@@ -17,10 +17,10 @@ import {
 	FormTreeCombobox,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';
+import { ModalAction, ModalClose, ModalFooter, useModal } from '@wcpos/components/modal';
 import { VStack } from '@wcpos/components/vstack';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 
 import { useT } from '../../../../../contexts/translations';
@@ -69,6 +69,7 @@ export function EditProductForm({ product }: Props) {
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
 	const { localPatch } = useLocalMutation();
+	const { close } = useModal();
 	const [categoryOptions, setCategoryOptions] = React.useState<HierarchicalOption[]>([]);
 
 	if (!product) {
@@ -123,29 +124,34 @@ export function EditProductForm({ product }: Props) {
 			} as any;
 			setLoading(true);
 			try {
-				await localPatch({
+				const patched = await localPatch({
 					document: product,
 					data: patchData,
 				});
+				// localPatch swallows write errors and resolves undefined - pushing
+				// anyway would sync the unchanged resident and report success
+				if (!patched?.document) {
+					throw new Error('Local patch failed');
+				}
 				await pushDocument(product).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
 						mutationLogger.success(t('common.saved', { name: product.name }), {
 							showToast: true,
-							saveToDb: true,
 							context: {
 								productId: savedDoc.id,
 								productName: product.name,
 							},
 						});
+						close();
 					}
 				});
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
-				mutationLogger.error(t('products.failed_to_save_product'), {
+				mutationLogger.error('Failed to save product', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.PRODUCT_SAVE_FAILED,
+					toast: { title: t('products.failed_to_save_product') },
 					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
 						productId: product.id,
 						error: errorMessage,
 					},
@@ -154,7 +160,7 @@ export function EditProductForm({ product }: Props) {
 				setLoading(false);
 			}
 		},
-		[localPatch, product, pushDocument, t]
+		[close, localPatch, product, pushDocument, t]
 	);
 
 	/**
@@ -172,7 +178,9 @@ export function EditProductForm({ product }: Props) {
 				<FormField
 					control={form.control}
 					name="name"
-					render={({ field }) => <FormInput label={t('common.name')} {...field} />}
+					render={({ field }) => (
+						<FormInput testID="product-edit-name-input" label={t('common.name')} {...field} />
+					)}
 				/>
 				<FormField
 					control={form.control}
@@ -343,8 +351,8 @@ export function EditProductForm({ product }: Props) {
 				</HStack>
 				<MetaDataForm />
 				<ModalFooter className="px-0">
-					<ModalClose>{t('common.cancel')}</ModalClose>
-					<ModalAction loading={loading} onPress={onSave}>
+					<ModalClose testID="product-edit-cancel-button">{t('common.cancel')}</ModalClose>
+					<ModalAction testID="product-edit-save-button" loading={loading} onPress={onSave}>
 						{t('common.save')}
 					</ModalAction>
 				</ModalFooter>

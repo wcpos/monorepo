@@ -1,5 +1,7 @@
-import { expect, type Locator, type Page } from '@playwright/test';
-import { authenticatedTest as test } from './fixtures';
+import { errors, expect, type Locator, type Page } from '@playwright/test';
+
+import { findVariableProduct, isolatedVariableProductTest as test } from './checkout-probe';
+import { becomesVisible } from './fixtures';
 
 /**
  * Helper: ensure the POS products are in table view (not grid view).
@@ -8,9 +10,7 @@ import { authenticatedTest as test } from './fixtures';
  */
 async function ensureTableView(page: Page) {
 	const toggle = page.getByTestId('view-mode-toggle');
-	// Scope columnheader to products pane to avoid matching cart panel headers on desktop
-	const productsPane = page.locator('[data-testid="products-pane"], [data-testid="products-table"], [data-testid="product-list"]').first();
-	const tableHeader = productsPane.getByRole('columnheader').first();
+	const tableHeader = page.getByTestId('data-table-header-name').first();
 	const variablePopoverButton = page.getByTestId('variable-product-popover-button').first();
 
 	// Check if table indicators are already present (wait up to 2s for visibility).
@@ -48,17 +48,14 @@ async function ensureTableView(page: Page) {
 }
 
 /**
- * Helper: search for a variable product (WooCommerce sample data "hoodie")
- * and wait for results to appear. Variable products may take longer to sync
- * from WooCommerce in CI, so we use generous timeouts.
+ * Search the worker-private variable product and wait for it to render.
+ * Secretless forks retain the sample-catalog fallback in findVariableProduct.
  */
 async function searchForVariableProduct(page: Page) {
 	// These tests require table view — switch if needed
 	await ensureTableView(page);
 
-	const searchInput = page.getByTestId('search-products');
-	await searchInput.fill('hoodie');
-	await page.waitForTimeout(2_000);
+	await findVariableProduct(page, page.getByTestId('screen-pos').getByTestId('search-products'));
 
 	// Verify we got results — product sync can be slow in CI
 	const countEl = page.getByTestId('data-table-count');
@@ -79,7 +76,19 @@ async function searchForVariableProduct(page: Page) {
  */
 async function openVariationPopover(page: Page): Promise<Locator> {
 	const popoverButton = page.getByTestId('variable-product-popover-button').first();
-	await popoverButton.click();
+
+	// Opening the popover mounts the variations binding, which lazily syncs the
+	// parent's variations from WooCommerce. Wait for that response before
+	// interacting so attribute selection resolves against complete data rather
+	// than racing an in-flight sync (which would leave the "Add to Cart" button
+	// hidden). Mirrors the guard the expanded-row tests already use.
+	await Promise.all([
+		page.waitForResponse(
+			(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+			{ timeout: 30_000 }
+		),
+		popoverButton.click(),
+	]);
 
 	const popoverDialog = page.getByRole('dialog').last();
 	await expect(popoverDialog).toBeVisible({ timeout: 10_000 });
@@ -88,10 +97,55 @@ async function openVariationPopover(page: Page): Promise<Locator> {
 
 /**
  * Select variation options until a valid combination resolves.
+ *
+ * Two ordering hazards live here, and both produced the recurring CI failure
+ * on this spec (#1114 shard 5, #1124 shard 4 — fails with retries, green on
+ * the next run):
+ *
+ * 1. MATERIALIZATION. Every option's enabled state derives from the LOCAL
+ *    variations result (`optionCounts` in the popover): until the synced
+ *    variations materialize into the local collection, every count is 0 and
+ *    every option renders DISABLED. Sampling `isDisabled()` once in a quick
+ *    pass during that window reads "nothing to click", the helper returns
+ *    having selected nothing — and the add-to-cart button can then never
+ *    appear, because it only renders when a selection narrows the result to
+ *    exactly one variation. The popover announces this transient state
+ *    (`variation-popover-syncing`), so gate on its end and on an option
+ *    actually becoming enabled, rather than trusting a point-in-time sample.
+ *
+ * 2. RESOLUTION. After a click, the matched-variation lookup needs a re-query
+ *    and re-render. The old 1-second poll walked on to the NEXT option when a
+ *    slow runner missed the window — and each extra click CHANGES the
+ *    single-select group's value, so the walk could march past the completing
+ *    combination. Give each selection a real window instead.
  */
 async function selectUntilAddToCartVisible(page: Page, popoverDialog: Locator) {
 	const options = popoverDialog.locator('[data-testid^="variation-option-"]');
 	await expect(options.first()).toBeVisible({ timeout: 15_000 });
+
+	// Materialization gate: wait for the popover to stop syncing AND for at
+	// least one option to become enabled. Counts flow from the local result,
+	// so "all disabled" while the sync lands is a transient state, not a fact.
+	const syncing = popoverDialog.getByTestId('variation-popover-syncing');
+	await expect
+		.poll(
+			async () => {
+				if (await syncing.isVisible().catch(() => false)) return false;
+				const count = await options.count();
+				for (let i = 0; i < count; i++) {
+					if (
+						await options
+							.nth(i)
+							.isEnabled()
+							.catch(() => false)
+					)
+						return true;
+				}
+				return false;
+			},
+			{ timeout: 30_000 }
+		)
+		.toBeTruthy();
 
 	const optionCount = await options.count();
 	expect(optionCount).toBeGreaterThan(0);
@@ -99,15 +153,29 @@ async function selectUntilAddToCartVisible(page: Page, popoverDialog: Locator) {
 	const addToCartButton = page.getByTestId('variation-popover-add-to-cart');
 	for (let i = 0; i < optionCount; i++) {
 		const option = options.nth(i);
-		const isDisabled = await option.isDisabled().catch(() => true);
-		if (isDisabled) {
+		// Re-check at click time — enabled-ness can change as selections filter
+		// the remaining combinations.
+		const isEnabled = await option.isEnabled().catch(() => false);
+		if (!isEnabled) {
 			continue;
 		}
 
-		await option.click();
+		// The enabled-check window is racy by nature: a prior selection's
+		// re-filter can disable or detach this option before the click lands, and
+		// click() would then burn its full inherited timeout and THROW — failing
+		// the test instead of moving on. Short explicit timeout; only a
+		// TimeoutError means "state moved on, try the next option".
+		try {
+			await option.click({ timeout: 1_000 });
+		} catch (error) {
+			if (error instanceof errors.TimeoutError) {
+				continue;
+			}
+			throw error;
+		}
 
 		const isReady = await expect
-			.poll(async () => addToCartButton.isVisible().catch(() => false), { timeout: 1_000 })
+			.poll(async () => addToCartButton.isVisible().catch(() => false), { timeout: 5_000 })
 			.toBeTruthy()
 			.then(() => true)
 			.catch(() => false);
@@ -123,7 +191,10 @@ async function selectUntilAddToCartVisible(page: Page, popoverDialog: Locator) {
  */
 async function voidCartIfNeeded(page: Page) {
 	const voidButton = page.getByTestId('void-button');
-	if (await voidButton.isVisible({ timeout: 1_000 }).catch(() => false)) {
+	// `becomesVisible` honours the wait; `isVisible({ timeout })` ignores its
+	// timeout, so a void button still rendering would read as "cart empty" and
+	// skip the cleanup.
+	if (await becomesVisible(voidButton, 1_000)) {
 		await voidButton.click();
 		await page.waitForTimeout(1_500);
 	}
@@ -152,9 +223,7 @@ test.describe('POS Variations', () => {
 		await expect(popoverButton).toBeVisible();
 	});
 
-	test('should open variation popover when clicking chevron button', async ({
-		posPage: page,
-	}) => {
+	test('should open variation popover when clicking chevron button', async ({ posPage: page }) => {
 		await searchForVariableProduct(page);
 		await openVariationPopover(page);
 	});
@@ -191,25 +260,31 @@ test.describe('POS Variations', () => {
 
 		// Click the expand link on the first variable product
 		const expandLink = page.getByTestId('variable-product-expand').first();
-		await expandLink.click();
-
-		// Wait for the expansion animation (500ms) and data loading
-		await page.waitForTimeout(1_500);
+		await Promise.all([
+			page.waitForResponse(
+				(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+				{ timeout: 30_000 }
+			),
+			expandLink.click(),
+		]);
 
 		// Variation rows should now be visible with their "+" buttons
 		const variationPlusButtons = page.getByTestId('add-variation-to-cart-button');
 		await expect(variationPlusButtons.first()).toBeVisible({ timeout: 15_000 });
 	});
 
-	test('should add variation to cart via expanded row plus button', async ({
-		posPage: page,
-	}) => {
+	test('should add variation to cart via expanded row plus button', async ({ posPage: page }) => {
 		await searchForVariableProduct(page);
 
 		// Expand the variable product row
 		const expandLink = page.getByTestId('variable-product-expand').first();
-		await expandLink.click();
-		await page.waitForTimeout(1_500);
+		await Promise.all([
+			page.waitForResponse(
+				(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+				{ timeout: 30_000 }
+			),
+			expandLink.click(),
+		]);
 
 		// Click the "+" button on the first variation
 		const variationPlusButton = page.getByTestId('add-variation-to-cart-button').first();
@@ -228,8 +303,13 @@ test.describe('POS Variations', () => {
 
 		// Expand
 		const expandLink = page.getByTestId('variable-product-expand').first();
-		await expandLink.click();
-		await page.waitForTimeout(1_500);
+		await Promise.all([
+			page.waitForResponse(
+				(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+				{ timeout: 30_000 }
+			),
+			expandLink.click(),
+		]);
 
 		const variationPlusButtons = page.getByTestId('add-variation-to-cart-button');
 		await expect(variationPlusButtons.first()).toBeVisible({ timeout: 15_000 });
@@ -247,8 +327,13 @@ test.describe('POS Variations', () => {
 
 		// Expand the variable product row
 		const expandLink = page.getByTestId('variable-product-expand').first();
-		await expandLink.click();
-		await page.waitForTimeout(1_500);
+		await Promise.all([
+			page.waitForResponse(
+				(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+				{ timeout: 30_000 }
+			),
+			expandLink.click(),
+		]);
 
 		const variationPlusButtons = page.getByTestId('add-variation-to-cart-button');
 		await expect(variationPlusButtons.first()).toBeVisible({ timeout: 15_000 });
@@ -268,15 +353,18 @@ test.describe('POS Variations', () => {
 		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 10_000 });
 	});
 
-	test('should increment quantity when adding same variation twice', async ({
-		posPage: page,
-	}) => {
+	test('should increment quantity when adding same variation twice', async ({ posPage: page }) => {
 		await searchForVariableProduct(page);
 
 		// Expand the variable product row
 		const expandLink = page.getByTestId('variable-product-expand').first();
-		await expandLink.click();
-		await page.waitForTimeout(1_500);
+		await Promise.all([
+			page.waitForResponse(
+				(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+				{ timeout: 30_000 }
+			),
+			expandLink.click(),
+		]);
 
 		const variationPlusButton = page.getByTestId('add-variation-to-cart-button').first();
 		await expect(variationPlusButton).toBeVisible({ timeout: 15_000 });

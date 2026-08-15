@@ -1,8 +1,5 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-import { map } from 'rxjs/operators';
-
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Select,
@@ -10,24 +7,19 @@ import {
 	SelectItem,
 	SelectPrimitiveTrigger,
 } from '@wcpos/components/select';
-import { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
 import { useStockStatusLabel } from '../../../hooks/use-stock-status-label';
-
-type ProductCollection = import('@wcpos/database').ProductCollection;
-
-interface Props {
-	query: Query<ProductCollection>;
-}
+import { useQueryState, useQueryStateActions } from '../../../../../query';
 
 /**
  *
  */
-export function StockStatusPill({ query }: Props) {
-	const selected = useObservableEagerState(
-		query.rxQuery$.pipe(map(() => query.getSelector('stock_status') as string | undefined))
+export function StockStatusPill() {
+	const selected = useQueryState<'products', string | undefined>(
+		(state) => state.filters.stock_status
 	);
+	const actions = useQueryStateActions<'products'>();
 	const t = useT();
 	const isActive = !!selected;
 	const { items } = useStockStatusLabel();
@@ -47,7 +39,7 @@ export function StockStatusPill({ query }: Props) {
 	return (
 		<Select
 			value={value}
-			onValueChange={(option) => option && query.where('stock_status').equals(option.value).exec()}
+			onValueChange={(option) => option && actions.setFilter('stock_status', option.value)}
 		>
 			<SelectPrimitiveTrigger asChild>
 				<ButtonPill
@@ -55,7 +47,8 @@ export function StockStatusPill({ query }: Props) {
 					leftIcon="warehouseFull"
 					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
-					onRemove={() => query.removeWhere('stock_status').exec()}
+					removeTestID="filter-pill-remove-stock_status"
+					onRemove={() => actions.clearFilter('stock_status')}
 				>
 					<ButtonText decodeHtml>{value?.label || t('common.stock_status')}</ButtonText>
 				</ButtonPill>

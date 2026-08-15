@@ -11,6 +11,7 @@ import {
 	PrinterService,
 	probeVendor,
 } from '@wcpos/printer';
+import { getLogger } from '@wcpos/utils/logger';
 import type { ConnectionDiagnostics, PrinterProfile, PrinterServiceOptions } from '@wcpos/printer';
 
 import { buildPrinterProfileFields, type PrinterDialogPrefill } from '../profile-config';
@@ -19,6 +20,8 @@ import { useT } from '../../../../../contexts/translations';
 
 import type * as z from 'zod';
 import type { PrinterFormValues } from '../schema';
+
+const printerLogger = getLogger(['wcpos', 'printer', 'dialog']);
 
 export interface VendorDefaults {
 	language: PrinterFormValues['language'];
@@ -170,8 +173,8 @@ export function usePrinterDialogForm({
 		} else {
 			const autoName =
 				printerCount > 0
-					? `${t('settings.receipt_printer', 'Receipt Printer')} ${printerCount + 1}`
-					: t('settings.receipt_printer', 'Receipt Printer');
+					? `${t('settings.receipt_printer')} ${printerCount + 1}`
+					: t('settings.receipt_printer');
 			const vendorDefaults = deriveVendorDefaults(defaultValues.vendor);
 			const next = {
 				...defaultValues,
@@ -242,6 +245,9 @@ export function usePrinterDialogForm({
 						setDetectedVendor(null);
 					}
 				})
+				.catch((error) => {
+					printerLogger.warn('Printer vendor probe failed', { context: { error: String(error) } });
+				})
 				.finally(() => {
 					if (probeRequestIdRef.current === requestId) setProbing(false);
 				});
@@ -278,10 +284,7 @@ export function usePrinterDialogForm({
 		try {
 			await printerService.testPrint(buildProfile(data));
 			Toast.show({
-				title: t('settings.test_print_sent', 'Test print sent to %s').replace(
-					'%s',
-					data.name || 'printer'
-				),
+				title: t('settings.test_print_sent').replace('%s', data.name || 'printer'),
 				type: 'success',
 			});
 		} catch (err) {
@@ -318,7 +321,7 @@ export function usePrinterDialogForm({
 		try {
 			await printerService.openDrawer(buildProfile(data));
 			Toast.show({
-				title: t('settings.cash_drawer_opened', 'Cash drawer opened'),
+				title: t('settings.cash_drawer_opened'),
 				type: 'success',
 			});
 		} catch (err) {
@@ -362,7 +365,7 @@ export function usePrinterDialogForm({
 			try {
 				await persistProfile(data);
 				form.reset();
-				Toast.show({ title: t('settings.printer_saved', 'Printer saved'), type: 'success' });
+				Toast.show({ title: t('settings.printer_saved'), type: 'success' });
 				onSave();
 			} finally {
 				setSaveLoading(false);

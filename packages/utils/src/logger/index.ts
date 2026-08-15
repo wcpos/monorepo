@@ -10,14 +10,41 @@
 import { logger } from 'react-native-logs';
 
 import { getErrorCodeDocURL } from './constants';
-import { redactSensitiveFields } from './redact';
+import {
+	clearRecorder,
+	recorderStats,
+	recordEvent,
+	removePromotedEvents,
+	snapshotRecorder,
+} from './flight-recorder';
+import { ERROR_CATALOGUE, ErrorCode } from './generated/error-codes.generated';
+import { redactSensitiveFields, redactSensitiveText } from './redact';
+import { LogRetentionCollection, sweepLogRetention } from './retention';
+
+/**
+ * Schema-v2 terminal-record columns. These are promoted to top-level log row
+ * fields (not nested in `context`) so the Logs UI and exports can filter and
+ * group on them without parsing context.
+ */
+export interface LogTerminalFields {
+	outcome?: 'ok' | 'recovered' | 'failed' | 'rejected' | 'cancelled' | 'unknown';
+	operationId?: string;
+	operationType?: string;
+	requestId?: string;
+	serverRequestId?: string;
+	attempt?: number;
+	durationMs?: number;
+	startedAt?: number;
+}
 
 // Custom options interface
 export interface LoggerOptions {
+	code?: ErrorCode;
 	showToast?: boolean;
-	saveToDb?: boolean;
 	context?: any;
+	terminal?: LogTerminalFields;
 	toast?: {
+		title?: string; // Override the toast title when the log message is forensic (ids, codes) rather than cashier-readable
 		text2?: string; // Secondary message
 		dismissable?: boolean; // Show close button
 		showErrorCode?: boolean; // Show error code "Help" link (default: true if errorCode exists)
@@ -41,7 +68,7 @@ export type LazyContext = Record<string, any> | (() => Record<string, any>);
 
 // Extended logger interface with custom options support
 export interface ExtendedLogger {
-	error: (message: string, options?: LoggerOptions) => void;
+	error: (message: string, options: LoggerOptions & { code: ErrorCode }) => void;
 	warn: (message: string, options?: LoggerOptions) => void;
 	info: (message: string, options?: LoggerOptions) => void;
 	debug: (message: string, options?: LoggerOptions) => void;
@@ -55,7 +82,385 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 // Global state
 let toastShow: ((config: any) => void) | null = null;
 let dbCollection: any | null = null;
-let hasPruned = false;
+let databaseEpoch = 0;
+let sequence = 0;
+let persistedInsertCount = 0;
+let recorderPromotionChain: Promise<void> = Promise.resolve();
+const MAX_CONTEXT_BYTES = 16 * 1024;
+const SWEEP_INSERT_INTERVAL = 200;
+
+type PersistedDocument = {
+	incrementalPatch(patch: Record<string, unknown>): Promise<PersistedDocument>;
+};
+
+type LoggerCollection = LogRetentionCollection & {
+	insert(row: Record<string, unknown>): Promise<PersistedDocument>;
+	bulkInsert(
+		rows: Record<string, unknown>[]
+	): Promise<{ success: { seq?: unknown }[]; error: unknown[] }>;
+};
+
+type RepeatState = {
+	identity: string;
+	count: number;
+	write: Promise<PersistedDocument | undefined>;
+};
+
+const repeatStateByCollection = new WeakMap<object, RepeatState>();
+
+const SEARCH_CONTEXT_KEY =
+	/^(category|event|orderI[Dd]|orderUUID|orderNumber|documentId|collectionName|collection|type|lane|productId|productName|sku|itemName|couponCode|feeName|method|methodTitle|endpoint|status|customerId|errorCode|reason|previousQuantity|quantity|previousPrice|price)$/;
+
+function searchableContext(context: Record<string, any>): string {
+	return Object.entries(context)
+		.filter(([key, value]) => SEARCH_CONTEXT_KEY.test(key) && value != null)
+		.map(([, value]) => value)
+		.join(' ');
+}
+
+function serializedBytes(value: unknown): number {
+	return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+}
+
+function admitContext(context: Record<string, unknown>): Record<string, unknown> {
+	if (serializedBytes(context) <= MAX_CONTEXT_BYTES) return context;
+
+	const admitted: Record<string, unknown> = { _truncated: true };
+	let droppedKeys = 0;
+	for (const [key, value] of Object.entries(context)) {
+		admitted[key] = value;
+		if (serializedBytes(admitted) > MAX_CONTEXT_BYTES) {
+			admitted[key] = '[truncated]';
+			if (serializedBytes(admitted) > MAX_CONTEXT_BYTES) {
+				delete admitted[key];
+				droppedKeys += 1;
+			}
+		}
+	}
+	if (droppedKeys > 0) admitted._droppedKeys = droppedKeys;
+	return admitted;
+}
+
+function recordSize(row: Record<string, unknown>): Record<string, unknown> {
+	row.sizeBytes = 0;
+	let sizeBytes = serializedBytes(row);
+	while (row.sizeBytes !== sizeBytes) {
+		row.sizeBytes = sizeBytes;
+		sizeBytes = serializedBytes(row);
+	}
+	return row;
+}
+
+/**
+ * #163: with a dead storage worker every error log triggers a promotion, the
+ * promotion's bulkInsert rejects, and the catch below logs — roughly 200
+ * errors/second measured live, which buries the real diagnostics and burns the
+ * main thread during exactly the outage you most need to debug. Promotion is
+ * best-effort narration, so a failing streak backs off instead of hammering, and
+ * reports once per streak rather than once per attempt.
+ */
+const RECORDER_PROMOTION_BASE_BACKOFF_MS = 1_000;
+const RECORDER_PROMOTION_MAX_BACKOFF_MS = 60_000;
+let recorderPromotionFailureStreak = 0;
+let recorderPromotionRetryAt = 0;
+
+/** Clears the promotion backoff. Called when a new database binds, and by tests. */
+export function resetRecorderPromotionBackoff(): void {
+	recorderPromotionFailureStreak = 0;
+	recorderPromotionRetryAt = 0;
+}
+
+async function runRecorderPromotion(reason: string, requestedEpoch: number): Promise<number> {
+	try {
+		if (requestedEpoch !== databaseEpoch) return 0;
+		// Storage is still failing and the backoff window has not elapsed — skip the
+		// attempt entirely. Recorded events stay in the recorder for the next one.
+		if (recorderPromotionFailureStreak > 0 && Date.now() < recorderPromotionRetryAt) return 0;
+		const collection = dbCollection as LoggerCollection | null;
+		const recorded = snapshotRecorder();
+		if (!collection || recorded.length === 0) return 0;
+
+		const rows = recorded.map((event) => {
+			sequence += 1;
+			const terminal = event.terminal;
+			// Mirror persistLog's column extraction so promoted narration answers the
+			// same category/code filters as live rows — otherwise the trail is present
+			// but invisible behind the Logs tab's preset chips.
+			const code = clampColumn(
+				'code',
+				typeof event.context.errorCode === 'string' ? event.context.errorCode : undefined
+			);
+			const category = clampColumn(
+				'category',
+				typeof event.context.category === 'string' ? event.context.category : undefined
+			);
+			return recordSize({
+				timestamp: event.timestamp,
+				level: event.level,
+				message: event.message,
+				context: { ...event.context, _promotedBy: reason },
+				seq: sequence,
+				count: 1,
+				firstSeen: event.timestamp,
+				lastSeen: event.timestamp,
+				...(code && { code }),
+				...(category && { category }),
+				...(terminal?.outcome && { outcome: terminal.outcome }),
+				...(terminal?.operationId !== undefined && {
+					operationId: clampColumn('operationId', terminal.operationId),
+				}),
+				...(terminal?.operationType !== undefined && {
+					operationType: clampColumn('operationType', terminal.operationType),
+				}),
+				...(terminal?.requestId !== undefined && {
+					requestId: clampColumn('requestId', terminal.requestId),
+				}),
+				...(terminal?.serverRequestId !== undefined && {
+					serverRequestId: clampColumn('serverRequestId', terminal.serverRequestId),
+				}),
+				...(terminal?.attempt !== undefined && { attempt: terminal.attempt }),
+				...(terminal?.durationMs !== undefined && { durationMs: terminal.durationMs }),
+				...(terminal?.startedAt !== undefined && { startedAt: terminal.startedAt }),
+			});
+		});
+		const result = await collection.bulkInsert(rows);
+		// The collection can be rebound while this was in flight; the old
+		// database's outcome must not reset or advance the new one's backoff.
+		if (requestedEpoch !== databaseEpoch) return 0;
+		const insertedSequences = new Set(result.success.map((document) => document.seq));
+		removePromotedEvents(recorded.filter((_, index) => insertedSequences.has(rows[index].seq)));
+		// bulkInsert resolves with separate success/error arrays, so a total write
+		// failure never reaches the catch below. Treat it as the failed attempt it
+		// is, or the same snapshot is retried on every error log — the exact
+		// hammering this backoff exists to stop.
+		if (result.success.length === 0) {
+			noteRecorderPromotionFailure(
+				new Error(`flight recorder promotion rejected all ${rows.length} rows`)
+			);
+			return 0;
+		}
+		resetRecorderPromotionBackoff();
+		return result.success.length;
+	} catch (error) {
+		if (requestedEpoch !== databaseEpoch) return 0;
+		noteRecorderPromotionFailure(error);
+		return 0;
+	}
+}
+
+function noteRecorderPromotionFailure(error: unknown): void {
+	recorderPromotionFailureStreak += 1;
+	recorderPromotionRetryAt =
+		Date.now() +
+		Math.min(
+			RECORDER_PROMOTION_BASE_BACKOFF_MS * 2 ** (recorderPromotionFailureStreak - 1),
+			RECORDER_PROMOTION_MAX_BACKOFF_MS
+		);
+	// Once per streak: the first failure carries the diagnosis, the next 200 a
+	// second carry nothing. A later success resets the streak, so a genuinely
+	// new outage is reported again.
+	if (recorderPromotionFailureStreak === 1) {
+		console.error('Failed to promote flight recorder', error);
+	}
+}
+
+export function promoteRecorder(reason: string): Promise<number> {
+	const requestedEpoch = databaseEpoch;
+	const run = recorderPromotionChain.then(() => runRecorderPromotion(reason, requestedEpoch));
+	recorderPromotionChain = run.then(
+		() => undefined,
+		() => undefined
+	);
+	return run;
+}
+
+/**
+ * Schema-enforced maxLength of every bounded string column in the `logs` v2
+ * schema. RxDB rejects the WHOLE insert when one exceeds its limit, so an
+ * over-long value would cost the entire terminal record rather than just that
+ * field — e.g. a 36-character UUID in the 32-character `operationId`. Clamping
+ * keeps the row (and the identifier's greppable prefix); losing the row is the
+ * one outcome this logger must never produce.
+ */
+const COLUMN_MAX_LENGTH = {
+	code: 24,
+	category: 64,
+	operationId: 32,
+	operationType: 48,
+	requestId: 40,
+	serverRequestId: 40,
+} as const;
+
+function clampColumn<K extends keyof typeof COLUMN_MAX_LENGTH>(
+	column: K,
+	value: string | undefined
+): string | undefined {
+	if (value === undefined) return undefined;
+	const max = COLUMN_MAX_LENGTH[column];
+	return value.length > max ? value.slice(0, max) : value;
+}
+
+const GENERIC_ERROR_CODES = [
+	['wcpos.pos.checkout.payment', 'PAYMENT999'],
+	['wcpos.payment', 'PAYMENT999'],
+	['wcpos.pos.checkout', 'CHECKOUT999'],
+	['wcpos.checkout', 'CHECKOUT999'],
+	['wcpos.sync', 'SYNC999'],
+	['wcpos.auth', 'AUTH999'],
+	['wcpos.print', 'PRINT999'],
+	['wcpos.product', 'PRODUCT999'],
+	['wcpos.license', 'LICENSE999'],
+] as const satisfies readonly (readonly [string, ErrorCode])[];
+
+function genericErrorCode(category: string | undefined): ErrorCode {
+	return GENERIC_ERROR_CODES.find(([prefix]) => category?.startsWith(prefix))?.[1] ?? 'CLIENT999';
+}
+
+function persistLog(
+	collection: LoggerCollection,
+	level: LogLevel,
+	message: string,
+	context: Record<string, unknown>,
+	terminal?: LogTerminalFields
+): void {
+	const now = Date.now();
+	const outcome = terminal?.outcome;
+	let persistedContext = context;
+	let code = clampColumn(
+		'code',
+		typeof context.errorCode === 'string' ? context.errorCode : undefined
+	);
+	const category = clampColumn(
+		'category',
+		typeof context.category === 'string' ? context.category : undefined
+	);
+	if (level === 'error' && outcome !== 'ok' && !code) {
+		code = genericErrorCode(category);
+		persistedContext = { ...context, errorCode: code, codeFallback: true };
+	}
+	if (outcome === 'ok' && code && ERROR_CATALOGUE[code as ErrorCode]?.severity === 'error') {
+		persistedContext = { ...context };
+		delete persistedContext.errorCode;
+		console.error(`Dropped failure-severity code ${code} from log row with outcome ok`);
+		code = undefined;
+	}
+	const admittedContext = admitContext({
+		...persistedContext,
+		search: searchableContext(persistedContext),
+	});
+	const identity = JSON.stringify([
+		level,
+		code ?? null,
+		category ?? null,
+		message,
+		context.recordId ?? null,
+		outcome ?? null,
+		// Chained operations are distinct units of work and must not collapse.
+		// Uncorrelated record failures keep null here and still collapse by record/reason.
+		terminal?.operationId ?? null,
+		// Collection is part of the identity or per-collection events with no
+		// message of their own collapse across collections: one change-signal cycle
+		// emitting apply.refresh for tax_rates and then for another collection
+		// matches on every other component, so the second would fold into the first
+		// and the surviving row would name only the first collection — attributing
+		// evidence to the wrong collection, which is worse than an extra row.
+		context.collection ?? null,
+		context.cursor ?? null,
+		context.cursorFrom ?? null,
+		context.head ?? null,
+		context.backlog ?? null,
+	]);
+	// Repeat-collapse folds identical consecutive REPEATS — the same event, record
+	// and reason (spec §7). A record carrying a duration is not a repeat: it is a
+	// distinct timed unit of work whose duration and cursor ARE the evidence, so two
+	// sync cycles that happen to render the same message must stay two rows rather
+	// than folding and discarding the second one's numbers. Everything without a
+	// duration (record failures, state transitions) still collapses normally, which
+	// is what keeps a failing record from flooding the log.
+	const timedUnitOfWork = terminal?.durationMs !== undefined;
+	const previous = timedUnitOfWork ? undefined : repeatStateByCollection.get(collection);
+
+	if (previous?.identity === identity) {
+		previous.count += 1;
+		previous.write = previous.write.then((document) =>
+			document?.incrementalPatch({ count: previous.count, lastSeen: now })
+		);
+		// A rejected chain would silently swallow every later identical event —
+		// drop the repeat state so the next occurrence inserts a fresh row.
+		void previous.write.catch((error: unknown) => {
+			console.error(error);
+			if (repeatStateByCollection.get(collection) === previous) {
+				repeatStateByCollection.delete(collection);
+			}
+		});
+		return;
+	}
+
+	sequence += 1;
+	const row = recordSize({
+		timestamp: now,
+		level,
+		message,
+		context: admittedContext,
+		seq: sequence,
+		count: 1,
+		firstSeen: now,
+		lastSeen: now,
+		...(code && { code }),
+		...(category && { category }),
+		...(outcome && { outcome }),
+		...(terminal?.operationId !== undefined && {
+			operationId: clampColumn('operationId', terminal.operationId),
+		}),
+		...(terminal?.operationType !== undefined && {
+			operationType: clampColumn('operationType', terminal.operationType),
+		}),
+		...(terminal?.requestId !== undefined && {
+			requestId: clampColumn('requestId', terminal.requestId),
+		}),
+		...(terminal?.serverRequestId !== undefined && {
+			serverRequestId: clampColumn('serverRequestId', terminal.serverRequestId),
+		}),
+		...(terminal?.attempt !== undefined && { attempt: terminal.attempt }),
+		...(terminal?.durationMs !== undefined && { durationMs: terminal.durationMs }),
+		...(terminal?.startedAt !== undefined && { startedAt: terminal.startedAt }),
+	});
+	const writeEpoch = databaseEpoch;
+	const write = Promise.resolve().then(() => {
+		if (writeEpoch !== databaseEpoch || collection !== dbCollection) return undefined;
+		return collection.insert(row);
+	});
+	const state: RepeatState = { identity, count: 1, write };
+	// A timed unit of work is never a collapse anchor either — the next identical
+	// row must not fold into it.
+	if (timedUnitOfWork) repeatStateByCollection.delete(collection);
+	else repeatStateByCollection.set(collection, state);
+	void write.catch(() => {
+		if (repeatStateByCollection.get(collection) === state) {
+			repeatStateByCollection.delete(collection);
+		}
+	});
+	void write
+		.then((document) => {
+			if (!document) {
+				if (repeatStateByCollection.get(collection) === state) {
+					repeatStateByCollection.delete(collection);
+				}
+				return;
+			}
+			notifyLogPersistedInsert(collection);
+		})
+		.catch(console.error);
+}
+
+export function notifyLogPersistedInsert(collection: LogRetentionCollection): void {
+	persistedInsertCount += 1;
+	if (persistedInsertCount % SWEEP_INSERT_INTERVAL === 0) {
+		void sweepLogRetention(collection).catch((error: unknown) =>
+			console.error('Failed to enforce log retention', error)
+		);
+	}
+}
 
 // Log level severity (lower = more verbose)
 const LOG_LEVEL_SEVERITY: Record<LogLevel, number> = {
@@ -65,6 +470,10 @@ const LOG_LEVEL_SEVERITY: Record<LogLevel, number> = {
 	error: 3,
 };
 
+function isDevelopment(): boolean {
+	return typeof __DEV__ !== 'undefined' && __DEV__;
+}
+
 // Initialize log level from localStorage (if available) or use default
 function getInitialLogLevel(): LogLevel {
 	if (typeof window !== 'undefined' && window.localStorage) {
@@ -73,10 +482,50 @@ function getInitialLogLevel(): LogLevel {
 			return stored as LogLevel;
 		}
 	}
-	return __DEV__ ? 'debug' : 'info';
+	return isDevelopment() ? 'debug' : 'info';
 }
 
 let currentLogLevel: LogLevel = getInitialLogLevel();
+
+const VERBOSE_DIAGNOSTICS_KEY = 'wcpos_verbose_diagnostics';
+const DEFAULT_VERBOSE_TTL_MS = 24 * 60 * 60 * 1000;
+
+function getInitialVerboseExpiry(): number {
+	try {
+		if (typeof window !== 'undefined' && window.localStorage) {
+			const expiresAt = Number(window.localStorage.getItem(VERBOSE_DIAGNOSTICS_KEY));
+			if (Number.isFinite(expiresAt) && Date.now() < expiresAt) return expiresAt;
+		}
+	} catch {
+		// Storage may be unavailable even when the browser exposes localStorage.
+	}
+	return 0;
+}
+
+const initialVerboseExpiry = getInitialVerboseExpiry();
+let verboseDiagnosticsEnabled = initialVerboseExpiry > 0;
+let verboseDiagnosticsExpiresAt = initialVerboseExpiry;
+
+export function isVerboseDiagnostics(): boolean {
+	return verboseDiagnosticsEnabled && Date.now() < verboseDiagnosticsExpiresAt;
+}
+
+export function setVerboseDiagnostics(enabled: boolean, ttlMs = DEFAULT_VERBOSE_TTL_MS): void {
+	verboseDiagnosticsEnabled = enabled;
+	verboseDiagnosticsExpiresAt = enabled ? Date.now() + ttlMs : 0;
+
+	try {
+		if (typeof window !== 'undefined' && window.localStorage) {
+			if (enabled) {
+				window.localStorage.setItem(VERBOSE_DIAGNOSTICS_KEY, String(verboseDiagnosticsExpiresAt));
+			} else {
+				window.localStorage.removeItem(VERBOSE_DIAGNOSTICS_KEY);
+			}
+		}
+	} catch {
+		// Verbose diagnostics still works for this session when storage is unavailable.
+	}
+}
 
 /**
  * Safe JSON stringify that handles circular references and large objects
@@ -117,27 +566,26 @@ export const setToast = (toastShowFunction: (config: any) => void) => {
 
 /**
  * Set Database collection - call when database is ready.
- * Prunes log entries older than 30 days once on first initialization.
+ * Runs log retention every time a collection is bound.
  */
 export const setDatabase = (collection: any) => {
+	if (collection !== dbCollection) {
+		databaseEpoch += 1;
+		clearRecorder();
+		// A freshly bound collection deserves a clean attempt, not the previous
+		// database's backoff.
+		resetRecorderPromotionBackoff();
+	}
 	dbCollection = collection;
 
-	if (collection && !hasPruned) {
-		hasPruned = true;
-		const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-		collection
-			.find({ selector: { timestamp: { $lt: thirtyDaysAgo } } })
-			.remove()
-			.then((removed: any[]) => {
-				if (removed.length > 0) {
-					console.log(`Pruned ${removed.length} log entries older than 30 days`);
-				}
-			})
-			.catch((error: unknown) => {
-				console.error('Failed to prune old log entries', error);
-			});
+	if (collection) {
+		void sweepLogRetention(collection).catch((error: unknown) => {
+			console.error('Failed to enforce log retention', error);
+		});
 	}
 };
+
+export const getDatabaseEpoch = () => databaseEpoch;
 
 /**
  * Main transport - handles console, toast, and database
@@ -157,30 +605,46 @@ const mainTransport = (props: any) => {
 	} else {
 		message = String(rawMsg || '');
 	}
+	message = redactSensitiveText(message);
 
-	// Redact sensitive fields from context before any output
-	if (options.context) {
-		options = { ...options, context: redactSensitiveFields(options.context) };
+	// Redact sensitive fields and merge the typed code into context before any output.
+	if (options.context || options.code) {
+		const context = options.context ? redactSensitiveFields(options.context) : {};
+		options = {
+			...options,
+			context:
+				options.code && context.errorCode === undefined
+					? { ...context, errorCode: options.code }
+					: context,
+		};
 	}
 
 	// Check if this log level should be shown (based on runtime level)
-	const levelName = level.text as LogLevel;
+	const levelName = (level.text === 'success' ? 'info' : level.text) as LogLevel;
 	const levelSeverity = LOG_LEVEL_SEVERITY[levelName] ?? 0;
 	const currentSeverity = LOG_LEVEL_SEVERITY[currentLogLevel];
 
-	// Skip console logging if below current level (but still allow toast/db)
-	const shouldLogToConsole = levelSeverity >= currentSeverity;
+	// Production only sends warnings and errors to the console; toast/db remain available for all levels.
+	const shouldLogToConsole =
+		levelSeverity >= currentSeverity &&
+		(isDevelopment() || levelName === 'warn' || levelName === 'error');
 
 	// 1. Log to console if level permits
 	if (shouldLogToConsole) {
 		const timestamp = new Date().toLocaleTimeString();
 		const levelText = level.text.toUpperCase();
-		// console.errors open a redbox in development which is annoying
-		const consoleMethod = console.log;
-
 		// Include context in console output if available (using safe stringify)
 		const contextStr = options.context ? ` | Context: ${safeStringify(options.context)}` : '';
-		consoleMethod(`${timestamp} | ${levelText} : ${message}${contextStr}`);
+		const formattedMessage = `${timestamp} | ${levelText} : ${message}${contextStr}`;
+
+		if (isDevelopment()) {
+			// console.errors open a redbox in development which is annoying
+			console.log(formattedMessage);
+		} else if (levelName === 'warn') {
+			console.warn(formattedMessage);
+		} else {
+			console.error(formattedMessage);
+		}
 	}
 
 	// 2. Show toast if available and requested
@@ -197,7 +661,7 @@ const mainTransport = (props: any) => {
 		// Build toast config using NEW format (not legacy text1/text2)
 		const toastConfig: any = {
 			type: toastType,
-			title: message, // New format uses 'title' not 'text1'
+			title: options.toast?.title ?? message, // New format uses 'title' not 'text1'
 		};
 
 		// Add secondary message (description in new format)
@@ -241,28 +705,51 @@ const mainTransport = (props: any) => {
 		toastShow(toastConfig);
 	}
 
-	// 3. Save to database if available and requested
-	if (options.saveToDb && dbCollection) {
-		const errorCode = options.context?.errorCode || '';
-
-		dbCollection
-			.insert({
+	// 3. Record debug narration, or persist info and above when a collection is bound.
+	if (levelName === 'debug') {
+		try {
+			// Redaction above is privacy-load-bearing: only redacted context enters the ring.
+			recordEvent({
 				timestamp: Date.now(),
-				code: errorCode,
-				level: level.text,
+				level: 'debug',
 				message,
-				context: options.context || {},
-			})
-			.catch(console.error);
+				context: options.context ?? {},
+				terminal: options.terminal,
+			});
+			if (dbCollection && isVerboseDiagnostics()) {
+				// Forward terminal fields too: a forensic debug row (e.g. a recovered 401
+				// attempt, #899) is only chainable to its refresh/success rows through
+				// outcome + operationId, and dropping them here would break the chain
+				// exactly where verbose diagnostics is meant to expose it.
+				persistLog(dbCollection, levelName, message, options.context ?? {}, options.terminal);
+			}
+		} catch (error) {
+			console.error('Failed to record debug log entry', error);
+		}
+	} else if (dbCollection) {
+		try {
+			const terminal: LogTerminalFields | undefined =
+				level.text === 'success'
+					? { ...options.terminal, outcome: options.terminal?.outcome ?? 'ok' }
+					: options.terminal;
+			persistLog(dbCollection, levelName, message, options.context || {}, terminal);
+			if (levelName === 'error') void promoteRecorder('error');
+		} catch (error) {
+			console.error('Failed to persist log entry', error);
+		}
 	}
 };
 
 /**
- * Log Level Guidelines:
- * - DEBUG: Internal flow details, retries, skipped items (developer only, hidden in production)
- * - INFO:  Meaningful state changes worth tracking - successful syncs, logins, connections
- * - WARN:  Potential issues that don't block functionality
- * - ERROR: Failures that need attention
+ * Log Level Guidelines (full rubric: ./LEVELS.md):
+ * - DEBUG: Forensic detail — internal flow, retries, transient failures that later
+ *          RECOVERED (stamp `outcome: 'recovered'`); developer only, hidden in production
+ * - INFO:  Lifecycle — meaningful state changes worth tracking (syncs, logins, "Session renewed")
+ * - WARN:  Will need attention if it persists
+ * - ERROR: Needs user action
+ *
+ * A level reflects how the OPERATION ended, not the loudest moment inside it —
+ * the layer that sees the whole arc decides the level once the arc settles (#899).
  *
  * In development: all logs (debug, info, warn, error)
  * In production: info, warn, error (debug is filtered for performance)
@@ -308,7 +795,7 @@ const resetLevel = () => {
 	if (typeof window !== 'undefined' && window.localStorage) {
 		localStorage.removeItem('wcpos_log_level');
 	}
-	currentLogLevel = __DEV__ ? 'debug' : 'info';
+	currentLogLevel = isDevelopment() ? 'debug' : 'info';
 	console.log(`Log level reset to default: ${currentLogLevel}`);
 };
 
@@ -333,6 +820,9 @@ if (typeof window !== 'undefined') {
 		setLevel,
 		getLevel,
 		resetLevel,
+		promoteRecorder,
+		setVerbose: setVerboseDiagnostics,
+		recorderStats,
 		debug: log.debug,
 		info: log.info,
 		warn: log.warn,
@@ -364,15 +854,6 @@ if (typeof window !== 'undefined') {
  */
 function resolveLazy<T>(value: T | (() => T)): T {
 	return typeof value === 'function' ? (value as () => T)() : value;
-}
-
-/**
- * Check if the given log level should be logged based on current level
- */
-function shouldLog(level: LogLevel): boolean {
-	const levelSeverity = LOG_LEVEL_SEVERITY[level] ?? 0;
-	const currentSeverity = LOG_LEVEL_SEVERITY[currentLogLevel];
-	return levelSeverity >= currentSeverity;
 }
 
 /**
@@ -433,6 +914,10 @@ export class CategoryLogger {
 	/**
 	 * Build the final options object with category and bound context
 	 */
+	protected buildOptions(
+		options: LoggerOptions & { code: ErrorCode }
+	): LoggerOptions & { code: ErrorCode };
+	protected buildOptions(options?: LoggerOptions): LoggerOptions;
 	protected buildOptions(options?: LoggerOptions): LoggerOptions {
 		return {
 			...options,
@@ -453,15 +938,12 @@ export class CategoryLogger {
 	 * // Eager - always computed
 	 * logger.debug('Cart state', { context: { items: cart.items } });
 	 *
-	 * // Lazy - only computed if debug level is enabled
+	 * // Lazy - deferred until the logger captures it
 	 * logger.debug(() => `Cart state: ${JSON.stringify(cart.getFullState())}`);
 	 * ```
 	 */
 	debug(message: LazyMessage, options?: LoggerOptions): void {
-		// Only resolve lazy message if we're actually going to log
-		if (!shouldLog('debug') && !options?.showToast && !options?.saveToDb) {
-			return;
-		}
+		// The recorder needs the rendered trail, so lazy debug messages now always resolve.
 		const resolvedMessage = resolveLazy(message);
 		log.debug(resolvedMessage, this.buildOptions(options));
 	}
@@ -485,7 +967,7 @@ export class CategoryLogger {
 	/**
 	 * Error level log - failures that need attention
 	 */
-	error(message: LazyMessage, options?: LoggerOptions): void {
+	error(message: LazyMessage, options: LoggerOptions & { code: ErrorCode }): void {
 		const resolvedMessage = resolveLazy(message);
 		log.error(resolvedMessage, this.buildOptions(options));
 	}
@@ -527,4 +1009,5 @@ export function getLogger(category: string[]): CategoryLogger {
 	return new CategoryLogger(category);
 }
 
-export { log };
+export { mapExceptionToCode } from './map-exception';
+export { log, recorderStats, snapshotRecorder };

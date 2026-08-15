@@ -36,7 +36,8 @@ function isLegacyProps(props: ToastShowProps): props is LegacyToastProps {
 }
 
 const Toast = {
-	show: (props: ToastShowProps) => {
+	// Returns the toast id; passing the same `id` option again updates that toast in place.
+	show: (props: ToastShowProps): string | number => {
 		if (isLegacyProps(props)) {
 			console.log(
 				'Legacy toast props detected. These will be phased out in future versions.',

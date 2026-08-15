@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
@@ -43,9 +43,8 @@ export function useDownloadReceiptPdf() {
 				})) as PdfResponse;
 
 				await saveOrSharePdf(data, filename);
-				httpLogger.success(t('receipt.pdf_downloaded', 'PDF downloaded'), {
+				httpLogger.success(t('receipt.pdf_downloaded'), {
 					showToast: true,
-					saveToDb: true,
 					context: {
 						orderId,
 						templateId: normalizedTemplateId,
@@ -54,9 +53,8 @@ export function useDownloadReceiptPdf() {
 			} catch (error) {
 				httpLogger.error('Failed to download receipt PDF', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.RECEIPT_DELIVERY_FAILED,
 					context: {
-						errorCode: ERROR_CODES.CONNECTION_REFUSED,
 						orderId,
 						templateId: normalizedTemplateId,
 						error: error instanceof Error ? error.message : String(error),

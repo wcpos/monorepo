@@ -55,7 +55,7 @@ export function TemplateSwitcher({
 			}}
 		>
 			<SelectTrigger>
-				<SelectValue placeholder={t('receipt.select_template', 'Select template')} />
+				<SelectValue placeholder={t('receipt.select_template')} />
 			</SelectTrigger>
 			<SelectContent>
 				<SelectGroup>

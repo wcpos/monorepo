@@ -10,18 +10,18 @@ import {
 	ComboboxTrigger,
 } from '@wcpos/components/combobox';
 import { Suspense } from '@wcpos/components/suspense';
-import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
-import { Query, useQuery } from '@wcpos/query';
+import type { CustomerDocument } from '@wcpos/database';
 
 import { useT } from '../../../../../contexts/translations';
+import { useQueryState, useQueryStateActions, useSearchSelect } from '../../../../../query';
+import { parseRemoteId } from '../../../../../utils/parse-remote-id';
 import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
 import { CustomerList } from '../../customer-select';
 import { isIdOnlyCustomerEntity } from './customer-filter-utils';
 
 interface CashierPillProps {
-	query: Query<CustomerCollection>;
 	resource: ObservableResource<CustomerDocument>;
-	cashierID?: number;
+	onMissing?: () => void;
 }
 
 type CashierWithLoadingMarker = CustomerDocument & { __isLoading?: boolean };
@@ -31,33 +31,7 @@ type CashierWithLoadingMarker = CustomerDocument & { __isLoading?: boolean };
  */
 function CashierSearch() {
 	const t = useT();
-	const [search, setSearch] = React.useState('');
-
-	/**
-	 * Query for cashiers
-	 */
-	const query = useQuery({
-		queryKeys: ['customers', 'cashier-select'],
-		collectionName: 'customers',
-		initialParams: {
-			sort: [{ last_name: 'asc' }],
-			selector: {
-				role: { $in: ['administrator', 'shop_manager', 'cashier'] },
-			},
-		},
-		greedy: true,
-	});
-
-	/**
-	 *
-	 */
-	const onSearch = React.useCallback(
-		(value: string) => {
-			setSearch(value);
-			query?.debouncedSearch(value);
-		},
-		[query]
-	);
+	const binding = useSearchSelect('cashier');
 
 	/**
 	 *
@@ -66,11 +40,11 @@ function CashierSearch() {
 		<>
 			<ComboboxInput
 				placeholder={t('common.search_cashiers')}
-				value={search}
-				onChangeText={onSearch}
+				value={binding.search}
+				onChangeText={binding.setSearch}
 			/>
 			<Suspense>
-				<CustomerList query={query} withGuest={false} />
+				<CustomerList resource={binding.resource} withGuest={false} />
 			</Suspense>
 		</>
 	);
@@ -79,12 +53,22 @@ function CashierSearch() {
 /**
  *
  */
-export function CashierPill({ query, resource, cashierID }: CashierPillProps) {
-	let cashier = useObservableSuspense(resource);
+export function CashierPill({ resource, onMissing }: CashierPillProps) {
+	const cashierID = useQueryState<'orders', string | number | undefined>(
+		(state) => state.filters.cashier
+	);
+	const actions = useQueryStateActions<'orders'>();
+	const resolvedCashier = useObservableSuspense(resource);
+	let cashier = resolvedCashier;
 	const { format } = useCustomerNameFormat();
 	const t = useT();
 	const isCashierLoading = (cashier as CashierWithLoadingMarker | null)?.__isLoading;
 	const isActive = cashierID !== null && cashierID !== undefined;
+
+	React.useEffect(() => {
+		// Missing labels escalate through the engine demand seam after the resident lookup settles.
+		if (isActive && !resolvedCashier) onMissing?.();
+	}, [isActive, onMissing, resolvedCashier]);
 
 	/**
 	 * @FIXME - if the customers are cleared, it's possible that the cashier will be null
@@ -96,23 +80,16 @@ export function CashierPill({ query, resource, cashierID }: CashierPillProps) {
 	const isLoading = isActive && (!!isCashierLoading || isIdOnlyCustomerEntity(cashierEntity));
 
 	const handleRemove = React.useCallback(() => {
-		query.removeElemMatch('meta_data', { key: '_pos_user' }).exec();
-	}, [query]);
+		actions.clearFilter('cashier');
+	}, [actions]);
 
-	/**
-	 * value is always a string when dealing with comboboxes
-	 *
-	 * @NOTE - meta_data is used for _pos_user and _pos_store, so we need multipleElemMatch
-	 */
 	return (
 		<Combobox
 			onValueChange={(option) => {
 				if (!option) return;
-				query
-					.removeElemMatch('meta_data', { key: '_pos_user' }) // clear any previous value
-					.where('meta_data')
-					.multipleElemMatch({ key: '_pos_user', value: String(option.value) })
-					.exec();
+				const cashierID = parseRemoteId(option.value);
+				if (cashierID === undefined) return;
+				actions.setFilter('cashier', cashierID);
 			}}
 		>
 			<ComboboxTrigger asChild>

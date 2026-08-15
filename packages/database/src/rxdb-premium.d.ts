@@ -49,31 +49,3 @@ declare module 'rxdb-premium/plugins/storage-worker' {
 		workerOptions?: WorkerOptions;
 	}): import('rxdb').RxStorage<any, any>;
 }
-
-declare module 'rxdb-premium-old/plugins/storage-sqlite' {
-	export * from 'rxdb-old/plugins/storage-sqlite';
-
-	export type RxStorageSQLite = {
-		name: string;
-		settings: import('rxdb-old/plugins/storage-sqlite').SQLiteStorageSettings;
-		createStorageInstance<RxDocType>(
-			params: import('rxdb/plugins/core').RxStorageInstanceCreationParams<
-				RxDocType,
-				import('rxdb-old/plugins/storage-sqlite').SQLiteInstanceCreationOptions
-			>
-		): Promise<any>;
-	};
-
-	export function createSQLiteStorageInstance<RxDocType>(
-		storage: RxStorageSQLite,
-		params: import('rxdb/plugins/core').RxStorageInstanceCreationParams<
-			RxDocType,
-			import('rxdb-old/plugins/storage-sqlite').SQLiteInstanceCreationOptions
-		>,
-		settings: import('rxdb-old/plugins/storage-sqlite').SQLiteStorageSettings
-	): Promise<any>;
-
-	export function getRxStorageSQLite(
-		settings: import('rxdb-old/plugins/storage-sqlite').SQLiteStorageSettings
-	): RxStorageSQLite;
-}

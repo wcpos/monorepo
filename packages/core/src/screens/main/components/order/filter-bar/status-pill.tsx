@@ -1,8 +1,5 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-import { map } from 'rxjs/operators';
-
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Select,
@@ -10,23 +7,17 @@ import {
 	SelectItem,
 	SelectPrimitiveTrigger,
 } from '@wcpos/components/select';
-import type { OrderCollection } from '@wcpos/database';
-import type { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
+import { useQueryState, useQueryStateActions } from '../../../../../query';
 import { useOrderStatusLabel } from '../../../hooks/use-order-status-label';
-
-interface Props {
-	query: Query<OrderCollection>;
-}
 
 /**
  *
  */
-export function StatusPill({ query }: Props) {
-	const selected = useObservableEagerState(
-		query.rxQuery$.pipe(map(() => query.getSelector('status')))
-	);
+export function StatusPill() {
+	const selected = useQueryState<'orders', string | undefined>((state) => state.filters.status);
+	const actions = useQueryStateActions<'orders'>();
 	const t = useT();
 	const isActive = !!selected;
 	const { items } = useOrderStatusLabel();
@@ -38,15 +29,16 @@ export function StatusPill({ query }: Props) {
 	return (
 		<Select
 			value={value}
-			onValueChange={(option) => option && query.where('status').equals(option.value).exec()}
+			onValueChange={(option) => option && actions.setFilter('status', option.value)}
 		>
 			<SelectPrimitiveTrigger asChild>
 				<ButtonPill
+					testID="order-filter-status"
 					size="xs"
 					leftIcon="cartCircleCheck"
 					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
-					onRemove={() => query.removeWhere('status').exec()}
+					onRemove={() => actions.clearFilter('status')}
 				>
 					<ButtonText>{value?.label || t('common.status')}</ButtonText>
 				</ButtonPill>

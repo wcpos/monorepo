@@ -22,7 +22,7 @@ export function SyncingBadge({ isSyncing }: SyncingBadgeProps) {
 			<HStack className="items-center gap-1.5">
 				<Icon name="arrowRotateRight" size="xs" variant="muted" />
 				<Text className="text-muted-foreground text-xs font-medium">
-					{t('receipt.syncing_with_server', 'Syncing with server...')}
+					{t('receipt.syncing_with_server')}
 				</Text>
 			</HStack>
 		</View>

@@ -81,8 +81,8 @@ export function EditFeeLineForm({ uuid, item }: Props) {
 	 *
 	 */
 	const handleSave = React.useCallback(
-		(data: FormValues) => {
-			updateFeeLine(uuid, {
+		async (data: FormValues) => {
+			await updateFeeLine(uuid, {
 				name: data.name,
 				amount: String(data.amount),
 				tax_status: data.tax_status,

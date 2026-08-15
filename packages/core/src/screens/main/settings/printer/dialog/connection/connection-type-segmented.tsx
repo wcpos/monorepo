@@ -30,9 +30,9 @@ export function ConnectionTypeSegmented({
 	}
 	const enabledTypes = availableTypes ?? defaultTypes;
 	const allOptions: { value: ConnType; label: string }[] = [
-		{ value: 'network', label: t('settings.connection_network', 'Network') },
-		{ value: 'bluetooth', label: t('settings.connection_bluetooth', 'Bluetooth') },
-		{ value: 'usb', label: t('settings.connection_usb', 'USB') },
+		{ value: 'network', label: t('settings.connection_network') },
+		{ value: 'bluetooth', label: t('settings.connection_bluetooth') },
+		{ value: 'usb', label: t('settings.connection_usb') },
 	];
 	const options = allOptions.filter((option) => enabledTypes.includes(option.value));
 

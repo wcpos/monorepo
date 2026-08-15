@@ -8,9 +8,11 @@ import { VStack } from '@wcpos/components/vstack';
 
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 
+import type { QueryStateActions } from '../../../../query';
 import type { CellContext } from '@tanstack/react-table';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
+type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
 /**
  *
@@ -21,7 +23,11 @@ export function Customer({
 	column,
 }: CellContext<{ document: OrderDocument }, 'customer_id'>) {
 	const order = row.original.document;
-	const query = (table.options.meta as { query: any } | undefined)?.query;
+	const actions = (
+		table.options.meta as {
+			actions?: Pick<QueryStateActions<'orders'>, 'setFilter'>;
+		}
+	)?.actions;
 	const { format } = useCustomerNameFormat();
 	const customerID = useObservableEagerState(order.customer_id$!);
 	const billing = useObservableEagerState(order.billing$!);
@@ -33,12 +39,22 @@ export function Customer({
 			<ButtonPill
 				variant="ghost-primary"
 				size="xs"
-				onPress={() => query.where('customer_id').equals(customerID).exec()}
+				onPress={() => actions?.setFilter('customer_id', customerID)}
 			>
-				{format({ billing, shipping, id: customerID } as any)}
+				{format({ billing, shipping, id: customerID } as unknown as CustomerDocument)}
 			</ButtonPill>
-			{show?.('billing') && <FormatAddress address={billing as any} showName={false} />}
-			{show?.('shipping') && <FormatAddress address={shipping as any} showName={false} />}
+			{show?.('billing') && (
+				<FormatAddress
+					address={billing as React.ComponentProps<typeof FormatAddress>['address']}
+					showName={false}
+				/>
+			)}
+			{show?.('shipping') && (
+				<FormatAddress
+					address={shipping as React.ComponentProps<typeof FormatAddress>['address']}
+					showName={false}
+				/>
+			)}
 		</VStack>
 	);
 }

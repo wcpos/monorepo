@@ -15,10 +15,10 @@ import {
 	FormSwitch,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';
+import { ModalAction, ModalClose, ModalFooter, useModal } from '@wcpos/components/modal';
 import { VStack } from '@wcpos/components/vstack';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../../contexts/translations';
 import { CurrencyInput } from '../../../components/currency-input';
@@ -58,6 +58,7 @@ export function EditVariationForm({ variation }: Props) {
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
 	const { localPatch } = useLocalMutation();
+	const { close } = useModal();
 
 	if (!variation) {
 		throw new Error('Variation not found');
@@ -94,29 +95,34 @@ export function EditVariationForm({ variation }: Props) {
 			}
 			setLoading(true);
 			try {
-				await localPatch({
+				const patched = await localPatch({
 					document: variation,
 					data: data as Partial<import('@wcpos/database').ProductVariationDocument>,
 				});
+				// localPatch swallows write errors and resolves undefined - pushing
+				// anyway would sync the unchanged resident and report success
+				if (!patched?.document) {
+					throw new Error('Local patch failed');
+				}
 				await pushDocument(variation).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
 						mutationLogger.success(t('common.saved', { name: variation.name }), {
 							showToast: true,
-							saveToDb: true,
 							context: {
 								variationId: savedDoc.id,
 								variationName: variation.name,
 							},
 						});
+						close();
 					}
 				});
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
-				mutationLogger.error(t('products.failed_to_save_variation'), {
+				mutationLogger.error('Failed to save product variation', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.PRODUCT_UNEXPECTED,
+					toast: { title: t('products.failed_to_save_variation') },
 					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
 						variationId: variation.id,
 						error: errorMessage,
 					},
@@ -125,7 +131,7 @@ export function EditVariationForm({ variation }: Props) {
 				setLoading(false);
 			}
 		},
-		[localPatch, variation, pushDocument, t]
+		[close, localPatch, variation, pushDocument, t]
 	);
 
 	/**
@@ -258,7 +264,7 @@ export function EditVariationForm({ variation }: Props) {
 				<MetaDataForm />
 				<ModalFooter className="px-0">
 					<ModalClose>{t('common.cancel')}</ModalClose>
-					<ModalAction loading={loading} onPress={onSave}>
+					<ModalAction testID="variation-edit-save-button" loading={loading} onPress={onSave}>
 						{t('common.save')}
 					</ModalAction>
 				</ModalFooter>

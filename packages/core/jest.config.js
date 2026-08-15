@@ -5,7 +5,14 @@ module.exports = {
 	displayName: '@wcpos/core',
 	preset: 'ts-jest',
 	transform: {
-		'^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.jest.json' }],
+		// Components whose rendered behavior depends on React Compiler memoization
+		// (the app builds with experiments.reactCompiler) are compiled the same way
+		// here; everything else goes through ts-jest. The patterns are mutually
+		// exclusive so transformer pick order can't matter.
+		'variable-product-row/(index|context|variations/(index|table|filters|footer))\\.tsx$':
+			'<rootDir>/jest/react-compiler-transform.js',
+		'^(?!.*variable-product-row/(index|context|variations/(index|table|filters|footer))\\.tsx$).+\\.(ts|tsx)$':
+			['ts-jest', { tsconfig: '<rootDir>/tsconfig.jest.json' }],
 	},
 	testRegex: TEST_REGEX,
 	moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
@@ -22,13 +29,14 @@ module.exports = {
 	setupFilesAfterEnv: ['<rootDir>/jest/setup.js'],
 	moduleNameMapper: {
 		// Mock logger modules (must come before generic @wcpos/utils matcher)
-		'^@wcpos/utils/logger/error-codes$':
-			'<rootDir>/jest/__mocks__/@wcpos/utils/logger/error-codes.js',
 		'^@wcpos/utils/logger$': '<rootDir>/jest/__mocks__/@wcpos/utils/logger.js',
 		// Other mocks
 		'^expo-localization$': '<rootDir>/jest/__mocks__/expo-localization.js',
+		'^expo-modules-core$': '<rootDir>/jest/__mocks__/expo-modules-core.js',
 		'^react-native$': 'react-native-web',
 		'^@wcpos/printer$': '<rootDir>/../printer/src/index.ts',
+		'^@wcpos/scanner$': '<rootDir>/../scanner/src/index.ts',
+		'^@wcpos/scanner/(.*)$': '<rootDir>/../scanner/src/$1',
 		'^@wcpos/receipt-renderer$': '<rootDir>/../receipt-renderer/src/index.ts',
 		'^@wcpos/receipt-renderer/(.*)$': '<rootDir>/../receipt-renderer/src/$1',
 		'^@wcpos/printer/(.*)$': '<rootDir>/../printer/src/$1',
@@ -36,6 +44,7 @@ module.exports = {
 		// Fallback for other @wcpos/utils imports
 		'^@wcpos/utils/(.*)$': '<rootDir>/../utils/src/$1',
 		'^@wcpos/database$': '<rootDir>/../database/src',
+		'^@wcpos/database/(.*)$': '<rootDir>/../database/src/$1',
 		'^@wcpos/hooks/(.*)$': '<rootDir>/../hooks/src/$1',
 	},
 };

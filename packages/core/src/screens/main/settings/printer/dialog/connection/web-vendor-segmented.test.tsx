@@ -48,7 +48,12 @@ jest.mock('@wcpos/components/vstack', () => ({
 }));
 
 jest.mock('../../../../../../contexts/translations', () => ({
-	useT: () => (_key: string, fallback: string) => fallback,
+	useT: () =>
+		jest
+			.requireActual<typeof import('../../../../../../../jest/translate')>(
+				'../../../../../../../jest/translate'
+			)
+			.createTestT(),
 }));
 
 describe('WebVendorSegmented', () => {

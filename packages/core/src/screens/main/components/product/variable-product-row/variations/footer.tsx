@@ -4,16 +4,17 @@ import { useObservableEagerState, useObservableState } from 'observable-hooks';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import { useReplicationState } from '@wcpos/query';
 import type { ProductDocument } from '@wcpos/database';
-import type { Query } from '@wcpos/query';
 
-import { useAppState } from '../../../../../../contexts/app-state';
 import { useT } from '../../../../../../contexts/translations';
 import { SyncButton } from '../../../../components/sync-button';
+import { useCollectionReset } from '../../../../hooks/use-collection-reset';
 
 interface VariationTableFooterProps {
-	query: Query<import('@wcpos/database').ProductVariationCollection>;
+	binding: Pick<
+		ReturnType<typeof import('../../../../../../query').useCollectionBinding<'variations'>>,
+		'sync' | 'active$' | 'total$'
+	>;
 	parent: ProductDocument;
 	count: number;
 }
@@ -21,37 +22,34 @@ interface VariationTableFooterProps {
 /**
  *
  */
-export function VariationTableFooter({ query, parent, count }: VariationTableFooterProps) {
-	const { fastStoreDB, storeDB } = useAppState();
-	const { sync, active$ } = useReplicationState(query);
-	const loading = useObservableEagerState(active$);
+export function VariationTableFooter({ binding, parent, count }: VariationTableFooterProps) {
+	const loading = useObservableEagerState(binding.active$);
+	const { clearAndSync } = useCollectionReset('variations');
 
 	/**
-	 *
+	 * Local cache eviction ONLY (#1093): the guarded reset funnel drops the local
+	 * variations collection and refills — it never enqueues mutations, and a
+	 * pending variation edit makes it return needs-confirmation instead of
+	 * destroying the queue. `engine.write({operation:'delete'})` is a durable
+	 * SERVER delete and must never appear in a refresh affordance.
 	 */
 	const handleClearVariations = React.useCallback(async () => {
-		await storeDB.collections.variations.find({ selector: { parent_id: parent.id } }).remove();
-		await fastStoreDB.collections.variations
-			.find({ selector: { endpoint: 'products/' + parent.id + '/variations' } })
-			.remove();
-		return sync();
-	}, [fastStoreDB, storeDB, parent.id, sync]);
+		await clearAndSync();
+		return binding.sync();
+	}, [binding, clearAndSync]);
 
 	/**
-	 * Get total from sync collection
+	 * Prefer the parent product's server variation ids over the local collection total.
 	 */
-	const total = useObservableState(
-		fastStoreDB.collections.variations.count({
-			selector: { endpoint: 'products/' + parent.id + '/variations' },
-		}).$,
-		0
-	);
+	const localTotal = useObservableState(binding.total$, 0);
+	const parentVariations = useObservableEagerState(parent.variations$!);
+	const total = parentVariations?.length ? parentVariations.length : localTotal;
 	const t = useT();
 
 	return (
 		<HStack space="xs" className="border-border bg-footer justify-end border-b p-2">
 			<Text className="text-xs">{t('common.showing_of', { shown: count, total })}</Text>
-			<SyncButton sync={sync} clearAndSync={handleClearVariations} active={loading} />
+			<SyncButton sync={binding.sync} clearAndSync={handleClearVariations} active={loading} />
 		</HStack>
 	);
 }

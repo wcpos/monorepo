@@ -7,9 +7,9 @@ import { map } from 'rxjs/operators';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { useQueryManager } from '@wcpos/query';
 
-import { useVariationRow } from './variable-product-row/context';
+import { useQueryState, useQueryStateActions } from '../../../../query';
+import { setVariationMatch } from './variation-matches';
 import { useT } from '../../../../contexts/translations';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
@@ -67,9 +67,10 @@ export function ProductAttributes({
 	const isExpanded = useObservableEagerState(
 		meta.expanded$.pipe(map((expanded: Record<string, boolean>) => !!expanded[row.id]))
 	);
-	const { updateQueryParams } = useVariationRow();
-
-	const manager = useQueryManager();
+	const matches = useQueryState<'variations', import('../../../../query').VariationMatch[]>(
+		(state) => state.filters.attributeMatches
+	);
+	const actions = useQueryStateActions<'variations'>();
 	const t = useT();
 
 	/**
@@ -84,36 +85,23 @@ export function ProductAttributes({
 	const handleSelect = React.useCallback(
 		(attribute: { id?: number; name?: string }, option: string) => {
 			setRowExpanded?.(row.id, true);
-
-			if (manager.hasQuery(['variations', { parentID: product.id }])) {
-				const query = manager.getQuery(['variations', { parentID: product.id }]);
-				// remove any search term previously set
-				query?.search('');
-				query
-					?.variationMatch({
-						id: attribute.id ?? 0,
-						name: attribute.name ?? '',
-						option,
-					})
-					.exec();
-			} else {
-				// remove any search term previously set
-				updateQueryParams('search', null);
-				// we need to pass the attribute/option down so it can be used in the table
-				updateQueryParams('attribute', {
-					id: attribute.id,
-					name: attribute.name,
+			actions.clearSearch();
+			actions.setFilter(
+				'attributeMatches',
+				setVariationMatch(matches, {
+					id: attribute.id ?? 0,
+					name: attribute.name ?? '',
 					option,
-				});
-			}
+				})
+			);
 		},
-		[manager, product.id, row.id, setRowExpanded, updateQueryParams]
+		[actions, matches, row.id, setRowExpanded]
 	);
 
 	/**
 	 * Expand the row
-	 * Also, special case for when search has found variations, set the useQueryParams
-	 * so we can pick up the search term in the variations table
+	 * Also, when relational search found child variations, seed this row's query state
+	 * with the parent search term before mounting its variations table.
 	 */
 	const handleExpand = React.useCallback(() => {
 		if (isExpanded) {
@@ -121,24 +109,16 @@ export function ProductAttributes({
 			return;
 		}
 		if ((original.childrenSearchCount ?? 0) > 0) {
-			if (manager.hasQuery(['variations', { parentID: product.id }])) {
-				const query = manager.getQuery(['variations', { parentID: product.id }]);
-				query?.search(original.parentSearchTerm ?? '');
-				query?.removeWhere('attributes').exec();
-			} else {
-				updateQueryParams('search', original.parentSearchTerm);
-				updateQueryParams('attribute', null);
-			}
+			actions.setSearch(original.parentSearchTerm ?? '');
+			actions.clearFilter('attributeMatches');
 		}
 		setRowExpanded?.(row.id, true);
 	}, [
-		manager,
-		product.id,
+		actions,
 		row.id,
 		original.childrenSearchCount,
 		original.parentSearchTerm,
 		setRowExpanded,
-		updateQueryParams,
 		isExpanded,
 	]);
 

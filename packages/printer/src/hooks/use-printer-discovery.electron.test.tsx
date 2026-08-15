@@ -201,6 +201,39 @@ describe('usePrinterDiscovery (electron)', () => {
 		expect(result.current.error).toEqual({ code: 'usb-none-found' });
 	});
 
+	it('connectUsbDevice trusts the full DiscoveredPrinter shape returned by IPC', async () => {
+		installIpc((channel: string) => {
+			if (channel === 'usb-discovery') {
+				return Promise.resolve([
+					{
+						id: 'winspool:EPSON TM-T20III Receipt',
+						name: 'EPSON TM-T20III Receipt',
+						connectionType: 'system',
+						address: 'winspool:EPSON TM-T20III Receipt',
+						vendor: 'generic',
+					},
+				]);
+			}
+			return Promise.resolve([]);
+		});
+		const { result } = renderHook(() => usePrinterDiscovery());
+
+		await act(async () => {
+			result.current.connectUsbDevice?.();
+		});
+
+		expect(result.current.error).toBeNull();
+		expect(result.current.printers).toEqual([
+			{
+				id: 'winspool:EPSON TM-T20III Receipt',
+				name: 'EPSON TM-T20III Receipt',
+				connectionType: 'system',
+				address: 'winspool:EPSON TM-T20III Receipt',
+				vendor: 'generic',
+			},
+		]);
+	});
+
 	// 7. select → connect-timeout path
 	it('select then connect timeout sets bt-connect-failed error and clears scanning', () => {
 		const { result } = renderHook(() => usePrinterDiscovery());
@@ -261,7 +294,15 @@ describe('usePrinterDiscovery (electron)', () => {
 	it('connectSerialDevice invokes serial-discovery and adds paired serial printers', async () => {
 		installIpc((channel: string) => {
 			if (channel === 'serial-discovery') {
-				return Promise.resolve([{ id: 'serial:/dev/cu.TM-P20', name: 'TM P20' }]);
+				return Promise.resolve([
+					{
+						id: 'serial:/dev/cu.TM-P20',
+						name: 'TM P20',
+						connectionType: 'bluetooth',
+						address: 'serial:/dev/cu.TM-P20',
+						vendor: 'generic',
+					},
+				]);
 			}
 			return Promise.resolve([]);
 		});

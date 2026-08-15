@@ -4,9 +4,10 @@ import { router } from 'expo-router';
 
 import { sanitizeWPCredentialsData } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAppState } from '../../../contexts/app-state';
+import { linkCredentialsToSite } from '../../../utils/site-writes';
 
 const authLogger = getLogger(['wcpos', 'auth', 'login']);
 
@@ -60,9 +61,7 @@ export const useLoginHandler = (
 				if (!params.uuid || !params.access_token || !params.refresh_token) {
 					authLogger.error('Invalid login response - missing required parameters', {
 						showToast: true,
-						context: {
-							errorCode: ERROR_CODES.MISSING_REQUIRED_PARAMETERS,
-						},
+						code: ERROR_CODES.AUTH_UNEXPECTED,
 					});
 					throw new Error('Invalid login response - missing required parameters');
 				}
@@ -124,12 +123,10 @@ export const useLoginHandler = (
 					});
 				}
 
-				// Link credentials to site if not already linked
-				const siteCredentials = site.wp_credentials || [];
-				if (!siteCredentials.includes(credentialsData.uuid)) {
-					await site.getLatest().incrementalPatch({
-						wp_credentials: [...siteCredentials, credentialsData.uuid],
-					});
+				// Link credentials to site if not already linked.
+				// Atomic append — see `linkCredentialsToSite` (#902).
+				const linked = await linkCredentialsToSite(site, credentialsData.uuid);
+				if (linked) {
 					authLogger.debug(`Linked ${credentialsData.display_name} to ${site.name}`);
 				}
 
@@ -144,33 +141,33 @@ export const useLoginHandler = (
 					(err instanceof Error ? err.message : '') || 'Failed to save WordPress credentials';
 
 				// Determine error type and code based on error characteristics
-				let errorCode: ErrorCode = ERROR_CODES.TRANSACTION_FAILED; // Default for DB operations
+				let errorCode: ErrorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED; // Default for DB operations
 
 				if (err instanceof Error && err.message?.includes('missing required parameters')) {
-					errorCode = ERROR_CODES.MISSING_REQUIRED_FIELD;
+					errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
 				} else if (err instanceof Error && err.name === 'ValidationError') {
-					errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
+					errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
 				} else if (err instanceof Error && err.name === 'RxError') {
 					// Check for specific RxDB error codes
 					switch ((err as Error & { code?: string }).code) {
 						case 'RX1':
-							errorCode = ERROR_CODES.DUPLICATE_RECORD;
+							errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
 							break;
 						case 'RX2':
-							errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
+							errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
 							break;
 						case 'RX3':
-							errorCode = ERROR_CODES.INVALID_DATA_TYPE;
+							errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
 							break;
 						default:
-							errorCode = ERROR_CODES.TRANSACTION_FAILED;
+							errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
 					}
 				}
 
 				authLogger.error(`Failed to save WordPress credentials: ${errorMessage}`, {
+					code: errorCode,
 					showToast: true,
 					context: {
-						errorCode,
 						error: errorMessage,
 					},
 				});

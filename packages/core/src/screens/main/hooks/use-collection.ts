@@ -28,7 +28,7 @@ export type CollectionKey = keyof typeof storeCollections;
  * 2. collection.remove() is called (instant, regardless of record count)
  * 3. reset-collection plugin re-creates the collection and emits on reset$
  * 4. This hook receives the new collection and triggers re-render
- * 5. useQuery/useRelationalQuery hooks also subscribe to reset$ and re-register
+ * 5. Direct query bindings subscribe to engine db$ replacement.
  */
 export const useCollection = <K extends CollectionKey>(
 	key: K

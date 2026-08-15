@@ -61,10 +61,14 @@ describe('tax-rates.helpers', () => {
 				];
 				const result = filterTaxRates(rates, 'US');
 
-				// Should match US and empty country rates
-				const ids = result.map((r) => r.id);
-				expect(ids).toContain(1);
-				expect(ids).not.toContain(2);
+				expect(result).toEqual([rates[0]]);
+			});
+
+			it('returns the empty-country wildcard as the sole fallback for an unmatched country', () => {
+				const wildcard = createTaxRate({ id: 1, country: '' });
+				const rates = [wildcard, createTaxRate({ id: 2, country: 'CA' })];
+
+				expect(filterTaxRates(rates, 'US')).toEqual([wildcard]);
 			});
 
 			it('should be case-insensitive for country', () => {
@@ -81,9 +85,7 @@ describe('tax-rates.helpers', () => {
 				];
 				const result = filterTaxRates(rates, 'US', 'CA');
 
-				const ids = result.map((r) => r.id);
-				expect(ids).toContain(1);
-				expect(ids).not.toContain(2);
+				expect(result).toEqual([rates[0]]);
 			});
 
 			it('should be case-insensitive for state', () => {
@@ -207,6 +209,45 @@ describe('tax-rates.helpers', () => {
 				expect(result).toHaveLength(2);
 				expect(result[0].id).toBe(1); // priority 1, lower id
 				expect(result[1].id).toBe(3); // priority 2, order 1
+			});
+
+			it('pins the equal-specificity id tie-break over stored order', () => {
+				const rates = [
+					createTaxRate({ id: 9, country: 'US', priority: 1, order: 1 }),
+					createTaxRate({ id: 4, country: 'US', priority: 1, order: 99 }),
+				];
+
+				// Matches modern WooCommerce (WC_Tax::sort_rates_callback): stored order plays
+				// no part in matching; equal specificity falls through to the id tie-break.
+				expect(filterTaxRates(rates, 'US')).toEqual([rates[1]]);
+			});
+
+			it('compares specificity by MATCHING postcodes, not by how many a rate lists (WC parity)', () => {
+				const rates = [
+					createTaxRate({
+						id: 5,
+						country: 'US',
+						priority: 1,
+						postcodes: ['10001', '10002', '10003'],
+					}),
+					createTaxRate({ id: 2, country: 'US', priority: 1, postcodes: ['10001'] }),
+				];
+
+				// Both rates match 10001 with exactly one postcode row, so WooCommerce ties on
+				// specificity (COUNT of matched location rows) and falls to the lower id — the
+				// three unrelated postcodes on id 5 must not win the tie.
+				expect(filterTaxRates(rates, 'US', '', '10001')).toEqual([rates[1]]);
+			});
+
+			it('ranks a rate higher when several of its postcode patterns match the customer', () => {
+				const rates = [
+					createTaxRate({ id: 1, country: 'US', priority: 1, postcodes: ['90210'] }),
+					createTaxRate({ id: 9, country: 'US', priority: 1, postcodes: ['90210', '902*'] }),
+				];
+
+				// Two matched rows beat one, as in WooCommerce's matched-row COUNT, so the
+				// higher id still wins here.
+				expect(filterTaxRates(rates, 'US', '', '90210')).toEqual([rates[1]]);
 			});
 
 			it('should prefer a country-specific rate over a wildcard rate at the same priority', () => {

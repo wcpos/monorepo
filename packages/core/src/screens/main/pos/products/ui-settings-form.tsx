@@ -55,10 +55,8 @@ export const schema = z.object({
 
 /**
  * Sortable product fields, stored as the underlying DB field name.
- * Each value must be sortable locally (products RxDB schema) and remotely — the
- * REST `orderby` mapping lives in @wcpos/query hooks/products, and the server
- * enum is WooCommerce core plus the WCPOS plugin additions (sku, barcode,
- * stock_quantity, stock_status).
+ * These choices order the locally synced window. Server-side ordering applies
+ * only to fields that have a wire `orderby` mapping.
  */
 const SORT_FIELD_VALUES = [
 	'name',
@@ -104,14 +102,14 @@ export function UISettingsForm() {
 	}, [resetUI, form, uiSettings]);
 
 	React.useEffect(() => {
-		setButtonPressHandler(handleReset);
+		setButtonPressHandler(() => void handleReset());
 	}, [setButtonPressHandler, handleReset]);
 
 	/**
 	 * Form is the source of truth during editing.
 	 * Changes are saved to RxDB but we don't re-sync back to avoid loops.
 	 */
-	useFormChangeHandler({ form: form as never, onChange: patchUI });
+	useFormChangeHandler({ form: form as never, onChange: (changes) => void patchUI(changes) });
 
 	/**
 	 *

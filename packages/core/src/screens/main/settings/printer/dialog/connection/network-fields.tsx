@@ -66,7 +66,7 @@ export function NetworkFields({
 				: detectedVendor === 'star'
 					? 'Star'
 					: detectedVendor === 'generic'
-						? t('settings.printer_vendor_generic', 'Generic')
+						? t('settings.printer_vendor_generic')
 						: detectedVendor;
 	const networkPrinters = printers.filter((printer) => printer.connectionType === 'network');
 
@@ -80,7 +80,7 @@ export function NetworkFields({
 						render={({ field }) => (
 							<FormInput
 								testID="add-printer-ip-input"
-								label={t('settings.printer_address', 'IP Address')}
+								label={t('settings.printer_address')}
 								placeholder="192.168.1.100"
 								{...field}
 							/>
@@ -94,7 +94,7 @@ export function NetworkFields({
 						render={({ field: { value, ...rest } }) => (
 							<FormInput
 								testID="add-printer-port-input"
-								label={t('settings.printer_port', 'Port')}
+								label={t('settings.printer_port')}
 								type="numeric"
 								value={value != null ? String(value) : undefined}
 								{...rest}
@@ -104,19 +104,17 @@ export function NetworkFields({
 				</VStack>
 			</HStack>
 			{probing && (
-				<Text className="text-muted-foreground text-xs">
-					{t('settings.detecting_printer', 'Detecting printer...')}
-				</Text>
+				<Text className="text-muted-foreground text-xs">{t('settings.detecting_printer')}</Text>
 			)}
 			{!probing && detectedVendor && (
 				<Text className="text-xs text-green-600">
-					{t('settings.detected_vendor', 'Detected: %s').replace('%s', detectedVendorLabel)}
+					{t('settings.detected_vendor').replace('%s', detectedVendorLabel)}
 				</Text>
 			)}
 			{endpointHint && (
 				<VStack className="bg-muted/50 gap-0.5 rounded-md p-2">
 					<Text className="text-muted-foreground text-xs font-medium">
-						{t('settings.web_print_endpoint', 'Web print endpoint')}
+						{t('settings.web_print_endpoint')}
 					</Text>
 					<Text testID="add-printer-endpoint-hint" className="text-xs">
 						{endpointHint}
@@ -142,7 +140,7 @@ export function NetworkFields({
 				>
 					<HStack className="items-center gap-1">
 						<Icon name="magnifyingGlass" size="sm" />
-						<Text>{t('settings.scan_network', 'Scan Network')}</Text>
+						<Text>{t('settings.scan_network')}</Text>
 					</HStack>
 				</Button>
 			)}
@@ -151,10 +149,7 @@ export function NetworkFields({
 					{scanning ? (
 						<VStack className="gap-1.5">
 							<Text className="text-muted-foreground text-xs font-medium">
-								{t(
-									'settings.scan_candidates_progress',
-									'Checking common printer addresses… %s / %s'
-								)
+								{t('settings.scan_candidates_progress')
 									.replace('%s', String(scanProgress.tested))
 									.replace('%s', String(scanProgress.total))}
 							</Text>
@@ -169,10 +164,10 @@ export function NetworkFields({
 						<Collapsible>
 							<CollapsibleTrigger testID="add-printer-scan-candidates-toggle">
 								<Text className="text-muted-foreground text-xs font-medium">
-									{t(
-										'settings.scan_candidates_done',
-										'Checked %s common printer addresses'
-									).replace('%s', String(scanProgress.total || scanCandidates.length))}
+									{t('settings.scan_candidates_done').replace(
+										'%s',
+										String(scanProgress.total || scanCandidates.length)
+									)}
 								</Text>
 							</CollapsibleTrigger>
 							<CollapsibleContent>
@@ -181,24 +176,18 @@ export function NetworkFields({
 						</Collapsible>
 					)}
 					<Text className="text-muted-foreground text-xs">
-						{t(
-							'settings.scan_candidates_hint',
-							'If your printer shows a different IP address, add it manually.'
-						)}
+						{t('settings.scan_candidates_hint')}
 					</Text>
 				</VStack>
 			)}
 			{scanning && (
 				<Text testID="add-printer-network-searching" className="text-muted-foreground text-xs">
-					{t('settings.searching_for_printers', 'Searching for printers...')}
+					{t('settings.searching_for_printers')}
 				</Text>
 			)}
 			{!scanning && networkPrinters.length === 0 && onScan && (
 				<Text testID="add-printer-network-none-found" className="text-muted-foreground text-xs">
-					{t(
-						'settings.no_printers_found',
-						'Not all printers can be detected automatically. Enter the IP address above to add one manually.'
-					)}
+					{t('settings.no_printers_found')}
 				</Text>
 			)}
 			{networkPrinters.length > 0 && (
@@ -230,20 +219,14 @@ export function NetworkFields({
 								<VStack className="flex-1 items-start gap-0.5">
 									<Text className="text-sm font-medium">{printer.name}</Text>
 									<Text className="text-muted-foreground text-xs">
-										{t('settings.printer_discovered_at', 'Discovered: %s').replace(
-											'%s',
-											discoveredAt
-										)}
+										{t('settings.printer_discovered_at').replace('%s', discoveredAt)}
 									</Text>
 									{endpoint && (
 										<Text
 											testID={`add-printer-network-result-endpoint-${printer.id}`}
 											className="text-muted-foreground text-xs"
 										>
-											{t('settings.web_print_will_use', 'Web printing will use: %s').replace(
-												'%s',
-												endpoint
-											)}
+											{t('settings.web_print_will_use').replace('%s', endpoint)}
 										</Text>
 									)}
 									{resultEndpoint && printer.port === 9100 && (
@@ -251,16 +234,13 @@ export function NetworkFields({
 											testID={`add-printer-network-result-raw-tcp-${printer.id}`}
 											className="text-muted-foreground text-xs"
 										>
-											{t(
-												'settings.raw_tcp_not_supported_on_web',
-												'Browsers cannot print to raw TCP port 9100 — the web print endpoint above will be used instead.'
-											)}
+											{t('settings.raw_tcp_not_supported_on_web')}
 										</Text>
 									)}
 									<HStack className="items-center gap-1 pt-1">
 										<Icon name="circlePlus" size="sm" className="text-primary" />
 										<Text className="text-primary text-xs font-semibold">
-											{t('settings.use_this_printer', 'Use this printer')}
+											{t('settings.use_this_printer')}
 										</Text>
 									</HStack>
 								</VStack>

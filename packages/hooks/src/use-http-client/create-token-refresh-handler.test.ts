@@ -5,17 +5,10 @@ import { requestStateManager } from './request-state-manager';
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({
 		debug: jest.fn(),
+		info: jest.fn(),
 		warn: jest.fn(),
 		error: jest.fn(),
 	}),
-}));
-
-jest.mock('@wcpos/utils/logger/error-codes', () => ({
-	ERROR_CODES: {
-		REFRESH_TOKEN_INVALID: 'REFRESH_TOKEN_INVALID',
-		TOKEN_REFRESH_FAILED: 'TOKEN_REFRESH_FAILED',
-		AUTH_REQUIRED: 'AUTH_REQUIRED',
-	},
 }));
 
 jest.mock('./request-queue', () => ({
@@ -23,13 +16,22 @@ jest.mock('./request-queue', () => ({
 	resumeQueue: jest.fn(),
 }));
 
-jest.mock('./request-state-manager', () => ({
-	requestStateManager: {
-		startTokenRefresh: jest.fn(),
-		getRefreshedToken: jest.fn(),
-		setAuthFailed: jest.fn(),
-	},
-}));
+jest.mock('./request-state-manager', () => {
+	const setAuthFailed = jest.fn();
+	return {
+		requestStateManager: {
+			startTokenRefresh: jest.fn(),
+			getRefreshedToken: jest.fn(),
+			setAuthFailed,
+			// Reflect reality: setAuthFailed(true) → isAuthFailed() === true. Reading the latest
+			// setAuthFailed call keeps the two consistent and auto-resets via clearAllMocks() per test.
+			isAuthFailed: jest.fn(() => {
+				const calls = setAuthFailed.mock.calls;
+				return calls.length > 0 && calls[calls.length - 1][0] === true;
+			}),
+		},
+	};
+});
 
 const makeWpUser = (overrides: any = {}) => ({
 	id: 1,
@@ -42,7 +44,7 @@ const makeWpUser = (overrides: any = {}) => ({
 });
 
 const makeSite = (overrides: any = {}) => ({
-	wcpos_api_url: 'https://example.com/wp-json/wcpos/v1/',
+	wcpos_api_url: 'https://example.com/wp-json/wcpos/v2/',
 	url: 'https://example.com',
 	...overrides,
 });
@@ -147,7 +149,10 @@ describe('createTokenRefreshHandler', () => {
 		it('should use wp_api_url as fallback for constructing API URL', async () => {
 			const wpUser = makeWpUser();
 			const handler = createTokenRefreshHandler({
-				site: { wcpos_api_url: undefined, wp_api_url: 'https://example.com/wp-json/' },
+				site: {
+					wcpos_api_url: undefined,
+					wp_api_url: 'https://example.com/wp-json/',
+				},
 				wpUser,
 				getHttpClient,
 			});
@@ -166,7 +171,7 @@ describe('createTokenRefreshHandler', () => {
 			await handler.handle(ctx);
 
 			expect(mockPost).toHaveBeenCalledWith(
-				'https://example.com/wp-json/wcpos/v1/auth/refresh',
+				'https://example.com/wp-json/wcpos/v2/auth/refresh',
 				expect.any(Object),
 				expect.any(Object)
 			);
@@ -349,6 +354,9 @@ describe('createTokenRefreshHandler', () => {
 
 			const ctx = makeContext();
 			await expect(handler.handle(ctx)).rejects.toThrow();
+			// A transient refresh failure must stay retryable: no re-auth, no invalid flag.
+			expect(requestStateManager.setAuthFailed).not.toHaveBeenCalledWith(true);
+			expect(ctx.error).not.toHaveProperty('isRefreshTokenInvalid');
 		});
 	});
 });

@@ -15,10 +15,13 @@ import {
 	DialogTrigger,
 } from '@wcpos/components/dialog';
 import { Textarea } from '@wcpos/components/textarea';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../../contexts/translations';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../../contexts/current-order';
+
+const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
 /**
  *
@@ -44,11 +47,15 @@ export function AddNoteButton() {
 	 *
 	 */
 	const handleSave = React.useCallback(async () => {
-		await localPatch({
+		const result = await localPatch({
 			document: currentOrder,
 			data: {
 				customer_note: text,
 			},
+		});
+		if (!result) return;
+		cartLogger.info('Order note updated', {
+			context: { event: 'cart.order-note.updated', orderId: currentOrder.uuid ?? currentOrder.id },
 		});
 		setOpen(false);
 	}, [currentOrder, localPatch, text]);
@@ -63,12 +70,18 @@ export function AddNoteButton() {
 					{t('pos_cart.order_note')}
 				</Button>
 			</DialogTrigger>
-			<DialogContent portalHost="pos">
+			<DialogContent testID="order-note-dialog" portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('pos_cart.order_note')}</DialogTitle>
 				</DialogHeader>
 				<DialogBody>
-					<Textarea autoFocus value={text} minHeight={80} onChangeText={onChangeText} />
+					<Textarea
+						testID="order-note-input"
+						autoFocus
+						value={text}
+						minHeight={80}
+						onChangeText={onChangeText}
+					/>
 				</DialogBody>
 				<DialogFooter>
 					<DialogClose>{t('common.cancel')}</DialogClose>

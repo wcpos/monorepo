@@ -1,7 +1,7 @@
 import { Subject } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
 	StoreCollections,
@@ -17,18 +17,20 @@ import '../types.d';
 
 const resetLogger = getLogger(['wcpos', 'db', 'reset']);
 
+const runResetHook =
+	(hook: (collection: RxCollection) => Promise<void>) => (collection: RxCollection) =>
+		hook(collection).catch((error) =>
+			resetLogger.error('Unhandled collection reset hook failure', {
+				code: ERROR_CODES.SYNC_UNEXPECTED,
+				context: { error },
+			})
+		);
+
 // Track removal counts for debugging
 const removalCounts: Record<string, number> = {};
 
 // Track in-progress re-additions to prevent double execution
 const pendingReAdditions = new Set<string>();
-
-/**
- * Collections currently being swapped by swapCollections().
- * When a collection is in this set, the reset plugin will re-add it but NOT emit on reset$.
- * The swapCollections function handles the reset$ emission after the swap is complete.
- */
-export const swappingCollections = new Set<string>();
 
 /**
  * Set of collection names that this plugin manages.
@@ -55,18 +57,6 @@ function isManagedCollection(collectionName: string, databaseName: string): bool
 // Subjects for emitting reset events
 const storeReset = new Subject<RxCollection>();
 const syncReset = new Subject<RxCollection>();
-
-/**
- * Manually emit a reset event for a collection.
- * Used by swapCollections after swap is complete.
- */
-export function emitCollectionReset(collection: RxCollection, databaseName: string): void {
-	if (databaseName.startsWith('fast_store')) {
-		syncReset.next(collection);
-	} else if (databaseName.startsWith('store')) {
-		storeReset.next(collection);
-	}
-}
 
 /**
  * Reset Collection Plugin
@@ -120,7 +110,8 @@ export const resetCollectionPlugin: RxPlugin = {
 			 * Automatically re-add the collection after it's destroyed.
 			 * Only handles collections we manage - ignores plugin-created collections.
 			 */
-			after: async (collection) => {
+			// RxDB awaits this hook via runAsyncPluginHooks despite declaring its return type void.
+			after: runResetHook(async (collection) => {
 				const database = collection.database;
 				const collectionName = collection.name;
 
@@ -147,7 +138,11 @@ export const resetCollectionPlugin: RxPlugin = {
 				const reAddKey = `${database.name}:${collectionName}`;
 				if (pendingReAdditions.has(reAddKey)) {
 					resetLogger.debug('Skipping re-addition - already in progress', {
-						context: { collection: collectionName, database: database.name, reAddKey },
+						context: {
+							collection: collectionName,
+							database: database.name,
+							reAddKey,
+						},
 					});
 					return;
 				}
@@ -209,64 +204,49 @@ export const resetCollectionPlugin: RxPlugin = {
 						if (!schema) {
 							resetLogger.error('No schema found for sync collection', {
 								showToast: false,
-								saveToDb: true,
+								code: ERROR_CODES.SCHEMA_MISMATCH,
 								context: {
-									errorCode: ERROR_CODES.INVALID_CONFIGURATION,
 									collection: collectionName,
 								},
 							});
 							return;
 						}
 
-						const cols = await database.addCollections({ [collectionName]: schema });
+						const cols = await database.addCollections({
+							[collectionName]: schema,
+						});
 
-						// Only emit on reset$ if NOT being swapped by swapCollections
-						// (swapCollections handles emission after swap completes)
-						if (!swappingCollections.has(collectionName)) {
-							syncReset.next(cols[collectionName]);
-							resetLogger.debug('Sync collection re-added and emitted reset$', {
-								context: { collection: collectionName },
-							});
-						} else {
-							resetLogger.debug('Sync collection re-added (no emit - in swap)', {
-								context: { collection: collectionName },
-							});
-						}
+						syncReset.next(cols[collectionName]);
+						resetLogger.debug('Sync collection re-added and emitted reset$', {
+							context: { collection: collectionName },
+						});
 					} else if (database.name.startsWith('store')) {
 						const schema = storeCollections[collectionName as keyof StoreCollections];
 						if (!schema) {
 							resetLogger.error('No schema found for store collection', {
 								showToast: false,
-								saveToDb: true,
+								code: ERROR_CODES.SCHEMA_MISMATCH,
 								context: {
-									errorCode: ERROR_CODES.INVALID_CONFIGURATION,
 									collection: collectionName,
 								},
 							});
 							return;
 						}
 
-						const cols = await database.addCollections({ [collectionName]: schema });
+						const cols = await database.addCollections({
+							[collectionName]: schema,
+						});
 
-						// Only emit on reset$ if NOT being swapped by swapCollections
-						// (swapCollections handles emission after swap completes)
-						if (!swappingCollections.has(collectionName)) {
-							storeReset.next(cols[collectionName]);
-							resetLogger.debug('Store collection re-added and emitted reset$', {
-								context: { collection: collectionName },
-							});
-						} else {
-							resetLogger.debug('Store collection re-added (no emit - in swap)', {
-								context: { collection: collectionName },
-							});
-						}
+						storeReset.next(cols[collectionName]);
+						resetLogger.debug('Store collection re-added and emitted reset$', {
+							context: { collection: collectionName },
+						});
 					}
 				} catch (error: any) {
 					resetLogger.error('Failed to re-add collection', {
 						showToast: true,
-						saveToDb: true,
+						code: ERROR_CODES.SCHEMA_MISMATCH,
 						context: {
-							errorCode: ERROR_CODES.DB_UPSERT_FAILED,
 							collection: collectionName,
 							database: database.name,
 							error: error.message,
@@ -279,7 +259,7 @@ export const resetCollectionPlugin: RxPlugin = {
 					});
 					pendingReAdditions.delete(reAddKey);
 				}
-			},
+			}) as (collection: RxCollection) => void,
 		},
 	},
 };

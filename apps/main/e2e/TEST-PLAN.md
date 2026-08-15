@@ -1,13 +1,14 @@
 # WCPOS E2E Test Plan
 
-Inventory of the Playwright web suite in `apps/main/e2e/` — 120 tests across 15 spec files.
+Inventory of the Playwright web suite in `apps/main/e2e/` — 121 tests across 15 spec files.
 Regenerated from the spec files themselves (see #691 for the audit that found the previous
 version stale). If you add, remove, or rename tests, update this file.
 
 The Playwright suite defines four projects (`apps/main/playwright.config.ts`):
-`free-unauthenticated`, `free-authenticated`, `pro-unauthenticated`, `pro-authenticated`.
+`free-unauthenticated`, `free-authenticated`, `pro-unauthenticated`, `pro-authenticated`,
+plus the opt-in `pro-cold-start` profile described below.
 `auth.spec.ts` runs in the two unauthenticated projects; all other specs run in the two
-authenticated projects.
+authenticated projects (`*.cold.spec.ts` excluded).
 Specs marked **pro only** or **free only** below skip themselves on the other variant via
 `getStoreVariant()`. Authenticated specs use the `authenticatedTest` fixture from
 `fixtures.ts`, which restores a saved login and lands on the POS screen.
@@ -45,7 +46,7 @@ Authenticated Navigation:
 Drawer Navigation:
 
 - [x] All sidebar navigation buttons present (≥7: POS, Products, Orders, Customers, Reports, Logs, Support)
-- [x] Navigate to Logs page
+- [x] Navigate to Logs inside Store health
 - [x] Navigate to Support page
 - [x] Navigate to a page and back to POS
 
@@ -55,7 +56,7 @@ Header (free + pro):
 
 - [x] User menu trigger visible
 - [x] User menu dropdown opens
-- [x] Settings modal opens from user menu
+- [x] Settings area opens from user menu
 
 Upgrade Banner (free only):
 
@@ -78,7 +79,7 @@ The POS product panel defaults to **grid (tile) view**; tests cover both views a
 - [x] Variation popover opens when clicking a variable product tile (grid view)
 - [x] Add product to cart via row add-to-cart button (table view)
 
-### products-page.spec.ts — Products drawer page — 10 tests
+### products-page.spec.ts — Products drawer page — 12 tests
 
 Products Page (pro only):
 
@@ -90,13 +91,15 @@ Products Page (pro only):
 - [x] Expand variable product to show variations
 - [x] Variation actions menu with Edit/Sync/Delete
 - [x] Collapse expanded variable product
+- [x] Inline edit stock quantity: server accepts, row + REST read-back updated, stock status flips to instock (#1088)
+- [x] Inline edit stock quantity: forced 403 push rejection shows red snackbar and auto-reverts the cell (#1088, #1082)
 
 Products Page (free only):
 
 - [x] Upgrade overlay shown
 - [x] View Demo button visible
 
-### pos-cart.spec.ts (authenticated, free + pro) — 13 tests
+### pos-cart.spec.ts (authenticated, free + pro) — 14 tests
 
 POS Cart:
 
@@ -109,6 +112,12 @@ POS Cart:
 - [x] Subtotal visible in cart totals
 - [x] Cart total shown in Checkout button
 
+POS Cart — save to server parity (live store, writes):
+
+- [x] Plain one-product cart saves with identical totals (rate-set, cart_tax, total) and no
+      divergence banner (the woocommerce-pos#1545 regression oracle; see Money-oracle
+      doctrine below)
+
 POS Cart — Add Items Menu (the cart "+" dropdown):
 
 - [x] Dropdown shows Misc Product, Fee, and Shipping menu items
@@ -117,7 +126,7 @@ POS Cart — Add Items Menu (the cart "+" dropdown):
 - [x] Add miscellaneous product via the dropdown menu
 - [x] Close the add-item dialog (Escape) without adding
 
-### pos-checkout.spec.ts (authenticated, free + pro) — 11 tests
+### pos-checkout.spec.ts (authenticated, free + pro) — 12 tests
 
 Order Actions:
 
@@ -132,23 +141,41 @@ Multiple Orders:
 POS Checkout:
 
 - [x] Open checkout modal
-- [x] Order total shown in checkout (cancel + process payment buttons visible)
+- [x] Order total shown in checkout (modal amount equals the cart's Pay button amount, non-zero)
 - [x] Cancel checkout returns to cart
-- [x] Complete an order (process payment, receipt or POS screen appears)
+- [x] Payment disabled when the server omits the payment link
 - [x] Auto-print receipt after checkout when the cart settings enable auto show/print (print button auto-triggered and disabled)
+
+Real payment against the live store (**writes**, see "Live-store write discipline" below):
+
+- [x] Completes a real payment and reads the order back from the store REST API: order
+      exists and carries this run's label, `date_paid` is set and the status is not a
+      failure state, line-item count and quantities match the cart, line-item
+      `subtotal`/`total` match what the client sent, tax fields come back at full 6dp
+      stored precision (#946), and **the amount charged equals the amount the checkout
+      modal showed the cashier**
 
 Payment gateway routing (top-level tests, network-stubbed):
 
 - [x] Built-in POS gateways use the legacy webview even when `supports_checkout=true` (no contract-checkout API calls)
 - [x] Falls back to the legacy webview when `supports_checkout=false`
 
-### pos-refunds.spec.ts (pro only, network-stubbed) — 2 tests
+### pos-refunds.spec.ts (pro only) — 3 tests
 
-Both tests create a completed order, open `/orders/refund/:uuid`, and intercept the refunds
-API to assert the submitted payload:
+Two **contract** tests build an order, open `/orders/refund/:uuid`, and intercept the
+refunds API to assert the submitted payload. They stub the gateway list deliberately — a
+single live store advertises one capability set, so the `supports_provider_refunds`
+matrix is not reachable against dev-next. Their order never reaches the server and no
+payment is taken:
 
 - [x] Refund to cash for a non-cash order submits `refund_destination=cash`, `api_refund=false`
 - [x] Refund to original method (provider refunds supported) submits `refund_destination=original_method`, `api_refund=true`
+
+One **real** test against the live store (**writes**, see below), with no stubs at all:
+
+- [x] Completes a real payment, refunds part of it, and reads the refund back from the
+      store: the order carries this run's label, `refunds[]` holds exactly the one refund,
+      recorded as a negative amount at full 6dp precision
 
 ### pos-variations.spec.ts (authenticated, free + pro) — 9 tests
 
@@ -164,6 +191,12 @@ via the toggle if needed):
 - [x] Collapse expanded variable product row
 - [x] Add multiple variations to cart
 - [x] Adding the same variation twice increments quantity to 2
+
+### pos-coupon-apply.spec.ts — coupon application parity (pro + writer gated) — 1 test
+
+- [x] Create-and-find percent probe coupon → apply via cart UI → save → coupon_lines,
+      discount/total/cart_tax parity, rate-set equality; banner-absence parked on
+      woocommerce-pos#1548 (see Money-oracle doctrine)
 
 ### coupons.spec.ts — Coupons drawer page — 6 tests
 
@@ -238,17 +271,16 @@ Reports Page (free only):
 - [x] Upgrade overlay shown
 - [x] View Demo button visible
 
-### settings.spec.ts (authenticated, free + pro) — 10 tests
+### settings.spec.ts (authenticated, free + pro) — 9 tests
 
 Settings Modal:
 
-- [x] Open settings and show tabs
-- [x] General settings tab
-- [x] Tax settings tab
+- [x] Open settings and show page navigation
+- [x] General settings page
+- [x] Tax settings page
 - [x] Barcode Scanning tab
-- [x] Keyboard Shortcuts tab
 - [x] Theme tab
-- [x] Close settings modal (route-based; closes via back navigation)
+- [x] Leave settings area (route-based; closes via back navigation)
 
 Language Settings:
 
@@ -263,6 +295,136 @@ Language Settings:
 
 ---
 
+## Live-store write discipline
+
+Most specs only read. The two "real" specs above **create orders on the shared live store**
+(dev-next), which every shard and the occasional human also use. There is no ephemeral
+store, so they follow one contract, implemented in `e2e/order-lifecycle.ts`:
+
+1. **Label.** Every created order gets a globally unique run label (CI run id + attempt +
+   a per-order UUID) stamped into `customer_note`. Uniqueness is per ORDER, not per file,
+   so parallel shards and retries cannot collide.
+2. **Assert only on your own records.** The order id comes from the push ack for the order
+   under test, the ack is correlated against the checkout route's uuid, and the label is
+   re-checked on every readback. No spec asserts on "the newest order" or on global counts.
+3. **Clean up, and say what you made.** Cleanup runs in a Playwright **fixture teardown**
+   (not a `finally`) so it still runs when a test times out, and orders are registered for
+   cleanup as soon as the server acks them — not at the end of the happy path. The demo
+   cashier cannot hard-DELETE, so cleanup sets the order to `cancelled` (`trash` is
+   rejected); it refuses to touch any order whose note is not this run's label, never
+   throws, and always prints and attaches the created order ids so a leak is traceable.
+
+`readOrder` probes the REST API through Playwright's `APIRequestContext`, which page route
+stubs cannot touch, and retries transient 5xx — dev-next is a real host under load from six
+shards.
+
+## Money-oracle doctrine: parity is the invariant, drift is an alarm
+
+Every spec that creates or mutates an order asserts **totals parity**: the amounts the POS
+rang up (line taxes, tax-line rate SET, cart_tax, order total) equal the amounts the server
+recorded, and the "your store changed this order's totals" banner
+(`order-totals-changed-banner`) does NOT appear on a plain sale.
+
+This section exists because its absence cost us. The server-calc-is-truth rule ("the
+server's math wins; the POS mirrors it; divergence → cashier alert") was misread as "the
+server's numbers may legitimately differ, so don't compare them." An earlier
+`pos-checkout.spec.ts` measured a real divergence (client tax 4.090909 → server 9.163636;
+total 45.00 → 50.07) and wrote it into the spec as "dev-next applies a surcharge when the
+order is paid." It was not a surcharge. It was a live bug — the v2 push create dropped
+`_pos_store` before the server's tax calculation, so multi-store orders were taxed from the
+site base (GB VAT 20% + compound 2% ≡ ×1.224 — exactly 45.00 → 50.07) — shipped invisible
+because the one oracle that would have caught it had been talked out of the spec
+(woocommerce-pos#1545).
+
+The rules:
+
+1. **Server-calc-is-truth is about AUTHORITY, not tolerance.** The server's answer is the
+   one that counts — and on a correctly configured store it MUST equal the POS's answer.
+   Both compute the same rates from the same tax location. Equality is the invariant;
+   authority only decides who wins when the invariant breaks.
+2. **Rate-SET parity, not just amount parity.** A tax-location bug swaps which rates apply;
+   compare `tax_lines[].rate_id` sets, so a near-miss on amounts cannot slip through.
+3. **Any tolerated divergence is a named, narrowly-scoped exception** in the spec, with the
+   mechanism that causes it (e.g. a specific gateway fee extension) — never a blanket "the
+   server may recalculate differently." If a parity assertion fails against a store, the
+   default reading is REGRESSION, not environment quirk; prove the mechanism before
+   loosening the oracle.
+
+   Currently-named exceptions:
+
+   **woocommerce-pos#1548 (v2 acks vs the tax_lines rounding contract)**: v2-lane acks
+   serve `tax_lines[].tax_total` UNROUNDED (`dp=6` over raw stored per-rate sums) where
+   the money contract says display-rounded-then-padded — so the totals-changed banner
+   fires on ANY sale whose tax is not 2dp-clean (plain and couponed alike); couponed
+   acks additionally swap per-line `taxes[]` rate attribution relative to their own
+   `tax_lines`. Both banner-absence assertions (`pos-cart.spec.ts`,
+   `pos-coupon-apply.spec.ts`) are parked on that issue and re-arm when it closes; every
+   parity assertion (rate set, totals, cart_tax, discount) runs strictly and passes.
+
+   **The microunit tie** (`expectTaxParity` in `order-lifecycle.ts`):
+   server-COMPUTED tax amounts may differ from the client's by **at most one microunit**
+   (0.000001) at the 6dp storage precision — a half-way rounding tie lands on different
+   sides in PHP's float path vs the client's decimal path (observed in CI 2026-08-08:
+   4.575164 vs 4.575163; rate set and 2dp money identical). Display money (2dp) is exact;
+   two microunits fails. Eliminating the tie outright (aligning the client's 6dp storage
+   rounding with `wc_round_tax_total`'s float behaviour) is a tracked follow-up in the
+   tax-parity program — this tolerance is a measured ceiling, not a settlement.
+4. **Parity assertions are store-agnostic by construction** — they compare the two sides of
+   the same sale, never fixture values — so they belong in every order-writing spec at no
+   cost to the any-store contract.
+
+## Cold-start profile (thin local catalogue) — #991
+
+Every project above runs against a fully-synced tiny demo catalogue, so a query that
+silently falls back to **local residents only** still passes. That blind spot is how #950
+(variations search had no remote lane) and the #941–#945 filtered-browse family reached
+production. The `pro-cold-start` project removes the local shortcut.
+
+Mechanism (`e2e/cold-start.ts`, both halves deterministic — no sleeps):
+
+1. `globalSetup` runs a **second** OAuth bootstrap with bulk catalogue sync already
+   starved and `waitForCatalogue: false`, and exports it to `.auth-state/pro-cold.json`.
+   The snapshot is a genuine RxDB-consistent login with empty catalogue collections.
+2. Every cold test reinstalls the same route stub, so the catalogue cannot refill. Only
+   the **bulk** lanes over `/wcpos/v2/products` and `/wcpos/v2/customers` are answered
+   locally (empty page, huge `X-WP-Total` so the completeness gate can never claim the
+   catalogue is fully resident). Requests carrying `include=`, `search=` or `sku=`, and
+   the whole `/wcpos/v2/variations` route, reach the real server untouched.
+
+Run it:
+
+```sh
+E2E_COLD_START=1 npx playwright test --project=pro-cold-start
+```
+
+Specs opt in by file name: `*.cold.spec.ts`, using `coldStartTest` instead of
+`authenticatedTest`. Keep the subset small — the extra bootstrap costs a full OAuth round.
+
+### variation-sku-search.cold.spec.ts — 2 tests
+
+- [x] The local catalogue starts (and stays) empty — self-test for the profile
+- [x] Searching a variation SKU pulls the non-resident variation from the server
+      (skips with an explicit reason until `wcpos/v2/variations?search=` is deployed —
+      wcpos/woocommerce-pos#1441 — and PR #987 is in the bundle; the gate probes the live
+      endpoint rather than hard-coding a skip, and reuses the probe's response to
+      discover a real variation SKU)
+
+### Candidates for the same profile
+
+- **Filtered browse** (#941–#945): category / tag / brand / featured / on-sale / stock
+  pills against a thin DB — the exact regression class where a filtered window that never
+  reached the wire looked fine locally.
+- **Customer search**: `/wcpos/v2/customers` has the same census-completeness gate as
+  products, so a missing remote lane is equally invisible on a full local DB.
+- **Barcode scan of a never-seen item**: the scan path resolves by SKU/barcode and must
+  create remote demand; on a full catalogue it always hits locally.
+- **Sort change on a large catalogue**: a re-sort must re-seed a server-ordered browse
+  window rather than re-sorting the resident slice (ADR 0027 §2 / #909).
+- **Infinite scroll past the cold seed**: scrolling beyond the seeded window must fetch
+  the next page instead of stopping at the residents.
+
+---
+
 ## Future Test Ideas
 
 Lower-priority tests that would add depth but are harder to automate reliably:
@@ -272,7 +434,6 @@ Lower-priority tests that would add depth but are harder to automate reliably:
 - Session persists across page reload
 - Previously connected stores persist as site cards
 - Remove site / remove user with confirmation dialogs
-- Inline edit stock quantity on Products page (pro)
 - Inline edit price on Products page (pro)
 - Delete product with confirmation dialog (pro)
 - Re-open order from Orders page (pro)
@@ -293,7 +454,7 @@ Lower-priority tests that would add depth but are harder to automate reliably:
 - Edit and save customer billing/shipping from cart
 - Switch between multiple open orders
 - Complete order with selected customer
-- Refund flow end-to-end against a real store (current tests stub the refunds API)
+- Full refund (not just partial) and refund-to-original-method against a real store
 - Theme switching persists
 - Barcode scanning adds product
 - Offline indicator shown when network drops

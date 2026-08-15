@@ -19,9 +19,9 @@ import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { CouponDocument } from '@wcpos/database';
-import { useQuery } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
+import { useSearchSelect } from '../../../../query';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useAddCoupon } from '../hooks/use-add-coupon';
 
@@ -55,12 +55,7 @@ export function AddCoupon() {
 			if (result.success) {
 				onOpenChange(false);
 			} else {
-				setError(
-					result.error ||
-						t('pos_cart.failed_to_apply_coupon', {
-							defaultValue: 'Failed to apply coupon.',
-						})
-				);
+				setError(result.error || t('pos_cart.failed_to_apply_coupon'));
 			}
 		} finally {
 			setIsApplying(false);
@@ -71,10 +66,8 @@ export function AddCoupon() {
 		<VStack className="gap-4">
 			{error && <Text className="text-destructive">{error}</Text>}
 			<Combobox onValueChange={handleValueChange}>
-				<ComboboxTrigger>
-					<ComboboxValue
-						placeholder={t('pos_cart.select_coupon', { defaultValue: 'Select coupon...' })}
-					/>
+				<ComboboxTrigger testID="add-coupon-combobox">
+					<ComboboxValue placeholder={t('pos_cart.select_coupon')} />
 				</ComboboxTrigger>
 				<ComboboxContent
 					portalHost="pos"
@@ -92,7 +85,7 @@ export function AddCoupon() {
 					onPress={handleApply}
 					disabled={!selected || isApplying}
 				>
-					{t('common.apply', { defaultValue: 'Apply' })}
+					{t('common.apply')}
 				</DialogAction>
 			</DialogFooter>
 		</VStack>
@@ -101,61 +94,44 @@ export function AddCoupon() {
 
 function CouponSearch({ onSearchChange }: { onSearchChange?: () => void }) {
 	const t = useT();
-	const [search, setSearch] = React.useState('');
-
-	const query = useQuery({
-		queryKeys: ['coupons', 'coupon-select'],
-		collectionName: 'coupons',
-		initialParams: {
-			sort: [{ code: 'asc' }],
-		},
-		infiniteScroll: true,
-	});
+	const binding = useSearchSelect('coupon');
 
 	const onSearch = React.useCallback(
 		(value: string) => {
-			setSearch(value);
+			binding.setSearch(value);
 			onSearchChange?.();
-			query?.debouncedSearch(value);
 		},
-		[onSearchChange, query]
+		[binding.setSearch, onSearchChange]
 	);
-
-	React.useEffect(() => {
-		return () => query?.search('');
-	}, [query]);
 
 	return (
 		<>
 			<ComboboxInput
-				placeholder={t('pos_cart.search_coupons', { defaultValue: 'Search coupons...' })}
-				value={search}
+				testID="add-coupon-search-input"
+				placeholder={t('pos_cart.search_coupons')}
+				value={binding.search}
 				onChangeText={onSearch}
 			/>
 			<Suspense>
-				<CouponList query={query} />
+				<CouponList resource={binding.resource} />
 			</Suspense>
 		</>
 	);
 }
 
-function CouponList({ query }: { query: any }) {
-	const result = useObservableSuspense(query.resource) as { hits: CouponHit[] };
+function CouponList({ resource }: { resource: ReturnType<typeof useSearchSelect>['resource'] }) {
+	const result = useObservableSuspense(resource) as { hits: CouponHit[] };
 	const t = useT();
 
 	return (
 		<ComboboxList
 			data={result.hits as unknown as import('@wcpos/components/combobox').Option[]}
 			shouldFilter={false}
-			onEndReached={() => {
-				if (query?.infiniteScroll) {
-					query.loadMore();
-				}
-			}}
 			renderItem={({ item }) => {
 				const hit = item as unknown as CouponHit;
 				return (
 					<ComboboxItem
+						testID={`add-coupon-option-${hit.document.id}`}
 						value={String(hit.document.id)}
 						label={hit.document.code ?? ''}
 						item={hit.document}
@@ -165,11 +141,7 @@ function CouponList({ query }: { query: any }) {
 				);
 			}}
 			estimatedItemSize={52}
-			ListEmptyComponent={
-				<ComboboxEmpty>
-					{t('pos_cart.no_coupons_found', { defaultValue: 'No coupons found' })}
-				</ComboboxEmpty>
-			}
+			ListEmptyComponent={<ComboboxEmpty>{t('pos_cart.no_coupons_found')}</ComboboxEmpty>}
 		/>
 	);
 }
@@ -194,11 +166,11 @@ function CouponItemContent({ coupon }: { coupon: CouponDocument }) {
 	const typeLabel = React.useMemo(() => {
 		switch (coupon.discount_type) {
 			case 'percent':
-				return t('pos_cart.percentage_discount', { defaultValue: 'Percentage discount' });
+				return t('pos_cart.percentage_discount');
 			case 'fixed_cart':
-				return t('pos_cart.fixed_cart_discount', { defaultValue: 'Fixed cart discount' });
+				return t('pos_cart.fixed_cart_discount');
 			case 'fixed_product':
-				return t('pos_cart.fixed_product_discount', { defaultValue: 'Fixed product discount' });
+				return t('pos_cart.fixed_product_discount');
 			default:
 				return '';
 		}

@@ -71,6 +71,7 @@ type Props = {
 	 */
 	style?: StyleProp<ViewStyle>;
 	drawerType?: DrawerNavigationOptions['drawerType'];
+	testID?: string;
 };
 
 // Separate component for permanent drawer items (icon-only on large screens)
@@ -80,10 +81,12 @@ function PermanentDrawerItem({
 	focused,
 	onPress,
 	style,
-}: Pick<Props, 'icon' | 'label' | 'focused' | 'onPress' | 'style'>) {
+	testID,
+}: Pick<Props, 'icon' | 'label' | 'focused' | 'onPress' | 'style' | 'testID'>) {
 	const button = (
 		<Button
 			onPress={onPress}
+			testID={testID}
 			size="xl"
 			className={cn(
 				'h-12 rounded-none border-x-4 border-transparent bg-transparent px-3',
@@ -118,10 +121,12 @@ function StandardDrawerItem({
 	focused,
 	onPress,
 	style,
-}: Pick<Props, 'icon' | 'label' | 'focused' | 'onPress' | 'style'>) {
+	testID,
+}: Pick<Props, 'icon' | 'label' | 'focused' | 'onPress' | 'style' | 'testID'>) {
 	return (
 		<Button
 			onPress={onPress}
+			testID={testID}
 			size="xl"
 			className={cn(
 				'h-12 items-start rounded-none border-x-4 border-transparent bg-transparent px-3',
@@ -149,6 +154,7 @@ export function DrawerItem({
 	onPress,
 	drawerType,
 	style = {},
+	testID,
 	...rest
 }: Props) {
 	// Use permanent drawer item for 'permanent' type, standard for all others
@@ -160,6 +166,7 @@ export function DrawerItem({
 				focused={focused}
 				onPress={onPress}
 				style={style}
+				testID={testID}
 			/>
 		);
 	}
@@ -171,6 +178,7 @@ export function DrawerItem({
 			focused={focused}
 			onPress={onPress}
 			style={style}
+			testID={testID}
 		/>
 	);
 }

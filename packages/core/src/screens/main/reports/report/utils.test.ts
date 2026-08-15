@@ -80,6 +80,14 @@ describe('calculateTotals', () => {
 		expect(result.totalItemsSold).toBe(11); // 2+3+1+1+4
 	});
 
+	it('ignores NaN quantities when calculating the total items sold', () => {
+		const orders = [{ ...mockOrders[0], line_items: [{ quantity: 2 }, { quantity: NaN }] }];
+
+		const result = calculateTotals({ orders });
+
+		expect(result.totalItemsSold).toBe(2);
+	});
+
 	it('categorizes unpaid and unknown payment methods correctly', () => {
 		const result = calculateTotals({ orders: mockOrders });
 		// Note: order.total already includes tax in WooCommerce

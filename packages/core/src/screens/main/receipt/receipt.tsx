@@ -35,6 +35,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { WebView } from '@wcpos/components/webview';
 import { usePrint } from '@wcpos/printer';
+import { getLogger } from '@wcpos/utils/logger';
 
 import {
 	getReceiptPreviewPaperWidth,
@@ -67,6 +68,26 @@ const CHECKOUT_ROUTE_NAMES = ['Checkout', '(modals)/cart/[orderId]/checkout'] as
  */
 export function Receipt({ resource }: Props) {
 	const order = useObservableSuspense(resource);
+	const t = useT();
+
+	if (!isRxDocument(order)) {
+		return (
+			<Modal>
+				<ModalContent size="lg">
+					<ModalHeader>
+						<ModalTitle>
+							<Text>{t('common.no_order_found')}</Text>
+						</ModalTitle>
+					</ModalHeader>
+				</ModalContent>
+			</Modal>
+		);
+	}
+
+	return <ReceiptDocument order={order} />;
+}
+
+function ReceiptDocument({ order }: { order: import('@wcpos/database').OrderDocument }) {
 	const t = useT();
 	const iframeRef = React.useRef<HTMLIFrameElement>(null);
 	const { store } = useAppState();
@@ -193,6 +214,10 @@ export function Receipt({ resource }: Props) {
 		// (the same `wcpos_template` id the receipt URL uses as `?template=`).
 		orderId,
 		templateId: templateInfo?.id,
+		onBeforePrint: () =>
+			getLogger(['wcpos', 'pos', 'receipt']).info('Receipt print attempted', {
+				context: { event: 'receipt.print_attempted', orderId: order.uuid ?? orderId },
+			}),
 	});
 
 	/**
@@ -219,26 +244,9 @@ export function Receipt({ resource }: Props) {
 	const handleLoad = () => {
 		if (uiSettings.autoPrintReceipt && checkoutRef.current && !hasAutoPrintedRef.current) {
 			hasAutoPrintedRef.current = true;
-			print();
+			void print();
 		}
 	};
-
-	/**
-	 *
-	 */
-	if (!isRxDocument(order)) {
-		return (
-			<Modal>
-				<ModalContent size="lg">
-					<ModalHeader>
-						<ModalTitle>
-							<Text>{t('common.no_order_found')}</Text>
-						</ModalTitle>
-					</ModalHeader>
-				</ModalContent>
-			</Modal>
-		);
-	}
 
 	/**
 	 *
@@ -272,8 +280,8 @@ export function Receipt({ resource }: Props) {
 								key={previewKey}
 								paperWidth={previewPaperWidth}
 								contentSize={contentSize}
-								zoomInLabel={t('receipt.zoom_in', 'Zoom in')}
-								zoomOutLabel={t('receipt.zoom_out', 'Zoom out')}
+								zoomInLabel={t('receipt.zoom_in')}
+								zoomOutLabel={t('receipt.zoom_out')}
 								testID="receipt-preview"
 							>
 								<WebView
@@ -292,23 +300,28 @@ export function Receipt({ resource }: Props) {
 				</ModalBody>
 				<ModalFooter>
 					<ModalClose testID="receipt-close-button">{t('common.close')}</ModalClose>
-					{!isOffline ? (
-						<Dialog>
-							<DialogTrigger asChild>
-								<ModalAction>{t('receipt.email_receipt')}</ModalAction>
-							</DialogTrigger>
-							<DialogContent>
-								<DialogHeader>
-									<DialogTitle>{t('receipt.email_receipt')}</DialogTitle>
-								</DialogHeader>
-								<DialogBody>
-									<EmailForm order={order} />
-								</DialogBody>
-							</DialogContent>
-						</Dialog>
-					) : (
-						<ModalAction disabled>{t('receipt.email_receipt')}</ModalAction>
-					)}
+					{/* Reachable offline on purpose (#165). The 2026-03-06 stopgap
+					    (ba8729a77) disabled this button when the store was unreachable,
+					    because a send could only fail. It cannot any more: EmailForm owns
+					    the offline path — it explains the situation, relabels the button,
+					    and writes a durable queue row instead of a doomed round trip. A
+					    cashier finishing a sale offline is the whole reason the queue
+					    exists, so this is the one entry point that must NOT be gated on
+					    connectivity. The PDF download above still is: that one genuinely
+					    needs the server. */}
+					<Dialog>
+						<DialogTrigger asChild>
+							<ModalAction testID="receipt-email-button">{t('receipt.email_receipt')}</ModalAction>
+						</DialogTrigger>
+						<DialogContent>
+							<DialogHeader>
+								<DialogTitle>{t('receipt.email_receipt')}</DialogTitle>
+							</DialogHeader>
+							<DialogBody>
+								<EmailForm order={order} />
+							</DialogBody>
+						</DialogContent>
+					</Dialog>
 					<ModalAction
 						testID="receipt-download-pdf-button"
 						onPress={() => downloadReceiptPdf({ orderId, templateId: templateInfo?.id })}

@@ -5,6 +5,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
+import { formatMetaDataValue } from '../../../components/format-meta-data-value';
 import { EditCartItemButton } from './edit-cart-item-button';
 import { EditFeeLine } from './edit-fee-line';
 import { useT } from '../../../../../contexts/translations';
@@ -65,7 +66,7 @@ export function FeeName({ row }: CellContext<Props, 'name'>) {
 						return (
 							<React.Fragment key={meta.id || meta.key}>
 								<Text className="text-sm">{`${meta.key}:`}</Text>
-								<Text className="text-sm">{meta.value}</Text>
+								<Text className="text-sm">{formatMetaDataValue(meta.value)}</Text>
 							</React.Fragment>
 						);
 					})}

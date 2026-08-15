@@ -7,9 +7,10 @@ import { RequestConfig, requestStateManager, useHttpClient } from '@wcpos/hooks/
 import { createTokenRefreshHandler } from '@wcpos/hooks/use-http-client/create-token-refresh-handler';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAppState } from '../../../../contexts/app-state';
+import { useT } from '../../../../contexts/translations';
 import { errorSubject, useAuthErrorHandler } from './auth-error-handler';
 import { createRefreshHttpClient } from './refresh-http-client';
 
@@ -26,9 +27,8 @@ function extractValidJSON(responseString: string) {
 
 	if (indexOfJsonStart === -1) {
 		httpLogger.error('Server returned invalid response - no JSON found', {
-			saveToDb: true,
+			code: ERROR_CODES.STORE_SERVER_ERROR,
 			context: {
-				errorCode: ERROR_CODES.MALFORMED_JSON_RESPONSE,
 				responsePreview: responseString.substring(0, 200),
 			},
 		});
@@ -48,9 +48,8 @@ function extractValidJSON(responseString: string) {
 	}
 
 	httpLogger.error('Unable to parse server response', {
-		saveToDb: true,
+		code: ERROR_CODES.STORE_SERVER_ERROR,
 		context: {
-			errorCode: ERROR_CODES.MALFORMED_JSON_RESPONSE,
 			responsePreview: responseString.substring(0, 200),
 		},
 	});
@@ -60,6 +59,7 @@ function extractValidJSON(responseString: string) {
 export const useRestHttpClient = (endpoint = '') => {
 	const { site, wpCredentials, store, logout } = useAppState();
 	const { status: onlineStatus } = useOnlineStatus();
+	const t = useT();
 
 	/**
 	 * NOTE: We intentionally do NOT use useObservableEagerState for the JWT token.
@@ -104,8 +104,9 @@ export const useRestHttpClient = (endpoint = '') => {
 				site,
 				wpUser: wpCredentials,
 				getHttpClient,
+				sessionRenewedMessage: t('auth.session_renewed_automatically'),
 			}),
-		[site, wpCredentials, getHttpClient]
+		[site, wpCredentials, getHttpClient, t]
 	);
 
 	/**
@@ -173,11 +174,12 @@ export const useRestHttpClient = (endpoint = '') => {
 			);
 
 			let apiURL = site.wcpos_api_url;
+			const wpApiURL = site.wp_api_url.replace(/\/?$/, '/');
 
-			// sanity check, make sure we have a wcpos_api_url
-			if (!apiURL) {
-				apiURL = site.wp_api_url + 'wcpos/v1';
-				site.incrementalPatch({ wcpos_api_url: apiURL });
+			// Migrate missing and persisted v1 service bases to v2.
+			if (!apiURL || /\/wcpos\/v1\/?$/.test(apiURL)) {
+				apiURL = wpApiURL + 'wcpos/v2';
+				await site.incrementalPatch({ wcpos_api_url: apiURL });
 			}
 
 			const defaultConfig = {
@@ -207,9 +209,8 @@ export const useRestHttpClient = (endpoint = '') => {
 				 */
 				if (typeof response?.data === 'string') {
 					httpLogger.warn('Server returned text instead of JSON - attempting recovery', {
-						saveToDb: true,
+						code: ERROR_CODES.STORE_RESPONSE_MALFORMED,
 						context: {
-							errorCode: ERROR_CODES.JSON_RECOVERY_ATTEMPTED,
 							endpoint,
 							url: config.url,
 							responsePreview: response.data.substring(0, 200),

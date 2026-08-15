@@ -11,6 +11,7 @@ import { VStack } from '@wcpos/components/vstack';
 import type { ProductDocument } from '@wcpos/database';
 
 import { VariationTableFooter } from './footer';
+import { resolveVariationStock } from '../../../../pos/products/cells/variations-popover/variation-stock';
 import { TextCell } from '../../../../components/text-cell';
 import { getColumnStyle } from '../../../data-table';
 
@@ -19,8 +20,9 @@ import type { CellContext, Row } from '@tanstack/react-table';
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 
 interface Props {
-	query: import('@wcpos/query').Query<import('@wcpos/database').ProductVariationCollection>;
+	binding: ReturnType<typeof import('../../../../../../query').useCollectionBinding<'variations'>>;
 	row: Row<{ document: ProductDocument }>;
+	hideOutOfStock?: boolean;
 }
 
 interface VariationHit {
@@ -54,8 +56,27 @@ const cellRenderer = (props: CellContext<Record<string, unknown>, unknown>) => {
 /**
  *
  */
-export function VariationsTable({ query, row }: Props) {
-	const result = useObservableSuspense(query.resource) as { hits: VariationHit[] };
+export function VariationsTable({ binding, row, hideOutOfStock }: Props) {
+	/**
+	 * React Compiler breaks tanstack/react-table: it caches the
+	 * row.getVisibleCells() JSX keyed on the stable Row object, so subrows keep
+	 * rendering stale columns after a columnVisibility change.
+	 * https://github.com/facebook/react/issues/33057
+	 *
+	 * eslint's react-compiler rule (19.1.0-rc.2) claims this directive is unused,
+	 * but babel-plugin-react-compiler 1.0.0 (the app build) does memoize this
+	 * component — see column-visibility.test.tsx, which compiles it for real.
+	 */
+	// eslint-disable-next-line react-compiler/react-compiler -- directive is load-bearing under babel-plugin-react-compiler 1.0.0
+	'use no memo';
+	const result = useObservableSuspense(binding.resource) as { hits: VariationHit[] };
+	const hits = React.useMemo(
+		() =>
+			hideOutOfStock
+				? result.hits.filter((hit) => resolveVariationStock(hit.document).sellable)
+				: result.hits,
+		[hideOutOfStock, result.hits]
+	);
 
 	/**
 	 * @NOTE - Don't use a unique key here, index is sufficient
@@ -63,7 +84,7 @@ export function VariationsTable({ query, row }: Props) {
 	 */
 	return (
 		<VStack className="gap-0">
-			{result.hits.map((hit: VariationHit, index: number) => {
+			{hits.map((hit: VariationHit, index: number) => {
 				return (
 					<TableRow key={index} index={index}>
 						{row
@@ -110,11 +131,7 @@ export function VariationsTable({ query, row }: Props) {
 					</TableRow>
 				);
 			})}
-			<VariationTableFooter
-				query={query}
-				parent={row.original.document}
-				count={result.hits.length}
-			/>
+			<VariationTableFooter binding={binding} parent={row.original.document} count={hits.length} />
 		</VStack>
 	);
 }

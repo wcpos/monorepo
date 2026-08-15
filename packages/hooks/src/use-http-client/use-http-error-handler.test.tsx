@@ -14,21 +14,6 @@ jest.mock('@wcpos/utils/logger', () => ({
 	})),
 }));
 
-jest.mock('@wcpos/utils/logger/error-codes', () => ({
-	ERROR_CODES: {
-		SSL_CERTIFICATE_ERROR: 'SSL_CERTIFICATE_ERROR',
-		INVALID_REQUEST_FORMAT: 'INVALID_REQUEST_FORMAT',
-		INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
-		INSUFFICIENT_PERMISSIONS: 'INSUFFICIENT_PERMISSIONS',
-		PLUGIN_NOT_FOUND: 'PLUGIN_NOT_FOUND',
-		CONNECTION_REFUSED: 'CONNECTION_REFUSED',
-		CONNECTION_TIMEOUT: 'CONNECTION_TIMEOUT',
-		UNEXPECTED_RESPONSE_CODE: 'UNEXPECTED_RESPONSE_CODE',
-		NETWORK_UNREACHABLE: 'NETWORK_UNREACHABLE',
-		REQUEST_QUEUE_FULL: 'REQUEST_QUEUE_FULL',
-	},
-}));
-
 jest.mock('./parse-wp-error', () => ({
 	extractErrorMessage: jest.fn((_data: any, fallback: string) => fallback),
 	extractWpErrorCode: jest.fn(() => undefined),
@@ -73,7 +58,7 @@ describe('useHttpErrorHandler', () => {
 				'SSL certificate error',
 				expect.objectContaining({
 					showToast: true,
-					context: expect.objectContaining({ errorCode: 'SSL_CERTIFICATE_ERROR' }),
+					code: 'AUTH401',
 				})
 			);
 		});
@@ -85,7 +70,7 @@ describe('useHttpErrorHandler', () => {
 				'Bad request',
 				expect.objectContaining({
 					showToast: true,
-					context: expect.objectContaining({ errorCode: 'INVALID_REQUEST_FORMAT' }),
+					code: 'SYNC211',
 				})
 			);
 		});
@@ -97,7 +82,7 @@ describe('useHttpErrorHandler', () => {
 				'Authentication failed',
 				expect.objectContaining({
 					showToast: true,
-					context: expect.objectContaining({ errorCode: 'INVALID_CREDENTIALS' }),
+					code: 'AUTH101',
 				})
 			);
 		});
@@ -109,7 +94,7 @@ describe('useHttpErrorHandler', () => {
 				'Access forbidden',
 				expect.objectContaining({
 					showToast: true,
-					context: expect.objectContaining({ errorCode: 'INSUFFICIENT_PERMISSIONS' }),
+					code: 'AUTH201',
 				})
 			);
 		});
@@ -121,7 +106,7 @@ describe('useHttpErrorHandler', () => {
 				'Resource not found',
 				expect.objectContaining({
 					showToast: true,
-					context: expect.objectContaining({ errorCode: 'PLUGIN_NOT_FOUND' }),
+					code: 'AUTH311',
 				})
 			);
 		});
@@ -133,7 +118,7 @@ describe('useHttpErrorHandler', () => {
 				'Internal server error',
 				expect.objectContaining({
 					showToast: true,
-					context: expect.objectContaining({ errorCode: 'CONNECTION_REFUSED' }),
+					code: 'SYNC131',
 				})
 			);
 		});
@@ -145,8 +130,8 @@ describe('useHttpErrorHandler', () => {
 				`Server unavailable (${status})`,
 				expect.objectContaining({
 					showToast: true,
+					code: 'SYNC131',
 					context: expect.objectContaining({
-						errorCode: 'CONNECTION_TIMEOUT',
 						status,
 					}),
 				})
@@ -160,8 +145,8 @@ describe('useHttpErrorHandler', () => {
 				'Unexpected response (418)',
 				expect.objectContaining({
 					showToast: true,
+					code: 'SYNC131',
 					context: expect.objectContaining({
-						errorCode: 'UNEXPECTED_RESPONSE_CODE',
 						status: 418,
 					}),
 				})
@@ -208,7 +193,7 @@ describe('useHttpErrorHandler', () => {
 			expect.stringContaining('Network error'),
 			expect.objectContaining({
 				showToast: true,
-				context: expect.objectContaining({ errorCode: 'NETWORK_UNREACHABLE' }),
+				code: 'SYNC121',
 			})
 		);
 	});
@@ -220,7 +205,7 @@ describe('useHttpErrorHandler', () => {
 			'Server unavailable: /test-endpoint',
 			expect.objectContaining({
 				showToast: true,
-				context: expect.objectContaining({ errorCode: 'CONNECTION_REFUSED' }),
+				code: 'SYNC121',
 			})
 		);
 	});
@@ -241,7 +226,7 @@ describe('useHttpErrorHandler', () => {
 			'Network error: DNS lookup failed',
 			expect.objectContaining({
 				showToast: true,
-				context: expect.objectContaining({ errorCode: 'NETWORK_UNREACHABLE' }),
+				code: 'SYNC121',
 			})
 		);
 	});
@@ -253,7 +238,7 @@ describe('useHttpErrorHandler', () => {
 			'Network error: some string error',
 			expect.objectContaining({
 				showToast: true,
-				context: expect.objectContaining({ errorCode: 'NETWORK_UNREACHABLE' }),
+				code: 'SYNC121',
 			})
 		);
 	});

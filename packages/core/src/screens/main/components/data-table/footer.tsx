@@ -1,30 +1,51 @@
 import * as React from 'react';
 
 import { useObservableEagerState, useObservableState } from 'observable-hooks';
-import { of } from 'rxjs';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import { Query, useReplicationState } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
+import { useQueryStateActions } from '../../../../query';
 import { useCollectionReset } from '../../hooks/use-collection-reset';
 import { SyncButton } from '../sync-button';
 
-interface Props {
+import type { CollectionKey } from '../../hooks/use-collection';
+import type { Observable } from 'rxjs';
+
+interface CommonProps {
 	children?: React.ReactNode;
-	query: Query<any>;
 	count: number;
 }
+
+export type BindingDataTableFooterProps = CommonProps & {
+	collectionName: CollectionKey;
+	active$: Observable<boolean>;
+	total$: Observable<number>;
+	totalSource$: Observable<'coverage' | 'local'>;
+	sync: () => Promise<void>;
+};
+
+type FooterContentProps = CommonProps &
+	Pick<BindingDataTableFooterProps, 'active$' | 'sync' | 'total$' | 'totalSource$'> & {
+		clearAndSync: () => Promise<void>;
+	};
 
 /**
  *
  */
-export function DataTableFooter({ children, query, count }: Props) {
-	const { sync, active$, total$ } = useReplicationState(query);
-	const { clearAndSync } = useCollectionReset(query.collection.name);
+function FooterContent({
+	children,
+	count,
+	active$,
+	total$,
+	totalSource$,
+	sync,
+	clearAndSync,
+}: FooterContentProps) {
 	const loading = useObservableEagerState(active$);
-	const total = useObservableState(total$ ?? of(0), 0);
+	const total = useObservableState(total$, 0);
+	const totalSource = useObservableState(totalSource$, 'local');
 	const t = useT();
 
 	return (
@@ -32,10 +53,27 @@ export function DataTableFooter({ children, query, count }: Props) {
 			<HStack className="flex-1 justify-start *:flex-1">{children}</HStack>
 			<HStack className="justify-end gap-0">
 				<Text testID="data-table-count" className="text-xs">
-					{t('common.showing_of', { shown: count, total })}
+					{totalSource === 'local'
+						? t('common.showing_of_at_least', { shown: count, total })
+						: t('common.showing_of', { shown: count, total })}
+				</Text>
+				<Text testID="data-table-loaded-count" className="hidden">
+					{count}
 				</Text>
 				<SyncButton sync={sync} clearAndSync={clearAndSync} active={loading} />
 			</HStack>
 		</HStack>
 	);
+}
+
+export function DataTableFooter({ collectionName, ...props }: BindingDataTableFooterProps) {
+	const { clearAndSync } = useCollectionReset(collectionName);
+	const { clearSearch, resetFilters } = useQueryStateActions();
+	const resetQueryAndCollection = React.useCallback(() => {
+		clearSearch();
+		resetFilters();
+		return clearAndSync();
+	}, [clearAndSync, clearSearch, resetFilters]);
+
+	return <FooterContent {...props} clearAndSync={resetQueryAndCollection} />;
 }

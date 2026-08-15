@@ -2,7 +2,9 @@
  * @jest-environment jsdom
  */
 import { act, renderHook } from '@testing-library/react';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
+
+import type { ScanEvent } from '@wcpos/scanner';
 
 import { useBarcodeDetection } from './use-barcode-detection';
 
@@ -12,6 +14,17 @@ const suffix$ = new BehaviorSubject('');
 const avgThreshold$ = new BehaviorSubject(24);
 
 const focusEffectCleanups: (() => void)[] = [];
+const mockToastShow = jest.fn();
+const mockMarkUserActivity = jest.fn();
+const attributedEvents$ = new Subject<ScanEvent>();
+const cameraEvents$ = new Subject<ScanEvent>();
+const deviceEvents$ = new Subject<ScanEvent>();
+const mockUseAttributedWedge = jest.fn((_enabled?: boolean) => ({
+	scanEvents$: attributedEvents$,
+	available: true,
+	profiles: [],
+}));
+let mockIsFocused = true;
 
 jest.mock('expo-router', () => ({
 	useFocusEffect: (callback: () => void | (() => void)) => {
@@ -21,6 +34,26 @@ jest.mock('expo-router', () => ({
 		}
 	},
 }));
+jest.mock('expo-router/react-navigation', () => ({
+	useIsFocused: () => mockIsFocused,
+}));
+jest.mock('./use-attributed-wedge', () => ({
+	useAttributedWedge: (enabled?: boolean) => mockUseAttributedWedge(enabled),
+}));
+jest.mock('./camera-scan-context', () => ({
+	useCameraScanBus: () => ({ events$: cameraEvents$, emit: jest.fn() }),
+}));
+jest.mock('./device-scan-context', () => ({
+	useDeviceScanBus: () => ({ events$: deviceEvents$ }),
+}));
+
+// Stable storeDB stub: the attributed-wedge source (merged into scanEvents$)
+// reads scanner_profiles through useCollection.
+const mockScannerProfiles = { find: () => ({ $: new BehaviorSubject([]) }) };
+const mockStoreDB = {
+	reset$: new Subject(),
+	collections: { scanner_profiles: mockScannerProfiles },
+};
 
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({
@@ -30,6 +63,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 			barcode_scanning_suffix$: suffix$,
 			barcode_scanning_avg_time_input_threshold$: avgThreshold$,
 		},
+		storeDB: mockStoreDB,
 	}),
 }));
 
@@ -49,6 +83,14 @@ jest.mock('@wcpos/utils/logger', () => {
 	};
 });
 
+jest.mock('@wcpos/components/toast', () => ({
+	// Lazy closure: the hoisted factory must not evaluate mockToastShow before init.
+	Toast: { show: (...args: unknown[]) => mockToastShow(...args) },
+}));
+jest.mock('@wcpos/utils/user-activity', () => ({
+	markUserActivity: (...args: unknown[]) => mockMarkUserActivity(...args),
+}));
+
 const barcodeLogger = jest.requireMock('@wcpos/utils/logger').__barcodeLogger as {
 	warn: jest.Mock;
 };
@@ -67,6 +109,7 @@ describe('useBarcodeDetection', () => {
 		prefix$.next('');
 		suffix$.next('');
 		avgThreshold$.next(24);
+		mockIsFocused = true;
 	});
 
 	afterEach(() => {
@@ -204,5 +247,105 @@ describe('useBarcodeDetection', () => {
 		expect(barcodeLogger.warn).not.toHaveBeenCalled();
 
 		subscription.unsubscribe();
+	});
+
+	it('shows a direct warning toast and logs a scan shorter than the minimum length', () => {
+		const detected: string[] = [];
+		const { result } = renderHook(() => useBarcodeDetection());
+		const subscription = result.current.barcode$.subscribe((barcode) =>
+			detected.push(String(barcode))
+		);
+
+		act(() => {
+			dispatchBarcode('1234');
+			jest.advanceTimersByTime(151);
+		});
+
+		expect(detected).toEqual([]);
+		expect(mockToastShow).toHaveBeenCalledWith({
+			type: 'warning',
+			title: 'common.barcode_scanned',
+			description: 'Barcode must be at least 8 characters long',
+			duration: 6000,
+		});
+		expect(barcodeLogger.warn).toHaveBeenCalledWith(
+			'Scanned barcode was shorter than the minimum length',
+			expect.not.objectContaining({ showToast: expect.anything(), toast: expect.anything() })
+		);
+
+		subscription.unsubscribe();
+	});
+
+	it('bridges attributed scans to barcode$ without duplicating scanEvents$', () => {
+		const barcodes: string[] = [];
+		const events: ScanEvent[] = [];
+		const { result } = renderHook(() => useBarcodeDetection());
+		const barcodeSubscription = result.current.barcode$.subscribe((code) => barcodes.push(code));
+		const eventSubscription = result.current.scanEvents$.subscribe((event) => events.push(event));
+		const attributedEvent: ScanEvent = {
+			code: '9310988001234',
+			source: { kind: 'wedge-attributed', profileId: 'profile-1' },
+			timestamp: 123,
+		};
+
+		act(() => attributedEvents$.next(attributedEvent));
+
+		expect(barcodes).toEqual(['9310988001234']);
+		expect(events).toEqual([attributedEvent]);
+		barcodeSubscription.unsubscribe();
+		eventSubscription.unsubscribe();
+	});
+
+	it('marks native wedge scans as user activity after they pass the scan gate', () => {
+		const { result } = renderHook(() => useBarcodeDetection());
+		const subscription = result.current.scanEvents$.subscribe();
+
+		act(() => {
+			for (const key of '12345678') {
+				result.current.onKeyPress({
+					nativeEvent: { key },
+				} as Parameters<typeof result.current.onKeyPress>[0]);
+				jest.advanceTimersByTime(10);
+			}
+			jest.advanceTimersByTime(200);
+		});
+
+		expect(mockMarkUserActivity).toHaveBeenCalledTimes(1);
+		subscription.unsubscribe();
+	});
+
+	it('marks attributed, camera, serial, and HID scans as user activity', () => {
+		const { result } = renderHook(() => useBarcodeDetection());
+		const subscription = result.current.scanEvents$.subscribe();
+		const events: ScanEvent[] = [
+			{
+				code: 'attributed',
+				source: { kind: 'wedge-attributed', profileId: 'profile-1' },
+				timestamp: 1,
+			},
+			{ code: 'camera', source: { kind: 'camera' }, timestamp: 2 },
+			{ code: 'serial', source: { kind: 'serial' }, timestamp: 3 },
+			{ code: 'hid', source: { kind: 'hid-pos' }, timestamp: 4 },
+		];
+
+		act(() => {
+			attributedEvents$.next(events[0]!);
+			cameraEvents$.next(events[1]!);
+			deviceEvents$.next(events[2]!);
+			deviceEvents$.next(events[3]!);
+		});
+
+		expect(mockMarkUserActivity).toHaveBeenCalledTimes(4);
+		subscription.unsubscribe();
+	});
+
+	it('disables attributed capture when the screen loses focus', () => {
+		const { rerender } = renderHook(() => useBarcodeDetection());
+		expect(mockUseAttributedWedge).toHaveBeenLastCalledWith(true);
+
+		mockIsFocused = false;
+		rerender();
+
+		expect(mockUseAttributedWedge).toHaveBeenLastCalledWith(false);
 	});
 });

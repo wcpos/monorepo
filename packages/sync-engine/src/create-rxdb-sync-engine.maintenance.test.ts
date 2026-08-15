@@ -1,0 +1,958 @@
+/**
+ * Slice 5d: the four maintenance lanes driven ENTIRELY through the public
+ * handle (mode:'manual' + sync(lane)) against /testing adapters — the web
+ * host's mountWebSyncHost lanes 4–7, now engine verbs.
+ */
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
+
+import {
+	type CensusTotals,
+	type EngineEvent,
+	type RxdbSyncEngine,
+	type RxdbSyncEnginePorts,
+	type StoreScopeIdentity,
+} from './create-rxdb-sync-engine';
+import { RxCoverageRepository } from './local-coverage/persistence';
+import { REFERENCE_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
+import { RxQueryTotalRequestStateRepository } from './rx-query-total-request-state-repository';
+import * as schedulerDrain from './scheduler/engine-scheduler-drain';
+import { ledgerRebuiltSchedulerTaskRunnerResult } from './scheduler/rx-scheduler-task-runner';
+import { createEngineHarness, memoryEngineStorage } from './testing';
+
+setPremiumFlag();
+
+// A spy installed inside a test must not survive a failed assertion into the next one.
+afterEach(() => {
+	vi.restoreAllMocks();
+});
+
+const SITE = 'https://lab.example.test';
+let uniqueStore = 0;
+
+const refusalError = (reason: string) => new SyntaxError(`index reconciliation refused: ${reason}`);
+
+function freshIdentity(): StoreScopeIdentity {
+	uniqueStore += 1;
+	return { site: SITE, storeId: 5, cashierId: `maint-${uniqueStore}` };
+}
+
+function engineWith(
+	overrides?: Partial<RxdbSyncEnginePorts>,
+	identity = freshIdentity()
+): RxdbSyncEngine {
+	const { now = Date.now, diagnostics, connectivity, fetcher, ...ports } = overrides ?? {};
+	return createEngineHarness({
+		site: SITE,
+		identity,
+		mode: 'manual',
+		captureTimers: overrides?.mode === 'auto',
+		now,
+		diagnostics,
+		connectivitySignal: connectivity,
+		...(fetcher === undefined ? {} : { fetch: fetcher }),
+		ports,
+		awaitReady: false,
+	}).engine;
+}
+
+async function taskRows(engine: RxdbSyncEngine): Promise<Record<string, unknown>[]> {
+	const scope = engine.active();
+	if (!scope) throw new Error('no active scope');
+	const docs = await (
+		scope.database.collections.schedulerTaskStates as {
+			find(): { exec(): Promise<{ toJSON(): Record<string, unknown> }[]> };
+		}
+	)
+		.find()
+		.exec();
+	return docs.map((doc) => doc.toJSON());
+}
+
+describe('maintenance lanes through the public handle (slice 5d)', () => {
+	it('checks one fresh collection census and ticks change-signal exactly once', async () => {
+		let productTotal = 40;
+		const fetchWooQueryTotal = vi.fn(async ({ request }: { request: { queryKey: string } }) =>
+			request.queryKey === 'census:products' ? productTotal : 40
+		);
+		const engine = engineWith({
+			queryTotal: { fetchWooQueryTotal },
+			now: () => 1_000_000,
+			intervals: { censusFreshForMs: 60_000 },
+		});
+		await engine.ready;
+		await engine.sync('query-total-retry');
+		fetchWooQueryTotal.mockClear();
+		productTotal = 91;
+
+		const events: EngineEvent[] = [];
+		engine.events((event) => events.push(event));
+		const emissions: CensusTotals[] = [];
+		const unsubscribe = engine.censusChanges((totals) => emissions.push(totals));
+
+		await expect(engine.checkCollection('products')).resolves.toMatchObject({
+			collection: 'products',
+			status: 'ran',
+		});
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(1);
+		expect(fetchWooQueryTotal.mock.calls[0]?.[0].request).toMatchObject({
+			queryKey: 'census:products',
+			endpoint: 'products',
+			params: { page: 1, per_page: 1, status: 'publish' },
+		});
+		expect(events.filter((event) => event.type === 'query-total-cache')).toHaveLength(1);
+		expect(
+			events.filter((event) => event.type === 'lane-start' && event.lane === 'change-signal')
+		).toHaveLength(1);
+		// The forced probe rides the registered query-total-retry lane, so its
+		// events flow through the standard instrumentation.
+		expect(
+			events.filter((event) => event.type === 'lane-start' && event.lane === 'query-total-retry')
+		).toHaveLength(1);
+		await vi.waitFor(() => expect(emissions.at(-1)?.products?.total).toBe(91));
+
+		unsubscribe();
+		await engine.dispose();
+	});
+
+	it('skips a collection check while a lifecycle operation is pending', async () => {
+		const fetchWooQueryTotal = vi.fn(async () => 40);
+		const engine = engineWith({ queryTotal: { fetchWooQueryTotal } });
+		await engine.ready;
+		let enterReset!: () => void;
+		let releaseReset!: () => void;
+		const resetEntered = new Promise<void>((resolve) => {
+			enterReset = resolve;
+		});
+		const resetHeld = new Promise<void>((resolve) => {
+			releaseReset = resolve;
+		});
+		const resetting = engine.scope.resetCollection('products', {
+			beforeDrop: async () => {
+				enterReset();
+				await resetHeld;
+			},
+		});
+		await resetEntered;
+
+		await expect(engine.checkCollection('products')).resolves.toEqual({
+			collection: 'products',
+			status: 'skipped',
+			reason: 'lifecycle operation pending',
+		});
+		expect(fetchWooQueryTotal).not.toHaveBeenCalled();
+
+		releaseReset();
+		await resetting;
+		await engine.dispose();
+	});
+
+	it('rejects an unknown collection check', async () => {
+		const engine = engineWith();
+		await engine.ready;
+
+		await expect(engine.checkCollection('unknown' as never)).rejects.toThrow(
+			'Unknown sync collection "unknown"'
+		);
+		await engine.dispose();
+	});
+
+	it('surfaces a failed forced census on the registered lane and retries it on the next manual check', async () => {
+		let failProbe = true;
+		const fetchWooQueryTotal = vi.fn(async () => {
+			if (failProbe) throw new Error('HTTP 502');
+			return 77;
+		});
+		const engine = engineWith({
+			queryTotal: { fetchWooQueryTotal },
+			now: () => 2_000_000,
+			intervals: { censusFreshForMs: 60_000 },
+		});
+		await engine.ready;
+		const events: EngineEvent[] = [];
+		engine.events((event) => events.push(event));
+
+		await expect(engine.checkCollection('products')).resolves.toMatchObject({
+			collection: 'products',
+			status: 'error',
+		});
+		expect(engine.status().lanes['query-total-retry'].lastError).toContain(
+			'Census refresh failed for products'
+		);
+		expect(
+			events.some(
+				(event) =>
+					event.type === 'lane-finish' &&
+					event.lane === 'query-total-retry' &&
+					event.status === 'error'
+			)
+		).toBe(true);
+
+		// The failure left the request state 'failed' mid-backoff (the fixed clock
+		// never reaches retryAfterMs) — the next manual check must wake it NOW
+		// instead of skipping until the periodic lane's backoff expires.
+		failProbe = false;
+		fetchWooQueryTotal.mockClear();
+		const emissions: CensusTotals[] = [];
+		const unsubscribe = engine.censusChanges((totals) => emissions.push(totals));
+		await expect(engine.checkCollection('products')).resolves.toMatchObject({ status: 'ran' });
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(1);
+		await vi.waitFor(() => expect(emissions.at(-1)?.products?.total).toBe(77));
+		expect(engine.status().lanes['query-total-retry'].lastError).toBeNull();
+
+		unsubscribe();
+		await engine.dispose();
+	});
+
+	it('seeds the POS bootstrap lanes once for each opened scope without reseeding a returning scope', async () => {
+		const initialIdentity = freshIdentity();
+		const engine = engineWith(undefined, initialIdentity);
+		await engine.ready;
+
+		const initialRows = await taskRows(engine);
+		expect(initialRows.map((row) => row['collectionName'])).toEqual(['taxRates']);
+
+		const initialScope = engine.active();
+		if (!initialScope) throw new Error('no active scope');
+		const initialTaskDocuments = await (
+			initialScope.database.collections.schedulerTaskStates as {
+				find(): {
+					exec(): Promise<{ incrementalPatch(patch: Record<string, unknown>): Promise<unknown> }[]>;
+				};
+			}
+		)
+			.find()
+			.exec();
+		await Promise.all(
+			initialTaskDocuments.map((document) => document.incrementalPatch({ status: 'completed' }))
+		);
+		expect((await taskRows(engine)).every((row) => row['status'] === 'completed')).toBe(true);
+
+		await engine.scope.switch(freshIdentity());
+		const switchedRows = await taskRows(engine);
+		expect(switchedRows.map((row) => row['collectionName'])).toEqual(['taxRates']);
+
+		await engine.scope.switch(initialIdentity);
+		const returnedRows = await taskRows(engine);
+		expect(returnedRows).toHaveLength(initialRows.length);
+		expect(returnedRows.every((row) => row['status'] === 'completed')).toBe(true);
+		await engine.dispose();
+	});
+
+	it('order-window-seed persists the windowed open-recent task into the scope database', async () => {
+		const engine = engineWith();
+		await engine.ready;
+		const report = await engine.sync('order-window-seed');
+		expect(report.status).toBe('ran');
+
+		const rows = await taskRows(engine);
+		const windowed = rows.find(
+			(row) => row['collectionName'] === 'orders' && row['mode'] === 'windowed'
+		);
+		expect(windowed).toBeDefined();
+		expect(windowed!['priority']).toBe(600);
+		expect(String(windowed!['queryKey'])).toContain('pending,processing,on-hold');
+		await engine.dispose();
+	});
+
+	it('product-browse-window-seed persists the windowed browse task into a cold scope database', async () => {
+		const engine = engineWith();
+		await engine.ready;
+		const report = await engine.sync('product-browse-window-seed');
+		expect(report.status).toBe('ran');
+
+		const rows = await taskRows(engine);
+		const windowed = rows.find(
+			(row) => row['collectionName'] === 'products' && row['mode'] === 'windowed'
+		);
+		expect(windowed).toBeDefined();
+		expect(windowed!['priority']).toBe(500);
+		expect(String(windowed!['queryKey'])).toContain('products:browse-window:limit=100');
+		await engine.dispose();
+	});
+
+	it('orders the browse window below the orders open-recent window at drain time', async () => {
+		const engine = engineWith();
+		await engine.ready;
+		expect((await engine.sync('order-window-seed')).status).toBe('ran');
+		expect((await engine.sync('product-browse-window-seed')).status).toBe('ran');
+
+		const rows = await taskRows(engine);
+		const orderWindow = rows.find(
+			(row) => row['collectionName'] === 'orders' && row['mode'] === 'windowed'
+		);
+		const browseWindow = rows.find(
+			(row) => row['collectionName'] === 'products' && row['mode'] === 'windowed'
+		);
+		expect(Number(browseWindow!['priority'])).toBeLessThan(Number(orderWindow!['priority']));
+		await engine.dispose();
+	});
+
+	it('refreshes a reference on demand, dedupes a remount, and maintains only materialized lanes', async () => {
+		let nowMs = 1_000_000;
+		const pulls = { categories: 0, brands: 0, tags: 0, coupons: 0 };
+		const engine = engineWith({
+			now: () => nowMs,
+			fetcher: async (url) => {
+				const path = new URL(url).pathname;
+				for (const collection of Object.keys(pulls) as (keyof typeof pulls)[]) {
+					const endpoint = collection === 'coupons' ? '/coupons' : `/products/${collection}`;
+					if (path.endsWith(endpoint)) {
+						pulls[collection] += 1;
+						return Response.json(
+							collection === 'categories'
+								? [
+										{
+											id: 1,
+											name: 'Category 1',
+											meta_data: [
+												{
+													key: '_woocommerce_pos_uuid',
+													value: '55555555-5555-4555-8555-555555555555',
+												},
+											],
+										},
+									]
+								: []
+						);
+					}
+				}
+				return Response.json([]);
+			},
+		});
+		await engine.ready;
+
+		await engine.sync('reference-seed');
+		expect((await taskRows(engine)).filter((row) => row['collectionName'] !== 'taxRates')).toEqual(
+			[]
+		);
+
+		const opened = await engine.require({
+			id: 'category-picker',
+			collection: 'categories',
+			kind: 'refresh',
+		}).ready;
+		expect(opened).toMatchObject({ action: 'fetched' });
+		expect(pulls).toEqual({ categories: 1, brands: 0, tags: 0, coupons: 0 });
+
+		// A remount inside the dedupe window resolves against local residents rather than
+		// re-pulling — the outcome has to say so, not claim a fetch that never happened.
+		const remounted = await engine.require({
+			id: 'category-picker-remount',
+			collection: 'categories',
+			kind: 'refresh',
+		}).ready;
+		expect(remounted).toMatchObject({
+			action: 'serve-local',
+			requests: 0,
+			documents: 0,
+		});
+		expect(pulls).toEqual({ categories: 1, brands: 0, tags: 0, coupons: 0 });
+
+		nowMs += REFERENCE_REFRESH_DEDUPE_MS + 1;
+		await engine.sync('reference-seed');
+		await engine.sync('scheduler-drain');
+		expect(pulls).toEqual({ categories: 2, brands: 0, tags: 0, coupons: 0 });
+
+		// An ACTIVE lane is not the same answer as a deduped one: another owner is mid-pull,
+		// so this caller is released (as the orders/products require branches do) rather than
+		// being told its stale residents are fresh.
+		const scope = engine.active();
+		if (!scope) throw new Error('no active scope');
+		const [categoriesTask] = await (
+			scope.database.collections.schedulerTaskStates as {
+				find(query: unknown): {
+					exec(): Promise<{ incrementalPatch(patch: unknown): Promise<unknown> }[]>;
+				};
+			}
+		)
+			.find({ selector: { taskId: { $regex: '^categories' } } })
+			.exec();
+		await categoriesTask!.incrementalPatch({ status: 'in-flight' });
+
+		const contended = await engine.require({
+			id: 'category-picker-contended',
+			collection: 'categories',
+			kind: 'refresh',
+		}).ready;
+		expect(contended).toMatchObject({ action: 'released' });
+		expect(pulls).toEqual({ categories: 2, brands: 0, tags: 0, coupons: 0 });
+
+		// #956: a derivable-ledger rebuild ABORTS the drain tick — the task store was
+		// dropped mid-tick, so nothing was claimed and nothing was pulled. Like a lost
+		// claim, that releases this caller instead of reporting a refresh that never ran.
+		await categoriesTask!.incrementalPatch({
+			status: 'queued',
+			ownerId: null,
+			claimedUntilMs: null,
+		});
+		nowMs += REFERENCE_REFRESH_DEDUPE_MS + 1;
+		vi.spyOn(schedulerDrain, 'runEngineSchedulerDrain').mockResolvedValue(
+			ledgerRebuiltSchedulerTaskRunnerResult()
+		);
+		const rebuilt = await engine.require({
+			id: 'category-picker-ledger-rebuilt',
+			collection: 'categories',
+			kind: 'refresh',
+		}).ready;
+		expect(rebuilt).toMatchObject({
+			action: 'released',
+			reason: expect.stringMatching(/local sync bookkeeping was rebuilt/i),
+		});
+		expect(pulls).toEqual({ categories: 2, brands: 0, tags: 0, coupons: 0 });
+		await engine.dispose();
+	});
+
+	it('query-total-retry reports skipped without the port, and drains + emits cache entries with it', async () => {
+		const bare = engineWith();
+		await bare.ready;
+		const skipped = await bare.sync('query-total-retry');
+		expect(skipped.status).toBe('skipped');
+		expect(skipped.reason).toContain('queryTotal');
+		await bare.dispose();
+
+		// With the port: seed a due request state directly (the persisted shape the
+		// web app writes), then one lane tick claims + fetches + caches it.
+		const fetchWooQueryTotal = vi.fn(async (_input: { request: { queryKey: string } }) => 42);
+		const engine = engineWith({ queryTotal: { fetchWooQueryTotal }, now: () => 1_000_000 });
+		await engine.ready;
+		const scope = engine.active();
+		if (!scope) throw new Error('no active scope');
+		await (
+			scope.database.collections.queryTotalRequestStates as {
+				insert(doc: Record<string, unknown>): Promise<unknown>;
+			}
+		).insert({
+			queryKey: 'orders:total:test',
+			status: 'failed',
+			ownerId: null,
+			claimedUntilMs: null,
+			attempt: 0,
+			retryAfterMs: 0, // due immediately
+			updatedAtMs: 0,
+			request: {
+				queryKey: 'orders:total:test',
+				method: 'GET',
+				endpoint: '/orders',
+				params: {},
+				totalHeader: 'X-WP-Total',
+			},
+			schemaVersion: 3,
+		});
+		const events: EngineEvent[] = [];
+		engine.events((event) => events.push(event));
+
+		const report = await engine.sync('query-total-retry');
+		expect(report.status).toBe('ran');
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(10);
+		expect(fetchWooQueryTotal.mock.calls.map(([input]) => input.request.queryKey)).toContain(
+			'orders:total:test'
+		);
+		const cacheEvent = events.find((event) => event.type === 'query-total-cache');
+		expect(cacheEvent).toBeDefined();
+		await engine.dispose();
+	});
+
+	it('seeds supported collection census requests and exposes fresh, stale, and unknown totals', async () => {
+		let nowMs = 1_000_000;
+		const fetchWooQueryTotal = vi.fn(
+			async ({
+				request,
+			}: {
+				request: { queryKey: string; params: Record<string, string | number | boolean> };
+			}) => (request.queryKey === 'census:orders' ? 25 : 40)
+		);
+		const engine = engineWith({
+			queryTotal: { fetchWooQueryTotal },
+			now: () => nowMs,
+			intervals: { censusFreshForMs: 60_000 },
+		});
+		await engine.ready;
+
+		const emissions: CensusTotals[] = [];
+		const unsubscribe = engine.censusChanges((totals) => emissions.push(totals));
+		await vi.waitFor(() => expect(emissions.at(-1)).toBeDefined());
+		const latest = emissions.at(-1);
+		expect(Object.values(latest!).every((entry) => entry === null)).toBe(true);
+		const report = await engine.sync('query-total-retry');
+
+		expect(report.status).toBe('ran');
+		expect(fetchWooQueryTotal.mock.calls.map(([input]) => input.request.queryKey).sort()).toEqual([
+			'census:brands',
+			'census:categories',
+			'census:coupons',
+			'census:customers',
+			'census:orders',
+			'census:products',
+			'census:tags',
+			'census:taxRates',
+			'census:variations',
+		]);
+		expect(
+			fetchWooQueryTotal.mock.calls.find(
+				([input]) => input.request.queryKey === 'census:products'
+			)?.[0].request.params
+		).toEqual({ page: 1, per_page: 1, status: 'publish' });
+		// Variations count what the till can sell, same as products.
+		expect(
+			fetchWooQueryTotal.mock.calls.find(
+				([input]) => input.request.queryKey === 'census:variations'
+			)?.[0].request.params
+		).toEqual({ page: 1, per_page: 1, status: 'publish' });
+		await vi.waitFor(() => expect(emissions.at(-1)?.orders?.total).toBe(25));
+		expect(emissions.at(-1)?.variations?.total).toBe(40);
+		expect(emissions.at(-1)?.orders).toEqual({
+			total: 25,
+			updatedAtMs: 1_000_000,
+			freshUntilMs: 1_060_000,
+			fresh: true,
+		});
+
+		const scope = engine.active();
+		if (!scope) throw new Error('no active scope');
+		const stateCollection = scope.database.collections.queryTotalRequestStates as {
+			storageInstance: {
+				findDocumentsById(ids: string[], withDeleted: boolean): Promise<Record<string, unknown>[]>;
+			};
+		};
+		const readOrdersState = async () =>
+			(await stateCollection.storageInstance.findDocumentsById(['census:orders'], true))[0];
+		let ordersState = await readOrdersState();
+		expect(ordersState).toMatchObject({
+			status: 'idle',
+			ownerId: null,
+			claimedUntilMs: null,
+			attempt: 1,
+			retryAfterMs: null,
+		});
+		expect(ordersState?.['_deleted']).not.toBe(true);
+		await expect(
+			new RxQueryTotalRequestStateRepository(scope.database as never).readRunnable(nowMs)
+		).resolves.toEqual([]);
+
+		const freshRevision = ordersState?.['_rev'];
+		await engine.sync('query-total-retry');
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(9);
+		expect((await readOrdersState())?.['_rev']).toBe(freshRevision);
+
+		let previousRevisionHeight = Number(String(freshRevision).split('-')[0]);
+		for (let cycle = 0; cycle < 2; cycle += 1) {
+			nowMs += 60_001;
+			await engine.sync('query-total-retry');
+			ordersState = await readOrdersState();
+			expect(ordersState).toMatchObject({ status: 'idle', attempt: 1, _deleted: false });
+			const revisionHeight = Number(String(ordersState?.['_rev']).split('-')[0]);
+			expect(revisionHeight).toBeGreaterThan(previousRevisionHeight);
+			previousRevisionHeight = revisionHeight;
+		}
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(27);
+
+		unsubscribe();
+		await engine.dispose();
+	});
+
+	it('reuses scheduler response totals instead of probing observed census collections', async () => {
+		const fetchWooQueryTotal = vi.fn(async (_input: { request: { queryKey: string } }) => 40);
+		const engine = engineWith({
+			fetcher: vi.fn(async (url: string) => {
+				const path = new URL(url).pathname;
+				if (path.endsWith('/products')) {
+					return new Response('[]', { headers: { 'X-WP-Total': '321' } });
+				}
+				if (path.endsWith('/taxes')) {
+					return new Response('[]', { headers: { 'X-WP-Total': '5' } });
+				}
+				throw new Error(`unexpected scheduler request: ${path}`);
+			}),
+			queryTotal: { fetchWooQueryTotal },
+			now: () => 1_000_000,
+			intervals: { censusFreshForMs: 60_000 },
+		});
+		await engine.ready;
+		await engine.sync('product-browse-window-seed');
+		await engine.sync('scheduler-drain');
+		await engine.sync('query-total-retry');
+
+		const requested = fetchWooQueryTotal.mock.calls.map(([input]) => input.request.queryKey).sort();
+		expect(requested).toEqual([
+			'census:brands',
+			'census:categories',
+			'census:coupons',
+			'census:customers',
+			'census:orders',
+			'census:tags',
+			'census:variations',
+		]);
+		expect(requested).not.toContain('census:products');
+		expect(requested).not.toContain('census:taxRates');
+		await engine.dispose();
+	});
+
+	it('republishes a census snapshot when its freshness deadline passes', async () => {
+		const fetchWooQueryTotal = vi.fn(async () => 25);
+		const engine = engineWith({
+			// Real timers here (no `now` override), so the window must comfortably
+			// exceed the async publish latency: publishCensusChanges() reads the
+			// cache before emitting, and a window shorter than that read makes the
+			// very first snapshot compute fresh:false (and skips the expiry timer),
+			// so fresh:true is never observed. 500ms clears that latency while the
+			// republish still fires well inside the 2s deadline asserted below.
+			queryTotal: { fetchWooQueryTotal },
+			intervals: { censusFreshForMs: 500 },
+		});
+		await engine.ready;
+
+		const emissions: CensusTotals[] = [];
+		const unsubscribe = engine.censusChanges((totals) => emissions.push(totals));
+		await engine.sync('query-total-retry');
+		await vi.waitFor(() => expect(emissions.at(-1)?.orders?.fresh).toBe(true));
+
+		// No cache/lane event fires at freshUntilMs — the expiry timer must
+		// republish so subscribers never hold a fresh:true snapshot past its
+		// deadline (stale-means-unknown).
+		await vi.waitFor(() => expect(emissions.at(-1)?.orders?.fresh).toBe(false), {
+			timeout: 2_000,
+		});
+		expect(emissions.at(-1)?.orders?.total).toBe(25);
+		unsubscribe();
+		await engine.dispose();
+	});
+
+	it('dispose waits for an in-flight maintenance write before closing the scope database', async () => {
+		let releaseFetch!: (total: number) => void;
+		const fetchWooQueryTotal = vi.fn(({ request }: { request: { queryKey: string } }) =>
+			request.queryKey === 'orders:total:guarded-dispose'
+				? new Promise<number>((resolve) => {
+						releaseFetch = resolve;
+					})
+				: Promise.resolve(42)
+		);
+		const engine = engineWith({ queryTotal: { fetchWooQueryTotal }, now: () => 1_000_000 });
+		await engine.ready;
+		const scope = engine.active();
+		if (!scope) throw new Error('no active scope');
+		const close = vi.spyOn(scope.database, 'close');
+		await (
+			scope.database.collections.queryTotalRequestStates as {
+				insert(doc: Record<string, unknown>): Promise<unknown>;
+			}
+		).insert({
+			queryKey: 'orders:total:guarded-dispose',
+			status: 'failed',
+			ownerId: null,
+			claimedUntilMs: null,
+			attempt: 0,
+			retryAfterMs: 0,
+			updatedAtMs: 0,
+			request: {
+				queryKey: 'orders:total:guarded-dispose',
+				method: 'GET',
+				endpoint: '/orders',
+				params: {},
+				totalHeader: 'X-WP-Total',
+			},
+			schemaVersion: 3,
+		});
+
+		const tick = engine.sync('query-total-retry');
+		await vi.waitFor(() =>
+			expect(fetchWooQueryTotal.mock.calls.map(([input]) => input.request.queryKey)).toContain(
+				'orders:total:guarded-dispose'
+			)
+		);
+		const disposing = engine.dispose();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		const closeStartedBeforeTickFinished = close.mock.calls.length > 0;
+
+		releaseFetch(42);
+		const report = await tick;
+		await disposing;
+		expect(closeStartedBeforeTickFinished).toBe(false);
+		expect(report.status).toBe('ran');
+	});
+
+	it('auto mode retries a persisted due query-total request immediately after ready', async () => {
+		const storage = memoryEngineStorage();
+		const identity = freshIdentity();
+		const seed = engineWith({ storage }, identity);
+		await seed.ready;
+		const scope = seed.active();
+		if (!scope) throw new Error('no active scope');
+		await (
+			scope.database.collections.queryTotalRequestStates as {
+				insert(doc: Record<string, unknown>): Promise<unknown>;
+			}
+		).insert({
+			queryKey: 'orders:total:auto-start',
+			status: 'failed',
+			ownerId: null,
+			claimedUntilMs: null,
+			attempt: 0,
+			retryAfterMs: 0,
+			updatedAtMs: 0,
+			request: {
+				queryKey: 'orders:total:auto-start',
+				method: 'GET',
+				endpoint: '/orders',
+				params: {},
+				totalHeader: 'X-WP-Total',
+			},
+			schemaVersion: 3,
+		});
+		await seed.dispose();
+
+		const fetchWooQueryTotal = vi.fn(async (_input: { request: { queryKey: string } }) => 42);
+		const engine = engineWith(
+			{
+				storage,
+				mode: 'auto',
+				queryTotal: { fetchWooQueryTotal },
+				now: () => 1_000_000,
+				intervals: { queryTotalRetryScanMs: 60_000 },
+			},
+			identity
+		);
+		await engine.ready;
+		await vi.waitFor(
+			() =>
+				expect(fetchWooQueryTotal.mock.calls.map(([input]) => input.request.queryKey)).toContain(
+					'orders:total:auto-start'
+				),
+			{ timeout: 1_000 }
+		);
+		await engine.dispose();
+	});
+
+	it('auto mode omits the product seed before the scheduler drain at boot', async () => {
+		const bootLanes = ['reference-seed', 'order-window-seed', 'scheduler-drain'] as const;
+		const fetcher = vi.fn(
+			async (_url: string) =>
+				new Response(JSON.stringify([]), {
+					status: 200,
+					headers: { 'content-type': 'application/json' },
+				})
+		);
+		const engine = engineWith({
+			mode: 'auto',
+			fetcher,
+		});
+
+		try {
+			const lifecycle: EngineEvent[] = [];
+			let finished = 0;
+			let resolveBootTicks!: () => void;
+			const bootTicksFinished = new Promise<void>((resolve) => {
+				resolveBootTicks = resolve;
+			});
+			engine.events((event) => {
+				if (
+					(event.type === 'lane-start' || event.type === 'lane-finish') &&
+					bootLanes.includes(event.lane as (typeof bootLanes)[number])
+				) {
+					lifecycle.push(event);
+					if (event.type === 'lane-finish' && ++finished === bootLanes.length) {
+						resolveBootTicks();
+					}
+				}
+			});
+
+			await engine.ready;
+			await bootTicksFinished;
+			expect(
+				lifecycle
+					.filter((event) => event.type === 'lane-start')
+					.map((event) => (event.type === 'lane-start' ? event.lane : ''))
+			).toEqual(bootLanes);
+
+			for (const lane of bootLanes) {
+				const events = lifecycle.filter((event) => 'lane' in event && event.lane === lane);
+				expect(events[0]).toEqual({ type: 'lane-start', lane });
+				expect(events[1]).toMatchObject({
+					type: 'lane-finish',
+					lane,
+					status: lane === 'reference-seed' ? 'skipped' : 'ran',
+				});
+			}
+			const fetchedUrls = fetcher.mock.calls.map(([url]) => url);
+			expect(fetchedUrls.some((url) => new URL(url).pathname.endsWith('/products'))).toBe(false);
+			expect(fetchedUrls).toContainEqual(expect.stringContaining('/orders?'));
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('opens a manual read-only engine without Web Crypto', async () => {
+		vi.stubGlobal('crypto', undefined);
+		try {
+			const engine = engineWith();
+			await engine.ready;
+			expect(engine.active()).not.toBeNull();
+			await engine.dispose();
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	});
+
+	it('coverage-compaction runs clean on an empty coverage store and records no error', async () => {
+		const engine = engineWith({ now: () => 10_000_000 });
+		await engine.ready;
+		const report = await engine.sync('coverage-compaction');
+		expect(report.status).toBe('ran');
+		expect(engine.status().lanes['coverage-compaction']).toMatchObject({
+			lastError: null,
+			lastTick: { status: 'ran' },
+		});
+		await engine.dispose();
+	});
+
+	it('keeps coverage subscribers live after a ledger rebuild replaces their collections', async () => {
+		const diagnostics = vi.fn();
+		const engine = engineWith({ diagnostics, now: () => 1_000_000 });
+		await engine.ready;
+		const verdicts: { source: string; total: number | null }[] = [];
+		const unsubscribe = engine.coverageChanges(
+			{ collection: 'categories', lane: 'reference' },
+			(verdict) => verdicts.push(verdict)
+		);
+		vi.spyOn(RxCoverageRepository.prototype, 'readCoverageDocuments').mockRejectedValueOnce(
+			refusalError('unsorted-primary')
+		);
+
+		await expect(engine.sync('coverage-compaction')).resolves.toMatchObject({ status: 'ran' });
+		expect(diagnostics).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: 'coverage.ledger-rebuilt',
+				fields: { reason: 'unsorted-primary', trigger: 'coverage' },
+			})
+		);
+		const emissionsAfterRebuild = verdicts.length;
+		const scope = engine.active();
+		if (!scope) throw new Error('no active scope');
+		await scope.database.collections.coverageLanes.insert({
+			laneKey: 'categories::categories:all',
+			collectionName: 'categories',
+			queryKey: 'categories:all',
+			complete: true,
+			expectedRecordIds: ['woo-category:1', 'woo-category:2'],
+			freshUntilMs: 1_060_000,
+			updatedAtMs: 1_000_000,
+			schemaVersion: 3,
+		});
+
+		await vi.waitFor(() => expect(verdicts.length).toBeGreaterThan(emissionsAfterRebuild));
+		expect(verdicts.at(-1)).toMatchObject({ source: 'lane', total: 2 });
+		unsubscribe();
+		await engine.dispose();
+	});
+
+	it('exposes existence prime and reconcile only through the public facade and coverage diagnostics', async () => {
+		const diagnostics = vi.fn();
+		const engine = engineWith({ diagnostics });
+		await engine.ready;
+
+		await expect(engine.sync('existence-prime')).resolves.toMatchObject({
+			lane: 'existence-prime',
+			status: 'ran',
+		});
+		await expect(engine.sync('existence-reconcile')).resolves.toMatchObject({
+			lane: 'existence-reconcile',
+			status: 'ran',
+		});
+		expect(diagnostics).toHaveBeenCalledWith(
+			expect.objectContaining({ type: 'coverage.existence-prime' })
+		);
+		expect(diagnostics).toHaveBeenCalledWith(
+			expect.objectContaining({ type: 'coverage.existence-reconcile' })
+		);
+		expect(engine.status().lanes['existence-prime']).toMatchObject({
+			lastError: null,
+			lastTick: { status: 'ran' },
+		});
+		expect(engine.status().lanes['existence-reconcile']).toMatchObject({
+			lastError: null,
+			lastTick: { status: 'ran' },
+		});
+		await engine.dispose();
+	});
+
+	it('emits a lane-start before a lane-finish carrying the tick outcome', async () => {
+		const engine = engineWith();
+		await engine.ready;
+		const events: EngineEvent[] = [];
+		engine.events((event) => events.push(event));
+
+		const report = await engine.sync('reference-seed');
+		expect(report).toMatchObject({
+			status: 'skipped',
+			reason: 'no materialized reference collections',
+		});
+		const lifecycle = events.filter(
+			(event) => event.type === 'lane-start' || event.type === 'lane-finish'
+		);
+		expect(lifecycle).toEqual([
+			{ type: 'lane-start', lane: 'reference-seed' },
+			{
+				type: 'lane-finish',
+				lane: 'reference-seed',
+				status: 'skipped',
+				detail: 'no materialized reference collections',
+			},
+		]);
+		await engine.dispose();
+	});
+
+	it('a failing lane still emits lane-finish with an error outcome, after its lane-start', async () => {
+		const engine = engineWith();
+		await engine.ready;
+		const scope = engine.active();
+		if (!scope) throw new Error('no active scope');
+		// Poison the seed's first persisted read so the browse-window seed lane throws — the
+		// lane wrapper turns that into a status:'error' tick, and the lifecycle pair must still
+		// close with lane-finish(error).
+		const collection = scope.database.collections.schedulerTaskStates as { find: unknown };
+		const originalFind = collection.find;
+		collection.find = () => {
+			throw new Error('poisoned scheduler read');
+		};
+
+		const events: EngineEvent[] = [];
+		engine.events((event) => events.push(event));
+		const report = await engine.sync('product-browse-window-seed');
+		collection.find = originalFind;
+		expect(report.status).toBe('error');
+
+		const startIndex = events.findIndex(
+			(event) => event.type === 'lane-start' && event.lane === 'product-browse-window-seed'
+		);
+		const finishIndex = events.findIndex(
+			(event) => event.type === 'lane-finish' && event.lane === 'product-browse-window-seed'
+		);
+		expect(startIndex).toBeGreaterThanOrEqual(0);
+		expect(finishIndex).toBeGreaterThan(startIndex);
+		expect(events[finishIndex]).toMatchObject({
+			type: 'lane-finish',
+			lane: 'product-browse-window-seed',
+			status: 'error',
+		});
+		await engine.dispose();
+	});
+
+	it('maintenance lanes skip while offline', async () => {
+		const engine = engineWith({ connectivity: () => 'offline' });
+		await engine.ready;
+		for (const lane of [
+			'order-window-seed',
+			'product-browse-window-seed',
+			'reference-seed',
+			'coverage-compaction',
+			'existence-prime',
+			'existence-reconcile',
+		] as const) {
+			const report = await engine.sync(lane);
+			expect(report.status, lane).toBe('skipped');
+			expect(report.reason, lane).toBe('offline');
+		}
+		await engine.dispose();
+	});
+});

@@ -29,7 +29,7 @@ export function CheckoutTitle({ order }: CheckoutTitleProps) {
 	const displayTotal = getNetPaymentTotal(total, refunds);
 
 	return (
-		<Text className="text-center text-lg font-bold">
+		<Text testID="checkout-amount-to-pay" className="text-center text-lg font-bold">
 			{t('pos_checkout.amount_to_pay')}
 			{`: ${format(displayTotal || 0)}`}
 		</Text>

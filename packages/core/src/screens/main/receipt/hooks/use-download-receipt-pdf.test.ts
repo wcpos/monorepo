@@ -18,9 +18,12 @@ jest.mock('../../hooks/use-rest-http-client', () => ({
 	}),
 }));
 
-jest.mock('../../../../contexts/translations', () => ({
-	useT: () => (key: string, fallback?: string) => fallback ?? key,
-}));
+jest.mock('../../../../contexts/translations', () => {
+	const { createTestT } = jest.requireActual<typeof import('../../../../../jest/translate')>(
+		'../../../../../jest/translate'
+	);
+	return { useT: () => createTestT() };
+});
 
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({
@@ -58,7 +61,6 @@ describe('useDownloadReceiptPdf', () => {
 		expect(mockSaveOrSharePdf).toHaveBeenCalledWith(pdfBody, 'receipt-42.pdf');
 		expect(mockLoggerSuccess).toHaveBeenCalledWith('PDF downloaded', {
 			showToast: true,
-			saveToDb: true,
 			context: { orderId: 42, templateId: 'template-1' },
 		});
 		expect(result.current.isDownloading).toBe(false);
@@ -117,8 +119,8 @@ describe('useDownloadReceiptPdf', () => {
 		});
 
 		expect(mockLoggerError).toHaveBeenCalledWith('Failed to download receipt PDF', {
+			code: 'PRINT311',
 			showToast: true,
-			saveToDb: true,
 			context: expect.objectContaining({
 				orderId: 42,
 				templateId: 'template-1',

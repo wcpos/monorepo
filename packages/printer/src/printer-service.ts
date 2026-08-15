@@ -3,7 +3,6 @@ import PQueue from 'p-queue';
 
 import { buildDiagnosticTemplate } from './encoder/diagnostic-template';
 import { encodeReceipt } from './encoder/encode-receipt';
-import { formatReceiptData } from './encoder/format-receipt-data';
 import { encodeThermalTemplateForPrint } from './encoder/thermal-print';
 import { encodeThermalTemplate } from './renderer';
 import { CloudAdapter, isOrderBasedCloudProfile } from './transport/cloud-adapter';
@@ -132,15 +131,14 @@ export class PrinterService {
 	}
 
 	/**
-	 * Print a receipt using the given profile.
-	 * If templateXml is provided, uses the custom XML template via encodeThermalTemplate().
-	 * Otherwise falls back to the built-in default layout via encodeReceipt().
+	 * Print a receipt with the built-in default layout via encodeReceipt().
+	 * Custom XML templates go through printThermalTemplateForPrint(), which
+	 * prepares image assets before encoding.
 	 */
 	async printReceipt(
 		receiptData: ReceiptData,
 		profile?: PrinterProfile,
 		html?: string,
-		templateXml?: string,
 		decimals?: number
 	): Promise<void> {
 		return this.queue.add(async () => {
@@ -155,30 +153,17 @@ export class PrinterService {
 			}
 
 			const transport = await this.getTransport(profile);
-			const encoderOptions = {
+			const encodeOpts: EncodeReceiptOptions = {
 				language: profile.language,
 				columns: profile.columns,
 				printerModel: profile.printerModel,
 				emitEscPrintMode: profile.emitEscPrintMode ?? true,
 				drawerConnector: profile.drawerConnector,
+				cut: profile.autoCut,
+				openDrawer: profile.autoOpenDrawer,
+				decimals,
 			};
-
-			let bytes: Uint8Array;
-			if (templateXml) {
-				const templateData = formatReceiptData(receiptData);
-				bytes = encodeThermalTemplate(templateXml, templateData, {
-					...encoderOptions,
-					openDrawer: profile.autoOpenDrawer,
-				});
-			} else {
-				const encodeOpts: EncodeReceiptOptions = {
-					...encoderOptions,
-					cut: profile.autoCut,
-					openDrawer: profile.autoOpenDrawer,
-					decimals,
-				};
-				bytes = encodeReceipt(receiptData, encodeOpts);
-			}
+			const bytes = encodeReceipt(receiptData, encodeOpts);
 
 			await transport.printRaw(bytes);
 		});

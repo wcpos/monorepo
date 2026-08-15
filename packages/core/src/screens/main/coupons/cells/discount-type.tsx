@@ -4,6 +4,7 @@ import { ButtonPill, ButtonText } from '@wcpos/components/button';
 
 import { useT } from '../../../../contexts/translations';
 
+import type { QueryStateActions } from '../../../../query';
 import type { CellContext } from '@tanstack/react-table';
 
 type CouponDocument = import('@wcpos/database').CouponDocument;
@@ -21,7 +22,11 @@ export function DiscountType({
 	const coupon = row.original.document;
 	const discountType = useObservableEagerState(coupon.discount_type$!) ?? 'percent';
 	const t = useT();
-	const query = table.options.meta?.query;
+	const actions = (
+		table.options.meta as {
+			actions?: Pick<QueryStateActions<'coupons'>, 'setFilter'>;
+		}
+	)?.actions;
 
 	const label = labelMap[discountType] ? t(labelMap[discountType]) : discountType;
 
@@ -29,7 +34,7 @@ export function DiscountType({
 		<ButtonPill
 			variant="ghost-primary"
 			size="xs"
-			onPress={() => query?.where('discount_type').equals(discountType).exec()}
+			onPress={() => actions?.setFilter('discount_type', discountType)}
 		>
 			<ButtonText numberOfLines={1}>{label}</ButtonText>
 		</ButtonPill>

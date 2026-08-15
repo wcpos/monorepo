@@ -5,17 +5,23 @@ import { useObservableSuspense } from 'observable-hooks';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import { useQuery } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
+import { useCollectionBinding } from '../../../../query';
+
+import type { QueryStateOf } from '../../../../query';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
 /**
  *
  */
-function GroupedNamesList({ query }: { query: ReturnType<typeof useQuery> }) {
-	const result = useObservableSuspense(query!.resource) as {
+function GroupedNamesList({
+	resource,
+}: {
+	resource: ReturnType<typeof useCollectionBinding<'products'>>['resource'];
+}) {
+	const result = useObservableSuspense(resource) as {
 		hits: { document: { name?: string } }[];
 	};
 	const names = result.hits.map(({ document }: { document: { name?: string } }) => document.name);
@@ -39,21 +45,17 @@ function GroupedNamesList({ query }: { query: ReturnType<typeof useQuery> }) {
  */
 export function GroupedNames({ row }: CellContext<{ document: ProductDocument }, 'name'>) {
 	const parent = row.original.document;
+	const wooIds = parent.grouped_products ?? [];
+	const state = React.useMemo<QueryStateOf<'products'>>(
+		() => ({
+			search: '',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'id', direction: 'asc' },
+			limit: Math.max(wooIds.length, 1),
+		}),
+		[wooIds.length]
+	);
+	const binding = useCollectionBinding('products', state, { wooIds });
 
-	/**
-	 *
-	 */
-	const query = useQuery({
-		queryKeys: ['products', { target: 'grouped', parentID: parent.id }],
-		collectionName: 'products',
-		initialParams: {
-			selector: {
-				id: {
-					$in: parent.grouped_products,
-				},
-			},
-		},
-	});
-
-	return <GroupedNamesList query={query} />;
+	return <GroupedNamesList resource={binding.resource} />;
 }

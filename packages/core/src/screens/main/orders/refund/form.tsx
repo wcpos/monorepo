@@ -31,7 +31,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
 	calculateLineItemRefund,
@@ -54,6 +54,7 @@ import {
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { usePaymentGateways } from '../../hooks/use-payment-gateways';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
+import { isStorageBlockedError, useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 
 const refundLogger = getLogger(['wcpos', 'mutations', 'refund']);
 
@@ -112,18 +113,18 @@ function createRefundFormSchema(dp: number) {
 
 type RefundFormValues = z.infer<ReturnType<typeof createRefundFormSchema>>;
 
+/** Renders the form used to calculate and submit an order refund. */
 export function RefundOrderForm({ order }: Props) {
 	const t = useT();
 	const { store } = useAppState();
 	const refundMutation = useRefundMutation();
+	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
 	const http = useRestHttpClient();
 	const router = useRouter();
 	const taxRates = React.useContext(TaxRatesContext);
 	const storeDp = useObservableEagerState(store?.wc_price_decimals$) as number | undefined;
 	const taxDisplayCart = useObservableEagerState(store?.tax_display_cart$) as
-		| 'incl'
-		| 'excl'
-		| undefined;
+		'incl' | 'excl' | undefined;
 	const displayTax: 'incl' | 'excl' = taxDisplayCart === 'excl' ? 'excl' : 'incl';
 	const dp = resolvePriceNumDecimals({
 		contextDp: taxRates?.priceNumDecimals,
@@ -208,20 +209,20 @@ export function RefundOrderForm({ order }: Props) {
 
 	const initialLineItems = React.useMemo(() => {
 		return (order.line_items || []).map((item) => ({
-			id: item.id || 0,
+			id: item.id ?? 0,
 			name: item.name || '',
-			quantity: item.quantity || 0,
+			quantity: item.quantity ?? 0,
 			remaining_quantity: refundDetailsLoading
 				? 0
 				: computeRemainingRefundQuantity({
-						lineItemId: item.id || 0,
-						quantity: item.quantity || 0,
+						lineItemId: item.id ?? 0,
+						quantity: item.quantity ?? 0,
 						refunds: refundDetails,
 					}),
 			total: item.total || '0.00',
 			total_tax: item.total_tax || '0.00',
 			taxes: (item.taxes || []).map((tax) => ({
-				id: tax.id || 0,
+				id: tax.id ?? 0,
 				total: tax.total || '0.00',
 			})),
 			refund_qty: 0,
@@ -245,7 +246,7 @@ export function RefundOrderForm({ order }: Props) {
 				...form.getValues(),
 				line_items: initialLineItems.map((item, index) => ({
 					...item,
-					refund_qty: Math.min(currentLineItems[index]?.refund_qty || 0, item.remaining_quantity),
+					refund_qty: Math.min(currentLineItems[index]?.refund_qty ?? 0, item.remaining_quantity),
 				})),
 			},
 			{ keepDirty: true, keepTouched: true }
@@ -308,6 +309,12 @@ export function RefundOrderForm({ order }: Props) {
 	const handleSubmit = React.useCallback(async () => {
 		if (loading || refundDetailsLoading) return;
 		if (!order.id) return;
+		// #163 follow-up ruling: the latch can fire while the confirm dialog sits
+		// open, so re-read it here rather than trusting the rendered disabled state.
+		if (blockIfDegraded('refund', { orderId: order.id })) {
+			setConfirmOpen(false);
+			return;
+		}
 		const valid = await form.trigger();
 		if (!valid) return;
 		setConfirmOpen(false);
@@ -361,21 +368,24 @@ export function RefundOrderForm({ order }: Props) {
 
 			refundLogger.success(t('orders.refund_processed', { amount: freshRefundTotal }), {
 				showToast: true,
-				saveToDb: true,
 				context: {
 					orderId: order.id,
 					amount: freshRefundTotal,
+					reason: values.reason || '',
 				},
 			});
 
 			router.back();
 		} catch (err: any) {
+			// The mutation's own guard already surfaced the reason — don't stack a
+			// generic "refund failed" toast on top of it.
+			if (isStorageBlockedError(err)) return;
+
 			const serverMessage = extractErrorMessage(err?.response?.data, t('orders.refund_failed'));
 			refundLogger.error(serverMessage, {
 				showToast: true,
-				saveToDb: true,
+				code: ERROR_CODES.PAYMENT_UNEXPECTED,
 				context: {
-					errorCode: ERROR_CODES.TRANSACTION_FAILED,
 					orderId: order.id,
 					error: err instanceof Error ? err.message : String(err),
 				},
@@ -383,7 +393,7 @@ export function RefundOrderForm({ order }: Props) {
 		} finally {
 			setLoading(false);
 		}
-	}, [loading, refundDetailsLoading, form, order, refundMutation, router, t, dp]);
+	}, [blockIfDegraded, loading, refundDetailsLoading, form, order, refundMutation, router, t, dp]);
 
 	return (
 		<Form {...form}>
@@ -530,7 +540,7 @@ export function RefundOrderForm({ order }: Props) {
 					<ModalAction
 						testID="process-refund-button"
 						loading={loading}
-						disabled={!isValid}
+						disabled={!isValid || storageDegraded}
 						onPress={() => setConfirmOpen(true)}
 					>
 						{t('orders.process_refund')}
@@ -555,7 +565,7 @@ export function RefundOrderForm({ order }: Props) {
 							variant="destructive"
 							testID="confirm-process-refund-button"
 							onPress={handleSubmit}
-							disabled={loading}
+							disabled={loading || storageDegraded}
 						>
 							{t('orders.process_refund')}
 						</AlertDialogAction>

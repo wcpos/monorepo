@@ -8,12 +8,12 @@ export const useKeyboardShortcuts = () => {
 	const router = useRouter();
 	const { logout } = useAppState();
 
-	/** Settings Modal */
+	/** Settings */
 	useHotkeys('ctrl+shift+s', (event, handler) => {
-		router.push('/(app)/(modals)/settings');
+		router.push('/settings');
 	});
 
-	/** Settings Modal */
+	/** Logout */
 	useHotkeys('ctrl+shift+l', (event, handler) => {
 		logout();
 	});

@@ -7,6 +7,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { usePrinterDiscovery } from '@wcpos/printer';
 
 import { useT } from '../../../../../../contexts/translations';
+import { isUsbLikeDevice } from './discovered-printer-filters';
 
 import type { UseFormReturn } from 'react-hook-form';
 import type { PrinterFormValues } from '../../schema';
@@ -14,16 +15,14 @@ import type { PrinterFormValues } from '../../schema';
 export function UsbDevicePicker({ form }: { form: UseFormReturn<PrinterFormValues> }) {
 	const t = useT();
 	const { printers, startScan, isScanning } = usePrinterDiscovery();
-	const devices = printers.filter((p) => p.connectionType === 'usb');
+	const devices = printers.filter(isUsbLikeDevice);
 	const selectedAddress = form.watch('address');
 
 	return (
 		<VStack className="gap-2">
-			<Text className="text-sm font-medium">{t('settings.usb_printer', 'USB Printer')}</Text>
+			<Text className="text-sm font-medium">{t('settings.usb_printer')}</Text>
 			{devices.length === 0 && (
-				<Text className="text-muted-foreground text-xs">
-					{t('settings.no_devices_found', 'No devices found yet.')}
-				</Text>
+				<Text className="text-muted-foreground text-xs">{t('settings.no_devices_found')}</Text>
 			)}
 			{devices.map((device) => {
 				const selected = device.address === selectedAddress;
@@ -62,7 +61,7 @@ export function UsbDevicePicker({ form }: { form: UseFormReturn<PrinterFormValue
 				onPress={startScan}
 				loading={isScanning}
 			>
-				<Text>{t('settings.refresh_devices', 'Refresh')}</Text>
+				<Text>{t('settings.refresh_devices')}</Text>
 			</Button>
 		</VStack>
 	);

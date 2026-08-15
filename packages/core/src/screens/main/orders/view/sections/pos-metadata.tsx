@@ -38,10 +38,8 @@ export function POSMetadataSection({ order, last }: { order: OrderDocument; last
 	if (!cashier && !store && !createdVia && !order.id) return null;
 
 	return (
-		<RailSection title={t('orders.metadata', { defaultValue: 'Metadata' })} last={last}>
-			{order.id ? (
-				<KV k={t('orders.order_id', { defaultValue: 'Order ID' })} v={String(order.id)} />
-			) : null}
+		<RailSection title={t('orders.metadata')} last={last}>
+			{order.id ? <KV k={t('orders.order_id')} v={String(order.id)} /> : null}
 			<KV k={t('common.cashier')} v={cashier} />
 			<KV k={t('common.store')} v={store} />
 			<KV k={t('common.created_via_2')} v={createdVia} />

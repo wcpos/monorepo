@@ -1,21 +1,11 @@
-import React from 'react';
-
 import { useLocalSearchParams } from 'expo-router';
-import { ObservableResource } from 'observable-hooks';
 
 import { RefundOrderModal } from './modal';
-import { useCollection } from '../../hooks/use-collection';
+import { useEngineDocument } from '../../hooks/use-engine-document';
 
 export function RefundOrderScreen() {
 	const { orderId } = useLocalSearchParams<{ orderId: string }>();
-	const { collection } = useCollection('orders');
-	const query = collection.findOneFix(orderId);
+	const resource = useEngineDocument<import('@wcpos/database').OrderDocument>('orders', orderId);
 
-	const resource = React.useMemo(() => new ObservableResource(query.$), [query]);
-
-	return (
-		<RefundOrderModal
-			resource={resource as ObservableResource<import('@wcpos/database').OrderDocument>}
-		/>
-	);
+	return <RefundOrderModal resource={resource} />;
 }

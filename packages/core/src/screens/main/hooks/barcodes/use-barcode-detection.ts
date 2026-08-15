@@ -2,46 +2,50 @@ import * as React from 'react';
 import { NativeSyntheticEvent, Platform, TextInputKeyPressEventData } from 'react-native';
 
 import { useFocusEffect } from 'expo-router';
+import { useIsFocused } from 'expo-router/react-navigation';
 import { useObservableCallback, useObservableEagerState } from 'observable-hooks';
+import { merge } from 'rxjs';
 import { filter, map, tap, withLatestFrom } from 'rxjs/operators';
 
-import { getLogger } from '@wcpos/utils/logger';
+import { createWedgeDetector, type ScanEvent, type WedgeDetector } from '@wcpos/scanner';
+import { markUserActivity } from '@wcpos/utils/user-activity';
 
+import { showTooShortFeedback } from './too-short-feedback';
+import { useAttributedWedge } from './use-attributed-wedge';
+import { useCameraScanBus } from './camera-scan-context';
+import { useDeviceScanBus } from './device-scan-context';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 
-const barcodeLogger = getLogger(['wcpos', 'barcode', 'detection']);
+// Runs at scan time (not render): wraps a detected code in the normalized event.
+function toWedgeScanEvent(code: unknown): ScanEvent {
+	return { code: String(code), source: { kind: 'wedge' }, timestamp: Date.now() };
+}
 
 type BarcodeScanEvent = {
 	barcode: string;
 	callback: (barcode: string) => void;
 };
 
-export const useBarcodeDetection = (
-	callback = (barcode: string) => {}
-	// options = {
-	// 	enabled: true,
-	// 	// buffer: 500, // removed for now, but perhaps allow setting timeout in the future
-	// 	minLength: 8,
-	// 	prefix: '',
-	// 	suffix: '',
-	// }
-) => {
+/**
+ * The wedge (HID keyboard mode) input source. Keystroke timing/latching lives
+ * in `@wcpos/scanner`'s wedge detector — the same implementation the settings
+ * test panel replays — this hook only wires it to the platform (document
+ * keydown on web, TextInput onKeyPress on native) and to the app pipeline
+ * (min-length gate → `barcode$` / `scanEvents$`).
+ */
+export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 	const t = useT();
+	const isFocused = useIsFocused();
 	const { store } = useAppState();
 	const prefix = useObservableEagerState(store.barcode_scanning_prefix$) as string;
 	const suffix = useObservableEagerState(store.barcode_scanning_suffix$) as string;
 	const avgTimeInputThreshold = useObservableEagerState(
 		store.barcode_scanning_avg_time_input_threshold$
 	) as number;
-	// Refs to keep track of mutable state without causing re-renders
-	const inputStackRef = React.useRef<string[]>([]);
-	const lastInputTimeRef = React.useRef<number | null>(null);
-	const avgInputTimeRef = React.useRef<number>(0);
-	const detectingScanningRef = React.useRef<boolean>(false);
-	const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
 	// Subject to emit detected barcodes
-	const [onBarcodeScan, barcode$] = useObservableCallback<
+	const [onBarcodeScan, wedgeBarcode$] = useObservableCallback<
 		string,
 		BarcodeScanEvent,
 		[string, (barcode: string) => void]
@@ -54,19 +58,7 @@ export const useBarcodeDetection = (
 					if (event.barcode.length >= currentMinLengthNumber) {
 						return true;
 					}
-					barcodeLogger.warn(t('common.barcode_scanned', { barcode: event.barcode }), {
-						showToast: true,
-						toast: {
-							text2: t('common.barcode_must_be_at_least_characters', {
-								minLength: currentMinLengthNumber,
-							}),
-						},
-						context: {
-							barcode: event.barcode,
-							minLength: currentMinLengthNumber,
-							actualLength: event.barcode.length,
-						},
-					});
+					showTooShortFeedback(t, event.barcode, currentMinLengthNumber);
 					return false;
 				}),
 				tap(([event]) => {
@@ -77,79 +69,34 @@ export const useBarcodeDetection = (
 		([barcode, eventCallback]) => ({ barcode, callback: eventCallback })
 	);
 
+	// Live values behind stable refs so the long-lived detector always reads the
+	// latest settings and emitter without being recreated per render. Refs may
+	// not be written during render, so a sync effect keeps them fresh.
+	const settingsRef = React.useRef({ threshold: avgTimeInputThreshold, prefix, suffix });
+	const emitRef = React.useRef<(code: string) => void>(() => {});
+	// Ref-sync effect: mirrors the latest reactive values for event-time reads.
+	React.useEffect(() => {
+		settingsRef.current = { threshold: avgTimeInputThreshold, prefix, suffix };
+	}, [avgTimeInputThreshold, prefix, suffix]);
+	React.useEffect(() => {
+		emitRef.current = (code: string) => onBarcodeScan(code, callback);
+	}, [onBarcodeScan, callback]);
+
+	const detectorRef = React.useRef<WedgeDetector | null>(null);
+
 	/**
-	 * Shared logic for handling key input.
+	 * Shared logic for handling key input. The detector is created lazily at
+	 * event time (render must not touch refs or call impure factories).
 	 */
-	const handleKeyInput = React.useCallback(
-		(key: string) => {
-			// Filter out non-printable keys
-			if (key.length !== 1) {
-				return;
-			}
-
-			const currentInputTime = Date.now();
-			// With no previous keystroke the input speed is unknown — treat it as slow,
-			// otherwise the first key after mount always reads as scanner-fast (0ms) and
-			// normal typing gets captured as a barcode.
-			let timeBetweenInputs = Number.POSITIVE_INFINITY;
-			if (lastInputTimeRef.current !== null) {
-				timeBetweenInputs = currentInputTime - lastInputTimeRef.current;
-			}
-
-			// Update average input time
-			if (avgInputTimeRef.current === 0) {
-				avgInputTimeRef.current = timeBetweenInputs;
-			} else {
-				avgInputTimeRef.current = (avgInputTimeRef.current + timeBetweenInputs) / 2;
-			}
-
-			if (detectingScanningRef.current || avgInputTimeRef.current < avgTimeInputThreshold) {
-				detectingScanningRef.current = true;
-				inputStackRef.current.push(key);
-
-				// Clear existing timeout
-				if (timeoutRef.current) {
-					clearTimeout(timeoutRef.current);
-				}
-
-				// Set timeout to detect end of scanning
-				timeoutRef.current = setTimeout(() => {
-					if (
-						detectingScanningRef.current &&
-						Date.now() - (lastInputTimeRef.current || 0) > avgTimeInputThreshold
-					) {
-						// Stop scanning detection
-						detectingScanningRef.current = false;
-
-						// Remove prefix and suffix if necessary
-						const inputStack = [...inputStackRef.current];
-						if (prefix && inputStack[0] === prefix) {
-							inputStack.shift();
-						}
-
-						if (suffix && inputStack[inputStack.length - 1] === suffix) {
-							inputStack.pop();
-						}
-
-						const barcode = inputStack.join('');
-						onBarcodeScan(barcode, callback);
-
-						// Reset variables
-						inputStackRef.current = [];
-						avgInputTimeRef.current = 0;
-					}
-				}, 150);
-			} else {
-				// Reset average input time and start a new input stack
-				avgInputTimeRef.current = 0;
-				inputStackRef.current = [key];
-			}
-
-			// Update lastInputTimeRef
-			lastInputTimeRef.current = currentInputTime;
-		},
-		[avgTimeInputThreshold, prefix, suffix, callback, onBarcodeScan]
-	);
+	const handleKeyInput = React.useCallback((key: string) => {
+		if (detectorRef.current === null) {
+			detectorRef.current = createWedgeDetector({
+				getSettings: () => settingsRef.current,
+				onScan: (code) => emitRef.current(code),
+			});
+		}
+		detectorRef.current.handleKey(key);
+	}, []);
 
 	/**
 	 * Event handler for keyup event (Web).
@@ -181,8 +128,6 @@ export const useBarcodeDetection = (
 	 * A user was experiencing an issue where keyup events were only giving the lowercase, even
 	 * though the barcode was uppercase. They recommend to not use keydown events, but it should
 	 * still work on almost all browsers.
-	 *
-	 * @TODO - use the serial API to connect to barcode scanners.
 	 */
 	useFocusEffect(
 		React.useCallback(() => {
@@ -192,20 +137,52 @@ export const useBarcodeDetection = (
 
 				return () => {
 					document.removeEventListener('keydown', onKeyUp);
-					if (timeoutRef.current) {
-						clearTimeout(timeoutRef.current);
-					}
+					// Drop the detector with its latched state: a partial burst must not
+					// survive refocus and corrupt the next scan. A fresh detector is
+					// created lazily on the next keystroke.
+					detectorRef.current?.dispose();
+					detectorRef.current = null;
 				};
 			}
 		}, [onKeyUp])
 	);
 
 	/**
-	 * Return an observable that emits detected barcodes, and
-	 * the onKeyPress handler for the POS products search input.
+	 * Post-gate scan events (architecture: wcpos/monorepo#715). Consumers like
+	 * the POS product route subscribe here; additional sources (attributed
+	 * wedge, serial, HID-POS, camera) will feed the same shape.
+	 */
+	const attributed = useAttributedWedge(isFocused);
+	const camera = useCameraScanBus();
+	const device = useDeviceScanBus();
+	const barcode$ = React.useMemo(
+		() =>
+			merge(
+				wedgeBarcode$,
+				attributed.scanEvents$.pipe(map((event) => event.code)),
+				camera.events$.pipe(map((event) => event.code)),
+				device.events$.pipe(map((event) => event.code))
+			),
+		[wedgeBarcode$, attributed.scanEvents$, camera.events$, device.events$]
+	);
+	const scanEvents$ = React.useMemo(
+		() =>
+			merge(
+				wedgeBarcode$.pipe(map(toWedgeScanEvent)),
+				attributed.scanEvents$,
+				camera.events$,
+				device.events$
+			).pipe(tap(() => markUserActivity())),
+		[wedgeBarcode$, attributed.scanEvents$, camera.events$, device.events$]
+	);
+
+	/**
+	 * Return the detected-barcode observables and the onKeyPress handler for
+	 * the POS products search input.
 	 */
 	return {
 		barcode$,
+		scanEvents$,
 		onKeyPress,
 	};
 };

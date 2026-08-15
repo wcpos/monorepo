@@ -1,10 +1,13 @@
 import * as React from 'react';
 
+import { useObservableEagerState } from 'observable-hooks';
+
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
-import { useQuery } from '@wcpos/query';
 
 import { Variations } from './variations';
+import { useUISettings } from '../../../../contexts/ui-settings';
+import { QueryStateProvider, useCollectionBinding, useQueryState } from '../../../../../../query';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -18,41 +21,53 @@ interface VariationsPopoverProps {
 /**
  *
  */
-export function VariationsPopover({ parent, addToCart }: VariationsPopoverProps) {
-	/**
-	 *
-	 */
-	const query = useQuery({
-		queryKeys: ['variations', { parentID: parent.id }],
-		collectionName: 'variations',
-		initialParams: {
-			selector: { id: { $in: parent.variations } },
-		},
-		endpoint: `products/${parent.id}/variations`,
-		greedy: true,
+function VariationsPopoverContent({ parent, addToCart }: VariationsPopoverProps) {
+	const state = useQueryState<'variations'>();
+	const binding = useCollectionBinding('variations', state, {
+		wooIds: parent.variations ?? [],
 	});
-
-	/**
-	 * Clear the query when the popover closes
-	 */
-	React.useEffect(
-		() => {
-			return () => {
-				query?.removeWhere('attributes').exec();
-			};
-		},
-		[
-			// only run when the component unmounts
-		]
+	const initialBinding = React.useRef(binding);
+	React.useEffect(() => {
+		// Refresh once per popover open without blocking locally resident variations.
+		void initialBinding.current.sync().catch(() => undefined);
+	}, []);
+	const allVariationsState = React.useMemo(
+		() => ({
+			...state,
+			filters: { ...state.filters, attributeMatches: [] },
+		}),
+		[state]
 	);
-
-	if (!query) return null;
+	const allVariationsBinding = useCollectionBinding('variations', allVariationsState, {
+		wooIds: parent.variations ?? [],
+	});
+	const { uiSettings } = useUISettings('pos-products');
+	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
 
 	return (
 		<ErrorBoundary>
 			<Suspense>
-				<Variations query={query} parent={parent} addToCart={addToCart} />
+				<Variations
+					binding={binding}
+					allVariationsResource={allVariationsBinding.resource}
+					parent={parent}
+					addToCart={addToCart}
+					hideOutOfStock={!showOutOfStock}
+				/>
 			</Suspense>
 		</ErrorBoundary>
+	);
+}
+
+export function VariationsPopover(props: VariationsPopoverProps) {
+	return (
+		<QueryStateProvider
+			collection="variations"
+			initialPageSize={Number.MAX_SAFE_INTEGER}
+			initialSort={{ field: 'name', direction: 'asc' }}
+			initialFilters={{ status: 'publish' }}
+		>
+			<VariationsPopoverContent {...props} />
+		</QueryStateProvider>
 	);
 }

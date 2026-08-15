@@ -1,22 +1,21 @@
 import * as React from 'react';
 
-import toNumber from 'lodash/toNumber';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import { Combobox, ComboboxContent, ComboboxTrigger } from '@wcpos/components/combobox';
-import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
-import { Query } from '@wcpos/query';
+import type { CustomerDocument } from '@wcpos/database';
 
 import { useT } from '../../../../../contexts/translations';
+import { useQueryState, useQueryStateActions } from '../../../../../query';
 import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
 import { CustomerSearch } from '../../customer-select';
 import { isIdOnlyCustomerEntity, resolveCustomerPillEntity } from './customer-filter-utils';
 
 interface CustomerPillProps {
-	query: Query<CustomerCollection>;
 	resource: ObservableResource<CustomerDocument>;
-	customerID?: number;
+	guestCustomer: CustomerDocument;
+	onMissing?: () => void;
 }
 
 type CustomerWithLoadingMarker = CustomerDocument & { __isLoading?: boolean };
@@ -24,13 +23,23 @@ type CustomerWithLoadingMarker = CustomerDocument & { __isLoading?: boolean };
 /**
  *
  */
-export function CustomerPill({ query, resource, customerID }: CustomerPillProps) {
-	let customer = useObservableSuspense(resource);
+export function CustomerPill({ resource, guestCustomer, onMissing }: CustomerPillProps) {
+	const customerID = useQueryState<'orders', number | undefined>(
+		(state) => state.filters.customer_id
+	);
+	const actions = useQueryStateActions<'orders'>();
+	const resolvedCustomer = useObservableSuspense(resource);
+	let customer = customerID === 0 ? guestCustomer : resolvedCustomer;
 	const { format } = useCustomerNameFormat();
 	const t = useT();
 	const isCustomerLoading = (customer as CustomerWithLoadingMarker | null)?.__isLoading;
 	const isActive = customerID !== null && customerID !== undefined;
 	const [selectedCustomer, setSelectedCustomer] = React.useState<CustomerDocument | null>(null);
+
+	React.useEffect(() => {
+		// Missing labels escalate through the engine demand seam after the resident lookup settles.
+		if (isActive && customerID !== 0 && !resolvedCustomer) onMissing?.();
+	}, [customerID, isActive, onMissing, resolvedCustomer]);
 
 	/**
 	 * @FIXME - if the customers are cleared, it's possible that the customer will be null
@@ -72,7 +81,7 @@ export function CustomerPill({ query, resource, customerID }: CustomerPillProps)
 			onValueChange={(option) => {
 				if (!option) return;
 				setSelectedCustomer(option.item ?? null);
-				query.where('customer_id').equals(toNumber(option.value)).exec();
+				actions.setFilter('customer_id', Number(option.value));
 			}}
 		>
 			<ComboboxTrigger asChild>
@@ -81,7 +90,7 @@ export function CustomerPill({ query, resource, customerID }: CustomerPillProps)
 					leftIcon="user"
 					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
-					onRemove={() => query.removeWhere('customer_id').exec()}
+					onRemove={() => actions.clearFilter('customer_id')}
 				>
 					<ButtonText>
 						{isLoading

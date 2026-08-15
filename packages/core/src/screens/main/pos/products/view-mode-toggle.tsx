@@ -15,7 +15,7 @@ export function ViewModeToggle() {
 	const t = useT();
 
 	const handlePress = React.useCallback(() => {
-		patchUI({ viewMode: viewMode === 'table' ? 'grid' : 'table' });
+		void patchUI({ viewMode: viewMode === 'table' ? 'grid' : 'table' });
 	}, [patchUI, viewMode]);
 
 	const tooltipText =

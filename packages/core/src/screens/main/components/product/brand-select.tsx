@@ -15,13 +15,14 @@ import {
 } from '@wcpos/components/combobox';
 import { Suspense } from '@wcpos/components/suspense';
 import { useT } from '@wcpos/core/contexts/translations';
-import { useQuery } from '@wcpos/query';
+
+import { useSearchSelect } from '../../../../query';
 
 /**
  *
  */
-function BrandList({ query }: { query: ReturnType<typeof useQuery> }) {
-	const result = useObservableSuspense(query!.resource) as {
+function BrandList({ resource }: { resource: ReturnType<typeof useSearchSelect>['resource'] }) {
+	const result = useObservableSuspense(resource) as {
 		hits: { id: string; document: { id?: number; name?: string } }[];
 	};
 	const t = useT();
@@ -36,11 +37,6 @@ function BrandList({ query }: { query: ReturnType<typeof useQuery> }) {
 	return (
 		<ComboboxList
 			data={data}
-			onEndReached={() => {
-				if (query?.infiniteScroll) {
-					query.loadMore();
-				}
-			}}
 			renderItem={({ item }) => (
 				<ComboboxItem value={String(item.value)} label={item.label} item={item}>
 					<ComboboxItemText />
@@ -57,38 +53,7 @@ function BrandList({ query }: { query: ReturnType<typeof useQuery> }) {
  */
 export function BrandSearch() {
 	const t = useT();
-	const [search, setSearch] = React.useState('');
-
-	/**
-	 *
-	 */
-	const query = useQuery({
-		queryKeys: ['products/brands'],
-		collectionName: 'products/brands',
-		initialParams: {
-			sort: [{ name: 'asc' }],
-		},
-		greedy: true,
-		infiniteScroll: true,
-	});
-
-	/**
-	 *
-	 */
-	const onSearch = React.useCallback(
-		(value: string) => {
-			setSearch(value);
-			query?.debouncedSearch(value);
-		},
-		[query]
-	);
-
-	/**
-	 * Clear the search when unmounting
-	 */
-	React.useEffect(() => {
-		return () => query?.search('');
-	}, [query]);
+	const binding = useSearchSelect('brand');
 
 	/**
 	 *
@@ -97,11 +62,11 @@ export function BrandSearch() {
 		<>
 			<ComboboxInput
 				placeholder={t('common.search_brands')}
-				value={search}
-				onChangeText={onSearch}
+				value={binding.search}
+				onChangeText={binding.setSearch}
 			/>
 			<Suspense>
-				<BrandList query={query} />
+				<BrandList resource={binding.resource} />
 			</Suspense>
 		</>
 	);

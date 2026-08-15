@@ -1,0 +1,86 @@
+appId: com.wcpos.main.dev
+env:
+  STORE_URL: https://dev-pro.wcpos.com
+  E2E_USERNAME: demo
+  E2E_PASSWORD: demo
+---
+# P0-2: controlled authentication — the ONE real-OAuth flow (doubles as suite
+# setup; later flows reuse the session it persists). Auth decision: #698.
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      id: "store-url-input"
+    timeout: 60000
+- tapOn:
+    id: "store-url-input"
+- inputText: ${STORE_URL}
+- hideKeyboard
+- tapOn:
+    id: "connect-store-button"
+- extendedWaitUntil:
+    visible:
+      id: "add-user-button"
+    timeout: 60000
+- tapOn:
+    id: "add-user-button"
+# iOS shows the ASWebAuthenticationSession consent alert; Android goes
+# straight to the Custom Tab (spike #696 / check on #698).
+- runFlow:
+    when:
+      visible: "Continue"
+    commands:
+      - tapOn: "Continue"
+# The WP login form arrives EMPTY on dev-pro, and the page may render
+# localized (observed: Spanish). Match EN|ES labels until the store's login
+# locale is pinned (spec §3c).
+- extendedWaitUntil:
+    visible: "Username or Email Address|Nombre de usuario o correo electrónico"
+    timeout: 60000
+- tapOn: "Username or Email Address|Nombre de usuario o correo electrónico"
+- inputText: ${E2E_USERNAME}
+# Android: the soft keyboard covers the password field — ENTER advances focus.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - pressKey: Enter
+- tapOn: "Password|Contraseña"
+- inputText: ${E2E_PASSWORD}
+- hideKeyboard
+- tapOn: "Log In|Acceder"
+# Redirect returns through the wcpos:// deep link.
+- extendedWaitUntil:
+    visible:
+      id: "logged-in-users-label"
+    timeout: 120000
+# Select the first store and open the POS (store rows tagged in PR #730).
+- extendedWaitUntil:
+    visible:
+      id: "store-option-.*"
+    timeout: 120000
+- tapOn:
+    id: "store-option-.*"
+# StoreSelect keeps the button disabled while cashier validation is in flight;
+# tapping a disabled native button no-ops silently.
+- extendedWaitUntil:
+    visible:
+      id: "open-pos-button"
+      enabled: true
+    timeout: 60000
+- tapOn:
+    id: "open-pos-button"
+# Initial RxDB product sync on a cold database (240s budget was never
+# approached in the spike, but keep the headroom).
+- extendedWaitUntil:
+    visible:
+      id: "search-products"
+    timeout: 240000
+# The demo catalog defaults to an In-Stock filter that can hide products.
+- runFlow:
+    when:
+      visible:
+        id: "filter-pill-remove-stock_status"
+    commands:
+      - tapOn:
+          id: "filter-pill-remove-stock_status"

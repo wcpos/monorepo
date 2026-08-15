@@ -43,20 +43,29 @@ jobs:
             monorepo
             web-bundle
 
-      - name: 📥 Check out monorepo (with submodules)
+      - name: 📥 Check out monorepo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.inputs.monorepo_ref }}
-          submodules: true
+          # submodules: false — we init the submodules by name in the next step
+          # instead, so this workflow controls exactly when they are populated.
+          submodules: false
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
+
+      - name: 📦 Init submodules
+        # Populate apps/web BEFORE `pnpm install` scans the `apps/*` workspace glob
+        # — otherwise apps/web is an empty dir, `@wcpos/web-bundle` isn't a
+        # workspace project, and `pnpm web build` no-ops (leaving no build output).
+        # The repo preinstall hook's own `git submodule update --init` runs too
+        # late (after workspace discovery), so it can't be relied on here.
+        run: git submodule update --init apps/web apps/electron
 
       - name: 🏗 Setup monorepo
         uses: ./.github/actions/setup-monorepo
         with:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
-          uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
 
       - name: 🔨 Build web bundle
         run: pnpm web build

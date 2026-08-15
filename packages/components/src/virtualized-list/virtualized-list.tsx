@@ -60,6 +60,19 @@ function List<T>({
 		style: { height: '100%', ...((parentProps?.style || {}) as any) },
 	} as React.ComponentProps<typeof Parent>;
 
+	// FlashList v2 recycles views by item identity, so props must stay referentially stable
+	const renderItemWithContext = React.useCallback<NonNullable<typeof renderItem>>(
+		({ item, index, ...rest }) => {
+			const key = keyExtractor ? keyExtractor(item, index) : String(index);
+			return (
+				<ItemContext.Provider key={key} value={{ item, index } as BaseItemContext<T>}>
+					{renderItem({ item, index, ...rest })}
+				</ItemContext.Provider>
+			);
+		},
+		[renderItem, keyExtractor]
+	);
+
 	return (
 		<Parent {...wrapperProps}>
 			<FlashList
@@ -67,14 +80,8 @@ function List<T>({
 				data={data}
 				{...(renderScrollComponent ? { renderScrollComponent, nestedScrollEnabled: true } : {})}
 				style={{ flex: 1 }}
-				renderItem={({ item, index, ...rest }) => {
-					const key = keyExtractor ? keyExtractor(item, index) : String(index);
-					return (
-						<ItemContext.Provider key={key} value={{ item, index } as BaseItemContext<T>}>
-							{renderItem({ item, index, ...rest })}
-						</ItemContext.Provider>
-					);
-				}}
+				keyExtractor={keyExtractor}
+				renderItem={renderItemWithContext}
 				drawDistance={overscan * estimatedItemSize}
 				onEndReached={onEndReached}
 				onEndReachedThreshold={onEndReachedThreshold}

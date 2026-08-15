@@ -63,13 +63,24 @@ describe('printing settings copy', () => {
 	});
 
 	it('uses Print Dialog consistently for the built-in system printer', () => {
+		// The English lives in the bundled catalog, not in the source, so assert on
+		// the resolved copy for every key these screens use.
 		const files = ['index.tsx', 'printer-row.tsx', 'printers-empty-state.tsx'];
+		const sourceCatalog = JSON.parse(
+			readFileSync(
+				join(__dirname, '../../../../contexts/translations/locales/en/core.json'),
+				'utf8'
+			)
+		) as Record<string, string>;
 
 		for (const file of files) {
 			const source = readFileSync(join(__dirname, file), 'utf8');
+			const copy = [...source.matchAll(/\bt\(\s*['"]([^'"]+)['"]/g)]
+				.map((match) => sourceCatalog[match[1]])
+				.filter((value): value is string => typeof value === 'string');
 
-			expect(source).not.toMatch(/System (?:Print )?Dialog/);
-			expect(source).toContain('Print Dialog');
+			expect(copy.join('\n')).not.toMatch(/System (?:Print )?Dialog/);
+			expect(copy.join('\n')).toContain('Print Dialog');
 		}
 	});
 });

@@ -1,7 +1,7 @@
 import Bottleneck from 'bottleneck';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { requestStateManager } from './request-state-manager';
 
@@ -20,9 +20,8 @@ const globalQueue = new Bottleneck({
 globalQueue.on('error', (error) => {
 	httpLogger.error('Too many requests queued - please wait', {
 		showToast: true,
-		saveToDb: true,
+		code: ERROR_CODES.REQUEST_QUEUE_OVERFLOW,
 		context: {
-			errorCode: ERROR_CODES.REQUEST_QUEUE_FULL,
 			error: error instanceof Error ? error.message : String(error),
 		},
 	});

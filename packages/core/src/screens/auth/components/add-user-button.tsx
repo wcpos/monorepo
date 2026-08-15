@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
 import { useWcposAuth } from '../../../hooks/use-wcpos-auth';
@@ -39,6 +40,7 @@ export function AddUserButton({ site, hasExistingUsers }: Props) {
 		if (response.type === 'success') {
 			if (!response.params) {
 				authLogger.error('Login succeeded without credentials', {
+					code: ERROR_CODES.AUTH_UNEXPECTED,
 					showToast: true,
 					context: { siteName: site.name, response },
 				});
@@ -49,6 +51,7 @@ export function AddUserButton({ site, hasExistingUsers }: Props) {
 			void handleLoginSuccess({ params: response.params });
 		} else if (response.type === 'error') {
 			authLogger.error(`Login failed: ${response.error}`, {
+				code: ERROR_CODES.AUTH_UNEXPECTED,
 				showToast: true,
 				context: {
 					siteName: site.name,
@@ -66,7 +69,7 @@ export function AddUserButton({ site, hasExistingUsers }: Props) {
 		// may surface the same error / token) is not silently swallowed by the
 		// guard in the effect above.
 		processedResponseRef.current = null;
-		promptAsync();
+		void promptAsync();
 	}, [promptAsync]);
 
 	return (

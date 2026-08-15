@@ -2,13 +2,14 @@ import * as React from 'react';
 
 import { v4 as uuidv4 } from 'uuid';
 
+import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
-import { usePullDocument } from '../../contexts/use-pull-document';
 import { RefundDestination } from '../../hooks/payment-gateway-contract';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
+import { StorageBlockedError, useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 
-const refundMutationLogger = getLogger(['wcpos', 'mutations', 'refund']);
+const refundLogger = getLogger(['wcpos', 'orders', 'refund']);
 
 interface RefundLineItem {
 	id?: number;
@@ -70,12 +71,21 @@ export function createRefundIdempotencyKey(orderId: number) {
  */
 export function useRefundMutation() {
 	const http = useRestHttpClient();
-	const pullDocument = usePullDocument();
+	const runtime = useQueryRuntime();
+	const { blockIfDegraded } = useStorageMoneyPathGuard();
 
 	return React.useCallback(
 		async ({ order, amount, reason, lineItems, refundDestination }: RefundMutationArgs) => {
 			if (!order.id) {
 				throw new Error('refund_requires_persisted_order');
+			}
+
+			// #163 follow-up ruling: refunds are a money path. This is the last
+			// synchronous point before the POST — past it the money has moved and the
+			// idempotency key makes a retry mint a SECOND refund. It throws rather
+			// than returning quietly so the form cannot toast a refund as successful.
+			if (blockIfDegraded('refund', { orderId: order.id })) {
+				throw new StorageBlockedError('refund');
 			}
 
 			const payload = buildRefundPayload({
@@ -91,21 +101,34 @@ export function useRefundMutation() {
 				},
 			});
 
+			let handle;
 			try {
-				await pullDocument(order.id, order.collection as never);
+				handle = runtime.engine.require({
+					id: `refund:order-refresh:${order.id}`,
+					collection: 'orders',
+					kind: 'targeted-records',
+					wooIds: [order.id],
+					forceRefresh: true,
+				});
+				await handle.ready;
 			} catch (error) {
-				refundMutationLogger.error('refund_refresh_failed', {
-					showToast: false,
-					saveToDb: true,
+				// The refund POST already succeeded — money has moved. A failed local
+				// refresh must never reject the mutation: the error toast would invite
+				// the cashier to retry, and each retry mints a fresh idempotency key,
+				// so a retry POSTs a SECOND refund. Log it; the local order heals on
+				// the next sync pass.
+				refundLogger.warn('Refund succeeded but the local order refresh failed', {
 					context: {
 						orderId: order.id,
 						error: error instanceof Error ? error.message : String(error),
 					},
 				});
+			} finally {
+				handle?.release();
 			}
 
 			return response?.data;
 		},
-		[http, pullDocument]
+		[blockIfDegraded, http, runtime]
 	);
 }

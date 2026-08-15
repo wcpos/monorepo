@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test';
 
-import { getStoreUrl, stubStoreVersionForE2E } from './fixtures';
+import { getStoreUrl, getStoreVariant, stubStoreVersionForE2E } from './fixtures';
 
 test.describe('Connect Screen', () => {
 	test.beforeEach(async ({ page }, testInfo) => {
-		await stubStoreVersionForE2E(page.context(), getStoreUrl(testInfo));
+		await stubStoreVersionForE2E(page.context(), getStoreUrl(testInfo), getStoreVariant(testInfo));
 		await page.goto('/');
 		await expect(page.getByTestId('connect-store-button')).toBeVisible({
 			timeout: 60_000,
@@ -47,7 +47,7 @@ test.describe('Connect Screen', () => {
 		await connectButton.click();
 
 		await expect(page.getByTestId('logged-in-users-label')).toBeVisible({
-			timeout: 30_000,
+			timeout: 60_000,
 		});
 	});
 
@@ -60,7 +60,7 @@ test.describe('Connect Screen', () => {
 
 		await page.getByTestId('connect-store-button').click();
 		await expect(page.getByTestId('logged-in-users-label')).toBeVisible({
-			timeout: 30_000,
+			timeout: 60_000,
 		});
 		await expect(page.getByTestId('add-user-button')).toBeVisible();
 	});

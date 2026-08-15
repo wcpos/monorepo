@@ -1,22 +1,14 @@
 import { useSubscription } from 'observable-hooks';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
 import { useBarcodeDetection, useBarcodeSearch } from '../hooks/barcodes';
 
-import type { QuerySearchInput } from '../components/query-search-input';
-
 const barcodeLogger = getLogger(['wcpos', 'barcode', 'product']);
 
-type ProductCollection = import('@wcpos/database').ProductCollection;
-type Query = import('@wcpos/query').RelationalQuery<ProductCollection>;
-
-export const useBarcode = (
-	productQuery: Query,
-	querySearchInputRef: React.RefObject<{ setSearch: (search: string) => void } | null>
-) => {
+export const useBarcode = (setSearch: (search: string) => void) => {
 	const { barcode$, onKeyPress } = useBarcodeDetection();
 	const { barcodeSearch } = useBarcodeSearch();
 	const t = useT();
@@ -24,7 +16,7 @@ export const useBarcode = (
 	/**
 	 *
 	 */
-	useSubscription(barcode$, async (rawBarcode) => {
+	const handleBarcode = async (rawBarcode: unknown) => {
 		const barcode = rawBarcode as string;
 		const text1 = t('common.barcode_scanned', { barcode });
 		const results = await barcodeSearch(barcode);
@@ -37,14 +29,18 @@ export const useBarcode = (
 		}
 
 		if (isError) {
-			barcodeLogger.error(text1, {
+			// Zero/many matches is a workflow miss, not a system failure — warn
+			// matches the registry severity of both codes.
+			barcodeLogger.warn(text1, {
 				showToast: true,
-				saveToDb: true,
 				toast: {
 					text2,
 				},
+				code:
+					results.length === 0
+						? ERROR_CODES.SEARCH_NO_RESULTS_REASON
+						: ERROR_CODES.BARCODE_AMBIGUOUS,
 				context: {
-					errorCode: ERROR_CODES.RECORD_NOT_FOUND,
 					barcode,
 					resultsCount: results.length,
 				},
@@ -61,9 +57,16 @@ export const useBarcode = (
 				},
 			});
 		}
-		productQuery.search(barcode);
-		querySearchInputRef.current?.setSearch(barcode);
-	});
+		setSearch(barcode);
+	};
+
+	useSubscription(
+		barcode$,
+		(rawBarcode) =>
+			void handleBarcode(rawBarcode).catch((error) =>
+				barcodeLogger.error(String(error), { code: ERROR_CODES.PRODUCT_UNEXPECTED })
+			)
+	);
 
 	return { onKeyPress };
 };

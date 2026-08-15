@@ -31,6 +31,7 @@ interface ProductTileProps {
 	gridFields: GridFields;
 }
 
+/** Renders a product tile with the fields enabled for the product grid. */
 export function ProductTile({ product, gridFields }: ProductTileProps) {
 	const t = useT();
 	const { addProduct } = useAddProduct();
@@ -59,8 +60,8 @@ export function ProductTile({ product, gridFields }: ProductTileProps) {
 		gridFields.stock_quantity ||
 		gridFields.cost_of_goods_sold;
 
-	const handlePress = React.useCallback(() => {
-		addProduct(product);
+	const handlePress = React.useCallback(async () => {
+		await addProduct(product);
 	}, [addProduct, product]);
 
 	return (
@@ -69,7 +70,7 @@ export function ProductTile({ product, gridFields }: ProductTileProps) {
 			className="bg-card border-border m-1 flex-1 overflow-hidden rounded-lg border"
 			testID="product-tile"
 		>
-			<View className="aspect-square">
+			<View className="aspect-square" testID={`product-tile-${product.id}`}>
 				<TileImage product={product} />
 			</View>
 			{hasAnyField && (
@@ -129,7 +130,7 @@ export function ProductTile({ product, gridFields }: ProductTileProps) {
 					)}
 					{gridFields.cost_of_goods_sold && costOfGoodsSold != null ? (
 						<Text className="text-muted-foreground text-xs">
-							{t('common.cogs')}: {format(costOfGoodsSold?.total_value || 0)}
+							{t('common.cogs')}: {format(costOfGoodsSold?.total_value ?? 0)}
 						</Text>
 					) : null}
 				</VStack>

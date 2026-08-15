@@ -7,14 +7,13 @@ import { Image } from '@wcpos/components/image';
 import { Suspense } from '@wcpos/components/suspense';
 
 import { useImageAttachment } from '../../../hooks/use-image-attachment';
+import { PRODUCT_IMAGE_PLACEHOLDER } from '../../../components/product/product-image-placeholder';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
-const PLACEHOLDER = 'https://via.placeholder.com/150';
-
 function TileImageInner({ product, imageUrl }: { product: ProductDocument; imageUrl: string }) {
 	const { uri, error } = useImageAttachment(product, imageUrl);
-	const imageSource = !uri || error ? { uri: PLACEHOLDER } : { uri };
+	const imageSource = !uri || error ? { uri: PRODUCT_IMAGE_PLACEHOLDER } : { uri };
 
 	return <Image source={imageSource} recyclingKey={product.uuid} className="h-full w-full" />;
 }

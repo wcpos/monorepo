@@ -1,21 +1,25 @@
 import { expect, type Page } from '@playwright/test';
 
-import { authenticatedTest as test } from './fixtures';
+import {
+	addCheckoutProbeProduct,
+	isolatedProductTest as test,
+	tryAddRunPrivateSimpleProduct,
+} from './checkout-probe';
+import {
+	expectMoneyMatches,
+	expectRateSetParity,
+	expectTaxParity,
+	isPushOrdersResponse,
+	liveOrderTest as liveTest,
+	newRunLabel,
+	type OrderPayload,
+	type ServerOrder,
+	stampRunLabel,
+} from './order-lifecycle';
 
-/** Helper to add the first simple product to the cart. Works in both grid and table view. */
+/** Add the run-private simple product, or the shared-SKU fallback on secretless forks. */
 async function addFirstProductToCart(page: Page) {
-	const tile = page.getByTestId('product-tile').first();
-	const tableButton = page.getByTestId('add-to-cart-button').first();
-
-	// Wait for products to render in whichever view mode is active
-	await expect(tile.or(tableButton)).toBeVisible({ timeout: 15_000 });
-
-	if (await tile.isVisible()) {
-		await tile.click();
-	} else {
-		await tableButton.click();
-	}
-	await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 10_000 });
+	await addCheckoutProbeProduct(page);
 }
 
 /**
@@ -82,6 +86,12 @@ test.describe('POS Cart', () => {
 	});
 
 	test('should add multiple different products', async ({ posPage: page }) => {
+		if (await tryAddRunPrivateSimpleProduct(page)) {
+			expect(await tryAddRunPrivateSimpleProduct(page, 1)).toBe(true);
+			return;
+		}
+
+		// Secretless forks retain the former two-catalog-product path below.
 		// Works in both grid (product-tile) and table (add-to-cart-button) views
 		const tile = page.getByTestId('product-tile');
 		const tableButton = page.getByTestId('add-to-cart-button');
@@ -89,6 +99,7 @@ test.describe('POS Cart', () => {
 		// Wait for products to render in whichever view mode is active
 		await expect(tile.first().or(tableButton.first())).toBeVisible({ timeout: 15_000 });
 
+		// A marker already settled visible above; one-shot picks which view rendered.
 		const isTileVisible = await tile.first().isVisible();
 		const buttons = isTileVisible ? tile : tableButton;
 
@@ -125,6 +136,95 @@ test.describe('POS Cart', () => {
 		const buttonText = await checkoutButton.textContent();
 		expect(buttonText).toMatch(/\d/);
 	});
+});
+
+/**
+ * SAVE-TO-SERVER TOTALS PARITY — the regression that motivated the whole
+ * tax-parity oracle (woocommerce-pos#1545): a one-product cart saved to the
+ * server came back with DIFFERENT totals (server taxed from the site base
+ * instead of the POS store), and the only symptom was the "your store changed
+ * this order's totals" banner. Parity is the invariant; the banner is the
+ * cashier-facing alarm. This spec asserts both, store-agnostically: whatever
+ * this store's rates are, the server must agree with the POS about them.
+ *
+ * Writes to the shared live store → follows the labelling and cleanup
+ * contract in order-lifecycle.ts.
+ */
+liveTest.describe('POS Cart - save to server parity (live store)', () => {
+	liveTest(
+		'a plain one-product cart saves with identical totals and no divergence banner',
+		async ({ posPage: page, trackOrder }) => {
+			const label = newRunLabel();
+			await addFirstProductToCart(page);
+			await stampRunLabel(page, label);
+
+			// The cart total the cashier sees, captured before the save. Raw trimmed
+			// text, NOT digits-only (#1114 review): stripping separators collapses
+			// decimal position ("45.00" and "450.0" both become "4500"), and since
+			// this exact string is later compared against the SAME source, the
+			// verbatim text is both safe across locales and strictly stronger.
+			const checkoutButton = page.getByTestId('checkout-button');
+			const cartTotalText = ((await checkoutButton.textContent()) ?? '').trim();
+			expect(cartTotalText, 'cart must show a total').not.toBe('');
+			expect(cartTotalText, 'cart total must contain an amount').toMatch(/\d/);
+
+			const saved = page.waitForResponse((response) => isPushOrdersResponse(response), {
+				timeout: 90_000,
+			});
+			saved.catch(() => {});
+
+			await page.getByTestId('save-to-server-button').click();
+			const response = await saved;
+			expect(response.status(), 'save to server must succeed').toBeLessThan(400);
+
+			const envelope = (response.request().postDataJSON() ?? {}) as {
+				recordId?: string;
+				payload?: OrderPayload;
+			};
+			const sent = envelope.payload ?? {};
+			const ack = (await response.json().catch(() => null)) as {
+				document?: ServerOrder;
+			} | null;
+			const doc = ack?.document;
+			expect(doc?.id, 'ack must carry the created order').toBeTruthy();
+			trackOrder({ id: Number(doc!.id), uuid: envelope.recordId, label });
+
+			// PARITY: the server recorded the numbers the POS rang up. Rate-set
+			// equality first — a tax-location mismatch swaps the rate SET even when
+			// amounts land close together. Unconditional over both sets (#1114
+			// review): [] === [] on a tax-free store, and a dropped client
+			// tax_lines fails instead of skipping.
+			expectRateSetParity(
+				sent.tax_lines,
+				doc!.tax_lines,
+				'server tax rates must equal the rates the POS applied'
+			);
+			if (sent.total !== undefined) {
+				expectMoneyMatches(doc!.total, sent.total, 'order total parity (cart vs server)');
+			}
+			if (sent.cart_tax !== undefined) {
+				expectTaxParity(doc!.cart_tax, sent.cart_tax, 'cart_tax parity');
+			}
+
+			// The money the cashier sees must be stable across the save. Wait for the
+			// TERMINAL write signal first (#1114 review): the save button re-enables
+			// when the round trip completes, so the reconciliation that could rewrite
+			// the rendered total has run before we compare — a bare toPass would
+			// succeed instantly on the pre-save rendering.
+			await expect(page.getByTestId('save-to-server-button')).toBeEnabled({ timeout: 30_000 });
+			const totalNow = ((await checkoutButton.textContent()) ?? '').trim();
+			expect(totalNow, 'cart total must be unchanged by the save round trip').toBe(cartTotalText);
+
+			// RE-ARMED (was parked on woocommerce-pos#1548): the client now emits
+			// tax_lines at WooCommerce STORAGE precision (mono#1117 — raw 6dp
+			// per-rate sums under round-at-subtotal), so a plain sale's ack matches
+			// what the cart pushed and the cashier-facing alarm must stay down.
+			await expect(
+				page.getByTestId('order-totals-changed-banner'),
+				'a plain sale must not trigger the totals-changed banner'
+			).not.toBeVisible();
+		}
+	);
 });
 
 test.describe('POS Cart - Add Items Menu', () => {

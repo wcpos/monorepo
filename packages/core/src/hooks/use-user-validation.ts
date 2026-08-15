@@ -7,7 +7,7 @@ import { of } from 'rxjs';
 import { createTokenRefreshHandler, useHttpClient } from '@wcpos/hooks/use-http-client';
 import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAppState } from '../contexts/app-state';
 import { mergeStoresWithResponse } from '../utils/merge-stores';
@@ -178,8 +178,8 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					if (!response || response.status < 200 || response.status >= 300) {
 						const errorMsg = `Invalid response status: ${response?.status}`;
 						appLogger.error('User validation failed', {
+							code: ERROR_CODES.AUTH_UNEXPECTED,
 							context: {
-								errorCode: ERROR_CODES.CONNECTION_REFUSED,
 								status: response?.status,
 								statusText: response?.statusText,
 								userId,
@@ -195,8 +195,8 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					if (!data || typeof data !== 'object') {
 						const errorMsg = 'Invalid response data';
 						appLogger.error('User validation response contains no valid data', {
+							code: ERROR_CODES.AUTH_UNEXPECTED,
 							context: {
-								errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT,
 								userId,
 								siteUrl,
 								hasData: !!data,
@@ -209,8 +209,8 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					if (data.id !== undefined && data.id !== userId) {
 						const errorMsg = `User ID mismatch: expected ${userId}, got ${data.id}`;
 						appLogger.error('User validation failed - ID mismatch', {
+							code: ERROR_CODES.AUTH_UNEXPECTED,
 							context: {
-								errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT,
 								expectedUserId: userId,
 								receivedUserId: data.id,
 								siteUrl,
@@ -227,8 +227,8 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						'Failed to fetch user data from server'
 					);
 					appLogger.error(serverMessage, {
+						code: ERROR_CODES.AUTH_UNEXPECTED,
 						context: {
-							errorCode: ERROR_CODES.CONNECTION_REFUSED,
 							error: error instanceof Error ? error.message : String(error),
 							userId,
 							siteUrl,
@@ -272,6 +272,26 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						updateData.roles = [data.role];
 					}
 
+					// Server omits `capabilities` on plugin versions without the capability
+					// payload (absence = unknown = fail open). Never patch the key to
+					// `undefined` — RxDB schema validation rejects undefined values (422),
+					// which failed the whole login validation and left the user stuck on
+					// "Re-authenticate" with no stores. Stale stored caps are cleared via
+					// an incrementalModify below instead, which can actually remove a key.
+					let clearCapabilities = false;
+					if (data.capabilities === undefined) {
+						clearCapabilities = true;
+					} else if (Array.isArray(data.capabilities)) {
+						updateData.capabilities = [
+							...new Set(
+								data.capabilities.filter(
+									(capability: unknown): capability is string =>
+										typeof capability === 'string' && capability.length > 0
+								)
+							),
+						];
+					}
+
 					// Update user data if we have fields to update
 					if (Object.keys(updateData).length > 0) {
 						await wpUser.incrementalPatch(updateData);
@@ -280,6 +300,20 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 								userId,
 								updatedFields: Object.keys(updateData),
 							},
+						});
+					}
+
+					if (
+						clearCapabilities &&
+						(wpUser.getLatest() as unknown as { capabilities?: string[] }).capabilities !==
+							undefined
+					) {
+						await wpUser.getLatest().incrementalModify((docData) => {
+							delete (docData as { capabilities?: string[] }).capabilities;
+							return docData;
+						});
+						appLogger.debug('Cleared stale capabilities (server omitted the field)', {
+							context: { userId },
 						});
 					}
 
@@ -313,8 +347,8 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 				} catch (error) {
 					const errorMsg = error instanceof Error ? error.message : String(error);
 					appLogger.error('Failed to update user in local database', {
+						code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 						context: {
-							errorCode: ERROR_CODES.TRANSACTION_FAILED,
 							error: errorMsg,
 							userId,
 						},
@@ -340,6 +374,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 			} catch (error) {
 				const errorMsg = error instanceof Error ? error.message : String(error);
 				appLogger.error('[stores] validation FAILED', {
+					code: ERROR_CODES.AUTH_UNEXPECTED,
 					context: {
 						error: errorMsg,
 						userId,
@@ -354,7 +389,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 			}
 		};
 
-		validateUser();
+		void validateUser();
 	}, [
 		httpClient,
 		apiUrl,

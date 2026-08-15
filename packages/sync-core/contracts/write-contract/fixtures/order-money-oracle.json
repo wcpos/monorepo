@@ -1,0 +1,160 @@
+{
+	"$comment": "THE shared money oracle for the order write contract. One truth for the client's divergence comparator and for the plugin-side write-contract tests, so both sides argue against the same arithmetic instead of two hand-typed copies. Scenario: 3 x 9.99 ex-tax, GB 20% VAT plus a 2% COMPOUND surcharge, store display decimals 2, taxes rounded at subtotal. `pos` is MEASURED from packages/order-math (calculateOrderTotals), not hand-derived — which is why it is not six decimals throughout: WooCommerce stores money per field and order-math mirrors it field for field. `server6dp` is the same order as the plugin serves it since woocommerce-pos#1466 (dp=6 on every WCPOS order surface); note that order-level `total` and `total_tax` are 2dp VALUES merely padded to a six-decimal STRING, because WC_Abstract_Order stores them at display decimals on every route. `server2dp` is the legacy shape from before that fix, retained so version skew stays pinned. A comparator that flags `pos` against either server shape is over-strict; one that flags nothing at all is useless. See packages/sync-engine/src/write-path/order-money-divergence.ts.",
+	"scenario": {
+		"currency": "GBP",
+		"pricesIncludeTax": false,
+		"priceDecimals": 2,
+		"taxRoundAtSubtotal": true,
+		"lines": [{ "quantity": 3, "price": "9.99" }],
+		"rates": [
+			{ "id": 1, "label": "VAT", "rate": "20.0000", "compound": false },
+			{ "id": 2, "label": "Surcharge", "rate": "2.0000", "compound": true }
+		],
+		"arithmetic": {
+			"subtotal": "3 * 9.99 = 29.97",
+			"vat": "29.97 * 0.20 = 5.994",
+			"surcharge": "(29.97 + 5.994) * 0.02 = 0.71928",
+			"cart_tax": "5.994 + 0.71928 = 6.71328 (full precision — WC sums per-rate taxes unrounded)",
+			"total_tax": "wc_round_tax_total(6.71328) = 6.71 (display decimals)",
+			"total": "29.97 + 6.71 = 36.68 (display decimals — WC stores the order total at 2dp)"
+		}
+	},
+	"pos": {
+		"status": "processing",
+		"currency": "GBP",
+		"prices_include_tax": false,
+		"discount_total": "0",
+		"discount_tax": "0",
+		"shipping_total": "0",
+		"shipping_tax": "0",
+		"cart_tax": "6.71328",
+		"total_tax": "6.71",
+		"total": "36.68",
+		"line_items": [
+			{
+				"name": "Oracle widget",
+				"quantity": 3,
+				"price": 9.99,
+				"subtotal": "29.97",
+				"subtotal_tax": "6.71328",
+				"total": "29.97",
+				"total_tax": "6.71328",
+				"taxes": [
+					{ "id": 1, "total": "5.994", "subtotal": "5.994" },
+					{ "id": 2, "total": "0.71928", "subtotal": "0.71928" }
+				],
+				"meta_data": [
+					{ "key": "_woocommerce_pos_uuid", "value": "0f1e2d3c-4b5a-4697-8899-aabbccddeeff" }
+				]
+			}
+		],
+		"tax_lines": [
+			{
+				"rate_id": 1,
+				"label": "VAT",
+				"compound": false,
+				"tax_total": "5.99",
+				"shipping_tax_total": "0"
+			},
+			{
+				"rate_id": 2,
+				"label": "Surcharge",
+				"compound": true,
+				"tax_total": "0.72",
+				"shipping_tax_total": "0"
+			}
+		]
+	},
+	"server6dp": {
+		"status": "processing",
+		"currency": "GBP",
+		"prices_include_tax": false,
+		"discount_total": "0.000000",
+		"discount_tax": "0.000000",
+		"shipping_total": "0.000000",
+		"shipping_tax": "0.000000",
+		"cart_tax": "6.713280",
+		"total_tax": "6.710000",
+		"total": "36.680000",
+		"line_items": [
+			{
+				"name": "Oracle widget",
+				"quantity": 3,
+				"price": 9.99,
+				"subtotal": "29.970000",
+				"subtotal_tax": "6.713280",
+				"total": "29.970000",
+				"total_tax": "6.713280",
+				"taxes": [
+					{ "id": 1, "total": "5.994000", "subtotal": "5.994000" },
+					{ "id": 2, "total": "0.719280", "subtotal": "0.719280" }
+				],
+				"meta_data": [
+					{ "key": "_woocommerce_pos_uuid", "value": "0f1e2d3c-4b5a-4697-8899-aabbccddeeff" }
+				]
+			}
+		],
+		"tax_lines": [
+			{
+				"rate_id": 1,
+				"label": "VAT",
+				"compound": false,
+				"tax_total": "5.990000",
+				"shipping_tax_total": "0.000000"
+			},
+			{
+				"rate_id": 2,
+				"label": "Surcharge",
+				"compound": true,
+				"tax_total": "0.720000",
+				"shipping_tax_total": "0.000000"
+			}
+		]
+	},
+	"server2dp": {
+		"status": "processing",
+		"currency": "GBP",
+		"prices_include_tax": false,
+		"discount_total": "0.00",
+		"discount_tax": "0.00",
+		"shipping_total": "0.00",
+		"shipping_tax": "0.00",
+		"cart_tax": "6.71",
+		"total_tax": "6.71",
+		"total": "36.68",
+		"line_items": [
+			{
+				"name": "Oracle widget",
+				"quantity": 3,
+				"price": 9.99,
+				"subtotal": "29.97",
+				"subtotal_tax": "6.71",
+				"total": "29.97",
+				"total_tax": "6.71",
+				"taxes": [
+					{ "id": 1, "total": "5.99", "subtotal": "5.99" },
+					{ "id": 2, "total": "0.72", "subtotal": "0.72" }
+				],
+				"meta_data": [
+					{ "key": "_woocommerce_pos_uuid", "value": "0f1e2d3c-4b5a-4697-8899-aabbccddeeff" }
+				]
+			}
+		],
+		"tax_lines": [
+			{
+				"rate_id": 1,
+				"label": "VAT",
+				"compound": false,
+				"tax_total": "5.99",
+				"shipping_tax_total": "0.00"
+			},
+			{
+				"rate_id": 2,
+				"label": "Surcharge",
+				"compound": true,
+				"tax_total": "0.72",
+				"shipping_tax_total": "0.00"
+			}
+		]
+	}
+}

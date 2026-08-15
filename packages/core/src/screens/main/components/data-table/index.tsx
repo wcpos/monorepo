@@ -18,8 +18,9 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
-import type { Query } from '@wcpos/query';
+import type { QueryResult } from '@wcpos/query';
 
+import { useGuardedExtendLimit } from '../../../../query';
 import { UISettingID, useUISettings } from '../../contexts/ui-settings';
 import { TextCell } from '../../components/text-cell';
 import { useT } from '../../../../contexts/translations';
@@ -28,18 +29,29 @@ import { DataTableFooter } from './footer';
 import { ListFooterComponent as DefaultListFooterComponent } from './list-footer';
 
 import type { SortingChange } from './sort-field';
+import type { CollectionKey as QueryCollectionKey } from '../../../../query';
 import type { ColumnDef, Header, Table as TanStackTable } from '@tanstack/react-table';
+
+type DataTableCollectionKey = Exclude<QueryCollectionKey, 'tax-rates'>;
 
 interface RenderHeaderProps<TData = unknown> extends Header<TData, unknown> {
 	table: TanStackTable<TData>;
+	collectionName?: DataTableCollectionKey;
 	sortBy: string;
 	sortDirection: 'asc' | 'desc';
 	onSortingChange: (sort: SortingChange) => void;
 }
 
-interface Props {
+type BindingDataTableFooterProps = React.ComponentProps<typeof DataTableFooter>;
+
+interface BindingActions<TSortField extends string> {
+	setSort(field: TSortField, direction: 'asc' | 'desc'): void;
+	extendLimit(): void;
+	setFilter: (...args: never[]) => void;
+}
+
+interface CommonProps {
 	id: UISettingID;
-	query: Query<any>;
 	noDataMessage?: string;
 	estimatedItemSize?: number;
 	showFooter?: boolean;
@@ -53,8 +65,21 @@ interface Props {
 	tableConfig?: any;
 	getItemType?: (row: any) => string;
 	ListFooterComponent?: React.ComponentType<any>;
-	TableFooterComponent?: React.ComponentType<any>;
 }
+
+type BindingProps<TSortField extends string> = {
+	collectionName: DataTableCollectionKey;
+	resource: import('observable-hooks').ObservableResource<QueryResult<import('rxdb').RxCollection>>;
+	sort: { field: TSortField; direction: 'asc' | 'desc' };
+	actions: BindingActions<TSortField>;
+	TableFooterComponent?: React.ComponentType<BindingDataTableFooterProps>;
+	active$: import('rxjs').Observable<boolean>;
+	total$: import('rxjs').Observable<number>;
+	totalSource$: import('rxjs').Observable<'coverage' | 'local'>;
+	sync: () => Promise<void>;
+};
+
+type Props<TSortField extends string> = CommonProps & BindingProps<TSortField>;
 
 /**
  * React Compiler breaks tanstack/react-table
@@ -65,26 +90,26 @@ function useReactTableWrapper(...args: Parameters<typeof useReactTable>) {
 	return { ...useReactTable(...args) };
 }
 
-function DataTable<TData>({
-	id,
-	query,
-	noDataMessage,
-	estimatedItemSize,
-	showFooter = true,
-	renderItem,
-	renderCell,
-	renderHeader,
-	tableConfig,
-	getItemType,
-	ListFooterComponent,
-	TableFooterComponent,
-}: Props) {
+function DataTable<TData, TSortField extends string = string>(props: Props<TSortField>) {
+	const {
+		id,
+		noDataMessage,
+		estimatedItemSize,
+		showFooter = true,
+		renderItem,
+		renderCell,
+		renderHeader,
+		tableConfig,
+		getItemType,
+		ListFooterComponent,
+	} = props;
+	const resource = props.resource;
 	const { uiSettings, getUILabel, patchUI } = useUISettings(id);
 	const uiColumns = useObservableEagerState(
 		uiSettings.columns$ as import('rxjs').Observable<Record<string, unknown>[]>
 	);
 	const t = useT();
-	const result = useObservableSuspense(query.resource);
+	const result = useObservableSuspense(resource);
 	const deferredResult = React.useDeferredValue(result);
 
 	const columns = React.useMemo(
@@ -97,22 +122,24 @@ function DataTable<TData>({
 		[uiColumns]
 	);
 
-	const sortBy = uiSettings.sortBy;
-	const sortDirection: 'asc' | 'desc' = uiSettings.sortDirection === 'desc' ? 'desc' : 'asc';
+	const sortBy = props.sort.field;
+	const sortDirection = props.sort.direction;
 
 	const handleSortingChange = React.useCallback(
 		({ sortBy, sortDirection }: SortingChange) => {
-			patchUI({ sortBy, sortDirection });
-			query.sort([{ [sortBy]: sortDirection }]).exec();
+			void patchUI({ sortBy, sortDirection });
+			props.actions.setSort(sortBy as TSortField, sortDirection);
 		},
-		[patchUI, query]
+		[patchUI, props.actions]
 	);
 
-	const handleEndReached = React.useCallback(() => {
-		if (query.infiniteScroll) {
-			query.loadMore();
-		}
-	}, [query]);
+	// Guarded (#1221): a short page is the true end, and an outstanding extension must land
+	// before the next one fires — unguarded end-reached churn recompiled the search demand
+	// per step and abort/re-issued identical wire requests.
+	const handleEndReached = useGuardedExtendLimit(
+		props.actions.extendLimit,
+		deferredResult.hits.length
+	);
 
 	const table = useReactTableWrapper({
 		columns,
@@ -122,8 +149,8 @@ function DataTable<TData>({
 		...tableConfig,
 		state: { columnVisibility, ...tableConfig?.state },
 		meta: {
-			query,
 			...tableConfig?.meta,
+			actions: { setFilter: props.actions.setFilter },
 		},
 	});
 
@@ -148,12 +175,14 @@ function DataTable<TData>({
 									renderHeader({
 										...header,
 										table,
+										collectionName: props.collectionName,
 										sortBy,
 										sortDirection,
 										onSortingChange: handleSortingChange,
 									})
 								) : (
 									<DataTableHeader
+										collectionName={props.collectionName}
 										columnId={header.column.id}
 										header={flexRender(header.column.columnDef.header, header.getContext())}
 										disableSort={!header.column.getCanSort()}
@@ -168,9 +197,13 @@ function DataTable<TData>({
 					</TableRow>
 				))}
 			</TableHeader>
-			<VirtualizedList.Root style={{ flex: 1 }}>
+			<VirtualizedList.Root
+				testID={`data-table-scroller-${props.collectionName}`}
+				style={{ flex: 1 }}
+			>
 				<VirtualizedList.List
 					data={table.getRowModel().rows}
+					keyExtractor={(item) => item.id}
 					renderItem={({ item, index }) =>
 						renderItem
 							? renderItem({ item, index, table })
@@ -188,20 +221,36 @@ function DataTable<TData>({
 							</Text>
 						</TableRow>
 					)}
-					ListFooterComponent={
-						ListFooterComponent
-							? () => <ListFooterComponent query={query} />
-							: () => <DefaultListFooterComponent query={query} />
+					ListFooterComponent={() =>
+						ListFooterComponent ? (
+							<ListFooterComponent active$={props.active$} />
+						) : (
+							<DefaultListFooterComponent active$={props.active$} />
+						)
 					}
 					extraData={extraData}
 				/>
 			</VirtualizedList.Root>
 			{showFooter && (
 				<TableFooter>
-					{TableFooterComponent ? (
-						<TableFooterComponent query={query} count={result.hits.length} />
+					{props.TableFooterComponent ? (
+						<props.TableFooterComponent
+							collectionName={props.collectionName}
+							active$={props.active$}
+							total$={props.total$}
+							totalSource$={props.totalSource$}
+							sync={props.sync}
+							count={result.hits.length}
+						/>
 					) : (
-						<DataTableFooter query={query} count={result.hits.length} />
+						<DataTableFooter
+							collectionName={props.collectionName}
+							active$={props.active$}
+							total$={props.total$}
+							totalSource$={props.totalSource$}
+							sync={props.sync}
+							count={result.hits.length}
+						/>
 					)}
 				</TableFooter>
 			)}
@@ -211,7 +260,8 @@ function DataTable<TData>({
 
 function getRowTestID(item: any) {
 	const document = item?.original?.document;
-	const stableId = document?.slug ?? document?.id ?? item?.id;
+	// Woo numeric ids can appear after a create ack; the adapter uuid/hit id is stable for the row.
+	const stableId = document?.slug ?? document?.uuid ?? item?.id;
 	return stableId !== null && stableId !== undefined && stableId !== ''
 		? `data-table-row-${stableId}`
 		: undefined;
@@ -315,3 +365,4 @@ export {
 	getHeaderStyle,
 };
 export type { RenderHeaderProps, SortingChange };
+export type { BindingDataTableFooterProps };

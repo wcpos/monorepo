@@ -1,0 +1,366 @@
+import {
+	BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT,
+	clampToBrowseWindowBackstop,
+	isBrowseWindowLimit,
+} from './browse-window-continuation';
+import { type BrowseWindowGrammar, browseWindowKeyPart } from './browse-window-grammar';
+
+import type { OrderBrowseDimensions } from '../require-plane';
+
+export const WOO_REST_MAX_PER_PAGE = 100;
+export const ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON = 'descriptor is not supported';
+
+/**
+ * Window growth quantum past the first page (#948/#957 — mirrors
+ * PRODUCT_BROWSE_WINDOW_STEP). The orders grid extends its limit 10 rows at a time; below
+ * one Woo page the limit travels verbatim (a cold grid must not pull 100 orders to show
+ * 10), and above it the window rounds up to this step so scrolling to row 5,000 mints ~50
+ * coverage lanes rather than 500.
+ */
+export const ORDER_BROWSE_WINDOW_STEP = WOO_REST_MAX_PER_PAGE;
+
+/**
+ * Record ceiling for a RANGED FETCH-TO-COMPLETION browse (`limit=all`, Reports only).
+ * Distinct from a scroll window: nothing here is scroll-driven, the caller asked for the
+ * whole date range, and this is the sanity bound on that.
+ */
+export const ORDER_BROWSE_RANGED_COMPLETE_MAX_RECORDS = 10_000;
+
+/**
+ * Quantize a requested orders browse window (#948/#957).
+ *
+ * Replaces the old `Math.min(…, ORDER_BROWSER_SCHEDULER_DESCRIPTOR_MAX_RECORDS = 200)`
+ * clamp. That clamp was not merely a small ceiling — because the limit travels IN the lane
+ * key, clamping made every `extendLimit` past 200 produce the identical key, which the
+ * scheduler deduped as already-done work, so no further window was ever requested and the
+ * grid dead-ended in silence. Quantizing (rather than clamping) keeps the key space small
+ * while keeping successive windows DISTINCT.
+ */
+export function normalizeOrderBrowseWindowLimit(limit: number): number {
+	if (!Number.isFinite(limit)) return 10;
+	const requested = Math.max(1, Math.trunc(clampToBrowseWindowBackstop(limit)));
+	if (requested <= ORDER_BROWSE_WINDOW_STEP) return requested;
+	return clampToBrowseWindowBackstop(
+		Math.ceil(requested / ORDER_BROWSE_WINDOW_STEP) * ORDER_BROWSE_WINDOW_STEP
+	);
+}
+
+/**
+ * The lane identity of the orders window ONE GROWTH STEP smaller — the prefix a growing
+ * window resumes from (#957; see browse-window-continuation.ts). The limit is the LAST
+ * field of this grammar, so the predecessor is the same key with a smaller `:limit=`
+ * suffix; every other dimension is preserved verbatim, which is what keeps a
+ * customer/cashier/store/date-scoped browse continuing from its own prefix.
+ */
+export function orderBrowserPredecessorWindow(
+	queryKey: string,
+	limit: number
+): { queryKey: string; limit: number } | null {
+	// Below the quantum the grid still extends 10 rows at a time, so the predecessor is
+	// one UI page back; above it, one full step.
+	const previous = limit > ORDER_BROWSE_WINDOW_STEP ? limit - ORDER_BROWSE_WINDOW_STEP : limit - 10;
+	if (previous <= 0) return null;
+	const suffix = `:limit=${limit}`;
+	if (!queryKey.endsWith(suffix)) return null;
+	return { queryKey: `${queryKey.slice(0, -suffix.length)}:limit=${previous}`, limit: previous };
+}
+
+export type OrderBrowserSchedulerDescriptor = {
+	queryKey: string;
+	status: string;
+	search: string;
+	limit: number;
+	customerId?: number;
+	cashierId?: number;
+	store?: string;
+	afterSeconds?: number;
+	beforeSeconds?: number;
+	orderby?: 'date' | 'modified' | 'id' | 'status' | 'customer_id' | 'payment_method' | 'total';
+	order?: 'asc' | 'desc';
+	complete: boolean;
+	wooStatus: string;
+};
+
+export type OrderBrowserSchedulerDescriptorDecision =
+	| { descriptor: OrderBrowserSchedulerDescriptor; skipReason?: never }
+	| { descriptor?: never; skipReason: string };
+
+/**
+ * The dimensions of an orders browse window, ALREADY NORMALIZED — the grammar's own input
+ * shape and the one thing its encoder writes bytes from.
+ *
+ * Two doors reach it and each normalizes differently, which is exactly why the encoding
+ * lives here and not at either door: the demand plane quantizes the grid's limit onto the
+ * growth curve ({@link orderBrowserQueryKey}), while the seeder honours the caller's limit
+ * verbatim (a Reports range asks for the rows it asks for). They must nonetheless emit the
+ * SAME BYTES for the same window, or one browse gets two persisted lane identities
+ * depending on which door it came through — the duplication rx-order-scheduler-task-seeder
+ * used to carry, complete with a runtime round-trip assertion admitting it.
+ */
+export type OrderBrowseWindowFields = {
+	status: string;
+	search: string;
+	/** `'all'` for a RANGED fetch-to-completion lane (Reports); a row count otherwise. */
+	limit: number | 'all';
+	customerId?: number | undefined;
+	cashierId?: number | undefined;
+	store?: string | undefined;
+	afterSeconds?: number | undefined;
+	beforeSeconds?: number | undefined;
+	orderby?: OrderBrowserSchedulerDescriptor['orderby'];
+	order?: OrderBrowserSchedulerDescriptor['order'];
+};
+
+/**
+ * The sort tail of the key.
+ *
+ * A RANGED (`limit=all`) lane is sort-agnostic. It fetches the whole range to completion and
+ * always walks `date desc` on the wire — the dimension its resume cursor is expressed in
+ * (#954) — so the grid's sort cannot change which records the lane ends up holding, and its
+ * `expectedRecordIds` is consumed only as a count. Carrying sort in the key forked the lane
+ * identity per sort, so every re-sort of the reports grid re-downloaded the entire range.
+ * A WINDOWED browse keeps it: there the sort decides which slice the window holds (#909).
+ * The DEFAULT `id desc` sort is omitted rather than encoded, so one window has one key.
+ */
+function orderBrowseWindowSortPart(fields: OrderBrowseWindowFields): string {
+	if (fields.limit === 'all') return '';
+	if (fields.orderby === undefined && fields.order === undefined) return '';
+	if (fields.orderby === 'id' && fields.order === 'desc') return '';
+	return `${browseWindowKeyPart('orderby', fields.orderby)}${browseWindowKeyPart('order', fields.order)}`;
+}
+
+/**
+ * Assemble the key from parts already decided — the ONE place this grammar's bytes are
+ * written.
+ *
+ * `search` carries arbitrary cashier text, so it stays the LAST free-text field, delimited
+ * only by the `:limit=` suffix; every structured dimension therefore sits BETWEEN the
+ * colon-free `status` and `:search=`. See the matching note on
+ * {@link parseOrderBrowserSchedulerDescriptor}.
+ */
+function encodeOrderBrowseWindowKey(fields: OrderBrowseWindowFields, limitText: string): string {
+	return [
+		`orders:browser:status=${fields.status}`,
+		browseWindowKeyPart('customer', fields.customerId),
+		browseWindowKeyPart('cashier', fields.cashierId),
+		browseWindowKeyPart('store', fields.store),
+		browseWindowKeyPart('after', fields.afterSeconds),
+		browseWindowKeyPart('before', fields.beforeSeconds),
+		orderBrowseWindowSortPart(fields),
+		`:search=${fields.search}`,
+		`:limit=${limitText}`,
+	].join('');
+}
+
+/** Build the canonical persisted lane identity from already-normalized dimensions. */
+export function orderBrowseWindowQueryKey(fields: OrderBrowseWindowFields): string {
+	return encodeOrderBrowseWindowKey(fields, fields.limit === 'all' ? 'all' : String(fields.limit));
+}
+
+/**
+ * The persisted requirement identity for an orders browse window.
+ *
+ * The undimensioned form keeps its own dotted spelling — `orders.browser.status.<s>` — while
+ * any structured dimension switches to the whole key with `:` swapped for `.`. Both spellings
+ * are PERSISTED (`schedulerTaskStates.requirementId`), so this asymmetry is pinned, not tidied.
+ */
+export function orderBrowseWindowRequirementId(fields: OrderBrowseWindowFields): string {
+	const dimensioned =
+		fields.customerId !== undefined ||
+		fields.cashierId !== undefined ||
+		fields.store !== undefined ||
+		fields.afterSeconds !== undefined ||
+		fields.beforeSeconds !== undefined ||
+		orderBrowseWindowSortPart(fields) !== '';
+	if (dimensioned) return orderBrowseWindowQueryKey(fields).replaceAll(':', '.');
+	const searchPart = fields.search === '' ? '' : `.search.${fields.search}`;
+	const limitPart = fields.limit === 'all' ? 'all' : fields.limit;
+	return `orders.browser.status.${fields.status}${searchPart}.limit.${limitPart}`;
+}
+
+/** Build the canonical persisted lane identity for an orders browse window. */
+export function orderBrowserQueryKey(dims: OrderBrowseDimensions): string {
+	const status = (dims.status ?? 'all').trim();
+	const search = (dims.search ?? '').trim();
+	const safeNonNegativeInteger = (value: number | undefined): number | undefined =>
+		value !== undefined && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+	const afterSeconds = safeNonNegativeInteger(dims.afterSeconds);
+	const beforeSeconds = safeNonNegativeInteger(dims.beforeSeconds);
+	if (status === '') throw new TypeError('orders browse status must not be empty');
+	if (status.includes(':')) throw new TypeError('orders browse status must not contain ":"');
+	if ((dims.orderby === undefined) !== (dims.order === undefined)) {
+		throw new TypeError('orders browse orderby and order must be provided together');
+	}
+	if (
+		dims.orderby !== undefined &&
+		dims.orderby !== 'date' &&
+		dims.orderby !== 'modified' &&
+		dims.orderby !== 'id' &&
+		dims.orderby !== 'status' &&
+		dims.orderby !== 'customer_id' &&
+		dims.orderby !== 'payment_method' &&
+		dims.orderby !== 'total'
+	) {
+		throw new TypeError(`unsupported orders browse orderby "${dims.orderby}"`);
+	}
+	if (dims.order !== undefined && dims.order !== 'asc' && dims.order !== 'desc') {
+		throw new TypeError(`unsupported orders browse order "${dims.order}"`);
+	}
+	if (dims.limit === 'all' && afterSeconds === undefined && beforeSeconds === undefined) {
+		throw new TypeError("orders browse limit 'all' requires a date range bound");
+	}
+
+	const store = dims.store && /^(?:\d+|[a-z0-9_-]+)$/.test(dims.store) ? dims.store : undefined;
+
+	return orderBrowseWindowQueryKey({
+		status,
+		search,
+		limit: dims.limit === 'all' ? 'all' : normalizeOrderBrowseWindowLimit(dims.limit as number),
+		customerId: safeNonNegativeInteger(dims.customerId),
+		cashierId: safeNonNegativeInteger(dims.cashierId),
+		store,
+		afterSeconds,
+		beforeSeconds,
+		orderby: dims.orderby,
+		order: dims.order,
+	});
+}
+
+export function browserOrderSchedulerDescriptorLimit(limitText: string): number | null {
+	const limit = Number(limitText);
+	// Only the runaway backstop refuses now (#957). The old 200-record refusal is gone:
+	// a window is however many orders the cashier has scrolled to.
+	return isBrowseWindowLimit(limit) ? limit : null;
+}
+
+export function browserOrderSchedulerDescriptorLimitError(): string {
+	return `Browser order scheduler descriptors cannot exceed ${BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT} records`;
+}
+
+export function parseOrderBrowserSchedulerDescriptor(
+	queryKey: string
+): OrderBrowserSchedulerDescriptorDecision | null {
+	if (!queryKey.startsWith('orders:browser:')) return null;
+
+	// `search` carries arbitrary cashier text, so it must stay the LAST free-text field:
+	// it is delimited only by the literal `:limit=` suffix (greedy `.*` + anchored end),
+	// which is how this grammar has always terminated it. Every structured dimension
+	// (customer, cashier, store, the range bounds, then the sort pair) therefore sits
+	// BETWEEN the colon-free `status` and `:search=` — appending them after `search`
+	// would let a literal search term like `invoice:after=1` be read as a date bound.
+	const match =
+		/^orders:browser:status=([^:]*)(?::customer=(\d+))?(?::cashier=(\d+))?(?::store=([a-z0-9_-]+))?(?::after=(\d+))?(?::before=(\d+))?(?::orderby=(date|modified|id|status|customer_id|payment_method|total))?(?::order=(asc|desc))?:search=(.*):limit=(\d+|all)$/.exec(
+			queryKey
+		);
+	if (!match) return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
+
+	const [
+		,
+		status,
+		customerText,
+		cashierText,
+		store,
+		afterText,
+		beforeText,
+		orderby,
+		order,
+		search,
+		limitText,
+	] = match;
+	if (status === '') return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
+	const customerId = customerText === undefined ? undefined : Number(customerText);
+	const cashierId = cashierText === undefined ? undefined : Number(cashierText);
+	const afterSeconds = afterText === undefined ? undefined : Number(afterText);
+	const beforeSeconds = beforeText === undefined ? undefined : Number(beforeText);
+	if (
+		(customerId !== undefined && !Number.isSafeInteger(customerId)) ||
+		(cashierId !== undefined && !Number.isSafeInteger(cashierId)) ||
+		(afterSeconds !== undefined && !Number.isSafeInteger(afterSeconds)) ||
+		(beforeSeconds !== undefined && !Number.isSafeInteger(beforeSeconds)) ||
+		(orderby === undefined) !== (order === undefined)
+	) {
+		return {
+			skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON,
+		};
+	}
+	const complete = limitText === 'all';
+	if (complete && afterSeconds === undefined && beforeSeconds === undefined) {
+		return {
+			skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON,
+		};
+	}
+	const limit = complete
+		? ORDER_BROWSE_RANGED_COMPLETE_MAX_RECORDS
+		: browserOrderSchedulerDescriptorLimit(limitText);
+	if (limit === null) return { skipReason: browserOrderSchedulerDescriptorLimitError() };
+
+	return {
+		descriptor: {
+			queryKey,
+			status,
+			search,
+			limit,
+			...(customerId !== undefined ? { customerId } : {}),
+			...(cashierId !== undefined ? { cashierId } : {}),
+			...(store !== undefined ? { store } : {}),
+			...(afterSeconds !== undefined ? { afterSeconds } : {}),
+			...(beforeSeconds !== undefined ? { beforeSeconds } : {}),
+			// A ranged lane is sort-agnostic (see the sortPart note in orderBrowserQueryKey), so the
+			// sort is DROPPED here rather than rejected: lanes and queued tasks persisted before
+			// that change still carry it, and refusing them would strand the task instead of
+			// letting it run. Normalizing at the door means nothing downstream can act on a sort
+			// the ranged walk ignores anyway.
+			...(orderby !== undefined && !complete
+				? { orderby: orderby as OrderBrowserSchedulerDescriptor['orderby'] }
+				: {}),
+			...(order !== undefined && !complete
+				? { order: order as OrderBrowserSchedulerDescriptor['order'] }
+				: {}),
+			complete,
+			wooStatus: status === 'all' ? '' : status,
+		},
+	};
+}
+
+/** The grammar's own field shape, recovered from a parsed descriptor. */
+export function orderBrowseWindowFields(
+	descriptor: OrderBrowserSchedulerDescriptor
+): OrderBrowseWindowFields {
+	return {
+		status: descriptor.status,
+		search: descriptor.search,
+		limit: descriptor.complete ? 'all' : descriptor.limit,
+		customerId: descriptor.customerId,
+		cashierId: descriptor.cashierId,
+		store: descriptor.store,
+		afterSeconds: descriptor.afterSeconds,
+		beforeSeconds: descriptor.beforeSeconds,
+		orderby: descriptor.orderby,
+		order: descriptor.order,
+	};
+}
+
+/**
+ * The orders lane, as a value the shared browse-window engine consumes
+ * (browse-window-grammar.ts).
+ *
+ * `viewKey` re-encodes with an empty limit, which for this grammar — where `:limit=` is the
+ * LAST field — is byte-identical to stripping the suffix.
+ *
+ * A ranged `limit=all` lane reports `limitOf === 'all'`, which takes it out of eviction
+ * entirely: it is not a scroll window, its lane is written cumulatively, and it must be
+ * neither survivor nor victim.
+ */
+export const ORDER_BROWSE_WINDOW_GRAMMAR: BrowseWindowGrammar<OrderBrowseWindowFields> = {
+	collection: 'orders',
+	encode: orderBrowseWindowQueryKey,
+	parse: (queryKey) => {
+		const decision = parseOrderBrowserSchedulerDescriptor(queryKey);
+		return decision?.descriptor ? orderBrowseWindowFields(decision.descriptor) : null;
+	},
+	limitOf: (fields) => fields.limit,
+	requirementId: orderBrowseWindowRequirementId,
+	viewKey: (fields) => encodeOrderBrowseWindowKey(fields, ''),
+	schemaCeilingLabel: 'Browser order scheduler descriptor',
+	measureTaskIdAgainstCeiling: false,
+};

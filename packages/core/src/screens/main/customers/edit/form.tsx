@@ -1,13 +1,13 @@
 import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useRouter } from 'expo-router';
 import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
+import { useModal } from '@wcpos/components/modal';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
 import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';
@@ -30,7 +30,7 @@ export function EditCustomerForm({ customer }: Props) {
 	const { localPatch } = useLocalMutation();
 	const pushDocument = usePushDocument();
 	const { format } = useCustomerNameFormat();
-	const router = useRouter();
+	const { close } = useModal();
 
 	/**
 	 *
@@ -52,10 +52,15 @@ export function EditCustomerForm({ customer }: Props) {
 		async (data: z.infer<typeof customerFormSchema>) => {
 			setLoading(true);
 			try {
-				await localPatch({
+				const patched = await localPatch({
 					document: customer,
 					data: data as Partial<import('@wcpos/database').CustomerDocument>,
 				});
+				// localPatch swallows write errors and resolves undefined - pushing
+				// anyway would sync the unchanged resident and report success
+				if (!patched?.document) {
+					throw new Error('Local patch failed');
+				}
 				await pushDocument(customer).then((savedDoc: unknown) => {
 					if (isRxDocument(savedDoc)) {
 						mutationLogger.success(
@@ -64,22 +69,22 @@ export function EditCustomerForm({ customer }: Props) {
 							}),
 							{
 								showToast: true,
-								saveToDb: true,
 								context: {
 									customerId: (savedDoc as { id?: number }).id,
 									customerName: format(savedDoc as import('@wcpos/database').CustomerDocument),
 								},
 							}
 						);
+						close();
 					}
 				});
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
-				mutationLogger.error(t('common.failed_to_save_customer'), {
+				mutationLogger.error('Failed to save customer', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.SYNC_UNEXPECTED,
+					toast: { title: t('common.failed_to_save_customer') },
 					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
 						customerId: customer.id,
 						error: errorMessage,
 					},
@@ -88,18 +93,11 @@ export function EditCustomerForm({ customer }: Props) {
 				setLoading(false);
 			}
 		},
-		[localPatch, customer, pushDocument, t, format]
+		[localPatch, customer, pushDocument, t, format, close]
 	);
 
 	/**
 	 *
 	 */
-	return (
-		<CustomerForm
-			form={form}
-			onClose={() => router.back()}
-			onSubmit={handleSave}
-			loading={loading}
-		/>
-	);
+	return <CustomerForm form={form} onClose={close} onSubmit={handleSave} loading={loading} />;
 }

@@ -6,6 +6,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import { Image } from '@wcpos/components/image';
 
 import { useImageAttachment } from '../../hooks/use-image-attachment';
+import { PRODUCT_IMAGE_PLACEHOLDER } from './product-image-placeholder';
 
 import type { CellContext } from '@tanstack/react-table';
 
@@ -23,7 +24,7 @@ export function ProductImage({ row }: CellContext<{ document: ProductDocument },
 	if (error) {
 		return (
 			<Image
-				source={{ uri: 'https://via.placeholder.com/150' }}
+				source={{ uri: PRODUCT_IMAGE_PLACEHOLDER }}
 				recyclingKey={product.uuid}
 				className="h-20 w-full rounded"
 			/>

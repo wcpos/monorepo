@@ -8,8 +8,8 @@ import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { VStack } from '@wcpos/components/vstack';
 
+import { type Notification, useNovuNotifications } from '../../../../contexts/novu';
 import { useT } from '../../../../contexts/translations';
-import { type Notification, useNovuNotifications } from '../../../../hooks/use-novu-notifications';
 import { useDateFormat } from '../../hooks/use-date-format';
 
 /** Estimated height of a notification item in pixels (includes padding, title, body, timestamp) */
@@ -86,7 +86,7 @@ export function NotificationPanelContent() {
 	const { notifications, unreadCount, markAsRead, markAllAsRead } = useNovuNotifications();
 
 	const handleMarkAllAsRead = React.useCallback(() => {
-		markAllAsRead();
+		void markAllAsRead();
 	}, [markAllAsRead]);
 
 	const renderNotificationItem = React.useCallback(

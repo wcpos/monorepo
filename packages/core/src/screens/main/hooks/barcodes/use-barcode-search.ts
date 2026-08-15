@@ -1,14 +1,74 @@
 import * as React from 'react';
 
-import { useCollection } from '../use-collection';
+import {
+	type EngineRxDocument,
+	isEngineRxDocument,
+	useQueryRuntime,
+	wrapEngineDocument,
+} from '@wcpos/query';
+import { barcodeMatchCandidates, buildLocalBarcodeIndex } from '@wcpos/sync-core';
+
+/**
+ * The barcode carriers of the engine's ACTIVE scope, per materialized
+ * collection — the scan reads them off the scope it is scanning, so a store
+ * switch cannot leave a previous site's carriers in play.
+ */
+type ActiveBarcodeSelectors = { products: readonly string[]; variations: readonly string[] };
+const NO_BARCODE_SELECTORS: ActiveBarcodeSelectors = { products: [], variations: [] };
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 
+function engineDocuments(value: unknown): EngineRxDocument[] {
+	return Array.isArray(value) ? value.filter(isEngineRxDocument) : [];
+}
+
+/** The document carries the scanned code verbatim in a barcode-symbology field. */
+function matchesExactSymbology(document: EngineRxDocument, barcode: string): boolean {
+	const materialized = document.payload?.barcode;
+	return typeof materialized === 'string' && materialized.trim() === barcode;
+}
+
+/**
+ * The document carries the UPC-A/EAN-13 counterpart of the scanned code in a
+ * barcode-symbology field (#740). Scoped to barcode fields so a numeric SKU
+ * never gains an equivalent form, and excludes the exact code (a higher tier) so
+ * this is strictly the equivalence match.
+ */
+function matchesEquivalentSymbology(
+	document: EngineRxDocument,
+	barcode: string,
+	selectors: ActiveBarcodeSelectors
+): boolean {
+	const materialized = document.payload?.barcode;
+	const collection = document.collection.name;
+	const skuActive =
+		(collection === 'products' || collection === 'variations') &&
+		selectors[collection][0] === 'sku';
+	if (typeof materialized !== 'string' || skuActive) {
+		return false;
+	}
+	return barcodeMatchCandidates(barcode).some(
+		(candidate) => candidate !== barcode && candidate === materialized.trim()
+	);
+}
+
+/** The document carries the scanned code verbatim in any discovery field (incl. SKU). */
+function matchesExactAnyField(document: EngineRxDocument, barcode: string): boolean {
+	const payload = document.payload;
+	if (!payload) {
+		return false;
+	}
+	return buildLocalBarcodeIndex([{ id: document.id, payload }]).index.has(barcode);
+}
+
+function matchesEquivalentGlobalId(document: EngineRxDocument, barcode: string): boolean {
+	const value = document.payload?.global_unique_id;
+	return typeof value === 'string' && barcodeMatchCandidates(barcode).includes(value.trim());
+}
+
 export const useBarcodeSearch = () => {
-	// Get the RxDB collections for products and variations
-	const { collection: productCollection } = useCollection('products');
-	const { collection: variationsCollection } = useCollection('variations');
+	const runtime = useQueryRuntime();
 
 	/**
 	 * Searches for a barcode in the product and variation collections.
@@ -18,27 +78,94 @@ export const useBarcodeSearch = () => {
 	 */
 	const barcodeSearch = React.useCallback(
 		async (barcode: string): Promise<(ProductDocument | ProductVariationDocument)[]> => {
-			const result = await Promise.all([
-				productCollection
-					.find({
-						selector: {
-							barcode,
-						},
-					})
-					.exec(),
-				variationsCollection
-					.find({
-						selector: {
-							barcode,
-						},
-					})
-					.exec(),
-			]);
+			const normalizedBarcode = barcode.trim();
+			if (normalizedBarcode === '') {
+				return [];
+			}
 
-			return [...result[0], ...result[1]];
+			// Resolve on every scan: a store-scope move replaces the active engine
+			// database AND its barcode carriers — read both off the same scope.
+			const scope = runtime.engine.active();
+			const selectors: ActiveBarcodeSelectors = scope?.barcodeSelectors ?? NO_BARCODE_SELECTORS;
+			const collections = scope?.database.collections;
+			const productCollection = collections?.products;
+			const variationsCollection = collections?.variations;
+			if (!productCollection || !variationsCollection) {
+				return [];
+			}
+
+			// Phase 1 ceiling: barcode fields live in the unindexable payload blob, so scan both
+			// collections once per (rare) scan until the payload-blob indexing debt is retired.
+			const [productResult, variationResult] = await Promise.all([
+				productCollection.find().exec(),
+				variationsCollection.find().exec(),
+			]);
+			const products = engineDocuments(productResult).filter(
+				(document) => selectors.products.length > 0 && document.payload?.status === 'publish'
+			);
+			const variations = engineDocuments(variationResult).filter(
+				(document) => selectors.variations.length > 0 && document.payload?.status === 'publish'
+			);
+
+			const select = (predicate: (document: EngineRxDocument) => boolean) => [
+				...products
+					.filter(predicate)
+					.map((document) => wrapEngineDocument<ProductDocument>('products', document)),
+				...variations
+					.filter(predicate)
+					.map((document) => wrapEngineDocument<ProductVariationDocument>('variations', document)),
+			];
+
+			// Precedence (#740), first non-empty tier wins so a scan never turns
+			// falsely ambiguous:
+			//   1. exact match on the materialized barcode — the product literally has this barcode;
+			//   2. UPC-A/EAN-13 equivalent on the materialized barcode — the leading-zero twin;
+			//   3. UPC-A/EAN-13 equivalent on the global_unique_id fallback field;
+			//   4. exact match on any field, incl. SKU — a coincidental SKU string.
+			// Barcode semantics rank above a SKU coincidence: an unrelated product whose
+			// SKU equals the scanned digits must not preempt a genuine barcode
+			// equivalence — including a global-ID equivalence while SKU is the
+			// active carrier, so every equivalence tier runs before the exact-any
+			// fallback.
+			const symbologyExact = select((document) =>
+				matchesExactSymbology(document, normalizedBarcode)
+			);
+			if (symbologyExact.length > 0) {
+				return symbologyExact;
+			}
+			const symbologyEquivalent = select((document) =>
+				matchesEquivalentSymbology(document, normalizedBarcode, selectors)
+			);
+			if (symbologyEquivalent.length > 0) {
+				return symbologyEquivalent;
+			}
+			const globalIdEquivalent = select((document) =>
+				matchesEquivalentGlobalId(document, normalizedBarcode)
+			);
+			if (globalIdEquivalent.length > 0) {
+				return globalIdEquivalent;
+			}
+			return select((document) => matchesExactAnyField(document, normalizedBarcode));
 		},
-		[productCollection, variationsCollection]
+		[runtime]
 	);
 
-	return { barcodeSearch };
+	const findProductById = React.useCallback(
+		async (productId: number): Promise<ProductDocument | null> => {
+			// Resolve on every call so parent lookup follows a concurrent store-scope move.
+			const productCollection = runtime.engine.active()?.database.collections.products;
+			if (!productCollection) {
+				return null;
+			}
+			const result = await productCollection
+				.findOne({ selector: { wooProductId: productId } })
+				.exec();
+			return isEngineRxDocument(result)
+				? wrapEngineDocument<ProductDocument>('products', result)
+				: null;
+		},
+		[runtime]
+	);
+
+	return { barcodeSearch, findProductById };
 };

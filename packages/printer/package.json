@@ -9,24 +9,37 @@
 	"exports": {
 		".": "./src/index.ts",
 		"./encoder": "./src/encoder/index.ts",
-		"./encoder/render-preview": "./src/encoder/render-preview.ts"
+		"./encoder/render-preview": "./src/encoder/render-preview.ts",
+		"./ipc-channels": "./src/ipc/channels.cts",
+		"./transport/device-key": "./src/transport/device-key.ts"
+	},
+	"typesVersions": {
+		"*": {
+			"transport/device-key": [
+				"src/transport/device-key.ts"
+			]
+		}
 	},
 	"files": [
-		"src/**"
+		"src/**",
+		"ipc-channels.d.ts"
 	],
+	"scripts": {
+		"test": "vitest run"
+	},
 	"dependencies": {
 		"@point-of-sale/receipt-printer-encoder": "^3.0.3",
 		"@point-of-sale/webbluetooth-receipt-printer": "2.0.0",
 		"@point-of-sale/webusb-receipt-printer": "2.0.0",
 		"@wcpos/receipt-renderer": "workspace:*",
-		"p-queue": "^9.3.0",
+		"p-queue": "^9.3.3",
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {
 		"@testing-library/react": "^16.3.2",
 		"jsdom": "^26.1.0",
 		"react-dom": "19.2.7",
-		"vitest": "^4.1.8"
+		"vitest": "^4.1.10"
 	},
 	"peerDependencies": {
 		"expo-print": ">=55.0.0",

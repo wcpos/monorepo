@@ -18,6 +18,7 @@ import { ResponseType, useAuthRequest } from 'expo-auth-session';
 
 import { AppInfo } from '@wcpos/utils/app-info';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { buildAuthUrl, generateState, getRedirectUri, parseAuthResult } from './utils';
 
@@ -114,11 +115,12 @@ function parseAuthFromUrl(): WcposAuthResult | null {
 	if (result.type === 'success' && result.params) {
 		const savedState = getSavedCsrfState();
 		const returnedState = (result.params as unknown as Record<string, unknown>)?.state as
-			| string
-			| undefined;
+			string | undefined;
 
 		if (savedState && returnedState !== savedState) {
-			oauthLogger.error('State parameter mismatch - possible CSRF attack');
+			oauthLogger.error('State parameter mismatch - possible CSRF attack', {
+				code: ERROR_CODES.AUTH_UNEXPECTED,
+			});
 			return {
 				type: 'error',
 				error: 'State parameter mismatch - authentication rejected for security',
@@ -313,7 +315,10 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 				return;
 			}
 
-			oauthLogger.error('Auth failed', { context: { error: errorMessage } });
+			oauthLogger.error('Auth failed', {
+				code: ERROR_CODES.AUTH_UNEXPECTED,
+				context: { error: errorMessage },
+			});
 
 			const errorResult: WcposAuthResult = {
 				type: 'error',

@@ -3,7 +3,9 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { CurrencyInput } from '../../components/currency-input';
+import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { useProAccess } from '../../contexts/pro-access';
+import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
 import type { CellContext } from '@tanstack/react-table';
 
@@ -34,17 +36,24 @@ export function EditablePrice({
 		}) => void;
 	};
 	const { readOnly } = useProAccess();
+	const { caps } = useUserCapabilities();
+	const canEdit = item.type === 'variation' ? caps.canEditVariations : caps.canEditProducts;
 
 	/**
 	 *
 	 */
 	return (
-		<CurrencyInput
-			value={price}
-			onChangeText={(price) =>
-				meta.onChange({ document: item, changes: { [column.id]: String(price) } })
-			}
-			disabled={readOnly || (column.id === 'sale_price' && !item.on_sale)}
-		/>
+		<CapabilityTooltip show={!readOnly && !canEdit} hint="editProducts">
+			<CurrencyInput
+				value={price}
+				onChangeText={(price) =>
+					meta.onChange({
+						document: item,
+						changes: { [column.id]: String(price) },
+					})
+				}
+				disabled={readOnly || !canEdit || (column.id === 'sale_price' && !item.on_sale)}
+			/>
+		</CapabilityTooltip>
 	);
 }

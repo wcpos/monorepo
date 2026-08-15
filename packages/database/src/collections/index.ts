@@ -11,6 +11,7 @@ import { notificationsLiteral } from './schemas/notifications';
 import { templatesLiteral } from './schemas/templates';
 import { ordersLiteral } from './schemas/orders';
 import { productsLiteral } from './schemas/products';
+import { receiptEmailQueueLiteral } from './schemas/receipt-email-queue';
 import { sitesLiteral } from './schemas/sites';
 import { storesLiteral } from './schemas/stores';
 import { syncLiteral } from './schemas/sync';
@@ -20,12 +21,27 @@ import { usersLiteral } from './schemas/users';
 import { variationsLiteral } from './schemas/variations';
 import { wpCredentialsLiteral } from './schemas/wp-credientials';
 import { printerProfilesLiteral } from './schemas/printer-profiles';
+import { scannerProfilesLiteral } from './schemas/scanner-profiles';
 import { templatePrinterOverridesLiteral } from './schemas/template-printer-overrides';
 import { toSortableInteger } from './utils';
 import { sanitizeProductData } from './products';
 import { sanitizeWPCredentialsData } from './wp-credentials';
 
 import type { RxCollection, RxCollectionCreator, RxDatabase, RxDocument } from 'rxdb';
+
+type WithJsonMetaData<T> = T extends { meta_data?: infer MetaData }
+	? Omit<T, 'meta_data'> & {
+			meta_data?: MetaData extends readonly (infer Entry)[]
+				? (Omit<Entry, 'value'> & { value?: unknown })[]
+				: MetaData;
+		}
+	: T;
+
+type WithNestedJsonMetaData<T, Key extends keyof T> = Omit<T, Key> & {
+	[Property in Key]?: NonNullable<T[Property]> extends readonly (infer Entry)[]
+		? WithJsonMetaData<Entry>[]
+		: never;
+};
 
 /**
  * Global Users
@@ -133,6 +149,25 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			oldDoc.timezone = typeof oldDoc.timezone === 'string' ? oldDoc.timezone : '';
 			return oldDoc;
 		},
+		10(oldDoc: any) {
+			// #559 knob contract: per-store sync tuning, Balanced defaults.
+			// Amended pre-release by the #908 re-tune (Balanced = 60 s / 50): this
+			// migration has never shipped, so it writes the final default directly
+			// instead of stacking a corrective migration on an unreleased one.
+			oldDoc.sync_check_interval_ms = 60_000;
+			oldDoc.sync_pull_batch_size = 50;
+			return oldDoc;
+		},
+		11(oldDoc: StoreDocumentType) {
+			oldDoc.prevent_overselling = false;
+			return oldDoc;
+		},
+		12(oldDoc: StoreDocumentType) {
+			// Scan sounds are opt-in per station (#717): default off so quiet
+			// counters stay quiet until a cashier turns feedback on.
+			oldDoc.barcode_scanning_sound_enabled = false;
+			return oldDoc;
+		},
 	},
 };
 
@@ -165,6 +200,10 @@ const wp_credentials: RxCollectionCreator<WPCredentialsDocumentType> = {
 			// builds, so force one more migration pass to sanitize them.
 			return sanitizeWPCredentialsData(oldDoc) as WPCredentialsDocumentType;
 		},
+		5(oldDoc) {
+			// Added optional `capabilities`; absence deliberately means unknown.
+			return oldDoc;
+		},
 	},
 };
 
@@ -180,8 +219,10 @@ const wp_credentials: RxCollectionCreator<WPCredentialsDocumentType> = {
 /**
  * Products
  */
+type ProductDocumentType = WithJsonMetaData<
+	ExtractDocumentTypeFromTypedRxJsonSchema<typeof productsLiteral>
+>;
 const productSchema: RxJsonSchema<ProductDocumentType> = productsLiteral;
-type ProductDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof productsLiteral>;
 export type ProductDocument = RxDocument<ProductDocumentType>;
 export type ProductCollection = RxCollection<ProductDocumentType>;
 const products: RxCollectionCreator<ProductDocumentType> = {
@@ -235,10 +276,10 @@ const products: RxCollectionCreator<ProductDocumentType> = {
 /**
  * Product Variations
  */
-const productVariationSchema: RxJsonSchema<ProductVariationDocumentType> = variationsLiteral;
-type ProductVariationDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<
-	typeof variationsLiteral
+type ProductVariationDocumentType = WithJsonMetaData<
+	ExtractDocumentTypeFromTypedRxJsonSchema<typeof variationsLiteral>
 >;
+const productVariationSchema: RxJsonSchema<ProductVariationDocumentType> = variationsLiteral;
 export type ProductVariationDocument = RxDocument<ProductVariationDocumentType>;
 export type ProductVariationCollection = RxCollection<ProductVariationDocumentType>;
 const variations: RxCollectionCreator<ProductVariationDocumentType> = {
@@ -359,9 +400,14 @@ const brands: RxCollectionCreator<ProductBrandDocumentType> = {
 /**
  * Orders
  */
+type OrderDocumentType = WithNestedJsonMetaData<
+	WithJsonMetaData<ExtractDocumentTypeFromTypedRxJsonSchema<typeof ordersLiteral>>,
+	'line_items' | 'tax_lines' | 'shipping_lines' | 'fee_lines' | 'coupon_lines'
+>;
 const orderSchema: RxJsonSchema<OrderDocumentType> = ordersLiteral;
-type OrderDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof ordersLiteral>;
-export type OrderDocument = RxDocument<OrderDocumentType> & { readonly isNew?: boolean };
+export type OrderDocument = RxDocument<OrderDocumentType> & {
+	readonly isNew?: boolean;
+};
 export type OrderCollection = RxCollection<OrderDocumentType>;
 const orders: RxCollectionCreator<OrderDocumentType> = {
 	schema: orderSchema,
@@ -422,8 +468,10 @@ const orders: RxCollectionCreator<OrderDocumentType> = {
 /**
  * Customers
  */
+type CustomerDocumentType = WithJsonMetaData<
+	ExtractDocumentTypeFromTypedRxJsonSchema<typeof customersLiteral>
+>;
 const customerSchema: RxJsonSchema<CustomerDocumentType> = customersLiteral;
-type CustomerDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof customersLiteral>;
 export type CustomerDocument = RxDocument<CustomerDocumentType>;
 export type CustomerCollection = RxCollection<CustomerDocumentType>;
 const customers: RxCollectionCreator<CustomerDocumentType> = {
@@ -528,8 +576,49 @@ export type LogDocument = RxDocument<LogDocumentType>;
 export type LogCollection = RxCollection<LogDocumentType>;
 const logs: RxCollectionCreator<LogDocumentType> = {
 	schema: logSchema,
+	migrationStrategies: {
+		1: (oldDoc: any) => {
+			oldDoc.level = String(oldDoc.level ?? 'info').slice(0, 16);
+			return oldDoc;
+		}, // v0→v1 only adds indexes; documents are unchanged
+		2: (oldDoc: any) => {
+			const level = String(oldDoc.level ?? 'info');
+			const errorCode = oldDoc.context?.errorCode;
+
+			if (typeof errorCode === 'string') oldDoc.code = errorCode;
+			if (level === 'success') {
+				oldDoc.level = 'info';
+				oldDoc.outcome = 'ok';
+			} else if (level === 'audit') {
+				oldDoc.level = 'info';
+				oldDoc.category = 'db.audit';
+			} else {
+				oldDoc.level = ['debug', 'info', 'warn', 'error'].includes(level) ? level : 'info';
+			}
+
+			oldDoc.count = 1;
+			oldDoc.firstSeen = oldDoc.timestamp;
+			oldDoc.lastSeen = oldDoc.timestamp;
+			if (typeof oldDoc.sizeBytes !== 'number') {
+				try {
+					oldDoc.sizeBytes = 0;
+					let sizeBytes = new TextEncoder().encode(JSON.stringify(oldDoc)).byteLength;
+					while (oldDoc.sizeBytes !== sizeBytes) {
+						oldDoc.sizeBytes = sizeBytes;
+						sizeBytes = new TextEncoder().encode(JSON.stringify(oldDoc)).byteLength;
+					}
+				} catch {
+					delete oldDoc.sizeBytes;
+					// leave unset; retention serializes rows without sizeBytes
+				}
+			}
+			return oldDoc;
+		},
+		// v2→v3 only widens the `outcome` enum (adds 'recovered'); documents are unchanged.
+		3: (oldDoc: any) => oldDoc,
+	},
 	options: {
-		searchFields: ['message', 'context.error', 'context.errorCode'],
+		searchFields: ['message', 'context.error', 'context.errorCode', 'context.search'],
 	},
 };
 
@@ -558,6 +647,27 @@ const templates: RxCollectionCreator<TemplateDocumentType> = {
 	migrationStrategies: {
 		1(oldDoc) {
 			// v1: Added output_type and paper_width fields — populated on next sync
+			return oldDoc;
+		},
+	},
+};
+
+/**
+ * Scanner Profiles (local-only, not synced to server)
+ */
+const scannerProfileSchema: RxJsonSchema<ScannerProfileDocumentType> = scannerProfilesLiteral;
+type ScannerProfileDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<
+	typeof scannerProfilesLiteral
+>;
+export type ScannerProfileDocument = RxDocument<ScannerProfileDocumentType>;
+export type ScannerProfileCollection = RxCollection<ScannerProfileDocumentType>;
+const scanner_profiles: RxCollectionCreator<ScannerProfileDocumentType> = {
+	schema: scannerProfileSchema,
+	migrationStrategies: {
+		1(oldDoc) {
+			// v1: added the serial/hid-pos connection types and their optional
+			// device-identity fields. Existing wedge-attributed profiles are
+			// unchanged — the new fields are optional.
 			return oldDoc;
 		},
 	},
@@ -640,6 +750,20 @@ const template_printer_overrides: RxCollectionCreator<TemplatePrinterOverrideDoc
 	},
 };
 
+/**
+ * Receipt Email Queue (local-only, not synced to server)
+ */
+const receiptEmailQueueSchema: RxJsonSchema<ReceiptEmailQueueDocumentType> =
+	receiptEmailQueueLiteral;
+type ReceiptEmailQueueDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<
+	typeof receiptEmailQueueLiteral
+>;
+export type ReceiptEmailQueueDocument = RxDocument<ReceiptEmailQueueDocumentType>;
+export type ReceiptEmailQueueCollection = RxCollection<ReceiptEmailQueueDocumentType>;
+const receipt_email_queue: RxCollectionCreator<ReceiptEmailQueueDocumentType> = {
+	schema: receiptEmailQueueSchema,
+};
+
 export type UserCollections = {
 	users: UserCollection;
 	sites: SiteCollection;
@@ -663,7 +787,9 @@ export type StoreCollections = {
 	notifications: NotificationCollection;
 	templates: TemplateCollection;
 	printer_profiles: PrinterProfileCollection;
+	scanner_profiles: ScannerProfileCollection;
 	template_printer_overrides: TemplatePrinterOverrideCollection;
+	receipt_email_queue: ReceiptEmailQueueCollection;
 };
 
 export type SyncCollections = {
@@ -712,7 +838,9 @@ export const storeCollections = {
 	notifications,
 	templates,
 	printer_profiles,
+	scanner_profiles,
 	template_printer_overrides,
+	receipt_email_queue,
 };
 
 // @NOTE: sync collection should have corresponding collections in storeCollections

@@ -17,6 +17,7 @@ import { Loader } from '@wcpos/components/loader';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useLoginHandler } from '../hooks/use-login-handler';
 import { useT } from '../../../contexts/translations';
@@ -71,6 +72,7 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 		if (response.type === 'success') {
 			if (!response.params) {
 				authLogger.error('Re-authentication succeeded without credentials', {
+					code: ERROR_CODES.AUTH_UNEXPECTED,
 					showToast: true,
 					context: { siteName: site.name, response },
 				});
@@ -82,7 +84,7 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 			void (async () => {
 				try {
 					await handleLoginSuccess({ params });
-					// Re-auth can be reached after a pre-flight AUTH_REQUIRED block;
+					// Re-auth can be reached after a pre-flight auth-required block;
 					// clear the flag so subsequent requests aren't rejected despite
 					// the newly-saved tokens (mirrors auth-error-handler.ts:203).
 					requestStateManager.setRefreshedToken(params.access_token);
@@ -90,6 +92,7 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 				} catch (error) {
 					processedResponseRef.current = null;
 					authLogger.error('Failed to finish re-authentication', {
+						code: ERROR_CODES.AUTH_UNEXPECTED,
 						showToast: true,
 						context: { siteName: site.name, error },
 					});
@@ -97,6 +100,7 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 			})();
 		} else if (response.type === 'error') {
 			authLogger.error(`Re-authentication failed: ${response.error}`, {
+				code: ERROR_CODES.AUTH_UNEXPECTED,
 				showToast: true,
 				context: { siteName: site.name, response },
 			});
@@ -106,7 +110,7 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 
 	const handleRemoveWpUser = React.useCallback(async () => {
 		await wpUser.incrementalRemove();
-		await site.incrementalUpdate({
+		await site.getLatest().incrementalUpdate({
 			$pullAll: {
 				wp_credentials: [wpUser.uuid],
 			},
@@ -121,7 +125,7 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 			variant="outline-warning"
 			onPress={(e) => {
 				e.stopPropagation();
-				promptAsync();
+				void promptAsync();
 			}}
 		>
 			<ButtonText>{t('auth.re_authenticate', { _tags: 'core' })}</ButtonText>

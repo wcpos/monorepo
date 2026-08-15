@@ -1,18 +1,23 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useObservablePickState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Form, FormField, FormInput, useFormChangeHandler } from '@wcpos/components/form';
-import { HStack } from '@wcpos/components/hstack';
+import {
+	Form,
+	FormField,
+	FormInput,
+	FormSwitch,
+	useFormChangeHandler,
+} from '@wcpos/components/form';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { FormErrors } from '../../components/form-errors';
+import { SettingsRow } from '../components/settings-row';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 
 const formSchema = z.object({
@@ -21,6 +26,7 @@ const formSchema = z.object({
 	barcode_scanning_min_chars: z.number().default(8),
 	barcode_scanning_prefix: z.string().default(''),
 	barcode_scanning_suffix: z.string().default(''),
+	barcode_scanning_sound_enabled: z.boolean().default(false),
 });
 
 /**
@@ -43,12 +49,14 @@ export function BarcodeSettings() {
 				barcode_scanning_min_chars: latest.barcode_scanning_min_chars,
 				barcode_scanning_prefix: latest.barcode_scanning_prefix || '',
 				barcode_scanning_suffix: latest.barcode_scanning_suffix || '',
+				barcode_scanning_sound_enabled: latest.barcode_scanning_sound_enabled ?? false,
 			};
 		},
 		'barcode_scanning_avg_time_input_threshold',
 		'barcode_scanning_min_chars',
 		'barcode_scanning_prefix',
-		'barcode_scanning_suffix'
+		'barcode_scanning_suffix',
+		'barcode_scanning_sound_enabled'
 	);
 
 	/**
@@ -73,65 +81,71 @@ export function BarcodeSettings() {
 		[localPatch, store]
 	);
 
-	useFormChangeHandler({ form: form as never, onChange: handleChange as never });
+	useFormChangeHandler({
+		form: form as never,
+		onChange: handleChange as never,
+	});
 
 	/**
 	 *
 	 */
 	return (
 		<Form {...form}>
-			<VStack className="gap-4">
+			<VStack className="gap-1">
 				<FormErrors />
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="barcode_scanning_avg_time_input_threshold"
-						render={({ field: { value, ...rest } }) => (
-							<View className="flex-1">
-								<FormInput
-									label={t('settings.barcode_average_time_input_threshold_ms')}
-									type="numeric"
-									value={value != null ? String(value) : undefined}
-									{...rest}
-								/>
-							</View>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="barcode_scanning_min_chars"
-						render={({ field: { value, ...rest } }) => (
-							<View className="flex-1">
-								<FormInput
-									label={t('settings.barcode_minimum_length')}
-									type="numeric"
-									value={value != null ? String(value) : undefined}
-									{...rest}
-								/>
-							</View>
-						)}
-					/>
-				</HStack>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="barcode_scanning_prefix"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput label={t('settings.barcode_scanner_prefix')} {...field} />
-							</View>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="barcode_scanning_suffix"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput label={t('settings.barcode_scanner_suffix')} {...field} />
-							</View>
-						)}
-					/>
-				</HStack>
+				<FormField
+					control={form.control}
+					name="barcode_scanning_avg_time_input_threshold"
+					render={({ field: { value, ...rest } }) => (
+						<SettingsRow label={t('settings.barcode_average_time_input_threshold_ms')}>
+							<FormInput
+								type="numeric"
+								value={value != null ? String(value) : undefined}
+								{...rest}
+							/>
+						</SettingsRow>
+					)}
+				/>
+				<FormField
+					control={form.control}
+					name="barcode_scanning_min_chars"
+					render={({ field: { value, ...rest } }) => (
+						<SettingsRow label={t('settings.barcode_minimum_length')}>
+							<FormInput
+								type="numeric"
+								value={value != null ? String(value) : undefined}
+								{...rest}
+							/>
+						</SettingsRow>
+					)}
+				/>
+				<FormField
+					control={form.control}
+					name="barcode_scanning_prefix"
+					render={({ field }) => (
+						<SettingsRow label={t('settings.barcode_scanner_prefix')}>
+							<FormInput {...field} />
+						</SettingsRow>
+					)}
+				/>
+				<FormField
+					control={form.control}
+					name="barcode_scanning_suffix"
+					render={({ field }) => (
+						<SettingsRow label={t('settings.barcode_scanner_suffix')}>
+							<FormInput {...field} />
+						</SettingsRow>
+					)}
+				/>
+				<FormField
+					control={form.control}
+					name="barcode_scanning_sound_enabled"
+					render={({ field }) => (
+						<SettingsRow inline label={t('settings.barcode_scan_sound')}>
+							<FormSwitch {...field} />
+						</SettingsRow>
+					)}
+				/>
 			</VStack>
 		</Form>
 	);

@@ -79,7 +79,7 @@ One Expo codebase renders the POS everywhere; the difference between platforms i
 | --- | --- |
 | Web | OPFS (Origin Private File System), in a worker — migrating from IndexedDB |
 | Desktop (Electron) | Filesystem-node storage in the main process, reached over IPC; legacy SQLite-over-IPC is used for migrations |
-| Native (iOS/Android) | SQLite via `expo-sqlite` |
+| Native (iOS/Android) | Expo filesystem storage |
 
 Querying and replication against the WooCommerce REST API live in `@wcpos/query`; printing (ESC/POS encoding, transports and receipt rendering) lives in `@wcpos/printer` and `@wcpos/receipt-renderer`. See the [Client Architecture](https://github.com/wcpos/wiki/blob/main/architecture/client.md) wiki page for a deeper dive.
 

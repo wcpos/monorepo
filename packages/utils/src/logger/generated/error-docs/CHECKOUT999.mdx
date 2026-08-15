@@ -1,0 +1,42 @@
+---
+title: "CHECKOUT999: Checkout unexpected"
+sidebar_label: CHECKOUT999
+description: "Checkout hit an unexpected problem."
+---
+
+{/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with `pnpm generate:error-codes`. */}
+
+## What this means {#what-this-means}
+
+Checkout hit an unexpected problem.
+
+Check the order in your store admin before charging the customer again. Export diagnostics and contact support if the problem repeats.
+
+## What to do {#what-to-do}
+
+Check the details below before trying again. WCPOS does not retry this by itself — retry when you are ready.
+
+## Your data {#your-data}
+
+The outcome could not be confirmed — verify before retrying. If this persists, export diagnostics and contact WCPOS support.
+
+## Troubleshoot {#troubleshoot}
+
+1. Check WooCommerce → Orders in WP Admin for the order before charging the customer again.
+2. Expand the log entry and note the event code and any serverCode — this generic code means the cause has no dedicated code yet.
+3. If it repeats, export debug info and contact support.
+
+## Where to look {#where-to-look}
+
+When WCPOS can save this error, it is recorded on the device that raised it. Open **Store health → Logs** (the heart-pulse icon at the bottom of the navigation drawer), find the entry marked with this code and expand it: the expanded row shows the plain-language reason and the context captured at the moment of failure. For a store request, that context may include the server’s own error code (`serverCode`), the HTTP `status` or the `endpoint`; the fields shown depend on where the failure occurred. When reporting a problem, use **Copy debug info** at the top of the Logs screen (**Share debug info** on phones and tablets) rather than screenshots: it bundles the app version, connection state and the most recent errors. Logs are kept for at most 30 days, so collect them while the problem is fresh. Also copy any browser-console error that appeared before the POS was able to write its own log entry.
+
+Beyond the in-app log, this failure can leave evidence in:
+
+- **Network inspector** (web and desktop): open the developer tools — press F12 in the browser, or **Advanced → Toggle Developer Tools** in the desktop app’s menu — and select the **Network** tab. Follow this page’s retry guidance first; reproduce the action only when those steps say it is safe. A failing request shows the HTTP status and the raw response body, including error pages that never reach the POS log.
+- **Server-side POS logs**: in WP Admin, open **POS → Settings → Tools → Logs**. This page records POS-related warnings and errors raised on the server itself, which may never appear inside the app. A red badge on the menu means unread server-side errors.
+
+## Details {#details}
+
+- **Code:** `CHECKOUT999` (`CHECKOUT_UNEXPECTED`)
+- **Severity:** error
+- **Introduced in:** WCPOS 1.10.0

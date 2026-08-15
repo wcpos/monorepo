@@ -4,6 +4,7 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
 import { Loader } from '@wcpos/components/loader';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
 import { useWcposAuth } from '../../../hooks/use-wcpos-auth';
@@ -54,9 +55,10 @@ export function DemoButton() {
 		if (response.type === 'success') {
 			authLogger.debug('Demo login successful');
 			processedResponseRef.current = responseKey;
-			handleLoginSuccess({ params: response.params } as any);
+			void handleLoginSuccess({ params: response.params } as any);
 		} else if (response.type === 'error') {
 			authLogger.error(`Demo login failed: ${response.error}`, {
+				code: ERROR_CODES.AUTH_UNEXPECTED,
 				showToast: true,
 				context: { response },
 			});
@@ -86,7 +88,8 @@ export function DemoButton() {
 			// Don't show toast here - specific error messages are already displayed
 			// by the hooks (use-url-discovery, use-api-discovery, use-auth-testing)
 			authLogger.error(
-				`Demo connection failed: ${err instanceof Error ? err.message : String(err)}`
+				`Demo connection failed: ${err instanceof Error ? err.message : String(err)}`,
+				{ code: ERROR_CODES.AUTH_UNEXPECTED }
 			);
 		}
 	};
@@ -103,7 +106,7 @@ export function DemoButton() {
 		if (connectedSite && isReady && !isProcessing) {
 			authLogger.debug('Triggering OAuth flow for demo site');
 			authTriggeredRef.current = true; // Set immediately before async call
-			promptAsync();
+			void promptAsync();
 		}
 	}, [connectedSite, isReady, isProcessing, promptAsync]);
 

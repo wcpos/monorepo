@@ -14,7 +14,7 @@ export const metaDataSchema = z.array(
 		.object({
 			id: z.number().optional(),
 			key: z.string().optional(),
-			value: z.string().nullable().optional(),
+			value: z.unknown().optional(),
 			attr_id: z.number().optional(),
 			display_key: z.string().optional(),
 			display_value: z.string().optional(),

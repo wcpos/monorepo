@@ -5,6 +5,7 @@ import { from } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useUILabel } from './use-ui-label';
 import {
@@ -31,7 +32,6 @@ export interface UISettingsContextValue {
 		orders: ObservableResource<UISettingState<'orders'>>;
 		coupons: ObservableResource<UISettingState<'coupons'>>;
 		customers: ObservableResource<UISettingState<'customers'>>;
-		logs: ObservableResource<UISettingState<'logs'>>;
 		'reports-orders': ObservableResource<UISettingState<'reports-orders'>>;
 	};
 	getLabel: (id: string, key: string) => string;
@@ -94,6 +94,7 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 						return state as UISettingState<T>;
 					} catch (error) {
 						uiLogger.error(`Failed to merge initial values for ${id}`, {
+							code: ERROR_CODES.UNEXPECTED_ERROR,
 							context: { error: String(error) },
 						});
 						throw error;
@@ -117,7 +118,6 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 			orders: createUIResource('orders'),
 			coupons: createUIResource('coupons'),
 			customers: createUIResource('customers'),
-			logs: createUIResource('logs'),
 			'reports-orders': createUIResource('reports-orders'),
 		}),
 		[createUIResource]

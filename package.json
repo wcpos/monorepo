@@ -7,10 +7,16 @@
     "dev:main": "turbo dev --filter=\"{./apps/main}...\"",
     "dev:electron": "turbo dev --filter=\"{./apps/electron}...\"",
     "build": "turbo build",
+    "build:opfs-worker": "node scripts/build-opfs-worker.mjs",
+    "generate:error-codes": "node scripts/generate-error-codes.mjs",
+    "check:error-docs-lockstep": "node scripts/check-error-docs-lockstep.mjs",
+    "sync:error-docs": "node scripts/sync-error-docs.mjs",
+    "generate:event-labels": "node scripts/generate-event-labels.mjs",
+    "report:unused-error-codes": "node scripts/report-unused-error-codes.mjs",
     "build:main": "turbo build --filter=\"...{./apps/main}\"",
     "test": "turbo run test --filter='{./packages/*}' --filter='{./apps/main}'",
     "test:ci": "pnpm jest --ci --passWithNoTests && cd packages/query && npx jest --config jest.config.cjs --ci",
-    "test:scripts": "node scripts/check-dep-duplicates.mjs && node scripts/check-expo-alignment.mjs && node --test scripts/*.test.mjs && pnpm --filter @wcpos/virtual-printer test",
+    "test:scripts": "pnpm --filter @wcpos/virtual-printer test && pnpm --filter @wcpos/eslint-config test && node --test scripts/*.test.mjs && node scripts/check-dep-duplicates.mjs && node scripts/check-expo-alignment.mjs && node scripts/check-event-labels.mjs && node scripts/check-sync-event-types.mjs && node scripts/check-ci-test-matrix.mjs && node scripts/check-test-removal.mjs",
     "lint": "turbo lint --continue --concurrency=1 --filter='{./packages/*}' --filter='{./apps/main}'",
     "lint:fix": "turbo lint:fix --continue --concurrency=1 --filter='{./packages/*}' --filter='{./apps/main}'",
     "typecheck": "turbo typecheck --filter='{./packages/*}' --filter='{./apps/main}'",
@@ -30,23 +36,28 @@
     "expo:install": "pnpm --filter main exec expo install",
     "extract:translations": "node scripts/extract-js-strings.js",
     "translations:check": "node scripts/extract-js-strings.js --check",
+    "postinstall": "node scripts/patch-rxdb-premium-resurrection-leak.mjs",
     "prepare": "git config core.hooksPath .githooks",
     "virtual-printer": "pnpm --filter @wcpos/virtual-printer start",
-    "submodules:update": "git submodule update --init --remote apps/electron apps/web && git add apps/electron apps/web"
+    "submodules:update": "git submodule update --init --remote apps/electron apps/web && node ./scripts/stage-submodule-bumps.mjs"
   },
   "packageManager": "pnpm@11.1.1",
   "lint-staged": {
     "!(*.worker).{js,jsx,ts,tsx}": "eslint --fix"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "4.1.10",
+    "esbuild": "0.28.1",
     "eslint": "^9.39.4",
-    "expo": "~56.0.11",
+    "expo": "~57.0.8",
     "glob": "^13.0.6",
-    "lint-staged": "^16.4.0",
-    "prettier-plugin-tailwindcss": "^0.8.0"
+    "lint-staged": "^17.2.0",
+    "prettier-plugin-tailwindcss": "^0.8.1",
+    "rxdb": "17.4.0",
+    "rxdb-premium": "17.4.0"
   },
   "dependencies": {
-    "turbo": "^2.9.18",
+    "turbo": "^2.10.7",
     "typescript": "^5.9.3"
   }
 }

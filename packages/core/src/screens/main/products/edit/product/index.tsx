@@ -1,25 +1,13 @@
-import React from 'react';
-
 import { useLocalSearchParams } from 'expo-router';
-import { ObservableResource } from 'observable-hooks';
 
 import { EditProductModal } from './modal';
-import { useCollection } from '../../../hooks/use-collection';
+import { useEngineDocument } from '../../../hooks/use-engine-document';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
 export function EditProductScreen() {
 	const { productId } = useLocalSearchParams<{ productId: string }>();
-	const { collection } = useCollection('products');
-	const query = collection.findOneFix(productId);
-
-	const resource = React.useMemo(
-		() =>
-			new ObservableResource<ProductDocument>(
-				query.$ as import('rxjs').Observable<ProductDocument>
-			),
-		[query]
-	);
+	const resource = useEngineDocument<ProductDocument>('products', productId);
 
 	return <EditProductModal resource={resource} />;
 }

@@ -7,6 +7,8 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { DiscoveredPrinter } from '@wcpos/printer';
 
+import { hasTargetKind, type OsPrinterTargetKind } from './discovered-printer-filters';
+
 import type { PrinterFormValues } from '../../schema';
 import type { UseFormReturn } from 'react-hook-form';
 
@@ -28,8 +30,8 @@ export interface OsPrintersSectionProps {
 	printers: DiscoveredPrinter[];
 	onScan?: () => void;
 	scanning?: boolean;
-	/** Address prefix that identifies this section's printers (e.g. 'winspool:', 'serial:'). */
-	addressPrefix: string;
+	/** Parsed device-key kind that identifies this section's printers. */
+	targetKind: OsPrinterTargetKind;
 	heading: string;
 	hint: string;
 	emptyText: string;
@@ -43,7 +45,7 @@ export function OsPrintersSection({
 	printers,
 	onScan,
 	scanning,
-	addressPrefix,
+	targetKind,
 	heading,
 	hint,
 	emptyText,
@@ -51,7 +53,7 @@ export function OsPrintersSection({
 	testIdPrefix,
 }: OsPrintersSectionProps) {
 	const selectedAddress = useWatch({ control: form.control, name: 'address' });
-	const filtered = printers.filter((p) => p.address?.startsWith(addressPrefix));
+	const filtered = printers.filter((p) => hasTargetKind(p, targetKind));
 
 	// useEffect required: imperative one-shot kick of the OS-printers IPC scan
 	// when this section mounts — there is no user gesture to attach it to,

@@ -1,17 +1,38 @@
-import { Query, QueryHooks, QueryResult } from './query-state';
-
-export { QueryProvider, useQueryManager } from './provider';
-export { useQuery } from './use-query';
+export { QueryProvider, useQueryRuntime, type QueryRuntime } from './provider';
 export { useLocalQuery } from './use-local-query';
-export { useRelationalQuery } from './use-relational-query';
-export { useReplicationState } from './use-replication-state';
-export { swapCollection, swapCollections } from './collection-swap';
-export { yieldToEventLoop, processInChunks, chunkedIterator } from './yield';
-export { CollectionReplicationState } from './collection-replication-state';
-export type { RelationalQuery } from './relational-query-state';
-export type { Query, QueryHooks, QueryResult };
-export type { CollectionSwapConfig, CollectionSwapResult } from './collection-swap';
+export { awaitWriteOutcome, WriteOutcomeError } from './await-write-outcome';
+export type { QueryResult } from './query-result';
+export { isEngineRxDocument, wrapEngineDocument } from './engine-adapter/document-proxy';
 export {
-	isRecoverableLogsStorageError,
-	recoverLogsCollectionStorage,
-} from './logs-storage-recovery';
+	adapterDerivedFieldsFor,
+	COLLECTION_VOCABULARY,
+	engineCollectionNameFor,
+	promotedColumnsFor,
+	resolveLegacyField,
+	sortAliasFor,
+	sortTiebreakFor,
+	wooOrderbyFor,
+	type LegacyCollectionName,
+	type WriteableCollection,
+} from './engine-adapter/collection-map';
+export type {
+	CompiledQueryRead,
+	CompiledSortPart,
+	EngineRxDocument,
+} from './engine-adapter/execute-query';
+export { variationAllMatch, variationAttributesMatch } from './engine-adapter/translate-selector';
+export {
+	FLEXSEARCH_MIN_TERM_LENGTH,
+	observeCoverage,
+	observeEngineDatabases,
+	observeEngineQuery,
+	type EngineQueryDescriptor,
+} from './engine-query';
+export {
+	declareRequirements,
+	runResetRefill,
+	requirementsForQuery,
+	type RequirementSortPart,
+} from './requirement-bridge';
+export { observeCollectionActive } from './engine-status';
+export { recoverLogsCollectionStorage } from './logs-storage-recovery';

@@ -594,6 +594,27 @@ describe('buildReceiptData', () => {
 			value: JSON.stringify({ price, regular_price: regularPrice, tax_status: taxStatus }),
 		});
 
+		it('accepts typed-object pos data (next stores meta as objects, not strings)', () => {
+			const objectPosData = {
+				key: '_woocommerce_pos_data',
+				value: { price: 15, regular_price: 20, tax_status: 'taxable' },
+			};
+			const result = buildReceiptData(
+				{
+					...aliasOrder,
+					line_items: [
+						{
+							...aliasOrder.line_items[0],
+							quantity: 1,
+							meta_data: [objectPosData],
+						},
+					],
+				} as never,
+				inclStore
+			);
+			expect(result.totals.total_saved_complete).toBe(true);
+		});
+
 		it('preserves signed refund quantities in lines and totals', () => {
 			const result = buildReceiptData(
 				{

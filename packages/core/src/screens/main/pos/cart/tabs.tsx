@@ -44,11 +44,11 @@ export function OpenOrderTabs() {
 		>
 			<ScrollableTabsList className="bg-transparent p-0">
 				{openOrders.map(({ id, document }) => (
-					<TabsTrigger key={id} value={id}>
+					<TabsTrigger key={id} value={id} testID={`open-order-tab-${id}`}>
 						<CartTabTitle order={document} />
 					</TabsTrigger>
 				))}
-				<TabsTrigger value="new">
+				<TabsTrigger value="new" testID="new-order-tab">
 					<Tooltip>
 						<TooltipTrigger>
 							<Icon name="plus" />

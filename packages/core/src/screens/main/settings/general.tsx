@@ -1,12 +1,10 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useObservablePickState, useObservableSuspense } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Button } from '@wcpos/components/button';
 import {
 	Form,
 	FormCombobox,
@@ -16,12 +14,17 @@ import {
 	FormSwitch,
 	useFormChangeHandler,
 } from '@wcpos/components/form';
-import { HStack } from '@wcpos/components/hstack';
-import { ModalClose, ModalFooter } from '@wcpos/components/modal';
 import { VStack } from '@wcpos/components/vstack';
+import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { SERVER_OWNED_STORE_FIELDS } from '@wcpos/database/collections/schemas/stores';
 
+import { SettingsDangerZone } from './components/settings-danger-zone';
+import { SettingsRow } from './components/settings-row';
+import { SettingsSection } from './components/settings-section';
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
+import { getServerOwnedStorePatch } from '../../../utils/merge-stores';
 import { CountryCombobox } from '../components/country-state-select/country-combobox';
 import { StateFormInput } from '../components/country-state-select/state-forminput';
 import { CurrencyPositionSelect } from '../components/currency-position-select';
@@ -34,6 +37,8 @@ import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format';
 import { useDefaultCustomer } from '../hooks/use-default-customer';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
+
+const uiLogger = getLogger(['wcpos', 'ui', 'settings']);
 
 /**
  *
@@ -127,7 +132,10 @@ export function GeneralSettings() {
 		[localPatch, store]
 	);
 
-	useFormChangeHandler({ form: form as never, onChange: handleChange as never });
+	useFormChangeHandler({
+		form: form as never,
+		onChange: handleChange as never,
+	});
 
 	/**
 	 * Toggle customer select
@@ -147,28 +155,21 @@ export function GeneralSettings() {
 		try {
 			const response = await http.get(`stores/${store.id}`);
 			const data = response.data;
-			await localPatch({
-				document: store,
-				data: {
-					name: data.name,
-					store_country: data.store_country,
-					store_state: data.store_state,
-					store_city: data.store_city,
-					store_postcode: data.store_postcode,
-					locale: data.locale,
-					default_customer: data.default_customer,
-					default_customer_is_cashier: data.default_customer_is_cashier,
-					currency: data.currency,
-					currency_pos: data.currency_pos,
-					price_thousand_sep: data.price_thousand_sep,
-					price_decimal_sep: data.price_decimal_sep,
-					price_num_decimals: data.price_num_decimals,
-					wc_price_decimals: data.price_num_decimals,
-					// thousands_group_style: data.thousands_group_style,
+			const patch = getServerOwnedStorePatch(
+				store.getLatest() as unknown as Record<string, unknown>,
+				data,
+				SERVER_OWNED_STORE_FIELDS
+			);
+			if (Object.keys(patch).length > 0) {
+				await localPatch({ document: store, data: patch as never });
+			}
+		} catch (error) {
+			uiLogger.error('Failed to restore server settings', {
+				code: ERROR_CODES.UNEXPECTED_ERROR,
+				context: {
+					error: error instanceof Error ? error.message : String(error),
 				},
 			});
-		} catch (error) {
-			console.error(error);
 		} finally {
 			setLoading(false);
 		}
@@ -179,86 +180,84 @@ export function GeneralSettings() {
 	 */
 	return (
 		<Form {...form}>
-			<VStack className="gap-4">
+			<VStack className="gap-5">
 				<FormErrors />
-				<FormField
-					control={form.control}
-					name="name"
-					render={({ field }) => <FormInput label={t('settings.store_name')} {...field} />}
-				/>
-				<HStack className="gap-4">
+				<SettingsSection first title={t('settings.store')}>
+					<FormField
+						control={form.control}
+						name="name"
+						render={({ field }) => (
+							<SettingsRow label={t('settings.store_name')}>
+								<FormInput {...field} />
+							</SettingsRow>
+						)}
+					/>
+					<FormField
+						name="store_country"
+						render={({ field }) => (
+							<SettingsRow label={t('settings.store_base_country')}>
+								<FormCombobox customComponent={CountryCombobox} {...field} disabled />
+							</SettingsRow>
+						)}
+					/>
+					<FormField
+						name="store_state"
+						render={({ field }) => (
+							<SettingsRow label={t('settings.store_base_state')}>
+								<FormInput
+									customComponent={StateFormInput}
+									{...field}
+									{...({ countryCode } as Record<string, unknown>)}
+									disabled
+								/>
+							</SettingsRow>
+						)}
+					/>
 					<FormField
 						control={form.control}
 						name="store_city"
 						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput label={t('settings.store_base_city')} {...field} disabled />
-							</View>
+							<SettingsRow label={t('settings.store_base_city')}>
+								<FormInput {...field} disabled />
+							</SettingsRow>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="store_postcode"
 						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput label={t('settings.store_base_postcode')} {...field} disabled />
-							</View>
+							<SettingsRow label={t('settings.store_base_postcode')}>
+								<FormInput {...field} disabled />
+							</SettingsRow>
 						)}
 					/>
-				</HStack>
-				<HStack className="gap-4">
-					<FormField
-						name="store_state"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput
-									customComponent={StateFormInput}
-									label={t('settings.store_base_state')}
-									{...field}
-									{...({ countryCode } as Record<string, unknown>)}
-									disabled
-								/>
-							</View>
-						)}
-					/>
-					<FormField
-						name="store_country"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormCombobox
-									customComponent={CountryCombobox}
-									label={t('settings.store_base_country')}
-									{...field}
-									disabled
-								/>
-							</View>
-						)}
-					/>
-				</HStack>
-				<HStack className="gap-4">
+				</SettingsSection>
+
+				<SettingsSection title={t('settings.localization')}>
 					<FormField
 						control={form.control}
 						name="locale"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
+							<SettingsRow label={t('settings.language')}>
 								<FormSelect
 									customComponent={LanguageSelect}
-									label={t('settings.language')}
 									value={value}
 									onChange={onChange}
 									{...rest}
 								/>
-							</View>
+							</SettingsRow>
 						)}
 					/>
-					<VStack className="flex-1">
-						<FormField
-							control={form.control}
-							name="default_customer"
-							render={({ field: { value, onChange, ...rest } }) => (
+					<FormField
+						control={form.control}
+						name="default_customer"
+						render={({ field: { value, onChange, ...rest } }) => (
+							<SettingsRow
+								label={t('settings.default_customer')}
+								description={t('settings.default_customer_description')}
+							>
 								<FormCombobox
 									customComponent={CustomerSelect}
-									label={t('settings.default_customer')}
 									onChange={onChange}
 									{...rest}
 									{...({ withGuest: true } as Record<string, unknown>)}
@@ -266,106 +265,99 @@ export function GeneralSettings() {
 									value={{ value, label: format(defaultCustomer) } as never}
 									disabled={toggleCustomerSelect}
 								/>
-							)}
-						/>
-						<FormField
-							control={form.control}
-							name="default_customer_is_cashier"
-							render={({ field }) => (
-								<FormSwitch label={t('settings.default_customer_is_cashier')} {...field} />
-							)}
-						/>
-					</VStack>
-				</HStack>
-				<HStack className="gap-4">
+							</SettingsRow>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="default_customer_is_cashier"
+						render={({ field }) => (
+							<SettingsRow inline label={t('settings.default_customer_is_cashier')}>
+								<FormSwitch {...field} />
+							</SettingsRow>
+						)}
+					/>
+				</SettingsSection>
+
+				<SettingsSection title={t('settings.currency_and_numbers')}>
 					<FormField
 						control={form.control}
 						name="currency"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
+							<SettingsRow label={t('common.currency')}>
 								<FormCombobox
 									customComponent={CurrencySelect}
-									label={t('common.currency')}
 									value={value}
 									onChange={onChange}
 									{...rest}
 								/>
-							</View>
+							</SettingsRow>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="currency_pos"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
+							<SettingsRow label={t('settings.currency_position')}>
 								<FormSelect
 									customComponent={CurrencyPositionSelect}
-									label={t('settings.currency_position')}
 									value={value}
 									onChange={onChange}
 									{...rest}
 								/>
-							</View>
+							</SettingsRow>
 						)}
 					/>
-				</HStack>
-				<HStack className="gap-4">
 					<FormField
 						control={form.control}
 						name="price_decimal_sep"
 						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput label={t('settings.decimal_separator')} {...field} />
-							</View>
+							<SettingsRow label={t('settings.decimal_separator')}>
+								<FormInput {...field} />
+							</SettingsRow>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="price_num_decimals"
 						render={({ field: { value, ...rest } }) => (
-							<View className="flex-1">
-								<FormInput
-									label={t('settings.number_of_decimals')}
-									type="numeric"
-									value={value ?? undefined}
-									{...rest}
-								/>
-							</View>
+							<SettingsRow label={t('settings.number_of_decimals')}>
+								<FormInput type="numeric" value={value ?? undefined} {...rest} />
+							</SettingsRow>
 						)}
 					/>
-				</HStack>
-				<HStack className="gap-4">
 					<FormField
 						control={form.control}
 						name="price_thousand_sep"
 						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput label={t('settings.thousand_separator')} {...field} />
-							</View>
+							<SettingsRow label={t('settings.thousand_separator')}>
+								<FormInput {...field} />
+							</SettingsRow>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="thousands_group_style"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
+							<SettingsRow label={t('settings.thousands_group_style')}>
 								<FormSelect
-									label={t('settings.thousands_group_style')}
 									customComponent={ThousandsStyleSelect}
 									value={value}
 									onChange={onChange}
 									{...rest}
 								/>
-							</View>
+							</SettingsRow>
 						)}
 					/>
-				</HStack>
-				<ModalFooter className="px-0">
-					<Button variant="destructive" onPress={handleRestoreServerSettings} loading={loading}>
-						{t('settings.restore_server_settings')}
-					</Button>
-					<ModalClose>{t('common.close')}</ModalClose>
-				</ModalFooter>
+				</SettingsSection>
+
+				<SettingsDangerZone
+					description={t('settings.restore_server_settings_description')}
+					buttonLabel={t('settings.restore_server_settings')}
+					onPress={handleRestoreServerSettings}
+					loading={loading}
+					testID="settings-general-restore-server"
+				/>
 			</VStack>
 		</Form>
 	);

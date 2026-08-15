@@ -5,7 +5,7 @@ import { Badge } from '@wcpos/components/badge';
 import { Icon } from '@wcpos/components/icon';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 
-import { useNovuNotifications } from '../../../../hooks/use-novu-notifications';
+import { useNovuNotifications } from '../../../../contexts/novu';
 import { NotificationPanelContent } from './notification-panel';
 
 /**
@@ -19,7 +19,7 @@ export function NotificationBell() {
 	const handleOpenChange = (open: boolean) => {
 		setIsOpen(open);
 		if (open) {
-			markAllAsSeen();
+			void markAllAsSeen();
 		}
 	};
 

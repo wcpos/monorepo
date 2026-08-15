@@ -55,7 +55,12 @@ jest.mock('@wcpos/components/collapsible', () => ({
 }));
 
 jest.mock('../../../../../contexts/translations', () => ({
-	useT: () => (_key: string, fallback: string) => fallback,
+	useT: () =>
+		jest
+			.requireActual<typeof import('../../../../../../jest/translate')>(
+				'../../../../../../jest/translate'
+			)
+			.createTestT(),
 }));
 
 const failureWithDiagnostics: TestPrintFailure = {
@@ -85,7 +90,7 @@ describe('TestPrintError', () => {
 	it('renders the structured attempt, reason, suggestions, and support details', () => {
 		render(<TestPrintError error={failureWithDiagnostics} />);
 
-		expect(screen.getByText('Could not connect to the printer.')).toBeInTheDocument();
+		expect(screen.getByText('Test print failed')).toBeInTheDocument();
 		expect(screen.getByText('Epson ePOS over HTTPS')).toBeInTheDocument();
 		expect(screen.getByTestId('add-printer-test-error-url')).toHaveTextContent(
 			'https://localhost:8043/cgi-bin/epos/service.cgi?devid=local_printer&timeout=10000'
@@ -119,6 +124,6 @@ describe('TestPrintError', () => {
 	it('falls back to the plain message without diagnostics', () => {
 		render(<TestPrintError error={{ message: 'Printer exploded', diagnostics: null }} />);
 		expect(screen.getByText('Printer exploded')).toBeInTheDocument();
-		expect(screen.queryByText('We tried:')).not.toBeInTheDocument();
+		expect(screen.queryByText('We tried')).not.toBeInTheDocument();
 	});
 });

@@ -14,7 +14,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		? iosInfoPlist.UISupportedExternalAccessoryProtocols
 		: [];
 
-	const isDev = easProfile === 'development';
+	const isDev = easProfile === 'development' || easProfile === 'e2e-test';
 	const isAdhoc = easProfile === 'adhoc';
 
 	// Set env var for web builds (used by @wcpos/utils/app-info)
@@ -31,12 +31,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		icon: './assets/images/icon.png',
 		scheme: 'wcpos',
 		userInterfaceStyle: 'automatic',
-
-		splash: {
-			image: './assets/images/splash-icon.png',
-			resizeMode: 'contain',
-			backgroundColor: '#F0F6FD',
-		},
 
 		ios: {
 			...config.ios,
@@ -97,6 +91,14 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 
 		plugins: [
 			'./plugins/with-printer-support',
+			'./plugins/with-wedge-key-events',
+			[
+				'expo-camera',
+				{
+					cameraPermission: 'WCPOS uses the camera to scan product barcodes.',
+					recordAudioAndroid: false,
+				},
+			],
 			[
 				'expo-router',
 				{
@@ -126,7 +128,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			],
 			'expo-image',
 			'expo-localization',
-			'expo-sqlite',
 			'expo-web-browser',
 		],
 

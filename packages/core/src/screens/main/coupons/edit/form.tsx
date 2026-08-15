@@ -1,13 +1,13 @@
 import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useRouter } from 'expo-router';
 import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
+import { useModal } from '@wcpos/components/modal';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
 import { CouponForm, couponFormSchema } from '../../components/coupon/coupon-form';
@@ -25,7 +25,7 @@ export function EditCouponForm({ coupon }: Props) {
 	const [loading, setLoading] = React.useState(false);
 	const { localPatch } = useLocalMutation();
 	const pushDocument = usePushDocument();
-	const router = useRouter();
+	const { close } = useModal();
 
 	const form = useForm<z.infer<typeof couponFormSchema>>({
 		resolver: zodResolver(couponFormSchema as never) as never,
@@ -51,19 +51,19 @@ export function EditCouponForm({ coupon }: Props) {
 				}
 				mutationLogger.success(t('common.saved', { name: (savedDoc as { code?: string }).code }), {
 					showToast: true,
-					saveToDb: true,
 					context: {
 						couponId: (savedDoc as { id?: number }).id,
 						couponCode: (savedDoc as { code?: string }).code,
 					},
 				});
+				close();
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
-				mutationLogger.error(t('coupons.failed_to_save_coupon'), {
+				mutationLogger.error('Failed to save coupon', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.SYNC_UNEXPECTED,
+					toast: { title: t('coupons.failed_to_save_coupon') },
 					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
 						couponId: coupon.id,
 						error: errorMessage,
 					},
@@ -72,10 +72,8 @@ export function EditCouponForm({ coupon }: Props) {
 				setLoading(false);
 			}
 		},
-		[localPatch, coupon, pushDocument, t]
+		[close, localPatch, coupon, pushDocument, t]
 	);
 
-	return (
-		<CouponForm form={form} onClose={() => router.back()} onSubmit={handleSave} loading={loading} />
-	);
+	return <CouponForm form={form} onClose={close} onSubmit={handleSave} loading={loading} />;
 }

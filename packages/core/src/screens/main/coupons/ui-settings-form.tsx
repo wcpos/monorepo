@@ -25,7 +25,7 @@ export function UISettingsForm() {
 	const { setButtonPressHandler } = useDialogContext();
 
 	React.useEffect(() => {
-		setButtonPressHandler(resetUI);
+		setButtonPressHandler(() => void resetUI());
 	}, [setButtonPressHandler, resetUI]);
 
 	const form = useForm<z.infer<typeof schema>>({
@@ -33,7 +33,7 @@ export function UISettingsForm() {
 		values: formData,
 	});
 
-	useFormChangeHandler({ form: form as never, onChange: patchUI });
+	useFormChangeHandler({ form: form as never, onChange: (changes) => void patchUI(changes) });
 
 	return (
 		<Form {...form}>

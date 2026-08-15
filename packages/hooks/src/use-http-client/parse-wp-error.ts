@@ -11,10 +11,10 @@
  * }
  *
  * This utility extracts the most useful error message for display to users
- * and maps external error codes to our internal error code format (APIxxxxx).
+ * and maps external error codes to our evidence-backed internal domains.
  */
 
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES, ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 export interface WpErrorResponse {
 	code?: string;
@@ -29,13 +29,15 @@ export interface ParsedWpError {
 	/** User-friendly error message */
 	message: string;
 	/** Internal error code (APIxxxxx format) for docs/help link */
-	code: string | null;
+	code: ErrorCode | null;
 	/** Original server error code (for debugging) */
 	serverCode: string | null;
 	/** HTTP status from server response */
 	status: number | null;
 	/** Whether this was a recognized WP/WC error format */
 	isWpError: boolean;
+	/** Whether an unmapped server code needs classification */
+	triage?: true;
 }
 
 /**
@@ -51,45 +53,46 @@ export interface ParsedWpError {
  * - WooCommerce REST API errors (woocommerce_rest_*)
  * - JWT Auth plugin errors (jwt_auth_*)
  */
-const SERVER_CODE_TO_INTERNAL: Record<string, string> = {
+const SERVER_CODE_TO_INTERNAL: Record<string, ErrorCode> = {
 	// WordPress REST API - Authentication/Authorization
-	rest_forbidden: ERROR_CODES.INSUFFICIENT_PERMISSIONS,
-	rest_cannot_view: ERROR_CODES.USER_NOT_AUTHORIZED,
-	rest_cannot_create: ERROR_CODES.INSUFFICIENT_PERMISSIONS,
-	rest_cannot_edit: ERROR_CODES.INSUFFICIENT_PERMISSIONS,
-	rest_cannot_delete: ERROR_CODES.INSUFFICIENT_PERMISSIONS,
-	rest_forbidden_context: ERROR_CODES.INSUFFICIENT_PERMISSIONS,
-	rest_login_required: ERROR_CODES.AUTH_REQUIRED,
+	rest_forbidden: ERROR_CODES.INSUFFICIENT_ROLE,
+	rest_cannot_view: ERROR_CODES.INSUFFICIENT_ROLE,
+	rest_cannot_create: ERROR_CODES.INSUFFICIENT_ROLE,
+	rest_cannot_edit: ERROR_CODES.INSUFFICIENT_ROLE,
+	rest_cannot_delete: ERROR_CODES.INSUFFICIENT_ROLE,
+	rest_forbidden_context: ERROR_CODES.INSUFFICIENT_ROLE,
+	rest_login_required: ERROR_CODES.SESSION_EXPIRED,
 
 	// WordPress REST API - Request errors
-	rest_no_route: ERROR_CODES.RESOURCE_NOT_FOUND,
-	rest_invalid_param: ERROR_CODES.INVALID_PARAMETER_VALUE,
-	rest_missing_callback_param: ERROR_CODES.MISSING_REQUIRED_PARAMETERS,
-	rest_invalid_json: ERROR_CODES.INVALID_REQUEST_FORMAT,
+	rest_no_route: ERROR_CODES.REST_ROUTE_MISSING,
+	rest_invalid_param: ERROR_CODES.RECORD_INVALID_FIELD,
+	rest_missing_callback_param: ERROR_CODES.RECORD_INVALID_FIELD,
+	rest_invalid_json: ERROR_CODES.RECORD_INVALID_FIELD,
 
 	// WooCommerce REST API - Authentication/Authorization
-	woocommerce_rest_authentication_error: ERROR_CODES.INVALID_CREDENTIALS,
-	woocommerce_rest_cannot_view: ERROR_CODES.USER_NOT_AUTHORIZED,
-	woocommerce_rest_cannot_create: ERROR_CODES.INSUFFICIENT_PERMISSIONS,
-	woocommerce_rest_cannot_edit: ERROR_CODES.INSUFFICIENT_PERMISSIONS,
-	woocommerce_rest_cannot_delete: ERROR_CODES.INSUFFICIENT_PERMISSIONS,
+	woocommerce_pos_rest_forbidden: ERROR_CODES.INSUFFICIENT_ROLE,
+	woocommerce_rest_authentication_error: ERROR_CODES.SESSION_EXPIRED,
+	woocommerce_rest_cannot_view: ERROR_CODES.INSUFFICIENT_ROLE,
+	woocommerce_rest_cannot_create: ERROR_CODES.INSUFFICIENT_ROLE,
+	woocommerce_rest_cannot_edit: ERROR_CODES.INSUFFICIENT_ROLE,
+	woocommerce_rest_cannot_delete: ERROR_CODES.INSUFFICIENT_ROLE,
 
 	// WooCommerce REST API - Validation errors
-	woocommerce_rest_invalid_id: ERROR_CODES.INVALID_PARAMETER_VALUE,
-	woocommerce_rest_product_invalid_id: ERROR_CODES.INVALID_PARAMETER_VALUE,
-	woocommerce_rest_customer_invalid_id: ERROR_CODES.INVALID_PARAMETER_VALUE,
-	woocommerce_rest_order_invalid_id: ERROR_CODES.INVALID_PARAMETER_VALUE,
-	woocommerce_rest_invalid_product_sku: ERROR_CODES.INVALID_PARAMETER_VALUE,
-	woocommerce_rest_invalid_image: ERROR_CODES.INVALID_PARAMETER_VALUE,
+	woocommerce_rest_invalid_id: ERROR_CODES.RECORD_INVALID_FIELD,
+	woocommerce_rest_product_invalid_id: ERROR_CODES.RECORD_INVALID_FIELD,
+	woocommerce_rest_customer_invalid_id: ERROR_CODES.RECORD_INVALID_FIELD,
+	woocommerce_rest_order_invalid_id: ERROR_CODES.RECORD_INVALID_FIELD,
+	woocommerce_rest_invalid_product_sku: ERROR_CODES.RECORD_INVALID_FIELD,
+	woocommerce_rest_invalid_image: ERROR_CODES.RECORD_INVALID_FIELD,
 
 	// JWT Auth plugin
-	jwt_auth_failed: ERROR_CODES.INVALID_CREDENTIALS,
-	jwt_auth_invalid_token: ERROR_CODES.TOKEN_INVALID,
-	jwt_auth_expired_token: ERROR_CODES.TOKEN_EXPIRED,
-	jwt_auth_bad_iss: ERROR_CODES.TOKEN_INVALID,
-	jwt_auth_bad_request: ERROR_CODES.INVALID_REQUEST_FORMAT,
-	jwt_auth_bad_config: ERROR_CODES.INVALID_SITE_CONFIGURATION,
-	jwt_auth_no_auth_header: ERROR_CODES.AUTH_REQUIRED,
+	jwt_auth_failed: ERROR_CODES.SESSION_EXPIRED,
+	jwt_auth_invalid_token: ERROR_CODES.SESSION_EXPIRED,
+	jwt_auth_expired_token: ERROR_CODES.SESSION_EXPIRED,
+	jwt_auth_bad_iss: ERROR_CODES.SESSION_EXPIRED,
+	jwt_auth_bad_request: ERROR_CODES.RECORD_INVALID_FIELD,
+	jwt_auth_bad_config: ERROR_CODES.AUTH_PLUGIN_CONFLICT,
+	jwt_auth_no_auth_header: ERROR_CODES.SESSION_EXPIRED,
 };
 
 /**
@@ -97,12 +100,12 @@ const SERVER_CODE_TO_INTERNAL: Record<string, string> = {
  *
  * @param serverCode - The error code from the server (e.g., "woocommerce_rest_cannot_view")
  * @param httpStatus - Optional HTTP status code for fallback mapping
- * @returns Internal error code (e.g., "API02004") or null if no mapping exists
+ * @returns Internal error code or null when there is no server code or status
  */
 export const mapToInternalCode = (
 	serverCode: string | null | undefined,
 	httpStatus?: number | null
-): string | null => {
+): ErrorCode | null => {
 	// Try direct mapping first
 	if (serverCode && SERVER_CODE_TO_INTERNAL[serverCode]) {
 		return SERVER_CODE_TO_INTERNAL[serverCode];
@@ -112,24 +115,28 @@ export const mapToInternalCode = (
 	if (httpStatus) {
 		switch (httpStatus) {
 			case 400:
-				return ERROR_CODES.INVALID_REQUEST_FORMAT;
+				return ERROR_CODES.RECORD_INVALID_FIELD;
 			case 401:
-				return ERROR_CODES.AUTH_REQUIRED;
+				return ERROR_CODES.SESSION_EXPIRED;
 			case 403:
-				return ERROR_CODES.INSUFFICIENT_PERMISSIONS;
+				return ERROR_CODES.INSUFFICIENT_ROLE;
 			case 404:
-				return ERROR_CODES.RESOURCE_NOT_FOUND;
+				return ERROR_CODES.REST_ROUTE_MISSING;
 			case 429:
-				return ERROR_CODES.RATE_LIMIT_EXCEEDED;
-			case 500:
-			case 502:
-			case 503:
-			case 504:
-				return ERROR_CODES.SERVICE_UNAVAILABLE;
+				return ERROR_CODES.STORE_RATE_LIMITED;
+			default:
+				// A 5xx means the store WAS reached and its server failed. Attributing
+				// that to the client ("WCPOS encountered an unexpected error") is the
+				// misleading-code failure mode the mined corpora call out: the merchant
+				// blames the POS for their own site's fault and the safe action —
+				// check the site's error log — never surfaces. It is also distinct from
+				// SYNC_UNREACHABLE, which means the store could not be reached at all.
+				if (httpStatus >= 500) return ERROR_CODES.STORE_SERVER_ERROR;
+				return ERROR_CODES.UNEXPECTED_ERROR;
 		}
 	}
 
-	return null;
+	return serverCode ? ERROR_CODES.UNEXPECTED_ERROR : null;
 };
 
 /**
@@ -188,11 +195,16 @@ export const parseWpError = (data: unknown, fallbackMessage: string): ParsedWpEr
 	}
 
 	// Extract server code and status
-	const serverCode = data.code || null;
-	const status = data.data?.status || null;
+	const rawServerCode = typeof data.code === 'string' ? data.code : null;
+	const serverCode =
+		rawServerCode === null || /^[A-Za-z0-9_.:\-]{1,64}$/.test(rawServerCode)
+			? rawServerCode
+			: 'invalid_server_code';
+	const status = data.data?.status ?? null;
 
 	// Map to internal code for user-facing display
 	const code = mapToInternalCode(serverCode, status);
+	const triage = Boolean(serverCode && !SERVER_CODE_TO_INTERNAL[serverCode]);
 
 	return {
 		message,
@@ -200,6 +212,7 @@ export const parseWpError = (data: unknown, fallbackMessage: string): ParsedWpEr
 		serverCode,
 		status,
 		isWpError: true,
+		...(triage && { triage: true as const }),
 	};
 };
 

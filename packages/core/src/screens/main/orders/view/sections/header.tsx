@@ -60,7 +60,7 @@ export function HeaderSection({ order }: Props) {
 				{order.created_via ? (
 					<View className="bg-muted ml-1 rounded px-1.5 py-0.5">
 						<Text className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
-							{t('orders.via', { defaultValue: 'via' })} {order.created_via}
+							{t('orders.via')} {order.created_via}
 						</Text>
 					</View>
 				) : null}

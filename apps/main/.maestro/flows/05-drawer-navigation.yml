@@ -1,0 +1,62 @@
+appId: com.wcpos.main.dev
+---
+# P0-5: drawer navigation smoke — visit main areas, return to POS.
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: "search-products"
+    timeout: 120000
+# Small screens hide the rail behind a drawer button; large screens show it.
+- runFlow:
+    when:
+      visible:
+        id: "drawer-open-button"
+    commands:
+      - tapOn:
+          id: "drawer-open-button"
+- tapOn:
+    id: "drawer-item-products"
+- extendedWaitUntil:
+    visible:
+      id: "screen-products"
+    timeout: 60000
+- runFlow:
+    when:
+      visible:
+        id: "drawer-open-button"
+    commands:
+      - tapOn:
+          id: "drawer-open-button"
+- tapOn:
+    id: "drawer-item-orders"
+- extendedWaitUntil:
+    visible:
+      id: "screen-orders"
+    timeout: 60000
+- runFlow:
+    when:
+      visible:
+        id: "drawer-open-button"
+    commands:
+      - tapOn:
+          id: "drawer-open-button"
+- tapOn:
+    id: "drawer-item-customers"
+- extendedWaitUntil:
+    visible:
+      id: "screen-customers"
+    timeout: 60000
+- runFlow:
+    when:
+      visible:
+        id: "drawer-open-button"
+    commands:
+      - tapOn:
+          id: "drawer-open-button"
+- tapOn:
+    id: "drawer-item-pos"
+- extendedWaitUntil:
+    visible:
+      id: "search-products"
+    timeout: 60000

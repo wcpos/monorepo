@@ -4,8 +4,13 @@
 		"baseUrl": ".",
 		"module": "esnext",
 		"paths": {
+			"@wcpos/printer/ipc-channels": ["packages/printer/src/ipc/channels.cts"],
 			"@wcpos/main/*": ["apps/main/*"],
 			"@wcpos/electron/*": ["apps/electron/*"],
+			"@wcpos/order-math": ["packages/order-math/src/index"],
+			"@wcpos/scanner": ["packages/scanner/src/index"],
+			"@wcpos/scanner/*": ["packages/scanner/src/*"],
+			"@wcpos/order-math/*": ["packages/order-math/src/*"],
 			"@wcpos/components/*": ["packages/components/src/*"],
 			"@wcpos/core/*": ["packages/core/src/*"],
 			"@wcpos/database": ["packages/database/src/index"],

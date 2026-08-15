@@ -15,14 +15,15 @@ import {
 } from '@wcpos/components/combobox';
 import { Suspense } from '@wcpos/components/suspense';
 import { useT } from '@wcpos/core/contexts/translations';
-import { useQuery } from '@wcpos/query';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
+
+import { useAllCategoriesBinding, useSearchSelect } from '../../../../query';
 
 /**
  *
  */
-function CategoryList({ query }: { query: ReturnType<typeof useQuery> }) {
-	const result = useObservableSuspense(query!.resource) as {
+function CategoryList({ resource }: { resource: ReturnType<typeof useSearchSelect>['resource'] }) {
+	const result = useObservableSuspense(resource) as {
 		hits: { id: string; document: { id?: number; name?: string } }[];
 	};
 	const t = useT();
@@ -37,11 +38,6 @@ function CategoryList({ query }: { query: ReturnType<typeof useQuery> }) {
 	return (
 		<ComboboxList
 			data={data}
-			onEndReached={() => {
-				if (query?.infiniteScroll) {
-					query.loadMore();
-				}
-			}}
 			renderItem={({ item }) => (
 				<ComboboxItem value={String(item.value)} label={item.label} item={item}>
 					<ComboboxItemText />
@@ -58,38 +54,7 @@ function CategoryList({ query }: { query: ReturnType<typeof useQuery> }) {
  */
 export function CategorySearch() {
 	const t = useT();
-	const [search, setSearch] = React.useState('');
-
-	/**
-	 *
-	 */
-	const query = useQuery({
-		queryKeys: ['products/categories'],
-		collectionName: 'products/categories',
-		initialParams: {
-			sort: [{ name: 'asc' }],
-		},
-		greedy: true,
-		infiniteScroll: true,
-	});
-
-	/**
-	 *
-	 */
-	const onSearch = React.useCallback(
-		(value: string) => {
-			setSearch(value);
-			query?.debouncedSearch(value);
-		},
-		[query]
-	);
-
-	/**
-	 * Clear the search when unmounting
-	 */
-	React.useEffect(() => {
-		return () => query?.search('');
-	}, [query]);
+	const binding = useSearchSelect('category');
 
 	/**
 	 *
@@ -98,18 +63,18 @@ export function CategorySearch() {
 		<>
 			<ComboboxInput
 				placeholder={t('common.search_categories')}
-				value={search}
-				onChangeText={onSearch}
+				value={binding.search}
+				onChangeText={binding.setSearch}
 			/>
 			<Suspense>
-				<CategoryList query={query} />
+				<CategoryList resource={binding.resource} />
 			</Suspense>
 		</>
 	);
 }
 
 /**
- * Loads categories via useQuery and passes them as HierarchicalOption[] to a callback.
+ * Loads all resident categories and passes them as HierarchicalOption[] to a callback.
  * Intended to be rendered inside TreeComboboxContent so it only mounts when the popover opens.
  *
  * @param onOptionsLoaded Must be a stable reference (e.g. setState) — an unstable
@@ -120,16 +85,9 @@ function CategoryTreeLoaderInner({
 }: {
 	onOptionsLoaded: (options: HierarchicalOption[]) => void;
 }) {
-	const categoryQuery = useQuery({
-		queryKeys: ['products/categories'],
-		collectionName: 'products/categories',
-		initialParams: {
-			sort: [{ name: 'asc' }],
-		},
-		greedy: true,
-	});
+	const binding = useAllCategoriesBinding();
 
-	const result = useObservableSuspense(categoryQuery!.resource) as {
+	const result = useObservableSuspense(binding.resource) as {
 		hits: { id: string; document: { id?: number; name?: string; parent?: number } }[];
 	};
 

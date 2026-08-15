@@ -2,9 +2,10 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useObservablePickState } from 'observable-hooks';
+import { useObservableEagerState, useObservablePickState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
+import { map } from 'rxjs/operators';
 import * as z from 'zod';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
@@ -17,11 +18,11 @@ import {
 	FormTextarea,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';
+import { ModalAction, ModalClose, ModalFooter, useModal } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
 import { BillingAddressForm, billingAddressSchema } from '../../components/billing-address-form';
@@ -34,9 +35,10 @@ import { OrderStatusSelect } from '../../components/order/order-status-select';
 import { ShippingAddressForm, shippingAddressSchema } from '../../components/shipping-address-form';
 import { usePushDocument } from '../../contexts/use-push-document';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
-import { useCollection } from '../../hooks/use-collection';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
+import { useEngineDocumentByWooId } from '../../hooks/use-engine-document';
 import { useGuestCustomer } from '../../hooks/use-guest-customer';
+import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'order']);
 
@@ -67,9 +69,26 @@ export function EditOrderForm({ order }: Props) {
 	const { localPatch } = useLocalMutation();
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
+	const { close } = useModal();
+	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
 	const { format } = useCustomerNameFormat();
-	const previousCustomerId = React.useRef<number | undefined>(order?.getLatest().customer_id);
-	const { collection } = useCollection('customers');
+	const [customerIdToLoad, setCustomerIdToLoad] = React.useState<number | null>(null);
+	const customerIdForLookup = customerIdToLoad ?? 0;
+	const customerResource = useEngineDocumentByWooId<import('@wcpos/database').CustomerDocument>(
+		'customers',
+		customerIdForLookup
+	);
+	const customerLookup$ = React.useMemo(
+		() =>
+			customerResource.valueRef$$.pipe(
+				map((valueRef) => ({
+					requestedId: customerIdForLookup,
+					document: valueRef?.current,
+				}))
+			),
+		[customerIdForLookup, customerResource]
+	);
+	const customerLookup = useObservableEagerState(customerLookup$);
 	const guestCustomer = useGuestCustomer();
 
 	if (!order) {
@@ -127,32 +146,43 @@ export function EditOrderForm({ order }: Props) {
 	 */
 	const handleSaveToServer = React.useCallback(
 		async (data: z.infer<typeof formSchema>) => {
+			// #163 ruling R5: this is an order save. `localPatch` swallows storage
+			// failures, so without this guard the push would go out built on a local
+			// patch that never landed.
+			if (blockIfDegraded('save-order', { orderId: order.uuid ?? order.id })) return;
+
 			setLoading(true);
 			try {
-				await localPatch({
+				const patched = await localPatch({
 					document: order,
 					data: data as unknown as Partial<import('@wcpos/database').OrderDocument>,
 				});
+				// localPatch swallows write errors and resolves undefined - pushing
+				// anyway would sync the unchanged resident and report success
+				if (!patched?.document) {
+					throw new Error('Local patch failed');
+				}
+				if (blockIfDegraded('save-order', { orderId: order.uuid ?? order.id })) return;
 				await pushDocument(order).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
 						const doc = savedDoc as unknown as { id?: number; number?: string };
 						mutationLogger.success(t('common.order_saved', { number: doc.number }), {
 							showToast: true,
-							saveToDb: true,
 							context: {
 								orderId: doc.id,
 								orderNumber: doc.number,
 							},
 						});
+						close();
 					}
 				});
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
-				mutationLogger.error(t('common.failed_to_save_order'), {
+				mutationLogger.error('Failed to save order', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.SYNC_UNEXPECTED,
+					toast: { title: t('common.failed_to_save_order') },
 					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
 						orderId: order.id,
 						error: errorMessage,
 					},
@@ -161,7 +191,7 @@ export function EditOrderForm({ order }: Props) {
 				setLoading(false);
 			}
 		},
-		[localPatch, order, pushDocument, t]
+		[blockIfDegraded, close, localPatch, order, pushDocument, t]
 	);
 
 	/**
@@ -173,25 +203,16 @@ export function EditOrderForm({ order }: Props) {
 	 * Fetch customer record and update form fields.
 	 */
 	const handleCustomerChange = React.useCallback(
-		async (customerId: number) => {
+		(
+			customerId: number,
+			selectedCustomer:
+				import('@wcpos/database').CustomerDocument | ReturnType<typeof useGuestCustomer>
+		) => {
 			// customerId can be 0
 			if (customerId === undefined || customerId === null) return;
 
 			try {
-				let customer;
-				if (customerId === 0) {
-					customer = guestCustomer;
-				} else {
-					customer = await collection.findOne({ selector: { id: customerId } }).exec();
-					// this is not needed, because the customer must be local to be selected, right?
-					// if (!customer) {
-					// 	customer = await pullDocument(customerId, collection);
-					// }
-				}
-
-				if (!customer) {
-					throw new Error(t('orders.customer_not_found'));
-				}
+				const customer = customerId === 0 ? guestCustomer : selectedCustomer;
 
 				/**
 				 * @FIXME - this is similar to the transformCustomerJSONToOrderJSON function
@@ -206,7 +227,9 @@ export function EditOrderForm({ order }: Props) {
 				};
 
 				form.setValue('billing', billing, { shouldValidate: true });
-				form.setValue('shipping', customerData.shipping, { shouldValidate: true });
+				form.setValue('shipping', customerData.shipping, {
+					shouldValidate: true,
+				});
 				// Snapshot the customer's tax IDs onto the order at attach time
 				// (mirrors `transformCustomerJSONToOrderJSON`). Empty array
 				// when the customer has none — overrides the prior snapshot.
@@ -218,33 +241,43 @@ export function EditOrderForm({ order }: Props) {
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
 				mutationLogger.error('Error fetching customer', {
+					code: ERROR_CODES.SYNC_UNEXPECTED,
 					context: {
-						errorCode: ERROR_CODES.RECORD_NOT_FOUND,
 						customerId,
 						error: errorMessage,
 					},
 				});
 			}
 		},
-		[form, collection, guestCustomer, t]
+		[form, guestCustomer]
 	);
 
 	/**
-	 * Watch for changes in `customer_id` and call handleCustomerChange only if it changes.
+	 * Apply the selected external engine customer after its reactive lookup resolves.
 	 */
 	React.useEffect(() => {
-		const subscription = form.watch((values) => {
-			if (
-				values.customer_id !== undefined &&
-				values.customer_id !== null &&
-				previousCustomerId.current !== values.customer_id
-			) {
-				previousCustomerId.current = values.customer_id;
-				handleCustomerChange(values.customer_id);
-			}
-		});
-		return () => subscription.unsubscribe();
-	}, [form, handleCustomerChange]);
+		if (customerIdToLoad === null) return;
+		const selectedCustomer =
+			customerIdToLoad === 0
+				? guestCustomer
+				: customerLookup?.requestedId === customerIdToLoad
+					? customerLookup.document
+					: undefined;
+		if (selectedCustomer === undefined) return;
+		if (selectedCustomer === null) {
+			mutationLogger.error('Error fetching customer', {
+				code: ERROR_CODES.SYNC_UNEXPECTED,
+				context: {
+					customerId: customerIdToLoad,
+					error: t('orders.customer_not_found'),
+				},
+			});
+			setCustomerIdToLoad(null);
+			return;
+		}
+		handleCustomerChange(customerIdToLoad, selectedCustomer);
+		setCustomerIdToLoad(null);
+	}, [customerIdToLoad, customerLookup, guestCustomer, handleCustomerChange, t]);
 
 	/**
 	 * Watch the customer fields to compute the customer label
@@ -305,6 +338,11 @@ export function EditOrderForm({ order }: Props) {
 										label: t('common.customer'),
 										withGuest: true,
 										...field,
+										onChange: (value: string) => {
+											const customerId = Number(value);
+											field.onChange(customerId);
+											setCustomerIdToLoad(customerId);
+										},
 										value: {
 											value: String(field.value),
 											label: customerLabel,
@@ -389,7 +427,12 @@ export function EditOrderForm({ order }: Props) {
 				</VStack>
 				<ModalFooter className="px-0">
 					<ModalClose>{t('common.cancel')}</ModalClose>
-					<ModalAction loading={loading} onPress={onSave}>
+					<ModalAction
+						testID="order-edit-save-button"
+						loading={loading}
+						onPress={onSave}
+						disabled={storageDegraded}
+					>
 						{t('common.save')}
 					</ModalAction>
 				</ModalFooter>

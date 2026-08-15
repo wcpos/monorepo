@@ -1,13 +1,7 @@
 import * as React from 'react';
 
-import { ObservableResource, useObservable, useObservableEagerState } from 'observable-hooks';
-import { isRxDocument } from 'rxdb';
-import { of } from 'rxjs';
-import { map, switchMap, tap } from 'rxjs/operators';
-
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
-import type { Query } from '@wcpos/query';
 
 import { BrandsPill } from './brands-pill';
 import { CategoryPill } from './category-pill';
@@ -15,95 +9,41 @@ import { FeaturedPill } from './featured-pill';
 import { OnSalePill } from './on-sale-pill';
 import { StockStatusPill } from './stock-status-pill';
 import { TagPill } from './tag-pill';
-import { usePullDocument } from '../../../contexts/use-pull-document';
-import { useCollection } from '../../../hooks/use-collection';
-
-type ProductCollection = import('@wcpos/database').ProductCollection;
-
-interface Props {
-	query: Query<ProductCollection>;
-}
+import { useEngineDocumentByWooId } from '../../../hooks/use-engine-document';
+import { useQueryState } from '../../../../../query';
 
 /**
  *
  */
-export function FilterBar({ query }: Props) {
-	const pullDocument = usePullDocument();
-	const { collection: tagCollection } = useCollection('products/tags');
-	const { collection: brandCollection } = useCollection('products/brands');
-	const selectedTagID = useObservableEagerState(
-		query.rxQuery$.pipe(map(() => query.getElemMatchId('tags')))
-	);
-	const selectedBrandID = useObservableEagerState(
-		query.rxQuery$.pipe(map(() => query.getElemMatchId('brands')))
-	);
-
-	const selectedTag$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(([id, tagCollection, pullDocument]) => {
-					if (!id) {
-						return of(undefined);
-					}
-					return tagCollection.findOne({ selector: { id } }).$.pipe(
-						tap((doc) => {
-							if (!isRxDocument(doc)) {
-								pullDocument(id, tagCollection as any);
-							}
-						})
-					);
-				})
-			),
-		[selectedTagID, tagCollection, pullDocument]
-	);
-
-	const selectedTagResource = React.useMemo(
-		() => new ObservableResource(selectedTag$),
-		[selectedTag$]
-	);
-
-	const selectedBrand$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(([id, brandCollection, pullDocument]) => {
-					if (!id) {
-						return of(undefined);
-					}
-					return brandCollection.findOne({ selector: { id } }).$.pipe(
-						tap((doc) => {
-							if (!isRxDocument(doc)) {
-								pullDocument(id, brandCollection as any);
-							}
-						})
-					);
-				})
-			),
-		[selectedBrandID, brandCollection, pullDocument]
-	);
-
-	const selectedBrandResource = React.useMemo(
-		() => new ObservableResource(selectedBrand$),
-		[selectedBrand$]
-	);
+export function FilterBar() {
+	const { selectedTagID, selectedBrandID } = useQueryState<
+		'products',
+		{ selectedTagID?: number; selectedBrandID?: number }
+	>((state) => ({
+		selectedTagID: state.filters.tags[0],
+		selectedBrandID: state.filters.brands[0],
+	}));
+	const selectedTagResource = useEngineDocumentByWooId<
+		import('@wcpos/database').ProductTagDocument
+	>('products/tags', selectedTagID ?? 0);
+	const selectedBrandResource = useEngineDocumentByWooId<
+		import('@wcpos/database').ProductCategoryDocument
+	>('products/brands', selectedBrandID ?? 0);
 
 	/**
 	 *
 	 */
 	return (
 		<HStack className="w-full flex-wrap">
-			<StockStatusPill query={query} />
-			<FeaturedPill query={query} />
-			<OnSalePill query={query} />
-			<CategoryPill query={query} />
+			<StockStatusPill />
+			<FeaturedPill />
+			<OnSalePill />
+			<CategoryPill />
 			<Suspense>
-				<TagPill query={query} resource={selectedTagResource as any} selectedID={selectedTagID} />
+				<TagPill resource={selectedTagResource} selectedID={selectedTagID} />
 			</Suspense>
 			<Suspense>
-				<BrandsPill
-					query={query}
-					resource={selectedBrandResource as any}
-					selectedID={selectedBrandID}
-				/>
+				<BrandsPill resource={selectedBrandResource} selectedID={selectedBrandID} />
 			</Suspense>
 		</HStack>
 	);

@@ -9,6 +9,13 @@
 
 // Mock the FlexSearch plugin
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
+// Real FlexSearch engine, used by the tokenizer-behaviour tests below.
+import { Index } from 'flexsearch';
+
+// eslint-disable-next-line import/no-unresolved -- Jest maps source without a runtime dependency.
+import { deriveBarcodeFromPayload } from '@wcpos/sync-core';
+
+import { getSearchIdentifier, searchPlugin } from './search';
 
 import type { RxCollection } from 'rxdb';
 
@@ -45,13 +52,6 @@ jest.mock('@wcpos/utils/logger', () => ({
 		warn: jest.fn(),
 		error: jest.fn(),
 	})),
-}));
-
-jest.mock('@wcpos/utils/logger/error-codes', () => ({
-	ERROR_CODES: {
-		INVALID_CONFIGURATION: 'INVALID_CONFIGURATION',
-		SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
-	},
 }));
 
 describe('search plugin', () => {
@@ -245,23 +245,20 @@ describe('search plugin', () => {
 	});
 
 	describe('search identifier generation', () => {
-		it('should generate unique identifier per collection and locale', () => {
-			const getIdentifier = (collectionName: string, locale: string) =>
-				`${collectionName}-search-${locale}`;
-
-			expect(getIdentifier('products', 'en')).toBe('products-search-en');
-			expect(getIdentifier('orders', 'de')).toBe('orders-search-de');
-			expect(getIdentifier('customers', 'fr')).toBe('customers-search-fr');
+		it('should generate a versioned, unique identifier per collection and locale', () => {
+			// The version tag (v2) is migration-critical: it forces the rxdb-premium
+			// flexsearch pipeline to rebuild the persisted index from scratch when the
+			// index config changes. Guard it explicitly. See #679.
+			expect(getSearchIdentifier('products', 'en')).toBe('products-search-v2-en');
+			expect(getSearchIdentifier('orders', 'de')).toBe('orders-search-v2-de');
+			expect(getSearchIdentifier('customers', 'fr')).toBe('customers-search-v2-fr');
 		});
 
 		it('should generate different identifiers for different locales', () => {
-			const getIdentifier = (collectionName: string, locale: string) =>
-				`${collectionName}-search-${locale}`;
-
 			const ids = [
-				getIdentifier('products', 'en'),
-				getIdentifier('products', 'de'),
-				getIdentifier('products', 'fr'),
+				getSearchIdentifier('products', 'en'),
+				getSearchIdentifier('products', 'de'),
+				getSearchIdentifier('products', 'fr'),
 			];
 
 			// All unique
@@ -270,6 +267,47 @@ describe('search plugin', () => {
 	});
 
 	describe('FlexSearch initialization', () => {
+		it('passes the caller snapshot and intended index options to FlexSearch', async () => {
+			const collectionPrototype: Record<string, unknown> = {};
+			const install = searchPlugin.prototypes?.RxCollection;
+			if (!install) throw new Error('search plugin RxCollection prototype is missing');
+			install(collectionPrototype as unknown as RxCollection);
+
+			const collection = Object.assign(Object.create(collectionPrototype), {
+				name: 'products',
+				options: {},
+				database: { collections: {} },
+				onClose: [],
+			});
+			const documentSnapshot = (document: Record<string, unknown>) => ({
+				...(document.payload as Record<string, unknown>),
+				uuid: document.id,
+			});
+
+			await collection.initSearch('en', {
+				searchFields: ['name', 'sku'],
+				documentSnapshot,
+			});
+
+			const config = (addFulltextSearch as jest.Mock).mock.calls[0][0] as {
+				docToString(document: Record<string, unknown>): string;
+				indexOptions: { minlength?: number };
+			};
+			expect(config.indexOptions.minlength).toBe(3);
+			expect(
+				config.docToString({
+					id: 'product-1',
+					payload: { name: 'Payload Keyboard', sku: 'KB-1' },
+				})
+			).toBe('Payload Keyboard KB-1');
+			expect(
+				config.docToString({
+					id: 'product-1',
+					payload: { name: 'Renamed Keyboard', sku: 'KB-1' },
+				})
+			).toBe('Renamed Keyboard KB-1');
+		});
+
 		it('should call addFulltextSearch with correct config', async () => {
 			const mockCollection = {
 				name: 'products',
@@ -277,24 +315,24 @@ describe('search plugin', () => {
 			} as unknown as RxCollection;
 
 			await addFulltextSearch({
-				identifier: 'products-search-en',
+				identifier: getSearchIdentifier('products', 'en'),
 				collection: mockCollection,
 				docToString: jest.fn(),
 				initialization: 'lazy',
 				indexOptions: {
 					preset: 'performance',
-					tokenize: 'forward',
+					tokenize: 'full',
 					language: 'en',
 				},
 			});
 
 			expect(addFulltextSearch).toHaveBeenCalledWith(
 				expect.objectContaining({
-					identifier: 'products-search-en',
+					identifier: getSearchIdentifier('products', 'en'),
 					initialization: 'lazy',
 					indexOptions: expect.objectContaining({
 						preset: 'performance',
-						tokenize: 'forward',
+						tokenize: 'full',
 						language: 'en',
 					}),
 				})
@@ -315,6 +353,50 @@ describe('search plugin', () => {
 					initialization: 'lazy',
 				})
 			);
+		});
+	});
+
+	// Exercises the real FlexSearch engine (not the mocked rxdb-premium wrapper) to lock
+	// in the tokenizer behaviour our production config depends on. Guards against a
+	// FlexSearch/rxdb-premium upgrade silently changing tokenizer semantics. See #679.
+	describe('tokenizer behaviour (WooCommerce parity)', () => {
+		// Mirrors createSearchInstance's indexOptions (minus language stemming).
+		const buildIndex = (tokenize: 'forward' | 'full') => {
+			const index = new Index({ preset: 'performance', tokenize });
+			index.add(1, 'Kuorintasaippua'); // Finnish compound: "exfoliating soap"
+			index.add(2, 'Blue Cotton Shirt');
+			return index;
+		};
+
+		it("'full' matches a mid-word substring the way WooCommerce LIKE '%term%' does", () => {
+			const index = buildIndex('full');
+			// "saippua" (soap) is the tail of the compound word, not a prefix.
+			expect(index.search('saippua')).toContain(1);
+			// Interior fragment of a normal word also matches (contains semantics).
+			expect(index.search('otto')).toContain(2); // inside "Cotton"
+		});
+
+		it("'forward' (the old config) misses mid-word substrings — the bug we are fixing", () => {
+			const index = buildIndex('forward');
+			expect(index.search('saippua')).not.toContain(1);
+		});
+
+		it('still matches word prefixes (no regression for the common case)', () => {
+			const index = buildIndex('full');
+			expect(index.search('kuor')).toContain(1);
+			expect(index.search('shirt')).toContain(2);
+		});
+
+		it('finds a custom-meta barcode after materialization into the grid search field', () => {
+			const index = new Index({ preset: 'performance', tokenize: 'full' });
+			const barcode = deriveBarcodeFromPayload(
+				{ meta_data: [{ key: '_barcode', value: 'CUSTOM-1' }] },
+				['meta_data:_barcode']
+			);
+			if (!barcode) throw new Error('expected a materialized barcode');
+			index.add(1, barcode);
+
+			expect(index.search('CUSTOM-1')).toContain(1);
 		});
 	});
 

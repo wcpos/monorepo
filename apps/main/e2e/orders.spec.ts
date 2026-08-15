@@ -1,6 +1,25 @@
 import { expect, type Page } from '@playwright/test';
 
-import { getStoreVariant, navigateToPage, authenticatedTest as test } from './fixtures';
+import { isolatedProductTest as test, tryAddRunPrivateSimpleProduct } from './checkout-probe';
+import { getStoreVariant, navigateToPage, tryAddProductBySku } from './fixtures';
+import { extractOrderIdFromPushBody, extractOrderNumberFromPushBody } from './order-cleanup';
+import {
+	expectMoneyMatches,
+	expectTaxParity,
+	openCheckout,
+	type OrderPayload,
+	type ServerOrder,
+	stampRunLabel,
+} from './order-lifecycle';
+import { mintSearchProbeToken, searchAndWaitForServer } from './search-probe';
+
+/**
+ * Layer 2 is live: pro-authenticated shards use one of 16 provisioned
+ * e2e-cashier accounts. Serialized PR runs use band A (slots 1..8); push,
+ * workflow_dispatch, and local runs use band B (slots 9..16). The normalized
+ * shard index selects within the band. Two simultaneous non-PR runs can still
+ * share band B (accepted residual); secretless runs keep the demo login.
+ */
 
 /** Helper to navigate to Orders page and wait for load */
 async function navigateToOrders(page: Page) {
@@ -8,6 +27,28 @@ async function navigateToOrders(page: Page) {
 	const screen = page.getByTestId('screen-orders');
 	await expect(screen.getByTestId('search-orders')).toBeVisible({ timeout: 30_000 });
 	return screen;
+}
+
+/** Add a resident simple product so Save creates an order with the active POS scope meta. */
+async function addOrderProbeProduct(page: Page) {
+	if (await tryAddRunPrivateSimpleProduct(page)) return;
+
+	// Secretless forks retain the pre-isolation shared-SKU path below.
+	const skuResult = await tryAddProductBySku(page);
+	if (skuResult === 'added') return;
+	if (skuResult === 'add_failed') {
+		throw new Error('Dedicated E2E SKU matched but did not reach the order-probe cart');
+	}
+
+	const tile = page.getByTestId('product-tile').first();
+	const tableButton = page.getByTestId('add-to-cart-button').first();
+	await expect(tile.or(tableButton).first()).toBeVisible({ timeout: 30_000 });
+	if (await tile.isVisible()) {
+		await tile.click();
+	} else {
+		await tableButton.click();
+	}
+	await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
 }
 
 /**
@@ -40,69 +81,116 @@ test.describe('Orders Page (Pro)', () => {
 	test('should show orders or empty state', async ({ posPage: page }) => {
 		const screen = await navigateToOrders(page);
 
-		const hasOrders = await screen
-			.getByTestId('data-table-count')
-			.isVisible({ timeout: 10_000 })
-			.catch(() => false);
-		const noOrders = await screen
-			.getByTestId('no-data-message')
-			.isVisible({ timeout: 15_000 })
-			.catch(() => false);
-		expect(hasOrders || noOrders).toBeTruthy();
+		// Poll so the assertion waits for whichever state resolves. A bare
+		// `isVisible({ timeout })` samples once and ignores its timeout, so both
+		// reads could be false while the table is still loading (#1044).
+		await expect
+			.poll(
+				async () => {
+					const hasOrders = await screen
+						.getByTestId('data-table-count')
+						.isVisible()
+						.catch(() => false);
+					const noOrders = await screen
+						.getByTestId('no-data-message')
+						.isVisible()
+						.catch(() => false);
+					return hasOrders || noOrders;
+				},
+				{ timeout: 30_000 }
+			)
+			.toBeTruthy();
 	});
 
-	test('should search orders', async ({ posPage: page }) => {
+	test('should search orders', async ({ posPage: page }, testInfo) => {
+		await addOrderProbeProduct(page);
+		await stampRunLabel(page, `E2E Probe ${mintSearchProbeToken(testInfo.workerIndex)}`);
+
+		const savePending = page.waitForResponse(
+			(response) => {
+				if (response.request().method() !== 'POST') return false;
+				// Pretty permalinks put the route in the pathname; plain permalinks
+				// carry it as ?rest_route= — match both, like searchAndWaitForServer.
+				const url = new URL(response.url());
+				return (
+					url.pathname.endsWith('/wp-json/wcpos/v2/push/orders') ||
+					url.searchParams.get('rest_route') === '/wcpos/v2/push/orders'
+				);
+			},
+			{ timeout: 90_000 }
+		);
+		savePending.catch(() => {});
+		await page.getByTestId('save-to-server-button').click();
+		const saveResponse = await savePending;
+		if (!saveResponse.ok()) {
+			test.skip(
+				true,
+				`Store rejected order search-probe creation (HTTP ${saveResponse.status()}); server write access is required`
+			);
+			return;
+		}
+
+		const pushBody: unknown = await saveResponse.json().catch(() => null);
+		const orderId = extractOrderIdFromPushBody(pushBody);
+		const envelope = (saveResponse.request().postDataJSON() ?? {}) as {
+			recordId?: unknown;
+			payload?: OrderPayload;
+		};
+		const orderUuid = typeof envelope.recordId === 'string' ? envelope.recordId : '';
+		if (orderId === null || !orderUuid) {
+			throw new Error('Order search-probe create succeeded without its server id or stable uuid');
+		}
+
+		// Totals parity on the ack we already hold (Money-oracle doctrine in
+		// TEST-PLAN.md): this spec creates a REAL order, so the amounts it rang up
+		// must be the amounts the server recorded — for free, no extra request.
+		const ackDoc = (pushBody as { document?: ServerOrder } | null)?.document;
+		const sentPayload = envelope.payload ?? {};
+		if (ackDoc && sentPayload.total !== undefined) {
+			expectMoneyMatches(ackDoc.total, sentPayload.total, 'order total parity (cart vs server)');
+		}
+		if (ackDoc && sentPayload.cart_tax !== undefined) {
+			expectTaxParity(ackDoc.cart_tax, sentPayload.cart_tax, 'cart_tax parity');
+		}
+		await expect(page.getByTestId('save-to-server-button')).toBeEnabled({ timeout: 30_000 });
+
 		const screen = await navigateToOrders(page);
-
 		const searchInput = screen.getByTestId('search-orders');
-		await searchInput.fill('123');
-		await page.waitForTimeout(1_500);
+		// The Orders table renders `number`, which differs from the server `id` on
+		// stores running sequential-order-number plugins — search and assert by the
+		// DISPLAYED number, falling back to the id when the push body omits it.
+		const orderNumber = extractOrderNumberFromPushBody(pushBody) ?? String(orderId);
+		await searchAndWaitForServer(page, searchInput, 'orders', orderNumber);
 
-		const hasResults = await screen
-			.getByTestId('data-table-count')
-			.isVisible()
-			.catch(() => false);
-		const noResults = await screen
-			.getByTestId('no-data-message')
-			.isVisible()
-			.catch(() => false);
-		expect(hasResults || noResults).toBeTruthy();
+		const createdRow = screen.getByTestId(`data-table-row-${orderUuid}`);
+		await expect(createdRow).toBeVisible({ timeout: 30_000 });
+		await expect(createdRow).toContainText(orderNumber);
+		await expect
+			.poll(() => screen.getByTestId(/^data-table-row-/).count(), { timeout: 30_000 })
+			.toBeGreaterThanOrEqual(1);
 	});
 
 	test('should show filter pills', async ({ posPage: page }) => {
 		const screen = await navigateToOrders(page);
 
-		// Filter pills are buttons near the search bar
-		const filterButtons = screen.locator('[role="button"]');
-		expect(await filterButtons.count()).toBeGreaterThanOrEqual(1);
+		await expect(screen.getByTestId('order-filter-status')).toBeVisible({ timeout: 15_000 });
 	});
 
-	test('should show order actions menu', async ({ posPage: page }) => {
+	test('should show order actions menu', async ({ posPage: page }, testInfo) => {
+		await addOrderProbeProduct(page);
+		await stampRunLabel(page, `E2E Probe ${mintSearchProbeToken(testInfo.workerIndex)}`);
+		const { uuid } = await openCheckout(page);
+		await page.getByTestId('cancel-checkout-button').click();
+		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
+
 		const screen = await navigateToOrders(page);
-
-		const countEl = screen.getByTestId('data-table-count');
-		const hasOrders = await countEl
-			.isVisible({ timeout: 15_000 })
-			.then(
-				async (visible) => visible && /Showing\s+[1-9]/.test((await countEl.textContent()) ?? '')
-			)
-			.catch(() => false);
-
-		if (!hasOrders) {
-			test.skip(true, 'No orders available to test actions menu');
-		}
-
-		// Find the first data row in the table body
-		const dataRow = screen.locator('[role="rowgroup"] [role="row"]').first();
-		await expect(dataRow).toBeVisible({ timeout: 15_000 });
-
-		// The actions trigger is the last button in the row
-		const actionsButton = dataRow.locator('[role="button"]').last();
+		const createdRow = screen.getByTestId(`data-table-row-${uuid}`);
+		await expect(createdRow).toBeVisible({ timeout: 30_000 });
+		const actionsButton = createdRow.getByTestId('order-actions-button');
 		await expect(actionsButton).toBeVisible({ timeout: 15_000 });
 		await actionsButton.click();
 
-		// Menu should show at least one menu item
-		await expect(page.getByRole('menuitem').first()).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByTestId('order-delete-menu-item')).toBeVisible({ timeout: 15_000 });
 	});
 });
 

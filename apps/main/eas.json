@@ -28,6 +28,16 @@
         "simulator": true
       }
     },
+    "e2e-test": {
+      "extends": "monorepo",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": true
+      }
+    },
     "production": {
       "extends": "monorepo",
       "distribution": "store",

@@ -4,7 +4,7 @@ import { isCancel } from 'axios';
 import get from 'lodash/get';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { extractErrorMessage, extractWpErrorCode } from './parse-wp-error';
 
@@ -41,37 +41,61 @@ const useHttpErrorHandler = () => {
 				// SSL certificate error or invalid domain
 				httpLogger.error(extractErrorMessage(res.data, 'SSL certificate error'), {
 					showToast: true,
-					context: { errorCode: ERROR_CODES.SSL_CERTIFICATE_ERROR, endpoint, wpErrorCode },
+					code: ERROR_CODES.TLS_UNTRUSTED,
+					context: {
+						endpoint,
+						wpErrorCode,
+					},
 				});
 				break;
 			case 400:
 				httpLogger.error(extractErrorMessage(res.data, 'Bad request'), {
 					showToast: true,
-					context: { errorCode: ERROR_CODES.INVALID_REQUEST_FORMAT, endpoint, wpErrorCode },
+					code: ERROR_CODES.RECORD_INVALID_FIELD,
+					context: {
+						endpoint,
+						wpErrorCode,
+					},
 				});
 				break;
 			case 401:
 				httpLogger.error(extractErrorMessage(res.data, 'Authentication failed'), {
 					showToast: true,
-					context: { errorCode: ERROR_CODES.INVALID_CREDENTIALS, endpoint, wpErrorCode },
+					code: ERROR_CODES.SESSION_EXPIRED,
+					context: {
+						endpoint,
+						wpErrorCode,
+					},
 				});
 				break;
 			case 403:
 				httpLogger.error(extractErrorMessage(res.data, 'Access forbidden'), {
 					showToast: true,
-					context: { errorCode: ERROR_CODES.INSUFFICIENT_PERMISSIONS, endpoint, wpErrorCode },
+					code: ERROR_CODES.INSUFFICIENT_ROLE,
+					context: {
+						endpoint,
+						wpErrorCode,
+					},
 				});
 				break;
 			case 404:
 				httpLogger.error(extractErrorMessage(res.data, 'Resource not found'), {
 					showToast: true,
-					context: { errorCode: ERROR_CODES.PLUGIN_NOT_FOUND, endpoint, wpErrorCode },
+					code: ERROR_CODES.REST_ROUTE_MISSING,
+					context: {
+						endpoint,
+						wpErrorCode,
+					},
 				});
 				break;
 			case 500:
 				httpLogger.error(extractErrorMessage(res.data, 'Internal server error'), {
 					showToast: true,
-					context: { errorCode: ERROR_CODES.CONNECTION_REFUSED, endpoint, wpErrorCode },
+					code: ERROR_CODES.STORE_SERVER_ERROR,
+					context: {
+						endpoint,
+						wpErrorCode,
+					},
 				});
 				break;
 			case 502:
@@ -79,8 +103,8 @@ const useHttpErrorHandler = () => {
 			case 504:
 				httpLogger.error(extractErrorMessage(res.data, `Server unavailable (${res.status})`), {
 					showToast: true,
+					code: ERROR_CODES.STORE_SERVER_ERROR,
 					context: {
-						errorCode: ERROR_CODES.CONNECTION_TIMEOUT,
 						endpoint,
 						status: res.status,
 						wpErrorCode,
@@ -90,8 +114,8 @@ const useHttpErrorHandler = () => {
 			default:
 				httpLogger.error(extractErrorMessage(res.data, `Unexpected response (${res.status})`), {
 					showToast: true,
+					code: ERROR_CODES.STORE_SERVER_ERROR,
 					context: {
-						errorCode: ERROR_CODES.UNEXPECTED_RESPONSE_CODE,
 						endpoint,
 						status: res.status,
 						wpErrorCode,
@@ -117,7 +141,8 @@ const useHttpErrorHandler = () => {
 				// client never received a response, or request never left
 				httpLogger.error(`Server unavailable: ${endpoint}`, {
 					showToast: true,
-					context: { errorCode: ERROR_CODES.CONNECTION_REFUSED, endpoint },
+					code: ERROR_CODES.SYNC_UNREACHABLE,
+					context: { endpoint },
 				});
 			} else if (isCancel(error)) {
 				// handle cancel - no logging needed for cancelled requests
@@ -127,7 +152,8 @@ const useHttpErrorHandler = () => {
 				const errorMessage = error instanceof Error ? error.message : String(error);
 				httpLogger.error(`Network error: ${errorMessage}`, {
 					showToast: true,
-					context: { errorCode: ERROR_CODES.NETWORK_UNREACHABLE, endpoint },
+					code: ERROR_CODES.SYNC_UNREACHABLE,
+					context: { endpoint },
 				});
 			}
 		},

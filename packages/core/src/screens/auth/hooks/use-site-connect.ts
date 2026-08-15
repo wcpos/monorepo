@@ -1,10 +1,11 @@
 import * as React from 'react';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
+import { upsertSiteData } from '../../../utils/site-writes';
 import { useApiDiscovery } from './use-api-discovery';
 import { useAuthTesting } from './use-auth-testing';
 import { useUrlDiscovery } from './use-url-discovery';
@@ -58,13 +59,7 @@ interface ExtendedSiteData extends WpJsonResponse {
 }
 
 export type SiteConnectStatus =
-	| 'idle'
-	| 'discovering-url'
-	| 'discovering-api'
-	| 'testing-auth'
-	| 'saving'
-	| 'success'
-	| 'error';
+	'idle' | 'discovering-url' | 'discovering-api' | 'testing-auth' | 'saving' | 'success' | 'error';
 
 export interface SiteConnectProgress {
 	step: number;
@@ -142,54 +137,60 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 				// Check if site already exists
 				const existingSite = await (userDB.sites as any).findOneFix(siteData.uuid).exec();
 
-				if (existingSite) {
-					// Update existing site
-					await existingSite.incrementalPatch(parsedData);
+				/**
+				 * Merge the discovered details into the site document.
+				 *
+				 * This must not be a full-document write: `parsedData` carries the schema
+				 * default for every property the REST index does not return, including the
+				 * locally-owned `wp_credentials` link array. Writing that back erased any
+				 * credential linked while discovery was still in flight (#902).
+				 */
+				const siteDoc = await upsertSiteData(userDB.sites, parsedData);
 
-					// Ensure site is in user's sites array (may be missing if previously removed)
-					const currentSites: string[] = user.getLatest().sites ?? [];
-					if (!currentSites.includes(siteData.uuid)) {
-						await user.incrementalUpdate({ $push: { sites: siteData.uuid } });
-						siteLogger.debug(`Re-added site to user: ${siteData.name}`);
-					}
-
-					siteLogger.debug(`Updated site: ${siteData.name}`);
-					return existingSite.getLatest();
-				} else {
-					// Add new site to user's sites list
-					await user.incrementalUpdate({ $push: { sites: parsedData } });
-					const newSite = await (userDB.sites as any).findOneFix(siteData.uuid).exec();
-					siteLogger.debug(`Added new site: ${siteData.name}`);
-					return newSite;
+				// Ensure site is in user's sites array (may be missing if new or previously removed)
+				const currentSites: string[] = user.getLatest().sites ?? [];
+				if (!currentSites.includes(siteData.uuid)) {
+					await user.getLatest().incrementalUpdate({ $push: { sites: siteData.uuid } });
+					siteLogger.debug(
+						existingSite
+							? `Re-added site to user: ${siteData.name}`
+							: `Added new site: ${siteData.name}`
+					);
 				}
+
+				if (existingSite) {
+					siteLogger.debug(`Updated site: ${siteData.name}`);
+				}
+
+				return siteDoc.getLatest();
 			} catch (err: unknown) {
 				// Determine error type and code
-				let errorCode: ErrorCode = ERROR_CODES.TRANSACTION_FAILED; // Default for DB operations
+				let errorCode: ErrorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED; // Default for DB operations
 
 				if (err instanceof Error && err.name === 'ValidationError') {
-					errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
+					errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
 				} else if (err instanceof Error && err.name === 'RxError') {
 					// Check for specific RxDB error codes
 					switch ((err as Error & { code?: string }).code) {
 						case 'RX1':
-							errorCode = ERROR_CODES.DUPLICATE_RECORD;
+							errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
 							break;
 						case 'RX2':
-							errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
+							errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
 							break;
 						case 'RX3':
-							errorCode = ERROR_CODES.INVALID_DATA_TYPE;
+							errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
 							break;
 						default:
-							errorCode = ERROR_CODES.TRANSACTION_FAILED;
+							errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
 					}
 				}
 
 				const errMessage = err instanceof Error ? err.message : String(err);
 				siteLogger.error(`Failed to save site data: ${errMessage}`, {
+					code: errorCode,
 					showToast: true,
 					context: {
-						errorCode,
 						error: errMessage,
 					},
 				});
@@ -209,7 +210,7 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 				const errorMsg = t('auth.url_is_required');
 				siteLogger.error(errorMsg, {
 					showToast: true,
-					context: { errorCode: ERROR_CODES.MISSING_REQUIRED_PARAMETERS },
+					code: ERROR_CODES.STORE_URL_INVALID,
 				});
 				setError(errorMsg);
 				return null;

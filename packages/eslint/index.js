@@ -8,6 +8,24 @@ export const config = [
 	eslintPluginPrettierRecommended,
 	...expoConfig,
 	{
+		files: ['**/*.{ts,tsx}'],
+		ignores: ['**/*.test.{ts,tsx}', '**/e2e/**', '**/*.config.{ts,tsx}'],
+		languageOptions: {
+			parserOptions: {
+				projectService: true,
+			},
+		},
+		rules: {
+			'@typescript-eslint/no-floating-promises': 'error',
+			// attributes:false — async JSX handlers (onPress etc.) are idiomatic RN;
+			// rejections there surface as unhandled-rejection reports, not silent data loss
+			'@typescript-eslint/no-misused-promises': [
+				'error',
+				{ checksVoidReturn: { attributes: false } },
+			],
+		},
+	},
+	{
 		files: ['**/*.{js,jsx,ts,tsx}'],
 		settings: {
 			'import/resolver': {
@@ -65,7 +83,7 @@ export const config = [
 			'import/no-unresolved': [
 				'error',
 				{
-					ignore: ['^uniwind$', '^uniwind/.+', '^rxdb-premium/.+', '^rxdb-premium-old/.+'],
+					ignore: ['^uniwind$', '^uniwind/.+', '^rxdb-premium/.+'],
 				},
 			],
 

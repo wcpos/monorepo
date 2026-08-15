@@ -21,15 +21,21 @@ import {
 } from '@wcpos/components/dropdown-menu';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
+import { useQueryRuntime } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
+import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { useProAccess } from '../../contexts/pro-access';
-import { useDeleteDocument } from '../../contexts/use-delete-document';
-import { usePullDocument } from '../../contexts/use-pull-document';
+import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
+import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
 import type { CellContext } from '@tanstack/react-table';
 
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
+
+const syncLogger = getLogger(['wcpos', 'products', 'variation-actions', 'sync']);
 
 /**
  *
@@ -39,27 +45,46 @@ export function VariationActions({
 }: CellContext<{ document: ProductVariationDocument }, 'actions'>) {
 	const variation = row.original.document;
 	const parentRow = row.getParentRow()!;
-	const parent = (parentRow.original as { document: { id: number; name: string } }).document;
+	const parent = (parentRow.original as { document: { name: string } }).document;
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const router = useRouter();
-	const pullDocument = usePullDocument();
 	const t = useT();
-	const deleteDocument = useDeleteDocument();
+	const runtime = useQueryRuntime();
 	const { readOnly } = useProAccess();
+	const { caps } = useUserCapabilities();
+
+	const handleRefresh = React.useCallback(() => {
+		if (!variation.id) return;
+		const handle = runtime.engine.require({
+			id: `variation-actions:refresh:${variation.id}`,
+			collection: 'variations',
+			kind: 'targeted-records',
+			wooIds: [variation.id],
+			forceRefresh: true,
+		});
+		void handle.ready
+			.finally(() => handle.release())
+			.catch((error) => {
+				syncLogger.error('Failed to refresh variation', {
+					code: ERROR_CODES.PRODUCT_UNEXPECTED,
+					showToast: true,
+					context: {
+						variationId: variation.id,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
+			});
+	}, [runtime, variation.id]);
 
 	/**
 	 * Handle delete button click
 	 */
 	const handleDelete = React.useCallback(async () => {
-		try {
-			if (variation.id) {
-				await deleteDocument(variation.id, variation.collection);
-			}
-			await variation.remove();
-		} finally {
-			//
-		}
-	}, [variation, deleteDocument]);
+		await requestServerDelete(runtime.engine, {
+			collection: 'variations',
+			recordId: variation.uuid!,
+		});
+	}, [runtime, variation.uuid]);
 
 	if (readOnly) {
 		return null;
@@ -75,60 +100,61 @@ export function VariationActions({
 					<Icon name="ellipsisVertical" />
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
-					<DropdownMenuItem
-						onPress={() =>
-							router.push({
-								pathname: `/(app)/(drawer)/products/(modals)/edit/variation/${variation.uuid}`,
-							})
-						}
-					>
-						<Icon name="penToSquare" />
-						<Text>{t('common.edit')}</Text>
-					</DropdownMenuItem>
-					{variation.id && (
+					<CapabilityTooltip show={!caps.canEditVariations} hint="editProducts">
 						<DropdownMenuItem
-							onPress={() => {
-								pullDocument(
-									variation.id!,
-									variation.collection as never,
-									`products/${parent.id}/variations`
-								);
-							}}
+							disabled={!caps.canEditVariations}
+							onPress={() =>
+								router.push({
+									pathname: `/(app)/(drawer)/products/(modals)/edit/variation/${variation.uuid}`,
+								})
+							}
 						>
+							<Icon name="penToSquare" />
+							<Text>{t('common.edit')}</Text>
+						</DropdownMenuItem>
+					</CapabilityTooltip>
+					{variation.id && (
+						<DropdownMenuItem onPress={handleRefresh}>
 							<Icon name="arrowRotateRight" />
 							<Text>{t('common.sync')}</Text>
 						</DropdownMenuItem>
 					)}
-					<DropdownMenuSeparator />
-					<DropdownMenuItem variant="destructive" onPress={() => setDeleteDialogOpened(true)}>
-						<Icon
-							name="trash"
-							className="fill-destructive web:group-focus:fill-accent-foreground"
-						/>
-						<Text>{t('common.delete')}</Text>
-					</DropdownMenuItem>
+					{caps.canDeleteVariations && (
+						<>
+							<DropdownMenuSeparator />
+							<DropdownMenuItem variant="destructive" onPress={() => setDeleteDialogOpened(true)}>
+								<Icon
+									name="trash"
+									className="fill-destructive web:group-focus:fill-accent-foreground"
+								/>
+								<Text>{t('common.delete')}</Text>
+							</DropdownMenuItem>
+						</>
+					)}
 				</DropdownMenuContent>
 			</DropdownMenu>
-			<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>
-							{t('products.delete', {
-								product: `${parent.name} - ${variation.name}`,
-							})}
-						</AlertDialogTitle>
-						<AlertDialogDescription>
-							{t('products.are_you_sure_you_want_to_2')}
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-						<AlertDialogAction variant="destructive" onPress={handleDelete}>
-							{t('common.delete')}
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
+			{caps.canDeleteVariations && (
+				<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
+					<AlertDialogContent>
+						<AlertDialogHeader>
+							<AlertDialogTitle>
+								{t('products.delete', {
+									product: `${parent.name} - ${variation.name}`,
+								})}
+							</AlertDialogTitle>
+							<AlertDialogDescription>
+								{t('products.are_you_sure_you_want_to_2')}
+							</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+							<AlertDialogAction variant="destructive" onPress={handleDelete}>
+								{t('common.delete')}
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
+			)}
 		</>
 	);
 }

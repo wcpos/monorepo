@@ -1,6 +1,11 @@
 import { expect } from '@playwright/test';
 
-import { authenticatedTest as test } from './fixtures';
+import {
+	addCheckoutProbeProduct,
+	findVariableProduct,
+	isolatedProductTest as simpleProductTest,
+	isolatedVariableProductTest as test,
+} from './checkout-probe';
 
 /**
  * Product browsing and search in the POS panel (both free and pro).
@@ -50,16 +55,19 @@ test.describe('Products in POS', () => {
 	});
 
 	test('should search products by name', async ({ posPage: page }) => {
-		const searchInput = page.getByTestId('search-products');
-		await searchInput.fill('hoodie');
-		await page.waitForTimeout(1_000);
-
+		await page.getByTestId('view-mode-toggle').click();
 		const countEl = page.getByTestId('data-table-count');
-		const noResults = page.getByTestId('no-data-message');
+		await expect(countEl).toBeVisible({ timeout: 15_000 });
+		const initialCount = await countEl.textContent();
+		const knownNonMatch = page.getByTestId('data-table-row-hoodie');
+		await expect(knownNonMatch).toBeVisible({ timeout: 15_000 });
 
-		const hasResults = await countEl.isVisible().catch(() => false);
-		const hasNoResults = await noResults.isVisible().catch(() => false);
-		expect(hasResults || hasNoResults).toBeTruthy();
+		const searchInput = page.getByTestId('search-products');
+		await searchInput.fill('Belt');
+
+		await expect(page.getByTestId('data-table-row-belt')).toBeVisible({ timeout: 15_000 });
+		await expect(knownNonMatch).not.toBeVisible();
+		await expect.poll(() => countEl.textContent(), { timeout: 15_000 }).not.toBe(initialCount);
 	});
 
 	test('should clear search and show all products', async ({ posPage: page }) => {
@@ -83,39 +91,30 @@ test.describe('Products in POS', () => {
 	});
 
 	test('should update product count after search', async ({ posPage: page }) => {
+		await page.getByTestId('view-mode-toggle').click();
 		const countEl = page.getByTestId('data-table-count');
-		await expect(countEl).toBeVisible();
+		await expect(countEl).toBeVisible({ timeout: 15_000 });
 		const initialText = await countEl.textContent();
+		await expect(page.getByTestId('data-table-row-hoodie')).toBeVisible({ timeout: 15_000 });
 
 		const searchInput = page.getByTestId('search-products');
-		await searchInput.fill('hoodie');
-		await page.waitForTimeout(1_500);
+		await searchInput.fill('Belt');
 
-		const hasResults = await countEl.isVisible().catch(() => false);
-		const noResults = await page
-			.getByTestId('no-data-message')
-			.isVisible()
-			.catch(() => false);
-		expect(hasResults || noResults).toBeTruthy();
+		await expect(page.getByTestId('data-table-row-belt')).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByTestId('data-table-row-hoodie')).not.toBeVisible();
+		await expect.poll(() => countEl.textContent(), { timeout: 15_000 }).not.toBe(initialText);
+	});
 
-		if (hasResults) {
-			const filteredText = await countEl.textContent();
-			expect(filteredText).toBeTruthy();
+	simpleProductTest(
+		'should add a simple product to cart by clicking tile',
+		async ({ posPage: page }) => {
+			await addCheckoutProbeProduct(page);
 		}
-	});
-
-	test('should add a simple product to cart by clicking tile', async ({ posPage: page }) => {
-		// In grid view, clicking a product tile adds it to the cart
-		await page.getByTestId('product-tile').first().click();
-		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 10_000 });
-	});
+	);
 
 	test('should show variable product tiles in grid view', async ({ posPage: page }) => {
-		const searchInput = page.getByTestId('search-products');
-		await searchInput.fill('hoodie');
-		await page.waitForTimeout(1_500);
+		await findVariableProduct(page, page.getByTestId('screen-pos').getByTestId('search-products'));
 
-		// Seed data must include "hoodie" as a variable product
 		const variableTiles = page.getByTestId('variable-product-tile');
 		await expect(variableTiles.first()).toBeVisible({ timeout: 10_000 });
 	});
@@ -123,9 +122,7 @@ test.describe('Products in POS', () => {
 	test('should open variation popover when clicking variable product tile', async ({
 		posPage: page,
 	}) => {
-		const searchInput = page.getByTestId('search-products');
-		await searchInput.fill('hoodie');
-		await page.waitForTimeout(1_500);
+		await findVariableProduct(page, page.getByTestId('screen-pos').getByTestId('search-products'));
 
 		const variableTile = page.getByTestId('variable-product-tile');
 		await expect(variableTile.first()).toBeVisible({ timeout: 10_000 });
@@ -134,13 +131,11 @@ test.describe('Products in POS', () => {
 		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 });
 	});
 
-	test('should add product to cart in table view', async ({ posPage: page }) => {
+	simpleProductTest('should add product to cart in table view', async ({ posPage: page }) => {
 		// Switch to table view
 		await page.getByTestId('view-mode-toggle').click();
 		await expect(page.getByRole('columnheader').first()).toBeVisible({ timeout: 15_000 });
 
-		// Table view uses the add-to-cart-button in each row
-		await page.getByTestId('add-to-cart-button').first().click();
-		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 10_000 });
+		await addCheckoutProbeProduct(page);
 	});
 });

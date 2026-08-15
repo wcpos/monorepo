@@ -168,7 +168,7 @@ export function usePrint(options: UsePrintOptions) {
 						geometry.maxWidthDots
 					);
 				} else {
-					await service.printReceipt(normalised, printerProfile, undefined, undefined, decimals);
+					await service.printReceipt(normalised, printerProfile, undefined, decimals);
 				}
 			} else {
 				// System print fallback — need HTML content

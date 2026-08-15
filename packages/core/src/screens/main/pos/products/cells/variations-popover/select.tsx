@@ -29,12 +29,18 @@ interface VariationSelectProps {
 	};
 	onSelect: (attr: { id?: number; name?: string; option: string }) => void;
 	selected?: string;
+	disabledOptions?: Record<string, boolean>;
 }
 
 /**
  *
  */
-export function VariationSelect({ attribute, onSelect, selected }: VariationSelectProps) {
+export function VariationSelect({
+	attribute,
+	onSelect,
+	selected,
+	disabledOptions = {},
+}: VariationSelectProps) {
 	const t = useT();
 	const options = attribute?.options || [];
 
@@ -47,7 +53,7 @@ export function VariationSelect({ attribute, onSelect, selected }: VariationSele
 			<Select
 				value={selected ? { value: selected, label: selected } : undefined}
 				onValueChange={(option) => {
-					if (option) {
+					if (option && !disabledOptions[option.value]) {
 						onSelect({ id: attribute.id, name: attribute.name, option: option.value });
 					}
 				}}
@@ -57,7 +63,12 @@ export function VariationSelect({ attribute, onSelect, selected }: VariationSele
 				</SelectTrigger>
 				<SelectContent>
 					{options.map((option: string) => (
-						<SelectItem key={option} label={option} value={option} />
+						<SelectItem
+							key={option}
+							label={option}
+							value={option}
+							disabled={disabledOptions[option]}
+						/>
 					))}
 				</SelectContent>
 			</Select>
@@ -78,7 +89,7 @@ export function VariationSelect({ attribute, onSelect, selected }: VariationSele
 		<Combobox
 			value={selected ? { value: selected, label: selected } : undefined}
 			onValueChange={(option) => {
-				if (option) {
+				if (option && !disabledOptions[String(option.value)]) {
 					onSelect({ id: attribute.id, name: attribute.name, option: String(option.value) });
 				}
 			}}
@@ -91,7 +102,12 @@ export function VariationSelect({ attribute, onSelect, selected }: VariationSele
 				<ComboboxList
 					data={data}
 					renderItem={({ item }) => (
-						<ComboboxItem value={String(item.value)} label={item.label} item={item}>
+						<ComboboxItem
+							value={String(item.value)}
+							label={item.label}
+							item={item}
+							disabled={disabledOptions[String(item.value)]}
+						>
 							<ComboboxItemText />
 						</ComboboxItem>
 					)}

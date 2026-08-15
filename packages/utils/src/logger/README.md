@@ -23,25 +23,22 @@ A progressive enhancement logger for WooCommerce POS that supports console loggi
 
 ```typescript
 import { log } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 // 1. Simple console log (always works)
 log.debug('User clicked button');
 
 // 2. User-facing error with toast
 log.error('Connection failed', {
+  code: ERROR_CODES.SYNC_UNREACHABLE,
   showToast: true,
-  context: {
-    errorCode: ERROR_CODES.CONNECTION_REFUSED
-  }
 });
 
 // 3. Track important error to database
 log.error('Payment declined', {
+  code: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
   showToast: true,
-  saveToDb: true,
   context: {
-    errorCode: ERROR_CODES.PAYMENT_DECLINED,
     amount: 99.99,
     cardType: 'visa'
   }
@@ -50,7 +47,6 @@ log.error('Payment declined', {
 // 4. Success message with audit trail
 log.success('Order saved', {
   showToast: true,
-  saveToDb: true,
   context: {
     orderId: 123,
     orderTotal: 99.99
@@ -166,11 +162,10 @@ const authLogger = getLogger(['wcpos', 'auth', 'login']);
 const loginLogger = authLogger.with({ userId: user.id });
 
 // Use the logger
-loginLogger.info('Login successful', { saveToDb: true });
+loginLogger.info('Login successful');
 loginLogger.error('Login failed', { 
+  code: ERROR_CODES.SESSION_EXPIRED,
   showToast: true, 
-  saveToDb: true,
-  context: { errorCode: ERROR_CODES.INVALID_CREDENTIALS }
 });
 ```
 
@@ -305,7 +300,7 @@ You can also call log methods directly from the console:
 ```javascript
 window.wcposLog.debug('Test debug message')
 window.wcposLog.info('Test info message')
-window.wcposLog.error('Test error message')
+window.wcposLog.error('Test error message', { code: 'CLIENT999' })
 ```
 
 ### Programmatic Usage
@@ -328,7 +323,7 @@ log.setLevel('debug');
 log.debug(message, options?)   // Hidden in production (__DEV__ only)
 log.info(message, options?)    // Visible in production
 log.warn(message, options?)    // Warnings
-log.error(message, options?)   // Errors
+log.error(message, options: LoggerOptions & { code: ErrorCode }) // Errors
 log.success(message, options?) // Success messages
 ```
 
@@ -336,8 +331,8 @@ log.success(message, options?) // Success messages
 
 ```typescript
 interface LoggerOptions {
+  code?: ErrorCode;             // Registry-typed error code (required by log.error)
   showToast?: boolean;          // Show toast notification
-  saveToDb?: boolean;           // Save to database
   context?: any;                // Additional context data
   toast?: {
     text2?: string;             // Secondary message
@@ -357,12 +352,12 @@ interface LoggerOptions {
 
 ```typescript
 log.error('Barcode scanned: 12345', {
+  code: ERROR_CODES.RECORD_REJECTED,
   showToast: true,
   toast: {
     text2: '3 products found locally'
   },
   context: {
-    errorCode: ERROR_CODES.RECORD_NOT_FOUND,
     barcode: '12345'
   }
 });
@@ -384,7 +379,6 @@ log.success('Settings saved', {
 ```typescript
 log.success('Item removed from cart', {
   showToast: true,
-  saveToDb: true,
   toast: {
     dismissable: true,
     action: {
@@ -405,12 +399,10 @@ When you include an error code, a "Help" button automatically appears (unless yo
 
 ```typescript
 log.error('Invalid credentials', {
+  code: ERROR_CODES.SESSION_EXPIRED, // Adds "Help" button automatically
   showToast: true,
-  context: {
-    errorCode: ERROR_CODES.INVALID_CREDENTIALS  // Adds "Help" button automatically
-  }
 });
-// User can click "Help" to open: https://docs.wcpos.com/error-codes/API02001
+// User can click "Help" to open: https://docs.wcpos.com/error-codes/AUTH101
 ```
 
 ### Controlling Error Code Display
@@ -418,33 +410,33 @@ log.error('Invalid credentials', {
 ```typescript
 // Default: Show help link in toast
 log.error('Connection failed', {
+  code: ERROR_CODES.SYNC_UNREACHABLE,
   showToast: true,
-  context: { errorCode: ERROR_CODES.CONNECTION_REFUSED }
 });
 // ✓ Shows "Help" button in toast
 // ✓ Error code visible in logs
 
 // Hide help link from toast
 log.error('Minor validation issue', {
+  code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
   showToast: true,
   toast: {
     showErrorCode: false  // Hide help link
-  },
-  context: { errorCode: ERROR_CODES.CONSTRAINT_VIOLATION }
+  }
 });
 // ✗ No "Help" button in toast
 // ✓ Error code still visible in logs
 
 // Custom action takes priority
 log.success('Item removed', {
+  code: ERROR_CODES.RECORD_REJECTED,
   showToast: true,
   toast: {
     action: {
       label: 'Undo',
       onClick: () => restore()
     }
-  },
-  context: { errorCode: ERROR_CODES.RECORD_DELETED }
+  }
 });
 // ✓ Shows "Undo" button (not "Help")
 // ✓ Error code still in logs
@@ -467,7 +459,7 @@ Error codes follow the format: `[DOMAIN][CATEGORY][SPECIFIC_CODE]`
 All error codes link to: `https://docs.wcpos.com/error-codes/{CODE}`
 
 Error codes are:
-- **Always visible in logs UI** (if present in `context.errorCode`)
+- **Always visible in logs UI** (pass them as top-level `code`; they persist as `context.errorCode`)
 - **Optionally shown in toasts** (default: true, can be disabled per-call with `toast.showErrorCode: false`)
 
 ### Cross-Platform URL Opening
@@ -636,6 +628,12 @@ const internalCode = mapToInternalCode('jwt_auth_expired_token', 401);
 
 ## When to Use What
 
+> **Level rubric** (reviewed for every new producer — see [LEVELS.md](./LEVELS.md)):
+> `error` = needs user action · `warn` = will need attention if it persists ·
+> `info` = lifecycle · `debug` = forensic. A row's level reflects how the
+> **operation ended**, not the loudest moment inside it — transient failures the
+> system healed are `debug` with `outcome: 'recovered'`.
+
 ### log.debug() - Developer Only
 - Hidden in production (`__DEV__` only)
 - Request/response details
@@ -668,7 +666,6 @@ log.info('User logged in', {
 ```typescript
 log.success('Customer saved', {
   showToast: true,
-  saveToDb: true,
   context: { customerId: 456 }
 });
 ```
@@ -694,10 +691,9 @@ log.warn('Product out of stock', {
 
 ```typescript
 log.error('Failed to save order', {
+  code: ERROR_CODES.TRANSACTION_FAILED,
   showToast: true,
-  saveToDb: true,
   context: {
-    errorCode: ERROR_CODES.TRANSACTION_FAILED,
     orderId: 123,
     error: err.message
   }
@@ -784,10 +780,9 @@ try {
   return response.data;
 } catch (err) {
   log.error('Failed to fetch from server', {
+    code: ERROR_CODES.SYNC_UNREACHABLE,
     showToast: true,    // User needs to know
-    saveToDb: true,     // Support needs to track
     context: {
-      errorCode: ERROR_CODES.CONNECTION_REFUSED,
       endpoint,
       error: err.message
     }
@@ -803,10 +798,9 @@ try {
   return await collection.upsert(data);
 } catch (err) {
   log.error('Failed to save to database', {
+    code: ERROR_CODES.TRANSACTION_FAILED,
     showToast: true,
-    saveToDb: true,
     context: {
-      errorCode: ERROR_CODES.TRANSACTION_FAILED,
       collectionName: collection.name,
       error: err.message
     }
@@ -823,7 +817,6 @@ const removeItem = async (itemId: string) => {
   
   log.success('Item removed from cart', {
     showToast: true,
-    saveToDb: true,
     toast: {
       dismissable: true,
       action: {

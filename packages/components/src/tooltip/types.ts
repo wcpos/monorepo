@@ -3,6 +3,8 @@ import type { ForceMountable, PressableRef } from '@rn-primitives/types';
 
 interface TooltipProps {
 	children: React.ReactNode;
+	/** Styles the primitive Root's wrapper view (e.g. flex sizing in a row of triggers). */
+	className?: string;
 	/**
 	 * On native, tooltips are disabled by default (just passes through children).
 	 * Set to true to enable press-to-show tooltip behavior on native.

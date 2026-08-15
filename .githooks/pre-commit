@@ -1,9 +1,12 @@
 #!/bin/sh
 set -e
 
-# Keep submodule pointers current before every commit. This intentionally stages
-# the gitlinks so commits cannot accidentally ship stale detached submodule SHAs.
-pnpm submodules:update
+# Stage submodule pointer bumps, but only fast-forwards: a checkout that is a
+# descendant of the committed gitlink is staged automatically; anything behind
+# or sideways is left alone and must be staged explicitly with `git add`.
+# (A blind `git add` here once reverted the deliberate apps/electron rxdb-17.4
+# pin — see PR #772.)
+node ./scripts/stage-submodule-bumps.mjs
 
 # Block docs/ files from being committed
 docs_files=$(git diff --cached --name-only --diff-filter=ACM | grep '^docs/' || true)

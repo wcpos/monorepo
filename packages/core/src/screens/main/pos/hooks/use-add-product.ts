@@ -4,7 +4,7 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import { isRxDocument } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
@@ -29,7 +29,7 @@ export const useAddProduct = () => {
 	const { addItemToOrder } = useAddItemToOrder();
 	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
 	const { currentOrder } = useCurrentOrder();
-	const { updateLineItem } = useUpdateLineItem();
+	const { incrementLineItem } = useUpdateLineItem();
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
 	const metaDataKeys = useObservableEagerState(uiSettings.metaDataKeys$);
@@ -51,7 +51,10 @@ export const useAddProduct = () => {
 	 * NOTE: for the miscellaneous product we pass in an object!! Not a document
 	 */
 	const addProduct = React.useCallback(
-		async (data: ProductDocument | { id: number; [key: string]: any }) => {
+		async (
+			data: ProductDocument | { id: number; [key: string]: any },
+			options?: { silent?: boolean }
+		) => {
 			let success;
 			let product = data;
 
@@ -61,14 +64,16 @@ export const useAddProduct = () => {
 				product = latest.toMutableJSON();
 			}
 
+			const lineItems = currentOrder.getLatest().line_items ?? [];
+
 			// check if product is already in order, if so increment quantity
 			if (!(currentOrder as unknown as { isNew?: boolean }).isNew && product.id !== 0) {
-				const lineItems = currentOrder.getLatest().line_items ?? [];
 				const matches = findByProductVariationID(lineItems, product.id ?? 0);
 				if (matches && matches.length === 1) {
 					const uuid = getUuidFromLineItem(matches[0]);
 					if (uuid) {
-						success = await updateLineItem(uuid, { quantity: (matches[0].quantity ?? 0) + 1 });
+						success = await incrementLineItem(uuid, 1);
+						if (success === false) return false;
 					}
 				}
 			}
@@ -79,33 +84,38 @@ export const useAddProduct = () => {
 				let newLineItem = convertProductToLineItemWithoutTax(product as ProductDocument, keys);
 				newLineItem = calculateLineItemTaxesAndTotals(newLineItem);
 				success = await addItemToOrder('line_items', newLineItem);
+				if (success === false) return false;
 			}
 
 			// returned success should be the updated order
 			if (success) {
 				orderLogger.success(t('common.added_to_cart', { name: product.name }), {
-					showToast: true,
-					saveToDb: true,
+					// Scan-driven adds toast via the scan-feedback module instead.
+					showToast: !options?.silent,
 					context: {
 						productId: product.id,
 						productName: product.name,
 					},
 				});
+				return true;
 			} else {
-				orderLogger.error(t('pos.error_adding_to_cart', { name: product.name }), {
+				orderLogger.error('Failed to add product to cart', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.CART_UPDATE_FAILED,
+					toast: { title: t('pos.error_adding_to_cart', { name: product.name }) },
 					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
 						productId: product.id,
 						productName: product.name,
 					},
 				});
+				return false;
 			}
+
+			return Boolean(success);
 		},
 		[
 			currentOrder,
-			updateLineItem,
+			incrementLineItem,
 			metaDataKeys,
 			calculateLineItemTaxesAndTotals,
 			addItemToOrder,

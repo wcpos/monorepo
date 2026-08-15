@@ -7,12 +7,15 @@ import { SwitchWithLabel } from '@wcpos/components/switch';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
+import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { NumberInput } from '../../components/number-input';
 import { useProAccess } from '../../contexts/pro-access';
+import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
 import type { CellContext } from '@tanstack/react-table';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
+type ProductDocument =
+	import('@wcpos/database').ProductDocument | import('@wcpos/database').ProductVariationDocument;
 
 /**
  *
@@ -29,28 +32,36 @@ export function StockQuantity({
 		onChange: (arg: { document: ProductDocument; changes: Record<string, unknown> }) => void;
 	};
 	const { readOnly } = useProAccess();
+	const { caps } = useUserCapabilities();
+	const canEdit = product.type === 'variation' ? caps.canEditVariations : caps.canEditProducts;
+	const disabled = readOnly || !canEdit;
 
 	return (
-		<VStack>
-			<View className="flex-row justify-center">
-				<NumberInput
-					value={String(stockQuantity || 0)}
-					onChangeText={(stock_quantity) =>
-						meta.onChange({ document: product, changes: { stock_quantity } })
-					}
-					disabled={readOnly || !manageStock}
+		<CapabilityTooltip show={!readOnly && !canEdit} hint="editProducts">
+			<VStack>
+				<View className="flex-row justify-center">
+					<NumberInput
+						testID="stock-quantity-input"
+						value={String(stockQuantity ?? 0)}
+						onChangeText={(stock_quantity) =>
+							meta.onChange({ document: product, changes: { stock_quantity } })
+						}
+						disabled={disabled || !manageStock}
+					/>
+				</View>
+				<SwitchWithLabel
+					nativeID="manage_stock"
+					label={t('products.manage')}
+					checked={manageStock ?? false}
+					onCheckedChange={(manage_stock) => {
+						if (!disabled) {
+							meta.onChange({ document: product, changes: { manage_stock } });
+						}
+					}}
+					size="sm"
+					disabled={disabled}
 				/>
-			</View>
-			<SwitchWithLabel
-				nativeID="manage_stock"
-				label={t('products.manage')}
-				checked={manageStock ?? false}
-				onCheckedChange={(manage_stock) =>
-					meta.onChange({ document: product, changes: { manage_stock } })
-				}
-				size="sm"
-				disabled={readOnly}
-			/>
-		</VStack>
+			</VStack>
+		</CapabilityTooltip>
 	);
 }

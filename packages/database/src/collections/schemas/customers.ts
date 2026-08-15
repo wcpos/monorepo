@@ -6,7 +6,6 @@ export const customersLiteral = {
 	description: 'WooCommerce Customer schema',
 	type: 'object',
 	primaryKey: 'uuid',
-	attachments: {},
 	indexes: [
 		'id',
 		'role',
@@ -169,7 +168,6 @@ export const customersLiteral = {
 					},
 					value: {
 						description: 'Meta value.',
-						type: 'string',
 					},
 				},
 			},

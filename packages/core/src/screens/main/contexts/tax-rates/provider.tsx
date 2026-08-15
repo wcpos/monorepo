@@ -6,11 +6,15 @@ import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
 import { filterTaxRates } from './tax-rates.helpers';
 import { useAppState } from '../../../../contexts/app-state';
+import { QueryStateProvider, useCollectionBinding, useQueryState } from '../../../../query';
+import { TAX_RATES_ALL_RESULTS_LIMIT, TAX_RATES_INITIAL_SORT } from '../../tax-rates/query-state';
 import { useBaseTaxLocation } from '../../hooks/use-base-tax-location';
 
 type TaxRateDocument = import('@wcpos/database').TaxRateDocument;
-type TaxRateCollection = import('@wcpos/database').TaxRateCollection;
-type TaxQuery = import('@wcpos/query').Query<TaxRateCollection>;
+
+interface QueryResult {
+	hits: { document: TaxRateDocument }[];
+}
 
 interface TaxRatesContextProps {
 	allRates: TaxRateDocument[];
@@ -27,7 +31,6 @@ interface TaxRatesContextProps {
 		city: string;
 		postcode: string;
 	};
-	taxQuery: TaxQuery;
 	taxClasses: string[];
 }
 
@@ -35,7 +38,6 @@ export const TaxRatesContext = React.createContext<TaxRatesContextProps | null>(
 
 interface TaxRatesProviderProps {
 	children: React.ReactNode;
-	taxQuery: TaxQuery;
 	order?: import('@wcpos/database').OrderDocument;
 }
 
@@ -44,8 +46,22 @@ interface TaxRatesProviderProps {
  *
  * If an order is passed in, we can use the order's location to query the tax rates
  */
-export function TaxRatesProvider({ children, taxQuery, order }: TaxRatesProviderProps) {
-	const result = useObservableSuspense(taxQuery.resource);
+export function TaxRatesProvider({ children, order }: TaxRatesProviderProps) {
+	return (
+		<QueryStateProvider
+			collection="tax-rates"
+			initialPageSize={TAX_RATES_ALL_RESULTS_LIMIT}
+			initialSort={TAX_RATES_INITIAL_SORT}
+		>
+			<TaxRatesContextProvider order={order}>{children}</TaxRatesContextProvider>
+		</QueryStateProvider>
+	);
+}
+
+function TaxRatesContextProvider({ children, order }: TaxRatesProviderProps) {
+	const state = useQueryState<'tax-rates'>();
+	const binding = useCollectionBinding('tax-rates', state);
+	const result = useObservableSuspense(binding.resource) as QueryResult;
 	const allRates = React.useMemo(() => result.hits.map((hit) => hit.document), [result.hits]);
 
 	const { store } = useAppState();
@@ -151,7 +167,6 @@ export function TaxRatesProvider({ children, taxQuery, order }: TaxRatesProvider
 				priceNumDecimals: (priceNumDecimals ?? 2) as number,
 				taxBasedOn: taxBasedOn as 'base' | 'shipping' | 'billing',
 				location,
-				taxQuery, // pass through for easy access
 				taxClasses: [...new Set(allRates.map((r) => r.class).filter(Boolean))] as string[],
 			}}
 		>

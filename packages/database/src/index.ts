@@ -6,9 +6,23 @@ import './plugins';
 export { createUserDB, createStoreDB, createTemporaryDB, createFastStoreDB } from './create-db';
 export { userCollections, storeCollections, syncCollections } from './collections';
 export { sanitizeWPCredentialsData } from './collections/wp-credentials';
+export {
+	CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY,
+	scheduleClearLocalDataOnNextLoad,
+} from './clear-local-data-flag';
 export { clearAllDB } from './clear-all-db';
 export type { ClearDBResult } from './clear-all-db';
-export type { FlexSearchInstance } from './types.d';
+export { measureAppStorage } from './measure-storage';
+export type { StorageFootprint, StorageFootprintEntry } from './measure-storage';
+export {
+	SCOPE_DATABASE_NAME_ANYWHERE,
+	isLegacyAppDatabaseName,
+	isStoreDatabaseName,
+	isFastStoreDatabaseName,
+} from './database-names';
+export { purgeLegacyDatabases } from './purge-legacy-db';
+export type { PurgeLegacyDBResult } from './purge-legacy-db';
+export type { FlexSearchInstance, SearchInitializationOptions } from './types.d';
 
 /**
  * Re-export some rxdb helpers
@@ -65,6 +79,10 @@ export type {
 	WPCredentialsDocument,
 	PrinterProfileCollection,
 	PrinterProfileDocument,
+	ScannerProfileCollection,
+	ScannerProfileDocument,
 	TemplatePrinterOverrideCollection,
 	TemplatePrinterOverrideDocument,
+	ReceiptEmailQueueCollection,
+	ReceiptEmailQueueDocument,
 } from './collections';

@@ -1,5 +1,5 @@
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 type RxPlugin = import('rxdb').RxPlugin;
 
@@ -41,8 +41,7 @@ const deleteDBPlugin: RxPlugin = {
 	 * you can add hooks to the hook-list
 	 * https://github.com/pubkey/rxdb/blob/master/src/hooks.ts
 	 *
-	 * Legacy IndexedDB cleanup hook retained for older migrations; deferred cleanup for the new
-	 * storage migration flow now runs from the migration verification step.
+	 * Keep IndexedDB cleanup so explicit database removal also clears IndexedDB-backed generations.
 	 */
 	hooks: {
 		postRemoveRxDatabase: {
@@ -51,9 +50,8 @@ const deleteDBPlugin: RxPlugin = {
 					const DBDeleteRequest = window.indexedDB.deleteDatabase(databaseName);
 					DBDeleteRequest.onerror = (event) => {
 						dbLogger.error('Error deleting database', {
-							saveToDb: true,
+							code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 							context: {
-								errorCode: ERROR_CODES.TRANSACTION_FAILED,
 								databaseName,
 							},
 						});

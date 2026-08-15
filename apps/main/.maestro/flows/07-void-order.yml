@@ -1,0 +1,48 @@
+appId: com.wcpos.main.dev
+---
+# P0-7: void the open order (created by 06); relaunch must not resurrect it.
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: "search-products"
+    timeout: 120000
+- runFlow:
+    when:
+      visible:
+        id: "pos-tab-cart"
+    commands:
+      - tapOn:
+          id: "pos-tab-cart"
+- extendedWaitUntil:
+    visible:
+      id: "void-button"
+    timeout: 30000
+- tapOn:
+    id: "void-button"
+# Confirm if a confirmation dialog appears.
+- runFlow:
+    when:
+      visible: "Void|Confirm"
+    commands:
+      - tapOn: "Void|Confirm"
+- extendedWaitUntil:
+    notVisible:
+      id: "cart-quantity-input"
+    timeout: 30000
+# Relaunch: the voided order must not come back.
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: "search-products"
+    timeout: 120000
+- runFlow:
+    when:
+      visible:
+        id: "pos-tab-cart"
+    commands:
+      - tapOn:
+          id: "pos-tab-cart"
+- assertNotVisible:
+    id: "cart-quantity-input"

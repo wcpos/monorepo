@@ -13,6 +13,7 @@ interface VariationButtonsProps {
 	onSelect: (attr: { id?: number; name?: string; option: string }) => void;
 	selected?: string;
 	optionCounts: Record<string, number>;
+	disabledOptions?: Record<string, boolean>;
 }
 
 /**
@@ -23,11 +24,13 @@ export function VariationButtons({
 	onSelect,
 	selected = '',
 	optionCounts,
+	disabledOptions = {},
 }: VariationButtonsProps) {
 	const options = attribute?.options || [];
 
 	const handleSelect = (option: string | undefined) => {
 		if (option) {
+			if (disabledOptions[option]) return;
 			onSelect?.({ id: attribute.id, name: attribute.name, option });
 		}
 	};
@@ -39,7 +42,7 @@ export function VariationButtons({
 					<ToggleGroupItem
 						key={option}
 						value={option}
-						disabled={optionCounts[option] === 0}
+						disabled={optionCounts[option] === 0 || disabledOptions[option]}
 						testID={`variation-option-${option}`}
 					>
 						<Text>{option}</Text>

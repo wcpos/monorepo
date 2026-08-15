@@ -6,6 +6,8 @@ import * as React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { Receipt } from './receipt';
 
 const mockDownload = jest.fn();
@@ -15,8 +17,10 @@ const mockUseDownloadReceiptPdf = jest.fn(() => ({
 	download: mockDownload,
 	isDownloading: false,
 }));
+let mockSuspenseValue: unknown;
 
 const mockOrder = {
+	uuid: 'local-order-42',
 	id$: new BehaviorSubject(42),
 	links$: new BehaviorSubject(undefined),
 	billing: {},
@@ -183,7 +187,13 @@ jest.mock('../contexts/tax-rates/resolve-price-num-decimals', () => ({
 }));
 
 jest.mock('@wcpos/printer', () => ({
-	usePrint: () => ({ print: mockPrint, isPrinting: false }),
+	usePrint: (options: { onBeforePrint?: () => void }) => ({
+		print: async () => {
+			options.onBeforePrint?.();
+			await mockPrint();
+		},
+		isPrinting: false,
+	}),
 }));
 
 jest.mock('expo-router/react-navigation', () => ({
@@ -191,19 +201,22 @@ jest.mock('expo-router/react-navigation', () => ({
 }));
 
 jest.mock('observable-hooks', () => ({
-	useObservableSuspense: () => mockOrder,
+	useObservableSuspense: () => mockSuspenseValue,
 	useObservableEagerState: (subject: BehaviorSubject<unknown>) => subject?.getValue?.(),
 	useObservableState: (_source: unknown, initialValue: unknown) => initialValue,
 }));
 
 jest.mock('rxdb', () => ({
-	isRxDocument: () => true,
+	isRxDocument: (value: unknown) => value === mockOrder,
 }));
 
 describe('Receipt preview content size', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		capturedContentSizeHandlers.length = 0;
+		// next's Receipt guards on the suspense order before mounting the
+		// preview — without a resolved order no WebView (and no handler) exists.
+		mockSuspenseValue = mockOrder;
 		mockUseTemplateRenderer.mockReturnValue(defaultTemplateRenderer);
 	});
 
@@ -244,11 +257,21 @@ describe('Receipt preview content size', () => {
 describe('Receipt PDF download action', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockSuspenseValue = mockOrder;
 		mockUseTemplateRenderer.mockReturnValue(defaultTemplateRenderer);
 		mockUseDownloadReceiptPdf.mockReturnValue({
 			download: mockDownload,
 			isDownloading: false,
 		});
+	});
+
+	it('renders not-found before accessing document observables when the resource emits null', () => {
+		mockSuspenseValue = null;
+
+		render(<Receipt resource={{} as never} />);
+
+		expect(screen.getByText('common.no_order_found')).toBeTruthy();
+		expect(mockUseTemplateRenderer).not.toHaveBeenCalled();
 	});
 
 	it('downloads the selected server PDF receipt template', () => {
@@ -278,6 +301,69 @@ describe('Receipt PDF download action', () => {
 			templates: [],
 			selectedTemplateId: undefined,
 		});
+
+		render(<Receipt resource={{} as never} />);
+
+		expect((screen.getByTestId('receipt-download-pdf-button') as HTMLButtonElement).disabled).toBe(
+			true
+		);
+	});
+
+	it('persists a print attempt before invoking the printer transport', async () => {
+		let loggedBeforeTransport = false;
+		mockPrint.mockImplementation(async () => {
+			loggedBeforeTransport = jest.mocked(getLogger([]).info).mock.calls.length > 0;
+		});
+		render(<Receipt resource={{} as never} />);
+
+		fireEvent.click(screen.getByTestId('receipt-print-button'));
+		await act(async () => Promise.resolve());
+		expect(loggedBeforeTransport).toBe(true);
+		expect(getLogger([]).info).toHaveBeenCalledWith(
+			'Receipt print attempted',
+			expect.objectContaining({
+				context: expect.objectContaining({
+					event: 'receipt.print_attempted',
+					orderId: 'local-order-42',
+				}),
+			})
+		);
+	});
+});
+
+describe('Receipt email action', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockSuspenseValue = mockOrder;
+		mockUseTemplateRenderer.mockReturnValue(defaultTemplateRenderer);
+	});
+
+	const emailButton = () => screen.getByTestId('receipt-email-button') as HTMLButtonElement;
+
+	it('opens the email dialog when the store is reachable', () => {
+		render(<Receipt resource={{} as never} />);
+
+		expect(emailButton().disabled).toBe(false);
+		expect(screen.getByText('Email form')).toBeTruthy();
+	});
+
+	it('still opens the email dialog when offline — queuing IS the offline path (#165)', () => {
+		// The 2026-03-06 stopgap (ba8729a77) rendered a disabled button here
+		// instead of the dialog. That predates the durable queue: it left a
+		// cashier finishing a sale offline with no way to send the receipt at
+		// all, which is the exact scenario #165 exists to fix. EmailForm owns
+		// the offline behaviour now — notice, label, and skip-the-round-trip
+		// enqueue — so the entry point must reach it.
+		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, isOffline: true });
+
+		render(<Receipt resource={{} as never} />);
+
+		expect(emailButton().disabled).toBe(false);
+		expect(screen.getByText('Email form')).toBeTruthy();
+	});
+
+	it('keeps the PDF download disabled offline — that one still needs the server', () => {
+		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, isOffline: true });
 
 		render(<Receipt resource={{} as never} />);
 

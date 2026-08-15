@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -63,4 +63,35 @@ test("--check ignores translation calls inside source comments", () => {
   });
 
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+});
+
+test("--check sees both footer count keys as literal calls", () => {
+  const footerPaths = [
+    "packages/core/src/screens/main/components/data-table/footer.tsx",
+    "packages/core/src/screens/main/tax-rates/footer.tsx",
+  ];
+
+  for (const footerPath of footerPaths) {
+    const root = mkdtempSync(join(tmpdir(), "wcpos-translations-footer-"));
+
+    writeFixtureFile(
+      root,
+      "packages/core/src/contexts/translations/locales/en/core.json",
+      JSON.stringify({}, null, "\t"),
+    );
+    writeFixtureFile(
+      root,
+      footerPath,
+      readFileSync(new URL(`../${footerPath}`, import.meta.url), "utf8"),
+    );
+
+    const result = spawnSync(process.execPath, [scriptPath, root, "--check"], {
+      encoding: "utf8",
+    });
+    const output = `${result.stdout}\n${result.stderr}`;
+
+    assert.notEqual(result.status, 0, `${footerPath}\n${output}`);
+    assert.match(output, /common\.showing_of"/, footerPath);
+    assert.match(output, /common\.showing_of_at_least/, footerPath);
+  }
 });

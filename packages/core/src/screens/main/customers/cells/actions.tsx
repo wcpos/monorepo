@@ -26,16 +26,22 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { useQueryRuntime } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
+import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { useProAccess } from '../../contexts/pro-access';
-import { useDeleteDocument } from '../../contexts/use-delete-document';
-import { usePullDocument } from '../../contexts/use-pull-document';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
+import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
+import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
 import type { CellContext } from '@tanstack/react-table';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
+
+const syncLogger = getLogger(['wcpos', 'customers', 'actions', 'sync']);
 
 /**
  *
@@ -43,28 +49,46 @@ type CustomerDocument = import('@wcpos/database').CustomerDocument;
 export function Actions({ row }: CellContext<{ document: CustomerDocument }, 'actions'>) {
 	const customer = row.original.document;
 	const router = useRouter();
-	const pullDocument = usePullDocument();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
 	const { format } = useCustomerNameFormat();
 	const [force, setForce] = React.useState(!customer.id);
-	const deleteDocument = useDeleteDocument();
+	const runtime = useQueryRuntime();
 	const { readOnly } = useProAccess();
+	const { caps } = useUserCapabilities();
+
+	const handleRefresh = React.useCallback(() => {
+		if (!customer.id) return;
+		const handle = runtime.engine.require({
+			id: `customer-actions:refresh:${customer.id}`,
+			collection: 'customers',
+			kind: 'targeted-records',
+			wooIds: [customer.id],
+			forceRefresh: true,
+		});
+		void handle.ready
+			.finally(() => handle.release())
+			.catch((error) => {
+				syncLogger.error('Failed to refresh customer', {
+					code: ERROR_CODES.SYNC_UNEXPECTED,
+					showToast: true,
+					context: {
+						customerId: customer.id,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
+			});
+	}, [customer.id, runtime]);
 
 	/**
 	 * Handle delete button click
 	 */
 	const handleDelete = React.useCallback(async () => {
-		try {
-			if (customer.id) {
-				await deleteDocument(customer.id, customer.collection as never, { force });
-			}
-			await customer.getLatest().remove();
-		} finally {
-			// @TODO - add button loading state and close
-			// setDeleteDialogOpened(false);
-		}
-	}, [customer, deleteDocument, force]);
+		await requestServerDelete(runtime.engine, {
+			collection: 'customers',
+			recordId: customer.uuid!,
+		});
+	}, [customer.uuid, runtime]);
 
 	if (readOnly) {
 		return null;
@@ -80,71 +104,80 @@ export function Actions({ row }: CellContext<{ document: CustomerDocument }, 'ac
 					<IconButton name="ellipsisVertical" />
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
-					<DropdownMenuItem
-						onPress={() =>
-							router.push({
-								pathname: `/customers/edit/${customer.uuid}`,
-							})
-						}
-					>
-						<Icon name="penToSquare" />
-						<Text>{t('common.edit')}</Text>
-					</DropdownMenuItem>
-					{customer.id && (
+					<CapabilityTooltip show={!caps.canEditCustomers} hint="editCustomers">
 						<DropdownMenuItem
-							onPress={() => {
-								if (customer.id) {
-									pullDocument(customer.id, customer.collection as never);
-								}
-							}}
+							disabled={!caps.canEditCustomers}
+							onPress={() =>
+								router.push({
+									pathname: `/customers/edit/${customer.uuid}`,
+								})
+							}
 						>
+							<Icon name="penToSquare" />
+							<Text>{t('common.edit')}</Text>
+						</DropdownMenuItem>
+					</CapabilityTooltip>
+					{customer.id && (
+						<DropdownMenuItem onPress={handleRefresh}>
 							<Icon name="arrowRotateRight" />
 							<Text>{t('common.sync')}</Text>
 						</DropdownMenuItem>
 					)}
-					<DropdownMenuSeparator />
-					<DropdownMenuItem variant="destructive" onPress={() => setDeleteDialogOpened(true)}>
-						<Icon
-							name="trash"
-							className="fill-destructive web:group-focus:fill-accent-foreground"
-						/>
-						<Text>{t('common.delete')}</Text>
-					</DropdownMenuItem>
+					{caps.canDeleteCustomers && (
+						<>
+							<DropdownMenuSeparator />
+							<DropdownMenuItem variant="destructive" onPress={() => setDeleteDialogOpened(true)}>
+								<Icon
+									name="trash"
+									className="fill-destructive web:group-focus:fill-accent-foreground"
+								/>
+								<Text>{t('common.delete')}</Text>
+							</DropdownMenuItem>
+						</>
+					)}
 				</DropdownMenuContent>
 			</DropdownMenu>
-			<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>
-							{t('customers.delete', {
-								name: format(customer),
-							})}
-						</AlertDialogTitle>
-						<AlertDialogDescription>
-							<VStack>
-								<Text className="text-destructive">{t('customers.are_you_sure_you_want_to')}</Text>
-								<HStack>
-									<Checkbox aria-labelledby="confirm" onCheckedChange={setForce} checked={force} />
-									<Label
-										nativeID="confirm"
-										onPress={() => {
-											setForce(!force);
-										}}
-									>
-										{t('customers.confirm')}
-									</Label>
-								</HStack>
-							</VStack>
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-						<AlertDialogAction variant="destructive" disabled={!force} onPress={handleDelete}>
-							{t('common.delete')}
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
+			{caps.canDeleteCustomers && (
+				<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
+					<AlertDialogContent>
+						<AlertDialogHeader>
+							<AlertDialogTitle>
+								{t('customers.delete', {
+									name: format(customer),
+								})}
+							</AlertDialogTitle>
+							<AlertDialogDescription>
+								<VStack>
+									<Text className="text-destructive">
+										{t('customers.are_you_sure_you_want_to')}
+									</Text>
+									<HStack>
+										<Checkbox
+											aria-labelledby="confirm"
+											onCheckedChange={setForce}
+											checked={force}
+										/>
+										<Label
+											nativeID="confirm"
+											onPress={() => {
+												setForce(!force);
+											}}
+										>
+											{t('customers.confirm')}
+										</Label>
+									</HStack>
+								</VStack>
+							</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+							<AlertDialogAction variant="destructive" disabled={!force} onPress={handleDelete}>
+								{t('common.delete')}
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
+			)}
 		</>
 	);
 }

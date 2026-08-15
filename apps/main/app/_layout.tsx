@@ -12,7 +12,9 @@ import { KeyboardProvider } from '@wcpos/components/keyboard-controller';
 import { Toast, Toaster } from '@wcpos/components/toast';
 import { useAppState } from '@wcpos/core/contexts/app-state';
 import { HydrationProviders } from '@wcpos/core/contexts/hydration-providers';
+import { CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY } from '@wcpos/database';
 import { getLogger, setToast } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { RootError } from '../components/root-error';
 import '../global.css';
@@ -21,7 +23,6 @@ import '../polyfills';
 WebBrowser.maybeCompleteAuthSession();
 
 const appLogger = getLogger(['wcpos', 'app', 'startup']);
-const CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY = 'wcpos.clearLocalDataOnNextLoad';
 
 /**
  * Forwards safe area insets to Uniwind for p-safe, m-safe, etc. utilities
@@ -122,7 +123,7 @@ function useClearLocalDataOnStartup() {
 
 		let cancelled = false;
 
-		(async () => {
+		void (async () => {
 			try {
 				const { clearAllDB } = await import('@wcpos/database/clear-all-db');
 				const result = await clearAllDB();
@@ -137,6 +138,7 @@ function useClearLocalDataOnStartup() {
 				}
 			} catch (error) {
 				appLogger.error('Failed to clear local data before hydration', {
+					code: ERROR_CODES.UNEXPECTED_ERROR,
 					context: {
 						error: error instanceof Error ? error.message : String(error),
 					},

@@ -1,5 +1,12 @@
 import { expect, type Page } from '@playwright/test';
-import { authenticatedTest as test, getStoreVariant, navigateToPage } from './fixtures';
+
+import {
+	getStoreUrl,
+	getStoreVariant,
+	navigateToPage,
+	authenticatedTest as test,
+} from './fixtures';
+import { createSearchProbe, deleteSearchProbe, searchAndWaitForServer } from './search-probe';
 
 async function openAddCartItemsMenu(page: Page) {
 	const menuButton = page.getByTestId('add-cart-item-menu');
@@ -15,7 +22,9 @@ test.describe('Customers in POS', () => {
 		await expect(page.getByTestId('cart-customer-name')).toBeVisible();
 	});
 
-	test('should open customer address dialog when clicking customer name', async ({ posPage: page }) => {
+	test('should open customer address dialog when clicking customer name', async ({
+		posPage: page,
+	}) => {
 		const customerPill = page.getByTestId('cart-customer-name');
 		await expect(customerPill).toBeVisible({ timeout: 15_000 });
 		await customerPill.click();
@@ -23,7 +32,6 @@ test.describe('Customers in POS', () => {
 		// Should open the Edit Customer Address dialog
 		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 15_000 });
 	});
-
 });
 
 /**
@@ -120,34 +128,46 @@ test.describe('Customers Page (Pro)', () => {
 			.toBeTruthy();
 	});
 
-	test('should search customers', async ({ posPage: page }) => {
-		await navigateToPage(page, 'customers');
-		const screen = page.getByTestId('screen-customers');
-		await expect(screen.getByTestId('search-customers')).toBeVisible({ timeout: 30_000 });
+	test('should search customers', async ({
+		posPage: page,
+		request,
+		storeAuthorization,
+	}, testInfo) => {
+		const storeUrl = getStoreUrl(testInfo);
+		const authorization = storeAuthorization();
+		const created = await createSearchProbe({
+			request,
+			storeUrl,
+			authorization,
+			collection: 'customers',
+			workerIndex: testInfo.workerIndex,
+		});
+		if (!created.ok) {
+			test.skip(true, created.reason);
+			return;
+		}
 
-		const searchInput = screen.getByTestId('search-customers');
-		await searchInput.fill('admin');
+		try {
+			await navigateToPage(page, 'customers');
+			const screen = page.getByTestId('screen-customers');
+			const searchInput = screen.getByTestId('search-customers');
+			await expect(searchInput).toBeVisible({ timeout: 30_000 });
 
-		await expect
-			.poll(
-				async () => {
-					const countEl = screen.getByTestId('data-table-count');
-					const hasResults = await countEl
-						.isVisible()
-						.then(
-							async (visible) =>
-								visible && /[0-9]/.test((await countEl.textContent()) ?? '')
-						)
-						.catch(() => false);
-					const noResults = await screen
-						.getByTestId('no-data-message')
-						.isVisible()
-						.catch(() => false);
-					return hasResults || noResults;
-				},
-				{ timeout: 15_000 }
-			)
-			.toBeTruthy();
+			await searchAndWaitForServer(page, searchInput, 'customers', created.probe.token);
+
+			const matchingRows = screen.getByTestId(/^data-table-row-/);
+			await expect(matchingRows).toHaveCount(1, { timeout: 30_000 });
+			await expect(matchingRows.first()).toBeVisible();
+			await expect(screen.getByTestId('data-table-count')).toContainText(/\b1\b/);
+		} finally {
+			await deleteSearchProbe({
+				request,
+				storeUrl,
+				authorization,
+				collection: created.probe.collection,
+				id: created.probe.id,
+			});
+		}
 	});
 
 	test('should have add customer button on Customers page', async ({ posPage: page }) => {
@@ -155,14 +175,7 @@ test.describe('Customers Page (Pro)', () => {
 		const screen = page.getByTestId('screen-customers');
 		await expect(screen.getByTestId('search-customers')).toBeVisible({ timeout: 30_000 });
 
-		// The add customer button is an IconButton with userPlus icon next to the search
-		// It doesn't have accessible text, so we find it by being a button near the search
-		// The button is inside an HStack with the search input, look for buttons with role="button"
-		const headerButtons = screen.locator('[role="button"]');
-		const buttonCount = await headerButtons.count();
-
-		// Should have at least 2 buttons in the header (add customer + settings)
-		expect(buttonCount).toBeGreaterThanOrEqual(2);
+		await expect(screen.getByTestId('customers-add-button')).toBeVisible();
 	});
 });
 

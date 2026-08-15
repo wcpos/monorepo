@@ -70,7 +70,7 @@ export const useRemoveCoupon = () => {
 				return;
 			}
 
-			orderLogger.info(t('pos_cart.coupon_removed', { defaultValue: 'Coupon removed' }), {
+			orderLogger.info(t('pos_cart.coupon_removed'), {
 				showToast: true,
 				context: { couponCode },
 			});

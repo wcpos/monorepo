@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { useVirtualizer } from '@tanstack/react-virtual';
 
+import { createHiddenSafeMeasureElement } from './utils/create-hidden-safe-measure-element';
 import { ItemContext, RootContext, useItemContext, useRootContext } from './utils/contexts';
 import { useOnEndReached } from './utils/use-on-end-reached';
 
@@ -109,18 +110,17 @@ function List<T>({
 	ListFooterComponent,
 	...rest
 }: ListProps<T>) {
-	// extraData is used to force re-renders - we include it in a key or dependency
-	// to ensure items re-render when it changes
-	const extraDataKey = React.useMemo(() => JSON.stringify(extraData), [extraData]);
 	const { ref: rootRef, scrollElement, horizontal } = useRootContext();
 
 	// set up virtualizer
 	const rowVirtualizer = useVirtualWrapper({
 		count: data.length,
+		getItemKey: (index) => (keyExtractor ? keyExtractor(data[index], index) : index),
 		getScrollElement: () => scrollElement,
 		horizontal,
 		overscan,
 		estimateSize: () => estimatedItemSize,
+		measureElement: createHiddenSafeMeasureElement(estimatedItemSize),
 		...rest,
 	});
 
@@ -201,9 +201,10 @@ function List<T>({
 		<Parent {...wrapperProps}>
 			{rowVirtualizer.getVirtualItems().map((vItem) => {
 				const item = data[vItem.index];
-				// Include extraDataKey in the key to force re-render when extraData changes
-				const baseKey = keyExtractor ? keyExtractor(item, vItem.index) : String(vItem.key);
-				const key = extraDataKey ? `${baseKey}-${extraDataKey}` : baseKey;
+				// Rows render inline (not memoized), so extraData changes reach them via
+				// ordinary re-render — extraData must never be folded into the key, which
+				// would remount every visible row instead.
+				const key = keyExtractor ? keyExtractor(item, vItem.index) : String(vItem.key);
 
 				const itemContext = {
 					item,
@@ -266,7 +267,19 @@ function Item({ children, ...props }: ItemProps<any>) {
 			return;
 		}
 		previousNodeRef.current = node;
-		virtualizerRef.current.measureElement(node);
+		// Defer the mount-time measure out of React's commit phase. The ref callback
+		// fires during commitAttachRef, and measureElement can trigger a scroll
+		// adjustment that notifies with sync=true, which makes react-virtual call
+		// flushSync while React is still committing ("flushSync was called from
+		// inside a lifecycle method"). A microtask runs after the commit finishes
+		// but before paint, so the correction still lands pre-paint. Subsequent
+		// re-measures come from virtual-core's ResizeObserver, outside React, and
+		// don't need deferring.
+		queueMicrotask(() => {
+			if (previousNodeRef.current === node) {
+				virtualizerRef.current.measureElement(node);
+			}
+		});
 	}, []);
 
 	// Web-specific props (dataSet, transform in style) require type assertion

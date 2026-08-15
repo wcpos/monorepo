@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
@@ -32,7 +32,7 @@ interface MetaData {
 export const useAddVariation = () => {
 	const { addItemToOrder } = useAddItemToOrder();
 	const { currentOrder } = useCurrentOrder();
-	const { updateLineItem } = useUpdateLineItem();
+	const { incrementLineItem } = useUpdateLineItem();
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
 	const metaDataKeys = useObservableEagerState(uiSettings.metaDataKeys$);
@@ -45,22 +45,24 @@ export const useAddVariation = () => {
 		async (
 			variationDoc: ProductVariationDocument,
 			parentDoc: ProductDocument,
-			metaData?: MetaData[]
+			metaData?: MetaData[],
+			options?: { silent?: boolean }
 		) => {
 			let success;
 
 			// always make sure we have the latest product document
 			const variation = variationDoc.getLatest();
 			const parent = parentDoc.getLatest();
+			const lineItems = currentOrder.getLatest().line_items ?? [];
 
 			// check if variation is already in order, if so increment quantity
 			if (!(currentOrder as unknown as { isNew?: boolean }).isNew && parent.id !== 0) {
-				const lineItems = currentOrder.getLatest().line_items ?? [];
 				const matches = findByProductVariationID(lineItems, parent.id ?? 0, variation.id);
 				if (matches && matches.length === 1) {
 					const uuid = getUuidFromLineItem(matches[0]);
 					if (uuid) {
-						success = await updateLineItem(uuid, { quantity: (matches[0].quantity ?? 0) + 1 });
+						success = await incrementLineItem(uuid, 1);
+						if (success === false) return false;
 					}
 				}
 			}
@@ -71,13 +73,14 @@ export const useAddVariation = () => {
 				let newLineItem = convertVariationToLineItemWithoutTax(variation, parent, metaData, keys);
 				newLineItem = calculateLineItemTaxesAndTotals(newLineItem);
 				success = await addItemToOrder('line_items', newLineItem);
+				if (success === false) return false;
 			}
 
 			// returned success should be the updated order
 			if (success) {
 				cartLogger.success(t('common.added_to_cart', { name: parent.name }), {
-					showToast: true,
-					saveToDb: true,
+					// Scan-driven adds toast via the scan-feedback module instead.
+					showToast: !options?.silent,
 					context: {
 						variationId: variation.id,
 						productId: parent.id,
@@ -85,21 +88,32 @@ export const useAddVariation = () => {
 						orderId: currentOrder.id,
 					},
 				});
+				return true;
 			} else {
-				cartLogger.error(t('pos.error_adding_to_cart', { name: parent.name }), {
+				cartLogger.error('Failed to add product to cart', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.CART_UPDATE_FAILED,
+					toast: { title: t('pos.error_adding_to_cart', { name: parent.name }) },
 					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
 						variationId: variation.id,
 						productId: parent.id,
 						productName: parent.name,
 						orderId: currentOrder.id,
 					},
 				});
+				return false;
 			}
+
+			return Boolean(success);
 		},
-		[currentOrder, updateLineItem, metaDataKeys, calculateLineItemTaxesAndTotals, addItemToOrder, t]
+		[
+			currentOrder,
+			incrementLineItem,
+			metaDataKeys,
+			calculateLineItemTaxesAndTotals,
+			addItemToOrder,
+			t,
+		]
 	);
 
 	return { addVariation };

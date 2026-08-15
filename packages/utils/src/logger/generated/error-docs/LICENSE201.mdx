@@ -1,0 +1,41 @@
+---
+title: "LICENSE201: Version skew Pro disabled"
+sidebar_label: LICENSE201
+description: "WCPOS Pro is disabled because its version does not match WCPOS."
+---
+
+{/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with `pnpm generate:error-codes`. */}
+
+## What this means {#what-this-means}
+
+WCPOS Pro is disabled because its version does not match WCPOS.
+
+Update the named WCPOS or WCPOS Pro component so both versions are compatible.
+
+## What to do {#what-to-do}
+
+A settings change is needed before this will work. Retry after making the change above; retrying without it will fail the same way.
+
+## Your data {#your-data}
+
+No order or product data is affected. If this persists, ask the person who manages your WordPress site.
+
+## Troubleshoot {#troubleshoot}
+
+1. Check both plugin versions in WP Admin → Plugins — the log entry names which of WCPOS and WCPOS Pro is behind.
+2. Update the older one; updating both to the latest versions resolves the skew.
+3. If Pro updates are not being offered, the updater may not be authorized (see LICENSE301) — fix that first, then update.
+
+## Where to look {#where-to-look}
+
+When WCPOS can save this error, it is recorded on the device that raised it. Open **Store health → Logs** (the heart-pulse icon at the bottom of the navigation drawer), find the entry marked with this code and expand it: the expanded row shows the plain-language reason and the context captured at the moment of failure. For a store request, that context may include the server’s own error code (`serverCode`), the HTTP `status` or the `endpoint`; the fields shown depend on where the failure occurred. When reporting a problem, use **Copy debug info** at the top of the Logs screen (**Share debug info** on phones and tablets) rather than screenshots: it bundles the app version, connection state and the most recent errors. Logs are kept for at most 30 days, so collect them while the problem is fresh. Also copy any browser-console error that appeared before the POS was able to write its own log entry.
+
+Beyond the in-app log, this failure can leave evidence in:
+
+- **Server-side POS logs**: in WP Admin, open **POS → Settings → Tools → Logs**. This page records POS-related warnings and errors raised on the server itself, which may never appear inside the app. A red badge on the menu means unread server-side errors.
+
+## Details {#details}
+
+- **Code:** `LICENSE201` (`VERSION_SKEW_PRO_DISABLED`)
+- **Severity:** error
+- **Introduced in:** WCPOS 1.10.0

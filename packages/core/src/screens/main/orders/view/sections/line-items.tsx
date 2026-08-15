@@ -126,16 +126,14 @@ export function LineItemsSection({ order }: { order: OrderDocument }) {
 
 	if (!lineItems.length && !fees.length) {
 		return (
-			<Section title={t('orders.items', { defaultValue: 'Items' })}>
-				<Text className="text-muted-foreground">
-					{t('orders.no_line_items', { defaultValue: 'No line items.' })}
-				</Text>
+			<Section title={t('orders.items')}>
+				<Text className="text-muted-foreground">{t('orders.no_line_items')}</Text>
 			</Section>
 		);
 	}
 
 	return (
-		<Section title={t('orders.items', { defaultValue: 'Items' })}>
+		<Section title={t('orders.items')}>
 			<View>
 				{lineItems.map((item, index) => (
 					<LineItemRow

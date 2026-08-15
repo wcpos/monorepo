@@ -23,23 +23,29 @@ import {
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
+import { awaitWriteOutcome, useQueryRuntime, WriteOutcomeError } from '@wcpos/query';
+import { WOO_REST_CANNOT_DELETE } from '@wcpos/sync-core';
+import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
+import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
 import { useProAccess } from '../../contexts/pro-access';
-import { useDeleteDocument } from '../../contexts/use-delete-document';
-import { usePullDocument } from '../../contexts/use-pull-document';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 
 import type { CellContext } from '@tanstack/react-table';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
+const syncLogger = getLogger(['wcpos', 'orders', 'actions', 'sync']);
+
 /**
  * Helper function - @TODO move to utils
  */
 const upsertMetaData = (
-	metaDataArray: { key?: string; value?: string; id?: number }[],
+	metaDataArray: { key?: string; value?: unknown; id?: number }[],
 	key: string,
 	value: string
 ) => {
@@ -60,15 +66,38 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 	const order = row.original.document;
 	const router = useRouter();
 	const status = useObservableEagerState(order.status$!);
-	const pullDocument = usePullDocument();
 	const { localPatch } = useLocalMutation();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
 	const { store, wpCredentials } = useAppState();
 	const orderHasID = useObservableEagerState(order.id$!); // we need to update the menu with change to order.id
-	const deleteDocument = useDeleteDocument();
+	const runtime = useQueryRuntime();
 	const { readOnly } = useProAccess();
+	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
 	const canRefund = orderHasID && !!status && REFUNDABLE_STATUSES.includes(status);
+
+	const handleRefresh = React.useCallback(() => {
+		if (!orderHasID) return;
+		const handle = runtime.engine.require({
+			id: `order-actions:refresh:${orderHasID}`,
+			collection: 'orders',
+			kind: 'targeted-records',
+			wooIds: [orderHasID],
+			forceRefresh: true,
+		});
+		void handle.ready
+			.finally(() => handle.release())
+			.catch((error) => {
+				syncLogger.error('Failed to refresh order', {
+					code: ERROR_CODES.SYNC_UNEXPECTED,
+					showToast: true,
+					context: {
+						orderId: orderHasID,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
+			});
+	}, [runtime, orderHasID]);
 
 	/**
 	 * To re-open an order, we need to:
@@ -78,6 +107,11 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 	 * - navigate to POS screen
 	 */
 	const handleOpen = React.useCallback(async () => {
+		// #163 ruling R5: re-opening writes status + cashier/store meta to the order.
+		// With the worker dead that write cannot be recorded, and the cart it lands
+		// in could not be checked out anyway.
+		if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
+
 		const meta_data = order.getLatest().toMutableJSON()?.meta_data || [];
 		upsertMetaData(meta_data, '_pos_user', String(wpCredentials.id));
 		if (store.id !== 0) {
@@ -85,27 +119,48 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 		}
 
 		await localPatch({ document: order, data: { status: 'pos-open', meta_data } });
+		if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
 		router.push({
 			pathname: '/cart/[...orderId]',
 			params: { orderId: order.uuid ? [order.uuid] : [] },
 		} as any);
-	}, [localPatch, router, order, store.id, wpCredentials.id]);
+	}, [blockIfDegraded, localPatch, router, order, store.id, wpCredentials.id]);
 
 	/**
 	 * Handle delete button click
 	 */
-	const handleDelete = React.useCallback(async () => {
-		try {
-			const latest = order.getLatest();
+	/**
+	 * Refunds are a money path under the #163 follow-up ruling: cash handed back
+	 * with no persistable record is the checkout hazard in reverse. Refuse at the
+	 * door rather than letting the cashier into a flow that cannot complete.
+	 */
+	const handleRefund = React.useCallback(() => {
+		if (blockIfDegraded('refund', { orderId: order.uuid })) return;
+		router.push({ pathname: `/orders/refund/${order.uuid}` });
+	}, [blockIfDegraded, order.uuid, router]);
 
-			if (latest.id) {
-				await deleteDocument(latest.id, latest.collection as never);
-			}
-			await latest.remove();
-		} finally {
-			//
+	const handleDelete = React.useCallback(async () => {
+		// #163 ruling R5: same hazard as the cart's Void — a delete the device
+		// cannot record leaves the order's fate unknowable locally.
+		if (blockIfDegraded('void', { orderId: order.uuid })) return;
+
+		const receipt = await requestServerDelete(runtime.engine, {
+			collection: 'orders',
+			recordId: order.uuid!,
+		});
+		if (!receipt.annihilated) {
+			void awaitWriteOutcome(runtime.engine, receipt.mutationId).catch((error) => {
+				if (error instanceof WriteOutcomeError && error.reason === WOO_REST_CANNOT_DELETE) {
+					syncLogger.error('Server refused to delete order', {
+						code: ERROR_CODES.SYNC_UNEXPECTED,
+						showToast: true,
+						toast: { title: t('orders.delete_not_permitted') },
+						context: { orderId: order.uuid },
+					});
+				}
+			});
 		}
-	}, [deleteDocument, order]);
+	}, [blockIfDegraded, runtime, order.uuid, t]);
 
 	if (readOnly) {
 		return null;
@@ -118,7 +173,7 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 		<>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
-					<IconButton name="ellipsisVertical" />
+					<IconButton testID="order-actions-button" name="ellipsisVertical" />
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
 					<DropdownMenuItem
@@ -141,7 +196,11 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 						<Icon name="penToSquare" />
 						<Text>{t('common.edit')}</Text>
 					</DropdownMenuItem>
-					<DropdownMenuItem onPress={handleOpen}>
+					<DropdownMenuItem
+						testID="order-reopen-menu-item"
+						onPress={handleOpen}
+						disabled={storageDegraded}
+					>
 						<Icon name="cartShopping" />
 						<Text>{t('orders.re-open')}</Text>
 					</DropdownMenuItem>
@@ -155,20 +214,27 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 							</DropdownMenuItem>
 							{canRefund && (
 								<DropdownMenuItem
-									onPress={() => router.push({ pathname: `/orders/refund/${order.uuid}` })}
+									testID="order-refund-menu-item"
+									onPress={handleRefund}
+									disabled={storageDegraded}
 								>
 									<Icon name="arrowRotateLeft" />
 									<Text>{t('orders.refund')}</Text>
 								</DropdownMenuItem>
 							)}
-							<DropdownMenuItem onPress={() => pullDocument(order.id!, order.collection as never)}>
+							<DropdownMenuItem onPress={handleRefresh}>
 								<Icon name="arrowRotateRight" />
 								<Text>{t('common.sync')}</Text>
 							</DropdownMenuItem>
 						</>
 					)}
 					<DropdownMenuSeparator />
-					<DropdownMenuItem variant="destructive" onPress={() => setDeleteDialogOpened(true)}>
+					<DropdownMenuItem
+						testID="order-delete-menu-item"
+						variant="destructive"
+						onPress={() => setDeleteDialogOpened(true)}
+						disabled={storageDegraded}
+					>
 						<Icon
 							name="trash"
 							className="fill-destructive web:group-focus:fill-accent-foreground"
@@ -195,7 +261,12 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 					</AlertDialogHeader>
 					<AlertDialogFooter>
 						<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-						<AlertDialogAction variant="destructive" onPress={handleDelete}>
+						<AlertDialogAction
+							testID="order-delete-confirm-button"
+							variant="destructive"
+							onPress={handleDelete}
+							disabled={storageDegraded}
+						>
 							{t('common.delete')}
 						</AlertDialogAction>
 					</AlertDialogFooter>

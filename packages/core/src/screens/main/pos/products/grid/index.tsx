@@ -5,8 +5,8 @@ import { useObservableEagerState, useObservableSuspense } from 'observable-hooks
 
 import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
-import type { Query } from '@wcpos/query';
 
+import { useGuardedExtendLimit } from '../../../../../query';
 import { ProductTile } from './product-tile';
 import { VariableProductTile } from './variable-product-tile';
 import { useT } from '../../../../../contexts/translations';
@@ -15,10 +15,13 @@ import { DataTableFooter } from '../../../components/data-table/footer';
 import { TaxBasedOn } from '../../../components/product/tax-based-on';
 import { useTaxRates } from '../../../contexts/tax-rates';
 
+import type { QueryStateActions } from '../../../../../query';
+
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
 interface ProductGridProps {
-	query: Query<any>;
+	binding: ReturnType<typeof import('../../../../../query').useRelationalCollectionBinding>;
+	actions: Pick<QueryStateActions<'products'>, 'extendLimit'>;
 }
 
 interface GridFields {
@@ -33,15 +36,20 @@ interface GridFields {
 	cost_of_goods_sold: boolean;
 }
 
-export function ProductGrid({ query }: ProductGridProps) {
+export function ProductGrid({ binding, actions }: ProductGridProps) {
 	const { uiSettings } = useUISettings('pos-products');
 	const gridColumns = useObservableEagerState(uiSettings.gridColumns$);
 	const gridFields = useObservableEagerState(uiSettings.gridFields$) as GridFields;
 	const { calcTaxes } = useTaxRates();
 	const t = useT();
 
-	const result = useObservableSuspense(query.resource);
+	const result = useObservableSuspense(binding.resource);
 	const deferredResult = React.useDeferredValue(result);
+
+	// Guarded (#1221): a short page is the true end, and an outstanding extension must land
+	// before the next one fires — unguarded end-reached churn recompiled the search demand
+	// per step and abort/re-issued identical wire requests.
+	const handleEndReached = useGuardedExtendLimit(actions.extendLimit, deferredResult.hits.length);
 
 	/**
 	 * Chunk flat product list into rows of N
@@ -70,7 +78,7 @@ export function ProductGrid({ query }: ProductGridProps) {
 
 	return (
 		<View className="flex h-full flex-col">
-			<VirtualizedList.Root style={{ flex: 1 }}>
+			<VirtualizedList.Root testID="pos-products-grid-scroller" style={{ flex: 1 }}>
 				<VirtualizedList.List
 					data={rows}
 					renderItem={({ item: row }) => (
@@ -98,11 +106,7 @@ export function ProductGrid({ query }: ProductGridProps) {
 					)}
 					estimatedItemSize={200}
 					onEndReachedThreshold={0.1}
-					onEndReached={() => {
-						if (query.infiniteScroll) {
-							query.loadMore();
-						}
-					}}
+					onEndReached={handleEndReached}
 					ListEmptyComponent={() => (
 						<View className="items-center justify-center p-4">
 							<Text testID="no-data-message">{t('common.no_products_found')}</Text>
@@ -112,11 +116,25 @@ export function ProductGrid({ query }: ProductGridProps) {
 			</VirtualizedList.Root>
 			<View className="border-border border-t">
 				{calcTaxes ? (
-					<DataTableFooter query={query} count={deferredResult.hits.length}>
+					<DataTableFooter
+						collectionName="products"
+						active$={binding.active$}
+						total$={binding.total$}
+						totalSource$={binding.totalSource$}
+						sync={binding.sync}
+						count={deferredResult.hits.length}
+					>
 						<TaxBasedOn />
 					</DataTableFooter>
 				) : (
-					<DataTableFooter query={query} count={deferredResult.hits.length} />
+					<DataTableFooter
+						collectionName="products"
+						active$={binding.active$}
+						total$={binding.total$}
+						totalSource$={binding.totalSource$}
+						sync={binding.sync}
+						count={deferredResult.hits.length}
+					/>
 				)}
 			</View>
 		</View>

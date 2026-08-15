@@ -1,194 +1,71 @@
 import * as React from 'react';
 
-import toNumber from 'lodash/toNumber';
-import { ObservableResource, useObservable, useObservableEagerState } from 'observable-hooks';
-import { map, tap } from 'rxjs/operators';
+import { ObservableResource } from 'observable-hooks';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
-import { useQuery } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 
+import { forceRefreshFilterCustomer } from './force-refresh-filter-customer';
 import { useAppState } from '../../../contexts/app-state';
+import { useQueryState } from '../../../query';
 import { CashierPill } from '../components/order/filter-bar/cashier-pill';
 import { CustomerPill } from '../components/order/filter-bar/customer-pill';
 import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
 import { StatusPill } from '../components/order/filter-bar/status-pill';
 import { StorePill } from '../components/order/filter-bar/store-pill';
-import { normalizeSelectedCustomerID } from '../components/order/filter-bar/customer-filter-utils';
-import { createSelectedEntityFromInputs$ } from '../components/filter-bar/selected-entity';
-import { pullDocumentSafely } from '../components/filter-bar/pull-document-safely';
+import { useEngineDocumentByWooId } from '../hooks/use-engine-document';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
-import { usePullDocument } from '../contexts/use-pull-document';
-import { useCollection } from '../hooks/use-collection';
-
-type CustomerCollection = import('@wcpos/database').CustomerCollection;
-type PullCustomerDocument = (id: number, collection: CustomerCollection) => Promise<unknown>;
 
 /**
  *
  */
-export function FilterBar({
-	query,
-}: {
-	query: import('@wcpos/query').Query<import('@wcpos/database').OrderCollection>;
-}) {
+export function FilterBar() {
+	const customerID = useQueryState<'orders', number | undefined>(
+		(state) => state.filters.customer_id
+	);
+	const cashierFilter = useQueryState<'orders', string | number | undefined>(
+		(state) => state.filters.cashier
+	);
+	const cashierID = cashierFilter === undefined ? undefined : Number(cashierFilter);
 	const guestCustomer = useGuestCustomer();
-	const rawCustomerID = useObservableEagerState(
-		query.rxQuery$.pipe(map(() => query.getSelector('customer_id')))
+	const customerResource = useEngineDocumentByWooId<import('@wcpos/database').CustomerDocument>(
+		'customers',
+		customerID ?? 0
 	);
-	const customerID = React.useMemo(
-		() => normalizeSelectedCustomerID(rawCustomerID as string | number | null | undefined),
-		[rawCustomerID]
-	);
-	const cashierID = useObservableEagerState(
-		query.rxQuery$.pipe(map(() => query.getMetaDataElemMatchValue('_pos_user')))
+	const cashierResource = useEngineDocumentByWooId<import('@wcpos/database').CustomerDocument>(
+		'customers',
+		cashierID ?? 0
 	);
 	const { wpCredentials } = useAppState();
-	const pullDocument = usePullDocument();
-	const pullCustomerDocument = pullDocument as PullCustomerDocument;
-	const { collection: customerCollection } = useCollection('customers');
+	const runtime = useQueryRuntime();
 
-	/**
-	 *
-	 */
-	const customerQuery = useQuery({
-		queryKeys: ['customers', 'orders-customer-filter', customerID ?? 'none'],
-		collectionName: 'customers',
-		initialParams:
-			customerID !== undefined && customerID !== 0
-				? {
-						selector: { id: customerID },
-					}
-				: undefined,
-	});
+	const refreshCustomer = React.useCallback(() => {
+		if (customerID === undefined || customerID === 0) return;
+		void forceRefreshFilterCustomer(runtime, customerID, 'customer');
+	}, [customerID, runtime]);
+	const refreshCashier = React.useCallback(() => {
+		if (cashierID === undefined || !Number.isFinite(cashierID)) return;
+		void forceRefreshFilterCustomer(runtime, cashierID, 'cashier');
+	}, [cashierID, runtime]);
 
-	/**
-	 *
-	 */
-	const cashierQuery = useQuery({
-		queryKeys: ['customers', 'cashier-filter', cashierID ?? 'none'],
-		collectionName: 'customers',
-		initialParams:
-			cashierID !== undefined && cashierID !== null
-				? {
-						selector: { id: toNumber(cashierID as string) },
-					}
-				: undefined,
-	});
-
-	/**
-	 *
-	 */
-	const selectedCustomer$ = useObservable(
-		(inputs$) =>
-			createSelectedEntityFromInputs$(
-				inputs$.pipe(
-					map(
-						([id, result$, selectedGuestCustomer]) =>
-							[
-								id,
-								result$?.pipe(
-									tap((result) => {
-										if (id && id !== 0 && result.hits.length === 0) {
-											void pullDocumentSafely(
-												pullCustomerDocument,
-												toNumber(id),
-												customerCollection
-											);
-										}
-									})
-								),
-								selectedGuestCustomer,
-								false,
-							] as const
-					)
-				)
-			),
-		[
-			customerID as string | number | null | undefined,
-			customerQuery?.result$,
-			guestCustomer,
-			pullCustomerDocument,
-			customerCollection,
-		]
-	);
-
-	/**
-	 *
-	 */
-	const customerResource = React.useMemo(
-		() => new ObservableResource(selectedCustomer$),
-		[selectedCustomer$]
-	);
-
-	/**
-	 *
-	 */
-	const selectedCashier$ = useObservable(
-		(inputs$) =>
-			createSelectedEntityFromInputs$(
-				inputs$.pipe(
-					map(
-						([id, result$]) =>
-							[
-								id,
-								result$?.pipe(
-									tap((result) => {
-										if (id && result.hits.length === 0) {
-											void pullDocumentSafely(
-												pullCustomerDocument,
-												toNumber(id),
-												customerCollection
-											);
-										}
-									})
-								),
-								undefined,
-								false,
-							] as const
-					)
-				)
-			),
-		[
-			cashierID as string | number | null | undefined,
-			cashierQuery?.result$,
-			undefined,
-			pullCustomerDocument,
-			customerCollection,
-		]
-	);
-
-	/**
-	 *
-	 */
-	const cashierResource = React.useMemo(
-		() => new ObservableResource(selectedCashier$),
-		[selectedCashier$]
-	);
-
-	/**
-	 *
-	 */
 	const storesResource = React.useMemo(
 		() => new ObservableResource(wpCredentials.populate$('stores'), (val) => !!val),
 		[wpCredentials]
 	);
 
-	/**
-	 *
-	 */
 	return (
 		<HStack className="w-full flex-wrap">
-			<StatusPill query={query} />
+			<StatusPill />
 			<Suspense>
-				<CustomerPill resource={customerResource} query={query} customerID={customerID} />
+				<CustomerPill
+					resource={customerResource}
+					guestCustomer={guestCustomer as unknown as import('@wcpos/database').CustomerDocument}
+					onMissing={refreshCustomer}
+				/>
 			</Suspense>
 			<Suspense>
-				<CashierPill
-					resource={cashierResource}
-					query={query}
-					cashierID={cashierID as number | undefined}
-				/>
+				<CashierPill resource={cashierResource} onMissing={refreshCashier} />
 			</Suspense>
 			<StorePill
 				resource={
@@ -196,9 +73,8 @@ export function FilterBar({
 						import('@wcpos/database').StoreDocument[]
 					>
 				}
-				query={query}
 			/>
-			<DateRangePill query={query} />
+			<DateRangePill />
 		</HStack>
 	);
 }

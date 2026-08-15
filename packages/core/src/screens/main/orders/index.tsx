@@ -8,7 +8,6 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { VStack } from '@wcpos/components/vstack';
-import { useQuery } from '@wcpos/query';
 
 import { Actions } from './cells/actions';
 import { Address } from './cells/address';
@@ -31,7 +30,17 @@ import { Total } from '../components/order/total';
 import { QuerySearchInput } from '../components/query-search-input';
 import { UISettingsDialog } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
+import { useReferencedCustomerDemand } from '../hooks/use-referenced-customer-demand';
 import { TextCell } from '../components/text-cell';
+import {
+	QueryStateProvider,
+	useCollectionBinding,
+	useQueryState,
+	useQueryStateActions,
+} from '../../../query';
+
+import type { FiltersOf, QueryStateActions, QueryStateOf } from '../../../query';
+import type { SortFieldsByCollection } from '../../../query/query-state-types';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -54,6 +63,33 @@ const cells = {
 	number: OrderNumber,
 };
 
+const ORDERS_PAGE_SIZE = 10;
+const ORDER_SORT_FIELDS = [
+	'status',
+	'number',
+	'customer_id',
+	'total',
+	'date_created_gmt',
+	'date_modified_gmt',
+	'date_completed_gmt',
+	'date_paid_gmt',
+	'payment_method',
+] as const satisfies readonly SortFieldsByCollection['orders'][];
+const DEFAULT_ORDER_SORT = { field: 'date_created_gmt', direction: 'desc' } as const;
+
+function isOrderSortField(field: unknown): field is SortFieldsByCollection['orders'] {
+	return ORDER_SORT_FIELDS.some((sortField) => sortField === field);
+}
+
+function getInitialOrderSort(
+	sortBy: unknown,
+	sortDirection: unknown
+): QueryStateOf<'orders'>['sort'] {
+	if (!isOrderSortField(sortBy)) return DEFAULT_ORDER_SORT;
+
+	return { field: sortBy, direction: sortDirection === 'asc' ? 'asc' : 'desc' };
+}
+
 function renderCell(columnKey: string, info: any) {
 	const Renderer = cells[columnKey as keyof typeof cells];
 	if (Renderer) {
@@ -63,39 +99,23 @@ function renderCell(columnKey: string, info: any) {
 	return <TextCell {...info} />;
 }
 
-/**
- *
- */
-export function OrdersScreen() {
-	const { uiSettings } = useUISettings('orders');
+function OrdersScreenContent() {
+	const state = useQueryState<'orders'>();
+	const actions = useQueryStateActions<'orders'>();
+	const binding = useCollectionBinding('orders', state);
+	useReferencedCustomerDemand(binding.result$);
+	const tableActions = React.useMemo<
+		Pick<QueryStateActions<'orders'>, 'setSort' | 'extendLimit' | 'setFilter'>
+	>(
+		() => ({
+			setSort: actions.setSort,
+			extendLimit: actions.extendLimit,
+			setFilter: actions.setFilter,
+		}),
+		[actions]
+	);
 	const t = useT();
-	const { wpCredentials, store } = useAppState();
 	const { bottom } = useSafeAreaInsets();
-
-	const selector: Record<string, unknown> = {
-		$and: [{ meta_data: { $elemMatch: { key: '_pos_user', value: String(wpCredentials?.id) } } }],
-	};
-
-	if (store?.id) {
-		(selector.$and as Record<string, unknown>[]).push({
-			meta_data: { $elemMatch: { key: '_pos_store', value: String(store?.id) } },
-		});
-	} else {
-		selector.created_via = 'woocommerce-pos';
-	}
-
-	/**
-	 *
-	 */
-	const query = useQuery({
-		queryKeys: ['orders'],
-		collectionName: 'orders',
-		initialParams: {
-			sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection } as Record<string, 'asc' | 'desc'>],
-			selector,
-		},
-		infiniteScroll: true,
-	});
 
 	/**
 	 *
@@ -111,7 +131,7 @@ export function OrdersScreen() {
 					<VStack>
 						<HStack>
 							<QuerySearchInput
-								query={query!}
+								collectionName="orders"
 								placeholder={t('orders.search_orders')}
 								className="flex-1"
 								testID="search-orders"
@@ -121,7 +141,7 @@ export function OrdersScreen() {
 							</UISettingsDialog>
 						</HStack>
 						<ErrorBoundary>
-							<FilterBar query={query!} />
+							<FilterBar />
 						</ErrorBoundary>
 					</VStack>
 				</CardHeader>
@@ -130,7 +150,14 @@ export function OrdersScreen() {
 						<Suspense fallback={<DataTableSkeleton id="orders" />}>
 							<DataTable<OrderDocument>
 								id="orders"
-								query={query!}
+								collectionName="orders"
+								resource={binding.resource}
+								sort={state.sort}
+								actions={tableActions}
+								active$={binding.active$}
+								total$={binding.total$}
+								totalSource$={binding.totalSource$}
+								sync={binding.sync}
 								renderCell={renderCell}
 								noDataMessage={t('common.no_orders_found')}
 								estimatedItemSize={100}
@@ -140,5 +167,32 @@ export function OrdersScreen() {
 				</CardContent>
 			</Card>
 		</View>
+	);
+}
+
+/**
+ *
+ */
+export function OrdersScreen() {
+	const { uiSettings } = useUISettings('orders');
+	const { wpCredentials, store } = useAppState();
+	const initialSort = getInitialOrderSort(uiSettings.sortBy, uiSettings.sortDirection);
+	const cashierScopeID = String(wpCredentials?.id);
+	const storeScopeID = store?.id ? String(store.id) : 'woocommerce-pos';
+	const initialFilters: Partial<FiltersOf<'orders'>> = {
+		cashier: cashierScopeID,
+		store: storeScopeID,
+	};
+
+	return (
+		<QueryStateProvider
+			key={`${cashierScopeID}:${storeScopeID}`}
+			collection="orders"
+			initialPageSize={ORDERS_PAGE_SIZE}
+			initialSort={initialSort}
+			initialFilters={initialFilters}
+		>
+			<OrdersScreenContent />
+		</QueryStateProvider>
 	);
 }

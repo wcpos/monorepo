@@ -4,7 +4,6 @@ export const variationsLiteral = {
 	description: 'WooCommerce Product Variation schema',
 	type: 'object',
 	primaryKey: 'uuid',
-	attachments: {},
 	indexes: ['id', 'barcode', 'parent_id', 'sortable_price'],
 	properties: {
 		uuid: {
@@ -261,9 +260,7 @@ export const variationsLiteral = {
 					key: {
 						type: 'string',
 					},
-					value: {
-						type: 'string',
-					},
+					value: {},
 				},
 			},
 		},

@@ -2,10 +2,10 @@ import * as React from 'react';
 
 import set from 'lodash/set';
 
-import { getLogger } from '@wcpos/utils/logger';
+import { getDatabaseEpoch, getLogger, mapExceptionToCode } from '@wcpos/utils/logger';
 
 import { http } from './http';
-import { parseWpError } from './parse-wp-error';
+import { mapToInternalCode, parseWpError } from './parse-wp-error';
 import { scheduleRequest } from './request-queue';
 import { requestStateManager } from './request-state-manager';
 
@@ -33,7 +33,7 @@ const processErrorHandlers = async (
 	}
 
 	// Sort handlers by priority (higher first)
-	const sortedHandlers = [...errorHandlers].sort((a, b) => (b.priority || 0) - (a.priority || 0));
+	const sortedHandlers = [...errorHandlers].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
 
 	let retryCount = 0;
 	const maxRetries = 3;
@@ -93,6 +93,7 @@ const processErrorHandlers = async (
 			}
 		} catch (handlerError) {
 			httpLogger.error(`Error handler ${handler.name} threw an error`, {
+				code: 'CLIENT999',
 				context: {
 					error: handlerError instanceof Error ? handlerError.message : String(handlerError),
 					originalStatus: error.response?.status,
@@ -170,7 +171,7 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 		if (!canProceed.ok) {
 			// Create error with additional context
 			const error = new Error(canProceed.reason || 'Request blocked') as any;
-			error.errorCode = canProceed.errorCode;
+			error.blockCode = canProceed.blockCode;
 			error.isPreFlightBlocked = true;
 			error.isSleeping = canProceed.isSleeping || false;
 
@@ -178,7 +179,7 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 			if (!canProceed.isSleeping) {
 				httpLogger.debug('Request blocked by pre-flight check', {
 					context: {
-						errorCode: canProceed.errorCode,
+						blockCode: canProceed.blockCode,
 						reason: canProceed.reason,
 						url: config.url,
 						method: config.method,
@@ -187,6 +188,8 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 			}
 			throw error;
 		}
+
+		const databaseEpoch = getDatabaseEpoch();
 
 		// If token refresh is in progress, wait for it to complete
 		if (requestStateManager.isTokenRefreshing()) {
@@ -223,7 +226,17 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 			set(processedConfig, ['params', 'XDEBUG_SESSION'], 'start');
 		}
 
-		return scheduleRequest(() => http.request(processedConfig));
+		const method = (processedConfig.method ?? 'GET').toUpperCase();
+		const endpoint = processedConfig.url
+			? new URL(processedConfig.url, 'http://localhost').pathname
+			: 'unknown';
+		const response = await scheduleRequest(() => http.request(processedConfig));
+		if (method !== 'GET' && method !== 'HEAD' && databaseEpoch === getDatabaseEpoch()) {
+			httpLogger.info('HTTP request completed', {
+				context: { method, endpoint, status: response.status },
+			});
+		}
+		return response;
 	}, []);
 
 	/**
@@ -231,6 +244,7 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 	 */
 	const request = React.useCallback(
 		async (reqConfig: AxiosRequestConfig = {}) => {
+			const databaseEpoch = getDatabaseEpoch();
 			try {
 				const response = await makeRequest(reqConfig);
 				return response;
@@ -272,11 +286,37 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 					// - Let polling retry later
 					throw error;
 				}
+				const axiosError = error as AxiosError;
+				const wpError = axiosError.response?.data
+					? parseWpError(axiosError.response.data, axiosError.message)
+					: undefined;
+				const mappedException = axiosError.response ? undefined : mapExceptionToCode(error);
+				const errorCode =
+					wpError?.code ??
+					(axiosError.response
+						? mapToInternalCode(null, axiosError.response.status)
+						: mappedException?.code);
+				if (!(error as any).isPreFlightBlocked && databaseEpoch === getDatabaseEpoch()) {
+					const method = (reqConfig.method ?? 'GET').toUpperCase();
+					const endpoint = reqConfig.url
+						? new URL(reqConfig.url, 'http://localhost').pathname
+						: 'unknown';
+					httpLogger.error('HTTP request failed', {
+						code: errorCode ?? 'CLIENT999',
+						context: {
+							...(mappedException?.context ?? {}),
+							method,
+							endpoint,
+							status: axiosError.response?.status ?? 0,
+							...(mappedException?.code === 'CLIENT999' && { codeFallback: true }),
+							...(wpError?.serverCode && { serverCode: wpError.serverCode }),
+							...(wpError?.triage && { triage: true }),
+						},
+					});
+				}
 
 				// Enrich error with WordPress/WooCommerce error details before throwing
-				const axiosError = error as AxiosError;
-				if (axiosError.response?.data) {
-					const wpError = parseWpError(axiosError.response.data, axiosError.message);
+				if (wpError) {
 					(error as any).wpCode = wpError.code; // Internal code (APIxxxxx)
 					(error as any).wpServerCode = wpError.serverCode; // Original server code for debugging
 					(error as any).wpMessage = wpError.message;

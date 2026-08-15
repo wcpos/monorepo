@@ -1,4 +1,4 @@
-import { requestStateManager } from './request-state-manager';
+import { PREFLIGHT_BLOCK, requestStateManager } from './request-state-manager';
 
 describe('RequestStateManager', () => {
 	beforeEach(() => {
@@ -6,6 +6,21 @@ describe('RequestStateManager', () => {
 	});
 
 	describe('checkCanProceed', () => {
+		it('stamps the blockCode both downstream consumers branch on', () => {
+			// auth-error-handler keys its re-auth prompt on AUTH_REQUIRED; the
+			// receipt email queue keys retry-vs-surface on OFFLINE/ASLEEP/RECOVERING.
+			requestStateManager.setOffline(true);
+			expect(requestStateManager.checkCanProceed().blockCode).toBe(PREFLIGHT_BLOCK.OFFLINE);
+			requestStateManager.setOffline(false);
+
+			requestStateManager.setAuthFailed(true);
+			expect(requestStateManager.checkCanProceed().blockCode).toBe(PREFLIGHT_BLOCK.AUTH_REQUIRED);
+			requestStateManager.setAuthFailed(false);
+
+			requestStateManager.pauseRequests();
+			expect(requestStateManager.checkCanProceed().blockCode).toBe(PREFLIGHT_BLOCK.RECOVERING);
+		});
+
 		it('should return ok:true by default', () => {
 			expect(requestStateManager.checkCanProceed()).toEqual({ ok: true });
 		});

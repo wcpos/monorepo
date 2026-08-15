@@ -1,5 +1,9 @@
 import { filter, firstValueFrom, Subject, timeout } from 'rxjs';
 
+import { resetCollectionPlugin } from './reset-collection';
+
+import type { RxCollection } from 'rxdb';
+
 /**
  * Tests for reset-collection plugin logic.
  *
@@ -11,6 +15,29 @@ import { filter, firstValueFrom, Subject, timeout } from 'rxjs';
  */
 
 describe('reset-collection plugin', () => {
+	it('returns the post-close reset work to the RxDB hook runner', async () => {
+		let finishAddCollections = (_collections: Record<string, unknown>) => undefined;
+		const addCollections = jest.fn(
+			() =>
+				new Promise<Record<string, unknown>>((resolve) => {
+					finishAddCollections = resolve;
+				})
+		);
+		const collection = {
+			name: 'products',
+			database: { name: 'store_test', collections: {}, addCollections },
+		} as unknown as RxCollection;
+		const hook = resetCollectionPlugin.hooks?.postCloseRxCollection?.after as unknown as (
+			closedCollection: RxCollection
+		) => Promise<void>;
+
+		const hookResult = hook(collection);
+		finishAddCollections({ products: collection });
+
+		await expect(hookResult).resolves.toBeUndefined();
+		expect(addCollections).toHaveBeenCalledTimes(1);
+	});
+
 	describe('isManagedCollection logic', () => {
 		// Test the concept of managed vs unmanaged collections
 		const managedCollections = new Set(['products', 'orders', 'customers', 'variations']);

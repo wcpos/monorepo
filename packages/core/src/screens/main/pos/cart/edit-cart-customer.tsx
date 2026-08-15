@@ -12,8 +12,9 @@ import { Form } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { type EngineRxDocument, useQueryRuntime, wrapEngineDocument } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
 import { BillingAddressForm, billingAddressSchema } from '../../components/billing-address-form';
@@ -22,11 +23,26 @@ import { FormErrors } from '../../components/form-errors';
 import { ShippingAddressForm, shippingAddressSchema } from '../../components/shipping-address-form';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useMutation } from '../../hooks/mutations/use-mutation';
-import { useCollection } from '../../hooks/use-collection';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
+import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 import { useCurrentOrder } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
+type CustomerDocument = import('@wcpos/database').CustomerDocument;
+type QueryManager = ReturnType<typeof useQueryRuntime>;
+
+async function findCustomerByWooId(
+	runtime: QueryManager,
+	wooCustomerId: number
+): Promise<CustomerDocument | null> {
+	const scope = runtime.engine.active() ?? (await runtime.engine.ready);
+	const collection = scope.database.collections.customers;
+	if (!collection) return null;
+	const document = await collection.findOne({ selector: { wooCustomerId } }).exec();
+	return document
+		? wrapEngineDocument<CustomerDocument>('customers', document as unknown as EngineRxDocument)
+		: null;
+}
 
 /**
  *
@@ -57,10 +73,11 @@ export function EditCartCustomerForm() {
 	);
 	const { localPatch } = useLocalMutation();
 	const { patch } = useMutation({ collectionName: 'customers' });
+	const runtime = useQueryRuntime();
 	const { onOpenChange } = useRootContext();
-	const { collection: customerCollection } = useCollection('customers');
 	const { format } = useCustomerNameFormat();
 	const [loading, setLoading] = React.useState(false);
+	const { caps } = useUserCapabilities();
 
 	/**
 	 * Use `values` instead of `defaultValues` + useEffect reset pattern.
@@ -92,21 +109,22 @@ export function EditCartCustomerForm() {
 	 * We need to get the customer document and patch it with the new address
 	 */
 	const handleSaveToOrderAndToCustomer = async (data: FormValues) => {
+		const wooCustomerId = Number(customerID ?? 0);
 		await handleSaveToOrder(data);
-		const customer = await customerCollection.findOne({ selector: { id: customerID } }).exec();
-		if (!customer) {
-			cartLogger.error(t('common.no_customer_found'), {
-				showToast: true,
-				saveToDb: true,
-				context: {
-					errorCode: ERROR_CODES.RECORD_NOT_FOUND,
-					customerId: customerID,
-				},
-			});
-			return;
-		}
 		setLoading(true);
 		try {
+			const customer = await findCustomerByWooId(runtime, wooCustomerId);
+			if (!customer) {
+				cartLogger.error('Customer record was not found', {
+					showToast: true,
+					code: ERROR_CODES.SYNC_UNEXPECTED,
+					toast: { title: t('common.no_customer_found') },
+					context: {
+						customerId: wooCustomerId,
+					},
+				});
+				return;
+			}
 			const savedDoc = await patch({
 				document: customer,
 				data: {
@@ -118,7 +136,6 @@ export function EditCartCustomerForm() {
 			if (savedDoc) {
 				cartLogger.success(t('common.saved', { name: format(savedDoc as any) }), {
 					showToast: true,
-					saveToDb: true,
 					context: {
 						customerId: (savedDoc as any).id,
 						customerName: format(savedDoc as any),
@@ -128,12 +145,12 @@ export function EditCartCustomerForm() {
 			onOpenChange(false);
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
-			cartLogger.error(t('common.failed_to_save_customer'), {
+			cartLogger.error('Failed to save customer', {
 				showToast: true,
-				saveToDb: true,
+				code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
+				toast: { title: t('common.failed_to_save_customer') },
 				context: {
-					errorCode: ERROR_CODES.TRANSACTION_FAILED,
-					customerId: customerID,
+					customerId: wooCustomerId,
 					error: errorMessage,
 				},
 			});
@@ -189,7 +206,7 @@ export function EditCartCustomerForm() {
 				<TaxIdsForm />
 				<DialogFooter className="px-0">
 					<DialogClose>{t('common.close')}</DialogClose>
-					{customerID !== 0 && (
+					{customerID !== 0 && caps.canEditCustomers && (
 						// @ts-expect-error: loading prop passes through ...props to Button but isn't in SlottablePressableProps
 						<DialogAction onPress={onSaveToOrderAndCustomer} loading={loading}>
 							{t('pos_cart.save_to_order_customer')}

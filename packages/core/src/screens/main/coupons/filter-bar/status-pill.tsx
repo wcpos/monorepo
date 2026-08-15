@@ -1,8 +1,5 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-import { map } from 'rxjs/operators';
-
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Select,
@@ -10,20 +7,13 @@ import {
 	SelectItem,
 	SelectPrimitiveTrigger,
 } from '@wcpos/components/select';
-import type { Query } from '@wcpos/query';
 
+import { useQueryState, useQueryStateActions } from '../../../../query';
 import { useT } from '../../../../contexts/translations';
 
-type CouponCollection = import('@wcpos/database').CouponCollection;
-
-interface Props {
-	query: Query<CouponCollection>;
-}
-
-export function StatusPill({ query }: Props) {
-	const selected = useObservableEagerState(
-		query.rxQuery$.pipe(map(() => query.getSelector('status') as string | undefined))
-	);
+export function StatusPill() {
+	const selected = useQueryState<'coupons', string | undefined>((state) => state.filters.status);
+	const { setFilter, clearFilter } = useQueryStateActions<'coupons'>();
 	const t = useT();
 	const isActive = !!selected;
 
@@ -43,17 +33,14 @@ export function StatusPill({ query }: Props) {
 	}, [items, selected]);
 
 	return (
-		<Select
-			value={value}
-			onValueChange={(option) => option && query.where('status').equals(option.value).exec()}
-		>
+		<Select value={value} onValueChange={(option) => option && setFilter('status', option.value)}>
 			<SelectPrimitiveTrigger asChild>
 				<ButtonPill
 					size="xs"
 					leftIcon="circleInfo"
 					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
-					onRemove={() => query.removeWhere('status').exec()}
+					onRemove={() => clearFilter('status')}
 				>
 					<ButtonText>{value?.label || t('common.status')}</ButtonText>
 				</ButtonPill>

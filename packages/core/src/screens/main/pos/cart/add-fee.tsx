@@ -67,9 +67,9 @@ export function AddFee() {
 	 * NOTE: tax_class 'standard' needs to be sent as an empty string, otherwise the API will throw an error.
 	 */
 	const handleAdd = React.useCallback(
-		(data: FormValues) => {
+		async (data: FormValues) => {
 			const { name, amount, percent, tax_status, tax_class, prices_include_tax } = data;
-			addFee({
+			await addFee({
 				name: isEmpty(name) ? t('pos_cart.fee') : (name ?? ''),
 				amount: amount ?? '0',
 				tax_status,
@@ -170,7 +170,11 @@ export function AddFee() {
 				</HStack>
 				<DialogFooter className="px-0">
 					<DialogClose>{t('common.cancel')}</DialogClose>
-					<DialogAction testID="add-to-cart-submit" onPress={onAdd}>
+					<DialogAction
+						disabled={form.formState.isSubmitting}
+						testID="add-to-cart-submit"
+						onPress={onAdd}
+					>
 						{t('common.add_to_cart')}
 					</DialogAction>
 				</DialogFooter>

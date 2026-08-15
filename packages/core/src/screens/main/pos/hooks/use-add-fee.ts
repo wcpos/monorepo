@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateFeeLineTaxAndTotals } from './use-calculate-fee-line-tax-and-totals';
@@ -17,7 +17,7 @@ interface FeeData {
 	prices_include_tax: boolean;
 	tax_class: string;
 	tax_status: 'taxable' | 'none';
-	meta_data: { key: string; value: string }[];
+	meta_data: { key: string; value: unknown }[];
 }
 
 /**
@@ -50,11 +50,11 @@ export const useAddFee = () => {
 
 				meta_data.push({
 					key: '_woocommerce_pos_data',
-					value: JSON.stringify({
+					value: {
 						amount: data.amount,
 						percent: data.percent,
 						prices_include_tax: data.prices_include_tax,
-					}),
+					},
 				});
 
 				const newFeeLine = calculateFeeLineTaxesAndTotals({
@@ -64,7 +64,7 @@ export const useAddFee = () => {
 					meta_data,
 				});
 
-				await addItemToOrder('fee_lines', newFeeLine);
+				if (!(await addItemToOrder('fee_lines', newFeeLine))) return;
 
 				// Log fee added success
 				orderLogger.info(t('pos.fee_added', { feeName: data.name }), {
@@ -76,11 +76,11 @@ export const useAddFee = () => {
 					},
 				});
 			} catch (error) {
-				orderLogger.error(t('pos.error_adding_fee_to_cart'), {
+				orderLogger.error('Failed to add fee to cart', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.CART_UPDATE_FAILED,
+					toast: { title: t('pos.error_adding_fee_to_cart') },
 					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
 						feeName: data.name,
 						error: error instanceof Error ? error.message : String(error),
 					},

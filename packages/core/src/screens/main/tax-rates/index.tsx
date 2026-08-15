@@ -1,21 +1,22 @@
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
-import { useQuery } from '@wcpos/query';
 
+import { TAX_RATES_ALL_RESULTS_LIMIT, TAX_RATES_INITIAL_SORT } from './query-state';
 import { TaxRates } from './tax-rates';
+import { QueryStateProvider } from '../../../query';
 
 export function TaxRatesModal() {
-	const query = useQuery({
-		queryKeys: ['tax-rates'],
-		collectionName: 'taxes',
-		initialParams: {},
-	});
-
 	return (
-		<ErrorBoundary>
-			<Suspense>
-				<TaxRates query={query!} />
-			</Suspense>
-		</ErrorBoundary>
+		<QueryStateProvider
+			collection="tax-rates"
+			initialPageSize={TAX_RATES_ALL_RESULTS_LIMIT}
+			initialSort={TAX_RATES_INITIAL_SORT}
+		>
+			<ErrorBoundary>
+				<Suspense>
+					<TaxRates />
+				</Suspense>
+			</ErrorBoundary>
+		</QueryStateProvider>
 	);
 }

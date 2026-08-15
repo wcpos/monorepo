@@ -1,24 +1,72 @@
 /**
- * @jest-environment node
+ * @jest-environment jsdom
  */
+import * as React from 'react';
 
+import { fireEvent, render, screen } from '@testing-library/react';
+
+import { DataTableHeader } from './header';
 import { getSortField } from './sort-field';
+
+jest.mock('react-native', () => ({
+	Pressable: ({
+		children,
+		onPress,
+		testID,
+	}: {
+		children: React.ReactNode | ((state: { hovered: boolean }) => React.ReactNode);
+		onPress: () => void;
+		testID: string;
+	}) => (
+		<button data-testid={testID} onClick={onPress}>
+			{typeof children === 'function' ? children({ hovered: false }) : children}
+		</button>
+	),
+}));
+jest.mock('@wcpos/components/hstack', () => ({
+	HStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+jest.mock('@wcpos/components/text', () => ({
+	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+}));
+jest.mock('@wcpos/components/sort-icon', () => ({ SortIcon: () => null }));
 
 describe('DataTableHeader sorting behavior', () => {
 	describe('getSortField', () => {
 		it('maps price column to sortable_price', () => {
-			expect(getSortField('price')).toBe('sortable_price');
+			expect(getSortField('products', 'price')).toBe('sortable_price');
 		});
 
-		it('maps total column to sortable_total', () => {
-			expect(getSortField('total')).toBe('sortable_total');
+		it('keeps the semantic order total field for the translator', () => {
+			expect(getSortField('orders', 'total')).toBe('total');
 		});
 
 		it('passes through regular column IDs unchanged', () => {
-			expect(getSortField('name')).toBe('name');
-			expect(getSortField('date_created_gmt')).toBe('date_created_gmt');
-			expect(getSortField('last_name')).toBe('last_name');
-			expect(getSortField('sku')).toBe('sku');
+			expect(getSortField('products', 'name')).toBe('name');
+			expect(getSortField('products', 'date_created_gmt')).toBe('date_created_gmt');
+			expect(getSortField('customers', 'last_name')).toBe('last_name');
+			expect(getSortField('products', 'sku')).toBe('sku');
+		});
+	});
+
+	it('clicking the Price header requests sortable_price', () => {
+		const onSortingChange = jest.fn();
+		render(
+			<DataTableHeader
+				collectionName="products"
+				columnId="price"
+				header="Price"
+				sortBy="name"
+				sortDirection="asc"
+				onSortingChange={onSortingChange}
+			/>
+		);
+
+		fireEvent.click(screen.getByTestId('data-table-header-price'));
+
+		expect(onSortingChange).toHaveBeenCalledWith({
+			sortBy: 'sortable_price',
+			sortDirection: 'asc',
 		});
 	});
 

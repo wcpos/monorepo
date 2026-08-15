@@ -47,7 +47,7 @@ export default function ResizablePOSColumns() {
 	// This handles the case when user resizes from large to small screen
 	if (screenSize === 'sm') {
 		return (
-			<View style={{ flex: 1, paddingBottom: bottom }}>
+			<View testID="screen-pos" style={{ flex: 1, paddingBottom: bottom }}>
 				{/* Tab content */}
 				<View style={{ flex: 1 }}>
 					{activeTab === 'products' ? (
@@ -67,6 +67,7 @@ export default function ResizablePOSColumns() {
 				{/* Tab bar */}
 				<View className="border-border bg-card flex-row justify-around border-t py-2">
 					<Pressable
+						testID="pos-tab-products"
 						onPress={() => setActiveTab('products')}
 						className="flex-1 items-center gap-1 py-2"
 					>
@@ -80,6 +81,7 @@ export default function ResizablePOSColumns() {
 						</Text>
 					</Pressable>
 					<Pressable
+						testID="pos-tab-cart"
 						onPress={() => setActiveTab('cart')}
 						className="flex-1 items-center gap-1 py-2"
 					>
@@ -101,7 +103,7 @@ export default function ResizablePOSColumns() {
 	 *
 	 */
 	return (
-		<View style={{ flex: 1, paddingBottom: bottom }}>
+		<View testID="screen-pos" style={{ flex: 1, paddingBottom: bottom }}>
 			<PanelGroup
 				onLayout={([productsWidth, cartWidth]) => patchUI({ width: productsWidth })}
 				direction="horizontal"

@@ -37,6 +37,12 @@ const getDefaultForType = (schema: SchemaNode): unknown => {
 };
 
 const coercePrimitive = (schema: SchemaNode, value: unknown): unknown => {
+	// An omitted type is the schema's any-JSON escape hatch. Preserve structured
+	// metadata exactly instead of routing it through primitive string coercion.
+	if (schema.type === undefined) {
+		return value;
+	}
+
 	if (Array.isArray(schema.type) && schema.type.includes('null')) {
 		if (value === null || value === undefined) {
 			return null;

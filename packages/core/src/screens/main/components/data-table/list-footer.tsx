@@ -4,10 +4,10 @@ import { View } from 'react-native';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { Loader } from '@wcpos/components/loader';
-import { Query, useReplicationState } from '@wcpos/query';
 
-export function ListFooterComponent({ query }: { query: Query<any> }) {
-	const { active$ } = useReplicationState(query);
+import type { Observable } from 'rxjs';
+
+function LoadingFooter({ active$ }: { active$: Observable<boolean> }) {
 	const loading = useObservableEagerState(active$);
 
 	if (!loading) return null;
@@ -17,4 +17,8 @@ export function ListFooterComponent({ query }: { query: Query<any> }) {
 			<Loader />
 		</View>
 	);
+}
+
+export function ListFooterComponent({ active$ }: { active$: Observable<boolean> }) {
+	return <LoadingFooter active$={active$} />;
 }

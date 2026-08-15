@@ -249,7 +249,6 @@ export const ordersLiteral = {
 					},
 					value: {
 						description: 'Meta value.',
-						type: 'string',
 					},
 				},
 			},
@@ -363,7 +362,6 @@ export const ordersLiteral = {
 								},
 								value: {
 									description: 'Meta value.',
-									type: 'string',
 								},
 								display_key: {
 									description: 'Display key.',
@@ -438,7 +436,6 @@ export const ordersLiteral = {
 								},
 								value: {
 									description: 'Meta value.',
-									type: 'string',
 								},
 							},
 						},
@@ -508,7 +505,6 @@ export const ordersLiteral = {
 								},
 								value: {
 									description: 'Meta value.',
-									type: 'string',
 								},
 							},
 						},
@@ -587,7 +583,6 @@ export const ordersLiteral = {
 								},
 								value: {
 									description: 'Meta value.',
-									type: 'string',
 								},
 							},
 						},
@@ -633,7 +628,6 @@ export const ordersLiteral = {
 								},
 								value: {
 									description: 'Meta value.',
-									type: 'string',
 								},
 							},
 						},

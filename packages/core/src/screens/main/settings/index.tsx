@@ -1,86 +1,43 @@
 import * as React from 'react';
+import { ScrollView, View } from 'react-native';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
 import { Suspense } from '@wcpos/components/suspense';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 
-import { BarcodeScanning } from './barcode-scanning';
-import { GeneralSettings } from './general';
-import { PrintingSettings } from './printing';
-import { KeyboardShortcuts } from './shortcuts';
-import { TaxSettings } from './tax';
-import { ThemeSettings } from './theme';
-import { useT } from '../../../contexts/translations';
+export { BarcodeScanning } from './barcode-scanning';
+export { GeneralSettings } from './general';
+export { PrintingSettings } from './printing';
+export { TaxSettings } from './tax';
+export { ThemeSettings } from './theme';
+export { SettingsSection } from './components/settings-section';
+export { SettingsRow } from './components/settings-row';
+export { SettingsDangerZone } from './components/settings-danger-zone';
 
-/**
- *
- */
-export function SettingsScreen() {
-	const [value, setValue] = React.useState('general');
-	const t = useT();
-
-	const tabs = [
-		{
-			value: 'general',
-			label: t('settings.general_settings'),
-			component: <GeneralSettings />,
-		},
-		{ value: 'tax', label: t('settings.tax_settings'), component: <TaxSettings /> },
-		{
-			value: 'printing',
-			label: t('settings.printing', 'Printing'),
-			component: <PrintingSettings />,
-		},
-		{
-			value: 'barcode',
-			label: t('settings.barcode_scanning'),
-			component: <BarcodeScanning />,
-		},
-		{
-			value: 'shortcuts',
-			label: t('settings.keyboard_shortcuts'),
-			component: <KeyboardShortcuts />,
-		},
-		{
-			value: 'theme',
-			label: t('settings.theme'),
-			component: <ThemeSettings />,
-		},
-	];
-
+export function SettingsPage({
+	title,
+	description,
+	testID,
+	children,
+}: {
+	title: string;
+	description?: string;
+	testID: string;
+	children: React.ReactNode;
+}) {
 	return (
-		<Modal>
-			<ModalContent size="2xl">
-				<ModalHeader>
-					<ModalTitle>{t('common.settings')}</ModalTitle>
-				</ModalHeader>
-				<ModalBody>
-					<Tabs value={value} onValueChange={setValue}>
-						<TabsList asSelect className="w-full flex-row">
-							{tabs.map((tab) => (
-								<TabsTrigger
-									key={tab.value}
-									value={tab.value}
-									label={tab.label}
-									testID={`settings-tab-${tab.value}`}
-									className="flex-1"
-								>
-									<Text>{tab.label}</Text>
-								</TabsTrigger>
-							))}
-						</TabsList>
-						{tabs.map((tab) => (
-							<TabsContent key={tab.value} value={tab.value}>
-								<ErrorBoundary>
-									<Suspense>{tab.component}</Suspense>
-								</ErrorBoundary>
-							</TabsContent>
-						))}
-					</Tabs>
-				</ModalBody>
-			</ModalContent>
-		</Modal>
+		<ScrollView testID={testID} className="bg-card flex-1">
+			<View className="mx-auto w-full max-w-3xl gap-5 px-4 py-6 md:px-10 md:py-8">
+				<View className="gap-1">
+					<Text role="heading" aria-level={1} className="text-xl font-semibold">
+						{title}
+					</Text>
+					{!!description && <Text className="text-muted-foreground text-sm">{description}</Text>}
+				</View>
+				<ErrorBoundary>
+					<Suspense>{children}</Suspense>
+				</ErrorBoundary>
+			</View>
+		</ScrollView>
 	);
 }

@@ -16,11 +16,8 @@ export function FullReceiptRasterField({ form }: { form: UseFormReturn<PrinterFo
 			render={({ field }) => (
 				<FormSwitch
 					testID="add-printer-raster-toggle"
-					label={t('settings.full_receipt_raster', 'Full receipt raster')}
-					description={t(
-						'settings.full_receipt_raster_help',
-						'Prints the whole receipt as an image for Unicode/RTL compatibility. Slower and larger than text mode.'
-					)}
+					label={t('settings.full_receipt_raster')}
+					description={t('settings.full_receipt_raster_help')}
 					{...field}
 				/>
 			)}

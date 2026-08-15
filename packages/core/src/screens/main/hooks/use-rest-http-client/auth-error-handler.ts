@@ -12,7 +12,7 @@
  *    and threw it. This handler catches it.
  *
  * 2. **Pre-flight Block**: The RequestStateManager blocked a request because
- *    `authFailed = true`. The error has `errorCode: AUTH_REQUIRED`.
+ *    `authFailed = true`. The error has `blockCode: PREFLIGHT_BLOCK.AUTH_REQUIRED`.
  *
  * 3. **Direct 401**: A 401 that somehow bypassed token-refresh (shouldn't happen
  *    in normal flow, but handled for safety).
@@ -22,7 +22,7 @@
  * | Error Type | Behavior | Rationale |
  * |------------|----------|-----------|
  * | `isRefreshTokenInvalid` | Auto-launch OAuth | Session expired, needs immediate action |
- * | `AUTH_REQUIRED` (pre-flight) | Show toast with [Login] button | User may have cancelled intentionally |
+ * | auth-required pre-flight block | Show toast with [Login] button | User may have cancelled intentionally |
  * | Other 401 | Auto-launch OAuth | Unexpected auth failure, try to recover |
  *
  * ## Why CanceledError?
@@ -56,9 +56,9 @@ import { CanceledError } from 'axios';
 import { BehaviorSubject } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { HttpErrorHandler } from '@wcpos/hooks/use-http-client';
-import { requestStateManager } from '@wcpos/hooks/use-http-client';
+import { PREFLIGHT_BLOCK, requestStateManager } from '@wcpos/hooks/use-http-client';
 
 import { useWcposAuth } from '../../../../hooks/use-wcpos-auth';
 import { useLoginHandler } from '../../../auth/hooks/use-login-handler';
@@ -134,9 +134,8 @@ export const useAuthErrorHandler = (
 			.catch((authError) => {
 				authLogger.warn('promptAsync rejected - Authentication failed', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.AUTH_UNEXPECTED,
 					context: {
-						errorCode: ERROR_CODES.AUTH_REQUIRED,
 						siteName: site.name,
 						error: authError instanceof Error ? authError.message : String(authError),
 					},
@@ -177,9 +176,8 @@ export const useAuthErrorHandler = (
 				if (returnedUserId && expectedUserId && String(returnedUserId) !== String(expectedUserId)) {
 					authLogger.error('Security: Logged in as different user than expected', {
 						showToast: true,
-						saveToDb: true,
+						code: ERROR_CODES.SIGNED_IN_AS_WRONG_USER,
 						context: {
-							errorCode: ERROR_CODES.INVALID_CREDENTIALS,
 							expectedUserId,
 							returnedUserId,
 							siteName: site.name,
@@ -208,7 +206,6 @@ export const useAuthErrorHandler = (
 
 				authLogger.success('Successfully logged in', {
 					showToast: true,
-					saveToDb: true,
 					context: {
 						siteName: site.name,
 						userId: wpCredentials.id,
@@ -217,9 +214,8 @@ export const useAuthErrorHandler = (
 			} catch (error) {
 				authLogger.error('Failed to save login credentials', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
 						siteName: site.name,
 						error: error instanceof Error ? error.message : String(error),
 					},
@@ -228,15 +224,14 @@ export const useAuthErrorHandler = (
 		};
 
 		if (response.type === 'success') {
-			processSuccessfulLogin();
+			void processSuccessfulLogin();
 		} else if (response.type === 'error') {
 			// OAuth returned an error (e.g., invalid credentials)
 			// authFailed stays true - user needs to try again
 			authLogger.warn('Login failed - please check your credentials', {
 				showToast: true,
-				saveToDb: true,
+				code: ERROR_CODES.CREDENTIALS_REJECTED,
 				context: {
-					errorCode: ERROR_CODES.INVALID_CREDENTIALS,
 					siteName: site.name,
 					errorDetails: response.error,
 				},
@@ -250,11 +245,9 @@ export const useAuthErrorHandler = (
 			// User intentionally closed the auth window
 			// authFailed stays true - prevents background request spam
 			// User must click [Login] or interact with UI to retry
-			authLogger.warn('Login cancelled', {
+			authLogger.info('Login cancelled', {
 				showToast: true,
-				saveToDb: true,
 				context: {
-					errorCode: ERROR_CODES.AUTH_REQUIRED,
 					siteName: site.name,
 					status: response.type,
 				},
@@ -278,13 +271,13 @@ export const useAuthErrorHandler = (
 			 *
 			 * Catches:
 			 * - Direct 401 errors (backup)
-			 * - Pre-flight AUTH_REQUIRED errors
+			 * - Pre-flight auth-required blocks (blockCode)
 			 * - Errors marked by token-refresh handler as refresh failures
 			 */
 			canHandle: (error) => {
 				const canHandle =
 					error.response?.status === 401 ||
-					(error as any).errorCode === ERROR_CODES.AUTH_REQUIRED ||
+					(error as any).blockCode === PREFLIGHT_BLOCK.AUTH_REQUIRED ||
 					(error as any).isRefreshTokenInvalid ||
 					(error as any).refreshTokenInvalid ||
 					(error instanceof Error && error.message === 'REFRESH_TOKEN_INVALID');
@@ -293,7 +286,7 @@ export const useAuthErrorHandler = (
 					context: {
 						canHandle,
 						errorStatus: error.response?.status,
-						errorCode: (error as any).errorCode,
+						blockCode: (error as any).blockCode,
 						hasRefreshTokenInvalidFlag: (error as any).isRefreshTokenInvalid,
 						hasRefreshTokenInvalidFlag2: (error as any).refreshTokenInvalid,
 						errorMessage: error instanceof Error ? error.message : String(error),
@@ -316,7 +309,7 @@ export const useAuthErrorHandler = (
 					context: {
 						errorMessage: error instanceof Error ? error.message : String(error),
 						errorStatus: (error as any)?.response?.status,
-						errorCode: (error as any)?.errorCode,
+						blockCode: (error as any)?.blockCode,
 						hasRefreshTokenInvalidFlag: (error as any)?.isRefreshTokenInvalid,
 						hasRefreshTokenInvalidFlag2: (error as any)?.refreshTokenInvalid,
 					},
@@ -331,22 +324,21 @@ export const useAuthErrorHandler = (
 					// Session expired - immediate OAuth is appropriate
 					authLogger.debug('Refresh token is invalid, launching OAuth flow');
 					triggerAuthFlow();
-				} else if ((error as any).errorCode === ERROR_CODES.AUTH_REQUIRED) {
+				} else if ((error as any).blockCode === PREFLIGHT_BLOCK.AUTH_REQUIRED) {
 					// Pre-flight block (user may have cancelled previously)
 					// Show toast with [Login] button instead of auto-launching
 					// This prevents OAuth window spam if user keeps dismissing
 					authLogger.debug('Auth required (pre-flight blocked), showing toast');
 					authLogger.warn('Please log in to continue', {
 						showToast: true,
-						saveToDb: true,
 						toast: {
 							action: {
 								label: 'Login',
 								onClick: () => triggerAuthFlow(),
 							},
 						},
+						code: ERROR_CODES.SESSION_EXPIRED,
 						context: {
-							errorCode: ERROR_CODES.AUTH_REQUIRED,
 							siteName: site.name,
 						},
 					});

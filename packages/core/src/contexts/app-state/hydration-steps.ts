@@ -10,6 +10,12 @@ import type { UserDatabase } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 import { Platform } from '@wcpos/utils/platform';
 
+import {
+	mergeServerOwnedStoreFields,
+	normalizeStorePayload,
+	type ServerStorePayload,
+} from '../../utils/merge-stores';
+import { upsertSiteData } from '../../utils/site-writes';
 import { initialProps } from './initial-props';
 
 const appLogger = getLogger(['wcpos', 'app', 'hydration']);
@@ -199,6 +205,28 @@ export const hydrateUserSession = async (
 	return { site, wpCredentials, store, storeDB, fastStoreDB, extraData };
 };
 
+export async function switchUserSessionStore(
+	userDB: UserDatabase,
+	appState: any,
+	storeLocalID: string,
+	opts?: {
+		switchEngineScope?: (
+			sessionData: Awaited<ReturnType<typeof hydrateUserSession>>
+		) => Promise<void>;
+	}
+) {
+	const current = await appState.get('current');
+	const newState = { ...current, storeID: storeLocalID };
+	const sessionData = await hydrateUserSession(userDB, newState);
+
+	// The engine must reach the new scope BEFORE the session is committed — a
+	// failed engine transition aborts the switch with durable state untouched.
+	await opts?.switchEngineScope?.(sessionData);
+
+	await appState.set('current', () => newState);
+	return sessionData;
+}
+
 /**
  * Context that accumulates data as hydration steps complete
  */
@@ -279,8 +307,11 @@ const processInitialPropsStep: HydrationStep = {
 		const { initialProps, userDB, appState, user } = context;
 		const oldState = await appState.get('current');
 
-		// Upsert site and credentials
-		const siteDoc = await userDB.sites.upsert(initialProps.site);
+		// Upsert site and credentials.
+		// `upsertSiteData` merges instead of overwriting: a plain `upsert()` is a
+		// full-document write and would drop the locally-owned `wp_credentials`
+		// link array, which the embedded payload never carries (#902).
+		const siteDoc = await upsertSiteData(userDB.sites, initialProps.site);
 		const wpCredentialsDoc = await userDB.wp_credentials.upsert(
 			sanitizeWPCredentialsData(initialProps.wp_credentials)
 		);
@@ -301,12 +332,13 @@ const processInitialPropsStep: HydrationStep = {
 		// Process stores and generate local IDs
 		let selectedStoreID: string | undefined;
 		const stores = await Promise.all(
-			initialProps.stores.map(async (store: any) => {
+			initialProps.stores.map(async (store: ServerStorePayload) => {
+				const normalizedStore = normalizeStorePayload(store);
 				const localID = await generateHashId({
 					user: user.uuid,
 					siteID: siteDoc.uuid,
 					wpCredentialsID: wpCredentialsDoc.uuid,
-					storeID: store.id,
+					storeID: normalizedStore.id,
 				});
 
 				// Check if this is the URL-selected store
@@ -315,7 +347,7 @@ const processInitialPropsStep: HydrationStep = {
 				}
 
 				return {
-					...store,
+					...normalizedStore,
 					localID,
 				};
 			})
@@ -336,8 +368,23 @@ const processInitialPropsStep: HydrationStep = {
 			storeID = stores[0].localID;
 		}
 
-		// Insert stores and update credentials
-		await userDB.stores.bulkInsert(stores); // will not overwrite existing data
+		// Patch existing documents without touching local preferences; insert new stores.
+		const newStores = [];
+		for (let index = 0; index < stores.length; index++) {
+			const preparedStore = stores[index];
+			const existingStore = await userDB.stores.findOne(preparedStore.localID).exec();
+			if (existingStore) {
+				await mergeServerOwnedStoreFields(
+					existingStore,
+					initialProps.stores[index] as ServerStorePayload
+				);
+			} else {
+				newStores.push(preparedStore);
+			}
+		}
+		if (newStores.length > 0) {
+			await userDB.stores.bulkInsert(newStores);
+		}
 		await wpCredentialsDoc.patch({
 			stores: storeLocalIDs,
 		});
@@ -387,14 +434,23 @@ const testAuthorizationStep: HydrationStep = {
 
 		const result = await testAuthorizationMethod(wcposApiUrl, accessToken);
 
-		if (result && result.useJwtAsParam) {
-			// Update the site document to use JWT as query parameter
+		if (result) {
+			/**
+			 * Write the outcome both ways. The embedded payload never carries
+			 * `use_jwt_as_param`, and the site write above merges rather than
+			 * overwrites (#902), so a stale `true` from an earlier session would
+			 * otherwise keep JWTs in the query string forever.
+			 */
 			const siteDoc = await userDB.sites.findOne(initialProps.site.uuid).exec();
 			if (siteDoc) {
-				await siteDoc.incrementalPatch({ use_jwt_as_param: true });
-				appLogger.info('Site configured to use JWT as query parameter', {
-					context: { siteId: initialProps.site.uuid },
+				await siteDoc.getLatest().incrementalPatch({
+					use_jwt_as_param: !!result.useJwtAsParam,
 				});
+				if (result.useJwtAsParam) {
+					appLogger.info('Site configured to use JWT as query parameter', {
+						context: { siteId: initialProps.site.uuid },
+					});
+				}
 			}
 		}
 

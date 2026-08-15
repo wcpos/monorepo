@@ -18,7 +18,6 @@
     },
     "./logger": "./src/logger/index.ts",
     "./logger/constants": "./src/logger/constants.ts",
-    "./logger/error-codes": "./src/logger/error-codes.ts",
     "./open-external-url": {
       "browser": "./src/open-external-url.web.ts",
       "default": "./src/open-external-url.ts"
@@ -39,7 +38,7 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "expo-constants": "~56.0.16",
+    "expo-constants": "~57.0.7",
     "react-native": "*"
   },
   "peerDependenciesMeta": {
@@ -55,6 +54,6 @@
     "@types/jest": "^30.0.0",
     "@types/lodash": "^4.17.24",
     "jest": "^30.4.2",
-    "ts-jest": "^29.4.11"
+    "ts-jest": "^29.4.12"
   }
 }

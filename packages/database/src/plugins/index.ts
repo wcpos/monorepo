@@ -1,5 +1,4 @@
 import { addRxPlugin } from 'rxdb';
-import { RxDBAttachmentsPlugin } from 'rxdb/plugins/attachments';
 import { RxDBCleanupPlugin } from 'rxdb/plugins/cleanup';
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 import { RxDBJsonDumpPlugin } from 'rxdb/plugins/json-dump';
@@ -13,13 +12,13 @@ import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 import { RxDBFlexSearchPlugin } from 'rxdb-premium/plugins/flexsearch';
 import { disableVersionCheck, setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
-import { RxDBAuditLogPlugin } from './audit-log';
 import { findOneFixPlugin } from './find-one-fix';
 import { RxDBGenerateIdPlugin } from './generate-id';
 import { middlewaresPlugin } from './middlewares';
 import { parseRestResponsePlugin } from './parse-rest-response';
 import { populatePlugin } from './populate';
 import { resetCollectionPlugin } from './reset-collection';
+import { rxDatabaseRegistryPlugin } from './rx-database-registry';
 import { searchPlugin } from './search';
 
 /**
@@ -37,7 +36,6 @@ if (__DEV__) {
 	// }
 	addRxPlugin(RxDBDevModePlugin);
 	// add debugging
-	// @ts-ignore
 	// import('pouchdb-debug').then((pouchdbDebug) => {
 	// 	PouchDB.plugin(pouchdbDebug.default);
 	// 	PouchDB.debug.enable('*');
@@ -50,7 +48,6 @@ addRxPlugin(RxDBUpdatePlugin);
 addRxPlugin(RxDBLeaderElectionPlugin);
 addRxPlugin(RxDBMigrationPlugin);
 addRxPlugin(RxDBJsonDumpPlugin);
-addRxPlugin(RxDBAttachmentsPlugin);
 addRxPlugin(RxDBLocalDocumentsPlugin);
 addRxPlugin(RxDBStatePlugin);
 addRxPlugin(RxDBCleanupPlugin);
@@ -67,4 +64,6 @@ addRxPlugin(parseRestResponsePlugin);
 addRxPlugin(resetCollectionPlugin);
 addRxPlugin(searchPlugin);
 addRxPlugin(middlewaresPlugin);
-addRxPlugin(RxDBAuditLogPlugin); // should run last to capture all changes
+addRxPlugin(rxDatabaseRegistryPlugin);
+// The generic audit plugin retired with the logging overhaul (spec §1 silo
+// fates): action rows + sync records replace it; full snapshots die.

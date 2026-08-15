@@ -1,0 +1,129 @@
+/**
+ * Product variations — first-class local records (CONTEXT.md: their own
+ * collection, indexed barcode + parent reference). Pulled ON DEMAND via the
+ * versioned `{syncBase}/variations?include=<ids>` endpoint, which
+ * resolves the parent server-side. The stable string `id` is derived from the
+ * Woo id; `wooId` and `parentId` are mirrored fields (never the key — G1).
+ */
+import { finiteOrNull } from '@wcpos/sync-core';
+
+import type { MigrationStrategies } from 'rxdb';
+
+export type WooVariationPayload = Record<string, unknown> & { id?: number };
+
+export type LocalVariationDocument = {
+	id: string;
+	wooId: number | null;
+	parentId: number | null;
+	payload: WooVariationPayload;
+	sync: {
+		revision: string;
+		partial: boolean;
+		source: 'woo-rest';
+	};
+	local: {
+		dirty: boolean;
+		pendingMutationIds: string[];
+	};
+};
+
+/** A normalized variation attribute. Malformed non-string entries are dropped for 1.9 parity
+ * (#811). The WooCommerce "Any <attribute>" case is modeled as ABSENCE (the entry is dropped),
+ * so the variation filter's `$not $elemMatch` "any" semantics work uniformly. */
+export type VariationAttribute = { id: number; name: string; option: string };
+
+/** Promoted variation filter/sort columns. `attributes` is promoted out of payload so the variation
+ * attribute filter (`$or[$not $elemMatch {id,name}, $elemMatch {id,name,option}]`) is Mango-queryable. */
+export type PromotedVariationColumns = {
+	price: number;
+	stockStatus: string;
+	attributes: VariationAttribute[];
+	/** Decimal-capable managed stock (P2-2). null when stock management is off. */
+	stockQuantity: number | null;
+};
+
+export type StoredVariationDocument = LocalVariationDocument & PromotedVariationColumns;
+
+/** Normalize a variation's `attributes`: DROP malformed non-string entries for 1.9 parity (#811)
+ * and DROP "any" entries (empty option), so "any" becomes absence. */
+export function normalizeVariationAttributes(value: unknown): VariationAttribute[] {
+	if (!Array.isArray(value)) return [];
+	return value.flatMap((entry) => {
+		if (entry === null || typeof entry !== 'object') return [];
+		const { id, name, option } = entry as Record<string, unknown>;
+		if (typeof name !== 'string' || typeof option !== 'string') return [];
+		if (name === '' || option === '') return [];
+		return [{ id: Number(id) || 0, name, option }];
+	});
+}
+
+/** Project the promoted variation columns from a Woo variation payload. Pure. */
+export function promotedVariationColumns(payload: WooVariationPayload): PromotedVariationColumns {
+	return {
+		price: Number(payload.price) || 0,
+		stockStatus: String(payload.stock_status ?? ''),
+		attributes: normalizeVariationAttributes(payload.attributes),
+		// Decimal-preserving (no (int) coercion); null when stock management is off.
+		stockQuantity: finiteOrNull(payload.stock_quantity),
+	};
+}
+
+/** Attach the promoted columns (derived from `doc.payload`) to a variation document for storage. */
+export function withVariationColumns<T extends { payload: WooVariationPayload }>(
+	doc: T
+): T & PromotedVariationColumns {
+	return { ...doc, ...promotedVariationColumns(doc.payload) };
+}
+
+export const variationSchema = {
+	title: 'Woo product-variation document schema',
+	version: 3,
+	primaryKey: 'id',
+	type: 'object',
+	properties: {
+		id: { type: 'string', maxLength: 128 },
+		wooId: { type: ['number', 'null'] },
+		parentId: { type: ['number', 'null'] },
+		// Promoted filter columns (duplicated out of payload, payload bytes unchanged).
+		price: { type: 'number' },
+		stockStatus: { type: 'string', maxLength: 24 },
+		attributes: {
+			type: 'array',
+			items: {
+				type: 'object',
+				properties: {
+					id: { type: 'number' },
+					name: { type: 'string' },
+					option: { type: 'string' },
+				},
+			},
+		},
+		// Decimal-capable managed stock (P2-2) — no integer bound (WooCommerce POS allows
+		// fractional stock). Not indexed (number-or-null can't back an RxDB index).
+		stockQuantity: { type: ['number', 'null'] },
+		payload: { type: 'object', additionalProperties: true },
+		sync: { type: 'object', additionalProperties: true },
+		local: { type: 'object', additionalProperties: true },
+	},
+	required: [
+		'id',
+		'wooId',
+		'parentId',
+		'price',
+		'stockStatus',
+		'attributes',
+		'stockQuantity',
+		'payload',
+		'sync',
+		'local',
+	],
+} as const;
+
+export const variationMigrationStrategies: MigrationStrategies = {
+	/** v0 → v1: backfill the promoted columns from the existing payload (payload untouched). */
+	1: (doc) => ({ ...doc, ...promotedVariationColumns(doc.payload) }),
+	/** v1 → v2: additive — backfill the new decimal stockQuantity column from the payload. */
+	2: (doc) => ({ ...doc, stockQuantity: promotedVariationColumns(doc.payload).stockQuantity }),
+	/** v2 → v3: write facets need the same durable local bookkeeping as products/customers. */
+	3: (doc) => ({ ...doc, local: { dirty: false, pendingMutationIds: [] } }),
+};

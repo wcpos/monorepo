@@ -1,11 +1,12 @@
 {
   "pos-products": {
-    "sortBy": "name",
+    "sortBy": "menu_order",
     "sortDirection": "asc",
     "width": 60,
     "showOutOfStock": false,
     "position": "left",
     "viewMode": "grid",
+    "scannerHeight": 176,
     "gridColumns": 4,
     "gridFields": {
       "name": true,
@@ -240,8 +241,7 @@
       },
       {
         "key": "type",
-        "show": false,
-        "disableSort": true
+        "show": false
       },
       {
         "key": "sku",
@@ -650,37 +650,6 @@
             "show": false
           }
         ]
-      }
-    ]
-  },
-  "logs": {
-    "sortBy": "timestamp",
-    "sortDirection": "desc",
-    "columns": [
-      {
-        "key": "timestamp",
-        "show": true
-      },
-      {
-        "key": "level",
-        "show": true
-      },
-      {
-        "key": "message",
-        "show": true,
-        "disableSort": true,
-        "flex": 3
-      },
-      {
-        "key": "context",
-        "show": true,
-        "disableSort": true,
-        "hideLabel": true,
-        "flex": 3
-      },
-      {
-        "key": "code",
-        "show": true
       }
     ]
   }

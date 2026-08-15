@@ -173,8 +173,8 @@ jest.mock('./printers-empty-state', () => ({
 	PrintersEmptyState: () => null,
 }));
 
-jest.mock('./section-header', () => ({
-	SectionHeader: () => null,
+jest.mock('../components/settings-section', () => ({
+	SettingsSection: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 jest.mock('./template-row', () => ({
@@ -210,7 +210,12 @@ jest.mock('../../../../contexts/app-state', () => ({
 }));
 
 jest.mock('../../../../contexts/translations', () => ({
-	useT: () => (_key: string, fallback: string) => fallback,
+	useT: () =>
+		jest
+			.requireActual<typeof import('../../../../../jest/translate')>(
+				'../../../../../jest/translate'
+			)
+			.createTestT(),
 }));
 
 jest.mock('../../hooks/use-cloud-enqueue', () => ({

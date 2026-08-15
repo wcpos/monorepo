@@ -100,7 +100,12 @@ jest.mock('@wcpos/components/progress', () => ({
 }));
 
 jest.mock('../../../../../../contexts/translations', () => ({
-	useT: () => (_key: string, fallback: string) => fallback,
+	useT: () =>
+		jest
+			.requireActual<typeof import('../../../../../../../jest/translate')>(
+				'../../../../../../../jest/translate'
+			)
+			.createTestT(),
 }));
 
 const makeForm = () =>

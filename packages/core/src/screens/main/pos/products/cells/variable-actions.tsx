@@ -29,8 +29,8 @@ export function VariableActions({ row }: CellContext<{ document: ProductDocument
 	 *
 	 */
 	const addToCart = React.useCallback(
-		(variation: ProductVariationDocument | ProductDocument, metaData: MetaData[]) => {
-			addVariation(variation as ProductVariationDocument, parent, metaData);
+		async (variation: ProductVariationDocument | ProductDocument, metaData: MetaData[]) => {
+			await addVariation(variation as ProductVariationDocument, parent, metaData);
 			if (triggerRef.current) {
 				triggerRef.current.close();
 			}

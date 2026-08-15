@@ -3,6 +3,7 @@ import * as React from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import type { UsePrintExternalURLOptions } from './types';
 
@@ -49,7 +50,9 @@ export const usePrintExternalURL = (options: UsePrintExternalURLOptions) => {
 			ipc.once(`onBeforePrint-${printJobId}`, () => {
 				setIsPrinting(true);
 				if (onBeforePrint) {
-					onBeforePrint();
+					void Promise.resolve()
+						.then(() => onBeforePrint())
+						.catch((error) => onPrintError?.('onBeforePrint', error as Error));
 				}
 			});
 
@@ -69,7 +72,7 @@ export const usePrintExternalURL = (options: UsePrintExternalURLOptions) => {
 				}
 			});
 		} else {
-			printLogger.error('ipcRenderer not available');
+			printLogger.error('ipcRenderer not available', { code: ERROR_CODES.PRINT_UNEXPECTED });
 		}
 	}, [externalURL, html, onBeforePrint, onAfterPrint, onPrintError]);
 

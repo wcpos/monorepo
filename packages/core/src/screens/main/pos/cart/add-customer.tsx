@@ -16,7 +16,7 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
 import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';
@@ -65,11 +65,10 @@ export function AddNewCustomer() {
 		async (data: z.infer<typeof customerFormSchema>) => {
 			setLoading(true);
 			try {
-				const savedDoc = await create({ data });
+				const savedDoc = await create({ data, awaitRemoteId: true });
 				if (savedDoc) {
 					cartLogger.success(t('common.saved', { name: format(savedDoc as any) }), {
 						showToast: true,
-						saveToDb: true,
 						context: {
 							customerId: (savedDoc as any).id,
 							customerName: format(savedDoc as any),
@@ -90,11 +89,11 @@ export function AddNewCustomer() {
 				}
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
-				cartLogger.error(t('common.failed_to_save_customer'), {
+				cartLogger.error('Failed to save customer', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.SYNC_UNEXPECTED,
+					toast: { title: t('common.failed_to_save_customer') },
 					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
 						error: errorMessage,
 					},
 				});
@@ -116,7 +115,7 @@ export function AddNewCustomer() {
 						<Text>{t('common.add_new_customer')}</Text>
 					</TooltipContent>
 				</Tooltip>
-				<DialogContent size="xl" portalHost="pos">
+				<DialogContent testID="add-new-customer-dialog" size="xl" portalHost="pos">
 					<DialogHeader>
 						<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
 					</DialogHeader>
@@ -166,11 +165,10 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
 		async (data: z.infer<typeof customerFormSchema>) => {
 			setLoading(true);
 			try {
-				const savedDoc = await create({ data });
+				const savedDoc = await create({ data, awaitRemoteId: true });
 				if (savedDoc) {
 					cartLogger.success(t('common.saved', { name: format(savedDoc as any) }), {
 						showToast: true,
-						saveToDb: true,
 						context: {
 							customerId: (savedDoc as any).id,
 							customerName: format(savedDoc as any),
@@ -191,11 +189,11 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
 				}
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
-				cartLogger.error(t('common.failed_to_save_customer'), {
+				cartLogger.error('Failed to save customer', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.SYNC_UNEXPECTED,
+					toast: { title: t('common.failed_to_save_customer') },
 					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
 						error: errorMessage,
 					},
 				});
@@ -208,7 +206,7 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange} style={{ display: 'none' }}>
-			<DialogContent size="xl" portalHost="pos">
+			<DialogContent testID="add-customer-dialog" size="xl" portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
 				</DialogHeader>

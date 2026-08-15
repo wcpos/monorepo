@@ -1,13 +1,7 @@
 import * as React from 'react';
 
 import toNumber from 'lodash/toNumber';
-import {
-	ObservableResource,
-	useObservable,
-	useObservableEagerState,
-	useObservableSuspense,
-} from 'observable-hooks';
-import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
@@ -15,63 +9,28 @@ import {
 	TreeComboboxContent,
 	TreeComboboxTrigger,
 } from '@wcpos/components/tree-combobox';
-import { Query } from '@wcpos/query';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 import type { Option } from '@wcpos/components/combobox/types';
 
 import { useT } from '../../../../../contexts/translations';
-import { usePullDocument } from '../../../contexts/use-pull-document';
-import { useCollection } from '../../../hooks/use-collection';
+import { useEngineDocumentsByWooId } from '../../../hooks/use-engine-document';
 import { CategoryTreeLoader } from '../category-select';
-import { createSelectedCategoryOptions$ } from './selected-categories';
+import { useQueryState, useQueryStateActions } from '../../../../../query';
 
-type ProductCollection = import('@wcpos/database').ProductCollection;
-type ProductCategoryCollection = import('@wcpos/database').ProductCategoryCollection;
-
-interface Props {
-	query: Query<ProductCollection>;
-}
-
-/**
- * Extract category IDs from the query selector, handling both formats:
- * - Direct: selector.categories.$elemMatch.id (single from ProductCategories)
- * - $and/$or: selector.$and[].{$or[].categories.$elemMatch.id} (multi from CategoryPill)
- */
-function getCategoryIdsFromQuery(query: Query<ProductCollection>): number[] {
-	const directId = query.getElemMatchId('categories');
-	if (directId !== undefined) {
-		return [directId];
-	}
-
-	const selector = query.currentRxQuery?.mangoQuery?.selector as Record<string, any> | undefined;
-	if (selector?.$and) {
-		for (const condition of selector.$and) {
-			if (Array.isArray(condition.$or)) {
-				const ids: number[] = [];
-				for (const clause of condition.$or) {
-					const id = clause?.categories?.$elemMatch?.id;
-					if (id !== undefined) ids.push(id);
-				}
-				if (ids.length > 0) return ids;
-			}
-		}
-	}
-
-	return [];
-}
+type ProductCategoryDocument = import('@wcpos/database').ProductCategoryDocument;
 
 function CategoryPillLabel({
 	resource,
 	fallbackLabel,
 }: {
-	resource: ObservableResource<Option[]>;
+	resource: ObservableResource<ProductCategoryDocument[]>;
 	fallbackLabel: string;
 }) {
 	const selected = useObservableSuspense(resource);
 	const displayText = React.useMemo(() => {
 		if (selected.length === 0) return fallbackLabel;
-		if (selected.length === 1) return selected[0].label;
-		return `${selected[0].label} +${selected.length - 1}`;
+		if (selected.length === 1) return selected[0].name;
+		return `${selected[0].name} +${selected.length - 1}`;
 	}, [fallbackLabel, selected]);
 
 	return <ButtonText decodeHtml>{displayText}</ButtonText>;
@@ -80,42 +39,16 @@ function CategoryPillLabel({
 /**
  *
  */
-export function CategoryPill({ query }: Props) {
+export function CategoryPill() {
 	const t = useT();
 	const [options, setOptions] = React.useState<HierarchicalOption[]>([]);
-	const { collection } = useCollection('products/categories');
-	const pullDocument = usePullDocument();
-
-	const activeCategoryIds$ = React.useMemo(
-		() =>
-			query.rxQuery$.pipe(
-				map(() => getCategoryIdsFromQuery(query)),
-				distinctUntilChanged((a, b) => a.length === b.length && a.every((v, i) => v === b[i]))
-			),
-		[query]
+	const activeCategoryIds = useQueryState<'products', number[]>(
+		(state) => state.filters.categories
 	);
-	const activeCategoryIds = useObservableEagerState(activeCategoryIds$);
-
-	const selectedCategories$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(([ids, categoryCollection, pullSelectedCategory, loadingLabel]) =>
-					createSelectedCategoryOptions$({
-						ids,
-						collection: categoryCollection as ProductCategoryCollection,
-						pullDocument: pullSelectedCategory as (
-							id: number,
-							collection: ProductCategoryCollection
-						) => Promise<unknown>,
-						loadingLabel,
-					})
-				)
-			),
-		[activeCategoryIds, collection, pullDocument, t('common.loading')]
-	);
-	const selectedCategoriesResource = React.useMemo(
-		() => new ObservableResource(selectedCategories$),
-		[selectedCategories$]
+	const actions = useQueryStateActions<'products'>();
+	const selectedCategoriesResource = useEngineDocumentsByWooId<ProductCategoryDocument>(
+		'products/categories',
+		activeCategoryIds
 	);
 	const selected = React.useMemo<Option[]>(() => {
 		if (!activeCategoryIds || activeCategoryIds.length === 0) return [];
@@ -129,24 +62,17 @@ export function CategoryPill({ query }: Props) {
 
 	const handleChange = React.useCallback(
 		(newSelection: Option[]) => {
-			if (newSelection.length > 0) {
-				const orConditions = newSelection.map((opt) => ({
-					categories: { $elemMatch: { id: toNumber(opt.value) } },
-				}));
-				query
-					.removeWhere('categories')
-					.and([{ $or: orConditions }])
-					.exec();
-			} else {
-				query.removeWhere('categories').exec();
-			}
+			actions.setFilter(
+				'categories',
+				newSelection.map((option) => toNumber(option.value))
+			);
 		},
-		[query]
+		[actions]
 	);
 
 	const handleRemove = React.useCallback(() => {
-		query.removeWhere('categories').exec();
-	}, [query]);
+		actions.clearFilter('categories');
+	}, [actions]);
 
 	return (
 		<TreeCombobox options={options} multiple value={selected} onValueChange={handleChange}>
@@ -156,6 +82,7 @@ export function CategoryPill({ query }: Props) {
 					leftIcon="folder"
 					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
+					removeTestID="filter-pill-remove-categories"
 					onRemove={handleRemove}
 				>
 					<React.Suspense fallback={<ButtonText>{t('common.loading')}</ButtonText>}>

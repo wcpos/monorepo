@@ -23,7 +23,7 @@ export const useTaxDisplayValues = ({
 	context,
 	...props
 }: TaxDisplayValuesProps) => {
-	const { rates, calcTaxes, pricesIncludeTax } = useTaxRates();
+	const { rates, calcTaxes, pricesIncludeTax, priceNumDecimals } = useTaxRates();
 	const { inclOrExcl } = useTaxInclOrExcl({ context });
 	const amountIncludesTax = props.amountIncludesTax ?? pricesIncludeTax;
 
@@ -54,6 +54,7 @@ export const useTaxDisplayValues = ({
 			amount,
 			rates: appliedRates as { id: number; rate: string; compound: boolean; order: number }[],
 			amountIncludesTax,
+			dp: priceNumDecimals,
 		});
 
 		if (amountIncludesTax && inclOrExcl === 'excl') {
@@ -69,5 +70,5 @@ export const useTaxDisplayValues = ({
 			taxTotal,
 			inclOrExcl,
 		};
-	}, [amount, calcTaxes, taxStatus, appliedRates, amountIncludesTax, inclOrExcl]);
+	}, [amount, calcTaxes, taxStatus, appliedRates, amountIncludesTax, inclOrExcl, priceNumDecimals]);
 };

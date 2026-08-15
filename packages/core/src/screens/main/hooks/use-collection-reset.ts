@@ -1,132 +1,64 @@
 import * as React from 'react';
 
-import { swapCollection, swapCollections, useQueryManager } from '@wcpos/query';
-import type { CollectionSwapResult } from '@wcpos/query';
+import { COLLECTION_VOCABULARY, runResetRefill, useQueryRuntime } from '@wcpos/query';
+import type { SyncCollectionName } from '@wcpos/sync-engine';
 import { getLogger } from '@wcpos/utils/logger';
-
-import { useAppState } from '../../../contexts/app-state';
 
 import type { CollectionKey } from './use-collection';
 
 const logger = getLogger(['wcpos', 'hooks', 'useCollectionReset']);
 
-/**
- * Wait for a replication to be registered for a collection.
- * Polls the manager's replicationStates until found or timeout.
- *
- * @param manager - The query manager instance
- * @param collectionName - The collection name to wait for
- * @param timeout - Maximum time to wait in ms (default: 5000)
- * @param interval - Polling interval in ms (default: 50)
- * @returns true if replication found, false if timed out
- */
-async function waitForReplication(
-	manager: ReturnType<typeof useQueryManager>,
-	collectionName: string,
-	timeout = 5000,
-	interval = 50
-): Promise<boolean> {
-	const startTime = Date.now();
+const ENGINE_COLLECTIONS = Object.fromEntries(
+	Object.entries(COLLECTION_VOCABULARY).map(([name, row]) => [row.legacyName, name])
+) as Partial<Record<CollectionKey, SyncCollectionName>>;
 
-	while (Date.now() - startTime < timeout) {
-		// Check if any replication exists for this collection
-		let found = false;
-		manager.replicationStates.forEach((replication) => {
-			if ((replication as any)?.collection?.name === collectionName) {
-				found = true;
-			}
-		});
-
-		if (found) {
-			return true;
-		}
-
-		// Wait before next check
-		await new Promise((resolve) => setTimeout(resolve, interval));
-	}
-
-	return false;
+export interface CollectionResetResult {
+	collectionName: CollectionKey;
+	outcome: 'reset' | 'needs-confirmation';
 }
 
-/**
- * Hook for safely resetting (clearing) a collection.
- *
- * Uses swapCollection which:
- * 1. Cancels all queries and replications for the collection
- * 2. Removes the collection (data is cleared instantly, regardless of size)
- * 3. Waits for the reset-collection plugin to re-create the collection
- *
- * This is much faster than deleteAll() for large datasets (100k+ records).
- */
+/** Engine-owned reset funnel. A pending mutation queue is never destroyed implicitly: the
+ * engine's `needs-confirmation` value is preserved and returned to the caller unchanged. */
 export const useCollectionReset = (key: CollectionKey) => {
-	const { storeDB, fastStoreDB } = useAppState();
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
+	const collectionNames = React.useMemo<CollectionKey[]>(
+		() => (key === 'products' ? ['variations', 'products'] : [key]),
+		[key]
+	);
 
-	/**
-	 * Clear the collection and all associated data.
-	 *
-	 * Special case for products: also clears the variations collection first,
-	 * since variations are children of products and should be cleared together.
-	 *
-	 * @returns Promise with results from each collection swap
-	 */
-	const clear = React.useCallback(async (): Promise<CollectionSwapResult[]> => {
-		if (key === 'products') {
-			// Products have associated variations - clear both
-			// Order matters: variations first, then products
-			return swapCollections({
-				manager,
-				collectionNames: ['variations', 'products'],
-				storeDB,
-				fastStoreDB,
-			});
+	const resetOne = React.useCallback(
+		async (collectionName: CollectionKey): Promise<CollectionResetResult> => {
+			const engineName = ENGINE_COLLECTIONS[collectionName];
+			if (!engineName) throw new Error(`Collection "${collectionName}" cannot be engine-reset`);
+			const outcome = await runtime.engine.scope.resetCollection(engineName);
+			return { collectionName, outcome };
+		},
+		[runtime]
+	);
+
+	const clear = React.useCallback(async (): Promise<CollectionResetResult[]> => {
+		const results: CollectionResetResult[] = [];
+		for (const collectionName of collectionNames) {
+			const result = await resetOne(collectionName);
+			results.push(result);
+			if (result.outcome === 'needs-confirmation') break;
 		}
+		return results;
+	}, [collectionNames, resetOne]);
 
-		// Single collection swap
-		const result = await swapCollection({
-			manager,
-			collectionName: key,
-			storeDB,
-			fastStoreDB,
-		});
-
-		return [result];
-	}, [fastStoreDB, key, manager, storeDB]);
-
-	/**
-	 * Clear the collection and then trigger a fresh sync.
-	 *
-	 * After swap, waits for queries to re-register then triggers sync
-	 * on the manager's replications (which are connected to the UI).
-	 */
 	const clearAndSync = React.useCallback(async (): Promise<void> => {
 		logger.debug('clearAndSync: starting', { context: { key } });
-
 		const results = await clear();
-
-		// Trigger sync on manager's replications
-		for (const result of results) {
-			if (result.success && result.collectionName) {
-				// Wait for the replication to be registered (with timeout)
-				const replicationReady = await waitForReplication(manager, result.collectionName);
-
-				if (!replicationReady) {
-					logger.warn('clearAndSync: proceeding without confirmed replication', {
-						context: { collectionName: result.collectionName },
-					});
-				}
-
-				// Find and run replications from the manager's replicationStates
-				manager.replicationStates.forEach((replication, endpoint) => {
-					if ((replication as any)?.collection?.name === result.collectionName) {
-						replication.run({ force: true });
-					}
-				});
-			}
+		const pendingConfirmation = results.find((result) => result.outcome === 'needs-confirmation');
+		if (pendingConfirmation) {
+			logger.warn('clearAndSync: reset needs confirmation', {
+				context: { collectionName: pendingConfirmation.collectionName },
+			});
+			return;
 		}
-
+		await runResetRefill(runtime.engine, collectionNames);
 		logger.debug('clearAndSync: complete', { context: { key } });
-	}, [clear, key, manager]);
+	}, [clear, collectionNames, key, runtime.engine]);
 
 	return { clear, clearAndSync };
 };

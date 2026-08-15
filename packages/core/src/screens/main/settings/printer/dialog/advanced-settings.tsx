@@ -40,9 +40,7 @@ export function AdvancedSettings({
 	return (
 		<Collapsible defaultOpen={defaultOpen}>
 			<CollapsibleTrigger testID="add-printer-advanced-trigger">
-				<Text className="text-sm font-medium">
-					{t('settings.printer_settings', 'Printer Settings')}
-				</Text>
+				<Text className="text-sm font-medium">{t('settings.printer_settings')}</Text>
 			</CollapsibleTrigger>
 			<CollapsibleContent>
 				<VStack className="gap-4 pt-2">
@@ -55,7 +53,7 @@ export function AdvancedSettings({
 									<View className="flex-1">
 										<FormSelect
 											customComponent={(p: any) => <VendorSelect {...p} options={vendorOptions} />}
-											label={t('settings.printer_vendor', 'Vendor')}
+											label={t('settings.printer_vendor')}
 											value={value}
 											onChange={(v: string) => {
 												onVendorManualChange?.();
@@ -76,7 +74,7 @@ export function AdvancedSettings({
 								<View className="flex-1">
 									<FormSelect
 										customComponent={LanguageSelect}
-										label={t('settings.printer_language', 'Printer Language')}
+										label={t('settings.printer_language')}
 										value={value}
 										onChange={onChange}
 										{...rest}
@@ -91,7 +89,7 @@ export function AdvancedSettings({
 								<View className="flex-1">
 									<FormSelect
 										customComponent={PaperWidthSelect}
-										label={t('settings.printer_text_width', 'Printer text width')}
+										label={t('settings.printer_text_width')}
 										value={value != null ? String(value) : undefined}
 										onChange={(val: string) => onChange(Number(val))}
 										{...rest}

@@ -6,6 +6,7 @@ import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 
 import type { CellContext } from '@tanstack/react-table';
+import type { QueryStateActions } from '../../../../query';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -19,7 +20,9 @@ export function ProductCategories({
 	const product = row.original.document;
 	const categories = useObservableEagerState(product.categories$!) || [];
 
-	const query = (table.options.meta as unknown as { query: any })?.query;
+	const meta = table.options.meta as unknown as {
+		actions: Pick<QueryStateActions<'products'>, 'setFilter'>;
+	};
 
 	if (categories.length === 0) {
 		return null;
@@ -36,10 +39,7 @@ export function ProductCategories({
 					size="xs"
 					key={index}
 					onPress={() =>
-						query
-							.removeWhere('categories')
-							.and([{ $or: [{ categories: { $elemMatch: { id: cat.id } } }] }])
-							.exec()
+						cat.id === undefined ? undefined : meta.actions.setFilter('categories', [cat.id])
 					}
 				>
 					<ButtonText numberOfLines={1} decodeHtml>

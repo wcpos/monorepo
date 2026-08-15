@@ -54,7 +54,7 @@ export function PaymentSection({ order, last }: { order: OrderDocument; last?: b
 		<RailSection title={t('common.payment_method')} last={last}>
 			<KV k={t('common.payment_method')} v={method} />
 			<KV k={t('common.transaction_id')} v={order.transaction_id} />
-			<KV k={t('orders.captured', { defaultValue: 'Captured' })} v={datePaid ?? undefined} />
+			<KV k={t('orders.captured')} v={datePaid ?? undefined} />
 			{refunded > 0 ? <KV k={t('orders.refund')} v={format(-refunded)} tone="destructive" /> : null}
 		</RailSection>
 	);

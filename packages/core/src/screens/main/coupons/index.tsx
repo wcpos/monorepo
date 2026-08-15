@@ -10,9 +10,8 @@ import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import { Tooltip, TooltipContent } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
-import { useQuery } from '@wcpos/query';
 
 import { Actions } from './cells/actions';
 import { Active } from './cells/active';
@@ -27,14 +26,25 @@ import { FilterBar } from './filter-bar';
 import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../contexts/translations';
 import { useProAccess } from '../contexts/pro-access';
+import { CapabilityTooltipTrigger } from '../components/capability-tooltip';
 import { DataTable } from '../components/data-table';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
 import { TextCell } from '../components/text-cell';
 import { DateCell } from '../components/date';
-import { QuerySearchInput } from '../components/query-search-input';
 import { UISettingsDialog } from '../components/ui-settings';
+import { QuerySearchInput } from '../components/query-search-input';
 import { useUISettings } from '../contexts/ui-settings';
 import { useMutation } from '../hooks/mutations/use-mutation';
+import { useUserCapabilities } from '../hooks/use-user-capabilities';
+import {
+	QueryStateProvider,
+	useCollectionBinding,
+	useQueryState,
+	useQueryStateActions,
+} from '../../../query';
+
+import type { QueryStateActions, QueryStateOf } from '../../../query';
+import type { SortFieldsByCollection } from '../../../query/query-state-types';
 
 type CouponDocument = import('@wcpos/database').CouponDocument;
 
@@ -52,6 +62,35 @@ const cells = {
 	date_modified_gmt: DateCell,
 };
 
+const COUPONS_PAGE_SIZE = 10;
+const COUPON_SORT_FIELDS = [
+	'code',
+	'amount',
+	'discount_type',
+	'status',
+	'usage_count',
+	'date_expires_gmt',
+	'date_created_gmt',
+	'date_modified_gmt',
+] as const satisfies readonly SortFieldsByCollection['coupons'][];
+const DEFAULT_COUPON_SORT = {
+	field: 'date_created_gmt',
+	direction: 'desc',
+} as const;
+
+function isCouponSortField(field: unknown): field is SortFieldsByCollection['coupons'] {
+	return COUPON_SORT_FIELDS.some((sortField) => sortField === field);
+}
+
+function getInitialCouponSort(
+	sortBy: unknown,
+	sortDirection: unknown
+): QueryStateOf<'coupons'>['sort'] {
+	if (!isCouponSortField(sortBy)) return DEFAULT_COUPON_SORT;
+
+	return { field: sortBy, direction: sortDirection === 'asc' ? 'asc' : 'desc' };
+}
+
 function renderCell(columnKey: string, info: Record<string, unknown>) {
 	const Renderer = cells[columnKey as keyof typeof cells];
 	if (Renderer) {
@@ -61,22 +100,26 @@ function renderCell(columnKey: string, info: Record<string, unknown>) {
 	return <TextCell {...(info as any)} />;
 }
 
-export function CouponsScreen() {
-	const { uiSettings } = useUISettings('coupons');
+function CouponsScreenContent() {
+	const state = useQueryState<'coupons'>();
+	const actions = useQueryStateActions<'coupons'>();
+	const binding = useCollectionBinding('coupons', state);
+	const tableActions = React.useMemo<
+		Pick<QueryStateActions<'coupons'>, 'setSort' | 'extendLimit' | 'setFilter'>
+	>(
+		() => ({
+			setSort: actions.setSort,
+			extendLimit: actions.extendLimit,
+			setFilter: actions.setFilter,
+		}),
+		[actions]
+	);
 	const t = useT();
 	const router = useRouter();
 	const { bottom } = useSafeAreaInsets();
 	const { readOnly } = useProAccess();
+	const { caps } = useUserCapabilities();
 	const { patch } = useMutation({ collectionName: 'coupons' });
-
-	const query = useQuery({
-		queryKeys: ['coupons'],
-		collectionName: 'coupons',
-		initialParams: {
-			sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection } as Record<string, 'asc' | 'desc'>],
-		},
-		infiniteScroll: true,
-	});
 
 	const tableConfig = React.useMemo(
 		() => ({
@@ -88,7 +131,7 @@ export function CouponsScreen() {
 					document: CouponDocument;
 					changes: Record<string, unknown>;
 				}) => {
-					patch({ document, data: changes });
+					void patch({ document, data: changes });
 				},
 			},
 		}),
@@ -106,21 +149,28 @@ export function CouponsScreen() {
 					<VStack>
 						<HStack>
 							<QuerySearchInput
-								query={query!}
+								collectionName="coupons"
 								placeholder={t('common.search_coupons')}
 								className="flex-1"
 								testID="search-coupons"
 							/>
-							<Tooltip>
-								<TooltipTrigger asChild>
+							<Tooltip showOnNative={readOnly || !caps.canCreateCoupons}>
+								<CapabilityTooltipTrigger>
 									<IconButton
+										testID="coupons-add-button"
 										name="plus"
 										onPress={() => router.push({ pathname: '/coupons/add' })}
-										disabled={readOnly}
+										disabled={readOnly || !caps.canCreateCoupons}
 									/>
-								</TooltipTrigger>
+								</CapabilityTooltipTrigger>
 								<TooltipContent>
-									<Text>{readOnly ? t('common.upgrade_to_pro') : t('coupons.add_coupon')}</Text>
+									<Text>
+										{readOnly
+											? t('common.upgrade_to_pro')
+											: !caps.canCreateCoupons
+												? t('capability_hints.create_coupons')
+												: t('coupons.add_coupon')}
+									</Text>
 								</TooltipContent>
 							</Tooltip>
 							<UISettingsDialog title={t('coupons.coupon_settings')}>
@@ -128,16 +178,23 @@ export function CouponsScreen() {
 							</UISettingsDialog>
 						</HStack>
 						<ErrorBoundary>
-							<FilterBar query={query!} />
+							<FilterBar />
 						</ErrorBoundary>
 					</VStack>
 				</CardHeader>
 				<CardContent className="border-border flex-1 border-t p-0">
 					<ErrorBoundary>
 						<Suspense fallback={<DataTableSkeleton id="coupons" />}>
-							<DataTable
+							<DataTable<CouponDocument>
 								id="coupons"
-								query={query!}
+								collectionName="coupons"
+								resource={binding.resource}
+								sort={state.sort}
+								actions={tableActions}
+								active$={binding.active$}
+								total$={binding.total$}
+								totalSource$={binding.totalSource$}
+								sync={binding.sync}
 								renderCell={renderCell}
 								noDataMessage={t('common.no_coupons_found')}
 								estimatedItemSize={100}
@@ -148,5 +205,20 @@ export function CouponsScreen() {
 				</CardContent>
 			</Card>
 		</View>
+	);
+}
+
+export function CouponsScreen() {
+	const { uiSettings } = useUISettings('coupons');
+	const initialSort = getInitialCouponSort(uiSettings.sortBy, uiSettings.sortDirection);
+
+	return (
+		<QueryStateProvider
+			collection="coupons"
+			initialPageSize={COUPONS_PAGE_SIZE}
+			initialSort={initialSort}
+		>
+			<CouponsScreenContent />
+		</QueryStateProvider>
 	);
 }

@@ -2,10 +2,10 @@ import get from 'lodash/get';
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import type { RxCollection, RxPlugin } from 'rxdb';
-import type { FlexSearchInstance } from '../types.d';
+import type { FlexSearchInstance, SearchInitializationOptions } from '../types.d';
 
 const searchLogger = getLogger(['wcpos', 'db', 'search']);
 
@@ -20,6 +20,30 @@ const MAX_CACHED_LOCALES = 3;
  */
 function normalizeLocale(locale: string): string {
 	return locale.slice(0, 2).toLowerCase();
+}
+
+/**
+ * Version tag baked into the search index identifier.
+ *
+ * Bump this whenever the index configuration changes in a way that requires
+ * existing persisted indexes to be rebuilt. The rxdb-premium flexsearch plugin
+ * builds its index through an RxDB pipeline that resumes from a checkpoint and
+ * rehydrates the previously serialized index via import(); it does NOT
+ * re-tokenize already-indexed documents. Changing options like `tokenize` in
+ * place would therefore only affect newly-synced documents, leaving existing
+ * catalogues on the old behaviour. A new identifier gives the pipeline a fresh
+ * checkpoint and an empty index collection, forcing a one-time full rebuild.
+ *
+ * v2: tokenize 'forward' -> 'full' for WooCommerce-parity mid-word matching (#679).
+ */
+const SEARCH_INDEX_VERSION = 'v2';
+
+/**
+ * Build the FlexSearch instance identifier for a collection + locale.
+ * FlexSearch appends `_flexsearch` to this string to name its persisted collection.
+ */
+export function getSearchIdentifier(collectionName: string, locale: string): string {
+	return `${collectionName}-search-${SEARCH_INDEX_VERSION}-${locale}`;
 }
 
 /**
@@ -86,11 +110,13 @@ async function evictLRUIfNeeded(collection: RxCollection): Promise<void> {
  */
 async function createSearchInstance(
 	collection: RxCollection,
-	locale: string
+	locale: string,
+	options?: SearchInitializationOptions
 ): Promise<FlexSearchInstance> {
-	const searchFields = collection.options?.searchFields;
+	const searchFields = options?.searchFields ?? collection.options?.searchFields;
+	const documentSnapshot = options?.documentSnapshot ?? ((document: unknown) => document);
 	// FlexSearch appends _flexsearch to the identifier (note: underscore, not hyphen)
-	const searchCollectionName = `${collection.name}-search-${locale}_flexsearch`;
+	const searchCollectionName = `${getSearchIdentifier(collection.name, locale)}_flexsearch`;
 	const database = collection.database;
 
 	searchLogger.debug('Creating search instance', {
@@ -120,16 +146,25 @@ async function createSearchInstance(
 	}
 
 	const searchInstance = await addFulltextSearch({
-		identifier: `${collection.name}-search-${locale}`,
+		identifier: getSearchIdentifier(collection.name, locale),
 		collection,
 		docToString: (doc: any) => {
+			const snapshot = documentSnapshot(doc);
 			// Fields can be nested, so we use lodash get to access them
-			return searchFields.map((field: string) => get(doc, field) || '').join(' ');
+			return searchFields.map((field: string) => get(snapshot, field) || '').join(' ');
 		},
 		initialization: 'lazy',
 		indexOptions: {
 			preset: 'performance',
-			tokenize: 'forward',
+			// 'full' indexes every substring so mid-word matches work (e.g. "saippua"
+			// finds "Kuorintasaippua"), which compound-word languages (fi/de/sv/nl…) need.
+			// It also mirrors WooCommerce's own product search, which is a LIKE '%term%'
+			// substring match — 'forward' (prefix-only) diverged from that. We deliberately
+			// do NOT enable `suggest` on queries: WooCommerce search is not fuzzy, and
+			// best-effort partial results would return matches Woo would not. See #679.
+			tokenize: 'full',
+			// Keep equal to FLEXSEARCH_MIN_TERM_LENGTH in packages/query/src/engine-query.ts.
+			minlength: 3,
 			language: locale,
 		},
 	});
@@ -147,7 +182,7 @@ async function createSearchInstance(
  */
 async function destroySearchCollection(collection: RxCollection, locale: string): Promise<boolean> {
 	// FlexSearch appends _flexsearch to the identifier (note: underscore, not hyphen)
-	const searchCollectionName = `${collection.name}-search-${locale}_flexsearch`;
+	const searchCollectionName = `${getSearchIdentifier(collection.name, locale)}_flexsearch`;
 	const database = collection.database;
 
 	searchLogger.debug('Attempting to destroy search collection', {
@@ -207,13 +242,23 @@ export const searchPlugin: RxPlugin = {
 			 * @param locale - The locale for search (e.g., 'en', 'de', 'zh')
 			 * @returns The FlexSearch instance, or null if no searchFields configured
 			 */
-			proto.initSearch = async function (locale = 'en'): Promise<FlexSearchInstance | null> {
+			proto.initSearch = async function (
+				locale = 'en',
+				options?: SearchInitializationOptions
+			): Promise<FlexSearchInstance | null> {
 				// Check if collection has searchFields configured
-				if (!Array.isArray(this.options?.searchFields)) {
+				if (!Array.isArray(options?.searchFields ?? this.options?.searchFields)) {
 					return null;
 				}
 
 				locale = normalizeLocale(locale);
+				if (!this._searchInitializationOptions) {
+					this._searchInitializationOptions = new Map<string, SearchInitializationOptions>();
+				}
+				if (options) {
+					this._searchInitializationOptions.set(locale, options);
+				}
+				const initializationOptions = this._searchInitializationOptions.get(locale);
 
 				// Initialize maps if needed
 				if (!this._searchInstances) {
@@ -237,7 +282,7 @@ export const searchPlugin: RxPlugin = {
 				// Create initialization promise
 				const searchPromise = (async (): Promise<FlexSearchInstance> => {
 					try {
-						const searchInstance = await createSearchInstance(this, locale);
+						const searchInstance = await createSearchInstance(this, locale, initializationOptions);
 
 						// Store instance and update LRU
 						this._searchInstances.set(locale, searchInstance);
@@ -253,9 +298,8 @@ export const searchPlugin: RxPlugin = {
 
 						searchLogger.error('Failed to initialize search', {
 							showToast: false,
-							saveToDb: true,
+							code: ERROR_CODES.UNEXPECTED_ERROR,
 							context: {
-								errorCode: ERROR_CODES.INVALID_CONFIGURATION,
 								collection: this.name,
 								locale,
 								error: error.message,
@@ -270,7 +314,11 @@ export const searchPlugin: RxPlugin = {
 						const destroyed = await destroySearchCollection(this, locale);
 						if (destroyed) {
 							try {
-								const searchInstance = await createSearchInstance(this, locale);
+								const searchInstance = await createSearchInstance(
+									this,
+									locale,
+									initializationOptions
+								);
 								this._searchInstances.set(locale, searchInstance);
 								touchLRU(this, locale);
 								await evictLRUIfNeeded(this);
@@ -283,9 +331,8 @@ export const searchPlugin: RxPlugin = {
 							} catch (retryError: any) {
 								searchLogger.error('Search recovery failed', {
 									showToast: true,
-									saveToDb: true,
+									code: ERROR_CODES.UNEXPECTED_ERROR,
 									context: {
-										errorCode: ERROR_CODES.SERVICE_UNAVAILABLE,
 										collection: this.name,
 										locale,
 										error: retryError.message,
@@ -329,6 +376,7 @@ export const searchPlugin: RxPlugin = {
 							if (this._localeLRU) {
 								this._localeLRU = [];
 							}
+							this._searchInitializationOptions?.clear();
 							return;
 						}
 
@@ -386,7 +434,7 @@ export const searchPlugin: RxPlugin = {
 												mainCollection: this.name,
 												locale: loc,
 												searchCollectionName,
-												expectedPattern: `${this.name}-search-${loc}_flexsearch`,
+												expectedPattern: `${getSearchIdentifier(this.name, loc)}_flexsearch`,
 											},
 										});
 										continue;
@@ -430,6 +478,7 @@ export const searchPlugin: RxPlugin = {
 						if (this._localeLRU) {
 							this._localeLRU = [];
 						}
+						this._searchInitializationOptions?.clear();
 					});
 				}
 
@@ -480,11 +529,13 @@ export const searchPlugin: RxPlugin = {
 			 */
 			proto.recreateSearch = async function (locale?: string): Promise<FlexSearchInstance | null> {
 				// Check if collection has searchFields configured
-				if (!Array.isArray(this.options?.searchFields)) {
+				const normalizedLocale = normalizeLocale(locale || this._activeLocale || 'en');
+				const initializationOptions = this._searchInitializationOptions?.get(normalizedLocale);
+				if (!Array.isArray(initializationOptions?.searchFields ?? this.options?.searchFields)) {
 					return null;
 				}
 
-				locale = normalizeLocale(locale || this._activeLocale || 'en');
+				locale = normalizedLocale;
 
 				searchLogger.info('Recreating search index', {
 					context: { collection: this.name, locale },
@@ -501,7 +552,11 @@ export const searchPlugin: RxPlugin = {
 							await oldInstance.collection.destroy();
 						} catch (error: any) {
 							searchLogger.warn('Error destroying old search instance', {
-								context: { collection: this.name, locale, error: error.message },
+								context: {
+									collection: this.name,
+									locale,
+									error: error.message,
+								},
 							});
 						}
 					}
@@ -523,7 +578,11 @@ export const searchPlugin: RxPlugin = {
 
 				// Create fresh instance
 				try {
-					const searchInstance = await createSearchInstance(this, locale);
+					const searchInstance = await createSearchInstance(
+						this,
+						locale,
+						this._searchInitializationOptions?.get(locale)
+					);
 
 					// Store and track
 					if (!this._searchInstances) {
@@ -541,9 +600,8 @@ export const searchPlugin: RxPlugin = {
 				} catch (error: any) {
 					searchLogger.error('Failed to recreate search index', {
 						showToast: true,
-						saveToDb: true,
+						code: ERROR_CODES.UNEXPECTED_ERROR,
 						context: {
-							errorCode: ERROR_CODES.SERVICE_UNAVAILABLE,
 							collection: this.name,
 							locale,
 							error: error.message,

@@ -1,0 +1,43 @@
+---
+title: "AUTH311: Rest route missing"
+sidebar_label: AUTH311
+description: "The WCPOS store route is unavailable."
+---
+
+{/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with `pnpm generate:error-codes`. */}
+
+## What this means {#what-this-means}
+
+The WCPOS store route is unavailable.
+
+Ask the site administrator to check whether a security or proxy plugin is stripping WCPOS request headers.
+
+## What to do {#what-to-do}
+
+A settings change is needed before this will work. Retry after making the change above; retrying without it will fail the same way.
+
+## Your data {#your-data}
+
+No order or product data is affected. If this persists, ask the person who manages your WordPress site.
+
+## Troubleshoot {#troubleshoot}
+
+1. Confirm WCPOS is active on the site: WP Admin → Plugins.
+2. Test both supported REST forms in a browser: your store's /wp-json/ address and /index.php?rest_route=/. Only diagnose a REST block if neither address returns JSON.
+3. If neither REST form works, ask the site administrator whether a security plugin, proxy or CDN is stripping WCPOS request headers or blocking REST requests — firewall rules and disable-REST-API hardening options are the usual culprits.
+4. On some hosts, re-saving permalinks (Settings → Permalinks → Save) restores missing REST routes.
+
+## Where to look {#where-to-look}
+
+When WCPOS can save this error, it is recorded on the device that raised it. Open **Store health → Logs** (the heart-pulse icon at the bottom of the navigation drawer), find the entry marked with this code and expand it: the expanded row shows the plain-language reason and the context captured at the moment of failure. For a store request, that context may include the server’s own error code (`serverCode`), the HTTP `status` or the `endpoint`; the fields shown depend on where the failure occurred. When reporting a problem, use **Copy debug info** at the top of the Logs screen (**Share debug info** on phones and tablets) rather than screenshots: it bundles the app version, connection state and the most recent errors. Logs are kept for at most 30 days, so collect them while the problem is fresh. Also copy any browser-console error that appeared before the POS was able to write its own log entry.
+
+Beyond the in-app log, this failure can leave evidence in:
+
+- **Network inspector** (web and desktop): open the developer tools — press F12 in the browser, or **Advanced → Toggle Developer Tools** in the desktop app’s menu — and select the **Network** tab. Follow this page’s retry guidance first; reproduce the action only when those steps say it is safe. A failing request shows the HTTP status and the raw response body, including error pages that never reach the POS log.
+- **WooCommerce → Status → Logs**: on the WordPress site, check the newest `fatal-errors-*.log` for PHP crashes, plus any log source named after a plugin involved in the failure. A 500-class error from the store almost always leaves its cause here.
+
+## Details {#details}
+
+- **Code:** `AUTH311` (`REST_ROUTE_MISSING`)
+- **Severity:** error
+- **Introduced in:** WCPOS 1.10.0

@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 
@@ -10,7 +11,7 @@ export type ReceiptMode = 'fiscal' | 'live';
 export type SubmissionStatus = 'pending' | 'sent' | 'failed';
 
 /**
- * Matches the response from GET /wcpos/v1/receipts/{order_id}
+ * Matches the response from GET /wcpos/v2/receipts/{order_id}
  */
 interface ReceiptApiResponse {
 	order_id: number;
@@ -95,7 +96,7 @@ export function useReceiptData({
 
 				const error = err instanceof Error ? err : new Error(String(err));
 				logger.error('Failed to fetch receipt data', {
-					saveToDb: true,
+					code: ERROR_CODES.PRINT_UNEXPECTED,
 					context: { orderId, mode, error: error.message },
 				});
 
@@ -107,7 +108,7 @@ export function useReceiptData({
 			}
 		}
 
-		fetchReceipt();
+		void fetchReceipt();
 
 		return () => {
 			cancelled = true;

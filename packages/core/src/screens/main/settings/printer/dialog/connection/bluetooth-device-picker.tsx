@@ -7,6 +7,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { usePrinterDiscovery } from '@wcpos/printer';
 
 import { useT } from '../../../../../../contexts/translations';
+import { isBluetoothPickerPrinter } from './discovered-printer-filters';
 
 import type { UseFormReturn } from 'react-hook-form';
 import type { PrinterFormValues } from '../../schema';
@@ -14,18 +15,14 @@ import type { PrinterFormValues } from '../../schema';
 export function BluetoothDevicePicker({ form }: { form: UseFormReturn<PrinterFormValues> }) {
 	const t = useT();
 	const { printers, startScan, isScanning: scanning } = usePrinterDiscovery();
-	const devices = printers.filter((p) => p.connectionType === 'bluetooth');
+	const devices = printers.filter(isBluetoothPickerPrinter);
 	const selectedAddress = form.watch('address');
 
 	return (
 		<VStack className="gap-2">
-			<Text className="text-sm font-medium">
-				{t('settings.bluetooth_printer', 'Bluetooth Printer')}
-			</Text>
+			<Text className="text-sm font-medium">{t('settings.bluetooth_printer')}</Text>
 			{devices.length === 0 && (
-				<Text className="text-muted-foreground text-xs">
-					{t('settings.no_devices_found', 'No devices found yet.')}
-				</Text>
+				<Text className="text-muted-foreground text-xs">{t('settings.no_devices_found')}</Text>
 			)}
 			{devices.map((device) => {
 				const selected = device.address === selectedAddress;
@@ -66,7 +63,7 @@ export function BluetoothDevicePicker({ form }: { form: UseFormReturn<PrinterFor
 				onPress={startScan}
 				loading={scanning}
 			>
-				<Text>{t('settings.scan_for_printers', 'Scan for printers')}</Text>
+				<Text>{t('settings.scan_for_printers')}</Text>
 			</Button>
 		</VStack>
 	);

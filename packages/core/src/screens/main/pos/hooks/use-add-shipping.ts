@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateShippingLineTaxAndTotals } from './use-calculate-shipping-line-tax-and-totals';
@@ -17,7 +17,7 @@ interface ShippingData {
 	prices_include_tax: boolean;
 	tax_status: 'taxable' | 'none';
 	tax_class: string;
-	meta_data?: { key: string; value: string }[];
+	meta_data?: { key: string; value: unknown }[];
 }
 
 /**
@@ -50,12 +50,12 @@ export const useAddShipping = () => {
 
 				meta_data.push({
 					key: '_woocommerce_pos_data',
-					value: JSON.stringify({
+					value: {
 						amount: data.amount,
 						prices_include_tax: data.prices_include_tax,
 						tax_class: data.tax_class,
 						tax_status: data.tax_status,
-					}),
+					},
 				});
 
 				const newShippingLine = calculateShippingLineTaxesAndTotals({
@@ -64,7 +64,7 @@ export const useAddShipping = () => {
 					meta_data,
 				});
 
-				await addItemToOrder('shipping_lines', newShippingLine);
+				if (!(await addItemToOrder('shipping_lines', newShippingLine))) return;
 
 				// Log shipping added success
 				orderLogger.info(t('pos.shipping_added', { methodTitle: data.method_title }), {
@@ -76,11 +76,11 @@ export const useAddShipping = () => {
 					},
 				});
 			} catch (error) {
-				orderLogger.error(t('pos.error_adding_shipping_to_cart'), {
+				orderLogger.error('Failed to add shipping to cart', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.CART_UPDATE_FAILED,
+					toast: { title: t('pos.error_adding_shipping_to_cart') },
 					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
 						methodTitle: data.method_title,
 						methodId: data.method_id,
 						error: error instanceof Error ? error.message : String(error),
