@@ -29,7 +29,10 @@ export function NovuProvider({ children }: NovuProviderProps) {
 export { useNovu, type NovuContextValue } from './config';
 export {
 	useNovuNotifications,
+	useNovuNotificationsSummary,
 	type Notification,
+	type NovuNotificationsList,
+	type NovuNotificationsSummary,
 	type UseNovuNotificationsResult,
 } from './notifications';
 
