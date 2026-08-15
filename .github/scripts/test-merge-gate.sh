@@ -12,6 +12,11 @@ cat > "$tmpdir/gh" <<'MOCK_GH'
 set -euo pipefail
 args="$*"
 
+if [[ "$args" == pr\ view* && "$args" == *headRefName* ]]; then
+  printf '%s\t%s\t%s\n' "${MOCK_HEAD_REF:-feature/x}" "${MOCK_BASE_REF:-main}" "${MOCK_HEAD_OWNER:-wcpos}"
+  exit 0
+fi
+
 if [[ "$args" == pr\ view* ]]; then
   if [[ "${MOCK_MERGE_STATE_FAIL:-false}" == "true" ]]; then
     echo "mock: merge-state lookup unavailable" >&2
@@ -220,5 +225,52 @@ run_case "fix-bot config commit with trailer passes without a new test" pass \
   MOCK_PR_COMMITS="$bot_commits" \
   MOCK_COMMIT_FILES_c1=$'modified\tcomposer.json' \
   MOCK_COMMIT_MSG_c1=$'fix: bump dep\n\nTested: OK (79 tests, 334 assertions) — wp-env WC 10.4.3'
+
+# --- Lane-promotion PRs (next → main) skip the per-commit fix-bot discipline;
+# --- the promotion's content is still gated by the required checks.
+
+run_case "lane promotion from next skips fix-bot discipline" pass \
+  PR_AUTHOR="kilbot" PR_TITLE="Promote next to main: v1.10.0" \
+  MOCK_CHANGED_FILES="packages/core/src/index.ts" \
+  MOCK_PATCH="" \
+  MOCK_HEAD_REF="next" \
+  MOCK_PR_COMMITS="$bot_commits" \
+  MOCK_COMMIT_FILES_c1=$'modified\tpackages/core/src/index.ts' \
+  MOCK_COMMIT_MSG_c1="fix: bot commit without trailer"
+if ! grep -Fq "skipping per-commit fix-bot discipline" "$tmpdir/out"; then
+  echo "Expected the promotion PR to log the discipline skip" >&2
+  exit 1
+fi
+
+run_case "promote/* cut of next also skips discipline" pass \
+  PR_AUTHOR="kilbot" PR_TITLE="Promote next to main: v1.10.0" \
+  MOCK_CHANGED_FILES="packages/core/src/index.ts" \
+  MOCK_PATCH="" \
+  MOCK_HEAD_REF="promote/1.10" \
+  MOCK_PR_COMMITS="$bot_commits" \
+  MOCK_COMMIT_FILES_c1=$'modified\tpackages/core/src/index.ts' \
+  MOCK_COMMIT_MSG_c1="fix: bot commit without trailer"
+
+run_case "fork branch named next does not bypass discipline" fail \
+  PR_AUTHOR="kilbot" PR_TITLE="Promote next to main: v1.10.0" \
+  MOCK_CHANGED_FILES="packages/core/src/index.ts" \
+  MOCK_PATCH="" \
+  MOCK_HEAD_REF="next" \
+  MOCK_HEAD_OWNER="attacker" \
+  MOCK_PR_COMMITS="$bot_commits" \
+  MOCK_COMMIT_FILES_c1=$'modified\tpackages/core/src/index.ts' \
+  MOCK_COMMIT_MSG_c1="fix: bot commit without trailer" \
+  MOCK_NO_CHECKS_EXPECTED=true
+
+run_case "promotion to a non-main base does not bypass discipline" fail \
+  PR_AUTHOR="kilbot" PR_TITLE="feat: retarget" \
+  MOCK_CHANGED_FILES="packages/core/src/index.ts" \
+  MOCK_PATCH="" \
+  MOCK_HEAD_REF="next" \
+  MOCK_BASE_REF="release/1.9" \
+  MOCK_PR_COMMITS="$bot_commits" \
+  MOCK_COMMIT_FILES_c1=$'modified\tpackages/core/src/index.ts' \
+  MOCK_COMMIT_MSG_c1="fix: bot commit without trailer" \
+  MOCK_NO_CHECKS_EXPECTED=true
 
 echo "All merge-gate tests passed."
