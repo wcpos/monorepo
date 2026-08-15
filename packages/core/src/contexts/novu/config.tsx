@@ -93,7 +93,7 @@ export function NovuConfigProvider({ children }: NovuConfigProviderProps) {
 	const wcposProVersion = useObservableEagerState(site?.wcpos_pro_version$ ?? UNDEFINED$) as
 		string | undefined;
 	const storeId = useObservableEagerState(store?.id$ ?? UNDEFINED$) as number | undefined;
-	const storeLocalID = useObservableEagerState(store?.localID$ ?? UNDEFINED$) as string | undefined;
+	const storeLocalID = store?.localID;
 	const storeLocale = useObservableEagerState(store?.locale$ ?? UNDEFINED$) as string | undefined;
 
 	const value = React.useMemo<NovuContextValue>(() => {

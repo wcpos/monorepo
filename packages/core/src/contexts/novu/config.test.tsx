@@ -16,7 +16,6 @@ const license$ = new BehaviorSubject<{ key?: string; status?: string } | undefin
 const wcposVersion$ = new BehaviorSubject<string | undefined>('1.9.0');
 const wcposProVersion$ = new BehaviorSubject<string | undefined>(undefined);
 const storeId$ = new BehaviorSubject<number | undefined>(7);
-const storeLocalID$ = new BehaviorSubject<string | undefined>('local-7');
 const storeLocale$ = new BehaviorSubject<string | undefined>('en_US');
 
 /**
@@ -31,7 +30,15 @@ const site = {
 	wcpos_version$: wcposVersion$,
 	wcpos_pro_version$: wcposProVersion$,
 };
-const store = { id: 7, id$: storeId$, localID$: storeLocalID$, locale$: storeLocale$ };
+const store = {
+	id: 7,
+	id$: storeId$,
+	localID: 'local-7',
+	get localID$(): never {
+		throw new Error('RxDB primary keys cannot be observed');
+	},
+	locale$: storeLocale$,
+};
 const wpCredentials = { uuid: 'creds-1' };
 
 jest.mock('../app-state', () => ({
@@ -70,7 +77,6 @@ beforeEach(() => {
 	wcposVersion$.next('1.9.0');
 	wcposProVersion$.next(undefined);
 	storeId$.next(7);
-	storeLocalID$.next('local-7');
 	storeLocale$.next('en_US');
 });
 
@@ -143,7 +149,7 @@ describe('NovuConfigProvider subscriber metadata', () => {
 		expect(metadata().locale).toBe('en_US');
 	});
 
-	it('falls back to the store localID when there is no WooCommerce id', () => {
+	it('reads the immutable store localID without subscribing when there is no WooCommerce id', () => {
 		act(() => {
 			storeId$.next(undefined);
 		});
