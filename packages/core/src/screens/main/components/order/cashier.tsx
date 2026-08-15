@@ -17,17 +17,29 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
  */
 export function Cashier({ table, row }: CellContext<{ document: OrderDocument }, 'cashier'>) {
 	const order = row.original.document;
-	const cashierID = useObservableEagerState(
-		order.meta_data$!.pipe(
-			map((meta) => meta?.find((entry) => entry.key === '_pos_user')),
-			// _pos_user is a scalar id that may arrive as string OR number — both resolve.
-			map((entry) =>
-				typeof entry?.value === 'string' || typeof entry?.value === 'number'
-					? entry.value
-					: undefined
-			)
-		)
+	/**
+	 * Memoised on the document wrapper, not built inline.
+	 *
+	 * The engine adapter's `$` getter returns a NEW observable on every property access, so
+	 * `order.meta_data$` is a fresh stream each time it is read — an inline `.pipe()` here
+	 * resubscribed on every render, for every visible order row. `order` is the right key:
+	 * the wrapper is replaced exactly when the underlying document changes, so the stream is
+	 * rebuilt when it must be and never merely because the cell re-rendered.
+	 */
+	const cashierID$ = React.useMemo(
+		() =>
+			order.meta_data$!.pipe(
+				map((meta) => meta?.find((entry) => entry.key === '_pos_user')),
+				// _pos_user is a scalar id that may arrive as string OR number — both resolve.
+				map((entry) =>
+					typeof entry?.value === 'string' || typeof entry?.value === 'number'
+						? entry.value
+						: undefined
+				)
+			),
+		[order]
 	);
+	const cashierID = useObservableEagerState(cashierID$);
 	const cashier = useCashierLabel(cashierID);
 	const actions = (
 		table.options.meta as {

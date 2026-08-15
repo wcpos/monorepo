@@ -54,12 +54,15 @@ export const useDateFormat = (
 		}, [visibleRef])
 	);
 
-	return useObservableState(
-		visible$.pipe(
-			filter((visible) => visible && !!date && isToday(date)),
-			switchMap(() => heartbeat$),
-			map(getDisplayDate)
-		),
-		getDisplayDate()
+	const displayDate$ = React.useMemo(
+		() =>
+			visible$.pipe(
+				filter((visible) => visible && !!date && isToday(date)),
+				switchMap(() => heartbeat$),
+				map(getDisplayDate)
+			),
+		[visible$, heartbeat$, date, getDisplayDate]
 	);
+
+	return useObservableState(displayDate$, getDisplayDate());
 };

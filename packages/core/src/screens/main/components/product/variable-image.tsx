@@ -33,9 +33,11 @@ export function VariableProductImage({
 		expanded$: import('rxjs').Observable<Record<string, boolean>>;
 	};
 	const setRowExpanded = meta?.setRowExpanded;
-	const isExpanded = useObservableEagerState(
-		meta.expanded$.pipe(map((expanded: Record<string, boolean>) => !!expanded[row.id]))
+	const isExpanded$ = React.useMemo(
+		() => meta.expanded$.pipe(map((expanded: Record<string, boolean>) => !!expanded[row.id])),
+		[meta.expanded$, row.id]
 	);
+	const isExpanded = useObservableEagerState(isExpanded$);
 
 	const handlePress = React.useCallback(() => {
 		setRowExpanded?.(row.id, !isExpanded);
