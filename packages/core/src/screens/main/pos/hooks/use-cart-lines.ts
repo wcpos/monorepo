@@ -12,7 +12,7 @@ import { useFeeLineData } from './use-fee-line-data';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { useUpdateFeeLine } from './use-update-fee-line';
 import { getUuidFromLineItem } from './utils';
-import { useTaxRates } from '../../contexts/tax-rates';
+import { useTaxSettings } from '../../contexts/tax-rates';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
 import { useT } from '../../../../contexts/translations';
@@ -78,7 +78,7 @@ export const useCartLines = () => {
 	const { updateFeeLine } = useUpdateFeeLine();
 	const { localPatch } = useLocalMutation();
 	const { recalculate } = useRecalculateCoupons();
-	const { allRates, taxRoundAtSubtotal, priceNumDecimals, pricesIncludeTax } = useTaxRates();
+	const { allRates, taxRoundAtSubtotal, priceNumDecimals, pricesIncludeTax } = useTaxSettings();
 	const t = useT();
 
 	/**

@@ -54,7 +54,7 @@ import { useResolvedPrinter } from './hooks/use-resolved-printer';
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { useUISettings } from '../contexts/ui-settings';
-import { TaxRatesContext } from '../contexts/tax-rates/provider';
+import { useTaxSettingsOptional } from '../contexts/tax-rates/provider';
 import { resolvePriceNumDecimals } from '../contexts/tax-rates/resolve-price-num-decimals';
 
 interface Props {
@@ -96,7 +96,7 @@ function ReceiptDocument({ order }: { order: import('@wcpos/database').OrderDocu
 		() => createCloudEnqueueFactory(cloudHttp),
 		[cloudHttp]
 	);
-	const taxRates = React.useContext(TaxRatesContext);
+	const taxRates = useTaxSettingsOptional();
 	const storeDp = useObservableEagerState(store?.wc_price_decimals$) as number | undefined;
 	const dp = resolvePriceNumDecimals({
 		contextDp: taxRates?.priceNumDecimals,

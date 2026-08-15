@@ -39,7 +39,7 @@ import { VariableProductRow } from '../components/product/variable-product-row';
 import { ProductVariationImage } from '../components/product/variation-image';
 import { QuerySearchInput } from '../components/query-search-input';
 import { UISettingsDialog } from '../components/ui-settings';
-import { useTaxRates } from '../contexts/tax-rates';
+import { useTaxSettings } from '../contexts/tax-rates';
 import { useMutation } from '../hooks/mutations/use-mutation';
 import { TextCell } from '../components/text-cell';
 import { ProductBrands } from '../components/product/brands';
@@ -184,7 +184,7 @@ export function Products() {
 		}),
 		[actions]
 	);
-	const { calcTaxes } = useTaxRates();
+	const { calcTaxes } = useTaxSettings();
 	const { patch: productsPatch } = useMutation({ collectionName: 'products' });
 	const { patch: variationsPatch } = useMutation({ collectionName: 'variations' });
 	const { bottom } = useSafeAreaInsets();

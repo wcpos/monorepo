@@ -177,10 +177,9 @@ jest.mock('../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { autoPrintReceipt: false } }),
 }));
 
-jest.mock('../contexts/tax-rates/provider', () => {
-	const ReactActual = jest.requireActual<typeof import('react')>('react');
-	return { TaxRatesContext: ReactActual.createContext(null) };
-});
+jest.mock('../contexts/tax-rates/provider', () => ({
+	useTaxSettingsOptional: () => null,
+}));
 
 jest.mock('../contexts/tax-rates/resolve-price-num-decimals', () => ({
 	resolvePriceNumDecimals: () => 2,

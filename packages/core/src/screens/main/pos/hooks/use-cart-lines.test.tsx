@@ -135,7 +135,7 @@ let priceNumDecimals = 2;
 let pricesIncludeTax = false;
 
 jest.mock('../../contexts/tax-rates', () => ({
-	useTaxRates: () => ({
+	useTaxSettings: () => ({
 		allRates,
 		taxRoundAtSubtotal,
 		priceNumDecimals,

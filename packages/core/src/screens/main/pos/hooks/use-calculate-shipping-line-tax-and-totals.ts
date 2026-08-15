@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useShippingLineData } from './use-shipping-line-data';
-import { useTaxRates } from '../../contexts/tax-rates';
+import { useTaxSettings } from '../../contexts/tax-rates';
 import { useCalculateTaxesFromValue } from '../../hooks/use-calculate-taxes-from-value';
 import { getRoundingPrecision, roundHalfUp, roundTaxTotal } from '../../hooks/utils/precision';
 
@@ -12,7 +12,7 @@ type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shippin
  * Returns the updated shipping line object.
  */
 export const useCalculateShippingLineTaxAndTotals = () => {
-	const { pricesIncludeTax, taxRoundAtSubtotal, priceNumDecimals } = useTaxRates();
+	const { pricesIncludeTax, taxRoundAtSubtotal, priceNumDecimals } = useTaxSettings();
 	const { calculateTaxesFromValue } = useCalculateTaxesFromValue();
 	const { getShippingLineData } = useShippingLineData();
 

@@ -7,7 +7,7 @@ import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
 
-import { useTaxRates } from '../../contexts/tax-rates';
+import { useTaxSettings } from '../../contexts/tax-rates';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useTaxDisplayValues } from '../../hooks/use-tax-display-values';
 
@@ -27,7 +27,7 @@ export function PriceWithTax({
 	strikethrough,
 }: Props) {
 	const { format } = useCurrencyFormat();
-	const { calcTaxes } = useTaxRates();
+	const { calcTaxes } = useTaxSettings();
 	const taxable = taxStatus === 'taxable' && calcTaxes;
 	const { displayValue, taxTotal, inclOrExcl } = useTaxDisplayValues({
 		amount: toNumber(price),
