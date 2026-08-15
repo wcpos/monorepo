@@ -53,9 +53,17 @@ export function VariableProductRow({
 				hideOutOfStockVariations?: boolean;
 		  }
 		| undefined;
-	const isExpanded = useObservableEagerState(
-		meta!.expanded$.pipe(map((expanded: Record<string, boolean>) => !!expanded[item.id]))
+	/**
+	 * Memoised explicitly. This component carries `'use no memo'` above, so nothing else
+	 * would: the inline `.pipe()` built a new observable every render, and
+	 * `useObservableEagerState` keys its subscription on observable identity, so every
+	 * visible variable-product row resubscribed on every render.
+	 */
+	const isExpanded$ = React.useMemo(
+		() => meta!.expanded$.pipe(map((expanded: Record<string, boolean>) => !!expanded[item.id])),
+		[meta, item.id]
 	);
+	const isExpanded = useObservableEagerState(isExpanded$);
 
 	/**
 	 * Animation setup
