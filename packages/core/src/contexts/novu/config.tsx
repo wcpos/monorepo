@@ -1,5 +1,8 @@
 import * as React from 'react';
 
+import { useObservableEagerState } from 'observable-hooks';
+import { of } from 'rxjs';
+
 import { useAppState } from '../app-state';
 import { useLocale } from '../../hooks/use-locale';
 import {
@@ -45,6 +48,13 @@ export interface NovuContextValue {
 
 const NovuContext = React.createContext<NovuContextValue | undefined>(undefined);
 
+/**
+ * Stand-in for "no document yet". Module scope so it keeps a stable identity —
+ * `useObservableEagerState` keys its subscription on the observable, so an inline `of()`
+ * here would resubscribe on every render.
+ */
+const UNDEFINED$ = of(undefined);
+
 interface NovuConfigProviderProps {
 	children: React.ReactNode;
 }
@@ -65,6 +75,27 @@ export function NovuConfigProvider({ children }: NovuConfigProviderProps) {
 	const { site, store, wpCredentials } = useAppState();
 	const { locale } = useLocale();
 
+	/**
+	 * Subscribed, not read off the documents.
+	 *
+	 * The metadata used to be built by handing `generateSubscriberMetadata` the site and
+	 * store documents, with the memo keyed on document IDENTITY. Every field it reads —
+	 * licence key and status, plugin versions, store locale — was therefore a plain read: a
+	 * licence renewal or a plugin upgrade written to the same document regenerated nothing
+	 * and never resynced to Novu, so a merchant could sit on stale targeting metadata
+	 * indefinitely.
+	 */
+	const siteUrl = useObservableEagerState(site?.url$ ?? UNDEFINED$) as string | undefined;
+	const license = useObservableEagerState(site?.license$ ?? UNDEFINED$) as
+		{ key?: string; status?: string } | undefined;
+	const wcposVersion = useObservableEagerState(site?.wcpos_version$ ?? UNDEFINED$) as
+		string | undefined;
+	const wcposProVersion = useObservableEagerState(site?.wcpos_pro_version$ ?? UNDEFINED$) as
+		string | undefined;
+	const storeId = useObservableEagerState(store?.id$ ?? UNDEFINED$) as number | undefined;
+	const storeLocalID = useObservableEagerState(store?.localID$ ?? UNDEFINED$) as string | undefined;
+	const storeLocale = useObservableEagerState(store?.locale$ ?? UNDEFINED$) as string | undefined;
+
 	const value = React.useMemo<NovuContextValue>(() => {
 		// Check if we have all required data to generate subscriber ID
 		if (!site || !store || !wpCredentials) {
@@ -77,7 +108,15 @@ export function NovuConfigProvider({ children }: NovuConfigProviderProps) {
 		}
 
 		const subscriberId = generateSubscriberId(site, store, wpCredentials);
-		const subscriberMetadata = generateSubscriberMetadata(site, store);
+		const subscriberMetadata = generateSubscriberMetadata({
+			siteUrl,
+			license,
+			wcposVersion,
+			wcposProVersion,
+			storeId,
+			storeLocalID,
+			storeLocale,
+		});
 
 		return {
 			subscriberId,
@@ -86,7 +125,19 @@ export function NovuConfigProvider({ children }: NovuConfigProviderProps) {
 			config: NOVU_CONFIG,
 			isConfigured: true,
 		};
-	}, [site, store, wpCredentials, locale]);
+	}, [
+		site,
+		store,
+		wpCredentials,
+		locale,
+		siteUrl,
+		license,
+		wcposVersion,
+		wcposProVersion,
+		storeId,
+		storeLocalID,
+		storeLocale,
+	]);
 
 	return <NovuContext.Provider value={value}>{children}</NovuContext.Provider>;
 }
