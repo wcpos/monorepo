@@ -17,6 +17,7 @@ interface QueryResult {
 	hits: { document: TaxRateDocument }[];
 }
 
+/** Address fields used to select the applicable tax rates. */
 export interface TaxLocation {
 	country: string;
 	state: string;
@@ -24,6 +25,7 @@ export interface TaxLocation {
 	postcode: string;
 }
 
+/** Supported sources for resolving an order's tax location. */
 export type TaxBasedOn = 'base' | 'shipping' | 'billing';
 
 /**
@@ -50,9 +52,13 @@ export interface TaxLocationContextProps {
 	location: TaxLocation;
 }
 
+/** Combined tax settings and location contract returned by `useTaxRates()`. */
 export type TaxRatesContextProps = TaxSettingsContextProps & TaxLocationContextProps;
 
+/** Order-independent tax settings context. Prefer `useTaxSettings()` when consuming it. */
 export const TaxSettingsContext = React.createContext<TaxSettingsContextProps | null>(null);
+
+/** Order-dependent tax location context. Prefer `useTaxLocation()` when consuming it. */
 export const TaxLocationContext = React.createContext<TaxLocationContextProps | null>(null);
 
 interface TaxRatesProviderProps {

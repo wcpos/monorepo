@@ -1,6 +1,9 @@
 /**
  * @jest-environment jsdom
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import * as React from 'react';
 
 import { act, render, screen } from '@testing-library/react';
@@ -12,6 +15,28 @@ import { useTaxRates } from './use-tax-rates';
 import type { QueryStateOf } from '../../../../query';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
+
+describe('tax context public API documentation', () => {
+	it('documents every export added by the context split', () => {
+		const source = readFileSync(join(__dirname, 'provider.tsx'), 'utf8');
+
+		expect(source).toContain(
+			'/** Address fields used to select the applicable tax rates. */\nexport interface TaxLocation'
+		);
+		expect(source).toContain(
+			"/** Supported sources for resolving an order's tax location. */\nexport type TaxBasedOn"
+		);
+		expect(source).toContain(
+			'/** Combined tax settings and location contract returned by `useTaxRates()`. */\nexport type TaxRatesContextProps'
+		);
+		expect(source).toContain(
+			'/** Order-independent tax settings context. Prefer `useTaxSettings()` when consuming it. */\nexport const TaxSettingsContext'
+		);
+		expect(source).toContain(
+			'/** Order-dependent tax location context. Prefer `useTaxLocation()` when consuming it. */\nexport const TaxLocationContext'
+		);
+	});
+});
 
 const allRates = [
 	{ id: 1, class: 'standard', country: '', state: '', cities: [], postcodes: [] },
