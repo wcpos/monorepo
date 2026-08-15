@@ -22,13 +22,15 @@ export const useDateFormat = (
 	const { dateFnsLocale, formatDate } = useLocalDate();
 	const [visibleRef, visible$] = useObservableRef(false);
 
-	let date: Date | null = null;
+	const date = React.useMemo(() => {
+		if (typeof gmtDate === 'string' && gmtDate !== '') {
+			return convertUTCStringToLocalDate(gmtDate);
+		} else if (typeof gmtDate === 'number') {
+			return new Date(gmtDate);
+		}
 
-	if (typeof gmtDate === 'string' && gmtDate !== '') {
-		date = convertUTCStringToLocalDate(gmtDate);
-	} else if (typeof gmtDate === 'number') {
-		date = new Date(gmtDate);
-	}
+		return null;
+	}, [gmtDate]);
 
 	const getDisplayDate = React.useCallback(() => {
 		if (!date || !isValid(date)) {
