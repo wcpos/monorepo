@@ -11,11 +11,34 @@ export { useOpenOrdersResource } from './use-open-orders-resource';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
+type OpenOrderHit = { id: string; document: OrderDocument };
+
 interface CurrentOrderContextProps {
 	currentOrder: OrderDocument;
-	openOrders: { id: string; document: OrderDocument }[];
+	openOrders: OpenOrderHit[];
 	setCurrentOrderID: (id: string) => void;
 }
+
+/**
+ * The order the cashier is working on, and the way to switch. Deliberately excludes the
+ * open-orders LIST: that array is rebuilt on every write to any `pos-open` order, and 31 of
+ * the 33 consumers here want nothing but `currentOrder`.
+ *
+ * This split only became worth making once document identity was preserved across query
+ * emissions — before that, `currentOrder` was a fresh Proxy on every emission, so splitting
+ * the list out changed nothing.
+ */
+interface CurrentOrderOnlyContextProps {
+	currentOrder: OrderDocument;
+	setCurrentOrderID: (id: string) => void;
+}
+
+const CurrentOrderOnlyContext = React.createContext<CurrentOrderOnlyContextProps>(
+	null as unknown as CurrentOrderOnlyContextProps
+);
+
+/** The open-orders list. Only the tab strip needs it. */
+const OpenOrdersContext = React.createContext<OpenOrderHit[]>(null as unknown as OpenOrderHit[]);
 
 export const CurrentOrderContext = React.createContext<CurrentOrderContextProps>(
 	null as unknown as CurrentOrderContextProps
@@ -99,16 +122,27 @@ export function CurrentOrderProvider({
 	/**
 	 *
 	 */
+	/**
+	 * Memoised on `currentOrder`, which is now stable when the current order itself did not
+	 * change — so a write to a background tab's order no longer re-renders the cart, the
+	 * totals, the customer, the note, or any of the mutation hooks.
+	 */
+	const currentOrderValue = React.useMemo<CurrentOrderOnlyContextProps>(
+		() => ({ currentOrder, setCurrentOrderID }),
+		[currentOrder, setCurrentOrderID]
+	);
+
+	const combined = React.useMemo<CurrentOrderContextProps>(
+		() => ({ currentOrder, openOrders, setCurrentOrderID }),
+		[currentOrder, openOrders, setCurrentOrderID]
+	);
+
 	return (
-		<CurrentOrderContext.Provider
-			value={{
-				currentOrder,
-				openOrders,
-				setCurrentOrderID,
-			}}
-		>
-			{children}
-		</CurrentOrderContext.Provider>
+		<CurrentOrderOnlyContext.Provider value={currentOrderValue}>
+			<OpenOrdersContext.Provider value={openOrders}>
+				<CurrentOrderContext.Provider value={combined}>{children}</CurrentOrderContext.Provider>
+			</OpenOrdersContext.Provider>
+		</CurrentOrderOnlyContext.Provider>
 	);
 }
 
@@ -116,9 +150,22 @@ export function CurrentOrderProvider({
  *
  */
 export const useCurrentOrder = () => {
-	const context = React.useContext(CurrentOrderContext);
+	const context = React.useContext(CurrentOrderOnlyContext);
 	if (!context) {
 		throw new Error(`useCurrentOrder must be called within CurrentOrderProvider`);
+	}
+	return context;
+};
+
+/**
+ * The open-orders list, for the tab strip. Separate from `useCurrentOrder()` so that the
+ * 31 consumers that only want the current order are not re-rendered by a write to some
+ * other cashier tab's order.
+ */
+export const useOpenOrders = () => {
+	const context = React.useContext(OpenOrdersContext);
+	if (!context) {
+		throw new Error(`useOpenOrders must be called within CurrentOrderProvider`);
 	}
 	return context;
 };

@@ -70,12 +70,41 @@ function legacySnapshot(
 	return snapshot;
 }
 
+/**
+ * Wrapper cache, keyed on the underlying RxDocument instance.
+ *
+ * This is what preserves document identity across query emissions. Without it every
+ * emission built a fresh Proxy for every hit, so a write to ONE row handed React all-new
+ * identities for the whole result set — every row and cell in every table reconciled, and
+ * the current-order context ticked on writes to unrelated orders.
+ *
+ * Keying on the instance is safe because RxDB's document cache gives a NEW RxDocument
+ * whenever a document's data changes and reuses the instance when it does not — so
+ * "same instance" and "same data" are the same statement, and a cached wrapper cannot go
+ * stale. That property is pinned by `rxdb-document-identity.probe.test.ts` in
+ * `@wcpos/database`, which should be re-run on any RxDB upgrade.
+ *
+ * A WeakMap, so wrappers are collected with the documents they wrap. The inner Map is keyed
+ * by legacy collection name, since the same document could in principle be asked for under
+ * more than one.
+ */
+const WRAPPER_CACHE = new WeakMap<RxDocument<EngineDocument>, Map<LegacyCollectionName, unknown>>();
+
 /** Wrap an engine RxDocument with the legacy read contract. Writes intentionally fail loudly. */
 export function wrapEngineDocument<TDocument extends object = Record<string, unknown>>(
 	collection: LegacyCollectionName,
 	rxDocument: RxDocument<EngineDocument>
 ): TDocument {
-	return new Proxy<Record<string, unknown>>(
+	let byCollection = WRAPPER_CACHE.get(rxDocument);
+	if (byCollection) {
+		const cached = byCollection.get(collection);
+		if (cached) return cached as TDocument;
+	} else {
+		byCollection = new Map();
+		WRAPPER_CACHE.set(rxDocument, byCollection);
+	}
+
+	const wrapper = new Proxy<Record<string, unknown>>(
 		{},
 		{
 			// RxDB's isRxDocument() checks `'isInstanceOfRxDocument' in obj`, and
@@ -143,4 +172,7 @@ export function wrapEngineDocument<TDocument extends object = Record<string, unk
 			},
 		}
 	) as TDocument;
+
+	byCollection.set(collection, wrapper);
+	return wrapper;
 }

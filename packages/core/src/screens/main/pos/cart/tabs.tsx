@@ -7,13 +7,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/toolt
 
 import { CartTabTitle } from './tab-title';
 import { useT } from '../../../../contexts/translations';
-import { useCurrentOrder } from '../contexts/current-order';
+import { useCurrentOrder, useOpenOrders } from '../contexts/current-order';
 
 /**
  *
  */
 export function OpenOrderTabs() {
-	const { currentOrder, openOrders, setCurrentOrderID } = useCurrentOrder();
+	const { currentOrder, setCurrentOrderID } = useCurrentOrder();
+	const openOrders = useOpenOrders();
 	const t = useT();
 
 	/**
