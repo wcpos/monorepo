@@ -43,8 +43,14 @@ const allRates = [
 	{ id: 2, class: 'reduced-rate', country: '', state: '', cities: [], postcodes: [] },
 ];
 const mockResource = { hits: allRates.map((document) => ({ document })) };
+
+/**
+ * Swappable so the address tests can supply country-specific rates; reset in `beforeEach`.
+ */
+let activeResource: { hits: { document: unknown }[] } = mockResource;
+
 const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown) => ({
-	resource: mockResource,
+	resource: activeResource,
 }));
 const mockUseObservableSuspense = jest.fn((resource: unknown) => resource);
 
@@ -110,6 +116,7 @@ function latestState(): QueryStateOf<'tax-rates'> {
 beforeEach(() => {
 	jest.clearAllMocks();
 	storeSubjects.tax_based_on$.next('base');
+	activeResource = mockResource;
 });
 
 describe('TaxRatesProvider query-state consumption', () => {
@@ -253,5 +260,113 @@ describe('order identity churn', () => {
 		});
 
 		expect(screen.getByTestId('based-on').textContent).toBe('base');
+	});
+});
+
+/**
+ * The split must not cost the thing the order-dependent half exists for: when tax is based
+ * on the customer's billing or shipping address, editing that address has to re-filter the
+ * rates. These drive the real `filterTaxRates` against country-specific rates, so a rate
+ * actually changes — not just an object identity.
+ */
+describe('tax follows the customer address', () => {
+	const usRate = {
+		id: 10,
+		class: 'standard',
+		country: 'US',
+		state: '',
+		cities: [],
+		postcodes: [],
+		rate: '10.0',
+	};
+	const gbRate = {
+		id: 20,
+		class: 'standard',
+		country: 'GB',
+		state: '',
+		cities: [],
+		postcodes: [],
+		rate: '20.0',
+	};
+
+	function RatesProbe() {
+		const { rates } = useTaxLocation();
+		return <output data-testid="rate-ids">{rates.map((rate) => rate.id).join(',')}</output>;
+	}
+
+	function renderWithOrder(order: OrderDocument) {
+		return render(
+			<TaxRatesProvider order={order}>
+				<RatesProbe />
+			</TaxRatesProvider>
+		);
+	}
+
+	beforeEach(() => {
+		activeResource = { hits: [usRate, gbRate].map((document) => ({ document })) };
+	});
+
+	it('re-filters the rates when the billing address changes', () => {
+		storeSubjects.tax_based_on$.next('billing');
+		const billing$ = new BehaviorSubject<Record<string, string | undefined>>({ country: 'US' });
+		const order = { ...makeOrder(), billing$ } as unknown as OrderDocument;
+
+		renderWithOrder(order);
+		expect(screen.getByTestId('rate-ids').textContent).toBe('10');
+
+		act(() => {
+			billing$.next({ country: 'GB' });
+		});
+
+		expect(screen.getByTestId('rate-ids').textContent).toBe('20');
+	});
+
+	it('re-filters the rates when the shipping address changes', () => {
+		storeSubjects.tax_based_on$.next('shipping');
+		const shipping$ = new BehaviorSubject<Record<string, string | undefined>>({ country: 'US' });
+		const order = { ...makeOrder(), shipping$ } as unknown as OrderDocument;
+
+		renderWithOrder(order);
+		expect(screen.getByTestId('rate-ids').textContent).toBe('10');
+
+		act(() => {
+			shipping$.next({ country: 'GB' });
+		});
+
+		expect(screen.getByTestId('rate-ids').textContent).toBe('20');
+	});
+
+	it('ignores the customer address while tax is based on the shop base address', () => {
+		// baseLocation is mocked to US, so the US rate must hold regardless of billing.
+		const billing$ = new BehaviorSubject<Record<string, string | undefined>>({ country: 'GB' });
+		const order = { ...makeOrder(), billing$ } as unknown as OrderDocument;
+
+		renderWithOrder(order);
+		expect(screen.getByTestId('rate-ids').textContent).toBe('10');
+
+		act(() => {
+			billing$.next({ country: 'GB', city: 'London' });
+		});
+
+		expect(screen.getByTestId('rate-ids').textContent).toBe('10');
+	});
+
+	/**
+	 * Both fixes at once: the per-order meta override flips the basis from base to billing,
+	 * and the rates must follow the customer address from that point on.
+	 */
+	it('switches to the billing address when the order meta override lands', () => {
+		const meta$ = new BehaviorSubject<OrderMeta[]>([]);
+		const billing$ = new BehaviorSubject<Record<string, string | undefined>>({ country: 'GB' });
+		const order = { ...makeOrder(), meta_data$: meta$, billing$ } as unknown as OrderDocument;
+
+		renderWithOrder(order);
+		expect(screen.getByTestId('rate-ids').textContent).toBe('10');
+
+		act(() => {
+			meta$.next([{ key: '_woocommerce_pos_tax_based_on', value: 'billing' }]);
+		});
+
+		expect(screen.getByTestId('rate-ids').textContent).toBe('20');
 	});
 });
