@@ -16,7 +16,7 @@ import {
 } from './utils';
 import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';
-import { useCurrentOrder } from '../contexts/current-order';
+import { useCurrentOrderActions } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
@@ -28,22 +28,18 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 export const useAddProduct = () => {
 	const { addItemToOrder } = useAddItemToOrder();
 	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
-	const { currentOrder } = useCurrentOrder();
+	/**
+	 * Resolved when the button is pressed, NOT subscribed during render.
+	 *
+	 * Every product tile calls this hook, so subscribing to the current order here meant every
+	 * cart write re-rendered every visible tile — measured at 20 tiles x 4 writes = 80 commits
+	 * per add or remove. Nothing this hook does needs the order until the user acts.
+	 */
+	const { getCurrentOrder } = useCurrentOrderActions();
 	const { incrementLineItem } = useUpdateLineItem();
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
 	const metaDataKeys = useObservableEagerState(uiSettings.metaDataKeys$);
-
-	// Create order-specific logger
-	const orderLogger = React.useMemo(
-		() =>
-			cartLogger.with({
-				orderUUID: currentOrder.uuid,
-				orderID: currentOrder.id,
-				orderNumber: currentOrder.number,
-			}),
-		[currentOrder.uuid, currentOrder.id, currentOrder.number]
-	);
 
 	/**
 	 * Add product to order, or increment quantity if already in order
@@ -57,6 +53,15 @@ export const useAddProduct = () => {
 		) => {
 			let success;
 			let product = data;
+
+			const currentOrder = getCurrentOrder();
+			// Built here rather than memoised in render, so this hook reads nothing
+			// order-shaped until the press happens.
+			const orderLogger = cartLogger.with({
+				orderUUID: currentOrder.uuid,
+				orderID: currentOrder.id,
+				orderNumber: currentOrder.number,
+			});
 
 			// always make sure we have the latest product document
 			if (isRxDocument(data)) {
@@ -114,13 +119,12 @@ export const useAddProduct = () => {
 			return Boolean(success);
 		},
 		[
-			currentOrder,
+			getCurrentOrder,
 			incrementLineItem,
 			metaDataKeys,
 			calculateLineItemTaxesAndTotals,
 			addItemToOrder,
 			t,
-			orderLogger,
 		]
 	);
 

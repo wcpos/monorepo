@@ -18,7 +18,7 @@ import {
 	patchEngineResident,
 	useLocalMutation,
 } from '../../hooks/mutations/use-local-mutation';
-import { useCurrentOrder } from '../contexts/current-order';
+import { useCurrentOrderActions } from '../contexts/current-order';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
@@ -64,7 +64,9 @@ function hasQueuedOrAcknowledgedCreate(resident: EngineResident): boolean {
  * @returns An object containing the callback that adds a line to the order.
  */
 export const useAddItemToOrder = () => {
-	const { currentOrder, setCurrentOrderID } = useCurrentOrder();
+	// Event-time resolution: every product tile mounts this hook via useAddProduct, so a
+	// render-time subscription re-rendered the whole grid on every cart write.
+	const { getCurrentOrder, setCurrentOrderID } = useCurrentOrderActions();
 	const runtime = useQueryRuntime();
 	const { localPatch } = useLocalMutation();
 	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
@@ -214,7 +216,7 @@ export const useAddItemToOrder = () => {
 	 */
 	const addItemToOrder = React.useCallback(
 		async (type: CartLineType, data: CartLine) => {
-			const order = currentOrder.getLatest();
+			const order = getCurrentOrder().getLatest();
 
 			// make sure items have a uuid before saving
 			data.meta_data = data.meta_data || [];
@@ -291,7 +293,7 @@ export const useAddItemToOrder = () => {
 		[
 			buildCartLines,
 			checkCartStock,
-			currentOrder,
+			getCurrentOrder,
 			localPatch,
 			runtime,
 			saveNewOrder,

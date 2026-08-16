@@ -11,7 +11,7 @@ import { useLineItemData } from './use-line-item-data';
 import { enqueueOrderMutation } from './order-mutation-queue';
 import { updatePosDataMeta } from './utils';
 import { documentRecordId, useLocalMutation } from '../../hooks/mutations/use-local-mutation';
-import { useCurrentOrder } from '../contexts/current-order';
+import { useCurrentOrderActions } from '../contexts/current-order';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 
@@ -34,7 +34,8 @@ interface UpdateLineItemOptions {
  *
  */
 export const useUpdateLineItem = () => {
-	const { currentOrder } = useCurrentOrder();
+	// Event-time resolution — reached from every product tile via useAddProduct.
+	const { getCurrentOrder } = useCurrentOrderActions();
 	const { localPatch } = useLocalMutation();
 	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
 	const { getLineItemData } = useLineItemData();
@@ -47,7 +48,7 @@ export const useUpdateLineItem = () => {
 	 */
 	const applyLineItemChanges = React.useCallback(
 		async (uuid: string, changes: Changes, options?: UpdateLineItemOptions) => {
-			const order = currentOrder.getLatest();
+			const order = getCurrentOrder().getLatest();
 			const json = order.toMutableJSON();
 			let updated = false;
 			let stockWarningName: string | null = null;
@@ -139,7 +140,7 @@ export const useUpdateLineItem = () => {
 		[
 			calculateLineItemTaxesAndTotals,
 			checkCartStock,
-			currentOrder,
+			getCurrentOrder,
 			getLineItemData,
 			localPatch,
 			showBackorderWarning,
@@ -149,19 +150,19 @@ export const useUpdateLineItem = () => {
 
 	const updateLineItem = React.useCallback(
 		async (uuid: string, changes: Changes, options?: UpdateLineItemOptions) => {
-			const recordId = documentRecordId(currentOrder.getLatest());
+			const recordId = documentRecordId(getCurrentOrder().getLatest());
 			if (!recordId) throw new Error('Order is missing its uuid');
 			return enqueueOrderMutation(recordId, () => applyLineItemChanges(uuid, changes, options));
 		},
-		[applyLineItemChanges, currentOrder]
+		[applyLineItemChanges, getCurrentOrder]
 	);
 
 	const incrementLineItem = React.useCallback(
 		async (uuid: string, quantity: number) => {
-			const recordId = documentRecordId(currentOrder.getLatest());
+			const recordId = documentRecordId(getCurrentOrder().getLatest());
 			if (!recordId) throw new Error('Order is missing its uuid');
 			return enqueueOrderMutation(recordId, async () => {
-				const lineItem = currentOrder
+				const lineItem = getCurrentOrder()
 					.getLatest()
 					.toMutableJSON()
 					.line_items?.find((item) =>
@@ -175,7 +176,7 @@ export const useUpdateLineItem = () => {
 				});
 			});
 		},
-		[applyLineItemChanges, currentOrder]
+		[applyLineItemChanges, getCurrentOrder]
 	);
 
 	/**
@@ -183,7 +184,7 @@ export const useUpdateLineItem = () => {
 	 */
 	const splitLineItem = React.useCallback(
 		async (uuid: string) => {
-			const order = currentOrder.getLatest();
+			const order = getCurrentOrder().getLatest();
 			const lineItemIndex = (order.line_items ?? []).findIndex((item) =>
 				(item.meta_data ?? []).some(
 					(meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid
@@ -243,7 +244,7 @@ export const useUpdateLineItem = () => {
 
 			return localPatch({ document: order, data: { line_items: updatedLineItems } });
 		},
-		[calculateLineItemTaxesAndTotals, currentOrder, localPatch]
+		[calculateLineItemTaxesAndTotals, getCurrentOrder, localPatch]
 	);
 
 	return { updateLineItem, incrementLineItem, splitLineItem };

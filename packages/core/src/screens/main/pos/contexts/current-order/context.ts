@@ -45,3 +45,35 @@ export const useCurrentOrderOptional = (): OrderDocument | undefined => {
 	const context = React.useContext(CurrentOrderContext);
 	return context?.currentOrder;
 };
+
+export interface CurrentOrderActions {
+	/** The current order AT CALL TIME. Never call during render — that is the whole point. */
+	getCurrentOrder: () => OrderDocument;
+	setCurrentOrderID: (id: string) => void;
+}
+
+/**
+ * Stable, for code that MUTATES the order rather than displays it.
+ *
+ * This value never changes identity, so subscribing to it costs nothing. `useCurrentOrder()`
+ * republishes on every cart write — correct for anything rendering the cart, ruinous for
+ * anything that merely holds a button.
+ *
+ * That distinction is the bug this exists to fix. Every product tile calls `useAddProduct()`,
+ * which called `useCurrentOrder()` purely so its click handler could read the order — so
+ * every cart write re-rendered every visible tile. Measured at 20 tiles x 4 writes = 80
+ * commits per add or remove, and no amount of memoisation further down could help, because
+ * the tiles were genuinely subscribed to a value that genuinely changed.
+ */
+export const CurrentOrderActionsContext = React.createContext<CurrentOrderActions | null>(null);
+
+/**
+ * The order-mutating half. Resolve the order when the user acts, not while rendering.
+ */
+export const useCurrentOrderActions = (): CurrentOrderActions => {
+	const context = React.useContext(CurrentOrderActionsContext);
+	if (!context) {
+		throw new Error('useCurrentOrderActions must be called within CurrentOrderProvider');
+	}
+	return context;
+};

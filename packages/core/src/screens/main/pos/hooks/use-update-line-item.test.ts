@@ -28,8 +28,15 @@ jest.mock('./use-cart-stock-guard', () => ({
 	}),
 }));
 
-// Mock useCurrentOrder
+// Mock useCurrentOrder / useCurrentOrderActions.
+// The hook now resolves the order at event time via `getCurrentOrder()` rather than
+// subscribing during render, so the mock exposes both against the same fixture.
 jest.mock('../contexts/current-order', () => ({
+	useCurrentOrderActions: () => ({
+		getCurrentOrder: () =>
+			jest.requireMock('../contexts/current-order').useCurrentOrder().currentOrder,
+		setCurrentOrderID: jest.fn(),
+	}),
 	useCurrentOrder: () => ({
 		currentOrder: {
 			getLatest: () => ({

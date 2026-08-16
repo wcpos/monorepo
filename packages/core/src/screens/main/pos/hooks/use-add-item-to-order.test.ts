@@ -82,6 +82,11 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 }));
 
 jest.mock('../contexts/current-order', () => ({
+	// The hook resolves the order at event time now, rather than subscribing during render.
+	useCurrentOrderActions: () => ({
+		getCurrentOrder: () => ({ getLatest: () => order }),
+		setCurrentOrderID: mockSetCurrentOrderID,
+	}),
 	useCurrentOrder: () => ({
 		currentOrder: { getLatest: () => order },
 		setCurrentOrderID: mockSetCurrentOrderID,

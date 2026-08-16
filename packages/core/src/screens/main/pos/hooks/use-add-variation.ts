@@ -15,7 +15,7 @@ import {
 } from './utils';
 import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';
-import { useCurrentOrder } from '../contexts/current-order';
+import { useCurrentOrderActions } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'variation']);
 
@@ -31,7 +31,8 @@ interface MetaData {
 
 export const useAddVariation = () => {
 	const { addItemToOrder } = useAddItemToOrder();
-	const { currentOrder } = useCurrentOrder();
+	// Event-time resolution — every variable product tile mounts this hook.
+	const { getCurrentOrder } = useCurrentOrderActions();
 	const { incrementLineItem } = useUpdateLineItem();
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
@@ -53,6 +54,7 @@ export const useAddVariation = () => {
 			// always make sure we have the latest product document
 			const variation = variationDoc.getLatest();
 			const parent = parentDoc.getLatest();
+			const currentOrder = getCurrentOrder();
 			const lineItems = currentOrder.getLatest().line_items ?? [];
 
 			// check if variation is already in order, if so increment quantity
@@ -107,7 +109,7 @@ export const useAddVariation = () => {
 			return Boolean(success);
 		},
 		[
-			currentOrder,
+			getCurrentOrder,
 			incrementLineItem,
 			metaDataKeys,
 			calculateLineItemTaxesAndTotals,

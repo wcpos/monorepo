@@ -5,14 +5,22 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { Platform } from '@wcpos/utils/platform';
 
-import { CurrentOrderContext, type CurrentOrderContextProps } from './context';
+import {
+	type CurrentOrderActions,
+	CurrentOrderActionsContext,
+	CurrentOrderContext,
+	type CurrentOrderContextProps,
+} from './context';
 import { useNewOrder } from './use-new-order';
 
 export { useOpenOrdersResource } from './use-open-orders-resource';
 export {
+	CurrentOrderActionsContext,
 	CurrentOrderContext,
 	useCurrentOrder,
+	useCurrentOrderActions,
 	useCurrentOrderOptional,
+	type CurrentOrderActions,
 	type CurrentOrderContextProps,
 } from './context';
 
@@ -94,17 +102,38 @@ export function CurrentOrderProvider({
 	);
 
 	/**
-	 *
+	 * Kept current so `getCurrentOrder()` can resolve the order at event time without anyone
+	 * having to subscribe to it. Written during render deliberately: the ref must be correct
+	 * by the time any handler in this commit can fire, and an effect would land too late for
+	 * a handler invoked in the same tick.
 	 */
+	const currentOrderRef = React.useRef(currentOrder);
+	currentOrderRef.current = currentOrder;
+
+	/**
+	 * Stable for the provider's lifetime — `setCurrentOrderID` is a useCallback on the router
+	 * and the getter closes over a ref. Anything that only mutates the order can subscribe
+	 * here and never re-render on a cart write.
+	 */
+	const actions = React.useMemo<CurrentOrderActions>(
+		() => ({
+			getCurrentOrder: () => currentOrderRef.current,
+			setCurrentOrderID,
+		}),
+		[setCurrentOrderID]
+	);
+
 	return (
-		<CurrentOrderContext.Provider
-			value={{
-				currentOrder,
-				openOrders,
-				setCurrentOrderID,
-			}}
-		>
-			{children}
-		</CurrentOrderContext.Provider>
+		<CurrentOrderActionsContext.Provider value={actions}>
+			<CurrentOrderContext.Provider
+				value={{
+					currentOrder,
+					openOrders,
+					setCurrentOrderID,
+				}}
+			>
+				{children}
+			</CurrentOrderContext.Provider>
+		</CurrentOrderActionsContext.Provider>
 	);
 }
