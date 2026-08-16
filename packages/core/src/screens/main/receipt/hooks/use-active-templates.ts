@@ -42,14 +42,16 @@ export function useActiveTemplates(): TemplateDocument[] {
 		});
 	}, [storeDB]);
 
-	const allTemplates = useObservableState(
-		query.$.pipe(
-			map((docs: TemplateDocument[]) =>
-				docs.filter((doc) => doc.is_virtual || doc.status === 'publish')
-			)
-		),
-		[] as TemplateDocument[]
+	const allTemplates$ = React.useMemo(
+		() =>
+			query.$.pipe(
+				map((docs: TemplateDocument[]) =>
+					docs.filter((doc) => doc.is_virtual || doc.status === 'publish')
+				)
+			),
+		[query]
 	);
+	const allTemplates = useObservableState(allTemplates$, [] as TemplateDocument[]);
 
 	// Apply per-store filtering for Pro users
 	return React.useMemo(() => {

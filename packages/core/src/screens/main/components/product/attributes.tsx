@@ -64,9 +64,11 @@ export function ProductAttributes({
 		expanded$: import('rxjs').Observable<Record<string, boolean>>;
 		setRowExpanded?: (id: string, expanded: boolean) => void;
 	};
-	const isExpanded = useObservableEagerState(
-		meta.expanded$.pipe(map((expanded: Record<string, boolean>) => !!expanded[row.id]))
+	const isExpanded$ = React.useMemo(
+		() => meta.expanded$.pipe(map((expanded: Record<string, boolean>) => !!expanded[row.id])),
+		[meta.expanded$, row.id]
 	);
+	const isExpanded = useObservableEagerState(isExpanded$);
 	const matches = useQueryState<'variations', import('../../../../query').VariationMatch[]>(
 		(state) => state.filters.attributeMatches
 	);

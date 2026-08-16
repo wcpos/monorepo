@@ -52,10 +52,14 @@ export function PaymentWebview({
 	...props
 }: PaymentWebviewProps) {
 	const router = useRouter();
-	const paymentURL = useObservableState(
-		order.links$!.pipe(map((links) => get(links, ['payment', 0, 'href']))),
-		get(order, ['links', 'payment', 0, 'href'])
+	// Memoised on the document wrapper: the engine adapter's `$` getter builds a new
+	// observable per property access, so an inline `.pipe()` resubscribed on every render of
+	// the checkout modal — which re-renders on every order write.
+	const paymentURL$ = React.useMemo(
+		() => order.links$!.pipe(map((links) => get(links, ['payment', 0, 'href']))),
+		[order]
 	);
+	const paymentURL = useObservableState(paymentURL$, get(order, ['links', 'payment', 0, 'href']));
 	const { wpCredentials } = useAppState();
 	const jwt = useObservableState(wpCredentials.access_token$, wpCredentials.access_token);
 	const { stockAdjustment } = useStockAdjustment();
