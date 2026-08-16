@@ -76,6 +76,31 @@ export function wrapEngineDocument<TDocument extends object = Record<string, unk
 	collection: LegacyCollectionName,
 	rxDocument: RxDocument<EngineDocument>
 ): TDocument {
+	/**
+	 * Per-wrapper cache for the `$` and `<field>$` observables.
+	 *
+	 * Both sides of this were rebuilt on every property access. RxDB's `$` is a GETTER that
+	 * returns a fresh `defer(...).pipe(shareReplay(...))` each time it is read, so reading
+	 * `order.billing$` twice produced two independent chains — each with its own shareReplay
+	 * buffer and its own subscription to the collection event stream — and our `.pipe()` on
+	 * top of it made a third. Anything handing these to `observable-hooks`, which keys its
+	 * subscription on observable identity, therefore resubscribed on every render.
+	 *
+	 * Safe to cache for the life of the wrapper: RxDB's `$` follows the document by PRIMARY
+	 * KEY (it filters `collection.eventBulks$` on `documentId` and seeds with
+	 * `getLatestDocumentData`), not by revision — so an observable built from this instance
+	 * keeps emitting correctly regardless of how many revisions land afterwards.
+	 */
+	const observableCache = new Map<string, unknown>();
+
+	const cachedObservable = (key: string, build: () => unknown): unknown => {
+		const existing = observableCache.get(key);
+		if (existing) return existing;
+		const built = build();
+		observableCache.set(key, built);
+		return built;
+	};
+
 	return new Proxy<Record<string, unknown>>(
 		{},
 		{
@@ -121,8 +146,8 @@ export function wrapEngineDocument<TDocument extends object = Record<string, unk
 					return () => wrapEngineDocument(collection, rxDocument.getLatest());
 				}
 				if (property === '$') {
-					return rxDocument.$.pipe(
-						map((nextDocument) => wrapEngineDocument(collection, nextDocument))
+					return cachedObservable('$', () =>
+						rxDocument.$.pipe(map((nextDocument) => wrapEngineDocument(collection, nextDocument)))
 					);
 				}
 				if (MUTATION_METHODS.has(property)) {
@@ -133,22 +158,24 @@ export function wrapEngineDocument<TDocument extends object = Record<string, unk
 				if (property.endsWith('$') && property.length > 1) {
 					const legacyField = property.slice(0, -1);
 					resolveLegacyField(collection, legacyField);
-					return rxDocument.$.pipe(
-						map((nextDocument) =>
-							readLegacyField(collection, engineDocument(nextDocument), legacyField)
-						),
-						/**
-						 * `deepEqual`, not reference equality — the same call RxDB's own `get$` makes,
-						 * for the same reason: every revision produces new object references, so `===`
-						 * treats an untouched object or array field as changed and re-emits. That made
-						 * `billing$`, `shipping$`, `meta_data$`, `line_items$` and `links$` fire on
-						 * every write to their document regardless of what actually moved.
-						 *
-						 * `deepEqual` short-circuits on `a === b`, so primitives cost one comparison.
-						 * The walk is only paid on object fields, and it is far cheaper than the
-						 * render it prevents: ~12µs for a 20-line cart, ~123µs at 200 lines.
-						 */
-						distinctUntilChanged(deepEqual)
+					return cachedObservable(property, () =>
+						rxDocument.$.pipe(
+							map((nextDocument) =>
+								readLegacyField(collection, engineDocument(nextDocument), legacyField)
+							),
+							/**
+							 * `deepEqual`, not reference equality — the same call RxDB's own `get$` makes,
+							 * for the same reason: every revision produces new object references, so `===`
+							 * treats an untouched object or array field as changed and re-emits. That made
+							 * `billing$`, `shipping$`, `meta_data$`, `line_items$` and `links$` fire on
+							 * every write to their document regardless of what actually moved.
+							 *
+							 * `deepEqual` short-circuits on `a === b`, so primitives cost one comparison.
+							 * The walk is only paid on object fields, and it is far cheaper than the
+							 * render it prevents: ~12µs for a 20-line cart, ~123µs at 200 lines.
+							 */
+							distinctUntilChanged(deepEqual)
+						)
 					);
 				}
 				return readLegacyField(collection, engineDocument(rxDocument), property);

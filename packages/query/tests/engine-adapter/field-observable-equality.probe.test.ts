@@ -91,3 +91,45 @@ describe('adapter field$ emission on unrelated writes', () => {
 		expect(seen[1]).toEqual({ country: 'GB' });
 	});
 });
+
+/**
+ * Observable identity per property access.
+ *
+ * RxDB's `$` is a GETTER returning a fresh `defer(...).pipe(shareReplay(...))` per read, and
+ * the adapter piped on top of it — so two reads of `order.billing$` produced two independent
+ * chains. `observable-hooks` keys its subscription on observable identity, so every render
+ * that read a `<field>$` resubscribed, and each subscription had its own shareReplay buffer
+ * and its own subscription to the collection event stream.
+ */
+describe('adapter field$ observable identity', () => {
+	const doc = () =>
+		fakeRxDocument({
+			id: 'order-1',
+			payload: { date_modified_gmt: '42', billing: { country: 'US' } },
+		} as unknown as EngineDocument).document;
+
+	it('returns the same observable for repeated reads of the same field', () => {
+		const wrapper = wrapEngineDocument<Record<string, Observable<unknown>>>('orders', doc());
+
+		expect(wrapper.billing$).toBe(wrapper.billing$);
+	});
+
+	it('returns the same observable for repeated reads of the document stream', () => {
+		const wrapper = wrapEngineDocument<Record<string, Observable<unknown>>>('orders', doc());
+
+		expect(wrapper.$).toBe(wrapper.$);
+	});
+
+	it('keeps different fields on different observables', () => {
+		const wrapper = wrapEngineDocument<Record<string, Observable<unknown>>>('orders', doc());
+
+		expect(wrapper.billing$).not.toBe(wrapper.date_modified_gmt$);
+	});
+
+	it('does not share observables between two different documents', () => {
+		const first = wrapEngineDocument<Record<string, Observable<unknown>>>('orders', doc());
+		const second = wrapEngineDocument<Record<string, Observable<unknown>>>('orders', doc());
+
+		expect(first.billing$).not.toBe(second.billing$);
+	});
+});
