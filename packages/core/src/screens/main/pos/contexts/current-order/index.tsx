@@ -5,21 +5,18 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { Platform } from '@wcpos/utils/platform';
 
+import { CurrentOrderContext, type CurrentOrderContextProps } from './context';
 import { useNewOrder } from './use-new-order';
 
 export { useOpenOrdersResource } from './use-open-orders-resource';
+export {
+	CurrentOrderContext,
+	useCurrentOrder,
+	useCurrentOrderOptional,
+	type CurrentOrderContextProps,
+} from './context';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
-
-interface CurrentOrderContextProps {
-	currentOrder: OrderDocument;
-	openOrders: { id: string; document: OrderDocument }[];
-	setCurrentOrderID: (id: string) => void;
-}
-
-export const CurrentOrderContext = React.createContext<CurrentOrderContextProps>(
-	null as unknown as CurrentOrderContextProps
-);
 
 interface CurrentOrderContextProviderProps {
 	children: React.ReactNode;
@@ -111,14 +108,3 @@ export function CurrentOrderProvider({
 		</CurrentOrderContext.Provider>
 	);
 }
-
-/**
- *
- */
-export const useCurrentOrder = () => {
-	const context = React.useContext(CurrentOrderContext);
-	if (!context) {
-		throw new Error(`useCurrentOrder must be called within CurrentOrderProvider`);
-	}
-	return context;
-};

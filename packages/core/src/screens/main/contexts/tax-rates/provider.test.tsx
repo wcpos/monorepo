@@ -8,6 +8,10 @@ import { BehaviorSubject } from 'rxjs';
 
 import { TaxRatesProvider, useTaxLocation, useTaxSettings } from './provider';
 import { useTaxRates } from './use-tax-rates';
+import {
+	CurrentOrderContext,
+	type CurrentOrderContextProps,
+} from '../../pos/contexts/current-order/context';
 
 import type { QueryStateOf } from '../../../../query';
 
@@ -343,5 +347,99 @@ describe('tax follows the customer address', () => {
 		});
 
 		expect(screen.getByTestId('rate-ids').textContent).toBe('20');
+	});
+});
+
+/**
+ * The provider subscribes to the current order ITSELF rather than being handed it by an
+ * ancestor. That is the fix for the reported bug: `POSStack` used to call `useCurrentOrder()`
+ * purely to pass the order down, which put a cart-write subscription above the POS navigator
+ * and re-rendered the whole products panel on every add/remove.
+ *
+ * Measured before the fix: `POSProductsContent` ×4, `ProductGrid` ×4, `ProductTile` ×80 per
+ * cart mutation.
+ */
+describe('current-order subscription', () => {
+	function LocationProbe() {
+		const { taxBasedOn } = useTaxLocation();
+		return <output data-testid="based-on">{taxBasedOn}</output>;
+	}
+
+	function withOrder(order: OrderDocument, children: React.ReactNode) {
+		return (
+			<CurrentOrderContext.Provider
+				value={{ currentOrder: order } as unknown as CurrentOrderContextProps}
+			>
+				{children}
+			</CurrentOrderContext.Provider>
+		);
+	}
+
+	it('resolves the order from context when no order prop is given', () => {
+		const meta$ = new BehaviorSubject<OrderMeta[]>([
+			{ key: '_woocommerce_pos_tax_based_on', value: 'billing' },
+		]);
+		const order = { ...makeOrder(), meta_data$: meta$ } as unknown as OrderDocument;
+
+		render(
+			withOrder(
+				order,
+				<TaxRatesProvider>
+					<LocationProbe />
+				</TaxRatesProvider>
+			)
+		);
+
+		expect(screen.getByTestId('based-on').textContent).toBe('billing');
+	});
+
+	it('follows a live write to the context order', () => {
+		const meta$ = new BehaviorSubject<OrderMeta[]>([]);
+		const order = { ...makeOrder(), meta_data$: meta$ } as unknown as OrderDocument;
+
+		render(
+			withOrder(
+				order,
+				<TaxRatesProvider>
+					<LocationProbe />
+				</TaxRatesProvider>
+			)
+		);
+		expect(screen.getByTestId('based-on').textContent).toBe('base');
+
+		act(() => {
+			meta$.next([{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' }]);
+		});
+
+		expect(screen.getByTestId('based-on').textContent).toBe('shipping');
+	});
+
+	it('falls back to the shop base address with no current order at all', () => {
+		render(
+			<TaxRatesProvider>
+				<LocationProbe />
+			</TaxRatesProvider>
+		);
+
+		expect(screen.getByTestId('based-on').textContent).toBe('base');
+	});
+
+	it('still honours an explicit order prop, which overrides context', () => {
+		const contextOrder = { ...makeOrder() } as unknown as OrderDocument;
+		const propMeta$ = new BehaviorSubject<OrderMeta[]>([
+			{ key: '_woocommerce_pos_tax_based_on', value: 'billing' },
+		]);
+		const propOrder = { ...makeOrder(), meta_data$: propMeta$ } as unknown as OrderDocument;
+
+		render(
+			withOrder(
+				contextOrder,
+				<TaxRatesProvider order={propOrder}>
+					<LocationProbe />
+				</TaxRatesProvider>
+			)
+		);
+
+		expect(screen.getByTestId('based-on').textContent).toBe('billing');
 	});
 });
