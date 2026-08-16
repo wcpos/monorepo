@@ -7,7 +7,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { ObservableResource } from 'observable-hooks';
 import { of } from 'rxjs';
 
-import { ReportsProvider, useReports, useReportsBinding, useReportsSelection } from './context';
+import { ReportsProvider, useReportsBinding, useReportsData, useReportsSelection } from './context';
 import { QueryStateProvider, useQueryStateActions } from '../../../query';
 
 jest.mock('../../../hooks/use-local-date', () => ({
@@ -26,7 +26,9 @@ const Provider = ReportsProvider as unknown as React.ComponentType<{
 }>;
 
 function Probe() {
-	const reports = useReports();
+	const data = useReportsData();
+	const selection = useReportsSelection();
+	const reports = { ...data, ...selection };
 	const actions = useQueryStateActions<'orders'>();
 	return (
 		<div>

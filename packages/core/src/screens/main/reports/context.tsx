@@ -34,23 +34,20 @@ export interface ReportsData {
 	dateRange: DateRange;
 }
 
-interface ReportsContextType extends ReportsBinding, ReportsSelection, ReportsData {}
-
 /**
  * Split three ways along how often each part changes.
  *
  * `allOrders` and `selectedOrders` are rebuilt on every order-query emission, and the whole
  * bundle was republished with them — so `ReportsSyncProgress`, which reads nothing but
  * `binding`, re-rendered on every emission and on every row the cashier ticked.
+ *
+ * There is deliberately NO combined context here. Every consumer takes exactly the slice it
+ * uses; a combined `useReports()` would be surface with no callers, and the only thing it
+ * could do is put back the coupling this split removes.
  */
 const ReportsBindingContext = React.createContext<ReportsBinding | undefined>(undefined);
 const ReportsSelectionContext = React.createContext<ReportsSelection | undefined>(undefined);
 const ReportsDataContext = React.createContext<ReportsData | undefined>(undefined);
-/**
- * The combined view, published by the provider rather than composed per consumer so that
- * `useReports()` callers keep sharing one object identity.
- */
-const ReportsContext = React.createContext<ReportsContextType | undefined>(undefined);
 
 /** Just the binding — stable across order emissions and selection changes. */
 export const useReportsBinding = (): ReportsBinding => {
@@ -75,18 +72,6 @@ export const useReportsData = (): ReportsData => {
 	const context = React.useContext(ReportsDataContext);
 	if (!context) {
 		throw new Error('useReportsData must be used within a ReportsContext');
-	}
-	return context;
-};
-
-/**
- * Everything. Subscribes to all three halves, so it re-renders on any of them — prefer the
- * narrower hooks above.
- */
-export const useReports = () => {
-	const context = React.useContext(ReportsContext);
-	if (!context) {
-		throw new Error('useReports must be used within a ReportsContext');
 	}
 	return context;
 };
@@ -158,17 +143,10 @@ export function ReportsProvider({ binding, children }: ReportsProviderProps) {
 		[allOrders, selectedOrders, dateRange]
 	);
 
-	const combined = React.useMemo<ReportsContextType>(
-		() => ({ ...bindingValue, ...selectionValue, ...dataValue }),
-		[bindingValue, selectionValue, dataValue]
-	);
-
 	return (
 		<ReportsBindingContext.Provider value={bindingValue}>
 			<ReportsSelectionContext.Provider value={selectionValue}>
-				<ReportsDataContext.Provider value={dataValue}>
-					<ReportsContext.Provider value={combined}>{children}</ReportsContext.Provider>
-				</ReportsDataContext.Provider>
+				<ReportsDataContext.Provider value={dataValue}>{children}</ReportsDataContext.Provider>
 			</ReportsSelectionContext.Provider>
 		</ReportsBindingContext.Provider>
 	);
