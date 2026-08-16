@@ -53,7 +53,7 @@ jest.mock('./use-cart-lines', () => ({
 	useCartLines: () => ({ line_items: [], fee_lines: [], shipping_lines: [], coupon_lines: [] }),
 }));
 jest.mock('../../contexts/tax-rates', () => ({
-	useTaxRates: () => ({
+	useTaxSettings: () => ({
 		allRates: [],
 		taxRoundAtSubtotal: false,
 		priceNumDecimals: 2,

@@ -39,7 +39,7 @@ import { VariableProductRow } from '../../components/product/variable-product-ro
 import { ProductVariationImage } from '../../components/product/variation-image';
 import { QuerySearchInput } from '../../components/query-search-input';
 import { UISettingsDialog } from '../../components/ui-settings';
-import { useTaxRates } from '../../contexts/tax-rates';
+import { useTaxSettings } from '../../contexts/tax-rates';
 import { useUISettings } from '../../contexts/ui-settings';
 import { TextCell } from '../../components/text-cell';
 import { COGS } from './cells/cogs';
@@ -194,7 +194,7 @@ function POSProductsContent({
 		}),
 		[actions]
 	);
-	const { calcTaxes } = useTaxRates();
+	const { calcTaxes } = useTaxSettings();
 	const viewMode = useObservableEagerState(uiSettings.viewMode$);
 	const sortBy = useObservableEagerState(uiSettings.sortBy$);
 	const sortDirection = useObservableEagerState(uiSettings.sortDirection$);

@@ -39,12 +39,9 @@ jest.mock('../../contexts/tax-rates', () => ({
 	},
 }));
 
-jest.mock('../../contexts/tax-rates/provider', () => {
-	const React = jest.requireActual<typeof import('react')>('react');
-	return {
-		TaxRatesContext: React.createContext(null),
-	};
-});
+jest.mock('../../contexts/tax-rates/provider', () => ({
+	useTaxSettingsOptional: () => null,
+}));
 
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => mockUseAppState(),

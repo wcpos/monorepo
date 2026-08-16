@@ -10,7 +10,7 @@ import { useActiveTemplates } from './use-active-templates';
 import { useReceiptData } from './use-receipt-data';
 import { buildReceiptData } from '../utils/build-receipt-data';
 import { useAppState } from '../../../../contexts/app-state';
-import { TaxRatesContext } from '../../contexts/tax-rates/provider';
+import { useTaxSettingsOptional } from '../../contexts/tax-rates/provider';
 import { resolvePriceNumDecimals } from '../../contexts/tax-rates/resolve-price-num-decimals';
 import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
 
@@ -73,7 +73,7 @@ export function useTemplateRenderer({
 }: UseTemplateRendererOptions): TemplateRendererResult {
 	const templates = useActiveTemplates();
 	const { store } = useAppState();
-	const taxRates = React.useContext(TaxRatesContext);
+	const taxRates = useTaxSettingsOptional();
 	const storeDp = useObservableEagerState(store?.wc_price_decimals$) as number | undefined;
 	const dp = resolvePriceNumDecimals({
 		contextDp: taxRates?.priceNumDecimals,

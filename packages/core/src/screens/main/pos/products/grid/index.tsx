@@ -13,7 +13,7 @@ import { useT } from '../../../../../contexts/translations';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { DataTableFooter } from '../../../components/data-table/footer';
 import { TaxBasedOn } from '../../../components/product/tax-based-on';
-import { useTaxRates } from '../../../contexts/tax-rates';
+import { useTaxSettings } from '../../../contexts/tax-rates';
 
 import type { QueryStateActions } from '../../../../../query';
 
@@ -40,7 +40,7 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 	const { uiSettings } = useUISettings('pos-products');
 	const gridColumns = useObservableEagerState(uiSettings.gridColumns$);
 	const gridFields = useObservableEagerState(uiSettings.gridFields$) as GridFields;
-	const { calcTaxes } = useTaxRates();
+	const { calcTaxes } = useTaxSettings();
 	const t = useT();
 
 	const result = useObservableSuspense(binding.resource);
