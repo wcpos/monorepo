@@ -103,12 +103,18 @@ export function CurrentOrderProvider({
 
 	/**
 	 * Kept current so `getCurrentOrder()` can resolve the order at event time without anyone
-	 * having to subscribe to it. Written during render deliberately: the ref must be correct
-	 * by the time any handler in this commit can fire, and an effect would land too late for
-	 * a handler invoked in the same tick.
+	 * having to subscribe to it.
+	 *
+	 * Updated in an effect, not during render — react-compiler forbids touching a ref while
+	 * rendering, and the effect is sufficient here: the ref is seeded with the first order at
+	 * mount, and every consumer reads it from an event handler, which cannot run before the
+	 * commit that rendered it. So the value a handler sees is always the one from its own
+	 * commit or newer.
 	 */
 	const currentOrderRef = React.useRef(currentOrder);
-	currentOrderRef.current = currentOrder;
+	React.useEffect(() => {
+		currentOrderRef.current = currentOrder;
+	}, [currentOrder]);
 
 	/**
 	 * Stable for the provider's lifetime — `setCurrentOrderID` is a useCallback on the router
