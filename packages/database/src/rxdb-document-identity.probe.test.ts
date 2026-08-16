@@ -91,14 +91,33 @@ describe('RxDB document instance identity across query emissions', () => {
 		await db.close();
 	});
 
-	it('returns the current instance from getLatest() on a superseded one', async () => {
+	/**
+	 * THE load-bearing test. An RxDocument instance is immutable: `_data` is assigned once in
+	 * the constructor (`rx-document.ts:455`) and every read goes through it, so a given
+	 * instance's data can never change underneath a cached wrapper.
+	 *
+	 * This is the property the wrapper cache's safety rests on — stronger and simpler than
+	 * "RxDB reuses instances for unchanged documents", which only explains why the cache
+	 * HITS. Under immutability a cached wrapper is exactly as current as the document it
+	 * wraps, which is unchanged behaviour, and no enumeration of the paths that produce
+	 * documents is required.
+	 */
+	it('never mutates an existing instance — a write produces a separate one', async () => {
 		const { db, rows } = await makeCollection();
 
 		const stale = (await rows.findOne('a').exec()) as RxDocument<Row>;
+		expect(stale.counter).toBe(0);
+
 		await stale.incrementalPatch({ counter: 5 });
 
-		// The instance captured before the write still reads its old value...
-		expect(stale.getLatest().counter).toBe(5);
+		// The captured instance still reads its ORIGINAL value. If RxDB mutated `_data` in
+		// place this would be 5, and caching a wrapper against an instance would be unsafe.
+		expect(stale.counter).toBe(0);
+
+		// The new state is a DIFFERENT object, reached explicitly.
+		const latest = stale.getLatest();
+		expect(latest).not.toBe(stale);
+		expect(latest.counter).toBe(5);
 
 		await db.close();
 	});
