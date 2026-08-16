@@ -28,7 +28,7 @@ import { PaymentMethod } from '../../components/order/payment-method';
 import { Status } from '../../components/order/status';
 import { Total } from '../../components/order/total';
 import { UISettingsDialog } from '../../components/ui-settings';
-import { useReports } from '../context';
+import { useReportsBinding, useReportsData, useReportsSelection } from '../context';
 import { UISettingsForm } from '../ui-settings-form';
 import { TextCell } from '../../components/text-cell';
 import { useQueryState, useQueryStateActions } from '../../../../query';
@@ -104,7 +104,9 @@ export function Orders() {
 	const t = useT();
 	const state = useQueryState<'orders'>();
 	const actions = useQueryStateActions<'orders'>();
-	const { binding, allOrders, unselectedRowIds, setUnselectedRowIds } = useReports();
+	const { binding } = useReportsBinding();
+	const { allOrders } = useReportsData();
+	const { unselectedRowIds, setUnselectedRowIds } = useReportsSelection();
 	const tableActions = React.useMemo<
 		Pick<QueryStateActions<'orders'>, 'setSort' | 'extendLimit' | 'setFilter'>
 	>(

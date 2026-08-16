@@ -6,7 +6,7 @@ import { useObservableState } from 'observable-hooks';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../contexts/translations';
-import { useReports } from './context';
+import { useReportsBinding } from './context';
 
 /**
  * "12,400 of 30,000 orders downloaded" while a ranged report is still being fetched (#954).
@@ -20,7 +20,7 @@ import { useReports } from './context';
  * continuation cursor is cleared, which is exactly when the range is complete.
  */
 export function ReportsSyncProgress() {
-	const { binding } = useReports();
+	const { binding } = useReportsBinding();
 	const progress = useObservableState(binding.laneProgress$, null);
 	const t = useT();
 

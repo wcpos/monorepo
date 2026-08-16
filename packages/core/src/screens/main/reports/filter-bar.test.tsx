@@ -71,7 +71,7 @@ jest.mock('../components/order/filter-bar/date-range-pill', () => ({
 		<button data-testid="shared-date-range-pill" onClick={onRemove} />
 	),
 }));
-jest.mock('./context', () => ({ useReports: () => ({}) }));
+jest.mock('./context', () => ({ useReports: () => ({}), useReportsData: () => ({}) }));
 jest.mock('../../../hooks/use-local-date', () => ({
 	convertLocalDateToUTCString: (date: Date) => date.toISOString(),
 }));

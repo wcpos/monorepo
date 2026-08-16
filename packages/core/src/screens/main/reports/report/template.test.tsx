@@ -66,7 +66,7 @@ jest.mock('../../hooks/use-number-format', () => ({
 }));
 const REPORTS = { selectedOrders: [] };
 jest.mock('../context', () => ({
-	useReports: () => REPORTS,
+	useReportsData: () => REPORTS,
 }));
 
 describe('ZReport query-state dates', () => {

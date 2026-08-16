@@ -13,7 +13,7 @@ import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useNumberFormat } from '../../hooks/use-number-format';
-import { useReports } from '../context';
+import { useReportsData } from '../context';
 import { useQueryState } from '../../../../query';
 
 /**
@@ -24,7 +24,7 @@ export function ZReport() {
 	const { store, wpCredentials } = useAppState();
 	const storeName = useObservableEagerState(store.name$) as string;
 	const num_decimals = useObservableEagerState(store.price_num_decimals$) as number;
-	const { selectedOrders } = useReports();
+	const { selectedOrders } = useReportsData();
 	const selectedDateRange = useQueryState<'orders', { from: string; to: string } | undefined>(
 		(state) => state.filters.dateRange
 	);

@@ -7,7 +7,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { ObservableResource } from 'observable-hooks';
 import { of } from 'rxjs';
 
-import { ReportsProvider, useReports } from './context';
+import { ReportsProvider, useReportsBinding, useReportsData, useReportsSelection } from './context';
 import { QueryStateProvider, useQueryStateActions } from '../../../query';
 
 jest.mock('../../../hooks/use-local-date', () => ({
@@ -26,7 +26,9 @@ const Provider = ReportsProvider as unknown as React.ComponentType<{
 }>;
 
 function Probe() {
-	const reports = useReports();
+	const data = useReportsData();
+	const selection = useReportsSelection();
+	const reports = { ...data, ...selection };
 	const actions = useQueryStateActions<'orders'>();
 	return (
 		<div>
@@ -89,5 +91,48 @@ describe('ReportsProvider binding context', () => {
 		expect(screen.getByTestId('date-range').textContent).toBe(
 			'2026-07-10T00:00:00.000Z|2026-07-11T23:59:59.999Z'
 		);
+	});
+
+	/**
+	 * `ReportsSyncProgress` reads nothing but `binding`, and the binding does not change when
+	 * the cashier ticks a row — but the whole bundle used to be republished together, so it
+	 * re-rendered on every selection change and every order emission.
+	 *
+	 * The consumer is memoised with no props, so a parent render alone cannot reach it.
+	 */
+	it('does not re-render a binding-only consumer when the row selection changes', () => {
+		const onBindingRender = jest.fn();
+		const BindingConsumer = React.memo(function BindingConsumer() {
+			useReportsBinding();
+			onBindingRender();
+			return null;
+		});
+
+		function SelectionButton() {
+			const { setUnselectedRowIds } = useReportsSelection();
+			return <button data-testid="exclude" onClick={() => setUnselectedRowIds({ one: true })} />;
+		}
+
+		render(
+			<QueryStateProvider
+				collection="orders"
+				initialPageSize={Number.MAX_SAFE_INTEGER}
+				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+			>
+				<React.Suspense fallback={null}>
+					<Provider binding={binding}>
+						<BindingConsumer />
+						<SelectionButton />
+					</Provider>
+				</React.Suspense>
+			</QueryStateProvider>
+		);
+
+		const rendersBefore = onBindingRender.mock.calls.length;
+		expect(rendersBefore).toBeGreaterThan(0);
+
+		fireEvent.click(screen.getByTestId('exclude'));
+
+		expect(onBindingRender).toHaveBeenCalledTimes(rendersBefore);
 	});
 });

@@ -78,12 +78,9 @@ jest.mock('../../components/text-cell', () => ({ TextCell: () => null }));
 jest.mock('./header-select', () => ({ TableHeaderSelect: () => null }));
 jest.mock('./row-select', () => ({ TableRowSelect: () => null }));
 jest.mock('../context', () => ({
-	useReports: () => ({
-		binding: mockBinding,
-		allOrders: [],
-		unselectedRowIds: {},
-		setUnselectedRowIds: jest.fn(),
-	}),
+	useReportsBinding: () => ({ binding: mockBinding }),
+	useReportsData: () => ({ allOrders: [] }),
+	useReportsSelection: () => ({ unselectedRowIds: {}, setUnselectedRowIds: jest.fn() }),
 }));
 jest.mock('../ui-settings-form', () => ({ UISettingsForm: () => null }));
 jest.mock('../../../../contexts/translations', () => ({
