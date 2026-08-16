@@ -77,10 +77,6 @@ describe('MEASUREMENT: wrapper churn for a single-row write', () => {
 
 		const changed = after.filter((wrapper, i) => wrapper !== before[i]).length;
 
-		console.log(
-			`\n  [measurement] ${ROW_COUNT} rows, one written -> ${changed} wrapper identity change(s)\n`
-		);
-
 		// The whole point: only the row that actually changed.
 		expect(changed).toBe(1);
 
@@ -125,10 +121,6 @@ describe('MEASUREMENT: wrapper churn for a single-row write', () => {
 		const second = (await nextEmission) as RxDocument<EngineDocument>[];
 
 		rerender(<Table rows={wrapAll(second) as { number?: string }[]} />);
-
-		console.log(
-			`\n  [measurement] ${ROW_COUNT} rows, one written -> ${onRowRender.mock.calls.length} row re-render(s)\n`
-		);
 
 		expect(onRowRender).toHaveBeenCalledTimes(1);
 
