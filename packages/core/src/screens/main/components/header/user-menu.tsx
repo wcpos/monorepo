@@ -87,21 +87,29 @@ function StoreSubMenu({ storesResource, switchStore, currentStoreID }: StoreSubM
  * The image attachment hook suspends while the avatar loads, so it lives in
  * its own component behind a Suspense boundary that falls back to initials.
  */
-function UserAvatarImage({ wpCredentials }: { wpCredentials: WPCredentialsDocument }) {
+function UserAvatarImage({
+	wpCredentials,
+	displayName,
+}: {
+	wpCredentials: WPCredentialsDocument;
+	displayName?: string;
+}) {
 	const avatarUrl = useObservableEagerState(wpCredentials.avatar_url$!);
 	const { uri } = useImageAttachment(wpCredentials, avatarUrl as string);
 
-	return <Avatar source={{ uri }} fallback={getInitials(wpCredentials?.display_name)} />;
+	return <Avatar source={{ uri }} fallback={getInitials(displayName)} />;
 }
 
-function UserAvatar({ wpCredentials }: { wpCredentials: WPCredentialsDocument }) {
+function UserAvatar({
+	wpCredentials,
+	displayName,
+}: {
+	wpCredentials: WPCredentialsDocument;
+	displayName?: string;
+}) {
 	return (
-		<Suspense
-			fallback={
-				<Avatar source={{ uri: undefined }} fallback={getInitials(wpCredentials?.display_name)} />
-			}
-		>
-			<UserAvatarImage wpCredentials={wpCredentials} />
+		<Suspense fallback={<Avatar source={{ uri: undefined }} fallback={getInitials(displayName)} />}>
+			<UserAvatarImage wpCredentials={wpCredentials} displayName={displayName} />
 		</Suspense>
 	);
 }
@@ -115,6 +123,10 @@ export function UserMenu() {
 	const { screenSize } = useTheme();
 	const { engine } = useQueryRuntime();
 	const stores = useObservableEagerState(wpCredentials?.stores$);
+	// Subscribed, not read off the document: `display_name` is rendered in the trigger and
+	// in both avatar fallbacks, but the only subscriptions here were stores$/avatar_url$, so
+	// a rename never reached the header.
+	const displayName = useObservableEagerState(wpCredentials?.display_name$) as string | undefined;
 	const t = useT();
 	const [isSwitching, setIsSwitching] = React.useState(false);
 	/** Non-null while the reset confirm is open, carrying the reading it must state. */
@@ -213,11 +225,9 @@ export function UserMenu() {
 					className="text-sidebar-foreground web:hover:bg-white/10 rounded-none bg-transparent px-2"
 				>
 					<HStack>
-						<UserAvatar wpCredentials={wpCredentials} />
+						<UserAvatar wpCredentials={wpCredentials} displayName={displayName} />
 						{screenSize !== 'sm' ? (
-							<ButtonText className="text-sidebar-foreground">
-								{wpCredentials?.display_name}
-							</ButtonText>
+							<ButtonText className="text-sidebar-foreground">{displayName}</ButtonText>
 						) : null}
 						<Icon name="caretDown" className="text-sidebar-foreground" />
 					</HStack>
