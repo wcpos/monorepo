@@ -532,18 +532,23 @@ function useEngineBinding(
 		() => projection$.pipe(map(({ laneProgress }) => laneProgress)),
 		[projection$]
 	);
-	return {
-		resource,
-		result$,
-		active$,
-		total$,
-		totalSource$,
-		laneProgress$,
-		sync: demand.sync,
-		whenReady: demand.whenReady,
-		declareOnce: demand.declareOnce,
-		generation: demand.generation,
-	};
+	// Memoised for the same reason as the projections above: consumers hold the binding and
+	// compare it, so a fresh object per render is churn they cannot memoise away.
+	return React.useMemo(
+		() => ({
+			resource,
+			result$,
+			active$,
+			total$,
+			totalSource$,
+			laneProgress$,
+			sync: demand.sync,
+			whenReady: demand.whenReady,
+			declareOnce: demand.declareOnce,
+			generation: demand.generation,
+		}),
+		[resource, result$, active$, total$, totalSource$, laneProgress$, demand]
+	);
 }
 
 export function useCollectionBinding<C extends Exclude<CollectionKey, 'logs'>>(
@@ -711,15 +716,36 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 		() => Promise.all([parentDemand.sync(), childDemand.sync()]).then(() => undefined),
 		[childDemand, parentDemand]
 	);
-	return {
-		resource,
-		result$,
-		active$,
-		total$: projection$.pipe(map(({ total }) => total)),
-		totalSource$: projection$.pipe(map(({ source }) => source)),
-		laneProgress$: projection$.pipe(map(({ laneProgress }) => laneProgress)),
-		sync,
-	};
+
+	/**
+	 * Memoised, like `resource` and `active$` above and like every projection in
+	 * `useEngineBinding`. These three were piped inline in the return, so each render handed
+	 * consumers three NEW observables.
+	 *
+	 * That is not merely wasteful. `useObservableState` keys its subscription on observable
+	 * identity, so the footer resubscribed on every render; `projection$` carries
+	 * `shareReplay({ bufferSize: 1 })`, so each resubscribe immediately replayed its buffered
+	 * value and set state again. A single cart write therefore rang through the products
+	 * panel several times over before settling — measured at `POSProductsContent` ×4,
+	 * `ProductTile` ×80 per add or remove.
+	 *
+	 * `useEngineBinding` already memoises the same three projections; this hook is the one
+	 * the POS products panel uses, and it did not.
+	 */
+	const total$ = React.useMemo(() => projection$.pipe(map(({ total }) => total)), [projection$]);
+	const totalSource$ = React.useMemo(
+		() => projection$.pipe(map(({ source }) => source)),
+		[projection$]
+	);
+	const laneProgress$ = React.useMemo(
+		() => projection$.pipe(map(({ laneProgress }) => laneProgress)),
+		[projection$]
+	);
+
+	return React.useMemo(
+		() => ({ resource, result$, active$, total$, totalSource$, laneProgress$, sync }),
+		[resource, result$, active$, total$, totalSource$, laneProgress$, sync]
+	);
 }
 
 export type SearchSelectCollection =

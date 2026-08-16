@@ -11,9 +11,10 @@ import { useLineItemData } from './use-line-item-data';
 import { enqueueOrderMutation } from './order-mutation-queue';
 import { updatePosDataMeta } from './utils';
 import { documentRecordId, useLocalMutation } from '../../hooks/mutations/use-local-mutation';
-import { useCurrentOrder } from '../contexts/current-order';
+import { useCurrentOrderActions } from '../contexts/current-order';
 
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+type OrderDocument = import('@wcpos/database').OrderDocument;
+type LineItem = NonNullable<OrderDocument['line_items']>[number];
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'line-item']);
 
@@ -34,7 +35,8 @@ interface UpdateLineItemOptions {
  *
  */
 export const useUpdateLineItem = () => {
-	const { currentOrder } = useCurrentOrder();
+	// Event-time resolution — reached from every product tile via useAddProduct.
+	const { getCurrentOrder } = useCurrentOrderActions();
 	const { localPatch } = useLocalMutation();
 	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
 	const { getLineItemData } = useLineItemData();
@@ -45,9 +47,26 @@ export const useUpdateLineItem = () => {
 	 *
 	 * @TODO - what if more than one property is changed at once?
 	 */
+	/**
+	 * Takes the order it must operate on rather than resolving the CURRENT one.
+	 *
+	 * These mutations are queued, so execution can be arbitrarily later than the press. If
+	 * this resolved `getCurrentOrder()` at execution time, a cashier who switched order tabs
+	 * while a mutation was still queued would have it applied to the wrong order: the queue is
+	 * keyed by the order that was selected at enqueue time, so the edit either lands in the
+	 * new order or is silently dropped when its line is not found there.
+	 *
+	 * The caller captures the order at press time and threads it through. `getLatest()` still
+	 * gets the freshest revision — of that order.
+	 */
 	const applyLineItemChanges = React.useCallback(
-		async (uuid: string, changes: Changes, options?: UpdateLineItemOptions) => {
-			const order = currentOrder.getLatest();
+		async (
+			capturedOrder: OrderDocument,
+			uuid: string,
+			changes: Changes,
+			options?: UpdateLineItemOptions
+		) => {
+			const order = capturedOrder.getLatest();
 			const json = order.toMutableJSON();
 			let updated = false;
 			let stockWarningName: string | null = null;
@@ -139,7 +158,6 @@ export const useUpdateLineItem = () => {
 		[
 			calculateLineItemTaxesAndTotals,
 			checkCartStock,
-			currentOrder,
 			getLineItemData,
 			localPatch,
 			showBackorderWarning,
@@ -149,19 +167,24 @@ export const useUpdateLineItem = () => {
 
 	const updateLineItem = React.useCallback(
 		async (uuid: string, changes: Changes, options?: UpdateLineItemOptions) => {
-			const recordId = documentRecordId(currentOrder.getLatest());
+			// Captured at press time, so the queued work operates on the order it was queued for.
+			const capturedOrder = getCurrentOrder();
+			const recordId = documentRecordId(capturedOrder.getLatest());
 			if (!recordId) throw new Error('Order is missing its uuid');
-			return enqueueOrderMutation(recordId, () => applyLineItemChanges(uuid, changes, options));
+			return enqueueOrderMutation(recordId, () =>
+				applyLineItemChanges(capturedOrder, uuid, changes, options)
+			);
 		},
-		[applyLineItemChanges, currentOrder]
+		[applyLineItemChanges, getCurrentOrder]
 	);
 
 	const incrementLineItem = React.useCallback(
 		async (uuid: string, quantity: number) => {
-			const recordId = documentRecordId(currentOrder.getLatest());
+			const capturedOrder = getCurrentOrder();
+			const recordId = documentRecordId(capturedOrder.getLatest());
 			if (!recordId) throw new Error('Order is missing its uuid');
 			return enqueueOrderMutation(recordId, async () => {
-				const lineItem = currentOrder
+				const lineItem = capturedOrder
 					.getLatest()
 					.toMutableJSON()
 					.line_items?.find((item) =>
@@ -170,12 +193,12 @@ export const useUpdateLineItem = () => {
 						)
 					);
 				if (!lineItem) return;
-				return applyLineItemChanges(uuid, {
+				return applyLineItemChanges(capturedOrder, uuid, {
 					quantity: (lineItem.quantity ?? 0) + quantity,
 				});
 			});
 		},
-		[applyLineItemChanges, currentOrder]
+		[applyLineItemChanges, getCurrentOrder]
 	);
 
 	/**
@@ -183,7 +206,7 @@ export const useUpdateLineItem = () => {
 	 */
 	const splitLineItem = React.useCallback(
 		async (uuid: string) => {
-			const order = currentOrder.getLatest();
+			const order = getCurrentOrder().getLatest();
 			const lineItemIndex = (order.line_items ?? []).findIndex((item) =>
 				(item.meta_data ?? []).some(
 					(meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid
@@ -243,7 +266,7 @@ export const useUpdateLineItem = () => {
 
 			return localPatch({ document: order, data: { line_items: updatedLineItems } });
 		},
-		[calculateLineItemTaxesAndTotals, currentOrder, localPatch]
+		[calculateLineItemTaxesAndTotals, getCurrentOrder, localPatch]
 	);
 
 	return { updateLineItem, incrementLineItem, splitLineItem };

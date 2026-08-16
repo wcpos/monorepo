@@ -9,6 +9,7 @@ import { useAppState } from '../../../../contexts/app-state';
 import { QueryStateProvider, useCollectionBinding, useQueryState } from '../../../../query';
 import { TAX_RATES_ALL_RESULTS_LIMIT, TAX_RATES_INITIAL_SORT } from '../../tax-rates/query-state';
 import { useBaseTaxLocation } from '../../hooks/use-base-tax-location';
+import { useCurrentOrderOptional } from '../../pos/contexts/current-order/context';
 
 type TaxRateDocument = import('@wcpos/database').TaxRateDocument;
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -63,6 +64,10 @@ export const TaxLocationContext = React.createContext<TaxLocationContextProps | 
 
 interface TaxRatesProviderProps {
 	children: React.ReactNode;
+	/**
+	 * Escape hatch for tests and for callers that already hold an order. Production does NOT
+	 * pass this — see `TaxLocationProvider`, which subscribes to the current order itself.
+	 */
 	order?: OrderDocument;
 }
 
@@ -172,10 +177,29 @@ function isTaxBasedOn(value: unknown): value is TaxBasedOn {
  * Order-dependent. Re-renders when the order identity changes, but the value it publishes
  * is deduped, so consumers only re-render when the tax basis or address actually moved.
  */
-function TaxLocationProvider({ children, order }: TaxRatesProviderProps) {
+function TaxLocationProvider({ children, order: orderProp }: TaxRatesProviderProps) {
 	const { allRates } = useTaxSettings();
 	const { store } = useAppState();
 	const baseLocation = useBaseTaxLocation();
+
+	/**
+	 * Subscribe to the current order HERE rather than taking it from an ancestor.
+	 *
+	 * This is the fix for the reported bug. `POSStack` used to call `useCurrentOrder()` just
+	 * to hand the order down as a prop — which put a cart-write subscription ABOVE the
+	 * navigator, so every add/remove re-rendered the entire POS stack, products panel and
+	 * all. Measured: `POSProductsContent` ×4, `ProductGrid` ×4, `ProductTile` ×80 on every
+	 * cart mutation, and no amount of context-splitting or document-identity work below could
+	 * stop it, because the panel was being dragged from above rather than through its data.
+	 *
+	 * Subscribing here keeps the churn where it belongs: this provider re-renders, publishes
+	 * a deduped value, and `children` — a stable element prop — is left alone.
+	 *
+	 * Optional because this provider is also mounted on the standalone Products screen, which
+	 * has no current order at all; there it resolves to the shop base address, as before.
+	 */
+	const currentOrder = useCurrentOrderOptional();
+	const order = orderProp ?? currentOrder;
 
 	/**
 	 * Tax Based On
