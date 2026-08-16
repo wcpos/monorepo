@@ -70,12 +70,48 @@ function legacySnapshot(
 	return snapshot;
 }
 
+/**
+ * Wrapper cache, keyed on the underlying RxDocument instance.
+ *
+ * This is what preserves document identity across query emissions. Without it every
+ * emission built a fresh Proxy for every hit, so a write to ONE row handed React all-new
+ * identities for the whole result set — every row and cell in every table reconciled, and
+ * the current-order context ticked on writes to unrelated orders.
+ *
+ * Keying on the instance is safe because an RxDocument is IMMUTABLE: `_data` is assigned
+ * once in the constructor (rxdb `rx-document.ts:455`) and every read goes through it, so a
+ * given instance's data can never change. A wrapper cached against an instance is therefore
+ * exactly as current as the document it wraps — which is unchanged behaviour, since the
+ * uncached wrapper read through to the same instance. No enumeration of the paths that
+ * produce documents is needed; immutability covers them all.
+ *
+ * (RxDB's doc cache separately de-duplicates instances by `_rev + _meta.lwt`, which is why
+ * this cache HITS often rather than why it is safe. Worth not conflating the two.)
+ *
+ * Both properties are pinned by `rxdb-document-identity.probe.test.ts` in `@wcpos/database`,
+ * which should be re-run on any RxDB upgrade.
+ *
+ * A WeakMap, so wrappers are collected with the documents they wrap. The inner Map is keyed
+ * by legacy collection name, since the same document could in principle be asked for under
+ * more than one.
+ */
+const WRAPPER_CACHE = new WeakMap<RxDocument<EngineDocument>, Map<LegacyCollectionName, unknown>>();
+
 /** Wrap an engine RxDocument with the legacy read contract. Writes intentionally fail loudly. */
 export function wrapEngineDocument<TDocument extends object = Record<string, unknown>>(
 	collection: LegacyCollectionName,
 	rxDocument: RxDocument<EngineDocument>
 ): TDocument {
-	return new Proxy<Record<string, unknown>>(
+	let byCollection = WRAPPER_CACHE.get(rxDocument);
+	if (byCollection) {
+		const cached = byCollection.get(collection);
+		if (cached) return cached as TDocument;
+	} else {
+		byCollection = new Map();
+		WRAPPER_CACHE.set(rxDocument, byCollection);
+	}
+
+	const wrapper = new Proxy<Record<string, unknown>>(
 		{},
 		{
 			// RxDB's isRxDocument() checks `'isInstanceOfRxDocument' in obj`, and
@@ -143,4 +179,7 @@ export function wrapEngineDocument<TDocument extends object = Record<string, unk
 			},
 		}
 	) as TDocument;
+
+	byCollection.set(collection, wrapper);
+	return wrapper;
 }
