@@ -14,6 +14,27 @@ import {
 import type { RxDatabase } from 'rxdb';
 
 describe('observeEngineQuery', () => {
+	it('exposes the native engine record beside the legacy document', async () => {
+		const database = await createEngineDatabase(['products']);
+		const engine = createFakeEngine(database);
+		await database.collections.products.insert(
+			engineProduct({ uuid: 'native-record', id: 42, name: 'Native record' })
+		);
+
+		try {
+			const result = await firstValueFrom(
+				observeEngineQuery(engine, 'en', { collection: 'products' })
+			);
+			const hit = result.hits[0];
+
+			expect(hit.document.name).toBe('Native record');
+			expect(hit.record).toBe(await database.collections.products.findOne('native-record').exec());
+			expect(hit.record.payload.name).toBe('Native record');
+		} finally {
+			await database.close();
+		}
+	});
+
 	it('matches one- and two-character word prefixes without mid-token fallthrough', async () => {
 		const database = await createEngineDatabase(['products']);
 		const engine = createFakeEngine(database);

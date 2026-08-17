@@ -9,6 +9,7 @@ import { Suspense } from '@wcpos/components/suspense';
 import { TableCell, TableRow } from '@wcpos/components/table';
 import { VStack } from '@wcpos/components/vstack';
 import type { ProductDocument } from '@wcpos/database';
+import type { EngineRecord } from '@wcpos/query';
 
 import { VariationTableFooter } from './footer';
 import { resolveVariationStock } from '../../../../pos/products/cells/variations-popover/variation-stock';
@@ -21,13 +22,14 @@ type ProductVariationDocument = import('@wcpos/database').ProductVariationDocume
 
 interface Props {
 	binding: ReturnType<typeof import('../../../../../../query').useCollectionBinding<'variations'>>;
-	row: Row<{ document: ProductDocument }>;
+	row: Row<{ document: ProductDocument; record: EngineRecord<'products'> }>;
 	hideOutOfStock?: boolean;
 }
 
 interface VariationHit {
 	id: string;
 	document: ProductVariationDocument;
+	record: EngineRecord<'variations'>;
 }
 
 const cellRenderer = (props: CellContext<Record<string, unknown>, unknown>) => {
@@ -73,7 +75,7 @@ export function VariationsTable({ binding, row, hideOutOfStock }: Props) {
 	const hits = React.useMemo(
 		() =>
 			hideOutOfStock
-				? result.hits.filter((hit) => resolveVariationStock(hit.document).sellable)
+				? result.hits.filter((hit) => resolveVariationStock(hit.record.payload).sellable)
 				: result.hits,
 		[hideOutOfStock, result.hits]
 	);
@@ -92,7 +94,7 @@ export function VariationsTable({ binding, row, hideOutOfStock }: Props) {
 							.map(
 								(
 									cell: import('@tanstack/react-table').Cell<
-										{ document: ProductDocument },
+										{ document: ProductDocument; record: EngineRecord<'products'> },
 										unknown
 									>,
 									cellIndex: number
@@ -131,7 +133,7 @@ export function VariationsTable({ binding, row, hideOutOfStock }: Props) {
 					</TableRow>
 				);
 			})}
-			<VariationTableFooter binding={binding} parent={row.original.document} count={hits.length} />
+			<VariationTableFooter binding={binding} parent={row.original.record} count={hits.length} />
 		</VStack>
 	);
 }

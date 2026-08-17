@@ -3,6 +3,7 @@ import { combineLatest, defer, type Observable, of } from 'rxjs';
 import { distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
 import { deepEqual } from 'rxdb/plugins/utils';
 
+import type { EngineRecord, EngineRecordCollectionName, EngineRecordShape } from './engine-record';
 import type { RxDocument, RxState } from 'rxdb';
 
 /**
@@ -85,17 +86,25 @@ function useSelectedValue<TSource, TData, R>(
  * Inline selectors are fine — they never cost a resubscription. Passing `null`/`undefined`
  * yields `undefined` (for optional mounts, e.g. no selected order).
  */
+export function useRecordField<C extends EngineRecordCollectionName, R>(
+	record: EngineRecord<C>,
+	select: Selector<EngineRecordShape<C>, R>
+): R;
+export function useRecordField<C extends EngineRecordCollectionName, R>(
+	record: EngineRecord<C> | null | undefined,
+	select: Selector<EngineRecordShape<C>, R>
+): R | undefined;
 export function useRecordField<TDoc extends Record<string, unknown>, R>(
 	record: RxDocument<TDoc>,
-	select: Selector<TDoc, R>
+	select: Selector<NoInfer<TDoc>, R>
 ): R;
 export function useRecordField<TDoc extends Record<string, unknown>, R>(
 	record: RxDocument<TDoc> | null | undefined,
-	select: Selector<TDoc, R>
+	select: Selector<NoInfer<TDoc>, R>
 ): R | undefined;
 export function useRecordField<TDoc extends Record<string, unknown>, R>(
 	record: RxDocument<TDoc> | null | undefined,
-	select: Selector<TDoc, R>
+	select: Selector<NoInfer<TDoc>, R>
 ): R | undefined {
 	return useSelectedValue(record, select, recordData$);
 }

@@ -1,9 +1,8 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { MetaData } from './meta-data';
 import { PlainAttributes, ProductAttributes } from '../../../components/product/attributes';
@@ -20,11 +19,18 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export function Name(props: CellContext<{ document: ProductDocument }, 'name'>) {
-	const product = props.row.original.document;
+export function Name(
+	props: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'name'>
+) {
+	const record = props.row.original.record;
 	const meta = props.column.columnDef.meta;
 	const show = meta?.show ?? (() => false);
-	const name = useObservableEagerState(product.name$!);
+	const fields = useRecordField(record, ({ payload }) => ({
+		name: payload.name,
+		sku: payload.sku,
+		barcode: payload.barcode,
+		type: payload.type,
+	}));
 
 	/**
 	 * Sometimes the product name from WooCommerce is encoded in html entities
@@ -32,13 +38,13 @@ export function Name(props: CellContext<{ document: ProductDocument }, 'name'>) 
 	return (
 		<VStack space="xs" className="w-full">
 			<Text className="font-bold" decodeHtml>
-				{name}
+				{fields.name}
 			</Text>
-			{show('sku') && <Text className="text-sm">{product.sku}</Text>}
-			{show('barcode') && <Text className="text-sm">{product.barcode}</Text>}
+			{show('sku') && <Text className="text-sm">{fields.sku}</Text>}
+			{show('barcode') && <Text className="text-sm">{fields.barcode}</Text>}
 			{/* @ts-expect-error: CellContext column type differs but components only use row/table */}
 			{show('stock_quantity') && <StockQuantity {...props} className="text-sm" withText />}
-			{show('meta_data') && <MetaData product={product} />}
+			{show('meta_data') && <MetaData record={record} />}
 			{/* @ts-expect-error: CellContext column type differs but components only use row/table */}
 			{show('categories') && <ProductCategories {...props} />}
 			{/* @ts-expect-error: CellContext column type differs but components only use row/table */}
@@ -47,7 +53,7 @@ export function Name(props: CellContext<{ document: ProductDocument }, 'name'>) 
 			{show('brands') && <ProductBrands {...props} />}
 			{show('attributes') && <PlainAttributes {...props} />}
 
-			{product.type === 'variable' && (
+			{fields.type === 'variable' && (
 				<ProductAttributes
 					{...props}
 					// variationQuery={variationQuery}
@@ -55,7 +61,7 @@ export function Name(props: CellContext<{ document: ProductDocument }, 'name'>) 
 				/>
 			)}
 
-			{product.type === 'grouped' && <GroupedNames {...props} />}
+			{fields.type === 'grouped' && <GroupedNames {...props} />}
 		</VStack>
 	);
 }

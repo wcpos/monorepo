@@ -1,8 +1,7 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { VStack } from '@wcpos/components/vstack';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { PriceWithTax } from '../../../components/product/price-with-tax';
 
@@ -13,13 +12,18 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export function Price({ table, row, column }: CellContext<{ document: ProductDocument }, 'price'>) {
-	const product = row.original.document;
-	const price = useObservableEagerState(product.price$!);
-	const regular_price = useObservableEagerState(product.regular_price$!);
-	const taxStatus = useObservableEagerState(product.tax_status$!);
-	const taxClass = useObservableEagerState(product.tax_class$!);
-	const onSale = useObservableEagerState(product.on_sale$!);
+export function Price({
+	row,
+	column,
+}: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'price'>) {
+	const price = useRecordField(row.original.record, (product) => product.payload.price);
+	const regular_price = useRecordField(
+		row.original.record,
+		(product) => product.payload.regular_price
+	);
+	const taxStatus = useRecordField(row.original.record, (product) => product.payload.tax_status);
+	const taxClass = useRecordField(row.original.record, (product) => product.payload.tax_class);
+	const onSale = useRecordField(row.original.record, (product) => product.payload.on_sale);
 
 	const meta = column.columnDef.meta;
 	const show = meta?.show ?? (() => false);

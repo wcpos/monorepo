@@ -4,6 +4,7 @@ import { CellContext } from '@tanstack/react-table';
 
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { StockQuantity } from './stock-quantity';
 
@@ -13,10 +14,17 @@ type ProductVariationDocument = import('@wcpos/database').ProductVariationDocume
  *
  */
 export function ProductVariationName(
-	props: CellContext<{ document: ProductVariationDocument }, 'name'>
+	props: CellContext<
+		{ document: ProductVariationDocument; record: EngineRecord<'variations'> },
+		'name'
+	>
 ) {
 	const { row, column } = props;
-	const variation = row.original.document;
+	const variation = useRecordField(row.original.record, ({ payload }) => ({
+		name: payload.name,
+		sku: payload.sku,
+		barcode: payload.barcode,
+	}));
 	const meta = column.columnDef.meta;
 	const show = meta?.show ?? (() => false);
 

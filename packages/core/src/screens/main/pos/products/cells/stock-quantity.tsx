@@ -2,16 +2,22 @@ import * as React from 'react';
 
 import { CellContext } from '@tanstack/react-table';
 import isFinite from 'lodash/isFinite';
-import { useObservableEagerState } from 'observable-hooks';
 
 import { Text } from '@wcpos/components/text';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
 import { useNumberFormat } from '../../../hooks/use-number-format';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
-type Props = CellContext<{ document: ProductDocument | ProductVariationDocument }, string> & {
+type Props = CellContext<
+	{
+		document: ProductDocument | ProductVariationDocument;
+		record: EngineRecord<'products'> | EngineRecord<'variations'>;
+	},
+	string
+> & {
 	className?: string;
 	withText?: boolean;
 };
@@ -20,9 +26,14 @@ type Props = CellContext<{ document: ProductDocument | ProductVariationDocument 
  *
  */
 export function StockQuantity({ row, className, withText = false }: Props) {
-	const product = row.original.document;
-	const stockQuantity = useObservableEagerState(product.stock_quantity$!);
-	const manageStock = useObservableEagerState(product.manage_stock$!);
+	const stockQuantity = useRecordField(
+		row.original.record,
+		(product) => product.payload.stock_quantity
+	);
+	const manageStock = useRecordField(
+		row.original.record,
+		(product) => product.payload.manage_stock
+	);
 	const { format } = useNumberFormat();
 	const t = useT();
 

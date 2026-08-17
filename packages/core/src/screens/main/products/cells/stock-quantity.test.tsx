@@ -9,8 +9,8 @@ import { StockQuantity } from './stock-quantity';
 
 const mockSwitch = jest.fn();
 
-jest.mock('observable-hooks', () => ({
-	useObservableEagerState: (observable: { value: unknown }) => observable.value,
+jest.mock('@wcpos/query', () => ({
+	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));
 jest.mock('react-native', () => ({
 	View: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -40,13 +40,13 @@ it('does not update manage-stock state when editing is disabled', () => {
 	const onChange = jest.fn();
 	const product = {
 		type: 'simple',
-		stock_quantity$: { value: 4 },
-		manage_stock$: { value: false },
+		stock_quantity: 4,
+		manage_stock: false,
 	};
 
 	render(
 		<StockQuantity
-			row={{ original: { document: product } } as never}
+			row={{ original: { document: product, record: { payload: product } } } as never}
 			table={{ options: { meta: { onChange } } } as never}
 			column={{} as never}
 			cell={{} as never}

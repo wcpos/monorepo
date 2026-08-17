@@ -2,10 +2,10 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import get from 'lodash/get';
-import { useObservableEagerState } from 'observable-hooks';
 // import Svg, { Line } from 'react-native-svg';
 
 import { Image } from '@wcpos/components/image';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { ProductVariationDocument } from '@wcpos/database';
 
 import { useImageAttachment } from '../../hooks/use-image-attachment';
@@ -17,9 +17,12 @@ import type { CellContext } from '@tanstack/react-table';
  */
 export function ProductVariationImage({
 	row,
-}: CellContext<{ document: ProductVariationDocument }, 'image'>) {
+}: CellContext<
+	{ document: ProductVariationDocument; record: EngineRecord<'variations'> },
+	'image'
+>) {
 	const variation = row.original.document;
-	const image = useObservableEagerState(variation.image$!);
+	const image = useRecordField(row.original.record, (record) => record.payload.image);
 	const imageURL = get(image, 'src', undefined);
 	const { uri } = useImageAttachment(variation, imageURL ?? '');
 
@@ -32,7 +35,11 @@ export function ProductVariationImage({
 				</Svg>
 			</View> */}
 			<View className="w-full pl-3">
-				<Image source={{ uri }} recyclingKey={variation.uuid} className="h-20 w-full rounded" />
+				<Image
+					source={{ uri }}
+					recyclingKey={row.original.record.uuid}
+					className="h-20 w-full rounded"
+				/>
 			</View>
 		</>
 	);

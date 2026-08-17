@@ -11,8 +11,8 @@ import { ProductCategories } from './categories';
 import { ProductTags } from './tags';
 import { StockStatus } from '../../products/cells/stock-status';
 
-jest.mock('observable-hooks', () => ({
-	useObservableEagerState: (value: unknown) => value,
+jest.mock('@wcpos/query', () => ({
+	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));
 jest.mock('@wcpos/components/button', () => ({
 	ButtonPill: ({ children, onPress }: { children: React.ReactNode; onPress?: () => void }) => (
@@ -32,14 +32,14 @@ type CellName = 'brands' | 'categories' | 'tags' | 'stock_status';
 function Harness({ cell }: { cell: CellName }) {
 	const actions = useQueryStateActions<'products'>();
 	const filters = useQueryState<'products', string>((state) => JSON.stringify(state.filters));
-	const document = {
-		brands$: [{ id: 12, name: 'Acme' }],
-		categories$: [{ id: 23, name: 'Shirts' }],
-		tags$: [{ id: 34, name: 'Sale' }],
-		stock_status$: 'instock',
+	const payload = {
+		brands: [{ id: 12, name: 'Acme' }],
+		categories: [{ id: 23, name: 'Shirts' }],
+		tags: [{ id: 34, name: 'Sale' }],
+		stock_status: 'instock',
 	};
 	const props = {
-		row: { original: { document } },
+		row: { original: { document: payload, record: { payload } } },
 		table: { options: { meta: { actions: { setFilter: actions.setFilter } } } },
 	};
 	const cells = {

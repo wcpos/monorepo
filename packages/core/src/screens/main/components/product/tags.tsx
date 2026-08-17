@@ -1,9 +1,8 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import type { CellContext } from '@tanstack/react-table';
 import type { QueryStateActions } from '../../../../query';
@@ -13,9 +12,11 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export function ProductTags({ table, row }: CellContext<{ document: ProductDocument }, 'tags'>) {
-	const product = row.original.document;
-	const tags = useObservableEagerState(product.tags$!) || [];
+export function ProductTags({
+	table,
+	row,
+}: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'tags'>) {
+	const tags = useRecordField(row.original.record, (product) => product.payload.tags) || [];
 
 	const meta = table.options.meta as unknown as {
 		actions: Pick<QueryStateActions<'products'>, 'setFilter'>;

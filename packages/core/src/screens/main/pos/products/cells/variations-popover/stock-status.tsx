@@ -1,14 +1,11 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { StatusBadge } from '@wcpos/components/status-badge';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { resolveVariationStock, type VariationStock } from './variation-stock';
 import { useT } from '../../../../../../contexts/translations';
 import { useNumberFormat } from '../../../../hooks/use-number-format';
-
-type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 
 export { resolveVariationStock } from './variation-stock';
 export type { VariationStock, VariationStockInput } from './variation-stock';
@@ -20,11 +17,11 @@ export type { VariationStock, VariationStockInput } from './variation-stock';
  * stock_status is ignored (WooCommerce derives it). Otherwise (including
  * parent-managed stock) the stock_status flag governs and no quantity is shown.
  */
-export function useVariationStock(variation: ProductVariationDocument): VariationStock {
-	const manageStock = useObservableEagerState(variation.manage_stock$!);
-	const stockQuantity = useObservableEagerState(variation.stock_quantity$!);
-	const stockStatus = useObservableEagerState(variation.stock_status$!);
-	const backorders = useObservableEagerState(variation.backorders$!);
+export function useVariationStock(variation: EngineRecord<'variations'>): VariationStock {
+	const manageStock = useRecordField(variation, (record) => record.payload.manage_stock);
+	const stockQuantity = useRecordField(variation, (record) => record.payload.stock_quantity);
+	const stockStatus = useRecordField(variation, (record) => record.payload.stock_status);
+	const backorders = useRecordField(variation, (record) => record.payload.backorders);
 
 	return resolveVariationStock({
 		manage_stock: manageStock,

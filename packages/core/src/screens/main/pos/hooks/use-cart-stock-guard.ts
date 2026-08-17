@@ -2,12 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import {
-	isEngineRxDocument,
-	resolveLegacyField,
-	useQueryRuntime,
-	wrapEngineDocument,
-} from '@wcpos/query';
+import { isEngineRxDocument, resolveLegacyField, useQueryRuntime } from '@wcpos/query';
 import { engineDocumentIdFor } from '@wcpos/sync-engine';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
@@ -70,7 +65,7 @@ export const useCartStockGuard = () => {
 			const field = resolveLegacyField(collectionName, 'id').enginePath;
 			const result = await collection.findOne({ selector: { [field]: remoteId } }).exec();
 			if (isEngineRxDocument(result)) {
-				return wrapEngineDocument(collectionName, result) as unknown as StockDocument;
+				return result.getLatest().payload as StockDocument;
 			}
 			const documentId = engineDocumentIdFor(
 				collectionName === 'products' ? 'product' : 'variation',
