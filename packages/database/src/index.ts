@@ -50,6 +50,8 @@ export type {
 	NotificationDocument,
 	OrderCollection,
 	OrderDocument,
+	ProductBrandCollection,
+	ProductBrandDocument,
 	ProductCategoryCollection,
 	ProductCategoryDocument,
 	ProductCollection,
