@@ -1,7 +1,12 @@
 import { use } from 'react';
 
+import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+
 import { type HydrationContext, hydrationSteps } from './hydration-steps';
 import { useSplashProgress } from '../../screens/splash';
+
+const hydrationLogger = getLogger(['wcpos', 'app-state', 'hydration']);
 
 interface UseHydrationSuspenseReturn {
 	isComplete: boolean;
@@ -25,24 +30,24 @@ function getOrCreateHydrationPromise(
 		return globalHydrationPromise;
 	}
 
-	console.log('Creating ONE hydration promise...');
+	hydrationLogger.debug('Creating hydration promise');
 
 	globalHydrationPromise = (async () => {
 		let currentContext = {} as HydrationContext;
 		let totalProgress = 0;
 
-		console.log('Starting hydration steps...');
+		hydrationLogger.debug('Starting hydration steps');
 		setProgress(1);
 
 		for (let i = 0; i < hydrationSteps.length; i++) {
 			const step = hydrationSteps[i];
 
 			if (step.shouldExecute && !step.shouldExecute(currentContext)) {
-				console.log(`Skipping step ${step.name} - shouldExecute returned false`);
+				hydrationLogger.debug(`Skipping step ${step.name} - shouldExecute returned false`);
 				continue;
 			}
 
-			console.log(`Executing step ${step.name} (${i + 1}/${hydrationSteps.length})`);
+			hydrationLogger.debug(`Executing step ${step.name} (${i + 1}/${hydrationSteps.length})`);
 			setProgress(totalProgress);
 
 			try {
@@ -50,22 +55,28 @@ function getOrCreateHydrationPromise(
 				currentContext = { ...currentContext, ...stepResult };
 				totalProgress += step.progressIncrement;
 
-				console.log(`Step ${step.name} completed`);
+				hydrationLogger.debug(`Step ${step.name} completed`);
 				setProgress(totalProgress);
 
 				await new Promise((resolve) => setTimeout(resolve, 300));
 			} catch (err) {
-				console.log(`Step ${step.name} failed:`, err);
 				const error = err instanceof Error ? err : new Error(String(err));
+				hydrationLogger.error(`Hydration step ${step.name} failed`, {
+					code: ERROR_CODES.APP_START_FAILED,
+					context: { step: step.name, error },
+				});
 				throw error;
 			}
 		}
 
-		console.log('All hydration steps completed!');
+		hydrationLogger.debug('All hydration steps completed');
 		setProgress(100);
 		return currentContext;
 	})().catch((err) => {
-		console.log('Hydration failed:', err);
+		// Step failures are reported above; this clears the cache so a remount retries.
+		hydrationLogger.debug('Hydration promise cleared after failure', {
+			context: { error: err },
+		});
 		globalHydrationPromise = null;
 		throw err;
 	});
