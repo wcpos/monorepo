@@ -389,6 +389,118 @@ test.describe('Products Page (Pro)', () => {
 		}
 	});
 
+	test('modal edit pushes a sparse payload even when the store serves poisoned fields', async ({
+		posPage: page,
+		request,
+		storeAuthorization,
+	}, testInfo) => {
+		const productsRoute = '**/wcpos/v2/products*';
+		let poisonedProducts = 0;
+		const poisonLowStockAmount = async (route: Route) => {
+			try {
+				if (route.request().method() !== 'GET') {
+					await route.fallback().catch(() => {});
+					return;
+				}
+
+				const response = await route.fetch();
+				const body: unknown = await response.json();
+				if (!Array.isArray(body)) {
+					await route.fulfill({ response });
+					return;
+				}
+
+				const poisonedBody = body.map((product) =>
+					typeof product === 'object' && product !== null && !Array.isArray(product)
+						? { ...(product as Record<string, unknown>), low_stock_amount: '' }
+						: product
+				);
+				poisonedProducts += poisonedBody.length;
+				await route.fulfill({ response, body: JSON.stringify(poisonedBody) });
+			} catch {
+				await route.fallback().catch(() => {});
+			}
+		};
+		await page.route(productsRoute, poisonLowStockAmount);
+
+		const { storeUrl, authorization, probe, rowTestId } = await createStockEditProbe(
+			request,
+			storeAuthorization,
+			testInfo
+		);
+		const newName = `Sparse ${probe.token}`;
+
+		try {
+			await navigateToPage(page, 'products');
+			const screen = page.getByTestId('screen-products').filter({ visible: true });
+			const searchInput = screen.getByTestId('search-products');
+			await expect(searchInput).toBeVisible({ timeout: 30_000 });
+			await searchAndWaitForServer(page, searchInput, 'products', probe.token);
+
+			const row = screen.getByTestId(rowTestId);
+			await expect(row).toBeVisible({ timeout: 30_000 });
+			// Silent-green guard: if the interception pattern ever stops matching the
+			// catalog GET, the poison premise no-ops and this spec proves nothing.
+			expect(
+				poisonedProducts,
+				'catalog GET was never intercepted — the poisoned-store premise did not apply'
+			).toBeGreaterThan(0);
+			await row.getByTestId('product-actions-button').click();
+			const editAction = page.getByTestId('product-actions-edit');
+			const editDisabled = await editAction.evaluate(
+				(el) => el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true'
+			);
+			if (editDisabled) {
+				test.skip(
+					true,
+					'Product edit action is disabled: the signed-in cashier has no catalog write capability on this store'
+				);
+			}
+			await editAction.click();
+
+			const modal = page.getByTestId('product-edit-modal');
+			await expect(modal).toBeVisible({ timeout: 15_000 });
+			const nameInput = modal.getByTestId('product-edit-name-input');
+			await nameInput.clear();
+			await nameInput.fill(newName);
+
+			const pushResponsePending = page.waitForResponse(isPushProductsResponse, {
+				timeout: 60_000,
+			});
+			pushResponsePending.catch(() => {});
+			await modal.getByTestId('product-edit-save-button').click();
+
+			const pushResponse = await pushResponsePending;
+			if (pushResponse.status() === 403) {
+				test.skip(
+					true,
+					'Store rejects the signed-in cashier catalog push (HTTP 403); grant the E2E cashier product edit capability to enable this spec'
+				);
+			}
+			expect(pushResponse.ok(), `products push failed: HTTP ${pushResponse.status()}`).toBeTruthy();
+
+			const pushRequestBody = pushResponse.request().postDataJSON() as {
+				mutationId: unknown;
+				operation: unknown;
+				collection: unknown;
+				recordId: unknown;
+				baseRevision: unknown;
+				payload: Record<string, unknown>;
+			};
+			expect(pushRequestBody).toMatchObject({ payload: expect.any(Object) });
+			expect(pushRequestBody.payload).not.toHaveProperty('low_stock_amount');
+		} finally {
+			await page.unroute(productsRoute, poisonLowStockAmount).catch(() => {});
+			await deleteSearchProbe({
+				request,
+				storeUrl,
+				authorization,
+				collection: probe.collection,
+				id: probe.id,
+			});
+		}
+	});
+
 	test('should show red snackbar and auto-revert when the server rejects a stock edit', async ({
 		posPage: page,
 		request,
