@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { Linking, Pressable, View } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
 
@@ -19,6 +19,18 @@ import { ScannerDeviceChooser } from './scanner-device-chooser';
 import { SettingsSection } from '../components/settings-section';
 
 const NO_PROFILES: ScannerProfileDocument[] = [];
+const MODE_DOCS_URL = 'https://docs.wcpos.com/products/barcode-scanning#connection-modes';
+
+/** Secondary identity line for a saved profile: USB vid:pid, BT UUID, or nothing. */
+function profileIdentity(profile: ScannerProfileDocument): string {
+	if (profile.vendorId !== undefined && profile.productId !== undefined) {
+		return `${profile.deviceName} · ${profile.vendorId}:${profile.productId}`;
+	}
+	if (profile.bluetoothServiceClassId) {
+		return `${profile.deviceName} · ${profile.bluetoothServiceClassId}`;
+	}
+	return profile.deviceName;
+}
 
 /**
  * Input sources for barcode scanning (architecture: wcpos/monorepo#715).
@@ -112,6 +124,17 @@ export function InputSources() {
 					</HStack>
 				) : null}
 
+				{serial.available || hid.available ? (
+					<VStack space="xs" testID="scanner-mode-note">
+						<Text className="text-muted-foreground text-xs">{t('settings.scanner_mode_note')}</Text>
+						<Pressable onPress={() => Linking.openURL(MODE_DOCS_URL)}>
+							<Text className="text-muted-foreground text-xs underline">
+								{t('settings.scanner_mode_docs_link')}
+							</Text>
+						</Pressable>
+					</VStack>
+				) : null}
+
 				{/* Electron surfaces its serial/HID chooser candidates here; inert elsewhere. */}
 				<ScannerDeviceChooser />
 
@@ -124,7 +147,7 @@ export function InputSources() {
 						<VStack className="flex-1" space="xs">
 							<Text className="text-sm font-medium">{profile.label || profile.deviceName}</Text>
 							<Text className="text-muted-foreground font-mono text-xs">
-								{profile.deviceName} · {profile.vendorId}:{profile.productId}
+								{profileIdentity(profile)}
 							</Text>
 						</VStack>
 						<Button

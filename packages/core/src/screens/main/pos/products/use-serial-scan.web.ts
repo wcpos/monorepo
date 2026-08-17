@@ -22,10 +22,24 @@ import type { UseSerialScanResult } from './use-serial-scan';
 const serialLogger = getLogger(['wcpos', 'barcode', 'serial']);
 const DEFAULT_BAUD_RATE = 9600;
 
+// Chromium's chooser only lists unmapped Bluetooth RFCOMM ports whose service
+// class is the standard Serial Port Profile (0x1101); any other UUID must be
+// named in `allowedBluetoothServiceClassIds` or the device is silently absent
+// (https://developer.chrome.com/blog/serial-over-bluetooth). Scanners with a
+// vendor-specific RFCOMM service go here as we learn their UUIDs; saved
+// profiles' UUIDs are added at request time.
+const STANDARD_SPP_SERVICE_CLASS_ID = '00001101-0000-1000-8000-00805f9b34fb';
+const KNOWN_SCANNER_BLUETOOTH_SERVICE_CLASS_IDS: string[] = [STANDARD_SPP_SERVICE_CLASS_ID];
+
 // Minimal Web Serial typings (not in the RN/TS lib).
 interface SerialPortInfoLike {
 	usbVendorId?: number;
 	usbProductId?: number;
+	/** Service class UUID for Bluetooth RFCOMM ports (no USB ids on those). */
+	bluetoothServiceClassId?: string;
+}
+interface SerialPortRequestOptionsLike {
+	allowedBluetoothServiceClassIds?: string[];
 }
 interface SerialPortLike {
 	open: (options: { baudRate: number }) => Promise<void>;
@@ -34,7 +48,7 @@ interface SerialPortLike {
 	getInfo: () => SerialPortInfoLike;
 }
 interface SerialLike {
-	requestPort: () => Promise<SerialPortLike>;
+	requestPort: (options?: SerialPortRequestOptionsLike) => Promise<SerialPortLike>;
 	getPorts: () => Promise<SerialPortLike[]>;
 }
 
@@ -177,13 +191,20 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 			await pending;
 			if (attached && save) {
 				const info = port.getInfo();
+				const isBluetooth =
+					info.usbVendorId === undefined &&
+					info.usbProductId === undefined &&
+					info.bluetoothServiceClassId !== undefined;
 				await collection.insert({
 					id: uuidv4(),
 					label: '',
 					connectionType: 'serial',
-					deviceName: `Serial ${info.usbVendorId ?? ''}:${info.usbProductId ?? ''}`.trim(),
+					deviceName: isBluetooth
+						? 'Bluetooth serial'
+						: `Serial ${info.usbVendorId ?? ''}:${info.usbProductId ?? ''}`.trim(),
 					vendorId: info.usbVendorId,
 					productId: info.usbProductId,
+					bluetoothServiceClassId: info.bluetoothServiceClassId,
 					createdAt: new Date().toISOString(),
 				});
 			}
@@ -197,14 +218,25 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 			return;
 		}
 		try {
-			const port = await serial.requestPort();
+			// A previously saved scanner may use a vendor-specific RFCOMM service
+			// class; include saved UUIDs so it stays visible in the chooser.
+			const profiles = await collection.find({ selector: { connectionType: 'serial' } }).exec();
+			const allowedBluetoothServiceClassIds = Array.from(
+				new Set([
+					...KNOWN_SCANNER_BLUETOOTH_SERVICE_CLASS_IDS,
+					...profiles
+						.map((profile: ScannerProfileDocument) => profile.bluetoothServiceClassId)
+						.filter((id): id is string => typeof id === 'string' && id.length > 0),
+				])
+			);
+			const port = await serial.requestPort({ allowedBluetoothServiceClassIds });
 			await attachPort(port, true);
 		} catch (error) {
 			serialLogger.warn('serial connect cancelled or failed', {
 				context: { error: String(error) },
 			});
 		}
-	}, [attachPort]);
+	}, [attachPort, collection]);
 
 	// On mount, silently re-open any already-granted port that matches a saved
 	// serial profile (the browser remembers granted devices across reloads).
@@ -224,13 +256,21 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 			}
 			const match = ports.find((port) => {
 				const info = port.getInfo();
-				if (info.usbVendorId === undefined || info.usbProductId === undefined) {
-					return false;
+				if (info.usbVendorId !== undefined && info.usbProductId !== undefined) {
+					return profiles.some(
+						(profile: ScannerProfileDocument) =>
+							profile.vendorId === info.usbVendorId && profile.productId === info.usbProductId
+					);
 				}
-				return profiles.some(
-					(profile: ScannerProfileDocument) =>
-						profile.vendorId === info.usbVendorId && profile.productId === info.usbProductId
-				);
+				// Bluetooth RFCOMM ports carry no USB ids — re-match on the service
+				// class UUID saved when the scanner was first registered.
+				if (info.bluetoothServiceClassId !== undefined) {
+					return profiles.some(
+						(profile: ScannerProfileDocument) =>
+							profile.bluetoothServiceClassId === info.bluetoothServiceClassId
+					);
+				}
+				return false;
 			});
 			if (match && !cancelled) {
 				await attachPort(match, false);

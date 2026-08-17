@@ -63,6 +63,34 @@ jest.mock('../../../../contexts/translations', () => ({
 			.createTestT(),
 }));
 
+const unavailableControl = {
+	available: false,
+	connected: false,
+	connect: jest.fn(),
+	disconnect: jest.fn(),
+};
+let mockSerialControl = unavailableControl;
+jest.mock('../../hooks/barcodes/device-scan-context', () => ({
+	useDeviceScanControls: () => ({ serial: mockSerialControl, hid: unavailableControl }),
+}));
+
+describe('InputSources mode explainer', () => {
+	afterEach(() => {
+		mockSerialControl = unavailableControl;
+	});
+
+	it('shows the keyboard-mode note when a direct connection is available', () => {
+		mockSerialControl = { ...unavailableControl, available: true };
+		render(<InputSources />);
+		expect(screen.getByTestId('scanner-mode-note')).toBeTruthy();
+	});
+
+	it('hides the note when no direct connection is available', () => {
+		render(<InputSources />);
+		expect(screen.queryByTestId('scanner-mode-note')).toBeNull();
+	});
+});
+
 describe('InputSources write failures', () => {
 	beforeEach(() => jest.clearAllMocks());
 
