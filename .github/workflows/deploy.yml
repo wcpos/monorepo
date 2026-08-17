@@ -240,15 +240,18 @@ jobs:
               || date -u -v-2H '+%Y-%m-%dT%H:%M:%SZ')
             if ! active_runs=$(
               api "repos/$REPO/actions/workflows/deploy.yml/runs?status=in_progress&per_page=100" \
-                --paginate --jq '.workflow_runs[].id' &&
+                --paginate --jq '.workflow_runs[] | "\(.id)\t\(.created_at)"' &&
               api "repos/$REPO/actions/workflows/deploy.yml/runs?status=queued&per_page=100" \
-                --paginate --jq ".workflow_runs[] | select(.created_at > \"$queued_cutoff\") | .id"
+                --paginate --jq ".workflow_runs[] | select(.created_at > \"$queued_cutoff\") | \"\(.id)\t\(.created_at)\""
             ); then
               echo "⏳ GitHub API unavailable while listing runs — waiting…"
               sleep 180
               continue
             fi
-            for id in $active_runs; do
+            # fd 9 keeps the run list out of stdin — a tool inside the loop
+            # reading stdin must not be able to swallow the remaining runs.
+            while IFS=$'\t' read -r -u 9 id created; do
+              [ -z "$id" ] && continue
               [ "$id" = "$RUN_ID" ] && continue
               if ! jobs=$(api "repos/$REPO/actions/runs/$id/jobs?per_page=100" \
                 --jq '[.jobs[] | {name, status, conclusion, started_at, completed_at}]'); then
@@ -296,7 +299,24 @@ jobs:
               # the store in its name) have no matching queue job. Hold the
               # store until those rollout-era runs finish, including ones
               # still queued in the former shared concurrency group.
+              #
+              # Created-at fence (2026-08-17 starvation incident): a FRESHLY
+              # created run also shows no queue job for its entire build
+              # phase (~8 min) — the job only renders once its deploy
+              # finishes. Counting those as rollout-era holders froze every
+              # waiter for ~8 min after every push anywhere; an agent's push
+              # cadence turned that into an evening-long starvation of
+              # dev-pro. A young run cannot actually own the store — its
+              # shards need its own queue job to pass first, and that job
+              # will FIFO behind us once it renders — so only runs old
+              # enough that a live queue job must have rendered already
+              # (30 min covers build plus runner-queue slack) block here.
               if [ -z "$their_queue" ]; then
+                build_cutoff=$(date -u -d '30 minutes ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
+                  || date -u -v-30M '+%Y-%m-%dT%H:%M:%SZ')
+                if [ -n "$created" ] && [[ "$created" > "$build_cutoff" ]]; then
+                  continue
+                fi
                 busy="run $id uses the previous workflow and has not finished"
                 break
               fi
@@ -331,7 +351,7 @@ jobs:
                 busy="run $id entered the queue before us"
                 break
               fi
-            done
+            done 9<<< "$active_runs"
 
             if [ -z "$busy" ]; then
               echo "✅ Store is free — releasing the E2E shards"

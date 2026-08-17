@@ -143,13 +143,13 @@ case "$endpoint" in
     ;;
   *status=in_progress*)
     if [ "$LEGACY_QUEUE" != "missing" ]; then
-      printf '%s\n' '2'
+      printf '%s\t%s\n' '2' '${recentQueueTime}'
     fi
     ;;
   *status=queued*)
     [[ " $* " == *" --paginate "* ]] || exit 64
     if [ "$LEGACY_QUEUE" = "missing" ]; then
-      printf '%s\n' '2'
+      printf '%s\t%s\n' '2' '2026-08-12T05:00:00Z'
     fi
     ;;
   */actions/runs/2/jobs?*)
@@ -220,6 +220,28 @@ exit 75
 		assert.equal(legacyWaiter.status, 0, legacyWaiter.stdout + legacyWaiter.stderr);
 		assert.match(legacyWaiter.stdout, /Store is free/);
 
+		// A FRESHLY created run with no queue job yet is just building — the
+		// job graph renders the queue job only after its deploy finishes
+		// (~8 min). It must NOT read as a rollout-era store holder: that
+		// mis-classification froze every waiter after every push and starved
+		// dev-pro for a whole evening (2026-08-17). Its created_at is recent,
+		// so the build fence skips it; the 'missing' case above (created
+		// 2026-08-12, long past any build) still blocks conservatively.
+		const buildingRun = runShell(queueStep.run, {
+			cwd: workspace,
+			env: {
+				GH_TOKEN: 'test-token',
+				PATH: `${binDir}:${process.env.PATH}`,
+				REPO: 'wcpos/monorepo',
+				RUN_ID: '1',
+				STORE: 'dev-pro',
+				LEGACY_QUEUE: 'building',
+			},
+		});
+
+		assert.equal(buildingRun.status, 0, buildingRun.stdout + buildingRun.stderr);
+		assert.match(buildingRun.stdout, /Store is free/);
+
 		// The queued-runs poll must fence out zombies: a run stuck "queued" for
 		// hours (observed: six days) would otherwise block every waiter until
 		// its 150-minute timeout. Pinned declaratively — the mock above ignores
@@ -271,7 +293,7 @@ case "$endpoint" in
     printf '%s\n' '2026-08-12T05:00:00Z'
     ;;
   *status=in_progress*)
-    printf '%s\n' '2'
+    printf '%s\t%s\n' '2' '${recentShardStart}'
     ;;
   *status=queued*)
     ;;
@@ -392,9 +414,11 @@ test('the deploy concurrency contract isolates stale rerun attempts', () => {
 	assert.match(workflow.concurrency.group, /github\.event\.pull_request\.number/);
 	assert.match(workflow.concurrency.group, /github\.run_attempt != '1'/);
 	assert.match(workflow.concurrency.group, /github\.run_id/);
+	// The run listing must carry created_at alongside the id — the build
+	// fence (young queue-less runs are not rollout-era holders) reads it.
 	assert.match(
 		findStep(workflow, 'queue', '⏳ Wait for the shared dev store to be free').run,
-		/--paginate --jq '\.workflow_runs\[\]\.id'/
+		/--paginate --jq '\.workflow_runs\[\] \| "\\\(\.id\)\\t\\\(\.created_at\)"'/
 	);
 });
 
