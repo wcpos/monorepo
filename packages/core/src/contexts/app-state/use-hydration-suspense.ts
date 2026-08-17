@@ -63,7 +63,10 @@ function getOrCreateHydrationPromise(
 				const error = err instanceof Error ? err : new Error(String(err));
 				hydrationLogger.error(`Hydration step ${step.name} failed`, {
 					code: ERROR_CODES.APP_START_FAILED,
-					context: { step: step.name, error },
+					context: {
+						step: step.name,
+						error: { name: error.name, message: error.message, stack: error.stack },
+					},
 				});
 				throw error;
 			}
@@ -73,9 +76,12 @@ function getOrCreateHydrationPromise(
 		setProgress(100);
 		return currentContext;
 	})().catch((err) => {
+		const error = err instanceof Error ? err : new Error(String(err));
 		// Step failures are reported above; this clears the cache so a remount retries.
 		hydrationLogger.debug('Hydration promise cleared after failure', {
-			context: { error: err },
+			context: {
+				error: { name: error.name, message: error.message, stack: error.stack },
+			},
 		});
 		globalHydrationPromise = null;
 		throw err;
