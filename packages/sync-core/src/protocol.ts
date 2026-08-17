@@ -1,3 +1,5 @@
+import { type RemoteId, wooIdOf } from './woo/remoteIdCodec';
+
 export type SyncCheckpoint = {
 	updatedAtGmt: string;
 	orderId: number;
@@ -29,6 +31,7 @@ export type WooProductPayload = Record<string, unknown> & {
  * via `promotedOrderColumns`; backfilled from payload by the orderSchema v1 migration.
  */
 export type PromotedOrderColumns = {
+	// Driver-shaped filter dimensions stay numeric; they are not document identity.
 	number: string;
 	dateCreatedGmt: string;
 	status: string;
@@ -37,8 +40,8 @@ export type PromotedOrderColumns = {
 };
 
 export type OrderDocument = {
-	id: string;
-	wooOrderId: number | null;
+	uuid: string;
+	remoteId: RemoteId | null;
 	payload: WooOrderPayload;
 	sync: SyncMetadata;
 	local: {
@@ -148,8 +151,8 @@ export type ProductSyncMetadata = {
 };
 
 export type ProductDocument = {
-	id: string;
-	wooProductId: number | null;
+	uuid: string;
+	remoteId: RemoteId | null;
 	payload: WooProductPayload;
 	sync: ProductSyncMetadata;
 	local: {
@@ -158,8 +161,8 @@ export type ProductDocument = {
 	};
 };
 
-export type PullResponse = {
-	documents: OrderDocument[];
+export type PullResponse<TDocument = OrderDocument> = {
+	documents: TDocument[];
 	/**
 	 * wooOrderIds of orders deleted server-side (F6). A SEPARATE channel from `documents` — the
 	 * client resolves each to its stored uuid key and removes the local order. Present (and
@@ -261,18 +264,18 @@ export function checkpointInstantMs(updatedAtGmt: string | null | undefined): nu
 	return Number.isNaN(ms) ? 0 : ms;
 }
 
-export function orderDocumentId(orderId: number): string {
-	return `woo-order:${orderId}`;
+export function orderDocumentId(remoteId: RemoteId): string {
+	return `woo-order:${wooIdOf(remoteId)}`;
 }
 
-export function productDocumentId(productId: number): string {
-	return `woo-product:${productId}`;
+export function productDocumentId(remoteId: RemoteId): string {
+	return `woo-product:${wooIdOf(remoteId)}`;
 }
 
-export function variationDocumentId(variationId: number): string {
-	return `woo-variation:${variationId}`;
+export function variationDocumentId(remoteId: RemoteId): string {
+	return `woo-variation:${wooIdOf(remoteId)}`;
 }
 
-export function customerDocumentId(customerId: number): string {
-	return `woo-customer:${customerId}`;
+export function customerDocumentId(remoteId: RemoteId): string {
+	return `woo-customer:${wooIdOf(remoteId)}`;
 }

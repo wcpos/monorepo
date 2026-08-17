@@ -20,7 +20,7 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 import { createFakeWriteServer } from '@wcpos/sync-core/testing';
 import type { StoreScopeIdentity } from '@wcpos/sync-core';
 
-import { createEngineHarness } from './testing';
+import { createEngineHarness, remoteId } from './testing';
 import {
 	createWriteOutcomeBridge,
 	type WriteOutcomeChannel,
@@ -68,8 +68,8 @@ function channelWorld() {
 async function insertServerOrder(engine: RxdbSyncEngine): Promise<void> {
 	await engine.ready;
 	await engine.active()!.database.collections.orders.insert({
-		id: ORDER_ID,
-		wooOrderId: 900,
+		uuid: ORDER_ID,
+		remoteId: remoteId(900),
 		number: '900',
 		dateCreatedGmt: '2026-08-14T00:00:00',
 		// NOT 'pos-open': the drain deliberately holds an open cart's implicit
@@ -219,8 +219,8 @@ describe('cross-tab write outcomes (#1209)', () => {
 			await tabs.leader.engine.ready;
 			tabs.setLeaderOwns(false);
 			await tabs.leader.engine.active()!.database.collections.orders.insert({
-				id: ORDER_ID,
-				wooOrderId: null,
+				uuid: ORDER_ID,
+				remoteId: null,
 				number: '',
 				dateCreatedGmt: '2026-08-14T00:00:00',
 				status: 'pos-open',

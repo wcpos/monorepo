@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
+import { remoteId } from '../testing';
 import { EngineOrderRepository, type OrderRepositoryDatabase } from './engine-order-repository';
 
 /**
@@ -12,8 +13,8 @@ import { EngineOrderRepository, type OrderRepositoryDatabase } from './engine-or
  */
 
 type OrderRow = {
-	id: string;
-	wooOrderId: number | null;
+	uuid: string;
+	remoteId: ReturnType<typeof remoteId> | null;
 	local?: { dirty?: boolean; pendingMutationIds?: unknown[] };
 };
 
@@ -48,11 +49,11 @@ function orderDatabase(orders: OrderRow[]) {
 describe('removeDeletedOrders manifest bookkeeping', () => {
 	it('keeps the manifest row of an order it declined to delete (dirty)', async () => {
 		const { db, removedOrderIds, removedManifestIds } = orderDatabase([
-			{ id: 'o-1', wooOrderId: 101, local: { dirty: true } },
-			{ id: 'o-2', wooOrderId: 102 },
+			{ uuid: 'o-1', remoteId: remoteId(101), local: { dirty: true } },
+			{ uuid: 'o-2', remoteId: remoteId(102) },
 		]);
 
-		await new EngineOrderRepository(db).removeDeletedOrders([101, 102]);
+		await new EngineOrderRepository(db).removeDeletedOrders([101, 102].map(remoteId));
 
 		// Only the clean order's document went.
 		expect(removedOrderIds).toEqual([['o-2']]);
@@ -63,10 +64,10 @@ describe('removeDeletedOrders manifest bookkeeping', () => {
 
 	it('keeps the manifest row of an order protected by the pending-mutation set', async () => {
 		const { db, removedOrderIds, removedManifestIds } = orderDatabase([
-			{ id: 'o-1', wooOrderId: 101 },
+			{ uuid: 'o-1', remoteId: remoteId(101) },
 		]);
 
-		await new EngineOrderRepository(db).removeDeletedOrders([101], new Set([101]));
+		await new EngineOrderRepository(db).removeDeletedOrders([remoteId(101)], new Set([101]));
 
 		expect(removedOrderIds).toEqual([]);
 		// Nothing to depurate: removeManifestByWooIds no-ops on an empty batch.
@@ -75,19 +76,19 @@ describe('removeDeletedOrders manifest bookkeeping', () => {
 
 	it('still depurates the row of a Woo id with no resident order at all', async () => {
 		// Nothing local to protect — the row is stale bookkeeping and must go.
-		const { db, removedManifestIds } = orderDatabase([{ id: 'o-1', wooOrderId: 101 }]);
+		const { db, removedManifestIds } = orderDatabase([{ uuid: 'o-1', remoteId: remoteId(101) }]);
 
-		await new EngineOrderRepository(db).removeDeletedOrders([101, 999]);
+		await new EngineOrderRepository(db).removeDeletedOrders([101, 999].map(remoteId));
 
 		expect(removedManifestIds).toEqual([['101', '999']]);
 	});
 
 	it('removes both document and row for a clean order', async () => {
 		const { db, removedOrderIds, removedManifestIds } = orderDatabase([
-			{ id: 'o-1', wooOrderId: 101, local: { pendingMutationIds: [] } },
+			{ uuid: 'o-1', remoteId: remoteId(101), local: { pendingMutationIds: [] } },
 		]);
 
-		await new EngineOrderRepository(db).removeDeletedOrders([101]);
+		await new EngineOrderRepository(db).removeDeletedOrders([remoteId(101)]);
 
 		expect(removedOrderIds).toEqual([['o-1']]);
 		expect(removedManifestIds).toEqual([['101']]);

@@ -18,15 +18,15 @@ let sequence = 0;
 addRxPlugin(RxDBMigrationSchemaPlugin);
 
 function product(
-	id: string,
+	uuid: string,
 	wooProductId: number,
 	name: string,
 	price: string,
 	tagIds: number[] = []
 ) {
 	return {
-		id,
-		wooProductId,
+		uuid,
+		remoteId: String(wooProductId),
 		price: Math.round(Number(price) * 100) / 100,
 		stockStatus: 'instock',
 		type: 'simple',
@@ -51,15 +51,15 @@ function product(
 }
 
 function order(
-	id: string,
+	uuid: string,
 	wooOrderId: number,
 	dateCreatedGmt: string,
 	cashier = '6',
 	total = '10.00'
 ) {
 	return {
-		id,
-		wooOrderId,
+		uuid,
+		remoteId: String(wooOrderId),
 		number: String(wooOrderId),
 		dateCreatedGmt,
 		status: 'completed',
@@ -223,7 +223,7 @@ describe('executeAdapterQuery', () => {
 
 		expect(find).toHaveBeenCalledWith({
 			selector: {},
-			sort: [{ id: 'asc' }],
+			sort: [{ uuid: 'asc' }],
 			skip: 0,
 			limit: 10,
 		});
@@ -253,7 +253,7 @@ describe('executeAdapterQuery', () => {
 			})
 		);
 
-		expect(result.hits.map((document) => document.id)).toEqual([
+		expect(result.hits.map((document) => document.uuid)).toEqual([
 			'order-10',
 			'order-9',
 			'order-8',
@@ -278,7 +278,7 @@ describe('executeAdapterQuery', () => {
 		await firstValueFrom(results.pipe(take(1)));
 		const updated = firstValueFrom(
 			results.pipe(
-				filter((result) => result.count === 2 && result.hits[0]?.id === 'order-2'),
+				filter((result) => result.count === 2 && result.hits[0]?.uuid === 'order-2'),
 				take(1)
 			)
 		);
@@ -308,7 +308,7 @@ describe('executeAdapterQuery', () => {
 			})
 		);
 
-		expect(result.hits.map((document) => document.id)).toEqual(['order-c', 'order-a']);
+		expect(result.hits.map((document) => document.uuid)).toEqual(['order-c', 'order-a']);
 		expect(result.count).toBe(3);
 		await database.close();
 	});
@@ -337,7 +337,7 @@ describe('executeAdapterQuery', () => {
 		);
 
 		expect(result.count).toBe(3);
-		expect(result.hits.map((document) => document.id)).toEqual(['product-b']);
+		expect(result.hits.map((document) => document.uuid)).toEqual(['product-b']);
 		await database.close();
 	});
 
@@ -375,7 +375,7 @@ describe('executeAdapterQuery', () => {
 		);
 
 		expect(result.count).toBe(3);
-		expect(result.hits.map((document) => document.id)).toEqual(['product-b']);
+		expect(result.hits.map((document) => document.uuid)).toEqual(['product-b']);
 		await database.close();
 	});
 
@@ -394,7 +394,7 @@ describe('executeAdapterQuery', () => {
 				sort: [{ name: 'asc' }],
 			})
 		);
-		expect(result.hits.map((document) => document.id)).toEqual(['product-a', 'product-z']);
+		expect(result.hits.map((document) => document.uuid)).toEqual(['product-a', 'product-z']);
 		await database.close();
 	});
 
@@ -421,7 +421,7 @@ describe('executeAdapterQuery', () => {
 
 		// Equal menu_order (the common all-zero case) resolves by Woo id — not by
 		// name or insertion order.
-		expect(result.hits.map((document) => document.id)).toEqual([
+		expect(result.hits.map((document) => document.uuid)).toEqual([
 			'product-b',
 			'product-c',
 			'product-a',
@@ -465,7 +465,7 @@ describe('executeAdapterQuery', () => {
 				? ['external', 'grouped', 'simple', 'variable']
 				: ['variable', 'simple', 'grouped', 'external']
 		);
-		expect(result.hits.map((document) => document.id)).toEqual(expected);
+		expect(result.hits.map((document) => document.uuid)).toEqual(expected);
 		await database.close();
 	});
 
@@ -486,7 +486,7 @@ describe('executeAdapterQuery', () => {
 			})
 		);
 
-		expect(result.hits.map((document) => document.id)).toEqual([
+		expect(result.hits.map((document) => document.uuid)).toEqual([
 			'product-x',
 			'product-y',
 			'product-z',
@@ -518,11 +518,35 @@ describe('executeAdapterQuery', () => {
 			})
 		);
 
-		expect(result.hits.map((document) => document.id)).toEqual([
+		expect(result.hits.map((document) => document.uuid)).toEqual([
 			'variation-c',
 			'variation-a',
 			'variation-b',
 		]);
+		await database.close();
+	});
+
+	it.each([
+		['asc', ['product-2', 'product-10', 'product-local']],
+		['desc', ['product-10', 'product-2', 'product-local']],
+	] as const)('orders remote ids numerically %s with nulls last', async (direction, expected) => {
+		const { database, products } = await openProductsDatabase();
+		await products.bulkInsert([
+			product('product-10', 10, 'Ten', '1.00'),
+			product('product-2', 2, 'Two', '1.00'),
+			{ ...product('product-local', 1, 'Local', '1.00'), remoteId: null },
+		]);
+
+		const result = await firstValueFrom(
+			executeAdapterQuery({
+				database: database as unknown as AdapterDatabase,
+				collection: 'products',
+				selector: {},
+				sort: [{ id: direction }],
+			})
+		);
+
+		expect(result.hits.map((document) => document.uuid)).toEqual(expected);
 		await database.close();
 	});
 
@@ -571,7 +595,7 @@ describe('executeAdapterQuery', () => {
 		);
 
 		expect(results.some((result) => result.count === 2)).toBe(true);
-		expect(results.at(-1)?.hits.map((document) => document.id)).toEqual(['product-a']);
+		expect(results.at(-1)?.hits.map((document) => document.uuid)).toEqual(['product-a']);
 		subscription.unsubscribe();
 		await database.close();
 	});

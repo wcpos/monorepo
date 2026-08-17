@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, type Mock, vi } from 'vitest';
 
+import { remoteId } from '../testing';
 import { createCustomerSchedulerFetcher } from './rx-scheduler-customer-fetcher';
 
 import type { FetchTask } from './replication-policy';
@@ -97,8 +98,8 @@ describe('createCustomerSchedulerFetcher', () => {
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			expect.objectContaining({
-				id: uuidFor(12),
-				wooCustomerId: 12,
+				uuid: uuidFor(12),
+				remoteId: remoteId(12),
 				payload: expect.objectContaining({ email: 'ada@example.test' }),
 				sync: expect.objectContaining({
 					revision: '2026-05-28T10:00:00',
@@ -107,8 +108,8 @@ describe('createCustomerSchedulerFetcher', () => {
 				}),
 			}),
 			expect.objectContaining({
-				id: uuidFor(34),
-				wooCustomerId: 34,
+				uuid: uuidFor(34),
+				remoteId: remoteId(34),
 				payload: expect.objectContaining({ email: 'grace@example.test' }),
 				sync: expect.objectContaining({
 					revision: '2026-05-28T10:05:00',
@@ -153,8 +154,8 @@ describe('createCustomerSchedulerFetcher', () => {
 		expect(fetcher).not.toHaveBeenCalled();
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			expect.objectContaining({
-				id: 'customer:default',
-				wooCustomerId: null,
+				uuid: 'customer:default',
+				remoteId: null,
 				payload: {},
 				sync: expect.objectContaining({ revision: '', source: 'woo-rest', partial: true }),
 			}),
@@ -532,7 +533,7 @@ describe('createCustomerSchedulerFetcher', () => {
 			await kit.schedulerFetcher(browseTask(100));
 
 			const upserted = kit.repository.upsertMany.mock.calls[0]?.[0] ?? [];
-			const ids = upserted.map((document) => document.id);
+			const ids = upserted.map((document) => document.uuid);
 			expect(new Set(ids).size).toBe(ids.length);
 		});
 

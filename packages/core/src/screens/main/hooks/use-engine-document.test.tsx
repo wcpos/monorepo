@@ -13,7 +13,7 @@ import {
 import type { RxDocument } from 'rxdb';
 
 type EngineDocument = Record<string, unknown> & {
-	id: string;
+	uuid: string;
 	payload: Record<string, unknown>;
 };
 
@@ -107,8 +107,8 @@ describe('useEngineDocument', () => {
 
 	it('resolves a UUID from the active engine collection and wraps the legacy shape', () => {
 		const source = fakeRxDocument({
-			id: 'product-uuid',
-			wooProductId: 42,
+			uuid: 'product-uuid',
+			remoteId: '42',
 			payload: { name: 'Coffee' },
 		});
 		const document$ = new BehaviorSubject<RxDocument<EngineDocument> | null>(source.document);
@@ -128,8 +128,8 @@ describe('useEngineDocument', () => {
 
 	it('resolves a Woo ID through the collection-specific promoted field', () => {
 		const source = fakeRxDocument({
-			id: 'product-uuid',
-			wooProductId: 42,
+			uuid: 'product-uuid',
+			remoteId: '42',
 			payload: { name: 'Coffee' },
 		});
 		const document$ = new BehaviorSubject<RxDocument<EngineDocument> | null>(source.document);
@@ -141,7 +141,7 @@ describe('useEngineDocument', () => {
 		);
 
 		expect(database.collections.products.findOne).toHaveBeenCalledWith({
-			selector: { wooProductId: 42 },
+			selector: { remoteId: '42' },
 		});
 		const document = current(result.current);
 		expect(document?.uuid).toBe('product-uuid');
@@ -149,17 +149,17 @@ describe('useEngineDocument', () => {
 	});
 
 	it.each([
-		['category-pill', 'products/categories', 'categories', 'wooId'],
-		['product-filter tag', 'products/tags', 'tags', 'wooId'],
-		['product-filter brand', 'products/brands', 'brands', 'wooId'],
-		['order-edit customer', 'customers', 'customers', 'wooCustomerId'],
-		['edit-cart-customer', 'customers', 'customers', 'wooCustomerId'],
+		['category-pill', 'products/categories', 'categories'],
+		['product-filter tag', 'products/tags', 'tags'],
+		['product-filter brand', 'products/brands', 'brands'],
+		['order-edit customer', 'customers', 'customers'],
+		['edit-cart-customer', 'customers', 'customers'],
 	] as const)(
 		'resolves the %s key path through %s by its adapter-mapped Woo ID field',
-		(_site, legacyCollection, engineCollection, wooIdField) => {
+		(_site, legacyCollection, engineCollection) => {
 			const source = fakeRxDocument({
-				id: `${engineCollection}-uuid`,
-				[wooIdField]: 42,
+				uuid: `${engineCollection}-uuid`,
+				remoteId: '42',
 				payload: { name: 'Selected record' },
 			});
 			const document$ = new BehaviorSubject<RxDocument<EngineDocument> | null>(source.document);
@@ -170,20 +170,20 @@ describe('useEngineDocument', () => {
 				useEngineDocumentByWooId<Record<string, unknown>>(legacyCollection, 42)
 			);
 
-			expect(findOne).toHaveBeenCalledWith({ selector: { [wooIdField]: 42 } });
+			expect(findOne).toHaveBeenCalledWith({ selector: { remoteId: '42' } });
 			expect(current(result.current)?.id).toBe(42);
 		}
 	);
 
 	it('resolves selected categories as an ordered list and leaves missing IDs absent', () => {
 		const hardware = fakeRxDocument({
-			id: 'category-38',
-			wooId: 38,
+			uuid: 'category-38',
+			remoteId: '38',
 			payload: { name: 'Hardware' },
 		});
 		const tools = fakeRxDocument({
-			id: 'category-12',
-			wooId: 12,
+			uuid: 'category-12',
+			remoteId: '12',
 			payload: { name: 'Tools' },
 		});
 		const documents$ = new BehaviorSubject<RxDocument<EngineDocument>[]>([
@@ -197,7 +197,7 @@ describe('useEngineDocument', () => {
 			useEngineDocumentsByWooId<Record<string, unknown>>('products/categories', [12, 999, 38])
 		);
 
-		expect(find).toHaveBeenCalledWith({ selector: { wooId: { $in: [12, 999, 38] } } });
+		expect(find).toHaveBeenCalledWith({ selector: { remoteId: { $in: ['12', '999', '38'] } } });
 		expect(result.current.read().map((document: Record<string, unknown>) => document.id)).toEqual([
 			12, 38,
 		]);
@@ -240,8 +240,8 @@ describe('useEngineDocument', () => {
 
 	it('emits a newly wrapped document when the engine query updates', () => {
 		const first = fakeRxDocument({
-			id: 'product-uuid',
-			wooProductId: 42,
+			uuid: 'product-uuid',
+			remoteId: '42',
 			payload: { name: 'Coffee' },
 		});
 		const document$ = new BehaviorSubject<RxDocument<EngineDocument> | null>(first.document);
@@ -251,8 +251,8 @@ describe('useEngineDocument', () => {
 		);
 
 		const updated = fakeRxDocument({
-			id: 'product-uuid',
-			wooProductId: 42,
+			uuid: 'product-uuid',
+			remoteId: '42',
 			payload: { name: 'Tea' },
 		});
 		act(() => document$.next(updated.document));
@@ -262,13 +262,13 @@ describe('useEngineDocument', () => {
 
 	it('rebinds the query when the engine moves to another scope', () => {
 		const first = fakeRxDocument({
-			id: 'product-uuid',
-			wooProductId: 42,
+			uuid: 'product-uuid',
+			remoteId: '42',
 			payload: { name: 'Old scope' },
 		});
 		const second = fakeRxDocument({
-			id: 'product-uuid',
-			wooProductId: 42,
+			uuid: 'product-uuid',
+			remoteId: '42',
 			payload: { name: 'New scope' },
 		});
 		const firstDatabase = databaseWith(

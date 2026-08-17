@@ -105,8 +105,8 @@ describe('useLocalMutation', () => {
 		async (selector, carrier) => {
 			setSelectors('scope-1', 'products', [selector]);
 			const stored: Record<string, unknown> = {
-				id: 'product-uuid',
-				wooProductId: 42,
+				uuid: 'product-uuid',
+				remoteId: '42',
 				payload: { id: 42 },
 				sync: { revision: 'rev-1' },
 				local: { dirty: false, pendingMutationIds: [] },
@@ -142,8 +142,8 @@ describe('useLocalMutation', () => {
 	it('keeps the resident and barcode carrier on one scope through an A→B→A switch', async () => {
 		setSelectors('scope-1', 'products', ['sku']);
 		const stored: Record<string, unknown> = {
-			id: 'product-uuid',
-			wooProductId: 42,
+			uuid: 'product-uuid',
+			remoteId: '42',
 			payload: { id: 42 },
 			sync: { revision: 'rev-1' },
 			local: { dirty: false, pendingMutationIds: [] },
@@ -206,8 +206,8 @@ describe('useLocalMutation', () => {
 		async (selector, priorCarrier, carrierEdit, expected) => {
 			setSelectors('scope-1', 'products', [selector]);
 			const stored: Record<string, unknown> = {
-				id: 'product-uuid',
-				wooProductId: 42,
+				uuid: 'product-uuid',
+				remoteId: '42',
 				payload: { id: 42, ...priorCarrier, barcode: 'OLD' },
 				sync: { revision: 'rev-1' },
 				local: { dirty: false, pendingMutationIds: [] },
@@ -339,8 +339,8 @@ describe('useLocalMutation', () => {
 
 	it('optimistically patches a server-born resident and enqueues syncable fields', async () => {
 		const stored: Record<string, unknown> = {
-			id: 'order-uuid',
-			wooOrderId: 42,
+			uuid: 'order-uuid',
+			remoteId: '42',
 			status: 'pending',
 			payload: { id: 42, status: 'pending' },
 			sync: { revision: 'rev-1' },
@@ -395,8 +395,8 @@ describe('useLocalMutation', () => {
 
 	it('enqueues born-local edits as updates for the write plane to fold into the pending create', async () => {
 		const stored: Record<string, unknown> = {
-			id: 'order-uuid',
-			wooOrderId: null,
+			uuid: 'order-uuid',
+			remoteId: null,
 			status: 'pos-open',
 			payload: { status: 'pos-open', line_items: [] },
 			sync: { revision: '' },
@@ -439,8 +439,8 @@ describe('useLocalMutation', () => {
 
 	it('restores the resident snapshot when the write intent cannot be enqueued', async () => {
 		const stored: Record<string, unknown> = {
-			id: 'order-uuid',
-			wooOrderId: 42,
+			uuid: 'order-uuid',
+			remoteId: '42',
 			status: 'pending',
 			payload: { id: 42, status: 'pending' },
 			sync: { revision: 'rev-1' },
@@ -488,8 +488,8 @@ describe('useLocalMutation', () => {
 		mockStatus.mockImplementation(() => ({ activeScopeId }));
 		setSelectors('scope-1', 'products', ['sku']);
 		const stored: Record<string, unknown> = {
-			id: 'product-uuid',
-			wooProductId: 42,
+			uuid: 'product-uuid',
+			remoteId: '42',
 			payload: { id: 42 },
 			sync: { revision: 'rev-1' },
 			local: { dirty: false, pendingMutationIds: [] },
@@ -549,8 +549,8 @@ describe('useLocalMutation', () => {
 		activeReturnsNullOnce = true;
 		mockStatus.mockImplementation(() => ({ activeScopeId }));
 		const stored: Record<string, unknown> = {
-			id: 'order-uuid',
-			wooOrderId: 42,
+			uuid: 'order-uuid',
+			remoteId: '42',
 			status: 'pending',
 			payload: { id: 42, status: 'pending' },
 		};
@@ -591,8 +591,8 @@ describe('useLocalMutation', () => {
 		// state the engine cannot be in.
 		mockStatus.mockImplementation(() => ({ activeScopeId }));
 		const firstStored: Record<string, unknown> = {
-			id: 'order-uuid',
-			wooOrderId: 42,
+			uuid: 'order-uuid',
+			remoteId: '42',
 			status: 'pending',
 			payload: { id: 42, status: 'pending' },
 		};
@@ -645,8 +645,8 @@ describe('useLocalMutation', () => {
 		let activeScopeId = 'scope-1';
 		mockStatus.mockImplementation(() => ({ activeScopeId }));
 		const firstStored: Record<string, unknown> = {
-			id: 'order-uuid',
-			wooOrderId: 42,
+			uuid: 'order-uuid',
+			remoteId: '42',
 			status: 'pending',
 			payload: { id: 42, status: 'pending' },
 		};

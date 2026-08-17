@@ -135,7 +135,7 @@ export function createVariationsSchedulerFetcher(
 			// Coverage stays in the stable Woo-id space (`woo-variation:<wooId>`), not the uuid
 			// storage key — same contract as the products fetcher's coverageRecordId.
 			documents.map((document) =>
-				document.wooId === null ? document.id : variationDocumentId(document.wooId)
+				document.remoteId === null ? document.uuid : variationDocumentId(document.remoteId)
 			),
 			complete
 		);

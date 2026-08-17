@@ -8,6 +8,7 @@ import { map } from 'rxjs/operators';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { WebView } from '@wcpos/components/webview';
 import { useQueryRuntime } from '@wcpos/query';
+import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -100,7 +101,7 @@ export function PaymentWebview({
 			id: `checkout:order-refresh:${order.id}`,
 			collection: 'orders',
 			kind: 'targeted-records',
-			wooIds: [order.id],
+			remoteIds: [order.id].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 			forceRefresh: true,
 		});
 		try {

@@ -35,7 +35,7 @@ describe('useDefaultCustomer', () => {
 			create(<Harness />);
 		});
 		expect(mockUseCollectionBinding).toHaveBeenCalledWith('customers', expect.any(Object), {
-			wooIds: [],
+			remoteIds: [],
 		});
 	});
 
@@ -45,7 +45,7 @@ describe('useDefaultCustomer', () => {
 			create(<Harness />);
 		});
 		expect(mockUseCollectionBinding).toHaveBeenCalledWith('customers', expect.any(Object), {
-			wooIds: [42],
+			remoteIds: ['42'],
 		});
 	});
 });

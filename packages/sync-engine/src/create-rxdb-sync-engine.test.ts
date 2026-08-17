@@ -24,7 +24,7 @@ import {
 	type RxdbSyncEnginePorts,
 	type StoreScopeIdentity,
 } from './create-rxdb-sync-engine';
-import { createEngineHarness, memoryStringStore, scriptedConnectivity } from './testing';
+import { createEngineHarness, memoryStringStore, remoteId, scriptedConnectivity } from './testing';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
 
 setPremiumFlag();
@@ -69,8 +69,8 @@ async function insertOrder(
 		insert(doc: Record<string, unknown>): Promise<unknown>;
 	};
 	await orders.insert({
-		id,
-		wooOrderId: 1,
+		uuid: id,
+		remoteId: remoteId(1),
 		number: '1001',
 		dateCreatedGmt: '2026-07-09T00:00:00',
 		status: 'processing',
@@ -298,7 +298,7 @@ describe('createRxdbSyncEngine — slice 2 scope lifecycle', () => {
 			attempt: 1,
 			retryAfterMs: null,
 			updatedAtMs: 1,
-			schemaVersion: 4,
+			schemaVersion: 0,
 		});
 		for (const collectionName of ['products', 'customers'] as const) {
 			await collections.schedulerTaskStates.insert(task(collectionName));
@@ -376,8 +376,8 @@ describe('createRxdbSyncEngine — slice 2 scope lifecycle', () => {
 			revision: 'r1',
 		});
 		await (scope.database.collections.orders as { insert(doc: unknown): Promise<unknown> }).insert({
-			id,
-			wooOrderId: 1,
+			uuid: id,
+			remoteId: remoteId(1),
 			number: '1001',
 			dateCreatedGmt: '2026-07-01T00:00:00',
 			status: 'pos-open',
@@ -398,8 +398,8 @@ describe('createRxdbSyncEngine — slice 2 scope lifecycle', () => {
 
 		await repository.upsertMany([
 			{
-				id,
-				wooOrderId: 1,
+				uuid: id,
+				remoteId: remoteId(1),
 				payload: {
 					id: 1,
 					status: 'pos-open',

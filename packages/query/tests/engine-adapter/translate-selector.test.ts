@@ -5,8 +5,8 @@ import {
 } from '../../src/engine-adapter/translate-selector';
 
 const product = {
-	id: 'product-1',
-	wooProductId: 10,
+	uuid: 'product-1',
+	remoteId: '10',
 	stockStatus: 'instock',
 	type: 'simple',
 	featured: true,
@@ -67,7 +67,7 @@ describe('translateSelector', () => {
 
 		expect(translated.prefilter).toEqual({});
 		expect(translated.complete).toBe(false);
-		expect(translated.residual({ id: 'coupon-1', payload: {} })).toBe(true);
+		expect(translated.residual({ uuid: 'coupon-1', payload: {} })).toBe(true);
 	});
 
 	it('keeps computed selectors and unsupported pushed operators incomplete', () => {
@@ -106,7 +106,7 @@ describe('translateSelector', () => {
 		});
 
 		expect(translated.prefilter).toEqual({
-			wooProductId: { $in: [10, 11] },
+			remoteId: { $in: ['10', '11'] },
 			stockStatus: 'instock',
 			'payload.name': { $regex: '^Al' },
 			'payload.meta_data': { $elemMatch: { key: 'color', value: 'blue' } },
@@ -118,6 +118,26 @@ describe('translateSelector', () => {
 				payload: { ...product.payload, name: 'Beta' },
 			})
 		).toBe(false);
+	});
+
+	it.each([
+		[{ id: 10 }, { remoteId: '10' }],
+		[{ id: { $eq: 10 } }, { remoteId: { $eq: '10' } }],
+		[{ id: { $ne: 10 } }, { remoteId: { $ne: '10' } }],
+		[{ id: { $in: [10, 11] } }, { remoteId: { $in: ['10', '11'] } }],
+		[{ parent_id: { $eq: 10 } }, { parentRemoteId: { $eq: '10' } }],
+	] as const)('converts legacy identifier selector values %#', (selector, expected) => {
+		const collection = 'parent_id' in selector ? 'variations' : 'products';
+		expect(translateSelector(collection, selector).prefilter).toEqual(expected);
+	});
+
+	it('rejects operators that cannot preserve identifier semantics', () => {
+		expect(() => translateSelector('products', { id: { $gt: 10 } })).toThrow(
+			'Unsupported Mango operator "$gt" against identifier field "id"'
+		);
+		expect(() => translateSelector('variations', { parent_id: { $nin: [10] } })).toThrow(
+			'Unsupported Mango operator "$nin" against identifier field "parent_id"'
+		);
 	});
 
 	it('translates category and brand object matches to numeric membership prefilters', () => {
@@ -162,7 +182,7 @@ describe('translateSelector', () => {
 		});
 		expect(
 			translated.residual({
-				id: 'order-1',
+				uuid: 'order-1',
 				status: 'processing',
 				customerId: 2,
 				payload: { created_via: 'checkout' },
@@ -172,8 +192,8 @@ describe('translateSelector', () => {
 
 	it('evaluates normalized variation attributes including any-attribute semantics', () => {
 		const variation = {
-			id: 'variation-1',
-			wooId: 20,
+			uuid: 'variation-1',
+			remoteId: '20',
 			attributes: [{ id: 1, name: 'Color', option: 'Red' }],
 			payload: {
 				attributes: [
@@ -209,8 +229,8 @@ describe('translateSelector', () => {
 
 	it('excludes only missing payload attribute arrays under an active filter (#811)', () => {
 		const requested = [{ name: 'Color', option: 'Red' }];
-		const missing = { id: 'variation-missing', attributes: [], payload: {} };
-		const empty = { id: 'variation-empty', attributes: [], payload: { attributes: [] } };
+		const missing = { uuid: 'variation-missing', attributes: [], payload: {} };
+		const empty = { uuid: 'variation-empty', attributes: [], payload: { attributes: [] } };
 
 		expect(
 			translateSelector('variations', {
@@ -244,7 +264,7 @@ describe('translateSelector', () => {
 		[{ value: { $regex: '^alp', $options: 'i' } }, 'Alpha', true],
 	])('evaluates supported Mango operators %#', (selector, value, expected) => {
 		const translated = translateSelector('products', selector);
-		expect(translated.residual({ id: 'operator-doc', payload: { value } })).toBe(expected);
+		expect(translated.residual({ uuid: 'operator-doc', payload: { value } })).toBe(expected);
 	});
 
 	it('throws a named error for unknown operators before execution', () => {
@@ -280,13 +300,13 @@ describe('translateSelector', () => {
 		[
 			'variations',
 			{ id: { $in: [20] } },
-			{ id: 'variation-1', wooId: 20, attributes: [], payload: {} },
+			{ uuid: 'variation-1', remoteId: '20', attributes: [], payload: {} },
 		],
 		[
 			'variations',
 			{ attributes: { $elemMatch: { id: 1, name: 'Color', option: 'Red' } } },
 			{
-				id: 'variation-1',
+				uuid: 'variation-1',
 				attributes: [{ id: 1, name: 'Color', option: 'Red' }],
 				payload: {},
 			},
@@ -294,41 +314,41 @@ describe('translateSelector', () => {
 		[
 			'variations',
 			{ name: 'Variation' },
-			{ id: 'variation-1', attributes: [], payload: { name: 'Variation' } },
+			{ uuid: 'variation-1', attributes: [], payload: { name: 'Variation' } },
 		],
-		['orders', { status: 'processing' }, { id: 'order-1', status: 'processing', payload: {} }],
-		['orders', { customer_id: 7 }, { id: 'order-1', customerId: 7, payload: {} }],
+		['orders', { status: 'processing' }, { uuid: 'order-1', status: 'processing', payload: {} }],
+		['orders', { customer_id: 7 }, { uuid: 'order-1', customerId: 7, payload: {} }],
 		[
 			'orders',
 			{ date_created_gmt: { $gte: '2026-01-01', $lte: '2026-12-31' } },
-			{ id: 'order-1', dateCreatedGmt: '2026-07-01', payload: {} },
+			{ uuid: 'order-1', dateCreatedGmt: '2026-07-01', payload: {} },
 		],
 		[
 			'orders',
 			{ meta_data: { $elemMatch: { key: '_pos_user', value: '5' } } },
 			{
-				id: 'order-1',
+				uuid: 'order-1',
 				payload: { meta_data: [{ key: '_pos_user', value: '5' }] },
 			},
 		],
-		['orders', { created_via: 'wcpos' }, { id: 'order-1', payload: { created_via: 'wcpos' } }],
+		['orders', { created_via: 'wcpos' }, { uuid: 'order-1', payload: { created_via: 'wcpos' } }],
 		[
 			'customers',
 			{ id: 7, role: { $in: ['cashier'] } },
-			{ id: 'customer-1', wooCustomerId: 7, payload: { role: 'cashier' } },
+			{ uuid: 'customer-1', remoteId: '7', payload: { role: 'cashier' } },
 		],
 		[
 			'coupons',
 			{ status: 'publish', discount_type: 'percent' },
 			{
-				id: 'coupon-1',
+				uuid: 'coupon-1',
 				payload: { status: 'publish', discount_type: 'percent' },
 			},
 		],
 		[
 			'coupons',
 			{ date_expires_gmt: { $gt: '2026-01-01', $lt: '2027-01-01' } },
-			{ id: 'coupon-1', payload: { date_expires_gmt: '2026-08-01' } },
+			{ uuid: 'coupon-1', payload: { date_expires_gmt: '2026-08-01' } },
 		],
 	] as const)('matches the census selector %# for %s', (collection, selector, document) => {
 		expect(translateSelector(collection, selector).residual(document)).toBe(true);
@@ -338,8 +358,8 @@ describe('translateSelector', () => {
 describe('query-builder operators (codex round 2)', () => {
 	it('evaluates $all on payload arrays', () => {
 		const { residual } = translateSelector('products', { tag_ids: { $all: [1, 2] } } as any);
-		expect(residual({ id: 'a', payload: { tag_ids: [1, 2, 3] } } as any)).toBe(true);
-		expect(residual({ id: 'b', payload: { tag_ids: [1, 3] } } as any)).toBe(false);
+		expect(residual({ uuid: 'a', payload: { tag_ids: [1, 2, 3] } } as any)).toBe(true);
+		expect(residual({ uuid: 'b', payload: { tag_ids: [1, 3] } } as any)).toBe(false);
 	});
 
 	it('keeps $all out of the RxDB prefilter', () => {
@@ -350,7 +370,7 @@ describe('query-builder operators (codex round 2)', () => {
 		expect(translated.prefilter).toEqual({});
 		expect(
 			translated.residual({
-				id: 'variation-1',
+				uuid: 'variation-1',
 				attributes: [{ name: 'Color', option: 'Red' }],
 				payload: {},
 			})
@@ -359,21 +379,21 @@ describe('query-builder operators (codex round 2)', () => {
 
 	it('evaluates $size on payload arrays', () => {
 		const { residual } = translateSelector('products', { tag_ids: { $size: 2 } } as any);
-		expect(residual({ id: 'a', payload: { tag_ids: [1, 2] } } as any)).toBe(true);
-		expect(residual({ id: 'b', payload: { tag_ids: [1] } } as any)).toBe(false);
+		expect(residual({ uuid: 'a', payload: { tag_ids: [1, 2] } } as any)).toBe(true);
+		expect(residual({ uuid: 'b', payload: { tag_ids: [1] } } as any)).toBe(false);
 	});
 
 	it('evaluates $mod on numeric payload fields', () => {
 		const { residual } = translateSelector('products', { menu_order: { $mod: [2, 0] } } as any);
-		expect(residual({ id: 'a', payload: { menu_order: 4 } } as any)).toBe(true);
-		expect(residual({ id: 'b', payload: { menu_order: 5 } } as any)).toBe(false);
+		expect(residual({ uuid: 'a', payload: { menu_order: 4 } } as any)).toBe(true);
+		expect(residual({ uuid: 'b', payload: { menu_order: 5 } } as any)).toBe(false);
 	});
 
 	it('evaluates root $nor', () => {
 		const { residual } = translateSelector('products', {
 			$nor: [{ status: 'draft' }, { status: 'pending' }],
 		} as any);
-		expect(residual({ id: 'a', payload: { status: 'publish' } } as any)).toBe(true);
-		expect(residual({ id: 'b', payload: { status: 'draft' } } as any)).toBe(false);
+		expect(residual({ uuid: 'a', payload: { status: 'publish' } } as any)).toBe(true);
+		expect(residual({ uuid: 'b', payload: { status: 'draft' } } as any)).toBe(false);
 	});
 });

@@ -74,7 +74,7 @@ jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrder }),
 }));
 
-function engineDocument(document: Record<string, unknown> & { id: string; payload: object }) {
+function engineDocument(document: Record<string, unknown> & { uuid: string; payload: object }) {
 	return {
 		...document,
 		$: of(document),
@@ -110,13 +110,17 @@ describe('useAddCoupon engine reads', () => {
 		localPatch.mockReset();
 		recalculate.mockReset();
 		const coupons = [
-			engineDocument({ id: 'coupon-bonus', wooId: 1, payload: couponPayload('bonus', false) }),
-			engineDocument({ id: 'coupon-solo', wooId: 2, payload: couponPayload('solo', true) }),
+			engineDocument({
+				uuid: 'coupon-bonus',
+				remoteId: '1',
+				payload: couponPayload('bonus', false),
+			}),
+			engineDocument({ uuid: 'coupon-solo', remoteId: '2', payload: couponPayload('solo', true) }),
 		];
 		const products = [
 			engineDocument({
-				id: 'product-82',
-				wooProductId: 82,
+				uuid: 'product-82',
+				remoteId: '82',
 				payload: { id: 82, categories: [{ id: 17 }] },
 			}),
 		];

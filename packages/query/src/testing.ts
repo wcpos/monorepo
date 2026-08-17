@@ -19,6 +19,7 @@ import type {
 	RxdbSyncEngine,
 	SyncCollectionName,
 } from '@wcpos/sync-engine';
+import { remoteIdOrNull } from '@wcpos/sync-core';
 
 import { searchPlugin } from './search';
 
@@ -190,8 +191,8 @@ export function engineProduct(input: {
 	const { uuid, id, name, price, stock_status, type, categories, brands, tags, ...rest } = input;
 	const wooId = id ?? 0;
 	return {
-		id: uuid,
-		wooProductId: wooId,
+		uuid,
+		remoteId: remoteIdOrNull(wooId),
 		price: num(price),
 		stockStatus: stock_status ?? 'instock',
 		type: type ?? 'simple',
@@ -230,8 +231,8 @@ export function engineOrder(input: {
 	const { uuid, id, number, status, date_created_gmt, total, customer_id, ...rest } = input;
 	const wooId = id ?? 0;
 	return {
-		id: uuid,
-		wooOrderId: wooId,
+		uuid,
+		remoteId: remoteIdOrNull(wooId),
 		number: number ?? String(wooId),
 		dateCreatedGmt: date_created_gmt ?? '2026-01-01T00:00:00',
 		status: status ?? 'processing',
@@ -266,9 +267,9 @@ export function engineVariation(input: {
 }): Record<string, unknown> {
 	const { uuid, id, parent_id, name, sku, price, stock_status, attributes, ...rest } = input;
 	return {
-		id: uuid,
-		wooId: id ?? 0,
-		parentId: parent_id ?? 0,
+		uuid,
+		remoteId: remoteIdOrNull(id),
+		parentRemoteId: remoteIdOrNull(parent_id),
 		price: num(price),
 		stockStatus: stock_status ?? 'instock',
 		stockQuantity: input.stock_quantity ?? null,

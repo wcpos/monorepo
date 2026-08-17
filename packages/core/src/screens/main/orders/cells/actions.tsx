@@ -24,7 +24,7 @@ import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { awaitWriteOutcome, useQueryRuntime, WriteOutcomeError } from '@wcpos/query';
-import { WOO_REST_CANNOT_DELETE } from '@wcpos/sync-core';
+import { remoteIdOrNull, WOO_REST_CANNOT_DELETE } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -82,7 +82,7 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 			id: `order-actions:refresh:${orderHasID}`,
 			collection: 'orders',
 			kind: 'targeted-records',
-			wooIds: [orderHasID],
+			remoteIds: [orderHasID].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 			forceRefresh: true,
 		});
 		void handle.ready

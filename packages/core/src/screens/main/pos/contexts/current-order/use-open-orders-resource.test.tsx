@@ -7,7 +7,7 @@ import { BehaviorSubject, of } from 'rxjs';
 import { useOpenOrdersResource } from './use-open-orders-resource';
 
 type EngineDocument = Record<string, unknown> & {
-	id: string;
+	uuid: string;
 	payload: Record<string, unknown>;
 };
 
@@ -44,18 +44,18 @@ jest.mock('@wcpos/query', () => ({
 
 function order(
 	uuid: string,
-	wooOrderId: number,
+	remoteId: number,
 	dateCreatedGmt: string,
 	cashierId: number,
 	storeId: number
 ) {
 	const document: EngineDocument = {
-		id: uuid,
-		wooOrderId,
+		uuid,
+		remoteId: String(remoteId),
 		status: 'pos-open',
 		dateCreatedGmt,
 		payload: {
-			id: wooOrderId,
+			id: remoteId,
 			status: 'pos-open',
 			date_created_gmt: dateCreatedGmt,
 			meta_data: [
@@ -68,7 +68,7 @@ function order(
 		...document,
 		$: of(document),
 		collection: { name: 'orders' },
-		getLatest: () => order(uuid, wooOrderId, dateCreatedGmt, cashierId, storeId),
+		getLatest: () => order(uuid, remoteId, dateCreatedGmt, cashierId, storeId),
 		toJSON: () => document,
 	};
 }

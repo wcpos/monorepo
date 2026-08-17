@@ -84,7 +84,7 @@ describe('requirementsForQuery extraction', () => {
 			id: 'q:targeted',
 			collection: 'products',
 			kind: 'targeted-records',
-			wooIds: [1, 2],
+			remoteIds: ['1', '2'],
 		});
 		expect(
 			onlyRequirement({
@@ -92,14 +92,14 @@ describe('requirementsForQuery extraction', () => {
 				selector: { id: { $eq: 7 } },
 				limit: undefined,
 			})
-		).toMatchObject({ kind: 'targeted-records', wooIds: [7] });
+		).toMatchObject({ kind: 'targeted-records', remoteIds: ['7'] });
 		expect(
 			onlyRequirement({
 				collectionName: 'variations',
 				selector: { id: '42' },
 				limit: undefined,
 			})
-		).toMatchObject({ kind: 'targeted-records', wooIds: [42] });
+		).toMatchObject({ kind: 'targeted-records', remoteIds: ['42'] });
 		expect(plan({ collectionName: 'customers', selector: { id: { $in: [] } } })).toEqual({
 			requirements: [],
 			represented: false,
@@ -111,7 +111,7 @@ describe('requirementsForQuery extraction', () => {
 			id: 'q:targeted',
 			collection: 'products',
 			kind: 'targeted-records',
-			wooIds: [123],
+			remoteIds: ['123'],
 		});
 	});
 
@@ -128,7 +128,7 @@ describe('requirementsForQuery extraction', () => {
 					id: 'q:targeted',
 					collection: 'variations',
 					kind: 'targeted-records',
-					wooIds: [11, 12],
+					remoteIds: ['11', '12'],
 				},
 			],
 			represented: false,
@@ -299,7 +299,7 @@ describe('requirementsForQuery extraction', () => {
 			expect(extended).toMatchObject({ limit: 110 });
 		});
 
-		// #850/#865 regression guard. use-default-customer.ts passes `wooIds: []` for the guest
+		// #850/#865 regression guard. use-default-customer.ts passes an empty id list for the guest
 		// (id 0) so that NOTHING is fetched — its comment says "no fetch is ever declared". That
 		// selector compiles to `id: { $in: [] }`, which finiteWooIds reports as null (no targeted
 		// demand). Without this guard the browse branch then sees the hook's `id asc` sort and
@@ -789,7 +789,7 @@ describe('declareRequirements', () => {
 				id: 'b',
 				collection: 'products',
 				kind: 'targeted-records',
-				wooIds: [1],
+				remoteIds: ['1'],
 			},
 		];
 		const unhandled = jest.fn();

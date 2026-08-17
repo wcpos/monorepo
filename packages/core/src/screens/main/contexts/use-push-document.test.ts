@@ -72,7 +72,7 @@ describe('usePushDocument', () => {
 			line_items: [{ id: 1, product_id: 42, quantity: 1 }],
 		};
 		const resident: Record<string, unknown> = {
-			wooOrderId: 123,
+			remoteId: '123',
 			payload: {
 				id: 123,
 				status: 'processing',
@@ -109,7 +109,7 @@ describe('usePushDocument', () => {
 	it('enqueues a create when the resident document was born locally', async () => {
 		const json = { uuid: 'order-uuid', id: 0, status: 'pos-open', line_items: [] };
 		const resident: Record<string, unknown> = {
-			wooOrderId: null,
+			remoteId: null,
 			payload: json,
 		};
 		resident.get = (field: string) => resident[field];
@@ -146,7 +146,7 @@ describe('usePushDocument', () => {
 			{}
 		);
 		const resident: Record<string, unknown> = {
-			wooOrderId: null,
+			remoteId: null,
 		};
 		resident.get = (field: string) => (field === 'payload' ? payload : resident[field]);
 		resident.toMutableJSON = () => ({ payload: plainPayload });
@@ -169,7 +169,7 @@ describe('usePushDocument', () => {
 
 	it('preserves a non-empty order billing email', async () => {
 		const payload = { status: 'pos-open', billing: { email: 'shopper@example.com' } };
-		const resident: Record<string, unknown> = { wooOrderId: null, payload };
+		const resident: Record<string, unknown> = { remoteId: null, payload };
 		resident.get = (field: string) => resident[field];
 		mockFindOneExec.mockResolvedValue(resident);
 		const doc = {
@@ -190,7 +190,7 @@ describe('usePushDocument', () => {
 
 	it('waits for an order acknowledgement and returns the rematerialized document id', async () => {
 		const resident: Record<string, unknown> = {
-			wooOrderId: null,
+			remoteId: null,
 			payload: { status: 'pos-open' },
 			collection: { name: 'orders' },
 		};
@@ -198,7 +198,7 @@ describe('usePushDocument', () => {
 		resident.getLatest = () => resident;
 		mockFindOneExec.mockResolvedValue(resident);
 		mockAwaitWriteOutcome.mockImplementationOnce(async () => {
-			resident.wooOrderId = 987;
+			resident.remoteId = '987';
 			resident.payload = { id: 987, number: '987', status: 'pending' };
 			return 'success';
 		});
@@ -225,7 +225,7 @@ describe('usePushDocument', () => {
 		['timed out', new Error('Timed out waiting for mutation "mutation-1"')],
 	])('throws when an order write outcome is %s', async (_label, error) => {
 		const resident: Record<string, unknown> = {
-			wooOrderId: null,
+			remoteId: null,
 			payload: { status: 'pos-open' },
 		};
 		resident.get = (field: string) => resident[field];

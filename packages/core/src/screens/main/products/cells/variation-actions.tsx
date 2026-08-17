@@ -22,6 +22,7 @@ import {
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { useQueryRuntime } from '@wcpos/query';
+import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -59,7 +60,7 @@ export function VariationActions({
 			id: `variation-actions:refresh:${variation.id}`,
 			collection: 'variations',
 			kind: 'targeted-records',
-			wooIds: [variation.id],
+			remoteIds: [variation.id].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 			forceRefresh: true,
 		});
 		void handle.ready

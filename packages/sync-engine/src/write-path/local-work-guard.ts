@@ -22,12 +22,12 @@ export function hasPendingLocalWork(document: unknown): boolean {
 }
 
 /** Drop pulled server rows whose resident counterpart still owns local work. */
-export async function withoutLocallyProtected<T extends { id: string }>(
+export async function withoutLocallyProtected<T extends { uuid: string }>(
 	collection: LocalWorkCollection,
 	documents: T[]
 ): Promise<T[]> {
 	if (documents.length === 0) return documents;
-	const stored = await collection.findByIds(documents.map((document) => document.id)).exec();
+	const stored = await collection.findByIds(documents.map((document) => document.uuid)).exec();
 	if (stored.size === 0) return documents;
-	return documents.filter((document) => !hasPendingLocalWork(stored.get(document.id)?.toJSON()));
+	return documents.filter((document) => !hasPendingLocalWork(stored.get(document.uuid)?.toJSON()));
 }

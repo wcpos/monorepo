@@ -1,7 +1,8 @@
 const maxSafeInteger = 9_007_199_254_740_991;
 
 /**
- * A Leg-3 existence-reconcile manifest row (ADR 0014). The COMPACT `{wooId, digest}` the client
+ * A Leg-3 existence-reconcile manifest row (ADR 0014). Numeric `wooId` remains Woo-driver
+ * bookkeeping rather than stored document identity. The COMPACT `{wooId, digest}` the client
  * compares, bucket by bucket, against the server's stored-digest buckets — carrying NO payload, so
  * bucketing/hashing reads tiny rows instead of materializing the whole product catalog (the RxDB
  * review's headline killer). Populated as products/variations are pulled (they carry `_rxdb_digest`),
@@ -26,7 +27,7 @@ export const existenceManifestSchema = {
 	properties: {
 		id: { type: 'string', maxLength: 20 }, // wooId is at most maxSafeInteger (16 digits)
 		// Indexed numeric id for range-bucket queries. RxDB can range-query an indexed NON-null number
-		// field; the product payload's `wooProductId` is `number|null` (unindexable), which is exactly why
+		// field; the product document's `remoteId` is `string|null` (unindexable), which is exactly why
 		// the manifest carries its own always-present numeric `wooId` rather than reusing the product doc.
 		wooId: { type: 'number', minimum: 0, maximum: maxSafeInteger, multipleOf: 1 },
 		objectType: { type: 'string', maxLength: 16 },

@@ -4,6 +4,7 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
+import { remoteIdOrNull } from '@wcpos/sync-core';
 
 import { Variations } from './variations';
 import { useUISettings } from '../../../../contexts/ui-settings';
@@ -23,8 +24,11 @@ interface VariationsPopoverProps {
  */
 function VariationsPopoverContent({ parent, addToCart }: VariationsPopoverProps) {
 	const state = useQueryState<'variations'>();
+	const remoteIds = (parent.variations ?? [])
+		.map(remoteIdOrNull)
+		.filter((remoteId) => remoteId !== null);
 	const binding = useCollectionBinding('variations', state, {
-		wooIds: parent.variations ?? [],
+		remoteIds,
 	});
 	const initialBinding = React.useRef(binding);
 	React.useEffect(() => {
@@ -39,7 +43,7 @@ function VariationsPopoverContent({ parent, addToCart }: VariationsPopoverProps)
 		[state]
 	);
 	const allVariationsBinding = useCollectionBinding('variations', allVariationsState, {
-		wooIds: parent.variations ?? [],
+		remoteIds,
 	});
 	const { uiSettings } = useUISettings('pos-products');
 	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);

@@ -1,6 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
+import { type RemoteId } from '@wcpos/sync-core';
+
+import { remoteId } from '../testing';
 import {
 	type ExistenceManifestPrimeDatabase,
 	primeExistenceManifest,
@@ -19,7 +22,7 @@ import {
 
 type ProductRow = {
 	primary: string;
-	wooProductId?: number | null;
+	remoteId?: RemoteId | null;
 	payload?: { status?: unknown };
 	local?: { dirty?: boolean; pendingMutationIds?: unknown[] };
 };
@@ -30,7 +33,7 @@ const product = (
 	local: ProductRow['local'] = {}
 ): ProductRow => ({
 	primary: `p-${wooProductId}`,
-	wooProductId,
+	remoteId: remoteId(wooProductId),
 	payload: { status },
 	local,
 });

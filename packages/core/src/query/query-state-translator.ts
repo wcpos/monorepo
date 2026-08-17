@@ -16,6 +16,7 @@ import type {
 	OrderBrowseDimensions,
 	ProductBrowseDimensions,
 } from '@wcpos/sync-engine';
+import { remoteIdOrNull } from '@wcpos/sync-core';
 
 import { parseRemoteId } from '../utils/parse-remote-id';
 
@@ -296,7 +297,7 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 	state: QueryStateOf<C>,
 	options: {
 		id: string;
-		targeted?: readonly number[];
+		targeted?: readonly unknown[];
 		searchFields?: string[];
 	}
 ) {
@@ -310,13 +311,16 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 		if (translator.operator === 'metadata' && parseRemoteId(value) === undefined) return [];
 		return [{ field, value, translator }];
 	});
-	const targeted = options.targeted?.map(Number).filter(Number.isFinite);
+	const targeted = options.targeted?.map(remoteIdOrNull).filter((remoteId) => remoteId !== null);
 	const readFilters = active.map(({ translator, value }) => compileReadFilter(translator, value));
 	if (targeted !== undefined) {
 		const idMapping = resolveLegacyField(legacyCollection, 'id');
 		readFilters.push({
 			prefilter: { [idMapping.enginePath]: { $in: targeted } },
-			matches: (document) => targeted.includes(Number(mappedValue(idMapping, document))),
+			matches: (document) => {
+				const remoteId = remoteIdOrNull(mappedValue(idMapping, document));
+				return remoteId !== null && targeted.includes(remoteId);
+			},
 		});
 	}
 	const prefilters = readFilters.flatMap((filter) => (filter.prefilter ? [filter.prefilter] : []));
@@ -372,7 +376,7 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 			id: requirementId(options.id, 'targeted-records'),
 			collection: engineCollection,
 			kind: 'targeted-records',
-			wooIds: targeted,
+			remoteIds: targeted,
 		} as EngineRequirement);
 	}
 	if (

@@ -174,7 +174,7 @@ describe('useCheckoutSession', () => {
 			id: 'checkout:order-refresh:42',
 			collection: 'orders',
 			kind: 'targeted-records',
-			wooIds: [42],
+			remoteIds: ['42'],
 			forceRefresh: true,
 		});
 		expect(mockEngineRequire.mock.results[0]?.value.release).toHaveBeenCalledTimes(1);

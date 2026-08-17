@@ -1,6 +1,7 @@
 import type {
 	QueuedMutation,
 	RecordMutationQueue,
+	RemoteId,
 	StoreScopeManager,
 	SyncObserver,
 } from '@wcpos/sync-core';
@@ -47,10 +48,10 @@ type WritePlaneDeps = {
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
 	persistOrderRepull: (input: {
 		database: RxDatabase;
-		wooIds: number[];
+		remoteIds: RemoteId[];
 		nowMs?: number;
 	}) => Promise<void>;
-	repullOrdersNow: (input: { wooIds: number[]; reason: string }) => Promise<void>;
+	repullOrdersNow: (input: { remoteIds: RemoteId[]; reason: string }) => Promise<void>;
 	queueFor?: (database: RxDatabase) => RecordMutationQueue;
 };
 export function createWritePlane(deps: WritePlaneDeps): WritePlane {

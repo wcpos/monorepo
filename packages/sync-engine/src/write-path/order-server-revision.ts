@@ -1,3 +1,5 @@
+import { type RemoteId, wooIdOf } from '@wcpos/sync-core';
+
 import { orderDocumentFromWooPayload } from '../scheduler';
 
 /**
@@ -10,13 +12,13 @@ import { orderDocumentFromWooPayload } from '../scheduler';
 export async function fetchOrderServerRevision(input: {
 	fetch: (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
 	syncBaseUrl: string;
-	wooOrderId: number;
+	remoteId: RemoteId;
 }): Promise<string | null> {
 	// No `dp` — see the monetary-precision note in rx-scheduler-order-fetcher (#946). This
 	// read is the sharpest case: it exists ONLY to adopt the server's stamped revision, so a
 	// `dp`-shifted payload here would hand the drain a hash the push side can never match.
 	const response = await input.fetch(
-		`${input.syncBaseUrl}/orders?include=${input.wooOrderId}&per_page=1&orderby=include`
+		`${input.syncBaseUrl}/orders?include=${wooIdOf(input.remoteId)}&per_page=1&orderby=include`
 	);
 	if (!response.ok) throw new Error(`revision refresh failed: HTTP ${response.status}`);
 	const [payload] = (await response.json()) as Record<string, unknown>[];

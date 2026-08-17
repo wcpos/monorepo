@@ -19,7 +19,7 @@ describe('variation attribute read boundary (#811)', () => {
 		readLegacyField(
 			'variations',
 			{
-				id: 'variation-1',
+				uuid: 'variation-1',
 				payload: present ? { attributes } : {},
 			},
 			'attributes'
@@ -59,7 +59,7 @@ describe('variation attribute read boundary (#811)', () => {
 		expect(read([])).toEqual([]);
 		expect(read(undefined, false)).toBeUndefined();
 		expect(sanitizeVariationAttributesRead(undefined)).toBeUndefined();
-		expect(readSanitizedFieldsFor('variations')).toEqual(['attributes']);
+		expect(readSanitizedFieldsFor('variations')).toEqual(['id', 'attributes', 'parent_id']);
 	});
 });
 
@@ -148,16 +148,16 @@ describe('engine adapter collection map', () => {
 	it('reverses legacy and engine identifiers per collection', () => {
 		expect(resolveLegacyField('products', 'uuid')).toMatchObject({
 			kind: 'identifier',
-			enginePath: 'id',
+			enginePath: 'uuid',
 		});
 		expect(resolveLegacyField('products', 'id')).toMatchObject({
 			kind: 'identifier',
-			enginePath: 'wooProductId',
+			enginePath: 'remoteId',
 		});
-		expect(resolveLegacyField('orders', 'id').enginePath).toBe('wooOrderId');
-		expect(resolveLegacyField('customers', 'id').enginePath).toBe('wooCustomerId');
-		expect(resolveLegacyField('taxes', 'id').enginePath).toBe('wooTaxRateId');
-		expect(resolveLegacyField('products/categories', 'id').enginePath).toBe('wooId');
+		expect(resolveLegacyField('orders', 'id').enginePath).toBe('remoteId');
+		expect(resolveLegacyField('customers', 'id').enginePath).toBe('remoteId');
+		expect(resolveLegacyField('taxes', 'id').enginePath).toBe('remoteId');
+		expect(resolveLegacyField('products/categories', 'id').enginePath).toBe('remoteId');
 	});
 
 	it('maps each legacy collection to its engine collection', () => {
@@ -309,7 +309,7 @@ describe('engine adapter collection map', () => {
 				stock_quantity: '8',
 			})
 		).toEqual({
-			parentId: null,
+			parentRemoteId: null,
 			price: -4.25,
 			stockStatus: 'instock',
 			attributes: [{ id: 2, name: 'Size', option: 'Large' }],

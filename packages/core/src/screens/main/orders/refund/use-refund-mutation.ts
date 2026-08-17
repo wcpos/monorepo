@@ -3,6 +3,7 @@ import * as React from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { useQueryRuntime } from '@wcpos/query';
+import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { RefundDestination } from '../../hooks/payment-gateway-contract';
@@ -107,7 +108,7 @@ export function useRefundMutation() {
 					id: `refund:order-refresh:${order.id}`,
 					collection: 'orders',
 					kind: 'targeted-records',
-					wooIds: [order.id],
+					remoteIds: [order.id].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 					forceRefresh: true,
 				});
 				await handle.ready;

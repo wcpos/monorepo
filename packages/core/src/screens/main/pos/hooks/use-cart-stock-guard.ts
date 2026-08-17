@@ -9,6 +9,7 @@ import {
 	wrapEngineDocument,
 } from '@wcpos/query';
 import { engineDocumentIdFor } from '@wcpos/sync-engine';
+import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import {
@@ -64,14 +65,16 @@ export const useCartStockGuard = () => {
 		async (collectionName: 'products' | 'variations', wooId: number) => {
 			const collection = runtime.engine.active()?.database.collections[collectionName];
 			if (!collection) return null;
+			const remoteId = remoteIdOrNull(wooId);
+			if (remoteId === null) return null;
 			const field = resolveLegacyField(collectionName, 'id').enginePath;
-			const result = await collection.findOne({ selector: { [field]: wooId } }).exec();
+			const result = await collection.findOne({ selector: { [field]: remoteId } }).exec();
 			if (isEngineRxDocument(result)) {
 				return wrapEngineDocument(collectionName, result) as unknown as StockDocument;
 			}
 			const documentId = engineDocumentIdFor(
 				collectionName === 'products' ? 'product' : 'variation',
-				wooId
+				remoteId
 			);
 			const [deletedDocument] = await collection.storageInstance.findDocumentsById(
 				[documentId],

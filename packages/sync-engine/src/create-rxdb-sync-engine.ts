@@ -45,6 +45,7 @@ import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 import {
 	assertBulkSuccess,
 	canonicalSiteKey,
+	mintRemoteId,
 	MUTATION_QUEUE_COLLECTION,
 	normalizeCheckpoint,
 	scopeDatabaseName,
@@ -909,7 +910,7 @@ export function createRxdbSyncEngine(
 			const pruneTargeted = (
 				manifest: 'existenceManifest' | 'existenceManifestCustomers',
 				collection: 'products' | 'variations' | 'customers',
-				field: string,
+				field: 'remoteId',
 				wooIds: number[]
 			) => removeTargeted(db, db.collections[manifest] as never, collection, field, wooIds);
 			const coverage = createLocalCoverage({
@@ -918,14 +919,15 @@ export function createRxdbSyncEngine(
 					fetcher: (url, init) => fetcher(url, init?.signal ? { signal: init.signal } : undefined),
 					syncBaseUrl: ports.site.syncBaseUrl,
 					pruneDeleted: {
-						product: (wooIds) =>
-							pruneTargeted('existenceManifest', 'products', 'wooProductId', wooIds),
+						product: (wooIds) => pruneTargeted('existenceManifest', 'products', 'remoteId', wooIds),
 						variation: (wooIds) =>
-							pruneTargeted('existenceManifest', 'variations', 'wooId', wooIds),
+							pruneTargeted('existenceManifest', 'variations', 'remoteId', wooIds),
 						customer: (wooIds) =>
-							pruneTargeted('existenceManifestCustomers', 'customers', 'wooCustomerId', wooIds),
+							pruneTargeted('existenceManifestCustomers', 'customers', 'remoteId', wooIds),
 						order: (wooIds) =>
-							new EngineOrderRepository(db.collections as never).removeDeletedOrders(wooIds),
+							new EngineOrderRepository(db.collections as never).removeDeletedOrders(
+								wooIds.map((wooId) => mintRemoteId(wooId, 'order prune id'))
+							),
 					},
 				},
 				reconcile: createReconcilePorts({
@@ -1559,21 +1561,21 @@ export function createRxdbSyncEngine(
 		},
 		onActivityChange: changeCollectionActivity,
 		barcodeSelectorsFor,
-		persistOrderRepull: async ({ database, wooIds, nowMs: repullNowMs }) => {
+		persistOrderRepull: async ({ database, remoteIds, nowMs: repullNowMs }) => {
 			await seedTargetedOrderSchedulerTask({
-				orderIds: wooIds,
+				remoteIds,
 				priority: 1_000,
 				completedDedupeForMs: 0,
 				...(repullNowMs === undefined ? {} : { nowMs: repullNowMs }),
 				database,
 			});
 		},
-		repullOrdersNow: async ({ wooIds, reason }) => {
+		repullOrdersNow: async ({ remoteIds, reason }) => {
 			await requirePlane.require({
 				id: reason,
 				collection: 'orders',
 				kind: 'targeted-records',
-				wooIds,
+				remoteIds,
 				forceRefresh: true,
 				priority: 1_000,
 			}).ready;

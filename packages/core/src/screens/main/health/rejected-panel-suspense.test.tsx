@@ -58,7 +58,7 @@ function makeEngine(
 	const residentDoc = {
 		toJSON: () => ({
 			id: UUID_A,
-			wooOrderId: null,
+			remoteId: null,
 			number: '',
 			total: '25.00',
 			payload: { status: 'pos-open', total: '25.00' },

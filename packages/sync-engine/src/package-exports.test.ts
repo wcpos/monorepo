@@ -40,6 +40,7 @@ describe('package exports', () => {
 			'memoryStringStore',
 			'orderBrowserQueryKey',
 			'productBrowseWindowQueryKeyFromDimensions',
+			'remoteId',
 			'schedulerTaskStateKey',
 			'schedulerTaskStateSchema',
 			'scriptedConnectivity',

@@ -1,17 +1,15 @@
-import { promotedProductColumns, type StoredProductDocument } from '@wcpos/sync-core';
-
-import type { MigrationStrategies } from 'rxdb';
+import type { StoredProductDocument } from '@wcpos/sync-core';
 
 export type LocalProductDocument = StoredProductDocument;
 
 export const productSchema = {
 	title: 'Woo product document schema',
-	version: 2,
-	primaryKey: 'id',
+	version: 0,
+	primaryKey: 'uuid',
 	type: 'object',
 	properties: {
-		id: { type: 'string', maxLength: 128 },
-		wooProductId: { type: ['number', 'null'] },
+		uuid: { type: 'string', maxLength: 128 },
+		remoteId: { type: ['string', 'null'], maxLength: 64 },
 		// Promoted filter/sort columns (duplicated out of payload, payload bytes unchanged). price is
 		// numeric for range filters; categoryIds/brandIds are membership arrays for multi-select.
 		// Indexed number fields need bounds + multipleOf; prices are cents (rounded in promotedProductColumns).
@@ -32,8 +30,8 @@ export const productSchema = {
 		local: { type: 'object', additionalProperties: true },
 	},
 	required: [
-		'id',
-		'wooProductId',
+		'uuid',
+		'remoteId',
 		'price',
 		'stockStatus',
 		'type',
@@ -50,10 +48,3 @@ export const productSchema = {
 	// stock + type are the index-worthy filter axes; price backs the default product panel sort.
 	indexes: ['stockStatus', 'price', ['type', 'stockStatus']],
 } as const;
-
-export const productMigrationStrategies: MigrationStrategies = {
-	/** v0 → v1: backfill the promoted columns from the existing payload (payload untouched). */
-	1: (doc) => ({ ...doc, ...promotedProductColumns(doc.payload) }),
-	/** v1 → v2: additive — backfill the new decimal stockQuantity column from the payload. */
-	2: (doc) => ({ ...doc, stockQuantity: promotedProductColumns(doc.payload).stockQuantity }),
-};

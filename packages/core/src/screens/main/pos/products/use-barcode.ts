@@ -5,7 +5,7 @@ import { useObservableEagerState, useSubscription } from 'observable-hooks';
 import { isStorageWorkerFailure } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { useQueryRuntime } from '@wcpos/query';
 import { type ScanEvent } from '@wcpos/scanner';
-import { type BarcodeResolveFetcher, resolveScan } from '@wcpos/sync-core';
+import { type BarcodeResolveFetcher, remoteIdOrNull, resolveScan } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -275,7 +275,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 									id: `barcode:${barcodeStr}:ambiguous:products`,
 									collection: 'products',
 									kind: 'targeted-records',
-									wooIds: productIds,
+									remoteIds: productIds.map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 									forceRefresh: true,
 								})
 							);
@@ -286,7 +286,9 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 									id: `barcode:${barcodeStr}:ambiguous:variations`,
 									collection: 'variations',
 									kind: 'targeted-records',
-									wooIds: variationIds,
+									remoteIds: variationIds
+										.map(remoteIdOrNull)
+										.filter((remoteId) => remoteId !== null),
 									forceRefresh: true,
 								})
 							);
@@ -336,7 +338,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 							id: `barcode:${barcodeStr}:${match.type}:${match.id}`,
 							collection: match.type === 'variation' ? 'variations' : 'products',
 							kind: 'targeted-records',
-							wooIds: [match.id],
+							remoteIds: [match.id].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 							forceRefresh: true,
 						})
 					);
@@ -346,7 +348,9 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 								id: `barcode:${barcodeStr}:product:${match.parent_id}`,
 								collection: 'products',
 								kind: 'targeted-records',
-								wooIds: [match.parent_id!],
+								remoteIds: [match.parent_id]
+									.map(remoteIdOrNull)
+									.filter((remoteId) => remoteId !== null),
 								forceRefresh: true,
 							})
 						);
@@ -411,7 +415,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 						id: `barcode:${barcodeStr}:product:${parent_id}`,
 						collection: 'products',
 						kind: 'targeted-records',
-						wooIds: [parent_id],
+						remoteIds: [parent_id].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 						forceRefresh: true,
 					});
 					try {

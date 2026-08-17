@@ -6,6 +6,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { VStack } from '@wcpos/components/vstack';
+import { remoteIdOrNull } from '@wcpos/sync-core';
 
 import { VariationsFilterBar } from './filters';
 import { VariationsTable } from './table';
@@ -40,8 +41,9 @@ export function Variations({ row, hideOutOfStock }: Props) {
 	const state = useQueryState<'variations'>();
 	const actions = useQueryStateActions<'variations'>();
 	const variationIds = useObservableEagerState(parent.variations$!) ?? [];
+	const remoteIds = variationIds.map(remoteIdOrNull).filter((remoteId) => remoteId !== null);
 	const binding = useCollectionBinding('variations', state, {
-		wooIds: variationIds,
+		remoteIds,
 	});
 	const initialBinding = React.useRef(binding);
 

@@ -111,7 +111,7 @@ async function runCustomerTrickle(deps: CustomerTrickleDeps): Promise<CustomerTr
 	);
 	const applicable = await withoutLocallyProtected(
 		deps.database.collections.customers as never,
-		documents as { id: string }[]
+		documents as { uuid: string }[]
 	);
 	if (applicable.length > 0) {
 		assertBulkSuccess(

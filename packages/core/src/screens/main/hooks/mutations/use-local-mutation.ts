@@ -18,7 +18,11 @@ import {
 	useQueryRuntime,
 	type WriteableCollection,
 } from '@wcpos/query';
-import { deriveBarcodeFromPayload, mapBarcodeEditToPayload } from '@wcpos/sync-core';
+import {
+	deriveBarcodeFromPayload,
+	mapBarcodeEditToPayload,
+	remoteIdOrNull,
+} from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -298,7 +302,7 @@ export async function insertEngineResident(input: {
 		input.recordId
 	);
 	const common: Record<string, unknown> = {
-		id: input.recordId,
+		uuid: input.recordId,
 		payload,
 		sync: {
 			revision: '',
@@ -307,16 +311,10 @@ export async function insertEngineResident(input: {
 		},
 		local: { dirty: false, pendingMutationIds: [] },
 	};
-	const remoteId = Number(payload.id);
+	const remoteId = remoteIdOrNull(payload.id);
 	const resident = withPromotedFields(input.collection, {
 		...common,
-		...(input.collection === 'orders'
-			? { wooOrderId: remoteId > 0 ? remoteId : null }
-			: input.collection === 'products'
-				? { wooProductId: remoteId > 0 ? remoteId : null }
-				: input.collection === 'customers'
-					? { wooCustomerId: remoteId > 0 ? remoteId : null }
-					: { wooId: remoteId > 0 ? remoteId : null }),
+		remoteId,
 	});
 	return (await residentCollection.insert(resident)) as EngineResident;
 }

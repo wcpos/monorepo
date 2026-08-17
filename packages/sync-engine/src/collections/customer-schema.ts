@@ -1,3 +1,5 @@
+import type { RemoteId } from '@wcpos/sync-core';
+
 export type WooCustomerPayload = Record<string, unknown> & {
 	id?: number;
 	date_modified_gmt?: string;
@@ -5,8 +7,8 @@ export type WooCustomerPayload = Record<string, unknown> & {
 };
 
 export type LocalCustomerDocument = {
-	id: string;
-	wooCustomerId: number | null;
+	uuid: string;
+	remoteId: RemoteId | null;
 	payload: WooCustomerPayload;
 	sync: {
 		revision: string;
@@ -27,14 +29,14 @@ export { customerDocumentId } from '@wcpos/sync-core';
 export const customerSchema = {
 	title: 'Woo customer document schema',
 	version: 0,
-	primaryKey: 'id',
+	primaryKey: 'uuid',
 	type: 'object',
 	properties: {
-		id: { type: 'string', maxLength: 128 },
-		wooCustomerId: { type: ['number', 'null'] },
+		uuid: { type: 'string', maxLength: 128 },
+		remoteId: { type: ['string', 'null'], maxLength: 64 },
 		payload: { type: 'object', additionalProperties: true },
 		sync: { type: 'object', additionalProperties: true },
 		local: { type: 'object', additionalProperties: true },
 	},
-	required: ['id', 'wooCustomerId', 'payload', 'sync', 'local'],
+	required: ['uuid', 'remoteId', 'payload', 'sync', 'local'],
 } as const;

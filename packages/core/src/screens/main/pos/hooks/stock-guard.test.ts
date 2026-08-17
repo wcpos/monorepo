@@ -33,7 +33,7 @@ jest.mock('@wcpos/query', () => ({
 		},
 	}),
 	isEngineRxDocument: () => false,
-	resolveLegacyField: () => ({ enginePath: 'wooProductId' }),
+	resolveLegacyField: () => ({ enginePath: 'remoteId' }),
 	wrapEngineDocument: (_collection: string, document: unknown) => document,
 }));
 jest.mock('../../../../contexts/app-state', () => ({
@@ -254,7 +254,10 @@ describe('useCartStockGuard', () => {
 			requestedQuantity: 1,
 		});
 
-		expect(mockFindDocumentsById).toHaveBeenCalledWith([engineDocumentIdFor('product', 10)], true);
+		expect(mockFindDocumentsById).toHaveBeenCalledWith(
+			[engineDocumentIdFor('product', '10' as never)],
+			true
+		);
 		expect(stockResult).toEqual({
 			allowed: false,
 			warning: null,

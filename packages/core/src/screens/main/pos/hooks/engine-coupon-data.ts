@@ -6,6 +6,7 @@ import {
 	resolveLegacyField,
 	wrapEngineDocument,
 } from '@wcpos/query';
+import { remoteIdOrNull } from '@wcpos/sync-core';
 
 type QueryManager = ReturnType<typeof import('@wcpos/query').useQueryRuntime>;
 
@@ -50,7 +51,8 @@ export async function readEngineProductsByWooId(manager: QueryManager, wooIds: n
 	const collection = activeCollection(manager, collectionName);
 	if (!collection) return [];
 	const wooIdPath = resolveLegacyField(collectionName, 'id').enginePath;
-	const result = await collection.find({ selector: { [wooIdPath]: { $in: wooIds } } }).exec();
+	const remoteIds = wooIds.map(remoteIdOrNull).filter((remoteId) => remoteId !== null);
+	const result = await collection.find({ selector: { [wooIdPath]: { $in: remoteIds } } }).exec();
 	return engineDocuments(result).map((document) =>
 		wrapEngineDocument<import('@wcpos/database').ProductDocument>(collectionName, document)
 	);

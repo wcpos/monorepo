@@ -5,6 +5,7 @@ import { Observable } from 'rxjs';
 import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
 import { useQueryRuntime } from '@wcpos/query';
+import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { parseRemoteId } from '../../../utils/parse-remote-id';
@@ -47,7 +48,7 @@ export function useReferencedCustomerDemand(result$: Observable<OrdersResult>): 
 								id: `orders:referenced-customers:${ids.join(',')}`,
 								collection: 'customers',
 								kind: 'targeted-records',
-								wooIds: ids,
+								remoteIds: ids.map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 							});
 							// Attempted only when the requirement settles successfully.
 							// A 'released' outcome means switchMap superseded this requirement

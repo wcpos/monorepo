@@ -5,6 +5,7 @@ import { catchError, map, switchMap } from 'rxjs/operators';
 import { COLLECTION_VOCABULARY, resolveLegacyField, useQueryRuntime } from '@wcpos/query';
 import { MUTATION_QUEUE_RXDB_COLLECTION, rejectionSuggestsServerRecord } from '@wcpos/sync-engine';
 import type { EngineConflict, RxdbSyncEngine } from '@wcpos/sync-engine';
+import { remoteIdOrNull } from '@wcpos/sync-core';
 
 /**
  * The dead-letter feed for Store health → Database (#832).
@@ -64,7 +65,7 @@ export type RejectedMutation = {
 };
 
 /**
- * The record's server-identity column per collection ("wooOrderId", "wooId", …),
+ * The record's shared server-identity column (`remoteId`),
  * derived exactly like `usePushDocument` derives it: the legacy `id` field's
  * engine path. A resident with no value there has never existed server-side.
  */
@@ -142,12 +143,12 @@ async function describe(
 					? undefined
 					: ((entry.payload as Record<string, unknown> | undefined)?.id ??
 						(entry.conflictDocument as Record<string, unknown> | undefined)?.id);
-			const remoteId = typeof columnRemoteId === 'number' ? columnRemoteId : queuedRemoteId;
+			const remoteId = remoteIdOrNull(columnRemoteId) ?? remoteIdOrNull(queuedRemoteId);
 			// A non-order row WITH a server identity is the engine's other destructive
 			// branch: it fetches the server document and removes the resident when the
 			// server 404s. Orders skip that fetch entirely, so they never take it.
 			const mayDestroyRecord =
-				entry.collectionName !== 'orders' && resident !== null && typeof remoteId === 'number';
+				entry.collectionName !== 'orders' && resident !== null && remoteId !== null;
 			return {
 				mutationId: entry.mutationId,
 				collectionName: entry.collectionName,
@@ -170,7 +171,7 @@ async function describe(
 					entry.operation === 'create' &&
 					resident !== null &&
 					!readFailed &&
-					typeof remoteId !== 'number' &&
+					remoteId === null &&
 					!rejectionSuggestsServerRecord(entry.rejectedReason),
 				mayDestroyRecord: mayDestroyRecord && !readFailed,
 			};
