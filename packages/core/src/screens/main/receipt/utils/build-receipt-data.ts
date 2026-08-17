@@ -592,8 +592,8 @@ export function buildReceiptData(
 		const discountsIncl = subtotalIncl - totalIncl;
 		const meta = Array.isArray(item.meta_data)
 			? item.meta_data
-					.filter((entry: Record<string, any>) => !String(entry?.key ?? '').startsWith('_'))
-					.map((entry: Record<string, any>) => ({
+					.filter((entry: Record<string, unknown>) => !String(entry?.key ?? '').startsWith('_'))
+					.map((entry: Record<string, unknown>) => ({
 						key: String(entry?.key ?? ''),
 						value: String(entry?.value ?? ''),
 					}))

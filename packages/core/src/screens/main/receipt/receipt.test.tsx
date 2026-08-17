@@ -268,10 +268,14 @@ describe('Receipt auto-print', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		capturedLoadHandlers.length = 0;
+		mockOrder.id$.next(42);
 		mockSuspenseValue = mockOrder;
 		mockUseUISettings.mockReturnValue({ uiSettings: { autoPrintReceipt: true } });
 		mockUseNavigationState.mockImplementation((selector) => selector({ routeNames: ['Checkout'] }));
 		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, hasFinalData: false });
+	});
+	afterEach(() => {
+		mockOrder.id$.next(42);
 	});
 
 	it('waits for final data after the receipt frame loads and prints exactly once', () => {
@@ -297,6 +301,23 @@ describe('Receipt auto-print', () => {
 
 		act(() => capturedLoadHandlers.at(-1)!());
 		expect(mockPrint).toHaveBeenCalledTimes(1);
+	});
+
+	it('waits for the new receipt frame to load after the order changes', () => {
+		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, hasFinalData: true });
+		const { rerender } = render(<Receipt resource={{} as never} />);
+
+		act(() => capturedLoadHandlers.at(-1)!());
+		expect(mockPrint).toHaveBeenCalledTimes(1);
+
+		act(() => {
+			mockOrder.id$.next(43);
+			rerender(<Receipt resource={{} as never} />);
+		});
+		expect(mockPrint).toHaveBeenCalledTimes(1);
+
+		act(() => capturedLoadHandlers.at(-1)!());
+		expect(mockPrint).toHaveBeenCalledTimes(2);
 	});
 });
 

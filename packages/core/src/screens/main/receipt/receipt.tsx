@@ -245,9 +245,10 @@ function ReceiptDocument({ order }: { order: import('@wcpos/database').OrderDocu
 		return state;
 	});
 
-	// Reset auto-print guard when a new receipt is loaded
+	// Reset auto-print guards when a new receipt is loaded
 	React.useEffect(() => {
 		hasAutoPrintedRef.current = false;
+		iframeLoadedRef.current = false;
 	}, [orderId]);
 
 	const attemptAutoPrint = React.useCallback(() => {
