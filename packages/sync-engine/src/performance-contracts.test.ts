@@ -10,7 +10,7 @@ import {
 import { forEachYielding } from './event-loop-yield';
 import { existenceManifestDocument } from './local-coverage/existence-manifest-schema';
 import { materializeTargeted } from './materialization/record-materialization';
-import { memoryEngineStorage, remoteId } from './testing';
+import { memoryEngineStorage } from './testing';
 
 import type { RxDatabase } from 'rxdb';
 
@@ -394,8 +394,11 @@ async function measureFirstPage(
 	residentCeiling: number
 ): Promise<{ elapsedMs: number; hitCount: number }> {
 	const started = performance.now();
+	// Range over the zero-padded fixture uuid (fixed width ⇒ lexicographic = numeric), NOT over
+	// remoteId: the opaque string column supports equality/membership only — a $lte over it is
+	// lexicographic ('2' ≤ '10' is false) and 0 is not a mintable remote id.
 	const page = await database.collections['products']!.find({
-		selector: { remoteId: { $lte: remoteId(residentCeiling) } },
+		selector: { uuid: { $lte: uuidFor(residentCeiling, 0) } },
 		limit: 10,
 	}).exec();
 	return { elapsedMs: performance.now() - started, hitCount: page.length };
