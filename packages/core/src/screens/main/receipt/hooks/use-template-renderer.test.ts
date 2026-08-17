@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
 import { renderOfflineTemplatePreview, useTemplateRenderer } from './use-template-renderer';
@@ -210,6 +210,91 @@ describe('useTemplateRenderer', () => {
 			const { result } = renderHook(() => useTemplateRenderer(defaultOptions));
 
 			expect(result.current.isOffline).toBe(true);
+		});
+	});
+
+	describe('hasFinalData', () => {
+		it.each([
+			[
+				'offline',
+				{ status: 'offline', orderId: 42, data: null, error: null, hasResponded: false },
+				true,
+			],
+			[
+				'fetch error',
+				{
+					status: 'online-website-available',
+					orderId: 42,
+					data: null,
+					error: new Error('fetch failed'),
+					hasResponded: true,
+				},
+				true,
+			],
+			[
+				'settled empty response',
+				{
+					status: 'online-website-available',
+					orderId: 42,
+					data: null,
+					error: null,
+					hasResponded: true,
+				},
+				true,
+			],
+			[
+				'API data present',
+				{
+					status: 'online-website-available',
+					orderId: 42,
+					data: { source: 'api' },
+					error: null,
+					hasResponded: true,
+				},
+				true,
+			],
+			[
+				'order ID undefined',
+				{
+					status: 'online-website-available',
+					orderId: undefined,
+					data: null,
+					error: null,
+					hasResponded: false,
+				},
+				true,
+			],
+		] as const)('is %s', (_case, { status, orderId, data, error, hasResponded }, expected) => {
+			mockUseOnlineStatus.mockReturnValue({ status });
+			mockUseReceiptData.mockReturnValue({ data, error, hasResponded, isLoading: false });
+
+			const { result } = renderHook(() => useTemplateRenderer({ ...defaultOptions, orderId }));
+
+			expect(result.current.hasFinalData).toBe(expected);
+		});
+
+		it('stops waiting for a pending fetch after the settle deadline', () => {
+			jest.useFakeTimers();
+			try {
+				mockUseReceiptData.mockReturnValue({
+					data: null,
+					error: null,
+					hasResponded: false,
+					isLoading: true,
+				});
+
+				const { result } = renderHook(() => useTemplateRenderer(defaultOptions));
+
+				expect(result.current.hasFinalData).toBe(false);
+				expect(result.current.isSyncing).toBe(true);
+
+				act(() => jest.advanceTimersByTime(8000));
+
+				expect(result.current.hasFinalData).toBe(true);
+				expect(result.current.isSyncing).toBe(false);
+			} finally {
+				jest.useRealTimers();
+			}
 		});
 	});
 });
