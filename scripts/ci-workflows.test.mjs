@@ -174,6 +174,7 @@ exit 75
 				PATH: `${binDir}:${process.env.PATH}`,
 				REPO: 'wcpos/monorepo',
 				RUN_ID: '1',
+				STORE: 'dev-pro',
 			},
 		});
 
@@ -203,6 +204,96 @@ exit 75
 		assert.match(
 			queueStep.run,
 			/startswith\(\$p\)\) and \.status == "in_progress"\)\s*\n\s*\| select\(\.started_at > \$cutoff\)/
+		);
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
+test('the shared-store queue does not contend with a run queued for a different store', () => {
+	const workflow = readWorkflow('deploy.yml');
+	const queueStep = findStep(workflow, 'queue', '⏳ Wait for the shared dev store to be free');
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-store-scoped-queue-'));
+	const binDir = path.join(workspace, 'bin');
+	mkdirSync(binDir);
+
+	// Run 2 targets dev-next (its queue-job name says so) and is ACTIVELY
+	// running a shard — the strongest possible claim under the old rules.
+	// A dev-pro waiter must skip it entirely: the running-shard rule fires
+	// before the ownership rules, so anything short of a full skip would
+	// block here.
+	const recentShardStart = new Date(Date.now() - 60 * 1000).toISOString();
+	writeFileSync(
+		path.join(binDir, 'gh'),
+		`#!/usr/bin/env bash
+set -eu
+endpoint="$2"
+case "$endpoint" in
+  */actions/runs/1/jobs?*)
+    printf '%s\n' '2026-08-12T05:00:00Z'
+    ;;
+  *status=in_progress*)
+    printf '%s\n' '2'
+    ;;
+  *status=queued*)
+    ;;
+  */actions/runs/2/jobs?*)
+    printf '%s\n' '[{"name":"🎭 E2E Tests (1/4)","status":"in_progress","conclusion":null,"started_at":"${recentShardStart}","completed_at":null},{"name":"⏳ Shared-store queue (dev-next)","status":"completed","conclusion":"success","started_at":"${recentShardStart}","completed_at":"${recentShardStart}"}]'
+    ;;
+  *)
+    printf 'unexpected gh call: %s\n' "$*" >&2
+    exit 65
+    ;;
+esac
+`,
+		{ mode: 0o755 }
+	);
+	writeFileSync(
+		path.join(binDir, 'sleep'),
+		`#!/usr/bin/env bash
+printf 'sleep:%s\n' "$1"
+exit 75
+`,
+		{ mode: 0o755 }
+	);
+
+	try {
+		const result = runShell(queueStep.run, {
+			cwd: workspace,
+			env: {
+				GH_TOKEN: 'test-token',
+				PATH: `${binDir}:${process.env.PATH}`,
+				REPO: 'wcpos/monorepo',
+				RUN_ID: '1',
+				STORE: 'dev-pro',
+			},
+		});
+
+		assert.equal(result.status, 0, result.stdout + result.stderr);
+		assert.match(result.stdout, /Store is free/);
+
+		// The lane→store map is duplicated in the queue job's NAME (how other
+		// waiters read our store), its STORE env (how the script reads it),
+		// and the e2e job's E2E_STORE_URL_PRO (where the shards actually
+		// point). Pin all three to the same lane expression so they cannot
+		// drift apart — disagreement would let two runs share a store
+		// unqueued.
+		const laneExpr = "(github.base_ref == 'next' || github.ref_name == 'next')";
+		assert.ok(workflow.jobs.queue.name.includes(laneExpr), 'queue job name lost the lane expression');
+		assert.ok(
+			workflow.jobs.queue.name.includes("'dev-next' || 'dev-pro'"),
+			'queue job name lost the store map'
+		);
+		assert.ok(
+			queueStep.env.STORE.includes(laneExpr),
+			'queue STORE env lost the lane expression'
+		);
+		const e2eStore = workflow.jobs.e2e.steps.find(({ env }) => env && env.E2E_STORE_URL_PRO).env
+			.E2E_STORE_URL_PRO;
+		assert.ok(e2eStore.includes(laneExpr), 'e2e store env lost the lane expression');
+		assert.ok(
+			e2eStore.includes("'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com'"),
+			'e2e store env lost the store map'
 		);
 	} finally {
 		rmSync(workspace, { recursive: true, force: true });
@@ -239,6 +330,7 @@ printf '%s\\n' "$1" >> "$SLEEP_LOG"
 				PATH: `${binDir}:${process.env.PATH}`,
 				REPO: 'wcpos/monorepo',
 				RUN_ID: '1',
+				STORE: 'dev-pro',
 				GH_CALL_LOG: ghCallLog,
 				SLEEP_LOG: sleepLog,
 			},
