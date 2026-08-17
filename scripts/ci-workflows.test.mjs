@@ -147,7 +147,11 @@ case "$endpoint" in
     printf '%s\n' '2'
     ;;
   */actions/runs/2/jobs?*)
-    printf '%s\n' '[{"name":"🚀 Deploy","status":"queued","conclusion":null,"started_at":null}]'
+    if [ "$LEGACY_QUEUE" = "bare" ]; then
+      printf '%s\n' '[{"name":"🚀 Deploy","status":"queued","conclusion":null,"started_at":null},{"name":"⏳ Shared-store queue","status":"in_progress","conclusion":null,"started_at":"2026-08-12T05:00:00Z"}]'
+    else
+      printf '%s\n' '[{"name":"🚀 Deploy","status":"queued","conclusion":null,"started_at":null}]'
+    fi
     ;;
   *)
     printf 'unexpected gh call: %s\n' "$*" >&2
@@ -167,20 +171,23 @@ exit 75
 	);
 
 	try {
-		const result = runShell(queueStep.run, {
-			cwd: workspace,
-			env: {
-				GH_TOKEN: 'test-token',
-				PATH: `${binDir}:${process.env.PATH}`,
-				REPO: 'wcpos/monorepo',
-				RUN_ID: '1',
-				STORE: 'dev-pro',
-			},
-		});
+		for (const legacyQueue of ['missing', 'bare']) {
+			const result = runShell(queueStep.run, {
+				cwd: workspace,
+				env: {
+					GH_TOKEN: 'test-token',
+					PATH: `${binDir}:${process.env.PATH}`,
+					REPO: 'wcpos/monorepo',
+					RUN_ID: '1',
+					STORE: 'dev-pro',
+					LEGACY_QUEUE: legacyQueue,
+				},
+			});
 
-		assert.equal(result.status, 75, result.stdout + result.stderr);
-		assert.match(result.stdout, /run 2 uses the previous workflow and has not finished/);
-		assert.match(result.stdout, /sleep:180/);
+			assert.equal(result.status, 75, result.stdout + result.stderr);
+			assert.match(result.stdout, /run 2 uses the previous workflow and has not finished/);
+			assert.match(result.stdout, /sleep:180/);
+		}
 
 		// The queued-runs poll must fence out zombies: a run stuck "queued" for
 		// hours (observed: six days) would otherwise block every waiter until

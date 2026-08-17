@@ -259,11 +259,13 @@ jobs:
               # Store scoping: a run's target store rides in its queue-job
               # name. A run queued for a DIFFERENT store cannot contend with
               # ours — skip every ownership rule for it. A run with NO queue
-              # job at all falls through to the pre-rollout rule below, which
-              # blocks conservatively.
+              # job, or the exact bare queue name from before store scoping,
+              # falls through to the pre-rollout rule and blocks conservatively.
               their_queue=$(jq -r --arg p "$QUEUE_PREFIX" \
                 '[.[] | select(.name | startswith($p))][0].name // ""' <<< "$jobs")
-              if [ -n "$their_queue" ] && [ "$their_queue" != "$QUEUE_JOB" ]; then
+              if [ "$their_queue" = "$QUEUE_PREFIX" ]; then
+                their_queue=""
+              elif [ -n "$their_queue" ] && [ "$their_queue" != "$QUEUE_JOB" ]; then
                 continue
               fi
 
