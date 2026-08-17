@@ -405,9 +405,11 @@ function coverageTargetKey(target: CoverageTarget | null): string {
  * resident count.
  *
  * Precedence, freshness and ranged-walk progress live behind `coverageChanges`. What stays here
- * is the one thing the engine cannot know: the local count. It is both the fallback when the
- * engine declines to vouch (`total: null`) and the lower bound on a recorded total, since the
- * footer must never claim fewer total records than it currently renders.
+ * is the one thing the engine cannot know: the local count. It is the fallback when the engine
+ * declines to vouch (`total: null`) — and it OUTRANKS a recorded total it exceeds, because more
+ * residents than the server's last count proves that count outdated. The number published then
+ * IS the local count, so it carries `source: 'local'`: the footer must render a locally derived
+ * lower bound as `N+`, never dress it up as an exact server total.
  */
 function coverageProjection$(
 	engine: RxdbSyncEngine,
@@ -425,13 +427,9 @@ function coverageProjection$(
 		verdict$,
 	]).pipe(
 		map(([localCount, verdict]) =>
-			verdict.total === null
+			verdict.total === null || verdict.total < localCount
 				? { total: localCount, source: 'local' as const, laneProgress: verdict.progress }
-				: {
-						total: Math.max(verdict.total, localCount),
-						source: 'coverage' as const,
-						laneProgress: verdict.progress,
-					}
+				: { total: verdict.total, source: 'coverage' as const, laneProgress: verdict.progress }
 		),
 		distinctUntilChanged(
 			(previous, current) =>
