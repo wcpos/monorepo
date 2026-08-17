@@ -27,6 +27,7 @@ interface UseReceiptDataResult {
 	hasSnapshot: boolean;
 	submissionStatus: SubmissionStatus | null;
 	isLoading: boolean;
+	hasResponded: boolean;
 	error: Error | null;
 	refetch: () => void;
 }
@@ -55,6 +56,7 @@ export function useReceiptData({
 		hasSnapshot: false,
 		submissionStatus: null,
 		isLoading: false,
+		hasResponded: false,
 		error: null,
 	});
 
@@ -72,7 +74,7 @@ export function useReceiptData({
 		let cancelled = false;
 
 		async function fetchReceipt() {
-			setState((prev) => ({ ...prev, isLoading: true, error: null }));
+			setState((prev) => ({ ...prev, isLoading: true, hasResponded: false, error: null }));
 
 			try {
 				const response = await http.get(`/receipts/${orderId}`, {
@@ -89,6 +91,7 @@ export function useReceiptData({
 					hasSnapshot: res.has_snapshot ?? false,
 					submissionStatus: res.submission_status ?? null,
 					isLoading: false,
+					hasResponded: true,
 					error: null,
 				});
 			} catch (err) {
@@ -103,6 +106,7 @@ export function useReceiptData({
 				setState((prev) => ({
 					...prev,
 					isLoading: false,
+					hasResponded: true,
 					error,
 				}));
 			}
@@ -124,6 +128,7 @@ export function useReceiptData({
 			hasSnapshot: false,
 			submissionStatus: null,
 			isLoading: false,
+			hasResponded: false,
 			error: null,
 			refetch,
 		};

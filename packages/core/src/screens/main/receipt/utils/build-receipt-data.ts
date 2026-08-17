@@ -591,10 +591,12 @@ export function buildReceiptData(
 		const discountsExcl = subtotalExcl - totalExcl;
 		const discountsIncl = subtotalIncl - totalIncl;
 		const meta = Array.isArray(item.meta_data)
-			? item.meta_data.map((entry: Record<string, any>) => ({
-					key: String(entry?.key ?? ''),
-					value: String(entry?.value ?? ''),
-				}))
+			? item.meta_data
+					.filter((entry: Record<string, any>) => !String(entry?.key ?? '').startsWith('_'))
+					.map((entry: Record<string, any>) => ({
+						key: String(entry?.key ?? ''),
+						value: String(entry?.value ?? ''),
+					}))
 			: [];
 
 		const { raw: savingsRaw, ...priceConvenience } = getLinePriceConvenienceFields({
