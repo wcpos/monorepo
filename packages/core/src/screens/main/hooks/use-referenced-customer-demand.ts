@@ -5,7 +5,7 @@ import { Observable } from 'rxjs';
 import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
 import { useQueryRuntime } from '@wcpos/query';
-import { remoteIdOrNull } from '@wcpos/sync-core';
+import { remoteIdOrNull, wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { parseRemoteId } from '../../../utils/parse-remote-id';
@@ -20,8 +20,7 @@ function referencedIds(result: OrdersResult): number[] {
 	const ids = new Set<number>();
 	for (const { document } of result.hits) {
 		if (isPositiveInteger(document.customer_id)) ids.add(document.customer_id);
-		const cashier = document.meta_data?.find(({ key }) => key === '_pos_user');
-		const cashierId = parseRemoteId(cashier?.value);
+		const cashierId = parseRemoteId(wooMetaCarrier.readIdentity(document.meta_data).cashierId);
 		if (isPositiveInteger(cashierId)) ids.add(cashierId);
 	}
 	return [...ids].sort((a, b) => a - b);

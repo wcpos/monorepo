@@ -24,7 +24,12 @@ import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { awaitWriteOutcome, useQueryRuntime, WriteOutcomeError } from '@wcpos/query';
-import { remoteIdOrNull, WOO_REST_CANNOT_DELETE } from '@wcpos/sync-core';
+import {
+	POS_META_KEYS,
+	remoteIdOrNull,
+	WOO_REST_CANNOT_DELETE,
+	wooMetaCarrier,
+} from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -40,22 +45,6 @@ import type { CellContext } from '@tanstack/react-table';
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
 const syncLogger = getLogger(['wcpos', 'orders', 'actions', 'sync']);
-
-/**
- * Helper function - @TODO move to utils
- */
-const upsertMetaData = (
-	metaDataArray: { key?: string; value?: unknown; id?: number }[],
-	key: string,
-	value: string
-) => {
-	const index = metaDataArray.findIndex((item) => item.key === key);
-	if (index !== -1) {
-		metaDataArray[index].value = value;
-	} else {
-		metaDataArray.push({ key, value });
-	}
-};
 
 const REFUNDABLE_STATUSES: readonly string[] = ['completed', 'processing', 'on-hold'];
 
@@ -112,10 +101,14 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 		// in could not be checked out anyway.
 		if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
 
-		const meta_data = order.getLatest().toMutableJSON()?.meta_data || [];
-		upsertMetaData(meta_data, '_pos_user', String(wpCredentials.id));
-		if (store.id !== 0) {
-			upsertMetaData(meta_data, '_pos_store', String(store.id));
+		const existingMeta = order.getLatest().toMutableJSON()?.meta_data || [];
+		const existingStoreId = wooMetaCarrier.readIdentity(existingMeta).storeId;
+		let meta_data = wooMetaCarrier.stampIdentity(existingMeta, {
+			userId: wpCredentials.id,
+			storeId: store.id === 0 ? (existingStoreId ?? 0) : store.id,
+		});
+		if (store.id === 0 && existingStoreId === null) {
+			meta_data = meta_data.filter((entry) => entry.key !== POS_META_KEYS.store);
 		}
 
 		await localPatch({ document: order, data: { status: 'pos-open', meta_data } });

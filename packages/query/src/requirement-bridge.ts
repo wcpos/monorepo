@@ -25,7 +25,7 @@
  */
 
 import { getLogger } from '@wcpos/utils/logger';
-import { type RemoteId, remoteIdOrNull } from '@wcpos/sync-core';
+import { type RemoteId, remoteIdOrNull, wooMetaCarrier } from '@wcpos/sync-core';
 import type {
 	CustomerBrowseDimensions,
 	EngineRequirement,
@@ -180,22 +180,19 @@ function orderBrowseDimensions(
 	// key and would otherwise overwrite each other. Every dimension below therefore has to
 	// look in both places.
 	const metaValue = (
-		key: '_pos_user' | '_pos_store'
+		key: 'cashierId' | 'storeId'
 	): { value: string; index: number; exact: boolean } | undefined => {
 		for (const [index, condition] of conditions.entries()) {
 			if (condition === null || typeof condition !== 'object') continue;
 			const record = condition as Record<string, unknown>;
 			const metaData = record.meta_data;
 			if (metaData === null || typeof metaData !== 'object') continue;
-			const elemMatch = (metaData as Record<string, unknown>).$elemMatch;
-			if (
-				elemMatch !== null &&
-				typeof elemMatch === 'object' &&
-				(elemMatch as Record<string, unknown>).key === key &&
-				typeof (elemMatch as Record<string, unknown>).value === 'string'
-			) {
+			const value = wooMetaCarrier.decodeIdentityFilter({
+				meta_data: metaData,
+			})?.[key];
+			if (value !== undefined) {
 				return {
-					value: (elemMatch as Record<string, unknown>).value as string,
+					value,
 					index,
 					exact: Object.keys(record).length === 1,
 				};
@@ -203,14 +200,14 @@ function orderBrowseDimensions(
 		}
 		return undefined;
 	};
-	const cashierMeta = metaValue('_pos_user');
+	const cashierMeta = metaValue('cashierId');
 	const cashier = cashierMeta?.value;
 	const cashierId = cashier !== undefined && /^\d+$/.test(cashier) ? Number(cashier) : undefined;
 	if (cashierId !== undefined && Number.isSafeInteger(cashierId)) {
 		dimensions.cashierId = cashierId;
 		if (cashierMeta?.exact) consumed[cashierMeta.index]?.add('meta_data');
 	}
-	const storeMeta = metaValue('_pos_store');
+	const storeMeta = metaValue('storeId');
 	const metaStore = storeMeta?.value;
 	// A store-less install selects its store by slug, which the translator compiles to
 	// `created_via` — a nested `$and` condition, not a root field (see the note above). A

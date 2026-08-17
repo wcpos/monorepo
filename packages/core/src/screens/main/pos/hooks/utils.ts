@@ -17,6 +17,7 @@ import {
 	updatePosDataMeta,
 } from '@wcpos/order-math/internal';
 import type { CartLine } from '@wcpos/order-math/internal';
+import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 
 // MIGRATION SHIM: these names moved to @wcpos/order-math; re-exported here so
 // existing './utils' imports keep working until the PR 2 adapter cutover.
@@ -56,15 +57,16 @@ export function ensurePosOrderIdentityMeta(
 	metaData: OrderMetaData | undefined,
 	identity: { userId: number | string; storeId: number; taxBasedOn?: string }
 ): OrderMetaData {
-	const ensured = Array.isArray(metaData) ? [...metaData] : [];
-	const appendMissing = (key: string, value: string) => {
-		if (!ensured.some((entry) => entry.key === key)) ensured.push({ key, value });
-	};
-
-	appendMissing('_pos_user', String(identity.userId));
-	if (identity.storeId !== 0) appendMissing('_pos_store', String(identity.storeId));
-	if (identity.taxBasedOn) {
-		appendMissing('_woocommerce_pos_tax_based_on', identity.taxBasedOn);
+	const existing = wooMetaCarrier.readIdentity(metaData);
+	let ensured = wooMetaCarrier.stampIdentity(metaData, {
+		userId: existing.cashierId ?? identity.userId,
+		storeId: existing.storeId ?? identity.storeId,
+	}) as OrderMetaData;
+	if (identity.storeId === 0 && existing.storeId === null) {
+		ensured = ensured.filter((entry) => entry.key !== POS_META_KEYS.store);
+	}
+	if (identity.taxBasedOn && wooMetaCarrier.taxBasedOnOverride(ensured) === null) {
+		ensured.push({ key: POS_META_KEYS.taxBasedOn, value: identity.taxBasedOn });
 	}
 	return ensured;
 }
@@ -114,11 +116,7 @@ export const getTaxStatusFromMetaData = (metaData: CartLine['meta_data']) => {
  *
  */
 export function findByMetaDataUUID(items: CartLine[], uuid: string): CartLine | null {
-	const item = items.find(
-		(item) =>
-			Array.isArray(item.meta_data) &&
-			item.meta_data.some((meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid)
-	);
+	const item = items.find((item) => wooMetaCarrier.lineUuid(item) === uuid);
 	return item || null;
 }
 

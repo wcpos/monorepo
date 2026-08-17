@@ -16,7 +16,7 @@ import type {
 	OrderBrowseDimensions,
 	ProductBrowseDimensions,
 } from '@wcpos/sync-engine';
-import { remoteIdOrNull } from '@wcpos/sync-core';
+import { remoteIdOrNull, wooMetaCarrier } from '@wcpos/sync-core';
 
 import { parseRemoteId } from '../utils/parse-remote-id';
 
@@ -193,37 +193,28 @@ function compileReadFilter(
 	}
 	if (operator === 'metadata') {
 		const id = parseRemoteId(value)!;
+		const identityFilter = wooMetaCarrier.identityFilter({
+			cashierId: String(id),
+		});
 		return {
-			prefilter: {
-				[mapping.enginePath]: { $elemMatch: { key: '_pos_user', value: String(id) } },
-			},
+			prefilter: { [mapping.enginePath]: identityFilter.meta_data },
 			matches: (document) => String(actual(document)) === String(id),
 		};
 	}
 	if (operator === 'store') {
 		const numeric = typeof value === 'number' || /^\d+$/.test(String(value));
+		const identityFilter = wooMetaCarrier.identityFilter({
+			storeId: String(value),
+		});
 		return {
 			prefilter: numeric
-				? {
-						[mapping.enginePath]: {
-							$elemMatch: { key: '_pos_store', value: String(value) },
-						},
-					}
+				? { [mapping.enginePath]: identityFilter.meta_data }
 				: { 'payload.created_via': value },
 			matches: (document) => {
 				const payload = readEnginePath(document, 'payload') as Record<string, unknown> | undefined;
 				if (!numeric) return payload?.created_via === value;
-				const metadata = payload?.meta_data;
-				return (
-					Array.isArray(metadata) &&
-					metadata.some(
-						(item) =>
-							item &&
-							typeof item === 'object' &&
-							(item as Record<string, unknown>).key === '_pos_store' &&
-							String((item as Record<string, unknown>).value) === String(value)
-					)
-				);
+				const metadata = Array.isArray(payload?.meta_data) ? payload.meta_data : undefined;
+				return wooMetaCarrier.readIdentity(metadata).storeId === String(value);
 			},
 		};
 	}
