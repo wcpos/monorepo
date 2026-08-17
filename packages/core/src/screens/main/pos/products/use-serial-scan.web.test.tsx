@@ -107,6 +107,21 @@ describe('useSerialScan (web) — Bluetooth RFCOMM support', () => {
 		expect(mockInsert).not.toHaveBeenCalled();
 	});
 
+	it('does not auto-reconnect when multiple granted Bluetooth ports share a service class', async () => {
+		const firstPort = fakePort({ bluetoothServiceClassId: CUSTOM_SERVICE_CLASS });
+		const secondPort = fakePort({ bluetoothServiceClassId: CUSTOM_SERVICE_CLASS });
+		mockGetPorts.mockResolvedValue([firstPort, secondPort]);
+		mockProfiles = [{ connectionType: 'serial', bluetoothServiceClassId: CUSTOM_SERVICE_CLASS }];
+
+		renderHook(() => useSerialScan(jest.fn()));
+
+		await act(async () => {
+			await Promise.resolve();
+		});
+		expect(firstPort.open).not.toHaveBeenCalled();
+		expect(secondPort.open).not.toHaveBeenCalled();
+	});
+
 	it('does not auto-connect a granted Bluetooth port with no matching profile', async () => {
 		const btPort = fakePort({ bluetoothServiceClassId: CUSTOM_SERVICE_CLASS });
 		mockGetPorts.mockResolvedValue([btPort]);
@@ -148,7 +163,7 @@ describe('useSerialScan (web) — Bluetooth RFCOMM support', () => {
 			expect(mockInsert).toHaveBeenCalledWith(
 				expect.objectContaining({
 					connectionType: 'serial',
-					deviceName: 'Bluetooth serial',
+					deviceName: 'bluetooth-serial',
 					bluetoothServiceClassId: CUSTOM_SERVICE_CLASS,
 					vendorId: undefined,
 					productId: undefined,

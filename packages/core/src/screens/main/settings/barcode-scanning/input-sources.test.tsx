@@ -9,6 +9,11 @@ import { InputSources } from './input-sources';
 const mockToastShow = jest.fn();
 const mockSave = jest.fn();
 const mockRemove = jest.fn();
+const mockOpenExternalURL = jest.fn();
+
+jest.mock('@wcpos/utils/open-external-url', () => ({
+	openExternalURL: (...args: unknown[]) => mockOpenExternalURL(...args),
+}));
 
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
@@ -40,7 +45,8 @@ const profile = {
 	productId: 5678,
 	getLatest: () => ({ remove: mockRemove }),
 };
-const collection = { find: () => ({ $: of([profile]) }) };
+let mockProfiles: Record<string, unknown>[] = [profile];
+const collection = { find: () => ({ $: of(mockProfiles) }) };
 
 jest.mock('../../hooks/use-collection', () => ({
 	useCollection: () => ({ collection }),
@@ -77,6 +83,7 @@ jest.mock('../../hooks/barcodes/device-scan-context', () => ({
 describe('InputSources mode explainer', () => {
 	afterEach(() => {
 		mockSerialControl = unavailableControl;
+		mockProfiles = [profile];
 	});
 
 	it('shows the keyboard-mode note when a direct connection is available', () => {
@@ -88,6 +95,34 @@ describe('InputSources mode explainer', () => {
 	it('hides the note when no direct connection is available', () => {
 		render(<InputSources />);
 		expect(screen.queryByTestId('scanner-mode-note')).toBeNull();
+	});
+
+	it('opens the mode guide through the external URL helper', () => {
+		mockSerialControl = { ...unavailableControl, available: true };
+		render(<InputSources />);
+
+		fireEvent.click(screen.getByTestId('scanner-mode-docs-link'));
+
+		expect(mockOpenExternalURL).toHaveBeenCalledWith(
+			'https://docs.wcpos.com/products/barcode-scanning#connection-modes'
+		);
+	});
+
+	it('translates the fallback name for a Bluetooth serial profile', () => {
+		mockProfiles = [
+			{
+				...profile,
+				label: '',
+				deviceName: 'bluetooth-serial',
+				vendorId: undefined,
+				productId: undefined,
+				bluetoothServiceClassId: '00001101-0000-1000-8000-00805f9b34fb',
+			},
+		];
+
+		render(<InputSources />);
+
+		expect(screen.getByText('Bluetooth serial')).toBeTruthy();
 	});
 });
 

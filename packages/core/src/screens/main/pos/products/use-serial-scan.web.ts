@@ -200,7 +200,7 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 					label: '',
 					connectionType: 'serial',
 					deviceName: isBluetooth
-						? 'Bluetooth serial'
+						? 'bluetooth-serial'
 						: `Serial ${info.usbVendorId ?? ''}:${info.usbProductId ?? ''}`.trim(),
 					vendorId: info.usbVendorId,
 					productId: info.usbProductId,
@@ -254,7 +254,7 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 			if (cancelled) {
 				return;
 			}
-			const match = ports.find((port) => {
+			const matches = ports.filter((port) => {
 				const info = port.getInfo();
 				if (info.usbVendorId !== undefined && info.usbProductId !== undefined) {
 					return profiles.some(
@@ -272,8 +272,8 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 				}
 				return false;
 			});
-			if (match && !cancelled) {
-				await attachPort(match, false);
+			if (matches.length === 1 && !cancelled) {
+				await attachPort(matches[0], false);
 			}
 		})().catch((error) => {
 			serialLogger.warn('Failed to reopen saved serial scanner', {

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Linking, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
 
@@ -10,6 +10,7 @@ import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import type { ScannerProfileDocument } from '@wcpos/database';
+import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { useT } from '../../../../contexts/translations';
 import { useDeviceScanControls } from '../../hooks/barcodes/device-scan-context';
@@ -22,14 +23,15 @@ const NO_PROFILES: ScannerProfileDocument[] = [];
 const MODE_DOCS_URL = 'https://docs.wcpos.com/products/barcode-scanning#connection-modes';
 
 /** Secondary identity line for a saved profile: USB vid:pid, BT UUID, or nothing. */
-function profileIdentity(profile: ScannerProfileDocument): string {
+function profileIdentity(profile: ScannerProfileDocument, bluetoothDeviceName: string): string {
+	const deviceName = profile.bluetoothServiceClassId ? bluetoothDeviceName : profile.deviceName;
 	if (profile.vendorId !== undefined && profile.productId !== undefined) {
-		return `${profile.deviceName} · ${profile.vendorId}:${profile.productId}`;
+		return `${deviceName} · ${profile.vendorId}:${profile.productId}`;
 	}
 	if (profile.bluetoothServiceClassId) {
-		return `${profile.deviceName} · ${profile.bluetoothServiceClassId}`;
+		return `${deviceName} · ${profile.bluetoothServiceClassId}`;
 	}
-	return profile.deviceName;
+	return deviceName;
 }
 
 /**
@@ -39,6 +41,7 @@ function profileIdentity(profile: ScannerProfileDocument): string {
  */
 export function InputSources() {
 	const t = useT();
+	const bluetoothDeviceName = t('settings.scanner_bluetooth_serial');
 	const { collection } = useCollection('scanner_profiles');
 	const profiles = useObservableState(
 		React.useMemo(() => collection.find().$, [collection]),
@@ -127,7 +130,10 @@ export function InputSources() {
 				{serial.available || hid.available ? (
 					<VStack space="xs" testID="scanner-mode-note">
 						<Text className="text-muted-foreground text-xs">{t('settings.scanner_mode_note')}</Text>
-						<Pressable onPress={() => Linking.openURL(MODE_DOCS_URL)}>
+						<Pressable
+							testID="scanner-mode-docs-link"
+							onPress={() => openExternalURL(MODE_DOCS_URL)}
+						>
 							<Text className="text-muted-foreground text-xs underline">
 								{t('settings.scanner_mode_docs_link')}
 							</Text>
@@ -145,9 +151,12 @@ export function InputSources() {
 						testID="scanner-profile-row"
 					>
 						<VStack className="flex-1" space="xs">
-							<Text className="text-sm font-medium">{profile.label || profile.deviceName}</Text>
+							<Text className="text-sm font-medium">
+								{profile.label ||
+									(profile.bluetoothServiceClassId ? bluetoothDeviceName : profile.deviceName)}
+							</Text>
 							<Text className="text-muted-foreground font-mono text-xs">
-								{profileIdentity(profile)}
+								{profileIdentity(profile, bluetoothDeviceName)}
 							</Text>
 						</VStack>
 						<Button
