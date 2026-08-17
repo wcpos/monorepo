@@ -36,6 +36,11 @@ export const scannerProfilesLiteral = {
 			type: 'string',
 			description: 'USB serial number, when the platform exposes one (helps re-match on reconnect)',
 		},
+		bluetoothServiceClassId: {
+			type: 'string',
+			description:
+				'For serial over Bluetooth RFCOMM: the service class UUID reported by SerialPort.getInfo(). Bluetooth ports have no USB vendor/product id, so this is the re-match key on reconnect',
+		},
 		hidUsagePage: {
 			type: 'integer',
 			description: 'For hid-pos: the HID usage page (0x8C for POS) used to re-open the device',

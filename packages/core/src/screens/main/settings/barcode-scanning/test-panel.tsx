@@ -1,6 +1,5 @@
 import * as React from 'react';
 import {
-	Linking,
 	type NativeSyntheticEvent,
 	Platform,
 	Pressable,
@@ -18,6 +17,7 @@ import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { analyzeScanTrace, type TraceAnalysis, type TraceSuggestion } from '@wcpos/scanner';
+import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { useScanTraceCapture } from './use-scan-trace-capture';
 import { useAppState } from '../../../../contexts/app-state';
@@ -193,7 +193,7 @@ export function TestPanel() {
 
 			{history.length > 0 ? <History history={history} /> : null}
 
-			<Pressable onPress={() => Linking.openURL(DOCS_URL)}>
+			<Pressable onPress={() => openExternalURL(DOCS_URL)}>
 				<Text className="text-muted-foreground text-sm">
 					{t('settings.barcode_test_docs_link')}
 				</Text>
