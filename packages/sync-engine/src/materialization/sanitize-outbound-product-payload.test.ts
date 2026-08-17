@@ -3,6 +3,30 @@ import { describe, expect, it } from 'vitest';
 import { sanitizeOutboundProductPayload } from './sanitize-outbound-product-payload';
 
 describe('sanitizeOutboundProductPayload', () => {
+	it('drops an empty low_stock_amount', () => {
+		const output = sanitizeOutboundProductPayload({ low_stock_amount: '' });
+
+		expect(output).not.toHaveProperty('low_stock_amount');
+	});
+
+	it('coerces a numeric low_stock_amount string to an integer', () => {
+		const output = sanitizeOutboundProductPayload({ low_stock_amount: '5' });
+
+		expect(output.low_stock_amount).toBe(5);
+	});
+
+	it.each([5, null])('keeps writable low_stock_amount %s unchanged', (lowStockAmount) => {
+		const output = sanitizeOutboundProductPayload({ low_stock_amount: lowStockAmount });
+
+		expect(output.low_stock_amount).toBe(lowStockAmount);
+	});
+
+	it('leaves low_stock_amount absent when it is not in the input', () => {
+		const output = sanitizeOutboundProductPayload({ name: 'Probe' });
+
+		expect(output).not.toHaveProperty('low_stock_amount');
+	});
+
 	it('drops cost_of_goods_sold when defined_value is null', () => {
 		const output = sanitizeOutboundProductPayload({
 			name: 'Probe',
