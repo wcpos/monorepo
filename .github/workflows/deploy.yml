@@ -153,8 +153,13 @@ jobs:
             echo "is_production=true" >> $GITHUB_OUTPUT
           fi
 
-  # Serializes E2E across ALL runs of this workflow (any trigger — they all
-  # drive the same shared dev store) without ever cancelling another run: it
+  # Serializes E2E across all runs of this workflow THAT TARGET THE SAME
+  # STORE, without ever cancelling another run: the E2E store is keyed to the
+  # run's lane (owner ruling 2026-08-17: `next`-lane work tests against
+  # dev-next; everything else — main PRs, pushes to main — tests against
+  # dev-pro, the released-profile store). The target store rides in this job's
+  # NAME so other runs can read it from the jobs API; runs queued for a
+  # different store never contend. It
   # polls the Actions API and proceeds only when (a) no other run is executing
   # or about to execute its E2E shards and (b) no other run entered this queue
   # earlier (FIFO by this job's started_at, run id as tie-break — both sides
@@ -165,7 +170,11 @@ jobs:
   # one run's queue passing and its shards appearing — the failure mode is a
   # rare concurrent run (today's flake), never a blocked or cancelled gate.
   queue:
-    name: ⏳ Shared-store queue
+    # Lane→store map, duplicated in the e2e job's E2E_STORE_URL_PRO and the
+    # STORE env below — keep all three in step. Computed from pure event
+    # context (never a needs output) so the name is rendered the moment the
+    # run is created and other queue waiters can always read it.
+    name: ⏳ Shared-store queue (${{ (github.base_ref == 'next' || github.ref_name == 'next') && 'dev-next' || 'dev-pro' }})
     needs: deploy
     if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
@@ -183,9 +192,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
+          STORE: ${{ (github.base_ref == 'next' || github.ref_name == 'next') && 'dev-next' || 'dev-pro' }}
         run: |
           set -euo pipefail
-          QUEUE_JOB='⏳ Shared-store queue'
+          QUEUE_PREFIX='⏳ Shared-store queue'
+          QUEUE_JOB="$QUEUE_PREFIX ($STORE)"
           SHARD_PREFIX='🎭 E2E Tests ('
 
           # A transient GitHub API failure (5xx, truncated body — observed
@@ -245,6 +256,17 @@ jobs:
                 break
               fi
 
+              # Store scoping: a run's target store rides in its queue-job
+              # name. A run queued for a DIFFERENT store cannot contend with
+              # ours — skip every ownership rule for it. A run with NO queue
+              # job at all falls through to the pre-rollout rule below, which
+              # blocks conservatively.
+              their_queue=$(jq -r --arg p "$QUEUE_PREFIX" \
+                '[.[] | select(.name | startswith($p))][0].name // ""' <<< "$jobs")
+              if [ -n "$their_queue" ] && [ "$their_queue" != "$QUEUE_JOB" ]; then
+                continue
+              fi
+
               # Zombie fence, applied to every ownership rule below: runner
               # death leaves a job "in_progress" forever with no logs (observed
               # 3× on 2026-08-12; run 31587156153's shard held the store ~50
@@ -268,12 +290,11 @@ jobs:
                 break
               fi
 
-              # Runs created before this queue existed have no queue job.
-              # Hold the store until those rollout-era runs finish, including
-              # ones still queued in the former shared concurrency group.
-              queue_seen=$(jq --arg q "$QUEUE_JOB" \
-                '[.[] | select(.name == $q)] | length' <<< "$jobs")
-              if [ "$queue_seen" = "0" ]; then
+              # Runs created before this queue existed (or before it carried
+              # the store in its name) have no matching queue job. Hold the
+              # store until those rollout-era runs finish, including ones
+              # still queued in the former shared concurrency group.
+              if [ -z "$their_queue" ]; then
                 busy="run $id uses the previous workflow and has not finished"
                 break
               fi
@@ -414,6 +435,12 @@ jobs:
           E2E_CASHIER_PASS: ${{ secrets.E2E_CASHIER_PASS }}
           E2E_PRODUCT_WRITER_USER: ${{ secrets.E2E_PRODUCT_WRITER_USER }}
           E2E_PRODUCT_WRITER_PASS: ${{ secrets.E2E_PRODUCT_WRITER_PASS }}
+          # Lane→store map (owner ruling 2026-08-17): `next`-lane work tests
+          # against dev-next; everything else tests against dev-pro, the
+          # released-profile store. Keep in step with the queue job's name and
+          # its STORE env — the queue serializes runs per store, so this URL
+          # and that name must agree or two runs could share a store unqueued.
+          E2E_STORE_URL_PRO: ${{ (github.base_ref == 'next' || github.ref_name == 'next') && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}
 
       - name: 📊 Upload blob report
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
