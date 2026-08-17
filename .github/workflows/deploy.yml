@@ -379,8 +379,15 @@ jobs:
         # finish sooner in wall-clock than six COUNT-balanced ones did, for a
         # quarter less runner time. Change this number alone — the shard plan
         # rebalances itself.
-        shardIndex: [1, 2, 3, 4]
-        shardTotal: [4]
+        #
+        # Lane-aware concurrency (2026-08-17, first dev-pro-gated run): the
+        # realism store runs the same 5 php-fpm workers as dev-next but each
+        # request costs several times more (ATUM hooks every product query,
+        # full plugin roster, WC 10.9). Four concurrent shards push it past
+        # the queuing knee — search idles at 0.4s and starves past 120s under
+        # storm. Two shards keep dev-pro under the knee; dev-next keeps four.
+        shardIndex: ${{ fromJSON((github.base_ref == 'next' || github.ref_name == 'next') && '[1, 2, 3, 4]' || '[1, 2]') }}
+        shardTotal: ${{ fromJSON((github.base_ref == 'next' || github.ref_name == 'next') && '[4]' || '[2]') }}
     steps:
       - name: 🏗 Setup repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
