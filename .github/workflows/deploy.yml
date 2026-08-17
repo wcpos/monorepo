@@ -157,7 +157,20 @@ jobs:
   # STORE, without ever cancelling another run: the E2E store is keyed to the
   # run's lane (owner ruling 2026-08-17: `next`-lane work tests against
   # dev-next; everything else — main PRs, pushes to main — tests against
-  # dev-pro, the released-profile store). The target store rides in this job's
+  # dev-pro, the released-profile store).
+  #
+  # INTERIM (2026-08-18): the dev-pro arm of the map reads 'dev-next' — the
+  # ruling's flip is BLOCKED on dev-pro write-path capacity, not design.
+  # First gated run against dev-pro (run 32072750667): every order-save spec
+  # timed out at 120s under 4 concurrent shards (the realism profile — ATUM
+  # hooking product queries, full plugin roster — saturates; idle latency is
+  # fine). Flipping tonight would redden every main PR on store capacity.
+  # To complete the ruling: give dev-pro headroom (or drop shardTotal for
+  # dev-pro runs) until the order-save specs pass, then change the fallback
+  # arm in the THREE map sites (queue name, STORE, E2E_STORE_URL_PRO) back
+  # to dev-pro. The queue machinery below is store-generic either way.
+  #
+  # The target store rides in this job's
   # NAME so other runs can read it from the jobs API; runs queued for a
   # different store never contend. It
   # polls the Actions API and proceeds only when (a) no other run is executing
@@ -174,7 +187,7 @@ jobs:
     # STORE env below — keep all three in step. Computed from pure event
     # context (never a needs output) so the name is rendered the moment the
     # run is created and other queue waiters can always read it.
-    name: ⏳ Shared-store queue (${{ (github.base_ref == 'next' || github.ref_name == 'next') && 'dev-next' || 'dev-pro' }})
+    name: ⏳ Shared-store queue (${{ (github.base_ref == 'next' || github.ref_name == 'next') && 'dev-next' || 'dev-next' }})
     needs: deploy
     if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
@@ -192,7 +205,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
-          STORE: ${{ (github.base_ref == 'next' || github.ref_name == 'next') && 'dev-next' || 'dev-pro' }}
+          STORE: ${{ (github.base_ref == 'next' || github.ref_name == 'next') && 'dev-next' || 'dev-next' }}
         run: |
           set -euo pipefail
           QUEUE_PREFIX='⏳ Shared-store queue'
@@ -462,7 +475,7 @@ jobs:
           # released-profile store. Keep in step with the queue job's name and
           # its STORE env — the queue serializes runs per store, so this URL
           # and that name must agree or two runs could share a store unqueued.
-          E2E_STORE_URL_PRO: ${{ (github.base_ref == 'next' || github.ref_name == 'next') && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}
+          E2E_STORE_URL_PRO: ${{ (github.base_ref == 'next' || github.ref_name == 'next') && 'https://dev-next.wcpos.com' || 'https://dev-next.wcpos.com' }}
 
       - name: 📊 Upload blob report
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0

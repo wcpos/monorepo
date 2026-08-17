@@ -340,8 +340,12 @@ exit 75
 		// unqueued.
 		const laneExpr = "(github.base_ref == 'next' || github.ref_name == 'next')";
 		assert.ok(workflow.jobs.queue.name.includes(laneExpr), 'queue job name lost the lane expression');
+		// INTERIM (2026-08-18): both arms read dev-next until dev-pro's
+		// write path survives shard concurrency (order-save specs timed out
+		// at 120s on run 32072750667). When the flip to dev-pro happens,
+		// update these pins together with the three workflow map sites.
 		assert.ok(
-			workflow.jobs.queue.name.includes("'dev-next' || 'dev-pro'"),
+			workflow.jobs.queue.name.includes("'dev-next' || 'dev-next'"),
 			'queue job name lost the store map'
 		);
 		assert.ok(
@@ -352,7 +356,7 @@ exit 75
 			.E2E_STORE_URL_PRO;
 		assert.ok(e2eStore.includes(laneExpr), 'e2e store env lost the lane expression');
 		assert.ok(
-			e2eStore.includes("'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com'"),
+			e2eStore.includes("'https://dev-next.wcpos.com' || 'https://dev-next.wcpos.com'"),
 			'e2e store env lost the store map'
 		);
 	} finally {
