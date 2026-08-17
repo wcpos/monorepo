@@ -164,6 +164,39 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(upserted[0].remoteId).toBe('11');
 	});
 
+	it.each([
+		['uuid', uuidFor(11)],
+		['remote id', remoteId(11)],
+		['numeric Woo id', 11],
+	])('guards stale-envelope custom-pull documents by assembled %s', async (_label, pendingId) => {
+		const serverDoc = {
+			...customPullDoc(11),
+			id: 'woo-order:stale',
+			wooOrderId: 999,
+		};
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+		};
+		const checkpointStore = {
+			readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+			writeCustomPullCheckpoint: vi.fn(async () => undefined),
+		};
+		const fetcher = vi.fn(async () =>
+			response({ documents: [serverDoc], checkpoint: nextCheckpoint, hasMore: false })
+		);
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			checkpointStore,
+			pendingMutationOrderIds: vi.fn(async () => new Set<string | number>([pendingId])),
+			fetcher,
+		});
+
+		await schedulerFetcher(orderTask());
+
+		expect(repository.upsertMany).toHaveBeenCalledWith([]);
+	});
+
 	it('marks the custom-pull lane complete when the final greedy batch exhausts the remote orders catalog', async () => {
 		const documents = [customPullDoc(11), customPullDoc(12)] as WirePullDocument[];
 		const repository = {

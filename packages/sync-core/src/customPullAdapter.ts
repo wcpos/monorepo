@@ -5,7 +5,7 @@ import {
 	type ServerMetrics,
 	type SyncCheckpoint,
 } from './protocol';
-import { type RemoteId, remoteIdOrNull } from './woo/remoteIdCodec';
+import { type RemoteId, remoteIdOrNull, wooIdOf } from './woo/remoteIdCodec';
 
 export type WirePullDocument = Pick<OrderDocument, 'payload' | 'sync' | 'local'> & {
 	id: string;
@@ -126,14 +126,15 @@ export type CustomPullBatchSyncResult = {
  * have queued mutations.
  */
 export function shouldApplyPulledDocument(
-	pulledDocument: Pick<WirePullDocument, 'id' | 'wooOrderId'>,
+	pulledDocument: Pick<OrderDocument, 'uuid' | 'remoteId'>,
 	pendingMutationOrderIds: ReadonlySet<string | number>
 ): boolean {
-	if (pendingMutationOrderIds.has(pulledDocument.id)) {
-		return false;
-	}
-	const wooOrderId = pulledDocument.wooOrderId;
-	return !(typeof wooOrderId === 'number' && pendingMutationOrderIds.has(wooOrderId));
+	if (pendingMutationOrderIds.has(pulledDocument.uuid)) return false;
+	return (
+		pulledDocument.remoteId === null ||
+		(!pendingMutationOrderIds.has(pulledDocument.remoteId) &&
+			!pendingMutationOrderIds.has(wooIdOf(pulledDocument.remoteId)))
+	);
 }
 
 export async function syncCustomPullBatchIntoRepository(input: {
@@ -251,19 +252,19 @@ export async function syncCustomPullBatchIntoRepository(input: {
 		);
 	}
 
-	const applicableWireDocuments = deduplicateDocumentsById(result.documents).filter(
-		(document) => !effectivePending || shouldApplyPulledDocument(document, effectivePending)
-	);
-	const mappedDocuments = applicableWireDocuments.map((document): OrderDocument => ({
+	const mappedDocuments = result.documents.map((document): OrderDocument => ({
 		uuid: document.id,
 		remoteId: remoteIdOrNull(document.wooOrderId ?? document.payload?.id),
 		payload: document.payload,
 		sync: document.sync,
 		local: document.local,
 	}));
-	const documents = input.assembleDocument
+	const assembledDocuments = input.assembleDocument
 		? mappedDocuments.map(input.assembleDocument)
 		: mappedDocuments;
+	const documents = deduplicateDocumentsByUuid(assembledDocuments).filter(
+		(document) => !effectivePending || shouldApplyPulledDocument(document, effectivePending)
+	);
 	await input.repository.upsertMany(documents);
 	// Apply the delete channel (F6). The repository owns wooOrderId→uuid resolution + the pending/dirty
 	// guard (it has the local docs); the server already coalesced each order to its net state, so a
@@ -292,10 +293,10 @@ export async function syncCustomPullBatchIntoRepository(input: {
 	};
 }
 
-function deduplicateDocumentsById(documents: WirePullDocument[]): WirePullDocument[] {
-	const byId = new Map<string, WirePullDocument>();
+function deduplicateDocumentsByUuid(documents: OrderDocument[]): OrderDocument[] {
+	const byId = new Map<string, OrderDocument>();
 	for (const document of documents) {
-		byId.set(document.id, document);
+		byId.set(document.uuid, document);
 	}
 	return [...byId.values()];
 }

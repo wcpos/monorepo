@@ -9,6 +9,7 @@ import {
 	syncCustomPullBatchIntoRepository,
 } from './customPullAdapter';
 import { createFakePullServer, fakeUuid } from './fakePullServer';
+import { mintRemoteId } from './woo/remoteIdCodec';
 
 // Pull fixtures come from the contract-faithful fake server (fakePullServer.ts, pinned against the
 // PHP pull_orders emit in fakePullServer.test.ts) — not hand-rolled envelopes that can drift from
@@ -498,32 +499,46 @@ describe('hostile-envelope poison guards (B7, ADR 0017 family)', () => {
 });
 
 describe('shouldApplyPulledDocument', () => {
-	const pending = new Set<string | number>(['local-order:sat-rush-r1-1', 'woo-order:204', 207]);
+	const pending = new Set<string | number>([fakeUuid(204), mintRemoteId(207, 'test'), 208]);
 
-	it('blocks pulled documents whose document id has a pending mutation', () => {
-		expect(shouldApplyPulledDocument({ id: 'woo-order:204', wooOrderId: 204 }, pending)).toBe(
-			false
-		);
-	});
-
-	it('blocks pulled documents whose temp id has a pending mutation', () => {
+	it('blocks pulled documents whose uuid has a pending mutation', () => {
 		expect(
-			shouldApplyPulledDocument({ id: 'local-order:sat-rush-r1-1', wooOrderId: null }, pending)
+			shouldApplyPulledDocument(
+				{ uuid: fakeUuid(204), remoteId: mintRemoteId(204, 'test') },
+				pending
+			)
 		).toBe(false);
 	});
 
-	it('blocks pulled documents whose woo order id has a pending mutation', () => {
-		expect(shouldApplyPulledDocument({ id: 'woo-order:207', wooOrderId: 207 }, pending)).toBe(
-			false
-		);
+	it('blocks pulled documents whose remote id has a pending mutation', () => {
+		expect(
+			shouldApplyPulledDocument(
+				{ uuid: fakeUuid(207), remoteId: mintRemoteId(207, 'test') },
+				pending
+			)
+		).toBe(false);
+	});
+
+	it('blocks pulled documents whose numeric Woo id has a pending mutation', () => {
+		expect(
+			shouldApplyPulledDocument(
+				{ uuid: fakeUuid(208), remoteId: mintRemoteId(208, 'test') },
+				pending
+			)
+		).toBe(false);
 	});
 
 	it('applies pulled documents with no pending mutations', () => {
-		expect(shouldApplyPulledDocument({ id: 'woo-order:999', wooOrderId: 999 }, pending)).toBe(true);
-		expect(shouldApplyPulledDocument({ id: 'woo-order:999', wooOrderId: null }, pending)).toBe(
-			true
-		);
-		expect(shouldApplyPulledDocument({ id: 'woo-order:1', wooOrderId: 1 }, new Set())).toBe(true);
+		expect(
+			shouldApplyPulledDocument(
+				{ uuid: fakeUuid(999), remoteId: mintRemoteId(999, 'test') },
+				pending
+			)
+		).toBe(true);
+		expect(shouldApplyPulledDocument({ uuid: fakeUuid(999), remoteId: null }, pending)).toBe(true);
+		expect(
+			shouldApplyPulledDocument({ uuid: fakeUuid(1), remoteId: mintRemoteId(1, 'test') }, new Set())
+		).toBe(true);
 	});
 });
 
