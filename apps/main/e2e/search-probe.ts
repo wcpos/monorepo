@@ -662,7 +662,13 @@ export async function searchAndWaitForServer(
 				route === `/wcpos/v2/${collection}`;
 			return matchesCollection && url.searchParams.get('search') === term;
 		},
-		{ timeout: 60_000 }
+		// 120s, not 60s: calibrated to the slowest gated store, not the fastest.
+		// Under 4 concurrent shards the realism-profile store (dev-pro: WC 10.9,
+		// ATUM hooking every product query, full plugin roster) answers search
+		// with a p99 just past 60s — observed 2026-08-17, three retries at
+		// exactly 1.1m each while idle latency measured 0.4s. A real regression
+		// still fails; a slow-but-correct answer no longer does.
+		{ timeout: 120_000 }
 	);
 	responsePending.catch(() => {});
 
