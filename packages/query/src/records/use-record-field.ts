@@ -3,7 +3,7 @@ import { combineLatest, defer, type Observable, of } from 'rxjs';
 import { distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
 import { deepEqual } from 'rxdb/plugins/utils';
 
-import type { RxDocument } from 'rxdb';
+import type { RxDocument, RxState } from 'rxdb';
 
 /**
  * THE field-reactivity idiom (ADR 0028): one hook family owns observable identity and
@@ -31,7 +31,6 @@ type Selector<TData, R> = (data: TData) => R;
 type RxStateLike<TState> = {
 	$: Observable<TState>;
 	get: () => TState;
-	collection?: undefined;
 };
 
 function isRxDocumentLike(value: unknown): value is RxDocument<Record<string, unknown>> {
@@ -107,6 +106,14 @@ export function useRecordField<TDoc extends Record<string, unknown>, R>(
  * `useObservableEagerState(x.<field>$)` call site — those getters mint a fresh observable
  * per render and resubscribe each time (the app-wide churn class behind #1250).
  */
+export function useDocField<TState extends Record<string, unknown>, R>(
+	source: RxState<TState>,
+	select: Selector<TState, R>
+): R;
+export function useDocField<TState extends Record<string, unknown>, R>(
+	source: RxState<TState> | null | undefined,
+	select: Selector<TState, R>
+): R | undefined;
 export function useDocField<TState extends Record<string, unknown>, R>(
 	source: RxDocument<TState> | RxStateLike<TState>,
 	select: Selector<TState, R>
