@@ -7,8 +7,8 @@ import { render, screen } from '@testing-library/react';
 
 import { resolveVariationStock, useVariationStock, VariationStockBadge } from './stock-status';
 
-jest.mock('observable-hooks', () => ({
-	useObservableEagerState: (obs: { __value: unknown }) => obs.__value,
+jest.mock('@wcpos/query', () => ({
+	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));
 jest.mock('@wcpos/components/status-badge', () => ({
 	StatusBadge: ({
@@ -42,10 +42,12 @@ function variation(fields: {
 	backorders?: string;
 }): FakeVariation {
 	return {
-		manage_stock$: { __value: fields.manage_stock },
-		stock_quantity$: { __value: fields.stock_quantity ?? null },
-		stock_status$: { __value: fields.stock_status },
-		backorders$: { __value: fields.backorders ?? 'no' },
+		payload: {
+			manage_stock: fields.manage_stock,
+			stock_quantity: fields.stock_quantity ?? null,
+			stock_status: fields.stock_status,
+			backorders: fields.backorders ?? 'no',
+		},
 	} as unknown as FakeVariation;
 }
 

@@ -31,6 +31,15 @@ jest.mock('@wcpos/components/suspense', () => ({
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
+jest.mock('@wcpos/query', () => ({
+	useRecordField: (
+		record: { variations$: BehaviorSubject<number[]> },
+		select: (value: { payload: { variations: number[] } }) => unknown
+	) => {
+		const { useObservableEagerState } = jest.requireActual('observable-hooks');
+		return select({ payload: { variations: useObservableEagerState(record.variations$) } });
+	},
+}));
 jest.mock('../../../../../../query', () => ({
 	useQueryState: () => mockState,
 	useQueryStateActions: () => mockActions,
@@ -51,6 +60,7 @@ describe('Variations query binding', () => {
 		const row = {
 			original: {
 				document: { id: 1, variations: variations$.value, variations$ },
+				record: { variations$ },
 			},
 		} as never;
 

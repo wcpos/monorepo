@@ -70,8 +70,16 @@ jest.mock('./utils', () => ({
 
 const variation = { id: 202 };
 const parent = { id: 101, name: 'Variable product' };
-const variationDocument = { getLatest: () => variation };
-const parentDocument = { getLatest: () => parent };
+const variationDocument = {
+	remoteId: String(variation.id),
+	payload: variation,
+	getLatest: () => variationDocument,
+};
+const parentDocument = {
+	remoteId: String(parent.id),
+	payload: parent,
+	getLatest: () => parentDocument,
+};
 
 function makeOrder(id: number, lineItems: object[]): TestOrder {
 	return {

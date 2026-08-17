@@ -1,10 +1,9 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
 import { PriceWithTax } from '../../../components/product/price-with-tax';
@@ -28,29 +27,32 @@ interface GridFields {
 
 interface ProductTileProps {
 	product: ProductDocument;
+	record: EngineRecord<'products'>;
 	gridFields: GridFields;
 }
 
 /** Renders a product tile with the fields enabled for the product grid. */
-export function ProductTile({ product, gridFields }: ProductTileProps) {
+export function ProductTile({ product, record, gridFields }: ProductTileProps) {
 	const t = useT();
 	const { addProduct } = useAddProduct();
 	const { format } = useCurrencyFormat();
-	const name = useObservableEagerState(product.name$!);
-	const price = useObservableEagerState(product.price$!);
-	const regularPrice = useObservableEagerState(product.regular_price$!);
-	const onSale = useObservableEagerState(product.on_sale$!);
-	const taxStatus = useObservableEagerState(product.tax_status$!);
-	const taxClass = useObservableEagerState(product.tax_class$!);
-	const categories = useObservableEagerState(product.categories$!) || [];
-	const sku = useObservableEagerState(product.sku$!);
-	const barcode = useObservableEagerState(product.barcode$!);
-	const stockQuantity = useObservableEagerState(product.stock_quantity$!);
-	const costOfGoodsSold = useObservableEagerState(product.cost_of_goods_sold$!);
+	const fields = useRecordField(record, ({ payload }) => ({
+		name: payload.name,
+		price: payload.price,
+		regularPrice: payload.regular_price,
+		onSale: payload.on_sale,
+		taxStatus: payload.tax_status,
+		taxClass: payload.tax_class,
+		categories: payload.categories ?? [],
+		sku: payload.sku,
+		barcode: payload.barcode,
+		stockQuantity: payload.stock_quantity,
+		costOfGoodsSold: payload.cost_of_goods_sold,
+	}));
 
-	const safeTaxStatus = (taxStatus || 'none') as 'taxable' | 'shipping' | 'none';
+	const safeTaxStatus = (fields.taxStatus || 'none') as 'taxable' | 'shipping' | 'none';
 	const taxDisplay = gridFields.tax ? ('text' as const) : ('none' as const);
-	const showOnSale = gridFields.on_sale && onSale;
+	const showOnSale = gridFields.on_sale && fields.onSale;
 	const hasAnyField =
 		gridFields.name ||
 		gridFields.price ||
@@ -61,8 +63,8 @@ export function ProductTile({ product, gridFields }: ProductTileProps) {
 		gridFields.cost_of_goods_sold;
 
 	const handlePress = React.useCallback(async () => {
-		await addProduct(product);
-	}, [addProduct, product]);
+		await addProduct(record);
+	}, [addProduct, record]);
 
 	return (
 		<Pressable
@@ -70,14 +72,14 @@ export function ProductTile({ product, gridFields }: ProductTileProps) {
 			className="bg-card border-border m-1 flex-1 overflow-hidden rounded-lg border"
 			testID="product-tile"
 		>
-			<View className="aspect-square" testID={`product-tile-${product.id}`}>
-				<TileImage product={product} />
+			<View className="aspect-square" testID={`product-tile-${record.remoteId ?? record.uuid}`}>
+				<TileImage product={product} record={record} />
 			</View>
 			{hasAnyField && (
 				<VStack className="p-2" space="xs">
 					{gridFields.name && (
 						<Text className="font-bold" numberOfLines={2} decodeHtml>
-							{name}
+							{fields.name}
 						</Text>
 					)}
 					{gridFields.price && (
@@ -85,52 +87,52 @@ export function ProductTile({ product, gridFields }: ProductTileProps) {
 							{showOnSale ? (
 								<VStack space="xs">
 									<PriceWithTax
-										price={regularPrice ?? ''}
+										price={fields.regularPrice ?? ''}
 										taxStatus={safeTaxStatus}
-										taxClass={taxClass ?? ''}
+										taxClass={fields.taxClass ?? ''}
 										taxDisplay={taxDisplay}
 										strikethrough
 									/>
 									<PriceWithTax
-										price={price ?? ''}
+										price={fields.price ?? ''}
 										taxStatus={safeTaxStatus}
-										taxClass={taxClass ?? ''}
+										taxClass={fields.taxClass ?? ''}
 										taxDisplay={taxDisplay}
 									/>
 								</VStack>
 							) : (
 								<PriceWithTax
-									price={price ?? ''}
+									price={fields.price ?? ''}
 									taxStatus={safeTaxStatus}
-									taxClass={taxClass ?? ''}
+									taxClass={fields.taxClass ?? ''}
 									taxDisplay={taxDisplay}
 								/>
 							)}
 						</>
 					)}
-					{gridFields.sku && sku ? (
+					{gridFields.sku && fields.sku ? (
 						<Text className="text-muted-foreground text-xs">
-							{t('common.sku')}: {sku}
+							{t('common.sku')}: {fields.sku}
 						</Text>
 					) : null}
-					{gridFields.barcode && barcode ? (
+					{gridFields.barcode && fields.barcode ? (
 						<Text className="text-muted-foreground text-xs">
-							{t('common.barcode')}: {barcode}
+							{t('common.barcode')}: {fields.barcode}
 						</Text>
 					) : null}
-					{gridFields.category && categories.length > 0 && (
+					{gridFields.category && fields.categories.length > 0 && (
 						<Text className="text-muted-foreground text-xs" numberOfLines={1} decodeHtml>
-							{categories.map((c) => c.name ?? '').join(', ')}
+							{fields.categories.map((c) => c.name ?? '').join(', ')}
 						</Text>
 					)}
-					{gridFields.stock_quantity && stockQuantity != null && (
+					{gridFields.stock_quantity && fields.stockQuantity != null && (
 						<Text className="text-muted-foreground text-xs">
-							{t('common.stock')}: {stockQuantity}
+							{t('common.stock')}: {fields.stockQuantity}
 						</Text>
 					)}
-					{gridFields.cost_of_goods_sold && costOfGoodsSold != null ? (
+					{gridFields.cost_of_goods_sold && fields.costOfGoodsSold != null ? (
 						<Text className="text-muted-foreground text-xs">
-							{t('common.cogs')}: {format(costOfGoodsSold?.total_value ?? 0)}
+							{t('common.cogs')}: {format(fields.costOfGoodsSold?.total_value ?? 0)}
 						</Text>
 					) : null}
 				</VStack>

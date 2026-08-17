@@ -1,9 +1,9 @@
 import * as React from 'react';
 
 import { CellContext } from '@tanstack/react-table';
-import { useObservableEagerState } from 'observable-hooks';
 
 import { Input } from '@wcpos/components/input';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { useProAccess } from '../../contexts/pro-access';
@@ -15,13 +15,23 @@ type ProductDocument =
 /**
  *
  */
-export function Barcode({ row, table }: CellContext<{ document: ProductDocument }, 'name'>) {
+export function Barcode({
+	row,
+	table,
+}: CellContext<
+	{
+		document: ProductDocument;
+		record: EngineRecord<'products'> | EngineRecord<'variations'>;
+	},
+	'name'
+>) {
 	const product = row.original.document;
-	const barcode = useObservableEagerState(product.barcode$!);
+	const barcode = useRecordField(row.original.record, (record) => record.payload.barcode);
+	const type = useRecordField(row.original.record, (record) => record.payload.type);
 	const [value, setValue] = React.useState(barcode);
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
-	const canEdit = product.type === 'variation' ? caps.canEditVariations : caps.canEditProducts;
+	const canEdit = type === 'variation' ? caps.canEditVariations : caps.canEditProducts;
 	const disabled = readOnly || !canEdit;
 	const meta = table.options.meta as unknown as {
 		onChange: (arg: { document: ProductDocument; changes: Record<string, unknown> }) => void;

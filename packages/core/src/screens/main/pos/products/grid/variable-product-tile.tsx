@@ -1,12 +1,11 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { HStack } from '@wcpos/components/hstack';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { VariationsPopover } from '../cells/variations-popover';
 import { useT } from '../../../../../contexts/translations';
@@ -17,13 +16,7 @@ import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { TileImage } from './tile-image';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
-type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
-
-interface MetaData {
-	attr_id: number;
-	display_key?: string;
-	display_value?: string;
-}
+type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 
 interface GridFields {
 	name: boolean;
@@ -39,6 +32,7 @@ interface GridFields {
 
 interface VariableProductTileProps {
 	product: ProductDocument;
+	record: EngineRecord<'products'>;
 	gridFields: GridFields;
 }
 
@@ -96,31 +90,33 @@ function VariablePriceRange({
 }
 
 /** Renders a variable product tile with the fields enabled for the product grid. */
-export function VariableProductTile({ product, gridFields }: VariableProductTileProps) {
+export function VariableProductTile({ product, record, gridFields }: VariableProductTileProps) {
 	const t = useT();
 	const { addVariation } = useAddVariation();
 	const { format } = useCurrencyFormat();
 	const triggerRef = React.useRef<{ close: () => void } | null>(null);
 
-	const name = useObservableEagerState(product.name$!);
-	const metaData = useObservableEagerState(product.meta_data$!);
+	const fields = useRecordField(record, ({ payload }) => ({
+		name: payload.name,
+		metaData: payload.meta_data,
+		price: payload.price,
+		regularPrice: payload.regular_price,
+		onSale: payload.on_sale,
+		taxStatus: payload.tax_status,
+		taxClass: payload.tax_class,
+		categories: payload.categories ?? [],
+		sku: payload.sku,
+		barcode: payload.barcode,
+		stockQuantity: payload.stock_quantity,
+		costOfGoodsSold: payload.cost_of_goods_sold,
+	}));
 	const variablePrices = getVariablePrices(
-		metaData as { key?: string; value?: string }[] | undefined
+		fields.metaData as { key?: string; value?: string }[] | undefined
 	);
-	const price = useObservableEagerState(product.price$!);
-	const regularPrice = useObservableEagerState(product.regular_price$!);
-	const onSale = useObservableEagerState(product.on_sale$!);
-	const taxStatus = useObservableEagerState(product.tax_status$!);
-	const taxClass = useObservableEagerState(product.tax_class$!);
-	const categories = useObservableEagerState(product.categories$!) || [];
-	const sku = useObservableEagerState(product.sku$!);
-	const barcode = useObservableEagerState(product.barcode$!);
-	const stockQuantity = useObservableEagerState(product.stock_quantity$!);
-	const costOfGoodsSold = useObservableEagerState(product.cost_of_goods_sold$!);
 
-	const safeTaxStatus = (taxStatus || 'none') as 'taxable' | 'shipping' | 'none';
+	const safeTaxStatus = (fields.taxStatus || 'none') as 'taxable' | 'shipping' | 'none';
 	const taxDisplay = gridFields.tax ? ('text' as const) : ('none' as const);
-	const showOnSale = gridFields.on_sale && onSale;
+	const showOnSale = gridFields.on_sale && fields.onSale;
 	const hasAnyField =
 		gridFields.name ||
 		gridFields.price ||
@@ -131,13 +127,13 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 		gridFields.cost_of_goods_sold;
 
 	const addToCart = React.useCallback(
-		async (variation: ProductVariationDocument | ProductDocument, metaData: MetaData[]) => {
-			await addVariation(variation as ProductVariationDocument, product, metaData);
+		async (variation: EngineRecord<'variations'>, metaData: LineItem['meta_data']) => {
+			await addVariation(variation, record, metaData as Parameters<typeof addVariation>[2]);
 			if (triggerRef.current) {
 				triggerRef.current.close();
 			}
 		},
-		[addVariation, product]
+		[addVariation, record]
 	);
 
 	return (
@@ -145,7 +141,7 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 			<PopoverTrigger ref={triggerRef as React.RefObject<never>} asChild>
 				<Pressable className="flex-1" testID="variable-product-tile">
 					<View className="aspect-square">
-						<TileImage product={product} />
+						<TileImage product={product} record={record} />
 						<View className="absolute top-1 right-1 rounded bg-black/50 px-1 py-0.5">
 							<Text className="text-xs text-white">{t('common.variants')}</Text>
 						</View>
@@ -154,7 +150,7 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 						<VStack className="p-2" space="xs">
 							{gridFields.name && (
 								<Text className="font-bold" numberOfLines={2} decodeHtml>
-									{name}
+									{fields.name}
 								</Text>
 							)}
 							{gridFields.price && (
@@ -165,14 +161,14 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 												<VariablePriceRange
 													prices={variablePrices.regular_price}
 													taxStatus={safeTaxStatus}
-													taxClass={taxClass ?? ''}
+													taxClass={fields.taxClass ?? ''}
 													taxDisplay={taxDisplay}
 													strikethrough
 												/>
 												<VariablePriceRange
 													prices={variablePrices.price}
 													taxStatus={safeTaxStatus}
-													taxClass={taxClass ?? ''}
+													taxClass={fields.taxClass ?? ''}
 													taxDisplay={taxDisplay}
 												/>
 											</VStack>
@@ -180,59 +176,59 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 											<VariablePriceRange
 												prices={variablePrices.price}
 												taxStatus={safeTaxStatus}
-												taxClass={taxClass ?? ''}
+												taxClass={fields.taxClass ?? ''}
 												taxDisplay={taxDisplay}
 											/>
 										)
 									) : showOnSale ? (
 										<VStack space="xs">
 											<PriceWithTax
-												price={regularPrice ?? ''}
+												price={fields.regularPrice ?? ''}
 												taxStatus={safeTaxStatus}
-												taxClass={taxClass ?? ''}
+												taxClass={fields.taxClass ?? ''}
 												taxDisplay={taxDisplay}
 												strikethrough
 											/>
 											<PriceWithTax
-												price={price ?? ''}
+												price={fields.price ?? ''}
 												taxStatus={safeTaxStatus}
-												taxClass={taxClass ?? ''}
+												taxClass={fields.taxClass ?? ''}
 												taxDisplay={taxDisplay}
 											/>
 										</VStack>
 									) : (
 										<PriceWithTax
-											price={price ?? ''}
+											price={fields.price ?? ''}
 											taxStatus={safeTaxStatus}
-											taxClass={taxClass ?? ''}
+											taxClass={fields.taxClass ?? ''}
 											taxDisplay={taxDisplay}
 										/>
 									)}
 								</>
 							)}
-							{gridFields.sku && sku ? (
+							{gridFields.sku && fields.sku ? (
 								<Text className="text-muted-foreground text-xs">
-									{t('common.sku')}: {sku}
+									{t('common.sku')}: {fields.sku}
 								</Text>
 							) : null}
-							{gridFields.barcode && barcode ? (
+							{gridFields.barcode && fields.barcode ? (
 								<Text className="text-muted-foreground text-xs">
-									{t('common.barcode')}: {barcode}
+									{t('common.barcode')}: {fields.barcode}
 								</Text>
 							) : null}
-							{gridFields.category && categories.length > 0 && (
+							{gridFields.category && fields.categories.length > 0 && (
 								<Text className="text-muted-foreground text-xs" numberOfLines={1} decodeHtml>
-									{categories.map((c) => c.name ?? '').join(', ')}
+									{fields.categories.map((c) => c.name ?? '').join(', ')}
 								</Text>
 							)}
-							{gridFields.stock_quantity && stockQuantity != null && (
+							{gridFields.stock_quantity && fields.stockQuantity != null && (
 								<Text className="text-muted-foreground text-xs">
-									{t('common.stock')}: {stockQuantity}
+									{t('common.stock')}: {fields.stockQuantity}
 								</Text>
 							)}
-							{gridFields.cost_of_goods_sold && costOfGoodsSold != null ? (
+							{gridFields.cost_of_goods_sold && fields.costOfGoodsSold != null ? (
 								<Text className="text-muted-foreground text-xs">
-									{t('common.cogs')}: {format(costOfGoodsSold?.total_value ?? 0)}
+									{t('common.cogs')}: {format(fields.costOfGoodsSold?.total_value ?? 0)}
 								</Text>
 							) : null}
 						</VStack>
@@ -240,7 +236,7 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 				</Pressable>
 			</PopoverTrigger>
 			<PopoverContent side="right" align="center" className="w-auto max-w-80 p-2">
-				<VariationsPopover parent={product} addToCart={addToCart as never} />
+				<VariationsPopover parent={record} addToCart={addToCart} />
 			</PopoverContent>
 		</Popover>
 	);

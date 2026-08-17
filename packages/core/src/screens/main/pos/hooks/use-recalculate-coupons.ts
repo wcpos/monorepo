@@ -3,13 +3,14 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { useQueryRuntime } from '@wcpos/query';
+import { wooIdOf } from '@wcpos/sync-core';
 
 import { buildEnrichedProductCategories } from './coupon-helpers';
 import { recalculateCoupons, type RecalculateResult } from './coupon-recalculate';
 import {
 	readEngineCategories,
 	readEngineCoupons,
-	readEngineProductsByWooId,
+	readEngineProductRecordsByWooId,
 } from './engine-coupon-data';
 import { useAppState } from '../../../../contexts/app-state';
 import { useTaxRates } from '../../contexts/tax-rates';
@@ -76,12 +77,15 @@ export const useRecalculateCoupons = () => {
 				.filter((id): id is number => id != null);
 			if (productIds.length > 0) {
 				const [products, categories] = await Promise.all([
-					readEngineProductsByWooId(runtime, productIds),
+					readEngineProductRecordsByWooId(runtime, productIds),
 					readEngineCategories(runtime),
 				]);
 				for (const p of products) {
-					if (p.id != null) {
-						productCategories.set(p.id, (p.categories || []) as { id: number }[]);
+					if (p.remoteId !== null) {
+						productCategories.set(
+							wooIdOf(p.remoteId),
+							(p.payload.categories || []) as { id: number }[]
+						);
 					}
 				}
 

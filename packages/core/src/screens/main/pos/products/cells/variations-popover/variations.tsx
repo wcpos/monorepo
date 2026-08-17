@@ -7,6 +7,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { VariationButtons } from './buttons';
 import { VariationSelect } from './select';
@@ -20,8 +21,6 @@ import {
 } from '../../../../components/product/variation-matches';
 import { useQueryState, useQueryStateActions } from '../../../../../../query';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
-type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type LineItem = NonNullable<OrderDocument['line_items']>[number];
 
@@ -33,8 +32,8 @@ interface VariationPopoverProps {
 	allVariationsResource?: ReturnType<
 		typeof import('../../../../../../query').useCollectionBinding<'variations'>
 	>['resource'];
-	parent: import('@wcpos/database').ProductDocument;
-	addToCart: (variation: ProductDocument, metaData: LineItem['meta_data']) => void;
+	parent: EngineRecord<'products'>;
+	addToCart: (variation: EngineRecord<'variations'>, metaData: LineItem['meta_data']) => void;
 	hideOutOfStock?: boolean;
 }
 
@@ -56,15 +55,16 @@ export function Variations({
 		import('../../../../../../query').VariationMatch[]
 	>((state) => state.filters.attributeMatches);
 	const actions = useQueryStateActions<'variations'>();
-	const selectedVariation = result.count === 1 && result.hits[0].document;
+	const selectedVariation = result.count === 1 && result.hits[0].record;
+	const parentAttributes = useRecordField(parent, (record) => record.payload.attributes);
 	const t = useT();
 
 	/**
 	 *
 	 */
 	const attributeOptions = React.useMemo(
-		() => parseAttributes(parent.attributes, selectedAttributes, result.hits),
-		[parent.attributes, selectedAttributes, result.hits]
+		() => parseAttributes(parentAttributes, selectedAttributes, result.hits),
+		[parentAttributes, selectedAttributes, result.hits]
 	);
 
 	/**
@@ -167,10 +167,11 @@ function VariationAddToCart({
 	variation,
 	onAddToCart,
 }: {
-	variation: ProductVariationDocument;
+	variation: EngineRecord<'variations'>;
 	onAddToCart: () => void;
 }) {
 	const stock = useVariationStock(variation);
+	const price = useRecordField(variation, (record) => record.payload.price);
 	const { format } = useCurrencyFormat();
 	const t = useT();
 
@@ -182,9 +183,7 @@ function VariationAddToCart({
 				onPress={onAddToCart}
 				disabled={!stock.sellable}
 			>
-				<ButtonText>
-					{t('common.add_to_cart') + ': ' + format(Number(variation.price ?? 0))}
-				</ButtonText>
+				<ButtonText>{t('common.add_to_cart') + ': ' + format(Number(price ?? 0))}</ButtonText>
 			</Button>
 		</VStack>
 	);

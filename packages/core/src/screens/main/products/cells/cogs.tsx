@@ -1,7 +1,8 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
 import get from 'lodash/get';
+
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { CurrencyInput } from '../../components/currency-input';
 import { CapabilityTooltip } from '../../components/capability-tooltip';
@@ -19,16 +20,23 @@ type ProductDocument =
 export function COGS({
 	table,
 	row,
-}: CellContext<{ document: ProductDocument }, 'cost_of_goods_sold'>) {
+}: CellContext<
+	{
+		document: ProductDocument;
+		record: EngineRecord<'products'> | EngineRecord<'variations'>;
+	},
+	'cost_of_goods_sold'
+>) {
 	const product = row.original.document;
-	const cogs = useObservableEagerState(product.cost_of_goods_sold$!);
+	const cogs = useRecordField(row.original.record, (record) => record.payload.cost_of_goods_sold);
+	const type = useRecordField(row.original.record, (record) => record.payload.type);
 	const defined_value = get(cogs, ['values', 0, 'defined_value'], 0);
 	const meta = table.options.meta as unknown as {
 		onChange: (arg: { document: ProductDocument; changes: Record<string, unknown> }) => void;
 	};
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
-	const canEdit = product.type === 'variation' ? caps.canEditVariations : caps.canEditProducts;
+	const canEdit = type === 'variation' ? caps.canEditVariations : caps.canEditProducts;
 
 	/**
 	 *

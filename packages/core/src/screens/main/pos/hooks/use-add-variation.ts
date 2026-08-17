@@ -4,6 +4,8 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import type { EngineRecord } from '@wcpos/query';
+import { wooIdOf } from '@wcpos/sync-core';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
@@ -44,16 +46,24 @@ export const useAddVariation = () => {
 	 */
 	const addVariation = React.useCallback(
 		async (
-			variationDoc: ProductVariationDocument,
-			parentDoc: ProductDocument,
+			variationDoc: EngineRecord<'variations'>,
+			parentDoc: EngineRecord<'products'>,
 			metaData?: MetaData[],
 			options?: { silent?: boolean }
 		) => {
 			let success;
 
 			// always make sure we have the latest product document
-			const variation = variationDoc.getLatest();
-			const parent = parentDoc.getLatest();
+			const variationRecord = variationDoc.getLatest();
+			const parentRecord = parentDoc.getLatest();
+			const variation = {
+				...variationRecord.payload,
+				id: variationRecord.remoteId === null ? 0 : wooIdOf(variationRecord.remoteId),
+			} as ProductVariationDocument;
+			const parent = {
+				...parentRecord.payload,
+				id: parentRecord.remoteId === null ? 0 : wooIdOf(parentRecord.remoteId),
+			} as ProductDocument;
 			const currentOrder = getCurrentOrder();
 			const lineItems = currentOrder.getLatest().line_items ?? [];
 
@@ -105,8 +115,6 @@ export const useAddVariation = () => {
 				});
 				return false;
 			}
-
-			return Boolean(success);
 		},
 		[
 			getCurrentOrder,

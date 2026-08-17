@@ -1,9 +1,8 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { useDocField } from '@wcpos/query';
 
 import { CurrencyInput } from '../../../components/currency-input';
 import { useUISettings } from '../../../contexts/ui-settings';
@@ -48,7 +47,7 @@ export function Price({ row, column }: CellContext<Props, 'price'>) {
 	 * Discounts
 	 */
 	const { uiSettings } = useUISettings('pos-cart');
-	const quickDiscounts = useObservableEagerState(uiSettings.quickDiscounts$);
+	const quickDiscounts = useDocField(uiSettings, (settings) => settings.quickDiscounts);
 
 	/**
 	 *

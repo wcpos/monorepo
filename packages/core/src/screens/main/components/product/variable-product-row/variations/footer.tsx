@@ -4,7 +4,7 @@ import { useObservableEagerState, useObservableState } from 'observable-hooks';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import type { ProductDocument } from '@wcpos/database';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { useT } from '../../../../../../contexts/translations';
 import { SyncButton } from '../../../../components/sync-button';
@@ -15,7 +15,7 @@ interface VariationTableFooterProps {
 		ReturnType<typeof import('../../../../../../query').useCollectionBinding<'variations'>>,
 		'sync' | 'active$' | 'total$'
 	>;
-	parent: ProductDocument;
+	parent: EngineRecord<'products'>;
 	count: number;
 }
 
@@ -42,7 +42,7 @@ export function VariationTableFooter({ binding, parent, count }: VariationTableF
 	 * Prefer the parent product's server variation ids over the local collection total.
 	 */
 	const localTotal = useObservableState(binding.total$, 0);
-	const parentVariations = useObservableEagerState(parent.variations$!);
+	const parentVariations = useRecordField(parent, (record) => record.payload.variations);
 	const total = parentVariations?.length ? parentVariations.length : localTotal;
 	const t = useT();
 

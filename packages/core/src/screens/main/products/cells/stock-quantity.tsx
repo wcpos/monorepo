@@ -1,10 +1,9 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { SwitchWithLabel } from '@wcpos/components/switch';
 import { VStack } from '@wcpos/components/vstack';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
 import { CapabilityTooltip } from '../../components/capability-tooltip';
@@ -23,17 +22,27 @@ type ProductDocument =
 export function StockQuantity({
 	row,
 	table,
-}: CellContext<{ document: ProductDocument }, 'stock_quantity'>) {
+}: CellContext<
+	{
+		document: ProductDocument;
+		record: EngineRecord<'products'> | EngineRecord<'variations'>;
+	},
+	'stock_quantity'
+>) {
 	const product = row.original.document;
-	const stockQuantity = useObservableEagerState(product.stock_quantity$!);
-	const manageStock = useObservableEagerState(product.manage_stock$!);
+	const stockQuantity = useRecordField(
+		row.original.record,
+		(record) => record.payload.stock_quantity
+	);
+	const manageStock = useRecordField(row.original.record, (record) => record.payload.manage_stock);
+	const type = useRecordField(row.original.record, (record) => record.payload.type);
 	const t = useT();
 	const meta = table.options.meta as unknown as {
 		onChange: (arg: { document: ProductDocument; changes: Record<string, unknown> }) => void;
 	};
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
-	const canEdit = product.type === 'variation' ? caps.canEditVariations : caps.canEditProducts;
+	const canEdit = type === 'variation' ? caps.canEditVariations : caps.canEditProducts;
 	const disabled = readOnly || !canEdit;
 
 	return (
