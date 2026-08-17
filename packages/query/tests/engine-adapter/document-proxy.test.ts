@@ -362,3 +362,82 @@ describe('rxdocument identity contract (codex round 1)', () => {
 		expect(get('id')).toBe(42);
 	});
 });
+
+/**
+ * Wrapper identity across query emissions.
+ *
+ * `wrapEngineDocument` used to build a fresh Proxy per call, so every query emission handed
+ * React all-new document identities — a write to one row reconciled every row and cell in
+ * every table, and the current-order context ticked on writes to unrelated orders.
+ *
+ * The cache is keyed on the underlying RxDocument instance. That is only safe because RxDB
+ * gives a NEW instance whenever a document's data changes and reuses it when it does not, so
+ * "same instance" and "same data" are the same statement. That property is a third-party
+ * guarantee, pinned separately by `rxdb-document-identity.probe.test.ts` in
+ * `@wcpos/database` — re-run it on any RxDB upgrade.
+ */
+describe('wrapEngineDocument identity across emissions', () => {
+	const makeDoc = (payload: Record<string, unknown>, id = 'product-uuid') =>
+		fakeRxDocument({ id, wooProductId: 42, stockStatus: 'instock', payload }).document;
+
+	it('returns the same wrapper for the same underlying document', () => {
+		const document = makeDoc({ id: 42, name: 'Coffee' });
+
+		expect(wrapEngineDocument('products', document)).toBe(wrapEngineDocument('products', document));
+	});
+
+	it('returns a different wrapper for a different underlying document', () => {
+		const first = makeDoc({ id: 42, name: 'Coffee' });
+		const second = makeDoc({ id: 43, name: 'Tea' }, 'other-uuid');
+
+		expect(wrapEngineDocument('products', first)).not.toBe(wrapEngineDocument('products', second));
+	});
+
+	/** The staleness direction — the failure mode that would actually hurt. */
+	it('never serves stale data, because a changed document is a new instance', () => {
+		const before = makeDoc({ id: 42, name: 'Coffee' });
+		const wrapperBefore = wrapEngineDocument<{ name?: string }>('products', before);
+		expect(wrapperBefore.name).toBe('Coffee');
+
+		const after = makeDoc({ id: 42, name: 'Decaf' });
+		const wrapperAfter = wrapEngineDocument<{ name?: string }>('products', after);
+
+		expect(wrapperAfter).not.toBe(wrapperBefore);
+		expect(wrapperAfter.name).toBe('Decaf');
+	});
+
+	it('preserves identity for the unchanged rows of a re-emitted result set', () => {
+		const a = makeDoc({ id: 1, name: 'A' }, 'a');
+		const b = makeDoc({ id: 2, name: 'B' }, 'b');
+		const c = makeDoc({ id: 3, name: 'C' }, 'c');
+
+		const first = [a, b, c].map((doc) => wrapEngineDocument('products', doc));
+
+		// Row b changed; RxDB hands back the very same instances for a and c.
+		const bChanged = makeDoc({ id: 2, name: 'B2' }, 'b');
+		const second = [a, bChanged, c].map((doc) => wrapEngineDocument('products', doc));
+
+		expect(second[0]).toBe(first[0]);
+		expect(second[2]).toBe(first[2]);
+		expect(second[1]).not.toBe(first[1]);
+	});
+
+	it('keeps wrappers separate per legacy collection name', () => {
+		const document = makeDoc({ id: 42, name: 'Coffee' });
+
+		expect(wrapEngineDocument('products', document)).not.toBe(
+			wrapEngineDocument('orders', document)
+		);
+		expect(wrapEngineDocument('products', document)).toBe(wrapEngineDocument('products', document));
+	});
+
+	it('still reads through to the underlying document when cached', () => {
+		const document = makeDoc({ id: 42, name: 'Coffee' });
+
+		wrapEngineDocument('products', document);
+		const cached = wrapEngineDocument<{ name?: string }>('products', document);
+
+		expect(cached.name).toBe('Coffee');
+		expect('isInstanceOfRxDocument' in cached).toBe(true);
+	});
+});
