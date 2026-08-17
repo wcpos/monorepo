@@ -85,7 +85,10 @@ test.describe('POS Cart', () => {
 		await page.waitForTimeout(500);
 	});
 
-	test('should add multiple different products', async ({ posPage: page }) => {
+	test('should add multiple different products', async ({ posPage: page }, testInfo) => {
+		test.slow(); // Two sequential server searches can each consume the 120s response budget.
+		expect(testInfo.timeout).toBeGreaterThanOrEqual(240_000);
+
 		if (await tryAddRunPrivateSimpleProduct(page)) {
 			expect(await tryAddRunPrivateSimpleProduct(page, 1)).toBe(true);
 			return;
