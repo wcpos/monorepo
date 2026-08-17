@@ -1,4 +1,4 @@
-import { useObservable, useObservableEagerState } from 'observable-hooks';
+import { useLayoutObservable, useObservableEagerState } from 'observable-hooks';
 import { combineLatest, defer, type Observable, of } from 'rxjs';
 import { distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
 import { deepEqual } from 'rxdb/plugins/utils';
@@ -44,16 +44,21 @@ function isRxDocumentLike(value: unknown): value is RxDocument<Record<string, un
 }
 
 /**
- * Core: a stable value stream over [source, selector] inputs. `useObservable` keeps ONE
+ * Core: a stable value stream over [source, selector] inputs. `useLayoutObservable` keeps ONE
  * outer observable for the component's lifetime; new inputs are pushed through `inputs$`,
  * so the document subscription survives re-renders and inline selectors by construction.
+ *
+ * LAYOUT variant deliberately: with the passive-effect variant, a component whose `source`
+ * prop swaps (virtualized row recycling, order-tab switches) would paint one frame of the
+ * PREVIOUS source's value before the effect pushed the new inputs. Layout timing pushes the
+ * swap before the browser paints.
  */
 function useSelectedValue<TSource, TData, R>(
 	source: TSource | null | undefined,
 	select: Selector<TData, R>,
 	toData$: (source: TSource) => Observable<TData>
 ): R | undefined {
-	const value$ = useObservable(
+	const value$ = useLayoutObservable(
 		(inputs$: Observable<[TSource | null | undefined, Selector<TData, R>]>) => {
 			const data$ = inputs$.pipe(
 				map(([input]) => input),

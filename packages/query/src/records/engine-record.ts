@@ -56,15 +56,24 @@ type LegacyDocumentByCollection = {
 	coupons: CouponDocument;
 };
 
+/**
+ * Legacy storage-side fields that were never part of the wire payload: `uuid` is engine-level
+ * identity, and the `sortable_*` columns were legacy sort denormalizations (their engine
+ * equivalents are promoted columns, outside `payload`). Typing them on `payload` would make
+ * reads silently return `undefined`.
+ */
+type LegacyStorageOnlyField = 'uuid' | 'sortable_price' | 'sortable_total';
+
 export type PayloadOf<C extends EngineRecordCollectionName> = Omit<
 	LegacyDataOf<LegacyDocumentByCollection[C]>,
-	'uuid'
+	LegacyStorageOnlyField
 >;
 
 /** Sync metadata the engine stamps on every record (see `@wcpos/sync-core` protocol). */
 export interface EngineRecordSyncState {
 	revision: string;
-	checkpoint: unknown;
+	/** Only the orders pull lane persists a per-record checkpoint; absent elsewhere. */
+	checkpoint?: unknown;
 	partial: boolean;
 	source: string;
 }
