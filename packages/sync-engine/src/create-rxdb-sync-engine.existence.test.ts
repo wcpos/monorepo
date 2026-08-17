@@ -1,10 +1,9 @@
 // @vitest-environment node
-import { remoteId } from './testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
+import { createEngineHarness, remoteId, scriptedConnectivity } from './testing';
 import { type RxdbSyncEnginePorts, type StoreScopeIdentity } from './create-rxdb-sync-engine';
-import { createEngineHarness, scriptedConnectivity } from './testing';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
 
 setPremiumFlag();

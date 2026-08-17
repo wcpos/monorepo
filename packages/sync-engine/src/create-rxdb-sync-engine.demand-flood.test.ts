@@ -12,14 +12,13 @@
  * where demand requests execute, and it is provably passive.
  */
 
-import { remoteId } from './testing';
 import { describe, expect, it } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import type { StoreScopeIdentity } from '@wcpos/sync-core';
 
+import { createEngineHarness, remoteId } from './testing';
 import { DEMAND_FLOOD_REQUESTS_PER_TICK, DEMAND_FLOOD_TICK_MS } from './demand-flood-detector';
-import { createEngineHarness } from './testing';
 
 import type { EngineHarness } from './engine-harness';
 

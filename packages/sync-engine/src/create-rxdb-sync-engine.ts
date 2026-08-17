@@ -919,8 +919,7 @@ export function createRxdbSyncEngine(
 					fetcher: (url, init) => fetcher(url, init?.signal ? { signal: init.signal } : undefined),
 					syncBaseUrl: ports.site.syncBaseUrl,
 					pruneDeleted: {
-						product: (wooIds) =>
-							pruneTargeted('existenceManifest', 'products', 'remoteId', wooIds),
+						product: (wooIds) => pruneTargeted('existenceManifest', 'products', 'remoteId', wooIds),
 						variation: (wooIds) =>
 							pruneTargeted('existenceManifest', 'variations', 'remoteId', wooIds),
 						customer: (wooIds) =>

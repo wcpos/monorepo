@@ -29,13 +29,13 @@ const ROW_COUNT = 50;
 /** Engine-shaped: an id plus an opaque payload, which is what the adapter translates. */
 const schema = {
 	version: 0,
-	primaryKey: 'id',
+	primaryKey: 'uuid',
 	type: 'object',
 	properties: {
-		id: { type: 'string', maxLength: 64 },
+		uuid: { type: 'string', maxLength: 64 },
 		payload: { type: 'object', additionalProperties: true },
 	},
-	required: ['id'],
+	required: ['uuid'],
 };
 
 let dbCounter = 0;
@@ -48,7 +48,7 @@ async function makeOrders(count: number) {
 	const { orders } = await db.addCollections({ orders: { schema: schema as never } });
 	await orders.bulkInsert(
 		Array.from({ length: count }, (_, i) => ({
-			id: `order-${i}`,
+			uuid: `order-${i}`,
 			payload: { number: String(i), billing: { country: 'US' }, status: 'pos-open' },
 		}))
 	);
@@ -62,7 +62,7 @@ function wrapAll(docs: RxDocument<EngineDocument>[]) {
 describe('MEASUREMENT: wrapper churn for a single-row write', () => {
 	it('reports how many of the result set change identity', async () => {
 		const { db, orders } = await makeOrders(ROW_COUNT);
-		const query = orders.find({ selector: {}, sort: [{ id: 'asc' }] });
+		const query = orders.find({ selector: {}, sort: [{ uuid: 'asc' }] });
 
 		const first = (await firstValueFrom(query.$)) as RxDocument<EngineDocument>[];
 		const before = wrapAll(first);
@@ -85,7 +85,7 @@ describe('MEASUREMENT: wrapper churn for a single-row write', () => {
 
 	it('reports how many memoised row components React re-renders', async () => {
 		const { db, orders } = await makeOrders(ROW_COUNT);
-		const query = orders.find({ selector: {}, sort: [{ id: 'asc' }] });
+		const query = orders.find({ selector: {}, sort: [{ uuid: 'asc' }] });
 
 		const onRowRender = jest.fn();
 

@@ -1,10 +1,11 @@
-import type {
-	QueuedMutation,
-	RecordMutationQueue,
-	StoreScopeManager,
-	SyncObserver,
+import {
+	type QueuedMutation,
+	type RecordMutationQueue,
+	type RemoteId,
+	remoteIdOrNull,
+	type StoreScopeManager,
+	type SyncObserver,
 } from '@wcpos/sync-core';
-import { remoteIdOrNull, type RemoteId } from '@wcpos/sync-core';
 
 import { writeFacetFor } from '../collections/collection-descriptors';
 import { fetchOrderServerRevision } from './order-server-revision';
@@ -269,8 +270,8 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 							)?.toJSON() as Record<string, unknown> | undefined;
 							const remoteId = remoteIdOrNull(
 								row?.[facet.remoteIdField] ??
-								(entry.payload as Record<string, unknown>).id ??
-								(entry.conflictDocument as Record<string, unknown> | undefined)?.id
+									(entry.payload as Record<string, unknown>).id ??
+									(entry.conflictDocument as Record<string, unknown> | undefined)?.id
 							);
 							if (remoteId !== null) {
 								// Discard WRITES this document back as server truth — without the

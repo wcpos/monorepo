@@ -7,14 +7,13 @@
  * creates AbortSignal.any, or leaks a signal into a bound fetcher, throws.
  */
 
-import { remoteId } from './testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { createFakeWriteServer } from '@wcpos/sync-core/testing';
 
+import { createEngineHarness, remoteId } from './testing';
 import { type RxdbSyncEngine, type StoreScopeIdentity } from './create-rxdb-sync-engine';
-import { createEngineHarness } from './testing';
 
 setPremiumFlag();
 

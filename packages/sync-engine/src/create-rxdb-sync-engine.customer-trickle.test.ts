@@ -1,11 +1,10 @@
-import { remoteId } from './testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { scopeKeyFor } from '@wcpos/sync-core';
 
+import { createEngineHarness, memoryEngineStorage, memoryStringStore, remoteId } from './testing';
 import { type RxdbSyncEnginePorts, type StoreScopeIdentity } from './create-rxdb-sync-engine';
-import { createEngineHarness, memoryEngineStorage, memoryStringStore } from './testing';
 
 setPremiumFlag();
 

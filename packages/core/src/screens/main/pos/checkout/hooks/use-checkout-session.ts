@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 
 import { useQueryRuntime } from '@wcpos/query';
+import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -97,7 +98,7 @@ export function useCheckoutSession(order: OrderDocument) {
 			id: `checkout:order-refresh:${order.id}`,
 			collection: 'orders',
 			kind: 'targeted-records',
-			wooIds: [order.id],
+			remoteIds: [order.id].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 			forceRefresh: true,
 		});
 		try {
@@ -144,7 +145,7 @@ export function useCheckoutSession(order: OrderDocument) {
 					id: `checkout:stock-rejection:${collection}:${order.id}`,
 					collection,
 					kind: 'targeted-records',
-					wooIds,
+					remoteIds: wooIds.map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 					forceRefresh: true,
 				});
 				refreshes.push(

@@ -5,7 +5,7 @@ import {
 	type ServerMetrics,
 	type SyncCheckpoint,
 } from './protocol';
-import { remoteIdOrNull, type RemoteId } from './woo/remoteIdCodec';
+import { type RemoteId, remoteIdOrNull } from './woo/remoteIdCodec';
 
 export type WirePullDocument = Pick<OrderDocument, 'payload' | 'sync' | 'local'> & {
 	id: string;
@@ -254,15 +254,13 @@ export async function syncCustomPullBatchIntoRepository(input: {
 	const applicableWireDocuments = deduplicateDocumentsById(result.documents).filter(
 		(document) => !effectivePending || shouldApplyPulledDocument(document, effectivePending)
 	);
-	const mappedDocuments = applicableWireDocuments.map(
-		(document): OrderDocument => ({
-			uuid: document.id,
-			remoteId: remoteIdOrNull(document.wooOrderId ?? document.payload?.id),
-			payload: document.payload,
-			sync: document.sync,
-			local: document.local,
-		})
-	);
+	const mappedDocuments = applicableWireDocuments.map((document): OrderDocument => ({
+		uuid: document.id,
+		remoteId: remoteIdOrNull(document.wooOrderId ?? document.payload?.id),
+		payload: document.payload,
+		sync: document.sync,
+		local: document.local,
+	}));
 	const documents = input.assembleDocument
 		? mappedDocuments.map(input.assembleDocument)
 		: mappedDocuments;

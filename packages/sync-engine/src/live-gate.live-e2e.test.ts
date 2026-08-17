@@ -1,17 +1,16 @@
-import { remoteId } from './testing';
 import { afterAll, describe, expect, it } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { log } from '@wcpos/utils/logger';
 import { remoteIdOrNull, wooIdOf } from '@wcpos/sync-core';
 
+import { memoryEngineStorage, remoteId } from './testing';
 import {
 	createRxdbSyncEngine,
 	type EngineEvent,
 	type RxdbSyncEngine,
 } from './create-rxdb-sync-engine';
 import { createConfigFingerprintLiveSource } from './change-signal/config-fingerprint-source';
-import { memoryEngineStorage } from './testing';
 
 const LIVE_SYNC_BASE = process.env['LIVE_SYNC_BASE']?.trim();
 const LIVE_BASIC_AUTH = process.env['LIVE_BASIC_AUTH']?.trim();

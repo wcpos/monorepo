@@ -1,6 +1,7 @@
 import { RECORD_UUID_META_KEY } from './recordIdentity';
-import type { WirePullDocument } from './customPullAdapter';
 import { type SyncCheckpoint } from './protocol';
+
+import type { WirePullDocument } from './customPullAdapter';
 
 /**
  * A reusable in-memory PULL server honoring the custom-pull contract

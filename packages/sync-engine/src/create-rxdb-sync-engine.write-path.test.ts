@@ -6,7 +6,6 @@
  * priority preemption of queued work, release()).
  */
 
-import { remoteId } from './testing';
 import { describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
@@ -14,13 +13,18 @@ import { createFakeWriteServer } from '@wcpos/sync-core/testing';
 import type { StoreScopeIdentity, SyncEvent, SyncObserver } from '@wcpos/sync-core';
 
 import {
+	createEngineHarness,
+	memoryEngineStorage,
+	remoteId,
+	scriptedConnectivity,
+} from './testing';
+import {
 	type EngineEvent,
 	type EngineFetcher,
 	type RxdbSyncEngine,
 } from './create-rxdb-sync-engine';
 import { writeFacetFor } from './collections/collection-descriptors';
 import { queueFor, requeueBornTwiceSnapshot } from './write-path/write-intents';
-import { createEngineHarness, memoryEngineStorage, scriptedConnectivity } from './testing';
 
 import type { RxStorage } from 'rxdb';
 
@@ -4754,8 +4758,12 @@ describe('require() through the public handle', () => {
 			engine.require({ id: 'x', collection: 'products', kind: 'targeted-records' } as never).ready
 		).rejects.toThrow(/needs remoteIds/i);
 		await expect(
-			engine.require({ id: 'y', collection: 'categories', kind: 'targeted-records', remoteIds: [1].map(remoteId) })
-				.ready
+			engine.require({
+				id: 'y',
+				collection: 'categories',
+				kind: 'targeted-records',
+				remoteIds: [1].map(remoteId),
+			}).ready
 		).rejects.toThrow(/targeted collection/i);
 		await engine.dispose();
 	});

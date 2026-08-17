@@ -60,7 +60,7 @@ describe('observeEngineQuery', () => {
 		try {
 			await waitFor(() => expect(ids).toEqual([]));
 			expect(find.mock.calls).toContainEqual([
-				expect.objectContaining({ selector: { id: { $in: [] } } }),
+				expect.objectContaining({ selector: { uuid: { $in: [] } } }),
 			]);
 			await collection.insert(
 				engineProduct({ uuid: 'reactive-prefix', id: 2, name: 'Nails 42mm' })

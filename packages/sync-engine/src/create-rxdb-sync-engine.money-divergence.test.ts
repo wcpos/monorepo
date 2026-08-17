@@ -16,7 +16,6 @@
  * a real server-side recalculation, and scoped to the record that diverged.
  */
 
-import { remoteId } from './testing';
 import { describe, expect, it } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
@@ -27,8 +26,8 @@ import {
 } from '@wcpos/sync-core/testing';
 import type { StoreScopeIdentity, SyncEvent, SyncObserver } from '@wcpos/sync-core';
 
+import { createEngineHarness, remoteId } from './testing';
 import { type EngineEvent, type RxdbSyncEngine } from './create-rxdb-sync-engine';
-import { createEngineHarness } from './testing';
 
 setPremiumFlag();
 

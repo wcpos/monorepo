@@ -29,8 +29,14 @@
  * workflow-anchored moves to the durable queue per-kind.
  */
 
-import type { Fetcher, StoreScopeManager, SyncObserver } from '@wcpos/sync-core';
-import { remoteIdOrNull, type RemoteId, wooIdOf } from '@wcpos/sync-core';
+import {
+	type Fetcher,
+	type RemoteId,
+	remoteIdOrNull,
+	type StoreScopeManager,
+	type SyncObserver,
+	wooIdOf,
+} from '@wcpos/sync-core';
 
 import {
 	COLLECTION_DESCRIPTORS,

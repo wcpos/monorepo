@@ -1,4 +1,4 @@
-import { wooIdOf, type OrderDocument, type ProductDocument } from '@wcpos/sync-core';
+import { type OrderDocument, type ProductDocument, wooIdOf } from '@wcpos/sync-core';
 
 import {
 	existenceManifestDocument,

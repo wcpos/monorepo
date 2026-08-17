@@ -4,13 +4,13 @@ import {
 	identifyRecord,
 	mintRemoteId,
 	normalizeCheckpoint,
-	remoteIdOrNull,
-	type RemoteId,
 	type OrderDocument,
 	promotedProductColumns,
+	type RemoteId,
+	remoteIdOrNull,
+	wooIdOf,
 	type WooOrderPayload,
 	type WooProductPayload,
-	wooIdOf,
 } from '@wcpos/sync-core';
 
 import { adoptStampedRevision } from '../write-path/adopt-stamped-revision';
@@ -214,7 +214,6 @@ export function materializeLocalOnly(
 /** Storage-adapter entry for already assembled/local order documents. */
 export function materializeExistingLocalOnly(document: OrderDocument): Materialized<OrderDocument> {
 	const remoteId = document.remoteId;
-	const manifestRow =
-		remoteId == null ? undefined : digest(document.payload, remoteId, 'order');
+	const manifestRow = remoteId == null ? undefined : digest(document.payload, remoteId, 'order');
 	return result({ ...document, payload: stripDigest(document.payload) }, manifestRow);
 }

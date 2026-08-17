@@ -1,9 +1,9 @@
 // @vitest-environment node
-import { remoteId } from '../testing';
 import { describe, expect, it, vi } from 'vitest';
 
-import { wooIdOf, type ProductDocument, type RemoteId } from '@wcpos/sync-core';
+import { type ProductDocument, type RemoteId, wooIdOf } from '@wcpos/sync-core';
 
+import { remoteId } from '../testing';
 import {
 	coverageRecordId,
 	createProductsSchedulerFetcher,
@@ -266,7 +266,9 @@ describe('createProductsSchedulerFetcher', () => {
 		]);
 		// The tail is the true tail (ids 1000-976, in order), not a re-read of page 2's rows.
 		expect(repository.upsertMany).toHaveBeenCalledWith(
-			Array.from({ length: 25 }, (_, i) => expect.objectContaining({ remoteId: remoteId(1000 - i) }))
+			Array.from({ length: 25 }, (_, i) =>
+				expect.objectContaining({ remoteId: remoteId(1000 - i) })
+			)
 		);
 		// The leg filled its limit with no short page — the server may hold more
 		// matches, so the search coverage is honestly incomplete.
@@ -515,9 +517,7 @@ describe('createProductsSchedulerFetcher', () => {
 			3,
 			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&orderby=menu_order&order=asc&status=publish&category=2%2C7&tag=3&brand=5&featured=true&on_sale=false&stock_status=instock&page=3'
 		);
-		const upsertCalls = repository.upsertMany.mock.calls as unknown as [
-			{ remoteId: RemoteId }[],
-		][];
+		const upsertCalls = repository.upsertMany.mock.calls as unknown as [{ remoteId: RemoteId }[]][];
 		expect(upsertCalls[0]?.[0].map(({ remoteId: id }) => wooIdOf(id))).toEqual([
 			1,
 			...Array.from({ length: 99 }, (_, index) => index + 200),
@@ -677,9 +677,7 @@ describe('createProductsSchedulerFetcher', () => {
 		);
 
 		expect(fetcher).toHaveBeenCalledTimes(maxPages);
-		const upsertCalls = repository.upsertMany.mock.calls as unknown as [
-			{ remoteId: RemoteId }[],
-		][];
+		const upsertCalls = repository.upsertMany.mock.calls as unknown as [{ remoteId: RemoteId }[]][];
 		expect(upsertCalls[0]?.[0].map(({ remoteId: id }) => wooIdOf(id))).toEqual(
 			Array.from({ length: 100 }, (_, index) => index + 1)
 		);
@@ -1687,7 +1685,9 @@ describe('createProductsSchedulerFetcher', () => {
 		expect(upsertedDocuments.map(({ remoteId: id }) => wooIdOf(id))).toEqual(
 			Array.from({ length: 39 }, (_, index) => index + 1)
 		);
-		for (const [documents] of repository.upsertMany.mock.calls as unknown as [{ uuid: string }[]][]) {
+		for (const [documents] of repository.upsertMany.mock.calls as unknown as [
+			{ uuid: string }[],
+		][]) {
 			const ids = documents.map(({ uuid }) => uuid);
 			expect(new Set(ids).size).toBe(ids.length);
 		}

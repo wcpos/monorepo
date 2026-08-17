@@ -1,9 +1,8 @@
-import { remoteId } from './testing';
 import { describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
+import { createEngineHarness, remoteId } from './testing';
 import { createRxdbSyncEngine } from './create-rxdb-sync-engine';
-import { createEngineHarness } from './testing';
 
 setPremiumFlag();
 

@@ -14,14 +14,13 @@
  * as ONE success, never an intermediate conflict.
  */
 
-import { remoteId } from './testing';
 import { describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { createFakeWriteServer } from '@wcpos/sync-core/testing';
 import type { StoreScopeIdentity } from '@wcpos/sync-core';
 
-import { createEngineHarness } from './testing';
+import { createEngineHarness, remoteId } from './testing';
 import {
 	createWriteOutcomeBridge,
 	type WriteOutcomeChannel,

@@ -35,7 +35,7 @@ type EngineResident = NonNullable<Awaited<ReturnType<typeof findEngineResident>>
  *
  * - the enqueue marks the record dirty and appends to `local.pendingMutationIds`
  *   (write-intents' dirty-mark) — a create is queued but not yet pushed;
- * - the create ack stamps the server id into `wooOrderId` (the orders facet's
+ * - the create ack stamps the server id into `remoteId` (the orders facet's
  *   `remoteIdField`, from the pushed document's `id`) — the server has it;
  * - `sync.revision` only moves for hosts that answer with a
  *   `{ document, currentRevision }` envelope. wc/v3 returns a BARE order, so
@@ -50,11 +50,11 @@ function hasQueuedOrAcknowledgedCreate(resident: EngineResident): boolean {
 	const record = resident as unknown as {
 		local?: { dirty?: boolean; pendingMutationIds?: unknown[] };
 		sync?: { revision?: unknown };
-		wooOrderId?: unknown;
+		remoteId?: unknown;
 	};
 	if (record.local?.dirty === true) return true;
 	if ((record.local?.pendingMutationIds?.length ?? 0) > 0) return true;
-	if (typeof record.wooOrderId === 'number' && record.wooOrderId > 0) return true;
+	if (record.remoteId !== null && record.remoteId !== undefined) return true;
 	return typeof record.sync?.revision === 'string' && record.sync.revision !== '';
 }
 

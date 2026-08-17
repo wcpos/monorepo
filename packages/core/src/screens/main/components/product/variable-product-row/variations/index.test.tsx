@@ -14,7 +14,7 @@ const mockActions = {
 };
 const mockState = { search: '', filters: {}, sort: {}, limit: 10 };
 const mockUseCollectionBinding = jest.fn(
-	(_collection: string, _state: unknown, _options: { wooIds: readonly number[] }) => ({
+	(_collection: string, _state: unknown, _options: { remoteIds: readonly string[] }) => ({
 		sync: jest.fn().mockResolvedValue(undefined),
 	})
 );
@@ -37,7 +37,7 @@ jest.mock('../../../../../../query', () => ({
 	useCollectionBinding: (
 		collection: string,
 		state: unknown,
-		options: { wooIds: readonly number[] }
+		options: { remoteIds: readonly string[] }
 	) => mockUseCollectionBinding(collection, state, options),
 }));
 jest.mock('./filters', () => ({ VariationsFilterBar: () => null }));
@@ -57,13 +57,13 @@ describe('Variations query binding', () => {
 		render(<Variations row={row} />);
 
 		expect(mockUseCollectionBinding).toHaveBeenLastCalledWith('variations', mockState, {
-			wooIds: [11, 12],
+			remoteIds: ['11', '12'],
 		});
 
 		act(() => variations$.next([11, 12, 13]));
 
 		expect(mockUseCollectionBinding).toHaveBeenLastCalledWith('variations', mockState, {
-			wooIds: [11, 12, 13],
+			remoteIds: ['11', '12', '13'],
 		});
 	});
 });

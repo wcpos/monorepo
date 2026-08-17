@@ -6,7 +6,7 @@
  *
  *  - **finite-ID selectors** (`id: {$in: [...]}` or single-id equality) over the
  *    targeted collections (products, variations, customers, orders) →
- *    `engine.require({kind: 'targeted-records', wooIds})`. Covers parent
+ *    `engine.require({kind: 'targeted-records', remoteIds})`. Covers parent
  *    variations, grouped products and the default-customer lookup.
  *  - **search demand** (products/customers with a non-empty search term) →
  *    `engine.require({collection, kind: 'search', term, limit})`.
@@ -25,6 +25,7 @@
  */
 
 import { getLogger } from '@wcpos/utils/logger';
+import { type RemoteId, remoteIdOrNull } from '@wcpos/sync-core';
 import type {
 	CustomerBrowseDimensions,
 	EngineRequirement,
@@ -81,15 +82,12 @@ const ORDER_SCOPED_QUERY_PRIORITY = 700;
  */
 const ORDER_COMPLETE_REQUEST_LIMIT = Number.MAX_SAFE_INTEGER;
 
-function finiteWooIds(selector: Record<string, unknown> | undefined): number[] | null {
+function finiteRemoteIds(selector: Record<string, unknown> | undefined): RemoteId[] | null {
 	const idSelector = selector?.id as unknown;
 	if (idSelector === undefined || idSelector === null) {
 		return null;
 	}
-	const coerce = (value: unknown): number | null => {
-		const numeric = Number(value);
-		return Number.isFinite(numeric) ? numeric : null;
-	};
+	const coerce = remoteIdOrNull;
 	if (typeof idSelector === 'number' || typeof idSelector === 'string') {
 		const single = coerce(idSelector);
 		return single === null ? null : [single];
@@ -97,7 +95,7 @@ function finiteWooIds(selector: Record<string, unknown> | undefined): number[] |
 	if (typeof idSelector === 'object') {
 		const record = idSelector as Record<string, unknown>;
 		if (Array.isArray(record.$in)) {
-			const ids = record.$in.map(coerce).filter((id): id is number => id !== null);
+			const ids = record.$in.map(coerce).filter((id): id is RemoteId => id !== null);
 			return ids.length > 0 ? ids : null;
 		}
 		if ('$eq' in record) {
@@ -481,13 +479,13 @@ export function requirementsForQuery(input: RequirementInput): RequirementPlan {
 	const engineCollection = engineCollectionNameFor(collectionName);
 	const requirements: EngineRequirement[] = [];
 
-	const wooIds = finiteWooIds(selector);
-	if (wooIds && TARGETED_ENGINE_COLLECTIONS.has(engineCollection)) {
+	const remoteIds = finiteRemoteIds(selector);
+	if (remoteIds && TARGETED_ENGINE_COLLECTIONS.has(engineCollection)) {
 		requirements.push({
 			id: `${input.id}:targeted`,
 			collection: engineCollection,
 			kind: 'targeted-records',
-			wooIds,
+			remoteIds,
 			...(input.priority !== undefined ? { priority: input.priority } : {}),
 			...(input.forceRefresh ? { forceRefresh: true } : {}),
 		});
@@ -498,7 +496,7 @@ export function requirementsForQuery(input: RequirementInput): RequirementPlan {
 	if (
 		trimmedSearchTerm &&
 		SEARCH_ENGINE_COLLECTIONS.has(engineCollection) &&
-		(engineCollection !== 'variations' || !wooIds) &&
+		(engineCollection !== 'variations' || !remoteIds) &&
 		(engineCollection !== 'customers' || trimmedSearchTerm.length >= FLEXSEARCH_MIN_TERM_LENGTH)
 	) {
 		requirements.push({
@@ -570,7 +568,8 @@ export function requirementsForQuery(input: RequirementInput): RequirementPlan {
 		// A selector carrying an `id` predicate is a targeted LOOKUP, never a browse. When it
 		// names ids the targeted branch above already returned; when it resolves to the EMPTY
 		// set it must still declare nothing. `use-default-customer.ts` relies on exactly that:
-		// it passes `wooIds: []` for the guest (id 0) so no request is made — passing `[0]` once
+		// it passes an empty targeted-id list for the guest (id 0) so no request is made — passing
+		// the guest id once
 		// jammed the customers cursor on every boot (#850) — and its own comment records that
 		// "no fetch is ever declared". Falling through to the browse would read that hook's
 		// `id asc` sort and pull a 100-row window on every cold POS mount, which is precisely

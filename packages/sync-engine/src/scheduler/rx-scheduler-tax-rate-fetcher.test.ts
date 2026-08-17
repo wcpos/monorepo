@@ -1,7 +1,7 @@
 // @vitest-environment node
-import { remoteId } from '../testing';
 import { describe, expect, it, vi } from 'vitest';
 
+import { remoteId } from '../testing';
 import { createTaxRateSchedulerFetcher } from './rx-scheduler-tax-rate-fetcher';
 
 import type { FetchTask } from './replication-policy';

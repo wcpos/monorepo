@@ -17,12 +17,7 @@
  * slice-4 fetch queue; these bodies are package-internal and swap then).
  */
 
-import {
-	assertBulkSuccess,
-	mintRemoteId,
-	remoteIdOrNull,
-	wooIdOf,
-} from '@wcpos/sync-core';
+import { assertBulkSuccess, mintRemoteId, remoteIdOrNull, wooIdOf } from '@wcpos/sync-core';
 import type {
 	Fetcher,
 	HybridCollection,
@@ -476,9 +471,7 @@ export function buildReplicationHandlers(ctx: HandlerContext): ReplicationAction
 						payload?: Record<string, unknown>;
 					};
 					if (hasPendingLocalWork(json)) continue;
-					const remoteId = remoteIdOrNull(
-						json[descriptor.wooIdField] ?? json.payload?.id
-					);
+					const remoteId = remoteIdOrNull(json[descriptor.wooIdField] ?? json.payload?.id);
 					if (remoteId !== null) wooIds.add(wooIdOf(remoteId));
 				}
 				return effects.targeted[collection].pull([...wooIds].sort((left, right) => left - right));

@@ -1,8 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { type RemoteId } from '@wcpos/sync-core';
-import { remoteId } from '../testing';
 
+import { type RemoteId } from '@wcpos/sync-core';
+
+import { remoteId } from '../testing';
 import {
 	type ExistenceManifestPrimeDatabase,
 	primeExistenceManifest,

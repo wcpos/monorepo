@@ -10,6 +10,7 @@
 
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
+
 import { mintRemoteId, type RemoteId } from '@wcpos/sync-core';
 
 import type { RxStorage } from 'rxdb';

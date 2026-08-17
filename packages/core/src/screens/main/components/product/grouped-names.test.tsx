@@ -45,7 +45,7 @@ describe('GroupedNames', () => {
 		expect(mockUseCollectionBinding).toHaveBeenCalledWith(
 			'products',
 			expect.objectContaining({ limit: 2 }),
-			{ wooIds: [12, 34] }
+			{ remoteIds: ['12', '34'] }
 		);
 		expect(screen.getByText('Hat, Scarf')).toBeTruthy();
 	});

@@ -93,7 +93,9 @@ async function expectRoundTrip(input: {
 }): Promise<void> {
 	const { db, collection } = await openCollection(input);
 	await collection.insert(input.document);
-	const read = await collection.findOne((input.document.uuid ?? input.document.id) as string).exec();
+	const read = await collection
+		.findOne((input.document.uuid ?? input.document.id) as string)
+		.exec();
 	expect(read).not.toBeNull();
 	expect(read!.toJSON()).toEqual(input.document);
 	await db.close();

@@ -2,8 +2,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ExistenceManifestDocument } from '@wcpos/sync-engine/testing';
-import { remoteId } from '../testing';
 
+import { remoteId } from '../testing';
 import { removeTargeted } from './reconcile-port';
 import { partitionActionsByLane, reconcileExistence, resolveDirtyWooIds } from './reconciliation';
 

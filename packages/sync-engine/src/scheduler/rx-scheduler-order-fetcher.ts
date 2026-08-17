@@ -8,8 +8,8 @@ import {
 	type SyncCheckpoint,
 	syncCustomPullBatchIntoRepository,
 	type SyncObserver,
-	type WooOrderPayload,
 	wooIdOf,
+	type WooOrderPayload,
 } from '@wcpos/sync-core';
 
 import { materializeLocalOnly } from '../materialization/record-materialization';

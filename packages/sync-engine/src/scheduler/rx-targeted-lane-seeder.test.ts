@@ -1,7 +1,7 @@
 // @vitest-environment node
-import { remoteId } from '../testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { remoteId } from '../testing';
 import { seedTargetedLane, type TargetedLaneDescriptor } from './rx-targeted-lane-seeder';
 
 const mocks = vi.hoisted(() => ({

@@ -1,7 +1,7 @@
 // @vitest-environment node
-import { remoteId } from '../testing';
 import { describe, expect, it, type Mock, vi } from 'vitest';
 
+import { remoteId } from '../testing';
 import { createCustomerSchedulerFetcher } from './rx-scheduler-customer-fetcher';
 
 import type { FetchTask } from './replication-policy';

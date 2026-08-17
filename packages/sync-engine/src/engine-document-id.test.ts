@@ -1,6 +1,6 @@
-import { remoteId } from './testing';
 import { describe, expect, it } from 'vitest';
 
+import { remoteId } from './testing';
 import { engineDocumentIdFor } from './index';
 
 describe('engineDocumentIdFor', () => {

@@ -8,23 +8,23 @@
  * the shared change-signal cursor untouched).
  */
 
-import { remoteId } from './testing';
 import { describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { scopeKeyFor, type StoreScopeIdentity, type SyncEvent } from '@wcpos/sync-core';
 
 import {
+	createEngineHarness,
+	memoryEngineStorage,
+	memoryStringStore,
+	remoteId,
+	scriptedConnectivity,
+} from './testing';
+import {
 	type EngineEvent,
 	EngineStringStore,
 	type RxdbSyncEngine,
 } from './create-rxdb-sync-engine';
-import {
-	createEngineHarness,
-	memoryEngineStorage,
-	memoryStringStore,
-	scriptedConnectivity,
-} from './testing';
 
 import type { RxStorage } from 'rxdb';
 

@@ -1,5 +1,4 @@
 // @vitest-environment node
-import { remoteId } from '../testing';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -8,6 +7,7 @@ import {
 	schedulerTaskStateSchema,
 } from '@wcpos/sync-engine/testing';
 
+import { remoteId } from '../testing';
 import { RxSchedulerTaskStateRepository } from './rx-scheduler-task-state-repository';
 
 import type { PersistedSchedulerTaskState } from './persisted-scheduler-state';
@@ -420,7 +420,11 @@ describe('RxSchedulerTaskStateRepository', () => {
 	it('does not remove or mark failed state when only the remoteIds channel differs', async () => {
 		// Once document keys are uuids, ids can match while remoteIds (the real fetch target)
 		// differs — the CAS guard must treat that as a changed row, not a stale match.
-		const storedState = taskState({ taskId: 'orders:targeted', ids: ['woo-order:1'], remoteIds: [1].map(remoteId) });
+		const storedState = taskState({
+			taskId: 'orders:targeted',
+			ids: ['woo-order:1'],
+			remoteIds: [1].map(remoteId),
+		});
 		const expectedState = taskState({
 			taskId: 'orders:targeted',
 			ids: ['woo-order:1'],

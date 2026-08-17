@@ -4,8 +4,8 @@ import { vi } from 'vitest';
 
 import type { OrderDocument, ProductDocument } from '@wcpos/sync-core';
 import type { LocalCustomerDocument } from '@wcpos/sync-engine/testing';
-import { remoteId } from '../testing';
 
+import { remoteId } from '../testing';
 import {
 	extractCustomerManifest,
 	extractOrderManifest,

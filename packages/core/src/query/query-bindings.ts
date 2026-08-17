@@ -34,6 +34,7 @@ import type {
 	RxdbSyncEngine,
 	SyncCollectionName,
 } from '@wcpos/sync-engine';
+import type { RemoteId } from '@wcpos/sync-core';
 
 import {
 	compileQuery,
@@ -554,7 +555,7 @@ function useEngineBinding(
 export function useCollectionBinding<C extends Exclude<CollectionKey, 'logs'>>(
 	collection: C,
 	state: QueryStateOf<C>,
-	options: { wooIds?: readonly number[] } = {}
+	options: { remoteIds?: readonly RemoteId[] } = {}
 ): QueryBinding {
 	const runtime = useQueryRuntime();
 	const bindingId = React.useId();
@@ -562,12 +563,12 @@ export function useCollectionBinding<C extends Exclude<CollectionKey, 'logs'>>(
 		runtime.localDB,
 		(collection === 'tax-rates' ? 'taxes' : collection) as LegacyCollectionName
 	);
-	const compileKey = JSON.stringify([collection, state, options.wooIds, searchFields]);
+	const compileKey = JSON.stringify([collection, state, options.remoteIds, searchFields]);
 	const compiled = React.useMemo(
 		() =>
 			compileQuery(collection, state, {
 				id: bindingId,
-				targeted: options.wooIds,
+				targeted: options.remoteIds,
 				searchFields,
 			}),
 		[compileKey, bindingId]

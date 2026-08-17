@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { remoteId } from '../testing';
 
+import { remoteId } from '../testing';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import { createVariationsSchedulerFetcher } from './rx-scheduler-variation-fetcher';
 

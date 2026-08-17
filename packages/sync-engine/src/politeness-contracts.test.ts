@@ -1,11 +1,10 @@
 // @vitest-environment node
-import { remoteId } from './testing';
 import { describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { scopeKeyFor, type StoreScopeIdentity } from '@wcpos/sync-core';
 
-import { createEngineHarness, memoryStringStore } from './testing';
+import { createEngineHarness, memoryStringStore, remoteId } from './testing';
 import { LANE_REGISTRY } from './maintenance/lane-registry';
 
 import type { EngineHarness } from './engine-harness';

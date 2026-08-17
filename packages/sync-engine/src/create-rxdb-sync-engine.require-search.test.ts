@@ -6,12 +6,11 @@
  * declarations share one in-memory execution and `release()` abandons the last declaration.
  */
 
-import { remoteId } from './testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
+import { createEngineHarness, remoteId } from './testing';
 import { type RxdbSyncEngine, type StoreScopeIdentity } from './create-rxdb-sync-engine';
-import { createEngineHarness } from './testing';
 
 setPremiumFlag();
 

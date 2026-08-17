@@ -197,9 +197,12 @@ describe('query bindings', () => {
 			sort: { field: 'id', direction: 'asc' },
 			limit: 1,
 		};
-		const { result } = renderHook(() => useCollectionBinding('products', state, { wooIds: [] }), {
-			wrapper: Provider,
-		});
+		const { result } = renderHook(
+			() => useCollectionBinding('products', state, { remoteIds: [] }),
+			{
+				wrapper: Provider,
+			}
+		);
 
 		await waitFor(() => expect(current(result.current.resource)?.hits).toEqual([]));
 		expect(engine.requireCalls).toEqual([]);
@@ -295,11 +298,14 @@ describe('query bindings', () => {
 		const bindTargeted = useCollectionBinding as unknown as (
 			collection: 'variations',
 			queryState: QueryStateOf<'variations'>,
-			options: { wooIds: number[] }
+			options: { remoteIds: import('@wcpos/sync-core').RemoteId[] }
 		) => ReturnType<typeof useCollectionBinding<'variations'>>;
-		const { result } = renderHook(() => bindTargeted('variations', state, { wooIds: [11, 12] }), {
-			wrapper: Provider,
-		});
+		const { result } = renderHook(
+			() => bindTargeted('variations', state, { remoteIds: ['11', '12'] as never }),
+			{
+				wrapper: Provider,
+			}
+		);
 
 		await waitFor(() =>
 			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['red-small'])
@@ -309,7 +315,7 @@ describe('query bindings', () => {
 				(requirement) =>
 					requirement.collection === 'variations' && requirement.kind === 'targeted-records'
 			)
-		).toMatchObject({ wooIds: [11, 12] });
+		).toMatchObject({ remoteIds: ['11', '12'] });
 	});
 
 	it('keeps an any variation when the attribute residual admits its missing attribute', async () => {
@@ -387,10 +393,10 @@ describe('query bindings', () => {
 		const bindTargeted = useCollectionBinding as unknown as (
 			collection: 'variations',
 			queryState: QueryStateOf<'variations'>,
-			options: { wooIds: number[] }
+			options: { remoteIds: import('@wcpos/sync-core').RemoteId[] }
 		) => ReturnType<typeof useCollectionBinding<'variations'>>;
 		const { result, rerender } = renderHook(
-			({ state }) => bindTargeted('variations', state, { wooIds: [11, 12, 13] }),
+			({ state }) => bindTargeted('variations', state, { remoteIds: ['11', '12', '13'] as never }),
 			{ wrapper: Provider, initialProps: { state: base } }
 		);
 
@@ -788,8 +794,8 @@ describe('query bindings', () => {
 
 	it('uses coupons:all coverage only for the unfiltered reference lane', async () => {
 		await engineDB.collections.coupons.insert({
-			id: 'coupon-1',
-			wooId: 1,
+			uuid: 'coupon-1',
+			remoteId: '1',
 			payload: {
 				id: 1,
 				code: 'SUMMER',
@@ -838,8 +844,8 @@ describe('query bindings', () => {
 	// verdict under `{lane:'reference'}` is what proves it never spells the key out.
 	it('projects taxRates:all coverage and idle binding activity for Tier 0', async () => {
 		await engineDB.collections.taxRates.insert({
-			id: 'woo-tax-rate:1',
-			wooTaxRateId: 1,
+			uuid: 'woo-tax-rate:1',
+			remoteId: '1',
 			payload: { id: 1, name: 'Standard', class: 'standard' },
 			sync: { revision: '1', partial: false, source: 'woo-rest' },
 		});
@@ -902,8 +908,8 @@ describe('query bindings', () => {
 		).resolves.toBe('local');
 
 		await engineDB.collections.customers.insert({
-			id: 'customer-ada',
-			wooCustomerId: 103,
+			uuid: 'customer-ada',
+			remoteId: '103',
 			payload: { id: 103, first_name: 'Ada', last_name: 'Lovelace' },
 			sync: { revision: '1', partial: false, source: 'woo-rest' },
 			local: { dirty: false, pendingMutationIds: [] },
@@ -924,8 +930,8 @@ describe('query bindings', () => {
 	// the resident count as the total is the false-complete bug (#894/#945).
 	it('reports the server total for a sorted customers browse, not the resident count', async () => {
 		await engineDB.collections.customers.insert({
-			id: 'customer-ada',
-			wooCustomerId: 103,
+			uuid: 'customer-ada',
+			remoteId: '103',
 			payload: { id: 103, first_name: 'Ada', last_name: 'Lovelace' },
 			sync: { revision: '1', partial: false, source: 'woo-rest' },
 			local: { dirty: false, pendingMutationIds: [] },
@@ -972,8 +978,8 @@ describe('query bindings', () => {
 	// DEFAULT sort drives a server-sorted browse window rather than a local-only sort.
 	it('declares a browse window for the last_name sort now that the plugin proxies it', async () => {
 		await engineDB.collections.customers.insert({
-			id: 'customer-ada',
-			wooCustomerId: 103,
+			uuid: 'customer-ada',
+			remoteId: '103',
 			payload: { id: 103, first_name: 'Ada', last_name: 'Lovelace' },
 			sync: { revision: '1', partial: false, source: 'woo-rest' },
 			local: { dirty: false, pendingMutationIds: [] },
@@ -1000,8 +1006,8 @@ describe('query bindings', () => {
 	// does NO local rank mapping.
 	it('drives a server browse window for the role sort with no client-side rank mapping', async () => {
 		await engineDB.collections.customers.insert({
-			id: 'customer-ada',
-			wooCustomerId: 103,
+			uuid: 'customer-ada',
+			remoteId: '103',
 			payload: { id: 103, first_name: 'Ada', last_name: 'Lovelace', role: 'customer' },
 			sync: { revision: '1', partial: false, source: 'woo-rest' },
 			local: { dirty: false, pendingMutationIds: [] },
@@ -1418,22 +1424,22 @@ describe('query bindings', () => {
 		jest.useFakeTimers();
 		await engineDB.collections.categories.bulkInsert([
 			{
-				id: 'a',
-				wooId: 1,
+				uuid: 'a',
+				remoteId: '1',
 				payload: { name: 'Alpha' },
 				sync: { revision: '1', partial: false, source: 'woo-rest' },
 				local: { dirty: false, pendingMutationIds: [] },
 			},
 			{
-				id: 'b',
-				wooId: 2,
+				uuid: 'b',
+				remoteId: '2',
 				payload: { name: 'Alpine' },
 				sync: { revision: '1', partial: false, source: 'woo-rest' },
 				local: { dirty: false, pendingMutationIds: [] },
 			},
 			{
-				id: 'c',
-				wooId: 3,
+				uuid: 'c',
+				remoteId: '3',
 				payload: { name: 'Albatross' },
 				sync: { revision: '1', partial: false, source: 'woo-rest' },
 				local: { dirty: false, pendingMutationIds: [] },
@@ -1677,8 +1683,8 @@ describe('query bindings', () => {
 	it('binds cashier search-select to eligible customer roles only', async () => {
 		await engineDB.collections.customers.bulkInsert([
 			{
-				id: 'cashier-grace',
-				wooCustomerId: 7,
+				uuid: 'cashier-grace',
+				remoteId: '7',
 				payload: {
 					id: 7,
 					first_name: 'Grace',
@@ -1689,8 +1695,8 @@ describe('query bindings', () => {
 				local: { dirty: false, pendingMutationIds: [] },
 			},
 			{
-				id: 'customer-ada',
-				wooCustomerId: 42,
+				uuid: 'customer-ada',
+				remoteId: '42',
 				payload: {
 					id: 42,
 					first_name: 'Ada',

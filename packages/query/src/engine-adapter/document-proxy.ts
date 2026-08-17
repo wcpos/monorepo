@@ -14,13 +14,13 @@ import type { RxDocument } from 'rxdb';
 export function isEngineRxDocument(value: unknown): value is RxDocument<EngineDocument> {
 	if (value === null || typeof value !== 'object') return false;
 	const candidate = value as {
-		id?: unknown;
+		uuid?: unknown;
 		payload?: unknown;
 		getLatest?: unknown;
 		collection?: unknown;
 	};
 	return (
-		typeof candidate.id === 'string' &&
+		typeof candidate.uuid === 'string' &&
 		candidate.payload !== null &&
 		typeof candidate.payload === 'object' &&
 		typeof candidate.getLatest === 'function' &&

@@ -1,8 +1,8 @@
 import {
 	assertBulkSuccess,
 	mintRemoteId,
-	remoteIdOrNull,
 	type RemoteId,
+	remoteIdOrNull,
 	wooIdOf,
 } from '@wcpos/sync-core';
 
@@ -209,13 +209,7 @@ export function createReconcilePorts(deps: ReconcilePortDeps): LocalCoverageReco
 					return new EngineOrderRepository(db.collections as never).removeDeletedOrders(
 						wooIds.map((wooId) => mintRemoteId(wooId, 'order delete id'))
 					);
-				return removeTargeted(
-					db,
-					manifest,
-					collection,
-					'remoteId',
-					wooIds
-				);
+				return removeTargeted(db, manifest, collection, 'remoteId', wooIds);
 			},
 			deleteVariations: (wooIds: number[]) =>
 				removeTargeted(db, manifest, 'variations', 'remoteId', wooIds),

@@ -6,18 +6,17 @@
  * slice-3 scripted-server style.
  */
 
-import { remoteId } from './testing';
 import { describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { customerDocumentId } from '@wcpos/sync-core';
 
+import { createEngineHarness, remoteId } from './testing';
 import {
 	type RxdbSyncEngine,
 	type RxdbSyncEnginePorts,
 	type StoreScopeIdentity,
 } from './create-rxdb-sync-engine';
-import { createEngineHarness } from './testing';
 import { seedTargetedProductSchedulerTask } from './scheduler/rx-scheduler-product-task-seeder';
 import { seedTargetedLane } from './scheduler/rx-targeted-lane-seeder';
 

@@ -1,7 +1,7 @@
 import { type MetaDataEntry, readRecordUuid } from './recordIdentity';
 import { type SyncEvent, type SyncObserver } from './telemetry';
 import { mapBarcodeEditToPayload } from './barcodeResolve';
-import { remoteIdOrNull, type RemoteId } from './woo/remoteIdCodec';
+import { type RemoteId, remoteIdOrNull } from './woo/remoteIdCodec';
 
 import type { RecordMutation } from './recordMutation';
 

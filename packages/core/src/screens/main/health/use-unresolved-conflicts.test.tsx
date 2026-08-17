@@ -21,7 +21,7 @@ const UUID_A = '070ef836-0d14-4109-ac2b-c35a96b2d1c6';
 function makeEngine({
 	collectionName = 'orders',
 	operation = 'create',
-	resident = { wooOrderId: null, number: '1042', total: '25.00' },
+	resident = { remoteId: null, number: '1042', total: '25.00' },
 	failFirstQuery = false,
 }: {
 	collectionName?: string;
@@ -114,7 +114,7 @@ describe('useUnresolvedConflicts', () => {
 		const { engine } = makeEngine({
 			collectionName: 'products',
 			operation: 'update',
-			resident: { wooProductId: 501, name: 'Aether Gym Pant' },
+			resident: { remoteId: '501', name: 'Aether Gym Pant' },
 		});
 		engineStub = engine;
 

@@ -1,7 +1,7 @@
 // @vitest-environment node
-import { remoteId } from '../testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { remoteId } from '../testing';
 import {
 	seedProductBrowseWindowSchedulerTask,
 	seedTargetedProductSchedulerTask,

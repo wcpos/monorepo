@@ -5,6 +5,7 @@ import { useObservableSuspense } from 'observable-hooks';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
+import { remoteIdOrNull } from '@wcpos/sync-core';
 
 import { useT } from '../../../../contexts/translations';
 import { useCollectionBinding } from '../../../../query';
@@ -46,6 +47,7 @@ function GroupedNamesList({
 export function GroupedNames({ row }: CellContext<{ document: ProductDocument }, 'name'>) {
 	const parent = row.original.document;
 	const wooIds = parent.grouped_products ?? [];
+	const remoteIds = wooIds.map(remoteIdOrNull).filter((remoteId) => remoteId !== null);
 	const state = React.useMemo<QueryStateOf<'products'>>(
 		() => ({
 			search: '',
@@ -55,7 +57,7 @@ export function GroupedNames({ row }: CellContext<{ document: ProductDocument },
 		}),
 		[wooIds.length]
 	);
-	const binding = useCollectionBinding('products', state, { wooIds });
+	const binding = useCollectionBinding('products', state, { remoteIds });
 
 	return <GroupedNamesList resource={binding.resource} />;
 }

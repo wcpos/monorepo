@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { remoteId } from '../testing';
 
+import { remoteId } from '../testing';
 import {
 	BRAND_REFERENCE_CONFIG,
 	CATEGORY_REFERENCE_CONFIG,

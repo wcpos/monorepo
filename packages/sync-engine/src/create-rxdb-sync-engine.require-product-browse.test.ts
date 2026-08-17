@@ -9,6 +9,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { type RemoteId, wooIdOf } from '@wcpos/sync-core';
 
 import { type RxdbSyncEngine, type StoreScopeIdentity } from './create-rxdb-sync-engine';

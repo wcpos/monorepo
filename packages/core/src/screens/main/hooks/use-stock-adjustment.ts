@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { useQueryRuntime } from '@wcpos/query';
+import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -17,27 +18,29 @@ export const useStockAdjustment = () => {
 			const requests = [
 				{
 					collection: 'products' as const,
-					wooIds: lineItems
+					remoteIds: lineItems
 						.filter((item) => item.variation_id === 0)
 						.map((item) => item.product_id)
-						.filter((id): id is number => id != null),
+						.map(remoteIdOrNull)
+						.filter((remoteId) => remoteId !== null),
 				},
 				{
 					collection: 'variations' as const,
-					wooIds: lineItems
+					remoteIds: lineItems
 						.filter((item) => item.variation_id !== 0)
 						.map((item) => item.variation_id)
-						.filter((id): id is number => id != null),
+						.map(remoteIdOrNull)
+						.filter((remoteId) => remoteId !== null),
 				},
 			];
 
 			for (const request of requests) {
-				if (request.wooIds.length === 0) continue;
+				if (request.remoteIds.length === 0) continue;
 				const handle = runtime.engine.require({
-					id: `stock-adjustment:${request.collection}:${request.wooIds.join(',')}`,
+					id: `stock-adjustment:${request.collection}:${request.remoteIds.join(',')}`,
 					collection: request.collection,
 					kind: 'targeted-records',
-					wooIds: request.wooIds,
+					remoteIds: request.remoteIds,
 					forceRefresh: true,
 				});
 				void handle.ready.then(

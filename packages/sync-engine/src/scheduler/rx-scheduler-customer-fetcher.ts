@@ -6,11 +6,7 @@
  * sentinel, the search-lane queryKey grammar, and the browse-window walk.
  */
 
-import {
-	customerDocumentId,
-	remoteIdOrNull,
-	type SyncObserver,
-} from '@wcpos/sync-core';
+import { customerDocumentId, remoteIdOrNull, type SyncObserver } from '@wcpos/sync-core';
 
 import {
 	type LocalCustomerDocument,

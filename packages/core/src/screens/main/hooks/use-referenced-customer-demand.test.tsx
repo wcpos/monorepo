@@ -66,7 +66,7 @@ describe('useReferencedCustomerDemand', () => {
 			id: 'orders:referenced-customers:5,7',
 			collection: 'customers',
 			kind: 'targeted-records',
-			wooIds: [5, 7],
+			remoteIds: ['5', '7'],
 		});
 		rerender();
 		expect(firstHandle.release).not.toHaveBeenCalled();
@@ -102,7 +102,7 @@ describe('useReferencedCustomerDemand', () => {
 			id: 'orders:referenced-customers:9',
 			collection: 'customers',
 			kind: 'targeted-records',
-			wooIds: [9],
+			remoteIds: ['9'],
 		});
 		expect(firstHandle.release).toHaveBeenCalledTimes(1);
 
@@ -130,7 +130,9 @@ describe('useReferencedCustomerDemand', () => {
 		});
 
 		expect(requireCustomer).toHaveBeenCalledTimes(2);
-		expect(requireCustomer).toHaveBeenLastCalledWith(expect.objectContaining({ wooIds: [5, 9] }));
+		expect(requireCustomer).toHaveBeenLastCalledWith(
+			expect.objectContaining({ remoteIds: ['5', '9'] })
+		);
 	});
 
 	it('retries a released id when later results change away and back', async () => {

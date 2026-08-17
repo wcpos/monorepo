@@ -6,7 +6,7 @@ import {
 	useQueryRuntime,
 	wrapEngineDocument,
 } from '@wcpos/query';
-import { barcodeMatchCandidates, buildLocalBarcodeIndex } from '@wcpos/sync-core';
+import { barcodeMatchCandidates, buildLocalBarcodeIndex, remoteIdOrNull } from '@wcpos/sync-core';
 
 /**
  * The barcode carriers of the engine's ACTIVE scope, per materialized
@@ -59,7 +59,7 @@ function matchesExactAnyField(document: EngineRxDocument, barcode: string): bool
 	if (!payload) {
 		return false;
 	}
-	return buildLocalBarcodeIndex([{ id: document.id, payload }]).index.has(barcode);
+	return buildLocalBarcodeIndex([{ id: document.uuid, payload }]).index.has(barcode);
 }
 
 function matchesEquivalentGlobalId(document: EngineRxDocument, barcode: string): boolean {
@@ -158,7 +158,7 @@ export const useBarcodeSearch = () => {
 				return null;
 			}
 			const result = await productCollection
-				.findOne({ selector: { wooProductId: productId } })
+				.findOne({ selector: { remoteId: remoteIdOrNull(productId) } })
 				.exec();
 			return isEngineRxDocument(result)
 				? wrapEngineDocument<ProductDocument>('products', result)

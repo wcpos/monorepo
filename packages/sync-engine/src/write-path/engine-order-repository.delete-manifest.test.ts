@@ -1,7 +1,7 @@
 // @vitest-environment node
-import { remoteId } from '../testing';
 import { describe, expect, it } from 'vitest';
 
+import { remoteId } from '../testing';
 import { EngineOrderRepository, type OrderRepositoryDatabase } from './engine-order-repository';
 
 /**
@@ -76,9 +76,7 @@ describe('removeDeletedOrders manifest bookkeeping', () => {
 
 	it('still depurates the row of a Woo id with no resident order at all', async () => {
 		// Nothing local to protect — the row is stale bookkeeping and must go.
-		const { db, removedManifestIds } = orderDatabase([
-			{ uuid: 'o-1', remoteId: remoteId(101) },
-		]);
+		const { db, removedManifestIds } = orderDatabase([{ uuid: 'o-1', remoteId: remoteId(101) }]);
 
 		await new EngineOrderRepository(db).removeDeletedOrders([101, 999].map(remoteId));
 

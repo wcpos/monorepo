@@ -11,8 +11,8 @@ import {
 	productDocumentId,
 	type StoredProductDocument,
 	type SyncObserver,
-	type WooProductPayload,
 	wooIdOf,
+	type WooProductPayload,
 } from '@wcpos/sync-core';
 
 import {

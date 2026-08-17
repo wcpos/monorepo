@@ -40,7 +40,7 @@ function fakeRxDocument(initial: EngineDocument) {
 
 const orderDoc = () =>
 	fakeRxDocument({
-		id: 'order-1',
+		uuid: 'order-1',
 		payload: { date_modified_gmt: '42', billing: { country: 'US' } },
 	} as unknown as EngineDocument).document;
 
@@ -89,7 +89,7 @@ describe('adapter field$ emission behaviour is unchanged', () => {
 
 	const withBilling = (modified: string, billing: Record<string, string>) =>
 		({
-			id: 'order-1',
+			uuid: 'order-1',
 			payload: { date_modified_gmt: modified, billing },
 		}) as unknown as EngineDocument;
 

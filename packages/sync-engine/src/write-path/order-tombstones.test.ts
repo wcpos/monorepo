@@ -1,7 +1,7 @@
 // @vitest-environment node
-import { remoteId } from '../testing';
 import { describe, expect, it } from 'vitest';
 
+import { remoteId } from '../testing';
 import { orderStorageIdsForWooDeletes } from './order-tombstones';
 
 const doc = (uuid: string, wooOrderId: number | null) => ({

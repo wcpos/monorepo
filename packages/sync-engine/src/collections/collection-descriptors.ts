@@ -34,15 +34,13 @@
 
 import {
 	assertBulkSuccess,
-	remoteIdOrNull,
-	type RemoteId,
-	withOrderColumns,
-	wooIdOf,
-} from '@wcpos/sync-core';
-import type {
 	Fetcher,
 	HybridCollection,
 	ReferenceCollection,
+	type RemoteId,
+	remoteIdOrNull,
+	withOrderColumns,
+	wooIdOf,
 	WooOrderPayload,
 } from '@wcpos/sync-core';
 

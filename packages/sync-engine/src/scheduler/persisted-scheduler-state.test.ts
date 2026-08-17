@@ -1,7 +1,7 @@
 // @vitest-environment node
-import { remoteId } from '../testing';
 import { describe, expect, it } from 'vitest';
 
+import { remoteId } from '../testing';
 import {
 	type PersistedSchedulerTaskState,
 	planPersistedSchedulerTaskStates,
@@ -85,7 +85,9 @@ describe('planPersistedSchedulerTaskStates', () => {
 			existingStates: [],
 		});
 
-		expect(result.states[0]).toEqual(expect.objectContaining({ remoteIds: [123, 456].map(remoteId) }));
+		expect(result.states[0]).toEqual(
+			expect.objectContaining({ remoteIds: [123, 456].map(remoteId) })
+		);
 	});
 
 	it('waits when another tab owns an unexpired in-flight task', () => {

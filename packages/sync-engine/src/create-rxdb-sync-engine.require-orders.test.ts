@@ -4,14 +4,13 @@
  * public handle against a scripted /orders proxy.
  */
 
-import { remoteId } from './testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { createEngineHarness, remoteId } from './testing';
 import { type RxdbSyncEngine, type StoreScopeIdentity } from './create-rxdb-sync-engine';
 import { createRequirePlane } from './require-plane';
 import * as orderTaskSeeder from './scheduler/rx-order-scheduler-task-seeder';
 import * as schedulerDrain from './scheduler/engine-scheduler-drain';
-import { createEngineHarness } from './testing';
 
 import type { PersistedSchedulerTaskOutcomeKind } from './scheduler';
 

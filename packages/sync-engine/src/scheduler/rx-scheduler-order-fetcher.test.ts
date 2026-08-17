@@ -1,16 +1,16 @@
 // @vitest-environment node
-import { remoteId } from '../testing';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
 	normalizeCheckpoint,
-	wooIdOf,
 	type OrderDocument,
 	type PullResponse,
 	type SyncCheckpoint,
 	type WirePullDocument,
+	wooIdOf,
 } from '@wcpos/sync-core';
 
+import { remoteId } from '../testing';
 import { createOrdersSchedulerFetcher } from './rx-scheduler-order-fetcher';
 
 import type { FetchTask } from './replication-policy';
