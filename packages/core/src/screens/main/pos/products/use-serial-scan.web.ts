@@ -27,7 +27,9 @@ const DEFAULT_BAUD_RATE = 9600;
 // named in `allowedBluetoothServiceClassIds` or the device is silently absent
 // (https://developer.chrome.com/blog/serial-over-bluetooth). Scanners with a
 // vendor-specific RFCOMM service go here as we learn their UUIDs; saved
-// profiles' UUIDs are added at request time.
+// profiles' UUIDs are added at request time. Known limitation (PR #1257): a
+// FIRST-TIME scanner with a vendor UUID not yet in this list cannot appear in
+// the chooser at all — manual UUID entry is planned for the setup wizard.
 const STANDARD_SPP_SERVICE_CLASS_ID = '00001101-0000-1000-8000-00805f9b34fb';
 const KNOWN_SCANNER_BLUETOOTH_SERVICE_CLASS_IDS: string[] = [STANDARD_SPP_SERVICE_CLASS_ID];
 
@@ -263,7 +265,12 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 					);
 				}
 				// Bluetooth RFCOMM ports carry no USB ids — re-match on the service
-				// class UUID saved when the scanner was first registered.
+				// class UUID saved when the scanner was first registered. Accepted
+				// contract (PR #1257 author ruling): a service UUID identifies a
+				// service, not a physical unit, and Web Serial exposes nothing
+				// better for BT ports — same ceiling as vid:pid for identical USB
+				// scanners. Single unambiguous match reconnects; multiple matches
+				// wait for an explicit chooser pick.
 				if (info.bluetoothServiceClassId !== undefined) {
 					return profiles.some(
 						(profile: ScannerProfileDocument) =>
