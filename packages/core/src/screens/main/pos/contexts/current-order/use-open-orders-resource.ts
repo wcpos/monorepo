@@ -13,6 +13,7 @@ import {
 	useQueryRuntime,
 	wrapEngineDocument,
 } from '@wcpos/query';
+import { wooMetaCarrier } from '@wcpos/sync-core';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type OpenOrderHit = { id: string; document: OrderDocument };
@@ -27,16 +28,9 @@ type EngineOrderCollection = {
 	};
 };
 
-function metaValue(document: EngineRxDocument, key: string): unknown {
+function orderMeta(document: EngineRxDocument) {
 	const payload = (document as unknown as { payload?: Record<string, unknown> }).payload;
-	const metaData = payload?.meta_data;
-	if (!Array.isArray(metaData)) return undefined;
-	const entry = metaData.find(
-		(item) => item !== null && typeof item === 'object' && (item as { key?: unknown }).key === key
-	);
-	return entry !== null && typeof entry === 'object'
-		? (entry as { value?: unknown }).value
-		: undefined;
+	return Array.isArray(payload?.meta_data) ? payload.meta_data : undefined;
 }
 
 export function useOpenOrdersResource(
@@ -61,8 +55,9 @@ export function useOpenOrdersResource(
 			map((documents) =>
 				documents
 					.filter((document) => {
-						const posUser = metaValue(document, '_pos_user');
-						const posStore = metaValue(document, '_pos_store');
+						const { cashierId: posUser, storeId: posStore } = wooMetaCarrier.readIdentity(
+							orderMeta(document)
+						);
 						if (cashierID === undefined) return false;
 						if (storeID === undefined || storeID === 0) return posUser === String(cashierID);
 						return posUser === String(cashierID) && posStore === String(storeID);

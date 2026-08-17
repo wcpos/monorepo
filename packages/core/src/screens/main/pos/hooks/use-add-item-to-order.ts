@@ -1,9 +1,10 @@
 import * as React from 'react';
 
-import { v4 as uuidv4 } from 'uuid';
 import { useObservableEagerState } from 'observable-hooks';
+import { v4 as uuidv4 } from 'uuid';
 
 import { useQueryRuntime, wrapEngineDocument } from '@wcpos/query';
+import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useCartStockGuard } from './use-cart-stock-guard';
@@ -218,17 +219,7 @@ export const useAddItemToOrder = () => {
 		async (type: CartLineType, data: CartLine) => {
 			const order = getCurrentOrder().getLatest();
 
-			// make sure items have a uuid before saving
-			data.meta_data = data.meta_data || [];
-			const meta = data.meta_data.find((meta: any) => meta.key === '_woocommerce_pos_uuid');
-			const metaUUID = meta && meta.value;
-
-			if (!metaUUID) {
-				data.meta_data.push({
-					key: '_woocommerce_pos_uuid',
-					value: uuidv4(),
-				});
-			}
+			data = wooMetaCarrier.ensureLineUuid(data, uuidv4);
 
 			const recordId = documentRecordId(order);
 			if (!recordId) throw new Error('Order is missing its uuid');

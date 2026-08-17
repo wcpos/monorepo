@@ -1,5 +1,5 @@
 import { normalizeVariationAttributes } from '@wcpos/sync-engine';
-import { remoteIdOrNull, wooIdOf } from '@wcpos/sync-core';
+import { remoteIdOrNull, wooIdOf, wooMetaCarrier } from '@wcpos/sync-core';
 import type {
 	CustomerBrowseDimensions,
 	OrderBrowseDimensions,
@@ -153,18 +153,6 @@ function valueAtPath(value: unknown, path: string): unknown {
 		}
 		return (current as Record<string, unknown>)[part];
 	}, value);
-}
-
-function metadataValue(document: EngineDocument, key: string): unknown {
-	const metadata = valueAtPath(document, 'payload.meta_data');
-	if (!Array.isArray(metadata)) {
-		return undefined;
-	}
-	const entry = metadata.find(
-		(item) =>
-			item !== null && typeof item === 'object' && (item as Record<string, unknown>).key === key
-	);
-	return entry && typeof entry === 'object' ? (entry as Record<string, unknown>).value : undefined;
 }
 
 function queryPayloadField<W extends NonNullable<FieldMapEntry['wireFace']>>(
@@ -516,7 +504,16 @@ export const collectionMap = {
 				kind: 'computed',
 				enginePath: 'payload.meta_data',
 				notes: 'Value of the _pos_user metadata entry.',
-				compute: (document) => metadataValue(document, '_pos_user'),
+				compute: (document) => {
+					const metadata = valueAtPath(document, 'payload.meta_data');
+					return (
+						wooMetaCarrier.readIdentity(
+							Array.isArray(metadata)
+								? (metadata as Parameters<typeof wooMetaCarrier.readIdentity>[0])
+								: undefined
+						).cashierId ?? undefined
+					);
+				},
 				wireFace: 'dimension',
 			},
 			store: {

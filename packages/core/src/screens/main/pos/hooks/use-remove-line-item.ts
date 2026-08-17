@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { getLogger } from '@wcpos/utils/logger';
+import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import { useT } from '../../../../contexts/translations';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
@@ -32,11 +33,7 @@ export const useRemoveLineItem = () => {
 
 			// Determine if the item with this UUID exists in the current list
 			const items = (order[type] ?? []) as LineItem[];
-			const itemIndex = items.findIndex((item) =>
-				(item.meta_data ?? []).some(
-					(meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid
-				)
-			);
+			const itemIndex = items.findIndex((item) => wooMetaCarrier.lineUuid(item) === uuid);
 
 			let updatedLines: LineItem[];
 
@@ -74,11 +71,7 @@ export const useRemoveLineItem = () => {
 			const items = (order[type] ?? []) as LineItem[];
 			const updatedLines = items
 				.map((item) => {
-					if (
-						(item.meta_data ?? []).some(
-							(meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid
-						)
-					) {
+					if (wooMetaCarrier.lineUuid(item) === uuid) {
 						itemToRestore = item;
 						if (item.id) {
 							switch (type) {

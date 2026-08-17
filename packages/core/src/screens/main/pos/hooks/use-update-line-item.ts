@@ -3,6 +3,7 @@ import * as React from 'react';
 import unset from 'lodash/unset';
 import { v4 as uuidv4 } from 'uuid';
 
+import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
@@ -70,10 +71,8 @@ export const useUpdateLineItem = () => {
 			const json = order.toMutableJSON();
 			let updated = false;
 			let stockWarningName: string | null = null;
-			const lineItemToUpdate = json.line_items?.find((lineItem) =>
-				lineItem.meta_data?.some(
-					(meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid
-				)
+			const lineItemToUpdate = json.line_items?.find(
+				(lineItem) => wooMetaCarrier.lineUuid(lineItem) === uuid
 			);
 			const previousData = lineItemToUpdate ? getLineItemData(lineItemToUpdate) : undefined;
 
@@ -100,10 +99,7 @@ export const useUpdateLineItem = () => {
 			}
 
 			const updatedLineItems = json.line_items?.map((lineItem) => {
-				if (
-					updated ||
-					!lineItem.meta_data?.some((m) => m.key === '_woocommerce_pos_uuid' && m.value === uuid)
-				) {
+				if (updated || wooMetaCarrier.lineUuid(lineItem) !== uuid) {
 					return lineItem;
 				}
 
@@ -187,11 +183,7 @@ export const useUpdateLineItem = () => {
 				const lineItem = capturedOrder
 					.getLatest()
 					.toMutableJSON()
-					.line_items?.find((item) =>
-						item.meta_data?.some(
-							(meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid
-						)
-					);
+					.line_items?.find((item) => wooMetaCarrier.lineUuid(item) === uuid);
 				if (!lineItem) return;
 				return applyLineItemChanges(capturedOrder, uuid, {
 					quantity: (lineItem.quantity ?? 0) + quantity,
@@ -207,10 +199,8 @@ export const useUpdateLineItem = () => {
 	const splitLineItem = React.useCallback(
 		async (uuid: string) => {
 			const order = getCurrentOrder().getLatest();
-			const lineItemIndex = (order.line_items ?? []).findIndex((item) =>
-				(item.meta_data ?? []).some(
-					(meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid
-				)
+			const lineItemIndex = (order.line_items ?? []).findIndex(
+				(item) => wooMetaCarrier.lineUuid(item) === uuid
 			);
 
 			if (lineItemIndex === -1) {
@@ -236,7 +226,7 @@ export const useUpdateLineItem = () => {
 				const newItem = {
 					...lineItemToCopy,
 					meta_data: (lineItemToCopy.meta_data ?? []).map((meta) =>
-						meta.key === '_woocommerce_pos_uuid' ? { ...meta, value: uuidv4() } : meta
+						meta.key === POS_META_KEYS.lineUuid ? { ...meta, value: uuidv4() } : meta
 					),
 				};
 				newLineItems.push(newItem);
@@ -251,7 +241,7 @@ export const useUpdateLineItem = () => {
 					...remainderLineItem,
 					quantity: remainder,
 					meta_data: (remainderLineItem.meta_data ?? []).map((meta) =>
-						meta.key === '_woocommerce_pos_uuid' ? { ...meta, value: uuidv4() } : meta
+						meta.key === POS_META_KEYS.lineUuid ? { ...meta, value: uuidv4() } : meta
 					),
 				};
 				newLineItems.push(newItem);

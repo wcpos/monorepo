@@ -1,3 +1,5 @@
+import { wooMetaCarrier } from '@wcpos/sync-core';
+
 export interface StockFields {
 	manage_stock?: boolean | 'parent';
 	stock_quantity?: number | null;
@@ -42,10 +44,7 @@ function normalizeDecimal(value: number): number {
 
 function isExcludedLine(lineItem: CartLineStockIdentity, excludedLineItemUuid?: string): boolean {
 	return Boolean(
-		excludedLineItemUuid &&
-		lineItem.meta_data?.some(
-			(meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === excludedLineItemUuid
-		)
+		excludedLineItemUuid && wooMetaCarrier.lineUuid(lineItem) === excludedLineItemUuid
 	);
 }
 

@@ -48,6 +48,14 @@ export {
 } from './protocol';
 export { identifyRecord, webCryptoUuid } from './recordIdentity';
 export {
+	type MetaDataEntry,
+	type PosCarrier,
+	type PosIdentity,
+	POS_META_KEYS,
+	wooMetaCarrier,
+} from './pos-carrier/carrier';
+export { createFakeCarrier, type FakeCarrierState } from './pos-carrier/fake';
+export {
 	compareRemoteIds,
 	mintRemoteId,
 	remoteIdOrNull,

@@ -4,6 +4,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { ButtonPill } from '@wcpos/components/button';
+import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import { useCashierLabel } from '../../hooks/use-cashier-label';
 
@@ -29,13 +30,7 @@ export function Cashier({ table, row }: CellContext<{ document: OrderDocument },
 	const cashierID$ = React.useMemo(
 		() =>
 			order.meta_data$!.pipe(
-				map((meta) => meta?.find((entry) => entry.key === '_pos_user')),
-				// _pos_user is a scalar id that may arrive as string OR number — both resolve.
-				map((entry) =>
-					typeof entry?.value === 'string' || typeof entry?.value === 'number'
-						? entry.value
-						: undefined
-				)
+				map((meta) => wooMetaCarrier.readIdentity(meta).cashierId ?? undefined)
 			),
 		[order]
 	);

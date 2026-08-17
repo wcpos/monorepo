@@ -4,6 +4,8 @@ import { useObservable, useObservableEagerState, useObservableSuspense } from 'o
 import { combineLatest, of } from 'rxjs';
 import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
+import { wooMetaCarrier } from '@wcpos/sync-core';
+
 import { filterTaxRates } from './tax-rates.helpers';
 import { useAppState } from '../../../../contexts/app-state';
 import { QueryStateProvider, useCollectionBinding, useQueryState } from '../../../../query';
@@ -221,9 +223,7 @@ function TaxLocationProvider({ children, order: orderProp }: TaxRatesProviderPro
 						>
 					).pipe(
 						map((meta) => {
-							const override = (meta ?? []).find(
-								(m) => m.key === '_woocommerce_pos_tax_based_on'
-							)?.value;
+							const override = wooMetaCarrier.taxBasedOnOverride(meta);
 							return isTaxBasedOn(override) ? override : storeTaxBasedOn;
 						})
 					);
