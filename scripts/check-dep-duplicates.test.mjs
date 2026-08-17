@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 
 import {
   ALLOWED_DUPLICATES,
@@ -140,4 +141,20 @@ test('formatDuplicates renders versions with their importers and specifiers', ()
   assert.match(output, /@shopify\/flash-list:/);
   assert.match(output, /2\.0\.2 {2}<- apps\/main \(2\.0\.2\)/);
   assert.match(output, /2\.3\.2 {2}<- packages\/components \(\^2\.2\.2\)/);
+});
+
+test('workspace resolves one react-native-reanimated version', () => {
+  const workspaces = JSON.parse(
+    execFileSync('pnpm', ['list', '-r', 'react-native-reanimated', '--depth', 'Infinity', '--json'], {
+      encoding: 'utf8',
+    })
+  );
+  const versions = new Set();
+
+  JSON.stringify(workspaces, (key, value) => {
+    if (key === 'react-native-reanimated' && value?.version) versions.add(value.version);
+    return value;
+  });
+
+  assert.deepEqual([...versions], ['4.5.1']);
 });

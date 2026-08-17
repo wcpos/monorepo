@@ -32,6 +32,8 @@ overrides:
   "react": "19.2.3"
   "react-dom": "19.2.3"
   "react-native": "0.86.2"
+  # Expo SDK 57.0.13 prescribes 4.5.1; keep transitive auto-installed peers on the same native runtime.
+  "react-native-reanimated": "4.5.1"
   "react-native-edge-to-edge": "^1.6.2"
   "react-native-gesture-handler": "~2.32.0"
   "react-native-safe-area-context": "~5.7.0"
@@ -90,4 +92,3 @@ patchedDependencies:
   # license-gated postinstall, so it is absent from the tarball pnpm patches.
   # The resurrection-index-leak fix for it lives in
   # scripts/patch-rxdb-premium-resurrection-leak.mjs (root postinstall).
-
