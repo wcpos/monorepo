@@ -124,11 +124,12 @@ test('the E2E aggregator fails when the shared-store queue never released the sh
 	assert.doesNotMatch(missingQueueOutput, /unbound variable/);
 });
 
-test('the shared-store queue fences queued runs from the previous workflow', () => {
+test('the shared-store queue handles runs from the previous workflow without deadlocking', () => {
 	const workflow = readWorkflow('deploy.yml');
 	const queueStep = findStep(workflow, 'queue', '⏳ Wait for the shared dev store to be free');
 	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-shared-store-queue-'));
 	const binDir = path.join(workspace, 'bin');
+	const recentQueueTime = new Date(Date.now() - 60 * 1000).toISOString();
 	mkdirSync(binDir);
 
 	writeFileSync(
@@ -141,14 +142,21 @@ case "$endpoint" in
     printf '%s\n' '2026-08-12T05:00:00Z'
     ;;
   *status=in_progress*)
+    if [ "$LEGACY_QUEUE" != "missing" ]; then
+      printf '%s\n' '2'
+    fi
     ;;
   *status=queued*)
     [[ " $* " == *" --paginate "* ]] || exit 64
-    printf '%s\n' '2'
+    if [ "$LEGACY_QUEUE" = "missing" ]; then
+      printf '%s\n' '2'
+    fi
     ;;
   */actions/runs/2/jobs?*)
-    if [ "$LEGACY_QUEUE" = "bare" ]; then
-      printf '%s\n' '[{"name":"🚀 Deploy","status":"queued","conclusion":null,"started_at":null},{"name":"⏳ Shared-store queue","status":"in_progress","conclusion":null,"started_at":"2026-08-12T05:00:00Z"}]'
+    if [ "$LEGACY_QUEUE" = "waiting" ]; then
+      printf '%s\n' '[{"name":"🚀 Deploy","status":"queued","conclusion":null,"started_at":null},{"name":"⏳ Shared-store queue","status":"in_progress","conclusion":null,"started_at":"${recentQueueTime}"}]'
+    elif [ "$LEGACY_QUEUE" = "owning" ]; then
+      printf '%s\n' '[{"name":"⏳ Shared-store queue","status":"completed","conclusion":"success","started_at":"${recentQueueTime}","completed_at":"${recentQueueTime}"},{"name":"🎭 E2E Tests (1/4)","status":"queued","conclusion":null,"started_at":null,"completed_at":null}]'
     else
       printf '%s\n' '[{"name":"🚀 Deploy","status":"queued","conclusion":null,"started_at":null}]'
     fi
@@ -171,7 +179,7 @@ exit 75
 	);
 
 	try {
-		for (const legacyQueue of ['missing', 'bare']) {
+		for (const legacyQueue of ['missing', 'owning']) {
 			const result = runShell(queueStep.run, {
 				cwd: workspace,
 				env: {
@@ -185,9 +193,32 @@ exit 75
 			});
 
 			assert.equal(result.status, 75, result.stdout + result.stderr);
-			assert.match(result.stdout, /run 2 uses the previous workflow and has not finished/);
+			assert.match(
+				result.stdout,
+				legacyQueue === 'missing'
+					? /run 2 uses the previous workflow and has not finished/
+					: /run 2 passed the queue and its shards have not finished/
+			);
 			assert.match(result.stdout, /sleep:180/);
 		}
+
+		// A bare legacy queue that is still waiting must yield. The old waiter
+		// treats our suffixed queue as pre-rollout work, so waiting here too
+		// would deadlock the two generations.
+		const legacyWaiter = runShell(queueStep.run, {
+			cwd: workspace,
+			env: {
+				GH_TOKEN: 'test-token',
+				PATH: `${binDir}:${process.env.PATH}`,
+				REPO: 'wcpos/monorepo',
+				RUN_ID: '1',
+				STORE: 'dev-pro',
+				LEGACY_QUEUE: 'waiting',
+			},
+		});
+
+		assert.equal(legacyWaiter.status, 0, legacyWaiter.stdout + legacyWaiter.stderr);
+		assert.match(legacyWaiter.stdout, /Store is free/);
 
 		// The queued-runs poll must fence out zombies: a run stuck "queued" for
 		// hours (observed: six days) would otherwise block every waiter until
