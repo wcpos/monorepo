@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { IconButton } from '@wcpos/components/icon-button';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { sanitizeVariationAttributesRead } from '@wcpos/query/collection-map';
 
 import { useAddVariation } from '../../hooks/use-add-variation';
 
@@ -28,7 +29,10 @@ export function ProductVariationActions({
 	 * TODO: move this to a helper function
 	 */
 	const metaData = React.useMemo(() => {
-		return (attributes ?? []).map((attribute) => {
+		const sanitizedAttributes = sanitizeVariationAttributesRead(
+			attributes
+		) as ProductVariationDocument['attributes'];
+		return (sanitizedAttributes ?? []).map((attribute) => {
 			return {
 				attr_id: attribute.id ?? 0,
 				display_key: attribute.name,
