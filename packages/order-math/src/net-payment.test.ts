@@ -17,6 +17,7 @@ test('null amount falls back to total; garbage coerces to 0', () => {
 // --- legacy parity pins ---
 
 // PIN: packages/core/src/screens/main/pos/cart/utils/get-net-payment-total.ts
+// (deleted 2026-08-18 — call sites now import @wcpos/order-math; pin kept as behavior record)
 // Legacy: toNumber = parseFloat(String(value || '0')); abs-sums r.total only.
 // For total='50.75', refunds=[{total:'-12.5'},{total:'-3.25'}]:
 //   legacy refundTotal = abs(-12.5) + abs(-3.25) = 15.75; net = 50.75 - 15.75 = 35
