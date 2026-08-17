@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
 
@@ -10,6 +10,7 @@ import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import type { ScannerProfileDocument } from '@wcpos/database';
+import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { useT } from '../../../../contexts/translations';
 import { useDeviceScanControls } from '../../hooks/barcodes/device-scan-context';
@@ -19,6 +20,19 @@ import { ScannerDeviceChooser } from './scanner-device-chooser';
 import { SettingsSection } from '../components/settings-section';
 
 const NO_PROFILES: ScannerProfileDocument[] = [];
+const MODE_DOCS_URL = 'https://docs.wcpos.com/products/barcode-scanning#connection-modes';
+
+/** Secondary identity line for a saved profile: USB vid:pid, BT UUID, or nothing. */
+function profileIdentity(profile: ScannerProfileDocument, bluetoothDeviceName: string): string {
+	const deviceName = profile.bluetoothServiceClassId ? bluetoothDeviceName : profile.deviceName;
+	if (profile.vendorId !== undefined && profile.productId !== undefined) {
+		return `${deviceName} · ${profile.vendorId}:${profile.productId}`;
+	}
+	if (profile.bluetoothServiceClassId) {
+		return `${deviceName} · ${profile.bluetoothServiceClassId}`;
+	}
+	return deviceName;
+}
 
 /**
  * Input sources for barcode scanning (architecture: wcpos/monorepo#715).
@@ -27,6 +41,7 @@ const NO_PROFILES: ScannerProfileDocument[] = [];
  */
 export function InputSources() {
 	const t = useT();
+	const bluetoothDeviceName = t('settings.scanner_bluetooth_serial');
 	const { collection } = useCollection('scanner_profiles');
 	const profiles = useObservableState(
 		React.useMemo(() => collection.find().$, [collection]),
@@ -112,6 +127,20 @@ export function InputSources() {
 					</HStack>
 				) : null}
 
+				{serial.available || hid.available ? (
+					<VStack space="xs" testID="scanner-mode-note">
+						<Text className="text-muted-foreground text-xs">{t('settings.scanner_mode_note')}</Text>
+						<Pressable
+							testID="scanner-mode-docs-link"
+							onPress={() => openExternalURL(MODE_DOCS_URL)}
+						>
+							<Text className="text-muted-foreground text-xs underline">
+								{t('settings.scanner_mode_docs_link')}
+							</Text>
+						</Pressable>
+					</VStack>
+				) : null}
+
 				{/* Electron surfaces its serial/HID chooser candidates here; inert elsewhere. */}
 				<ScannerDeviceChooser />
 
@@ -122,9 +151,12 @@ export function InputSources() {
 						testID="scanner-profile-row"
 					>
 						<VStack className="flex-1" space="xs">
-							<Text className="text-sm font-medium">{profile.label || profile.deviceName}</Text>
+							<Text className="text-sm font-medium">
+								{profile.label ||
+									(profile.bluetoothServiceClassId ? bluetoothDeviceName : profile.deviceName)}
+							</Text>
 							<Text className="text-muted-foreground font-mono text-xs">
-								{profile.deviceName} · {profile.vendorId}:{profile.productId}
+								{profileIdentity(profile, bluetoothDeviceName)}
 							</Text>
 						</VStack>
 						<Button

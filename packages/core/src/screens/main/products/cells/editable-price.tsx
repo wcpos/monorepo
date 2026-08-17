@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { CurrencyInput } from '../../components/currency-input';
 import { CapabilityTooltip } from '../../components/capability-tooltip';
@@ -24,11 +24,17 @@ export function EditablePrice({
 	'sale_price' | 'regular_price'
 >) {
 	const item = row.original.document;
-	const price = useObservableEagerState(
-		(item as unknown as Record<string, unknown>)[`${column.id}$`] as import('rxjs').Observable<
-			string | undefined
-		>
-	) as string;
+	const record = (
+		row.original as typeof row.original & {
+			record: EngineRecord<'products'> | EngineRecord<'variations'>;
+		}
+	).record;
+	const priceKey = column.id as 'sale_price' | 'regular_price';
+	const price = useRecordField(record, ({ payload }) => payload[priceKey]) as string;
+	const fields = useRecordField(record, ({ payload }) => ({
+		type: payload.type,
+		onSale: payload.on_sale,
+	}));
 	const meta = table.options.meta as unknown as {
 		onChange: (arg: {
 			document: ProductDocument | ProductVariationDocument;
@@ -37,7 +43,7 @@ export function EditablePrice({
 	};
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
-	const canEdit = item.type === 'variation' ? caps.canEditVariations : caps.canEditProducts;
+	const canEdit = fields.type === 'variation' ? caps.canEditVariations : caps.canEditProducts;
 
 	/**
 	 *
@@ -52,7 +58,7 @@ export function EditablePrice({
 						changes: { [column.id]: String(price) },
 					})
 				}
-				disabled={readOnly || !canEdit || (column.id === 'sale_price' && !item.on_sale)}
+				disabled={readOnly || !canEdit || (column.id === 'sale_price' && !fields.onSale)}
 			/>
 		</CapabilityTooltip>
 	);

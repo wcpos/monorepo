@@ -63,6 +63,9 @@ jest.mock('@wcpos/components/table', () => ({
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
+jest.mock('@wcpos/query', () => ({
+	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
+}));
 jest.mock('../../data-table', () => ({
 	getColumnStyle: () => ({}),
 }));
@@ -83,7 +86,13 @@ jest.mock('../../../pos/products/cells/variations-popover/variation-stock', () =
 }));
 
 const variationHits$ = new BehaviorSubject({
-	hits: [{ id: 'v11', document: { id: 11, type: 'variation' } }],
+	hits: [
+		{
+			id: 'v11',
+			document: { id: 11, type: 'variation' },
+			record: { remoteId: '11', payload: { id: 11, type: 'variation' } },
+		},
+	],
 });
 const binding = {
 	resource: new ObservableResource(variationHits$),
@@ -95,7 +104,11 @@ jest.mock('../../../../../query', () => ({
 	useCollectionBinding: () => binding,
 }));
 
-type RowData = { id: string; document: Record<string, unknown> };
+type RowData = {
+	id: string;
+	document: Record<string, unknown>;
+	record: { remoteId: string; payload: Record<string, unknown> };
+};
 
 const columns: ColumnDef<RowData>[] = [
 	{
@@ -113,6 +126,10 @@ const data: RowData[] = [
 	{
 		id: 'p1',
 		document: { id: 1, type: 'variable', slug: 'variable-product', variations$, variations: [11] },
+		record: {
+			remoteId: '1',
+			payload: { id: 1, type: 'variable', slug: 'variable-product', variations: [11] },
+		},
 	},
 ];
 

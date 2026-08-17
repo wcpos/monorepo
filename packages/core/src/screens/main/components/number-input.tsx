@@ -1,8 +1,7 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { Input, InputProps } from '@wcpos/components/input';
+import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';
 import { NumberFormatOptions } from '../hooks/use-number-format';
@@ -41,7 +40,7 @@ export function NumberInput({
 	...props
 }: NumberInputProps) {
 	const { store } = useAppState();
-	const decimalSeparator = useObservableEagerState(store.price_decimal_sep$) || '.';
+	const decimalSeparator = useDocField(store, (state) => state.price_decimal_sep) || '.';
 
 	/**
 	 * Convert number to display string using the store's decimal separator

@@ -1,4 +1,4 @@
-import { useObservableEagerState } from 'observable-hooks';
+import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';
 
@@ -11,8 +11,8 @@ interface TaxDisplayProps {
  */
 export const useTaxInclOrExcl = ({ context }: TaxDisplayProps) => {
 	const { store } = useAppState();
-	const taxDisplayShop = useObservableEagerState(store?.tax_display_shop$);
-	const taxDisplayCart = useObservableEagerState(store?.tax_display_cart$);
+	const taxDisplayShop = useDocField(store, (state) => state.tax_display_shop);
+	const taxDisplayCart = useDocField(store, (state) => state.tax_display_cart);
 	let inclOrExcl = taxDisplayShop;
 
 	if (context === 'shop') {

@@ -2,7 +2,8 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { isRxDocument } from '@wcpos/database';
+import { type EngineRecord, isEngineRxDocument } from '@wcpos/query';
+import { wooIdOf } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -48,11 +49,11 @@ export const useAddProduct = () => {
 	 */
 	const addProduct = React.useCallback(
 		async (
-			data: ProductDocument | { id: number; [key: string]: any },
+			data: EngineRecord<'products'> | { id: number; [key: string]: any },
 			options?: { silent?: boolean }
 		) => {
 			let success;
-			let product = data;
+			let product: ProductDocument | { id: number; [key: string]: any };
 
 			const currentOrder = getCurrentOrder();
 			// Built here rather than memoised in render, so this hook reads nothing
@@ -64,9 +65,14 @@ export const useAddProduct = () => {
 			});
 
 			// always make sure we have the latest product document
-			if (isRxDocument(data)) {
-				const latest = data.getLatest();
-				product = latest.toMutableJSON();
+			if (isEngineRxDocument(data)) {
+				const latest = data.getLatest() as unknown as EngineRecord<'products'>;
+				product = {
+					...latest.payload,
+					id: latest.remoteId === null ? 0 : wooIdOf(latest.remoteId),
+				};
+			} else {
+				product = data as { id: number; [key: string]: any };
 			}
 
 			const lineItems = currentOrder.getLatest().line_items ?? [];
@@ -115,8 +121,6 @@ export const useAddProduct = () => {
 				});
 				return false;
 			}
-
-			return Boolean(success);
 		},
 		[
 			getCurrentOrder,

@@ -163,7 +163,7 @@ describe('usePushDocument', () => {
 		await expect(result.current(doc as never)).resolves.toBeDefined();
 
 		const queuedPayload = mockWrite.mock.calls[0][0].payload;
-		expect(queuedPayload).toEqual({ status: 'pos-open', billing: {}, line_items: [] });
+		expect(queuedPayload).toEqual(plainPayload);
 		expect(queuedPayload).toBe(plainPayload);
 	});
 

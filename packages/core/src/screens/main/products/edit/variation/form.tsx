@@ -3,7 +3,6 @@ import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
 import {
@@ -28,7 +27,6 @@ import { NumberInput } from '../../../components/number-input';
 import { ProductStatusSelect } from '../../../components/product/status-select';
 import { TaxClassSelect } from '../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../components/tax-status-radio-group';
-import { usePushDocument } from '../../../contexts/use-push-document';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'variation']);
@@ -54,7 +52,6 @@ interface Props {
  *
  */
 export function EditVariationForm({ variation }: Props) {
-	const pushDocument = usePushDocument();
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
 	const { localPatch } = useLocalMutation();
@@ -99,23 +96,18 @@ export function EditVariationForm({ variation }: Props) {
 					document: variation,
 					data: data as Partial<import('@wcpos/database').ProductVariationDocument>,
 				});
-				// localPatch swallows write errors and resolves undefined - pushing
-				// anyway would sync the unchanged resident and report success
+				// localPatch swallows write errors and resolves undefined.
 				if (!patched?.document) {
 					throw new Error('Local patch failed');
 				}
-				await pushDocument(variation).then((savedDoc) => {
-					if (isRxDocument(savedDoc)) {
-						mutationLogger.success(t('common.saved', { name: variation.name }), {
-							showToast: true,
-							context: {
-								variationId: savedDoc.id,
-								variationName: variation.name,
-							},
-						});
-						close();
-					}
+				mutationLogger.success(t('common.saved', { name: variation.name }), {
+					showToast: true,
+					context: {
+						variationId: variation.id,
+						variationName: variation.name,
+					},
 				});
+				close();
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
 				mutationLogger.error('Failed to save product variation', {
@@ -131,7 +123,7 @@ export function EditVariationForm({ variation }: Props) {
 				setLoading(false);
 			}
 		},
-		[close, localPatch, variation, pushDocument, t]
+		[close, localPatch, variation, t]
 	);
 
 	/**

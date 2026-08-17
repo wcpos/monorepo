@@ -2,8 +2,9 @@ import * as React from 'react';
 
 import defaults from 'lodash/defaults';
 import round from 'lodash/round';
-import { useObservableEagerState } from 'observable-hooks';
 import { NumericFormatProps, numericFormatter } from 'react-number-format';
+
+import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';
 
@@ -15,10 +16,10 @@ export type NumberFormatOptions = NumericFormatProps;
 export const useNumberFormat = (options?: NumberFormatOptions) => {
 	const { store } = useAppState();
 
-	const decimalSeparator = useObservableEagerState(store?.price_decimal_sep$);
-	const thousandSeparator = useObservableEagerState(store?.price_thousand_sep$);
-	const decimalPrecision = useObservableEagerState(store?.price_num_decimals$);
-	const thousandsGroupStyle = useObservableEagerState(store?.thousands_group_style$);
+	const decimalSeparator = useDocField(store, (state) => state.price_decimal_sep);
+	const thousandSeparator = useDocField(store, (state) => state.price_thousand_sep);
+	const decimalPrecision = useDocField(store, (state) => state.price_num_decimals);
+	const thousandsGroupStyle = useDocField(store, (state) => state.thousands_group_style);
 
 	/**
 	 *

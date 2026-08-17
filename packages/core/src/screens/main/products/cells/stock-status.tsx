@@ -1,8 +1,7 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { ButtonPill } from '@wcpos/components/button';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { useStockStatusLabel } from '../../hooks/use-stock-status-label';
 
@@ -17,9 +16,11 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 export function StockStatus({
 	table,
 	row,
-}: CellContext<{ document: ProductDocument }, 'stock_status'>) {
-	const product = row.original.document;
-	const stockStatus = useObservableEagerState(product.stock_status$!);
+}: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'stock_status'>) {
+	const stockStatus = useRecordField(
+		row.original.record,
+		(product) => product.payload.stock_status
+	);
 	const { getLabel } = useStockStatusLabel();
 	const meta = table.options.meta as unknown as {
 		actions: Pick<QueryStateActions<'products'>, 'setFilter'>;

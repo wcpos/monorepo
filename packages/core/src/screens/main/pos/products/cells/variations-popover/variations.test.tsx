@@ -27,7 +27,7 @@ const mockUseCollectionBinding = jest.fn(
 	(_collection: string, state: { filters: { status?: string } }) => {
 		const hits = mockVariationDocuments
 			.filter((document) => !state.filters.status || document.status === state.filters.status)
-			.map((document) => ({ document }));
+			.map((document) => ({ document, record: { payload: document } }));
 		return {
 			resource: { value: { count: hits.length, hits } },
 			active$: of(false),
@@ -49,6 +49,9 @@ jest.mock('observable-hooks', () => ({
 	useObservableSuspense: (resource: { value: unknown }) => resource.value,
 }));
 jest.mock('@wcpos/query', () => ({
+	useDocField: (_source: unknown, select: (value: unknown) => unknown) =>
+		select({ showOutOfStock: false }),
+	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 	useReplicationState: () => {
 		throw new Error('legacy popover replication reached');
 	},
@@ -130,8 +133,10 @@ describe('Variations popover query state', () => {
 	it('refreshes variations once when opened, not when re-rendered', () => {
 		const props = {
 			parent: {
-				variations: [11, 12],
-				attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
+				payload: {
+					variations: [11, 12],
+					attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
+				},
 			} as never,
 			addToCart: jest.fn(),
 		};
@@ -149,8 +154,10 @@ describe('Variations popover query state', () => {
 			<VariationsPopover
 				parent={
 					{
-						variations: [11, 12],
-						attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
+						payload: {
+							variations: [11, 12],
+							attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
+						},
 					} as never
 				}
 				addToCart={jest.fn()}
@@ -168,8 +175,18 @@ describe('Variations popover query state', () => {
 				value: {
 					count: 2,
 					hits: [
-						{ document: { id: 11, attributes: [{ id: 1, name: 'Color', option: 'Red' }] } },
-						{ document: { id: 12, attributes: [{ id: 1, name: 'Color', option: 'Blue' }] } },
+						{
+							document: { id: 11, attributes: [{ id: 1, name: 'Color', option: 'Red' }] },
+							record: {
+								payload: { id: 11, attributes: [{ id: 1, name: 'Color', option: 'Red' }] },
+							},
+						},
+						{
+							document: { id: 12, attributes: [{ id: 1, name: 'Color', option: 'Blue' }] },
+							record: {
+								payload: { id: 12, attributes: [{ id: 1, name: 'Color', option: 'Blue' }] },
+							},
+						},
 					],
 				},
 			},
@@ -184,7 +201,9 @@ describe('Variations popover query state', () => {
 				<Component
 					binding={binding}
 					parent={{
-						attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
+						payload: {
+							attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
+						},
 					}}
 					addToCart={jest.fn()}
 				/>

@@ -7,7 +7,6 @@ import { act, render } from '@testing-library/react';
 
 import { EditProductForm } from './form';
 
-const mockPushDocument = jest.fn();
 const mockLocalPatch = jest.fn();
 const mockModalClose = jest.fn();
 const modalActions = new Map<string, { onPress?: () => unknown; disabled: boolean }>();
@@ -101,9 +100,6 @@ jest.mock('../../../components/product/category-select', () => ({
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
-jest.mock('../../../contexts/use-push-document', () => ({
-	usePushDocument: () => mockPushDocument,
-}));
 jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
 }));
@@ -127,8 +123,6 @@ describe('EditProductForm save', () => {
 
 	it('closes the modal after a successful save', async () => {
 		mockLocalPatch.mockResolvedValue({ changes: {}, document: product });
-		// isRxDocument only checks for this marker property
-		mockPushDocument.mockResolvedValue({ id: 5, isInstanceOfRxDocument: true });
 		render(<EditProductForm product={product} />);
 
 		await act(async () => {
@@ -136,46 +130,18 @@ describe('EditProductForm save', () => {
 		});
 
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
-		expect(mockPushDocument).toHaveBeenCalledTimes(1);
 		expect(mockModalClose).toHaveBeenCalledTimes(1);
 	});
 
-	it('keeps the modal open when the push fails', async () => {
-		mockLocalPatch.mockResolvedValue({ changes: {}, document: product });
-		mockPushDocument.mockRejectedValue(new Error('HTTP 500'));
-		render(<EditProductForm product={product} />);
-
-		await act(async () => {
-			await modalActions.get('product-edit-save-button')!.onPress!();
-		});
-
-		expect(mockPushDocument).toHaveBeenCalledTimes(1);
-		expect(mockModalClose).not.toHaveBeenCalled();
-	});
-
-	it('keeps the modal open when the push does not return a saved document', async () => {
-		mockLocalPatch.mockResolvedValue({ changes: {}, document: product });
-		mockPushDocument.mockResolvedValue(undefined);
-		render(<EditProductForm product={product} />);
-
-		await act(async () => {
-			await modalActions.get('product-edit-save-button')!.onPress!();
-		});
-
-		expect(mockModalClose).not.toHaveBeenCalled();
-	});
-
-	it('does not push or close when the local patch fails', async () => {
+	it('keeps the modal open when the local patch fails', async () => {
 		// localPatch swallows write errors and resolves undefined
 		mockLocalPatch.mockResolvedValue(undefined);
-		mockPushDocument.mockResolvedValue({ id: 5, isInstanceOfRxDocument: true });
 		render(<EditProductForm product={product} />);
 
 		await act(async () => {
 			await modalActions.get('product-edit-save-button')!.onPress!();
 		});
 
-		expect(mockPushDocument).not.toHaveBeenCalled();
 		expect(mockModalClose).not.toHaveBeenCalled();
 	});
 });
