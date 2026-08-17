@@ -48,6 +48,18 @@ overrides:
   # external-editor@3.1.0 pins vulnerable tmp 0.0.33 — force the patched current release
   # (GHSA-ph9p-34f9-6g65, high).
   "external-editor@3.1.0>tmp": "0.2.7"
+  # rxdb-premium -> eth-crypto -> eccrypto (unmaintained, archived) pins vulnerable
+  # crypto deps exactly — force patched releases (elliptic GHSA-vjh7-7g9h-fjfh critical,
+  # secp256k1 GHSA-584q-6j8j-r5pm high). elliptic 6.6.1 is the newest published release;
+  # two low advisories targeting an unpublished 6.6.2 remain open upstream.
+  "eccrypto>elliptic": ">=6.6.1"
+  "eccrypto>secp256k1": ">=3.8.1 <4"
+  # ethers 5.x (@ethersproject/providers, via rxdb-premium -> eth-crypto) pins
+  # ws 8.18.0 exactly — force the patched line (GHSA-3h5v-q93c-6h6q high, DoS).
+  "@ethersproject/providers>ws": ">=8.21.0 <9"
+  # async-test-util (rxdb-premium) pins @babel/runtime 7.24.5 exactly
+  # (GHSA-968p-4wvh-cqc8 moderate, ReDoS).
+  "async-test-util>@babel/runtime": ">=7.26.10"
 allowBuilds:
   "@firebase/util": false
   "@serialport/bindings-cpp": true
