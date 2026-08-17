@@ -484,11 +484,11 @@ describe('reconcileCreateAck', () => {
 			id: 4242,
 			meta_data: [{ key: RECORD_UUID_META_KEY, value: UUID }],
 		});
-		expect(r).toEqual({ recordId: UUID, remoteId: 4242 });
+		expect(r).toEqual({ recordId: UUID, remoteId: '4242' });
 	});
 
 	it('tolerates a server document without meta_data (remoteId from id)', () => {
-		expect(reconcileCreateAck(mut(), { id: 7 })).toEqual({ recordId: UUID, remoteId: 7 });
+		expect(reconcileCreateAck(mut(), { id: 7 })).toEqual({ recordId: UUID, remoteId: '7' });
 	});
 
 	it('throws if the server came back with a DIFFERENT uuid (never re-key)', () => {

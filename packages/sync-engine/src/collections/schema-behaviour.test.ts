@@ -33,22 +33,16 @@ import {
 	recordMutationQueueSchema,
 } from '@wcpos/sync-core';
 
-import { memoryEngineStorage } from '../testing';
-import { orderMigrationStrategies, orderSchema } from './order-schema';
-import { productMigrationStrategies, productSchema } from './product-schema';
-import {
-	promotedVariationColumns,
-	variationMigrationStrategies,
-	variationSchema,
-	withVariationColumns,
-} from './variation-schema';
+import { memoryEngineStorage, remoteId } from '../testing';
+import { orderSchema } from './order-schema';
+import { productSchema } from './product-schema';
+import { variationSchema, withVariationColumns } from './variation-schema';
 import { customerSchema } from './customer-schema';
 import { taxRateDocumentId, taxRateSchema } from './tax-rate-schema';
 import {
 	brandSchema,
 	categorySchema,
 	couponSchema,
-	referenceCollectionMigrationStrategies,
 	referenceDocumentId,
 	tagSchema,
 } from './reference-collection-schema';
@@ -99,7 +93,7 @@ async function expectRoundTrip(input: {
 }): Promise<void> {
 	const { db, collection } = await openCollection(input);
 	await collection.insert(input.document);
-	const read = await collection.findOne(input.document.id as string).exec();
+	const read = await collection.findOne((input.document.uuid ?? input.document.id) as string).exec();
 	expect(read).not.toBeNull();
 	expect(read!.toJSON()).toEqual(input.document);
 	await db.close();
@@ -138,10 +132,9 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 	it('orders', async () => {
 		await expectRoundTrip({
 			schema: orderSchema,
-			migrationStrategies: orderMigrationStrategies,
 			document: {
-				id: 'woo-order:42',
-				wooOrderId: 42,
+				uuid: 'order-uuid-42',
+				remoteId: '42',
 				...promotedOrderColumns(ORDER_PAYLOAD),
 				payload: ORDER_PAYLOAD,
 				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
@@ -153,10 +146,9 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 	it('products', async () => {
 		await expectRoundTrip({
 			schema: productSchema,
-			migrationStrategies: productMigrationStrategies,
 			document: {
-				id: 'woo-product:9',
-				wooProductId: 9,
+				uuid: 'product-uuid-9',
+				remoteId: '9',
 				...promotedProductColumns(PRODUCT_PAYLOAD),
 				payload: PRODUCT_PAYLOAD,
 				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
@@ -168,11 +160,10 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 	it('variations', async () => {
 		await expectRoundTrip({
 			schema: variationSchema,
-			migrationStrategies: variationMigrationStrategies,
 			document: withVariationColumns({
-				id: 'woo-variation:77',
-				wooId: 77,
-				parentId: 9,
+				uuid: 'variation-uuid-77',
+				remoteId: '77',
+				parentRemoteId: '9',
 				payload: VARIATION_PAYLOAD,
 				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
 				local: { dirty: false, pendingMutationIds: [] },
@@ -181,12 +172,12 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 	});
 
 	it('customers', async () => {
-		expect(customerDocumentId(42)).toBe('woo-customer:42');
+		expect(customerDocumentId(remoteId(42))).toBe('woo-customer:42');
 		await expectRoundTrip({
 			schema: customerSchema,
 			document: {
-				id: customerDocumentId(42),
-				wooCustomerId: 42,
+				uuid: customerDocumentId(remoteId(42)),
+				remoteId: '42',
 				payload: { id: 42, date_modified_gmt: '2026-07-01T10:00:00' },
 				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
 				local: { dirty: false, pendingMutationIds: [] },
@@ -195,12 +186,12 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 	});
 
 	it('taxRates', async () => {
-		expect(taxRateDocumentId(7)).toBe('woo-tax-rate:7');
+		expect(taxRateDocumentId(remoteId(7))).toBe('woo-tax-rate:7');
 		await expectRoundTrip({
 			schema: taxRateSchema,
 			document: {
-				id: taxRateDocumentId(7),
-				wooTaxRateId: 7,
+				uuid: taxRateDocumentId(remoteId(7)),
+				remoteId: '7',
 				payload: { id: 7, rate: '10.0' },
 				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
 			},
@@ -215,10 +206,9 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 	] as const)('%s', async (_name, schema, prefix) => {
 		await expectRoundTrip({
 			schema,
-			migrationStrategies: referenceCollectionMigrationStrategies,
 			document: {
-				id: referenceDocumentId(prefix, 3),
-				wooId: 3,
+				uuid: referenceDocumentId(prefix, remoteId(3)),
+				remoteId: '3',
 				payload: { id: 3, name: 'Ref' },
 				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
 				local: { dirty: false, pendingMutationIds: [] },
@@ -312,36 +302,6 @@ describe('stored documents migrate through every schema version', () => {
 		return json;
 	}
 
-	it('orders v0 → v1 backfills the promoted filter/sort columns from the payload', async () => {
-		const migrated = await migrate({
-			fixtureSchema: {
-				title: 'order v0 fixture',
-				version: 0,
-				primaryKey: 'id',
-				type: 'object',
-				properties: {
-					id: { type: 'string', maxLength: 128 },
-					wooOrderId: { type: ['number', 'null'] },
-					payload: { type: 'object', additionalProperties: true },
-					sync: { type: 'object', additionalProperties: true },
-					local: { type: 'object', additionalProperties: true },
-				},
-				required: ['id', 'wooOrderId', 'payload', 'sync', 'local'],
-			},
-			oldDocument: {
-				id: 'woo-order:42',
-				wooOrderId: 42,
-				payload: ORDER_PAYLOAD,
-				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
-				local: { dirty: false, pendingMutationIds: [] },
-			},
-			currentSchema: orderSchema,
-			migrationStrategies: orderMigrationStrategies,
-		});
-		expect(migrated).toMatchObject(promotedOrderColumns(ORDER_PAYLOAD));
-		expect(migrated.payload).toEqual(ORDER_PAYLOAD); // payload bytes untouched
-	});
-
 	it('query-total request state v2 → v3 preserves the document with the new marker', async () => {
 		const migrated = await migrate({
 			fixtureSchema: {
@@ -374,130 +334,6 @@ describe('stored documents migrate through every schema version', () => {
 			attempt: 1,
 			schemaVersion: 3,
 		});
-	});
-
-	it('products v0 → v2 runs BOTH strategies: promoted columns then decimal stockQuantity', async () => {
-		const migrated = await migrate({
-			fixtureSchema: {
-				title: 'product v0 fixture',
-				version: 0,
-				primaryKey: 'id',
-				type: 'object',
-				properties: {
-					id: { type: 'string', maxLength: 128 },
-					wooProductId: { type: ['number', 'null'] },
-					payload: { type: 'object', additionalProperties: true },
-					sync: { type: 'object', additionalProperties: true },
-					local: { type: 'object', additionalProperties: true },
-				},
-				required: ['id', 'wooProductId', 'payload', 'sync', 'local'],
-			},
-			oldDocument: {
-				id: 'woo-product:9',
-				wooProductId: 9,
-				payload: PRODUCT_PAYLOAD,
-				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
-				local: { dirty: false, pendingMutationIds: [] },
-			},
-			currentSchema: productSchema,
-			migrationStrategies: productMigrationStrategies,
-		});
-		expect(migrated).toMatchObject(promotedProductColumns(PRODUCT_PAYLOAD));
-		expect(migrated.stockQuantity).toBe(3.6); // v1→v2 ran — decimal preserved, not int-coerced
-		expect(migrated.payload).toEqual(PRODUCT_PAYLOAD);
-	});
-
-	it('products v1 → v2 in ISOLATION backfills stockQuantity (v0→v1 already sets it, so the chain alone cannot catch a broken strategy 2)', async () => {
-		const { stockQuantity: _stockQuantity, ...v1Properties } = productSchema.properties;
-		const v1Required = productSchema.required.filter((field) => field !== 'stockQuantity');
-		const migrated = await migrate({
-			fixtureSchema: {
-				...productSchema,
-				title: 'product v1 fixture',
-				version: 1,
-				properties: v1Properties,
-				required: v1Required,
-			},
-			// A fresh collection at version 1 needs a strategy per prior version;
-			// the fixture stands in for a device already ON v1.
-			fixtureMigrationStrategies: { 1: (doc) => doc },
-			oldDocument: {
-				id: 'woo-product:9',
-				wooProductId: 9,
-				...(() => {
-					const { stockQuantity: _promoted, ...v1Columns } =
-						promotedProductColumns(PRODUCT_PAYLOAD);
-					return v1Columns;
-				})(),
-				payload: PRODUCT_PAYLOAD,
-				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
-				local: { dirty: false, pendingMutationIds: [] },
-			},
-			currentSchema: productSchema,
-			migrationStrategies: productMigrationStrategies,
-		});
-		expect(migrated.stockQuantity).toBe(3.6); // strategy 2 alone did this
-	});
-
-	it('variations v0 → v3 backfills promoted columns, stockQuantity, and local write bookkeeping', async () => {
-		const migrated = await migrate({
-			fixtureSchema: {
-				title: 'variation v0 fixture',
-				version: 0,
-				primaryKey: 'id',
-				type: 'object',
-				properties: {
-					id: { type: 'string', maxLength: 128 },
-					wooId: { type: ['number', 'null'] },
-					parentId: { type: ['number', 'null'] },
-					payload: { type: 'object', additionalProperties: true },
-					sync: { type: 'object', additionalProperties: true },
-				},
-				required: ['id', 'wooId', 'parentId', 'payload', 'sync'],
-			},
-			oldDocument: {
-				id: 'woo-variation:77',
-				wooId: 77,
-				parentId: 9,
-				payload: VARIATION_PAYLOAD,
-				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
-			},
-			currentSchema: variationSchema,
-			migrationStrategies: variationMigrationStrategies,
-		});
-		expect(migrated).toMatchObject(promotedVariationColumns(VARIATION_PAYLOAD));
-		expect(migrated.stockQuantity).toBeNull(); // stock management off → null, not 0
-		expect(migrated.local).toEqual({ dirty: false, pendingMutationIds: [] });
-		expect(migrated.payload).toEqual(VARIATION_PAYLOAD);
-	});
-
-	it('reference collections v0 → v1 add local write bookkeeping without changing payload bytes', async () => {
-		const payload = { id: 3, code: 'SAVE10' };
-		const migrated = await migrate({
-			fixtureSchema: {
-				title: 'reference v0 fixture',
-				version: 0,
-				primaryKey: 'id',
-				type: 'object',
-				properties: {
-					id: { type: 'string', maxLength: 128 },
-					wooId: { type: ['number', 'null'] },
-					payload: { type: 'object', additionalProperties: true },
-					sync: { type: 'object', additionalProperties: true },
-				},
-				required: ['id', 'wooId', 'payload', 'sync'],
-			},
-			oldDocument: {
-				id: 'woo-coupon:3',
-				wooId: 3,
-				payload,
-				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
-			},
-			currentSchema: couponSchema,
-			migrationStrategies: referenceCollectionMigrationStrategies,
-		});
-		expect(migrated.local).toEqual({ dirty: false, pendingMutationIds: [] });
-		expect(migrated.payload).toEqual(payload);
 	});
 
 	it('syncCheckpoints v0 → v1 keeps pre-epoch checkpoints valid (epoch stays absent)', async () => {

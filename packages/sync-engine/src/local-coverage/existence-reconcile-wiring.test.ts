@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ExistenceManifestDocument } from '@wcpos/sync-engine/testing';
+import { remoteId } from '../testing';
 
 import { removeTargeted } from './reconcile-port';
 import { partitionActionsByLane, reconcileExistence, resolveDirtyWooIds } from './reconciliation';
@@ -47,14 +48,14 @@ describe('removeTargeted', () => {
 		const stale = {
 			primary: 'p-3',
 			toJSON: () => ({
-				wooProductId: 3,
+				remoteId: remoteId(3),
 				local: { dirty: false, pendingMutationIds: [] },
 			}),
 		};
 		const current = {
 			primary: 'p-3',
 			toJSON: () => ({
-				wooProductId: 3,
+				remoteId: remoteId(3),
 				local: { dirty: true, pendingMutationIds: ['late-edit'] },
 			}),
 		};
@@ -76,7 +77,7 @@ describe('removeTargeted', () => {
 			} as never,
 			{ bulkRemove: manifestBulkRemove } as never,
 			'products',
-			'wooProductId',
+			'remoteId',
 			[3]
 		);
 

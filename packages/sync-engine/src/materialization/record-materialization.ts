@@ -2,11 +2,15 @@
 import {
 	deriveBarcodeFromPayload,
 	identifyRecord,
+	mintRemoteId,
 	normalizeCheckpoint,
+	remoteIdOrNull,
+	type RemoteId,
 	type OrderDocument,
 	promotedProductColumns,
 	type WooOrderPayload,
 	type WooProductPayload,
+	wooIdOf,
 } from '@wcpos/sync-core';
 
 import { adoptStampedRevision } from '../write-path/adopt-stamped-revision';
@@ -45,12 +49,6 @@ function result<T extends object>(
 	return { storedDocument, ...(manifestRow ? { manifestRow } : {}) };
 }
 
-function requireId(payload: Payload, label: string): number {
-	const id = Number(payload.id);
-	if (!Number.isSafeInteger(id) || id <= 0)
-		throw new Error(`Woo REST ${label} response contained an invalid id`);
-	return id;
-}
 function identity(payload: Payload) {
 	return identifyRecord(payload, {
 		mintUuid: () => globalThis.crypto.randomUUID(),
@@ -59,12 +57,12 @@ function identity(payload: Payload) {
 }
 function digest(
 	payload: Payload,
-	wooId: number,
+	remoteId: RemoteId,
 	objectType: 'product' | 'variation' | 'customer' | 'order'
 ) {
 	const value = payload._rxdb_digest;
 	if (typeof value !== 'string' || value === '') return undefined;
-	return existenceManifestDocument({ wooId, objectType, digest: value });
+	return existenceManifestDocument({ wooId: wooIdOf(remoteId), objectType, digest: value });
 }
 function stripDigest<T extends Payload>(payload: T): T {
 	if (!('_rxdb_digest' in payload)) return payload;
@@ -87,7 +85,7 @@ export function materializeTargeted(
 ): Materialized<Record<string, unknown>> {
 	const label =
 		collection === 'products' ? 'product' : collection === 'variations' ? 'variation' : 'customer';
-	const wooId = requireId(raw, label);
+	const remoteId = mintRemoteId(raw.id, `Woo REST ${label} response id`);
 	const legacy =
 		collection === 'customers'
 			? () =>
@@ -96,9 +94,14 @@ export function materializeTargeted(
 							(raw as WooCustomerPayload).date_modified ??
 							''
 					)
-			: () => String(raw.date_modified_gmt ?? (collection === 'variations' ? wooId : ''));
+			: () =>
+					typeof raw.date_modified_gmt === 'string'
+						? raw.date_modified_gmt
+						: collection === 'variations'
+							? remoteId
+							: '';
 	const adopted = adoptStampedRevision(raw, legacy);
-	const manifestRow = digest(adopted.payload, wooId, label);
+	const manifestRow = digest(adopted.payload, remoteId, label);
 	const barcode =
 		collection === 'products' || collection === 'variations'
 			? deriveBarcodeFromPayload(raw, barcodeSelectors)
@@ -107,7 +110,7 @@ export function materializeTargeted(
 		stripDigest(barcode === undefined ? adopted.payload : { ...adopted.payload, barcode })
 	);
 	const common = {
-		id: identified.id,
+		uuid: identified.id,
 		payload: identified.payload,
 		sync: { revision: adopted.revision, partial: false, source: 'woo-rest' as const },
 	};
@@ -115,7 +118,7 @@ export function materializeTargeted(
 		return result(
 			{
 				...common,
-				wooProductId: wooId,
+				remoteId,
 				...promotedProductColumns(identified.payload as WooProductPayload),
 				local: { dirty: false, pendingMutationIds: [] },
 			},
@@ -125,10 +128,8 @@ export function materializeTargeted(
 		return result(
 			{
 				...common,
-				wooId,
-				parentId: Number.isFinite(Number(identified.payload.parent_id))
-					? Number(identified.payload.parent_id)
-					: null,
+				remoteId,
+				parentRemoteId: remoteIdOrNull(identified.payload.parent_id),
 				...promotedVariationColumns(identified.payload as WooVariationPayload),
 				local: { dirty: false, pendingMutationIds: [] },
 			},
@@ -137,7 +138,7 @@ export function materializeTargeted(
 	return result(
 		{
 			...common,
-			wooCustomerId: wooId,
+			remoteId,
 			local: { dirty: false, pendingMutationIds: [] },
 		} satisfies LocalCustomerDocument,
 		manifestRow
@@ -147,13 +148,13 @@ export function materializeTargeted(
 export function materializeGreedyPrunable(
 	raw: WooReferencePayload
 ): Materialized<LocalReferenceDocument> {
-	const wooId = requireId(raw, 'reference');
-	const adopted = adoptStampedRevision(raw, () => String(raw.id ?? ''));
+	const remoteId = mintRemoteId(raw.id, 'Woo REST reference response id');
+	const adopted = adoptStampedRevision(raw, () => remoteId);
 	const identified = identity(stripDigest(adopted.payload));
 	return {
 		storedDocument: {
-			id: identified.id,
-			wooId,
+			uuid: identified.id,
+			remoteId,
 			payload: identified.payload,
 			sync: { revision: adopted.revision, partial: false, source: 'woo-rest' },
 			local: { dirty: false, pendingMutationIds: [] },
@@ -164,12 +165,12 @@ export function materializeGreedyPrunable(
 export function materializeUpsertRefresh(
 	raw: WooTaxRatePayload
 ): Materialized<LocalTaxRateDocument> {
-	const wooTaxRateId = requireId(raw, 'tax-rate');
-	const adopted = adoptStampedRevision(raw, () => String(raw.id ?? ''));
+	const remoteId = mintRemoteId(raw.id, 'Woo REST tax-rate response id');
+	const adopted = adoptStampedRevision(raw, () => remoteId);
 	return {
 		storedDocument: {
-			id: taxRateDocumentId(wooTaxRateId),
-			wooTaxRateId,
+			uuid: taxRateDocumentId(remoteId),
+			remoteId,
 			payload: stripDigest(adopted.payload),
 			sync: { revision: adopted.revision, partial: false, source: 'woo-rest' },
 		},
@@ -178,17 +179,17 @@ export function materializeUpsertRefresh(
 
 export function materializeLocalOnly(
 	raw: WooOrderPayload,
-	envelope?: Pick<OrderDocument, 'sync' | 'local'>
+	envelope?: Pick<OrderDocument, 'uuid' | 'sync' | 'local'>
 ): Materialized<OrderDocument> {
 	const normalizedRaw = stripNonStringMetaDisplayFields(raw);
-	const wooOrderId = requireId(
-		normalizedRaw,
-		envelope ? 'custom-pull order payload' : 'targeted order'
+	const remoteId = mintRemoteId(
+		normalizedRaw.id,
+		envelope ? 'Woo REST custom-pull order payload id' : 'Woo REST targeted order id'
 	);
 	const adopted = envelope
 		? { payload: normalizedRaw, revision: envelope.sync.revision }
 		: adoptStampedRevision(normalizedRaw, () => String(normalizedRaw.date_modified_gmt ?? ''));
-	const manifestRow = digest(adopted.payload, wooOrderId, 'order');
+	const manifestRow = digest(adopted.payload, remoteId, 'order');
 	const identified = identity(stripDigest(adopted.payload));
 	const sync = envelope?.sync ?? {
 		revision: adopted.revision,
@@ -196,13 +197,13 @@ export function materializeLocalOnly(
 		source: 'woo-rest' as const,
 		checkpoint: normalizeCheckpoint({
 			updatedAtGmt: String(normalizedRaw.date_modified_gmt ?? '1970-01-01T00:00:00.000Z'),
-			orderId: wooOrderId,
+			orderId: wooIdOf(remoteId),
 			revision: adopted.revision,
 		}),
 	};
 	const document = {
-		id: identified.id,
-		wooOrderId,
+		uuid: envelope?.uuid ?? identified.id,
+		remoteId,
 		payload: identified.payload,
 		sync,
 		local: envelope?.local ?? { dirty: false, pendingMutationIds: [] },
@@ -212,8 +213,8 @@ export function materializeLocalOnly(
 
 /** Storage-adapter entry for already assembled/local order documents. */
 export function materializeExistingLocalOnly(document: OrderDocument): Materialized<OrderDocument> {
-	const wooOrderId = document.wooOrderId;
+	const remoteId = document.remoteId;
 	const manifestRow =
-		wooOrderId == null ? undefined : digest(document.payload, wooOrderId, 'order');
+		remoteId == null ? undefined : digest(document.payload, remoteId, 'order');
 	return result({ ...document, payload: stripDigest(document.payload) }, manifestRow);
 }

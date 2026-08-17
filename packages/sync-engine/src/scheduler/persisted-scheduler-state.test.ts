@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { remoteId } from '../testing';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -15,7 +16,7 @@ function task(overrides: Partial<FetchTask> & Pick<FetchTask, 'id' | 'requiremen
 		collection: overrides.collection ?? 'orders',
 		queryKey: overrides.queryKey ?? overrides.id,
 		ids: overrides.ids,
-		wooIds: overrides.wooIds,
+		remoteIds: overrides.remoteIds,
 		limit: overrides.limit ?? 25,
 		priority: overrides.priority ?? 500,
 		mode: overrides.mode ?? 'windowed',
@@ -67,7 +68,7 @@ describe('planPersistedSchedulerTaskStates', () => {
 		]);
 	});
 
-	it('persists the wooIds numeric channel onto the claimed state (survives rehydrate)', () => {
+	it('persists the remoteIds numeric channel onto the claimed state (survives rehydrate)', () => {
 		const result = planPersistedSchedulerTaskStates({
 			nowMs: 2_000,
 			ownerId: 'tab-a',
@@ -77,14 +78,14 @@ describe('planPersistedSchedulerTaskStates', () => {
 					id: 'orders:ids:123,456:on-demand',
 					requirementId: 'orders.deep-link',
 					ids: ['woo-order:123', 'woo-order:456'],
-					wooIds: [123, 456],
+					remoteIds: [123, 456].map(remoteId),
 					mode: 'on-demand',
 				}),
 			],
 			existingStates: [],
 		});
 
-		expect(result.states[0]).toEqual(expect.objectContaining({ wooIds: [123, 456] }));
+		expect(result.states[0]).toEqual(expect.objectContaining({ remoteIds: [123, 456].map(remoteId) }));
 	});
 
 	it('waits when another tab owns an unexpired in-flight task', () => {

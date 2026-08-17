@@ -280,7 +280,7 @@ describe('syncCustomPullBatchIntoRepository journal epoch (F8)', () => {
 		};
 		expect(
 			repository.upsertMany.mock.calls.map(([documents]) =>
-				documents.map((document) => document.id)
+				documents.map((document) => document.uuid)
 			)
 		).toEqual([[fakeUuid(1)]]); // applied — no reset
 		expect(store.writeCustomPullCheckpoint).toHaveBeenCalledWith(next);
@@ -306,7 +306,7 @@ describe('syncCustomPullBatchIntoRepository journal epoch (F8)', () => {
 
 		expect(
 			repository.upsertMany.mock.calls.map(([documents]) =>
-				documents.map((document) => document.id)
+				documents.map((document) => document.uuid)
 			)
 		).toEqual([[fakeUuid(1)]]);
 		expect(store.writeJournalEpoch).toHaveBeenCalledWith('epoch-FIRST');
@@ -575,7 +575,7 @@ describe('syncCustomPullBatchIntoRepository pull guard wiring', () => {
 
 		expect(
 			repository.upsertMany.mock.calls.map(([documents]) =>
-				documents.map((document) => document.id)
+				documents.map((document) => document.uuid)
 			)
 		).toEqual([[fakeUuid(12)]]);
 		expect(checkpointStore.writeCustomPullCheckpoint).toHaveBeenCalledWith(advancedCheckpoint);
@@ -601,7 +601,7 @@ describe('syncCustomPullBatchIntoRepository pull guard wiring', () => {
 
 		expect(
 			repository.upsertMany.mock.calls.map(([documents]) =>
-				documents.map((document) => document.id)
+				documents.map((document) => document.uuid)
 			)
 		).toEqual([[fakeUuid(11), fakeUuid(12)]]);
 		expect(result.documents).toBe(2);
@@ -622,13 +622,13 @@ describe('syncCustomPullBatchIntoRepository pull guard wiring', () => {
 			// Stand-in for the order fetcher's identity assembly — the client owns the document id.
 			assembleDocument: (document) => ({
 				...document,
-				id: `assembled:${document.wooOrderId}`,
+				uuid: `assembled:${document.remoteId}`,
 			}),
 		});
 
 		expect(
 			repository.upsertMany.mock.calls.map(([documents]) =>
-				documents.map((document) => document.id)
+				documents.map((document) => document.uuid)
 			)
 		).toEqual([['assembled:12']]);
 	});
@@ -680,7 +680,7 @@ describe('syncCustomPullBatchIntoRepository delete channel (F6)', () => {
 			pendingMutationOrderIds: pending,
 		});
 
-		expect(repository.removeDeletedOrders).toHaveBeenCalledWith([999, 1000], pending);
+		expect(repository.removeDeletedOrders).toHaveBeenCalledWith(['999', '1000'], pending);
 	});
 
 	it('re-reads the pending set right before applying deletes (freshness for the destructive guard)', async () => {
@@ -705,7 +705,7 @@ describe('syncCustomPullBatchIntoRepository delete channel (F6)', () => {
 
 		expect(refreshPendingMutationOrderIds).toHaveBeenCalledOnce();
 		// The delete guard uses the FRESH set (999 now protected), not the pre-pull snapshot.
-		expect(repository.removeDeletedOrders).toHaveBeenCalledWith([999], fresh);
+		expect(repository.removeDeletedOrders).toHaveBeenCalledWith(['999'], fresh);
 	});
 
 	it('guards the UPSERT with the fresh pending set too, not just deletes/reset (Codex P1)', async () => {
@@ -747,7 +747,7 @@ describe('syncCustomPullBatchIntoRepository delete channel (F6)', () => {
 			pendingMutationOrderIds: pending,
 		});
 
-		expect(repository.removeDeletedOrders).toHaveBeenCalledWith([999], pending);
+		expect(repository.removeDeletedOrders).toHaveBeenCalledWith(['999'], pending);
 	});
 
 	it('does not call remove when the response carries no deletes', async () => {

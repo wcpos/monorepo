@@ -5,6 +5,14 @@ import {
 	type ServerMetrics,
 	type SyncCheckpoint,
 } from './protocol';
+import { remoteIdOrNull, type RemoteId } from './woo/remoteIdCodec';
+
+export type WirePullDocument = Pick<OrderDocument, 'payload' | 'sync' | 'local'> & {
+	id: string;
+	wooOrderId: number | null;
+};
+
+type WirePullResponse = PullResponse<WirePullDocument>;
 
 type Fetcher = (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
 
@@ -28,7 +36,7 @@ export async function pullCustomBatch(input: {
 	 */
 	fetcher: Fetcher;
 	signal?: AbortSignal;
-}): Promise<PullResponse & { metrics?: ServerMetrics; responseBytes: number }> {
+}): Promise<WirePullResponse & { metrics?: ServerMetrics; responseBytes: number }> {
 	const checkpoint = normalizeCheckpoint(input.checkpoint);
 	// No `dp` — monetary precision is a SERVER guarantee on this route, not a client param.
 	// See the monetary-precision note in sync-engine's rx-scheduler-order-fetcher (#946).
@@ -52,12 +60,12 @@ export async function pullCustomBatch(input: {
 		throw new Error(`Custom pull failed: ${response.status}`);
 	}
 	const body = await response.text();
-	const parsed = JSON.parse(body) as PullResponse & { metrics?: ServerMetrics };
+	const parsed = JSON.parse(body) as WirePullResponse & { metrics?: ServerMetrics };
 	return { ...parsed, responseBytes: measuredResponseBytes(body) };
 }
 
 export type CustomPullRepository = {
-	upsertMany(documents: PullResponse['documents']): Promise<void>;
+	upsertMany(documents: OrderDocument[]): Promise<void>;
 	/**
 	 * Remove the local orders for a server delete batch (F6). Optional — collections without a
 	 * tombstone channel omit it and the adapter no-ops. The wooOrderIds are resolved to stored uuid
@@ -66,7 +74,7 @@ export type CustomPullRepository = {
 	 * The pending set is the same one used to guard upserts.
 	 */
 	removeDeletedOrders?(
-		wooOrderIds: number[],
+		remoteIds: RemoteId[],
 		pendingMutationOrderIds?: ReadonlySet<string | number>
 	): Promise<void>;
 	/**
@@ -118,7 +126,7 @@ export type CustomPullBatchSyncResult = {
  * have queued mutations.
  */
 export function shouldApplyPulledDocument(
-	pulledDocument: Pick<OrderDocument, 'id' | 'wooOrderId'>,
+	pulledDocument: Pick<WirePullDocument, 'id' | 'wooOrderId'>,
 	pendingMutationOrderIds: ReadonlySet<string | number>
 ): boolean {
 	if (pendingMutationOrderIds.has(pulledDocument.id)) {
@@ -156,11 +164,9 @@ export async function syncCustomPullBatchIntoRepository(input: {
 	 * the server building the envelope. Applied before dedup/pending-filter so both see the
 	 * assembled id. Omitted → the server's document is stored as-is.
 	 */
-	assembleDocument?: (
-		document: PullResponse['documents'][number]
-	) => PullResponse['documents'][number];
+	assembleDocument?: (document: OrderDocument) => OrderDocument;
 	afterUpsert?: (
-		documents: PullResponse['documents'],
+		documents: OrderDocument[],
 		result: Pick<PullResponse, 'hasMore' | 'checkpoint'>
 	) => Promise<void>;
 }): Promise<CustomPullBatchSyncResult> {
@@ -245,18 +251,30 @@ export async function syncCustomPullBatchIntoRepository(input: {
 		);
 	}
 
-	const assembled = input.assembleDocument
-		? result.documents.map(input.assembleDocument)
-		: result.documents;
-	const documents = deduplicateDocumentsById(assembled).filter(
+	const applicableWireDocuments = deduplicateDocumentsById(result.documents).filter(
 		(document) => !effectivePending || shouldApplyPulledDocument(document, effectivePending)
 	);
+	const mappedDocuments = applicableWireDocuments.map(
+		(document): OrderDocument => ({
+			uuid: document.id,
+			remoteId: remoteIdOrNull(document.wooOrderId ?? document.payload?.id),
+			payload: document.payload,
+			sync: document.sync,
+			local: document.local,
+		})
+	);
+	const documents = input.assembleDocument
+		? mappedDocuments.map(input.assembleDocument)
+		: mappedDocuments;
 	await input.repository.upsertMany(documents);
 	// Apply the delete channel (F6). The repository owns wooOrderId→uuid resolution + the pending/dirty
 	// guard (it has the local docs); the server already coalesced each order to its net state, so a
 	// wooOrderId here is a settled delete, never also present in `documents`.
 	if (result.deletes && result.deletes.length > 0) {
-		await input.repository.removeDeletedOrders?.(result.deletes, effectivePending);
+		const remoteIds = result.deletes
+			.map(remoteIdOrNull)
+			.filter((remoteId): remoteId is RemoteId => remoteId !== null);
+		await input.repository.removeDeletedOrders?.(remoteIds, effectivePending);
 	}
 	await input.afterUpsert?.(documents, {
 		hasMore: result.hasMore,
@@ -276,8 +294,8 @@ export async function syncCustomPullBatchIntoRepository(input: {
 	};
 }
 
-function deduplicateDocumentsById(documents: PullResponse['documents']): PullResponse['documents'] {
-	const byId = new Map<string, PullResponse['documents'][number]>();
+function deduplicateDocumentsById(documents: WirePullDocument[]): WirePullDocument[] {
+	const byId = new Map<string, WirePullDocument>();
 	for (const document of documents) {
 		byId.set(document.id, document);
 	}

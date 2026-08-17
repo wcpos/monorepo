@@ -1,4 +1,10 @@
-import { assertBulkSuccess } from '@wcpos/sync-core';
+import {
+	assertBulkSuccess,
+	mintRemoteId,
+	remoteIdOrNull,
+	type RemoteId,
+	wooIdOf,
+} from '@wcpos/sync-core';
 
 import { forEachYielding } from '../event-loop-yield';
 import { EngineOrderRepository } from '../write-path/engine-order-repository';
@@ -101,14 +107,15 @@ export async function removeTargeted(
 	db: RxDatabase,
 	manifest: ManifestCollection,
 	name: 'products' | 'variations' | 'customers',
-	field: string,
+	field: 'remoteId',
 	wooIds: number[]
 ): Promise<void> {
+	const remoteIds = wooIds.map((wooId) => mintRemoteId(wooId, `${name} delete id`));
 	const docs = await db.collections[name]
-		.find({ selector: { [field]: { $in: wooIds } } as never })
+		.find({ selector: { [field]: { $in: remoteIds } } as never })
 		.exec();
 	const current = await db.collections[name].findByIds(docs.map((doc) => doc.primary)).exec();
-	const protectedWooIds = new Set<number>();
+	const protectedRemoteIds = new Set<RemoteId>();
 	const removable: string[] = [];
 	for (const [primary, doc] of current) {
 		const row = doc.toJSON() as Record<string, unknown>;
@@ -116,8 +123,8 @@ export async function removeTargeted(
 			removable.push(primary);
 			continue;
 		}
-		const wooId = row[field];
-		if (typeof wooId === 'number') protectedWooIds.add(wooId);
+		const remoteId = remoteIdOrNull(row[field]);
+		if (remoteId !== null) protectedRemoteIds.add(remoteId);
 	}
 	if (removable.length > 0)
 		assertBulkSuccess(
@@ -126,7 +133,7 @@ export async function removeTargeted(
 		);
 	await removeManifestByWooIds(
 		manifest,
-		wooIds.filter((wooId) => !protectedWooIds.has(wooId))
+		remoteIds.filter((remoteId) => !protectedRemoteIds.has(remoteId)).map(wooIdOf)
 	);
 }
 
@@ -149,15 +156,13 @@ export function createReconcilePorts(deps: ReconcilePortDeps): LocalCoverageReco
 				// measured at ~24 ms per 50k products — cannot hold the loop in one span (#949).
 				await forEachYielding(docs, DIRTY_SCAN_CHUNK_SIZE, (doc) => {
 					const row = doc.toJSON() as {
-						wooProductId?: number;
-						wooId?: number;
-						wooCustomerId?: number;
-						wooOrderId?: number;
+						remoteId?: RemoteId | null;
 						local?: { dirty?: boolean; pendingMutationIds?: unknown[] };
 					};
 					if (!row.local?.dirty && !row.local?.pendingMutationIds?.length) return;
-					const wooId = row.wooProductId ?? row.wooId ?? row.wooCustomerId ?? row.wooOrderId;
-					if (typeof wooId === 'number') ids.add(wooId);
+					if (row.remoteId !== null && row.remoteId !== undefined) {
+						ids.add(wooIdOf(row.remoteId));
+					}
 				});
 			}
 			return ids;
@@ -201,17 +206,19 @@ export function createReconcilePorts(deps: ReconcilePortDeps): LocalCoverageReco
 			},
 			deleteProducts: async (wooIds: number[]) => {
 				if (collection === 'orders')
-					return new EngineOrderRepository(db.collections as never).removeDeletedOrders(wooIds);
+					return new EngineOrderRepository(db.collections as never).removeDeletedOrders(
+						wooIds.map((wooId) => mintRemoteId(wooId, 'order delete id'))
+					);
 				return removeTargeted(
 					db,
 					manifest,
 					collection,
-					collection === 'products' ? 'wooProductId' : 'wooCustomerId',
+					'remoteId',
 					wooIds
 				);
 			},
 			deleteVariations: (wooIds: number[]) =>
-				removeTargeted(db, manifest, 'variations', 'wooId', wooIds),
+				removeTargeted(db, manifest, 'variations', 'remoteId', wooIds),
 		};
 	};
 	return [

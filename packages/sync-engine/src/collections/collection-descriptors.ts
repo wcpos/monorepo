@@ -32,7 +32,13 @@
  * transitional fallback for proxies that predate the stamp.
  */
 
-import { assertBulkSuccess, withOrderColumns } from '@wcpos/sync-core';
+import {
+	assertBulkSuccess,
+	remoteIdOrNull,
+	type RemoteId,
+	withOrderColumns,
+	wooIdOf,
+} from '@wcpos/sync-core';
 import type {
 	Fetcher,
 	HybridCollection,
@@ -86,7 +92,7 @@ export type TargetedDescriptor = {
 	/** Namespaced read path for the include-chunked pull (under site.syncBaseUrl). */
 	pullPath: string;
 	/** The document field carrying the numeric Woo id — delete resolution selector. */
-	wooIdField: string;
+	wooIdField: 'remoteId';
 	/**
 	 * Response-body → pull items. /products and /customers return a BARE wc/v3
 	 * array; the lab /variations endpoint returns `{ documents: [{ id,
@@ -148,7 +154,7 @@ export type UpsertRefreshDescriptor = {
 	collection: Extract<SyncCollectionName, 'taxRates'>;
 	hybrid: Extract<HybridCollection, 'tax_rates'>;
 	refreshPath: string;
-	tombstoneIdFor: (wooId: number) => string;
+	tombstoneIdFor: (remoteId: RemoteId) => string;
 	project: RecordProjection;
 };
 
@@ -156,7 +162,7 @@ export type UpsertRefreshDescriptor = {
 export type WriteAck = {
 	mutation: { mutationId: string; operation: 'create' | 'update' | 'delete'; recordId: string };
 	recordId: string;
-	remoteId: unknown;
+	remoteId: RemoteId | null;
 	currentRevision: string | null;
 	document?: Record<string, unknown> | null;
 	/**
@@ -221,7 +227,7 @@ export type CollectionWriteFacet = {
 		'orders' | 'products' | 'variations' | 'customers' | 'coupons'
 	>;
 	/** Stored field carrying the server numeric identity used by targeted refresh. */
-	remoteIdField: 'wooOrderId' | 'wooProductId' | 'wooId' | 'wooCustomerId';
+	remoteIdField: 'remoteId';
 	/**
 	 * Read one server document through this collection's existing include-pull
 	 * shape. `barcodeSelectors` are the calling SCOPE's carriers: the result is
@@ -233,7 +239,7 @@ export type CollectionWriteFacet = {
 	fetchServerDocument: (input: {
 		fetch: Fetcher;
 		syncBaseUrl: string;
-		remoteId: number;
+		remoteId: RemoteId;
 		signal?: AbortSignal;
 		barcodeSelectors?: BarcodeSelectors;
 	}) => Promise<Record<string, unknown> | null>;
@@ -367,8 +373,8 @@ function ackBookkeeping(options: {
 					...data,
 					...(adopting && adoptionPatch ? adoptionPatch : identityPatch),
 					[remoteIdField]:
-						ack.mutation.operation === 'create' && typeof ack.remoteId === 'number'
-							? ack.remoteId
+						ack.mutation.operation === 'create'
+							? (remoteIdOrNull(ack.remoteId) ?? data[remoteIdField])
 							: data[remoteIdField],
 					sync: {
 						...sync,
@@ -452,7 +458,7 @@ function createWriteFacet(input: {
 			input.project(payload as WooPayload, barcodeSelectors),
 		fetchServerDocument: async ({ fetch, syncBaseUrl, remoteId, signal, barcodeSelectors }) => {
 			const search = new URLSearchParams({
-				include: String(remoteId),
+				include: `${wooIdOf(remoteId)}`,
 				per_page: '1',
 			});
 			const response = await fetch(`${syncBaseUrl}${input.pullPath}?${search.toString()}`, {
@@ -507,12 +513,10 @@ function catalogAckPatch(
 	barcodeSelectors?: BarcodeSelectors
 ): Record<string, unknown> {
 	const {
-		id: _id,
+		uuid: _uuid,
 		sync: _sync,
 		local: _local,
-		wooProductId: _wooProductId,
-		wooId: _wooId,
-		wooCustomerId: _wooCustomerId,
+		remoteId: _remoteId,
 		...patch
 	} = project(document as WooPayload, barcodeSelectors);
 	return patch;
@@ -520,7 +524,7 @@ function catalogAckPatch(
 
 const productsWriteFacet = createWriteFacet({
 	collection: 'products',
-	remoteIdField: 'wooProductId',
+	remoteIdField: 'remoteId',
 	pullPath: '/products',
 	parse: parseBareArray,
 	project: productDocument,
@@ -529,7 +533,7 @@ const productsWriteFacet = createWriteFacet({
 });
 const variationsWriteFacet = createWriteFacet({
 	collection: 'variations',
-	remoteIdField: 'wooId',
+	remoteIdField: 'remoteId',
 	pullPath: '/variations',
 	parse: parseVariationsEnvelope,
 	project: variationDocument,
@@ -554,7 +558,7 @@ function flattenVariationAckDocument(document: Record<string, unknown>): Record<
 }
 const customersWriteFacet = createWriteFacet({
 	collection: 'customers',
-	remoteIdField: 'wooCustomerId',
+	remoteIdField: 'remoteId',
 	pullPath: '/customers',
 	parse: parseBareArray,
 	project: customerDocument,
@@ -563,7 +567,7 @@ const customersWriteFacet = createWriteFacet({
 });
 const couponsWriteFacet = createWriteFacet({
 	collection: 'coupons',
-	remoteIdField: 'wooId',
+	remoteIdField: 'remoteId',
 	pullPath: '/coupons',
 	parse: parseBareArray,
 	project: referenceDocument,
@@ -578,7 +582,7 @@ const couponsWriteFacet = createWriteFacet({
 /** The order facet retains its repository and pull-side materializer byte-for-byte. */
 const ordersWriteFacet = createWriteFacet({
 	collection: 'orders',
-	remoteIdField: 'wooOrderId',
+	remoteIdField: 'remoteId',
 	pullPath: '/orders',
 	parse: parseBareArray,
 	project: orderDocument,
@@ -621,7 +625,7 @@ export const COLLECTION_DESCRIPTORS: readonly CollectionDescriptor[] = [
 		collection: 'products',
 		hybrid: 'products',
 		pullPath: '/products',
-		wooIdField: 'wooProductId',
+		wooIdField: 'remoteId',
 		parse: parseBareArray,
 		project: productDocument,
 		write: productsWriteFacet,
@@ -631,7 +635,7 @@ export const COLLECTION_DESCRIPTORS: readonly CollectionDescriptor[] = [
 		collection: 'variations',
 		hybrid: 'variations',
 		pullPath: '/variations',
-		wooIdField: 'wooId',
+		wooIdField: 'remoteId',
 		parse: parseVariationsEnvelope,
 		project: variationDocument,
 		write: variationsWriteFacet,
@@ -641,7 +645,7 @@ export const COLLECTION_DESCRIPTORS: readonly CollectionDescriptor[] = [
 		collection: 'customers',
 		hybrid: 'customers',
 		pullPath: '/customers',
-		wooIdField: 'wooCustomerId',
+		wooIdField: 'remoteId',
 		parse: parseBareArray,
 		project: customerDocument,
 		write: customersWriteFacet,

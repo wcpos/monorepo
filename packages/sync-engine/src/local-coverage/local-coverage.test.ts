@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
+import { remoteId } from '../testing';
 
 import {
 	createLocalCoverage,
@@ -176,7 +177,7 @@ describe('LocalCoverage interface', () => {
 		});
 	});
 
-	it('bounds manifest chunks while filtering invalid, stray, existing, and local-only ids', async () => {
+	it('bounds manifest chunks while filtering stray, existing, and local-only ids', async () => {
 		const database = coverageDatabase() as ReturnType<typeof coverageDatabase> &
 			Record<string, unknown>;
 		const manifest = memoryCollection('id');
@@ -203,16 +204,16 @@ describe('LocalCoverage interface', () => {
 				count: () => ({ exec: async () => 4 }),
 				find: () => ({
 					exec: async () => [
-						{ wooProductId: 1, payload: { status: 'publish' } },
-						{ wooProductId: 2, payload: { status: 'publish' } },
-						{ wooProductId: null },
-						{ wooProductId: -1 },
+						{ remoteId: remoteId(1), payload: { status: 'publish' } },
+						{ remoteId: remoteId(2), payload: { status: 'publish' } },
+						{ remoteId: null },
+						{ remoteId: undefined },
 					],
 				}),
 			},
 			variations: {
 				count: () => ({ exec: async () => 2 }),
-				find: () => ({ exec: async () => [{ wooId: 3 }, { wooId: 4 }] }),
+				find: () => ({ exec: async () => [{ remoteId: remoteId(3) }, { remoteId: remoteId(4) }] }),
 			},
 			customers: {
 				count: () => ({ exec: async () => 0 }),

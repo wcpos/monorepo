@@ -51,9 +51,10 @@ export function referenceCollectionRepository(
 			const toRemove = docs
 				.map((doc) => doc.toJSON())
 				.filter(
-					(doc) => doc.sync?.source === 'woo-rest' && !hasPendingLocalWork(doc) && !kept.has(doc.id)
+					(doc) =>
+						doc.sync?.source === 'woo-rest' && !hasPendingLocalWork(doc) && !kept.has(doc.uuid)
 				)
-				.map((doc) => doc.id);
+				.map((doc) => doc.uuid);
 			if (toRemove.length > 0)
 				assertBulkSuccess(
 					await collection.bulkRemove(toRemove),

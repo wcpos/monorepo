@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
+import { remoteId } from '../testing';
 
 import {
 	BRAND_REFERENCE_CONFIG,
@@ -194,7 +195,7 @@ describe('createReferenceCollectionFetcher set-difference deletion', () => {
 		await schedulerFetcher(categoryTask());
 
 		expect(repository.upsertMany).toHaveBeenCalledWith([
-			expect.objectContaining({ id: uuidFor(1), wooId: 1 }),
+			expect.objectContaining({ uuid: uuidFor(1), remoteId: remoteId(1) }),
 		]);
 		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
 			expect.objectContaining({

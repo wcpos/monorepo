@@ -4,6 +4,7 @@
  * public handle against a scripted /orders proxy.
  */
 
+import { remoteId } from './testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { type RxdbSyncEngine, type StoreScopeIdentity } from './create-rxdb-sync-engine';
@@ -129,8 +130,8 @@ function scriptedGreedyOrderProxy(batchCount: number) {
 			JSON.stringify({
 				documents: [
 					{
-						id: `77777777-7777-4777-8777-${String(id).padStart(12, '0')}`,
-						wooOrderId: id,
+						uuid: `77777777-7777-4777-8777-${String(id).padStart(12, '0')}`,
+						remoteId: remoteId(id),
 						payload: {
 							id,
 							date_modified_gmt: checkpoint.updatedAtGmt,
@@ -201,10 +202,10 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 			id: 'pos-open-order',
 			collection: 'orders',
 			kind: 'targeted-records',
-			wooIds: [7],
+			remoteIds: [7].map(remoteId),
 		}).ready;
 		expect(first.action).toBe('fetched');
-		expect(first.missingRecordIds).toEqual([7]);
+		expect(first.missingRecordIds).toEqual([remoteId(7)]);
 		expect(server.state.pulls).toBeGreaterThan(0);
 
 		const scope = engine.active();
@@ -216,14 +217,14 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 		)
 			.find()
 			.exec();
-		expect(orders.map((doc) => doc.toJSON()['wooOrderId'])).toEqual([7]);
+		expect(orders.map((doc) => doc.toJSON()['remoteId'])).toEqual([remoteId(7)]);
 
 		const pullsBefore = server.state.pulls;
 		const second = await engine.require({
 			id: 'pos-open-order',
 			collection: 'orders',
 			kind: 'targeted-records',
-			wooIds: [7],
+			remoteIds: [7].map(remoteId),
 		}).ready;
 		expect(second.action).toBe('serve-local');
 		expect(server.state.pulls).toBe(pullsBefore); // resident — no second fetch
@@ -241,14 +242,14 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 			id: 'resident',
 			collection: 'orders',
 			kind: 'targeted-records',
-			wooIds: [7],
+			remoteIds: [7].map(remoteId),
 		}).ready;
 		const pullsBefore = server.state.pulls;
 		const refreshed = await engine.require({
 			id: 're-anchor',
 			collection: 'orders',
 			kind: 'targeted-records',
-			wooIds: [7],
+			remoteIds: [7].map(remoteId),
 			forceRefresh: true,
 		}).ready;
 
@@ -278,7 +279,7 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 					find: () => ({
 						exec: async () =>
 							residentOrderIds.map((wooOrderId) => ({
-								toJSON: () => ({ wooOrderId }),
+								toJSON: () => ({ remoteId: remoteId(wooOrderId) }),
 							})),
 					}),
 				},
@@ -330,7 +331,7 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 			id: 'dedupe',
 			collection: 'orders',
 			kind: 'targeted-records',
-			wooIds: [8],
+			remoteIds: [8].map(remoteId),
 		}).ready;
 
 		expect(seed).toHaveBeenCalledWith(expect.objectContaining({ completedDedupeForMs: 0 }));
@@ -353,7 +354,7 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 			id: 'bound-fetch',
 			collection: 'orders',
 			kind: 'targeted-records',
-			wooIds: [8],
+			remoteIds: [8].map(remoteId),
 		}).ready;
 
 		expect(drain).toHaveBeenCalledWith(expect.objectContaining({ fetcher: expect.any(Function) }));
@@ -757,13 +758,13 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 			id: 'slow-targeted',
 			collection: 'orders',
 			kind: 'targeted-records',
-			wooIds: [8],
+			remoteIds: [8].map(remoteId),
 		});
 		const next = harness.plane.require({
 			id: 'next-targeted',
 			collection: 'orders',
 			kind: 'targeted-records',
-			wooIds: [9],
+			remoteIds: [9].map(remoteId),
 		});
 		await vi.waitFor(() => expect(observedSignal).toBeDefined());
 		slow.release();
@@ -794,7 +795,7 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 				id: 'failed',
 				collection: 'orders',
 				kind: 'targeted-records',
-				wooIds: [8],
+				remoteIds: [8].map(remoteId),
 			}).ready
 		).rejects.toThrow(/scheduler drain failed/i);
 	});
@@ -810,7 +811,7 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 			id: 'active',
 			collection: 'orders',
 			kind: 'targeted-records',
-			wooIds: [8],
+			remoteIds: [8].map(remoteId),
 		}).ready;
 
 		const early = await Promise.race([
@@ -820,7 +821,10 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 		expect(early).toBe('pending');
 
 		harness.setResidentOrderIds([8]);
-		await expect(ready).resolves.toMatchObject({ action: 'fetched', missingRecordIds: [8] });
+		await expect(ready).resolves.toMatchObject({
+			action: 'fetched',
+			missingRecordIds: [remoteId(8)],
+		});
 	});
 
 	it('uses the injected clock for targeted order seeding and draining', async () => {
@@ -840,7 +844,7 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 			id: 'injected-clock',
 			collection: 'orders',
 			kind: 'targeted-records',
-			wooIds: [8],
+			remoteIds: [8].map(remoteId),
 		}).ready;
 
 		expect(seed).toHaveBeenCalledWith(expect.objectContaining({ nowMs }));
@@ -861,7 +865,7 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 			id: 'active-timeout',
 			collection: 'orders',
 			kind: 'targeted-records',
-			wooIds: [8],
+			remoteIds: [8].map(remoteId),
 		}).ready;
 		const rejected = expect(ready).rejects.toThrow(/timed out waiting for an active order task/i);
 
@@ -889,7 +893,7 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 			id: 'active-backoff',
 			collection: 'orders',
 			kind: 'targeted-records',
-			wooIds: [8],
+			remoteIds: [8].map(remoteId),
 		}).ready;
 		const rejected = expect(ready).rejects.toThrow(/timed out waiting for an active order task/i);
 
@@ -920,13 +924,13 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 			id: 'active-long-backoff',
 			collection: 'orders',
 			kind: 'targeted-records',
-			wooIds: [8],
+			remoteIds: [8].map(remoteId),
 		});
 		const next = harness.plane.require({
 			id: 'after-release',
 			collection: 'orders',
 			kind: 'targeted-records',
-			wooIds: [9],
+			remoteIds: [9].map(remoteId),
 		});
 		await vi.advanceTimersByTimeAsync(300);
 		expect(drain).toHaveBeenCalledTimes(3);
@@ -936,7 +940,10 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 		await vi.advanceTimersByTimeAsync(0);
 
 		await expect(waiting.ready).resolves.toMatchObject({ action: 'released' });
-		await expect(next.ready).resolves.toMatchObject({ action: 'fetched', missingRecordIds: [9] });
+		await expect(next.ready).resolves.toMatchObject({
+			action: 'fetched',
+			missingRecordIds: [remoteId(9)],
+		});
 		expect(vi.getTimerCount()).toBe(0);
 	});
 
@@ -979,20 +986,23 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 			id: 'slow-product',
 			collection: 'products',
 			kind: 'targeted-records',
-			wooIds: [1],
+			remoteIds: [1].map(remoteId),
 		});
 		const next = engine.require({
 			id: 'next-product',
 			collection: 'products',
 			kind: 'targeted-records',
-			wooIds: [2],
+			remoteIds: [2].map(remoteId),
 		});
 		await vi.waitFor(() => expect(firstSignal).toBeDefined());
 
 		slow.release();
 
 		await expect(slow.ready).resolves.toMatchObject({ action: 'released' });
-		await expect(next.ready).resolves.toMatchObject({ action: 'fetched', missingRecordIds: [2] });
+		await expect(next.ready).resolves.toMatchObject({
+			action: 'fetched',
+			missingRecordIds: [remoteId(2)],
+		});
 		expect(firstSignal?.aborted).toBe(true);
 		await engine.dispose();
 	});

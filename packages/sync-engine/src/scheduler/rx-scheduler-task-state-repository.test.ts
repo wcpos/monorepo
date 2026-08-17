@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { remoteId } from '../testing';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -40,7 +41,7 @@ function storedTaskState(state: PersistedSchedulerTaskState): StoredTaskState {
 		...rest,
 		stateKey: schedulerTaskStateKey(state.taskId),
 		collectionName: collection,
-		schemaVersion: 4,
+		schemaVersion: 0,
 	};
 }
 
@@ -179,17 +180,17 @@ describe('RxSchedulerTaskStateRepository', () => {
 		});
 	});
 
-	it('round-trips the wooIds numeric channel through persisted storage (uuid-ready targeted fetch)', async () => {
+	it('round-trips the remoteIds channel through persisted storage (uuid-ready targeted fetch)', async () => {
 		const { repository } = repositoryFor([
 			taskState({
 				taskId: 'orders:ids:deep-link:on-demand',
 				ids: ['woo-order:123', 'woo-order:456'],
-				wooIds: [123, 456],
+				remoteIds: [123, 456].map(remoteId),
 			}),
 		]);
 
 		const [readBack] = await repository.readForTaskIds(['orders:ids:deep-link:on-demand']);
-		expect(readBack.wooIds).toEqual([123, 456]);
+		expect(readBack.remoteIds).toEqual(['123', '456']);
 	});
 
 	it('stores compact primary keys while preserving long domain task ids', async () => {
@@ -416,14 +417,14 @@ describe('RxSchedulerTaskStateRepository', () => {
 		);
 	});
 
-	it('does not remove or mark failed state when only the wooIds numeric channel differs', async () => {
-		// Once document keys are uuids, ids can match while wooIds (the real fetch target)
+	it('does not remove or mark failed state when only the remoteIds channel differs', async () => {
+		// Once document keys are uuids, ids can match while remoteIds (the real fetch target)
 		// differs — the CAS guard must treat that as a changed row, not a stale match.
-		const storedState = taskState({ taskId: 'orders:targeted', ids: ['woo-order:1'], wooIds: [1] });
+		const storedState = taskState({ taskId: 'orders:targeted', ids: ['woo-order:1'], remoteIds: [1].map(remoteId) });
 		const expectedState = taskState({
 			taskId: 'orders:targeted',
 			ids: ['woo-order:1'],
-			wooIds: [2],
+			remoteIds: [2].map(remoteId),
 		});
 		const failedState = taskState({
 			...expectedState,
@@ -472,7 +473,7 @@ describe('RxSchedulerTaskStateRepository — change-signal coalescing (#318)', (
 			expect(doc?.claimedUntilMs).toBe(6_000);
 		});
 
-		it('strips present-but-undefined ids/wooIds from a legacy in-flight lane row when flagging a rerun', async () => {
+		it('strips present-but-undefined ids/remoteIds from a legacy in-flight lane row when flagging a rerun', async () => {
 			// A legacy/corrupt in-flight lane row whose optional keys are PRESENT with value
 			// undefined (as written before toDocument stripped them). A change arriving while the
 			// lease is still valid takes the in-flight branch, which rewrites the doc — it must run
@@ -485,7 +486,7 @@ describe('RxSchedulerTaskStateRepository — change-signal coalescing (#318)', (
 				collectionName: 'orders',
 				queryKey: 'orders:open',
 				ids: undefined,
-				wooIds: undefined,
+				remoteIds: undefined,
 				limit: 25,
 				priority: 600,
 				mode: 'windowed',
@@ -495,7 +496,7 @@ describe('RxSchedulerTaskStateRepository — change-signal coalescing (#318)', (
 				attempt: 1,
 				retryAfterMs: null,
 				updatedAtMs: 1_000,
-				schemaVersion: 4,
+				schemaVersion: 0,
 			};
 			const fixture = createCollection([corruptInFlight]);
 			const repository = new RxSchedulerTaskStateRepository({
@@ -514,7 +515,7 @@ describe('RxSchedulerTaskStateRepository — change-signal coalescing (#318)', (
 			// The present-but-undefined optional keys must be ABSENT after the rewrite, not
 			// re-written as `ids: undefined` (which z-schema rejects, VD2).
 			expect(Object.keys(doc)).not.toContain('ids');
-			expect(Object.keys(doc)).not.toContain('wooIds');
+			expect(Object.keys(doc)).not.toContain('remoteIds');
 			// CAS-compared fields stay untouched so the owner's completion still matches.
 			expect(doc.status).toBe('in-flight');
 			expect(doc.claimedUntilMs).toBe(6_000);

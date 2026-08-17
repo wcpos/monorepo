@@ -94,7 +94,7 @@ describe('write path integration', () => {
 
 		// reconciliation: stable uuid kept, server id captured, revision available for the next update
 		expect(reconciled).toEqual([
-			{ recordId: create.recordId, remoteId: 555, revision: 'sha256:rev1' },
+			{ recordId: create.recordId, remoteId: '555', revision: 'sha256:rev1' },
 		]);
 	});
 

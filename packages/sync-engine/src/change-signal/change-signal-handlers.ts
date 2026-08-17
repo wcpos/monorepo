@@ -17,7 +17,12 @@
  * slice-4 fetch queue; these bodies are package-internal and swap then).
  */
 
-import { assertBulkSuccess } from '@wcpos/sync-core';
+import {
+	assertBulkSuccess,
+	mintRemoteId,
+	remoteIdOrNull,
+	wooIdOf,
+} from '@wcpos/sync-core';
 import type {
 	Fetcher,
 	HybridCollection,
@@ -181,7 +186,7 @@ async function pullByIds(
 		const documents = payloads.map((payload) => d.project(payload, ctx.barcodeSelectors?.()));
 		const applicable = await withoutLocallyProtected(
 			collection as never,
-			documents as { id: string }[]
+			documents as { uuid: string }[]
 		);
 		if (persist) await persist(applicable);
 		else {
@@ -208,12 +213,15 @@ async function pullByIds(
 async function removeByWooIds(
 	ctx: HandlerContext,
 	name: string,
-	wooIdField: string,
+	wooIdField: 'remoteId',
 	ids: number[]
 ): Promise<number> {
 	if (ids.length === 0) return 0;
 	const collection = collectionOf(ctx, name);
-	const docs = await collection.find({ selector: { [wooIdField]: { $in: ids } } as never }).exec();
+	const remoteIds = ids.map((id) => mintRemoteId(id, `${name} tombstone id`));
+	const docs = await collection
+		.find({ selector: { [wooIdField]: { $in: remoteIds } } as never })
+		.exec();
 	const removable = docs.filter((doc) => !hasPendingLocalWork(doc.toJSON()));
 	if (removable.length > 0) {
 		assertBulkSuccess(
@@ -248,7 +256,7 @@ async function refreshUpsert(ctx: HandlerContext, d: UpsertRefreshDescriptor): P
 	);
 	const applicable = await withoutLocallyProtected(
 		collection as never,
-		documents as { id: string }[]
+		documents as { uuid: string }[]
 	);
 	if (applicable.length > 0) {
 		assertBulkSuccess(
@@ -266,7 +274,7 @@ async function refreshPrunable(ctx: HandlerContext, d: GreedyPrunableDescriptor)
 	);
 	const applicable = await withoutLocallyProtected(
 		collection as never,
-		documents as { id: string }[]
+		documents as { uuid: string }[]
 	);
 	if (applicable.length > 0) {
 		assertBulkSuccess(
@@ -276,7 +284,7 @@ async function refreshPrunable(ctx: HandlerContext, d: GreedyPrunableDescriptor)
 	}
 	// Prune by the fetched KEEP-SET of storage ids (uuid keys) — id-space
 	// discipline per the terms flip: storage ids only, never Woo ids.
-	const kept = new Set(documents.map((doc) => String((doc as { id: string }).id)));
+	const kept = new Set(documents.map((doc) => (doc as { uuid: string }).uuid));
 	const existing = await collection.find().exec();
 	const doomed = existing
 		.filter((doc) => !hasPendingLocalWork(doc.toJSON()))
@@ -317,7 +325,7 @@ function collectShapeEffects(ctx: HandlerContext): ShapeEffects {
 			}
 			case 'upsert-refresh': {
 				refreshTaxRates = () => refreshUpsert(ctx, descriptor);
-				deleteTaxRates = (ids) => removeByWooIds(ctx, descriptor.collection, 'wooTaxRateId', ids);
+				deleteTaxRates = (ids) => removeByWooIds(ctx, descriptor.collection, 'remoteId', ids);
 				break;
 			}
 			case 'greedy-prunable': {
@@ -365,10 +373,10 @@ async function loadSyncedTargetedDocs(
 	const docs = await collectionOf(ctx, descriptor.collection).find().exec();
 	return docs.map((doc) => {
 		const json = doc.toJSON() as {
-			id: string;
+			uuid: string;
 			payload: Record<string, unknown>;
 		};
-		return { id: json.id, payload: json.payload };
+		return { id: json.uuid, payload: json.payload };
 	});
 }
 
@@ -400,9 +408,8 @@ async function rebaselineTargeted(
 			payload?: Record<string, unknown>;
 		};
 		if (hasPendingLocalWork(json)) continue;
-		const mirrored = json[descriptor.wooIdField];
-		const wooId = typeof mirrored === 'number' ? mirrored : Number(json.payload?.id);
-		if (Number.isSafeInteger(wooId) && wooId > 0) wooIds.add(wooId);
+		const remoteId = remoteIdOrNull(json[descriptor.wooIdField] ?? json.payload?.id);
+		if (remoteId !== null) wooIds.add(wooIdOf(remoteId));
 	}
 	const requested = [...wooIds].sort((left, right) => left - right);
 	const missingIds: number[] = [];
@@ -469,9 +476,10 @@ export function buildReplicationHandlers(ctx: HandlerContext): ReplicationAction
 						payload?: Record<string, unknown>;
 					};
 					if (hasPendingLocalWork(json)) continue;
-					const mirrored = json[descriptor.wooIdField];
-					const wooId = typeof mirrored === 'number' ? mirrored : Number(json.payload?.id);
-					if (Number.isSafeInteger(wooId) && wooId > 0) wooIds.add(wooId);
+					const remoteId = remoteIdOrNull(
+						json[descriptor.wooIdField] ?? json.payload?.id
+					);
+					if (remoteId !== null) wooIds.add(wooIdOf(remoteId));
 				}
 				return effects.targeted[collection].pull([...wooIds].sort((left, right) => left - right));
 			});

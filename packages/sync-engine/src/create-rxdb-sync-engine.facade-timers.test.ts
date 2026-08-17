@@ -169,8 +169,8 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 		if (!active) throw new Error('expected an active scope');
 		const orderId = '10000000-0000-4000-8000-000000000001';
 		await active.database.collections.orders.insert({
-			id: orderId,
-			wooOrderId: null,
+			uuid: orderId,
+			remoteId: null,
 			number: '',
 			dateCreatedGmt: '2026-07-16T00:00:00',
 			status: 'pos-open',

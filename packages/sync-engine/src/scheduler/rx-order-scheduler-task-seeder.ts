@@ -1,3 +1,5 @@
+import { orderDocumentId, type RemoteId } from '@wcpos/sync-core';
+
 import {
 	seedPersistedSchedulerTasks,
 	type SeedPersistedSchedulerTasksResult,
@@ -40,7 +42,7 @@ const ORDER_TARGETED_LANE: TargetedLaneDescriptor = {
 	idLabel: 'order',
 	keyPrefix: 'orders',
 	requirementPrefix: 'orders',
-	documentId: (id) => `woo-order:${id}`,
+	documentId: orderDocumentId,
 	defaultPriority: 900,
 	defaultBatchSize: 100,
 	defaultCompletedDedupeForMs: 30_000,
@@ -55,7 +57,7 @@ export type SeedOrderSchedulerTasksInput = {
 };
 
 export type SeedTargetedOrderSchedulerTaskInput = {
-	orderIds: number[];
+	remoteIds: RemoteId[];
 	priority?: number;
 	batchSize?: number;
 	completedDedupeForMs?: number;
@@ -183,7 +185,7 @@ export async function seedTargetedOrderSchedulerTask(
 	input: SeedTargetedOrderSchedulerTaskInput
 ): Promise<SeedPersistedSchedulerTasksResult> {
 	return seedTargetedLane(ORDER_TARGETED_LANE, {
-		ids: input.orderIds,
+		remoteIds: input.remoteIds,
 		priority: input.priority,
 		batchSize: input.batchSize,
 		completedDedupeForMs: input.completedDedupeForMs,

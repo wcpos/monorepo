@@ -1,5 +1,6 @@
 import { RECORD_UUID_META_KEY } from './recordIdentity';
-import { type OrderDocument, type SyncCheckpoint } from './protocol';
+import type { WirePullDocument } from './customPullAdapter';
+import { type SyncCheckpoint } from './protocol';
 
 /**
  * A reusable in-memory PULL server honoring the custom-pull contract
@@ -427,7 +428,7 @@ export function createFakePullServer(options: FakePullServerOptions = {}): FakeP
 			revision: '',
 			sequence: request.sequence,
 		};
-		const documents: OrderDocument[] = [];
+		const documents: WirePullDocument[] = [];
 		const deletes: number[] = [];
 
 		for (const row of page) {

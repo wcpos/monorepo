@@ -143,7 +143,6 @@ export {
 } from './query-total-request-state-schema';
 export {
 	schedulerTaskStateKey,
-	schedulerTaskStateMigrationStrategies,
 	schedulerTaskStateSchema,
 	type SchedulerTaskStateDocument,
 } from './scheduler-task-state-schema';

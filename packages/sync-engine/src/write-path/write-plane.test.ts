@@ -9,6 +9,7 @@ import type { ScopeDatabase } from '@wcpos/sync-core';
 
 import { createWritePlane } from './write-plane';
 import { queueFor } from './write-intents';
+import { remoteId } from '../testing';
 
 import type { RxDatabase } from 'rxdb';
 
@@ -130,7 +131,7 @@ describe('write-plane ownership', () => {
 describe('write-plane status notifications', () => {
 	it('notifies after a resolution even when the active database closes mid-window', async () => {
 		let residentData: Record<string, unknown> = {
-			wooOrderId: 42,
+			remoteId: remoteId(42),
 			payload: {},
 			local: { dirty: true, pendingMutationIds: ['terminal'] },
 		};

@@ -16,6 +16,7 @@
  * a real server-side recalculation, and scoped to the record that diverged.
  */
 
+import { remoteId } from './testing';
 import { describe, expect, it } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
@@ -108,8 +109,8 @@ async function insertResident(
 			insert(doc: unknown): Promise<unknown>;
 		}
 	).insert({
-		id: ORDER_UUID,
-		wooOrderId: over.wooOrderId ?? null,
+		uuid: ORDER_UUID,
+		remoteId: over.wooOrderId == null ? null : remoteId(over.wooOrderId),
 		number: '',
 		dateCreatedGmt: '2026-08-06T00:00:00',
 		status: String(payload.status ?? 'processing'),
@@ -277,7 +278,7 @@ describe('(b) server-authoritative fields still graft (no #1008 / #815 regressio
 			const payload = residentPayload(row);
 			// `wooOrderId` comes from the ack document's own `id` (reconcileCreateAck),
 			// which the write contract stamps — not from anything the projection says.
-			expect(row.wooOrderId).toBe(500);
+			expect(row.remoteId).toBe(remoteId(500));
 			expect(payload.number).toBe('4242');
 			expect(payload.order_key).toBe('wc_order_abc123');
 			expect(lineOf(payload).id).toBe(77);
@@ -338,7 +339,7 @@ describe('(c) sparse-ack tolerance — an omitted array must not destroy the res
 		try {
 			const row = await residentJson(run.engine);
 			const payload = residentPayload(row);
-			expect(row.wooOrderId).toBe(500);
+			expect(row.remoteId).toBe(remoteId(500));
 			expect(payload.total).toBe('36.68');
 			expect((payload.line_items as unknown[]).length).toBe(1);
 		} finally {
@@ -523,8 +524,8 @@ describe('divergence detection at the ack boundary', () => {
 					insert(doc: unknown): Promise<unknown>;
 				}
 			).insert({
-				id: ORDER_UUID,
-				wooCustomerId: null,
+				uuid: ORDER_UUID,
+				remoteId: null,
 				payload: {
 					first_name: 'Ada',
 					meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],

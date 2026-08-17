@@ -6,6 +6,7 @@
  * priority preemption of queued work, release()).
  */
 
+import { remoteId } from './testing';
 import { describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
@@ -87,8 +88,8 @@ async function insertBornLocalOrder(
 	const scope = engine.active();
 	if (!scope) throw new Error('no active scope');
 	await (scope.database.collections.orders as { insert(doc: unknown): Promise<unknown> }).insert({
-		id,
-		wooOrderId: null,
+		uuid: id,
+		remoteId: null,
 		number: '',
 		dateCreatedGmt: '2026-07-10T00:00:00',
 		status: promotedStatus,
@@ -146,8 +147,8 @@ async function insertServerBornOrder(
 	const scope = engine.active();
 	if (!scope) throw new Error('no active scope');
 	await (scope.database.collections.orders as { insert(doc: unknown): Promise<unknown> }).insert({
-		id,
-		wooOrderId: over.wooOrderId,
+		uuid: id,
+		remoteId: remoteId(over.wooOrderId),
 		number: String(1000 + over.wooOrderId),
 		dateCreatedGmt: '2026-07-10T00:00:00',
 		status: over.status ?? 'processing',
@@ -591,7 +592,7 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			expect(await engine.scope.resetCollection('orders')).toBe('reset');
 			expect(await orderJson(engine, UUID_A)).toBeNull();
 			expect((await engine.sync('write-drain')).pushed).toBe(1);
-			expect((await orderJson(engine, UUID_A))?.wooOrderId).toBe(900_000_321);
+			expect((await orderJson(engine, UUID_A))?.remoteId).toBe(remoteId(900_000_321));
 			expect(events).toContainEqual(
 				expect.objectContaining({ type: 'write-ack-rematerialized', recordId: UUID_A })
 			);
@@ -681,7 +682,7 @@ describe('write() + sync("write-drain") through the public handle', () => {
 
 		// The ack write-back: server id captured, revision re-anchored, dirty cleared.
 		const order = await orderJson(engine, UUID_A);
-		expect(order?.wooOrderId).toBe(900_000_100);
+		expect(order?.remoteId).toBe(remoteId(900_000_100));
 		expect((order?.sync as { revision?: string }).revision).toBeTruthy();
 		expect((order?.local as { dirty?: boolean }).dirty).toBe(false);
 		await engine.dispose();
@@ -713,7 +714,7 @@ describe('write() + sync("write-drain") through the public handle', () => {
 
 			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
 			expect(await orderJson(engine, UUID_A)).toMatchObject({
-				wooOrderId: 900_000_101,
+				remoteId: remoteId(900_000_101),
 				payload: {
 					total: '52.00',
 					line_items: [{ product_id: 123, quantity: 1, id: 7001, total: '52.00' }],
@@ -839,7 +840,7 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			expect(await firstDrain).toMatchObject({ pushed: 1, rejected: 0 });
 			const order = await orderJson(engine, UUID_A);
 			expect(order).toMatchObject({
-				wooOrderId: 900_000_102,
+				remoteId: remoteId(900_000_102),
 				// The ack's `total: '104.00'` is NOT adopted — the queued successor owns
 				// the record's values (#815).
 				payload: { status: 'pos-open', total: '52.00' },
@@ -996,13 +997,13 @@ describe('write() + sync("write-drain") through the public handle', () => {
 					recordId: UUID_A,
 				},
 				recordId: UUID_A,
-				remoteId: 900_000_103,
+				remoteId: remoteId(900_000_103),
 				currentRevision: 'sha256:null-document',
 				document: null,
 			});
 
 			expect(await orderJson(engine, UUID_A)).toMatchObject({
-				wooOrderId: 900_000_103,
+				remoteId: '900000103',
 				payload: localPayload,
 				sync: { revision: 'sha256:null-document' },
 				local: { dirty: false, pendingMutationIds: [] },
@@ -1038,7 +1039,7 @@ describe('write() + sync("write-drain") through the public handle', () => {
 
 			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
 			expect(await orderJson(engine, UUID_A)).toMatchObject({
-				wooOrderId: 900_000_104,
+				remoteId: remoteId(900_000_104),
 				payload: localPayload,
 				sync: { revision: server.applied.get(UUID_A)?.revision },
 				local: { dirty: false, pendingMutationIds: [] },
@@ -1079,7 +1080,7 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
 			const afterBornTwice = await orderJson(engine, UUID_A);
 			expect(afterBornTwice).toMatchObject({
-				wooOrderId: 42,
+				remoteId: remoteId(42),
 				payload: localPayload,
 				local: { dirty: true },
 			});
@@ -1340,7 +1341,7 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			const row = doc?.toJSON() as Record<string, unknown>;
 			expect((row.payload as Record<string, unknown>).stock_status).toBe('outofstock');
 			expect(row.stockStatus).toBe('outofstock');
-			expect(row.parentId).toBe(50);
+			expect(row.parentRemoteId).toBe(remoteId(50));
 			expect(row.sync).toMatchObject({ revision: 'sha256:variation-after-stock-edit' });
 		} finally {
 			await engine.dispose();
@@ -1364,7 +1365,7 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			const ack = {
 				mutation: { mutationId: 'mut-live-reader', operation: 'update' as const, recordId: UUID_A },
 				recordId: UUID_A,
-				remoteId: PRODUCT_ID,
+				remoteId: remoteId(PRODUCT_ID),
 				currentRevision: 'sha256:live-reader',
 				document: { ...productPayload(0), sku: 'LIVE-77' },
 				barcodeSelectors: () => carriers,
@@ -1467,7 +1468,7 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			expect((row.payload as Record<string, unknown>).date_modified_gmt).toBe(
 				'2026-08-14T17:00:00'
 			);
-			expect(row.wooCustomerId).toBe(CUSTOMER_ID);
+			expect(row.remoteId).toBe(remoteId(CUSTOMER_ID));
 			expect(row.sync).toMatchObject({ revision: 'sha256:customer-after-edit' });
 		} finally {
 			await engine.dispose();
@@ -1606,7 +1607,7 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		connectivity.set('online');
 		const drained = await engine.sync('write-drain');
 		expect(drained).toMatchObject({ status: 'ran', pushed: 1 });
-		expect((await orderJson(engine, UUID_A))?.wooOrderId).toBe(900_000_200);
+		expect((await orderJson(engine, UUID_A))?.remoteId).toBe(remoteId(900_000_200));
 		await engine.dispose();
 	});
 
@@ -1921,7 +1922,7 @@ describe('#507 offline write flows through the public handle', () => {
 				id: 'recover',
 				collection: 'orders',
 				kind: 'targeted-records',
-				wooIds: [42],
+				remoteIds: [42].map(remoteId),
 				forceRefresh: true,
 			}).ready;
 			expect(state.orderPulls).toEqual([[42]]);
@@ -2072,7 +2073,7 @@ describe('#507 offline write flows through the public handle', () => {
 			expect(sent.meta_data).toEqual([{ key: '_woocommerce_pos_uuid', value: UUID_A }]);
 			// The sale is finally on the server, reconciled onto the resident record.
 			const order = await orderJson(engine, UUID_A);
-			expect(order?.wooOrderId).toBe(500);
+			expect(order?.remoteId).toBe(remoteId(500));
 			expect(order?.local).toMatchObject({ dirty: false, pendingMutationIds: [] });
 			expect(await queueRows(engine)).toEqual([]);
 		} finally {
@@ -2136,7 +2137,7 @@ describe('#507 offline write flows through the public handle', () => {
 			refuse = false;
 			expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', pushed: 1 });
 			expect(await engine.conflicts()).toEqual([]);
-			expect((await orderJson(engine, UUID_A))?.wooOrderId).toBe(500);
+			expect((await orderJson(engine, UUID_A))?.remoteId).toBe(remoteId(500));
 		} finally {
 			await engine.dispose();
 		}
@@ -2290,7 +2291,7 @@ describe('#507 offline write flows through the public handle', () => {
 				total: '25.00',
 				customer_note: 'gift wrap',
 			});
-			expect((await orderJson(engine, UUID_A))?.wooOrderId).toBe(500);
+			expect((await orderJson(engine, UUID_A))?.remoteId).toBe(remoteId(500));
 		} finally {
 			await engine.dispose();
 		}
@@ -2464,7 +2465,7 @@ describe('#507 offline write flows through the public handle', () => {
 				id: 'recover',
 				collection: 'orders',
 				kind: 'targeted-records',
-				wooIds: [42],
+				remoteIds: [42].map(remoteId),
 				forceRefresh: true,
 			}).ready;
 			expect(state.orderPulls).toEqual([[42]]);
@@ -2742,7 +2743,7 @@ describe('#507 offline write flows through the public handle', () => {
 
 			const order = await orderJson(engine, UUID_A);
 			expect(order).not.toBeNull();
-			expect(order?.wooOrderId).toBe(42);
+			expect(order?.remoteId).toBe(remoteId(42));
 			expect(order?.local).toMatchObject({ dirty: false, pendingMutationIds: [] });
 			expect(await engine.conflicts()).toEqual([]);
 		} finally {
@@ -2791,10 +2792,10 @@ describe('#507 offline write flows through the public handle', () => {
 				id: 'adopt',
 				collection: 'orders',
 				kind: 'targeted-records',
-				wooIds: [42],
+				remoteIds: [42].map(remoteId),
 				forceRefresh: true,
 			}).ready;
-			expect((await orderJson(engine, UUID_A))?.wooOrderId).toBe(42);
+			expect((await orderJson(engine, UUID_A))?.remoteId).toBe(remoteId(42));
 
 			await engine.resolveConflict('stranded-create', 'discard');
 
@@ -3312,7 +3313,7 @@ describe('#507 offline write flows through the public handle', () => {
 			});
 			expect((server.received[0].payload as { status?: string }).status).toBe('pos-paid');
 			const order = await orderJson(engine, UUID_A);
-			expect(order?.wooOrderId).toBe(900_000_500);
+			expect(order?.remoteId).toBe(remoteId(900_000_500));
 			expect(order?.local).toMatchObject({ dirty: false, pendingMutationIds: [] });
 		} finally {
 			await engine.dispose();
@@ -3418,7 +3419,7 @@ describe('#507 offline write flows through the public handle', () => {
 			error: rows.map((row) => ({
 				status: 422,
 				isError: true as const,
-				documentId: row.document.id as string,
+				documentId: row.document.uuid as string,
 				writeRow: row,
 				validationErrors: [{ message: 'sabotage: orders storage write refused' }],
 			})),
@@ -3939,7 +3940,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				currency: 'AUD',
 			});
 			const afterAck = await orderJson(engine, UUID_A);
-			expect(afterAck?.wooOrderId).toBe(900_120_777); // the existing server identity was adopted
+			expect(afterAck?.remoteId).toBe(remoteId(900_120_777)); // the existing server identity was adopted
 			expect((afterAck?.local as { dirty?: boolean }).dirty).toBe(true); // NOT posing as synced
 
 			// Drain 2: the follow-up lands the snapshot on the existing record's base.
@@ -4246,8 +4247,8 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 			await (
 				scope.database.collections.orders as { insert(doc: unknown): Promise<unknown> }
 			).insert({
-				id: UUID_A,
-				wooOrderId: null,
+				uuid: UUID_A,
+				remoteId: null,
 				number: '',
 				dateCreatedGmt: '2026-07-10T00:00:00',
 				status: 'pos-open',
@@ -4486,7 +4487,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 			error: rows.map((row) => ({
 				status: 422,
 				isError: true as const,
-				documentId: row.document.id as string,
+				documentId: row.document.uuid as string,
 				writeRow: row,
 				validationErrors: [{ message: 'sabotage: orders storage write refused' }],
 			})),
@@ -4676,9 +4677,9 @@ describe('require() through the public handle', () => {
 			id: 'r1',
 			collection: 'products',
 			kind: 'targeted-records',
-			wooIds: [1],
+			remoteIds: [1].map(remoteId),
 		}).ready;
-		expect(first).toMatchObject({ action: 'fetched', missingRecordIds: [1] });
+		expect(first).toMatchObject({ action: 'fetched', missingRecordIds: [remoteId(1)] });
 		expect(server.pulls).toEqual([[1]]);
 		const scope = engine.active();
 		if (!scope) throw new Error('no active scope');
@@ -4691,7 +4692,7 @@ describe('require() through the public handle', () => {
 			id: 'r2',
 			collection: 'products',
 			kind: 'targeted-records',
-			wooIds: [1],
+			remoteIds: [1].map(remoteId),
 		}).ready;
 		expect(again).toMatchObject({ action: 'serve-local', missingRecordIds: [] });
 		expect(server.pulls).toEqual([[1]]);
@@ -4702,21 +4703,21 @@ describe('require() through the public handle', () => {
 			id: 'low',
 			collection: 'products',
 			kind: 'targeted-records',
-			wooIds: [10],
+			remoteIds: [10].map(remoteId),
 			priority: 100,
 		});
 		const mid = engine.require({
 			id: 'mid',
 			collection: 'products',
 			kind: 'targeted-records',
-			wooIds: [20],
+			remoteIds: [20].map(remoteId),
 			priority: 500,
 		});
 		const high = engine.require({
 			id: 'high',
 			collection: 'products',
 			kind: 'targeted-records',
-			wooIds: [30],
+			remoteIds: [30].map(remoteId),
 			priority: 900,
 		});
 		await Promise.all([low.ready, mid.ready, high.ready]);
@@ -4728,14 +4729,14 @@ describe('require() through the public handle', () => {
 			id: 'busy',
 			collection: 'products',
 			kind: 'targeted-records',
-			wooIds: [40],
+			remoteIds: [40].map(remoteId),
 			priority: 100,
 		});
 		const released = engine.require({
 			id: 'released',
 			collection: 'products',
 			kind: 'targeted-records',
-			wooIds: [50],
+			remoteIds: [50].map(remoteId),
 			priority: 50,
 		});
 		released.release();
@@ -4751,9 +4752,9 @@ describe('require() through the public handle', () => {
 		await engine.ready;
 		await expect(
 			engine.require({ id: 'x', collection: 'products', kind: 'targeted-records' } as never).ready
-		).rejects.toThrow(/needs wooIds/i);
+		).rejects.toThrow(/needs remoteIds/i);
 		await expect(
-			engine.require({ id: 'y', collection: 'categories', kind: 'targeted-records', wooIds: [1] })
+			engine.require({ id: 'y', collection: 'categories', kind: 'targeted-records', remoteIds: [1].map(remoteId) })
 				.ready
 		).rejects.toThrow(/targeted collection/i);
 		await engine.dispose();
@@ -4784,7 +4785,7 @@ describe('telemetry redaction corpus', () => {
 		});
 		await engine.sync('write-drain');
 		await engine
-			.require({ id: 'resident', collection: 'orders', kind: 'targeted-records', wooIds: [] })
+			.require({ id: 'resident', collection: 'orders', kind: 'targeted-records', remoteIds: [] })
 			.ready.catch(() => undefined);
 		await engine.scope.resetCollection('products');
 		await engine.dispose();

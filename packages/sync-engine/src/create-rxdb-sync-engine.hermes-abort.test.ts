@@ -7,6 +7,7 @@
  * creates AbortSignal.any, or leaks a signal into a bound fetcher, throws.
  */
 
+import { remoteId } from './testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
@@ -120,9 +121,9 @@ describe('engine drains without AbortSignal.any (Hermes/RN emulation)', () => {
 				id: 'hermes-required-order',
 				collection: 'orders',
 				kind: 'targeted-records',
-				wooIds: [1],
+				remoteIds: [1].map(remoteId),
 			}).ready
-		).resolves.toMatchObject({ action: 'fetched', missingRecordIds: [1] });
+		).resolves.toMatchObject({ action: 'fetched', missingRecordIds: ['1'] });
 		expect(server.state.pulls).toBeGreaterThan(0);
 		expect(server.state.sawSignal).toBe(true);
 		await engine.dispose();
@@ -148,8 +149,8 @@ describe('engine drains without AbortSignal.any (Hermes/RN emulation)', () => {
 		if (!scope0) throw new Error('no active scope');
 		await (scope0.database.collections.orders as { insert(doc: unknown): Promise<unknown> }).insert(
 			{
-				id: UUID_1,
-				wooOrderId: null,
+				uuid: UUID_1,
+				remoteId: null,
 				number: '',
 				dateCreatedGmt: '2026-07-10T00:00:00',
 				status: 'pos-open',
@@ -216,8 +217,8 @@ describe('engine drains without AbortSignal.any (Hermes/RN emulation)', () => {
 		const scope = subject.active();
 		if (!scope) throw new Error('no active scope');
 		await scope.database.collections.products.insert({
-			id: UUID_1,
-			wooProductId: 501,
+			uuid: UUID_1,
+			remoteId: remoteId(501),
 			price: 12.5,
 			stockStatus: 'instock',
 			type: 'simple',

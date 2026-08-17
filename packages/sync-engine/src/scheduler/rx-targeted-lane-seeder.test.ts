@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { remoteId } from '../testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { seedTargetedLane, type TargetedLaneDescriptor } from './rx-targeted-lane-seeder';
@@ -67,7 +68,7 @@ describe('seedTargetedLane', () => {
 		await expect(
 			seedTargetedLane(VARIATIONS_LANE, {
 				database: MOCK_DATABASE,
-				ids: [456, 123, 123],
+				remoteIds: [456, 123, 123].map(remoteId),
 				priority: 950,
 				batchSize: 50,
 				completedDedupeForMs: 30_000,
@@ -85,7 +86,7 @@ describe('seedTargetedLane', () => {
 					collection: 'variations',
 					queryKey: 'variations:ids:123,456',
 					ids: ['woo-variation:123', 'woo-variation:456'],
-					wooIds: [123, 456],
+					remoteIds: [123, 456].map(remoteId),
 					limit: 50,
 					priority: 950,
 					mode: 'on-demand',
@@ -105,7 +106,7 @@ describe('seedTargetedLane', () => {
 
 		await seedTargetedLane(VARIATIONS_LANE, {
 			database: MOCK_DATABASE,
-			ids: [7],
+			remoteIds: [7].map(remoteId),
 			nowMs: 1_000,
 		});
 
@@ -131,7 +132,7 @@ describe('seedTargetedLane', () => {
 
 		await seedTargetedLane(VARIATIONS_LANE, {
 			database: MOCK_DATABASE,
-			ids: [7],
+			remoteIds: [7].map(remoteId),
 			completedDedupeForMs: 0,
 			nowMs: 1_000,
 		});
@@ -148,7 +149,7 @@ describe('seedTargetedLane', () => {
 
 		await seedTargetedLane(VARIATIONS_LANE, {
 			database: MOCK_DATABASE,
-			ids: [7],
+			remoteIds: [7].map(remoteId),
 		});
 
 		const seederInput = mocks.seedPersistedSchedulerTasks.mock.calls[0][0];
@@ -162,25 +163,25 @@ describe('seedTargetedLane', () => {
 		await expect(
 			seedTargetedLane(VARIATIONS_LANE, {
 				database: MOCK_DATABASE,
-				ids: [],
+				remoteIds: [],
 			})
 		).rejects.toThrow('Targeted variation scheduler task requires at least one variation id');
 		await expect(
 			seedTargetedLane(VARIATIONS_LANE, {
 				database: MOCK_DATABASE,
-				ids: [0],
+				remoteIds: ['0' as never],
 			})
-		).rejects.toThrow('Targeted variation scheduler task requires positive integer variation ids');
+		).rejects.toThrow(/non-numeric/);
 		await expect(
 			seedTargetedLane(VARIATIONS_LANE, {
 				database: MOCK_DATABASE,
-				ids: [1.5],
+				remoteIds: ['1.5' as never],
 			})
-		).rejects.toThrow('positive integer variation ids');
+		).rejects.toThrow(/non-numeric/);
 		await expect(
 			seedTargetedLane(VARIATIONS_LANE, {
 				database: MOCK_DATABASE,
-				ids: [5],
+				remoteIds: [5].map(remoteId),
 				batchSize: 0,
 			})
 		).rejects.toThrow('Targeted variation scheduler task batch size must be a positive integer');
@@ -193,7 +194,7 @@ describe('seedTargetedLane', () => {
 
 		await seedTargetedLane(VARIATIONS_LANE, {
 			database: MOCK_DATABASE,
-			ids: [5, 4, 3, 2, 1],
+			remoteIds: [5, 4, 3, 2, 1].map(remoteId),
 			batchSize: 2,
 			nowMs: 1_000,
 		});
@@ -214,7 +215,7 @@ describe('seedTargetedLane', () => {
 
 		await seedTargetedLane(VARIATIONS_LANE, {
 			database: MOCK_DATABASE,
-			ids: Array.from({ length: 100 }, (_, index) => index + 1),
+			remoteIds: Array.from({ length: 100 }, (_, index) => index + 1).map(remoteId),
 			batchSize: 100,
 			nowMs: 12_000,
 		});
@@ -262,7 +263,7 @@ describe('seedTargetedLane', () => {
 		fakeWiring();
 		await seedTargetedLane(productLane, {
 			database: MOCK_DATABASE,
-			ids: [456, 123, 123],
+			remoteIds: [456, 123, 123].map(remoteId),
 			priority: 950,
 			batchSize: 50,
 			completedDedupeForMs: 30_000,
@@ -275,7 +276,7 @@ describe('seedTargetedLane', () => {
 				collection: 'products',
 				queryKey: 'products:ids:123,456',
 				ids: ['woo-product:123', 'woo-product:456'],
-				wooIds: [123, 456],
+				remoteIds: [123, 456].map(remoteId),
 				limit: 50,
 				priority: 950,
 				mode: 'on-demand',
@@ -285,7 +286,7 @@ describe('seedTargetedLane', () => {
 		mocks.seedPersistedSchedulerTasks.mockClear();
 		await seedTargetedLane(orderLane, {
 			database: MOCK_DATABASE,
-			ids: [456, 123, 123],
+			remoteIds: [456, 123, 123].map(remoteId),
 			priority: 950,
 			batchSize: 50,
 			completedDedupeForMs: 30_000,
@@ -298,7 +299,7 @@ describe('seedTargetedLane', () => {
 				collection: 'orders',
 				queryKey: 'orders:ids:123,456',
 				ids: ['woo-order:123', 'woo-order:456'],
-				wooIds: [123, 456],
+				remoteIds: [123, 456].map(remoteId),
 				limit: 50,
 				priority: 950,
 				mode: 'on-demand',

@@ -2,19 +2,17 @@
  * Product variations — first-class local records (CONTEXT.md: their own
  * collection, indexed barcode + parent reference). Pulled ON DEMAND via the
  * versioned `{syncBase}/variations?include=<ids>` endpoint, which
- * resolves the parent server-side. The stable string `id` is derived from the
- * Woo id; `wooId` and `parentId` are mirrored fields (never the key — G1).
+ * resolves the parent server-side. The stable string `uuid` is the primary key;
+ * `remoteId` and `parentRemoteId` mirror the driver identities.
  */
-import { finiteOrNull } from '@wcpos/sync-core';
-
-import type { MigrationStrategies } from 'rxdb';
+import { finiteOrNull, type RemoteId } from '@wcpos/sync-core';
 
 export type WooVariationPayload = Record<string, unknown> & { id?: number };
 
 export type LocalVariationDocument = {
-	id: string;
-	wooId: number | null;
-	parentId: number | null;
+	uuid: string;
+	remoteId: RemoteId | null;
+	parentRemoteId: RemoteId | null;
 	payload: WooVariationPayload;
 	sync: {
 		revision: string;
@@ -77,13 +75,13 @@ export function withVariationColumns<T extends { payload: WooVariationPayload }>
 
 export const variationSchema = {
 	title: 'Woo product-variation document schema',
-	version: 3,
-	primaryKey: 'id',
+	version: 0,
+	primaryKey: 'uuid',
 	type: 'object',
 	properties: {
-		id: { type: 'string', maxLength: 128 },
-		wooId: { type: ['number', 'null'] },
-		parentId: { type: ['number', 'null'] },
+		uuid: { type: 'string', maxLength: 128 },
+		remoteId: { type: ['string', 'null'], maxLength: 64 },
+		parentRemoteId: { type: ['string', 'null'], maxLength: 64 },
 		// Promoted filter columns (duplicated out of payload, payload bytes unchanged).
 		price: { type: 'number' },
 		stockStatus: { type: 'string', maxLength: 24 },
@@ -106,9 +104,9 @@ export const variationSchema = {
 		local: { type: 'object', additionalProperties: true },
 	},
 	required: [
-		'id',
-		'wooId',
-		'parentId',
+		'uuid',
+		'remoteId',
+		'parentRemoteId',
 		'price',
 		'stockStatus',
 		'attributes',
@@ -118,12 +116,3 @@ export const variationSchema = {
 		'local',
 	],
 } as const;
-
-export const variationMigrationStrategies: MigrationStrategies = {
-	/** v0 → v1: backfill the promoted columns from the existing payload (payload untouched). */
-	1: (doc) => ({ ...doc, ...promotedVariationColumns(doc.payload) }),
-	/** v1 → v2: additive — backfill the new decimal stockQuantity column from the payload. */
-	2: (doc) => ({ ...doc, stockQuantity: promotedVariationColumns(doc.payload).stockQuantity }),
-	/** v2 → v3: write facets need the same durable local bookkeeping as products/customers. */
-	3: (doc) => ({ ...doc, local: { dirty: false, pendingMutationIds: [] } }),
-};

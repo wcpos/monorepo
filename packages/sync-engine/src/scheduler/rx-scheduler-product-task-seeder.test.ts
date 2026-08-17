@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { remoteId } from '../testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -50,7 +51,7 @@ describe('seedTargetedProductSchedulerTask', () => {
 		await expect(
 			seedTargetedProductSchedulerTask({
 				database: MOCK_DATABASE,
-				productIds: [456, 123, 123],
+				remoteIds: [456, 123, 123].map(remoteId),
 				priority: 950,
 				batchSize: 50,
 				completedDedupeForMs: 30_000,
@@ -68,7 +69,7 @@ describe('seedTargetedProductSchedulerTask', () => {
 					collection: 'products',
 					queryKey: 'products:ids:123,456',
 					ids: ['woo-product:123', 'woo-product:456'],
-					wooIds: [123, 456],
+					remoteIds: [123, 456].map(remoteId),
 					limit: 50,
 					priority: 950,
 					mode: 'on-demand',
@@ -102,7 +103,7 @@ describe('seedTargetedProductSchedulerTask', () => {
 
 		await seedTargetedProductSchedulerTask({
 			database: MOCK_DATABASE,
-			productIds: [7],
+			remoteIds: [7].map(remoteId),
 			nowMs: 1_000,
 		});
 
@@ -126,15 +127,15 @@ describe('seedTargetedProductSchedulerTask', () => {
 
 	it('rejects empty and invalid product ids before queuing work', async () => {
 		await expect(
-			seedTargetedProductSchedulerTask({ database: MOCK_DATABASE, productIds: [] })
+			seedTargetedProductSchedulerTask({ database: MOCK_DATABASE, remoteIds: [] })
 		).rejects.toThrow('Targeted product scheduler task requires at least one product id');
 		await expect(
-			seedTargetedProductSchedulerTask({ database: MOCK_DATABASE, productIds: [0] })
-		).rejects.toThrow('positive integer product ids');
+			seedTargetedProductSchedulerTask({ database: MOCK_DATABASE, remoteIds: ['0' as never] })
+		).rejects.toThrow('Remote id is non-numeric: 0');
 		await expect(
 			seedTargetedProductSchedulerTask({
 				database: MOCK_DATABASE,
-				productIds: [5],
+				remoteIds: [5].map(remoteId),
 				batchSize: 0,
 			})
 		).rejects.toThrow('batch size must be a positive integer');
@@ -161,7 +162,7 @@ describe('seedTargetedProductSchedulerTask', () => {
 
 		await seedTargetedProductSchedulerTask({
 			database: MOCK_DATABASE,
-			productIds: Array.from({ length: 100 }, (_, index) => index + 1),
+			remoteIds: Array.from({ length: 100 }, (_, index) => index + 1).map(remoteId),
 			nowMs: 12_000,
 		});
 

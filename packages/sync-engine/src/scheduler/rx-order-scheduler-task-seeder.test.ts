@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { remoteId } from '../testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -95,7 +96,7 @@ describe('seedOrderSchedulerTasks', () => {
 		await expect(
 			seedTargetedOrderSchedulerTask({
 				database: MOCK_DATABASE,
-				orderIds: [456, 123, 123],
+				remoteIds: [456, 123, 123].map(remoteId),
 				priority: 950,
 				batchSize: 50,
 				completedDedupeForMs: 30_000,
@@ -113,7 +114,7 @@ describe('seedOrderSchedulerTasks', () => {
 					collection: 'orders',
 					queryKey: 'orders:ids:123,456',
 					ids: ['woo-order:123', 'woo-order:456'],
-					wooIds: [123, 456],
+					remoteIds: [123, 456].map(remoteId),
 					limit: 50,
 					priority: 950,
 					mode: 'on-demand',
@@ -422,7 +423,7 @@ describe('seedOrderSchedulerTasks', () => {
 		await expect(
 			seedTargetedOrderSchedulerTask({
 				database: MOCK_DATABASE,
-				orderIds: [123],
+				remoteIds: [123].map(remoteId),
 				batchSize: 0,
 			})
 		).rejects.toThrow('Targeted order scheduler task batch size must be a positive integer');
@@ -451,7 +452,7 @@ describe('seedOrderSchedulerTasks', () => {
 		await expect(
 			seedTargetedOrderSchedulerTask({
 				database: MOCK_DATABASE,
-				orderIds: Array.from({ length: 100 }, (_, index) => index + 1),
+				remoteIds: Array.from({ length: 100 }, (_, index) => index + 1).map(remoteId),
 				nowMs: 12_000,
 			})
 		).resolves.toBe(result);

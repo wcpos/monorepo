@@ -1,3 +1,4 @@
+import { remoteId } from './testing';
 import { describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
@@ -29,8 +30,8 @@ function engineWith(writePlaneOwner?: () => boolean) {
 async function insertServerOrder(engine: ReturnType<typeof createRxdbSyncEngine>) {
 	await engine.ready;
 	await engine.active()!.database.collections.orders.insert({
-		id: ORDER_ID,
-		wooOrderId: 42,
+		uuid: ORDER_ID,
+		remoteId: remoteId(42),
 		number: '1042',
 		dateCreatedGmt: '2026-08-07T00:00:00',
 		status: 'processing',
@@ -121,8 +122,8 @@ describe('web write-plane leader gate', () => {
 			await engine.ready;
 			// Born-local order (no server identity) — rung up locally.
 			await engine.active()!.database.collections.orders.insert({
-				id: LOCAL_ID,
-				wooOrderId: null,
+				uuid: LOCAL_ID,
+				remoteId: null,
 				number: '',
 				dateCreatedGmt: '2026-08-07T00:00:00',
 				status: 'pos-open',

@@ -10,7 +10,7 @@ import {
 import { forEachYielding } from './event-loop-yield';
 import { existenceManifestDocument } from './local-coverage/existence-manifest-schema';
 import { materializeTargeted } from './materialization/record-materialization';
-import { memoryEngineStorage } from './testing';
+import { memoryEngineStorage, remoteId } from './testing';
 
 import type { RxDatabase } from 'rxdb';
 
@@ -395,7 +395,7 @@ async function measureFirstPage(
 ): Promise<{ elapsedMs: number; hitCount: number }> {
 	const started = performance.now();
 	const page = await database.collections['products']!.find({
-		selector: { wooProductId: { $lte: residentCeiling } },
+		selector: { remoteId: { $lte: remoteId(residentCeiling) } },
 		limit: 10,
 	}).exec();
 	return { elapsedMs: performance.now() - started, hitCount: page.length };

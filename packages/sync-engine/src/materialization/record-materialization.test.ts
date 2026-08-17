@@ -1,3 +1,4 @@
+import { remoteId } from '../testing';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -60,8 +61,8 @@ describe('record materialization seam', () => {
 			_rxdb_digest: 'digest-7',
 		});
 		expect(stamped.storedDocument).toMatchObject({
-			id: uuid,
-			wooProductId: 7,
+			uuid: uuid,
+			remoteId: remoteId(7),
 			price: 12.34,
 			sync: { revision: 'server-r' },
 		});
@@ -84,26 +85,26 @@ describe('record materialization seam', () => {
 			materializeTargeted('variations', { id: 7, parent_id: 3, attributes: [], meta_data })
 				.storedDocument
 		).toMatchObject({
-			id: uuid,
-			wooId: 7,
-			parentId: 3,
+			uuid,
+			remoteId: remoteId(7),
+			parentRemoteId: remoteId(3),
 			attributes: [],
 			local: { dirty: false, pendingMutationIds: [] },
 		});
 		expect(
 			materializeGreedyPrunable({ id: 7, name: 'Term', meta_data }).storedDocument
 		).toMatchObject({
-			id: uuid,
-			wooId: 7,
+			uuid,
+			remoteId: remoteId(7),
 			local: { dirty: false, pendingMutationIds: [] },
 		});
 		expect(materializeUpsertRefresh({ id: 7 } as never).storedDocument).toMatchObject({
-			id: 'woo-tax-rate:7',
-			wooTaxRateId: 7,
+			uuid: 'woo-tax-rate:7',
+			remoteId: remoteId(7),
 		});
 		expect(
 			materializeLocalOnly({ id: 7, status: 'processing', meta_data } as never).storedDocument
-		).toMatchObject({ id: uuid, wooOrderId: 7, payload: { status: 'processing' } });
+		).toMatchObject({ uuid: uuid, remoteId: remoteId(7), payload: { status: 'processing' } });
 	});
 
 	it('strips object order meta display fields while preserving typed values and strings', () => {

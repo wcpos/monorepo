@@ -6,7 +6,11 @@
  * sentinel, the search-lane queryKey grammar, and the browse-window walk.
  */
 
-import { customerDocumentId, type SyncObserver } from '@wcpos/sync-core';
+import {
+	customerDocumentId,
+	remoteIdOrNull,
+	type SyncObserver,
+} from '@wcpos/sync-core';
 
 import {
 	type LocalCustomerDocument,
@@ -39,13 +43,14 @@ export type CustomerSchedulerFetcherInput = CollectionSchedulerInput<LocalCustom
 
 function customerTargetFromDocumentId(id: string): CollectionTarget {
 	if (id === 'customer:default') {
-		return { documentId: id, wooId: null };
+		return { documentId: id, remoteId: null };
 	}
 	const match = /^woo-customer:(\d+)$/.exec(id);
 	if (!match)
 		throw new Error(`Targeted customer scheduler task id is not a Woo customer document id: ${id}`);
-	const wooCustomerId = Number(match[1]);
-	return { documentId: customerDocumentId(wooCustomerId), wooId: wooCustomerId };
+	const remoteId = remoteIdOrNull(match[1]);
+	if (remoteId === null) throw new Error(`Invalid Woo customer id: ${match[1]}`);
+	return { documentId: customerDocumentId(remoteId), remoteId };
 }
 
 function revisionFromCustomer(payload: WooCustomerPayload): string {
@@ -58,18 +63,18 @@ function customerDocumentFromWooPayload(payload: WooCustomerPayload): LocalCusto
 
 /**
  * The COVERAGE-record id for a customer — the stable Woo-id-space key (`woo-customer:<wooId>`), NOT the uuid
- * STORAGE key (P0-1). Coverage/lane ids stay in this space so the targeted side (which extracts wooCustomerId) and
- * the search lane's expectedRecordIds agree. The customer:default sentinel (wooCustomerId null) falls through to
+ * STORAGE key (P0-1). Coverage/lane ids stay in this space so the targeted side (which extracts remoteId) and
+ * the search lane's expectedRecordIds agree. The customer:default sentinel (remoteId null) falls through to
  * its literal storage id.
  */
 function customerCoverageRecordId(document: LocalCustomerDocument): string {
-	return document.wooCustomerId === null ? document.id : customerDocumentId(document.wooCustomerId);
+	return document.remoteId === null ? document.uuid : customerDocumentId(document.remoteId);
 }
 
 function defaultCustomerDocument(target: CollectionTarget): LocalCustomerDocument {
 	return {
-		id: target.documentId,
-		wooCustomerId: null,
+		uuid: target.documentId,
+		remoteId: null,
 		payload: {},
 		sync: { revision: '', partial: true, source: 'woo-rest' },
 		local: { dirty: false, pendingMutationIds: [] },
@@ -176,7 +181,7 @@ async function fetchCustomerBrowseWindow(
 	const documentsById = new Map<string, LocalCustomerDocument>();
 	for (const payload of payloads) {
 		const document = customerDocumentFromWooPayload(payload);
-		if (!documentsById.has(document.id)) documentsById.set(document.id, document);
+		if (!documentsById.has(document.uuid)) documentsById.set(document.uuid, document);
 		if (documentsById.size === limit) break;
 	}
 	const documents = [...documentsById.values()];

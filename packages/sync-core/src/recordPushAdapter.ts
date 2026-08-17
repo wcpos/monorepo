@@ -1,6 +1,7 @@
 import { type MetaDataEntry, readRecordUuid } from './recordIdentity';
 import { type SyncEvent, type SyncObserver } from './telemetry';
 import { mapBarcodeEditToPayload } from './barcodeResolve';
+import { remoteIdOrNull, type RemoteId } from './woo/remoteIdCodec';
 
 import type { RecordMutation } from './recordMutation';
 
@@ -396,12 +397,12 @@ async function safeJson(response: Response): Promise<Record<string, unknown> | n
 export function reconcileCreateAck(
 	mutation: RecordMutation,
 	document: ServerDocument | null
-): { recordId: string; remoteId: unknown } {
+): { recordId: string; remoteId: RemoteId | null } {
 	const serverUuid = readRecordUuid(document?.meta_data ?? null);
 	if (serverUuid && serverUuid !== mutation.recordId) {
 		throw new Error(
 			`reconcileCreateAck: server returned uuid "${serverUuid}" for a create keyed "${mutation.recordId}" — identity must never be re-keyed.`
 		);
 	}
-	return { recordId: mutation.recordId, remoteId: document?.id ?? null };
+	return { recordId: mutation.recordId, remoteId: remoteIdOrNull(document?.id) };
 }

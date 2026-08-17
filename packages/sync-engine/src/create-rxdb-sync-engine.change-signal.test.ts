@@ -8,6 +8,7 @@
  * the shared change-signal cursor untouched).
  */
 
+import { remoteId } from './testing';
 import { describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
@@ -267,7 +268,7 @@ describe('sync("change-signal") through the public handle', () => {
 			id: 'seed-variation-b',
 			collection: 'variations',
 			kind: 'targeted-records',
-			wooIds: [22],
+			remoteIds: [22].map(remoteId),
 		}).ready;
 		server.state.elidedVariationIds.add(22);
 
@@ -276,7 +277,7 @@ describe('sync("change-signal") through the public handle', () => {
 				id: 'short-variation-pull',
 				collection: 'variations',
 				kind: 'targeted-records',
-				wooIds: [21, 22],
+				remoteIds: [21, 22].map(remoteId),
 				forceRefresh: true,
 			}).ready
 		).resolves.toMatchObject({ action: 'fetched' });
@@ -305,7 +306,7 @@ describe('sync("change-signal") through the public handle', () => {
 			id: 'seed-variation-b-for-tick',
 			collection: 'variations',
 			kind: 'targeted-records',
-			wooIds: [32],
+			remoteIds: [32].map(remoteId),
 		}).ready;
 		await engine.sync('change-signal');
 		server.state.elidedVariationIds.add(32);
@@ -560,8 +561,8 @@ describe('sync("change-signal") through the public handle', () => {
 		// A locally-created-then-acked record: the server id lives ONLY in the
 		// mirrored field; the original create payload never carried `id`.
 		await products.insert({
-			id: '44444444-4444-4444-8444-444444444444',
-			wooProductId: 77,
+			uuid: '44444444-4444-4444-8444-444444444444',
+			remoteId: remoteId(77),
 			price: 7,
 			stockStatus: 'instock',
 			type: 'simple',
@@ -577,8 +578,8 @@ describe('sync("change-signal") through the public handle', () => {
 		// A record with pending local work: its payload must not be re-pulled (the
 		// local-work guard would discard it anyway).
 		await products.insert({
-			id: '55555555-5555-4555-8555-555555555555',
-			wooProductId: 88,
+			uuid: '55555555-5555-4555-8555-555555555555',
+			remoteId: remoteId(88),
 			price: 8,
 			stockStatus: 'instock',
 			type: 'simple',
@@ -834,7 +835,7 @@ describe('sync("change-signal") through the public handle', () => {
 				id: 'non-array-targeted-products',
 				collection: 'products',
 				kind: 'targeted-records',
-				wooIds: [9],
+				remoteIds: [9].map(remoteId),
 			}).ready
 		).rejects.toThrow(/targeted pull returned a non-array body/i);
 		expect(diagnosticsEvents).toContainEqual(

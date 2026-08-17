@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { remoteId } from '../testing';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createTaxRateSchedulerFetcher } from './rx-scheduler-tax-rate-fetcher';
@@ -71,21 +72,21 @@ describe('createTaxRateSchedulerFetcher', () => {
 		expect(repository.upsertMany).toHaveBeenCalledTimes(3);
 		expect(repository.upsertMany.mock.calls[0]?.[0]).toEqual([
 			expect.objectContaining({
-				id: 'woo-tax-rate:1',
-				wooTaxRateId: 1,
+				uuid: 'woo-tax-rate:1',
+				remoteId: remoteId(1),
 				sync: expect.objectContaining({ source: 'woo-rest', partial: false }),
 			}),
 			expect.objectContaining({
-				id: 'woo-tax-rate:2',
-				wooTaxRateId: 2,
+				uuid: 'woo-tax-rate:2',
+				remoteId: remoteId(2),
 				sync: expect.objectContaining({ source: 'woo-rest', partial: false }),
 			}),
 		]);
 		expect(repository.upsertMany.mock.calls[1]?.[0]).toEqual([
-			expect.objectContaining({ id: 'woo-tax-rate:3', wooTaxRateId: 3 }),
+			expect.objectContaining({ uuid: 'woo-tax-rate:3', remoteId: remoteId(3) }),
 		]);
 		expect(repository.upsertMany.mock.calls[2]?.[0]).toEqual([
-			expect.objectContaining({ id: 'woo-tax-rate:1', wooTaxRateId: 1 }),
+			expect.objectContaining({ uuid: 'woo-tax-rate:1', remoteId: remoteId(1) }),
 		]);
 		expect(coverageRepository.recordQueryResult).toHaveBeenNthCalledWith(2, {
 			collection: 'taxRates',

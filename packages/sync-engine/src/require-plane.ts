@@ -5,7 +5,7 @@
  * and its persisted scheduler tier; callers interact only through typed
  * requirements and handles. Concretely:
  *
- *  - `targeted-records` (targeted-shape collections, wooIds required): missing
+ *  - `targeted-records` (targeted-shape collections, remoteIds required): missing
  *    ids are pulled directly through the descriptor machinery; all-present
  *    resolves serve-local WITHOUT a fetch.
  *  - `refresh` (greedy-prunable / upsert-refresh collections): one re-pull of
@@ -30,6 +30,7 @@
  */
 
 import type { Fetcher, StoreScopeManager, SyncObserver } from '@wcpos/sync-core';
+import { remoteIdOrNull, type RemoteId, wooIdOf } from '@wcpos/sync-core';
 
 import {
 	COLLECTION_DESCRIPTORS,
@@ -150,7 +151,7 @@ export type CustomerBrowseDimensions = {
  */
 export type EngineRequirement = EngineRequirementCommon &
 	(
-		| { kind: 'targeted-records'; collection: SyncCollectionName; wooIds: number[] }
+		| { kind: 'targeted-records'; collection: SyncCollectionName; remoteIds: RemoteId[] }
 		// The current bridge narrows this with a runtime Set that TypeScript cannot follow.
 		| { kind: 'search'; collection: SyncCollectionName; term: string; limit?: number }
 		| { kind: 'refresh'; collection: SyncCollectionName; limit?: number }
@@ -161,7 +162,7 @@ export type EngineRequirement = EngineRequirementCommon &
 
 export type CoverageOutcome = {
 	action: 'serve-local' | 'fetched' | 'released';
-	missingRecordIds: number[];
+	missingRecordIds: RemoteId[];
 	reason: string;
 	documents?: number;
 	requests?: number;
@@ -444,19 +445,21 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		reason: 'released during drain',
 	});
 
-	async function missingWooIds(
+	async function missingRemoteIds(
 		db: RxDatabase,
-		d: { collection: SyncCollectionName; wooIdField: string },
-		wooIds: number[]
-	): Promise<number[]> {
+		d: { collection: SyncCollectionName; wooIdField: 'remoteId' },
+		remoteIds: RemoteId[]
+	): Promise<RemoteId[]> {
 		const collection = db.collections[d.collection] as RxCollection;
 		const docs = await collection
-			.find({ selector: { [d.wooIdField]: { $in: wooIds } } as never })
+			.find({ selector: { [d.wooIdField]: { $in: remoteIds } } as never })
 			.exec();
 		const present = new Set(
-			docs.map((doc) => Number((doc.toJSON() as Record<string, unknown>)[d.wooIdField]))
+			docs
+				.map((doc) => remoteIdOrNull((doc.toJSON() as Record<string, unknown>)[d.wooIdField]))
+				.filter((remoteId): remoteId is RemoteId => remoteId !== null)
 		);
-		return wooIds.filter((id) => !present.has(id));
+		return remoteIds.filter((id) => !present.has(id));
 	}
 
 	async function executeOne(item: QueuedRequirement): Promise<CoverageOutcome> {
@@ -903,14 +906,17 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				// waits out another owner's active claim with a bounded backoff instead of
 				// releasing on it, and reports the ids it pulled — so it shares the drain
 				// arguments (`drainScheduler`) and nothing else.
-				const wooIds = item.requirement.wooIds ?? [];
-				if (wooIds.length === 0) {
-					throw new Error("require: 'targeted-records' needs wooIds");
+				const remoteIds = item.requirement.remoteIds ?? [];
+				if (remoteIds.length === 0) {
+					throw new Error("require: 'targeted-records' needs remoteIds");
 				}
-				const orderWooIdLookup = { collection: 'orders' as const, wooIdField: 'wooOrderId' };
+				const orderWooIdLookup = {
+					collection: 'orders' as const,
+					wooIdField: 'remoteId' as const,
+				};
 				const missing = item.requirement.forceRefresh
-					? wooIds
-					: await missingWooIds(database, orderWooIdLookup, wooIds);
+					? remoteIds
+					: await missingRemoteIds(database, orderWooIdLookup, remoteIds);
 				if (missing.length === 0) {
 					return {
 						action: 'serve-local' as const,
@@ -940,7 +946,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					const applied = await bound.guardWrite(async () => {
 						const nowMs = now();
 						const seedResult = await seedTargetedOrderSchedulerTask({
-							orderIds: remaining,
+							remoteIds: remaining,
 							priority: item.priority,
 							completedDedupeForMs: 0,
 							nowMs,
@@ -959,7 +965,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						throw new Error('require: scope moved mid-pull — writes dropped');
 					}
 					if (item.abortController.signal.aborted) return releasedOutcome();
-					remaining = await missingWooIds(database, orderWooIdLookup, remaining);
+					remaining = await missingRemoteIds(database, orderWooIdLookup, remaining);
 					if (remaining.length === 0) break;
 					if (failed > 0) {
 						throw new Error(
@@ -993,7 +999,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					if (!bound.isCurrent()) {
 						throw new Error('require: scope moved while waiting for an active order task');
 					}
-					remaining = await missingWooIds(database, orderWooIdLookup, remaining);
+					remaining = await missingRemoteIds(database, orderWooIdLookup, remaining);
 				}
 				return {
 					action: 'fetched' as const,
@@ -1008,13 +1014,13 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						`require: 'targeted-records' needs a targeted collection; "${descriptor.collection}" is ${descriptor.shape}`
 					);
 				}
-				const wooIds = item.requirement.wooIds ?? [];
-				if (wooIds.length === 0) {
-					throw new Error("require: 'targeted-records' needs wooIds");
+				const remoteIds = item.requirement.remoteIds ?? [];
+				if (remoteIds.length === 0) {
+					throw new Error("require: 'targeted-records' needs remoteIds");
 				}
 				const missing = item.requirement.forceRefresh
-					? wooIds
-					: await missingWooIds(database, descriptor, wooIds);
+					? remoteIds
+					: await missingRemoteIds(database, descriptor, remoteIds);
 				if (missing.length === 0) {
 					return {
 						action: 'serve-local' as const,
@@ -1024,7 +1030,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				}
 				if (item.abortController.signal.aborted) return releasedOutcome();
 				const applied = await bound.guardWrite(async () => {
-					await pullTargetedByIds(ctx, descriptor, missing);
+					await pullTargetedByIds(ctx, descriptor, missing.map(wooIdOf));
 				});
 				if (applied === 'dropped') {
 					throw new Error('require: scope moved mid-pull — writes dropped');

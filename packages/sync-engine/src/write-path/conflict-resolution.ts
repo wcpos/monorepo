@@ -4,6 +4,7 @@ import type {
 	StoreScopeManager,
 	SyncObserver,
 } from '@wcpos/sync-core';
+import { remoteIdOrNull, type RemoteId } from '@wcpos/sync-core';
 
 import { writeFacetFor } from '../collections/collection-descriptors';
 import { fetchOrderServerRevision } from './order-server-revision';
@@ -34,7 +35,7 @@ export type ConflictResolutionChoice = 'retry-with-server-base' | 'requeue-rebui
  * `identity-ambiguous` is the case that matters: the push adapter raises it when
  * the record's uuid resolves to MORE THAN ONE server record, and fails closed
  * rather than write an arbitrary match (`recordPushAdapter.ts`, the permanent 409).
- * The create is dead-lettered with no ack, so no `wooOrderId` is ever reconciled
+ * The create is dead-lettered with no ack, so no `remoteId` is ever reconciled
  * onto the resident — the record looks born-local by every local signal while the
  * server demonstrably holds one or more matching orders. Destroying it there would
  * delete a real sale on the strength of an inference the client cannot make.
@@ -73,10 +74,10 @@ export type ConflictResolutionDeps = {
 	diagnostics: SyncObserver;
 	persistOrderRepull: (input: {
 		database: RxDatabase;
-		wooIds: number[];
+		remoteIds: RemoteId[];
 		nowMs?: number;
 	}) => Promise<void>;
-	repullOrdersNow: (input: { wooIds: number[]; reason: string }) => Promise<void>;
+	repullOrdersNow: (input: { remoteIds: RemoteId[]; reason: string }) => Promise<void>;
 	queueFor: (database: RxDatabase) => RecordMutationQueue;
 	resolutionInstanceIdFor: () => string;
 	serializeResolution: <T>(op: () => Promise<T>) => Promise<T>;
@@ -145,7 +146,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 				await settled('read');
 				// Scope-guarded like write(): the resolution writes into the captured
 				// scope's queue + record, and a switch/reset mid-resolution drops them.
-				let needsRepull: number | null = null;
+				let needsRepull: RemoteId | null = null;
 				let residentRemoved = false;
 				let resolved: { collectionName: string; recordId: string } | null = null;
 				let claimedQueue: ReturnType<typeof queueFor> | null = null;
@@ -221,8 +222,8 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 								const row = (
 									await database.collections[entry.collectionName]?.findOne(entry.recordId).exec()
 								)?.toJSON() as Record<string, unknown> | undefined;
-								const remoteId = row?.[facet.remoteIdField];
-								if (typeof remoteId !== 'number') {
+								const remoteId = remoteIdOrNull(row?.[facet.remoteIdField]);
+								if (remoteId === null) {
 									throw new Error(
 										`resolveConflict: cannot refresh the server revision for "${mutationId}" — the record has no server identity; discard instead`
 									);
@@ -231,7 +232,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 									serverBase = await fetchOrderServerRevision({
 										fetch: bound.bindFetch(fetcher as never) as never,
 										syncBaseUrl,
-										wooOrderId: remoteId,
+										remoteId: remoteId,
 									});
 								} else {
 									const serverDocument = await facet.fetchServerDocument({
@@ -266,11 +267,12 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 							const row = (
 								await database.collections[entry.collectionName]?.findOne(entry.recordId).exec()
 							)?.toJSON() as Record<string, unknown> | undefined;
-							const remoteId =
+							const remoteId = remoteIdOrNull(
 								row?.[facet.remoteIdField] ??
 								(entry.payload as Record<string, unknown>).id ??
-								(entry.conflictDocument as Record<string, unknown> | undefined)?.id;
-							if (typeof remoteId === 'number') {
+								(entry.conflictDocument as Record<string, unknown> | undefined)?.id
+							);
+							if (remoteId !== null) {
 								// Discard WRITES this document back as server truth — without the
 								// scope's carriers the restored row would lose its barcode.
 								const barcodeSelectors = boundBarcodeSelectors(bound.scopeId);
@@ -383,7 +385,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 								const bornLocalCreate =
 									entry.operation === 'create' &&
 									doc !== null &&
-									typeof remoteId !== 'number' &&
+									remoteIdOrNull(remoteId) === null &&
 									// The pre-flight above resolves a remote id from the queued payload
 									// too, and a server document coming back proves the record exists
 									// there whatever the resident's column says. Never destroy that.
@@ -435,9 +437,10 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 								// survives crashes and failed fetches (a failed task re-runs once
 								// its retry gate elapses), so discard can never strand the record
 								// silently posing as synced with the re-pull lost in memory.
-								if (entry.collectionName === 'orders' && typeof remoteId === 'number') {
-									needsRepull = remoteId;
-									await persistOrderRepull({ database, wooIds: [remoteId], nowMs: now() });
+								const orderRemoteId = remoteIdOrNull(remoteId);
+								if (entry.collectionName === 'orders' && orderRemoteId !== null) {
+									needsRepull = orderRemoteId;
+									await persistOrderRepull({ database, remoteIds: [orderRemoteId], nowMs: now() });
 								}
 								if (entry.collectionName !== 'orders' && discardServerDocument) {
 									if (!facet) {
@@ -587,7 +590,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 				if (needsRepull !== null) {
 					try {
 						await repullOrdersNow({
-							wooIds: [needsRepull],
+							remoteIds: [needsRepull],
 							reason: `conflict-discard:${mutationId}`,
 						});
 					} catch (error) {
@@ -596,7 +599,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 							level: 'warn',
 							collection: 'orders',
 							message: `discard re-pull deferred to the durable scheduler task: ${error instanceof Error ? error.message : String(error)}`,
-							fields: { mutationId, wooOrderId: needsRepull },
+							fields: { mutationId, remoteId: needsRepull },
 						});
 					}
 				}

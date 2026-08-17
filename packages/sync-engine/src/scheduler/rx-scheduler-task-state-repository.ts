@@ -19,16 +19,16 @@ function toDocument(state: PersistedSchedulerTaskState): SchedulerTaskStateDocum
 	// dev-mode z-schema validation type-checks a present key's value (VD2, 422),
 	// and key-absence is load-bearing downstream (migrateSchedulerTaskStateV4,
 	// the sameSchedulerTaskState CAS compare). Lane/query states arrive with the
-	// keys present-but-undefined (toQueuedState spreads task.ids/task.wooIds).
-	const { collection, ids, wooIds, rerunRequested, ...rest } = state;
+	// keys present-but-undefined (toQueuedState spreads task.ids/task.remoteIds).
+	const { collection, ids, remoteIds, rerunRequested, ...rest } = state;
 	return {
 		...rest,
 		...(ids === undefined ? {} : { ids }),
-		...(wooIds === undefined ? {} : { wooIds }),
+		...(remoteIds === undefined ? {} : { remoteIds }),
 		...(rerunRequested === undefined ? {} : { rerunRequested }),
 		stateKey: schedulerTaskStateKey(state.taskId),
 		collectionName: collection,
-		schemaVersion: 4,
+		schemaVersion: 0,
 	};
 }
 
@@ -38,11 +38,6 @@ function fromDocument(document: SchedulerTaskStateDocument): PersistedSchedulerT
 }
 
 function sameStringArray(left?: string[], right?: string[]): boolean {
-	if (left === undefined || right === undefined) return left === right;
-	return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-
-function sameNumberArray(left?: number[], right?: number[]): boolean {
 	if (left === undefined || right === undefined) return left === right;
 	return left.length === right.length && left.every((value, index) => value === right[index]);
 }
@@ -57,7 +52,7 @@ function sameSchedulerTaskState(
 		left.collection === right.collection &&
 		left.queryKey === right.queryKey &&
 		sameStringArray(left.ids, right.ids) &&
-		sameNumberArray(left.wooIds, right.wooIds) &&
+		sameStringArray(left.remoteIds, right.remoteIds) &&
 		left.limit === right.limit &&
 		left.priority === right.priority &&
 		left.mode === right.mode &&
@@ -185,7 +180,7 @@ export class RxSchedulerTaskStateRepository {
 				current.claimedUntilMs > nowMs
 			) {
 				outcome = 'rerun-requested';
-				// Route through toDocument so an existing invalid lane row (ids/wooIds
+				// Route through toDocument so an existing invalid lane row (ids/remoteIds
 				// present-but-undefined) has those keys stripped before the flag-set
 				// re-writes the doc — otherwise z-schema throws VD2 (#318).
 				return toDocument({ ...current, rerunRequested: true });

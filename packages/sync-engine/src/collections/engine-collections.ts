@@ -30,25 +30,21 @@ import {
 	recordMutationQueueSchema,
 } from '@wcpos/sync-core';
 
-import { orderMigrationStrategies, orderSchema } from './order-schema';
-import { productMigrationStrategies, productSchema } from './product-schema';
-import { variationMigrationStrategies, variationSchema } from './variation-schema';
+import { orderSchema } from './order-schema';
+import { productSchema } from './product-schema';
+import { variationSchema } from './variation-schema';
 import { customerSchema } from './customer-schema';
 import { taxRateSchema } from './tax-rate-schema';
 import {
 	brandSchema,
 	categorySchema,
 	couponSchema,
-	referenceCollectionMigrationStrategies,
 	tagSchema,
 } from './reference-collection-schema';
 import { existenceManifestSchema } from '../local-coverage/existence-manifest-schema';
 import { syncCheckpointMigrationStrategies, syncCheckpointSchema } from './sync-checkpoint-schema';
 // Keep scheduler schemas as deep imports: the barrel evaluates census.ts before this list initializes.
-import {
-	schedulerTaskStateMigrationStrategies,
-	schedulerTaskStateSchema,
-} from '../scheduler/scheduler-task-state-schema';
+import { schedulerTaskStateSchema } from '../scheduler/scheduler-task-state-schema';
 import {
 	coverageLaneMigrationStrategies,
 	coverageLaneSchema,
@@ -122,18 +118,15 @@ export const engineKvSchema = {
 export type CollectionCreator = { schema: unknown; migrationStrategies?: unknown };
 
 const SYNC_COLLECTION_CREATORS: Record<SyncCollectionName, CollectionCreator> = {
-	orders: { schema: orderSchema, migrationStrategies: orderMigrationStrategies },
-	products: { schema: productSchema, migrationStrategies: productMigrationStrategies },
-	variations: { schema: variationSchema, migrationStrategies: variationMigrationStrategies },
+	orders: { schema: orderSchema },
+	products: { schema: productSchema },
+	variations: { schema: variationSchema },
 	customers: { schema: customerSchema },
 	taxRates: { schema: taxRateSchema },
-	categories: {
-		schema: categorySchema,
-		migrationStrategies: referenceCollectionMigrationStrategies,
-	},
-	brands: { schema: brandSchema, migrationStrategies: referenceCollectionMigrationStrategies },
-	tags: { schema: tagSchema, migrationStrategies: referenceCollectionMigrationStrategies },
-	coupons: { schema: couponSchema, migrationStrategies: referenceCollectionMigrationStrategies },
+	categories: { schema: categorySchema },
+	brands: { schema: brandSchema },
+	tags: { schema: tagSchema },
+	coupons: { schema: couponSchema },
 };
 
 /** Deliberate `/testing` seam for hosts that open schema-canary databases. */
@@ -150,10 +143,7 @@ export function engineSyncCollectionCreators(): Record<SyncCollectionName, Colle
  * recipe byte-for-byte so an adopted host opens its existing data unchanged.
  */
 const SCHEDULER_TIER_CREATORS: Record<string, CollectionCreator> = {
-	schedulerTaskStates: {
-		schema: schedulerTaskStateSchema,
-		migrationStrategies: schedulerTaskStateMigrationStrategies,
-	},
+	schedulerTaskStates: { schema: schedulerTaskStateSchema },
 	coverageRecords: {
 		schema: coverageRecordSchema,
 		migrationStrategies: coverageRecordMigrationStrategies,

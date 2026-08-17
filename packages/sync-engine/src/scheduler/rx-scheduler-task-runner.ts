@@ -142,7 +142,7 @@ function taskFromState(state: PersistedSchedulerTaskState): FetchTask {
 		collection: state.collection,
 		queryKey: state.queryKey,
 		ids: state.ids,
-		wooIds: state.wooIds,
+		remoteIds: state.remoteIds,
 		limit: state.limit,
 		priority: state.priority,
 		mode: state.mode,

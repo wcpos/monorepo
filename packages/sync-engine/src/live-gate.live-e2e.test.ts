@@ -1,7 +1,9 @@
+import { remoteId } from './testing';
 import { afterAll, describe, expect, it } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { log } from '@wcpos/utils/logger';
+import { remoteIdOrNull, wooIdOf } from '@wcpos/sync-core';
 
 import {
 	createRxdbSyncEngine,
@@ -100,7 +102,7 @@ async function productByWooId(
 	const scope = engine.active();
 	if (!scope) throw new Error('live gate has no active engine scope');
 	const documents = (await scope.database.collections.products
-		.find({ selector: { wooProductId } })
+		.find({ selector: { remoteId: remoteId(wooProductId) } })
 		.exec()) as JsonDocument[];
 	return documents[0]?.toJSON() ?? null;
 }
@@ -124,8 +126,8 @@ async function insertBornLocalOrder(
 	const scope = engine.active();
 	if (!scope) throw new Error('live gate has no active engine scope');
 	await scope.database.collections.orders.insert({
-		id: recordId,
-		wooOrderId: null,
+		uuid: recordId,
+		remoteId: null,
 		number: '',
 		dateCreatedGmt: String(payload['date_created_gmt'] ?? ''),
 		status: String(payload['status'] ?? ''),
@@ -281,7 +283,7 @@ liveDescribe('LIVE sync-engine sale-ready gate', () => {
 				id: 'live-gate-product',
 				collection: 'products',
 				kind: 'targeted-records',
-				wooIds: [productId],
+				remoteIds: [remoteId(productId)],
 				forceRefresh: true,
 				priority: 1_000,
 			}).ready;
@@ -370,7 +372,8 @@ liveDescribe('LIVE sync-engine sale-ready gate', () => {
 		const drain = await engine.sync('write-drain');
 		unsubscribe();
 		const order = await orderByRecordId(engine, orderRecordId);
-		const wooOrderId = order?.['wooOrderId'];
+		const orderRemoteId = remoteIdOrNull(order?.['remoteId']);
+		const wooOrderId = orderRemoteId === null ? null : wooIdOf(orderRemoteId);
 		const orderRevision = (order?.['sync'] as { revision?: unknown } | undefined)?.revision;
 		if (typeof wooOrderId === 'number' && Number.isSafeInteger(wooOrderId) && wooOrderId > 0) {
 			createdWooOrderIds.add(wooOrderId);

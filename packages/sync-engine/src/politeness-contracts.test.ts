@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { remoteId } from './testing';
 import { describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
@@ -50,8 +51,8 @@ function scanEnvelope(url: string): unknown {
 
 function product(wooId: number): Record<string, unknown> {
 	return {
-		id: `00000000-0000-4000-8000-${String(wooId).padStart(12, '0')}`,
-		wooProductId: wooId,
+		uuid: `00000000-0000-4000-8000-${String(wooId).padStart(12, '0')}`,
+		remoteId: remoteId(wooId),
 		price: 1,
 		stockStatus: 'instock',
 		type: 'simple',

@@ -119,7 +119,7 @@ export function scopeDatabaseName(
 	identity: StoreScopeIdentity,
 	options?: ScopeDatabaseNameOptions
 ): string {
-	const generation = options?.generation ?? 2;
+	const generation = options?.generation ?? 3;
 	const suffix = options?.namespace === undefined ? '' : `_${options.namespace}`;
 	return `pos_v${generation}_${scopeKeyFor(identity)}${suffix}`;
 }

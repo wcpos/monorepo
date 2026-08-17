@@ -12,6 +12,7 @@
  * where demand requests execute, and it is provably passive.
  */
 
+import { remoteId } from './testing';
 import { describe, expect, it } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
@@ -75,13 +76,13 @@ describe('demand-path flood detector through the public handle', () => {
 						nextWooId += 1;
 						return nextWooId;
 					});
-				const requireOnce = async (wooIds: number[]) => {
+				const requireOnce = async (remoteIds: number[]) => {
 					nextRequireId += 1;
 					const outcome = await engine.require({
 						id: `flood-${nextRequireId}`,
 						collection: 'products',
 						kind: 'targeted-records',
-						wooIds,
+						remoteIds: remoteIds.map(remoteId),
 					}).ready;
 					// The demand path answers normally throughout: nothing is released,
 					// dropped, or failed by the detector.
