@@ -164,8 +164,16 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 		},
 		12(oldDoc: StoreDocumentType) {
 			// Scan sounds are opt-in per station (#717): default off so quiet
-			// counters stay quiet until a cashier turns feedback on.
+			// counters stay quiet until a cashier turns feedback on. Amended
+			// pre-release with the theme/volume/per-event fields — schema v12 has
+			// never shipped, so the defaults are written here directly instead of
+			// stacking a migration on an unreleased version.
 			oldDoc.barcode_scanning_sound_enabled = false;
+			oldDoc.barcode_scanning_sound_theme = 'classic';
+			oldDoc.barcode_scanning_sound_volume = 0.15;
+			oldDoc.barcode_scanning_sound_success_enabled = true;
+			oldDoc.barcode_scanning_sound_failure_enabled = true;
+			oldDoc.barcode_scanning_sound_haptic_enabled = true;
 			return oldDoc;
 		},
 	},

@@ -1,13 +1,14 @@
 import * as React from 'react';
 
 import { useRouter } from 'expo-router';
-import { useObservableEagerState } from 'observable-hooks';
+import { useObservablePickState } from 'observable-hooks';
 
 import { Toast } from '@wcpos/components/toast';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { playScanFailure, playScanSuccess } from './play-scan-sound';
+import { playScanFailure, playScanFailureHaptic, playScanSuccess } from './play-scan-sound';
+import { clampScanSoundVolume, normalizeScanSoundTheme } from './scan-sound-themes';
 
 const SUCCESS_DURATION = 2500;
 const ALERT_DURATION = 6000;
@@ -42,29 +43,69 @@ export const useScanFeedback = () => {
 	const t = useT();
 	const { store } = useAppState();
 	const router = useRouter();
-	// Scan sounds are opt-in per station (#717). Success plays a bright blip;
-	// every non-success terminal outcome plays the distinct failure tone (plus a
-	// native error haptic). The searching-online stage stays silent.
-	const soundEnabled = useObservableEagerState(store.barcode_scanning_sound_enabled$) as boolean;
+	// Scan sounds are opt-in per station (#717). Success plays the theme's
+	// success tone; every non-success terminal outcome plays its failure tone
+	// (plus a native error haptic unless disabled). Searching-online stays silent.
+	const sound = useObservablePickState(
+		store.$,
+		() => {
+			const latest = store.getLatest();
+			return {
+				barcode_scanning_sound_enabled: latest.barcode_scanning_sound_enabled ?? false,
+				barcode_scanning_sound_theme: latest.barcode_scanning_sound_theme,
+				barcode_scanning_sound_volume: latest.barcode_scanning_sound_volume,
+				barcode_scanning_sound_success_enabled:
+					latest.barcode_scanning_sound_success_enabled ?? true,
+				barcode_scanning_sound_failure_enabled:
+					latest.barcode_scanning_sound_failure_enabled ?? true,
+				barcode_scanning_sound_haptic_enabled: latest.barcode_scanning_sound_haptic_enabled ?? true,
+			};
+		},
+		'barcode_scanning_sound_enabled',
+		'barcode_scanning_sound_theme',
+		'barcode_scanning_sound_volume',
+		'barcode_scanning_sound_success_enabled',
+		'barcode_scanning_sound_failure_enabled',
+		'barcode_scanning_sound_haptic_enabled'
+	);
 	// A handle outlives begin() (an online lookup can terminate seconds later), so
-	// read the toggle at play-time via a ref — toggling it off silences even an
-	// in-flight scan instead of playing the value captured when begin() ran.
-	const soundEnabledRef = React.useRef(soundEnabled);
+	// read the settings at play-time via a ref — toggling them off silences even
+	// an in-flight scan instead of playing the values captured when begin() ran.
+	const soundRef = React.useRef(sound);
 	React.useEffect(() => {
-		soundEnabledRef.current = soundEnabled;
-	}, [soundEnabled]);
+		soundRef.current = sound;
+	}, [sound]);
 
 	const begin = React.useCallback((): ScanFeedbackHandle => {
 		const id = nextScanId();
 
 		const success = () => {
-			if (soundEnabledRef.current) {
-				playScanSuccess();
+			const current = soundRef.current;
+			if (
+				current.barcode_scanning_sound_enabled &&
+				current.barcode_scanning_sound_success_enabled
+			) {
+				playScanSuccess({
+					theme: normalizeScanSoundTheme(current.barcode_scanning_sound_theme),
+					volume: clampScanSoundVolume(current.barcode_scanning_sound_volume),
+				});
 			}
 		};
 		const failure = () => {
-			if (soundEnabledRef.current) {
-				playScanFailure();
+			const current = soundRef.current;
+			if (!current.barcode_scanning_sound_enabled) {
+				return;
+			}
+			// Vibration is independent of the failure tone: a quiet counter can run
+			// vibration-only by switching the failure sound off (review on #1278).
+			if (current.barcode_scanning_sound_failure_enabled) {
+				playScanFailure({
+					theme: normalizeScanSoundTheme(current.barcode_scanning_sound_theme),
+					volume: clampScanSoundVolume(current.barcode_scanning_sound_volume),
+					haptic: current.barcode_scanning_sound_haptic_enabled,
+				});
+			} else if (current.barcode_scanning_sound_haptic_enabled) {
+				playScanFailureHaptic();
 			}
 		};
 

@@ -127,4 +127,43 @@ describe('createWedgeDetector (streaming)', () => {
 			}
 		}
 	});
+
+	function streamWithMeta(entries: { key: string; timeMs: number }[]) {
+		const results: { code: string; terminated: boolean }[] = [];
+		const detector = createWedgeDetector({
+			getSettings: () => ({ ...SETTINGS }),
+			onScan: (code, meta) => results.push({ code, terminated: meta.terminated }),
+		});
+		for (const entry of entries) {
+			vi.setSystemTime(entry.timeMs);
+			detector.handleKey(entry.key, entry.timeMs);
+		}
+		vi.advanceTimersByTime(WEDGE_END_OF_SCAN_MS);
+		return results;
+	}
+
+	it('flags a burst ending in Enter as terminated', () => {
+		const keys = trace('4006'.split(''), 13);
+		const last = keys[keys.length - 1].timeMs;
+		const results = streamWithMeta([...keys, { key: 'Enter', timeMs: last + 13 }]);
+		expect(results).toEqual([{ code: '4006', terminated: true }]);
+	});
+
+	it('flags a burst ending in Tab as terminated', () => {
+		const keys = trace('4006'.split(''), 13);
+		const last = keys[keys.length - 1].timeMs;
+		const results = streamWithMeta([...keys, { key: 'Tab', timeMs: last + 13 }]);
+		expect(results).toEqual([{ code: '4006', terminated: true }]);
+	});
+
+	it('reports an unterminated burst as terminated: false', () => {
+		const results = streamWithMeta(trace('sdafs'.split(''), 13));
+		expect(results).toEqual([{ code: 'sdafs', terminated: false }]);
+	});
+
+	it('an Enter outside any burst does not mark the next burst terminated', () => {
+		const keys = trace('sdafs'.split(''), 13, 1000);
+		const results = streamWithMeta([{ key: 'Enter', timeMs: 500 }, ...keys]);
+		expect(results).toEqual([{ code: 'sdafs', terminated: false }]);
+	});
 });

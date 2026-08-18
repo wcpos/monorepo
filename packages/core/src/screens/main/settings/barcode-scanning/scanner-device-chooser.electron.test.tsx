@@ -3,6 +3,12 @@
  */
 import { act, fireEvent, render } from '@testing-library/react';
 
+const mockOpenExternalURL = jest.fn();
+jest.mock('@wcpos/utils/open-external-url', () => ({
+	openExternalURL: (...args: unknown[]) => mockOpenExternalURL(...args),
+}));
+
+// eslint-disable-next-line import/first -- jest.mock() must be registered before this import
 import { ScannerDeviceChooser } from './scanner-device-chooser.electron';
 
 let serialCb: ((devices: unknown) => void) | undefined;
@@ -20,6 +26,8 @@ jest.mock('react-native', () => {
 	return {
 		Pressable: ({ children, onPress, testID }: Record<string, unknown>) =>
 			R.createElement('button', { 'data-testid': testID, onClick: onPress }, children as never),
+		View: ({ children, testID }: Record<string, unknown>) =>
+			R.createElement('div', { 'data-testid': testID }, children as never),
 	};
 });
 jest.mock('@wcpos/components/button', () => {
@@ -65,6 +73,16 @@ describe('ScannerDeviceChooser (electron)', () => {
 	it('renders nothing until a chooser request arrives', () => {
 		const { queryByTestId } = render(<ScannerDeviceChooser />);
 		expect(queryByTestId('scanner-device-chooser')).toBeNull();
+	});
+
+	it('teaches the keyboard-mode wall in the empty state, with a wizard link', () => {
+		const { getByTestId } = render(<ScannerDeviceChooser />);
+		act(() => serialCb?.([]));
+		expect(getByTestId('scanner-chooser-empty-hint')).toBeTruthy();
+		fireEvent.click(getByTestId('scanner-chooser-wizard-link'));
+		expect(mockOpenExternalURL).toHaveBeenCalledWith(
+			'https://docs.wcpos.com/hardware/scanner-setup-wizard'
+		);
 	});
 
 	it('replies on the serial channel with the chosen port', () => {

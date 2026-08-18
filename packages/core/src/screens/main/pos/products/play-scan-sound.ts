@@ -1,54 +1,77 @@
-// Native (iOS/Android) scan sounds. Short WAV assets are played with expo-audio
-// and a failure additionally fires an error haptic (failure-only, per #717).
+// Native (iOS/Android) scan sounds. Short WAV assets — one pair per theme,
+// generated from the same tone tables the web build synthesises — are played
+// with expo-audio; a failure can additionally fire an error haptic.
 //
 // expo-audio / expo-haptics are pulled in lazily inside the play functions so
 // merely importing this module (e.g. Jest coverage instrumentation) never loads
 // their native TS. Everything is best-effort — audio must never break a scan.
 
+import {
+	clampScanSoundVolume,
+	normalizeScanSoundTheme,
+	type PlayScanSoundOptions,
+	type ScanSoundTheme,
+} from './scan-sound-themes';
+
 interface NativeAudioPlayer {
 	seekTo: (seconds: number) => void;
 	play: () => void;
+	volume: number;
 }
 
-let successPlayer: NativeAudioPlayer | null = null;
-let failurePlayer: NativeAudioPlayer | null = null;
+const players = new Map<string, NativeAudioPlayer>();
 
-function replay(player: NativeAudioPlayer): void {
-	// Rewind so rapid consecutive scans each get a full sound.
-	player.seekTo(0);
-	player.play();
+// Metro resolves require() calls with literal paths only, so the theme → asset
+// mapping is spelled out rather than computed.
+function getAsset(theme: ScanSoundTheme, kind: 'success' | 'failure'): unknown {
+	if (kind === 'success') {
+		if (theme === 'checkout') return require('./assets/scan-success-checkout.wav');
+		if (theme === 'soft') return require('./assets/scan-success-soft.wav');
+		return require('./assets/scan-success.wav');
+	}
+	if (theme === 'checkout') return require('./assets/scan-failure-checkout.wav');
+	if (theme === 'soft') return require('./assets/scan-failure-soft.wav');
+	return require('./assets/scan-failure.wav');
 }
 
-/** Bright blip for a product added to the cart. */
-export function playScanSuccess(): void {
+function play(kind: 'success' | 'failure', options: PlayScanSoundOptions): void {
 	try {
 		// eslint-disable-next-line @typescript-eslint/no-require-imports
 		const { createAudioPlayer } = require('expo-audio');
-		if (!successPlayer) {
-			successPlayer = createAudioPlayer(require('./assets/scan-success.wav'));
+		const theme = normalizeScanSoundTheme(options.theme);
+		const cacheKey = `${theme}:${kind}`;
+		let player = players.get(cacheKey);
+		if (!player) {
+			player = createAudioPlayer(getAsset(theme, kind)) as NativeAudioPlayer;
+			players.set(cacheKey, player);
 		}
-		if (successPlayer) {
-			replay(successPlayer);
+		if (player) {
+			player.volume = clampScanSoundVolume(options.volume);
+			// Rewind so rapid consecutive scans each get a full sound.
+			player.seekTo(0);
+			player.play();
 		}
 	} catch {
 		// best-effort
 	}
 }
 
-/** Distinct buzz + error haptic for a scan that didn't cleanly add a product. */
-export function playScanFailure(): void {
-	try {
-		// eslint-disable-next-line @typescript-eslint/no-require-imports
-		const { createAudioPlayer } = require('expo-audio');
-		if (!failurePlayer) {
-			failurePlayer = createAudioPlayer(require('./assets/scan-failure.wav'));
-		}
-		if (failurePlayer) {
-			replay(failurePlayer);
-		}
-	} catch {
-		// best-effort
+/** Success sound for a product added to the cart (theme-dependent). */
+export function playScanSuccess(options: PlayScanSoundOptions = {}): void {
+	play('success', options);
+}
+
+/** Failure sound for a scan that didn't cleanly add a product, plus an error haptic unless disabled. */
+export function playScanFailure(options: PlayScanSoundOptions = {}): void {
+	play('failure', options);
+	if (options.haptic === false) {
+		return;
 	}
+	playScanFailureHaptic();
+}
+
+/** The error haptic alone — for stations with the failure sound off but vibration on. */
+export function playScanFailureHaptic(): void {
 	try {
 		// eslint-disable-next-line @typescript-eslint/no-require-imports
 		const Haptics = require('expo-haptics');

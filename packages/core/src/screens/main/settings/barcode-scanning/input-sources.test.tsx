@@ -104,7 +104,7 @@ describe('InputSources mode explainer', () => {
 		fireEvent.click(screen.getByTestId('scanner-mode-docs-link'));
 
 		expect(mockOpenExternalURL).toHaveBeenCalledWith(
-			'https://docs.wcpos.com/products/barcode-scanning#connection-modes'
+			'https://docs.wcpos.com/hardware/scanner-setup-wizard'
 		);
 	});
 

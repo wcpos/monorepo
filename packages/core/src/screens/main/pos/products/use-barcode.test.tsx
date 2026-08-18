@@ -62,6 +62,9 @@ jest.mock('@wcpos/sync-core', () => {
 jest.mock('observable-hooks', () => ({
 	useObservableEagerState: (observable: unknown) =>
 		observable === mockSoundEnabledObservable ? mockSoundEnabled : mockShowOutOfStock,
+	// use-scan-feedback reads the sound settings via pick-state; calling the
+	// initial-value factory per render keeps it live against mockSoundEnabled.
+	useObservablePickState: (_observable: unknown, getInitial: () => unknown) => getInitial(),
 	useSubscription: (_observable: unknown, callback: (barcode: unknown) => Promise<void> | void) => {
 		mockSubscriptionCallback = callback;
 	},
@@ -109,7 +112,10 @@ jest.mock('../hooks/use-add-variation', () => ({
 
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({
-		store: { barcode_scanning_sound_enabled$: mockSoundEnabledObservable },
+		store: {
+			$: mockSoundEnabledObservable,
+			getLatest: () => ({ barcode_scanning_sound_enabled: mockSoundEnabled }),
+		},
 	}),
 }));
 
