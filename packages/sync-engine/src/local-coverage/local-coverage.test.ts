@@ -6,6 +6,7 @@ import {
 	createLocalCoverage,
 	type CreateLocalCoverageOptions,
 	type LocalCoverage,
+	PRIME_FORCE_COUNTER_KEY,
 } from './local-coverage';
 
 import type { CoverageDatabase } from './persistence';
@@ -175,6 +176,39 @@ describe('LocalCoverage interface', () => {
 			freshUntilMs: 3_500,
 			updatedAtMs: 3_000,
 		});
+	});
+
+	it('advances the persisted prime force counter each primeManifest tick', async () => {
+		const database = coverageDatabase() as ReturnType<typeof coverageDatabase> &
+			Record<string, unknown>;
+		const zeroCollection = {
+			count: () => ({ exec: async () => 0 }),
+			find: () => ({ exec: async () => [] }),
+		};
+		Object.assign(database, {
+			existenceManifest: { ...memoryCollection('id'), ...zeroCollection },
+			existenceManifestCustomers: { ...memoryCollection('id'), ...zeroCollection },
+			existenceManifestOrders: { ...memoryCollection('id'), ...zeroCollection },
+			products: zeroCollection,
+			variations: zeroCollection,
+			customers: zeroCollection,
+			orders: zeroCollection,
+		});
+		const cursors = new Map<string, string>();
+		const coverage = createLocalCoverage({
+			database: database as never,
+			freshForMs: 1,
+			manifest: { fetcher: vi.fn(), syncBaseUrl: 'https://example.test/sync' },
+			reconcileCursorStore: {
+				get: async (key) => cursors.get(key) ?? null,
+				set: async (key, value) => void cursors.set(key, value),
+			},
+		});
+
+		await coverage.primeManifest();
+		expect(cursors.get(PRIME_FORCE_COUNTER_KEY)).toBe('1');
+		await coverage.primeManifest();
+		expect(cursors.get(PRIME_FORCE_COUNTER_KEY)).toBe('2');
 	});
 
 	it('bounds manifest chunks while filtering stray, existing, and local-only ids', async () => {

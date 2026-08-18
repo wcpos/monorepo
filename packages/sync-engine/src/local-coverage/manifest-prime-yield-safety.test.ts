@@ -47,6 +47,8 @@ function primeDatabase(input: {
 	customerManifestWooIds?: number[];
 	/** Current state at removal time, keyed by primary; defaults to the snapshot. */
 	currentProducts?: ProductRow[];
+	/** Per-call products.find() results (snapshot, then re-reads); falls back to `products`. */
+	productsFindSequence?: ProductRow[][];
 	bulkRemove: (ids: string[]) => void;
 	removeManifest?: (ids: string[]) => void;
 }): ExistenceManifestPrimeDatabase {
@@ -89,7 +91,9 @@ function primeDatabase(input: {
 		},
 		products: {
 			count: () => ({ exec: async () => input.products.length }),
-			find: () => ({ exec: async () => input.products }),
+			find: () => ({
+				exec: async () => input.productsFindSequence?.shift() ?? input.products,
+			}),
 			findByIds: (ids: string[]) => ({
 				exec: async () =>
 					new Map(
@@ -177,6 +181,62 @@ describe('primeExistenceManifest removal safety across yields (#949)', () => {
 		expect(url.searchParams.get('absence')).toBe('explicit');
 		expect(pruneProduct).toHaveBeenCalledWith([7]);
 		expect(removedManifest).toEqual([['100', '101']]);
+	});
+
+	it('force bypasses the equal-count fast path and repairs balanced corruption', async () => {
+		const removedManifest: string[][] = [];
+		const pruneProduct = vi.fn(async () => undefined);
+		// Balanced state: one resident without a row + one stranded row — counts are
+		// equal, membership is not. The plain gate must fast-path; force must repair.
+		const db = primeDatabase({
+			products: [product(7, 'publish')],
+			manifestWooIds: [100],
+			bulkRemove: () => undefined,
+			removeManifest: (ids) => removedManifest.push(ids),
+		});
+		const fetcher = vi.fn(async () => ({
+			ok: true,
+			status: 200,
+			json: async () => ({ digests: [{ id: 7, deleted: true }] }),
+		}));
+
+		await expect(
+			primeExistenceManifest(db, {
+				fetcher: fetcher as never,
+				syncBaseUrl: 'https://x.test/wp-json/wcpos/v2',
+			})
+		).resolves.toBe(0);
+		expect(fetcher).not.toHaveBeenCalled();
+
+		await primeExistenceManifest(db, {
+			fetcher: fetcher as never,
+			syncBaseUrl: 'https://x.test/wp-json/wcpos/v2',
+			force: true,
+			pruneDeleted: { product: pruneProduct },
+		});
+		expect(fetcher).toHaveBeenCalledOnce();
+		expect(pruneProduct).toHaveBeenCalledWith([7]);
+		expect(removedManifest).toEqual([['100']]);
+	});
+
+	it('keeps a stranded candidate whose resident materialized before the removal', async () => {
+		const removedManifest: string[][] = [];
+		// products.find(): the snapshot sees no residents, the pre-removal re-read sees
+		// wooId 100 — another lane materialized it mid-pass. Its row must survive.
+		const db = primeDatabase({
+			products: [],
+			productsFindSequence: [[], [product(100, 'publish')]],
+			manifestWooIds: [100],
+			bulkRemove: () => undefined,
+			removeManifest: (ids) => removedManifest.push(ids),
+		});
+
+		await primeExistenceManifest(db, {
+			fetcher: digestFetcher() as never,
+			syncBaseUrl: 'https://x.test/wp-json/wcpos/v2',
+		});
+
+		expect(removedManifest).toEqual([]);
 	});
 
 	it('preserves the equal-count customer fast path when membership matches', async () => {

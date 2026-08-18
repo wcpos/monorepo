@@ -198,10 +198,53 @@ type PrimeFetcher = (
 	init?: RequestInit
 ) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
 
+/** Resident wooIds extracted from a full collection read, yield-chunked per #949. */
+async function residentWooIdSet<T>(
+	docs: readonly T[],
+	remoteIdFor: (doc: T) => RemoteId | null | undefined
+): Promise<Set<number>> {
+	const ids = new Set<number>();
+	await forEachYielding(docs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
+		const remoteId = remoteIdFor(doc);
+		if (remoteId != null) {
+			ids.add(wooIdOf(remoteId));
+		}
+	});
+	return ids;
+}
+
+/**
+ * Stranded-row guard (codex review, PR #1287): the stranded classification compares snapshots
+ * taken several yielding scans apart, so a resident another lane materializes mid-pass would
+ * read as stranded and lose its fresh manifest row. Mirror the #949 rule — re-validate against
+ * a fresh read immediately before the destructive op. The re-read itself still yields, so the
+ * window shrinks to the re-scan rather than vanishing; a row lost in that residual window
+ * self-heals on the next prime tick (counts diverge, the pass re-opens, /digests restores it)
+ * and errs in the safe direction meanwhile (the audit never prunes unmanifested residents).
+ */
+async function revalidateStranded(
+	candidates: readonly number[],
+	freshResidentReads: readonly (() => Promise<Set<number>>)[]
+): Promise<number[]> {
+	if (candidates.length === 0) {
+		return [];
+	}
+	let remaining = [...candidates];
+	for (const read of freshResidentReads) {
+		if (remaining.length === 0) break;
+		const fresh = await read();
+		remaining = remaining.filter((wooId) => !fresh.has(wooId));
+	}
+	return remaining;
+}
+
 /**
  * Wiring: read the local id sets + existing manifest ids, gate on a cheap count, and run the prime pass
  * against the live GET /digests endpoint. The count-gate short-circuits the expensive full-document read
  * once every resident record has a manifest row (the steady state after the first successful prime).
+ * `force` bypasses the fast path: count equality is not membership (a balanced state — N residents
+ * missing rows while N stale rows survive — satisfies it), so the host periodically forces a full
+ * membership pass (see local-coverage's prime force counter).
  *
  * Caveat: locally-born products (no server remoteId) are excluded from the prime (not part of the
  * server's set) but still count toward `products.count()`, so their presence can keep the gate open and
@@ -217,6 +260,7 @@ export async function primeExistenceManifest(
 		chunkBudget?: PrimeChunkBudget;
 		rotation?: PrimeRotation;
 		pruneDeleted?: Partial<Record<'product' | 'variation', PruneDeleted>>;
+		force?: boolean;
 	}
 ): Promise<number> {
 	if (input.chunkBudget?.remaining === 0) return 0;
@@ -225,7 +269,7 @@ export async function primeExistenceManifest(
 		db.products.count().exec(),
 		db.variations.count().exec(),
 	]);
-	if (manifestCount === productCount + variationCount) {
+	if (!input.force && manifestCount === productCount + variationCount) {
 		return 0;
 	}
 
@@ -285,11 +329,17 @@ export async function primeExistenceManifest(
 	});
 	const residentWooIds = new Set([...productWooIds, ...variationWooIds]);
 	const existingManifestWooIds = new Set<number>();
-	const strandedManifestIds: string[] = [];
+	const strandedWooIds: number[] = [];
 	await forEachYielding(manifestDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
 		existingManifestWooIds.add(doc.wooId);
-		if (!residentWooIds.has(doc.wooId)) strandedManifestIds.push(String(doc.wooId));
+		if (!residentWooIds.has(doc.wooId)) strandedWooIds.push(doc.wooId);
 	});
+	const strandedManifestIds = (
+		await revalidateStranded(strandedWooIds, [
+			async () => residentWooIdSet(await db.products.find().exec(), (doc) => doc.remoteId),
+			async () => residentWooIdSet(await db.variations.find().exec(), (doc) => doc.remoteId),
+		])
+	).map(String);
 	if (strandedManifestIds.length > 0) {
 		assertBulkSuccess(
 			await db.existenceManifest.bulkRemove(strandedManifestIds),
@@ -403,6 +453,7 @@ export async function primeExistenceManifestCustomers(
 		chunkBudget?: PrimeChunkBudget;
 		rotation?: PrimeRotation;
 		pruneDeleted?: PruneDeleted;
+		force?: boolean;
 	}
 ): Promise<number> {
 	if (input.chunkBudget?.remaining === 0) return 0;
@@ -410,7 +461,7 @@ export async function primeExistenceManifestCustomers(
 		db.existenceManifestCustomers.count().exec(),
 		db.customers.count().exec(),
 	]);
-	if (manifestCount === customerCount) {
+	if (!input.force && manifestCount === customerCount) {
 		return 0;
 	}
 
@@ -426,11 +477,16 @@ export async function primeExistenceManifestCustomers(
 	});
 	const residentWooIds = new Set(customerWooIds);
 	const existingManifestWooIds = new Set<number>();
-	const strandedManifestIds: string[] = [];
+	const strandedWooIds: number[] = [];
 	await forEachYielding(manifestDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
 		existingManifestWooIds.add(doc.wooId);
-		if (!residentWooIds.has(doc.wooId)) strandedManifestIds.push(String(doc.wooId));
+		if (!residentWooIds.has(doc.wooId)) strandedWooIds.push(doc.wooId);
 	});
+	const strandedManifestIds = (
+		await revalidateStranded(strandedWooIds, [
+			async () => residentWooIdSet(await db.customers.find().exec(), (doc) => doc.remoteId),
+		])
+	).map(String);
 	if (strandedManifestIds.length > 0) {
 		assertBulkSuccess(
 			await db.existenceManifestCustomers.bulkRemove(strandedManifestIds),
@@ -478,6 +534,7 @@ export async function primeExistenceManifestOrders(
 		chunkBudget?: PrimeChunkBudget;
 		rotation?: PrimeRotation;
 		pruneDeleted?: PruneDeleted;
+		force?: boolean;
 	}
 ): Promise<number> {
 	if (input.chunkBudget?.remaining === 0) return 0;
@@ -485,7 +542,7 @@ export async function primeExistenceManifestOrders(
 		db.existenceManifestOrders.count().exec(),
 		db.orders.count().exec(),
 	]);
-	if (manifestCount === orderCount) {
+	if (!input.force && manifestCount === orderCount) {
 		return 0;
 	}
 
@@ -502,11 +559,20 @@ export async function primeExistenceManifestOrders(
 	});
 	const residentWooIds = new Set(orderWooIds);
 	const existingManifestWooIds = new Set<number>();
-	const strandedManifestIds: string[] = [];
+	const strandedWooIds: number[] = [];
 	await forEachYielding(manifestDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
 		existingManifestWooIds.add(doc.wooId);
-		if (!residentWooIds.has(doc.wooId)) strandedManifestIds.push(String(doc.wooId));
+		if (!residentWooIds.has(doc.wooId)) strandedWooIds.push(doc.wooId);
 	});
+	const strandedManifestIds = (
+		await revalidateStranded(strandedWooIds, [
+			async () =>
+				residentWooIdSet(
+					await db.orders.find().exec(),
+					(doc) => (doc.toJSON() as { remoteId?: RemoteId | null }).remoteId
+				),
+		])
+	).map(String);
 	if (strandedManifestIds.length > 0) {
 		assertBulkSuccess(
 			await db.existenceManifestOrders.bulkRemove(strandedManifestIds),
