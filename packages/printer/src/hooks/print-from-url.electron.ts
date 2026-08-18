@@ -1,6 +1,9 @@
 import type { TypedIpcRenderer } from '@wcpos/printer/ipc-channels';
 
-import { FETCH_TIMEOUT_MS } from './constants';
+// Matches SystemPrintAdapter's print timeout: the hidden BrowserWindow must
+// load the external URL and render before printing, so the 10s fetch timeout
+// used by the web implementation is too tight here.
+const PRINT_TIMEOUT_MS = 30_000;
 
 type ElectronWindow = Window & {
 	ipcRenderer?: TypedIpcRenderer;
@@ -29,8 +32,8 @@ export async function printFromUrl(
 
 		const timeoutId = setTimeout(() => {
 			cleanup();
-			reject(new Error(`Electron print timed out after ${FETCH_TIMEOUT_MS}ms`));
-		}, FETCH_TIMEOUT_MS);
+			reject(new Error(`Electron print timed out after ${PRINT_TIMEOUT_MS}ms`));
+		}, PRINT_TIMEOUT_MS);
 
 		// ipc.on() returns an unsubscribe function (preload doesn't expose removeListener)
 		let unsubAfter: (() => void) | undefined;
@@ -46,7 +49,9 @@ export async function printFromUrl(
 			cleanup();
 			resolve();
 		});
-		unsubError = ipc.on(errorChannel, (_event: unknown, error?: unknown) => {
+		// The preload strips the IPC event arg, so the first callback arg is the
+		// error payload itself (see SystemPrintAdapter.printHtml).
+		unsubError = ipc.on(errorChannel, (error: unknown) => {
 			cleanup();
 			reject(new Error(`Electron print failed: ${String(error ?? 'unknown error')}`));
 		});

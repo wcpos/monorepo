@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { Row, Table } from '@tanstack/react-table';
 import Animated, {
 	cancelAnimation,
 	useAnimatedStyle,
@@ -13,11 +12,17 @@ import { useCSSVariable } from 'uniwind';
 
 import { cn } from '../lib/utils';
 
-type PulseTableRowProps = React.ComponentPropsWithoutRef<typeof Animated.View> & {
+import type { RowData, TableFeatures } from '@tanstack/react-table';
+import type { Row, Table } from '../data-table/types';
+
+type PulseTableRowProps<
+	TData extends RowData,
+	TFeatures extends TableFeatures,
+> = React.ComponentPropsWithoutRef<typeof Animated.View> & {
 	onRemove?: () => void;
 	index?: number;
-	row: Row<any>;
-	table: Table<any>;
+	row: Row<TData, TFeatures>;
+	table: Table<TData, TFeatures>;
 	ref?: React.Ref<PulseTableRowRef>;
 };
 
@@ -30,7 +35,7 @@ interface PulseTableRowRef {
  * Table row with pulse animation for add/remove feedback.
  * Uses theme-aware colors for alternating rows and pulse effects.
  */
-function PulseTableRow({
+function PulseTableRow<TData extends RowData, TFeatures extends TableFeatures>({
 	ref,
 	className,
 	index = 0,
@@ -38,7 +43,7 @@ function PulseTableRow({
 	row,
 	table,
 	...viewProps
-}: PulseTableRowProps) {
+}: PulseTableRowProps<TData, TFeatures>) {
 	// Get theme-aware colors
 	const [tableRowColor, tableRowAltColor, successColor, errorColor] = useCSSVariable([
 		'--color-table-row',

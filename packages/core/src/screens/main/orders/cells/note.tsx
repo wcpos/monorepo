@@ -5,8 +5,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
-
-import type { CellContext } from '@tanstack/react-table';
+import type { CellContext } from '@wcpos/core/table-types';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 

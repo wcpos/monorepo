@@ -172,6 +172,12 @@ describe('ProductsScreen query-state wiring', () => {
 		expect(mockDataTableProps).not.toHaveProperty('query');
 	});
 
+	it('keeps custom variation detail expansion under screen ownership', () => {
+		render(<ProductsScreen />);
+
+		expect(mockDataTableProps.tableConfig).toMatchObject({ manualExpanding: true });
+	});
+
 	it('commits search, sort, and pagination through products query state', () => {
 		render(<ProductsScreen />);
 

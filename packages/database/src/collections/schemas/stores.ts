@@ -542,6 +542,36 @@ export const storesLiteral = {
 			type: 'boolean',
 			default: false,
 		},
+		barcode_scanning_sound_theme: {
+			title: 'Barcode scan sound theme',
+			description: 'Which tone set scan feedback plays',
+			type: 'string',
+			enum: ['classic', 'checkout', 'soft'],
+			default: 'classic',
+		},
+		barcode_scanning_sound_volume: {
+			title: 'Barcode scan sound volume',
+			description: 'Playback gain for scan feedback, 0.05 (quiet) to 0.4 (loud)',
+			type: 'number',
+			minimum: 0.05,
+			maximum: 0.4,
+			default: 0.15,
+		},
+		barcode_scanning_sound_success_enabled: {
+			title: 'Barcode scan success sound',
+			type: 'boolean',
+			default: true,
+		},
+		barcode_scanning_sound_failure_enabled: {
+			title: 'Barcode scan failure sound',
+			type: 'boolean',
+			default: true,
+		},
+		barcode_scanning_sound_haptic_enabled: {
+			title: 'Barcode scan failure vibration (iOS/Android)',
+			type: 'boolean',
+			default: true,
+		},
 		theme: {
 			title: 'App Theme',
 			description: 'The visual theme for the app (system, light, dark, ocean, sunset, monochrome)',

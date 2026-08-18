@@ -128,7 +128,7 @@ export const isolatedProductTest = productProbeTest.extend<
 				}
 			}
 		},
-		{ scope: 'worker' },
+		{ scope: 'worker', auto: true },
 	],
 	posPage: async ({ posPage, runPrivateSimpleProducts }, use) => {
 		simpleProbesByPage.set(posPage, runPrivateSimpleProducts);
@@ -172,7 +172,7 @@ export const isolatedVariableProductTest = productProbeTest.extend<
 				});
 			}
 		},
-		{ scope: 'worker' },
+		{ scope: 'worker', auto: true },
 	],
 	posPage: async ({ posPage, runPrivateVariableProduct }, use) => {
 		variableProbeByPage.set(posPage, runPrivateVariableProduct);

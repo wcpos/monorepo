@@ -3,11 +3,10 @@ import * as React from 'react';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 import type { EngineRecord } from '@wcpos/query';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { VariationsPopover } from './variations-popover';
 import { useAddVariation } from '../../hooks/use-add-variation';
-
-import type { CellContext } from '@tanstack/react-table';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];

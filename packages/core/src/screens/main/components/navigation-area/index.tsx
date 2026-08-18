@@ -94,10 +94,10 @@ export function NavigationAreaLayout({
 						testID={`${testID}-back`}
 						className="border-border/50 bg-card h-12 items-center gap-2 border-b px-1"
 					>
-						<Button variant="ghost" onPress={() => router.navigate(indexHref)}>
+						<Button variant="link" onPress={() => router.navigate(indexHref)}>
 							<HStack className="items-center gap-1">
 								<Icon name="chevronLeft" className="text-primary" />
-								<ButtonText className="text-primary">{areaLabel}</ButtonText>
+								<ButtonText>{areaLabel}</ButtonText>
 							</HStack>
 						</Button>
 						<ButtonText className="font-semibold">{current.label}</ButtonText>

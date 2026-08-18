@@ -11,9 +11,14 @@ const oscillators: RecordedOscillator[] = [];
 let audioContextState = 'running';
 let resumeAudioContext: (() => void) | undefined;
 
+const gains: FakeGain[] = [];
+
 class FakeGain {
 	gain = { setValueAtTime: jest.fn(), linearRampToValueAtTime: jest.fn() };
 	connect = jest.fn();
+	constructor() {
+		gains.push(this);
+	}
 }
 
 class FakeOscillator {
@@ -45,8 +50,9 @@ class FakeAudioContext {
 	});
 }
 
-let playScanSuccess: () => void;
-let playScanFailure: () => void;
+type PlayOptions = { theme?: string; volume?: number };
+let playScanSuccess: (options?: PlayOptions) => void;
+let playScanFailure: (options?: PlayOptions) => void;
 
 beforeAll(() => {
 	(window as unknown as { AudioContext: unknown }).AudioContext = FakeAudioContext;
@@ -59,6 +65,7 @@ beforeAll(() => {
 
 beforeEach(() => {
 	oscillators.length = 0;
+	gains.length = 0;
 	audioContextState = 'running';
 	resumeAudioContext = undefined;
 });
@@ -85,5 +92,31 @@ describe('web scan sounds', () => {
 		await Promise.resolve();
 
 		expect(oscillators.map((o) => o.frequency.value)).toEqual([880, 1320]);
+	});
+
+	it('plays the requested theme instead of classic', () => {
+		playScanSuccess({ theme: 'checkout' });
+		expect(oscillators.map((o) => o.frequency.value)).toEqual([1000]);
+		expect(oscillators[0].type).toBe('triangle');
+	});
+
+	it('falls back to classic for an unknown theme', () => {
+		playScanFailure({ theme: 'polka' });
+		expect(oscillators.map((o) => o.frequency.value)).toEqual([330, 220]);
+	});
+
+	it('ramps each tone to the clamped requested volume', () => {
+		playScanSuccess({ volume: 0.3 });
+		// Second linearRamp arg of the first ramp call is the peak gain.
+		expect(gains[0].gain.linearRampToValueAtTime).toHaveBeenCalledWith(0.3, expect.any(Number));
+
+		gains.length = 0;
+		playScanSuccess({ volume: 5 });
+		expect(gains[0].gain.linearRampToValueAtTime).toHaveBeenCalledWith(0.4, expect.any(Number));
+	});
+
+	it('uses the default volume when none is given', () => {
+		playScanSuccess();
+		expect(gains[0].gain.linearRampToValueAtTime).toHaveBeenCalledWith(0.15, expect.any(Number));
 	});
 });

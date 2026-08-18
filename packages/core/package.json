@@ -90,7 +90,7 @@
 		"@hookform/error-message": "^2.0.1",
 		"@hookform/resolvers": "^5.5.7",
 		"@novu/js": "^3.18.1",
-		"@tanstack/react-table": "^8.21.3",
+		"@tanstack/react-table": "^9.1.2",
 		"@wcpos/components": "workspace:*",
 		"@wcpos/database": "workspace:*",
 		"@wcpos/hooks": "workspace:*",

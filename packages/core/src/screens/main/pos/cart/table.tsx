@@ -1,7 +1,12 @@
 import * as React from 'react';
 import { ScrollView } from 'react-native';
 
-import { ColumnDef, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
+import {
+	columnVisibilityFeature,
+	flexRender,
+	tableFeatures,
+	useTable,
+} from '@tanstack/react-table';
 import find from 'lodash/find';
 import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
@@ -38,6 +43,12 @@ import { useCurrentOrder } from '../contexts/current-order';
 import { useCartLines } from '../hooks/use-cart-lines';
 import { CartLine, getUuidFromLineItem } from '../hooks/utils';
 import { SKU } from './cells/sku';
+
+import type { Column, ColumnDef } from '../../../../table-types';
+
+const cartTableFeatures = tableFeatures({ columnVisibilityFeature });
+
+type CartTableFeatures = typeof cartTableFeatures;
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
@@ -121,7 +132,22 @@ export function CartTable() {
 	const prevDataRef = React.useRef<CartTableLine[]>([]);
 	const prevOrderRef = React.useRef<OrderDocument | null>(null);
 	const currentOrderRef = React.useRef<OrderDocument | null>(null);
-	currentOrderRef.current = currentOrder;
+
+	/**
+	 * Latest-value ref for the effect below, which must react to `data` alone and
+	 * so cannot take `currentOrder` as a dependency.
+	 *
+	 * This used to be a bare `currentOrderRef.current = currentOrder` during
+	 * render. That was invisible to the React Compiler while react-table v8 made
+	 * it skip this component wholesale ("Compilation Skipped: Use of incompatible
+	 * library"); v9 is compiler-compatible, so the component is compiled now and
+	 * a render-phase ref write is an error. Declared BEFORE the consuming effect,
+	 * this runs first in the same commit, so the value it reads is identical to
+	 * what the render-phase assignment produced.
+	 */
+	React.useEffect(() => {
+		currentOrderRef.current = currentOrder;
+	});
 
 	/**
 	 * Flatten line items, fee lines and shipping lines into a single array.
@@ -181,17 +207,13 @@ export function CartTable() {
 	/**
 	 *
 	 */
-	const columns = React.useMemo((): ColumnDef<CartTableLine>[] => {
+	const columns = React.useMemo((): ColumnDef<CartTableLine, unknown, CartTableFeatures>[] => {
 		return uiColumns
 			.filter((column) => column.show)
 			.map((col) => {
 				return {
 					id: col.key,
-					header: ({
-						column,
-					}: {
-						column: import('@tanstack/react-table').Column<CartTableLine, unknown>;
-					}) => (
+					header: ({ column }: { column: Column<CartTableLine, unknown, CartTableFeatures> }) => (
 						<Text className={'text-muted-foreground font-medium'} numberOfLines={1}>
 							{getUILabel(column.id)}
 						</Text>
@@ -216,17 +238,17 @@ export function CartTable() {
 							return !!(d && d.show);
 						},
 					},
-				} as ColumnDef<CartTableLine>;
+				} as ColumnDef<CartTableLine, unknown, CartTableFeatures>;
 			});
 	}, [uiColumns, getUILabel]);
 
 	/**
 	 *
 	 */
-	const table = useReactTable({
+	const table = useTable({
+		features: cartTableFeatures,
 		data,
 		columns,
-		getCoreRowModel: getCoreRowModel(),
 		getRowId: (line) => line.uuid,
 		// debugTable: true,
 		meta: {

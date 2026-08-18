@@ -18,8 +18,12 @@ let mockFooterProps: Record<string, unknown> | undefined;
 let mockDefaultFooterProps: Record<string, unknown> | undefined;
 const mockClearAndRefresh = jest.fn();
 
+// Mutable so a test can change the visible-column set between renders; the
+// default matches the original single-column fixture.
+let mockColumns: { key: string; show: boolean }[] = [{ key: 'level', show: true }];
+
 jest.mock('observable-hooks', () => ({
-	useObservableEagerState: () => [{ key: 'level', show: true }],
+	useObservableEagerState: () => mockColumns,
 	useObservableSuspense: () => ({
 		hits: [{ id: 'log-1', document: { level: 'error' } }],
 	}),
@@ -139,6 +143,7 @@ describe('DataTable binding contract', () => {
 		mockTableMeta = undefined;
 		mockFooterProps = undefined;
 		mockDefaultFooterProps = undefined;
+		mockColumns = [{ key: 'level', show: true }];
 	});
 
 	it('uses binding actions for sorting and pagination and publishes only filter actions to cells', () => {
@@ -273,5 +278,71 @@ describe('DataTable binding contract', () => {
 		expect(screen.getByTestId('tax-based-on')).toBeTruthy();
 		fireEvent.click(screen.getByTestId('clear-and-refresh'));
 		expect(mockClearAndRefresh).toHaveBeenCalledWith('products');
+	});
+
+	/**
+	 * Regression guard for the react-table v9 migration.
+	 *
+	 * Under v8 the table instance was rebuilt into a fresh object on every render
+	 * (`{ ...useReactTable(...) }`) purely so React Compiler could not serve a
+	 * memoized view of a table whose internals had mutated underneath it
+	 * (facebook/react#33057). v9 forbids that spread — its methods live on
+	 * prototypes — so the identity is now stable and correctness rests entirely on
+	 * v9's store subscription.
+	 *
+	 * This file is compiled by the React Compiler in jest (see the transform
+	 * routing in jest.config.js), so a stale memo here fails the test rather than
+	 * reaching a cashier as a column toggle that does nothing.
+	 */
+	it('re-renders header cells when the visible column set changes', () => {
+		mockColumns = [
+			{ key: 'level', show: true },
+			{ key: 'timestamp', show: true },
+		];
+		const BindingDataTable = DataTable as unknown as React.ComponentType<Record<string, unknown>>;
+		const props = {
+			id: 'logs',
+			collectionName: 'logs',
+			resource: { kind: 'resource' },
+			sort: { field: 'level', direction: 'asc' as const },
+			actions: {
+				setSort: mockSetSort,
+				extendLimit: mockExtendLimit,
+				setFilter: mockSetFilter,
+			},
+			active$: of(false),
+			total$: of(27),
+			totalSource$: of('local' as const),
+			sync: jest.fn(async () => undefined),
+			TableFooterComponent: Footer,
+		};
+
+		const { rerender } = render(
+			<QueryStateProvider
+				collection="logs"
+				initialPageSize={1}
+				initialSort={{ field: 'level', direction: 'asc' }}
+			>
+				<BindingDataTable {...props} />
+			</QueryStateProvider>
+		);
+
+		expect(screen.queryByTestId('sort-level')).toBeTruthy();
+		expect(screen.queryByTestId('sort-timestamp')).toBeTruthy();
+
+		// Hide a column, exactly as the column-visibility popover does.
+		mockColumns = [{ key: 'level', show: true }];
+		rerender(
+			<QueryStateProvider
+				collection="logs"
+				initialPageSize={1}
+				initialSort={{ field: 'level', direction: 'asc' }}
+			>
+				<BindingDataTable {...props} />
+			</QueryStateProvider>
+		);
+
+		expect(screen.queryByTestId('sort-level')).toBeTruthy();
+		expect(screen.queryByTestId('sort-timestamp')).toBeNull();
 	});
 });

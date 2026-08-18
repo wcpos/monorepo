@@ -1,10 +1,9 @@
 import { useObservableEagerState } from 'observable-hooks';
 
 import { Icon } from '@wcpos/components/icon';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
-
-import type { CellContext } from '@tanstack/react-table';
 
 type CouponDocument = import('@wcpos/database').CouponDocument;
 

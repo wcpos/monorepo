@@ -2,14 +2,13 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { HStack } from '@wcpos/components/hstack';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { EditCartItemButton } from './edit-cart-item-button';
 import { EditShippingLine } from './edit-shipping-line';
 import { useT } from '../../../../../contexts/translations';
 import { EditableField } from '../../../components/editable-field';
 import { useUpdateShippingLine } from '../../hooks/use-update-shipping-line';
-
-import type { CellContext } from '@tanstack/react-table';
 
 type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 interface Props {

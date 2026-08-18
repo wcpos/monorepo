@@ -1,11 +1,14 @@
 import * as React from 'react';
-import { Pressable } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { useT } from '../../../../contexts/translations';
+
+const WIZARD_DOCS_URL = 'https://docs.wcpos.com/hardware/scanner-setup-wizard';
 
 /**
  * Electron device chooser for direct scanner connection (#742). In a browser
@@ -122,9 +125,26 @@ export function ScannerDeviceChooser() {
 		>
 			<Text className="text-sm font-medium">{t('settings.scanner_choose_device')}</Text>
 			{candidates.length === 0 ? (
-				<Text className="text-muted-foreground text-xs">
-					{t('settings.scanner_searching_devices')}
-				</Text>
+				<VStack space="xs">
+					<Text className="text-muted-foreground text-xs">
+						{t('settings.scanner_searching_devices')}
+					</Text>
+					{/* The empty chooser is the moment a merchant concludes "broken" —
+					    teach the keyboard-mode wall right here (#712). */}
+					<View testID="scanner-chooser-empty-hint">
+						<Text className="text-muted-foreground text-xs">
+							{t('settings.scanner_chooser_empty_hint')}
+						</Text>
+					</View>
+					<Pressable
+						testID="scanner-chooser-wizard-link"
+						onPress={() => openExternalURL(WIZARD_DOCS_URL)}
+					>
+						<Text className="text-primary text-xs font-medium">
+							{t('settings.scanner_mode_docs_link')} ↗
+						</Text>
+					</Pressable>
+				</VStack>
 			) : (
 				candidates.map((device) => (
 					<Pressable

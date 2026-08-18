@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { CellContext } from '@tanstack/react-table';
 import { useObservableSuspense } from 'observable-hooks';
 
+import type { CellContext } from '@wcpos/core/table-types';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useRecordField } from '@wcpos/query';

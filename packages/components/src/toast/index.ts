@@ -1,4 +1,8 @@
+import { getLogger } from '@wcpos/utils/logger';
+
 import { toast, Toaster } from './sonner';
+
+const uiLogger = getLogger(['wcpos', 'ui', 'toast']);
 
 // Import types from sonner-native
 // Note: ExternalToast is not exported, so we'll extract it from the toast function parameter
@@ -39,10 +43,9 @@ const Toast = {
 	// Returns the toast id; passing the same `id` option again updates that toast in place.
 	show: (props: ToastShowProps): string | number => {
 		if (isLegacyProps(props)) {
-			console.log(
-				'Legacy toast props detected. These will be phased out in future versions.',
-				JSON.stringify(props)
-			);
+			uiLogger.debug('Legacy toast props detected. These will be phased out in future versions.', {
+				context: { props: JSON.stringify(props) },
+			});
 
 			const { type, text1, text2, props: legacyProps } = props;
 

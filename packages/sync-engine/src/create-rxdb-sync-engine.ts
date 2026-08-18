@@ -109,6 +109,7 @@ import {
 	decodeCustomerTrickleState,
 } from './maintenance/customer-trickle';
 import { PRODUCT_TRICKLE_STATE_KEY } from './maintenance/product-trickle';
+import { VARIATION_PREFETCH_STATE_KEY } from './maintenance/variation-prefetch';
 import { createLocalCoverage, type LocalCoverage } from './local-coverage/local-coverage';
 import { withLedgerRecovery } from './local-coverage/ledger-storage-recovery';
 import { createCoverageChangeHub } from './local-coverage/coverage-changes';
@@ -288,7 +289,7 @@ export type RxdbSyncEnginePorts = {
 	 * when this port is provided (the engine cannot guess the host's total
 	 * endpoint semantics). */
 	queryTotal?: QueryTotalPort;
-	/** Optional activity clock for the idle-only customer trickle lane. */
+	/** Optional activity clock for idle-only maintenance lanes. */
 	lastUserActivityMs?: () => number;
 	/** Optional user-interaction subscription for idle-decay snap-back. */
 	onUserActivity?: (listener: () => void) => () => void;
@@ -1029,6 +1030,11 @@ export function createRxdbSyncEngine(
 	manager.registerCursorInvalidator('products', (scopeId) =>
 		removeBlob(scopeId, PRODUCT_TRICKLE_STATE_KEY)
 	);
+	for (const collection of ['products', 'variations'] as const) {
+		manager.registerCursorInvalidator(collection, (scopeId) =>
+			removeBlob(scopeId, VARIATION_PREFETCH_STATE_KEY)
+		);
+	}
 
 	const registerManifestInvalidator = (
 		collection: 'products' | 'variations' | 'customers' | 'orders',
@@ -1612,6 +1618,7 @@ export function createRxdbSyncEngine(
 			get: (key) => readBlob(scopeId, key),
 			set: (key, value) => writeBlob(scopeId, key, value),
 		}),
+		censusTotals: () => censusPublisher.totals(),
 		// The lane body runs inside guardWrite; a scope switch drains it before changing
 		// manager.activeScope, so this active census read remains bound to the lane's database.
 		customerCensusTotal: async () => (await censusPublisher.totals()).customers,
@@ -1620,6 +1627,11 @@ export function createRxdbSyncEngine(
 			set: (key, value) => writeBlob(scopeId, key, value),
 		}),
 		productCensusTotal: async () => (await censusPublisher.totals()).products,
+		variationPrefetchStateFor: (scopeId) => ({
+			get: (key) => readBlob(scopeId, key),
+			set: (key, value) => writeBlob(scopeId, key, value),
+		}),
+		variationCensusTotal: async () => (await censusPublisher.totals()).variations,
 		hasPendingInteractiveWork: requirePlane.hasPendingWork,
 		...(ports.lastUserActivityMs !== undefined
 			? { lastUserActivityMs: ports.lastUserActivityMs }
@@ -1692,7 +1704,7 @@ export function createRxdbSyncEngine(
 	const tickLaneWithEvents = async (
 		name: EngineLane,
 		signal?: AbortSignal,
-		// A variant tick of the SAME registered lane (the scoped census check) — the
+		// A variant tick of the SAME registered lane (a manual census check) — the
 		// override keeps lane events, activity counters, and the census publish on
 		// the standard path instead of minting a parallel uninstrumented lane.
 		tickOverride?: (signal?: AbortSignal) => Promise<SyncReport>
@@ -2031,11 +2043,24 @@ export function createRxdbSyncEngine(
 			// (gate2 #516 item 6): the seeds only ENQUEUE persisted tasks, so a
 			// manual sync() must run them first or it returns 'ran' with its own
 			// just-seeded work still pending until some later tick.
-			// customer-trickle is idle-only by design: a manual full sync must
-			// not imply a trickle tick. Its explicit single-lane form remains valid.
+			// Idle maintenance lanes do not run as a side effect of a manual full sync.
+			// Their explicit single-lane forms remain valid.
 			const reports: SyncReport[] = [];
 			for (const name of MANUAL_SYNC_LANES) {
-				const report = await tickLaneWithEvents(name, options?.signal);
+				const report = await tickLaneWithEvents(
+					name,
+					options?.signal,
+					name === 'query-total-retry'
+						? (signal) =>
+								maintenanceLanes.queryTotalRetry === null
+									? Promise.resolve<SyncReport>({
+											lane: 'query-total-retry',
+											status: 'skipped',
+											reason: 'no queryTotal port provided',
+										})
+									: maintenanceLanes.queryTotalRetry.tick(signal, { forceAllCensus: true })
+						: undefined
+				);
 				laneLastTick.set(name, {
 					atMs: ports.now !== undefined ? ports.now() : Date.now(),
 					status: report.status,

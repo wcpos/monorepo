@@ -1,13 +1,12 @@
 import * as React from 'react';
 
 import { useDocField } from '@wcpos/query';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { CurrencyInput } from '../../../components/currency-input';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useLineItemData } from '../../hooks/use-line-item-data';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
-
-import type { CellContext } from '@tanstack/react-table';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {
