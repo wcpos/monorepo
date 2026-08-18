@@ -294,9 +294,9 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	// maintenance lane, and a maintenance completion landing shortly before a
 	// picker open suppressed the open's pull — a record created in that gap
 	// stayed invisible (field-confirmed within hours of the shared-window
-	// attempt). In-memory and per plane: a fresh app boot always pulls on
-	// first open, remount churn within the window still costs nothing, and
-	// maintenance completions never count.
+	// attempt). In-memory and per scope+collection: a fresh app boot always
+	// pulls on first open, remount churn within the window still costs nothing,
+	// and maintenance completions never count.
 	const lastDemandReferencePullMs = new Map<string, number>();
 	let seq = 0;
 	let running = false;
@@ -770,7 +770,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			// `REFERENCE_REFRESH_DEDUPE_MS` must never suppress a picker open (#1302).
 			if (item.requirement.kind === 'refresh' && descriptor.shape === 'greedy-prunable') {
 				const demandNowMs = deps.now?.() ?? Date.now();
-				const lastOwnPull = lastDemandReferencePullMs.get(descriptor.collection);
+				const demandKey = `${bound.scopeId}\u0000${descriptor.collection}`;
+				const lastOwnPull = lastDemandReferencePullMs.get(demandKey);
 				if (
 					!item.requirement.forceRefresh &&
 					lastOwnPull !== undefined &&
@@ -809,7 +810,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					freshReason: `${descriptor.collection} refreshed within the dedupe window`,
 				});
 				if (outcome.action === 'fetched') {
-					lastDemandReferencePullMs.set(descriptor.collection, demandNowMs);
+					lastDemandReferencePullMs.set(demandKey, deps.now?.() ?? Date.now());
 				}
 				return outcome;
 			}

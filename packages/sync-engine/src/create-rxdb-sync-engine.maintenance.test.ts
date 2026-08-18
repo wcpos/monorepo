@@ -601,6 +601,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 			fetcher: async (url) => {
 				if (new URL(url).pathname.endsWith('/coupons')) {
 					couponPulls += 1;
+					if (couponPulls === 2) nowMs += REFERENCE_DEMAND_REFRESH_DEDUPE_MS;
 				}
 				return Response.json([]);
 			},
@@ -635,14 +636,24 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		expect(opened).toMatchObject({ action: 'fetched' });
 		expect(couponPulls).toBe(2);
 
-		// Remount churn immediately after the open still costs nothing.
+		// Even when the pull itself consumes the entire window, remount churn
+		// immediately after completion still costs nothing.
 		const remounted = await engine.require({
 			id: 'coupon-picker-remount',
 			collection: 'coupons',
 			kind: 'refresh',
 		}).ready;
-		expect(remounted).toMatchObject({ action: 'serve-local', requests: 0 });
-		expect(couponPulls).toBe(2);
+		const pullsAfterRemount = couponPulls;
+
+		// A different scope has a different database and must get its own first
+		// demand pull even when it opens inside the prior scope's window.
+		await engine.scope.switch(freshIdentity());
+		const switched = await engine.require({
+			id: 'coupon-picker-new-scope',
+			collection: 'coupons',
+			kind: 'refresh',
+		}).ready;
+		const pullsAfterSwitch = couponPulls;
 
 		// Once the demand-vs-demand window lapses, a re-open revalidates again.
 		nowMs += REFERENCE_DEMAND_REFRESH_DEDUPE_MS + 1;
@@ -651,9 +662,14 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 			collection: 'coupons',
 			kind: 'refresh',
 		}).ready;
-		expect(reopened).toMatchObject({ action: 'fetched' });
-		expect(couponPulls).toBe(3);
 		await engine.dispose();
+
+		expect(remounted).toMatchObject({ action: 'serve-local', requests: 0 });
+		expect(pullsAfterRemount).toBe(2);
+		expect(switched).toMatchObject({ action: 'fetched' });
+		expect(pullsAfterSwitch).toBe(3);
+		expect(reopened).toMatchObject({ action: 'fetched' });
+		expect(couponPulls).toBe(4);
 	});
 
 	it('query-total-retry reports skipped without the port, and drains + emits cache entries with it', async () => {
