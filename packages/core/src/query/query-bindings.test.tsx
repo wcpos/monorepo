@@ -711,6 +711,53 @@ describe('query bindings', () => {
 		expect(engine.syncCalls).toContain('scheduler-drain');
 	});
 
+	// A recorded total below the resident count is proven outdated — the projection publishes
+	// the resident count instead, and because that number is locally derived it must carry
+	// `source: 'local'` (the footer's `N+`), not pose as an exact server total.
+	it('demotes to a local lower bound when residents exceed the recorded total', async () => {
+		await engineDB.collections.products.bulkInsert([
+			engineProduct({ uuid: 'resident-1', id: 1, name: 'Resident One' }),
+			engineProduct({ uuid: 'resident-2', id: 2, name: 'Resident Two' }),
+		]);
+		engine.setCoverageVerdict(
+			{
+				collection: 'products',
+				queryKey: 'products:browse-window:limit=100:orderby=title:order=asc',
+			},
+			{ total: 1, source: 'query-total', complete: false, fresh: false }
+		);
+		const state: QueryStateOf<'products'> = {
+			search: '',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'name', direction: 'asc' },
+			limit: 25,
+		};
+		const { result } = renderHook(() => useCollectionBinding('products', state), {
+			wrapper: Provider,
+		});
+
+		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(2));
+		await expect(
+			firstValueFrom(result.current.total$.pipe(filter((total) => total === 2)))
+		).resolves.toBe(2);
+		await expect(firstValueFrom(result.current.totalSource$)).resolves.toBe('local');
+
+		// The moment the recorded total catches back up, server provenance returns.
+		engine.setCoverageVerdict(
+			{
+				collection: 'products',
+				queryKey: 'products:browse-window:limit=100:orderby=title:order=asc',
+			},
+			{ total: 5, source: 'query-total', complete: false, fresh: false }
+		);
+		await expect(
+			firstValueFrom(result.current.total$.pipe(filter((total) => total === 5)))
+		).resolves.toBe(5);
+		await expect(
+			firstValueFrom(result.current.totalSource$.pipe(filter((source) => source === 'coverage')))
+		).resolves.toBe('coverage');
+	});
+
 	// The POS products grid's own filter shape — `status: 'publish'` on every browse, plus
 	// the out-of-stock toggle. `status` carries no key dimension but the fetcher hardcodes
 	// `status=publish` on the wire, so this grid must keep its coverage total.

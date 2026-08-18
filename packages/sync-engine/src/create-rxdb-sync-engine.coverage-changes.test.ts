@@ -214,7 +214,8 @@ describe('coverageChanges through the public handle', () => {
 	});
 
 	// Nothing writes a row at freshUntilMs, so without a timer a subscriber would keep a
-	// `fresh: true` verdict for ever — stale-means-unknown is the whole contract.
+	// `fresh: true` verdict for ever. Expiry demotes the lane to the stale tier — the count
+	// survives as the last known answer, but `fresh` must flip at the deadline it reported.
 	it('republishes at the freshness deadline it just reported', async () => {
 		let now = 1_000_000;
 		const engine = engineWith({ now: () => now });
@@ -226,11 +227,11 @@ describe('coverageChanges through the public handle', () => {
 			freshUntilMs: 1_000_500,
 		});
 		const orders = record(engine, { collection: 'orders', queryKey: ORDERS_KEY });
-		await vi.waitFor(() => expect(orders.latest()?.source).toBe('lane'));
+		await vi.waitFor(() => expect(orders.latest()?.fresh).toBe(true));
 
 		now = 1_000_501;
-		await vi.waitFor(() => expect(orders.latest()?.source).toBe('unknown'), { timeout: 2_000 });
-		expect(orders.latest()).toMatchObject({ total: null, fresh: false });
+		await vi.waitFor(() => expect(orders.latest()?.fresh).toBe(false), { timeout: 2_000 });
+		expect(orders.latest()).toMatchObject({ total: 2, source: 'lane', fresh: false });
 
 		orders.stop();
 		await engine.dispose();
