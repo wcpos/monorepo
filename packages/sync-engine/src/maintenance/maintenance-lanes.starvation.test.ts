@@ -50,6 +50,11 @@ async function starvationHarness() {
 			set: async () => undefined,
 		}),
 		customerCensusTotal: async () => null,
+		productTrickleStateFor: () => ({
+			get: async () => null,
+			set: async () => undefined,
+		}),
+		productCensusTotal: async () => null,
 		hasPendingInteractiveWork: () => false,
 		emitEvent: () => undefined,
 		now: () => nowMs,

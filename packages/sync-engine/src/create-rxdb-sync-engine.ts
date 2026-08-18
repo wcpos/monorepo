@@ -108,6 +108,7 @@ import {
 	CUSTOMER_TRICKLE_STATE_KEY,
 	decodeCustomerTrickleState,
 } from './maintenance/customer-trickle';
+import { PRODUCT_TRICKLE_STATE_KEY } from './maintenance/product-trickle';
 import { createLocalCoverage, type LocalCoverage } from './local-coverage/local-coverage';
 import { withLedgerRecovery } from './local-coverage/ledger-storage-recovery';
 import { createCoverageChangeHub } from './local-coverage/coverage-changes';
@@ -1025,6 +1026,9 @@ export function createRxdbSyncEngine(
 	manager.registerCursorInvalidator('customers', (scopeId) =>
 		removeBlob(scopeId, CUSTOMER_TRICKLE_STATE_KEY)
 	);
+	manager.registerCursorInvalidator('products', (scopeId) =>
+		removeBlob(scopeId, PRODUCT_TRICKLE_STATE_KEY)
+	);
 
 	const registerManifestInvalidator = (
 		collection: 'products' | 'variations' | 'customers' | 'orders',
@@ -1611,6 +1615,11 @@ export function createRxdbSyncEngine(
 		// The lane body runs inside guardWrite; a scope switch drains it before changing
 		// manager.activeScope, so this active census read remains bound to the lane's database.
 		customerCensusTotal: async () => (await censusPublisher.totals()).customers,
+		productTrickleStateFor: (scopeId) => ({
+			get: (key) => readBlob(scopeId, key),
+			set: (key, value) => writeBlob(scopeId, key, value),
+		}),
+		productCensusTotal: async () => (await censusPublisher.totals()).products,
 		hasPendingInteractiveWork: requirePlane.hasPendingWork,
 		...(ports.lastUserActivityMs !== undefined
 			? { lastUserActivityMs: ports.lastUserActivityMs }

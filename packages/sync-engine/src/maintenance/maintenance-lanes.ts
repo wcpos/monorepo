@@ -56,6 +56,7 @@ import { RxQueryTotalRequestStateRepository } from '../rx-query-total-request-st
 import { RxQueryTotalCacheRepository } from '../collections/rx-query-total-cache-repository';
 import { withLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
 import { type CustomerTrickleStateStore, tickCustomerTrickle } from './customer-trickle';
+import { type ProductTrickleStateStore, tickProductTrickle } from './product-trickle';
 import {
 	laneRegistryEntry,
 	type MaintenanceLaneName,
@@ -135,6 +136,8 @@ type MaintenanceLaneDeps = {
 	censusFreshForMs: number;
 	customerTrickleStateFor: (scopeId: string) => CustomerTrickleStateStore;
 	customerCensusTotal: () => Promise<CensusTotal | null>;
+	productTrickleStateFor: (scopeId: string) => ProductTrickleStateStore;
+	productCensusTotal: () => Promise<CensusTotal | null>;
 	hasPendingInteractiveWork: () => boolean;
 	lastUserActivityMs?: () => number;
 	emitEvent: (event: QueryTotalCacheEvent) => void;
@@ -201,6 +204,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 	const now = deps.now ?? (() => Date.now());
 	const pressureDeferredLanes = new Set<MaintenanceLaneName>([
 		'customer-trickle',
+		'product-trickle',
 		'existence-prime',
 		'existence-reconcile',
 		'query-total-retry',
@@ -635,6 +639,27 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			summary: `Customer trickle: page ${result.page}, ${result.rows} customers`,
 		};
 	});
+	const productTrickle = lane('product-trickle', async (db, scopeId, signal, fetcher) => {
+		const barcodeSelectors = () => deps.barcodeSelectorsFor?.(scopeId) ?? undefined;
+		const result = await tickProductTrickle({
+			baseUrl: deps.syncBaseUrl,
+			database: db,
+			fetcher,
+			stateStore: deps.productTrickleStateFor(scopeId),
+			hasPendingWork: deps.hasPendingInteractiveWork,
+			productCensusTotal: deps.productCensusTotal,
+			barcodeSelectors,
+			now,
+			...(deps.lastUserActivityMs !== undefined
+				? { lastUserActivityMs: deps.lastUserActivityMs }
+				: {}),
+			signal,
+		});
+		if (result.status !== 'ran') {
+			return { summary: null, status: 'skipped', reason: result.reason };
+		}
+		return { summary: `Product trickle: page ${result.page}, ${result.rows} products` };
+	});
 
 	// Per SCOPE, not per engine: switching A→B→A must not let B's compaction
 	// clock suppress A's (they are different databases).
@@ -710,6 +735,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		referenceSeed,
 		queryTotalRetry,
 		customerTrickle,
+		productTrickle,
 		coverageCompaction,
 		existencePrime,
 		existenceReconcile,
