@@ -47,11 +47,11 @@
   },
   "devDependencies": {
     "@vitest/coverage-v8": "4.1.10",
-    "esbuild": "0.28.1",
+    "esbuild": "0.28.2",
     "eslint": "^9.39.4",
     "expo": "~57.0.8",
     "glob": "^13.0.6",
-    "lint-staged": "^17.2.0",
+    "lint-staged": "^17.3.0",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "rxdb": "17.4.0",
     "rxdb-premium": "17.4.0"
