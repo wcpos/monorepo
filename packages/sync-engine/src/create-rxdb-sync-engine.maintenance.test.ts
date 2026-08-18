@@ -623,6 +623,9 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		// pull only exists server-side, so the open MUST re-pull — the maintenance
 		// completion cannot answer for the till (#1302: it did, and a wp-admin
 		// coupon stayed invisible at the POS).
+		// The guarantee only holds while the demand window is strictly inside the
+		// idle window; if they ever converge this test would pass vacuously.
+		expect(REFERENCE_DEMAND_REFRESH_DEDUPE_MS).toBeLessThan(REFERENCE_REFRESH_DEDUPE_MS);
 		nowMs += REFERENCE_DEMAND_REFRESH_DEDUPE_MS + 1;
 		const opened = await engine.require({
 			id: 'coupon-picker',
