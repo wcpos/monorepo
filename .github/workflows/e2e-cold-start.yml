@@ -36,7 +36,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: 🏗 Setup repository (next lane)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.inputs.ref || 'next' }}
           fetch-depth: 0
@@ -64,7 +64,7 @@ jobs:
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
 
       - name: 💾 Cache Playwright browsers
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -87,7 +87,7 @@ jobs:
           E2E_STORE_URL_PRO: ${{ github.event.inputs.lane == 'main' && 'https://dev-pro.wcpos.com' || 'https://dev-next.wcpos.com' }}
 
       - name: 📸 Upload results on failure
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
           name: cold-start-results-${{ github.run_id }}
