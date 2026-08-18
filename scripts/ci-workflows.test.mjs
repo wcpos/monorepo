@@ -327,12 +327,17 @@ test('deploy.yml names BOTH lane stores for the E2E job', () => {
 
 	// Each lane maps to its own allowed stores (owner ruling 2026-08-18): main
 	// may use dev-free + dev-pro and nothing else; next has only dev-next.
-	assert.match(runStep.env.E2E_STORE_URL_PRO, /dev-pro\.wcpos\.com/);
-	assert.match(runStep.env.E2E_STORE_URL_PRO, /dev-next\.wcpos\.com/);
-	assert.match(runStep.env.E2E_STORE_URL_FREE, /dev-free\.wcpos\.com/);
-	assert.match(runStep.env.E2E_STORE_URL_FREE, /dev-next\.wcpos\.com/);
-	assert.ok(
-		!/dev-next\.wcpos\.com'\s*\|\|\s*'https:\/\/dev-next/.test(runStep.env.E2E_STORE_URL_PRO),
-		'both arms of the pro lane map resolve to dev-next — main would gate against the next store'
+	// Pin the EXACT expressions, arm order included — hostname-presence checks
+	// would pass with the lanes swapped, silently gating each lane against the
+	// other's store (greptile catch on #1289).
+	const nextLane =
+		"(inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next')))";
+	assert.equal(
+		runStep.env.E2E_STORE_URL_PRO,
+		"${{ " + nextLane + " && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}"
+	);
+	assert.equal(
+		runStep.env.E2E_STORE_URL_FREE,
+		"${{ " + nextLane + " && 'https://dev-next.wcpos.com' || 'https://dev-free.wcpos.com' }}"
 	);
 });
