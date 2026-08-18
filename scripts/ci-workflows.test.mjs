@@ -111,6 +111,21 @@ test('the shared-store queue stays removed', () => {
 	assert.equal(gateStep.env.MERGE_GATE_MAX_ATTEMPTS, '140');
 });
 
+test('main-lane deploys cap shared-store E2E at two shards', () => {
+	const matrix = readWorkflow('deploy.yml').jobs.e2e.strategy.matrix;
+	const nextLane =
+		"(inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next')))";
+
+	assert.equal(
+		matrix.shardIndex,
+		"${{ fromJSON(" + nextLane + " && '[1, 2, 3, 4]' || '[1, 2]') }}"
+	);
+	assert.equal(
+		matrix.shardTotal,
+		"${{ fromJSON(" + nextLane + " && '[4]' || '[2]') }}"
+	);
+});
+
 test('cold-start dispatches bind raw refs to an explicit store lane', () => {
 	const workflow = readWorkflow('e2e-cold-start.yml');
 	const lane = workflow.on.workflow_dispatch.inputs.lane;

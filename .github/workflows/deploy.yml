@@ -177,15 +177,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 4, not 6. Each shard carries ~170s of fixed overhead (checkout,
-        # install, browsers, health check, auth bootstrap), so shards are not
-        # free: measured on run 31429108622 the six shards spent ~17 of their
-        # ~25 runner-minutes before running a test. Four duration-balanced shards
-        # finish sooner in wall-clock than six COUNT-balanced ones did, for a
-        # quarter less runner time. Change this number alone — the shard plan
-        # rebalances itself.
-        shardIndex: [1, 2, 3, 4]
-        shardTotal: [4]
+        # dev-pro does not sustain four concurrent write-heavy shards. Keep
+        # four on dev-next, but cap main/dev-pro at two.
+        shardIndex: ${{ fromJSON((inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && '[1, 2, 3, 4]' || '[1, 2]') }}
+        shardTotal: ${{ fromJSON((inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && '[4]' || '[2]') }}
     steps:
       - name: 🏗 Setup repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
