@@ -108,6 +108,7 @@ import {
 	CUSTOMER_TRICKLE_STATE_KEY,
 	decodeCustomerTrickleState,
 } from './maintenance/customer-trickle';
+import { PRODUCT_TRICKLE_STATE_KEY } from './maintenance/product-trickle';
 import { VARIATION_PREFETCH_STATE_KEY } from './maintenance/variation-prefetch';
 import { createLocalCoverage, type LocalCoverage } from './local-coverage/local-coverage';
 import { withLedgerRecovery } from './local-coverage/ledger-storage-recovery';
@@ -1026,6 +1027,9 @@ export function createRxdbSyncEngine(
 	manager.registerCursorInvalidator('customers', (scopeId) =>
 		removeBlob(scopeId, CUSTOMER_TRICKLE_STATE_KEY)
 	);
+	manager.registerCursorInvalidator('products', (scopeId) =>
+		removeBlob(scopeId, PRODUCT_TRICKLE_STATE_KEY)
+	);
 	for (const collection of ['products', 'variations'] as const) {
 		manager.registerCursorInvalidator(collection, (scopeId) =>
 			removeBlob(scopeId, VARIATION_PREFETCH_STATE_KEY)
@@ -1614,15 +1618,22 @@ export function createRxdbSyncEngine(
 			get: (key) => readBlob(scopeId, key),
 			set: (key, value) => writeBlob(scopeId, key, value),
 		}),
+		censusTotals: () => censusPublisher.totals(),
 		// The lane body runs inside guardWrite; a scope switch drains it before changing
 		// manager.activeScope, so this active census read remains bound to the lane's database.
 		customerCensusTotal: async () => (await censusPublisher.totals()).customers,
+		productTrickleStateFor: (scopeId) => ({
+			get: (key) => readBlob(scopeId, key),
+			set: (key, value) => writeBlob(scopeId, key, value),
+		}),
+		productCensusTotal: async () => (await censusPublisher.totals()).products,
 		variationPrefetchStateFor: (scopeId) => ({
 			get: (key) => readBlob(scopeId, key),
 			set: (key, value) => writeBlob(scopeId, key, value),
 		}),
 		variationCensusTotal: async () => (await censusPublisher.totals()).variations,
 		hasPendingInteractiveWork: requirePlane.hasPendingWork,
+		isWritePlaneOwner: writePlaneOwner,
 		...(ports.lastUserActivityMs !== undefined
 			? { lastUserActivityMs: ports.lastUserActivityMs }
 			: {}),

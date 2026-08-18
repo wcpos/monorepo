@@ -123,19 +123,14 @@ test('the shared-store queue stays removed', () => {
 	assert.equal(gateStep.env.MERGE_GATE_MAX_ATTEMPTS, '140');
 });
 
-test('main-lane deploys cap shared-store E2E at two shards', () => {
+test('both lanes run four E2E shards', () => {
+	// The two-shard main cap (2026-08-18) guarded dev-pro write capacity, but
+	// the feared load was the per-test catalogue re-sync removed in #1288.
+	// Shard count divides the same test list — it can never change coverage.
 	const matrix = readWorkflow('deploy.yml').jobs.e2e.strategy.matrix;
-	const nextLane =
-		"(inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next')))";
 
-	assert.equal(
-		matrix.shardIndex,
-		"${{ fromJSON(" + nextLane + " && '[1, 2, 3, 4]' || '[1, 2]') }}"
-	);
-	assert.equal(
-		matrix.shardTotal,
-		"${{ fromJSON(" + nextLane + " && '[4]' || '[2]') }}"
-	);
+	assert.equal(matrix.shardIndex, "${{ fromJSON('[1, 2, 3, 4]') }}");
+	assert.equal(matrix.shardTotal, "${{ fromJSON('[4]') }}");
 });
 
 test('cold-start dispatches bind raw refs to an explicit store lane', () => {

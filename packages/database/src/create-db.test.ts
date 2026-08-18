@@ -1,9 +1,4 @@
-import {
-	storeCollections,
-	syncCollections,
-	temporaryCollections,
-	userCollections,
-} from './collections';
+import { storeCollections, temporaryCollections, userCollections } from './collections';
 
 const mockPostCreate = jest.fn();
 const mockAddCollections = jest.fn(async () => ({
@@ -25,13 +20,6 @@ jest.mock('rxdb', () => ({
 
 jest.mock('./adapters/default', () => ({
 	defaultConfig: { storage: { name: 'default-storage' } },
-}));
-
-jest.mock('./adapters/fast', () => ({
-	fastStorageConfig: {
-		storage: { name: 'fast-storage' },
-		multiInstance: false,
-	},
 }));
 
 jest.mock('./adapters/ephemeral', () => ({
@@ -63,12 +51,6 @@ describe('create-db', () => {
 			'store_v6_abc123',
 			storeCollections,
 			async (module: typeof import('./create-db')) => module.createStoreDB('abc123'),
-		],
-		[
-			'createFastStoreDB',
-			'fast_store_v6_abc123',
-			syncCollections,
-			async (module: typeof import('./create-db')) => module.createFastStoreDB('abc123'),
 		],
 	])(
 		'creates the current database and adds collections for %s',

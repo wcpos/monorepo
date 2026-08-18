@@ -97,6 +97,13 @@ async function runCustomerTrickle(deps: CustomerTrickleDeps): Promise<CustomerTr
 	const url = `${deps.baseUrl}/customers?orderby=id&order=asc&per_page=${CUSTOMER_TRICKLE_BATCH_SIZE}&page=${state.page}`;
 	const response = await deps.fetcher(url, deps.signal ? { signal: deps.signal } : undefined);
 	if (!response.ok) {
+		if (response.status === 400) {
+			const error = (await response.json().catch(() => null)) as { code?: unknown } | null;
+			if (error?.code === 'rest_post_invalid_page_number') {
+				await deps.stateStore.set(CUSTOMER_TRICKLE_STATE_KEY, JSON.stringify(DEFAULT_STATE));
+				return { status: 'ran', rows: 0, page: state.page, walkComplete: false };
+			}
+		}
 		throw new Error(`/customers trickle pull failed: HTTP ${response.status}`);
 	}
 	const descriptor = COLLECTION_DESCRIPTORS.find(

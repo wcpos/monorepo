@@ -7,13 +7,13 @@ import { isRxDocument } from 'rxdb';
 import { Button } from '@wcpos/components/button';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { getNetPaymentTotal } from '@wcpos/order-math';
 
 import { useT } from '../../../../../contexts/translations';
 import { usePushDocument } from '../../../contexts/use-push-document';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCurrentOrder } from '../../contexts/current-order';
-import { getNetPaymentTotal } from '../utils/get-net-payment-total';
 
 const checkoutLogger = getLogger(['wcpos', 'pos', 'checkout']);
 

@@ -15,7 +15,10 @@ import {
 	type StoreScopeIdentity,
 } from './create-rxdb-sync-engine';
 import { RxCoverageRepository } from './local-coverage/persistence';
-import { REFERENCE_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
+import {
+	REFERENCE_DEMAND_REFRESH_DEDUPE_MS,
+	REFERENCE_REFRESH_DEDUPE_MS,
+} from './maintenance/maintenance-lanes';
 import { RxQueryTotalRequestStateRepository } from './rx-query-total-request-state-repository';
 import * as schedulerDrain from './scheduler/engine-scheduler-drain';
 import { ledgerRebuiltSchedulerTaskRunnerResult } from './scheduler/rx-scheduler-task-runner';
@@ -404,6 +407,77 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		await engine.dispose();
 	});
 
+	it.each([
+		{
+			name: 'backfills an unmaterialized reference with a fresh positive census',
+			total: 1,
+			fresh: true,
+		},
+		{ name: 'skips an unmaterialized reference with a fresh zero census', total: 0, fresh: true },
+		{
+			name: 'skips an unmaterialized reference with a stale positive census',
+			total: 1,
+			fresh: false,
+		},
+		{
+			name: 'skips an unmaterialized reference without a census entry',
+			total: undefined,
+			fresh: true,
+		},
+	])('$name', async ({ total, fresh }) => {
+		const nowMs = 1_000_000;
+		const diagnostics = vi.fn();
+		const fetcher = vi.fn(async (url: string) => {
+			if (new URL(url).pathname.endsWith('/products/categories')) {
+				return Response.json([
+					{
+						id: 1,
+						name: 'Category 1',
+						meta_data: [
+							{
+								key: '_woocommerce_pos_uuid',
+								value: '55555555-5555-4555-8555-555555555555',
+							},
+						],
+					},
+				]);
+			}
+			return Response.json([]);
+		});
+		const engine = engineWith({ diagnostics, fetcher, now: () => nowMs });
+		const scope = await engine.ready;
+		if (total !== undefined) {
+			await scope.database.collections.queryTotalCacheEntries.upsert({
+				queryKey: 'census:categories',
+				totalMatchingRecords: total,
+				updatedAtMs: nowMs,
+				freshUntilMs: fresh ? nowMs + 60_000 : nowMs,
+				schemaVersion: 1,
+			});
+		}
+
+		const report = await engine.sync('reference-seed');
+		await engine.sync('scheduler-drain');
+
+		const expectedPulls = total === 1 && fresh ? 1 : 0;
+		expect(
+			fetcher.mock.calls.filter(([url]) => new URL(url).pathname.endsWith('/products/categories'))
+		).toHaveLength(expectedPulls);
+		await expect(scope.database.collections.categories.count().exec()).resolves.toBe(expectedPulls);
+		if (expectedPulls === 1) {
+			expect(report.status).toBe('ran');
+			expect(diagnostics.mock.calls.map(([event]) => event.message)).toContain(
+				'Reference refresh (categories + brands + tags + coupons; backfilled: categories): 1 inserted, 0 requeued'
+			);
+		} else {
+			expect(report).toMatchObject({
+				status: 'skipped',
+				reason: 'no reference collections need seeding',
+			});
+		}
+		await engine.dispose();
+	});
+
 	it('refreshes a reference on demand, dedupes a remount, and maintains only materialized lanes', async () => {
 		let nowMs = 1_000_000;
 		const pulls = { categories: 0, brands: 0, tags: 0, coupons: 0 };
@@ -516,6 +590,59 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 			reason: expect.stringMatching(/local sync bookkeeping was rebuilt/i),
 		});
 		expect(pulls).toEqual({ categories: 2, brands: 0, tags: 0, coupons: 0 });
+		await engine.dispose();
+	});
+
+	it('a maintenance backfill never suppresses a deliberate picker open (#1302)', async () => {
+		let nowMs = 1_000_000;
+		let couponPulls = 0;
+		const engine = engineWith({
+			now: () => nowMs,
+			fetcher: async (url) => {
+				if (new URL(url).pathname.endsWith('/coupons')) {
+					couponPulls += 1;
+				}
+				return Response.json([]);
+			},
+		});
+		const scope = await engine.ready;
+		// The #1282 shape: census knows the store has coupons the app never opened.
+		await scope.database.collections.queryTotalCacheEntries.upsert({
+			queryKey: 'census:coupons',
+			totalMatchingRecords: 1,
+			updatedAtMs: nowMs,
+			freshUntilMs: nowMs + 60_000,
+			schemaVersion: 1,
+		});
+		await engine.sync('reference-seed');
+		await engine.sync('scheduler-drain');
+		expect(couponPulls).toBe(1);
+
+		// A cashier opens the coupon picker past remount-churn territory but well
+		// inside the idle lane's 4-minute window. A coupon created after the idle
+		// pull only exists server-side, so the open MUST re-pull — the maintenance
+		// completion cannot answer for the till (#1302: it did, and a wp-admin
+		// coupon stayed invisible at the POS).
+		// The guarantee only holds while the demand window is strictly inside the
+		// idle window; if they ever converge this test would pass vacuously.
+		expect(REFERENCE_DEMAND_REFRESH_DEDUPE_MS).toBeLessThan(REFERENCE_REFRESH_DEDUPE_MS);
+		nowMs += REFERENCE_DEMAND_REFRESH_DEDUPE_MS + 1;
+		const opened = await engine.require({
+			id: 'coupon-picker',
+			collection: 'coupons',
+			kind: 'refresh',
+		}).ready;
+		expect(opened).toMatchObject({ action: 'fetched' });
+		expect(couponPulls).toBe(2);
+
+		// Remount churn immediately after the open still costs nothing.
+		const remounted = await engine.require({
+			id: 'coupon-picker-remount',
+			collection: 'coupons',
+			kind: 'refresh',
+		}).ready;
+		expect(remounted).toMatchObject({ action: 'serve-local', requests: 0 });
+		expect(couponPulls).toBe(2);
 		await engine.dispose();
 	});
 
@@ -1000,7 +1127,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		const report = await engine.sync('reference-seed');
 		expect(report).toMatchObject({
 			status: 'skipped',
-			reason: 'no materialized reference collections',
+			reason: 'no reference collections need seeding',
 		});
 		const lifecycle = events.filter(
 			(event) => event.type === 'lane-start' || event.type === 'lane-finish'
@@ -1011,7 +1138,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 				type: 'lane-finish',
 				lane: 'reference-seed',
 				status: 'skipped',
-				detail: 'no materialized reference collections',
+				detail: 'no reference collections need seeding',
 			},
 		]);
 		await engine.dispose();

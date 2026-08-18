@@ -3,10 +3,10 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { Text } from '@wcpos/components/text';
+import { getNetPaymentTotal } from '@wcpos/order-math';
 
 import { useT } from '../../../../../contexts/translations';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
-import { getNetPaymentTotal } from '../../cart/utils/get-net-payment-total';
 
 interface CheckoutTitleProps {
 	order: import('@wcpos/database').OrderDocument;

@@ -73,7 +73,7 @@ jobs:
 
       - name: 🎭 Install Playwright browsers
         # No --with-deps: runner images carry Chrome's system libs (see deploy.yml).
-        run: cd apps/main && npx playwright install chromium
+        run: cd apps/main && npx playwright install chromium --only-shell
 
       - name: 🥶 Run cold-start E2E
         run: cd apps/main && npx playwright test --project=pro-cold-start

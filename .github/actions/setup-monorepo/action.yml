@@ -69,7 +69,14 @@ runs:
         key: turbo-${{ runner.os }}-${{ github.sha }}
         restore-keys: |
           turbo-${{ runner.os }}
+        # Turbo v2 stores its local cache in .turbo/cache — the old
+        # node_modules/.cache/turbo path had been persisting an EMPTY directory
+        # since the v2 upgrade, so every deploy rebuilt from scratch.
+        # node_modules/.cache carries Metro's content-addressed transform
+        # cache, which makes `expo export` incremental even when the turbo
+        # task itself misses (any apps/main source change).
         path: |
-          node_modules/.cache/turbo
+          .turbo/cache
+          node_modules/.cache
           apps/*/.turbo
           packages/*/.turbo

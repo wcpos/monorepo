@@ -3,12 +3,7 @@ import { Subject } from 'rxjs';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import {
-	StoreCollections,
-	storeCollections,
-	SyncCollections,
-	syncCollections,
-} from '../collections';
+import { StoreCollections, storeCollections, syncCollections } from '../collections';
 
 import type { RxCollection, RxPlugin } from 'rxdb';
 
@@ -200,7 +195,7 @@ export const resetCollectionPlugin: RxPlugin = {
 
 				try {
 					if (database.name.startsWith('fast_store')) {
-						const schema = syncCollections[collectionName as keyof SyncCollections];
+						const schema = syncCollections[collectionName as keyof typeof syncCollections];
 						if (!schema) {
 							resetLogger.error('No schema found for sync collection', {
 								showToast: false,

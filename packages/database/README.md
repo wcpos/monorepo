@@ -6,7 +6,7 @@ Local RxDB database for WCPOS with custom plugins for collection management and 
 
 This package provides:
 
-- **Database factories**: Create user, store, and sync databases
+- **Database factories**: Create user, store, and temporary databases
 - **Collection schemas**: Define data structures for WooCommerce entities
 - **RxDB plugins**: Custom plugins for collection reset and search
 
@@ -14,27 +14,14 @@ This package provides:
 
 ### Store Database
 
-Primary database for WooCommerce data:
+Database for store-local data:
 
 ```typescript
 import { createStoreDB } from '@wcpos/database';
 
 const storeDB = await createStoreDB({ name: 'store_123' });
 
-// Collections: products, variations, orders, customers, taxes, 
-// products/categories, products/tags, logs
-```
-
-### Fast Store Database (Sync State)
-
-Tracks sync status for each record:
-
-```typescript
-import { createFastStoreDB } from '@wcpos/database';
-
-const fastStoreDB = await createFastStoreDB({ name: 'fast_store_123' });
-
-// Collections mirror storeDB but store sync metadata
+// Collections include logs, notifications, templates, and device-local profiles
 ```
 
 ### User Database
@@ -210,8 +197,7 @@ To clear all databases (e.g., logout):
 ```typescript
 import { clearAllDB } from '@wcpos/database';
 
-const results = await clearAllDB({ storeDB, fastStoreDB, userDB });
-// Returns array of { name, success, error? } for each database
+const result = await clearAllDB();
 ```
 
 ## Design Decisions
@@ -246,21 +232,15 @@ FlexSearch stores its index in a separate RxDB collection. If the schema changes
 ### Database Factories
 
 - `createStoreDB(config)` - Main data database
-- `createFastStoreDB(config)` - Sync state database
 - `createUserDB(config)` - User settings database
 - `createTemporaryDB(config)` - In-memory database for testing
 
 ### Exports
 
 - `storeCollections` - Schema definitions for store
-- `syncCollections` - Schema definitions for sync state
 - `userCollections` - Schema definitions for user
 - `clearAllDB(databases)` - Clear all databases
 
 ### Types
 
 - `StoreCollections` - Type for store collection map
-- `SyncCollections` - Type for sync collection map
-
-Breaking change: `FlexSearchInstance` is no longer re-exported from the package root. Search
-plugin methods still expose its shape through their return types.

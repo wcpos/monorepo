@@ -23,6 +23,7 @@ import type {
 	HybridCollection,
 	RebaselineTargetedResult,
 	ReferenceCollection,
+	RemoteId,
 	ReplicationActionHandlers,
 	ReplicationActions,
 	SyncedDocument,
@@ -36,7 +37,10 @@ import {
 	type UpsertRefreshDescriptor,
 } from '../collections/collection-descriptors';
 import { manifestRowOf } from '../materialization/record-materialization';
-import { upsertManifestRows } from '../local-coverage/rx-existence-manifest-repository';
+import {
+	removeManifestByWooIds,
+	upsertManifestRows,
+} from '../local-coverage/rx-existence-manifest-repository';
 import { hasPendingLocalWork, withoutLocallyProtected } from '../write-path/local-work-guard';
 
 import type { BarcodeSelectorsReader } from '../materialization/barcode-selectors';
@@ -217,11 +221,33 @@ async function removeByWooIds(
 	const docs = await collection
 		.find({ selector: { [wooIdField]: { $in: remoteIds } } as never })
 		.exec();
-	const removable = docs.filter((doc) => !hasPendingLocalWork(doc.toJSON()));
+	const protectedRemoteIds = new Set<RemoteId>();
+	const removable: string[] = [];
+	for (const doc of docs) {
+		const row = doc.toJSON() as Record<string, unknown>;
+		if (!hasPendingLocalWork(row)) {
+			removable.push((doc as { primary: string }).primary);
+			continue;
+		}
+		const remoteId = remoteIdOrNull(row[wooIdField]);
+		if (remoteId !== null) protectedRemoteIds.add(remoteId);
+	}
 	if (removable.length > 0) {
-		assertBulkSuccess(
-			await collection.bulkRemove(removable.map((doc) => (doc as { primary: string }).primary)),
-			'change-signal-handlers remove'
+		assertBulkSuccess(await collection.bulkRemove(removable), 'change-signal-handlers remove');
+	}
+	const manifestName =
+		name === 'products' || name === 'variations'
+			? 'existenceManifest'
+			: name === 'customers'
+				? 'existenceManifestCustomers'
+				: name === 'orders'
+					? 'existenceManifestOrders'
+					: null;
+	const manifest = manifestName ? ctx.database.collections[manifestName] : undefined;
+	if (manifest) {
+		await removeManifestByWooIds(
+			manifest as never,
+			remoteIds.filter((remoteId) => !protectedRemoteIds.has(remoteId)).map(wooIdOf)
 		);
 	}
 	// A delete for a never-synced id is vacuously applied — tombstone semantics,

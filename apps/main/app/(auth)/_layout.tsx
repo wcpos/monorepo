@@ -32,9 +32,9 @@ function ThemedSystemBars() {
 
 export default function AuthLayout() {
 	const screenBackgroundColor = useNavigationBackground();
-	const { storeDB, fastStoreDB } = useAppState();
+	const { storeDB } = useAppState();
 
-	if (storeDB && fastStoreDB) {
+	if (storeDB) {
 		return <Redirect href="/(app)" />;
 	}
 

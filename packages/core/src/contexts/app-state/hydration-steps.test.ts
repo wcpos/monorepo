@@ -5,11 +5,9 @@ jest.mock('expo-crypto', () => ({
 }));
 
 const createStoreDBMock = jest.fn();
-const createFastStoreDBMock = jest.fn();
 
 jest.mock('@wcpos/database', () => ({
 	createStoreDB: (...args: unknown[]) => createStoreDBMock(...args),
-	createFastStoreDB: (...args: unknown[]) => createFastStoreDBMock(...args),
 	createUserDB: jest.fn(),
 	sanitizeWPCredentialsData: (data: unknown) => data,
 }));
@@ -47,7 +45,6 @@ describe('hydrateUserSession', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		createStoreDBMock.mockResolvedValue({ addState: jest.fn(async () => ({ id: 'state' })) });
-		createFastStoreDBMock.mockResolvedValue({ name: 'fast-store-db' });
 	});
 
 	it('throws when a selected store cannot create its store database', async () => {
@@ -64,27 +61,11 @@ describe('hydrateUserSession', () => {
 			)
 		).rejects.toThrow('Failed to create store database');
 	});
-
-	it('throws when a selected store cannot create its fast store database', async () => {
-		createFastStoreDBMock.mockResolvedValue(undefined);
-
-		await expect(
-			hydrateUserSession(
-				{
-					sites: documentLookup({ uuid: 'site-1' }),
-					wp_credentials: documentLookup({ uuid: 'cred-1' }),
-					stores: documentLookup({ localID: 'store-1' }),
-				} as any,
-				{ siteID: 'site-1', wpCredentialsID: 'cred-1', storeID: 'store-1' }
-			)
-		).rejects.toThrow('Failed to create fast store database');
-	});
 });
 
 describe('switchUserSessionStore', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
-		createFastStoreDBMock.mockResolvedValue({ name: 'fast-store-db' });
 	});
 
 	it('does not persist the new store when hydration fails', async () => {
@@ -157,7 +138,6 @@ describe('switchUserSessionStore', () => {
 			wpCredentials,
 			store,
 			storeDB,
-			fastStoreDB: { name: 'fast-store-db' },
 			extraData,
 		});
 		expect(appState.set).toHaveBeenCalledWith('current', expect.any(Function));

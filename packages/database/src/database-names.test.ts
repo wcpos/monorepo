@@ -1,7 +1,6 @@
 import {
 	APP_DATABASE_PREFIXES,
 	containsScopeDatabaseName,
-	getFastStoreDatabaseName,
 	getStoreDatabaseName,
 	getUserDatabaseName,
 	isFastStoreDatabaseName,
@@ -18,7 +17,6 @@ describe('database name helpers', () => {
 	it('returns the current database names', () => {
 		expect(getUserDatabaseName()).toBe('wcposusers_v6');
 		expect(getStoreDatabaseName('abc123')).toBe('store_v6_abc123');
-		expect(getFastStoreDatabaseName('abc123')).toBe('fast_store_v6_abc123');
 	});
 
 	it('exposes the exact legacy database generations', () => {

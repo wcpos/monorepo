@@ -17,6 +17,7 @@ import {
 	declareRequirements,
 	engineCollectionNameFor,
 	type EngineQueryDescriptor,
+	LEGACY_SEARCH_FIELDS,
 	observeCollectionActive,
 	observeCoverage,
 	observeEngineQuery,
@@ -43,7 +44,7 @@ import {
 } from './query-state-translator';
 
 import type { CollectionKey, QueryStateOf } from './query-state-types';
-import type { RxCollection, RxDatabase } from 'rxdb';
+import type { RxCollection } from 'rxdb';
 
 type LegacyCollectionName = EngineQueryDescriptor['collection'];
 type CompiledQuery = ReturnType<typeof compileQuery>;
@@ -442,12 +443,9 @@ function coverageProjection$(
 	);
 }
 
-function searchFieldsFor(
-	localDB: RxDatabase,
-	collection: LegacyCollectionName
-): string[] | undefined {
-	const fields = localDB.collections[collection]?.options?.searchFields;
-	return Array.isArray(fields) ? [...fields] : undefined;
+function searchFieldsFor(collection: LegacyCollectionName): string[] | undefined {
+	const fields = LEGACY_SEARCH_FIELDS[collection as keyof typeof LEGACY_SEARCH_FIELDS];
+	return fields ? [...fields] : undefined;
 }
 
 function emptyResult(): QueryResult<RxCollection> {
@@ -488,7 +486,7 @@ function useEngineBinding(
 	const runtime = useQueryRuntime();
 	const generatedId = React.useId();
 	const bindingId = compiledId ?? generatedId;
-	const searchFields = searchFieldsFor(runtime.localDB, descriptorInput.collection);
+	const searchFields = searchFieldsFor(descriptorInput.collection);
 	const searchFieldsKey = JSON.stringify(searchFields);
 	const read = React.useMemo(
 		() => (descriptorInput.read ? { ...descriptorInput.read, searchFields } : undefined),
@@ -558,10 +556,8 @@ export function useCollectionBinding<C extends Exclude<CollectionKey, 'logs'>>(
 	state: QueryStateOf<C>,
 	options: { remoteIds?: readonly RemoteId[] } = {}
 ): QueryBinding {
-	const runtime = useQueryRuntime();
 	const bindingId = React.useId();
 	const searchFields = searchFieldsFor(
-		runtime.localDB,
 		(collection === 'tax-rates' ? 'taxes' : collection) as LegacyCollectionName
 	);
 	const compileKey = JSON.stringify([collection, state, options.remoteIds, searchFields]);
@@ -617,7 +613,7 @@ function observeParentLookup(
 export function useRelationalCollectionBinding(state: QueryStateOf<'products'>): QueryBinding {
 	const runtime = useQueryRuntime();
 	const bindingId = React.useId();
-	const parentSearchFields = searchFieldsFor(runtime.localDB, 'products');
+	const parentSearchFields = searchFieldsFor('products');
 	const compileKey = JSON.stringify([state, parentSearchFields]);
 	const compiled = React.useMemo(
 		() =>
@@ -637,7 +633,7 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 		selector: state.filters.status ? { status: state.filters.status } : {},
 		sort: [{ id: 'asc' }],
 		search: compiled.read.search,
-		searchFields: searchFieldsFor(runtime.localDB, 'variations'),
+		searchFields: searchFieldsFor('variations'),
 	});
 	const parentDemand = useDemand(runtime.engine, `${bindingId}:parent`, descriptor, true, compiled);
 	const childDemand = useDemand(

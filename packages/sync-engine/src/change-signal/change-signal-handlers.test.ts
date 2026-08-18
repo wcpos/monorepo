@@ -4,7 +4,11 @@ import {
 	COLLECTION_DESCRIPTORS,
 	type TargetedDescriptor,
 } from '../collections/collection-descriptors';
-import { type HandlerContext, pullTargetedByIds } from './change-signal-handlers';
+import {
+	buildReplicationHandlers,
+	type HandlerContext,
+	pullTargetedByIds,
+} from './change-signal-handlers';
 
 function descriptor(collection: 'products' | 'variations' | 'customers'): TargetedDescriptor {
 	const found = COLLECTION_DESCRIPTORS.find((item) => item.collection === collection);
@@ -19,7 +23,8 @@ function context(
 	body: unknown,
 	urls: string[],
 	residents: ResidentRow[] = [],
-	removedPrimaries: string[] = []
+	removedPrimaries: string[] = [],
+	removedManifestIds: string[] = []
 ): HandlerContext {
 	return {
 		database: {
@@ -34,6 +39,12 @@ function context(
 						return { error: [] };
 					},
 				},
+				existenceManifest: {
+					bulkRemove: async (ids: string[]) => {
+						removedManifestIds.push(...ids);
+						return { error: [] };
+					},
+				},
 			},
 		} as never,
 		fetch: vi.fn(async (url: string) => {
@@ -45,6 +56,53 @@ function context(
 		log: () => undefined,
 	};
 }
+
+describe('change-signal tombstone manifest membership', () => {
+	it('removes a resident product and its manifest row', async () => {
+		const removedDocs: string[] = [];
+		const removedManifestIds: string[] = [];
+		const ctx = context(
+			'products',
+			[],
+			[],
+			[{ primary: 'uuid-7', json: { remoteId: '7' } }],
+			removedDocs,
+			removedManifestIds
+		);
+
+		await buildReplicationHandlers(ctx).deleteProducts([7]);
+
+		expect(removedDocs).toEqual(['uuid-7']);
+		expect(removedManifestIds).toEqual(['7']);
+	});
+
+	it('keeps both the resident product and manifest row when local work is pending', async () => {
+		const removedDocs: string[] = [];
+		const removedManifestIds: string[] = [];
+		const ctx = context(
+			'products',
+			[],
+			[],
+			[{ primary: 'uuid-7', json: { remoteId: '7', local: { dirty: true } } }],
+			removedDocs,
+			removedManifestIds
+		);
+
+		await buildReplicationHandlers(ctx).deleteProducts([7]);
+
+		expect(removedDocs).toEqual([]);
+		expect(removedManifestIds).toEqual([]);
+	});
+
+	it('removes a stale manifest row for a product that was never held locally', async () => {
+		const removedManifestIds: string[] = [];
+		const ctx = context('products', [], [], [], [], removedManifestIds);
+
+		await buildReplicationHandlers(ctx).deleteProducts([7]);
+
+		expect(removedManifestIds).toEqual(['7']);
+	});
+});
 
 describe('pullTargetedByIds product publication filter', () => {
 	it('sends status=publish and accepts a short products response', async () => {

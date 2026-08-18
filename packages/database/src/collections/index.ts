@@ -24,7 +24,6 @@ import { printerProfilesLiteral } from './schemas/printer-profiles';
 import { scannerProfilesLiteral } from './schemas/scanner-profiles';
 import { templatePrinterOverridesLiteral } from './schemas/template-printer-overrides';
 import { toSortableInteger } from './utils';
-import { sanitizeProductData } from './products';
 import { sanitizeWPCredentialsData } from './wp-credentials';
 
 import type { RxCollection, RxCollectionCreator, RxDatabase, RxDocument } from 'rxdb';
@@ -230,56 +229,8 @@ const wp_credentials: RxCollectionCreator<WPCredentialsDocumentType> = {
 type ProductDocumentType = WithJsonMetaData<
 	ExtractDocumentTypeFromTypedRxJsonSchema<typeof productsLiteral>
 >;
-const productSchema: RxJsonSchema<ProductDocumentType> = productsLiteral;
 export type ProductDocument = RxDocument<ProductDocumentType>;
 export type ProductCollection = RxCollection<ProductDocumentType>;
-const products: RxCollectionCreator<ProductDocumentType> = {
-	schema: productSchema,
-	options: {
-		searchFields: ['name', 'sku', 'barcode'],
-		middlewares: {
-			preInsert: {
-				handle: (doc: ProductDocumentType) => {
-					doc.sortable_price = toSortableInteger(doc.price);
-					return doc;
-				},
-				parallel: false,
-			},
-			preSave: {
-				handle: (doc: ProductDocumentType) => {
-					doc.sortable_price = toSortableInteger(doc.price);
-					return doc;
-				},
-				parallel: false,
-			},
-		},
-	},
-	migrationStrategies: {
-		1(oldDoc) {
-			oldDoc.sortable_price = toSortableInteger(oldDoc.price);
-			return oldDoc;
-		},
-		2(oldDoc) {
-			return oldDoc;
-		},
-		// v3: Removed multipleOf constraint from sortable_price (floating-point incompatibility)
-		3(oldDoc) {
-			return oldDoc;
-		},
-		// v4: Changed sortable_price from integer to number to avoid 32-bit overflow for prices > $2,147
-		4(oldDoc) {
-			return oldDoc;
-		},
-		// v5: Removed format: 'uri' from image.src and permalink (RxDB v17 strict validation)
-		5(oldDoc) {
-			return oldDoc;
-		},
-		// v6: Sanitize stale REST payload shapes before storage migration writes to strict schema.
-		6(oldDoc) {
-			return sanitizeProductData(oldDoc) as ProductDocumentType;
-		},
-	},
-};
 
 /**
  * Product Variations
@@ -287,123 +238,31 @@ const products: RxCollectionCreator<ProductDocumentType> = {
 type ProductVariationDocumentType = WithJsonMetaData<
 	ExtractDocumentTypeFromTypedRxJsonSchema<typeof variationsLiteral>
 >;
-const productVariationSchema: RxJsonSchema<ProductVariationDocumentType> = variationsLiteral;
 export type ProductVariationDocument = RxDocument<ProductVariationDocumentType>;
 export type ProductVariationCollection = RxCollection<ProductVariationDocumentType>;
-const variations: RxCollectionCreator<ProductVariationDocumentType> = {
-	schema: productVariationSchema,
-	options: {
-		searchFields: ['sku', 'barcode'],
-		middlewares: {
-			preInsert: {
-				handle: (doc: ProductVariationDocumentType) => {
-					doc.sortable_price = toSortableInteger(doc.price);
-					return doc;
-				},
-				parallel: false,
-			},
-			preSave: {
-				handle: (doc: ProductVariationDocumentType) => {
-					doc.sortable_price = toSortableInteger(doc.price);
-					return doc;
-				},
-				parallel: false,
-			},
-		},
-	},
-	migrationStrategies: {
-		1(oldDoc) {
-			oldDoc.type = 'variation';
-			return oldDoc;
-		},
-		2(oldDoc) {
-			oldDoc.sortable_price = toSortableInteger(oldDoc.price);
-			return oldDoc;
-		},
-		3(oldDoc) {
-			return oldDoc;
-		},
-		// v4: Removed multipleOf constraint from sortable_price (floating-point incompatibility)
-		4(oldDoc) {
-			return oldDoc;
-		},
-		// v5: Changed sortable_price from integer to number to avoid 32-bit overflow for prices > $2,147
-		5(oldDoc) {
-			return oldDoc;
-		},
-		// v6: Removed format: 'uri' from image.src and permalink (RxDB v17 strict validation)
-		6(oldDoc) {
-			return oldDoc;
-		},
-	},
-};
 
 /**
  * Product Categories
  */
-const productCategorySchema: RxJsonSchema<ProductCategoryDocumentType> = categoriesLiteral;
 type ProductCategoryDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<
 	typeof categoriesLiteral
 >;
 export type ProductCategoryDocument = RxDocument<ProductCategoryDocumentType>;
 export type ProductCategoryCollection = RxCollection<ProductCategoryDocumentType>;
-const categories: RxCollectionCreator<ProductCategoryDocumentType> = {
-	schema: productCategorySchema,
-	options: {
-		searchFields: ['name'],
-	},
-	migrationStrategies: {
-		1(oldDoc) {
-			return oldDoc;
-		},
-		2(oldDoc) {
-			return oldDoc;
-		},
-		// v3: Removed format: 'uri' from image.src (RxDB v17 strict validation)
-		3(oldDoc) {
-			return oldDoc;
-		},
-	},
-};
 
 /**
  * Product Tags
  */
-const productTagSchema: RxJsonSchema<ProductTagDocumentType> = tagsLiteral;
 type ProductTagDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof tagsLiteral>;
 export type ProductTagDocument = RxDocument<ProductTagDocumentType>;
 export type ProductTagCollection = RxCollection<ProductTagDocumentType>;
-const tags: RxCollectionCreator<ProductTagDocumentType> = {
-	schema: productTagSchema,
-	options: {
-		searchFields: ['name'],
-	},
-	migrationStrategies: {
-		1(oldDoc) {
-			return oldDoc;
-		},
-	},
-};
 
 /**
  * Product Brands
  */
-const productBrandSchema: RxJsonSchema<ProductBrandDocumentType> = brandsLiteral;
 type ProductBrandDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof brandsLiteral>;
 export type ProductBrandDocument = RxDocument<ProductBrandDocumentType>;
 export type ProductBrandCollection = RxCollection<ProductBrandDocumentType>;
-const brands: RxCollectionCreator<ProductBrandDocumentType> = {
-	schema: productBrandSchema,
-	options: {
-		searchFields: ['name'],
-	},
-	migrationStrategies: {
-		// v1: Removed format: 'uri' from image.src (RxDB v17 strict validation)
-		1(oldDoc) {
-			return oldDoc;
-		},
-	},
-};
 
 /**
  * Orders
@@ -479,83 +338,22 @@ const orders: RxCollectionCreator<OrderDocumentType> = {
 type CustomerDocumentType = WithJsonMetaData<
 	ExtractDocumentTypeFromTypedRxJsonSchema<typeof customersLiteral>
 >;
-const customerSchema: RxJsonSchema<CustomerDocumentType> = customersLiteral;
 export type CustomerDocument = RxDocument<CustomerDocumentType>;
 export type CustomerCollection = RxCollection<CustomerDocumentType>;
-const customers: RxCollectionCreator<CustomerDocumentType> = {
-	schema: customerSchema,
-	options: {
-		searchFields: [
-			'first_name',
-			'last_name',
-			'email',
-			'username',
-			'billing.first_name',
-			'billing.last_name',
-			'billing.email',
-			'billing.company',
-			'billing.phone',
-		],
-	},
-	migrationStrategies: {
-		1(oldDoc) {
-			return oldDoc;
-		},
-		2(oldDoc) {
-			return oldDoc;
-		},
-		// v3: Added top-level tax_ids: TaxId[] (canonical customer tax IDs)
-		3(oldDoc) {
-			oldDoc.tax_ids = Array.isArray(oldDoc.tax_ids) ? oldDoc.tax_ids : [];
-			return oldDoc;
-		},
-	},
-};
 
 /**
  * Coupons
  */
-const couponSchema: RxJsonSchema<CouponDocumentType> = couponsLiteral;
 type CouponDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof couponsLiteral>;
 export type CouponDocument = RxDocument<CouponDocumentType>;
 export type CouponCollection = RxCollection<CouponDocumentType>;
-const coupons: RxCollectionCreator<CouponDocumentType> = {
-	schema: couponSchema,
-	options: {
-		searchFields: ['code', 'description'],
-	},
-	migrationStrategies: {
-		1(oldDoc) {
-			oldDoc.status = oldDoc.status || '';
-			oldDoc.date_created = oldDoc.date_created || '';
-			oldDoc.date_modified = oldDoc.date_modified || '';
-			oldDoc.date_expires = oldDoc.date_expires || null;
-			oldDoc.links = oldDoc.links || {};
-			return oldDoc;
-		},
-	},
-};
 
 /**
  * Taxes
  */
-const taxRateSchema: RxJsonSchema<TaxRateDocumentType> = taxRatesLiteral;
 type TaxRateDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof taxRatesLiteral>;
 export type TaxRateDocument = RxDocument<TaxRateDocumentType>;
 export type TaxRateCollection = RxCollection<TaxRateDocumentType>;
-const taxes: RxCollectionCreator<TaxRateDocumentType> = {
-	schema: taxRateSchema,
-	migrationStrategies: {
-		// v1: `country` relaxed from an ISO-code enum to a plain string so
-		// WooCommerce's empty/general country values pass validation. Existing
-		// docs are already valid under the relaxed schema; just carry them over,
-		// normalizing a missing country to ''.
-		1(oldDoc) {
-			oldDoc.country = oldDoc.country || '';
-			return oldDoc;
-		},
-	},
-};
 
 /**
  * Gateways
@@ -782,16 +580,6 @@ export type UserCollections = {
 };
 
 export type StoreCollections = {
-	products: ProductCollection;
-	variations: ProductVariationCollection;
-	orders: OrderCollection;
-	customers: CustomerCollection;
-	coupons: CouponCollection;
-	taxes: TaxRateCollection;
-	// payment_gateways: GatewayCollection;
-	'products/categories': ProductCategoryCollection;
-	'products/tags': ProductTagCollection;
-	'products/brands': ProductBrandCollection;
 	logs: LogCollection;
 	notifications: NotificationCollection;
 	templates: TemplateCollection;
@@ -801,27 +589,12 @@ export type StoreCollections = {
 	receipt_email_queue: ReceiptEmailQueueCollection;
 };
 
-export type SyncCollections = {
-	products: SyncCollection;
-	variations: SyncCollection;
-	orders: SyncCollection;
-	customers: SyncCollection;
-	coupons: SyncCollection;
-	taxes: SyncCollection;
-	// payment_gateways: GatewayCollection;
-	'products/categories': SyncCollection;
-	'products/tags': SyncCollection;
-	'products/brands': SyncCollection;
-	templates: SyncCollection;
-};
-
 export type TemporaryCollections = {
 	orders: OrderCollection;
 };
 
 export type UserDatabase = RxDatabase<UserCollections>;
 export type StoreDatabase = RxDatabase<StoreCollections>;
-export type SyncDatabase = RxDatabase<SyncCollections>;
 export type TemporaryDatabase = RxDatabase<TemporaryCollections>;
 
 export const userCollections = {
@@ -833,16 +606,6 @@ export const userCollections = {
 };
 
 export const storeCollections = {
-	products,
-	variations,
-	orders,
-	customers,
-	coupons,
-	taxes, // NOTE: WC REST API uses 'taxes', not 'tax_rates', going against all other endpoints.
-	// payment_gateways,
-	'products/categories': categories, // NOTE: WC REST API uses 'products/categories' endpoint
-	'products/tags': tags, // NOTE: WC REST API uses 'products/tags' endpoint
-	'products/brands': brands, // NOTE: WC REST API uses 'products/brands' endpoint
 	logs,
 	notifications,
 	templates,
@@ -852,7 +615,6 @@ export const storeCollections = {
 	receipt_email_queue,
 };
 
-// @NOTE: sync collection should have corresponding collections in storeCollections
 export const syncCollections = {
 	products: sync,
 	variations: sync,

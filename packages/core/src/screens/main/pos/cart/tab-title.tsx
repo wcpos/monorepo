@@ -1,10 +1,10 @@
 import { useObservableEagerState } from 'observable-hooks';
 
 import { Text } from '@wcpos/components/text';
+import { getNetPaymentTotal } from '@wcpos/order-math';
 
 import { useT } from '../../../../contexts/translations';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
-import { getNetPaymentTotal } from './utils/get-net-payment-total';
 
 interface Props {
 	order: import('@wcpos/database').OrderDocument;

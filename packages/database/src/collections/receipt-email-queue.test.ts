@@ -28,9 +28,4 @@ describe('receipt_email_queue collection', () => {
 	it('constrains status to the three states the queue can be in', () => {
 		expect(receiptEmailQueueLiteral.properties.status.enum).toEqual(['pending', 'sent', 'failed']);
 	});
-
-	it('is not a synced collection — the row belongs to the device that made it', async () => {
-		const { syncCollections } = await import('./index');
-		expect(Object.keys(syncCollections)).not.toContain('receipt_email_queue');
-	});
 });

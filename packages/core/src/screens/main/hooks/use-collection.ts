@@ -5,17 +5,18 @@ import { filter } from 'rxjs/operators';
 
 import { storeCollections } from '@wcpos/database';
 import type { StoreCollections } from '@wcpos/database';
+import type { LegacyCollectionName } from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 
-export type CollectionKey = keyof typeof storeCollections;
+export type CollectionKey = keyof typeof storeCollections | LegacyCollectionName;
 
 /**
  * Hook to get a collection reference that auto-updates when the collection is reset.
  *
  * @example
- * const { collection } = useCollection('products');
+ * const { collection } = useCollection('logs');
  *
  * How it works:
  * - Returns the current collection from storeDB
@@ -30,7 +31,7 @@ export type CollectionKey = keyof typeof storeCollections;
  * 4. This hook receives the new collection and triggers re-render
  * 5. Direct query bindings subscribe to engine db$ replacement.
  */
-export const useCollection = <K extends CollectionKey>(
+export const useCollection = <K extends keyof StoreCollections>(
 	key: K
 ): { collection: StoreCollections[K]; collectionLabel: string } => {
 	const t = useT();
@@ -51,20 +52,6 @@ export const useCollection = <K extends CollectionKey>(
 	 */
 	const collectionLabel = React.useMemo(() => {
 		switch (key) {
-			case 'products':
-				return t('common.product');
-			case 'variations':
-				return t('common.variation');
-			case 'customers':
-				return t('common.customer');
-			case 'orders':
-				return t('common.order');
-			case 'taxes':
-				return t('common.tax');
-			case 'products/categories':
-				return t('common.category');
-			case 'products/tags':
-				return t('common.tag');
 			case 'logs':
 				return t('common.log');
 			default:

@@ -177,10 +177,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # dev-pro does not sustain four concurrent write-heavy shards. Keep
-        # four on dev-next, but cap main/dev-pro at two.
-        shardIndex: ${{ fromJSON((inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && '[1, 2, 3, 4]' || '[1, 2]') }}
-        shardTotal: ${{ fromJSON((inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && '[4]' || '[2]') }}
+        # Four shards on BOTH lanes. The two-shard main cap (2026-08-18) guarded
+        # dev-pro's write capacity, but the load it feared was the per-test
+        # catalogue re-sync removed in #1288 — post-fix, four shards' store
+        # traffic is below the old two-shard baseline. Cross-run safety stays
+        # the specs' job (run-private probes); cashier slots 1-16 exist on
+        # every dev store.
+        shardIndex: ${{ fromJSON('[1, 2, 3, 4]') }}
+        shardTotal: ${{ fromJSON('[4]') }}
     steps:
       - name: 🏗 Setup repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -206,7 +210,7 @@ jobs:
         # No --with-deps: GitHub's Ubuntu images already carry Chrome's system
         # libraries, and the apt run it triggers goes through the same flaky
         # azure mirror that wedged a shard for 36 minutes on 2026-08-18.
-        run: cd apps/main && npx playwright install chromium
+        run: cd apps/main && npx playwright install chromium --only-shell
 
       - name: 🏥 Health check deployment
         run: |

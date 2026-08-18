@@ -60,7 +60,6 @@ const matchesAnyPrefix = (value: string, prefixes: readonly string[]) =>
 
 export const getUserDatabaseName = () => USER_DATABASE_NAME;
 export const getStoreDatabaseName = (id: string) => `${STORE_DATABASE_PREFIX}${id}`;
-export const getFastStoreDatabaseName = (id: string) => `${FAST_STORE_DATABASE_PREFIX}${id}`;
 
 export const isStoreDatabaseName = (value: string) => matchesAnyPrefix(value, ALL_STORE_PREFIXES);
 export const isFastStoreDatabaseName = (value: string) =>

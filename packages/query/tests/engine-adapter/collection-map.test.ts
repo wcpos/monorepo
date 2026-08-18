@@ -4,6 +4,7 @@ import {
 	adapterDerivedFieldsFor,
 	COLLECTION_VOCABULARY,
 	collectionMap,
+	LEGACY_SEARCH_FIELDS,
 	promotedColumnsFor,
 	readLegacyField,
 	readSanitizedFieldsFor,
@@ -64,6 +65,19 @@ describe('variation attribute read boundary (#811)', () => {
 });
 
 describe('engine adapter collection map', () => {
+	it('pins legacy search fields after the shadow collections are retired', () => {
+		expect(LEGACY_SEARCH_FIELDS.products).toEqual(['name', 'sku', 'barcode']);
+		expect(LEGACY_SEARCH_FIELDS.variations).toEqual(['sku', 'barcode']);
+		expect(LEGACY_SEARCH_FIELDS.orders).toEqual([
+			'number',
+			'billing.first_name',
+			'billing.last_name',
+			'billing.email',
+			'billing.company',
+			'billing.phone',
+		]);
+	});
+
 	it('pins collection-name facts to the previous hand-written maps', () => {
 		const entries = Object.entries(COLLECTION_VOCABULARY);
 		expect(Object.fromEntries(entries.map(([name, row]) => [row.telemetryName, name]))).toEqual({

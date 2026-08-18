@@ -36,6 +36,7 @@ import {
 	censusCollectionFromQueryKey,
 	censusQueryKey,
 	type CensusTotal,
+	type CensusTotals,
 	PRODUCT_BROWSE_WINDOW_LIMIT,
 	QUERY_TOTAL_FRESH_FOR_MS,
 	QUERY_TOTAL_LEASE_FOR_MS,
@@ -56,6 +57,7 @@ import { RxQueryTotalRequestStateRepository } from '../rx-query-total-request-st
 import { RxQueryTotalCacheRepository } from '../collections/rx-query-total-cache-repository';
 import { withLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
 import { type CustomerTrickleStateStore, tickCustomerTrickle } from './customer-trickle';
+import { type ProductTrickleStateStore, tickProductTrickle } from './product-trickle';
 import { tickVariationPrefetch, type VariationPrefetchStateStore } from './variation-prefetch';
 import {
 	laneRegistryEntry,
@@ -106,6 +108,21 @@ export const ORDER_OPEN_RECENT_PRIORITY = 600;
 export { PRODUCT_BROWSE_WINDOW_LIMIT };
 export const PRODUCT_BROWSE_WINDOW_PRIORITY = 500;
 export const REFERENCE_REFRESH_DEDUPE_MS = 4 * 60_000;
+// Demand-path (picker/screen open) reference refreshes use a much shorter
+// window: just enough to absorb remount churn, never enough to hide a fresh
+// record from a cashier who deliberately opened the surface. The 4-minute
+// window above is for the IDLE maintenance passes — #1302 showed that letting
+// an idle backfill arm the demand window makes a coupon created in wp-admin
+// invisible at the till for up to 4 minutes (indefinitely while idle passes
+// keep re-arming ahead of opens).
+//
+// KNOWN residual (#1303 review): an open within 15s of an idle pull still
+// dedupes against that maintenance completion, so a record created inside
+// that gap stays invisible for that one open — bounded at 15s and
+// self-healing on the next open. Removing it entirely needs source-tagged
+// completions in the scheduler task state; take that surgery only if field
+// reports show the 15s window mattering.
+export const REFERENCE_DEMAND_REFRESH_DEDUPE_MS = 15_000;
 export const COVERAGE_COMPACTION_INTERVAL_MS = 5 * 60 * 1_000;
 export const COVERAGE_COMPACTION_RETAIN_STALE_FOR_MS = 5 * 60 * 1_000;
 export const COVERAGE_COMPACTION_LEASE_FOR_MS = 30 * 1_000;
@@ -135,10 +152,14 @@ type MaintenanceLaneDeps = {
 	queryTotal?: QueryTotalPort;
 	censusFreshForMs: number;
 	customerTrickleStateFor: (scopeId: string) => CustomerTrickleStateStore;
+	censusTotals: () => Promise<CensusTotals>;
 	customerCensusTotal: () => Promise<CensusTotal | null>;
+	productTrickleStateFor: (scopeId: string) => ProductTrickleStateStore;
+	productCensusTotal: () => Promise<CensusTotal | null>;
 	variationPrefetchStateFor: (scopeId: string) => VariationPrefetchStateStore;
 	variationCensusTotal: () => Promise<CensusTotal | null>;
 	hasPendingInteractiveWork: () => boolean;
+	isWritePlaneOwner: () => boolean;
 	lastUserActivityMs?: () => number;
 	emitEvent: (event: QueryTotalCacheEvent) => void;
 	now?: () => number;
@@ -206,6 +227,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 	const now = deps.now ?? (() => Date.now());
 	const pressureDeferredLanes = new Set<MaintenanceLaneName>([
 		'customer-trickle',
+		'product-trickle',
 		'variation-prefetch',
 		'existence-prime',
 		'existence-reconcile',
@@ -499,17 +521,25 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			REFERENCE_COLLECTIONS.map((collection) => db.collections[collection].count().exec())
 		);
 		const materialized = REFERENCE_COLLECTIONS.filter((_, index) => counts[index] > 0);
-		if (materialized.length === 0) {
-			return { summary: null, status: 'skipped', reason: 'no materialized reference collections' };
+		const unmaterialized = REFERENCE_COLLECTIONS.filter((_, index) => counts[index] === 0);
+		const census = unmaterialized.length > 0 ? await deps.censusTotals() : null;
+		const backfill = unmaterialized.filter((collection) => {
+			const entry = census?.[collection];
+			return entry?.fresh === true && entry.total > 0;
+		});
+		const collections = [...materialized, ...backfill];
+		if (collections.length === 0) {
+			return { summary: null, status: 'skipped', reason: 'no reference collections need seeding' };
 		}
 		const result = await seedReferenceLanes({
-			collections: materialized,
+			collections,
 			completedDedupeForMs: REFERENCE_REFRESH_DEDUPE_MS,
 			database: db,
 			// Same one-clock rule as the order window seed above.
 			...(deps.now !== undefined ? { nowMs: deps.now() } : {}),
 		});
-		return seedSummary('Reference refresh (categories + brands + tags + coupons)', result);
+		const label = `Reference refresh (categories + brands + tags + coupons${backfill.length > 0 ? `; backfilled: ${backfill.join(', ')}` : ''})`;
+		return seedSummary(label, result);
 	});
 
 	const queryTotal = deps.queryTotal;
@@ -637,6 +667,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			})
 		: null;
 	const customerTrickle = lane('customer-trickle', async (db, scopeId, signal, fetcher) => {
+		if (!deps.isWritePlaneOwner()) {
+			return { summary: null, status: 'skipped', reason: 'not-write-plane-owner' };
+		}
 		const result = await tickCustomerTrickle({
 			baseUrl: deps.syncBaseUrl,
 			database: db,
@@ -656,6 +689,30 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		return {
 			summary: `Customer trickle: page ${result.page}, ${result.rows} customers`,
 		};
+	});
+	const productTrickle = lane('product-trickle', async (db, scopeId, signal, fetcher) => {
+		if (!deps.isWritePlaneOwner()) {
+			return { summary: null, status: 'skipped', reason: 'not-write-plane-owner' };
+		}
+		const barcodeSelectors = () => deps.barcodeSelectorsFor?.(scopeId) ?? undefined;
+		const result = await tickProductTrickle({
+			baseUrl: deps.syncBaseUrl,
+			database: db,
+			fetcher,
+			stateStore: deps.productTrickleStateFor(scopeId),
+			hasPendingWork: deps.hasPendingInteractiveWork,
+			productCensusTotal: deps.productCensusTotal,
+			barcodeSelectors,
+			now,
+			...(deps.lastUserActivityMs !== undefined
+				? { lastUserActivityMs: deps.lastUserActivityMs }
+				: {}),
+			signal,
+		});
+		if (result.status !== 'ran') {
+			return { summary: null, status: 'skipped', reason: result.reason };
+		}
+		return { summary: `Product trickle: page ${result.page}, ${result.rows} products` };
 	});
 	const variationPrefetch = lane('variation-prefetch', async (db, scopeId, signal, fetcher) => {
 		const barcodeSelectors: BarcodeSelectorsReader | undefined =
@@ -760,6 +817,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		referenceSeed,
 		queryTotalRetry,
 		customerTrickle,
+		productTrickle,
 		variationPrefetch,
 		coverageCompaction,
 		existencePrime,
