@@ -26,47 +26,52 @@ export function catalogueFor(code: string | undefined): CatalogueEntry | null {
 	return (ERROR_CATALOGUE as Record<string, CatalogueEntry>)[code as ErrorCode] ?? null;
 }
 
-/** Literal t() calls per enum value — dynamic keys are invisible to the i18n gate. */
-function useDataSafetyText(dataSafety: CatalogueEntry['dataSafety'] | undefined): string | null {
+/**
+ * At most one guidance line per problem row, and only when it changes what the
+ * cashier should do next — everything explanatory lives on the linked docs page
+ * (owner ruling 2026-08-14/18). A risky data state leads; the safe next step
+ * joins it as a second sentence. Benign states ("no impact", "verify first",
+ * "keep working") render nothing. Literal t() calls per enum value — dynamic
+ * keys are invisible to the i18n gate.
+ */
+function useGuidanceText(entry: CatalogueEntry | null): string | null {
 	const t = useT();
-	switch (dataSafety) {
-		case 'no-impact':
-			return t('health.logs.safety_no_impact');
-		case 'local-only':
-			return t('health.logs.safety_local_only');
-		case 'order-safe':
-			return t('health.logs.safety_order_safe');
-		case 'money-moved':
-			return t('health.logs.safety_money_moved');
-		case 'outcome-unknown':
-			return t('health.logs.safety_outcome_unknown');
-		case 'data-at-risk':
-			return t('health.logs.safety_data_at_risk');
-		default:
-			return null;
-	}
-}
+	if (!entry) return null;
 
-function useSafeActionText(safeAction: CatalogueEntry['safeAction'] | undefined): string | null {
-	const t = useT();
-	switch (safeAction) {
-		case 'retry':
-			return t('health.logs.action_retry');
-		case 'retry-after-edit':
-			return t('health.logs.action_retry_after_edit');
-		case 'verify-first':
-			return t('health.logs.action_verify_first');
-		case 'continue':
-			return t('health.logs.action_continue');
-		case 'repair-local':
-			return t('health.logs.action_repair_local');
-		case 'reconfigure':
-			return t('health.logs.action_reconfigure');
-		case 'contact-support':
-			return t('health.logs.action_contact_support');
-		default:
-			return null;
+	let risk: string | null = null;
+	switch (entry.dataSafety) {
+		case 'money-moved':
+			risk = t('health.logs.safety_money_moved');
+			break;
+		case 'outcome-unknown':
+			risk = t('health.logs.safety_outcome_unknown');
+			break;
+		case 'data-at-risk':
+			risk = t('health.logs.safety_data_at_risk');
+			break;
 	}
+
+	let action: string | null = null;
+	switch (entry.safeAction) {
+		case 'retry':
+			action = t('health.logs.action_retry');
+			break;
+		case 'retry-after-edit':
+			action = t('health.logs.action_retry_after_edit');
+			break;
+		case 'repair-local':
+			action = t('health.logs.action_repair_local');
+			break;
+		case 'reconfigure':
+			action = t('health.logs.action_reconfigure');
+			break;
+		case 'contact-support':
+			action = t('health.logs.action_contact_support');
+			break;
+	}
+
+	const guidance = [risk, action].filter(Boolean).join(' ');
+	return guidance.length > 0 ? guidance : null;
 }
 
 function EventCode({ eventType, logId }: { eventType: string; logId: string }) {
@@ -137,26 +142,9 @@ function HelpLink({ code }: { code: string }) {
 }
 
 /**
- * The benign registry states are noise in an expanded row ("No sales or data
- * are affected", "Verify what happened before you retry") — the row only earns
- * an extra line when it changes what the cashier should do next.
- */
-function showDataSafety(dataSafety: CatalogueEntry['dataSafety'] | undefined): boolean {
-	return (
-		dataSafety === 'money-moved' ||
-		dataSafety === 'outcome-unknown' ||
-		dataSafety === 'data-at-risk'
-	);
-}
-
-function showSafeAction(safeAction: CatalogueEntry['safeAction'] | undefined): boolean {
-	return safeAction !== undefined && safeAction !== 'verify-first' && safeAction !== 'continue';
-}
-
-/**
  * Inline expandable detail under a ledger row. Problems get the callout
- * treatment (plain-language reason, data-safety line, safe next step, help,
- * correlation KV); quiet rows get the correlation KV and raw context.
+ * treatment (plain-language reason, one guidance line, help link, correlation
+ * KV); quiet rows get the correlation KV and raw context.
  *
  * `title` is the row's rendered (translated) title, passed in so the detail can
  * show the raw engine event code — the greppable identity support asks for —
@@ -168,8 +156,7 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 	const { formatDate } = useLocalDate();
 	const entry = catalogueFor(row.code);
 	const detail = rowDetailData(row);
-	const dataSafety = useDataSafetyText(entry?.dataSafety);
-	const safeAction = useSafeActionText(entry?.safeAction);
+	const guidance = useGuidanceText(entry);
 	const isProblem = kind === 'error' || kind === 'warn';
 
 	const context = row.context ?? {};
@@ -245,12 +232,7 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 				<View className="flex-col gap-x-8 gap-y-2 md:flex-row">
 					<VStack className="flex-1 gap-1">
 						<Text className="font-medium">{explanation}</Text>
-						{dataSafety && showDataSafety(entry?.dataSafety) ? (
-							<Text className="text-muted-foreground text-sm">{dataSafety}</Text>
-						) : null}
-						{safeAction && showSafeAction(entry?.safeAction) ? (
-							<Text className="text-success text-sm font-medium">{safeAction}</Text>
-						) : null}
+						{guidance ? <Text className="text-sm font-medium">{guidance}</Text> : null}
 						{entry && row.code ? <HelpLink code={row.code} /> : null}
 					</VStack>
 					{eventType || entries.length > 0 ? (

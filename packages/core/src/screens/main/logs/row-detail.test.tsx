@@ -92,13 +92,14 @@ describe('RowDetail', () => {
 		expect(mockOpenURL).toHaveBeenCalledWith('https://docs.wcpos.com/error-codes/SYNC101');
 	});
 
-	it('hides the benign safety and next-step boilerplate on a low-stakes code', () => {
+	it('renders no guidance line on a low-stakes code — summary and help link only', () => {
 		const codedRow: LogRow = { ...row, code: 'PRODUCT301', level: 'warn' };
 		render(<RowDetail row={codedRow} kind="warn" title="Barcode scan did not match a product" />);
 
 		expect(screen.getByText('No products matched the current search and filters.')).not.toBeNull();
-		expect(screen.queryByText('No sales or data are affected.')).toBeNull();
-		expect(screen.queryByText('Verify what happened before you retry.')).toBeNull();
+		// no-impact + verify-first maps to no guidance — the docs page carries it
+		expect(screen.queryByText(/retry/i)).toBeNull();
+		expect(screen.queryByText(/affected/i)).toBeNull();
 		expect(screen.getByTestId('logs-help-PRODUCT301')).not.toBeNull();
 	});
 
@@ -131,33 +132,59 @@ describe('RowDetail', () => {
 		expect(screen.queryByTestId('logs-copy-event-log-1')).toBeNull();
 	});
 
-	it('keeps the risk and support lines on a data-at-risk code, docs body stays in docs', () => {
+	it('merges risk and next step into one guidance line on a data-at-risk code', () => {
 		render(<RowDetail row={{ ...row, code: 'SYNC101' }} kind="error" />);
 
 		expect(
 			screen.getByText(
-				'Data on this device may be affected — follow the recovery guidance before clearing or reloading.'
+				"Don't clear or reload this device's data. Contact support and include this code."
 			)
 		).not.toBeNull();
-		expect(screen.getByText('Contact support and include this code.')).not.toBeNull();
 		// The registry docs body renders on the linked docs page, not in the app.
 		expect(
 			screen.queryByText(
 				'Do not clear or reload local data. Export diagnostics and contact support before retrying or repairing anything.'
 			)
 		).toBeNull();
-		expect(screen.queryByText('Repair from Store health → Database.')).toBeNull();
+		expect(screen.queryByText(/Repair from Store health/)).toBeNull();
 	});
+
+	it('pairs the data-at-risk warning with the local repair step on a repair-local code', () => {
+		render(<RowDetail row={{ ...row, code: 'SYNC111' }} kind="error" />);
+
+		expect(
+			screen.getByText(
+				"Don't clear or reload this device's data. Repair from Store health → Database."
+			)
+		).not.toBeNull();
+		expect(screen.queryByText(/Contact support/)).toBeNull();
+	});
+
+	it.each(['PAYMENT201', 'PRINT201'] as const)(
+		'keeps outcome verification domain-neutral for %s',
+		(code) => {
+			render(<RowDetail row={{ ...row, code }} kind="error" />);
+
+			expect(
+				screen.getByText("The final result couldn't be confirmed — verify before retrying.")
+			).not.toBeNull();
+			expect(screen.queryByText(/check your store/i)).toBeNull();
+		}
+	);
 
 	it('directs SYNC311 users to support without telling them to reset the collection', () => {
 		render(<RowDetail row={{ ...row, code: 'SYNC311' }} kind="error" />);
 
-		expect(screen.getByText('Contact support and include this code.')).not.toBeNull();
+		expect(
+			screen.getByText(
+				"Don't clear or reload this device's data. Contact support and include this code."
+			)
+		).not.toBeNull();
 		expect(
 			screen.queryByText(
 				'Do not reset the affected local collection when this device may hold changes that never reached your store — resetting deletes the only local copy. Export diagnostics to help support investigate, then contact support for recovery guidance.'
 			)
 		).toBeNull();
-		expect(screen.queryByText('Repair from Store health → Database.')).toBeNull();
+		expect(screen.queryByText(/Repair from Store health/)).toBeNull();
 	});
 });
