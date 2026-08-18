@@ -26,6 +26,22 @@ updates:
       - dependency-name: "@shopify/react-native-skia"
       - dependency-name: "jest-expo"
       - dependency-name: "react-native-nitro-modules"
+      # Everything below is in expo/bundledNativeModules.json — the SDK
+      # prescribes exact versions and check-expo-alignment enforces them, so
+      # dependabot bumps can only ever fight the SDK (see #1298).
+      - dependency-name: "@shopify/flash-list"
+      - dependency-name: "@react-native-async-storage/async-storage"
+      - dependency-name: "@react-native-masked-view/masked-view"
+      - dependency-name: "@react-native-picker/picker"
+      - dependency-name: "@react-native-segmented-control/segmented-control"
+      - dependency-name: "@stripe/stripe-react-native"
+      - dependency-name: "@sentry/react-native"
+      - dependency-name: "eslint-config-expo"
+      - dependency-name: "lottie-react-native"
+      - dependency-name: "react-server-dom-webpack"
+      - dependency-name: "sentry-expo"
+      - dependency-name: "unimodules-app-loader"
+      - dependency-name: "unimodules-image-loader-interface"
       # React is pinned to Expo's required version via pnpm overrides
       - dependency-name: "react"
       - dependency-name: "react-dom"
