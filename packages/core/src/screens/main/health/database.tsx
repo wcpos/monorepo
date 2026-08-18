@@ -439,8 +439,8 @@ function CollectionRowView({
 						<AlertDialogCancel>
 							<Text>{t('common.cancel')}</Text>
 						</AlertDialogCancel>
-						<AlertDialogAction onPress={() => void resetCollection()}>
-							<Text className="text-destructive">{t('health.database.clear_confirm')}</Text>
+						<AlertDialogAction variant="destructive" onPress={() => void resetCollection()}>
+							<Text>{t('health.database.clear_confirm')}</Text>
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

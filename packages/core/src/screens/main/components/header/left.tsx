@@ -38,9 +38,10 @@ export function HeaderLeft() {
 	if (screenSize === 'sm') {
 		return (
 			<Button
+				variant="sidebar"
 				testID="drawer-open-button"
 				onPress={handleOpenDrawer}
-				className="web:hover:bg-white/10 rounded-none bg-transparent px-3"
+				className="px-3"
 			>
 				<Icon name="bars" className="text-sidebar-foreground" />
 			</Button>
@@ -52,13 +53,14 @@ export function HeaderLeft() {
 	 */
 	return (
 		<Button
+			variant="sidebar"
 			testID="drawer-open-button"
 			onPress={handleOpenDrawer}
-			className="web:hover:bg-white/10 rounded-none bg-transparent px-3"
+			className="px-3"
 		>
 			<HStack className="gap-2">
 				<Icon name="bars" className="text-sidebar-foreground" />
-				<ButtonText className="text-sidebar-foreground">{t('common.menu')}</ButtonText>
+				<ButtonText>{t('common.menu')}</ButtonText>
 			</HStack>
 		</Button>
 	);

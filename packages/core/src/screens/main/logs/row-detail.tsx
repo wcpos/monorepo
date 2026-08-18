@@ -100,12 +100,11 @@ function EventCode({ eventType, logId }: { eventType: string; logId: string }) {
 			{canShare || canCopy ? (
 				<Button
 					variant="ghost"
-					size="sm"
+					size="xs"
 					testID={`logs-copy-event-${logId}`}
-					className="h-6 px-2"
 					onPress={() => void handleCopy()}
 				>
-					<ButtonText className="text-xs">
+					<ButtonText>
 						{canShare ? t('health.logs.share_event_code') : t('health.logs.copy_event_code')}
 					</ButtonText>
 				</Button>
@@ -123,15 +122,13 @@ function HelpLink({ code }: { code: string }) {
 	const t = useT();
 	return (
 		<Button
-			variant="ghost"
-			size="sm"
+			variant="ghost-quiet"
+			size="xs"
 			testID={`logs-help-${code}`}
 			className="self-start px-0"
 			onPress={() => Linking.openURL(getErrorCodeDocURL(code))}
 		>
-			<ButtonText className="text-muted-foreground text-xs font-semibold">
-				{t('health.logs.help_code', { code })}
-			</ButtonText>
+			<ButtonText className="font-semibold">{t('health.logs.help_code', { code })}</ButtonText>
 		</Button>
 	);
 }

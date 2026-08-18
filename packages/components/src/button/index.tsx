@@ -13,6 +13,14 @@ import { Text, TextClassContext } from '../text';
 
 import type { VariantProps } from 'class-variance-authority';
 
+/**
+ * The label inside a `Button`. Colour AND font size arrive automatically from
+ * the Button's `variant`/`size` props via `TextClassContext` — a `<ButtonText>`
+ * written by hand still picks them up. Do NOT re-state them as a className
+ * (`<Button size="sm"><ButtonText className="text-sm">` is redundant, and
+ * `className="text-destructive"` on a solid variant paints red text on a
+ * primary fill). Reach for a different `variant`/`size`, or add one here.
+ */
 const ButtonText = Text;
 
 const buttonVariants = cva(
@@ -70,6 +78,28 @@ const buttonVariants = cva(
 				'ghost-attention': 'bg-attention/15 web:hover:bg-attention active:bg-attention',
 				'ghost-warning': 'bg-warning/15 web:hover:bg-warning active:bg-warning',
 				'ghost-error': 'bg-error/15 web:hover:bg-error active:bg-error',
+
+				/**
+				 * Transparent, de-emphasised label. Distinct from `ghost-muted`,
+				 * which tints its surface — `ghost-quiet` keeps the surface clear and
+				 * quietens only the text, for secondary actions sitting beside a
+				 * primary one in a row.
+				 */
+				'ghost-quiet': 'web:hover:bg-accent/90 active:bg-accent',
+
+				/**
+				 * For buttons living on the sidebar / header surface, which is dark in
+				 * every theme. Square by design — these sit flush in the header bar.
+				 */
+				sidebar:
+					'web:hover:bg-sidebar-foreground/10 active:bg-sidebar-foreground/10 rounded-none bg-transparent',
+
+				/**
+				 * Reads as a link, behaves as a button — no surface at all. For
+				 * in-flow navigation (a back affordance, an "open docs" jump), where a
+				 * ghost's hover surface would be too much furniture.
+				 */
+				link: 'bg-transparent',
 			},
 			size: {
 				default: 'h-10 px-4 py-2',
@@ -141,6 +171,10 @@ const buttonTextVariants = cva(
 					'text-warning web:group-hover:text-warning-foreground group-active:text-warning-foreground',
 				'ghost-error':
 					'text-error web:group-hover:text-error-foreground group-active:text-error-foreground',
+				'ghost-quiet':
+					'text-muted-foreground web:group-hover:text-accent-foreground group-active:text-accent-foreground',
+				sidebar: 'text-sidebar-foreground',
+				link: 'text-primary web:hover:underline',
 			},
 			size: {
 				default: '',
