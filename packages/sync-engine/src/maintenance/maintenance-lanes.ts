@@ -646,7 +646,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 							? 1
 							: laneRegistryEntry('query-total-retry').maxRequestsPerTick!,
 					...(forced !== undefined ? { forceQueryKey: censusQueryKey(forced) } : {}),
-					...(tick.forceAllCensus ? { ignoreFreshQueryKeys: censusQueryKeys } : {}),
+					...(tick.forceAllCensus
+						? { onlyQueryKeys: censusQueryKeys, ignoreFreshQueryKeys: censusQueryKeys }
+						: {}),
 				});
 				if (result.cacheEntries.length > 0) {
 					deps.emitEvent({ type: 'query-total-cache', entries: result.cacheEntries });

@@ -119,7 +119,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		await engine.dispose();
 	});
 
-	it('refreshes every fresh census total during a full manual sync', async () => {
+	it('refreshes every fresh census total without draining unrelated retries', async () => {
 		let productTotal = 40;
 		const fetchWooQueryTotal = vi.fn(async ({ request }: { request: { queryKey: string } }) =>
 			request.queryKey === 'census:products' ? productTotal : 40
@@ -161,7 +161,9 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 
 		const requested = fetchWooQueryTotal.mock.calls.map(([input]) => input.request.queryKey);
 		expect(requested.filter((queryKey) => queryKey.startsWith('census:'))).toHaveLength(9);
-		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(10);
+		expect(requested).not.toContain('a:due');
+		expect(requested).not.toContain('b:due');
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(9);
 		await vi.waitFor(() => expect(emissions.at(-1)?.products?.total).toBe(91));
 		unsubscribe();
 		await engine.dispose();

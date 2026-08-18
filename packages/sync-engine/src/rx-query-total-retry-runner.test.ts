@@ -56,6 +56,32 @@ const baseInput = {
 };
 
 describe('runQueryTotalRetryRequests', () => {
+	it('limits a forced batch to the requested query keys', async () => {
+		const censusRequest: QueryTotalWooRequest = {
+			...request,
+			queryKey: 'census:products',
+			endpoint: '/wp-json/wc/v3/products',
+		};
+		const stateRepository = createStateRepository([
+			state(),
+			state({ queryKey: censusRequest.queryKey, request: censusRequest }),
+		]);
+		const fetchWooQueryTotal = vi.fn(async () => 1);
+
+		const result = await runQueryTotalRetryRequests({
+			...baseInput,
+			stateRepository,
+			cacheRepository: createCacheRepository(),
+			fetchWooQueryTotal,
+			onlyQueryKeys: [censusRequest.queryKey],
+		});
+
+		expect(result.scanned).toBe(1);
+		expect(stateRepository.claim).toHaveBeenCalledTimes(1);
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(1);
+		expect(fetchWooQueryTotal).toHaveBeenCalledWith({ request: censusRequest });
+	});
+
 	it('leaves runnable totals beyond the per-tick request budget unclaimed', async () => {
 		const runnable = [0, 1, 2].map((index) =>
 			state({
