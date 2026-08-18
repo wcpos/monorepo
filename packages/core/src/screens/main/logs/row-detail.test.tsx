@@ -28,8 +28,9 @@ jest.mock('@wcpos/components/button', () => ({
 		children,
 		testID,
 		onPress,
-	}: React.PropsWithChildren<{ testID?: string; onPress?: () => void }>) => (
-		<button data-testid={testID} onClick={onPress}>
+		size,
+	}: React.PropsWithChildren<{ testID?: string; onPress?: () => void; size?: string }>) => (
+		<button data-testid={testID} data-size={size} onClick={onPress}>
 			{children}
 		</button>
 	),
@@ -87,7 +88,9 @@ describe('RowDetail', () => {
 		const codedRow: LogRow = { ...row, code: 'SYNC101', level: 'error' };
 		render(<RowDetail row={codedRow} kind="error" title="Local save failed" />);
 
-		fireEvent.click(screen.getByTestId('logs-help-SYNC101'));
+		const helpButton = screen.getByTestId('logs-help-SYNC101');
+		expect(helpButton.getAttribute('data-size')).toBe('compact');
+		fireEvent.click(helpButton);
 
 		expect(mockOpenURL).toHaveBeenCalledWith('https://docs.wcpos.com/error-codes/SYNC101');
 	});

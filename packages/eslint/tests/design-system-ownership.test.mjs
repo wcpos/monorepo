@@ -5,24 +5,43 @@ import test from "node:test";
 
 import { ESLint } from "eslint";
 
+import componentsConfig from "../../components/eslint.config.mjs";
 import { config } from "../index.js";
 
 // Type-aware linting is on for **/*.{ts,tsx}, so a synthetic path would be
 // rejected by the TS project service ("not found by the project service").
 // Lint the sample text AT a real file's path instead — the same trick an editor
 // uses for unsaved buffers — so the parser has a project to resolve against.
-const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
-const IN_APP = join(REPO_ROOT, "packages/core/src/screens/main/health/database.tsx");
-const IN_DESIGN_SYSTEM = join(REPO_ROOT, "packages/components/src/button/index.tsx");
+const REPO_ROOT = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "..",
+);
+const IN_APP = join(
+  REPO_ROOT,
+  "packages/core/src/screens/main/health/database.tsx",
+);
+const IN_DESIGN_SYSTEM = join(
+  REPO_ROOT,
+  "packages/components/src/button/index.tsx",
+);
+const COMPONENTS_ROOT = join(REPO_ROOT, "packages/components");
 
-async function lint(code, filePath, ruleId) {
+async function lint(
+  code,
+  filePath,
+  ruleId,
+  baseConfig = config,
+  cwd = REPO_ROOT,
+) {
   // cwd must be the repo root: ESLint silently skips any file outside its base
   // path, which would make every assertion below pass vacuously.
-  const eslint = new ESLint({ baseConfig: config, overrideConfigFile: true, cwd: REPO_ROOT });
+  const eslint = new ESLint({ baseConfig, overrideConfigFile: true, cwd });
   const [result] = await eslint.lintText(code, { filePath });
   assert(
     !result.messages.some((m) => m.fatal),
-    `fixture failed to parse: ${result.messages.find((m) => m.fatal)?.message}`
+    `fixture failed to parse: ${result.messages.find((m) => m.fatal)?.message}`,
   );
   return result.messages.filter((m) => m.ruleId === ruleId);
 }
@@ -37,8 +56,9 @@ test("rejects colour utilities on components that own colour as a variant", asyn
 			return (
 				<>
 					<AlertDialogAction>
-						<ButtonText className="text-destructive">Clear</ButtonText>
+						<Text className="text-destructive">Clear</Text>
 					</AlertDialogAction>
+					<ModalAction><Text className="text-destructive">Remove</Text></ModalAction>
 					<Button className="bg-transparent rounded-none">Menu</Button>
 					<Badge className="border-destructive">3</Badge>
 				</>
@@ -46,7 +66,7 @@ test("rejects colour utilities on components that own colour as a variant", asyn
 		}
 	`);
 
-  assert.equal(messages.length, 3);
+  assert.equal(messages.length, 4);
 });
 
 test("rejects font-size utilities that duplicate or fight the size prop", async () => {
@@ -118,7 +138,7 @@ test("rejects defining a variant vocabulary outside the design system", async ()
   const messages = await lint(
     `import { cva } from 'class-variance-authority';`,
     IN_APP,
-    "no-restricted-imports"
+    "no-restricted-imports",
   );
 
   assert.equal(messages.length, 1);
@@ -128,7 +148,19 @@ test("allows cva inside packages/components, where variants are defined", async 
   const messages = await lint(
     `import { cva } from 'class-variance-authority';`,
     IN_DESIGN_SYSTEM,
-    "no-restricted-imports"
+    "no-restricted-imports",
+  );
+
+  assert.deepEqual(messages, []);
+});
+
+test("allows cva when lint runs from the packages/components workspace", async () => {
+  const messages = await lint(
+    `import { cva } from 'class-variance-authority';`,
+    join(COMPONENTS_ROOT, "src/button/index.tsx"),
+    "no-restricted-imports",
+    componentsConfig,
+    COMPONENTS_ROOT,
   );
 
   assert.deepEqual(messages, []);
@@ -140,7 +172,7 @@ test("packages/components still enforces the reanimated v4 import restriction", 
   const messages = await lint(
     `import { runOnJS } from 'react-native-reanimated';`,
     IN_DESIGN_SYSTEM,
-    "no-restricted-imports"
+    "no-restricted-imports",
   );
 
   assert.equal(messages.length, 1);

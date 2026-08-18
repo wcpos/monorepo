@@ -166,6 +166,15 @@ export const config = [
 					message:
 						'Colour and type on this component are owned by its variant/size props. Use the right variant (e.g. variant="destructive", variant="ghost-quiet", size="xs") — or add the missing variant in packages/components — instead of a className.',
 				},
+				{
+					selector:
+						'JSXElement:has(> JSXOpeningElement[name.name=/^(AlertDialogAction|ModalAction)$/])' +
+						' > JSXElement > JSXOpeningElement[name.name="Text"]' +
+						' > JSXAttribute[name.name="className"]' +
+						' > Literal[value=/(^|\\s)(bg-|border-|text-(?!left|center|right|justify|wrap|nowrap))/]',
+					message:
+						'Colour and type on an action label are owned by the action variant/size props. Use the right variant or size instead of a Text className.',
+				},
 			],
 		},
 	},

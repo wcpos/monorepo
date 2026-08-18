@@ -123,7 +123,7 @@ function HelpLink({ code }: { code: string }) {
 	return (
 		<Button
 			variant="ghost-quiet"
-			size="xs"
+			size="compact"
 			testID={`logs-help-${code}`}
 			className="self-start px-0"
 			onPress={() => Linking.openURL(getErrorCodeDocURL(code))}

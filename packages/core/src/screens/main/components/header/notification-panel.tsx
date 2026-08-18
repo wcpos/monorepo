@@ -104,7 +104,7 @@ export function NotificationPanelContent() {
 			<HStack className="border-border items-center justify-between border-b px-3 py-2">
 				<Text className="text-sm font-semibold">{t('common.notifications')}</Text>
 				{unreadCount > 0 && (
-					<Button variant="ghost" size="xs" onPress={handleMarkAllAsRead}>
+					<Button variant="ghost" size="compact" onPress={handleMarkAllAsRead}>
 						<ButtonText>{t('common.mark_all_as_read')}</ButtonText>
 					</Button>
 				)}
