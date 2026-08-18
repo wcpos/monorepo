@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { POS_META_KEYS } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -49,7 +50,7 @@ export const useAddFee = () => {
 				const meta_data = Array.isArray(data.meta_data) ? [...data.meta_data] : [];
 
 				meta_data.push({
-					key: '_woocommerce_pos_data',
+					key: POS_META_KEYS.posData,
 					value: {
 						amount: data.amount,
 						percent: data.percent,

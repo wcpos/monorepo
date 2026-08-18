@@ -138,17 +138,6 @@ export function useDocField<TState extends Record<string, unknown>, R>(
 	return useSelectedValue(source, select, sourceData$);
 }
 
-/**
- * Non-React face of the same contract, for feeds and pipelines (e.g. the order-math feed):
- * one subscription per call, deepEqual-deduped, synchronous first value.
- */
-export function observeRecordField<TDoc extends Record<string, unknown>, R>(
-	record: RxDocument<TDoc>,
-	select: Selector<TDoc, R>
-): Observable<R> {
-	return recordData$(record).pipe(map(select), distinctUntilChanged(deepEqual));
-}
-
 function recordData$<TDoc extends Record<string, unknown>>(
 	record: RxDocument<TDoc>
 ): Observable<TDoc> {

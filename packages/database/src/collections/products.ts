@@ -1,3 +1,5 @@
+import { RECORD_UUID_META_KEY } from '@wcpos/sync-core';
+
 import { productsLiteral } from './schemas/products';
 
 type SchemaNode = {
@@ -83,7 +85,7 @@ const coerceBySchema = (
 			if (key === 'uuid' && Array.isArray(root.meta_data)) {
 				const uuidMeta = root.meta_data.find(
 					(meta): meta is { key: string; value: unknown } =>
-						isRecord(meta) && meta.key === '_woocommerce_pos_uuid'
+						isRecord(meta) && meta.key === RECORD_UUID_META_KEY
 				);
 				if (uuidMeta) {
 					coerced.uuid = String(uuidMeta.value || '');

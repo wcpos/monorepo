@@ -5,6 +5,7 @@ import {
 	normalizeCheckpoint,
 	type OrderDocument,
 	orderDocumentId,
+	POS_META_KEYS,
 	type SyncCheckpoint,
 	syncCustomPullBatchIntoRepository,
 	type SyncObserver,
@@ -204,13 +205,13 @@ function honorsRequestedDimensions(
 ): boolean {
 	if (
 		descriptor.cashierId !== undefined &&
-		payloadMetaValue(payload, '_pos_user') !== String(descriptor.cashierId)
+		payloadMetaValue(payload, POS_META_KEYS.user) !== String(descriptor.cashierId)
 	) {
 		return false;
 	}
 	if (descriptor.store !== undefined) {
 		const matched = /^\d+$/.test(descriptor.store)
-			? payloadMetaValue(payload, '_pos_store') === descriptor.store
+			? payloadMetaValue(payload, POS_META_KEYS.store) === descriptor.store
 			: (payload as { created_via?: unknown }).created_via === descriptor.store;
 		if (!matched) return false;
 	}

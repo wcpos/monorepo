@@ -21,6 +21,7 @@ import {
 import {
 	deriveBarcodeFromPayload,
 	mapBarcodeEditToPayload,
+	RECORD_UUID_META_KEY,
 	remoteIdOrNull,
 } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
@@ -95,8 +96,8 @@ function ensureRecordMetadata(
 	const metadata = Array.isArray(payload.meta_data)
 		? [...(payload.meta_data as Record<string, unknown>[])]
 		: [];
-	const index = metadata.findIndex((entry) => entry.key === '_woocommerce_pos_uuid');
-	const identity = { key: '_woocommerce_pos_uuid', value: recordId };
+	const index = metadata.findIndex((entry) => entry.key === RECORD_UUID_META_KEY);
+	const identity = { key: RECORD_UUID_META_KEY, value: recordId };
 	if (index === -1) metadata.push(identity);
 	else metadata[index] = { ...metadata[index], ...identity };
 	return { ...payload, meta_data: metadata };

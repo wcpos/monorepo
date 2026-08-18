@@ -1,6 +1,8 @@
 import find from 'lodash/find';
 import uniq from 'lodash/uniq';
 
+import { POS_META_KEYS } from '@wcpos/sync-core';
+
 import { calculateTaxesForValue } from './internal/lines/calc-taxes-for-value';
 import {
 	extractFeeLineData,
@@ -93,7 +95,7 @@ function detectMalformedPosData(
 	lineType: WarningSite['lineType'],
 	warnings: EngineWarning[]
 ): void {
-	const posDataValue = getMetaDataValueByKey(line.meta_data, '_woocommerce_pos_data');
+	const posDataValue = getMetaDataValueByKey(line.meta_data, POS_META_KEYS.posData);
 	if (posDataValue && parsePosData(line) == null) {
 		warnings.push({ code: 'malformed_pos_data', where: { lineType, index: -1 } });
 	}

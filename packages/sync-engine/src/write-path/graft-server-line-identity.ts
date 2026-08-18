@@ -1,3 +1,5 @@
+import { POS_META_KEYS } from '@wcpos/sync-core';
+
 /**
  * Server line-IDENTITY graft (#818) — the residual duplication window left by
  * #815.
@@ -51,7 +53,7 @@ const GRAFTABLE_LINE_FIELDS = [
 ] as const;
 
 /** The per-LINE identity meta the POS cart hooks stamp (same key as the record uuid). */
-const LINE_UUID_META_KEY = '_woocommerce_pos_uuid';
+const LINE_UUID_META_KEY = POS_META_KEYS.lineUuid;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
