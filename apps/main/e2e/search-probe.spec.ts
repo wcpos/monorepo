@@ -1,6 +1,11 @@
 import { expect, test } from '@playwright/test';
 
-import { findVariableProduct, tryAddRunPrivateSimpleProduct } from './checkout-probe';
+import {
+	findVariableProduct,
+	isolatedProductTest,
+	isolatedVariableProductTest,
+	tryAddRunPrivateSimpleProduct,
+} from './checkout-probe';
 import {
 	createRunPrivateProduct,
 	findCreatedProductRecord,
@@ -8,6 +13,7 @@ import {
 	productProbeFailureAction,
 	productWriterAuthorization,
 	productWriterCredentialsDecision,
+	searchAndWaitForServer,
 } from './search-probe';
 
 function response(status: number, body: unknown) {
@@ -27,7 +33,65 @@ test('builds canonical rest_route URLs for plain WordPress permalinks', () => {
 	);
 });
 
+let simpleProductWriterStarted = false;
+const automaticSimpleProductTest = isolatedProductTest.extend({
+	productWriter: [
+		// eslint-disable-next-line no-empty-pattern -- Playwright requires object destructuring for fixtures.
+		async ({}, use) => {
+			simpleProductWriterStarted = true;
+			await use(null);
+		},
+		{ scope: 'worker' },
+	],
+});
+
+automaticSimpleProductTest('provisions simple products before a test requests posPage', () => {
+	expect(simpleProductWriterStarted).toBe(true);
+});
+
+let variableProductWriterStarted = false;
+const automaticVariableProductTest = isolatedVariableProductTest.extend({
+	productWriter: [
+		// eslint-disable-next-line no-empty-pattern -- Playwright requires object destructuring for fixtures.
+		async ({}, use) => {
+			variableProductWriterStarted = true;
+			await use(null);
+		},
+		{ scope: 'worker' },
+	],
+});
+
+automaticVariableProductTest('provisions a variable product before a test requests posPage', () => {
+	expect(variableProductWriterStarted).toBe(true);
+});
+
 test.describe('search-probe pure logic', () => {
+	test('accepts matching variations demand while searching products', async () => {
+		const matchingResponse = {
+			request: () => ({ method: () => 'GET' }),
+			url: () => 'https://example.test/wp-json/wcpos/v2/variations?search=zxtrace',
+			ok: () => true,
+			status: () => 200,
+		};
+		const page = {
+			waitForResponse: async (predicate: (response: typeof matchingResponse) => boolean) => {
+				if (!predicate(matchingResponse)) {
+					throw new Error('matching variations demand was ignored');
+				}
+				return matchingResponse;
+			},
+		};
+		let searchValue = '';
+		const searchInput = {
+			fill: async (value: string) => {
+				searchValue = value;
+			},
+		};
+
+		await searchAndWaitForServer(page as never, searchInput as never, 'products', 'zxtrace');
+		expect(searchValue).toBe('zxtrace');
+	});
+
 	test('writer credentials must be either fully configured or fully absent', () => {
 		expect(productWriterCredentialsDecision(undefined, undefined)).toBe(false);
 		expect(productWriterCredentialsDecision('writer', 'secret')).toBe(true);

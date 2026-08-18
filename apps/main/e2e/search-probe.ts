@@ -657,10 +657,13 @@ export async function searchAndWaitForServer(
 			if (response.request().method() !== 'GET') return false;
 			const url = new URL(response.url());
 			const route = url.searchParams.get('rest_route');
-			const matchesCollection =
+			const matchesDemand =
 				url.pathname.endsWith(`/wp-json/wcpos/v2/${collection}`) ||
-				route === `/wcpos/v2/${collection}`;
-			return matchesCollection && url.searchParams.get('search') === term;
+				route === `/wcpos/v2/${collection}` ||
+				(collection === 'products' &&
+					(url.pathname.endsWith('/wp-json/wcpos/v2/variations') ||
+						route === '/wcpos/v2/variations'));
+			return matchesDemand && url.searchParams.get('search') === term;
 		},
 		// 120s, not 60s: calibrated to the slowest gated store, not the fastest.
 		// Under 4 concurrent shards the realism-profile store (dev-pro: WC 10.9,
