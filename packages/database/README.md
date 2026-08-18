@@ -259,6 +259,8 @@ FlexSearch stores its index in a separate RxDB collection. If the schema changes
 
 ### Types
 
-- `FlexSearchInstance` - Search instance returned by plugin
 - `StoreCollections` - Type for store collection map
 - `SyncCollections` - Type for sync collection map
+
+Breaking change: `FlexSearchInstance` is no longer re-exported from the package root. Search
+plugin methods still expose its shape through their return types.
