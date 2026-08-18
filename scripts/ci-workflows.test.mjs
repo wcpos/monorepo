@@ -14,6 +14,10 @@ function readWorkflow(filename) {
 	return parse(readFileSync(path.join(ROOT, '.github', 'workflows', filename), 'utf8'));
 }
 
+function readAction(filename) {
+	return parse(readFileSync(path.join(ROOT, '.github', 'actions', filename), 'utf8'));
+}
+
 function findStep(workflow, jobName, stepName) {
 	const step = workflow.jobs[jobName].steps.find(({ name }) => name === stepName);
 	assert.ok(step, `missing ${stepName} step`);
@@ -30,6 +34,14 @@ function runShell(script, { cwd = ROOT, env = {}, unsetEnv = [] } = {}) {
 		env: shellEnv,
 	});
 }
+
+test('the shared setup action uses a Node version supported by jsdom 30', () => {
+	// Composite-action defaults are evaluated by hosted Actions, so this pins
+	// the parsed declarative contract exercised by every setup-monorepo caller.
+	const setup = readAction('setup-monorepo/action.yml');
+
+	assert.equal(setup.inputs['node-version'].default, '22.22.2');
+});
 
 test('the E2E aggregator runs on cancellation and fails the cancelled deploy', () => {
 	const gate = readWorkflow('deploy.yml').jobs['e2e-gate'];
