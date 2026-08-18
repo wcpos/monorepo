@@ -276,6 +276,3 @@ export function PrinterDialog({
 		/>
 	);
 }
-
-/** @deprecated Use PrinterDialog. */
-export const AddPrinter = PrinterDialog;

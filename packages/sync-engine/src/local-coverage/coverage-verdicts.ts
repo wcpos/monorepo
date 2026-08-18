@@ -16,18 +16,21 @@ import type { CoverageLaneDocument } from './coverage-schema';
 /**
  * What the engine can vouch for about ONE coverage key, right now.
  *
- * `total` is `null` whenever the engine cannot vouch for a count — there is no fallback baked
- * in here, because the only sensible fallback (the caller's resident count) is the caller's
+ * `total` is the engine's best server-derived count for the key — freshest tier first, falling
+ * back to the last server answer it recorded when every fresh tier has expired. It is `null`
+ * only when NO server answer has ever been recorded for the key; there is no local fallback
+ * baked in here, because the only sensible one (the caller's resident count) is the caller's
  * own knowledge. `source` says which row the number came from so a caller can decide how to
  * present it; `unknown` and `total: null` always travel together.
  *
  * `complete`/`fresh` describe the local coverage LANE for the key — whether the engine believes
  * it holds the whole matching set locally, and whether that belief is still inside its freshness
  * window. They are reported independently of which source supplied `total`, because a fresh
- * server-side count says nothing about local completeness.
+ * server-side count says nothing about local completeness — and a stale-sourced `total` says
+ * nothing about the lane.
  */
 export type CoverageVerdict = {
-	/** The authoritative count, or null when the engine cannot vouch for one. */
+	/** The best server-derived count, or null when no server answer was ever recorded. */
 	total: number | null;
 	source: 'query-total' | 'lane' | 'unknown';
 	complete: boolean;
@@ -63,13 +66,19 @@ export const UNKNOWN_COVERAGE_VERDICT: CoverageVerdict = Object.freeze({
 
 /**
  * Precedence: a FRESH cached query-total wins, then a lane that is both COMPLETE and FRESH,
- * then nothing.
+ * then the same two rows STALE (query-total first), then nothing.
  *
  * Completeness is required of the lane and not of the query-total on purpose. A windowed browse
  * lane is deliberately incomplete — it holds the first N of a much larger set — so its id count
  * is not the query's size; the cached total is exactly the server's answer for that same window
  * key, which is why it can stand alone (#894/#945/#951). Freshness is strict `>`: a document
- * that expires at exactly `nowMs` has expired, and stale is indistinguishable from missing.
+ * that expires at exactly `nowMs` has expired.
+ *
+ * Staleness demotes a row, it does not erase it. A total's freshness window says when the
+ * scheduler owes the server another question, but the row is still the server's last answer —
+ * and for anything that DISPLAYS the total, the last server answer beats refusing to answer
+ * (the footer's `18 of 18+` complaint). Callers that must not act on a stale belief have the
+ * `fresh` flag; `total` itself no longer encodes freshness.
  */
 export function coverageVerdictFrom(
 	lane: CoverageLaneDocument | null,
@@ -95,6 +104,12 @@ export function coverageVerdictFrom(
 		return { ...shared, total: queryTotal.totalMatchingRecords, source: 'query-total' };
 	}
 	if (lane !== null && lane.complete && laneFresh) {
+		return { ...shared, total: lane.expectedRecordIds.length, source: 'lane' };
+	}
+	if (queryTotal !== null) {
+		return { ...shared, total: queryTotal.totalMatchingRecords, source: 'query-total' };
+	}
+	if (lane !== null && lane.complete) {
 		return { ...shared, total: lane.expectedRecordIds.length, source: 'lane' };
 	}
 	return { ...shared, total: null, source: 'unknown' };
