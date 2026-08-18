@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { StoreScopeManager, type SyncEvent } from '@wcpos/sync-core';
 
 import { createMaintenanceLanes } from './maintenance-lanes';
+import { censusTotalsFromCache } from '../scheduler';
 
 import type { LocalCoverage } from '../local-coverage/local-coverage';
 
@@ -49,6 +50,7 @@ async function starvationHarness() {
 			get: async () => null,
 			set: async () => undefined,
 		}),
+		censusTotals: async () => censusTotalsFromCache([], nowMs),
 		customerCensusTotal: async () => null,
 		hasPendingInteractiveWork: () => false,
 		emitEvent: () => undefined,
