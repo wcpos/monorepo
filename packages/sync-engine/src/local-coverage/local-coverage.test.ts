@@ -6,6 +6,7 @@ import {
 	createLocalCoverage,
 	type CreateLocalCoverageOptions,
 	type LocalCoverage,
+	PRIME_FORCE_COUNTER_KEY,
 } from './local-coverage';
 
 import type { CoverageDatabase } from './persistence';
@@ -175,6 +176,104 @@ describe('LocalCoverage interface', () => {
 			freshUntilMs: 3_500,
 			updatedAtMs: 3_000,
 		});
+	});
+
+	it('advances the persisted prime force counter each primeManifest tick', async () => {
+		const database = coverageDatabase() as ReturnType<typeof coverageDatabase> &
+			Record<string, unknown>;
+		const zeroCollection = {
+			count: () => ({ exec: async () => 0 }),
+			find: () => ({ exec: async () => [] }),
+		};
+		Object.assign(database, {
+			existenceManifest: { ...memoryCollection('id'), ...zeroCollection },
+			existenceManifestCustomers: { ...memoryCollection('id'), ...zeroCollection },
+			existenceManifestOrders: { ...memoryCollection('id'), ...zeroCollection },
+			products: zeroCollection,
+			variations: zeroCollection,
+			customers: zeroCollection,
+			orders: zeroCollection,
+		});
+		const cursors = new Map<string, string>();
+		const coverage = createLocalCoverage({
+			database: database as never,
+			freshForMs: 1,
+			manifest: { fetcher: vi.fn(), syncBaseUrl: 'https://example.test/sync' },
+			reconcileCursorStore: {
+				get: async (key) => cursors.get(key) ?? null,
+				set: async (key, value) => void cursors.set(key, value),
+			},
+		});
+
+		await coverage.primeManifest();
+		expect(cursors.get(PRIME_FORCE_COUNTER_KEY)).toBe('1');
+		await coverage.primeManifest();
+		expect(cursors.get(PRIME_FORCE_COUNTER_KEY)).toBe('2');
+	});
+
+	it('repairs every forced space after the first space exhausts the shared chunk budget', async () => {
+		const database = coverageDatabase() as ReturnType<typeof coverageDatabase> &
+			Record<string, unknown>;
+		const productManifest = memoryCollection('id');
+		const customerManifest = memoryCollection('id');
+		const orderManifest = memoryCollection('id');
+		customerManifest.documents.set('20', { id: '20', wooId: 20, objectType: 'customer' });
+		orderManifest.documents.set('40', { id: '40', wooId: 40, objectType: 'order' });
+		const withManifestRemoval = (collection: ReturnType<typeof memoryCollection>) => ({
+			...collection,
+			bulkRemove: vi.fn(async (ids: string[]) => {
+				ids.forEach((id) => collection.documents.delete(id));
+				return [];
+			}),
+			count: () => ({ exec: async () => collection.documents.size }),
+		});
+		Object.assign(database, {
+			existenceManifest: withManifestRemoval(productManifest),
+			existenceManifestCustomers: withManifestRemoval(customerManifest),
+			existenceManifestOrders: withManifestRemoval(orderManifest),
+			products: {
+				count: () => ({ exec: async () => 1 }),
+				find: () => ({
+					exec: async () => [{ remoteId: remoteId(1), payload: { status: 'publish' } }],
+				}),
+			},
+			variations: {
+				count: () => ({ exec: async () => 0 }),
+				find: () => ({ exec: async () => [] }),
+			},
+			customers: {
+				count: () => ({ exec: async () => 1 }),
+				find: () => ({ exec: async () => [{ remoteId: remoteId(10) }] }),
+			},
+			orders: {
+				count: () => ({ exec: async () => 1 }),
+				find: () => ({
+					exec: async () => [{ toJSON: () => ({ remoteId: remoteId(30) }) }],
+				}),
+			},
+		});
+		const fetcher = vi.fn(async (url: string) => {
+			const ids = new URL(url).searchParams.get('include')?.split(',').map(Number) ?? [];
+			return {
+				ok: true,
+				status: 200,
+				json: async () => ({ digests: ids.map((id) => ({ id, digest: `digest-${id}` })) }),
+			};
+		});
+		const coverage = createLocalCoverage({
+			database: database as never,
+			freshForMs: 1,
+			manifest: { fetcher, syncBaseUrl: 'https://example.test/sync' },
+		});
+
+		await expect(coverage.primeManifest(undefined, { maxChunks: 1 })).resolves.toEqual({
+			products: 1,
+			customers: 0,
+			orders: 0,
+		});
+		expect(fetcher).toHaveBeenCalledTimes(1);
+		expect(customerManifest.documents.has('20')).toBe(false);
+		expect(orderManifest.documents.has('40')).toBe(false);
 	});
 
 	it('bounds manifest chunks while filtering stray, existing, and local-only ids', async () => {

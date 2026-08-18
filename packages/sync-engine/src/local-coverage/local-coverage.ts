@@ -199,6 +199,15 @@ export const DRILL_DOWNS_PER_TICK = 2;
 export const SCAN_PAGES_PER_SPACE = 3;
 export const EXISTENCE_RECONCILE_CURSOR_KEY = 'existence-reconcile:cursor';
 export const PRIME_SPACE_CURSOR_KEY = 'existence-prime:space';
+export const PRIME_FORCE_COUNTER_KEY = 'existence-prime:force-counter';
+/**
+ * Every Nth prime tick runs the full membership pass even when the count gate reads equal
+ * (codex review, PR #1287): count equality is not membership — a balanced state (N residents
+ * missing rows while N stale rows survive, e.g. after a rebaseline over a catalog replacement)
+ * satisfies the fast path in every pass and would otherwise never re-open it. At the lane's
+ * 15-minute cadence this bounds convergence of any such state to about an hour.
+ */
+export const FORCE_FULL_PRIME_EVERY_N_TICKS = 4;
 type ReconcileCursor = { nextPort: number; afterBuckets: number[] };
 
 function decodeReconcileCursor(raw: string | null, portCount: number): ReconcileCursor {
@@ -392,6 +401,15 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 			const pruneDeleted = requestedPrune ?? options.manifest?.pruneDeleted;
 			const database = options.database as LocalCoverageDatabase & ExistenceManifestPrimeDatabase;
 			const chunkBudget = { remaining: primeOptions?.maxChunks ?? PRIME_CHUNKS_PER_TICK };
+			// See FORCE_FULL_PRIME_EVERY_N_TICKS: periodically bypass the passes' count-equality
+			// fast path so balanced membership corruption cannot close the gate forever.
+			const forceRaw = Number(await cursorGet(PRIME_FORCE_COUNTER_KEY));
+			const forceTick = Number.isSafeInteger(forceRaw) && forceRaw >= 0 ? forceRaw : 0;
+			const force = forceTick % FORCE_FULL_PRIME_EVERY_N_TICKS === 0;
+			await cursorSet(
+				PRIME_FORCE_COUNTER_KEY,
+				String((forceTick + 1) % FORCE_FULL_PRIME_EVERY_N_TICKS)
+			);
 			// Rotation (codex-review P1): both the id order WITHIN a space and the space ORDER
 			// itself rotate on persisted cursors, so ids whose /digests lookup keeps returning
 			// nothing (server-deleted residents) cannot pin the shared budget to one prefix or
@@ -412,6 +430,7 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 						...(pruneDeleted ? { pruneDeleted } : {}),
 						chunkBudget,
 						rotation: await rotationFor('products'),
+						force,
 					}),
 				customers: async () =>
 					primeExistenceManifestCustomers(database, {
@@ -419,6 +438,7 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 						...(pruneDeleted?.customer ? { pruneDeleted: pruneDeleted.customer } : {}),
 						chunkBudget,
 						rotation: await rotationFor('customers'),
+						force,
 					}),
 				orders: async () =>
 					primeExistenceManifestOrders(database, {
@@ -426,6 +446,7 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 						...(pruneDeleted?.order ? { pruneDeleted: pruneDeleted.order } : {}),
 						chunkBudget,
 						rotation: await rotationFor('orders'),
+						force,
 					}),
 			} as const;
 			const spaces = ['products', 'customers', 'orders'] as const;
