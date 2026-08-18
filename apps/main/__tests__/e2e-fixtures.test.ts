@@ -1,5 +1,6 @@
 import { log } from '@wcpos/utils/logger';
 
+import { isAuthenticatedStoreApiResponse } from '../e2e/global-setup';
 import {
 	blockScriptRequests,
 	isRouteTeardownError,
@@ -14,6 +15,27 @@ jest.mock('@wcpos/utils/logger', () => ({
 
 // Reset at module scope to avoid jest-expo's winter-runtime "require outside test scope" error.
 jest.resetModules();
+
+describe('isAuthenticatedStoreApiResponse', () => {
+	it('accepts only successful WCPOS API responses from the configured store', () => {
+		const storeUrl = 'https://current-store.example';
+
+		expect(
+			isAuthenticatedStoreApiResponse(
+				'https://current-store.example/wp-json/wcpos/v2/census',
+				storeUrl,
+				true
+			)
+		).toBe(true);
+		expect(
+			isAuthenticatedStoreApiResponse(
+				'https://old-store.example/wp-json/wcpos/v2/census',
+				storeUrl,
+				true
+			)
+		).toBe(false);
+	});
+});
 
 describe('isRouteTeardownError', () => {
 	it('recognizes Playwright route callbacks that fail because the page closed', () => {

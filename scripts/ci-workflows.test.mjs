@@ -160,6 +160,8 @@ test('the E2E auth-state cache is shard- and lane-scoped', () => {
 	assert.ok(step, 'deploy.yml e2e job no longer caches the auth state');
 	assert.match(step.with.key, /shard\$\{\{ matrix\.shardIndex \}\}/);
 	assert.match(step.with.key, /'next' \|\| 'main'/);
+	assert.match(step.with['restore-keys'], /shard\$\{\{ matrix\.shardIndex \}\}/);
+	assert.match(step.with['restore-keys'], /'next' \|\| 'main'/);
 
 	// The snapshot embeds cashier access+refresh tokens and the repo is public:
 	// ONLY ciphertext may be cached. Pin that no step caches the plaintext dir

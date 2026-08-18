@@ -43,6 +43,20 @@ function shouldStubCrossOriginStoreRequests(storeUrl: string, baseURL: string): 
 	}
 }
 
+export function isAuthenticatedStoreApiResponse(
+	responseUrl: string,
+	storeUrl: string,
+	responseOk: boolean
+): boolean {
+	const url = new URL(responseUrl);
+	return (
+		responseOk &&
+		url.origin === new URL(storeUrl).origin &&
+		(url.pathname.includes('/wcpos/v2/') ||
+			url.searchParams.get('rest_route')?.startsWith('/wcpos/v2/') === true)
+	);
+}
+
 async function stubCrossOriginStoreDiscovery(
 	context: import('@playwright/test').BrowserContext,
 	storeUrl: string
@@ -146,8 +160,7 @@ async function reuseValidAuthState(
 		// and never arrives when it is dead.
 		let sawAuthenticatedOk = false;
 		page.on('response', (response) => {
-			const url = response.url();
-			if ((url.includes('/wcpos/v2/') || url.includes('rest_route=/wcpos/v2/')) && response.ok()) {
+			if (isAuthenticatedStoreApiResponse(response.url(), storeUrl, response.ok())) {
 				sawAuthenticatedOk = true;
 			}
 		});
