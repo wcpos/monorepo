@@ -46,7 +46,7 @@ export {
 	type StoredOrderDocument, type StoredProductDocument, type SyncCheckpoint,
 	type WooOrderPayload, type WooProductPayload,
 } from './protocol';
-export { identifyRecord, webCryptoUuid } from './recordIdentity';
+export { identifyRecord, RECORD_UUID_META_KEY, webCryptoUuid } from './recordIdentity';
 export {
 	type MetaDataEntry,
 	type PosCarrier,

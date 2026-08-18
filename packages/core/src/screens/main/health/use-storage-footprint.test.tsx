@@ -32,6 +32,7 @@ jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine: mockEngine }),
 }));
 jest.mock('@wcpos/sync-core', () => ({
+	...jest.requireActual('@wcpos/sync-core'),
 	siteHashFor: (site: string) => mockSiteHashFor(site),
 }));
 jest.mock('../../../contexts/app-state', () => ({
