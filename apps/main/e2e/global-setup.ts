@@ -116,10 +116,16 @@ async function reuseValidAuthState(
 	try {
 		state = JSON.parse(fs.readFileSync(statePath, 'utf-8'));
 	} catch {
+		// Delete on EVERY invalid path — a bad file that survives one rejection
+		// would be retried by the next shard/setup for nothing (review on #1297).
+		fs.rmSync(statePath, { force: true });
 		return null;
 	}
 	// Old snapshots without storeIds cannot satisfy the caller; treat as absent.
-	if (!state.opfs || !state.localStorage || !Array.isArray(state.storeIds)) return null;
+	if (!state.opfs || !state.localStorage || !Array.isArray(state.storeIds)) {
+		fs.rmSync(statePath, { force: true });
+		return null;
+	}
 
 	const browser = await chromium.launch();
 	try {
@@ -132,6 +138,19 @@ async function reuseValidAuthState(
 		}
 		await stubStoreVersionForE2E(context, storeUrl, variant);
 		const page = await context.newPage();
+		// Local render alone cannot validate the snapshot: an expired or revoked
+		// JWT still boots the offline-capable app from restored OPFS data
+		// (review on #1297). Demand proof the STORE still accepts the session —
+		// the booted app immediately talks wcpos/v2 (census, open-orders poll),
+		// so an authenticated 2xx arrives within seconds when the token lives
+		// and never arrives when it is dead.
+		let sawAuthenticatedOk = false;
+		page.on('response', (response) => {
+			const url = response.url();
+			if ((url.includes('/wcpos/v2/') || url.includes('rest_route=/wcpos/v2/')) && response.ok()) {
+				sawAuthenticatedOk = true;
+			}
+		});
 		await page.route('**/*', blockScriptRequests);
 		await page.goto(baseURL, { waitUntil: 'commit' });
 		await restoreOPFS(page, state.opfs as never);
@@ -139,6 +158,13 @@ async function reuseValidAuthState(
 		await page.unroute('**/*', blockScriptRequests);
 		await page.reload({ waitUntil: 'commit' });
 		await page.getByTestId('search-products').waitFor({ state: 'visible', timeout: 30_000 });
+		const serverDeadline = Date.now() + 20_000;
+		while (!sawAuthenticatedOk) {
+			if (Date.now() > serverDeadline) {
+				throw new Error('restored session never produced an authenticated server response');
+			}
+			await page.waitForTimeout(500);
+		}
 		if (
 			await page
 				.getByTestId('error-boundary-fallback')
