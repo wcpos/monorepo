@@ -17,8 +17,8 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import type { StoreScopeIdentity } from '@wcpos/sync-core';
 
+import { createEngineHarness, remoteId } from './testing';
 import { DEMAND_FLOOD_REQUESTS_PER_TICK, DEMAND_FLOOD_TICK_MS } from './demand-flood-detector';
-import { createEngineHarness } from './testing';
 
 import type { EngineHarness } from './engine-harness';
 
@@ -75,13 +75,13 @@ describe('demand-path flood detector through the public handle', () => {
 						nextWooId += 1;
 						return nextWooId;
 					});
-				const requireOnce = async (wooIds: number[]) => {
+				const requireOnce = async (remoteIds: number[]) => {
 					nextRequireId += 1;
 					const outcome = await engine.require({
 						id: `flood-${nextRequireId}`,
 						collection: 'products',
 						kind: 'targeted-records',
-						wooIds,
+						remoteIds: remoteIds.map(remoteId),
 					}).ready;
 					// The demand path answers normally throughout: nothing is released,
 					// dropped, or failed by the detector.

@@ -10,7 +10,7 @@ templates remain dedicated local-only paths.
 
 The package root exports:
 
-- `QueryProvider`, `useQueryRuntime`, and `QueryRuntime` — the shared runtime dependencies
+- `QueryProvider` and `useQueryRuntime` — provide and access the shared runtime dependencies
   `{ localDB, engine, locale }`.
 - `observeEngineQuery` and `observeEngineDatabases` — direct engine-resident reads through the
   adapter execution path.

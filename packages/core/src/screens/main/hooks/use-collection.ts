@@ -40,10 +40,11 @@ export const useCollection = <K extends CollectionKey>(
 	 * Subscribe to reset$ to get the new collection reference when reset.
 	 * Initial value is the current collection from storeDB.
 	 */
-	const collection = useObservableState(
-		storeDB.reset$.pipe(filter((collection: { name: string }) => collection.name === key)),
-		storeDB.collections[key]
-	) as StoreCollections[K];
+	const reset$ = React.useMemo(
+		() => storeDB.reset$.pipe(filter((collection: { name: string }) => collection.name === key)),
+		[storeDB.reset$, key]
+	);
+	const collection = useObservableState(reset$, storeDB.collections[key]) as StoreCollections[K];
 
 	/**
 	 *

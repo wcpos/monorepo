@@ -17,6 +17,8 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { type RemoteId, wooIdOf } from '@wcpos/sync-core';
+
 import { type RxdbSyncEngine, type StoreScopeIdentity } from './create-rxdb-sync-engine';
 import { seedTaxRatesLane } from './scheduler/rx-pos-bootstrap-seeder';
 import { createEngineHarness } from './testing';
@@ -112,7 +114,7 @@ async function residentCustomerIds(engine: RxdbSyncEngine): Promise<number[]> {
 		.find()
 		.exec();
 	return documents
-		.map((document) => Number(document.toJSON()['wooCustomerId']))
+		.map((document) => wooIdOf(document.toJSON()['remoteId'] as RemoteId))
 		.filter((id) => Number.isFinite(id))
 		.sort((a, b) => a - b);
 }

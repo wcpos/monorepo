@@ -13,6 +13,7 @@ import {
 	useQueryRuntime,
 	wrapEngineDocument,
 } from '@wcpos/query';
+import { remoteIdOrNull, wooIdOf } from '@wcpos/sync-core';
 
 type EngineCollection = {
 	findOne(query: string | { selector: Record<string, unknown> }): {
@@ -54,7 +55,7 @@ function engineDocument$(
 					? key.value
 					: {
 							selector: {
-								[resolveLegacyField(collectionName, 'id').enginePath]: key.value,
+								[resolveLegacyField(collectionName, 'id').enginePath]: remoteIdOrNull(key.value),
 							},
 						};
 			return collection.findOne(query).$;
@@ -123,6 +124,10 @@ export function useEngineDocumentsByWooId<TDocument extends object>(
 		() => (wooIdsKey === '' ? [] : [...new Set(wooIdsKey.split('\u0000').map(Number))]),
 		[wooIdsKey]
 	);
+	const stableRemoteIds = React.useMemo(
+		() => stableWooIds.map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
+		[stableWooIds]
+	);
 	const resource = React.useMemo(() => {
 		const documents$ = observeEngineDatabases(runtime.engine).pipe(
 			map((database) => database as unknown as EngineDatabase | null),
@@ -139,16 +144,21 @@ export function useEngineDocumentsByWooId<TDocument extends object>(
 				}
 
 				const wooIdPath = resolveLegacyField(collectionName, 'id').enginePath;
-				return collection.find({ selector: { [wooIdPath]: { $in: stableWooIds } } }).$.pipe(
+				return collection.find({ selector: { [wooIdPath]: { $in: stableRemoteIds } } }).$.pipe(
 					map((documents) => {
 						const order = new Map(stableWooIds.map((id, index) => [id, index]));
 						return [...documents].sort((a, b) => {
-							const aId = Number((a as unknown as Record<string, unknown>)[wooIdPath]);
-							const bId = Number((b as unknown as Record<string, unknown>)[wooIdPath]);
-							return (
-								(order.get(aId) ?? Number.MAX_SAFE_INTEGER) -
-								(order.get(bId) ?? Number.MAX_SAFE_INTEGER)
+							const aRemoteId = remoteIdOrNull(
+								(a as unknown as Record<string, unknown>)[wooIdPath]
 							);
+							const bRemoteId = remoteIdOrNull(
+								(b as unknown as Record<string, unknown>)[wooIdPath]
+							);
+							const aId = aRemoteId === null ? undefined : wooIdOf(aRemoteId);
+							const bId = bRemoteId === null ? undefined : wooIdOf(bRemoteId);
+							const aOrder = aId === undefined ? undefined : order.get(aId);
+							const bOrder = bId === undefined ? undefined : order.get(bId);
+							return (aOrder ?? Number.MAX_SAFE_INTEGER) - (bOrder ?? Number.MAX_SAFE_INTEGER);
 						});
 					})
 				);
@@ -158,7 +168,7 @@ export function useEngineDocumentsByWooId<TDocument extends object>(
 			)
 		);
 		return new ObservableResource(documents$);
-	}, [collectionName, runtime, stableWooIds]);
+	}, [collectionName, runtime, stableRemoteIds, stableWooIds]);
 
 	React.useEffect(() => {
 		// ObservableResource owns the db$/RxDB subscriptions and must release them on rebind/unmount.

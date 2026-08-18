@@ -1,20 +1,19 @@
 /**
  * Small reference collections (product categories, product brands, product tags)
  * — pull-only lookup data a POS needs for display/filtering. They share one uniform shape
- * (mirrors taxRateSchema): a string `id` derived from the Woo id, the numeric
- * Woo id mirrored in nullable `wooId`, the raw payload, and sync metadata. Per
- * the identity guardrail (G1) the key is stable and never re-keyed; `wooId` is a
- * field, not the key. These are GREEDY tier (small, sell-relevant — pain point #2
+ * (mirrors taxRateSchema): a stable string `uuid`, the driver identity mirrored
+ * in nullable `remoteId`, the raw payload, and sync metadata. These are GREEDY
+ * tier (small, sell-relevant — pain point #2
  * groups categories with tax rates).
  */
 
-import type { MigrationStrategies } from 'rxdb';
+import { type RemoteId, wooIdOf } from '@wcpos/sync-core';
 
 export type WooReferencePayload = Record<string, unknown> & { id?: number };
 
 export type LocalReferenceDocument = {
-	id: string;
-	wooId: number | null;
+	uuid: string;
+	remoteId: RemoteId | null;
 	payload: WooReferencePayload;
 	sync: {
 		revision: string;
@@ -31,78 +30,70 @@ export type LocalReferenceDocument = {
 };
 
 /** `woo-category:<n>` / `woo-brand:<n>` / `woo-tag:<n>` — the stable document id derived from the Woo id. */
-export function referenceDocumentId(prefix: string, wooId: number): string {
-	return `${prefix}:${wooId}`;
+export function referenceDocumentId(prefix: string, remoteId: RemoteId): string {
+	return `${prefix}:${wooIdOf(remoteId)}`;
 }
 
 export const categorySchema = {
 	title: 'Woo product-category document schema',
-	version: 1,
-	primaryKey: 'id',
+	version: 0,
+	primaryKey: 'uuid',
 	type: 'object',
 	properties: {
-		id: { type: 'string', maxLength: 128 },
-		wooId: { type: ['number', 'null'] },
+		uuid: { type: 'string', maxLength: 128 },
+		remoteId: { type: ['string', 'null'], maxLength: 64 },
 		payload: { type: 'object', additionalProperties: true },
 		sync: { type: 'object', additionalProperties: true },
 		local: { type: 'object', additionalProperties: true },
 	},
-	required: ['id', 'wooId', 'payload', 'sync', 'local'],
+	required: ['uuid', 'remoteId', 'payload', 'sync', 'local'],
 } as const;
 
 export const brandSchema = {
 	title: 'Woo product-brand document schema',
-	version: 1,
-	primaryKey: 'id',
+	version: 0,
+	primaryKey: 'uuid',
 	type: 'object',
 	properties: {
-		id: { type: 'string', maxLength: 128 },
-		wooId: { type: ['number', 'null'] },
+		uuid: { type: 'string', maxLength: 128 },
+		remoteId: { type: ['string', 'null'], maxLength: 64 },
 		payload: { type: 'object', additionalProperties: true },
 		sync: { type: 'object', additionalProperties: true },
 		local: { type: 'object', additionalProperties: true },
 	},
-	required: ['id', 'wooId', 'payload', 'sync', 'local'],
+	required: ['uuid', 'remoteId', 'payload', 'sync', 'local'],
 } as const;
 
 export const tagSchema = {
 	title: 'Woo product-tag document schema',
-	version: 1,
-	primaryKey: 'id',
+	version: 0,
+	primaryKey: 'uuid',
 	type: 'object',
 	properties: {
-		id: { type: 'string', maxLength: 128 },
-		wooId: { type: ['number', 'null'] },
+		uuid: { type: 'string', maxLength: 128 },
+		remoteId: { type: ['string', 'null'], maxLength: 64 },
 		payload: { type: 'object', additionalProperties: true },
 		sync: { type: 'object', additionalProperties: true },
 		local: { type: 'object', additionalProperties: true },
 	},
-	required: ['id', 'wooId', 'payload', 'sync', 'local'],
+	required: ['uuid', 'remoteId', 'payload', 'sync', 'local'],
 } as const;
 
 // Coupons are not a taxonomy term — they are a WC_Data resource (`shop_coupon`) — but
-// they share the uniform pull-only reference shape (id/wooId/payload/sync); the POS
+// they share the uniform pull-only reference shape (uuid/remoteId/payload/sync); the POS
 // needs them for checkout discounts. Their uuid is stamped server-side by a post
 // stamper (not the term adapter), same shape the client consumes.
 export const couponSchema = {
 	title: 'Woo coupon document schema',
-	version: 1,
-	primaryKey: 'id',
+	version: 0,
+	primaryKey: 'uuid',
 	type: 'object',
 	properties: {
-		id: { type: 'string', maxLength: 128 },
-		wooId: { type: ['number', 'null'] },
+		uuid: { type: 'string', maxLength: 128 },
+		remoteId: { type: ['string', 'null'], maxLength: 64 },
 		payload: { type: 'object', additionalProperties: true },
 		sync: { type: 'object', additionalProperties: true },
 		local: { type: 'object', additionalProperties: true },
 	},
-	required: ['id', 'wooId', 'payload', 'sync', 'local'],
+	required: ['uuid', 'remoteId', 'payload', 'sync', 'local'],
 } as const;
-
-/** v0 → v1: every reference collection gains the same harmless write bookkeeping. */
-export const referenceCollectionMigrationStrategies: MigrationStrategies = {
-	1: (doc) => ({
-		...doc,
-		local: { dirty: false, pendingMutationIds: [] },
-	}),
-};

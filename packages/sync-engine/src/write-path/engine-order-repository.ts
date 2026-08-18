@@ -5,8 +5,11 @@ import {
 	assertBulkSuccess,
 	normalizeCheckpoint,
 	type OrderDocument,
+	POS_META_KEYS,
+	type RemoteId,
 	type SyncCheckpoint,
 	withOrderColumns,
+	wooIdOf,
 } from '@wcpos/sync-core';
 
 import { extractOrderManifest } from '../local-coverage/existence-manifest-population';
@@ -22,9 +25,9 @@ const CUSTOM_PULL_CHECKPOINT_ID = 'custom-pull';
 
 /** POS identity metadata whose resident values must survive server adoption. */
 export const POS_ORDER_IDENTITY_META_KEYS = [
-	'_pos_user',
-	'_pos_store',
-	'_woocommerce_pos_tax_based_on',
+	POS_META_KEYS.user,
+	POS_META_KEYS.store,
+	POS_META_KEYS.taxBasedOn,
 ] as const;
 
 type StoredOrderDoc = { toJSON(): unknown };
@@ -70,7 +73,7 @@ export class EngineOrderRepository {
 		const applicable = await withoutLocallyProtected(this.db.orders, documents);
 		if (applicable.length === 0) return;
 		const residents = await this.db.orders
-			.findByIds(applicable.map((document) => document.id))
+			.findByIds(applicable.map((document) => document.uuid))
 			.exec();
 		// Leg-3 (ADR 0015): seed the order existence manifest (its OWN collection) from each pull's
 		// `_rxdb_digest`, and strip the digest from the stored payload so it never pollutes the order doc.
@@ -79,7 +82,7 @@ export class EngineOrderRepository {
 			storedDocument,
 		}));
 		for (const entry of materialized) {
-			const resident = residents.get(entry.storedDocument.id)?.toJSON() as
+			const resident = residents.get(entry.storedDocument.uuid)?.toJSON() as
 				{ payload?: Record<string, unknown> } | undefined;
 			const localMeta = Array.isArray(resident?.payload?.meta_data)
 				? resident.payload.meta_data
@@ -119,10 +122,10 @@ export class EngineOrderRepository {
 	}
 
 	/**
-	 * Apply the server order-delete channel (F6). Resolve each deleted wooOrderId to its stored uuid
+	 * Apply the server order-delete channel (F6). Resolve each deleted remoteId to its stored uuid
 	 * key and remove the local order — EXCEPT any order with queued local work (pending mutation or
 	 * `local.dirty`), which stays resident so an offline POS edit is never clobbered by an upstream
-	 * delete (mirrors the pull-apply guard). Born-local orders (null wooOrderId) are never matched.
+	 * delete (mirrors the pull-apply guard). Born-local orders (null remoteId) are never matched.
 	 * Full-scan census like deleteProducts — order fields live in an unindexable payload blob.
 	 *
 	 * A PROTECTED order keeps its manifest row too. Dropping the row while the document survives
@@ -131,22 +134,22 @@ export class EngineOrderRepository {
 	 * boot prime happened to repair it. This mirrors removeTargeted's protected-id filter (#949).
 	 */
 	async removeDeletedOrders(
-		wooOrderIds: number[],
+		remoteIds: RemoteId[],
 		pendingMutationOrderIds?: ReadonlySet<string | number>
 	): Promise<void> {
-		if (wooOrderIds.length === 0) return;
-		const { unprotected, protectedWooOrderIds } = await this.orderCensus(pendingMutationOrderIds);
-		const storageIds = orderStorageIdsForWooDeletes(unprotected, wooOrderIds);
+		if (remoteIds.length === 0) return;
+		const { unprotected, protectedRemoteIds } = await this.orderCensus(pendingMutationOrderIds);
+		const storageIds = orderStorageIdsForWooDeletes(unprotected, remoteIds);
 		if (storageIds.length > 0)
 			assertBulkSuccess(
 				await this.db.orders.bulkRemove(storageIds),
 				'engine-order-repository remove'
 			);
-		// Leg-3 maintenance invariant (ADR 0015): depurate the deleted wooOrderIds from the order
+		// Leg-3 maintenance invariant (ADR 0015): depurate the deleted remoteIds from the order
 		// manifest — except the ones whose document we just declined to remove.
 		await removeManifestByWooIds(
 			this.db.existenceManifestOrders,
-			wooOrderIds.filter((wooId) => !protectedWooOrderIds.has(wooId))
+			remoteIds.filter((remoteId) => !protectedRemoteIds.has(remoteId)).map(wooIdOf)
 		);
 	}
 
@@ -154,13 +157,13 @@ export class EngineOrderRepository {
 	 * Reconcile local orders for a journal reset (F8). The re-pull from zero repopulates the current
 	 * generation, so every local order that is NOT protected by queued local work is cleared first —
 	 * otherwise an order absent from the new generation lingers as a phantom. A dirty/pending order
-	 * (its id or wooOrderId in the pending set) stays resident so an offline POS edit survives.
+	 * (its id or remoteId in the pending set) stays resident so an offline POS edit survives.
 	 */
 	async resetForResync(pendingMutationOrderIds?: ReadonlySet<string | number>): Promise<void> {
 		const removable = await this.unprotectedOrders(pendingMutationOrderIds);
 		if (removable.length > 0)
 			assertBulkSuccess(
-				await this.db.orders.bulkRemove(removable.map((doc) => doc.id)),
+				await this.db.orders.bulkRemove(removable.map((doc) => doc.uuid)),
 				'engine-order-repository remove'
 			);
 	}
@@ -170,7 +173,7 @@ export class EngineOrderRepository {
 	 * Shared by the delete channel (F6) and the resync reconcile (F8). Treats a missing/non-array
 	 * pendingMutationIds (the schema only requires `local` to be an object) as empty, so a partial row
 	 * can't throw. An order stays protected when it is dirty, has pending mutation ids, or its id /
-	 * wooOrderId is in the pending-mutation set.
+	 * remoteId is in the pending-mutation set.
 	 */
 	private async unprotectedOrders(
 		pendingMutationOrderIds?: ReadonlySet<string | number>
@@ -185,18 +188,18 @@ export class EngineOrderRepository {
 	 */
 	private async orderCensus(pendingMutationOrderIds?: ReadonlySet<string | number>): Promise<{
 		unprotected: OrderDocument[];
-		protectedWooOrderIds: Set<number>;
+		protectedRemoteIds: Set<RemoteId>;
 	}> {
 		const docs = (await this.db.orders.find().exec()).map(
 			(doc) => doc.toJSON() as unknown as OrderDocument
 		);
-		const protectedWooOrderIds = new Set<number>();
+		const protectedRemoteIds = new Set<RemoteId>();
 		const unprotected = docs.filter((doc) => {
 			if (this.isUnprotectedOrder(doc, pendingMutationOrderIds)) return true;
-			if (doc.wooOrderId !== null) protectedWooOrderIds.add(doc.wooOrderId);
+			if (doc.remoteId !== null) protectedRemoteIds.add(doc.remoteId);
 			return false;
 		});
-		return { unprotected, protectedWooOrderIds };
+		return { unprotected, protectedRemoteIds };
 	}
 
 	private isUnprotectedOrder(
@@ -204,8 +207,9 @@ export class EngineOrderRepository {
 		pendingMutationOrderIds?: ReadonlySet<string | number>
 	): boolean {
 		if (hasPendingLocalWork(doc)) return false;
-		if (pendingMutationOrderIds?.has(doc.id)) return false;
-		if (doc.wooOrderId !== null && pendingMutationOrderIds?.has(doc.wooOrderId)) return false;
+		if (pendingMutationOrderIds?.has(doc.uuid)) return false;
+		if (doc.remoteId !== null && pendingMutationOrderIds?.has(doc.remoteId)) return false;
+		if (doc.remoteId !== null && pendingMutationOrderIds?.has(wooIdOf(doc.remoteId))) return false;
 		return true;
 	}
 
@@ -213,7 +217,7 @@ export class EngineOrderRepository {
 		const documents = await this.db.orders
 			.find({
 				selector: {},
-				sort: [{ id: 'asc' }],
+				sort: [{ uuid: 'asc' }],
 				limit,
 			})
 			.exec();

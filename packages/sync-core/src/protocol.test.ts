@@ -7,6 +7,7 @@ import {
 	orderDocumentId,
 	productDocumentId,
 } from './protocol';
+import { mintRemoteId } from './woo/remoteIdCodec';
 
 describe('protocol helpers', () => {
 	it('normalizes an empty checkpoint to the beginning of time', () => {
@@ -18,8 +19,8 @@ describe('protocol helpers', () => {
 		});
 	});
 
-	it('uses Woo order IDs as stable local document IDs', () => {
-		expect(orderDocumentId(123)).toBe('woo-order:123');
+	it('uses remote IDs as stable local document IDs', () => {
+		expect(orderDocumentId(mintRemoteId(123, 'order id'))).toBe('woo-order:123');
 	});
 });
 
@@ -65,12 +66,12 @@ describe('checkpointInstantMs', () => {
 
 describe('productDocumentId', () => {
 	it('uses a stable Woo product document prefix', () => {
-		expect(productDocumentId(321)).toBe('woo-product:321');
+		expect(productDocumentId(mintRemoteId(321, 'product id'))).toBe('woo-product:321');
 	});
 });
 
 describe('customerDocumentId', () => {
 	it('uses a stable Woo customer document prefix (the Woo-id-space coverage key)', () => {
-		expect(customerDocumentId(7)).toBe('woo-customer:7');
+		expect(customerDocumentId(mintRemoteId(7, 'customer id'))).toBe('woo-customer:7');
 	});
 });

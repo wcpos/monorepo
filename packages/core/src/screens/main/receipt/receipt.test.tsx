@@ -13,6 +13,11 @@ import { Receipt } from './receipt';
 const mockDownload = jest.fn();
 const mockPrint = jest.fn();
 const mockUseTemplateRenderer = jest.fn();
+const mockUseUISettings = jest.fn(() => ({ uiSettings: { autoPrintReceipt: false } }));
+type NavigationState = { routeNames: string[] };
+const mockUseNavigationState = jest.fn((selector: (state: NavigationState) => unknown) =>
+	selector({ routeNames: [] })
+);
 const mockUseDownloadReceiptPdf = jest.fn(() => ({
 	download: mockDownload,
 	isDownloading: false,
@@ -37,6 +42,7 @@ const defaultTemplateRenderer = {
 	selectedTemplateContent: '<html><body>Receipt</body></html>',
 	isOffline: false,
 	isSyncing: false,
+	hasFinalData: true,
 };
 
 type TestButtonProps = {
@@ -89,14 +95,18 @@ jest.mock('@wcpos/components/vstack', () => ({
 
 type ContentSizeEvent = { nativeEvent: { contentSize: { width: number; height: number } } };
 const capturedContentSizeHandlers: ((event: ContentSizeEvent) => void)[] = [];
+const capturedLoadHandlers: (() => void)[] = [];
 
 jest.mock('@wcpos/components/webview', () => ({
 	WebView: ({
 		onContentSizeChange,
+		onLoad,
 	}: {
 		onContentSizeChange?: (event: ContentSizeEvent) => void;
+		onLoad?: () => void;
 	}) => {
 		if (onContentSizeChange) capturedContentSizeHandlers.push(onContentSizeChange);
+		if (onLoad) capturedLoadHandlers.push(onLoad);
 		return <iframe title="receipt-preview-frame" />;
 	},
 }));
@@ -174,13 +184,12 @@ jest.mock('../../../contexts/translations', () => ({
 }));
 
 jest.mock('../contexts/ui-settings', () => ({
-	useUISettings: () => ({ uiSettings: { autoPrintReceipt: false } }),
+	useUISettings: () => mockUseUISettings(),
 }));
 
-jest.mock('../contexts/tax-rates/provider', () => {
-	const ReactActual = jest.requireActual<typeof import('react')>('react');
-	return { TaxRatesContext: ReactActual.createContext(null) };
-});
+jest.mock('../contexts/tax-rates/provider', () => ({
+	useTaxSettingsOptional: () => null,
+}));
 
 jest.mock('../contexts/tax-rates/resolve-price-num-decimals', () => ({
 	resolvePriceNumDecimals: () => 2,
@@ -197,7 +206,8 @@ jest.mock('@wcpos/printer', () => ({
 }));
 
 jest.mock('expo-router/react-navigation', () => ({
-	useNavigationState: () => ({ routeNames: [] }),
+	useNavigationState: (selector: (state: NavigationState) => unknown) =>
+		mockUseNavigationState(selector),
 }));
 
 jest.mock('observable-hooks', () => ({
@@ -251,6 +261,63 @@ describe('Receipt preview content size', () => {
 
 		act(() => template7Handler({ nativeEvent: { contentSize: { width: 398, height: 814 } } }));
 		expect(viewportContentSize()).toEqual({ width: 794, height: 1123 });
+	});
+});
+
+describe('Receipt auto-print', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		capturedLoadHandlers.length = 0;
+		mockOrder.id$.next(42);
+		mockSuspenseValue = mockOrder;
+		mockUseUISettings.mockReturnValue({ uiSettings: { autoPrintReceipt: true } });
+		mockUseNavigationState.mockImplementation((selector) => selector({ routeNames: ['Checkout'] }));
+		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, hasFinalData: false });
+	});
+	afterEach(() => {
+		mockOrder.id$.next(42);
+	});
+
+	it('waits for final data after the receipt frame loads and prints exactly once', () => {
+		const { rerender } = render(<Receipt resource={{} as never} />);
+
+		act(() => capturedLoadHandlers.at(-1)!());
+		expect(mockPrint).not.toHaveBeenCalled();
+
+		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, hasFinalData: true });
+		rerender(<Receipt resource={{} as never} />);
+		expect(mockPrint).toHaveBeenCalledTimes(1);
+
+		act(() => capturedLoadHandlers.at(-1)!());
+		expect(mockPrint).toHaveBeenCalledTimes(1);
+	});
+
+	it('waits for the receipt frame to load when final data is already available', () => {
+		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, hasFinalData: true });
+
+		render(<Receipt resource={{} as never} />);
+
+		expect(mockPrint).not.toHaveBeenCalled();
+
+		act(() => capturedLoadHandlers.at(-1)!());
+		expect(mockPrint).toHaveBeenCalledTimes(1);
+	});
+
+	it('waits for the new receipt frame to load after the order changes', () => {
+		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, hasFinalData: true });
+		const { rerender } = render(<Receipt resource={{} as never} />);
+
+		act(() => capturedLoadHandlers.at(-1)!());
+		expect(mockPrint).toHaveBeenCalledTimes(1);
+
+		act(() => {
+			mockOrder.id$.next(43);
+			rerender(<Receipt resource={{} as never} />);
+		});
+		expect(mockPrint).toHaveBeenCalledTimes(1);
+
+		act(() => capturedLoadHandlers.at(-1)!());
+		expect(mockPrint).toHaveBeenCalledTimes(2);
 	});
 });
 

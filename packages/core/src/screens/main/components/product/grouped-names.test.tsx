@@ -10,7 +10,12 @@ import { GroupedNames } from './grouped-names';
 const mockUseCollectionBinding = jest.fn(
 	(_collection: unknown, _state: unknown, _options: unknown) => ({
 		resource: {
-			value: { hits: [{ document: { name: 'Hat' } }, { document: { name: 'Scarf' } }] },
+			value: {
+				hits: [
+					{ record: { payload: { name: 'Hat' } } },
+					{ record: { payload: { name: 'Scarf' } } },
+				],
+			},
 		},
 	})
 );
@@ -23,6 +28,7 @@ jest.mock('observable-hooks', () => ({
 	useObservableSuspense: (resource: { value: unknown }) => resource.value,
 }));
 jest.mock('@wcpos/query', () => ({
+	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 	useQuery: () => {
 		throw new Error('legacy grouped-products query reached');
 	},
@@ -40,12 +46,21 @@ jest.mock('../../../../contexts/translations', () => ({
 describe('GroupedNames', () => {
 	it('reads grouped products through a finite-id collection binding', () => {
 		const Cell = GroupedNames as unknown as React.ComponentType<Record<string, unknown>>;
-		render(<Cell row={{ original: { document: { grouped_products: [12, 34] } } }} />);
+		render(
+			<Cell
+				row={{
+					original: {
+						document: { grouped_products: [12, 34] },
+						record: { payload: { grouped_products: [12, 34] } },
+					},
+				}}
+			/>
+		);
 
 		expect(mockUseCollectionBinding).toHaveBeenCalledWith(
 			'products',
 			expect.objectContaining({ limit: 2 }),
-			{ wooIds: [12, 34] }
+			{ remoteIds: ['12', '34'] }
 		);
 		expect(screen.getByText('Hat, Scarf')).toBeTruthy();
 	});

@@ -111,7 +111,7 @@ describe('PaymentWebview fallback order refresh', () => {
 			id: 'checkout:order-refresh:42',
 			collection: 'orders',
 			kind: 'targeted-records',
-			wooIds: [42],
+			remoteIds: ['42'],
 			forceRefresh: true,
 		});
 		expect(mockReplace).not.toHaveBeenCalled();

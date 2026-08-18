@@ -29,6 +29,7 @@ interface CreateSearchProbeOptions {
 	authorization: StoreAuthorization | null;
 	collection: ProbeCollection;
 	workerIndex: number;
+	token?: string;
 	/** True when CI declared product-writer secrets; failures must then fail, never skip. */
 	writerConfigured?: boolean;
 	/** Extra wc/v3 fields merged over the default product probe payload (products only). */
@@ -342,12 +343,13 @@ function positiveId(record: Record<string, unknown> | null): number | null {
 
 export function findCreatedProductRecord(
 	body: unknown,
-	token: string
+	token: string,
+	extraNames: readonly string[] = []
 ): Record<string, unknown> | null {
 	if (!Array.isArray(body)) {
 		throw new Error('Product create adoption lookup returned a malformed product list');
 	}
-	const expectedNames = new Set([`E2E Probe ${token}`, `E2E Variable ${token}`]);
+	const expectedNames = new Set([`E2E Probe ${token}`, `E2E Variable ${token}`, ...extraNames]);
 	return body.map(asRecord).find((record) => expectedNames.has(String(record?.name))) ?? null;
 }
 
@@ -355,7 +357,8 @@ async function findCreatedProduct(
 	request: APIRequestContext,
 	storeUrl: string,
 	authorization: StoreAuthorization | null,
-	token: string
+	token: string,
+	extraNames?: readonly string[]
 ): Promise<{ response: APIResponse; record: Record<string, unknown> | null }> {
 	const auth = storeRequestOptions(authorization);
 	const response = await probeRequest(request, 'get', storeUrl, 'products', undefined, {
@@ -367,7 +370,7 @@ async function findCreatedProduct(
 	}
 	return {
 		response,
-		record: findCreatedProductRecord(await response.json().catch(() => null), token),
+		record: findCreatedProductRecord(await response.json().catch(() => null), token, extraNames),
 	};
 }
 
@@ -385,19 +388,23 @@ export async function createSearchProbe(
 		authorization,
 		collection,
 		workerIndex,
+		token: suppliedToken,
 		writerConfigured = false,
 		productData,
 	} = options;
-	const token = mintSearchProbeToken(workerIndex);
+	const token = suppliedToken ?? mintSearchProbeToken(workerIndex);
+	// Custom names must start with "E2E Probe " so sweepOrphanedProductProbes can clean up orphans.
+	const productName =
+		typeof productData?.name === 'string' ? productData.name : `E2E Probe ${token}`;
 	const data =
 		collection === 'products'
 			? {
-					name: `E2E Probe ${token}`,
 					type: 'simple',
 					status: 'publish',
 					regular_price: '25.00',
 					manage_stock: false,
 					...productData,
+					name: productName,
 				}
 			: {
 					email: `${token}@example.invalid`,
@@ -417,7 +424,7 @@ export async function createSearchProbe(
 						create,
 						writerConfigured,
 						'products search-probe creation',
-						() => findCreatedProduct(request, storeUrl, authorization, token)
+						() => findCreatedProduct(request, storeUrl, authorization, token, [productName])
 					)
 				: { response: await create(), adoptedRecord: undefined };
 		const { response } = result;
@@ -657,10 +664,13 @@ export async function searchAndWaitForServer(
 			if (response.request().method() !== 'GET') return false;
 			const url = new URL(response.url());
 			const route = url.searchParams.get('rest_route');
-			const matchesCollection =
+			const matchesDemand =
 				url.pathname.endsWith(`/wp-json/wcpos/v2/${collection}`) ||
-				route === `/wcpos/v2/${collection}`;
-			return matchesCollection && url.searchParams.get('search') === term;
+				route === `/wcpos/v2/${collection}` ||
+				(collection === 'products' &&
+					(url.pathname.endsWith('/wp-json/wcpos/v2/variations') ||
+						route === '/wcpos/v2/variations'));
+			return matchesDemand && url.searchParams.get('search') === term;
 		},
 		// 120s, not 60s: calibrated to the slowest gated store, not the fastest.
 		// Under 4 concurrent shards the realism-profile store (dev-pro: WC 10.9,

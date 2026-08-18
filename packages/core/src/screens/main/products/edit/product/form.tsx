@@ -4,7 +4,6 @@ import { View } from 'react-native';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toNumber from 'lodash/toNumber';
 import { useForm } from 'react-hook-form';
-import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
 import {
@@ -32,7 +31,6 @@ import { ProductStatusSelect } from '../../../components/product/status-select';
 import { TaxClassSelect } from '../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../components/tax-status-radio-group';
 import { CategoryTreeLoader } from '../../../components/product/category-select';
-import { usePushDocument } from '../../../contexts/use-push-document';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'product']);
@@ -65,7 +63,6 @@ interface Props {
  *
  */
 export function EditProductForm({ product }: Props) {
-	const pushDocument = usePushDocument();
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
 	const { localPatch } = useLocalMutation();
@@ -128,23 +125,18 @@ export function EditProductForm({ product }: Props) {
 					document: product,
 					data: patchData,
 				});
-				// localPatch swallows write errors and resolves undefined - pushing
-				// anyway would sync the unchanged resident and report success
+				// localPatch swallows write errors and resolves undefined.
 				if (!patched?.document) {
 					throw new Error('Local patch failed');
 				}
-				await pushDocument(product).then((savedDoc) => {
-					if (isRxDocument(savedDoc)) {
-						mutationLogger.success(t('common.saved', { name: product.name }), {
-							showToast: true,
-							context: {
-								productId: savedDoc.id,
-								productName: product.name,
-							},
-						});
-						close();
-					}
+				mutationLogger.success(t('common.saved', { name: product.name }), {
+					showToast: true,
+					context: {
+						productId: product.id,
+						productName: product.name,
+					},
 				});
+				close();
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
 				mutationLogger.error('Failed to save product', {
@@ -160,7 +152,7 @@ export function EditProductForm({ product }: Props) {
 				setLoading(false);
 			}
 		},
-		[close, localPatch, product, pushDocument, t]
+		[close, localPatch, product, t]
 	);
 
 	/**

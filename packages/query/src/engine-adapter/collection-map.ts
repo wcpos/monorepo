@@ -1,4 +1,5 @@
 import { normalizeVariationAttributes } from '@wcpos/sync-engine';
+import { remoteIdOrNull, wooIdOf, wooMetaCarrier } from '@wcpos/sync-core';
 import type {
 	CustomerBrowseDimensions,
 	OrderBrowseDimensions,
@@ -107,7 +108,7 @@ export type WriteableCollection = {
 }[SyncCollectionName];
 
 export type EngineDocument = Record<string, unknown> & {
-	id: string;
+	uuid: string;
 	payload?: Record<string, unknown>;
 };
 
@@ -154,18 +155,6 @@ function valueAtPath(value: unknown, path: string): unknown {
 	}, value);
 }
 
-function metadataValue(document: EngineDocument, key: string): unknown {
-	const metadata = valueAtPath(document, 'payload.meta_data');
-	if (!Array.isArray(metadata)) {
-		return undefined;
-	}
-	const entry = metadata.find(
-		(item) =>
-			item !== null && typeof item === 'object' && (item as Record<string, unknown>).key === key
-	);
-	return entry && typeof entry === 'object' ? (entry as Record<string, unknown>).value : undefined;
-}
-
 function queryPayloadField<W extends NonNullable<FieldMapEntry['wireFace']>>(
 	legacy: string,
 	wireFace: W
@@ -188,6 +177,11 @@ function couponIsActive(document: EngineDocument): boolean {
 	}
 	const timestamp = Date.parse(expires.endsWith('Z') ? expires : `${expires}Z`);
 	return Number.isNaN(timestamp) || timestamp >= Date.now();
+}
+
+function readRemoteId(value: unknown): number | undefined {
+	const remoteId = remoteIdOrNull(value);
+	return remoteId === null ? undefined : wooIdOf(remoteId);
 }
 
 /**
@@ -218,7 +212,7 @@ export const collectionMap = {
 	products: {
 		engineCollection: 'products',
 		fields: {
-			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'id' },
+			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
 			sku: {
 				legacy: 'sku',
 				kind: 'payload',
@@ -234,7 +228,8 @@ export const collectionMap = {
 			id: {
 				legacy: 'id',
 				kind: 'identifier',
-				enginePath: 'wooProductId',
+				enginePath: 'remoteId',
+				read: readRemoteId,
 				adapterDerived: false,
 				sort: { wooOrderby: 'id' },
 			},
@@ -375,7 +370,7 @@ export const collectionMap = {
 	variations: {
 		engineCollection: 'variations',
 		fields: {
-			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'id' },
+			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
 			// Variations share the product catalog-order contract (#871).
 			menu_order: {
 				legacy: 'menu_order',
@@ -386,7 +381,8 @@ export const collectionMap = {
 			id: {
 				legacy: 'id',
 				kind: 'identifier',
-				enginePath: 'wooId',
+				enginePath: 'remoteId',
+				read: readRemoteId,
 				adapterDerived: false,
 			},
 			attributes: {
@@ -427,23 +423,21 @@ export const collectionMap = {
 			parent_id: {
 				legacy: 'parent_id',
 				kind: 'promoted',
-				enginePath: 'parentId',
-				write: (value) => {
-					if (value === null || value === undefined || value === '') return null;
-					const numeric = Number(value);
-					return Number.isFinite(numeric) ? numeric : null;
-				},
+				enginePath: 'parentRemoteId',
+				read: readRemoteId,
+				write: remoteIdOrNull,
 			},
 		},
 	},
 	orders: {
 		engineCollection: 'orders',
 		fields: {
-			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'id' },
+			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
 			id: {
 				legacy: 'id',
 				kind: 'identifier',
-				enginePath: 'wooOrderId',
+				enginePath: 'remoteId',
+				read: readRemoteId,
 				adapterDerived: false,
 				sort: { wooOrderby: 'id' },
 			},
@@ -510,7 +504,16 @@ export const collectionMap = {
 				kind: 'computed',
 				enginePath: 'payload.meta_data',
 				notes: 'Value of the _pos_user metadata entry.',
-				compute: (document) => metadataValue(document, '_pos_user'),
+				compute: (document) => {
+					const metadata = valueAtPath(document, 'payload.meta_data');
+					return (
+						wooMetaCarrier.readIdentity(
+							Array.isArray(metadata)
+								? (metadata as Parameters<typeof wooMetaCarrier.readIdentity>[0])
+								: undefined
+						).cashierId ?? undefined
+					);
+				},
 				wireFace: 'dimension',
 			},
 			store: {
@@ -523,7 +526,7 @@ export const collectionMap = {
 			select: {
 				legacy: 'select',
 				kind: 'computed',
-				enginePath: 'id',
+				enginePath: 'uuid',
 				notes: 'Report selection is UI state and has no engine-document value.',
 				compute: () => undefined,
 			},
@@ -546,11 +549,12 @@ export const collectionMap = {
 	customers: {
 		engineCollection: 'customers',
 		fields: {
-			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'id' },
+			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
 			id: {
 				legacy: 'id',
 				kind: 'identifier',
-				enginePath: 'wooCustomerId',
+				enginePath: 'remoteId',
+				read: readRemoteId,
 				adapterDerived: false,
 				sort: { wooOrderby: 'id' },
 			},
@@ -601,11 +605,12 @@ export const collectionMap = {
 	taxes: {
 		engineCollection: 'taxRates',
 		fields: {
-			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'id' },
+			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
 			id: {
 				legacy: 'id',
 				kind: 'identifier',
-				enginePath: 'wooTaxRateId',
+				enginePath: 'remoteId',
+				read: readRemoteId,
 				adapterDerived: false,
 			},
 		},
@@ -613,11 +618,12 @@ export const collectionMap = {
 	'products/categories': {
 		engineCollection: 'categories',
 		fields: {
-			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'id' },
+			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
 			id: {
 				legacy: 'id',
 				kind: 'identifier',
-				enginePath: 'wooId',
+				enginePath: 'remoteId',
+				read: readRemoteId,
 				adapterDerived: false,
 			},
 		},
@@ -625,11 +631,12 @@ export const collectionMap = {
 	'products/tags': {
 		engineCollection: 'tags',
 		fields: {
-			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'id' },
+			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
 			id: {
 				legacy: 'id',
 				kind: 'identifier',
-				enginePath: 'wooId',
+				enginePath: 'remoteId',
+				read: readRemoteId,
 				adapterDerived: false,
 			},
 		},
@@ -637,11 +644,12 @@ export const collectionMap = {
 	'products/brands': {
 		engineCollection: 'brands',
 		fields: {
-			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'id' },
+			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
 			id: {
 				legacy: 'id',
 				kind: 'identifier',
-				enginePath: 'wooId',
+				enginePath: 'remoteId',
+				read: readRemoteId,
 				adapterDerived: false,
 			},
 		},
@@ -649,11 +657,12 @@ export const collectionMap = {
 	coupons: {
 		engineCollection: 'coupons',
 		fields: {
-			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'id' },
+			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
 			id: {
 				legacy: 'id',
 				kind: 'identifier',
-				enginePath: 'wooId',
+				enginePath: 'remoteId',
+				read: readRemoteId,
 				adapterDerived: false,
 			},
 			discount_type: queryPayloadField('discount_type', 'local-only'),

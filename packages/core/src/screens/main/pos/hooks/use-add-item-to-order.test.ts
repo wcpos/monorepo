@@ -82,6 +82,11 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 }));
 
 jest.mock('../contexts/current-order', () => ({
+	// The hook resolves the order at event time now, rather than subscribing during render.
+	useCurrentOrderActions: () => ({
+		getCurrentOrder: () => ({ getLatest: () => order }),
+		setCurrentOrderID: mockSetCurrentOrderID,
+	}),
 	useCurrentOrder: () => ({
 		currentOrder: { getLatest: () => order },
 		setCurrentOrderID: mockSetCurrentOrderID,
@@ -307,14 +312,14 @@ describe('useAddItemToOrder', () => {
 	it('reuses an acked order that carries a server id but no revision', async () => {
 		order.isNew = true;
 		// What a created order looks like once wc/v3 acks it: the queue row is gone
-		// (not dirty, nothing pending) and the ack stamped `wooOrderId`. Woo answers
+		// (not dirty, nothing pending) and the ack stamped `remoteId`. Woo answers
 		// with a bare order, so `sync.revision` NEVER moves off '' — reading the
 		// revision alone would call this an orphan and create the order twice.
 		const ackedPayload = { uuid: 'order-uuid', id: 4711, line_items: [{ product_id: 1 }] };
 		const resident = {
 			local: { dirty: false, pendingMutationIds: [] },
 			sync: { revision: '', source: 'skeleton' },
-			wooOrderId: 4711,
+			remoteId: '4711',
 			payload: ackedPayload,
 			toMutableJSON: () => ({ payload: ackedPayload }),
 			remove: jest.fn().mockResolvedValue(undefined),

@@ -1,4 +1,4 @@
-import { assertBulkSuccess } from '@wcpos/sync-core';
+import { assertBulkSuccess, type RemoteId, wooIdOf } from '@wcpos/sync-core';
 
 import { forEachYielding } from '../event-loop-yield';
 import { chunk } from '../scheduler';
@@ -20,7 +20,7 @@ type FindByIdsCollection<TDoc> = {
 };
 type PrimeProductDocument = {
 	primary: string;
-	wooProductId?: number | null;
+	remoteId?: RemoteId | null;
 	payload?: { status?: unknown };
 	local?: { dirty?: boolean; pendingMutationIds?: unknown[] };
 };
@@ -42,8 +42,8 @@ export type ExistenceManifestPrimeDatabase = {
 		FindByIdsCollection<PrimeProductDocument> & {
 			bulkRemove(ids: string[]): Promise<unknown>;
 		};
-	variations: CountFindCollection<{ wooId?: number | null }>;
-	customers: CountFindCollection<{ wooCustomerId?: number | null }>;
+	variations: CountFindCollection<{ remoteId?: RemoteId | null }>;
+	customers: CountFindCollection<{ remoteId?: RemoteId | null }>;
 	orders: CountFindCollection<{ toJSON(): unknown }>;
 };
 
@@ -203,7 +203,7 @@ type PrimeFetcher = (
  * against the live GET /digests endpoint. The count-gate short-circuits the expensive full-document read
  * once every resident record has a manifest row (the steady state after the first successful prime).
  *
- * Caveat: locally-born products (no server wooProductId) are excluded from the prime (not part of the
+ * Caveat: locally-born products (no server remoteId) are excluded from the prime (not part of the
  * server's set) but still count toward `products.count()`, so their presence can keep the gate open and
  * re-read on boot. Rare for a POS (it seldom authors products); a persisted one-shot marker is the robust
  * follow-up. Correctness never depends on the gate — the pass only ever primes server ids missing locally.
@@ -240,10 +240,11 @@ export async function primeExistenceManifest(
 	const unpublishedCandidates: string[] = [];
 	const productWooIds: number[] = [];
 	await forEachYielding(productDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
-		const wooId = doc.wooProductId;
-		if (typeof wooId !== 'number' || wooId <= 0) {
+		const remoteId = doc.remoteId;
+		if (remoteId == null) {
 			return;
 		}
+		const wooId = wooIdOf(remoteId);
 		if (doc.payload?.status !== 'publish' && !hasPendingLocalWork(doc)) {
 			unpublishedCandidates.push(doc.primary);
 			return;
@@ -265,8 +266,8 @@ export async function primeExistenceManifest(
 			}
 			// It grew local work (or got published) while we walked — it stays resident, so it
 			// belongs in the primed id set exactly as an untouched product would.
-			if (typeof doc.wooProductId === 'number' && doc.wooProductId > 0) {
-				productWooIds.push(doc.wooProductId);
+			if (doc.remoteId != null) {
+				productWooIds.push(wooIdOf(doc.remoteId));
 			}
 		}
 		if (removable.length > 0) {
@@ -282,9 +283,8 @@ export async function primeExistenceManifest(
 	});
 	const variationWooIds: number[] = [];
 	await forEachYielding(variationDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
-		const wooId = doc.wooId;
-		if (typeof wooId === 'number' && wooId > 0) {
-			variationWooIds.push(wooId);
+		if (doc.remoteId != null) {
+			variationWooIds.push(wooIdOf(doc.remoteId));
 		}
 	});
 
@@ -415,9 +415,8 @@ export async function primeExistenceManifestCustomers(
 	});
 	const customerWooIds: number[] = [];
 	await forEachYielding(customerDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
-		const wooId = doc.wooCustomerId;
-		if (typeof wooId === 'number' && wooId > 0) {
-			customerWooIds.push(wooId);
+		if (doc.remoteId != null) {
+			customerWooIds.push(wooIdOf(doc.remoteId));
 		}
 	});
 
@@ -482,9 +481,9 @@ export async function primeExistenceManifestOrders(
 	});
 	const orderWooIds: number[] = [];
 	await forEachYielding(orderDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
-		const wooId = (doc.toJSON() as { wooOrderId?: number | null }).wooOrderId;
-		if (typeof wooId === 'number' && wooId > 0) {
-			orderWooIds.push(wooId);
+		const remoteId = (doc.toJSON() as { remoteId?: RemoteId | null }).remoteId;
+		if (remoteId != null) {
+			orderWooIds.push(wooIdOf(remoteId));
 		}
 	});
 

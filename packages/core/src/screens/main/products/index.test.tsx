@@ -102,7 +102,7 @@ jest.mock('../contexts/tax-rates', () => ({
 			children
 		);
 	},
-	useTaxRates: () => ({ calcTaxes: false }),
+	useTaxSettings: () => ({ calcTaxes: false }),
 }));
 jest.mock('../hooks/mutations/use-mutation', () => ({
 	useMutation: () => ({ patch: jest.fn() }),

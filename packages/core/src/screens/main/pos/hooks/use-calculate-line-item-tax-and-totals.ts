@@ -4,7 +4,7 @@ import find from 'lodash/find';
 import uniq from 'lodash/uniq';
 
 import { useLineItemData } from './use-line-item-data';
-import { useTaxRates } from '../../contexts/tax-rates';
+import { useTaxSettings } from '../../contexts/tax-rates';
 import { useCalculateTaxesFromValue } from '../../hooks/use-calculate-taxes-from-value';
 import { getRoundingPrecision, roundHalfUp, roundTaxTotal } from '../../hooks/utils/precision';
 
@@ -62,7 +62,7 @@ const consolidateTaxes = (
  * Custom hook to calculate line item tax and totals.
  */
 export const useCalculateLineItemTaxAndTotals = () => {
-	const { pricesIncludeTax, taxRoundAtSubtotal, priceNumDecimals } = useTaxRates();
+	const { pricesIncludeTax, taxRoundAtSubtotal, priceNumDecimals } = useTaxSettings();
 	const { calculateTaxesFromValue } = useCalculateTaxesFromValue();
 	const { getLineItemData } = useLineItemData();
 

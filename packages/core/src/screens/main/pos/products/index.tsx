@@ -11,6 +11,7 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { VStack } from '@wcpos/components/vstack';
+import type { EngineRecord } from '@wcpos/query';
 
 import { Actions } from './cells/actions';
 import { Name } from './cells/name';
@@ -39,7 +40,7 @@ import { VariableProductRow } from '../../components/product/variable-product-ro
 import { ProductVariationImage } from '../../components/product/variation-image';
 import { QuerySearchInput } from '../../components/query-search-input';
 import { UISettingsDialog } from '../../components/ui-settings';
-import { useTaxRates } from '../../contexts/tax-rates';
+import { useTaxSettings } from '../../contexts/tax-rates';
 import { useUISettings } from '../../contexts/ui-settings';
 import { TextCell } from '../../components/text-cell';
 import { COGS } from './cells/cogs';
@@ -56,6 +57,7 @@ import type { SortFieldsByCollection } from '../../../../query/query-state-types
 import type { BindingDataTableFooterProps } from '../../components/data-table';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
+type ProductRow = { document: ProductDocument; record: EngineRecord<'products'> };
 
 const POS_PRODUCTS_PAGE_SIZE = 10;
 const POS_PRODUCT_SORT_FIELDS = [
@@ -123,7 +125,7 @@ const variationCells = {
  */
 function renderCell(columnKey: string, info: any) {
 	let type = 'simple';
-	if (info.row.original.document.type === 'variable') {
+	if (info.row.original.record.payload.type === 'variable') {
 		type = 'variable';
 	}
 	const Renderer = get(cells, [type, columnKey]);
@@ -149,11 +151,11 @@ function renderItem({
 	index,
 	table,
 }: {
-	item: Row<{ document: ProductDocument }>;
+	item: Row<ProductRow>;
 	index: number;
-	table: import('@tanstack/react-table').Table<{ document: ProductDocument }>;
+	table: import('@tanstack/react-table').Table<ProductRow>;
 }) {
-	if (item.original.document.type === 'variable') {
+	if (item.original.record.payload.type === 'variable') {
 		return <VariableProductRow item={item} index={index} table={table} />;
 	}
 	return defaultRenderItem({ item, index, table });
@@ -194,7 +196,7 @@ function POSProductsContent({
 		}),
 		[actions]
 	);
-	const { calcTaxes } = useTaxRates();
+	const { calcTaxes } = useTaxSettings();
 	const viewMode = useObservableEagerState(uiSettings.viewMode$);
 	const sortBy = useObservableEagerState(uiSettings.sortBy$);
 	const sortDirection = useObservableEagerState(uiSettings.sortDirection$);
@@ -255,8 +257,7 @@ function POSProductsContent({
 				const value = typeof updater === 'function' ? updater(expandedRef.current) : updater;
 				expandedRef.current = value;
 			},
-			getRowCanExpand: (row: Row<{ document: ProductDocument }>) =>
-				row.original.document.type === 'variable',
+			getRowCanExpand: (row: Row<ProductRow>) => row.original.record.payload.type === 'variable',
 			meta: {
 				expandedRef,
 				expanded$,
@@ -332,7 +333,7 @@ function POSProductsContent({
 									noDataMessage={t('common.no_products_found')}
 									estimatedItemSize={100}
 									TableFooterComponent={calcTaxes ? TableFooter : DataTableFooter}
-									getItemType={(row) => row.original.document.type}
+									getItemType={(row) => row.original.record.payload.type}
 									tableConfig={tableConfig}
 								/>
 							)}

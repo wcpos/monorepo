@@ -1,5 +1,4 @@
 export {
-	BURST_SETTLE_MS,
 	createBurstAssembler,
 	type BurstAssembler,
 	type BurstAssemblerOptions,
@@ -14,7 +13,6 @@ export { decodeHidPosReport, type HidPosDecodeOptions, type HidPosResult } from 
 export {
 	createScanSession,
 	hasValidRetailCheckDigit,
-	DEFAULT_COOLDOWN_MS,
 	type ScanSession,
 	type ScanSessionOptions,
 	type ScanOfferResult,
@@ -26,7 +24,6 @@ export {
 	foldWedgeKey,
 	replayWedgeDetector,
 	stripBoundary,
-	WEDGE_END_OF_SCAN_MS,
 	type TraceKey,
 	type WedgeDetector,
 	type WedgeDetectorOptions,

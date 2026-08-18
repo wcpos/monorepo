@@ -13,7 +13,7 @@ describe('forceRefreshFilterCustomer', () => {
 			id: 'orders-filter:cashier:42',
 			collection: 'customers',
 			kind: 'targeted-records',
-			wooIds: [42],
+			remoteIds: ['42'],
 			forceRefresh: true,
 		});
 		expect(release).toHaveBeenCalledTimes(1);

@@ -111,7 +111,7 @@ jest.mock('../../contexts/ui-settings', () => ({
 		},
 	}),
 }));
-jest.mock('../../contexts/tax-rates', () => ({ useTaxRates: () => ({ calcTaxes: false }) }));
+jest.mock('../../contexts/tax-rates', () => ({ useTaxSettings: () => ({ calcTaxes: false }) }));
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));

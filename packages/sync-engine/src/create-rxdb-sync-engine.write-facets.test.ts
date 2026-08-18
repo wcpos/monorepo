@@ -6,14 +6,14 @@ import type { StoreScopeIdentity } from '@wcpos/sync-core';
 
 import { buildReplicationHandlers } from './change-signal/change-signal-handlers';
 import { type RxdbSyncEngine } from './create-rxdb-sync-engine';
-import { createEngineHarness } from './testing';
+import { createEngineHarness, remoteId } from './testing';
 
 setPremiumFlag();
 
 type FacetName = 'products' | 'variations' | 'customers' | 'coupons';
 type FacetSpec = {
 	collection: FacetName;
-	remoteIdField: 'wooProductId' | 'wooId' | 'wooCustomerId';
+	remoteIdField: 'remoteId';
 	remoteId: number;
 	pullPath: string;
 	parentId?: number;
@@ -22,24 +22,24 @@ type FacetSpec = {
 const FACETS: readonly FacetSpec[] = [
 	{
 		collection: 'products',
-		remoteIdField: 'wooProductId',
+		remoteIdField: 'remoteId',
 		remoteId: 501,
 		pullPath: '/products',
 	},
 	{
 		collection: 'variations',
-		remoteIdField: 'wooId',
+		remoteIdField: 'remoteId',
 		remoteId: 502,
 		pullPath: '/variations',
 		parentId: 50,
 	},
 	{
 		collection: 'customers',
-		remoteIdField: 'wooCustomerId',
+		remoteIdField: 'remoteId',
 		remoteId: 503,
 		pullPath: '/customers',
 	},
-	{ collection: 'coupons', remoteIdField: 'wooId', remoteId: 504, pullPath: '/coupons' },
+	{ collection: 'coupons', remoteIdField: 'remoteId', remoteId: 504, pullPath: '/coupons' },
 ];
 
 const SITE = 'https://facets.example.test';
@@ -96,10 +96,10 @@ function storedDocument(input: {
 	revision?: string;
 }) {
 	const { spec, id, label } = input;
-	const remoteId = input.remoteId ?? null;
+	const mirroredRemoteId = input.remoteId === undefined ? null : remoteId(input.remoteId);
 	const common = {
-		id,
-		[spec.remoteIdField]: remoteId,
+		uuid: id,
+		[spec.remoteIdField]: mirroredRemoteId,
 		payload: payload(spec, id, label, input.remoteId),
 		sync: {
 			revision: input.revision ?? '',
@@ -124,7 +124,7 @@ function storedDocument(input: {
 	if (spec.collection === 'variations') {
 		return {
 			...common,
-			parentId: spec.parentId ?? null,
+			parentRemoteId: spec.parentId === undefined ? null : remoteId(spec.parentId),
 			price: 4.2,
 			stockStatus: 'instock',
 			attributes: [],
@@ -347,7 +347,7 @@ describe('write facets beyond orders', () => {
 			// the stored payload has no id.
 			await insert(subject, spec, {
 				...storedDocument({ spec, id: UUID_A, label: 'created-locally' }),
-				[spec.remoteIdField]: spec.remoteId,
+				[spec.remoteIdField]: remoteId(spec.remoteId),
 			});
 			// A dirty resident must not be re-fetched over its pending edit.
 			await insert(subject, spec, {
@@ -447,7 +447,7 @@ describe('write facets beyond orders', () => {
 			expect(await subject.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
 			const afterCreate = await record(subject, spec, UUID_A);
 			expect(afterCreate).toMatchObject({
-				[spec.remoteIdField]: spec.remoteId,
+				[spec.remoteIdField]: remoteId(spec.remoteId),
 				local: { dirty: false, pendingMutationIds: [] },
 			});
 			const createRevision = (afterCreate?.sync as { revision: string }).revision;
@@ -511,8 +511,8 @@ describe('write facets beyond orders', () => {
 
 			expect(await subject.sync('write-drain')).toMatchObject({ pushed: 1 });
 			expect(await record(subject, spec, UUID_A)).toMatchObject({
-				id: UUID_A,
-				[spec.remoteIdField]: spec.remoteId,
+				uuid: UUID_A,
+				[spec.remoteIdField]: remoteId(spec.remoteId),
 				local: { dirty: false, pendingMutationIds: [] },
 			});
 			await subject.dispose();
@@ -1122,7 +1122,7 @@ describe('write facets beyond orders', () => {
 		await vi.waitFor(async () => {
 			expect(await subject.conflicts()).toEqual([]);
 			expect(await record(subject, spec, UUID_A)).toMatchObject({
-				[spec.remoteIdField]: spec.remoteId,
+				[spec.remoteIdField]: remoteId(spec.remoteId),
 				payload: { first_name: 'server' },
 			});
 		});
@@ -1403,7 +1403,7 @@ describe('write facets beyond orders', () => {
 		expect(await subject.sync('write-drain')).toMatchObject({ pushed: 1 });
 		expect(route.server.received).toHaveLength(2);
 		expect(await record(subject, spec, UUID_A)).toMatchObject({
-			[spec.remoteIdField]: spec.remoteId,
+			[spec.remoteIdField]: remoteId(spec.remoteId),
 			local: { dirty: false, pendingMutationIds: [] },
 		});
 		await subject.dispose();
@@ -1469,7 +1469,7 @@ describe('write facets beyond orders', () => {
 
 			if (resolution === 'discard') {
 				expect(await record(subject, spec, UUID_A)).toMatchObject({
-					parentId: 50,
+					parentRemoteId: remoteId(50),
 					payload: { parent_id: 50, sku: 'refreshed-server-truth' },
 					sync: { revision: 'sha256:refreshed' },
 				});

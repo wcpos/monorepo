@@ -5,6 +5,7 @@ import toNumber from 'lodash/toNumber';
 
 import { Text } from '@wcpos/components/text';
 import { ModalHeader } from '@wcpos/components/modal';
+import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import { StatusPill } from './_status-pill';
 import { useT } from '../../../../../contexts/translations';
@@ -14,11 +15,6 @@ import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useDateFormat } from '../../../hooks/use-date-format';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
-
-function getMetaValue(metaData: { key?: string; value?: unknown }[] | undefined, key: string) {
-	const value = metaData?.find((item) => item.key === key)?.value;
-	return value == null || value === '' ? undefined : String(value);
-}
 
 function totalRefunded(order: OrderDocument) {
 	return (order.refunds || []).reduce((sum, refund) => {
@@ -43,9 +39,10 @@ export function HeaderSection({ order }: Props) {
 	const isPartialRefund = refundedAmount > 0 && refundedAmount < total;
 	const status = isPartialRefund ? 'partially-refunded' : order.status;
 
-	const cashierID = getMetaValue(order.meta_data, '_pos_user');
+	const { cashierId, storeId } = wooMetaCarrier.readIdentity(order.meta_data);
+	const cashierID = cashierId ?? undefined;
 	const cashier = useCashierLabel(cashierID).label;
-	const storeID = getMetaValue(order.meta_data, '_pos_store');
+	const storeID = storeId ?? undefined;
 	const store = useStoreLabel(storeID).label;
 	const paymentMethod = order.payment_method_title || order.payment_method;
 

@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { wooMetaCarrier } from '@wcpos/sync-core';
+
 import { useCalculateFeeLineTaxAndTotals } from './use-calculate-fee-line-tax-and-totals';
 import { useFeeLineData } from './use-fee-line-data';
 import { updatePosDataMeta } from './utils';
@@ -38,10 +40,7 @@ export const useUpdateFeeLine = () => {
 			let updated = false;
 
 			const updatedLineItems = json.fee_lines?.map((feeLine) => {
-				if (
-					updated ||
-					!feeLine.meta_data?.some((m) => m.key === '_woocommerce_pos_uuid' && m.value === uuid)
-				) {
+				if (updated || wooMetaCarrier.lineUuid(feeLine) !== uuid) {
 					return feeLine;
 				}
 
@@ -70,7 +69,10 @@ export const useUpdateFeeLine = () => {
 			});
 
 			if (updated && updatedLineItems) {
-				return localPatch({ document: order, data: { fee_lines: updatedLineItems } });
+				return localPatch({
+					document: order,
+					data: { fee_lines: updatedLineItems },
+				});
 			}
 		},
 		[calculateFeeLineTaxesAndTotals, currentOrder, getFeeLineData, localPatch]

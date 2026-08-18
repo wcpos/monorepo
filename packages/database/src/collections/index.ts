@@ -666,8 +666,9 @@ const scanner_profiles: RxCollectionCreator<ScannerProfileDocumentType> = {
 	migrationStrategies: {
 		1(oldDoc) {
 			// v1: added the serial/hid-pos connection types and their optional
-			// device-identity fields. Existing wedge-attributed profiles are
-			// unchanged — the new fields are optional.
+			// device-identity fields (incl. bluetoothServiceClassId — folded into
+			// v1 pre-release, 1.10.0 ships this schema fresh). Existing
+			// wedge-attributed profiles are unchanged — the new fields are optional.
 			return oldDoc;
 		},
 	},

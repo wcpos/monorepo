@@ -5,7 +5,7 @@ import { act, renderHook } from '@testing-library/react';
 
 import { useCalculateFeeLineTaxAndTotals } from './use-calculate-fee-line-tax-and-totals';
 import { useFeeLineData } from './use-fee-line-data';
-import { useTaxRates } from '../../contexts/tax-rates';
+import { useTaxSettings } from '../../contexts/tax-rates';
 import { useCalculateTaxesFromValue } from '../../hooks/use-calculate-taxes-from-value';
 import { useCurrentOrder } from '../contexts/current-order';
 import { calculateTaxes } from '../../hooks/utils/calculate-taxes';
@@ -15,7 +15,7 @@ jest.mock('./use-fee-line-data', () => ({
 	useFeeLineData: jest.fn(),
 }));
 jest.mock('../../contexts/tax-rates', () => ({
-	useTaxRates: jest.fn(),
+	useTaxSettings: jest.fn(),
 }));
 jest.mock('../../hooks/use-calculate-taxes-from-value', () => ({
 	useCalculateTaxesFromValue: jest.fn(),
@@ -28,7 +28,7 @@ describe('useCalculateFeeLineTaxAndTotals', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 
-		(useTaxRates as jest.Mock).mockReturnValue({
+		(useTaxSettings as jest.Mock).mockReturnValue({
 			pricesIncludeTax: false,
 			priceNumDecimals: 2,
 			taxRoundAtSubtotal: false,
@@ -85,7 +85,7 @@ describe('useCalculateFeeLineTaxAndTotals', () => {
 	});
 
 	it('should correctly calculate fee line tax and totals when prices include tax', () => {
-		(useTaxRates as jest.Mock).mockReturnValue({
+		(useTaxSettings as jest.Mock).mockReturnValue({
 			pricesIncludeTax: true,
 			priceNumDecimals: 2,
 			taxRoundAtSubtotal: false,

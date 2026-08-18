@@ -13,6 +13,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRxDocument, useQueryRuntime, wrapEngineDocument } from '@wcpos/query';
+import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -38,7 +39,9 @@ async function findCustomerByWooId(
 	const scope = runtime.engine.active() ?? (await runtime.engine.ready);
 	const collection = scope.database.collections.customers;
 	if (!collection) return null;
-	const document = await collection.findOne({ selector: { wooCustomerId } }).exec();
+	const document = await collection
+		.findOne({ selector: { remoteId: remoteIdOrNull(wooCustomerId) } })
+		.exec();
 	return document
 		? wrapEngineDocument<CustomerDocument>('customers', document as unknown as EngineRxDocument)
 		: null;

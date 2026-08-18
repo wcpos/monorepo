@@ -1,3 +1,5 @@
+import type { RemoteId } from '@wcpos/sync-core';
+
 export type ConnectivityMode = 'online' | 'offline' | 'degraded';
 
 export type OfflineReadBehavior = 'serve-local' | 'require-fresh' | 'fail-if-missing';
@@ -32,11 +34,11 @@ export type ReplicationRequirement = {
 	 * (the P0-1 cutover shipped), so the numeric server id CANNOT be recovered from
 	 * the key — this channel is the ONLY way a targeted fetcher learns its server ids.
 	 * REQUIRED whenever `ids` marks the requirement as targeted: the order/product
-	 * fetchers throw a contract error on a missing/empty `wooIds` (the interim
+	 * fetchers throw a contract error on a missing/empty `remoteIds` (the interim
 	 * `/^woo-order:(\d+)$/` reverse-parse scaffolding is deleted). It stays optional
 	 * in the type only because lane/query requirements carry no ids at all.
 	 */
-	wooIds?: number[];
+	remoteIds?: RemoteId[];
 	policy: ReplicationPolicy;
 };
 
@@ -49,10 +51,10 @@ export type FetchTask = {
 	/**
 	 * Numeric Woo server ids for a targeted fetch — the only channel: targeted
 	 * fetchers throw a contract error when it is missing/empty (see
-	 * {@link ReplicationRequirement.wooIds}). Optional only because non-targeted
+	 * {@link ReplicationRequirement.remoteIds}). Optional only because non-targeted
 	 * (lane/query) tasks carry no ids.
 	 */
-	wooIds?: number[];
+	remoteIds?: RemoteId[];
 	limit: number;
 	priority: number;
 	mode: ReplicationMode;

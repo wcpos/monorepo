@@ -8,7 +8,7 @@ import { CartesianChart, StackedBar } from 'victory-native';
 
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useLocalDate } from '../../../../hooks/use-local-date';
-import { useReports } from '../context';
+import { useReportsData } from '../context';
 import { aggregateData } from './utils';
 
 import type { AggregatedDataPoint } from './utils';
@@ -57,7 +57,7 @@ function findClosestPointIndex(points: PointWithPosition[], touchX: number): num
 }
 
 export default function Chart() {
-	const { selectedOrders, dateRange } = useReports();
+	const { selectedOrders, dateRange } = useReportsData();
 	const { format } = useCurrencyFormat();
 	const { dateFnsLocale, formatDate } = useLocalDate();
 	const font = useFont(require('../../../../assets/fonts/Inter-Medium.ttf'), 12);

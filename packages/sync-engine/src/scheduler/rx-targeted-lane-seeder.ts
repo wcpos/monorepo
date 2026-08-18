@@ -18,6 +18,8 @@
  * Adding a collection lane is a descriptor, not a copy.
  */
 
+import { compareRemoteIds, type RemoteId, wooIdOf } from '@wcpos/sync-core';
+
 import {
 	seedPersistedSchedulerTasks,
 	type SeedPersistedSchedulerTasksResult,
@@ -42,7 +44,7 @@ export type TargetedLaneDescriptor = {
 	/** requirementId prefix → `<requirementPrefix>.targeted.<ids>` (e.g. `'products'`). */
 	requirementPrefix: string;
 	/** Builds a Woo document id from a numeric record id (e.g. `id => `woo-product:${id}``). */
-	documentId: (id: number) => string;
+	documentId: (remoteId: RemoteId) => string;
 	/** Default scheduler priority when the caller does not override it. */
 	defaultPriority: number;
 	/** Default per-task batch size when the caller does not override it. */
@@ -52,7 +54,7 @@ export type TargetedLaneDescriptor = {
 };
 
 export type SeedTargetedLaneInput = {
-	ids: number[];
+	remoteIds: RemoteId[];
 	priority?: number;
 	batchSize?: number;
 	completedDedupeForMs?: number;
@@ -62,19 +64,20 @@ export type SeedTargetedLaneInput = {
 	coalesceInFlight?: boolean;
 };
 
-function normalizedLaneIds(descriptor: TargetedLaneDescriptor, ids: number[]): number[] {
+function normalizedLaneIds(descriptor: TargetedLaneDescriptor, remoteIds: RemoteId[]): RemoteId[] {
 	const normalized = [
 		...new Set(
-			ids.map((id) => {
-				if (!Number.isSafeInteger(id) || id <= 0) {
+			remoteIds.map((remoteId) => {
+				const wooId = wooIdOf(remoteId);
+				if (wooId <= 0) {
 					throw new Error(
-						`Targeted ${descriptor.idLabel} scheduler task requires positive integer ${descriptor.idLabel} ids: ${id}`
+						`Targeted ${descriptor.idLabel} scheduler task requires positive integer ${descriptor.idLabel} ids: ${remoteId}`
 					);
 				}
-				return id;
+				return remoteId;
 			})
 		),
-	].sort((left, right) => left - right);
+	].sort(compareRemoteIds);
 	if (normalized.length === 0) {
 		throw new Error(
 			`Targeted ${descriptor.idLabel} scheduler task requires at least one ${descriptor.idLabel} id`
@@ -85,7 +88,7 @@ function normalizedLaneIds(descriptor: TargetedLaneDescriptor, ids: number[]): n
 
 function laneKeyParts(
 	descriptor: TargetedLaneDescriptor,
-	ids: number[]
+	ids: RemoteId[]
 ): { idsPart: string; requirementId: string; queryKey: string } {
 	const idsPart = ids.join(',');
 	return {
@@ -97,11 +100,11 @@ function laneKeyParts(
 
 function chunkLaneIds(
 	descriptor: TargetedLaneDescriptor,
-	ids: number[],
+	ids: RemoteId[],
 	batchSize: number
-): number[][] {
-	const chunks: number[][] = [];
-	let current: number[] = [];
+): RemoteId[][] {
+	const chunks: RemoteId[][] = [];
+	let current: RemoteId[] = [];
 
 	for (const id of ids) {
 		const candidate = [...current, id];
@@ -137,7 +140,7 @@ export async function seedTargetedLane(
 	descriptor: TargetedLaneDescriptor,
 	input: SeedTargetedLaneInput
 ): Promise<SeedPersistedSchedulerTasksResult> {
-	const ids = normalizedLaneIds(descriptor, input.ids);
+	const ids = normalizedLaneIds(descriptor, input.remoteIds);
 	const batchSize = laneBatchSize(descriptor, input.batchSize);
 	const nowMs = input.nowMs ?? Date.now();
 
@@ -159,7 +162,7 @@ export async function seedTargetedLane(
 						ids: chunk.map((id) => descriptor.documentId(id)),
 						// The validated numeric ids ride alongside the document keys so the fetcher
 						// reads them directly — decoupled from the key encoding (uuid-ready).
-						wooIds: chunk,
+						remoteIds: chunk,
 						limit: batchSize,
 						priority: input.priority ?? descriptor.defaultPriority,
 						mode: 'on-demand',

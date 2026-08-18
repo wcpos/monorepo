@@ -34,6 +34,7 @@ import type {
 	RxdbSyncEngine,
 	SyncCollectionName,
 } from '@wcpos/sync-engine';
+import type { RemoteId } from '@wcpos/sync-core';
 
 import {
 	compileQuery,
@@ -403,11 +404,12 @@ function coverageTargetKey(target: CoverageTarget | null): string {
  * The footer's three numbers, composed from the engine's verdict and this binding's own
  * resident count.
  *
- * The verdict is the engine's answer and is taken as given — precedence, freshness and the
- * ranged-walk progress all live behind `coverageChanges`. What stays here is the one thing the
- * engine cannot know: the local count, and the decision to fall back to it when the engine
- * declines to vouch (`total: null`). `unknown` therefore surfaces as `local`, which is what
- * every consumer of `totalSource$` already means by it.
+ * Precedence, freshness and ranged-walk progress live behind `coverageChanges`. What stays here
+ * is the one thing the engine cannot know: the local count. It is the fallback when the engine
+ * declines to vouch (`total: null`) — and it OUTRANKS a recorded total it exceeds, because more
+ * residents than the server's last count proves that count outdated. The number published then
+ * IS the local count, so it carries `source: 'local'`: the footer must render a locally derived
+ * lower bound as `N+`, never dress it up as an exact server total.
  */
 function coverageProjection$(
 	engine: RxdbSyncEngine,
@@ -425,7 +427,7 @@ function coverageProjection$(
 		verdict$,
 	]).pipe(
 		map(([localCount, verdict]) =>
-			verdict.total === null
+			verdict.total === null || verdict.total < localCount
 				? { total: localCount, source: 'local' as const, laneProgress: verdict.progress }
 				: { total: verdict.total, source: 'coverage' as const, laneProgress: verdict.progress }
 		),
@@ -532,24 +534,29 @@ function useEngineBinding(
 		() => projection$.pipe(map(({ laneProgress }) => laneProgress)),
 		[projection$]
 	);
-	return {
-		resource,
-		result$,
-		active$,
-		total$,
-		totalSource$,
-		laneProgress$,
-		sync: demand.sync,
-		whenReady: demand.whenReady,
-		declareOnce: demand.declareOnce,
-		generation: demand.generation,
-	};
+	// Memoised for the same reason as the projections above: consumers hold the binding and
+	// compare it, so a fresh object per render is churn they cannot memoise away.
+	return React.useMemo(
+		() => ({
+			resource,
+			result$,
+			active$,
+			total$,
+			totalSource$,
+			laneProgress$,
+			sync: demand.sync,
+			whenReady: demand.whenReady,
+			declareOnce: demand.declareOnce,
+			generation: demand.generation,
+		}),
+		[resource, result$, active$, total$, totalSource$, laneProgress$, demand]
+	);
 }
 
 export function useCollectionBinding<C extends Exclude<CollectionKey, 'logs'>>(
 	collection: C,
 	state: QueryStateOf<C>,
-	options: { wooIds?: readonly number[] } = {}
+	options: { remoteIds?: readonly RemoteId[] } = {}
 ): QueryBinding {
 	const runtime = useQueryRuntime();
 	const bindingId = React.useId();
@@ -557,12 +564,12 @@ export function useCollectionBinding<C extends Exclude<CollectionKey, 'logs'>>(
 		runtime.localDB,
 		(collection === 'tax-rates' ? 'taxes' : collection) as LegacyCollectionName
 	);
-	const compileKey = JSON.stringify([collection, state, options.wooIds, searchFields]);
+	const compileKey = JSON.stringify([collection, state, options.remoteIds, searchFields]);
 	const compiled = React.useMemo(
 		() =>
 			compileQuery(collection, state, {
 				id: bindingId,
-				targeted: options.wooIds,
+				targeted: options.remoteIds,
 				searchFields,
 			}),
 		[compileKey, bindingId]
@@ -711,15 +718,36 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 		() => Promise.all([parentDemand.sync(), childDemand.sync()]).then(() => undefined),
 		[childDemand, parentDemand]
 	);
-	return {
-		resource,
-		result$,
-		active$,
-		total$: projection$.pipe(map(({ total }) => total)),
-		totalSource$: projection$.pipe(map(({ source }) => source)),
-		laneProgress$: projection$.pipe(map(({ laneProgress }) => laneProgress)),
-		sync,
-	};
+
+	/**
+	 * Memoised, like `resource` and `active$` above and like every projection in
+	 * `useEngineBinding`. These three were piped inline in the return, so each render handed
+	 * consumers three NEW observables.
+	 *
+	 * That is not merely wasteful. `useObservableState` keys its subscription on observable
+	 * identity, so the footer resubscribed on every render; `projection$` carries
+	 * `shareReplay({ bufferSize: 1 })`, so each resubscribe immediately replayed its buffered
+	 * value and set state again. A single cart write therefore rang through the products
+	 * panel several times over before settling — measured at `POSProductsContent` ×4,
+	 * `ProductTile` ×80 per add or remove.
+	 *
+	 * `useEngineBinding` already memoises the same three projections; this hook is the one
+	 * the POS products panel uses, and it did not.
+	 */
+	const total$ = React.useMemo(() => projection$.pipe(map(({ total }) => total)), [projection$]);
+	const totalSource$ = React.useMemo(
+		() => projection$.pipe(map(({ source }) => source)),
+		[projection$]
+	);
+	const laneProgress$ = React.useMemo(
+		() => projection$.pipe(map(({ laneProgress }) => laneProgress)),
+		[projection$]
+	);
+
+	return React.useMemo(
+		() => ({ resource, result$, active$, total$, totalSource$, laneProgress$, sync }),
+		[resource, result$, active$, total$, totalSource$, laneProgress$, sync]
+	);
 }
 
 export type SearchSelectCollection =

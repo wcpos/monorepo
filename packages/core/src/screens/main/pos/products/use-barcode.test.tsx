@@ -15,7 +15,7 @@ const mockFindEngineProducts = jest.fn(async () => engineProducts);
 const mockFindEngineVariations = jest.fn(async () => engineVariations);
 const mockFindEngineProductById = jest.fn(
 	async (productId: number) =>
-		engineProducts.find((document) => document.wooProductId === productId) ?? null
+		engineProducts.find((document) => document.remoteId === String(productId)) ?? null
 );
 const mockOnKeyPress = jest.fn();
 const engineProducts: EngineDocument[] = [];
@@ -28,7 +28,7 @@ const mockToastShow = jest.fn();
 const mockPlayScanSuccess = jest.fn();
 
 interface EngineDocument {
-	id: string;
+	uuid: string;
 	payload: Record<string, unknown>;
 	collection: { name: 'products' | 'variations' };
 	getLatest: () => EngineDocument;
@@ -184,8 +184,8 @@ function productDocument(id = 41, barcode = 'ABC'): EngineDocument {
 		barcode,
 	};
 	const document = {
-		id: `product-${id}`,
-		wooProductId: id,
+		uuid: `product-${id}`,
+		remoteId: String(id),
 		stockStatus: 'instock',
 		payload,
 		collection: { name: 'products' as const },
@@ -207,9 +207,9 @@ function variationDocument(id = 51, parentId = 41, barcode = 'ABC'): EngineDocum
 		attributes: [{ id: 7, name: 'Colour', option: 'Black' }],
 	};
 	const document = {
-		id: `variation-${id}`,
-		wooId: id,
-		parentId,
+		uuid: `variation-${id}`,
+		remoteId: String(id),
+		parentRemoteId: String(parentId),
 		stockStatus: 'instock',
 		payload,
 		collection: { name: 'variations' as const },
@@ -274,7 +274,7 @@ describe('useBarcode online escalation', () => {
 		mockFindEngineVariations.mockImplementation(async () => engineVariations);
 		mockFindEngineProductById.mockImplementation(
 			async (productId: number) =>
-				engineProducts.find((document) => document.wooProductId === productId) ?? null
+				engineProducts.find((document) => document.remoteId === String(productId)) ?? null
 		);
 		mockEngineActive.mockImplementation(() => ({
 			barcodeSelectors: scopeSelectors,
@@ -282,8 +282,8 @@ describe('useBarcode online escalation', () => {
 				collections: {
 					products: {
 						find: () => ({ exec: mockFindEngineProducts }),
-						findOne: ({ selector }: { selector: { wooProductId: number } }) => ({
-							exec: () => mockFindEngineProductById(selector.wooProductId),
+						findOne: ({ selector }: { selector: { remoteId: string } }) => ({
+							exec: () => mockFindEngineProductById(Number(selector.remoteId)),
 						}),
 					},
 					variations: {
@@ -345,14 +345,14 @@ describe('useBarcode online escalation', () => {
 			expect(mockFetcher).not.toHaveBeenCalled();
 			expect(mockAddProduct).toHaveBeenCalledTimes(1);
 			const [product] = mockAddProduct.mock.calls[0] ?? [];
-			expect(product.id).toBe(41);
-			expect(product.name).toBe('Keyboard');
-			expect(product.stock_status).toBe('instock');
+			expect(product).toBe(resident);
+			expect(product.remoteId).toBe('41');
+			expect(product.payload.name).toBe('Keyboard');
+			expect(product.payload.stock_status).toBe('instock');
 			expect(product.collection.name).toBe('products');
-			expect(product.isInstanceOfRxDocument).toBe(true);
 			expect(product.getLatest().toMutableJSON()).toMatchObject({
-				id: 41,
-				name: 'Keyboard',
+				remoteId: '41',
+				payload: { id: 41, name: 'Keyboard' },
 			});
 			expect(mockClearSearch).toHaveBeenCalledTimes(1);
 			expect(mockSetSearch).not.toHaveBeenCalled();
@@ -422,10 +422,8 @@ describe('useBarcode online escalation', () => {
 		expect(mockEngineRequire).not.toHaveBeenCalled();
 		expect(mockAddVariation).toHaveBeenCalledTimes(1);
 		const [variation, parent, metaData] = mockAddVariation.mock.calls[0] ?? [];
-		expect(variation.id).toBe(51);
-		expect(variation.isInstanceOfRxDocument).toBe(true);
-		expect(parent.id).toBe(41);
-		expect(parent.isInstanceOfRxDocument).toBe(true);
+		expect(variation.remoteId).toBe('51');
+		expect(parent.remoteId).toBe('41');
 		expect(metaData).toEqual([{ attr_id: 7, display_key: 'Colour', display_value: 'Black' }]);
 	});
 
@@ -452,8 +450,8 @@ describe('useBarcode online escalation', () => {
 		engineProducts.push(productDocument(41, 'PARENT'));
 		const variation = variationDocument();
 		variation.payload.manage_stock = true;
-		(variation as { stockQuantity?: number }).stockQuantity = 0;
-		variation.stockStatus = 'instock';
+		variation.payload.stock_quantity = 0;
+		variation.payload.stock_status = 'instock';
 		variation.payload.backorders = 'no';
 		engineVariations.push(variation);
 		renderBarcodeHook();
@@ -481,7 +479,7 @@ describe('useBarcode online escalation', () => {
 		mockShowOutOfStock = false;
 		engineProducts.push(productDocument(41, 'PARENT'));
 		const variation = variationDocument();
-		variation.stockStatus = 'onbackorder';
+		variation.payload.stock_status = 'onbackorder';
 		engineVariations.push(variation);
 		renderBarcodeHook();
 
@@ -513,13 +511,13 @@ describe('useBarcode online escalation', () => {
 			id: 'barcode:ABC:product:41',
 			collection: 'products',
 			kind: 'targeted-records',
-			wooIds: [41],
+			remoteIds: ['41'],
 			forceRefresh: true,
 		});
 		expect(mockAddVariation).toHaveBeenCalledTimes(1);
 		const [variation, addedParent] = mockAddVariation.mock.calls[0] ?? [];
-		expect(variation.id).toBe(51);
-		expect(addedParent.id).toBe(41);
+		expect(variation.remoteId).toBe('51');
+		expect(addedParent.remoteId).toBe('41');
 		expect(mockEngineRequire.mock.results[0]?.value.release).toHaveBeenCalledTimes(1);
 	});
 
@@ -595,15 +593,15 @@ describe('useBarcode online escalation', () => {
 			id: 'barcode:ABC:product:41',
 			collection: 'products',
 			kind: 'targeted-records',
-			wooIds: [41],
+			remoteIds: ['41'],
 			forceRefresh: true,
 		});
 		expect(mockFindEngineProducts).toHaveBeenCalledTimes(2);
 		expect(mockAddProduct).toHaveBeenCalledTimes(1);
 		const [addedProduct] = mockAddProduct.mock.calls[0] ?? [];
-		expect(addedProduct.id).toBe(41);
-		expect(addedProduct.name).toBe('Keyboard');
-		expect(addedProduct.isInstanceOfRxDocument).toBe(true);
+		expect(addedProduct).toBe(product);
+		expect(addedProduct.remoteId).toBe('41');
+		expect(addedProduct.payload.name).toBe('Keyboard');
 		expect(mockEngineRequire.mock.results[0]?.value.release).toHaveBeenCalledTimes(1);
 	});
 
@@ -637,22 +635,22 @@ describe('useBarcode online escalation', () => {
 			id: 'barcode:ABC:variation:51',
 			collection: 'variations',
 			kind: 'targeted-records',
-			wooIds: [51],
+			remoteIds: ['51'],
 			forceRefresh: true,
 		});
 		expect(mockEngineRequire).toHaveBeenNthCalledWith(2, {
 			id: 'barcode:ABC:product:41',
 			collection: 'products',
 			kind: 'targeted-records',
-			wooIds: [41],
+			remoteIds: ['41'],
 			forceRefresh: true,
 		});
 		expect(mockAddVariation).toHaveBeenCalledTimes(1);
 		const [addedVariation, addedParent, metaData] = mockAddVariation.mock.calls[0] ?? [];
-		expect(addedVariation.id).toBe(51);
-		expect(addedVariation.isInstanceOfRxDocument).toBe(true);
-		expect(addedParent.id).toBe(41);
-		expect(addedParent.isInstanceOfRxDocument).toBe(true);
+		expect(addedVariation).toBe(variation);
+		expect(addedVariation.remoteId).toBe('51');
+		expect(addedParent).toBe(parent);
+		expect(addedParent.remoteId).toBe('41');
 		expect(metaData).toEqual([{ attr_id: 7, display_key: 'Colour', display_value: 'Black' }]);
 		for (const result of mockEngineRequire.mock.results) {
 			expect(result.value.release).toHaveBeenCalledTimes(1);
@@ -706,7 +704,7 @@ describe('useBarcode online escalation', () => {
 
 		expect(mockFindEngineProducts).toHaveBeenCalledTimes(3);
 		expect(mockAddProduct).toHaveBeenCalledTimes(1);
-		expect(mockAddProduct.mock.calls[0]?.[0].id).toBe(1);
+		expect(mockAddProduct.mock.calls[0]?.[0].remoteId).toBe('1');
 		expect(mockSetSearch).not.toHaveBeenCalled();
 	});
 
@@ -782,14 +780,14 @@ describe('useBarcode online escalation', () => {
 			id: 'barcode:ABC:ambiguous:products',
 			collection: 'products',
 			kind: 'targeted-records',
-			wooIds: [1, 2],
+			remoteIds: ['1', '2'],
 			forceRefresh: true,
 		});
 		expect(mockEngineRequire).toHaveBeenNthCalledWith(2, {
 			id: 'barcode:ABC:ambiguous:variations',
 			collection: 'variations',
 			kind: 'targeted-records',
-			wooIds: [3],
+			remoteIds: ['3'],
 			forceRefresh: true,
 		});
 		expect(mockSetSearch).not.toHaveBeenCalled();
@@ -829,14 +827,14 @@ describe('useBarcode online escalation', () => {
 			1,
 			expect.objectContaining({
 				collection: 'products',
-				wooIds: [1, 3, 5, 7, 9],
+				remoteIds: ['1', '3', '5', '7', '9'],
 			})
 		);
 		expect(mockEngineRequire).toHaveBeenNthCalledWith(
 			2,
 			expect.objectContaining({
 				collection: 'variations',
-				wooIds: [2, 4, 6, 8, 10],
+				remoteIds: ['2', '4', '6', '8', '10'],
 			})
 		);
 		expect(mockBarcodeLogger.debug).toHaveBeenCalledWith(

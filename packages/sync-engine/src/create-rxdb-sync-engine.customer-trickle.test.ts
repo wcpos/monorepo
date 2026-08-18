@@ -3,8 +3,8 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { scopeKeyFor } from '@wcpos/sync-core';
 
+import { createEngineHarness, memoryEngineStorage, memoryStringStore, remoteId } from './testing';
 import { type RxdbSyncEnginePorts, type StoreScopeIdentity } from './create-rxdb-sync-engine';
-import { createEngineHarness, memoryEngineStorage, memoryStringStore } from './testing';
 
 setPremiumFlag();
 
@@ -173,7 +173,7 @@ describe('customer-trickle maintenance lane', () => {
 			id: 'interactive-customer',
 			collection: 'customers',
 			kind: 'targeted-records',
-			wooIds: [91],
+			remoteIds: [91].map(remoteId),
 		});
 		await started.promise;
 
@@ -399,7 +399,7 @@ describe('customers targeted-records require path', () => {
 		const requirement = {
 			collection: 'customers' as const,
 			kind: 'targeted-records' as const,
-			wooIds: [41, 42],
+			remoteIds: [41, 42].map(remoteId),
 		};
 
 		await expect(

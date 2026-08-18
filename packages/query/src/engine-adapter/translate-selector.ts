@@ -1,3 +1,5 @@
+import { remoteIdOrNull } from '@wcpos/sync-core';
+
 import {
 	type EngineDocument,
 	type LegacyCollectionName,
@@ -11,10 +13,31 @@ import type { MangoQuerySelector } from 'rxdb';
 export type LegacyMangoSelector = Record<string, unknown>;
 
 export class EngineAdapterSelectorError extends Error {
-	public constructor(operator: string) {
-		super(`Unsupported Mango operator "${operator}" in engine adapter selector`);
+	public constructor(operator: string, field?: string) {
+		super(
+			field
+				? `Unsupported Mango operator "${operator}" against identifier field "${field}" in engine adapter selector`
+				: `Unsupported Mango operator "${operator}" in engine adapter selector`
+		);
 		this.name = 'EngineAdapterSelectorError';
 	}
+}
+
+function remoteIdSelectorCondition(field: string, condition: unknown): unknown {
+	const convert = (value: unknown): unknown => remoteIdOrNull(value) ?? value;
+	if (!isRecord(condition)) return convert(condition);
+
+	return Object.fromEntries(
+		Object.entries(condition).map(([operator, operand]) => {
+			if (operator !== '$eq' && operator !== '$ne' && operator !== '$in') {
+				throw new EngineAdapterSelectorError(operator, field);
+			}
+			return [
+				operator,
+				operator === '$in' && Array.isArray(operand) ? operand.map(convert) : convert(operand),
+			];
+		})
+	);
 }
 
 const FIELD_OPERATORS = new Set([
@@ -423,6 +446,9 @@ function buildPrefilter(
 		}
 
 		const mapping = resolveLegacyField(collection, field);
+		const identifier =
+			mapping.kind === 'identifier' || (collection === 'variations' && field === 'parent_id');
+		const engineCondition = identifier ? remoteIdSelectorCondition(field, condition) : condition;
 		const faithful = !containsUnsafePushOperator(condition);
 		if (
 			mapping.kind === 'payload' &&
@@ -430,13 +456,13 @@ function buildPrefilter(
 			mapping.readEnginePath === undefined &&
 			faithful
 		) {
-			result[mapping.enginePath] = condition;
+			result[mapping.enginePath] = engineCondition;
 		} else if (
 			(mapping.kind === 'promoted' || mapping.kind === 'identifier') &&
 			mapping.readEnginePath === undefined &&
 			faithful
 		) {
-			result[mapping.enginePath] = condition;
+			result[mapping.enginePath] = engineCondition;
 		} else if (
 			collection === 'variations' &&
 			field === 'attributes' &&

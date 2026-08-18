@@ -10,12 +10,16 @@ import { useActiveTemplates } from './use-active-templates';
 import { useReceiptData } from './use-receipt-data';
 import { buildReceiptData } from '../utils/build-receipt-data';
 import { useAppState } from '../../../../contexts/app-state';
-import { TaxRatesContext } from '../../contexts/tax-rates/provider';
+import { useTaxSettingsOptional } from '../../contexts/tax-rates/provider';
 import { resolvePriceNumDecimals } from '../../contexts/tax-rates/resolve-price-num-decimals';
 import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
 
 import type { ReceiptData } from '../utils/build-receipt-data';
 import type { ReceiptMode } from './use-receipt-data';
+
+// Bounds how long auto-print and the syncing state may wait for the receipts API —
+// a hung fetch must never leave the cashier unable to print.
+const RECEIPT_SETTLE_DEADLINE_MS = 8000;
 
 function resolvePreviewEngine(engine: string | null | undefined): PreviewTemplateEngine {
 	if (engine == null || engine === 'logicless') {
@@ -63,6 +67,7 @@ interface TemplateRendererResult {
 	selectedTemplateContent: string | null;
 	isOffline: boolean;
 	isSyncing: boolean;
+	hasFinalData: boolean;
 }
 
 export function useTemplateRenderer({
@@ -73,7 +78,7 @@ export function useTemplateRenderer({
 }: UseTemplateRendererOptions): TemplateRendererResult {
 	const templates = useActiveTemplates();
 	const { store } = useAppState();
-	const taxRates = React.useContext(TaxRatesContext);
+	const taxRates = useTaxSettingsOptional();
 	const storeDp = useObservableEagerState(store?.wc_price_decimals$) as number | undefined;
 	const dp = resolvePriceNumDecimals({
 		contextDp: taxRates?.priceNumDecimals,
@@ -84,7 +89,23 @@ export function useTemplateRenderer({
 	const { getLabel: getStatusLabel } = useOrderStatusLabel();
 
 	// Fetch receipt data from API (when online)
-	const { data: apiReceiptData, isLoading } = useReceiptData({ orderId, mode });
+	const { data: apiReceiptData, hasResponded, isLoading } = useReceiptData({ orderId, mode });
+	// The deadline record is kept together with the order it was armed for; a
+	// stale record from a previous order derives to "not passed" without any
+	// synchronous reset in the effect (same pattern as the template pick below).
+	const [deadline, setDeadline] = React.useState<{
+		orderId: number | undefined;
+		passed: boolean;
+	}>({ orderId, passed: false });
+	React.useEffect(() => {
+		const timer = setTimeout(
+			() => setDeadline({ orderId, passed: true }),
+			RECEIPT_SETTLE_DEADLINE_MS
+		);
+		return () => clearTimeout(timer);
+	}, [orderId]);
+	const deadlinePassed = deadline.orderId === orderId && deadline.passed;
+	const hasFinalData = isOffline || orderId == null || hasResponded || deadlinePassed;
 
 	// Fall back to locally-built receipt data when the API response is unavailable
 	const receiptData = React.useMemo(() => {
@@ -96,7 +117,7 @@ export function useTemplateRenderer({
 	}, [apiReceiptData, order, store, dp, getStatusLabel]);
 
 	// Syncing: API fetch is in flight and we're still showing local data
-	const isSyncing = isLoading && !apiReceiptData;
+	const isSyncing = isLoading && !apiReceiptData && !deadlinePassed;
 
 	// Default to the first template (or the one marked is_active)
 	const defaultId = React.useMemo(() => {
@@ -200,5 +221,6 @@ export function useTemplateRenderer({
 		selectedTemplateContent: selectedTemplate?.content ?? null,
 		isOffline,
 		isSyncing,
+		hasFinalData,
 	};
 }

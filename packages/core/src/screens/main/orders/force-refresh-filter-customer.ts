@@ -1,3 +1,5 @@
+import { remoteIdOrNull } from '@wcpos/sync-core';
+
 type QueryManager = ReturnType<typeof import('@wcpos/query').useQueryRuntime>;
 
 /** Re-anchor a missing selected filter label without writing through legacy storeDB. */
@@ -10,7 +12,7 @@ export async function forceRefreshFilterCustomer(
 		id: `orders-filter:${role}:${wooId}`,
 		collection: 'customers',
 		kind: 'targeted-records',
-		wooIds: [wooId],
+		remoteIds: [wooId].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 		forceRefresh: true,
 	});
 	try {

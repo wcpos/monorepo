@@ -9,8 +9,8 @@ import { parseRemoteId, useCashierLabel } from './use-cashier-label';
 import type { RxDocument } from 'rxdb';
 
 type EngineDocument = {
-	id: string;
-	wooCustomerId: number;
+	uuid: string;
+	remoteId: string;
 	payload: { first_name?: string; last_name?: string };
 };
 
@@ -44,8 +44,8 @@ jest.mock('./use-customer-name-format', () => ({
 
 function fakeCustomer(): RxDocument<EngineDocument> {
 	const json = {
-		id: 'customer-uuid',
-		wooCustomerId: 42,
+		uuid: 'customer-uuid',
+		remoteId: '42',
 		payload: { first_name: 'Ada', last_name: 'Lovelace' },
 	};
 	return {
@@ -80,7 +80,7 @@ describe('useCashierLabel', () => {
 		const { result } = renderHook(() => useCashierLabel('42'));
 
 		await waitFor(() => expect(result.current.label).toBe('Ada Lovelace'));
-		expect(findOne).toHaveBeenCalledWith({ selector: { wooCustomerId: 42 } });
+		expect(findOne).toHaveBeenCalledWith({ selector: { remoteId: '42' } });
 		expect(result.current.document?.uuid).toBe('customer-uuid');
 		expect(result.current.document?.id).toBe(42);
 		expect(result.current.document?.first_name).toBe('Ada');

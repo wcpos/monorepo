@@ -1,6 +1,7 @@
 import round from 'lodash/round';
 import toNumber from 'lodash/toNumber';
 
+import { wooMetaCarrier } from '@wcpos/sync-core';
 import type { OrderDocument } from '@wcpos/database';
 
 interface CalculateTotalsProps {
@@ -107,8 +108,9 @@ export const calculateTotals = ({ orders, num_decimals = 2 }: CalculateTotalsPro
 		});
 
 		// Cashier and store totals
-		const cashierId = (order.meta_data || []).find((meta) => meta.key === '_pos_user')?.value || '';
-		const storeId = (order.meta_data || []).find((meta) => meta.key === '_pos_store')?.value || '';
+		const identity = wooMetaCarrier.readIdentity(order.meta_data);
+		const cashierId = identity.cashierId ?? '';
+		const storeId = identity.storeId ?? '';
 		const key = `${cashierId}-${storeId}`;
 
 		if (!userStoreTotals[key]) {

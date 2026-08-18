@@ -12,7 +12,7 @@ import { DrawerContent } from '@wcpos/core/screens/main/components/drawer-conten
 import { LogsBadge } from '@wcpos/core/screens/main/components/drawer-content/logs-badge';
 import { Header } from '@wcpos/core/screens/main/components/header';
 
-import { UnreadLogsProvider, useUnreadLogs } from '../../../components/unread-logs';
+import { UnreadLogsProvider, useUnreadLogsCount } from '../../../components/unread-logs';
 import { useNavigationBackground } from '../../../components/use-navigation-background';
 
 export const unstable_settings = {
@@ -221,7 +221,7 @@ function DrawerLayoutContent() {
 		setPrevIsPro(isPro);
 		setShowUpgrade(!isPro);
 	}
-	const { count: unreadErrorCount } = useUnreadLogs();
+	const unreadErrorCount = useUnreadLogsCount();
 
 	return (
 		<View className="bg-background flex-1">

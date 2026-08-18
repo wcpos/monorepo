@@ -1,23 +1,23 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 
 import { formatMetaDataValue } from '../../../components/format-meta-data-value';
 import { useUISettings } from '../../../contexts/ui-settings';
 
 interface Props {
-	product: import('@wcpos/database').ProductDocument;
+	record: EngineRecord<'products'>;
 }
 
 /**
  *
  */
-export function MetaData({ product }: Props) {
+export function MetaData({ record }: Props) {
 	const { uiSettings } = useUISettings('pos-products');
-	const metaDataKeys = useObservableEagerState(uiSettings.metaDataKeys$);
+	const metaDataKeys = useDocField(uiSettings, (settings) => settings.metaDataKeys);
+	const productMetaData = useRecordField(record, (product) => product.payload.meta_data);
 
 	/**
 	 * Filter the product meta data to only show the keys set in UI Settings
@@ -25,10 +25,10 @@ export function MetaData({ product }: Props) {
 	 */
 	const metaData = React.useMemo(() => {
 		const keys = metaDataKeys ? metaDataKeys.split(',') : [];
-		return (product.meta_data || [])
+		return (productMetaData || [])
 			.filter((item) => item.key && keys.includes(item.key))
 			.map(({ key, value }) => ({ key, value }));
-	}, [metaDataKeys, product.meta_data]);
+	}, [metaDataKeys, productMetaData]);
 
 	/**
 	 * No meta data

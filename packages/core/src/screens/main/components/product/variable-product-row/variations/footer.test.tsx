@@ -11,6 +11,13 @@ import { VariationTableFooter } from './footer';
 const engineWrite = jest.fn();
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine: { write: engineWrite } }),
+	useRecordField: (
+		record: { variations$: BehaviorSubject<number[]> },
+		select: (value: { payload: { variations: number[] } }) => unknown
+	) => {
+		const { useObservableEagerState } = jest.requireActual('observable-hooks');
+		return select({ payload: { variations: useObservableEagerState(record.variations$) } });
+	},
 }));
 const clearAndSync = jest.fn(async () => undefined);
 const collectionResetKeys: string[] = [];

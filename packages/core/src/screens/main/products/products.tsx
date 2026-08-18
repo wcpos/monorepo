@@ -12,6 +12,7 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { VStack } from '@wcpos/components/vstack';
+import type { EngineRecord } from '@wcpos/query';
 
 import { Actions } from './cells/actions';
 import { Barcode } from './cells/barcode';
@@ -39,7 +40,7 @@ import { VariableProductRow } from '../components/product/variable-product-row';
 import { ProductVariationImage } from '../components/product/variation-image';
 import { QuerySearchInput } from '../components/query-search-input';
 import { UISettingsDialog } from '../components/ui-settings';
-import { useTaxRates } from '../contexts/tax-rates';
+import { useTaxSettings } from '../contexts/tax-rates';
 import { useMutation } from '../hooks/mutations/use-mutation';
 import { TextCell } from '../components/text-cell';
 import { ProductBrands } from '../components/product/brands';
@@ -55,6 +56,7 @@ import type { QueryStateActions } from '../../../query';
 import type { BindingDataTableFooterProps } from '../components/data-table';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
+type ProductRow = { document: ProductDocument; record: EngineRecord<'products'> };
 
 const cells = {
 	simple: {
@@ -116,7 +118,7 @@ const variationCells = {
  */
 function renderCell(columnKey: string, info: any) {
 	let type = 'simple';
-	if (info.row.original.document.type === 'variable') {
+	if (info.row.original.record.payload.type === 'variable') {
 		type = 'variable';
 	}
 	const Renderer = get(cells, [type, columnKey]);
@@ -142,15 +144,11 @@ function renderItem({
 	index,
 	table,
 }: {
-	item: import('@tanstack/react-table').Row<{
-		document: import('@wcpos/database').ProductDocument;
-	}>;
+	item: import('@tanstack/react-table').Row<ProductRow>;
 	index: number;
-	table: import('@tanstack/react-table').Table<{
-		document: import('@wcpos/database').ProductDocument;
-	}>;
+	table: import('@tanstack/react-table').Table<ProductRow>;
 }) {
-	if (item.original.document.type === 'variable') {
+	if (item.original.record.payload.type === 'variable') {
 		return <VariableProductRow item={item} index={index} table={table} />;
 	}
 	return defaultRenderItem({ item, index, table });
@@ -184,7 +182,7 @@ export function Products() {
 		}),
 		[actions]
 	);
-	const { calcTaxes } = useTaxRates();
+	const { calcTaxes } = useTaxSettings();
 	const { patch: productsPatch } = useMutation({ collectionName: 'products' });
 	const { patch: variationsPatch } = useMutation({ collectionName: 'variations' });
 	const { bottom } = useSafeAreaInsets();
@@ -226,11 +224,8 @@ export function Products() {
 				const value = typeof updater === 'function' ? updater(expandedRef.current) : updater;
 				expandedRef.current = value;
 			},
-			getRowCanExpand: (
-				row: import('@tanstack/react-table').Row<{
-					document: import('@wcpos/database').ProductDocument;
-				}>
-			) => row.original.document.type === 'variable',
+			getRowCanExpand: (row: import('@tanstack/react-table').Row<ProductRow>) =>
+				row.original.record.payload.type === 'variable',
 			meta: {
 				expandedRef,
 				expanded$,
@@ -310,7 +305,7 @@ export function Products() {
 								noDataMessage={t('common.no_products_found')}
 								estimatedItemSize={100}
 								TableFooterComponent={calcTaxes ? TableFooter : DataTableFooter}
-								getItemType={(row) => row.original.document.type}
+								getItemType={(row) => row.original.record.payload.type}
 								tableConfig={tableConfig}
 							/>
 						</Suspense>

@@ -34,7 +34,7 @@ jest.mock('@wcpos/components/text', () => ({
 }));
 
 jest.mock('./context', () => ({
-	useReports: () => ({ binding: { laneProgress$: of(laneProgress) } }),
+	useReportsBinding: () => ({ binding: { laneProgress$: of(laneProgress) } }),
 }));
 
 jest.mock('../../../contexts/translations', () => ({

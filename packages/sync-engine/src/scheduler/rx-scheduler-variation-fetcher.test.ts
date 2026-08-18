@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
+import { remoteId } from '../testing';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import { createVariationsSchedulerFetcher } from './rx-scheduler-variation-fetcher';
 
@@ -149,8 +150,8 @@ describe('createVariationsSchedulerFetcher', () => {
 
 		expect(repo.upsertMany).toHaveBeenCalledWith([
 			expect.objectContaining({
-				wooId: 101,
-				parentId: 9,
+				remoteId: remoteId(101),
+				parentRemoteId: remoteId(9),
 				payload: expect.objectContaining({ name: 'Exact SKU', sku: 'KEY-101' }),
 			}),
 		]);
@@ -211,9 +212,9 @@ describe('createVariationsSchedulerFetcher', () => {
 
 		const stored = repo.upsertMany.mock.calls[0]?.[0]?.[0];
 		expect(stored).toMatchObject({
-			id: uuidFor(7),
-			wooId: 7,
-			parentId: 3,
+			uuid: uuidFor(7),
+			remoteId: remoteId(7),
+			parentRemoteId: remoteId(3),
 			price: 12.5,
 			payload: { id: 7, parent_id: 3 },
 		});

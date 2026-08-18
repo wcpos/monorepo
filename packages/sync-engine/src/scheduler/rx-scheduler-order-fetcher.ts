@@ -5,10 +5,11 @@ import {
 	normalizeCheckpoint,
 	type OrderDocument,
 	orderDocumentId,
-	shouldApplyPulledDocument,
+	POS_META_KEYS,
 	type SyncCheckpoint,
 	syncCustomPullBatchIntoRepository,
 	type SyncObserver,
+	wooIdOf,
 	type WooOrderPayload,
 } from '@wcpos/sync-core';
 
@@ -204,13 +205,13 @@ function honorsRequestedDimensions(
 ): boolean {
 	if (
 		descriptor.cashierId !== undefined &&
-		payloadMetaValue(payload, '_pos_user') !== String(descriptor.cashierId)
+		payloadMetaValue(payload, POS_META_KEYS.user) !== String(descriptor.cashierId)
 	) {
 		return false;
 	}
 	if (descriptor.store !== undefined) {
 		const matched = /^\d+$/.test(descriptor.store)
-			? payloadMetaValue(payload, '_pos_store') === descriptor.store
+			? payloadMetaValue(payload, POS_META_KEYS.store) === descriptor.store
 			: (payload as { created_via?: unknown }).created_via === descriptor.store;
 		if (!matched) return false;
 	}
@@ -218,15 +219,15 @@ function honorsRequestedDimensions(
 }
 
 function targetedOrderIds(task: FetchTask): number[] {
-	// The numeric server ids travel ONLY on the explicit wooIds channel — independent of
+	// Remote ids travel ONLY on the explicit remoteIds channel — independent of
 	// the document-key encoding (storage keys are uuids since the P0-1 emit-flip, so the
 	// server id is unrecoverable from the key). Every targeted seeder populates it
 	// (seedTargetedLane); a targeted task without it is a contract violation, not
 	// something to fall back from.
-	if (!task.wooIds || task.wooIds.length === 0) {
-		throw new Error(`Targeted order scheduler task is missing its wooIds channel: ${task.id}`);
+	if (!task.remoteIds || task.remoteIds.length === 0) {
+		throw new Error(`Targeted order scheduler task is missing its remoteIds channel: ${task.id}`);
 	}
-	return task.wooIds;
+	return task.remoteIds.map(wooIdOf);
 }
 
 export function orderDocumentFromWooPayload(payload: WooOrderPayload) {
@@ -243,11 +244,12 @@ export function orderDocumentFromWooPayload(payload: WooOrderPayload) {
  */
 function assembleCustomPullOrderDocument(document: OrderDocument): OrderDocument {
 	// Derive BOTH identity fields from the payload (not the server envelope): the storage id from
-	// the stamped uuid, and wooOrderId from payload.id — same as orderDocumentFromWooPayload. The
-	// scheduler keys coverage + the pending-mutation pull guard off wooOrderId, so trusting a stale
-	// envelope wooOrderId could record a correct payload under the wrong order or clobber a queued
+	// the stamped uuid, and remoteId from payload.id — same as orderDocumentFromWooPayload. The
+	// scheduler keys coverage + the pending-mutation pull guard off remoteId, so trusting a stale
+	// envelope remoteId could record a correct payload under the wrong order or clobber a queued
 	// local mutation. Owning both from the payload keeps the document internally consistent.
-	return materializeLocalOnly(document.payload, document).storedDocument;
+	const assembled = materializeLocalOnly(document.payload).storedDocument;
+	return { ...assembled, sync: document.sync, local: document.local };
 }
 
 /**
@@ -255,10 +257,22 @@ function assembleCustomPullOrderDocument(document: OrderDocument): OrderDocument
  * (`woo-order:<wooId>`), NOT the uuid STORAGE key (P0-1). Coverage stays in this space on
  * both sides of the lane gate (RxOrdersBrowser current-ids) and the targeted-records
  * store, which is seeded by wooId before any uuid exists — mirrors products'
- * coverageRecordId. Born-local orders with no wooOrderId fall back to the storage id.
+ * coverageRecordId. Born-local orders with no remoteId fall back to the storage id.
  */
-function orderCoverageRecordId(document: { id: string; wooOrderId: number | null }): string {
-	return document.wooOrderId === null ? document.id : orderDocumentId(document.wooOrderId);
+function orderCoverageRecordId(document: OrderDocument): string {
+	return document.remoteId === null ? document.uuid : orderDocumentId(document.remoteId);
+}
+
+function shouldApplyStoredOrder(
+	document: OrderDocument,
+	pendingMutationOrderIds: ReadonlySet<string | number>
+): boolean {
+	if (pendingMutationOrderIds.has(document.uuid)) return false;
+	return (
+		document.remoteId === null ||
+		(!pendingMutationOrderIds.has(document.remoteId) &&
+			!pendingMutationOrderIds.has(wooIdOf(document.remoteId)))
+	);
 }
 
 function coverageNowMs(input: OrdersSchedulerFetcherInput): number {
@@ -759,7 +773,7 @@ async function fetchBrowserOrderQuery(
 			? await input.pendingMutationOrderIds()
 			: undefined;
 		const applicable = pending
-			? documents.filter((document) => shouldApplyPulledDocument(document, pending))
+			? documents.filter((document) => shouldApplyStoredOrder(document, pending))
 			: documents;
 		await input.repository.upsertMany(applicable);
 		fetchedDocumentIds.push(...documents.map(orderCoverageRecordId));
@@ -936,7 +950,7 @@ async function fetchTargetedOrders(
 			? await input.pendingMutationOrderIds()
 			: undefined;
 		const applicable = pending
-			? documents.filter((document) => shouldApplyPulledDocument(document, pending))
+			? documents.filter((document) => shouldApplyStoredOrder(document, pending))
 			: documents;
 		await input.repository.upsertMany(applicable);
 		fetchedDocumentIds.push(...documents.map(orderCoverageRecordId));
@@ -1040,7 +1054,7 @@ export function createOrdersSchedulerFetcher(input: OrdersSchedulerFetcherInput)
 			signal: context?.signal,
 			assembleDocument: assembleCustomPullOrderDocument,
 			// F6: opt into the server delete channel so a deleted order removes its local copy
-			// (repository.removeDeletedOrders resolves wooOrderId→uuid + guards pending/dirty).
+			// (repository.removeDeletedOrders resolves remoteId→uuid + guards pending/dirty).
 			includeDeletes: true,
 			...(input.pendingMutationOrderIds
 				? {

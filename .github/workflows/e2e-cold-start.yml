@@ -14,6 +14,14 @@ on:
         description: Branch to test
         type: string
         default: next
+      lane:
+        description: Store lane containing the selected ref
+        type: choice
+        required: true
+        default: next
+        options:
+          - main
+          - next
 
 permissions:
   contents: read
@@ -35,10 +43,12 @@ jobs:
           submodules: false
 
       - name: 🔒 Validate trusted ref
+        env:
+          E2E_LANE: ${{ github.event.inputs.lane || 'next' }}
         run: |
-          git fetch origin next
-          if ! git merge-base --is-ancestor HEAD origin/next; then
-            echo "::error::ref must resolve to a commit on the next branch"
+          git fetch origin "$E2E_LANE"
+          if ! git merge-base --is-ancestor HEAD "origin/$E2E_LANE"; then
+            echo "::error::ref must resolve to a commit on the selected $E2E_LANE lane"
             exit 1
           fi
 
@@ -62,13 +72,19 @@ jobs:
             playwright-${{ runner.os }}-
 
       - name: 🎭 Install Playwright browsers
-        run: cd apps/main && npx playwright install --with-deps chromium
+        # No --with-deps: runner images carry Chrome's system libs (see deploy.yml).
+        run: cd apps/main && npx playwright install chromium
 
       - name: 🥶 Run cold-start E2E
         run: cd apps/main && npx playwright test --project=pro-cold-start
         env:
           E2E_COLD_START: '1'
           CI: true
+          # Scheduled runs default to next. Manual runs bind arbitrary refs to
+          # an explicit validated lane, so a main-lane tag or SHA cannot be
+          # silently routed to dev-next. This selects `pro-cold-start` alone,
+          # so no free store is needed or bootstrapped.
+          E2E_STORE_URL_PRO: ${{ github.event.inputs.lane == 'main' && 'https://dev-pro.wcpos.com' || 'https://dev-next.wcpos.com' }}
 
       - name: 📸 Upload results on failure
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0

@@ -140,7 +140,7 @@ describe('EditCartCustomerForm', () => {
 
 		await waitFor(() => expect(localPatch).toHaveBeenCalled());
 		expect(customerFindOne).toHaveBeenCalledWith({
-			selector: { wooCustomerId: 42 },
+			selector: { remoteId: '42' },
 		});
 		expect(patchCustomer).not.toHaveBeenCalled();
 

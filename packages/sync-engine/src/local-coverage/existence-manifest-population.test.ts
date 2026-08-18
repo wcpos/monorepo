@@ -5,6 +5,7 @@ import { vi } from 'vitest';
 import type { OrderDocument, ProductDocument } from '@wcpos/sync-core';
 import type { LocalCustomerDocument } from '@wcpos/sync-engine/testing';
 
+import { remoteId } from '../testing';
 import {
 	extractCustomerManifest,
 	extractOrderManifest,
@@ -17,8 +18,8 @@ import { materializeExistingLocalOnly } from '../materialization/record-material
 
 function productDoc(payload: Record<string, unknown>, wooProductId = 10): ProductDocument {
 	return {
-		id: `uuid-${wooProductId}`,
-		wooProductId,
+		uuid: `uuid-${wooProductId}`,
+		remoteId: remoteId(wooProductId),
 		payload: payload as ProductDocument['payload'],
 		sync: { revision: 'r', partial: false, source: 'woo-rest' },
 		local: { dirty: false, pendingMutationIds: [] },
@@ -72,8 +73,8 @@ function customerDoc(
 	wooCustomerId: number | null = 30
 ): LocalCustomerDocument {
 	return {
-		id: `uuid-${wooCustomerId}`,
-		wooCustomerId,
+		uuid: `uuid-${wooCustomerId}`,
+		remoteId: wooCustomerId === null ? null : remoteId(wooCustomerId),
 		payload: payload as LocalCustomerDocument['payload'],
 		sync: { revision: 'r', partial: false, source: 'woo-rest' },
 		local: { dirty: false, pendingMutationIds: [] },
@@ -136,8 +137,8 @@ describe('withCustomerManifestPopulation', () => {
 describe('extractOrderManifest', () => {
 	const orderDoc = (wooOrderId: number | null, payload: Record<string, unknown>): OrderDocument =>
 		({
-			id: `uuid-${wooOrderId}`,
-			wooOrderId,
+			uuid: `uuid-${wooOrderId}`,
+			remoteId: wooOrderId === null ? null : remoteId(wooOrderId),
 			payload,
 			sync: { revision: 'r', partial: false, source: 'woo-rest' },
 			local: { dirty: false, pendingMutationIds: [] },

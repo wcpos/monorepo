@@ -54,11 +54,11 @@ function referenceDocumentFromWooPayload(
  */
 function referenceCoverageRecordId(
 	config: ReferenceCollectionConfig,
-	document: { id: string; wooId: number | null }
+	document: LocalReferenceDocument
 ): string {
-	return document.wooId === null
-		? document.id
-		: referenceDocumentId(config.documentIdPrefix, document.wooId);
+	return document.remoteId === null
+		? document.uuid
+		: referenceDocumentId(config.documentIdPrefix, document.remoteId);
 }
 
 export function createReferenceCollectionFetcher(
@@ -71,7 +71,7 @@ export function createReferenceCollectionFetcher(
 			greedyQueryKey: config.queryKey,
 			endpoint: config.endpoint,
 			documentFromPayload: (payload) => referenceDocumentFromWooPayload(config, payload),
-			storageId: (document) => document.id, // uuid STORAGE key — for the prune kept-set
+			storageId: (document) => document.uuid, // uuid STORAGE key — for the prune kept-set
 			coverageRecordId: (document) => referenceCoverageRecordId(config, document), // Woo-id-space — DISTINCT
 			prunable: true, // reference participates in set-difference deletion; always reports prunedCount
 		},

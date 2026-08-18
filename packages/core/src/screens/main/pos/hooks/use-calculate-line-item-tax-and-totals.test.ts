@@ -5,13 +5,13 @@ import { act, renderHook } from '@testing-library/react';
 
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useLineItemData } from './use-line-item-data';
-import { useTaxRates } from '../../contexts/tax-rates';
+import { useTaxSettings } from '../../contexts/tax-rates';
 import { useCalculateTaxesFromValue } from '../../hooks/use-calculate-taxes-from-value';
 import { calculateTaxes } from '../../hooks/utils/calculate-taxes';
 
 // Mock the external hooks used within the custom hook
 jest.mock('../../contexts/tax-rates', () => ({
-	useTaxRates: jest.fn(),
+	useTaxSettings: jest.fn(),
 }));
 jest.mock('../../hooks/use-calculate-taxes-from-value', () => ({
 	useCalculateTaxesFromValue: jest.fn(),
@@ -28,7 +28,7 @@ describe('useCalculateLineItemTaxAndTotals', () => {
 
 	it('should correctly calculate line item tax and totals when prices exclude tax', () => {
 		// Mocking external hook responses
-		(useTaxRates as jest.Mock).mockReturnValue({
+		(useTaxSettings as jest.Mock).mockReturnValue({
 			pricesIncludeTax: false,
 			priceNumDecimals: 2,
 			taxRoundAtSubtotal: false,
@@ -81,7 +81,7 @@ describe('useCalculateLineItemTaxAndTotals', () => {
 	});
 
 	it('rounds half-up before padding per-rate taxes', () => {
-		(useTaxRates as jest.Mock).mockReturnValue({
+		(useTaxSettings as jest.Mock).mockReturnValue({
 			pricesIncludeTax: false,
 			priceNumDecimals: 2,
 			taxRoundAtSubtotal: true,
@@ -114,7 +114,7 @@ describe('useCalculateLineItemTaxAndTotals', () => {
 
 	it('should correctly calculate line item tax and totals when prices include tax', () => {
 		// Mocking external hook responses
-		(useTaxRates as jest.Mock).mockReturnValue({
+		(useTaxSettings as jest.Mock).mockReturnValue({
 			pricesIncludeTax: true,
 			priceNumDecimals: 2,
 			taxRoundAtSubtotal: false,
@@ -167,7 +167,7 @@ describe('useCalculateLineItemTaxAndTotals', () => {
 
 	it('should correctly round line item tax and totals when prices include tax', () => {
 		// Mocking external hook responses
-		(useTaxRates as jest.Mock).mockReturnValue({
+		(useTaxSettings as jest.Mock).mockReturnValue({
 			pricesIncludeTax: true,
 			priceNumDecimals: 2,
 			taxRoundAtSubtotal: false,
@@ -220,7 +220,7 @@ describe('useCalculateLineItemTaxAndTotals', () => {
 
 	it('should correctly calculate when prices do not include tax', () => {
 		// Mocking external hook responses
-		(useTaxRates as jest.Mock).mockReturnValue({
+		(useTaxSettings as jest.Mock).mockReturnValue({
 			pricesIncludeTax: false,
 			priceNumDecimals: 2,
 			taxRoundAtSubtotal: false,
@@ -273,7 +273,7 @@ describe('useCalculateLineItemTaxAndTotals', () => {
 
 	describe('dp parameter (price_num_decimals)', () => {
 		it('dp=0 (JPY): ¥1000 exclusive at 10%', () => {
-			(useTaxRates as jest.Mock).mockReturnValue({
+			(useTaxSettings as jest.Mock).mockReturnValue({
 				pricesIncludeTax: false,
 				priceNumDecimals: 0,
 				taxRoundAtSubtotal: false,
@@ -312,7 +312,7 @@ describe('useCalculateLineItemTaxAndTotals', () => {
 		});
 
 		it('dp=0 (JPY): ¥999 inclusive at 10%', () => {
-			(useTaxRates as jest.Mock).mockReturnValue({
+			(useTaxSettings as jest.Mock).mockReturnValue({
 				pricesIncludeTax: true,
 				priceNumDecimals: 0,
 				taxRoundAtSubtotal: false,
@@ -353,7 +353,7 @@ describe('useCalculateLineItemTaxAndTotals', () => {
 		});
 
 		it('dp=3: $9.999 exclusive at 20%', () => {
-			(useTaxRates as jest.Mock).mockReturnValue({
+			(useTaxSettings as jest.Mock).mockReturnValue({
 				pricesIncludeTax: false,
 				priceNumDecimals: 3,
 				taxRoundAtSubtotal: false,

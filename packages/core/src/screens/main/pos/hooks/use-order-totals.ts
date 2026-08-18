@@ -5,7 +5,7 @@ import useDeepCompareEffect from 'use-deep-compare-effect';
 
 import { calculateOrderTotals } from './calculate-order-totals';
 import { useCartLines } from './use-cart-lines';
-import { useTaxRates } from '../../contexts/tax-rates';
+import { useTaxSettings } from '../../contexts/tax-rates';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
 import { useOrderMoneyDivergence } from '../contexts/order-money-divergence';
@@ -17,7 +17,7 @@ type Totals = ReturnType<typeof calculateOrderTotals>;
  */
 export const useOrderTotals = () => {
 	const { currentOrder } = useCurrentOrder();
-	const { allRates, taxRoundAtSubtotal, priceNumDecimals, pricesIncludeTax } = useTaxRates();
+	const { allRates, taxRoundAtSubtotal, priceNumDecimals, pricesIncludeTax } = useTaxSettings();
 	const { localPatch } = useLocalMutation();
 	const { line_items, fee_lines, shipping_lines, coupon_lines } = useCartLines();
 

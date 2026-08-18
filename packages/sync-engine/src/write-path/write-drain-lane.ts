@@ -31,6 +31,7 @@ import {
 	pushEndpointResolver,
 	pushRecordMutation,
 	reconcileCreateAck,
+	remoteIdOrNull,
 } from '@wcpos/sync-core';
 import type {
 	Fetcher,
@@ -406,14 +407,14 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									?.findOne(mutation.recordId)
 									.exec();
 								const row = doc?.toJSON() as Record<string, unknown> | undefined;
-								const remoteId = row?.[facet.remoteIdField];
-								if (typeof remoteId !== 'number') return null;
+								const remoteId = remoteIdOrNull(row?.[facet.remoteIdField]);
+								if (remoteId === null) return null;
 								const revision =
 									mutation.collectionName === 'orders'
 										? await fetchOrderServerRevision({
 												fetch: boundFetch,
 												syncBaseUrl: deps.syncBaseUrl,
-												wooOrderId: remoteId,
+												remoteId: remoteId,
 											})
 										: revisionOf(
 												await facet.fetchServerDocument({

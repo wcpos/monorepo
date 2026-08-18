@@ -18,7 +18,12 @@ import {
 	useQueryRuntime,
 	type WriteableCollection,
 } from '@wcpos/query';
-import { deriveBarcodeFromPayload, mapBarcodeEditToPayload } from '@wcpos/sync-core';
+import {
+	deriveBarcodeFromPayload,
+	mapBarcodeEditToPayload,
+	RECORD_UUID_META_KEY,
+	remoteIdOrNull,
+} from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -91,8 +96,8 @@ function ensureRecordMetadata(
 	const metadata = Array.isArray(payload.meta_data)
 		? [...(payload.meta_data as Record<string, unknown>[])]
 		: [];
-	const index = metadata.findIndex((entry) => entry.key === '_woocommerce_pos_uuid');
-	const identity = { key: '_woocommerce_pos_uuid', value: recordId };
+	const index = metadata.findIndex((entry) => entry.key === RECORD_UUID_META_KEY);
+	const identity = { key: RECORD_UUID_META_KEY, value: recordId };
 	if (index === -1) metadata.push(identity);
 	else metadata[index] = { ...metadata[index], ...identity };
 	return { ...payload, meta_data: metadata };
@@ -298,7 +303,7 @@ export async function insertEngineResident(input: {
 		input.recordId
 	);
 	const common: Record<string, unknown> = {
-		id: input.recordId,
+		uuid: input.recordId,
 		payload,
 		sync: {
 			revision: '',
@@ -307,16 +312,10 @@ export async function insertEngineResident(input: {
 		},
 		local: { dirty: false, pendingMutationIds: [] },
 	};
-	const remoteId = Number(payload.id);
+	const remoteId = remoteIdOrNull(payload.id);
 	const resident = withPromotedFields(input.collection, {
 		...common,
-		...(input.collection === 'orders'
-			? { wooOrderId: remoteId > 0 ? remoteId : null }
-			: input.collection === 'products'
-				? { wooProductId: remoteId > 0 ? remoteId : null }
-				: input.collection === 'customers'
-					? { wooCustomerId: remoteId > 0 ? remoteId : null }
-					: { wooId: remoteId > 0 ? remoteId : null }),
+		remoteId,
 	});
 	return (await residentCollection.insert(resident)) as EngineResident;
 }

@@ -14,6 +14,8 @@
  * keeps two arrays and feeds the prune ONLY storageIds and coverage ONLY coverageIds.
  */
 
+import { type RemoteId, wooIdOf } from '@wcpos/sync-core';
+
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import { chunk } from './chunk';
 import { censusQueryKey } from './census';
@@ -252,7 +254,7 @@ export function createGreedyCollectionFetcher<Doc, Payload>(
 }
 
 /** A targeted-fetch target parsed from a document id: its canonical storage id + the Woo id (null = born-local sentinel). */
-export type CollectionTarget = { documentId: string; wooId: number | null };
+export type CollectionTarget = { documentId: string; remoteId: RemoteId | null };
 
 /**
  * The per-collection delta for an ON-DEMAND (targeted-by-id OR search-windowed) collection — customer, product.
@@ -275,7 +277,7 @@ export type TargetedSearchCollectionSpec<Doc, Payload> = {
 	coverageRecordId: (document: Doc) => string;
 	/** The Woo id carried by a payload (for verifying a targeted include= response returned everything requested). */
 	payloadWooId: (payload: Payload) => number;
-	/** Parse a targeted task document id → its target (wooId null for a born-local sentinel like customer:default). */
+	/** Parse a targeted task document id → its target (remoteId null for a born-local sentinel like customer:default). */
 	targetFromId: (id: string) => CollectionTarget;
 	/** Build the partial born-local document for a sentinel target (e.g. customer:default) — stored without a request. */
 	defaultDocument: (target: CollectionTarget) => Doc;
@@ -312,9 +314,12 @@ async function fetchTargeted<Doc, Payload>(
 	assertPositiveLimit(spec.label, task);
 	const targets = (task.ids ?? []).map(spec.targetFromId);
 	const defaultDocuments = targets
-		.filter((target) => target.wooId === null)
+		.filter((target) => target.remoteId === null)
 		.map(spec.defaultDocument);
-	const ids = targets.map((target) => target.wooId).filter((id): id is number => id !== null);
+	const ids = targets
+		.map((target) => target.remoteId)
+		.filter((remoteId): remoteId is RemoteId => remoteId !== null)
+		.map(wooIdOf);
 	const batchSize = Math.min(pullRequestLimit(task, input.pullBatchSize), WOO_REST_MAX_PER_PAGE);
 	let documentCount = 0;
 	let requestCount = 0;

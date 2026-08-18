@@ -7,6 +7,7 @@ import { catchError, map, switchMap } from 'rxjs/operators';
 import { COLLECTION_VOCABULARY, resolveLegacyField, useQueryRuntime } from '@wcpos/query';
 import { MUTATION_QUEUE_RXDB_COLLECTION, rejectionSuggestsServerRecord } from '@wcpos/sync-engine';
 import type { EngineConflict, RxdbSyncEngine } from '@wcpos/sync-engine';
+import { remoteIdOrNull } from '@wcpos/sync-core';
 
 /**
  * The unresolved-conflict feed for Store health → Database.
@@ -120,7 +121,7 @@ async function describe(
 					? undefined
 					: ((entry.payload as Record<string, unknown> | undefined)?.id ??
 						(entry.conflictDocument as Record<string, unknown> | undefined)?.id);
-			const remoteId = typeof columnRemoteId === 'number' ? columnRemoteId : queuedRemoteId;
+			const remoteId = remoteIdOrNull(columnRemoteId) ?? remoteIdOrNull(queuedRemoteId);
 			return {
 				mutationId: entry.mutationId,
 				collectionName: entry.collectionName,
@@ -133,13 +134,13 @@ async function describe(
 					entry.operation === 'create' &&
 					resident !== null &&
 					!readFailed &&
-					typeof remoteId !== 'number' &&
+					remoteId === null &&
 					!rejectionSuggestsServerRecord(entry.rejectedReason),
 				mayDestroyRecord:
 					entry.collectionName !== 'orders' &&
 					resident !== null &&
 					!readFailed &&
-					typeof remoteId === 'number',
+					remoteId !== null,
 				residentUnknown: readFailed,
 			} satisfies UnresolvedConflict;
 		})

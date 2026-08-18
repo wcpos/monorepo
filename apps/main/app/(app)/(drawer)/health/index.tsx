@@ -3,10 +3,10 @@ import * as React from 'react';
 import { NavigationAreaIndex } from '@wcpos/core/screens/main/components/navigation-area';
 
 import { useHealthNavigationItems } from '../../../../components/area-navigation/health';
-import { useUnreadLogs } from '../../../../components/unread-logs';
+import { useUnreadLogsCount } from '../../../../components/unread-logs';
 
 export default function HealthIndex() {
-	const { count } = useUnreadLogs();
+	const count = useUnreadLogsCount();
 	const items = useHealthNavigationItems(count);
 
 	return (

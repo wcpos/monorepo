@@ -3,9 +3,9 @@ import * as React from 'react';
 import { useObservableEagerState, useSubscription } from 'observable-hooks';
 
 import { isStorageWorkerFailure } from '@wcpos/database/plugins/wrapped-error-handler-storage';
-import { useQueryRuntime } from '@wcpos/query';
+import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { type ScanEvent } from '@wcpos/scanner';
-import { type BarcodeResolveFetcher, resolveScan } from '@wcpos/sync-core';
+import { type BarcodeResolveFetcher, remoteIdOrNull, resolveScan, wooIdOf } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -61,12 +61,9 @@ function withBarcodeLookupDeadline(fetcher: BarcodeResolveFetcher): BarcodeResol
 	};
 }
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
-type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
-
 function isVariationDocument(
-	document: ProductDocument | ProductVariationDocument
-): document is ProductVariationDocument {
+	document: EngineRecord<'products'> | EngineRecord<'variations'>
+): document is EngineRecord<'variations'> {
 	return document.collection.name === 'variations';
 }
 
@@ -275,7 +272,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 									id: `barcode:${barcodeStr}:ambiguous:products`,
 									collection: 'products',
 									kind: 'targeted-records',
-									wooIds: productIds,
+									remoteIds: productIds.map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 									forceRefresh: true,
 								})
 							);
@@ -286,7 +283,9 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 									id: `barcode:${barcodeStr}:ambiguous:variations`,
 									collection: 'variations',
 									kind: 'targeted-records',
-									wooIds: variationIds,
+									remoteIds: variationIds
+										.map(remoteIdOrNull)
+										.filter((remoteId) => remoteId !== null),
 									forceRefresh: true,
 								})
 							);
@@ -316,9 +315,11 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 				const match =
 					resolution.ambiguous.length > 0
 						? {
-								id: visibleMatch.id!,
+								id: visibleMatch.remoteId === null ? 0 : wooIdOf(visibleMatch.remoteId),
 								type: isVariationDocument(visibleMatch) ? 'variation' : 'product',
-								parent_id: isVariationDocument(visibleMatch) ? visibleMatch.parent_id : undefined,
+								parent_id: isVariationDocument(visibleMatch)
+									? visibleMatch.payload.parent_id
+									: undefined,
 							}
 						: resolution.match;
 				if (match.type === 'variation' && !match.parent_id) {
@@ -336,7 +337,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 							id: `barcode:${barcodeStr}:${match.type}:${match.id}`,
 							collection: match.type === 'variation' ? 'variations' : 'products',
 							kind: 'targeted-records',
-							wooIds: [match.id],
+							remoteIds: [match.id].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 							forceRefresh: true,
 						})
 					);
@@ -346,7 +347,9 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 								id: `barcode:${barcodeStr}:product:${match.parent_id}`,
 								collection: 'products',
 								kind: 'targeted-records',
-								wooIds: [match.parent_id!],
+								remoteIds: [match.parent_id]
+									.map(remoteIdOrNull)
+									.filter((remoteId) => remoteId !== null),
 								forceRefresh: true,
 							})
 						);
@@ -377,16 +380,16 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		const [product] = results;
 
 		const outOfStock = isVariationDocument(product)
-			? !resolveVariationStock(product).sellable
-			: product.stock_status !== 'instock';
+			? !resolveVariationStock(product.payload).sellable
+			: product.payload.stock_status !== 'instock';
 		if (!showOutOfStock && outOfStock) {
-			scan.outOfStock(product.name ?? '', barcodeStr);
+			scan.outOfStock(product.payload.name ?? '', barcodeStr);
 			barcodeLogger.warn('Barcode scan matched an out-of-stock product', {
 				context: {
 					barcode: barcodeStr,
-					productId: product.id,
-					productName: product.name,
-					stockStatus: product.stock_status,
+					productId: product.remoteId === null ? undefined : wooIdOf(product.remoteId),
+					productName: product.payload.name,
+					stockStatus: product.payload.stock_status,
 				},
 			});
 			return;
@@ -398,7 +401,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			 * Hack: we need to get the parent product
 			 * - parent_id was added recently to the variation schema, so older variations don't have it
 			 */
-			const parent_id = product.parent_id;
+			const parent_id = product.payload.parent_id;
 			if (!parent_id) {
 				guardedSetSearch(barcodeStr);
 				return;
@@ -411,7 +414,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 						id: `barcode:${barcodeStr}:product:${parent_id}`,
 						collection: 'products',
 						kind: 'targeted-records',
-						wooIds: [parent_id],
+						remoteIds: [parent_id].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 						forceRefresh: true,
 					});
 					try {
@@ -429,12 +432,12 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 				guardedSetSearch(barcodeStr);
 				return;
 			}
-			if (parent.status !== 'publish') {
+			if (parent.payload.status !== 'publish') {
 				showNotFound();
 				return;
 			}
 
-			const metaData = (product.attributes ?? []).map(
+			const metaData = (product.payload.attributes ?? []).map(
 				(attribute: { id?: number; name?: string; option?: string }) => {
 					return {
 						attr_id: attribute.id ?? 0,
@@ -455,7 +458,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			// the "Searching store…" toast up after the scan finished. Replace it
 			// with terminal failure feedback (the add hook surfaces its own mutation error).
 			if (searchingOnlineShown) {
-				scan.addFailed(product.name ?? '');
+				scan.addFailed(product.payload.name ?? '');
 			}
 			return;
 		}
@@ -463,12 +466,12 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		/**
 		 * Show success message
 		 */
-		scan.added(product.name ?? '');
+		scan.added(product.payload.name ?? '');
 		barcodeLogger.success(text1, {
 			context: {
 				barcode: barcodeStr,
-				productId: product.id,
-				productName: product.name,
+				productId: product.remoteId === null ? undefined : wooIdOf(product.remoteId),
+				productName: product.payload.name,
 			},
 		});
 

@@ -6,6 +6,7 @@
  * See field-picker.tsx for the full field reference.
  */
 
+import { POS_META_KEYS } from '@wcpos/sync-core';
 import type { TaxId } from '@wcpos/database';
 
 interface ReceiptOrder {
@@ -225,7 +226,7 @@ function isNumeric(value: unknown): boolean {
 
 function getPosPriceData(item: Record<string, any>): PosPriceData | null {
 	const entry = Array.isArray(item.meta_data)
-		? item.meta_data.find((meta: Record<string, any>) => meta?.key === '_woocommerce_pos_data')
+		? item.meta_data.find((meta: Record<string, any>) => meta?.key === POS_META_KEYS.posData)
 		: undefined;
 	// next speaks typed meta: the local write path stores this value as an
 	// OBJECT (pos/hooks/utils.ts), while server round-trips may still deliver
@@ -591,10 +592,12 @@ export function buildReceiptData(
 		const discountsExcl = subtotalExcl - totalExcl;
 		const discountsIncl = subtotalIncl - totalIncl;
 		const meta = Array.isArray(item.meta_data)
-			? item.meta_data.map((entry: Record<string, any>) => ({
-					key: String(entry?.key ?? ''),
-					value: String(entry?.value ?? ''),
-				}))
+			? item.meta_data
+					.filter((entry: Record<string, unknown>) => !String(entry?.key ?? '').startsWith('_'))
+					.map((entry: Record<string, unknown>) => ({
+						key: String(entry?.key ?? ''),
+						value: String(entry?.value ?? ''),
+					}))
 			: [];
 
 		const { raw: savingsRaw, ...priceConvenience } = getLinePriceConvenienceFields({

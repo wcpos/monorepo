@@ -1,8 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ProductDocument } from '@wcpos/sync-core';
+import { type ProductDocument, type RemoteId, wooIdOf } from '@wcpos/sync-core';
 
+import { remoteId } from '../testing';
 import {
 	coverageRecordId,
 	createProductsSchedulerFetcher,
@@ -87,7 +88,7 @@ describe('createProductsSchedulerFetcher', () => {
 				requirementId: 'products.cart-items',
 				queryKey: 'products:ids:321,654',
 				ids: ['woo-product:321', 'woo-product:654'],
-				wooIds: [321, 654],
+				remoteIds: [321, 654].map(remoteId),
 				limit: 2,
 				mode: 'on-demand',
 			})
@@ -161,8 +162,8 @@ describe('createProductsSchedulerFetcher', () => {
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			{
-				id: uuidFor(321),
-				wooProductId: 321,
+				uuid: uuidFor(321),
+				remoteId: remoteId(321),
 				// Promoted filter/sort columns attached at the storage seam (withProductColumns). This payload
 				// carries no filter fields, so they default — proving the promotion runs on every upsert.
 				price: 0,
@@ -265,7 +266,9 @@ describe('createProductsSchedulerFetcher', () => {
 		]);
 		// The tail is the true tail (ids 1000-976, in order), not a re-read of page 2's rows.
 		expect(repository.upsertMany).toHaveBeenCalledWith(
-			Array.from({ length: 25 }, (_, i) => expect.objectContaining({ wooProductId: 1000 - i }))
+			Array.from({ length: 25 }, (_, i) =>
+				expect.objectContaining({ remoteId: remoteId(1000 - i) })
+			)
 		);
 		// The leg filled its limit with no short page — the server may hold more
 		// matches, so the search coverage is honestly incomplete.
@@ -319,7 +322,7 @@ describe('createProductsSchedulerFetcher', () => {
 			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=10&orderby=menu_order&order=asc&status=publish&page=1'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
-			expect.objectContaining({ id: uuidFor(321), wooProductId: 321 }),
+			expect.objectContaining({ uuid: uuidFor(321), remoteId: remoteId(321) }),
 		]);
 		// A page below the ceiling exhausts the servable set → complete coverage.
 		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith({
@@ -514,10 +517,8 @@ describe('createProductsSchedulerFetcher', () => {
 			3,
 			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&orderby=menu_order&order=asc&status=publish&category=2%2C7&tag=3&brand=5&featured=true&on_sale=false&stock_status=instock&page=3'
 		);
-		const upsertCalls = repository.upsertMany.mock.calls as unknown as [
-			{ wooProductId: number }[],
-		][];
-		expect(upsertCalls[0]?.[0].map(({ wooProductId }) => wooProductId)).toEqual([
+		const upsertCalls = repository.upsertMany.mock.calls as unknown as [{ remoteId: RemoteId }[]][];
+		expect(upsertCalls[0]?.[0].map(({ remoteId: id }) => wooIdOf(id))).toEqual([
 			1,
 			...Array.from({ length: 99 }, (_, index) => index + 200),
 		]);
@@ -676,10 +677,8 @@ describe('createProductsSchedulerFetcher', () => {
 		);
 
 		expect(fetcher).toHaveBeenCalledTimes(maxPages);
-		const upsertCalls = repository.upsertMany.mock.calls as unknown as [
-			{ wooProductId: number }[],
-		][];
-		expect(upsertCalls[0]?.[0].map(({ wooProductId }) => wooProductId)).toEqual(
+		const upsertCalls = repository.upsertMany.mock.calls as unknown as [{ remoteId: RemoteId }[]][];
+		expect(upsertCalls[0]?.[0].map(({ remoteId: id }) => wooIdOf(id))).toEqual(
 			Array.from({ length: 100 }, (_, index) => index + 1)
 		);
 		expect(diagnostics).toHaveBeenCalledOnce();
@@ -762,8 +761,8 @@ describe('createProductsSchedulerFetcher', () => {
 		expect(Math.max(...perPageSeen)).toBeLessThanOrEqual(25);
 		// Four dial-sized pages still seed the FULL 100-row window.
 		expect(result.documentCount).toBe(100);
-		const upserted = repository.upsertMany.mock.calls as unknown as [{ wooProductId: number }[]][];
-		expect(upserted[0]?.[0].map(({ wooProductId }) => wooProductId)).toEqual(
+		const upserted = repository.upsertMany.mock.calls as unknown as [{ remoteId: RemoteId }[]][];
+		expect(upserted[0]?.[0].map(({ remoteId: id }) => wooIdOf(id))).toEqual(
 			Array.from({ length: 100 }, (_, index) => index + 1)
 		);
 	});
@@ -871,8 +870,8 @@ describe('createProductsSchedulerFetcher', () => {
 		// re-download would have cost eleven.
 		expect(pagesSeen).toEqual([11, 12]);
 		expect(result.documentCount).toBe(100);
-		const upserted = repository.upsertMany.mock.calls as unknown as [{ wooProductId: number }[]][];
-		expect(upserted[0]?.[0].map(({ wooProductId }) => wooProductId)).toEqual(
+		const upserted = repository.upsertMany.mock.calls as unknown as [{ remoteId: RemoteId }[]][];
+		expect(upserted[0]?.[0].map(({ remoteId: id }) => wooIdOf(id))).toEqual(
 			Array.from({ length: 100 }, (_, index) => 1_001 + index)
 		);
 		// The lane still describes the WHOLE window, prefix unioned with delta — the grid's
@@ -935,9 +934,9 @@ describe('createProductsSchedulerFetcher', () => {
 		expect(fetcher).toHaveBeenCalledTimes(2);
 		expect(repository.upsertMany).toHaveBeenCalledTimes(1);
 		const [documents] = repository.upsertMany.mock.calls[0] as unknown as [
-			{ wooProductId: number }[],
+			{ remoteId: RemoteId }[],
 		];
-		expect(documents.map(({ wooProductId }) => wooProductId)).toEqual(
+		expect(documents.map(({ remoteId: id }) => wooIdOf(id))).toEqual(
 			Array.from({ length: 100 }, (_, index) => index + 201)
 		);
 		expect(fetcher.mock.calls.every(([url]) => String(url).includes('category=9'))).toBe(true);
@@ -1681,13 +1680,15 @@ describe('createProductsSchedulerFetcher', () => {
 		expect(fetcher).toHaveBeenCalledTimes(2);
 		expect(repository.upsertMany).toHaveBeenCalledTimes(1);
 		const [upsertedDocuments] = repository.upsertMany.mock.calls[0] as unknown as [
-			{ id: string; wooProductId: number }[],
+			{ uuid: string; remoteId: RemoteId }[],
 		];
-		expect(upsertedDocuments.map(({ wooProductId }) => wooProductId)).toEqual(
+		expect(upsertedDocuments.map(({ remoteId: id }) => wooIdOf(id))).toEqual(
 			Array.from({ length: 39 }, (_, index) => index + 1)
 		);
-		for (const [documents] of repository.upsertMany.mock.calls as unknown as [{ id: string }[]][]) {
-			const ids = documents.map(({ id }) => id);
+		for (const [documents] of repository.upsertMany.mock.calls as unknown as [
+			{ uuid: string }[],
+		][]) {
+			const ids = documents.map(({ uuid }) => uuid);
 			expect(new Set(ids).size).toBe(ids.length);
 		}
 	});
@@ -1832,8 +1833,8 @@ describe('createProductsSchedulerFetcher', () => {
 		// continues until the server runs short — and the window holds the LOWEST 40 ids.
 		expect(perPageSeen.every((perPage) => perPage <= 20)).toBe(true);
 		expect(result.requestCount).toBe(3);
-		const upserted = repository.upsertMany.mock.calls as unknown as [{ wooProductId: number }[]][];
-		expect(upserted[0]?.[0].map(({ wooProductId }) => wooProductId)).toEqual(
+		const upserted = repository.upsertMany.mock.calls as unknown as [{ remoteId: RemoteId }[]][];
+		expect(upserted[0]?.[0].map(({ remoteId: id }) => wooIdOf(id))).toEqual(
 			Array.from({ length: 40 }, (_, index) => index + 1)
 		);
 	});
@@ -1873,9 +1874,9 @@ describe('createProductsSchedulerFetcher', () => {
 		// No menu_order/id tiebreak walk on a non-default sort: the server's own order is
 		// authoritative, so it is exactly ceil(40 / 20) requests.
 		expect(result.requestCount).toBe(2);
-		const upserted = repository.upsertMany.mock.calls as unknown as [{ wooProductId: number }[]][];
+		const upserted = repository.upsertMany.mock.calls as unknown as [{ remoteId: RemoteId }[]][];
 		// Server order preserved — NOT re-sorted into menu_order/id order locally.
-		expect(upserted[0]?.[0].map(({ wooProductId }) => wooProductId)).toEqual(
+		expect(upserted[0]?.[0].map(({ remoteId: id }) => wooIdOf(id))).toEqual(
 			Array.from({ length: 40 }, (_, index) => 900 - index)
 		);
 	});
@@ -1966,7 +1967,7 @@ describe('createProductsSchedulerFetcher', () => {
 			'http://wcpos.local/wp-json/wcpos/v2/products?sku=KEY-101&per_page=25&page=1&orderby=id&order=desc&status=publish'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
-			expect.objectContaining({ id: uuidFor(101), wooProductId: 101 }),
+			expect.objectContaining({ uuid: uuidFor(101), remoteId: remoteId(101) }),
 		]);
 		expect(result).toEqual({
 			taskId: 'products:search:KEY-101:windowed',
@@ -2023,8 +2024,8 @@ describe('createProductsSchedulerFetcher', () => {
 		);
 
 		expect(repository.upsertMany).toHaveBeenCalledWith([
-			expect.objectContaining({ id: uuidFor(101), wooProductId: 101 }),
-			expect.objectContaining({ id: uuidFor(201), wooProductId: 201 }),
+			expect.objectContaining({ uuid: uuidFor(101), remoteId: remoteId(101) }),
+			expect.objectContaining({ uuid: uuidFor(201), remoteId: remoteId(201) }),
 		]);
 	});
 
@@ -2185,7 +2186,7 @@ describe('createProductsSchedulerFetcher', () => {
 				requirementId: 'products.cart-items',
 				queryKey: 'products:ids:321,654',
 				ids: ['woo-product:321', 'woo-product:654'],
-				wooIds: [321, 654],
+				remoteIds: [321, 654].map(remoteId),
 				limit: 2,
 				mode: 'on-demand',
 			})
@@ -2195,8 +2196,8 @@ describe('createProductsSchedulerFetcher', () => {
 			'http://wcpos.local/wp-json/wcpos/v2/products?include=321%2C654&per_page=2&orderby=include'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
-			expect.objectContaining({ id: uuidFor(321), wooProductId: 321 }),
-			expect.objectContaining({ id: uuidFor(654), wooProductId: 654 }),
+			expect.objectContaining({ uuid: uuidFor(321), remoteId: remoteId(321) }),
+			expect.objectContaining({ uuid: uuidFor(654), remoteId: remoteId(654) }),
 		]);
 		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith({
 			collection: 'products',
@@ -2241,7 +2242,7 @@ describe('createProductsSchedulerFetcher', () => {
 				requirementId: 'products.cart-items',
 				queryKey: 'products:ids:321',
 				ids: ['woo-product:321'],
-				wooIds: [321],
+				remoteIds: [321].map(remoteId),
 				limit: 1,
 				mode: 'on-demand',
 			})
@@ -2253,8 +2254,8 @@ describe('createProductsSchedulerFetcher', () => {
 		expect(repository.upsertMany).not.toHaveBeenCalled();
 		expect(repository.removeMany).toHaveBeenCalledWith([
 			expect.objectContaining({
-				id: uuidFor(321),
-				wooProductId: 321,
+				uuid: uuidFor(321),
+				remoteId: remoteId(321),
 				payload: expect.objectContaining({ status: 'draft' }),
 			}),
 		]);
@@ -2266,9 +2267,9 @@ describe('createProductsSchedulerFetcher', () => {
 		});
 	});
 
-	it('reads the numeric server ids from task.wooIds, decoupled from the document-key encoding', async () => {
+	it('reads the numeric server ids from task.remoteIds, decoupled from the document-key encoding', async () => {
 		// ids are deliberately opaque (a uuid + garbage): the document keys are never
-		// parsed — wooIds is the only channel for the numeric server ids.
+		// parsed — remoteIds is the only channel for the numeric server ids.
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
@@ -2303,7 +2304,7 @@ describe('createProductsSchedulerFetcher', () => {
 				id: 'products:ids:deep-link:on-demand',
 				requirementId: 'products.cart-items',
 				queryKey: 'products:ids:deep-link',
-				wooIds: [321, 654],
+				remoteIds: [321, 654].map(remoteId),
 				ids: ['8e29c1a4-3b2d-4f6a-9c0e-1d2f3a4b5c6d', 'not-a-woo-product-key'],
 				limit: 2,
 				mode: 'on-demand',
@@ -2315,9 +2316,9 @@ describe('createProductsSchedulerFetcher', () => {
 		);
 	});
 
-	it('fails a targeted product task that is missing its wooIds channel (contract error, no reverse-parse)', async () => {
+	it('fails a targeted product task that is missing its remoteIds channel (contract error, no reverse-parse)', async () => {
 		// The `/^woo-product:(\d+)$/` reverse-parse scaffolding is deleted: a targeted task
-		// without wooIds is a seeder contract violation, surfaced — never silently parsed.
+		// without remoteIds is a seeder contract violation, surfaced — never silently parsed.
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
@@ -2341,7 +2342,7 @@ describe('createProductsSchedulerFetcher', () => {
 				})
 			)
 		).rejects.toThrow(
-			'Targeted product scheduler task is missing its wooIds channel: products:ids:321,654:on-demand'
+			'Targeted product scheduler task is missing its remoteIds channel: products:ids:321,654:on-demand'
 		);
 		expect(fetcher).not.toHaveBeenCalled();
 		expect(repository.upsertMany).not.toHaveBeenCalled();
@@ -2350,8 +2351,8 @@ describe('createProductsSchedulerFetcher', () => {
 
 describe('coverageRecordId', () => {
 	const doc = (over: Partial<ProductDocument>): ProductDocument => ({
-		id: 'woo-product:1',
-		wooProductId: 1,
+		uuid: 'woo-product:1',
+		remoteId: remoteId(1),
 		payload: {} as ProductDocument['payload'],
 		sync: {} as ProductDocument['sync'],
 		local: { dirty: false, pendingMutationIds: [] },
@@ -2359,15 +2360,15 @@ describe('coverageRecordId', () => {
 	});
 
 	it('keys product coverage by the stable wooId, decoupled from the storage id (uuid-ready)', () => {
-		// Simulate a post-emit-flip document: uuid STORAGE key, numeric wooProductId retained.
+		// Simulate a post-emit-flip document with a uuid storage key and remote identity.
 		// Coverage must use the wooId-key so the deep-link lookup (woo-product:<wooId>) matches.
 		const result = coverageRecordId(
-			doc({ id: '5b8e1a3c-2f4d-4a6b-9c8e-1d2f3a4b5c6d', wooProductId: 321 })
+			doc({ uuid: '5b8e1a3c-2f4d-4a6b-9c8e-1d2f3a4b5c6d', remoteId: remoteId(321) })
 		);
 		expect(result).toBe('woo-product:321'); // the wooId-key, NOT the uuid storage id
 	});
 
-	it('falls back to the storage id for a born-local product with no wooProductId', () => {
-		expect(coverageRecordId(doc({ id: 'local-keyed', wooProductId: null }))).toBe('local-keyed');
+	it('falls back to the storage id for a born-local product with no remoteId', () => {
+		expect(coverageRecordId(doc({ uuid: 'local-keyed', remoteId: null }))).toBe('local-keyed');
 	});
 });

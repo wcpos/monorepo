@@ -2,7 +2,8 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { isRxDocument } from '@wcpos/database';
+import { type EngineRecord, isEngineRxDocument } from '@wcpos/query';
+import { wooIdOf } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -16,7 +17,7 @@ import {
 } from './utils';
 import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';
-import { useCurrentOrder } from '../contexts/current-order';
+import { useCurrentOrderActions } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
@@ -28,22 +29,18 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 export const useAddProduct = () => {
 	const { addItemToOrder } = useAddItemToOrder();
 	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
-	const { currentOrder } = useCurrentOrder();
+	/**
+	 * Resolved when the button is pressed, NOT subscribed during render.
+	 *
+	 * Every product tile calls this hook, so subscribing to the current order here meant every
+	 * cart write re-rendered every visible tile — measured at 20 tiles x 4 writes = 80 commits
+	 * per add or remove. Nothing this hook does needs the order until the user acts.
+	 */
+	const { getCurrentOrder } = useCurrentOrderActions();
 	const { incrementLineItem } = useUpdateLineItem();
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
 	const metaDataKeys = useObservableEagerState(uiSettings.metaDataKeys$);
-
-	// Create order-specific logger
-	const orderLogger = React.useMemo(
-		() =>
-			cartLogger.with({
-				orderUUID: currentOrder.uuid,
-				orderID: currentOrder.id,
-				orderNumber: currentOrder.number,
-			}),
-		[currentOrder.uuid, currentOrder.id, currentOrder.number]
-	);
 
 	/**
 	 * Add product to order, or increment quantity if already in order
@@ -52,16 +49,30 @@ export const useAddProduct = () => {
 	 */
 	const addProduct = React.useCallback(
 		async (
-			data: ProductDocument | { id: number; [key: string]: any },
+			data: EngineRecord<'products'> | { id: number; [key: string]: any },
 			options?: { silent?: boolean }
 		) => {
 			let success;
-			let product = data;
+			let product: ProductDocument | { id: number; [key: string]: any };
+
+			const currentOrder = getCurrentOrder();
+			// Built here rather than memoised in render, so this hook reads nothing
+			// order-shaped until the press happens.
+			const orderLogger = cartLogger.with({
+				orderUUID: currentOrder.uuid,
+				orderID: currentOrder.id,
+				orderNumber: currentOrder.number,
+			});
 
 			// always make sure we have the latest product document
-			if (isRxDocument(data)) {
-				const latest = data.getLatest();
-				product = latest.toMutableJSON();
+			if (isEngineRxDocument(data)) {
+				const latest = data.getLatest() as unknown as EngineRecord<'products'>;
+				product = {
+					...latest.payload,
+					id: latest.remoteId === null ? 0 : wooIdOf(latest.remoteId),
+				};
+			} else {
+				product = data as { id: number; [key: string]: any };
 			}
 
 			const lineItems = currentOrder.getLatest().line_items ?? [];
@@ -110,17 +121,14 @@ export const useAddProduct = () => {
 				});
 				return false;
 			}
-
-			return Boolean(success);
 		},
 		[
-			currentOrder,
+			getCurrentOrder,
 			incrementLineItem,
 			metaDataKeys,
 			calculateLineItemTaxesAndTotals,
 			addItemToOrder,
 			t,
-			orderLogger,
 		]
 	);
 

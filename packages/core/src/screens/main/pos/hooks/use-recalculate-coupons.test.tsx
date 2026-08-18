@@ -41,7 +41,7 @@ jest.mock('../../hooks/use-collection', () => ({
 }));
 
 type EngineDocument = Record<string, unknown> & {
-	id: string;
+	uuid: string;
 	payload: Record<string, unknown>;
 };
 
@@ -89,23 +89,23 @@ const lineItems = [
 ] as NonNullable<import('@wcpos/database').OrderDocument['line_items']>;
 
 function installEngineFixture(couponPayload: Record<string, unknown>) {
-	const coupon = engineDocument({ id: 'coupon-uuid', wooId: 501, payload: couponPayload });
+	const coupon = engineDocument({ uuid: 'coupon-uuid', remoteId: '501', payload: couponPayload });
 	const products = [
 		engineDocument({
-			id: 'product-83',
-			wooProductId: 83,
+			uuid: 'product-83',
+			remoteId: '83',
 			payload: { id: 83, categories: [{ id: 19 }] },
 		}),
 		engineDocument({
-			id: 'product-82',
-			wooProductId: 82,
+			uuid: 'product-82',
+			remoteId: '82',
 			payload: { id: 82, categories: [{ id: 17 }] },
 		}),
 	];
 	const categories = [
-		engineDocument({ id: 'category-16', wooId: 16, payload: { id: 16, parent: 0 } }),
-		engineDocument({ id: 'category-17', wooId: 17, payload: { id: 17, parent: 16 } }),
-		engineDocument({ id: 'category-19', wooId: 19, payload: { id: 19, parent: 0 } }),
+		engineDocument({ uuid: 'category-16', remoteId: '16', payload: { id: 16, parent: 0 } }),
+		engineDocument({ uuid: 'category-17', remoteId: '17', payload: { id: 17, parent: 16 } }),
+		engineDocument({ uuid: 'category-19', remoteId: '19', payload: { id: 19, parent: 0 } }),
 	];
 	const couponFind = jest.fn(() => ({ exec: async () => [coupon] }));
 	const productFind = jest.fn(() => ({ exec: async () => products }));
@@ -165,7 +165,7 @@ describe('useRecalculateCoupons engine reads', () => {
 
 		await expect(result.current.recalculate(lineItems, couponLines)).resolves.toEqual(expected);
 		expect(reads.productFind).toHaveBeenCalledWith({
-			selector: { wooProductId: { $in: [83, 82] } },
+			selector: { remoteId: { $in: ['83', '82'] } },
 		});
 		expect(reads.categoryFind).toHaveBeenCalledWith();
 	});

@@ -60,6 +60,25 @@ export function generateSubscriberId(
 }
 
 /**
+ * The document fields this metadata is built from.
+ *
+ * Spelled out as primitives rather than taking the site/store documents, because the caller
+ * has to SUBSCRIBE to each of these for the metadata to stay current. Passing the documents
+ * hid that: the provider memoised on document identity and read the fields imperatively, so
+ * a licence renewal or a plugin upgrade written to the same document never regenerated the
+ * metadata and never resynced it to Novu.
+ */
+export interface SubscriberMetadataFields {
+	siteUrl?: string;
+	license?: { key?: string; status?: string };
+	wcposVersion?: string;
+	wcposProVersion?: string;
+	storeId?: number | string;
+	storeLocalID?: string;
+	storeLocale?: string;
+}
+
+/**
  * Generates subscriber metadata for Novu.
  *
  * This metadata is used for:
@@ -67,25 +86,23 @@ export function generateSubscriberId(
  * - Analytics and segmentation
  * - Debugging and support
  *
- * @param site - The WordPress site document
- * @param store - The store document
+ * @param fields - Subscribed field values from the site and store documents
  * @returns Metadata object for Novu subscriber
  */
 export function generateSubscriberMetadata(
-	site: SiteDocument,
-	store: StoreDocument
+	fields: SubscriberMetadataFields
 ): NovuSubscriberMetadata {
 	return {
-		domain: extractDomain(site.url || ''),
+		domain: extractDomain(fields.siteUrl || ''),
 		// Use nullish coalescing to preserve legitimate 0 values
-		storeId: store.id ?? store.localID ?? '',
-		licenseKey: site.license?.key,
-		licenseStatus: site.license?.status,
+		storeId: fields.storeId ?? fields.storeLocalID ?? '',
+		licenseKey: fields.license?.key,
+		licenseStatus: fields.license?.status,
 		appVersion: AppInfo.version,
 		platform: AppInfo.platform,
-		wcposVersion: site.wcpos_version,
-		wcposProVersion: site.wcpos_pro_version,
-		locale: store.locale,
+		wcposVersion: fields.wcposVersion,
+		wcposProVersion: fields.wcposProVersion,
+		locale: fields.storeLocale,
 	};
 }
 
