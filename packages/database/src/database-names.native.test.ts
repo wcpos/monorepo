@@ -1,5 +1,4 @@
 import {
-	getFastStoreDatabaseName,
 	getStoreDatabaseName,
 	getUserDatabaseName,
 	isLegacyAppDatabaseName,
@@ -15,7 +14,6 @@ describe('native database generation', () => {
 		expect(NATIVE_DATABASE_GENERATION).toBe('v7');
 		expect(getUserDatabaseName()).toBe('wcposusers_v7');
 		expect(getStoreDatabaseName('abc123')).toBe('store_v7_abc123');
-		expect(getFastStoreDatabaseName('abc123')).toBe('fast_store_v7_abc123');
 	});
 
 	it.each(['wcposusers_v6', 'store_v6_abc123', 'fast_store_v6_abc123'])(

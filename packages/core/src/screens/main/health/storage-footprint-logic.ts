@@ -57,7 +57,6 @@ export type StorageContext = {
 	/** Exact database names of the active sign-in (safe-name comparison is done here). */
 	activeScopeDbName: string | null;
 	storeDbName: string | null;
-	fastStoreDbName: string | null;
 	userDbName: string | null;
 	/** siteHashFor() of every site the user database knows. */
 	knownSiteHashes: ReadonlySet<string>;
@@ -103,12 +102,9 @@ export function classifyStorageEntries(
 	const otherStoreKeys = new Set<string>();
 
 	// This store's databases, each with its own data/search/bookkeeping split.
-	// The fast store is a working mirror of the synced data, so ALL of it is
-	// bookkeeping — counting it as data would double what the table itemizes.
 	const ownDbs = [
 		{ name: context.activeScopeDbName, dataCounts: true },
 		{ name: context.storeDbName, dataCounts: false },
-		{ name: context.fastStoreDbName, dataCounts: false },
 		{ name: context.userDbName, dataCounts: false },
 	].filter((db): db is { name: string; dataCounts: boolean } => db.name !== null);
 

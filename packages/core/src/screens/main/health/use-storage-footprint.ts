@@ -25,7 +25,7 @@ export type StorageFootprintSummary = {
  */
 export function useStorageFootprint(): StorageFootprintSummary | null {
 	const { engine } = useQueryRuntime();
-	const { userDB, storeDB, fastStoreDB } = useAppState();
+	const { userDB, storeDB } = useAppState();
 	// One engine hosts multiple scopes: a same-site store switch changes
 	// `activeScopeId` without changing the engine's identity, so the probe
 	// must key on the scope, not just the engine.
@@ -69,7 +69,6 @@ export function useStorageFootprint(): StorageFootprintSummary | null {
 			const breakdown = classifyStorageEntries(footprint.entries, {
 				activeScopeDbName,
 				storeDbName: storeDB?.name ?? null,
-				fastStoreDbName: fastStoreDB?.name ?? null,
 				userDbName: userDB?.name ?? null,
 				knownSiteHashes,
 			});
@@ -89,7 +88,7 @@ export function useStorageFootprint(): StorageFootprintSummary | null {
 		return () => {
 			cancelled = true;
 		};
-	}, [engine, activeScopeId, userDB, storeDB, fastStoreDB]);
+	}, [engine, activeScopeId, userDB, storeDB]);
 
 	return measurement?.scopeId === activeScopeId ? measurement.summary : null;
 }

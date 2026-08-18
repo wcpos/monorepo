@@ -24,7 +24,7 @@ describe('reset-collection plugin', () => {
 				})
 		);
 		const collection = {
-			name: 'products',
+			name: 'logs',
 			database: { name: 'store_test', collections: {}, addCollections },
 		} as unknown as RxCollection;
 		const hook = resetCollectionPlugin.hooks?.postCloseRxCollection?.after as unknown as (
@@ -32,7 +32,7 @@ describe('reset-collection plugin', () => {
 		) => Promise<void>;
 
 		const hookResult = hook(collection);
-		finishAddCollections({ products: collection });
+		finishAddCollections({ logs: collection });
 
 		await expect(hookResult).resolves.toBeUndefined();
 		expect(addCollections).toHaveBeenCalledTimes(1);

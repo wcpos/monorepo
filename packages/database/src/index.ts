@@ -3,8 +3,8 @@ import './types.d';
 
 import './plugins';
 
-export { createUserDB, createStoreDB, createTemporaryDB, createFastStoreDB } from './create-db';
-export { userCollections, storeCollections, syncCollections } from './collections';
+export { createUserDB, createStoreDB, createTemporaryDB } from './create-db';
+export { userCollections, storeCollections } from './collections';
 export { sanitizeWPCredentialsData } from './collections/wp-credentials';
 export {
 	CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY,
