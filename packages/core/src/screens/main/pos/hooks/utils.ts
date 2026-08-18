@@ -232,7 +232,7 @@ export const convertProductToLineItemWithoutTax = (
 	}
 
 	new_meta_data.push({
-		key: '_woocommerce_pos_data',
+		key: POS_META_KEYS.posData,
 		value: posData,
 	});
 
@@ -293,7 +293,7 @@ export const convertVariationToLineItemWithoutTax = (
 	const new_meta_data: MetaData = [...meta_data];
 
 	new_meta_data.push({
-		key: '_woocommerce_pos_data',
+		key: POS_META_KEYS.posData,
 		value: { price, regular_price, tax_status },
 	});
 

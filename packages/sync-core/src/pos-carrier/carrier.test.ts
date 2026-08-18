@@ -1,5 +1,10 @@
 import { createFakeCarrier } from './fake';
-import { type PosCarrier, wooMetaCarrier } from './carrier';
+import { POS_META_KEYS, type PosCarrier, wooMetaCarrier } from './carrier';
+
+it('freezes POS metadata wire keys', () => {
+	expect(POS_META_KEYS.posData).toBe('_woocommerce_pos_data');
+	expect(POS_META_KEYS.lineUuid).toBe('_woocommerce_pos_uuid');
+});
 
 type CarrierFactory = () => PosCarrier;
 

@@ -11,6 +11,17 @@ on:
         options:
           - preview
           - production
+      lane:
+        description: >-
+          Which lane's E2E store to use. `auto` reads the PR base / branch name,
+          which cannot see the lane of a feature branch dispatched by hand.
+        type: choice
+        required: false
+        default: auto
+        options:
+          - auto
+          - main
+          - next
       skip_e2e:
         description: Skip E2E tests
         type: boolean
@@ -166,15 +177,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 4, not 6. Each shard carries ~170s of fixed overhead (checkout,
-        # install, browsers, health check, auth bootstrap), so shards are not
-        # free: measured on run 31429108622 the six shards spent ~17 of their
-        # ~25 runner-minutes before running a test. Four duration-balanced shards
-        # finish sooner in wall-clock than six COUNT-balanced ones did, for a
-        # quarter less runner time. Change this number alone — the shard plan
-        # rebalances itself.
-        shardIndex: [1, 2, 3, 4]
-        shardTotal: [4]
+        # dev-pro does not sustain four concurrent write-heavy shards. Keep
+        # four on dev-next, but cap main/dev-pro at two.
+        shardIndex: ${{ fromJSON((inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && '[1, 2, 3, 4]' || '[1, 2]') }}
+        shardTotal: ${{ fromJSON((inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && '[4]' || '[2]') }}
     steps:
       - name: 🏗 Setup repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -197,7 +203,10 @@ jobs:
             playwright-${{ runner.os }}-
 
       - name: 🎭 Install Playwright browsers
-        run: cd apps/main && npx playwright install --with-deps chromium
+        # No --with-deps: GitHub's Ubuntu images already carry Chrome's system
+        # libraries, and the apt run it triggers goes through the same flaky
+        # azure mirror that wedged a shard for 36 minutes on 2026-08-18.
+        run: cd apps/main && npx playwright install chromium
 
       - name: 🏥 Health check deployment
         run: |
@@ -244,6 +253,31 @@ jobs:
         env:
           BASE_URL: ${{ needs.deploy.outputs.deployment_url }}
           CI: true
+          # Lane → store. Owner ruling (2026-08-18): main may test against
+          # dev-free and dev-pro and NOTHING else; next has exactly one site,
+          # dev-next, which runs the next branch of both plugins and therefore
+          # serves both variants (the free matrix gets its licence masked by
+          # stubStoreVersionForE2E, as it already does on every lane).
+          #
+          # `inputs.lane` wins when a human dispatches: for workflow_dispatch,
+          # base_ref is empty and ref_name is the feature branch, so `auto` would
+          # read every next-lane feature branch as main and recreate exactly the
+          # cross-lane testing this change removes.
+          #
+          # These MUST be set here. playwright.config used to fall back to
+          # dev-next when they were absent, and since this job never set them,
+          # the whole main lane silently gated 1.9.x against the 1.10 store
+          # while dev-free coverage was switched off entirely. The config now
+          # fails the job rather than guessing, so an unset value is loud.
+          E2E_STORE_URL_PRO: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}
+          # DEFERRED (2026-08-18, #1277): naming a free store is what enables the
+          # free matrix, and dev-free cannot pass it yet — every free spec times
+          # out in waitForResponse though the store answers every endpoint the
+          # tests use in ~0.4s, including order creation. Re-enabling is one line
+          # here, deliberately left undone until #1277 closes rather than merged
+          # red. The pro map above is the fix that matters: it is what moves the
+          # main lane off dev-next.
+          # E2E_STORE_URL_FREE: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-free.wcpos.com' }}
           # The shard index no longer reaches Playwright via --shard, but the
           # cashier-slot isolation is keyed on it. Without this every shard would
           # normalize to slot 0 and share one cashier.
