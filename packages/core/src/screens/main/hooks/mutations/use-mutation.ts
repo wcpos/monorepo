@@ -23,7 +23,6 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { findEngineResident, insertEngineResident, useLocalMutation } from './use-local-mutation';
 import { useT } from '../../../../contexts/translations';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
-import { CollectionKey, useCollection } from '../use-collection';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'document']);
 
@@ -31,7 +30,7 @@ type Document =
 	OrderDocument | ProductDocument | CustomerDocument | ProductVariationDocument | CouponDocument;
 
 interface Props {
-	collectionName: CollectionKey;
+	collectionName: WriteableCollection;
 	endpoint?: string;
 }
 
@@ -57,7 +56,20 @@ function isWriteableCollection(name: string): name is WriteableCollection {
 export const useMutation = ({ collectionName, endpoint }: Props) => {
 	const runtime = useQueryRuntime();
 	const t = useT();
-	const { collectionLabel } = useCollection(collectionName);
+	const collectionLabel = React.useMemo(() => {
+		switch (collectionName) {
+			case 'products':
+				return t('common.product');
+			case 'variations':
+				return t('common.variation');
+			case 'customers':
+				return t('common.customer');
+			case 'orders':
+				return t('common.order');
+			default:
+				return t('common.document');
+		}
+	}, [collectionName, t]);
 	const { localPatch } = useLocalMutation();
 
 	const handleError = React.useCallback(

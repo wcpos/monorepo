@@ -5,22 +5,15 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { defaultConfig } from './adapters/default';
 import { ephemeralStorageConfig } from './adapters/ephemeral';
-import { fastStorageConfig } from './adapters/fast';
 import {
 	StoreCollections,
 	storeCollections,
-	SyncCollections,
-	syncCollections,
 	TemporaryCollections,
 	temporaryCollections,
 	UserCollections,
 	userCollections,
 } from './collections';
-import {
-	getFastStoreDatabaseName,
-	getStoreDatabaseName,
-	getUserDatabaseName,
-} from './database-names';
+import { getStoreDatabaseName, getUserDatabaseName } from './database-names';
 
 const dbLogger = getLogger(['wcpos', 'db', 'create']);
 
@@ -67,34 +60,6 @@ export const createStoreDB = async (id: string) => {
 		return db;
 	} catch (error) {
 		dbLogger.error('Failed to create store database', {
-			showToast: true,
-			code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
-			context: {
-				databaseName: name,
-				storeId: id,
-				error: error instanceof Error ? error.message : String(error),
-			},
-		});
-	}
-};
-
-/**
- * creates the Sync State database
- */
-export const createFastStoreDB = async (id: string) => {
-	const name = getFastStoreDatabaseName(id);
-	try {
-		const db = await createRxDatabase<SyncCollections>({
-			name,
-			allowSlowCount: true,
-			...fastStorageConfig,
-			localDocuments: true,
-			closeDuplicates: true, // Allow returning existing DB when switching back to a store
-		});
-		await db?.addCollections(syncCollections);
-		return db;
-	} catch (error) {
-		dbLogger.error('Failed to create fast store database', {
 			showToast: true,
 			code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 			context: {

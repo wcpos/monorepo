@@ -1,4 +1,3 @@
-import { storeCollections } from './index';
 import { taxRatesLiteral } from './schemas/tax-rates';
 
 describe('tax rate schema', () => {
@@ -11,42 +10,8 @@ describe('tax rate schema', () => {
 	});
 });
 
-describe('taxes migration strategy', () => {
+describe('taxes schema', () => {
 	it('bumps taxes to schema version 1', () => {
 		expect(taxRatesLiteral.version).toBe(1);
-	});
-
-	it('carries v0 documents over to v1, preserving an empty country', () => {
-		const migrated = storeCollections.taxes.migrationStrategies?.[1]?.({
-			uuid: '1',
-			id: 1,
-			country: '',
-			name: 'Impuesto',
-			rate: '10.0000',
-		} as any);
-
-		expect(migrated).toMatchObject({ uuid: '1', id: 1, country: '', name: 'Impuesto' });
-	});
-
-	it('normalizes a missing country to an empty string', () => {
-		const migrated = storeCollections.taxes.migrationStrategies?.[1]?.({
-			uuid: '2',
-			id: 2,
-			name: 'No Country',
-		} as any);
-
-		expect(migrated).toMatchObject({ uuid: '2', country: '' });
-	});
-
-	it('preserves valid ISO country codes during migration', () => {
-		const migrated = storeCollections.taxes.migrationStrategies?.[1]?.({
-			uuid: '3',
-			id: 3,
-			country: 'US',
-			name: 'US Tax',
-			rate: '8.5000',
-		} as any);
-
-		expect(migrated).toMatchObject({ uuid: '3', country: 'US' });
 	});
 });

@@ -1,11 +1,6 @@
 import * as Crypto from 'expo-crypto';
 
-import {
-	createFastStoreDB,
-	createStoreDB,
-	createUserDB,
-	sanitizeWPCredentialsData,
-} from '@wcpos/database';
+import { createStoreDB, createUserDB, sanitizeWPCredentialsData } from '@wcpos/database';
 import type { UserDatabase } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 import { Platform } from '@wcpos/utils/platform';
@@ -172,7 +167,7 @@ export const hydrateUserSession = async (
 	userDB: UserDatabase,
 	sessionIds: { siteID?: string; wpCredentialsID?: string; storeID?: string }
 ) => {
-	let site, wpCredentials, store, storeDB, fastStoreDB, extraData;
+	let site, wpCredentials, store, storeDB, extraData;
 
 	/**
 	 * Becareful! RxDB will return a value if primary ID is empty, it sucks, I hate it.
@@ -192,17 +187,11 @@ export const hydrateUserSession = async (
 			throw new Error('Failed to create store database');
 		}
 
-		const fastDb = await createFastStoreDB(store.localID!);
-		if (!fastDb) {
-			throw new Error('Failed to create fast store database');
-		}
-
 		storeDB = db;
-		fastStoreDB = fastDb;
 		extraData = await db.addState('data_v2');
 	}
 
-	return { site, wpCredentials, store, storeDB, fastStoreDB, extraData };
+	return { site, wpCredentials, store, storeDB, extraData };
 };
 
 export async function switchUserSessionStore(
@@ -240,7 +229,6 @@ export interface HydrationContext {
 	wpCredentials?: any;
 	store?: any;
 	storeDB?: any;
-	fastStoreDB?: any;
 	extraData?: any;
 	stores?: any[];
 	storeLocalIDs?: string[];

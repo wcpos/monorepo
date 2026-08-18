@@ -8,7 +8,6 @@ const ACTIVE_SCOPE = 'pos_v2_abcdefabcdef_s578_c12';
 const CONTEXT: StorageContext = {
 	activeScopeDbName: ACTIVE_SCOPE,
 	storeDbName: 'store_v6_local1',
-	fastStoreDbName: 'fast_store_v6_local1',
 	userDbName: 'wcposusers_v6',
 	knownSiteHashes: new Set(['abcdefabcdef', 'feedfeedfeed']),
 };
@@ -57,21 +56,19 @@ describe('classifyStorageEntries', () => {
 				// Search indexes, wherever they live:
 				entry(`rxdb-${ACTIVE_SCOPE}-products-search-v2-en_flexsearch-0`, 20),
 				entry('rxdb-store_v6_local1-logs-search-v2-en_flexsearch-0', 5),
-				// The store db (logs, settings) and the fast mirror are bookkeeping —
-				// the mirror duplicates synced docs the table already itemizes:
+				// The store and user databases hold local bookkeeping:
 				entry('rxdb-store_v6_local1-logs-0', 30),
-				entry('rxdb-fast_store_v6_local1-orders-0', 90),
 				entry('rxdb-wcposusers_v6-sites-0', 2),
 			],
 			CONTEXT
 		);
 		expect(breakdown.activeDataBytes).toBe(150);
 		expect(breakdown.searchIndexBytes).toBe(25);
-		expect(breakdown.bookkeepingBytes).toBe(133);
+		expect(breakdown.bookkeepingBytes).toBe(43);
 		expect(breakdown.otherStoresBytes).toBe(0);
 		expect(breakdown.orphanedBytes).toBe(0);
 		expect(breakdown.unknownBytes).toBe(0);
-		expect(breakdown.measuredTotalBytes).toBe(308);
+		expect(breakdown.measuredTotalBytes).toBe(218);
 	});
 
 	it('buckets other cashiers, other stores and signed-out sites', () => {

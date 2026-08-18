@@ -14,7 +14,6 @@ import { RxDBGenerateIdPlugin } from './generate-id';
 import { parseRestResponsePlugin } from './parse-rest-response';
 import { logsLiteral } from './schemas/logs';
 import { productsLiteral } from './schemas/products';
-import { syncLiteral } from './schemas/sync';
 import { variationsLiteral } from './schemas/variations';
 import { searchPlugin } from '../../src/search';
 
@@ -58,16 +57,6 @@ const variations: RxCollectionCreator<ProductVariationDocumentType> = {
 };
 
 /**
- * Sync
- */
-const syncTyped = toTypedRxJsonSchema(syncLiteral);
-const syncSchema: RxJsonSchema<SyncDocumentType> = syncLiteral;
-type SyncDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof syncTyped>;
-export type SyncDocument = RxDocument<SyncDocumentType>;
-export type SyncCollection = RxCollection<SyncDocumentType>;
-const sync: RxCollectionCreator<SyncDocumentType> = { schema: syncSchema };
-
-/**
  * Logs
  */
 const logsTyped = toTypedRxJsonSchema(logsLiteral);
@@ -104,21 +93,6 @@ export async function createStoreDatabase(): Promise<RxDatabase> {
 	// Add mock reset$ observable for tests that use the reset collection plugin
 	// This simulates the behavior of the reset-collection plugin
 	(db as any).reset$ = new Subject<RxCollection>();
-
-	return db;
-}
-
-/**
- *
- */
-export async function createSyncDatabase(): Promise<RxDatabase> {
-	const db = await createRxDatabase({
-		name: generateUniqueDbName('syncdb'),
-		storage: getRxStorageMemory(),
-		allowSlowCount: true,
-	});
-
-	const collections = await db.addCollections({ products: sync, variations: sync });
 
 	return db;
 }

@@ -9,6 +9,7 @@ export {
 	adapterDerivedFieldsFor,
 	COLLECTION_VOCABULARY,
 	engineCollectionNameFor,
+	LEGACY_SEARCH_FIELDS,
 	promotedColumnsFor,
 	resolveLegacyField,
 	sortAliasFor,

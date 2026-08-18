@@ -3,7 +3,6 @@ import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { wrappedValidateAjvStorage } from 'rxdb/plugins/validate-ajv';
 
-import { storeCollections } from './index';
 import { sanitizeProductData } from './products';
 import { productsLiteral } from './schemas/products';
 
@@ -96,27 +95,9 @@ describe('sanitizeProductData', () => {
 	});
 });
 
-describe('products migration strategy', () => {
+describe('products schema', () => {
 	it('bumps products to schema version 6', () => {
 		expect(productsLiteral.version).toBe(6);
-	});
-
-	it('sanitizes v5 product documents during v6 migration', () => {
-		const migrated = storeCollections.products.migrationStrategies?.[6]?.({
-			uuid: 'product-uuid',
-			id: '1',
-			price: '9.99',
-			meta_data: [{ id: '11', key: '_pos_visible', value: { enabled: true } }],
-			_links: { self: [{ href: 'https://example.test/product/1' }] },
-		} as any);
-
-		expect(migrated).toMatchObject({
-			uuid: 'product-uuid',
-			id: 1,
-			meta_data: [{ id: 11, key: '_pos_visible', value: { enabled: true } }],
-			links: { self: [{ href: 'https://example.test/product/1' }] },
-		});
-		expect(migrated).not.toHaveProperty('_links');
 	});
 });
 

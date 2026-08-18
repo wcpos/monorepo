@@ -23,7 +23,6 @@ const mockUserDB = {
 	sites: { find: () => ({ exec: mockSitesExec }) },
 };
 const mockStoreDB = { name: 'store_v6_active' };
-const mockFastStoreDB = { name: 'fast_store_v6_active' };
 
 jest.mock('@wcpos/database', () => ({
 	measureAppStorage: () => mockMeasureAppStorage(),
@@ -39,7 +38,6 @@ jest.mock('../../../contexts/app-state', () => ({
 	useAppState: () => ({
 		userDB: mockUserDB,
 		storeDB: mockStoreDB,
-		fastStoreDB: mockFastStoreDB,
 	}),
 }));
 jest.mock('../hooks/use-engine-monitor', () => ({

@@ -90,7 +90,6 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 			wpCredentials: undefined,
 			store: undefined,
 			storeDB: undefined,
-			fastStoreDB: undefined,
 			extraData: undefined,
 		});
 	}, [state.appState, updateAppState]);

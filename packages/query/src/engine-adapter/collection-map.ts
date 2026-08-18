@@ -20,6 +20,34 @@ export type LegacyCollectionName =
 
 export type EngineCollectionName = SyncCollectionName;
 
+export const LEGACY_SEARCH_FIELDS = {
+	products: ['name', 'sku', 'barcode'],
+	variations: ['sku', 'barcode'],
+	orders: [
+		'number',
+		'billing.first_name',
+		'billing.last_name',
+		'billing.email',
+		'billing.company',
+		'billing.phone',
+	],
+	customers: [
+		'first_name',
+		'last_name',
+		'email',
+		'username',
+		'billing.first_name',
+		'billing.last_name',
+		'billing.email',
+		'billing.company',
+		'billing.phone',
+	],
+	'products/categories': ['name'],
+	'products/tags': ['name'],
+	'products/brands': ['name'],
+	coupons: ['code', 'description'],
+} as const satisfies Partial<Record<LegacyCollectionName, readonly string[]>>;
+
 type CollectionVocabularyEntry = {
 	legacyName: LegacyCollectionName;
 	telemetryName: string;
