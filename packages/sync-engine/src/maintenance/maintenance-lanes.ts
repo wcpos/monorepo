@@ -56,6 +56,7 @@ import { RxQueryTotalRequestStateRepository } from '../rx-query-total-request-st
 import { RxQueryTotalCacheRepository } from '../collections/rx-query-total-cache-repository';
 import { withLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
 import { type CustomerTrickleStateStore, tickCustomerTrickle } from './customer-trickle';
+import { tickVariationPrefetch, type VariationPrefetchStateStore } from './variation-prefetch';
 import {
 	laneRegistryEntry,
 	type MaintenanceLaneName,
@@ -135,6 +136,8 @@ type MaintenanceLaneDeps = {
 	censusFreshForMs: number;
 	customerTrickleStateFor: (scopeId: string) => CustomerTrickleStateStore;
 	customerCensusTotal: () => Promise<CensusTotal | null>;
+	variationPrefetchStateFor: (scopeId: string) => VariationPrefetchStateStore;
+	variationCensusTotal: () => Promise<CensusTotal | null>;
 	hasPendingInteractiveWork: () => boolean;
 	lastUserActivityMs?: () => number;
 	emitEvent: (event: QueryTotalCacheEvent) => void;
@@ -143,10 +146,12 @@ type MaintenanceLaneDeps = {
 	isServerRetryAfterActive?: (atMs: number) => boolean;
 };
 
-/** Per-tick options — only the query-total lane reads them (the scoped manual check). */
+/** Per-tick options — only the query-total lane reads them (manual census checks). */
 export type MaintenanceLaneTickOptions = {
 	/** Probe this one census key now, bypassing its freshness window; skip the full scan. */
 	forceCensusCollection?: SyncCollectionName;
+	/** Bypass every census entry's freshness window — the manual "check everything" path. */
+	forceAllCensus?: boolean;
 };
 
 export type MaintenanceLane = {
@@ -201,6 +206,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 	const now = deps.now ?? (() => Date.now());
 	const pressureDeferredLanes = new Set<MaintenanceLaneName>([
 		'customer-trickle',
+		'variation-prefetch',
 		'existence-prime',
 		'existence-reconcile',
 		'query-total-retry',
@@ -316,6 +322,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 									...(options?.forceCensusCollection !== undefined
 										? { forceCensusCollection: options.forceCensusCollection }
 										: {}),
+									...(options?.forceAllCensus === true ? { forceAllCensus: true } : {}),
 								});
 								if (bodyReport.status !== 'skipped' && pressureDeferredLanes.has(name)) {
 									lastRanAtMs.set(name, now());
@@ -519,6 +526,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 					trigger: 'query-total',
 					create: () => new RxQueryTotalCacheRepository(db as never),
 				});
+				const censusQueryKeys = SUPPORTED_CENSUS_COLLECTIONS.map(censusQueryKey);
 				const forced = tick.forceCensusCollection;
 				if (forced !== undefined) {
 					const queryKey = censusQueryKey(forced);
@@ -541,7 +549,6 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 						await stateRepository.claimNew(runnableState);
 					}
 				} else {
-					const censusQueryKeys = SUPPORTED_CENSUS_COLLECTIONS.map(censusQueryKey);
 					const [censusCacheEntries, censusRequestStates] = await Promise.all([
 						cacheRepository.readForQueryKeys(censusQueryKeys),
 						stateRepository.readForQueryKeys(censusQueryKeys),
@@ -555,9 +562,19 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 					for (const collection of SUPPORTED_CENSUS_COLLECTIONS) {
 						const queryKey = censusQueryKey(collection);
 						const cacheEntry = censusCacheByKey.get(queryKey);
-						if (cacheEntry && cacheEntry.freshUntilMs > nowMs) continue;
+						if (!tick.forceAllCensus && cacheEntry && cacheEntry.freshUntilMs > nowMs) continue;
 						const currentState = censusStateByKey.get(queryKey);
-						if (currentState && currentState.status !== 'idle') continue;
+						// A force-all wakes backoff and expired leases, but never steals a
+						// live claim: that owner's result will land in the shared cache.
+						if (
+							currentState &&
+							(tick.forceAllCensus
+								? currentState.status === 'in-flight' &&
+									currentState.claimedUntilMs !== null &&
+									currentState.claimedUntilMs > nowMs
+								: currentState.status !== 'idle')
+						)
+							continue;
 						const runnableState = censusRunnableState(collection, nowMs);
 						if (currentState) {
 							await stateRepository.wake(currentState, runnableState);
@@ -586,10 +603,11 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 							? QUERY_TOTAL_FRESH_FOR_MS
 							: deps.censusFreshForMs,
 					maxRequests:
-						forced !== undefined || tick.starvation
+						forced !== undefined || (tick.starvation && !tick.forceAllCensus)
 							? 1
 							: laneRegistryEntry('query-total-retry').maxRequestsPerTick!,
 					...(forced !== undefined ? { forceQueryKey: censusQueryKey(forced) } : {}),
+					...(tick.forceAllCensus ? { ignoreFreshQueryKeys: censusQueryKeys } : {}),
 				});
 				if (result.cacheEntries.length > 0) {
 					deps.emitEvent({ type: 'query-total-cache', entries: result.cacheEntries });
@@ -597,8 +615,12 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				// The periodic scan reports failures in its summary and lets backoff retry;
 				// a forced check is a direct user action, so its failure must surface as a
 				// lane error (status + lastError + events), not a healthy-looking count.
-				if (forced !== undefined && result.failed > 0) {
-					throw new Error(`Census refresh failed for ${forced}`);
+				if ((forced !== undefined || tick.forceAllCensus) && result.failed > 0) {
+					throw new Error(
+						forced === undefined
+							? 'Census refresh failed during full refresh'
+							: `Census refresh failed for ${forced}`
+					);
 				}
 				if (
 					result.succeeded === 0 &&
@@ -633,6 +655,34 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		}
 		return {
 			summary: `Customer trickle: page ${result.page}, ${result.rows} customers`,
+		};
+	});
+	const variationPrefetch = lane('variation-prefetch', async (db, scopeId, signal, fetcher) => {
+		const barcodeSelectors: BarcodeSelectorsReader | undefined =
+			deps.barcodeSelectorsFor === undefined
+				? undefined
+				: () => deps.barcodeSelectorsFor!(scopeId) ?? undefined;
+		const result = await tickVariationPrefetch({
+			database: db,
+			fetcher,
+			syncBaseUrl: deps.syncBaseUrl,
+			diagnostics: deps.diagnostics,
+			...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
+			...(barcodeSelectors !== undefined ? { barcodeSelectors } : {}),
+			stateStore: deps.variationPrefetchStateFor(scopeId),
+			hasPendingWork: deps.hasPendingInteractiveWork,
+			variationCensusTotal: deps.variationCensusTotal,
+			now,
+			...(deps.lastUserActivityMs !== undefined
+				? { lastUserActivityMs: deps.lastUserActivityMs }
+				: {}),
+			signal,
+		});
+		if (result.status !== 'ran') {
+			return { summary: null, status: 'skipped', reason: result.reason };
+		}
+		return {
+			summary: `Variation prefetch: parent ${result.parentWooId ?? 'none'}, ${result.requestedIds} requested`,
 		};
 	});
 
@@ -710,6 +760,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		referenceSeed,
 		queryTotalRetry,
 		customerTrickle,
+		variationPrefetch,
 		coverageCompaction,
 		existencePrime,
 		existenceReconcile,

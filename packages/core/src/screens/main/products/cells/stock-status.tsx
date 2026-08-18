@@ -2,10 +2,10 @@ import * as React from 'react';
 
 import { ButtonPill } from '@wcpos/components/button';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { useStockStatusLabel } from '../../hooks/use-stock-status-label';
 
-import type { CellContext } from '@tanstack/react-table';
 import type { QueryStateActions } from '../../../../query';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;

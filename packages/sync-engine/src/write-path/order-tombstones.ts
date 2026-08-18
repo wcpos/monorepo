@@ -6,7 +6,7 @@ import type { OrderDocument, RemoteId } from '@wcpos/sync-core';
  * Orders are keyed by their server uuid (P0-1), so a Woo id can no longer address a row
  * directly (the old `woo-order:<id>` key is gone); match the retained `remoteId` field
  * instead. A born-local row with no `remoteId` is never matched by an upstream Woo-id
- * delete. Mirrors productStorageIdsForWooDeletes.
+ * delete.
  */
 export function orderStorageIdsForWooDeletes(
 	docs: Pick<OrderDocument, 'uuid' | 'remoteId'>[],

@@ -4,7 +4,12 @@ import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 import { of } from 'rxjs';
 
-import { createTokenRefreshHandler, useHttpClient } from '@wcpos/hooks/use-http-client';
+import {
+	createTokenRefreshHandler,
+	PREFLIGHT_BLOCK,
+	requestStateManager,
+	useHttpClient,
+} from '@wcpos/hooks/use-http-client';
 import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -13,6 +18,16 @@ import { useAppState } from '../contexts/app-state';
 import { mergeStoresWithResponse } from '../utils/merge-stores';
 
 const appLogger = getLogger(['wcpos', 'app', 'validation']);
+
+/**
+ * A request blocked by the sleeping pre-flight check (tab hidden) is expected
+ * control flow, not an auth failure — the block codes are explicitly documented
+ * as never-to-be-persisted log codes (see request-state-manager.ts). Validation
+ * is deferred to the wake retry instead of being reported as an error.
+ */
+const isAsleepBlock = (error: unknown): boolean =>
+	(error as { isPreFlightBlocked?: boolean })?.isPreFlightBlocked === true &&
+	(error as { blockCode?: string })?.blockCode === PREFLIGHT_BLOCK.ASLEEP;
 
 interface Props {
 	site: import('@wcpos/database').SiteDocument;
@@ -79,6 +94,14 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 
 	// Add a ref to track the last validation attempt to prevent duplicate validations
 	const lastValidationKey = React.useRef<string>('');
+
+	// A validation attempt blocked while the tab was hidden clears
+	// lastValidationKey and waits here: waking bumps the tick, re-running the
+	// effect, and the key guard skips the re-run when nothing was deferred.
+	const [wakeTick, setWakeTick] = React.useState(0);
+	React.useEffect(() => {
+		return requestStateManager.onWake(() => setWakeTick((tick) => tick + 1));
+	}, []);
 
 	React.useEffect(() => {
 		// Create a unique key for this validation attempt
@@ -221,6 +244,9 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 
 					return data;
 				} catch (error: any) {
+					if (isAsleepBlock(error)) {
+						throw error; // Expected while the tab is hidden — handled by the caller.
+					}
 					// Extract the WooCommerce/WordPress error message from the response
 					const serverMessage = extractErrorMessage(
 						error?.response?.data,
@@ -372,17 +398,26 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 				});
 				setIsValid(true);
 			} catch (error) {
-				const errorMsg = error instanceof Error ? error.message : String(error);
-				appLogger.error('[stores] validation FAILED', {
-					code: ERROR_CODES.AUTH_UNEXPECTED,
-					context: {
-						error: errorMsg,
-						userId,
-						siteUrl,
-					},
-				});
-				setError(errorMsg);
-				setIsValid(false);
+				if (isAsleepBlock(error)) {
+					// Defer, don't fail: clear the key so the wake tick re-runs this
+					// validation, and leave isValid untouched — nothing was proven wrong.
+					lastValidationKey.current = '';
+					appLogger.debug('[stores] validation deferred — app is in background', {
+						context: { userId, siteUrl },
+					});
+				} else {
+					const errorMsg = error instanceof Error ? error.message : String(error);
+					appLogger.error('[stores] validation FAILED', {
+						code: ERROR_CODES.AUTH_UNEXPECTED,
+						context: {
+							error: errorMsg,
+							userId,
+							siteUrl,
+						},
+					});
+					setError(errorMsg);
+					setIsValid(false);
+				}
 			} finally {
 				validationInProgress.current = false;
 				setIsLoading(false);
@@ -401,6 +436,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 		userDB,
 		user,
 		site.uuid,
+		wakeTick,
 	]);
 
 	// When required data is missing the user is invalid — derived during render

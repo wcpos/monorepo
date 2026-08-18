@@ -69,8 +69,8 @@ routing shows it as "unavailable" and falls back to auto/system rather than fail
 
 ### Discovery (Scan)
 Finding printers on the local environment automatically. Platform-specific: web does an
-HTTP **sweep** of common subnets; Electron uses **mDNS** (currently unimplemented — IPC
-channel missing); native uses vendor **SDK** discovery (Epson/Star). Distinct from
+HTTP **sweep** of common subnets; Electron uses **mDNS** over IPC (see
+`use-printer-discovery.electron.ts`); native uses vendor **SDK** discovery (Epson/Star). Distinct from
 manually typing an IP. Cloud Printers are not "discovered" — they are read from the server.
 
 ### Printer Settings (transport-independent)

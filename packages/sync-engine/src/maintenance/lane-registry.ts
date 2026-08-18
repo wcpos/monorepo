@@ -17,6 +17,7 @@ export const LANE_REGISTRY = [
 	{ laneName: 'coverage-compaction', intervalKey: 'coverageCompactionScanMs', defaultMs: 60_000, targetKey: 'coverageCompaction', owner: 'maintenance', collections: [], manualSync: true, seedRetickOrder: null, rebaselineOrder: null, timerOrder: 8, maxRequestsPerTick: 0 },
 	{ laneName: 'existence-prime', intervalKey: 'existencePrimeMs', defaultMs: 15 * 60_000, targetKey: 'existencePrime', owner: 'maintenance', collections: [], manualSync: true, seedRetickOrder: null, rebaselineOrder: 3, timerOrder: 9, maxRequestsPerTick: 5 },
 	{ laneName: 'existence-reconcile', intervalKey: 'existenceReconcileMs', defaultMs: 17 * 60_000, targetKey: 'existenceReconcile', owner: 'maintenance', collections: [], manualSync: true, seedRetickOrder: null, rebaselineOrder: 4, timerOrder: 10, maxRequestsPerTick: 11 },
+	{ laneName: 'variation-prefetch', intervalKey: 'variationPrefetchMs', defaultMs: 5 * 60_000, targetKey: 'variationPrefetch', owner: 'maintenance', collections: [], manualSync: false, seedRetickOrder: null, rebaselineOrder: null, timerOrder: 11, maxRequestsPerTick: 1 },
 ] as const;
 
 export type LaneRegistryEntry = (typeof LANE_REGISTRY)[number];

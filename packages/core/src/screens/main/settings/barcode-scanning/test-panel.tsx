@@ -25,7 +25,7 @@ import { useT } from '../../../../contexts/translations';
 import { useBarcodeDetection } from '../../hooks/barcodes';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 
-const DOCS_URL = 'https://docs.wcpos.com/products/barcode-scanning';
+const DOCS_URL = 'https://docs.wcpos.com/hardware/scanner-setup-wizard';
 const BAR_HEIGHT_CAP_MS = 60;
 
 function keyGlyph(key: string): string {
@@ -194,8 +194,8 @@ export function TestPanel() {
 			{history.length > 0 ? <History history={history} /> : null}
 
 			<Pressable onPress={() => openExternalURL(DOCS_URL)}>
-				<Text className="text-muted-foreground text-sm">
-					{t('settings.barcode_test_docs_link')}
+				<Text className="text-primary text-sm font-medium">
+					{t('settings.barcode_test_docs_link')} ↗
 				</Text>
 			</Pressable>
 		</VStack>
@@ -230,6 +230,12 @@ function Verdict({
 		});
 		boxClass = 'border-warning/40 bg-warning/10';
 		textClass = 'text-warning';
+	} else if (!Number.isFinite(analysis.avgGapMs)) {
+		// A single (or modifier-only) keypress has no gaps — "Infinityms" is not
+		// a number a cashier should ever read.
+		headline = t('settings.barcode_test_single_key');
+		boxClass = 'border-border bg-muted/50';
+		textClass = 'text-foreground';
 	} else {
 		headline = t('settings.barcode_test_typing', {
 			avg,

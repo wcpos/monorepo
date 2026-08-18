@@ -3,10 +3,9 @@ import * as React from 'react';
 import { IconButton } from '@wcpos/components/icon-button';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { sanitizeVariationAttributesRead } from '@wcpos/query/collection-map';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { useAddVariation } from '../../hooks/use-add-variation';
-
-import type { CellContext } from '@tanstack/react-table';
 
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 

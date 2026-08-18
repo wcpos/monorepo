@@ -1,9 +1,9 @@
 import * as React from 'react';
 
-import { CellContext } from '@tanstack/react-table';
 import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
+import type { CellContext } from '@wcpos/core/table-types';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';

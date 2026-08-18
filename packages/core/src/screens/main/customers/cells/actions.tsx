@@ -30,6 +30,7 @@ import { useQueryRuntime } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../contexts/translations';
 import { CapabilityTooltip } from '../../components/capability-tooltip';
@@ -37,8 +38,6 @@ import { useProAccess } from '../../contexts/pro-access';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
-
-import type { CellContext } from '@tanstack/react-table';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 

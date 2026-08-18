@@ -2,6 +2,14 @@
 // no audio asset ships in the browser bundle. Everything is best-effort and
 // swallows errors: a missing/blocked AudioContext must never break a scan.
 
+import {
+	clampScanSoundVolume,
+	normalizeScanSoundTheme,
+	type PlayScanSoundOptions,
+	SCAN_SOUND_TONES,
+	type ToneSegment,
+} from './scan-sound-themes';
+
 interface MinimalAudioContext {
 	readonly currentTime: number;
 	readonly state: string;
@@ -12,14 +20,6 @@ interface MinimalAudioContext {
 }
 
 type AudioContextCtor = new () => MinimalAudioContext;
-
-interface Segment {
-	freq: number;
-	duration: number;
-	type?: OscillatorType;
-}
-
-const PEAK_GAIN = 0.15;
 
 let sharedContext: MinimalAudioContext | null = null;
 
@@ -41,7 +41,11 @@ function getContext(): MinimalAudioContext | null {
 	return sharedContext;
 }
 
-function scheduleTones(context: MinimalAudioContext, segments: Segment[]): void {
+function scheduleTones(
+	context: MinimalAudioContext,
+	segments: ToneSegment[],
+	peakGain: number
+): void {
 	// Read currentTime here (not before an async resume) so the schedule starts
 	// from the moment the context is actually running.
 	let start = context.currentTime;
@@ -53,7 +57,7 @@ function scheduleTones(context: MinimalAudioContext, segments: Segment[]): void 
 		const end = start + segment.duration;
 		// Short ramps top and tail each tone so it doesn't click.
 		gain.gain.setValueAtTime(0, start);
-		gain.gain.linearRampToValueAtTime(PEAK_GAIN, start + 0.01);
+		gain.gain.linearRampToValueAtTime(peakGain, start + 0.01);
 		gain.gain.linearRampToValueAtTime(0, end);
 		oscillator.connect(gain).connect(context.destination);
 		oscillator.start(start);
@@ -62,7 +66,7 @@ function scheduleTones(context: MinimalAudioContext, segments: Segment[]): void 
 	}
 }
 
-function playTones(segments: Segment[]): void {
+function playTones(segments: ToneSegment[], peakGain: number): void {
 	const context = getContext();
 	if (!context) {
 		return;
@@ -72,33 +76,32 @@ function playTones(segments: Segment[]): void {
 	if (context.state === 'suspended') {
 		void context
 			.resume()
-			.then(() => scheduleTones(context, segments))
+			.then(() => scheduleTones(context, segments, peakGain))
 			.catch(() => undefined);
 		return;
 	}
-	scheduleTones(context, segments);
+	scheduleTones(context, segments, peakGain);
 }
 
-/** Bright rising two-note blip for a product added to the cart. */
-export function playScanSuccess(): void {
+/** Success tone for a product added to the cart (theme-dependent). */
+export function playScanSuccess(options: PlayScanSoundOptions = {}): void {
 	try {
-		playTones([
-			{ freq: 880, duration: 0.06 },
-			{ freq: 1320, duration: 0.09 },
-		]);
+		const theme = normalizeScanSoundTheme(options.theme);
+		playTones(SCAN_SOUND_TONES[theme].success, clampScanSoundVolume(options.volume));
 	} catch {
 		// best-effort
 	}
 }
 
-/** Low descending buzz for a scan that didn't cleanly add a product. */
-export function playScanFailure(): void {
+/** Failure tone for a scan that didn't cleanly add a product (theme-dependent). */
+export function playScanFailure(options: PlayScanSoundOptions = {}): void {
 	try {
-		playTones([
-			{ freq: 330, duration: 0.11, type: 'square' },
-			{ freq: 220, duration: 0.13, type: 'square' },
-		]);
+		const theme = normalizeScanSoundTheme(options.theme);
+		playTones(SCAN_SOUND_TONES[theme].failure, clampScanSoundVolume(options.volume));
 	} catch {
 		// best-effort
 	}
 }
+
+/** No haptics on web — parity export so callers stay platform-agnostic. */
+export function playScanFailureHaptic(): void {}

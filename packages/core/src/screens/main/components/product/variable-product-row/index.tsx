@@ -22,7 +22,8 @@ import { getColumnStyle } from '../../data-table';
 import { VariationRowProvider } from './context';
 import { Variations } from './variations';
 
-import type { Row, Table } from '@tanstack/react-table';
+import type { DataTableFeatures } from '../../data-table';
+import type { Cell, Row, Table } from '../../../../../table-types';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductRow = { document: ProductDocument; record: EngineRecord<'products'> };
@@ -37,9 +38,9 @@ export function VariableProductRow({
 	index,
 	table,
 }: {
-	item: Row<ProductRow>;
+	item: Row<ProductRow, DataTableFeatures>;
 	index: number;
-	table: Table<ProductRow>;
+	table: Table<ProductRow, DataTableFeatures>;
 }) {
 	/**
 	 * React Compiler breaks tanstack/react-table: it caches the
@@ -113,17 +114,15 @@ export function VariableProductRow({
 		<VirtualizedList.Item>
 			<VariationRowProvider row={item} setRowExpanded={setRowExpanded}>
 				<TableRow testID={stableId ? `data-table-row-${stableId}` : undefined} index={index}>
-					{item
-						.getVisibleCells()
-						.map((cell: import('@tanstack/react-table').Cell<ProductRow, unknown>) => {
-							return (
-								<TableCell key={cell.id} style={getColumnStyle(cell.column.columnDef.meta)}>
-									<ErrorBoundary>
-										<Suspense>{flexRender(cell.column.columnDef.cell, cell.getContext())}</Suspense>
-									</ErrorBoundary>
-								</TableCell>
-							);
-						})}
+					{item.getVisibleCells().map((cell: Cell<ProductRow, unknown, DataTableFeatures>) => {
+						return (
+							<TableCell key={cell.id} style={getColumnStyle(cell.column.columnDef.meta)}>
+								<ErrorBoundary>
+									<Suspense>{flexRender(cell.column.columnDef.cell, cell.getContext())}</Suspense>
+								</ErrorBoundary>
+							</TableCell>
+						);
+					})}
 				</TableRow>
 				<Animated.View style={[animatedStyle, { overflow: 'hidden' }]}>
 					{/*

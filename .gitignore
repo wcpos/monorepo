@@ -27,3 +27,6 @@ coverage/
 .cursor/*
 !.cursor/rules/
 docs/
+# Local scratch (Paul) — real store data / local wiki checkout, never commit
+/paper-current.html
+/.wiki/

@@ -1,8 +1,7 @@
 import * as React from 'react';
 
 import { Image } from '@wcpos/components/image';
-
-import type { CellContext } from '@tanstack/react-table';
+import type { CellContext } from '@wcpos/core/table-types';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 

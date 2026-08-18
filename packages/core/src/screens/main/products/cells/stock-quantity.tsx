@@ -4,14 +4,13 @@ import { View } from 'react-native';
 import { SwitchWithLabel } from '@wcpos/components/switch';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../contexts/translations';
 import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { NumberInput } from '../../components/number-input';
 import { useProAccess } from '../../contexts/pro-access';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
-
-import type { CellContext } from '@tanstack/react-table';
 
 type ProductDocument =
 	import('@wcpos/database').ProductDocument | import('@wcpos/database').ProductVariationDocument;

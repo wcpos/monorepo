@@ -5,11 +5,11 @@ import { useObservableEagerState } from 'observable-hooks';
 import { ButtonPill } from '@wcpos/components/button';
 import { FormatAddress } from '@wcpos/components/format';
 import { VStack } from '@wcpos/components/vstack';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 
 import type { QueryStateActions } from '../../../../query';
-import type { CellContext } from '@tanstack/react-table';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type CustomerDocument = import('@wcpos/database').CustomerDocument;

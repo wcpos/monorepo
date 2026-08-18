@@ -6,6 +6,7 @@ import { BehaviorSubject, Subject } from 'rxjs';
 
 import type { ScanEvent } from '@wcpos/scanner';
 
+import { resetHeuristicTooShortRateLimit } from './too-short-feedback';
 import { useBarcodeDetection } from './use-barcode-detection';
 
 const minChars$ = new BehaviorSubject(8);
@@ -105,6 +106,7 @@ describe('useBarcodeDetection', () => {
 	beforeEach(() => {
 		jest.useFakeTimers();
 		jest.clearAllMocks();
+		resetHeuristicTooShortRateLimit();
 		minChars$.next(8);
 		prefix$.next('');
 		suffix$.next('');
@@ -249,7 +251,7 @@ describe('useBarcodeDetection', () => {
 		subscription.unsubscribe();
 	});
 
-	it('shows a direct warning toast and logs a scan shorter than the minimum length', () => {
+	it('shows a warning toast and logs a short scan-shaped burst (all digits)', () => {
 		const detected: string[] = [];
 		const { result } = renderHook(() => useBarcodeDetection());
 		const subscription = result.current.barcode$.subscribe((barcode) =>
@@ -269,8 +271,34 @@ describe('useBarcodeDetection', () => {
 			duration: 6000,
 		});
 		expect(barcodeLogger.warn).toHaveBeenCalledWith(
-			'Scanned barcode was shorter than the minimum length',
+			'Fast keystroke burst was shorter than the minimum length',
 			expect.not.objectContaining({ showToast: expect.anything(), toast: expect.anything() })
+		);
+
+		subscription.unsubscribe();
+	});
+
+	it('suppresses the toast for a short typing-shaped burst (letters, no terminator)', () => {
+		const detected: string[] = [];
+		const { result } = renderHook(() => useBarcodeDetection());
+		const subscription = result.current.barcode$.subscribe((barcode) =>
+			detected.push(String(barcode))
+		);
+
+		act(() => {
+			dispatchBarcode('sdafs');
+			jest.advanceTimersByTime(151);
+		});
+
+		// Still rejected as too short — but a fast typist isn't scolded with a
+		// toast; the rejection is only logged (and visible in the test panel).
+		expect(detected).toEqual([]);
+		expect(mockToastShow).not.toHaveBeenCalled();
+		expect(barcodeLogger.warn).toHaveBeenCalledWith(
+			'Fast keystroke burst was shorter than the minimum length',
+			expect.objectContaining({
+				context: expect.objectContaining({ terminated: false, toastShown: false }),
+			})
 		);
 
 		subscription.unsubscribe();

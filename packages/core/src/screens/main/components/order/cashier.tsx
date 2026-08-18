@@ -5,11 +5,11 @@ import { map } from 'rxjs/operators';
 
 import { ButtonPill } from '@wcpos/components/button';
 import { wooMetaCarrier } from '@wcpos/sync-core';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { useCashierLabel } from '../../hooks/use-cashier-label';
 
 import type { QueryStateActions } from '../../../../query';
-import type { CellContext } from '@tanstack/react-table';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
