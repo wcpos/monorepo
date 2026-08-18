@@ -50,6 +50,11 @@ async function starvationHarness() {
 			set: async () => undefined,
 		}),
 		customerCensusTotal: async () => null,
+		variationPrefetchStateFor: () => ({
+			get: async () => null,
+			set: async () => undefined,
+		}),
+		variationCensusTotal: async () => null,
 		hasPendingInteractiveWork: () => false,
 		emitEvent: () => undefined,
 		now: () => nowMs,

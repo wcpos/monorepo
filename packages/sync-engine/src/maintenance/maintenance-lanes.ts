@@ -56,6 +56,7 @@ import { RxQueryTotalRequestStateRepository } from '../rx-query-total-request-st
 import { RxQueryTotalCacheRepository } from '../collections/rx-query-total-cache-repository';
 import { withLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
 import { type CustomerTrickleStateStore, tickCustomerTrickle } from './customer-trickle';
+import { tickVariationPrefetch, type VariationPrefetchStateStore } from './variation-prefetch';
 import {
 	laneRegistryEntry,
 	type MaintenanceLaneName,
@@ -135,6 +136,8 @@ type MaintenanceLaneDeps = {
 	censusFreshForMs: number;
 	customerTrickleStateFor: (scopeId: string) => CustomerTrickleStateStore;
 	customerCensusTotal: () => Promise<CensusTotal | null>;
+	variationPrefetchStateFor: (scopeId: string) => VariationPrefetchStateStore;
+	variationCensusTotal: () => Promise<CensusTotal | null>;
 	hasPendingInteractiveWork: () => boolean;
 	lastUserActivityMs?: () => number;
 	emitEvent: (event: QueryTotalCacheEvent) => void;
@@ -203,6 +206,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 	const now = deps.now ?? (() => Date.now());
 	const pressureDeferredLanes = new Set<MaintenanceLaneName>([
 		'customer-trickle',
+		'variation-prefetch',
 		'existence-prime',
 		'existence-reconcile',
 		'query-total-retry',
@@ -653,6 +657,34 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			summary: `Customer trickle: page ${result.page}, ${result.rows} customers`,
 		};
 	});
+	const variationPrefetch = lane('variation-prefetch', async (db, scopeId, signal, fetcher) => {
+		const barcodeSelectors: BarcodeSelectorsReader | undefined =
+			deps.barcodeSelectorsFor === undefined
+				? undefined
+				: () => deps.barcodeSelectorsFor!(scopeId) ?? undefined;
+		const result = await tickVariationPrefetch({
+			database: db,
+			fetcher,
+			syncBaseUrl: deps.syncBaseUrl,
+			diagnostics: deps.diagnostics,
+			...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
+			...(barcodeSelectors !== undefined ? { barcodeSelectors } : {}),
+			stateStore: deps.variationPrefetchStateFor(scopeId),
+			hasPendingWork: deps.hasPendingInteractiveWork,
+			variationCensusTotal: deps.variationCensusTotal,
+			now,
+			...(deps.lastUserActivityMs !== undefined
+				? { lastUserActivityMs: deps.lastUserActivityMs }
+				: {}),
+			signal,
+		});
+		if (result.status !== 'ran') {
+			return { summary: null, status: 'skipped', reason: result.reason };
+		}
+		return {
+			summary: `Variation prefetch: parent ${result.parentWooId ?? 'none'}, ${result.requestedIds} requested`,
+		};
+	});
 
 	// Per SCOPE, not per engine: switching A→B→A must not let B's compaction
 	// clock suppress A's (they are different databases).
@@ -728,6 +760,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		referenceSeed,
 		queryTotalRetry,
 		customerTrickle,
+		variationPrefetch,
 		coverageCompaction,
 		existencePrime,
 		existenceReconcile,
