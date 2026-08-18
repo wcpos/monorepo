@@ -14,11 +14,73 @@ export interface WcposTestOptions {
 	coldStart?: boolean;
 }
 
-// dev-next is a PRO store: the free matrix (upgrade-gate expectations) is
-// mutually exclusive with it, so the free project only runs when an explicit
-// free next-train target is provided.
-const FREE_STORE_URL = process.env.E2E_STORE_URL_FREE || '';
-const PRO_STORE_URL = process.env.E2E_STORE_URL_PRO || 'https://dev-next.wcpos.com';
+/**
+ * Lane → store. The lane owns this decision and passes it in; nothing here may
+ * invent a store.
+ *
+ * A store URL is NEVER defaulted in CI. `E2E_STORE_URL_PRO` used to fall back to
+ * dev-next, and since the workflow never set it, the whole main lane silently
+ * gated 1.9.x client code against the 1.10 store for weeks, while dev-free
+ * coverage vanished because its own default was the empty string. A wrong store
+ * answers every request happily, so this surfaces as unrelated flaky specs
+ * rather than as a configuration error — hence, fail loudly instead.
+ *
+ * Allowed stores per lane (owner ruling, 2026-08-18):
+ * - main → dev-free (free) + dev-pro (pro), and NOTHING else.
+ * - next → dev-next only. One site runs the next branch of BOTH plugins, so it
+ *   serves both variants: the free projects point at it too and take the free
+ *   path because `stubStoreVersionForE2E` masks the licence per variant (it
+ *   already does this on every lane — see fixtures.ts).
+ */
+const LOCAL_DEFAULT_PRO_STORE_URL = 'https://dev-pro.wcpos.com';
+
+/**
+ * `E2E_STORE_URL` points BOTH variants at one store (e2e-native.yml). Resolved
+ * here so this module is the single resolver — fixtures used to apply it again
+ * downstream, which let a run bootstrap against one origin and connect to another.
+ */
+function configuredStoreUrl(envValue: string | undefined): string {
+	return (envValue || process.env.E2E_STORE_URL || '').trim();
+}
+
+/**
+ * The free matrix runs ONLY when a free store is named.
+ *
+ * This is a declaration, not a guess. Playwright's `FullConfig.projects` is the
+ * full configured list even under `--project=` (verified 2026-08-18), so
+ * globalSetup cannot ask which projects were selected — an earlier attempt to
+ * infer it made a pro-only run demand and bootstrap a free store it never opens,
+ * which is exactly what breaks the cold-start workflow.
+ *
+ * Naming the store is therefore what turns the variant on: a run that wants free
+ * coverage says so, and one that does not (cold-start; a local pro-only run) pays
+ * nothing for it. The risk this reopens — a lane silently losing free coverage,
+ * which is how dev-free vanished for weeks — is closed where it belongs, by a
+ * contract test asserting deploy.yml names BOTH stores for every lane.
+ */
+export const FREE_STORE_URL = configuredStoreUrl(process.env.E2E_STORE_URL_FREE);
+export const PRO_STORE_URL =
+	configuredStoreUrl(process.env.E2E_STORE_URL_PRO) ||
+	// Local runs default to the stable trunk's pro store; CI must name it (below).
+	(process.env.CI ? '' : LOCAL_DEFAULT_PRO_STORE_URL);
+
+/**
+ * Fail a CI run whose lane never named its stores.
+ *
+ * Deliberately NOT enforced while this module loads: the config is imported by
+ * unit tests and by the sibling one-off configs, none of which touch a store, and
+ * a module-load throw would fail them for a rule that does not apply. globalSetup
+ * is the honest seam — it runs only when a real E2E run is about to authenticate.
+ */
+export function assertLaneStoresConfigured(): void {
+	if (!process.env.CI) return;
+	if (PRO_STORE_URL) return;
+	throw new Error(
+		'E2E_STORE_URL_PRO is not set. Every lane runs the pro matrix, so the workflow ' +
+			'must name its store (main → dev-pro, next → dev-next); the config will not ' +
+			'guess one. The free matrix is opt-in: name E2E_STORE_URL_FREE to run it.'
+	);
+}
 const FREE_PROJECT_ENABLED = FREE_STORE_URL.length > 0;
 
 // Cold-start profile (#991): a thin-local-DB variant that runs only the
