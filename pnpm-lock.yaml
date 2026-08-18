@@ -633,6 +633,9 @@ importers:
       expo-crypto:
         specifier: ~57.0.1
         version: 57.0.1(expo@57.0.8)
+      expo-intent-launcher:
+        specifier: 57.0.1
+        version: 57.0.1(expo@57.0.8)
       expo-localization:
         specifier: ~57.0.1
         version: 57.0.1(expo@57.0.8)(react@19.2.3)
@@ -6217,6 +6220,11 @@ packages:
     peerDependenciesMeta:
       react-native-web:
         optional: true
+
+  expo-intent-launcher@57.0.1:
+    resolution: {integrity: sha512-BYiPEOUeW3AkW/uxEESbS2UBw9LasJ8Heb6A8kF9Ueh6pqrXQHMNJFHzfrOP8qZfv9G2e8CTzrtzpN5p0vH5fA==}
+    peerDependencies:
+      expo: ~57.0.8
 
   expo-json-utils@57.0.1:
     resolution: {integrity: sha512-cgTe1NqzQdYs/WN+3nIY5IZg8s0pb0xaTUbhYvxQDn137GbwRfHoGM2se3m3Vsl4Qu+B9G4RPEK5WJDEU2Do7g==}
@@ -16006,6 +16014,10 @@ snapshots:
       sf-symbols-typescript: 2.2.0
     optionalDependencies:
       react-native-web: 0.21.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+
+  expo-intent-launcher@57.0.1(expo@57.0.8):
+    dependencies:
+      expo: 57.0.8(04f3e72b2e760302ece9d0ffbc7cc61f)
 
   expo-json-utils@57.0.1: {}
 
