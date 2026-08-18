@@ -37,6 +37,7 @@ const LOCAL_DEFAULT_STORE_URL: Record<StoreVariant, string> = {
 	pro: 'https://dev-pro.wcpos.com',
 };
 
+/** Resolve a variant's configured store URL, including the generic local override. */
 function storeUrlFor(variant: StoreVariant, envValue: string | undefined): string {
 	// `E2E_STORE_URL` points BOTH variants at one store (e2e-native.yml). Kept as the
 	// generic fallback here so this module stays the single resolver — fixtures used

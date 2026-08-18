@@ -111,6 +111,20 @@ test('the shared-store queue stays removed', () => {
 	assert.equal(gateStep.env.MERGE_GATE_MAX_ATTEMPTS, '140');
 });
 
+test('cold-start dispatches bind raw refs to an explicit store lane', () => {
+	const workflow = readWorkflow('e2e-cold-start.yml');
+	const lane = workflow.on.workflow_dispatch.inputs.lane;
+	const validateStep = findStep(workflow, 'cold-start', '🔒 Validate trusted ref');
+	const runStep = findStep(workflow, 'cold-start', '🥶 Run cold-start E2E');
+
+	assert.equal(lane.required, true);
+	assert.equal(lane.default, 'next');
+	assert.deepEqual(lane.options, ['main', 'next']);
+	assert.match(validateStep.env.E2E_LANE, /github\.event\.inputs\.lane/);
+	assert.match(validateStep.run, /origin\/\$E2E_LANE/);
+	assert.match(runStep.env.E2E_STORE_URL_PRO, /github\.event\.inputs\.lane == 'main'/);
+});
+
 test('the deploy concurrency contract isolates stale rerun attempts', () => {
 	const workflow = readWorkflow('deploy.yml');
 
