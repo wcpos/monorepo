@@ -56,6 +56,7 @@ async function starvationHarness() {
 		}),
 		productCensusTotal: async () => null,
 		hasPendingInteractiveWork: () => false,
+		isWritePlaneOwner: () => true,
 		emitEvent: () => undefined,
 		now: () => nowMs,
 		isServerBackingOff: () => pressure || retryAfterActive,

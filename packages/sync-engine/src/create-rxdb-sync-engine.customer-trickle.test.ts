@@ -98,6 +98,54 @@ describe('customer-trickle maintenance lane', () => {
 		await engine.dispose();
 	});
 
+	it('resets an out-of-range durable page and resumes from page 1 on the next tick', async () => {
+		const pages: string[] = [];
+		const engine = engineWith({
+			fetcher: async (url) => {
+				const page = new URL(url).searchParams.get('page')!;
+				pages.push(page);
+				if (pages.length === 1) return json(customers(1, 10));
+				if (pages.length === 2) {
+					return new Response(JSON.stringify({ code: 'rest_post_invalid_page_number' }), {
+						status: 400,
+						headers: { 'content-type': 'application/json' },
+					});
+				}
+				return json([customer(1)]);
+			},
+		});
+		await engine.ready;
+
+		await engine.sync('customer-trickle');
+		await expect(engine.sync('customer-trickle')).resolves.toMatchObject({ status: 'ran' });
+		await engine.sync('customer-trickle');
+		expect(pages).toEqual(['1', '2', '1']);
+		await engine.dispose();
+	});
+
+	it('runs only while this tab owns the shared write plane', async () => {
+		let isLeader = false;
+		let customerFetches = 0;
+		const engine = engineWith({
+			writePlaneOwner: () => isLeader,
+			fetcher: async () => {
+				customerFetches += 1;
+				return json([]);
+			},
+		});
+		await engine.ready;
+
+		await expect(engine.sync('customer-trickle')).resolves.toMatchObject({
+			status: 'skipped',
+			reason: 'not-write-plane-owner',
+		});
+		expect(customerFetches).toBe(0);
+		isLeader = true;
+		await expect(engine.sync('customer-trickle')).resolves.toMatchObject({ status: 'ran' });
+		expect(customerFetches).toBe(1);
+		await engine.dispose();
+	});
+
 	it('completes a full final page using the pagination headers', async () => {
 		const urls: string[] = [];
 		const engine = engineWith({

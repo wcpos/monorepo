@@ -103,6 +103,13 @@ async function runProductTrickle(deps: ProductTrickleDeps): Promise<ProductTrick
 	const url = `${deps.baseUrl}/products?status=publish&orderby=id&order=asc&per_page=${PRODUCT_TRICKLE_BATCH_SIZE}&page=${state.page}`;
 	const response = await deps.fetcher(url, deps.signal ? { signal: deps.signal } : undefined);
 	if (!response.ok) {
+		if (response.status === 400) {
+			const error = (await response.json().catch(() => null)) as { code?: unknown } | null;
+			if (error?.code === 'rest_post_invalid_page_number') {
+				await deps.stateStore.set(PRODUCT_TRICKLE_STATE_KEY, JSON.stringify(DEFAULT_STATE));
+				return { status: 'ran', rows: 0, page: state.page, walkComplete: false };
+			}
+		}
 		throw new Error(`/products trickle pull failed: HTTP ${response.status}`);
 	}
 	const descriptor = COLLECTION_DESCRIPTORS.find(({ collection }) => collection === 'products');

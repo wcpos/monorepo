@@ -139,6 +139,7 @@ type MaintenanceLaneDeps = {
 	productTrickleStateFor: (scopeId: string) => ProductTrickleStateStore;
 	productCensusTotal: () => Promise<CensusTotal | null>;
 	hasPendingInteractiveWork: () => boolean;
+	isWritePlaneOwner: () => boolean;
 	lastUserActivityMs?: () => number;
 	emitEvent: (event: QueryTotalCacheEvent) => void;
 	now?: () => number;
@@ -619,6 +620,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			})
 		: null;
 	const customerTrickle = lane('customer-trickle', async (db, scopeId, signal, fetcher) => {
+		if (!deps.isWritePlaneOwner()) {
+			return { summary: null, status: 'skipped', reason: 'not-write-plane-owner' };
+		}
 		const result = await tickCustomerTrickle({
 			baseUrl: deps.syncBaseUrl,
 			database: db,
@@ -640,6 +644,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		};
 	});
 	const productTrickle = lane('product-trickle', async (db, scopeId, signal, fetcher) => {
+		if (!deps.isWritePlaneOwner()) {
+			return { summary: null, status: 'skipped', reason: 'not-write-plane-owner' };
+		}
 		const barcodeSelectors = () => deps.barcodeSelectorsFor?.(scopeId) ?? undefined;
 		const result = await tickProductTrickle({
 			baseUrl: deps.syncBaseUrl,

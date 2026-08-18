@@ -1621,6 +1621,7 @@ export function createRxdbSyncEngine(
 		}),
 		productCensusTotal: async () => (await censusPublisher.totals()).products,
 		hasPendingInteractiveWork: requirePlane.hasPendingWork,
+		isWritePlaneOwner: writePlaneOwner,
 		...(ports.lastUserActivityMs !== undefined
 			? { lastUserActivityMs: ports.lastUserActivityMs }
 			: {}),
