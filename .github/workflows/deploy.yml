@@ -203,7 +203,10 @@ jobs:
             playwright-${{ runner.os }}-
 
       - name: 🎭 Install Playwright browsers
-        run: cd apps/main && npx playwright install --with-deps chromium
+        # No --with-deps: GitHub's Ubuntu images already carry Chrome's system
+        # libraries, and the apt run it triggers goes through the same flaky
+        # azure mirror that wedged a shard for 36 minutes on 2026-08-18.
+        run: cd apps/main && npx playwright install chromium
 
       - name: 🏥 Health check deployment
         run: |

@@ -192,6 +192,9 @@ async function setupVariant(
 	try {
 		const { storeIds } = await authenticateWithStore(authPage, testInfo as any, {
 			waitForCatalogue: !options.coldStart,
+			// Snapshot the FULL catalogue: a partial export makes every restored
+			// test finish the sync itself (~75s/test — see waitForCatalogueQuiescence).
+			waitForFullCatalogue: !options.coldStart,
 			credentials: cashierAuth ?? undefined,
 			storeId: options.storeId,
 		});
