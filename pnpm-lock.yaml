@@ -527,11 +527,11 @@ importers:
         specifier: 0.10.1
         version: 0.10.1(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
       sonner:
-        specifier: ^2.0.8
+        specifier: ^2.0.7
         version: 2.0.8(@types/react@19.2.18)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       sonner-native:
-        specifier: ^0.27.0
-        version: 0.27.0(8428486483797a9134eba19d68b0d4b8)
+        specifier: ^0.26.4
+        version: 0.26.5(8428486483797a9134eba19d68b0d4b8)
       tailwind-merge:
         specifier: ^3.6.0
         version: 3.6.0
@@ -8882,8 +8882,8 @@ packages:
     peerDependencies:
       solid-js: ^1.8
 
-  sonner-native@0.27.0:
-    resolution: {integrity: sha512-TKX4mXoMnwx3m51bSTqrbmiImIjs18g9L6t0sv4XemR+s6XsKf1+l3yn3C4/psOHj3E+sdc2Bh5P/7+AG/41eA==}
+  sonner-native@0.26.5:
+    resolution: {integrity: sha512-LlYiAryfg3Ui5eQlxwLV/Ziyaew7HTWqPvbbpUKMypGM5lcMZc0TLYTZziWAHBiMyvDLi8813KO2iMmF8C5GyQ==}
     peerDependencies:
       react: 19.2.3
       react-native: 0.86.2
@@ -19168,7 +19168,7 @@ snapshots:
       '@corvu/utils': 0.4.2(solid-js@1.9.13)
       solid-js: 1.9.13
 
-  sonner-native@0.27.0(8428486483797a9134eba19d68b0d4b8):
+  sonner-native@0.26.5(8428486483797a9134eba19d68b0d4b8):
     dependencies:
       react: 19.2.3
       react-native: 0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)
