@@ -57,6 +57,7 @@ runs:
     - name: 📦 Install dependencies
       run: |
         if [ "${{ inputs.skip-install-scripts }}" = "true" ]; then
+          echo "WCPOS_INSTALL_SCRIPTS_SKIPPED=true" >> "$GITHUB_ENV"
           pnpm install --no-frozen-lockfile --ignore-scripts
         else
           pnpm install --no-frozen-lockfile

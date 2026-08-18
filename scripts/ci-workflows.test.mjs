@@ -43,6 +43,52 @@ test('the shared setup action uses a Node version supported by jsdom 30', () => 
 	assert.equal(setup.inputs['node-version'].default, '22.22.2');
 });
 
+test('Dependabot repair pushes keep install scripts disabled', () => {
+	const workflow = readWorkflow('test.yml');
+	const expression =
+		"${{ github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]' }}";
+
+	for (const jobName of ['lint', 'unit-tests']) {
+		const setup = findStep(workflow, jobName, '🏗 Setup monorepo');
+		assert.equal(setup.with['skip-install-scripts'], expression);
+	}
+
+	const install = readAction('setup-monorepo/action.yml').runs.steps.find(
+		({ name }) => name === '📦 Install dependencies'
+	);
+	assert.ok(install, 'missing install step');
+	assert.match(install.run, /WCPOS_INSTALL_SCRIPTS_SKIPPED=true/);
+});
+
+test('script tests tolerate missing premium modules when install scripts are disabled', () => {
+	const directory = mkdtempSync(path.join(tmpdir(), 'wcpos-premium-loader-'));
+	const loader = path.join(directory, 'loader.mjs');
+	writeFileSync(
+		loader,
+		`export async function resolve(specifier, context, nextResolve) {
+	if (specifier === 'rxdb-premium/plugins/storage-filesystem-node') {
+		throw new Error('premium generated module is unavailable');
+	}
+	return nextResolve(specifier, context);
+}\n`
+	);
+
+	try {
+		const result = spawnSync(
+			process.execPath,
+			['--experimental-loader', loader, '--test', path.join(ROOT, 'scripts/opfs-targeted-recovery.test.mjs')],
+			{
+				cwd: ROOT,
+				encoding: 'utf8',
+				env: { ...process.env, WCPOS_INSTALL_SCRIPTS_SKIPPED: 'true' },
+			}
+		);
+		assert.equal(result.status, 0, result.stdout + result.stderr);
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
+});
+
 test('the E2E aggregator runs on cancellation and fails the cancelled deploy', () => {
 	const gate = readWorkflow('deploy.yml').jobs['e2e-gate'];
 
