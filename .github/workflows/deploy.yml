@@ -244,6 +244,19 @@ jobs:
         env:
           BASE_URL: ${{ needs.deploy.outputs.deployment_url }}
           CI: true
+          # Lane → store. Owner ruling (2026-08-18): main may test against
+          # dev-free and dev-pro and NOTHING else; next has exactly one site,
+          # dev-next, which runs the next branch of both plugins and therefore
+          # serves both variants (the free matrix gets its licence masked by
+          # stubStoreVersionForE2E, as it already does on every lane).
+          #
+          # These MUST be set here. playwright.config used to fall back to
+          # dev-next when they were absent, and since this job never set them,
+          # the whole main lane silently gated 1.9.x against the 1.10 store
+          # while dev-free coverage was switched off entirely. The config now
+          # fails the job rather than guessing, so an unset value is loud.
+          E2E_STORE_URL_PRO: ${{ (github.base_ref == 'next' || github.ref_name == 'next') && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}
+          E2E_STORE_URL_FREE: ${{ (github.base_ref == 'next' || github.ref_name == 'next') && 'https://dev-next.wcpos.com' || 'https://dev-free.wcpos.com' }}
           # The shard index no longer reaches Playwright via --shard, but the
           # cashier-slot isolation is keyed on it. Without this every shard would
           # normalize to slot 0 and share one cashier.

@@ -14,11 +14,61 @@ export interface WcposTestOptions {
 	coldStart?: boolean;
 }
 
-// dev-next is a PRO store: the free matrix (upgrade-gate expectations) is
-// mutually exclusive with it, so the free project only runs when an explicit
-// free next-train target is provided.
-const FREE_STORE_URL = process.env.E2E_STORE_URL_FREE || '';
-const PRO_STORE_URL = process.env.E2E_STORE_URL_PRO || 'https://dev-next.wcpos.com';
+/**
+ * Lane → store. The lane owns this decision and passes it in; nothing here may
+ * invent a store.
+ *
+ * A store URL is NEVER defaulted in CI. `E2E_STORE_URL_PRO` used to fall back to
+ * dev-next, and since the workflow never set it, the whole main lane silently
+ * gated 1.9.x client code against the 1.10 store for weeks, while dev-free
+ * coverage vanished because its own default was the empty string. A wrong store
+ * answers every request happily, so this surfaces as unrelated flaky specs
+ * rather than as a configuration error — hence, fail loudly instead.
+ *
+ * Allowed stores per lane (owner ruling, 2026-08-18):
+ * - main → dev-free (free) + dev-pro (pro), and NOTHING else.
+ * - next → dev-next only. One site runs the next branch of BOTH plugins, so it
+ *   serves both variants: the free projects point at it too and take the free
+ *   path because `stubStoreVersionForE2E` masks the licence per variant (it
+ *   already does this on every lane — see fixtures.ts).
+ */
+const LOCAL_DEFAULT_STORE_URL: Record<StoreVariant, string> = {
+	free: 'https://dev-free.wcpos.com',
+	pro: 'https://dev-pro.wcpos.com',
+};
+
+function storeUrlFor(variant: StoreVariant, envValue: string | undefined): string {
+	const configured = (envValue || '').trim();
+	if (configured) return configured;
+	// Local runs fall back to the MAIN-lane pair: the stable trunk, and the pair a
+	// checkout is most likely on. Running next locally means naming dev-next.
+	return LOCAL_DEFAULT_STORE_URL[variant];
+}
+
+export const FREE_STORE_URL = storeUrlFor('free', process.env.E2E_STORE_URL_FREE);
+export const PRO_STORE_URL = storeUrlFor('pro', process.env.E2E_STORE_URL_PRO);
+
+/**
+ * Fail a CI run whose lane never named its stores.
+ *
+ * Deliberately NOT enforced while this module loads: the config is imported by
+ * unit tests and by the sibling one-off configs, none of which touch a store, and
+ * a module-load throw would fail them for a rule that does not apply. globalSetup
+ * is the honest seam — it runs only when a real E2E run is about to authenticate.
+ */
+export function assertLaneStoresConfigured(): void {
+	if (!process.env.CI) return;
+	const missing = (['free', 'pro'] as const).filter(
+		(variant) => !(process.env[`E2E_STORE_URL_${variant.toUpperCase()}`] || '').trim()
+	);
+	if (missing.length === 0) return;
+	throw new Error(
+		`E2E store not configured for this lane: ${missing
+			.map((variant) => `E2E_STORE_URL_${variant.toUpperCase()}`)
+			.join(', ')} unset. The workflow must name the stores (main → dev-free + dev-pro, ` +
+			`next → dev-next); the config will not guess one.`
+	);
+}
 const FREE_PROJECT_ENABLED = FREE_STORE_URL.length > 0;
 
 // Cold-start profile (#991): a thin-local-DB variant that runs only the
