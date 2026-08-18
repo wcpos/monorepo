@@ -49,11 +49,14 @@ export function isAuthenticatedStoreApiResponse(
 	responseOk: boolean
 ): boolean {
 	const url = new URL(responseUrl);
+	const store = new URL(storeUrl);
+	const storePath = store.pathname.replace(/\/+$/, '');
 	return (
 		responseOk &&
-		url.origin === new URL(storeUrl).origin &&
-		(url.pathname.includes('/wcpos/v2/') ||
-			url.searchParams.get('rest_route')?.startsWith('/wcpos/v2/') === true)
+		url.origin === store.origin &&
+		(url.pathname.startsWith(`${storePath}/wp-json/wcpos/v2/`) ||
+			(url.pathname.replace(/\/+$/, '') === storePath &&
+				url.searchParams.get('rest_route')?.startsWith('/wcpos/v2/') === true))
 	);
 }
 

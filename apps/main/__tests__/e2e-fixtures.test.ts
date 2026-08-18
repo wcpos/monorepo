@@ -18,18 +18,39 @@ jest.resetModules();
 
 describe('isAuthenticatedStoreApiResponse', () => {
 	it('accepts only successful WCPOS API responses from the configured store', () => {
-		const storeUrl = 'https://current-store.example';
+		const storeUrl = 'https://stores.example/current-store';
 
 		expect(
 			isAuthenticatedStoreApiResponse(
-				'https://current-store.example/wp-json/wcpos/v2/census',
+				'https://stores.example/current-store/wp-json/wcpos/v2/census',
 				storeUrl,
 				true
 			)
 		).toBe(true);
 		expect(
 			isAuthenticatedStoreApiResponse(
-				'https://old-store.example/wp-json/wcpos/v2/census',
+				'https://stores.example/current-store/?rest_route=/wcpos/v2/census',
+				storeUrl,
+				true
+			)
+		).toBe(true);
+		expect(
+			isAuthenticatedStoreApiResponse(
+				'https://stores.example/old-store/wp-json/wcpos/v2/census',
+				storeUrl,
+				true
+			)
+		).toBe(false);
+		expect(
+			isAuthenticatedStoreApiResponse(
+				'https://stores.example/old-store/?rest_route=/wcpos/v2/census',
+				storeUrl,
+				true
+			)
+		).toBe(false);
+		expect(
+			isAuthenticatedStoreApiResponse(
+				'https://other.example/current-store/wp-json/wcpos/v2/census',
 				storeUrl,
 				true
 			)
