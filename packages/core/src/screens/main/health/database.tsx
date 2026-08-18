@@ -301,7 +301,7 @@ function CollectionRowView({
 				<DropdownMenuItem testID={`db-row-sync-now-${row.key}`} onPress={() => void check(row.key)}>
 					<Text>{t('health.database.sync_now')}</Text>
 				</DropdownMenuItem>
-				<DropdownMenuItem onPress={() => setConfirming(true)}>
+				<DropdownMenuItem testID={`db-row-clear-${row.key}`} onPress={() => setConfirming(true)}>
 					<Text className="text-destructive">{t('health.database.clear_redownload')}</Text>
 				</DropdownMenuItem>
 			</DropdownMenuContent>
@@ -439,7 +439,11 @@ function CollectionRowView({
 						<AlertDialogCancel>
 							<Text>{t('common.cancel')}</Text>
 						</AlertDialogCancel>
-						<AlertDialogAction variant="destructive" onPress={() => void resetCollection()}>
+						<AlertDialogAction
+							variant="destructive"
+							testID={`db-row-clear-confirm-${row.key}`}
+							onPress={() => void resetCollection()}
+						>
 							<Text>{t('health.database.clear_confirm')}</Text>
 						</AlertDialogAction>
 					</AlertDialogFooter>
