@@ -290,10 +290,23 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 	});
 
 	it.each([
-		{ name: 'backfills an unmaterialized reference with a fresh positive census', total: 1 },
-		{ name: 'skips an unmaterialized reference with a fresh zero census', total: 0 },
-		{ name: 'skips an unmaterialized reference without a census entry', total: undefined },
-	])('$name', async ({ total }) => {
+		{
+			name: 'backfills an unmaterialized reference with a fresh positive census',
+			total: 1,
+			fresh: true,
+		},
+		{ name: 'skips an unmaterialized reference with a fresh zero census', total: 0, fresh: true },
+		{
+			name: 'skips an unmaterialized reference with a stale positive census',
+			total: 1,
+			fresh: false,
+		},
+		{
+			name: 'skips an unmaterialized reference without a census entry',
+			total: undefined,
+			fresh: true,
+		},
+	])('$name', async ({ total, fresh }) => {
 		const nowMs = 1_000_000;
 		const diagnostics = vi.fn();
 		const fetcher = vi.fn(async (url: string) => {
@@ -320,7 +333,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 				queryKey: 'census:categories',
 				totalMatchingRecords: total,
 				updatedAtMs: nowMs,
-				freshUntilMs: nowMs + 60_000,
+				freshUntilMs: fresh ? nowMs + 60_000 : nowMs,
 				schemaVersion: 1,
 			});
 		}
@@ -328,12 +341,12 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		const report = await engine.sync('reference-seed');
 		await engine.sync('scheduler-drain');
 
-		const expectedPulls = total === 1 ? 1 : 0;
+		const expectedPulls = total === 1 && fresh ? 1 : 0;
 		expect(
 			fetcher.mock.calls.filter(([url]) => new URL(url).pathname.endsWith('/products/categories'))
 		).toHaveLength(expectedPulls);
 		await expect(scope.database.collections.categories.count().exec()).resolves.toBe(expectedPulls);
-		if (total === 1) {
+		if (expectedPulls === 1) {
 			expect(report.status).toBe('ran');
 			expect(diagnostics.mock.calls.map(([event]) => event.message)).toContain(
 				'Reference refresh (categories + brands + tags + coupons; backfilled: categories): 1 inserted, 0 requeued'
