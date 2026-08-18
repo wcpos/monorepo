@@ -141,14 +141,28 @@ async function residentVariableParentFingerprint(
 	const docs = await database.collections[descriptor.collection]
 		.find({ selector: { type: 'variable' } })
 		.exec();
-	const parentIds = docs
-		.map((doc) => remoteIdOrNull(doc.toJSON()[descriptor.wooIdField]))
-		.filter((id) => id !== null)
+	const parentSignatures = docs
+		.flatMap((doc) => {
+			const json = doc.toJSON() as Record<string, unknown> & {
+				payload?: Record<string, unknown>;
+			};
+			const parentId = remoteIdOrNull(json[descriptor.wooIdField] ?? json.payload?.id);
+			if (parentId === null) return [];
+			const rawVariationIds = json.payload?.variations;
+			const variationIds = Array.isArray(rawVariationIds)
+				? rawVariationIds
+						.filter(
+							(id): id is number => Number.isSafeInteger(id) && typeof id === 'number' && id > 0
+						)
+						.sort((left, right) => left - right)
+				: [];
+			return [`${parentId}:${variationIds.join(',')}`];
+		})
 		.sort()
-		.join(',');
+		.join('|');
 	let fingerprint = 0xcbf29ce484222325n;
-	for (let index = 0; index < parentIds.length; index += 1) {
-		fingerprint ^= BigInt(parentIds.charCodeAt(index));
+	for (let index = 0; index < parentSignatures.length; index += 1) {
+		fingerprint ^= BigInt(parentSignatures.charCodeAt(index));
 		fingerprint = BigInt.asUintN(64, fingerprint * 0x100000001b3n);
 	}
 	return fingerprint.toString(36).padStart(13, '0');
