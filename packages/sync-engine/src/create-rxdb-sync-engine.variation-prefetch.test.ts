@@ -481,6 +481,33 @@ describe('variation-prefetch maintenance lane', () => {
 		await engine.dispose();
 	});
 
+	it('restarts the walk when variations are reset', async () => {
+		const requested: string[] = [];
+		const engine = engineWith({
+			fetcher: async (url) => {
+				const include = new URL(url).searchParams.get('include');
+				if (include !== null) requested.push(include);
+				return json({ documents: [variationEnvelope(101, 10)] });
+			},
+		});
+		const scope = await engine.ready;
+		await scope.database.collections.products.insert(product(10, [101]) as never);
+
+		await engine.sync('variation-prefetch');
+		// Second tick finds the parent covered and completes the walk. A local wipe
+		// changes neither the census total nor the parent frontier, so only the
+		// reset invalidator can revive the lane.
+		await engine.sync('variation-prefetch');
+		await expect(engine.sync('variation-prefetch')).resolves.toMatchObject({
+			status: 'skipped',
+			reason: 'walk-complete',
+		});
+		await engine.scope.resetCollection('variations');
+		await expect(engine.sync('variation-prefetch')).resolves.toMatchObject({ status: 'ran' });
+		expect(requested).toEqual(['101', '101']);
+		await engine.dispose();
+	});
+
 	it('is excluded from a manual full sync but remains explicitly tickable', async () => {
 		const variationRequests: string[] = [];
 		const engine = engineWith({
