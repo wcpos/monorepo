@@ -74,7 +74,7 @@ import {
 	seedTargetedOrderSchedulerTask,
 } from './scheduler';
 import { createDemandFloodDetector } from './demand-flood-detector';
-import { REFERENCE_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
+import { REFERENCE_DEMAND_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
 import { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
 import { withLedgerRecovery } from './local-coverage/ledger-storage-recovery';
 
@@ -755,9 +755,10 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 
 			// On-demand reference pull (#952). Categories/tags/brands/coupons are no longer
 			// seeded at boot; the mounted picker/screen/cart binding that needs one declares a
-			// `refresh` and the greedy lane runs HERE, at open. `REFERENCE_REFRESH_DEDUPE_MS`
-			// collapses a remount (or a second surface over the same collection) into the one
-			// pull, so repeated opens cost nothing until the window lapses.
+			// `refresh` and the greedy lane runs HERE, at open. The short
+			// `REFERENCE_DEMAND_REFRESH_DEDUPE_MS` collapses remount churn into one pull
+			// while guaranteeing a deliberate open revalidates — the idle lane's 4-minute
+			// `REFERENCE_REFRESH_DEDUPE_MS` must never suppress a picker open (#1302).
 			if (item.requirement.kind === 'refresh' && descriptor.shape === 'greedy-prunable') {
 				return runSeedDrain({
 					seed: async () => {
@@ -769,7 +770,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 								collections: [descriptor.collection],
 								completedDedupeForMs: item.requirement.forceRefresh
 									? 0
-									: REFERENCE_REFRESH_DEDUPE_MS,
+									: REFERENCE_DEMAND_REFRESH_DEDUPE_MS,
 								database: database,
 								...(nowMs !== undefined ? { nowMs } : {}),
 							}),
