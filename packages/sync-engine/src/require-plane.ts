@@ -289,6 +289,15 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	});
 	const queue: QueuedRequirement[] = [];
 	const activeSearches = new Map<string, QueuedRequirement>();
+	// Demand-path reference refreshes dedupe ONLY against their own last pull
+	// (#1302 round 2): the persisted task timestamp is shared with the idle
+	// maintenance lane, and a maintenance completion landing shortly before a
+	// picker open suppressed the open's pull — a record created in that gap
+	// stayed invisible (field-confirmed within hours of the shared-window
+	// attempt). In-memory and per plane: a fresh app boot always pulls on
+	// first open, remount churn within the window still costs nothing, and
+	// maintenance completions never count.
+	const lastDemandReferencePullMs = new Map<string, number>();
 	let seq = 0;
 	let running = false;
 	const defaultSearchLimit = 25;
@@ -760,17 +769,33 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			// while guaranteeing a deliberate open revalidates — the idle lane's 4-minute
 			// `REFERENCE_REFRESH_DEDUPE_MS` must never suppress a picker open (#1302).
 			if (item.requirement.kind === 'refresh' && descriptor.shape === 'greedy-prunable') {
-				return runSeedDrain({
+				const demandNowMs = deps.now?.() ?? Date.now();
+				const lastOwnPull = lastDemandReferencePullMs.get(descriptor.collection);
+				if (
+					!item.requirement.forceRefresh &&
+					lastOwnPull !== undefined &&
+					demandNowMs - lastOwnPull < REFERENCE_DEMAND_REFRESH_DEDUPE_MS
+				) {
+					return {
+						action: 'serve-local',
+						missingRecordIds: [],
+						reason: `${descriptor.collection} refreshed by demand within the dedupe window`,
+						requests: 0,
+						documents: 0,
+					};
+				}
+				const outcome = await runSeedDrain({
 					seed: async () => {
 						// One clock reading for BOTH halves of the tick: the dedupe window the seed
 						// measures and the runnability the drain measures must agree.
 						const nowMs = deps.now?.();
 						return {
+							// completedDedupeForMs 0: the persisted task timestamp is shared with
+							// the idle maintenance lane and must never answer for a demand open —
+							// the in-memory own-window check above is the only demand dedupe.
 							seed: await seedReferenceLanes({
 								collections: [descriptor.collection],
-								completedDedupeForMs: item.requirement.forceRefresh
-									? 0
-									: REFERENCE_DEMAND_REFRESH_DEDUPE_MS,
+								completedDedupeForMs: 0,
 								database: database,
 								...(nowMs !== undefined ? { nowMs } : {}),
 							}),
@@ -783,6 +808,10 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					fetchedReason: `drained ${descriptor.collection} refresh`,
 					freshReason: `${descriptor.collection} refreshed within the dedupe window`,
 				});
+				if (outcome.action === 'fetched') {
+					lastDemandReferencePullMs.set(descriptor.collection, demandNowMs);
+				}
+				return outcome;
 			}
 
 			if (item.requirement.kind === 'search') {
