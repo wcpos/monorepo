@@ -1,10 +1,9 @@
 import * as React from 'react';
 
 import { IconButton } from '@wcpos/components/icon-button';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { useRemoveLineItem } from '../../hooks/use-remove-line-item';
-
-import type { CellContext } from '@tanstack/react-table';
 
 interface Props {
 	uuid: string;

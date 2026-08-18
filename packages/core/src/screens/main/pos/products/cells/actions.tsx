@@ -1,7 +1,6 @@
 import * as React from 'react';
 
-import { CellContext } from '@tanstack/react-table';
-
+import type { CellContext } from '@wcpos/core/table-types';
 import { IconButton } from '@wcpos/components/icon-button';
 import type { EngineRecord } from '@wcpos/query';
 

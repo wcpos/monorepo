@@ -7,10 +7,9 @@ import get from 'lodash/get';
 import { Image } from '@wcpos/components/image';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { ProductVariationDocument } from '@wcpos/database';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { useImageAttachment } from '../../hooks/use-image-attachment';
-
-import type { CellContext } from '@tanstack/react-table';
 
 /**
  *

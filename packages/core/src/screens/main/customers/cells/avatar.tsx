@@ -4,10 +4,9 @@ import { useObservableEagerState } from 'observable-hooks';
 import { of } from 'rxjs';
 
 import { Image } from '@wcpos/components/image';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { useImageAttachment } from '../../hooks/use-image-attachment';
-
-import type { CellContext } from '@tanstack/react-table';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 

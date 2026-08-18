@@ -2,12 +2,12 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
+import type { CellContext } from '@wcpos/core/table-types';
+
 import { DatePickerInput } from '../../components/coupon/date-picker-input';
 import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { useProAccess } from '../../contexts/pro-access';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
-
-import type { CellContext } from '@tanstack/react-table';
 
 type CouponDocument = import('@wcpos/database').CouponDocument;
 

@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import get from 'lodash/get';
 import omit from 'lodash/omit';
 import { useObservableEagerState, useObservableRef } from 'observable-hooks';
-import { type ExpandedState, getExpandedRowModel, type Row } from '@tanstack/react-table';
+import { type ExpandedState } from '@tanstack/react-table';
 
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -54,7 +54,8 @@ import { normalizeQuerySortField } from '../../../../query/query-state-translato
 
 import type { QueryStateActions, QueryStateOf } from '../../../../query';
 import type { SortFieldsByCollection } from '../../../../query/query-state-types';
-import type { BindingDataTableFooterProps } from '../../components/data-table';
+import type { BindingDataTableFooterProps, DataTableFeatures } from '../../components/data-table';
+import type { Row, Table } from '../../../../table-types';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductRow = { document: ProductDocument; record: EngineRecord<'products'> };
@@ -151,9 +152,9 @@ function renderItem({
 	index,
 	table,
 }: {
-	item: Row<ProductRow>;
+	item: Row<ProductRow, DataTableFeatures>;
 	index: number;
-	table: import('@tanstack/react-table').Table<ProductRow>;
+	table: Table<ProductRow, DataTableFeatures>;
 }) {
 	if (item.original.record.payload.type === 'variable') {
 		return <VariableProductRow item={item} index={index} table={table} />;
@@ -252,12 +253,12 @@ function POSProductsContent({
 	 */
 	const tableConfig = React.useMemo(
 		() => ({
-			getExpandedRowModel: getExpandedRowModel(),
 			onExpandedChange: (updater: ExpandedState | ((old: ExpandedState) => ExpandedState)) => {
 				const value = typeof updater === 'function' ? updater(expandedRef.current) : updater;
 				expandedRef.current = value;
 			},
-			getRowCanExpand: (row: Row<ProductRow>) => row.original.record.payload.type === 'variable',
+			getRowCanExpand: (row: Row<ProductRow, DataTableFeatures>) =>
+				row.original.record.payload.type === 'variable',
 			meta: {
 				expandedRef,
 				expanded$,

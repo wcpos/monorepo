@@ -128,7 +128,7 @@
     "@rn-primitives/tooltip": "^1.5.2",
     "@rn-primitives/types": "^1.5.2",
     "@rn-primitives/utils": "^1.5.2",
-    "@tanstack/react-table": "^8.21.3",
+    "@tanstack/react-table": "^9.1.2",
     "@tanstack/react-virtual": "^3.14.9",
     "@uiw/react-json-view": "2.0.0-alpha.43",
     "class-variance-authority": "^0.7.1",

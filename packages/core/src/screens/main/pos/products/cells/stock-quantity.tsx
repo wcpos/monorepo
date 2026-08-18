@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { CellContext } from '@tanstack/react-table';
 import isFinite from 'lodash/isFinite';
 
+import type { CellContext } from '@wcpos/core/table-types';
 import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 

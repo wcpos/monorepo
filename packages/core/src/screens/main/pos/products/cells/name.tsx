@@ -3,6 +3,7 @@ import * as React from 'react';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { MetaData } from './meta-data';
 import { PlainAttributes, ProductAttributes } from '../../../components/product/attributes';
@@ -11,8 +12,6 @@ import { GroupedNames } from '../../../components/product/grouped-names';
 import { ProductTags } from '../../../components/product/tags';
 import { StockQuantity } from '../cells/stock-quantity';
 import { ProductBrands } from '../../../components/product/brands';
-
-import type { CellContext } from '@tanstack/react-table';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 

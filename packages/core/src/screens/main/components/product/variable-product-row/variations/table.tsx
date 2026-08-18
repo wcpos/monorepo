@@ -16,14 +16,19 @@ import { resolveVariationStock } from '../../../../pos/products/cells/variations
 import { TextCell } from '../../../../components/text-cell';
 import { getColumnStyle } from '../../../data-table';
 
-import type { CellContext, Row } from '@tanstack/react-table';
+import type { DataTableFeatures } from '../../../data-table';
+import type { Cell, CellContext, Row } from '../../../../../../table-types';
 
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 
 interface Props {
 	binding: ReturnType<typeof import('../../../../../../query').useCollectionBinding<'variations'>>;
-	row: Row<{ document: ProductDocument; record: EngineRecord<'products'> }>;
+	row: Row<{ document: ProductDocument; record: EngineRecord<'products'> }, DataTableFeatures>;
 	hideOutOfStock?: boolean;
+}
+
+interface TableCellRow {
+	document: Record<string, unknown>;
 }
 
 interface VariationHit {
@@ -32,12 +37,12 @@ interface VariationHit {
 	record: EngineRecord<'variations'>;
 }
 
-const cellRenderer = (props: CellContext<Record<string, unknown>, unknown>) => {
+const cellRenderer = (props: CellContext<TableCellRow, unknown, DataTableFeatures>) => {
 	const meta = props.table.options.meta as
 		| {
 				variationRenderCell?: (
-					props: CellContext<Record<string, unknown>, unknown>
-				) => React.ComponentType<CellContext<Record<string, unknown>, unknown>> | null;
+					props: CellContext<TableCellRow, unknown, DataTableFeatures>
+				) => React.ComponentType<CellContext<TableCellRow, unknown, DataTableFeatures>> | null;
 		  }
 		| undefined;
 	const Cell = meta?.variationRenderCell?.(props);
@@ -52,7 +57,7 @@ const cellRenderer = (props: CellContext<Record<string, unknown>, unknown>) => {
 		);
 	}
 
-	return <TextCell {...(props as CellContext<Record<string, unknown>, string>)} />;
+	return <TextCell {...(props as CellContext<TableCellRow, string, DataTableFeatures>)} />;
 };
 
 /**
@@ -93,9 +98,10 @@ export function VariationsTable({ binding, row, hideOutOfStock }: Props) {
 							.getVisibleCells()
 							.map(
 								(
-									cell: import('@tanstack/react-table').Cell<
+									cell: Cell<
 										{ document: ProductDocument; record: EngineRecord<'products'> },
-										unknown
+										unknown,
+										DataTableFeatures
 									>,
 									cellIndex: number
 								) => {
@@ -105,12 +111,11 @@ export function VariationsTable({ binding, row, hideOutOfStock }: Props) {
 									 */
 									const subrowCellContext = {
 										...cell.getContext(),
-										row: {
-											...row,
+										row: Object.assign(Object.create(row), {
 											parentId: row.id,
 											getParentRow: () => row,
 											original: hit,
-										},
+										}),
 									};
 
 									return (
@@ -122,8 +127,9 @@ export function VariationsTable({ binding, row, hideOutOfStock }: Props) {
 											{flexRender(
 												cellRenderer,
 												subrowCellContext as unknown as CellContext<
-													Record<string, unknown>,
-													unknown
+													TableCellRow,
+													unknown,
+													DataTableFeatures
 												>
 											)}
 										</TableCell>

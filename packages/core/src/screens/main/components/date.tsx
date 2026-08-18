@@ -3,10 +3,9 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { Text } from '@wcpos/components/text';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { useDateFormat } from '../hooks/use-date-format';
-
-import type { CellContext } from '@tanstack/react-table';
 
 type Document =
 	| import('@wcpos/database').ProductDocument

@@ -1,10 +1,9 @@
 import * as React from 'react';
 
 import { type EngineRecord, useRecordField } from '@wcpos/query';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { PriceWithTax } from '../../components/product/price-with-tax';
-
-import type { CellContext } from '@tanstack/react-table';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
