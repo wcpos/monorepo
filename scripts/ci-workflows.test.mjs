@@ -317,32 +317,20 @@ test('deploy.yml names BOTH lane stores for the E2E job', () => {
 
 	assert.ok(runStep, 'deploy.yml e2e job no longer names a pro store');
 
-	// The free matrix is DEFERRED, not forgotten (#1277): dev-free cannot pass it
-	// yet. Naming the store is what re-enables it, so this asserts the deferral is
-	// deliberate and traceable — the commented line and its issue reference must
-	// both survive, which makes re-enabling a one-line edit and silent deletion a
-	// test failure.
-	const workflowText = readFileSync(
-		new URL('../.github/workflows/deploy.yml', import.meta.url),
-		'utf8'
+	// The free matrix went dark for weeks because this env var silently
+	// disappeared (#1277). It is now REQUIRED: a deploy.yml that stops naming
+	// the free store fails this test instead of quietly dropping free coverage.
+	assert.ok(
+		'E2E_STORE_URL_FREE' in runStep.env,
+		'deploy.yml e2e job no longer names a free store — the free matrix vanished silently'
 	);
-	if (!('E2E_STORE_URL_FREE' in runStep.env)) {
-		assert.match(
-			workflowText,
-			/#\s*E2E_STORE_URL_FREE:/,
-			'the free store is neither set nor deferred — the free matrix vanished silently'
-		);
-		assert.match(workflowText, /#1277/, 'free-matrix deferral lost its tracking issue');
-	}
 
 	// Each lane maps to its own allowed stores (owner ruling 2026-08-18): main
 	// may use dev-free + dev-pro and nothing else; next has only dev-next.
 	assert.match(runStep.env.E2E_STORE_URL_PRO, /dev-pro\.wcpos\.com/);
 	assert.match(runStep.env.E2E_STORE_URL_PRO, /dev-next\.wcpos\.com/);
-	if ('E2E_STORE_URL_FREE' in runStep.env) {
-		assert.match(runStep.env.E2E_STORE_URL_FREE, /dev-free\.wcpos\.com/);
-		assert.match(runStep.env.E2E_STORE_URL_FREE, /dev-next\.wcpos\.com/);
-	}
+	assert.match(runStep.env.E2E_STORE_URL_FREE, /dev-free\.wcpos\.com/);
+	assert.match(runStep.env.E2E_STORE_URL_FREE, /dev-next\.wcpos\.com/);
 	assert.ok(
 		!/dev-next\.wcpos\.com'\s*\|\|\s*'https:\/\/dev-next/.test(runStep.env.E2E_STORE_URL_PRO),
 		'both arms of the pro lane map resolve to dev-next — main would gate against the next store'
