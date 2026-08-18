@@ -15,7 +15,10 @@ import {
 	type StoreScopeIdentity,
 } from './create-rxdb-sync-engine';
 import { RxCoverageRepository } from './local-coverage/persistence';
-import { REFERENCE_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
+import {
+	REFERENCE_DEMAND_REFRESH_DEDUPE_MS,
+	REFERENCE_REFRESH_DEDUPE_MS,
+} from './maintenance/maintenance-lanes';
 import { RxQueryTotalRequestStateRepository } from './rx-query-total-request-state-repository';
 import * as schedulerDrain from './scheduler/engine-scheduler-drain';
 import { ledgerRebuiltSchedulerTaskRunnerResult } from './scheduler/rx-scheduler-task-runner';
@@ -587,6 +590,59 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 			reason: expect.stringMatching(/local sync bookkeeping was rebuilt/i),
 		});
 		expect(pulls).toEqual({ categories: 2, brands: 0, tags: 0, coupons: 0 });
+		await engine.dispose();
+	});
+
+	it('a maintenance backfill never suppresses a deliberate picker open (#1302)', async () => {
+		let nowMs = 1_000_000;
+		let couponPulls = 0;
+		const engine = engineWith({
+			now: () => nowMs,
+			fetcher: async (url) => {
+				if (new URL(url).pathname.endsWith('/coupons')) {
+					couponPulls += 1;
+				}
+				return Response.json([]);
+			},
+		});
+		const scope = await engine.ready;
+		// The #1282 shape: census knows the store has coupons the app never opened.
+		await scope.database.collections.queryTotalCacheEntries.upsert({
+			queryKey: 'census:coupons',
+			totalMatchingRecords: 1,
+			updatedAtMs: nowMs,
+			freshUntilMs: nowMs + 60_000,
+			schemaVersion: 1,
+		});
+		await engine.sync('reference-seed');
+		await engine.sync('scheduler-drain');
+		expect(couponPulls).toBe(1);
+
+		// A cashier opens the coupon picker past remount-churn territory but well
+		// inside the idle lane's 4-minute window. A coupon created after the idle
+		// pull only exists server-side, so the open MUST re-pull — the maintenance
+		// completion cannot answer for the till (#1302: it did, and a wp-admin
+		// coupon stayed invisible at the POS).
+		// The guarantee only holds while the demand window is strictly inside the
+		// idle window; if they ever converge this test would pass vacuously.
+		expect(REFERENCE_DEMAND_REFRESH_DEDUPE_MS).toBeLessThan(REFERENCE_REFRESH_DEDUPE_MS);
+		nowMs += REFERENCE_DEMAND_REFRESH_DEDUPE_MS + 1;
+		const opened = await engine.require({
+			id: 'coupon-picker',
+			collection: 'coupons',
+			kind: 'refresh',
+		}).ready;
+		expect(opened).toMatchObject({ action: 'fetched' });
+		expect(couponPulls).toBe(2);
+
+		// Remount churn immediately after the open still costs nothing.
+		const remounted = await engine.require({
+			id: 'coupon-picker-remount',
+			collection: 'coupons',
+			kind: 'refresh',
+		}).ready;
+		expect(remounted).toMatchObject({ action: 'serve-local', requests: 0 });
+		expect(couponPulls).toBe(2);
 		await engine.dispose();
 	});
 
