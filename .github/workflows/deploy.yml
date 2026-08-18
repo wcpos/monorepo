@@ -26,18 +26,12 @@ on:
     # gate always gets an answer — the same pattern test.yml uses for Lint /
     # Unit Tests.
 
-# PR-event runs all hit the ONE shared dev store; concurrent E2E runs contend
-# on the same pinned SKU / checkout flows and fail specs that pass solo
-# (verified 2026-08-07: 5 simultaneous runs → checkout/variations failures;
-# solo reruns green). Serialization used to be a single shared concurrency
-# group ('e2e-shared-store'), but GitHub keeps at most ONE pending run per
-# group: with 3+ PRs active, each new run evicted (cancelled) another PR's
-# queued run, and the evicted PR's required "🎭 E2E Tests" gate never
-# reported at all (observed 2026-08-11: a dozen cross-PR cancellations in one
-# evening). First-attempt groups are therefore per-PR — a new push can only
-# supersede ITS OWN PR's older run. Re-run attempts use their original run id
-# so a stale re-run cannot cancel a newer SHA. Cross-run store serialization
-# moved to the ⏳ Shared-store queue job below, which waits instead.
+# Concurrency groups are per-PR — a new push can only supersede ITS OWN PR's
+# older run (a single shared group let each new run evict another PR's queued
+# run, and the evicted PR's required "🎭 E2E Tests" gate never reported;
+# observed 2026-08-11). Re-run attempts use their original run id so a stale
+# re-run cannot cancel a newer SHA. There is deliberately NO cross-run store
+# serialization — see the comment above the e2e job.
 concurrency:
   group: ${{ github.event_name == 'pull_request' && format('deploy-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || format('deploy-{0}', github.ref) }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -153,176 +147,19 @@ jobs:
             echo "is_production=true" >> $GITHUB_OUTPUT
           fi
 
-  # Serializes E2E across ALL runs of this workflow (any trigger — they all
-  # drive the same shared dev store) without ever cancelling another run: it
-  # polls the Actions API and proceeds only when (a) no other run is executing
-  # or about to execute its E2E shards and (b) no other run entered this queue
-  # earlier (FIFO by this job's started_at, run id as tie-break — both sides
-  # evaluate the same total order, so two waiters can't deadlock or both
-  # proceed). Lock-free on purpose: a branch/mutex lock leaks when its holder
-  # is cancelled, but a cancelled run's shard jobs read as completed here, so
-  # the store frees itself. A few seconds of overlap remain possible between
-  # one run's queue passing and its shards appearing — the failure mode is a
-  # rare concurrent run (today's flake), never a blocked or cancelled gate.
-  queue:
-    name: ⏳ Shared-store queue
-    needs: deploy
-    if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main')
-    runs-on: ubuntu-latest
-    # Generous: each run ahead of us holds the store for its full E2E phase
-    # (~15–25 min), and agent-driven evenings queue several PRs deep. A
-    # timeout fails the e2e-gate with an explicit message — re-run the
-    # workflow — rather than silently passing.
-    timeout-minutes: 150
-    permissions:
-      actions: read
-      contents: read
-    steps:
-      - name: ⏳ Wait for the shared dev store to be free
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          RUN_ID: ${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          QUEUE_JOB='⏳ Shared-store queue'
-          SHARD_PREFIX='🎭 E2E Tests ('
-
-          # A transient GitHub API failure (5xx, truncated body — observed
-          # 2026-08-12 as "unexpected end of JSON input" failing this REQUIRED
-          # gate two seconds in) must not fail the gate. Retry each read; the
-          # poll loop below additionally treats a read that stays broken as
-          # "store busy" and just waits out the next cycle. Missing startup
-          # timestamps and the job-level timeout remain hard failures.
-          api() {
-            local attempt out
-            for attempt in 1 2 3; do
-              if out=$(gh api "$@" 2>/dev/null); then
-                printf '%s\n' "$out"
-                return 0
-              fi
-              echo "::warning::gh api $1 failed (attempt $attempt/3)" >&2
-              if (( attempt < 3 )); then
-                sleep $((attempt * 15))
-              fi
-            done
-            return 1
-          }
-
-          # Our queue-arrival timestamp is the FIFO ordering key.
-          my_started=$(api "repos/$REPO/actions/runs/$RUN_ID/jobs?per_page=100" \
-            --jq ".jobs[] | select(.name == \"$QUEUE_JOB\") | .started_at" | head -n 1 || true)
-          if [ -z "$my_started" ]; then
-            echo "::error::Could not read this run's queue job start time"
-            exit 1
-          fi
-          echo "Queue slot: $my_started (run $RUN_ID)"
-
-          while :; do
-            busy=""
-            # A queued run normally starts within minutes; one stuck queued for
-            # longer is a zombie (observed 2026-08-12: run 31123458025 had sat
-            # "queued" for SIX DAYS) and counting it as a rollout-era blocker
-            # would hold the store hostage until every waiter's 150-minute
-            # timeout. Two hours is comfortably past real runner wait times.
-            queued_cutoff=$(date -u -d '2 hours ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
-              || date -u -v-2H '+%Y-%m-%dT%H:%M:%SZ')
-            if ! active_runs=$(
-              api "repos/$REPO/actions/workflows/deploy.yml/runs?status=in_progress&per_page=100" \
-                --paginate --jq '.workflow_runs[].id' &&
-              api "repos/$REPO/actions/workflows/deploy.yml/runs?status=queued&per_page=100" \
-                --paginate --jq ".workflow_runs[] | select(.created_at > \"$queued_cutoff\") | .id"
-            ); then
-              echo "⏳ GitHub API unavailable while listing runs — waiting…"
-              sleep 180
-              continue
-            fi
-            for id in $active_runs; do
-              [ "$id" = "$RUN_ID" ] && continue
-              if ! jobs=$(api "repos/$REPO/actions/runs/$id/jobs?per_page=100" \
-                --jq '[.jobs[] | {name, status, conclusion, started_at, completed_at}]'); then
-                busy="run $id could not be inspected (GitHub API error)"
-                break
-              fi
-
-              # Zombie fence, applied to every ownership rule below: runner
-              # death leaves a job "in_progress" forever with no logs (observed
-              # 3× on 2026-08-12; run 31587156153's shard held the store ~50
-              # min and stalled every waiter repo-wide). Anything claiming the
-              # store longer than the 60-minute shard timeout plus slack can
-              # only be a zombie — GitHub would have killed a live job.
-              ownership_cutoff=$(date -u -d '90 minutes ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
-                || date -u -v-90M '+%Y-%m-%dT%H:%M:%SZ')
-
-              # A shard actively running → the store is in use. (Only
-              # in_progress counts: check runs for not-yet-eligible jobs can
-              # already sit "queued", and counting those would deadlock two
-              # waiters against each other. The started_at fence keeps a
-              # zombie shard — the exact incident above — from blocking here
-              # before the ownership rule's fence is ever consulted.)
-              running=$(jq --arg p "$SHARD_PREFIX" --arg cutoff "$ownership_cutoff" \
-                '[.[] | select((.name | startswith($p)) and .status == "in_progress")
-                      | select(.started_at > $cutoff)] | length' <<< "$jobs")
-              if [ "$running" != "0" ]; then
-                busy="run $id is executing $running E2E shard(s)"
-                break
-              fi
-
-              # Runs created before this queue existed have no queue job.
-              # Hold the store until those rollout-era runs finish, including
-              # ones still queued in the former shared concurrency group.
-              queue_seen=$(jq --arg q "$QUEUE_JOB" \
-                '[.[] | select(.name == $q)] | length' <<< "$jobs")
-              if [ "$queue_seen" = "0" ]; then
-                busy="run $id uses the previous workflow and has not finished"
-                break
-              fi
-
-              # Their queue already passed but their shards haven't all
-              # finished → they own the store (covers the gap where shards
-              # exist only as queued check runs, or none are listed yet). The
-              # completed_at fence expires claims a zombie can't release —
-              # completed_at is in the projection above precisely for this.
-              queue_passed=$(jq --arg q "$QUEUE_JOB" --arg cutoff "$ownership_cutoff" \
-                '[.[] | select(.name == $q and .status == "completed" and .conclusion == "success")
-                      | select(.completed_at > $cutoff)] | length' <<< "$jobs")
-              if [ "$queue_passed" != "0" ]; then
-                shards_done=$(jq --arg p "$SHARD_PREFIX" \
-                  '([.[] | select(.name | startswith($p))] | length > 0) and ([.[] | select((.name | startswith($p)) and .status != "completed")] | length == 0)' <<< "$jobs")
-                if [ "$shards_done" != "true" ]; then
-                  busy="run $id passed the queue and its shards have not finished"
-                  break
-                fi
-              fi
-
-              # An earlier waiter goes first — unless its queue job has sat
-              # "in_progress" past its own 150-minute timeout, which only a
-              # zombie can do (GitHub would have killed a live one).
-              waiter_cutoff=$(date -u -d '150 minutes ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
-                || date -u -v-150M '+%Y-%m-%dT%H:%M:%SZ')
-              older=$(jq --arg q "$QUEUE_JOB" --arg mine "$my_started" --arg cutoff "$waiter_cutoff" --argjson me "$RUN_ID" --argjson other "$id" \
-                '[.[] | select(.name == $q and .status == "in_progress")
-                      | select(.started_at > $cutoff)
-                      | select(.started_at < $mine or (.started_at == $mine and $other < $me))] | length' <<< "$jobs")
-              if [ "$older" != "0" ]; then
-                busy="run $id entered the queue before us"
-                break
-              fi
-            done
-
-            if [ -z "$busy" ]; then
-              echo "✅ Store is free — releasing the E2E shards"
-              exit 0
-            fi
-            echo "⏳ $busy — waiting…"
-            # Keep several simultaneous waiters below GITHUB_TOKEN's shared
-            # 1,000-requests-per-hour repository limit.
-            sleep 180
-          done
-
+  # E2E runs from concurrent PRs hit the shared dev store WITHOUT any
+  # cross-run serialization. A global FIFO queue job lived here from
+  # 2026-08-12 to 2026-08-18: with 2+ PRs active it starved every merge gate
+  # (the gate polls ~40 min; queue latency ran to hours), so nothing merged
+  # on agent-heavy evenings. Cross-run safety is the SPECS' job — worker- and
+  # run-private probe records (checkout-probe.ts / search-probe.ts random
+  # tokens), relative count assertions (store-agnostic E2E policy in
+  # CLAUDE.md), and Playwright CI retries absorb residual contention. If a
+  # spec flakes under concurrency, fix THAT spec's isolation; do not
+  # reintroduce a cross-run mutex here.
   e2e:
     name: 🎭 E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
-    needs: [deploy, queue]
+    needs: deploy
     if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -440,7 +277,7 @@ jobs:
   # app-affecting paths) or when a manual dispatch explicitly opted out.
   e2e-gate:
     name: 🎭 E2E Tests
-    needs: [changes, deploy, queue, e2e]
+    needs: [changes, deploy, e2e]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -449,7 +286,6 @@ jobs:
           CHANGES_RESULT: ${{ needs.changes.result }}
           DEPLOY_RESULT: ${{ needs.deploy.result }}
           DEPLOY_URL: ${{ needs.deploy.outputs.deployment_url }}
-          QUEUE_RESULT: ${{ needs.queue.result }}
           E2E_RESULT: ${{ needs.e2e.result }}
           EVENT_NAME: ${{ github.event_name }}
           SKIP_E2E_INPUT: ${{ github.event.inputs.skip_e2e }}
@@ -487,13 +323,6 @@ jobs:
           if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$SKIP_E2E_INPUT" = "true" ]; then
             echo "⏭️ E2E skipped by the explicit skip_e2e workflow_dispatch input"
             exit 0
-          fi
-
-          # The shared-store queue timed out or errored, so the shards never
-          # ran. That is a real no-answer, not a pass — re-run the workflow.
-          if [ "${QUEUE_RESULT:-}" = "failure" ] || [ "${QUEUE_RESULT:-}" = "cancelled" ]; then
-            echo "::error::The shared-store queue did not succeed (result: ${QUEUE_RESULT:-}), so the E2E shards never ran. Re-run this workflow once the store frees up."
-            exit 1
           fi
 
           if [ "$DEPLOY_RESULT" != "success" ]; then
