@@ -408,11 +408,61 @@ async function waitForOPFSPersistence(page: Page): Promise<void> {
  * the session state. Unlike the old approach (writing directly to IndexedDB),
  * this works with the OPFS storage backend.
  */
+/**
+ * Wait until the app stops requesting catalogue records from the store.
+ *
+ * "First row visible" is not "catalogue synced": the initial sync keeps
+ * paginating products/variations/customers long after the first row renders.
+ * Snapshotting OPFS at that point exports a sliver, and every restored test
+ * then finishes the remaining sync itself — measured 2026-08-18 as a flat
+ * ~75-85s tax on ~130 tests (2.5 spec-hours/run) against the Luma-scale
+ * stores. Network quiescence on the catalogue endpoints is the one signal
+ * that works regardless of how the table windows its rows or which
+ * collections the sync scheduler decides to walk.
+ *
+ * The cap is a safety valve: hitting it exports whatever has synced — the
+ * pre-existing behavior — rather than failing setup.
+ */
+async function waitForCatalogueQuiescence(
+	page: Page,
+	{ quietMs = 10_000, capMs = 300_000 }: { quietMs?: number; capMs?: number } = {}
+): Promise<void> {
+	const catalogueRequest =
+		/(\/wcpos\/v2\/|rest_route=(%2F|\/)wcpos(%2F|\/)v2(%2F|\/))(products|variations|customers)/;
+	let lastActivity = Date.now();
+	const onRequest = (request: { url(): string }) => {
+		if (catalogueRequest.test(request.url())) lastActivity = Date.now();
+	};
+	page.on('request', onRequest);
+	try {
+		const start = Date.now();
+		while (Date.now() - lastActivity < quietMs) {
+			if (Date.now() - start >= capMs) {
+				console.warn(
+					`[auth] catalogue sync still active after ${capMs}ms; exporting a partial snapshot`
+				);
+				return;
+			}
+			await page.waitForTimeout(1_000);
+		}
+	} finally {
+		page.off('request', onRequest);
+	}
+}
+
 export async function authenticateWithStore(
 	page: Page,
 	testInfo: TestInfo,
 	options: {
 		waitForCatalogue?: boolean;
+		/**
+		 * Also wait for catalogue sync traffic to go quiet before returning.
+		 * globalSetup turns this on so the OPFS snapshot it exports contains the
+		 * FULL catalogue: waitForCatalogue alone returns at the first synced row,
+		 * and a partial snapshot makes every restored test finish the remaining
+		 * sync itself (~75s/test against a Luma-scale store, measured 2026-08-18).
+		 */
+		waitForFullCatalogue?: boolean;
 		credentials?: { username: string; password: string };
 		/**
 		 * WooCommerce store id to open the POS against. Omit for "whichever store
@@ -423,7 +473,7 @@ export async function authenticateWithStore(
 		storeId?: number | string;
 	} = {}
 ) {
-	const { waitForCatalogue = true, storeId } = options;
+	const { waitForCatalogue = true, waitForFullCatalogue = false, storeId } = options;
 	let discoveredStoreIds: string[] = [];
 	const storeUrl = getStoreUrl(testInfo);
 	const context = page.context();
@@ -720,6 +770,9 @@ export async function authenticateWithStore(
 		await expect(page.getByTestId('data-table-count')).toContainText(/[1-9]/, {
 			timeout: 120_000,
 		});
+		if (waitForFullCatalogue) {
+			await waitForCatalogueQuiescence(page);
+		}
 	} else {
 		await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 120_000 });
 	}
@@ -845,9 +898,16 @@ export async function hydrateAuthenticatedPage(
 				throw new Error('Saved auth state restored into an app error; falling back to OAuth.');
 			}
 			if (waitForCatalogue) {
+				// Every rendered product shape counts as the marker. Omitting
+				// variable-product-tile made this wait burn its FULL timeout on any
+				// store whose first grid page is all variable products (the Luma
+				// catalogue is) — a silent 60s tax on every posPage test, swallowed
+				// by the .catch below. Measured 2026-08-18: hydrate was 2s + 60s of
+				// exactly this.
 				const productMarker = page
 					.getByTestId('product-tile')
 					.first()
+					.or(page.getByTestId('variable-product-tile').first())
 					.or(page.getByTestId('add-to-cart-button').first())
 					.first();
 				await productMarker.waitFor({ state: 'visible', timeout: 60_000 }).catch(() => {});
