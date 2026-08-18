@@ -142,6 +142,11 @@ test.describe('search-probe pure logic', () => {
 
 	test('adopts only the exact product identified by the create token', () => {
 		const exact = { id: 42, name: 'E2E Probe zxexact', slug: 'e2e-probe-zxexact' };
+		const custom = {
+			id: 44,
+			name: 'E2E Probe zxexact alpha',
+			slug: 'e2e-probe-zxexact-alpha',
+		};
 		expect(
 			findCreatedProductRecord(
 				[
@@ -152,6 +157,7 @@ test.describe('search-probe pure logic', () => {
 				'zxexact'
 			)
 		).toEqual(exact);
+		expect(findCreatedProductRecord([custom], 'zxexact', [custom.name])).toEqual(custom);
 		expect(findCreatedProductRecord([], 'zxexact')).toBeNull();
 	});
 

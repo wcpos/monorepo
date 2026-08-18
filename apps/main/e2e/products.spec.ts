@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 import {
 	addCheckoutProbeProduct,
@@ -6,6 +6,40 @@ import {
 	isolatedProductTest as simpleProductTest,
 	isolatedVariableProductTest as test,
 } from './checkout-probe';
+import { searchAndWaitForServer, type SearchProbe } from './search-probe';
+
+function productSearchTest(title: string) {
+	simpleProductTest(title, async ({ posPage: page, runPrivateSimpleProducts }) => {
+		simpleProductTest.skip(
+			!runPrivateSimpleProducts,
+			'E2E product-writer credentials are not configured'
+		);
+		const probe = runPrivateSimpleProducts![0];
+		await assertRunPrivateProductSearch(page, probe);
+	});
+}
+
+async function assertRunPrivateProductSearch(page: Page, probe: SearchProbe) {
+	if (!probe.rowTestId) {
+		throw new Error('Run-private simple product is missing its slug-derived row testID');
+	}
+	await page.getByTestId('view-mode-toggle').click();
+	const countEl = page.getByTestId('data-table-count');
+	await expect(countEl).toBeVisible({ timeout: 15_000 });
+	const initialText = await countEl.textContent();
+	const nonMatchingRow = page
+		.locator(`[data-testid^="data-table-row-"]:not([data-testid="${probe.rowTestId}"]):visible`)
+		.first();
+	await expect(nonMatchingRow).toBeVisible({ timeout: 30_000 });
+	const nonMatchingRowTestId = await nonMatchingRow.getAttribute('data-testid');
+	if (!nonMatchingRowTestId) {
+		throw new Error('Visible non-matching product row is missing its data-testid');
+	}
+	await searchAndWaitForServer(page, page.getByTestId('search-products'), 'products', probe.token);
+	await expect(page.getByTestId(probe.rowTestId)).toBeVisible({ timeout: 30_000 });
+	await expect(page.getByTestId(nonMatchingRowTestId)).not.toBeVisible();
+	await expect.poll(() => countEl.textContent(), { timeout: 15_000 }).not.toBe(initialText);
+}
 
 /**
  * Product browsing and search in the POS panel (both free and pro).
@@ -54,21 +88,7 @@ test.describe('Products in POS', () => {
 		await expect(tiles.first()).toBeVisible({ timeout: 15_000 });
 	});
 
-	test('should search products by name', async ({ posPage: page }) => {
-		await page.getByTestId('view-mode-toggle').click();
-		const countEl = page.getByTestId('data-table-count');
-		await expect(countEl).toBeVisible({ timeout: 15_000 });
-		const initialCount = await countEl.textContent();
-		const knownNonMatch = page.getByTestId('data-table-row-hoodie');
-		await expect(knownNonMatch).toBeVisible({ timeout: 15_000 });
-
-		const searchInput = page.getByTestId('search-products');
-		await searchInput.fill('Belt');
-
-		await expect(page.getByTestId('data-table-row-belt')).toBeVisible({ timeout: 15_000 });
-		await expect(knownNonMatch).not.toBeVisible();
-		await expect.poll(() => countEl.textContent(), { timeout: 15_000 }).not.toBe(initialCount);
-	});
+	productSearchTest('should search products by name');
 
 	test('should clear search and show all products', async ({ posPage: page }) => {
 		const searchInput = page.getByTestId('search-products');
@@ -90,20 +110,7 @@ test.describe('Products in POS', () => {
 		await expect(page.getByTestId('no-data-message')).toBeVisible({ timeout: 15_000 });
 	});
 
-	test('should update product count after search', async ({ posPage: page }) => {
-		await page.getByTestId('view-mode-toggle').click();
-		const countEl = page.getByTestId('data-table-count');
-		await expect(countEl).toBeVisible({ timeout: 15_000 });
-		const initialText = await countEl.textContent();
-		await expect(page.getByTestId('data-table-row-hoodie')).toBeVisible({ timeout: 15_000 });
-
-		const searchInput = page.getByTestId('search-products');
-		await searchInput.fill('Belt');
-
-		await expect(page.getByTestId('data-table-row-belt')).toBeVisible({ timeout: 15_000 });
-		await expect(page.getByTestId('data-table-row-hoodie')).not.toBeVisible();
-		await expect.poll(() => countEl.textContent(), { timeout: 15_000 }).not.toBe(initialText);
-	});
+	productSearchTest('should update product count after search');
 
 	simpleProductTest(
 		'should add a simple product to cart by clicking tile',
