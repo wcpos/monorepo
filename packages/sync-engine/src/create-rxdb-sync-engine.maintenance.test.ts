@@ -116,6 +116,121 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		await engine.dispose();
 	});
 
+	it('refreshes every fresh census total during a full manual sync', async () => {
+		let productTotal = 40;
+		const fetchWooQueryTotal = vi.fn(async ({ request }: { request: { queryKey: string } }) =>
+			request.queryKey === 'census:products' ? productTotal : 40
+		);
+		const engine = engineWith({
+			queryTotal: { fetchWooQueryTotal },
+			now: () => 1_000_000,
+			intervals: { censusFreshForMs: 60_000 },
+		});
+		await engine.ready;
+		await engine.sync('query-total-retry');
+		const scope = engine.active();
+		if (!scope) throw new Error('no active scope');
+		const states = new RxQueryTotalRequestStateRepository(scope.database as never);
+		for (const queryKey of ['a:due', 'b:due']) {
+			await states.upsert({
+				queryKey,
+				status: 'failed',
+				ownerId: null,
+				claimedUntilMs: null,
+				attempt: 0,
+				retryAfterMs: 0,
+				updatedAtMs: 0,
+				request: {
+					queryKey,
+					method: 'GET',
+					endpoint: '/orders',
+					params: {},
+					totalHeader: 'X-WP-Total',
+				},
+			});
+		}
+		fetchWooQueryTotal.mockClear();
+		productTotal = 91;
+
+		const emissions: CensusTotals[] = [];
+		const unsubscribe = engine.censusChanges((totals) => emissions.push(totals));
+		await expect(engine.sync()).resolves.toMatchObject({ lane: 'all', status: 'ran' });
+
+		const requested = fetchWooQueryTotal.mock.calls.map(([input]) => input.request.queryKey);
+		expect(requested.filter((queryKey) => queryKey.startsWith('census:'))).toHaveLength(9);
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(10);
+		await vi.waitFor(() => expect(emissions.at(-1)?.products?.total).toBe(91));
+		unsubscribe();
+		await engine.dispose();
+	});
+
+	it('surfaces a failed census request during a full manual sync', async () => {
+		const fetchWooQueryTotal = vi.fn(async ({ request }: { request: { queryKey: string } }) => {
+			if (request.queryKey === 'census:products') throw new Error('HTTP 502');
+			return 40;
+		});
+		const engine = engineWith({ queryTotal: { fetchWooQueryTotal }, now: () => 1_000_000 });
+		await engine.ready;
+		const events: EngineEvent[] = [];
+		engine.events((event) => events.push(event));
+
+		await expect(engine.sync()).resolves.toMatchObject({
+			lane: 'all',
+			status: 'error',
+			error: 'Census refresh failed during full refresh',
+		});
+		expect(engine.status().lanes['query-total-retry'].lastError).toBe(
+			'Census refresh failed during full refresh'
+		);
+		expect(
+			events.some(
+				(event) =>
+					event.type === 'lane-finish' &&
+					event.lane === 'query-total-retry' &&
+					event.status === 'error'
+			)
+		).toBe(true);
+		await engine.dispose();
+	});
+
+	it('keeps a live census claim while a full manual sync refreshes the other collections', async () => {
+		const nowMs = 1_000_000;
+		const fetchWooQueryTotal = vi.fn(async (_input: { request: { queryKey: string } }) => 40);
+		const engine = engineWith({
+			queryTotal: { fetchWooQueryTotal },
+			now: () => nowMs,
+			intervals: { censusFreshForMs: 60_000 },
+		});
+		await engine.ready;
+		await engine.sync('query-total-retry');
+		const scope = engine.active();
+		if (!scope) throw new Error('no active scope');
+		const states = new RxQueryTotalRequestStateRepository(scope.database as never);
+		const [products] = await states.readForQueryKeys(['census:products']);
+		if (!products) throw new Error('products census state was not seeded');
+		await states.upsert({
+			...products,
+			status: 'in-flight',
+			ownerId: 'other-engine',
+			claimedUntilMs: nowMs + 30_000,
+		});
+		fetchWooQueryTotal.mockClear();
+
+		await engine.sync();
+
+		const requested = fetchWooQueryTotal.mock.calls.map(([input]) => input.request.queryKey);
+		expect(requested).toHaveLength(8);
+		expect(requested).not.toContain('census:products');
+		await expect(states.readForQueryKeys(['census:products'])).resolves.toEqual([
+			expect.objectContaining({
+				status: 'in-flight',
+				ownerId: 'other-engine',
+				claimedUntilMs: nowMs + 30_000,
+			}),
+		]);
+		await engine.dispose();
+	});
+
 	it('skips a collection check while a lifecycle operation is pending', async () => {
 		const fetchWooQueryTotal = vi.fn(async () => 40);
 		const engine = engineWith({ queryTotal: { fetchWooQueryTotal } });
@@ -454,7 +569,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		await engine.dispose();
 	});
 
-	it('seeds supported collection census requests and exposes fresh, stale, and unknown totals', async () => {
+	it('seeds census requests, skips fresh unforced ticks, and exposes freshness states', async () => {
 		let nowMs = 1_000_000;
 		const fetchWooQueryTotal = vi.fn(
 			async ({

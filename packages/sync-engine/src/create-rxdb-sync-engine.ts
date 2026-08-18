@@ -1683,7 +1683,7 @@ export function createRxdbSyncEngine(
 	const tickLaneWithEvents = async (
 		name: EngineLane,
 		signal?: AbortSignal,
-		// A variant tick of the SAME registered lane (the scoped census check) — the
+		// A variant tick of the SAME registered lane (a manual census check) — the
 		// override keeps lane events, activity counters, and the census publish on
 		// the standard path instead of minting a parallel uninstrumented lane.
 		tickOverride?: (signal?: AbortSignal) => Promise<SyncReport>
@@ -2026,7 +2026,20 @@ export function createRxdbSyncEngine(
 			// not imply a trickle tick. Its explicit single-lane form remains valid.
 			const reports: SyncReport[] = [];
 			for (const name of MANUAL_SYNC_LANES) {
-				const report = await tickLaneWithEvents(name, options?.signal);
+				const report = await tickLaneWithEvents(
+					name,
+					options?.signal,
+					name === 'query-total-retry'
+						? (signal) =>
+								maintenanceLanes.queryTotalRetry === null
+									? Promise.resolve<SyncReport>({
+											lane: 'query-total-retry',
+											status: 'skipped',
+											reason: 'no queryTotal port provided',
+										})
+									: maintenanceLanes.queryTotalRetry.tick(signal, { forceAllCensus: true })
+						: undefined
+				);
 				laneLastTick.set(name, {
 					atMs: ports.now !== undefined ? ports.now() : Date.now(),
 					status: report.status,
