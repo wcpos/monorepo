@@ -57,6 +57,7 @@ import { RxQueryTotalRequestStateRepository } from '../rx-query-total-request-st
 import { RxQueryTotalCacheRepository } from '../collections/rx-query-total-cache-repository';
 import { withLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
 import { type CustomerTrickleStateStore, tickCustomerTrickle } from './customer-trickle';
+import { type ProductTrickleStateStore, tickProductTrickle } from './product-trickle';
 import { tickVariationPrefetch, type VariationPrefetchStateStore } from './variation-prefetch';
 import {
 	laneRegistryEntry,
@@ -138,9 +139,12 @@ type MaintenanceLaneDeps = {
 	customerTrickleStateFor: (scopeId: string) => CustomerTrickleStateStore;
 	censusTotals: () => Promise<CensusTotals>;
 	customerCensusTotal: () => Promise<CensusTotal | null>;
+	productTrickleStateFor: (scopeId: string) => ProductTrickleStateStore;
+	productCensusTotal: () => Promise<CensusTotal | null>;
 	variationPrefetchStateFor: (scopeId: string) => VariationPrefetchStateStore;
 	variationCensusTotal: () => Promise<CensusTotal | null>;
 	hasPendingInteractiveWork: () => boolean;
+	isWritePlaneOwner: () => boolean;
 	lastUserActivityMs?: () => number;
 	emitEvent: (event: QueryTotalCacheEvent) => void;
 	now?: () => number;
@@ -208,6 +212,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 	const now = deps.now ?? (() => Date.now());
 	const pressureDeferredLanes = new Set<MaintenanceLaneName>([
 		'customer-trickle',
+		'product-trickle',
 		'variation-prefetch',
 		'existence-prime',
 		'existence-reconcile',
@@ -647,6 +652,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			})
 		: null;
 	const customerTrickle = lane('customer-trickle', async (db, scopeId, signal, fetcher) => {
+		if (!deps.isWritePlaneOwner()) {
+			return { summary: null, status: 'skipped', reason: 'not-write-plane-owner' };
+		}
 		const result = await tickCustomerTrickle({
 			baseUrl: deps.syncBaseUrl,
 			database: db,
@@ -666,6 +674,30 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		return {
 			summary: `Customer trickle: page ${result.page}, ${result.rows} customers`,
 		};
+	});
+	const productTrickle = lane('product-trickle', async (db, scopeId, signal, fetcher) => {
+		if (!deps.isWritePlaneOwner()) {
+			return { summary: null, status: 'skipped', reason: 'not-write-plane-owner' };
+		}
+		const barcodeSelectors = () => deps.barcodeSelectorsFor?.(scopeId) ?? undefined;
+		const result = await tickProductTrickle({
+			baseUrl: deps.syncBaseUrl,
+			database: db,
+			fetcher,
+			stateStore: deps.productTrickleStateFor(scopeId),
+			hasPendingWork: deps.hasPendingInteractiveWork,
+			productCensusTotal: deps.productCensusTotal,
+			barcodeSelectors,
+			now,
+			...(deps.lastUserActivityMs !== undefined
+				? { lastUserActivityMs: deps.lastUserActivityMs }
+				: {}),
+			signal,
+		});
+		if (result.status !== 'ran') {
+			return { summary: null, status: 'skipped', reason: result.reason };
+		}
+		return { summary: `Product trickle: page ${result.page}, ${result.rows} products` };
 	});
 	const variationPrefetch = lane('variation-prefetch', async (db, scopeId, signal, fetcher) => {
 		const barcodeSelectors: BarcodeSelectorsReader | undefined =
@@ -770,6 +802,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		referenceSeed,
 		queryTotalRetry,
 		customerTrickle,
+		productTrickle,
 		variationPrefetch,
 		coverageCompaction,
 		existencePrime,

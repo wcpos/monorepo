@@ -52,12 +52,18 @@ async function starvationHarness() {
 		}),
 		censusTotals: async () => censusTotalsFromCache([], nowMs),
 		customerCensusTotal: async () => null,
+		productTrickleStateFor: () => ({
+			get: async () => null,
+			set: async () => undefined,
+		}),
+		productCensusTotal: async () => null,
 		variationPrefetchStateFor: () => ({
 			get: async () => null,
 			set: async () => undefined,
 		}),
 		variationCensusTotal: async () => null,
 		hasPendingInteractiveWork: () => false,
+		isWritePlaneOwner: () => true,
 		emitEvent: () => undefined,
 		now: () => nowMs,
 		isServerBackingOff: () => pressure || retryAfterActive,

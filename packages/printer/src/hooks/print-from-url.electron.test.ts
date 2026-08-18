@@ -53,9 +53,7 @@ describe('printFromUrl (electron)', () => {
 		vi.useFakeTimers();
 		installIpc();
 		const promise = printFromUrl('https://example.com/receipt', vi.fn());
-		const assertion = expect(promise).rejects.toThrow(
-			'Electron print timed out after 30000ms'
-		);
+		const assertion = expect(promise).rejects.toThrow('Electron print timed out after 30000ms');
 
 		await vi.advanceTimersByTimeAsync(30_000);
 		await assertion;

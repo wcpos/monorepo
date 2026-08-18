@@ -177,6 +177,7 @@ describe('change-signal server-pressure adaptation', () => {
 
 		for (const lane of [
 			'customer-trickle',
+			'product-trickle',
 			'existence-prime',
 			'existence-reconcile',
 			'query-total-retry',
