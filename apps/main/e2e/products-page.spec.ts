@@ -6,6 +6,7 @@ import {
 	createSearchProbe,
 	deleteSearchProbe,
 	fetchProductRecord,
+	mintSearchProbeToken,
 	productWriterAuthorization,
 	productWriterCredentialsConfigured,
 	searchAndWaitForServer,
@@ -88,56 +89,111 @@ test.describe('Products Page (Pro)', () => {
 
 	test('should reorder rows when clicking the Name column header on Products page', async ({
 		posPage: page,
-	}) => {
-		await navigateToPage(page, 'products');
-		const screen = page.locator('[data-testid="screen-products"]:visible');
-		await expect(screen.getByTestId('data-table-count')).toBeVisible({
-			timeout: 60_000,
+		request,
+		storeAuthorization,
+	}, testInfo) => {
+		const storeUrl = getStoreUrl(testInfo);
+		const writerAuthorization = await productWriterAuthorization(request, storeUrl);
+		const authorization = writerAuthorization ?? storeAuthorization();
+		const token = mintSearchProbeToken(testInfo.workerIndex);
+		const alpha = await createSearchProbe({
+			request,
+			storeUrl,
+			authorization,
+			collection: 'products',
+			workerIndex: testInfo.workerIndex,
+			token,
+			writerConfigured: Boolean(writerAuthorization),
+			productData: { name: `E2E Probe ${token} alpha` },
 		});
-
-		// Use deterministic fixture data known to include multiple hoodie products.
-		const searchInput = screen.getByTestId('search-products');
-		await searchInput.fill('hoodie with');
-		await page.waitForTimeout(1_500);
-
-		const hoodieWithPocketRow = screen
-			.locator('[data-testid="data-table-row-hoodie-with-pocket"]:visible')
-			.first();
-		const hoodieWithZipperRow = screen
-			.locator('[data-testid="data-table-row-hoodie-with-zipper"]:visible')
-			.first();
-		await expect(hoodieWithPocketRow).toBeVisible({ timeout: 30_000 });
-		await expect(hoodieWithZipperRow).toBeVisible({ timeout: 30_000 });
-
-		const getRowOrder = async () => {
-			return Promise.all(
-				[hoodieWithPocketRow, hoodieWithZipperRow].map(
-					async (row) => (await row.boundingBox())?.y ?? -1
-				)
-			);
-		};
-
-		const [initialHoodieWithPocketY, initialHoodieWithZipperY] = await getRowOrder();
-		expect(initialHoodieWithPocketY).toBeGreaterThan(0);
-		expect(initialHoodieWithZipperY).toBeGreaterThan(0);
-		expect(initialHoodieWithPocketY).not.toBe(initialHoodieWithZipperY);
-		const initialSortDirection = Math.sign(initialHoodieWithPocketY - initialHoodieWithZipperY);
-
-		const productSortControl = screen.getByTestId('data-table-header-name').first();
-		await expect(productSortControl).toBeVisible({ timeout: 15_000 });
-		await productSortControl.click();
-
-		const getSortDirection = async () => {
-			const [hoodieWithPocketY, hoodieWithZipperY] = await getRowOrder();
-			return Math.sign(hoodieWithPocketY - hoodieWithZipperY);
-		};
+		if (!alpha.ok) {
+			const reason = writerAuthorization
+				? alpha.reason
+				: `${alpha.reason} (E2E_PRODUCT_WRITER_USER/_PASS are not configured)`;
+			test.skip(true, reason);
+			return;
+		}
+		const zulu = await createSearchProbe({
+			request,
+			storeUrl,
+			authorization,
+			collection: 'products',
+			workerIndex: testInfo.workerIndex,
+			token,
+			writerConfigured: Boolean(writerAuthorization),
+			productData: { name: `E2E Probe ${token} zulu` },
+		});
+		if (!zulu.ok) {
+			await deleteSearchProbe({
+				request,
+				storeUrl,
+				authorization,
+				collection: alpha.probe.collection,
+				id: alpha.probe.id,
+			});
+			const reason = writerAuthorization
+				? zulu.reason
+				: `${zulu.reason} (E2E_PRODUCT_WRITER_USER/_PASS are not configured)`;
+			test.skip(true, reason);
+			return;
+		}
 
 		try {
-			await expect.poll(getSortDirection, { timeout: 8_000 }).toBe(initialSortDirection * -1);
-		} catch {
-			// First click can set the current sort direction instead of toggling it.
+			if (!alpha.probe.rowTestId || !zulu.probe.rowTestId) {
+				throw new Error('Product sort probe is missing its WC response slug-derived row testID');
+			}
+			await navigateToPage(page, 'products');
+			const screen = page.locator('[data-testid="screen-products"]:visible');
+			await expect(screen.getByTestId('data-table-count')).toBeVisible({
+				timeout: 60_000,
+			});
+
+			const searchInput = screen.getByTestId('search-products');
+			await searchAndWaitForServer(page, searchInput, 'products', token);
+
+			const alphaRow = screen.getByTestId(alpha.probe.rowTestId).first();
+			const zuluRow = screen.getByTestId(zulu.probe.rowTestId).first();
+			await expect(alphaRow).toBeVisible({ timeout: 30_000 });
+			await expect(zuluRow).toBeVisible({ timeout: 30_000 });
+
+			const getRowOrder = async () => {
+				return Promise.all(
+					[alphaRow, zuluRow].map(async (row) => (await row.boundingBox())?.y ?? -1)
+				);
+			};
+
+			const [initialAlphaY, initialZuluY] = await getRowOrder();
+			expect(initialAlphaY).toBeGreaterThan(0);
+			expect(initialZuluY).toBeGreaterThan(0);
+			expect(initialAlphaY).not.toBe(initialZuluY);
+			const initialSortDirection = Math.sign(initialAlphaY - initialZuluY);
+
+			const productSortControl = screen.getByTestId('data-table-header-name').first();
+			await expect(productSortControl).toBeVisible({ timeout: 15_000 });
 			await productSortControl.click();
-			await expect.poll(getSortDirection, { timeout: 15_000 }).toBe(initialSortDirection * -1);
+
+			const getSortDirection = async () => {
+				const [alphaY, zuluY] = await getRowOrder();
+				return Math.sign(alphaY - zuluY);
+			};
+
+			try {
+				await expect.poll(getSortDirection, { timeout: 8_000 }).toBe(initialSortDirection * -1);
+			} catch {
+				// First click can set the current sort direction instead of toggling it.
+				await productSortControl.click();
+				await expect.poll(getSortDirection, { timeout: 15_000 }).toBe(initialSortDirection * -1);
+			}
+		} finally {
+			for (const probe of [alpha.probe, zulu.probe]) {
+				await deleteSearchProbe({
+					request,
+					storeUrl,
+					authorization,
+					collection: probe.collection,
+					id: probe.id,
+				});
+			}
 		}
 	});
 
