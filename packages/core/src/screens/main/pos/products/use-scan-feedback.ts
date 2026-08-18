@@ -7,7 +7,7 @@ import { Toast } from '@wcpos/components/toast';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { playScanFailure, playScanSuccess } from './play-scan-sound';
+import { playScanFailure, playScanFailureHaptic, playScanSuccess } from './play-scan-sound';
 import { clampScanSoundVolume, normalizeScanSoundTheme } from './scan-sound-themes';
 
 const SUCCESS_DURATION = 2500;
@@ -93,15 +93,19 @@ export const useScanFeedback = () => {
 		};
 		const failure = () => {
 			const current = soundRef.current;
-			if (
-				current.barcode_scanning_sound_enabled &&
-				current.barcode_scanning_sound_failure_enabled
-			) {
+			if (!current.barcode_scanning_sound_enabled) {
+				return;
+			}
+			// Vibration is independent of the failure tone: a quiet counter can run
+			// vibration-only by switching the failure sound off (review on #1278).
+			if (current.barcode_scanning_sound_failure_enabled) {
 				playScanFailure({
 					theme: normalizeScanSoundTheme(current.barcode_scanning_sound_theme),
 					volume: clampScanSoundVolume(current.barcode_scanning_sound_volume),
 					haptic: current.barcode_scanning_sound_haptic_enabled,
 				});
+			} else if (current.barcode_scanning_sound_haptic_enabled) {
+				playScanFailureHaptic();
 			}
 		};
 

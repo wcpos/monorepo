@@ -31,6 +31,7 @@ jest.mock(
 type PlayModule = typeof import('./play-scan-sound');
 let playScanSuccess: PlayModule['playScanSuccess'];
 let playScanFailure: PlayModule['playScanFailure'];
+let playScanFailureHaptic: PlayModule['playScanFailureHaptic'];
 
 beforeEach(() => {
 	jest.clearAllMocks();
@@ -42,6 +43,7 @@ beforeEach(() => {
 		const mod = require('./play-scan-sound') as PlayModule;
 		playScanSuccess = mod.playScanSuccess;
 		playScanFailure = mod.playScanFailure;
+		playScanFailureHaptic = mod.playScanFailureHaptic;
 	});
 });
 
@@ -85,6 +87,13 @@ describe('native scan sounds', () => {
 		playScanFailure({ haptic: false });
 		expect(mockPlay).toHaveBeenCalledTimes(1);
 		expect(mockNotificationAsync).not.toHaveBeenCalled();
+	});
+
+	it('playScanFailureHaptic fires the haptic without any tone', () => {
+		playScanFailureHaptic();
+		expect(mockNotificationAsync).toHaveBeenCalledWith('error');
+		expect(mockPlay).not.toHaveBeenCalled();
+		expect(mockCreateAudioPlayer).not.toHaveBeenCalled();
 	});
 
 	it('never throws when the audio backend is unavailable', () => {

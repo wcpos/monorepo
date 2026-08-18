@@ -67,6 +67,11 @@ export function playScanFailure(options: PlayScanSoundOptions = {}): void {
 	if (options.haptic === false) {
 		return;
 	}
+	playScanFailureHaptic();
+}
+
+/** The error haptic alone — for stations with the failure sound off but vibration on. */
+export function playScanFailureHaptic(): void {
 	try {
 		// eslint-disable-next-line @typescript-eslint/no-require-imports
 		const Haptics = require('expo-haptics');

@@ -102,3 +102,6 @@ export function playScanFailure(options: PlayScanSoundOptions = {}): void {
 		// best-effort
 	}
 }
+
+/** No haptics on web — parity export so callers stay platform-agnostic. */
+export function playScanFailureHaptic(): void {}

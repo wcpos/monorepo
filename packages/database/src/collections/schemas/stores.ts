@@ -544,14 +544,17 @@ export const storesLiteral = {
 		},
 		barcode_scanning_sound_theme: {
 			title: 'Barcode scan sound theme',
-			description: 'Which tone set scan feedback plays (classic, checkout, soft)',
+			description: 'Which tone set scan feedback plays',
 			type: 'string',
+			enum: ['classic', 'checkout', 'soft'],
 			default: 'classic',
 		},
 		barcode_scanning_sound_volume: {
 			title: 'Barcode scan sound volume',
 			description: 'Playback gain for scan feedback, 0.05 (quiet) to 0.4 (loud)',
 			type: 'number',
+			minimum: 0.05,
+			maximum: 0.4,
 			default: 0.15,
 		},
 		barcode_scanning_sound_success_enabled: {
