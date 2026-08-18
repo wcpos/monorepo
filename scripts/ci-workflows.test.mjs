@@ -147,6 +147,20 @@ test('cold-start dispatches bind raw refs to an explicit store lane', () => {
 	assert.match(runStep.env.E2E_STORE_URL_PRO, /github\.event\.inputs\.lane == 'main'/);
 });
 
+test('the E2E auth-state cache is shard- and lane-scoped', () => {
+	// Reused auth states are validated at boot in globalSetup (stale falls back
+	// to full auth), but a state restored for the WRONG shard or lane would
+	// validate fine and then run every spec against the wrong cashier slot or
+	// store. The key must therefore carry both dimensions.
+	const step = readWorkflow('deploy.yml').jobs.e2e.steps.find(
+		(candidate) => candidate.with && candidate.with.path === 'apps/main/e2e/.auth-state'
+	);
+
+	assert.ok(step, 'deploy.yml e2e job no longer caches the auth state');
+	assert.match(step.with.key, /shard\$\{\{ matrix\.shardIndex \}\}/);
+	assert.match(step.with.key, /'next' \|\| 'main'/);
+});
+
 test('the deploy concurrency contract isolates stale rerun attempts', () => {
 	const workflow = readWorkflow('deploy.yml');
 

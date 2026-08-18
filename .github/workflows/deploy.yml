@@ -198,6 +198,18 @@ jobs:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
 
+      - name: 💾 Cache E2E auth state
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          # globalSetup validates a restored state by booting the app from it
+          # and silently falls back to a full re-auth when it is stale, so this
+          # cache can only ever save time, never poison a run. Keyed per shard
+          # (cashier slots differ) and per lane (different stores).
+          path: apps/main/e2e/.auth-state
+          key: e2e-auth-v1-${{ runner.os }}-${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'next' || 'main' }}-shard${{ matrix.shardIndex }}-${{ github.run_id }}
+          restore-keys: |
+            e2e-auth-v1-${{ runner.os }}-${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'next' || 'main' }}-shard${{ matrix.shardIndex }}-
+
       - name: 💾 Cache Playwright browsers
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:

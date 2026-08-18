@@ -10,7 +10,8 @@ import {
 	installThinCatalogueRoutes,
 } from './cold-start';
 import { authenticateWithStore, stubStoreVersionForE2E } from './fixtures';
-import { exportOPFS } from './opfs-helpers';
+import { restoreLocalStorage } from './indexeddb-helpers';
+import { exportOPFS, restoreOPFS } from './opfs-helpers';
 // Resolved by playwright.config, never re-derived here: these used to be two
 // independent copies with different fallbacks, so a lane could bootstrap against
 // one store and then run its specs against another.
@@ -92,6 +93,75 @@ async function exportLocalStorage(
 }
 
 /**
+ * Reuse a cached auth state (restored by the CI cache) when it still boots.
+ *
+ * globalSetup costs ~60s per variant per shard — login plus a full catalogue
+ * sync — and its output is deterministic per store. CI caches
+ * e2e/.auth-state across runs; this validates a restored state by actually
+ * booting the app from it (restore OPFS + localStorage, reload, POS search
+ * visible, no error boundary). Anything stale — expired JWT, wiped store,
+ * schema change — fails the boot and falls through to the normal full auth,
+ * so a bad cache costs one ~30s probe, never a red run. Cold-start states
+ * are excluded: theirs is deliberately a PRE-sync snapshot.
+ */
+async function reuseValidAuthState(
+	stateName: string,
+	variant: StoreVariant,
+	storeUrl: string,
+	baseURL: string
+): Promise<string[] | null> {
+	const statePath = path.join(AUTH_STATE_DIR, `${stateName}.json`);
+	if (!fs.existsSync(statePath)) return null;
+	let state: { opfs?: unknown; localStorage?: unknown; storeIds?: unknown };
+	try {
+		state = JSON.parse(fs.readFileSync(statePath, 'utf-8'));
+	} catch {
+		return null;
+	}
+	// Old snapshots without storeIds cannot satisfy the caller; treat as absent.
+	if (!state.opfs || !state.localStorage || !Array.isArray(state.storeIds)) return null;
+
+	const browser = await chromium.launch();
+	try {
+		const context = await browser.newContext({
+			baseURL,
+			viewport: { width: 1280, height: 720 },
+		});
+		if (shouldStubCrossOriginStoreRequests(storeUrl, baseURL)) {
+			await stubCrossOriginStoreDiscovery(context, storeUrl);
+		}
+		await stubStoreVersionForE2E(context, storeUrl, variant);
+		const page = await context.newPage();
+		await page.route('**/*', blockScriptRequests);
+		await page.goto(baseURL, { waitUntil: 'commit' });
+		await restoreOPFS(page, state.opfs as never);
+		await restoreLocalStorage(page, state.localStorage as never);
+		await page.unroute('**/*', blockScriptRequests);
+		await page.reload({ waitUntil: 'commit' });
+		await page.getByTestId('search-products').waitFor({ state: 'visible', timeout: 30_000 });
+		if (
+			await page
+				.getByTestId('error-boundary-fallback')
+				.first()
+				.isVisible()
+				.catch(() => false)
+		) {
+			throw new Error('restored state faulted the error boundary');
+		}
+		console.log(`[global-setup] Reusing cached ${stateName} state (validated boot)`);
+		return state.storeIds as string[];
+	} catch (error) {
+		console.log(
+			`[global-setup] Cached ${stateName} state invalid, re-authenticating: ${error instanceof Error ? error.message : error}`
+		);
+		fs.rmSync(statePath, { force: true });
+		return null;
+	} finally {
+		await browser.close();
+	}
+}
+
+/**
  * Run auth for a single store variant, export state, and save to disk.
  *
  * After authenticateWithStore completes (POS visible, products loaded), we
@@ -127,6 +197,11 @@ async function setupVariant(
 		`[global-setup] Authenticating with ${variant} store: ${storeUrl}` +
 			(options.coldStart ? ' (cold start — bulk catalogue sync blocked)' : '')
 	);
+
+	if (!options.coldStart) {
+		const reused = await reuseValidAuthState(stateName, variant, storeUrl, baseURL);
+		if (reused) return reused;
+	}
 
 	let discoveredStoreIds: string[] = [];
 	const browser = await chromium.launch();
@@ -218,7 +293,7 @@ async function setupVariant(
 		const opfs = await exportOPFS(exportPage);
 		const localStorage = await exportLocalStorage(exportPage);
 
-		const state = { opfs, localStorage };
+		const state = { opfs, localStorage, storeIds: discoveredStoreIds };
 		const statePath = path.join(AUTH_STATE_DIR, `${stateName}.json`);
 		fs.writeFileSync(statePath, JSON.stringify(state));
 
