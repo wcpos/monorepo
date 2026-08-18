@@ -697,8 +697,8 @@ describe('query-state translator', () => {
 		);
 		const attributes = [{ id: 1, name: 'Color', option: 'Red' }];
 
-		expect(compiled.read.residual({ id: 'missing', attributes: [], payload: {} })).toBe(false);
-		expect(compiled.read.residual({ id: 'matching', attributes, payload: { attributes } })).toBe(
+		expect(compiled.read.residual({ uuid: 'missing', attributes: [], payload: {} })).toBe(false);
+		expect(compiled.read.residual({ uuid: 'matching', attributes, payload: { attributes } })).toBe(
 			true
 		);
 	});
@@ -758,7 +758,7 @@ describe('query-state translator', () => {
 
 		expect(compiled.demand).toEqual([]);
 		expect(compiled.represented).toBe(false);
-		expect(compiled.read.prefilter).toEqual({ wooCustomerId: { $in: [] } });
+		expect(compiled.read.prefilter).toEqual({ remoteId: { $in: [] } });
 	});
 
 	it('keeps forceRefresh kind-sensitive when compiled demand is re-declared', () => {

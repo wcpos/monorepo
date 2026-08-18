@@ -5,7 +5,7 @@ import { Badge } from '@wcpos/components/badge';
 import { Icon } from '@wcpos/components/icon';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 
-import { useNovuNotifications } from '../../../../contexts/novu';
+import { useNovuNotificationsSummary } from '../../../../contexts/novu';
 import { NotificationPanelContent } from './notification-panel';
 
 /**
@@ -13,7 +13,7 @@ import { NotificationPanelContent } from './notification-panel';
  * Clicking the bell opens a notification popover.
  */
 export function NotificationBell() {
-	const { unreadCount, markAllAsSeen } = useNovuNotifications();
+	const { unreadCount, markAllAsSeen } = useNovuNotificationsSummary();
 	const [isOpen, setIsOpen] = React.useState(false);
 
 	const handleOpenChange = (open: boolean) => {

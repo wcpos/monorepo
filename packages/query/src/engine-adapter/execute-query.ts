@@ -1,5 +1,7 @@
 import { combineLatest, Observable } from 'rxjs';
 
+import { compareRemoteIds, remoteIdOrNull } from '@wcpos/sync-core';
+
 import {
 	collectionMap,
 	type EngineDocument,
@@ -101,6 +103,19 @@ function compareValues(left: unknown, right: unknown): number {
 	return leftString < rightString ? -1 : 1;
 }
 
+function compareRemoteIdValues(left: unknown, right: unknown, direction: 'asc' | 'desc'): number {
+	const leftRemoteId = remoteIdOrNull(left);
+	const rightRemoteId = remoteIdOrNull(right);
+	if (leftRemoteId === null) return rightRemoteId === null ? 0 : 1;
+	if (rightRemoteId === null) return -1;
+	const comparison = compareRemoteIds(leftRemoteId, rightRemoteId);
+	return direction === 'desc' ? -comparison : comparison;
+}
+
+function isRemoteIdPath(path: string | undefined): boolean {
+	return path === 'remoteId' || path === 'parentRemoteId';
+}
+
 function sortDocuments(
 	collection: LegacyCollectionName,
 	documents: EngineRxDocument[],
@@ -112,6 +127,16 @@ function sortDocuments(
 			if (!legacyField) {
 				continue;
 			}
+			const mapping = resolveLegacyField(collection, legacyField);
+			if (isRemoteIdPath(mapping.enginePath)) {
+				const comparison = compareRemoteIdValues(
+					left[mapping.enginePath],
+					right[mapping.enginePath],
+					direction
+				);
+				if (comparison !== 0) return comparison;
+				continue;
+			}
 			const comparison = compareValues(
 				comparableValue(collection, left, legacyField),
 				comparableValue(collection, right, legacyField)
@@ -120,7 +145,7 @@ function sortDocuments(
 				return direction === 'desc' ? -comparison : comparison;
 			}
 		}
-		return String(left.id).localeCompare(String(right.id));
+		return String(left.uuid).localeCompare(String(right.uuid));
 	});
 }
 
@@ -130,10 +155,19 @@ function sortCompiledDocuments(
 ): EngineRxDocument[] {
 	return [...documents].sort((left, right) => {
 		for (const part of sort) {
+			if (isRemoteIdPath(part.enginePath)) {
+				const comparison = compareRemoteIdValues(
+					part.value(left),
+					part.value(right),
+					part.direction
+				);
+				if (comparison !== 0) return comparison;
+				continue;
+			}
 			const comparison = compareValues(part.value(left), part.value(right));
 			if (comparison !== 0) return part.direction === 'desc' ? -comparison : comparison;
 		}
-		return String(left.id).localeCompare(String(right.id));
+		return String(left.uuid).localeCompare(String(right.uuid));
 	});
 }
 
@@ -149,6 +183,7 @@ function translateSort(
 		}
 		const mapping = resolveLegacyField(collection, legacyField);
 		if (
+			isRemoteIdPath(mapping.enginePath) ||
 			mapping.compute ||
 			mapping.numeric ||
 			mapping.readEnginePath !== undefined ||
@@ -189,7 +224,7 @@ export function executeAdapterQuery({
 		: selectorRead!.complete;
 	const engineSort = read
 		? {
-				pushable: read.sortPushable,
+				pushable: read.sortPushable && !read.sort.some((part) => isRemoteIdPath(part.enginePath)),
 				sort: read.sort.map((part) => ({ [part.enginePath!]: part.direction })),
 			}
 		: translateSort(collection, sort);
@@ -209,7 +244,7 @@ export function executeAdapterQuery({
 	if (complete && engineSort.pushable) {
 		const query = engineCollection.find({
 			selector: prefilter,
-			sort: engineSort.sort.length > 0 ? engineSort.sort : [{ id: 'asc' }],
+			sort: engineSort.sort.length > 0 ? engineSort.sort : [{ uuid: 'asc' }],
 			skip: Math.max(0, effectiveSkip),
 			...(effectiveLimit !== undefined ? { limit: Math.max(0, effectiveLimit) } : {}),
 		});

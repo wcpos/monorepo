@@ -1,6 +1,8 @@
 import { RxCollection, RxPlugin } from 'rxdb';
 import { v4 as uuidv4 } from 'uuid';
 
+import { RECORD_UUID_META_KEY } from '@wcpos/sync-core';
+
 /**
  * Generate a UUID if the primary key is not set
  */
@@ -11,7 +13,7 @@ export function generateID(this: RxCollection, data: Record<string, any>) {
 
 	if (hasMetaData) {
 		data.meta_data = data.meta_data || [];
-		const meta = data.meta_data.find((meta: any) => meta.key === '_woocommerce_pos_uuid');
+		const meta = data.meta_data.find((meta: any) => meta.key === RECORD_UUID_META_KEY);
 		metaUUID = meta && meta.value;
 	}
 
@@ -31,7 +33,7 @@ export function generateID(this: RxCollection, data: Record<string, any>) {
 
 	if (hasMetaData && !metaUUID) {
 		data.meta_data.push({
-			key: '_woocommerce_pos_uuid',
+			key: RECORD_UUID_META_KEY,
 			value: data[primaryPath],
 		});
 	}

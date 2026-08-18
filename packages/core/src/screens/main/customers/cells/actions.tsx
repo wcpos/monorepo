@@ -27,6 +27,7 @@ import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useQueryRuntime } from '@wcpos/query';
+import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -63,7 +64,7 @@ export function Actions({ row }: CellContext<{ document: CustomerDocument }, 'ac
 			id: `customer-actions:refresh:${customer.id}`,
 			collection: 'customers',
 			kind: 'targeted-records',
-			wooIds: [customer.id],
+			remoteIds: [customer.id].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 			forceRefresh: true,
 		});
 		void handle.ready

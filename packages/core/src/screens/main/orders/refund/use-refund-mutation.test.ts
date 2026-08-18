@@ -146,7 +146,7 @@ describe('useRefundMutation', () => {
 			id: 'refund:order-refresh:77',
 			collection: 'orders',
 			kind: 'targeted-records',
-			wooIds: [77],
+			remoteIds: ['77'],
 			forceRefresh: true,
 		});
 		expect(mockEngineRequire.mock.results[0]?.value.release).toHaveBeenCalledTimes(1);

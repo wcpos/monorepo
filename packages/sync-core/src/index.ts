@@ -10,7 +10,7 @@ export {
 export { planReplicationActions, type ReplicationActions } from './changeSignalReplication';
 export { type ConfigFingerprintSnapshot, type ConfigFingerprintSource } from './configChangeSignal';
 // prettier-ignore
-export { shouldApplyPulledDocument, syncCustomPullBatchIntoRepository, type CustomPullCheckpointStore, type CustomPullRepository } from './customPullAdapter';
+export { syncCustomPullBatchIntoRepository, type CustomPullCheckpointStore, type CustomPullRepository, type WirePullDocument } from './customPullAdapter';
 export { drainMutationQueue, isNeverPushedChain } from './drainMutationQueue';
 // prettier-ignore
 export {
@@ -46,7 +46,22 @@ export {
 	type StoredOrderDocument, type StoredProductDocument, type SyncCheckpoint,
 	type WooOrderPayload, type WooProductPayload,
 } from './protocol';
-export { identifyRecord, webCryptoUuid } from './recordIdentity';
+export { identifyRecord, RECORD_UUID_META_KEY, webCryptoUuid } from './recordIdentity';
+export {
+	type MetaDataEntry,
+	type PosCarrier,
+	type PosIdentity,
+	POS_META_KEYS,
+	wooMetaCarrier,
+} from './pos-carrier/carrier';
+export { createFakeCarrier, type FakeCarrierState } from './pos-carrier/fake';
+export {
+	compareRemoteIds,
+	mintRemoteId,
+	remoteIdOrNull,
+	wooIdOf,
+	type RemoteId,
+} from './woo/remoteIdCodec';
 // prettier-ignore
 export {
 	composeObservers, createMetricsCollector, type MetricsSnapshot, type SyncEvent,

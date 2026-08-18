@@ -49,7 +49,7 @@ describe('useMutation', () => {
 		mockAwaitWriteOutcome.mockResolvedValue('success');
 		mockWrapEngineDocument.mockImplementation(
 			(_collection: string, resident: { get: (field: string) => unknown }) => ({
-				id: resident.get('wooCustomerId'),
+				id: Number(resident.get('remoteId')),
 			})
 		);
 	});
@@ -131,15 +131,15 @@ describe('useMutation', () => {
 	it('awaits a customer create outcome and returns the rematerialized Woo id on request', async () => {
 		const initial = {
 			get: (field: string) =>
-				field === 'payload' ? { first_name: 'Ada' } : field === 'wooCustomerId' ? null : undefined,
+				field === 'payload' ? { first_name: 'Ada' } : field === 'remoteId' ? null : undefined,
 			remove: jest.fn().mockResolvedValue(undefined),
 		};
 		const refreshed = {
 			get: (field: string) =>
 				field === 'payload'
 					? { id: 321, first_name: 'Ada' }
-					: field === 'wooCustomerId'
-						? 321
+					: field === 'remoteId'
+						? '321'
 						: undefined,
 		};
 		mockInsertEngineResident.mockResolvedValue(initial);

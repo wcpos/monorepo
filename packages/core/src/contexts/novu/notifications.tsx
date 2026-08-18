@@ -56,6 +56,37 @@ export interface UseNovuNotificationsResult {
 	refresh: () => Promise<void>;
 }
 
+/**
+ * What the header bell needs: two counts and the seen action. Deliberately excludes the
+ * notification list — the bell is mounted for the whole session, and publishing the list
+ * alongside the counts re-rendered it on every notification body/seen/loading change even
+ * when the number on the badge had not moved.
+ */
+export interface NovuNotificationsSummary {
+	/** Number of unread notifications */
+	unreadCount: number;
+	/** Number of unseen notifications */
+	unseenCount: number;
+	/** Mark all notifications as seen (without marking as read) */
+	markAllAsSeen: () => Promise<void>;
+}
+
+/** Everything else — the list itself and the actions that operate on it. */
+export type NovuNotificationsList = Omit<
+	UseNovuNotificationsResult,
+	keyof NovuNotificationsSummary
+>;
+
+const NovuNotificationsSummaryContext = React.createContext<NovuNotificationsSummary | undefined>(
+	undefined
+);
+const NovuNotificationsListContext = React.createContext<NovuNotificationsList | undefined>(
+	undefined
+);
+/**
+ * The combined view, published by the provider rather than composed per consumer so that
+ * every `useNovuNotifications()` caller keeps sharing one object identity.
+ */
 const NovuNotificationsContext = React.createContext<UseNovuNotificationsResult | undefined>(
 	undefined
 );
@@ -252,40 +283,59 @@ export function NovuNotificationsProvider({ children }: NovuNotificationsProvide
 		await refreshNovuNotifications();
 	}, []);
 
-	const value = React.useMemo<UseNovuNotificationsResult>(
+	const summary = React.useMemo<NovuNotificationsSummary>(
+		() => ({ unreadCount, unseenCount, markAllAsSeen }),
+		[unreadCount, unseenCount, markAllAsSeen]
+	);
+
+	const list = React.useMemo<NovuNotificationsList>(
 		() => ({
 			notifications,
-			unreadCount,
-			unseenCount,
 			isLoading: status.isLoading,
 			isConnected,
 			markAsRead,
 			markAllAsRead,
-			markAllAsSeen,
 			refresh,
 		}),
-		[
-			notifications,
-			unreadCount,
-			unseenCount,
-			status.isLoading,
-			isConnected,
-			markAsRead,
-			markAllAsRead,
-			markAllAsSeen,
-			refresh,
-		]
+		[notifications, status.isLoading, isConnected, markAsRead, markAllAsRead, refresh]
+	);
+
+	const combined = React.useMemo<UseNovuNotificationsResult>(
+		() => ({ ...summary, ...list }),
+		[summary, list]
 	);
 
 	return (
-		<NovuNotificationsContext.Provider value={value}>{children}</NovuNotificationsContext.Provider>
+		<NovuNotificationsSummaryContext.Provider value={summary}>
+			<NovuNotificationsListContext.Provider value={list}>
+				<NovuNotificationsContext.Provider value={combined}>
+					{children}
+				</NovuNotificationsContext.Provider>
+			</NovuNotificationsListContext.Provider>
+		</NovuNotificationsSummaryContext.Provider>
 	);
+}
+
+/**
+ * The counts and the seen action only. Prefer this in anything that renders a badge — it
+ * does not subscribe to the notification list, so a new notification body or a seen flag
+ * cannot re-render it.
+ */
+export function useNovuNotificationsSummary(): NovuNotificationsSummary {
+	const context = React.useContext(NovuNotificationsSummaryContext);
+	if (!context) {
+		throw new Error('useNovuNotificationsSummary must be used within a NovuProvider');
+	}
+	return context;
 }
 
 /**
  * Hook to read the shared Novu notification state.
  *
  * This is a thin subscription - all initialization is owned by `NovuNotificationsProvider`.
+ *
+ * Subscribes to BOTH halves, so it re-renders on any notification change. Reach for
+ * `useNovuNotificationsSummary()` instead when all you need is a count.
  */
 export function useNovuNotifications(): UseNovuNotificationsResult {
 	const context = React.useContext(NovuNotificationsContext);

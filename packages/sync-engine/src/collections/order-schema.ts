@@ -1,17 +1,15 @@
-import { promotedOrderColumns, type StoredOrderDocument } from '@wcpos/sync-core';
-
-import type { MigrationStrategies } from 'rxdb';
+import type { StoredOrderDocument } from '@wcpos/sync-core';
 
 export type LocalOrderDocument = StoredOrderDocument;
 
 export const orderSchema = {
 	title: 'Woo order document schema',
-	version: 1,
-	primaryKey: 'id',
+	version: 0,
+	primaryKey: 'uuid',
 	type: 'object',
 	properties: {
-		id: { type: 'string', maxLength: 128 },
-		wooOrderId: { type: ['number', 'null'] },
+		uuid: { type: 'string', maxLength: 128 },
+		remoteId: { type: ['string', 'null'], maxLength: 64 },
 		// Promoted filter/sort columns (duplicated out of payload, payload bytes unchanged) so RxDB
 		// Mango .where()/sort can touch them. Indexed string fields require maxLength + required.
 		number: { type: 'string', maxLength: 24 },
@@ -24,8 +22,8 @@ export const orderSchema = {
 		local: { type: 'object', additionalProperties: true },
 	},
 	required: [
-		'id',
-		'wooOrderId',
+		'uuid',
+		'remoteId',
 		'number',
 		'dateCreatedGmt',
 		'status',
@@ -38,12 +36,3 @@ export const orderSchema = {
 	// The axes a POS order list sorts/filters by, as single + compound indexes.
 	indexes: ['dateCreatedGmt', ['status', 'dateCreatedGmt']],
 } as const;
-
-/**
- * v0 → v1: backfill the promoted filter/sort columns from the existing payload (payload untouched).
- * The mapping is the single shared `promotedOrderColumns` projection, so a migrated doc is byte-identical
- * to a freshly-built one.
- */
-export const orderMigrationStrategies: MigrationStrategies = {
-	1: (doc) => ({ ...doc, ...promotedOrderColumns(doc.payload) }),
-};

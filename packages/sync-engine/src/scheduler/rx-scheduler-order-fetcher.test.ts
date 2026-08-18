@@ -1,8 +1,16 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
-import { normalizeCheckpoint, type PullResponse, type SyncCheckpoint } from '@wcpos/sync-core';
+import {
+	normalizeCheckpoint,
+	type OrderDocument,
+	type PullResponse,
+	type SyncCheckpoint,
+	type WirePullDocument,
+	wooIdOf,
+} from '@wcpos/sync-core';
 
+import { remoteId } from '../testing';
 import { createOrdersSchedulerFetcher } from './rx-scheduler-order-fetcher';
 
 import type { FetchTask } from './replication-policy';
@@ -40,7 +48,7 @@ function orderTask(overrides: Partial<FetchTask> = {}): FetchTask {
 	};
 }
 
-function response(payload: PullResponse | unknown[]): Response {
+function response(payload: PullResponse<WirePullDocument> | unknown[]): Response {
 	return new Response(JSON.stringify(payload), {
 		status: 200,
 		headers: { 'content-type': 'application/json' },
@@ -51,7 +59,7 @@ function response(payload: PullResponse | unknown[]): Response {
 // stamped _woocommerce_pos_uuid) + its computed sync, and the client assembles the document
 // — deriving the storage id from the payload via identifyRecord. The mock is self-consistent
 // (document id == the payload's uuid), so client assembly round-trips to the same document.
-function customPullDoc(wooId: number): PullResponse['documents'][number] {
+function customPullDoc(wooId: number): WirePullDocument {
 	return {
 		id: uuidFor(wooId),
 		wooOrderId: wooId,
@@ -72,7 +80,7 @@ function customPullDoc(wooId: number): PullResponse['documents'][number] {
 
 describe('createOrdersSchedulerFetcher', () => {
 	it('runs one custom-pull batch for an order scheduler task and reports whether more batches remain', async () => {
-		const documents = [customPullDoc(11)] as PullResponse['documents'];
+		const documents = [customPullDoc(11)];
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 		};
@@ -96,7 +104,9 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(fetcher).toHaveBeenCalledWith(
 			'http://wcpos.local/wp-json/wcpos/v2/orders/pull?limit=25&updated_at_gmt=2026-05-20T10%3A00%3A00.000Z&order_id=10&sequence=10&include_deletes=true'
 		);
-		expect(repository.upsertMany).toHaveBeenCalledWith(documents);
+		expect(repository.upsertMany).toHaveBeenCalledWith([
+			expect.objectContaining({ uuid: uuidFor(11), remoteId: '11' }),
+		]);
 		expect(checkpointStore.writeCustomPullCheckpoint).toHaveBeenCalledWith(nextCheckpoint);
 		expect(result).toEqual({
 			taskId: 'orders:custom-pull:windowed',
@@ -126,8 +136,8 @@ describe('createOrdersSchedulerFetcher', () => {
 				checkpoint: normalizeCheckpoint({ orderId: 11 }),
 			},
 			local: { dirty: false, pendingMutationIds: [] },
-		} as PullResponse['documents'][number];
-		const upserted: PullResponse['documents'] = [];
+		} as WirePullDocument;
+		const upserted: OrderDocument[] = [];
 		const repository = {
 			upsertMany: vi.fn(async (docs: PullResponse['documents']) => {
 				upserted.push(...docs);
@@ -150,12 +160,45 @@ describe('createOrdersSchedulerFetcher', () => {
 		await schedulerFetcher(orderTask());
 
 		expect(upserted).toHaveLength(1);
-		expect(upserted[0].id).toBe(uuidFor(11));
-		expect(upserted[0].wooOrderId).toBe(11);
+		expect(upserted[0].uuid).toBe(uuidFor(11));
+		expect(upserted[0].remoteId).toBe('11');
+	});
+
+	it.each([
+		['uuid', uuidFor(11)],
+		['remote id', remoteId(11)],
+		['numeric Woo id', 11],
+	])('guards stale-envelope custom-pull documents by assembled %s', async (_label, pendingId) => {
+		const serverDoc = {
+			...customPullDoc(11),
+			id: 'woo-order:stale',
+			wooOrderId: 999,
+		};
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+		};
+		const checkpointStore = {
+			readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+			writeCustomPullCheckpoint: vi.fn(async () => undefined),
+		};
+		const fetcher = vi.fn(async () =>
+			response({ documents: [serverDoc], checkpoint: nextCheckpoint, hasMore: false })
+		);
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			checkpointStore,
+			pendingMutationOrderIds: vi.fn(async () => new Set<string | number>([pendingId])),
+			fetcher,
+		});
+
+		await schedulerFetcher(orderTask());
+
+		expect(repository.upsertMany).toHaveBeenCalledWith([]);
 	});
 
 	it('marks the custom-pull lane complete when the final greedy batch exhausts the remote orders catalog', async () => {
-		const documents = [customPullDoc(11), customPullDoc(12)] as PullResponse['documents'];
+		const documents = [customPullDoc(11), customPullDoc(12)] as WirePullDocument[];
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 		};
@@ -208,7 +251,7 @@ describe('createOrdersSchedulerFetcher', () => {
 	});
 
 	it('does not mark a greedy terminal custom-pull batch complete when it starts from an advanced checkpoint', async () => {
-		const documents = [customPullDoc(11)] as PullResponse['documents'];
+		const documents = [customPullDoc(11)] as WirePullDocument[];
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 		};
@@ -244,7 +287,7 @@ describe('createOrdersSchedulerFetcher', () => {
 	});
 
 	it('marks a resumed greedy terminal custom-pull batch complete when a baseline marker survived fetcher restart', async () => {
-		const documents = [customPullDoc(12)] as PullResponse['documents'];
+		const documents = [customPullDoc(12)] as WirePullDocument[];
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 		};
@@ -287,7 +330,7 @@ describe('createOrdersSchedulerFetcher', () => {
 	});
 
 	it('does not mark windowed custom-pull batches complete even when the current page is exhausted', async () => {
-		const documents = [customPullDoc(11)] as PullResponse['documents'];
+		const documents = [customPullDoc(11)] as WirePullDocument[];
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 		};
@@ -323,7 +366,7 @@ describe('createOrdersSchedulerFetcher', () => {
 	});
 
 	it('records non-final custom-pull batch records as fresh without claiming complete all-orders lane coverage', async () => {
-		const documents = [customPullDoc(11), customPullDoc(12)] as PullResponse['documents'];
+		const documents = [customPullDoc(11), customPullDoc(12)] as WirePullDocument[];
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 		};
@@ -350,7 +393,14 @@ describe('createOrdersSchedulerFetcher', () => {
 
 		await schedulerFetcher(orderTask({ mode: 'greedy' }));
 
-		expect(repository.upsertMany).toHaveBeenCalledWith(documents);
+		expect(repository.upsertMany).toHaveBeenCalledWith(
+			documents.map((document) =>
+				expect.objectContaining({
+					uuid: uuidFor(Number(document.payload.id)),
+					remoteId: remoteId(Number(document.payload.id)),
+				})
+			)
+		);
 		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith({
 			collection: 'orders',
 			queryKey: 'orders:custom-pull',
@@ -362,7 +412,7 @@ describe('createOrdersSchedulerFetcher', () => {
 	});
 
 	it('does not advance the custom-pull checkpoint when coverage write fails after storing batch records', async () => {
-		const documents = [customPullDoc(11)] as PullResponse['documents'];
+		const documents = [customPullDoc(11)] as WirePullDocument[];
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 		};
@@ -390,7 +440,14 @@ describe('createOrdersSchedulerFetcher', () => {
 			'coverage unavailable'
 		);
 
-		expect(repository.upsertMany).toHaveBeenCalledWith(documents);
+		expect(repository.upsertMany).toHaveBeenCalledWith(
+			documents.map((document) =>
+				expect.objectContaining({
+					uuid: uuidFor(Number(document.payload.id)),
+					remoteId: remoteId(Number(document.payload.id)),
+				})
+			)
+		);
 		expect(coverageRepository.recordQueryResult).toHaveBeenCalled();
 		expect(checkpointStore.writeCustomPullCheckpoint).not.toHaveBeenCalled();
 	});
@@ -429,7 +486,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				requirementId: 'orders.deep-link',
 				queryKey: 'orders:ids:123,456',
 				ids: ['woo-order:123', 'woo-order:456'],
-				wooIds: [123, 456],
+				remoteIds: [123, 456].map(remoteId),
 				limit: 2,
 				mode: 'on-demand',
 			})
@@ -440,8 +497,8 @@ describe('createOrdersSchedulerFetcher', () => {
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			{
-				id: uuidFor(123),
-				wooOrderId: 123,
+				uuid: uuidFor(123),
+				remoteId: remoteId(123),
 				payload: {
 					id: 123,
 					date_modified_gmt: '2026-05-20T10:10:00',
@@ -461,8 +518,8 @@ describe('createOrdersSchedulerFetcher', () => {
 				local: { dirty: false, pendingMutationIds: [] },
 			},
 			{
-				id: uuidFor(456),
-				wooOrderId: 456,
+				uuid: uuidFor(456),
+				remoteId: remoteId(456),
 				payload: {
 					id: 456,
 					date_modified_gmt: '2026-05-20T10:11:00',
@@ -490,9 +547,9 @@ describe('createOrdersSchedulerFetcher', () => {
 		});
 	});
 
-	it('reads the numeric server ids from task.wooIds, decoupled from the document-key encoding', async () => {
+	it('reads the numeric server ids from task.remoteIds, decoupled from the document-key encoding', async () => {
 		// The ids here are deliberately opaque (a uuid + garbage): the document keys are
-		// never parsed — wooIds is the only channel for the numeric server ids.
+		// never parsed — remoteIds is the only channel for the numeric server ids.
 		const repository = { upsertMany: vi.fn(async () => undefined) };
 		const fetcher = vi.fn(async () =>
 			response([
@@ -523,7 +580,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				id: 'orders:ids:deep-link:on-demand',
 				requirementId: 'orders.deep-link',
 				queryKey: 'orders:ids:deep-link',
-				wooIds: [123, 456],
+				remoteIds: [123, 456].map(remoteId),
 				ids: ['8e29c1a4-3b2d-4f6a-9c0e-1d2f3a4b5c6d', 'not-a-woo-order-key'],
 				limit: 2,
 				mode: 'on-demand',
@@ -535,9 +592,9 @@ describe('createOrdersSchedulerFetcher', () => {
 		);
 	});
 
-	it('fails a targeted order task that is missing its wooIds channel (contract error, no reverse-parse)', async () => {
+	it('fails a targeted order task that is missing its remoteIds channel (contract error, no reverse-parse)', async () => {
 		// The `/^woo-order:(\d+)$/` reverse-parse scaffolding is deleted: a targeted task
-		// without wooIds is a seeder contract violation, surfaced — never silently parsed.
+		// without remoteIds is a seeder contract violation, surfaced — never silently parsed.
 		const repository = { upsertMany: vi.fn(async () => undefined) };
 		const fetcher = vi.fn(async () => response([]));
 		const schedulerFetcher = createOrdersSchedulerFetcher({
@@ -562,7 +619,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				})
 			)
 		).rejects.toThrow(
-			'Targeted order scheduler task is missing its wooIds channel: orders:ids:123,456:on-demand'
+			'Targeted order scheduler task is missing its remoteIds channel: orders:ids:123,456:on-demand'
 		);
 		expect(fetcher).not.toHaveBeenCalled();
 		expect(repository.upsertMany).not.toHaveBeenCalled();
@@ -605,7 +662,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				requirementId: 'orders.deep-link',
 				queryKey: 'orders:ids:123,456',
 				ids: ['woo-order:123', 'woo-order:456'],
-				wooIds: [123, 456],
+				remoteIds: [123, 456].map(remoteId),
 				limit: 2,
 				mode: 'on-demand',
 			})
@@ -613,10 +670,10 @@ describe('createOrdersSchedulerFetcher', () => {
 
 		// 123 has a queued local mutation → its dirty local copy wins (not overwritten); only 456 is upserted.
 		expect(repository.upsertMany).toHaveBeenCalledWith([
-			expect.objectContaining({ id: uuidFor(456) }),
+			expect.objectContaining({ uuid: uuidFor(456) }),
 		]);
 		expect(repository.upsertMany).not.toHaveBeenCalledWith(
-			expect.arrayContaining([expect.objectContaining({ id: uuidFor(123) })])
+			expect.arrayContaining([expect.objectContaining({ uuid: uuidFor(123) })])
 		);
 		// ...but 123 stays in coverage so the window isn't reported incomplete and re-pulled.
 		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
@@ -674,7 +731,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				requirementId: 'orders.deep-link',
 				queryKey: 'orders:ids:123,456',
 				ids: ['woo-order:123', 'woo-order:456'],
-				wooIds: [123, 456],
+				remoteIds: [123, 456].map(remoteId),
 				limit: 1, // batchSize 1 → two single-id batches, each re-reading the queue
 				mode: 'on-demand',
 			})
@@ -684,7 +741,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(pendingMutationOrderIds).toHaveBeenCalledTimes(2);
 		// Batch 1: 456 not yet queued → 123 upserted.
 		expect(repository.upsertMany).toHaveBeenNthCalledWith(1, [
-			expect.objectContaining({ id: uuidFor(123) }),
+			expect.objectContaining({ uuid: uuidFor(123) }),
 		]);
 		// Batch 2: 456 queued mid-pull → skipped, NOT overwritten by the stale server copy.
 		expect(repository.upsertMany).toHaveBeenNthCalledWith(2, []);
@@ -731,10 +788,10 @@ describe('createOrdersSchedulerFetcher', () => {
 
 		// 456 has a queued local mutation → skipped; only 123 is upserted.
 		expect(repository.upsertMany).toHaveBeenCalledWith([
-			expect.objectContaining({ id: uuidFor(123) }),
+			expect.objectContaining({ uuid: uuidFor(123) }),
 		]);
 		expect(repository.upsertMany).not.toHaveBeenCalledWith(
-			expect.arrayContaining([expect.objectContaining({ id: uuidFor(456) })])
+			expect.arrayContaining([expect.objectContaining({ uuid: uuidFor(456) })])
 		);
 	});
 
@@ -778,7 +835,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				requirementId: 'orders.deep-link',
 				queryKey: 'orders:ids:123,456',
 				ids: ['woo-order:123', 'woo-order:456'],
-				wooIds: [123, 456],
+				remoteIds: [123, 456].map(remoteId),
 				limit: 2,
 				mode: 'on-demand',
 			})
@@ -825,7 +882,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				requirementId: 'orders.deep-link',
 				queryKey: 'orders:ids:123',
 				ids: ['woo-order:123'],
-				wooIds: [123],
+				remoteIds: [123].map(remoteId),
 				limit: 1,
 				mode: 'on-demand',
 			}),
@@ -878,7 +935,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				requirementId: 'orders.bulk-deep-link',
 				queryKey: 'orders:ids:bulk',
 				ids: requestedIds,
-				wooIds: requestedWooIds,
+				remoteIds: requestedWooIds.map(remoteId),
 				limit: 101,
 				mode: 'on-demand',
 			})
@@ -963,7 +1020,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				requirementId: 'orders.limit-two',
 				queryKey: 'orders:ids:limit-two',
 				ids: ['woo-order:1', 'woo-order:2', 'woo-order:3', 'woo-order:4', 'woo-order:5'],
-				wooIds: [1, 2, 3, 4, 5],
+				remoteIds: [1, 2, 3, 4, 5].map(remoteId),
 				limit: 2,
 				mode: 'on-demand',
 			})
@@ -1012,7 +1069,7 @@ describe('createOrdersSchedulerFetcher', () => {
 					requirementId: 'orders.missing',
 					queryKey: 'orders:ids:missing',
 					ids: ['woo-order:123', 'woo-order:456'],
-					wooIds: [123, 456],
+					remoteIds: [123, 456].map(remoteId),
 					limit: 2,
 					mode: 'on-demand',
 				})
@@ -1060,8 +1117,8 @@ describe('createOrdersSchedulerFetcher', () => {
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			expect.objectContaining({
-				id: uuidFor(789),
-				wooOrderId: 789,
+				uuid: uuidFor(789),
+				remoteId: remoteId(789),
 				payload: {
 					id: 789,
 					status: 'processing',
@@ -2013,9 +2070,9 @@ describe('createOrdersSchedulerFetcher', () => {
 		const coverageRepository = rangedLaneStore();
 		const upserted: number[] = [];
 		const repository = {
-			upsertMany: vi.fn(async (documents: { wooOrderId: number | null }[]) => {
+			upsertMany: vi.fn(async (documents: { remoteId: ReturnType<typeof remoteId> | null }[]) => {
 				for (const document of documents)
-					if (document.wooOrderId) upserted.push(document.wooOrderId);
+					if (document.remoteId) upserted.push(wooIdOf(document.remoteId));
 			}),
 		};
 		const { fetcher } = rangedOrderServer(
@@ -2055,9 +2112,9 @@ describe('createOrdersSchedulerFetcher', () => {
 		const coverageRepository = rangedLaneStore();
 		const upserted: number[] = [];
 		const repository = {
-			upsertMany: vi.fn(async (documents: { wooOrderId: number | null }[]) => {
+			upsertMany: vi.fn(async (documents: { remoteId: ReturnType<typeof remoteId> | null }[]) => {
 				for (const document of documents)
-					if (document.wooOrderId) upserted.push(document.wooOrderId);
+					if (document.remoteId) upserted.push(wooIdOf(document.remoteId));
 			}),
 		};
 		const server = rangedOrderServer(
@@ -2087,9 +2144,9 @@ describe('createOrdersSchedulerFetcher', () => {
 		const coverageRepository = rangedLaneStore();
 		const upserted: number[] = [];
 		const repository = {
-			upsertMany: vi.fn(async (documents: { wooOrderId: number | null }[]) => {
+			upsertMany: vi.fn(async (documents: { remoteId: ReturnType<typeof remoteId> | null }[]) => {
 				for (const document of documents)
-					if (document.wooOrderId) upserted.push(document.wooOrderId);
+					if (document.remoteId) upserted.push(wooIdOf(document.remoteId));
 			}),
 		};
 		// 40 orders of which THIRTY (ids 40…11) share one second — more than the 25-record page,
@@ -2247,8 +2304,8 @@ describe('createOrdersSchedulerFetcher', () => {
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			expect.objectContaining({
-				id: uuidFor(789),
-				wooOrderId: 789,
+				uuid: uuidFor(789),
+				remoteId: remoteId(789),
 				payload: {
 					id: 789,
 					status: 'processing',
@@ -2315,7 +2372,7 @@ describe('createOrdersSchedulerFetcher', () => {
 
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			expect.objectContaining({
-				id: uuidFor(789),
+				uuid: uuidFor(789),
 			}),
 		]);
 		expect(coverageRepository.recordQueryResult).not.toHaveBeenCalled();
@@ -2417,7 +2474,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		type ReadShape = {
 			name: string;
 			task: FetchTask;
-			body: (wooId: number) => PullResponse | unknown[];
+			body: (wooId: number) => PullResponse<WirePullDocument> | unknown[];
 		};
 
 		const readShapes: ReadShape[] = [
@@ -2430,7 +2487,7 @@ describe('createOrdersSchedulerFetcher', () => {
 							...customPullDoc(wooId),
 							payload: sixDecimalPayload(wooId),
 						},
-					] as PullResponse['documents'],
+					] as WirePullDocument[],
 					checkpoint: nextCheckpoint,
 					hasMore: false,
 				}),
@@ -2460,7 +2517,7 @@ describe('createOrdersSchedulerFetcher', () => {
 					requirementId: 'orders.bulk-deep-link',
 					queryKey: 'orders:ids:bulk',
 					ids: ['woo-order:77'],
-					wooIds: [77],
+					remoteIds: [77].map(remoteId),
 					limit: 1,
 					mode: 'on-demand',
 				}),
@@ -2469,7 +2526,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		];
 
 		it.each(readShapes)('$name', async ({ task, body }) => {
-			const wooId = task.wooIds?.[0] ?? 77;
+			const wooId = wooIdOf(task.remoteIds?.[0] ?? remoteId(77));
 			const upserted: PullResponse['documents'] = [];
 			const repository = {
 				upsertMany: vi.fn(async (documents: PullResponse['documents']) => {

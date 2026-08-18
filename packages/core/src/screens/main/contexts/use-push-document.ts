@@ -69,10 +69,6 @@ export const usePushDocument = () => {
 						? (resident.toMutableJSON().payload ?? {})
 						: cloneDeep((resident as unknown as Record<string, unknown>).payload ?? {})
 				) as Record<string, unknown>;
-				if (collectionName === 'orders') {
-					const billing = payload.billing as Record<string, unknown> | undefined;
-					if (billing?.email === '') delete billing.email;
-				}
 				const receipt = await runtime.engine.write({
 					collection: collectionName,
 					operation: remoteId == null ? 'create' : 'update',

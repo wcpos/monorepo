@@ -45,7 +45,7 @@ import { RefundDestinationRadioGroup } from './refund-destination-radio-group';
 import { useRefundMutation } from './use-refund-mutation';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { TaxRatesContext } from '../../contexts/tax-rates/provider';
+import { useTaxSettingsOptional } from '../../contexts/tax-rates/provider';
 import { resolvePriceNumDecimals } from '../../contexts/tax-rates/resolve-price-num-decimals';
 import {
 	deriveRefundDestinationOptions,
@@ -121,7 +121,7 @@ export function RefundOrderForm({ order }: Props) {
 	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
 	const http = useRestHttpClient();
 	const router = useRouter();
-	const taxRates = React.useContext(TaxRatesContext);
+	const taxRates = useTaxSettingsOptional();
 	const storeDp = useObservableEagerState(store?.wc_price_decimals$) as number | undefined;
 	const taxDisplayCart = useObservableEagerState(store?.tax_display_cart$) as
 		'incl' | 'excl' | undefined;

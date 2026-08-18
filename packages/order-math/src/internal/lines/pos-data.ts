@@ -1,5 +1,7 @@
 import toNumber from 'lodash/toNumber';
 
+import { POS_META_KEYS } from '@wcpos/sync-core';
+
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
@@ -55,7 +57,7 @@ export const getUuidFromLineItemMetaData = (metaData: CartLine['meta_data']) => 
 	if (!Array.isArray(metaData)) {
 		return;
 	}
-	const uuidMeta = metaData.find((meta) => meta.key === '_woocommerce_pos_uuid');
+	const uuidMeta = metaData.find((meta) => meta.key === POS_META_KEYS.lineUuid);
 	return typeof uuidMeta?.value === 'string' ? uuidMeta.value : undefined;
 };
 
@@ -77,7 +79,7 @@ export function updatePosDataMeta<T extends CartLine>(
 	let posDataFound = false;
 
 	const updatedMetaData = meta_data.map((meta) => {
-		if (meta.key === '_woocommerce_pos_data') {
+		if (meta.key === POS_META_KEYS.posData) {
 			const posData = parsePosData({ meta_data: [meta] }) ?? {};
 			posDataFound = true;
 			return {
@@ -91,7 +93,7 @@ export function updatePosDataMeta<T extends CartLine>(
 	// If '_woocommerce_pos_data' was not found, add it to the metadata
 	if (!posDataFound) {
 		updatedMetaData.push({
-			key: '_woocommerce_pos_data',
+			key: POS_META_KEYS.posData,
 			value: newData,
 		});
 	}
@@ -108,7 +110,7 @@ export function updatePosDataMeta<T extends CartLine>(
  * types (LineItemInput etc.) are accepted alongside DB document fragments.
  */
 export const parsePosData = (item: { meta_data?: CartLine['meta_data'] }) => {
-	const value = getMetaDataValueByKey(item.meta_data, '_woocommerce_pos_data');
+	const value = getMetaDataValueByKey(item.meta_data, POS_META_KEYS.posData);
 	if (!value) {
 		return null;
 	}

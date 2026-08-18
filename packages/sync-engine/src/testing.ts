@@ -11,8 +11,14 @@
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
 
+import { mintRemoteId, type RemoteId } from '@wcpos/sync-core';
+
 import type { RxStorage } from 'rxdb';
 import type { EngineConnectivity, EngineStringStore } from './create-rxdb-sync-engine';
+
+export function remoteId(value: number): RemoteId {
+	return mintRemoteId(value, 'test remote id');
+}
 
 // Host schema-canary fixtures. This is deliberately the exact sync-collection
 // recipe the engine opens, without exposing package-private descriptors.

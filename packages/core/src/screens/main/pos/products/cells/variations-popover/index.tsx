@@ -1,21 +1,20 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
+import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
+import { remoteIdOrNull } from '@wcpos/sync-core';
 
 import { Variations } from './variations';
 import { useUISettings } from '../../../../contexts/ui-settings';
 import { QueryStateProvider, useCollectionBinding, useQueryState } from '../../../../../../query';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type LineItem = NonNullable<OrderDocument['line_items']>[number];
 
 interface VariationsPopoverProps {
-	parent: ProductDocument;
-	addToCart: (variation: ProductDocument, metaData: LineItem['meta_data']) => void;
+	parent: EngineRecord<'products'>;
+	addToCart: (variation: EngineRecord<'variations'>, metaData: LineItem['meta_data']) => void;
 }
 
 /**
@@ -23,8 +22,12 @@ interface VariationsPopoverProps {
  */
 function VariationsPopoverContent({ parent, addToCart }: VariationsPopoverProps) {
 	const state = useQueryState<'variations'>();
+	const variationIds = useRecordField(parent, (record) => record.payload.variations);
+	const remoteIds = (variationIds ?? [])
+		.map(remoteIdOrNull)
+		.filter((remoteId) => remoteId !== null);
 	const binding = useCollectionBinding('variations', state, {
-		wooIds: parent.variations ?? [],
+		remoteIds,
 	});
 	const initialBinding = React.useRef(binding);
 	React.useEffect(() => {
@@ -39,10 +42,10 @@ function VariationsPopoverContent({ parent, addToCart }: VariationsPopoverProps)
 		[state]
 	);
 	const allVariationsBinding = useCollectionBinding('variations', allVariationsState, {
-		wooIds: parent.variations ?? [],
+		remoteIds,
 	});
 	const { uiSettings } = useUISettings('pos-products');
-	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
+	const showOutOfStock = useDocField(uiSettings, (settings) => settings.showOutOfStock);
 
 	return (
 		<ErrorBoundary>

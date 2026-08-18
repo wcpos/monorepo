@@ -27,6 +27,7 @@ interface UseReceiptDataResult {
 	hasSnapshot: boolean;
 	submissionStatus: SubmissionStatus | null;
 	isLoading: boolean;
+	hasResponded: boolean;
 	error: Error | null;
 	refetch: () => void;
 }
@@ -35,6 +36,10 @@ interface UseReceiptDataOptions {
 	orderId: number | undefined;
 	mode?: ReceiptMode;
 }
+
+type ReceiptDataState = Omit<UseReceiptDataResult, 'refetch'> & {
+	orderId: number | undefined;
+};
 
 /**
  * Fetches receipt data from the receipts REST endpoint.
@@ -49,12 +54,14 @@ export function useReceiptData({
 }: UseReceiptDataOptions): UseReceiptDataResult {
 	const http = useRestHttpClient();
 	const [fetchKey, setFetchKey] = React.useState(0);
-	const [state, setState] = React.useState<Omit<UseReceiptDataResult, 'refetch'>>({
+	const [state, setState] = React.useState<ReceiptDataState>({
+		orderId,
 		data: null,
 		mode,
 		hasSnapshot: false,
 		submissionStatus: null,
 		isLoading: false,
+		hasResponded: false,
 		error: null,
 	});
 
@@ -72,7 +79,16 @@ export function useReceiptData({
 		let cancelled = false;
 
 		async function fetchReceipt() {
-			setState((prev) => ({ ...prev, isLoading: true, error: null }));
+			setState({
+				orderId,
+				data: null,
+				mode,
+				hasSnapshot: false,
+				submissionStatus: null,
+				isLoading: true,
+				hasResponded: false,
+				error: null,
+			});
 
 			try {
 				const response = await http.get(`/receipts/${orderId}`, {
@@ -84,11 +100,13 @@ export function useReceiptData({
 				const res = response?.data as ReceiptApiResponse;
 
 				setState({
+					orderId,
 					data: res.data ?? null,
 					mode: res.mode ?? mode,
 					hasSnapshot: res.has_snapshot ?? false,
 					submissionStatus: res.submission_status ?? null,
 					isLoading: false,
+					hasResponded: true,
 					error: null,
 				});
 			} catch (err) {
@@ -102,7 +120,9 @@ export function useReceiptData({
 
 				setState((prev) => ({
 					...prev,
+					orderId,
 					isLoading: false,
+					hasResponded: true,
 					error,
 				}));
 			}
@@ -117,17 +137,19 @@ export function useReceiptData({
 
 	// When there's no order the result is the empty state regardless of any
 	// previously-fetched data (derived rather than reset via setState).
-	if (!orderId) {
+	if (!orderId || state.orderId !== orderId) {
 		return {
 			data: null,
 			mode,
 			hasSnapshot: false,
 			submissionStatus: null,
 			isLoading: false,
+			hasResponded: false,
 			error: null,
 			refetch,
 		};
 	}
 
-	return { ...state, refetch };
+	const { orderId: _requestOrderId, ...currentState } = state;
+	return { ...currentState, refetch };
 }

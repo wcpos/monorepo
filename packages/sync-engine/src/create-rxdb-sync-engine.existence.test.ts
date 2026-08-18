@@ -2,8 +2,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
+import { createEngineHarness, remoteId, scriptedConnectivity } from './testing';
 import { type RxdbSyncEnginePorts, type StoreScopeIdentity } from './create-rxdb-sync-engine';
-import { createEngineHarness, scriptedConnectivity } from './testing';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
 
 setPremiumFlag();
@@ -119,8 +119,8 @@ describe('existence maintenance lanes through the public facade', () => {
 			local: { dirty: false, pendingMutationIds: [] },
 		};
 		await seed(db.products as never, {
-			id: 'p10',
-			wooProductId: 10,
+			uuid: 'p10',
+			remoteId: remoteId(10),
 			price: 1,
 			stockStatus: 'instock',
 			type: 'simple',
@@ -133,9 +133,9 @@ describe('existence maintenance lanes through the public facade', () => {
 			...common,
 		});
 		await seed(db.variations as never, {
-			id: 'v11',
-			wooId: 11,
-			parentId: 10,
+			uuid: 'v11',
+			remoteId: remoteId(11),
+			parentRemoteId: remoteId(10),
 			price: 1,
 			stockStatus: 'instock',
 			attributes: [],
@@ -144,21 +144,21 @@ describe('existence maintenance lanes through the public facade', () => {
 			...common,
 		});
 		await seed(db.customers as never, {
-			id: 'c20',
-			wooCustomerId: 20,
+			uuid: 'c20',
+			remoteId: remoteId(20),
 			payload: { id: 20 },
 			...common,
 		});
 		await seed(db.customers as never, {
-			id: 'c21',
-			wooCustomerId: 21,
+			uuid: 'c21',
+			remoteId: remoteId(21),
 			payload: { id: 21 },
 			sync: common.sync,
 			local: { dirty: true, pendingMutationIds: ['m'] },
 		});
 		const order = (id: number, dirty = false) => ({
-			id: `o${id}`,
-			wooOrderId: id,
+			uuid: `o${id}`,
+			remoteId: remoteId(id),
 			number: String(id),
 			dateCreatedGmt: '2026-01-01T00:00:00',
 			status: 'processing',
@@ -262,8 +262,8 @@ describe('existence maintenance lanes through the public facade', () => {
 		await e.ready;
 		const db = e.active()!.database.collections;
 		await seed(db.products as never, {
-			id: productId,
-			wooProductId: 77,
+			uuid: productId,
+			remoteId: remoteId(77),
 			price: 7,
 			stockStatus: 'instock',
 			type: 'simple',
@@ -294,8 +294,8 @@ describe('existence maintenance lanes through the public facade', () => {
 
 	it('prunes unmanifested non-publish residents during prime without dropping local work', async () => {
 		const product = (id: number, status: string, dirty = false) => ({
-			id: `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`,
-			wooProductId: id,
+			uuid: `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`,
+			remoteId: remoteId(id),
 			price: id,
 			stockStatus: 'instock',
 			type: 'simple',
@@ -326,9 +326,9 @@ describe('existence maintenance lanes through the public facade', () => {
 		await expect(e.sync('existence-prime')).resolves.toMatchObject({
 			status: 'ran',
 		});
-		expect(await db.products.findOne(product(81, 'draft').id).exec()).toBeNull();
-		expect(await db.products.findOne(product(82, 'private').id).exec()).toBeNull();
-		expect(await db.products.findOne(product(83, 'draft', true).id).exec()).not.toBeNull();
+		expect(await db.products.findOne(product(81, 'draft').uuid).exec()).toBeNull();
+		expect(await db.products.findOne(product(82, 'private').uuid).exec()).toBeNull();
+		expect(await db.products.findOne(product(83, 'draft', true).uuid).exec()).not.toBeNull();
 		await e.dispose();
 	});
 
@@ -351,8 +351,8 @@ describe('existence maintenance lanes through the public facade', () => {
 			local: { dirty: false, pendingMutationIds: [] },
 		};
 		const product = (id: number, dirty = false) => ({
-			id: `p${id}`,
-			wooProductId: id,
+			uuid: `p${id}`,
+			remoteId: remoteId(id),
 			price: id,
 			stockStatus: 'instock',
 			type: 'simple',
@@ -368,9 +368,9 @@ describe('existence maintenance lanes through the public facade', () => {
 		await seed(db.products as never, product(91));
 		await seed(db.products as never, product(92, true));
 		await seed(db.variations as never, {
-			id: 'v93',
-			wooId: 93,
-			parentId: 91,
+			uuid: 'v93',
+			remoteId: remoteId(93),
+			parentRemoteId: remoteId(91),
 			price: 1,
 			stockStatus: 'instock',
 			attributes: [],
@@ -379,14 +379,14 @@ describe('existence maintenance lanes through the public facade', () => {
 			...common,
 		});
 		await seed(db.customers as never, {
-			id: 'c94',
-			wooCustomerId: 94,
+			uuid: 'c94',
+			remoteId: remoteId(94),
 			payload: { id: 94 },
 			...common,
 		});
 		await seed(db.orders as never, {
-			id: 'o95',
-			wooOrderId: 95,
+			uuid: 'o95',
+			remoteId: remoteId(95),
 			number: '95',
 			dateCreatedGmt: '2026-01-01T00:00:00',
 			status: 'processing',
@@ -408,7 +408,7 @@ describe('existence maintenance lanes through the public facade', () => {
 		expect(await db.existenceManifest.findOne('93').exec()).toBeNull();
 		expect(await db.existenceManifestCustomers.findOne('94').exec()).toBeNull();
 		expect(await db.existenceManifestOrders.findOne('95').exec()).toBeNull();
-		expect(orderPrune).toHaveBeenCalledWith([95]);
+		expect(orderPrune).toHaveBeenCalledWith([remoteId(95)]);
 		await e.dispose();
 	});
 
@@ -433,8 +433,8 @@ describe('existence maintenance lanes through the public facade', () => {
 		await e.ready;
 		const oldDb = e.active()!.database.collections;
 		await seed(oldDb.products as never, {
-			id: 'p40',
-			wooProductId: 40,
+			uuid: 'p40',
+			remoteId: remoteId(40),
 			price: 1,
 			stockStatus: 'instock',
 			type: 'simple',
@@ -489,8 +489,8 @@ describe('existence maintenance lanes through the public facade', () => {
 		await e.ready;
 		const oldDb = e.active()!.database.collections;
 		await seed(oldDb.products as never, {
-			id: 'p40',
-			wooProductId: 40,
+			uuid: 'p40',
+			remoteId: remoteId(40),
 			price: 1,
 			stockStatus: 'instock',
 			type: 'simple',
@@ -534,8 +534,8 @@ describe('existence maintenance lanes through the public facade', () => {
 		await e.ready;
 		let db = e.active()!.database.collections;
 		const order = {
-			id: '00000000-0000-4000-8000-000000000077',
-			wooOrderId: 77,
+			uuid: '00000000-0000-4000-8000-000000000077',
+			remoteId: remoteId(77),
 			number: '77',
 			dateCreatedGmt: '2026-01-01T00:00:00',
 			status: 'processing',

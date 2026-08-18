@@ -7,6 +7,7 @@ import { map } from 'rxjs/operators';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { useQueryState, useQueryStateActions } from '../../../../query';
 import { setVariationMatch } from './variation-matches';
@@ -17,9 +18,10 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export function PlainAttributes({ row }: CellContext<{ document: ProductDocument }, 'name'>) {
-	const product = row.original.document;
-	const attributes = useObservableEagerState(product.attributes$!);
+export function PlainAttributes({
+	row,
+}: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'name'>) {
+	const attributes = useRecordField(row.original.record, (product) => product.payload.attributes);
 
 	/**
 	 * @NOTE - Don't use a unique key here, index is sufficient
@@ -49,24 +51,23 @@ export function PlainAttributes({ row }: CellContext<{ document: ProductDocument
  */
 type ProductRowOriginal = {
 	document: ProductDocument;
+	record: EngineRecord<'products'>;
 	childrenSearchCount?: number;
 	parentSearchTerm?: string;
 };
 
-export function ProductAttributes({
-	row,
-	table,
-}: CellContext<{ document: ProductDocument }, 'name'>) {
+export function ProductAttributes({ row, table }: CellContext<ProductRowOriginal, 'name'>) {
 	const original = row.original as ProductRowOriginal;
-	const product = row.original.document;
-	const attributes = useObservableEagerState(product.attributes$!);
+	const attributes = useRecordField(row.original.record, (product) => product.payload.attributes);
 	const meta = table.options.meta as unknown as {
 		expanded$: import('rxjs').Observable<Record<string, boolean>>;
 		setRowExpanded?: (id: string, expanded: boolean) => void;
 	};
-	const isExpanded = useObservableEagerState(
-		meta.expanded$.pipe(map((expanded: Record<string, boolean>) => !!expanded[row.id]))
+	const isExpanded$ = React.useMemo(
+		() => meta.expanded$.pipe(map((expanded: Record<string, boolean>) => !!expanded[row.id])),
+		[meta.expanded$, row.id]
 	);
+	const isExpanded = useObservableEagerState(isExpanded$);
 	const matches = useQueryState<'variations', import('../../../../query').VariationMatch[]>(
 		(state) => state.filters.attributeMatches
 	);

@@ -35,8 +35,8 @@ export function createTaxRateSchedulerFetcher(
 			endpoint: 'taxes',
 			documentFromPayload: taxRateDocumentFromWooPayload,
 			// G1: id IS woo-tax-rate:<id> — storage and coverage share the one id-space, no prune.
-			storageId: (document) => document.id,
-			coverageRecordId: (document) => document.id,
+			storageId: (document) => document.uuid,
+			coverageRecordId: (document) => document.uuid,
 		},
 		input
 	);

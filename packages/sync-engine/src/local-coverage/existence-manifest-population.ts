@@ -1,4 +1,4 @@
-import type { OrderDocument, ProductDocument } from '@wcpos/sync-core';
+import { type OrderDocument, type ProductDocument, wooIdOf } from '@wcpos/sync-core';
 
 import {
 	existenceManifestDocument,
@@ -21,11 +21,11 @@ const MANIFEST_DIGEST_FIELD = '_rxdb_digest';
 /** A manifest row for a pulled product, or null when it carries no server digest (id/digest missing). */
 export function productManifestRow(document: ProductDocument): ExistenceManifestDocument | null {
 	const digest = (document.payload as Record<string, unknown> | undefined)?.[MANIFEST_DIGEST_FIELD];
-	if (typeof digest !== 'string' || digest === '' || document.wooProductId == null) {
+	if (typeof digest !== 'string' || digest === '' || document.remoteId == null) {
 		return null;
 	}
 	return existenceManifestDocument({
-		wooId: document.wooProductId,
+		wooId: wooIdOf(document.remoteId),
 		objectType: 'product',
 		digest,
 	});
@@ -69,11 +69,11 @@ export function customerManifestRow(
 	document: LocalCustomerDocument
 ): ExistenceManifestDocument | null {
 	const digest = (document.payload as Record<string, unknown> | undefined)?.[MANIFEST_DIGEST_FIELD];
-	if (typeof digest !== 'string' || digest === '' || document.wooCustomerId == null) {
+	if (typeof digest !== 'string' || digest === '' || document.remoteId == null) {
 		return null;
 	}
 	return existenceManifestDocument({
-		wooId: document.wooCustomerId,
+		wooId: wooIdOf(document.remoteId),
 		objectType: 'customer',
 		digest,
 	});
@@ -143,14 +143,14 @@ export function withCustomerManifestPopulation<R extends CustomerUpsertRepositor
 // manifest collection (existenceManifestOrders) — the HPOS/CPT order id-space, again separate to avoid
 // numeric collision with wp_posts/wp_users ids.
 
-/** A manifest row for a pulled order, or null when it carries no server digest / no wooOrderId. */
+/** A manifest row for a pulled order, or null when it carries no server digest / no remoteId. */
 export function orderManifestRow(document: OrderDocument): ExistenceManifestDocument | null {
 	const digest = (document.payload as Record<string, unknown> | undefined)?.[MANIFEST_DIGEST_FIELD];
-	if (typeof digest !== 'string' || digest === '' || document.wooOrderId == null) {
+	if (typeof digest !== 'string' || digest === '' || document.remoteId == null) {
 		return null;
 	}
 	return existenceManifestDocument({
-		wooId: document.wooOrderId,
+		wooId: wooIdOf(document.remoteId),
 		objectType: 'order',
 		digest,
 	});

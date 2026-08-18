@@ -11,6 +11,7 @@ import {
 	productDocumentId,
 	type StoredProductDocument,
 	type SyncObserver,
+	wooIdOf,
 	type WooProductPayload,
 } from '@wcpos/sync-core';
 
@@ -157,14 +158,14 @@ function productSearchTerm(task: FetchTask): string | null {
 }
 
 function targetedProductIds(task: FetchTask): number[] {
-	// The numeric server ids travel ONLY on the explicit wooIds channel — decoupled from the document-key
+	// Remote ids travel ONLY on the explicit remoteIds channel — decoupled from the document-key
 	// encoding (storage keys are uuids since the P0-1 emit-flip, so the server id is unrecoverable from the
 	// key). Every targeted seeder populates it (seedTargetedLane); a targeted task without it is a contract
 	// violation, not something to fall back from.
-	if (!task.wooIds || task.wooIds.length === 0) {
-		throw new Error(`Targeted product scheduler task is missing its wooIds channel: ${task.id}`);
+	if (!task.remoteIds || task.remoteIds.length === 0) {
+		throw new Error(`Targeted product scheduler task is missing its remoteIds channel: ${task.id}`);
 	}
-	return task.wooIds;
+	return task.remoteIds.map(wooIdOf);
 }
 
 function taskLimit(task: FetchTask, pullBatchSize?: () => number | undefined): number {
@@ -180,7 +181,7 @@ function taskLimit(task: FetchTask, pullBatchSize?: () => number | undefined): n
  * coverage lookup (which builds `woo-product:<wooId>` from the numeric id) keeps matching.
  */
 export function coverageRecordId(document: ProductDocument): string {
-	return document.wooProductId === null ? document.id : productDocumentId(document.wooProductId);
+	return document.remoteId === null ? document.uuid : productDocumentId(document.remoteId);
 }
 
 async function fetchTargetedProducts(
@@ -612,7 +613,7 @@ async function tryProductBrowseWindowWalk(
 	const documentsById = new Map<string, Materialized<Record<string, unknown>>>();
 	for (const payload of windowPayloads) {
 		const document = productDocumentFromWooPayload(payload, input.barcodeSelectors?.());
-		const storageId = (document.storedDocument as { id: string }).id;
+		const storageId = (document.storedDocument as { uuid: string }).uuid;
 		if (!documentsById.has(storageId)) documentsById.set(storageId, document);
 	}
 	const documents = [...documentsById.values()];

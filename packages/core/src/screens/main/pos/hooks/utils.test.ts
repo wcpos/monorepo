@@ -393,8 +393,8 @@ describe('Utilities', () => {
 
 		it('drops malformed variation attributes before creating cart metadata (#811)', () => {
 			const document = {
-				id: 'variation-101',
-				wooId: 101,
+				uuid: 'variation-101',
+				remoteId: '101',
 				payload: {
 					id: 101,
 					price: '15',

@@ -9,6 +9,7 @@ import {
 	syncCustomPullBatchIntoRepository,
 } from './customPullAdapter';
 import { createFakePullServer, fakeUuid } from './fakePullServer';
+import { mintRemoteId } from './woo/remoteIdCodec';
 
 // Pull fixtures come from the contract-faithful fake server (fakePullServer.ts, pinned against the
 // PHP pull_orders emit in fakePullServer.test.ts) — not hand-rolled envelopes that can drift from
@@ -280,7 +281,7 @@ describe('syncCustomPullBatchIntoRepository journal epoch (F8)', () => {
 		};
 		expect(
 			repository.upsertMany.mock.calls.map(([documents]) =>
-				documents.map((document) => document.id)
+				documents.map((document) => document.uuid)
 			)
 		).toEqual([[fakeUuid(1)]]); // applied — no reset
 		expect(store.writeCustomPullCheckpoint).toHaveBeenCalledWith(next);
@@ -306,7 +307,7 @@ describe('syncCustomPullBatchIntoRepository journal epoch (F8)', () => {
 
 		expect(
 			repository.upsertMany.mock.calls.map(([documents]) =>
-				documents.map((document) => document.id)
+				documents.map((document) => document.uuid)
 			)
 		).toEqual([[fakeUuid(1)]]);
 		expect(store.writeJournalEpoch).toHaveBeenCalledWith('epoch-FIRST');
@@ -498,32 +499,46 @@ describe('hostile-envelope poison guards (B7, ADR 0017 family)', () => {
 });
 
 describe('shouldApplyPulledDocument', () => {
-	const pending = new Set<string | number>(['local-order:sat-rush-r1-1', 'woo-order:204', 207]);
+	const pending = new Set<string | number>([fakeUuid(204), mintRemoteId(207, 'test'), 208]);
 
-	it('blocks pulled documents whose document id has a pending mutation', () => {
-		expect(shouldApplyPulledDocument({ id: 'woo-order:204', wooOrderId: 204 }, pending)).toBe(
-			false
-		);
-	});
-
-	it('blocks pulled documents whose temp id has a pending mutation', () => {
+	it('blocks pulled documents whose uuid has a pending mutation', () => {
 		expect(
-			shouldApplyPulledDocument({ id: 'local-order:sat-rush-r1-1', wooOrderId: null }, pending)
+			shouldApplyPulledDocument(
+				{ uuid: fakeUuid(204), remoteId: mintRemoteId(204, 'test') },
+				pending
+			)
 		).toBe(false);
 	});
 
-	it('blocks pulled documents whose woo order id has a pending mutation', () => {
-		expect(shouldApplyPulledDocument({ id: 'woo-order:207', wooOrderId: 207 }, pending)).toBe(
-			false
-		);
+	it('blocks pulled documents whose remote id has a pending mutation', () => {
+		expect(
+			shouldApplyPulledDocument(
+				{ uuid: fakeUuid(207), remoteId: mintRemoteId(207, 'test') },
+				pending
+			)
+		).toBe(false);
+	});
+
+	it('blocks pulled documents whose numeric Woo id has a pending mutation', () => {
+		expect(
+			shouldApplyPulledDocument(
+				{ uuid: fakeUuid(208), remoteId: mintRemoteId(208, 'test') },
+				pending
+			)
+		).toBe(false);
 	});
 
 	it('applies pulled documents with no pending mutations', () => {
-		expect(shouldApplyPulledDocument({ id: 'woo-order:999', wooOrderId: 999 }, pending)).toBe(true);
-		expect(shouldApplyPulledDocument({ id: 'woo-order:999', wooOrderId: null }, pending)).toBe(
-			true
-		);
-		expect(shouldApplyPulledDocument({ id: 'woo-order:1', wooOrderId: 1 }, new Set())).toBe(true);
+		expect(
+			shouldApplyPulledDocument(
+				{ uuid: fakeUuid(999), remoteId: mintRemoteId(999, 'test') },
+				pending
+			)
+		).toBe(true);
+		expect(shouldApplyPulledDocument({ uuid: fakeUuid(999), remoteId: null }, pending)).toBe(true);
+		expect(
+			shouldApplyPulledDocument({ uuid: fakeUuid(1), remoteId: mintRemoteId(1, 'test') }, new Set())
+		).toBe(true);
 	});
 });
 
@@ -575,7 +590,7 @@ describe('syncCustomPullBatchIntoRepository pull guard wiring', () => {
 
 		expect(
 			repository.upsertMany.mock.calls.map(([documents]) =>
-				documents.map((document) => document.id)
+				documents.map((document) => document.uuid)
 			)
 		).toEqual([[fakeUuid(12)]]);
 		expect(checkpointStore.writeCustomPullCheckpoint).toHaveBeenCalledWith(advancedCheckpoint);
@@ -601,7 +616,7 @@ describe('syncCustomPullBatchIntoRepository pull guard wiring', () => {
 
 		expect(
 			repository.upsertMany.mock.calls.map(([documents]) =>
-				documents.map((document) => document.id)
+				documents.map((document) => document.uuid)
 			)
 		).toEqual([[fakeUuid(11), fakeUuid(12)]]);
 		expect(result.documents).toBe(2);
@@ -622,13 +637,13 @@ describe('syncCustomPullBatchIntoRepository pull guard wiring', () => {
 			// Stand-in for the order fetcher's identity assembly — the client owns the document id.
 			assembleDocument: (document) => ({
 				...document,
-				id: `assembled:${document.wooOrderId}`,
+				uuid: `assembled:${document.remoteId}`,
 			}),
 		});
 
 		expect(
 			repository.upsertMany.mock.calls.map(([documents]) =>
-				documents.map((document) => document.id)
+				documents.map((document) => document.uuid)
 			)
 		).toEqual([['assembled:12']]);
 	});
@@ -680,7 +695,7 @@ describe('syncCustomPullBatchIntoRepository delete channel (F6)', () => {
 			pendingMutationOrderIds: pending,
 		});
 
-		expect(repository.removeDeletedOrders).toHaveBeenCalledWith([999, 1000], pending);
+		expect(repository.removeDeletedOrders).toHaveBeenCalledWith(['999', '1000'], pending);
 	});
 
 	it('re-reads the pending set right before applying deletes (freshness for the destructive guard)', async () => {
@@ -705,7 +720,7 @@ describe('syncCustomPullBatchIntoRepository delete channel (F6)', () => {
 
 		expect(refreshPendingMutationOrderIds).toHaveBeenCalledOnce();
 		// The delete guard uses the FRESH set (999 now protected), not the pre-pull snapshot.
-		expect(repository.removeDeletedOrders).toHaveBeenCalledWith([999], fresh);
+		expect(repository.removeDeletedOrders).toHaveBeenCalledWith(['999'], fresh);
 	});
 
 	it('guards the UPSERT with the fresh pending set too, not just deletes/reset (Codex P1)', async () => {
@@ -747,7 +762,7 @@ describe('syncCustomPullBatchIntoRepository delete channel (F6)', () => {
 			pendingMutationOrderIds: pending,
 		});
 
-		expect(repository.removeDeletedOrders).toHaveBeenCalledWith([999], pending);
+		expect(repository.removeDeletedOrders).toHaveBeenCalledWith(['999'], pending);
 	});
 
 	it('does not call remove when the response carries no deletes', async () => {

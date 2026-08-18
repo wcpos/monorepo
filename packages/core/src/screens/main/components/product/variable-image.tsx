@@ -6,6 +6,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { Image } from '@wcpos/components/image';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { useImageAttachment } from '../../hooks/use-image-attachment';
 
@@ -19,9 +20,9 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 export function VariableProductImage({
 	row,
 	table,
-}: CellContext<{ document: ProductDocument }, 'image'>) {
+}: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'image'>) {
 	const product = row.original.document;
-	const images = useObservableEagerState(product.images$!);
+	const images = useRecordField(row.original.record, (record) => record.payload.images);
 	const imageURL = get(images, [0, 'src'], undefined);
 	const { uri } = useImageAttachment(product, imageURL ?? '');
 
@@ -33,9 +34,11 @@ export function VariableProductImage({
 		expanded$: import('rxjs').Observable<Record<string, boolean>>;
 	};
 	const setRowExpanded = meta?.setRowExpanded;
-	const isExpanded = useObservableEagerState(
-		meta.expanded$.pipe(map((expanded: Record<string, boolean>) => !!expanded[row.id]))
+	const isExpanded$ = React.useMemo(
+		() => meta.expanded$.pipe(map((expanded: Record<string, boolean>) => !!expanded[row.id])),
+		[meta.expanded$, row.id]
 	);
+	const isExpanded = useObservableEagerState(isExpanded$);
 
 	const handlePress = React.useCallback(() => {
 		setRowExpanded?.(row.id, !isExpanded);
@@ -43,7 +46,11 @@ export function VariableProductImage({
 
 	return (
 		<Pressable onPress={handlePress} className="h-20 w-full">
-			<Image source={{ uri }} recyclingKey={product.uuid} className="h-full w-full rounded" />
+			<Image
+				source={{ uri }}
+				recyclingKey={row.original.record.uuid}
+				className="h-full w-full rounded"
+			/>
 		</Pressable>
 	);
 }

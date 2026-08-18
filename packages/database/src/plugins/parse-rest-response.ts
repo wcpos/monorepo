@@ -3,6 +3,7 @@ import difference from 'lodash/difference';
 import isPlainObject from 'lodash/isPlainObject';
 import unset from 'lodash/unset';
 
+import { RECORD_UUID_META_KEY } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import type { RxCollection, RxJsonSchema, RxPlugin } from 'rxdb';
@@ -196,7 +197,7 @@ export function coerceData(
 
 				/** Special case for extracting uuid from meta_data */
 				if (prop === 'uuid' && Array.isArray(json.meta_data)) {
-					const uuidMeta = json.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
+					const uuidMeta = json.meta_data.find((meta) => meta.key === RECORD_UUID_META_KEY);
 					if (uuidMeta) {
 						coercedData['uuid'] = uuidMeta.value;
 						continue;

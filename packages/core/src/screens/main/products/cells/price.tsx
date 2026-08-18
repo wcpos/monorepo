@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { PriceWithTax } from '../../components/product/price-with-tax';
 
@@ -11,11 +11,13 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export function Price({ table, row, column }: CellContext<{ document: ProductDocument }, 'price'>) {
-	const product = row.original.document;
-	const price = useObservableEagerState(product.price$!);
-	const taxStatus = useObservableEagerState(product.tax_status$!);
-	const taxClass = useObservableEagerState(product.tax_class$!);
+export function Price({
+	row,
+	column,
+}: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'price'>) {
+	const price = useRecordField(row.original.record, (product) => product.payload.price);
+	const taxStatus = useRecordField(row.original.record, (product) => product.payload.tax_status);
+	const taxClass = useRecordField(row.original.record, (product) => product.payload.tax_class);
 
 	/**
 	 *

@@ -4,6 +4,7 @@ import { ButtonPill } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
 import type { ProductDocument } from '@wcpos/database';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { VariationSelect } from '../../variation-select';
 import {
@@ -17,14 +18,14 @@ import { useQueryState, useQueryStateActions } from '../../../../../../query';
 import type { Row } from '@tanstack/react-table';
 
 interface Props {
-	row: Row<{ document: ProductDocument }>;
+	row: Row<{ document: ProductDocument; record: EngineRecord<'products'> }>;
 }
 
 /**
  *
  */
 export function VariationsFilterBar({ row }: Props) {
-	const parent = row.original.document;
+	const attributes = useRecordField(row.original.record, (parent) => parent.payload.attributes);
 	const { rowId, setRowExpanded } = useVariationRow();
 	const { searchTerm, matches } = useQueryState<
 		'variations',
@@ -44,7 +45,7 @@ export function VariationsFilterBar({ row }: Props) {
 						{searchTerm}
 					</ButtonPill>
 				)}
-				{(parent.attributes || [])
+				{(attributes || [])
 					.filter((attribute) => attribute.variation)
 					.sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
 					.map((attribute, index) => {

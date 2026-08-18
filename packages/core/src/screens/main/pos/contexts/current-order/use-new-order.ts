@@ -16,7 +16,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { useAppState } from '../../../../../contexts/app-state';
 import allCurrencies from '../../../../../contexts/currencies/currencies.json';
 import { useDefaultCustomer } from '../../../hooks/use-default-customer';
-import { transformCustomerJSONToOrderJSON } from '../../hooks/utils';
+import { ensurePosOrderIdentityMeta, transformCustomerJSONToOrderJSON } from '../../hooks/utils';
 
 const temporaryDB$ = from(createTemporaryDB()).pipe(shareReplay(1));
 const newOrderLogger = getLogger(['wcpos', 'pos', 'new-order']);
@@ -80,23 +80,11 @@ export const useNewOrder = () => {
 		const currencyData = allCurrencies.find((c) => c.code === currency) ?? { symbol: '' };
 		data.currency_symbol = decode(currencyData.symbol || '');
 		data.prices_include_tax = prices_include_tax === 'yes';
-		data.meta_data = [
-			{
-				key: '_woocommerce_pos_tax_based_on',
-				value: tax_based_on,
-			},
-			{
-				key: '_pos_user',
-				value: String(wpCredentials.id),
-			},
-		];
-
-		if (store.id !== 0) {
-			(data.meta_data as { key: string; value: string }[]).push({
-				key: '_pos_store',
-				value: String(store.id),
-			});
-		}
+		data.meta_data = ensurePosOrderIdentityMeta(undefined, {
+			userId: wpCredentials.id,
+			storeId: store.id,
+			taxBasedOn: typeof tax_based_on === 'string' ? tax_based_on : undefined,
+		});
 
 		newOrder!.incrementalPatch(data).catch((error) => {
 			newOrderLogger.error(error instanceof Error ? error.message : String(error), {

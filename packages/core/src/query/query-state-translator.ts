@@ -16,6 +16,7 @@ import type {
 	OrderBrowseDimensions,
 	ProductBrowseDimensions,
 } from '@wcpos/sync-engine';
+import { remoteIdOrNull, wooMetaCarrier } from '@wcpos/sync-core';
 
 import { parseRemoteId } from '../utils/parse-remote-id';
 
@@ -192,37 +193,28 @@ function compileReadFilter(
 	}
 	if (operator === 'metadata') {
 		const id = parseRemoteId(value)!;
+		const identityFilter = wooMetaCarrier.identityFilter({
+			cashierId: String(id),
+		});
 		return {
-			prefilter: {
-				[mapping.enginePath]: { $elemMatch: { key: '_pos_user', value: String(id) } },
-			},
+			prefilter: { [mapping.enginePath]: identityFilter.meta_data },
 			matches: (document) => String(actual(document)) === String(id),
 		};
 	}
 	if (operator === 'store') {
 		const numeric = typeof value === 'number' || /^\d+$/.test(String(value));
+		const identityFilter = wooMetaCarrier.identityFilter({
+			storeId: String(value),
+		});
 		return {
 			prefilter: numeric
-				? {
-						[mapping.enginePath]: {
-							$elemMatch: { key: '_pos_store', value: String(value) },
-						},
-					}
+				? { [mapping.enginePath]: identityFilter.meta_data }
 				: { 'payload.created_via': value },
 			matches: (document) => {
 				const payload = readEnginePath(document, 'payload') as Record<string, unknown> | undefined;
 				if (!numeric) return payload?.created_via === value;
-				const metadata = payload?.meta_data;
-				return (
-					Array.isArray(metadata) &&
-					metadata.some(
-						(item) =>
-							item &&
-							typeof item === 'object' &&
-							(item as Record<string, unknown>).key === '_pos_store' &&
-							String((item as Record<string, unknown>).value) === String(value)
-					)
-				);
+				const metadata = Array.isArray(payload?.meta_data) ? payload.meta_data : undefined;
+				return wooMetaCarrier.readIdentity(metadata).storeId === String(value);
 			},
 		};
 	}
@@ -296,7 +288,7 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 	state: QueryStateOf<C>,
 	options: {
 		id: string;
-		targeted?: readonly number[];
+		targeted?: readonly unknown[];
 		searchFields?: string[];
 	}
 ) {
@@ -310,13 +302,16 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 		if (translator.operator === 'metadata' && parseRemoteId(value) === undefined) return [];
 		return [{ field, value, translator }];
 	});
-	const targeted = options.targeted?.map(Number).filter(Number.isFinite);
+	const targeted = options.targeted?.map(remoteIdOrNull).filter((remoteId) => remoteId !== null);
 	const readFilters = active.map(({ translator, value }) => compileReadFilter(translator, value));
 	if (targeted !== undefined) {
 		const idMapping = resolveLegacyField(legacyCollection, 'id');
 		readFilters.push({
 			prefilter: { [idMapping.enginePath]: { $in: targeted } },
-			matches: (document) => targeted.includes(Number(mappedValue(idMapping, document))),
+			matches: (document) => {
+				const remoteId = remoteIdOrNull(mappedValue(idMapping, document));
+				return remoteId !== null && targeted.includes(remoteId);
+			},
 		});
 	}
 	const prefilters = readFilters.flatMap((filter) => (filter.prefilter ? [filter.prefilter] : []));
@@ -372,7 +367,7 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 			id: requirementId(options.id, 'targeted-records'),
 			collection: engineCollection,
 			kind: 'targeted-records',
-			wooIds: targeted,
+			remoteIds: targeted,
 		} as EngineRequirement);
 	}
 	if (

@@ -6,7 +6,11 @@ import * as React from 'react';
 import { act, render, waitFor } from '@testing-library/react';
 import { type Observable, of, Subject } from 'rxjs';
 
-import { NovuNotificationsProvider, useNovuNotifications } from './notifications';
+import {
+	NovuNotificationsProvider,
+	useNovuNotifications,
+	useNovuNotificationsSummary,
+} from './notifications';
 import { stopNovuBootstrap } from '../../services/novu/bootstrap';
 import { getNovuClient, subscribeToNovuEvents } from '../../services/novu/client';
 import { syncSubscriberToServer } from '../../services/novu/subscriber';
@@ -246,5 +250,84 @@ describe('NovuNotificationsProvider', () => {
 			'useNovuNotifications must be used within a NovuProvider'
 		);
 		spy.mockRestore();
+	});
+
+	/**
+	 * The bell is mounted for the whole session. Publishing the notification list alongside
+	 * the counts re-rendered it whenever any notification body or seen flag changed, even
+	 * though the number on the badge had not moved.
+	 *
+	 * `BellConsumer` is memoised with no props, so a parent render alone cannot reach it —
+	 * only the context it subscribes to actually changing can.
+	 */
+	it('does not re-render a summary consumer when only the notification body changes', async () => {
+		const onBellRender = jest.fn();
+		const BellConsumer = React.memo(function BellConsumer() {
+			const { unreadCount } = useNovuNotificationsSummary();
+			onBellRender();
+			return <span data-testid="bell">{unreadCount}</span>;
+		});
+
+		const query$ = new Subject<Record<string, unknown>[]>();
+		notificationQuery$ = query$;
+
+		const { getByTestId } = render(
+			<NovuNotificationsProvider>
+				<BellConsumer />
+			</NovuNotificationsProvider>
+		);
+
+		act(() => {
+			query$.next([
+				{ id: '1', title: 'First', body: 'original', status: 'unread', seen: false, createdAt: 1 },
+			]);
+		});
+		await waitFor(() => expect(getByTestId('bell').textContent).toBe('1'));
+
+		const rendersAtCountOne = onBellRender.mock.calls.length;
+
+		// Same id, same unread status, same seen flag — only the body moved.
+		act(() => {
+			query$.next([
+				{ id: '1', title: 'First', body: 'edited', status: 'unread', seen: false, createdAt: 1 },
+			]);
+		});
+
+		expect(onBellRender).toHaveBeenCalledTimes(rendersAtCountOne);
+		expect(getByTestId('bell').textContent).toBe('1');
+	});
+
+	it('still re-renders a summary consumer when the unread count moves', async () => {
+		const onBellRender = jest.fn();
+		const BellConsumer = React.memo(function BellConsumer() {
+			const { unreadCount } = useNovuNotificationsSummary();
+			onBellRender();
+			return <span data-testid="bell">{unreadCount}</span>;
+		});
+
+		const query$ = new Subject<Record<string, unknown>[]>();
+		notificationQuery$ = query$;
+
+		const { getByTestId } = render(
+			<NovuNotificationsProvider>
+				<BellConsumer />
+			</NovuNotificationsProvider>
+		);
+
+		act(() => {
+			query$.next([
+				{ id: '1', title: 'First', body: '', status: 'unread', seen: false, createdAt: 1 },
+			]);
+		});
+		await waitFor(() => expect(getByTestId('bell').textContent).toBe('1'));
+
+		act(() => {
+			query$.next([
+				{ id: '1', title: 'First', body: '', status: 'unread', seen: false, createdAt: 1 },
+				{ id: '2', title: 'Second', body: '', status: 'unread', seen: false, createdAt: 2 },
+			]);
+		});
+
+		await waitFor(() => expect(getByTestId('bell').textContent).toBe('2'));
 	});
 });

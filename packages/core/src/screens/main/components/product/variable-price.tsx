@@ -1,9 +1,8 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
-
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { getVariablePrices } from './get-variable-prices';
 import { PriceWithTax } from './price-with-tax';
@@ -21,16 +20,16 @@ export function VariableProductPrice({
 	table,
 	row,
 	column,
-}: CellContext<{ document: ProductDocument }, 'price' | 'regular_price' | 'sale_price'>) {
-	const product = row.original.document;
-	const taxStatus = useObservableState(product.tax_status$!, product.tax_status) as
-		'none' | 'taxable' | 'shipping' | undefined;
-	const taxClass = useObservableState(product.tax_class$!, product.tax_class) as string | undefined;
-
-	const metaData = useObservableState(product.meta_data$!, product.meta_data) as
-		{ key?: string; value?: unknown }[] | undefined;
+}: CellContext<
+	{ document: ProductDocument; record: EngineRecord<'products'> },
+	'price' | 'regular_price' | 'sale_price'
+>) {
+	const taxStatus = useRecordField(row.original.record, (product) => product.payload.tax_status);
+	const taxClass = useRecordField(row.original.record, (product) => product.payload.tax_class);
+	const metaData = useRecordField(row.original.record, (product) => product.payload.meta_data);
 	const variablePrices = getVariablePrices(metaData);
 	const key = column.id as PriceKey;
+	const safeTaxStatus = taxStatus || 'none';
 
 	if (!variablePrices || !variablePrices[key]) {
 		return null;
@@ -42,7 +41,7 @@ export function VariableProductPrice({
 		return (
 			<PriceWithTax
 				price={range.max}
-				taxStatus={taxStatus ?? 'none'}
+				taxStatus={safeTaxStatus}
 				taxClass={taxClass ?? ''}
 				taxDisplay={column.columnDef.meta?.show?.('tax') ? 'text' : 'tooltip'}
 			/>
@@ -53,14 +52,14 @@ export function VariableProductPrice({
 		<HStack className="flex-wrap justify-end gap-1">
 			<PriceWithTax
 				price={range.min}
-				taxStatus={taxStatus ?? 'none'}
+				taxStatus={safeTaxStatus}
 				taxClass={taxClass ?? ''}
 				taxDisplay={column.columnDef.meta?.show?.('tax') ? 'text' : 'tooltip'}
 			/>
 			<Text> - </Text>
 			<PriceWithTax
 				price={range.max}
-				taxStatus={taxStatus ?? 'none'}
+				taxStatus={safeTaxStatus}
 				taxClass={taxClass ?? ''}
 				taxDisplay={column.columnDef.meta?.show?.('tax') ? 'text' : 'tooltip'}
 			/>

@@ -1,9 +1,10 @@
 import * as React from 'react';
 
-import { v4 as uuidv4 } from 'uuid';
 import { useObservableEagerState } from 'observable-hooks';
+import { v4 as uuidv4 } from 'uuid';
 
 import { useQueryRuntime, wrapEngineDocument } from '@wcpos/query';
+import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useCartStockGuard } from './use-cart-stock-guard';
@@ -18,7 +19,7 @@ import {
 	patchEngineResident,
 	useLocalMutation,
 } from '../../hooks/mutations/use-local-mutation';
-import { useCurrentOrder } from '../contexts/current-order';
+import { useCurrentOrderActions } from '../contexts/current-order';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
@@ -35,7 +36,7 @@ type EngineResident = NonNullable<Awaited<ReturnType<typeof findEngineResident>>
  *
  * - the enqueue marks the record dirty and appends to `local.pendingMutationIds`
  *   (write-intents' dirty-mark) — a create is queued but not yet pushed;
- * - the create ack stamps the server id into `wooOrderId` (the orders facet's
+ * - the create ack stamps the server id into `remoteId` (the orders facet's
  *   `remoteIdField`, from the pushed document's `id`) — the server has it;
  * - `sync.revision` only moves for hosts that answer with a
  *   `{ document, currentRevision }` envelope. wc/v3 returns a BARE order, so
@@ -50,11 +51,11 @@ function hasQueuedOrAcknowledgedCreate(resident: EngineResident): boolean {
 	const record = resident as unknown as {
 		local?: { dirty?: boolean; pendingMutationIds?: unknown[] };
 		sync?: { revision?: unknown };
-		wooOrderId?: unknown;
+		remoteId?: unknown;
 	};
 	if (record.local?.dirty === true) return true;
 	if ((record.local?.pendingMutationIds?.length ?? 0) > 0) return true;
-	if (typeof record.wooOrderId === 'number' && record.wooOrderId > 0) return true;
+	if (record.remoteId !== null && record.remoteId !== undefined) return true;
 	return typeof record.sync?.revision === 'string' && record.sync.revision !== '';
 }
 
@@ -64,7 +65,9 @@ function hasQueuedOrAcknowledgedCreate(resident: EngineResident): boolean {
  * @returns An object containing the callback that adds a line to the order.
  */
 export const useAddItemToOrder = () => {
-	const { currentOrder, setCurrentOrderID } = useCurrentOrder();
+	// Event-time resolution: every product tile mounts this hook via useAddProduct, so a
+	// render-time subscription re-rendered the whole grid on every cart write.
+	const { getCurrentOrder, setCurrentOrderID } = useCurrentOrderActions();
 	const runtime = useQueryRuntime();
 	const { localPatch } = useLocalMutation();
 	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
@@ -214,19 +217,9 @@ export const useAddItemToOrder = () => {
 	 */
 	const addItemToOrder = React.useCallback(
 		async (type: CartLineType, data: CartLine) => {
-			const order = currentOrder.getLatest();
+			const order = getCurrentOrder().getLatest();
 
-			// make sure items have a uuid before saving
-			data.meta_data = data.meta_data || [];
-			const meta = data.meta_data.find((meta: any) => meta.key === '_woocommerce_pos_uuid');
-			const metaUUID = meta && meta.value;
-
-			if (!metaUUID) {
-				data.meta_data.push({
-					key: '_woocommerce_pos_uuid',
-					value: uuidv4(),
-				});
-			}
+			data = wooMetaCarrier.ensureLineUuid(data, uuidv4);
 
 			const recordId = documentRecordId(order);
 			if (!recordId) throw new Error('Order is missing its uuid');
@@ -291,7 +284,7 @@ export const useAddItemToOrder = () => {
 		[
 			buildCartLines,
 			checkCartStock,
-			currentOrder,
+			getCurrentOrder,
 			localPatch,
 			runtime,
 			saveNewOrder,

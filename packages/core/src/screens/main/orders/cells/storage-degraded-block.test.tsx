@@ -32,7 +32,10 @@ jest.mock('@wcpos/query', () => ({
 	WriteOutcomeError: class WriteOutcomeError extends Error {},
 }));
 
-jest.mock('@wcpos/sync-core', () => ({ WOO_REST_CANNOT_DELETE: 'woocommerce_rest_cannot_delete' }));
+jest.mock('@wcpos/sync-core', () => ({
+	...jest.requireActual('@wcpos/sync-core'),
+	WOO_REST_CANNOT_DELETE: 'woocommerce_rest_cannot_delete',
+}));
 
 const recordAction = (testID?: string, onPress?: () => unknown, disabled?: boolean) => {
 	if (!testID) return;

@@ -5,6 +5,7 @@ import { useObservableEagerState, useObservableSuspense } from 'observable-hooks
 
 import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
+import type { EngineRecord } from '@wcpos/query';
 
 import { useGuardedExtendLimit } from '../../../../../query';
 import { ProductTile } from './product-tile';
@@ -13,11 +14,15 @@ import { useT } from '../../../../../contexts/translations';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { DataTableFooter } from '../../../components/data-table/footer';
 import { TaxBasedOn } from '../../../components/product/tax-based-on';
-import { useTaxRates } from '../../../contexts/tax-rates';
+import { useTaxSettings } from '../../../contexts/tax-rates';
 
 import type { QueryStateActions } from '../../../../../query';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
+type ProductHit = {
+	document: ProductDocument;
+	record: EngineRecord<'products'>;
+};
 
 interface ProductGridProps {
 	binding: ReturnType<typeof import('../../../../../query').useRelationalCollectionBinding>;
@@ -40,7 +45,7 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 	const { uiSettings } = useUISettings('pos-products');
 	const gridColumns = useObservableEagerState(uiSettings.gridColumns$);
 	const gridFields = useObservableEagerState(uiSettings.gridFields$) as GridFields;
-	const { calcTaxes } = useTaxRates();
+	const { calcTaxes } = useTaxSettings();
 	const t = useT();
 
 	const result = useObservableSuspense(binding.resource);
@@ -55,21 +60,19 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 	 * Chunk flat product list into rows of N
 	 */
 	const rows = React.useMemo(() => {
-		const products = deferredResult.hits.reduce<ProductDocument[]>(
-			(acc, hit: { document: ProductDocument }) => {
-				try {
-					// Replication can briefly leave deferred hits pointing at stale RxDB docs.
-					// Skip those entries so the grid keeps rendering while sync catches up.
-					void hit.document.name;
-					acc.push(hit.document as ProductDocument);
-				} catch {
-					// no-op
-				}
-				return acc;
-			},
-			[]
-		);
-		const chunked: ProductDocument[][] = [];
+		const products = deferredResult.hits.reduce<ProductHit[]>((acc, hit) => {
+			try {
+				// Replication can briefly leave deferred hits pointing at stale RxDB docs.
+				// Skip those entries so the grid keeps rendering while sync catches up.
+				if (!hit.record) return acc;
+				void hit.record.payload.name;
+				acc.push(hit as ProductHit);
+			} catch {
+				// no-op
+			}
+			return acc;
+		}, []);
+		const chunked: ProductHit[][] = [];
 		for (let i = 0; i < products.length; i += gridColumns) {
 			chunked.push(products.slice(i, i + gridColumns));
 		}
@@ -84,15 +87,21 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 					renderItem={({ item: row }) => (
 						<VirtualizedList.Item>
 							<View className="flex-row">
-								{row?.map((product: ProductDocument) =>
-									product.type === 'variable' ? (
+								{row?.map(({ document, record }) =>
+									record.payload.type === 'variable' ? (
 										<VariableProductTile
-											key={product.uuid}
-											product={product}
+											key={record.uuid}
+											product={document}
+											record={record}
 											gridFields={gridFields}
 										/>
 									) : (
-										<ProductTile key={product.uuid} product={product} gridFields={gridFields} />
+										<ProductTile
+											key={record.uuid}
+											product={document}
+											record={record}
+											gridFields={gridFields}
+										/>
 									)
 								)}
 								{/* Spacers for incomplete last row */}

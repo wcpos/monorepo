@@ -1,3 +1,5 @@
+import type { RemoteId } from '@wcpos/sync-core';
+
 import type { FetchTask, ReplicationMode } from './replication-policy';
 
 export type PersistedSchedulerTaskStatus = 'queued' | 'in-flight' | 'completed' | 'failed';
@@ -10,7 +12,7 @@ export type PersistedSchedulerTaskState = {
 	ids?: string[];
 	/** Numeric Woo server ids for a targeted task — persisted so the fetch survives a
 	 * rehydrate once document keys are uuids (the regex can't recover them). */
-	wooIds?: number[];
+	remoteIds?: RemoteId[];
 	limit: number;
 	priority: number;
 	mode: ReplicationMode;
@@ -137,7 +139,7 @@ function toQueuedState(task: FetchTask, nowMs: number): PersistedSchedulerTaskSt
 		collection: task.collection,
 		queryKey: task.queryKey,
 		ids: task.ids,
-		wooIds: task.wooIds,
+		remoteIds: task.remoteIds,
 		limit: task.limit,
 		priority: task.priority,
 		mode: task.mode,
@@ -171,7 +173,7 @@ function claimState(
 		collection: task.collection,
 		queryKey: task.queryKey,
 		ids: task.ids,
-		wooIds: task.wooIds,
+		remoteIds: task.remoteIds,
 		limit: task.limit,
 		priority: task.priority,
 		mode: task.mode,

@@ -1,11 +1,13 @@
 import {
 	engineCollectionNameFor,
+	type EngineRecord,
 	type EngineRxDocument,
 	isEngineRxDocument,
 	type LegacyCollectionName,
 	resolveLegacyField,
 	wrapEngineDocument,
 } from '@wcpos/query';
+import { remoteIdOrNull } from '@wcpos/sync-core';
 
 type QueryManager = ReturnType<typeof import('@wcpos/query').useQueryRuntime>;
 
@@ -44,18 +46,26 @@ export function readEngineCoupons(manager: QueryManager) {
 	return readAll<import('@wcpos/database').CouponDocument>(manager, 'coupons');
 }
 
-export async function readEngineProductsByWooId(manager: QueryManager, wooIds: number[]) {
+export async function readEngineProductRecordsByWooId(manager: QueryManager, wooIds: number[]) {
 	if (wooIds.length === 0) return [];
 	const collectionName = 'products' as const;
 	const collection = activeCollection(manager, collectionName);
 	if (!collection) return [];
 	const wooIdPath = resolveLegacyField(collectionName, 'id').enginePath;
-	const result = await collection.find({ selector: { [wooIdPath]: { $in: wooIds } } }).exec();
-	return engineDocuments(result).map((document) =>
-		wrapEngineDocument<import('@wcpos/database').ProductDocument>(collectionName, document)
+	const remoteIds = wooIds.map(remoteIdOrNull).filter((remoteId) => remoteId !== null);
+	const result = await collection.find({ selector: { [wooIdPath]: { $in: remoteIds } } }).exec();
+	return engineDocuments(result) as unknown as EngineRecord<'products'>[];
+}
+
+export async function readEngineProductsByWooId(manager: QueryManager, wooIds: number[]) {
+	const records = await readEngineProductRecordsByWooId(manager, wooIds);
+	return records.map((record) =>
+		wrapEngineDocument<import('@wcpos/database').ProductDocument>('products', record as never)
 	);
 }
 
-export function readEngineCategories(manager: QueryManager) {
-	return readAll<import('@wcpos/database').ProductCategoryDocument>(manager, 'products/categories');
+export async function readEngineCategories(manager: QueryManager) {
+	const collection = activeCollection(manager, 'products/categories');
+	if (!collection) return [];
+	return engineDocuments(await collection.find().exec()) as unknown as EngineRecord<'categories'>[];
 }

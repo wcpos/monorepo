@@ -1,12 +1,12 @@
 import * as React from 'react';
 
 import {
+	type EngineRecord,
 	type EngineRxDocument,
 	isEngineRxDocument,
 	useQueryRuntime,
-	wrapEngineDocument,
 } from '@wcpos/query';
-import { barcodeMatchCandidates, buildLocalBarcodeIndex } from '@wcpos/sync-core';
+import { barcodeMatchCandidates, buildLocalBarcodeIndex, remoteIdOrNull } from '@wcpos/sync-core';
 
 /**
  * The barcode carriers of the engine's ACTIVE scope, per materialized
@@ -15,9 +15,6 @@ import { barcodeMatchCandidates, buildLocalBarcodeIndex } from '@wcpos/sync-core
  */
 type ActiveBarcodeSelectors = { products: readonly string[]; variations: readonly string[] };
 const NO_BARCODE_SELECTORS: ActiveBarcodeSelectors = { products: [], variations: [] };
-
-type ProductDocument = import('@wcpos/database').ProductDocument;
-type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 
 function engineDocuments(value: unknown): EngineRxDocument[] {
 	return Array.isArray(value) ? value.filter(isEngineRxDocument) : [];
@@ -59,7 +56,7 @@ function matchesExactAnyField(document: EngineRxDocument, barcode: string): bool
 	if (!payload) {
 		return false;
 	}
-	return buildLocalBarcodeIndex([{ id: document.id, payload }]).index.has(barcode);
+	return buildLocalBarcodeIndex([{ id: document.uuid, payload }]).index.has(barcode);
 }
 
 function matchesEquivalentGlobalId(document: EngineRxDocument, barcode: string): boolean {
@@ -77,7 +74,7 @@ export const useBarcodeSearch = () => {
 	 * @returns {Promise<(ProductDocument | ProductVariationDocument)[]>} - A promise that resolves to an array containing the search results.
 	 */
 	const barcodeSearch = React.useCallback(
-		async (barcode: string): Promise<(ProductDocument | ProductVariationDocument)[]> => {
+		async (barcode: string): Promise<(EngineRecord<'products'> | EngineRecord<'variations'>)[]> => {
 			const normalizedBarcode = barcode.trim();
 			if (normalizedBarcode === '') {
 				return [];
@@ -110,10 +107,10 @@ export const useBarcodeSearch = () => {
 			const select = (predicate: (document: EngineRxDocument) => boolean) => [
 				...products
 					.filter(predicate)
-					.map((document) => wrapEngineDocument<ProductDocument>('products', document)),
+					.map((document) => document as unknown as EngineRecord<'products'>),
 				...variations
 					.filter(predicate)
-					.map((document) => wrapEngineDocument<ProductVariationDocument>('variations', document)),
+					.map((document) => document as unknown as EngineRecord<'variations'>),
 			];
 
 			// Precedence (#740), first non-empty tier wins so a scan never turns
@@ -151,18 +148,16 @@ export const useBarcodeSearch = () => {
 	);
 
 	const findProductById = React.useCallback(
-		async (productId: number): Promise<ProductDocument | null> => {
+		async (productId: number): Promise<EngineRecord<'products'> | null> => {
 			// Resolve on every call so parent lookup follows a concurrent store-scope move.
 			const productCollection = runtime.engine.active()?.database.collections.products;
 			if (!productCollection) {
 				return null;
 			}
 			const result = await productCollection
-				.findOne({ selector: { wooProductId: productId } })
+				.findOne({ selector: { remoteId: remoteIdOrNull(productId) } })
 				.exec();
-			return isEngineRxDocument(result)
-				? wrapEngineDocument<ProductDocument>('products', result)
-				: null;
+			return isEngineRxDocument(result) ? (result as unknown as EngineRecord<'products'>) : null;
 		},
 		[runtime]
 	);

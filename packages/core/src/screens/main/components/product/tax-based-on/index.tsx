@@ -7,13 +7,13 @@ import { Text } from '@wcpos/components/text';
 
 import { DisplayCurrentTaxRates } from './display-current-tax-rates';
 import { useT } from '../../../../../contexts/translations';
-import { useTaxRates } from '../../../contexts/tax-rates';
+import { useTaxLocation } from '../../../contexts/tax-rates';
 
 /**
  *
  */
 export function TaxBasedOn() {
-	const { rates, taxBasedOn, location } = useTaxRates();
+	const { rates, taxBasedOn, location } = useTaxLocation();
 	const t = useT();
 
 	/**

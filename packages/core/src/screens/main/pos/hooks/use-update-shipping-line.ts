@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { wooMetaCarrier } from '@wcpos/sync-core';
+
 import { useCalculateShippingLineTaxAndTotals } from './use-calculate-shipping-line-tax-and-totals';
 import { useShippingLineData } from './use-shipping-line-data';
 import { updatePosDataMeta } from './utils';
@@ -41,12 +43,7 @@ export const useUpdateShippingLine = () => {
 
 			// get matching shipping line
 			const updatedShippingLines = json.shipping_lines?.map((shippingLine) => {
-				if (
-					updated ||
-					!shippingLine.meta_data?.some(
-						(m) => m.key === '_woocommerce_pos_uuid' && m.value === uuid
-					)
-				) {
+				if (updated || wooMetaCarrier.lineUuid(shippingLine) !== uuid) {
 					return shippingLine;
 				}
 

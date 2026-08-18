@@ -28,8 +28,28 @@ jest.mock('./use-cart-stock-guard', () => ({
 	}),
 }));
 
-// Mock useCurrentOrder
+// Lets a test simulate the cashier switching order tabs between calls to getCurrentOrder().
+// Named `mock*` so jest allows the factory below to close over it.
+let mockSwitchedOrder: { uuid: string; getLatest: () => unknown } | null = null;
+let mockGetCurrentOrderCalls = 0;
+
+// Mock useCurrentOrder / useCurrentOrderActions.
+// The hook now resolves the order at event time via `getCurrentOrder()` rather than
+// subscribing during render, so the mock exposes both against the same fixture.
 jest.mock('../contexts/current-order', () => ({
+	useCurrentOrderActions: () => ({
+		getCurrentOrder: () => {
+			// The FIRST read is the capture at press time and must see the real order. Any
+			// later read models the cashier having switched tabs in the meantime — which the
+			// hook must not consume.
+			mockGetCurrentOrderCalls += 1;
+			if (mockSwitchedOrder && mockGetCurrentOrderCalls > 1) {
+				return mockSwitchedOrder;
+			}
+			return jest.requireMock('../contexts/current-order').useCurrentOrder().currentOrder;
+		},
+		setCurrentOrderID: jest.fn(),
+	}),
 	useCurrentOrder: () => ({
 		currentOrder: {
 			getLatest: () => ({
@@ -126,6 +146,8 @@ jest.mock('./use-line-item-data', () => ({
 describe('useUpdateLineItem', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockSwitchedOrder = null;
+		mockGetCurrentOrderCalls = 0;
 		mockLocalPatch.mockResolvedValue({ changes: {} });
 		mockLineItemQuantity = 1;
 		mockCheckCartStock.mockResolvedValue({
@@ -412,6 +434,47 @@ describe('useUpdateLineItem', () => {
 									id: '1',
 								}),
 							]),
+						}),
+					]),
+				}),
+			})
+		);
+	});
+
+	/**
+	 * Regression for a P1 found in review of the event-time refactor.
+	 *
+	 * These mutations are queued, so execution can land long after the press. If the callback
+	 * resolved `getCurrentOrder()` at EXECUTION time, a cashier switching order tabs while a
+	 * mutation was still queued would have the edit applied against the wrong order — the
+	 * queue is keyed by the order captured at enqueue time, so the edit lands in the new order
+	 * or is silently dropped when its line is not found there.
+	 *
+	 * The order must be captured at press time and threaded through.
+	 */
+	it('applies the edit to the order captured at press time, not the one selected later', async () => {
+		const { result } = renderHook(() => useUpdateLineItem());
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+
+		// The cashier switches tabs: the NEXT getCurrentOrder() would hand back a different
+		// order, one that does not contain this line at all.
+		mockSwitchedOrder = {
+			uuid: 'a-different-order',
+			getLatest: () => ({ toMutableJSON: () => ({ line_items: [] }) }),
+		};
+
+		await act(async () => {
+			await result.current.updateLineItem(uuid, { quantity: 5 });
+		});
+
+		// The patch still went to the original order and still found the line.
+		expect(mockLocalPatch).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					line_items: expect.arrayContaining([
+						expect.objectContaining({
+							meta_data: expect.arrayContaining([expect.objectContaining({ value: uuid })]),
+							quantity: 5,
 						}),
 					]),
 				}),

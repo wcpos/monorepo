@@ -9,8 +9,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
+import { createEngineHarness, remoteId } from './testing';
 import { type RxdbSyncEngine, type StoreScopeIdentity } from './create-rxdb-sync-engine';
-import { createEngineHarness } from './testing';
 
 setPremiumFlag();
 
@@ -164,8 +164,8 @@ async function insertResidentProduct(engine: RxdbSyncEngine, id: number): Promis
 	const scope = engine.active();
 	if (!scope) throw new Error('no active scope');
 	await scope.database.collections.products.insert({
-		id: productUuid(id),
-		wooProductId: id,
+		uuid: productUuid(id),
+		remoteId: remoteId(id),
 		price: 5,
 		stockStatus: 'instock',
 		type: 'simple',
@@ -330,8 +330,8 @@ describe('require() for search — the public search-demand verb', () => {
 		// One real customer exists server-side (census 1) but only the born-local
 		// sentinel is resident: the gate must fetch, not mask the missing customer.
 		await scope.database.collections.customers.upsert({
-			id: 'customer:default',
-			wooCustomerId: null,
+			uuid: 'customer:default',
+			remoteId: null,
 			payload: {},
 			sync: { revision: '', partial: true, source: 'woo-rest' },
 			local: { dirty: false, pendingMutationIds: [] },
@@ -425,7 +425,7 @@ describe('require() for search — the public search-demand verb', () => {
 				.find()
 				.exec()
 		).map((doc) => doc.toJSON());
-		expect(rows.map((row) => row['wooProductId'])).toEqual([321]);
+		expect(rows.map((row) => row['remoteId'])).toEqual([remoteId(321)]);
 		expect(await searchTaskRows(engine)).toEqual([]);
 		await engine.dispose();
 	});
@@ -462,7 +462,11 @@ describe('require() for search — the public search-demand verb', () => {
 				.exec()
 		).map((doc) => doc.toJSON());
 		expect(rows).toEqual([
-			expect.objectContaining({ id: variationUuid(654), wooId: 654, parentId: 321 }),
+			expect.objectContaining({
+				uuid: variationUuid(654),
+				remoteId: remoteId(654),
+				parentRemoteId: remoteId(321),
+			}),
 		]);
 		expect(await searchTaskRows(engine)).toEqual([]);
 		await engine.dispose();
@@ -573,7 +577,7 @@ describe('require() for search — the public search-demand verb', () => {
 				.find()
 				.exec()
 		).map((doc) => doc.toJSON());
-		expect(rows.map((row) => row['wooCustomerId'])).toEqual([12]);
+		expect(rows.map((row) => row['remoteId'])).toEqual([remoteId(12)]);
 		expect(await searchTaskRows(engine)).toEqual([]);
 		await engine.dispose();
 	});
@@ -592,8 +596,8 @@ describe('require() for search — the public search-demand verb', () => {
 			find(): { exec(): Promise<{ toJSON(): Record<string, unknown> }[]> };
 		};
 		await products.insert({
-			id: productUuid(321),
-			wooProductId: 321,
+			uuid: productUuid(321),
+			remoteId: remoteId(321),
 			price: 5,
 			stockStatus: 'instock',
 			type: 'simple',

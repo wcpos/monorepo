@@ -14,7 +14,7 @@ const mockActions = {
 };
 const mockState = { search: '', filters: {}, sort: {}, limit: 10 };
 const mockUseCollectionBinding = jest.fn(
-	(_collection: string, _state: unknown, _options: { wooIds: readonly number[] }) => ({
+	(_collection: string, _state: unknown, _options: { remoteIds: readonly string[] }) => ({
 		sync: jest.fn().mockResolvedValue(undefined),
 	})
 );
@@ -31,13 +31,22 @@ jest.mock('@wcpos/components/suspense', () => ({
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
+jest.mock('@wcpos/query', () => ({
+	useRecordField: (
+		record: { variations$: BehaviorSubject<number[]> },
+		select: (value: { payload: { variations: number[] } }) => unknown
+	) => {
+		const { useObservableEagerState } = jest.requireActual('observable-hooks');
+		return select({ payload: { variations: useObservableEagerState(record.variations$) } });
+	},
+}));
 jest.mock('../../../../../../query', () => ({
 	useQueryState: () => mockState,
 	useQueryStateActions: () => mockActions,
 	useCollectionBinding: (
 		collection: string,
 		state: unknown,
-		options: { wooIds: readonly number[] }
+		options: { remoteIds: readonly string[] }
 	) => mockUseCollectionBinding(collection, state, options),
 }));
 jest.mock('./filters', () => ({ VariationsFilterBar: () => null }));
@@ -51,19 +60,20 @@ describe('Variations query binding', () => {
 		const row = {
 			original: {
 				document: { id: 1, variations: variations$.value, variations$ },
+				record: { variations$ },
 			},
 		} as never;
 
 		render(<Variations row={row} />);
 
 		expect(mockUseCollectionBinding).toHaveBeenLastCalledWith('variations', mockState, {
-			wooIds: [11, 12],
+			remoteIds: ['11', '12'],
 		});
 
 		act(() => variations$.next([11, 12, 13]));
 
 		expect(mockUseCollectionBinding).toHaveBeenLastCalledWith('variations', mockState, {
-			wooIds: [11, 12, 13],
+			remoteIds: ['11', '12', '13'],
 		});
 	});
 });

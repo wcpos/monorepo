@@ -211,6 +211,7 @@ export function observeEngineQuery(
 					count: result.count,
 					hits: result.hits.map((document) => ({
 						id: document.primary,
+						record: document,
 						document: wrapEngineDocument(descriptor.collection, document),
 					})),
 				})),

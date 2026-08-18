@@ -88,7 +88,7 @@ function queuedStateFromTask(
 		collection: task.collection,
 		queryKey: task.queryKey,
 		ids: task.ids,
-		wooIds: task.wooIds,
+		remoteIds: task.remoteIds,
 		limit: task.limit,
 		priority: task.priority,
 		mode: task.mode,

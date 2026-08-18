@@ -34,8 +34,14 @@ interface VariationRowProviderProps {
  *
  */
 export function VariationRowProvider({ row, setRowExpanded, children }: VariationRowProviderProps) {
+	// Memoised explicitly: this provider sits under a TanStack row that carries a document,
+	// so it re-renders on product writes. The React Compiler happens to cache this literal
+	// today, but the stability is the point of the context — it should not rest on a build
+	// flag.
+	const value = React.useMemo(() => ({ rowId: row.id, setRowExpanded }), [row.id, setRowExpanded]);
+
 	return (
-		<VariationRowContext.Provider value={{ rowId: row.id, setRowExpanded }}>
+		<VariationRowContext.Provider value={value}>
 			<QueryStateProvider
 				collection="variations"
 				initialPageSize={Number.MAX_SAFE_INTEGER}

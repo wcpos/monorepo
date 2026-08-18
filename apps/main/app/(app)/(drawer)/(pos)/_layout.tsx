@@ -11,7 +11,6 @@ import { useAppState } from '@wcpos/core/contexts/app-state';
 import { TaxRatesProvider } from '@wcpos/core/screens/main/contexts/tax-rates';
 import {
 	CurrentOrderProvider,
-	useCurrentOrder,
 	useOpenOrdersResource,
 } from '@wcpos/core/screens/main/pos/contexts/current-order';
 import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/contexts/order-money-divergence';
@@ -95,12 +94,19 @@ export default function POSLayout() {
 	);
 }
 
+/**
+ * Deliberately does NOT subscribe to the current order.
+ *
+ * It used to call `useCurrentOrder()` purely to pass the order down to `TaxRatesProvider`.
+ * That put a cart-write subscription ABOVE the navigator, so every add/remove re-rendered
+ * this component and the whole `<Stack>` subtree with it — measured at `ProductTile` ×80 per
+ * cart mutation. `TaxRatesProvider` now subscribes to the order itself, below this point.
+ */
 function POSStack() {
 	const screenBackgroundColor = useNavigationBackground();
-	const { currentOrder } = useCurrentOrder();
 
 	return (
-		<TaxRatesProvider order={currentOrder}>
+		<TaxRatesProvider>
 			<View className="bg-background flex-1">
 				<Stack
 					screenOptions={{

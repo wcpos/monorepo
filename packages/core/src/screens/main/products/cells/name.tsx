@@ -1,9 +1,8 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { EditableField } from '../../components/editable-field';
 import { CapabilityTooltip } from '../../components/capability-tooltip';
@@ -19,10 +18,18 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export function ProductName(props: CellContext<{ document: ProductDocument }, 'name'>) {
+export function ProductName(
+	props: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'name'>
+) {
 	const product = props.row.original.document;
+	const record = props.row.original.record;
 	const show = props.column.columnDef.meta?.show;
-	const name = useObservableEagerState(product.name$!);
+	const fields = useRecordField(record, ({ payload }) => ({
+		name: payload.name,
+		sku: payload.sku,
+		barcode: payload.barcode,
+		type: payload.type,
+	}));
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();
 	const canEdit = caps.canEditProducts;
@@ -37,7 +44,7 @@ export function ProductName(props: CellContext<{ document: ProductDocument }, 'n
 		<VStack space="xs" className="w-full">
 			<CapabilityTooltip show={!readOnly && !canEdit} hint="editProducts">
 				<EditableField
-					value={name}
+					value={fields.name}
 					onChangeText={
 						readOnly || !canEdit
 							? undefined
@@ -46,11 +53,11 @@ export function ProductName(props: CellContext<{ document: ProductDocument }, 'n
 					editable={!readOnly && canEdit}
 				/>
 			</CapabilityTooltip>
-			{show?.('sku') && <Text className="text-sm">{product.sku}</Text>}
-			{show?.('barcode') && <Text className="text-sm">{product.barcode}</Text>}
+			{show?.('sku') && <Text className="text-sm">{fields.sku}</Text>}
+			{show?.('barcode') && <Text className="text-sm">{fields.barcode}</Text>}
 			{show?.('attributes') && <PlainAttributes {...props} />}
-			{product.type === 'variable' && <ProductAttributes {...props} />}
-			{product.type === 'grouped' && <GroupedNames {...props} />}
+			{fields.type === 'variable' && <ProductAttributes {...props} />}
+			{fields.type === 'grouped' && <GroupedNames {...props} />}
 		</VStack>
 	);
 }

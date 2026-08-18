@@ -36,6 +36,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { WebView } from '@wcpos/components/webview';
 import { usePrint } from '@wcpos/printer';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
 	getReceiptPreviewPaperWidth,
@@ -54,7 +55,7 @@ import { useResolvedPrinter } from './hooks/use-resolved-printer';
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { useUISettings } from '../contexts/ui-settings';
-import { TaxRatesContext } from '../contexts/tax-rates/provider';
+import { useTaxSettingsOptional } from '../contexts/tax-rates/provider';
 import { resolvePriceNumDecimals } from '../contexts/tax-rates/resolve-price-num-decimals';
 
 interface Props {
@@ -96,7 +97,7 @@ function ReceiptDocument({ order }: { order: import('@wcpos/database').OrderDocu
 		() => createCloudEnqueueFactory(cloudHttp),
 		[cloudHttp]
 	);
-	const taxRates = React.useContext(TaxRatesContext);
+	const taxRates = useTaxSettingsOptional();
 	const storeDp = useObservableEagerState(store?.wc_price_decimals$) as number | undefined;
 	const dp = resolvePriceNumDecimals({
 		contextDp: taxRates?.priceNumDecimals,
@@ -125,6 +126,7 @@ function ReceiptDocument({ order }: { order: import('@wcpos/database').OrderDocu
 		selectedTemplateContent,
 		isOffline,
 		isSyncing,
+		hasFinalData,
 	} = useTemplateRenderer({
 		orderId,
 		baseReceiptURL,
@@ -218,6 +220,15 @@ function ReceiptDocument({ order }: { order: import('@wcpos/database').OrderDocu
 			getLogger(['wcpos', 'pos', 'receipt']).info('Receipt print attempted', {
 				context: { event: 'receipt.print_attempted', orderId: order.uuid ?? orderId },
 			}),
+		onPrintError: (error) =>
+			getLogger(['wcpos', 'pos', 'receipt']).error('Receipt print failed', {
+				code: ERROR_CODES.PRINT_UNEXPECTED,
+				context: {
+					event: 'receipt.print_failed',
+					orderId: order.uuid ?? orderId,
+					error: error.message,
+				},
+			}),
 	});
 
 	/**
@@ -226,6 +237,7 @@ function ReceiptDocument({ order }: { order: import('@wcpos/database').OrderDocu
 	const { uiSettings } = useUISettings('pos-cart');
 	const checkoutRef = React.useRef(false);
 	const hasAutoPrintedRef = React.useRef(false);
+	const iframeLoadedRef = React.useRef(false);
 	useNavigationState((state) => {
 		if (CHECKOUT_ROUTE_NAMES.some((routeName) => state.routeNames.includes(routeName))) {
 			checkoutRef.current = true;
@@ -233,19 +245,37 @@ function ReceiptDocument({ order }: { order: import('@wcpos/database').OrderDocu
 		return state;
 	});
 
-	// Reset auto-print guard when a new receipt is loaded
+	// Reset auto-print guards when a new receipt is loaded
 	React.useEffect(() => {
 		hasAutoPrintedRef.current = false;
+		iframeLoadedRef.current = false;
 	}, [orderId]);
+
+	const attemptAutoPrint = React.useCallback(() => {
+		if (
+			uiSettings.autoPrintReceipt &&
+			checkoutRef.current &&
+			iframeLoadedRef.current &&
+			hasFinalData &&
+			!hasAutoPrintedRef.current
+		) {
+			hasAutoPrintedRef.current = true;
+			// Errors are logged via onPrintError; auto-print must not surface an unhandled rejection.
+			print().catch(() => undefined);
+		}
+	}, [hasFinalData, print, uiSettings.autoPrintReceipt]);
+
+	// Final API data can arrive without causing the receipt frame to load again.
+	React.useEffect(() => {
+		attemptAutoPrint();
+	}, [attemptAutoPrint]);
 
 	/**
 	 * Handle load — single-shot auto-print guard prevents duplicate prints on mode switch
 	 */
 	const handleLoad = () => {
-		if (uiSettings.autoPrintReceipt && checkoutRef.current && !hasAutoPrintedRef.current) {
-			hasAutoPrintedRef.current = true;
-			void print();
-		}
+		iframeLoadedRef.current = true;
+		attemptAutoPrint();
 	};
 
 	/**

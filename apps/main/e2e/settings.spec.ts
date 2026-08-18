@@ -48,6 +48,15 @@ test.describe('Settings Area', () => {
 		await expect(page.getByTestId('screen-settings-barcode-scanning')).toBeVisible({
 			timeout: 10_000,
 		});
+
+		// The keyboard-mode explainer renders whenever a direct connection
+		// (Web Serial / WebHID) is available — capability-gated, store-agnostic.
+		const directConnectAvailable = await page.evaluate(
+			() => 'serial' in navigator || 'hid' in navigator
+		);
+		if (directConnectAvailable) {
+			await expect(page.getByTestId('scanner-mode-note')).toBeVisible();
+		}
 	});
 
 	test('should show Theme page and list themes', async ({ posPage: page }) => {

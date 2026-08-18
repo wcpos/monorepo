@@ -11,12 +11,12 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { customerDocumentId } from '@wcpos/sync-core';
 
+import { createEngineHarness, remoteId } from './testing';
 import {
 	type RxdbSyncEngine,
 	type RxdbSyncEnginePorts,
 	type StoreScopeIdentity,
 } from './create-rxdb-sync-engine';
-import { createEngineHarness } from './testing';
 import { seedTargetedProductSchedulerTask } from './scheduler/rx-scheduler-product-task-seeder';
 import { seedTargetedLane } from './scheduler/rx-targeted-lane-seeder';
 
@@ -130,7 +130,7 @@ describe('scheduler drain through the public handle (slice 5e)', () => {
 			.find()
 			.exec();
 		expect(orders).toHaveLength(1);
-		expect(orders[0]!.toJSON()['wooOrderId']).toBe(1);
+		expect(orders[0]!.toJSON()['remoteId']).toBe('1');
 		expect(
 			(await scope.database.collections.existenceManifestOrders.findOne('1').exec())?.toJSON()
 		).toMatchObject({ wooId: 1, objectType: 'order', digest: 'order-digest-1' });
@@ -219,13 +219,13 @@ describe('scheduler drain through the public handle (slice 5e)', () => {
 				defaultBatchSize: 100,
 				defaultCompletedDedupeForMs: 30_000,
 			},
-			{ ids: [41], nowMs: 1, database: scope.database }
+			{ remoteIds: [remoteId(41)], nowMs: 1, database: scope.database }
 		);
 		await expect(engine.sync('scheduler-drain')).resolves.toMatchObject({ status: 'ran' });
 
 		const customer = await scope.database.collections.customers.findOne(customerUuid).exec();
 		expect(customer?.toJSON()).toMatchObject({
-			wooCustomerId: 41,
+			remoteId: '41',
 			payload: { email: 'customer@example.test' },
 		});
 		expect('_rxdb_digest' in (customer!.toJSON().payload as object)).toBe(false);
@@ -261,7 +261,7 @@ describe('scheduler drain through the public handle (slice 5e)', () => {
 		const scope = engine.active();
 		if (!scope) throw new Error('no active scope');
 		const product = await scope.database.collections.products.findOne(PRODUCT_UUID_55).exec();
-		expect(product?.toJSON()).toMatchObject({ wooProductId: 77, payload: { name: 'Apron' } });
+		expect(product?.toJSON()).toMatchObject({ remoteId: '77', payload: { name: 'Apron' } });
 		await engine.dispose();
 	});
 
@@ -357,8 +357,8 @@ describe('scheduler drain through the public handle (slice 5e)', () => {
 		const scope = engine.active();
 		if (!scope) throw new Error('no active scope');
 		await scope.database.collections.products.insert({
-			id: PRODUCT_UUID_55,
-			wooProductId: 77,
+			uuid: PRODUCT_UUID_55,
+			remoteId: remoteId(77),
 			price: 0,
 			stockStatus: '',
 			type: '',
@@ -372,7 +372,7 @@ describe('scheduler drain through the public handle (slice 5e)', () => {
 			local: { dirty: false, pendingMutationIds: [] },
 		} as never);
 		await seedTargetedProductSchedulerTask({
-			productIds: [77],
+			remoteIds: [77].map(remoteId),
 			nowMs: 1,
 			database: scope.database,
 		});
@@ -406,8 +406,8 @@ describe('scheduler drain through the public handle (slice 5e)', () => {
 		const scope = engine.active();
 		if (!scope) throw new Error('no active scope');
 		await scope.database.collections.products.insert({
-			id: PRODUCT_UUID_55,
-			wooProductId: 77,
+			uuid: PRODUCT_UUID_55,
+			remoteId: remoteId(77),
 			price: 0,
 			stockStatus: '',
 			type: '',

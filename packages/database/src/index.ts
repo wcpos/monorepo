@@ -11,7 +11,6 @@ export {
 	scheduleClearLocalDataOnNextLoad,
 } from './clear-local-data-flag';
 export { clearAllDB } from './clear-all-db';
-export type { ClearDBResult } from './clear-all-db';
 export { measureAppStorage } from './measure-storage';
 export type { StorageFootprint, StorageFootprintEntry } from './measure-storage';
 export {
@@ -22,7 +21,6 @@ export {
 } from './database-names';
 export { purgeLegacyDatabases } from './purge-legacy-db';
 export type { PurgeLegacyDBResult } from './purge-legacy-db';
-export type { FlexSearchInstance, SearchInitializationOptions } from './types.d';
 
 /**
  * Re-export some rxdb helpers
@@ -40,49 +38,34 @@ export type { TaxId, TaxIdType, TaxIdVerified } from './collections/schemas/tax-
  * Re-export types
  */
 export type {
-	CouponCollection,
 	CouponDocument,
-	CustomerCollection,
 	CustomerDocument,
 	LogCollection,
 	LogDocument,
 	NotificationCollection,
 	NotificationDocument,
-	OrderCollection,
 	OrderDocument,
-	ProductCategoryCollection,
+	ProductBrandDocument,
 	ProductCategoryDocument,
 	ProductCollection,
 	ProductDocument,
-	ProductTagCollection,
 	ProductTagDocument,
 	ProductVariationCollection,
 	ProductVariationDocument,
 	SiteCollection,
 	SiteDocument,
-	StoreCollection,
 	StoreCollections,
 	StoreDatabase,
 	StoreDocument,
 	SyncCollection,
-	SyncDatabase,
 	SyncDocument,
-	TaxRateCollection,
 	TaxRateDocument,
-	TemplateCollection,
 	TemplateDocument,
-	TemporaryDatabase,
-	UserCollection,
 	UserDatabase,
 	UserDocument,
-	WPCredentialsCollection,
 	WPCredentialsDocument,
-	PrinterProfileCollection,
 	PrinterProfileDocument,
-	ScannerProfileCollection,
 	ScannerProfileDocument,
-	TemplatePrinterOverrideCollection,
 	TemplatePrinterOverrideDocument,
 	ReceiptEmailQueueCollection,
-	ReceiptEmailQueueDocument,
 } from './collections';

@@ -248,6 +248,27 @@ describe('buildReceiptData', () => {
 		expect(result.lines[0].total).toBe('20.00');
 	});
 
+	it('excludes internal line-item metadata', () => {
+		const result = buildReceiptData(
+			{
+				...mockOrder,
+				line_items: [
+					{
+						...mockOrder.line_items[0],
+						meta_data: [
+							{ key: '_woocommerce_pos_data', value: 'x' },
+							{ key: '_woocommerce_pos_uuid', value: 'y' },
+							{ key: 'Size', value: 'XL' },
+						],
+					},
+				],
+			},
+			mockStore
+		);
+
+		expect(result.lines[0].meta).toEqual([{ key: 'Size', value: 'XL' }]);
+	});
+
 	it('maps totals', () => {
 		const result = buildReceiptData(mockOrder, mockStore);
 		expect(result.totals.subtotal).toBe('25.00');

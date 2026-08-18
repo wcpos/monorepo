@@ -3,6 +3,7 @@ import * as React from 'react';
 import isEqual from 'lodash/isEqual';
 import { v4 as uuidv4 } from 'uuid';
 
+import { type MetaDataEntry, wooMetaCarrier } from '@wcpos/sync-core';
 import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -154,12 +155,13 @@ export const useAddCoupon = () => {
 				// 5. Create new coupon line and recalculate all coupons from scratch
 				const couponData = coupon.toJSON();
 
-				const newCouponLine = {
+				const newCouponLineData = {
 					code: couponData.code,
 					discount: '0',
 					discount_tax: '0',
-					meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidv4() }],
+					meta_data: [] as MetaDataEntry[],
 				};
+				const newCouponLine = wooMetaCarrier.ensureLineUuid(newCouponLineData, uuidv4);
 
 				const cartSnapshot = {
 					line_items: order.line_items,

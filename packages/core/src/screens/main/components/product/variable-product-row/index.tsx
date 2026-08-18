@@ -16,6 +16,7 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { TableCell, TableRow } from '@wcpos/components/table';
+import type { EngineRecord } from '@wcpos/query';
 
 import { getColumnStyle } from '../../data-table';
 import { VariationRowProvider } from './context';
@@ -24,6 +25,7 @@ import { Variations } from './variations';
 import type { Row, Table } from '@tanstack/react-table';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
+type ProductRow = { document: ProductDocument; record: EngineRecord<'products'> };
 
 const duration = 500;
 
@@ -35,9 +37,9 @@ export function VariableProductRow({
 	index,
 	table,
 }: {
-	item: Row<{ document: ProductDocument }>;
+	item: Row<ProductRow>;
 	index: number;
-	table: Table<{ document: ProductDocument }>;
+	table: Table<ProductRow>;
 }) {
 	/**
 	 * React Compiler breaks tanstack/react-table: it caches the
@@ -53,9 +55,17 @@ export function VariableProductRow({
 				hideOutOfStockVariations?: boolean;
 		  }
 		| undefined;
-	const isExpanded = useObservableEagerState(
-		meta!.expanded$.pipe(map((expanded: Record<string, boolean>) => !!expanded[item.id]))
+	/**
+	 * Memoised explicitly. This component carries `'use no memo'` above, so nothing else
+	 * would: the inline `.pipe()` built a new observable every render, and
+	 * `useObservableEagerState` keys its subscription on observable identity, so every
+	 * visible variable-product row resubscribed on every render.
+	 */
+	const isExpanded$ = React.useMemo(
+		() => meta!.expanded$.pipe(map((expanded: Record<string, boolean>) => !!expanded[item.id])),
+		[meta, item.id]
 	);
+	const isExpanded = useObservableEagerState(isExpanded$);
 
 	/**
 	 * Animation setup
@@ -97,7 +107,7 @@ export function VariableProductRow({
 	/**
 	 * Render the row and the animated Variations component
 	 */
-	const stableId = item.original.document.slug ?? item.original.document.id ?? item.id;
+	const stableId = item.original.record.payload.slug ?? item.original.record.remoteId ?? item.id;
 
 	return (
 		<VirtualizedList.Item>
@@ -105,21 +115,15 @@ export function VariableProductRow({
 				<TableRow testID={stableId ? `data-table-row-${stableId}` : undefined} index={index}>
 					{item
 						.getVisibleCells()
-						.map(
-							(
-								cell: import('@tanstack/react-table').Cell<{ document: ProductDocument }, unknown>
-							) => {
-								return (
-									<TableCell key={cell.id} style={getColumnStyle(cell.column.columnDef.meta)}>
-										<ErrorBoundary>
-											<Suspense>
-												{flexRender(cell.column.columnDef.cell, cell.getContext())}
-											</Suspense>
-										</ErrorBoundary>
-									</TableCell>
-								);
-							}
-						)}
+						.map((cell: import('@tanstack/react-table').Cell<ProductRow, unknown>) => {
+							return (
+								<TableCell key={cell.id} style={getColumnStyle(cell.column.columnDef.meta)}>
+									<ErrorBoundary>
+										<Suspense>{flexRender(cell.column.columnDef.cell, cell.getContext())}</Suspense>
+									</ErrorBoundary>
+								</TableCell>
+							);
+						})}
 				</TableRow>
 				<Animated.View style={[animatedStyle, { overflow: 'hidden' }]}>
 					{/*

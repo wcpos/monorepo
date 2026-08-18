@@ -14,6 +14,8 @@
  * the tick — the lane already exists; this seeder is the entry point.
  */
 
+import { productDocumentId, type RemoteId } from '@wcpos/sync-core';
+
 import {
 	BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT,
 	isBrowseWindowLimit,
@@ -52,14 +54,14 @@ const PRODUCT_TARGETED_LANE: TargetedLaneDescriptor = {
 	idLabel: 'product',
 	keyPrefix: 'products',
 	requirementPrefix: 'products',
-	documentId: (id) => `woo-product:${id}`,
+	documentId: productDocumentId,
 	defaultPriority: 900,
 	defaultBatchSize: 100,
 	defaultCompletedDedupeForMs: 30_000,
 };
 
 export type SeedTargetedProductSchedulerTaskInput = {
-	productIds: number[];
+	remoteIds: RemoteId[];
 	priority?: number;
 	batchSize?: number;
 	completedDedupeForMs?: number;
@@ -143,7 +145,7 @@ export async function seedTargetedProductSchedulerTask(
 	input: SeedTargetedProductSchedulerTaskInput
 ): Promise<SeedPersistedSchedulerTasksResult> {
 	return seedTargetedLane(PRODUCT_TARGETED_LANE, {
-		ids: input.productIds,
+		remoteIds: input.remoteIds,
 		priority: input.priority,
 		batchSize: input.batchSize,
 		completedDedupeForMs: input.completedDedupeForMs,

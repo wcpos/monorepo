@@ -22,13 +22,15 @@ export const useDateFormat = (
 	const { dateFnsLocale, formatDate } = useLocalDate();
 	const [visibleRef, visible$] = useObservableRef(false);
 
-	let date: Date | null = null;
+	const date = React.useMemo(() => {
+		if (typeof gmtDate === 'string' && gmtDate !== '') {
+			return convertUTCStringToLocalDate(gmtDate);
+		} else if (typeof gmtDate === 'number') {
+			return new Date(gmtDate);
+		}
 
-	if (typeof gmtDate === 'string' && gmtDate !== '') {
-		date = convertUTCStringToLocalDate(gmtDate);
-	} else if (typeof gmtDate === 'number') {
-		date = new Date(gmtDate);
-	}
+		return null;
+	}, [gmtDate]);
 
 	const getDisplayDate = React.useCallback(() => {
 		if (!date || !isValid(date)) {
@@ -54,12 +56,15 @@ export const useDateFormat = (
 		}, [visibleRef])
 	);
 
-	return useObservableState(
-		visible$.pipe(
-			filter((visible) => visible && !!date && isToday(date)),
-			switchMap(() => heartbeat$),
-			map(getDisplayDate)
-		),
-		getDisplayDate()
+	const displayDate$ = React.useMemo(
+		() =>
+			visible$.pipe(
+				filter((visible) => visible && !!date && isToday(date)),
+				switchMap(() => heartbeat$),
+				map(getDisplayDate)
+			),
+		[visible$, heartbeat$, date, getDisplayDate]
 	);
+
+	return useObservableState(displayDate$, getDisplayDate());
 };

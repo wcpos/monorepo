@@ -1,10 +1,12 @@
+import { type RemoteId, wooIdOf } from '@wcpos/sync-core';
+
 export type WooTaxRatePayload = Record<string, unknown> & {
 	id?: number;
 };
 
 export type LocalTaxRateDocument = {
-	id: string;
-	wooTaxRateId: number | null;
+	uuid: string;
+	remoteId: RemoteId | null;
 	payload: WooTaxRatePayload;
 	sync: {
 		revision: string;
@@ -21,20 +23,20 @@ export type LocalTaxRateDocument = {
  * reconciliation purpose doesn't apply, and they have no native WC meta store to stamp.
  * This is NOT scaffolding awaiting a flip.
  */
-export function taxRateDocumentId(taxRateId: number): string {
-	return `woo-tax-rate:${taxRateId}`;
+export function taxRateDocumentId(remoteId: RemoteId): string {
+	return `woo-tax-rate:${wooIdOf(remoteId)}`;
 }
 
 export const taxRateSchema = {
 	title: 'Woo tax-rate document schema',
 	version: 0,
-	primaryKey: 'id',
+	primaryKey: 'uuid',
 	type: 'object',
 	properties: {
-		id: { type: 'string', maxLength: 128 },
-		wooTaxRateId: { type: ['number', 'null'] },
+		uuid: { type: 'string', maxLength: 128 },
+		remoteId: { type: ['string', 'null'], maxLength: 64 },
 		payload: { type: 'object', additionalProperties: true },
 		sync: { type: 'object', additionalProperties: true },
 	},
-	required: ['id', 'wooTaxRateId', 'payload', 'sync'],
+	required: ['uuid', 'remoteId', 'payload', 'sync'],
 } as const;
