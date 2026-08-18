@@ -14,8 +14,10 @@ import {
 	useOpenOrdersResource,
 } from '@wcpos/core/screens/main/pos/contexts/current-order';
 import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/contexts/order-money-divergence';
+import { CustomerDisplayBroadcaster } from '@wcpos/core/screens/main/pos/customer-display';
 
 import { useNavigationBackground } from '../../../../components/use-navigation-background';
+import { getCustomerDisplayRouteState } from '../../../../lib/customer-display-route';
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
@@ -104,9 +106,14 @@ export default function POSLayout() {
  */
 function POSStack() {
 	const screenBackgroundColor = useNavigationBackground();
+	const segments = useSegments();
+	const customerDisplayRoute = getCustomerDisplayRouteState(segments);
 
 	return (
 		<TaxRatesProvider>
+			{customerDisplayRoute.enabled && (
+				<CustomerDisplayBroadcaster status={customerDisplayRoute.status} />
+			)}
 			<View className="bg-background flex-1">
 				<Stack
 					screenOptions={{
