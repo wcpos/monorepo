@@ -66,12 +66,12 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"peerDependencies": {
-		"expo-asset": "~57.0.7",
+		"expo-asset": "~57.0.12",
 		"expo-blob": "~57.0.1",
-		"expo-constants": "~57.0.7",
+		"expo-constants": "~57.0.12",
 		"expo-crypto": "~57.0.1",
 		"expo-localization": "~57.0.1",
-		"expo-modules-core": "~57.0.7",
+		"expo-modules-core": "~57.0.11",
 		"expo-router": "~57.0.8",
 		"react": "~19.2.3",
 		"react-dom": "~19.2.3",
