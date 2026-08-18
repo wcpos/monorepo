@@ -42,6 +42,8 @@ export type QueryTotalRetryRunnerInput = {
 	maxRequests?: number;
 	/** Run only this request and ignore its fresh cache entry. */
 	forceQueryKey?: string;
+	/** Ignore fresh cache entries for these requests without narrowing the runnable scan. */
+	ignoreFreshQueryKeys?: readonly string[];
 };
 
 export type QueryTotalRetryRunnerResult = {
@@ -106,6 +108,10 @@ export async function runQueryTotalRetryRequests(
 	if (input.forceQueryKey !== undefined) {
 		runnableStates = runnableStates.filter((state) => state.queryKey === input.forceQueryKey);
 		freshCacheEntries = freshCacheEntries.filter((entry) => entry.queryKey !== input.forceQueryKey);
+	}
+	if (input.ignoreFreshQueryKeys !== undefined) {
+		const ignored = new Set(input.ignoreFreshQueryKeys);
+		freshCacheEntries = freshCacheEntries.filter((entry) => !ignored.has(entry.queryKey));
 	}
 	const freshCacheByQueryKey = new Map(freshCacheEntries.map((entry) => [entry.queryKey, entry]));
 	const result: QueryTotalRetryRunnerResult = {
