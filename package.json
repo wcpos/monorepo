@@ -57,7 +57,7 @@
     "rxdb-premium": "17.4.0"
   },
   "dependencies": {
-    "turbo": "^2.10.7",
+    "turbo": "^2.10.10",
     "typescript": "^5.9.3"
   }
 }
