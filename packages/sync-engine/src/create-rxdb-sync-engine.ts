@@ -108,6 +108,7 @@ import {
 	CUSTOMER_TRICKLE_STATE_KEY,
 	decodeCustomerTrickleState,
 } from './maintenance/customer-trickle';
+import { VARIATION_PREFETCH_STATE_KEY } from './maintenance/variation-prefetch';
 import { createLocalCoverage, type LocalCoverage } from './local-coverage/local-coverage';
 import { withLedgerRecovery } from './local-coverage/ledger-storage-recovery';
 import { createCoverageChangeHub } from './local-coverage/coverage-changes';
@@ -1025,6 +1026,11 @@ export function createRxdbSyncEngine(
 	manager.registerCursorInvalidator('customers', (scopeId) =>
 		removeBlob(scopeId, CUSTOMER_TRICKLE_STATE_KEY)
 	);
+	for (const collection of ['products', 'variations'] as const) {
+		manager.registerCursorInvalidator(collection, (scopeId) =>
+			removeBlob(scopeId, VARIATION_PREFETCH_STATE_KEY)
+		);
+	}
 
 	const registerManifestInvalidator = (
 		collection: 'products' | 'variations' | 'customers' | 'orders',

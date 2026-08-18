@@ -18,6 +18,9 @@ export type VariationPrefetchState = {
 	cursorWooId: number;
 	walkComplete: boolean;
 	observedCensusTotal: number | null;
+	observedParentCount: number | null;
+	activeParentWooId: number | null;
+	attemptedVariationIds: number[];
 };
 export type VariationPrefetchStateStore = {
 	get(key: string): Promise<string | null>;
@@ -27,6 +30,9 @@ const DEFAULT_STATE: VariationPrefetchState = {
 	cursorWooId: 0,
 	walkComplete: false,
 	observedCensusTotal: null,
+	observedParentCount: null,
+	activeParentWooId: null,
+	attemptedVariationIds: [],
 };
 
 export function decodeVariationPrefetchState(raw: string | null): VariationPrefetchState {
@@ -39,7 +45,16 @@ export function decodeVariationPrefetchState(raw: string | null): VariationPrefe
 			typeof parsed.walkComplete !== 'boolean' ||
 			(parsed.observedCensusTotal !== null &&
 				(!Number.isSafeInteger(parsed.observedCensusTotal) ||
-					(parsed.observedCensusTotal ?? -1) < 0))
+					(parsed.observedCensusTotal ?? -1) < 0)) ||
+			(parsed.observedParentCount !== null &&
+				(!Number.isSafeInteger(parsed.observedParentCount) ||
+					(parsed.observedParentCount ?? -1) < 0)) ||
+			(parsed.activeParentWooId !== null &&
+				(!Number.isSafeInteger(parsed.activeParentWooId) || (parsed.activeParentWooId ?? 0) < 1)) ||
+			!Array.isArray(parsed.attemptedVariationIds) ||
+			parsed.attemptedVariationIds.some(
+				(id) => !Number.isSafeInteger(id) || typeof id !== 'number' || id < 1
+			)
 		) {
 			return { ...DEFAULT_STATE };
 		}
@@ -47,6 +62,9 @@ export function decodeVariationPrefetchState(raw: string | null): VariationPrefe
 			cursorWooId: parsed.cursorWooId!,
 			walkComplete: parsed.walkComplete,
 			observedCensusTotal: parsed.observedCensusTotal!,
+			observedParentCount: parsed.observedParentCount!,
+			activeParentWooId: parsed.activeParentWooId!,
+			attemptedVariationIds: parsed.attemptedVariationIds,
 		};
 	} catch {
 		return { ...DEFAULT_STATE };
@@ -78,6 +96,7 @@ export type VariationPrefetchDeps = {
 	variationCensusTotal: () => Promise<CensusTotal | null>;
 	now: () => number;
 	lastUserActivityMs?: () => number;
+	signal?: AbortSignal;
 };
 const inFlightDatabases = new WeakSet<RxDatabase>();
 export function tickVariationPrefetch(
@@ -116,6 +135,21 @@ async function missingVariationIds(
 	);
 	return ids.filter((id) => !present.has(remoteIdOrNull(id)!));
 }
+function residentVariableParentCount(
+	database: RxDatabase,
+	descriptor: TargetedDescriptor
+): Promise<number> {
+	return database.collections[descriptor.collection]
+		.count({ selector: { type: 'variable' } })
+		.exec();
+}
+function throwIfAborted(signal?: AbortSignal): void {
+	if (!signal?.aborted) return;
+	if (signal.reason instanceof Error) throw signal.reason;
+	throw Object.assign(new Error('Variation prefetch aborted'), {
+		name: 'AbortError',
+	});
+}
 async function runVariationPrefetch(
 	deps: VariationPrefetchDeps
 ): Promise<VariationPrefetchTickResult> {
@@ -127,25 +161,45 @@ async function runVariationPrefetch(
 	}
 	if (deps.hasPendingWork()) return { status: 'skipped', reason: 'interactive-demand' };
 
+	const productsDescriptor = descriptorFor('products');
+	const variationsDescriptor = descriptorFor('variations');
 	let state = decodeVariationPrefetchState(await deps.stateStore.get(VARIATION_PREFETCH_STATE_KEY));
+	throwIfAborted(deps.signal);
 	if (state.walkComplete) {
-		const census = await deps.variationCensusTotal();
+		const [census, parentCount] = await Promise.all([
+			deps.variationCensusTotal(),
+			residentVariableParentCount(deps.database, productsDescriptor),
+		]);
+		throwIfAborted(deps.signal);
 		// The census is a change signal, not a coverage proof: permanently omitted
 		// server ids must not re-arm this walk forever.
-		if (census?.fresh && census.total !== state.observedCensusTotal) {
+		if (
+			parentCount !== state.observedParentCount ||
+			(census?.fresh && census.total !== state.observedCensusTotal)
+		) {
 			state = { ...DEFAULT_STATE };
 		} else {
 			return { status: 'idle', reason: 'walk-complete' };
 		}
 	}
+	if (state.observedCensusTotal === null || state.observedParentCount === null) {
+		const [census, parentCount] = await Promise.all([
+			deps.variationCensusTotal(),
+			residentVariableParentCount(deps.database, productsDescriptor),
+		]);
+		throwIfAborted(deps.signal);
+		state = {
+			...state,
+			observedCensusTotal: state.observedCensusTotal ?? census?.total ?? null,
+			observedParentCount: state.observedParentCount ?? parentCount,
+		};
+	}
 
-	const productsDescriptor = descriptorFor('products');
-	const variationsDescriptor = descriptorFor('variations');
-	const parents = (
-		await deps.database.collections[productsDescriptor.collection]
-			.find({ selector: { type: 'variable' } })
-			.exec()
-	)
+	const parentDocs = await deps.database.collections[productsDescriptor.collection]
+		.find({ selector: { type: 'variable' } })
+		.exec();
+	throwIfAborted(deps.signal);
+	const parents = parentDocs
 		.flatMap((doc) => {
 			const json = doc.toJSON() as Record<string, unknown> & {
 				payload?: Record<string, unknown>;
@@ -157,10 +211,15 @@ async function runVariationPrefetch(
 		.sort((left, right) => left.wooId - right.wooId);
 	const scanned = parents.slice(0, VARIATION_PREFETCH_PARENT_SCAN_LIMIT);
 	let cursorWooId = state.cursorWooId;
+	let deferredParent = false;
 	for (const parent of scanned) {
+		throwIfAborted(deps.signal);
 		const previousCursorWooId = cursorWooId;
+		if (hasPendingLocalWork(parent.json)) {
+			deferredParent = true;
+			break;
+		}
 		cursorWooId = parent.wooId;
-		if (hasPendingLocalWork(parent.json)) continue;
 		const rawIds = parent.json.payload?.variations;
 		const variationIds = Array.isArray(rawIds)
 			? rawIds.filter(
@@ -168,8 +227,24 @@ async function runVariationPrefetch(
 				)
 			: [];
 		const missing = await missingVariationIds(deps.database, variationsDescriptor, variationIds);
-		if (missing.length === 0) continue;
-		const requested = missing.slice(0, VARIATION_PREFETCH_BATCH_SIZE);
+		throwIfAborted(deps.signal);
+		const attempted = new Set(
+			state.activeParentWooId === parent.wooId ? state.attemptedVariationIds : []
+		);
+		const unattempted = missing.filter((id) => !attempted.has(id));
+		if (unattempted.length === 0) {
+			state = { ...state, activeParentWooId: null, attemptedVariationIds: [] };
+			continue;
+		}
+		const requested = unattempted.slice(0, VARIATION_PREFETCH_BATCH_SIZE);
+		if (
+			deps.lastUserActivityMs &&
+			deps.now() - deps.lastUserActivityMs() < VARIATION_PREFETCH_IDLE_AFTER_MS
+		) {
+			return { status: 'skipped', reason: 'user-active' };
+		}
+		if (deps.hasPendingWork()) return { status: 'skipped', reason: 'interactive-demand' };
+		throwIfAborted(deps.signal);
 		const ctx: HandlerContext = {
 			database: deps.database,
 			fetch: deps.fetcher,
@@ -186,13 +261,16 @@ async function runVariationPrefetch(
 			...(deps.barcodeSelectors !== undefined ? { barcodeSelectors: deps.barcodeSelectors } : {}),
 		};
 		await pullTargetedByIds(ctx, variationsDescriptor, requested);
+		throwIfAborted(deps.signal);
 		// A server-omitted id gets one attempt per walk; only a partial parent batch
 		// holds the cursor for the next tick.
+		const parentIncomplete = unattempted.length > VARIATION_PREFETCH_BATCH_SIZE;
 		const nextState = {
 			...state,
-			cursorWooId:
-				missing.length <= VARIATION_PREFETCH_BATCH_SIZE ? parent.wooId : previousCursorWooId,
+			cursorWooId: parentIncomplete ? previousCursorWooId : parent.wooId,
 			walkComplete: false,
+			activeParentWooId: parentIncomplete ? parent.wooId : null,
+			attemptedVariationIds: parentIncomplete ? [...attempted, ...requested] : [],
 		};
 		await deps.stateStore.set(VARIATION_PREFETCH_STATE_KEY, JSON.stringify(nextState));
 		return {
@@ -202,12 +280,14 @@ async function runVariationPrefetch(
 			walkComplete: false,
 		};
 	}
-	const walkComplete = parents.length <= VARIATION_PREFETCH_PARENT_SCAN_LIMIT;
-	const census = walkComplete ? await deps.variationCensusTotal() : null;
+	const walkComplete = !deferredParent && parents.length <= VARIATION_PREFETCH_PARENT_SCAN_LIMIT;
 	const nextState: VariationPrefetchState = {
 		cursorWooId,
 		walkComplete,
-		observedCensusTotal: walkComplete ? (census?.total ?? null) : state.observedCensusTotal,
+		observedCensusTotal: state.observedCensusTotal,
+		observedParentCount: state.observedParentCount,
+		activeParentWooId: state.activeParentWooId,
+		attemptedVariationIds: state.attemptedVariationIds,
 	};
 	await deps.stateStore.set(VARIATION_PREFETCH_STATE_KEY, JSON.stringify(nextState));
 	return {

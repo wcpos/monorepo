@@ -639,7 +639,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			summary: `Customer trickle: page ${result.page}, ${result.rows} customers`,
 		};
 	});
-	const variationPrefetch = lane('variation-prefetch', async (db, scopeId, _signal, fetcher) => {
+	const variationPrefetch = lane('variation-prefetch', async (db, scopeId, signal, fetcher) => {
 		const barcodeSelectors: BarcodeSelectorsReader | undefined =
 			deps.barcodeSelectorsFor === undefined
 				? undefined
@@ -658,6 +658,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			...(deps.lastUserActivityMs !== undefined
 				? { lastUserActivityMs: deps.lastUserActivityMs }
 				: {}),
+			signal,
 		});
 		if (result.status !== 'ran') {
 			return { summary: null, status: 'skipped', reason: result.reason };

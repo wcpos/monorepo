@@ -3,6 +3,7 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { createEngineHarness, remoteId } from './testing';
 import { type RxdbSyncEnginePorts, type StoreScopeIdentity } from './create-rxdb-sync-engine';
+import { VARIATION_PREFETCH_STATE_KEY } from './maintenance/variation-prefetch';
 
 setPremiumFlag();
 
@@ -172,6 +173,67 @@ describe('variation-prefetch maintenance lane', () => {
 		await pending.dispose();
 	});
 
+	it('rechecks user activity immediately before fetching', async () => {
+		let activityChecks = 0;
+		const fetcher = vi.fn(async () => json({ documents: [] }));
+		const engine = engineWith({
+			now: () => 1_000_000,
+			lastUserActivityMs: () => (activityChecks++ === 0 ? 0 : 1_000_000),
+			fetcher,
+		});
+		const scope = await engine.ready;
+		await scope.database.collections.products.insert(product(10, [101]) as never);
+
+		await expect(engine.sync('variation-prefetch')).resolves.toMatchObject({
+			status: 'skipped',
+			reason: 'user-active',
+		});
+		expect(fetcher).not.toHaveBeenCalled();
+		await engine.dispose();
+	});
+
+	it('honors cancellation after an awaited state read without scanning or fetching', async () => {
+		const stateRead = Promise.withResolvers<void>();
+		const releaseStateRead = Promise.withResolvers<void>();
+		const values = new Map<string, string>();
+		const fetcher = vi.fn(async () => json({ documents: [] }));
+		const engine = engineWith({
+			fetcher,
+			checkpoints: {
+				get: async (key) => {
+					if (key.endsWith(`:${VARIATION_PREFETCH_STATE_KEY}`)) {
+						stateRead.resolve();
+						await releaseStateRead.promise;
+					}
+					return values.get(key) ?? null;
+				},
+				set: async (key, value) => {
+					values.set(key, value);
+				},
+				remove: async (key) => {
+					values.delete(key);
+				},
+			},
+		});
+		const scope = await engine.ready;
+		await scope.database.collections.products.insert(product(10, [101]) as never);
+		const controller = new AbortController();
+
+		const tick = engine.sync('variation-prefetch', {
+			signal: controller.signal,
+		});
+		await stateRead.promise;
+		controller.abort();
+		releaseStateRead.resolve();
+
+		await expect(tick).resolves.toMatchObject({
+			status: 'skipped',
+			reason: 'aborted',
+		});
+		expect(fetcher).not.toHaveBeenCalled();
+		await engine.dispose();
+	});
+
 	it('skips resident variations, completes the walk, then stays idle', async () => {
 		const fetcher = vi.fn(async () => json({ documents: [] }));
 		const engine = engineWith({ fetcher });
@@ -196,7 +258,7 @@ describe('variation-prefetch maintenance lane', () => {
 		await engine.dispose();
 	});
 
-	it('re-arms only when the fresh variations census total changes', async () => {
+	it('re-arms when the resident variable-parent frontier changes', async () => {
 		let requests = 0;
 		const engine = engineWith({
 			now: () => 1_000_000,
@@ -224,7 +286,7 @@ describe('variation-prefetch maintenance lane', () => {
 		await scope.database.collections.products.insert(product(20, [201]) as never);
 		await scope.database.collections.queryTotalCacheEntries.upsert({
 			queryKey: 'census:variations',
-			totalMatchingRecords: 2,
+			totalMatchingRecords: 1,
 			updatedAtMs: 1_000_000,
 			freshUntilMs: 2_000_000,
 			schemaVersion: 1,
@@ -235,6 +297,73 @@ describe('variation-prefetch maintenance lane', () => {
 		expect(requests).toBe(1);
 		await engine.dispose();
 	});
+
+	it('re-arms when the variation census changes during a multi-tick walk', async () => {
+		const engine = engineWith({ now: () => 1_000_000 });
+		const scope = await engine.ready;
+		await scope.database.collections.products.bulkInsert(
+			Array.from({ length: 26 }, (_, index) => product(index + 1, [index + 101])) as never
+		);
+		await scope.database.collections.variations.bulkInsert(
+			Array.from({ length: 26 }, (_, index) => variation(index + 101, index + 1)) as never
+		);
+		await scope.database.collections.queryTotalCacheEntries.upsert({
+			queryKey: 'census:variations',
+			totalMatchingRecords: 26,
+			updatedAtMs: 1_000_000,
+			freshUntilMs: 2_000_000,
+			schemaVersion: 1,
+		});
+
+		await expect(engine.sync('variation-prefetch')).resolves.toMatchObject({
+			status: 'ran',
+		});
+		await scope.database.collections.queryTotalCacheEntries.upsert({
+			queryKey: 'census:variations',
+			totalMatchingRecords: 27,
+			updatedAtMs: 1_000_000,
+			freshUntilMs: 2_000_000,
+			schemaVersion: 1,
+		});
+		await expect(engine.sync('variation-prefetch')).resolves.toMatchObject({
+			status: 'ran',
+		});
+		await expect(engine.sync('variation-prefetch')).resolves.toMatchObject({
+			status: 'ran',
+		});
+		await engine.dispose();
+	});
+
+	it.each(['products', 'variations'] as const)(
+		'invalidates completed walk state when %s are reset',
+		async (collection) => {
+			const requested: string[] = [];
+			const engine = engineWith({
+				fetcher: async (url) => {
+					const include = new URL(url).searchParams.get('include')!;
+					requested.push(include);
+					return json({
+						documents:
+							include === '102' ? [variationEnvelope(102, 10)] : [variationEnvelope(101, 10)],
+					});
+				},
+			});
+			const scope = await engine.ready;
+			await scope.database.collections.products.insert(product(10, [101]) as never);
+			await scope.database.collections.variations.insert(variation(101, 10) as never);
+			await engine.sync('variation-prefetch');
+
+			await engine.scope.resetCollection(collection);
+			if (collection === 'products') {
+				await scope.database.collections.products.insert(product(10, [102]) as never);
+			}
+			await expect(engine.sync('variation-prefetch')).resolves.toMatchObject({
+				status: 'ran',
+			});
+			expect(requested).toEqual([collection === 'products' ? '102' : '101']);
+			await engine.dispose();
+		}
+	);
 
 	it('advances past an omitted variation instead of fetching the same parent again', async () => {
 		const requested: string[] = [];
@@ -256,6 +385,64 @@ describe('variation-prefetch maintenance lane', () => {
 		await engine.sync('variation-prefetch');
 		await engine.sync('variation-prefetch');
 		expect(requested).toEqual(['101', '201']);
+		await engine.dispose();
+	});
+
+	it('attempts every variation batch once before advancing past an omitted parent', async () => {
+		const requested: string[] = [];
+		const engine = engineWith({
+			fetcher: async (url) => {
+				const include = new URL(url).searchParams.get('include')!;
+				requested.push(include);
+				return json({
+					documents: include === '201' ? [variationEnvelope(201, 20)] : [],
+				});
+			},
+		});
+		const scope = await engine.ready;
+		await scope.database.collections.products.bulkInsert([
+			product(
+				10,
+				Array.from({ length: 12 }, (_, index) => 101 + index)
+			),
+			product(20, [201]),
+		] as never);
+
+		await engine.sync('variation-prefetch');
+		await engine.sync('variation-prefetch');
+		await engine.sync('variation-prefetch');
+		expect(requested).toEqual(['101,102,103,104,105,106,107,108,109,110', '111,112', '201']);
+		await engine.dispose();
+	});
+
+	it('revisits a locally protected parent after its pending work clears', async () => {
+		const requested: string[] = [];
+		const engine = engineWith({
+			fetcher: async (url) => {
+				const include = new URL(url).searchParams.get('include')!;
+				requested.push(include);
+				return json({
+					documents: [variationEnvelope(Number(include), include === '101' ? 10 : 20)],
+				});
+			},
+		});
+		const scope = await engine.ready;
+		await scope.database.collections.products.bulkInsert([
+			{
+				...product(10, [101]),
+				local: { dirty: true, pendingMutationIds: ['pending-10'] },
+			},
+			product(20, [201]),
+		] as never);
+
+		await engine.sync('variation-prefetch');
+		expect(requested).toEqual([]);
+		const parent = await scope.database.collections.products.findOne(uuid('product', 10)).exec();
+		await parent!.incrementalPatch({
+			local: { dirty: false, pendingMutationIds: [] },
+		} as never);
+		await engine.sync('variation-prefetch');
+		expect(requested).toEqual(['101']);
 		await engine.dispose();
 	});
 
