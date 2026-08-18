@@ -10,7 +10,7 @@ import { filter, map, tap, withLatestFrom } from 'rxjs/operators';
 import { createWedgeDetector, type ScanEvent, type WedgeDetector } from '@wcpos/scanner';
 import { markUserActivity } from '@wcpos/utils/user-activity';
 
-import { showTooShortFeedback } from './too-short-feedback';
+import { showHeuristicTooShortFeedback } from './too-short-feedback';
 import { useAttributedWedge } from './use-attributed-wedge';
 import { useCameraScanBus } from './camera-scan-context';
 import { useDeviceScanBus } from './device-scan-context';
@@ -25,6 +25,8 @@ function toWedgeScanEvent(code: unknown): ScanEvent {
 type BarcodeScanEvent = {
 	barcode: string;
 	callback: (barcode: string) => void;
+	/** The burst ended with an Enter/Tab terminator (see WedgeScanMeta). */
+	terminated: boolean;
 };
 
 /**
@@ -48,7 +50,7 @@ export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 	const [onBarcodeScan, wedgeBarcode$] = useObservableCallback<
 		string,
 		BarcodeScanEvent,
-		[string, (barcode: string) => void]
+		[string, (barcode: string) => void, boolean]
 	>(
 		(event$) =>
 			event$.pipe(
@@ -58,7 +60,11 @@ export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 					if (event.barcode.length >= currentMinLengthNumber) {
 						return true;
 					}
-					showTooShortFeedback(t, event.barcode, currentMinLengthNumber);
+					// Timing-guessed input: only scan-shaped bursts toast (rate
+					// limited) — fast typists aren't scolded for short searches.
+					showHeuristicTooShortFeedback(t, event.barcode, currentMinLengthNumber, {
+						terminated: event.terminated,
+					});
 					return false;
 				}),
 				tap(([event]) => {
@@ -66,20 +72,21 @@ export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 				}),
 				map(([event]) => event.barcode)
 			),
-		([barcode, eventCallback]) => ({ barcode, callback: eventCallback })
+		([barcode, eventCallback, terminated]) => ({ barcode, callback: eventCallback, terminated })
 	);
 
 	// Live values behind stable refs so the long-lived detector always reads the
 	// latest settings and emitter without being recreated per render. Refs may
 	// not be written during render, so a sync effect keeps them fresh.
 	const settingsRef = React.useRef({ threshold: avgTimeInputThreshold, prefix, suffix });
-	const emitRef = React.useRef<(code: string) => void>(() => {});
+	const emitRef = React.useRef<(code: string, terminated: boolean) => void>(() => {});
 	// Ref-sync effect: mirrors the latest reactive values for event-time reads.
 	React.useEffect(() => {
 		settingsRef.current = { threshold: avgTimeInputThreshold, prefix, suffix };
 	}, [avgTimeInputThreshold, prefix, suffix]);
 	React.useEffect(() => {
-		emitRef.current = (code: string) => onBarcodeScan(code, callback);
+		emitRef.current = (code: string, terminated: boolean) =>
+			onBarcodeScan(code, callback, terminated);
 	}, [onBarcodeScan, callback]);
 
 	const detectorRef = React.useRef<WedgeDetector | null>(null);
@@ -92,7 +99,7 @@ export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 		if (detectorRef.current === null) {
 			detectorRef.current = createWedgeDetector({
 				getSettings: () => settingsRef.current,
-				onScan: (code) => emitRef.current(code),
+				onScan: (code, meta) => emitRef.current(code, meta.terminated),
 			});
 		}
 		detectorRef.current.handleKey(key);

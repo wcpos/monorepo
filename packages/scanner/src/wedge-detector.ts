@@ -26,6 +26,8 @@ export interface WedgeState {
 	lastTimeMs: number | null;
 	/** Lowest folded average reached — the value a threshold suggestion must clear. */
 	minAvgGapMs: number;
+	/** An Enter/Tab arrived during the burst — the signature of a scanner terminator. */
+	sawTerminator: boolean;
 }
 
 export function createWedgeState(): WedgeState {
@@ -35,6 +37,7 @@ export function createWedgeState(): WedgeState {
 		stack: [],
 		lastTimeMs: null,
 		minAvgGapMs: Number.POSITIVE_INFINITY,
+		sawTerminator: false,
 	};
 }
 
@@ -129,11 +132,16 @@ export function replayWedgeDetector(keys: TraceKey[], settings: WedgeSettings): 
 /** End-of-scan settle: a burst is complete this long after its last key. */
 export const WEDGE_END_OF_SCAN_MS = 150;
 
+export interface WedgeScanMeta {
+	/** The burst ended with an Enter/Tab terminator — scanners send one, typists rarely do. */
+	terminated: boolean;
+}
+
 export interface WedgeDetectorOptions {
 	/** Read the current settings — called per keystroke so live changes apply. */
 	getSettings: () => WedgeSettings;
 	/** A completed burst, prefix/suffix already stripped. */
-	onScan: (code: string) => void;
+	onScan: (code: string, meta: WedgeScanMeta) => void;
 	/** Injectable clock/timers so hosts and tests control time. */
 	now?: () => number;
 	setTimeout?: (fn: () => void, ms: number) => unknown;
@@ -169,6 +177,12 @@ export function createWedgeDetector(options: WedgeDetectorOptions): WedgeDetecto
 
 	const handleKey = (key: string, timeMs?: number) => {
 		if (key.length !== 1) {
+			// Non-printable keys never advance the burst, but an Enter/Tab landing
+			// inside one is the scanner-terminator signature — remember it so the
+			// emit can tell a real (mis-configured) scan from fast typing.
+			if ((key === 'Enter' || key === 'Tab') && state.detecting) {
+				state.sawTerminator = true;
+			}
 			return;
 		}
 		const settings = options.getSettings();
@@ -183,11 +197,12 @@ export function createWedgeDetector(options: WedgeDetectorOptions): WedgeDetecto
 			const current = options.getSettings();
 			if (state.detecting && now() - (state.lastTimeMs || 0) > current.threshold) {
 				const code = stripBoundary(state.stack, current);
+				const terminated = state.sawTerminator;
 				// Reset for the next burst (lastTimeMs is deliberately kept, as before).
 				const lastTimeMs = state.lastTimeMs;
 				state = createWedgeState();
 				state.lastTimeMs = lastTimeMs;
-				options.onScan(code);
+				options.onScan(code, { terminated });
 			}
 		}, WEDGE_END_OF_SCAN_MS);
 	};
