@@ -404,6 +404,77 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		await engine.dispose();
 	});
 
+	it.each([
+		{
+			name: 'backfills an unmaterialized reference with a fresh positive census',
+			total: 1,
+			fresh: true,
+		},
+		{ name: 'skips an unmaterialized reference with a fresh zero census', total: 0, fresh: true },
+		{
+			name: 'skips an unmaterialized reference with a stale positive census',
+			total: 1,
+			fresh: false,
+		},
+		{
+			name: 'skips an unmaterialized reference without a census entry',
+			total: undefined,
+			fresh: true,
+		},
+	])('$name', async ({ total, fresh }) => {
+		const nowMs = 1_000_000;
+		const diagnostics = vi.fn();
+		const fetcher = vi.fn(async (url: string) => {
+			if (new URL(url).pathname.endsWith('/products/categories')) {
+				return Response.json([
+					{
+						id: 1,
+						name: 'Category 1',
+						meta_data: [
+							{
+								key: '_woocommerce_pos_uuid',
+								value: '55555555-5555-4555-8555-555555555555',
+							},
+						],
+					},
+				]);
+			}
+			return Response.json([]);
+		});
+		const engine = engineWith({ diagnostics, fetcher, now: () => nowMs });
+		const scope = await engine.ready;
+		if (total !== undefined) {
+			await scope.database.collections.queryTotalCacheEntries.upsert({
+				queryKey: 'census:categories',
+				totalMatchingRecords: total,
+				updatedAtMs: nowMs,
+				freshUntilMs: fresh ? nowMs + 60_000 : nowMs,
+				schemaVersion: 1,
+			});
+		}
+
+		const report = await engine.sync('reference-seed');
+		await engine.sync('scheduler-drain');
+
+		const expectedPulls = total === 1 && fresh ? 1 : 0;
+		expect(
+			fetcher.mock.calls.filter(([url]) => new URL(url).pathname.endsWith('/products/categories'))
+		).toHaveLength(expectedPulls);
+		await expect(scope.database.collections.categories.count().exec()).resolves.toBe(expectedPulls);
+		if (expectedPulls === 1) {
+			expect(report.status).toBe('ran');
+			expect(diagnostics.mock.calls.map(([event]) => event.message)).toContain(
+				'Reference refresh (categories + brands + tags + coupons; backfilled: categories): 1 inserted, 0 requeued'
+			);
+		} else {
+			expect(report).toMatchObject({
+				status: 'skipped',
+				reason: 'no reference collections need seeding',
+			});
+		}
+		await engine.dispose();
+	});
+
 	it('refreshes a reference on demand, dedupes a remount, and maintains only materialized lanes', async () => {
 		let nowMs = 1_000_000;
 		const pulls = { categories: 0, brands: 0, tags: 0, coupons: 0 };
@@ -1000,7 +1071,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		const report = await engine.sync('reference-seed');
 		expect(report).toMatchObject({
 			status: 'skipped',
-			reason: 'no materialized reference collections',
+			reason: 'no reference collections need seeding',
 		});
 		const lifecycle = events.filter(
 			(event) => event.type === 'lane-start' || event.type === 'lane-finish'
@@ -1011,7 +1082,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 				type: 'lane-finish',
 				lane: 'reference-seed',
 				status: 'skipped',
-				detail: 'no materialized reference collections',
+				detail: 'no reference collections need seeding',
 			},
 		]);
 		await engine.dispose();

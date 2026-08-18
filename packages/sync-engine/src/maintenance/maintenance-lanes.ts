@@ -36,6 +36,7 @@ import {
 	censusCollectionFromQueryKey,
 	censusQueryKey,
 	type CensusTotal,
+	type CensusTotals,
 	PRODUCT_BROWSE_WINDOW_LIMIT,
 	QUERY_TOTAL_FRESH_FOR_MS,
 	QUERY_TOTAL_LEASE_FOR_MS,
@@ -135,6 +136,7 @@ type MaintenanceLaneDeps = {
 	queryTotal?: QueryTotalPort;
 	censusFreshForMs: number;
 	customerTrickleStateFor: (scopeId: string) => CustomerTrickleStateStore;
+	censusTotals: () => Promise<CensusTotals>;
 	customerCensusTotal: () => Promise<CensusTotal | null>;
 	variationPrefetchStateFor: (scopeId: string) => VariationPrefetchStateStore;
 	variationCensusTotal: () => Promise<CensusTotal | null>;
@@ -499,17 +501,25 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			REFERENCE_COLLECTIONS.map((collection) => db.collections[collection].count().exec())
 		);
 		const materialized = REFERENCE_COLLECTIONS.filter((_, index) => counts[index] > 0);
-		if (materialized.length === 0) {
-			return { summary: null, status: 'skipped', reason: 'no materialized reference collections' };
+		const unmaterialized = REFERENCE_COLLECTIONS.filter((_, index) => counts[index] === 0);
+		const census = unmaterialized.length > 0 ? await deps.censusTotals() : null;
+		const backfill = unmaterialized.filter((collection) => {
+			const entry = census?.[collection];
+			return entry?.fresh === true && entry.total > 0;
+		});
+		const collections = [...materialized, ...backfill];
+		if (collections.length === 0) {
+			return { summary: null, status: 'skipped', reason: 'no reference collections need seeding' };
 		}
 		const result = await seedReferenceLanes({
-			collections: materialized,
+			collections,
 			completedDedupeForMs: REFERENCE_REFRESH_DEDUPE_MS,
 			database: db,
 			// Same one-clock rule as the order window seed above.
 			...(deps.now !== undefined ? { nowMs: deps.now() } : {}),
 		});
-		return seedSummary('Reference refresh (categories + brands + tags + coupons)', result);
+		const label = `Reference refresh (categories + brands + tags + coupons${backfill.length > 0 ? `; backfilled: ${backfill.join(', ')}` : ''})`;
+		return seedSummary(label, result);
 	});
 
 	const queryTotal = deps.queryTotal;
