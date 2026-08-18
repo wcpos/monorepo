@@ -78,7 +78,7 @@ function captureTimers(): {
 }
 
 async function waitForAutomaticIntervals(intervals: CapturedInterval[]): Promise<void> {
-	await vi.waitFor(() => expect(intervals).toHaveLength(10));
+	await vi.waitFor(() => expect(intervals).toHaveLength(11));
 }
 
 function changeSignalTimeout(
