@@ -15,10 +15,11 @@ import {
 import { useVariationRow } from '../context';
 import { useQueryState, useQueryStateActions } from '../../../../../../query';
 
-import type { Row } from '@tanstack/react-table';
+import type { DataTableFeatures } from '../../../data-table';
+import type { Row } from '../../../../../../table-types';
 
 interface Props {
-	row: Row<{ document: ProductDocument; record: EngineRecord<'products'> }>;
+	row: Row<{ document: ProductDocument; record: EngineRecord<'products'> }, DataTableFeatures>;
 }
 
 /**

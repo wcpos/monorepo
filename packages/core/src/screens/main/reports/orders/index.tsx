@@ -68,7 +68,7 @@ const headers: Record<string, React.ComponentType<Record<string, unknown>>> = {
 };
 
 const renderHeader = (props: RenderHeaderProps) => {
-	const Renderer = headers[props.column.id];
+	const Renderer = headers[props.header.column.id];
 	if (Renderer) {
 		return <Renderer {...(props as unknown as Record<string, unknown>)} />;
 	}
@@ -76,13 +76,13 @@ const renderHeader = (props: RenderHeaderProps) => {
 	return (
 		<DataTableHeader
 			collectionName={props.collectionName}
-			columnId={props.column.id}
-			header={flexRender(props.column.columnDef.header, props.getContext())}
-			disableSort={!props.column.getCanSort()}
+			columnId={props.header.column.id}
+			header={flexRender(props.header.column.columnDef.header, props.header.getContext())}
+			disableSort={!props.header.column.getCanSort()}
 			sortBy={props.sortBy}
 			sortDirection={props.sortDirection}
 			onSortingChange={props.onSortingChange}
-			align={props.column.columnDef.meta?.align}
+			align={props.header.column.columnDef.meta?.align}
 		/>
 	);
 };

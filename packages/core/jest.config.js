@@ -5,15 +5,34 @@ module.exports = {
 	displayName: '@wcpos/core',
 	preset: 'ts-jest',
 	transform: {
+		'^.+\\.js$': [
+			'babel-jest',
+			{
+				babelrc: false,
+				configFile: false,
+				plugins: ['@babel/plugin-transform-modules-commonjs'],
+			},
+		],
 		// Components whose rendered behavior depends on React Compiler memoization
 		// (the app builds with experiments.reactCompiler) are compiled the same way
 		// here; everything else goes through ts-jest. The patterns are mutually
 		// exclusive so transformer pick order can't matter.
-		'variable-product-row/(index|context|variations/(index|table|filters|footer))\\.tsx$':
+		//
+		// data-table/index.tsx joined this list with the react-table v9 migration:
+		// its useTableWrapper used to return `{ ...useReactTable(...) }`, and that
+		// spread is illegal in v9 (methods live on prototypes now). The spread was
+		// also breaking the table's object identity every render, which is what
+		// kept React Compiler from serving a stale memo. v9's store subscription
+		// is supposed to make that unnecessary — compiling this file the way the
+		// app compiles it is what actually holds that claim to account.
+		'(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/index)\\.tsx$':
 			'<rootDir>/jest/react-compiler-transform.js',
-		'^(?!.*variable-product-row/(index|context|variations/(index|table|filters|footer))\\.tsx$).+\\.(ts|tsx)$':
+		'^(?!.*(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/index)\\.tsx$).+\\.(ts|tsx)$':
 			['ts-jest', { tsconfig: '<rootDir>/tsconfig.jest.json' }],
 	},
+	transformIgnorePatterns: [
+		'node_modules/(?!@tanstack/(react-table|table-core|react-store|store)/)',
+	],
 	testRegex: TEST_REGEX,
 	moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
 	collectCoverage: true,

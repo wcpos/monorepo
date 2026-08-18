@@ -11,12 +11,13 @@ import { VariationsFilterBar } from './filters';
 import { VariationsTable } from './table';
 import { useCollectionBinding, useQueryState, useQueryStateActions } from '../../../../../../query';
 
-import type { Row } from '@tanstack/react-table';
+import type { DataTableFeatures } from '../../../data-table';
+import type { Row } from '../../../../../../table-types';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
 interface Props {
-	row: Row<{ document: ProductDocument; record: EngineRecord<'products'> }>;
+	row: Row<{ document: ProductDocument; record: EngineRecord<'products'> }, DataTableFeatures>;
 	hideOutOfStock?: boolean;
 }
 

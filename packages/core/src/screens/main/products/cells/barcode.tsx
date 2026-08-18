@@ -1,7 +1,6 @@
 import * as React from 'react';
 
-import { CellContext } from '@tanstack/react-table';
-
+import type { CellContext } from '@wcpos/core/table-types';
 import { Input } from '@wcpos/components/input';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 

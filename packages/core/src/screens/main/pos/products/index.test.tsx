@@ -205,6 +205,12 @@ describe('POSProducts query-state wiring', () => {
 		expect(latestState().search).toBe('');
 	});
 
+	it('keeps custom variation detail expansion under screen ownership', () => {
+		render(<POSProducts />);
+
+		expect(mockDataTableProps.tableConfig).toMatchObject({ manualExpanding: true });
+	});
+
 	it('maps showOutOfStock and runtime sort changes exactly onto products query state', () => {
 		const { rerender } = render(<POSProducts />);
 		expect(latestState().filters).toMatchObject({

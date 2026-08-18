@@ -32,6 +32,7 @@ import {
 } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -39,8 +40,6 @@ import { requestServerDelete } from '../../hooks/mutations/request-server-delete
 import { useProAccess } from '../../contexts/pro-access';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
-
-import type { CellContext } from '@tanstack/react-table';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 

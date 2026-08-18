@@ -4,11 +4,10 @@ import get from 'lodash/get';
 
 import { Image } from '@wcpos/components/image';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { useImageAttachment } from '../../hooks/use-image-attachment';
 import { PRODUCT_IMAGE_PLACEHOLDER } from './product-image-placeholder';
-
-import type { CellContext } from '@tanstack/react-table';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 

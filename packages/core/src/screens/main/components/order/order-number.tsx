@@ -3,8 +3,7 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { Text } from '@wcpos/components/text';
-
-import type { CellContext } from '@tanstack/react-table';
+import type { CellContext } from '@wcpos/core/table-types';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
