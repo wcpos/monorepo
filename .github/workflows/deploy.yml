@@ -11,6 +11,17 @@ on:
         options:
           - preview
           - production
+      lane:
+        description: >-
+          Which lane's E2E store to use. `auto` reads the PR base / branch name,
+          which cannot see the lane of a feature branch dispatched by hand.
+        type: choice
+        required: false
+        default: auto
+        options:
+          - auto
+          - main
+          - next
       skip_e2e:
         description: Skip E2E tests
         type: boolean
@@ -250,13 +261,18 @@ jobs:
           # serves both variants (the free matrix gets its licence masked by
           # stubStoreVersionForE2E, as it already does on every lane).
           #
+          # `inputs.lane` wins when a human dispatches: for workflow_dispatch,
+          # base_ref is empty and ref_name is the feature branch, so `auto` would
+          # read every next-lane feature branch as main and recreate exactly the
+          # cross-lane testing this change removes.
+          #
           # These MUST be set here. playwright.config used to fall back to
           # dev-next when they were absent, and since this job never set them,
           # the whole main lane silently gated 1.9.x against the 1.10 store
           # while dev-free coverage was switched off entirely. The config now
           # fails the job rather than guessing, so an unset value is loud.
-          E2E_STORE_URL_PRO: ${{ (github.base_ref == 'next' || github.ref_name == 'next') && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}
-          E2E_STORE_URL_FREE: ${{ (github.base_ref == 'next' || github.ref_name == 'next') && 'https://dev-next.wcpos.com' || 'https://dev-free.wcpos.com' }}
+          E2E_STORE_URL_PRO: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}
+          E2E_STORE_URL_FREE: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-free.wcpos.com' }}
           # The shard index no longer reaches Playwright via --shard, but the
           # cashier-slot isolation is keyed on it. Without this every shard would
           # normalize to slot 0 and share one cashier.

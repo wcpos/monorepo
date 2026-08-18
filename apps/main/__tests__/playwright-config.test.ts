@@ -7,6 +7,7 @@ describe('Playwright project boundaries', () => {
 	const originalFreeStoreUrl = process.env.E2E_STORE_URL_FREE;
 	const originalProStoreUrl = process.env.E2E_STORE_URL_PRO;
 	const originalCi = process.env.CI;
+	const originalGenericStoreUrl = process.env.E2E_STORE_URL;
 	const originalBaseUrl = process.env.BASE_URL;
 
 	afterEach(() => {
@@ -24,6 +25,11 @@ describe('Playwright project boundaries', () => {
 			delete process.env.CI;
 		} else {
 			process.env.CI = originalCi;
+		}
+		if (originalGenericStoreUrl === undefined) {
+			delete process.env.E2E_STORE_URL;
+		} else {
+			process.env.E2E_STORE_URL = originalGenericStoreUrl;
 		}
 		if (originalBaseUrl === undefined) {
 			delete process.env.BASE_URL;
@@ -68,9 +74,70 @@ describe('Playwright project boundaries', () => {
 
 		expect(() =>
 			(
-				require('../playwright.config') as { assertLaneStoresConfigured(): void }
-			).assertLaneStoresConfigured()
+				require('../playwright.config') as {
+					assertLaneStoresConfigured(needed: Iterable<string>): void;
+				}
+			).assertLaneStoresConfigured(['free', 'pro'])
 		).toThrow('E2E_STORE_URL_FREE, E2E_STORE_URL_PRO');
+	});
+
+	// The nightly cold-start workflow selects `pro-cold-start` alone. Demanding a
+	// free store it will never open would fail a run that is correctly configured.
+	it('demands only the stores the selected projects will use', () => {
+		process.env.CI = 'true';
+		delete process.env.E2E_STORE_URL_FREE;
+		process.env.E2E_STORE_URL_PRO = 'https://dev-next.wcpos.com';
+		jest.resetModules();
+
+		const mod = require('../playwright.config') as {
+			assertLaneStoresConfigured(needed: Iterable<string>): void;
+			variantsForProjects(names: readonly string[]): Set<string>;
+		};
+		expect([...mod.variantsForProjects(['pro-cold-start'])]).toEqual(['pro']);
+		expect(() =>
+			mod.assertLaneStoresConfigured(mod.variantsForProjects(['pro-cold-start']))
+		).not.toThrow();
+		expect(() => mod.assertLaneStoresConfigured(['free'])).toThrow('E2E_STORE_URL_FREE');
+	});
+
+	// A pro-only local run must not drag the free store's OAuth + catalogue sync
+	// in behind it; an unavailable free store would fail a run that never uses it.
+	it('maps project names to just the variants they need', () => {
+		process.env.E2E_STORE_URL_FREE = 'https://dev-free.wcpos.com';
+		process.env.E2E_STORE_URL_PRO = 'https://dev-pro.wcpos.com';
+		jest.resetModules();
+
+		const { variantsForProjects } = require('../playwright.config') as {
+			variantsForProjects(names: readonly string[]): Set<string>;
+		};
+		expect([...variantsForProjects(['pro-authenticated'])]).toEqual(['pro']);
+		expect([...variantsForProjects(['free-authenticated'])]).toEqual(['free']);
+		expect([...variantsForProjects(['free-authenticated', 'pro-authenticated'])].sort()).toEqual([
+			'free',
+			'pro',
+		]);
+		// A bare `playwright test` selects everything, so it needs everything.
+		expect([...variantsForProjects([])].sort()).toEqual(['free', 'pro']);
+	});
+
+	// E2E_STORE_URL points both variants at one store (e2e-native.yml). Resolving
+	// it here AND again in getStoreUrl let setup stub one origin and connect to another.
+	it('folds the generic store override into both variants', () => {
+		process.env.CI = 'true';
+		delete process.env.E2E_STORE_URL_FREE;
+		delete process.env.E2E_STORE_URL_PRO;
+		process.env.E2E_STORE_URL = 'https://dev-pro.wcpos.com';
+		jest.resetModules();
+
+		const mod = require('../playwright.config') as {
+			assertLaneStoresConfigured(needed: Iterable<string>): void;
+			FREE_STORE_URL: string;
+			PRO_STORE_URL: string;
+		};
+		expect(mod.PRO_STORE_URL).toBe('https://dev-pro.wcpos.com');
+		expect(mod.FREE_STORE_URL).toBe('https://dev-pro.wcpos.com');
+		expect(() => mod.assertLaneStoresConfigured(['free', 'pro'])).not.toThrow();
+		delete process.env.E2E_STORE_URL;
 	});
 
 	// The same import happens in unit tests and the one-off sibling configs, none

@@ -38,7 +38,11 @@ const LOCAL_DEFAULT_STORE_URL: Record<StoreVariant, string> = {
 };
 
 function storeUrlFor(variant: StoreVariant, envValue: string | undefined): string {
-	const configured = (envValue || '').trim();
+	// `E2E_STORE_URL` points BOTH variants at one store (e2e-native.yml). Kept as the
+	// generic fallback here so this module stays the single resolver — fixtures used
+	// to apply it again downstream, which let a run bootstrap against one origin and
+	// then connect to another.
+	const configured = (envValue || process.env.E2E_STORE_URL || '').trim();
 	if (configured) return configured;
 	// Local runs fall back to the MAIN-lane pair: the stable trunk, and the pair a
 	// checkout is most likely on. Running next locally means naming dev-next.
@@ -48,6 +52,21 @@ function storeUrlFor(variant: StoreVariant, envValue: string | undefined): strin
 export const FREE_STORE_URL = storeUrlFor('free', process.env.E2E_STORE_URL_FREE);
 export const PRO_STORE_URL = storeUrlFor('pro', process.env.E2E_STORE_URL_PRO);
 
+/** Which store variants a set of selected Playwright projects actually needs. */
+export function variantsForProjects(projectNames: readonly string[]): Set<StoreVariant> {
+	const variants = new Set<StoreVariant>();
+	for (const name of projectNames) {
+		if (name.startsWith('free-')) variants.add('free');
+		if (name.startsWith('pro-')) variants.add('pro');
+	}
+	// No recognisable project (a bare `playwright test`) means the full matrix.
+	if (variants.size === 0) {
+		variants.add('pro');
+		if (FREE_PROJECT_ENABLED) variants.add('free');
+	}
+	return variants;
+}
+
 /**
  * Fail a CI run whose lane never named its stores.
  *
@@ -56,9 +75,13 @@ export const PRO_STORE_URL = storeUrlFor('pro', process.env.E2E_STORE_URL_PRO);
  * a module-load throw would fail them for a rule that does not apply. globalSetup
  * is the honest seam — it runs only when a real E2E run is about to authenticate.
  */
-export function assertLaneStoresConfigured(): void {
+export function assertLaneStoresConfigured(needed: Iterable<StoreVariant>): void {
 	if (!process.env.CI) return;
-	const missing = (['free', 'pro'] as const).filter(
+	// Only the variants this run will actually execute. A cold-start run selects
+	// `pro-cold-start` alone and must not be failed for an unset free store it
+	// will never open.
+	if ((process.env.E2E_STORE_URL || '').trim()) return;
+	const missing = [...new Set(needed)].filter(
 		(variant) => !(process.env[`E2E_STORE_URL_${variant.toUpperCase()}`] || '').trim()
 	);
 	if (missing.length === 0) return;

@@ -261,7 +261,11 @@ export async function waitForOAuthCallback(page: Page, appOrigin: string): Promi
  * Get the store URL from the project config, with env var override.
  */
 export function getStoreUrl(testInfo: TestInfo): string {
-	if (process.env.E2E_STORE_URL) return process.env.E2E_STORE_URL;
+	// No `E2E_STORE_URL` override here: playwright.config already folds it into the
+	// project's storeUrl. Applying it a second time let globalSetup stub and bootstrap
+	// one origin while authenticateWithStore connected to another — and the second
+	// stubStoreVersionForE2E call cannot correct it, because the context is already in
+	// VERSION_STUBBED_CONTEXTS. The project's resolved URL is the single answer.
 	const opts = testInfo.project.use as WcposTestOptions;
 	return opts.storeUrl || 'https://dev-free.wcpos.com';
 }

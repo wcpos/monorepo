@@ -69,6 +69,12 @@ jobs:
         env:
           E2E_COLD_START: '1'
           CI: true
+          # This workflow lives on main only because schedules fire from the
+          # default branch; it checks out `next` (see the header), so it is a
+          # NEXT-lane run and gates against dev-next. It selects the
+          # `pro-cold-start` project alone, so no free store is needed or
+          # bootstrapped — globalSetup asks only for the variants in play.
+          E2E_STORE_URL_PRO: ${{ github.event.inputs.ref == 'main' && 'https://dev-pro.wcpos.com' || 'https://dev-next.wcpos.com' }}
 
       - name: 📸 Upload results on failure
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
