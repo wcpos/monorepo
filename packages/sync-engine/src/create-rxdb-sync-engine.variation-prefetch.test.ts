@@ -298,6 +298,41 @@ describe('variation-prefetch maintenance lane', () => {
 		await engine.dispose();
 	});
 
+	it('re-arms when a resident variable parent is replaced at the same count', async () => {
+		const requested: string[] = [];
+		const engine = engineWith({
+			now: () => 1_000_000,
+			fetcher: async (url) => {
+				const include = new URL(url).searchParams.get('include')!;
+				requested.push(include);
+				return json({ documents: [variationEnvelope(Number(include), 20)] });
+			},
+		});
+		const scope = await engine.ready;
+		await scope.database.collections.products.insert(product(10, [101]) as never);
+		await scope.database.collections.variations.insert(variation(101, 10) as never);
+		await scope.database.collections.queryTotalCacheEntries.upsert({
+			queryKey: 'census:variations',
+			totalMatchingRecords: 1,
+			updatedAtMs: 1_000_000,
+			freshUntilMs: 2_000_000,
+			schemaVersion: 1,
+		});
+		await engine.sync('variation-prefetch');
+		await expect(engine.sync('variation-prefetch')).resolves.toMatchObject({
+			status: 'skipped',
+			reason: 'walk-complete',
+		});
+
+		await (await scope.database.collections.products.findOne(uuid('product', 10)).exec())!.remove();
+		await scope.database.collections.products.insert(product(20, [201]) as never);
+		await expect(engine.sync('variation-prefetch')).resolves.toMatchObject({
+			status: 'ran',
+		});
+		expect(requested).toEqual(['201']);
+		await engine.dispose();
+	});
+
 	it('re-arms when the variation census changes during a multi-tick walk', async () => {
 		const engine = engineWith({ now: () => 1_000_000 });
 		const scope = await engine.ready;

@@ -18,7 +18,7 @@ export type VariationPrefetchState = {
 	cursorWooId: number;
 	walkComplete: boolean;
 	observedCensusTotal: number | null;
-	observedParentCount: number | null;
+	observedParentFingerprint: string | null;
 	activeParentWooId: number | null;
 	attemptedVariationIds: number[];
 };
@@ -30,7 +30,7 @@ const DEFAULT_STATE: VariationPrefetchState = {
 	cursorWooId: 0,
 	walkComplete: false,
 	observedCensusTotal: null,
-	observedParentCount: null,
+	observedParentFingerprint: null,
 	activeParentWooId: null,
 	attemptedVariationIds: [],
 };
@@ -46,9 +46,8 @@ export function decodeVariationPrefetchState(raw: string | null): VariationPrefe
 			(parsed.observedCensusTotal !== null &&
 				(!Number.isSafeInteger(parsed.observedCensusTotal) ||
 					(parsed.observedCensusTotal ?? -1) < 0)) ||
-			(parsed.observedParentCount !== null &&
-				(!Number.isSafeInteger(parsed.observedParentCount) ||
-					(parsed.observedParentCount ?? -1) < 0)) ||
+			(parsed.observedParentFingerprint !== null &&
+				typeof parsed.observedParentFingerprint !== 'string') ||
 			(parsed.activeParentWooId !== null &&
 				(!Number.isSafeInteger(parsed.activeParentWooId) || (parsed.activeParentWooId ?? 0) < 1)) ||
 			!Array.isArray(parsed.attemptedVariationIds) ||
@@ -62,7 +61,7 @@ export function decodeVariationPrefetchState(raw: string | null): VariationPrefe
 			cursorWooId: parsed.cursorWooId!,
 			walkComplete: parsed.walkComplete,
 			observedCensusTotal: parsed.observedCensusTotal!,
-			observedParentCount: parsed.observedParentCount!,
+			observedParentFingerprint: parsed.observedParentFingerprint!,
 			activeParentWooId: parsed.activeParentWooId!,
 			attemptedVariationIds: parsed.attemptedVariationIds,
 		};
@@ -135,13 +134,24 @@ async function missingVariationIds(
 	);
 	return ids.filter((id) => !present.has(remoteIdOrNull(id)!));
 }
-function residentVariableParentCount(
+async function residentVariableParentFingerprint(
 	database: RxDatabase,
 	descriptor: TargetedDescriptor
-): Promise<number> {
-	return database.collections[descriptor.collection]
-		.count({ selector: { type: 'variable' } })
+): Promise<string> {
+	const docs = await database.collections[descriptor.collection]
+		.find({ selector: { type: 'variable' } })
 		.exec();
+	const parentIds = docs
+		.map((doc) => remoteIdOrNull(doc.toJSON()[descriptor.wooIdField]))
+		.filter((id) => id !== null)
+		.sort()
+		.join(',');
+	let fingerprint = 0xcbf29ce484222325n;
+	for (let index = 0; index < parentIds.length; index += 1) {
+		fingerprint ^= BigInt(parentIds.charCodeAt(index));
+		fingerprint = BigInt.asUintN(64, fingerprint * 0x100000001b3n);
+	}
+	return fingerprint.toString(36).padStart(13, '0');
 }
 function throwIfAborted(signal?: AbortSignal): void {
 	if (!signal?.aborted) return;
@@ -166,15 +176,15 @@ async function runVariationPrefetch(
 	let state = decodeVariationPrefetchState(await deps.stateStore.get(VARIATION_PREFETCH_STATE_KEY));
 	throwIfAborted(deps.signal);
 	if (state.walkComplete) {
-		const [census, parentCount] = await Promise.all([
+		const [census, parentFingerprint] = await Promise.all([
 			deps.variationCensusTotal(),
-			residentVariableParentCount(deps.database, productsDescriptor),
+			residentVariableParentFingerprint(deps.database, productsDescriptor),
 		]);
 		throwIfAborted(deps.signal);
 		// The census is a change signal, not a coverage proof: permanently omitted
 		// server ids must not re-arm this walk forever.
 		if (
-			parentCount !== state.observedParentCount ||
+			parentFingerprint !== state.observedParentFingerprint ||
 			(census?.fresh && census.total !== state.observedCensusTotal)
 		) {
 			state = { ...DEFAULT_STATE };
@@ -182,16 +192,16 @@ async function runVariationPrefetch(
 			return { status: 'idle', reason: 'walk-complete' };
 		}
 	}
-	if (state.observedCensusTotal === null || state.observedParentCount === null) {
-		const [census, parentCount] = await Promise.all([
+	if (state.observedCensusTotal === null || state.observedParentFingerprint === null) {
+		const [census, parentFingerprint] = await Promise.all([
 			deps.variationCensusTotal(),
-			residentVariableParentCount(deps.database, productsDescriptor),
+			residentVariableParentFingerprint(deps.database, productsDescriptor),
 		]);
 		throwIfAborted(deps.signal);
 		state = {
 			...state,
 			observedCensusTotal: state.observedCensusTotal ?? census?.total ?? null,
-			observedParentCount: state.observedParentCount ?? parentCount,
+			observedParentFingerprint: state.observedParentFingerprint ?? parentFingerprint,
 		};
 	}
 
@@ -285,7 +295,7 @@ async function runVariationPrefetch(
 		cursorWooId,
 		walkComplete,
 		observedCensusTotal: state.observedCensusTotal,
-		observedParentCount: state.observedParentCount,
+		observedParentFingerprint: state.observedParentFingerprint,
 		activeParentWooId: state.activeParentWooId,
 		attemptedVariationIds: state.attemptedVariationIds,
 	};
