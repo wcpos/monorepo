@@ -78,7 +78,7 @@ function captureTimers(): {
 }
 
 async function waitForAutomaticIntervals(intervals: CapturedInterval[]): Promise<void> {
-	await vi.waitFor(() => expect(intervals).toHaveLength(9));
+	await vi.waitFor(() => expect(intervals).toHaveLength(10));
 }
 
 function changeSignalTimeout(
@@ -209,6 +209,7 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 		await waitForAutomaticIntervals(captured.intervals);
 		expect(engine.status().lanes['change-signal'].nextDueAtMs).toBe(11_000);
 		expect(engine.status().lanes['customer-trickle'].nextDueAtMs).toBe(301_000);
+		expect(engine.status().lanes['variation-prefetch'].nextDueAtMs).toBe(301_000);
 		expect(engine.status().lanes['customer-trickle'].lastTick).toBeNull();
 		nowMs = 40_000;
 		changeSignalTimeout(engine, captured.timeouts, 1_000).callback();

@@ -287,7 +287,7 @@ export type RxdbSyncEnginePorts = {
 	 * when this port is provided (the engine cannot guess the host's total
 	 * endpoint semantics). */
 	queryTotal?: QueryTotalPort;
-	/** Optional activity clock for the idle-only customer trickle lane. */
+	/** Optional activity clock for idle-only maintenance lanes. */
 	lastUserActivityMs?: () => number;
 	/** Optional user-interaction subscription for idle-decay snap-back. */
 	onUserActivity?: (listener: () => void) => () => void;
@@ -1611,6 +1611,11 @@ export function createRxdbSyncEngine(
 		// The lane body runs inside guardWrite; a scope switch drains it before changing
 		// manager.activeScope, so this active census read remains bound to the lane's database.
 		customerCensusTotal: async () => (await censusPublisher.totals()).customers,
+		variationPrefetchStateFor: (scopeId) => ({
+			get: (key) => readBlob(scopeId, key),
+			set: (key, value) => writeBlob(scopeId, key, value),
+		}),
+		variationCensusTotal: async () => (await censusPublisher.totals()).variations,
 		hasPendingInteractiveWork: requirePlane.hasPendingWork,
 		...(ports.lastUserActivityMs !== undefined
 			? { lastUserActivityMs: ports.lastUserActivityMs }
@@ -2022,8 +2027,8 @@ export function createRxdbSyncEngine(
 			// (gate2 #516 item 6): the seeds only ENQUEUE persisted tasks, so a
 			// manual sync() must run them first or it returns 'ran' with its own
 			// just-seeded work still pending until some later tick.
-			// customer-trickle is idle-only by design: a manual full sync must
-			// not imply a trickle tick. Its explicit single-lane form remains valid.
+			// Idle maintenance lanes do not run as a side effect of a manual full sync.
+			// Their explicit single-lane forms remain valid.
 			const reports: SyncReport[] = [];
 			for (const name of MANUAL_SYNC_LANES) {
 				const report = await tickLaneWithEvents(name, options?.signal);
