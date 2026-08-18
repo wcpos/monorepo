@@ -123,6 +123,35 @@ test('the shared-store queue stays removed', () => {
 	assert.equal(gateStep.env.MERGE_GATE_MAX_ATTEMPTS, '140');
 });
 
+test('main-lane deploys cap shared-store E2E at two shards', () => {
+	const matrix = readWorkflow('deploy.yml').jobs.e2e.strategy.matrix;
+	const nextLane =
+		"(inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next')))";
+
+	assert.equal(
+		matrix.shardIndex,
+		"${{ fromJSON(" + nextLane + " && '[1, 2, 3, 4]' || '[1, 2]') }}"
+	);
+	assert.equal(
+		matrix.shardTotal,
+		"${{ fromJSON(" + nextLane + " && '[4]' || '[2]') }}"
+	);
+});
+
+test('cold-start dispatches bind raw refs to an explicit store lane', () => {
+	const workflow = readWorkflow('e2e-cold-start.yml');
+	const lane = workflow.on.workflow_dispatch.inputs.lane;
+	const validateStep = findStep(workflow, 'cold-start', '🔒 Validate trusted ref');
+	const runStep = findStep(workflow, 'cold-start', '🥶 Run cold-start E2E');
+
+	assert.equal(lane.required, true);
+	assert.equal(lane.default, 'next');
+	assert.deepEqual(lane.options, ['main', 'next']);
+	assert.match(validateStep.env.E2E_LANE, /github\.event\.inputs\.lane/);
+	assert.match(validateStep.run, /origin\/\$E2E_LANE/);
+	assert.match(runStep.env.E2E_STORE_URL_PRO, /github\.event\.inputs\.lane == 'main'/);
+});
+
 test('the deploy concurrency contract isolates stale rerun attempts', () => {
 	const workflow = readWorkflow('deploy.yml');
 
@@ -273,4 +302,49 @@ test('order-math coverage includes an unimported source module', () => {
 		rmSync(probe, { force: true });
 		rmSync(coverageDir, { recursive: true, force: true });
 	}
+});
+
+test('deploy.yml names BOTH lane stores for the E2E job', () => {
+	// The free matrix is opt-in: playwright.config enables it only when a free
+	// store is named (it cannot ask which projects `--project=` selected —
+	// FullConfig.projects is the full configured list either way). That keeps a
+	// pro-only run, like nightly cold-start, from demanding a store it never
+	// opens — but it also means a lane that forgets E2E_STORE_URL_FREE loses its
+	// free coverage in silence. That is exactly how dev-free coverage vanished
+	// for weeks. This pin is where that risk is closed.
+	const runStep = readWorkflow('deploy.yml')
+		.jobs.e2e.steps.find((step) => step.env && 'E2E_STORE_URL_PRO' in step.env);
+
+	assert.ok(runStep, 'deploy.yml e2e job no longer names a pro store');
+
+	// The free matrix is DEFERRED, not forgotten (#1277): dev-free cannot pass it
+	// yet. Naming the store is what re-enables it, so this asserts the deferral is
+	// deliberate and traceable — the commented line and its issue reference must
+	// both survive, which makes re-enabling a one-line edit and silent deletion a
+	// test failure.
+	const workflowText = readFileSync(
+		new URL('../.github/workflows/deploy.yml', import.meta.url),
+		'utf8'
+	);
+	if (!('E2E_STORE_URL_FREE' in runStep.env)) {
+		assert.match(
+			workflowText,
+			/#\s*E2E_STORE_URL_FREE:/,
+			'the free store is neither set nor deferred — the free matrix vanished silently'
+		);
+		assert.match(workflowText, /#1277/, 'free-matrix deferral lost its tracking issue');
+	}
+
+	// Each lane maps to its own allowed stores (owner ruling 2026-08-18): main
+	// may use dev-free + dev-pro and nothing else; next has only dev-next.
+	assert.match(runStep.env.E2E_STORE_URL_PRO, /dev-pro\.wcpos\.com/);
+	assert.match(runStep.env.E2E_STORE_URL_PRO, /dev-next\.wcpos\.com/);
+	if ('E2E_STORE_URL_FREE' in runStep.env) {
+		assert.match(runStep.env.E2E_STORE_URL_FREE, /dev-free\.wcpos\.com/);
+		assert.match(runStep.env.E2E_STORE_URL_FREE, /dev-next\.wcpos\.com/);
+	}
+	assert.ok(
+		!/dev-next\.wcpos\.com'\s*\|\|\s*'https:\/\/dev-next/.test(runStep.env.E2E_STORE_URL_PRO),
+		'both arms of the pro lane map resolve to dev-next — main would gate against the next store'
+	);
 });

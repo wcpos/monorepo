@@ -11,17 +11,15 @@ import {
 } from './cold-start';
 import { authenticateWithStore, stubStoreVersionForE2E } from './fixtures';
 import { exportOPFS } from './opfs-helpers';
+// Resolved by playwright.config, never re-derived here: these used to be two
+// independent copies with different fallbacks, so a lane could bootstrap against
+// one store and then run its specs against another.
+import { assertLaneStoresConfigured, FREE_STORE_URL, PRO_STORE_URL } from '../playwright.config';
 
 import type { StoreVariant, WcposTestOptions } from '../playwright.config';
 
 const AUTH_STATE_DIR = path.join(__dirname, '.auth-state');
 
-// No default free target: dev-next is a PRO store and the free matrix is
-// mutually exclusive with it (playwright.config gates the free projects on
-// this same env var).
-const FREE_STORE_URL = process.env.E2E_STORE_URL_FREE || process.env.E2E_STORE_URL || '';
-const PRO_STORE_URL =
-	process.env.E2E_STORE_URL_PRO || process.env.E2E_STORE_URL || 'https://dev-next.wcpos.com';
 const STUB_UPLOADS_IN_CROSS_ORIGIN_E2E = process.env.E2E_STUB_UPLOADS !== 'false';
 const TRANSPARENT_PNG_BASE64 =
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9sM7nDUAAAAASUVORK5CYII=';
@@ -251,6 +249,9 @@ async function setupVariant(
  * Playwright globalSetup: authenticate once per store variant and save state.
  */
 async function globalSetup(config: FullConfig) {
+	// Before anything authenticates: a CI lane that never named its pro store must
+	// stop here rather than fall back to a plausible-looking wrong one.
+	assertLaneStoresConfigured();
 	const baseURL = process.env.BASE_URL || 'http://localhost:8081';
 	// Normalize Playwright's 1-based shard number to the 0-based index used
 	// within the PR (1..8) or non-PR/local (9..16) cashier band.
@@ -260,6 +261,8 @@ async function globalSetup(config: FullConfig) {
 	fs.mkdirSync(AUTH_STATE_DIR, { recursive: true });
 
 	// Auth both variants in sequence (parallel would contend on the same stores)
+	// Naming a free store is what turns the free matrix on, so it is also exactly
+	// when the free bootstrap is worth paying for — an OAuth plus catalogue sync.
 	if (FREE_STORE_URL) {
 		await setupVariant('free', FREE_STORE_URL, baseURL, { shardIndex });
 	}
