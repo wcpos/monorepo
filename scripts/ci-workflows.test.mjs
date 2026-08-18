@@ -276,3 +276,32 @@ test('order-math coverage includes an unimported source module', () => {
 		rmSync(coverageDir, { recursive: true, force: true });
 	}
 });
+
+test('deploy.yml names BOTH lane stores for the E2E job', () => {
+	// The free matrix is opt-in: playwright.config enables it only when a free
+	// store is named (it cannot ask which projects `--project=` selected —
+	// FullConfig.projects is the full configured list either way). That keeps a
+	// pro-only run, like nightly cold-start, from demanding a store it never
+	// opens — but it also means a lane that forgets E2E_STORE_URL_FREE loses its
+	// free coverage in silence. That is exactly how dev-free coverage vanished
+	// for weeks. This pin is where that risk is closed.
+	const runStep = readWorkflow('deploy.yml')
+		.jobs.e2e.steps.find((step) => step.env && 'E2E_STORE_URL_PRO' in step.env);
+
+	assert.ok(runStep, 'deploy.yml e2e job no longer names a pro store');
+	assert.ok(
+		'E2E_STORE_URL_FREE' in runStep.env,
+		'deploy.yml e2e job stopped naming a free store — the free matrix silently stops running'
+	);
+
+	// Each lane maps to its own allowed stores (owner ruling 2026-08-18): main
+	// may use dev-free + dev-pro and nothing else; next has only dev-next.
+	assert.match(runStep.env.E2E_STORE_URL_PRO, /dev-pro\.wcpos\.com/);
+	assert.match(runStep.env.E2E_STORE_URL_PRO, /dev-next\.wcpos\.com/);
+	assert.match(runStep.env.E2E_STORE_URL_FREE, /dev-free\.wcpos\.com/);
+	assert.match(runStep.env.E2E_STORE_URL_FREE, /dev-next\.wcpos\.com/);
+	assert.ok(
+		!/dev-next\.wcpos\.com'\s*\|\|\s*'https:\/\/dev-next/.test(runStep.env.E2E_STORE_URL_PRO),
+		'both arms of the pro lane map resolve to dev-next — main would gate against the next store'
+	);
+});

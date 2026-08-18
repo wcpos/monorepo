@@ -32,41 +32,37 @@ export interface WcposTestOptions {
  *   path because `stubStoreVersionForE2E` masks the licence per variant (it
  *   already does this on every lane — see fixtures.ts).
  */
-const LOCAL_DEFAULT_STORE_URL: Record<StoreVariant, string> = {
-	free: 'https://dev-free.wcpos.com',
-	pro: 'https://dev-pro.wcpos.com',
-};
+const LOCAL_DEFAULT_PRO_STORE_URL = 'https://dev-pro.wcpos.com';
 
-/** Resolve a variant's configured store URL, including the generic local override. */
-function storeUrlFor(variant: StoreVariant, envValue: string | undefined): string {
-	// `E2E_STORE_URL` points BOTH variants at one store (e2e-native.yml). Kept as the
-	// generic fallback here so this module stays the single resolver — fixtures used
-	// to apply it again downstream, which let a run bootstrap against one origin and
-	// then connect to another.
-	const configured = (envValue || process.env.E2E_STORE_URL || '').trim();
-	if (configured) return configured;
-	// Local runs fall back to the MAIN-lane pair: the stable trunk, and the pair a
-	// checkout is most likely on. Running next locally means naming dev-next.
-	return LOCAL_DEFAULT_STORE_URL[variant];
+/**
+ * `E2E_STORE_URL` points BOTH variants at one store (e2e-native.yml). Resolved
+ * here so this module is the single resolver — fixtures used to apply it again
+ * downstream, which let a run bootstrap against one origin and connect to another.
+ */
+function configuredStoreUrl(envValue: string | undefined): string {
+	return (envValue || process.env.E2E_STORE_URL || '').trim();
 }
 
-export const FREE_STORE_URL = storeUrlFor('free', process.env.E2E_STORE_URL_FREE);
-export const PRO_STORE_URL = storeUrlFor('pro', process.env.E2E_STORE_URL_PRO);
-
-/** Which store variants a set of selected Playwright projects actually needs. */
-export function variantsForProjects(projectNames: readonly string[]): Set<StoreVariant> {
-	const variants = new Set<StoreVariant>();
-	for (const name of projectNames) {
-		if (name.startsWith('free-')) variants.add('free');
-		if (name.startsWith('pro-')) variants.add('pro');
-	}
-	// No recognisable project (a bare `playwright test`) means the full matrix.
-	if (variants.size === 0) {
-		variants.add('pro');
-		if (FREE_PROJECT_ENABLED) variants.add('free');
-	}
-	return variants;
-}
+/**
+ * The free matrix runs ONLY when a free store is named.
+ *
+ * This is a declaration, not a guess. Playwright's `FullConfig.projects` is the
+ * full configured list even under `--project=` (verified 2026-08-18), so
+ * globalSetup cannot ask which projects were selected — an earlier attempt to
+ * infer it made a pro-only run demand and bootstrap a free store it never opens,
+ * which is exactly what breaks the cold-start workflow.
+ *
+ * Naming the store is therefore what turns the variant on: a run that wants free
+ * coverage says so, and one that does not (cold-start; a local pro-only run) pays
+ * nothing for it. The risk this reopens — a lane silently losing free coverage,
+ * which is how dev-free vanished for weeks — is closed where it belongs, by a
+ * contract test asserting deploy.yml names BOTH stores for every lane.
+ */
+export const FREE_STORE_URL = configuredStoreUrl(process.env.E2E_STORE_URL_FREE);
+export const PRO_STORE_URL =
+	configuredStoreUrl(process.env.E2E_STORE_URL_PRO) ||
+	// Local runs default to the stable trunk's pro store; CI must name it (below).
+	(process.env.CI ? '' : LOCAL_DEFAULT_PRO_STORE_URL);
 
 /**
  * Fail a CI run whose lane never named its stores.
@@ -76,21 +72,13 @@ export function variantsForProjects(projectNames: readonly string[]): Set<StoreV
  * a module-load throw would fail them for a rule that does not apply. globalSetup
  * is the honest seam — it runs only when a real E2E run is about to authenticate.
  */
-export function assertLaneStoresConfigured(needed: Iterable<StoreVariant>): void {
+export function assertLaneStoresConfigured(): void {
 	if (!process.env.CI) return;
-	// Only the variants this run will actually execute. A cold-start run selects
-	// `pro-cold-start` alone and must not be failed for an unset free store it
-	// will never open.
-	if ((process.env.E2E_STORE_URL || '').trim()) return;
-	const missing = [...new Set(needed)].filter(
-		(variant) => !(process.env[`E2E_STORE_URL_${variant.toUpperCase()}`] || '').trim()
-	);
-	if (missing.length === 0) return;
+	if (PRO_STORE_URL) return;
 	throw new Error(
-		`E2E store not configured for this lane: ${missing
-			.map((variant) => `E2E_STORE_URL_${variant.toUpperCase()}`)
-			.join(', ')} unset. The workflow must name the stores (main → dev-free + dev-pro, ` +
-			`next → dev-next); the config will not guess one.`
+		'E2E_STORE_URL_PRO is not set. Every lane runs the pro matrix, so the workflow ' +
+			'must name its store (main → dev-pro, next → dev-next); the config will not ' +
+			'guess one. The free matrix is opt-in: name E2E_STORE_URL_FREE to run it.'
 	);
 }
 const FREE_PROJECT_ENABLED = FREE_STORE_URL.length > 0;

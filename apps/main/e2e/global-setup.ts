@@ -14,12 +14,7 @@ import { exportOPFS } from './opfs-helpers';
 // Resolved by playwright.config, never re-derived here: these used to be two
 // independent copies with different fallbacks, so a lane could bootstrap against
 // one store and then run its specs against another.
-import {
-	assertLaneStoresConfigured,
-	FREE_STORE_URL,
-	PRO_STORE_URL,
-	variantsForProjects,
-} from '../playwright.config';
+import { assertLaneStoresConfigured, FREE_STORE_URL, PRO_STORE_URL } from '../playwright.config';
 
 import type { StoreVariant, WcposTestOptions } from '../playwright.config';
 
@@ -254,15 +249,9 @@ async function setupVariant(
  * Playwright globalSetup: authenticate once per store variant and save state.
  */
 async function globalSetup(config: FullConfig) {
-	// `config.projects` is what this invocation SELECTED, so `--project=pro-cold-start`
-	// or a local `--project=pro-authenticated` neither demands nor bootstraps the free
-	// store. Bootstrapping is the expensive half — a full OAuth plus catalogue sync per
-	// variant — so an unused one is not merely wasted but a second store that can fail
-	// a run which never needed it.
-	const neededVariants = variantsForProjects(config.projects.map((project) => project.name));
-	// Before anything authenticates: a CI lane that never named the stores it is about
-	// to use must stop here rather than fall back to a plausible-looking wrong one.
-	assertLaneStoresConfigured(neededVariants);
+	// Before anything authenticates: a CI lane that never named its pro store must
+	// stop here rather than fall back to a plausible-looking wrong one.
+	assertLaneStoresConfigured();
 	const baseURL = process.env.BASE_URL || 'http://localhost:8081';
 	// Normalize Playwright's 1-based shard number to the 0-based index used
 	// within the PR (1..8) or non-PR/local (9..16) cashier band.
@@ -272,12 +261,12 @@ async function globalSetup(config: FullConfig) {
 	fs.mkdirSync(AUTH_STATE_DIR, { recursive: true });
 
 	// Auth both variants in sequence (parallel would contend on the same stores)
-	if (FREE_STORE_URL && neededVariants.has('free')) {
+	// Naming a free store is what turns the free matrix on, so it is also exactly
+	// when the free bootstrap is worth paying for — an OAuth plus catalogue sync.
+	if (FREE_STORE_URL) {
 		await setupVariant('free', FREE_STORE_URL, baseURL, { shardIndex });
 	}
-	const proStoreIds = neededVariants.has('pro')
-		? await setupVariant('pro', PRO_STORE_URL, baseURL, { shardIndex })
-		: [];
+	const proStoreIds = await setupVariant('pro', PRO_STORE_URL, baseURL, { shardIndex });
 
 	// One auth state PER store, so a spec can target the store its assertions
 	// need. The tax-parity specs are the reason this exists: a store's rate set
