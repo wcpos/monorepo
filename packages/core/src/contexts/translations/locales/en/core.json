@@ -1127,7 +1127,7 @@
 	"health.logs.kv_server_code": "Server code",
 	"health.logs.kv_attempts": "Attempts",
 	"health.logs.safety_money_moved": "Payment has been taken — check the order before retrying.",
-	"health.logs.safety_outcome_unknown": "The final result couldn't be confirmed — check your store before retrying.",
+	"health.logs.safety_outcome_unknown": "The final result couldn't be confirmed — verify before retrying.",
 	"health.logs.safety_data_at_risk": "Don't clear or reload this device's data.",
 	"health.logs.action_retry": "It is safe to try again.",
 	"health.logs.action_retry_after_edit": "Fix the issue above, then retry.",

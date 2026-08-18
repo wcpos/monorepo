@@ -160,6 +160,18 @@ describe('RowDetail', () => {
 		expect(screen.queryByText(/Contact support/)).toBeNull();
 	});
 
+	it.each(['PAYMENT201', 'PRINT201'] as const)(
+		'keeps outcome verification domain-neutral for %s',
+		(code) => {
+			render(<RowDetail row={{ ...row, code }} kind="error" />);
+
+			expect(
+				screen.getByText("The final result couldn't be confirmed — verify before retrying.")
+			).not.toBeNull();
+			expect(screen.queryByText(/check your store/i)).toBeNull();
+		}
+	);
+
 	it('directs SYNC311 users to support without telling them to reset the collection', () => {
 		render(<RowDetail row={{ ...row, code: 'SYNC311' }} kind="error" />);
 
