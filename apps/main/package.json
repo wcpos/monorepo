@@ -85,7 +85,7 @@
 		"expo-splash-screen": "~57.0.6",
 		"expo-system-ui": "~57.0.2",
 		"expo-web-browser": "~57.0.2",
-		"js-base64": "^3.9.2",
+		"js-base64": "^3.9.3",
 		"observable-hooks": "4.2.4",
 		"postcss": "^8.5.26",
 		"react": "19.2.3",
