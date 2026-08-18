@@ -612,6 +612,42 @@ describe('change-signal server-pressure adaptation', () => {
 		await context.engine.dispose();
 	});
 
+	it('a forced census bypasses the pressure stand-down; unforced ticks still defer', async () => {
+		const fetchWooQueryTotal = vi.fn(async () => 40);
+		const context = await harness({ queryTotal: { fetchWooQueryTotal } });
+		// Warm the census so every entry is FRESH — the state the live soak
+		// (2026-08-19) caught: fresh totals + pressure ate the manual refresh.
+		await expect(context.engine.sync('query-total-retry')).resolves.toMatchObject({
+			status: 'ran',
+		});
+		expect(fetchWooQueryTotal.mock.calls.length).toBeGreaterThanOrEqual(9);
+		fetchWooQueryTotal.mockClear();
+
+		await context.respond(new Response(null, { status: 429 }));
+
+		// Unforced tick: pressure deferral holds.
+		await expect(context.engine.sync('query-total-retry')).resolves.toMatchObject({
+			status: 'skipped',
+			reason: 'server-pressure',
+		});
+		expect(fetchWooQueryTotal).not.toHaveBeenCalled();
+
+		// The cashier's explicit "Check everything now" (full manual sync) must
+		// still refresh every total — the rest of the sweep is not pressure-gated,
+		// so deferring only the census silently breaks the button's promise.
+		await expect(context.engine.sync()).resolves.toMatchObject({ status: 'ran' });
+		expect(fetchWooQueryTotal.mock.calls.length).toBeGreaterThanOrEqual(9);
+
+		// The per-row forced check bypasses the same way.
+		fetchWooQueryTotal.mockClear();
+		await context.respond(new Response(null, { status: 429 }));
+		await expect(context.engine.checkCollection('products')).resolves.toMatchObject({
+			collection: 'products',
+		});
+		expect(fetchWooQueryTotal.mock.calls.length).toBeGreaterThanOrEqual(1);
+		await context.engine.dispose();
+	});
+
 	it('starts every engine trusting the server again', async () => {
 		const first = await harness();
 		await first.respond(new Response(null, { status: 429 }));
