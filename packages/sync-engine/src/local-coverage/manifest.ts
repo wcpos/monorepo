@@ -225,7 +225,7 @@ export async function primeExistenceManifest(
 		db.products.count().exec(),
 		db.variations.count().exec(),
 	]);
-	if (manifestCount >= productCount + variationCount) {
+	if (manifestCount === productCount + variationCount) {
 		return 0;
 	}
 
@@ -277,16 +277,25 @@ export async function primeExistenceManifest(
 			);
 		}
 	}
-	const existingManifestWooIds = new Set<number>();
-	await forEachYielding(manifestDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
-		existingManifestWooIds.add(doc.wooId);
-	});
 	const variationWooIds: number[] = [];
 	await forEachYielding(variationDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
 		if (doc.remoteId != null) {
 			variationWooIds.push(wooIdOf(doc.remoteId));
 		}
 	});
+	const residentWooIds = new Set([...productWooIds, ...variationWooIds]);
+	const existingManifestWooIds = new Set<number>();
+	const strandedManifestIds: string[] = [];
+	await forEachYielding(manifestDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
+		existingManifestWooIds.add(doc.wooId);
+		if (!residentWooIds.has(doc.wooId)) strandedManifestIds.push(String(doc.wooId));
+	});
+	if (strandedManifestIds.length > 0) {
+		assertBulkSuccess(
+			await db.existenceManifest.bulkRemove(strandedManifestIds),
+			'existence manifest prime stranded removal'
+		);
+	}
 
 	const fetchDigests: DigestFetch = async (ids) => {
 		const url = `${input.syncBaseUrl}/digests?include=${ids.join(',')}&status=publish&absence=explicit`;
@@ -401,7 +410,7 @@ export async function primeExistenceManifestCustomers(
 		db.existenceManifestCustomers.count().exec(),
 		db.customers.count().exec(),
 	]);
-	if (manifestCount >= customerCount) {
+	if (manifestCount === customerCount) {
 		return 0;
 	}
 
@@ -409,16 +418,25 @@ export async function primeExistenceManifestCustomers(
 		db.existenceManifestCustomers.find().exec(),
 		db.customers.find().exec(),
 	]);
-	const existingManifestWooIds = new Set<number>();
-	await forEachYielding(manifestDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
-		existingManifestWooIds.add(doc.wooId);
-	});
 	const customerWooIds: number[] = [];
 	await forEachYielding(customerDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
 		if (doc.remoteId != null) {
 			customerWooIds.push(wooIdOf(doc.remoteId));
 		}
 	});
+	const residentWooIds = new Set(customerWooIds);
+	const existingManifestWooIds = new Set<number>();
+	const strandedManifestIds: string[] = [];
+	await forEachYielding(manifestDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
+		existingManifestWooIds.add(doc.wooId);
+		if (!residentWooIds.has(doc.wooId)) strandedManifestIds.push(String(doc.wooId));
+	});
+	if (strandedManifestIds.length > 0) {
+		assertBulkSuccess(
+			await db.existenceManifestCustomers.bulkRemove(strandedManifestIds),
+			'customer existence manifest prime stranded removal'
+		);
+	}
 
 	const fetchDigests: DigestFetch = async (ids) => {
 		const response = await input.fetcher(
@@ -467,7 +485,7 @@ export async function primeExistenceManifestOrders(
 		db.existenceManifestOrders.count().exec(),
 		db.orders.count().exec(),
 	]);
-	if (manifestCount >= orderCount) {
+	if (manifestCount === orderCount) {
 		return 0;
 	}
 
@@ -475,10 +493,6 @@ export async function primeExistenceManifestOrders(
 		db.existenceManifestOrders.find().exec(),
 		db.orders.find().exec(),
 	]);
-	const existingManifestWooIds = new Set<number>();
-	await forEachYielding(manifestDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
-		existingManifestWooIds.add(doc.wooId);
-	});
 	const orderWooIds: number[] = [];
 	await forEachYielding(orderDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
 		const remoteId = (doc.toJSON() as { remoteId?: RemoteId | null }).remoteId;
@@ -486,6 +500,19 @@ export async function primeExistenceManifestOrders(
 			orderWooIds.push(wooIdOf(remoteId));
 		}
 	});
+	const residentWooIds = new Set(orderWooIds);
+	const existingManifestWooIds = new Set<number>();
+	const strandedManifestIds: string[] = [];
+	await forEachYielding(manifestDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
+		existingManifestWooIds.add(doc.wooId);
+		if (!residentWooIds.has(doc.wooId)) strandedManifestIds.push(String(doc.wooId));
+	});
+	if (strandedManifestIds.length > 0) {
+		assertBulkSuccess(
+			await db.existenceManifestOrders.bulkRemove(strandedManifestIds),
+			'order existence manifest prime stranded removal'
+		);
+	}
 
 	const fetchDigests: DigestFetch = async (ids) => {
 		const response = await input.fetcher(
