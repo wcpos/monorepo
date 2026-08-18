@@ -173,7 +173,9 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 					</AlertDialogHeader>
 					<AlertDialogFooter>
 						<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-						<AlertDialogAction onPress={handleRemoveWpUser}>{t('auth.remove')}</AlertDialogAction>
+						<AlertDialogAction variant="destructive" onPress={handleRemoveWpUser}>
+							{t('auth.remove')}
+						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>

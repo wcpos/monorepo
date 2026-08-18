@@ -209,7 +209,7 @@ export function RejectedMutationsPanel() {
 								<ButtonText>{t('health.database.rejected.requeue')}</ButtonText>
 							</Button>
 							<Button
-								variant="ghost"
+								variant="ghost-destructive"
 								size="sm"
 								testID={`db-rejected-discard-${row.mutationId}`}
 								// A failed resident read leaves the destructive outcome UNKNOWN
@@ -220,9 +220,7 @@ export function RejectedMutationsPanel() {
 								disabled={busyId !== null || row.residentUnknown}
 								onPress={() => setDiscarding(row)}
 							>
-								<ButtonText className="text-destructive">
-									{t('health.database.rejected.discard')}
-								</ButtonText>
+								<ButtonText>{t('health.database.rejected.discard')}</ButtonText>
 							</Button>
 						</HStack>
 					</HStack>
@@ -253,6 +251,7 @@ export function RejectedMutationsPanel() {
 							<Text>{t('common.cancel')}</Text>
 						</AlertDialogCancel>
 						<AlertDialogAction
+							variant="destructive"
 							testID="db-rejected-requeue-delete-confirm"
 							onPress={() => {
 								const row = requeueingDelete;
@@ -260,9 +259,7 @@ export function RejectedMutationsPanel() {
 								if (row) void settle(row, 'requeue-rebuilt');
 							}}
 						>
-							<Text className="text-destructive">
-								{t('health.database.rejected.requeue_delete_confirm')}
-							</Text>
+							<Text>{t('health.database.rejected.requeue_delete_confirm')}</Text>
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>
@@ -309,6 +306,7 @@ export function RejectedMutationsPanel() {
 							<Text>{t('common.cancel')}</Text>
 						</AlertDialogCancel>
 						<AlertDialogAction
+							variant="destructive"
 							testID="db-rejected-discard-confirm"
 							onPress={() => {
 								const row = discarding;
@@ -316,7 +314,7 @@ export function RejectedMutationsPanel() {
 								if (row) void settle(row, 'discard');
 							}}
 						>
-							<Text className="text-destructive">
+							<Text>
 								{discarding?.destroysRecord
 									? t('health.database.rejected.discard_destroy_confirm')
 									: t('health.database.rejected.discard_confirm')}

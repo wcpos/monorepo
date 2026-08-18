@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { ButtonPill } from './index';
+import { ButtonPill, buttonTextVariants, buttonVariants } from './index';
 
 jest.mock('react-native', () => ({
 	Platform: { OS: 'web' },
@@ -24,13 +24,6 @@ jest.mock('react-native', () => ({
 jest.mock('expo-haptics', () => ({
 	impactAsync: jest.fn(),
 	ImpactFeedbackStyle: { Light: 'light' },
-}));
-
-jest.mock('class-variance-authority', () => ({
-	cva:
-		(base: string) =>
-		({ className }: { className?: string } = {}) =>
-			[base, className].filter(Boolean).join(' '),
 }));
 
 jest.mock('../hstack', () => ({
@@ -86,5 +79,12 @@ describe('ButtonPill', () => {
 		);
 
 		expect(screen.getByTestId('filter-pill-remove-stock_status')).toBeInTheDocument();
+	});
+});
+
+describe('Button variants', () => {
+	it('keeps a touch-safe hit area with compact label typography', () => {
+		expect(buttonVariants({ size: 'compact' })).toContain('h-9');
+		expect(buttonTextVariants({ size: 'compact' })).toContain('text-xs');
 	});
 });

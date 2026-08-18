@@ -182,15 +182,13 @@ export function QueuedEmailsPanel() {
 								</Button>
 							) : null}
 							<Button
-								variant="ghost"
+								variant="ghost-destructive"
 								size="sm"
 								testID={`db-queued-email-remove-${row.localID}`}
 								disabled={busyId !== null}
 								onPress={() => void discard(row)}
 							>
-								<ButtonText className="text-destructive">
-									{t('health.database.emails.remove')}
-								</ButtonText>
+								<ButtonText>{t('health.database.emails.remove')}</ButtonText>
 							</Button>
 						</HStack>
 					</HStack>

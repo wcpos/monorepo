@@ -220,15 +220,10 @@ export function UserMenu() {
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<Button
-					testID="user-menu-trigger"
-					className="text-sidebar-foreground web:hover:bg-white/10 rounded-none bg-transparent px-2"
-				>
+				<Button variant="sidebar" testID="user-menu-trigger" className="px-2">
 					<HStack>
 						<UserAvatar wpCredentials={wpCredentials} displayName={displayName} />
-						{screenSize !== 'sm' ? (
-							<ButtonText className="text-sidebar-foreground">{displayName}</ButtonText>
-						) : null}
+						{screenSize !== 'sm' ? <ButtonText>{displayName}</ButtonText> : null}
 						<Icon name="caretDown" className="text-sidebar-foreground" />
 					</HStack>
 				</Button>
@@ -309,6 +304,7 @@ export function UserMenu() {
 							<Text>{t('common.cancel')}</Text>
 						</AlertDialogCancel>
 						<AlertDialogAction
+							variant="destructive"
 							testID="clear-all-local-data-confirm"
 							onPress={() => void handleReset()}
 						>
