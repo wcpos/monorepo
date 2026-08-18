@@ -263,7 +263,7 @@ export async function primeExistenceManifest(
 		force?: boolean;
 	}
 ): Promise<number> {
-	if (input.chunkBudget?.remaining === 0) return 0;
+	if (input.chunkBudget?.remaining === 0 && !input.force) return 0;
 	const [manifestCount, productCount, variationCount] = await Promise.all([
 		db.existenceManifest.count().exec(),
 		db.products.count().exec(),
@@ -456,7 +456,7 @@ export async function primeExistenceManifestCustomers(
 		force?: boolean;
 	}
 ): Promise<number> {
-	if (input.chunkBudget?.remaining === 0) return 0;
+	if (input.chunkBudget?.remaining === 0 && !input.force) return 0;
 	const [manifestCount, customerCount] = await Promise.all([
 		db.existenceManifestCustomers.count().exec(),
 		db.customers.count().exec(),
@@ -537,7 +537,7 @@ export async function primeExistenceManifestOrders(
 		force?: boolean;
 	}
 ): Promise<number> {
-	if (input.chunkBudget?.remaining === 0) return 0;
+	if (input.chunkBudget?.remaining === 0 && !input.force) return 0;
 	const [manifestCount, orderCount] = await Promise.all([
 		db.existenceManifestOrders.count().exec(),
 		db.orders.count().exec(),
