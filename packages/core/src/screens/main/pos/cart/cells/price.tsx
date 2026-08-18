@@ -3,14 +3,13 @@ import * as React from 'react';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { CurrencyInput } from '../../../components/currency-input';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useLineItemData } from '../../hooks/use-line-item-data';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
-
-import type { CellContext } from '@tanstack/react-table';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {

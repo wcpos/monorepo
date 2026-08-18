@@ -3,11 +3,11 @@ import * as React from 'react';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { getVariablePrices } from './get-variable-prices';
 import { PriceWithTax } from './price-with-tax';
 
-import type { CellContext } from '@tanstack/react-table';
 import type { VariablePrices } from './get-variable-prices';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;

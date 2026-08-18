@@ -4,9 +4,9 @@
  * hybrid hypothesis"). It graduates the playground's measured tiers into a
  * sync-core module behind a clean port shared by its host adapters.
  *
- * The engine does NOT re-implement endpoint plumbing — that lives in the bench
- * instrument (apps/web/src/bench/changeSignalMatrix.ts), which MEASURED the
- * candidates. The engine COMPOSES the tiers the matrix ranked:
+ * The engine does NOT re-implement endpoint plumbing — that lived in the bench
+ * instrument (changeSignalMatrix, since removed from apps/web), which MEASURED
+ * the candidates. The engine COMPOSES the tiers the matrix ranked:
  *
  *   TIER 1 — sequence-log: the routine signal on every poll. Hook-fed cursor,
  *            carries ALL hooked changes (products, variations, tax rates,

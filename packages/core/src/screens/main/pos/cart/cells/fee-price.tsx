@@ -2,13 +2,12 @@ import * as React from 'react';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { CurrencyInput } from '../../../components/currency-input';
 import { NumberInput } from '../../../components/number-input';
 import { useFeeLineData } from '../../hooks/use-fee-line-data';
 import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
-
-import type { CellContext } from '@tanstack/react-table';
 
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 interface Props {

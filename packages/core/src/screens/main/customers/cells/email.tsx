@@ -4,8 +4,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import { of } from 'rxjs';
 
 import { Text } from '@wcpos/components/text';
-
-import type { CellContext } from '@tanstack/react-table';
+import type { CellContext } from '@wcpos/core/table-types';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 

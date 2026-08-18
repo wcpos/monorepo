@@ -1,7 +1,16 @@
 import * as React from 'react';
 import type { FlexAlignType, ViewStyle } from 'react-native';
 
-import { flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
+import {
+	columnVisibilityFeature,
+	createExpandedRowModel,
+	flexRender,
+	rowExpandingFeature,
+	rowSelectionFeature,
+	rowSortingFeature,
+	tableFeatures,
+	useTable,
+} from '@tanstack/react-table';
 import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
 import { find } from 'lodash';
 
@@ -30,12 +39,25 @@ import { ListFooterComponent as DefaultListFooterComponent } from './list-footer
 
 import type { SortingChange } from './sort-field';
 import type { CollectionKey as QueryCollectionKey } from '../../../../query';
-import type { ColumnDef, Header, Table as TanStackTable } from '@tanstack/react-table';
+import type { RowData } from '@tanstack/react-table';
+import type { ColumnDef, Header, Table as TanStackTable } from '../../../../table-types';
+
+const dataTableFeatures = tableFeatures({
+	columnVisibilityFeature,
+	rowSortingFeature,
+	rowExpandingFeature,
+	expandedRowModel: createExpandedRowModel(),
+	rowSelectionFeature,
+});
+
+type DataTableFeatures = typeof dataTableFeatures;
+type DataTableRow = QueryResult<import('rxdb').RxCollection>['hits'][number];
 
 type DataTableCollectionKey = Exclude<QueryCollectionKey, 'tax-rates'>;
 
-interface RenderHeaderProps<TData = unknown> extends Header<TData, unknown> {
-	table: TanStackTable<TData>;
+interface RenderHeaderProps {
+	header: Header<DataTableRow, unknown, DataTableFeatures>;
+	table: TanStackTable<DataTableRow, DataTableFeatures>;
 	collectionName?: DataTableCollectionKey;
 	sortBy: string;
 	sortDirection: 'asc' | 'desc';
@@ -81,16 +103,27 @@ type BindingProps<TSortField extends string> = {
 
 type Props<TSortField extends string> = CommonProps & BindingProps<TSortField>;
 
-/**
- * React Compiler breaks tanstack/react-table
- * https://github.com/facebook/react/issues/33057
- */
-function useReactTableWrapper(...args: Parameters<typeof useReactTable>) {
-	'use no memo';
-	return { ...useReactTable(...args) };
-}
-
-function DataTable<TData, TSortField extends string = string>(props: Props<TSortField>) {
+function DataTable<TData extends RowData, TSortField extends string = string>(
+	props: Props<TSortField>
+) {
+	/*
+	 * NOTE (react-table v9): this component is now compiled by the React
+	 * Compiler, and that is a real change. Under v8 the compiler skipped it on
+	 * its own ("Compilation Skipped: Use of incompatible library" — it
+	 * recognised `useReactTable`), and a `useReactTableWrapper` hook returned
+	 * `{ ...useReactTable(...) }` so the table's identity changed every render
+	 * (facebook/react#33057). v9 removes both halves of that: it is
+	 * compiler-compatible, and spreading is illegal because row/cell/column
+	 * methods live on prototypes. A `'use no memo'` bail-out is not an option
+	 * either — react-compiler now reports it as an unused directive.
+	 *
+	 * What holds this together is v9's store subscription, and the guard for it
+	 * is `index.test.tsx`'s "re-renders header cells when the visible column set
+	 * changes", which runs against this file compiled exactly as the app
+	 * compiles it (see the transform routing in jest.config.js). If a stale memo
+	 * ever creeps back, that test fails instead of a cashier's column toggle
+	 * quietly doing nothing.
+	 */
 	const {
 		id,
 		noDataMessage,
@@ -141,11 +174,11 @@ function DataTable<TData, TSortField extends string = string>(props: Props<TSort
 		deferredResult.hits.length
 	);
 
-	const table = useReactTableWrapper({
+	const table = useTable<DataTableFeatures, DataTableRow>({
+		features: dataTableFeatures,
 		columns,
 		data: deferredResult.hits,
-		getRowId: (row: { id: string; document: TData }) => row.id,
-		getCoreRowModel: getCoreRowModel(),
+		getRowId: (row) => row.id,
 		...tableConfig,
 		state: { columnVisibility, ...tableConfig?.state },
 		meta: {
@@ -173,7 +206,7 @@ function DataTable<TData, TSortField extends string = string>(props: Props<TSort
 							<TableHead key={header.id} style={getHeaderStyle(header.column.columnDef.meta)}>
 								{renderHeader ? (
 									renderHeader({
-										...header,
+										header,
 										table,
 										collectionName: props.collectionName,
 										sortBy,
@@ -289,7 +322,7 @@ function buildColumns(
 	columns: any,
 	getUILabel: (key: string) => string,
 	renderCell?: (columnKey: string, info: any) => React.ReactNode
-): ColumnDef<any, any>[] {
+): ColumnDef<any, any, DataTableFeatures>[] {
 	return columns.map((c: any) => {
 		return {
 			accessorKey: c.key,
@@ -366,3 +399,4 @@ export {
 };
 export type { RenderHeaderProps, SortingChange };
 export type { BindingDataTableFooterProps };
+export type { DataTableFeatures };

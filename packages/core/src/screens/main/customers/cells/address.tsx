@@ -4,8 +4,7 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import { FormatAddress } from '@wcpos/components/format';
 import type { FormatAddressProps } from '@wcpos/components/format/address';
-
-import type { CellContext } from '@tanstack/react-table';
+import type { CellContext } from '@wcpos/core/table-types';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 

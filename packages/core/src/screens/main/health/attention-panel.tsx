@@ -124,7 +124,7 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 							testID="db-attention-fix"
 							onPress={() => router.push(fixRoute)}
 						>
-							<ButtonText className="text-sm">{t('health.database.attention_fix')}</ButtonText>
+							<ButtonText>{t('health.database.attention_fix')}</ButtonText>
 						</Button>
 					) : null}
 					{first.retryable ? (
@@ -136,18 +136,16 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 							disabled={busy}
 							onPress={() => void sync()}
 						>
-							<ButtonText className="text-sm">{t('health.database.attention_retry')}</ButtonText>
+							<ButtonText>{t('health.database.attention_retry')}</ButtonText>
 						</Button>
 					) : null}
 					<Button
-						variant="ghost"
+						variant="ghost-quiet"
 						size="sm"
 						testID="db-attention-view-log"
 						onPress={() => router.push('/health/logs')}
 					>
-						<ButtonText className="text-muted-foreground text-sm">
-							{t('health.database.attention_view_log')}
-						</ButtonText>
+						<ButtonText>{t('health.database.attention_view_log')}</ButtonText>
 					</Button>
 				</HStack>
 			</HStack>

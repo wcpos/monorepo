@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 import { useUserValidation } from './use-user-validation';
 
@@ -11,6 +11,7 @@ const mockIncrementalModify = jest.fn(async (_modify?: unknown) => undefined);
 const mockBaseHttpClient = {};
 const mockAuthenticatedHttpClient = { get: mockGet };
 const mockRefreshHandler = jest.fn();
+const mockWakeCallbacks: (() => void)[] = [];
 
 jest.mock('observable-hooks', () => ({
 	useObservableEagerState: (observable: { value: unknown }) => observable.value,
@@ -19,6 +20,16 @@ jest.mock('@wcpos/hooks/use-http-client', () => ({
 	createTokenRefreshHandler: () => mockRefreshHandler,
 	useHttpClient: (handlers?: unknown[]) =>
 		handlers ? mockAuthenticatedHttpClient : mockBaseHttpClient,
+	PREFLIGHT_BLOCK: { ASLEEP: 'preflight-asleep' },
+	requestStateManager: {
+		onWake: (callback: () => void) => {
+			mockWakeCallbacks.push(callback);
+			return () => {
+				const index = mockWakeCallbacks.indexOf(callback);
+				if (index !== -1) mockWakeCallbacks.splice(index, 1);
+			};
+		},
+	},
 }));
 jest.mock('../contexts/app-state', () => ({
 	useAppState: () => ({ userDB: {}, user: { uuid: 'user-1' } }),
@@ -46,6 +57,7 @@ describe('useUserValidation capabilities', () => {
 		mockGet.mockReset();
 		mockIncrementalPatch.mockClear();
 		mockIncrementalModify.mockClear();
+		mockWakeCallbacks.length = 0;
 	});
 
 	it('never patches capabilities: undefined when the cashier response omits them', async () => {
@@ -96,5 +108,96 @@ describe('useUserValidation capabilities', () => {
 			)
 		);
 		expect(mockIncrementalModify).not.toHaveBeenCalled();
+	});
+});
+
+describe('useUserValidation while the app is asleep', () => {
+	const site = {
+		uuid: 'site-1',
+		url: 'https://example.com',
+		wcpos_api_url: 'https://example.com/wp-json/wcpos/v2/',
+		use_jwt_as_param: false,
+	};
+
+	const makeWpUser = () => ({
+		uuid: 'cashier-1',
+		id$: { value: 7 },
+		access_token$: { value: 'access-token' },
+		refresh_token$: { value: 'refresh-token' },
+		incrementalPatch: mockIncrementalPatch,
+		getLatest: () => ({ stores: [], incrementalModify: mockIncrementalModify }),
+	});
+
+	const makeAsleepError = () =>
+		Object.assign(new Error('App is in background'), {
+			isPreFlightBlocked: true,
+			blockCode: 'preflight-asleep',
+			isSleeping: true,
+		});
+
+	beforeEach(() => {
+		mockGet.mockReset();
+		mockIncrementalPatch.mockClear();
+		mockIncrementalModify.mockClear();
+		mockWakeCallbacks.length = 0;
+	});
+
+	it('defers instead of failing when the request is blocked by the asleep pre-flight check', async () => {
+		// Regression: a hidden-tab token refresh re-triggered validation, whose
+		// request was blocked by the sleeping pre-flight check — and the expected
+		// block was logged as AUTH999 errors and flipped isValid to false.
+		mockGet.mockRejectedValue(makeAsleepError());
+		const wpUser = makeWpUser();
+
+		const { result } = renderHook(() =>
+			useUserValidation({ site: site as never, wpUser: wpUser as never })
+		);
+
+		await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(result.current.isLoading).toBe(false));
+		expect(result.current.isValid).toBe(true);
+		expect(result.current.error).toBeNull();
+	});
+
+	it('retries the deferred validation when the app wakes', async () => {
+		mockGet
+			.mockRejectedValueOnce(makeAsleepError())
+			.mockResolvedValue({ status: 200, data: { id: 7, display_name: 'Demo Cashier' } });
+		const wpUser = makeWpUser();
+
+		const { result } = renderHook(() =>
+			useUserValidation({ site: site as never, wpUser: wpUser as never })
+		);
+
+		await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+		act(() => {
+			mockWakeCallbacks.forEach((callback) => callback());
+		});
+
+		await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(mockIncrementalPatch).toHaveBeenCalled());
+		expect(result.current.isValid).toBe(true);
+	});
+
+	it('does not re-validate on wake when the last validation succeeded', async () => {
+		mockGet.mockResolvedValue({ status: 200, data: { id: 7, display_name: 'Demo Cashier' } });
+		const wpUser = makeWpUser();
+
+		const { result } = renderHook(() =>
+			useUserValidation({ site: site as never, wpUser: wpUser as never })
+		);
+
+		await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+		act(() => {
+			mockWakeCallbacks.forEach((callback) => callback());
+		});
+
+		// The validation-key guard skips the re-run — nothing was deferred.
+		await waitFor(() => expect(result.current.isLoading).toBe(false));
+		expect(mockGet).toHaveBeenCalledTimes(1);
 	});
 });

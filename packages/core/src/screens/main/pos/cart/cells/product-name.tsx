@@ -6,6 +6,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { formatMetaDataValue } from '../../../components/format-meta-data-value';
 import { EditCartItemButton } from './edit-cart-item-button';
@@ -15,8 +16,6 @@ import { EditableField } from '../../../components/editable-field';
 import { getStockRejectionForLine, stockRejection$ } from '../../hooks/stock-rejection';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 import { useCurrentOrder } from '../../contexts/current-order';
-
-import type { CellContext } from '@tanstack/react-table';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {

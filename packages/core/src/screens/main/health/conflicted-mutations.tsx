@@ -220,13 +220,13 @@ export function ConflictedMutationsPanel() {
 									<ButtonText>{t('health.database.conflicted.resend')}</ButtonText>
 								</Button>
 								<Button
-									variant="ghost"
+									variant="ghost-destructive"
 									size="sm"
 									testID={`db-conflicted-discard-${row.mutationId}`}
 									disabled={busyId !== null || row.residentUnknown}
 									onPress={() => setDiscarding(row)}
 								>
-									<ButtonText className="text-destructive">
+									<ButtonText>
 										{row.destroysRecord || row.mayDestroyRecord || row.status === 'needs-revision'
 											? t('health.database.conflicted.discard_change')
 											: t('health.database.conflicted.use_server')}
@@ -234,14 +234,12 @@ export function ConflictedMutationsPanel() {
 								</Button>
 								{fixRoute ? (
 									<Button
-										variant="ghost"
+										variant="ghost-quiet"
 										size="sm"
 										testID={`db-conflicted-open-${row.mutationId}`}
 										onPress={() => router.push(fixRoute)}
 									>
-										<ButtonText className="text-muted-foreground">
-											{t('health.database.conflicted.open')}
-										</ButtonText>
+										<ButtonText>{t('health.database.conflicted.open')}</ButtonText>
 									</Button>
 								) : null}
 							</HStack>
@@ -274,6 +272,7 @@ export function ConflictedMutationsPanel() {
 							<Text>{t('common.cancel')}</Text>
 						</AlertDialogCancel>
 						<AlertDialogAction
+							variant="destructive"
 							testID="db-conflicted-resend-delete-confirm"
 							onPress={() => {
 								const row = resendingDelete;
@@ -281,9 +280,7 @@ export function ConflictedMutationsPanel() {
 								if (row) void settle(row, 'retry-with-server-base');
 							}}
 						>
-							<Text className="text-destructive">
-								{t('health.database.conflicted.resend_delete_confirm')}
-							</Text>
+							<Text>{t('health.database.conflicted.resend_delete_confirm')}</Text>
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>
@@ -329,6 +326,7 @@ export function ConflictedMutationsPanel() {
 							<Text>{t('common.cancel')}</Text>
 						</AlertDialogCancel>
 						<AlertDialogAction
+							variant="destructive"
 							testID="db-conflicted-discard-confirm"
 							onPress={() => {
 								const row = discarding;
@@ -336,7 +334,7 @@ export function ConflictedMutationsPanel() {
 								if (row) void settle(row, 'discard');
 							}}
 						>
-							<Text className="text-destructive">
+							<Text>
 								{discarding?.destroysRecord
 									? t('health.database.conflicted.delete_local_confirm')
 									: discarding?.mayDestroyRecord || discarding?.status === 'needs-revision'

@@ -1,10 +1,10 @@
 import * as React from 'react';
 
+import type { CellContext } from '@wcpos/core/table-types';
+
 import { CurrencyInput } from '../../../components/currency-input';
 import { useShippingLineData } from '../../hooks/use-shipping-line-data';
 import { useUpdateShippingLine } from '../../hooks/use-update-shipping-line';
-
-import type { CellContext } from '@tanstack/react-table';
 
 type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 interface Props {

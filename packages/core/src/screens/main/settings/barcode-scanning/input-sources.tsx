@@ -20,7 +20,7 @@ import { ScannerDeviceChooser } from './scanner-device-chooser';
 import { SettingsSection } from '../components/settings-section';
 
 const NO_PROFILES: ScannerProfileDocument[] = [];
-const MODE_DOCS_URL = 'https://docs.wcpos.com/products/barcode-scanning#connection-modes';
+const WIZARD_DOCS_URL = 'https://docs.wcpos.com/hardware/scanner-setup-wizard';
 
 /** Secondary identity line for a saved profile: USB vid:pid, BT UUID, or nothing. */
 function profileIdentity(profile: ScannerProfileDocument, bluetoothDeviceName: string): string {
@@ -127,19 +127,25 @@ export function InputSources() {
 					</HStack>
 				) : null}
 
-				{serial.available || hid.available ? (
-					<VStack space="xs" testID="scanner-mode-note">
-						<Text className="text-muted-foreground text-xs">{t('settings.scanner_mode_note')}</Text>
-						<Pressable
-							testID="scanner-mode-docs-link"
-							onPress={() => openExternalURL(MODE_DOCS_URL)}
-						>
-							<Text className="text-muted-foreground text-xs underline">
-								{t('settings.scanner_mode_docs_link')}
+				<VStack space="xs">
+					{serial.available || hid.available ? (
+						<View testID="scanner-mode-note">
+							<Text className="text-muted-foreground text-xs">
+								{t('settings.scanner_mode_note')}
 							</Text>
-						</Pressable>
-					</VStack>
-				) : null}
+						</View>
+					) : null}
+					{/* The wizard link renders on every platform with an input source —
+					    on Android it is the only in-app pointer to scanner setup help. */}
+					<Pressable
+						testID="scanner-mode-docs-link"
+						onPress={() => openExternalURL(WIZARD_DOCS_URL)}
+					>
+						<Text className="text-primary text-xs font-medium">
+							{t('settings.scanner_mode_docs_link')} ↗
+						</Text>
+					</Pressable>
+				</VStack>
 
 				{/* Electron surfaces its serial/HID chooser candidates here; inert elsewhere. */}
 				<ScannerDeviceChooser />

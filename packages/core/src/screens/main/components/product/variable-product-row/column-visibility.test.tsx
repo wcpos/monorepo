@@ -14,14 +14,19 @@
  */
 import * as React from 'react';
 
-import { getCoreRowModel, useReactTable } from '@tanstack/react-table';
+import { columnVisibilityFeature, tableFeatures, useTable } from '@tanstack/react-table';
 import { act, render } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 import { ObservableResource } from 'observable-hooks';
 
 import { VariableProductRow } from './index';
 
-import type { CellContext, ColumnDef, VisibilityState } from '@tanstack/react-table';
+import type { ColumnVisibilityState } from '@tanstack/react-table';
+import type { CellContext, ColumnDef } from '../../../../../table-types';
+
+const features = tableFeatures({ columnVisibilityFeature });
+
+type TestTableFeatures = typeof features;
 
 jest.mock('react-native', () => ({
 	View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
@@ -110,7 +115,7 @@ type RowData = {
 	record: { remoteId: string; payload: Record<string, unknown> };
 };
 
-const columns: ColumnDef<RowData>[] = [
+const columns: ColumnDef<RowData, unknown, TestTableFeatures>[] = [
 	{
 		accessorKey: 'name',
 		cell: () => <span>parent-name-cell</span>,
@@ -143,16 +148,16 @@ const variationCells: Record<string, React.ComponentType> = {
 // The test file itself is transformed by ts-jest, so Harness is never compiled
 // by React Compiler — only the imported components under test are (see the
 // react-compiler transform routing in jest.config.js).
-function Harness({ visibility }: { visibility: VisibilityState }) {
-	const table = useReactTable<RowData>({
+function Harness({ visibility }: { visibility: ColumnVisibilityState }) {
+	const table = useTable({
+		features,
 		data,
 		columns,
 		getRowId: (row) => row.id,
-		getCoreRowModel: getCoreRowModel(),
 		state: { columnVisibility: visibility },
 		meta: {
 			expanded$,
-			variationRenderCell: ({ column }: CellContext<RowData, unknown>) =>
+			variationRenderCell: ({ column }: CellContext<RowData, unknown, TestTableFeatures>) =>
 				variationCells[column.id] ?? null,
 		} as never,
 	});

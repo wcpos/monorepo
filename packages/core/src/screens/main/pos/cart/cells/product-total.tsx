@@ -5,11 +5,10 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { useAppState } from '../../../../../contexts/app-state';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
-
-import type { CellContext } from '@tanstack/react-table';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {
