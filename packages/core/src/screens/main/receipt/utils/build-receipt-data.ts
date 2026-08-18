@@ -6,6 +6,7 @@
  * See field-picker.tsx for the full field reference.
  */
 
+import { POS_META_KEYS } from '@wcpos/sync-core';
 import type { TaxId } from '@wcpos/database';
 
 interface ReceiptOrder {
@@ -225,7 +226,7 @@ function isNumeric(value: unknown): boolean {
 
 function getPosPriceData(item: Record<string, any>): PosPriceData | null {
 	const entry = Array.isArray(item.meta_data)
-		? item.meta_data.find((meta: Record<string, any>) => meta?.key === '_woocommerce_pos_data')
+		? item.meta_data.find((meta: Record<string, any>) => meta?.key === POS_META_KEYS.posData)
 		: undefined;
 	// next speaks typed meta: the local write path stores this value as an
 	// OBJECT (pos/hooks/utils.ts), while server round-trips may still deliver

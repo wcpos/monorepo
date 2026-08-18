@@ -5,6 +5,7 @@ import {
 	assertBulkSuccess,
 	normalizeCheckpoint,
 	type OrderDocument,
+	POS_META_KEYS,
 	type RemoteId,
 	type SyncCheckpoint,
 	withOrderColumns,
@@ -24,9 +25,9 @@ const CUSTOM_PULL_CHECKPOINT_ID = 'custom-pull';
 
 /** POS identity metadata whose resident values must survive server adoption. */
 export const POS_ORDER_IDENTITY_META_KEYS = [
-	'_pos_user',
-	'_pos_store',
-	'_woocommerce_pos_tax_based_on',
+	POS_META_KEYS.user,
+	POS_META_KEYS.store,
+	POS_META_KEYS.taxBasedOn,
 ] as const;
 
 type StoredOrderDoc = { toJSON(): unknown };
