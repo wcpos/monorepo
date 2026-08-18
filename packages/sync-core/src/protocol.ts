@@ -77,9 +77,11 @@ export function withOrderColumns<T extends { payload: WooOrderPayload }>(
 /** Numeric ids from a Woo taxonomy array (categories/brands: `[{ id, name, ... }]`). Defensive — the
  * payload is opaque, so non-arrays and malformed entries are dropped. */
 function taxonomyIds(value: unknown): number[] {
+	// Accepts Woo objects ({id, name}) AND bare numeric ids ([3]) — ruled 2026-08-19:
+	// dropping bare ids silently removes the product from its category filter.
 	return Array.isArray(value)
 		? value
-				.map((entry) => Number((entry as { id?: unknown } | null)?.id))
+				.map((entry) => Number((entry as { id?: unknown } | null)?.id ?? entry))
 				.filter((n) => Number.isFinite(n) && n > 0)
 		: [];
 }
@@ -90,7 +92,9 @@ function taxonomyIds(value: unknown): number[] {
  * `0` is distinguishable from "unmanaged". Used for decimal stock (P2-2).
  */
 export function finiteOrNull(value: unknown): number | null {
-	if (value == null) return null;
+	// '' (a cleared local input) is "no value", not 0 — Number('') === 0 would silently
+	// turn "unmanaged" into "zero stock" on the promoted column.
+	if (value == null || value === '') return null;
 	const n = Number(value);
 	return Number.isFinite(n) ? n : null;
 }

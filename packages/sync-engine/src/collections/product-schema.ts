@@ -13,7 +13,10 @@ export const productSchema = {
 		// Promoted filter/sort columns (duplicated out of payload, payload bytes unchanged). price is
 		// numeric for range filters; categoryIds/brandIds are membership arrays for multi-select.
 		// Indexed number fields need bounds + multipleOf; prices are cents (rounded in promotedProductColumns).
-		price: { type: 'number', minimum: 0, maximum: 100_000_000, multipleOf: 0.01 },
+		// Negative bound is deliberate (ruled 2026-08-19): negative-priced products (deposit
+		// returns etc.) store their real price — the column must not lie relative to
+		// sortable_price, which already sorts on the raw payload value.
+		price: { type: 'number', minimum: -100_000_000, maximum: 100_000_000, multipleOf: 0.01 },
 		stockStatus: { type: 'string', maxLength: 24 },
 		type: { type: 'string', maxLength: 24 },
 		categoryIds: { type: 'array', items: { type: 'number' } },

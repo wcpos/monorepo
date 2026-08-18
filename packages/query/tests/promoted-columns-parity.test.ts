@@ -1,4 +1,4 @@
-import { promotedProductColumns } from '@wcpos/sync-core';
+import { promotedOrderColumns, promotedProductColumns } from '@wcpos/sync-core';
 
 import { promotedColumnsFor } from '../src/engine-adapter/collection-map';
 
@@ -25,15 +25,16 @@ describe('promoted product columns parity', () => {
 		expect(queryColumns).toEqual(promotedProductColumns(payload));
 	});
 
-	// The source-of-truth decision for these known divergences is pending.
-	it('documents the negative-price clamp divergence', () => {
+	// Ruled 2026-08-19: promotedColumnsFor delegates to the sync-core projectors, so the
+	// former divergences are pinned as SINGLE behaviors on both faces.
+	it('preserves negative prices on both faces (no clamp — ruled)', () => {
 		const payload = { price: '-1.25' };
 
-		expect(promotedColumnsFor('products', payload).price).toBe(0);
+		expect(promotedColumnsFor('products', payload).price).toBe(-1.25);
 		expect(promotedProductColumns(payload).price).toBe(-1.25);
 	});
 
-	it('documents the bare-number taxonomy divergence', () => {
+	it('accepts bare-number taxonomy ids on both faces (ruled)', () => {
 		const payload = { categories: [3], brands: [7] };
 
 		expect(promotedColumnsFor('products', payload)).toMatchObject({
@@ -41,8 +42,36 @@ describe('promoted product columns parity', () => {
 			brandIds: [7],
 		});
 		expect(promotedProductColumns(payload)).toMatchObject({
-			categoryIds: [],
+			categoryIds: [3],
+			brandIds: [7],
+		});
+	});
+
+	it("treats a cleared stock quantity ('') as unmanaged (null), never 0", () => {
+		expect(promotedProductColumns({ stock_quantity: '' }).stockQuantity).toBeNull();
+		expect(promotedColumnsFor('products', { stock_quantity: '' }).stockQuantity).toBeNull();
+	});
+
+	it('still accepts Woo object taxonomy entries and drops garbage', () => {
+		const payload = { categories: [{ id: 3 }, 'nope', null, -2, { id: 0 }], brands: [] };
+
+		expect(promotedProductColumns(payload)).toMatchObject({
+			categoryIds: [3],
 			brandIds: [],
 		});
+	});
+});
+
+describe('promoted order columns parity', () => {
+	it('matches for canonical Woo order payloads', () => {
+		const payload = {
+			number: '1234',
+			date_created_gmt: '2026-08-19T10:00:00',
+			status: 'pos-open',
+			total: '99.50',
+			customer_id: 42,
+		};
+
+		expect(promotedColumnsFor('orders', payload)).toEqual(promotedOrderColumns(payload));
 	});
 });
