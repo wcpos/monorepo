@@ -53,7 +53,10 @@ describe('promoted product columns parity', () => {
 	});
 
 	it('still accepts Woo object taxonomy entries and drops garbage', () => {
-		const payload = { categories: [{ id: 3 }, 'nope', null, -2, { id: 0 }], brands: [] };
+		const payload = {
+			categories: [{ id: 3 }, 'nope', true, [4], null, -2, { id: 0 }],
+			brands: [],
+		};
 
 		expect(promotedProductColumns(payload)).toMatchObject({
 			categoryIds: [3],

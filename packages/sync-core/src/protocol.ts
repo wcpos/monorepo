@@ -81,7 +81,9 @@ function taxonomyIds(value: unknown): number[] {
 	// dropping bare ids silently removes the product from its category filter.
 	return Array.isArray(value)
 		? value
-				.map((entry) => Number((entry as { id?: unknown } | null)?.id ?? entry))
+				.map((entry) =>
+					typeof entry === 'number' ? entry : Number((entry as { id?: unknown } | null)?.id)
+				)
 				.filter((n) => Number.isFinite(n) && n > 0)
 		: [];
 }
