@@ -4,7 +4,7 @@ description: Prepare and install everything for the monorepo
 inputs:
   node-version:
     description: Version of Node to use
-    default: "22.13.1"
+    default: "22.22.2"
   eas-version:
     description: Version of EAS CLI to use
     default: "latest"
@@ -36,12 +36,11 @@ runs:
         eas-version: ${{ inputs.eas-version }}
         token: ${{ inputs.expo-token }}
 
-    - name: 📦 Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y jq libsecret-1-dev
-      shell: bash
-
+    # No apt step: `jq` is preinstalled on GitHub's Ubuntu runners and
+    # libsecret-1-dev is only needed by the EAS Android pre-install hook,
+    # which runs on EAS build servers, never here. The `apt-get update`
+    # this used to run hung a shard for 36 minutes on a flaky mirror
+    # (2026-08-18) while installing nothing this job uses.
     - name: 🏗 Add RXDB_LICENSE_KEY to package.json
       env:
         RXDB_LICENSE_KEY: ${{ inputs.rxdb-license-key }}

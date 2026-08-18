@@ -23,6 +23,7 @@ export const POS_META_KEYS = {
 	store: '_pos_store',
 	taxBasedOn: '_woocommerce_pos_tax_based_on',
 	lineUuid: RECORD_UUID_META_KEY,
+	posData: '_woocommerce_pos_data',
 } as const;
 
 function scalarMetaValue(meta: MetaDataEntry[] | undefined, key: string): string | null {
