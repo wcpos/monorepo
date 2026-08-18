@@ -10,7 +10,7 @@ export {
 export { planReplicationActions, type ReplicationActions } from './changeSignalReplication';
 export { type ConfigFingerprintSnapshot, type ConfigFingerprintSource } from './configChangeSignal';
 // prettier-ignore
-export { shouldApplyPulledDocument, syncCustomPullBatchIntoRepository, type CustomPullCheckpointStore, type CustomPullRepository, type WirePullDocument } from './customPullAdapter';
+export { syncCustomPullBatchIntoRepository, type CustomPullCheckpointStore, type CustomPullRepository, type WirePullDocument } from './customPullAdapter';
 export { drainMutationQueue, isNeverPushedChain } from './drainMutationQueue';
 // prettier-ignore
 export {

@@ -80,12 +80,12 @@ describe('coverageVerdictFrom', () => {
 		});
 	});
 
-	// Freshness is strict: a document that expires exactly now has expired, and a stale row is
-	// indistinguishable from a missing one.
+	// Freshness is strict: a document that expires exactly now has expired. Expiry demotes the
+	// row to the stale tiers — it flips `fresh`, it does not erase the count.
 	it('treats a deadline of exactly now as expired', () => {
 		expect(coverageVerdictFrom(lane({ freshUntilMs: NOW }), null, NOW)).toMatchObject({
-			total: null,
-			source: 'unknown',
+			total: 3,
+			source: 'lane',
 			fresh: false,
 		});
 		expect(coverageVerdictFrom(lane({ freshUntilMs: NOW + 1 }), null, NOW)).toMatchObject({
@@ -93,6 +93,45 @@ describe('coverageVerdictFrom', () => {
 			source: 'lane',
 			fresh: true,
 		});
+	});
+
+	// The `18 of 18+` complaint: a total whose freshness window lapsed is still the server's
+	// last answer, and for display the last answer beats refusing to answer. `fresh` (a LANE
+	// fact) is what callers with sync-side decisions consult instead.
+	it('keeps vouching a stale query-total when nothing fresh outranks it', () => {
+		expect(coverageVerdictFrom(null, queryTotal({ freshUntilMs: NOW - 1 }), NOW)).toMatchObject({
+			total: 4_200,
+			source: 'query-total',
+			fresh: false,
+		});
+	});
+
+	it('prefers a fresh complete lane over a stale query-total', () => {
+		expect(coverageVerdictFrom(lane(), queryTotal({ freshUntilMs: NOW - 1 }), NOW)).toMatchObject({
+			total: 3,
+			source: 'lane',
+			fresh: true,
+		});
+	});
+
+	// Between two stale rows the ordering matches the fresh tiers: the query-total is the
+	// server's own count for the key, the lane's id set is only local evidence of it.
+	it('prefers a stale query-total over a stale complete lane', () => {
+		expect(
+			coverageVerdictFrom(
+				lane({ freshUntilMs: NOW - 1 }),
+				queryTotal({ freshUntilMs: NOW - 1 }),
+				NOW
+			)
+		).toMatchObject({ total: 4_200, source: 'query-total', fresh: false });
+	});
+
+	// An incomplete lane's id count was never the query's size, stale or not (#894/#945) — with
+	// no query-total ever recorded there is genuinely nothing to vouch.
+	it('still vouches nothing for a stale incomplete lane with no query-total', () => {
+		expect(
+			coverageVerdictFrom(lane({ complete: false, freshUntilMs: NOW - 1 }), null, NOW)
+		).toMatchObject({ total: null, source: 'unknown', fresh: false });
 	});
 
 	it('reports the walk running count when the cursor carries one', () => {

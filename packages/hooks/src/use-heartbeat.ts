@@ -1,4 +1,4 @@
-import { useObservable, useSubscription } from 'observable-hooks';
+import { useObservable } from 'observable-hooks';
 import { interval } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 
@@ -19,16 +19,4 @@ export const useHeartbeatObservable = (emitFrequency: number) => {
 	);
 
 	return heartbeat$;
-};
-
-/**
- * Custom hook to use the global heartbeat with configurable intervals.
- *
- * @param emitFrequency
- * @param callback
- */
-export const useHeartbeatCallback = (emitFrequency: number, callback: () => void) => {
-	const heartbeat$ = useHeartbeatObservable(emitFrequency);
-
-	useSubscription(heartbeat$, callback);
 };
