@@ -473,3 +473,11 @@ jobs:
                 body: body
               });
             }
+
+      - name: 🔒 Dependency guards (SDK alignment + duplicates)
+        # Local-only until 2026-08-18 — dependabot PR #1298 carried 15 Expo SDK
+        # misalignments and a vulnerable transitive tree with green CI because
+        # these never ran here.
+        run: |
+          node scripts/check-expo-alignment.mjs
+          node scripts/check-dep-duplicates.mjs
