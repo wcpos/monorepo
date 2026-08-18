@@ -219,6 +219,7 @@ export function Products() {
 
 	const tableConfig = React.useMemo(
 		() => ({
+			manualExpanding: true,
 			onExpandedChange: (updater: ExpandedState | ((old: ExpandedState) => ExpandedState)) => {
 				const value = typeof updater === 'function' ? updater(expandedRef.current) : updater;
 				expandedRef.current = value;
