@@ -611,8 +611,12 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				// The periodic scan reports failures in its summary and lets backoff retry;
 				// a forced check is a direct user action, so its failure must surface as a
 				// lane error (status + lastError + events), not a healthy-looking count.
-				if (forced !== undefined && result.failed > 0) {
-					throw new Error(`Census refresh failed for ${forced}`);
+				if ((forced !== undefined || tick.forceAllCensus) && result.failed > 0) {
+					throw new Error(
+						forced === undefined
+							? 'Census refresh failed during full refresh'
+							: `Census refresh failed for ${forced}`
+					);
 				}
 				if (
 					result.succeeded === 0 &&
