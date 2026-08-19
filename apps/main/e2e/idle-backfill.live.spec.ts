@@ -20,9 +20,30 @@ import { resolveIdleSoakMs } from './idle-backfill-soak-duration';
  *     status=publish&orderby=id&order=asc page pull appears within one 5-min
  *     lane cadence, unprompted.
  *  3. variation-prefetch (#1281) — an include= targeted variations pull
- *     appears in the same idle window (skips cleanly if the store has no
- *     variable products — logged, not failed, per store-agnostic policy the
- *     assertion only requires it when a parent with variations materialized).
+ *     appears in the same idle window, asserted only when the session is
+ *     ELIGIBLE (see below).
+ *
+ * ELIGIBILITY, not assumption (review thread on #1309). "Zero variation pulls"
+ * is uninterpretable on its own: a catalog with no variable parent and a
+ * catalog whose variations are already resident both produce zero, and so does
+ * a broken lane. This soak therefore DERIVES eligibility from traffic it
+ * already observes, rather than guessing or mocking:
+ *
+ *   - Every product payload the app pulls is parsed for `type: 'variable'` and
+ *     its `variations` id list — those are the parents the lane can walk. The
+ *     browser context is fresh, so OPFS starts empty and a resident parent's
+ *     variations are absent unless this session fetched them.
+ *   - Every `?include=` variations pull in the session records the ids that
+ *     ARE now resident.
+ *   - Eligible = a resident variable parent with at least one variation id that
+ *     no pull in this session covered. If any exists, the idle window MUST show
+ *     a variations pull and a zero fails the run. If none exists, the store
+ *     genuinely has nothing to prefetch and the oracle reports skip-with-reason
+ *     naming which of the two causes applied — the store-agnostic E2E policy's
+ *     "declared-missing environment is a skip" rule.
+ *
+ * No fixture and no same-session mock: eligibility is read off the real
+ * browser/store boundary, which is the only thing that proves the lane.
  */
 
 const IDLE_SOAK_MS = resolveIdleSoakMs(process.env.SOAK_MS);
@@ -34,7 +55,27 @@ type WireLog = {
 	customerTricklePages: string[];
 	variationIncludePulls: string[];
 	allStoreRequests: string[];
+	/** Resident variable parents seen on the wire → their declared variation ids. */
+	variableParents: Map<number, number[]>;
+	/** Variation ids any `?include=` pull covered this session. */
+	fetchedVariationIds: Set<number>;
 };
+
+/** Records nested under `payload`, an envelope's `documents`, or a bare array. */
+function recordsOf(body: unknown): Record<string, unknown>[] {
+	const list = Array.isArray(body)
+		? body
+		: Array.isArray((body as { documents?: unknown } | null)?.documents)
+			? (body as { documents: unknown[] }).documents
+			: [];
+	return list.filter((entry): entry is Record<string, unknown> => typeof entry === 'object');
+}
+
+function positiveIds(value: unknown): number[] {
+	return Array.isArray(value)
+		? value.filter((id): id is number => Number.isSafeInteger(id) && (id as number) > 0)
+		: [];
+}
 
 function watchWire(page: import('@playwright/test').Page): WireLog {
 	const log: WireLog = {
@@ -43,7 +84,30 @@ function watchWire(page: import('@playwright/test').Page): WireLog {
 		customerTricklePages: [],
 		variationIncludePulls: [],
 		allStoreRequests: [],
+		variableParents: new Map<number, number[]>(),
+		fetchedVariationIds: new Set<number>(),
 	};
+	// Parse product payloads for the parents the prefetch lane can walk. Failures
+	// are ignored on purpose: an unreadable body must never fail the soak, it
+	// only leaves the session less eligible (and the oracle then skips loudly).
+	page.on('response', (response) => {
+		const url = response.url();
+		if (!url.includes('/products')) return;
+		if (url.includes('/variations')) return;
+		void response
+			.json()
+			.then((body) => {
+				for (const record of recordsOf(body)) {
+					const payload = (record.payload ?? record) as Record<string, unknown>;
+					if (payload.type !== 'variable') continue;
+					const parentId = Number(payload.id ?? record.id);
+					const variationIds = positiveIds(payload.variations);
+					if (!Number.isSafeInteger(parentId) || parentId <= 0) continue;
+					if (variationIds.length > 0) log.variableParents.set(parentId, variationIds);
+				}
+			})
+			.catch(() => undefined);
+	});
 	page.on('request', (request) => {
 		let url: URL;
 		try {
@@ -74,6 +138,10 @@ function watchWire(page: import('@playwright/test').Page): WireLog {
 		}
 		if (path.includes('/variations') && params.has('include')) {
 			log.variationIncludePulls.push(url.toString());
+			for (const id of (params.get('include') ?? '').split(',')) {
+				const parsed = Number(id.trim());
+				if (Number.isSafeInteger(parsed) && parsed > 0) log.fetchedVariationIds.add(parsed);
+			}
 		}
 		if (
 			path.includes('/customers') &&
@@ -144,24 +212,53 @@ test('idle POS trickles products+variations and manual check refreshes totals', 
 		);
 	}
 
+	// ---- Oracle 3: variation-prefetch, gated on DERIVED eligibility. ----
+	// Evaluated BEFORE the product-trickle assertion: these lanes fail
+	// independently (product-trickle is intermittent live — issue #1318), and a
+	// run must report every oracle it was able to evaluate, not just the first
+	// to fail.
+	const uncoveredParents = [...wire.variableParents.entries()].filter(([, variationIds]) =>
+		variationIds.some((id) => !wire.fetchedVariationIds.has(id))
+	);
+	const idlePulls = wire.variationIncludePulls.length - variationPullsBefore;
+	console.log(
+		`[soak] variation eligibility: ${wire.variableParents.size} resident variable parent(s), ` +
+			`${uncoveredParents.length} with variations this session never fetched, ` +
+			`${idlePulls} idle include pull(s)`
+	);
+	if (uncoveredParents.length === 0) {
+		// Not eligible: name WHICH cause applied and record it on the run, so a
+		// green result is never mistaken for "variation-prefetch verified". An
+		// annotation rather than test.skip() — skipping mid-test would abort and
+		// discard the product-trickle oracle this same soak paid ten minutes for.
+		const reason =
+			wire.variableParents.size === 0
+				? 'no published variable parent materialized in this session'
+				: 'every resident variable parent already had its variations fetched this session';
+		console.log(`[soak] variation oracle NOT EVALUATED — ${reason}`);
+		testInfo.annotations.push({
+			type: 'oracle-unavailable',
+			description: `variation-prefetch: ${reason}`,
+		});
+	} else {
+		expect
+			.soft(
+				idlePulls,
+				`variation-prefetch fired no include pull while ${uncoveredParents.length} resident variable parent(s) still had unfetched variations (e.g. parent ${uncoveredParents[0]?.[0]})`
+			)
+			.toBeGreaterThanOrEqual(1);
+	}
+
 	if (wire.productTricklePages.length - productPagesBefore === 0) {
 		console.log('[soak] DEBUG idle-window store traffic:');
 		for (const line of wire.allStoreRequests.slice(-60)) {
 			console.log(`[soak]   ${line}`);
 		}
 	}
-	expect(
-		wire.productTricklePages.length - productPagesBefore,
-		'product-trickle fired no ordered catalog page pull during the idle window'
-	).toBeGreaterThanOrEqual(1);
-
-	if (wire.variationIncludePulls.length - variationPullsBefore === 0) {
-		console.log(
-			'[soak] no variation include pulls — store may have no variable parents with missing variations resident; see product pages log'
-		);
-	} else {
-		console.log(
-			`[soak] variation-prefetch fired ${wire.variationIncludePulls.length - variationPullsBefore} include pull(s)`
-		);
-	}
+	expect
+		.soft(
+			wire.productTricklePages.length - productPagesBefore,
+			'product-trickle fired no ordered catalog page pull during the idle window (see #1318)'
+		)
+		.toBeGreaterThanOrEqual(1);
 });
