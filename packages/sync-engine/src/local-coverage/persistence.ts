@@ -252,7 +252,7 @@ function mergeLaneWithCurrentRevision(
 	return toLaneDocument(merged);
 }
 
-/** Structural: any database carrying the coverage collections (LabDatabase and engine scope dbs both satisfy it). */
+/** Structural: any database carrying the coverage collections — any engine scope database satisfies it. */
 export type CoverageDatabase = {
 	coverageRecords: RxCoverageCollection<CoverageRecordDocument>;
 	coverageLanes: RxCoverageCollection<CoverageLaneDocument>;

@@ -5,7 +5,7 @@
  * executes. The engine DETECTS; this routes; the host APPLIES.
  *
  * Pure module: NO rxdb, NO fetch, NO DOM. It only re-shapes the outcome — every
- * host (web scheduler, playground LabController, the live conformance runner)
+ * host (the engine scheduler, the live conformance runner)
  * runs the SAME routing decision through this one function, so "what does a
  * change signal mean for the pull loop" is decided once, in sync-core, behind a
  * locked contract shared by the hybrid engine and its host adapters.

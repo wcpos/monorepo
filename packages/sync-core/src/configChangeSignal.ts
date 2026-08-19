@@ -13,7 +13,7 @@
  *   - TIER 2 hash-checksum digests the raw product row — unchanged.
  *   - TIER 3 revision-hash WOULD catch it (it rebuilds the served
  *     representation) but is never polled (112–142s at 10k).
- * `docs/experiments/change-signal-candidates.md` already admits this case
+ * The change-signal candidate study already admitted this case: it
  * "remains revision-hash territory".
  *
  * THE SIGNAL. The server reports, per collection, a cheap FINGERPRINT = a hash

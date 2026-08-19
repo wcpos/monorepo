@@ -31,7 +31,7 @@ import {
 } from '@wcpos/sync-core';
 
 import { orderSchema } from './order-schema';
-import { productSchema } from './product-schema';
+import { productMigrationStrategies, productSchema } from './product-schema';
 import { variationSchema } from './variation-schema';
 import { customerSchema } from './customer-schema';
 import { taxRateSchema } from './tax-rate-schema';
@@ -114,7 +114,7 @@ export type CollectionCreator = { schema: unknown; migrationStrategies?: unknown
 
 const SYNC_COLLECTION_CREATORS: Record<SyncCollectionName, CollectionCreator> = {
 	orders: { schema: orderSchema },
-	products: { schema: productSchema },
+	products: { schema: productSchema, migrationStrategies: productMigrationStrategies },
 	variations: { schema: variationSchema },
 	customers: { schema: customerSchema },
 	taxRates: { schema: taxRateSchema },
@@ -229,8 +229,7 @@ export function creatorFor(name: ResettableCollectionName): CollectionCreator {
  * Drop and recreate one collection on an engine scope database. RxDB
  * re-registers `db.<name>` as a live getter after addCollections, so
  * per-access references re-resolve; only references captured BEFORE the
- * reset go stale (the same contract as the web host's scope database —
- * apps/web/src/db/createScopeLabDatabase.ts).
+ * reset go stale (the same contract the lab web host's scope database had).
  */
 export async function resetEngineCollection(
 	db: RxDatabase,
