@@ -32,11 +32,22 @@ const NAME_SORT_WIRE_ORDERBY = 'title';
 const ARRIVAL_TIMEOUT_MS = 6 * 60_000 + 30_000;
 
 /**
- * The explicit deadlines standing before the arrival assertion: navigate (12s) +
- * grid census (60s) + name browse (60s) + anchor row (30s) = 162s, rounded up to
- * 180s for the wc/v3 writer login and probe-creation round trips. Those round trips
- * are request-timeout bounded and their pathological paths throw rather than return
- * late, so they cannot silently stretch the window this budget guards.
+ * The `posPage` fixture's own explicit deadlines. Playwright charges FIXTURE setup
+ * to the test's timeout, and `test.setTimeout()` in the body re-sizes that budget
+ * without refunding time already spent — so this has to be counted, not assumed
+ * free: `search-products` visible (60s) + catalogue count ready (20s,
+ * CATALOGUE_READY_TIMEOUT_MS) + the #1106 `screen-pos` pin (30s) = 110s, plus the
+ * OPFS restore and two navigations.
+ */
+const FIXTURE_BUDGET_MS = 120_000;
+
+/**
+ * The explicit deadlines inside the test body before the arrival assertion:
+ * navigate (12s) + grid census (60s) + name browse (60s) + anchor row (30s) =
+ * 162s, rounded up to 180s for the wc/v3 writer login and probe-creation round
+ * trips. Those round trips are request-timeout bounded and their pathological
+ * paths throw rather than return late, so they cannot silently stretch the window
+ * this budget guards.
  */
 const SETUP_BUDGET_MS = 180_000;
 
@@ -46,19 +57,28 @@ const TEARDOWN_BUDGET_MS = 30_000;
 /**
  * TIMEOUT ARITHMETIC — do not set this to a bare literal.
  *
- *   setup      180s
- *   arrival    390s
- *   teardown    30s
- *   ----------------
- *   total      600s
+ *   posPage fixture   120s
+ *   in-test setup     180s
+ *   arrival           390s
+ *   teardown           30s
+ *   ---------------------
+ *   total             720s
  *
- * The test budget must be at least setup + arrival + teardown. Previously the test
- * ran on a flat 480s while setup alone could spend 180s before the 390s arrival
- * assertion even started — so a slow-but-successful arrival was reported as a
- * synchronization failure that never happened. Derive the budget from the parts so
- * raising any one of them cannot silently re-open that gap.
+ * The budget must cover EVERYTHING Playwright charges to this test, which includes
+ * fixture setup and not just the body. The spec previously ran on a flat 480s while
+ * the fixture and setup could together spend 300s before the 390s arrival assertion
+ * even started — so a slow-but-successful arrival was reported as a synchronization
+ * failure that never happened.
+ *
+ * The arrival deadline is the one term that must NOT be shrunk to make the sum fit:
+ * it is derived from the merchant's freshness contract (eco cadence + jitter), so
+ * trimming it would trade a false failure for a false pass. The budget therefore
+ * grows to fit it, and is derived from the parts so raising any one of them cannot
+ * silently re-open that gap. Only a genuinely broken pipeline ever spends this —
+ * measured arrival on dev-pro is ~2 seconds.
  */
-const TEST_TIMEOUT_MS = SETUP_BUDGET_MS + ARRIVAL_TIMEOUT_MS + TEARDOWN_BUDGET_MS;
+const TEST_TIMEOUT_MS =
+	FIXTURE_BUDGET_MS + SETUP_BUDGET_MS + ARRIVAL_TIMEOUT_MS + TEARDOWN_BUDGET_MS;
 
 /**
  * Directional coverage: a record created on the SERVER while the till is open
