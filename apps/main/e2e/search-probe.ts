@@ -643,6 +643,11 @@ export async function sweepOrphanedProductProbes(
 				id !== null &&
 				(name.startsWith('E2E Probe ') ||
 					name.startsWith('E2E Variable ') ||
+					// Arrival probes lead with a sort-direction token (see
+					// ARRIVAL_PROBE_LEAD in server-created-visibility.spec.ts). `aaaa`
+					// is retired but still swept, so orphans from older runs are not
+					// stranded on the dev store.
+					name.startsWith('0000 E2E Arrival ') ||
 					name.startsWith('aaaa E2E Arrival ') ||
 					name.startsWith('zzzz E2E Arrival ')) &&
 				Date.parse(`${createdGmt}Z`) < cutoff

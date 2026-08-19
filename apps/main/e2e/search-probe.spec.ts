@@ -188,6 +188,13 @@ test.describe('search-probe pure logic', () => {
 						name: 'Catalog E2E Arrival',
 						date_created_gmt: '2020-01-01T00:00:00',
 					},
+					// The current ascending lead token; `aaaa` above is the retired one,
+					// still swept so older orphans are not stranded.
+					{
+						id: 44,
+						name: '0000 E2E Arrival zxzero',
+						date_created_gmt: '2020-01-01T00:00:00',
+					},
 				]),
 			delete: async (url: string) => {
 				deleted.push(url);
@@ -204,6 +211,7 @@ test.describe('search-probe pure logic', () => {
 		expect(deleted).toEqual([
 			'https://example.test/wp-json/wc/v3/products/41',
 			'https://example.test/wp-json/wc/v3/products/42',
+			'https://example.test/wp-json/wc/v3/products/44',
 		]);
 	});
 

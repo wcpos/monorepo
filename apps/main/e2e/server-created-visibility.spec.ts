@@ -26,6 +26,27 @@ import {
 const NAME_SORT_WIRE_ORDERBY = 'title';
 
 /**
+ * The leading token that puts the probe in the FIRST rendered rows, per direction.
+ *
+ * These are chosen against the RENDERER's comparator, not the server's collation —
+ * the two disagree. MySQL sorts `post_title` under a case-INSENSITIVE collation, but
+ * the client re-sorts resident documents with plain `<` code-unit ordering
+ * (`compareValues` in packages/query/src/engine-adapter/execute-query.ts, whose own
+ * comment spells it out: "code-unit order, 'Zoo' before 'apple'").
+ *
+ * So a lowercase `aaaa` lead — which the server WOULD sort first — renders after
+ * every capitalized product name, because 'a' (0x61) > 'Z' (0x5A). The probe stays
+ * resident but lands at the far end of the rendered list, off the first page, and
+ * the arrival assertion fails for a reason that has nothing to do with arrival.
+ *
+ * A digit lead is first under BOTH orderings (digits precede letters in code-unit
+ * order and in the server's collation), so ascending is safe from the disagreement.
+ * Descending wants the highest code unit, and lowercase 'z' (0x7A) outranks every
+ * letter under both.
+ */
+const ARRIVAL_PROBE_LEAD = { asc: '0000', desc: 'zzzz' } as const;
+
+/**
  * Eco cadence is 300 seconds with up to 20% jitter (360s worst case). Keep 30
  * seconds for materialization after the latest supported poll fires.
  */
@@ -172,24 +193,43 @@ test('a product created on the server reaches the products grid without a search
 	if (!Array.isArray(sortedBody)) {
 		throw new Error('Products name browse returned a malformed product list');
 	}
+	// Emptiness is the ONE thing this body may still be asked: whether the browse
+	// window has any records at all. Its ORDER is not usable — see below.
 	if (sortedBody.length === 0) {
 		test.skip(true, 'Products name browse returned an empty catalog');
 		return;
 	}
-	const anchor = sortedBody[0];
-	const anchorSlug =
-		anchor && typeof anchor === 'object' && 'slug' in anchor && typeof anchor.slug === 'string'
-			? anchor.slug
-			: '';
-	if (!anchorSlug) {
-		throw new Error('Products name browse first record is missing its slug');
-	}
-	await expect(screen.getByTestId(`data-table-row-${anchorSlug}`).first()).toBeVisible({
+
+	/**
+	 * Anchor on the RENDERED grid, never on `sortedBody[0]`.
+	 *
+	 * The client does not render the server's ordering verbatim. The wire response
+	 * only decides WHICH records get pulled into the browse window; the grid then
+	 * re-sorts the resident documents locally, and the two orderings disagree:
+	 *
+	 *  - Different collation. MySQL orders `post_title` case-INSENSITIVELY, while the
+	 *    local comparator is plain `<` code-unit order — 'Zoo' before 'apple'
+	 *    (`compareValues`, packages/query/src/engine-adapter/execute-query.ts). Sorting
+	 *    products by `name` is always local: the field is `kind: 'payload'`, so it is
+	 *    never pushed down to RxDB.
+	 *  - Different tiebreak. Equal titles fall back to uuid locally, which has no
+	 *    relationship to the server's ordering of the same rows.
+	 *  - Different granularity. The captured response is ONE `pullBatchSize` page of a
+	 *    window that may be walked over several requests, so it is not even guaranteed
+	 *    to be the request that populated what is on screen.
+	 *
+	 * Asserting `data-table-row-${sortedBody[0].slug}` was visible therefore failed on
+	 * dev-pro with "element(s) not found" — a wrong assumption, not a slow store.
+	 * What this step actually needs is only "the grid has rendered rows under the sort
+	 * that is actually applied", so take that from the DOM.
+	 */
+	await expect(screen.getByTestId(/^data-table-row-/).first()).toBeVisible({
 		timeout: 30_000,
 	});
 
 	// Land the probe in the first page of rendered rows under the sort that is
-	// actually applied, so arrival needs no scrolling.
+	// actually applied, so arrival needs no scrolling. The lead token is chosen
+	// against the RENDERER's ordering, not the server's — see ARRIVAL_PROBE_LEAD.
 	const token = mintSearchProbeToken(testInfo.workerIndex);
 	const created = await createSearchProbe({
 		request,
@@ -200,7 +240,7 @@ test('a product created on the server reaches the products grid without a search
 		token,
 		writerConfigured: Boolean(writer),
 		productData: {
-			name: `${order === 'desc' ? 'zzzz' : 'aaaa'} E2E Arrival ${token}`,
+			name: `${ARRIVAL_PROBE_LEAD[order]} E2E Arrival ${token}`,
 		},
 	});
 	if (!created.ok) {
