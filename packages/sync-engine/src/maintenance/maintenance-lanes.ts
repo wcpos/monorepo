@@ -24,7 +24,7 @@
  * Same tick contract as the change-signal/write-drain lanes: offline or
  * mid-lifecycle → skipped; scope-guarded body; errors land on diagnostics and
  * the report, never throw. The persisted scheduler DRAIN (which needs the
- * per-scope fetcher registry) is slice 5e — these lanes only SEED or operate
+ * per-scope fetcher registry) lives on the scheduler tier — these lanes only SEED or operate
  * on engine-owned state.
  */
 

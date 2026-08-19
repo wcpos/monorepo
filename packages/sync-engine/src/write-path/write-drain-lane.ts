@@ -1,5 +1,5 @@
 /**
- * The write-drain lane (facade slice 4): one deterministic, scope-guarded
+ * The write-drain lane: one deterministic, scope-guarded
  * tick = drain the ACTIVE scope's durable mutation queue through the push
  * adapter with ADR 0012 backoff, applying each ack through the descriptor
  * write facet. Push outcomes surface as ENGINE EVENTS

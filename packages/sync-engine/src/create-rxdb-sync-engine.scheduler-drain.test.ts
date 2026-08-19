@@ -1,9 +1,9 @@
 /**
- * Slice 5e: the persisted scheduler DRAIN through the public handle —
+ * The persisted scheduler DRAIN through the public handle —
  * sync('order-window-seed') persists the windowed task, sync('scheduler-drain')
  * claims it and pulls through the scripted server, orders land in the scope
  * database and the custom-pull checkpoint store advances. mode:'manual', the
- * slice-3 scripted-server style.
+ * change-signal lane's scripted-server style.
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -109,7 +109,7 @@ function engineWith(
 	}).engine;
 }
 
-describe('scheduler drain through the public handle (slice 5e)', () => {
+describe('scheduler drain through the public handle', () => {
 	it('seed → drain: the windowed order task pulls through the transport port and lands orders + checkpoint', async () => {
 		const server = scriptedOrderServer();
 		const engine = engineWith(server.fetch);

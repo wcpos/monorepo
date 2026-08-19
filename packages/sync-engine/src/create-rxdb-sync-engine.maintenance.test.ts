@@ -1,5 +1,5 @@
 /**
- * Slice 5d: the four maintenance lanes driven ENTIRELY through the public
+ * The four maintenance lanes driven ENTIRELY through the public
  * handle (mode:'manual' + sync(lane)) against /testing adapters — the web
  * host's mountWebSyncHost lanes 4–7, now engine verbs.
  */
@@ -73,7 +73,7 @@ async function taskRows(engine: RxdbSyncEngine): Promise<Record<string, unknown>
 	return docs.map((doc) => doc.toJSON());
 }
 
-describe('maintenance lanes through the public handle (slice 5d)', () => {
+describe('maintenance lanes through the public handle', () => {
 	it('checks one fresh collection census and ticks change-signal exactly once', async () => {
 		let productTotal = 40;
 		const fetchWooQueryTotal = vi.fn(async ({ request }: { request: { queryKey: string } }) =>

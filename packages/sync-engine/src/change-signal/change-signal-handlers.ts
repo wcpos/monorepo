@@ -1,5 +1,5 @@
 /**
- * The generated apply arms (facade slice 3, ADR 0018): ALL of
+ * The generated apply arms (ADR 0018): ALL of
  * `ReplicationActionHandlers` is built HERE, once, from the package-private
  * collection descriptors — ADR 0007's completeness guarantee moves from
  * "every host compiles 13 arms" to "this package compiles them once", held by
@@ -12,9 +12,9 @@
  *     against the fully-REQUIRED `ReplicationActionHandlers` — a new arm added
  *     in sync-core fails the build here until the descriptors produce it.
  *
- * Slice-3 arm effects are DIRECT chunked fetch-and-upsert through the
+ * Change-signal arm effects are DIRECT chunked fetch-and-upsert through the
  * scope-bound fetcher (the web host's scheduler/coverage indirection is the
- * slice-4 fetch queue; these bodies are package-internal and swap then).
+ * demand-plane fetch queue; these bodies stay package-internal).
  */
 
 import { assertBulkSuccess, mintRemoteId, remoteIdOrNull, wooIdOf } from '@wcpos/sync-core';
@@ -47,7 +47,7 @@ import type { BarcodeSelectorsReader } from '../materialization/barcode-selector
 import type { RxCollection, RxDatabase } from 'rxdb';
 import type { SyncCollectionName } from '../collections/engine-collections';
 
-// Re-exported for the require plane (slice 4): the demand plane's direct
+// Re-exported for the require plane: the demand plane's direct
 // pulls are exactly the change-signal arm effects — one implementation.
 export { pullByIds as pullTargetedByIds };
 export async function refreshCollection(

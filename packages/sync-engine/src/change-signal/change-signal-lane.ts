@@ -1,5 +1,5 @@
 /**
- * The change-signal lane (facade slice 3): one deterministic, scope-guarded
+ * The change-signal lane: one deterministic, scope-guarded
  * tick = detect (hybrid engine poll) → route (planReplicationActions) → apply
  * (the generated arms), with the cursor committed ONLY after every arm
  * succeeded (ADR 0005/0007 — persistState is the applier's last step).
@@ -68,7 +68,7 @@ export type ChangeSignalLaneDeps = {
 	databaseFor: (scopeId: string) => RxDatabase | null;
 	fetcher: EngineSourceFetcher;
 	syncBaseUrl: string;
-	/** Blob I/O through the slice-2 checkpoint seam (engine kv or the ports.checkpoints override). */
+	/** Blob I/O through the scope checkpoint seam (engine kv or the ports.checkpoints override). */
 	readBlob: (scopeId: string, key: string) => Promise<string | null>;
 	writeBlob: (scopeId: string, key: string, value: string) => Promise<void>;
 	connectivity: () => 'online' | 'offline' | 'degraded';

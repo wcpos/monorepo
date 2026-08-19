@@ -1,5 +1,5 @@
 /**
- * Package-private live ConfigFingerprintSource (facade slice 3) — the config-
+ * Package-private live ConfigFingerprintSource — the config-
  * change tier (ADR 0006: settings-change staleness; a barcode-field flip with
  * no product row change must still re-derive). Ported from the lab web host's
  * live adapter; one endpoint request, one snake_case→camelCase projection.

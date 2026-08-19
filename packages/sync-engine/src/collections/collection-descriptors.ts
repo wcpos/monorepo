@@ -1,5 +1,5 @@
 /**
- * Package-private collection descriptors (facade slice 3, ADR 0018): each
+ * Package-private collection descriptors (ADR 0018): each
  * syncable collection declares its change-signal SHAPE, and the facade
  * GENERATES every apply-handler arm from it (changeSignalHandlers.ts). Hosts
  * cannot register or customize a descriptor — that seam would have exactly one
@@ -18,10 +18,10 @@
  *  - `local-only`      — no change-signal arms at all (orders: on-demand
  *                        windowed pull + the write path own that collection).
  *
- * Slice-3 arm EFFECTS are direct chunked fetch-and-upsert through the
+ * Change-signal arm EFFECTS are direct chunked fetch-and-upsert through the
  * scope-bound fetcher. The scheduler/coverage indirection the web host uses
- * for products/customers is the slice-4 fetch queue's job; these bodies are
- * package-internal and swap then without touching the descriptor surface.
+ * for products/customers is the demand-plane fetch queue's job; these bodies
+ * stay package-internal without touching the descriptor surface.
  *
  * Projections mirror the web lanes byte-for-byte (identifyRecord keys every
  * record by its server-stamped _woocommerce_pos_uuid, mintOnMissing:false —
@@ -214,7 +214,7 @@ export type AckPayloadAdoption = (
 ) => Record<string, unknown>;
 
 /**
- * The write facet (slice 4): a collection is client-writeable ONLY when its
+ * The write facet: a collection is client-writeable ONLY when its
  * descriptor carries this — the push route existing server-side is not
  * enough; the ack write-back contract must exist too. Orthogonal to `shape`
  * (writeability is explicit and independent of the change-signal shape).
