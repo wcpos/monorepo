@@ -2,6 +2,7 @@ import { defer, EMPTY, from, Observable, of, throwError } from 'rxjs';
 import { catchError, distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
 import get from 'lodash/get';
 
+import { FLEXSEARCH_MIN_TERM_LENGTH } from '@wcpos/sync-core';
 import type { CoverageTarget, CoverageVerdict, RxdbSyncEngine } from '@wcpos/sync-engine';
 
 import {
@@ -41,8 +42,8 @@ type SearchableCollection = {
 };
 
 const SEARCH_INDEX_ERROR = Symbol('search-index-error');
-/** Must equal FlexSearch `minlength` in packages/database/src/plugins/search.ts. */
-export const FLEXSEARCH_MIN_TERM_LENGTH = 3;
+// Owned by the side that builds the index; re-exported for existing consumers.
+export { FLEXSEARCH_MIN_TERM_LENGTH };
 
 export interface EngineQueryDescriptor {
 	collection: LegacyCollectionName;

@@ -7,6 +7,7 @@
  */
 
 import {
+	FLEXSEARCH_MIN_TERM_LENGTH,
 	type ProductDocument,
 	productDocumentId,
 	type StoredProductDocument,
@@ -112,8 +113,6 @@ export type ProductsSchedulerFetcherInput = {
  * boundary reports `product.browse-window.approximate` rather than paging forever.
  */
 export const PRODUCT_BROWSE_WINDOW_MAX_TIEBREAK_PAGES = 19;
-/** Keep equal to FLEXSEARCH_MIN_TERM_LENGTH in packages/query/src/engine-query.ts. */
-const FLEXSEARCH_MIN_TERM_LENGTH = 3;
 
 /** Store a pulled product batch: extract the Leg-3 manifest rows, strip `_rxdb_digest`, upsert both. */
 async function persistProductDocuments(
