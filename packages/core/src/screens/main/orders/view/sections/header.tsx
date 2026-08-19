@@ -8,6 +8,7 @@ import { ModalHeader } from '@wcpos/components/modal';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import { StatusPill } from './_status-pill';
+import { totalRefunded } from './total-refunded';
 import { useT } from '../../../../../contexts/translations';
 import { useCashierLabel } from '../../../hooks/use-cashier-label';
 import { useStoreLabel } from '../../../hooks/use-store-label';
@@ -15,14 +16,6 @@ import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useDateFormat } from '../../../hooks/use-date-format';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
-
-function totalRefunded(order: OrderDocument) {
-	return (order.refunds || []).reduce((sum, refund) => {
-		const value = 'amount' in refund ? (refund.amount ?? refund.total) : refund.total;
-		const total = parseFloat(String(value ?? '0'));
-		return Number.isFinite(total) ? sum + Math.abs(total) : sum;
-	}, 0);
-}
 
 interface Props {
 	order: OrderDocument;
@@ -34,7 +27,7 @@ export function HeaderSection({ order }: Props) {
 	const dateCreated = useDateFormat(order.date_created_gmt);
 	const datePaid = useDateFormat(order.date_paid_gmt);
 
-	const refundedAmount = totalRefunded(order);
+	const refundedAmount = totalRefunded(order.refunds);
 	const total = toNumber(order.total);
 	const isPartialRefund = refundedAmount > 0 && refundedAmount < total;
 	const status = isPartialRefund ? 'partially-refunded' : order.status;

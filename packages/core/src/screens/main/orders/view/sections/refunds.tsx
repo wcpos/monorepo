@@ -6,8 +6,10 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
+import { refundValue } from '@wcpos/order-math';
 
 import { Section } from './_section';
+import { totalRefunded } from './total-refunded';
 import { useT } from '../../../../../contexts/translations';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useDateFormat } from '../../../hooks/use-date-format';
@@ -16,20 +18,13 @@ import { WCRefund } from '../use-order-refunds';
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type LocalRefund = NonNullable<OrderDocument['refunds']>[number];
 
-function refundTotal(refunds: WCRefund[] | LocalRefund[] | undefined) {
-	return (refunds || []).reduce((sum, refund) => {
-		const value = 'amount' in refund ? (refund.amount ?? refund.total) : refund.total;
-		return sum + Math.abs(toNumber(value));
-	}, 0);
-}
-
 function RefundCard({ refund, currencySymbol }: { refund: WCRefund; currencySymbol?: string }) {
 	const t = useT();
 	const { format } = useCurrencyFormat({ currencySymbol });
 	const date = useDateFormat(refund.date_created);
 	const lineItems = refund.line_items || [];
 	const reason = refund.reason || '';
-	const amount = Math.abs(toNumber(refund.amount ?? refund.total));
+	const amount = refundValue(refund);
 
 	return (
 		<View className="border-border bg-card overflow-hidden rounded-md border">
@@ -181,7 +176,7 @@ function RefundsDetail({
 
 	if (!refunds.length) return null;
 
-	const total = refundTotal(refunds);
+	const total = totalRefunded(refunds);
 
 	return (
 		<Section

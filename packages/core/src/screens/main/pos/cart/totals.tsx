@@ -73,7 +73,6 @@ export function Totals() {
 	const hasCoupons = coupon_lines.length > 0;
 	const hasRefunds = Boolean(refunds && refunds.length > 0);
 	const hasTotals = hasSubtotal || hasCoupons || hasShipping || hasFee || hasTax || hasRefunds;
-	const refundTotal = hasRefunds ? (refunds ?? []).reduce((sum, r) => sum + refundValue(r), 0) : 0;
 	const netPayment = getNetPaymentTotal(orderTotal, refunds);
 
 	return (
