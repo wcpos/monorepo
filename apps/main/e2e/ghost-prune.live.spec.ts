@@ -3,7 +3,7 @@ import { execFileSync } from 'child_process';
 
 import { expect, test } from '@playwright/test';
 
-import { authenticateWithStore, blockScriptRequests } from './fixtures';
+import { authenticateWithStore, blockScriptRequests, getStoreUrl } from './fixtures';
 import { exportOPFS, restoreOPFS } from './opfs-helpers';
 import { restoreLocalStorage, type SavedAuthState } from './indexeddb-helpers';
 
@@ -77,6 +77,23 @@ const TOKEN = process.env.GHOST_TOKEN ?? '';
 
 function ops(...args: string[]): string {
 	return execFileSync('bash', [OPS, ...args], { encoding: 'utf-8', timeout: 60_000 }).trim();
+}
+
+/**
+ * The browser client and the ops script must address the SAME store.
+ * `ghost-ops.sh` targets one hard-coded container, while the client's store URL
+ * is configurable — so an override could mutate one store while asserting on
+ * another's client state, invalidating the experiment and touching an
+ * unintended fixture (codex review). Ask the ops target which site it is and
+ * compare hosts before any mutation.
+ */
+function assertOpsTargetsClientStore(storeUrl: string): void {
+	const opsHost = new URL(ops('storeurl')).host;
+	const clientHost = new URL(storeUrl).host;
+	expect(
+		opsHost,
+		`GHOST_OPS targets ${opsHost} but the client store is ${clientHost} — point both at one store`
+	).toBe(clientHost);
 }
 
 function opsCreate(sku: string, ghost: boolean): { id: number; slug: string } {
@@ -154,12 +171,22 @@ function liveManifestRow(state: SavedAuthState, wooId: number): boolean {
 	return false;
 }
 
-/** Live manifest rows vs live residents — the gate's two inputs, logged for the record. */
+/**
+ * Live manifest rows vs live residents — the gate's two inputs.
+ *
+ * MUST collapse to the last revision per primary BEFORE dropping tombstones
+ * (codex review): documents.json appends a revision per write, so filtering raw
+ * revisions double-counts every updated doc and keeps a deleted doc's earlier
+ * live revision. Any figure derived from this feeds a claim about whether the
+ * pre-fix gate was open, so a wrong count is a wrong conclusion.
+ */
 function manifestBalance(state: SavedAuthState): { manifestRows: number; residents: number } {
 	const live = (suffix: RegExp): Record<string, any>[] => {
 		for (const [path, base64] of Object.entries(state.opfs)) {
 			if (!suffix.test(path)) continue;
-			return parseAppendedDocs(base64).filter((doc) => doc._deleted === false);
+			return [...lastRevisionById(parseAppendedDocs(base64)).values()].filter(
+				(doc) => doc._deleted === false
+			);
 		}
 		return [];
 	};
@@ -199,12 +226,37 @@ async function openHealthDatabase(page: Page): Promise<void> {
 	await expect(page.getByTestId('db-row-products')).toBeVisible({ timeout: 20_000 });
 }
 
-/** One full manual pass (engine.sync() — every manualSync lane, existence-prime included). */
+/**
+ * One full manual pass (engine.sync() — every manualSync lane, existence-prime
+ * included), and a HARD FAILURE if the pass did not actually run.
+ *
+ * `useManualSync` reports a failed tick as `status: 'error'` and a no-op as
+ * `status: 'skipped'`, surfacing each only as a toast while re-enabling the
+ * button either way. Waiting on the button alone therefore accepts a pass that
+ * never reconciled anything — which would let the pre-fix `survive` control
+ * pass for the wrong reason (codex review). Sonner tags its toasts with
+ * `data-type`, so error/warning are detectable without touching localized text.
+ */
 async function checkEverything(page: Page): Promise<void> {
 	const button = page.getByTestId('db-check-everything');
 	await expect(button).toBeEnabled({ timeout: 60_000 });
+	const failed = page.locator('[data-sonner-toast][data-type="error"]');
+	const skipped = page.locator('[data-sonner-toast][data-type="warning"]');
 	await button.click();
 	await expect(button).toBeEnabled({ timeout: 120_000 });
+	// Success emits NO toast, so any error/warning toast here is a pass that did
+	// not run. Sampled once: the pass has already completed at this point.
+	const failedText = (await failed.count()) > 0 ? await failed.first().innerText() : null;
+	const skippedText = (await skipped.count()) > 0 ? await skipped.first().innerText() : null;
+	if (failedText !== null || skippedText !== null) {
+		throw new Error(
+			`manual pass did not run — ${failedText !== null ? 'error' : 'skipped'} toast: ${(
+				failedText ??
+				skippedText ??
+				''
+			).replace(/\s+/g, ' ')}`
+		);
+	}
 }
 
 /** Probe row presence on the Products TABLE (the POS grid renders tiles, not rows). */
@@ -268,6 +320,7 @@ test.describe('#1284 ghost residents live proof', () => {
 	}, testInfo) => {
 		test.skip(PHASE !== 'mint', 'phase mismatch');
 		test.setTimeout(900_000);
+		assertOpsTargetsClientStore(getStoreUrl(testInfo));
 
 		await authenticateWithStore(page, testInfo, {
 			waitForCatalogue: true,
@@ -308,9 +361,10 @@ test.describe('#1284 ghost residents live proof', () => {
 		page,
 		context,
 		baseURL,
-	}) => {
+	}, testInfo) => {
 		test.skip(PHASE !== 'ab', 'phase mismatch');
 		test.setTimeout(600_000);
+		assertOpsTargetsClientStore(getStoreUrl(testInfo));
 		const expectation = process.env.GHOST_EXPECT ?? '';
 		expect(['survive', 'pruned']).toContain(expectation);
 
