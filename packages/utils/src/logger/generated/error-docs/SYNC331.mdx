@@ -26,7 +26,8 @@ No order or product data is affected. If this persists, export diagnostics and c
 2. For a changed or missing record, run a targeted download for the affected collection so the device replaces its copy with the store's.
 3. For a deleted record, remove the local copy; the server tombstone must not be downloaded.
 4. Compare the record in WP Admin with what the POS shows; a price or stock difference is the visible symptom.
-5. If the same records keep reappearing after repair, export debug info and contact support - repeated escalation means the repair is not resolving the difference.
+5. If the SAME records keep reappearing after repair, the store's stored digests are stale - this happens after a bulk write that skips WooCommerce's save hooks (a CSV import, a migration plugin, WP-CLI or direct SQL). The record itself is usually fine; a site administrator can clear it by rebuilding the integrity index, and WCPOS schedules that rebuild automatically once a range keeps reporting the same difference.
+6. If it still returns after a rebuild, export debug info and contact support.
 
 ## Where to look {#where-to-look}
 
