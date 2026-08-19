@@ -24,7 +24,7 @@ import { REFERENCE_COLLECTIONS, type ReferenceCollection } from '@wcpos/sync-cor
 
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import {
-	DEFAULT_REFERENCE_LANE_DESCRIPTOR,
+	defaultReferenceLaneDescriptor,
 	parseReferenceLaneQueryKey,
 	type ReferenceLaneDescriptor,
 	referenceLaneQueryKey,
@@ -107,7 +107,7 @@ export function laneKeyFor(collection: SyncCollectionName): string | null {
  */
 export function referenceLaneTaskFor<C extends ReferenceCollection>(
 	collection: C,
-	descriptor: ReferenceLaneDescriptor<C> = DEFAULT_REFERENCE_LANE_DESCRIPTOR
+	descriptor: ReferenceLaneDescriptor<C> = defaultReferenceLaneDescriptor(collection)
 ): FetchTask {
 	const { config, priority } = REFERENCE_LANE_CONFIGS[collection];
 	const queryKey = referenceLaneQueryKey(collection, descriptor);
@@ -202,7 +202,10 @@ export async function seedReferenceLanes(
 					.map((state) => ({ state, parsed: parseReferenceLaneQueryKey(state.queryKey) }))
 					.find(({ parsed }) => parsed?.collection === collection);
 				const descriptor = input.sorts?.[collection] ?? persisted?.parsed?.descriptor;
-				return referenceLaneTaskFor(collection, descriptor ?? DEFAULT_REFERENCE_LANE_DESCRIPTOR);
+				return referenceLaneTaskFor(
+					collection,
+					descriptor ?? defaultReferenceLaneDescriptor(collection)
+				);
 			});
 			for (const state of existing) {
 				const replacement = tasks.find(

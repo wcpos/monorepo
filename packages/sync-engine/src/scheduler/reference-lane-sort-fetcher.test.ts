@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
 	CATEGORY_REFERENCE_CONFIG,
+	COUPON_REFERENCE_CONFIG,
 	createReferenceCollectionFetcher,
 } from './rx-scheduler-reference-fetcher';
 
@@ -39,7 +40,11 @@ function repository() {
 }
 
 describe('reference lane sorted greedy fetches', () => {
-	it('pins the legacy default query bytes and skips verification', async () => {
+	it('pins the term default bytes: the legacy key now walks name asc and verifies its prune', async () => {
+		// Paul's ruling 2026-08-19: terms default to the order every UI shows. The
+		// legacy `categories:all` key IS the name-asc lane — zero key migration —
+		// so the default walk uses the mutable-key prune path (verify leg consulted;
+		// an empty doomed set costs no extra request).
 		const repo = repository();
 		const fetcher = vi.fn(async () => response([cat(1)]));
 		const run = createReferenceCollectionFetcher(CATEGORY_REFERENCE_CONFIG, {
@@ -48,11 +53,37 @@ describe('reference lane sorted greedy fetches', () => {
 			fetcher,
 		});
 
-		await run(task());
+		const result = await run(task());
 
 		expect(fetcher).toHaveBeenCalledOnce();
 		expect(fetcher).toHaveBeenCalledWith(
-			'https://example.test/wp-json/wcpos/v2/products/categories?per_page=2&page=1&orderby=id&order=asc'
+			'https://example.test/wp-json/wcpos/v2/products/categories?per_page=2&page=1&orderby=name&order=asc'
+		);
+		expect(repo.listServerSourcedAbsent).toHaveBeenCalledOnce();
+		expect(result).toMatchObject({ completed: true, requestCount: 1 });
+	});
+
+	it('pins the coupon default bytes: the legacy key keeps the immutable id walk, no verification', async () => {
+		const repo = repository();
+		const fetcher = vi.fn(async () => response([cat(1)]));
+		const run = createReferenceCollectionFetcher(COUPON_REFERENCE_CONFIG, {
+			baseUrl: 'https://example.test/wp-json/wcpos/v2',
+			repository: repo,
+			fetcher,
+		});
+
+		await run({
+			id: 'coupons:all:greedy',
+			requirementId: 'coupons.all',
+			collection: 'coupons',
+			queryKey: 'coupons:all',
+			limit: 2,
+			priority: 920,
+			mode: 'greedy',
+		});
+
+		expect(fetcher).toHaveBeenCalledWith(
+			'https://example.test/wp-json/wcpos/v2/coupons?per_page=2&page=1&orderby=id&order=asc'
 		);
 		expect(repo.listServerSourcedAbsent).not.toHaveBeenCalled();
 	});

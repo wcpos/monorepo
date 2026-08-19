@@ -21,7 +21,6 @@ import { chunk } from './chunk';
 import { censusQueryKey } from './census';
 import { type CacheQueryTotals, queryTotalFromResponse } from './query-total-requests';
 import {
-	DEFAULT_REFERENCE_LANE_DESCRIPTOR,
 	parseReferenceLaneQueryKey,
 	type ReferenceLaneDescriptor,
 } from './reference-lane-descriptor';
@@ -125,7 +124,10 @@ function assertGreedyTask(
 	if (!Number.isSafeInteger(task.limit) || task.limit <= 0) {
 		throw new Error(`${spec.collection} scheduler task limit must be a positive integer`);
 	}
-	return referenceLane?.descriptor ?? DEFAULT_REFERENCE_LANE_DESCRIPTOR;
+	// Non-reference greedy lanes (tax rates) have no descriptor grammar and keep
+	// the immutable id walk. Reference lanes always parse — the legacy key spells
+	// the collection's own default (name asc for terms, id asc for coupons).
+	return referenceLane?.descriptor ?? { orderby: 'id', order: 'asc' };
 }
 
 export async function httpGet(
