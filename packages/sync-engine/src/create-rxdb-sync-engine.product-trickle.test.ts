@@ -51,14 +51,33 @@ function products(start: number, count: number): Record<string, unknown>[] {
 	return Array.from({ length: count }, (_, index) => product(start + index));
 }
 
+/**
+ * The trickle is the only products request that asks for a single 10-record page — the
+ * browse-window drain walks at the Performance dial (100 by default here). It is no longer
+ * identifiable by its sort: the sort is now the cashier's (owner ruling 2026-08-19).
+ */
 function isTrickleUrl(url: string): boolean {
 	const parsed = new URL(url);
 	return (
 		parsed.pathname.endsWith('/products') &&
 		parsed.searchParams.get('status') === 'publish' &&
-		parsed.searchParams.get('orderby') === 'id' &&
-		parsed.searchParams.get('order') === 'asc'
+		parsed.searchParams.get('per_page') === '10'
 	);
+}
+
+/** Declare and settle one products browse window, so the engine records it as current. */
+async function declareBrowseWindow(
+	engine: ReturnType<typeof engineWith>,
+	dimensions: Record<string, unknown>
+): Promise<void> {
+	const handle = engine.require({
+		id: 'grid',
+		collection: 'products',
+		kind: 'product-browse',
+		...dimensions,
+	} as never);
+	await handle.ready.catch(() => undefined);
+	handle.release();
 }
 
 function engineWith(
@@ -95,7 +114,7 @@ describe('product-trickle maintenance lane', () => {
 		await expect(engine.sync('product-trickle')).resolves.toMatchObject({ status: 'ran' });
 		const first = new URL(urls[0]!);
 		expect(first.pathname).toBe('/wp-json/wcpos/v2/products');
-		expect(first.search).toBe('?status=publish&orderby=id&order=asc&per_page=10&page=1');
+		expect(first.search).toBe('?orderby=menu_order&order=asc&status=publish&per_page=10&page=1');
 		expect(await scope.database.collections.products.count().exec()).toBe(10);
 		expect(await scope.database.collections.existenceManifest.count().exec()).toBe(10);
 
@@ -126,6 +145,69 @@ describe('product-trickle maintenance lane', () => {
 		await expect(engine.sync('product-trickle')).resolves.toMatchObject({ status: 'ran' });
 		await engine.sync('product-trickle');
 		expect(pages).toEqual(['1', '2', '1']);
+		await engine.dispose();
+	});
+
+	// Paul's ruling, 2026-08-19: the catalogue comes down in the order the merchant/cashier
+	// chose, not by id — and re-pointing the grid re-points the backfill.
+	it('trickles in the sort the grid last declared, and restarts when that sort changes', async () => {
+		const trickled: URL[] = [];
+		const engine = engineWith({
+			fetcher: async (url) => {
+				if (isTrickleUrl(url)) trickled.push(new URL(url));
+				return json(products(1, 10));
+			},
+		});
+		await engine.ready;
+
+		await declareBrowseWindow(engine, { limit: 100, orderby: 'title', order: 'asc' });
+		await engine.sync('product-trickle');
+		await engine.sync('product-trickle');
+		expect(trickled.map((url) => url.searchParams.get('orderby'))).toEqual(['title', 'title']);
+		expect(trickled.map((url) => url.searchParams.get('page'))).toEqual(['1', '2']);
+
+		// The cashier re-sorts to newest-first: the walk starts again in THAT order.
+		await declareBrowseWindow(engine, { limit: 100, orderby: 'date', order: 'desc' });
+		await engine.sync('product-trickle');
+		expect(trickled[2]!.searchParams.get('orderby')).toBe('date');
+		expect(trickled[2]!.searchParams.get('order')).toBe('desc');
+		expect(trickled[2]!.searchParams.get('page')).toBe('1');
+		await engine.dispose();
+	});
+
+	// Filters PRIORITISE, they do not EXCLUDE: the till must still end up able to sell the
+	// products the cashier's filter hid.
+	it('covers the filtered window first, then continues the same sort unfiltered', async () => {
+		const trickled: URL[] = [];
+		const engine = engineWith({
+			fetcher: async (url) => {
+				if (!isTrickleUrl(url)) return json([]);
+				trickled.push(new URL(url));
+				return json(products(trickled.length * 100, 3));
+			},
+		});
+		await engine.ready;
+
+		await declareBrowseWindow(engine, {
+			limit: 100,
+			orderby: 'title',
+			order: 'asc',
+			stock_status: 'instock',
+		});
+		// Stage 1 runs out of in-stock products — that is a handover, not the end of the walk.
+		await expect(engine.sync('product-trickle')).resolves.toMatchObject({ status: 'ran' });
+		expect(trickled[0]!.searchParams.get('stock_status')).toBe('instock');
+
+		await expect(engine.sync('product-trickle')).resolves.toMatchObject({ status: 'ran' });
+		expect(trickled[1]!.searchParams.get('stock_status')).toBeNull();
+		expect(trickled[1]!.searchParams.get('orderby')).toBe('title');
+		expect(trickled[1]!.searchParams.get('page')).toBe('1');
+
+		await expect(engine.sync('product-trickle')).resolves.toMatchObject({
+			status: 'skipped',
+			reason: 'walk-complete',
+		});
+		expect(trickled).toHaveLength(2);
 		await engine.dispose();
 	});
 

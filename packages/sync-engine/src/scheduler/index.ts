@@ -56,11 +56,17 @@ export {
 	WOO_REST_MAX_PER_PAGE,
 } from './order-browser-scheduler-descriptor';
 export {
+	hasProductBrowseWindowFilters,
 	normalizeProductBrowseWindowLimit,
 	parseProductBrowseWindowDescriptor,
 	PRODUCT_BROWSE_WINDOW_LIMIT,
+	PRODUCT_BROWSE_WINDOW_ORDER,
+	PRODUCT_BROWSE_WINDOW_ORDERBY,
 	PRODUCT_BROWSE_WINDOW_STEP,
 	productBrowseWindowQueryKeyFromDimensions,
+	productBrowseWindowQueryParams,
+	productBrowseWindowViewKey,
+	type ProductBrowseWindowDescriptor,
 	type ProductBrowseWindowOrderby,
 } from './product-browse-window-descriptor';
 export {

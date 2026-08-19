@@ -275,6 +275,28 @@ type SeedDrainRequirement = {
 export type RequirePlane = {
 	require(requirement: EngineRequirement): RequirementHandle;
 	hasPendingWork(): boolean;
+	/**
+	 * The lane identity of the LAST products browse window a grid declared — the cashier's
+	 * current effective catalog sort and filters, in the engine's own grammar.
+	 *
+	 * Paul's ruling, 2026-08-19: the idle catalog backfill must download products in the
+	 * order the merchant/cashier actually cares about, not by id. "The store owner will set a
+	 * default sort order and that should be the governing principle of which products come
+	 * down first… and then if they change the sort order to created first, then that should
+	 * be the order that the products are coming down."
+	 *
+	 * The maintenance lane runs inside the engine and has no view of UI state, but it does
+	 * not need one: the grid ALREADY declares its effective sort and representable filters
+	 * here on every render, and `require()` already derives the canonical window key from
+	 * them. The merchant's default `pos-products` sort arrives the same way — it is what the
+	 * grid mounts with — so no host settings port is involved.
+	 *
+	 * In memory and last-write-wins: null until a products grid has declared once this
+	 * session, and the POS grid and the Products screen overwrite each other (the grid the
+	 * cashier last had open is the one that governs). A caller must treat null as "use the
+	 * default window".
+	 */
+	lastProductBrowseQueryKey(): string | null;
 };
 
 export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
@@ -289,6 +311,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	});
 	const queue: QueuedRequirement[] = [];
 	const activeSearches = new Map<string, QueuedRequirement>();
+	/** See RequirePlane.lastProductBrowseQueryKey — the idle backfill's ordering signal. */
+	let lastProductBrowseQueryKey: string | null = null;
 	// Demand-path reference refreshes dedupe ONLY against their own last pull
 	// (#1302 round 2): the persisted task timestamp is shared with the idle
 	// maintenance lane, and a maintenance completion landing shortly before a
@@ -1201,6 +1225,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 
 	return {
 		hasPendingWork: () => running || queue.length > 0,
+		lastProductBrowseQueryKey: () => lastProductBrowseQueryKey,
 		require: (requirement) => {
 			// The runaway backstop is the ONE ceiling left on a browse window (#948/#957),
 			// and it must never behave like the caps it replaced: it is announced, not
@@ -1222,7 +1247,11 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			const queryKey = (() => {
 				if (requirement.kind === 'orders-browse') return orderBrowserQueryKey(requirement);
 				if (requirement.kind === 'product-browse') {
-					return productBrowseWindowQueryKeyFromDimensions(requirement);
+					// Recorded on DECLARATION, not on completion: the idle backfill must follow the
+					// window the grid is showing even when that window was served entirely from
+					// local rows (which writes no coverage and completes no task).
+					return (lastProductBrowseQueryKey =
+						productBrowseWindowQueryKeyFromDimensions(requirement));
 				}
 				if (requirement.kind === 'customer-browse') {
 					return customerBrowseWindowQueryKeyFromDimensions(requirement);

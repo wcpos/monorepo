@@ -43,6 +43,7 @@ import {
 	type ProductBrowseWindowDescriptor,
 	productBrowseWindowFilterPart,
 	productBrowseWindowPredecessorQueryKey,
+	productBrowseWindowQueryParams,
 } from './product-browse-window-descriptor';
 import { censusQueryKey } from './census';
 import { type CacheQueryTotals, queryTotalFromResponse } from './query-total-requests';
@@ -463,16 +464,12 @@ async function tryProductBrowseWindowWalk(
 		descriptor.order === PRODUCT_BROWSE_WINDOW_ORDER;
 	const query = new URLSearchParams();
 	query.set('per_page', String(pageSize));
-	query.set('orderby', descriptor.orderby);
-	query.set('order', descriptor.order);
-	query.set('status', 'publish');
-	for (const field of ['category', 'tag', 'brand'] as const) {
-		if (descriptor[field]) query.set(field, descriptor[field].join(','));
+	// The window's sort + filters come from the ONE translator the idle catalog backfill
+	// also walks by (product-browse-window-descriptor.ts), so the two lanes can never
+	// express the same window as two different wire requests.
+	for (const [field, value] of productBrowseWindowQueryParams(descriptor)) {
+		query.set(field, value);
 	}
-	for (const field of ['featured', 'on_sale'] as const) {
-		if (descriptor[field] !== undefined) query.set(field, String(descriptor[field]));
-	}
-	if (descriptor.stock_status) query.set('stock_status', descriptor.stock_status);
 
 	// Resume at the first page holding uncovered rows, dropping the rows of that page the
 	// prefix already carries. Worst case one partially-wasted page per growth step —
