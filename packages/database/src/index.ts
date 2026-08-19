@@ -57,8 +57,6 @@ export type {
 	StoreCollections,
 	StoreDatabase,
 	StoreDocument,
-	SyncCollection,
-	SyncDocument,
 	TaxRateDocument,
 	TemplateDocument,
 	UserDatabase,
