@@ -208,8 +208,13 @@ export async function seedReferenceLanes(
 				);
 			});
 			for (const state of existing) {
+				const isFormerTermDefault =
+					state.collection !== 'coupons' &&
+					state.queryKey === `${state.collection}:all:orderby=name:order=asc`;
 				const replacement = tasks.find(
-					(task) => parseReferenceLaneQueryKey(state.queryKey)?.collection === task.collection
+					(task) =>
+						parseReferenceLaneQueryKey(state.queryKey)?.collection === task.collection ||
+						(isFormerTermDefault && state.collection === task.collection)
 				);
 				if (!replacement || replacement.id === state.taskId) continue;
 				// The remove is CAS-guarded, and a concurrent owner (a drain claiming,
