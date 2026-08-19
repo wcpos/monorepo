@@ -20,16 +20,19 @@ import { AppInfo } from '@wcpos/utils/app-info';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { buildAuthUrl, generateState, getRedirectUri, parseAuthResult } from './utils';
+import {
+	captureRedirectResult,
+	claimRedirectResult,
+	clearRedirectState,
+	saveRedirectState,
+} from './redirect-result';
+import { buildAuthUrl, generateState, getRedirectUri } from './utils';
 
 import type { UseWcposAuthReturn, WcposAuthConfig, WcposAuthResult } from './types';
 
 const oauthLogger = getLogger(['wcpos', 'auth', 'oauth']);
 
 export type { WcposAuthConfig, WcposAuthResult, UseWcposAuthReturn } from './types';
-
-const AUTH_STATE_KEY = 'wcpos_auth_state';
-const AUTH_CSRF_STATE_KEY = 'wcpos_auth_csrf_state';
 
 /**
  * Navigate to URL - extracted to avoid React Compiler warning about
@@ -39,108 +42,27 @@ function navigateToUrl(url: string): void {
 	window.location.href = url;
 }
 
-interface SavedAuthState {
-	returnPath: string;
-	timestamp: number;
-}
-
-function getSavedAuthState(): SavedAuthState | null {
-	if (typeof sessionStorage === 'undefined') return null;
-
-	const raw = sessionStorage.getItem(AUTH_STATE_KEY);
-	if (!raw) return null;
-
-	try {
-		return JSON.parse(raw) as SavedAuthState;
-	} catch {
-		return null;
-	}
-}
-
-/**
- * Save current location before redirecting
- */
-function saveAuthState(): void {
-	const state: SavedAuthState = {
-		returnPath: window.location.pathname + window.location.search,
-		timestamp: Date.now(),
-	};
-	sessionStorage.setItem(AUTH_STATE_KEY, JSON.stringify(state));
-}
-
-/**
- * Clear saved auth state
- */
-function clearAuthState(): void {
-	sessionStorage.removeItem(AUTH_STATE_KEY);
-	sessionStorage.removeItem(AUTH_CSRF_STATE_KEY);
-}
-
-/**
- * Save CSRF state before redirect
- */
-function saveCsrfState(state: string): void {
-	sessionStorage.setItem(AUTH_CSRF_STATE_KEY, state);
-}
-
-/**
- * Get saved CSRF state
- */
-function getSavedCsrfState(): string | null {
-	if (typeof sessionStorage === 'undefined') return null;
-	return sessionStorage.getItem(AUTH_CSRF_STATE_KEY);
-}
-
-/**
- * Result of inspecting the URL for auth tokens (redirect-return fallback).
- * Computed synchronously from window.location so it can seed initial state.
- */
-function parseAuthFromUrl(): WcposAuthResult | null {
-	if (typeof window === 'undefined') return null;
-
-	const hash = window.location.hash;
-	const search = window.location.search;
-
-	if (!hash && !search) return null;
-
-	const urlToCheck = window.location.href;
-	if (!urlToCheck.includes('access_token') && !urlToCheck.includes('error')) {
-		return null;
-	}
-
-	oauthLogger.debug('Detected auth params in URL, parsing...');
-	const result = parseAuthResult(urlToCheck);
-
-	// Validate CSRF state for our fallback redirect
-	if (result.type === 'success' && result.params) {
-		const savedState = getSavedCsrfState();
-		const returnedState = (result.params as unknown as Record<string, unknown>)?.state as
-			string | undefined;
-
-		if (savedState && returnedState !== savedState) {
-			oauthLogger.error('State parameter mismatch - possible CSRF attack', {
-				code: ERROR_CODES.AUTH_UNEXPECTED,
-			});
-			return {
-				type: 'error',
-				error: 'State parameter mismatch - authentication rejected for security',
-			};
-		}
-	}
-
-	if (result.type === 'success' || result.type === 'error') {
-		return result;
-	}
-
-	return null;
-}
-
 export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
-	// Seed state once from the URL (redirect-return fallback) and from any error
-	// raised while launching the prompt. Both are set outside of effects.
-	const [imperativeResult, setImperativeResult] = React.useState<WcposAuthResult | null>(() =>
-		parseAuthFromUrl()
-	);
+	// Holds the redirect-return result once this instance claims it, and any
+	// error raised while launching the prompt.
+	const [imperativeResult, setImperativeResult] = React.useState<WcposAuthResult | null>(null);
+
+	const loginUrl = config.site?.wcpos_login_url ?? null;
+
+	// Capture the redirect return on the first mount of any instance (parses,
+	// CSRF-validates, and strips the URL exactly once per page load), then claim
+	// the result for this instance's site. Claiming happens in an effect — not a
+	// render-time initializer — so a render discarded by Suspense can't consume
+	// the one-shot result. The consumer for the initiating site typically mounts
+	// long after the first instances, so the claim has to survive until then.
+	React.useEffect(() => {
+		captureRedirectResult();
+		const pendingResult = claimRedirectResult(loginUrl);
+		if (pendingResult) {
+			// eslint-disable-next-line react-hooks/set-state-in-effect -- claiming consumes a one-shot external store (the parsed redirect URL); it must happen post-commit, never during render, so a Suspense-discarded render can't eat the token.
+			setImperativeResult(pendingResult);
+		}
+	}, [loginUrl]);
 
 	const redirectUri = React.useMemo(() => getRedirectUri(), []);
 
@@ -216,25 +138,10 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 	// A live response supersedes the seeded URL/prompt result.
 	const authResult = responseResult ?? imperativeResult;
 
-	/**
-	 * Mount-only side effects. State seeding for both the URL fallback and the
-	 * response mapping happens during render (above); this effect only performs
-	 * the imperative cleanup that must run once: clearing saved auth state and
-	 * stripping auth params from the URL. Runs once on mount.
-	 */
-	React.useEffect(() => {
-		const urlResult = parseAuthFromUrl();
-		if (urlResult && (urlResult.type === 'success' || urlResult.type === 'error')) {
-			const cleanUrl = getSavedAuthState()?.returnPath ?? window.location.pathname;
-			clearAuthState();
-			window.history.replaceState({}, document.title, cleanUrl);
-		}
-	}, []);
-
 	// Clear saved auth state once a live response resolves successfully or errors.
 	React.useEffect(() => {
 		if (response && (response.type === 'success' || response.type === 'error')) {
-			clearAuthState();
+			clearRedirectState();
 		}
 	}, [response]);
 
@@ -267,8 +174,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 				state,
 				mergedExtraParams
 			);
-			saveAuthState();
-			saveCsrfState(state);
+			saveRedirectState(config.site!.wcpos_login_url, state);
 			oauthLogger.debug('Redirecting to auth URL', { context: { authUrl } });
 			navigateToUrl(authUrl);
 		};
