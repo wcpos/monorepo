@@ -1,16 +1,16 @@
 ---
 title: "SYNC331: Local record diverged"
 sidebar_label: SYNC331
-description: "This record on the device does not match your store and needs downloading again."
+description: "This record on the device does not match your store and needs local repair."
 ---
 
 {/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with `pnpm generate:error-codes`. */}
 
 ## What this means {#what-this-means}
 
-This record on the device does not match your store and needs downloading again.
+This record on the device does not match your store and needs local repair.
 
-Nothing you entered is waiting to be sent. The device's copy of a record your store owns has drifted from the store's copy, so download that record again.
+Nothing you entered is waiting to be sent. The device's copy of a record your store owns has drifted from the store's copy; repair it according to the status shown in the log.
 
 ## What to do {#what-to-do}
 
@@ -22,10 +22,11 @@ No order or product data is affected. If this persists, export diagnostics and c
 
 ## Troubleshoot {#troubleshoot}
 
-1. Expand the log entry - its context names the collection, the record id and the detector that spotted the difference.
-2. Run a targeted download for the affected collection so the device replaces its copy with the store's.
-3. Compare the record in WP Admin with what the POS shows; a price or stock difference is the visible symptom.
-4. If the same records keep reappearing after a download, export debug info and contact support - repeated escalation means the download is not resolving the difference.
+1. Expand the log entry - its context names the collection, the record id, the status and the detector that spotted the difference.
+2. For a changed or missing record, run a targeted download for the affected collection so the device replaces its copy with the store's.
+3. For a deleted record, remove the local copy; the server tombstone must not be downloaded.
+4. Compare the record in WP Admin with what the POS shows; a price or stock difference is the visible symptom.
+5. If the same records keep reappearing after repair, export debug info and contact support - repeated escalation means the repair is not resolving the difference.
 
 ## Where to look {#where-to-look}
 

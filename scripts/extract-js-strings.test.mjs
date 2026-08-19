@@ -95,3 +95,30 @@ test("--check sees both footer count keys as literal calls", () => {
     assert.match(output, /common\.showing_of_at_least/, footerPath);
   }
 });
+
+test("--check sees every attention-reason key as a literal call", () => {
+  const root = mkdtempSync(join(tmpdir(), "wcpos-translations-attention-"));
+  const attentionPath =
+    "packages/core/src/screens/main/health/attention-panel.tsx";
+
+  writeFixtureFile(
+    root,
+    "packages/core/src/contexts/translations/locales/en/core.json",
+    JSON.stringify({}, null, "\t"),
+  );
+  writeFixtureFile(
+    root,
+    attentionPath,
+    readFileSync(new URL(`../${attentionPath}`, import.meta.url), "utf8"),
+  );
+
+  const result = spawnSync(process.execPath, [scriptPath, root, "--check"], {
+    encoding: "utf8",
+  });
+  const output = `${result.stdout}\n${result.stderr}`;
+
+  assert.notEqual(result.status, 0, output);
+  assert.match(output, /health\.database\.attention_reason"/);
+  assert.match(output, /health\.database\.attention_reason_pull"/);
+  assert.match(output, /health\.database\.attention_reason_delete"/);
+});

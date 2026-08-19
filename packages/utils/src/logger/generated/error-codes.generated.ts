@@ -260,9 +260,9 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		retryPolicy: 'manual',
 		dataSafety: 'no-impact',
 		escalation: 'support-with-export',
-		summary: 'This record on the device does not match your store and needs downloading again.',
+		summary: 'This record on the device does not match your store and needs local repair.',
 		docsBody:
-			"Nothing you entered is waiting to be sent. The device's copy of a record your store owns has drifted from the store's copy, so download that record again.",
+			"Nothing you entered is waiting to be sent. The device's copy of a record your store owns has drifted from the store's copy; repair it according to the status shown in the log.",
 		introducedIn: '1.10.0',
 		evidence: 'monorepo: dev-pro session 2026-08-19, 138 products escalated per sweep',
 	},

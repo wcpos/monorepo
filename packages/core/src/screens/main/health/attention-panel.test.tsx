@@ -129,6 +129,20 @@ describe('AttentionPanel', () => {
 		expect(text).not.toContain('upload');
 	});
 
+	it('says remove, not download, for a deleted pull escalation', () => {
+		mockExec.mockResolvedValue(null);
+
+		render(
+			<AttentionPanel
+				stuck={[{ ...stuck('products', false), direction: 'pull', status: 'deleted' }]}
+			/>
+		);
+
+		const text = screen.getByTestId('db-attention-panel').textContent ?? '';
+		expect(text).toContain('removed from this device');
+		expect(text).not.toContain('download');
+	});
+
 	it('still says upload for a push-direction record', () => {
 		mockExec.mockResolvedValue(null);
 

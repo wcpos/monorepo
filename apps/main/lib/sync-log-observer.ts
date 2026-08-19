@@ -273,16 +273,16 @@ export const CONFORMANCE_TABLE = {
 		code: null,
 	},
 	// A pull escalation is a READ-side divergence: the detector found this
-	// record's local copy differs from the store's, so it needs downloading
-	// again. Nothing the cashier entered is stranded. It stays `sync.record`
+	// record's local copy differs from the store's, so it needs status-aware
+	// local repair. Nothing the cashier entered is stranded. It stays `sync.record`
 	// /`failed` on purpose — that is what puts it in the attention list, which
 	// is the whole point of an escalation the engine will not auto-repair
 	// (`applyReplicationActions` §8) — but the CODE must not be
 	// LOCAL_DB_WRITE_FAILED. That code means "could not be saved to the local
 	// database", severity error, data-at-risk, contact-support, and it made a
 	// routine catalogue re-check read as a data-loss event on Store health.
-	// The direction field is what the UI reads to say "download" and not
-	// "upload"; see `health.database.attention_reason_pull`.
+	// The direction and status fields let the UI distinguish a download from
+	// removing a tombstoned record; neither path is an upload.
 	'apply.escalation': {
 		operationType: 'sync.record',
 		outcome: 'failed',

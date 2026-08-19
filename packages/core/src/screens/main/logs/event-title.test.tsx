@@ -7,7 +7,7 @@ import { EVENT_LABELS } from '@wcpos/utils/logger/generated/event-labels.generat
 
 import { createTestT } from '../../../../jest/translate';
 import { useEventTitle } from './event-title';
-import { translateEventDescription } from './generated/event-titles.generated';
+import { translateEventDescription, translateEventTitle } from './generated/event-titles.generated';
 
 import type { LogRow } from './logs-logic';
 
@@ -105,6 +105,12 @@ describe('useEventTitle', () => {
 });
 
 describe('translateEventDescription', () => {
+	it('describes an escalation as local divergence, not a failed store update', () => {
+		expect(translateEventTitle(createTestT(), 'apply.escalation')).toBe(
+			'A record on this device does not match your store'
+		);
+	});
+
 	it('round-trips a described event through the English catalogue', () => {
 		expect(translateEventDescription(createTestT(), 'apply.pull')).toBe(
 			'Updates made in your store were saved to this device.'

@@ -239,13 +239,14 @@
 		"retryPolicy": "manual",
 		"dataSafety": "no-impact",
 		"escalation": "support-with-export",
-		"summary": "This record on the device does not match your store and needs downloading again.",
-		"docsBody": "Nothing you entered is waiting to be sent. The device's copy of a record your store owns has drifted from the store's copy, so download that record again.",
+		"summary": "This record on the device does not match your store and needs local repair.",
+		"docsBody": "Nothing you entered is waiting to be sent. The device's copy of a record your store owns has drifted from the store's copy; repair it according to the status shown in the log.",
 		"troubleshooting": [
-			"Expand the log entry - its context names the collection, the record id and the detector that spotted the difference.",
-			"Run a targeted download for the affected collection so the device replaces its copy with the store's.",
+			"Expand the log entry - its context names the collection, the record id, the status and the detector that spotted the difference.",
+			"For a changed or missing record, run a targeted download for the affected collection so the device replaces its copy with the store's.",
+			"For a deleted record, remove the local copy; the server tombstone must not be downloaded.",
 			"Compare the record in WP Admin with what the POS shows; a price or stock difference is the visible symptom.",
-			"If the same records keep reappearing after a download, export debug info and contact support - repeated escalation means the download is not resolving the difference."
+			"If the same records keep reappearing after repair, export debug info and contact support - repeated escalation means the repair is not resolving the difference."
 		],
 		"logSources": [],
 		"evidence": "monorepo: dev-pro session 2026-08-19, 138 products escalated per sweep",

@@ -222,6 +222,14 @@ describe('error registry', () => {
 		expect(guidance).toContain("if it failed, follow that request's error");
 	});
 
+	it('gives status-aware repair guidance for SYNC331 tombstones', () => {
+		const entry = entryFor('SYNC331');
+		const guidance = entry.troubleshooting.join(' ');
+		expect(entry.summary).not.toContain('downloading');
+		expect(guidance).toContain('deleted record');
+		expect(guidance).toContain('must not be downloaded');
+	});
+
 	it('documents the passive SYNC411 flood alarm without implying throttling', () => {
 		const entry = entryFor('SYNC411');
 		const guidance = entry.troubleshooting.join(' ');
