@@ -155,6 +155,18 @@ export default defineConfig<WcposTestOptions>({
 					{
 						name: 'free-authenticated',
 						testIgnore: [/auth\.spec\.ts/, COLD_SPEC, LIVE_SPEC],
+						// The free lane needs its own budget. Measured 2026-08-19 on one
+						// machine, single worker, same build, same spec
+						// (pos-variations "popover button on variable products"):
+						// pro 1.1 min, free 2.2 min. Against the 180s default that
+						// leaves the free lane ~25% headroom with NO contention, so
+						// ordinary CI parallelism pushes it over and every free shard
+						// times out at exactly 3.0m — which reads as a broken diff on
+						// whichever PR happens to be running (it took out every open PR
+						// on 2026-08-19). This is a budget correction, not a mask: the
+						// specs pass, they are simply slower against this store. Why
+						// free runs 2x pro is tracked separately.
+						timeout: 300_000,
 						use: {
 							...devices['Desktop Chrome'],
 							storeVariant: 'free' as const,
