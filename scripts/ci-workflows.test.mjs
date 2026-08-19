@@ -106,7 +106,13 @@ test('the shared-store queue stays removed', () => {
 	const workflow = readWorkflow('deploy.yml');
 
 	assert.ok(!('queue' in workflow.jobs), 'deploy.yml grew a queue job again');
-	assert.deepEqual(workflow.jobs.e2e.needs, 'deploy');
+	// e2e may depend on `changes` (scope narrowing) and `deploy`, never on a queue.
+	const e2eNeeds = [workflow.jobs.e2e.needs].flat();
+	assert.ok(e2eNeeds.includes('deploy'), 'e2e no longer waits for the deployment');
+	assert.ok(
+		!e2eNeeds.some((need) => /queue/i.test(need)),
+		'e2e depends on a queue job again — see the ruling above'
+	);
 
 	const gate = workflow.jobs['e2e-gate'];
 	assert.ok(!('QUEUE_RESULT' in gate.steps[0].env), 'e2e-gate re-grew QUEUE_RESULT');
@@ -129,8 +135,10 @@ test('both lanes run four E2E shards', () => {
 	// Shard count divides the same test list — it can never change coverage.
 	const matrix = readWorkflow('deploy.yml').jobs.e2e.strategy.matrix;
 
-	assert.equal(matrix.shardIndex, "${{ fromJSON('[1, 2, 3, 4]') }}");
-	assert.equal(matrix.shardTotal, "${{ fromJSON('[4]') }}");
+	// The DEFAULT arm — what an ordinary PR runs. (A spec-only PR deliberately
+	// narrows to one shard; that arm is pinned in the scope-narrowing test.)
+	assert.match(matrix.shardIndex, /\|\| '\[1, 2, 3, 4\]'/);
+	assert.match(matrix.shardTotal, /\|\| '\[4\]'/);
 });
 
 test('cold-start dispatches bind raw refs to an explicit store lane', () => {
@@ -178,6 +186,31 @@ test('the E2E auth-state cache is shard- and lane-scoped', () => {
 		assert.match(crypto.run, /openssl enc/);
 	}
 	assert.match(encrypt.run, /rm -rf e2e\/\.auth-state/);
+});
+
+test('E2E scope narrowing cannot silently drop coverage', () => {
+	// Narrowing is a wall-clock optimisation; it must never be able to turn a
+	// real regression into a green run.
+	const workflow = readWorkflow('deploy.yml');
+	const changes = workflow.jobs.changes;
+	const scope = changes.steps.find((step) => /Scope E2E to the change/.test(step.name ?? ''));
+
+	assert.ok(scope, 'the changes job no longer scopes the E2E run');
+	// A branch NAME would be missing from a PR checkout; the base SHA always resolves.
+	assert.match(scope.run, /github\.event\.pull_request\.base\.sha/);
+	assert.equal(changes.outputs.behavioural, '${{ steps.scope.outputs.behavioural }}');
+	assert.equal(changes.outputs.only_specs, '${{ steps.scope.outputs.only_specs }}');
+
+	// Deploy (and therefore E2E) skip only on an explicit false — an unset or
+	// errored scope step must leave the full pipeline running.
+	assert.match(workflow.jobs.deploy.if, /needs\.changes\.outputs\.behavioural != 'false'/);
+
+	// A narrowed run uses ONE shard: spreading two specs over four shards leaves
+	// shards with zero tests, and a shard that runs zero tests still exits 0.
+	const matrix = workflow.jobs.e2e.strategy.matrix;
+	assert.match(matrix.shardIndex, /only_specs != '' && '\[1\]'/);
+	assert.match(matrix.shardTotal, /only_specs != '' && '\[1\]'/);
+	assert.deepEqual([...workflow.jobs.e2e.needs].sort(), ['changes', 'deploy']);
 });
 
 test('the deploy concurrency contract isolates stale rerun attempts', () => {

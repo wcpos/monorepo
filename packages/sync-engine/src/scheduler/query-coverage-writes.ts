@@ -7,17 +7,6 @@ export type QueryCoverageResultRecord = {
 	id: string;
 };
 
-export type QueryCoverageCompletenessEvidence = {
-	returnedRecordCount: number;
-	totalMatchingRecords: number | null;
-};
-
-export function deriveQueryCoverageCompleteness(input: QueryCoverageCompletenessEvidence): boolean {
-	return (
-		input.totalMatchingRecords !== null && input.returnedRecordCount === input.totalMatchingRecords
-	);
-}
-
 export type BuildCoverageDocumentsFromQueryResultInput = {
 	collection: string;
 	queryKey: string;
