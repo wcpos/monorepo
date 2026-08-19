@@ -1,7 +1,10 @@
 import { FLEXSEARCH_MIN_TERM_LENGTH, variationDocumentId } from '@wcpos/sync-core';
 
-import { parseVariationsEnvelope, variationDocument } from '../collections/collection-descriptors';
-import { manifestRowOf } from '../materialization/record-materialization';
+import {
+	parseVariationsEnvelope,
+	variationMaterialized,
+} from '../collections/collection-descriptors';
+import { manifestRowsForApplied } from '../local-coverage/existence-manifest-population';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import {
 	type CollectionSchedulerInput,
@@ -111,16 +114,16 @@ export function createVariationsSchedulerFetcher(
 				: await fetchVariationSearchLeg(input, 'search', search, limit, pageSize, context);
 		const skuLeg = await fetchVariationSearchLeg(input, 'sku', search, limit, pageSize, context);
 		const payloads = uniqueVariationPayloads([...skuLeg.payloads, ...(searchLeg?.payloads ?? [])]);
-		const documents = payloads
+		// The manifest row travels on the envelope, not on the stored document — see
+		// MaterializedProjection. Upsert the documents first, then feed the sink their rows.
+		const materialized = payloads
 			.slice(0, limit)
-			.map(
-				(payload) =>
-					variationDocument(payload, input.barcodeSelectors?.()) as StoredVariationDocument
-			);
-		await input.repository.upsertMany(documents);
-		const manifestRows = documents.flatMap((document) =>
-			manifestRowOf(document) ? [manifestRowOf(document)!] : []
+			.map((payload) => variationMaterialized(payload, input.barcodeSelectors?.()));
+		const documents = materialized.map(
+			({ storedDocument }) => storedDocument as StoredVariationDocument
 		);
+		const applied = (await input.repository.upsertMany(documents)) ?? documents;
+		const manifestRows = manifestRowsForApplied(materialized, applied);
 		if (input.manifestSink && manifestRows.length > 0) {
 			await input.manifestSink(manifestRows);
 		}

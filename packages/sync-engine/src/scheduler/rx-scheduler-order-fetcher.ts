@@ -13,7 +13,8 @@ import {
 	type WooOrderPayload,
 } from '@wcpos/sync-core';
 
-import { materializeLocalOnly } from '../materialization/record-materialization';
+import { manifestRowsForApplied } from '../local-coverage/existence-manifest-population';
+import { type Materialized, materializeLocalOnly } from '../materialization/record-materialization';
 import {
 	BROWSE_WINDOW_MAX_PAGES_PER_DRAIN,
 	type BrowseWindowContinuation,
@@ -35,6 +36,7 @@ import { assertReturnedRequestedIds, chunk, httpGet } from './rx-scheduler-colle
 // prettier-ignore
 import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerFetcher, type SchedulerFetcherContext } from './replication-policy';
 
+import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
 import type { RangedLaneResumeState } from './persisted-coverage-schema';
 import type {
 	BuildCoverageDocumentsFromQueryResultInput,
@@ -105,7 +107,16 @@ export type OrdersSchedulerCoverageRepository = BrowseWindowLaneEvictionReposito
 export type OrdersSchedulerFetcherInput = {
 	/** The versioned WCPOS sync base — all order reads (custom-pull, browser, targeted) route through it. */
 	baseUrl: string;
-	repository: CustomPullRepository;
+	repository: CustomPullRepository & {
+		/**
+		 * Leg-3 (ADR 0015): record the existence-manifest rows of the orders this fetcher just
+		 * APPLIED — the ingest site owns the manifest write because only it holds the pull's
+		 * `Materialized` envelopes and knows which documents survived the guards (ADR 0028 rider).
+		 * Optional so a test fake can omit it; EngineOrderRepository — the only production
+		 * implementation — always provides it, so there is no wiring line to forget.
+		 */
+		upsertManifestRows?(rows: readonly ExistenceManifestDocument[]): Promise<void>;
+	};
 	checkpointStore: CustomPullCheckpointStore;
 	fetcher?: Fetcher;
 	coverageRepository?: OrdersSchedulerCoverageRepository;
@@ -235,6 +246,15 @@ export function orderDocumentFromWooPayload(payload: WooOrderPayload) {
 }
 
 /**
+ * The same materialization, envelope and all: the stored order PLUS the existence-manifest row
+ * the server's `_rxdb_digest` produced (ADR 0028 rider). The pull lanes use THIS one — they own
+ * the manifest write, because only they know which documents survived the pending-mutation guard.
+ */
+function materializedOrderFromWooPayload(payload: WooOrderPayload): Materialized<OrderDocument> {
+	return materializeLocalOnly(payload);
+}
+
+/**
  * Client-assemble a custom-pull record into the stored order document. The server streams the
  * payload + its computed sync (checkpoint/revision/sequence/source); the CLIENT derives the
  * storage id from the payload's server-stamped uuid via identifyRecord — uniform with the
@@ -242,21 +262,40 @@ export function orderDocumentFromWooPayload(payload: WooOrderPayload) {
  * here, so the client owns identity for every order path. (mintOnMissing:false — a pulled record
  * MUST already carry its uuid.) sync/local stay as the server computed them.
  */
-function assembleCustomPullOrderDocument(document: OrderDocument): OrderDocument {
+function assembleCustomPullOrderDocument(
+	document: OrderDocument,
+	manifestRows: Map<string, ExistenceManifestDocument>
+): OrderDocument {
 	// Derive BOTH identity fields from the payload (not the server envelope): the storage id from
 	// the stamped uuid, and remoteId from payload.id — same as orderDocumentFromWooPayload. The
 	// scheduler keys coverage off remoteId and the pending-mutation pull guard off the uuid, so
 	// trusting a stale envelope identity could record a correct payload under the wrong order or
 	// clobber a queued local mutation. Owning both from the payload keeps the document consistent.
-	const assembled = materializeLocalOnly(document.payload).storedDocument;
-	// Assign in place instead of spreading: the existence-manifest row rides on a
-	// non-enumerable Symbol that materializeLocalOnly attaches to the document, and an
-	// object spread drops it — which starved the order manifest for every custom-pull
-	// order (the payload's _rxdb_digest is already stripped by then, so the repository's
-	// fallback finds nothing either).
-	assembled.sync = document.sync;
-	assembled.local = document.local;
+	const { storedDocument, manifestRow } = materializeLocalOnly(document.payload);
+	const assembled = { ...storedDocument, sync: document.sync, local: document.local };
+	// The manifest row is EXPLICIT batch state, not metadata riding the document: park it under
+	// the assembled uuid so `afterUpsert` can record exactly the rows of the documents the
+	// adapter applied. It used to ride a non-enumerable Symbol, which this very spread dropped —
+	// starving the order manifest for every custom-pull order (#1340).
+	if (manifestRow) manifestRows.set(assembled.uuid, manifestRow);
 	return assembled;
+}
+
+/**
+ * Seed the order existence manifest with the rows of the documents this lane APPLIED — after
+ * their upsert, never before (an abort between the two leaves a missing row that self-heals; an
+ * orphan row does not). A pulled order the pending-mutation guard skipped contributes NOTHING:
+ * its local copy is the dirty one, so claiming the server's digest for it would hide a real
+ * divergence from the existence reconcile.
+ */
+async function recordOrderManifestRows(
+	input: OrdersSchedulerFetcherInput,
+	materialized: readonly Materialized<OrderDocument>[],
+	applied: readonly OrderDocument[]
+): Promise<void> {
+	if (!input.repository.upsertManifestRows) return;
+	const rows = manifestRowsForApplied(materialized, applied);
+	if (rows.length > 0) await input.repository.upsertManifestRows(rows);
 }
 
 /**
@@ -769,7 +808,8 @@ async function fetchBrowserOrderQuery(
 				);
 			}
 		}
-		const documents = kept.map(orderDocumentFromWooPayload);
+		const materialized = kept.map((payload) => materializedOrderFromWooPayload(payload));
+		const documents = materialized.map(({ storedDocument }) => storedDocument);
 		// Offline-first: never overwrite an order that has queued local mutations.
 		// Re-read the pending set IMMEDIATELY before each page's upsert (not once up
 		// front) so a mutation queued mid-pull — during a slow request or a later
@@ -783,6 +823,7 @@ async function fetchBrowserOrderQuery(
 			? documents.filter((document) => shouldApplyStoredOrder(document, pending))
 			: documents;
 		await input.repository.upsertMany(applicable);
+		await recordOrderManifestRows(input, materialized, applicable);
 		fetchedDocumentIds.push(...documents.map(orderCoverageRecordId));
 		documentCount += documents.length;
 		requestCount += 1;
@@ -949,7 +990,8 @@ async function fetchTargetedOrders(
 			idsBatch,
 			payloads
 		);
-		const documents = payloads.map(orderDocumentFromWooPayload);
+		const materialized = payloads.map((payload) => materializedOrderFromWooPayload(payload));
+		const documents = materialized.map(({ storedDocument }) => storedDocument);
 		// Offline-first: re-read the pending set per batch (not once up front) so a
 		// mutation queued mid-pull is honored; skip overwriting orders with queued
 		// local mutations (their dirty local copy wins), but keep them in coverage.
@@ -960,6 +1002,7 @@ async function fetchTargetedOrders(
 			? documents.filter((document) => shouldApplyStoredOrder(document, pending))
 			: documents;
 		await input.repository.upsertMany(applicable);
+		await recordOrderManifestRows(input, materialized, applicable);
 		fetchedDocumentIds.push(...documents.map(orderCoverageRecordId));
 		documentCount += documents.length;
 		requestCount += 1;
@@ -1051,6 +1094,10 @@ export function createOrdersSchedulerFetcher(input: OrdersSchedulerFetcherInput)
 		const canCompleteAllOrdersLane =
 			task.mode === 'greedy' &&
 			(fullBaselineGreedyTasks.has(task.id) || (await hasFullBaselineMarker(input, task)));
+		// Batch-scoped: `assembleDocument` runs per pulled record and parks its manifest row here,
+		// keyed by the assembled uuid; `afterUpsert` drains exactly the rows of the documents the
+		// adapter applied (post-dedup, post-pending-guard) and the map dies with the batch.
+		const customPullManifestRows = new Map<string, ExistenceManifestDocument>();
 		const result = await syncCustomPullBatchIntoRepository({
 			baseUrl: input.baseUrl,
 			limit: pullRequestLimit(task, input.pullBatchSize),
@@ -1059,7 +1106,8 @@ export function createOrdersSchedulerFetcher(input: OrdersSchedulerFetcherInput)
 			checkpointStore: input.checkpointStore,
 			fetcher,
 			signal: context?.signal,
-			assembleDocument: assembleCustomPullOrderDocument,
+			assembleDocument: (document) =>
+				assembleCustomPullOrderDocument(document, customPullManifestRows),
 			// F6: opt into the server delete channel so a deleted order removes its local copy
 			// (repository.removeDeletedOrders resolves remoteId→uuid + guards pending/dirty).
 			includeDeletes: true,
@@ -1071,14 +1119,20 @@ export function createOrdersSchedulerFetcher(input: OrdersSchedulerFetcherInput)
 						refreshPendingMutationOrderIds: input.pendingMutationOrderIds,
 					}
 				: {}),
-			afterUpsert: (documents, result) =>
-				recordCumulativeOrderFetchCoverage(
+			afterUpsert: async (documents, result) => {
+				const rows = documents.flatMap((document) => {
+					const row = customPullManifestRows.get(document.uuid);
+					return row ? [row] : [];
+				});
+				if (rows.length > 0) await input.repository.upsertManifestRows?.(rows);
+				await recordCumulativeOrderFetchCoverage(
 					input,
 					task,
 					documents.map(orderCoverageRecordId),
 					canCompleteAllOrdersLane && !result.hasMore,
 					greedyTaskStartedAtBaseline
-				),
+				);
+			},
 		});
 		if (!result.hasMore) {
 			fullBaselineGreedyTasks.delete(task.id);

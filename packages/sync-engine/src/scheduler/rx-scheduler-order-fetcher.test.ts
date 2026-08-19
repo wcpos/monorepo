@@ -10,7 +10,6 @@ import {
 	wooIdOf,
 } from '@wcpos/sync-core';
 
-import { extractOrderManifest } from '../local-coverage/existence-manifest-population';
 import { remoteId } from '../testing';
 import { createOrdersSchedulerFetcher } from './rx-scheduler-order-fetcher';
 
@@ -116,18 +115,21 @@ describe('createOrdersSchedulerFetcher', () => {
 		});
 	});
 
-	it('keeps the out-of-band existence-manifest row on assembled custom-pull documents', async () => {
-		// The proxy stamps _rxdb_digest into the payload; materializeLocalOnly lifts it onto a
-		// non-enumerable Symbol on the document and strips it from the stored payload. If
-		// assembly loses the Symbol (e.g. via an object spread), extractOrderManifest finds
-		// neither the row nor the digest fallback, and custom-pull orders contribute nothing
-		// to the order existence manifest — silently shutting the prune gate.
+	it('records the existence-manifest rows of the custom-pull orders it applied', async () => {
+		// #1340: the proxy stamps _rxdb_digest into the payload and materialization lifts it into
+		// the row, stripping it from the stored payload. The custom-pull lane is the path that
+		// silently stopped producing rows for two days — nothing errors when it does, the prune
+		// gate just starves. This pins the whole wiring: assemble → apply → manifest write.
 		const doc = customPullDoc(11);
 		(doc.payload as Record<string, unknown>)._rxdb_digest = '9223372036854775810';
 		const upserted: OrderDocument[] = [];
+		const manifestUpserts: unknown[][] = [];
 		const repository = {
 			upsertMany: vi.fn(async (docs: OrderDocument[]) => {
 				upserted.push(...docs);
+			}),
+			upsertManifestRows: vi.fn(async (rows: readonly unknown[]) => {
+				manifestUpserts.push([...rows]);
 			}),
 		};
 		const checkpointStore = {
@@ -147,11 +149,54 @@ describe('createOrdersSchedulerFetcher', () => {
 		await schedulerFetcher(orderTask());
 
 		expect(upserted).toHaveLength(1);
-		const { manifestRows, documents } = extractOrderManifest(upserted);
-		expect(manifestRows).toEqual([
-			{ remoteId: '11', wooId: 11, objectType: 'order', digest: '9223372036854775810' },
+		expect(upserted[0]?.payload).not.toHaveProperty('_rxdb_digest');
+		expect(manifestUpserts).toEqual([
+			[{ remoteId: '11', wooId: 11, objectType: 'order', digest: '9223372036854775810' }],
 		]);
-		expect(documents[0]?.payload).not.toHaveProperty('_rxdb_digest');
+	});
+
+	it('records no manifest row for a custom-pull order the pending-mutation guard skipped', async () => {
+		// The other half of the #1340 class, and the one a tautological test would miss: a row
+		// recorded for a document that was NOT stored claims the server's digest is locally held
+		// while the resident copy is the dirty one — hiding a real divergence from the reconcile.
+		const applied = customPullDoc(11);
+		const skipped = customPullDoc(12);
+		(applied.payload as Record<string, unknown>)._rxdb_digest = 'digest-11';
+		(skipped.payload as Record<string, unknown>)._rxdb_digest = 'digest-12';
+		const upserted: OrderDocument[] = [];
+		const manifestUpserts: unknown[][] = [];
+		const repository = {
+			upsertMany: vi.fn(async (docs: OrderDocument[]) => {
+				upserted.push(...docs);
+			}),
+			upsertManifestRows: vi.fn(async (rows: readonly unknown[]) => {
+				manifestUpserts.push([...rows]);
+			}),
+		};
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			checkpointStore: {
+				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+				writeCustomPullCheckpoint: vi.fn(async () => undefined),
+			},
+			fetcher: vi.fn(async () =>
+				response({
+					documents: [applied, skipped],
+					checkpoint: nextCheckpoint,
+					hasMore: false,
+				})
+			),
+			// Order 12 has a queued local mutation: the adapter drops it before the upsert.
+			pendingMutationOrderIds: async () => new Set([uuidFor(12)]),
+		});
+
+		await schedulerFetcher(orderTask());
+
+		expect(upserted.map((document) => document.uuid)).toEqual([uuidFor(11)]);
+		expect(manifestUpserts).toEqual([
+			[{ remoteId: '11', wooId: 11, objectType: 'order', digest: 'digest-11' }],
+		]);
 	});
 
 	it('client-assembles custom-pull documents from the payload, ignoring the server-built envelope id', async () => {
@@ -716,6 +761,54 @@ describe('createOrdersSchedulerFetcher', () => {
 				records: expect.arrayContaining([{ id: 'woo-order:123' }, { id: 'woo-order:456' }]),
 			})
 		);
+	});
+
+	it('records manifest rows for the targeted orders it applied, and none for the guarded one', async () => {
+		// The REST lanes apply the pending-mutation guard themselves, so they own the manifest
+		// write for what survives it (ADR 0028 rider): a row for the SKIPPED order would claim
+		// the server's digest is locally held while the resident copy is the dirty one.
+		const manifestUpserts: unknown[][] = [];
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			upsertManifestRows: vi.fn(async (rows: readonly unknown[]) => {
+				manifestUpserts.push([...rows]);
+			}),
+		};
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			checkpointStore: {
+				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+				writeCustomPullCheckpoint: vi.fn(async () => undefined),
+			},
+			pendingMutationOrderIds: vi.fn(async () => new Set<string>([uuidFor(123)])),
+			fetcher: vi.fn(async () =>
+				response(
+					[123, 456].map((id) => ({
+						id,
+						date_modified_gmt: '2026-05-20T10:10:00',
+						_rxdb_digest: `digest-${id}`,
+						meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(id) }],
+					}))
+				)
+			),
+		});
+
+		await schedulerFetcher(
+			orderTask({
+				id: 'orders:ids:123,456:on-demand',
+				requirementId: 'orders.deep-link',
+				queryKey: 'orders:ids:123,456',
+				documentIds: ['woo-order:123', 'woo-order:456'],
+				remoteIds: [123, 456].map(remoteId),
+				limit: 2,
+				mode: 'on-demand',
+			})
+		);
+
+		expect(manifestUpserts).toEqual([
+			[{ remoteId: '456', wooId: 456, objectType: 'order', digest: 'digest-456' }],
+		]);
 	});
 
 	it('re-reads pending mutations per batch so an order queued mid-pull is not overwritten', async () => {

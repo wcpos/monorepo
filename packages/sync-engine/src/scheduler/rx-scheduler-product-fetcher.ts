@@ -21,6 +21,7 @@ import {
 	barcodeSelectorsFor,
 	type BarcodeSelectorsReader,
 } from '../materialization/barcode-selectors';
+import { manifestRowsForApplied } from '../local-coverage/existence-manifest-population';
 import { type Materialized, materializeTargeted } from '../materialization/record-materialization';
 import {
 	BROWSE_WINDOW_MAX_PAGES_PER_DRAIN,
@@ -64,7 +65,7 @@ import type { ExistenceManifestDocument } from '../local-coverage/existence-mani
 export type ProductSchedulerRepository = {
 	// Accepts the STORED shape (promoted filter/sort columns attached at the call sites via
 	// withProductColumns) so every stored product is queryable by the indexed columns.
-	upsertMany(documents: StoredProductDocument[]): Promise<void>;
+	upsertMany(documents: StoredProductDocument[]): Promise<readonly StoredProductDocument[] | void>;
 	removeMany(documents: StoredProductDocument[]): Promise<void>;
 };
 
@@ -120,10 +121,9 @@ async function persistProductDocuments(
 	input: ProductsSchedulerFetcherInput,
 	records: Materialized<Record<string, unknown>>[]
 ): Promise<void> {
-	await input.repository.upsertMany(
-		records.map(({ storedDocument }) => storedDocument as StoredProductDocument)
-	);
-	const manifestRows = records.flatMap(({ manifestRow }) => (manifestRow ? [manifestRow] : []));
+	const documents = records.map(({ storedDocument }) => storedDocument as StoredProductDocument);
+	const applied = (await input.repository.upsertMany(documents)) ?? documents;
+	const manifestRows = manifestRowsForApplied(records, applied);
 	if (input.manifestSink && manifestRows.length > 0) {
 		await input.manifestSink(manifestRows);
 	}

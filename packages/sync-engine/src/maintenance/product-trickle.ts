@@ -38,12 +38,13 @@
 import { assertBulkSuccess } from '@wcpos/sync-core';
 
 import { COLLECTION_DESCRIPTORS } from '../collections/collection-descriptors';
+import { manifestRowsForApplied } from '../local-coverage/existence-manifest-population';
 import { upsertManifestRows } from '../local-coverage/rx-existence-manifest-repository';
 import {
 	barcodeSelectorsFor,
 	type BarcodeSelectorsReader,
 } from '../materialization/barcode-selectors';
-import { manifestRowOf, materializeTargeted } from '../materialization/record-materialization';
+import { materializeTargeted } from '../materialization/record-materialization';
 import {
 	type CensusTotal,
 	hasProductBrowseWindowFilters,
@@ -249,9 +250,10 @@ async function runProductTrickle(deps: ProductTrickleDeps): Promise<ProductTrick
 	}
 	const payloads = descriptor.parse((await response.json()) as unknown);
 	const selectors = barcodeSelectorsFor(deps.barcodeSelectors?.(), 'products');
-	const documents = payloads.map(
-		(payload) => materializeTargeted('products', payload, selectors).storedDocument
+	const materialized = payloads.map((payload) =>
+		materializeTargeted('products', payload, selectors)
 	);
+	const documents = materialized.map(({ storedDocument }) => storedDocument);
 	const applicable = await withoutLocallyProtected(
 		deps.database.collections.products as never,
 		documents as { uuid: string }[]
@@ -262,10 +264,9 @@ async function runProductTrickle(deps: ProductTrickleDeps): Promise<ProductTrick
 			'product-trickle upsert'
 		);
 	}
-	const manifestRows = applicable.flatMap((document) => {
-		const row = manifestRowOf(document);
-		return row ? [row] : [];
-	});
+	// Rows for the documents this walk actually STORED — the guard-protected ones keep whatever
+	// the manifest already holds for them (the row travels on the envelope, ADR 0028 rider).
+	const manifestRows = manifestRowsForApplied(materialized, applicable as { uuid: string }[]);
 	await upsertManifestRows(deps.database.collections.existenceManifest as never, manifestRows);
 
 	const totalPagesHeader = response.headers.get('X-WP-TotalPages');

@@ -51,6 +51,7 @@ import {
 	type BarcodeSelectorsReader,
 } from '../materialization/barcode-selectors';
 import {
+	type Materialized,
 	materializeGreedyPrunable,
 	materializeLocalOnly,
 	materializeTargeted,
@@ -82,6 +83,19 @@ type RecordProjection = (
 	barcodeSelectors?: BarcodeSelectors
 ) => Record<string, unknown>;
 
+/**
+ * The same projection, envelope and all: the stored document PLUS the
+ * existence-manifest row the server's `_rxdb_digest` produced (ADR 0028 rider).
+ * Ingest sites (fetchers, change-signal handlers, trickles) project through
+ * THIS one and push the rows themselves, because only they know which documents
+ * were actually applied; `project` is the bare-document form the write-path ack
+ * consumes, and is defined as this projection's `.storedDocument`.
+ */
+type MaterializedProjection = (
+	payload: WooPayload,
+	barcodeSelectors?: BarcodeSelectors
+) => Materialized<Record<string, unknown>>;
+
 /** shape: 'targeted' — pulled by id, deleted by tombstone. */
 export type TargetedDescriptor = {
 	shape: 'targeted';
@@ -100,6 +114,8 @@ export type TargetedDescriptor = {
 	 */
 	parse: (body: unknown) => WooPayload[];
 	project: RecordProjection;
+	/** Manifest-bearing projection for the pull/ingest side — see MaterializedProjection. */
+	projectMaterialized: MaterializedProjection;
 	write: CollectionWriteFacet;
 };
 
@@ -400,16 +416,27 @@ function ackBookkeeping(options: {
 export type CollectionDescriptor =
 	TargetedDescriptor | GreedyPrunableDescriptor | UpsertRefreshDescriptor | LocalOnlyDescriptor;
 
+const productMaterialized: MaterializedProjection = (rawPayload, barcodeSelectors) =>
+	materializeTargeted('products', rawPayload, barcodeSelectorsFor(barcodeSelectors, 'products'));
+
+export const variationMaterialized: MaterializedProjection = (rawPayload, barcodeSelectors) =>
+	materializeTargeted(
+		'variations',
+		rawPayload,
+		barcodeSelectorsFor(barcodeSelectors, 'variations')
+	);
+
+const customerMaterialized: MaterializedProjection = (rawPayload) =>
+	materializeTargeted('customers', rawPayload);
+
 const productDocument: RecordProjection = (rawPayload, barcodeSelectors) =>
-	materializeTargeted('products', rawPayload, barcodeSelectorsFor(barcodeSelectors, 'products'))
-		.storedDocument;
+	productMaterialized(rawPayload, barcodeSelectors).storedDocument;
 
 export const variationDocument: RecordProjection = (rawPayload, barcodeSelectors) =>
-	materializeTargeted('variations', rawPayload, barcodeSelectorsFor(barcodeSelectors, 'variations'))
-		.storedDocument;
+	variationMaterialized(rawPayload, barcodeSelectors).storedDocument;
 
 const customerDocument: RecordProjection = (rawPayload) =>
-	materializeTargeted('customers', rawPayload).storedDocument;
+	customerMaterialized(rawPayload).storedDocument;
 
 function referenceDocument(rawPayload: WooPayload): Record<string, unknown> {
 	return materializeGreedyPrunable(rawPayload as WooReferencePayload).storedDocument;
@@ -627,6 +654,7 @@ export const COLLECTION_DESCRIPTORS: readonly CollectionDescriptor[] = [
 		wooIdField: 'remoteId',
 		parse: parseBareArray,
 		project: productDocument,
+		projectMaterialized: productMaterialized,
 		write: productsWriteFacet,
 	},
 	{
@@ -637,6 +665,7 @@ export const COLLECTION_DESCRIPTORS: readonly CollectionDescriptor[] = [
 		wooIdField: 'remoteId',
 		parse: parseVariationsEnvelope,
 		project: variationDocument,
+		projectMaterialized: variationMaterialized,
 		write: variationsWriteFacet,
 	},
 	{
@@ -647,6 +676,7 @@ export const COLLECTION_DESCRIPTORS: readonly CollectionDescriptor[] = [
 		wooIdField: 'remoteId',
 		parse: parseBareArray,
 		project: customerDocument,
+		projectMaterialized: customerMaterialized,
 		write: customersWriteFacet,
 	},
 	{

@@ -33,16 +33,18 @@ import type {
 import type { LocalCustomerDocument, WooCustomerPayload } from '../collections/customer-schema';
 
 type Payload = Record<string, unknown> & { id?: number };
+/**
+ * The ONE carrier for a pulled record's existence-manifest row (ADR 0028 rider):
+ * an explicit, typed envelope the ingest site destructures. It replaced a
+ * non-enumerable Symbol stamped onto the stored document, which any object
+ * spread dropped silently — the #1340 failure, where custom-pull orders
+ * contributed zero manifest rows for two days with no error anywhere.
+ */
 export type Materialized<T> = { storedDocument: T; manifestRow?: ExistenceManifestDocument };
-const manifestMetadata = Symbol('record-materialization-manifest');
-export function manifestRowOf(value: object): ExistenceManifestDocument | undefined {
-	return (value as { [manifestMetadata]?: ExistenceManifestDocument })[manifestMetadata];
-}
 function result<T extends object>(
 	storedDocument: T,
 	manifestRow?: ExistenceManifestDocument
 ): Materialized<T> {
-	if (manifestRow) Object.defineProperty(storedDocument, manifestMetadata, { value: manifestRow });
 	return { storedDocument, ...(manifestRow ? { manifestRow } : {}) };
 }
 

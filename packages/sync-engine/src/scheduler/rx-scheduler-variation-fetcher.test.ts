@@ -6,6 +6,7 @@ import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import { createVariationsSchedulerFetcher } from './rx-scheduler-variation-fetcher';
 
 import type { FetchTask } from './replication-policy';
+import type { StoredVariationDocument } from '../collections/variation-schema';
 
 const BASE_URL = 'http://wcpos.local/wp-json/wcpos/v2';
 const uuidFor = (n: number): string => `70000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -187,7 +188,9 @@ describe('createVariationsSchedulerFetcher', () => {
 	});
 
 	it('tolerates envelope metadata and projects wrapper identity, parent, and digest like targeted pulls', async () => {
-		const repo = repository();
+		const repo = {
+			upsertMany: vi.fn(async (documents: StoredVariationDocument[]) => documents.slice(0, 1)),
+		};
 		const manifestSink = vi.fn(async () => undefined);
 		const fetcher = vi.fn(async (url: string) => {
 			if (url.includes('sku=')) return response([]);
@@ -197,8 +200,9 @@ describe('createVariationsSchedulerFetcher', () => {
 						...wrapper(7, 3, { id: 999, parent_id: 999, price: '12.50' }),
 						_rxdb_digest: 'digest-7',
 					},
+					{ ...wrapper(8, 3), _rxdb_digest: 'digest-8' },
 				],
-				{ total: 1, extra: 'ignored' }
+				{ total: 2, extra: 'ignored' }
 			);
 		});
 		const schedulerFetcher = createVariationsSchedulerFetcher({

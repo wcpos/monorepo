@@ -39,7 +39,6 @@ import { parseReferenceLaneQueryKey } from './reference-lane-descriptor';
 import { referenceCollectionRepository } from '../collections/rx-reference-collection-repository';
 import { createOrderPendingMutationIds } from '../write-path/order-pull-guard';
 import { hasPendingLocalWork, withoutLocallyProtected } from '../write-path/local-work-guard';
-import { withCustomerManifestPopulation } from '../local-coverage/existence-manifest-population';
 import {
 	type ManifestCollection,
 	upsertManifestRows,
@@ -180,14 +179,15 @@ type BulkUpsertCollection<T extends { uuid: string }> = {
 function collectionSchedulerRepository<T extends { uuid: string }>(
 	collection: BulkUpsertCollection<T>
 ): {
-	upsertMany(documents: T[]): Promise<void>;
+	upsertMany(documents: T[]): Promise<T[]>;
 	removeMany(documents: T[]): Promise<void>;
 } {
 	return {
-		async upsertMany(documents: T[]): Promise<void> {
+		async upsertMany(documents: T[]): Promise<T[]> {
 			const applicable = await withoutLocallyProtected(collection, documents);
 			if (applicable.length > 0)
 				assertBulkSuccess(await collection.bulkUpsert(applicable), 'engine-scheduler-drain upsert');
+			return applicable;
 		},
 		async removeMany(documents: T[]): Promise<void> {
 			const stored = await collection.findByIds(documents.map(({ uuid }) => uuid)).exec();
@@ -407,11 +407,9 @@ function createEngineSchedulerFetcherRegistry(
 			supportsTask: isSupportedCustomerSchedulerTask,
 			fetcher: createCustomerSchedulerFetcher({
 				...shared,
+				repository: collectionSchedulerRepository(db.customers) as never,
 				// Leg-3 (ADR 0015): the customer manifest is its OWN collection (id-space partition).
-				repository: withCustomerManifestPopulation(
-					collectionSchedulerRepository(db.customers) as never,
-					db.existenceManifestCustomers
-				),
+				manifestSink: (rows) => upsertManifestRows(db.existenceManifestCustomers, rows),
 			}),
 		},
 		{
