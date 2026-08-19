@@ -603,6 +603,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 			fetcher: async (url) => {
 				if (new URL(url).pathname.endsWith('/coupons')) {
 					couponPulls += 1;
+					if (couponPulls === 2) nowMs += REFERENCE_DEMAND_REFRESH_DEDUPE_MS;
 				}
 				return Response.json([]);
 			},
@@ -620,15 +621,15 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		await engine.sync('scheduler-drain');
 		expect(couponPulls).toBe(1);
 
-		// A cashier opens the coupon picker past remount-churn territory but well
-		// inside the idle lane's 4-minute window. A coupon created after the idle
-		// pull only exists server-side, so the open MUST re-pull — the maintenance
-		// completion cannot answer for the till (#1302: it did, and a wp-admin
-		// coupon stayed invisible at the POS).
-		// The guarantee only holds while the demand window is strictly inside the
-		// idle window; if they ever converge this test would pass vacuously.
+		// A cashier opens the coupon picker IMMEDIATELY after an idle pull — the
+		// field-observed shape (#1302 round 2): a realistic coupon catalogue made
+		// backfill completions routinely land just before opens, and the shared
+		// 15s window hid a just-created coupon every time. Maintenance
+		// completions must never answer for a demand open: same clock instant,
+		// and the open still pulls.
+		// The window-ordering guard stays: if the windows ever converge the
+		// remount assertion below would pass vacuously.
 		expect(REFERENCE_DEMAND_REFRESH_DEDUPE_MS).toBeLessThan(REFERENCE_REFRESH_DEDUPE_MS);
-		nowMs += REFERENCE_DEMAND_REFRESH_DEDUPE_MS + 1;
 		const opened = await engine.require({
 			id: 'coupon-picker',
 			collection: 'coupons',
@@ -637,15 +638,40 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		expect(opened).toMatchObject({ action: 'fetched' });
 		expect(couponPulls).toBe(2);
 
-		// Remount churn immediately after the open still costs nothing.
+		// Even when the pull itself consumes the entire window, remount churn
+		// immediately after completion still costs nothing.
 		const remounted = await engine.require({
 			id: 'coupon-picker-remount',
 			collection: 'coupons',
 			kind: 'refresh',
 		}).ready;
-		expect(remounted).toMatchObject({ action: 'serve-local', requests: 0 });
-		expect(couponPulls).toBe(2);
+		const pullsAfterRemount = couponPulls;
+
+		// A different scope has a different database and must get its own first
+		// demand pull even when it opens inside the prior scope's window.
+		await engine.scope.switch(freshIdentity());
+		const switched = await engine.require({
+			id: 'coupon-picker-new-scope',
+			collection: 'coupons',
+			kind: 'refresh',
+		}).ready;
+		const pullsAfterSwitch = couponPulls;
+
+		// Once the demand-vs-demand window lapses, a re-open revalidates again.
+		nowMs += REFERENCE_DEMAND_REFRESH_DEDUPE_MS + 1;
+		const reopened = await engine.require({
+			id: 'coupon-picker-reopen',
+			collection: 'coupons',
+			kind: 'refresh',
+		}).ready;
 		await engine.dispose();
+
+		expect(remounted).toMatchObject({ action: 'serve-local', requests: 0 });
+		expect(pullsAfterRemount).toBe(2);
+		expect(switched).toMatchObject({ action: 'fetched' });
+		expect(pullsAfterSwitch).toBe(3);
+		expect(reopened).toMatchObject({ action: 'fetched' });
+		expect(couponPulls).toBe(4);
 	});
 
 	it('query-total-retry reports skipped without the port, and drains + emits cache entries with it', async () => {
