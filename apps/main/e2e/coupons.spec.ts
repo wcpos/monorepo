@@ -1,5 +1,6 @@
 import { expect } from '@playwright/test';
 
+import { LOADED_COUNT_READY, LOADED_COUNT_TEST_ID } from './catalogue-readiness';
 import { getStoreVariant, navigateToPage, authenticatedTest as test } from './fixtures';
 
 /**
@@ -61,17 +62,15 @@ test.describe('Coupons Page (Pro)', () => {
 		// Gate on the LOCAL result materializing, not on the count element merely
 		// existing: the footer renders immediately and reports "0 de 0" until the
 		// coupons sync lands, which can outlast 30s under full-shard CI load (the
-		// other half of the mono#1127 shard-3 failure). The first number is the
-		// rendered-row count, so rows exist the moment it is positive.
-		const countEl = screen.getByTestId('data-table-count');
-		await expect(countEl).toBeVisible({ timeout: 30_000 });
-		const counts = async (): Promise<[number, number]> => {
-			const text = (await countEl.textContent().catch(() => '')) ?? '';
-			const numbers = text.match(/\d+/g)?.map(Number) ?? [];
-			return [numbers[0] ?? 0, numbers[numbers.length - 1] ?? 0];
-		};
-		await expect.poll(async () => (await counts())[0], { timeout: 90_000 }).toBeGreaterThan(0);
-		const [, totalBefore] = await counts();
+		// other half of the mono#1127 shard-3 failure). `data-table-loaded-count`
+		// carries the rendered-row count on its own — never parse the translated
+		// footer sentence, whose number order is locale-dependent and whose server
+		// total also matches digit regexes (#1336, #1345).
+		const loadedCount = screen.getByTestId(LOADED_COUNT_TEST_ID);
+		const loadedRows = async (): Promise<number> =>
+			Number((await loadedCount.textContent().catch(() => '')) ?? '') || 0;
+		await expect(loadedCount).toHaveText(LOADED_COUNT_READY, { timeout: 90_000 });
+		const shownBefore = await loadedRows();
 
 		const firstRow = screen.getByTestId(/^data-table-row-/).first();
 		await expect(firstRow).toBeVisible({ timeout: 15_000 });
@@ -83,6 +82,16 @@ test.describe('Coupons Page (Pro)', () => {
 		const firstRowText = (await firstRow.textContent()) ?? '';
 		const token = firstRowText.match(/[a-z][a-z0-9]{2,}/i)?.[0];
 		expect(token, `no searchable code token in first coupon row: "${firstRowText}"`).toBeTruthy();
+		const nonMatchingRow = screen
+			.getByTestId(/^data-table-row-/)
+			.filter({ hasNotText: token as string })
+			.first();
+		test.skip(
+			!(await nonMatchingRow.isVisible().catch(() => false)),
+			'live store has no coupon row distinguishable by the derived search token'
+		);
+		const nonMatchingRowTestId = await nonMatchingRow.getAttribute('data-testid');
+		expect(nonMatchingRowTestId, 'distinguishable coupon row has no test ID').toBeTruthy();
 
 		const searchInput = screen.getByTestId('search-coupons');
 		await searchInput.fill(token as string);
@@ -90,12 +99,10 @@ test.describe('Coupons Page (Pro)', () => {
 		const matchingRow = screen.getByTestId(/^data-table-row-/).first();
 		await expect(matchingRow).toBeVisible({ timeout: 15_000 });
 		await expect(matchingRow).toContainText(token as string, { ignoreCase: true });
-		// Filtering narrows (or keeps, when every code matches the token) the local
-		// set — it must never grow it. The old `!== initialCount` assertion failed
-		// legitimately whenever the token matched everything.
-		await expect
-			.poll(async () => (await counts())[1], { timeout: 15_000 })
-			.toBeLessThanOrEqual(totalBefore);
+		await expect(screen.getByTestId(nonMatchingRowTestId as string)).not.toBeVisible({
+			timeout: 15_000,
+		});
+		await expect.poll(loadedRows, { timeout: 15_000 }).toBeLessThan(shownBefore);
 	});
 
 	test('should have add coupon button on Coupons page', async ({ posPage: page }) => {

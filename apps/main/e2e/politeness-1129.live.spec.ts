@@ -4,6 +4,7 @@ import {
 	createServerPressureMonitor,
 	parseServerPressure,
 } from '../../../packages/sync-engine/src/change-signal/server-pressure';
+import { LOADED_COUNT_READY, LOADED_COUNT_TEST_ID } from './catalogue-readiness';
 import { authenticateWithStore, navigateToPage } from './fixtures';
 
 import type { Page, Request } from '@playwright/test';
@@ -243,15 +244,32 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 		await authenticateWithStore(page, testInfo, { waitForCatalogue: false });
 		await navigateToPage(page, 'products');
 		const firstProducts = page.getByTestId('screen-products').filter({ visible: true });
-		const firstCount = firstProducts.getByTestId('data-table-count');
-		await expect(firstCount).toBeVisible({ timeout: 120_000 });
-		const hasRows = await firstCount
-			.filter({ hasText: /[1-9]/ })
-			.waitFor({ timeout: 60_000 })
+		await expect(firstProducts.getByTestId('data-table-count')).toBeVisible({ timeout: 120_000 });
+		// Rows must actually LAND locally — the old /[1-9]/ probe on the footer
+		// sentence also matched the server total, so an empty grid with a non-zero
+		// total sailed past this gate (#1336, #1345).
+		const hasRows = await expect(firstProducts.getByTestId(LOADED_COUNT_TEST_ID))
+			.toHaveText(LOADED_COUNT_READY, { timeout: 60_000 })
 			.then(
 				() => true,
 				() => false
 			);
+		if (!hasRows) {
+			// Distinguish declared-missing from broken (store-agnostic ruling): the
+			// SERVER total is deliberately the referent here — an empty store shows
+			// "0 of 0" and skips, while a non-zero total with zero rendered rows is
+			// a sync/render regression and must fail, not skip.
+			const serverTotalText =
+				(await firstProducts
+					.getByTestId('data-table-total-count')
+					.textContent()
+					.catch(() => null)) ?? '';
+			const serverTotal = Number(serverTotalText || '0');
+			expect(
+				serverTotal,
+				`catalog rows never rendered although the footer reports a server total of ${serverTotal} — a product-demand regression looks exactly like this`
+			).toBe(0);
+		}
 		test.skip(
 			!hasRows,
 			'live store has no catalog rows — the populated-manifest scenario needs a seeded store'
@@ -318,12 +336,16 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 
 		// Render marker: the table-backed count, not the card-header search box — the
 		// table sits behind its own Suspense boundary and renders later (codex review).
+		// And the LOCAL loaded count, not the footer sentence: the sentence's server
+		// total matches /[1-9]/ with zero rows rendered, which would anchor every
+		// window invariant below to the wrong moment (#1345).
 		const products = page.getByTestId('screen-products').filter({ visible: true });
-		await expect(products.getByTestId('data-table-count').filter({ hasText: /[1-9]/ })).toBeVisible(
-			{
-				timeout: 120_000,
-			}
-		);
+		await expect(products.getByTestId(LOADED_COUNT_TEST_ID)).toHaveText(LOADED_COUNT_READY, {
+			timeout: 120_000,
+		});
+		await expect(products.getByTestId(/^data-table-row-/).first()).toBeVisible({
+			timeout: 120_000,
+		});
 		const renderedAtMs = Date.now();
 
 		// Invariant 1: the cashier's open window carries ZERO audit traffic, existence

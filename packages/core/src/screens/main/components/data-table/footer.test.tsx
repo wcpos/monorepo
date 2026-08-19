@@ -104,6 +104,7 @@ describe('DataTableFooter binding projections', () => {
 
 		expect(screen.getByTestId('data-table-count').textContent).toBe('common.showing_of:10/27');
 		expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('10');
+		expect(screen.getByTestId('data-table-total-count').textContent).toBe('27');
 		expect(mockUseCollectionReset).toHaveBeenCalledWith('coupons');
 	});
 

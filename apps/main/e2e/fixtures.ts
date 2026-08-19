@@ -139,7 +139,10 @@ export async function tryAddProductBySku(
 		return 'unavailable';
 	}
 
-	const resultCount = page.getByTestId('data-table-count');
+	// The RENDERED-count testID, not the footer sentence: a change in the sentence's
+	// server-total constituent could release the gate below without the grid ever
+	// re-rendering (#1345).
+	const resultCount = page.getByTestId(LOADED_COUNT_TEST_ID);
 	const unfilteredCount = await resultCount.textContent().catch(() => null);
 	await search.fill(sku);
 	// Search is debounced and resolves against the local RxDB replica.

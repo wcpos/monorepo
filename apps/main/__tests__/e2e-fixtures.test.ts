@@ -154,9 +154,9 @@ describe('tryAddProductBySku', () => {
 		const resultCount = {
 			textContent: jest
 				.fn()
-				.mockResolvedValueOnce('Showing 10 of 10')
-				.mockResolvedValueOnce('Showing 10 of 10')
-				.mockResolvedValue('Showing 1 of 1'),
+				.mockResolvedValueOnce('10')
+				.mockResolvedValueOnce('10')
+				.mockResolvedValue('1'),
 		};
 		const tiles = {
 			count: jest.fn().mockResolvedValue(1),
@@ -182,7 +182,7 @@ describe('tryAddProductBySku', () => {
 				switch (testId) {
 					case 'search-products':
 						return search;
-					case 'data-table-count':
+					case 'data-table-loaded-count':
 						return resultCount;
 					case 'product-tile':
 						return tiles;
@@ -241,7 +241,7 @@ describe('tryAddProductBySku', () => {
 				switch (testId) {
 					case 'search-products':
 						return search;
-					case 'data-table-count':
+					case 'data-table-loaded-count':
 						return { textContent: jest.fn().mockResolvedValueOnce('10').mockResolvedValue('1') };
 					case 'product-tile':
 						return tiles;
@@ -280,7 +280,7 @@ describe('tryAddProductBySku', () => {
 				switch (testId) {
 					case 'search-products':
 						return search;
-					case 'data-table-count':
+					case 'data-table-loaded-count':
 						return { textContent: jest.fn().mockResolvedValueOnce('10').mockResolvedValue('1') };
 					case 'product-tile':
 						return {

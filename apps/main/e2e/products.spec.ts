@@ -6,6 +6,7 @@ import {
 	isolatedProductTest as simpleProductTest,
 	isolatedVariableProductTest as test,
 } from './checkout-probe';
+import { LOADED_COUNT_READY, LOADED_COUNT_TEST_ID } from './catalogue-readiness';
 import { searchAndWaitForServer, type SearchProbe } from './search-probe';
 
 function productSearchTest(title: string) {
@@ -24,8 +25,11 @@ async function assertRunPrivateProductSearch(page: Page, probe: SearchProbe) {
 		throw new Error('Run-private simple product is missing its slug-derived row testID');
 	}
 	await page.getByTestId('view-mode-toggle').click();
-	const countEl = page.getByTestId('data-table-count');
-	await expect(countEl).toBeVisible({ timeout: 15_000 });
+	// Change-detection baseline reads the RENDERED count, not the footer sentence —
+	// a server-total change in the sentence would satisfy the "changed" poll below
+	// without the grid re-rendering (#1345).
+	await expect(page.getByTestId('data-table-count')).toBeVisible({ timeout: 15_000 });
+	const countEl = page.getByTestId(LOADED_COUNT_TEST_ID);
 	const initialText = await countEl.textContent();
 	const nonMatchingRow = page
 		.locator(`[data-testid^="data-table-row-"]:not([data-testid="${probe.rowTestId}"]):visible`)
@@ -99,7 +103,9 @@ test.describe('Products in POS', () => {
 		await searchInput.clear();
 		await page.waitForTimeout(1_000);
 
-		await expect(page.getByTestId('data-table-count')).toContainText(/[1-9]/);
+		// LOCAL rows, not the footer sentence: /[1-9]/ on "Showing {shown} of {total}"
+		// matches the server total and passes on an empty grid (#1336, #1345).
+		await expect(page.getByTestId(LOADED_COUNT_TEST_ID)).toHaveText(LOADED_COUNT_READY);
 	});
 
 	test('should show "No products found" for nonsense search', async ({ posPage: page }) => {

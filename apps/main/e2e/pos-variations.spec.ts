@@ -1,5 +1,6 @@
 import { errors, expect, type Locator, type Page } from '@playwright/test';
 
+import { LOADED_COUNT_READY, LOADED_COUNT_TEST_ID } from './catalogue-readiness';
 import { findVariableProduct, isolatedVariableProductTest as test } from './checkout-probe';
 import { becomesVisible } from './fixtures';
 
@@ -57,10 +58,12 @@ async function searchForVariableProduct(page: Page) {
 
 	await findVariableProduct(page, page.getByTestId('screen-pos').getByTestId('search-products'));
 
-	// Verify we got results — product sync can be slow in CI
-	const countEl = page.getByTestId('data-table-count');
-	await expect(countEl).toBeVisible({ timeout: 30_000 });
-	await expect(countEl).toContainText(/[1-9]/, { timeout: 30_000 });
+	// Verify we got results — product sync can be slow in CI. Gate on the LOCAL
+	// loaded count, not the footer sentence: /[1-9]/ on "Showing {shown} of {total}"
+	// matches the server total and passes on an empty grid (#1336, #1345).
+	await expect(page.getByTestId(LOADED_COUNT_TEST_ID)).toHaveText(LOADED_COUNT_READY, {
+		timeout: 30_000,
+	});
 
 	// Re-ensure table mode after results load in case settings hydration flips mode.
 	await ensureTableView(page);
