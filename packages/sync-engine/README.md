@@ -65,7 +65,7 @@ The engine's diagnostics call sites emit these event types (including events emi
 | `queue.write.born-twice-requeue` | `recordId`, `mutationId`, `followUpMutationId` — a 200-acked create's discarded snapshot re-queued |
 | `queue.write.resolve` | `recordId`, `mutationId`, `resolution` |
 | `queue.write.conflict-transition` | `recordId`, `mutationId` — one terminal transition after push conflict |
-| `queue.write.discard-repull-deferred` | `mutationId`, `wooOrderId` — the discard's immediate re-pull failed; the durable task self-heals later |
+| `queue.write.discard-repull-deferred` | `mutationId`, `remoteId` — the discard's immediate re-pull failed; the durable task self-heals later |
 | `queue.write.reschedule-failed` | `recordId`, `mutationId`, `attempts` |
 | `push.in_progress`, `push.conflict`, `push.rejected`, `push.error`, `push.aborted`, `push.outcome` | `recordId`, `mutationId`, `operation`, `attempts`; outcome/status/reason where applicable |
 | `coverage.require.log` | coverage detail in `message` |

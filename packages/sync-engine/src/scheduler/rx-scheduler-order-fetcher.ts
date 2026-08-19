@@ -117,7 +117,7 @@ export type OrdersSchedulerFetcherInput = {
 	 * Resolved before each pull batch; pulled documents whose ids are in the
 	 * set are skipped so scheduled pulls never overwrite queued local work.
 	 */
-	pendingMutationOrderIds?: () => Promise<ReadonlySet<string | number>>;
+	pendingMutationOrderIds?: () => Promise<ReadonlySet<string>>;
 	/**
 	 * The ONE browse-window lane key an explicitly user-driven sync is refreshing. Only
 	 * THAT window re-walks from page 1 instead of resuming from its covered prefix; every
@@ -245,9 +245,9 @@ export function orderDocumentFromWooPayload(payload: WooOrderPayload) {
 function assembleCustomPullOrderDocument(document: OrderDocument): OrderDocument {
 	// Derive BOTH identity fields from the payload (not the server envelope): the storage id from
 	// the stamped uuid, and remoteId from payload.id — same as orderDocumentFromWooPayload. The
-	// scheduler keys coverage + the pending-mutation pull guard off remoteId, so trusting a stale
-	// envelope remoteId could record a correct payload under the wrong order or clobber a queued
-	// local mutation. Owning both from the payload keeps the document internally consistent.
+	// scheduler keys coverage off remoteId and the pending-mutation pull guard off the uuid, so
+	// trusting a stale envelope identity could record a correct payload under the wrong order or
+	// clobber a queued local mutation. Owning both from the payload keeps the document consistent.
 	const assembled = materializeLocalOnly(document.payload).storedDocument;
 	// Assign in place instead of spreading: the existence-manifest row rides on a
 	// non-enumerable Symbol that materializeLocalOnly attaches to the document, and an
@@ -270,16 +270,16 @@ function orderCoverageRecordId(document: OrderDocument): string {
 	return document.remoteId === null ? document.uuid : orderDocumentId(document.remoteId);
 }
 
+/**
+ * The pending set is keyed by record UUID (the stable storage key) — `pendingRecordIds` returns
+ * `mutation.recordId` — and a materialized order carries that same uuid, so uuid membership is
+ * the whole test (ADR 0029 decision 6). Mirrors sync-core's shouldApplyPulledDocument.
+ */
 function shouldApplyStoredOrder(
 	document: OrderDocument,
-	pendingMutationOrderIds: ReadonlySet<string | number>
+	pendingMutationOrderIds: ReadonlySet<string>
 ): boolean {
-	if (pendingMutationOrderIds.has(document.uuid)) return false;
-	return (
-		document.remoteId === null ||
-		(!pendingMutationOrderIds.has(document.remoteId) &&
-			!pendingMutationOrderIds.has(wooIdOf(document.remoteId)))
-	);
+	return !pendingMutationOrderIds.has(document.uuid);
 }
 
 function coverageNowMs(input: OrdersSchedulerFetcherInput): number {

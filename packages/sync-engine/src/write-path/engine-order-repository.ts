@@ -135,7 +135,7 @@ export class EngineOrderRepository {
 	 */
 	async removeDeletedOrders(
 		remoteIds: RemoteId[],
-		pendingMutationOrderIds?: ReadonlySet<string | number>
+		pendingMutationOrderIds?: ReadonlySet<string>
 	): Promise<void> {
 		if (remoteIds.length === 0) return;
 		const { unprotected, protectedRemoteIds } = await this.orderCensus(pendingMutationOrderIds);
@@ -157,9 +157,9 @@ export class EngineOrderRepository {
 	 * Reconcile local orders for a journal reset (F8). The re-pull from zero repopulates the current
 	 * generation, so every local order that is NOT protected by queued local work is cleared first —
 	 * otherwise an order absent from the new generation lingers as a phantom. A dirty/pending order
-	 * (its id or remoteId in the pending set) stays resident so an offline POS edit survives.
+	 * (its uuid in the pending set) stays resident so an offline POS edit survives.
 	 */
-	async resetForResync(pendingMutationOrderIds?: ReadonlySet<string | number>): Promise<void> {
+	async resetForResync(pendingMutationOrderIds?: ReadonlySet<string>): Promise<void> {
 		const removable = await this.unprotectedOrders(pendingMutationOrderIds);
 		if (removable.length > 0)
 			assertBulkSuccess(
@@ -172,11 +172,11 @@ export class EngineOrderRepository {
 	 * Full-scan census of local orders that are NOT protected by queued local work — safe to remove.
 	 * Shared by the delete channel (F6) and the resync reconcile (F8). Treats a missing/non-array
 	 * pendingMutationIds (the schema only requires `local` to be an object) as empty, so a partial row
-	 * can't throw. An order stays protected when it is dirty, has pending mutation ids, or its id /
-	 * remoteId is in the pending-mutation set.
+	 * can't throw. An order stays protected when it is dirty, has pending mutation ids, or its uuid
+	 * is in the pending-mutation set (which is keyed by record uuid — see `pendingRecordIds`).
 	 */
 	private async unprotectedOrders(
-		pendingMutationOrderIds?: ReadonlySet<string | number>
+		pendingMutationOrderIds?: ReadonlySet<string>
 	): Promise<OrderDocument[]> {
 		return (await this.orderCensus(pendingMutationOrderIds)).unprotected;
 	}
@@ -186,7 +186,7 @@ export class EngineOrderRepository {
 	 * guard protected. The delete channel needs the protected ids so it can leave their manifest
 	 * rows intact — one scan, both answers.
 	 */
-	private async orderCensus(pendingMutationOrderIds?: ReadonlySet<string | number>): Promise<{
+	private async orderCensus(pendingMutationOrderIds?: ReadonlySet<string>): Promise<{
 		unprotected: OrderDocument[];
 		protectedRemoteIds: Set<RemoteId>;
 	}> {
@@ -204,12 +204,10 @@ export class EngineOrderRepository {
 
 	private isUnprotectedOrder(
 		doc: OrderDocument,
-		pendingMutationOrderIds?: ReadonlySet<string | number>
+		pendingMutationOrderIds?: ReadonlySet<string>
 	): boolean {
 		if (hasPendingLocalWork(doc)) return false;
 		if (pendingMutationOrderIds?.has(doc.uuid)) return false;
-		if (doc.remoteId !== null && pendingMutationOrderIds?.has(doc.remoteId)) return false;
-		if (doc.remoteId !== null && pendingMutationOrderIds?.has(wooIdOf(doc.remoteId))) return false;
 		return true;
 	}
 

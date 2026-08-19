@@ -144,7 +144,7 @@ describe('syncCustomPullBatchIntoRepository journal epoch (F8)', () => {
 			resetForResync: vi.fn(async () => undefined),
 		};
 		const store = epochStore('epoch-OLD', normalizeCheckpoint(null));
-		const fresh = new Set<string | number>([777]);
+		const fresh = new Set<string>([fakeUuid(777)]);
 		const refreshPendingMutationOrderIds = vi.fn(async () => fresh);
 
 		await syncCustomPullBatchIntoRepository({
@@ -348,7 +348,6 @@ describe('hostile-envelope poison guards (B7, ADR 0017 family)', () => {
 			documents: [
 				{
 					id: fakeUuid(1),
-					wooOrderId: 1,
 					payload: { id: 1 },
 					sync: { partial: false, checkpoint: { sequence: 5 } },
 					local: { dirty: false, pendingMutationIds: [] },
@@ -499,46 +498,29 @@ describe('hostile-envelope poison guards (B7, ADR 0017 family)', () => {
 });
 
 describe('shouldApplyPulledDocument', () => {
-	const pending = new Set<string | number>([fakeUuid(204), mintRemoteId(207, 'test'), 208]);
+	// The queue is keyed by record uuid — `pendingRecordIds` returns `mutation.recordId`, the
+	// storage primary key — so the guard tests uuid membership and nothing else.
+	const pending = new Set<string>([fakeUuid(204)]);
 
 	it('blocks pulled documents whose uuid has a pending mutation', () => {
-		expect(
-			shouldApplyPulledDocument(
-				{ uuid: fakeUuid(204), remoteId: mintRemoteId(204, 'test') },
-				pending
-			)
-		).toBe(false);
+		expect(shouldApplyPulledDocument({ uuid: fakeUuid(204) }, pending)).toBe(false);
 	});
 
-	it('blocks pulled documents whose remote id has a pending mutation', () => {
-		expect(
-			shouldApplyPulledDocument(
-				{ uuid: fakeUuid(207), remoteId: mintRemoteId(207, 'test') },
-				pending
-			)
-		).toBe(false);
+	it('applies a pulled document whose REMOTE id happens to sit in the set — it is uuid-keyed', () => {
+		// A remote id can never be a member in production; if one somehow were, it must not
+		// shadow an unrelated order whose uuid is absent.
+		const remoteKeyed = new Set<string>([mintRemoteId(207, 'test')]);
+		expect(shouldApplyPulledDocument({ uuid: fakeUuid(207) }, remoteKeyed)).toBe(true);
 	});
 
-	it('blocks pulled documents whose numeric Woo id has a pending mutation', () => {
-		expect(
-			shouldApplyPulledDocument(
-				{ uuid: fakeUuid(208), remoteId: mintRemoteId(208, 'test') },
-				pending
-			)
-		).toBe(false);
+	it('applies a pulled document whose numeric Woo id happens to sit in the set', () => {
+		const wooKeyed = new Set<string>(['208']);
+		expect(shouldApplyPulledDocument({ uuid: fakeUuid(208) }, wooKeyed)).toBe(true);
 	});
 
 	it('applies pulled documents with no pending mutations', () => {
-		expect(
-			shouldApplyPulledDocument(
-				{ uuid: fakeUuid(999), remoteId: mintRemoteId(999, 'test') },
-				pending
-			)
-		).toBe(true);
-		expect(shouldApplyPulledDocument({ uuid: fakeUuid(999), remoteId: null }, pending)).toBe(true);
-		expect(
-			shouldApplyPulledDocument({ uuid: fakeUuid(1), remoteId: mintRemoteId(1, 'test') }, new Set())
-		).toBe(true);
+		expect(shouldApplyPulledDocument({ uuid: fakeUuid(999) }, pending)).toBe(true);
+		expect(shouldApplyPulledDocument({ uuid: fakeUuid(1) }, new Set())).toBe(true);
 	});
 });
 
@@ -585,7 +567,7 @@ describe('syncCustomPullBatchIntoRepository pull guard wiring', () => {
 			repository,
 			fetcher: server.fetch,
 			checkpointStore,
-			pendingMutationOrderIds: new Set<string | number>([11]),
+			pendingMutationOrderIds: new Set<string>([fakeUuid(11)]),
 		});
 
 		expect(
@@ -684,7 +666,7 @@ describe('syncCustomPullBatchIntoRepository delete channel (F6)', () => {
 			upsertMany: vi.fn(async (_documents: PullResponse['documents']) => undefined),
 			removeDeletedOrders: vi.fn(async () => undefined),
 		};
-		const pending = new Set<string | number>([11]);
+		const pending = new Set<string>([fakeUuid(11)]);
 
 		await syncCustomPullBatchIntoRepository({
 			baseUrl: BASE_URL,
@@ -704,8 +686,8 @@ describe('syncCustomPullBatchIntoRepository delete channel (F6)', () => {
 			upsertMany: vi.fn(async (_documents: PullResponse['documents']) => undefined),
 			removeDeletedOrders: vi.fn(async () => undefined),
 		};
-		const stale = new Set<string | number>();
-		const fresh = new Set<string | number>([999]); // a mutation queued mid-pull
+		const stale = new Set<string>();
+		const fresh = new Set<string>([fakeUuid(999)]); // a mutation queued mid-pull
 		const refreshPendingMutationOrderIds = vi.fn(async () => fresh);
 
 		await syncCustomPullBatchIntoRepository({
@@ -719,7 +701,7 @@ describe('syncCustomPullBatchIntoRepository delete channel (F6)', () => {
 		});
 
 		expect(refreshPendingMutationOrderIds).toHaveBeenCalledOnce();
-		// The delete guard uses the FRESH set (999 now protected), not the pre-pull snapshot.
+		// The delete guard uses the FRESH set (999's uuid now protected), not the pre-pull snapshot.
 		expect(repository.removeDeletedOrders).toHaveBeenCalledWith(['999'], fresh);
 	});
 
@@ -731,14 +713,14 @@ describe('syncCustomPullBatchIntoRepository delete channel (F6)', () => {
 		const repository = {
 			upsertMany: vi.fn(async (_documents: PullResponse['documents']) => undefined),
 		};
-		const refreshPendingMutationOrderIds = vi.fn(async () => new Set<string | number>([777]));
+		const refreshPendingMutationOrderIds = vi.fn(async () => new Set<string>([fakeUuid(777)]));
 
 		await syncCustomPullBatchIntoRepository({
 			baseUrl: BASE_URL,
 			limit: 50,
 			repository,
 			fetcher: server.fetch,
-			pendingMutationOrderIds: new Set<string | number>(), // stale snapshot: empty
+			pendingMutationOrderIds: new Set<string>(), // stale snapshot: empty
 			refreshPendingMutationOrderIds,
 		});
 
@@ -751,7 +733,7 @@ describe('syncCustomPullBatchIntoRepository delete channel (F6)', () => {
 			upsertMany: vi.fn(async (_documents: PullResponse['documents']) => undefined),
 			removeDeletedOrders: vi.fn(async () => undefined),
 		};
-		const pending = new Set<string | number>([11]);
+		const pending = new Set<string>([fakeUuid(11)]);
 
 		await syncCustomPullBatchIntoRepository({
 			baseUrl: BASE_URL,

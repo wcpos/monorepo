@@ -49,7 +49,7 @@ describe('fakePullServer envelope byte-shape (pinned against the PHP emit)', () 
 				documents: [
 					{
 						id: UUID, // P0-1: keyed by the order's stable uuid, never a synthetic id (:185-196)
-						wooOrderId: 999,
+						// No `wooOrderId` key: remote identity rides `payload.id` (ADR 0029 decision 6).
 						payload: {
 							id: 999,
 							status: 'processing',
@@ -126,7 +126,7 @@ describe('fakePullServer journal semantics (pinned against pull_orders + Sync_In
 		server.seed({ uuid: fakeUuid(2), wooOrderId: 2 });
 
 		const first = await (await server.fetch(pullUrl({ ...ZERO_CURSOR, limit: '1' }))).json();
-		expect(first.documents.map((d: { wooOrderId: number }) => d.wooOrderId)).toEqual([1]);
+		expect(first.documents.map((d: { payload: { id: number } }) => d.payload.id)).toEqual([1]);
 		expect(first.hasMore).toBe(true);
 		expect(first.checkpoint.sequence).toBe(1);
 
@@ -135,7 +135,7 @@ describe('fakePullServer journal semantics (pinned against pull_orders + Sync_In
 				pullUrl({ ...ZERO_CURSOR, limit: '1', sequence: String(first.checkpoint.sequence) })
 			)
 		).json();
-		expect(second.documents.map((d: { wooOrderId: number }) => d.wooOrderId)).toEqual([2]);
+		expect(second.documents.map((d: { payload: { id: number } }) => d.payload.id)).toEqual([2]);
 		expect(second.hasMore).toBe(false);
 		expect(second.checkpoint.sequence).toBe(2);
 	});
@@ -211,7 +211,7 @@ describe('fakePullServer journal semantics (pinned against pull_orders + Sync_In
 
 		expect(envelope.deletes).toEqual([]);
 		expect(envelope.documents).toHaveLength(1);
-		expect(envelope.documents[0].wooOrderId).toBe(999);
+		expect(envelope.documents[0].payload.id).toBe(999);
 		expect(envelope.checkpoint.sequence).toBe(42);
 	});
 
@@ -243,6 +243,33 @@ describe('fakePullServer journal semantics (pinned against pull_orders + Sync_In
 			meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID }],
 		});
 		expect(document.payload.currency).toBeUndefined();
+	});
+
+	it('keeps payload.id in a sparse fieldset that never asked for it — identity always survives', async () => {
+		// Since the envelope's per-document `wooOrderId` key was retired (ADR 0029 decision 6),
+		// `payload.id` is the ONLY remote identity a pulled document carries, so it is retained
+		// like the `_woocommerce_pos_uuid` meta rather than on request. A sparse page that could
+		// strip it would land every order with a null remoteId — invisible to coverage and to the
+		// tombstone channel.
+		const server = createFakePullServer();
+		server.seed({
+			uuid: UUID,
+			wooOrderId: 10,
+			payload: { status: 'processing', currency: 'USD' },
+		});
+
+		const envelope = await (
+			await server.fetch(pullUrl({ ...ZERO_CURSOR, order_fields: 'status' }))
+		).json();
+
+		const document = envelope.documents[0];
+		expect(document.sync.partial).toBe(true);
+		expect(server.received[0].orderFields).toEqual(['status']); // `id` was never requested
+		expect(document.payload).toEqual({
+			status: 'processing',
+			id: 10,
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID }],
+		});
 	});
 
 	it('matches sparse order_fields against OWN payload keys only — inherited names are not "present"', async () => {

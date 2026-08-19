@@ -63,7 +63,6 @@ function response(payload: PullResponse<WirePullDocument> | unknown[]): Response
 function customPullDoc(wooId: number): WirePullDocument {
 	return {
 		id: uuidFor(wooId),
-		wooOrderId: wooId,
 		payload: {
 			id: wooId,
 			date_modified_gmt: '2026-05-20T10:00:00',
@@ -155,14 +154,13 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(documents[0]?.payload).not.toHaveProperty('_rxdb_digest');
 	});
 
-	it('client-assembles custom-pull documents from the payload, ignoring the server-built envelope id and wooOrderId', async () => {
-		// The server-built envelope identity is deliberately stale/wrong (a woo-order:<id> id AND a
-		// mismatched wooOrderId); the client must re-key BOTH from the payload — the storage id from
-		// the stamped uuid, wooOrderId from payload.id — so identity is owned client-side, uniform
-		// with the browser/targeted paths. This is the point of the client-assemble refactor.
+	it('client-assembles custom-pull documents from the payload, ignoring the server-built envelope id', async () => {
+		// The server-built envelope identity is deliberately stale/wrong (a woo-order:<id> id); the
+		// client must re-key BOTH identity fields from the payload — the storage id from the stamped
+		// uuid, remoteId from payload.id — so identity is owned client-side, uniform with the
+		// browser/targeted paths. This is the point of the client-assemble refactor.
 		const serverDoc = {
 			id: 'woo-order:11',
-			wooOrderId: 999,
 			payload: {
 				id: 11,
 				date_modified_gmt: '2026-05-20T10:00:00',
@@ -203,15 +201,13 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(upserted[0].remoteId).toBe('11');
 	});
 
-	it.each([
-		['uuid', uuidFor(11)],
-		['remote id', remoteId(11)],
-		['numeric Woo id', 11],
-	])('guards stale-envelope custom-pull documents by assembled %s', async (_label, pendingId) => {
+	it('guards stale-envelope custom-pull documents by the assembled uuid', async () => {
+		// The pending set is keyed by record uuid (`pendingRecordIds` returns `mutation.recordId`),
+		// so the guard must match the uuid the CLIENT assembled from the payload — never the stale
+		// envelope id the server sent.
 		const serverDoc = {
 			...customPullDoc(11),
 			id: 'woo-order:stale',
-			wooOrderId: 999,
 		};
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
@@ -227,7 +223,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			checkpointStore,
-			pendingMutationOrderIds: vi.fn(async () => new Set<string | number>([pendingId])),
+			pendingMutationOrderIds: vi.fn(async () => new Set<string>([uuidFor(11)])),
 			fetcher,
 		});
 
@@ -691,7 +687,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
 				writeCustomPullCheckpoint: vi.fn(async () => undefined),
 			},
-			pendingMutationOrderIds: vi.fn(async () => new Set<string | number>([123])),
+			pendingMutationOrderIds: vi.fn(async () => new Set<string>([uuidFor(123)])),
 			fetcher,
 		});
 
@@ -747,9 +743,9 @@ describe('createOrdersSchedulerFetcher', () => {
 			);
 		// Empty when batch 1 (id 123) upserts; 456 is queued by the time batch 2 upserts.
 		const pendingMutationOrderIds = vi
-			.fn<() => Promise<ReadonlySet<string | number>>>()
-			.mockResolvedValueOnce(new Set<string | number>())
-			.mockResolvedValueOnce(new Set<string | number>([456]));
+			.fn<() => Promise<ReadonlySet<string>>>()
+			.mockResolvedValueOnce(new Set<string>())
+			.mockResolvedValueOnce(new Set<string>([uuidFor(456)]));
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
@@ -786,7 +782,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(repository.upsertMany).toHaveBeenNthCalledWith(2, []);
 	});
 
-	it('does NOT overwrite a browser-window order that has queued local mutations (numeric pending id)', async () => {
+	it('does NOT overwrite a browser-window order that has queued local mutations', async () => {
 		const repository = { upsertMany: vi.fn(async () => undefined) };
 		const fetcher = vi.fn(async () =>
 			response([
@@ -811,7 +807,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
 				writeCustomPullCheckpoint: vi.fn(async () => undefined),
 			},
-			pendingMutationOrderIds: vi.fn(async () => new Set<string | number>([456])),
+			pendingMutationOrderIds: vi.fn(async () => new Set<string>([uuidFor(456)])),
 			fetcher,
 		});
 
