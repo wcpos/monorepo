@@ -209,7 +209,7 @@ export function EditCartCustomerForm() {
 				<TaxIdsForm />
 				<DialogFooter className="px-0">
 					<DialogClose>{t('common.close')}</DialogClose>
-					{!isGuestCustomer(customerID) && caps.canEditCustomers && (
+					{customerID != null && !isGuestCustomer(customerID) && caps.canEditCustomers && (
 						// @ts-expect-error: loading prop passes through ...props to Button but isn't in SlottablePressableProps
 						<DialogAction onPress={onSaveToOrderAndCustomer} loading={loading}>
 							{t('pos_cart.save_to_order_customer')}

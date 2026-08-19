@@ -19,7 +19,7 @@ import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { CustomerDocument } from '@wcpos/database';
-import { GUEST_CUSTOMER_ID } from '@wcpos/sync-core';
+import { GUEST_CUSTOMER_ID, isGuestCustomer } from '@wcpos/sync-core';
 
 import { useT } from '../../../contexts/translations';
 import { useSearchSelect } from '../../../query';
@@ -132,7 +132,7 @@ function CustomerSelectItem({ customer }: { customer: CustomerDocument }) {
 	const t = useT();
 	const { format } = useCustomerNameFormat();
 
-	if (customer.id === 0) {
+	if (isGuestCustomer(customer.id)) {
 		return (
 			<HStack className="items-center">
 				<Avatar

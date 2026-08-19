@@ -27,7 +27,7 @@ const manager = {
 };
 
 const currentOrder = {
-	customer_id$: new BehaviorSubject(42),
+	customer_id$: new BehaviorSubject<number | null>(42),
 	billing$: new BehaviorSubject(formValues.billing),
 	shipping$: new BehaviorSubject(formValues.shipping),
 	tax_ids$: new BehaviorSubject(formValues.tax_ids),
@@ -125,6 +125,7 @@ describe('EditCartCustomerForm', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		canEditCustomers = true;
+		currentOrder.customer_id$.next(42);
 	});
 
 	it('updates the selected customer when save is clicked before the lookup resolves', async () => {
@@ -156,6 +157,15 @@ describe('EditCartCustomerForm', () => {
 
 	it('keeps save-to-order available but hides save-to-customer without edit permission', () => {
 		canEditCustomers = false;
+
+		render(<EditCartCustomerForm />);
+
+		expect(screen.getByTestId('pos_cart.save_to_order')).toBeTruthy();
+		expect(screen.queryByTestId('pos_cart.save_to_order_customer')).toBeNull();
+	});
+
+	it('hides save-to-customer when the order has no customer ID', () => {
+		currentOrder.customer_id$.next(null);
 
 		render(<EditCartCustomerForm />);
 
