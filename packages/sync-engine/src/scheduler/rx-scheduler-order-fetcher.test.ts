@@ -10,6 +10,7 @@ import {
 	wooIdOf,
 } from '@wcpos/sync-core';
 
+import { extractOrderManifest } from '../local-coverage/existence-manifest-population';
 import { remoteId } from '../testing';
 import { createOrdersSchedulerFetcher } from './rx-scheduler-order-fetcher';
 
@@ -114,6 +115,44 @@ describe('createOrdersSchedulerFetcher', () => {
 			requestCount: 1,
 			completed: false,
 		});
+	});
+
+	it('keeps the out-of-band existence-manifest row on assembled custom-pull documents', async () => {
+		// The proxy stamps _rxdb_digest into the payload; materializeLocalOnly lifts it onto a
+		// non-enumerable Symbol on the document and strips it from the stored payload. If
+		// assembly loses the Symbol (e.g. via an object spread), extractOrderManifest finds
+		// neither the row nor the digest fallback, and custom-pull orders contribute nothing
+		// to the order existence manifest — silently shutting the prune gate.
+		const doc = customPullDoc(11);
+		(doc.payload as Record<string, unknown>)._rxdb_digest = '9223372036854775810';
+		const upserted: OrderDocument[] = [];
+		const repository = {
+			upsertMany: vi.fn(async (docs: OrderDocument[]) => {
+				upserted.push(...docs);
+			}),
+		};
+		const checkpointStore = {
+			readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+			writeCustomPullCheckpoint: vi.fn(async () => undefined),
+		};
+		const fetcher = vi.fn(async () =>
+			response({ documents: [doc], checkpoint: nextCheckpoint, hasMore: false })
+		);
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			checkpointStore,
+			fetcher,
+		});
+
+		await schedulerFetcher(orderTask());
+
+		expect(upserted).toHaveLength(1);
+		const { manifestRows, documents } = extractOrderManifest(upserted);
+		expect(manifestRows).toEqual([
+			{ id: '11', wooId: 11, objectType: 'order', digest: '9223372036854775810' },
+		]);
+		expect(documents[0]?.payload).not.toHaveProperty('_rxdb_digest');
 	});
 
 	it('client-assembles custom-pull documents from the payload, ignoring the server-built envelope id and wooOrderId', async () => {
