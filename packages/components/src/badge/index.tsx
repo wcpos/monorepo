@@ -4,7 +4,7 @@ import { View, ViewProps } from 'react-native';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '../lib/utils';
-import { Text } from '../text';
+import { Text, TextClassContext } from '../text';
 
 const badgeVariants = cva('items-center justify-center rounded-full', {
 	variants: {
@@ -95,7 +95,15 @@ export function Badge({
 
 	return (
 		<View className={cn(badgeVariants({ variant, size }), className)} {...props}>
-			<Text className={badgeTextVariants({ variant, size })}>{displayCount}</Text>
+			{/* A badge carries its own colour contract, so it resets whatever text classes it
+			    is nested inside. A `Button` publishes stateful label colours through
+			    `TextClassContext` (`web:group-hover:text-accent-foreground` on the ghost
+			    variants); `tailwind-merge` scopes conflicts by modifier, so a prefixed rule
+			    never collides with the badge's own unprefixed colour and wins on hover
+			    instead — a red badge with dark blue digits (#1369). */}
+			<TextClassContext.Provider value={undefined}>
+				<Text className={badgeTextVariants({ variant, size })}>{displayCount}</Text>
+			</TextClassContext.Provider>
 		</View>
 	);
 }
