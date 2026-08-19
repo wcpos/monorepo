@@ -13,7 +13,52 @@ import {
 	productWriterAuthorization,
 } from './search-probe';
 
+/**
+ * The wire `orderby` the app emits when the cashier sorts the products grid by the
+ * NAME column. The grid's column id is `name`, but the query translator maps it to
+ * Woo's `title` (`wooOrderbyFor('products', 'name')` in
+ * packages/query/src/engine-adapter/collection-map.ts) — and `name` is not even a
+ * member of the supported products browse enum
+ * (PRODUCT_BROWSE_WINDOW_ORDERBY_VALUES in
+ * packages/sync-engine/src/scheduler/product-browse-window-descriptor.ts). Waiting
+ * on `orderby=name` matches nothing and burns the whole wait budget.
+ */
+const NAME_SORT_WIRE_ORDERBY = 'title';
+
+/**
+ * Eco cadence is 300 seconds with up to 20% jitter (360s worst case). Keep 30
+ * seconds for materialization after the latest supported poll fires.
+ */
 const ARRIVAL_TIMEOUT_MS = 6 * 60_000 + 30_000;
+
+/**
+ * The explicit deadlines standing before the arrival assertion: navigate (12s) +
+ * grid census (60s) + name browse (60s) + anchor row (30s) = 162s, rounded up to
+ * 180s for the wc/v3 writer login and probe-creation round trips. Those round trips
+ * are request-timeout bounded and their pathological paths throw rather than return
+ * late, so they cannot silently stretch the window this budget guards.
+ */
+const SETUP_BUDGET_MS = 180_000;
+
+/** Force-deleting the probe in the `finally` also spends the test budget. */
+const TEARDOWN_BUDGET_MS = 30_000;
+
+/**
+ * TIMEOUT ARITHMETIC — do not set this to a bare literal.
+ *
+ *   setup      180s
+ *   arrival    390s
+ *   teardown    30s
+ *   ----------------
+ *   total      600s
+ *
+ * The test budget must be at least setup + arrival + teardown. Previously the test
+ * ran on a flat 480s while setup alone could spend 180s before the 390s arrival
+ * assertion even started — so a slow-but-successful arrival was reported as a
+ * synchronization failure that never happened. Derive the budget from the parts so
+ * raising any one of them cannot silently re-open that gap.
+ */
+const TEST_TIMEOUT_MS = SETUP_BUDGET_MS + ARRIVAL_TIMEOUT_MS + TEARDOWN_BUDGET_MS;
 
 /**
  * Directional coverage: a record created on the SERVER while the till is open
@@ -37,6 +82,9 @@ const ARRIVAL_TIMEOUT_MS = 6 * 60_000 + 30_000;
  *  - Do NOT assume a sort direction, and do not try to steer it with
  *    `menu_order`: read the direction from the actual name-browse request, then
  *    name the probe so it lands first under whatever sort is actually applied.
+ *  - Do NOT assume the grid's column id reaches the wire: the name column sorts
+ *    as `orderby=title` (see NAME_SORT_WIRE_ORDERBY above). Only the `order`
+ *    parameter is read verbatim off the response.
  * Measured against dev-pro with that method: arrival in ~2 seconds.
  */
 test('a product created on the server reaches the products grid without a search', async ({
@@ -44,7 +92,7 @@ test('a product created on the server reaches the products grid without a search
 	request,
 	storeAuthorization,
 }, testInfo) => {
-	test.setTimeout(8 * 60_000);
+	test.setTimeout(TEST_TIMEOUT_MS);
 
 	// The Products page is a Pro-only drawer screen (same gate every
 	// products-page spec uses) — on free there is no grid to assert against.
@@ -66,7 +114,7 @@ test('a product created on the server reaches the products grid without a search
 			const route = url.searchParams.get('rest_route');
 			const isProductsBrowse =
 				url.pathname.endsWith('/wp-json/wcpos/v2/products') || route === '/wcpos/v2/products';
-			return isProductsBrowse && url.searchParams.get('orderby') === 'name';
+			return isProductsBrowse && url.searchParams.get('orderby') === NAME_SORT_WIRE_ORDERBY;
 		},
 		{ timeout: 60_000 }
 	);
@@ -125,8 +173,6 @@ test('a product created on the server reaches the products grid without a search
 		if (!created.probe.rowTestId) {
 			throw new Error('Arrival probe is missing its slug-derived row testID');
 		}
-		// Eco cadence is 300 seconds with up to 20% jitter. Keep 30 seconds for
-		// materialization after the latest supported poll fires.
 		await expect(
 			screen.getByTestId(created.probe.rowTestId),
 			'a product created on the server must reach the grid without a search or manual sync'
