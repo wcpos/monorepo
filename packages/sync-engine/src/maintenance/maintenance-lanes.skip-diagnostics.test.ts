@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { StoreScopeManager, type SyncEvent } from '@wcpos/sync-core';
 
 import { createMaintenanceLanes } from './maintenance-lanes';
 import { censusTotalsFromCache } from '../scheduler';
+
+import type { LocalCoverage } from '../local-coverage/local-coverage';
 
 /**
  * A skipped maintenance tick used to be completely silent, so a lane that never
@@ -15,6 +17,7 @@ import { censusTotalsFromCache } from '../scheduler';
 async function skipHarness(overrides?: {
 	connectivity?: () => 'online' | 'offline' | 'degraded';
 	hasPendingInteractiveWork?: () => boolean;
+	coverage?: LocalCoverage | null;
 }) {
 	const database = {
 		listCollections: () => [],
@@ -28,7 +31,7 @@ async function skipHarness(overrides?: {
 	const lanes = createMaintenanceLanes({
 		manager,
 		databaseFor: () => database as never,
-		coverageFor: () => null,
+		coverageFor: () => overrides?.coverage ?? null,
 		syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
 		fetcher: async () => Response.json({}),
 		connectivity: overrides?.connectivity ?? (() => 'online'),
@@ -94,6 +97,41 @@ describe('maintenance lane skip diagnostics (#1318)', () => {
 				fields: expect.objectContaining({ lane: 'product-trickle', reason: 'offline' }),
 			})
 		);
+	});
+
+	it('does not write a second event when the tick already summarised its stand-down', async () => {
+		// A deferred existence-reconcile reports partial work AND a stand-down: the
+		// summary row must name the reason, and the skip must not duplicate it.
+		const coverage = {
+			primeManifest: vi.fn(async () => ({ products: 0, customers: 0, orders: 0 })),
+			reconcilePass: vi.fn(async () => ({
+				buckets: 1,
+				emptyBuckets: 0,
+				pruned: 0,
+				missing: 0,
+				changed: 0,
+				skippedDirty: 0,
+				deferred: true,
+			})),
+		} as unknown as LocalCoverage;
+		const context = await skipHarness({ coverage });
+
+		await expect(context.lanes.existenceReconcile.tick()).resolves.toMatchObject({
+			status: 'skipped',
+			reason: 'server-pressure',
+		});
+		const events = skipEvents(context.diagnostics);
+		expect(events).toHaveLength(1);
+		expect(events[0]).toMatchObject({
+			level: 'info',
+			message: expect.stringContaining('Existence audit'),
+			fields: expect.objectContaining({
+				lane: 'existence-reconcile',
+				status: 'skipped',
+				reason: 'server-pressure',
+				outcome: 'cancelled',
+			}),
+		});
 	});
 
 	it('stays silent when the lane actually runs', async () => {

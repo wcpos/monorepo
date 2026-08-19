@@ -254,16 +254,22 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		 * static elimination to narrow: the skip reason is the only evidence a lane
 		 * that never runs leaves behind. It rides the same `maintenance.lane.tick`
 		 * type as the summary (types are a closed, labelled set — see the emit
-		 * below) at DEBUG, so it lands in the flight recorder always and in a
-		 * durable log row only under verbose diagnostics; a routine "nothing to do"
-		 * must never sit in front of a cashier.
+		 * below) at DEBUG, which the cashier-log observer admits only under verbose
+		 * diagnostics: a routine "nothing to do" must never sit in front of a
+		 * cashier, and it must not evict real forensic evidence from the flight
+		 * recorder ring either.
+		 *
+		 * `outcome: 'cancelled'` is load-bearing, not decoration. The observer maps
+		 * this type to INVISIBLE, which inherits `outcome: 'failed'` — so without an
+		 * explicit outcome every routine stand-down would persist as a FAILED row
+		 * and pollute the failure filter support reads (codex review on #1330).
 		 */
 		const skipped = (reason: string): MaintenanceLaneReport => {
 			deps.diagnostics({
 				type: 'maintenance.lane.tick',
 				level: 'debug',
 				message: `Lane ${name} skipped: ${reason}`,
-				fields: { lane: name, status: 'skipped', reason },
+				fields: { lane: name, status: 'skipped', reason, outcome: 'cancelled' },
 			});
 			return { lane: name, status: 'skipped', reason };
 		};
@@ -377,7 +383,22 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 										type: 'maintenance.lane.tick',
 										level: level ?? 'info',
 										message: summary,
-										fields: { lane: name, ...(starvation ? { starvation: true } : {}) },
+										fields: {
+											lane: name,
+											...(starvation ? { starvation: true } : {}),
+											// A body may report BOTH partial work and a stand-down (a
+											// deferred existence-reconcile does exactly that). Naming the
+											// stand-down here keeps this row from reading as a full run,
+											// and lets the skip below stay quiet instead of writing a
+											// second row for the same tick (coderabbit review on #1330).
+											...(bodyReport.status === 'skipped'
+												? {
+														status: 'skipped' as const,
+														reason: bodyReport.reason ?? 'unspecified',
+														outcome: 'cancelled' as const,
+													}
+												: {}),
+										},
 									});
 								}
 							});
@@ -389,7 +410,12 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 							return skipped('scope moved mid-tick (writes dropped)');
 						}
 						if (bodyReport?.status === 'skipped') {
-							return skipped(bodyReport.reason ?? 'unspecified');
+							const reason = bodyReport.reason ?? 'unspecified';
+							// The summary emit above already carried this tick's reason; a
+							// second event would only duplicate the row.
+							return bodyReport.summary === null
+								? skipped(reason)
+								: { lane: name, status: 'skipped', reason };
 						}
 						return { lane: name, status: 'ran' };
 					});
