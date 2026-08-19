@@ -69,4 +69,49 @@ describe('reference lane sorted seeding', () => {
 			['categories:all:orderby=slug:order=asc'],
 		]);
 	});
+
+	it('a supersede that loses its CAS re-reads and retries instead of rejecting', async () => {
+		const { database, stored } = schedulerDatabase();
+		await seedReferenceLanes({
+			database,
+			collections: ['categories'],
+			sorts: { categories: { orderby: 'name', order: 'desc' } },
+		});
+		const oldStateKey = [...stored.entries()].find(
+			([, row]) => row.queryKey === 'categories:all:orderby=name:order=desc'
+		)?.[0];
+		if (oldStateKey === undefined) throw new Error('expected a persisted sorted lane');
+
+		// A concurrent owner mutates the row between the seeder's read and its
+		// CAS-guarded remove: hand the FIRST findOne for the old lane a tampered
+		// snapshot so that remove legitimately loses, then behave normally so the
+		// re-read retry can win.
+		const collectionStub = (
+			database as unknown as {
+				schedulerTaskStates: { findOne: (stateKey: string) => { exec: () => Promise<unknown> } };
+			}
+		).schedulerTaskStates;
+		const originalFindOne = collectionStub.findOne.bind(collectionStub);
+		let tampered = false;
+		collectionStub.findOne = (stateKey: string) => {
+			if (!tampered && stateKey === oldStateKey) {
+				tampered = true;
+				return {
+					exec: async () => ({
+						toJSON: () => ({ ...stored.get(stateKey), priority: 1 }),
+						incrementalModify: async () => undefined,
+					}),
+				};
+			}
+			return originalFindOne(stateKey);
+		};
+
+		await seedReferenceLanes({
+			database,
+			collections: ['categories'],
+			sorts: { categories: { orderby: 'slug', order: 'asc' } },
+		});
+		expect(tampered).toBe(true);
+		expect(categoryKeys(stored)).toEqual(['categories:all:orderby=slug:order=asc']);
+	});
 });

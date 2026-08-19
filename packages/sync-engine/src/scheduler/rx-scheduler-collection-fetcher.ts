@@ -239,59 +239,97 @@ export function createGreedyCollectionFetcher<Doc, Payload>(
 		nextPageByTask.set(task.id, page + 1);
 		const completed = payloads.length < perPage;
 
-		await recordCoverage(spec.collection, input, task, allCoverageIds, completed);
-
 		// Only prunable collections prune — a non-prunable (G1 tax) collection never runs a prune even if a repo
 		// somehow implements one, and never reports prunedCount.
 		const prunes = spec.prunable ? input.repository.pruneServerSourcedAbsent : undefined;
 		let prunedCount = 0;
 		let requestCount = 1;
+		const runsVerifiedPrune =
+			completed &&
+			prunes !== undefined &&
+			context?.signal?.aborted !== true &&
+			sort.orderby !== 'id' &&
+			input.repository.listServerSourcedAbsent !== undefined &&
+			input.repository.pruneServerSourcedAbsentByUuids !== undefined &&
+			spec.remoteId !== undefined;
+
+		// Verify-before-prune, resolved BEFORE coverage is recorded so verified
+		// survivors join the walk's covered set. Only the wire leg (request +
+		// body parse) is fail-safe — a repository failure propagates and fails
+		// the task exactly as it would on the page path, so the scheduler
+		// retries and tagged storage refusals reach their recovery handlers.
+		// `null` = the wire leg failed: prune NOTHING this walk (the next walk
+		// reconciles), mirroring the abort guard below.
+		let confirmedAbsentUuids: string[] | null = [];
+		let coverageIds = allCoverageIds;
+		if (runsVerifiedPrune) {
+			const absent = await input.repository.listServerSourcedAbsent!(allStorageIds);
+			const batches: Payload[][] = [];
+			for (const batch of chunk(absent, WOO_REST_MAX_PER_PAGE)) {
+				try {
+					const verifyQuery = new URLSearchParams();
+					verifyQuery.set('include', batch.map(({ wooId }) => wooId).join(','));
+					verifyQuery.set('per_page', String(batch.length));
+					const verify = await httpGet(
+						input,
+						`${input.baseUrl}/${spec.endpoint}?${verifyQuery.toString()}`,
+						context
+					);
+					requestCount += 1;
+					if (!verify.ok) throw new Error(`verify request failed: ${verify.status}`);
+					batches.push(JSON.parse(await verify.text()) as Payload[]);
+				} catch (error) {
+					input.diagnostics?.({
+						type: 'engine.guard',
+						level: 'warn',
+						collection: spec.collection,
+						message: `reference.prune.verify-failed: ${error instanceof Error ? error.message : 'UnknownError'}`,
+					});
+					confirmedAbsentUuids = null;
+					break;
+				}
+			}
+			if (confirmedAbsentUuids !== null) {
+				const live = new Set<number>();
+				for (const payloads of batches) {
+					const survivors = payloads.map(spec.documentFromPayload);
+					await input.repository.upsertMany(survivors);
+					for (const survivor of survivors) {
+						const id = spec.remoteId!(survivor);
+						if (id !== null) live.add(id);
+					}
+					// A survivor was absent from every page (it moved mid-walk), so it is
+					// not in allCoverageIds — but the walk did fetch it: cover it.
+					coverageIds = [...coverageIds, ...survivors.map(spec.coverageRecordId)];
+				}
+				confirmedAbsentUuids = absent
+					.filter(({ wooId }) => !live.has(wooId))
+					.map(({ uuid }) => uuid);
+			}
+		}
+
+		// Coverage keys on the CANONICAL lane, whatever sort the walk used: sort is
+		// lane identity (page arithmetic), not coverage identity — a completed walk
+		// under any sort covers the same "everything, pruned" set, and hosts watch
+		// the canonical key (require-plane hands it out as the coverage target).
+		await recordCoverage(
+			spec.collection,
+			input,
+			{ ...task, queryKey: spec.greedyQueryKey },
+			coverageIds,
+			completed
+		);
+
 		if (completed) {
 			// Skip the prune on abort so a torn-down refresh can't tombstone against a partial set. keptDocumentIds
 			// are STORAGE keys (uuid) — they must match the stored doc.id the prune compares.
 			if (prunes && context?.signal?.aborted !== true) {
 				if (sort.orderby === 'id') {
 					prunedCount = (await prunes(allStorageIds)).length;
-				} else if (
-					input.repository.listServerSourcedAbsent &&
-					input.repository.pruneServerSourcedAbsentByUuids &&
-					spec.remoteId
-				) {
-					try {
-						const absent = await input.repository.listServerSourcedAbsent(allStorageIds);
-						const live = new Set<number>();
-						for (const batch of chunk(absent, WOO_REST_MAX_PER_PAGE)) {
-							const verifyQuery = new URLSearchParams();
-							verifyQuery.set('include', batch.map(({ wooId }) => wooId).join(','));
-							verifyQuery.set('per_page', String(batch.length));
-							const verify = await httpGet(
-								input,
-								`${input.baseUrl}/${spec.endpoint}?${verifyQuery.toString()}`,
-								context
-							);
-							requestCount += 1;
-							if (!verify.ok) throw new Error(`verify request failed: ${verify.status}`);
-							const payloads = JSON.parse(await verify.text()) as Payload[];
-							const documents = payloads.map(spec.documentFromPayload);
-							await input.repository.upsertMany(documents);
-							for (const document of documents) {
-								const id = spec.remoteId(document);
-								if (id !== null) live.add(id);
-							}
-						}
-						const confirmed = absent
-							.filter(({ wooId }) => !live.has(wooId))
-							.map(({ uuid }) => uuid);
-						prunedCount = (await input.repository.pruneServerSourcedAbsentByUuids(confirmed))
-							.length;
-					} catch (error) {
-						input.diagnostics?.({
-							type: 'engine.guard',
-							level: 'warn',
-							collection: spec.collection,
-							message: `reference.prune.verify-failed: ${error instanceof Error ? error.message : 'UnknownError'}`,
-						});
-					}
+				} else if (runsVerifiedPrune && confirmedAbsentUuids !== null) {
+					prunedCount = (
+						await input.repository.pruneServerSourcedAbsentByUuids!(confirmedAbsentUuids)
+					).length;
 				}
 			}
 			fetchedStorageIdsByTask.delete(task.id);

@@ -31,8 +31,6 @@
 
 import {
 	type Fetcher,
-	REFERENCE_COLLECTIONS,
-	type ReferenceCollection,
 	type RemoteId,
 	remoteIdOrNull,
 	type StoreScopeManager,
@@ -352,10 +350,6 @@ function createBrowseWindowKeyMemory(activeScope: () => string | null) {
 }
 
 type RefreshRequirement = Extract<EngineRequirement, { kind: 'refresh' }>;
-
-function isReferenceCollection(collection: SyncCollectionName): collection is ReferenceCollection {
-	return (REFERENCE_COLLECTIONS as readonly string[]).includes(collection);
-}
 
 /**
  * A refresh with NO stated orderby (or one the wire enum rejects) returns null:
@@ -1357,15 +1351,11 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					customerBrowseWindowKeys.record(key);
 					return key;
 				}
-				if (requirement.kind === 'refresh') {
-					if (!isReferenceCollection(requirement.collection)) {
-						return laneKeyFor(requirement.collection);
-					}
-					const sort = referenceSortFor(requirement, deps.diagnostics);
-					return sort
-						? referenceLaneQueryKey(requirement.collection, sort)
-						: referenceLaneQueryKey(requirement.collection);
-				}
+				// The handle's key is a COVERAGE target (core subscribes footer totals to
+				// it), and reference coverage keys on the canonical lane whatever sort the
+				// walk used — sort is lane identity, not coverage identity. Spelling the
+				// sorted key here would point subscribers at a lane no coverage row names.
+				if (requirement.kind === 'refresh') return laneKeyFor(requirement.collection);
 				return null;
 			})();
 			deps.onActivityChange?.(requirement.collection, 1);

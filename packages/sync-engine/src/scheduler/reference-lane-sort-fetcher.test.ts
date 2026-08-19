@@ -127,4 +127,66 @@ describe('reference lane sorted greedy fetches', () => {
 			expect.objectContaining({ level: 'warn', collection: 'categories' })
 		);
 	});
+
+	it('lets a repository failure escape the verification guard and fail the task', async () => {
+		const repo = repository();
+		repo.listServerSourcedAbsent.mockResolvedValue([{ uuid: uuidFor(99), wooId: 99 }]);
+		// The page upsert succeeds; the survivor upsert hits a storage refusal. Only
+		// the WIRE leg is fail-safe — storage failures must fail the task so the
+		// scheduler retries and tagged refusals reach their recovery handlers.
+		repo.upsertMany
+			.mockResolvedValueOnce(undefined)
+			.mockRejectedValueOnce(new Error('index reconciliation refused: pending rows'));
+		const diagnostics = vi.fn();
+		const fetcher = vi
+			.fn()
+			.mockResolvedValueOnce(response([]))
+			.mockResolvedValueOnce(response([cat(99)]));
+		const run = createReferenceCollectionFetcher(CATEGORY_REFERENCE_CONFIG, {
+			baseUrl: 'https://example.test/wp-json/wcpos/v2',
+			repository: repo,
+			fetcher,
+			diagnostics,
+		});
+
+		await expect(run(task('categories:all:orderby=name:order=desc'))).rejects.toThrow(
+			'index reconciliation refused'
+		);
+		expect(repo.pruneServerSourcedAbsentByUuids).not.toHaveBeenCalled();
+		expect(diagnostics).not.toHaveBeenCalled();
+	});
+
+	it('covers verified survivors, under the canonical lane key whatever the sort', async () => {
+		const repo = repository();
+		repo.listServerSourcedAbsent.mockResolvedValue([
+			{ uuid: uuidFor(98), wooId: 98 },
+			{ uuid: uuidFor(99), wooId: 99 },
+		]);
+		const recordQueryResult = vi.fn(async () => undefined);
+		const fetcher = vi
+			.fn()
+			.mockResolvedValueOnce(response([cat(1)]))
+			.mockResolvedValueOnce(response([cat(99)]));
+		const run = createReferenceCollectionFetcher(CATEGORY_REFERENCE_CONFIG, {
+			baseUrl: 'https://example.test/wp-json/wcpos/v2',
+			repository: repo,
+			fetcher,
+			coverageRepository: { recordQueryResult },
+		});
+
+		await run(task('categories:all:orderby=name:order=desc'));
+
+		const coverageCalls = recordQueryResult.mock.calls as unknown as [
+			{ queryKey: string; complete: boolean; records: { id: string }[] },
+		][];
+		const recorded = coverageCalls.at(-1)![0];
+		// Sort is lane identity, not coverage identity: the sorted walk records
+		// coverage under the canonical key hosts subscribe to...
+		expect(recorded.queryKey).toBe('categories:all');
+		expect(recorded.complete).toBe(true);
+		// ...and the verified survivor (absent from every page because it moved
+		// mid-walk) joins the walk's covered set alongside the page record.
+		expect(recorded.records).toHaveLength(2);
+		expect(new Set(recorded.records.map(({ id }) => id)).size).toBe(2);
+	});
 });
