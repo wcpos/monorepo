@@ -60,6 +60,9 @@ function FooterContent({
 				<Text testID="data-table-loaded-count" className="hidden">
 					{count}
 				</Text>
+				<Text testID="data-table-total-count" className="hidden">
+					{total}
+				</Text>
 				<SyncButton sync={sync} clearAndSync={clearAndSync} active={loading} />
 			</HStack>
 		</HStack>

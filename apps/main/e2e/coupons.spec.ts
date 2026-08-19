@@ -82,6 +82,16 @@ test.describe('Coupons Page (Pro)', () => {
 		const firstRowText = (await firstRow.textContent()) ?? '';
 		const token = firstRowText.match(/[a-z][a-z0-9]{2,}/i)?.[0];
 		expect(token, `no searchable code token in first coupon row: "${firstRowText}"`).toBeTruthy();
+		const nonMatchingRow = screen
+			.getByTestId(/^data-table-row-/)
+			.filter({ hasNotText: token as string })
+			.first();
+		test.skip(
+			!(await nonMatchingRow.isVisible().catch(() => false)),
+			'live store has no coupon row distinguishable by the derived search token'
+		);
+		const nonMatchingRowTestId = await nonMatchingRow.getAttribute('data-testid');
+		expect(nonMatchingRowTestId, 'distinguishable coupon row has no test ID').toBeTruthy();
 
 		const searchInput = screen.getByTestId('search-coupons');
 		await searchInput.fill(token as string);
@@ -89,12 +99,10 @@ test.describe('Coupons Page (Pro)', () => {
 		const matchingRow = screen.getByTestId(/^data-table-row-/).first();
 		await expect(matchingRow).toBeVisible({ timeout: 15_000 });
 		await expect(matchingRow).toContainText(token as string, { ignoreCase: true });
-		// Filtering narrows (or keeps, when every code matches the token) the local
-		// set — it must never grow it. The old `!== initialCount` assertion failed
-		// legitimately whenever the token matched everything; the previous
-		// total-vs-total comparison was vacuous (a filtered server total can never
-		// exceed the unfiltered one), so the RENDERED count is the referent (#1345).
-		await expect.poll(loadedRows, { timeout: 15_000 }).toBeLessThanOrEqual(shownBefore);
+		await expect(screen.getByTestId(nonMatchingRowTestId as string)).not.toBeVisible({
+			timeout: 15_000,
+		});
+		await expect.poll(loadedRows, { timeout: 15_000 }).toBeLessThan(shownBefore);
 	});
 
 	test('should have add coupon button on Coupons page', async ({ posPage: page }) => {

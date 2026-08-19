@@ -244,8 +244,7 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 		await authenticateWithStore(page, testInfo, { waitForCatalogue: false });
 		await navigateToPage(page, 'products');
 		const firstProducts = page.getByTestId('screen-products').filter({ visible: true });
-		const firstCount = firstProducts.getByTestId('data-table-count');
-		await expect(firstCount).toBeVisible({ timeout: 120_000 });
+		await expect(firstProducts.getByTestId('data-table-count')).toBeVisible({ timeout: 120_000 });
 		// Rows must actually LAND locally — the old /[1-9]/ probe on the footer
 		// sentence also matched the server total, so an empty grid with a non-zero
 		// total sailed past this gate (#1336, #1345).
@@ -260,11 +259,15 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 			// SERVER total is deliberately the referent here — an empty store shows
 			// "0 of 0" and skips, while a non-zero total with zero rendered rows is
 			// a sync/render regression and must fail, not skip.
-			const sentence = (await firstCount.textContent().catch(() => null)) ?? '';
-			const serverTotal = Number(sentence.match(/\d+/g)?.pop() ?? '0');
+			const serverTotalText =
+				(await firstProducts
+					.getByTestId('data-table-total-count')
+					.textContent()
+					.catch(() => null)) ?? '';
+			const serverTotal = Number(serverTotalText || '0');
 			expect(
 				serverTotal,
-				`catalog rows never rendered although the footer reports a server total of ${serverTotal} ("${sentence}") — a product-demand regression looks exactly like this`
+				`catalog rows never rendered although the footer reports a server total of ${serverTotal} — a product-demand regression looks exactly like this`
 			).toBe(0);
 		}
 		test.skip(
@@ -338,6 +341,9 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 		// window invariant below to the wrong moment (#1345).
 		const products = page.getByTestId('screen-products').filter({ visible: true });
 		await expect(products.getByTestId(LOADED_COUNT_TEST_ID)).toHaveText(LOADED_COUNT_READY, {
+			timeout: 120_000,
+		});
+		await expect(products.getByTestId(/^data-table-row-/).first()).toBeVisible({
 			timeout: 120_000,
 		});
 		const renderedAtMs = Date.now();
