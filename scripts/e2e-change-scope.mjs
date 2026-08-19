@@ -75,21 +75,20 @@ if (changed.length === 0) runEverything("no changed files detected");
  * starts with one and executes code (greptile caught exactly this on #1327,
  * where it would have skipped deploy AND E2E for a behaviour-changing PR).
  * A line only counts when nothing executable survives the comment.
+ * Cross-line block delimiters are ambiguous because `git diff -U0` omits the
+ * unchanged lines whose execution they can alter, so they run the full suite.
  */
 function isCommentOnlyLine(content) {
   // `//` comments the rest of the line, so nothing can follow it.
   if (content.startsWith("//")) return true;
-  if (
-    content.startsWith("/*") ||
-    content.startsWith("*/") ||
-    content.startsWith("*")
-  ) {
+  if (content.startsWith("/*")) {
     const closed = content.lastIndexOf("*/");
-    // No close on this line: still inside the block, nothing executes here.
-    if (closed === -1) return true;
+    if (closed === -1) return false;
     // Closed: anything after the final `*/` is code.
     return content.slice(closed + 2).trim() === "";
   }
+  if (content.includes("*/")) return false;
+  if (content.startsWith("*")) return true;
   return false;
 }
 const CODE_EXTENSIONS = /\.(ts|tsx|js|jsx|mjs|cjs)$/;

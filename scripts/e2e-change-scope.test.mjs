@@ -127,14 +127,24 @@ test("a closed block comment followed by code is NOT comment-only", () => {
   assert.equal(scope.behavioural, "true");
 });
 
-test("an unterminated block comment IS comment-only", () => {
+test("block delimiters around unchanged code run the full suite", () => {
+  const scope = scopeOf(({ write, join }) => {
+    write(
+      join("packages/core/src/index.ts"),
+      "// header\n/*\nexport const x = 1;\n*/\n",
+    );
+  });
+  assert.equal(scope.behavioural, "true");
+});
+
+test("a multi-line block comment conservatively runs the full suite", () => {
   const scope = scopeOf(({ append, join }) => {
     append(
       join("packages/core/src/index.ts"),
       "/* opening a block\n * more\n */\n",
     );
   });
-  assert.equal(scope.behavioural, "false");
+  assert.equal(scope.behavioural, "true");
 });
 
 test("a spec basename with regex metacharacters refuses to narrow", () => {
