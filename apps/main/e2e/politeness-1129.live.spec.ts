@@ -386,6 +386,9 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 						(entry) =>
 							entry.path.includes('/products') &&
 							entry.path.includes('orderby=') &&
+							// per_page=100 is the seed's page size — without it the
+							// product-trickle's page-1 request would satisfy this too.
+							entry.path.includes('per_page=100') &&
 							entry.path.includes('page=1')
 					),
 				{

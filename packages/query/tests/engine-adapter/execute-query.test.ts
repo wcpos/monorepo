@@ -465,6 +465,32 @@ describe('executeAdapterQuery', () => {
 		await database.close();
 	});
 
+	it('folded-equal names ("Apple"/"apple") tie to the id part, never to case', async () => {
+		// The collator returns 0 for folded-equal strings ON PURPOSE: to a cashier
+		// they are the same word, so the declared id tiebreak decides — a code-unit
+		// residue here would order 'Apple' before 'apple' regardless of id.
+		const { database, products } = await openProductsDatabase();
+		await products.bulkInsert([
+			product('product-upper', 40, 'Apple', '1.00'),
+			product('product-lower', 20, 'apple', '1.00'),
+		]);
+
+		const result = await firstValueFrom(
+			executeAdapterQuery({
+				database: database as unknown as AdapterDatabase,
+				collection: 'products',
+				selector: {},
+				sort: [{ name: 'asc' }, { id: 'asc' }],
+			})
+		);
+
+		expect(result.hits.map((document) => document.uuid)).toEqual([
+			'product-lower',
+			'product-upper',
+		]);
+		await database.close();
+	});
+
 	// #947, Paul's ruling 2026-08-14: both product lists sort by type. `type` has no wire
 	// `orderby` on any surface, so this is the LOCAL sort the grid falls back to — the ordering
 	// the cashier sees has to be genuinely by product type, not the default window's order

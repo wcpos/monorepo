@@ -96,19 +96,13 @@ function compareValues(left: unknown, right: unknown): number {
 	// 'Apple', 'Éclair' beside 'Eclair'), and MySQL's utf8mb4 ci collation orders
 	// the WIRE window the same way — folding here keeps the rendered order aligned
 	// with window membership (Paul's cashier-expectation ruling, 2026-08-19; this
-	// replaced the code-unit ordering that put 'Zoo' before 'apple'). Code-unit
-	// order remains the deterministic tiebreak for strings the collation folds
-	// together, so the comparator stays total.
+	// replaced the code-unit ordering that put 'Zoo' before 'apple'). Folded-equal
+	// strings return 0 ON PURPOSE: 'Apple' and 'apple' ARE the same word to a
+	// cashier, so the tie must fall through to the NEXT sort part (the declared id
+	// tiebreak), never to case. The uuid fallback keeps the overall sort total.
 	const leftString = String(left);
 	const rightString = String(right);
-	if (leftString === rightString) {
-		return 0;
-	}
-	const folded = CASHIER_STRING_COLLATOR.compare(leftString, rightString);
-	if (folded !== 0) {
-		return folded;
-	}
-	return leftString < rightString ? -1 : 1;
+	return CASHIER_STRING_COLLATOR.compare(leftString, rightString);
 }
 
 const CASHIER_STRING_COLLATOR = new Intl.Collator('en', { sensitivity: 'base' });
