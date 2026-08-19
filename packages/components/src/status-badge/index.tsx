@@ -4,7 +4,7 @@ import { View, type ViewProps } from 'react-native';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '../lib/utils';
-import { Text } from '../text';
+import { Text, TextClassContext } from '../text';
 
 const statusBadgeVariants = cva('items-center justify-center rounded-full px-2 py-0.5', {
 	variants: {
@@ -57,7 +57,10 @@ export interface StatusBadgeProps extends ViewProps, VariantProps<typeof statusB
 export function StatusBadge({ label, variant, className, ...props }: StatusBadgeProps) {
 	return (
 		<View className={cn(statusBadgeVariants({ variant }), className)} {...props}>
-			<Text className={statusBadgeTextVariants({ variant })}>{label}</Text>
+			{/* Same colour-contract reset as `Badge` — see the note there (#1369). */}
+			<TextClassContext.Provider value={undefined}>
+				<Text className={statusBadgeTextVariants({ variant })}>{label}</Text>
+			</TextClassContext.Provider>
 		</View>
 	);
 }
