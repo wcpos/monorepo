@@ -1,6 +1,9 @@
 /**
  * @jest-environment jsdom
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { act, renderHook } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 import { distinctUntilChanged } from 'rxjs/operators';
@@ -76,6 +79,15 @@ function mutationDatabase(
 
 describe('engine monitor hooks', () => {
 	afterEach(() => mockDatabase$.next(null));
+
+	it('documents pending counts as network-waiting mutations', () => {
+		const source = readFileSync(join(__dirname, 'use-engine-monitor.ts'), 'utf8');
+
+		expect(source).toContain(
+			'Every outbound record waiting for the network (`pending` or `claimed`).'
+		);
+		expect(source).not.toContain('Every queued outbound record');
+	});
 
 	it('re-subscribes collection counts after a same-database reset', () => {
 		const first = countDatabase(1);

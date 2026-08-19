@@ -10,9 +10,8 @@ import type { EngineStatus, RxdbSyncEngine, SyncCollectionName } from '@wcpos/sy
 export type EngineCollectionCounts = Record<string, number>;
 export type EngineMutationCounts = {
 	/**
-	 * Every queued outbound record, any collection — the "changes waiting to
-	 * send" number. A product edit stuck on this device matters as much as a
-	 * sale, so nothing gets a privileged sub-count (Paul, 2026-08-08).
+	 * Every outbound record waiting for the network (`pending` or `claimed`).
+	 * Conflict records are reported by the separate conflict counters.
 	 */
 	pending: number;
 	/** Every terminal row awaiting a decision: conflicted + needs-revision + rejected. */
