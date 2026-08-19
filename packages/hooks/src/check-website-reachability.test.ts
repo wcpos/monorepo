@@ -11,12 +11,12 @@ describe('checkWebsiteReachability', () => {
 	it('falls back to GET when HEAD fails', async () => {
 		fetchMock
 			.mockRejectedValueOnce(new Error('HEAD blocked'))
-			.mockResolvedValueOnce({} as Response);
+			.mockResolvedValueOnce({ status: 200 } as Response);
 
-		await expect(checkWebsiteReachability('https://example.com')).resolves.toBe(true);
+		await expect(checkWebsiteReachability('https://example.com/wp-json/')).resolves.toBe(true);
 		expect(fetchMock).toHaveBeenNthCalledWith(
 			2,
-			'https://example.com?wcpos=1',
+			'https://example.com/wp-json/wcpos/v2/ping?wcpos=1',
 			expect.objectContaining({ method: 'GET', mode: 'cors', cache: 'no-store' })
 		);
 	});
@@ -24,41 +24,46 @@ describe('checkWebsiteReachability', () => {
 	it('returns false when HEAD and GET both fail', async () => {
 		fetchMock.mockRejectedValue(new Error('network down'));
 
-		await expect(checkWebsiteReachability('https://example.com')).resolves.toBe(false);
+		await expect(checkWebsiteReachability('https://example.com/wp-json/')).resolves.toBe(false);
 		expect(fetchMock).toHaveBeenCalledTimes(2);
 	});
 
 	it('does not issue GET when HEAD succeeds', async () => {
-		fetchMock.mockResolvedValue({} as Response);
+		fetchMock.mockResolvedValue({ status: 200 } as Response);
 
-		await expect(checkWebsiteReachability('https://example.com')).resolves.toBe(true);
+		await expect(checkWebsiteReachability('https://example.com/wp-json/')).resolves.toBe(true);
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://example.com?wcpos=1',
+			'https://example.com/wp-json/wcpos/v2/ping?wcpos=1',
 			expect.objectContaining({ method: 'HEAD' })
 		);
 	});
 
-	it('appends the wcpos marker after an existing query string', async () => {
-		// Plain-permalink stores probe /?rest_route=/ — the marker must not
-		// produce a second "?".
-		fetchMock.mockResolvedValue({} as Response);
+	it('probes the ping route for plain permalinks', async () => {
+		fetchMock.mockResolvedValue({ status: 200 } as Response);
 
 		await expect(checkWebsiteReachability('https://example.com/?rest_route=/')).resolves.toBe(true);
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://example.com/?rest_route=/&wcpos=1',
+			'https://example.com/?rest_route=/wcpos/v2/ping&wcpos=1',
 			expect.objectContaining({ method: 'HEAD' })
 		);
+	});
+
+	it('treats a 404 from an older plugin as reachable', async () => {
+		fetchMock.mockResolvedValue({ status: 404 } as Response);
+
+		await expect(checkWebsiteReachability('https://example.com/wp-json/')).resolves.toBe(true);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
 	it('treats a rejected cross-origin probe as unreachable', async () => {
 		// Under cors mode a 5xx error page without CORS headers (proxy up,
 		// backend dead) rejects the fetch — that must read as NOT reachable.
-		// The store's wp-json root always serves CORS on a working deployment,
-		// so a rejection here is never a false alarm.
+		// The marked ping probe is readable on a working deployment, so a
+		// rejection here is never a false alarm.
 		fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
 
-		await expect(checkWebsiteReachability('https://example.com')).resolves.toBe(false);
+		await expect(checkWebsiteReachability('https://example.com/wp-json/')).resolves.toBe(false);
 		expect(fetchMock).toHaveBeenCalledTimes(2);
 	});
 
@@ -68,7 +73,7 @@ describe('checkWebsiteReachability', () => {
 		// must not read as online.
 		fetchMock.mockResolvedValue({ type: 'basic', status: 502 } as Response);
 
-		await expect(checkWebsiteReachability('https://example.com')).resolves.toBe(false);
+		await expect(checkWebsiteReachability('https://example.com/wp-json/')).resolves.toBe(false);
 		expect(fetchMock).toHaveBeenCalledTimes(2);
 	});
 
@@ -77,10 +82,10 @@ describe('checkWebsiteReachability', () => {
 			.mockResolvedValueOnce({ type: 'basic', status: 500 } as Response)
 			.mockResolvedValueOnce({ type: 'basic', status: 200 } as Response);
 
-		await expect(checkWebsiteReachability('https://example.com')).resolves.toBe(true);
+		await expect(checkWebsiteReachability('https://example.com/wp-json/')).resolves.toBe(true);
 		expect(fetchMock).toHaveBeenNthCalledWith(
 			2,
-			'https://example.com?wcpos=1',
+			'https://example.com/wp-json/wcpos/v2/ping?wcpos=1',
 			expect.objectContaining({ method: 'GET' })
 		);
 	});
