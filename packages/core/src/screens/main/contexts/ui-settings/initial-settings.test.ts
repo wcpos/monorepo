@@ -39,9 +39,9 @@ type ColumnSetting = { key: string; disableSort?: boolean };
 
 type SortSeamGrid = {
 	/** The grid's key in initial-settings.json. */
-	grid: 'pos-products' | 'products' | 'orders' | 'reports-orders' | 'customers';
+	grid: 'pos-products' | 'products' | 'orders' | 'reports-orders' | 'customers' | 'coupons';
 	/** The collection whose wire vocabulary that grid's sorts must live inside. */
-	collection: 'products' | 'orders' | 'customers';
+	collection: 'products' | 'orders' | 'customers' | 'coupons';
 	/**
 	 * Columns the cashier can click that the wire cannot express, served by sorting LOCAL
 	 * residents. A local sort is a legitimate answer for such a column — what #947 forbids is a
@@ -73,6 +73,11 @@ const SORT_SEAM_GRIDS: SortSeamGrid[] = [
 	// The reports grid's `select` is a row-selection checkbox, not a data column.
 	{ grid: 'reports-orders', collection: 'orders', localOnlySorts: [], nonSortColumns: ['select'] },
 	{ grid: 'customers', collection: 'customers', localOnlySorts: ['date_modified_gmt'] },
+	// Coupons joined the wire vocabulary with #1347 part 2 (refresh lanes, not a
+	// browse window). Every column ships `disableSort` today except the two hidden
+	// date columns, so the per-column sweep is a tripwire for whichever column is
+	// un-disabled first; the default-sort assertion is live immediately.
+	{ grid: 'coupons', collection: 'coupons', localOnlySorts: [] },
 ];
 
 const sortableColumns = ({ grid, nonSortColumns }: SortSeamGrid): string[] =>

@@ -510,11 +510,18 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 		collection === 'products/brands' ||
 		collection === 'products/tags'
 	) {
+		// Same contract as the customers window above (#1347): a sort with no wire
+		// orderby (the coupon picker's `code` — v2 never ported orderby=title) still
+		// declares the refresh with the sort OMITTED, which the engine treats as "no
+		// opinion" and preserves whatever lane exists. A mapped sort re-points the
+		// lane so a cold multi-page pull arrives in the order the picker displays.
+		const wooOrderby = wooOrderbyFor(collection, uiSortField);
 		demand.push({
 			id: requirementId(options.id, 'refresh'),
 			collection: engineCollection,
 			kind: 'refresh',
 			priority: 700,
+			...(wooOrderby ? { orderby: wooOrderby, order: state.sort.direction } : {}),
 		});
 		represented = false;
 	} else represented = false;

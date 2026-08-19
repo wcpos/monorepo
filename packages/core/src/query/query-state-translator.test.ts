@@ -665,6 +665,58 @@ describe('query-state translator', () => {
 		expect(compiled.read.prefilter).toEqual({ remoteId: { $in: [] } });
 	});
 
+	it('states the picker sort on a reference refresh when the wire can express it (#1347)', () => {
+		const categories = compileQuery(
+			'products/categories',
+			{
+				search: '',
+				filters: {},
+				sort: { field: 'name', direction: 'asc' },
+				limit: 10,
+			},
+			{ id: 'category-picker' }
+		);
+		expect(categories.demand[0]).toMatchObject({
+			kind: 'refresh',
+			collection: 'categories',
+			orderby: 'name',
+			order: 'asc',
+		});
+
+		const coupons = compileQuery(
+			'coupons',
+			{
+				search: '',
+				filters: {},
+				sort: { field: 'date_created_gmt', direction: 'desc' },
+				limit: 10,
+			},
+			{ id: 'coupons-grid' }
+		);
+		expect(coupons.demand[0]).toMatchObject({
+			kind: 'refresh',
+			collection: 'coupons',
+			orderby: 'date',
+			order: 'desc',
+		});
+	});
+
+	it('omits the sort ENTIRELY when the wire cannot express it — the engine reads absence as "no opinion"', () => {
+		const compiled = compileQuery(
+			'coupons',
+			{
+				search: '',
+				filters: {},
+				sort: { field: 'code', direction: 'asc' },
+				limit: 10,
+			},
+			{ id: 'coupon-picker' }
+		);
+		expect(compiled.demand[0]).toMatchObject({ kind: 'refresh', collection: 'coupons' });
+		expect(Object.keys(compiled.demand[0] ?? {})).not.toContain('orderby');
+		expect(Object.keys(compiled.demand[0] ?? {})).not.toContain('order');
+	});
+
 	it('keeps forceRefresh kind-sensitive when compiled demand is re-declared', () => {
 		const refresh = compileQuery(
 			'coupons',

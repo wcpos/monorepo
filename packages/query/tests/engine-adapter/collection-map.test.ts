@@ -213,9 +213,10 @@ describe('engine adapter collection map', () => {
 	});
 
 	it('pins the declared sort vocabulary', () => {
+		type SortVocabularyCollection = Parameters<typeof wooOrderbyFor>[0];
 		const declaredValues = (
-			collection: 'products' | 'variations' | 'orders',
-			accessor: (collection: 'products' | 'variations' | 'orders', field: string) => unknown
+			collection: SortVocabularyCollection,
+			accessor: (collection: SortVocabularyCollection, field: string) => unknown
 		) =>
 			Object.fromEntries(
 				Object.keys(collectionMap[collection].fields)
@@ -272,6 +273,16 @@ describe('engine adapter collection map', () => {
 			email: 'email',
 			username: 'username',
 			role: 'role',
+		});
+		// Reference collections joined the wire sort vocabulary with #1347 part 2.
+		// `code` (coupons) is absent by design: its server mapping (orderby=title)
+		// exists on wcpos/v1 only and was deliberately not ported to v2.
+		for (const terms of ['products/categories', 'products/tags', 'products/brands'] as const) {
+			expect(declaredValues(terms, wooOrderbyFor)).toEqual({ name: 'name' });
+		}
+		expect(declaredValues('coupons', wooOrderbyFor)).toEqual({
+			date_created_gmt: 'date',
+			date_modified_gmt: 'modified',
 		});
 	});
 

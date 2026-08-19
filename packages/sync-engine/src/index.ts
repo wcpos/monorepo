@@ -45,3 +45,6 @@ export type { CoverageTarget, CoverageVerdict } from './local-coverage/coverage-
 /** PORT type: the request contract of `ports.queryTotal`, implemented host-side
  * (apps/main/lib/engine-fetcher.ts) — not a storage document. */
 export type { QueryTotalWooRequest } from './scheduler';
+/** The reference-lane wire sort vocabulary (#1347) — what a `refresh`
+ * requirement's `orderby` may spell for terms and coupons. */
+export type { CouponReferenceOrderby, TermReferenceOrderby } from './scheduler';
