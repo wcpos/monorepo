@@ -31,7 +31,7 @@ import {
 } from '@wcpos/sync-core';
 
 import { orderSchema } from './order-schema';
-import { productSchema } from './product-schema';
+import { productMigrationStrategies, productSchema } from './product-schema';
 import { variationSchema } from './variation-schema';
 import { customerSchema } from './customer-schema';
 import { taxRateSchema } from './tax-rate-schema';
@@ -119,7 +119,7 @@ export type CollectionCreator = { schema: unknown; migrationStrategies?: unknown
 
 const SYNC_COLLECTION_CREATORS: Record<SyncCollectionName, CollectionCreator> = {
 	orders: { schema: orderSchema },
-	products: { schema: productSchema },
+	products: { schema: productSchema, migrationStrategies: productMigrationStrategies },
 	variations: { schema: variationSchema },
 	customers: { schema: customerSchema },
 	taxRates: { schema: taxRateSchema },
