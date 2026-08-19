@@ -19,7 +19,7 @@ import type {
 	RxdbSyncEngine,
 	SyncCollectionName,
 } from '@wcpos/sync-engine';
-import { remoteIdOrNull } from '@wcpos/sync-core';
+import { GUEST_CUSTOMER_ID, remoteIdOrNull } from '@wcpos/sync-core';
 
 import { searchPlugin } from './search';
 
@@ -237,14 +237,14 @@ export function engineOrder(input: {
 		dateCreatedGmt: date_created_gmt ?? '2026-01-01T00:00:00',
 		status: status ?? 'processing',
 		total: total ?? '0',
-		customerId: customer_id ?? 0,
+		customerId: customer_id ?? GUEST_CUSTOMER_ID,
 		payload: {
 			id: wooId,
 			number: number ?? String(wooId),
 			status: status ?? 'processing',
 			date_created_gmt: date_created_gmt ?? '2026-01-01T00:00:00',
 			total: total ?? '0',
-			customer_id: customer_id ?? 0,
+			customer_id: customer_id ?? GUEST_CUSTOMER_ID,
 			...rest,
 		},
 		sync: { revision: '1', partial: false, source: 'woo-rest' },

@@ -12,7 +12,7 @@ import {
 	useQueryRuntime,
 	wrapEngineDocument,
 } from '@wcpos/query';
-import { wooMetaCarrier } from '@wcpos/sync-core';
+import { NO_STORE, wooMetaCarrier } from '@wcpos/sync-core';
 
 import {
 	compileQuery,
@@ -74,7 +74,7 @@ export function useOpenOrdersResource(
 							orderMeta(document)
 						);
 						if (cashierID === undefined) return false;
-						if (storeID === undefined || storeID === 0) return posUser === String(cashierID);
+						if (storeID === undefined || storeID === NO_STORE) return posUser === String(cashierID);
 						return posUser === String(cashierID) && posStore === String(storeID);
 					})
 					.map((document) => wrapEngineDocument<OrderDocument>('orders', document))

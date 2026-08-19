@@ -1,6 +1,8 @@
 import { Observable, of } from 'rxjs';
 import { filter, map, startWith, switchMap } from 'rxjs/operators';
 
+import { GUEST_CUSTOMER_ID } from '@wcpos/sync-core';
+
 interface QueryHit<T> {
 	document: T;
 }
@@ -55,8 +57,8 @@ export function createSelectedEntity$<T extends { id?: string | number }>({
 	guestCustomer,
 	fallbackOnEmpty = true,
 }: CreateSelectedEntityOptions<T>): Observable<T | null> {
-	if (id === 0) {
-		return of((guestCustomer ?? ({ id: 0 } as T)) as T);
+	if (id === GUEST_CUSTOMER_ID) {
+		return of((guestCustomer ?? ({ id: GUEST_CUSTOMER_ID } as T)) as T);
 	}
 
 	if (id === null || id === undefined || id === '') {

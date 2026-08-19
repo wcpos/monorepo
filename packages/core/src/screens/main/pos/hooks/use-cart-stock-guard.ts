@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { isEngineRxDocument, resolveLegacyField, useQueryRuntime } from '@wcpos/query';
-import { catalogDocumentId, remoteIdOrNull } from '@wcpos/sync-core';
+import { catalogDocumentId, MISC_PRODUCT_ID, remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import {
@@ -91,7 +91,7 @@ export const useCartStockGuard = () => {
 			variation: suppliedVariation,
 			name: suppliedName,
 		}: CheckCartStockArgs): Promise<CartStockGuardResult> => {
-			if (preventOverselling !== true || productId === 0) {
+			if (preventOverselling !== true || productId === MISC_PRODUCT_ID) {
 				return { ...ALLOWED_RESULT, name: suppliedName ?? '' };
 			}
 

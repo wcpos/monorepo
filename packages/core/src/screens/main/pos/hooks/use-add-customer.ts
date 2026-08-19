@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
+import { isGuestCustomer } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { transformCustomerJSONToOrderJSON } from './utils';
@@ -58,17 +59,16 @@ export const useAddCustomer = () => {
 			let data: Record<string, unknown> & { id?: number; billing?: object; shipping?: object } =
 				isRxDocument(customer) ? (customer as CustomerDocument).toMutableJSON() : customer;
 
-			// if id === 0 and no billing or shipping, use guest customer
-			const isGuest = data.id === 0 && !data.billing && !data.shipping;
+			// a guest id with no billing or shipping means "use the guest customer defaults"
+			const isGuest = isGuestCustomer(data.id) && !data.billing && !data.shipping;
 			data = isGuest ? guestCustomer : data;
 
 			// Get customer display name
-			const customerName =
-				data.id === 0
-					? t('common.guest')
-					: `${(data as Record<string, unknown>).first_name || ''} ${(data as Record<string, unknown>).last_name || ''}`.trim() ||
-						(data as Record<string, unknown>).email ||
-						`#${data.id}`;
+			const customerName = isGuestCustomer(data.id)
+				? t('common.guest')
+				: `${(data as Record<string, unknown>).first_name || ''} ${(data as Record<string, unknown>).last_name || ''}`.trim() ||
+					(data as Record<string, unknown>).email ||
+					`#${data.id}`;
 
 			const result = await localPatch({
 				document: currentOrder,

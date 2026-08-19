@@ -19,6 +19,7 @@ import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { CustomerDocument } from '@wcpos/database';
+import { GUEST_CUSTOMER_ID } from '@wcpos/sync-core';
 
 import { useT } from '../../../contexts/translations';
 import { useSearchSelect } from '../../../query';
@@ -98,7 +99,7 @@ export function CustomerList({ resource, withGuest }: CustomerListProps) {
 		() =>
 			withGuest
 				? [
-						{ id: 'guest', document: { id: 0 } as CustomerDocument },
+						{ id: 'guest', document: { id: GUEST_CUSTOMER_ID } as CustomerDocument },
 						...result.hits.filter((hit: CustomerHit) => hit.id !== 'guest'),
 					]
 				: result.hits,

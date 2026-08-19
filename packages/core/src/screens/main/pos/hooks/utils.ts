@@ -17,7 +17,7 @@ import {
 	updatePosDataMeta,
 } from '@wcpos/order-math/internal';
 import type { CartLine } from '@wcpos/order-math/internal';
-import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
+import { MISC_PRODUCT_ID, NO_STORE, POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 
 // MIGRATION SHIM: these names moved to @wcpos/order-math; re-exported here so
 // existing './utils' imports keep working until the PR 2 adapter cutover.
@@ -62,7 +62,7 @@ export function ensurePosOrderIdentityMeta(
 		userId: existing.cashierId ?? identity.userId,
 		storeId: existing.storeId ?? identity.storeId,
 	}) as OrderMetaData;
-	if (identity.storeId === 0 && existing.storeId === null) {
+	if (identity.storeId === NO_STORE && existing.storeId === null) {
 		ensured = ensured.filter((entry) => entry.key !== POS_META_KEYS.store);
 	}
 	if (identity.taxBasedOn && wooMetaCarrier.taxBasedOnOverride(ensured) === null) {
@@ -196,7 +196,7 @@ export const convertProductToLineItemWithoutTax = (
 	const posData: Record<string, unknown> = { price, regular_price, tax_status };
 
 	// Include misc product fields in pos_data (only for misc products, id === 0)
-	if (product.id === 0) {
+	if (product.id === MISC_PRODUCT_ID) {
 		posData.virtual = product.virtual ?? false;
 		posData.downloadable = product.downloadable ?? false;
 		if ((product as any)._pos_categories != null) {

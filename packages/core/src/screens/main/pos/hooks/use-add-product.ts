@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { type EngineRecord, isEngineRxDocument } from '@wcpos/query';
-import { wooIdOf } from '@wcpos/sync-core';
+import { MISC_PRODUCT_ID, wooIdOf } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { reportCartFailure } from './cart-failure';
@@ -69,7 +69,9 @@ export const useAddProduct = () => {
 				const latest = data.getLatest() as unknown as EngineRecord<'products'>;
 				product = {
 					...latest.payload,
-					id: latest.remoteId === null ? 0 : wooIdOf(latest.remoteId),
+					// NOTE: the wc/v3 wire overloads 0, so a born-local product that has not been
+					// pushed yet is indistinguishable from a misc product from here on.
+					id: latest.remoteId === null ? MISC_PRODUCT_ID : wooIdOf(latest.remoteId),
 				};
 			} else {
 				product = data as { id: number; [key: string]: any };

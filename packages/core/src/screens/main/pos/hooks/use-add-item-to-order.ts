@@ -4,7 +4,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import { v4 as uuidv4 } from 'uuid';
 
 import { useQueryRuntime, wrapEngineDocument } from '@wcpos/query';
-import { wooMetaCarrier } from '@wcpos/sync-core';
+import { isMiscProductLine, MISC_PRODUCT_ID, wooMetaCarrier } from '@wcpos/sync-core';
 
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useCartStockGuard } from './use-cart-stock-guard';
@@ -99,7 +99,7 @@ export const useAddItemToOrder = () => {
 			const lineItem = data as LineItem;
 			// A miscellaneous product (product_id 0) is always its own line, matching
 			// the duplicate check in useAddProduct/useAddVariation.
-			if (type !== 'line_items' || !lineItem.product_id) {
+			if (type !== 'line_items' || lineItem.product_id == null || isMiscProductLine(lineItem)) {
 				return [...existing, data];
 			}
 			const matches = findByProductVariationID(
@@ -247,11 +247,11 @@ export const useAddItemToOrder = () => {
 					}
 				}
 				let stockWarningName: string | null = null;
-				if (type === 'line_items' && stockGuardEnabled && (data as LineItem).product_id !== 0) {
+				if (type === 'line_items' && stockGuardEnabled && !isMiscProductLine(data as LineItem)) {
 					const lineItem = data as LineItem;
 					const stockResult = await checkCartStock({
 						lineItems: latest.line_items ?? [],
-						productId: lineItem.product_id ?? 0,
+						productId: lineItem.product_id ?? MISC_PRODUCT_ID,
 						variationId: lineItem.variation_id ?? 0,
 						requestedQuantity: lineItem.quantity ?? 1,
 						name: lineItem.name,

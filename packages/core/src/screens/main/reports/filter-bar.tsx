@@ -8,6 +8,7 @@ import { Card } from '@wcpos/components/card';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { useQueryRuntime } from '@wcpos/query';
+import { isGuestCustomer } from '@wcpos/sync-core';
 
 import { forceRefreshFilterCustomer } from '../orders/force-refresh-filter-customer';
 import { useAppState } from '../../../contexts/app-state';
@@ -46,7 +47,7 @@ export function FilterBar() {
 	const runtime = useQueryRuntime();
 
 	const refreshCustomer = React.useCallback(() => {
-		if (customerID === undefined || customerID === 0) return;
+		if (customerID === undefined || isGuestCustomer(customerID)) return;
 		void forceRefreshFilterCustomer(runtime, customerID, 'customer');
 	}, [customerID, runtime]);
 	const refreshCashier = React.useCallback(() => {

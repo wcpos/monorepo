@@ -13,7 +13,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRxDocument, useQueryRuntime, wrapEngineDocument } from '@wcpos/query';
-import { remoteIdOrNull } from '@wcpos/sync-core';
+import { isGuestCustomer, remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -209,7 +209,7 @@ export function EditCartCustomerForm() {
 				<TaxIdsForm />
 				<DialogFooter className="px-0">
 					<DialogClose>{t('common.close')}</DialogClose>
-					{customerID !== 0 && caps.canEditCustomers && (
+					{!isGuestCustomer(customerID) && caps.canEditCustomers && (
 						// @ts-expect-error: loading prop passes through ...props to Button but isn't in SlottablePressableProps
 						<DialogAction onPress={onSaveToOrderAndCustomer} loading={loading}>
 							{t('pos_cart.save_to_order_customer')}
