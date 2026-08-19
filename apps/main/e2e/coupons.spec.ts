@@ -102,7 +102,13 @@ test.describe('Coupons Page (Pro)', () => {
 		await expect(screen.getByTestId(nonMatchingRowTestId as string)).not.toBeVisible({
 			timeout: 15_000,
 		});
-		await expect.poll(loadedRows, { timeout: 15_000 }).toBeLessThan(shownBefore);
+		// NOT strictly less: the rendered count is page-capped, so on a store where
+		// enough coupons match the token to refill the page, both sides sit at the
+		// cap (the mono#1127 store renders "20 de 48") and a strict < false-fails
+		// against a correctly filtered grid — a store-shape assumption the
+		// store-agnostic policy forbids. The vanished non-matching row above is the
+		// evidence that filtering happened; this only guards "must never grow".
+		await expect.poll(loadedRows, { timeout: 15_000 }).toBeLessThanOrEqual(shownBefore);
 	});
 
 	test('should have add coupon button on Coupons page', async ({ posPage: page }) => {
