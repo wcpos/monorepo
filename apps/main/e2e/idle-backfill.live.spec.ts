@@ -1,7 +1,10 @@
+import * as path from 'path';
+
 import { expect, test } from '@playwright/test';
 
 import { authenticateWithStore, navigateToPage } from './fixtures';
 import { resolveIdleSoakMs } from './idle-backfill-soak-duration';
+import { compareBundleIdentity, entryFromHtml, localEntry } from './served-bundle-identity';
 
 /**
  * Idle-backfill live soak (2026-08-19) — one-shot proof that the merged trickle
@@ -158,6 +161,24 @@ function watchWire(page: import('@playwright/test').Page): WireLog {
 test('idle POS trickles products+variations and manual check refreshes totals', async ({
 	page,
 }, testInfo) => {
+	// FIRST, before anything else: prove the URL under test serves THIS build.
+	// A stale bundle from another worktree answers health checks perfectly and
+	// silently invalidates every oracle below (see served-bundle-identity.ts).
+	const baseUrl = testInfo.project.use.baseURL ?? process.env.BASE_URL ?? '';
+	const servedHtml = await (await page.request.get(baseUrl)).text();
+	const identity = compareBundleIdentity(
+		localEntry(path.join(__dirname, '..', 'web-build')),
+		entryFromHtml(servedHtml),
+		baseUrl
+	);
+	if (identity.ok === false)
+		throw new Error(`Served bundle identity check failed: ${identity.reason}`);
+	console.log(
+		identity.ok === true
+			? `[soak] serving this worktree's build (${identity.entry})`
+			: `[soak] bundle identity unchecked — ${identity.reason}`
+	);
+
 	const wire = watchWire(page);
 
 	await authenticateWithStore(page, testInfo, { waitForCatalogue: true });
@@ -214,7 +235,7 @@ test('idle POS trickles products+variations and manual check refreshes totals', 
 
 	// ---- Oracle 3: variation-prefetch, gated on DERIVED eligibility. ----
 	// Evaluated BEFORE the product-trickle assertion: these lanes fail
-	// independently (product-trickle is intermittent live — issue #1318), and a
+	// independently, and a
 	// run must report every oracle it was able to evaluate, not just the first
 	// to fail.
 	const uncoveredParents = [...wire.variableParents.entries()].filter(([, variationIds]) =>
@@ -258,7 +279,7 @@ test('idle POS trickles products+variations and manual check refreshes totals', 
 	expect
 		.soft(
 			wire.productTricklePages.length - productPagesBefore,
-			'product-trickle fired no ordered catalog page pull during the idle window (see #1318)'
+			'product-trickle fired no ordered catalog page pull during the idle window'
 		)
 		.toBeGreaterThanOrEqual(1);
 });
