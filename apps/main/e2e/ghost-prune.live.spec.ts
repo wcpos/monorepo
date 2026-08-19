@@ -344,7 +344,7 @@ test.describe('#1284 ghost residents live proof', () => {
 		// no tick can ever deliver the delete.
 		await page.close();
 		const state = await exportProfile(context, String(baseURL));
-		ops('ghostdelete', String(ghost.id));
+		ops('ghostdelete', String(ghost.id), `${TOKEN}g`);
 
 		expect(liveProductWithSku(state, `${TOKEN}g`)).toBe(true);
 		expect(liveManifestRow(state, ghost.id)).toBe(false);

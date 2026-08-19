@@ -49,13 +49,13 @@ switch ( $op ) {
 		echo 'ID:' . $id . ' SLUG:' . get_post_field( 'post_name', $id ) . "\n";
 		break;
 
-	case 'hookdelete': // hookdelete <id> — normal delete; the tombstone flows to clients
-		echo probe_guard( (int) $args[1] ) ? "OK\n" : "REFUSED\n";
+	case 'hookdelete': // hookdelete <id> <sku> — normal delete; the tombstone flows to clients
+		echo probe_guard( (int) $args[1], (string) ( $args[2] ?? '' ) ) ? "OK\n" : "REFUSED\n";
 		break;
 
-	case 'ghostdelete': // ghostdelete <id> — delete + purge journal/digest so clients never learn
+	case 'ghostdelete': // ghostdelete <id> <sku> — delete + purge journal/digest so clients never learn
 		$id = (int) $args[1];
-		if ( ! probe_guard( $id ) ) {
+		if ( ! probe_guard( $id, (string) ( $args[2] ?? '' ) ) ) {
 			echo "REFUSED\n";
 			break;
 		}
@@ -102,7 +102,7 @@ switch ( $op ) {
 		);
 		$deleted = 0;
 		foreach ( $ids as $pid ) {
-			if ( probe_guard( (int) $pid ) ) {
+			if ( probe_guard( (int) $pid, $sku ) ) {
 				++$deleted;
 			}
 		}
@@ -114,17 +114,19 @@ switch ( $op ) {
 }
 
 /**
- * Force-delete a post ONLY if it is one of this harness's probes, identified by
- * the "Ghost Probe " title prefix its own `create` op stamps. Anything else —
- * notably a real catalog product — is refused, which is the guard the 81131
- * incident was missing.
+ * Force-delete a post ONLY if it is the caller's exact probe, identified by both
+ * the title prefix and SKU its own `create` op stamps. Anything else — notably a
+ * real catalog product or another concurrent run's probe — is refused.
  */
-function probe_guard( int $id ): bool {
+function probe_guard( int $id, string $sku ): bool {
 	$post = get_post( $id );
 	if ( ! $post || 'product' !== $post->post_type ) {
 		return false;
 	}
 	if ( 0 !== strpos( (string) $post->post_title, 'Ghost Probe ' ) ) {
+		return false;
+	}
+	if ( (string) get_post_meta( $id, '_sku', true ) !== $sku ) {
 		return false;
 	}
 	wp_delete_post( $id, true );
