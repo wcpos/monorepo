@@ -37,6 +37,7 @@ import {
 	type CensusTotal,
 	type CensusTotals,
 	PRODUCT_BROWSE_WINDOW_LIMIT,
+	type ProductBrowseWindowDescriptor,
 	QUERY_TOTAL_FRESH_FOR_MS,
 	QUERY_TOTAL_LEASE_FOR_MS,
 	QUERY_TOTAL_RETRY_AFTER_MS,
@@ -154,6 +155,11 @@ type MaintenanceLaneDeps = {
 	customerCensusTotal: () => Promise<CensusTotal | null>;
 	productTrickleStateFor: (scopeId: string) => ProductTrickleStateStore;
 	productCensusTotal: () => Promise<CensusTotal | null>;
+	/** The host's authored default product sort — see RxdbSyncEnginePorts. */
+	defaultProductBrowseSort?: {
+		orderby: ProductBrowseWindowDescriptor['orderby'];
+		order: ProductBrowseWindowDescriptor['order'];
+	};
 	variationPrefetchStateFor: (scopeId: string) => VariationPrefetchStateStore;
 	variationCensusTotal: () => Promise<CensusTotal | null>;
 	hasPendingInteractiveWork: () => boolean;
@@ -570,6 +576,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			limit: PRODUCT_BROWSE_WINDOW_LIMIT,
 			priority: PRODUCT_BROWSE_WINDOW_PRIORITY,
 			database: db,
+			// The cold-start window pulls in the host's authored default order, so
+			// the boot pull and the grid's first declaration are ONE lane.
+			...(deps.defaultProductBrowseSort ?? {}),
 			// Same one-clock rule as the order window seed above.
 			...(deps.now !== undefined ? { nowMs: deps.now() } : {}),
 		});
@@ -773,6 +782,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			barcodeSelectors,
 			...(deps.currentProductBrowseWindowKey !== undefined
 				? { currentBrowseWindowKey: deps.currentProductBrowseWindowKey }
+				: {}),
+			...(deps.defaultProductBrowseSort !== undefined
+				? { defaultBrowseSort: deps.defaultProductBrowseSort }
 				: {}),
 			now,
 			...(deps.lastUserActivityMs !== undefined

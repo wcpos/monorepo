@@ -123,6 +123,24 @@ describe('product-trickle maintenance lane', () => {
 		await engine.dispose();
 	});
 
+	it('the pre-declaration fallback walks the host-authored default sort (one-place ruling, #1372)', async () => {
+		const urls: string[] = [];
+		const engine = engineWith({
+			fetcher: async (url) => {
+				urls.push(url);
+				const page = Number(new URL(url).searchParams.get('page'));
+				return json(products((page - 1) * 10 + 1, 10));
+			},
+			defaultProductBrowseSort: { orderby: 'title', order: 'asc' },
+		});
+		await engine.ready;
+
+		await expect(engine.sync('product-trickle')).resolves.toMatchObject({ status: 'ran' });
+		const first = new URL(urls[0]!);
+		expect(first.search).toBe('?orderby=title&order=asc&status=publish&per_page=10&page=1');
+		await engine.dispose();
+	});
+
 	it('resets an out-of-range durable page and resumes from page 1 on the next tick', async () => {
 		const pages: string[] = [];
 		const engine = engineWith({

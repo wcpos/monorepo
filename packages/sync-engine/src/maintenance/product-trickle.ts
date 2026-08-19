@@ -151,6 +151,9 @@ export type ProductTrickleDeps = {
 	 * unparseable falls back to {@link DEFAULT_BROWSE_WINDOW}.
 	 */
 	currentBrowseWindowKey?: () => string | null;
+	/** The host's authored default sort — the pre-declaration fallback (see
+	 * RxdbSyncEnginePorts). Absent, {@link DEFAULT_BROWSE_WINDOW} applies. */
+	defaultBrowseSort?: Pick<ProductBrowseWindowDescriptor, 'orderby' | 'order'>;
 	now: () => number;
 	lastUserActivityMs?: () => number;
 	signal?: AbortSignal;
@@ -163,8 +166,10 @@ function resolveBrowseWindow(deps: ProductTrickleDeps): {
 	openingStage: ProductTrickleStage;
 } {
 	const key = deps.currentBrowseWindowKey?.() ?? null;
-	const browseWindow =
-		(key === null ? null : parseProductBrowseWindowDescriptor(key)) ?? DEFAULT_BROWSE_WINDOW;
+	const fallback = deps.defaultBrowseSort
+		? { ...DEFAULT_BROWSE_WINDOW, ...deps.defaultBrowseSort }
+		: DEFAULT_BROWSE_WINDOW;
+	const browseWindow = (key === null ? null : parseProductBrowseWindowDescriptor(key)) ?? fallback;
 	return {
 		browseWindow,
 		viewKey: productBrowseWindowViewKey(browseWindow),

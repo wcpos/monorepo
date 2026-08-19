@@ -274,13 +274,13 @@ describe('POSProducts query-state wiring', () => {
 		expect(latestState().sort).toEqual({ field: 'sortable_price', direction: 'desc' });
 	});
 
-	it('defaults to the 1.9 catalog order (menu_order asc) when the persisted sort is invalid (#810)', () => {
+	it('falls back to the authored default (name asc — Paul 2026-08-19, reverses #810) when the persisted sort is invalid', () => {
 		mockSortBy = 'not-a-sort-field';
 		mockSortDirection = 'desc';
 
 		render(<POSProducts />);
 
-		expect(latestState().sort).toEqual({ field: 'menu_order', direction: 'asc' });
+		expect(latestState().sort).toEqual({ field: 'name', direction: 'asc' });
 	});
 
 	// #947, Paul's ruling 2026-08-14: both product lists sort by type. This grid always let the

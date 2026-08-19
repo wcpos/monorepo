@@ -95,6 +95,7 @@ import {
 import {
 	type CensusTotals,
 	ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
+	type ProductBrowseWindowOrderby,
 	seedPosBootstrapLanes,
 	seedTargetedOrderSchedulerTask,
 } from './scheduler';
@@ -291,6 +292,17 @@ export type RxdbSyncEnginePorts = {
 	queryTotal?: QueryTotalPort;
 	/** Optional activity clock for idle-only maintenance lanes. */
 	lastUserActivityMs?: () => number;
+	/**
+	 * The host's authored default product sort (initial-settings), for the work
+	 * the engine does BEFORE any grid declares a window: the boot browse-window
+	 * seed and the idle trickle's fallback. The engine holds no product-sort
+	 * opinion of its own (Paul's one-place ruling, 2026-08-19); absent, it falls
+	 * back to the canonical key spelling (menu_order asc).
+	 */
+	defaultProductBrowseSort?: {
+		orderby: ProductBrowseWindowOrderby;
+		order: 'asc' | 'desc';
+	};
 	/** Optional user-interaction subscription for idle-decay snap-back. */
 	onUserActivity?: (listener: () => void) => () => void;
 	now?: () => number;
@@ -1638,6 +1650,9 @@ export function createRxdbSyncEngine(
 		variationCensusTotal: async () => (await censusPublisher.totals()).variations,
 		hasPendingInteractiveWork: requirePlane.hasPendingWork,
 		currentProductBrowseWindowKey: requirePlane.lastProductBrowseQueryKey,
+		...(ports.defaultProductBrowseSort !== undefined
+			? { defaultProductBrowseSort: ports.defaultProductBrowseSort }
+			: {}),
 		currentCustomerBrowseWindowKey: requirePlane.lastCustomerBrowseQueryKey,
 		isWritePlaneOwner: writePlaneOwner,
 		...(ports.lastUserActivityMs !== undefined

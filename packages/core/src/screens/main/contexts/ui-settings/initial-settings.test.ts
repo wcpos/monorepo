@@ -1,12 +1,21 @@
 import { wooOrderbyFor } from '@wcpos/query/collection-map';
 
+import { defaultProductBrowseSort } from './default-product-browse-sort';
 import initialSettings from './initial-settings.json';
 import { normalizeQuerySortField } from '../../../../query/query-state-translator';
 
 describe('pos-products initial settings', () => {
-	it('defaults the browse sort to the 1.9 catalog order — menu_order asc (#810)', () => {
-		expect(initialSettings['pos-products'].sortBy).toBe('menu_order');
+	// Paul's ruling 2026-08-19 (issue #1372): name ascending — what a cashier
+	// expects "alphabetical" to mean — REVERSING #810's 1.9-parity menu_order.
+	// This JSON is the ONE authored default: the POS screen's invalid-sort
+	// fallback and the engine's boot-seed/trickle sort both derive from it.
+	it('defaults the browse sort to name ascending (Paul 2026-08-19, reverses #810)', () => {
+		expect(initialSettings['pos-products'].sortBy).toBe('name');
 		expect(initialSettings['pos-products'].sortDirection).toBe('asc');
+	});
+
+	it('derives the engine boot-seed sort from the same authored default', () => {
+		expect(defaultProductBrowseSort()).toEqual({ orderby: 'title', order: 'asc' });
 	});
 });
 

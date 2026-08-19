@@ -265,6 +265,34 @@ describe('scheduler drain through the public handle', () => {
 		await engine.dispose();
 	});
 
+	it('the host-authored default sort drives the cold-grid seed page (one-place ruling, #1372)', async () => {
+		// With the defaultProductBrowseSort port set (apps/main derives it from
+		// initial-settings), the boot seed pulls in the SAME order a fresh grid
+		// will declare — one lane, not a menu_order seed plus a title grid lane.
+		const server = scriptedProductServer([
+			{
+				id: 77,
+				name: 'Apron',
+				date_modified_gmt: '2026-07-10T00:00:01',
+				meta_data: [{ id: 1, key: '_woocommerce_pos_uuid', value: PRODUCT_UUID_55 }],
+			},
+		]);
+		const engine = engineWith(server.fetch, {
+			defaultProductBrowseSort: { orderby: 'title', order: 'asc' },
+		});
+		await engine.ready;
+
+		expect((await engine.sync('product-browse-window-seed')).status).toBe('ran');
+		expect((await engine.sync('scheduler-drain')).status).toBe('ran');
+		expect(
+			server.state.urls.some((url) =>
+				url.includes('/products?per_page=100&orderby=title&order=asc')
+			)
+		).toBe(true);
+		expect(server.state.urls.some((url) => url.includes('orderby=menu_order'))).toBe(false);
+		await engine.dispose();
+	});
+
 	it('stores a response total with query and census freshness from the drain clock', async () => {
 		const nowMs = 10_000;
 		const server = scriptedProductServer([], 42);

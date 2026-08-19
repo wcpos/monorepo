@@ -378,11 +378,19 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 		await expect
 			.poll(
 				() =>
-					requests
-						.slice(rebaseline.requestCountAtMutation())
-						.some(
-							(entry) => entry.path.includes('orderby=menu_order') && entry.path.includes('page=1')
-						),
+					requests.slice(rebaseline.requestCountAtMutation()).some(
+						// The proof is "a products browse-window seed went out" — identify it
+						// by collection + first page, NOT by the default orderby, so the
+						// assertion survives default-sort changes (title asc since Paul's
+						// 2026-08-19 ruling, #1372; menu_order before that).
+						(entry) =>
+							entry.path.includes('/products') &&
+							entry.path.includes('orderby=') &&
+							// per_page=100 is the seed's page size — without it the
+							// product-trickle's page-1 request would satisfy this too.
+							entry.path.includes('per_page=100') &&
+							entry.path.includes('page=1')
+					),
 				{
 					timeout: DRAIN_POLL_TIMEOUT_MS,
 					message:
