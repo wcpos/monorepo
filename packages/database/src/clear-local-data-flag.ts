@@ -2,6 +2,8 @@ import { File, Paths } from 'expo-file-system';
 
 export const CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY = 'wcpos.clearLocalDataOnNextLoad';
 
+export type ClearLocalDataFlag = 'scheduled' | 'not-scheduled' | 'unknown';
+
 /**
  * Native has no localStorage, so the flag is a marker file in the app's
  * document directory, readable synchronously before hydration. It lives
@@ -26,11 +28,18 @@ export const scheduleClearLocalDataOnNextLoad = (): boolean => {
 	}
 };
 
-export const isClearLocalDataOnNextLoadScheduled = (): boolean => {
+/**
+ * `File.exists` is non-throwing by contract (it reports false without read
+ * access), so 'unknown' should never happen — but if the filesystem layer does
+ * throw, an armed marker may be hiding behind the error, and hydrating anyway
+ * would let a later launch destroy everything sold in between. Callers must
+ * treat 'unknown' as "do not open the databases".
+ */
+export const readClearLocalDataOnNextLoadFlag = (): ClearLocalDataFlag => {
 	try {
-		return markerFile().exists;
+		return markerFile().exists ? 'scheduled' : 'not-scheduled';
 	} catch {
-		return false;
+		return 'unknown';
 	}
 };
 
@@ -41,6 +50,7 @@ export const unscheduleClearLocalDataOnNextLoad = (): void => {
 			file.delete();
 		}
 	} catch {
-		// Best-effort: a flag that cannot be removed re-triggers a harmless clear.
+		// A removal failure is observable: the caller's post-clear verification
+		// read still sees 'scheduled' (or 'unknown') and refuses to hydrate.
 	}
 };

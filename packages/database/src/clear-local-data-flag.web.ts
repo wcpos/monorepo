@@ -1,5 +1,7 @@
 export const CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY = 'wcpos.clearLocalDataOnNextLoad';
 
+export type ClearLocalDataFlag = 'scheduled' | 'not-scheduled' | 'unknown';
+
 /**
  * Schedule a pre-hydration full reset: the app root checks this flag on the
  * next load and clears databases before anything re-opens them.
@@ -17,11 +19,20 @@ export const scheduleClearLocalDataOnNextLoad = (): boolean => {
 	}
 };
 
-export const isClearLocalDataOnNextLoadScheduled = (): boolean => {
+/**
+ * A storage sandbox that throws on read also throws on write, so it can never
+ * hold an armed flag — read failures report 'not-scheduled' rather than
+ * 'unknown', otherwise storage-restricted embedded browsers (which worked via
+ * the direct-clear fallback before the flag existed) would block on startup
+ * forever.
+ */
+export const readClearLocalDataOnNextLoadFlag = (): ClearLocalDataFlag => {
 	try {
-		return window.localStorage.getItem(CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY) === '1';
+		return window.localStorage.getItem(CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY) === '1'
+			? 'scheduled'
+			: 'not-scheduled';
 	} catch {
-		return false;
+		return 'not-scheduled';
 	}
 };
 
@@ -29,6 +40,7 @@ export const unscheduleClearLocalDataOnNextLoad = (): void => {
 	try {
 		window.localStorage.removeItem(CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY);
 	} catch {
-		// Best-effort: a flag that cannot be removed re-triggers a harmless clear.
+		// A removal failure is observable: the caller's post-clear verification
+		// read still sees 'scheduled' and refuses to hydrate.
 	}
 };

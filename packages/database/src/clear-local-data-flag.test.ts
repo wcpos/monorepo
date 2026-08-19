@@ -3,13 +3,14 @@
  * localStorage. Web behaviour is covered in clear-local-data-flag.web.test.ts.
  */
 import {
-	isClearLocalDataOnNextLoadScheduled,
+	readClearLocalDataOnNextLoadFlag,
 	scheduleClearLocalDataOnNextLoad,
 	unscheduleClearLocalDataOnNextLoad,
 } from './clear-local-data-flag';
 
 const files = new Map<string, string>();
 let failWrites = false;
+let failReads = false;
 
 jest.mock('expo-file-system', () => ({
 	Paths: { document: '/documents' },
@@ -21,6 +22,9 @@ jest.mock('expo-file-system', () => ({
 		}
 
 		get exists() {
+			if (failReads) {
+				throw new Error('filesystem unavailable');
+			}
 			return files.has(this.path);
 		}
 
@@ -44,20 +48,36 @@ describe('clear-local-data-flag (native)', () => {
 	beforeEach(() => {
 		files.clear();
 		failWrites = false;
+		failReads = false;
 	});
 
-	it('round-trips schedule → isScheduled → unschedule through the marker file', () => {
-		expect(isClearLocalDataOnNextLoadScheduled()).toBe(false);
+	it('round-trips schedule → read → unschedule through the marker file', () => {
+		expect(readClearLocalDataOnNextLoadFlag()).toBe('not-scheduled');
 		expect(scheduleClearLocalDataOnNextLoad()).toBe(true);
-		expect(isClearLocalDataOnNextLoadScheduled()).toBe(true);
+		expect(readClearLocalDataOnNextLoadFlag()).toBe('scheduled');
 		unscheduleClearLocalDataOnNextLoad();
-		expect(isClearLocalDataOnNextLoadScheduled()).toBe(false);
+		expect(readClearLocalDataOnNextLoadFlag()).toBe('not-scheduled');
 	});
 
 	it('reports failure instead of throwing when the marker cannot be written', () => {
 		failWrites = true;
 		expect(scheduleClearLocalDataOnNextLoad()).toBe(false);
-		expect(isClearLocalDataOnNextLoadScheduled()).toBe(false);
+		expect(readClearLocalDataOnNextLoadFlag()).toBe('not-scheduled');
+	});
+
+	it("reports 'unknown' when the marker cannot be read — an armed flag may hide behind the error", () => {
+		failReads = true;
+		expect(readClearLocalDataOnNextLoadFlag()).toBe('unknown');
+	});
+
+	it('a failed removal stays observable through the read', () => {
+		scheduleClearLocalDataOnNextLoad();
+		failReads = true;
+		// unschedule's own exists check fails, so the marker survives …
+		unscheduleClearLocalDataOnNextLoad();
+		failReads = false;
+		// … and the verification read still reports it armed.
+		expect(readClearLocalDataOnNextLoadFlag()).toBe('scheduled');
 	});
 
 	it('unschedule is a safe no-op when no marker exists', () => {

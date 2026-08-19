@@ -1,6 +1,6 @@
 import {
 	CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY,
-	isClearLocalDataOnNextLoadScheduled,
+	readClearLocalDataOnNextLoadFlag,
 	scheduleClearLocalDataOnNextLoad,
 	unscheduleClearLocalDataOnNextLoad,
 } from './clear-local-data-flag.web';
@@ -37,7 +37,7 @@ describe('clear-local-data-flag (web)', () => {
 		expect(scheduleClearLocalDataOnNextLoad()).toBe(false);
 	});
 
-	it('round-trips schedule → isScheduled → unschedule against real storage semantics', () => {
+	it('round-trips schedule → read → unschedule against real storage semantics', () => {
 		const store = new Map<string, string>();
 		(globalThis as { window?: unknown }).window = {
 			localStorage: {
@@ -47,15 +47,15 @@ describe('clear-local-data-flag (web)', () => {
 			},
 		};
 
-		expect(isClearLocalDataOnNextLoadScheduled()).toBe(false);
+		expect(readClearLocalDataOnNextLoadFlag()).toBe('not-scheduled');
 		expect(scheduleClearLocalDataOnNextLoad()).toBe(true);
-		expect(isClearLocalDataOnNextLoadScheduled()).toBe(true);
+		expect(readClearLocalDataOnNextLoadFlag()).toBe('scheduled');
 		unscheduleClearLocalDataOnNextLoad();
-		expect(isClearLocalDataOnNextLoadScheduled()).toBe(false);
+		expect(readClearLocalDataOnNextLoadFlag()).toBe('not-scheduled');
 	});
 
-	it('reads and removals never throw when storage is unavailable', () => {
-		expect(isClearLocalDataOnNextLoadScheduled()).toBe(false);
+	it("reads report 'not-scheduled' when storage is unavailable — a sandbox that cannot read the flag also cannot arm it", () => {
+		expect(readClearLocalDataOnNextLoadFlag()).toBe('not-scheduled');
 		expect(() => unscheduleClearLocalDataOnNextLoad()).not.toThrow();
 	});
 });

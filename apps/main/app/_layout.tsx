@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { Platform } from 'react-native';
 
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -12,20 +11,17 @@ import { KeyboardProvider } from '@wcpos/components/keyboard-controller';
 import { Toast, Toaster } from '@wcpos/components/toast';
 import { useAppState } from '@wcpos/core/contexts/app-state';
 import { HydrationProviders } from '@wcpos/core/contexts/hydration-providers';
-import {
-	isClearLocalDataOnNextLoadScheduled,
-	unscheduleClearLocalDataOnNextLoad,
-} from '@wcpos/database';
-import { getLogger, setToast } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { setToast } from '@wcpos/utils/logger';
 
+import {
+	ClearLocalDataBlockedScreen,
+	useClearLocalDataOnStartup,
+} from '../components/clear-local-data-on-startup';
 import { RootError } from '../components/root-error';
 import '../global.css';
 import '../polyfills';
 
 WebBrowser.maybeCompleteAuthSession();
-
-const appLogger = getLogger(['wcpos', 'app', 'startup']);
 
 /**
  * Forwards safe area insets to Uniwind for p-safe, m-safe, etc. utilities
@@ -111,65 +107,18 @@ function ThemedToaster() {
 	return <Toaster position="top-center" theme={toastTheme} richColors />;
 }
 
-function useClearLocalDataOnStartup() {
-	const [isClearing, setIsClearing] = React.useState(() => isClearLocalDataOnNextLoadScheduled());
-
-	React.useEffect(() => {
-		if (!isClearing) {
-			return;
-		}
-
-		let cancelled = false;
-
-		void (async () => {
-			try {
-				const { clearAllDB } = await import('@wcpos/database/clear-all-db');
-				const result = await clearAllDB();
-				unscheduleClearLocalDataOnNextLoad();
-
-				if (result && typeof result === 'object' && 'message' in result) {
-					appLogger.info(String(result.message));
-				}
-
-				if (cancelled) {
-					return;
-				}
-
-				if (Platform.OS === 'web') {
-					window.location.reload();
-				} else {
-					// Native has no page to reload, and none is needed: the layout renders
-					// null while this runs, so nothing has opened the databases yet and
-					// hydration starts fresh against the cleared state.
-					setIsClearing(false);
-				}
-			} catch (error) {
-				appLogger.error('Failed to clear local data before hydration', {
-					code: ERROR_CODES.UNEXPECTED_ERROR,
-					context: {
-						error: error instanceof Error ? error.message : String(error),
-					},
-				});
-
-				if (!cancelled) {
-					setIsClearing(false);
-				}
-			}
-		})();
-
-		return () => {
-			cancelled = true;
-		};
-	}, [isClearing]);
-
-	return isClearing;
-}
-
 export default function RootLayout() {
-	const isClearingLocalData = useClearLocalDataOnStartup();
+	const clearLocalDataState = useClearLocalDataOnStartup();
 
-	if (isClearingLocalData) {
+	if (clearLocalDataState === 'clearing') {
 		return null;
+	}
+
+	// Fail closed: a failed or unverifiable clear leaves the reset flag armed,
+	// and hydrating would let its retry destroy everything sold before the next
+	// launch. See clear-local-data-on-startup.tsx.
+	if (clearLocalDataState === 'blocked') {
+		return <ClearLocalDataBlockedScreen />;
 	}
 
 	return (

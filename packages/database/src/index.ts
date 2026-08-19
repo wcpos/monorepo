@@ -8,10 +8,11 @@ export { userCollections, storeCollections } from './collections';
 export { sanitizeWPCredentialsData } from './collections/wp-credentials';
 export {
 	CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY,
-	isClearLocalDataOnNextLoadScheduled,
+	readClearLocalDataOnNextLoadFlag,
 	scheduleClearLocalDataOnNextLoad,
 	unscheduleClearLocalDataOnNextLoad,
 } from './clear-local-data-flag';
+export type { ClearLocalDataFlag } from './clear-local-data-flag';
 export { clearAllDB } from './clear-all-db';
 export { measureAppStorage } from './measure-storage';
 export type { StorageFootprint, StorageFootprintEntry } from './measure-storage';
