@@ -179,14 +179,15 @@ type BulkUpsertCollection<T extends { uuid: string }> = {
 function collectionSchedulerRepository<T extends { uuid: string }>(
 	collection: BulkUpsertCollection<T>
 ): {
-	upsertMany(documents: T[]): Promise<void>;
+	upsertMany(documents: T[]): Promise<T[]>;
 	removeMany(documents: T[]): Promise<void>;
 } {
 	return {
-		async upsertMany(documents: T[]): Promise<void> {
+		async upsertMany(documents: T[]): Promise<T[]> {
 			const applicable = await withoutLocallyProtected(collection, documents);
 			if (applicable.length > 0)
 				assertBulkSuccess(await collection.bulkUpsert(applicable), 'engine-scheduler-drain upsert');
+			return applicable;
 		},
 		async removeMany(documents: T[]): Promise<void> {
 			const stored = await collection.findByIds(documents.map(({ uuid }) => uuid)).exec();

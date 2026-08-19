@@ -4,6 +4,7 @@ import {
 	parseVariationsEnvelope,
 	variationMaterialized,
 } from '../collections/collection-descriptors';
+import { manifestRowsForApplied } from '../local-coverage/existence-manifest-population';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import {
 	type CollectionSchedulerInput,
@@ -121,10 +122,8 @@ export function createVariationsSchedulerFetcher(
 		const documents = materialized.map(
 			({ storedDocument }) => storedDocument as StoredVariationDocument
 		);
-		await input.repository.upsertMany(documents);
-		const manifestRows = materialized.flatMap(({ manifestRow }) =>
-			manifestRow ? [manifestRow] : []
-		);
+		const applied = (await input.repository.upsertMany(documents)) ?? documents;
+		const manifestRows = manifestRowsForApplied(materialized, applied);
 		if (input.manifestSink && manifestRows.length > 0) {
 			await input.manifestSink(manifestRows);
 		}

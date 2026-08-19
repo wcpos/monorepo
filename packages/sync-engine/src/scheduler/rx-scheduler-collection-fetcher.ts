@@ -16,6 +16,7 @@
 
 import { type RemoteId, type SyncObserver, wooIdOf } from '@wcpos/sync-core';
 
+import { manifestRowsForApplied } from '../local-coverage/existence-manifest-population';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import { chunk } from './chunk';
 import { censusQueryKey } from './census';
@@ -39,7 +40,8 @@ export const DEFAULT_COVERAGE_FRESH_FOR_MS = 5 * 60 * 1_000;
 export type Fetcher = (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
 
 export type CollectionRepository<Doc> = {
-	upsertMany(documents: Doc[]): Promise<void>;
+	/** Applied input documents, or void when the repository applies the whole batch. */
+	upsertMany(documents: Doc[]): Promise<readonly Doc[] | void>;
 	/**
 	 * Optional set-difference deletion. A greedy refresh fetches the COMPLETE authoritative set, so any
 	 * server-sourced local doc absent from it was deleted upstream and must be tombstoned (the upsert-only refresh
@@ -364,7 +366,7 @@ export type CollectionTarget = { documentId: string; remoteId: RemoteId | null }
  * There is no prune and a single coverage id-space (targeted/search never tombstone), so only coverageRecordId
  * is needed — but it still returns the Woo-id-space id so the lane's expectedRecordIds match.
  */
-export type TargetedSearchCollectionSpec<Doc, Payload> = {
+export type TargetedSearchCollectionSpec<Doc extends { uuid: string }, Payload> = {
 	/** Scheduler collection name, e.g. 'customers' | 'products'. */
 	collection: string;
 	/** Resource path under the sync namespace (no leading slash), e.g. 'customers' | 'products'. */
@@ -398,12 +400,13 @@ export type TargetedSearchCollectionSpec<Doc, Payload> = {
 };
 
 /** Feed the spec's manifest sink the rows of a just-upserted batch (no-op without a sink). */
-async function pushManifestRows<Doc, Payload>(
+async function pushManifestRows<Doc extends { uuid: string }, Payload>(
 	spec: TargetedSearchCollectionSpec<Doc, Payload>,
-	materialized: readonly Materialized<Doc>[]
+	materialized: readonly Materialized<Doc>[],
+	applied: readonly Doc[]
 ): Promise<void> {
 	if (!spec.manifestSink) return;
-	const rows = materialized.flatMap(({ manifestRow }) => (manifestRow ? [manifestRow] : []));
+	const rows = manifestRowsForApplied(materialized, applied);
 	if (rows.length > 0) await spec.manifestSink(rows);
 }
 
@@ -427,7 +430,7 @@ export function assertReturnedRequestedIds<Payload>(
 	}
 }
 
-async function fetchTargeted<Doc, Payload>(
+async function fetchTargeted<Doc extends { uuid: string }, Payload>(
 	spec: TargetedSearchCollectionSpec<Doc, Payload>,
 	input: CollectionSchedulerInput<Doc>,
 	task: FetchTask,
@@ -467,8 +470,8 @@ async function fetchTargeted<Doc, Payload>(
 		assertReturnedRequestedIds(spec, idsBatch, payloads);
 		const materialized = payloads.map(spec.documentFromPayload);
 		const documents = materialized.map(({ storedDocument }) => storedDocument);
-		await input.repository.upsertMany(documents);
-		await pushManifestRows(spec, materialized);
+		const applied = (await input.repository.upsertMany(documents)) ?? documents;
+		await pushManifestRows(spec, materialized, applied);
 		fetchedCoverageIds.push(...documents.map(spec.coverageRecordId));
 		documentCount += documents.length;
 		requestCount += 1;
@@ -478,7 +481,7 @@ async function fetchTargeted<Doc, Payload>(
 	return { taskId: task.id, documentCount, requestCount, completed: true };
 }
 
-async function fetchSearch<Doc, Payload>(
+async function fetchSearch<Doc extends { uuid: string }, Payload>(
 	spec: TargetedSearchCollectionSpec<Doc, Payload>,
 	input: CollectionSchedulerInput<Doc>,
 	task: FetchTask,
@@ -508,8 +511,8 @@ async function fetchSearch<Doc, Payload>(
 		const payloads = JSON.parse(await response.text()) as Payload[];
 		const materialized = payloads.slice(0, remaining).map(spec.documentFromPayload);
 		const documents = materialized.map(({ storedDocument }) => storedDocument);
-		await input.repository.upsertMany(documents);
-		await pushManifestRows(spec, materialized);
+		const applied = (await input.repository.upsertMany(documents)) ?? documents;
+		await pushManifestRows(spec, materialized, applied);
 		fetchedCoverageIds.push(...documents.map(spec.coverageRecordId));
 		documentCount += documents.length;
 		requestCount += 1;
@@ -529,7 +532,7 @@ async function fetchSearch<Doc, Payload>(
  * On-demand fetcher: dispatch a task either to a targeted include= fetch (when it names ids) or to a search-windowed
  * paginate (when its queryKey is a search lane). Shares the http-guard + coverage scaffolding with the greedy core.
  */
-export function createTargetedSearchCollectionFetcher<Doc, Payload>(
+export function createTargetedSearchCollectionFetcher<Doc extends { uuid: string }, Payload>(
 	spec: TargetedSearchCollectionSpec<Doc, Payload>,
 	input: CollectionSchedulerInput<Doc>
 ): SchedulerFetcher {

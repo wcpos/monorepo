@@ -12,6 +12,7 @@ import {
 	type LocalCustomerDocument,
 	type WooCustomerPayload,
 } from '../collections/customer-schema';
+import { manifestRowsForApplied } from '../local-coverage/existence-manifest-population';
 import { type Materialized, materializeTargeted } from '../materialization/record-materialization';
 import {
 	type CustomerBrowseWindowDescriptor,
@@ -194,12 +195,8 @@ async function fetchCustomerBrowseWindow(
 	}
 	const materialized = [...documentsById.values()];
 	const documents = materialized.map(({ storedDocument }) => storedDocument);
-	await input.repository.upsertMany(documents);
-	// The manifest row rides the envelope, and the browse lane applies every document it
-	// materialized — so every row it holds belongs in the customer manifest (ADR 0028 rider).
-	const manifestRows = materialized.flatMap(({ manifestRow }) =>
-		manifestRow ? [manifestRow] : []
-	);
+	const applied = (await input.repository.upsertMany(documents)) ?? documents;
+	const manifestRows = manifestRowsForApplied(materialized, applied);
 	if (input.manifestSink && manifestRows.length > 0) {
 		await input.manifestSink(manifestRows);
 	}

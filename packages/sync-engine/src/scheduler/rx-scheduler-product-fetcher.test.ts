@@ -1,7 +1,12 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
-import { type ProductDocument, type RemoteId, wooIdOf } from '@wcpos/sync-core';
+import {
+	type ProductDocument,
+	type RemoteId,
+	type StoredProductDocument,
+	wooIdOf,
+} from '@wcpos/sync-core';
 
 import { remoteId } from '../testing';
 import {
@@ -1881,9 +1886,9 @@ describe('createProductsSchedulerFetcher', () => {
 		);
 	});
 
-	it('populates the Leg-3 manifest from _rxdb_digest and strips it from the stored payload', async () => {
+	it('populates the Leg-3 manifest only for products that survive the apply guard', async () => {
 		const repository = {
-			upsertMany: vi.fn(async () => undefined),
+			upsertMany: vi.fn(async (documents: StoredProductDocument[]) => documents.slice(0, 1)),
 			removeMany: vi.fn(async () => undefined),
 		};
 		const manifestSink = vi.fn(async () => undefined);
@@ -1895,6 +1900,13 @@ describe('createProductsSchedulerFetcher', () => {
 					date_modified_gmt: '2026-05-20T10:10:00',
 					meta_data: posMeta(321),
 					_rxdb_digest: '9223372036854775810',
+				},
+				{
+					id: 654,
+					name: 'Mouse',
+					date_modified_gmt: '2026-05-20T10:11:00',
+					meta_data: posMeta(654),
+					_rxdb_digest: 'digest-654',
 				},
 			])
 		);

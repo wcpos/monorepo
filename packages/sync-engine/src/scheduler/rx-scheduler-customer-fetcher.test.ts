@@ -126,12 +126,12 @@ describe('createCustomerSchedulerFetcher', () => {
 		});
 	});
 
-	it('feeds the customer manifest sink the digests of a targeted pull, stripped from the stored payload', async () => {
+	it('feeds the customer manifest sink only targeted documents that survive the apply guard', async () => {
 		// Leg-3 (ADR 0015): the customer existence manifest is populated by the INGEST SITE from
 		// each record's materialization envelope (ADR 0028 rider). A lane that stops feeding the
 		// sink starves the prune gate with no error anywhere — the #1340 failure class.
 		const repository = {
-			upsertMany: vi.fn(async (_documents: LocalCustomerDocument[]) => undefined),
+			upsertMany: vi.fn(async (documents: LocalCustomerDocument[]) => documents.slice(0, 1)),
 		};
 		const manifestSink = vi.fn(async (_rows: unknown[]) => undefined);
 		const schedulerFetcher = createCustomerSchedulerFetcher({
@@ -141,7 +141,7 @@ describe('createCustomerSchedulerFetcher', () => {
 			fetcher: vi.fn(async () =>
 				response([
 					{ id: 12, email: 'ada@example.test', meta_data: uuidMeta(12), _rxdb_digest: 'd12' },
-					{ id: 34, email: 'grace@example.test', meta_data: uuidMeta(34) }, // no digest
+					{ id: 34, email: 'grace@example.test', meta_data: uuidMeta(34), _rxdb_digest: 'd34' },
 				])
 			),
 		});
@@ -161,6 +161,30 @@ describe('createCustomerSchedulerFetcher', () => {
 		]);
 		const stored = repository.upsertMany.mock.calls[0]![0];
 		expect(stored[0]!.payload).not.toHaveProperty('_rxdb_digest');
+	});
+
+	it('feeds the customer manifest sink only search documents that survive the apply guard', async () => {
+		const repository = {
+			upsertMany: vi.fn(async (documents: LocalCustomerDocument[]) => documents.slice(0, 1)),
+		};
+		const manifestSink = vi.fn(async (_rows: unknown[]) => undefined);
+		const schedulerFetcher = createCustomerSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			manifestSink,
+			fetcher: vi.fn(async () =>
+				response([
+					{ ...customerPayload(56), _rxdb_digest: 'd56' },
+					{ ...customerPayload(57), _rxdb_digest: 'd57' },
+				])
+			),
+		});
+
+		await schedulerFetcher(customerTask());
+
+		expect(manifestSink).toHaveBeenCalledWith([
+			{ remoteId: '56', wooId: 56, objectType: 'customer', digest: 'd56' },
+		]);
 	});
 
 	it('stores the existing default customer target without issuing an invalid Woo include request', async () => {
@@ -439,7 +463,7 @@ describe('createCustomerSchedulerFetcher', () => {
 			}
 		);
 
-		it('feeds the customer manifest sink one row per deduplicated window row', async () => {
+		it('feeds the customer manifest sink only deduplicated window rows that survive the apply guard', async () => {
 			// The browse walk is the customer lane with its OWN upsert (it dedupes boundary rows
 			// itself), so it must feed the manifest sink itself too — see the targeted-lane test.
 			const manifestSink = vi.fn(async (_rows: unknown[]) => undefined);
@@ -449,13 +473,15 @@ describe('createCustomerSchedulerFetcher', () => {
 					{ 'X-WP-Total': '3', 'X-WP-TotalPages': '1' }
 				)
 			);
-			const kit = browseFetcher(fetcher, { manifestSink });
+			const guardedRepository = {
+				upsertMany: vi.fn(async (documents: LocalCustomerDocument[]) => documents.slice(0, 1)),
+			};
+			const kit = browseFetcher(fetcher, { repository: guardedRepository, manifestSink });
 
 			await kit.schedulerFetcher(browseTask(100));
 
 			expect(manifestSink).toHaveBeenCalledWith([
 				{ remoteId: '1', wooId: 1, objectType: 'customer', digest: 'd1' },
-				{ remoteId: '2', wooId: 2, objectType: 'customer', digest: 'd2' },
 			]);
 		});
 
