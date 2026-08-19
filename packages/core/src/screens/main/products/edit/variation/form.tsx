@@ -28,6 +28,7 @@ import { ProductStatusSelect } from '../../../components/product/status-select';
 import { TaxClassSelect } from '../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../components/tax-status-radio-group';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
+import { taxClassFromWire, taxClassToWire } from '../../../hooks/tax-class';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'variation']);
 
@@ -75,21 +76,17 @@ export function EditVariationForm({ variation }: Props) {
 			manage_stock: variation.manage_stock,
 			barcode: variation.barcode,
 			tax_status: variation.tax_status,
-			tax_class: variation.tax_class === '' ? 'standard' : variation.tax_class,
+			tax_class: taxClassFromWire(variation.tax_class),
 			meta_data: variation.meta_data,
 		},
 	});
 
 	/**
 	 * Handle save button click
-	 *
-	 * @NOTE - the form needs a value for tax_class, but WC REST API uses an empty string for standard
 	 */
 	const handleSave = React.useCallback(
 		async (data: z.infer<typeof schema>) => {
-			if (data.tax_class === 'standard') {
-				data.tax_class = '';
-			}
+			data.tax_class = taxClassToWire(data.tax_class);
 			setLoading(true);
 			try {
 				const patched = await localPatch({

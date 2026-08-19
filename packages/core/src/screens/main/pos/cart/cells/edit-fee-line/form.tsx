@@ -25,6 +25,7 @@ import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-f
 import { NumberInput } from '../../../../components/number-input';
 import { TaxClassSelect } from '../../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
+import { taxClassFromWire, taxClassToWire } from '../../../../hooks/tax-class';
 import { useFeeLineData } from '../../../hooks/use-fee-line-data';
 import { useUpdateFeeLine } from '../../../hooks/use-update-fee-line';
 
@@ -47,9 +48,6 @@ interface Props {
 	item: NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 }
 
-/**
- * NOTE: tax_class 'standard' needs to be sent as an empty string, otherwise the API will throw an error.
- */
 export function EditFeeLineForm({ uuid, item }: Props) {
 	const t = useT();
 	const { updateFeeLine } = useUpdateFeeLine();
@@ -70,7 +68,7 @@ export function EditFeeLineForm({ uuid, item }: Props) {
 			amount: toNumber(amount),
 			percent,
 			tax_status: item.tax_status ?? 'taxable',
-			tax_class: item.tax_class === '' ? 'standard' : item.tax_class,
+			tax_class: taxClassFromWire(item.tax_class),
 			prices_include_tax,
 			percent_of_cart_total_with_tax,
 			meta_data: item.meta_data as FormValues['meta_data'],
@@ -86,7 +84,7 @@ export function EditFeeLineForm({ uuid, item }: Props) {
 				name: data.name,
 				amount: String(data.amount),
 				tax_status: data.tax_status,
-				tax_class: data.tax_class === 'standard' ? '' : data.tax_class,
+				tax_class: taxClassToWire(data.tax_class),
 				percent: data.percent,
 				prices_include_tax: data.prices_include_tax,
 				percent_of_cart_total_with_tax: data.percent_of_cart_total_with_tax,

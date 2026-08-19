@@ -26,6 +26,7 @@ import { FormErrors } from '../../components/form-errors';
 import { CategoryTreeLoader } from '../../components/product/category-select';
 import { TaxClassSelect } from '../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
+import { taxClassToWire } from '../../hooks/tax-class';
 import { useAddProduct } from '../hooks/use-add-product';
 
 const categoryOptionSchema = z.object({ value: z.string(), label: z.string() });
@@ -69,9 +70,6 @@ export function AddMiscProduct() {
 		},
 	});
 
-	/**
-	 * NOTE: tax_class 'standard' needs to be sent as an empty string, otherwise the API will throw an error.
-	 */
 	const handleAdd = React.useCallback(
 		async (data: FormValues) => {
 			const { name, price, sku, tax_status, tax_class, virtual, downloadable, categories } = data;
@@ -82,7 +80,7 @@ export function AddMiscProduct() {
 				sku,
 				regular_price: isEmpty(price) ? '0' : price,
 				tax_status,
-				tax_class: tax_class === 'standard' ? '' : tax_class,
+				tax_class: taxClassToWire(tax_class),
 				virtual: virtual ?? false,
 				downloadable: downloadable ?? false,
 				_pos_categories: categories.map((opt) => ({

@@ -130,6 +130,10 @@ describe('EditProductForm save', () => {
 		});
 
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		// The form's 'standard' must leave as the wire spelling '' (WC REST rejects 'standard').
+		expect(mockLocalPatch).toHaveBeenCalledWith(
+			expect.objectContaining({ data: expect.objectContaining({ tax_class: '' }) })
+		);
 		expect(mockModalClose).toHaveBeenCalledTimes(1);
 	});
 
