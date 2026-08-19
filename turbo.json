@@ -30,13 +30,12 @@
 			],
 			"inputs": [
 				"$TURBO_DEFAULT$",
-				"!**/*.test.ts",
-				"!**/*.test.tsx",
-				"!**/__tests__/**",
+				"!**/*.test.js",
+				"!**/*.test.jsx",
 				"!e2e/**",
 				"!.maestro/**",
-				"!**/*.spec.ts",
-				"!**/*.spec.tsx"
+				"!**/*.spec.js",
+				"!**/*.spec.jsx"
 			]
 		},
 		"dev": {
