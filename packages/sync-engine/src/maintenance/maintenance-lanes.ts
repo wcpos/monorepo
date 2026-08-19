@@ -714,6 +714,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		return { summary: `Product trickle: page ${result.page}, ${result.rows} products` };
 	});
 	const variationPrefetch = lane('variation-prefetch', async (db, scopeId, signal, fetcher) => {
+		if (!deps.isWritePlaneOwner()) {
+			return { summary: null, status: 'skipped', reason: 'not-write-plane-owner' };
+		}
 		const barcodeSelectors: BarcodeSelectorsReader | undefined =
 			deps.barcodeSelectorsFor === undefined
 				? undefined
