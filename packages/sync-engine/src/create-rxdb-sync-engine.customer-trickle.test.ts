@@ -378,7 +378,12 @@ describe('customer-trickle maintenance lane', () => {
 		await expect(
 			checkpoints.get(`${scopeKeyFor(storeIdentity)}:${TRICKLE_STATE_KEY}`)
 		).resolves.toBe(
-			JSON.stringify({ viewKey: 'customers:browse-window:limit=', page: 2, walkComplete: false })
+			JSON.stringify({
+				viewKey: 'customers:browse-window:limit=',
+				page: 2,
+				walkComplete: false,
+				observedCensusTotal: null,
+			})
 		);
 		await engine.dispose();
 	});
@@ -478,6 +483,50 @@ describe('customer-trickle maintenance lane', () => {
 		await engine.sync('customer-trickle');
 		expect(urls).toHaveLength(2);
 		expect(new URL(urls[1]!).searchParams.get('page')).toBe('1');
+		await engine.dispose();
+	});
+
+	it('re-walks once per census total, not forever, on a permanent deficit (#1345)', async () => {
+		// The server reports 20 customers but only ever serves 3 (id drift, duplicate
+		// pos-uuid collapse). Deficit alone must not re-arm a completed walk — only a
+		// deficit with a CHANGED total may, and exactly once per total value.
+		const urls: string[] = [];
+		const engine = engineWith({
+			now: () => 1_000_000,
+			fetcher: async (url) => {
+				urls.push(url);
+				return json(urls.length === 1 ? customers(1, 3) : []);
+			},
+		});
+		const scope = await engine.ready;
+		await engine.sync('customer-trickle');
+		const cache = scope.database.collections.queryTotalCacheEntries;
+		await cache.upsert({
+			queryKey: 'census:customers',
+			totalMatchingRecords: 20,
+			updatedAtMs: 1_000_000,
+			freshUntilMs: 2_000_000,
+			schemaVersion: 1,
+		});
+
+		// Changed total (null → 20) with a deficit: one re-walk.
+		await engine.sync('customer-trickle');
+		expect(urls).toHaveLength(2);
+		// Unchanged total, deficit persists: the walk must stay dormant.
+		await engine.sync('customer-trickle');
+		await engine.sync('customer-trickle');
+		expect(urls).toHaveLength(2);
+		// The total changing re-arms exactly one more walk.
+		await cache.upsert({
+			queryKey: 'census:customers',
+			totalMatchingRecords: 21,
+			updatedAtMs: 1_000_001,
+			freshUntilMs: 2_000_000,
+			schemaVersion: 1,
+		});
+		await engine.sync('customer-trickle');
+		expect(urls).toHaveLength(3);
+		expect(new URL(urls[2]!).searchParams.get('page')).toBe('1');
 		await engine.dispose();
 	});
 

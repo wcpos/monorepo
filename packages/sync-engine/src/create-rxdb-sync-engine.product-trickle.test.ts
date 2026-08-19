@@ -391,6 +391,55 @@ describe('product-trickle maintenance lane', () => {
 		await engine.dispose();
 	});
 
+	it('re-walks once per census total, not forever, on a permanent deficit (#1345)', async () => {
+		// The server reports 4 products but only ever serves 3 (id drift, duplicate
+		// pos-uuid collapse). The old completion gate restarted the whole catalog walk
+		// on every deficit — and never recorded walkComplete, so the changed-total
+		// re-arm gate was never reached: an infinite background re-walk. One re-walk
+		// per observed total is the bound; a CHANGED total re-arms again.
+		const trickled: string[] = [];
+		const engine = engineWith({
+			now: () => 1_000_000,
+			fetcher: async (url) => {
+				if (!isTrickleUrl(url)) return json([]);
+				trickled.push(url);
+				return json(products(1, 3));
+			},
+		});
+		const scope = await engine.ready;
+		const cache = scope.database.collections.queryTotalCacheEntries;
+		await cache.upsert({
+			queryKey: 'census:products',
+			totalMatchingRecords: 4,
+			updatedAtMs: 1_000_000,
+			freshUntilMs: 2_000_000,
+			schemaVersion: 1,
+		});
+
+		// Walk 1 ends with a deficit → exactly one re-walk (walk 2), which then
+		// accepts completion for this total.
+		await engine.sync('product-trickle');
+		await engine.sync('product-trickle');
+		expect(trickled).toHaveLength(2);
+		await expect(engine.sync('product-trickle')).resolves.toMatchObject({
+			status: 'skipped',
+			reason: 'walk-complete',
+		});
+		expect(trickled).toHaveLength(2);
+		// The total changing re-arms the walk again.
+		await cache.upsert({
+			queryKey: 'census:products',
+			totalMatchingRecords: 5,
+			updatedAtMs: 1_000_001,
+			freshUntilMs: 2_000_000,
+			schemaVersion: 1,
+		});
+		await engine.sync('product-trickle');
+		expect(trickled).toHaveLength(3);
+		expect(new URL(trickled[2]!).searchParams.get('page')).toBe('1');
+		await engine.dispose();
+	});
+
 	it('does not clobber a locally protected resident product', async () => {
 		const engine = engineWith({ fetcher: async () => json([product(77, 'Server Name')]) });
 		const scope = await engine.ready;

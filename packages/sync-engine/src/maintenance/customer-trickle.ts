@@ -67,6 +67,14 @@ export type CustomerTrickleState = {
 	viewKey: string;
 	page: number;
 	walkComplete: boolean;
+	/**
+	 * The fresh census total that last triggered a deficit re-walk. A completed walk
+	 * re-arms on a deficit only while the total DIFFERS from this — one re-walk per
+	 * observed total, so a record the server permanently omits (id drift, duplicate
+	 * pos-uuid collapsing two server records into one local doc) cannot re-walk the
+	 * directory forever (#1345 mechanism 2d).
+	 */
+	observedCensusTotal: number | null;
 };
 export type CustomerTrickleStateStore = {
 	get(key: string): Promise<string | null>;
@@ -79,6 +87,7 @@ const DEFAULT_STATE: CustomerTrickleState = {
 	viewKey: '',
 	page: 1,
 	walkComplete: false,
+	observedCensusTotal: null,
 };
 
 export function decodeCustomerTrickleState(raw: string | null): CustomerTrickleState {
@@ -89,11 +98,19 @@ export function decodeCustomerTrickleState(raw: string | null): CustomerTrickleS
 			!Number.isSafeInteger(parsed.page) ||
 			(parsed.page ?? 0) < 1 ||
 			typeof parsed.walkComplete !== 'boolean' ||
-			typeof parsed.viewKey !== 'string'
+			typeof parsed.viewKey !== 'string' ||
+			(parsed.observedCensusTotal != null &&
+				(!Number.isSafeInteger(parsed.observedCensusTotal) || parsed.observedCensusTotal < 0))
 		) {
 			return { ...DEFAULT_STATE };
 		}
-		return { viewKey: parsed.viewKey, page: parsed.page!, walkComplete: parsed.walkComplete };
+		return {
+			viewKey: parsed.viewKey,
+			page: parsed.page!,
+			walkComplete: parsed.walkComplete,
+			// Absent on states persisted before #1345 — decode as "no re-walk recorded".
+			observedCensusTotal: parsed.observedCensusTotal ?? null,
+		};
 	} catch {
 		return { ...DEFAULT_STATE };
 	}
@@ -175,8 +192,12 @@ async function runCustomerTrickle(deps: CustomerTrickleDeps): Promise<CustomerTr
 			// Plain count intentionally includes the customer:default sentinel. This can
 			// under-trigger re-arming by one, which is accepted for this low-rate lane.
 			const localCount = await deps.database.collections.customers.count().exec();
-			if (census.total > localCount) {
-				state = restart;
+			// Deficit alone is not enough: the total must also have CHANGED since the
+			// last deficit re-walk. A permanent deficit (server-omitted id) with an
+			// unchanged total otherwise re-walks the whole directory every cadence,
+			// forever (#1345 mechanism 2d).
+			if (census.total > localCount && census.total !== state.observedCensusTotal) {
+				state = { ...restart, observedCensusTotal: census.total };
 			} else {
 				return { status: 'idle', reason: 'walk-complete' };
 			}
@@ -246,8 +267,18 @@ async function runCustomerTrickle(deps: CustomerTrickleDeps): Promise<CustomerTr
 	const nextState: CustomerTrickleState =
 		payloads.length < CUSTOMER_TRICKLE_BATCH_SIZE ||
 		(totalPagesHeader !== null && Number.isSafeInteger(totalPages) && state.page >= totalPages)
-			? { viewKey, page: state.page, walkComplete: true }
-			: { viewKey, page: state.page + 1, walkComplete: false };
+			? {
+					viewKey,
+					page: state.page,
+					walkComplete: true,
+					observedCensusTotal: state.observedCensusTotal,
+				}
+			: {
+					viewKey,
+					page: state.page + 1,
+					walkComplete: false,
+					observedCensusTotal: state.observedCensusTotal,
+				};
 	await deps.stateStore.set(CUSTOMER_TRICKLE_STATE_KEY, JSON.stringify(nextState));
 	return ran(payloads.length, state.page, nextState.walkComplete);
 }

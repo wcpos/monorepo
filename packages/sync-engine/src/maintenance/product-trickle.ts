@@ -276,8 +276,17 @@ async function runProductTrickle(deps: ProductTrickleDeps): Promise<ProductTrick
 	const handsOver = stageExhausted && state.stage === 'window';
 	const walkComplete = stageExhausted && !handsOver;
 	const completionCensus = walkComplete ? await deps.productCensusTotal() : null;
+	// One deficit re-walk per observed total (#1345 mechanism 2d): a record the server
+	// permanently omits (id drift, duplicate pos-uuid collapsing two server records
+	// into one local doc) keeps localCount < total after EVERY walk. Unbounded, that
+	// restarts the whole catalog walk forever — and walkComplete is never recorded, so
+	// the changed-total re-arm gate above is never even reached. After one re-walk for
+	// a given total, accept completion; the walk re-arms again when the total CHANGES.
+	const alreadyRetriedThisTotal =
+		completionCensus?.fresh === true && state.observedCensusTotal === completionCensus.total;
 	const localCatalogIncomplete =
 		completionCensus?.fresh === true &&
+		!alreadyRetriedThisTotal &&
 		(await deps.database.collections.products.count().exec()) < completionCensus.total;
 	const completesWalk = walkComplete && !localCatalogIncomplete;
 	const nextState: ProductTrickleState = completesWalk
@@ -293,7 +302,11 @@ async function runProductTrickle(deps: ProductTrickleDeps): Promise<ProductTrick
 				stage: handsOver ? 'catalog' : state.stage,
 				page: handsOver || localCatalogIncomplete ? 1 : state.page + 1,
 				walkComplete: false,
-				observedCensusTotal: null,
+				// A deficit restart records the total it is re-walking for; ordinary page
+				// advances carry the record forward so the bound survives the walk.
+				observedCensusTotal: localCatalogIncomplete
+					? (completionCensus?.total ?? null)
+					: state.observedCensusTotal,
 			};
 	await deps.stateStore.set(PRODUCT_TRICKLE_STATE_KEY, JSON.stringify(nextState));
 	return ran(payloads.length, state.page, nextState.walkComplete, state.stage);
