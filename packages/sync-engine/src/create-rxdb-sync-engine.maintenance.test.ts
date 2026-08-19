@@ -674,6 +674,72 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		expect(couponPulls).toBe(4);
 	});
 
+	it('a re-sorted picker demand is never answered by a different sort dedupe window (#1347)', async () => {
+		const nowMs = 1_000_000;
+		const couponUrls: string[] = [];
+		const engine = engineWith({
+			now: () => nowMs,
+			fetcher: async (url) => {
+				if (new URL(url).pathname.endsWith('/coupons')) couponUrls.push(url);
+				return Response.json([]);
+			},
+		});
+		await engine.ready;
+
+		// A bare open pulls, with the legacy default bytes on the wire.
+		const opened = await engine.require({
+			id: 'coupon-picker',
+			collection: 'coupons',
+			kind: 'refresh',
+		}).ready;
+		expect(opened).toMatchObject({ action: 'fetched' });
+		expect(couponUrls).toHaveLength(1);
+		expect(new URL(couponUrls[0]).searchParams.get('orderby')).toBe('id');
+
+		// Re-pointing the lane to a different sort INSIDE the 15s window is a new
+		// lane identity — it must pull, not be served the id-sorted window.
+		const resorted = await engine.require({
+			id: 'coupon-picker-resorted',
+			collection: 'coupons',
+			kind: 'refresh',
+			orderby: 'title',
+			order: 'desc',
+		}).ready;
+		expect(resorted).toMatchObject({ action: 'fetched' });
+		expect(couponUrls).toHaveLength(2);
+		expect(new URL(couponUrls[1]).searchParams.get('orderby')).toBe('title');
+		expect(new URL(couponUrls[1]).searchParams.get('order')).toBe('desc');
+
+		// The SAME sort re-demanded inside the window still dedupes...
+		const resortedAgain = await engine.require({
+			id: 'coupon-picker-resorted-remount',
+			collection: 'coupons',
+			kind: 'refresh',
+			orderby: 'title',
+			order: 'desc',
+		}).ready;
+		expect(resortedAgain).toMatchObject({ action: 'serve-local', requests: 0 });
+
+		// ...and so does a bare re-open against the original default window. An
+		// orderby the wire enum rejects is "no opinion": it joins the default
+		// window instead of minting a lane identity the server would refuse.
+		const reopened = await engine.require({
+			id: 'coupon-picker-remount',
+			collection: 'coupons',
+			kind: 'refresh',
+		}).ready;
+		expect(reopened).toMatchObject({ action: 'serve-local', requests: 0 });
+		const typoed = await engine.require({
+			id: 'coupon-picker-typoed',
+			collection: 'coupons',
+			kind: 'refresh',
+			orderby: 'usage_count',
+		}).ready;
+		expect(typoed).toMatchObject({ action: 'serve-local', requests: 0 });
+		expect(couponUrls).toHaveLength(2);
+		await engine.dispose();
+	});
+
 	it('query-total-retry reports skipped without the port, and drains + emits cache entries with it', async () => {
 		const bare = engineWith();
 		await bare.ready;

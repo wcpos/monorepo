@@ -35,6 +35,7 @@ import {
 	createReferenceCollectionFetcher,
 	TAG_REFERENCE_CONFIG,
 } from './rx-scheduler-reference-fetcher';
+import { parseReferenceLaneQueryKey } from './reference-lane-descriptor';
 import { referenceCollectionRepository } from '../collections/rx-reference-collection-repository';
 import { createOrderPendingMutationIds } from '../write-path/order-pull-guard';
 import { hasPendingLocalWork, withoutLocallyProtected } from '../write-path/local-work-guard';
@@ -156,7 +157,8 @@ function isSupportedReferenceSchedulerTask(
 ): boolean {
 	return (
 		task.collection === collection &&
-		task.queryKey === queryKey &&
+		(task.queryKey === queryKey ||
+			parseReferenceLaneQueryKey(task.queryKey)?.collection === collection) &&
 		task.mode === 'greedy' &&
 		hasNoTargetedIds(task)
 	);

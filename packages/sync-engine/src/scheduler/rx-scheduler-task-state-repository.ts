@@ -122,6 +122,16 @@ export class RxSchedulerTaskStateRepository {
 		return states.filter((state) => requested.has(state.taskId)).sort(byTaskId);
 	}
 
+	async readForCollections(collections: string[]): Promise<PersistedSchedulerTaskState[]> {
+		if (collections.length === 0) return [];
+		const requested = new Set(collections);
+		const states = await this.keyed.readMany({
+			selector: { collectionName: { $in: collections } },
+			sort: [{ collectionName: 'asc' }, { queryKey: 'asc' }],
+		});
+		return states.filter((state) => requested.has(state.collection)).sort(byTaskId);
+	}
+
 	async readRunnable(nowMs: number): Promise<PersistedSchedulerTaskState[]> {
 		const states = await this.keyed.readMany({
 			selector: { status: { $in: ['queued', 'in-flight', 'failed'] } },

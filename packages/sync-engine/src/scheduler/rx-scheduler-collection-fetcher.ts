@@ -14,12 +14,17 @@
  * keeps two arrays and feeds the prune ONLY storageIds and coverage ONLY coverageIds.
  */
 
-import { type RemoteId, wooIdOf } from '@wcpos/sync-core';
+import { type RemoteId, type SyncObserver, wooIdOf } from '@wcpos/sync-core';
 
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import { chunk } from './chunk';
 import { censusQueryKey } from './census';
 import { type CacheQueryTotals, queryTotalFromResponse } from './query-total-requests';
+import {
+	DEFAULT_REFERENCE_LANE_DESCRIPTOR,
+	parseReferenceLaneQueryKey,
+	type ReferenceLaneDescriptor,
+} from './reference-lane-descriptor';
 // prettier-ignore
 import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerFetcher, type SchedulerFetcherContext } from './replication-policy';
 
@@ -40,6 +45,10 @@ export type CollectionRepository<Doc> = {
 	 * they must match the stored doc.id the prune compares. Locally-born unpushed docs are left untouched.
 	 */
 	pruneServerSourcedAbsent?(keptStorageIds: readonly string[]): Promise<string[]>;
+	listServerSourcedAbsent?(
+		keptStorageIds: readonly string[]
+	): Promise<{ uuid: string; wooId: number }[]>;
+	pruneServerSourcedAbsentByUuids?(uuids: readonly string[]): Promise<string[]>;
 };
 
 export type CollectionSchedulerCoverageRepository = {
@@ -67,6 +76,7 @@ export type CollectionSchedulerInput<Doc> = {
 	nowMs?: () => number;
 	pullBatchSize?: () => number | undefined;
 	cacheQueryTotals?: CacheQueryTotals;
+	diagnostics?: SyncObserver;
 	/** LIVE read of the active scope's barcode carriers, for the collections that
 	 * materialize one. A reader, not a value: a drain spans many pages. */
 	barcodeSelectors?: BarcodeSelectorsReader;
@@ -86,6 +96,7 @@ export type GreedyCollectionSpec<Doc, Payload> = {
 	storageId: (document: Doc) => string;
 	/** The Woo-id-space COVERAGE id (== storageId for the single-id-space tax exception). */
 	coverageRecordId: (document: Doc) => string;
+	remoteId?: (document: Doc) => number | null;
 	/**
 	 * Whether this collection participates in set-difference deletion. When true the result ALWAYS reports
 	 * `prunedCount` (0 when the repository implements no prune or none ran), and the prune runs on the terminal
@@ -98,11 +109,15 @@ export type GreedyCollectionSpec<Doc, Payload> = {
 function assertGreedyTask(
 	spec: { collection: string; greedyQueryKey: string },
 	task: FetchTask
-): void {
+): ReferenceLaneDescriptor {
 	if (task.collection !== spec.collection) {
 		throw new Error(`${spec.collection} scheduler fetcher cannot run ${task.collection} tasks`);
 	}
-	if (task.queryKey !== spec.greedyQueryKey) {
+	const referenceLane = parseReferenceLaneQueryKey(task.queryKey);
+	if (
+		task.queryKey !== spec.greedyQueryKey &&
+		(referenceLane === null || referenceLane.collection !== spec.collection)
+	) {
 		throw new Error(
 			`${spec.collection} scheduler task queryKey is not supported: ${task.queryKey}`
 		);
@@ -110,6 +125,7 @@ function assertGreedyTask(
 	if (!Number.isSafeInteger(task.limit) || task.limit <= 0) {
 		throw new Error(`${spec.collection} scheduler task limit must be a positive integer`);
 	}
+	return referenceLane?.descriptor ?? DEFAULT_REFERENCE_LANE_DESCRIPTOR;
 }
 
 export async function httpGet(
@@ -178,7 +194,7 @@ export function createGreedyCollectionFetcher<Doc, Payload>(
 	const nextPageByTask = new Map<string, number>();
 
 	return async (task: FetchTask, context?: SchedulerFetcherContext): Promise<FetchTaskResult> => {
-		assertGreedyTask(spec, task);
+		const sort = assertGreedyTask(spec, task);
 		// GREEDY lanes are exempt from the batch dial: their cross-invocation page
 		// cursor makes a mid-task per_page change shift the page arithmetic (rows
 		// skipped, then the terminal prune removes valid local records), and a
@@ -189,8 +205,8 @@ export function createGreedyCollectionFetcher<Doc, Payload>(
 		const query = new URLSearchParams();
 		query.set('per_page', String(perPage));
 		query.set('page', String(page));
-		query.set('orderby', 'id');
-		query.set('order', 'asc');
+		query.set('orderby', sort.orderby);
+		query.set('order', sort.order);
 
 		const url = `${input.baseUrl}/${spec.endpoint}?${query.toString()}`;
 		const response = await httpGet(input, url, context);
@@ -229,11 +245,54 @@ export function createGreedyCollectionFetcher<Doc, Payload>(
 		// somehow implements one, and never reports prunedCount.
 		const prunes = spec.prunable ? input.repository.pruneServerSourcedAbsent : undefined;
 		let prunedCount = 0;
+		let requestCount = 1;
 		if (completed) {
 			// Skip the prune on abort so a torn-down refresh can't tombstone against a partial set. keptDocumentIds
 			// are STORAGE keys (uuid) — they must match the stored doc.id the prune compares.
 			if (prunes && context?.signal?.aborted !== true) {
-				prunedCount = (await prunes(allStorageIds)).length;
+				if (sort.orderby === 'id') {
+					prunedCount = (await prunes(allStorageIds)).length;
+				} else if (
+					input.repository.listServerSourcedAbsent &&
+					input.repository.pruneServerSourcedAbsentByUuids &&
+					spec.remoteId
+				) {
+					try {
+						const absent = await input.repository.listServerSourcedAbsent(allStorageIds);
+						const live = new Set<number>();
+						for (const batch of chunk(absent, WOO_REST_MAX_PER_PAGE)) {
+							const verifyQuery = new URLSearchParams();
+							verifyQuery.set('include', batch.map(({ wooId }) => wooId).join(','));
+							verifyQuery.set('per_page', String(batch.length));
+							const verify = await httpGet(
+								input,
+								`${input.baseUrl}/${spec.endpoint}?${verifyQuery.toString()}`,
+								context
+							);
+							requestCount += 1;
+							if (!verify.ok) throw new Error(`verify request failed: ${verify.status}`);
+							const payloads = JSON.parse(await verify.text()) as Payload[];
+							const documents = payloads.map(spec.documentFromPayload);
+							await input.repository.upsertMany(documents);
+							for (const document of documents) {
+								const id = spec.remoteId(document);
+								if (id !== null) live.add(id);
+							}
+						}
+						const confirmed = absent
+							.filter(({ wooId }) => !live.has(wooId))
+							.map(({ uuid }) => uuid);
+						prunedCount = (await input.repository.pruneServerSourcedAbsentByUuids(confirmed))
+							.length;
+					} catch (error) {
+						input.diagnostics?.({
+							type: 'engine.guard',
+							level: 'warn',
+							collection: spec.collection,
+							message: `reference.prune.verify-failed: ${error instanceof Error ? error.message : 'UnknownError'}`,
+						});
+					}
+				}
 			}
 			fetchedStorageIdsByTask.delete(task.id);
 			fetchedCoverageIdsByTask.delete(task.id);
@@ -245,11 +304,11 @@ export function createGreedyCollectionFetcher<Doc, Payload>(
 			? {
 					taskId: task.id,
 					documentCount: documents.length,
-					requestCount: 1,
+					requestCount,
 					completed,
 					prunedCount,
 				}
-			: { taskId: task.id, documentCount: documents.length, requestCount: 1, completed };
+			: { taskId: task.id, documentCount: documents.length, requestCount, completed };
 	};
 }
 

@@ -31,6 +31,8 @@
 
 import {
 	type Fetcher,
+	REFERENCE_COLLECTIONS,
+	type ReferenceCollection,
 	type RemoteId,
 	remoteIdOrNull,
 	type StoreScopeManager,
@@ -52,6 +54,8 @@ import {
 	emptyPersistedSchedulerTaskRunnerResult,
 	emptySeedPersistedSchedulerTasksResult,
 	type FetchTask,
+	isCouponReferenceOrderby,
+	isTermReferenceOrderby,
 	laneKeyFor,
 	ORDER_SCHEDULER_LEASE_FOR_MS,
 	orderBrowserQueryKey,
@@ -62,6 +66,8 @@ import {
 	type PersistedSchedulerTaskRunnerResult,
 	type ProductBrowseWindowOrderby,
 	productBrowseWindowQueryKeyFromDimensions,
+	type ReferenceLaneDescriptor,
+	referenceLaneQueryKey,
 	runEngineSchedulerDrain,
 	runEngineSchedulerTask,
 	type SchedulerDrainDatabase,
@@ -160,7 +166,13 @@ export type EngineRequirement = EngineRequirementCommon &
 		| { kind: 'targeted-records'; collection: SyncCollectionName; remoteIds: RemoteId[] }
 		// The current bridge narrows this with a runtime Set that TypeScript cannot follow.
 		| { kind: 'search'; collection: SyncCollectionName; term: string; limit?: number }
-		| { kind: 'refresh'; collection: SyncCollectionName; limit?: number }
+		| {
+				kind: 'refresh';
+				collection: SyncCollectionName;
+				limit?: number;
+				orderby?: string;
+				order?: 'asc' | 'desc';
+		  }
 		| ({ kind: 'orders-browse'; collection: 'orders' } & OrderBrowseDimensions)
 		| ({ kind: 'product-browse'; collection: 'products' } & ProductBrowseDimensions)
 		| ({ kind: 'customer-browse'; collection: 'customers' } & CustomerBrowseDimensions)
@@ -337,6 +349,39 @@ function createBrowseWindowKeyMemory(activeScope: () => string | null) {
 			return byScope.get(scopeId) ?? null;
 		},
 	};
+}
+
+type RefreshRequirement = Extract<EngineRequirement, { kind: 'refresh' }>;
+
+function isReferenceCollection(collection: SyncCollectionName): collection is ReferenceCollection {
+	return (REFERENCE_COLLECTIONS as readonly string[]).includes(collection);
+}
+
+/**
+ * A refresh with NO stated orderby (or one the wire enum rejects) returns null:
+ * "no opinion", which preserves whatever lane already exists rather than
+ * superseding it back to the default and restarting its walk. Only a stated,
+ * enum-valid sort may re-point a lane.
+ */
+function referenceSortFor(
+	requirement: RefreshRequirement,
+	diagnostics?: SyncObserver
+): ReferenceLaneDescriptor | null {
+	if (requirement.orderby === undefined) return null;
+	const order = requirement.order ?? 'asc';
+	if (requirement.collection === 'coupons' && isCouponReferenceOrderby(requirement.orderby)) {
+		return { orderby: requirement.orderby, order };
+	}
+	if (requirement.collection !== 'coupons' && isTermReferenceOrderby(requirement.orderby)) {
+		return { orderby: requirement.orderby, order };
+	}
+	diagnostics?.({
+		type: 'coverage.require.log',
+		level: 'debug',
+		collection: requirement.collection,
+		message: `Ignored unsupported reference orderby "${requirement.orderby}"`,
+	});
+	return null;
 }
 
 export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
@@ -836,7 +881,14 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			// `REFERENCE_REFRESH_DEDUPE_MS` must never suppress a picker open (#1302).
 			if (item.requirement.kind === 'refresh' && descriptor.shape === 'greedy-prunable') {
 				const demandNowMs = deps.now?.() ?? Date.now();
-				const demandKey = `${bound.scopeId}\u0000${descriptor.collection}`;
+				const sort = referenceSortFor(item.requirement, deps.diagnostics);
+				// A sortless demand dedupes under the default spelling — the same key a
+				// default-sorted demand uses, which is exactly today's per-collection window.
+				const demandKey = `${bound.scopeId}\u0000${
+					sort
+						? referenceLaneQueryKey(descriptor.collection, sort)
+						: referenceLaneQueryKey(descriptor.collection)
+				}`;
 				const lastOwnPull = lastDemandReferencePullMs.get(demandKey);
 				if (
 					!item.requirement.forceRefresh &&
@@ -862,6 +914,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 							// the in-memory own-window check above is the only demand dedupe.
 							seed: await seedReferenceLanes({
 								collections: [descriptor.collection],
+								...(sort ? { sorts: { [descriptor.collection]: sort } } : {}),
 								completedDedupeForMs: 0,
 								database: database,
 								...(nowMs !== undefined ? { nowMs } : {}),
@@ -1304,7 +1357,15 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					customerBrowseWindowKeys.record(key);
 					return key;
 				}
-				if (requirement.kind === 'refresh') return laneKeyFor(requirement.collection);
+				if (requirement.kind === 'refresh') {
+					if (!isReferenceCollection(requirement.collection)) {
+						return laneKeyFor(requirement.collection);
+					}
+					const sort = referenceSortFor(requirement, deps.diagnostics);
+					return sort
+						? referenceLaneQueryKey(requirement.collection, sort)
+						: referenceLaneQueryKey(requirement.collection);
+				}
 				return null;
 			})();
 			deps.onActivityChange?.(requirement.collection, 1);

@@ -8,6 +8,8 @@
  * so the storage id (uuid) and coverage id (woo-<prefix>:<wooId>) are DISTINCT — the generic keeps them separate.
  */
 
+import { wooIdOf } from '@wcpos/sync-core';
+
 import {
 	type LocalReferenceDocument,
 	referenceDocumentId,
@@ -70,6 +72,7 @@ export function createReferenceCollectionFetcher(
 			documentFromPayload: (payload) => referenceDocumentFromWooPayload(payload),
 			storageId: (document) => document.uuid, // uuid STORAGE key — for the prune kept-set
 			coverageRecordId: (document) => referenceCoverageRecordId(config, document), // Woo-id-space — DISTINCT
+			remoteId: (document) => (document.remoteId === null ? null : wooIdOf(document.remoteId)),
 			prunable: true, // reference participates in set-difference deletion; always reports prunedCount
 		},
 		input
