@@ -1,3 +1,4 @@
+/** Build the marked WCPOS ping URL from the store's WordPress REST root. */
 export function pingProbeUrl(wpAPIURL: string): string {
 	const base = wpAPIURL.endsWith('/') ? wpAPIURL : `${wpAPIURL}/`;
 	const querySeparator = wpAPIURL.includes('rest_route=') ? '&' : '?';
