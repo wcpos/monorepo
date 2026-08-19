@@ -4,6 +4,7 @@ import { Observable, of } from 'rxjs';
 import { catchError, switchMap } from 'rxjs/operators';
 
 import { useQueryRuntime } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
 import { MUTATION_QUEUE_RXDB_COLLECTION } from '@wcpos/sync-engine';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 import {
@@ -12,6 +13,8 @@ import {
 	rememberUnsentChanges,
 	type UnsentChanges,
 } from '@wcpos/utils/unsent-changes';
+
+const healthLogger = getLogger(['wcpos', 'health']);
 
 /**
  * Structural, so this module stays a leaf: importing the translations context
@@ -96,7 +99,10 @@ export async function countUnsentChanges(engine: RxdbSyncEngine): Promise<Unsent
 		rememberUnsentChanges(count === 0 ? null : count);
 		if (count === 0) return readUnsentChanges();
 		return classifyUnsentChanges(count);
-	} catch {
+	} catch (error) {
+		healthLogger.warn('Unsent-changes count probe failed; showing the cached value', {
+			context: { error: error instanceof Error ? error.message : String(error) },
+		});
 		return readUnsentChanges();
 	} finally {
 		if (deadline !== undefined) clearTimeout(deadline);

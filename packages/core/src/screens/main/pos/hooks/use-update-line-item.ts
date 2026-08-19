@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useCartStockGuard } from './use-cart-stock-guard';
@@ -204,14 +205,23 @@ export const useUpdateLineItem = () => {
 			);
 
 			if (lineItemIndex === -1) {
-				console.error('Line item not found');
+				// Unreachable through the UI (the Split link only renders on an existing
+				// line) — an invariant break, so log with a code rather than toasting.
+				cartLogger.error('Split targeted a line item that is not in the cart', {
+					code: ERROR_CODES.UNEXPECTED_ERROR,
+					context: { uuid, orderId: order.id },
+				});
 				return;
 			}
 
 			const lineItemToSplit = (order.line_items ?? [])[lineItemIndex];
 
 			if ((lineItemToSplit?.quantity ?? 0) <= 1) {
-				console.error('Line item quantity must be greater than 1');
+				// Unreachable through the UI (Split only renders when quantity > 1).
+				cartLogger.error('Split requires a line item quantity greater than 1', {
+					code: ERROR_CODES.UNEXPECTED_ERROR,
+					context: { uuid, quantity: lineItemToSplit?.quantity ?? 0, orderId: order.id },
+				});
 				return;
 			}
 

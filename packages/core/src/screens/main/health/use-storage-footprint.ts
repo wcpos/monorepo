@@ -3,10 +3,13 @@ import * as React from 'react';
 import { measureAppStorage } from '@wcpos/database';
 import { useQueryRuntime } from '@wcpos/query';
 import { siteHashFor } from '@wcpos/sync-core';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useEngineStatus } from '../hooks/use-engine-monitor';
 import { classifyStorageEntries, type StorageBreakdown } from './storage-footprint-logic';
+
+const healthLogger = getLogger(['wcpos', 'health']);
 
 export type StorageFootprintSummary = {
 	breakdown: StorageBreakdown;
@@ -58,13 +61,27 @@ export function useStorageFootprint(): StorageFootprintSummary | null {
 					if (!site.wp_api_url) continue;
 					try {
 						knownSiteHashes.add(siteHashFor(site.wp_api_url));
-					} catch {
-						// A site row without a usable url cannot own scope data.
+					} catch (error) {
+						// A site row without a usable url cannot own scope data — its bytes
+						// land in "other stores"; record which site so the bucket is explicable.
+						healthLogger.warn('Storage footprint could not hash a site url', {
+							context: {
+								siteId: site.uuid,
+								error: error instanceof Error ? error.message : String(error),
+							},
+						});
 					}
 				}
-			} catch {
+			} catch (error) {
 				// Unknown sites collapse "signed-out stores" into "other stores" —
-				// wrong bucket, never a hidden byte.
+				// wrong bucket, never a hidden byte — but the misclassification must
+				// be visible in the log pipeline.
+				healthLogger.warn(
+					'Storage footprint could not read the sites list; buckets may be misattributed',
+					{
+						context: { error: error instanceof Error ? error.message : String(error) },
+					}
+				);
 			}
 
 			const breakdown = classifyStorageEntries(footprint.entries, {

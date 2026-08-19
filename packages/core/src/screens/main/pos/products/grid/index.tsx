@@ -6,6 +6,7 @@ import { useObservableEagerState, useObservableSuspense } from 'observable-hooks
 import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import type { EngineRecord } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useGuardedExtendLimit } from '../../../../../query';
 import { ProductTile } from './product-tile';
@@ -17,6 +18,8 @@ import { TaxBasedOn } from '../../../components/product/tax-based-on';
 import { useTaxSettings } from '../../../contexts/tax-rates';
 
 import type { QueryStateActions } from '../../../../../query';
+
+const gridLogger = getLogger(['wcpos', 'pos', 'products', 'grid']);
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductHit = {
@@ -59,7 +62,7 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 	/**
 	 * Chunk flat product list into rows of N
 	 */
-	const rows = React.useMemo(() => {
+	const { rows, skippedStaleHits } = React.useMemo(() => {
 		const products = deferredResult.hits.reduce<ProductHit[]>((acc, hit) => {
 			try {
 				// Replication can briefly leave deferred hits pointing at stale RxDB docs.
@@ -68,7 +71,7 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 				void hit.record.payload.name;
 				acc.push(hit as ProductHit);
 			} catch {
-				// no-op
+				// Counted below — every hit that fails to land in `products` was skipped.
 			}
 			return acc;
 		}, []);
@@ -76,8 +79,19 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 		for (let i = 0; i < products.length; i += gridColumns) {
 			chunked.push(products.slice(i, i + gridColumns));
 		}
-		return chunked;
+		return { rows: chunked, skippedStaleHits: deferredResult.hits.length - products.length };
 	}, [deferredResult.hits, gridColumns]);
+
+	// Products vanishing from the grid during sync churn must be visible in the log
+	// pipeline (cashier-full-information ruling), even though the grid self-heals
+	// once sync catches up. One line per change, not per skipped hit.
+	React.useEffect(() => {
+		if (skippedStaleHits > 0) {
+			gridLogger.warn('Products grid skipped stale rows while sync catches up', {
+				context: { skipped: skippedStaleHits },
+			});
+		}
+	}, [skippedStaleHits]);
 
 	return (
 		<View className="flex h-full flex-col">
