@@ -93,9 +93,9 @@ export function Badge({
 
 	const displayCount = count && count > max ? `${max}+` : String(count);
 
-	return (
+		return (
 		<View className={cn(badgeVariants({ variant, size }), className)} {...props}>
-			<Text className={badgeTextVariants({ variant, size })}>{displayCount}</Text>
+			<Text className={cn(badgeTextVariants({ variant, size }), 'web:group-hover:text-inherit web:group-active:text-inherit')}>{displayCount}</Text>
 		</View>
 	);
 }
