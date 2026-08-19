@@ -3,7 +3,7 @@
  * sync('order-window-seed') persists the windowed task, sync('scheduler-drain')
  * claims it and pulls through the scripted server, orders land in the scope
  * database and the custom-pull checkpoint store advances. mode:'manual', the
- * slice-3 scripted-server style.
+ * change-signal lane's scripted-server style.
  */
 
 import { describe, expect, it, vi } from 'vitest';

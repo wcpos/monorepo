@@ -18,10 +18,10 @@
  *  - `local-only`      — no change-signal arms at all (orders: on-demand
  *                        windowed pull + the write path own that collection).
  *
- * Slice-3 arm EFFECTS are direct chunked fetch-and-upsert through the
+ * Change-signal arm EFFECTS are direct chunked fetch-and-upsert through the
  * scope-bound fetcher. The scheduler/coverage indirection the web host uses
- * for products/customers is the slice-4 fetch queue's job; these bodies are
- * package-internal and swap then without touching the descriptor surface.
+ * for products/customers is the demand-plane fetch queue's job; these bodies
+ * stay package-internal without touching the descriptor surface.
  *
  * Projections mirror the web lanes byte-for-byte (identifyRecord keys every
  * record by its server-stamped _woocommerce_pos_uuid, mintOnMissing:false —

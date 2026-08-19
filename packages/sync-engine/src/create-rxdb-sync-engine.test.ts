@@ -1,5 +1,5 @@
 /**
- * Slice-2 conformance: the scope lifecycle driven ENTIRELY through the public
+ * Scope-lifecycle conformance: driven ENTIRELY through the public
  * handle against the /testing adapters (ADR 0018: the interface is the test
  * surface — no backdoor). A→B→A switch and reset semantics are the ticket's
  * done-criterion (#427).

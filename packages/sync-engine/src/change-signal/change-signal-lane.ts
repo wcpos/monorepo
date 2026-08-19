@@ -68,7 +68,7 @@ export type ChangeSignalLaneDeps = {
 	databaseFor: (scopeId: string) => RxDatabase | null;
 	fetcher: EngineSourceFetcher;
 	syncBaseUrl: string;
-	/** Blob I/O through the slice-2 checkpoint seam (engine kv or the ports.checkpoints override). */
+	/** Blob I/O through the scope checkpoint seam (engine kv or the ports.checkpoints override). */
 	readBlob: (scopeId: string, key: string) => Promise<string | null>;
 	writeBlob: (scopeId: string, key: string, value: string) => Promise<void>;
 	connectivity: () => 'online' | 'offline' | 'degraded';

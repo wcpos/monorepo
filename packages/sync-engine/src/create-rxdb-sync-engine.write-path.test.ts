@@ -1,5 +1,6 @@
 /**
- * Slice-4 conformance (#429), through the PUBLIC handle: the write path
+ * Write-path and demand-plane conformance (#429), through the PUBLIC handle:
+ * the write path
  * (durable enqueue → drain → ack/conflict/reject events, offline-first,
  * backoff, queue survival across switch) against sync-core's fakeWriteServer,
  * and the require() demand plane (serve-local coverage, targeted pulls,

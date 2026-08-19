@@ -12,9 +12,9 @@
  *     against the fully-REQUIRED `ReplicationActionHandlers` — a new arm added
  *     in sync-core fails the build here until the descriptors produce it.
  *
- * Slice-3 arm effects are DIRECT chunked fetch-and-upsert through the
+ * Change-signal arm effects are DIRECT chunked fetch-and-upsert through the
  * scope-bound fetcher (the web host's scheduler/coverage indirection is the
- * slice-4 fetch queue; these bodies are package-internal and swap then).
+ * demand-plane fetch queue; these bodies stay package-internal).
  */
 
 import { assertBulkSuccess, mintRemoteId, remoteIdOrNull, wooIdOf } from '@wcpos/sync-core';

@@ -1,5 +1,5 @@
 /**
- * Slice-3 conformance (#428): the change-signal lane driven ENTIRELY through
+ * Change-signal lane conformance (#428): driven ENTIRELY through
  * the public handle — sync('change-signal') against a scripted HTTP fake.
  * The ticket's done-criterion: a fresh signal detected → applied → cursor
  * advanced; plus persistence (a NEW engine over the same storage resumes past
