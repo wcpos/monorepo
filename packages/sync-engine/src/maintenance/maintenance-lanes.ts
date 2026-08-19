@@ -294,7 +294,16 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				if (deps.connectivity() === 'offline') {
 					return skipped('offline');
 				}
-				if (pressureDeferredLanes.has(name)) {
+				// A FORCED census tick is an explicit cashier action ("check now" /
+				// per-row check): the rest of the manual sweep is not pressure-gated
+				// and has already run, so deferring only this lane silently breaks
+				// the button's promise (live soak, 2026-08-19 — the sweep's own
+				// traffic tripped the pressure signal and ate the forced refresh).
+				// Nine per_page=1 probes are the cheapest requests in the sweep;
+				// pressure deferral stays in force for every unforced tick.
+				const forcedCensusTick =
+					options?.forceAllCensus === true || options?.forceCensusCollection !== undefined;
+				if (pressureDeferredLanes.has(name) && !forcedCensusTick) {
 					const tickAtMs = now();
 					if (deps.isServerBackingOff?.(tickAtMs)) {
 						const previousRunAtMs = lastRanAtMs.get(name);
@@ -688,7 +697,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 							? 1
 							: laneRegistryEntry('query-total-retry').maxRequestsPerTick!,
 					...(forced !== undefined ? { forceQueryKey: censusQueryKey(forced) } : {}),
-					...(tick.forceAllCensus ? { ignoreFreshQueryKeys: censusQueryKeys } : {}),
+					...(tick.forceAllCensus
+						? { onlyQueryKeys: censusQueryKeys, ignoreFreshQueryKeys: censusQueryKeys }
+						: {}),
 				});
 				if (result.cacheEntries.length > 0) {
 					deps.emitEvent({ type: 'query-total-cache', entries: result.cacheEntries });
