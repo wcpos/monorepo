@@ -1,9 +1,11 @@
 import { http } from './use-http-client';
+import { pingProbeUrl } from './reachability-url';
 
 export async function checkWebsiteReachability(url: string): Promise<boolean> {
+	const probeUrl = pingProbeUrl(url);
 	for (const method of ['head', 'get'] as const) {
 		try {
-			await http.request({ url, method, timeout: 10000 });
+			await http.request({ url: probeUrl, method, timeout: 10000 });
 			return true;
 		} catch (error) {
 			const status =

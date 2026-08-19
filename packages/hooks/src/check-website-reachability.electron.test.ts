@@ -15,18 +15,18 @@ describe('checkWebsiteReachability', () => {
 	it('returns true when the HEAD request succeeds and sends the timeout', async () => {
 		request.mockResolvedValue({ data: null, status: 200 });
 
-		await expect(checkWebsiteReachability('https://example.com')).resolves.toBe(true);
+		await expect(checkWebsiteReachability('https://example.com/wp-json/')).resolves.toBe(true);
 		expect(request).toHaveBeenCalledWith({
-			url: 'https://example.com',
+			url: 'https://example.com/wp-json/wcpos/v2/ping?wcpos=1',
 			method: 'head',
 			timeout: 10000,
 		});
 	});
 
-	it('returns true when the server responds with a 4xx error', async () => {
-		request.mockRejectedValue({ response: { status: 405 } });
+	it('treats a 404 from an older plugin as reachable', async () => {
+		request.mockRejectedValue({ response: { status: 404 } });
 
-		await expect(checkWebsiteReachability('https://example.com')).resolves.toBe(true);
+		await expect(checkWebsiteReachability('https://example.com/wp-json/')).resolves.toBe(true);
 		expect(request).toHaveBeenCalledTimes(1);
 	});
 
@@ -36,7 +36,7 @@ describe('checkWebsiteReachability', () => {
 		// stays green while every real request fails.
 		request.mockRejectedValue({ response: { status: 502 } });
 
-		await expect(checkWebsiteReachability('https://example.com')).resolves.toBe(false);
+		await expect(checkWebsiteReachability('https://example.com/wp-json/')).resolves.toBe(false);
 		expect(request).toHaveBeenCalledTimes(2);
 	});
 
@@ -45,9 +45,9 @@ describe('checkWebsiteReachability', () => {
 			.mockRejectedValueOnce({ response: { status: 500 } })
 			.mockResolvedValueOnce({ data: null, status: 200 });
 
-		await expect(checkWebsiteReachability('https://example.com')).resolves.toBe(true);
+		await expect(checkWebsiteReachability('https://example.com/wp-json/')).resolves.toBe(true);
 		expect(request).toHaveBeenNthCalledWith(2, {
-			url: 'https://example.com',
+			url: 'https://example.com/wp-json/wcpos/v2/ping?wcpos=1',
 			method: 'get',
 			timeout: 10000,
 		});
@@ -59,9 +59,9 @@ describe('checkWebsiteReachability', () => {
 			status: 200,
 		});
 
-		await expect(checkWebsiteReachability('https://example.com')).resolves.toBe(true);
+		await expect(checkWebsiteReachability('https://example.com/wp-json/')).resolves.toBe(true);
 		expect(request).toHaveBeenNthCalledWith(2, {
-			url: 'https://example.com',
+			url: 'https://example.com/wp-json/wcpos/v2/ping?wcpos=1',
 			method: 'get',
 			timeout: 10000,
 		});
@@ -70,7 +70,7 @@ describe('checkWebsiteReachability', () => {
 	it('returns false when HEAD and GET both have a network error', async () => {
 		request.mockRejectedValue(new Error('Network Error'));
 
-		await expect(checkWebsiteReachability('https://example.com')).resolves.toBe(false);
+		await expect(checkWebsiteReachability('https://example.com/wp-json/')).resolves.toBe(false);
 		expect(request).toHaveBeenCalledTimes(2);
 	});
 });
