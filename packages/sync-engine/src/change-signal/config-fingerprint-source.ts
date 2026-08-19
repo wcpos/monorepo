@@ -1,9 +1,8 @@
 /**
  * Package-private live ConfigFingerprintSource (facade slice 3) — the config-
  * change tier (ADR 0006: settings-change staleness; a barcode-field flip with
- * no product row change must still re-derive). Ported from the web host's
- * adapter (apps/web/src/bench/configFingerprintLiveSource.ts, kept until
- * #430); one endpoint request, one snake_case→camelCase projection.
+ * no product row change must still re-derive). Ported from the lab web host's
+ * live adapter; one endpoint request, one snake_case→camelCase projection.
  */
 import type {
 	BarcodeConfigCollection,

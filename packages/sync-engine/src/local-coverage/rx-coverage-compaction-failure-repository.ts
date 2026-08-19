@@ -38,7 +38,7 @@ function fromDocument(
 	return { failedAtMs: document.failedAtMs, retryAfterMs: document.retryAfterMs };
 }
 
-/** Structural: any database carrying the coverageCompactionFailures collection (LabDatabase and engine scope dbs both satisfy it). */
+/** Structural: any database carrying the coverageCompactionFailures collection — any engine scope database satisfies it. */
 export type CoverageCompactionFailureDatabase = {
 	coverageCompactionFailures: RxCoverageCompactionFailureCollection<CoverageCompactionFailureDocument>;
 };
