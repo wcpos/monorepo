@@ -31,11 +31,6 @@ export {
 	observeEngineQuery,
 	type EngineQueryDescriptor,
 } from './engine-query';
-export {
-	declareRequirements,
-	runResetRefill,
-	requirementsForQuery,
-	type RequirementSortPart,
-} from './requirement-bridge';
+export { declareRequirements, runResetRefill } from './requirement-bridge';
 export { observeCollectionActive } from './engine-status';
 export { recoverLogsCollectionStorage } from './logs-storage-recovery';

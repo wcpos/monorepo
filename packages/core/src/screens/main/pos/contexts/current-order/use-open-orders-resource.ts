@@ -8,12 +8,16 @@ import {
 	declareRequirements,
 	engineCollectionNameFor,
 	type EngineRxDocument,
-	requirementsForQuery,
 	resolveLegacyField,
 	useQueryRuntime,
 	wrapEngineDocument,
 } from '@wcpos/query';
 import { wooMetaCarrier } from '@wcpos/sync-core';
+
+import {
+	compileQuery,
+	requirementsForCompiledQuery,
+} from '../../../../../query/query-state-translator';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type OpenOrderHit = { id: string; document: OrderDocument };
@@ -27,6 +31,17 @@ type EngineOrderCollection = {
 		$: Observable<EngineRxDocument[]>;
 	};
 };
+
+const OPEN_ORDERS_COMPILED = compileQuery(
+	'orders',
+	{
+		search: '',
+		filters: { status: 'pos-open' },
+		// This resource owns its read order; an unsupported wire sort preserves unbounded demand.
+		sort: { field: 'date_completed_gmt', direction: 'asc' },
+	},
+	{ id: 'pos:open-orders' }
+);
 
 function orderMeta(document: EngineRxDocument) {
 	const payload = (document as unknown as { payload?: Record<string, unknown> }).payload;
@@ -74,12 +89,7 @@ export function useOpenOrdersResource(
 		// Keep remote demand and the resident subscription bound to the same resource lifetime.
 		const handles = declareRequirements(
 			runtime.engine,
-			requirementsForQuery({
-				id: 'pos:open-orders',
-				collectionName: 'orders',
-				selector: { status: 'pos-open' },
-				limit: undefined,
-			}).requirements
+			requirementsForCompiledQuery(OPEN_ORDERS_COMPILED.demand, { id: 'pos:open-orders' })
 		);
 		return () => {
 			for (const handle of handles) handle.release();
