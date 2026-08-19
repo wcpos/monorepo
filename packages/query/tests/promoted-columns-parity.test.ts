@@ -1,4 +1,5 @@
 import { promotedOrderColumns, promotedProductColumns } from '@wcpos/sync-core';
+import { promotedVariationColumns } from '@wcpos/sync-engine';
 
 import { promotedColumnsFor } from '../src/engine-adapter/collection-map';
 
@@ -62,6 +63,30 @@ describe('promoted product columns parity', () => {
 			categoryIds: [3],
 			brandIds: [],
 		});
+	});
+});
+
+// Unlike products/orders, the variation map face still carries its own write fns (the
+// sync-engine projector isn't reachable from the map — it also owns parentRemoteId, which
+// the map derives separately). This pin is the drift tripwire #1308 gave the other two
+// collections: the four shared columns must agree on both faces.
+describe('promoted variation columns parity', () => {
+	it('matches the sync-engine projector for canonical Woo variation payloads', () => {
+		const payload = {
+			price: '12.345',
+			stock_status: 'instock',
+			stock_quantity: 3.6,
+			attributes: [{ id: 1, name: 'Size', option: 'Large' }],
+		};
+
+		expect(promotedColumnsFor('variations', payload)).toMatchObject(
+			promotedVariationColumns(payload)
+		);
+	});
+
+	it("treats a cleared stock quantity ('') as unmanaged (null) on both faces, never 0", () => {
+		expect(promotedVariationColumns({ stock_quantity: '' }).stockQuantity).toBeNull();
+		expect(promotedColumnsFor('variations', { stock_quantity: '' }).stockQuantity).toBeNull();
 	});
 });
 
