@@ -491,6 +491,20 @@ describe('deriveStuckRecords', () => {
 		expect(stuck[0].attempts).toBeGreaterThan(1);
 	});
 
+	it('retains the repair status for status-aware recovery guidance', () => {
+		const [stuck] = deriveStuckRecords([
+			recordRow('deleted', 300, 'failed', {
+				recordId: 812,
+				collection: 'products',
+				type: 'apply.escalation',
+				direction: 'pull',
+				status: 'deleted',
+			}),
+		]);
+
+		expect(stuck).toMatchObject({ status: 'deleted' });
+	});
+
 	it.each([
 		['push.error', 'push', true],
 		['push.in_progress', 'push', true],

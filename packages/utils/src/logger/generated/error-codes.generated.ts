@@ -11,6 +11,7 @@ export type ErrorCode =
 	| 'SYNC301'
 	| 'SYNC311'
 	| 'SYNC321'
+	| 'SYNC331'
 	| 'AUTH101'
 	| 'AUTH201'
 	| 'AUTH301'
@@ -249,6 +250,21 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 			'Review the named records and their reasons before retrying only the records that did not sync.',
 		introducedIn: '1.10.0',
 		evidence: 'spec validation set: 89 of 99',
+	},
+	SYNC331: {
+		code: 'SYNC331',
+		symbol: 'LOCAL_RECORD_DIVERGED',
+		domain: 'SYNC',
+		severity: 'warn',
+		safeAction: 'repair-local',
+		retryPolicy: 'manual',
+		dataSafety: 'no-impact',
+		escalation: 'support-with-export',
+		summary: 'This record on the device does not match your store and needs local repair.',
+		docsBody:
+			"Nothing you entered is waiting to be sent. The device's copy of a record your store owns has drifted from the store's copy; repair it according to the status shown in the log.",
+		introducedIn: '1.10.0',
+		evidence: 'monorepo: dev-pro session 2026-08-19, 138 products escalated per sweep',
 	},
 	AUTH101: {
 		code: 'AUTH101',
@@ -1065,6 +1081,7 @@ export const ERROR_CODES = {
 	SYNC_BEHIND_HEAD: 'SYNC301',
 	SCHEMA_MISMATCH: 'SYNC311',
 	SYNC_PARTIAL: 'SYNC321',
+	LOCAL_RECORD_DIVERGED: 'SYNC331',
 	SESSION_EXPIRED: 'AUTH101',
 	INSUFFICIENT_ROLE: 'AUTH201',
 	AUTH_PLUGIN_CONFLICT: 'AUTH301',

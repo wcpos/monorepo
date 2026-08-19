@@ -149,6 +149,7 @@ export type StuckRecord = {
 	attempts: number;
 	eventType: string | null;
 	direction: 'push' | 'pull' | null;
+	status?: 'changed' | 'deleted' | 'missing_stored';
 	retryable: boolean;
 };
 
@@ -184,6 +185,12 @@ export function deriveStuckRecords(rows: LogRow[]): StuckRecord[] {
 			const eventType = typeof context.type === 'string' ? context.type : null;
 			const direction =
 				context.direction === 'push' || context.direction === 'pull' ? context.direction : null;
+			const status =
+				context.status === 'changed' ||
+				context.status === 'deleted' ||
+				context.status === 'missing_stored'
+					? context.status
+					: undefined;
 			const reason =
 				typeof context.reason === 'string' && context.reason.length > 0
 					? context.reason
@@ -197,6 +204,7 @@ export function deriveStuckRecords(rows: LogRow[]): StuckRecord[] {
 				attempts: row.count ?? 1,
 				eventType,
 				direction,
+				status,
 				retryable:
 					direction === 'push' && eventType !== null && RETRYABLE_STUCK_EVENTS.has(eventType),
 			});

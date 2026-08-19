@@ -111,10 +111,24 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 							})}
 				</Text>
 				<Text className="text-muted-foreground min-w-0 flex-shrink text-sm">
-					{t('health.database.attention_reason', {
-						name: displayName,
-						reason: first.reason,
-					})}
+					{/* A pull-direction record never left the till in the first place —
+					    saying "can't upload" told cashiers their sales were stranded
+					    when the engine was only re-checking the catalogue. Only a push
+					    is an upload. */}
+					{first.status === 'deleted'
+						? t('health.database.attention_reason_delete', {
+								name: displayName,
+								reason: first.reason,
+							})
+						: first.direction === 'pull'
+							? t('health.database.attention_reason_pull', {
+									name: displayName,
+									reason: first.reason,
+								})
+							: t('health.database.attention_reason', {
+									name: displayName,
+									reason: first.reason,
+								})}
 				</Text>
 				<HStack className="items-center gap-1">
 					{fixRoute ? (

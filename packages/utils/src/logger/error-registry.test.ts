@@ -46,6 +46,7 @@ const SEED_SYMBOLS = [
 	'LOCAL_DB_SETUP_FAILED',
 	'LOCAL_DB_UNAVAILABLE',
 	'LOCAL_DB_WRITE_FAILED',
+	'LOCAL_RECORD_DIVERGED',
 	'MULTI_TAB_LIMITED',
 	'NATIVE_CRASH',
 	'OUT_OF_MEMORY',
@@ -219,6 +220,14 @@ describe('error registry', () => {
 		const guidance = entryFor('SYNC151').troubleshooting.join(' ');
 		expect(guidance).toContain('Check whether the related request ultimately succeeded');
 		expect(guidance).toContain("if it failed, follow that request's error");
+	});
+
+	it('gives status-aware repair guidance for SYNC331 tombstones', () => {
+		const entry = entryFor('SYNC331');
+		const guidance = entry.troubleshooting.join(' ');
+		expect(entry.summary).not.toContain('downloading');
+		expect(guidance).toContain('deleted record');
+		expect(guidance).toContain('must not be downloaded');
 	});
 
 	it('documents the passive SYNC411 flood alarm without implying throttling', () => {

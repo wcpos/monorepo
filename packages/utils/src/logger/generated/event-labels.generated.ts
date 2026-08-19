@@ -132,7 +132,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		type: 'apply.escalation',
 		domain: 'SYNC',
 		key: 'health.logs.event.apply_escalation',
-		label: 'An update from your store could not be saved',
+		label: 'A record on this device does not match your store',
 		introducedIn: '1.10.0',
 	},
 	'apply.pull': {
