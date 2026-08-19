@@ -104,13 +104,17 @@ describe('engine monitor hooks', () => {
 	it('counts every queued outbound record as a change waiting to send', () => {
 		// No per-collection carve-out: a stuck product edit counts exactly like a
 		// stuck sale (Paul, 2026-08-08), so the hook issues no collectionName query.
+		// That ruling is about COLLECTIONS. The status list is narrower: only work
+		// waiting on the network counts. `conflicted`/`needs-revision` wait on a
+		// human and render in their own panels, so counting them here inflated the
+		// stat and reported one record in two places at once.
 		const mutations = mutationDatabase(3, 0);
 		mockDatabase$.next(mutations.database);
 		const { result, unmount } = renderHook(() => useMutationCounts());
 
 		expect(mutations.find).toHaveBeenCalledWith({
 			selector: {
-				status: { $in: ['pending', 'claimed', 'conflicted', 'needs-revision'] },
+				status: { $in: ['pending', 'claimed'] },
 			},
 		});
 		for (const call of mutations.find.mock.calls) {

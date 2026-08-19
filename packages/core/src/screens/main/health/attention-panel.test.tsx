@@ -116,6 +116,27 @@ describe('AttentionPanel', () => {
 		);
 	});
 
+	// A pull escalation is the engine re-checking the catalogue; the record never
+	// left the till, so "can't upload" was a lie a cashier would read as "my sales
+	// are stranded". On 2026-08-19 a dev store showed 138 of them at once.
+	it('says download, not upload, for a pull-direction record', async () => {
+		mockExec.mockResolvedValue(null);
+
+		render(<AttentionPanel stuck={[{ ...stuck('products', false), direction: 'pull' }]} />);
+
+		const text = screen.getByTestId('db-attention-panel').textContent ?? '';
+		expect(text).toContain('download');
+		expect(text).not.toContain('upload');
+	});
+
+	it('still says upload for a push-direction record', () => {
+		mockExec.mockResolvedValue(null);
+
+		render(<AttentionPanel stuck={[stuck('products', true)]} />);
+
+		expect(screen.getByTestId('db-attention-panel').textContent ?? '').toContain('upload');
+	});
+
 	it('offers Retry for a retryable push failure', () => {
 		mockExec.mockResolvedValue(null);
 

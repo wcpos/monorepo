@@ -364,6 +364,29 @@ describe('createSyncLogObserver', () => {
 		expect(rows[0].context).toMatchObject({ recordId: 88, direction: 'pull' });
 	});
 
+	// The code was SYNC101 (LOCAL_DB_WRITE_FAILED: severity error, data-at-risk,
+	// contact-support) until 2026-08-19, so a routine catalogue re-check told the
+	// cashier their data might be lost — 138 products at once on a dev store.
+	// Nothing about an escalation is a local write failure, and no test pinned the
+	// code, which is how it survived. Pin it.
+	it('reports a pull escalation as a record divergence, not a local write failure', () => {
+		observer.observe(
+			event({
+				type: 'apply.escalation',
+				level: 'warn',
+				collection: 'products',
+				fields: { id: 88, status: 'changed', detector: 'hash-checksum' },
+			})
+		);
+
+		expect(rows[0]).toMatchObject({
+			level: 'warn',
+			code: 'SYNC331',
+			context: { direction: 'pull', collection: 'products', recordId: 88 },
+		});
+		expect(rows[0].code).not.toBe('SYNC101');
+	});
+
 	// Review #854: a table outcome is the SUCCESS-path outcome. A row may only wear
 	// it when the event actually succeeded, or filtering by outcome hides incidents.
 	it('derives a failed outcome from a raised level', () => {

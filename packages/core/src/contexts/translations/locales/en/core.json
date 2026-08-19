@@ -1156,6 +1156,7 @@
 	"health.database.attention_one": "1 record needs attention",
 	"health.database.attention_many": "{n} records need attention",
 	"health.database.attention_reason": "\"{name}\" can't upload — {reason}",
+	"health.database.attention_reason_pull": "\"{name}\" can't download from your store — {reason}",
 	"health.database.attention_fix": "Fix record",
 	"health.database.attention_retry": "Retry",
 	"health.database.attention_view_log": "View log ›",

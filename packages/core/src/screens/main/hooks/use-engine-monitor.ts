@@ -87,8 +87,13 @@ function subscribeToMutationCounts(
 				const mutations = database.collections[
 					MUTATION_QUEUE_RXDB_COLLECTION
 				] as unknown as MutationCollection;
+				// "Waiting to send" means exactly that: queued for the network, or in
+				// flight. `conflicted`/`needs-revision` are waiting on a HUMAN, not on
+				// the store, and each already has its own panel below the stat — so
+				// counting them here both overstated the queue and double-reported the
+				// same record in two places.
 				const pendingSelector = {
-					status: { $in: ['pending', 'claimed', 'conflicted', 'needs-revision'] },
+					status: { $in: ['pending', 'claimed'] },
 				};
 				const pending$ = mutations.find({ selector: pendingSelector }).$;
 				const conflicts$ = mutations.find({

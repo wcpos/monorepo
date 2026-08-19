@@ -233,6 +233,27 @@
 			"introducedIn": "1.10.0"
 		},
 		{
+			"code": "SYNC331",
+			"symbol": "LOCAL_RECORD_DIVERGED",
+			"domain": "SYNC",
+			"severity": "warn",
+			"safeAction": "repair-local",
+			"retryPolicy": "manual",
+			"dataSafety": "no-impact",
+			"escalation": "support-with-export",
+			"summary": "This record on the device does not match your store and needs downloading again.",
+			"docsBody": "Nothing you entered is waiting to be sent. The device's copy of a record your store owns has drifted from the store's copy, so download that record again.",
+			"troubleshooting": [
+				"Expand the log entry - its context names the collection, the record id and the detector that spotted the difference.",
+				"Run a targeted download for the affected collection so the device replaces its copy with the store's.",
+				"Compare the record in WP Admin with what the POS shows; a price or stock difference is the visible symptom.",
+				"If the same records keep reappearing after a download, export debug info and contact support - repeated escalation means the download is not resolving the difference."
+			],
+			"logSources": [],
+			"evidence": "monorepo: dev-pro session 2026-08-19, 138 products escalated per sweep",
+			"introducedIn": "1.10.0"
+		},
+		{
 			"code": "AUTH101",
 			"symbol": "SESSION_EXPIRED",
 			"domain": "AUTH",
