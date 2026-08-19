@@ -234,8 +234,7 @@ export function creatorFor(name: ResettableCollectionName): CollectionCreator {
  * Drop and recreate one collection on an engine scope database. RxDB
  * re-registers `db.<name>` as a live getter after addCollections, so
  * per-access references re-resolve; only references captured BEFORE the
- * reset go stale (the same contract as the web host's scope database —
- * apps/web/src/db/createScopeLabDatabase.ts).
+ * reset go stale (the same contract the lab web host's scope database had).
  */
 export async function resetEngineCollection(
 	db: RxDatabase,

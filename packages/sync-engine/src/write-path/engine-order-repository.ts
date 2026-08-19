@@ -50,7 +50,7 @@ type SyncCheckpointsCollection = {
 	upsert(doc: Record<string, unknown>): Promise<unknown>;
 };
 
-/** Structural: the collections the order repository touches — LabDatabase and engine scope dbs both satisfy it. */
+/** Structural: the collections the order repository touches — any engine scope database satisfies it. */
 export type OrderRepositoryDatabase = {
 	orders: OrdersCollection;
 	existenceManifestOrders: ManifestCollection;

@@ -54,7 +54,7 @@ function isRxConflict(error: unknown): boolean {
 	);
 }
 
-/** Structural: any database carrying the coverageCompactionLeases collection (LabDatabase and engine scope dbs both satisfy it). */
+/** Structural: any database carrying the coverageCompactionLeases collection — any engine scope database satisfies it. */
 export type CoverageCompactionLeaseDatabase = {
 	coverageCompactionLeases: RxCoverageCompactionLeaseCollection<CoverageCompactionLeaseDocument>;
 };
