@@ -44,11 +44,33 @@ export function syncTemplates(collection: RxCollection, httpClient: any): Promis
 			if (!Array.isArray(data)) {
 				return;
 			}
+			// parseRestResponse coerces ONE document — handed the whole array it
+			// returns it untouched, so unpruned server extras reach bulkUpsert and
+			// schema validation rejects every row. Parse per row.
 			const parse = (collection as any)?.parseRestResponse;
-			const parsed = typeof parse === 'function' ? await parse.call(collection, data) : data;
-			const rows = Array.isArray(parsed) ? parsed : [parsed];
+			const rows = await Promise.all(
+				data.map((row: any) => (typeof parse === 'function' ? parse.call(collection, row) : row))
+			);
 			if (rows.length > 0) {
-				await (collection as any).bulkUpsert(rows);
+				const result = await (collection as any).bulkUpsert(rows);
+				// bulkUpsert reports per-document failures in its result instead of
+				// throwing — surface them, or a rejected set is indistinguishable
+				// from an empty store (the receipt modal just shows no templates).
+				const errors: any[] = result?.error ?? [];
+				if (errors.length > 0) {
+					templatesLogger.error('Templates upsert rejected documents', {
+						code: ERROR_CODES.PRINT_UNEXPECTED,
+						context: {
+							rejected: errors.length,
+							total: rows.length,
+							first: {
+								documentId: errors[0]?.documentId,
+								status: errors[0]?.status,
+								validationErrors: errors[0]?.validationErrors,
+							},
+						},
+					});
+				}
 			}
 		} catch (error: any) {
 			templatesLogger.error('Failed to sync templates', {
