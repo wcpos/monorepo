@@ -196,6 +196,39 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 		await engine.dispose();
 	});
 
+	it('a gated automatic tick names the skip instead of vanishing (#1348)', async () => {
+		const captured = captureTimers();
+		const engine = engineWith({ mode: 'auto', now: () => 1_000, random: () => 0.5 });
+		const events: EngineEvent[] = [];
+		engine.events((event) => events.push(event));
+		await engine.ready;
+		await waitForAutomaticIntervals(captured.intervals);
+
+		// Hold the lifecycle gate open: pendingLifecycleOps increments synchronously
+		// when the switch enqueues, before the op itself runs.
+		const switching = engine.scope.switch({
+			site: SITE,
+			storeId: 1,
+			cashierId: 'gate-probe',
+		});
+		const before = events.length;
+		// A due lane interval firing inside the hold — the field shape that used to
+		// produce NO lane events at all (observed live 2026-08-19, flagged on #1318).
+		captured.intervals[0]!.callback();
+		const emitted = events.slice(before);
+		expect(emitted).toHaveLength(2);
+		expect(emitted[0]).toEqual({ type: 'lane-start', lane: expect.any(String) });
+		expect(emitted[1]).toEqual({
+			type: 'lane-finish',
+			lane: (emitted[0] as { lane: string }).lane,
+			status: 'skipped',
+			detail: 'lifecycle-gated',
+		});
+
+		await switching;
+		await engine.dispose();
+	});
+
 	it('arms and advances each automatic lane nextDueAtMs on fixed interval boundaries', async () => {
 		let nowMs = 1_000;
 		const captured = captureTimers();

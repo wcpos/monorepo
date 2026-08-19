@@ -1747,6 +1747,20 @@ export function createRxdbSyncEngine(
 	};
 	const automaticTickGate = createAutomaticTickGate({
 		isGated: () => pendingLifecycleOps > 0,
+		// Mirror the rebaseline-hold emission below: the gate returns before
+		// tickLaneWithEvents can run, so it must name the skip itself — a gated
+		// tick used to emit nothing at all (#1348). Deliberately NOT recordTick:
+		// a skip is not a tick, so lastTick/cadence bookkeeping stays untouched.
+		onGatedSkip: (lane) => {
+			if (lane === undefined) return;
+			emitEngineEvent({ type: 'lane-start', lane });
+			emitEngineEvent({
+				type: 'lane-finish',
+				lane,
+				status: 'skipped',
+				detail: 'lifecycle-gated',
+			});
+		},
 		connectivity: readConnectivity,
 		now: nowMs,
 		diagnostics,

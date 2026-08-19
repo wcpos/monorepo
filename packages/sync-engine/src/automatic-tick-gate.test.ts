@@ -7,8 +7,10 @@ import type { EngineConnectivity, EngineLane, SyncReport } from './create-rxdb-s
 const report = (lane: EngineLane): SyncReport => ({ lane, status: 'ran' });
 
 describe('createAutomaticTickGate', () => {
-	it('drops automatic ticks while lifecycle work is pending', async () => {
+	it('drops automatic ticks while lifecycle work is pending, and names the skip (#1348)', async () => {
 		const tickLane = vi.fn().mockResolvedValue(report('change-signal'));
+		const recordTick = vi.fn();
+		const onGatedSkip = vi.fn();
 		const gate = createAutomaticTickGate({
 			isGated: () => true,
 			connectivity: () => 'online',
@@ -16,11 +18,32 @@ describe('createAutomaticTickGate', () => {
 			diagnostics: vi.fn(),
 			onStatusChange: vi.fn(),
 			tickLane,
-			recordTick: vi.fn(),
+			recordTick,
 			seedRetickLanes: [],
+			onGatedSkip,
 		});
 		await gate.runLane('change-signal');
 		expect(tickLane).not.toHaveBeenCalled();
+		// A gated skip is announced but is NOT a tick — cadence bookkeeping stays untouched.
+		expect(onGatedSkip).toHaveBeenCalledExactlyOnceWith('change-signal');
+		expect(recordTick).not.toHaveBeenCalled();
+	});
+
+	it('does not announce a gated skip when the gate is open', async () => {
+		const onGatedSkip = vi.fn();
+		const gate = createAutomaticTickGate({
+			isGated: () => false,
+			connectivity: () => 'online',
+			now: () => 0,
+			diagnostics: vi.fn(),
+			onStatusChange: vi.fn(),
+			tickLane: vi.fn().mockResolvedValue(report('change-signal')),
+			recordTick: vi.fn(),
+			seedRetickLanes: [],
+			onGatedSkip,
+		});
+		await gate.runLane('change-signal');
+		expect(onGatedSkip).not.toHaveBeenCalled();
 	});
 
 	it('records the tick with its start time', async () => {
