@@ -249,7 +249,14 @@ function assembleCustomPullOrderDocument(document: OrderDocument): OrderDocument
 	// envelope remoteId could record a correct payload under the wrong order or clobber a queued
 	// local mutation. Owning both from the payload keeps the document internally consistent.
 	const assembled = materializeLocalOnly(document.payload).storedDocument;
-	return { ...assembled, sync: document.sync, local: document.local };
+	// Assign in place instead of spreading: the existence-manifest row rides on a
+	// non-enumerable Symbol that materializeLocalOnly attaches to the document, and an
+	// object spread drops it — which starved the order manifest for every custom-pull
+	// order (the payload's _rxdb_digest is already stripped by then, so the repository's
+	// fallback finds nothing either).
+	assembled.sync = document.sync;
+	assembled.local = document.local;
+	return assembled;
 }
 
 /**
