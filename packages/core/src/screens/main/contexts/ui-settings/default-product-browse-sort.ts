@@ -1,7 +1,6 @@
-import { wooOrderbyFor } from '@wcpos/query';
+import { sortAliasFor, wooOrderbyFor } from '@wcpos/query';
 import type { ProductBrowseDimensions } from '@wcpos/sync-engine';
 
-import { normalizeQuerySortField } from '../../../../query/query-state-translator';
 import initialSettings from './initial-settings.json';
 
 export type DefaultProductBrowseSort = {
@@ -23,7 +22,10 @@ export type DefaultProductBrowseSort = {
  */
 export function defaultProductBrowseSort(): DefaultProductBrowseSort | undefined {
 	const { sortBy, sortDirection } = initialSettings['pos-products'];
-	const orderby = wooOrderbyFor('products', normalizeQuerySortField('products', sortBy) ?? sortBy);
+	// Inline normalizeQuerySortField's products arm (alias ?? field) — importing
+	// the translator would drag core's React-side graph into the host's module
+	// scope, which jest-expo's winter runtime refuses (the #1376 CI failure).
+	const orderby = wooOrderbyFor('products', sortAliasFor('products', sortBy) ?? sortBy);
 	if (!orderby) return undefined;
 	return { orderby, order: sortDirection === 'desc' ? 'desc' : 'asc' };
 }

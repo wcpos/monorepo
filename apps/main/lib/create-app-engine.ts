@@ -30,7 +30,10 @@ import type {
 	ScopedWriteOutcomeBridge,
 	StoreScopeIdentity,
 } from '@wcpos/sync-engine';
-import { defaultProductBrowseSort } from '@wcpos/core/screens/main/contexts/ui-settings';
+// Deep import ON PURPOSE: the ui-settings barrel carries the React provider
+// graph, which jest-expo's winter runtime refuses to require from this host
+// module. The helper file itself is dependency-light (JSON + @wcpos/query).
+import { defaultProductBrowseSort } from '@wcpos/core/screens/main/contexts/ui-settings/default-product-browse-sort';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { Platform } from '@wcpos/utils/platform';
