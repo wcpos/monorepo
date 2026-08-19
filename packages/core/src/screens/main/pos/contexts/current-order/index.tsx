@@ -105,14 +105,13 @@ export function CurrentOrderProvider({
 	 * Kept current so `getCurrentOrder()` can resolve the order at event time without anyone
 	 * having to subscribe to it.
 	 *
-	 * Updated in an effect, not during render — react-compiler forbids touching a ref while
-	 * rendering, and the effect is sufficient here: the ref is seeded with the first order at
-	 * mount, and every consumer reads it from an event handler, which cannot run before the
-	 * commit that rendered it. So the value a handler sees is always the one from its own
-	 * commit or newer.
+	 * Updated in a LAYOUT effect — react-compiler forbids touching a ref while rendering,
+	 * and the write must be commit-synchronous: subscription callbacks (e.g. the hardware
+	 * barcode scan) can fire after the commit that switched orders but before passive
+	 * effects flush, and a passive-effect write would hand them the previous order (#1294).
 	 */
 	const currentOrderRef = React.useRef(currentOrder);
-	React.useEffect(() => {
+	React.useLayoutEffect(() => {
 		currentOrderRef.current = currentOrder;
 	}, [currentOrder]);
 
