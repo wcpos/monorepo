@@ -576,6 +576,14 @@ export function RefundOrderForm({ order }: Props) {
 	);
 }
 
+/**
+ * Deliberately NOT @wcpos/order-math's `refundValue`: this form needs the SIGNED
+ * display string (embedded order.refunds[] rows carry negative totals; full refund
+ * documents carry positive amounts), and it prefers `total` because that is the
+ * signed spelling when both exist. `refundValue` is the positive-magnitude rule
+ * for sums and deductions — converting this site would flip the sign in the
+ * refund modal. Owner-ruled 2026-08-19 (post-review audit follow-up).
+ */
 function normalizeRefundDetails(refunds: RefundDetail[]): RefundDetail[] {
 	return refunds.map((refund) => {
 		const total = refund.total ?? refund.amount;
