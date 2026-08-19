@@ -310,7 +310,12 @@ jobs:
             # Spec-only PR: run exactly the specs it touched. Same single
             # alternation regex shape as the shard plan below — never a word
             # list, for the same reason (see the quoting note).
-            SPECS=$(printf '%s' "$ONLY_SPECS" | tr ' ' '|')
+            # Escape the dots before joining: unescaped, `products.spec.ts`
+            # would also match `productsXspecYts`, and a filter that matches
+            # nothing still exits 0 (greptile, #1327). The classifier already
+            # restricts basenames to [A-Za-z0-9._-], so `.` is the only
+            # metacharacter that can appear.
+            SPECS=$(printf '%s' "$ONLY_SPECS" | sed 's/\./\\./g' | tr ' ' '|')
             echo "::notice title=E2E narrowed to the changed specs::This PR changes only spec files, which cannot affect other specs. Running: $SPECS"
           else
             SPECS=$(node scripts/e2e-shard-plan.js "${{ matrix.shardIndex }}" "${{ matrix.shardTotal }}")
