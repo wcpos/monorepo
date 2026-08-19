@@ -60,8 +60,8 @@ export function resetRefillRequirements(collectionNames: string[]): EngineRequir
 	);
 	const requirements: EngineRequirement[] = [];
 	// Reset refill is the one path that must beat the dedupe window: the local collection was
-	// just wiped, so serving "recently refreshed" residents would serve nothing. The UI
-	// Compiled UI demand deliberately drops `forceRefresh` (#952), so
+	// just wiped, so serving "recently refreshed" residents would serve nothing. Compiled UI
+	// demand deliberately drops `forceRefresh` (#952), so
 	// the refill declares its own forced refresh per reset reference collection.
 	for (const collection of REFERENCE_ENGINE_COLLECTIONS) {
 		if (!resetEngineCollections.has(collection)) continue;

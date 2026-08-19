@@ -1,21 +1,8 @@
 import type { EngineRequirement, RequirementHandle } from '@wcpos/sync-engine';
 
 import { declareRequirements } from '../src/requirement-bridge';
-import { createEngineDatabase } from '../src/testing';
-
-import type { RxDatabase } from 'rxdb';
 
 describe('declareRequirements', () => {
-	let database: RxDatabase;
-
-	beforeEach(async () => {
-		database = await createEngineDatabase();
-	});
-
-	afterEach(async () => {
-		await database.close();
-	});
-
 	it('declares requirement objects and swallows search rejections', async () => {
 		const searchHandle: RequirementHandle = {
 			ready: Promise.reject(new Error('offline')),
