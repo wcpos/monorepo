@@ -213,6 +213,42 @@ test('E2E scope narrowing cannot silently drop coverage', () => {
 	assert.deepEqual([...workflow.jobs.e2e.needs].sort(), ['changes', 'deploy']);
 });
 
+test('E2E declares store-health probes and a bounded worker count', () => {
+	// 2026-08-19: concurrent runs saturated the shared dev store's PHP pool and
+	// every gate went red at global-setup. The stores are deliberately sized like
+	// a normal shop, so CI is what gives — and when it still saturates, the run
+	// must SAY so rather than let environmental reds read as broken diffs.
+	const steps = readWorkflow('deploy.yml').jobs.e2e.steps;
+	const probes = steps.filter((step) => /Probe store health/.test(step.name ?? ''));
+
+	assert.equal(probes.length, 2, 'expected a pre-flight and a post-failure store probe');
+	for (const probe of probes) {
+		assert.match(probe.run, /probe-store-health\.mjs/);
+		// Reporting must never gate the run.
+		assert.equal(probe['continue-on-error'], true);
+	}
+	assert.ok(
+		probes.some((probe) => probe.if === 'failure()'),
+		'no post-failure store probe — a store that saturates mid-run would go unrecorded'
+	);
+	const preFlight = probes.find((probe) => probe.if !== 'failure()');
+	const postFailure = probes.find((probe) => probe.if === 'failure()');
+	assert.ok(preFlight && postFailure, 'expected both probe phases');
+	assert.equal(postFailure.env.E2E_STORE_URL_FREE, preFlight.env.E2E_STORE_URL_FREE);
+	assert.match(postFailure.run, /probe-store-health\.mjs.*E2E_STORE_URL_FREE/);
+	assert.match(preFlight.run, /before the tests started/);
+	assert.match(postFailure.run, /after the tests failed/);
+
+	// Workers per shard multiply against shard count and concurrent runs.
+	const config = readFileSync(new URL('../apps/main/playwright.config.ts', import.meta.url), 'utf8');
+	const workers = /workers:[\s\S]{0,200}?process\.env\.CI\s*\n?\s*\?\s*(\d+)/.exec(config);
+	assert.ok(workers, 'could not read the CI worker count from playwright.config.ts');
+	assert.ok(
+		Number(workers[1]) <= 2,
+		`CI workers per shard is ${workers[1]}; >2 saturated the shared store on 2026-08-19`
+	);
+});
+
 test('the deploy concurrency contract isolates stale rerun attempts', () => {
 	const workflow = readWorkflow('deploy.yml');
 
