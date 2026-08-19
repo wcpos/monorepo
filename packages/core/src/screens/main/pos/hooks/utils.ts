@@ -94,33 +94,6 @@ const normalizeLineItemImage = (
 };
 
 /**
- * Get tax status from fee line meta data
- *
- * @TODO - default is 'taxable', is this correct?
- */
-export const getTaxStatusFromMetaData = (metaData: CartLine['meta_data']) => {
-	if (!Array.isArray(metaData)) {
-		posLogger.error('metaData is not an array', {
-			code: ERROR_CODES.CHECKOUT_UNEXPECTED,
-			context: {
-				metaData,
-			},
-		});
-		return;
-	}
-	const taxStatusMetaData = metaData.find((meta) => meta.key === '_woocommerce_pos_tax_status');
-	return (taxStatusMetaData?.value ?? 'taxable') as 'taxable' | 'none' | 'shipping';
-};
-
-/**
- *
- */
-export function findByMetaDataUUID(items: CartLine[], uuid: string): CartLine | null {
-	const item = items.find((item) => wooMetaCarrier.lineUuid(item) === uuid);
-	return item || null;
-}
-
-/**
  * Counts the occurrences of a product variation in the order's line items.
  */
 export const findByProductVariationID = (

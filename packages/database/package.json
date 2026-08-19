@@ -23,7 +23,7 @@
     "lint:fix": "eslint src --ext .js,.jsx,.ts,.tsx --fix"
   },
   "peerDependencies": {
-    "expo-file-system": "~57.0.1"
+    "expo-file-system": "~57.0.4"
   },
   "dependencies": {
     "@wcpos/sync-core": "workspace:*",
@@ -36,12 +36,12 @@
     "rxdb": "17.4.0",
     "rxdb-premium": "17.4.0",
     "rxjs": "7.8.2",
-    "uuid": "^14.0.0"
+    "uuid": "^14.0.1"
   },
   "devDependencies": {
-    "@faker-js/faker": "^10.5.0",
+    "@faker-js/faker": "^10.6.0",
     "@types/jest": "^30.0.0",
-    "@types/lodash": "^4.17.24",
+    "@types/lodash": "^4.17.25",
     "flexsearch": "0.7.43",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.12"

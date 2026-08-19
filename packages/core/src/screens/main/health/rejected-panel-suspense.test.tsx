@@ -27,8 +27,7 @@ import { useRejectedMutations } from './use-rejected-mutations';
 let engineStub: unknown;
 
 jest.mock('@wcpos/query', () => ({
-	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
-	resolveLegacyField: jest.requireActual('@wcpos/query').resolveLegacyField,
+	WRITEABLE_REMOTE_ID_FIELD: jest.requireActual('@wcpos/query').WRITEABLE_REMOTE_ID_FIELD,
 	useQueryRuntime: () => ({ engine: engineStub }),
 }));
 

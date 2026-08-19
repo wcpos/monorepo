@@ -4,8 +4,8 @@ import { Platform, View } from 'react-native';
 import { useIsFocused } from 'expo-router/react-navigation';
 import { BlurTargetView } from 'expo-blur';
 
+import { useAppInfo } from '../../../hooks/use-app-info';
 import { ProAccessProvider } from '../contexts/pro-access';
-import { useLicense } from '../hooks/use-license';
 import { ProPreviewOverlay } from './pro-preview-overlay';
 
 type ProPage = 'products' | 'orders' | 'coupons' | 'customers' | 'reports';
@@ -15,7 +15,8 @@ export const withProAccess = <P extends object>(
 	page: ProPage
 ) => {
 	function ProAccessWrapper(props: P) {
-		const { isPro } = useLicense();
+		const { license } = useAppInfo();
+		const isPro = license?.isPro ?? false;
 		const isFocused = useIsFocused();
 		const [overlayKey, setOverlayKey] = React.useState(0);
 		const blurTargetRef = React.useRef(null);

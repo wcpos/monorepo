@@ -2,7 +2,7 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { from, Observable, of } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
 
-import { COLLECTION_VOCABULARY, resolveLegacyField, useQueryRuntime } from '@wcpos/query';
+import { useQueryRuntime, WRITEABLE_REMOTE_ID_FIELD } from '@wcpos/query';
 import { MUTATION_QUEUE_RXDB_COLLECTION, rejectionSuggestsServerRecord } from '@wcpos/sync-engine';
 import type { EngineConflict, RxdbSyncEngine } from '@wcpos/sync-engine';
 import { remoteIdOrNull } from '@wcpos/sync-core';
@@ -69,11 +69,7 @@ export type RejectedMutation = {
  * derived exactly like `usePushDocument` derives it: the legacy `id` field's
  * engine path. A resident with no value there has never existed server-side.
  */
-const REMOTE_ID_FIELD = Object.fromEntries(
-	Object.entries(COLLECTION_VOCABULARY)
-		.filter(([, row]) => row.writeable)
-		.map(([name, row]) => [name, resolveLegacyField(row.legacyName, 'id').enginePath])
-) as Record<string, string | undefined>;
+const REMOTE_ID_FIELD: Record<string, string | undefined> = WRITEABLE_REMOTE_ID_FIELD;
 
 type EngineDatabase = NonNullable<ReturnType<RxdbSyncEngine['active']>>['database'];
 type MutationRow = EngineConflict | { toJSON(): EngineConflict };

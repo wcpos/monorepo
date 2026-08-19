@@ -59,6 +59,11 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       src: ${{ steps.filter.outputs.src }}
+      # false when the diff is comments/docs only — nothing executable changed.
+      behavioural: ${{ steps.scope.outputs.behavioural }}
+      # Spec files whose behaviour this PR can actually have changed, when that
+      # set is knowable. Empty string = run everything.
+      only_specs: ${{ steps.scope.outputs.only_specs }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -79,11 +84,24 @@ jobs:
               - 'package.json'
               - 'pnpm-lock.yaml'
 
+      # Run only what the diff can have broken. Comments/docs-only PRs skip
+      # deploy and E2E outright (comments are stripped before anything runs);
+      # spec-only PRs run just those specs (a spec is a leaf — nothing imports
+      # it). Anything else runs the full suite. Ambiguity always resolves to
+      # "run everything" — see scripts/e2e-change-scope.mjs.
+      - name: 🎯 Scope E2E to the change
+        id: scope
+        # The PR's base SHA, not a branch name: a PR checkout does not reliably
+        # have other branches' refs, and a missing ref makes the script fall back
+        # to "run everything" — safe, but it would silently never narrow.
+        # Push builds have no base SHA and always run the full suite.
+        run: node scripts/e2e-change-scope.mjs "${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+
   deploy:
     name: 🚀 Deploy
     runs-on: ubuntu-latest
     needs: changes
-    if: github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || needs.changes.outputs.src == 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+    if: github.actor != 'dependabot[bot]' && needs.changes.outputs.behavioural != 'false' && (github.event_name != 'pull_request' || needs.changes.outputs.src == 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
     outputs:
       deployment_url: ${{ steps.get-url.outputs.url }}
       is_production: ${{ steps.get-url.outputs.is_production }}
@@ -170,7 +188,7 @@ jobs:
   # reintroduce a cross-run mutex here.
   e2e:
     name: 🎭 E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
-    needs: deploy
+    needs: [changes, deploy]
     if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -183,8 +201,12 @@ jobs:
         # traffic is below the old two-shard baseline. Cross-run safety stays
         # the specs' job (run-private probes); cashier slots 1-16 exist on
         # every dev store.
-        shardIndex: ${{ fromJSON('[1, 2, 3, 4]') }}
-        shardTotal: ${{ fromJSON('[4]') }}
+        # A narrowed (spec-only) run uses ONE shard on purpose. Splitting two
+        # spec files across four shards would leave shards with nothing to run,
+        # and a shard that runs zero tests still exits 0 — a green that means
+        # nothing. One shard cannot produce that.
+        shardIndex: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || '[1, 2, 3, 4]') }}
+        shardTotal: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || '[4]') }}
     steps:
       - name: 🏗 Setup repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -197,6 +219,41 @@ jobs:
         with:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+
+      - name: 📅 Cache date
+        id: cache-date
+        run: echo "today=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: 💾 Cache E2E auth state
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          # ONLY the encrypted archive is ever cached: the snapshot embeds the
+          # cashier's access + refresh tokens and this repo is public, so the
+          # plaintext state must never reach the Actions cache (review on
+          # #1297). Forks have no E2E_AUTH_CACHE_KEY — they skip decryption and
+          # pay full auth, which is also their secretless status quo.
+          #
+          # globalSetup validates a restored state by booting the app from it
+          # AND observing an authenticated 2xx from the store, falling back to
+          # full re-auth otherwise — the cache saves time, never poisons runs.
+          # Day-keyed so same-day runs hit the exact key and skip re-saving
+          # (bounds generations); restore-keys still serve older states, gated
+          # by the same validation.
+          path: apps/main/e2e/auth-state.enc
+          key: e2e-auth-v2-${{ runner.os }}-${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'next' || 'main' }}-shard${{ matrix.shardIndex }}-${{ steps.cache-date.outputs.today }}
+          restore-keys: |
+            e2e-auth-v2-${{ runner.os }}-${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'next' || 'main' }}-shard${{ matrix.shardIndex }}-
+
+      - name: 🔓 Decrypt cached auth state
+        if: env.E2E_AUTH_CACHE_KEY != ''
+        env:
+          E2E_AUTH_CACHE_KEY: ${{ secrets.E2E_AUTH_CACHE_KEY }}
+        working-directory: apps/main
+        run: |
+          if [ -f e2e/auth-state.enc ]; then
+            mkdir -p e2e/.auth-state
+            openssl enc -d -aes-256-cbc -pbkdf2 -k "$E2E_AUTH_CACHE_KEY" -in e2e/auth-state.enc | tar -x -C e2e/.auth-state || rm -rf e2e/.auth-state
+          fi
 
       - name: 💾 Cache Playwright browsers
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
@@ -238,6 +295,21 @@ jobs:
           echo "❌ Deployment health check failed after 30 attempts"
           exit 1
 
+      # Saturated stores produce failures that look exactly like broken diffs.
+      # Measure BEFORE the tests so the annotation is already on the run when
+      # someone reads the reds (2026-08-19: a saturated dev-pro sent a whole
+      # night of gates red and the reds read as ordinary test failures).
+      - name: 🌡 Probe store health (pre-flight)
+        continue-on-error: true
+        env:
+          E2E_STORE_URL_PRO: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}
+          E2E_STORE_URL_FREE: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-free.wcpos.com' }}
+        run: |
+          node scripts/probe-store-health.mjs "$E2E_STORE_URL_PRO" "pro store" "before the tests started"
+          if [ -n "$E2E_STORE_URL_FREE" ] && [ "$E2E_STORE_URL_FREE" != "$E2E_STORE_URL_PRO" ]; then
+            node scripts/probe-store-health.mjs "$E2E_STORE_URL_FREE" "free store" "before the tests started"
+          fi
+
       - name: 🧪 Run E2E tests (shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
         id: e2e-tests
         # Not `--shard`: that splits by TEST COUNT, which on run 31429108622 gave
@@ -248,8 +320,17 @@ jobs:
         # it fails loudly if the plan is not a clean partition.
         run: |
           cd apps/main
-          SPECS=$(node scripts/e2e-shard-plan.js "${{ matrix.shardIndex }}" "${{ matrix.shardTotal }}")
-          echo "Shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }} running: $SPECS"
+          ONLY_SPECS='${{ needs.changes.outputs.only_specs }}'
+          if [ -n "$ONLY_SPECS" ]; then
+            # Spec-only PR: run exactly the specs it touched. Same single
+            # alternation regex shape as the shard plan below — never a word
+            # list, for the same reason (see the quoting note).
+            SPECS=$(printf '%s' "$ONLY_SPECS" | tr ' ' '|')
+            echo "::notice title=E2E narrowed to the changed specs::This PR changes only spec files, which cannot affect other specs. Running: $SPECS"
+          else
+            SPECS=$(node scripts/e2e-shard-plan.js "${{ matrix.shardIndex }}" "${{ matrix.shardTotal }}")
+            echo "Shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }} running: $SPECS"
+          fi
           # QUOTED: this is one alternation regex, not a word list. Unquoted, the
           # shell would split it and Playwright ANDs multiple filters — matching
           # nothing, and a shard that runs zero tests still exits 0.
@@ -286,6 +367,33 @@ jobs:
           E2E_CASHIER_PASS: ${{ secrets.E2E_CASHIER_PASS }}
           E2E_PRODUCT_WRITER_USER: ${{ secrets.E2E_PRODUCT_WRITER_USER }}
           E2E_PRODUCT_WRITER_PASS: ${{ secrets.E2E_PRODUCT_WRITER_PASS }}
+
+      - name: 🔐 Encrypt auth state for cache
+        if: always() && env.E2E_AUTH_CACHE_KEY != ''
+        env:
+          E2E_AUTH_CACHE_KEY: ${{ secrets.E2E_AUTH_CACHE_KEY }}
+        working-directory: apps/main
+        run: |
+          if [ -d e2e/.auth-state ]; then
+            tar -c -C e2e/.auth-state . | openssl enc -aes-256-cbc -pbkdf2 -k "$E2E_AUTH_CACHE_KEY" -out e2e/auth-state.enc
+          fi
+          # The plaintext must never reach the cache post-step or artifacts.
+          rm -rf e2e/.auth-state
+
+      # Same probe again on failure: a store that was healthy at the start can
+      # be saturated by the time the run fails, and that distinction is the
+      # difference between "your diff" and "the queue".
+      - name: 🌡 Probe store health (after failure)
+        if: failure()
+        continue-on-error: true
+        env:
+          E2E_STORE_URL_PRO: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}
+          E2E_STORE_URL_FREE: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-free.wcpos.com' }}
+        run: |
+          node scripts/probe-store-health.mjs "$E2E_STORE_URL_PRO" "pro store (post-failure)" "after the tests failed"
+          if [ -n "$E2E_STORE_URL_FREE" ] && [ "$E2E_STORE_URL_FREE" != "$E2E_STORE_URL_PRO" ]; then
+            node scripts/probe-store-health.mjs "$E2E_STORE_URL_FREE" "free store (post-failure)" "after the tests failed"
+          fi
 
       - name: 📊 Upload blob report
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0

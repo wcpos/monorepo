@@ -1,10 +1,8 @@
 /**
- * The write plane's intent layer (facade slice 4): `write(intent)` durable-
- * enqueue semantics per ADR 0018 — resolves when the mutation is IN the
- * per-scope queue, never when pushed; push outcomes are events. Ports the web
- * host's order write-intent semantics (apps/web/src/db/orderWriteIntents.ts,
- * kept until #430) behind the descriptor write facet, so the facade's
- * dispatch is the engine-internal analogue of createRegistryWriteReconcile.
+ * The write plane's intent layer: `write(intent)` durable-enqueue semantics
+ * per ADR 0018 — resolves when the mutation is IN the per-scope queue, never
+ * when pushed; push outcomes are events. Ports the lab web host's order
+ * write-intent semantics behind the descriptor write facet.
  *
  * Only collections whose descriptor carries a `write` facet are writeable —
  * orders, products, variations, customers, and coupons today. `write()` on

@@ -3,7 +3,7 @@ import { Subject } from 'rxjs';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { StoreCollections, storeCollections, syncCollections } from '../collections';
+import { StoreCollections, storeCollections } from '../collections';
 
 import type { RxCollection, RxPlugin } from 'rxdb';
 
@@ -33,25 +33,22 @@ const pendingReAdditions = new Set<string>();
  * Collections created by other plugins (e.g., FlexSearch) are excluded.
  */
 const managedStoreCollections = new Set(Object.keys(storeCollections));
-const managedSyncCollections = new Set(Object.keys(syncCollections));
 
 /**
  * Check if a collection is managed by this plugin.
  * Returns false for collections created by other plugins (e.g., FlexSearch indexes).
+ * (The fast_store branch left with fastStoreDB — no fast_store database can be
+ * created any more.)
  */
 function isManagedCollection(collectionName: string, databaseName: string): boolean {
-	if (databaseName.startsWith('fast_store')) {
-		return managedSyncCollections.has(collectionName);
-	}
 	if (databaseName.startsWith('store')) {
 		return managedStoreCollections.has(collectionName);
 	}
 	return false;
 }
 
-// Subjects for emitting reset events
+// Subject for emitting reset events
 const storeReset = new Subject<RxCollection>();
-const syncReset = new Subject<RxCollection>();
 
 /**
  * Reset Collection Plugin
@@ -61,7 +58,7 @@ const syncReset = new Subject<RxCollection>();
  *
  * Features:
  * - Attaches `reset$` observable to databases for subscribers to react
- * - Only manages collections defined in storeCollections/syncCollections
+ * - Only manages collections defined in storeCollections
  * - Ignores collections created by other plugins (e.g., FlexSearch indexes)
  *
  * Usage:
@@ -87,12 +84,7 @@ export const resetCollectionPlugin: RxPlugin = {
 		createRxDatabase: {
 			after: ({ database }) => {
 				// Attach reset$ observable based on database type
-				if (database.name.startsWith('fast_store')) {
-					database.reset$ = syncReset.asObservable();
-					resetLogger.debug('Attached reset$ to sync database', {
-						context: { database: database.name },
-					});
-				} else if (database.name.startsWith('store')) {
+				if (database.name.startsWith('store')) {
 					database.reset$ = storeReset.asObservable();
 					resetLogger.debug('Attached reset$ to store database', {
 						context: { database: database.name },
@@ -194,28 +186,7 @@ export const resetCollectionPlugin: RxPlugin = {
 				}
 
 				try {
-					if (database.name.startsWith('fast_store')) {
-						const schema = syncCollections[collectionName as keyof typeof syncCollections];
-						if (!schema) {
-							resetLogger.error('No schema found for sync collection', {
-								showToast: false,
-								code: ERROR_CODES.SCHEMA_MISMATCH,
-								context: {
-									collection: collectionName,
-								},
-							});
-							return;
-						}
-
-						const cols = await database.addCollections({
-							[collectionName]: schema,
-						});
-
-						syncReset.next(cols[collectionName]);
-						resetLogger.debug('Sync collection re-added and emitted reset$', {
-							context: { collection: collectionName },
-						});
-					} else if (database.name.startsWith('store')) {
+					if (database.name.startsWith('store')) {
 						const schema = storeCollections[collectionName as keyof StoreCollections];
 						if (!schema) {
 							resetLogger.error('No schema found for store collection', {

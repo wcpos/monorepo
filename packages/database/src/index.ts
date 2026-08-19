@@ -14,7 +14,7 @@ export { clearAllDB } from './clear-all-db';
 export { measureAppStorage } from './measure-storage';
 export type { StorageFootprint, StorageFootprintEntry } from './measure-storage';
 export {
-	SCOPE_DATABASE_NAME_ANYWHERE,
+	containsScopeDatabaseName,
 	isLegacyAppDatabaseName,
 	isStoreDatabaseName,
 	isFastStoreDatabaseName,
@@ -57,8 +57,6 @@ export type {
 	StoreCollections,
 	StoreDatabase,
 	StoreDocument,
-	SyncCollection,
-	SyncDocument,
 	TaxRateDocument,
 	TemplateDocument,
 	UserDatabase,

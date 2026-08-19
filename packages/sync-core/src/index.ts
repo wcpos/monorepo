@@ -29,8 +29,10 @@ export {
 // prettier-ignore
 export { pushEndpointResolver, pushRecordMutation, reconcileCreateAck, WOO_REST_CANNOT_DELETE } from './recordPushAdapter';
 // prettier-ignore
+export { FLEXSEARCH_MIN_TERM_LENGTH } from './searchIndexConfig';
 export {
 	canonicalSiteKey,
+	containsScopeDatabaseName,
 	scopeDatabaseName,
 	scopeKeyFor,
 	siteHashFor,

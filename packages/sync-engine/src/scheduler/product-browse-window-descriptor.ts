@@ -22,7 +22,7 @@ import type { ProductBrowseDimensions } from '../require-plane';
  *    sort): plausible-looking, silently wrong data. The window now carries `orderby`/
  *    `order`, so a non-default sort RE-SEEDS a server-sorted window. Only sorts inside the
  *    supported products `orderby` enum are expressible; the rest fall back to the default
- *    window (the caller maps them — see requirementsForQuery).
+ *    window (the compiled query demand face maps them).
  *  - **Size.** The window grows with the grid's limit (infinite scroll) in
  *    {@link PRODUCT_BROWSE_WINDOW_STEP} steps, quantized so a 10-row scroll tick does not
  *    mint a new coverage lane every time. It does NOT stop. The old

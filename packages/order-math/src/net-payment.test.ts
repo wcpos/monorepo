@@ -1,4 +1,27 @@
-import { getNetPaymentTotal } from './net-payment';
+import { getNetPaymentTotal, refundValue } from './net-payment';
+
+// --- one rule for what a refund is worth ---
+
+describe('refundValue', () => {
+	it('prefers amount over total and returns a positive number', () => {
+		expect(refundValue({ amount: '7', total: '-10' })).toBe(7);
+		expect(refundValue({ total: '-10' })).toBe(10);
+		expect(refundValue({ amount: null, total: '-3.5' })).toBe(3.5);
+		expect(refundValue({ total: 'abc' })).toBe(0);
+	});
+
+	// The POS cart footer displays refunds row-by-row and then deducts a total.
+	// Before #1267's follow-up the rows used `total` while the deduction used the
+	// shared rule, so a refund carrying `amount` made the footer's Net Payment
+	// disagree with the Pay button on the same screen.
+	it('makes displayed rows sum to exactly what getNetPaymentTotal deducts', () => {
+		const refunds = [{ amount: '7', total: '-10' }, { total: '-5' }];
+		const rowSum = refunds.reduce((sum, refund) => sum + refundValue(refund), 0);
+
+		expect(rowSum).toBe(12);
+		expect(getNetPaymentTotal('100', refunds)).toBe(100 - rowSum);
+	});
+});
 
 // --- spec-prescribed cases ---
 

@@ -55,6 +55,7 @@ export function useStorageFootprint(): StorageFootprintSummary | null {
 			try {
 				const sites = await userDB.sites.find().exec();
 				for (const site of sites) {
+					if (!site.wp_api_url) continue;
 					try {
 						knownSiteHashes.add(siteHashFor(site.wp_api_url));
 					} catch {

@@ -1,7 +1,6 @@
 /**
- * The engine's maintenance lanes (slice 5d, #430 phase 1): the four
- * registry-free loops the web host previously assembled in mountWebSyncHost
- * (lanes 4–7) run inside the engine —
+ * The engine's maintenance lanes: the registry-free loops the lab web host
+ * once assembled outside the engine now run inside it —
  *
  *  - ORDER OPEN-RECENT WINDOW SEED: orders aren't covered by the change
  *    signal, so the open/recent window is re-seeded on an interval (windowed
@@ -725,6 +724,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		return { summary: `Product trickle: page ${result.page}, ${result.rows} products` };
 	});
 	const variationPrefetch = lane('variation-prefetch', async (db, scopeId, signal, fetcher) => {
+		if (!deps.isWritePlaneOwner()) {
+			return { summary: null, status: 'skipped', reason: 'not-write-plane-owner' };
+		}
 		const barcodeSelectors: BarcodeSelectorsReader | undefined =
 			deps.barcodeSelectorsFor === undefined
 				? undefined

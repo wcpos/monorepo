@@ -2,6 +2,7 @@ import toNumber from 'lodash/toNumber';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import { getNetPaymentTotal, refundValue } from '@wcpos/order-math';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
@@ -72,10 +73,8 @@ export function Totals() {
 	const hasCoupons = coupon_lines.length > 0;
 	const hasRefunds = Boolean(refunds && refunds.length > 0);
 	const hasTotals = hasSubtotal || hasCoupons || hasShipping || hasFee || hasTax || hasRefunds;
-	const refundTotal = hasRefunds
-		? (refunds ?? []).reduce((sum, r) => sum + Math.abs(parseFloat(r.total || '0')), 0)
-		: 0;
-	const netPayment = parseFloat(orderTotal ?? '0') - refundTotal;
+	const refundTotal = hasRefunds ? (refunds ?? []).reduce((sum, r) => sum + refundValue(r), 0) : 0;
+	const netPayment = getNetPaymentTotal(orderTotal, refunds);
 
 	return (
 		<>
@@ -142,7 +141,7 @@ export function Totals() {
 					{hasRefunds && refunds && (
 						<>
 							{refunds.map((refund) => {
-								const refundAmount = Math.abs(parseFloat(refund.total || '0'));
+								const refundAmount = refundValue(refund);
 								return (
 									<HStack key={refund.id}>
 										<Text className="text-destructive grow">

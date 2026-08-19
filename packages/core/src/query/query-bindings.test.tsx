@@ -885,7 +885,7 @@ describe('query bindings', () => {
 		).resolves.toBe('local');
 	});
 
-	// Tier 0. Tax rates are seeded by the engine's BOOT lane, so requirementsForQuery declares
+	// Tier 0. Tax rates are seeded by the engine's BOOT lane, so compiled query demand declares
 	// nothing for them and there is no handle to carry a key. The binding must therefore ask
 	// through the reference arm and let the engine resolve `taxRates:all` itself — seeding the
 	// verdict under `{lane:'reference'}` is what proves it never spells the key out.

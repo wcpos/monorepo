@@ -38,10 +38,7 @@ export type ReferenceCollectionConfig = {
 	documentIdPrefix: string;
 };
 
-function referenceDocumentFromWooPayload(
-	config: ReferenceCollectionConfig,
-	payload: WooReferencePayload
-): LocalReferenceDocument {
+function referenceDocumentFromWooPayload(payload: WooReferencePayload): LocalReferenceDocument {
 	return materializeGreedyPrunable(payload).storedDocument;
 }
 
@@ -70,7 +67,7 @@ export function createReferenceCollectionFetcher(
 			collection: config.collection,
 			greedyQueryKey: config.queryKey,
 			endpoint: config.endpoint,
-			documentFromPayload: (payload) => referenceDocumentFromWooPayload(config, payload),
+			documentFromPayload: (payload) => referenceDocumentFromWooPayload(payload),
 			storageId: (document) => document.uuid, // uuid STORAGE key — for the prune kept-set
 			coverageRecordId: (document) => referenceCoverageRecordId(config, document), // Woo-id-space — DISTINCT
 			prunable: true, // reference participates in set-difference deletion; always reports prunedCount
