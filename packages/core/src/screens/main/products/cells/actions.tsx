@@ -100,7 +100,8 @@ export function Actions({ row }: CellContext<{ document: ProductDocument }, 'act
 							disabled={!caps.canEditProducts}
 							onPress={() => {
 								router.push({
-									pathname: `/(app)/(drawer)/products/(modals)/edit/product/${product.uuid}`,
+									pathname: '/(app)/(drawer)/products/(modals)/edit/product/[productId]',
+									params: { productId: product.uuid! },
 								});
 							}}
 						>

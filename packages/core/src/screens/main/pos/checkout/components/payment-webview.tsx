@@ -76,7 +76,7 @@ export function PaymentWebview({
 	const orderLogger = React.useMemo(
 		() =>
 			paymentLogger.with({
-				orderId: order.uuid,
+				orderId: order.uuid!,
 				orderNumber: order.number,
 			}),
 		[order.uuid, order.number]
@@ -155,11 +155,12 @@ export function PaymentWebview({
 
 					if (uiSettings.autoShowReceipt) {
 						router.replace({
-							pathname: `(modals)/cart/receipt/${order.uuid}`,
+							pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
+							params: { orderId: order.uuid! },
 						});
 					} else {
 						router.replace({
-							pathname: `cart`,
+							pathname: '/cart',
 						});
 					}
 				} catch (err) {
@@ -278,10 +279,11 @@ export function PaymentWebview({
 
 					if (uiSettings.autoShowReceipt) {
 						router.replace({
-							pathname: `(modals)/cart/receipt/${order.uuid}`,
+							pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
+							params: { orderId: order.uuid! },
 						});
 					} else {
-						router.replace({ pathname: `cart` });
+						router.replace({ pathname: '/cart' });
 					}
 				} catch (err) {
 					// Best-effort safety net only. Order completion is authoritatively

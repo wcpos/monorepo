@@ -26,7 +26,7 @@ export default function POSLayout() {
 	const { wpCredentials, store } = useAppState();
 	const cashierID = useObservableEagerState<number | undefined>(wpCredentials.id$);
 	const storeID = useObservableEagerState<number | undefined>(store.id$);
-	const segments = useSegments();
+	const segments: string[] = useSegments();
 	// Handle catch-all route param - [...orderId] returns an array (could be empty array for /cart)
 	const params = useGlobalSearchParams<{ orderId: string | string[] }>();
 

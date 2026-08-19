@@ -16,7 +16,7 @@
 		"test:e2e:native:seed": "node ../../scripts/e2e-native-seed.mjs",
 		"test:e2e:ui": "playwright test --ui",
 		"test:e2e:report": "playwright show-report",
-		"typecheck": "tsc --noEmit",
+		"typecheck": "expo customize tsconfig.json && node -e \"require('fs').accessSync('.expo/types/router.d.ts')\" && tsc --noEmit",
 		"build": "expo export --output-dir ./build --platform all",
 		"build:web": "expo export --output-dir ./web-build --platform=web",
 		"build:electron": "ELECTRON=true expo export --output-dir ./electron-build --platform=web",

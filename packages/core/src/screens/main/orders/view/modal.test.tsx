@@ -116,10 +116,16 @@ describe('ViewOrderModal', () => {
 		expect(refundButton).toBeInTheDocument();
 
 		fireEvent.click(printButton);
-		expect(push).toHaveBeenCalledWith({ pathname: '/orders/receipt/order-uuid' });
+		expect(push).toHaveBeenCalledWith({
+			pathname: '/orders/receipt/[orderId]',
+			params: { orderId: 'order-uuid' },
+		});
 
 		fireEvent.click(refundButton);
-		expect(push).toHaveBeenCalledWith({ pathname: '/orders/refund/order-uuid' });
+		expect(push).toHaveBeenCalledWith({
+			pathname: '/orders/refund/[orderId]',
+			params: { orderId: 'order-uuid' },
+		});
 	});
 
 	it('uses a top divider when stacked and left divider when the rail moves beside the main column', () => {

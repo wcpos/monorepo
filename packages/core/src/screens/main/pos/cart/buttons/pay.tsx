@@ -39,13 +39,13 @@ export function PayButton() {
 	const handlePay = React.useCallback(async () => {
 		// #163 ruling R5: a dead storage worker hard-blocks the money paths. Cash
 		// taken for an order the device cannot persist has no local record at all.
-		if (blockIfDegraded('checkout', { orderId: currentOrder.uuid })) {
+		if (blockIfDegraded('checkout', { orderId: currentOrder.uuid! })) {
 			return;
 		}
 
 		setLoading(true);
 		const orderLogger = checkoutLogger.with({
-			orderId: currentOrder.uuid,
+			orderId: currentOrder.uuid!,
 			orderNumber: currentOrder.number,
 		});
 
@@ -55,7 +55,7 @@ export function PayButton() {
 					// Re-checked after the await: the worker can die mid-push, and
 					// opening the payment modal then would let the cashier take money
 					// for an order this device can no longer record.
-					if (blockIfDegraded('checkout', { orderId: currentOrder.uuid })) {
+					if (blockIfDegraded('checkout', { orderId: currentOrder.uuid! })) {
 						return;
 					}
 
@@ -68,7 +68,8 @@ export function PayButton() {
 					});
 
 					router.push({
-						pathname: `(modals)/cart/${currentOrder.uuid}/checkout`,
+						pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
+						params: { orderId: currentOrder.uuid! },
 					});
 				}
 			});

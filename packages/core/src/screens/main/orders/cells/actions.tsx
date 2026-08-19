@@ -116,7 +116,7 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 		router.push({
 			pathname: '/cart/[...orderId]',
 			params: { orderId: order.uuid ? [order.uuid] : [] },
-		} as any);
+		});
 	}, [blockIfDegraded, localPatch, router, order, store.id, wpCredentials.id]);
 
 	/**
@@ -129,7 +129,7 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 	 */
 	const handleRefund = React.useCallback(() => {
 		if (blockIfDegraded('refund', { orderId: order.uuid })) return;
-		router.push({ pathname: `/orders/refund/${order.uuid}` });
+		router.push({ pathname: '/orders/refund/[orderId]', params: { orderId: order.uuid! } });
 	}, [blockIfDegraded, order.uuid, router]);
 
 	const handleDelete = React.useCallback(async () => {
@@ -172,7 +172,8 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 					<DropdownMenuItem
 						onPress={() =>
 							router.push({
-								pathname: `/orders/view/${order.uuid}`,
+								pathname: '/orders/view/[orderId]',
+								params: { orderId: order.uuid! },
 							})
 						}
 					>
@@ -182,7 +183,8 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 					<DropdownMenuItem
 						onPress={() =>
 							router.push({
-								pathname: `/orders/edit/${order.uuid}`,
+								pathname: '/orders/edit/[orderId]',
+								params: { orderId: order.uuid! },
 							})
 						}
 					>
@@ -200,7 +202,12 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 					{orderHasID && (
 						<>
 							<DropdownMenuItem
-								onPress={() => router.push({ pathname: `/orders/receipt/${order.uuid}` })}
+								onPress={() =>
+									router.push({
+										pathname: '/orders/receipt/[orderId]',
+										params: { orderId: order.uuid! },
+									})
+								}
 							>
 								<Icon name="receipt" />
 								<Text>{t('common.receipt')}</Text>
