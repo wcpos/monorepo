@@ -1,31 +1,47 @@
 {
-    "$schema": "https://turbo.build/schema.v2.json",
-    "tasks": {
-      "lint": {
-        "outputs": []
-      },
-      "lint:fix": {
-        "outputs": []
-      },
-      "test": {
-        "cache": false,
-        "inputs": ["**/*.{ts,tsx,js,jsx}"]
-      },
-      "typecheck": {
-        "dependsOn": ["^typecheck"],
-        "outputs": []
-      },
-      "build": {
-        "dependsOn": ["^build"],
-        "outputs": [
-          "build/**",
-          "dist/**",
-          "node_modules/.cache/metro/**"
-        ]
-      },
-      "dev": {
-        "cache": false,
-        "persistent": true
-      }
-    }
-  }
+	"$schema": "https://turbo.build/schema.v2.json",
+	"tasks": {
+		"lint": {
+			"outputs": []
+		},
+		"lint:fix": {
+			"outputs": []
+		},
+		"test": {
+			"cache": false,
+			"inputs": [
+				"**/*.{ts,tsx,js,jsx}"
+			]
+		},
+		"typecheck": {
+			"dependsOn": [
+				"^typecheck"
+			],
+			"outputs": []
+		},
+		"build": {
+			"dependsOn": [
+				"^build"
+			],
+			"outputs": [
+				"build/**",
+				"dist/**",
+				"node_modules/.cache/metro/**"
+			],
+			"inputs": [
+				"$TURBO_DEFAULT$",
+				"!**/*.test.ts",
+				"!**/*.test.tsx",
+				"!**/__tests__/**",
+				"!e2e/**",
+				"!.maestro/**",
+				"!**/*.spec.ts",
+				"!**/*.spec.tsx"
+			]
+		},
+		"dev": {
+			"cache": false,
+			"persistent": true
+		}
+	}
+}
