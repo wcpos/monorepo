@@ -46,29 +46,51 @@ export function Header({ options, showUpgrade, setShowUpgrade }: Props) {
 	const [titleTextWidth, setTitleTextWidth] = React.useState(0);
 
 	const isSmallScreen = screenSize === 'sm';
+	const isLargeScreen = screenSize === 'lg';
 	const title = `${options.title} - ${storeName}`;
+
+	// Large screens render no left button, so the true left width there is zero
+	// regardless of what was measured before a resize; deriving it (instead of
+	// resetting state) keeps the zero-report filter below unconditional.
+	const effectiveLeftWidth = isLargeScreen ? 0 : leftWidth;
 
 	// Calculate centering offset: positive means right is wider, negative means left is wider
 	// Only apply centering when the title actually fits - otherwise use all available space
-	const rawOffset = rightWidth - leftWidth;
+	const rawOffset = rightWidth - effectiveLeftWidth;
 	const availableWithCentering = titleContainerWidth - Math.abs(rawOffset);
 	const titleFits = titleTextWidth > 0 && titleTextWidth < availableWithCentering;
 	const centeringOffset = isSmallScreen || !titleFits ? 0 : rawOffset;
 
+	// Centering depends on the intrinsic text width, the container width and the
+	// right-side buttons (always non-empty). Until all three have reported, any
+	// paint would show the title un-centered, so it stays invisible (see the
+	// `visible` prop below). Small screens never center, so they never wait.
+	const measured = titleTextWidth > 0 && titleContainerWidth > 0 && rightWidth > 0;
+
+	// Inactive drawer screens are hidden with display:none on web, so every
+	// element in this header reports a zero-width layout while another screen is
+	// active. Accepting those zeros wipes the measurements, and each navigation
+	// then re-shows the title left-aligned for a frame before it re-centers.
+	// Zero is never a real measurement here — the one legitimate zero (no left
+	// button on large screens) is derived above — so zero reports keep the last
+	// real value.
 	const handleLeftLayout = React.useCallback((event: LayoutChangeEvent) => {
-		setLeftWidth(event.nativeEvent.layout.width);
+		const { width } = event.nativeEvent.layout;
+		setLeftWidth((previous) => (width > 0 ? width : previous));
 	}, []);
 
 	const handleRightLayout = React.useCallback((event: LayoutChangeEvent) => {
-		setRightWidth(event.nativeEvent.layout.width);
+		const { width } = event.nativeEvent.layout;
+		setRightWidth((previous) => (width > 0 ? width : previous));
 	}, []);
 
 	const handleTitleContainerLayout = React.useCallback((event: LayoutChangeEvent) => {
-		setTitleContainerWidth(event.nativeEvent.layout.width);
+		const { width } = event.nativeEvent.layout;
+		setTitleContainerWidth((previous) => (width > 0 ? width : previous));
 	}, []);
 
 	const handleIntrinsicWidth = React.useCallback((width: number) => {
-		setTitleTextWidth(width);
+		setTitleTextWidth((previous) => (width > 0 ? width : previous));
 	}, []);
 
 	return (
@@ -80,12 +102,13 @@ export function Header({ options, showUpgrade, setShowUpgrade }: Props) {
 				>
 					<HStack className="h-10 items-center">
 						{/* Left section - measured for centering calculation */}
-						<View onLayout={handleLeftLayout}>
+						<View testID="header-left-section" onLayout={handleLeftLayout}>
 							<Left />
 						</View>
 
 						{/* Title section - flex to fill remaining space, with centering offset */}
 						<View
+							testID="header-title-container"
 							className="min-w-0 flex-1"
 							onLayout={handleTitleContainerLayout}
 							style={{
@@ -99,6 +122,7 @@ export function Header({ options, showUpgrade, setShowUpgrade }: Props) {
 						>
 							<HeaderTitle
 								centered={!isSmallScreen && titleFits}
+								visible={isSmallScreen || measured}
 								onIntrinsicWidth={handleIntrinsicWidth}
 							>
 								{title}
@@ -106,7 +130,7 @@ export function Header({ options, showUpgrade, setShowUpgrade }: Props) {
 						</View>
 
 						{/* Right section - measured for centering calculation */}
-						<View onLayout={handleRightLayout}>
+						<View testID="header-right-section" onLayout={handleRightLayout}>
 							<Right />
 						</View>
 					</HStack>
