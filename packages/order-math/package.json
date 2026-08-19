@@ -8,7 +8,9 @@
 		".": "./src/index.ts",
 		"./internal": "./src/internal/index.ts"
 	},
-	"files": ["src/**"],
+	"files": [
+		"src/**"
+	],
 	"scripts": {
 		"test": "jest",
 		"lint": "eslint src --ext .js,.jsx,.ts,.tsx",
@@ -21,7 +23,7 @@
 	},
 	"devDependencies": {
 		"@types/jest": "^30.0.0",
-		"@types/lodash": "^4.17.24",
+		"@types/lodash": "^4.17.25",
 		"@wcpos/database": "workspace:*",
 		"jest": "^30.4.2",
 		"ts-jest": "^29.4.12"
