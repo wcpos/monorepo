@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { isRxDocument } from 'rxdb';
 
 import { Button } from '@wcpos/components/button';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { OrderDocument } from '@wcpos/database';
 
@@ -57,7 +57,7 @@ export function SaveButton() {
 				}
 			});
 		} catch (error) {
-			const errorMessage = error instanceof Error ? error.message : String(error);
+			const errorMessage = getErrorMessage(error);
 			cartLogger.error('Failed to save order', {
 				showToast: true,
 				code: ERROR_CODES.SYNC_UNEXPECTED,

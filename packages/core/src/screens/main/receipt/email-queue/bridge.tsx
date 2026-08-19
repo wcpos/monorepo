@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import {
@@ -60,7 +60,7 @@ export function ReceiptEmailQueueBridge() {
 				logger,
 			}).catch((error: unknown) => {
 				logger.warn('Receipt email drain failed', {
-					context: { error: error instanceof Error ? error.message : String(error) },
+					context: { error: getErrorMessage(error) },
 				});
 			});
 		};

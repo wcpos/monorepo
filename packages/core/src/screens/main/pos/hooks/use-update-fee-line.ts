@@ -3,6 +3,7 @@ import * as React from 'react';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
+import { reportStaleCartLine } from './cart-failure';
 import { useCalculateFeeLineTaxAndTotals } from './use-calculate-fee-line-tax-and-totals';
 import { useFeeLineData } from './use-fee-line-data';
 import { updatePosDataMeta } from './utils';
@@ -81,11 +82,14 @@ export const useUpdateFeeLine = () => {
 			}
 			// The uuid isn't in the order document — the cashier edited a stale row
 			// (multi-tab is first-class). Cashier-full-information ruling: say so.
-			cartLogger.warn('Fee line update targeted a line that is no longer in the cart', {
-				showToast: true,
-				toast: { title: t('pos_cart.update_fee_not_found') },
-				context: { uuid, orderId: order.id },
-			});
+			reportStaleCartLine(
+				cartLogger,
+				'Fee line update targeted a line that is no longer in the cart',
+				{
+					toastTitle: t('pos_cart.update_fee_not_found'),
+					context: { uuid, orderId: order.id },
+				}
+			);
 		},
 		[calculateFeeLineTaxesAndTotals, currentOrder, getFeeLineData, localPatch, t]
 	);

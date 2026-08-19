@@ -10,7 +10,7 @@ import { distinctUntilChanged, filter, shareReplay, switchMap, tap } from 'rxjs/
 import useDeepCompareEffect from 'use-deep-compare-effect';
 
 import { createTemporaryDB } from '@wcpos/database';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAppState } from '../../../../../contexts/app-state';
@@ -87,7 +87,7 @@ export const useNewOrder = () => {
 		});
 
 		newOrder!.incrementalPatch(data).catch((error) => {
-			newOrderLogger.error(error instanceof Error ? error.message : String(error), {
+			newOrderLogger.error(getErrorMessage(error), {
 				code: ERROR_CODES.CHECKOUT_UNEXPECTED,
 			});
 		});

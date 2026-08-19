@@ -18,7 +18,7 @@ import {
 	useFormChangeHandler,
 } from '@wcpos/components/form';
 import { VStack } from '@wcpos/components/vstack';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { SettingsDangerZone } from './components/settings-danger-zone';
@@ -142,7 +142,7 @@ export function TaxSettings() {
 			uiLogger.error('Failed to restore server settings', {
 				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: {
-					error: error instanceof Error ? error.message : String(error),
+					error: getErrorMessage(error),
 				},
 			});
 		} finally {

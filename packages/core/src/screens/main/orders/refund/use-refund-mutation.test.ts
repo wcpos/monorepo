@@ -33,6 +33,7 @@ jest.mock('@wcpos/query', () => ({
 }));
 
 jest.mock('@wcpos/utils/logger', () => ({
+	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 	getLogger: () => ({ error: jest.fn(), warn: jest.fn() }),
 }));
 

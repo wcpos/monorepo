@@ -19,7 +19,7 @@ import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import { COLLECTION_VOCABULARY, useQueryRuntime } from '@wcpos/query';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
@@ -121,7 +121,7 @@ export function ConflictedMutationsPanel() {
 				});
 				return;
 			}
-			const message = error instanceof Error ? error.message : String(error);
+			const message = getErrorMessage(error);
 			logger.error('conflict resolution failed', {
 				code: ERROR_CODES.SYNC_UNEXPECTED,
 				context: {

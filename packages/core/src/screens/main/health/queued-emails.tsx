@@ -6,7 +6,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
@@ -73,7 +73,7 @@ export function QueuedEmailsPanel() {
 				});
 			}
 		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
+			const message = getErrorMessage(error);
 			logger.error('Receipt email retry failed', {
 				code: ERROR_CODES.PRINT_UNEXPECTED,
 				context: { localID: row.localID, orderId: row.orderId, error: message },
@@ -104,7 +104,7 @@ export function QueuedEmailsPanel() {
 				),
 			});
 		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
+			const message = getErrorMessage(error);
 			logger.error('Receipt email removal failed', {
 				code: ERROR_CODES.PRINT_UNEXPECTED,
 				context: { localID: row.localID, orderId: row.orderId, error: message },

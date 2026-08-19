@@ -3,6 +3,7 @@ import * as React from 'react';
 import { getLogger } from '@wcpos/utils/logger';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 
+import { reportStaleCartLine } from './cart-failure';
 import { useT } from '../../../../contexts/translations';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
@@ -128,9 +129,8 @@ export const useRemoveLineItem = () => {
 			} else {
 				// The uuid isn't in the order document — the cashier acted on a stale row
 				// (multi-tab is first-class). Cashier-full-information ruling: say so.
-				cartLogger.warn('Remove tapped for a line that is no longer in the cart', {
-					showToast: true,
-					toast: { title: t('pos_cart.remove_line_not_found') },
+				reportStaleCartLine(cartLogger, 'Remove tapped for a line that is no longer in the cart', {
+					toastTitle: t('pos_cart.remove_line_not_found'),
 					context: { uuid, itemType: type, orderId: currentOrder.id },
 				});
 			}

@@ -17,7 +17,7 @@ import * as React from 'react';
 import { ResponseType, useAuthRequest } from 'expo-auth-session';
 
 import { AppInfo } from '@wcpos/utils/app-info';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { buildAuthUrl, generateState, getRedirectUri, parseAuthResult } from './utils';
@@ -302,7 +302,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 
 			return;
 		} catch (err) {
-			const errorMessage = err instanceof Error ? err.message : String(err);
+			const errorMessage = getErrorMessage(err);
 			oauthLogger.debug('expoPromptAsync threw error', {
 				context: { error: errorMessage },
 			});

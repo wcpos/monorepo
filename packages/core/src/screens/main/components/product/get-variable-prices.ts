@@ -1,4 +1,4 @@
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 const uiLogger = getLogger(['wcpos', 'ui', 'product']);
@@ -83,7 +83,7 @@ export function getVariablePrices(
 			code: ERROR_CODES.VARIABLE_PRICE_META_INVALID,
 			context: {
 				value: metaDataEntry.value,
-				error: error instanceof Error ? error.message : String(error),
+				error: getErrorMessage(error),
 			},
 		});
 		return null;

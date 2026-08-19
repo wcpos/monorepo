@@ -6,7 +6,7 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { useQueryRuntime } from '@wcpos/query';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../contexts/translations';
 import { Callout } from './components';
@@ -80,7 +80,7 @@ function useStuckRecordLabel(stuck: StuckRecord | undefined): string | null {
 					context: {
 						collection: stuck.collection,
 						recordId: stuck.recordId,
-						error: error instanceof Error ? error.message : String(error),
+						error: getErrorMessage(error),
 					},
 				});
 			}

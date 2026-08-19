@@ -17,7 +17,7 @@ import {
 	wrapEngineDocument,
 	type WriteableCollection,
 } from '@wcpos/query';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { findEngineResident, insertEngineResident, useLocalMutation } from './use-local-mutation';
@@ -74,7 +74,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 
 	const handleError = React.useCallback(
 		(error: unknown, context?: Record<string, unknown>) => {
-			const message = error instanceof Error ? error.message : String(error);
+			const message = getErrorMessage(error);
 			mutationLogger.error(message, {
 				showToast: true,
 				code: ERROR_CODES.SYNC_UNEXPECTED,

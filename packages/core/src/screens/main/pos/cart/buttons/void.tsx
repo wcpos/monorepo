@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { Button } from '@wcpos/components/button';
 import { awaitWriteOutcome, useQueryRuntime, WriteOutcomeError } from '@wcpos/query';
 import { WOO_REST_CANNOT_DELETE } from '@wcpos/sync-core';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../../contexts/translations';
@@ -83,7 +83,7 @@ export function VoidButton() {
 					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 					context: {
 						orderId: orderJson.uuid,
-						error: err instanceof Error ? err.message : String(err),
+						error: getErrorMessage(err),
 					},
 				});
 			}
@@ -143,7 +143,7 @@ export function VoidButton() {
 					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 					context: {
 						orderId: recordId,
-						error: err instanceof Error ? err.message : String(err),
+						error: getErrorMessage(err),
 					},
 				});
 			}

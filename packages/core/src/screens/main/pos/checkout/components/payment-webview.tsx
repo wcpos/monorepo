@@ -9,7 +9,7 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { WebView } from '@wcpos/components/webview';
 import { useQueryRuntime } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAppState } from '../../../../../contexts/app-state';
@@ -168,7 +168,7 @@ export function PaymentWebview({
 						showToast: true,
 						code: ERROR_CODES.PAYMENT_OK_STATUS_CHECK_FAILED,
 						context: {
-							error: err instanceof Error ? err.message : String(err),
+							error: getErrorMessage(err),
 						},
 					});
 				} finally {
@@ -291,7 +291,7 @@ export function PaymentWebview({
 					// doing so produced spurious PY02001 errors on successful checkouts.
 					orderLogger.debug('Fallback order status refresh did not complete', {
 						context: {
-							error: err instanceof Error ? err.message : String(err),
+							error: getErrorMessage(err),
 							source: 'fallback-refresh',
 						},
 					});

@@ -55,7 +55,7 @@ import * as React from 'react';
 import { CanceledError } from 'axios';
 import { BehaviorSubject } from 'rxjs';
 
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { HttpErrorHandler } from '@wcpos/hooks/use-http-client';
 import { PREFLIGHT_BLOCK, requestStateManager } from '@wcpos/hooks/use-http-client';
@@ -139,7 +139,7 @@ export const useAuthErrorHandler = (
 					code: ERROR_CODES.AUTH_UNEXPECTED,
 					context: {
 						siteName: site.name,
-						error: authError instanceof Error ? authError.message : String(authError),
+						error: getErrorMessage(authError),
 					},
 				});
 			})
@@ -235,7 +235,7 @@ export const useAuthErrorHandler = (
 					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 					context: {
 						siteName: site.name,
-						error: error instanceof Error ? error.message : String(error),
+						error: getErrorMessage(error),
 					},
 				});
 			}
@@ -307,7 +307,7 @@ export const useAuthErrorHandler = (
 						blockCode: (error as any).blockCode,
 						hasRefreshTokenInvalidFlag: (error as any).isRefreshTokenInvalid,
 						hasRefreshTokenInvalidFlag2: (error as any).refreshTokenInvalid,
-						errorMessage: error instanceof Error ? error.message : String(error),
+						errorMessage: getErrorMessage(error),
 					},
 				});
 
@@ -325,7 +325,7 @@ export const useAuthErrorHandler = (
 
 				authLogger.debug('Fallback auth handler triggered', {
 					context: {
-						errorMessage: error instanceof Error ? error.message : String(error),
+						errorMessage: getErrorMessage(error),
 						errorStatus: (error as any)?.response?.status,
 						blockCode: (error as any)?.blockCode,
 						hasRefreshTokenInvalidFlag: (error as any)?.isRefreshTokenInvalid,

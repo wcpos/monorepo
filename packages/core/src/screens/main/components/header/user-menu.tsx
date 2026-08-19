@@ -41,7 +41,7 @@ import { Toast } from '@wcpos/components/toast';
 import { clearAllDB, scheduleClearLocalDataOnNextLoad } from '@wcpos/database';
 import { useQueryRuntime } from '@wcpos/query';
 import { Platform } from '@wcpos/utils/platform';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { forgetUnsentChanges, type UnsentChanges } from '@wcpos/utils/unsent-changes';
 
@@ -234,7 +234,7 @@ export function UserMenu() {
 			Toast.show({
 				type: 'error',
 				title: t('common.store_switch_failed'),
-				description: error instanceof Error ? error.message : String(error),
+				description: getErrorMessage(error),
 			});
 			uiLogger.error('Store switch failed', {
 				code: ERROR_CODES.UNEXPECTED_ERROR,

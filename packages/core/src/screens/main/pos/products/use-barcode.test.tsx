@@ -45,7 +45,11 @@ jest.mock('@wcpos/utils/logger', () => {
 		warn: jest.fn(),
 		success: jest.fn(),
 	};
-	return { getLogger: () => barcodeLogger, __barcodeLogger: barcodeLogger };
+	return {
+		getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+		getLogger: () => barcodeLogger,
+		__barcodeLogger: barcodeLogger,
+	};
 });
 
 jest.mock('@wcpos/components/toast', () => ({

@@ -95,6 +95,7 @@ jest.mock('@wcpos/query', () => {
 });
 
 jest.mock('@wcpos/utils/logger', () => ({
+	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 	getLogger: () => ({
 		success: (...args: unknown[]) => mockCartLogger.success(...args),
 		error: (...args: unknown[]) => mockCartLogger.error(...args),

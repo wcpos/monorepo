@@ -1,3 +1,4 @@
+import { getErrorMessage } from '@wcpos/utils/logger';
 import type { ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { classifyEmailSendError, type EmailSendFailure } from './classify';
@@ -562,7 +563,7 @@ async function patch(
 			context: {
 				localID: doc.localID,
 				orderId: doc.orderId,
-				error: error instanceof Error ? error.message : String(error),
+				error: getErrorMessage(error),
 			},
 		});
 	}
@@ -582,7 +583,7 @@ async function forget(deps: DrainDeps, doc: ReceiptEmailDoc): Promise<void> {
 		deps.logger.debug('Could not prune a sent receipt email', {
 			context: {
 				localID: doc.localID,
-				error: error instanceof Error ? error.message : String(error),
+				error: getErrorMessage(error),
 			},
 		});
 	}

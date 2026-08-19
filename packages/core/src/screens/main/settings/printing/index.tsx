@@ -11,6 +11,7 @@ import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import { PrinterService, resolvePrinter } from '@wcpos/printer';
 import type { DiscoveredPrinter, PrinterProfile } from '@wcpos/printer';
+import { getErrorMessage } from '@wcpos/utils/logger';
 import type {
 	PrinterProfileDocument,
 	TemplateDocument,
@@ -165,7 +166,7 @@ export function PrintingSettings() {
 			} catch (err) {
 				Toast.show({
 					title: t('settings.test_print_failed'),
-					description: err instanceof Error ? err.message : String(err),
+					description: getErrorMessage(err),
 					type: 'error',
 				});
 			} finally {

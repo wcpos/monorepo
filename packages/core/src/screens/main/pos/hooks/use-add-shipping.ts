@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { POS_META_KEYS } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { reportCartFailure } from './cart-failure';
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateShippingLineTaxAndTotals } from './use-calculate-shipping-line-tax-and-totals';
 import { useT } from '../../../../contexts/translations';
@@ -79,15 +79,13 @@ export const useAddShipping = () => {
 					},
 				});
 			} catch (error) {
-				orderLogger.error('Failed to add shipping to cart', {
-					showToast: true,
-					code: ERROR_CODES.CART_UPDATE_FAILED,
-					toast: { title: t('pos.error_adding_shipping_to_cart') },
+				reportCartFailure(orderLogger, 'Failed to add shipping to cart', {
+					toastTitle: t('pos.error_adding_shipping_to_cart'),
 					context: {
 						methodTitle: data.method_title,
 						methodId: data.method_id,
-						error: error instanceof Error ? error.message : String(error),
 					},
+					error,
 				});
 			}
 		},

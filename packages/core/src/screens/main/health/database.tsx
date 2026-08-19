@@ -26,6 +26,7 @@ import { Toast } from '@wcpos/components/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
 import { COLLECTION_VOCABULARY, runResetRefill, useQueryRuntime } from '@wcpos/query';
+import { getErrorMessage } from '@wcpos/utils/logger';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { AttentionPanel } from './attention-panel';
@@ -277,7 +278,7 @@ function CollectionRowView({
 				text1: t('health.database.redownload_failed', {
 					label,
 				}),
-				text2: error instanceof Error ? error.message : String(error),
+				text2: getErrorMessage(error),
 			});
 		} finally {
 			setPhase('idle');

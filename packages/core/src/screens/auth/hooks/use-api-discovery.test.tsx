@@ -11,6 +11,7 @@ jest.mock('@wcpos/hooks/use-http-client', () => ({
 	useHttpClient: () => ({ get: mockGet }),
 }));
 jest.mock('@wcpos/utils/logger', () => ({
+	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 	getLogger: () => ({ debug: jest.fn(), error: jest.fn(), info: jest.fn(), warn: jest.fn() }),
 }));
 jest.mock('../../../contexts/translations', () => {

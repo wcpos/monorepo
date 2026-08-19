@@ -11,6 +11,10 @@ const mockConvertVariationToLineItemWithoutTax = jest.fn();
 const mockFindByProductVariationID = jest.fn();
 const mockGetUuidFromLineItem = jest.fn();
 const mockIncrementLineItem = jest.fn();
+const mockLoggerError = jest.fn();
+const mockLoggerWarn = jest.fn();
+const mockLoggerInfo = jest.fn();
+const mockLoggerSuccess = jest.fn();
 
 type TestOrder = {
 	id: number;
@@ -24,9 +28,30 @@ jest.mock('observable-hooks', () => ({
 	useObservableEagerState: () => undefined,
 }));
 
-jest.mock('@wcpos/utils/logger', () => ({
-	getLogger: () => ({ success: jest.fn(), error: jest.fn() }),
-}));
+jest.mock('@wcpos/utils/logger', () => {
+	const logger = {
+		get error() {
+			return mockLoggerError;
+		},
+		get warn() {
+			return mockLoggerWarn;
+		},
+		get info() {
+			return mockLoggerInfo;
+		},
+		get success() {
+			return mockLoggerSuccess;
+		},
+		with: () => logger,
+	};
+	return {
+		getLogger: () => logger,
+		getErrorMessage: (error: unknown) => {
+			if (error instanceof Error) return error.message;
+			return String(error);
+		},
+	};
+});
 
 jest.mock('@wcpos/utils/logger/generated/error-codes.generated', () => ({
 	ERROR_CODES: { CART_UPDATE_FAILED: 'CART_UPDATE_FAILED' },
@@ -150,6 +175,28 @@ describe('useAddVariation', () => {
 		expect(mockAddItemToOrder).toHaveBeenCalledWith('line_items', {
 			product_id: parent.id,
 			variation_id: variation.id,
+		});
+	});
+
+	it('reports a falsy add result with the cashier toast', async () => {
+		mockFindByProductVariationID.mockReturnValue([]);
+		mockAddItemToOrder.mockResolvedValue(undefined);
+		const { result } = renderHook(() => useAddVariation());
+
+		await act(async () => {
+			await result.current.addVariation(variationDocument as never, parentDocument as never);
+		});
+
+		expect(mockLoggerError).toHaveBeenCalledWith('Failed to add product to cart', {
+			showToast: true,
+			code: 'CART_UPDATE_FAILED',
+			toast: { title: 'pos.error_adding_to_cart' },
+			context: {
+				variationId: 202,
+				productId: 101,
+				productName: 'Variable product',
+				orderId: 1,
+			},
 		});
 	});
 });

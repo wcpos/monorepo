@@ -15,6 +15,7 @@ jest.mock('expo-crypto', () => ({
 }));
 
 jest.mock('@wcpos/utils/logger', () => ({
+	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 	getLogger: () => ({
 		debug: jest.fn(),
 		warn: jest.fn(),

@@ -24,7 +24,7 @@ import {
 	RECORD_UUID_META_KEY,
 	remoteIdOrNull,
 } from '@wcpos/sync-core';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
@@ -406,7 +406,7 @@ export const useLocalMutation = () => {
 				return { changes, document: doc };
 			} catch (error) {
 				const err = error as Record<string, unknown>;
-				let message = error instanceof Error ? error.message : String(error);
+				let message = getErrorMessage(error);
 				let errorCode: ErrorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
 				if (err.rxdb) {
 					message = 'rxdb ' + String(err.code);
