@@ -369,8 +369,8 @@ describe('applyReplicationActions — tax rates', () => {
 describe('applyReplicationActions — barcode re-derive', () => {
 	it('re-derives + applies the barcode index locally when the active field is present', async () => {
 		const docs: SyncedDocument[] = [
-			{ id: 'woo-product:1', payload: { sku: 'A', global_unique_id: 'g1' } },
-			{ id: 'woo-product:2', payload: { sku: 'B', global_unique_id: 'g2' } },
+			{ documentId: 'woo-product:1', payload: { sku: 'A', global_unique_id: 'g1' } },
+			{ documentId: 'woo-product:2', payload: { sku: 'B', global_unique_id: 'g2' } },
 		];
 		const { handlers, calls } = fakeHandlers({ docs: () => docs });
 		const result = await applyReplicationActions(
@@ -387,7 +387,9 @@ describe('applyReplicationActions — barcode re-derive', () => {
 	});
 
 	it('passes the rebuilt index (built by the active field) to applyBarcodeIndex', async () => {
-		const docs: SyncedDocument[] = [{ id: 'woo-product:1', payload: { global_unique_id: 'g1' } }];
+		const docs: SyncedDocument[] = [
+			{ documentId: 'woo-product:1', payload: { global_unique_id: 'g1' } },
+		];
 		const applied: { collection: HybridCollection; codes: string[] }[] = [];
 		const { handlers } = fakeHandlers({
 			docs: () => docs,
@@ -407,7 +409,7 @@ describe('applyReplicationActions — barcode re-derive', () => {
 	});
 
 	it('falls back to a re-fetch when the active field was never synced (stale collection)', async () => {
-		const docs: SyncedDocument[] = [{ id: 'woo-product:1', payload: { sku: 'A' } }];
+		const docs: SyncedDocument[] = [{ documentId: 'woo-product:1', payload: { sku: 'A' } }];
 		const { handlers, calls } = fakeHandlers({
 			docs: () => docs,
 			reFetchResult: () => 1,
@@ -425,7 +427,9 @@ describe('applyReplicationActions — barcode re-derive', () => {
 	});
 
 	it('surfaces a barcode re-derive the host DECLINED to apply (e.g. a scope-guard drop), not a false success', async () => {
-		const docs: SyncedDocument[] = [{ id: 'woo-product:1', payload: { global_unique_id: 'g1' } }];
+		const docs: SyncedDocument[] = [
+			{ documentId: 'woo-product:1', payload: { global_unique_id: 'g1' } },
+		];
 		const { handlers, calls } = fakeHandlers({ docs: () => docs, applyBarcodeResult: () => false });
 		const result = await applyReplicationActions(
 			actions({
@@ -647,7 +651,9 @@ describe('applyReplicationActions — persist-only-after-every-handler-succeeded
 	});
 
 	it('drives a fully-loaded mixed plan through one tick — every arm fires, fields do not cross', async () => {
-		const docs: SyncedDocument[] = [{ id: 'woo-product:10', payload: { global_unique_id: 'g10' } }];
+		const docs: SyncedDocument[] = [
+			{ documentId: 'woo-product:10', payload: { global_unique_id: 'g10' } },
+		];
 		const { handlers, calls } = fakeHandlers({ docs: () => docs });
 		const result = await applyReplicationActions(
 			actions({
@@ -693,7 +699,9 @@ describe('applyReplicationActions — persist-only-after-every-handler-succeeded
 	});
 
 	it('applies the barcode index BEFORE persisting (so the config baseline never advances ahead of the index)', async () => {
-		const docs: SyncedDocument[] = [{ id: 'woo-product:1', payload: { global_unique_id: 'g1' } }];
+		const docs: SyncedDocument[] = [
+			{ documentId: 'woo-product:1', payload: { global_unique_id: 'g1' } },
+		];
 		const { handlers, calls } = fakeHandlers({ docs: () => docs });
 		await applyReplicationActions(
 			actions({

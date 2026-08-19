@@ -107,7 +107,7 @@ describe('LocalCoverage interface', () => {
 
 		await expect(coverage.readRecord('orders', 'woo-order:1')).resolves.toEqual({
 			collection: 'orders',
-			id: 'woo-order:1',
+			documentId: 'woo-order:1',
 			fresh: true,
 		});
 		await expect(coverage.readLane('orders', 'orders:open')).resolves.toEqual({
@@ -186,9 +186,9 @@ describe('LocalCoverage interface', () => {
 			find: () => ({ exec: async () => [] }),
 		};
 		Object.assign(database, {
-			existenceManifest: { ...memoryCollection('id'), ...zeroCollection },
-			existenceManifestCustomers: { ...memoryCollection('id'), ...zeroCollection },
-			existenceManifestOrders: { ...memoryCollection('id'), ...zeroCollection },
+			existenceManifest: { ...memoryCollection('remoteId'), ...zeroCollection },
+			existenceManifestCustomers: { ...memoryCollection('remoteId'), ...zeroCollection },
+			existenceManifestOrders: { ...memoryCollection('remoteId'), ...zeroCollection },
 			products: zeroCollection,
 			variations: zeroCollection,
 			customers: zeroCollection,
@@ -214,11 +214,11 @@ describe('LocalCoverage interface', () => {
 	it('repairs every forced space after the first space exhausts the shared chunk budget', async () => {
 		const database = coverageDatabase() as ReturnType<typeof coverageDatabase> &
 			Record<string, unknown>;
-		const productManifest = memoryCollection('id');
-		const customerManifest = memoryCollection('id');
-		const orderManifest = memoryCollection('id');
-		customerManifest.documents.set('20', { id: '20', wooId: 20, objectType: 'customer' });
-		orderManifest.documents.set('40', { id: '40', wooId: 40, objectType: 'order' });
+		const productManifest = memoryCollection('remoteId');
+		const customerManifest = memoryCollection('remoteId');
+		const orderManifest = memoryCollection('remoteId');
+		customerManifest.documents.set('20', { remoteId: '20', wooId: 20, objectType: 'customer' });
+		orderManifest.documents.set('40', { remoteId: '40', wooId: 40, objectType: 'order' });
 		const withManifestRemoval = (collection: ReturnType<typeof memoryCollection>) => ({
 			...collection,
 			bulkRemove: vi.fn(async (ids: string[]) => {
@@ -279,9 +279,9 @@ describe('LocalCoverage interface', () => {
 	it('bounds manifest chunks while filtering stray, existing, and local-only ids', async () => {
 		const database = coverageDatabase() as ReturnType<typeof coverageDatabase> &
 			Record<string, unknown>;
-		const manifest = memoryCollection('id');
+		const manifest = memoryCollection('remoteId');
 		manifest.documents.set('2', {
-			id: '2',
+			remoteId: '2',
 			wooId: 2,
 			objectType: 'product',
 			digest: 'existing',
@@ -292,11 +292,11 @@ describe('LocalCoverage interface', () => {
 				count: () => ({ exec: async () => manifest.documents.size }),
 			},
 			existenceManifestCustomers: {
-				...memoryCollection('id'),
+				...memoryCollection('remoteId'),
 				count: () => ({ exec: async () => 0 }),
 			},
 			existenceManifestOrders: {
-				...memoryCollection('id'),
+				...memoryCollection('remoteId'),
 				count: () => ({ exec: async () => 0 }),
 			},
 			products: {
@@ -388,8 +388,8 @@ describe('LocalCoverage interface', () => {
 				bucketSize: 100,
 				occupiedBucketIndexes: async () => [0],
 				readManifestRange: async () => [
-					{ id: '10', wooId: 10, objectType: 'product', digest: '1' },
-					{ id: '20', wooId: 20, objectType: 'product', digest: '2' },
+					{ remoteId: '10', wooId: 10, objectType: 'product', digest: '1' },
+					{ remoteId: '20', wooId: 20, objectType: 'product', digest: '2' },
 				],
 				dirtyWooIds: async () => new Set([20]),
 				fetchServerScanPage: async () => ({
@@ -433,7 +433,7 @@ describe('LocalCoverage interface', () => {
 				occupiedBucketIndexes: async () => [0],
 				readManifestRange: async () => [
 					{
-						id: '10',
+						remoteId: '10',
 						wooId: 10,
 						objectType: 'product',
 						digest: '9007199254740992',
@@ -483,7 +483,7 @@ describe('LocalCoverage interface', () => {
 				occupiedBucketIndexes: async () => buckets,
 				readManifestRange: async (lo) => [
 					{
-						id: String(lo + 1),
+						remoteId: String(lo + 1),
 						wooId: lo + 1,
 						objectType: 'product',
 						digest: String(lo / 100 + 1),
@@ -537,7 +537,7 @@ describe('LocalCoverage interface', () => {
 				occupiedBucketIndexes: async () => [0, 1, 2],
 				readManifestRange: async (lo) => [
 					{
-						id: String(lo + 1),
+						remoteId: String(lo + 1),
 						wooId: lo + 1,
 						objectType: 'product',
 						digest: '1',
@@ -568,7 +568,9 @@ describe('LocalCoverage interface', () => {
 			reconcile: {
 				bucketSize: 100,
 				occupiedBucketIndexes: async () => [0],
-				readManifestRange: async () => [{ id: '1', wooId: 1, objectType: 'product', digest: '1' }],
+				readManifestRange: async () => [
+					{ remoteId: '1', wooId: 1, objectType: 'product', digest: '1' },
+				],
 				dirtyWooIds: async () => new Set<number>(),
 				fetchServerScanPage: async () => {
 					throw new Error('scan exploded');
@@ -643,7 +645,7 @@ describe('LocalCoverage interface', () => {
 			occupiedBucketIndexes: async () => [bucket],
 			readManifestRange: async () => [
 				{
-					id: String(bucket * 100 + 1),
+					remoteId: String(bucket * 100 + 1),
 					wooId: bucket * 100 + 1,
 					objectType: 'product' as const,
 					digest: '1',

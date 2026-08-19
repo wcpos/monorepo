@@ -17,7 +17,7 @@ export type CoverageWriteConflictMergeResult = {
 };
 
 function recordKey(record: PersistedCoverageRecord): string {
-	return `${record.collection}::${record.id}`;
+	return `${record.collection}::${record.documentId}`;
 }
 
 function laneKey(lane: PersistedCoverageLane): string {
@@ -40,7 +40,7 @@ function mergeRecord(
 
 	return {
 		collection: existing.collection,
-		id: existing.id,
+		documentId: existing.documentId,
 		coveredQueryKeys: mergeUniqueInOrder(existing.coveredQueryKeys, next.coveredQueryKeys),
 		freshUntilMs: Math.max(existing.freshUntilMs, next.freshUntilMs),
 		updatedAtMs: Math.max(existing.updatedAtMs, next.updatedAtMs),

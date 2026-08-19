@@ -12,7 +12,6 @@ describe('package exports', () => {
 		expect(Object.keys(production).sort()).toEqual(
 			[
 				'createRxdbSyncEngine',
-				'engineDocumentIdFor',
 				'normalizeVariationAttributes',
 				// The variation projector, exported so @wcpos/query's parity test can pin
 				// the map face against it — the drift tripwire #1308 gave products/orders.

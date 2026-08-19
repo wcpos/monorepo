@@ -7,7 +7,8 @@ export type FetchTask = {
 	requirementId: string;
 	collection: string;
 	queryKey: string;
-	ids?: string[];
+	/** Engine document keys the task is targeting (`descriptor.documentId(...)` values). */
+	documentIds?: string[];
 	/**
 	 * Numeric Woo server ids for a targeted fetch — the only channel: targeted
 	 * fetchers throw a contract error when it is missing/empty. Optional only because

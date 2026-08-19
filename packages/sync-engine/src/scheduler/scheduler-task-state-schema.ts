@@ -37,7 +37,7 @@ export const schedulerTaskStateSchema = {
 		requirementId: { type: 'string', maxLength: 256 },
 		collectionName: { type: 'string', maxLength: 64 },
 		queryKey: { type: 'string', maxLength: 256 },
-		ids: {
+		documentIds: {
 			type: 'array',
 			items: { type: 'string' },
 		},

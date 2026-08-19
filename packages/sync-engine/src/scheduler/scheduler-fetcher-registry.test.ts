@@ -12,7 +12,7 @@ function task(overrides: Partial<FetchTask> = {}): FetchTask {
 		requirementId: 'orders.lookup.1',
 		collection: 'orders',
 		queryKey: 'orders:ids:1',
-		ids: ['woo-order:1'],
+		documentIds: ['woo-order:1'],
 		limit: 1,
 		priority: 900,
 		mode: 'on-demand',
@@ -26,7 +26,7 @@ function state(overrides: Partial<PersistedSchedulerTaskState> = {}): PersistedS
 		requirementId: 'orders.lookup.1',
 		collection: 'orders',
 		queryKey: 'orders:ids:1',
-		ids: ['woo-order:1'],
+		documentIds: ['woo-order:1'],
 		limit: 1,
 		priority: 900,
 		mode: 'on-demand',
@@ -44,7 +44,7 @@ describe('createSchedulerFetcherRegistry', () => {
 	it('dispatches supported tasks to their registered fetcher and rejects unsupported tasks before they are claimed', async () => {
 		const ordersFetcher = vi.fn(async (fetchTask: FetchTask) => ({
 			taskId: fetchTask.id,
-			documentCount: fetchTask.ids?.length ?? fetchTask.limit,
+			documentCount: fetchTask.documentIds?.length ?? fetchTask.limit,
 			requestCount: 1,
 			completed: true,
 		}));
@@ -67,12 +67,20 @@ describe('createSchedulerFetcherRegistry', () => {
 		expect(ordersFetcher).toHaveBeenCalledWith(task(), { signal: abortController.signal });
 		expect(
 			registry.supportsTask(
-				task({ collection: 'products', queryKey: 'products:search=tea:limit=10', ids: undefined })
+				task({
+					collection: 'products',
+					queryKey: 'products:search=tea:limit=10',
+					documentIds: undefined,
+				})
 			)
 		).toBe(false);
 		await expect(
 			registry.fetcher(
-				task({ collection: 'products', queryKey: 'products:search=tea:limit=10', ids: undefined })
+				task({
+					collection: 'products',
+					queryKey: 'products:search=tea:limit=10',
+					documentIds: undefined,
+				})
 			)
 		).rejects.toThrow(
 			'No scheduler fetcher registered for products task products:search=tea:limit=10'
@@ -86,7 +94,7 @@ describe('createSchedulerFetcherRegistry', () => {
 			requirementId: 'products.search.tea',
 			collection: 'products',
 			queryKey: 'products:search=tea:limit=10',
-			ids: undefined,
+			documentIds: undefined,
 			limit: 10,
 			priority: 700,
 			mode: 'windowed',

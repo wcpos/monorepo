@@ -1,7 +1,4 @@
-import {
-	markPersistedSchedulerDocument,
-	type PersistedSchedulerSchemaVersionMarker,
-} from '../collections/schema-version';
+import { type PersistedSchedulerSchemaVersionMarker } from '../collections/schema-version';
 import { timestampMsSchemaField } from '../collections/timestamp-schema-field';
 
 import type { CoverageCompactionLease } from '../scheduler';
@@ -10,25 +7,11 @@ export type CoverageCompactionLeaseDocument = CoverageCompactionLease &
 	PersistedSchedulerSchemaVersionMarker<1> & {
 		leaseKey: 'coverage-compaction';
 	};
-export type CoverageCompactionLeaseV0Document = CoverageCompactionLease & {
-	leaseKey: 'coverage-compaction';
-};
-
-export function migrateCoverageCompactionLeaseV1(
-	document: CoverageCompactionLeaseV0Document
-): CoverageCompactionLeaseDocument {
-	return markPersistedSchedulerDocument(document, 1);
-}
-
-export const coverageCompactionLeaseMigrationStrategies = {
-	1: migrateCoverageCompactionLeaseV1,
-};
-
 export const COVERAGE_COMPACTION_LEASE_KEY = 'coverage-compaction' as const;
 
 export const coverageCompactionLeaseSchema = {
 	title: 'Woo/RxDB coverage compaction lease schema',
-	version: 1,
+	version: 0,
 	primaryKey: 'leaseKey',
 	type: 'object',
 	properties: {

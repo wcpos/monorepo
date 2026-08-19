@@ -31,7 +31,7 @@ import {
 } from '@wcpos/sync-core';
 
 import { orderSchema } from './order-schema';
-import { productMigrationStrategies, productSchema } from './product-schema';
+import { productSchema } from './product-schema';
 import { variationSchema } from './variation-schema';
 import { customerSchema } from './customer-schema';
 import { taxRateSchema } from './tax-rate-schema';
@@ -42,31 +42,14 @@ import {
 	tagSchema,
 } from './reference-collection-schema';
 import { existenceManifestSchema } from '../local-coverage/existence-manifest-schema';
-import { syncCheckpointMigrationStrategies, syncCheckpointSchema } from './sync-checkpoint-schema';
+import { syncCheckpointSchema } from './sync-checkpoint-schema';
 // Keep scheduler schemas as deep imports: the barrel evaluates census.ts before this list initializes.
 import { schedulerTaskStateSchema } from '../scheduler/scheduler-task-state-schema';
-import {
-	coverageLaneMigrationStrategies,
-	coverageLaneSchema,
-	coverageRecordMigrationStrategies,
-	coverageRecordSchema,
-} from '../local-coverage/coverage-schema';
-import {
-	coverageCompactionLeaseMigrationStrategies,
-	coverageCompactionLeaseSchema,
-} from '../local-coverage/coverage-compaction-lease-schema';
-import {
-	coverageCompactionFailureMigrationStrategies,
-	coverageCompactionFailureSchema,
-} from '../local-coverage/coverage-compaction-failure-schema';
-import {
-	queryTotalCacheMigrationStrategies,
-	queryTotalCacheSchema,
-} from '../scheduler/query-total-cache-schema';
-import {
-	queryTotalRequestStateMigrationStrategies,
-	queryTotalRequestStateSchema,
-} from '../scheduler/query-total-request-state-schema';
+import { coverageLaneSchema, coverageRecordSchema } from '../local-coverage/coverage-schema';
+import { coverageCompactionLeaseSchema } from '../local-coverage/coverage-compaction-lease-schema';
+import { coverageCompactionFailureSchema } from '../local-coverage/coverage-compaction-failure-schema';
+import { queryTotalCacheSchema } from '../scheduler/query-total-cache-schema';
+import { queryTotalRequestStateSchema } from '../scheduler/query-total-request-state-schema';
 import { changeSignalStateSchema } from '../change-signal/change-signal-state-schema';
 
 import type { RxDatabase } from 'rxdb';
@@ -101,20 +84,20 @@ export const ENGINE_KV_COLLECTION = 'engineKv';
 export const engineKvSchema = {
 	title: 'Sync engine internal key-value store',
 	version: 0,
-	primaryKey: 'id',
+	primaryKey: 'key',
 	type: 'object',
 	properties: {
-		id: { type: 'string', maxLength: 256 },
+		key: { type: 'string', maxLength: 256 },
 		value: { type: 'string' },
 	},
-	required: ['id', 'value'],
+	required: ['key', 'value'],
 } as const;
 
 export type CollectionCreator = { schema: unknown; migrationStrategies?: unknown };
 
 const SYNC_COLLECTION_CREATORS: Record<SyncCollectionName, CollectionCreator> = {
 	orders: { schema: orderSchema },
-	products: { schema: productSchema, migrationStrategies: productMigrationStrategies },
+	products: { schema: productSchema },
 	variations: { schema: variationSchema },
 	customers: { schema: customerSchema },
 	taxRates: { schema: taxRateSchema },
@@ -139,39 +122,18 @@ export function engineSyncCollectionCreators(): Record<SyncCollectionName, Colle
  */
 const SCHEDULER_TIER_CREATORS: Record<string, CollectionCreator> = {
 	schedulerTaskStates: { schema: schedulerTaskStateSchema },
-	coverageRecords: {
-		schema: coverageRecordSchema,
-		migrationStrategies: coverageRecordMigrationStrategies,
-	},
-	coverageLanes: {
-		schema: coverageLaneSchema,
-		migrationStrategies: coverageLaneMigrationStrategies,
-	},
-	coverageCompactionLeases: {
-		schema: coverageCompactionLeaseSchema,
-		migrationStrategies: coverageCompactionLeaseMigrationStrategies,
-	},
-	coverageCompactionFailures: {
-		schema: coverageCompactionFailureSchema,
-		migrationStrategies: coverageCompactionFailureMigrationStrategies,
-	},
-	queryTotalCacheEntries: {
-		schema: queryTotalCacheSchema,
-		migrationStrategies: queryTotalCacheMigrationStrategies,
-	},
-	queryTotalRequestStates: {
-		schema: queryTotalRequestStateSchema,
-		migrationStrategies: queryTotalRequestStateMigrationStrategies,
-	},
+	coverageRecords: { schema: coverageRecordSchema },
+	coverageLanes: { schema: coverageLaneSchema },
+	coverageCompactionLeases: { schema: coverageCompactionLeaseSchema },
+	coverageCompactionFailures: { schema: coverageCompactionFailureSchema },
+	queryTotalCacheEntries: { schema: queryTotalCacheSchema },
+	queryTotalRequestStates: { schema: queryTotalRequestStateSchema },
 	existenceManifest: { schema: existenceManifestSchema },
 	existenceManifestCustomers: { schema: existenceManifestSchema },
 	existenceManifestOrders: { schema: existenceManifestSchema },
 	// The custom-pull checkpoint/epoch store: the orders scheduler
 	// fetcher's checkpoint seam — mirrors the web createDatabase recipe.
-	syncCheckpoints: {
-		schema: syncCheckpointSchema,
-		migrationStrategies: syncCheckpointMigrationStrategies,
-	},
+	syncCheckpoints: { schema: syncCheckpointSchema },
 };
 
 /**

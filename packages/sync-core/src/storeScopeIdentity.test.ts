@@ -75,9 +75,9 @@ describe('scopeKeyFor', () => {
 });
 
 describe('scopeDatabaseName', () => {
-	it('defaults to the v3 scope generation for the remote-id reshape', () => {
+	it('defaults to the v4 scope generation for the bare-id renames', () => {
 		const name = scopeDatabaseName(identity);
-		expect(name).toBe(`pos_v3_${scopeKeyFor(identity)}`);
+		expect(name).toBe(`pos_v4_${scopeKeyFor(identity)}`);
 	});
 
 	it('bumps the generation prefix for storage-format migrations', () => {
@@ -86,7 +86,7 @@ describe('scopeDatabaseName', () => {
 
 	it('appends a namespace suffix for test isolation', () => {
 		expect(scopeDatabaseName(identity, { namespace: 'run7' })).toBe(
-			`pos_v3_${scopeKeyFor(identity)}_run7`
+			`pos_v4_${scopeKeyFor(identity)}_run7`
 		);
 	});
 

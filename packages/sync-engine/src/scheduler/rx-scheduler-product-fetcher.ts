@@ -723,7 +723,7 @@ export function createProductsSchedulerFetcher(
 	return async (task: FetchTask, context?: SchedulerFetcherContext): Promise<FetchTaskResult> => {
 		assertProductTask(task);
 
-		if (task.ids && task.ids.length > 0) {
+		if (task.documentIds && task.documentIds.length > 0) {
 			return fetchTargetedProducts(input, task, context);
 		}
 

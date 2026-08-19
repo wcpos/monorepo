@@ -220,20 +220,20 @@ describe('createVariationsSchedulerFetcher', () => {
 		});
 		expect(stored?.payload).not.toHaveProperty('_rxdb_digest');
 		expect(manifestSink).toHaveBeenCalledWith([
-			{ id: '7', wooId: 7, objectType: 'variation', digest: 'digest-7' },
+			{ remoteId: '7', wooId: 7, objectType: 'variation', digest: 'digest-7' },
 		]);
 	});
 
-	it.each([variationTask({ ids: ['variation:1'] }), variationTask({ queryKey: 'variations:all' })])(
-		'rejects non-search task shapes loudly',
-		async (task) => {
-			const schedulerFetcher = createVariationsSchedulerFetcher({
-				baseUrl: BASE_URL,
-				repository: repository(),
-				fetcher: vi.fn(async () => response([])),
-			});
+	it.each([
+		variationTask({ documentIds: ['variation:1'] }),
+		variationTask({ queryKey: 'variations:all' }),
+	])('rejects non-search task shapes loudly', async (task) => {
+		const schedulerFetcher = createVariationsSchedulerFetcher({
+			baseUrl: BASE_URL,
+			repository: repository(),
+			fetcher: vi.fn(async () => response([])),
+		});
 
-			await expect(schedulerFetcher(task)).rejects.toThrow(/variation scheduler task/i);
-		}
-	);
+		await expect(schedulerFetcher(task)).rejects.toThrow(/variation scheduler task/i);
+	});
 });

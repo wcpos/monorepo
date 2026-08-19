@@ -172,7 +172,7 @@ describe('existence maintenance lanes through the public facade', () => {
 		await seed(db.orders as never, order(31));
 		await seed(db.orders as never, order(32, true));
 		const manifest = (wooId: number, digest: string, objectType: string) => ({
-			id: String(wooId),
+			remoteId: String(wooId),
 			wooId,
 			digest,
 			objectType,
@@ -277,7 +277,7 @@ describe('existence maintenance lanes through the public facade', () => {
 			local: { dirty: false, pendingMutationIds: [] },
 		});
 		await seed(db.existenceManifest as never, {
-			id: '77',
+			remoteId: '77',
 			wooId: 77,
 			digest: '77',
 			objectType: 'product',
@@ -448,7 +448,7 @@ describe('existence maintenance lanes through the public facade', () => {
 			local: { dirty: false, pendingMutationIds: [] },
 		});
 		await seed(oldDb.existenceManifest as never, {
-			id: '40',
+			remoteId: '40',
 			wooId: 40,
 			digest: '40',
 			objectType: 'product',
@@ -547,7 +547,7 @@ describe('existence maintenance lanes through the public facade', () => {
 		};
 		await seed(db.orders as never, order);
 		await seed(db.existenceManifestOrders as never, {
-			id: '77',
+			remoteId: '77',
 			wooId: 77,
 			digest: 'stale',
 			objectType: 'order',
@@ -577,13 +577,13 @@ describe('existence maintenance lanes through the public facade', () => {
 		await e.ready;
 		const db = e.active()!.database.collections;
 		await seed(db.existenceManifest as never, {
-			id: 'product-1',
+			remoteId: 'product-1',
 			wooId: 1,
 			digest: 'product-1',
 			objectType: 'product',
 		});
 		await seed(db.existenceManifest as never, {
-			id: 'variation-2',
+			remoteId: 'variation-2',
 			wooId: 2,
 			digest: 'variation-2',
 			objectType: 'variation',
@@ -606,13 +606,13 @@ describe('existence maintenance lanes through the public facade', () => {
 		await e.ready;
 		const db = e.active()!.database.collections;
 		await seed(db.existenceManifest as never, {
-			id: 'product-1',
+			remoteId: 'product-1',
 			wooId: 1,
 			digest: 'product-1',
 			objectType: 'product',
 		});
 		await seed(db.existenceManifest as never, {
-			id: 'variation-2',
+			remoteId: 'variation-2',
 			wooId: 2,
 			digest: 'variation-2',
 			objectType: 'variation',
@@ -637,7 +637,7 @@ describe('existence maintenance lanes through the public facade', () => {
 		});
 		await e.ready;
 		await seed(e.active()!.database.collections.existenceManifest as never, {
-			id: '1',
+			remoteId: '1',
 			wooId: 1,
 			digest: '1',
 			objectType: 'product',

@@ -32,7 +32,7 @@ function variationSearchTerm(task: FetchTask): string | null {
 function assertVariationSearchTask(task: FetchTask): string {
 	if (task.collection !== 'variations')
 		throw new Error(`Variations scheduler fetcher cannot run ${task.collection} tasks`);
-	if (task.ids && task.ids.length > 0)
+	if (task.documentIds && task.documentIds.length > 0)
 		throw new Error('Variation scheduler task does not support targeted ids');
 	const search = variationSearchTerm(task);
 	if (search === null) {

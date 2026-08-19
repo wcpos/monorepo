@@ -54,7 +54,7 @@ describe('EngineOrderRepository upsertMany — Symbol-borne manifest rows', () =
 		await new EngineOrderRepository(db).upsertMany([storedDocument]);
 
 		expect(manifestUpserts).toEqual([
-			[{ id: '77', wooId: 77, objectType: 'order', digest: 'd77' }],
+			[{ remoteId: '77', wooId: 77, objectType: 'order', digest: 'd77' }],
 		]);
 		// The stored document was rebuilt with promoted columns and no digest.
 		const stored = orderUpserts[0][0] as { status: string; payload: Record<string, unknown> };

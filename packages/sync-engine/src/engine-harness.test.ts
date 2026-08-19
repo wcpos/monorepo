@@ -30,7 +30,7 @@ describe('createEngineHarness', () => {
 		expect(harness.engine.status().connectivity).toBe('offline');
 		harness.connectivity.set('online');
 
-		await harness.seed('engineKv', [{ id: 'fixture', value: 'seeded' }]);
+		await harness.seed('engineKv', [{ key: 'fixture', value: 'seeded' }]);
 		expect((await harness.collection('engineKv').findOne('fixture').exec())?.get('value')).toBe(
 			'seeded'
 		);

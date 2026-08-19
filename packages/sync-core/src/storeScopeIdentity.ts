@@ -114,12 +114,21 @@ export function scopeKeyFor(identity: StoreScopeIdentity): string {
 	return `${site}_s${store}_c${cashier}`;
 }
 
-/** The database name a host opens for one store scope. */
+/**
+ * The database name a host opens for one store scope.
+ *
+ * Generation history: v3 = the remote-id reshape; **v4 = the ADR 0029 bare-id
+ * renames** — stored engine fields (`existenceManifest.remoteId`,
+ * `coverage.documentId`, `schedulerTaskState.documentIds`, the engine KV `key`
+ * and the sync-checkpoint `checkpointKey`) were renamed in place, so a
+ * generation-3 database is abandoned wholesale rather than migrated (house
+ * ruling: no migrations for unreleased schema; 1.10 ships a fresh database).
+ */
 export function scopeDatabaseName(
 	identity: StoreScopeIdentity,
 	options?: ScopeDatabaseNameOptions
 ): string {
-	const generation = options?.generation ?? 3;
+	const generation = options?.generation ?? 4;
 	const suffix = options?.namespace === undefined ? '' : `_${options.namespace}`;
 	return `pos_v${generation}_${scopeKeyFor(identity)}${suffix}`;
 }

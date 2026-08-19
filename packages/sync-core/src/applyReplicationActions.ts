@@ -41,7 +41,7 @@ import {
 import type { ReplicationActions } from './changeSignalReplication';
 
 /** An already-synced document the barcode re-derive reads (id + payload only). */
-export type SyncedDocument = { id: string; payload: Record<string, unknown> };
+export type SyncedDocument = { documentId: string; payload: Record<string, unknown> };
 
 /** Outcome of one collection's rebaseline pull: every locally synced id is
  * either re-pulled (`applied`) or pruned as server-deleted (`pruned`). */
@@ -384,7 +384,10 @@ export async function applyReplicationActions(
 	//    the stale index.
 	const reDerived: ReDeriveResult[] = [];
 	for (const target of actions.reDeriveBarcode) {
-		const docs = await handlers.loadSyncedDocs(target.collection);
+		const synced = await handlers.loadSyncedDocs(target.collection);
+		// The barcode index builder keys its rows by `id` (the local barcode doc id) — adapt the
+		// engine's `documentId` naming at this seam rather than renaming the index's own shape.
+		const docs = synced.map((doc) => ({ id: doc.documentId, payload: doc.payload }));
 		const rebuilt = rebuildBarcodeIndexForConfig({ docs, activeFields: target.activeFields });
 		if (rebuilt.staleCollection) {
 			const refetched = await handlers.reFetchCollection(target.collection);

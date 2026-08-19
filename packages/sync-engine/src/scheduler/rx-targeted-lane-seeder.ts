@@ -159,7 +159,7 @@ export async function seedTargetedLane(
 						requirementId,
 						collection: descriptor.collection,
 						queryKey,
-						ids: chunk.map((id) => descriptor.documentId(id)),
+						documentIds: chunk.map((id) => descriptor.documentId(id)),
 						// The validated numeric ids ride alongside the document keys so the fetcher
 						// reads them directly — decoupled from the key encoding (uuid-ready).
 						remoteIds: chunk,

@@ -80,21 +80,21 @@ describe('resolveRecordIdentity', () => {
 
 	it('SERVER-BORN: reuses the uuid from meta_data, meta unchanged', () => {
 		const result = resolveRecordIdentity({ metaData: [uuidEntry(U_SERVER)], mintUuid });
-		expect(result.id).toBe(U_SERVER);
+		expect(result.uuid).toBe(U_SERVER);
 		expect(result.origin).toBe('server-meta');
 		expect(result.metaData).toEqual([uuidEntry(U_SERVER)]);
 	});
 
 	it('LOCAL-BORN: mints a uuid and mirrors it into meta_data', () => {
 		const result = resolveRecordIdentity({ metaData: [], mintUuid });
-		expect(result.id).toBe(U_MINT);
+		expect(result.uuid).toBe(U_MINT);
 		expect(result.origin).toBe('minted');
 		expect(result.metaData).toEqual([uuidEntry(U_MINT)]);
 	});
 
 	it('LOCAL-BORN with no meta_data at all: mints + mirrors', () => {
 		expect(resolveRecordIdentity({ mintUuid })).toMatchObject({
-			id: U_MINT,
+			uuid: U_MINT,
 			origin: 'minted',
 			metaData: [uuidEntry(U_MINT)],
 		});
@@ -106,7 +106,7 @@ describe('resolveRecordIdentity', () => {
 			metaData: [{ key: 'x', value: 1 }],
 			mintUuid,
 		});
-		expect(result.id).toBe('woo-order:123'); // currentId is NOT format-validated (migration-safe)
+		expect(result.uuid).toBe('woo-order:123'); // currentId is NOT format-validated (migration-safe)
 		expect(result.origin).toBe('existing');
 		expect(result.metaData).toEqual([{ key: 'x', value: 1 }, uuidEntry('woo-order:123')]);
 	});
@@ -120,17 +120,17 @@ describe('resolveRecordIdentity', () => {
 	it('is idempotent: re-resolving a resolved record yields the same id and stable meta', () => {
 		const first = resolveRecordIdentity({ metaData: [], mintUuid });
 		const second = resolveRecordIdentity({
-			currentId: first.id,
+			currentId: first.uuid,
 			metaData: first.metaData,
 			mintUuid,
 		});
-		expect(second.id).toBe(first.id);
+		expect(second.uuid).toBe(first.uuid);
 		expect(second.metaData).toEqual(first.metaData);
 	});
 
 	it('BLANK/malformed meta uuid: mints and REPLACES the entry (meta ends mirrored)', () => {
 		const result = resolveRecordIdentity({ metaData: [uuidEntry('not-a-uuid')], mintUuid });
-		expect(result.id).toBe(U_MINT);
+		expect(result.uuid).toBe(U_MINT);
 		expect(result.origin).toBe('minted');
 		expect(result.metaData).toEqual([uuidEntry(U_MINT)]);
 	});
@@ -146,10 +146,11 @@ describe('resolveRecordIdentity', () => {
 
 	it('mintOnMissing:false still resolves a server-born or keyed record', () => {
 		expect(
-			resolveRecordIdentity({ metaData: [uuidEntry(U_SERVER)], mintUuid, mintOnMissing: false }).id
+			resolveRecordIdentity({ metaData: [uuidEntry(U_SERVER)], mintUuid, mintOnMissing: false })
+				.uuid
 		).toBe(U_SERVER);
 		expect(
-			resolveRecordIdentity({ currentId: 'woo-order:9', mintUuid, mintOnMissing: false }).id
+			resolveRecordIdentity({ currentId: 'woo-order:9', mintUuid, mintOnMissing: false }).uuid
 		).toBe('woo-order:9');
 	});
 
@@ -165,7 +166,7 @@ describe('resolveRecordIdentity', () => {
 			metaData: [uuidEntry(U_SERVER)],
 			mintUuid,
 		});
-		expect(result.id).toBe(U_SERVER);
+		expect(result.uuid).toBe(U_SERVER);
 		expect(result.origin).toBe('existing');
 	});
 });
@@ -180,7 +181,7 @@ describe('identifyRecord', () => {
 			meta_data: [{ key: 'x', value: 1 }, uuidEntry(U_SERVER)],
 		};
 		const result = identifyRecord(payload, { mintUuid });
-		expect(result.id).toBe(U_SERVER);
+		expect(result.uuid).toBe(U_SERVER);
 		expect(result.origin).toBe('server-meta');
 		expect(result.payload).toEqual({
 			name: 'Widget',
@@ -192,7 +193,7 @@ describe('identifyRecord', () => {
 	it('LOCAL-BORN payload: mints and mirrors the uuid into meta_data', () => {
 		const payload = { name: 'New product', meta_data: [] };
 		const result = identifyRecord(payload, { mintUuid });
-		expect(result.id).toBe(U_MINT);
+		expect(result.uuid).toBe(U_MINT);
 		expect(result.origin).toBe('minted');
 		expect(result.payload.meta_data).toEqual([uuidEntry(U_MINT)]);
 		expect(result.payload.name).toBe('New product');
@@ -201,7 +202,7 @@ describe('identifyRecord', () => {
 	it('handles a payload with no meta_data field (local-born)', () => {
 		const result = identifyRecord({ name: 'X' }, { mintUuid });
 		expect(result).toMatchObject({
-			id: U_MINT,
+			uuid: U_MINT,
 			origin: 'minted',
 			payload: { name: 'X', meta_data: [uuidEntry(U_MINT)] },
 		});

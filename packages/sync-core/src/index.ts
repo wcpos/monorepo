@@ -42,12 +42,17 @@ export {
 export { MUTATION_QUEUE_COLLECTION, StoreScopeManager, type Fetcher, type ScopeDatabase, type ScopeEvent } from './storeScopeManager';
 // prettier-ignore
 export {
-	checkpointInstantMs, customerDocumentId, finiteOrNull, normalizeCheckpoint,
-	orderDocumentId, productDocumentId, promotedOrderColumns, promotedProductColumns,
-	variationDocumentId, withOrderColumns, type OrderDocument, type ProductDocument, type PullResponse,
+	checkpointInstantMs, finiteOrNull, normalizeCheckpoint,
+	promotedOrderColumns, promotedProductColumns,
+	withOrderColumns, type OrderDocument, type ProductDocument, type PullResponse,
 	type StoredOrderDocument, type StoredProductDocument, type SyncCheckpoint,
 	type WooOrderPayload, type WooProductPayload,
 } from './protocol';
+// prettier-ignore
+export {
+	catalogDocumentId, customerDocumentId, orderDocumentId, productDocumentId,
+	referenceDocumentId, taxRateDocumentId, variationDocumentId,
+} from './woo/documentKeys';
 export { identifyRecord, RECORD_UUID_META_KEY, webCryptoUuid } from './recordIdentity';
 export {
 	type MetaDataEntry,

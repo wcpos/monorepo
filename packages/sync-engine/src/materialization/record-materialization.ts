@@ -8,6 +8,7 @@ import {
 	promotedProductColumns,
 	type RemoteId,
 	remoteIdOrNull,
+	taxRateDocumentId,
 	wooIdOf,
 	type WooOrderPayload,
 	type WooProductPayload,
@@ -18,11 +19,7 @@ import {
 	existenceManifestDocument,
 	type ExistenceManifestDocument,
 } from '../local-coverage/existence-manifest-schema';
-import {
-	type LocalTaxRateDocument,
-	taxRateDocumentId,
-	type WooTaxRatePayload,
-} from '../collections/tax-rate-schema';
+import { type LocalTaxRateDocument, type WooTaxRatePayload } from '../collections/tax-rate-schema';
 import {
 	promotedVariationColumns,
 	type WooVariationPayload,
@@ -110,7 +107,7 @@ export function materializeTargeted(
 		stripDigest(barcode === undefined ? adopted.payload : { ...adopted.payload, barcode })
 	);
 	const common = {
-		uuid: identified.id,
+		uuid: identified.uuid,
 		payload: identified.payload,
 		sync: { revision: adopted.revision, partial: false, source: 'woo-rest' as const },
 	};
@@ -153,7 +150,7 @@ export function materializeGreedyPrunable(
 	const identified = identity(stripDigest(adopted.payload));
 	return {
 		storedDocument: {
-			uuid: identified.id,
+			uuid: identified.uuid,
 			remoteId,
 			payload: identified.payload,
 			sync: { revision: adopted.revision, partial: false, source: 'woo-rest' },
@@ -202,7 +199,7 @@ export function materializeLocalOnly(
 		}),
 	};
 	const document = {
-		uuid: envelope?.uuid ?? identified.id,
+		uuid: envelope?.uuid ?? identified.uuid,
 		remoteId,
 		payload: identified.payload,
 		sync,

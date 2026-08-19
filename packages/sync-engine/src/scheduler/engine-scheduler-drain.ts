@@ -80,11 +80,11 @@ const SUPPORTED_CUSTOMER_SEARCH_QUERY_KEY_PATTERN = /^customers:search=([^:]*):l
 const SUPPORTED_TAX_RATE_QUERY_KEY = 'taxRates:all';
 
 function hasNoTargetedIds(task: SchedulerTaskSupportCandidate): boolean {
-	return !task.ids || task.ids.length === 0;
+	return !task.documentIds || task.documentIds.length === 0;
 }
 
 function hasTargetedIds(task: SchedulerTaskSupportCandidate): boolean {
-	return !!task.ids && task.ids.length > 0;
+	return !!task.documentIds && task.documentIds.length > 0;
 }
 
 function isSupportedBrowserOrderQueryKey(queryKey: string): boolean {

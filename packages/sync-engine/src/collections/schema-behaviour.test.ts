@@ -28,7 +28,13 @@ import {
 } from 'rxdb';
 import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 
-import { customerDocumentId, promotedOrderColumns, promotedProductColumns } from '@wcpos/sync-core';
+import {
+	customerDocumentId,
+	promotedOrderColumns,
+	promotedProductColumns,
+	referenceDocumentId,
+	taxRateDocumentId,
+} from '@wcpos/sync-core';
 import {
 	type QueuedMutation,
 	recordMutationQueueMigrationStrategies,
@@ -38,22 +44,17 @@ import {
 import { memoryEngineStorage, remoteId } from '../testing';
 import { orderSchema } from './order-schema';
 import { engineCollectionCreators } from './engine-collections';
-import { productMigrationStrategies, productSchema } from './product-schema';
+import { productSchema } from './product-schema';
 import { promotedVariationColumns, variationSchema } from './variation-schema';
 import { customerSchema } from './customer-schema';
-import { taxRateDocumentId, taxRateSchema } from './tax-rate-schema';
+import { taxRateSchema } from './tax-rate-schema';
 import {
 	brandSchema,
 	categorySchema,
 	couponSchema,
-	referenceDocumentId,
 	tagSchema,
 } from './reference-collection-schema';
-import { syncCheckpointMigrationStrategies, syncCheckpointSchema } from './sync-checkpoint-schema';
-import {
-	queryTotalRequestStateMigrationStrategies,
-	queryTotalRequestStateSchema,
-} from '../scheduler/query-total-request-state-schema';
+import { syncCheckpointSchema } from './sync-checkpoint-schema';
 import {
 	CHANGE_SIGNAL_STATE_ID,
 	changeSignalStateSchema,
@@ -225,9 +226,8 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 	it('syncCheckpoints', async () => {
 		await expectRoundTrip({
 			schema: syncCheckpointSchema,
-			migrationStrategies: syncCheckpointMigrationStrategies,
 			document: {
-				id: 'orders:custom-pull',
+				checkpointKey: 'orders:custom-pull',
 				checkpoint: {
 					updatedAtGmt: '2026-07-01T10:00:00',
 					orderId: 42,
@@ -258,7 +258,7 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 			digest: '18446744073709551615',
 		});
 		expect(row).toEqual({
-			id: '9',
+			remoteId: '9',
 			wooId: 9,
 			objectType: 'product',
 			digest: '18446744073709551615',
@@ -274,119 +274,6 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
  * run every strategy. This is the path a real device takes on upgrade.
  */
 describe('stored documents migrate through every schema version', () => {
-	async function migrate(input: {
-		fixtureSchema: Record<string, unknown>;
-		fixtureMigrationStrategies?: MigrationStrategies;
-		oldDocument: Record<string, unknown>;
-		currentSchema: unknown;
-		migrationStrategies: MigrationStrategies;
-	}): Promise<Record<string, unknown>> {
-		const storage = memoryEngineStorage();
-		const dbName = `schema-migration-${(dbSeq += 1)}`;
-		const old = await openCollection({
-			schema: input.fixtureSchema,
-			...(input.fixtureMigrationStrategies
-				? { migrationStrategies: input.fixtureMigrationStrategies }
-				: {}),
-			storage,
-			dbName,
-		});
-		await old.collection.insert(input.oldDocument);
-		await old.db.close();
-
-		const current = await openCollection({
-			schema: input.currentSchema,
-			migrationStrategies: input.migrationStrategies,
-			storage,
-			dbName,
-		});
-		const documentId = (input.oldDocument.id ?? input.oldDocument.queryKey) as string;
-		const migrated = await current.collection.findOne(documentId).exec();
-		expect(migrated).not.toBeNull();
-		const json = migrated!.toJSON() as Record<string, unknown>;
-		await current.db.close();
-		return json;
-	}
-
-	it('query-total request state v2 → v3 preserves the document with the new marker', async () => {
-		const migrated = await migrate({
-			fixtureSchema: {
-				...queryTotalRequestStateSchema,
-				version: 2,
-				properties: {
-					...queryTotalRequestStateSchema.properties,
-					status: { type: 'string', enum: ['in-flight', 'failed'], maxLength: 16 },
-					schemaVersion: { type: 'number', enum: [2] },
-				},
-			},
-			fixtureMigrationStrategies: { 1: (doc) => doc, 2: (doc) => doc },
-			oldDocument: {
-				queryKey: 'census:orders',
-				status: 'failed',
-				ownerId: null,
-				claimedUntilMs: null,
-				attempt: 1,
-				retryAfterMs: 1_000,
-				updatedAtMs: 900,
-				request: null,
-				schemaVersion: 2,
-			},
-			currentSchema: queryTotalRequestStateSchema,
-			migrationStrategies: queryTotalRequestStateMigrationStrategies,
-		});
-		expect(migrated).toMatchObject({
-			queryKey: 'census:orders',
-			status: 'failed',
-			attempt: 1,
-			schemaVersion: 3,
-		});
-	});
-
-	it('syncCheckpoints v0 → v1 keeps pre-epoch checkpoints valid (epoch stays absent)', async () => {
-		const migrated = await migrate({
-			fixtureSchema: {
-				title: 'sync checkpoint v0 fixture',
-				version: 0,
-				primaryKey: 'id',
-				type: 'object',
-				properties: {
-					id: { type: 'string', maxLength: 128 },
-					checkpoint: {
-						type: 'object',
-						properties: {
-							updatedAtGmt: { type: 'string' },
-							orderId: { type: 'number' },
-							revision: { type: 'string' },
-							sequence: { type: 'number' },
-						},
-						required: ['updatedAtGmt', 'orderId', 'revision', 'sequence'],
-					},
-					updatedAt: { type: 'string' },
-				},
-				required: ['id', 'checkpoint', 'updatedAt'],
-			},
-			oldDocument: {
-				id: 'orders:custom-pull',
-				checkpoint: {
-					updatedAtGmt: '2026-07-01T10:00:00',
-					orderId: 42,
-					revision: 'r1',
-					sequence: 3,
-				},
-				updatedAt: '2026-07-01T10:00:01.000Z',
-			},
-			currentSchema: syncCheckpointSchema,
-			migrationStrategies: syncCheckpointMigrationStrategies,
-		});
-		expect(migrated.checkpoint).toEqual({
-			updatedAtGmt: '2026-07-01T10:00:00',
-			orderId: 42,
-			revision: 'r1',
-			sequence: 3,
-		});
-		expect('epoch' in migrated).toBe(false); // pre-F8 checkpoint = never-seen epoch
-	});
-
 	it('mutation queue v1 → v2 synthesizes seq (queuedAt order preserved) and status pending (#507 regression 8)', async () => {
 		// The pre-#507 durable queue schema: no seq/status/conflict fields.
 		const v1FixtureSchema = {
@@ -526,55 +413,6 @@ describe('stored documents migrate through every schema version', () => {
 		expect(rows[0]?.rejectedReason).toBeUndefined();
 		expect(rows[0]?.requeueCount).toBeUndefined();
 	});
-
-	it('products v0 → v1 reopens an existing scope database and re-projects the clamped price', async () => {
-		// #1308 widened the promoted `price` bound to admit negative prices but left the
-		// schema at v0. RxDB keys the internal collection doc by `name-version`, so the
-		// amended hash threw DB6 and the ENTIRE scope database stopped opening — the app
-		// shell still rendered, the product grid was permanently empty, and every
-		// authenticated E2E test burned its 60s catalogue wait. This pins the bump.
-		const v0FixtureSchema = {
-			...productSchema,
-			title: 'Woo product document schema v0 fixture',
-			version: 0,
-			properties: {
-				...productSchema.properties,
-				// The pre-#1308 bound, paired with the pre-#1308 `Math.max(0, …)` write clamp.
-				price: { type: 'number', minimum: 0, maximum: 100_000_000, multipleOf: 0.01 },
-			},
-		};
-		// A deposit-return style product: the payload price is negative, but v0's clamp
-		// stored `0` in the promoted column.
-		const payload = { ...PRODUCT_PAYLOAD, id: 91, price: '-5.00' };
-
-		const storage = memoryEngineStorage();
-		const dbName = `schema-migration-${(dbSeq += 1)}`;
-		const old = await openCollection({ schema: v0FixtureSchema, storage, dbName });
-		await old.collection.insert({
-			uuid: 'product-v0',
-			remoteId: remoteId(91),
-			payload,
-			sync: { revision: 'r1', checkpoint: {}, partial: false, source: 'woo-rest' },
-			local: { dirty: false, pendingMutationIds: [] },
-			...promotedProductColumns(payload),
-			price: 0, // what the v0 clamp actually wrote
-		});
-		await old.db.close();
-
-		const current = await openCollection({
-			schema: productSchema,
-			migrationStrategies: productMigrationStrategies as unknown as MigrationStrategies,
-			storage,
-			dbName,
-		});
-		const migrated = await current.collection.findOne('product-v0').exec();
-		expect(migrated).not.toBeNull();
-		const json = migrated!.toJSON() as Record<string, unknown>;
-		await current.db.close();
-
-		expect(json.payload).toEqual(payload); // payload bytes untouched
-		expect(json.price).toBe(-5); // the promoted column no longer lies
-	});
 });
 
 describe('schema identity — an in-place edit throws DB6 and blocks the database from opening', () => {
@@ -607,7 +445,7 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 
 	const PINNED_DIGESTS: Record<string, string> = {
 		orders: '72d3cd3ea083c10c',
-		products: '96c520cdd7d66b8f', // v1 — see the v0 → v1 migration test above
+		products: '914ff9bc836d2f03',
 		variations: '478a682482d83df3',
 		// customers and the four reference schemas share a digest: they ARE the same
 		// shape apart from title (ADR 0019 — see the identity test below).
@@ -617,19 +455,19 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 		brands: '85e1373e0643f472',
 		tags: '85e1373e0643f472',
 		coupons: '85e1373e0643f472',
-		schedulerTaskStates: '10263819d3dd2b0c',
-		coverageRecords: '5d7d002dae66c251',
-		coverageLanes: '6160fb991f88a2bf',
-		coverageCompactionLeases: '003b7b4712002ac6',
-		coverageCompactionFailures: 'ab4f766f5371c8a2',
-		queryTotalCacheEntries: '6a93dbf57197742a',
-		queryTotalRequestStates: 'ad4e1c81100d2c16',
-		existenceManifest: 'f7ce76234e1c59be',
-		existenceManifestCustomers: 'f7ce76234e1c59be',
-		existenceManifestOrders: 'f7ce76234e1c59be',
-		syncCheckpoints: '31f42e272f4d79eb',
+		schedulerTaskStates: '3fbf7c70726dec3c',
+		coverageRecords: '3022569cc18cc7df',
+		coverageLanes: '12a1f38d36ffc0d0',
+		coverageCompactionLeases: '6b31b2aca59dab39',
+		coverageCompactionFailures: '7bd215537ecdb03d',
+		queryTotalCacheEntries: '00db9dffbd396f3c',
+		queryTotalRequestStates: '184b47e2c3aae0bf',
+		existenceManifest: '107bac24876b267a',
+		existenceManifestCustomers: '107bac24876b267a',
+		existenceManifestOrders: '107bac24876b267a',
+		syncCheckpoints: '13a461c616ee12b9',
 		recordMutations: '94c4fd4e440dbdd7',
-		engineKv: 'b9dabb778f9362a2',
+		engineKv: 'a8d94dc8495e36cc',
 		changeSignalStates: 'f53de19b6c426c6a',
 	};
 

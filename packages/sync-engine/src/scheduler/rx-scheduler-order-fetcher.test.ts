@@ -150,7 +150,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(upserted).toHaveLength(1);
 		const { manifestRows, documents } = extractOrderManifest(upserted);
 		expect(manifestRows).toEqual([
-			{ id: '11', wooId: 11, objectType: 'order', digest: '9223372036854775810' },
+			{ remoteId: '11', wooId: 11, objectType: 'order', digest: '9223372036854775810' },
 		]);
 		expect(documents[0]?.payload).not.toHaveProperty('_rxdb_digest');
 	});
@@ -524,7 +524,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				id: 'orders:ids:123,456:on-demand',
 				requirementId: 'orders.deep-link',
 				queryKey: 'orders:ids:123,456',
-				ids: ['woo-order:123', 'woo-order:456'],
+				documentIds: ['woo-order:123', 'woo-order:456'],
 				remoteIds: [123, 456].map(remoteId),
 				limit: 2,
 				mode: 'on-demand',
@@ -620,7 +620,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				requirementId: 'orders.deep-link',
 				queryKey: 'orders:ids:deep-link',
 				remoteIds: [123, 456].map(remoteId),
-				ids: ['8e29c1a4-3b2d-4f6a-9c0e-1d2f3a4b5c6d', 'not-a-woo-order-key'],
+				documentIds: ['8e29c1a4-3b2d-4f6a-9c0e-1d2f3a4b5c6d', 'not-a-woo-order-key'],
 				limit: 2,
 				mode: 'on-demand',
 			})
@@ -652,7 +652,7 @@ describe('createOrdersSchedulerFetcher', () => {
 					id: 'orders:ids:123,456:on-demand',
 					requirementId: 'orders.deep-link',
 					queryKey: 'orders:ids:123,456',
-					ids: ['woo-order:123', 'woo-order:456'],
+					documentIds: ['woo-order:123', 'woo-order:456'],
 					limit: 2,
 					mode: 'on-demand',
 				})
@@ -700,7 +700,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				id: 'orders:ids:123,456:on-demand',
 				requirementId: 'orders.deep-link',
 				queryKey: 'orders:ids:123,456',
-				ids: ['woo-order:123', 'woo-order:456'],
+				documentIds: ['woo-order:123', 'woo-order:456'],
 				remoteIds: [123, 456].map(remoteId),
 				limit: 2,
 				mode: 'on-demand',
@@ -769,7 +769,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				id: 'orders:ids:123,456:on-demand',
 				requirementId: 'orders.deep-link',
 				queryKey: 'orders:ids:123,456',
-				ids: ['woo-order:123', 'woo-order:456'],
+				documentIds: ['woo-order:123', 'woo-order:456'],
 				remoteIds: [123, 456].map(remoteId),
 				limit: 1, // batchSize 1 → two single-id batches, each re-reading the queue
 				mode: 'on-demand',
@@ -873,7 +873,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				id: 'orders:ids:123,456:on-demand',
 				requirementId: 'orders.deep-link',
 				queryKey: 'orders:ids:123,456',
-				ids: ['woo-order:123', 'woo-order:456'],
+				documentIds: ['woo-order:123', 'woo-order:456'],
 				remoteIds: [123, 456].map(remoteId),
 				limit: 2,
 				mode: 'on-demand',
@@ -920,7 +920,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				id: 'orders:ids:123:on-demand',
 				requirementId: 'orders.deep-link',
 				queryKey: 'orders:ids:123',
-				ids: ['woo-order:123'],
+				documentIds: ['woo-order:123'],
 				remoteIds: [123].map(remoteId),
 				limit: 1,
 				mode: 'on-demand',
@@ -973,7 +973,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				id: 'orders:ids:bulk:on-demand',
 				requirementId: 'orders.bulk-deep-link',
 				queryKey: 'orders:ids:bulk',
-				ids: requestedIds,
+				documentIds: requestedIds,
 				remoteIds: requestedWooIds.map(remoteId),
 				limit: 101,
 				mode: 'on-demand',
@@ -1058,7 +1058,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				id: 'orders:ids:limit-two:on-demand',
 				requirementId: 'orders.limit-two',
 				queryKey: 'orders:ids:limit-two',
-				ids: ['woo-order:1', 'woo-order:2', 'woo-order:3', 'woo-order:4', 'woo-order:5'],
+				documentIds: ['woo-order:1', 'woo-order:2', 'woo-order:3', 'woo-order:4', 'woo-order:5'],
 				remoteIds: [1, 2, 3, 4, 5].map(remoteId),
 				limit: 2,
 				mode: 'on-demand',
@@ -1107,7 +1107,7 @@ describe('createOrdersSchedulerFetcher', () => {
 					id: 'orders:ids:missing:on-demand',
 					requirementId: 'orders.missing',
 					queryKey: 'orders:ids:missing',
-					ids: ['woo-order:123', 'woo-order:456'],
+					documentIds: ['woo-order:123', 'woo-order:456'],
 					remoteIds: [123, 456].map(remoteId),
 					limit: 2,
 					mode: 'on-demand',
@@ -2555,7 +2555,7 @@ describe('createOrdersSchedulerFetcher', () => {
 					id: 'orders:ids:bulk:on-demand',
 					requirementId: 'orders.bulk-deep-link',
 					queryKey: 'orders:ids:bulk',
-					ids: ['woo-order:77'],
+					documentIds: ['woo-order:77'],
 					remoteIds: [77].map(remoteId),
 					limit: 1,
 					mode: 'on-demand',

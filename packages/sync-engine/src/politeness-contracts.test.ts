@@ -69,7 +69,7 @@ function product(wooId: number): Record<string, unknown> {
 async function seedPopulatedStore(harness: EngineHarness): Promise<void> {
 	await harness.seed('products', [product(1)]);
 	await harness.seed('existenceManifest', [
-		{ id: '1', wooId: 1, digest: '1', objectType: 'product' },
+		{ remoteId: '1', wooId: 1, digest: '1', objectType: 'product' },
 	]);
 }
 
@@ -250,7 +250,7 @@ describe('maintenance politeness contracts', () => {
 			await harness.seed(
 				'existenceManifest',
 				[0, 1, 2].map((bucket) => ({
-					id: String(bucket * 1_000 + 1),
+					remoteId: String(bucket * 1_000 + 1),
 					wooId: bucket * 1_000 + 1,
 					digest: '1',
 					objectType: 'product',

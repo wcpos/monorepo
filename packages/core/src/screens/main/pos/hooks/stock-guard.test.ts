@@ -4,7 +4,7 @@
 import { act, renderHook } from '@testing-library/react';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { engineDocumentIdFor } from '@wcpos/sync-engine';
+import { catalogDocumentId } from '@wcpos/sync-core';
 
 import { aggregateExistingCartQuantity, evaluateStockForCartChange } from './stock-guard';
 import { useCartStockGuard } from './use-cart-stock-guard';
@@ -255,7 +255,7 @@ describe('useCartStockGuard', () => {
 		});
 
 		expect(mockFindDocumentsById).toHaveBeenCalledWith(
-			[engineDocumentIdFor('product', '10' as never)],
+			[catalogDocumentId('product', '10' as never)],
 			true
 		);
 		expect(stockResult).toEqual({

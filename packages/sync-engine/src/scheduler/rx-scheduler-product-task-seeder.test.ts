@@ -68,7 +68,7 @@ describe('seedTargetedProductSchedulerTask', () => {
 					requirementId: 'products.targeted.123,456',
 					collection: 'products',
 					queryKey: 'products:ids:123,456',
-					ids: ['woo-product:123', 'woo-product:456'],
+					documentIds: ['woo-product:123', 'woo-product:456'],
 					remoteIds: [123, 456].map(remoteId),
 					limit: 50,
 					priority: 950,
@@ -113,7 +113,7 @@ describe('seedTargetedProductSchedulerTask', () => {
 					expect.objectContaining({
 						id: 'products:ids:7:on-demand',
 						queryKey: 'products:ids:7',
-						ids: ['woo-product:7'],
+						documentIds: ['woo-product:7'],
 						limit: 100,
 						priority: 900,
 						mode: 'on-demand',
@@ -168,18 +168,18 @@ describe('seedTargetedProductSchedulerTask', () => {
 
 		const seederInput = mocks.seedPersistedSchedulerTasks.mock.calls[0][0];
 		expect(seederInput.tasks.length).toBeGreaterThan(1);
-		expect(seederInput.tasks.flatMap((task: { ids?: string[] }) => task.ids ?? [])).toEqual(
-			Array.from({ length: 100 }, (_, index) => `woo-product:${index + 1}`)
-		);
+		expect(
+			seederInput.tasks.flatMap((task: { documentIds?: string[] }) => task.documentIds ?? [])
+		).toEqual(Array.from({ length: 100 }, (_, index) => `woo-product:${index + 1}`));
 		for (const task of seederInput.tasks as {
 			requirementId: string;
 			queryKey: string;
-			ids?: string[];
+			documentIds?: string[];
 			limit: number;
 		}[]) {
 			expect(task.requirementId.length).toBeLessThanOrEqual(256);
 			expect(task.queryKey.length).toBeLessThanOrEqual(256);
-			expect(task.ids?.length).toBeLessThanOrEqual(100);
+			expect(task.documentIds?.length).toBeLessThanOrEqual(100);
 			expect(task.limit).toBe(100);
 		}
 	});

@@ -62,7 +62,12 @@ function primeDatabase(input: {
 	const manifestDocs = (wooIds: number[]) =>
 		wooIds.map((wooId) => ({
 			wooId,
-			toJSON: () => ({ id: String(wooId), wooId, objectType: 'product' as const, digest: 'old' }),
+			toJSON: () => ({
+				remoteId: String(wooId),
+				wooId,
+				objectType: 'product' as const,
+				digest: 'old',
+			}),
 		}));
 	const productManifestWooIds = input.manifestWooIds ?? [];
 	const customerManifestWooIds = input.customerManifestWooIds ?? [];
@@ -384,7 +389,9 @@ describe('primeExistenceManifest removal safety across yields (#949)', () => {
 		).resolves.toBe(1);
 
 		expect(pruned).toEqual([[10]]);
-		expect(upserted).toEqual([[{ id: '11', wooId: 11, objectType: 'customer', digest: 'd-11' }]]);
+		expect(upserted).toEqual([
+			[{ remoteId: '11', wooId: 11, objectType: 'customer', digest: 'd-11' }],
+		]);
 		expect(cursor).toBe(11);
 	});
 
@@ -405,7 +412,7 @@ describe('primeExistenceManifest removal safety across yields (#949)', () => {
 
 		expect(pruned).not.toHaveBeenCalled();
 		expect(upsert).toHaveBeenCalledWith([
-			{ id: '20', wooId: 20, objectType: 'order', digest: 'old-server' },
+			{ remoteId: '20', wooId: 20, objectType: 'order', digest: 'old-server' },
 		]);
 	});
 

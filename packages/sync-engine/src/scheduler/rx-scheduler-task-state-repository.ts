@@ -15,15 +15,16 @@ export type RerunOrReseedOutcome = 'rerun-requested' | 'requeued' | 'skipped';
 export type CompleteOrRequeueOutcome = 'completed' | 'requeued' | 'claim-lost';
 
 function toDocument(state: PersistedSchedulerTaskState): SchedulerTaskStateDocument {
-	// The optional fields must be ABSENT keys when unset, never `ids: undefined`:
+	// The optional fields must be ABSENT keys when unset, never `documentIds: undefined`:
 	// dev-mode z-schema validation type-checks a present key's value (VD2, 422),
 	// and key-absence is load-bearing downstream (migrateSchedulerTaskStateV4,
 	// the sameSchedulerTaskState CAS compare). Lane/query states arrive with the
-	// keys present-but-undefined (toQueuedState spreads task.ids/task.remoteIds).
-	const { collection, ids, remoteIds, rerunRequested, ...rest } = state;
+	// keys present-but-undefined (toQueuedState spreads
+	// task.documentIds/task.remoteIds).
+	const { collection, documentIds, remoteIds, rerunRequested, ...rest } = state;
 	return {
 		...rest,
-		...(ids === undefined ? {} : { ids }),
+		...(documentIds === undefined ? {} : { documentIds }),
 		...(remoteIds === undefined ? {} : { remoteIds }),
 		...(rerunRequested === undefined ? {} : { rerunRequested }),
 		stateKey: schedulerTaskStateKey(state.taskId),
@@ -51,7 +52,7 @@ function sameSchedulerTaskState(
 		left.requirementId === right.requirementId &&
 		left.collection === right.collection &&
 		left.queryKey === right.queryKey &&
-		sameStringArray(left.ids, right.ids) &&
+		sameStringArray(left.documentIds, right.documentIds) &&
 		sameStringArray(left.remoteIds, right.remoteIds) &&
 		left.limit === right.limit &&
 		left.priority === right.priority &&

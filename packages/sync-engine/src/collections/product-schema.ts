@@ -1,14 +1,14 @@
-import { promotedProductColumns, type StoredProductDocument } from '@wcpos/sync-core';
+import { type StoredProductDocument } from '@wcpos/sync-core';
 
 export type LocalProductDocument = StoredProductDocument;
 
 export const productSchema = {
 	title: 'Woo product document schema',
-	// v1 (#1308 follow-up): the promoted `price` bound widened to admit negative prices.
 	// RxDB keys the internal collection doc by `name-version`, so amending a schema in
 	// place changes its hash and `addCollections` throws DB6 — the whole scope database
-	// then fails to open, not just this collection. Every schema edit needs a version bump.
-	version: 1,
+	// then fails to open, not just this collection. Pre-GA the scope database GENERATION
+	// is bumped instead (storeScopeIdentity), so versions stay at 0 with no migrations.
+	version: 0,
 	primaryKey: 'uuid',
 	type: 'object',
 	properties: {
@@ -55,16 +55,3 @@ export const productSchema = {
 	// stock + type are the index-worthy filter axes; price backs the default product panel sort.
 	indexes: ['stockStatus', 'price', ['type', 'stockStatus']],
 } as const;
-
-export const productMigrationStrategies = {
-	/**
-	 * v0 → v1: re-project the promoted columns from the (untouched) payload. v0 wrote
-	 * `price` through a `Math.max(0, …)` clamp, so a negative-priced product stored `0` —
-	 * a column that lies relative to `sortable_price`. Re-deriving through the single
-	 * projector is what makes the widened bound true for already-stored rows.
-	 */
-	1: (doc: LocalProductDocument): LocalProductDocument => ({
-		...doc,
-		...promotedProductColumns(doc.payload),
-	}),
-};

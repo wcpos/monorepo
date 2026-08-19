@@ -899,7 +899,7 @@ export function createRxdbSyncEngine(
 				if (legacyCheckpoint) {
 					const legacy = legacyCheckpoint.toJSON() as { state: string };
 					await db.collections[ENGINE_KV_COLLECTION].upsert({
-						id: CHANGE_SIGNAL_STATE_KEY,
+						key: CHANGE_SIGNAL_STATE_KEY,
 						value: legacy.state,
 					});
 				}
@@ -1003,7 +1003,7 @@ export function createRxdbSyncEngine(
 		}
 		const db = databaseByScopeId.get(scopeId);
 		if (!db) throw new Error(`Cannot persist "${key}": scope ${scopeId} has no open database`);
-		await db.collections[ENGINE_KV_COLLECTION].upsert({ id: key, value });
+		await db.collections[ENGINE_KV_COLLECTION].upsert({ key, value });
 	};
 	const removeBlob = async (scopeId: string, key: string): Promise<void> => {
 		if (ports.checkpoints) {

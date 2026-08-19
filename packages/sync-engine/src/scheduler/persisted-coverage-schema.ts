@@ -1,6 +1,7 @@
 export type PersistedCoverageRecord = {
 	collection: string;
-	id: string;
+	/** The engine document key this coverage row is about (`woo-<entity>:<n>` or a uuid). */
+	documentId: string;
 	coveredQueryKeys: string[];
 	freshUntilMs: number;
 	updatedAtMs: number;
@@ -66,7 +67,7 @@ export type PersistedCoverageLane = {
 	rangedResume?: RangedLaneResumeState;
 };
 
-export type LocalRecordCoverage = Pick<PersistedCoverageRecord, 'collection' | 'id'> & {
+export type LocalRecordCoverage = Pick<PersistedCoverageRecord, 'collection' | 'documentId'> & {
 	fresh: boolean;
 };
 
@@ -118,7 +119,7 @@ export type PersistedCoverageCompactionResult = {
 
 export const coverageSchemaIndexes = {
 	records: [
-		['collection', 'id'],
+		['collection', 'documentId'],
 		['collection', 'freshUntilMs'],
 	],
 	lanes: [
@@ -172,7 +173,7 @@ export function toLocalCoverageState(input: ToLocalCoverageStateInput): LocalCov
 	return {
 		records: input.documents.records.map((record) => ({
 			collection: record.collection,
-			id: record.id,
+			documentId: record.documentId,
 			fresh: isFresh(record.freshUntilMs, input.nowMs),
 		})),
 		lanes: input.documents.lanes.map((lane) => ({
@@ -204,7 +205,7 @@ export function planPersistedCoverageRetention(
 			retentionDecision({
 				documentType: 'record' as const,
 				collection: record.collection,
-				key: record.id,
+				key: record.documentId,
 				freshUntilMs: record.freshUntilMs,
 				nowMs: input.nowMs,
 				retainStaleForMs: input.retainStaleForMs,
@@ -241,7 +242,7 @@ export function compactPersistedCoverageDocuments(
 	return {
 		documents: {
 			records: input.documents.records.filter(
-				(record) => !removedRecordKeys.has(`${record.collection}::${record.id}`)
+				(record) => !removedRecordKeys.has(`${record.collection}::${record.documentId}`)
 			),
 			lanes: input.documents.lanes.filter(
 				(lane) => !removedLaneKeys.has(`${lane.collection}::${lane.queryKey}`)
