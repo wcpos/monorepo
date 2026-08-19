@@ -6,17 +6,11 @@ import toNumber from 'lodash/toNumber';
 import { Text } from '@wcpos/components/text';
 
 import { Section } from './_section';
+import { totalRefunded } from './total-refunded';
 import { useT } from '../../../../../contexts/translations';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
-
-function totalRefunded(order: OrderDocument) {
-	return (order.refunds || []).reduce((sum, refund) => {
-		const value = 'amount' in refund ? (refund.amount ?? refund.total) : refund.total;
-		return sum + Math.abs(toNumber(value));
-	}, 0);
-}
 
 function Row({
 	label,
@@ -51,7 +45,7 @@ export function TotalsSection({ order }: { order: OrderDocument }) {
 	const shipping = toNumber(order.shipping_total);
 	const fees = (order.fee_lines || []).reduce((sum, fee) => sum + toNumber(fee.total), 0);
 	const taxTotal = toNumber(order.total_tax);
-	const refunded = totalRefunded(order);
+	const refunded = totalRefunded(order.refunds);
 	const total = toNumber(order.total);
 
 	const couponLines = order.coupon_lines || [];

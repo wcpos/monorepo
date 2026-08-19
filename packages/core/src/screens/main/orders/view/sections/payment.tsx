@@ -1,23 +1,15 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import toNumber from 'lodash/toNumber';
-
 import { Text } from '@wcpos/components/text';
 
 import { RailSection } from './_section';
+import { totalRefunded } from './total-refunded';
 import { useT } from '../../../../../contexts/translations';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useDateFormat } from '../../../hooks/use-date-format';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
-
-function totalRefunded(order: OrderDocument) {
-	return (order.refunds || []).reduce((sum, refund) => {
-		const value = 'amount' in refund ? (refund.amount ?? refund.total) : refund.total;
-		return sum + Math.abs(toNumber(value));
-	}, 0);
-}
 
 function KV({
 	k,
@@ -44,7 +36,7 @@ export function PaymentSection({ order, last }: { order: OrderDocument; last?: b
 	const datePaid = useDateFormat(order.date_paid_gmt);
 
 	const method = order.payment_method_title || order.payment_method;
-	const refunded = totalRefunded(order);
+	const refunded = totalRefunded(order.refunds);
 
 	if (!method && !order.transaction_id && !datePaid && refunded === 0) {
 		return null;
