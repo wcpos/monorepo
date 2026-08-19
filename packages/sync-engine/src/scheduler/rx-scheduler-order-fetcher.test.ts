@@ -199,6 +199,47 @@ describe('createOrdersSchedulerFetcher', () => {
 		]);
 	});
 
+	it('records no manifest row for a custom-pull order the REPOSITORY storage guard skipped', async () => {
+		// The repository applies its own dirty-resident guard inside upsertMany, invisible to the
+		// adapter's pending-set filter (Greptile P1 class on this PR): when it reports an applied
+		// subset, the rows must follow that verdict, not the adapter's.
+		const stored = customPullDoc(11);
+		const dirtyResident = customPullDoc(12);
+		(stored.payload as Record<string, unknown>)._rxdb_digest = 'digest-11';
+		(dirtyResident.payload as Record<string, unknown>)._rxdb_digest = 'digest-12';
+		const manifestUpserts: unknown[][] = [];
+		const repository = {
+			// The storage guard drops order 12 (its resident is dirty) and reports what it applied.
+			upsertMany: vi.fn(async (docs: OrderDocument[]) =>
+				docs.filter((document) => document.uuid !== uuidFor(12))
+			),
+			upsertManifestRows: vi.fn(async (rows: readonly unknown[]) => {
+				manifestUpserts.push([...rows]);
+			}),
+		};
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			checkpointStore: {
+				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+				writeCustomPullCheckpoint: vi.fn(async () => undefined),
+			},
+			fetcher: vi.fn(async () =>
+				response({
+					documents: [stored, dirtyResident],
+					checkpoint: nextCheckpoint,
+					hasMore: false,
+				})
+			),
+		});
+
+		await schedulerFetcher(orderTask());
+
+		expect(manifestUpserts).toEqual([
+			[{ remoteId: '11', wooId: 11, objectType: 'order', digest: 'digest-11' }],
+		]);
+	});
+
 	it('client-assembles custom-pull documents from the payload, ignoring the server-built envelope id', async () => {
 		// The server-built envelope identity is deliberately stale/wrong (a woo-order:<id> id); the
 		// client must re-key BOTH identity fields from the payload — the storage id from the stamped
@@ -782,6 +823,55 @@ describe('createOrdersSchedulerFetcher', () => {
 				writeCustomPullCheckpoint: vi.fn(async () => undefined),
 			},
 			pendingMutationOrderIds: vi.fn(async () => new Set<string>([uuidFor(123)])),
+			fetcher: vi.fn(async () =>
+				response(
+					[123, 456].map((id) => ({
+						id,
+						date_modified_gmt: '2026-05-20T10:10:00',
+						_rxdb_digest: `digest-${id}`,
+						meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(id) }],
+					}))
+				)
+			),
+		});
+
+		await schedulerFetcher(
+			orderTask({
+				id: 'orders:ids:123,456:on-demand',
+				requirementId: 'orders.deep-link',
+				queryKey: 'orders:ids:123,456',
+				documentIds: ['woo-order:123', 'woo-order:456'],
+				remoteIds: [123, 456].map(remoteId),
+				limit: 2,
+				mode: 'on-demand',
+			})
+		);
+
+		expect(manifestUpserts).toEqual([
+			[{ remoteId: '456', wooId: 456, objectType: 'order', digest: 'digest-456' }],
+		]);
+	});
+
+	it('records manifest rows only for the targeted orders the REPOSITORY storage guard applied', async () => {
+		// Same applied-set contract as the scheduler repositories (Greptile P1 class): when
+		// upsertMany reports the subset its dirty-resident guard let through, the lane's manifest
+		// write follows that verdict rather than its own pre-filter.
+		const manifestUpserts: unknown[][] = [];
+		const repository = {
+			upsertMany: vi.fn(async (docs: OrderDocument[]) =>
+				docs.filter((document) => document.uuid !== uuidFor(123))
+			),
+			upsertManifestRows: vi.fn(async (rows: readonly unknown[]) => {
+				manifestUpserts.push([...rows]);
+			}),
+		};
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			checkpointStore: {
+				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+				writeCustomPullCheckpoint: vi.fn(async () => undefined),
+			},
 			fetcher: vi.fn(async () =>
 				response(
 					[123, 456].map((id) => ({

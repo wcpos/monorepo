@@ -822,8 +822,10 @@ async function fetchBrowserOrderQuery(
 		const applicable = pending
 			? documents.filter((document) => shouldApplyStoredOrder(document, pending))
 			: documents;
-		await input.repository.upsertMany(applicable);
-		await recordOrderManifestRows(input, materialized, applicable);
+		// The repository's storage guard may skip further documents (a dirty resident outside the
+		// pending set); manifest rows follow what it APPLIED, not what this lane offered.
+		const applied = (await input.repository.upsertMany(applicable)) ?? applicable;
+		await recordOrderManifestRows(input, materialized, applied);
 		fetchedDocumentIds.push(...documents.map(orderCoverageRecordId));
 		documentCount += documents.length;
 		requestCount += 1;
@@ -1001,8 +1003,10 @@ async function fetchTargetedOrders(
 		const applicable = pending
 			? documents.filter((document) => shouldApplyStoredOrder(document, pending))
 			: documents;
-		await input.repository.upsertMany(applicable);
-		await recordOrderManifestRows(input, materialized, applicable);
+		// The repository's storage guard may skip further documents (a dirty resident outside the
+		// pending set); manifest rows follow what it APPLIED, not what this lane offered.
+		const applied = (await input.repository.upsertMany(applicable)) ?? applicable;
+		await recordOrderManifestRows(input, materialized, applied);
 		fetchedDocumentIds.push(...documents.map(orderCoverageRecordId));
 		documentCount += documents.length;
 		requestCount += 1;
@@ -1096,12 +1100,26 @@ export function createOrdersSchedulerFetcher(input: OrdersSchedulerFetcherInput)
 			(fullBaselineGreedyTasks.has(task.id) || (await hasFullBaselineMarker(input, task)));
 		// Batch-scoped: `assembleDocument` runs per pulled record and parks its manifest row here,
 		// keyed by the assembled uuid; `afterUpsert` drains exactly the rows of the documents the
-		// adapter applied (post-dedup, post-pending-guard) and the map dies with the batch.
+		// adapter applied (post-dedup, post-pending-guard) AND the repository's own storage guard
+		// applied (a dirty resident outside the pending set is skipped by the repository, invisible
+		// to the adapter). Both die with the batch.
 		const customPullManifestRows = new Map<string, ExistenceManifestDocument>();
+		const repositoryAppliedUuids = new Set<string>();
+		// Explicit delegation (never an object spread — the repository is a class instance whose
+		// methods live on the prototype): capture the applied subset per upsert for the row filter.
+		const base = input.repository;
+		const capturingRepository: CustomPullRepository = {
+			upsertMany: async (documents) => {
+				const applied = (await base.upsertMany(documents)) ?? documents;
+				for (const document of applied) repositoryAppliedUuids.add(document.uuid);
+			},
+			removeDeletedOrders: base.removeDeletedOrders?.bind(base),
+			resetForResync: base.resetForResync?.bind(base),
+		};
 		const result = await syncCustomPullBatchIntoRepository({
 			baseUrl: input.baseUrl,
 			limit: pullRequestLimit(task, input.pullBatchSize),
-			repository: input.repository,
+			repository: capturingRepository,
 			checkpoint: previousCheckpoint,
 			checkpointStore: input.checkpointStore,
 			fetcher,
@@ -1122,7 +1140,7 @@ export function createOrdersSchedulerFetcher(input: OrdersSchedulerFetcherInput)
 			afterUpsert: async (documents, result) => {
 				const rows = documents.flatMap((document) => {
 					const row = customPullManifestRows.get(document.uuid);
-					return row ? [row] : [];
+					return row && repositoryAppliedUuids.has(document.uuid) ? [row] : [];
 				});
 				if (rows.length > 0) await input.repository.upsertManifestRows?.(rows);
 				await recordCumulativeOrderFetchCoverage(
