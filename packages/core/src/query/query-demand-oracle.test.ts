@@ -120,6 +120,9 @@ describe('compiled demand pins for the retired raw-selector callers', () => {
 				collection: 'categories',
 				kind: 'refresh',
 				priority: 700,
+				// #1347 part 2: the picker's name sort now rides the refresh.
+				orderby: 'name',
+				order: 'asc',
 			},
 		},
 		{
@@ -132,6 +135,9 @@ describe('compiled demand pins for the retired raw-selector callers', () => {
 				collection: 'brands',
 				kind: 'refresh',
 				priority: 700,
+				// #1347 part 2: the picker's name sort now rides the refresh.
+				orderby: 'name',
+				order: 'asc',
 			},
 		},
 		{
@@ -144,6 +150,9 @@ describe('compiled demand pins for the retired raw-selector callers', () => {
 				collection: 'tags',
 				kind: 'refresh',
 				priority: 700,
+				// #1347 part 2: the picker's name sort now rides the refresh.
+				orderby: 'name',
+				order: 'asc',
 			},
 		},
 		{
@@ -230,6 +239,9 @@ describe('compiled demand pins for the retired raw-selector callers', () => {
 					collection: 'categories',
 					kind: 'refresh',
 					priority: 700,
+					// #1347 part 2: the tree binding's name sort now rides the refresh.
+					orderby: 'name',
+					order: 'asc',
 				},
 			],
 			represented: false,
@@ -255,6 +267,9 @@ describe('compiled demand pins for the retired raw-selector callers', () => {
 				collection: 'categories',
 				kind: 'refresh',
 				priority: 700,
+				// #1347 part 2: a name-sorted reference demand states its sort.
+				orderby: 'name',
+				order: 'asc',
 			},
 		},
 	] as const)('pins applied-coupon reference demand for $collection', (fixture) => {

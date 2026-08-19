@@ -9,10 +9,12 @@ import {
 	type WooProductPayload,
 } from '@wcpos/sync-core';
 import type {
+	CouponReferenceOrderby,
 	CustomerBrowseDimensions,
 	OrderBrowseDimensions,
 	ProductBrowseDimensions,
 	SyncCollectionName,
+	TermReferenceOrderby,
 } from '@wcpos/sync-engine';
 
 export type LegacyCollectionName =
@@ -150,11 +152,14 @@ export type EngineDocument = Record<string, unknown> & {
 
 export type FieldKind = 'promoted' | 'payload' | 'computed' | 'identifier';
 
-type WooOrderby = NonNullable<
-	| OrderBrowseDimensions['orderby']
-	| ProductBrowseDimensions['orderby']
-	| CustomerBrowseDimensions['orderby']
->;
+type WooOrderby =
+	| NonNullable<
+			| OrderBrowseDimensions['orderby']
+			| ProductBrowseDimensions['orderby']
+			| CustomerBrowseDimensions['orderby']
+	  >
+	| TermReferenceOrderby
+	| CouponReferenceOrderby;
 
 export type FieldMapEntry = {
 	legacy: string;
@@ -635,6 +640,14 @@ export const collectionMap = {
 				read: readRemoteId,
 				adapterDerived: false,
 			},
+			// Same read path as the unmapped fallback; declared for the wire sort
+			// (#1347) so the pickers' name-ordered pull arrives in display order.
+			name: {
+				legacy: 'name',
+				kind: 'payload',
+				enginePath: 'payload.name',
+				sort: { wooOrderby: 'name' },
+			},
 		},
 	},
 	'products/tags': {
@@ -648,6 +661,14 @@ export const collectionMap = {
 				read: readRemoteId,
 				adapterDerived: false,
 			},
+			// Same read path as the unmapped fallback; declared for the wire sort
+			// (#1347) so the pickers' name-ordered pull arrives in display order.
+			name: {
+				legacy: 'name',
+				kind: 'payload',
+				enginePath: 'payload.name',
+				sort: { wooOrderby: 'name' },
+			},
 		},
 	},
 	'products/brands': {
@@ -660,6 +681,14 @@ export const collectionMap = {
 				enginePath: 'remoteId',
 				read: readRemoteId,
 				adapterDerived: false,
+			},
+			// Same read path as the unmapped fallback; declared for the wire sort
+			// (#1347) so the pickers' name-ordered pull arrives in display order.
+			name: {
+				legacy: 'name',
+				kind: 'payload',
+				enginePath: 'payload.name',
+				sort: { wooOrderby: 'name' },
 			},
 		},
 	},
@@ -677,6 +706,21 @@ export const collectionMap = {
 			discount_type: queryPayloadField('discount_type', 'local-only'),
 			status: queryPayloadField('status', 'local-only'),
 			date_expires_gmt: queryPayloadField('date_expires_gmt', 'local-only'),
+			// The two wire-sortable coupon columns (#1347). `code` stays local-only:
+			// its server mapping (orderby=title) exists on wcpos/v1 only and was
+			// deliberately not ported to v2.
+			date_created_gmt: {
+				legacy: 'date_created_gmt',
+				kind: 'payload',
+				enginePath: 'payload.date_created_gmt',
+				sort: { wooOrderby: 'date' },
+			},
+			date_modified_gmt: {
+				legacy: 'date_modified_gmt',
+				kind: 'payload',
+				enginePath: 'payload.date_modified_gmt',
+				sort: { wooOrderby: 'modified' },
+			},
 			active: {
 				legacy: 'active',
 				kind: 'computed',
@@ -718,7 +762,11 @@ type WooOrderbyFor<C extends LegacyCollectionName> = C extends 'products'
 		? NonNullable<OrderBrowseDimensions['orderby']>
 		: C extends 'customers'
 			? NonNullable<CustomerBrowseDimensions['orderby']>
-			: WooOrderby;
+			: C extends 'products/categories' | 'products/tags' | 'products/brands'
+				? TermReferenceOrderby
+				: C extends 'coupons'
+					? CouponReferenceOrderby
+					: WooOrderby;
 
 export function wooOrderbyFor<C extends LegacyCollectionName>(
 	collection: C,
