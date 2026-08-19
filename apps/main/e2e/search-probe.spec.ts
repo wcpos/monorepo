@@ -14,6 +14,7 @@ import {
 	productWriterAuthorization,
 	productWriterCredentialsDecision,
 	searchAndWaitForServer,
+	sweepOrphanedProductProbes,
 } from './search-probe';
 
 function response(status: number, body: unknown) {
@@ -165,6 +166,45 @@ test.describe('search-probe pure logic', () => {
 		expect(() => findCreatedProductRecord({ id: 42 }, 'zxexact')).toThrow(
 			'Product create adoption lookup returned a malformed product list'
 		);
+	});
+
+	test('sweeps orphaned directional arrival probes', async () => {
+		const deleted: string[] = [];
+		const request = {
+			get: async () =>
+				response(200, [
+					{
+						id: 41,
+						name: 'aaaa E2E Arrival zxalpha',
+						date_created_gmt: '2020-01-01T00:00:00',
+					},
+					{
+						id: 42,
+						name: 'zzzz E2E Arrival zxzulu',
+						date_created_gmt: '2020-01-01T00:00:00',
+					},
+					{
+						id: 43,
+						name: 'Catalog E2E Arrival',
+						date_created_gmt: '2020-01-01T00:00:00',
+					},
+				]),
+			delete: async (url: string) => {
+				deleted.push(url);
+				return response(200, {});
+			},
+		};
+
+		await sweepOrphanedProductProbes({
+			request: request as never,
+			storeUrl: 'https://example.test',
+			authorization: null,
+		});
+
+		expect(deleted).toEqual([
+			'https://example.test/wp-json/wc/v3/products/41',
+			'https://example.test/wp-json/wc/v3/products/42',
+		]);
 	});
 
 	test('product helpers name the fixture required for their page registration', async () => {

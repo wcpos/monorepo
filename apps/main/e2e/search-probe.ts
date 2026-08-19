@@ -393,7 +393,7 @@ export async function createSearchProbe(
 		productData,
 	} = options;
 	const token = suppliedToken ?? mintSearchProbeToken(workerIndex);
-	// Custom names must start with "E2E Probe " so sweepOrphanedProductProbes can clean up orphans.
+	// Custom names must use a prefix recognized by sweepOrphanedProductProbes.
 	const productName =
 		typeof productData?.name === 'string' ? productData.name : `E2E Probe ${token}`;
 	const data =
@@ -641,7 +641,10 @@ export async function sweepOrphanedProductProbes(
 			const id = positiveId(product);
 			if (
 				id !== null &&
-				(name.startsWith('E2E Probe ') || name.startsWith('E2E Variable ')) &&
+				(name.startsWith('E2E Probe ') ||
+					name.startsWith('E2E Variable ') ||
+					name.startsWith('aaaa E2E Arrival ') ||
+					name.startsWith('zzzz E2E Arrival ')) &&
 				Date.parse(`${createdGmt}Z`) < cutoff
 			) {
 				await deleteSearchProbe({ request, storeUrl, authorization, collection: 'products', id });
