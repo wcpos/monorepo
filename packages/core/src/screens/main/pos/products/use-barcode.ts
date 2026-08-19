@@ -4,6 +4,7 @@ import { useObservableEagerState, useSubscription } from 'observable-hooks';
 
 import { isStorageWorkerFailure } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
+import { sanitizeVariationAttributesRead } from '@wcpos/query/collection-map';
 import { type ScanEvent } from '@wcpos/scanner';
 import { type BarcodeResolveFetcher, remoteIdOrNull, resolveScan, wooIdOf } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -434,15 +435,17 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 				return;
 			}
 
-			const metaData = (product.payload.attributes ?? []).map(
-				(attribute: { id?: number; name?: string; option?: string }) => {
-					return {
-						attr_id: attribute.id ?? 0,
-						display_key: attribute.name ?? '',
-						display_value: attribute.option ?? '',
-					};
-				}
-			);
+			// Malformed payload attributes must not throw inside the scan subscription (#1294):
+			// route the read through the same guard every other UI consumer uses.
+			const sanitizedAttributes = (sanitizeVariationAttributesRead(product.payload.attributes) ??
+				[]) as { id?: number; name?: string; option?: string }[];
+			const metaData = sanitizedAttributes.map((attribute) => {
+				return {
+					attr_id: attribute.id ?? 0,
+					display_key: attribute.name ?? '',
+					display_value: attribute.option ?? '',
+				};
+			});
 
 			// The scan toast owns success feedback; silence the add-hook's own toast so
 			// a scan produces exactly one notification (fixes the double popup per scan).

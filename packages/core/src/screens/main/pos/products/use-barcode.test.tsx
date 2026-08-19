@@ -437,6 +437,41 @@ describe('useBarcode online escalation', () => {
 		expect(metaData).toEqual([{ attr_id: 7, display_key: 'Colour', display_value: 'Black' }]);
 	});
 
+	// #1294 P1: malformed payload attributes must not throw inside the scan subscription —
+	// the read goes through sanitizeVariationAttributesRead like every other UI consumer.
+	it('adds a scanned variation whose payload attributes are not an array', async () => {
+		engineProducts.push(productDocument(41, 'PARENT'));
+		const variation = variationDocument();
+		variation.payload.attributes = 'junk';
+		engineVariations.push(variation);
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockAddVariation).toHaveBeenCalledTimes(1);
+		const [, , metaData] = mockAddVariation.mock.calls[0] ?? [];
+		expect(metaData).toEqual([]);
+	});
+
+	it('drops malformed attribute entries and keeps well-formed ones when adding a scanned variation', async () => {
+		engineProducts.push(productDocument(41, 'PARENT'));
+		const variation = variationDocument();
+		variation.payload.attributes = [
+			null,
+			{ id: 9, name: 7, option: 'Black' },
+			{ id: 8, name: 'Size', option: null },
+			{ id: 7, name: 'Colour', option: 'Black' },
+		];
+		engineVariations.push(variation);
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockAddVariation).toHaveBeenCalledTimes(1);
+		const [, , metaData] = mockAddVariation.mock.calls[0] ?? [];
+		expect(metaData).toEqual([{ attr_id: 7, display_key: 'Colour', display_value: 'Black' }]);
+	});
+
 	it('does not add a published variation whose parent is non-published', async () => {
 		const parent = productDocument(41, 'PARENT');
 		parent.payload.status = 'draft';
