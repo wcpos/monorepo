@@ -112,16 +112,6 @@ export function referenceLaneTaskFor(collection: ReferenceCollection): FetchTask
 	};
 }
 
-/**
- * The greedy categories + brands + tags + coupons reference lanes, in stable order.
- * Extracted so they can be re-seeded on their own (F11): a completed greedy task is
- * terminal, so a rename/edit made mid-session never reaches a running POS without a
- * re-seed → re-pull → set-difference prune.
- */
-export function referenceLaneTasks(): FetchTask[] {
-	return REFERENCE_COLLECTIONS.map(referenceLaneTaskFor);
-}
-
 export function posBootstrapTasks(): FetchTask[] {
 	return [taxRatesLaneTask()];
 }
@@ -189,19 +179,4 @@ export async function seedReferenceLanes(
 	input: SeedPosBootstrapLanesInput & { collections?: readonly ReferenceCollection[] }
 ): Promise<SeedPersistedSchedulerTasksResult> {
 	return seedTasks((input.collections ?? REFERENCE_COLLECTIONS).map(referenceLaneTaskFor), input);
-}
-
-/**
- * Re-seed ONLY the greedy lane for one reference collection (coupons/categories/brands/
- * tags). The change-signal tick's `refreshReferenceCollection` handler uses this so a
- * change to one collection re-pulls just that collection (never the others). The one
- * greedy pull upserts current rows and set-difference-prunes a deleted one, so a
- * create/update/delete all reconcile through this single refresh.
- */
-export async function seedReferenceCollectionLane(
-	collection: ReferenceCollection,
-	input: SeedPosBootstrapLanesInput
-): Promise<SeedPersistedSchedulerTasksResult> {
-	// Change-signal refresh → opt into in-flight coalescing (#318).
-	return seedTasks([referenceLaneTaskFor(collection)], { ...input, coalesceInFlight: true });
 }

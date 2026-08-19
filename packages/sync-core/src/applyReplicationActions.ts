@@ -208,46 +208,6 @@ export type ApplyReplicationActionsResult = {
 	actions: ReplicationActions;
 };
 
-/**
- * The all-zero applier result: what a tick that never ran (engine off / no
- * change-signal source) reports. Owned here, next to the type, so every host
- * that needs the "nothing happened" shape shares ONE literal — a field added to
- * `ApplyReplicationActionsResult` is added to its empty form in the same file,
- * instead of drifting in a hand-maintained host copy.
- */
-export function emptyApplyReplicationActionsResult(): ApplyReplicationActionsResult {
-	return {
-		targetedProductIds: [],
-		appliedProductCount: 0,
-		deletedProductIds: [],
-		appliedDeleteCount: 0,
-		targetedVariationIds: [],
-		appliedVariationCount: 0,
-		variationDeleteIds: [],
-		appliedVariationDeleteCount: 0,
-		targetedCustomerIds: [],
-		appliedCustomerCount: 0,
-		customerDeleteIds: [],
-		appliedCustomerDeleteCount: 0,
-		taxRatesRefreshed: false,
-		refreshedReferenceCollections: [],
-		taxRateDeleteIds: [],
-		appliedTaxRateDeleteCount: 0,
-		reDerived: [],
-		escalations: [],
-		persisted: false,
-		actions: {
-			targetedPulls: [],
-			deletes: [],
-			rebaselineCollections: [],
-			reDeriveBarcode: [],
-			reFetchCollections: [],
-			escalations: [],
-			nextState: { cursor: { sequence: 0 }, baselineDigests: new Map() },
-		},
-	};
-}
-
 function dedupeSorted(ids: number[]): number[] {
 	return [...new Set(ids)].sort((left, right) => left - right);
 }

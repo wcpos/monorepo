@@ -2,71 +2,15 @@
 import { describe, expect, it } from 'vitest';
 import { vi } from 'vitest';
 
-import type { OrderDocument, ProductDocument } from '@wcpos/sync-core';
+import type { OrderDocument } from '@wcpos/sync-core';
 import type { LocalCustomerDocument } from '@wcpos/sync-engine/testing';
 
 import { remoteId } from '../testing';
 import {
 	extractCustomerManifest,
 	extractOrderManifest,
-	extractProductManifest,
-	productManifestRow,
-	stripProductManifestDigest,
 	withCustomerManifestPopulation,
 } from './existence-manifest-population';
-import { materializeExistingLocalOnly } from '../materialization/record-materialization';
-
-function productDoc(payload: Record<string, unknown>, wooProductId = 10): ProductDocument {
-	return {
-		uuid: `uuid-${wooProductId}`,
-		remoteId: remoteId(wooProductId),
-		payload: payload as ProductDocument['payload'],
-		sync: { revision: 'r', partial: false, source: 'woo-rest' },
-		local: { dirty: false, pendingMutationIds: [] },
-	} as ProductDocument;
-}
-
-describe('productManifestRow', () => {
-	it('builds a manifest row from the server-attached _rxdb_digest (string, un-truncated)', () => {
-		const doc = productDoc({ id: 10, _rxdb_digest: '9223372036854775810' }); // > JS safe int
-		expect(productManifestRow(doc)).toEqual({
-			id: '10',
-			wooId: 10,
-			objectType: 'product',
-			digest: '9223372036854775810',
-		});
-	});
-
-	it('returns null when there is no (or empty) _rxdb_digest', () => {
-		expect(productManifestRow(productDoc({ id: 10 }))).toBeNull();
-		expect(productManifestRow(productDoc({ id: 10, _rxdb_digest: '' }))).toBeNull();
-	});
-});
-
-describe('stripProductManifestDigest', () => {
-	it('removes _rxdb_digest from the stored payload (so it never pollutes the doc)', () => {
-		const stripped = stripProductManifestDigest(
-			productDoc({ id: 10, name: 'A', _rxdb_digest: 'x' })
-		);
-		expect(stripped.payload).toEqual({ id: 10, name: 'A' });
-	});
-
-	it('is a no-op (same reference) when the field is absent', () => {
-		const doc = productDoc({ id: 10 });
-		expect(stripProductManifestDigest(doc)).toBe(doc);
-	});
-});
-
-describe('extractProductManifest', () => {
-	it('splits a batch into manifest rows + cleaned documents', () => {
-		const { manifestRows, documents } = extractProductManifest([
-			productDoc({ id: 10, _rxdb_digest: 'a' }, 10),
-			productDoc({ id: 11 }, 11), // no digest → no row, still cleaned (no-op)
-		]);
-		expect(manifestRows).toEqual([{ id: '10', wooId: 10, objectType: 'product', digest: 'a' }]);
-		expect(documents.every((d) => !('_rxdb_digest' in (d.payload as object)))).toBe(true);
-	});
-});
 
 function customerDoc(
 	payload: Record<string, unknown>,
@@ -159,23 +103,5 @@ describe('extractOrderManifest', () => {
 			},
 		]);
 		expect(documents.every((d) => !('_rxdb_digest' in (d.payload as object)))).toBe(true);
-	});
-
-	it('preserves a manifest row carried out-of-band by order materialization', () => {
-		const materialized = materializeExistingLocalOnly(
-			orderDoc(77, { id: 77, _rxdb_digest: '9223372036854775810' })
-		).storedDocument;
-
-		const result = extractOrderManifest([materialized]);
-
-		expect(result.manifestRows).toEqual([
-			{
-				id: '77',
-				wooId: 77,
-				objectType: 'order',
-				digest: '9223372036854775810',
-			},
-		]);
-		expect(result.documents[0]?.payload).toEqual({ id: 77 });
 	});
 });

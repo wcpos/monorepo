@@ -1,4 +1,4 @@
-import { type OrderDocument, type ProductDocument, wooIdOf } from '@wcpos/sync-core';
+import { type OrderDocument, wooIdOf } from '@wcpos/sync-core';
 
 import {
 	existenceManifestDocument,
@@ -17,47 +17,6 @@ import type { LocalCustomerDocument } from '../collections/customer-schema';
  */
 
 const MANIFEST_DIGEST_FIELD = '_rxdb_digest';
-
-/** A manifest row for a pulled product, or null when it carries no server digest (id/digest missing). */
-export function productManifestRow(document: ProductDocument): ExistenceManifestDocument | null {
-	const digest = (document.payload as Record<string, unknown> | undefined)?.[MANIFEST_DIGEST_FIELD];
-	if (typeof digest !== 'string' || digest === '' || document.remoteId == null) {
-		return null;
-	}
-	return existenceManifestDocument({
-		wooId: wooIdOf(document.remoteId),
-		objectType: 'product',
-		digest,
-	});
-}
-
-/** The document with `_rxdb_digest` removed from its payload (no-op when absent). */
-export function stripProductManifestDigest(document: ProductDocument): ProductDocument {
-	const payload = document.payload as Record<string, unknown> | undefined;
-	if (!payload || !(MANIFEST_DIGEST_FIELD in payload)) {
-		return document;
-	}
-	const cleaned = { ...payload };
-	delete cleaned[MANIFEST_DIGEST_FIELD];
-	return { ...document, payload: cleaned as ProductDocument['payload'] };
-}
-
-/** Split a pulled batch into the manifest rows to record and the cleaned documents to store. */
-export function extractProductManifest(documents: readonly ProductDocument[]): {
-	manifestRows: ExistenceManifestDocument[];
-	documents: ProductDocument[];
-} {
-	const manifestRows: ExistenceManifestDocument[] = [];
-	const cleaned: ProductDocument[] = [];
-	for (const document of documents) {
-		const row = productManifestRow(document);
-		if (row) {
-			manifestRows.push(row);
-		}
-		cleaned.push(stripProductManifestDigest(document));
-	}
-	return { manifestRows, documents: cleaned };
-}
 
 // --- Customers (ADR 0015, Leg-3 phase 7) -------------------------------------------------------------
 // Customers carry `_rxdb_digest` in the payload (stamp_proxy_customer_digests, #348), same as products.

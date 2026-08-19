@@ -66,13 +66,6 @@ export function promotedVariationColumns(payload: WooVariationPayload): Promoted
 	};
 }
 
-/** Attach the promoted columns (derived from `doc.payload`) to a variation document for storage. */
-export function withVariationColumns<T extends { payload: WooVariationPayload }>(
-	doc: T
-): T & PromotedVariationColumns {
-	return { ...doc, ...promotedVariationColumns(doc.payload) };
-}
-
 export const variationSchema = {
 	title: 'Woo product-variation document schema',
 	version: 0,

@@ -98,11 +98,6 @@ export const MUTATION_QUEUE_RXDB_COLLECTION = 'recordMutations';
 /** Engine-owned kv collection backing the default checkpoints StringStore. */
 export const ENGINE_KV_COLLECTION = 'engineKv';
 
-export type EngineKvDocument = {
-	id: string;
-	value: string;
-};
-
 export const engineKvSchema = {
 	title: 'Sync engine internal key-value store',
 	version: 0,

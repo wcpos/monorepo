@@ -39,7 +39,7 @@ import { memoryEngineStorage, remoteId } from '../testing';
 import { orderSchema } from './order-schema';
 import { engineCollectionCreators } from './engine-collections';
 import { productMigrationStrategies, productSchema } from './product-schema';
-import { variationSchema, withVariationColumns } from './variation-schema';
+import { promotedVariationColumns, variationSchema } from './variation-schema';
 import { customerSchema } from './customer-schema';
 import { taxRateDocumentId, taxRateSchema } from './tax-rate-schema';
 import {
@@ -165,14 +165,15 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 	it('variations', async () => {
 		await expectRoundTrip({
 			schema: variationSchema,
-			document: withVariationColumns({
+			document: {
 				uuid: 'variation-uuid-77',
 				remoteId: '77',
 				parentRemoteId: '9',
+				...promotedVariationColumns(VARIATION_PAYLOAD),
 				payload: VARIATION_PAYLOAD,
 				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
 				local: { dirty: false, pendingMutationIds: [] },
-			}),
+			},
 		});
 	});
 

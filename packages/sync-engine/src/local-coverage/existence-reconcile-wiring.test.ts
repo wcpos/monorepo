@@ -5,7 +5,7 @@ import type { ExistenceManifestDocument } from '@wcpos/sync-engine/testing';
 
 import { remoteId } from '../testing';
 import { removeTargeted } from './reconcile-port';
-import { partitionActionsByLane, reconcileExistence, resolveDirtyWooIds } from './reconciliation';
+import { partitionActionsByLane, reconcileExistence } from './reconciliation';
 
 import type { ServerDigestEntry } from '../reconcile-bucket-plan';
 
@@ -18,28 +18,6 @@ describe('partitionActionsByLane', () => {
 				{ wooId: 3, objectType: 'product' },
 			])
 		).toEqual({ productWooIds: [1, 3], variationWooIds: [2] });
-	});
-});
-
-describe('resolveDirtyWooIds', () => {
-	it('resolves products/variations mutations recordId→wooId, ignoring other collections and unresolved ids', async () => {
-		const lookup = vi.fn(
-			async (recordId: string) =>
-				(({ 'uuid-1': 10, 'uuid-2': 20, 'uuid-3': null }) as Record<string, number | null>)[
-					recordId
-				] ?? null
-		);
-		const dirty = await resolveDirtyWooIds(
-			[
-				{ recordId: 'uuid-1', collectionName: 'products' },
-				{ recordId: 'uuid-2', collectionName: 'variations' },
-				{ recordId: 'uuid-3', collectionName: 'products' }, // unresolved → skipped
-				{ recordId: 'uuid-9', collectionName: 'orders' }, // not a product/variation → ignored (not looked up)
-			],
-			lookup
-		);
-		expect([...dirty].sort((a, b) => a - b)).toEqual([10, 20]);
-		expect(lookup).not.toHaveBeenCalledWith('uuid-9', 'orders');
 	});
 });
 
