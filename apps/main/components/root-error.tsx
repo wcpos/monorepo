@@ -1,16 +1,9 @@
 import * as React from 'react';
-import {
-	NativeModules,
-	Platform,
-	ScrollView,
-	StyleSheet,
-	Text,
-	TouchableOpacity,
-	View,
-} from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { reloadApp } from '@wcpos/core/utils/reload-app';
 import { scheduleClearLocalDataOnNextLoad } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -25,20 +18,6 @@ import { resetConfirmBody } from './root-error-copy';
 import type { FallbackProps } from 'react-error-boundary';
 
 const appLogger = getLogger(['wcpos', 'app', 'error']);
-
-/**
- * Reload the app - handles web and native platforms
- */
-const reloadApp = () => {
-	if (Platform.OS === 'web') {
-		// Web: use window.location.reload()
-		window.location.reload();
-	} else {
-		// Native: use DevSettings.reload() (works in development builds)
-		// For production, you would need expo-updates installed
-		NativeModules.DevSettings?.reload();
-	}
-};
 
 /**
  * NOTE: we don't have access to the theme here, so we can't use tailwind
@@ -125,6 +104,10 @@ const styles: any = StyleSheet.create({
 		color: '#fff',
 		fontWeight: '600',
 	},
+	resetFailedText: {
+		color: '#b3261e',
+		paddingTop: 16,
+	},
 });
 
 /**
@@ -150,6 +133,15 @@ export function RootError({ error, resetErrorBoundary }: FallbackProps) {
 	const [isResetting, setIsResetting] = React.useState(false);
 	/** Non-null while the reset confirm is showing, carrying the reading it states. */
 	const [confirming, setConfirming] = React.useState<UnsentChanges | null>(null);
+	/**
+	 * True once the wipe is scheduled on a build that cannot restart itself
+	 * (production native, no expo-updates). Terminal: both buttons disappear,
+	 * because "Try again" could remount a working app whose new sales the
+	 * armed pre-hydration clear would silently destroy at the next launch.
+	 */
+	const [restartRequired, setRestartRequired] = React.useState(false);
+	/** Set when the reset could not even be scheduled; the buttons stay usable. */
+	const [resetFailed, setResetFailed] = React.useState(false);
 
 	const handleTryAgain = () => {
 		if (isResetting) return;
@@ -173,14 +165,27 @@ export function RootError({ error, resetErrorBoundary }: FallbackProps) {
 		setConfirming(null);
 		forgetUnsentChanges();
 
-		if (Platform.OS === 'web') {
-			if (scheduleClearLocalDataOnNextLoad()) {
-				reloadApp();
+		if (scheduleClearLocalDataOnNextLoad()) {
+			if (reloadApp()) {
 				return;
 			}
-			appLogger.error('Failed to schedule the pre-hydration reset; falling back to direct clear', {
-				code: ERROR_CODES.UNEXPECTED_ERROR,
-			});
+			// Production native cannot restart itself (no expo-updates): the data
+			// stays intact until the relaunch, which clears it before hydration.
+			setRestartRequired(true);
+			setIsResetting(false);
+			return;
+		}
+
+		appLogger.error('Failed to schedule the pre-hydration reset; falling back to direct clear', {
+			code: ERROR_CODES.UNEXPECTED_ERROR,
+		});
+
+		if (Platform.OS !== 'web') {
+			// Without the flag, a direct clear would strand the running app on
+			// destroyed databases with no reload to recover it — refuse instead.
+			setResetFailed(true);
+			setIsResetting(false);
+			return;
 		}
 
 		try {
@@ -207,50 +212,67 @@ export function RootError({ error, resetErrorBoundary }: FallbackProps) {
 					<Text style={styles.title}>Oops!</Text>
 					<Text style={styles.subtitle}>{"There's an error"}</Text>
 					<Text style={styles.error}>{String(error)}</Text>
-					<TouchableOpacity
-						testID="root-error-try-again"
-						style={[styles.button, isResetting ? { opacity: 0.5 } : null]}
-						onPress={handleTryAgain}
-						disabled={isResetting}
-					>
-						<Text style={styles.buttonText}>Try again</Text>
-					</TouchableOpacity>
-					{confirming === null ? (
-						<TouchableOpacity
-							testID="root-error-reset"
-							style={[styles.resetButton, isResetting ? { opacity: 0.5 } : null]}
-							onPress={handleResetPress}
-							disabled={isResetting}
-						>
-							<Text style={styles.resetButtonText}>
-								{isResetting ? 'Resetting…' : 'Reset app data and restart'}
+					{restartRequired ? (
+						<View testID="root-error-restart-required" style={styles.confirm}>
+							<Text style={styles.confirmTitle}>Restart required</Text>
+							<Text style={styles.confirmBody}>
+								Local data will be cleared the next time the app starts. Close the app completely
+								and open it again.
 							</Text>
-						</TouchableOpacity>
-					) : (
-						<View testID="root-error-reset-panel" style={styles.confirm}>
-							<Text style={styles.confirmTitle}>Reset app data and restart?</Text>
-							<Text testID="root-error-reset-warning" style={styles.confirmBody}>
-								{resetConfirmBody(confirming)}
-							</Text>
-							<View style={styles.confirmActions}>
-								<TouchableOpacity
-									testID="root-error-reset-cancel"
-									style={styles.confirmCancel}
-									onPress={() => setConfirming(null)}
-								>
-									<Text style={styles.confirmCancelText}>Cancel</Text>
-								</TouchableOpacity>
-								<TouchableOpacity
-									testID="root-error-reset-confirm"
-									style={styles.confirmAction}
-									onPress={() => {
-										void handleConfirmReset();
-									}}
-								>
-									<Text style={styles.confirmActionText}>Reset and restart</Text>
-								</TouchableOpacity>
-							</View>
 						</View>
+					) : (
+						<>
+							<TouchableOpacity
+								testID="root-error-try-again"
+								style={[styles.button, isResetting ? { opacity: 0.5 } : null]}
+								onPress={handleTryAgain}
+								disabled={isResetting}
+							>
+								<Text style={styles.buttonText}>Try again</Text>
+							</TouchableOpacity>
+							{confirming === null ? (
+								<TouchableOpacity
+									testID="root-error-reset"
+									style={[styles.resetButton, isResetting ? { opacity: 0.5 } : null]}
+									onPress={handleResetPress}
+									disabled={isResetting}
+								>
+									<Text style={styles.resetButtonText}>
+										{isResetting ? 'Resetting…' : 'Reset app data and restart'}
+									</Text>
+								</TouchableOpacity>
+							) : (
+								<View testID="root-error-reset-panel" style={styles.confirm}>
+									<Text style={styles.confirmTitle}>Reset app data and restart?</Text>
+									<Text testID="root-error-reset-warning" style={styles.confirmBody}>
+										{resetConfirmBody(confirming)}
+									</Text>
+									<View style={styles.confirmActions}>
+										<TouchableOpacity
+											testID="root-error-reset-cancel"
+											style={styles.confirmCancel}
+											onPress={() => setConfirming(null)}
+										>
+											<Text style={styles.confirmCancelText}>Cancel</Text>
+										</TouchableOpacity>
+										<TouchableOpacity
+											testID="root-error-reset-confirm"
+											style={styles.confirmAction}
+											onPress={() => {
+												void handleConfirmReset();
+											}}
+										>
+											<Text style={styles.confirmActionText}>Reset and restart</Text>
+										</TouchableOpacity>
+									</View>
+								</View>
+							)}
+							{resetFailed ? (
+								<Text testID="root-error-reset-failed" style={styles.resetFailedText}>
+									Could not schedule the reset. Close the app completely, open it again, and retry.
+								</Text>
+							) : null}
+						</>
 					)}
 				</View>
 			</ScrollView>

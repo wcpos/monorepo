@@ -48,6 +48,7 @@ import { forgetUnsentChanges, type UnsentChanges } from '@wcpos/utils/unsent-cha
 import { useAppState } from '../../../../contexts/app-state';
 import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
+import { reloadApp } from '../../../../utils/reload-app';
 import { useImageAttachment } from '../../hooks/use-image-attachment';
 import { countUnsentChanges, describeResetConfirm } from '../../hooks/use-unsent-changes';
 
@@ -131,6 +132,13 @@ export function UserMenu() {
 	const [isSwitching, setIsSwitching] = React.useState(false);
 	/** Non-null while the reset confirm is open, carrying the reading it must state. */
 	const [confirmingReset, setConfirmingReset] = React.useState<UnsentChanges | null>(null);
+	/**
+	 * True once a clear is scheduled on a build that cannot restart itself
+	 * (production native, no expo-updates). The register must freeze behind an
+	 * overlay until the relaunch: anything sold after the confirm would be
+	 * silently destroyed by the pre-hydration clear on the next launch.
+	 */
+	const [restartRequired, setRestartRequired] = React.useState(false);
 
 	/**
 	 *
@@ -156,18 +164,38 @@ export function UserMenu() {
 		setConfirmingReset(await countUnsentChanges(engine));
 	};
 
+	/**
+	 * The databases must never be destroyed under the mounted provider tree:
+	 * every open RxDB handle (AppState.userDB included) would keep pointing at
+	 * removed storage. So the clear is scheduled as a pre-hydration flag and the
+	 * app is reloaded — the next load clears before anything re-opens them.
+	 */
 	const handleReset = async () => {
 		setConfirmingReset(null);
 		forgetUnsentChanges();
 
-		if (Platform.OS === 'web') {
-			if (scheduleClearLocalDataOnNextLoad()) {
-				window.location.reload();
+		if (scheduleClearLocalDataOnNextLoad()) {
+			if (reloadApp()) {
 				return;
 			}
-			uiLogger.error('Failed to schedule the pre-hydration reset; falling back to direct clear', {
-				code: ERROR_CODES.UNEXPECTED_ERROR,
+			// Production native cannot restart itself (no expo-updates): the data
+			// stays intact until the relaunch, and the overlay keeps it that way.
+			setRestartRequired(true);
+			return;
+		}
+
+		uiLogger.error('Failed to schedule the pre-hydration reset; falling back to direct clear', {
+			code: ERROR_CODES.UNEXPECTED_ERROR,
+		});
+
+		if (Platform.OS !== 'web') {
+			// Without the flag, a direct clear would leave the running app pointing
+			// at destroyed databases with no reload to recover it — refuse instead.
+			Toast.show({
+				type: 'error',
+				title: t('common.clear_all_local_data_failed'),
 			});
+			return;
 		}
 
 		// Clear databases to ensure clean start
@@ -182,7 +210,7 @@ export function UserMenu() {
 		}
 
 		// Reload the app to reinitialize everything
-		window.location.reload();
+		reloadApp();
 	};
 
 	const handleSwitchStore = async (nextStore: StoreDocument): Promise<void> => {
@@ -264,22 +292,20 @@ export function UserMenu() {
 						<DropdownMenuSeparator />
 					</>
 				)}
+				<DropdownMenuItem
+					testID="clear-all-local-data"
+					onPress={() => void handleResetPress()}
+					variant="destructive"
+				>
+					<Icon name="trash" />
+					<Text>{t('common.clear_all_local_data')}</Text>
+				</DropdownMenuItem>
+				<DropdownMenuSeparator />
 				{Platform.isWeb && (
-					<>
-						<DropdownMenuItem
-							testID="clear-all-local-data"
-							onPress={() => void handleResetPress()}
-							variant="destructive"
-						>
-							<Icon name="trash" />
-							<Text>{t('common.clear_all_local_data')}</Text>
-						</DropdownMenuItem>
-						<DropdownMenuSeparator />
-						<DropdownMenuItem onPress={() => Linking.openURL(`${site.home}/wp-admin`)}>
-							<Icon name="wordpress" />
-							<Text>{t('common.wordpress_admin')}</Text>
-						</DropdownMenuItem>
-					</>
+					<DropdownMenuItem onPress={() => Linking.openURL(`${site.home}/wp-admin`)}>
+						<Icon name="wordpress" />
+						<Text>{t('common.wordpress_admin')}</Text>
+					</DropdownMenuItem>
 				)}
 				<DropdownMenuItem onPress={logout} variant="destructive">
 					<Icon name="arrowRightFromBracket" />
@@ -313,6 +339,21 @@ export function UserMenu() {
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>
+			{restartRequired ? (
+				<Portal name="clear-local-data-restart-overlay">
+					<View
+						testID="clear-local-data-restart-overlay"
+						className="bg-background/80 absolute inset-0 z-50 items-center justify-center gap-3 p-6"
+					>
+						<Text className="text-lg font-bold">
+							{t('common.clear_all_local_data_restart_required')}
+						</Text>
+						<Text className="text-center">
+							{t('common.clear_all_local_data_restart_required_body')}
+						</Text>
+					</View>
+				</Portal>
+			) : null}
 			{isSwitching ? (
 				<Portal name="store-switch-overlay">
 					<View
