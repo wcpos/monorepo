@@ -1,5 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 
+import { LOADED_COUNT_TEST_ID } from './catalogue-readiness';
 import {
 	getStoreUrl,
 	getStoreVariant,
@@ -158,7 +159,9 @@ test.describe('Customers Page (Pro)', () => {
 			const matchingRows = screen.getByTestId(/^data-table-row-/);
 			await expect(matchingRows).toHaveCount(1, { timeout: 30_000 });
 			await expect(matchingRows.first()).toBeVisible();
-			await expect(screen.getByTestId('data-table-count')).toContainText(/\b1\b/);
+			// The RENDERED count, not the footer sentence — /\b1\b/ on
+			// "Showing {shown} of {total}" also matches the server total (#1345).
+			await expect(screen.getByTestId(LOADED_COUNT_TEST_ID)).toHaveText('1');
 		} finally {
 			await deleteSearchProbe({
 				request,
