@@ -278,7 +278,10 @@ export const collectionMap = {
 				legacy: 'name',
 				kind: 'payload',
 				enginePath: 'payload.name',
-				sort: { wooOrderby: 'title' },
+				// The id tiebreak keeps tied titles in Woo-id order on every till —
+				// without it the local sort falls through to client-minted uuids,
+				// a different order per device (Paul's 2026-08-19 name-asc default).
+				sort: { wooOrderby: 'title', tiebreak: ['id'] },
 			},
 			// 1.9 catalog-order contract (#810): equal menu_order values (usually 0) are
 			// common, so the Woo id tiebreak is part of the sort rather than an engine detail.

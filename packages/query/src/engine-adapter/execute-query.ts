@@ -92,16 +92,26 @@ function compareValues(left: unknown, right: unknown): number {
 	if (typeof left === 'number' && typeof right === 'number') {
 		return left < right ? -1 : 1;
 	}
-	// RxDB's comparator uses plain `<` ordering for strings (code-unit order,
-	// 'Zoo' before 'apple') — localeCompare would silently reorder after the
-	// engine swap.
+	// Cashiers read "alphabetical" case- and accent-insensitively ('apple' beside
+	// 'Apple', 'Éclair' beside 'Eclair'), and MySQL's utf8mb4 ci collation orders
+	// the WIRE window the same way — folding here keeps the rendered order aligned
+	// with window membership (Paul's cashier-expectation ruling, 2026-08-19; this
+	// replaced the code-unit ordering that put 'Zoo' before 'apple'). Code-unit
+	// order remains the deterministic tiebreak for strings the collation folds
+	// together, so the comparator stays total.
 	const leftString = String(left);
 	const rightString = String(right);
 	if (leftString === rightString) {
 		return 0;
 	}
+	const folded = CASHIER_STRING_COLLATOR.compare(leftString, rightString);
+	if (folded !== 0) {
+		return folded;
+	}
 	return leftString < rightString ? -1 : 1;
 }
+
+const CASHIER_STRING_COLLATOR = new Intl.Collator('en', { sensitivity: 'base' });
 
 function compareRemoteIdValues(left: unknown, right: unknown, direction: 'asc' | 'desc'): number {
 	const leftRemoteId = remoteIdOrNull(left);

@@ -30,6 +30,7 @@ import type {
 	ScopedWriteOutcomeBridge,
 	StoreScopeIdentity,
 } from '@wcpos/sync-engine';
+import { defaultProductBrowseSort } from '@wcpos/core/screens/main/contexts/ui-settings';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { Platform } from '@wcpos/utils/platform';
@@ -503,6 +504,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		markSyncStatusStale();
 	}
 
+	const hostDefaultProductBrowseSort = defaultProductBrowseSort();
 	const engine = createRxdbSyncEngine(
 		{
 			site,
@@ -512,6 +514,11 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				fetchWooQueryTotal: (input) => fetchWooQueryTotal(input, fetcher, site.wpJsonRoot),
 			},
 			connectivity: getEngineConnectivity,
+			// The one authored product default (initial-settings) — the engine's
+			// boot seed and trickle fallback derive from it, never restate it.
+			...(hostDefaultProductBrowseSort
+				? { defaultProductBrowseSort: hostDefaultProductBrowseSort }
+				: {}),
 			lastUserActivityMs,
 			onUserActivity,
 			diagnostics: composeObservers(appMetricsObserver, guardedDiagnostics),

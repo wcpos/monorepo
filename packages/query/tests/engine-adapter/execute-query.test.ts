@@ -429,6 +429,42 @@ describe('executeAdapterQuery', () => {
 		await database.close();
 	});
 
+	// Paul's cashier-expectation ruling (2026-08-19, issue #1372): "alphabetical"
+	// folds case and accents — apple beside Apple, Éclair beside Eclair — matching
+	// the ci collation MySQL uses to choose the wire window, so rendered order and
+	// window membership agree. Tied names resolve by the Woo id tiebreak the
+	// collection map now declares for `name`.
+	it('orders the name sort case- and accent-insensitively with the Woo id tiebreak', async () => {
+		const { database, products } = await openProductsDatabase();
+		await products.bulkInsert([
+			product('product-zoo', 10, 'Zoo', '1.00'),
+			product('product-apple', 20, 'apple', '1.00'),
+			product('product-eclair', 30, 'Éclair', '1.00'),
+			product('product-gift-2', 40, 'Gift Card', '1.00'),
+			product('product-gift-1', 5, 'Gift Card', '1.00'),
+		]);
+
+		const result = await firstValueFrom(
+			executeAdapterQuery({
+				database: database as unknown as AdapterDatabase,
+				collection: 'products',
+				selector: {},
+				sort: [{ name: 'asc' }, { id: 'asc' }],
+			})
+		);
+
+		expect(result.hits.map((document) => document.uuid)).toEqual([
+			// Code-unit order would put 'Zoo' first and 'Éclair' after 'zoo'.
+			'product-apple',
+			'product-eclair',
+			// Tied titles resolve by Woo id (5 before 40), identically on every till.
+			'product-gift-1',
+			'product-gift-2',
+			'product-zoo',
+		]);
+		await database.close();
+	});
+
 	// #947, Paul's ruling 2026-08-14: both product lists sort by type. `type` has no wire
 	// `orderby` on any surface, so this is the LOCAL sort the grid falls back to — the ordering
 	// the cashier sees has to be genuinely by product type, not the default window's order

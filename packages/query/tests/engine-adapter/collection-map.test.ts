@@ -232,6 +232,10 @@ describe('engine adapter collection map', () => {
 		});
 		expect(declaredValues('products', sortTiebreakFor)).toEqual({
 			menu_order: ['id'],
+			// name gained the same Woo-id tiebreak when it became the authored
+			// default (Paul 2026-08-19): tied titles must render in one order on
+			// every till, not in client-minted-uuid order.
+			name: ['id'],
 		});
 		expect(declaredValues('variations', sortTiebreakFor)).toEqual({
 			menu_order: ['id'],

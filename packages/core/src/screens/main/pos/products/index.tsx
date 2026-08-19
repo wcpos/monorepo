@@ -42,6 +42,7 @@ import { QuerySearchInput } from '../../components/query-search-input';
 import { UISettingsDialog } from '../../components/ui-settings';
 import { useTaxSettings } from '../../contexts/tax-rates';
 import { useUISettings } from '../../contexts/ui-settings';
+import initialSettings from '../../contexts/ui-settings/initial-settings.json';
 import { TextCell } from '../../components/text-cell';
 import { COGS } from './cells/cogs';
 import {
@@ -74,12 +75,21 @@ const POS_PRODUCT_SORT_FIELDS = [
 	'stock_status',
 	'menu_order',
 ] as const satisfies readonly SortFieldsByCollection['products'][];
-// 1.9 catalog-order default (#810): menu_order asc, id tiebreak added by the translator.
-const DEFAULT_POS_PRODUCT_SORT = { field: 'menu_order', direction: 'asc' } as const;
-
 function isPOSProductSortField(field: unknown): field is SortFieldsByCollection['products'] {
 	return POS_PRODUCT_SORT_FIELDS.some((sortField) => sortField === field);
 }
+
+// The invalid-persisted-sort fallback DERIVES from the one authored default
+// (initial-settings.json) rather than restating it — Paul's ruling 2026-08-19,
+// which also moved that default from menu_order (#810's 1.9 parity) to name asc.
+const DEFAULT_POS_PRODUCT_SORT: QueryStateOf<'products'>['sort'] = (() => {
+	const { sortBy, sortDirection } = initialSettings['pos-products'];
+	const field = normalizeQuerySortField('products', sortBy);
+	if (!isPOSProductSortField(field)) {
+		throw new Error(`initial-settings pos-products.sortBy "${sortBy}" is not a POS sort field`);
+	}
+	return { field, direction: sortDirection === 'desc' ? 'desc' : 'asc' };
+})();
 
 function getPOSProductSort(
 	sortBy: unknown,
