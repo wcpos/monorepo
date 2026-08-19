@@ -34,7 +34,7 @@ export type {
 export { getOrderTotals } from './order-totals';
 export type { OrderTotals } from './order-totals';
 
-export { getNetPaymentTotal } from './net-payment';
+export { getNetPaymentTotal, refundValue } from './net-payment';
 
 export type {
 	MoneyString,
