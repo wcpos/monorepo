@@ -92,6 +92,25 @@ test.describe('search-probe pure logic', () => {
 		expect(searchValue).toBe('zxtrace');
 	});
 
+	test('accepts an exact result that renders locally without server demand', async () => {
+		const page = {
+			waitForResponse: async () => {
+				await new Promise((resolve) => setTimeout(resolve, 10));
+				throw new Error('server demand was not emitted');
+			},
+		};
+		const searchInput = { fill: async () => {} };
+		const localResult = { waitFor: async () => {} };
+
+		await searchAndWaitForServer(
+			page as never,
+			searchInput as never,
+			'products',
+			'zxlocal',
+			localResult as never
+		);
+	});
+
 	test('writer credentials must be either fully configured or fully absent', () => {
 		expect(productWriterCredentialsDecision(undefined, undefined)).toBe(false);
 		expect(productWriterCredentialsDecision('writer', 'secret')).toBe(true);
