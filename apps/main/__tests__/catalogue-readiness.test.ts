@@ -1,9 +1,6 @@
 import {
 	CATALOGUE_READY_TIMEOUT_MS,
 	catalogueUnavailableMessage,
-	catalogueUnavailableReason,
-	recordCatalogueUnavailable,
-	resetCatalogueUnavailable,
 } from '../e2e/catalogue-readiness';
 
 // jest-expo installs winter globals lazily; a new test file in this package
@@ -11,8 +8,6 @@ import {
 jest.resetModules();
 
 describe('catalogue readiness', () => {
-	beforeEach(() => resetCatalogueUnavailable());
-
 	it('bounds the restored-session wait well under the OAuth ceiling', () => {
 		// The point of this wait is to NOTICE an unusable session quickly. If it
 		// ever creeps back toward the 120s OAuth ceiling (or the old swallowed
@@ -36,15 +31,12 @@ describe('catalogue readiness', () => {
 		);
 	});
 
-	it('reports nothing until a run-level failure is recorded', () => {
-		expect(catalogueUnavailableReason()).toBeNull();
-	});
-
-	it('memoises the FIRST diagnosis so later tests fail fast with the same reason', () => {
-		recordCatalogueUnavailable('first reason');
-		recordCatalogueUnavailable('second reason');
-		// Later tests inherit the original diagnosis rather than each re-deriving
-		// one — that is what turns N slow identical failures into one clear one.
-		expect(catalogueUnavailableReason()).toBe('first reason');
+	it('claims nothing about what the caller does next', () => {
+		// The same text is thrown from the restored path (which does fall back to
+		// OAuth) and from the OAuth path itself (which has nothing left to fall
+		// back to), so any such claim would be false half the time — #1336 review.
+		expect(catalogueUnavailableMessage({ countText: '0', elapsedMs: 1 })).not.toMatch(
+			/falling back/i
+		);
 	});
 });

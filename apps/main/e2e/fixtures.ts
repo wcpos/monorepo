@@ -12,12 +12,7 @@ import {
 
 import { log } from '@wcpos/utils/logger';
 
-import {
-	CATALOGUE_READY_TIMEOUT_MS,
-	catalogueUnavailableMessage,
-	catalogueUnavailableReason,
-	recordCatalogueUnavailable,
-} from './catalogue-readiness';
+import { CATALOGUE_READY_TIMEOUT_MS, catalogueUnavailableMessage } from './catalogue-readiness';
 import { cashierAuthStateName, currentShardIndex, getE2ECashierAuth } from './cashier-slot';
 import { captureCreatedOrderIds, finalizeCreatedOrders } from './order-cleanup';
 import { restoreOPFS } from './opfs-helpers';
@@ -778,16 +773,17 @@ export async function authenticateWithStore(
 		try {
 			await expect(countMarker).toContainText(/[1-9]/, { timeout: 120_000 });
 		} catch (error) {
-			// The authoritative verdict: OAuth is the un-restored path, so if the
-			// catalogue is empty HERE it is empty for every test in this worker.
-			// Remember it so the rest fail in milliseconds with this reason.
-			recordCatalogueUnavailable(
+			// Throw the ACTIONABLE message, not Playwright's generic matcher error —
+			// this is the run-level verdict (globalSetup runs this path before any
+			// test), so it is the one line a CI reader will see first. The matcher
+			// error is preserved as `cause` rather than discarded.
+			throw new Error(
 				catalogueUnavailableMessage({
 					countText: await countMarker.textContent().catch(() => null),
 					elapsedMs: Date.now() - startedAtMs,
-				})
+				}),
+				{ cause: error }
 			);
-			throw error;
 		}
 		if (waitForFullCatalogue) {
 			await waitForCatalogueQuiescence(page);
@@ -868,14 +864,6 @@ export async function hydrateAuthenticatedPage(
 	options: HydrateAuthenticatedPageOptions = {}
 ): Promise<void> {
 	const { waitForCatalogue = true, beforeBoot } = options;
-	// A catalogue that never renders is a RUN-level condition, not a per-test one.
-	// Once this worker has diagnosed it, every later test fails instantly with the
-	// same reason instead of re-paying the wait and a full OAuth fallback — the
-	// difference between one clear failure and a shard that times out at 60min.
-	const knownUnavailable = catalogueUnavailableReason();
-	if (waitForCatalogue && knownUnavailable !== null) {
-		throw new Error(knownUnavailable);
-	}
 	const variant = getStoreVariant(testInfo);
 	const cashierAuth = getE2ECashierAuth(variant, currentShardIndex(testInfo.config));
 	await stubStoreVersionForE2E(page.context(), getStoreUrl(testInfo), variant);

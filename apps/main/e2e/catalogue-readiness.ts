@@ -9,21 +9,22 @@
  * 32-60min, hit the job timeout, and reported as flaky infrastructure for most
  * of a day. Flat, identical per-test durations were the only tell.
  *
- * Two rules follow, and this module exists to keep them honest:
+ * The rule that follows: **use the evidence the OAuth path already trusts.**
+ * That path asserts `data-table-count` contains a non-zero digit. A restored
+ * session is ready by exactly the same standard — no separate tile-shaped guess
+ * that can drift from it (the previous marker missed variable-product tiles
+ * entirely and burned its whole timeout on a Luma catalogue).
  *
- *  1. **Use the evidence the OAuth path already trusts.** That path asserts on
- *     `data-table-count` containing a non-zero digit. A restored session is
- *     ready by exactly the same standard — no separate tile-shaped guess that
- *     can drift (the previous marker missed variable-product tiles entirely and
- *     burned its whole timeout on a Luma catalogue).
- *  2. **Diagnose once per worker, not once per test.** A catalogue that never
- *     renders is a RUN-level condition. The first test pays the timeout and
- *     records why; the rest fail instantly with the same reason instead of each
- *     re-paying it. One clear failure beats N slow identical ones.
+ * Run-level fast-fail is deliberately NOT implemented here. `globalSetup`
+ * authenticates with `waitForCatalogue` before any test runs and asserts the
+ * same signal, so a catalogue that never renders aborts the whole run there,
+ * once, with the message below. A per-worker memo was tried and removed: on
+ * failure Playwright replaces the worker process, so module state does not
+ * survive to help the tests that follow (review on #1336).
  *
- * Deliberately NOT changed: a cold-start profile still opts out via
- * `waitForCatalogue: false`, and an empty store is still the OAuth path's call
- * to make — this module only reports what it observed.
+ * Also deliberately unchanged: a cold-start profile still opts out via
+ * `waitForCatalogue: false`, and whether an empty store is legitimate stays the
+ * caller's judgement — this module only reports what it observed.
  */
 
 /**
@@ -45,6 +46,11 @@ export type CatalogueObservation = {
  * The message a failed readiness wait should carry. Written to be actionable in
  * a CI log with no other context: it names the signal, what it showed, and the
  * two causes worth checking, so nobody has to infer a regression from timings.
+ *
+ * Says nothing about what the caller does next — this same text is thrown from
+ * the restored path (which falls back to OAuth) and from the OAuth path itself
+ * (which has nothing left to fall back to), so any "falling back" claim here
+ * would be false half the time (review on #1336).
  */
 export function catalogueUnavailableMessage(observation: CatalogueObservation): string {
 	const observed =
@@ -52,28 +58,8 @@ export function catalogueUnavailableMessage(observation: CatalogueObservation): 
 			? 'the data-table-count element never rendered'
 			: `data-table-count showed "${observation.countText}"`;
 	return (
-		`Restored session never produced a non-empty catalogue after ${observation.elapsedMs}ms — ${observed}. ` +
+		`Catalogue never became non-empty after ${observation.elapsedMs}ms — ${observed}. ` +
 		`Either the store genuinely has no products, or the app failed to render them ` +
-		`(a product-demand regression looks exactly like this). Falling back to OAuth, which asserts the same signal.`
+		`(a product-demand regression looks exactly like this).`
 	);
-}
-
-/**
- * Per-worker memo of a run-level catalogue failure. Playwright workers are
- * separate processes, so this is naturally scoped to one worker: each pays the
- * diagnosis once, then short-circuits.
- */
-let catalogueUnavailable: string | null = null;
-
-export function recordCatalogueUnavailable(reason: string): void {
-	catalogueUnavailable ??= reason;
-}
-
-export function catalogueUnavailableReason(): string | null {
-	return catalogueUnavailable;
-}
-
-/** Test-only: the memo is module state, so suites that assert on it must reset. */
-export function resetCatalogueUnavailable(): void {
-	catalogueUnavailable = null;
 }
