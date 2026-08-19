@@ -356,6 +356,35 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it('auto mode drains an enqueued write on the nudge, not the interval timer', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith({
+			fetch: (url, init) => server.fetch(url, init as never),
+			mode: 'auto',
+			// The interval alone could never fire inside this test — only the
+			// enqueue-time nudge can deliver the push.
+			writeDrainPollMs: 600_000,
+		});
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, undefined, 'pos-open');
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { status: 'pos-open' },
+				explicit: true,
+			} as never);
+			// Auto-mode boot lanes GET this server too — only envelopes with a
+			// mutationId are pushes.
+			const pushes = () => server.received.filter((env) => env.mutationId !== undefined);
+			expect(pushes()).toHaveLength(0);
+			await vi.waitFor(() => expect(pushes()).toHaveLength(1), { timeout: 3_000 });
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('pushes an explicit pos-open create', async () => {
 		const server = createFakeWriteServer();
 		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
