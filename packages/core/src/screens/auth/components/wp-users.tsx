@@ -7,12 +7,16 @@ import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { WPCredentialsDocument } from '@wcpos/database';
+import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { AddUserButton } from './add-user-button';
 import { StoreSelect } from './store-select';
 import { WpUser } from './wp-user';
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
+
+const authLogger = getLogger(['wcpos', 'auth', 'login']);
 
 interface WpUsersProps {
 	site: import('@wcpos/database').SiteDocument;
@@ -81,10 +85,18 @@ export function WPUsers({ site }: WpUsersProps) {
 							selectedStoreId={selectedStoreId}
 							onStoreSelect={setSelectedStoreId}
 							onLogin={(storeID) => {
+								// uuid is the primary key on both documents — always set on a stored row.
 								login({
-									siteID: site.uuid,
-									wpCredentialsID: selectedUser.uuid,
+									siteID: site.uuid!,
+									wpCredentialsID: selectedUser.uuid!,
 									storeID,
+								}).catch((error) => {
+									// A rejected login leaves the cashier on the store picker with no
+									// feedback; at minimum it must reach the log pipeline.
+									authLogger.error('Store login failed', {
+										code: ERROR_CODES.AUTH_UNEXPECTED,
+										context: { siteName: site.name, storeID, error },
+									});
 								});
 							}}
 						/>
