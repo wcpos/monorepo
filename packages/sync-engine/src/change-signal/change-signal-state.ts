@@ -1,6 +1,6 @@
 /**
- * Package-private engine-state (de)serialization (facade slice 3) — ported from
- * the web host's former changeSignalStatePersistence (deleted at #430 phase 2). The
+ * Package-private engine-state (de)serialization — ported from the lab web
+ * host's former changeSignalStatePersistence, which no longer exists. The
  * hybrid engine's baselineDigests is a Map (JSON cannot hold one), so the blob
  * stores entries; a malformed blob deserializes to null and the lane falls back
  * to prime-to-head instead of crashing every tick. Persistence I/O lives in the

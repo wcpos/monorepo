@@ -453,8 +453,8 @@ export class StoreScopeManager {
 	 * `confirmDestroyQueue` is set. Data collections always reset; the
 	 * mutation queue is never touched by a data-collection reset.
 	 *
-	 * Cursor ordering is load-bearing (proven in
-	 * apps/web/src/integration/collectionResetRxdb.test.ts): invalidators run
+	 * Cursor ordering is load-bearing (proven by the lab's collection-reset
+	 * integration test, not ported here): invalidators run
 	 * AFTER the epoch bump + guarded-write drain (nothing can re-persist a
 	 * stale cursor once they run — every later write drops) and BEFORE the
 	 * drop, so every failure mode is safe without host machinery: an

@@ -295,6 +295,21 @@ jobs:
           echo "❌ Deployment health check failed after 30 attempts"
           exit 1
 
+      # Saturated stores produce failures that look exactly like broken diffs.
+      # Measure BEFORE the tests so the annotation is already on the run when
+      # someone reads the reds (2026-08-19: a saturated dev-pro sent a whole
+      # night of gates red and the reds read as ordinary test failures).
+      - name: 🌡 Probe store health (pre-flight)
+        continue-on-error: true
+        env:
+          E2E_STORE_URL_PRO: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}
+          E2E_STORE_URL_FREE: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-free.wcpos.com' }}
+        run: |
+          node scripts/probe-store-health.mjs "$E2E_STORE_URL_PRO" "pro store" "before the tests started"
+          if [ -n "$E2E_STORE_URL_FREE" ] && [ "$E2E_STORE_URL_FREE" != "$E2E_STORE_URL_PRO" ]; then
+            node scripts/probe-store-health.mjs "$E2E_STORE_URL_FREE" "free store" "before the tests started"
+          fi
+
       - name: 🧪 Run E2E tests (shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
         id: e2e-tests
         # Not `--shard`: that splits by TEST COUNT, which on run 31429108622 gave
@@ -369,6 +384,21 @@ jobs:
           fi
           # The plaintext must never reach the cache post-step or artifacts.
           rm -rf e2e/.auth-state
+
+      # Same probe again on failure: a store that was healthy at the start can
+      # be saturated by the time the run fails, and that distinction is the
+      # difference between "your diff" and "the queue".
+      - name: 🌡 Probe store health (after failure)
+        if: failure()
+        continue-on-error: true
+        env:
+          E2E_STORE_URL_PRO: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}
+          E2E_STORE_URL_FREE: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-free.wcpos.com' }}
+        run: |
+          node scripts/probe-store-health.mjs "$E2E_STORE_URL_PRO" "pro store (post-failure)" "after the tests failed"
+          if [ -n "$E2E_STORE_URL_FREE" ] && [ "$E2E_STORE_URL_FREE" != "$E2E_STORE_URL_PRO" ]; then
+            node scripts/probe-store-health.mjs "$E2E_STORE_URL_FREE" "free store (post-failure)" "after the tests failed"
+          fi
 
       - name: 📊 Upload blob report
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
