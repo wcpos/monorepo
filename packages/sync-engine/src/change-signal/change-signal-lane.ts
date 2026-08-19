@@ -344,10 +344,18 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 						const changedCollections = censusCollectionsForActions(actions);
 						if (changedCollections.length > 0) {
 							const cacheRepository = new RxQueryTotalCacheRepository(database as never);
-							expiredCensusEntries = await cacheRepository.expire(
+							const expiry = await cacheRepository.expire(
 								changedCollections.map(censusQueryKey),
 								deps.now?.() ?? Date.now()
 							);
+							expiredCensusEntries = expiry.expired;
+							for (const failure of expiry.failures) {
+								deps.diagnostics({
+									type: 'signal.log',
+									level: 'warn',
+									message: `census expiry after change-signal apply failed for ${failure.queryKey}: ${failure.error instanceof Error ? failure.error.message : String(failure.error)}`,
+								});
+							}
 						}
 					} catch (error) {
 						deps.diagnostics({

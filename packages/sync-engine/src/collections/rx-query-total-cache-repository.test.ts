@@ -50,16 +50,19 @@ describe('RxQueryTotalCacheRepository.expire', () => {
 		]);
 		const repository = new RxQueryTotalCacheRepository(database as never);
 
-		const expired = await repository.expire(['census:products', 'census:customers'], 5_000);
+		const result = await repository.expire(['census:products', 'census:customers'], 5_000);
 
-		expect(expired).toEqual([
-			{
-				queryKey: 'census:products',
-				totalMatchingRecords: 203,
-				freshUntilMs: 5_000,
-				updatedAtMs: 1_000,
-			},
-		]);
+		expect(result).toEqual({
+			expired: [
+				{
+					queryKey: 'census:products',
+					totalMatchingRecords: 203,
+					freshUntilMs: 5_000,
+					updatedAtMs: 1_000,
+				},
+			],
+			failures: [],
+		});
 		expect(byKey.get('census:products')?.freshUntilMs).toBe(5_000);
 		expect(byKey.get('census:products')?.totalMatchingRecords).toBe(203);
 		expect(byKey.get('census:products')?.updatedAtMs).toBe(1_000);
@@ -71,8 +74,14 @@ describe('RxQueryTotalCacheRepository.expire', () => {
 		const { byKey, database } = fakeDatabase([entry('census:products')]);
 		const repository = new RxQueryTotalCacheRepository(database as never);
 
-		await expect(repository.expire(['census:orders'], 5_000)).resolves.toEqual([]);
-		await expect(repository.expire([], 5_000)).resolves.toEqual([]);
+		await expect(repository.expire(['census:orders'], 5_000)).resolves.toEqual({
+			expired: [],
+			failures: [],
+		});
+		await expect(repository.expire([], 5_000)).resolves.toEqual({
+			expired: [],
+			failures: [],
+		});
 		expect(byKey.get('census:products')?.freshUntilMs).toBe(10_000);
 	});
 });

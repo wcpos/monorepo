@@ -248,7 +248,7 @@ describe('hydration-miss recovery accounting', () => {
 
 describe('census expiry on applied changes', () => {
 	/** In-memory queryTotalCacheEntries — enough of find/bulkUpsert for expire(). */
-	function censusDatabase(seed: QueryTotalCacheEntry[], failWrites = false) {
+	function censusDatabase(seed: QueryTotalCacheEntry[], failWrites = false, failWriteFor?: string) {
 		const byKey = new Map(
 			seed.map((entry) => [entry.queryKey, { ...entry, schemaVersion: 1 as const }])
 		);
@@ -266,7 +266,9 @@ describe('census expiry on applied changes', () => {
 						},
 					}),
 					bulkUpsert: async (documents: (QueryTotalCacheEntry & { schemaVersion: 1 })[]) => {
-						if (failWrites) throw new Error('cache write refused');
+						if (failWrites || documents.some(({ queryKey }) => queryKey === failWriteFor)) {
+							throw new Error('cache write refused');
+						}
 						for (const document of documents) byKey.set(document.queryKey, document);
 						return { success: documents, error: [] };
 					},
@@ -288,6 +290,7 @@ describe('census expiry on applied changes', () => {
 		}>;
 		seed: QueryTotalCacheEntry[];
 		failWrites?: boolean;
+		failWriteFor?: string;
 	}) {
 		const manager = new StoreScopeManager({
 			createDatabase: async () => stubDatabase(),
@@ -314,7 +317,11 @@ describe('census expiry on applied changes', () => {
 			reFetchCollections: [],
 			...options.plan,
 		} as never);
-		const { byKey, database } = censusDatabase(options.seed, options.failWrites ?? false);
+		const { byKey, database } = censusDatabase(
+			options.seed,
+			options.failWrites ?? false,
+			options.failWriteFor
+		);
 		const emitEvent = vi.fn();
 		const diagnostics = vi.fn();
 		const lane = createChangeSignalLane({
@@ -380,6 +387,31 @@ describe('census expiry on applied changes', () => {
 				type: 'signal.log',
 				level: 'warn',
 				message: expect.stringContaining('census expiry'),
+			})
+		);
+	});
+
+	it('emits completed expiries and identifies a later entry whose write fails', async () => {
+		const { byKey, emitEvent, diagnostics } = await runCensusTick({
+			plan: {
+				targetedPulls: [{ collection: 'products', ids: [7] }],
+				deletes: [{ collection: 'tax_rates', ids: [3] }],
+			},
+			seed: [censusEntry('census:products'), censusEntry('census:taxRates')],
+			failWriteFor: 'census:taxRates',
+		});
+
+		expect(byKey.get('census:products')?.freshUntilMs).toBe(5_000);
+		expect(byKey.get('census:taxRates')?.freshUntilMs).toBe(900_000);
+		expect(emitEvent).toHaveBeenCalledWith({
+			type: 'query-total-cache',
+			entries: [expect.objectContaining({ queryKey: 'census:products', freshUntilMs: 5_000 })],
+		});
+		expect(diagnostics).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: 'signal.log',
+				level: 'warn',
+				message: expect.stringContaining('census:taxRates'),
 			})
 		);
 	});
