@@ -37,14 +37,26 @@ export {
 	parseOrderBrowserSchedulerDescriptor,
 } from './order-browser-scheduler-descriptor';
 export {
+	hasProductBrowseWindowFilters,
 	parseProductBrowseWindowDescriptor,
 	PRODUCT_BROWSE_WINDOW_LIMIT,
+	PRODUCT_BROWSE_WINDOW_ORDER,
+	PRODUCT_BROWSE_WINDOW_ORDERBY,
 	productBrowseWindowQueryKeyFromDimensions,
+	productBrowseWindowQueryParams,
+	productBrowseWindowViewKey,
+	type ProductBrowseWindowDescriptor,
 	type ProductBrowseWindowOrderby,
 } from './product-browse-window-descriptor';
 export {
+	CUSTOMER_BROWSE_WINDOW_DEFAULT_LIMIT,
+	CUSTOMER_BROWSE_WINDOW_ORDER,
+	CUSTOMER_BROWSE_WINDOW_ORDERBY,
 	customerBrowseWindowQueryKeyFromDimensions,
+	customerBrowseWindowQueryParams,
+	customerBrowseWindowViewKey,
 	parseCustomerBrowseWindowDescriptor,
+	type CustomerBrowseWindowDescriptor,
 	type CustomerBrowseWindowOrderby,
 } from './customer-browse-window-descriptor';
 export {

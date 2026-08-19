@@ -18,6 +18,13 @@ const SITE = 'https://lab.example.test';
 const SYNC_BASE = `${SITE}/wp-json/wcpos/v2`;
 let uniqueStore = 0;
 
+/**
+ * The customer trickle's cursor is keyed by the browse window's VIEW identity (the sort) since
+ * the 2026-08-19 ordering ruling, so a seeded "walk finished" cursor must name the view it
+ * finished — here the default window (id asc), which is what an undeclared grid falls back to.
+ */
+const CUSTOMER_DEFAULT_VIEW_KEY = 'customers:browse-window:limit=';
+
 // Server-stamped identity: a deterministic v4-shaped uuid per Woo id, so the post-flip
 // STORAGE key (document.id) is predictable (mirrors the fetcher suites).
 const productUuid = (n: number): string => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -147,7 +154,8 @@ function engineWith(fetch: (url: string, init?: RequestInit) => Promise<Response
 async function seedProductsCensus(
 	engine: RxdbSyncEngine,
 	totalMatchingRecords: number,
-	freshUntilMs: number
+	freshUntilMs: number,
+	updatedAtMs = Date.now()
 ): Promise<void> {
 	const scope = engine.active();
 	if (!scope) throw new Error('no active scope');
@@ -155,7 +163,7 @@ async function seedProductsCensus(
 		queryKey: 'census:products',
 		totalMatchingRecords,
 		freshUntilMs,
-		updatedAtMs: Date.now(),
+		updatedAtMs,
 		schemaVersion: 1,
 	});
 }
@@ -246,6 +254,31 @@ describe('require() for search — the public search-demand verb', () => {
 		await engine.dispose();
 	});
 
+	it('does not trust a fully resident product census from before this engine session', async () => {
+		const server = scriptedProductSearchProxy([]);
+		const engine = createEngineHarness({
+			site: SITE,
+			identity: freshIdentity(),
+			fetch: server.fetch,
+			startAtMs: 2_000,
+			awaitReady: false,
+		}).engine;
+		await engine.ready;
+		await insertResidentProduct(engine, 1);
+		await seedProductsCensus(engine, 1, 60_000, 1_000);
+
+		await expect(
+			engine.require({
+				id: 'previous-session-census',
+				collection: 'products',
+				kind: 'search',
+				term: 'hat',
+			}).ready
+		).resolves.toMatchObject({ action: 'fetched' });
+		expect(server.state).toEqual({ searchPulls: 1, skuPulls: 1 });
+		await engine.dispose();
+	});
+
 	it.each([
 		['stale census', async (engine: RxdbSyncEngine) => seedProductsCensus(engine, 0, 1)],
 		['no census row', async () => undefined],
@@ -294,7 +327,7 @@ describe('require() for search — the public search-demand verb', () => {
 		const scope = await engine.ready;
 		await scope.database.collections.engineKv.upsert({
 			id: 'customer-trickle:state',
-			value: JSON.stringify({ page: 1, walkComplete: true }),
+			value: JSON.stringify({ viewKey: CUSTOMER_DEFAULT_VIEW_KEY, page: 1, walkComplete: true }),
 		});
 		await scope.database.collections.queryTotalCacheEntries.upsert({
 			queryKey: 'census:customers',
@@ -319,13 +352,47 @@ describe('require() for search — the public search-demand verb', () => {
 		await engine.dispose();
 	});
 
+	it('does not trust customer catalogue completion from before this engine session', async () => {
+		const server = scriptedCustomerSearchProxy([]);
+		const engine = createEngineHarness({
+			site: SITE,
+			identity: freshIdentity(),
+			fetch: server.fetch,
+			startAtMs: 2_000,
+			awaitReady: false,
+		}).engine;
+		const scope = await engine.ready;
+		await scope.database.collections.engineKv.upsert({
+			id: 'customer-trickle:state',
+			value: JSON.stringify({ viewKey: CUSTOMER_DEFAULT_VIEW_KEY, page: 1, walkComplete: true }),
+		});
+		await scope.database.collections.queryTotalCacheEntries.upsert({
+			queryKey: 'census:customers',
+			totalMatchingRecords: 0,
+			freshUntilMs: 60_000,
+			updatedAtMs: 1_000,
+			schemaVersion: 1,
+		});
+
+		await expect(
+			engine.require({
+				id: 'previous-session-customer-census',
+				collection: 'customers',
+				kind: 'search',
+				term: 'ada',
+			}).ready
+		).resolves.toMatchObject({ action: 'fetched' });
+		expect(server.state.pulls).toBe(1);
+		await engine.dispose();
+	});
+
 	it('does not let the customer:default sentinel satisfy the customers completeness count', async () => {
 		const server = scriptedCustomerSearchProxy([]);
 		const engine = engineWith(server.fetch);
 		const scope = await engine.ready;
 		await scope.database.collections.engineKv.upsert({
 			id: 'customer-trickle:state',
-			value: JSON.stringify({ page: 1, walkComplete: true }),
+			value: JSON.stringify({ viewKey: CUSTOMER_DEFAULT_VIEW_KEY, page: 1, walkComplete: true }),
 		});
 		// One real customer exists server-side (census 1) but only the born-local
 		// sentinel is resident: the gate must fetch, not mask the missing customer.

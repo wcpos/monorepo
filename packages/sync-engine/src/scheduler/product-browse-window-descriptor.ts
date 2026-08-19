@@ -229,6 +229,56 @@ export function productBrowseWindowFilterPart(filters?: ProductBrowseWindowFilte
 	].join('');
 }
 
+/**
+ * The wire query the window's identity means — `status=publish`, the sort, and whichever
+ * representable filter dimensions it carries. The ONE place a product browse window is
+ * translated into Woo REST params, so the drain fetcher (rx-scheduler-product-fetcher.ts)
+ * and the idle catalog backfill (maintenance/product-trickle.ts) cannot express the same
+ * window as two different requests.
+ *
+ * `omitFilters` keeps the SORT and drops the restrictive dimensions — the backfill's second
+ * stage. Paul's ruling (2026-08-19): filters PRIORITISE, they do not exclude. The active
+ * window (say in-stock, alphabetical) comes down first; then the same sort continues over
+ * the whole catalogue, so an out-of-stock product still lands and the till stays fully
+ * sellable offline.
+ *
+ * Callers add `per_page`/`page` themselves: the window is a row count, the page size is the
+ * Performance dial (#908), and the backfill paginates on its own cursor.
+ */
+export function productBrowseWindowQueryParams(
+	descriptor: ProductBrowseWindowDescriptor,
+	options?: { omitFilters?: boolean }
+): URLSearchParams {
+	const query = new URLSearchParams();
+	query.set('orderby', descriptor.orderby);
+	query.set('order', descriptor.order);
+	query.set('status', 'publish');
+	if (options?.omitFilters) return query;
+	for (const field of ['category', 'tag', 'brand'] as const) {
+		if (descriptor[field]) query.set(field, descriptor[field].join(','));
+	}
+	for (const field of ['featured', 'on_sale'] as const) {
+		if (descriptor[field] !== undefined) query.set(field, String(descriptor[field]));
+	}
+	if (descriptor.stock_status) query.set('stock_status', descriptor.stock_status);
+	return query;
+}
+
+/** Whether the window carries any restrictive filter dimension at all. */
+export function hasProductBrowseWindowFilters(descriptor: ProductBrowseWindowDescriptor): boolean {
+	return productBrowseWindowFilterPart(descriptor) !== '';
+}
+
+/**
+ * The window's VIEW identity — every dimension except the limit, which is what "the same
+ * slice of the catalogue" means. Lane eviction groups by it, and the idle catalog backfill
+ * keys its durable cursor by it (so a scroll tick does not restart the walk but a sort or
+ * filter change does). Always a string for products, unlike the nullable grammar slot.
+ */
+export function productBrowseWindowViewKey(descriptor: ProductBrowseWindowDescriptor): string {
+	return encodeProductBrowseWindowKey('', descriptor.orderby, descriptor.order, descriptor);
+}
+
 const QUERY_KEY_PATTERN =
 	/^products:browse-window:limit=(\d+)(?::orderby=([a-z_]+):order=(asc|desc))?(?::category=(\d+(?:,\d+)*))?(?::tag=(\d+(?:,\d+)*))?(?::brand=(\d+(?:,\d+)*))?(?::featured=(0|1))?(?::on_sale=(0|1))?(?::stock_status=(instock|outofstock|onbackorder))?$/;
 
@@ -321,8 +371,7 @@ export const PRODUCT_BROWSE_WINDOW_GRAMMAR: BrowseWindowGrammar<ProductBrowseWin
 	parse: parseProductBrowseWindowDescriptor,
 	limitOf: (descriptor) => descriptor.limit,
 	requirementId: productBrowseWindowRequirementId,
-	viewKey: (descriptor) =>
-		encodeProductBrowseWindowKey('', descriptor.orderby, descriptor.order, descriptor),
+	viewKey: productBrowseWindowViewKey,
 	schemaCeilingLabel: 'Product browse-window scheduler',
 	measureTaskIdAgainstCeiling: true,
 };

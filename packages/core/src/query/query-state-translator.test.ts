@@ -600,6 +600,54 @@ describe('query-state translator', () => {
 		}
 	);
 
+	/**
+	 * A customers sort with no wire `orderby` — `date_modified_gmt`, the one such column on the
+	 * customers grid — used to gate the WHOLE branch off and declare no demand at all, so the
+	 * grid locally re-ordered whichever residents the trickle happened to hold: the
+	 * plausible-looking-but-wrong slice #909/#951 introduced browse windows to prevent. It must
+	 * fall back exactly as products do — the window is still declared, with the sort omitted.
+	 */
+	it('declares a customers browse window for a sort the wire cannot express', () => {
+		const compiled = compileQuery(
+			'customers',
+			{
+				search: '',
+				filters: {},
+				sort: { field: 'date_modified_gmt', direction: 'desc' },
+				limit: 25,
+			},
+			{ id: 'customers' }
+		);
+
+		expect(compiled.demand).toEqual([
+			{
+				id: 'customers:customers-browse-window',
+				collection: 'customers',
+				kind: 'customer-browse',
+				limit: 25,
+			},
+		]);
+	});
+
+	it('carries an expressible customers sort onto the browse window', () => {
+		const compiled = compileQuery(
+			'customers',
+			{
+				search: '',
+				filters: {},
+				sort: { field: 'last_name', direction: 'desc' },
+				limit: 25,
+			},
+			{ id: 'customers' }
+		);
+
+		expect(compiled.demand[0]).toMatchObject({
+			kind: 'customer-browse',
+			orderby: 'last_name',
+			order: 'desc',
+		});
+	});
+
 	it('keeps empty targeting distinct from an untargeted customer browse', () => {
 		const compiled = compileQuery(
 			'customers',

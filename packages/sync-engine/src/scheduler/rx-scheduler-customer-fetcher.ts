@@ -15,6 +15,7 @@ import {
 import { materializeTargeted } from '../materialization/record-materialization';
 import {
 	type CustomerBrowseWindowDescriptor,
+	customerBrowseWindowQueryParams,
 	parseCustomerBrowseWindowDescriptor,
 } from './customer-browse-window-descriptor';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
@@ -95,7 +96,9 @@ function parseCustomerSearchQuery(task: FetchTask): { search: string; queryLimit
  * (#1379: the POS customer space is every WordPress user, matching 1.9), but the #850-era
  * lesson is that the client must not depend on a server-side default it can state itself — a
  * proxy that stopped applying it would silently narrow every browse to `role=customer` and
- * look like missing data, not like a regression.
+ * look like missing data, not like a regression. It comes from
+ * `customerBrowseWindowQueryParams`, shared with the idle backfill so the two lanes cannot
+ * express this window as two different requests.
  *
  * The server's `X-WP-Total` for this exact sorted view is cached against the window's
  * queryKey, so the grid footer can report the real total instead of the resident count. The
@@ -110,11 +113,8 @@ async function fetchCustomerBrowseWindow(
 	context?: SchedulerFetcherContext
 ): Promise<FetchTaskResult> {
 	const { limit } = descriptor;
-	const query = new URLSearchParams();
+	const query = customerBrowseWindowQueryParams(descriptor);
 	query.set('per_page', String(pageSize));
-	query.set('orderby', descriptor.orderby);
-	query.set('order', descriptor.order);
-	query.set('role', 'all');
 
 	const payloads: WooCustomerPayload[] = [];
 	let requestCount = 0;

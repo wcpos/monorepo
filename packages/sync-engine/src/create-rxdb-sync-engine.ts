@@ -1471,6 +1471,7 @@ export function createRxdbSyncEngine(
 		onActivityChange: changeCollectionActivity,
 		pullBatchSize: () => cadence?.pullBatchSize(),
 		censusFreshForMs: intervals.censusFreshForMs,
+		catalogCensusTrustedAfterMs: engineStartedAtMs,
 		customerSearchCatalogComplete: async () => {
 			const scopeId = manager.activeScope;
 			const database = scopeId === null ? null : databaseByScopeId.get(scopeId);
@@ -1478,7 +1479,7 @@ export function createRxdbSyncEngine(
 			const state = decodeCustomerTrickleState(await readBlob(scopeId, CUSTOMER_TRICKLE_STATE_KEY));
 			if (!state.walkComplete) return false;
 			const entry = await censusPublisher.freshEntry('customers', database);
-			if (entry === null) return false;
+			if (entry === null || entry.updatedAtMs < engineStartedAtMs) return false;
 			// The born-local customer:default sentinel is not part of the server census — counting
 			// it would let a walk that is one real customer short read as complete and suppress
 			// the remote search for exactly that customer. Exclude it by its literal storage id.
@@ -1633,6 +1634,8 @@ export function createRxdbSyncEngine(
 		}),
 		variationCensusTotal: async () => (await censusPublisher.totals()).variations,
 		hasPendingInteractiveWork: requirePlane.hasPendingWork,
+		currentProductBrowseWindowKey: requirePlane.lastProductBrowseQueryKey,
+		currentCustomerBrowseWindowKey: requirePlane.lastCustomerBrowseQueryKey,
 		isWritePlaneOwner: writePlaneOwner,
 		...(ports.lastUserActivityMs !== undefined
 			? { lastUserActivityMs: ports.lastUserActivityMs }

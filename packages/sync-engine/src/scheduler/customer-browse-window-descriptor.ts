@@ -35,11 +35,21 @@ import type { CustomerBrowseDimensions } from '../require-plane';
  */
 
 /**
- * Default wire sort — deliberately the SAME ordering the idle customer trickle walks
- * (`orderby=id&order=asc`, customer-trickle.ts). The default window and the trickle therefore
- * cover the customer base in one order, so a browse-fetched page is a page the trickle would
- * otherwise have had to fetch, and the two lanes converge on the same set instead of racing
- * over two different orderings.
+ * Default wire sort — `orderby=id&order=asc`, the order a customers grid seeds in before the
+ * cashier touches the sort UI.
+ *
+ * THE TWO LANES STILL CONVERGE, and now they do it for a stronger reason. This used to read
+ * "deliberately the SAME ordering the idle customer trickle walks", because the trickle was
+ * hard-wired to id-ascending. Since the 2026-08-19 ruling the trickle no longer has an
+ * ordering of its own at all: it walks THE WINDOW THIS FILE DESCRIBES
+ * (maintenance/customer-trickle.ts), whatever sort the grid last declared. So the two lanes
+ * cover the customer base in ONE order by construction rather than by a matched pair of
+ * constants — a browse-fetched page is a page the trickle would otherwise have had to fetch,
+ * and re-sorting the grid re-points both lanes together instead of splitting them across two
+ * orderings.
+ *
+ * What this constant now means is narrower: the sort BOTH lanes fall back to when no grid has
+ * declared a window yet.
  */
 export const CUSTOMER_BROWSE_WINDOW_ORDERBY = 'id';
 export const CUSTOMER_BROWSE_WINDOW_ORDER = 'asc';
@@ -218,6 +228,39 @@ export function customerBrowseWindowQueryKeyFromDimensions(dims: CustomerBrowseD
 	);
 }
 
+/**
+ * The wire query the window's identity means — the sort, plus the explicit `role=all` that
+ * defines the POS customer space (#1379/#850). The ONE place a customers browse window is
+ * translated into Woo REST params, so the drain fetcher (rx-scheduler-customer-fetcher.ts)
+ * and the idle backfill (maintenance/customer-trickle.ts) cannot express the same window as
+ * two different requests.
+ *
+ * There is NO filter half here, unlike the products sibling: a customers window is
+ * `{limit, orderby, order}` and nothing else, so there is no restrictive dimension to drop
+ * and no `omitFilters` second stage to walk. The backfill is a single-stage walk.
+ *
+ * Callers add `per_page`/`page` themselves: the window is a row count, the page size is the
+ * Performance dial (#908), and the backfill paginates on its own cursor.
+ */
+export function customerBrowseWindowQueryParams(
+	descriptor: CustomerBrowseWindowDescriptor
+): URLSearchParams {
+	const query = new URLSearchParams();
+	query.set('orderby', descriptor.orderby);
+	query.set('order', descriptor.order);
+	query.set('role', 'all');
+	return query;
+}
+
+/**
+ * The window's VIEW identity — every dimension except the limit, which is what "the same
+ * slice of the customer base" means. Lane eviction groups by it, and the idle backfill keys
+ * its durable cursor by it, so a scroll tick does not restart the walk but a sort change does.
+ */
+export function customerBrowseWindowViewKey(descriptor: CustomerBrowseWindowDescriptor): string {
+	return encodeCustomerBrowseWindowKey('', descriptor.orderby, descriptor.order);
+}
+
 const QUERY_KEY_PATTERN =
 	/^customers:browse-window:limit=(\d+)(?::orderby=([a-z_]+):order=(asc|desc))?$/;
 
@@ -267,7 +310,7 @@ export const CUSTOMER_BROWSE_WINDOW_GRAMMAR: BrowseWindowGrammar<CustomerBrowseW
 	parse: parseCustomerBrowseWindowDescriptor,
 	limitOf: (descriptor) => descriptor.limit,
 	requirementId: customerBrowseWindowRequirementId,
-	viewKey: (descriptor) => encodeCustomerBrowseWindowKey('', descriptor.orderby, descriptor.order),
+	viewKey: customerBrowseWindowViewKey,
 	schemaCeilingLabel: 'Customer browse-window scheduler',
 	measureTaskIdAgainstCeiling: true,
 };

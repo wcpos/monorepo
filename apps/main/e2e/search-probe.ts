@@ -652,12 +652,13 @@ export async function sweepOrphanedProductProbes(
 	}
 }
 
-/** Fill a testID-located search input only after arming the matching server-demand waiter. */
+/** Fill a testID-located search input after arming its server and exact-local-result waiters. */
 export async function searchAndWaitForServer(
 	page: Page,
 	searchInput: Locator,
 	collection: SearchCollection,
-	term: string
+	term: string,
+	localResult?: Locator
 ): Promise<void> {
 	const responsePending = page.waitForResponse(
 		(response) => {
@@ -680,10 +681,15 @@ export async function searchAndWaitForServer(
 		// still fails; a slow-but-correct answer no longer does.
 		{ timeout: 120_000 }
 	);
+	const localResultPending = localResult?.waitFor({ state: 'visible', timeout: 120_000 });
 	responsePending.catch(() => {});
+	localResultPending?.catch(() => {});
 
 	await searchInput.fill(term);
-	const response = await responsePending;
+	const response = localResultPending
+		? await Promise.race([responsePending, localResultPending.then(() => null)])
+		: await responsePending;
+	if (response === null) return;
 	if (!response.ok()) {
 		throw new Error(`${collection} search demand failed: HTTP ${response.status()}`);
 	}

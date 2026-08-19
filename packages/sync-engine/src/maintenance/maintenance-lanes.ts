@@ -157,6 +157,18 @@ type MaintenanceLaneDeps = {
 	variationPrefetchStateFor: (scopeId: string) => VariationPrefetchStateStore;
 	variationCensusTotal: () => Promise<CensusTotal | null>;
 	hasPendingInteractiveWork: () => boolean;
+	/**
+	 * The products browse window the grid last declared — the cashier's current catalog sort
+	 * and filters. The idle product backfill trickles in THAT order (owner ruling
+	 * 2026-08-19); see maintenance/product-trickle.ts.
+	 */
+	currentProductBrowseWindowKey?: () => string | null;
+	/**
+	 * The customers browse window the grid last declared — the cashier's current customer
+	 * sort. The idle customer backfill trickles in THAT order (same ruling); see
+	 * maintenance/customer-trickle.ts.
+	 */
+	currentCustomerBrowseWindowKey?: () => string | null;
 	isWritePlaneOwner: () => boolean;
 	lastUserActivityMs?: () => number;
 	emitEvent: (event: QueryTotalCacheEvent) => void;
@@ -675,6 +687,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			stateStore: deps.customerTrickleStateFor(scopeId),
 			hasPendingWork: deps.hasPendingInteractiveWork,
 			customerCensusTotal: deps.customerCensusTotal,
+			...(deps.currentCustomerBrowseWindowKey !== undefined
+				? { currentBrowseWindowKey: deps.currentCustomerBrowseWindowKey }
+				: {}),
 			now,
 			...(deps.lastUserActivityMs !== undefined
 				? { lastUserActivityMs: deps.lastUserActivityMs }
@@ -684,8 +699,11 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		if (result.status !== 'ran') {
 			return { summary: null, status: 'skipped', reason: result.reason };
 		}
+		// The sort is in the summary because it is now a product decision the cashier made,
+		// not an engine constant — a support reader must be able to see which order the
+		// customer base came down in.
 		return {
-			summary: `Customer trickle: page ${result.page}, ${result.rows} customers`,
+			summary: `Customer trickle: ${result.orderby} ${result.order}, page ${result.page}, ${result.rows} customers`,
 		};
 	});
 	const productTrickle = lane('product-trickle', async (db, scopeId, signal, fetcher) => {
@@ -701,6 +719,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			hasPendingWork: deps.hasPendingInteractiveWork,
 			productCensusTotal: deps.productCensusTotal,
 			barcodeSelectors,
+			...(deps.currentProductBrowseWindowKey !== undefined
+				? { currentBrowseWindowKey: deps.currentProductBrowseWindowKey }
+				: {}),
 			now,
 			...(deps.lastUserActivityMs !== undefined
 				? { lastUserActivityMs: deps.lastUserActivityMs }
@@ -710,7 +731,12 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		if (result.status !== 'ran') {
 			return { summary: null, status: 'skipped', reason: result.reason };
 		}
-		return { summary: `Product trickle: page ${result.page}, ${result.rows} products` };
+		// The sort is in the summary because it is now a product decision the cashier made,
+		// not an engine constant — a support reader must be able to see which order the
+		// catalogue came down in.
+		return {
+			summary: `Product trickle: ${result.orderby} ${result.order} (${result.stage}), page ${result.page}, ${result.rows} products`,
+		};
 	});
 	const variationPrefetch = lane('variation-prefetch', async (db, scopeId, signal, fetcher) => {
 		if (!deps.isWritePlaneOwner()) {

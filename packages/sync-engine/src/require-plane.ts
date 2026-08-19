@@ -195,6 +195,9 @@ export type RequirePlaneDeps = {
 	pullBatchSize?: () => number | undefined;
 	now?: () => number;
 	censusFreshForMs?: number;
+	/** A persisted census from an earlier engine session cannot prove that the remote catalogue
+	 * stayed unchanged while this client was closed. */
+	catalogCensusTrustedAfterMs?: number;
 	customerSearchCatalogComplete?: () => Promise<boolean>;
 	/** The per-scope barcode carriers a demand pull materializes products/variations by. */
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
@@ -275,7 +278,66 @@ type SeedDrainRequirement = {
 export type RequirePlane = {
 	require(requirement: EngineRequirement): RequirementHandle;
 	hasPendingWork(): boolean;
+	/**
+	 * The lane identity of the LAST products browse window a grid declared — the cashier's
+	 * current effective catalog sort and filters, in the engine's own grammar.
+	 *
+	 * Paul's ruling, 2026-08-19: the idle catalog backfill must download products in the
+	 * order the merchant/cashier actually cares about, not by id. "The store owner will set a
+	 * default sort order and that should be the governing principle of which products come
+	 * down first… and then if they change the sort order to created first, then that should
+	 * be the order that the products are coming down."
+	 *
+	 * The maintenance lane runs inside the engine and has no view of UI state, but it does
+	 * not need one: the grid ALREADY declares its effective sort and representable filters
+	 * here on every render, and `require()` already derives the canonical window key from
+	 * them. The merchant's default `pos-products` sort arrives the same way — it is what the
+	 * grid mounts with — so no host settings port is involved.
+	 *
+	 * In memory, per scope, and last-write-wins: null until a products grid has declared in
+	 * the active scope, and the POS grid and the Products screen overwrite each other there
+	 * (the grid the cashier last had open is the one that governs). A caller must treat null
+	 * as "use the default window".
+	 */
+	lastProductBrowseQueryKey(): string | null;
+	/**
+	 * The customers sibling of {@link lastProductBrowseQueryKey} — the lane identity of the
+	 * LAST customers browse window a grid declared, and therefore the sort the idle customer
+	 * backfill walks (maintenance/customer-trickle.ts). Same ruling, same mechanism, same
+	 * per-scope last-write-wins semantics; null means "use the default window".
+	 */
+	lastCustomerBrowseQueryKey(): string | null;
 };
+
+/**
+ * Per-scope last-write-wins memory for a browse window's lane identity — the signal the idle
+ * backfills read to walk the cashier's own ordering.
+ *
+ * A window can be DECLARED before the initial scope open settles (a grid mounted against a
+ * cold engine), so a pre-ready declaration parks in `beforeReady` and is adopted by the first
+ * scope that reads it. It is deliberately NOT carried across a later scope switch: another
+ * store's grid ordering is not this store's.
+ */
+function createBrowseWindowKeyMemory(activeScope: () => string | null) {
+	const byScope = new Map<string, string>();
+	let beforeReady: string | null = null;
+	return {
+		record(key: string): void {
+			const scopeId = activeScope();
+			if (scopeId === null) beforeReady = key;
+			else byScope.set(scopeId, key);
+		},
+		read(): string | null {
+			const scopeId = activeScope();
+			if (scopeId === null) return beforeReady;
+			if (beforeReady !== null) {
+				byScope.set(scopeId, beforeReady);
+				beforeReady = null;
+			}
+			return byScope.get(scopeId) ?? null;
+		},
+	};
+}
 
 export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	// #1134 item 2 (owner ruling 2026-08-14): the demand path stays UNCAPPED —
@@ -289,6 +351,10 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	});
 	const queue: QueuedRequirement[] = [];
 	const activeSearches = new Map<string, QueuedRequirement>();
+	/** See RequirePlane.lastProductBrowseQueryKey — the idle backfills' ordering signal. */
+	const activeScope = () => deps.manager.activeScope;
+	const productBrowseWindowKeys = createBrowseWindowKeyMemory(activeScope);
+	const customerBrowseWindowKeys = createBrowseWindowKeyMemory(activeScope);
 	// Demand-path reference refreshes dedupe ONLY against their own last pull
 	// (#1302 round 2): the persisted task timestamp is shared with the idle
 	// maintenance lane, and a maintenance completion landing shortly before a
@@ -875,6 +941,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						if (
 							entry &&
 							entry.freshUntilMs > now() &&
+							entry.updatedAtMs >= (deps.catalogCensusTrustedAfterMs ?? Number.NEGATIVE_INFINITY) &&
 							(await database.collections.products.count().exec()) >= entry.totalMatchingRecords
 						) {
 							return {
@@ -1201,6 +1268,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 
 	return {
 		hasPendingWork: () => running || queue.length > 0,
+		lastProductBrowseQueryKey: productBrowseWindowKeys.read,
+		lastCustomerBrowseQueryKey: customerBrowseWindowKeys.read,
 		require: (requirement) => {
 			// The runaway backstop is the ONE ceiling left on a browse window (#948/#957),
 			// and it must never behave like the caps it replaced: it is announced, not
@@ -1222,10 +1291,18 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			const queryKey = (() => {
 				if (requirement.kind === 'orders-browse') return orderBrowserQueryKey(requirement);
 				if (requirement.kind === 'product-browse') {
-					return productBrowseWindowQueryKeyFromDimensions(requirement);
+					// Recorded on DECLARATION, not on completion: the idle backfill must follow the
+					// window the grid is showing even when that window was served entirely from
+					// local rows (which writes no coverage and completes no task).
+					const key = productBrowseWindowQueryKeyFromDimensions(requirement);
+					productBrowseWindowKeys.record(key);
+					return key;
 				}
 				if (requirement.kind === 'customer-browse') {
-					return customerBrowseWindowQueryKeyFromDimensions(requirement);
+					// Same contract as products above — declaration, not completion.
+					const key = customerBrowseWindowQueryKeyFromDimensions(requirement);
+					customerBrowseWindowKeys.record(key);
+					return key;
 				}
 				if (requirement.kind === 'refresh') return laneKeyFor(requirement.collection);
 				return null;
