@@ -276,7 +276,11 @@ async function runProductTrickle(deps: ProductTrickleDeps): Promise<ProductTrick
 	const handsOver = stageExhausted && state.stage === 'window';
 	const walkComplete = stageExhausted && !handsOver;
 	const completionCensus = walkComplete ? await deps.productCensusTotal() : null;
-	const nextState: ProductTrickleState = walkComplete
+	const localCatalogIncomplete =
+		completionCensus?.fresh === true &&
+		(await deps.database.collections.products.count().exec()) < completionCensus.total;
+	const completesWalk = walkComplete && !localCatalogIncomplete;
+	const nextState: ProductTrickleState = completesWalk
 		? {
 				viewKey,
 				stage: state.stage,
@@ -287,7 +291,7 @@ async function runProductTrickle(deps: ProductTrickleDeps): Promise<ProductTrick
 		: {
 				viewKey,
 				stage: handsOver ? 'catalog' : state.stage,
-				page: handsOver ? 1 : state.page + 1,
+				page: handsOver || localCatalogIncomplete ? 1 : state.page + 1,
 				walkComplete: false,
 				observedCensusTotal: null,
 			};

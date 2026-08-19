@@ -291,10 +291,10 @@ export type RequirePlane = {
 	 * them. The merchant's default `pos-products` sort arrives the same way — it is what the
 	 * grid mounts with — so no host settings port is involved.
 	 *
-	 * In memory and last-write-wins: null until a products grid has declared once this
-	 * session, and the POS grid and the Products screen overwrite each other (the grid the
-	 * cashier last had open is the one that governs). A caller must treat null as "use the
-	 * default window".
+	 * In memory, per scope, and last-write-wins: null until a products grid has declared in
+	 * the active scope, and the POS grid and the Products screen overwrite each other there
+	 * (the grid the cashier last had open is the one that governs). A caller must treat null
+	 * as "use the default window".
 	 */
 	lastProductBrowseQueryKey(): string | null;
 };
@@ -312,7 +312,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	const queue: QueuedRequirement[] = [];
 	const activeSearches = new Map<string, QueuedRequirement>();
 	/** See RequirePlane.lastProductBrowseQueryKey — the idle backfill's ordering signal. */
-	let lastProductBrowseQueryKey: string | null = null;
+	const productBrowseQueryKeys = new Map<string, string>();
+	let productBrowseQueryKeyBeforeReady: string | null = null;
 	// Demand-path reference refreshes dedupe ONLY against their own last pull
 	// (#1302 round 2): the persisted task timestamp is shared with the idle
 	// maintenance lane, and a maintenance completion landing shortly before a
@@ -1225,7 +1226,15 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 
 	return {
 		hasPendingWork: () => running || queue.length > 0,
-		lastProductBrowseQueryKey: () => lastProductBrowseQueryKey,
+		lastProductBrowseQueryKey: () => {
+			const scopeId = deps.manager.activeScope;
+			if (scopeId === null) return productBrowseQueryKeyBeforeReady;
+			if (productBrowseQueryKeyBeforeReady !== null) {
+				productBrowseQueryKeys.set(scopeId, productBrowseQueryKeyBeforeReady);
+				productBrowseQueryKeyBeforeReady = null;
+			}
+			return productBrowseQueryKeys.get(scopeId) ?? null;
+		},
 		require: (requirement) => {
 			// The runaway backstop is the ONE ceiling left on a browse window (#948/#957),
 			// and it must never behave like the caps it replaced: it is announced, not
@@ -1250,8 +1259,11 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					// Recorded on DECLARATION, not on completion: the idle backfill must follow the
 					// window the grid is showing even when that window was served entirely from
 					// local rows (which writes no coverage and completes no task).
-					return (lastProductBrowseQueryKey =
-						productBrowseWindowQueryKeyFromDimensions(requirement));
+					const key = productBrowseWindowQueryKeyFromDimensions(requirement);
+					const scopeId = deps.manager.activeScope;
+					if (scopeId === null) productBrowseQueryKeyBeforeReady = key;
+					else productBrowseQueryKeys.set(scopeId, key);
+					return key;
 				}
 				if (requirement.kind === 'customer-browse') {
 					return customerBrowseWindowQueryKeyFromDimensions(requirement);

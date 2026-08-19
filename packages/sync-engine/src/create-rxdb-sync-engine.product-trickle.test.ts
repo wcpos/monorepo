@@ -175,6 +175,24 @@ describe('product-trickle maintenance lane', () => {
 		await engine.dispose();
 	});
 
+	it('does not carry a browse window into another store scope', async () => {
+		const trickled: URL[] = [];
+		const engine = engineWith({
+			fetcher: async (url) => {
+				if (isTrickleUrl(url)) trickled.push(new URL(url));
+				return json(products(1, 10));
+			},
+		});
+		const initialScope = await engine.ready;
+
+		await declareBrowseWindow(engine, { limit: 100, orderby: 'title', order: 'asc' });
+		await engine.scope.switch({ ...initialScope.identity, storeId: 8 });
+		await engine.sync('product-trickle');
+
+		expect(trickled[0]!.searchParams.get('orderby')).toBe('menu_order');
+		await engine.dispose();
+	});
+
 	// Filters PRIORITISE, they do not EXCLUDE: the till must still end up able to sell the
 	// products the cashier's filter hid.
 	it('covers the filtered window first, then continues the same sort unfiltered', async () => {
@@ -305,6 +323,33 @@ describe('product-trickle maintenance lane', () => {
 			reason: 'walk-complete',
 		});
 		expect(urls).toHaveLength(1);
+		await engine.dispose();
+	});
+
+	it('restarts an exhausted mutable-sort walk when fresh census exceeds local coverage', async () => {
+		const trickled: URL[] = [];
+		const engine = engineWith({
+			now: () => 1_000_000,
+			fetcher: async (url) => {
+				if (!isTrickleUrl(url)) return json([]);
+				trickled.push(new URL(url));
+				return json(trickled.length === 1 ? products(1, 3) : [product(4)]);
+			},
+		});
+		const scope = await engine.ready;
+		await scope.database.collections.queryTotalCacheEntries.upsert({
+			queryKey: 'census:products',
+			totalMatchingRecords: 4,
+			updatedAtMs: 1_000_000,
+			freshUntilMs: 2_000_000,
+			schemaVersion: 1,
+		});
+		await declareBrowseWindow(engine, { limit: 100, orderby: 'title', order: 'asc' });
+
+		await engine.sync('product-trickle');
+		await expect(engine.sync('product-trickle')).resolves.toMatchObject({ status: 'ran' });
+		expect(trickled.map((url) => url.searchParams.get('page'))).toEqual(['1', '1']);
+		expect(await scope.database.collections.products.count().exec()).toBe(4);
 		await engine.dispose();
 	});
 
