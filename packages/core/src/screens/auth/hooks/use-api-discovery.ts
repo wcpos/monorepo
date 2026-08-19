@@ -86,21 +86,85 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 	const http = useHttpClient();
 	const t = useT();
 
+	const handleApiError = React.useCallback(
+		(error: unknown, wpApiUrl: string): never => {
+			// If it's already one of our logged errors, re-throw
+			if (error instanceof ApiDiscoveryError) {
+				throw error;
+			}
+
+			const errorCode = get(error, ['code']);
+			if (errorCode === 'ECONNABORTED' || errorCode === 'ETIMEDOUT') {
+				throw new ApiDiscoveryError(t('auth.site_took_too_long_to_respond'));
+			}
+
+			const errorResponse = get(error, ['response']);
+			if (errorResponse) {
+				const status = get(errorResponse, 'status');
+				const contentType = get(errorResponse, ['headers', 'content-type']);
+				const isRestrictedApi =
+					(status === 401 || status === 403) &&
+					typeof contentType === 'string' &&
+					contentType.includes('application/json');
+
+				if (isRestrictedApi) {
+					// A security plugin (e.g. Force Login) is blocking REST API access
+					const serverMessage = get(errorResponse, ['data', 'message']);
+					const errorMsg =
+						typeof serverMessage === 'string' && serverMessage.length > 0
+							? serverMessage
+							: t('auth.rest_api_restricted');
+					discoveryLogger.error(errorMsg, {
+						showToast: true,
+						code: ERROR_CODES.AUTH_PLUGIN_CONFLICT,
+						context: { wpApiUrl, httpStatus: status },
+					});
+					throw new ApiDiscoveryError(errorMsg);
+				}
+
+				// Server responded but not with the expected WP REST API format
+				discoveryLogger.error('API discovery returned an invalid response', {
+					showToast: true,
+					code: ERROR_CODES.AUTH_UNEXPECTED,
+					toast: { title: t('auth.bad_api_response') },
+					context: { wpApiUrl, httpStatus: status },
+				});
+				throw new ApiDiscoveryError(t('auth.bad_api_response'));
+			}
+
+			discoveryLogger.error(`Failed to connect to ${wpApiUrl}: ${getErrorMessage(error)}`, {
+				showToast: true,
+				code: ERROR_CODES.AUTH_UNEXPECTED,
+				context: { wpApiUrl },
+			});
+			throw error;
+		},
+		[t]
+	);
+
 	/**
-	 * Fetch and validate the WordPress REST API index
+	 * Fetch and validate WordPress API discovery data
 	 */
 	const fetchApiIndex = React.useCallback(
 		async (wpApiUrl: string): Promise<WpJsonResponse> => {
 			try {
-				// Add cache-busting param. Bounded like the url-discovery probes
+				// Mark requests for CORS and bound them like the url-discovery probes
 				// (monorepo#1155: an unbounded connect-flow request leaves the cashier
-				// on an infinite spinner) — but looser, because this GET returns the
-				// full API index and was observed taking ~9s on a degraded-but-alive
-				// server where the front-page probe hung outright.
-				const response = await http.get(wpApiUrl, {
-					params: { wcpos: 1 },
-					timeout: 15_000,
-				});
+				// on an infinite spinner). The legacy fallback may return the full API
+				// index, which was observed taking ~9s on a degraded-but-alive server.
+				const baseUrl = wpApiUrl.endsWith('/') ? wpApiUrl : `${wpApiUrl}/`;
+				let response;
+				try {
+					response = await http.get(`${baseUrl}wcpos/v2/site`, {
+						params: { wcpos: 1 },
+						timeout: 15_000,
+					});
+				} catch (error: unknown) {
+					if (get(error, ['response', 'status']) !== 404) {
+						throw error;
+					}
+					response = await http.get(wpApiUrl, { params: { wcpos: 1 }, timeout: 15_000 });
+				}
 				const data = get(response, 'data') as WpJsonResponse;
 
 				// Basic validation
@@ -130,68 +194,10 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 				);
 				return data;
 			} catch (error: unknown) {
-				// If it's already one of our logged errors, re-throw
-				if (error instanceof ApiDiscoveryError) {
-					throw error;
-				}
-
-				const errorCode = get(error, ['code']);
-				if (errorCode === 'ECONNABORTED' || errorCode === 'ETIMEDOUT') {
-					throw new ApiDiscoveryError(t('auth.site_took_too_long_to_respond'));
-				}
-
-				const errorResponse = get(error, ['response']);
-				if (errorResponse) {
-					const status = get(errorResponse, 'status');
-					const contentType = get(errorResponse, ['headers', 'content-type']);
-					const isRestrictedApi =
-						(status === 401 || status === 403) &&
-						typeof contentType === 'string' &&
-						contentType.includes('application/json');
-
-					if (isRestrictedApi) {
-						// A security plugin (e.g. Force Login) is blocking REST API access
-						const serverMessage = get(errorResponse, ['data', 'message']);
-						const errorMsg =
-							typeof serverMessage === 'string' && serverMessage.length > 0
-								? serverMessage
-								: t('auth.rest_api_restricted');
-						discoveryLogger.error(errorMsg, {
-							showToast: true,
-							code: ERROR_CODES.AUTH_PLUGIN_CONFLICT,
-							context: {
-								wpApiUrl,
-								httpStatus: status,
-							},
-						});
-						throw new ApiDiscoveryError(errorMsg);
-					}
-
-					// Server responded but not with the expected WP REST API format
-					discoveryLogger.error('API discovery returned an invalid response', {
-						showToast: true,
-						code: ERROR_CODES.AUTH_UNEXPECTED,
-						toast: { title: t('auth.bad_api_response') },
-						context: {
-							wpApiUrl,
-							httpStatus: status,
-						},
-					});
-					throw new ApiDiscoveryError(t('auth.bad_api_response'));
-				}
-
-				// No response at all — network/connection error
-				discoveryLogger.error(`Failed to connect to ${wpApiUrl}: ${getErrorMessage(error)}`, {
-					showToast: true,
-					code: ERROR_CODES.AUTH_UNEXPECTED,
-					context: {
-						wpApiUrl,
-					},
-				});
-				throw error;
+				return handleApiError(error, wpApiUrl);
 			}
 		},
-		[http, t]
+		[handleApiError, http, t]
 	);
 
 	/**

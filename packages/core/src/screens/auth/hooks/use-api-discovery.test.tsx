@@ -21,21 +21,80 @@ jest.mock('../../../contexts/translations', () => {
 	return { useT: () => createTestT() };
 });
 
+const siteData = {
+	uuid: 'site-uuid',
+	authentication: {
+		wcpos: { endpoints: { authorization: 'https://example.com/wp-admin/authorize' } },
+	},
+	description: 'Example store',
+	gmt_offset: '0',
+	home: 'https://example.com',
+	name: 'Example Store',
+	namespaces: ['wc/v3', 'wcpos/v2'],
+	routes: {},
+	site_logo: '',
+	timezone_string: 'UTC',
+	url: 'https://example.com',
+	wc_version: '10.0.0',
+	wcpos_version: '1.9.0',
+	_links: {},
+};
+
+const requestOptions = { params: { wcpos: 1 }, timeout: 15_000 };
+
 describe('useApiDiscovery', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockGet.mockReset();
+	});
+
+	it.each([
+		['https://example.com/wp-json/', 'https://example.com/wp-json/wcpos/v2/site'],
+		['https://example.com/?rest_route=/', 'https://example.com/?rest_route=/wcpos/v2/site'],
+	])('discovers the API from the light endpoint for %s', async (wpApiUrl, lightApiUrl) => {
+		mockGet.mockResolvedValue({ data: siteData });
+
+		const { result } = renderHook(() => useApiDiscovery());
+		await act(async () => {
+			await expect(result.current.discoverApiEndpoints(wpApiUrl)).resolves.toMatchObject({
+				siteData,
+			});
+		});
+
+		expect(mockGet).toHaveBeenCalledWith(lightApiUrl, requestOptions);
+		expect(mockGet).not.toHaveBeenCalledWith(wpApiUrl, expect.anything());
+	});
+
+	it('falls back to the API index when the light endpoint returns 404', async () => {
+		const wpApiUrl = 'https://example.com/wp-json/';
+		mockGet
+			.mockRejectedValueOnce({ response: { status: 404 } })
+			.mockResolvedValueOnce({ data: siteData });
+
+		const { result } = renderHook(() => useApiDiscovery());
+		await act(async () => {
+			await expect(result.current.discoverApiEndpoints(wpApiUrl)).resolves.toMatchObject({
+				siteData,
+			});
+		});
+
+		expect(mockGet).toHaveBeenNthCalledWith(
+			1,
+			'https://example.com/wp-json/wcpos/v2/site',
+			requestOptions
+		);
+		expect(mockGet).toHaveBeenNthCalledWith(2, wpApiUrl, requestOptions);
 	});
 
 	it.each(['ECONNABORTED', 'ETIMEDOUT'])(
-		'reports a translated message when the API-index request fails with %s',
+		'reports the existing %s timeout error without falling back to the API index',
 		async (code) => {
+			const wpApiUrl = 'https://example.com/wp-json/';
 			mockGet.mockRejectedValue(Object.assign(new Error('timeout of 15000ms exceeded'), { code }));
 
 			const { result } = renderHook(() => useApiDiscovery());
 			await act(async () => {
-				await expect(
-					result.current.discoverApiEndpoints('https://example.com/wp-json/')
-				).rejects.toMatchObject({
+				await expect(result.current.discoverApiEndpoints(wpApiUrl)).rejects.toMatchObject({
 					name: 'ApiDiscoveryError',
 					message: 'The site took too long to respond — check the server and try again',
 				});
@@ -44,10 +103,23 @@ describe('useApiDiscovery', () => {
 			expect(result.current.error).toBe(
 				'The site took too long to respond — check the server and try again'
 			);
-			expect(mockGet).toHaveBeenCalledWith('https://example.com/wp-json/', {
-				params: { wcpos: 1 },
-				timeout: 15_000,
-			});
+			expect(mockGet).toHaveBeenCalledTimes(1);
+			expect(mockGet).not.toHaveBeenCalledWith(wpApiUrl, expect.anything());
 		}
 	);
+
+	it('reports the existing WooCommerce error for a light response missing wc/v3', async () => {
+		mockGet.mockResolvedValue({
+			data: { ...siteData, namespaces: ['wcpos/v2'] },
+		});
+
+		const { result } = renderHook(() => useApiDiscovery());
+		await act(async () => {
+			await expect(
+				result.current.discoverApiEndpoints('https://example.com/wp-json/')
+			).rejects.toThrow('WooCommerce API not found');
+		});
+
+		expect(result.current.error).toBe('WooCommerce API not found');
+	});
 });
