@@ -226,18 +226,14 @@ test('E2E declares store-health probes and a bounded worker count', () => {
 		assert.match(probe.run, /probe-store-health\.mjs/);
 		// Reporting must never gate the run.
 		assert.equal(probe['continue-on-error'], true);
-		assert.match(probe.env.E2E_PRODUCT_WRITER_USER, /matrix\.shardIndex == 1/);
-		assert.match(probe.env.E2E_PRODUCT_WRITER_USER, /secrets\.E2E_PRODUCT_WRITER_USER/);
-		assert.match(probe.env.E2E_PRODUCT_WRITER_PASS, /matrix\.shardIndex == 1/);
-		assert.match(probe.env.E2E_PRODUCT_WRITER_PASS, /secrets\.E2E_PRODUCT_WRITER_PASS/);
+		assert.equal(probe.env.E2E_PRODUCT_WRITER_USER, '${{ secrets.E2E_PRODUCT_WRITER_USER }}');
+		assert.equal(probe.env.E2E_PRODUCT_WRITER_PASS, '${{ secrets.E2E_PRODUCT_WRITER_PASS }}');
 	}
-	assert.ok(
-		probes.some((probe) => probe.if === 'failure()'),
-		'no post-failure store probe — a store that saturates mid-run would go unrecorded'
-	);
-	const preFlight = probes.find((probe) => probe.if !== 'failure()');
-	const postFailure = probes.find((probe) => probe.if === 'failure()');
+	const preFlight = probes.find((probe) => /pre-flight/.test(probe.name));
+	const postFailure = probes.find((probe) => /after failure/.test(probe.name));
 	assert.ok(preFlight && postFailure, 'expected both probe phases');
+	assert.equal(preFlight.if, 'matrix.shardIndex == 1');
+	assert.equal(postFailure.if, 'failure() && matrix.shardIndex == 1');
 	assert.equal(postFailure.env.E2E_STORE_URL_FREE, preFlight.env.E2E_STORE_URL_FREE);
 	assert.match(postFailure.run, /probe-store-health\.mjs.*E2E_STORE_URL_FREE/);
 	assert.match(preFlight.run, /before the tests started/);
