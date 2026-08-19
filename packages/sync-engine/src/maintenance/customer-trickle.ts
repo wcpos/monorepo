@@ -199,6 +199,12 @@ async function runCustomerTrickle(deps: CustomerTrickleDeps): Promise<CustomerTr
 			if (census.total > localCount && census.total !== state.observedCensusTotal) {
 				state = { ...restart, observedCensusTotal: census.total };
 			} else {
+				if (census.total <= localCount && census.total !== state.observedCensusTotal) {
+					await deps.stateStore.set(
+						CUSTOMER_TRICKLE_STATE_KEY,
+						JSON.stringify({ ...state, observedCensusTotal: census.total })
+					);
+				}
 				return { status: 'idle', reason: 'walk-complete' };
 			}
 		} else {
@@ -226,8 +232,11 @@ async function runCustomerTrickle(deps: CustomerTrickleDeps): Promise<CustomerTr
 			if (error?.code === 'rest_post_invalid_page_number') {
 				// Records were deleted under the cursor: rewind THIS view rather than discarding
 				// the view identity, which would restart the walk on the next tick anyway but
-				// lose the fact that the sort has not changed.
-				await deps.stateStore.set(CUSTOMER_TRICKLE_STATE_KEY, JSON.stringify(restart));
+				// lose the fact that the sort has not changed or this total already re-armed it.
+				await deps.stateStore.set(
+					CUSTOMER_TRICKLE_STATE_KEY,
+					JSON.stringify({ ...state, page: 1 })
+				);
 				return ran(0, state.page, false);
 			}
 		}

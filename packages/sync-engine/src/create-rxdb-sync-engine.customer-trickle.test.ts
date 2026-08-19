@@ -530,6 +530,87 @@ describe('customer-trickle maintenance lane', () => {
 		await engine.dispose();
 	});
 
+	it('preserves the observed census total when an invalid page rewinds the re-walk', async () => {
+		const checkpoints = memoryStringStore();
+		const storeIdentity = identity();
+		await checkpoints.set(
+			`${scopeKeyFor(storeIdentity)}:${TRICKLE_STATE_KEY}`,
+			JSON.stringify({
+				viewKey: 'customers:browse-window:limit=',
+				page: 2,
+				walkComplete: false,
+				observedCensusTotal: 20,
+			})
+		);
+		const pages: string[] = [];
+		const engine = engineWith(
+			{
+				checkpoints,
+				now: () => 1_000_000,
+				fetcher: async (url) => {
+					pages.push(new URL(url).searchParams.get('page')!);
+					if (pages.length === 1) {
+						return new Response(JSON.stringify({ code: 'rest_post_invalid_page_number' }), {
+							status: 400,
+							headers: { 'content-type': 'application/json' },
+						});
+					}
+					return json([]);
+				},
+			},
+			storeIdentity
+		);
+		const scope = await engine.ready;
+		await scope.database.collections.queryTotalCacheEntries.upsert({
+			queryKey: 'census:customers',
+			totalMatchingRecords: 20,
+			updatedAtMs: 1_000_000,
+			freshUntilMs: 2_000_000,
+			schemaVersion: 1,
+		});
+
+		await engine.sync('customer-trickle');
+		await engine.sync('customer-trickle');
+		await expect(engine.sync('customer-trickle')).resolves.toMatchObject({
+			status: 'skipped',
+			reason: 'walk-complete',
+		});
+		expect(pages).toEqual(['2', '1']);
+		await engine.dispose();
+	});
+
+	it('re-arms when a census total returns after a non-deficit total', async () => {
+		const urls: string[] = [];
+		const engine = engineWith({
+			now: () => 1_000_000,
+			fetcher: async (url) => {
+				urls.push(url);
+				return json(urls.length === 1 ? customers(1, 3) : []);
+			},
+		});
+		const scope = await engine.ready;
+		const cache = scope.database.collections.queryTotalCacheEntries;
+		await engine.sync('customer-trickle');
+		const localCount = await scope.database.collections.customers.count().exec();
+		const setCensusTotal = (totalMatchingRecords: number, updatedAtMs: number) =>
+			cache.upsert({
+				queryKey: 'census:customers',
+				totalMatchingRecords,
+				updatedAtMs,
+				freshUntilMs: 2_000_000,
+				schemaVersion: 1,
+			});
+
+		await setCensusTotal(20, 1_000_000);
+		await engine.sync('customer-trickle');
+		await setCensusTotal(localCount, 1_000_001);
+		await engine.sync('customer-trickle');
+		await setCensusTotal(20, 1_000_002);
+		await expect(engine.sync('customer-trickle')).resolves.toMatchObject({ status: 'ran' });
+		expect(urls).toHaveLength(3);
+		await engine.dispose();
+	});
+
 	it('excludes the idle lane from sync() but permits an explicit trickle tick', async () => {
 		const trickleUrls: string[] = [];
 		const engine = engineWith({
