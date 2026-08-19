@@ -45,7 +45,7 @@ function scopeOf(mutate) {
     );
     writeFileSync(
       path.join(repo, "packages/core/src/index.ts"),
-      "// header\nexport const x = 1;\n",
+      "// header\nexport const x = {\n};\n",
     );
     writeFileSync(path.join(repo, "README.md"), "# docs\n");
     git("add", "-A");
@@ -127,11 +127,21 @@ test("a closed block comment followed by code is NOT comment-only", () => {
   assert.equal(scope.behavioural, "true");
 });
 
+test("a generator method line is NOT comment-only", () => {
+  const scope = scopeOf(({ write, join }) => {
+    write(
+      join("packages/core/src/index.ts"),
+      "// header\nexport const x = {\n  *danger() { yield 1; },\n};\n",
+    );
+  });
+  assert.equal(scope.behavioural, "true");
+});
+
 test("block delimiters around unchanged code run the full suite", () => {
   const scope = scopeOf(({ write, join }) => {
     write(
       join("packages/core/src/index.ts"),
-      "// header\n/*\nexport const x = 1;\n*/\n",
+      "// header\n/*\nexport const x = {\n};\n*/\n",
     );
   });
   assert.equal(scope.behavioural, "true");

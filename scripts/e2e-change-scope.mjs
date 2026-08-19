@@ -88,7 +88,6 @@ function isCommentOnlyLine(content) {
     return content.slice(closed + 2).trim() === "";
   }
   if (content.includes("*/")) return false;
-  if (content.startsWith("*")) return true;
   return false;
 }
 const CODE_EXTENSIONS = /\.(ts|tsx|js|jsx|mjs|cjs)$/;
