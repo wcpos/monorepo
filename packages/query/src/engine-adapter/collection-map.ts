@@ -781,6 +781,25 @@ export function engineCollectionNameFor(collection: LegacyCollectionName): Engin
 	return collectionMap[collection].engineCollection;
 }
 
+/**
+ * Engine path holding each writeable collection's server id. A resident with no
+ * value there has never existed server-side — which is how the push path and the
+ * health screens tell "never pushed" from "pushed and rejected".
+ *
+ * Derived from the vocabulary rather than hand-listed so a new writeable
+ * collection cannot be missed.
+ */
+export const WRITEABLE_REMOTE_ID_FIELD = Object.fromEntries(
+	Object.entries(COLLECTION_VOCABULARY)
+		.filter(([, row]) => row.writeable)
+		.map(([name, row]) => [name, resolveLegacyField(row.legacyName, 'id').enginePath])
+) as Record<WriteableCollection, string>;
+
+/** True when `name` is a collection the client may push to the server. */
+export function isWriteableCollection(name: string): name is WriteableCollection {
+	return Object.prototype.hasOwnProperty.call(WRITEABLE_REMOTE_ID_FIELD, name);
+}
+
 export function readLegacyField(
 	collection: LegacyCollectionName,
 	document: EngineDocument,

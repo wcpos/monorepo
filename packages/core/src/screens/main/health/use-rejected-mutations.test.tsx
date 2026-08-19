@@ -10,11 +10,10 @@ let mockEngine = {};
 let mockRead = { rows: [], readError: false };
 
 jest.mock('@wcpos/query', () => ({
-	// The real vocabulary + field map: the hook derives each collection's
-	// server-identity column from them to decide whether a discard destroys the
-	// record, so a stubbed pair would prove nothing.
-	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
-	resolveLegacyField: jest.requireActual('@wcpos/query').resolveLegacyField,
+	// The real map of each collection's server-identity column: the hook reads it
+	// to decide whether a discard destroys the record, so a stubbed one would
+	// prove nothing.
+	WRITEABLE_REMOTE_ID_FIELD: jest.requireActual('@wcpos/query').WRITEABLE_REMOTE_ID_FIELD,
 	useQueryRuntime: () => ({ engine: mockEngine }),
 }));
 jest.mock('observable-hooks', () => ({
