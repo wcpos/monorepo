@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { schedulerTaskStateKey } from './scheduler-task-state-schema';
 import { referenceLaneTaskFor, seedReferenceLanes } from './rx-pos-bootstrap-seeder';
+import { schedulerTaskStateKey } from './scheduler-task-state-schema';
 
 function schedulerDatabase() {
 	const stored = new Map<string, Record<string, unknown>>();
@@ -142,6 +142,36 @@ describe('reference lane sorted seeding', () => {
 		});
 		expect(tampered).toBe(true);
 		expect(categoryKeys(stored)).toEqual(['categories:all:orderby=slug:order=asc']);
+	});
+
+	it('sweeps a rejected legacy spelling instead of leaving it inert (upgrade residue)', async () => {
+		// Parts 1+2 could persist `categories:all:orderby=name:order=asc` while name
+		// asc was still a non-default sort; after the default flip that spelling no
+		// longer parses, the drain refuses it, and only this sweep removes it.
+		const { database, stored } = schedulerDatabase();
+		await (
+			database as unknown as {
+				schedulerTaskStates: { insert: (value: Record<string, unknown>) => Promise<void> };
+			}
+		).schedulerTaskStates.insert({
+			stateKey: schedulerTaskStateKey('categories:all:orderby=name:order=asc:greedy'),
+			taskId: 'categories:all:orderby=name:order=asc:greedy',
+			requirementId: 'categories.all',
+			collectionName: 'categories',
+			queryKey: 'categories:all:orderby=name:order=asc',
+			ids: [],
+			remoteIds: [],
+			limit: 100,
+			priority: 950,
+			mode: 'greedy',
+			status: 'queued',
+			ownerId: null,
+			claimedUntilMs: null,
+			attempts: 0,
+			schemaVersion: 1,
+		});
+		await seedReferenceLanes({ database, collections: ['categories'] });
+		expect(categoryKeys(stored)).toEqual(['categories:all']);
 	});
 
 	it('a supersede an active drain keeps winning never rejects; later reseeds converge it', async () => {

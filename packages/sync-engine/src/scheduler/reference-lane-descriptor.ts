@@ -60,6 +60,18 @@ export function referenceLaneQueryKey<C extends ReferenceCollection>(
 		: `${legacyKey}:orderby=${descriptor.orderby}:order=${descriptor.order}`;
 }
 
+/**
+ * The collection a reference-shaped key belongs to, even when its sort spelling
+ * is no longer valid (a rejected legacy spelling — e.g. `…:orderby=name:order=asc`
+ * persisted while name asc was still a non-default sort). The seeder uses this to
+ * SUPERSEDE such rows instead of leaving them inert: the drain refuses keys that
+ * do not parse, so an unparseable reference row is dead by definition.
+ */
+export function referenceLaneCollectionOf(key: string): ReferenceCollection | null {
+	const match = /^(categories|tags|brands|coupons):all(?::|$)/.exec(key);
+	return (match?.[1] as ReferenceCollection | undefined) ?? null;
+}
+
 export function parseReferenceLaneQueryKey(key: string): ParsedReferenceLaneQueryKey | null {
 	const match = /^(categories|tags|brands|coupons):all(?::orderby=([^:]+):order=(asc|desc))?$/.exec(
 		key

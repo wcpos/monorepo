@@ -26,6 +26,7 @@ import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import {
 	defaultReferenceLaneDescriptor,
 	parseReferenceLaneQueryKey,
+	referenceLaneCollectionOf,
 	type ReferenceLaneDescriptor,
 	referenceLaneQueryKey,
 } from './reference-lane-descriptor';
@@ -208,13 +209,13 @@ export async function seedReferenceLanes(
 				);
 			});
 			for (const state of existing) {
-				const isFormerTermDefault =
-					state.collection !== 'coupons' &&
-					state.queryKey === `${state.collection}:all:orderby=name:order=asc`;
+				// Match by COLLECTION, not by parse: a key whose sort spelling no
+				// longer parses (a rejected legacy spelling after a default change —
+				// not only the former name-asc term default, but ANY future flip's
+				// residue) is dead — the drain refuses it — so it is superseded like
+				// any other non-matching lane instead of sitting inert forever.
 				const replacement = tasks.find(
-					(task) =>
-						parseReferenceLaneQueryKey(state.queryKey)?.collection === task.collection ||
-						(isFormerTermDefault && state.collection === task.collection)
+					(task) => referenceLaneCollectionOf(state.queryKey) === task.collection
 				);
 				if (!replacement || replacement.id === state.taskId) continue;
 				// The remove is CAS-guarded, and a concurrent owner (a drain claiming,
