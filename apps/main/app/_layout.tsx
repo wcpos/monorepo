@@ -12,7 +12,10 @@ import { KeyboardProvider } from '@wcpos/components/keyboard-controller';
 import { Toast, Toaster } from '@wcpos/components/toast';
 import { useAppState } from '@wcpos/core/contexts/app-state';
 import { HydrationProviders } from '@wcpos/core/contexts/hydration-providers';
-import { CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY } from '@wcpos/database';
+import {
+	isClearLocalDataOnNextLoadScheduled,
+	unscheduleClearLocalDataOnNextLoad,
+} from '@wcpos/database';
 import { getLogger, setToast } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -109,15 +112,10 @@ function ThemedToaster() {
 }
 
 function useClearLocalDataOnStartup() {
-	const [isClearing, setIsClearing] = React.useState(
-		() =>
-			Platform.OS === 'web' &&
-			typeof window !== 'undefined' &&
-			window.localStorage.getItem(CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY) === '1'
-	);
+	const [isClearing, setIsClearing] = React.useState(() => isClearLocalDataOnNextLoadScheduled());
 
 	React.useEffect(() => {
-		if (!isClearing || Platform.OS !== 'web') {
+		if (!isClearing) {
 			return;
 		}
 
@@ -127,14 +125,23 @@ function useClearLocalDataOnStartup() {
 			try {
 				const { clearAllDB } = await import('@wcpos/database/clear-all-db');
 				const result = await clearAllDB();
-				window.localStorage.removeItem(CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY);
+				unscheduleClearLocalDataOnNextLoad();
 
 				if (result && typeof result === 'object' && 'message' in result) {
 					appLogger.info(String(result.message));
 				}
 
-				if (!cancelled) {
+				if (cancelled) {
+					return;
+				}
+
+				if (Platform.OS === 'web') {
 					window.location.reload();
+				} else {
+					// Native has no page to reload, and none is needed: the layout renders
+					// null while this runs, so nothing has opened the databases yet and
+					// hydration starts fresh against the cleared state.
+					setIsClearing(false);
 				}
 			} catch (error) {
 				appLogger.error('Failed to clear local data before hydration', {
