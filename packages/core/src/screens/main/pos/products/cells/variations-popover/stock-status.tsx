@@ -3,12 +3,15 @@ import * as React from 'react';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
-import { resolveVariationStock, type VariationStock } from './variation-stock';
+import { type ResolvedStock, resolveStock } from '../../../../components/product/resolve-stock';
 import { useT } from '../../../../../../contexts/translations';
 import { useNumberFormat } from '../../../../hooks/use-number-format';
 
-export { resolveVariationStock } from './variation-stock';
-export type { VariationStock, VariationStockInput } from './variation-stock';
+export { resolveStock } from '../../../../components/product/resolve-stock';
+export type {
+	ResolvedStock,
+	ResolveStockInput,
+} from '../../../../components/product/resolve-stock';
 
 /**
  * Resolve the sellability of a single variation.
@@ -17,13 +20,13 @@ export type { VariationStock, VariationStockInput } from './variation-stock';
  * stock_status is ignored (WooCommerce derives it). Otherwise (including
  * parent-managed stock) the stock_status flag governs and no quantity is shown.
  */
-export function useVariationStock(variation: EngineRecord<'variations'>): VariationStock {
+export function useVariationStock(variation: EngineRecord<'variations'>): ResolvedStock {
 	const manageStock = useRecordField(variation, (record) => record.payload.manage_stock);
 	const stockQuantity = useRecordField(variation, (record) => record.payload.stock_quantity);
 	const stockStatus = useRecordField(variation, (record) => record.payload.stock_status);
 	const backorders = useRecordField(variation, (record) => record.payload.backorders);
 
-	return resolveVariationStock({
+	return resolveStock({
 		manage_stock: manageStock,
 		stock_quantity: stockQuantity,
 		stock_status: stockStatus,
@@ -35,7 +38,7 @@ export function useVariationStock(variation: EngineRecord<'variations'>): Variat
  * Stock badge for a resolved variation. Renders nothing for a sellable
  * variation with no managed quantity (no numbers when stock isn't managed).
  */
-export function VariationStockBadge({ stock }: { stock: VariationStock }) {
+export function VariationStockBadge({ stock }: { stock: ResolvedStock }) {
 	const { format } = useNumberFormat();
 	const t = useT();
 

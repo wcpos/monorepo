@@ -16,7 +16,7 @@ import { useBarcodeDetection } from '../../hooks/barcodes';
 import { useBarcodeSearch } from '../../hooks/barcodes/use-barcode-search';
 import { useAddProduct } from '../hooks/use-add-product';
 import { useAddVariation } from '../hooks/use-add-variation';
-import { resolveVariationStock } from './cells/variations-popover/variation-stock';
+import { resolveStock } from '../../components/product/resolve-stock';
 import { useScanFeedback } from './use-scan-feedback';
 
 import type { ScanFeedbackHandle } from './use-scan-feedback';
@@ -378,7 +378,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		const [product] = results;
 
 		const outOfStock = isVariationDocument(product)
-			? !resolveVariationStock(product.payload).sellable
+			? !resolveStock(product.payload).sellable
 			: product.payload.stock_status !== 'instock';
 		if (!showOutOfStock && outOfStock) {
 			scan.outOfStock(product.payload.name ?? '', barcodeStr);

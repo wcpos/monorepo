@@ -5,7 +5,7 @@ import * as React from 'react';
 
 import { render, screen } from '@testing-library/react';
 
-import { resolveVariationStock, useVariationStock, VariationStockBadge } from './stock-status';
+import { resolveStock, useVariationStock, VariationStockBadge } from './stock-status';
 
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
@@ -132,7 +132,7 @@ describe('useVariationStock / VariationStockBadge', () => {
 	});
 });
 
-describe('resolveVariationStock', () => {
+describe('resolveStock', () => {
 	it.each([
 		{
 			name: 'managed positive quantity',
@@ -185,6 +185,6 @@ describe('resolveVariationStock', () => {
 			expected: { status: 'onbackorder', quantity: null, sellable: true },
 		},
 	])('resolves $name', ({ input, expected }) => {
-		expect(resolveVariationStock(input)).toEqual(expected);
+		expect(resolveStock(input)).toEqual(expected);
 	});
 });

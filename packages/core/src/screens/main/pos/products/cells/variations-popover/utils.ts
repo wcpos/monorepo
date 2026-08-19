@@ -1,6 +1,6 @@
 import type { ProductDocument, ProductVariationDocument } from '@wcpos/database';
 
-import { resolveVariationStock } from './variation-stock';
+import { resolveStock } from '../../../../components/product/resolve-stock';
 
 /**
  * VARIATIONS POPOVER - PURPOSE & LOGIC
@@ -183,8 +183,7 @@ export function getDisabledVariationOptions(
 			hitMatchesOption(hit, targetAttrId, targetAttrName, option, partialSelection)
 		);
 		disabledOptions[option] =
-			matchingHits.length > 0 &&
-			matchingHits.every((hit) => !resolveVariationStock(hit.document).sellable);
+			matchingHits.length > 0 && matchingHits.every((hit) => !resolveStock(hit.document).sellable);
 	}
 
 	return disabledOptions;
