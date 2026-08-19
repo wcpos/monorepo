@@ -1,11 +1,6 @@
-import { DATABASE_GENERATION } from './database-generation';
+import { containsScopeDatabaseName } from '@wcpos/sync-core';
 
-// Keep in sync with SCOPE_DATABASE_NAME_SOURCE in
-// packages/sync-core/src/storeScopeIdentity.ts:
-// `pos_v<generation>_<siteHash12>_s<store>_c<cashier>` (ADR 0013). The full
-// shape is required — matching a bare `pos_v<n>_` fragment would classify
-// unrelated same-origin storage as WCPOS data and delete it on reset.
-export const SCOPE_DATABASE_NAME_ANYWHERE = /pos_v\d+_[a-f0-9]{12}_s[a-z0-9-]+_c[a-z0-9-]+/;
+import { DATABASE_GENERATION } from './database-generation';
 
 /**
  * WCPOS 1.9.x used the v4/v5 databases. V6 is the new engine's clean
@@ -68,4 +63,10 @@ export const isLegacyAppDatabaseName = (value: string) =>
 	matchesAnyPrefix(value, LEGACY_APP_DATABASE_PREFIXES);
 export const isKnownAppDatabaseName = (value: string) =>
 	matchesAnyPrefix(value, APP_DATABASE_PREFIXES);
-export const containsScopeDatabaseName = (name: string) => SCOPE_DATABASE_NAME_ANYWHERE.test(name);
+/**
+ * Re-exported from sync-core, which owns the scope-database name grammar
+ * (`pos_v<generation>_<siteHash12>_s<store>_c<cashier>`, ADR 0013). Storage
+ * cleanup matches by containment because rxdb internal stores and paired
+ * FlexSearch index stores derive their names from the database name.
+ */
+export { containsScopeDatabaseName };

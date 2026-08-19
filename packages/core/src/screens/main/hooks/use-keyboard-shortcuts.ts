@@ -1,8 +1,12 @@
 import { useRouter } from 'expo-router';
 
 import { useHotkeys } from '@wcpos/hooks/use-hotkeys';
+import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAppState } from '../../../contexts/app-state';
+
+const shortcutsLogger = getLogger(['wcpos', 'ui', 'shortcuts']);
 
 export const useKeyboardShortcuts = () => {
 	const router = useRouter();
@@ -15,7 +19,12 @@ export const useKeyboardShortcuts = () => {
 
 	/** Logout */
 	useHotkeys('ctrl+shift+l', (event, handler) => {
-		logout();
+		logout().catch((error) => {
+			shortcutsLogger.error('Logout shortcut failed', {
+				code: ERROR_CODES.AUTH_UNEXPECTED,
+				context: { error },
+			});
+		});
 	});
 
 	/** Main POS page */

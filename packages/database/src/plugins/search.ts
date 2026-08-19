@@ -2,6 +2,7 @@ import get from 'lodash/get';
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 
 import { getLogger } from '@wcpos/utils/logger';
+import { FLEXSEARCH_MIN_TERM_LENGTH } from '@wcpos/sync-core';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import type { RxCollection, RxPlugin } from 'rxdb';
@@ -163,8 +164,7 @@ async function createSearchInstance(
 			// do NOT enable `suggest` on queries: WooCommerce search is not fuzzy, and
 			// best-effort partial results would return matches Woo would not. See #679.
 			tokenize: 'full',
-			// Keep equal to FLEXSEARCH_MIN_TERM_LENGTH in packages/query/src/engine-query.ts.
-			minlength: 3,
+			minlength: FLEXSEARCH_MIN_TERM_LENGTH,
 			language: locale,
 		},
 	});

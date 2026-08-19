@@ -1,5 +1,13 @@
 import { normalizeVariationAttributes } from '@wcpos/sync-engine';
-import { remoteIdOrNull, wooIdOf, wooMetaCarrier } from '@wcpos/sync-core';
+import {
+	promotedOrderColumns,
+	promotedProductColumns,
+	remoteIdOrNull,
+	wooIdOf,
+	wooMetaCarrier,
+	type WooOrderPayload,
+	type WooProductPayload,
+} from '@wcpos/sync-core';
 import type {
 	CustomerBrowseDimensions,
 	OrderBrowseDimensions,
@@ -297,7 +305,6 @@ export const collectionMap = {
 				legacy: 'stock_status',
 				kind: 'promoted',
 				enginePath: 'stockStatus',
-				write: (value) => String(value ?? ''),
 				wireFace: 'dimension',
 				sort: { wooOrderby: 'stock_status' },
 			},
@@ -305,14 +312,12 @@ export const collectionMap = {
 				legacy: 'featured',
 				kind: 'promoted',
 				enginePath: 'featured',
-				write: Boolean,
 				wireFace: 'dimension',
 			},
 			on_sale: {
 				legacy: 'on_sale',
 				kind: 'promoted',
 				enginePath: 'onSale',
-				write: Boolean,
 				wireFace: 'dimension',
 			},
 			categories: {
@@ -320,12 +325,6 @@ export const collectionMap = {
 				kind: 'promoted',
 				enginePath: 'categoryIds',
 				readEnginePath: 'payload.categories',
-				write: (value) =>
-					Array.isArray(value)
-						? value
-								.map((entry) => Number((entry as { id?: unknown } | null)?.id ?? entry))
-								.filter((id) => Number.isFinite(id) && id > 0)
-						: [],
 				notes: 'Selectors use numeric membership; reads preserve Woo category objects.',
 				wireFace: 'dimension',
 			},
@@ -335,12 +334,6 @@ export const collectionMap = {
 				kind: 'promoted',
 				enginePath: 'brandIds',
 				readEnginePath: 'payload.brands',
-				write: (value) =>
-					Array.isArray(value)
-						? value
-								.map((entry) => Number((entry as { id?: unknown } | null)?.id ?? entry))
-								.filter((id) => Number.isFinite(id) && id > 0)
-						: [],
 				notes: 'Selectors use numeric membership; reads preserve Woo brand objects.',
 				wireFace: 'dimension',
 			},
@@ -361,17 +354,11 @@ export const collectionMap = {
 				legacy: 'type',
 				kind: 'promoted',
 				enginePath: 'type',
-				write: (value) => String(value ?? ''),
 			},
 			stock_quantity: {
 				legacy: 'stock_quantity',
 				kind: 'promoted',
 				enginePath: 'stockQuantity',
-				write: (value) => {
-					if (value === null || value === undefined || value === '') return null;
-					const numeric = Number(value);
-					return Number.isFinite(numeric) ? numeric : null;
-				},
 				sort: { wooOrderby: 'stock_quantity' },
 			},
 			sortable_price: {
@@ -388,7 +375,6 @@ export const collectionMap = {
 				kind: 'promoted',
 				enginePath: 'price',
 				readEnginePath: 'payload.price',
-				write: (value) => Math.max(0, Math.round((Number(value) || 0) * 100) / 100),
 				numeric: true,
 				notes: 'Promoted price is numeric cents precision; reads preserve the Woo string.',
 				sort: { uiAlias: 'sortable_price', wooOrderby: 'price' },
@@ -473,7 +459,6 @@ export const collectionMap = {
 				legacy: 'status',
 				kind: 'promoted',
 				enginePath: 'status',
-				write: (value) => String(value ?? ''),
 				sort: { wooOrderby: 'status' },
 				wireFace: 'dimension',
 			},
@@ -481,7 +466,6 @@ export const collectionMap = {
 				legacy: 'customer_id',
 				kind: 'promoted',
 				enginePath: 'customerId',
-				write: (value) => Number(value ?? 0),
 				sort: { wooOrderby: 'customer_id' },
 				wireFace: 'dimension',
 			},
@@ -489,7 +473,6 @@ export const collectionMap = {
 				legacy: 'date_created_gmt',
 				kind: 'promoted',
 				enginePath: 'dateCreatedGmt',
-				write: (value) => String(value ?? ''),
 				sort: { wooOrderby: 'date' },
 				wireFace: 'dimension',
 			},
@@ -503,7 +486,6 @@ export const collectionMap = {
 				legacy: 'number',
 				kind: 'promoted',
 				enginePath: 'number',
-				write: (value) => String(value ?? ''),
 				sort: { wooOrderby: 'id' },
 			},
 			sortable_total: {
@@ -518,7 +500,6 @@ export const collectionMap = {
 				legacy: 'total',
 				kind: 'promoted',
 				enginePath: 'total',
-				write: (value) => String(value ?? ''),
 				sort: { uiAlias: 'sortable_total', wooOrderby: 'total' },
 			},
 			payment_method: {
@@ -757,6 +738,17 @@ export function promotedColumnsFor(
 	collection: LegacyCollectionName,
 	legacyPayload: Record<string, unknown>
 ): Record<string, unknown> {
+	// Products and orders delegate to the sync-core projectors — the single source of the
+	// promotion mapping (the storage boundary uses the same functions), so the local write
+	// path and materialization cannot drift. Ruled 2026-08-19: no negative-price clamp;
+	// bare-number taxonomy ids are accepted. Collections without a sync-core projector
+	// (variations carry the map-only parentRemoteId promotion) keep the map-driven path.
+	if (collection === 'products') {
+		return { ...promotedProductColumns(legacyPayload as unknown as WooProductPayload) };
+	}
+	if (collection === 'orders') {
+		return { ...promotedOrderColumns(legacyPayload as unknown as WooOrderPayload) };
+	}
 	const fields = Object.values(collectionMap[collection].fields as Record<string, FieldMapEntry>);
 	return Object.fromEntries(
 		fields
@@ -787,6 +779,25 @@ export function readSanitizedFieldsFor(collection: LegacyCollectionName): readon
  * `taxRates`, `products/categories` → `categories`, …). */
 export function engineCollectionNameFor(collection: LegacyCollectionName): EngineCollectionName {
 	return collectionMap[collection].engineCollection;
+}
+
+/**
+ * Engine path holding each writeable collection's server id. A resident with no
+ * value there has never existed server-side — which is how the push path and the
+ * health screens tell "never pushed" from "pushed and rejected".
+ *
+ * Derived from the vocabulary rather than hand-listed so a new writeable
+ * collection cannot be missed.
+ */
+export const WRITEABLE_REMOTE_ID_FIELD = Object.fromEntries(
+	Object.entries(COLLECTION_VOCABULARY)
+		.filter(([, row]) => row.writeable)
+		.map(([name, row]) => [name, resolveLegacyField(row.legacyName, 'id').enginePath])
+) as Record<WriteableCollection, string>;
+
+/** True when `name` is a collection the client may push to the server. */
+export function isWriteableCollection(name: string): name is WriteableCollection {
+	return Object.prototype.hasOwnProperty.call(WRITEABLE_REMOTE_ID_FIELD, name);
 }
 
 export function readLegacyField(

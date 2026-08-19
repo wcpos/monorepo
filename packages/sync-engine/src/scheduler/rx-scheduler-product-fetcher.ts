@@ -7,6 +7,7 @@
  */
 
 import {
+	FLEXSEARCH_MIN_TERM_LENGTH,
 	type ProductDocument,
 	productDocumentId,
 	type StoredProductDocument,
@@ -89,7 +90,7 @@ export type ProductsSchedulerFetcherInput = {
 	cacheQueryTotals?: CacheQueryTotals;
 	/**
 	 * Leg-3 manifest sink (ADR 0014): receives the `{wooId, digest}` rows extracted from each pulled
-	 * batch (from the server-attached `_rxdb_digest`). Optional — omitted by the playground/tests, wired
+	 * batch (from the server-attached `_rxdb_digest`). Optional — omitted by tests, wired
 	 * to db.existenceManifest by the bootstrap. When present, the digest is also stripped from the payload.
 	 */
 	manifestSink?: (rows: ExistenceManifestDocument[]) => Promise<void>;
@@ -112,8 +113,6 @@ export type ProductsSchedulerFetcherInput = {
  * boundary reports `product.browse-window.approximate` rather than paging forever.
  */
 export const PRODUCT_BROWSE_WINDOW_MAX_TIEBREAK_PAGES = 19;
-/** Keep equal to FLEXSEARCH_MIN_TERM_LENGTH in packages/query/src/engine-query.ts. */
-const FLEXSEARCH_MIN_TERM_LENGTH = 3;
 
 /** Store a pulled product batch: extract the Leg-3 manifest rows, strip `_rxdb_digest`, upsert both. */
 async function persistProductDocuments(

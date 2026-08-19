@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { StoreDocument } from '@wcpos/database';
+import type { StoreDocument, UserDatabase } from '@wcpos/database';
 import { Platform } from '@wcpos/utils/platform';
 
 import { useHydrationSuspense } from './use-hydration-suspense';
@@ -9,7 +9,17 @@ import { hydrateUserSession, switchUserSessionStore } from './hydration-steps';
 
 import type { HydrationContext } from './hydration-steps';
 
-export const AppStateContext = React.createContext<any | undefined>(undefined);
+/** The context value: the hydrated session plus the session actions. */
+export interface AppState extends HydrationContext {
+	/** Always present after hydration — the first hydration step throws without it. */
+	userDB: UserDatabase;
+	updateAppState: (updates: Partial<HydrationContext>) => void;
+	login: (args: { siteID: string; wpCredentialsID: string; storeID: string }) => Promise<void>;
+	logout: () => Promise<void>;
+	switchStore: (store: StoreDocument) => Promise<void>;
+}
+
+export const AppStateContext = React.createContext<AppState | undefined>(undefined);
 
 /**
  * Navigate to URL - extracted to avoid React Compiler warning about
@@ -112,9 +122,11 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 		[state.appState, state.userDB, updateAppState]
 	);
 
-	const value = React.useMemo(() => {
+	const value = React.useMemo<AppState>(() => {
 		return {
 			...state,
+			// Present after hydration by construction — the first step throws without it.
+			userDB: state.userDB!,
 			updateAppState,
 			login,
 			logout,
@@ -125,7 +137,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 	return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }
 
-export const useAppState = () => {
+export const useAppState = (): AppState => {
 	const context = React.useContext(AppStateContext);
 	if (!context) {
 		throw new Error(`useAppState must be called within AppStateContext`);

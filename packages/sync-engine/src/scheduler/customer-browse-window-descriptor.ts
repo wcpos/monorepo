@@ -18,7 +18,7 @@ import type { CustomerBrowseDimensions } from '../require-plane';
  * expect to see those customers." So a SORTED browse goes to the server in that sort.
  *
  * DEMAND-DRIVEN, NOT EAGER. Nothing here seeds at boot or on idle. The window exists only
- * while a grid is mounted over it and declares it (requirementsForQuery), which is what keeps
+ * while a grid is mounted over it and declares compiled query demand, which is what keeps
  * #865's no-eager-seed ruling for customers intact.
  *
  * NO RECORD CAP (R8, 2026-08-06). The window grows with the grid's limit for as long as the

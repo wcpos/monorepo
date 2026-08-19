@@ -168,8 +168,8 @@ export async function seedOrderFilterSchedulerTask(
 		// A fetch-to-completion (`limit=all`) range is GREEDY: the runner keeps calling the
 		// fetcher until it reports `completed`, renewing the claim between passes. A windowed
 		// task gets exactly ONE fetch invocation (`taskCompleted = task.mode !== 'greedy' ||
-		// fetchResult.completed` in rx-scheduler-task-runner.ts) and `useDemand` declares a
-		// requirement once, so a ranged walk left windowed would stop after its first pass and
+		// fetchResult.completed` in rx-scheduler-task-runner.ts) and the compiled demand face is
+		// declared once, so a ranged walk left windowed would stop after its first pass and
 		// the report would stay permanently capped — the cursor would be persisted and never
 		// read (#954). The per-pass record bound still applies; greedy just means the next pass
 		// follows immediately instead of waiting for an unrelated re-declaration.

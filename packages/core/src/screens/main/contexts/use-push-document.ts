@@ -4,11 +4,10 @@ import cloneDeep from 'lodash/cloneDeep';
 
 import {
 	awaitWriteOutcome,
-	COLLECTION_VOCABULARY,
 	type LegacyCollectionName,
-	resolveLegacyField,
 	useQueryRuntime,
 	wrapEngineDocument,
+	WRITEABLE_REMOTE_ID_FIELD,
 	type WriteableCollection,
 } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
@@ -26,11 +25,7 @@ type AnyRxDocument = {
 	getLatest(): AnyRxDocument;
 };
 
-const REMOTE_ID_FIELD = Object.fromEntries(
-	Object.entries(COLLECTION_VOCABULARY)
-		.filter(([, row]) => row.writeable)
-		.map(([name, row]) => [name, resolveLegacyField(row.legacyName, 'id').enginePath])
-) as Record<WriteableCollection, string>;
+const REMOTE_ID_FIELD = WRITEABLE_REMOTE_ID_FIELD;
 
 function isWriteableCollection(name: string): name is WriteableCollection {
 	return Object.prototype.hasOwnProperty.call(REMOTE_ID_FIELD, name);
