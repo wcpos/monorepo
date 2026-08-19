@@ -126,7 +126,13 @@ export const useRemoveLineItem = () => {
 					}
 				);
 			} else {
-				// should we show a snackbar if the item was not found?
+				// The uuid isn't in the order document — the cashier acted on a stale row
+				// (multi-tab is first-class). Cashier-full-information ruling: say so.
+				cartLogger.warn('Remove tapped for a line that is no longer in the cart', {
+					showToast: true,
+					toast: { title: t('pos_cart.remove_line_not_found') },
+					context: { uuid, itemType: type, orderId: currentOrder.id },
+				});
 			}
 		},
 		[currentOrder, localPatch, t, undoRemove]

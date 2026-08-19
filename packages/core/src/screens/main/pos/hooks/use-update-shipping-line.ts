@@ -1,12 +1,16 @@
 import * as React from 'react';
 
 import { wooMetaCarrier } from '@wcpos/sync-core';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useCalculateShippingLineTaxAndTotals } from './use-calculate-shipping-line-tax-and-totals';
 import { useShippingLineData } from './use-shipping-line-data';
 import { updatePosDataMeta } from './utils';
+import { useT } from '../../../../contexts/translations';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
+
+const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'shipping-line']);
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type ShippingLine = NonNullable<OrderDocument['shipping_lines']>[number];
@@ -29,6 +33,7 @@ export const useUpdateShippingLine = () => {
 	const { localPatch } = useLocalMutation();
 	const { calculateShippingLineTaxesAndTotals } = useCalculateShippingLineTaxAndTotals();
 	const { getShippingLineData } = useShippingLineData();
+	const t = useT();
 
 	/**
 	 * Update shipping line
@@ -77,8 +82,15 @@ export const useUpdateShippingLine = () => {
 					data: { shipping_lines: updatedShippingLines },
 				});
 			}
+			// The uuid isn't in the order document — the cashier edited a stale row
+			// (multi-tab is first-class). Cashier-full-information ruling: say so.
+			cartLogger.warn('Shipping line update targeted a line that is no longer in the cart', {
+				showToast: true,
+				toast: { title: t('pos_cart.update_shipping_not_found') },
+				context: { uuid, orderId: order.id },
+			});
 		},
-		[calculateShippingLineTaxesAndTotals, currentOrder, getShippingLineData, localPatch]
+		[calculateShippingLineTaxesAndTotals, currentOrder, getShippingLineData, localPatch, t]
 	);
 
 	return { updateShippingLine };

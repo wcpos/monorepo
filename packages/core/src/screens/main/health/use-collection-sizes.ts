@@ -1,8 +1,11 @@
 import * as React from 'react';
 
 import { useQueryRuntime } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { type CollectionKey, estimateCollectionBytes } from './database-logic';
+
+const healthLogger = getLogger(['wcpos', 'health']);
 
 const SAMPLE_LIMIT = 25;
 /** Counts stream on every doc write; re-estimating on a trailing debounce keeps sampling cheap. */
@@ -71,8 +74,14 @@ export function useCollectionSizes(
 						const docs = await collection.find({ limit: SAMPLE_LIMIT }).exec();
 						const lengths = docs.map((doc) => JSON.stringify(doc.toJSON()).length);
 						next[key] = estimateCollectionBytes(count, lengths);
-					} catch {
+					} catch (error) {
 						next[key] = null;
+						healthLogger.warn('Collection size sampling failed; its cell shows no data', {
+							context: {
+								collection: key,
+								error: error instanceof Error ? error.message : String(error),
+							},
+						});
 					}
 				}
 				if (!cancelled) setSizes(next);

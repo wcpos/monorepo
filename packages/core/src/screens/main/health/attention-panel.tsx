@@ -6,6 +6,7 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { useQueryRuntime } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../contexts/translations';
 import { Callout } from './components';
@@ -13,6 +14,8 @@ import { rowKeyForTelemetryCollection } from './database-logic';
 import { useManualSync } from './use-manual-sync';
 
 import type { StuckRecord } from '../logs/logs-logic';
+
+const healthLogger = getLogger(['wcpos', 'health']);
 
 /** Edit routes per collection — only collections with an edit surface link out.
  * Shared with the conflicted-mutations panel so the two surfaces can never
@@ -69,8 +72,17 @@ function useStuckRecordLabel(stuck: StuckRecord | undefined): string | null {
 									? payload.username
 									: null;
 				if (name) setResolved({ key: stuck.key, label: name });
-			} catch {
-				// Doc unavailable — the collection/id fallback still identifies it.
+			} catch (error) {
+				if (cancelled) return;
+				// Doc unavailable — the collection/id fallback still identifies it, but a
+				// failed read on the health surface itself must reach the log pipeline.
+				healthLogger.warn('Attention panel could not read the stuck record for its label', {
+					context: {
+						collection: stuck.collection,
+						recordId: stuck.recordId,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
 			}
 		})();
 		return () => {

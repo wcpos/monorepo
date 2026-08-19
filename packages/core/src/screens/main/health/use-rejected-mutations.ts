@@ -6,6 +6,9 @@ import { useQueryRuntime, WRITEABLE_REMOTE_ID_FIELD } from '@wcpos/query';
 import { MUTATION_QUEUE_RXDB_COLLECTION, rejectionSuggestsServerRecord } from '@wcpos/sync-engine';
 import type { EngineConflict, RxdbSyncEngine } from '@wcpos/sync-engine';
 import { remoteIdOrNull } from '@wcpos/sync-core';
+import { getLogger } from '@wcpos/utils/logger';
+
+const healthLogger = getLogger(['wcpos', 'health']);
 
 /**
  * The dead-letter feed for Store health → Database (#832).
@@ -122,8 +125,15 @@ async function describe(
 					?.findOne(entry.recordId)
 					.exec();
 				resident = (doc?.toJSON() ?? null) as Record<string, unknown> | null;
-			} catch {
+			} catch (error) {
 				readFailed = true;
+				healthLogger.warn('Rejected-mutations panel could not read the local record', {
+					context: {
+						collection: entry.collectionName,
+						recordId: entry.recordId,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
 			}
 			const remoteIdField = REMOTE_ID_FIELD[entry.collectionName];
 			// The engine's OWN resolution order, mirrored exactly

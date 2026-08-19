@@ -60,6 +60,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import type { HttpErrorHandler } from '@wcpos/hooks/use-http-client';
 import { PREFLIGHT_BLOCK, requestStateManager } from '@wcpos/hooks/use-http-client';
 
+import { useT } from '../../../../contexts/translations';
 import { useWcposAuth } from '../../../../hooks/use-wcpos-auth';
 import { useLoginHandler } from '../../../auth/hooks/use-login-handler';
 
@@ -93,6 +94,7 @@ export const useAuthErrorHandler = (
 	onUserMismatch?: () => void | Promise<void>
 ): HttpErrorHandler => {
 	const { handleLoginSuccess } = useLoginHandler(site as any);
+	const t = useT();
 
 	/**
 	 * Ref to track processed OAuth responses.
@@ -188,12 +190,21 @@ export const useAuthErrorHandler = (
 					// force-logout on a user mismatch, so a rejection must be reported
 					// rather than surfacing as an unhandled rejection.
 					if (onUserMismatch) {
-						await Promise.resolve(onUserMismatch()).catch((error) => {
-							authLogger.error('Forced logout after user mismatch failed', {
-								code: ERROR_CODES.AUTH_UNEXPECTED,
-								context: { siteName: site.name, error },
+						// Promise.resolve().then(...) also catches a synchronous throw from the
+						// callback, which Promise.resolve(onUserMismatch()) would let escape to
+						// the outer catch and be mislabelled LOCAL_DB_WRITE_FAILED.
+						await Promise.resolve()
+							.then(() => onUserMismatch())
+							.catch((error) => {
+								// The cashier is still signed in as the wrong user — that must be
+								// visible at the till, not only in the log pipeline.
+								authLogger.error('Forced logout after user mismatch failed', {
+									showToast: true,
+									code: ERROR_CODES.SIGNED_IN_AS_WRONG_USER,
+									toast: { title: t('auth.forced_logout_failed') },
+									context: { siteName: site.name, error },
+								});
 							});
-						});
 					}
 					return;
 				}
@@ -261,7 +272,7 @@ export const useAuthErrorHandler = (
 			});
 			processedResponseRef.current = responseKey;
 		}
-	}, [response, handleLoginSuccess, site.name, wpCredentials.id, onUserMismatch]);
+	}, [response, handleLoginSuccess, site.name, wpCredentials.id, onUserMismatch, t]);
 
 	// ============================================================================
 	// ERROR HANDLER

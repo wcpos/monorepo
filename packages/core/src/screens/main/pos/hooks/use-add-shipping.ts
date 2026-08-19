@@ -65,7 +65,9 @@ export const useAddShipping = () => {
 					meta_data,
 				});
 
-				if (!(await addItemToOrder('shipping_lines', newShippingLine))) return;
+				if (!(await addItemToOrder('shipping_lines', newShippingLine))) {
+					return;
+				}
 
 				// Log shipping added success
 				orderLogger.info(t('pos.shipping_added', { methodTitle: data.method_title }), {
