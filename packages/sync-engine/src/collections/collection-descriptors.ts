@@ -1,5 +1,5 @@
 /**
- * Package-private collection descriptors (facade slice 3, ADR 0018): each
+ * Package-private collection descriptors (ADR 0018): each
  * syncable collection declares its change-signal SHAPE, and the facade
  * GENERATES every apply-handler arm from it (changeSignalHandlers.ts). Hosts
  * cannot register or customize a descriptor — that seam would have exactly one
@@ -214,7 +214,7 @@ export type AckPayloadAdoption = (
 ) => Record<string, unknown>;
 
 /**
- * The write facet (slice 4): a collection is client-writeable ONLY when its
+ * The write facet: a collection is client-writeable ONLY when its
  * descriptor carries this — the push route existing server-side is not
  * enough; the ack write-back contract must exist too. Orthogonal to `shape`
  * (writeability is explicit and independent of the change-signal shape).

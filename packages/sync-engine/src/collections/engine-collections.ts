@@ -3,8 +3,8 @@
  * "collections are package-private descriptors"; hosts don't vary
  * collections, so there is no public registration seam).
  *
- * Slice 2 carries exactly what the scope lifecycle needs:
- *  - the syncable collections (slice 1's schemas + their migrations), so a
+ * The base scope recipe carries exactly what the scope lifecycle needs:
+ *  - the syncable collections (their schemas + migrations), so a
  *    scope switch never changes what the app can store;
  *  - the mutation queue (`recordMutations` — the one collection that cannot
  *    be re-fetched from the server; the manager's needs-confirmation guard
@@ -16,7 +16,7 @@
  *  - the legacy `changeSignalStates` collection, reopened only so facade
  *    adoption can copy its web cursor into `engineKv` before the first tick.
  *
- * Slice 5 adds the persisted scheduler/coverage tier collections (task
+ * The persisted scheduler/coverage tier adds its collections (task
  * states, coverage records/lanes, compaction leases/failures, query-total
  * cache/request states, the three existence manifests) — the durable state
  * the scheduler loops need once they run inside the engine. Creating them is
@@ -130,7 +130,7 @@ export function engineSyncCollectionCreators(): Record<SyncCollectionName, Colle
 }
 
 /**
- * The persisted scheduler/coverage tier (slice 5): durable task queue,
+ * The persisted scheduler/coverage tier: durable task queue,
  * coverage evidence, compaction bookkeeping, query-total cache/requests, and
  * the three per-id-space existence manifests (ADR 0014/0015 — customers live
  * in wp_users and orders in HPOS/CPT, so a shared manifest would collide
@@ -166,7 +166,7 @@ const SCHEDULER_TIER_CREATORS: Record<string, CollectionCreator> = {
 	existenceManifest: { schema: existenceManifestSchema },
 	existenceManifestCustomers: { schema: existenceManifestSchema },
 	existenceManifestOrders: { schema: existenceManifestSchema },
-	// The custom-pull checkpoint/epoch store (slice 5e): the orders scheduler
+	// The custom-pull checkpoint/epoch store: the orders scheduler
 	// fetcher's checkpoint seam — mirrors the web createDatabase recipe.
 	syncCheckpoints: {
 		schema: syncCheckpointSchema,

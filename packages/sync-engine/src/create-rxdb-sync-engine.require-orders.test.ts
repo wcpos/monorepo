@@ -1,5 +1,5 @@
 /**
- * Slice 5f: require() covers ORDERS through the DURABLE path — a persisted
+ * require() covers ORDERS through the DURABLE path — a persisted
  * targeted task the scheduler drain completes — driven entirely through the
  * public handle against a scripted /orders proxy.
  */
@@ -168,7 +168,7 @@ function engineWith(fetch: (url: string, init?: RequestInit) => Promise<Response
 	}).engine;
 }
 
-describe('require() for orders (slice 5f — the durable path)', () => {
+describe('require() for orders (the durable path)', () => {
 	it('completes a required full refresh that needs more than 100 greedy batches', async () => {
 		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
 		setPremiumFlag();

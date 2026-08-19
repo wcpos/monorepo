@@ -1,5 +1,5 @@
 /**
- * Slice 5a: the persisted scheduler/coverage tier collections are part of the
+ * The persisted scheduler/coverage tier collections are part of the
  * engine's per-scope recipe — opened through the PUBLIC handle, versioned
  * schemas migration-wired, and byte-compatible with the web host's
  * createDatabase recipe (an adopted host must open its existing data
@@ -42,7 +42,7 @@ const TIER_COLLECTIONS = [
 	'existenceManifestOrders',
 ] as const;
 
-describe('engine scope recipe: the scheduler/coverage tier (slice 5a)', () => {
+describe('engine scope recipe: the scheduler/coverage tier', () => {
 	it('hard-whitelists only the five derivable ledger collections', async () => {
 		expect(DERIVABLE_METADATA_COLLECTIONS).toEqual([
 			'coverageRecords',

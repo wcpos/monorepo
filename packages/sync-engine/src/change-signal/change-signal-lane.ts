@@ -1,5 +1,5 @@
 /**
- * The change-signal lane (facade slice 3): one deterministic, scope-guarded
+ * The change-signal lane: one deterministic, scope-guarded
  * tick = detect (hybrid engine poll) → route (planReplicationActions) → apply
  * (the generated arms), with the cursor committed ONLY after every arm
  * succeeded (ADR 0005/0007 — persistState is the applier's last step).

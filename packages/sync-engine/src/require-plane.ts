@@ -1,5 +1,5 @@
 /**
- * The demand plane (facade slice 4): `require(requirement) → RequirementHandle`
+ * The demand plane: `require(requirement) → RequirementHandle`
  * — a component-declared data requirement as data (CONTEXT.md), resolved
  * coverage-aware for apps/main. The engine owns both local coverage evidence
  * and its persisted scheduler tier; callers interact only through typed
@@ -1001,7 +1001,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				item.requirement.kind === 'targeted-records' &&
 				item.requirement.collection === 'orders'
 			) {
-				// Orders (slice 5f): the DURABLE path — a persisted targeted task the
+				// Orders: the DURABLE path — a persisted targeted task the
 				// scheduler drain completes, so a crash mid-fetch never loses the
 				// requirement (the drain lane finishes it later). Presence gate first.
 				//

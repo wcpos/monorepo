@@ -354,7 +354,7 @@ export type EngineEvent =
 			detail?: string;
 	  }
 	| { type: 'bootstrap-failed'; scopeId: string; detail: string }
-	// Push outcomes (slice 4): write() resolved at enqueue; these are the drain's verdicts.
+	// Push outcomes: write() resolved at enqueue; these are the drain's verdicts.
 	| {
 			type: 'write-acknowledged';
 			collection: string;
@@ -380,7 +380,7 @@ export type EngineEvent =
 			recordId: string;
 			mutationId: string;
 	  }
-	// Fresh query totals persisted by the retry lane (slice 5d) — the host
+	// Fresh query totals persisted by the retry lane — the host
 	// hydrates its UI caches from these.
 	| QueryTotalCacheEvent
 	| { type: 'config-changed'; collections: string[] }
@@ -1431,7 +1431,7 @@ export function createRxdbSyncEngine(
 		});
 	};
 
-	// --- The change-signal lane (slice 3) --------------------------------------
+	// --- The change-signal lane --------------------------------------
 	const intervals: EngineIntervals = {
 		...DEFAULT_INTERVALS,
 		...ports.intervals,
@@ -1593,7 +1593,7 @@ export function createRxdbSyncEngine(
 		},
 	});
 
-	// --- The maintenance lanes (slice 5d) --------------------------------------
+	// --- The maintenance lanes --------------------------------------
 	let maintenanceOwnerId: string | null = null;
 	const maintenanceLanes = createMaintenanceLanes({
 		manager,
@@ -1783,7 +1783,7 @@ export function createRxdbSyncEngine(
 	});
 
 	// The orders scheduler fetcher's custom-pull checkpoint (+ F8 epoch) lives
-	// in the scope's syncCheckpoints collection (slice 5e), NOT the engine kv
+	// in the scope's syncCheckpoints collection, NOT the engine kv
 	// store — an orders reset must rewind it too, or the persisted drain
 	// resumes a stale cursor over the emptied collection (the apps/main host's
 	// increment-2 contract, engine-owned per invariant 2). Rewind-to-zero via

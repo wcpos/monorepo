@@ -106,7 +106,7 @@ async function enqueueMutation(
 	});
 }
 
-describe('createRxdbSyncEngine — slice 2 scope lifecycle', () => {
+describe('createRxdbSyncEngine — scope lifecycle', () => {
 	it('ready resolves the initial scope: ADR 0013 scope id and database name', async () => {
 		const { a } = freshIdentities();
 		const engine = engineWith(undefined, a);
