@@ -1,9 +1,9 @@
-import isEmpty from 'lodash/isEmpty';
 import round from 'lodash/round';
 
 import { calculateTaxes } from '../money/calculate-taxes';
 import { roundHalfUp, roundTaxTotal } from '../money/precision';
 import { getLineItemTaxStatus } from '../lines/pos-data';
+import { normalizeTaxClass } from '../tax-class';
 
 import type { PerItemDiscount } from './discount';
 
@@ -362,7 +362,7 @@ export function calculateCouponDiscountTaxSplit(
 			continue;
 		}
 
-		const taxClass = isEmpty(lineItem?.tax_class) ? 'standard' : lineItem!.tax_class!;
+		const taxClass = normalizeTaxClass(lineItem?.tax_class);
 		const applicableRates = taxRates.filter((r) => r.class === taxClass);
 
 		if (applicableRates.length > 0) {

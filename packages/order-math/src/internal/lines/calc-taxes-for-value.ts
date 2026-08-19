@@ -1,6 +1,5 @@
-import isEmpty from 'lodash/isEmpty';
-
 import { calculateTaxes } from '../money/calculate-taxes';
+import { normalizeTaxClass } from '../tax-class';
 
 import type { CartConfig } from '../../config';
 
@@ -27,7 +26,7 @@ export function calculateTaxesForValue(
 	},
 	config: CartConfig
 ): { total: number; taxes: { id: number; total: number }[] } {
-	const taxClass = isEmpty(args.taxClass) ? 'standard' : (args.taxClass as string);
+	const taxClass = normalizeTaxClass(args.taxClass);
 	let appliedRates = config.rates.filter((rate) => rate.class === taxClass);
 
 	// if shipping, we need to filter by shipping flag

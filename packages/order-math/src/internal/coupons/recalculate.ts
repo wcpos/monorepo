@@ -13,6 +13,7 @@ import {
 import { calculateTaxes } from '../money/calculate-taxes';
 import { roundHalfUp } from '../money/precision';
 import { getLineItemTaxStatus, parsePosData } from '../lines/pos-data';
+import { normalizeTaxClass } from '../tax-class';
 
 import type { CouponLineInput as CouponLine, LineItemInput as LineItem } from '../../types';
 
@@ -152,11 +153,10 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 			const taxStatus = getLineItemTaxStatus(item);
 
 			// Determine which tax rates apply to this item's tax class
-			const normalizedClass =
-				item.tax_class === '' || item.tax_class == null ? 'standard' : item.tax_class;
+			const normalizedClass = normalizeTaxClass(item.tax_class);
 			const itemRates =
 				taxStatus === 'taxable'
-					? taxRates.filter((r) => (r.class || 'standard') === normalizedClass)
+					? taxRates.filter((r) => normalizeTaxClass(r.class) === normalizedClass)
 					: [];
 
 			// Use calculateTaxes for exact WC-matching decomposition.
@@ -324,9 +324,8 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 					if (getLineItemTaxStatus(li) !== 'taxable') return entry;
 
 					// Get the applicable tax rates for this item's tax class
-					const itemTaxClass =
-						li.tax_class === '' || li.tax_class == null ? 'standard' : li.tax_class;
-					const itemRates = taxRates.filter((r) => (r.class || 'standard') === itemTaxClass);
+					const itemTaxClass = normalizeTaxClass(li.tax_class);
+					const itemRates = taxRates.filter((r) => normalizeTaxClass(r.class) === itemTaxClass);
 					if (itemRates.length === 0) return entry;
 
 					// Decompose the inclusive discount into tax + ex-tax using WC's algorithm
