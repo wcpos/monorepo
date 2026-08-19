@@ -55,40 +55,51 @@ const SETUP_BUDGET_MS = 180_000;
 const TEARDOWN_BUDGET_MS = 30_000;
 
 /**
- * TIMEOUT ARITHMETIC — do not set this to a bare literal.
+ * The ceiling for EVERYTHING before the arrival assertion — fixture setup plus the
+ * test body's own setup. Declared at file scope rather than as `test.setTimeout()`
+ * in the body, because the body runs only after `posPage` has hydrated: an in-body
+ * call leaves the whole of fixture setup governed by the 180s config default in
+ * playwright.config.ts. `test.describe.configure` is applied at collection time, so
+ * this covers the fixture too.
  *
- *   posPage fixture   120s
- *   in-test setup     180s
- *   arrival           390s
- *   teardown           30s
- *   ---------------------
- *   total             720s
- *
- * The budget must cover EVERYTHING Playwright charges to this test, which includes
- * fixture setup and not just the body. The spec previously ran on a flat 480s while
- * the fixture and setup could together spend 300s before the 390s arrival assertion
- * even started — so a slow-but-successful arrival was reported as a synchronization
- * failure that never happened.
- *
- * The arrival deadline is the one term that must NOT be shrunk to make the sum fit:
- * it is derived from the merchant's freshness contract (eco cadence + jitter), so
- * trimming it would trade a false failure for a false pass. The budget therefore
- * grows to fit it, and is derived from the parts so raising any one of them cannot
- * silently re-open that gap. Only a genuinely broken pipeline ever spends this —
- * measured arrival on dev-pro is ~2 seconds.
+ * This is a CEILING, not a reservation. It bounds a hung setup, and an overrun here
+ * is reported against the step that overran — a diagnosis, not the false "the
+ * product never arrived" that the arrival assertion would report. The arrival
+ * window itself does not come out of this number; see below.
  */
-const TEST_TIMEOUT_MS =
-	FIXTURE_BUDGET_MS + SETUP_BUDGET_MS + ARRIVAL_TIMEOUT_MS + TEARDOWN_BUDGET_MS;
+const SETUP_TIMEOUT_MS = FIXTURE_BUDGET_MS + SETUP_BUDGET_MS;
+
+test.describe.configure({ timeout: SETUP_TIMEOUT_MS });
 
 /**
- * Declared HERE, at file scope, and NOT as `test.setTimeout()` in the body. The
- * body runs only after `posPage` has finished hydrating, so an in-body call is
- * governed by the config default (180s in playwright.config.ts) for the whole of
- * fixture setup — a fixture that fell back to full OAuth would blow that 180s and
- * die before the line raising the budget ever executed. `test.describe.configure`
- * is applied at collection time, so the budget above covers fixture setup too.
+ * TIMEOUT ARITHMETIC — read this before changing any number above.
+ *
+ * The arrival assertion does NOT share a budget with setup. Predicting setup cost
+ * and reserving the remainder is what failed twice here: first the fixture's 110s
+ * of waits were unbudgeted, then the OAuth fallback's were. Every such prediction
+ * is one unenumerated code path away from silently truncating the assertion, and
+ * the truncation always presents as "the product never arrived" — a false failure
+ * against the exact behaviour this spec exists to prove.
+ *
+ * So the arrival window is GRANTED, not predicted. Immediately before the
+ * assertion, once setup is provably complete, the test extends its own budget by
+ * the full arrival window plus teardown (Playwright's documented
+ * `testInfo.setTimeout(testInfo.timeout + extra)` pattern):
+ *
+ *   reaching that line proves elapsed < SETUP_TIMEOUT_MS
+ *   new deadline        = start + SETUP_TIMEOUT_MS + ARRIVAL + TEARDOWN
+ *   remaining from here = that − elapsed  >  ARRIVAL + TEARDOWN
+ *
+ * The assertion therefore gets its full window no matter what setup actually cost,
+ * with no term left to forget. Worst case the run can spend
+ * SETUP_TIMEOUT_MS + ARRIVAL_TIMEOUT_MS + TEARDOWN_BUDGET_MS (720s), and only a
+ * genuinely broken pipeline ever does — measured arrival on dev-pro is ~2 seconds.
+ *
+ * ARRIVAL_TIMEOUT_MS is the one term that must never be shrunk to make a sum fit:
+ * it is the merchant's freshness contract, so trimming it trades a false failure
+ * for a false pass.
  */
-test.describe.configure({ timeout: TEST_TIMEOUT_MS });
+const ARRIVAL_GRANT_MS = ARRIVAL_TIMEOUT_MS + TEARDOWN_BUDGET_MS;
 
 /**
  * Directional coverage: a record created on the SERVER while the till is open
@@ -196,6 +207,13 @@ test('a product created on the server reaches the products grid without a search
 		test.skip(true, created.reason);
 		return;
 	}
+
+	// Setup is provably complete, so grant the arrival window rather than having
+	// reserved it: reaching this line proves elapsed < SETUP_TIMEOUT_MS, and the new
+	// deadline is SETUP_TIMEOUT_MS + ARRIVAL_GRANT_MS from the test's start — so at
+	// least the full arrival window plus teardown remains, whatever setup cost. See
+	// the TIMEOUT ARITHMETIC note above for why this is granted and not predicted.
+	test.setTimeout(testInfo.timeout + ARRIVAL_GRANT_MS);
 
 	try {
 		if (!created.probe.rowTestId) {
