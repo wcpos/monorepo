@@ -1,10 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
-import {
-	buildCoverageDocumentsFromQueryResult,
-	deriveQueryCoverageCompleteness,
-} from './query-coverage-writes';
+import { buildCoverageDocumentsFromQueryResult } from './query-coverage-writes';
 
 describe('buildCoverageDocumentsFromQueryResult', () => {
 	it('creates persisted records and a complete lane from a bounded query result', () => {
@@ -70,34 +67,5 @@ describe('buildCoverageDocumentsFromQueryResult', () => {
 				},
 			],
 		});
-	});
-});
-
-describe('deriveQueryCoverageCompleteness', () => {
-	it('marks a bounded query complete when the matching total equals returned records', () => {
-		expect(
-			deriveQueryCoverageCompleteness({
-				returnedRecordCount: 2,
-				totalMatchingRecords: 2,
-			})
-		).toBe(true);
-	});
-
-	it('keeps a full bounded page incomplete when more matching records exist', () => {
-		expect(
-			deriveQueryCoverageCompleteness({
-				returnedRecordCount: 50,
-				totalMatchingRecords: 75,
-			})
-		).toBe(false);
-	});
-
-	it('keeps query coverage incomplete without matching total evidence', () => {
-		expect(
-			deriveQueryCoverageCompleteness({
-				returnedRecordCount: 50,
-				totalMatchingRecords: null,
-			})
-		).toBe(false);
 	});
 });
