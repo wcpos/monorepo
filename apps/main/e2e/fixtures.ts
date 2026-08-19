@@ -12,6 +12,13 @@ import {
 
 import { log } from '@wcpos/utils/logger';
 
+import {
+	CATALOGUE_READY_TIMEOUT_MS,
+	catalogueUnavailableMessage,
+	DIAGNOSTIC_READ_TIMEOUT_MS,
+	LOADED_COUNT_READY,
+	LOADED_COUNT_TEST_ID,
+} from './catalogue-readiness';
 import { cashierAuthStateName, currentShardIndex, getE2ECashierAuth } from './cashier-slot';
 import { captureCreatedOrderIds, finalizeCreatedOrders } from './order-cleanup';
 import { restoreOPFS } from './opfs-helpers';
@@ -767,9 +774,28 @@ export async function authenticateWithStore(
 	// The cold-start profile (e2e/cold-start.ts) keeps the catalogue empty on
 	// purpose, so it opts out of this wait rather than burning its timeout.
 	if (waitForCatalogue) {
-		await expect(page.getByTestId('data-table-count')).toContainText(/[1-9]/, {
-			timeout: 120_000,
-		});
+		// The LOCAL count, not the footer sentence — "Showing 0 of 27" matches a
+		// bare /[1-9]/ on the server total and passed this assertion with an
+		// empty grid, which is why globalSetup did not abort on 2026-08-19.
+		const countMarker = page.getByTestId(LOADED_COUNT_TEST_ID);
+		const startedAtMs = Date.now();
+		try {
+			await expect(countMarker).toHaveText(LOADED_COUNT_READY, { timeout: 120_000 });
+		} catch (error) {
+			// Throw the ACTIONABLE message, not Playwright's generic matcher error —
+			// this is the run-level verdict (globalSetup runs this path before any
+			// test), so it is the one line a CI reader will see first. The matcher
+			// error is preserved as `cause` rather than discarded.
+			throw new Error(
+				catalogueUnavailableMessage({
+					countText: await countMarker
+						.textContent({ timeout: DIAGNOSTIC_READ_TIMEOUT_MS })
+						.catch(() => null),
+					elapsedMs: Date.now() - startedAtMs,
+				}),
+				{ cause: error }
+			);
+		}
 		if (waitForFullCatalogue) {
 			await waitForCatalogueQuiescence(page);
 		}
@@ -898,19 +924,29 @@ export async function hydrateAuthenticatedPage(
 				throw new Error('Saved auth state restored into an app error; falling back to OAuth.');
 			}
 			if (waitForCatalogue) {
-				// Every rendered product shape counts as the marker. Omitting
-				// variable-product-tile made this wait burn its FULL timeout on any
-				// store whose first grid page is all variable products (the Luma
-				// catalogue is) — a silent 60s tax on every posPage test, swallowed
-				// by the .catch below. Measured 2026-08-18: hydrate was 2s + 60s of
-				// exactly this.
-				const productMarker = page
-					.getByTestId('product-tile')
-					.first()
-					.or(page.getByTestId('variable-product-tile').first())
-					.or(page.getByTestId('add-to-cart-button').first())
-					.first();
-				await productMarker.waitFor({ state: 'visible', timeout: 60_000 }).catch(() => {});
+				// Readiness is `data-table-count` going non-zero — the SAME signal the
+				// OAuth path below already asserts on. The previous tile-shaped marker
+				// could drift from it (it missed variable-product tiles and burned its
+				// whole timeout on a Luma catalogue) and, worse, its failure was
+				// swallowed: see catalogue-readiness.ts for what that cost.
+				const countMarker = page.getByTestId(LOADED_COUNT_TEST_ID);
+				const startedAtMs = Date.now();
+				try {
+					await expect(countMarker).toHaveText(LOADED_COUNT_READY, {
+						timeout: CATALOGUE_READY_TIMEOUT_MS,
+					});
+				} catch {
+					// Never swallowed: falling through to OAuth is fine, silently paying
+					// the timeout on every test is not.
+					throw new Error(
+						catalogueUnavailableMessage({
+							countText: await countMarker
+								.textContent({ timeout: DIAGNOSTIC_READ_TIMEOUT_MS })
+								.catch(() => null),
+							elapsedMs: Date.now() - startedAtMs,
+						})
+					);
+				}
 			}
 		} catch (e) {
 			// Ensure the JS-blocking route is removed so the fallback can load scripts

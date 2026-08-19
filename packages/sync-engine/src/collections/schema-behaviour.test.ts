@@ -13,6 +13,8 @@
  * literals, free to diverge — deliberate divergence edits that one test.
  */
 
+import { createHash } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
 // Premium stays host-side; the test harness is the host (same rationale as
 // createRxdbSyncEngine.test.ts — open-core caps open collections at 13).
@@ -35,7 +37,8 @@ import {
 
 import { memoryEngineStorage, remoteId } from '../testing';
 import { orderSchema } from './order-schema';
-import { productSchema } from './product-schema';
+import { engineCollectionCreators } from './engine-collections';
+import { productMigrationStrategies, productSchema } from './product-schema';
 import { variationSchema, withVariationColumns } from './variation-schema';
 import { customerSchema } from './customer-schema';
 import { taxRateDocumentId, taxRateSchema } from './tax-rate-schema';
@@ -521,6 +524,133 @@ describe('stored documents migrate through every schema version', () => {
 		// rather than inventing one, and the row stays requeue-able.
 		expect(rows[0]?.rejectedReason).toBeUndefined();
 		expect(rows[0]?.requeueCount).toBeUndefined();
+	});
+
+	it('products v0 → v1 reopens an existing scope database and re-projects the clamped price', async () => {
+		// #1308 widened the promoted `price` bound to admit negative prices but left the
+		// schema at v0. RxDB keys the internal collection doc by `name-version`, so the
+		// amended hash threw DB6 and the ENTIRE scope database stopped opening — the app
+		// shell still rendered, the product grid was permanently empty, and every
+		// authenticated E2E test burned its 60s catalogue wait. This pins the bump.
+		const v0FixtureSchema = {
+			...productSchema,
+			title: 'Woo product document schema v0 fixture',
+			version: 0,
+			properties: {
+				...productSchema.properties,
+				// The pre-#1308 bound, paired with the pre-#1308 `Math.max(0, …)` write clamp.
+				price: { type: 'number', minimum: 0, maximum: 100_000_000, multipleOf: 0.01 },
+			},
+		};
+		// A deposit-return style product: the payload price is negative, but v0's clamp
+		// stored `0` in the promoted column.
+		const payload = { ...PRODUCT_PAYLOAD, id: 91, price: '-5.00' };
+
+		const storage = memoryEngineStorage();
+		const dbName = `schema-migration-${(dbSeq += 1)}`;
+		const old = await openCollection({ schema: v0FixtureSchema, storage, dbName });
+		await old.collection.insert({
+			uuid: 'product-v0',
+			remoteId: remoteId(91),
+			payload,
+			sync: { revision: 'r1', checkpoint: {}, partial: false, source: 'woo-rest' },
+			local: { dirty: false, pendingMutationIds: [] },
+			...promotedProductColumns(payload),
+			price: 0, // what the v0 clamp actually wrote
+		});
+		await old.db.close();
+
+		const current = await openCollection({
+			schema: productSchema,
+			migrationStrategies: productMigrationStrategies as unknown as MigrationStrategies,
+			storage,
+			dbName,
+		});
+		const migrated = await current.collection.findOne('product-v0').exec();
+		expect(migrated).not.toBeNull();
+		const json = migrated!.toJSON() as Record<string, unknown>;
+		await current.db.close();
+
+		expect(json.payload).toEqual(payload); // payload bytes untouched
+		expect(json.price).toBe(-5); // the promoted column no longer lies
+	});
+});
+
+describe('schema identity — an in-place edit throws DB6 and blocks the database from opening', () => {
+	/**
+	 * RxDB keys its internal collection doc by `name-version`. Editing a schema without
+	 * bumping `version` changes the schema hash, `addCollections` throws DB6, and the
+	 * WHOLE scope database fails to open — every collection on it, not just the edited
+	 * one. That is what happened to `products` in #1308 and it is invisible to every
+	 * fresh-database test, so the schemas are pinned here on purpose.
+	 *
+	 * To change a schema: bump its `version`, add the migration strategy, and update the
+	 * digest below in the same commit. The friction IS the guard.
+	 */
+	function canonicalJson(value: unknown): string {
+		if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+		if (value && typeof value === 'object') {
+			const entries = Object.entries(value as Record<string, unknown>)
+				.sort(([a], [b]) => a.localeCompare(b))
+				.map(([key, val]) => `${JSON.stringify(key)}:${canonicalJson(val)}`);
+			return `{${entries.join(',')}}`;
+		}
+		return JSON.stringify(value) ?? 'null';
+	}
+
+	/** `title` is a human label RxDB does not store shape from; everything else counts. */
+	const digest = (schema: unknown) => {
+		const { title: _title, ...shape } = schema as { title?: string };
+		return createHash('sha256').update(canonicalJson(shape)).digest('hex').slice(0, 16);
+	};
+
+	const PINNED_DIGESTS: Record<string, string> = {
+		orders: '72d3cd3ea083c10c',
+		products: '96c520cdd7d66b8f', // v1 — see the v0 → v1 migration test above
+		variations: '478a682482d83df3',
+		// customers and the four reference schemas share a digest: they ARE the same
+		// shape apart from title (ADR 0019 — see the identity test below).
+		customers: '85e1373e0643f472',
+		taxRates: 'faea838bf1991ead',
+		categories: '85e1373e0643f472',
+		brands: '85e1373e0643f472',
+		tags: '85e1373e0643f472',
+		coupons: '85e1373e0643f472',
+		schedulerTaskStates: '10263819d3dd2b0c',
+		coverageRecords: '5d7d002dae66c251',
+		coverageLanes: '6160fb991f88a2bf',
+		coverageCompactionLeases: '003b7b4712002ac6',
+		coverageCompactionFailures: 'ab4f766f5371c8a2',
+		queryTotalCacheEntries: '6a93dbf57197742a',
+		queryTotalRequestStates: 'ad4e1c81100d2c16',
+		existenceManifest: 'f7ce76234e1c59be',
+		existenceManifestCustomers: 'f7ce76234e1c59be',
+		existenceManifestOrders: 'f7ce76234e1c59be',
+		syncCheckpoints: '31f42e272f4d79eb',
+		recordMutations: '94c4fd4e440dbdd7',
+		engineKv: 'b9dabb778f9362a2',
+		changeSignalStates: 'f53de19b6c426c6a',
+	};
+
+	it('every engine collection schema matches its pinned digest', () => {
+		const creators = engineCollectionCreators();
+		const actual = Object.fromEntries(
+			Object.entries(creators).map(([name, creator]) => [name, digest(creator.schema)])
+		);
+		expect(actual).toEqual(PINNED_DIGESTS);
+	});
+
+	it('every versioned schema ships the migration strategies its version needs', () => {
+		const creators = engineCollectionCreators();
+		for (const [name, creator] of Object.entries(creators)) {
+			const version = (creator.schema as { version: number }).version;
+			if (version > 0) {
+				expect(
+					creator.migrationStrategies,
+					`${name} is at v${version} but declares no migrationStrategies — RxDB cannot open an existing database without them`
+				).toBeDefined();
+			}
+		}
 	});
 });
 
