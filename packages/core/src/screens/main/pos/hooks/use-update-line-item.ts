@@ -3,7 +3,12 @@ import * as React from 'react';
 import unset from 'lodash/unset';
 import { v4 as uuidv4 } from 'uuid';
 
-import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
+import {
+	isMiscProductLine,
+	MISC_PRODUCT_ID,
+	POS_META_KEYS,
+	wooMetaCarrier,
+} from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { reportCartInvariant } from './cart-failure';
@@ -81,13 +86,13 @@ export const useUpdateLineItem = () => {
 				stockGuardEnabled &&
 				!options?.skipStockGuard &&
 				lineItemToUpdate &&
-				lineItemToUpdate.product_id !== 0 &&
+				!isMiscProductLine(lineItemToUpdate) &&
 				typeof changes.quantity === 'number' &&
 				changes.quantity > (lineItemToUpdate.quantity ?? 0)
 			) {
 				const stockResult = await checkCartStock({
 					lineItems: json.line_items ?? [],
-					productId: lineItemToUpdate.product_id ?? 0,
+					productId: lineItemToUpdate.product_id ?? MISC_PRODUCT_ID,
 					variationId: lineItemToUpdate.variation_id ?? 0,
 					requestedQuantity: changes.quantity,
 					excludedLineItemUuid: uuid,

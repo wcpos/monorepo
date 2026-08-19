@@ -19,6 +19,7 @@ import {
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
+import { MISC_PRODUCT_ID } from '@wcpos/sync-core';
 
 import { useT } from '../../../../contexts/translations';
 import { CurrencyInput } from '../../components/currency-input';
@@ -74,7 +75,7 @@ export function AddMiscProduct() {
 		async (data: FormValues) => {
 			const { name, price, sku, tax_status, tax_class, virtual, downloadable, categories } = data;
 			await addProduct({
-				id: 0,
+				id: MISC_PRODUCT_ID,
 				name: isEmpty(name) ? t('common.product') : name,
 				price: isEmpty(price) ? '0' : price,
 				sku,

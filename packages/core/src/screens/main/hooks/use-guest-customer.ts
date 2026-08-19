@@ -2,6 +2,8 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
+import { GUEST_CUSTOMER_ID } from '@wcpos/sync-core';
+
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 
@@ -15,7 +17,7 @@ export const useGuestCustomer = () => {
 
 	return React.useMemo(
 		() => ({
-			id: 0,
+			id: GUEST_CUSTOMER_ID,
 			billing: {
 				first_name: t('common.guest'),
 				last_name: '',

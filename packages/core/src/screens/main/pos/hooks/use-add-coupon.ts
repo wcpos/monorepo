@@ -3,7 +3,12 @@ import * as React from 'react';
 import isEqual from 'lodash/isEqual';
 import { v4 as uuidv4 } from 'uuid';
 
-import { type MetaDataEntry, wooMetaCarrier } from '@wcpos/sync-core';
+import {
+	isGuestCustomer,
+	type MetaDataEntry,
+	MISC_PRODUCT_ID,
+	wooMetaCarrier,
+} from '@wcpos/sync-core';
 import { useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
@@ -93,7 +98,11 @@ export const useAddCoupon = () => {
 				}
 
 				// 3. Look up products for category/on_sale info
-				const productIds = lineItems.map((item: any) => item.product_id).filter(Boolean);
+				const productIds = lineItems
+					.map((item: any) => item.product_id)
+					.filter(
+						(productId): productId is number => productId != null && productId !== MISC_PRODUCT_ID
+					);
 				const products =
 					productIds.length > 0 ? await readEngineProductsByWooId(runtime, productIds) : [];
 				const productMap = new Map(products.map((p: any) => [p.id, p]));
@@ -147,7 +156,10 @@ export const useAddCoupon = () => {
 					customerEmail: order.billing?.email || '',
 					// customer_id 0 = guest: WC records guest coupon usage by email, so guests
 					// must map to null here to trigger the email-based used_by check
-					customerId: order.customer_id || null,
+					customerId:
+						order.customer_id == null || isGuestCustomer(order.customer_id)
+							? null
+							: order.customer_id,
 				});
 
 				if (!validation.valid) return rejectCoupon(validation.error ?? 'Coupon validation failed.');

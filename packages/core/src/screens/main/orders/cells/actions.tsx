@@ -25,6 +25,7 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { awaitWriteOutcome, useQueryRuntime, WriteOutcomeError } from '@wcpos/query';
 import {
+	NO_STORE,
 	POS_META_KEYS,
 	remoteIdOrNull,
 	WOO_REST_CANNOT_DELETE,
@@ -104,9 +105,9 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 		const existingStoreId = wooMetaCarrier.readIdentity(existingMeta).storeId;
 		let meta_data = wooMetaCarrier.stampIdentity(existingMeta, {
 			userId: wpCredentials.id,
-			storeId: store.id === 0 ? (existingStoreId ?? 0) : store.id,
+			storeId: store.id === NO_STORE ? (existingStoreId ?? NO_STORE) : store.id,
 		});
-		if (store.id === 0 && existingStoreId === null) {
+		if (store.id === NO_STORE && existingStoreId === null) {
 			meta_data = meta_data.filter((entry) => entry.key !== POS_META_KEYS.store);
 		}
 

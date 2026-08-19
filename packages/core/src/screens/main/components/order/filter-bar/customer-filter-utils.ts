@@ -1,6 +1,7 @@
 import toNumber from 'lodash/toNumber';
 
 import type { CustomerDocument } from '@wcpos/database';
+import { isGuestCustomer } from '@wcpos/sync-core';
 
 import { extractNameFromJSON } from '../../../hooks/use-customer-name-format/helpers';
 
@@ -35,7 +36,7 @@ export function resolveCustomerPillEntity({
 		return null;
 	}
 
-	if (customer && (customer.id === 0 || !isIdOnlyCustomerEntity(customer))) {
+	if (customer && (isGuestCustomer(customer.id) || !isIdOnlyCustomerEntity(customer))) {
 		return customer;
 	}
 

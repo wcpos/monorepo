@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { isGuestCustomer } from '@wcpos/sync-core';
+
 import { extractNameFromJSON, JSON } from './helpers';
 import { useT } from '../../../../contexts/translations';
 
@@ -23,7 +25,7 @@ export function useCustomerNameFormat() {
 			// fallback to Guest
 			const customerID = json.id ?? json.customer_id;
 
-			if (customerID === 0) {
+			if (isGuestCustomer(customerID)) {
 				return t('common.guest');
 			}
 

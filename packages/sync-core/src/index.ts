@@ -58,6 +58,7 @@ export {
 	type MetaDataEntry,
 	type PosCarrier,
 	type PosIdentity,
+	NO_STORE,
 	POS_META_KEYS,
 	wooMetaCarrier,
 } from './pos-carrier/carrier';
@@ -69,6 +70,12 @@ export {
 	wooIdOf,
 	type RemoteId,
 } from './woo/remoteIdCodec';
+export {
+	GUEST_CUSTOMER_ID,
+	isGuestCustomer,
+	isMiscProductLine,
+	MISC_PRODUCT_ID,
+} from './woo/sentinels';
 // prettier-ignore
 export {
 	composeObservers, createMetricsCollector, type MetricsSnapshot, type SyncEvent,

@@ -19,6 +19,7 @@ import {
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
+import { isMiscProductLine } from '@wcpos/sync-core';
 
 import { useT } from '../../../../../../contexts/translations';
 import { CategoryTreeLoader } from '../../../../components/product/category-select';
@@ -135,7 +136,7 @@ export function EditLineItemForm({ uuid, item }: Props) {
 					name="name"
 					render={({ field }) => <FormInput label={t('common.name')} {...field} />}
 				/>
-				{item.product_id === 0 && (
+				{isMiscProductLine(item) && (
 					<FormField
 						control={form.control}
 						name="categories"
@@ -247,7 +248,7 @@ export function EditLineItemForm({ uuid, item }: Props) {
 						)}
 					/>
 				</HStack>
-				{item.product_id === 0 && (
+				{isMiscProductLine(item) && (
 					<>
 						<VStack>
 							<FormField

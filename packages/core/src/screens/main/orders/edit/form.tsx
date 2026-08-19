@@ -21,6 +21,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { ModalAction, ModalClose, ModalFooter, useModal } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { GUEST_CUSTOMER_ID, isGuestCustomer } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -49,7 +50,7 @@ interface Props {
 const formSchema = z.object({
 	status: z.string(),
 	parent_id: z.number().optional(),
-	customer_id: z.number().default(0),
+	customer_id: z.number().default(GUEST_CUSTOMER_ID),
 	customer_note: z.string().optional(),
 	...billingAddressSchema.shape,
 	...shippingAddressSchema.shape,
@@ -212,7 +213,7 @@ export function EditOrderForm({ order }: Props) {
 			if (customerId === undefined || customerId === null) return;
 
 			try {
-				const customer = customerId === 0 ? guestCustomer : selectedCustomer;
+				const customer = isGuestCustomer(customerId) ? guestCustomer : selectedCustomer;
 
 				/**
 				 * @FIXME - this is similar to the transformCustomerJSONToOrderJSON function
@@ -257,12 +258,11 @@ export function EditOrderForm({ order }: Props) {
 	 */
 	React.useEffect(() => {
 		if (customerIdToLoad === null) return;
-		const selectedCustomer =
-			customerIdToLoad === 0
-				? guestCustomer
-				: customerLookup?.requestedId === customerIdToLoad
-					? customerLookup.document
-					: undefined;
+		const selectedCustomer = isGuestCustomer(customerIdToLoad)
+			? guestCustomer
+			: customerLookup?.requestedId === customerIdToLoad
+				? customerLookup.document
+				: undefined;
 		if (selectedCustomer === undefined) return;
 		if (selectedCustomer === null) {
 			mutationLogger.error('Error fetching customer', {

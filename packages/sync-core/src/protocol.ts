@@ -1,4 +1,5 @@
 import { type RemoteId } from './woo/remoteIdCodec';
+import { GUEST_CUSTOMER_ID } from './woo/sentinels';
 
 export type SyncCheckpoint = {
 	updatedAtGmt: string;
@@ -63,7 +64,7 @@ export function promotedOrderColumns(payload: WooOrderPayload): PromotedOrderCol
 		dateCreatedGmt: String(payload.date_created_gmt ?? ''),
 		status: String(payload.status ?? ''),
 		total: String(payload.total ?? ''),
-		customerId: Number(payload.customer_id ?? 0),
+		customerId: Number(payload.customer_id ?? GUEST_CUSTOMER_ID),
 	};
 }
 

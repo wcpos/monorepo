@@ -1,5 +1,7 @@
 import { BehaviorSubject } from 'rxjs';
 
+import { MISC_PRODUCT_ID } from '@wcpos/sync-core';
+
 export interface StockRejectionItem {
 	product_id: number;
 	variation_id: number;
@@ -57,7 +59,7 @@ export function getStockRejectionForLine({
 	lineItem,
 }: GetStockRejectionForLineArgs): StockRejectionItem | null {
 	if (!stockRejection || stockRejection.orderUuid !== orderUuid) return null;
-	const productId = lineItem.product_id ?? 0;
+	const productId = lineItem.product_id ?? MISC_PRODUCT_ID;
 	const variationId = lineItem.variation_id ?? 0;
 	const match = stockRejection.items.find(
 		(item) => item.product_id === productId && item.variation_id === variationId

@@ -18,6 +18,13 @@ export interface PosCarrier {
 	): { cashierId?: string; storeId?: string } | null;
 }
 
+/**
+ * Store-attribution sentinel: store id 0 = single-store install / no store attribution
+ * (a POS convention, not a Woo wire fact). Callers omit the `_pos_store` meta entry for
+ * it; `stampIdentity` itself stamps whatever it is given.
+ */
+export const NO_STORE = 0;
+
 export const POS_META_KEYS = {
 	user: '_pos_user',
 	store: '_pos_store',

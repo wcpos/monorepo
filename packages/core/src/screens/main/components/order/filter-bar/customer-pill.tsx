@@ -5,6 +5,7 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import { Combobox, ComboboxContent, ComboboxTrigger } from '@wcpos/components/combobox';
 import type { CustomerDocument } from '@wcpos/database';
+import { isGuestCustomer } from '@wcpos/sync-core';
 
 import { useT } from '../../../../../contexts/translations';
 import { useQueryState, useQueryStateActions } from '../../../../../query';
@@ -29,7 +30,7 @@ export function CustomerPill({ resource, guestCustomer, onMissing }: CustomerPil
 	);
 	const actions = useQueryStateActions<'orders'>();
 	const resolvedCustomer = useObservableSuspense(resource);
-	let customer = customerID === 0 ? guestCustomer : resolvedCustomer;
+	let customer = isGuestCustomer(customerID) ? guestCustomer : resolvedCustomer;
 	const { format } = useCustomerNameFormat();
 	const t = useT();
 	const isCustomerLoading = (customer as CustomerWithLoadingMarker | null)?.__isLoading;
@@ -38,7 +39,7 @@ export function CustomerPill({ resource, guestCustomer, onMissing }: CustomerPil
 
 	React.useEffect(() => {
 		// Missing labels escalate through the engine demand seam after the resident lookup settles.
-		if (isActive && customerID !== 0 && !resolvedCustomer) onMissing?.();
+		if (isActive && !isGuestCustomer(customerID) && !resolvedCustomer) onMissing?.();
 	}, [customerID, isActive, onMissing, resolvedCustomer]);
 
 	/**

@@ -1,3 +1,5 @@
+import { isGuestCustomer } from '@wcpos/sync-core';
+
 import { calculateCartLine } from './cart-line';
 import { recalculateCoupons } from './internal/coupons/recalculate';
 import { toCouponConfigs } from './internal/coupons/to-coupon-configs';
@@ -181,10 +183,13 @@ function buildValidationContext(args: {
 		appliedCoupons,
 		appliedCouponsWithIndividualUse,
 		cartSubtotal,
-		// QUIRK(parity): `|| ''` / `|| null` preserved verbatim from use-add-coupon.ts
-		// (customer_id 0 coerces to null, matching today's guest handling).
+		// QUIRK(parity): mirrors use-add-coupon.ts — `|| ''` preserved verbatim, and the
+		// guest customer (and absent customer_id) maps to null for the email-based used_by check.
 		customerEmail: snapshot.billing?.email || '',
-		customerId: snapshot.customer_id || null,
+		customerId:
+			snapshot.customer_id == null || isGuestCustomer(snapshot.customer_id)
+				? null
+				: snapshot.customer_id,
 		now,
 	};
 }
