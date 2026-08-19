@@ -248,15 +248,34 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		) => Promise<MaintenanceLaneBodyReport>
 	): MaintenanceLane {
 		let lastError: string | null = null;
+		/**
+		 * A skipped tick used to be COMPLETELY silent, which is why #1318 — a lane
+		 * that ran on the bench and never in a browser — cost four live soaks and a
+		 * static elimination to narrow: the skip reason is the only evidence a lane
+		 * that never runs leaves behind. It rides the same `maintenance.lane.tick`
+		 * type as the summary (types are a closed, labelled set — see the emit
+		 * below) at DEBUG, so it lands in the flight recorder always and in a
+		 * durable log row only under verbose diagnostics; a routine "nothing to do"
+		 * must never sit in front of a cashier.
+		 */
+		const skipped = (reason: string): MaintenanceLaneReport => {
+			deps.diagnostics({
+				type: 'maintenance.lane.tick',
+				level: 'debug',
+				message: `Lane ${name} skipped: ${reason}`,
+				fields: { lane: name, status: 'skipped', reason },
+			});
+			return { lane: name, status: 'skipped', reason };
+		};
 		return {
 			tick: async (callerSignal, options) => {
 				let starvation = false;
 				let starvationReservationAtMs: number | null = null;
 				if (callerSignal?.aborted) {
-					return { lane: name, status: 'skipped', reason: 'aborted' };
+					return skipped('aborted');
 				}
 				if (deps.connectivity() === 'offline') {
-					return { lane: name, status: 'skipped', reason: 'offline' };
+					return skipped('offline');
 				}
 				if (pressureDeferredLanes.has(name)) {
 					const tickAtMs = now();
@@ -264,21 +283,21 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 						const previousRunAtMs = lastRanAtMs.get(name);
 						if (previousRunAtMs === undefined) {
 							lastRanAtMs.set(name, tickAtMs);
-							return { lane: name, status: 'skipped', reason: 'server-pressure' };
+							return skipped('server-pressure');
 						}
 						if (deps.isServerRetryAfterActive?.(tickAtMs)) {
-							return { lane: name, status: 'skipped', reason: 'server-pressure' };
+							return skipped('server-pressure');
 						}
 						const starvationCeilingMs = 2 * laneRegistryEntry(name).defaultMs;
 						if (tickAtMs - previousRunAtMs < starvationCeilingMs) {
-							return { lane: name, status: 'skipped', reason: 'server-pressure' };
+							return skipped('server-pressure');
 						}
 						starvation = true;
 						starvationReservationAtMs = tickAtMs;
 					}
 				}
 				if (deps.manager.activeScope === null) {
-					return { lane: name, status: 'skipped', reason: 'no active scope' };
+					return skipped('no active scope');
 				}
 				if (starvationReservationAtMs !== null) {
 					lastRanAtMs.set(name, starvationReservationAtMs);
@@ -287,7 +306,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 					const report = await deps.manager.runGuarded<MaintenanceLaneReport>(async (bound) => {
 						const db = deps.databaseFor(bound.scopeId);
 						if (!db) {
-							return { lane: name, status: 'skipped', reason: 'scope database not open' };
+							return skipped('scope database not open');
 						}
 						// Caller (host stop) + scope signals combine through a MANUAL
 						// controller — AbortSignal.any is unavailable on RN/Expo fetch
@@ -367,14 +386,10 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 							bound.signal.removeEventListener('abort', abortComposite);
 						}
 						if (wrote === 'dropped') {
-							return {
-								lane: name,
-								status: 'skipped',
-								reason: 'scope moved mid-tick (writes dropped)',
-							};
+							return skipped('scope moved mid-tick (writes dropped)');
 						}
 						if (bodyReport?.status === 'skipped') {
-							return { lane: name, status: 'skipped', reason: bodyReport.reason };
+							return skipped(bodyReport.reason ?? 'unspecified');
 						}
 						return { lane: name, status: 'ran' };
 					});
@@ -387,7 +402,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 							(error.name === 'AbortError' || error.name === 'ScopeStaleError'))
 					) {
 						lastError = null;
-						return { lane: name, status: 'skipped', reason: 'aborted' };
+						return skipped('aborted');
 					}
 					const message = error instanceof Error ? error.message : String(error);
 					lastError = message;
