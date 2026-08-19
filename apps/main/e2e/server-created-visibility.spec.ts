@@ -1,6 +1,11 @@
 import { expect } from '@playwright/test';
 
-import { getStoreUrl, navigateToPage, authenticatedTest as test } from './fixtures';
+import {
+	getStoreUrl,
+	getStoreVariant,
+	navigateToPage,
+	authenticatedTest as test,
+} from './fixtures';
 import { createSearchProbe, deleteSearchProbe, productWriterAuthorization } from './search-probe';
 
 /**
@@ -32,6 +37,10 @@ test('a product created on the server reaches the products grid without a search
 	request,
 	storeAuthorization,
 }, testInfo) => {
+	// The Products page is a Pro-only drawer screen (same gate every
+	// products-page spec uses) — on free there is no grid to assert against.
+	test.skip(getStoreVariant(testInfo) !== 'pro', 'Products page requires Pro');
+
 	const storeUrl = getStoreUrl(testInfo);
 	const writer = await productWriterAuthorization(request, storeUrl);
 	const authorization = writer ?? storeAuthorization();
