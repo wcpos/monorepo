@@ -5,13 +5,10 @@ import type { ProductDocument, TaxId } from '@wcpos/database';
 import { wrapEngineDocument } from '@wcpos/query';
 
 import {
-	type CartLine,
 	convertProductToLineItemWithoutTax,
 	convertVariationToLineItemWithoutTax,
 	ensurePosOrderIdentityMeta,
-	findByMetaDataUUID,
 	findByProductVariationID,
-	getTaxStatusFromMetaData,
 	transformCustomerJSONToOrderJSON,
 } from './utils';
 
@@ -59,50 +56,6 @@ describe('Utilities', () => {
 			expect(
 				ensurePosOrderIdentityMeta([], { userId: 7, storeId: 11, taxBasedOn: undefined })
 			).not.toContainEqual(expect.objectContaining({ key: '_woocommerce_pos_tax_based_on' }));
-		});
-	});
-
-	// Test getTaxStatusFromMetaData
-	describe('getTaxStatusFromMetaData', () => {
-		it('should return tax status if present in meta data', () => {
-			const metaData = [{ key: '_woocommerce_pos_tax_status', value: 'none' }];
-			expect(getTaxStatusFromMetaData(metaData)).toBe('none');
-		});
-
-		it('should default to "taxable" if tax status is not present', () => {
-			const metaData = [{ key: 'other_key', value: 'value' }];
-			expect(getTaxStatusFromMetaData(metaData)).toBe('taxable');
-		});
-
-		it('should return undefined and log error if metaData is not an array', () => {
-			// Testing runtime behavior with invalid inputs
-			expect(
-				getTaxStatusFromMetaData(null as unknown as { key: string; value: string }[])
-			).toBeUndefined();
-			expect(
-				getTaxStatusFromMetaData(undefined as unknown as { key: string; value: string }[])
-			).toBeUndefined();
-			expect(
-				getTaxStatusFromMetaData({} as unknown as { key: string; value: string }[])
-			).toBeUndefined();
-		});
-
-		it('should return shipping tax status when present', () => {
-			const metaData = [{ key: '_woocommerce_pos_tax_status', value: 'shipping' }];
-			expect(getTaxStatusFromMetaData(metaData)).toBe('shipping');
-		});
-	});
-
-	// Test findByMetaDataUUID
-	describe('findByMetaDataUUID', () => {
-		it('should return the item if a matching UUID is found', () => {
-			const items = [{ meta_data: [{ key: '_woocommerce_pos_uuid', value: '1234' }] }];
-			expect(findByMetaDataUUID(items, '1234')).toEqual(items[0]);
-		});
-
-		it('should return null if no matching UUID is found', () => {
-			const items = [{ meta_data: [{ key: '_woocommerce_pos_uuid', value: '5678' }] }];
-			expect(findByMetaDataUUID(items, '1234')).toBeNull();
 		});
 	});
 
