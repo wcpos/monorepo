@@ -1,7 +1,6 @@
 import * as React from 'react';
 
-import isEmpty from 'lodash/isEmpty';
-
+import { taxClassFromWire } from './tax-class';
 import { calculateTaxes } from './utils/calculate-taxes';
 import { useTaxRates } from '../contexts/tax-rates';
 
@@ -27,7 +26,7 @@ export const useCalculateTaxesFromValue = () => {
 			taxClass?: string;
 			amountIncludesTax?: boolean;
 		}) => {
-			const taxClass = isEmpty(props.taxClass) ? 'standard' : props.taxClass;
+			const taxClass = taxClassFromWire(props.taxClass);
 			const amountIncludesTax = props.amountIncludesTax ?? pricesIncludeTax;
 			let appliedRates = rates.filter((rate) => rate.class === taxClass);
 

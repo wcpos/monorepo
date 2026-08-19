@@ -25,6 +25,7 @@ import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-f
 import { ShippingMethodSelect } from '../../../../components/shipping-method-select';
 import { TaxClassSelect } from '../../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
+import { taxClassFromWire, taxClassToWire } from '../../../../hooks/tax-class';
 import { useShippingLineData } from '../../../hooks/use-shipping-line-data';
 import { useUpdateShippingLine } from '../../../hooks/use-update-shipping-line';
 
@@ -71,7 +72,7 @@ export function EditShippingLineForm({ uuid, item }: Props) {
 			amount: toNumber(amount),
 			prices_include_tax,
 			tax_status,
-			tax_class: tax_class === '' ? 'standard' : tax_class,
+			tax_class: taxClassFromWire(tax_class),
 			meta_data: item.meta_data as FormValues['meta_data'],
 		},
 	});
@@ -87,7 +88,7 @@ export function EditShippingLineForm({ uuid, item }: Props) {
 				instance_id: data.instance_id,
 				amount: data.amount,
 				tax_status: data.tax_status,
-				tax_class: data.tax_class === 'standard' ? '' : data.tax_class,
+				tax_class: taxClassToWire(data.tax_class),
 				prices_include_tax: data.prices_include_tax,
 				meta_data: data.meta_data as NonNullable<
 					import('@wcpos/database').OrderDocument['shipping_lines']

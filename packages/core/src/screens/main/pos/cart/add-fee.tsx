@@ -24,6 +24,7 @@ import { FormErrors } from '../../components/form-errors';
 import { NumberInput } from '../../components/number-input';
 import { TaxClassSelect } from '../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
+import { taxClassToWire } from '../../hooks/tax-class';
 import { useAddFee } from '../hooks/use-add-fee';
 
 /**
@@ -63,9 +64,6 @@ export function AddFee() {
 		},
 	});
 
-	/**
-	 * NOTE: tax_class 'standard' needs to be sent as an empty string, otherwise the API will throw an error.
-	 */
 	const handleAdd = React.useCallback(
 		async (data: FormValues) => {
 			const { name, amount, percent, tax_status, tax_class, prices_include_tax } = data;
@@ -73,7 +71,7 @@ export function AddFee() {
 				name: isEmpty(name) ? t('pos_cart.fee') : (name ?? ''),
 				amount: amount ?? '0',
 				tax_status,
-				tax_class: tax_class === 'standard' ? '' : (tax_class ?? ''),
+				tax_class: taxClassToWire(tax_class),
 				percent,
 				prices_include_tax: prices_include_tax ?? true,
 				meta_data: [],

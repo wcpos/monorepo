@@ -28,6 +28,7 @@ import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-f
 import { NumberInput } from '../../../../components/number-input';
 import { TaxClassSelect } from '../../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
+import { taxClassFromWire, taxClassToWire } from '../../../../hooks/tax-class';
 import { useLineItemData } from '../../../hooks/use-line-item-data';
 import { useUpdateLineItem } from '../../../hooks/use-update-line-item';
 import { parsePosData } from '../../../hooks/utils';
@@ -56,9 +57,6 @@ interface Props {
 	item: NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 }
 
-/**
- * NOTE: tax_class 'standard' needs to be sent as an empty string, otherwise the API will throw an error.
- */
 export function EditLineItemForm({ uuid, item }: Props) {
 	const t = useT();
 	const { updateLineItem } = useUpdateLineItem();
@@ -82,7 +80,7 @@ export function EditLineItemForm({ uuid, item }: Props) {
 			price: toNumber(price),
 			regular_price: toNumber(regular_price),
 			tax_status,
-			tax_class: item.tax_class === '' ? 'standard' : item.tax_class,
+			tax_class: taxClassFromWire(item.tax_class),
 			virtual: posData?.virtual ?? false,
 			downloadable: posData?.downloadable ?? false,
 			categories:
@@ -106,7 +104,7 @@ export function EditLineItemForm({ uuid, item }: Props) {
 				price: data.price,
 				regular_price: data.regular_price,
 				tax_status: data.tax_status,
-				tax_class: data.tax_class === 'standard' ? '' : data.tax_class,
+				tax_class: taxClassToWire(data.tax_class),
 				meta_data: data.meta_data as never,
 				virtual: data.virtual,
 				downloadable: data.downloadable,

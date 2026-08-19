@@ -32,6 +32,7 @@ import { TaxClassSelect } from '../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../components/tax-status-radio-group';
 import { CategoryTreeLoader } from '../../../components/product/category-select';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
+import { taxClassFromWire, taxClassToWire } from '../../../hooks/tax-class';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'product']);
 
@@ -96,21 +97,17 @@ export function EditProductForm({ product }: Props) {
 			manage_stock: product.manage_stock,
 			barcode: product.barcode,
 			tax_status: product.tax_status,
-			tax_class: product.tax_class === '' ? 'standard' : product.tax_class,
+			tax_class: taxClassFromWire(product.tax_class),
 			meta_data: product.meta_data,
 		},
 	});
 
 	/**
 	 * Handle save button click
-	 *
-	 * @NOTE - the form needs a value for tax_class, but WC REST API uses an empty string for standard
 	 */
 	const handleSave = React.useCallback(
 		async (data: z.infer<typeof schema>) => {
-			if (data.tax_class === 'standard') {
-				data.tax_class = '';
-			}
+			data.tax_class = taxClassToWire(data.tax_class);
 			const { categories: categoryOptions, ...rest } = data;
 			const patchData: Partial<import('@wcpos/database').ProductDocument> = {
 				...rest,

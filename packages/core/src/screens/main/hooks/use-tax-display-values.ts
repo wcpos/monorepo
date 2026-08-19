@@ -1,7 +1,6 @@
 import * as React from 'react';
 
-import isEmpty from 'lodash/isEmpty';
-
+import { taxClassFromWire } from './tax-class';
 import { useTaxInclOrExcl } from './use-tax-incl-or-excl';
 import { calculateTaxes } from './utils/calculate-taxes';
 import { useTaxRates } from '../contexts/tax-rates';
@@ -31,7 +30,7 @@ export const useTaxDisplayValues = ({
 	 *
 	 */
 	const appliedRates = React.useMemo(() => {
-		const taxClass = isEmpty(props.taxClass) ? 'standard' : props.taxClass;
+		const taxClass = taxClassFromWire(props.taxClass);
 		return rates.filter((rate) => rate.class === taxClass);
 	}, [props.taxClass, rates]);
 
