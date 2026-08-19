@@ -195,6 +195,9 @@ export type RequirePlaneDeps = {
 	pullBatchSize?: () => number | undefined;
 	now?: () => number;
 	censusFreshForMs?: number;
+	/** A persisted census from an earlier engine session cannot prove that the remote catalogue
+	 * stayed unchanged while this client was closed. */
+	catalogCensusTrustedAfterMs?: number;
 	customerSearchCatalogComplete?: () => Promise<boolean>;
 	/** The per-scope barcode carriers a demand pull materializes products/variations by. */
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
@@ -938,6 +941,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						if (
 							entry &&
 							entry.freshUntilMs > now() &&
+							entry.updatedAtMs >= (deps.catalogCensusTrustedAfterMs ?? Number.NEGATIVE_INFINITY) &&
 							(await database.collections.products.count().exec()) >= entry.totalMatchingRecords
 						) {
 							return {

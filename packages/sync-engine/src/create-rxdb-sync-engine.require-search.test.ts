@@ -154,7 +154,8 @@ function engineWith(fetch: (url: string, init?: RequestInit) => Promise<Response
 async function seedProductsCensus(
 	engine: RxdbSyncEngine,
 	totalMatchingRecords: number,
-	freshUntilMs: number
+	freshUntilMs: number,
+	updatedAtMs = Date.now()
 ): Promise<void> {
 	const scope = engine.active();
 	if (!scope) throw new Error('no active scope');
@@ -162,7 +163,7 @@ async function seedProductsCensus(
 		queryKey: 'census:products',
 		totalMatchingRecords,
 		freshUntilMs,
-		updatedAtMs: Date.now(),
+		updatedAtMs,
 		schemaVersion: 1,
 	});
 }
@@ -253,6 +254,31 @@ describe('require() for search — the public search-demand verb', () => {
 		await engine.dispose();
 	});
 
+	it('does not trust a fully resident product census from before this engine session', async () => {
+		const server = scriptedProductSearchProxy([]);
+		const engine = createEngineHarness({
+			site: SITE,
+			identity: freshIdentity(),
+			fetch: server.fetch,
+			startAtMs: 2_000,
+			awaitReady: false,
+		}).engine;
+		await engine.ready;
+		await insertResidentProduct(engine, 1);
+		await seedProductsCensus(engine, 1, 60_000, 1_000);
+
+		await expect(
+			engine.require({
+				id: 'previous-session-census',
+				collection: 'products',
+				kind: 'search',
+				term: 'hat',
+			}).ready
+		).resolves.toMatchObject({ action: 'fetched' });
+		expect(server.state).toEqual({ searchPulls: 1, skuPulls: 1 });
+		await engine.dispose();
+	});
+
 	it.each([
 		['stale census', async (engine: RxdbSyncEngine) => seedProductsCensus(engine, 0, 1)],
 		['no census row', async () => undefined],
@@ -323,6 +349,40 @@ describe('require() for search — the public search-demand verb', () => {
 			reason: 'customers catalogue is fully resident locally',
 		});
 		expect(server.state.pulls).toBe(0);
+		await engine.dispose();
+	});
+
+	it('does not trust customer catalogue completion from before this engine session', async () => {
+		const server = scriptedCustomerSearchProxy([]);
+		const engine = createEngineHarness({
+			site: SITE,
+			identity: freshIdentity(),
+			fetch: server.fetch,
+			startAtMs: 2_000,
+			awaitReady: false,
+		}).engine;
+		const scope = await engine.ready;
+		await scope.database.collections.engineKv.upsert({
+			id: 'customer-trickle:state',
+			value: JSON.stringify({ viewKey: CUSTOMER_DEFAULT_VIEW_KEY, page: 1, walkComplete: true }),
+		});
+		await scope.database.collections.queryTotalCacheEntries.upsert({
+			queryKey: 'census:customers',
+			totalMatchingRecords: 0,
+			freshUntilMs: 60_000,
+			updatedAtMs: 1_000,
+			schemaVersion: 1,
+		});
+
+		await expect(
+			engine.require({
+				id: 'previous-session-customer-census',
+				collection: 'customers',
+				kind: 'search',
+				term: 'ada',
+			}).ready
+		).resolves.toMatchObject({ action: 'fetched' });
+		expect(server.state.pulls).toBe(1);
 		await engine.dispose();
 	});
 
