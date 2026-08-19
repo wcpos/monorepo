@@ -39,6 +39,39 @@ export type { CartLine };
 
 const posLogger = getLogger(['wcpos', 'pos', 'utils']);
 
+/**
+ * A cart line wrapped with the display metadata the cart table renders from.
+ */
+export interface CartLineRow {
+	item: CartLine;
+	uuid: string;
+	type: 'line_items' | 'fee_lines' | 'shipping_lines';
+}
+
+/**
+ * Diff two snapshots of the cart's rows and return the uuids that should
+ * receive an add pulse: rows that are new, plus line items whose quantity
+ * changed (adding an existing product bumps its quantity rather than adding
+ * a row).
+ */
+export function detectNewCartLines(prev: CartLineRow[], next: CartLineRow[]): string[] {
+	return next.reduce<string[]>((acc, newItem) => {
+		const prevItem = prev.find((candidate) => candidate.uuid === newItem.uuid);
+
+		if (!prevItem) {
+			acc.push(newItem.uuid);
+		} else if (
+			newItem.type === 'line_items' &&
+			(newItem.item as NonNullable<CartLineRow['item']> & { quantity?: number }).quantity !==
+				(prevItem.item as NonNullable<CartLineRow['item']> & { quantity?: number }).quantity
+		) {
+			acc.push(newItem.uuid);
+		}
+
+		return acc;
+	}, []);
+}
+
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type LineItemImage = LineItem['image'];
 type OrderMetaData = NonNullable<import('@wcpos/database').OrderDocument['meta_data']>;

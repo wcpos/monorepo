@@ -26,8 +26,6 @@ declare module '@tanstack/react-table' {
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	interface TableMeta<in out TFeatures extends TableFeatures, in out TData extends RowData> {
 		rowRefs: RefObject<Map<string, PulseTableRowRef | null>>;
-		newRowUUIDs: string[];
-		removeNewRowUUID: (uuid: string) => void;
 		onChange?: (data: unknown) => void;
 		rowLayouts?: RefObject<Map<string, { y: number; height: number }>>;
 		scrollToRow?: (uuid: string) => void;

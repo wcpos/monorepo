@@ -41,7 +41,7 @@ import { Subtotal } from './cells/subtotal';
 import { useUISettings } from '../../contexts/ui-settings';
 import { useCurrentOrder } from '../contexts/current-order';
 import { useCartLines } from '../hooks/use-cart-lines';
-import { CartLine, getUuidFromLineItem } from '../hooks/utils';
+import { CartLine, detectNewCartLines, getUuidFromLineItem } from '../hooks/utils';
 import { SKU } from './cells/sku';
 
 import type { Column, ColumnDef } from '../../../../table-types';
@@ -119,7 +119,17 @@ const formatCartItems = (
 /**
  *
  */
-export function CartTable() {
+interface CartTableProps {
+	/**
+	 * Set by OpenOrders while the current order is still an unsaved draft. If
+	 * this table mounts for the order that draft became (same uuid), its
+	 * initial rows are a first add and deserve a pulse; on a plain mount for an
+	 * existing order they are baseline data.
+	 */
+	lastDraftOrderUuidRef?: React.RefObject<string | undefined>;
+}
+
+export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 	const { uiSettings, getUILabel } = useUISettings('pos-cart');
 	const uiColumns = useObservableEagerState(uiSettings.columns$);
 	const { line_items, fee_lines, shipping_lines } = useCartLines();
@@ -162,47 +172,43 @@ export function CartTable() {
 	}, [line_items, fee_lines, shipping_lines]);
 
 	/**
-	 * Track new row UUIDs as state so they can be removed without prop mutation.
+	 * Pulse rows green when a line is added or its quantity changes.
+	 *
+	 * The pulse is triggered imperatively from this effect (row refs are
+	 * attached before effects run, so a row added in this commit is already in
+	 * rowRefs). Routing it through state/meta instead re-ran a consumer effect
+	 * on every cart re-render (totals recalcs), restarting the animation
+	 * several times per add and making it stutter.
 	 */
-	const [newRowUUIDs, setNewRowUUIDs] = React.useState<string[]>([]);
-
 	React.useEffect(() => {
 		if (!currentOrderRef.current?.uuid) {
-			setNewRowUUIDs([]);
 			return;
 		}
 
 		if (currentOrderRef.current.uuid !== prevOrderRef.current?.uuid) {
 			prevOrderRef.current = currentOrderRef.current;
-			prevDataRef.current = data;
-			setNewRowUUIDs([]);
-			return;
+			if (lastDraftOrderUuidRef?.current === currentOrderRef.current.uuid) {
+				// This order was the empty draft a moment ago: the rows it mounted
+				// with ARE the first add, so diff them against an empty baseline.
+				// (OpenOrders clears the ref after this commit — parent effects run
+				// after child effects — so a later remount can't re-pulse.)
+				prevDataRef.current = [];
+			} else {
+				// Switched to a different existing order — baseline, don't pulse.
+				prevDataRef.current = data;
+				return;
+			}
 		}
 
-		const detectedNewUUIDs = data.reduce<string[]>((acc, newItem) => {
-			const prevItem = prevDataRef.current.find((prevItem) => prevItem.uuid === newItem.uuid);
-
-			if (!prevItem) {
-				acc.push(newItem.uuid);
-			} else if (
-				newItem.type === 'line_items' &&
-				(newItem.item as LineItem).quantity !== (prevItem.item as LineItem).quantity
-			) {
-				acc.push(newItem.uuid);
-			}
-
-			return acc;
-		}, []);
+		const detectedNewUUIDs = detectNewCartLines(prevDataRef.current, data);
 
 		if (detectedNewUUIDs.length > 0) {
 			prevDataRef.current = data;
-			setNewRowUUIDs(detectedNewUUIDs);
+			for (const uuid of detectedNewUUIDs) {
+				rowRefs.current.get(uuid)?.pulseAdd();
+			}
 		}
-	}, [data]);
-
-	const removeNewRowUUID = React.useCallback((uuid: string) => {
-		setNewRowUUIDs((prev) => prev.filter((id) => id !== uuid));
-	}, []);
+	}, [data, lastDraftOrderUuidRef]);
 
 	/**
 	 *
@@ -256,8 +262,6 @@ export function CartTable() {
 				// fallback handler — should be overridden by the parent
 			},
 			rowRefs,
-			newRowUUIDs,
-			removeNewRowUUID,
 			rowLayouts,
 			scrollToRow: (uuid: string) => {
 				const layout = rowLayouts.current.get(uuid);

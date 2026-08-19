@@ -102,7 +102,10 @@ function PulseTableRow<TData extends RowData, TFeatures extends TableFeatures>({
 
 	return (
 		<Animated.View
-			className={cn('web:transition-colors web:data-[state=selected]:bg-muted flex-row', className)}
+			// No `web:transition-colors` here: a CSS background-color transition
+			// low-pass-filters reanimated's per-frame inline style updates, so the
+			// pulse never reaches the success/error color and visibly lags/snaps.
+			className={cn('web:data-[state=selected]:bg-muted flex-row', className)}
 			style={animatedStyle}
 			{...viewProps}
 		/>

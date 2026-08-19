@@ -7,10 +7,13 @@ import { wrapEngineDocument } from '@wcpos/query';
 import {
 	convertProductToLineItemWithoutTax,
 	convertVariationToLineItemWithoutTax,
+	detectNewCartLines,
 	ensurePosOrderIdentityMeta,
 	findByProductVariationID,
 	transformCustomerJSONToOrderJSON,
 } from './utils';
+
+import type { CartLineRow } from './utils';
 
 // Logger mocks are provided by moduleNameMapper in jest.config.js
 
@@ -452,6 +455,39 @@ describe('Utilities', () => {
 			expect(lineItem.product_id).toBe(100);
 			const posData = lineItem.meta_data?.find((m) => m.key === '_woocommerce_pos_data');
 			expect(posData).toBeDefined();
+		});
+	});
+
+	describe('detectNewCartLines', () => {
+		const line = (uuid: string, quantity: number): CartLineRow => ({
+			uuid,
+			type: 'line_items',
+			item: { quantity } as CartLineRow['item'],
+		});
+		const fee = (uuid: string): CartLineRow => ({
+			uuid,
+			type: 'fee_lines',
+			item: {} as CartLineRow['item'],
+		});
+
+		it('detects a row that was not in the previous snapshot', () => {
+			expect(detectNewCartLines([line('a', 1)], [line('a', 1), line('b', 1)])).toEqual(['b']);
+		});
+
+		it('detects every initial row when the previous snapshot is empty (first add)', () => {
+			expect(detectNewCartLines([], [line('a', 1)])).toEqual(['a']);
+		});
+
+		it('detects a quantity change on an existing line item', () => {
+			expect(detectNewCartLines([line('a', 1)], [line('a', 2)])).toEqual(['a']);
+		});
+
+		it('returns nothing when rows and quantities are unchanged', () => {
+			expect(detectNewCartLines([line('a', 2), fee('f')], [line('a', 2), fee('f')])).toEqual([]);
+		});
+
+		it('ignores non-quantity changes on fee lines', () => {
+			expect(detectNewCartLines([fee('f')], [fee('f')])).toEqual([]);
 		});
 	});
 });
