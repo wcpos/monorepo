@@ -231,6 +231,13 @@ test('E2E declares store-health probes and a bounded worker count', () => {
 		probes.some((probe) => probe.if === 'failure()'),
 		'no post-failure store probe — a store that saturates mid-run would go unrecorded'
 	);
+	const preFlight = probes.find((probe) => probe.if !== 'failure()');
+	const postFailure = probes.find((probe) => probe.if === 'failure()');
+	assert.ok(preFlight && postFailure, 'expected both probe phases');
+	assert.equal(postFailure.env.E2E_STORE_URL_FREE, preFlight.env.E2E_STORE_URL_FREE);
+	assert.match(postFailure.run, /probe-store-health\.mjs.*E2E_STORE_URL_FREE/);
+	assert.match(preFlight.run, /before the tests started/);
+	assert.match(postFailure.run, /after the tests failed/);
 
 	// Workers per shard multiply against shard count and concurrent runs.
 	const config = readFileSync(new URL('../apps/main/playwright.config.ts', import.meta.url), 'utf8');

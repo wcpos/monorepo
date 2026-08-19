@@ -13,7 +13,7 @@
  * produces a usable run; the point is that the annotation is there when the
  * failures are read.
  *
- * Usage: node scripts/probe-store-health.mjs <storeUrl> [label]
+ * Usage: node scripts/probe-store-health.mjs <storeUrl> [label] [phase]
  */
 
 const SAMPLES = 3;
@@ -28,13 +28,19 @@ function annotate(level, title, message) {
 	console.log(`::${level} title=${title}::${message}`);
 }
 
-async function sample(url) {
+async function sample(url, fallbackUrl) {
 	const started = Date.now();
 	try {
-		const response = await fetch(url, {
+		let response = await fetch(url, {
 			headers: { 'X-WCPOS': '1' },
 			signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
 		});
+		if (response.status === 404) {
+			response = await fetch(fallbackUrl, {
+				headers: { 'X-WCPOS': '1' },
+				signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+			});
+		}
 		// 401 is expected and fine — it proves PHP answered, which is what we measure.
 		return { ms: Date.now() - started, status: response.status };
 	} catch (error) {
@@ -48,15 +54,18 @@ async function sample(url) {
 
 const storeUrl = process.argv[2];
 const label = process.argv[3] ?? storeUrl;
+const phase = process.argv[4] ?? 'at probe time';
 if (!storeUrl) {
 	console.log('probe-store-health: no store URL given, nothing to probe');
 	process.exit(0);
 }
 
-const endpoint = `${storeUrl.replace(/\/+$/, '')}/wp-json/wcpos/v2/auth/test`;
+const root = storeUrl.replace(/\/+$/, '');
+const endpoint = `${root}/wp-json/wcpos/v2/auth/test`;
+const fallbackEndpoint = `${root}/index.php?rest_route=/wcpos/v2/auth/test`;
 const results = [];
 for (let index = 0; index < SAMPLES; index += 1) {
-	results.push(await sample(endpoint));
+	results.push(await sample(endpoint, fallbackEndpoint));
 }
 
 const timings = results.map((result) => result.ms).sort((a, b) => a - b);
@@ -73,7 +82,7 @@ if (failures > 0 || median >= SATURATED_MS) {
 	annotate(
 		'error',
 		'E2E store saturated',
-		`${label} responded in ${median}ms median (${failures} timeout(s)) BEFORE the tests started. ` +
+		`${label} responded in ${median}ms median (${failures} timeout(s)) ${phase}. ` +
 			`Failures in this run are very likely environmental — the store could not serve the run, ` +
 			`whatever the diff does. Re-run when the queue drains rather than debugging the diff.`
 	);
@@ -81,7 +90,7 @@ if (failures > 0 || median >= SATURATED_MS) {
 	annotate(
 		'warning',
 		'E2E store degraded',
-		`${label} responded in ${median}ms median before the tests started (healthy is well under ` +
+		`${label} responded in ${median}ms median ${phase} (healthy is well under ` +
 			`${DEGRADED_MS}ms). Treat timeouts and global-setup failures in this run as suspect.`
 	);
 } else {
