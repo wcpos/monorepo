@@ -45,7 +45,7 @@ function scopeOf(mutate) {
     );
     writeFileSync(
       path.join(repo, "packages/core/src/index.ts"),
-      "// header\nexport const x = 1;\n",
+      "// header\nexport const x = {\n};\n",
     );
     writeFileSync(path.join(repo, "README.md"), "# docs\n");
     git("add", "-A");
@@ -112,6 +112,59 @@ test("a string that merely looks like a comment is NOT treated as one", () => {
     );
   });
   assert.equal(scope.behavioural, "true");
+});
+
+test("a closed block comment followed by code is NOT comment-only", () => {
+  // greptile on #1327: `/* note */ disableAuth();` starts with a comment marker
+  // but executes. Treating it as a comment skipped deploy AND E2E for a
+  // behaviour-changing PR — the exact failure this analysis must never allow.
+  const scope = scopeOf(({ append, join }) => {
+    append(
+      join("packages/core/src/index.ts"),
+      "/* note */ export const danger = 1;\n",
+    );
+  });
+  assert.equal(scope.behavioural, "true");
+});
+
+test("a generator method line is NOT comment-only", () => {
+  const scope = scopeOf(({ write, join }) => {
+    write(
+      join("packages/core/src/index.ts"),
+      "// header\nexport const x = {\n  *danger() { yield 1; },\n};\n",
+    );
+  });
+  assert.equal(scope.behavioural, "true");
+});
+
+test("block delimiters around unchanged code run the full suite", () => {
+  const scope = scopeOf(({ write, join }) => {
+    write(
+      join("packages/core/src/index.ts"),
+      "// header\n/*\nexport const x = {\n};\n*/\n",
+    );
+  });
+  assert.equal(scope.behavioural, "true");
+});
+
+test("a multi-line block comment conservatively runs the full suite", () => {
+  const scope = scopeOf(({ append, join }) => {
+    append(
+      join("packages/core/src/index.ts"),
+      "/* opening a block\n * more\n */\n",
+    );
+  });
+  assert.equal(scope.behavioural, "true");
+});
+
+test("a spec basename with regex metacharacters refuses to narrow", () => {
+  // Unescaped metacharacters would select the wrong tests — or none, and a
+  // zero-test run still exits 0.
+  const scope = scopeOf(({ write, join, repo }) => {
+    write(join("apps/main/e2e/we(ird).spec.ts"), 'test("x", () => {});\n');
+    void repo;
+  });
+  assert.equal(scope.only_specs, "");
 });
 
 test("spec-only changes narrow to those specs", () => {

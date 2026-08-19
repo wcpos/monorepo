@@ -68,7 +68,28 @@ if (changed.length === 0) runEverything("no changed files detected");
 
 /* ---------- 1. comment/markdown-only? ---------- */
 
-const COMMENT_START = /^(\/\/|\/\*|\*\/|\*)/;
+/**
+ * Is this changed line entirely a comment?
+ *
+ * Starting with a comment marker is NOT enough: `/* note *\/ disableAuth();`
+ * starts with one and executes code (greptile caught exactly this on #1327,
+ * where it would have skipped deploy AND E2E for a behaviour-changing PR).
+ * A line only counts when nothing executable survives the comment.
+ * Cross-line block delimiters are ambiguous because `git diff -U0` omits the
+ * unchanged lines whose execution they can alter, so they run the full suite.
+ */
+function isCommentOnlyLine(content) {
+  // `//` comments the rest of the line, so nothing can follow it.
+  if (content.startsWith("//")) return true;
+  if (content.startsWith("/*")) {
+    const closed = content.lastIndexOf("*/");
+    if (closed === -1) return false;
+    // Closed: anything after the final `*/` is code.
+    return content.slice(closed + 2).trim() === "";
+  }
+  if (content.includes("*/")) return false;
+  return false;
+}
 const CODE_EXTENSIONS = /\.(ts|tsx|js|jsx|mjs|cjs)$/;
 const DOC_EXTENSIONS = /\.(md|mdx)$/;
 
@@ -99,7 +120,7 @@ function isNonBehavioural() {
     if (DOC_EXTENSIONS.test(file)) continue;
     const content = line.slice(1).trim();
     if (content === "") continue;
-    if (!COMMENT_START.test(content)) return false;
+    if (!isCommentOnlyLine(content)) return false;
   }
   return true;
 }
@@ -115,7 +136,11 @@ if (isNonBehavioural()) {
 
 /* ---------- 2. spec-only? ---------- */
 
-const E2E_SPEC = /^apps\/main\/e2e\/([^/]+\.spec\.ts)$/;
+// Deliberately strict: the basename is interpolated into a regex alternation
+// that Playwright receives, so anything outside this charset (spaces, regex
+// metacharacters) must fall back to the full suite rather than silently select
+// the wrong tests — or none, which would still exit 0 (greptile, #1327).
+const E2E_SPEC = /^apps\/main\/e2e\/([A-Za-z0-9._-]+\.spec\.ts)$/;
 const specs = new Set();
 for (const file of changed) {
   const match = E2E_SPEC.exec(file);
