@@ -31,7 +31,10 @@ export {
 	writeOutcomeChannelName,
 } from './write-path/write-outcome-bridge';
 export { rejectionSuggestsServerRecord } from './write-path/conflict-resolution';
-export { normalizeVariationAttributes } from './collections/variation-schema';
+export {
+	normalizeVariationAttributes,
+	promotedVariationColumns,
+} from './collections/variation-schema';
 
 // prettier-ignore
 export { MUTATION_QUEUE_RXDB_COLLECTION, SYNC_COLLECTION_NAMES } from './collections/engine-collections';

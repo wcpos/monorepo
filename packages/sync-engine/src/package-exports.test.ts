@@ -14,6 +14,9 @@ describe('package exports', () => {
 				'createRxdbSyncEngine',
 				'engineDocumentIdFor',
 				'normalizeVariationAttributes',
+				// The variation projector, exported so @wcpos/query's parity test can pin
+				// the map face against it — the drift tripwire #1308 gave products/orders.
+				'promotedVariationColumns',
 				'SYNC_COLLECTION_NAMES',
 				'MUTATION_QUEUE_RXDB_COLLECTION',
 				// The Store health panel must decide "does discard delete this record?"

@@ -89,9 +89,10 @@ function taxonomyIds(value: unknown): number[] {
 }
 
 /**
- * A promoted numeric column value that preserves decimals but maps a missing (null/undefined)
- * or non-finite (NaN/±Infinity) input to `null` — so the column is always valid JSON and a real
- * `0` is distinguishable from "unmanaged". Used for decimal stock (P2-2).
+ * A promoted numeric column value that preserves decimals but maps a missing (null/undefined),
+ * empty-string (`''`, Woo's "unmanaged" sentinel — its own `set_stock_quantity()` maps `''` to
+ * null) or non-finite (NaN/±Infinity) input to `null` — so the column is always valid JSON and
+ * a real `0` is distinguishable from "unmanaged". Used for decimal stock (P2-2).
  */
 export function finiteOrNull(value: unknown): number | null {
 	// '' (a cleared local input) is "no value", not 0 — Number('') === 0 would silently
@@ -115,7 +116,8 @@ export type PromotedProductColumns = {
 	featured: boolean;
 	/**
 	 * Managed stock level, promoted for POS quantity filter/sort (P2-2). `null` when Woo
-	 * stock management is off. DECIMAL-preserving on purpose — WooCommerce POS allows
+	 * stock management is off (the wire serves `null`; a locally-cleared `''` maps to
+	 * `null` too, never 0). DECIMAL-preserving on purpose — WooCommerce POS allows
 	 * fractional stock (e.g. 3.6 kg), so this must NOT be coerced to an integer the way
 	 * plain WC assumes; the schema deliberately omits an integer/multipleOf bound.
 	 */
@@ -137,7 +139,8 @@ export function promotedProductColumns(payload: WooProductPayload): PromotedProd
 		onSale: Boolean(payload.on_sale),
 		featured: Boolean(payload.featured),
 		// DECIMAL-preserving: Number('3.6') === 3.6 — no rounding/(int) coercion. null when
-		// stock management is off (Woo serves null), distinguished from a real 0 stock. A
+		// stock management is off (Woo serves null; a cleared '' input maps to null too,
+		// never 0 — WooCommerce's own set_stock_quantity() treats '' as unmanaged). A
 		// non-finite value (NaN/±Infinity — never valid JSON stock) also maps to null.
 		stockQuantity: finiteOrNull(payload.stock_quantity),
 	};
