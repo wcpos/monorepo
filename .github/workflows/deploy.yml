@@ -304,6 +304,8 @@ jobs:
         env:
           E2E_STORE_URL_PRO: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}
           E2E_STORE_URL_FREE: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-free.wcpos.com' }}
+          E2E_PRODUCT_WRITER_USER: ${{ matrix.shardIndex == 1 && secrets.E2E_PRODUCT_WRITER_USER || '' }}
+          E2E_PRODUCT_WRITER_PASS: ${{ matrix.shardIndex == 1 && secrets.E2E_PRODUCT_WRITER_PASS || '' }}
         run: |
           node scripts/probe-store-health.mjs "$E2E_STORE_URL_PRO" "pro store" "before the tests started"
           if [ -n "$E2E_STORE_URL_FREE" ] && [ "$E2E_STORE_URL_FREE" != "$E2E_STORE_URL_PRO" ]; then
@@ -389,6 +391,8 @@ jobs:
         env:
           E2E_STORE_URL_PRO: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}
           E2E_STORE_URL_FREE: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-free.wcpos.com' }}
+          E2E_PRODUCT_WRITER_USER: ${{ matrix.shardIndex == 1 && secrets.E2E_PRODUCT_WRITER_USER || '' }}
+          E2E_PRODUCT_WRITER_PASS: ${{ matrix.shardIndex == 1 && secrets.E2E_PRODUCT_WRITER_PASS || '' }}
         run: |
           node scripts/probe-store-health.mjs "$E2E_STORE_URL_PRO" "pro store (post-failure)" "after the tests failed"
           if [ -n "$E2E_STORE_URL_FREE" ] && [ "$E2E_STORE_URL_FREE" != "$E2E_STORE_URL_PRO" ]; then

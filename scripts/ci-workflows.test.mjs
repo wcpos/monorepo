@@ -226,6 +226,10 @@ test('E2E declares store-health probes and a bounded worker count', () => {
 		assert.match(probe.run, /probe-store-health\.mjs/);
 		// Reporting must never gate the run.
 		assert.equal(probe['continue-on-error'], true);
+		assert.match(probe.env.E2E_PRODUCT_WRITER_USER, /matrix\.shardIndex == 1/);
+		assert.match(probe.env.E2E_PRODUCT_WRITER_USER, /secrets\.E2E_PRODUCT_WRITER_USER/);
+		assert.match(probe.env.E2E_PRODUCT_WRITER_PASS, /matrix\.shardIndex == 1/);
+		assert.match(probe.env.E2E_PRODUCT_WRITER_PASS, /secrets\.E2E_PRODUCT_WRITER_PASS/);
 	}
 	assert.ok(
 		probes.some((probe) => probe.if === 'failure()'),

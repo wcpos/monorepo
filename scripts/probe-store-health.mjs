@@ -113,15 +113,26 @@ async function mintToken() {
  * query whose latency the tests actually feel.
  */
 async function sampleHeavyQuery(token) {
+  const query =
+    `per_page=50&orderby=menu_order&order=asc&status=publish&stock_status=instock`;
   const url =
     `${root}/wp-json/wcpos/v2/products` +
-    `?per_page=50&orderby=menu_order&order=asc&status=publish&stock_status=instock`;
+    `?${query}`;
+  const fallbackUrl =
+    `${root}/index.php?rest_route=/wcpos/v2/products&${query}`;
   const started = Date.now();
   try {
-    const response = await fetch(url, {
+    let response = await fetch(url, {
       headers: { "X-WCPOS": "1", Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
+    if (response.status === 404) {
+      response = await fetch(fallbackUrl, {
+        headers: { "X-WCPOS": "1", Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    }
+    await response.text();
     return { ms: Date.now() - started, status: response.status };
   } catch {
     return { ms: Date.now() - started, status: 0 };
@@ -150,12 +161,17 @@ console.log(`[store-health] samples: ${summary} — median ${median}ms`);
 // Runner-side timing for the query the app actually waits on. Local machine
 // medians for comparison (2026-08-19): 1.33s free, 1.35s pro.
 const token = await mintToken();
+let heavyMedian = 0;
+let heavyFailures = 0;
 if (token) {
   const heavy = [];
   for (let index = 0; index < SAMPLES; index += 1)
     heavy.push(await sampleHeavyQuery(token));
   const heavyTimings = heavy.map((r) => r.ms).sort((a, b) => a - b);
-  const heavyMedian = heavyTimings[Math.floor(heavyTimings.length / 2)];
+  heavyMedian = heavyTimings[Math.floor(heavyTimings.length / 2)];
+  heavyFailures = heavy.filter(
+    (result) => result.status < 200 || result.status >= 300,
+  ).length;
   console.log(
     `[store-health] ${label} products(50) median ${heavyMedian}ms ` +
       `(statuses: ${heavy.map((r) => r.status).join(",")})`,
@@ -166,23 +182,25 @@ if (token) {
   );
 }
 
-if (failures > 0 || median >= SATURATED_MS) {
+const verdictMedian = Math.max(median, heavyMedian);
+const verdictFailures = failures + heavyFailures;
+if (verdictFailures > 0 || verdictMedian >= SATURATED_MS) {
   annotate(
     "error",
     "E2E store saturated",
-    `${label} responded in ${median}ms median (${failures} timeout(s)) ${phase}. ` +
+    `${label} responded in ${verdictMedian}ms median (${verdictFailures} failed sample(s)) ${phase}. ` +
       `Failures in this run are very likely environmental — the store could not serve the run, ` +
       `whatever the diff does. Re-run when the queue drains rather than debugging the diff.`,
   );
-} else if (median >= DEGRADED_MS) {
+} else if (verdictMedian >= DEGRADED_MS) {
   annotate(
     "warning",
     "E2E store degraded",
-    `${label} responded in ${median}ms median ${phase} (healthy is well under ` +
+    `${label} responded in ${verdictMedian}ms median ${phase} (healthy is well under ` +
       `${DEGRADED_MS}ms). Treat timeouts and global-setup failures in this run as suspect.`,
   );
 } else {
-  console.log(`[store-health] ${label} healthy (median ${median}ms)`);
+  console.log(`[store-health] ${label} healthy (median ${verdictMedian}ms)`);
 }
 
 process.exit(0);
