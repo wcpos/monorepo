@@ -26,10 +26,15 @@ import type {
 	ConfigFingerprintSnapshot,
 	Fetcher,
 	HybridChangeSignalEngine,
+	HybridCollection,
+	ReplicationActions,
 	StoreScopeManager,
 	SyncObserver,
 } from '@wcpos/sync-core';
 
+import { COLLECTION_DESCRIPTORS } from '../collections/collection-descriptors';
+import { RxQueryTotalCacheRepository } from '../collections/rx-query-total-cache-repository';
+import { censusQueryKey } from '../scheduler';
 import { buildReplicationHandlers } from './change-signal-handlers';
 import {
 	createLiveChangeSignalSource,
@@ -45,6 +50,34 @@ import type {
 	ScopeBarcodeSelectors,
 } from '../materialization/barcode-selectors';
 import type { SyncCollectionName } from '../collections/engine-collections';
+import type { QueryTotalCacheEvent } from '../maintenance/maintenance-lanes';
+import type { QueryTotalCacheEntry } from '../scheduler';
+
+/** Detection vocabulary → engine collection names (local-only rows carry no hybrid). */
+const COLLECTION_FOR_HYBRID: ReadonlyMap<HybridCollection, SyncCollectionName> = new Map(
+	COLLECTION_DESCRIPTORS.flatMap((descriptor) =>
+		'hybrid' in descriptor ? [[descriptor.hybrid, descriptor.collection] as const] : []
+	)
+);
+
+/**
+ * The collections whose SERVER population this tick's applied plan changed —
+ * their census totals are about to be wrong, so the tick expires them for the
+ * query-total lane to re-probe. Pulls/deletes with no ids are detection noise,
+ * not a population change.
+ */
+export function censusCollectionsForActions(actions: ReplicationActions): SyncCollectionName[] {
+	const hybrids = new Set<HybridCollection>([
+		...actions.targetedPulls.filter((group) => group.ids.length > 0).map((g) => g.collection),
+		...actions.deletes.filter((group) => group.ids.length > 0).map((g) => g.collection),
+		...actions.rebaselineCollections,
+		...actions.reFetchCollections,
+	]);
+	return [...hybrids].flatMap((hybrid) => {
+		const collection = COLLECTION_FOR_HYBRID.get(hybrid);
+		return collection === undefined ? [] : [collection];
+	});
+}
 
 /** The engine-owned kv key holding one scope's serialized engine state. */
 export const CHANGE_SIGNAL_STATE_KEY = 'checkpoint:change-signal';
@@ -73,7 +106,9 @@ export type ChangeSignalLaneDeps = {
 	writeBlob: (scopeId: string, key: string, value: string) => Promise<void>;
 	connectivity: () => 'online' | 'offline' | 'degraded';
 	diagnostics: SyncObserver;
-	emitEvent: (event: { type: 'config-changed'; collections: string[] }) => void;
+	emitEvent: (
+		event: { type: 'config-changed'; collections: string[] } | QueryTotalCacheEvent
+	) => void;
 	withCollectionActivity?: <T>(
 		collection: SyncCollectionName,
 		work: () => Promise<T>
@@ -188,6 +223,7 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 		}
 		const cycleStartedAtMs = Date.now();
 		let cycleSummary: { pulls: number; deletes: number } | null = null;
+		let expiredCensusEntries: QueryTotalCacheEntry[] = [];
 		let cursorSummary: {
 			from?: number;
 			to?: number;
@@ -297,6 +333,29 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 							...(barcodeSelectors !== undefined ? { barcodeSelectors } : {}),
 						})
 					);
+					// The applied plan just changed these collections' local mirror of the
+					// server population, so their census totals are stale the moment this
+					// tick lands — expire them and the query-total lane re-probes on its
+					// next scan instead of waiting out the freshness window (device count
+					// racing a frozen server total on the health page, 2026-08-19).
+					// Best-effort by design: a failed expiry must not fail the tick or
+					// force a replay — the freshness TTL stays the backstop.
+					try {
+						const changedCollections = censusCollectionsForActions(actions);
+						if (changedCollections.length > 0) {
+							const cacheRepository = new RxQueryTotalCacheRepository(database as never);
+							expiredCensusEntries = await cacheRepository.expire(
+								changedCollections.map(censusQueryKey),
+								deps.now?.() ?? Date.now()
+							);
+						}
+					} catch (error) {
+						deps.diagnostics({
+							type: 'signal.log',
+							level: 'warn',
+							message: `census expiry after change-signal apply failed: ${error instanceof Error ? error.message : String(error)}`,
+						});
+					}
 				});
 				if (wrote === 'dropped') {
 					report = {
@@ -312,6 +371,12 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 						type: 'config-changed',
 						collections: configChangedCollections,
 					});
+				}
+				if (wrote !== 'dropped' && expiredCensusEntries.length > 0) {
+					// Same event the query-total lane emits for fresh totals — the facade
+					// republishes the census so subscribers see the entries go stale now,
+					// not at their old expiry timers.
+					deps.emitEvent({ type: 'query-total-cache', entries: expiredCensusEntries });
 				}
 				if (wrote !== 'dropped' && cycleSummary !== null && cursorSummary !== null) {
 					deps.diagnostics({

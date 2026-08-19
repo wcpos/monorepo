@@ -42,6 +42,13 @@ const defaultStorageFootprint = {
 	unattributedBytes: 0,
 };
 let mockStorageFootprint = { ...defaultStorageFootprint };
+const defaultCensusTotals = {
+	products: { total: 2, updatedAtMs: 100, freshUntilMs: 1_000, fresh: true },
+};
+let mockCensusTotals: Record<
+	string,
+	{ total: number; updatedAtMs: number; freshUntilMs: number; fresh: boolean }
+> = { ...defaultCensusTotals };
 
 jest.mock('@wcpos/components/tooltip', () => ({
 	Tooltip: (props: TooltipProps) => mockTooltip(props),
@@ -182,9 +189,7 @@ jest.mock('./use-dead-letter-attention', () => ({
 	useDeadLetterStuckRecords: () => mockDeadLetterStuck,
 }));
 jest.mock('../hooks/use-census-totals', () => ({
-	useCensusTotals: () => ({
-		products: { total: 2, updatedAtMs: 100, freshUntilMs: 1_000, fresh: true },
-	}),
+	useCensusTotals: () => mockCensusTotals,
 }));
 jest.mock('../hooks/use-engine-monitor', () => ({
 	useCollectionCounts: () => ({ products: 1 }),
@@ -226,6 +231,20 @@ describe('DatabaseScreen coverage', () => {
 		lastAttentionStuck = [];
 		mockLogStats = { stuck: [] };
 		mockStorageFootprint = { ...defaultStorageFootprint };
+		mockCensusTotals = { ...defaultCensusTotals };
+	});
+
+	it('shows the last-known total with "checking…" while the census is stale', () => {
+		// The change-signal lane expires the census the moment it applies server
+		// changes — the row must keep the number the server DID report instead of
+		// blanking to "…" or claiming a green bar off the stale denominator.
+		mockCensusTotals = {
+			products: { total: 203, updatedAtMs: 100, freshUntilMs: 400, fresh: false },
+		};
+		const { getAllByTestId } = render(<DatabaseScreen />);
+		const rowText = getAllByTestId('db-row-products')[0].textContent ?? '';
+		expect(rowText).toContain('203');
+		expect(rowText).toContain('checking…');
 	});
 
 	it('spins only the checked row and disables manual controls while its check runs', async () => {

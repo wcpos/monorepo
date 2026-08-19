@@ -48,4 +48,22 @@ export class RxQueryTotalCacheRepository {
 		});
 		return entries.filter((entry) => requested.has(entry.queryKey));
 	}
+
+	/**
+	 * Mark entries stale NOW so the retry lane re-probes them on its next scan.
+	 * Only still-fresh entries are rewritten; the total and `updatedAtMs` are
+	 * preserved — the entry keeps saying WHAT was counted and WHEN, it just
+	 * stops claiming the count is current. Returns the rewritten entries.
+	 */
+	async expire(queryKeys: string[], nowMs: number): Promise<QueryTotalCacheEntry[]> {
+		const entries = await this.readForQueryKeys(queryKeys);
+		const expired: QueryTotalCacheEntry[] = [];
+		for (const entry of entries) {
+			if (entry.freshUntilMs <= nowMs) continue;
+			const rewritten = { ...entry, freshUntilMs: nowMs };
+			await this.keyed.upsert(rewritten);
+			expired.push(rewritten);
+		}
+		return expired;
+	}
 }

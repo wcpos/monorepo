@@ -30,9 +30,14 @@ describe('database page logic', () => {
 		expect(fresh.percentLocal).toBe(50);
 		expect(fresh.serverTotal).toBe(100);
 
+		// A stale census keeps its last-known total on screen — only the bar
+		// (percentLocal) demands freshness. The change-signal lane expires the
+		// census the moment it applies server changes, so "stale" now means
+		// "recount in flight", not "number unknown".
 		const stale = deriveCollectionRow('products', 50, census(100, { fresh: false }));
 		expect(stale.percentLocal).toBeNull();
-		expect(stale.serverTotal).toBeNull();
+		expect(stale.serverTotal).toBe(100);
+		expect(stale.fresh).toBe(false);
 
 		const unknown = deriveCollectionRow('products', 50, null);
 		expect(unknown.percentLocal).toBeNull();
