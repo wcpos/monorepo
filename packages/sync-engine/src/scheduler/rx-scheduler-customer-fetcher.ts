@@ -12,7 +12,7 @@ import {
 	type LocalCustomerDocument,
 	type WooCustomerPayload,
 } from '../collections/customer-schema';
-import { materializeTargeted } from '../materialization/record-materialization';
+import { type Materialized, materializeTargeted } from '../materialization/record-materialization';
 import {
 	type CustomerBrowseWindowDescriptor,
 	customerBrowseWindowQueryParams,
@@ -32,10 +32,19 @@ import {
 // prettier-ignore
 import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerFetcher, type SchedulerFetcherContext } from './replication-policy';
 
+import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
+
 export type CustomerSchedulerCoverageRepository = CollectionSchedulerCoverageRepository;
 
 export type CustomerSchedulerFetcherInput = CollectionSchedulerInput<LocalCustomerDocument> & {
 	diagnostics?: SyncObserver;
+	/**
+	 * Leg-3 manifest sink (ADR 0015): receives the `{wooId, digest}` rows of the customers this
+	 * fetcher APPLIED, taken from each pulled record's materialization envelope. Optional —
+	 * omitted by tests, wired to db.existenceManifestCustomers (its OWN collection: the wp_users
+	 * id-space overlaps wp_posts numerically) by the bootstrap.
+	 */
+	manifestSink?: (rows: ExistenceManifestDocument[]) => Promise<void>;
 };
 
 function customerTargetFromDocumentId(id: string): CollectionTarget {
@@ -54,8 +63,10 @@ function revisionFromCustomer(payload: WooCustomerPayload): string {
 	return String(payload.date_modified_gmt ?? payload.date_modified ?? '');
 }
 
-function customerDocumentFromWooPayload(payload: WooCustomerPayload): LocalCustomerDocument {
-	return materializeTargeted('customers', payload).storedDocument as LocalCustomerDocument;
+function customerDocumentFromWooPayload(
+	payload: WooCustomerPayload
+): Materialized<LocalCustomerDocument> {
+	return materializeTargeted('customers', payload) as Materialized<LocalCustomerDocument>;
 }
 
 /**
@@ -174,14 +185,24 @@ async function fetchCustomerBrowseWindow(
 	// bulkUpsert REJECTS an input carrying duplicate primary keys (COL22), which would fail the
 	// whole browse after several otherwise-successful requests. Dedupe on the materialized
 	// storage id, keeping the first sighting so the server's ordering is preserved.
-	const documentsById = new Map<string, LocalCustomerDocument>();
+	const documentsById = new Map<string, Materialized<LocalCustomerDocument>>();
 	for (const payload of payloads) {
-		const document = customerDocumentFromWooPayload(payload);
-		if (!documentsById.has(document.uuid)) documentsById.set(document.uuid, document);
+		const materialized = customerDocumentFromWooPayload(payload);
+		const { uuid } = materialized.storedDocument;
+		if (!documentsById.has(uuid)) documentsById.set(uuid, materialized);
 		if (documentsById.size === limit) break;
 	}
-	const documents = [...documentsById.values()];
+	const materialized = [...documentsById.values()];
+	const documents = materialized.map(({ storedDocument }) => storedDocument);
 	await input.repository.upsertMany(documents);
+	// The manifest row rides the envelope, and the browse lane applies every document it
+	// materialized — so every row it holds belongs in the customer manifest (ADR 0028 rider).
+	const manifestRows = materialized.flatMap(({ manifestRow }) =>
+		manifestRow ? [manifestRow] : []
+	);
+	if (input.manifestSink && manifestRows.length > 0) {
+		await input.manifestSink(manifestRows);
+	}
 	// COMPLETE means "this lane holds every customer matching the query", which is true only
 	// when the server ran out inside the window. A truncated walk records an incomplete lane so
 	// projectTotal falls through to the cached server total rather than reporting the window
@@ -216,6 +237,7 @@ export function createCustomerSchedulerFetcher(
 			label: 'Customer',
 			restLabel: 'customer',
 			documentFromPayload: customerDocumentFromWooPayload,
+			...(input.manifestSink ? { manifestSink: input.manifestSink } : {}),
 			coverageRecordId: customerCoverageRecordId,
 			payloadWooId: (payload) => Number(payload.id),
 			targetFromId: customerTargetFromDocumentId,

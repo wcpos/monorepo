@@ -29,6 +29,8 @@ import {
 import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerFetcher, type SchedulerFetcherContext } from './replication-policy';
 
 import type { BarcodeSelectorsReader } from '../materialization/barcode-selectors';
+import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
+import type { Materialized } from '../materialization/record-materialization';
 import type { SyncCollectionName } from '../collections/engine-collections';
 import type { BuildCoverageDocumentsFromQueryResultInput } from './query-coverage-writes';
 
@@ -371,8 +373,18 @@ export type TargetedSearchCollectionSpec<Doc, Payload> = {
 	label: string;
 	/** Lower-case label for "Woo REST {restLabel} ..." error messages, e.g. 'customer'. */
 	restLabel: string;
-	/** payload → local document (owns the uuid identity choice). */
-	documentFromPayload: (payload: Payload) => Doc;
+	/**
+	 * payload → the materialization ENVELOPE (owns the uuid identity choice): the stored document
+	 * plus, for a manifest-bearing collection, the existence-manifest row the server's
+	 * `_rxdb_digest` produced. A collection with no manifest returns `{ storedDocument }` and
+	 * provides no `manifestSink` — one generic, no second variant.
+	 */
+	documentFromPayload: (payload: Payload) => Materialized<Doc>;
+	/**
+	 * Leg-3 manifest sink (ADR 0015): receives the rows of the documents this fetcher APPLIED,
+	 * pushed after their upsert. Omitted by collections with no manifest (and by tests).
+	 */
+	manifestSink?: (rows: ExistenceManifestDocument[]) => Promise<void>;
 	/** The Woo-id-space COVERAGE id (born-local sentinels fall through to their storage id). */
 	coverageRecordId: (document: Doc) => string;
 	/** The Woo id carried by a payload (for verifying a targeted include= response returned everything requested). */
@@ -384,6 +396,16 @@ export type TargetedSearchCollectionSpec<Doc, Payload> = {
 	/** Parse a search-lane queryKey → { search, queryLimit }, or null when the queryKey is not a search lane. */
 	parseSearchQuery: (task: FetchTask) => { search: string; queryLimit: number } | null;
 };
+
+/** Feed the spec's manifest sink the rows of a just-upserted batch (no-op without a sink). */
+async function pushManifestRows<Doc, Payload>(
+	spec: TargetedSearchCollectionSpec<Doc, Payload>,
+	materialized: readonly Materialized<Doc>[]
+): Promise<void> {
+	if (!spec.manifestSink) return;
+	const rows = materialized.flatMap(({ manifestRow }) => (manifestRow ? [manifestRow] : []));
+	if (rows.length > 0) await spec.manifestSink(rows);
+}
 
 function assertPositiveLimit(label: string, task: FetchTask): void {
 	if (!Number.isSafeInteger(task.limit) || task.limit <= 0) {
@@ -443,8 +465,10 @@ async function fetchTargeted<Doc, Payload>(
 			throw new Error(`Woo REST targeted ${spec.restLabel} request failed: ${response.status}`);
 		const payloads = JSON.parse(await response.text()) as Payload[];
 		assertReturnedRequestedIds(spec, idsBatch, payloads);
-		const documents = payloads.map(spec.documentFromPayload);
+		const materialized = payloads.map(spec.documentFromPayload);
+		const documents = materialized.map(({ storedDocument }) => storedDocument);
 		await input.repository.upsertMany(documents);
+		await pushManifestRows(spec, materialized);
 		fetchedCoverageIds.push(...documents.map(spec.coverageRecordId));
 		documentCount += documents.length;
 		requestCount += 1;
@@ -482,8 +506,10 @@ async function fetchSearch<Doc, Payload>(
 			throw new Error(`Woo REST ${spec.restLabel} search request failed: ${response.status}`);
 
 		const payloads = JSON.parse(await response.text()) as Payload[];
-		const documents = payloads.slice(0, remaining).map(spec.documentFromPayload);
+		const materialized = payloads.slice(0, remaining).map(spec.documentFromPayload);
+		const documents = materialized.map(({ storedDocument }) => storedDocument);
 		await input.repository.upsertMany(documents);
+		await pushManifestRows(spec, materialized);
 		fetchedCoverageIds.push(...documents.map(spec.coverageRecordId));
 		documentCount += documents.length;
 		requestCount += 1;

@@ -12,7 +12,7 @@ import {
 	wooIdOf,
 } from '@wcpos/sync-core';
 
-import { extractOrderManifest } from '../local-coverage/existence-manifest-population';
+import { stripOrderManifestDigest } from '../local-coverage/existence-manifest-population';
 import {
 	type ManifestCollection,
 	removeManifestByWooIds,
@@ -20,6 +20,8 @@ import {
 } from '../local-coverage/rx-existence-manifest-repository';
 import { orderStorageIdsForWooDeletes } from './order-tombstones';
 import { hasPendingLocalWork, withoutLocallyProtected } from './local-work-guard';
+
+import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
 
 const CUSTOM_PULL_CHECKPOINT_ID = 'custom-pull';
 
@@ -75,11 +77,11 @@ export class EngineOrderRepository {
 		const residents = await this.db.orders
 			.findByIds(applicable.map((document) => document.uuid))
 			.exec();
-		// Leg-3 (ADR 0015): seed the order existence manifest (its OWN collection) from each pull's
-		// `_rxdb_digest`, and strip the digest from the stored payload so it never pollutes the order doc.
-		const extracted = extractOrderManifest(applicable);
-		const materialized = extracted.documents.map((storedDocument) => ({
-			storedDocument,
+		// Leg-3 (ADR 0015): the order existence manifest is seeded by the INGEST SITE, which holds the
+		// `Materialized` envelope and knows which documents it applied (ADR 0028 rider) — see
+		// `upsertManifestRows` below. This boundary only guarantees no `_rxdb_digest` reaches storage.
+		const materialized = applicable.map((document) => ({
+			storedDocument: stripOrderManifestDigest(document),
 		}));
 		for (const entry of materialized) {
 			const resident = residents.get(entry.storedDocument.uuid)?.toJSON() as
@@ -112,9 +114,18 @@ export class EngineOrderRepository {
 			),
 			'engine-order-repository upsert'
 		);
-		if (extracted.manifestRows.length > 0) {
-			await upsertManifestRows(this.db.existenceManifestOrders, extracted.manifestRows);
-		}
+	}
+
+	/**
+	 * Seed the order existence manifest (Leg-3, ADR 0015) with rows the CALLER extracted from the
+	 * pull's `Materialized` envelopes. The pull lanes call this AFTER their `upsertMany`, for the
+	 * documents that were actually applied: rows written before their documents would leave an
+	 * orphan row on an abort, and rows for skipped documents would claim local residency the store
+	 * does not have.
+	 */
+	async upsertManifestRows(rows: readonly ExistenceManifestDocument[]): Promise<void> {
+		if (rows.length === 0) return;
+		await upsertManifestRows(this.db.existenceManifestOrders, [...rows]);
 	}
 
 	async count(): Promise<number> {

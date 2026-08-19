@@ -36,7 +36,7 @@ import {
 	type TargetedDescriptor,
 	type UpsertRefreshDescriptor,
 } from '../collections/collection-descriptors';
-import { manifestRowOf } from '../materialization/record-materialization';
+import { manifestRowsForApplied } from '../local-coverage/existence-manifest-population';
 import {
 	removeManifestByWooIds,
 	upsertManifestRows,
@@ -184,7 +184,12 @@ async function pullByIds(
 				});
 			}
 		}
-		const documents = payloads.map((payload) => d.project(payload, ctx.barcodeSelectors?.()));
+		// Project through the ENVELOPE (ADR 0028 rider): the manifest row travels beside the stored
+		// document, so only the rows of the documents the local-work guard let through are recorded.
+		const materialized = payloads.map((payload) =>
+			d.projectMaterialized(payload, ctx.barcodeSelectors?.())
+		);
+		const documents = materialized.map(({ storedDocument }) => storedDocument);
 		const applicable = await withoutLocallyProtected(
 			collection as never,
 			documents as { uuid: string }[]
@@ -196,9 +201,7 @@ async function pullByIds(
 					await collection.bulkUpsert(applicable as never[]),
 					'change-signal-handlers upsert'
 				);
-			const rows = applicable.flatMap((document) =>
-				manifestRowOf(document) ? [manifestRowOf(document)!] : []
-			);
+			const rows = manifestRowsForApplied(materialized, applicable as { uuid: string }[]);
 			if (rows.length > 0) {
 				const manifestName =
 					d.collection === 'customers' ? 'existenceManifestCustomers' : 'existenceManifest';

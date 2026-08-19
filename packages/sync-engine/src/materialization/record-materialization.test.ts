@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { remoteId } from '../testing';
 import {
-	manifestRowOf,
 	materializeGreedyPrunable,
 	materializeLocalOnly,
 	materializeTargeted,
@@ -74,11 +73,9 @@ describe('record materialization seam', () => {
 			objectType: 'product',
 			digest: 'digest-7',
 		});
-		// The row also rides the stored document itself on a non-enumerable Symbol —
-		// the ONLY carrier for consumers that receive bare documents (trickle,
-		// change-signal). A spread anywhere on that path drops it silently (#1340).
-		expect(manifestRowOf(stamped.storedDocument)).toBe(stamped.manifestRow);
-		expect(manifestRowOf({ ...stamped.storedDocument })).toBeUndefined();
+		// The envelope is the row's ONLY carrier (ADR 0028 rider): nothing is stamped onto the
+		// stored document, so a spread anywhere downstream cannot silently drop it (#1340).
+		expect(Object.getOwnPropertySymbols(stamped.storedDocument)).toEqual([]);
 		expect(
 			materializeTargeted('products', { id: 7, date_modified_gmt: 'legacy', meta_data })
 				.storedDocument

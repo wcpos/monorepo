@@ -15,10 +15,10 @@ function collectionWith(stored: Record<string, unknown>) {
 }
 
 describe('withoutLocallyProtected', () => {
-	// Trickle and change-signal callers read Symbol-borne manifest metadata off the
-	// SURVIVING documents (manifestRowOf, #1340/#1345). Non-enumerable Symbols do not
-	// survive a spread or rebuild, so this guard must FILTER the caller's own object
-	// references, never reconstruct them. Reference identity is the contract.
+	// Trickle and change-signal callers pair the SURVIVORS back against the materialization
+	// envelopes that produced them, to record manifest rows for exactly the documents they
+	// stored (#1340/#1345). This guard filters the caller's own array and rebuilds nothing —
+	// a reconstructed document would be a second identity for the same pulled record.
 	it('returns the caller’s own references, dropping only locally-protected rows', async () => {
 		const kept = { uuid: 'kept' };
 		const clean = { uuid: 'clean' };

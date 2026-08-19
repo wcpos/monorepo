@@ -126,6 +126,43 @@ describe('createCustomerSchedulerFetcher', () => {
 		});
 	});
 
+	it('feeds the customer manifest sink the digests of a targeted pull, stripped from the stored payload', async () => {
+		// Leg-3 (ADR 0015): the customer existence manifest is populated by the INGEST SITE from
+		// each record's materialization envelope (ADR 0028 rider). A lane that stops feeding the
+		// sink starves the prune gate with no error anywhere — the #1340 failure class.
+		const repository = {
+			upsertMany: vi.fn(async (_documents: LocalCustomerDocument[]) => undefined),
+		};
+		const manifestSink = vi.fn(async (_rows: unknown[]) => undefined);
+		const schedulerFetcher = createCustomerSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			manifestSink,
+			fetcher: vi.fn(async () =>
+				response([
+					{ id: 12, email: 'ada@example.test', meta_data: uuidMeta(12), _rxdb_digest: 'd12' },
+					{ id: 34, email: 'grace@example.test', meta_data: uuidMeta(34) }, // no digest
+				])
+			),
+		});
+
+		await schedulerFetcher(
+			customerTask({
+				id: 'customers:ids:12,34:on-demand',
+				queryKey: 'customers:ids:12,34',
+				documentIds: ['woo-customer:12', 'woo-customer:34'],
+				limit: 2,
+				mode: 'on-demand',
+			})
+		);
+
+		expect(manifestSink).toHaveBeenCalledWith([
+			{ remoteId: '12', wooId: 12, objectType: 'customer', digest: 'd12' },
+		]);
+		const stored = repository.upsertMany.mock.calls[0]![0];
+		expect(stored[0]!.payload).not.toHaveProperty('_rxdb_digest');
+	});
+
 	it('stores the existing default customer target without issuing an invalid Woo include request', async () => {
 		const repository = {
 			upsertMany: vi.fn(async (_documents: LocalCustomerDocument[]) => undefined),
@@ -401,6 +438,26 @@ describe('createCustomerSchedulerFetcher', () => {
 				expect(url.searchParams.get('role')).toBe('all');
 			}
 		);
+
+		it('feeds the customer manifest sink one row per deduplicated window row', async () => {
+			// The browse walk is the customer lane with its OWN upsert (it dedupes boundary rows
+			// itself), so it must feed the manifest sink itself too — see the targeted-lane test.
+			const manifestSink = vi.fn(async (_rows: unknown[]) => undefined);
+			const fetcher = vi.fn(async (_url: string) =>
+				response(
+					[1, 2, 2].map((id) => ({ ...customerPayload(id), _rxdb_digest: `d${id}` })),
+					{ 'X-WP-Total': '3', 'X-WP-TotalPages': '1' }
+				)
+			);
+			const kit = browseFetcher(fetcher, { manifestSink });
+
+			await kit.schedulerFetcher(browseTask(100));
+
+			expect(manifestSink).toHaveBeenCalledWith([
+				{ remoteId: '1', wooId: 1, objectType: 'customer', digest: 'd1' },
+				{ remoteId: '2', wooId: 2, objectType: 'customer', digest: 'd2' },
+			]);
+		});
 
 		it('asks the SERVER for the sorted window, with role=all (#1379/#850)', async () => {
 			const fetcher = vi.fn(async (_url: string) =>

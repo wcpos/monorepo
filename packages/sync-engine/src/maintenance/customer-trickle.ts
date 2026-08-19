@@ -32,8 +32,9 @@
 import { assertBulkSuccess } from '@wcpos/sync-core';
 
 import { COLLECTION_DESCRIPTORS } from '../collections/collection-descriptors';
+import { manifestRowsForApplied } from '../local-coverage/existence-manifest-population';
 import { upsertManifestRows } from '../local-coverage/rx-existence-manifest-repository';
-import { manifestRowOf, materializeTargeted } from '../materialization/record-materialization';
+import { materializeTargeted } from '../materialization/record-materialization';
 import {
 	type CensusTotal,
 	CUSTOMER_BROWSE_WINDOW_DEFAULT_LIMIT,
@@ -252,9 +253,8 @@ async function runCustomerTrickle(deps: CustomerTrickleDeps): Promise<CustomerTr
 		throw new Error('Customer trickle requires the targeted customers descriptor');
 	}
 	const payloads = descriptor.parse((await response.json()) as unknown);
-	const documents = payloads.map(
-		(payload) => materializeTargeted('customers', payload).storedDocument
-	);
+	const materialized = payloads.map((payload) => materializeTargeted('customers', payload));
+	const documents = materialized.map(({ storedDocument }) => storedDocument);
 	const applicable = await withoutLocallyProtected(
 		deps.database.collections.customers as never,
 		documents as { uuid: string }[]
@@ -265,10 +265,9 @@ async function runCustomerTrickle(deps: CustomerTrickleDeps): Promise<CustomerTr
 			'customer-trickle upsert'
 		);
 	}
-	const manifestRows = applicable.flatMap((document) => {
-		const row = manifestRowOf(document);
-		return row ? [row] : [];
-	});
+	// Rows for the documents this walk actually STORED — the guard-protected ones keep whatever
+	// the manifest already holds for them (the row travels on the envelope, ADR 0028 rider).
+	const manifestRows = manifestRowsForApplied(materialized, applicable as { uuid: string }[]);
 	await upsertManifestRows(
 		deps.database.collections.existenceManifestCustomers as never,
 		manifestRows

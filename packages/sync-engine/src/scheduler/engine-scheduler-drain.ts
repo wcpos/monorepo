@@ -39,7 +39,6 @@ import { parseReferenceLaneQueryKey } from './reference-lane-descriptor';
 import { referenceCollectionRepository } from '../collections/rx-reference-collection-repository';
 import { createOrderPendingMutationIds } from '../write-path/order-pull-guard';
 import { hasPendingLocalWork, withoutLocallyProtected } from '../write-path/local-work-guard';
-import { withCustomerManifestPopulation } from '../local-coverage/existence-manifest-population';
 import {
 	type ManifestCollection,
 	upsertManifestRows,
@@ -407,11 +406,9 @@ function createEngineSchedulerFetcherRegistry(
 			supportsTask: isSupportedCustomerSchedulerTask,
 			fetcher: createCustomerSchedulerFetcher({
 				...shared,
+				repository: collectionSchedulerRepository(db.customers) as never,
 				// Leg-3 (ADR 0015): the customer manifest is its OWN collection (id-space partition).
-				repository: withCustomerManifestPopulation(
-					collectionSchedulerRepository(db.customers) as never,
-					db.existenceManifestCustomers
-				),
+				manifestSink: (rows) => upsertManifestRows(db.existenceManifestCustomers, rows),
 			}),
 		},
 		{
