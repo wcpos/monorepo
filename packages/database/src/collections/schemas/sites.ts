@@ -1,6 +1,6 @@
 export const sitesLiteral = {
 	title: 'Site schema',
-	version: 2,
+	version: 3,
 	description: 'WordPress site',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -23,6 +23,10 @@ export const sitesLiteral = {
 			type: 'string',
 		},
 		gmt_offset: {
+			type: 'string',
+		},
+		locale: {
+			description: 'WordPress site locale, e.g. en_US.',
 			type: 'string',
 		},
 		timezone_string: {

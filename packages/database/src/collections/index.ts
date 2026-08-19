@@ -67,6 +67,10 @@ const sites: RxCollectionCreator<SiteDocumentType> = {
 		2(oldDoc) {
 			return oldDoc;
 		},
+		3(oldDoc) {
+			// v3 adds the optional `locale` property; existing documents need no change.
+			return oldDoc;
+		},
 	},
 };
 

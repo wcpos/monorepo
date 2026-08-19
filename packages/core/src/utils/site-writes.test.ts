@@ -72,6 +72,54 @@ describe('parseRestResponse on a site payload', () => {
 	});
 });
 
+describe('upsertSiteData with a raw embedded payload', () => {
+	/**
+	 * Regression for the 2026-08 embedded-boot brick: the WordPress template
+	 * injects `initialProps.site` verbatim (no parseRestResponse on this path),
+	 * and the server started sending fields the client schema didn't know.
+	 * With `additionalProperties: false` + dev-only z-schema validation, every
+	 * dev boot threw RxDB VD2 in PROCESS_INITIAL_PROPS, forever.
+	 */
+	const embeddedPayload = (overrides: Record<string, unknown> = {}) => ({
+		...restResponse(),
+		locale: 'en_US',
+		some_future_server_field: 'boom',
+		...overrides,
+	});
+
+	it('inserts despite unknown server fields, keeping known ones like locale', async () => {
+		const doc = await upsertSiteData(sites(), embeddedPayload());
+
+		expect(doc.uuid).toBe(SITE_UUID);
+		expect(doc.locale).toBe('en_US');
+		expect(doc.toJSON()).not.toHaveProperty('some_future_server_field');
+	});
+
+	it('merges into an existing document despite unknown server fields', async () => {
+		await upsertSiteData(sites(), parse(restResponse()));
+		const site = await sites().findOne(SITE_UUID).exec();
+		await linkCredentialsToSite(site!, 'cred-1');
+
+		const doc = await upsertSiteData(sites(), embeddedPayload({ name: 'Renamed' }));
+
+		expect(doc.name).toBe('Renamed');
+		expect(doc.locale).toBe('en_US');
+		expect(doc.toJSON()).not.toHaveProperty('some_future_server_field');
+		// The prune must not weaken the #902 guarantee.
+		expect(doc.wp_credentials).toEqual(['cred-1']);
+	});
+
+	it('never writes local-only fields even when the payload carries them', async () => {
+		await upsertSiteData(sites(), parse(restResponse()));
+		const site = await sites().findOne(SITE_UUID).exec();
+		await linkCredentialsToSite(site!, 'cred-1');
+
+		const doc = await upsertSiteData(sites(), embeddedPayload({ wp_credentials: [] }));
+
+		expect(doc.wp_credentials).toEqual(['cred-1']);
+	});
+});
+
 describe('upsertSiteData', () => {
 	it('creates the site document when it does not exist', async () => {
 		const doc = await upsertSiteData(sites(), parse(restResponse()));
