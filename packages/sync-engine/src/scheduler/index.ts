@@ -19,6 +19,13 @@ export {
 	seedTargetedOrderSchedulerTask,
 } from './rx-order-scheduler-task-seeder';
 export { laneKeyFor, seedPosBootstrapLanes, seedReferenceLanes } from './rx-pos-bootstrap-seeder';
+export {
+	isCouponReferenceOrderby,
+	isTermReferenceOrderby,
+	parseReferenceLaneQueryKey,
+	referenceLaneQueryKey,
+	type ReferenceLaneDescriptor,
+} from './reference-lane-descriptor';
 export { seedProductBrowseWindowSchedulerTask } from './rx-scheduler-product-task-seeder';
 export { seedCustomerBrowseWindowSchedulerTask } from './rx-scheduler-customer-task-seeder';
 export {

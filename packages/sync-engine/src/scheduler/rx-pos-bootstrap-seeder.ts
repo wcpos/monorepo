@@ -24,6 +24,12 @@ import { REFERENCE_COLLECTIONS, type ReferenceCollection } from '@wcpos/sync-cor
 
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import {
+	DEFAULT_REFERENCE_LANE_DESCRIPTOR,
+	parseReferenceLaneQueryKey,
+	type ReferenceLaneDescriptor,
+	referenceLaneQueryKey,
+} from './reference-lane-descriptor';
+import {
 	seedPersistedSchedulerTasks,
 	type SeedPersistedSchedulerTasksResult,
 } from './rx-scheduler-task-seeder';
@@ -99,13 +105,17 @@ export function laneKeyFor(collection: SyncCollectionName): string | null {
  * tombstone arm (unlike tax rates, whose lane only upserts). Used both at boot and by the
  * change-signal tick to re-seed ONLY the changed collection (never the other reference lanes).
  */
-export function referenceLaneTaskFor(collection: ReferenceCollection): FetchTask {
+export function referenceLaneTaskFor<C extends ReferenceCollection>(
+	collection: C,
+	descriptor: ReferenceLaneDescriptor<C> = DEFAULT_REFERENCE_LANE_DESCRIPTOR
+): FetchTask {
 	const { config, priority } = REFERENCE_LANE_CONFIGS[collection];
+	const queryKey = referenceLaneQueryKey(collection, descriptor);
 	return {
-		id: `${config.queryKey}:greedy`,
+		id: `${queryKey}:greedy`,
 		requirementId: `${collection}.all`,
 		collection: config.collection,
-		queryKey: config.queryKey,
+		queryKey,
 		limit: WOO_REST_MAX_PER_PAGE,
 		priority,
 		mode: 'greedy',
@@ -176,7 +186,54 @@ export async function seedTaxRatesLane(
  * set is cheap.
  */
 export async function seedReferenceLanes(
-	input: SeedPosBootstrapLanesInput & { collections?: readonly ReferenceCollection[] }
+	input: SeedPosBootstrapLanesInput & {
+		collections?: readonly ReferenceCollection[];
+		sorts?: Partial<Record<ReferenceCollection, ReferenceLaneDescriptor>>;
+	}
 ): Promise<SeedPersistedSchedulerTasksResult> {
-	return seedTasks((input.collections ?? REFERENCE_COLLECTIONS).map(referenceLaneTaskFor), input);
+	const collections = input.collections ?? REFERENCE_COLLECTIONS;
+	return withSchedulerSeedLedgerRecovery({
+		database: input.database,
+		run: async () => {
+			const repository = new RxSchedulerTaskStateRepository(input.database);
+			const existing = await repository.readForCollections([...collections]);
+			const tasks = collections.map((collection) => {
+				const persisted = existing
+					.map((state) => ({ state, parsed: parseReferenceLaneQueryKey(state.queryKey) }))
+					.find(({ parsed }) => parsed?.collection === collection);
+				const descriptor = input.sorts?.[collection] ?? persisted?.parsed?.descriptor;
+				return referenceLaneTaskFor(collection, descriptor ?? DEFAULT_REFERENCE_LANE_DESCRIPTOR);
+			});
+			for (const state of existing) {
+				const replacement = tasks.find(
+					(task) => parseReferenceLaneQueryKey(state.queryKey)?.collection === task.collection
+				);
+				if (!replacement || replacement.id === state.taskId) continue;
+				// The remove is CAS-guarded, and a concurrent owner (a drain claiming,
+				// renewing per page, or completing the old lane) legitimately wins the
+				// race — that must never reject the refresh. Re-read and retry against
+				// the fresh state; the row being GONE is the outcome we wanted. If an
+				// actively-drained lane wins every attempt, seed the new lane anyway
+				// and leave the stale row: EVERY subsequent reseed re-runs this
+				// supersede, so the duplicate converges away once the drain lets go.
+				let current: typeof state | undefined = state;
+				let removed = false;
+				for (let attempt = 0; attempt < 3 && !removed && current !== undefined; attempt += 1) {
+					removed = await repository.remove(current);
+					if (!removed) {
+						current = (await repository.readForCollections([state.collection])).find(
+							(candidate) => candidate.taskId === state.taskId
+						);
+					}
+				}
+			}
+			return seedPersistedSchedulerTasks({
+				repository,
+				tasks,
+				nowMs: input.nowMs ?? Date.now(),
+				completedDedupeForMs: input.completedDedupeForMs ?? 0,
+				coalesceInFlight: input.coalesceInFlight ?? false,
+			});
+		},
+	});
 }

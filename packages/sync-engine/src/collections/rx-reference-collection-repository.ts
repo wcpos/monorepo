@@ -1,4 +1,4 @@
-import { assertBulkSuccess } from '@wcpos/sync-core';
+import { assertBulkSuccess, wooIdOf } from '@wcpos/sync-core';
 
 /**
  * RxDB-backed repository for the greedy reference collections (categories,
@@ -24,6 +24,10 @@ export type ReferenceRxCollection = {
 
 export type ReferenceCollectionRepository = {
 	upsertMany(documents: LocalReferenceDocument[]): Promise<void>;
+	listServerSourcedAbsent(
+		keptDocumentIds: readonly string[]
+	): Promise<{ uuid: string; wooId: number }[]>;
+	pruneServerSourcedAbsentByUuids(uuids: readonly string[]): Promise<string[]>;
 	/**
 	 * Remove SERVER-SOURCED local docs absent from the authoritative complete set
 	 * (deleted upstream). Locally-born docs (source !== 'woo-rest') are never
@@ -36,6 +40,16 @@ export type ReferenceCollectionRepository = {
 export function referenceCollectionRepository(
 	collection: ReferenceRxCollection
 ): ReferenceCollectionRepository {
+	const canPrune = (doc: LocalReferenceDocument): boolean =>
+		doc.sync?.source === 'woo-rest' && !hasPendingLocalWork(doc);
+	const remove = async (uuids: string[]): Promise<string[]> => {
+		if (uuids.length > 0)
+			assertBulkSuccess(
+				await collection.bulkRemove(uuids),
+				'rx-reference-collection-repository remove'
+			);
+		return uuids;
+	};
 	return {
 		async upsertMany(documents: LocalReferenceDocument[]): Promise<void> {
 			const applicable = await withoutLocallyProtected(collection, documents);
@@ -45,22 +59,38 @@ export function referenceCollectionRepository(
 					'rx-reference-collection-repository upsert'
 				);
 		},
+		async listServerSourcedAbsent(keptDocumentIds) {
+			const kept = new Set(keptDocumentIds);
+			return (await collection.find().exec())
+				.map((doc) => doc.toJSON())
+				.filter(
+					(
+						doc
+					): doc is LocalReferenceDocument & {
+						remoteId: NonNullable<LocalReferenceDocument['remoteId']>;
+					} => canPrune(doc) && doc.remoteId !== null && !kept.has(doc.uuid)
+				)
+				.map((doc) => ({ uuid: doc.uuid, wooId: wooIdOf(doc.remoteId) }));
+		},
+		async pruneServerSourcedAbsentByUuids(uuids) {
+			if (uuids.length === 0) return [];
+			const requested = new Set(uuids);
+			const docs = await collection.findByIds([...requested]).exec();
+			return remove(
+				[...docs.values()]
+					.map((doc) => doc.toJSON() as LocalReferenceDocument)
+					.filter((doc) => requested.has(doc.uuid) && canPrune(doc))
+					.map((doc) => doc.uuid)
+			);
+		},
 		async pruneServerSourcedAbsent(keptDocumentIds: readonly string[]): Promise<string[]> {
 			const kept = new Set(keptDocumentIds);
 			const docs = await collection.find().exec();
 			const toRemove = docs
 				.map((doc) => doc.toJSON())
-				.filter(
-					(doc) =>
-						doc.sync?.source === 'woo-rest' && !hasPendingLocalWork(doc) && !kept.has(doc.uuid)
-				)
+				.filter((doc) => canPrune(doc) && !kept.has(doc.uuid))
 				.map((doc) => doc.uuid);
-			if (toRemove.length > 0)
-				assertBulkSuccess(
-					await collection.bulkRemove(toRemove),
-					'rx-reference-collection-repository remove'
-				);
-			return toRemove;
+			return remove(toRemove);
 		},
 	};
 }
