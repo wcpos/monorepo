@@ -147,6 +147,39 @@ test('cold-start dispatches bind raw refs to an explicit store lane', () => {
 	assert.match(runStep.env.E2E_STORE_URL_PRO, /github\.event\.inputs\.lane == 'main'/);
 });
 
+test('the E2E auth-state cache is shard- and lane-scoped', () => {
+	// Reused auth states are validated at boot in globalSetup (stale falls back
+	// to full auth), but a state restored for the WRONG shard or lane would
+	// validate fine and then run every spec against the wrong cashier slot or
+	// store. The key must therefore carry both dimensions.
+	const steps = readWorkflow('deploy.yml').jobs.e2e.steps;
+	const step = steps.find(
+		(candidate) => candidate.with && candidate.with.path === 'apps/main/e2e/auth-state.enc'
+	);
+
+	assert.ok(step, 'deploy.yml e2e job no longer caches the auth state');
+	assert.match(step.with.key, /shard\$\{\{ matrix\.shardIndex \}\}/);
+	assert.match(step.with.key, /'next' \|\| 'main'/);
+	assert.match(step.with['restore-keys'], /shard\$\{\{ matrix\.shardIndex \}\}/);
+	assert.match(step.with['restore-keys'], /'next' \|\| 'main'/);
+
+	// The snapshot embeds cashier access+refresh tokens and the repo is public:
+	// ONLY ciphertext may be cached. Pin that no step caches the plaintext dir
+	// and that both crypto steps are secret-gated.
+	assert.ok(
+		!steps.some((candidate) => candidate.with && String(candidate.with.path ?? '').includes('.auth-state')),
+		'a cache step points at the PLAINTEXT auth state — credentials would reach the Actions cache'
+	);
+	const decrypt = steps.find((candidate) => /Decrypt cached auth state/.test(candidate.name ?? ''));
+	const encrypt = steps.find((candidate) => /Encrypt auth state for cache/.test(candidate.name ?? ''));
+	assert.ok(decrypt && encrypt, 'auth-state crypto steps missing');
+	for (const crypto of [decrypt, encrypt]) {
+		assert.match(crypto.if ?? '', /E2E_AUTH_CACHE_KEY/);
+		assert.match(crypto.run, /openssl enc/);
+	}
+	assert.match(encrypt.run, /rm -rf e2e\/\.auth-state/);
+});
+
 test('the deploy concurrency contract isolates stale rerun attempts', () => {
 	const workflow = readWorkflow('deploy.yml');
 

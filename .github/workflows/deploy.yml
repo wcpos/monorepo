@@ -198,6 +198,41 @@ jobs:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
 
+      - name: 📅 Cache date
+        id: cache-date
+        run: echo "today=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: 💾 Cache E2E auth state
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          # ONLY the encrypted archive is ever cached: the snapshot embeds the
+          # cashier's access + refresh tokens and this repo is public, so the
+          # plaintext state must never reach the Actions cache (review on
+          # #1297). Forks have no E2E_AUTH_CACHE_KEY — they skip decryption and
+          # pay full auth, which is also their secretless status quo.
+          #
+          # globalSetup validates a restored state by booting the app from it
+          # AND observing an authenticated 2xx from the store, falling back to
+          # full re-auth otherwise — the cache saves time, never poisons runs.
+          # Day-keyed so same-day runs hit the exact key and skip re-saving
+          # (bounds generations); restore-keys still serve older states, gated
+          # by the same validation.
+          path: apps/main/e2e/auth-state.enc
+          key: e2e-auth-v2-${{ runner.os }}-${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'next' || 'main' }}-shard${{ matrix.shardIndex }}-${{ steps.cache-date.outputs.today }}
+          restore-keys: |
+            e2e-auth-v2-${{ runner.os }}-${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'next' || 'main' }}-shard${{ matrix.shardIndex }}-
+
+      - name: 🔓 Decrypt cached auth state
+        if: env.E2E_AUTH_CACHE_KEY != ''
+        env:
+          E2E_AUTH_CACHE_KEY: ${{ secrets.E2E_AUTH_CACHE_KEY }}
+        working-directory: apps/main
+        run: |
+          if [ -f e2e/auth-state.enc ]; then
+            mkdir -p e2e/.auth-state
+            openssl enc -d -aes-256-cbc -pbkdf2 -k "$E2E_AUTH_CACHE_KEY" -in e2e/auth-state.enc | tar -x -C e2e/.auth-state || rm -rf e2e/.auth-state
+          fi
+
       - name: 💾 Cache Playwright browsers
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
@@ -286,6 +321,18 @@ jobs:
           E2E_CASHIER_PASS: ${{ secrets.E2E_CASHIER_PASS }}
           E2E_PRODUCT_WRITER_USER: ${{ secrets.E2E_PRODUCT_WRITER_USER }}
           E2E_PRODUCT_WRITER_PASS: ${{ secrets.E2E_PRODUCT_WRITER_PASS }}
+
+      - name: 🔐 Encrypt auth state for cache
+        if: always() && env.E2E_AUTH_CACHE_KEY != ''
+        env:
+          E2E_AUTH_CACHE_KEY: ${{ secrets.E2E_AUTH_CACHE_KEY }}
+        working-directory: apps/main
+        run: |
+          if [ -d e2e/.auth-state ]; then
+            tar -c -C e2e/.auth-state . | openssl enc -aes-256-cbc -pbkdf2 -k "$E2E_AUTH_CACHE_KEY" -out e2e/auth-state.enc
+          fi
+          # The plaintext must never reach the cache post-step or artifacts.
+          rm -rf e2e/.auth-state
 
       - name: 📊 Upload blob report
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
