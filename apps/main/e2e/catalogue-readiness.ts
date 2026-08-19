@@ -35,6 +35,30 @@
  */
 export const CATALOGUE_READY_TIMEOUT_MS = 20_000;
 
+/**
+ * Read the LOCAL row count, never the footer sentence.
+ *
+ * `data-table-count` renders "Showing {shown} of {total}" (footer.tsx), so a
+ * regex like `/[1-9]/` matches the SERVER total and passes on "Showing 0 of 27"
+ * — a grid with no rows at all. The pre-existing OAuth assertion did exactly
+ * that, which is why globalSetup did not abort on 2026-08-19 when the scope
+ * database failed to open and every collection was empty (#1336 review, and
+ * root cause in #1337).
+ *
+ * `data-table-loaded-count` carries the local count on its own. It is
+ * `display:none`, which is fine: text assertions need the node attached, not
+ * visible.
+ */
+export const LOADED_COUNT_TEST_ID = 'data-table-loaded-count';
+
+/** A loaded count is ready when it is a positive integer — "0" is not ready. */
+export const LOADED_COUNT_READY = /^\s*[1-9][0-9]*\s*$/;
+
+/** Bounded so a never-mounting element cannot eat the remaining test timeout:
+ *  `textContent()` auto-waits for attachment, and `.catch()` only handles the
+ *  eventual rejection (#1336 review). This read is diagnostics, not a wait. */
+export const DIAGNOSTIC_READ_TIMEOUT_MS = 1_000;
+
 /** What the count element showed when the wait ran out. */
 export type CatalogueObservation = {
 	/** `data-table-count`'s text, or null when the element never appeared. */
@@ -55,8 +79,8 @@ export type CatalogueObservation = {
 export function catalogueUnavailableMessage(observation: CatalogueObservation): string {
 	const observed =
 		observation.countText === null
-			? 'the data-table-count element never rendered'
-			: `data-table-count showed "${observation.countText}"`;
+			? `the ${LOADED_COUNT_TEST_ID} element never rendered`
+			: `${LOADED_COUNT_TEST_ID} showed "${observation.countText}"`;
 	return (
 		`Catalogue never became non-empty after ${observation.elapsedMs}ms — ${observed}. ` +
 		`Either the store genuinely has no products, or the app failed to render them ` +

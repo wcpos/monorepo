@@ -1,6 +1,8 @@
 import {
 	CATALOGUE_READY_TIMEOUT_MS,
 	catalogueUnavailableMessage,
+	DIAGNOSTIC_READ_TIMEOUT_MS,
+	LOADED_COUNT_READY,
 } from '../e2e/catalogue-readiness';
 
 // jest-expo installs winter globals lazily; a new test file in this package
@@ -15,9 +17,31 @@ describe('catalogue readiness', () => {
 		expect(CATALOGUE_READY_TIMEOUT_MS).toBeLessThanOrEqual(30_000);
 	});
 
+	it('rejects an empty grid that the footer sentence would have hidden', () => {
+		// The whole point: `data-table-count` renders "Showing 0 of 27", so a bare
+		// /[1-9]/ matches the SERVER total and passes with zero rows on screen —
+		// exactly the regression this check exists to catch (#1336 review, #1337).
+		expect('Showing 0 of 27').toMatch(/[1-9]/);
+		expect(LOADED_COUNT_READY.test('0')).toBe(false);
+		expect(LOADED_COUNT_READY.test('Showing 0 of 27')).toBe(false);
+	});
+
+	it('accepts a positive local count', () => {
+		expect(LOADED_COUNT_READY.test('1')).toBe(true);
+		expect(LOADED_COUNT_READY.test('27')).toBe(true);
+		expect(LOADED_COUNT_READY.test(' 27 ')).toBe(true);
+	});
+
+	it('keeps the diagnostic read short enough to never eat the test budget', () => {
+		// textContent() auto-waits for attachment; .catch() only handles the
+		// eventual rejection, so an unbounded read on a never-mounting element
+		// consumes the rest of the test timeout.
+		expect(DIAGNOSTIC_READ_TIMEOUT_MS).toBeLessThanOrEqual(2_000);
+	});
+
 	it('names the signal, what it showed, and both plausible causes', () => {
 		const message = catalogueUnavailableMessage({ countText: '0', elapsedMs: 20_001 });
-		expect(message).toContain('data-table-count showed "0"');
+		expect(message).toContain('data-table-loaded-count showed "0"');
 		expect(message).toContain('20001ms');
 		// A CI reader with no other context must be pointed at both causes rather
 		// than left to infer a regression from timings.

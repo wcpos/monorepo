@@ -12,7 +12,13 @@ import {
 
 import { log } from '@wcpos/utils/logger';
 
-import { CATALOGUE_READY_TIMEOUT_MS, catalogueUnavailableMessage } from './catalogue-readiness';
+import {
+	CATALOGUE_READY_TIMEOUT_MS,
+	catalogueUnavailableMessage,
+	DIAGNOSTIC_READ_TIMEOUT_MS,
+	LOADED_COUNT_READY,
+	LOADED_COUNT_TEST_ID,
+} from './catalogue-readiness';
 import { cashierAuthStateName, currentShardIndex, getE2ECashierAuth } from './cashier-slot';
 import { captureCreatedOrderIds, finalizeCreatedOrders } from './order-cleanup';
 import { restoreOPFS } from './opfs-helpers';
@@ -768,10 +774,13 @@ export async function authenticateWithStore(
 	// The cold-start profile (e2e/cold-start.ts) keeps the catalogue empty on
 	// purpose, so it opts out of this wait rather than burning its timeout.
 	if (waitForCatalogue) {
-		const countMarker = page.getByTestId('data-table-count');
+		// The LOCAL count, not the footer sentence — "Showing 0 of 27" matches a
+		// bare /[1-9]/ on the server total and passed this assertion with an
+		// empty grid, which is why globalSetup did not abort on 2026-08-19.
+		const countMarker = page.getByTestId(LOADED_COUNT_TEST_ID);
 		const startedAtMs = Date.now();
 		try {
-			await expect(countMarker).toContainText(/[1-9]/, { timeout: 120_000 });
+			await expect(countMarker).toHaveText(LOADED_COUNT_READY, { timeout: 120_000 });
 		} catch (error) {
 			// Throw the ACTIONABLE message, not Playwright's generic matcher error —
 			// this is the run-level verdict (globalSetup runs this path before any
@@ -779,7 +788,9 @@ export async function authenticateWithStore(
 			// error is preserved as `cause` rather than discarded.
 			throw new Error(
 				catalogueUnavailableMessage({
-					countText: await countMarker.textContent().catch(() => null),
+					countText: await countMarker
+						.textContent({ timeout: DIAGNOSTIC_READ_TIMEOUT_MS })
+						.catch(() => null),
 					elapsedMs: Date.now() - startedAtMs,
 				}),
 				{ cause: error }
@@ -918,10 +929,10 @@ export async function hydrateAuthenticatedPage(
 				// could drift from it (it missed variable-product tiles and burned its
 				// whole timeout on a Luma catalogue) and, worse, its failure was
 				// swallowed: see catalogue-readiness.ts for what that cost.
-				const countMarker = page.getByTestId('data-table-count');
+				const countMarker = page.getByTestId(LOADED_COUNT_TEST_ID);
 				const startedAtMs = Date.now();
 				try {
-					await expect(countMarker).toContainText(/[1-9]/, {
+					await expect(countMarker).toHaveText(LOADED_COUNT_READY, {
 						timeout: CATALOGUE_READY_TIMEOUT_MS,
 					});
 				} catch {
@@ -929,7 +940,9 @@ export async function hydrateAuthenticatedPage(
 					// the timeout on every test is not.
 					throw new Error(
 						catalogueUnavailableMessage({
-							countText: await countMarker.textContent().catch(() => null),
+							countText: await countMarker
+								.textContent({ timeout: DIAGNOSTIC_READ_TIMEOUT_MS })
+								.catch(() => null),
 							elapsedMs: Date.now() - startedAtMs,
 						})
 					);
