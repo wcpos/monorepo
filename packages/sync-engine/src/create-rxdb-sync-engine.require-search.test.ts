@@ -18,6 +18,13 @@ const SITE = 'https://lab.example.test';
 const SYNC_BASE = `${SITE}/wp-json/wcpos/v2`;
 let uniqueStore = 0;
 
+/**
+ * The customer trickle's cursor is keyed by the browse window's VIEW identity (the sort) since
+ * the 2026-08-19 ordering ruling, so a seeded "walk finished" cursor must name the view it
+ * finished — here the default window (id asc), which is what an undeclared grid falls back to.
+ */
+const CUSTOMER_DEFAULT_VIEW_KEY = 'customers:browse-window:limit=';
+
 // Server-stamped identity: a deterministic v4-shaped uuid per Woo id, so the post-flip
 // STORAGE key (document.id) is predictable (mirrors the fetcher suites).
 const productUuid = (n: number): string => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -294,7 +301,7 @@ describe('require() for search — the public search-demand verb', () => {
 		const scope = await engine.ready;
 		await scope.database.collections.engineKv.upsert({
 			id: 'customer-trickle:state',
-			value: JSON.stringify({ page: 1, walkComplete: true }),
+			value: JSON.stringify({ viewKey: CUSTOMER_DEFAULT_VIEW_KEY, page: 1, walkComplete: true }),
 		});
 		await scope.database.collections.queryTotalCacheEntries.upsert({
 			queryKey: 'census:customers',
@@ -325,7 +332,7 @@ describe('require() for search — the public search-demand verb', () => {
 		const scope = await engine.ready;
 		await scope.database.collections.engineKv.upsert({
 			id: 'customer-trickle:state',
-			value: JSON.stringify({ page: 1, walkComplete: true }),
+			value: JSON.stringify({ viewKey: CUSTOMER_DEFAULT_VIEW_KEY, page: 1, walkComplete: true }),
 		});
 		// One real customer exists server-side (census 1) but only the born-local
 		// sentinel is resident: the gate must fetch, not mask the missing customer.

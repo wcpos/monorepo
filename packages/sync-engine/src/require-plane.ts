@@ -297,7 +297,44 @@ export type RequirePlane = {
 	 * as "use the default window".
 	 */
 	lastProductBrowseQueryKey(): string | null;
+	/**
+	 * The customers sibling of {@link lastProductBrowseQueryKey} — the lane identity of the
+	 * LAST customers browse window a grid declared, and therefore the sort the idle customer
+	 * backfill walks (maintenance/customer-trickle.ts). Same ruling, same mechanism, same
+	 * per-scope last-write-wins semantics; null means "use the default window".
+	 */
+	lastCustomerBrowseQueryKey(): string | null;
 };
+
+/**
+ * Per-scope last-write-wins memory for a browse window's lane identity — the signal the idle
+ * backfills read to walk the cashier's own ordering.
+ *
+ * A window can be DECLARED before the initial scope open settles (a grid mounted against a
+ * cold engine), so a pre-ready declaration parks in `beforeReady` and is adopted by the first
+ * scope that reads it. It is deliberately NOT carried across a later scope switch: another
+ * store's grid ordering is not this store's.
+ */
+function createBrowseWindowKeyMemory(activeScope: () => string | null) {
+	const byScope = new Map<string, string>();
+	let beforeReady: string | null = null;
+	return {
+		record(key: string): void {
+			const scopeId = activeScope();
+			if (scopeId === null) beforeReady = key;
+			else byScope.set(scopeId, key);
+		},
+		read(): string | null {
+			const scopeId = activeScope();
+			if (scopeId === null) return beforeReady;
+			if (beforeReady !== null) {
+				byScope.set(scopeId, beforeReady);
+				beforeReady = null;
+			}
+			return byScope.get(scopeId) ?? null;
+		},
+	};
+}
 
 export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	// #1134 item 2 (owner ruling 2026-08-14): the demand path stays UNCAPPED —
@@ -311,9 +348,10 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	});
 	const queue: QueuedRequirement[] = [];
 	const activeSearches = new Map<string, QueuedRequirement>();
-	/** See RequirePlane.lastProductBrowseQueryKey — the idle backfill's ordering signal. */
-	const productBrowseQueryKeys = new Map<string, string>();
-	let productBrowseQueryKeyBeforeReady: string | null = null;
+	/** See RequirePlane.lastProductBrowseQueryKey — the idle backfills' ordering signal. */
+	const activeScope = () => deps.manager.activeScope;
+	const productBrowseWindowKeys = createBrowseWindowKeyMemory(activeScope);
+	const customerBrowseWindowKeys = createBrowseWindowKeyMemory(activeScope);
 	// Demand-path reference refreshes dedupe ONLY against their own last pull
 	// (#1302 round 2): the persisted task timestamp is shared with the idle
 	// maintenance lane, and a maintenance completion landing shortly before a
@@ -1226,15 +1264,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 
 	return {
 		hasPendingWork: () => running || queue.length > 0,
-		lastProductBrowseQueryKey: () => {
-			const scopeId = deps.manager.activeScope;
-			if (scopeId === null) return productBrowseQueryKeyBeforeReady;
-			if (productBrowseQueryKeyBeforeReady !== null) {
-				productBrowseQueryKeys.set(scopeId, productBrowseQueryKeyBeforeReady);
-				productBrowseQueryKeyBeforeReady = null;
-			}
-			return productBrowseQueryKeys.get(scopeId) ?? null;
-		},
+		lastProductBrowseQueryKey: productBrowseWindowKeys.read,
+		lastCustomerBrowseQueryKey: customerBrowseWindowKeys.read,
 		require: (requirement) => {
 			// The runaway backstop is the ONE ceiling left on a browse window (#948/#957),
 			// and it must never behave like the caps it replaced: it is announced, not
@@ -1260,13 +1291,14 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					// window the grid is showing even when that window was served entirely from
 					// local rows (which writes no coverage and completes no task).
 					const key = productBrowseWindowQueryKeyFromDimensions(requirement);
-					const scopeId = deps.manager.activeScope;
-					if (scopeId === null) productBrowseQueryKeyBeforeReady = key;
-					else productBrowseQueryKeys.set(scopeId, key);
+					productBrowseWindowKeys.record(key);
 					return key;
 				}
 				if (requirement.kind === 'customer-browse') {
-					return customerBrowseWindowQueryKeyFromDimensions(requirement);
+					// Same contract as products above — declaration, not completion.
+					const key = customerBrowseWindowQueryKeyFromDimensions(requirement);
+					customerBrowseWindowKeys.record(key);
+					return key;
 				}
 				if (requirement.kind === 'refresh') return laneKeyFor(requirement.collection);
 				return null;

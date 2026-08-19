@@ -71,11 +71,16 @@ export {
 } from './product-browse-window-descriptor';
 export {
 	CUSTOMER_BROWSE_WINDOW_DEFAULT_LIMIT,
+	CUSTOMER_BROWSE_WINDOW_ORDER,
+	CUSTOMER_BROWSE_WINDOW_ORDERBY,
 	CUSTOMER_BROWSE_WINDOW_ORDERBY_VALUES,
 	customerBrowseWindowQueryKey,
 	customerBrowseWindowQueryKeyFromDimensions,
+	customerBrowseWindowQueryParams,
+	customerBrowseWindowViewKey,
 	isCustomerBrowseWindowQueryKey,
 	parseCustomerBrowseWindowDescriptor,
+	type CustomerBrowseWindowDescriptor,
 	type CustomerBrowseWindowOrderby,
 } from './customer-browse-window-descriptor';
 export {

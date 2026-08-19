@@ -13,6 +13,10 @@
  * These tests pin that fix and the invariants it must not break: the trickle keeps its own
  * cursor, `role=all` stays on every request, scroll extension mints a DISTINCT window (not the
  * collapsed dedupe of #957), and no arbitrary record cap bounds the window (R8).
+ *
+ * Since 2026-08-19 the idle trickle walks THIS window too, in whatever sort the grid declared
+ * (maintenance/customer-trickle.ts) — so the two lanes now share a descriptor and a wire
+ * grammar, and differ only in their cursors and their batch size.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -275,12 +279,13 @@ describe('require() for the customers browse window', () => {
 		const engine = engineWith(server.fetch);
 		await engine.ready;
 
-		// The trickle owns a page cursor over `orderby=id&order=asc`, persisted per scope, and
-		// walks in fixed 10-row batches WITHOUT a `role` param. The browse window walks the same
-		// ordering but always states `role=all`, so the two lanes' requests are distinguishable
-		// on the wire — which is the honest way to watch the cursor from outside the engine.
+		// Since the 2026-08-19 ordering ruling both lanes build their request from the SAME
+		// browse-window descriptor, so they no longer differ in sort or in `role` — which is the
+		// point: one window, one ordering, two cursors. What still separates them on the wire is
+		// the batch size: the trickle walks fixed 10-row pages, the browse window walks at the
+		// Performance dial (100 here). That is the honest way to watch the cursor from outside.
 		const tricklePages = () =>
-			server.requests.filter((request) => request.role === null).map((request) => request.page);
+			server.requests.filter((request) => request.perPage === 10).map((request) => request.page);
 
 		await engine.sync('customer-trickle');
 		await engine.sync('customer-trickle');
