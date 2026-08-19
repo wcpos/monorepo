@@ -219,8 +219,11 @@ export async function switchUserSessionStore(
 /**
  * Context that accumulates data as hydration steps complete
  */
+// NOTE: the loose `any` fields are deliberate for now — typing them to the real database
+// documents surfaces ~270 consumer errors (census 2026-08-19) and needs its own pass.
 export interface HydrationContext {
 	userDB?: UserDatabase;
+	/** RxState from `userDB.addState('v2')` — session pointer (`current`). */
 	appState?: any;
 	translationsState?: any;
 	user?: any;
@@ -229,6 +232,7 @@ export interface HydrationContext {
 	wpCredentials?: any;
 	store?: any;
 	storeDB?: any;
+	/** RxState from `storeDB.addState('data_v2')`. */
 	extraData?: any;
 	stores?: any[];
 	storeLocalIDs?: string[];

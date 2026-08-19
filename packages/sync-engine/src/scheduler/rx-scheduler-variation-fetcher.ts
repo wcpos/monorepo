@@ -1,4 +1,4 @@
-import { variationDocumentId } from '@wcpos/sync-core';
+import { FLEXSEARCH_MIN_TERM_LENGTH, variationDocumentId } from '@wcpos/sync-core';
 
 import { parseVariationsEnvelope, variationDocument } from '../collections/collection-descriptors';
 import { manifestRowOf } from '../materialization/record-materialization';
@@ -13,9 +13,6 @@ import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerF
 
 import type { StoredVariationDocument } from '../collections/variation-schema';
 import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
-
-/** Keep equal to FLEXSEARCH_MIN_TERM_LENGTH in packages/query/src/engine-query.ts. */
-const FLEXSEARCH_MIN_TERM_LENGTH = 3;
 
 export type VariationsSchedulerFetcherInput = CollectionSchedulerInput<StoredVariationDocument> & {
 	manifestSink?: (rows: ExistenceManifestDocument[]) => Promise<void>;

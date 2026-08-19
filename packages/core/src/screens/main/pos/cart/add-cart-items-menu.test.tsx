@@ -42,7 +42,9 @@ jest.mock('@wcpos/components/tooltip', () => ({
 jest.mock('../../components/capability-tooltip', () => ({
 	CapabilityTooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
-jest.mock('../../hooks/use-license', () => ({ useLicense: () => ({ isPro: false }) }));
+jest.mock('../../../../hooks/use-app-info', () => ({
+	useAppInfo: () => ({ license: { isPro: false } }),
+}));
 jest.mock('../../hooks/use-user-capabilities', () => ({
 	useUserCapabilities: () => ({ caps: { canCreateCustomers: false } }),
 }));

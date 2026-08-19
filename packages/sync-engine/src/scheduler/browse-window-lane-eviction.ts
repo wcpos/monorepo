@@ -232,7 +232,7 @@ export function planBrowseWindowLaneEviction(input: {
 
 /**
  * Storage the sweep needs. Both members are OPTIONAL on the coverage repositories the
- * fetchers receive, so a host wired without them (the playground, older tests) keeps the
+ * fetchers receive, so a host wired without them (older tests) keeps the
  * pre-eviction behaviour — lanes reclaim on the 15-minute expiry as before — rather than
  * failing.
  */

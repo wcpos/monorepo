@@ -9,12 +9,14 @@ export {
 	adapterDerivedFieldsFor,
 	COLLECTION_VOCABULARY,
 	engineCollectionNameFor,
+	isWriteableCollection,
 	LEGACY_SEARCH_FIELDS,
 	promotedColumnsFor,
 	resolveLegacyField,
 	sortAliasFor,
 	sortTiebreakFor,
 	wooOrderbyFor,
+	WRITEABLE_REMOTE_ID_FIELD,
 	type LegacyCollectionName,
 	type WriteableCollection,
 } from './engine-adapter/collection-map';
@@ -31,11 +33,6 @@ export {
 	observeEngineQuery,
 	type EngineQueryDescriptor,
 } from './engine-query';
-export {
-	declareRequirements,
-	runResetRefill,
-	requirementsForQuery,
-	type RequirementSortPart,
-} from './requirement-bridge';
+export { declareRequirements, runResetRefill } from './requirement-bridge';
 export { observeCollectionActive } from './engine-status';
 export { recoverLogsCollectionStorage } from './logs-storage-recovery';

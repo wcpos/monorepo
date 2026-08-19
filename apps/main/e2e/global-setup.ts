@@ -1,8 +1,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { chromium, type FullConfig } from '@playwright/test';
+import { chromium, expect, type FullConfig } from '@playwright/test';
 
+import {
+	CATALOGUE_READY_TIMEOUT_MS,
+	LOADED_COUNT_READY,
+	LOADED_COUNT_TEST_ID,
+} from './catalogue-readiness';
 import { cashierAuthStateName, currentShardIndex, getE2ECashierAuth } from './cashier-slot';
 import {
 	COLD_START_ENABLED,
@@ -10,7 +15,8 @@ import {
 	installThinCatalogueRoutes,
 } from './cold-start';
 import { authenticateWithStore, stubStoreVersionForE2E } from './fixtures';
-import { exportOPFS } from './opfs-helpers';
+import { restoreLocalStorage } from './indexeddb-helpers';
+import { exportOPFS, restoreOPFS } from './opfs-helpers';
 // Resolved by playwright.config, never re-derived here: these used to be two
 // independent copies with different fallbacks, so a lane could bootstrap against
 // one store and then run its specs against another.
@@ -40,6 +46,23 @@ function shouldStubCrossOriginStoreRequests(storeUrl: string, baseURL: string): 
 	} catch {
 		return false;
 	}
+}
+
+export function isAuthenticatedStoreApiResponse(
+	responseUrl: string,
+	storeUrl: string,
+	responseOk: boolean
+): boolean {
+	const url = new URL(responseUrl);
+	const store = new URL(storeUrl);
+	const storePath = store.pathname.replace(/\/+$/, '');
+	return (
+		responseOk &&
+		url.origin === store.origin &&
+		(url.pathname.startsWith(`${storePath}/wp-json/wcpos/v2/`) ||
+			(url.pathname.replace(/\/+$/, '') === storePath &&
+				url.searchParams.get('rest_route')?.startsWith('/wcpos/v2/') === true))
+	);
 }
 
 async function stubCrossOriginStoreDiscovery(
@@ -92,6 +115,116 @@ async function exportLocalStorage(
 }
 
 /**
+ * Reuse a cached auth state (restored by the CI cache) when it still boots.
+ *
+ * globalSetup costs ~60s per variant per shard — login plus a full catalogue
+ * sync — and its output is deterministic per store. CI caches
+ * e2e/.auth-state across runs; this validates a restored state by actually
+ * booting the app from it (restore OPFS + localStorage, reload, POS search
+ * visible, no error boundary). Anything stale — expired JWT, wiped store,
+ * schema change — fails the boot and falls through to the normal full auth,
+ * so a bad cache costs one ~30s probe, never a red run. Cold-start states
+ * are excluded: theirs is deliberately a PRE-sync snapshot.
+ */
+async function reuseValidAuthState(
+	stateName: string,
+	variant: StoreVariant,
+	storeUrl: string,
+	baseURL: string
+): Promise<string[] | null> {
+	const statePath = path.join(AUTH_STATE_DIR, `${stateName}.json`);
+	if (!fs.existsSync(statePath)) return null;
+	let state: { opfs?: unknown; localStorage?: unknown; storeIds?: unknown };
+	try {
+		state = JSON.parse(fs.readFileSync(statePath, 'utf-8'));
+	} catch {
+		// Delete on EVERY invalid path — a bad file that survives one rejection
+		// would be retried by the next shard/setup for nothing (review on #1297).
+		fs.rmSync(statePath, { force: true });
+		return null;
+	}
+	// Old snapshots without storeIds cannot satisfy the caller; treat as absent.
+	if (!state.opfs || !state.localStorage || !Array.isArray(state.storeIds)) {
+		fs.rmSync(statePath, { force: true });
+		return null;
+	}
+
+	const browser = await chromium.launch();
+	try {
+		const context = await browser.newContext({
+			baseURL,
+			viewport: { width: 1280, height: 720 },
+		});
+		if (shouldStubCrossOriginStoreRequests(storeUrl, baseURL)) {
+			await stubCrossOriginStoreDiscovery(context, storeUrl);
+		}
+		await stubStoreVersionForE2E(context, storeUrl, variant);
+		const page = await context.newPage();
+		// Local render alone cannot validate the snapshot: an expired or revoked
+		// JWT still boots the offline-capable app from restored OPFS data
+		// (review on #1297). Demand proof the STORE still accepts the session —
+		// the booted app immediately talks wcpos/v2 (census, open-orders poll),
+		// so an authenticated 2xx arrives within seconds when the token lives
+		// and never arrives when it is dead.
+		let sawAuthenticatedOk = false;
+		page.on('response', (response) => {
+			if (isAuthenticatedStoreApiResponse(response.url(), storeUrl, response.ok())) {
+				sawAuthenticatedOk = true;
+			}
+		});
+		await page.route('**/*', blockScriptRequests);
+		await page.goto(baseURL, { waitUntil: 'commit' });
+		await restoreOPFS(page, state.opfs as never);
+		await restoreLocalStorage(page, state.localStorage as never);
+		await page.unroute('**/*', blockScriptRequests);
+		await page.reload({ waitUntil: 'commit' });
+		await page.getByTestId('search-products').waitFor({ state: 'visible', timeout: 30_000 });
+		const serverDeadline = Date.now() + 20_000;
+		while (!sawAuthenticatedOk) {
+			if (Date.now() > serverDeadline) {
+				throw new Error('restored session never produced an authenticated server response');
+			}
+			await page.waitForTimeout(500);
+		}
+		if (
+			await page
+				.getByTestId('error-boundary-fallback')
+				.first()
+				.isVisible()
+				.catch(() => false)
+		) {
+			throw new Error('restored state faulted the error boundary');
+		}
+		// A restored database can be structurally unusable while the shell renders
+		// perfectly: RxDB's DB6 (schema-hash mismatch) fails the DATABASE without
+		// touching the React tree, so `search-products`, an authenticated 2xx and a
+		// clean error boundary all pass above with zero rows behind them. That is
+		// precisely what happened on 2026-08-19 — a cached state captured under an
+		// older product schema was reused, every collection was empty, and CI spent
+		// an hour reporting it as slowness (this PR; root cause #1337).
+		//
+		// Validating what the tests actually need makes the cache SELF-HEALING for
+		// any cause, not just schema drift: the catch below deletes the state file
+		// and re-authenticates, so a run pays one login instead of a red day. Only
+		// reached when !coldStart (see caller), where an empty catalogue is never
+		// legitimate.
+		await expect(page.getByTestId(LOADED_COUNT_TEST_ID)).toHaveText(LOADED_COUNT_READY, {
+			timeout: CATALOGUE_READY_TIMEOUT_MS,
+		});
+		console.log(`[global-setup] Reusing cached ${stateName} state (validated boot + catalogue)`);
+		return state.storeIds as string[];
+	} catch (error) {
+		console.log(
+			`[global-setup] Cached ${stateName} state invalid, re-authenticating: ${error instanceof Error ? error.message : error}`
+		);
+		fs.rmSync(statePath, { force: true });
+		return null;
+	} finally {
+		await browser.close();
+	}
+}
+
+/**
  * Run auth for a single store variant, export state, and save to disk.
  *
  * After authenticateWithStore completes (POS visible, products loaded), we
@@ -127,6 +260,11 @@ async function setupVariant(
 		`[global-setup] Authenticating with ${variant} store: ${storeUrl}` +
 			(options.coldStart ? ' (cold start — bulk catalogue sync blocked)' : '')
 	);
+
+	if (!options.coldStart) {
+		const reused = await reuseValidAuthState(stateName, variant, storeUrl, baseURL);
+		if (reused) return reused;
+	}
 
 	let discoveredStoreIds: string[] = [];
 	const browser = await chromium.launch();
@@ -218,7 +356,7 @@ async function setupVariant(
 		const opfs = await exportOPFS(exportPage);
 		const localStorage = await exportLocalStorage(exportPage);
 
-		const state = { opfs, localStorage };
+		const state = { opfs, localStorage, storeIds: discoveredStoreIds };
 		const statePath = path.join(AUTH_STATE_DIR, `${stateName}.json`);
 		fs.writeFileSync(statePath, JSON.stringify(state));
 

@@ -33,6 +33,9 @@ export interface FiltersByCollection {
 		status?: string;
 		dateRange?: DateRangeFilter;
 	};
+	'products/categories': Record<never, never>;
+	'products/brands': Record<never, never>;
+	'products/tags': Record<never, never>;
 	variations: { attributeMatches: VariationMatch[]; status?: string };
 	customers: Record<never, never>;
 	'tax-rates': Record<never, never>;
@@ -70,6 +73,9 @@ export interface SortFieldsByCollection {
 		| DatedSort;
 	coupons:
 		'code' | 'amount' | 'discount_type' | 'status' | 'usage_count' | 'date_expires_gmt' | DatedSort;
+	'products/categories': 'id' | 'name';
+	'products/brands': 'id' | 'name';
+	'products/tags': 'id' | 'name';
 	variations: 'id' | 'name' | 'sku' | 'menu_order' | PriceSort | StockSort | DatedSort;
 	customers: 'id' | 'first_name' | 'last_name' | 'email' | 'role' | 'username' | DatedSort;
 	'tax-rates': 'id' | 'name' | 'country' | 'state' | 'priority' | 'rate' | 'class' | 'order';

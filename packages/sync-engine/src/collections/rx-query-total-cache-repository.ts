@@ -11,7 +11,7 @@ function fromDocument(document: QueryTotalCacheDocument): QueryTotalCacheEntry {
 	return entry;
 }
 
-/** Structural: any database carrying the queryTotalCacheEntries collection (LabDatabase and engine scope dbs both satisfy it). */
+/** Structural: any database carrying the queryTotalCacheEntries collection — any engine scope database satisfies it. */
 export type QueryTotalCacheDatabase = {
 	queryTotalCacheEntries: RxKeyedCollection<QueryTotalCacheDocument>;
 };

@@ -90,7 +90,7 @@ const errorSubject = new BehaviorSubject<import('axios').AxiosError | null>(null
 export const useAuthErrorHandler = (
 	site: Site,
 	wpCredentials: WPCredentials,
-	onUserMismatch?: () => void
+	onUserMismatch?: () => void | Promise<void>
 ): HttpErrorHandler => {
 	const { handleLoginSuccess } = useLoginHandler(site as any);
 
@@ -184,9 +184,16 @@ export const useAuthErrorHandler = (
 						},
 					});
 
-					// Trigger logout callback if provided
+					// Trigger logout callback if provided. This is the security-critical
+					// force-logout on a user mismatch, so a rejection must be reported
+					// rather than surfacing as an unhandled rejection.
 					if (onUserMismatch) {
-						onUserMismatch();
+						await Promise.resolve(onUserMismatch()).catch((error) => {
+							authLogger.error('Forced logout after user mismatch failed', {
+								code: ERROR_CODES.AUTH_UNEXPECTED,
+								context: { siteName: site.name, error },
+							});
+						});
 					}
 					return;
 				}

@@ -14,7 +14,6 @@ import { productsLiteral } from './schemas/products';
 import { receiptEmailQueueLiteral } from './schemas/receipt-email-queue';
 import { sitesLiteral } from './schemas/sites';
 import { storesLiteral } from './schemas/stores';
-import { syncLiteral } from './schemas/sync';
 import { tagsLiteral } from './schemas/tags';
 import { taxRatesLiteral } from './schemas/tax-rates';
 import { usersLiteral } from './schemas/users';
@@ -365,15 +364,6 @@ export type TaxRateCollection = RxCollection<TaxRateDocumentType>;
 // const payment_gateways: RxCollectionCreator<GatewayDocument> = { schema: gatewaysLiteral };
 
 /**
- * Sync
- */
-const syncSchema: RxJsonSchema<SyncDocumentType> = syncLiteral;
-type SyncDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof syncLiteral>;
-export type SyncDocument = RxDocument<SyncDocumentType>;
-export type SyncCollection = RxCollection<SyncDocumentType>;
-const sync: RxCollectionCreator<SyncDocumentType> = { schema: syncSchema };
-
-/**
  * Logs
  */
 const logSchema: RxJsonSchema<LogDocumentType> = logsLiteral;
@@ -613,20 +603,6 @@ export const storeCollections = {
 	scanner_profiles,
 	template_printer_overrides,
 	receipt_email_queue,
-};
-
-export const syncCollections = {
-	products: sync,
-	variations: sync,
-	orders: sync,
-	customers: sync,
-	coupons: sync,
-	taxes: sync,
-	// payment_gateways: sync,
-	'products/categories': sync,
-	'products/tags': sync,
-	'products/brands': sync,
-	templates: sync,
 };
 
 export const temporaryCollections = {

@@ -14,6 +14,11 @@ test('public value surface is exactly the spec', () => {
 		'isActiveFeeLine',
 		'isActiveLineItem',
 		'isActiveShippingLine',
+		// Added 2026-08-19: the POS cart footer displays refunds row-by-row and then
+		// deducts a total. Without a shared rule for "what one refund is worth" the
+		// rows and the deduction were computed differently and could disagree on
+		// screen. One exported function is the smallest fix; see net-payment.test.ts.
+		'refundValue',
 		'settleCart',
 		'snapshotFromOrderJSON',
 	]);

@@ -6,7 +6,7 @@
  *
  * Before this module, the "apply" tree was re-implemented on two hosts and they
  * DRIFTED: the web tick handled tax-rate updates/deletes and barcode re-derive;
- * the playground tick handled product pulls/deletes ONLY (tax rates unhandled,
+ * an earlier lab host tick handled product pulls/deletes ONLY (tax rates unhandled,
  * barcode re-derive absent). Lifting the tree here and making BOTH hosts thin
  * adapters fixes the drift permanently — and the handler interface is fully
  * REQUIRED, so a host that forgets an arm fails to compile rather than silently
@@ -50,14 +50,14 @@ export type RebaselineTargetedResult = { requested: number; applied: number; pru
 /**
  * The thin host adapter surface. EVERY handler is required: omitting one is a
  * compile error, which is what makes "forget to handle an arm" (the original
- * playground drift) impossible. Handlers may be sync or async; the applier
+ * host drift) impossible. Handlers may be sync or async; the applier
  * `await`s each. A handler that THROWS aborts the tick before `persistState`.
  */
 export type ReplicationActionHandlers = {
 	/**
 	 * Fetch + apply the given PRODUCT ids (the host's targeted-pull lane). Returns
-	 * how many were APPLIED (web: durably seeded == accepted; playground: actually
-	 * written). A return value < `ids.length` means the host could not apply some
+	 * how many were APPLIED (durably seeded == accepted, or actually written,
+	 * depending on the host). A return value < `ids.length` means the host could not apply some
 	 * (e.g. a mid-tick scope switch dropped a guarded write) and the applier
 	 * SURFACES the shortfall — the engine cursor has already advanced past them.
 	 */
@@ -142,7 +142,7 @@ export type ReplicationActionHandlers = {
 	/**
 	 * Persist the engine's advanced state. Called ONLY after every handler above
 	 * succeeded — the ADR-0005 commit-only-on-success invariant. A host whose
-	 * engine holds its cursor purely in memory (the playground) may pass a no-op.
+	 * engine holds its cursor purely in memory may pass a no-op.
 	 */
 	persistState(state: ReplicationActions['nextState']): Promise<void> | void;
 	/** Surface a log line (escalations, deferrals, shortfalls, re-derive notes). */
@@ -162,10 +162,8 @@ export type ReplicationActionHandlers = {
 export type ReDeriveResult = { collection: HybridCollection; rederived: boolean };
 
 /**
- * The single applier return type, reconciling the web tick's
- * `ChangeSignalReplicationTickResult` and the playground's
- * `ChangeSignalTickOutcome`. Hosts expose this directly (the web tick) or extend
- * it with a host concern (the playground adds `ran`).
+ * The single applier return type, reconciling the tick outcome shapes the lab's
+ * two hosts used. Hosts expose this directly, or extend it with a host concern.
  */
 export type ApplyReplicationActionsResult = {
 	/** PRODUCT ids routed to a targeted pull this tick (deduped, sorted). */
