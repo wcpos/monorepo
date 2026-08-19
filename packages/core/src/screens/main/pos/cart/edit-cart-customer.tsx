@@ -14,7 +14,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRxDocument, useQueryRuntime, wrapEngineDocument } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
@@ -147,7 +147,7 @@ export function EditCartCustomerForm() {
 			}
 			onOpenChange(false);
 		} catch (error) {
-			const errorMessage = error instanceof Error ? error.message : String(error);
+			const errorMessage = getErrorMessage(error);
 			cartLogger.error('Failed to save customer', {
 				showToast: true,
 				code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,

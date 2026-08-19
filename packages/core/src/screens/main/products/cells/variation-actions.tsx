@@ -23,7 +23,7 @@ import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { useQueryRuntime } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { CellContext } from '@wcpos/core/table-types';
 
@@ -70,7 +70,7 @@ export function VariationActions({
 					showToast: true,
 					context: {
 						variationId: variation.id,
-						error: error instanceof Error ? error.message : String(error),
+						error: getErrorMessage(error),
 					},
 				});
 			});

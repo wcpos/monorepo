@@ -5,7 +5,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
 import { Button } from '@wcpos/components/button';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { getNetPaymentTotal } from '@wcpos/order-math';
 
@@ -73,7 +73,7 @@ export function PayButton() {
 				}
 			});
 		} catch (error) {
-			const errorMessage = error instanceof Error ? error.message : String(error);
+			const errorMessage = getErrorMessage(error);
 			orderLogger.error('Checkout failed', {
 				showToast: true,
 				code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,

@@ -6,6 +6,7 @@ import { BehaviorSubject } from 'rxjs';
 import { Toast } from '@wcpos/components/toast';
 import { useQueryRuntime } from '@wcpos/query';
 import type { SyncCollectionName } from '@wcpos/sync-engine';
+import { getErrorMessage } from '@wcpos/utils/logger';
 
 import { useT } from '../../../contexts/translations';
 
@@ -78,7 +79,7 @@ export function useManualSync() {
 			Toast.show({
 				type: 'error',
 				text1: t('health.database.sync_failed'),
-				text2: error instanceof Error ? error.message : String(error),
+				text2: getErrorMessage(error),
 			});
 		} finally {
 			manualSyncInFlight$.next(false);
@@ -106,7 +107,7 @@ export function useCollectionCheck() {
 				Toast.show({
 					type: 'error',
 					text1: t('health.database.sync_failed'),
-					text2: error instanceof Error ? error.message : String(error),
+					text2: getErrorMessage(error),
 				});
 			} finally {
 				collectionCheckInFlight$.next(null);

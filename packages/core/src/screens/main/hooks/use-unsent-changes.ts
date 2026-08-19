@@ -4,7 +4,7 @@ import { Observable, of } from 'rxjs';
 import { catchError, switchMap } from 'rxjs/operators';
 
 import { useQueryRuntime } from '@wcpos/query';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { MUTATION_QUEUE_RXDB_COLLECTION } from '@wcpos/sync-engine';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 import {
@@ -101,7 +101,7 @@ export async function countUnsentChanges(engine: RxdbSyncEngine): Promise<Unsent
 		return classifyUnsentChanges(count);
 	} catch (error) {
 		healthLogger.warn('Unsent-changes count probe failed; showing the cached value', {
-			context: { error: error instanceof Error ? error.message : String(error) },
+			context: { error: getErrorMessage(error) },
 		});
 		return readUnsentChanges();
 	} finally {

@@ -10,6 +10,7 @@ import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import type { ScannerProfileDocument } from '@wcpos/database';
+import { getErrorMessage } from '@wcpos/utils/logger';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { useT } from '../../../../contexts/translations';
@@ -70,7 +71,7 @@ export function InputSources() {
 			Toast.show({
 				type: 'error',
 				title: t('common.error'),
-				description: error instanceof Error ? error.message : String(error),
+				description: getErrorMessage(error),
 			});
 		}
 	};
@@ -82,7 +83,7 @@ export function InputSources() {
 			Toast.show({
 				type: 'error',
 				title: t('common.error'),
-				description: error instanceof Error ? error.message : String(error),
+				description: getErrorMessage(error),
 			});
 		}
 	};

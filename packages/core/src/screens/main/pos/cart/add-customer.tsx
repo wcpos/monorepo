@@ -15,7 +15,7 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
@@ -88,7 +88,7 @@ export function AddNewCustomer() {
 					}
 				}
 			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error);
+				const errorMessage = getErrorMessage(error);
 				cartLogger.error('Failed to save customer', {
 					showToast: true,
 					code: ERROR_CODES.SYNC_UNEXPECTED,
@@ -188,7 +188,7 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
 					}
 				}
 			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error);
+				const errorMessage = getErrorMessage(error);
 				cartLogger.error('Failed to save customer', {
 					showToast: true,
 					code: ERROR_CODES.SYNC_UNEXPECTED,

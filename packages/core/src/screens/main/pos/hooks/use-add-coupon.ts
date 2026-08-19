@@ -5,8 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { type MetaDataEntry, wooMetaCarrier } from '@wcpos/sync-core';
 import { useQueryRuntime } from '@wcpos/query';
-import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { buildEnrichedProductCategories } from './coupon-helpers';
 import { validateCoupon } from './coupon-validation';
@@ -15,6 +14,7 @@ import {
 	readEngineCoupons,
 	readEngineProductsByWooId,
 } from './engine-coupon-data';
+import { reportCartFailure } from './cart-failure';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { parsePosData } from './utils';
 import { useT } from '../../../../contexts/translations';
@@ -236,22 +236,12 @@ export const useAddCoupon = () => {
 
 				return { success: true };
 			} catch (error) {
-				orderLogger.error('Local mutation failed', {
-					showToast: true,
-					code: ERROR_CODES.CART_UPDATE_FAILED,
-					toast: {
-						title: t('common.there_was_an_error', {
-							message: error instanceof Error ? error.message : String(error),
-						}),
-					},
-					context: {
-						error: error instanceof Error ? error.message : String(error),
-					},
+				const message = getErrorMessage(error);
+				reportCartFailure(orderLogger, 'Local mutation failed', {
+					toastTitle: t('common.there_was_an_error', { message }),
+					error,
 				});
-				return {
-					success: false,
-					error: error instanceof Error ? error.message : String(error),
-				};
+				return { success: false, error: message };
 			}
 		},
 		[runtime, currentOrder, localPatch, t, orderLogger, recalculate]

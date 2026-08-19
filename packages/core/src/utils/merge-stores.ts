@@ -3,7 +3,7 @@ import isEqual from 'lodash/isEqual';
 
 import type { StoreDocument, UserDatabase, WPCredentialsDocument } from '@wcpos/database';
 import { AUTO_SYNCED_STORE_FIELDS } from '@wcpos/database/collections/schemas/stores';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 const appLogger = getLogger(['wcpos', 'app', 'stores']);
@@ -354,7 +354,7 @@ export async function mergeStoresWithResponse({
 
 		return newStoreLocalIDs;
 	} catch (error) {
-		const errorMsg = error instanceof Error ? error.message : String(error);
+		const errorMsg = getErrorMessage(error);
 		appLogger.error('Failed to merge stores with response', {
 			code: ERROR_CODES.AUTH_UNEXPECTED,
 			context: {

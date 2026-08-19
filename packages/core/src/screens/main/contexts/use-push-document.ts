@@ -10,7 +10,7 @@ import {
 	WRITEABLE_REMOTE_ID_FIELD,
 	type WriteableCollection,
 } from '@wcpos/query';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
@@ -84,7 +84,7 @@ export const usePushDocument = () => {
 
 				return wrapEngineDocument(collectionName as LegacyCollectionName, currentResident as never);
 			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error);
+				const message = getErrorMessage(error);
 				syncLogger.error('Failed to send document to server', {
 					showToast: true,
 					code: ERROR_CODES.SYNC_UNEXPECTED,

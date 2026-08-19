@@ -1,7 +1,7 @@
 import { BehaviorSubject } from 'rxjs';
 
 import type { NotificationCollection } from '@wcpos/database';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
@@ -181,7 +181,7 @@ async function performMetadataSync(gen: number): Promise<void> {
 	} catch (error) {
 		novuLogger.error('Novu: Error syncing subscriber metadata', {
 			code: ERROR_CODES.UNEXPECTED_ERROR,
-			context: { error: error instanceof Error ? error.message : String(error) },
+			context: { error: getErrorMessage(error) },
 		});
 		if (syncedMetadataKey === key) syncedMetadataKey = null;
 	}
@@ -251,7 +251,7 @@ async function fetchAndSyncNotifications(
 				: 'Novu: Failed to refresh notifications',
 			{
 				code: ERROR_CODES.UNEXPECTED_ERROR,
-				context: { error: error instanceof Error ? error.message : String(error) },
+				context: { error: getErrorMessage(error) },
 			}
 		);
 	}
@@ -358,7 +358,7 @@ export function startNovuBootstrap({
 			if (gen !== generation) return;
 			novuLogger.error('Novu: Socket readiness check failed', {
 				code: ERROR_CODES.UNEXPECTED_ERROR,
-				context: { error: error instanceof Error ? error.message : String(error) },
+				context: { error: getErrorMessage(error) },
 			});
 		}
 

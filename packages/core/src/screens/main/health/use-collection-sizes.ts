@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useQueryRuntime } from '@wcpos/query';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { type CollectionKey, estimateCollectionBytes } from './database-logic';
 
@@ -79,7 +79,7 @@ export function useCollectionSizes(
 						healthLogger.warn('Collection size sampling failed; its cell shows no data', {
 							context: {
 								collection: key,
-								error: error instanceof Error ? error.message : String(error),
+								error: getErrorMessage(error),
 							},
 						});
 					}

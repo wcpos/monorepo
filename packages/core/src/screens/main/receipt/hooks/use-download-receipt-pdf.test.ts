@@ -26,6 +26,7 @@ jest.mock('../../../../contexts/translations', () => {
 });
 
 jest.mock('@wcpos/utils/logger', () => ({
+	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 	getLogger: () => ({
 		success: (...args: unknown[]) => mockLoggerSuccess(...args),
 		error: (...args: unknown[]) => mockLoggerError(...args),

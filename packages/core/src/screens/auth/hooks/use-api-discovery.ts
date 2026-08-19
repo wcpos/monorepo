@@ -5,7 +5,7 @@ import get from 'lodash/get';
 import semver from 'semver';
 
 import { useHttpClient } from '@wcpos/hooks/use-http-client';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
@@ -97,7 +97,10 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 				// on an infinite spinner) — but looser, because this GET returns the
 				// full API index and was observed taking ~9s on a degraded-but-alive
 				// server where the front-page probe hung outright.
-				const response = await http.get(wpApiUrl, { params: { wcpos: 1 }, timeout: 15_000 });
+				const response = await http.get(wpApiUrl, {
+					params: { wcpos: 1 },
+					timeout: 15_000,
+				});
 				const data = get(response, 'data') as WpJsonResponse;
 
 				// Basic validation
@@ -178,16 +181,13 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 				}
 
 				// No response at all — network/connection error
-				discoveryLogger.error(
-					`Failed to connect to ${wpApiUrl}: ${error instanceof Error ? error.message : String(error)}`,
-					{
-						showToast: true,
-						code: ERROR_CODES.AUTH_UNEXPECTED,
-						context: {
-							wpApiUrl,
-						},
-					}
-				);
+				discoveryLogger.error(`Failed to connect to ${wpApiUrl}: ${getErrorMessage(error)}`, {
+					showToast: true,
+					code: ERROR_CODES.AUTH_UNEXPECTED,
+					context: {
+						wpApiUrl,
+					},
+				});
 				throw error;
 			}
 		},

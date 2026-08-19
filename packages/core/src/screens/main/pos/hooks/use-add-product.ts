@@ -5,8 +5,8 @@ import { useObservableEagerState } from 'observable-hooks';
 import { type EngineRecord, isEngineRxDocument } from '@wcpos/query';
 import { wooIdOf } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { reportCartFailure } from './cart-failure';
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useUpdateLineItem } from './use-update-line-item';
@@ -110,10 +110,8 @@ export const useAddProduct = () => {
 				});
 				return true;
 			} else {
-				orderLogger.error('Failed to add product to cart', {
-					showToast: true,
-					code: ERROR_CODES.CART_UPDATE_FAILED,
-					toast: { title: t('pos.error_adding_to_cart', { name: product.name }) },
+				reportCartFailure(orderLogger, 'Failed to add product to cart', {
+					toastTitle: t('pos.error_adding_to_cart', { name: product.name }),
 					context: {
 						productId: product.id,
 						productName: product.name,

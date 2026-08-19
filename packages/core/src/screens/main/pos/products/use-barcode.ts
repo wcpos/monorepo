@@ -6,7 +6,7 @@ import { isStorageWorkerFailure } from '@wcpos/database/plugins/wrapped-error-ha
 import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { type ScanEvent } from '@wcpos/scanner';
 import { type BarcodeResolveFetcher, remoteIdOrNull, resolveScan, wooIdOf } from '@wcpos/sync-core';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
@@ -103,7 +103,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 				code: ERROR_CODES.LOCAL_DB_UNAVAILABLE,
 				context: {
 					barcode: barcodeStr,
-					error: error instanceof Error ? error.message : String(error),
+					error: getErrorMessage(error),
 				},
 			});
 		}
@@ -177,10 +177,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			if (isStorageWorkerFailure(error)) {
 				throw error;
 			}
-			showLookupError(
-				ERROR_CODES.PRODUCT_UNEXPECTED,
-				error instanceof Error ? error.message : String(error)
-			);
+			showLookupError(ERROR_CODES.PRODUCT_UNEXPECTED, getErrorMessage(error));
 		};
 
 		if (results.length > 1) {
@@ -483,7 +480,9 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		scanEvents$,
 		(event) =>
 			void handleScan(event).catch((error) =>
-				barcodeLogger.error(String(error), { code: ERROR_CODES.PRODUCT_UNEXPECTED })
+				barcodeLogger.error(String(error), {
+					code: ERROR_CODES.PRODUCT_UNEXPECTED,
+				})
 			)
 	);
 

@@ -30,7 +30,7 @@ import {
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
@@ -387,7 +387,7 @@ export function RefundOrderForm({ order }: Props) {
 				code: ERROR_CODES.PAYMENT_UNEXPECTED,
 				context: {
 					orderId: order.id,
-					error: err instanceof Error ? err.message : String(err),
+					error: getErrorMessage(err),
 				},
 			});
 		} finally {

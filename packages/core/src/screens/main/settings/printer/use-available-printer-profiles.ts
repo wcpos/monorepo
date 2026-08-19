@@ -5,7 +5,7 @@ import { map } from 'rxjs/operators';
 
 import type { PrinterProfile } from '@wcpos/printer';
 import type { PrinterProfileDocument } from '@wcpos/database';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import {
 	type CloudPrintResponse,
@@ -44,7 +44,7 @@ export function useAvailablePrinterProfiles(): PrinterProfile[] {
 			.catch((error) => {
 				if (cancelled) return;
 				printerLogger.warn('Unable to load cloud printer settings', {
-					context: { error: error instanceof Error ? error.message : String(error) },
+					context: { error: getErrorMessage(error) },
 				});
 				setCloudPayload(null);
 			});

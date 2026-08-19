@@ -1009,5 +1009,6 @@ export function getLogger(category: string[]): CategoryLogger {
 	return new CategoryLogger(category);
 }
 
+export { getErrorMessage } from './error-message';
 export { mapExceptionToCode } from './map-exception';
 export { log, recorderStats, snapshotRecorder };

@@ -13,6 +13,39 @@ jest.mock('uuid', () => ({ v4: () => 'coupon-line-uuid' }));
 const engine = { active: jest.fn() };
 const localPatch = jest.fn();
 const recalculate = jest.fn();
+const mockLoggerError = jest.fn();
+const mockLoggerWarn = jest.fn();
+const mockLoggerInfo = jest.fn();
+const mockLoggerSuccess = jest.fn();
+
+jest.mock('@wcpos/utils/logger', () => {
+	const logger = {
+		get error() {
+			return mockLoggerError;
+		},
+		get warn() {
+			return mockLoggerWarn;
+		},
+		get info() {
+			return mockLoggerInfo;
+		},
+		get success() {
+			return mockLoggerSuccess;
+		},
+		with: () => logger,
+	};
+	return {
+		getLogger: () => logger,
+		getErrorMessage: (error: unknown) => {
+			if (error instanceof Error) return error.message;
+			return String(error);
+		},
+	};
+});
+
+jest.mock('@wcpos/utils/logger/generated/error-codes.generated', () => ({
+	ERROR_CODES: { CART_UPDATE_FAILED: 'CART_UPDATE_FAILED' },
+}));
 
 jest.mock('@wcpos/query', () => ({
 	...jest.requireActual('@wcpos/query'),
@@ -154,5 +187,23 @@ describe('useAddCoupon engine reads', () => {
 				}),
 			})
 		);
+	});
+
+	it('returns and reports the message when a local dependency throws', async () => {
+		engine.active.mockImplementationOnce(() => {
+			throw new Error('kaboom');
+		});
+		const { result } = renderHook(() => useAddCoupon());
+
+		await expect(result.current.addCoupon('bonus')).resolves.toEqual({
+			success: false,
+			error: 'kaboom',
+		});
+		expect(mockLoggerError).toHaveBeenCalledWith('Local mutation failed', {
+			showToast: true,
+			code: 'CART_UPDATE_FAILED',
+			toast: { title: 'There was an error: kaboom' },
+			context: { error: 'kaboom' },
+		});
 	});
 });

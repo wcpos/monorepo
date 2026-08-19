@@ -21,7 +21,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { ModalAction, ModalClose, ModalFooter, useModal } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
@@ -177,7 +177,7 @@ export function EditOrderForm({ order }: Props) {
 					}
 				});
 			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error);
+				const errorMessage = getErrorMessage(error);
 				mutationLogger.error('Failed to save order', {
 					showToast: true,
 					code: ERROR_CODES.SYNC_UNEXPECTED,
@@ -239,7 +239,7 @@ export function EditOrderForm({ order }: Props) {
 
 				form.setValue('customer_id', customerId);
 			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error);
+				const errorMessage = getErrorMessage(error);
 				mutationLogger.error('Error fetching customer', {
 					code: ERROR_CODES.SYNC_UNEXPECTED,
 					context: {

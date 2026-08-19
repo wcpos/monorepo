@@ -6,7 +6,7 @@ import { useQueryRuntime, WRITEABLE_REMOTE_ID_FIELD } from '@wcpos/query';
 import { MUTATION_QUEUE_RXDB_COLLECTION, rejectionSuggestsServerRecord } from '@wcpos/sync-engine';
 import type { EngineConflict, RxdbSyncEngine } from '@wcpos/sync-engine';
 import { remoteIdOrNull } from '@wcpos/sync-core';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 const healthLogger = getLogger(['wcpos', 'health']);
 
@@ -131,7 +131,7 @@ async function describe(
 					context: {
 						collection: entry.collectionName,
 						recordId: entry.recordId,
-						error: error instanceof Error ? error.message : String(error),
+						error: getErrorMessage(error),
 					},
 				});
 			}

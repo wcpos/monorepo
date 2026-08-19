@@ -5,7 +5,7 @@
 import * as React from 'react';
 
 import { AppInfo } from '@wcpos/utils/app-info';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { buildAuthUrl, generateState, getRedirectUri } from './utils';
@@ -113,7 +113,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 		} catch (err) {
 			oauthLogger.error('Auth IPC failed', {
 				code: ERROR_CODES.AUTH_UNEXPECTED,
-				context: { error: err instanceof Error ? err.message : String(err) },
+				context: { error: getErrorMessage(err) },
 			});
 
 			const errorResult: WcposAuthResult = {

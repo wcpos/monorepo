@@ -18,7 +18,40 @@ jest.mock('uuid', () => ({
 const mockLocalPatch = jest.fn();
 const mockCheckCartStock = jest.fn();
 const mockShowBackorderWarning = jest.fn();
+const mockLoggerError = jest.fn();
+const mockLoggerWarn = jest.fn();
+const mockLoggerInfo = jest.fn();
+const mockLoggerSuccess = jest.fn();
 let mockLineItemQuantity = 1;
+
+jest.mock('@wcpos/utils/logger', () => {
+	const logger = {
+		get error() {
+			return mockLoggerError;
+		},
+		get warn() {
+			return mockLoggerWarn;
+		},
+		get info() {
+			return mockLoggerInfo;
+		},
+		get success() {
+			return mockLoggerSuccess;
+		},
+		with: () => logger,
+	};
+	return {
+		getLogger: () => logger,
+		getErrorMessage: (error: unknown) => {
+			if (error instanceof Error) return error.message;
+			return String(error);
+		},
+	};
+});
+
+jest.mock('@wcpos/utils/logger/generated/error-codes.generated', () => ({
+	ERROR_CODES: { UNEXPECTED_ERROR: 'UNEXPECTED_ERROR' },
+}));
 
 jest.mock('./use-cart-stock-guard', () => ({
 	useCartStockGuard: () => ({
@@ -52,51 +85,54 @@ jest.mock('../contexts/current-order', () => ({
 	}),
 	useCurrentOrder: () => ({
 		currentOrder: {
-			getLatest: () => ({
-				toMutableJSON: () => ({
-					line_items: [
-						{
-							meta_data: [
-								{
-									key: '_woocommerce_pos_uuid',
-									value: '5aa605ce-325e-47c8-96a9-fef1c55ea5b7',
-								},
-							],
-						},
-						{
-							name: 'Item 1',
-							product_id: 1,
-							variation_id: 0,
-							quantity: mockLineItemQuantity,
-							price: 10,
-							subtotal: '10',
-							total: '10',
-							meta_data: [
-								{
-									key: '_woocommerce_pos_uuid',
-									value: '23e108ca-63a7-469a-ad12-ed72e0d04be3',
-								},
-								{
-									key: '_woocommerce_pos_data',
-									value: JSON.stringify({
-										price: 10,
-										regular_price: 10,
-										tax_status: 'taxable',
-									}),
-								},
-							],
-						},
-						{
-							meta_data: [
-								{
-									key: '_woocommerce_pos_uuid',
-									value: 'f5e3c8d3-7d6d-4a3b-8c1d-0c2a0d1b3c8d',
-								},
-							],
-						},
-					],
-				}),
-			}),
+			getLatest: () => {
+				const lineItems = [
+					{
+						meta_data: [
+							{
+								key: '_woocommerce_pos_uuid',
+								value: '5aa605ce-325e-47c8-96a9-fef1c55ea5b7',
+							},
+						],
+					},
+					{
+						name: 'Item 1',
+						product_id: 1,
+						variation_id: 0,
+						quantity: mockLineItemQuantity,
+						price: 10,
+						subtotal: '10',
+						total: '10',
+						meta_data: [
+							{
+								key: '_woocommerce_pos_uuid',
+								value: '23e108ca-63a7-469a-ad12-ed72e0d04be3',
+							},
+							{
+								key: '_woocommerce_pos_data',
+								value: JSON.stringify({
+									price: 10,
+									regular_price: 10,
+									tax_status: 'taxable',
+								}),
+							},
+						],
+					},
+					{
+						meta_data: [
+							{
+								key: '_woocommerce_pos_uuid',
+								value: 'f5e3c8d3-7d6d-4a3b-8c1d-0c2a0d1b3c8d',
+							},
+						],
+					},
+				];
+				return {
+					id: 17,
+					line_items: lineItems,
+					toMutableJSON: () => ({ line_items: lineItems }),
+				};
+			},
 		},
 	}),
 }));
@@ -480,5 +516,45 @@ describe('useUpdateLineItem', () => {
 				}),
 			})
 		);
+	});
+
+	it('reports the invariant when split targets a missing line item without a toast', async () => {
+		const { result } = renderHook(() => useUpdateLineItem());
+
+		await act(async () => {
+			await result.current.splitLineItem('missing');
+		});
+
+		expect(mockLoggerError).toHaveBeenCalledWith(
+			'Split targeted a line item that is not in the cart',
+			{
+				code: 'UNEXPECTED_ERROR',
+				context: { uuid: 'missing', orderId: 17 },
+			}
+		);
+		expect(mockLoggerError.mock.calls[0][1]).not.toHaveProperty('showToast');
+		expect(mockLoggerError.mock.calls[0][1]).not.toHaveProperty('toast');
+	});
+
+	it('reports the invariant when split targets a quantity of one', async () => {
+		const { result } = renderHook(() => useUpdateLineItem());
+
+		await act(async () => {
+			await result.current.splitLineItem('23e108ca-63a7-469a-ad12-ed72e0d04be3');
+		});
+
+		expect(mockLoggerError).toHaveBeenCalledWith(
+			'Split requires a line item quantity greater than 1',
+			{
+				code: 'UNEXPECTED_ERROR',
+				context: {
+					uuid: '23e108ca-63a7-469a-ad12-ed72e0d04be3',
+					quantity: 1,
+					orderId: 17,
+				},
+			}
+		);
+		expect(mockLoggerError.mock.calls[0][1]).not.toHaveProperty('showToast');
+		expect(mockLoggerError.mock.calls[0][1]).not.toHaveProperty('toast');
 	});
 });

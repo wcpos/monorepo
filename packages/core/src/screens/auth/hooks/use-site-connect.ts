@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAppState } from '../../../contexts/app-state';
@@ -186,7 +186,7 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 					}
 				}
 
-				const errMessage = err instanceof Error ? err.message : String(err);
+				const errMessage = getErrorMessage(err);
 				siteLogger.error(`Failed to save site data: ${errMessage}`, {
 					code: errorCode,
 					showToast: true,

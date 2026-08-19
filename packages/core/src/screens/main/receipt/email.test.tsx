@@ -79,6 +79,7 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: onlineStatus }),
 }));
 jest.mock('@wcpos/utils/logger', () => ({
+	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 	// Lazy wrappers: `getLogger` runs at module load, before the mock consts above
 	// are initialized.
 	getLogger: () => ({

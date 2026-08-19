@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
@@ -57,7 +57,7 @@ export function useDownloadReceiptPdf() {
 					context: {
 						orderId,
 						templateId: normalizedTemplateId,
-						error: error instanceof Error ? error.message : String(error),
+						error: getErrorMessage(error),
 					},
 				});
 			} finally {

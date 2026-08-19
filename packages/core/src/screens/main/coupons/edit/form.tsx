@@ -6,7 +6,7 @@ import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
 import { useModal } from '@wcpos/components/modal';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
@@ -58,7 +58,7 @@ export function EditCouponForm({ coupon }: Props) {
 				});
 				close();
 			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error);
+				const errorMessage = getErrorMessage(error);
 				mutationLogger.error('Failed to save coupon', {
 					showToast: true,
 					code: ERROR_CODES.SYNC_UNEXPECTED,

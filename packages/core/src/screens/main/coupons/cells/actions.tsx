@@ -27,7 +27,7 @@ import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useQueryRuntime } from '@wcpos/query';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { CellContext } from '@wcpos/core/table-types';
 
@@ -66,7 +66,7 @@ export function Actions({ row }: CellContext<{ document: CouponDocument }, 'acti
 					code: ERROR_CODES.SYNC_UNEXPECTED,
 					showToast: true,
 					context: {
-						error: error instanceof Error ? error.message : String(error),
+						error: getErrorMessage(error),
 					},
 				});
 			});

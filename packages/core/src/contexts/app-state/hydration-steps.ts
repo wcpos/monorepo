@@ -2,7 +2,7 @@ import * as Crypto from 'expo-crypto';
 
 import { createStoreDB, createUserDB, sanitizeWPCredentialsData } from '@wcpos/database';
 import type { UserDatabase } from '@wcpos/database';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { Platform } from '@wcpos/utils/platform';
 
 import {
@@ -152,7 +152,7 @@ export async function testAuthorizationMethod(
 		appLogger.warn('Authorization method test error', {
 			context: {
 				wcposApiUrl,
-				error: err instanceof Error ? err.message : String(err),
+				error: getErrorMessage(err),
 			},
 		});
 		return null;

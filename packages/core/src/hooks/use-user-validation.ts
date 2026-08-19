@@ -11,7 +11,7 @@ import {
 	useHttpClient,
 } from '@wcpos/hooks/use-http-client';
 import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAppState } from '../contexts/app-state';
@@ -255,7 +255,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					appLogger.error(serverMessage, {
 						code: ERROR_CODES.AUTH_UNEXPECTED,
 						context: {
-							error: error instanceof Error ? error.message : String(error),
+							error: getErrorMessage(error),
 							userId,
 							siteUrl,
 						},
@@ -371,7 +371,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						});
 					}
 				} catch (error) {
-					const errorMsg = error instanceof Error ? error.message : String(error);
+					const errorMsg = getErrorMessage(error);
 					appLogger.error('Failed to update user in local database', {
 						code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 						context: {
@@ -406,7 +406,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						context: { userId, siteUrl },
 					});
 				} else {
-					const errorMsg = error instanceof Error ? error.message : String(error);
+					const errorMsg = getErrorMessage(error);
 					appLogger.error('[stores] validation FAILED', {
 						code: ERROR_CODES.AUTH_UNEXPECTED,
 						context: {

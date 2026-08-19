@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useQueryRuntime } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 type LineItems = import('@wcpos/database').OrderDocument['line_items'];
@@ -51,7 +51,7 @@ export const useStockAdjustment = () => {
 							code: ERROR_CODES.PRODUCT_UNEXPECTED,
 							context: {
 								collection: request.collection,
-								error: error instanceof Error ? error.message : String(error),
+								error: getErrorMessage(error),
 							},
 						});
 					}

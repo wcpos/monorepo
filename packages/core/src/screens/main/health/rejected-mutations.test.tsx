@@ -66,6 +66,7 @@ jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine: { resolveConflict: mockResolveConflict } }),
 }));
 jest.mock('@wcpos/utils/logger', () => ({
+	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 	getLogger: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),
 }));
 jest.mock('../../../contexts/translations', () => {

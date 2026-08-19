@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { useQueryRuntime } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { RefundDestination } from '../../hooks/payment-gateway-contract';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
@@ -121,7 +121,7 @@ export function useRefundMutation() {
 				refundLogger.warn('Refund succeeded but the local order refresh failed', {
 					context: {
 						orderId: order.id,
-						error: error instanceof Error ? error.message : String(error),
+						error: getErrorMessage(error),
 					},
 				});
 			} finally {

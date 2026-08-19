@@ -3,7 +3,7 @@ import * as React from 'react';
 import { measureAppStorage } from '@wcpos/database';
 import { useQueryRuntime } from '@wcpos/query';
 import { siteHashFor } from '@wcpos/sync-core';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useEngineStatus } from '../hooks/use-engine-monitor';
@@ -67,7 +67,7 @@ export function useStorageFootprint(): StorageFootprintSummary | null {
 						healthLogger.warn('Storage footprint could not hash a site url', {
 							context: {
 								siteId: site.uuid,
-								error: error instanceof Error ? error.message : String(error),
+								error: getErrorMessage(error),
 							},
 						});
 					}
@@ -79,7 +79,7 @@ export function useStorageFootprint(): StorageFootprintSummary | null {
 				healthLogger.warn(
 					'Storage footprint could not read the sites list; buckets may be misattributed',
 					{
-						context: { error: error instanceof Error ? error.message : String(error) },
+						context: { error: getErrorMessage(error) },
 					}
 				);
 			}

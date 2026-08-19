@@ -11,7 +11,7 @@ import {
 	PrinterService,
 	probeVendor,
 } from '@wcpos/printer';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import type { ConnectionDiagnostics, PrinterProfile, PrinterServiceOptions } from '@wcpos/printer';
 
 import { buildPrinterProfileFields, type PrinterDialogPrefill } from '../profile-config';
@@ -36,7 +36,7 @@ export interface TestPrintFailure {
 
 function toTestPrintFailure(err: unknown): TestPrintFailure {
 	return {
-		message: err instanceof Error ? err.message : String(err),
+		message: getErrorMessage(err),
 		diagnostics: isPrinterConnectionError(err) ? err.diagnostics : null,
 	};
 }

@@ -3,7 +3,7 @@ import * as React from 'react';
 import get from 'lodash/get';
 
 import { useHttpClient } from '@wcpos/hooks/use-http-client';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 const appLogger = getLogger(['wcpos', 'app', 'site']);
@@ -89,7 +89,7 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 					await site.incrementalPatch(patch);
 				}
 			} catch (err) {
-				const errorMsg = err instanceof Error ? err.message : String(err);
+				const errorMsg = getErrorMessage(err);
 				appLogger.error('Failed to fetch site info', {
 					code: ERROR_CODES.SYNC_UNEXPECTED,
 					context: {

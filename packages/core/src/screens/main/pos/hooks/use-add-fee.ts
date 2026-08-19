@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { POS_META_KEYS } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { reportCartFailure } from './cart-failure';
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateFeeLineTaxAndTotals } from './use-calculate-fee-line-tax-and-totals';
 import { useT } from '../../../../contexts/translations';
@@ -79,14 +79,10 @@ export const useAddFee = () => {
 					},
 				});
 			} catch (error) {
-				orderLogger.error('Failed to add fee to cart', {
-					showToast: true,
-					code: ERROR_CODES.CART_UPDATE_FAILED,
-					toast: { title: t('pos.error_adding_fee_to_cart') },
-					context: {
-						feeName: data.name,
-						error: error instanceof Error ? error.message : String(error),
-					},
+				reportCartFailure(orderLogger, 'Failed to add fee to cart', {
+					toastTitle: t('pos.error_adding_fee_to_cart'),
+					context: { feeName: data.name },
+					error,
 				});
 			}
 		},
