@@ -201,6 +201,9 @@ async function runCustomerTrickle(deps: CustomerTrickleDeps): Promise<CustomerTr
 	const response = await deps.fetcher(url, deps.signal ? { signal: deps.signal } : undefined);
 	if (!response.ok) {
 		if (response.status === 400) {
+			// Deliberate swallow (#1345): best-effort parse of an ALREADY-failed response
+			// for the one rewindable code — a malformed body falls through to the thrown
+			// HTTP error below, so no failure is hidden.
 			const error = (await response.json().catch(() => null)) as { code?: unknown } | null;
 			if (error?.code === 'rest_post_invalid_page_number') {
 				// Records were deleted under the cursor: rewind THIS view rather than discarding

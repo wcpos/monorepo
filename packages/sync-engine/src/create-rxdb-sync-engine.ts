@@ -970,6 +970,9 @@ export function createRxdbSyncEngine(
 		} catch (error) {
 			databaseByScopeId.delete(scopeId);
 			localCoverageByScopeId.delete(scopeId);
+			// Deliberate swallow (#1345): best-effort teardown of a half-open database.
+			// The original open failure rethrows below; a close rejection on top of it
+			// carries no extra signal.
 			await db.close().catch(() => undefined);
 			throw error;
 		}
@@ -1694,7 +1697,23 @@ export function createRxdbSyncEngine(
 						for (const lane of REBASELINE_RETICK_LANES.slice(2)) {
 							await automaticTickGate.runLane(lane);
 						}
-					})().catch(() => undefined);
+					})().catch((error) => {
+						// Landing here is an engine-invariant break: runLane never rejects on a
+						// tick failure (the automatic tick gate catches and reports those) and the
+						// audit-window wait cannot reject. A silent swallow would wedge
+						// rebaselineHoldActive, skipping every later automatic existence
+						// prime/reconcile with no trace (#1345) — so release THIS chain's hold
+						// (a newer rebaseline owns the flag once the generation moves) and report.
+						if (generation === rebaselineGeneration && !disposed) {
+							rebaselineHoldActive = false;
+						}
+						diagnostics({
+							type: 'engine.lane.tick',
+							level: 'error',
+							message: `rebaseline continuation failed: ${error instanceof Error ? error.message : String(error)}`,
+							fields: { lane: 'rebaseline-continuation', status: 'error' },
+						});
+					});
 				}
 				return report;
 			});

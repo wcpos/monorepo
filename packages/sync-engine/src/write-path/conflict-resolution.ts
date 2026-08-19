@@ -580,7 +580,18 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 					if (claimTaken && claimedQueue) {
 						await (claimedQueue as ReturnType<typeof queueFor>)
 							.releaseResolutionClaim(mutationId, resolutionInstanceIdFor())
-							.catch(() => undefined);
+							.catch((error) => {
+								// The release must never mask the try-block's outcome, and a failed
+								// release self-heals at the lease deadline — but a storage failure
+								// here is still a failure someone may be diagnosing, so it is
+								// reported rather than swallowed silently (#1345).
+								diagnostics({
+									type: 'queue.write.tick.error',
+									level: 'warn',
+									message: `conflict-claim release failed (row stays claimed until the lease deadline): ${error instanceof Error ? error.message : String(error)}`,
+									fields: { mutationId },
+								});
+							});
 					}
 				}
 				// Discard chose server truth — attempt the re-pull's IMMEDIATE
