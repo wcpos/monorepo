@@ -6,6 +6,7 @@ import * as React from 'react';
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 
 import { Toast } from '@wcpos/components/toast';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { AttentionPanel } from './attention-panel';
 import { useCollectionCheck } from './use-manual-sync';
@@ -114,6 +115,23 @@ describe('AttentionPanel', () => {
 		await waitFor(() =>
 			expect(screen.getByTestId('db-attention-panel').textContent).toContain(label)
 		);
+	});
+
+	it('does not warn when a label read rejects after the panel unmounts', async () => {
+		let rejectRead!: (error: Error) => void;
+		mockExec.mockReturnValue(
+			new Promise((_resolve, reject) => {
+				rejectRead = reject;
+			})
+		);
+		const { unmount } = render(<AttentionPanel stuck={[stuck('products', true)]} />);
+
+		unmount();
+		await act(async () => {
+			rejectRead(new Error('scope closed'));
+		});
+
+		expect(getLogger([]).warn).not.toHaveBeenCalled();
 	});
 
 	// A pull escalation is the engine re-checking the catalogue; the record never

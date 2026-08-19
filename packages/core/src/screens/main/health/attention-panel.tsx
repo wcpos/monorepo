@@ -73,6 +73,7 @@ function useStuckRecordLabel(stuck: StuckRecord | undefined): string | null {
 									: null;
 				if (name) setResolved({ key: stuck.key, label: name });
 			} catch (error) {
+				if (cancelled) return;
 				// Doc unavailable — the collection/id fallback still identifies it, but a
 				// failed read on the health surface itself must reach the log pipeline.
 				healthLogger.warn('Attention panel could not read the stuck record for its label', {

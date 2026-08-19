@@ -91,7 +91,7 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 				context: { skipped: skippedStaleHits },
 			});
 		}
-	}, [skippedStaleHits]);
+	}, [deferredResult.hits, skippedStaleHits]);
 
 	return (
 		<View className="flex h-full flex-col">

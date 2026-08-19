@@ -66,14 +66,6 @@ export const useAddShipping = () => {
 				});
 
 				if (!(await addItemToOrder('shipping_lines', newShippingLine))) {
-					// Fee/shipping adds never hit the stock guard, so a falsy result here is a
-					// silent write failure, not an already-toasted stock rejection.
-					orderLogger.error('Shipping was not added to the cart', {
-						showToast: true,
-						code: ERROR_CODES.CART_UPDATE_FAILED,
-						toast: { title: t('pos.error_adding_shipping_to_cart') },
-						context: { methodTitle: data.method_title },
-					});
 					return;
 				}
 

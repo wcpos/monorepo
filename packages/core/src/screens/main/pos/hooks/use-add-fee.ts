@@ -66,14 +66,6 @@ export const useAddFee = () => {
 				});
 
 				if (!(await addItemToOrder('fee_lines', newFeeLine))) {
-					// Fee/shipping adds never hit the stock guard, so a falsy result here is a
-					// silent write failure, not an already-toasted stock rejection.
-					orderLogger.error('Fee was not added to the cart', {
-						showToast: true,
-						code: ERROR_CODES.CART_UPDATE_FAILED,
-						toast: { title: t('pos.error_adding_fee_to_cart') },
-						context: { feeName: data.name },
-					});
 					return;
 				}
 
