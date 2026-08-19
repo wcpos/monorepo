@@ -470,7 +470,7 @@ export class RxCoverageRepository {
 	async readCoverageDocuments(): Promise<PersistedCoverageDocumentSet> {
 		const [records, lanes] = await Promise.all([
 			this.coverageRecords
-				.find({ selector: {}, sort: [{ collectionName: 'asc' }, { id: 'asc' }] })
+				.find({ selector: {}, sort: [{ collectionName: 'asc' }, { documentId: 'asc' }] })
 				.exec(),
 			this.coverageLanes
 				.find({ selector: {}, sort: [{ collectionName: 'asc' }, { queryKey: 'asc' }] })
