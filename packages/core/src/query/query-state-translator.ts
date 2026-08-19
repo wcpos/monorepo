@@ -489,15 +489,20 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 			...dimensions,
 			...(filtered ? { priority: 700 } : {}),
 		});
-	} else if (collection === 'customers' && wooOrderbyFor('customers', uiSortField)) {
-		const wooOrderby = wooOrderbyFor('customers', uiSortField)!;
+	} else if (collection === 'customers') {
+		// A sort with no wire `orderby` (the customers grid's `date_modified_gmt`) still
+		// declares the window — with the sort OMITTED, so it falls back to the default order,
+		// exactly as products do above. Gating the whole branch on the mapping existing
+		// declared NO demand for that column, which left the grid locally re-ordering
+		// whichever residents happened to exist: the plausible-looking-but-wrong slice #909
+		// and #951 introduced these windows to prevent.
+		const wooOrderby = wooOrderbyFor('customers', uiSortField);
 		demand.push({
 			id: requirementId(options.id, 'customer-browse'),
 			collection: 'customers',
 			kind: 'customer-browse',
 			limit: state.limit,
-			orderby: wooOrderby,
-			order: state.sort.direction,
+			...(wooOrderby ? { orderby: wooOrderby, order: state.sort.direction } : {}),
 		});
 	} else if (
 		collection === 'coupons' ||

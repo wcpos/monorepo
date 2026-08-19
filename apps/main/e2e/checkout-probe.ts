@@ -245,7 +245,13 @@ export async function findVariableProduct(page: Page, search: Locator): Promise<
 		);
 	}
 	if (probe) {
-		await searchAndWaitForServer(page, search, 'products', probe.token);
+		await searchAndWaitForServer(
+			page,
+			search,
+			'products',
+			probe.token,
+			page.getByTestId(probe.rowTestId!)
+		);
 		return;
 	}
 

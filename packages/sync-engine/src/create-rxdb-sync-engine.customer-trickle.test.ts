@@ -43,13 +43,29 @@ function customers(start: number, count: number): Record<string, unknown>[] {
 	return Array.from({ length: count }, (_, index) => customer(start + index));
 }
 
+/**
+ * The trickle is the only customers request that asks for a single 10-record page — the
+ * browse-window drain walks at the Performance dial (100 by default here). It is no longer
+ * identifiable by its sort: the sort is now the cashier's (owner ruling 2026-08-19).
+ */
 function isTrickleUrl(url: string): boolean {
 	const parsed = new URL(url);
-	return (
-		parsed.pathname.endsWith('/customers') &&
-		parsed.searchParams.get('orderby') === 'id' &&
-		parsed.searchParams.get('order') === 'asc'
-	);
+	return parsed.pathname.endsWith('/customers') && parsed.searchParams.get('per_page') === '10';
+}
+
+/** Declare and settle one customers browse window, so the engine records it as current. */
+async function declareBrowseWindow(
+	engine: ReturnType<typeof engineWith>,
+	dimensions: Record<string, unknown>
+): Promise<void> {
+	const handle = engine.require({
+		id: 'grid',
+		collection: 'customers',
+		kind: 'customer-browse',
+		...dimensions,
+	} as never);
+	await handle.ready.catch(() => undefined);
+	handle.release();
 }
 
 function engineWith(overrides: Partial<RxdbSyncEnginePorts> = {}, storeIdentity = identity()) {
@@ -86,7 +102,7 @@ describe('customer-trickle maintenance lane', () => {
 		expect(urls).toHaveLength(1);
 		const first = new URL(urls[0]!);
 		expect(first.pathname).toBe('/wp-json/wcpos/v2/customers');
-		expect(first.search).toBe('?orderby=id&order=asc&per_page=10&page=1');
+		expect(first.search).toBe('?orderby=id&order=asc&role=all&per_page=10&page=1');
 		expect(first.searchParams.has('include')).toBe(false);
 		expect(first.searchParams.has('search')).toBe(false);
 		expect(await scope.database.collections.customers.count().exec()).toBe(10);
@@ -120,6 +136,75 @@ describe('customer-trickle maintenance lane', () => {
 		await expect(engine.sync('customer-trickle')).resolves.toMatchObject({ status: 'ran' });
 		await engine.sync('customer-trickle');
 		expect(pages).toEqual(['1', '2', '1']);
+		await engine.dispose();
+	});
+
+	// Paul's ruling, 2026-08-19: records arrive in the order the user chose, whatever path they
+	// arrive by — and re-pointing the grid re-points the backfill.
+	it('trickles in the sort the grid last declared, and restarts when that sort changes', async () => {
+		const trickled: URL[] = [];
+		const engine = engineWith({
+			fetcher: async (url) => {
+				if (isTrickleUrl(url)) trickled.push(new URL(url));
+				return json(customers(1, 10));
+			},
+		});
+		await engine.ready;
+
+		await declareBrowseWindow(engine, { limit: 100, orderby: 'last_name', order: 'asc' });
+		await engine.sync('customer-trickle');
+		await engine.sync('customer-trickle');
+		expect(trickled.map((url) => url.searchParams.get('orderby'))).toEqual([
+			'last_name',
+			'last_name',
+		]);
+		expect(trickled.map((url) => url.searchParams.get('page'))).toEqual(['1', '2']);
+
+		// The cashier re-sorts to newest-registered-first: the walk starts again in THAT order.
+		await declareBrowseWindow(engine, { limit: 100, orderby: 'registered_date', order: 'desc' });
+		await engine.sync('customer-trickle');
+		expect(trickled[2]!.searchParams.get('orderby')).toBe('registered_date');
+		expect(trickled[2]!.searchParams.get('order')).toBe('desc');
+		expect(trickled[2]!.searchParams.get('page')).toBe('1');
+		await engine.dispose();
+	});
+
+	// Scrolling grows the window's limit, which is deliberately NOT part of the cursor's view
+	// identity — otherwise every scroll tick would restart the backfill at page 1.
+	it('keeps walking across a scroll that only grows the window', async () => {
+		const trickled: URL[] = [];
+		const engine = engineWith({
+			fetcher: async (url) => {
+				if (isTrickleUrl(url)) trickled.push(new URL(url));
+				return json(customers(1, 10));
+			},
+		});
+		await engine.ready;
+
+		await declareBrowseWindow(engine, { limit: 100, orderby: 'last_name', order: 'asc' });
+		await engine.sync('customer-trickle');
+		await declareBrowseWindow(engine, { limit: 400, orderby: 'last_name', order: 'asc' });
+		await engine.sync('customer-trickle');
+
+		expect(trickled.map((url) => url.searchParams.get('page'))).toEqual(['1', '2']);
+		await engine.dispose();
+	});
+
+	it('does not carry a browse window into another store scope', async () => {
+		const trickled: URL[] = [];
+		const engine = engineWith({
+			fetcher: async (url) => {
+				if (isTrickleUrl(url)) trickled.push(new URL(url));
+				return json(customers(1, 10));
+			},
+		});
+		const initialScope = await engine.ready;
+
+		await declareBrowseWindow(engine, { limit: 100, orderby: 'last_name', order: 'asc' });
+		await engine.scope.switch({ ...initialScope.identity, storeId: 8 });
+		await engine.sync('customer-trickle');
+
+		expect(trickled[0]!.searchParams.get('orderby')).toBe('id');
 		await engine.dispose();
 	});
 
@@ -292,7 +377,9 @@ describe('customer-trickle maintenance lane', () => {
 		expect(fetchCalls).toBe(1);
 		await expect(
 			checkpoints.get(`${scopeKeyFor(storeIdentity)}:${TRICKLE_STATE_KEY}`)
-		).resolves.toBe(JSON.stringify({ page: 2, walkComplete: false }));
+		).resolves.toBe(
+			JSON.stringify({ viewKey: 'customers:browse-window:limit=', page: 2, walkComplete: false })
+		);
 		await engine.dispose();
 	});
 

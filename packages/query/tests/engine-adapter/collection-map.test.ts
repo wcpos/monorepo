@@ -260,6 +260,19 @@ describe('engine adapter collection map', () => {
 			total: 'total',
 			payment_method: 'payment_method',
 		});
+		// Customers were the third collection with a browse window (#951) and the only one this
+		// assertion did not cover, which is how a clickable-but-unexpressible customers sort
+		// could reach the grid unnoticed. `date_modified_gmt` is absent by design: the customers
+		// read surface has no wire orderby for it (see initial-settings.test.ts).
+		expect(declaredValues('customers', wooOrderbyFor)).toEqual({
+			id: 'id',
+			date_created_gmt: 'registered_date',
+			first_name: 'first_name',
+			last_name: 'last_name',
+			email: 'email',
+			username: 'username',
+			role: 'role',
+		});
 	});
 
 	it('falls back explicitly to the payload for unlisted fields', () => {
