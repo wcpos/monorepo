@@ -254,30 +254,34 @@ export function createGreedyCollectionFetcher<Doc, Payload>(
 			spec.remoteId !== undefined;
 
 		// Verify-before-prune, resolved BEFORE coverage is recorded so verified
-		// survivors join the walk's covered set. Only the wire leg (request +
-		// body parse) is fail-safe — a repository failure propagates and fails
-		// the task exactly as it would on the page path, so the scheduler
-		// retries and tagged storage refusals reach their recovery handlers.
-		// `null` = the wire leg failed: prune NOTHING this walk (the next walk
-		// reconciles), mirroring the abort guard below.
+		// survivors join the walk's covered set. The WIRE leg is fail-safe — the
+		// request, the response shape, and payload materialization (a WP error
+		// object 200-wrapped by a proxy, a payload whose id the materializer
+		// refuses) are all "the server answered garbage": warn and prune NOTHING
+		// this walk (`null`), mirroring the abort guard below; the next walk
+		// reconciles. Repository writes stay OUTSIDE the guard — a storage
+		// failure propagates and fails the task exactly as on the page path, so
+		// the scheduler retries and tagged refusals reach their recovery handlers.
 		let confirmedAbsentUuids: string[] | null = [];
 		let coverageIds = allCoverageIds;
 		if (runsVerifiedPrune) {
 			const absent = await input.repository.listServerSourcedAbsent!(allStorageIds);
-			const batches: Payload[][] = [];
+			const survivorBatches: Doc[][] = [];
 			for (const batch of chunk(absent, WOO_REST_MAX_PER_PAGE)) {
 				try {
 					const verifyQuery = new URLSearchParams();
 					verifyQuery.set('include', batch.map(({ wooId }) => wooId).join(','));
 					verifyQuery.set('per_page', String(batch.length));
+					requestCount += 1;
 					const verify = await httpGet(
 						input,
 						`${input.baseUrl}/${spec.endpoint}?${verifyQuery.toString()}`,
 						context
 					);
-					requestCount += 1;
 					if (!verify.ok) throw new Error(`verify request failed: ${verify.status}`);
-					batches.push(JSON.parse(await verify.text()) as Payload[]);
+					const payloads = JSON.parse(await verify.text()) as Payload[];
+					if (!Array.isArray(payloads)) throw new Error('verify response is not a list');
+					survivorBatches.push(payloads.map(spec.documentFromPayload));
 				} catch (error) {
 					input.diagnostics?.({
 						type: 'engine.guard',
@@ -291,8 +295,7 @@ export function createGreedyCollectionFetcher<Doc, Payload>(
 			}
 			if (confirmedAbsentUuids !== null) {
 				const live = new Set<number>();
-				for (const payloads of batches) {
-					const survivors = payloads.map(spec.documentFromPayload);
+				for (const survivors of survivorBatches) {
 					await input.repository.upsertMany(survivors);
 					for (const survivor of survivors) {
 						const id = spec.remoteId!(survivor);

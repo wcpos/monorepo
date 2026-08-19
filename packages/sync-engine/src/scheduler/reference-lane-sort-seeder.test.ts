@@ -114,4 +114,58 @@ describe('reference lane sorted seeding', () => {
 		expect(tampered).toBe(true);
 		expect(categoryKeys(stored)).toEqual(['categories:all:orderby=slug:order=asc']);
 	});
+
+	it('a supersede an active drain keeps winning never rejects; later reseeds converge it', async () => {
+		const { database, stored } = schedulerDatabase();
+		await seedReferenceLanes({
+			database,
+			collections: ['categories'],
+			sorts: { categories: { orderby: 'name', order: 'desc' } },
+		});
+		const oldStateKey = [...stored.entries()].find(
+			([, row]) => row.queryKey === 'categories:all:orderby=name:order=desc'
+		)?.[0];
+		if (oldStateKey === undefined) throw new Error('expected a persisted sorted lane');
+
+		// A drain renewing its lease per page wins EVERY removal attempt.
+		const collectionStub = (
+			database as unknown as {
+				schedulerTaskStates: { findOne: (stateKey: string) => { exec: () => Promise<unknown> } };
+			}
+		).schedulerTaskStates;
+		const originalFindOne = collectionStub.findOne.bind(collectionStub);
+		let drainHoldsLease = true;
+		collectionStub.findOne = (stateKey: string) => {
+			if (drainHoldsLease && stateKey === oldStateKey) {
+				return {
+					exec: async () => ({
+						toJSON: () => ({ ...stored.get(stateKey), priority: 1 }),
+						incrementalModify: async () => undefined,
+					}),
+				};
+			}
+			return originalFindOne(stateKey);
+		};
+
+		// The refresh must still seed the requested sort (no rejection); the stale
+		// row survives this round.
+		await seedReferenceLanes({
+			database,
+			collections: ['categories'],
+			sorts: { categories: { orderby: 'slug', order: 'asc' } },
+		});
+		expect(categoryKeys(stored).sort()).toEqual([
+			'categories:all:orderby=name:order=desc',
+			'categories:all:orderby=slug:order=asc',
+		]);
+
+		// Once the drain lets go, the next reseed converges back to one lane.
+		drainHoldsLease = false;
+		await seedReferenceLanes({
+			database,
+			collections: ['categories'],
+			sorts: { categories: { orderby: 'slug', order: 'asc' } },
+		});
+		expect(categoryKeys(stored)).toEqual(['categories:all:orderby=slug:order=asc']);
+	});
 });

@@ -210,9 +210,12 @@ export async function seedReferenceLanes(
 				);
 				if (!replacement || replacement.id === state.taskId) continue;
 				// The remove is CAS-guarded, and a concurrent owner (a drain claiming,
-				// renewing, or completing the old lane) legitimately wins the race —
-				// that must not reject the whole refresh. Re-read and retry against
-				// the fresh state; the row being GONE is the outcome we wanted.
+				// renewing per page, or completing the old lane) legitimately wins the
+				// race — that must never reject the refresh. Re-read and retry against
+				// the fresh state; the row being GONE is the outcome we wanted. If an
+				// actively-drained lane wins every attempt, seed the new lane anyway
+				// and leave the stale row: EVERY subsequent reseed re-runs this
+				// supersede, so the duplicate converges away once the drain lets go.
 				let current: typeof state | undefined = state;
 				let removed = false;
 				for (let attempt = 0; attempt < 3 && !removed && current !== undefined; attempt += 1) {
@@ -222,9 +225,6 @@ export async function seedReferenceLanes(
 							(candidate) => candidate.taskId === state.taskId
 						);
 					}
-				}
-				if (!removed && current !== undefined) {
-					throw new Error(`reference lane supersede lost for ${state.taskId}`);
 				}
 			}
 			return seedPersistedSchedulerTasks({

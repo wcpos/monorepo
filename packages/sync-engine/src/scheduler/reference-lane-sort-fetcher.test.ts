@@ -128,6 +128,37 @@ describe('reference lane sorted greedy fetches', () => {
 		);
 	});
 
+	it('treats a 200-wrapped error object and a malformed payload as wire failures, not task failures', async () => {
+		// A proxy can 200-wrap a WP error object (not a list), and a listed payload
+		// can carry an id the materializer refuses — both are "the server answered
+		// garbage": fail-safe (warn, no prune, completed), never a task rejection.
+		for (const body of [
+			Response.json({ code: 'internal_server_error', message: 'boom' }),
+			Response.json([{ name: 'no id at all', meta_data: [] }]),
+		] as const) {
+			const repo = repository();
+			repo.listServerSourcedAbsent.mockResolvedValue([{ uuid: uuidFor(98), wooId: 98 }]);
+			const diagnostics = vi.fn();
+			const fetcher = vi.fn().mockResolvedValueOnce(response([])).mockResolvedValueOnce(body);
+			const run = createReferenceCollectionFetcher(CATEGORY_REFERENCE_CONFIG, {
+				baseUrl: 'https://example.test/wp-json/wcpos/v2',
+				repository: repo,
+				fetcher,
+				diagnostics,
+			});
+
+			await expect(run(task('categories:all:orderby=name:order=desc'))).resolves.toMatchObject({
+				completed: true,
+				prunedCount: 0,
+				requestCount: 2,
+			});
+			expect(repo.pruneServerSourcedAbsentByUuids).not.toHaveBeenCalled();
+			expect(diagnostics).toHaveBeenCalledWith(
+				expect.objectContaining({ level: 'warn', collection: 'categories' })
+			);
+		}
+	});
+
 	it('lets a repository failure escape the verification guard and fail the task', async () => {
 		const repo = repository();
 		repo.listServerSourcedAbsent.mockResolvedValue([{ uuid: uuidFor(99), wooId: 99 }]);
