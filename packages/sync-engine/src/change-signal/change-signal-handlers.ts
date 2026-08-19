@@ -107,6 +107,8 @@ async function fetchBody(
 	const url = `${ctx.syncBaseUrl}${path}${search === '' ? '' : `?${search}`}`;
 	const response = await ctx.fetch(url);
 	if (!response.ok) {
+		// Deliberate swallow (#1345): best-effort enrichment of an ALREADY-failed
+		// response — a malformed error body still throws the HTTP-status error below.
 		const errorBody = (await response.json().catch(() => null)) as {
 			code?: unknown;
 			message?: unknown;

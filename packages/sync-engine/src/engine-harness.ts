@@ -296,6 +296,9 @@ function createEngineHarnessImpl(
 		requests,
 		respond: async (response, respondOptions) => {
 			scripted = { response, elapsedMs: respondOptions?.elapsedMs ?? 0 };
+			// Deliberate swallow (#1345): the fetch only drives the engine's observable
+			// effects — tests that script a network-error response make it reject by
+			// design, and callers assert on diagnostics/clocks, never on this result.
 			await engine
 				.hostTransport()
 				.fetcher(`${site.syncBaseUrl}/changes/tick`)

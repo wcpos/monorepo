@@ -5,6 +5,10 @@ import { vi } from 'vitest';
 import type { OrderDocument } from '@wcpos/sync-core';
 import type { LocalCustomerDocument } from '@wcpos/sync-engine/testing';
 
+import {
+	materializeLocalOnly,
+	materializeTargeted,
+} from '../materialization/record-materialization';
 import { remoteId } from '../testing';
 import {
 	extractCustomerManifest,
@@ -41,6 +45,47 @@ describe('extractCustomerManifest', () => {
 			},
 		]);
 		expect(documents.every((d) => !('_rxdb_digest' in (d.payload as object)))).toBe(true);
+	});
+});
+
+describe('Symbol-borne manifest rows (#1345 mechanism 1)', () => {
+	// materializeTargeted/materializeLocalOnly strip `_rxdb_digest` from the payload at
+	// materialization time; from there the manifest row travels ONLY on a non-enumerable
+	// Symbol (#1340). extract*Manifest must read that Symbol BEFORE stripping — strip*
+	// rebuilds the document with a spread, which drops the Symbol. These tests fail if
+	// the read/strip order in extract*Manifest is ever swapped.
+	const posUuid = (n: number) => [
+		{
+			key: '_woocommerce_pos_uuid',
+			value: `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`,
+		},
+	];
+
+	it('extractCustomerManifest recovers a row that rides only the Symbol', () => {
+		const { storedDocument } = materializeTargeted('customers', {
+			id: 30,
+			meta_data: posUuid(30),
+			_rxdb_digest: 'd30',
+		});
+		// The payload carrier is already gone — the Symbol is the row's only vehicle.
+		expect('_rxdb_digest' in (storedDocument.payload as object)).toBe(false);
+		const { manifestRows, documents } = extractCustomerManifest([
+			storedDocument as unknown as LocalCustomerDocument,
+		]);
+		expect(manifestRows).toEqual([{ id: '30', wooId: 30, objectType: 'customer', digest: 'd30' }]);
+		expect(documents).toHaveLength(1);
+	});
+
+	it('extractOrderManifest recovers a row that rides only the Symbol', () => {
+		const { storedDocument } = materializeLocalOnly({
+			id: 77,
+			meta_data: posUuid(77),
+			_rxdb_digest: 'd77',
+		} as never);
+		expect('_rxdb_digest' in (storedDocument.payload as object)).toBe(false);
+		const { manifestRows, documents } = extractOrderManifest([storedDocument]);
+		expect(manifestRows).toEqual([{ id: '77', wooId: 77, objectType: 'order', digest: 'd77' }]);
+		expect(documents).toHaveLength(1);
 	});
 });
 
