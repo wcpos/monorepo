@@ -4,9 +4,8 @@
  * `normalizeVariationAttributes` in `packages/query/src/hooks/variations.helpers.ts`).
  * That helper and its suite were deleted in the sync-engine rewrite; the production
  * successor is the module-private `normalizeVariationAttributes` in
- * `variation-schema.ts`, reached through `promotedVariationColumns` /
- * `withVariationColumns` — the exported seam, which is what this suite drives so the
- * guard tests the module's interface rather than a private symbol.
+ * `variation-schema.ts`, reached through `promotedVariationColumns` — the exported
+ * seam, which is what this suite drives so the guard tests the module's interface.
  *
  * WHAT THESE TESTS ARE: the ratified 1.9-parity behavior for
  * https://github.com/wcpos/monorepo/issues/811. Malformed entries whose `name` or
@@ -18,7 +17,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { promotedVariationColumns, withVariationColumns } from './variation-schema';
+import { promotedVariationColumns } from './variation-schema';
 
 /** Drive the module-private normalizer through its exported seam. */
 const normalize = (attributes: unknown) =>
@@ -108,8 +107,7 @@ describe('variation attribute normalization', () => {
 			},
 		};
 
-		expect(withVariationColumns(document)).toMatchObject({
-			id: 'variation-1',
+		expect(promotedVariationColumns(document.payload)).toMatchObject({
 			attributes: [{ id: 1, name: 'Color', option: 'Red' }],
 		});
 	});

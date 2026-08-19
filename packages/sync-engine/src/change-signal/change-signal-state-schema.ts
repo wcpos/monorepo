@@ -8,12 +8,6 @@
  * persistence layer (changeSignalStatePersistence.ts) handles the Map<->entries
  * round-trip and this schema stays a plain string blob.
  */
-export type ChangeSignalStateDocument = {
-	id: string;
-	state: string;
-	updatedAt: string;
-};
-
 export const CHANGE_SIGNAL_STATE_ID = 'change-signal:web';
 
 export const changeSignalStateSchema = {

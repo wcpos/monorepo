@@ -1,7 +1,3 @@
-import type { StoredProductDocument } from '@wcpos/sync-core';
-
-export type LocalProductDocument = StoredProductDocument;
-
 export const productSchema = {
 	title: 'Woo product document schema',
 	version: 0,

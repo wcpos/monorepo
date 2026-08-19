@@ -210,10 +210,3 @@ export function materializeLocalOnly(
 	} as OrderDocument;
 	return result(document, manifestRow);
 }
-
-/** Storage-adapter entry for already assembled/local order documents. */
-export function materializeExistingLocalOnly(document: OrderDocument): Materialized<OrderDocument> {
-	const remoteId = document.remoteId;
-	const manifestRow = remoteId == null ? undefined : digest(document.payload, remoteId, 'order');
-	return result({ ...document, payload: stripDigest(document.payload) }, manifestRow);
-}

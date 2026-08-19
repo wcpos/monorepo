@@ -1,7 +1,3 @@
-import type { StoredOrderDocument } from '@wcpos/sync-core';
-
-export type LocalOrderDocument = StoredOrderDocument;
-
 export const orderSchema = {
 	title: 'Woo order document schema',
 	version: 0,

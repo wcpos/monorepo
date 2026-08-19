@@ -6,7 +6,6 @@ import {
 	posBootstrapTasks,
 	REFERENCE_LANE_CONFIGS,
 	referenceLaneTaskFor,
-	referenceLaneTasks,
 } from './rx-pos-bootstrap-seeder';
 
 describe('posBootstrapTasks', () => {
@@ -50,28 +49,13 @@ describe('laneKeyFor', () => {
 	});
 });
 
-describe('referenceLaneTasks (F11 — in-session reference refresh)', () => {
-	it('returns ONLY the greedy categories + brands + tags + coupons lanes (not tax rates)', () => {
-		const tasks = referenceLaneTasks();
-		const collections = tasks.map((task) => task.collection).sort();
-
-		expect(collections).toEqual(['brands', 'categories', 'coupons', 'tags']);
-		expect(tasks.every((task) => task.mode === 'greedy')).toBe(true);
-		expect(tasks.some((task) => task.collection === 'taxRates')).toBe(false); // tax rates have their own change-signal refresh
-	});
-});
-
 describe('referenceLaneTaskFor (change-signal reference refresh)', () => {
 	it.each(['coupons', 'categories', 'brands', 'tags'] as const)(
-		'returns ONLY the greedy %s:all lane, identical to the one in referenceLaneTasks',
+		'returns ONLY the greedy %s:all lane',
 		(collection) => {
 			const task = referenceLaneTaskFor(collection);
 
 			expect(task).toMatchObject({ collection, queryKey: `${collection}:all`, mode: 'greedy' });
-			// Re-seeding must re-queue the SAME task id the boot lane uses, so a refresh
-			// reconciles the existing greedy lane rather than forking a duplicate.
-			const bootTask = referenceLaneTasks().find((t) => t.collection === collection);
-			expect(task).toEqual(bootTask);
 		}
 	);
 });

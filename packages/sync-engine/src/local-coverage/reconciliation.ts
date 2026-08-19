@@ -33,29 +33,6 @@ export function partitionActionsByLane(actions: readonly ReconcileAction[]): {
 }
 
 /**
- * The set of wooIds with pending local writes, for the dirty guard. The mutation queue is keyed by the
- * record's uuid (recordId), NOT its wooId, so each products/variations mutation is resolved recordId→wooId
- * via the injected lookup (a point-read per pending mutation — the queue is small). Non-product/variation
- * mutations (orders, etc.) are ignored.
- */
-export async function resolveDirtyWooIds(
-	mutations: readonly { recordId: string; collectionName: string }[],
-	lookupWooId: (recordId: string, collectionName: string) => Promise<number | null>
-): Promise<Set<number>> {
-	const dirty = new Set<number>();
-	for (const mutation of mutations) {
-		if (mutation.collectionName !== 'products' && mutation.collectionName !== 'variations') {
-			continue;
-		}
-		const wooId = await lookupWooId(mutation.recordId, mutation.collectionName);
-		if (wooId !== null && wooId > 0) {
-			dirty.add(wooId);
-		}
-	}
-	return dirty;
-}
-
-/**
  * Run one existence-reconcile audit. Reads the occupied local bucket indexes, marks dirty
  * records from the pending-mutation queue, and drives the pure walk — pruning stale records (reusing the
  * lane delete handlers, which already remove the doc AND its manifest row) and reporting missing/changed.

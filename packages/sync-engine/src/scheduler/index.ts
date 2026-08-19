@@ -8,7 +8,6 @@ export {
 } from './engine-scheduler-drain';
 export {
 	emptyPersistedSchedulerTaskRunnerResult,
-	type PersistedSchedulerTaskOutcome,
 	type PersistedSchedulerTaskOutcomeKind,
 	type PersistedSchedulerTaskRunnerResult,
 } from './rx-scheduler-task-runner';
@@ -30,45 +29,21 @@ export {
 // Descriptors
 export {
 	BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT,
-	BROWSE_WINDOW_MAX_PAGES_PER_DRAIN,
 	laneHoldsBrowseWindowPrefix,
 } from './browse-window-continuation';
+export { type BrowseWindowLaneSnapshot } from './browse-window-lane-eviction';
 export {
-	assertBrowseWindowKeyLengths,
-	type BrowseWindowGrammar,
-	browseWindowLaneIdentity,
-	type BrowseWindowLaneIdentity,
-} from './browse-window-grammar';
-export {
-	type BrowseWindowLaneEvictionRepository,
-	type BrowseWindowLaneIdentifier,
-	type BrowseWindowLaneSnapshot,
-	evictSupersededBrowseWindowLanes,
-	orderBrowseWindowLaneIdentity,
-	planBrowseWindowLaneEviction,
-	productBrowseWindowLaneIdentity,
-} from './browse-window-lane-eviction';
-export {
-	normalizeOrderBrowseWindowLimit,
-	ORDER_BROWSE_WINDOW_STEP,
 	orderBrowserQueryKey,
 	parseOrderBrowserSchedulerDescriptor,
-	WOO_REST_MAX_PER_PAGE,
 } from './order-browser-scheduler-descriptor';
 export {
-	normalizeProductBrowseWindowLimit,
 	parseProductBrowseWindowDescriptor,
 	PRODUCT_BROWSE_WINDOW_LIMIT,
-	PRODUCT_BROWSE_WINDOW_STEP,
 	productBrowseWindowQueryKeyFromDimensions,
 	type ProductBrowseWindowOrderby,
 } from './product-browse-window-descriptor';
 export {
-	CUSTOMER_BROWSE_WINDOW_DEFAULT_LIMIT,
-	CUSTOMER_BROWSE_WINDOW_ORDERBY_VALUES,
-	customerBrowseWindowQueryKey,
 	customerBrowseWindowQueryKeyFromDimensions,
-	isCustomerBrowseWindowQueryKey,
 	parseCustomerBrowseWindowDescriptor,
 	type CustomerBrowseWindowOrderby,
 } from './customer-browse-window-descriptor';
