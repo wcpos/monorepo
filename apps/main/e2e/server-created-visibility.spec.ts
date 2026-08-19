@@ -81,6 +81,16 @@ const TEST_TIMEOUT_MS =
 	FIXTURE_BUDGET_MS + SETUP_BUDGET_MS + ARRIVAL_TIMEOUT_MS + TEARDOWN_BUDGET_MS;
 
 /**
+ * Declared HERE, at file scope, and NOT as `test.setTimeout()` in the body. The
+ * body runs only after `posPage` has finished hydrating, so an in-body call is
+ * governed by the config default (180s in playwright.config.ts) for the whole of
+ * fixture setup — a fixture that fell back to full OAuth would blow that 180s and
+ * die before the line raising the budget ever executed. `test.describe.configure`
+ * is applied at collection time, so the budget above covers fixture setup too.
+ */
+test.describe.configure({ timeout: TEST_TIMEOUT_MS });
+
+/**
  * Directional coverage: a record created on the SERVER while the till is open
  * must reach the cashier without a search and without a manual sync.
  *
@@ -112,8 +122,6 @@ test('a product created on the server reaches the products grid without a search
 	request,
 	storeAuthorization,
 }, testInfo) => {
-	test.setTimeout(TEST_TIMEOUT_MS);
-
 	// The Products page is a Pro-only drawer screen (same gate every
 	// products-page spec uses) — on free there is no grid to assert against.
 	test.skip(getStoreVariant(testInfo) !== 'pro', 'Products page requires Pro');
