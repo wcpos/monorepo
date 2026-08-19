@@ -31,8 +31,14 @@ export default defineConfig<WcposTestOptions>({
 			name: 'idle-soak',
 			use: {
 				...devices['Desktop Chrome'],
-				storeVariant: 'pro',
-				storeUrl: process.env.E2E_STORE_URL_PRO || 'https://dev-pro.wcpos.com',
+				// Any main-lane store works — the soak asserts wire shapes, never
+				// contents. SOAK_STORE_URL/SOAK_STORE_VARIANT pick the healthy one.
+				storeVariant: (process.env.SOAK_STORE_VARIANT === 'free' ? 'free' : 'pro') as
+					'free' | 'pro',
+				storeUrl:
+					process.env.SOAK_STORE_URL ||
+					process.env.E2E_STORE_URL_PRO ||
+					'https://dev-pro.wcpos.com',
 			},
 		},
 	],

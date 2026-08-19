@@ -30,6 +30,7 @@ test.setTimeout(IDLE_SOAK_MS + 8 * 60_000);
 type WireLog = {
 	censusProbes: string[];
 	productTricklePages: string[];
+	customerTricklePages: string[];
 	variationIncludePulls: string[];
 	allStoreRequests: string[];
 };
@@ -38,6 +39,7 @@ function watchWire(page: import('@playwright/test').Page): WireLog {
 	const log: WireLog = {
 		censusProbes: [],
 		productTricklePages: [],
+		customerTricklePages: [],
 		variationIncludePulls: [],
 		allStoreRequests: [],
 	};
@@ -71,6 +73,14 @@ function watchWire(page: import('@playwright/test').Page): WireLog {
 		}
 		if (path.includes('/variations') && params.has('include')) {
 			log.variationIncludePulls.push(url.toString());
+		}
+		if (
+			path.includes('/customers') &&
+			params.get('orderby') === 'id' &&
+			params.get('order') === 'asc' &&
+			params.has('page')
+		) {
+			log.customerTricklePages.push(url.toString());
 		}
 	});
 	return log;
@@ -127,11 +137,18 @@ test('idle POS trickles products+variations and manual check refreshes totals', 
 		console.log(
 			`[soak] t+${Math.round((Date.now() - soakStart) / 1000)}s ` +
 				`productPages=${wire.productTricklePages.length - productPagesBefore} ` +
+				`customerPages=${wire.customerTricklePages.length} ` +
 				`variationPulls=${wire.variationIncludePulls.length - variationPullsBefore} ` +
 				`census=${wire.censusProbes.length}`
 		);
 	}
 
+	if (wire.productTricklePages.length - productPagesBefore === 0) {
+		console.log('[soak] DEBUG idle-window store traffic:');
+		for (const line of wire.allStoreRequests.slice(-60)) {
+			console.log(`[soak]   ${line}`);
+		}
+	}
 	expect(
 		wire.productTricklePages.length - productPagesBefore,
 		'product-trickle fired no ordered catalog page pull during the idle window'
