@@ -4,7 +4,7 @@ import type { PersistedSchedulerTaskRunnerRepository } from './rx-scheduler-task
 
 export type SchedulerTaskSupportCandidate = Pick<
 	FetchTask,
-	'collection' | 'queryKey' | 'ids' | 'mode' | 'limit'
+	'collection' | 'queryKey' | 'documentIds' | 'mode' | 'limit'
 >;
 
 export type SchedulerFetcherRegistration = {
@@ -25,7 +25,7 @@ function taskCandidateFromState(state: PersistedSchedulerTaskState): SchedulerTa
 	return {
 		collection: state.collection,
 		queryKey: state.queryKey,
-		ids: state.ids,
+		documentIds: state.documentIds,
 		mode: state.mode,
 		limit: state.limit,
 	};

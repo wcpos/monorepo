@@ -78,7 +78,7 @@ export function coverageLaneKey(collection: string, queryKey: string): string {
 function toRecordDocument(record: PersistedCoverageRecord): CoverageRecordDocument {
 	const { collection, ...rest } = record;
 	return {
-		coverageKey: coverageRecordKey(collection, record.id),
+		coverageKey: coverageRecordKey(collection, record.documentId),
 		collectionName: collection,
 		...rest,
 		schemaVersion: 2,
@@ -133,7 +133,7 @@ function sameCoverageRecord(
 ): boolean {
 	return (
 		left.collection === right.collection &&
-		left.id === right.id &&
+		left.documentId === right.documentId &&
 		left.freshUntilMs === right.freshUntilMs &&
 		left.updatedAtMs === right.updatedAtMs &&
 		sameStringArray(left.coveredQueryKeys, right.coveredQueryKeys)
@@ -180,7 +180,7 @@ function isRxConflict(error: unknown): boolean {
 function localRecordCoverage(record: PersistedCoverageRecord, nowMs: number): LocalRecordCoverage {
 	return {
 		collection: record.collection,
-		id: record.id,
+		documentId: record.documentId,
 		fresh: record.freshUntilMs > nowMs,
 	};
 }
@@ -287,7 +287,7 @@ export class RxCoverageRepository {
 		await this.writeCoverageDocumentsWithMerge({
 			records: input.records.map((record) => ({
 				collection: input.collection,
-				id: record.id,
+				documentId: record.id,
 				coveredQueryKeys: [input.queryKey],
 				freshUntilMs,
 				updatedAtMs: input.nowMs,
@@ -399,9 +399,9 @@ export class RxCoverageRepository {
 		// writeCoverageDocumentsWithMerge, so it resolves the live-lane set itself (#1034).
 		// Its OWN key is a ranged lane, which is never prunable — but the records it touches
 		// can still be carrying browse-window keys whose lanes are long gone.
-		const records = recordIdsToRefresh.map((id) => ({
+		const records = recordIdsToRefresh.map((documentId) => ({
 			collection: input.collection,
-			id,
+			documentId,
 			coveredQueryKeys: [input.queryKey],
 			freshUntilMs,
 			updatedAtMs: input.nowMs,
@@ -630,7 +630,7 @@ export class RxCoverageRepository {
 
 		for (const record of existingDocuments.records) {
 			const removalDecision = removalsByKey.get(
-				retentionDecisionKey('record', record.collection, record.id)
+				retentionDecisionKey('record', record.collection, record.documentId)
 			);
 			if (removalDecision && (await this.removeRecordIfUnchanged(record))) {
 				appliedRemovals.push(removalDecision);
@@ -695,8 +695,8 @@ export class RxCoverageRepository {
 		record: PersistedCoverageRecord,
 		liveLaneKeys: ReadonlySet<string>
 	): Promise<void> {
-		const documentId = coverageRecordKey(record.collection, record.id);
-		const document = await this.coverageRecords.findOne(documentId).exec();
+		const coverageKey = coverageRecordKey(record.collection, record.documentId);
+		const document = await this.coverageRecords.findOne(coverageKey).exec();
 		if (document) {
 			await this.mergeExistingRecord(document, record, liveLaneKeys);
 			return;
@@ -706,7 +706,7 @@ export class RxCoverageRepository {
 			await this.coverageRecords.insert(toRecordDocument(record));
 		} catch (error) {
 			if (!isRxConflict(error)) throw error;
-			const conflictingDocument = await this.coverageRecords.findOne(documentId).exec(true);
+			const conflictingDocument = await this.coverageRecords.findOne(coverageKey).exec(true);
 			await this.mergeExistingRecord(conflictingDocument, record, liveLaneKeys);
 		}
 	}
@@ -764,7 +764,7 @@ export class RxCoverageRepository {
 
 	private async removeRecordIfUnchanged(record: PersistedCoverageRecord): Promise<boolean> {
 		const document = await this.coverageRecords
-			.findOne(coverageRecordKey(record.collection, record.id))
+			.findOne(coverageRecordKey(record.collection, record.documentId))
 			.exec();
 		if (!document) return false;
 

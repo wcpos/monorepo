@@ -24,14 +24,14 @@ const freshLane = {
 };
 const expiredRecord = {
 	collection: 'orders',
-	id: 'order-expired',
+	documentId: 'order-expired',
 	coveredQueryKeys: ['orders:open'],
 	freshUntilMs: 700,
 	updatedAtMs: 600,
 };
 const refreshableRecord = {
 	collection: 'orders',
-	id: 'order-refresh',
+	documentId: 'order-refresh',
 	coveredQueryKeys: ['orders:open'],
 	freshUntilMs: 950,
 	updatedAtMs: 900,

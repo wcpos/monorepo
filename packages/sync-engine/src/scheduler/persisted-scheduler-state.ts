@@ -9,7 +9,8 @@ export type PersistedSchedulerTaskState = {
 	requirementId: string;
 	collection: string;
 	queryKey: string;
-	ids?: string[];
+	/** Engine document keys the task is targeting (`descriptor.documentId(...)` values). */
+	documentIds?: string[];
 	/** Numeric Woo server ids for a targeted task — persisted so the fetch survives a
 	 * rehydrate once document keys are uuids (the regex can't recover them). */
 	remoteIds?: RemoteId[];

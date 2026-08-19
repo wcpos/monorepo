@@ -87,7 +87,7 @@ describe('createProductsSchedulerFetcher', () => {
 				id: 'products:ids:321,654:on-demand',
 				requirementId: 'products.cart-items',
 				queryKey: 'products:ids:321,654',
-				ids: ['woo-product:321', 'woo-product:654'],
+				documentIds: ['woo-product:321', 'woo-product:654'],
 				remoteIds: [321, 654].map(remoteId),
 				limit: 2,
 				mode: 'on-demand',
@@ -1909,7 +1909,7 @@ describe('createProductsSchedulerFetcher', () => {
 
 		// The manifest receives the {wooId, digest} row (digest a string — un-truncated).
 		expect(manifestSink).toHaveBeenCalledWith([
-			{ id: '321', wooId: 321, objectType: 'product', digest: '9223372036854775810' },
+			{ remoteId: '321', wooId: 321, objectType: 'product', digest: '9223372036854775810' },
 		]);
 		// The stored payload is stripped of _rxdb_digest (never persisted into the product doc).
 		const calls = repository.upsertMany.mock.calls as unknown as [
@@ -2185,7 +2185,7 @@ describe('createProductsSchedulerFetcher', () => {
 				id: 'products:ids:321,654:on-demand',
 				requirementId: 'products.cart-items',
 				queryKey: 'products:ids:321,654',
-				ids: ['woo-product:321', 'woo-product:654'],
+				documentIds: ['woo-product:321', 'woo-product:654'],
 				remoteIds: [321, 654].map(remoteId),
 				limit: 2,
 				mode: 'on-demand',
@@ -2241,7 +2241,7 @@ describe('createProductsSchedulerFetcher', () => {
 				id: 'products:ids:321:on-demand',
 				requirementId: 'products.cart-items',
 				queryKey: 'products:ids:321',
-				ids: ['woo-product:321'],
+				documentIds: ['woo-product:321'],
 				remoteIds: [321].map(remoteId),
 				limit: 1,
 				mode: 'on-demand',
@@ -2305,7 +2305,7 @@ describe('createProductsSchedulerFetcher', () => {
 				requirementId: 'products.cart-items',
 				queryKey: 'products:ids:deep-link',
 				remoteIds: [321, 654].map(remoteId),
-				ids: ['8e29c1a4-3b2d-4f6a-9c0e-1d2f3a4b5c6d', 'not-a-woo-product-key'],
+				documentIds: ['8e29c1a4-3b2d-4f6a-9c0e-1d2f3a4b5c6d', 'not-a-woo-product-key'],
 				limit: 2,
 				mode: 'on-demand',
 			})
@@ -2336,7 +2336,7 @@ describe('createProductsSchedulerFetcher', () => {
 					id: 'products:ids:321,654:on-demand',
 					requirementId: 'products.cart-items',
 					queryKey: 'products:ids:321,654',
-					ids: ['woo-product:321', 'woo-product:654'],
+					documentIds: ['woo-product:321', 'woo-product:654'],
 					limit: 2,
 					mode: 'on-demand',
 				})

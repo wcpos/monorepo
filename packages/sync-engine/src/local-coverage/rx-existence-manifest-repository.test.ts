@@ -31,7 +31,7 @@ describe('existenceManifestDocument', () => {
 		expect(
 			existenceManifestDocument({ wooId: 42, objectType: 'product', digest: '9223372036854775810' })
 		).toEqual({
-			id: '42',
+			remoteId: '42',
 			wooId: 42,
 			objectType: 'product',
 			digest: '9223372036854775810', // > JS safe int — kept as a string

@@ -87,7 +87,7 @@ describe('createCustomerSchedulerFetcher', () => {
 				id: 'customers:ids:12,34:on-demand',
 				requirementId: 'customers.profile.lookup',
 				queryKey: 'customers:ids:12,34',
-				ids: ['woo-customer:12', 'woo-customer:34'],
+				documentIds: ['woo-customer:12', 'woo-customer:34'],
 				limit: 2,
 				mode: 'on-demand',
 			})
@@ -145,7 +145,7 @@ describe('createCustomerSchedulerFetcher', () => {
 				id: 'customers:ids:default:on-demand',
 				requirementId: 'customers.default',
 				queryKey: 'customers:ids:default',
-				ids: ['customer:default'],
+				documentIds: ['customer:default'],
 				limit: 1,
 				mode: 'on-demand',
 			})

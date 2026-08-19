@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-	checkpointInstantMs,
-	customerDocumentId,
-	normalizeCheckpoint,
-	orderDocumentId,
-	productDocumentId,
-} from './protocol';
+import { checkpointInstantMs, normalizeCheckpoint } from './protocol';
+import { customerDocumentId, orderDocumentId, productDocumentId } from './woo/documentKeys';
 import { mintRemoteId } from './woo/remoteIdCodec';
 
 describe('protocol helpers', () => {

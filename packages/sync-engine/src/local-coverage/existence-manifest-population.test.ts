@@ -38,7 +38,7 @@ describe('extractCustomerManifest', () => {
 		]);
 		expect(manifestRows).toEqual([
 			{
-				id: '30',
+				remoteId: '30',
 				wooId: 30,
 				objectType: 'customer',
 				digest: '9223372036854775810',
@@ -72,7 +72,9 @@ describe('Symbol-borne manifest rows (#1345 mechanism 1)', () => {
 		const { manifestRows, documents } = extractCustomerManifest([
 			storedDocument as unknown as LocalCustomerDocument,
 		]);
-		expect(manifestRows).toEqual([{ id: '30', wooId: 30, objectType: 'customer', digest: 'd30' }]);
+		expect(manifestRows).toEqual([
+			{ remoteId: '30', wooId: 30, objectType: 'customer', digest: 'd30' },
+		]);
 		expect(documents).toHaveLength(1);
 	});
 
@@ -84,7 +86,9 @@ describe('Symbol-borne manifest rows (#1345 mechanism 1)', () => {
 		} as never);
 		expect('_rxdb_digest' in (storedDocument.payload as object)).toBe(false);
 		const { manifestRows, documents } = extractOrderManifest([storedDocument]);
-		expect(manifestRows).toEqual([{ id: '77', wooId: 77, objectType: 'order', digest: 'd77' }]);
+		expect(manifestRows).toEqual([
+			{ remoteId: '77', wooId: 77, objectType: 'order', digest: 'd77' },
+		]);
 		expect(documents).toHaveLength(1);
 	});
 });
@@ -106,7 +110,7 @@ describe('withCustomerManifestPopulation', () => {
 		expect('_rxdb_digest' in (stored.payload as object)).toBe(false);
 		// Manifest seeded with the customer row.
 		expect(bulkUpsert).toHaveBeenCalledWith([
-			{ id: '30', wooId: 30, objectType: 'customer', digest: 'd30' },
+			{ remoteId: '30', wooId: 30, objectType: 'customer', digest: 'd30' },
 		]);
 	});
 
@@ -141,7 +145,7 @@ describe('extractOrderManifest', () => {
 		]);
 		expect(manifestRows).toEqual([
 			{
-				id: '77',
+				remoteId: '77',
 				wooId: 77,
 				objectType: 'order',
 				digest: '9223372036854775810',

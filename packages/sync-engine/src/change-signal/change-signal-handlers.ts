@@ -88,7 +88,7 @@ export type HandlerContext = {
 
 const INCLUDE_CHUNK = 50;
 const REFRESH_PAGE_SIZE = 100;
-type PruneByIds = (ids: number[]) => Promise<number>;
+type PruneByIds = (wooIds: number[]) => Promise<number>;
 
 function collectionOf(ctx: HandlerContext, name: string): RxCollection {
 	const collection = ctx.database.collections[name];
@@ -147,16 +147,16 @@ async function fetchPayloadPage(
 async function pullByIds(
 	ctx: HandlerContext,
 	d: TargetedDescriptor,
-	ids: number[],
+	wooIds: number[],
 	persist?: (documents: Record<string, unknown>[]) => Promise<void>,
 	pruneByIds?: PruneByIds
 ): Promise<number> {
-	if (ids.length === 0) return 0;
+	if (wooIds.length === 0) return 0;
 	const collection = collectionOf(ctx, d.collection);
 	const includeChunk = ctx.pullBatchSize?.() ?? INCLUDE_CHUNK;
 	let applied = 0;
-	for (let at = 0; at < ids.length; at += includeChunk) {
-		const chunk = ids.slice(at, at + includeChunk);
+	for (let at = 0; at < wooIds.length; at += includeChunk) {
+		const chunk = wooIds.slice(at, at + includeChunk);
 		const payloads = d.parse(
 			await fetchBody(ctx, d.pullPath, {
 				include: chunk.join(','),
@@ -215,11 +215,11 @@ async function removeByWooIds(
 	ctx: HandlerContext,
 	name: string,
 	wooIdField: 'remoteId',
-	ids: number[]
+	wooIds: number[]
 ): Promise<number> {
-	if (ids.length === 0) return 0;
+	if (wooIds.length === 0) return 0;
 	const collection = collectionOf(ctx, name);
-	const remoteIds = ids.map((id) => mintRemoteId(id, `${name} tombstone id`));
+	const remoteIds = wooIds.map((id) => mintRemoteId(id, `${name} tombstone id`));
 	const docs = await collection
 		.find({ selector: { [wooIdField]: { $in: remoteIds } } as never })
 		.exec();
@@ -254,7 +254,7 @@ async function removeByWooIds(
 	}
 	// A delete for a never-synced id is vacuously applied — tombstone semantics,
 	// not a shortfall (mirrors the web lanes).
-	return ids.length;
+	return wooIds.length;
 }
 
 /** Full-page refresh: pages until a short page; returns every projected document. */
@@ -319,14 +319,14 @@ async function refreshPrunable(ctx: HandlerContext, d: GreedyPrunableDescriptor)
 }
 
 type TargetedEffects = {
-	pull: (ids: number[]) => Promise<number>;
-	remove: (ids: number[]) => Promise<number>;
+	pull: (wooIds: number[]) => Promise<number>;
+	remove: (wooIds: number[]) => Promise<number>;
 };
 
 type ShapeEffects = {
 	targeted: Record<TargetedDescriptor['collection'], TargetedEffects>;
 	refreshTaxRates: () => Promise<void>;
-	deleteTaxRates: (ids: number[]) => Promise<number>;
+	deleteTaxRates: (wooIds: number[]) => Promise<number>;
 	refreshReference: (collection: ReferenceCollection) => Promise<void>;
 };
 
@@ -341,14 +341,15 @@ function collectShapeEffects(ctx: HandlerContext): ShapeEffects {
 		switch (descriptor.shape) {
 			case 'targeted': {
 				targeted[descriptor.collection] = {
-					pull: (ids) => pullByIds(ctx, descriptor, ids),
-					remove: (ids) => removeByWooIds(ctx, descriptor.collection, descriptor.wooIdField, ids),
+					pull: (wooIds) => pullByIds(ctx, descriptor, wooIds),
+					remove: (wooIds) =>
+						removeByWooIds(ctx, descriptor.collection, descriptor.wooIdField, wooIds),
 				};
 				break;
 			}
 			case 'upsert-refresh': {
 				refreshTaxRates = () => refreshUpsert(ctx, descriptor);
-				deleteTaxRates = (ids) => removeByWooIds(ctx, descriptor.collection, 'remoteId', ids);
+				deleteTaxRates = (wooIds) => removeByWooIds(ctx, descriptor.collection, 'remoteId', wooIds);
 				break;
 			}
 			case 'greedy-prunable': {
@@ -399,7 +400,7 @@ async function loadSyncedTargetedDocs(
 			uuid: string;
 			payload: Record<string, unknown>;
 		};
-		return { id: json.uuid, payload: json.payload };
+		return { documentId: json.uuid, payload: json.payload };
 	});
 }
 
@@ -436,8 +437,8 @@ async function rebaselineTargeted(
 	}
 	const requested = [...wooIds].sort((left, right) => left - right);
 	const missingIds: number[] = [];
-	const applied = await pullByIds(ctx, descriptor, requested, undefined, async (ids) => {
-		missingIds.push(...ids);
+	const applied = await pullByIds(ctx, descriptor, requested, undefined, async (absentWooIds) => {
+		missingIds.push(...absentWooIds);
 		return 0;
 	});
 	const pruned =
@@ -457,14 +458,15 @@ export function buildReplicationHandlers(ctx: HandlerContext): ReplicationAction
 	const active = <T>(collection: SyncCollectionName, work: () => Promise<T>): Promise<T> =>
 		ctx.withCollectionActivity?.(collection, work) ?? work();
 	const handlers: ReplicationActionHandlers = {
-		pullProducts: (ids) => active('products', () => effects.targeted.products.pull(ids)),
-		deleteProducts: (ids) => effects.targeted.products.remove(ids),
-		pullVariations: (ids) => active('variations', () => effects.targeted.variations.pull(ids)),
-		deleteVariations: (ids) => effects.targeted.variations.remove(ids),
-		pullCustomers: (ids) => active('customers', () => effects.targeted.customers.pull(ids)),
-		deleteCustomers: (ids) => effects.targeted.customers.remove(ids),
+		pullProducts: (wooIds) => active('products', () => effects.targeted.products.pull(wooIds)),
+		deleteProducts: (wooIds) => effects.targeted.products.remove(wooIds),
+		pullVariations: (wooIds) =>
+			active('variations', () => effects.targeted.variations.pull(wooIds)),
+		deleteVariations: (wooIds) => effects.targeted.variations.remove(wooIds),
+		pullCustomers: (wooIds) => active('customers', () => effects.targeted.customers.pull(wooIds)),
+		deleteCustomers: (wooIds) => effects.targeted.customers.remove(wooIds),
 		refreshTaxRates: () => active('taxRates', () => effects.refreshTaxRates()),
-		deleteTaxRates: (ids) => effects.deleteTaxRates(ids),
+		deleteTaxRates: (wooIds) => effects.deleteTaxRates(wooIds),
 		refreshReferenceCollection: (collection) =>
 			active(collection, () => effects.refreshReference(collection)),
 		rebaselineTargeted: (collection) =>

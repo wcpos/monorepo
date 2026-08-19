@@ -18,14 +18,14 @@ describe('buildCoverageDocumentsFromQueryResult', () => {
 			records: [
 				{
 					collection: 'orders',
-					id: 'order-2',
+					documentId: 'order-2',
 					coveredQueryKeys: ['orders:open'],
 					freshUntilMs: 1_500,
 					updatedAtMs: 1_000,
 				},
 				{
 					collection: 'orders',
-					id: 'order-1',
+					documentId: 'order-1',
 					coveredQueryKeys: ['orders:open'],
 					freshUntilMs: 1_500,
 					updatedAtMs: 1_000,

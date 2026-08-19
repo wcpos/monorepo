@@ -3,8 +3,7 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { isEngineRxDocument, resolveLegacyField, useQueryRuntime } from '@wcpos/query';
-import { engineDocumentIdFor } from '@wcpos/sync-engine';
-import { remoteIdOrNull } from '@wcpos/sync-core';
+import { catalogDocumentId, remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import {
@@ -67,7 +66,7 @@ export const useCartStockGuard = () => {
 			if (isEngineRxDocument(result)) {
 				return result.getLatest().payload as StockDocument;
 			}
-			const documentId = engineDocumentIdFor(
+			const documentId = catalogDocumentId(
 				collectionName === 'products' ? 'product' : 'variation',
 				remoteId
 			);

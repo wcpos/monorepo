@@ -125,13 +125,8 @@ export {
 } from './persisted-coverage-schema';
 
 // Scheduler and query-total schemas
+export { queryTotalCacheSchema, type QueryTotalCacheDocument } from './query-total-cache-schema';
 export {
-	queryTotalCacheMigrationStrategies,
-	queryTotalCacheSchema,
-	type QueryTotalCacheDocument,
-} from './query-total-cache-schema';
-export {
-	queryTotalRequestStateMigrationStrategies,
 	queryTotalRequestStateSchema,
 	type QueryTotalRequestStateDocument,
 } from './query-total-request-state-schema';

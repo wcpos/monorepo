@@ -59,7 +59,7 @@ export function buildCoverageDocumentsFromQueryResult(
 	return {
 		records: input.records.map((record) => ({
 			collection: input.collection,
-			id: record.id,
+			documentId: record.id,
 			coveredQueryKeys: [input.queryKey],
 			freshUntilMs,
 			updatedAtMs: input.nowMs,

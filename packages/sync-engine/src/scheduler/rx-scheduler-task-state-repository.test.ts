@@ -184,7 +184,7 @@ describe('RxSchedulerTaskStateRepository', () => {
 		const { repository } = repositoryFor([
 			taskState({
 				taskId: 'orders:ids:deep-link:on-demand',
-				ids: ['woo-order:123', 'woo-order:456'],
+				documentIds: ['woo-order:123', 'woo-order:456'],
 				remoteIds: [123, 456].map(remoteId),
 			}),
 		]);
@@ -195,7 +195,7 @@ describe('RxSchedulerTaskStateRepository', () => {
 
 	it('stores compact primary keys while preserving long domain task ids', async () => {
 		const longTaskId = `orders:orders:ids:on-demand:${Array.from({ length: 12 }, (_, index) => `${index}`.padStart(128, 'x')).join(',')}`;
-		const longTask = taskState({ taskId: longTaskId, ids: ['order-1'] });
+		const longTask = taskState({ taskId: longTaskId, documentIds: ['order-1'] });
 		const { repository, stored } = repositoryFor();
 
 		await repository.upsert(longTask);
@@ -398,8 +398,8 @@ describe('RxSchedulerTaskStateRepository', () => {
 	});
 
 	it('does not remove or mark failed state when targeted ids differ', async () => {
-		const storedState = taskState({ taskId: 'orders:targeted', ids: ['order-1'] });
-		const expectedState = taskState({ taskId: 'orders:targeted', ids: ['order-2'] });
+		const storedState = taskState({ taskId: 'orders:targeted', documentIds: ['order-1'] });
+		const expectedState = taskState({ taskId: 'orders:targeted', documentIds: ['order-2'] });
 		const failedState = taskState({
 			...expectedState,
 			status: 'failed',
@@ -422,12 +422,12 @@ describe('RxSchedulerTaskStateRepository', () => {
 		// differs — the CAS guard must treat that as a changed row, not a stale match.
 		const storedState = taskState({
 			taskId: 'orders:targeted',
-			ids: ['woo-order:1'],
+			documentIds: ['woo-order:1'],
 			remoteIds: [1].map(remoteId),
 		});
 		const expectedState = taskState({
 			taskId: 'orders:targeted',
-			ids: ['woo-order:1'],
+			documentIds: ['woo-order:1'],
 			remoteIds: [2].map(remoteId),
 		});
 		const failedState = taskState({
@@ -489,7 +489,7 @@ describe('RxSchedulerTaskStateRepository — change-signal coalescing (#318)', (
 				requirementId: 'orders.open',
 				collectionName: 'orders',
 				queryKey: 'orders:open',
-				ids: undefined,
+				documentIds: undefined,
 				remoteIds: undefined,
 				limit: 25,
 				priority: 600,

@@ -16,14 +16,14 @@ const documents: PersistedCoverageDocumentSet = {
 	records: [
 		{
 			collection: 'orders',
-			id: 'order-1',
+			documentId: 'order-1',
 			coveredQueryKeys: ['orders:open'],
 			freshUntilMs: 1_500,
 			updatedAtMs: 900,
 		},
 		{
 			collection: 'orders',
-			id: 'order-2',
+			documentId: 'order-2',
 			coveredQueryKeys: ['orders:open'],
 			freshUntilMs: 800,
 			updatedAtMs: 700,
@@ -53,8 +53,8 @@ describe('persisted coverage schema', () => {
 	it('converts persisted records and lanes to local coverage freshness at the current clock', () => {
 		expect(toLocalCoverageState({ documents, nowMs })).toEqual({
 			records: [
-				{ collection: 'orders', id: 'order-1', fresh: true },
-				{ collection: 'orders', id: 'order-2', fresh: false },
+				{ collection: 'orders', documentId: 'order-1', fresh: true },
+				{ collection: 'orders', documentId: 'order-2', fresh: false },
 			],
 			lanes: [
 				{ collection: 'orders', queryKey: 'orders:open', complete: true, fresh: true },
@@ -159,7 +159,7 @@ describe('persisted coverage schema', () => {
 			records: [
 				{
 					collection: 'orders',
-					id: 'order-1',
+					documentId: 'order-1',
 					coveredQueryKeys: ['orders:open'],
 					freshUntilMs: 1_500,
 					updatedAtMs: 900,
@@ -205,7 +205,7 @@ describe('persisted coverage schema', () => {
 	it('declares compound indexes needed for RxDB lookup and cleanup paths', () => {
 		expect(coverageSchemaIndexes).toEqual({
 			records: [
-				['collection', 'id'],
+				['collection', 'documentId'],
 				['collection', 'freshUntilMs'],
 			],
 			lanes: [

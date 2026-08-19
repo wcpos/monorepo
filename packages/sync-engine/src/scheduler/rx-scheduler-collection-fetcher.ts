@@ -412,7 +412,7 @@ async function fetchTargeted<Doc, Payload>(
 	context: SchedulerFetcherContext | undefined
 ): Promise<FetchTaskResult> {
 	assertPositiveLimit(spec.label, task);
-	const targets = (task.ids ?? []).map(spec.targetFromId);
+	const targets = (task.documentIds ?? []).map(spec.targetFromId);
 	const defaultDocuments = targets
 		.filter((target) => target.remoteId === null)
 		.map(spec.defaultDocument);
@@ -511,7 +511,8 @@ export function createTargetedSearchCollectionFetcher<Doc, Payload>(
 		if (task.collection !== spec.collection) {
 			throw new Error(`${spec.label} scheduler fetcher cannot run ${task.collection} tasks`);
 		}
-		if (task.ids && task.ids.length > 0) return fetchTargeted(spec, input, task, context);
+		if (task.documentIds && task.documentIds.length > 0)
+			return fetchTargeted(spec, input, task, context);
 		const parsedSearch = spec.parseSearchQuery(task);
 		if (parsedSearch !== null) {
 			if (parsedSearch.queryLimit !== task.limit) {

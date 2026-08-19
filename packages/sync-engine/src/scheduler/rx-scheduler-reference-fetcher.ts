@@ -8,11 +8,10 @@
  * so the storage id (uuid) and coverage id (woo-<prefix>:<wooId>) are DISTINCT — the generic keeps them separate.
  */
 
-import { wooIdOf } from '@wcpos/sync-core';
+import { referenceDocumentId, wooIdOf } from '@wcpos/sync-core';
 
 import {
 	type LocalReferenceDocument,
-	referenceDocumentId,
 	type WooReferencePayload,
 } from '../collections/reference-collection-schema';
 import { materializeGreedyPrunable } from '../materialization/record-materialization';

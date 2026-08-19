@@ -1,4 +1,4 @@
-import { type RemoteId, wooIdOf } from './woo/remoteIdCodec';
+import { type RemoteId } from './woo/remoteIdCodec';
 
 export type SyncCheckpoint = {
 	updatedAtGmt: string;
@@ -271,20 +271,4 @@ export function checkpointInstantMs(updatedAtGmt: string | null | undefined): nu
 	}
 	const ms = Date.parse(iso);
 	return Number.isNaN(ms) ? 0 : ms;
-}
-
-export function orderDocumentId(remoteId: RemoteId): string {
-	return `woo-order:${wooIdOf(remoteId)}`;
-}
-
-export function productDocumentId(remoteId: RemoteId): string {
-	return `woo-product:${wooIdOf(remoteId)}`;
-}
-
-export function variationDocumentId(remoteId: RemoteId): string {
-	return `woo-variation:${wooIdOf(remoteId)}`;
-}
-
-export function customerDocumentId(remoteId: RemoteId): string {
-	return `woo-customer:${wooIdOf(remoteId)}`;
 }

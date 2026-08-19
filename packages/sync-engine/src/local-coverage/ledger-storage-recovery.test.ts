@@ -756,7 +756,7 @@ describe('coverage ledger recovery', () => {
 		// A record keeps every key whose lane is LIVE — both windows still cover it here, and
 		// the limit=100 lane was revived by the write above.
 		const readKeys = async () =>
-			(await coverage.readSnapshot()).records.find((entry) => entry.id === 'woo-product:1')
+			(await coverage.readSnapshot()).records.find((entry) => entry.documentId === 'woo-product:1')
 				?.coveredQueryKeys;
 		expect(await readKeys()).toEqual([window(100), window(200)]);
 

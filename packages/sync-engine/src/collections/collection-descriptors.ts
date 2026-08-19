@@ -39,6 +39,7 @@ import {
 	ReferenceCollection,
 	type RemoteId,
 	remoteIdOrNull,
+	taxRateDocumentId,
 	withOrderColumns,
 	wooIdOf,
 	WooOrderPayload,
@@ -62,7 +63,7 @@ import {
 } from '../write-path/engine-order-repository';
 import { graftServerLineIdentity } from '../write-path/graft-server-line-identity';
 import { preserveEquivalentLocalPrecision } from '../write-path/order-money-divergence';
-import { taxRateDocumentId, type WooTaxRatePayload } from './tax-rate-schema';
+import { type WooTaxRatePayload } from './tax-rate-schema';
 
 import type { RxDatabase } from 'rxdb';
 import type { WooReferencePayload } from './reference-collection-schema';

@@ -305,7 +305,7 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 			await collections.coverageRecords.insert({
 				coverageKey: `coverage-${collectionName}`,
 				collectionName,
-				id: '1',
+				documentId: '1',
 				coveredQueryKeys: [`query-${collectionName}`],
 				freshUntilMs: 10_000,
 				updatedAtMs: 1,

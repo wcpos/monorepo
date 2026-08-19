@@ -24,7 +24,7 @@ describe('posBootstrapTasks', () => {
 			mode: 'greedy',
 			priority: 1000,
 		});
-		expect(tax?.ids).toBeUndefined();
+		expect(tax?.documentIds).toBeUndefined();
 		expect((tax?.limit ?? 0) > 0).toBe(true);
 	});
 

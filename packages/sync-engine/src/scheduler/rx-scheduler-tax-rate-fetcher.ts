@@ -4,11 +4,7 @@
  * the shared greedy core (createGreedyCollectionFetcher).
  */
 
-import {
-	type LocalTaxRateDocument,
-	taxRateDocumentId,
-	type WooTaxRatePayload,
-} from '../collections/tax-rate-schema';
+import { type LocalTaxRateDocument, type WooTaxRatePayload } from '../collections/tax-rate-schema';
 import {
 	type CollectionSchedulerCoverageRepository,
 	type CollectionSchedulerInput,

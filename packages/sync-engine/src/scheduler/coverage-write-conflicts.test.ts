@@ -10,7 +10,7 @@ describe('mergePersistedCoverageWrites', () => {
 				records: [
 					{
 						collection: 'orders',
-						id: 'order-1',
+						documentId: 'order-1',
 						coveredQueryKeys: ['orders:open'],
 						freshUntilMs: 1_500,
 						updatedAtMs: 1_000,
@@ -22,7 +22,7 @@ describe('mergePersistedCoverageWrites', () => {
 				records: [
 					{
 						collection: 'orders',
-						id: 'order-1',
+						documentId: 'order-1',
 						coveredQueryKeys: ['orders:recent', 'orders:open'],
 						freshUntilMs: 1_400,
 						updatedAtMs: 1_100,
@@ -35,7 +35,7 @@ describe('mergePersistedCoverageWrites', () => {
 		expect(result.documents.records).toEqual([
 			{
 				collection: 'orders',
-				id: 'order-1',
+				documentId: 'order-1',
 				coveredQueryKeys: ['orders:open', 'orders:recent'],
 				freshUntilMs: 1_500,
 				updatedAtMs: 1_100,
@@ -50,7 +50,7 @@ describe('mergePersistedCoverageWrites', () => {
 				records: [
 					{
 						collection: 'orders',
-						id: 'order-1',
+						documentId: 'order-1',
 						coveredQueryKeys: ['orders:open'],
 						freshUntilMs: 2_000,
 						updatedAtMs: 1_200,
@@ -62,7 +62,7 @@ describe('mergePersistedCoverageWrites', () => {
 				records: [
 					{
 						collection: 'orders',
-						id: 'order-1',
+						documentId: 'order-1',
 						coveredQueryKeys: ['orders:cancelled'],
 						freshUntilMs: 900,
 						updatedAtMs: 900,
@@ -74,7 +74,7 @@ describe('mergePersistedCoverageWrites', () => {
 
 		expect(result.documents.records[0]).toEqual({
 			collection: 'orders',
-			id: 'order-1',
+			documentId: 'order-1',
 			coveredQueryKeys: ['orders:open', 'orders:cancelled'],
 			freshUntilMs: 2_000,
 			updatedAtMs: 1_200,
@@ -88,7 +88,7 @@ describe('mergePersistedCoverageWrites', () => {
 				records: [
 					{
 						collection: 'orders',
-						id: 'order-1',
+						documentId: 'order-1',
 						coveredQueryKeys: ['orders:open'],
 						freshUntilMs: 2_000,
 						updatedAtMs: 1_000,
@@ -100,7 +100,7 @@ describe('mergePersistedCoverageWrites', () => {
 				records: [
 					{
 						collection: 'orders',
-						id: 'order-1',
+						documentId: 'order-1',
 						coveredQueryKeys: ['orders:recent'],
 						freshUntilMs: 1_800,
 						updatedAtMs: 1_300,
@@ -112,7 +112,7 @@ describe('mergePersistedCoverageWrites', () => {
 
 		expect(result.documents.records[0]).toEqual({
 			collection: 'orders',
-			id: 'order-1',
+			documentId: 'order-1',
 			coveredQueryKeys: ['orders:open', 'orders:recent'],
 			freshUntilMs: 2_000,
 			updatedAtMs: 1_300,

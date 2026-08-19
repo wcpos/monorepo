@@ -85,7 +85,7 @@ describe('seedTargetedLane', () => {
 					requirementId: 'variations.targeted.123,456',
 					collection: 'variations',
 					queryKey: 'variations:ids:123,456',
-					ids: ['woo-variation:123', 'woo-variation:456'],
+					documentIds: ['woo-variation:123', 'woo-variation:456'],
 					remoteIds: [123, 456].map(remoteId),
 					limit: 50,
 					priority: 950,
@@ -116,7 +116,7 @@ describe('seedTargetedLane', () => {
 					expect.objectContaining({
 						id: 'variations:ids:7:on-demand',
 						queryKey: 'variations:ids:7',
-						ids: ['woo-variation:7'],
+						documentIds: ['woo-variation:7'],
 						limit: 50,
 						priority: 800,
 						mode: 'on-demand',
@@ -200,7 +200,7 @@ describe('seedTargetedLane', () => {
 		});
 
 		const seederInput = mocks.seedPersistedSchedulerTasks.mock.calls[0][0];
-		expect(seederInput.tasks.map((task: { ids?: string[] }) => task.ids)).toEqual([
+		expect(seederInput.tasks.map((task: { documentIds?: string[] }) => task.documentIds)).toEqual([
 			['woo-variation:1', 'woo-variation:2'],
 			['woo-variation:3', 'woo-variation:4'],
 			['woo-variation:5'],
@@ -222,18 +222,18 @@ describe('seedTargetedLane', () => {
 
 		const seederInput = mocks.seedPersistedSchedulerTasks.mock.calls[0][0];
 		expect(seederInput.tasks.length).toBeGreaterThan(1);
-		expect(seederInput.tasks.flatMap((task: { ids?: string[] }) => task.ids ?? [])).toEqual(
-			Array.from({ length: 100 }, (_, index) => `woo-variation:${index + 1}`)
-		);
+		expect(
+			seederInput.tasks.flatMap((task: { documentIds?: string[] }) => task.documentIds ?? [])
+		).toEqual(Array.from({ length: 100 }, (_, index) => `woo-variation:${index + 1}`));
 		for (const task of seederInput.tasks as {
 			requirementId: string;
 			queryKey: string;
-			ids?: string[];
+			documentIds?: string[];
 			limit: number;
 		}[]) {
 			expect(task.requirementId.length).toBeLessThanOrEqual(256);
 			expect(task.queryKey.length).toBeLessThanOrEqual(256);
-			expect(task.ids?.length).toBeLessThanOrEqual(100);
+			expect(task.documentIds?.length).toBeLessThanOrEqual(100);
 			expect(task.limit).toBe(100);
 		}
 	});
@@ -275,7 +275,7 @@ describe('seedTargetedLane', () => {
 				requirementId: 'products.targeted.123,456',
 				collection: 'products',
 				queryKey: 'products:ids:123,456',
-				ids: ['woo-product:123', 'woo-product:456'],
+				documentIds: ['woo-product:123', 'woo-product:456'],
 				remoteIds: [123, 456].map(remoteId),
 				limit: 50,
 				priority: 950,
@@ -298,7 +298,7 @@ describe('seedTargetedLane', () => {
 				requirementId: 'orders.targeted.123,456',
 				collection: 'orders',
 				queryKey: 'orders:ids:123,456',
-				ids: ['woo-order:123', 'woo-order:456'],
+				documentIds: ['woo-order:123', 'woo-order:456'],
 				remoteIds: [123, 456].map(remoteId),
 				limit: 50,
 				priority: 950,

@@ -87,7 +87,7 @@ function queuedStateFromTask(
 		requirementId: task.requirementId,
 		collection: task.collection,
 		queryKey: task.queryKey,
-		ids: task.ids,
+		documentIds: task.documentIds,
 		remoteIds: task.remoteIds,
 		limit: task.limit,
 		priority: task.priority,

@@ -237,7 +237,7 @@ export class EngineOrderRepository {
 		// (including the reset-to-zero write) never clobbers the epoch that a prior epoch-write set.
 		const existing = await this.db.syncCheckpoints.findOne(CUSTOM_PULL_CHECKPOINT_ID).exec();
 		await this.db.syncCheckpoints.upsert({
-			id: CUSTOM_PULL_CHECKPOINT_ID,
+			checkpointKey: CUSTOM_PULL_CHECKPOINT_ID,
 			checkpoint: normalizeCheckpoint(checkpoint),
 			updatedAt: new Date().toISOString(),
 			...(existing?.epoch ? { epoch: existing.epoch } : {}),
@@ -254,7 +254,7 @@ export class EngineOrderRepository {
 		// Persist the epoch beside the checkpoint (F8), preserving the stored checkpoint.
 		const existing = await this.db.syncCheckpoints.findOne(CUSTOM_PULL_CHECKPOINT_ID).exec();
 		await this.db.syncCheckpoints.upsert({
-			id: CUSTOM_PULL_CHECKPOINT_ID,
+			checkpointKey: CUSTOM_PULL_CHECKPOINT_ID,
 			checkpoint: normalizeCheckpoint(existing?.checkpoint),
 			updatedAt: new Date().toISOString(),
 			epoch,

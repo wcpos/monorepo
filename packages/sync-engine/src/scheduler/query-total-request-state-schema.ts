@@ -1,48 +1,15 @@
-import {
-	markPersistedSchedulerDocument,
-	type PersistedSchedulerSchemaVersionMarker,
-} from '../collections/schema-version';
+import { type PersistedSchedulerSchemaVersionMarker } from '../collections/schema-version';
 import { timestampMsSchemaField } from '../collections/timestamp-schema-field';
 
 import type { QueryTotalRequestState } from './query-total-request-lifecycle';
 
 export type QueryTotalRequestStateDocument = QueryTotalRequestState &
 	PersistedSchedulerSchemaVersionMarker<3>;
-export type QueryTotalRequestStateV2Document = QueryTotalRequestState &
-	PersistedSchedulerSchemaVersionMarker<2>;
-export type QueryTotalRequestStateV1Document = QueryTotalRequestState;
-export type QueryTotalRequestStateV0Document = Omit<QueryTotalRequestState, 'request'>;
-
-export function migrateQueryTotalRequestStateV1(
-	document: QueryTotalRequestStateV0Document
-): QueryTotalRequestStateV1Document {
-	return { ...document, request: null };
-}
-
-export function migrateQueryTotalRequestStateV2(
-	document: QueryTotalRequestStateV1Document
-): QueryTotalRequestStateV2Document {
-	return markPersistedSchedulerDocument(document, 2);
-}
-
-export function migrateQueryTotalRequestStateV3(
-	document: QueryTotalRequestStateV2Document
-): QueryTotalRequestStateDocument {
-	const { schemaVersion: _schemaVersion, ...rest } = document;
-	return markPersistedSchedulerDocument(rest, 3);
-}
-
-export const queryTotalRequestStateMigrationStrategies = {
-	1: migrateQueryTotalRequestStateV1,
-	2: migrateQueryTotalRequestStateV2,
-	3: migrateQueryTotalRequestStateV3,
-};
-
 const maxSafeInteger = 9_007_199_254_740_991;
 
 export const queryTotalRequestStateSchema = {
 	title: 'Woo/RxDB query total request state schema',
-	version: 3,
+	version: 0,
 	primaryKey: 'queryKey',
 	type: 'object',
 	properties: {

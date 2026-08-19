@@ -4,12 +4,7 @@ import { addRxPlugin, createRxDatabase, type RxDatabase } from 'rxdb';
 import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
-import {
-	coverageLaneMigrationStrategies,
-	coverageLaneSchema,
-	coverageRecordMigrationStrategies,
-	coverageRecordSchema,
-} from './coverage-schema';
+import { coverageLaneSchema, coverageRecordSchema } from './coverage-schema';
 import { RxCoverageRepository } from './persistence';
 
 addRxPlugin(RxDBMigrationSchemaPlugin);
@@ -37,14 +32,8 @@ describe('browse-window prefix ancestry', () => {
 			multiInstance: false,
 		});
 		await db.addCollections({
-			coverageRecords: {
-				schema: coverageRecordSchema,
-				migrationStrategies: coverageRecordMigrationStrategies,
-			},
-			coverageLanes: {
-				schema: coverageLaneSchema,
-				migrationStrategies: coverageLaneMigrationStrategies,
-			},
+			coverageRecords: { schema: coverageRecordSchema },
+			coverageLanes: { schema: coverageLaneSchema },
 		} as never);
 		repository = new RxCoverageRepository(db as never);
 	});
@@ -125,7 +114,7 @@ describe('browse-window prefix ancestry', () => {
 
 		await expect(
 			repository.readLocalRecordCoverage('products', DELTA[0], 0)
-		).resolves.toMatchObject({ id: DELTA[0] });
+		).resolves.toMatchObject({ documentId: DELTA[0] });
 	});
 
 	it('claims nothing when another writer moved the source lane on', async () => {

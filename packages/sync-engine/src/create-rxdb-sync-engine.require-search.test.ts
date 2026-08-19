@@ -326,7 +326,7 @@ describe('require() for search — the public search-demand verb', () => {
 		const engine = engineWith(server.fetch);
 		const scope = await engine.ready;
 		await scope.database.collections.engineKv.upsert({
-			id: 'customer-trickle:state',
+			key: 'customer-trickle:state',
 			value: JSON.stringify({ viewKey: CUSTOMER_DEFAULT_VIEW_KEY, page: 1, walkComplete: true }),
 		});
 		await scope.database.collections.queryTotalCacheEntries.upsert({
@@ -363,7 +363,7 @@ describe('require() for search — the public search-demand verb', () => {
 		}).engine;
 		const scope = await engine.ready;
 		await scope.database.collections.engineKv.upsert({
-			id: 'customer-trickle:state',
+			key: 'customer-trickle:state',
 			value: JSON.stringify({ viewKey: CUSTOMER_DEFAULT_VIEW_KEY, page: 1, walkComplete: true }),
 		});
 		await scope.database.collections.queryTotalCacheEntries.upsert({
@@ -391,7 +391,7 @@ describe('require() for search — the public search-demand verb', () => {
 		const engine = engineWith(server.fetch);
 		const scope = await engine.ready;
 		await scope.database.collections.engineKv.upsert({
-			id: 'customer-trickle:state',
+			key: 'customer-trickle:state',
 			value: JSON.stringify({ viewKey: CUSTOMER_DEFAULT_VIEW_KEY, page: 1, walkComplete: true }),
 		});
 		// One real customer exists server-side (census 1) but only the born-local

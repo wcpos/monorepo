@@ -5,14 +5,14 @@ import { planCoverageCompactionCadence } from './coverage-compaction-cadence';
 
 const expiredRecord = {
 	collection: 'orders',
-	id: 'order-expired',
+	documentId: 'order-expired',
 	coveredQueryKeys: ['orders:open'],
 	freshUntilMs: 700,
 	updatedAtMs: 600,
 };
 const refreshRecord = {
 	collection: 'orders',
-	id: 'order-refresh',
+	documentId: 'order-refresh',
 	coveredQueryKeys: ['orders:open'],
 	freshUntilMs: 950,
 	updatedAtMs: 900,

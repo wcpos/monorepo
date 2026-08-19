@@ -229,7 +229,7 @@ export function createCustomerSchedulerFetcher(
 		// The browse window is checked BEFORE delegating: it shares the `customers:` namespace
 		// with the targeted and search lanes, and only the descriptor parser can tell them apart.
 		// Targeted tasks still win — a task that names ids is a deep-link pull, never a browse.
-		if (!task.ids || task.ids.length === 0) {
+		if (!task.documentIds || task.documentIds.length === 0) {
 			const browseWindow = parseCustomerBrowseWindowDescriptor(task.queryKey);
 			if (browseWindow !== null) {
 				if (!Number.isSafeInteger(task.limit) || task.limit <= 0) {

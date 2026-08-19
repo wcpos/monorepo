@@ -46,10 +46,10 @@ export type RecordIdOrigin = 'existing' | 'server-meta' | 'minted';
 
 export type RecordIdentity = {
 	/** The stable primary key — never re-keyed once set. */
-	id: string;
-	/** `meta_data` guaranteed to mirror `id` under `_woocommerce_pos_uuid`. */
+	uuid: string;
+	/** `meta_data` guaranteed to mirror `uuid` under `_woocommerce_pos_uuid`. */
 	metaData: MetaDataEntry[];
-	/** Provenance of `id`. `minted` means born-local and awaiting a server ack. */
+	/** Provenance of `uuid`. `minted` means born-local and awaiting a server ack. */
 	origin: RecordIdOrigin;
 };
 
@@ -150,7 +150,7 @@ export function resolveRecordIdentity(input: ResolveRecordIdentityInput): Record
 		id = input.mintUuid();
 		origin = 'minted';
 	}
-	return { id, origin, metaData: mirrorRecordUuid(input.metaData, id) };
+	return { uuid: id, origin, metaData: mirrorRecordUuid(input.metaData, id) };
 }
 
 /** A WooCommerce record payload — any shape that may carry `meta_data`. */
@@ -158,11 +158,11 @@ export type WooRecordPayload = { meta_data?: MetaDataEntry[] } & Record<string, 
 
 export type IdentifiedRecord<T extends WooRecordPayload> = {
 	/** The stable uuid key. */
-	id: string;
+	uuid: string;
 	/** Provenance — `minted` ⇒ born-local, awaiting the server create-ack. */
 	origin: RecordIdOrigin;
 	/**
-	 * A copy of `payload` whose `meta_data` mirrors `id` (never mutates the input).
+	 * A copy of `payload` whose `meta_data` mirrors `uuid` (never mutates the input).
 	 * `meta_data` is narrowed to a canonical `MetaDataEntry[]` — it is always
 	 * present and well-formed on the result, even when the input `T` omitted it or
 	 * typed it loosely.
@@ -184,13 +184,13 @@ export function identifyRecord<T extends WooRecordPayload>(
 	payload: T,
 	options: { currentId?: string | null; mintUuid: () => string; mintOnMissing?: boolean }
 ): IdentifiedRecord<T> {
-	const { id, origin, metaData } = resolveRecordIdentity({
+	const { uuid, origin, metaData } = resolveRecordIdentity({
 		currentId: options.currentId,
 		metaData: payload.meta_data,
 		mintUuid: options.mintUuid,
 		mintOnMissing: options.mintOnMissing,
 	});
-	return { id, origin, payload: { ...payload, meta_data: metaData } };
+	return { uuid, origin, payload: { ...payload, meta_data: metaData } };
 }
 
 /**

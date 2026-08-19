@@ -71,7 +71,7 @@ describe('reconcileExistence', () => {
 		digest: string,
 		objectType: 'product' | 'variation' = 'product'
 	): ExistenceManifestDocument => ({
-		id: String(wooId),
+		remoteId: String(wooId),
 		wooId,
 		objectType,
 		digest,

@@ -144,7 +144,9 @@ function parseAppendedDocs(base64: string): Record<string, any>[] {
 function lastRevisionById(docs: Record<string, any>[]): Map<string, Record<string, any>> {
 	const last = new Map<string, Record<string, any>>();
 	for (const doc of docs) {
-		const key = String(doc.uuid ?? doc.id ?? '');
+		// Engine collections key by `uuid`; the existence manifest keys by `remoteId`
+		// (ADR 0029 bare-id sweep — it was `id` before).
+		const key = String(doc.uuid ?? doc.remoteId ?? doc.id ?? '');
 		if (key) last.set(key, doc);
 	}
 	return last;

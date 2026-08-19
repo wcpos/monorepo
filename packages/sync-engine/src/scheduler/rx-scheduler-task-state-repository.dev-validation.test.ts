@@ -65,7 +65,7 @@ function laneTaskState(
 		requirementId: 'orders.open',
 		collection: 'orders',
 		queryKey: 'orders:open',
-		ids: undefined,
+		documentIds: undefined,
 		remoteIds: undefined,
 		limit: 25,
 		priority: 600,
@@ -103,7 +103,7 @@ describe('scheduler task state repository under dev-mode (z-schema) validation',
 
 		const [state] = await repository.readForTaskIds(['orders:orders:open:windowed']);
 		expect(state).toBeDefined();
-		expect(state.ids).toBeUndefined();
+		expect(state.documentIds).toBeUndefined();
 		expect(state.remoteIds).toBeUndefined();
 		expect(state.status).toBe('failed');
 	});
@@ -115,7 +115,7 @@ describe('scheduler task state repository under dev-mode (z-schema) validation',
 			requirementId: 'products.targeted',
 			collection: 'products',
 			queryKey: 'products:targeted',
-			ids: ['uuid-a', 'uuid-b'],
+			documentIds: ['uuid-a', 'uuid-b'],
 			remoteIds: [101, 102].map(remoteId),
 			mode: 'on-demand',
 		});
@@ -123,11 +123,11 @@ describe('scheduler task state repository under dev-mode (z-schema) validation',
 		await expect(repository.claimNew(targeted)).resolves.toBe(true);
 
 		const stored = await storedJson('products:targeted:1');
-		expect(stored?.ids).toEqual(['uuid-a', 'uuid-b']);
+		expect(stored?.documentIds).toEqual(['uuid-a', 'uuid-b']);
 		expect(stored?.remoteIds).toEqual(['101', '102']);
 
 		const [state] = await repository.readForTaskIds(['products:targeted:1']);
-		expect(state.ids).toEqual(['uuid-a', 'uuid-b']);
+		expect(state.documentIds).toEqual(['uuid-a', 'uuid-b']);
 		expect(state.remoteIds).toEqual(['101', '102']);
 	});
 

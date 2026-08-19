@@ -7,7 +7,7 @@
  * groups categories with tax rates).
  */
 
-import { type RemoteId, wooIdOf } from '@wcpos/sync-core';
+import { type RemoteId } from '@wcpos/sync-core';
 
 export type WooReferencePayload = Record<string, unknown> & { id?: number };
 
@@ -28,11 +28,6 @@ export type LocalReferenceDocument = {
 		pendingMutationIds: string[];
 	};
 };
-
-/** `woo-category:<n>` / `woo-brand:<n>` / `woo-tag:<n>` — the stable document id derived from the Woo id. */
-export function referenceDocumentId(prefix: string, remoteId: RemoteId): string {
-	return `${prefix}:${wooIdOf(remoteId)}`;
-}
 
 export const categorySchema = {
 	title: 'Woo product-category document schema',

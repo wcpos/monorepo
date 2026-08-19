@@ -233,7 +233,7 @@ describe('runPersistedSchedulerTasks', () => {
 			requirementId: runnable.requirementId,
 			collection: runnable.collection,
 			queryKey: runnable.queryKey,
-			ids: runnable.ids,
+			documentIds: runnable.documentIds,
 			limit: runnable.limit,
 			priority: runnable.priority,
 			mode: runnable.mode,

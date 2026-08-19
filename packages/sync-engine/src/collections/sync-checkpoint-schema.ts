@@ -1,7 +1,8 @@
 import type { SyncCheckpoint } from '@wcpos/sync-core';
 
 export type SyncCheckpointDocument = {
-	id: string;
+	/** The engine-internal checkpoint key (one row per checkpoint stream). */
+	checkpointKey: string;
 	checkpoint: SyncCheckpoint;
 	updatedAt: string;
 	/** The server's journal epoch as of the stored checkpoint (F8), or absent if never seen. */
@@ -10,11 +11,11 @@ export type SyncCheckpointDocument = {
 
 export const syncCheckpointSchema = {
 	title: 'Woo/RxDB sync checkpoint schema',
-	version: 1,
-	primaryKey: 'id',
+	version: 0,
+	primaryKey: 'checkpointKey',
 	type: 'object',
 	properties: {
-		id: { type: 'string', maxLength: 128 },
+		checkpointKey: { type: 'string', maxLength: 128 },
 		checkpoint: {
 			type: 'object',
 			properties: {
@@ -29,10 +30,5 @@ export const syncCheckpointSchema = {
 		// F8 journal epoch — optional; a pre-F8 checkpoint doc simply has no epoch (treated as never-seen).
 		epoch: { type: 'string' },
 	},
-	required: ['id', 'checkpoint', 'updatedAt'],
+	required: ['checkpointKey', 'checkpoint', 'updatedAt'],
 } as const;
-
-export const syncCheckpointMigrationStrategies = {
-	// v0 → v1: `epoch` is a new optional field (F8). Existing checkpoints carry no epoch and stay valid.
-	1: (doc: SyncCheckpointDocument): SyncCheckpointDocument => doc,
-};

@@ -1005,7 +1005,7 @@ export function createOrdersSchedulerFetcher(input: OrdersSchedulerFetcherInput)
 	const fetcher: Fetcher = input.fetcher ?? ((url, init) => window.fetch(url, init));
 
 	return async (task: FetchTask, context?: SchedulerFetcherContext): Promise<FetchTaskResult> => {
-		if (task.ids && task.ids.length > 0) {
+		if (task.documentIds && task.documentIds.length > 0) {
 			return fetchTargetedOrders(input, task, context);
 		}
 
