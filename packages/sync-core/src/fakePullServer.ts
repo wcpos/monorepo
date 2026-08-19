@@ -26,9 +26,11 @@ import type { WirePullDocument } from './customPullAdapter';
  *    advances past it.
  *  - F8 journal epoch + head siblings of the checkpoint (:210-224); `resetJournal` models a new
  *    sequence generation (fresh install / restore) for resync tests.
- *  - sparse fieldsets (`order_fields`, :173-175 + :244-257): requested fields are kept, and the
- *    `_woocommerce_pos_uuid` identity meta ALWAYS survives the filter
- *    (RestControllerTest.php:345-367) — documents flip to `partial: true`.
+ *  - sparse fieldsets (`order_fields`, :173-175 + :244-257): requested fields are kept, and BOTH
+ *    identity carriers ALWAYS survive the filter (RestControllerTest.php:345-367) — the
+ *    `_woocommerce_pos_uuid` meta and the payload's `id`, which is the only remote identity the
+ *    envelope carries now that the per-document `wooOrderId` key is gone (ADR 0029 decision 6) —
+ *    documents flip to `partial: true`.
  *  - documents are keyed by the order's stable uuid read from payload meta (:190-206), never a
  *    synthetic id, and that meta must be a REAL uuid — `read_valid_uuid_from_meta` skips anything
  *    that fails the 8-4-4-4-12 shape (class-pos-uuid.php:25-48), so `seed()` rejects it too;
@@ -255,7 +257,11 @@ function parseOrderFields(raw: string | null): string[] | null {
 }
 
 /** filter_payload_fields (:259-...; RestControllerTest.php:345-377): keep requested fields, and the
- * `_woocommerce_pos_uuid` identity meta ALWAYS survives — reduced to exactly the uuid entry. */
+ * identity carriers ALWAYS survive whether or not they were asked for — the
+ * `_woocommerce_pos_uuid` meta (reduced to exactly the uuid entry) and the payload's `id`, which
+ * since the envelope's per-document `wooOrderId` key was retired is the ONLY remote identity a
+ * pulled document carries (ADR 0029 decision 6). Dropping it would land the order with a null
+ * remoteId — invisible to coverage and the tombstone channel. */
 function filterPayloadFields(
 	full: Record<string, unknown>,
 	fields: string[]
@@ -271,6 +277,11 @@ function filterPayloadFields(
 		if (Object.hasOwn(full, field)) {
 			filtered[field] = full[field];
 		}
+	}
+	// Remote identity is not optional, so `id` is retained like the identity meta rather than
+	// on request — a sparse fieldset must never be able to strip it.
+	if (Object.hasOwn(full, 'id')) {
+		filtered['id'] = full['id'];
 	}
 	const uuid = readValidUuidFromMeta(full['meta_data']);
 	if (uuid !== null) {
@@ -496,7 +507,6 @@ export function createFakePullServer(options: FakePullServerOptions = {}): FakeP
 			};
 			documents.push({
 				id: state.uuid,
-				wooOrderId: row.wooOrderId,
 				payload,
 				sync: {
 					revision,

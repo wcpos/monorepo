@@ -5,11 +5,15 @@ import {
 	type ServerMetrics,
 	type SyncCheckpoint,
 } from './protocol';
-import { type RemoteId, remoteIdOrNull, wooIdOf } from './woo/remoteIdCodec';
+import { type RemoteId, remoteIdOrNull } from './woo/remoteIdCodec';
 
+/**
+ * The per-document pull envelope. Remote identity rides `payload.id` — wire DATA, not a
+ * separate envelope key; `{uuid, remoteId}` are minted from it at this ingest edge (ADR 0029
+ * decision 6). The deletes channel keeps its own numeric wooOrderId list.
+ */
 export type WirePullDocument = Pick<OrderDocument, 'payload' | 'sync' | 'local'> & {
 	id: string;
-	wooOrderId: number | null;
 };
 
 type WirePullResponse = PullResponse<WirePullDocument>;
@@ -75,7 +79,7 @@ export type CustomPullRepository = {
 	 */
 	removeDeletedOrders?(
 		remoteIds: RemoteId[],
-		pendingMutationOrderIds?: ReadonlySet<string | number>
+		pendingMutationOrderIds?: ReadonlySet<string>
 	): Promise<void>;
 	/**
 	 * Reconcile the local collection for a journal reset (F8). When the sequence generation changed,
@@ -85,7 +89,7 @@ export type CustomPullRepository = {
 	 * (pending mutation / dirty), which stay resident so an offline POS edit survives the resync.
 	 * Optional — collections without a resync story omit it and the adapter no-ops.
 	 */
-	resetForResync?(pendingMutationOrderIds?: ReadonlySet<string | number>): Promise<void>;
+	resetForResync?(pendingMutationOrderIds?: ReadonlySet<string>): Promise<void>;
 };
 
 export type CustomPullCheckpointStore = {
@@ -121,20 +125,16 @@ export type CustomPullBatchSyncResult = {
 /**
  * Saturday-rush pull guard (docs/wcpos-pain-points.md, conflict-resolution
  * working defaults): a pulled document must never overwrite a record that
- * still has pending local mutations. Pure helper — callers pass the set of
- * order identifiers (document ids, temp ids, or Woo order ids) that currently
- * have queued mutations.
+ * still has pending local mutations. Pure helper — callers pass the pending
+ * set, which is keyed by record UUID (the stable storage key): `pendingRecordIds`
+ * returns `mutation.recordId`, and a pulled document and its queued mutation
+ * share that uuid by construction, so uuid membership is the whole test.
  */
 export function shouldApplyPulledDocument(
-	pulledDocument: Pick<OrderDocument, 'uuid' | 'remoteId'>,
-	pendingMutationOrderIds: ReadonlySet<string | number>
+	pulledDocument: Pick<OrderDocument, 'uuid'>,
+	pendingMutationOrderIds: ReadonlySet<string>
 ): boolean {
-	if (pendingMutationOrderIds.has(pulledDocument.uuid)) return false;
-	return (
-		pulledDocument.remoteId === null ||
-		(!pendingMutationOrderIds.has(pulledDocument.remoteId) &&
-			!pendingMutationOrderIds.has(wooIdOf(pulledDocument.remoteId)))
-	);
+	return !pendingMutationOrderIds.has(pulledDocument.uuid);
 }
 
 export async function syncCustomPullBatchIntoRepository(input: {
@@ -147,7 +147,7 @@ export async function syncCustomPullBatchIntoRepository(input: {
 	fetcher: Fetcher;
 	signal?: AbortSignal;
 	/** Order identifiers with queued local mutations; matching pulled documents are skipped. */
-	pendingMutationOrderIds?: ReadonlySet<string | number>;
+	pendingMutationOrderIds?: ReadonlySet<string>;
 	/** Opt into the server delete channel (F6) — the response's `deletes` become local removals. */
 	includeDeletes?: boolean;
 	/**
@@ -157,7 +157,7 @@ export async function syncCustomPullBatchIntoRepository(input: {
 	 * queued while the request was in flight. Called once per batch, just before removeDeletedOrders;
 	 * falls back to `pendingMutationOrderIds` when absent.
 	 */
-	refreshPendingMutationOrderIds?: () => Promise<ReadonlySet<string | number>>;
+	refreshPendingMutationOrderIds?: () => Promise<ReadonlySet<string>>;
 	/**
 	 * Client-assembly seam (keeps this adapter collection-agnostic): map each record the
 	 * server returned into the stored document. The order fetcher injects identity assembly
@@ -254,7 +254,7 @@ export async function syncCustomPullBatchIntoRepository(input: {
 
 	const mappedDocuments = result.documents.map((document): OrderDocument => ({
 		uuid: document.id,
-		remoteId: remoteIdOrNull(document.wooOrderId ?? document.payload?.id),
+		remoteId: remoteIdOrNull(document.payload?.id),
 		payload: document.payload,
 		sync: document.sync,
 		local: document.local,

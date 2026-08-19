@@ -67,7 +67,8 @@ describe('removeDeletedOrders manifest bookkeeping', () => {
 			{ uuid: 'o-1', remoteId: remoteId(101) },
 		]);
 
-		await new EngineOrderRepository(db).removeDeletedOrders([remoteId(101)], new Set([101]));
+		// The pending set is keyed by record uuid (`pendingRecordIds` returns `mutation.recordId`).
+		await new EngineOrderRepository(db).removeDeletedOrders([remoteId(101)], new Set(['o-1']));
 
 		expect(removedOrderIds).toEqual([]);
 		// Nothing to depurate: removeManifestByWooIds no-ops on an empty batch.
