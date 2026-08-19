@@ -116,12 +116,11 @@ export const REFERENCE_REFRESH_DEDUPE_MS = 4 * 60_000;
 // invisible at the till for up to 4 minutes (indefinitely while idle passes
 // keep re-arming ahead of opens).
 //
-// KNOWN residual (#1303 review): an open within 15s of an idle pull still
-// dedupes against that maintenance completion, so a record created inside
-// that gap stays invisible for that one open — bounded at 15s and
-// self-healing on the next open. Removing it entirely needs source-tagged
-// completions in the scheduler task state; take that surgery only if field
-// reports show the 15s window mattering.
+// Round 2 (#1302): the residual shared-completion window the #1303 review
+// flagged WAS field-relevant (a realistic coupon catalogue made backfill
+// completions routinely land just before opens). Demand now tracks its own
+// last pull in memory inside the require plane — this window applies only
+// to demand-vs-demand (remount churn); maintenance completions never count.
 export const REFERENCE_DEMAND_REFRESH_DEDUPE_MS = 15_000;
 export const COVERAGE_COMPACTION_INTERVAL_MS = 5 * 60 * 1_000;
 export const COVERAGE_COMPACTION_RETAIN_STALE_FOR_MS = 5 * 60 * 1_000;
@@ -646,7 +645,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 							? 1
 							: laneRegistryEntry('query-total-retry').maxRequestsPerTick!,
 					...(forced !== undefined ? { forceQueryKey: censusQueryKey(forced) } : {}),
-					...(tick.forceAllCensus ? { ignoreFreshQueryKeys: censusQueryKeys } : {}),
+					...(tick.forceAllCensus
+						? { onlyQueryKeys: censusQueryKeys, ignoreFreshQueryKeys: censusQueryKeys }
+						: {}),
 				});
 				if (result.cacheEntries.length > 0) {
 					deps.emitEvent({ type: 'query-total-cache', entries: result.cacheEntries });

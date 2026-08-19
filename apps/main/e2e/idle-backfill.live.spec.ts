@@ -1,14 +1,15 @@
 import { expect, test } from '@playwright/test';
 
 import { authenticateWithStore, navigateToPage } from './fixtures';
+import { resolveIdleSoakMs } from './idle-backfill-soak-duration';
 
 /**
  * Idle-backfill live soak (2026-08-19) — one-shot proof that the merged trickle
  * lanes actually run in a real session. Run by hand, never in CI:
  *
  *   npx serve -s web-build -l 8091   (after build:web)
- *   BASE_URL=http://localhost:8091 npx playwright test idle-backfill.live \
- *     --workers=1 --project=chromium-pro
+ *   BASE_URL=http://localhost:8091 npx playwright test \
+ *     --config=playwright.soak.config.ts --workers=1 --project=idle-soak
  *
  * Store-agnostic: asserts WIRE traffic shapes, never catalog contents.
  *
@@ -24,7 +25,7 @@ import { authenticateWithStore, navigateToPage } from './fixtures';
  *     assertion only requires it when a parent with variations materialized).
  */
 
-const IDLE_SOAK_MS = Number(process.env.SOAK_MS ?? 6.5 * 60_000); // one full 5-min cadence + slack
+const IDLE_SOAK_MS = resolveIdleSoakMs(process.env.SOAK_MS);
 test.setTimeout(IDLE_SOAK_MS + 8 * 60_000);
 
 type WireLog = {
