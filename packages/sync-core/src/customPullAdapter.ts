@@ -69,7 +69,12 @@ export async function pullCustomBatch(input: {
 }
 
 export type CustomPullRepository = {
-	upsertMany(documents: OrderDocument[]): Promise<void>;
+	/**
+	 * May return the subset the repository's own storage guard actually applied (or void when it
+	 * applies the whole batch) — an ingest site that records existence-manifest rows intersects
+	 * against it so a guard-skipped document never claims the server's digest.
+	 */
+	upsertMany(documents: OrderDocument[]): Promise<readonly OrderDocument[] | void>;
 	/**
 	 * Remove the local orders for a server delete batch (F6). Optional — collections without a
 	 * tombstone channel omit it and the adapter no-ops. The wooOrderIds are resolved to stored uuid

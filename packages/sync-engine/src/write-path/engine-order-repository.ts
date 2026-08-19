@@ -63,8 +63,11 @@ export type OrderRepositoryDatabase = {
 export class EngineOrderRepository {
 	constructor(private readonly db: OrderRepositoryDatabase) {}
 
-	async upsertMany(documents: OrderDocument[]): Promise<void> {
-		if (documents.length === 0) return;
+	/** Returns the subset the storage guard actually applied, so the ingest site can
+	 * record manifest rows for exactly those documents (the guard-skipped-manifest class,
+	 * Greptile P1 on this PR — same contract as `collectionSchedulerRepository`). */
+	async upsertMany(documents: OrderDocument[]): Promise<readonly OrderDocument[]> {
+		if (documents.length === 0) return [];
 		// Offline-first guard: a pulled server row must never clobber a local edit that hasn't drained
 		// yet. `upsertMany` is only ever the pull-apply path (every incoming order is server truth with
 		// `local.dirty === false`), so dropping any incoming id whose ALREADY-STORED counterpart carries
@@ -73,7 +76,7 @@ export class EngineOrderRepository {
 		// `pendingMutationIds`) without being in the passed pending set. This is the same protection
 		// `resetForResync` (F8) and `removeDeletedOrders` (F6) already apply via `unprotectedOrders`.
 		const applicable = await withoutLocallyProtected(this.db.orders, documents);
-		if (applicable.length === 0) return;
+		if (applicable.length === 0) return [];
 		const residents = await this.db.orders
 			.findByIds(applicable.map((document) => document.uuid))
 			.exec();
@@ -114,6 +117,7 @@ export class EngineOrderRepository {
 			),
 			'engine-order-repository upsert'
 		);
+		return applicable;
 	}
 
 	/**
