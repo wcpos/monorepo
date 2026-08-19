@@ -22,8 +22,6 @@ import {
 	observeCoverage,
 	observeEngineQuery,
 	type QueryResult,
-	requirementsForQuery,
-	type RequirementSortPart,
 	useLocalQuery,
 	useQueryRuntime,
 } from '@wcpos/query';
@@ -89,13 +87,6 @@ function useStableDescriptor(descriptor: EngineQueryDescriptor): EngineQueryDesc
 		}),
 		[key, descriptor.read]
 	);
-}
-
-function selectorWithSearch(descriptor: EngineQueryDescriptor): Record<string, unknown> {
-	const selector = { ...(descriptor.selector ?? {}) } as Record<string, unknown>;
-	const search = descriptor.search?.trim();
-	if (search) selector.search = search;
-	return selector;
 }
 
 function useObservableResource<T>(observable$: Observable<T>): ObservableResource<T> {
@@ -188,19 +179,14 @@ function useDemand(
 	id: string,
 	descriptor: EngineQueryDescriptor,
 	enabled: boolean,
-	compiled?: CompiledQuery
+	compiled: CompiledQuery
 ): DemandProjection {
 	const coverageTarget$ = React.useMemo(
 		() => new BehaviorSubject<CoverageTarget | null>(null),
 		[engine, id]
 	);
 	const ready = React.useRef<Promise<DemandReadiness>>(Promise.resolve(ATTEMPTED));
-	const selector = selectorWithSearch(descriptor);
-	const selectorKey = JSON.stringify(selector);
-	// The products browse window travels with the grid's sort (#909), so the sort is part
-	// of what the demand effect depends on — a serialized key keeps the array identity out.
-	const sortKey = JSON.stringify(descriptor.sort ?? []);
-	const demandKey = JSON.stringify(compiled?.demand ?? []);
+	const demandKey = JSON.stringify(compiled.demand);
 	const engineCollection = engineCollectionNameFor(descriptor.collection);
 	const coverageGeneration = useCoverageGeneration(engine, engineCollection);
 
@@ -210,20 +196,10 @@ function useDemand(
 			ready.current = Promise.resolve(ATTEMPTED);
 			return undefined;
 		}
-		const stableSelector = JSON.parse(selectorKey) as Record<string, unknown>;
-		const binding = {
-			id,
-			collectionName: descriptor.collection,
-			selector: stableSelector,
-			limit: descriptor.limit,
-			sort: JSON.parse(sortKey) as RequirementSortPart[],
+		const plan = {
+			requirements: requirementsForCompiledQuery(compiled.demand, { id }),
+			represented: compiled.represented,
 		};
-		const plan = compiled
-			? {
-					requirements: requirementsForCompiledQuery(compiled.demand, { id }),
-					represented: compiled.represented,
-				}
-			: requirementsForQuery(binding);
 		const requirements = plan.requirements;
 		let handles: RequirementHandle[] = [];
 		let retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -237,11 +213,10 @@ function useDemand(
 		const declare = (retryOnReject: boolean) => {
 			if (cancelled) return;
 			handles = declareRequirements(engine, requirements);
-			const isUnfiltered = compiled
-				? compiled.read.complete &&
-					Object.keys(compiled.read.prefilter).length === 0 &&
-					compiled.read.search === ''
-				: Object.keys(stableSelector).length === 0;
+			const isUnfiltered =
+				compiled.read.complete &&
+				Object.keys(compiled.read.prefilter).length === 0 &&
+				compiled.read.search === '';
 			coverageTarget$.next(
 				coverageTargetFor({
 					collection: engineCollection,
@@ -291,14 +266,10 @@ function useDemand(
 		compiled,
 		demandKey,
 		descriptor.collection,
-		descriptor.limit,
-		descriptor.search,
 		enabled,
 		engine,
 		engineCollection,
 		id,
-		selectorKey,
-		sortKey,
 	]);
 
 	React.useEffect(
@@ -310,21 +281,11 @@ function useDemand(
 
 	const sync = React.useCallback(async () => {
 		if (!enabled) return;
-		const requirements = compiled
-			? requirementsForCompiledQuery(compiled.demand, {
-					id: `${id}:sync`,
-					priority: 1000,
-					forceRefresh: true,
-				})
-			: requirementsForQuery({
-					id: `${id}:sync`,
-					collectionName: descriptor.collection,
-					selector: selectorWithSearch(descriptor),
-					limit: descriptor.limit,
-					sort: descriptor.sort as RequirementSortPart[] | undefined,
-					priority: 1000,
-					forceRefresh: true,
-				}).requirements;
+		const requirements = requirementsForCompiledQuery(compiled.demand, {
+			id: `${id}:sync`,
+			priority: 1000,
+			forceRefresh: true,
+		});
 		const handles = declareRequirements(engine, requirements);
 		try {
 			await Promise.all(handles.map((handle) => handle.ready.catch(() => undefined)));
@@ -332,7 +293,7 @@ function useDemand(
 		} finally {
 			releaseHandles(handles);
 		}
-	}, [compiled, descriptor, enabled, engine, id]);
+	}, [compiled, enabled, engine, id]);
 
 	/**
 	 * Re-declare the standing requirements once and release them again.
@@ -347,15 +308,9 @@ function useDemand(
 		async (signal?: AbortSignal): Promise<DemandReadiness> => {
 			if (!enabled) return ATTEMPTED;
 			if (signal?.aborted) return NOT_ATTEMPTED;
-			const requirements = compiled
-				? requirementsForCompiledQuery(compiled.demand, { id: `${id}:rearm` })
-				: requirementsForQuery({
-						id: `${id}:rearm`,
-						collectionName: descriptor.collection,
-						selector: selectorWithSearch(descriptor),
-						limit: descriptor.limit,
-						sort: descriptor.sort as RequirementSortPart[] | undefined,
-					}).requirements;
+			const requirements = requirementsForCompiledQuery(compiled.demand, {
+				id: `${id}:rearm`,
+			});
 			const handles = declareRequirements(engine, requirements);
 			// `release()` IS the engine's cancellation verb — it aborts queued or in-flight
 			// foreground work and settles `ready` as `released`. Without this an aborted caller
@@ -371,7 +326,7 @@ function useDemand(
 				releaseHandles(handles);
 			}
 		},
-		[compiled, descriptor, enabled, engine, id]
+		[compiled, enabled, engine, id]
 	);
 
 	const whenReady = React.useCallback(() => ready.current.catch(() => NOT_ATTEMPTED), []);
@@ -474,8 +429,8 @@ export function useLogsBinding(state: QueryStateOf<'logs'>): QueryBinding {
 
 function useEngineBinding(
 	descriptorInput: EngineQueryDescriptor,
+	compiled: CompiledQuery,
 	enabled = true,
-	compiled?: CompiledQuery,
 	compiledId?: string
 ): QueryBinding & {
 	result$: Observable<QueryResult<RxCollection>>;
@@ -574,7 +529,7 @@ export function useCollectionBinding<C extends Exclude<CollectionKey, 'logs'>>(
 		collection: compiled.collection,
 		read: compiled.read,
 	};
-	return useEngineBinding(engineDescriptor, true, compiled, bindingId);
+	return useEngineBinding(engineDescriptor, compiled, true, bindingId);
 }
 
 function releaseHandles(handles: RequirementHandle[]): void {
@@ -595,12 +550,16 @@ function observeParentLookup(
 			selector: { id: { $in: parentIds } },
 			searchFields,
 		};
-		const requirements = requirementsForQuery({
-			id,
-			collectionName: 'products',
-			selector: descriptor.selector,
-			limit: undefined,
-		}).requirements;
+		const compiled = compileQuery(
+			'products',
+			{
+				search: '',
+				filters: { categories: [], brands: [], tags: [] },
+				sort: { field: 'id', direction: 'asc' },
+			},
+			{ id, targeted: parentIds, searchFields }
+		);
+		const requirements = requirementsForCompiledQuery(compiled.demand, { id });
 		const handles = declareRequirements(engine, requirements);
 		const subscription = observeEngineQuery(engine, locale, descriptor).subscribe(subscriber);
 		return () => {
@@ -635,12 +594,29 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 		search: compiled.read.search,
 		searchFields: searchFieldsFor('variations'),
 	});
+	const childCompiled = React.useMemo(
+		() =>
+			compileQuery(
+				'variations',
+				{
+					search: compiled.read.search,
+					filters: {
+						attributeMatches: [],
+						...(state.filters.status ? { status: state.filters.status } : {}),
+					},
+					sort: { field: 'id', direction: 'asc' },
+				},
+				{ id: `${bindingId}:child`, searchFields: childDescriptor.searchFields }
+			),
+		[bindingId, childDescriptor.searchFields, compiled.read.search, state.filters.status]
+	);
 	const parentDemand = useDemand(runtime.engine, `${bindingId}:parent`, descriptor, true, compiled);
 	const childDemand = useDemand(
 		runtime.engine,
 		`${bindingId}:child`,
 		childDescriptor,
-		Boolean(compiled.read.search)
+		Boolean(compiled.read.search),
+		childCompiled
 	);
 	const result$ = React.useMemo(() => {
 		if (!compiled.read.search) {
@@ -798,17 +774,78 @@ export function useSearchSelect(
 		1,
 		Math.min(options.maxResults ?? SEARCH_SELECT_LIMIT, SEARCH_SELECT_LIMIT_MAX)
 	);
-	const binding = useEngineBinding(searchSelectDescriptor(collection, committedSearch, limit));
+	const bindingId = React.useId();
+	const compiled = React.useMemo(() => {
+		const common = { search: committedSearch, filters: {}, limit } as const;
+		switch (collection) {
+			case 'customer':
+			case 'cashier':
+				return compileQuery(
+					'customers',
+					{ ...common, sort: { field: 'last_name', direction: 'asc' } },
+					{ id: bindingId, residual: collection === 'cashier' }
+				);
+			case 'category':
+				return compileQuery(
+					'products/categories',
+					{ ...common, sort: { field: 'name', direction: 'asc' } },
+					{ id: bindingId }
+				);
+			case 'brand':
+				return compileQuery(
+					'products/brands',
+					{ ...common, sort: { field: 'name', direction: 'asc' } },
+					{ id: bindingId }
+				);
+			case 'tag':
+				return compileQuery(
+					'products/tags',
+					{ ...common, sort: { field: 'name', direction: 'asc' } },
+					{ id: bindingId }
+				);
+			case 'coupon':
+				return compileQuery(
+					'coupons',
+					{ ...common, sort: { field: 'code', direction: 'asc' } },
+					{ id: bindingId }
+				);
+		}
+	}, [bindingId, collection, committedSearch, limit]);
+	const binding = useEngineBinding(
+		searchSelectDescriptor(collection, committedSearch, limit),
+		compiled,
+		true,
+		bindingId
+	);
 	return { ...binding, search, setSearch, committedSearch };
 }
 
 /** Full reference-lane category residents for the hierarchical category tree. */
 export function useAllCategoriesBinding() {
-	return useEngineBinding({
-		collection: 'products/categories',
-		selector: {},
-		sort: [{ name: 'asc' }],
-	});
+	const bindingId = React.useId();
+	const compiled = React.useMemo(
+		() =>
+			compileQuery(
+				'products/categories',
+				{
+					search: '',
+					filters: {},
+					sort: { field: 'name', direction: 'asc' },
+				},
+				{ id: bindingId }
+			),
+		[bindingId]
+	);
+	return useEngineBinding(
+		{
+			collection: 'products/categories',
+			selector: {},
+			sort: [{ name: 'asc' }],
+		},
+		compiled,
+		true,
+		bindingId
+	);
 }
 
 /** How long the coupon replay waits for its reference pull before giving up on it. */
@@ -903,6 +940,26 @@ const COUPON_REPLAY_CATEGORIES_DESCRIPTOR: EngineQueryDescriptor = {
 	sort: [{ name: 'asc' }],
 };
 
+const COUPON_REPLAY_COUPONS_COMPILED = compileQuery(
+	'coupons',
+	{
+		search: '',
+		filters: {},
+		sort: { field: 'code', direction: 'asc' },
+	},
+	{ id: 'coupon-replay:coupons' }
+);
+
+const COUPON_REPLAY_CATEGORIES_COMPILED = compileQuery(
+	'products/categories',
+	{
+		search: '',
+		filters: {},
+		sort: { field: 'name', direction: 'asc' },
+	},
+	{ id: 'coupon-replay:categories' }
+);
+
 /**
  * Reference demand for replaying coupons already applied to the cart (#952).
  *
@@ -951,8 +1008,16 @@ export function useAppliedCouponReferenceDemand(hasAppliedCoupons: boolean): {
 	whenSettledInBackground: (signal: AbortSignal) => Promise<boolean>;
 	generation: number;
 } {
-	const coupons = useEngineBinding(COUPON_REPLAY_COUPONS_DESCRIPTOR, hasAppliedCoupons);
-	const categories = useEngineBinding(COUPON_REPLAY_CATEGORIES_DESCRIPTOR, hasAppliedCoupons);
+	const coupons = useEngineBinding(
+		COUPON_REPLAY_COUPONS_DESCRIPTOR,
+		COUPON_REPLAY_COUPONS_COMPILED,
+		hasAppliedCoupons
+	);
+	const categories = useEngineBinding(
+		COUPON_REPLAY_CATEGORIES_DESCRIPTOR,
+		COUPON_REPLAY_CATEGORIES_COMPILED,
+		hasAppliedCoupons
+	);
 	const quiet$ = React.useMemo(
 		() =>
 			combineLatest([coupons.active$, categories.active$]).pipe(

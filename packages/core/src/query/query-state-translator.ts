@@ -1,5 +1,6 @@
 import {
 	collectionMap,
+	engineCollectionNameFor,
 	type EngineDocument,
 	type FieldMapEntry,
 	type LegacyCollectionName,
@@ -56,6 +57,9 @@ export const FILTER_TRANSLATORS = {
 		status: mappedEntry(collectionMap.coupons.fields.status),
 		dateRange: mappedEntry(collectionMap.coupons.fields.date_expires_gmt, 'date-range'),
 	},
+	'products/categories': {},
+	'products/brands': {},
+	'products/tags': {},
 	variations: {
 		attributeMatches: mappedEntry(collectionMap.variations.fields.attributes, 'all-match'),
 		status: mappedEntry(collectionMap.variations.fields.status),
@@ -285,11 +289,13 @@ export function requirementsForCompiledQuery(
 /** Compile UI query state once into its remote-demand and local-read faces. */
 export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 	collection: C,
-	state: QueryStateOf<C>,
+	state: Omit<QueryStateOf<C>, 'limit'> & { limit?: number },
 	options: {
 		id: string;
 		targeted?: readonly unknown[];
 		searchFields?: string[];
+		/** A read-side predicate intentionally left outside QueryState. */
+		residual?: boolean;
 	}
 ) {
 	const legacyCollection = (
@@ -342,6 +348,7 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 		prefilter: (prefilters.length === 1 ? prefilters[0] : { $and: prefilters }) as never,
 		residual: (document) => readFilters.every((filter) => filter.matches(document)),
 		complete:
+			!options.residual &&
 			prefilters.length === readFilters.length &&
 			readFilters.every((filter) => filter.complete !== false),
 		sort,
@@ -360,7 +367,7 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 			read,
 		};
 	}
-	const engineCollection = collection === 'tax-rates' ? 'taxRates' : collection;
+	const engineCollection = engineCollectionNameFor(legacyCollection);
 	const demand: EngineRequirement[] = [];
 	if (targeted?.length) {
 		demand.push({
@@ -381,17 +388,20 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 			collection: engineCollection,
 			kind: 'search',
 			term: search,
-			limit: state.limit,
+			...(state.limit !== undefined ? { limit: state.limit } : {}),
 		} as EngineRequirement);
 	}
 	if (demand.length > 0) return { collection: legacyCollection, demand, represented: false, read };
 
 	let represented =
+		!options.residual &&
 		active.every(({ translator }) => translator.mapping.wireFace !== 'local-only') &&
 		(!search || collection === 'orders');
 	if (collection === 'orders') {
 		const wooOrderby = wooOrderbyFor('orders', uiSortField);
-		const dimensions: OrderBrowseDimensions = { limit: state.limit };
+		const dimensions: OrderBrowseDimensions = {
+			...(state.limit !== undefined ? { limit: state.limit } : {}),
+		};
 		let scoped = false;
 		for (const { field, value } of active) {
 			if (field === 'status' && typeof value === 'string') dimensions.status = value;
@@ -426,6 +436,7 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 		}
 		if (
 			(dimensions.afterSeconds !== undefined || dimensions.beforeSeconds !== undefined) &&
+			state.limit !== undefined &&
 			state.limit >= Number.MAX_SAFE_INTEGER
 		)
 			dimensions.limit = 'all';
@@ -438,7 +449,9 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 		});
 	} else if (collection === 'products') {
 		const wooOrderby = wooOrderbyFor('products', uiSortField);
-		const dimensions: ProductBrowseDimensions = { limit: state.limit };
+		const dimensions: ProductBrowseDimensions = {
+			...(state.limit !== undefined ? { limit: state.limit } : {}),
+		};
 		let filtered = false;
 		for (const { field, value } of active) {
 			if (field === 'categories' || field === 'tags' || field === 'brands') {
@@ -486,10 +499,15 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 			orderby: wooOrderby,
 			order: state.sort.direction,
 		});
-	} else if (collection === 'coupons') {
+	} else if (
+		collection === 'coupons' ||
+		collection === 'products/categories' ||
+		collection === 'products/brands' ||
+		collection === 'products/tags'
+	) {
 		demand.push({
 			id: requirementId(options.id, 'refresh'),
-			collection: 'coupons',
+			collection: engineCollection,
 			kind: 'refresh',
 			priority: 700,
 		});
