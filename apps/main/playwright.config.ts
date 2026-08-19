@@ -109,7 +109,18 @@ export default defineConfig<WcposTestOptions>({
 	fullyParallel: true,
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 2 : 0,
-	workers: process.env.CI ? 4 : 1,
+	// Total store load is runs x shards x workers. With 4 shards and a deep PR
+	// queue, 4 workers/shard put ~100 concurrent browser sessions on one dev
+	// store and saturated its PHP pool (2026-08-19: every main-lane gate failed
+	// at global-setup while the store timed out). The dev stores are deliberately
+	// sized like a normal shop, so CI is what gives — 2 workers/shard keeps the
+	// shard parallelism that makes runs fast while halving the concurrent load.
+	// Override with E2E_WORKERS for a deliberate experiment.
+	workers: process.env.E2E_WORKERS
+		? Number(process.env.E2E_WORKERS)
+		: process.env.CI
+			? 2
+			: 1,
 	reporter: process.env.CI
 		? [
 				['github'],

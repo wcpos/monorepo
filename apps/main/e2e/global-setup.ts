@@ -1,8 +1,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { chromium, type FullConfig } from '@playwright/test';
+import { chromium, expect, type FullConfig } from '@playwright/test';
 
+import {
+	CATALOGUE_READY_TIMEOUT_MS,
+	LOADED_COUNT_READY,
+	LOADED_COUNT_TEST_ID,
+} from './catalogue-readiness';
 import { cashierAuthStateName, currentShardIndex, getE2ECashierAuth } from './cashier-slot';
 import {
 	COLD_START_ENABLED,
@@ -190,7 +195,23 @@ async function reuseValidAuthState(
 		) {
 			throw new Error('restored state faulted the error boundary');
 		}
-		console.log(`[global-setup] Reusing cached ${stateName} state (validated boot)`);
+		// A restored database can be structurally unusable while the shell renders
+		// perfectly: RxDB's DB6 (schema-hash mismatch) fails the DATABASE without
+		// touching the React tree, so `search-products`, an authenticated 2xx and a
+		// clean error boundary all pass above with zero rows behind them. That is
+		// precisely what happened on 2026-08-19 — a cached state captured under an
+		// older product schema was reused, every collection was empty, and CI spent
+		// an hour reporting it as slowness (this PR; root cause #1337).
+		//
+		// Validating what the tests actually need makes the cache SELF-HEALING for
+		// any cause, not just schema drift: the catch below deletes the state file
+		// and re-authenticates, so a run pays one login instead of a red day. Only
+		// reached when !coldStart (see caller), where an empty catalogue is never
+		// legitimate.
+		await expect(page.getByTestId(LOADED_COUNT_TEST_ID)).toHaveText(LOADED_COUNT_READY, {
+			timeout: CATALOGUE_READY_TIMEOUT_MS,
+		});
+		console.log(`[global-setup] Reusing cached ${stateName} state (validated boot + catalogue)`);
 		return state.storeIds as string[];
 	} catch (error) {
 		console.log(
