@@ -4,8 +4,7 @@
  * (the generated arms), with the cursor committed ONLY after every arm
  * succeeded (ADR 0005/0007 — persistState is the applier's last step).
  *
- * Per-scope engine registry (the playground perScopeEngineRegistry semantics,
- * package-internal): one hybrid engine per scope, created lazily on first tick
+ * Per-scope engine registry (package-internal): one hybrid engine per scope, created lazily on first tick
  * from the persisted state blob (malformed blob → null → cold start, never a
  * crash). Collection resets leave this shared cursor and cached engine intact;
  * later signals for wiped records use the normal targeted apply arms.

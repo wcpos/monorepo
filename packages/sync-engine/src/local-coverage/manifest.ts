@@ -9,7 +9,7 @@ import {
 } from './existence-manifest-schema';
 import { upsertManifestRows } from './rx-existence-manifest-repository';
 
-/** Structural collection slices the primes read — LabDatabase and engine scope dbs both satisfy them. */
+/** Structural collection slices the primes read — any engine scope database satisfies them. */
 type CountFindCollection<TDoc> = {
 	count(): { exec(): Promise<number> };
 	find(): { exec(): Promise<TDoc[]> };

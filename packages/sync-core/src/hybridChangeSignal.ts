@@ -1,8 +1,8 @@
 /**
- * Hybrid change-signal engine — the composition the change-signal matrix
- * nominated (docs/experiments/change-signal-matrix-2026-06-10.md, "Emerging
- * hybrid hypothesis"). It graduates the playground's measured tiers into a
- * sync-core module behind a clean port shared by its host adapters.
+ * Hybrid change-signal engine — the composition the 2026-06-10 change-signal
+ * matrix nominated as its "emerging hybrid hypothesis". It graduates that
+ * study's measured tiers into a sync-core module behind a clean port shared
+ * by its host adapters.
  *
  * The engine does NOT re-implement endpoint plumbing — that lived in the bench
  * instrument (changeSignalMatrix, since removed from apps/web), which MEASURED
@@ -100,9 +100,8 @@ export type BarcodeConfigCollection = 'products' | 'variations' | 'tax_rates';
  * `collection` is REQUIRED and is the row's single source of truth for "which
  * collection changed". The server tags every unified-stream row (its internal
  * `object_type` → collection, class-changes-controller.php) and the source
- * adapter maps that wire field to `collection` at the boundary
- * (apps/web/src/bench/hybridEngineLiveSource.ts), dropping rows whose
- * collection is absent or unknown — so the engine never guesses.
+ * adapter maps that wire field to `collection` at the boundary, dropping rows
+ * whose collection is absent or unknown — so the engine never guesses.
  */
 export type SequenceLogRow = {
 	sequence: number;
@@ -720,9 +719,9 @@ export function createHybridChangeSignalEngine(input: {
 		// drifted from what the hooks recorded (a hook-bypassing / sql-bypass
 		// write). That verdict is stateless and self-contained — it does NOT depend
 		// on a retained baseline — so we honour it ALWAYS, including on a cold start
-		// with no seeded baseline. This mirrors the measured bench
-		// (apps/web/src/bench/changeSignalMatrix.ts:523), which detects sql-bypass
-		// as exactly buckets.filter(row => !row.match). A pre-existing bypassing
+		// with no seeded baseline. This mirrors the bench that MEASURED the
+		// candidates (since removed with the lab web host), which detected
+		// sql-bypass as exactly buckets.filter(row => !row.match). A pre-existing bypassing
 		// write therefore flags on the very first sweep instead of being silently
 		// adopted as baseline.
 		let afterId = 0;

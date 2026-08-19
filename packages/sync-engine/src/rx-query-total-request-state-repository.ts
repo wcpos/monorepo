@@ -25,7 +25,7 @@ function isRunnable(state: QueryTotalRequestState, nowMs: number): boolean {
 	return state.retryAfterMs !== null && state.retryAfterMs <= nowMs;
 }
 
-/** Structural: any database carrying the queryTotalRequestStates collection (LabDatabase and engine scope dbs both satisfy it). */
+/** Structural: any database carrying the queryTotalRequestStates collection — any engine scope database satisfies it. */
 export type QueryTotalRequestStateDatabase = {
 	queryTotalRequestStates: RxKeyedCollection<QueryTotalRequestStateDocument>;
 };

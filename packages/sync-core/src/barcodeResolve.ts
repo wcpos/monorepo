@@ -461,7 +461,7 @@ export async function resolveScan(input: ResolveScanInput): Promise<ScanResult> 
 	};
 }
 
-// The bench instrument (runner, scenario prefetch, profile parsing, summary
-// stats, markdown rendering) lives in ./bench/barcodeResolveBench — import it
-// from the woo-rxdb-replication-lab repo. This module keeps only the engine:
-// the local index and the awaited scan flow.
+// The bench instrument that measured this (runner, profile parsing, summary
+// stats, markdown rendering) was never ported from the lab repo — there is no
+// ./bench sub-path in this package. This module keeps only the engine: the
+// local index and the awaited scan flow.
