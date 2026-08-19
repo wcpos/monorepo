@@ -81,10 +81,21 @@ describe('createReferenceCollectionFetcher set-difference deletion', () => {
 	);
 
 	it('prunes server-sourced local docs absent from the complete fetched set on the terminal page', async () => {
-		// 1 doc < perPage(2) ⇒ this single page is the complete authoritative set.
-		const fetcher = vi.fn(async () => response([cat(1)]));
-		const pruneServerSourcedAbsent = vi.fn(async () => ['woo-category:99']);
-		const repository = { upsertMany: vi.fn(async () => undefined), pruneServerSourcedAbsent };
+		// 1 doc < perPage(2) ⇒ this single page is the complete authoritative set. Terms
+		// default to a NAME walk (mutable key), so the terminal prune goes through the
+		// verify leg: list the doomed, re-fetch them by include=, prune confirmed absences.
+		const fetcher = vi
+			.fn()
+			.mockResolvedValueOnce(response([cat(1)]))
+			.mockResolvedValueOnce(response([]));
+		const listServerSourcedAbsent = vi.fn(async () => [{ uuid: uuidFor(99), wooId: 99 }]);
+		const pruneServerSourcedAbsentByUuids = vi.fn(async () => [uuidFor(99)]);
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			pruneServerSourcedAbsent: vi.fn(async () => []),
+			listServerSourcedAbsent,
+			pruneServerSourcedAbsentByUuids,
+		};
 		const schedulerFetcher = createReferenceCollectionFetcher(CATEGORY_REFERENCE_CONFIG, {
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
@@ -94,10 +105,11 @@ describe('createReferenceCollectionFetcher set-difference deletion', () => {
 		const result = await schedulerFetcher(categoryTask());
 
 		expect(result.completed).toBe(true);
-		expect(pruneServerSourcedAbsent).toHaveBeenCalledTimes(1);
 		// Post-flip the prune kept-set is the STORAGE keys (uuids) — it must match the stored doc.id,
 		// NOT the Woo-id-space coverage key, or every server-sourced term gets pruned every refresh.
-		expect(pruneServerSourcedAbsent).toHaveBeenCalledWith([uuidFor(1)]);
+		expect(listServerSourcedAbsent).toHaveBeenCalledWith([uuidFor(1)]);
+		expect(pruneServerSourcedAbsentByUuids).toHaveBeenCalledWith([uuidFor(99)]);
+		expect(repository.pruneServerSourcedAbsent).not.toHaveBeenCalled();
 		expect(result.prunedCount).toBe(1);
 	});
 
@@ -126,8 +138,13 @@ describe('createReferenceCollectionFetcher set-difference deletion', () => {
 			.fn()
 			.mockResolvedValueOnce(response([cat(1), cat(2)]))
 			.mockResolvedValueOnce(response([cat(3)]));
-		const pruneServerSourcedAbsent = vi.fn(async () => []);
-		const repository = { upsertMany: vi.fn(async () => undefined), pruneServerSourcedAbsent };
+		const listServerSourcedAbsent = vi.fn(async () => [] as { uuid: string; wooId: number }[]);
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			pruneServerSourcedAbsent: vi.fn(async () => []),
+			listServerSourcedAbsent,
+			pruneServerSourcedAbsentByUuids: vi.fn(async () => []),
+		};
 		const schedulerFetcher = createReferenceCollectionFetcher(CATEGORY_REFERENCE_CONFIG, {
 			baseUrl: 'http://x/v1',
 			repository,
@@ -139,8 +156,8 @@ describe('createReferenceCollectionFetcher set-difference deletion', () => {
 
 		expect(first.completed).toBe(false);
 		expect(second.completed).toBe(true);
-		expect(pruneServerSourcedAbsent).toHaveBeenCalledTimes(1);
-		expect(pruneServerSourcedAbsent).toHaveBeenCalledWith([uuidFor(1), uuidFor(2), uuidFor(3)]);
+		expect(listServerSourcedAbsent).toHaveBeenCalledTimes(1);
+		expect(listServerSourcedAbsent).toHaveBeenCalledWith([uuidFor(1), uuidFor(2), uuidFor(3)]);
 	});
 
 	it('skips the prune when the refresh was aborted', async () => {
@@ -182,8 +199,13 @@ describe('createReferenceCollectionFetcher set-difference deletion', () => {
 		// all three: the stored doc keys by the uuid; coverage records the Woo-id-space key; the prune
 		// kept-set is the uuid storage key (so it matches stored doc.id and never mass-deletes).
 		const fetcher = vi.fn(async () => response([cat(1)]));
-		const pruneServerSourcedAbsent = vi.fn(async () => []);
-		const repository = { upsertMany: vi.fn(async () => undefined), pruneServerSourcedAbsent };
+		const listServerSourcedAbsent = vi.fn(async () => [] as { uuid: string; wooId: number }[]);
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			pruneServerSourcedAbsent: vi.fn(async () => []),
+			listServerSourcedAbsent,
+			pruneServerSourcedAbsentByUuids: vi.fn(async () => []),
+		};
 		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
 		const schedulerFetcher = createReferenceCollectionFetcher(CATEGORY_REFERENCE_CONFIG, {
 			baseUrl: 'http://x/v1',
@@ -203,6 +225,6 @@ describe('createReferenceCollectionFetcher set-difference deletion', () => {
 				records: [{ id: 'woo-category:1' }],
 			})
 		);
-		expect(pruneServerSourcedAbsent).toHaveBeenCalledWith([uuidFor(1)]);
+		expect(listServerSourcedAbsent).toHaveBeenCalledWith([uuidFor(1)]);
 	});
 });

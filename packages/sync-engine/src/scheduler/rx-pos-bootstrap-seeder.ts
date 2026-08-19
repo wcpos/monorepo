@@ -24,7 +24,7 @@ import { REFERENCE_COLLECTIONS, type ReferenceCollection } from '@wcpos/sync-cor
 
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import {
-	DEFAULT_REFERENCE_LANE_DESCRIPTOR,
+	defaultReferenceLaneDescriptor,
 	parseReferenceLaneQueryKey,
 	type ReferenceLaneDescriptor,
 	referenceLaneQueryKey,
@@ -107,7 +107,7 @@ export function laneKeyFor(collection: SyncCollectionName): string | null {
  */
 export function referenceLaneTaskFor<C extends ReferenceCollection>(
 	collection: C,
-	descriptor: ReferenceLaneDescriptor<C> = DEFAULT_REFERENCE_LANE_DESCRIPTOR
+	descriptor: ReferenceLaneDescriptor<C> = defaultReferenceLaneDescriptor(collection)
 ): FetchTask {
 	const { config, priority } = REFERENCE_LANE_CONFIGS[collection];
 	const queryKey = referenceLaneQueryKey(collection, descriptor);
@@ -202,11 +202,19 @@ export async function seedReferenceLanes(
 					.map((state) => ({ state, parsed: parseReferenceLaneQueryKey(state.queryKey) }))
 					.find(({ parsed }) => parsed?.collection === collection);
 				const descriptor = input.sorts?.[collection] ?? persisted?.parsed?.descriptor;
-				return referenceLaneTaskFor(collection, descriptor ?? DEFAULT_REFERENCE_LANE_DESCRIPTOR);
+				return referenceLaneTaskFor(
+					collection,
+					descriptor ?? defaultReferenceLaneDescriptor(collection)
+				);
 			});
 			for (const state of existing) {
+				const isFormerTermDefault =
+					state.collection !== 'coupons' &&
+					state.queryKey === `${state.collection}:all:orderby=name:order=asc`;
 				const replacement = tasks.find(
-					(task) => parseReferenceLaneQueryKey(state.queryKey)?.collection === task.collection
+					(task) =>
+						parseReferenceLaneQueryKey(state.queryKey)?.collection === task.collection ||
+						(isFormerTermDefault && state.collection === task.collection)
 				);
 				if (!replacement || replacement.id === state.taskId) continue;
 				// The remove is CAS-guarded, and a concurrent owner (a drain claiming,

@@ -33,19 +33,40 @@ describe('reference lane descriptor grammar', () => {
 		}
 	});
 
-	it.each(['categories', 'tags', 'brands', 'coupons'] as const)(
-		'keeps the legacy %s key as the only spelling of the default',
+	// Paul's ruling 2026-08-19: the term lanes default to `name asc` — the order every
+	// UI shows — spelled as the legacy key, so the flip carries ZERO key migration.
+	// `id asc` survives as an ordinary non-default spelling.
+	it.each(['categories', 'tags', 'brands'] as const)(
+		'keeps the legacy %s key as the only spelling of the name-asc default',
 		(collection) => {
-			expect(referenceLaneQueryKey(collection, { orderby: 'id', order: 'asc' })).toBe(
+			expect(referenceLaneQueryKey(collection, { orderby: 'name', order: 'asc' })).toBe(
 				`${collection}:all`
 			);
+			expect(referenceLaneQueryKey(collection)).toBe(`${collection}:all`);
 			expect(parseReferenceLaneQueryKey(`${collection}:all`)).toEqual({
+				collection,
+				descriptor: { orderby: 'name', order: 'asc' },
+			});
+			expect(parseReferenceLaneQueryKey(`${collection}:all:orderby=name:order=asc`)).toBeNull();
+			expect(parseReferenceLaneQueryKey(`${collection}:all:orderby=id:order=asc`)).toEqual({
 				collection,
 				descriptor: { orderby: 'id', order: 'asc' },
 			});
-			expect(parseReferenceLaneQueryKey(`${collection}:all:orderby=id:order=asc`)).toBeNull();
 		}
 	);
+
+	it('keeps the legacy coupons key as the only spelling of the id-asc default', () => {
+		expect(referenceLaneQueryKey('coupons', { orderby: 'id', order: 'asc' })).toBe('coupons:all');
+		expect(referenceLaneQueryKey('coupons')).toBe('coupons:all');
+		expect(parseReferenceLaneQueryKey('coupons:all')).toEqual({
+			collection: 'coupons',
+			descriptor: { orderby: 'id', order: 'asc' },
+		});
+		expect(parseReferenceLaneQueryKey('coupons:all:orderby=id:order=asc')).toBeNull();
+		// name asc is a term default, NOT a coupon one — for coupons it is an
+		// ordinary... not even that: coupons have no `name` orderby at all.
+		expect(parseReferenceLaneQueryKey('coupons:all:orderby=name:order=asc')).toBeNull();
+	});
 
 	it('rejects unsupported and cross-collection orderby values', () => {
 		expect(parseReferenceLaneQueryKey('categories:all:orderby=date:order=desc')).toBeNull();

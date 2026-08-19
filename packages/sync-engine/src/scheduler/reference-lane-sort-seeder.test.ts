@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { schedulerTaskStateKey } from './scheduler-task-state-schema';
 import { referenceLaneTaskFor, seedReferenceLanes } from './rx-pos-bootstrap-seeder';
 
 function schedulerDatabase() {
@@ -68,6 +69,34 @@ describe('reference lane sorted seeding', () => {
 			['categories:all:orderby=name:order=desc'],
 			['categories:all:orderby=slug:order=asc'],
 		]);
+	});
+
+	it('reconciles the formerly canonical explicit name-asc term lane', async () => {
+		const { database, stored } = schedulerDatabase();
+		await seedReferenceLanes({
+			database,
+			collections: ['categories'],
+			sorts: { categories: { orderby: 'name', order: 'desc' } },
+		});
+		const persisted = [...stored.entries()].find(
+			([, row]) => row.queryKey === 'categories:all:orderby=name:order=desc'
+		);
+		if (persisted === undefined) throw new Error('expected a persisted sorted lane');
+
+		const [stateKey, state] = persisted;
+		const legacyTaskId = 'categories:all:orderby=name:order=asc:greedy';
+		const legacyStateKey = schedulerTaskStateKey(legacyTaskId);
+		stored.delete(stateKey);
+		stored.set(legacyStateKey, {
+			...state,
+			stateKey: legacyStateKey,
+			taskId: legacyTaskId,
+			queryKey: 'categories:all:orderby=name:order=asc',
+		});
+
+		await seedReferenceLanes({ database, collections: ['categories'] });
+
+		expect(categoryKeys(stored)).toEqual(['categories:all']);
 	});
 
 	it('a supersede that loses its CAS re-reads and retries instead of rejecting', async () => {
