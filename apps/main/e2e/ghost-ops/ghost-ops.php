@@ -78,18 +78,26 @@ switch ( $op ) {
 		), "\n";
 		break;
 
-	case 'cleanup': // cleanup <sku-prefix> — probe SKUs only
-		$prefix = (string) ( $args[1] ?? '' );
-		// A short or generic prefix would force-delete real catalog fixtures, so
-		// require something that can only be one of this harness's probe tokens.
-		if ( ! preg_match( '/^[A-Za-z0-9]{4,}$/', $prefix ) ) {
-			echo "REFUSED: cleanup needs an alphanumeric prefix of 4+ chars\n";
+	case 'cleanup': // cleanup <sku> — the ONE probe with this exact sku
+		$sku = (string) ( $args[1] ?? '' );
+		if ( ! preg_match( '/^[A-Za-z0-9]{4,}$/', $sku ) ) {
+			echo "REFUSED: cleanup needs the probe's exact alphanumeric sku, 4+ chars\n";
 			break;
 		}
+		// EXACT sku, never a prefix (greptile review). `LIKE sku%` also matches every
+		// SIBLING run whose token shares this prefix — tokens look like gp818a/gp818b,
+		// so `cleanup gp818` would delete a concurrent run's probe mid-experiment and
+		// corrupt its frozen profile or A/B result. Concurrent runs against one shared
+		// dev store are the norm here, not an edge case, and the title guard cannot
+		// separate them (every probe carries the same title prefix), so the precision
+		// has to come from the SKU.
+		//
+		// This takes the SAME sku `create` was given, so the two ops speak one
+		// language and no suffix convention is assumed on this side.
 		$ids = $wpdb->get_col(
 			$wpdb->prepare(
-				"SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_sku' AND meta_value LIKE %s",
-				$wpdb->esc_like( $prefix ) . '%'
+				"SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_sku' AND meta_value = %s",
+				$sku
 			)
 		);
 		$deleted = 0;
