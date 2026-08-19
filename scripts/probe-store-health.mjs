@@ -160,6 +160,9 @@ console.log(`[store-health] samples: ${summary} — median ${median}ms`);
 
 // Runner-side timing for the query the app actually waits on. Local machine
 // medians for comparison (2026-08-19): 1.33s free, 1.35s pro.
+const writerCredentialsConfigured = Boolean(
+  process.env.E2E_PRODUCT_WRITER_USER || process.env.E2E_PRODUCT_WRITER_PASS,
+);
 const token = await mintToken();
 let heavyMedian = 0;
 let heavyFailures = 0;
@@ -175,6 +178,11 @@ if (token) {
   console.log(
     `[store-health] ${label} products(50) median ${heavyMedian}ms ` +
       `(statuses: ${heavy.map((r) => r.status).join(",")})`,
+  );
+} else if (writerCredentialsConfigured) {
+  heavyFailures = SAMPLES;
+  console.log(
+    `[store-health] ${label} products(50) not measured (token mint failed)`,
   );
 } else {
   console.log(

@@ -125,6 +125,24 @@ test('times catalogue response bodies and uses their latency in the verdict', { 
 	);
 });
 
+test('uses configured token-mint failures in the health verdict', async () => {
+	await withServer(
+		(request, response) => {
+			if (request.url.startsWith('/wp-json/wcpos/v2/auth/test')) {
+				response.writeHead(401).end();
+				return;
+			}
+			response.writeHead(503).end('token unavailable');
+		},
+		async (storeUrl) => {
+			const { stdout } = await runProbe(storeUrl, 'before the tests started', writerEnv);
+			assert.match(stdout, /products\(50\) not measured \(token mint failed\)/);
+			assert.match(stdout, /::error title=E2E store saturated::/);
+			assert.doesNotMatch(stdout, /\[store-health\] test store healthy/);
+		}
+	);
+});
+
 test('uses catalogue transport failures in the health verdict', async () => {
 	await withServer(
 		(request, response) => {
