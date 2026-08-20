@@ -405,7 +405,7 @@ After `useHttpClient` catches an error, it enriches it with:
 
 - **Automatic JWT Injection**: Adds `Authorization: Bearer <token>` to headers (or query params if `use_jwt_as_param` is configured)
 - **Multi-Store Context**: Automatically injects `store_id` parameter
-- **Method Workarounds**: Converts PUT/PATCH to POST with `X-HTTP-Method-Override` headers for server compatibility
+- **Method Workarounds**: Converts PUT/PATCH/DELETE to POST with `_method` query parameters for server compatibility
 - **Invalid JSON Recovery**: Heuristic parser to extract JSON from corrupted responses (e.g., PHP warnings mixed in response)
 
 ---
