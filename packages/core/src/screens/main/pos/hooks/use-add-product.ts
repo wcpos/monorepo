@@ -67,6 +67,26 @@ export const useAddProduct = () => {
 			// always make sure we have the latest product document
 			if (isEngineRxDocument(data)) {
 				const latest = data.getLatest() as unknown as EngineRecord<'products'>;
+				// A products-collection document claiming to be a variation is misfiled
+				// (the pre-fix products search lane persisted Woo's variation-typed
+				// sku-leg rows; scope-open purges residue, but a document made dirty
+				// before the purge survives it). Building a PRODUCT line from it would
+				// write product_id = the variation's woo id with no variation_id and no
+				// attributes — a silently malformed order line. Refuse instead.
+				if (String(latest.payload?.type) === 'variation') {
+					reportCartFailure(
+						orderLogger,
+						'Refused to add a misfiled variation document as a product',
+						{
+							toastTitle: t('pos.error_adding_to_cart', { name: latest.payload?.name ?? '' }),
+							context: {
+								productId: latest.remoteId === null ? undefined : wooIdOf(latest.remoteId),
+								reason: 'products-collection document has type variation',
+							},
+						}
+					);
+					return false;
+				}
 				product = {
 					...latest.payload,
 					// NOTE: the wc/v3 wire overloads 0, so a born-local product that has not been
