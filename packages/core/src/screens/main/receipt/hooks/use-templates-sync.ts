@@ -27,7 +27,12 @@ const inFlight = new WeakMap<RxCollection, Promise<void>>();
  * Fetch the full templates set and upsert it into the local collection.
  * Best-effort: a network/parse failure is logged, never thrown into render.
  */
-export function syncTemplates(collection: RxCollection, httpClient: any): Promise<void> {
+export function syncTemplates(
+	collection: RxCollection,
+	httpClient: {
+		get(url: string, config: { params: { posts_per_page: number } }): Promise<{ data?: unknown }>;
+	}
+): Promise<void> {
 	if (!collection || !httpClient) {
 		return Promise.resolve();
 	}
@@ -49,14 +54,16 @@ export function syncTemplates(collection: RxCollection, httpClient: any): Promis
 			// schema validation rejects every row. Parse per row.
 			const parse = (collection as any)?.parseRestResponse;
 			const rows = await Promise.all(
-				data.map((row: any) => (typeof parse === 'function' ? parse.call(collection, row) : row))
+				data.map((row: Record<string, unknown>) =>
+					typeof parse === 'function' ? parse.call(collection, row) : row
+				)
 			);
 			if (rows.length > 0) {
-				const result = await (collection as any).bulkUpsert(rows);
+				const result = await collection.bulkUpsert(rows);
 				// bulkUpsert reports per-document failures in its result instead of
 				// throwing — surface them, or a rejected set is indistinguishable
 				// from an empty store (the receipt modal just shows no templates).
-				const errors: any[] = result?.error ?? [];
+				const errors = result.error;
 				if (errors.length > 0) {
 					templatesLogger.error('Templates upsert rejected documents', {
 						code: ERROR_CODES.PRINT_UNEXPECTED,
@@ -66,7 +73,8 @@ export function syncTemplates(collection: RxCollection, httpClient: any): Promis
 							first: {
 								documentId: errors[0]?.documentId,
 								status: errors[0]?.status,
-								validationErrors: errors[0]?.validationErrors,
+								validationErrors:
+									errors[0]?.status === 422 ? errors[0].validationErrors : undefined,
 							},
 						},
 					});

@@ -121,6 +121,12 @@ const fakeHttpClient = (data: unknown) => ({
 	get: jest.fn(async () => ({ data })),
 });
 
+type SyncTemplatesHttpClient = Parameters<typeof syncTemplates>[1];
+// Type-only pin: the response boundary must never regress to `any`.
+// @ts-expect-error A synchronous scalar is not a valid HTTP response.
+const invalidHttpClient: SyncTemplatesHttpClient = { get: () => 42 };
+void invalidHttpClient;
+
 describe('syncTemplates', () => {
 	it('upserts every template despite undeclared server fields on validating storage', async () => {
 		await syncTemplates(db.collections.templates as never, fakeHttpClient(serverPayload));
