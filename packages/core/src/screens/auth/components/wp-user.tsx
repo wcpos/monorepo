@@ -99,7 +99,11 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 					} else {
 						authLogger.warn(
 							'Re-authentication returned a different user; credentials saved but token not adopted for active requests',
-							{ context: { expectedId: wpUser.id, returnedId: params.id } }
+							{
+								showToast: true,
+								toast: { title: t('auth.signed_in_as_different_user', { _tags: 'core' }) },
+								context: { expectedId: wpUser.id, returnedId: params.id },
+							}
 						);
 					}
 				} catch (error) {
@@ -119,7 +123,7 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 			});
 			processedResponseRef.current = responseKey;
 		}
-	}, [response, handleLoginSuccess, site.name, wpUser.id]);
+	}, [response, handleLoginSuccess, site.name, wpUser.id, t]);
 
 	const handleRemoveWpUser = React.useCallback(async () => {
 		await wpUser.incrementalRemove();
