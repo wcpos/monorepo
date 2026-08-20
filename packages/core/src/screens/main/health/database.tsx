@@ -129,8 +129,11 @@ function useRowStory(row: CollectionRow, phase: RowPhase): RowStory {
 		};
 	}
 	if (!row.fresh || row.serverTotal === null) {
+		// A stale census keeps its last-known total on screen (a number the
+		// server DID report) while "checking…" replaces the bar — never a green
+		// bar off a stale denominator, never a bare "…" when we knew a total.
 		return {
-			serverText: '…',
+			serverText: row.serverTotal !== null ? row.serverTotal.toLocaleString() : '…',
 			coverage: {
 				kind: 'checking',
 				label: t('health.database.checking'),

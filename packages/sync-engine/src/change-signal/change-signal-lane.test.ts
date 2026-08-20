@@ -11,6 +11,8 @@ import {
 import { createScopeBarcodeSelectors } from '../materialization/barcode-selectors';
 import { createChangeSignalLane } from './change-signal-lane';
 
+import type { QueryTotalCacheEntry } from '../scheduler';
+
 const mocks = vi.hoisted(() => ({
 	poll: vi.fn(),
 }));
@@ -24,8 +26,9 @@ vi.mock('@wcpos/sync-core', async (importOriginal) => {
 			targetedPulls: [],
 			deletes: [],
 			rebaselineCollections: [],
+			reFetchCollections: [],
 		})),
-		applyReplicationActions: vi.fn(async () => undefined),
+		applyReplicationActions: vi.fn(async () => ({ reDerived: [] }) as never),
 	};
 });
 
@@ -123,10 +126,13 @@ describe('config change events', () => {
 		const applyStarted = new Promise<void>((resolve) => {
 			markApplyStarted = resolve;
 		});
-		vi.mocked(applyReplicationActions).mockImplementationOnce((async () => undefined) as never);
+		vi.mocked(applyReplicationActions).mockImplementationOnce((async () => ({
+			reDerived: [],
+		})) as never);
 		vi.mocked(applyReplicationActions).mockImplementationOnce((async () => {
 			markApplyStarted();
 			await applyFinished;
+			return { reDerived: [] };
 		}) as never);
 		const emitEvent = vi.fn();
 		const lane = createChangeSignalLane({
@@ -181,8 +187,6 @@ describe('hydration-miss recovery accounting', () => {
 			baselineDigests: new Map(),
 		};
 		mocks.poll.mockResolvedValueOnce(outcome);
-		// The module mock resolves undefined; this override only needs to reach
-		// persistState, so its (unused) result is cast rather than reconstructed.
 		vi.mocked(applyReplicationActions).mockImplementationOnce((async (
 			_actions: unknown,
 			handlers: { persistState: (state: unknown) => Promise<void> }
@@ -192,6 +196,7 @@ describe('hydration-miss recovery accounting', () => {
 					cursor: { sequence: 1 },
 					baselineDigests: new Map(),
 				});
+			return { reDerived: [] };
 		}) as never);
 		return { scopeBarcodeSelectors, writeBlob, outcome };
 	}
@@ -240,5 +245,217 @@ describe('hydration-miss recovery accounting', () => {
 
 	it('keeps the recovery owed when the tick never persisted', async () => {
 		expect(await runTick(false)).toEqual(['products', 'variations']);
+	});
+});
+
+describe('census expiry on applied changes', () => {
+	/** In-memory queryTotalCacheEntries — enough of find/findOne/incrementalModify for expire(). */
+	function censusDatabase(seed: QueryTotalCacheEntry[], failWrites = false, failWriteFor?: string) {
+		const byKey = new Map(
+			seed.map((entry) => [entry.queryKey, { ...entry, schemaVersion: 1 as const }])
+		);
+		return {
+			byKey,
+			database: {
+				collections: {},
+				queryTotalCacheEntries: {
+					find: (query?: { selector?: { queryKey?: { $in?: string[] } } }) => ({
+						exec: async () => {
+							const requested = query?.selector?.queryKey?.$in;
+							return [...byKey.values()].filter(
+								(document) => requested === undefined || requested.includes(document.queryKey)
+							);
+						},
+					}),
+					bulkUpsert: async (documents: (QueryTotalCacheEntry & { schemaVersion: 1 })[]) => {
+						if (failWrites || documents.some(({ queryKey }) => queryKey === failWriteFor)) {
+							throw new Error('cache write refused');
+						}
+						for (const document of documents) byKey.set(document.queryKey, document);
+						return { success: documents, error: [] };
+					},
+					findOne: (queryKey: string) => ({
+						exec: async () => {
+							const stored = byKey.get(queryKey);
+							if (!stored) return null;
+							return {
+								toJSON: () => stored,
+								incrementalModify: async (
+									modify: (
+										document: QueryTotalCacheEntry & { schemaVersion: 1 }
+									) => QueryTotalCacheEntry & { schemaVersion: 1 }
+								) => {
+									if (failWrites || queryKey === failWriteFor) {
+										throw new Error('cache write refused');
+									}
+									const current = byKey.get(queryKey);
+									if (current) byKey.set(queryKey, modify(current));
+								},
+							};
+						},
+					}),
+				},
+			} as never,
+		};
+	}
+
+	function censusEntry(queryKey: string): QueryTotalCacheEntry {
+		return { queryKey, totalMatchingRecords: 203, freshUntilMs: 900_000, updatedAtMs: 1_000 };
+	}
+
+	async function runCensusTick(options: {
+		plan: Partial<{
+			targetedPulls: { collection: string; ids: number[] }[];
+			deletes: { collection: string; ids: number[] }[];
+			rebaselineCollections: string[];
+			reFetchCollections: string[];
+			reDeriveBarcode: { collection: string; activeFields: string[] }[];
+		}>;
+		seed: QueryTotalCacheEntry[];
+		failWrites?: boolean;
+		failWriteFor?: string;
+		reDerived?: { collection: string; rederived: boolean }[];
+	}) {
+		const manager = new StoreScopeManager({
+			createDatabase: async () => stubDatabase(),
+		});
+		await manager.switchTo('scope-a');
+		const outcome: HybridPollOutcome = {
+			changes: [],
+			previousCursor: { sequence: 0 },
+			cursor: { sequence: 1 },
+			rebaseline: false,
+			sweepRan: false,
+			sweepIncomplete: false,
+			integrityMismatches: [],
+			idsToPull: [],
+			escalatedIds: [],
+			baselineDigests: new Map(),
+		};
+		mocks.poll.mockResolvedValueOnce(outcome);
+		const { planReplicationActions } = await import('@wcpos/sync-core');
+		vi.mocked(planReplicationActions).mockReturnValueOnce({
+			targetedPulls: [],
+			deletes: [],
+			rebaselineCollections: [],
+			reFetchCollections: [],
+			...options.plan,
+		} as never);
+		vi.mocked(applyReplicationActions).mockResolvedValueOnce({
+			reDerived: options.reDerived ?? [],
+		} as never);
+		const { byKey, database } = censusDatabase(
+			options.seed,
+			options.failWrites ?? false,
+			options.failWriteFor
+		);
+		const emitEvent = vi.fn();
+		const diagnostics = vi.fn();
+		const lane = createChangeSignalLane({
+			manager,
+			databaseFor: () => database,
+			fetcher: vi.fn(),
+			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+			readBlob: async () => JSON.stringify({ cursor: { sequence: 0 }, baselineDigests: [] }),
+			writeBlob: vi.fn(),
+			connectivity: () => 'online',
+			diagnostics,
+			emitEvent,
+			now: () => 5_000,
+		});
+		const report = await lane.tick();
+		return { report, byKey, emitEvent, diagnostics };
+	}
+
+	it('expires the touched collections (hybrid names mapped) and emits the rewritten entries', async () => {
+		const { byKey, emitEvent } = await runCensusTick({
+			plan: {
+				targetedPulls: [{ collection: 'products', ids: [7] }],
+				deletes: [{ collection: 'tax_rates', ids: [3] }],
+			},
+			seed: [
+				censusEntry('census:products'),
+				censusEntry('census:taxRates'),
+				censusEntry('census:customers'),
+			],
+		});
+		expect(byKey.get('census:products')?.freshUntilMs).toBe(5_000);
+		expect(byKey.get('census:taxRates')?.freshUntilMs).toBe(5_000);
+		// Untouched collections keep their freshness window.
+		expect(byKey.get('census:customers')?.freshUntilMs).toBe(900_000);
+		expect(emitEvent).toHaveBeenCalledWith({
+			type: 'query-total-cache',
+			entries: [
+				expect.objectContaining({ queryKey: 'census:products', freshUntilMs: 5_000 }),
+				expect.objectContaining({ queryKey: 'census:taxRates', freshUntilMs: 5_000 }),
+			],
+		});
+	});
+
+	it('expires nothing and emits nothing when the plan carried no population changes', async () => {
+		const { byKey, emitEvent } = await runCensusTick({
+			plan: { targetedPulls: [{ collection: 'products', ids: [] }] },
+			seed: [censusEntry('census:products')],
+		});
+		expect(byKey.get('census:products')?.freshUntilMs).toBe(900_000);
+		expect(emitEvent).not.toHaveBeenCalled();
+	});
+
+	it('expires a collection when barcode re-derive falls back to a full re-fetch', async () => {
+		const { byKey, emitEvent } = await runCensusTick({
+			plan: {
+				reDeriveBarcode: [{ collection: 'products', activeFields: ['global_unique_id'] }],
+			},
+			reDerived: [{ collection: 'products', rederived: false }],
+			seed: [censusEntry('census:products')],
+		});
+
+		expect(byKey.get('census:products')?.freshUntilMs).toBe(5_000);
+		expect(emitEvent).toHaveBeenCalledWith({
+			type: 'query-total-cache',
+			entries: [expect.objectContaining({ queryKey: 'census:products', freshUntilMs: 5_000 })],
+		});
+	});
+
+	it('keeps the tick ran when the expiry write fails, and only warns', async () => {
+		const { report, emitEvent, diagnostics } = await runCensusTick({
+			plan: { targetedPulls: [{ collection: 'products', ids: [7] }] },
+			seed: [censusEntry('census:products')],
+			failWrites: true,
+		});
+		expect(report.status).toBe('ran');
+		expect(emitEvent).not.toHaveBeenCalled();
+		expect(diagnostics).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: 'signal.log',
+				level: 'warn',
+				message: expect.stringContaining('census expiry'),
+			})
+		);
+	});
+
+	it('emits completed expiries and identifies a later entry whose write fails', async () => {
+		const { byKey, emitEvent, diagnostics } = await runCensusTick({
+			plan: {
+				targetedPulls: [{ collection: 'products', ids: [7] }],
+				deletes: [{ collection: 'tax_rates', ids: [3] }],
+			},
+			seed: [censusEntry('census:products'), censusEntry('census:taxRates')],
+			failWriteFor: 'census:taxRates',
+		});
+
+		expect(byKey.get('census:products')?.freshUntilMs).toBe(5_000);
+		expect(byKey.get('census:taxRates')?.freshUntilMs).toBe(900_000);
+		expect(emitEvent).toHaveBeenCalledWith({
+			type: 'query-total-cache',
+			entries: [expect.objectContaining({ queryKey: 'census:products', freshUntilMs: 5_000 })],
+		});
+		expect(diagnostics).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: 'signal.log',
+				level: 'warn',
+				message: expect.stringContaining('census:taxRates'),
+			})
+		);
 	});
 });

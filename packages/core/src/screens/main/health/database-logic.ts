@@ -33,9 +33,11 @@ export function deriveCollectionRow(
 	census: CensusTotal | null
 ): CollectionRow {
 	const windowed = WINDOWED_COLLECTIONS.has(key);
-	// A stale or missing census means the total is unknown — no bar, no percentage.
+	// A stale census still SHOWS its last-known total (with `fresh: false`, so
+	// the UI reads it as "checking…"), but only a fresh one is authoritative
+	// enough to draw a bar — never a percentage off a stale denominator.
 	const authoritative = census !== null && census.fresh;
-	const serverTotal = authoritative ? census.total : null;
+	const serverTotal = census !== null ? census.total : null;
 	const percentLocal =
 		!windowed && authoritative && census.total > 0
 			? Math.min(100, Math.round((local / census.total) * 100))

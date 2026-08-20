@@ -16,6 +16,11 @@ export type QueryTotalCacheDatabase = {
 	queryTotalCacheEntries: RxKeyedCollection<QueryTotalCacheDocument>;
 };
 
+type QueryTotalCacheExpiryResult = {
+	expired: QueryTotalCacheEntry[];
+	failures: { queryKey: string; error: unknown }[];
+};
+
 export class RxQueryTotalCacheRepository {
 	private readonly keyed;
 
@@ -47,5 +52,35 @@ export class RxQueryTotalCacheRepository {
 			sort: [{ queryKey: 'asc' }],
 		});
 		return entries.filter((entry) => requested.has(entry.queryKey));
+	}
+
+	/**
+	 * Mark entries stale NOW so the retry lane re-probes them on its next scan.
+	 * Only still-fresh entries are rewritten; the total and `updatedAtMs` are
+	 * preserved — the entry keeps saying WHAT was counted and WHEN, it just
+	 * stops claiming the count is current. Returns completed rewrites and failures.
+	 */
+	async expire(queryKeys: string[], nowMs: number): Promise<QueryTotalCacheExpiryResult> {
+		const entries = await this.readForQueryKeys(queryKeys);
+		const expired: QueryTotalCacheEntry[] = [];
+		const failures: QueryTotalCacheExpiryResult['failures'] = [];
+		for (const entry of entries) {
+			if (entry.freshUntilMs <= nowMs) continue;
+			const rewritten = { ...entry, freshUntilMs: nowMs };
+			try {
+				const replaced = await this.keyed.replaceIfCurrent(
+					entry,
+					rewritten,
+					(current, expected) =>
+						current.totalMatchingRecords === expected.totalMatchingRecords &&
+						current.freshUntilMs === expected.freshUntilMs &&
+						current.updatedAtMs === expected.updatedAtMs
+				);
+				if (replaced) expired.push(rewritten);
+			} catch (error) {
+				failures.push({ queryKey: entry.queryKey, error });
+			}
+		}
+		return { expired, failures };
 	}
 }
