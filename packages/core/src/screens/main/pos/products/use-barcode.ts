@@ -377,9 +377,11 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 
 		const [product] = results;
 
-		const outOfStock = isVariationDocument(product)
-			? !resolveStock(product.payload).sellable
-			: product.payload.stock_status !== 'instock';
+		// Products and variations gate on the same shared sellability the badge
+		// now displays — a raw stock_status check here would refuse a scan for a
+		// product whose optimistic quantity edit already shows "in stock"
+		// (and, unlike the resolver, treated backorderable items as unsellable).
+		const outOfStock = !resolveStock(product.payload).sellable;
 		if (!showOutOfStock && outOfStock) {
 			scan.outOfStock(product.payload.name ?? '', barcodeStr);
 			barcodeLogger.warn('Barcode scan matched an out-of-stock product', {
