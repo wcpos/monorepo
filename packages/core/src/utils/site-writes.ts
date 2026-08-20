@@ -24,6 +24,34 @@ export function stripLocalOnlySiteFields<T extends SiteData>(data: T): T {
 }
 
 /**
+ * Return a copy of `data` containing only properties the collection schema knows.
+ *
+ * The sites schema is `additionalProperties: false`, and the embedded boot path
+ * hands the server's `initialProps.site` to `upsertSiteData` verbatim — it never
+ * goes through `parseRestResponse`, which prunes for every other ingest path. A
+ * server that starts sending one extra field (e.g. `locale`, 2026-08) therefore
+ * turns every dev boot into an RxDB VD2 validation error. Pruning here makes the
+ * write boundary tolerate any future server-side addition.
+ *
+ * `parseRestResponse` itself is not usable for this write: it fills every absent
+ * schema property with a default, and `upsertSiteData` is a merge — defaults
+ * would clobber locally-stored values (the #902 class again).
+ */
+export function pruneUnknownSiteFields<T extends SiteData>(
+	collection: SiteCollection,
+	data: T
+): SiteData {
+	const knownProperties = collection.schema.jsonSchema.properties;
+	const copy: SiteData = {};
+	for (const key of Object.keys(data)) {
+		if (Object.prototype.hasOwnProperty.call(knownProperties, key) && !key.startsWith('_')) {
+			copy[key] = data[key];
+		}
+	}
+	return copy;
+}
+
+/**
  * Merge server-owned site data into the sites collection without clobbering
  * locally-owned fields.
  *
@@ -36,7 +64,7 @@ export async function upsertSiteData(
 	collection: SiteCollection,
 	siteData: SiteData
 ): Promise<SiteDocument> {
-	const patch = stripLocalOnlySiteFields(siteData);
+	const patch = pruneUnknownSiteFields(collection, stripLocalOnlySiteFields(siteData));
 	const primary = patch[collection.schema.primaryPath] as string | undefined;
 
 	if (!primary) {

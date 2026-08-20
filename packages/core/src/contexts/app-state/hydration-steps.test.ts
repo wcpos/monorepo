@@ -211,6 +211,23 @@ describe('switchUserSessionStore', () => {
 	});
 });
 
+describe('hydration step fail modes', () => {
+	it('only PROCESS_INITIAL_PROPS fails soft; the load-bearing steps stay hard', () => {
+		// A poisoned embedded payload must degrade to the previous session or the
+		// connect screen — never an infinite splash retry loop. The other steps
+		// produce state the app cannot boot without, so they must keep rejecting.
+		const failSoftByName = Object.fromEntries(
+			hydrationSteps.map((step) => [step.name, !!step.failSoft])
+		);
+		expect(failSoftByName).toEqual({
+			INITIALIZE_USER_DB: false,
+			PROCESS_INITIAL_PROPS: true,
+			TEST_AUTHORIZATION: false,
+			HYDRATE_USER_SESSION: false,
+		});
+	});
+});
+
 describe('PROCESS_INITIAL_PROPS', () => {
 	it('merges server-owned fields into existing stores and inserts new stores', async () => {
 		const existingStore: any = {
@@ -232,7 +249,7 @@ describe('PROCESS_INITIAL_PROPS', () => {
 		const bulkInsert = jest.fn(async () => undefined);
 		const userDB = {
 			sites: {
-				schema: { primaryPath: 'uuid' },
+				schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
 				findOne: jest.fn(() => ({ exec: jest.fn(async () => null) })),
 				incrementalUpsert: jest.fn(async () => siteDoc),
 			},

@@ -65,10 +65,18 @@ function getOrCreateHydrationPromise(
 					code: ERROR_CODES.APP_START_FAILED,
 					context: {
 						step: step.name,
+						failSoft: !!step.failSoft,
 						error: { name: error.name, message: error.message, stack: error.stack },
 					},
 				});
-				throw error;
+				if (!step.failSoft) {
+					throw error;
+				}
+				// Fail-soft step: keep booting from the context accumulated so far.
+				// Rejecting here clears the promise cache and the next render retries
+				// the identical failing work — an infinite splash loop.
+				totalProgress += step.progressIncrement;
+				setProgress(totalProgress);
 			}
 		}
 

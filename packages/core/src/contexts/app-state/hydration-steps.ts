@@ -247,6 +247,12 @@ export interface HydrationStep {
 	progressIncrement: number;
 	execute: (context: HydrationContext) => Promise<Partial<HydrationContext>>;
 	shouldExecute?: (context: HydrationContext) => boolean;
+	/**
+	 * A fail-soft step logs its error and lets hydration continue instead of
+	 * rejecting the whole boot. Only for steps that *enrich* durable state — a
+	 * failure must leave the app bootable from whatever state already exists.
+	 */
+	failSoft?: boolean;
 }
 
 /**
@@ -291,6 +297,15 @@ const processInitialPropsStep: HydrationStep = {
 	message: 'Processing initial props...',
 	progressIncrement: 20,
 	shouldExecute: (context) => Platform.isWeb && !!context.initialProps?.site,
+	/**
+	 * A poisoned embedded payload must not brick boot: a hard failure here
+	 * rejects the hydration promise, the module cache is cleared, and the next
+	 * render retries the identical failing work forever — the app never leaves
+	 * the splash screen (the server adding `site.locale` did exactly this,
+	 * 2026-08). Failing soft boots the previous session, or the connect screen
+	 * when there is none, with the error logged.
+	 */
+	failSoft: true,
 	execute: async (context) => {
 		if (!context.initialProps || !context.userDB || !context.appState || !context.user) {
 			throw new Error('Missing required context for initial props processing');
