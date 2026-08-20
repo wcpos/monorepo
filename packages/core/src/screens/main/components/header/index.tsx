@@ -61,11 +61,16 @@ export function Header({ options, showUpgrade, setShowUpgrade }: Props) {
 	const titleFits = titleTextWidth > 0 && titleTextWidth < availableWithCentering;
 	const centeringOffset = isSmallScreen || !titleFits ? 0 : rawOffset;
 
-	// Centering depends on the intrinsic text width, the container width and the
-	// right-side buttons (always non-empty). Until all three have reported, any
-	// paint would show the title un-centered, so it stays invisible (see the
-	// `visible` prop below). Small screens never center, so they never wait.
-	const measured = titleTextWidth > 0 && titleContainerWidth > 0 && rightWidth > 0;
+	// Centering depends on the intrinsic text width, the container width, the
+	// right-side buttons (always non-empty) and — on screens that render a left
+	// button — the left section. Until all have reported, any paint would show
+	// the title un-centered, so it stays invisible (see the `visible` prop
+	// below). Small screens never center, so they never wait.
+	const measured =
+		titleTextWidth > 0 &&
+		titleContainerWidth > 0 &&
+		rightWidth > 0 &&
+		(isLargeScreen || leftWidth > 0);
 
 	// Inactive drawer screens are hidden with display:none on web, so every
 	// element in this header reports a zero-width layout while another screen is

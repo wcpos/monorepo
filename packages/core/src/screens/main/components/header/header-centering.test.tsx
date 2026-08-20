@@ -143,6 +143,22 @@ describe('header title centering', () => {
 		expect(titleText().className).not.toContain('text-center');
 	});
 
+	it('waits for the left section on medium screens before showing the title', () => {
+		mockScreenSize = 'md';
+		renderHeader();
+
+		// right/container/intrinsic can report before the left button (CodeRabbit /
+		// Codex review finding on #1389): the title must stay hidden until the left
+		// width is in, or it would paint over-shifted and slide once left lands
+		measureAll({ container: 900 });
+		expect(titleText().style.opacity).toBe('0');
+
+		fireLayout('header-left-section', 80);
+		expect(titleText().style.opacity).not.toBe('0');
+		// right (212) minus left (80)
+		expect(titleContainer().style.paddingLeft).toBe('132px');
+	});
+
 	it('drops the stale left measurement when resizing into the large layout', () => {
 		mockScreenSize = 'md';
 		const { rerender } = renderHeader();
