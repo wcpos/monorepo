@@ -401,6 +401,7 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		};
 		const engine = engineWith({
 			fetch: (url, init) => server.fetch(url, init as never),
+			mode: 'auto',
 			ports: { writePlaneOwner: () => false, writeOutcomeBridge: bridge },
 		});
 		try {
@@ -414,6 +415,36 @@ describe('write() + sync("write-drain") through the public handle', () => {
 				explicit: true,
 			} as never);
 			expect(publishDrainNudge).toHaveBeenCalledTimes(1);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('a manual-mode follower enqueue does not forward a drain nudge', async () => {
+		const server = createFakeWriteServer();
+		const publishDrainNudge = vi.fn();
+		const bridge = {
+			publish: vi.fn(),
+			subscribe: () => () => undefined,
+			publishDrainNudge,
+			subscribeDrainNudge: () => () => undefined,
+		};
+		const engine = engineWith({
+			fetch: (url, init) => server.fetch(url, init as never),
+			mode: 'manual',
+			ports: { writePlaneOwner: () => false, writeOutcomeBridge: bridge },
+		});
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, undefined, 'pos-open');
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { status: 'pos-open' },
+				explicit: true,
+			} as never);
+			expect(publishDrainNudge).not.toHaveBeenCalled();
 		} finally {
 			await engine.dispose();
 		}

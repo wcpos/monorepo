@@ -2043,9 +2043,11 @@ export function createRxdbSyncEngine(
 				writeDrainNudge.nudge();
 				// A follower's drain tick is a no-op (write-plane.ts leader gate), so
 				// the LEADER must hear about this enqueue or the shared queue waits
-				// out the leader's interval. Local nudge stays armed regardless —
-				// leadership can move to this tab before the timer fires.
-				if (!writePlaneOwner()) ports.writeOutcomeBridge?.publishDrainNudge();
+				// out the leader's interval. In auto mode, the local nudge stays armed
+				// regardless — leadership can move to this tab before the timer fires.
+				if (mode === 'auto' && !writePlaneOwner()) {
+					ports.writeOutcomeBridge?.publishDrainNudge();
+				}
 			}
 			return receipt;
 		},
