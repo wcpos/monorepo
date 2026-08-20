@@ -109,6 +109,33 @@ describe('upsertSiteData with a raw embedded payload', () => {
 		expect(doc.wp_credentials).toEqual(['cred-1']);
 	});
 
+	it('does not clobber a stored locale with the parser-synthesized empty string', async () => {
+		// Embedded boot stores the real locale…
+		await upsertSiteData(sites(), embeddedPayload());
+		expect((await sites().findOne(SITE_UUID).exec())!.locale).toBe('en_US');
+
+		// …then the standalone discovery flow re-connects the same site. The REST
+		// index does not return `locale`, and `parseRestResponse` synthesizes the
+		// schema default for every absent property (the #902 ammunition), so the
+		// parsed payload carries `locale: ''`.
+		const trailingDiscovery = parse(restResponse({ wp_version: '6.9' }));
+		expect(trailingDiscovery).toHaveProperty('locale', '');
+
+		await upsertSiteData(sites(), trailingDiscovery);
+
+		const final = await sites().findOne(SITE_UUID).exec();
+		expect(final!.locale).toBe('en_US');
+		expect(final!.wp_version).toBe('6.9');
+	});
+
+	it('updates the stored locale when the server sends a real one', async () => {
+		await upsertSiteData(sites(), embeddedPayload());
+
+		await upsertSiteData(sites(), embeddedPayload({ locale: 'de_DE' }));
+
+		expect((await sites().findOne(SITE_UUID).exec())!.locale).toBe('de_DE');
+	});
+
 	it('never writes local-only fields even when the payload carries them', async () => {
 		await upsertSiteData(sites(), parse(restResponse()));
 		const site = await sites().findOne(SITE_UUID).exec();
