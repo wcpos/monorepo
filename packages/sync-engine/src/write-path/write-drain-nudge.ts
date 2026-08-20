@@ -26,17 +26,21 @@ export type WriteDrainNudge = {
  * Coalescing is first-edge: the first nudge arms one timer and later nudges
  * ride it, so a burst becomes one drain no more than `delayMs` after the
  * burst began (a trailing debounce could starve under continuous edits).
- * The gate's per-lane reservation makes a nudge during an active drain safe —
- * it either joins the running tick or runs one more, never two at once.
+ * The lane run is requested FRESH (gate.runLaneFresh): a drain already in
+ * flight snapshotted its queue before this nudge's mutation landed, so the
+ * nudge must never be satisfied by joining it.
  *
- * Offline nudges are dropped: the reconnect re-tick already drains the queue
- * the moment connectivity returns, so arming a timer would only fire a
- * guaranteed skip.
+ * An offline nudge is RETAINED, not dropped: the timer re-arms until
+ * connectivity returns, then drains. The gate's reconnect re-tick only fires
+ * when one of its own lane invocations observed the offline state — an outage
+ * that begins and ends between ticks is invisible to it, so dropping the
+ * nudge could strand the write until the interval. The re-arm loop is a local
+ * connectivity read every `delayMs`; no network traffic until it fires.
  */
 export function createWriteDrainNudge(options: {
-	/** Fire-and-forget lane run — wire to the automatic tick gate's runLane. */
+	/** Fire-and-forget lane run — wire to the automatic tick gate's runLaneFresh. */
 	runLane: () => void;
-	/** Nudges are dropped while offline (the reconnect re-tick owns that path). */
+	/** While true the armed timer re-arms instead of firing (retained, not dropped). */
 	isOffline: () => boolean;
 	/** Nudges are dropped when false — manual mode drives ticks via sync(). */
 	enabled: () => boolean;
@@ -47,14 +51,23 @@ export function createWriteDrainNudge(options: {
 	const delayMs = options.delayMs ?? WRITE_DRAIN_NUDGE_DELAY_MS;
 	let pending: ReturnType<typeof setTimeout> | null = null;
 	let disposed = false;
+	const arm = (): void => {
+		pending = timers.setTimeout(() => {
+			pending = null;
+			if (disposed || !options.enabled()) return;
+			if (options.isOffline()) {
+				// Retain until reconnect — see the module doc.
+				arm();
+				return;
+			}
+			options.runLane();
+		}, delayMs);
+		timers.unref(pending);
+	};
 	return {
 		nudge: () => {
-			if (disposed || pending !== null || !options.enabled() || options.isOffline()) return;
-			pending = timers.setTimeout(() => {
-				pending = null;
-				if (disposed || !options.enabled() || options.isOffline()) return;
-				options.runLane();
-			}, delayMs);
+			if (disposed || pending !== null || !options.enabled()) return;
+			arm();
 		},
 		dispose: () => {
 			disposed = true;

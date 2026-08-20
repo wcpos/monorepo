@@ -45,18 +45,39 @@ describe('createWriteDrainNudge', () => {
 		expect(runLane).toHaveBeenCalledTimes(2);
 	});
 
-	it('drops nudges while offline — the reconnect re-tick owns that path', () => {
+	it('retains an offline nudge and drains once connectivity returns', () => {
+		// The gate's reconnect re-tick misses outages that start and end between
+		// lane invocations, so an offline nudge must survive, not drop (Codex P1).
 		let offline = true;
 		const { runLane, nudge } = nudgeWith({ isOffline: () => offline });
 		nudge.nudge();
-		vi.advanceTimersByTime(WRITE_DRAIN_NUDGE_DELAY_MS);
+		vi.advanceTimersByTime(WRITE_DRAIN_NUDGE_DELAY_MS * 5);
 		expect(runLane).not.toHaveBeenCalled();
 
-		// A nudge armed online that fires after connectivity dropped stands down too.
 		offline = false;
+		vi.advanceTimersByTime(WRITE_DRAIN_NUDGE_DELAY_MS);
+		expect(runLane).toHaveBeenCalledTimes(1);
+	});
+
+	it('retains a nudge armed online whose timer fires after connectivity dropped', () => {
+		let offline = false;
+		const { runLane, nudge } = nudgeWith({ isOffline: () => offline });
 		nudge.nudge();
 		offline = true;
+		vi.advanceTimersByTime(WRITE_DRAIN_NUDGE_DELAY_MS * 3);
+		expect(runLane).not.toHaveBeenCalled();
+
+		offline = false;
 		vi.advanceTimersByTime(WRITE_DRAIN_NUDGE_DELAY_MS);
+		expect(runLane).toHaveBeenCalledTimes(1);
+	});
+
+	it('dispose cancels an offline-retained timer', () => {
+		const { runLane, nudge } = nudgeWith({ isOffline: () => true });
+		nudge.nudge();
+		vi.advanceTimersByTime(WRITE_DRAIN_NUDGE_DELAY_MS * 2);
+		nudge.dispose();
+		vi.advanceTimersByTime(WRITE_DRAIN_NUDGE_DELAY_MS * 5);
 		expect(runLane).not.toHaveBeenCalled();
 	});
 
