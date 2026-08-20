@@ -120,10 +120,9 @@ async function getEnvelope<Row>(
 			response.status
 		);
 	}
-	const body = await response.text();
 	let parsed: unknown;
 	try {
-		parsed = JSON.parse(body);
+		parsed = await response.json();
 	} catch {
 		throw new ChangeSignalPoisonError(
 			`${label}: response body is not valid JSON`,
@@ -297,10 +296,9 @@ export function createLiveChangeSignalSource(
 							response.status
 						);
 					}
-					const body = await response.text();
 					let parsed: unknown;
 					try {
-						parsed = JSON.parse(body);
+						parsed = await response.json();
 					} catch {
 						throw new ChangeSignalPoisonError(
 							'changes/tick: response body is not valid JSON',
@@ -366,7 +364,7 @@ export function createLiveChangeSignalSource(
 								},
 							}),
 					onAcceptedResponse: (response) => {
-						sequenceLogEtag = response.headers.get('etag');
+						sequenceLogEtag = response.headers.get('etag') ?? sequenceLogEtag;
 					},
 				}
 			);

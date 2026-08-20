@@ -153,7 +153,7 @@ async function fetchCustomerBrowseWindow(
 			throw new Error(`Woo REST customer browse request failed: ${response.status}`);
 		}
 		requestCount += 1;
-		const pagePayloads = JSON.parse(await response.text()) as WooCustomerPayload[];
+		const pagePayloads = (await response.json()) as WooCustomerPayload[];
 		payloads.push(...pagePayloads);
 		// Read the RAW header first: a proxy (or a browser whose CORS response omits
 		// `Access-Control-Expose-Headers`) hides these, and `Number(null)` is 0 — which would

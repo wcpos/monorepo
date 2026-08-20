@@ -9,6 +9,7 @@ import {
 } from '@wcpos/sync-core';
 
 import { remoteId } from '../testing';
+import { hydrateResponse } from '../transport/response-envelope';
 import {
 	coverageRecordId,
 	createProductsSchedulerFetcher,
@@ -48,6 +49,65 @@ const uuidFor = (n: number): string => `00000000-0000-4000-8000-${String(n).padS
 const posMeta = (n: number) => [{ key: '_woocommerce_pos_uuid', value: uuidFor(n) }];
 
 describe('createProductsSchedulerFetcher', () => {
+	it.each(['header-only', 'body-only', 'both'] as const)(
+		'produces the same browse outcome from a %s response',
+		async (mode) => {
+			const payload = {
+				id: 321,
+				name: 'Envelope product',
+				status: 'publish',
+				date_modified_gmt: '2026-05-20T10:10:00',
+				meta_data: posMeta(321),
+			};
+			const body =
+				mode === 'header-only'
+					? [payload]
+					: { data: [payload], _wcpos: { v: 1, total: 1, total_pages: 1 } };
+			const headers: Record<string, string> =
+				mode === 'body-only'
+					? { 'content-type': 'application/json' }
+					: {
+							'content-type': 'application/json',
+							'X-WP-Total': '1',
+							'X-WP-TotalPages': '1',
+						};
+			const fetcher = vi.fn(async () =>
+				hydrateResponse(new Response(JSON.stringify(body), { headers }), {
+					envelopeRequested: true,
+				})
+			);
+			const cacheQueryTotals = vi.fn(async () => undefined);
+			const schedulerFetcher = createProductsSchedulerFetcher({
+				baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+				repository: {
+					upsertMany: vi.fn(async () => undefined),
+					removeMany: vi.fn(async () => undefined),
+				},
+				fetcher,
+				cacheQueryTotals,
+			});
+
+			const result = await schedulerFetcher(
+				productTask({
+					id: 'products:browse-window:limit=100:windowed',
+					queryKey: 'products:browse-window:limit=100',
+					limit: 100,
+				})
+			);
+
+			expect(result).toMatchObject({
+				documentCount: 1,
+				requestCount: 1,
+				completed: true,
+			});
+			expect(cacheQueryTotals).toHaveBeenCalledWith({
+				// Window total only — census:products is probe-owned (#1400).
+				queryKeys: ['products:browse-window:limit=100'],
+				totalMatchingRecords: 1,
+			});
+		}
+	);
+
 	it("re-reads the barcode carriers per request, never freezing the drain's first read", async () => {
 		// A drain spans many requests and the change-signal lane publishes carriers
 		// concurrently. Holding the first read would let the tail of a slow drain
@@ -206,7 +266,9 @@ describe('createProductsSchedulerFetcher', () => {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
 		};
-		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+		};
 		const fetcher = vi.fn(async () => response([]));
 		const schedulerFetcher = createProductsSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -290,7 +352,9 @@ describe('createProductsSchedulerFetcher', () => {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
 		};
-		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+		};
 		const fetcher = vi.fn(async () =>
 			response([
 				{
@@ -446,7 +510,9 @@ describe('createProductsSchedulerFetcher', () => {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
 		};
-		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+		};
 		// The store honours `brand`: every returned product carries the requested brand, so
 		// the lane is allowed to complete (see the ignored-brand case below).
 		const brands = [{ id: 5, name: 'Acme', slug: 'acme' }];
@@ -554,7 +620,9 @@ describe('createProductsSchedulerFetcher', () => {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
 		};
-		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+		};
 		const diagnostics = vi.fn();
 		const fetcher = vi.fn(async () =>
 			response(
@@ -597,7 +665,9 @@ describe('createProductsSchedulerFetcher', () => {
 			})
 		);
 		expect(diagnostics).toHaveBeenCalledWith(
-			expect.objectContaining({ type: 'product.browse-window.brand-filter-ignored' })
+			expect.objectContaining({
+				type: 'product.browse-window.brand-filter-ignored',
+			})
 		);
 	});
 
@@ -614,7 +684,9 @@ describe('createProductsSchedulerFetcher', () => {
 			const page = Number(new URL(String(request)).searchParams.get('page'));
 			// Two full pages of 25 and nothing beyond — exactly the exact-multiple case.
 			if (page > 2) {
-				return new Response(JSON.stringify({ code: 'rest_invalid_param' }), { status: 400 });
+				return new Response(JSON.stringify({ code: 'rest_invalid_param' }), {
+					status: 400,
+				});
 			}
 			return response(
 				Array.from({ length: 25 }, (_, index) => ({
@@ -643,7 +715,11 @@ describe('createProductsSchedulerFetcher', () => {
 
 		// The 100-row window wants four 25-row pages; the server advertises two.
 		expect(fetcher).toHaveBeenCalledTimes(2);
-		expect(result).toMatchObject({ documentCount: 50, requestCount: 2, completed: true });
+		expect(result).toMatchObject({
+			documentCount: 50,
+			requestCount: 2,
+			completed: true,
+		});
 	});
 
 	it('bounds an all-tied browse window to the best rows from the scanned pages', async () => {
@@ -818,7 +894,13 @@ describe('createProductsSchedulerFetcher', () => {
 			recordQueryResult: vi.fn(async () => undefined),
 			readLocalLaneCoverage: vi.fn(async (_collection: string, queryKey: string) => {
 				const lane = lanes[queryKey];
-				return lane ? { complete: lane.complete, fresh: true, expectedRecordIds: lane.ids } : null;
+				return lane
+					? {
+							complete: lane.complete,
+							fresh: true,
+							expectedRecordIds: lane.ids,
+						}
+					: null;
 			}),
 		};
 	}
@@ -852,7 +934,10 @@ describe('createProductsSchedulerFetcher', () => {
 		});
 		const coverageRepository = coverageWithLanes({
 			// What the previous scroll tick left behind.
-			'products:browse-window:limit=1000': { complete: true, ids: wooProductIds(1, 1_000) },
+			'products:browse-window:limit=1000': {
+				complete: true,
+				ids: wooProductIds(1, 1_000),
+			},
 		});
 		const schedulerFetcher = createProductsSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -907,7 +992,10 @@ describe('createProductsSchedulerFetcher', () => {
 		const fetcher = catalogServer(products, []);
 		const coverageRepository = coverageWithLanes({
 			// The UNFILTERED lane is fresh and complete, and must be ignored.
-			'products:browse-window:limit=200': { complete: true, ids: wooProductIds(1, 200) },
+			'products:browse-window:limit=200': {
+				complete: true,
+				ids: wooProductIds(1, 200),
+			},
 			'products:browse-window:limit=200:category=9': {
 				complete: true,
 				ids: wooProductIds(1, 200),
@@ -995,7 +1083,10 @@ describe('createProductsSchedulerFetcher', () => {
 		};
 		const fetcher = vi.fn(async () => response([]));
 		const coverageRepository = coverageWithLanes({
-			'products:browse-window:limit=1100': { complete: true, ids: wooProductIds(1, 1_100) },
+			'products:browse-window:limit=1100': {
+				complete: true,
+				ids: wooProductIds(1, 1_100),
+			},
 		});
 		const schedulerFetcher = createProductsSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -1041,7 +1132,10 @@ describe('createProductsSchedulerFetcher', () => {
 			return catalog(request);
 		});
 		const coverageRepository = coverageWithLanes({
-			'products:browse-window:limit=300': { complete: true, ids: wooProductIds(1, 300) },
+			'products:browse-window:limit=300': {
+				complete: true,
+				ids: wooProductIds(1, 300),
+			},
 		});
 		const schedulerFetcher = createProductsSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -1093,7 +1187,11 @@ describe('createProductsSchedulerFetcher', () => {
 				if (queryKey !== 'products:browse-window:limit=1000') return null;
 				reads += 1;
 				return reads === 1
-					? { complete: true, fresh: true, expectedRecordIds: wooProductIds(1, 1_000) }
+					? {
+							complete: true,
+							fresh: true,
+							expectedRecordIds: wooProductIds(1, 1_000),
+						}
 					: null;
 			}),
 		};
@@ -1162,7 +1260,11 @@ describe('createProductsSchedulerFetcher', () => {
 			readLocalLaneCoverage: vi.fn(async (_collection: string, queryKey: string) => {
 				const lane = lanes.get(queryKey);
 				return lane
-					? { complete: lane.complete, fresh: true, expectedRecordIds: [...lane.expectedRecordIds] }
+					? {
+							complete: lane.complete,
+							fresh: true,
+							expectedRecordIds: [...lane.expectedRecordIds],
+						}
 					: null;
 			}),
 			listCoverageLanes: vi.fn(async () =>
@@ -1345,7 +1447,11 @@ describe('createProductsSchedulerFetcher', () => {
 		);
 
 		const write = coverageRepository.recordQueryResult.mock.calls.at(-1)![0] as {
-			prefixAncestry?: { sourceQueryKey: string; recordIds: string[]; fallbackRecordIds: string[] };
+			prefixAncestry?: {
+				sourceQueryKey: string;
+				recordIds: string[];
+				fallbackRecordIds: string[];
+			};
 		};
 		expect(write.prefixAncestry?.sourceQueryKey).toBe('products:browse-window:limit=200');
 		expect(write.prefixAncestry?.recordIds).toEqual(wooProductIds(1, 200));
@@ -1367,7 +1473,10 @@ describe('createProductsSchedulerFetcher', () => {
 			coverageFreshForMs: 60_000,
 			nowMs: () => 5_000,
 			fetcher: catalogServer(
-				Array.from({ length: 50 }, (_, index) => ({ id: index + 1, menu_order: index })),
+				Array.from({ length: 50 }, (_, index) => ({
+					id: index + 1,
+					menu_order: index,
+				})),
 				[]
 			),
 			pullBatchSize: () => 100,
@@ -1400,7 +1509,9 @@ describe('createProductsSchedulerFetcher', () => {
 			id: index + 1,
 			menu_order: index,
 		}));
-		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+		};
 		const schedulerFetcher = createProductsSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
@@ -1409,7 +1520,9 @@ describe('createProductsSchedulerFetcher', () => {
 			pullBatchSize: () => 100,
 		});
 
-		await expect(schedulerFetcher(browseTask())).resolves.toMatchObject({ completed: true });
+		await expect(schedulerFetcher(browseTask())).resolves.toMatchObject({
+			completed: true,
+		});
 	});
 
 	/**
@@ -1445,7 +1558,10 @@ describe('createProductsSchedulerFetcher', () => {
 			return catalog(request);
 		});
 		const coverageRepository = coverageWithLanes({
-			'products:browse-window:limit=200': { complete: true, ids: wooProductIds(1, 200) },
+			'products:browse-window:limit=200': {
+				complete: true,
+				ids: wooProductIds(1, 200),
+			},
 		});
 		const schedulerFetcher = createProductsSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -1572,7 +1688,10 @@ describe('createProductsSchedulerFetcher', () => {
 			return catalog(request);
 		});
 		const coverageRepository = coverageWithLanes({
-			'products:browse-window:limit=200': { complete: true, ids: wooProductIds(1, 200) },
+			'products:browse-window:limit=200': {
+				complete: true,
+				ids: wooProductIds(1, 200),
+			},
 		});
 		const schedulerFetcher = createProductsSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -1618,7 +1737,10 @@ describe('createProductsSchedulerFetcher', () => {
 		});
 		const coverageRepository = coverageWithLanes({
 			// 215 of 300 — not page-aligned at 100/page, so not a usable offset.
-			'products:browse-window:limit=300': { complete: false, ids: wooProductIds(1, 215) },
+			'products:browse-window:limit=300': {
+				complete: false,
+				ids: wooProductIds(1, 215),
+			},
 		});
 		const schedulerFetcher = createProductsSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -1656,10 +1778,16 @@ describe('createProductsSchedulerFetcher', () => {
 		};
 		// Page 2 repeats id 20 from page 1 — exactly what an insert between the two requests
 		// produces.
-		const page1 = Array.from({ length: 20 }, (_, index) => ({ id: index + 1, menu_order: index }));
+		const page1 = Array.from({ length: 20 }, (_, index) => ({
+			id: index + 1,
+			menu_order: index,
+		}));
 		const page2 = [
 			{ id: 20, menu_order: 19 },
-			...Array.from({ length: 19 }, (_, index) => ({ id: 21 + index, menu_order: 20 + index })),
+			...Array.from({ length: 19 }, (_, index) => ({
+				id: 21 + index,
+				menu_order: 20 + index,
+			})),
 		];
 		const fetcher = vi.fn(async (request: RequestInfo | URL) => {
 			const page = Number(new URL(String(request)).searchParams.get('page'));
@@ -1724,7 +1852,10 @@ describe('createProductsSchedulerFetcher', () => {
 			return catalog(request);
 		});
 		const coverageRepository = coverageWithLanes({
-			'products:browse-window:limit=200': { complete: true, ids: wooProductIds(1, 200) },
+			'products:browse-window:limit=200': {
+				complete: true,
+				ids: wooProductIds(1, 200),
+			},
 		});
 		const schedulerFetcher = createProductsSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -1782,7 +1913,13 @@ describe('createProductsSchedulerFetcher', () => {
 			),
 			readLocalLaneCoverage: vi.fn(async (_collection: string, queryKey: string) => {
 				const lane = lanes.get(queryKey);
-				return lane ? { complete: lane.complete, fresh: true, expectedRecordIds: lane.ids } : null;
+				return lane
+					? {
+							complete: lane.complete,
+							fresh: true,
+							expectedRecordIds: lane.ids,
+						}
+					: null;
 			}),
 		};
 		const schedulerFetcher = createProductsSchedulerFetcher({
@@ -1924,7 +2061,12 @@ describe('createProductsSchedulerFetcher', () => {
 
 		// The manifest receives the {wooId, digest} row (digest a string — un-truncated).
 		expect(manifestSink).toHaveBeenCalledWith([
-			{ remoteId: '321', wooId: 321, objectType: 'product', digest: '9223372036854775810' },
+			{
+				remoteId: '321',
+				wooId: 321,
+				objectType: 'product',
+				digest: '9223372036854775810',
+			},
 		]);
 		// The stored payload is stripped of _rxdb_digest (never persisted into the product doc).
 		const calls = repository.upsertMany.mock.calls as unknown as [
@@ -2049,7 +2191,9 @@ describe('createProductsSchedulerFetcher', () => {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
 		};
-		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+		};
 		// Both legs exhaust (short pages), but their union (3) exceeds limit (2): the
 		// persisted set is truncated, so the lane must not read back as complete.
 		const fetcher = vi.fn(async (url: string) => {
@@ -2107,7 +2251,9 @@ describe('createProductsSchedulerFetcher', () => {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
 		};
-		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+		};
 		const products = Array.from({ length: 2 }, (_, index) => ({
 			id: index + 1,
 			date_modified_gmt: '2026-05-20T10:10:00',
@@ -2170,7 +2316,9 @@ describe('createProductsSchedulerFetcher', () => {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
 		};
-		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+		};
 		const fetcher = vi.fn(async () =>
 			response([
 				{
@@ -2289,7 +2437,9 @@ describe('createProductsSchedulerFetcher', () => {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
 		};
-		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+		};
 		const fetcher = vi.fn(async () =>
 			response([
 				{
@@ -2378,7 +2528,10 @@ describe('coverageRecordId', () => {
 		// Simulate a post-emit-flip document with a uuid storage key and remote identity.
 		// Coverage must use the wooId-key so the deep-link lookup (woo-product:<wooId>) matches.
 		const result = coverageRecordId(
-			doc({ uuid: '5b8e1a3c-2f4d-4a6b-9c8e-1d2f3a4b5c6d', remoteId: remoteId(321) })
+			doc({
+				uuid: '5b8e1a3c-2f4d-4a6b-9c8e-1d2f3a4b5c6d',
+				remoteId: remoteId(321),
+			})
 		);
 		expect(result).toBe('woo-product:321'); // the wooId-key, NOT the uuid storage id
 	});

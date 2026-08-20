@@ -20,6 +20,10 @@ export {
 	type StoreScopeIdentity,
 	type SyncCollectionName,
 } from './create-rxdb-sync-engine';
+export {
+	hydrateResponse,
+	type ResponseEnvelopeTransportState,
+} from './transport/response-envelope';
 /** Web multi-tab write-outcome feedback (#1209) — the host opens the channel
  * (named per scope database, re-pointed on a scope switch) and injects it as the
  * `writeOutcomeBridge` port. */

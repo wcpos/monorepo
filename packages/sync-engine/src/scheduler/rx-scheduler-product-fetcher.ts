@@ -202,7 +202,7 @@ async function fetchTargetedProducts(
 		if (!response.ok) {
 			throw new Error(`Woo REST targeted product request failed: ${response.status}`);
 		}
-		const payloads = JSON.parse(await response.text()) as WooProductPayload[];
+		const payloads = (await response.json()) as WooProductPayload[];
 		assertReturnedRequestedIds(
 			{ restLabel: 'product', payloadWooId: (payload: WooProductPayload) => Number(payload.id) },
 			idsBatch,
@@ -246,7 +246,7 @@ async function fetchProductQuery(
 		throw new Error(`Woo REST product search request failed: ${response.status}`);
 	}
 	return {
-		payloads: JSON.parse(await response.text()) as WooProductPayload[],
+		payloads: (await response.json()) as WooProductPayload[],
 		totalPages: Number(response.headers.get('X-WP-TotalPages')) || null,
 		totalMatchingRecords: queryTotalFromResponse(response),
 	};

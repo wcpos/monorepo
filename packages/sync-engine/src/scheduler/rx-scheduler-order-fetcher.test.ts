@@ -11,6 +11,7 @@ import {
 } from '@wcpos/sync-core';
 
 import { remoteId } from '../testing';
+import { hydrateResponse } from '../transport/response-envelope';
 import { createOrdersSchedulerFetcher } from './rx-scheduler-order-fetcher';
 
 import type { FetchTask } from './replication-policy';
@@ -137,7 +138,11 @@ describe('createOrdersSchedulerFetcher', () => {
 			writeCustomPullCheckpoint: vi.fn(async () => undefined),
 		};
 		const fetcher = vi.fn(async () =>
-			response({ documents: [doc], checkpoint: nextCheckpoint, hasMore: false })
+			response({
+				documents: [doc],
+				checkpoint: nextCheckpoint,
+				hasMore: false,
+			})
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -151,7 +156,14 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(upserted).toHaveLength(1);
 		expect(upserted[0]?.payload).not.toHaveProperty('_rxdb_digest');
 		expect(manifestUpserts).toEqual([
-			[{ remoteId: '11', wooId: 11, objectType: 'order', digest: '9223372036854775810' }],
+			[
+				{
+					remoteId: '11',
+					wooId: 11,
+					objectType: 'order',
+					digest: '9223372036854775810',
+				},
+			],
 		]);
 	});
 
@@ -271,7 +283,11 @@ describe('createOrdersSchedulerFetcher', () => {
 			writeCustomPullCheckpoint: vi.fn(async () => undefined),
 		};
 		const fetcher = vi.fn(async () =>
-			response({ documents: [serverDoc], checkpoint: nextCheckpoint, hasMore: false })
+			response({
+				documents: [serverDoc],
+				checkpoint: nextCheckpoint,
+				hasMore: false,
+			})
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -303,7 +319,11 @@ describe('createOrdersSchedulerFetcher', () => {
 			writeCustomPullCheckpoint: vi.fn(async () => undefined),
 		};
 		const fetcher = vi.fn(async () =>
-			response({ documents: [serverDoc], checkpoint: nextCheckpoint, hasMore: false })
+			response({
+				documents: [serverDoc],
+				checkpoint: nextCheckpoint,
+				hasMore: false,
+			})
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -748,7 +768,9 @@ describe('createOrdersSchedulerFetcher', () => {
 
 	it('does NOT overwrite a targeted order that has queued local mutations, but keeps it covered', async () => {
 		const repository = { upsertMany: vi.fn(async () => undefined) };
-		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+		};
 		const fetcher = vi.fn(async () =>
 			response([
 				{
@@ -848,7 +870,14 @@ describe('createOrdersSchedulerFetcher', () => {
 		);
 
 		expect(manifestUpserts).toEqual([
-			[{ remoteId: '456', wooId: 456, objectType: 'order', digest: 'digest-456' }],
+			[
+				{
+					remoteId: '456',
+					wooId: 456,
+					objectType: 'order',
+					digest: 'digest-456',
+				},
+			],
 		]);
 	});
 
@@ -897,13 +926,22 @@ describe('createOrdersSchedulerFetcher', () => {
 		);
 
 		expect(manifestUpserts).toEqual([
-			[{ remoteId: '456', wooId: 456, objectType: 'order', digest: 'digest-456' }],
+			[
+				{
+					remoteId: '456',
+					wooId: 456,
+					objectType: 'order',
+					digest: 'digest-456',
+				},
+			],
 		]);
 	});
 
 	it('re-reads pending mutations per batch so an order queued mid-pull is not overwritten', async () => {
 		const repository = { upsertMany: vi.fn(async () => undefined) };
-		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+		};
 		const fetcher = vi
 			.fn()
 			.mockResolvedValueOnce(
@@ -1396,7 +1434,9 @@ describe('createOrdersSchedulerFetcher', () => {
 			],
 		});
 		const runWith = async (cashiers: string[]) => {
-			const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+			const coverageRepository = {
+				recordQueryResult: vi.fn(async () => undefined),
+			};
 			const schedulerFetcher = createOrdersSchedulerFetcher({
 				baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 				repository: { upsertMany: vi.fn(async () => undefined) },
@@ -1549,7 +1589,13 @@ describe('createOrdersSchedulerFetcher', () => {
 			recordQueryResult: vi.fn(async () => undefined),
 			readLocalLaneCoverage: vi.fn(async (_collection: string, queryKey: string) => {
 				const lane = lanes[queryKey];
-				return lane ? { complete: lane.complete, fresh: true, expectedRecordIds: lane.ids } : null;
+				return lane
+					? {
+							complete: lane.complete,
+							fresh: true,
+							expectedRecordIds: lane.ids,
+						}
+					: null;
 			}),
 		};
 	}
@@ -1563,7 +1609,9 @@ describe('createOrdersSchedulerFetcher', () => {
 	 * orders, not a re-download of the first two hundred.
 	 */
 	it('extends 200 → 300 as a new lane and fetches only the uncovered delta', async () => {
-		const repository = { upsertMany: vi.fn(async (_documents: unknown) => undefined) };
+		const repository = {
+			upsertMany: vi.fn(async (_documents: unknown) => undefined),
+		};
 		const coverageRepository = coverageWithLanes({
 			'orders:browser:status=processing:search=:limit=200': {
 				complete: false,
@@ -1602,7 +1650,11 @@ describe('createOrdersSchedulerFetcher', () => {
 
 		// A REQUEST IS ISSUED (the dedupe collapse is gone) and it is page 3 — the delta.
 		expect(pagesSeen).toEqual([3]);
-		expect(result).toMatchObject({ documentCount: 100, requestCount: 1, completed: true });
+		expect(result).toMatchObject({
+			documentCount: 100,
+			requestCount: 1,
+			completed: true,
+		});
 		// The lane describes the whole 300-row window: prefix ∪ delta.
 		const [recorded] = coverageRepository.recordQueryResult.mock.calls[0] as unknown as [
 			{ queryKey: string; records: { id: string }[] },
@@ -1615,7 +1667,9 @@ describe('createOrdersSchedulerFetcher', () => {
 
 	// #957 — the cap applied to every dimension equally, so the fix must too.
 	it('extends a customer-scoped window past 200 and continues from its own lane', async () => {
-		const repository = { upsertMany: vi.fn(async (_documents: unknown) => undefined) };
+		const repository = {
+			upsertMany: vi.fn(async (_documents: unknown) => undefined),
+		};
 		const coverageRepository = coverageWithLanes({
 			'orders:browser:status=all:customer=42:search=:limit=200': {
 				complete: false,
@@ -1656,7 +1710,9 @@ describe('createOrdersSchedulerFetcher', () => {
 
 	// #957 — a fresh lane already holding the whole window costs nothing.
 	it('serves a fresh, filled orders window from coverage without touching the wire', async () => {
-		const repository = { upsertMany: vi.fn(async (_documents: unknown) => undefined) };
+		const repository = {
+			upsertMany: vi.fn(async (_documents: unknown) => undefined),
+		};
 		const coverageRepository = coverageWithLanes({
 			'orders:browser:status=processing:search=:limit=300': {
 				complete: false,
@@ -1702,7 +1758,9 @@ describe('createOrdersSchedulerFetcher', () => {
 	 * ragged count must never become an offset.
 	 */
 	it('does not punch a hole in the window when an order is created between growth steps', async () => {
-		const repository = { upsertMany: vi.fn(async (_documents: unknown) => undefined) };
+		const repository = {
+			upsertMany: vi.fn(async (_documents: unknown) => undefined),
+		};
 		const coverageRepository = coverageWithLanes({
 			'orders:browser:status=processing:search=:limit=200': {
 				complete: false,
@@ -1758,7 +1816,9 @@ describe('createOrdersSchedulerFetcher', () => {
 	 * strictly contains go with it.
 	 */
 	it('evicts the sub-quantum windows a completed orders window contains', async () => {
-		const repository = { upsertMany: vi.fn(async (_documents: unknown) => undefined) };
+		const repository = {
+			upsertMany: vi.fn(async (_documents: unknown) => undefined),
+		};
 		const wooOrderIds = (count: number) =>
 			Array.from({ length: count }, (_, index) => `woo-order:${1_000 - index}`);
 		const lanes = new Map<
@@ -1791,7 +1851,11 @@ describe('createOrdersSchedulerFetcher', () => {
 			readLocalLaneCoverage: vi.fn(async (_collection: string, queryKey: string) => {
 				const lane = lanes.get(queryKey);
 				return lane
-					? { complete: lane.complete, fresh: true, expectedRecordIds: [...lane.expectedRecordIds] }
+					? {
+							complete: lane.complete,
+							fresh: true,
+							expectedRecordIds: [...lane.expectedRecordIds],
+						}
 					: null;
 			}),
 			listCoverageLanes: vi.fn(async () =>
@@ -2038,7 +2102,12 @@ describe('createOrdersSchedulerFetcher', () => {
 			publishRangedResume: vi.fn(async (input: { resume: unknown; expected: unknown }) => {
 				lane = lane
 					? { ...lane, rangedResume: input.resume }
-					: { complete: false, fresh: true, expectedRecordIds: [], rangedResume: input.resume };
+					: {
+							complete: false,
+							fresh: true,
+							expectedRecordIds: [],
+							rangedResume: input.resume,
+						};
 			}),
 			recordCumulativeQueryResult: vi.fn(
 				async (input: {
@@ -2078,11 +2147,57 @@ describe('createOrdersSchedulerFetcher', () => {
 		});
 	}
 
+	it.each(['header-only', 'body-only', 'both'] as const)(
+		'produces the same ranged outcome from a %s response',
+		async (mode) => {
+			const payloads = [rangedOrder(1_000, RANGE_BASE_SECONDS)];
+			const body =
+				mode === 'header-only'
+					? payloads
+					: { data: payloads, _wcpos: { v: 1, total: 1, total_pages: 1 } };
+			const headers: Record<string, string> =
+				mode === 'body-only'
+					? { 'content-type': 'application/json' }
+					: {
+							'content-type': 'application/json',
+							'X-WP-Total': '1',
+							'X-WP-TotalPages': '1',
+						};
+			const fetcher = vi.fn(async () =>
+				hydrateResponse(new Response(JSON.stringify(body), { headers }), {
+					envelopeRequested: true,
+				})
+			);
+			const coverageRepository = rangedLaneStore();
+			const schedulerFetcher = rangedFetcherFor({
+				fetcher,
+				coverageRepository,
+			});
+
+			const result = await schedulerFetcher(
+				orderTask({
+					id: `${RANGE_QUERY_KEY}:windowed`,
+					queryKey: RANGE_QUERY_KEY,
+					limit: 25,
+				})
+			);
+
+			expect(result).toMatchObject({
+				documentCount: 1,
+				requestCount: 1,
+				completed: true,
+			});
+			expect(fetcher).toHaveBeenCalledTimes(1);
+		}
+	);
+
 	it('fetches ranged complete order descriptors until a short page', async () => {
 		const repository = {
 			upsertMany: vi.fn(async (_documents: PullResponse['documents']) => undefined),
 		};
-		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+		};
 		const fullPage = Array.from({ length: 25 }, (_, index) =>
 			rangedOrder(1_000 - index, RANGE_BASE_SECONDS - index)
 		);
@@ -2091,7 +2206,11 @@ describe('createOrdersSchedulerFetcher', () => {
 			.fn()
 			.mockResolvedValueOnce(rangedResponse(fullPage))
 			.mockResolvedValueOnce(rangedResponse(shortPage));
-		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository, repository });
+		const schedulerFetcher = rangedFetcherFor({
+			fetcher,
+			coverageRepository,
+			repository,
+		});
 		const queryKey = RANGE_QUERY_KEY;
 
 		const result = await schedulerFetcher(
@@ -2197,7 +2316,9 @@ describe('createOrdersSchedulerFetcher', () => {
 
 		await schedulerFetcher(orderTask({ id: `${queryKey}:windowed`, queryKey, limit: 200 }));
 
-		expect(coverageRepository.lane()?.rangedResume).toMatchObject({ totalRecords: null });
+		expect(coverageRepository.lane()?.rangedResume).toMatchObject({
+			totalRecords: null,
+		});
 	});
 
 	// #954 (b): the next pass resumes at the cursor and fetches ONLY the remainder.
@@ -2299,9 +2420,17 @@ describe('createOrdersSchedulerFetcher', () => {
 				seconds: RANGE_BASE_SECONDS - index,
 			}))
 		);
-		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository, repository });
+		const schedulerFetcher = rangedFetcherFor({
+			fetcher,
+			coverageRepository,
+			repository,
+		});
 		const queryKey = 'orders:browser:status=all:after=1782864000:search=:limit=all';
-		const task = orderTask({ id: `${queryKey}:windowed`, queryKey, limit: 200 });
+		const task = orderTask({
+			id: `${queryKey}:windowed`,
+			queryKey,
+			limit: 200,
+		});
 
 		const firstPass = await schedulerFetcher(task);
 		expect(firstPass.documentCount).toBe(10_000);
@@ -2309,7 +2438,9 @@ describe('createOrdersSchedulerFetcher', () => {
 		// completion after a bounded pass would strand the range at its first 10,000 records.
 		expect(firstPass.completed).toBe(false);
 		expect(coverageRepository.lane()).toMatchObject({ complete: false });
-		expect(coverageRepository.lane()?.rangedResume).toMatchObject({ totalRecords: totalOrders });
+		expect(coverageRepository.lane()?.rangedResume).toMatchObject({
+			totalRecords: totalOrders,
+		});
 
 		const secondPass = await schedulerFetcher(task);
 		// Only the remainder — not another 10,000.
@@ -2347,7 +2478,11 @@ describe('createOrdersSchedulerFetcher', () => {
 			server.trash(250);
 			return response;
 		});
-		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository, repository });
+		const schedulerFetcher = rangedFetcherFor({
+			fetcher,
+			coverageRepository,
+			repository,
+		});
 		const queryKey = 'orders:browser:status=all:after=1782864000:search=:limit=all';
 
 		await schedulerFetcher(orderTask({ id: `${queryKey}:windowed`, queryKey, limit: 200 }));
@@ -2377,7 +2512,11 @@ describe('createOrdersSchedulerFetcher', () => {
 				seconds: index < 30 ? RANGE_BASE_SECONDS : RANGE_BASE_SECONDS - index,
 			}))
 		);
-		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository, repository });
+		const schedulerFetcher = rangedFetcherFor({
+			fetcher,
+			coverageRepository,
+			repository,
+		});
 		const queryKey = RANGE_QUERY_KEY;
 
 		await schedulerFetcher(orderTask({ id: `${queryKey}:windowed`, queryKey, limit: 25 }));
@@ -2415,7 +2554,11 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(
 			coverageRepository.publishRangedResume.mock.calls.map(
 				(call) =>
-					(call[0] as { resume: { downloadedRecords: number; totalRecords: number } }).resume
+					(
+						call[0] as {
+							resume: { downloadedRecords: number; totalRecords: number };
+						}
+					).resume
 			)
 		).toEqual([
 			expect.objectContaining({ downloadedRecords: 100, totalRecords: 250 }),
@@ -2444,7 +2587,10 @@ describe('createOrdersSchedulerFetcher', () => {
 				rangedOrder(10_000 - served - index, RANGE_BASE_SECONDS - served - index)
 			);
 			served += 100;
-			return rangedResponse(page, { 'X-WP-Total': '30000', 'X-WP-TotalPages': '300' });
+			return rangedResponse(page, {
+				'X-WP-Total': '30000',
+				'X-WP-TotalPages': '300',
+			});
 		});
 		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository });
 		const queryKey = 'orders:browser:status=all:cashier=7:after=1782864000:search=:limit=all';

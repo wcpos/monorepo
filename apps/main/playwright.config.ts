@@ -116,11 +116,7 @@ export default defineConfig<WcposTestOptions>({
 	// sized like a normal shop, so CI is what gives — 2 workers/shard keeps the
 	// shard parallelism that makes runs fast while halving the concurrent load.
 	// Override with E2E_WORKERS for a deliberate experiment.
-	workers: process.env.E2E_WORKERS
-		? Number(process.env.E2E_WORKERS)
-		: process.env.CI
-			? 2
-			: 1,
+	workers: process.env.E2E_WORKERS ? Number(process.env.E2E_WORKERS) : process.env.CI ? 2 : 1,
 	reporter: process.env.CI
 		? [
 				['github'],
@@ -155,6 +151,15 @@ export default defineConfig<WcposTestOptions>({
 					{
 						name: 'free-authenticated',
 						testIgnore: [/auth\.spec\.ts/, COLD_SPEC, LIVE_SPEC],
+						use: {
+							...devices['Desktop Chrome'],
+							storeVariant: 'free' as const,
+							storeUrl: FREE_STORE_URL,
+						},
+					},
+					{
+						name: 'free-hostile',
+						testMatch: /hostile-headers\.ts/,
 						use: {
 							...devices['Desktop Chrome'],
 							storeVariant: 'free' as const,

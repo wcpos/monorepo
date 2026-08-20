@@ -18,7 +18,11 @@ afterEach(() => {
 
 function identity(): StoreScopeIdentity {
 	uniqueStore += 1;
-	return { site: SITE, storeId: 7, cashierId: `customer-trickle-${uniqueStore}` };
+	return {
+		site: SITE,
+		storeId: 7,
+		cashierId: `customer-trickle-${uniqueStore}`,
+	};
 }
 
 function json(payload: unknown, headers: Record<string, string> = {}): Response {
@@ -133,7 +137,9 @@ describe('customer-trickle maintenance lane', () => {
 		await engine.ready;
 
 		await engine.sync('customer-trickle');
-		await expect(engine.sync('customer-trickle')).resolves.toMatchObject({ status: 'ran' });
+		await expect(engine.sync('customer-trickle')).resolves.toMatchObject({
+			status: 'ran',
+		});
 		await engine.sync('customer-trickle');
 		expect(pages).toEqual(['1', '2', '1']);
 		await engine.dispose();
@@ -151,7 +157,11 @@ describe('customer-trickle maintenance lane', () => {
 		});
 		await engine.ready;
 
-		await declareBrowseWindow(engine, { limit: 100, orderby: 'last_name', order: 'asc' });
+		await declareBrowseWindow(engine, {
+			limit: 100,
+			orderby: 'last_name',
+			order: 'asc',
+		});
 		await engine.sync('customer-trickle');
 		await engine.sync('customer-trickle');
 		expect(trickled.map((url) => url.searchParams.get('orderby'))).toEqual([
@@ -161,7 +171,11 @@ describe('customer-trickle maintenance lane', () => {
 		expect(trickled.map((url) => url.searchParams.get('page'))).toEqual(['1', '2']);
 
 		// The cashier re-sorts to newest-registered-first: the walk starts again in THAT order.
-		await declareBrowseWindow(engine, { limit: 100, orderby: 'registered_date', order: 'desc' });
+		await declareBrowseWindow(engine, {
+			limit: 100,
+			orderby: 'registered_date',
+			order: 'desc',
+		});
 		await engine.sync('customer-trickle');
 		expect(trickled[2]!.searchParams.get('orderby')).toBe('registered_date');
 		expect(trickled[2]!.searchParams.get('order')).toBe('desc');
@@ -181,9 +195,17 @@ describe('customer-trickle maintenance lane', () => {
 		});
 		await engine.ready;
 
-		await declareBrowseWindow(engine, { limit: 100, orderby: 'last_name', order: 'asc' });
+		await declareBrowseWindow(engine, {
+			limit: 100,
+			orderby: 'last_name',
+			order: 'asc',
+		});
 		await engine.sync('customer-trickle');
-		await declareBrowseWindow(engine, { limit: 400, orderby: 'last_name', order: 'asc' });
+		await declareBrowseWindow(engine, {
+			limit: 400,
+			orderby: 'last_name',
+			order: 'asc',
+		});
 		await engine.sync('customer-trickle');
 
 		expect(trickled.map((url) => url.searchParams.get('page'))).toEqual(['1', '2']);
@@ -200,7 +222,11 @@ describe('customer-trickle maintenance lane', () => {
 		});
 		const initialScope = await engine.ready;
 
-		await declareBrowseWindow(engine, { limit: 100, orderby: 'last_name', order: 'asc' });
+		await declareBrowseWindow(engine, {
+			limit: 100,
+			orderby: 'last_name',
+			order: 'asc',
+		});
 		await engine.scope.switch({ ...initialScope.identity, storeId: 8 });
 		await engine.sync('customer-trickle');
 
@@ -226,8 +252,39 @@ describe('customer-trickle maintenance lane', () => {
 		});
 		expect(customerFetches).toBe(0);
 		isLeader = true;
-		await expect(engine.sync('customer-trickle')).resolves.toMatchObject({ status: 'ran' });
+		await expect(engine.sync('customer-trickle')).resolves.toMatchObject({
+			status: 'ran',
+		});
 		expect(customerFetches).toBe(1);
+		await engine.dispose();
+	});
+
+	it('completes the walk from a body-only envelope when every pagination header is stripped', async () => {
+		// Pins the ENGINE-WRAPPER hydration seam (B9): the fetcher returns an
+		// enveloped body with NO pagination headers — a Tier 2 hostile edge —
+		// and the walk must complete exactly as the header-carrying test below.
+		const urls: string[] = [];
+		const engine = engineWith({
+			fetcher: async (url) => {
+				urls.push(url);
+				const page = Number(new URL(url).searchParams.get('page'));
+				return json({
+					data: customers((page - 1) * 10 + 1, 10),
+					_wcpos: { v: 1, total: 20, total_pages: 2 },
+				});
+			},
+		});
+		await engine.ready;
+
+		await engine.sync('customer-trickle');
+		await expect(engine.sync('customer-trickle')).resolves.toMatchObject({
+			status: 'ran',
+		});
+		await expect(engine.sync('customer-trickle')).resolves.toMatchObject({
+			status: 'skipped',
+			reason: 'walk-complete',
+		});
+		expect(urls).toHaveLength(2);
 		await engine.dispose();
 	});
 
@@ -316,7 +373,9 @@ describe('customer-trickle maintenance lane', () => {
 		});
 		expect(trickleFetches).toBe(0);
 		requirement.release();
-		await expect(requirement.ready).resolves.toMatchObject({ action: 'released' });
+		await expect(requirement.ready).resolves.toMatchObject({
+			action: 'released',
+		});
 		await engine.dispose();
 	});
 
@@ -606,7 +665,9 @@ describe('customer-trickle maintenance lane', () => {
 		await setCensusTotal(localCount, 1_000_001);
 		await engine.sync('customer-trickle');
 		await setCensusTotal(20, 1_000_002);
-		await expect(engine.sync('customer-trickle')).resolves.toMatchObject({ status: 'ran' });
+		await expect(engine.sync('customer-trickle')).resolves.toMatchObject({
+			status: 'ran',
+		});
 		expect(urls).toHaveLength(3);
 		await engine.dispose();
 	});

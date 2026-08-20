@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createScopeBarcodeSelectors } from '../materialization/barcode-selectors';
+import { hydrateResponse } from '../transport/response-envelope';
 import { ChangeSignalPoisonError, createLiveChangeSignalSource } from './change-signal-source';
 
 function response(checkpoint: Record<string, unknown>): Response {
@@ -104,6 +105,51 @@ describe('createLiveChangeSignalSource — sequence-log checkpoint head', () => 
 });
 
 describe('createLiveChangeSignalSource — sequence-log conditional requests', () => {
+	it.each(['header-only', 'body-only', 'both'] as const)(
+		'preserves the 304 idle path with a %s validator',
+		async (mode) => {
+			const validators: (string | null)[] = [];
+			let sequenceCall = 0;
+			const page = {
+				changes: [],
+				checkpoint: { since: 5, head: 5 },
+				complete: true,
+			};
+			const source = createLiveChangeSignalSource({
+				syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+				fetcher: async (url, init) => {
+					if (new URL(url).pathname.endsWith('/changes/tick')) {
+						return new Response(null, { status: 404 });
+					}
+					validators.push(new Headers(init?.headers).get('If-None-Match'));
+					sequenceCall += 1;
+					if (sequenceCall > 1) return new Response(null, { status: 304 });
+					const body =
+						mode === 'header-only'
+							? page
+							: { data: page, _wcpos: { v: 1, validator: '"sequence-5"' } };
+					const headers: Record<string, string> =
+						mode === 'body-only'
+							? { 'content-type': 'application/json' }
+							: { 'content-type': 'application/json', etag: '"sequence-5"' };
+					return hydrateResponse(new Response(JSON.stringify(body), { headers }), {
+						envelopeRequested: true,
+					});
+				},
+			});
+
+			await source.pollSequenceLog({ cursor: { sequence: 5 }, limit: 100 });
+			const idle = await source.pollSequenceLog({
+				cursor: { sequence: 5 },
+				limit: 100,
+			});
+			await source.pollSequenceLog({ cursor: { sequence: 5 }, limit: 100 });
+
+			expect(validators).toEqual([null, '"sequence-5"', '"sequence-5"']);
+			expect(idle).toMatchObject({ rows: [], hasMore: false, head: 5 });
+		}
+	);
+
 	it('maps a 304 to the current empty at-head page and retains the ETag', async () => {
 		const requests: ({ headers?: HeadersInit } | undefined)[] = [];
 		let call = 0;
