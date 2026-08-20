@@ -21,7 +21,7 @@ export default function ResizablePOSColumns() {
 	const { uiSettings, patchUI } = useUISettings('pos-products');
 	const { screenSize } = useTheme();
 	const { bottom } = useSafeAreaInsets();
-	const segments = useSegments();
+	const segments: string[] = useSegments();
 
 	// Check if we're at a /cart route (with or without orderId)
 	// If at cart route, default to cart tab; otherwise products tab

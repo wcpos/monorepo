@@ -95,7 +95,8 @@ export function Actions({ row }: CellContext<{ document: CouponDocument }, 'acti
 							disabled={!caps.canEditCoupons}
 							onPress={() =>
 								router.push({
-									pathname: `/coupons/edit/${coupon.uuid}`,
+									pathname: '/coupons/edit/[couponId]',
+									params: { couponId: coupon.uuid },
 								})
 							}
 						>

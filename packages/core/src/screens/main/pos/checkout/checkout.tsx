@@ -249,7 +249,7 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 					{showStockRejection ? (
 						<ModalAction
 							testID="return-to-cart-button"
-							onPress={() => router.replace({ pathname: 'cart' })}
+							onPress={() => router.replace({ pathname: '/cart' })}
 						>
 							{t('pos_checkout.return_to_cart')}
 						</ModalAction>

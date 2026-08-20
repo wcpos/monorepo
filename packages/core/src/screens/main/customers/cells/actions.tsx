@@ -109,7 +109,8 @@ export function Actions({ row }: CellContext<{ document: CustomerDocument }, 'ac
 							disabled={!caps.canEditCustomers}
 							onPress={() =>
 								router.push({
-									pathname: `/customers/edit/${customer.uuid}`,
+									pathname: '/customers/edit/[customerId]',
+									params: { customerId: customer.uuid! },
 								})
 							}
 						>

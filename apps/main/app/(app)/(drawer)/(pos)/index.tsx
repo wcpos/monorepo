@@ -9,8 +9,8 @@ export default function IndexScreen() {
 
 	// Initial redirect to the appropriate layout based on screen size
 	if (screenSize === 'sm') {
-		return <Redirect href="(tabs)" />;
+		return <Redirect href="/(app)/(drawer)/(pos)/(tabs)" />;
 	} else {
-		return <Redirect href="(columns)" />;
+		return <Redirect href="/(app)/(drawer)/(pos)/(columns)" />;
 	}
 }

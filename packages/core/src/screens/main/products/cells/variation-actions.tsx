@@ -105,7 +105,8 @@ export function VariationActions({
 							disabled={!caps.canEditVariations}
 							onPress={() =>
 								router.push({
-									pathname: `/(app)/(drawer)/products/(modals)/edit/variation/${variation.uuid}`,
+									pathname: '/(app)/(drawer)/products/(modals)/edit/variation/[variationId]',
+									params: { variationId: variation.uuid! },
 								})
 							}
 						>

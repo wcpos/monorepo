@@ -123,7 +123,8 @@ describe('PaymentWebview fallback order refresh', () => {
 
 		expect(release).toHaveBeenCalledTimes(1);
 		expect(mockReplace).toHaveBeenCalledWith({
-			pathname: '(modals)/cart/receipt/uuid-42',
+			pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
+			params: { orderId: 'uuid-42' },
 		});
 	});
 
@@ -260,7 +261,7 @@ describe('PaymentWebview fallback order refresh', () => {
 		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
 		expect(mockEngineRequire).toHaveBeenCalledTimes(1); // best-effort local catch-up
 		expect(logger.error).not.toHaveBeenCalled();
-		expect(mockReplace).toHaveBeenCalledWith({ pathname: 'cart' });
+		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
 	});
 });
 

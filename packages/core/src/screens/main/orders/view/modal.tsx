@@ -47,12 +47,12 @@ export function ViewOrderModal({ resource }: Props) {
 	}
 
 	const handlePrintReceipt = order.uuid
-		? () => router.push({ pathname: `/orders/receipt/${order.uuid}` })
+		? () => router.push({ pathname: '/orders/receipt/[orderId]', params: { orderId: order.uuid! } })
 		: undefined;
 
 	const canRefund = !!order.id && !!order.status && REFUNDABLE_STATUSES.includes(order.status);
 	const handleRefund = canRefund
-		? () => router.push({ pathname: `/orders/refund/${order.uuid}` })
+		? () => router.push({ pathname: '/orders/refund/[orderId]', params: { orderId: order.uuid! } })
 		: undefined;
 
 	return (

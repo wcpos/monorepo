@@ -116,9 +116,12 @@ export function useCheckoutSession(order: OrderDocument) {
 		stockAdjustment(reducedStockItems);
 
 		if (uiSettings.autoShowReceipt) {
-			router.replace({ pathname: `(modals)/cart/receipt/${order.uuid}` });
+			router.replace({
+				pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
+				params: { orderId: order.uuid! },
+			});
 		} else {
-			router.replace({ pathname: `cart` });
+			router.replace({ pathname: '/cart' });
 		}
 	}, [runtime, order, router, stockAdjustment, uiSettings.autoShowReceipt]);
 

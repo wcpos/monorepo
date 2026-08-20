@@ -35,7 +35,7 @@ export default function AuthLayout() {
 	const { storeDB } = useAppState();
 
 	if (storeDB) {
-		return <Redirect href="/(app)" />;
+		return <Redirect href="/(app)/(drawer)/(pos)" />;
 	}
 
 	return (

@@ -30,7 +30,12 @@ export function Receipt({ row }: CellContext<{ document: OrderDocument }, any>) 
 			<TooltipTrigger asChild>
 				<IconButton
 					name="receipt"
-					onPress={() => router.push(`(app)/(drawer)/orders/(modals)/receipt/${order.uuid}`)}
+					onPress={() =>
+						router.push({
+							pathname: '/(app)/(drawer)/orders/(modals)/receipt/[orderId]',
+							params: { orderId: order.uuid! },
+						})
+					}
 				/>
 			</TooltipTrigger>
 			<TooltipContent>
