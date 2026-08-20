@@ -51,14 +51,12 @@ export function buildAuthUrl(
 export function extractAuthParams(url: string): URLSearchParams | null {
 	try {
 		const urlObj = new URL(url);
-		if (urlObj.search) {
-			return urlObj.searchParams;
-		}
-		if (urlObj.hash) {
-			// Remove leading # and parse
-			return new URLSearchParams(urlObj.hash.slice(1));
-		}
-		return null;
+		if (!urlObj.search && !urlObj.hash) return null;
+		// Merge both sources (query wins) so an unrelated query param can't hide
+		// tokens returned in the fragment.
+		const merged = new URLSearchParams(urlObj.hash ? urlObj.hash.slice(1) : '');
+		urlObj.searchParams.forEach((value, key) => merged.set(key, value));
+		return merged;
 	} catch {
 		return null;
 	}
