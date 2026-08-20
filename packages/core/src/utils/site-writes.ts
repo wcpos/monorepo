@@ -60,11 +60,25 @@ export function pruneUnknownSiteFields<T extends SiteData>(
  * (or `collection.upsert()`, which is a full-document overwrite) replays a
  * snapshot that was computed before the conflicting write landed.
  */
+/**
+ * Fields where the empty string is never real data, only `parseRestResponse`'s
+ * synthesized default for a property the response did not carry. The standalone
+ * discovery flow parses the REST index — which does not return `locale` — so a
+ * merge that kept the synthesized `''` would erase the locale stored by an
+ * earlier embedded boot (the #902 default-clobber class, on the write side).
+ */
+const OMIT_EMPTY_SITE_FIELDS = ['locale'] as const;
+
 export async function upsertSiteData(
 	collection: SiteCollection,
 	siteData: SiteData
 ): Promise<SiteDocument> {
 	const patch = pruneUnknownSiteFields(collection, stripLocalOnlySiteFields(siteData));
+	for (const field of OMIT_EMPTY_SITE_FIELDS) {
+		if (patch[field] === '') {
+			delete patch[field];
+		}
+	}
 	const primary = patch[collection.schema.primaryPath] as string | undefined;
 
 	if (!primary) {
