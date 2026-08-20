@@ -40,35 +40,70 @@ export function Header({ options, showUpgrade, setShowUpgrade }: Props) {
 	const { screenSize } = useTheme();
 
 	// Track widths for centering calculation
-	const [leftWidth, setLeftWidth] = React.useState(0);
+	const [leftMeasurement, setLeftMeasurement] = React.useState<{
+		width: number;
+		screenSize: typeof screenSize;
+	} | null>(null);
 	const [rightWidth, setRightWidth] = React.useState(0);
 	const [titleContainerWidth, setTitleContainerWidth] = React.useState(0);
 	const [titleTextWidth, setTitleTextWidth] = React.useState(0);
 
 	const isSmallScreen = screenSize === 'sm';
+	const isLargeScreen = screenSize === 'lg';
 	const title = `${options.title} - ${storeName}`;
+
+	// Large screens render no left button, so the true left width there is zero
+	// regardless of what was measured before a resize; deriving it (instead of
+	// resetting state) keeps the zero-report filter below unconditional.
+	const hasCurrentLeftMeasurement = leftMeasurement?.screenSize === screenSize;
+	const effectiveLeftWidth =
+		isLargeScreen || !hasCurrentLeftMeasurement ? 0 : leftMeasurement.width;
 
 	// Calculate centering offset: positive means right is wider, negative means left is wider
 	// Only apply centering when the title actually fits - otherwise use all available space
-	const rawOffset = rightWidth - leftWidth;
+	const rawOffset = rightWidth - effectiveLeftWidth;
 	const availableWithCentering = titleContainerWidth - Math.abs(rawOffset);
 	const titleFits = titleTextWidth > 0 && titleTextWidth < availableWithCentering;
 	const centeringOffset = isSmallScreen || !titleFits ? 0 : rawOffset;
 
-	const handleLeftLayout = React.useCallback((event: LayoutChangeEvent) => {
-		setLeftWidth(event.nativeEvent.layout.width);
-	}, []);
+	// Centering depends on the intrinsic text width, the container width, the
+	// right-side buttons (always non-empty) and — on screens that render a left
+	// button — the left section. Until all have reported, any paint would show
+	// the title un-centered, so it stays invisible (see the `visible` prop
+	// below). Small screens never center, so they never wait.
+	const measured =
+		titleTextWidth > 0 &&
+		titleContainerWidth > 0 &&
+		rightWidth > 0 &&
+		(isLargeScreen || hasCurrentLeftMeasurement);
+
+	// Inactive drawer screens are hidden with display:none on web, so every
+	// element in this header reports a zero-width layout while another screen is
+	// active. Accepting those zeros wipes the measurements, and each navigation
+	// then re-shows the title left-aligned for a frame before it re-centers.
+	// Zero is never a real measurement here — the one legitimate zero (no left
+	// button on large screens) is derived above — so zero reports keep the last
+	// real value.
+	const handleLeftLayout = React.useCallback(
+		(event: LayoutChangeEvent) => {
+			const { width } = event.nativeEvent.layout;
+			setLeftMeasurement((previous) => (width > 0 ? { width, screenSize } : previous));
+		},
+		[screenSize]
+	);
 
 	const handleRightLayout = React.useCallback((event: LayoutChangeEvent) => {
-		setRightWidth(event.nativeEvent.layout.width);
+		const { width } = event.nativeEvent.layout;
+		setRightWidth((previous) => (width > 0 ? width : previous));
 	}, []);
 
 	const handleTitleContainerLayout = React.useCallback((event: LayoutChangeEvent) => {
-		setTitleContainerWidth(event.nativeEvent.layout.width);
+		const { width } = event.nativeEvent.layout;
+		setTitleContainerWidth((previous) => (width > 0 ? width : previous));
 	}, []);
 
 	const handleIntrinsicWidth = React.useCallback((width: number) => {
-		setTitleTextWidth(width);
+		setTitleTextWidth((previous) => (width > 0 ? width : previous));
 	}, []);
 
 	return (
@@ -80,12 +115,13 @@ export function Header({ options, showUpgrade, setShowUpgrade }: Props) {
 				>
 					<HStack className="h-10 items-center">
 						{/* Left section - measured for centering calculation */}
-						<View onLayout={handleLeftLayout}>
+						<View testID="header-left-section" onLayout={handleLeftLayout}>
 							<Left />
 						</View>
 
 						{/* Title section - flex to fill remaining space, with centering offset */}
 						<View
+							testID="header-title-container"
 							className="min-w-0 flex-1"
 							onLayout={handleTitleContainerLayout}
 							style={{
@@ -99,6 +135,7 @@ export function Header({ options, showUpgrade, setShowUpgrade }: Props) {
 						>
 							<HeaderTitle
 								centered={!isSmallScreen && titleFits}
+								visible={isSmallScreen || measured}
 								onIntrinsicWidth={handleIntrinsicWidth}
 							>
 								{title}
@@ -106,7 +143,7 @@ export function Header({ options, showUpgrade, setShowUpgrade }: Props) {
 						</View>
 
 						{/* Right section - measured for centering calculation */}
-						<View onLayout={handleRightLayout}>
+						<View testID="header-right-section" onLayout={handleRightLayout}>
 							<Right />
 						</View>
 					</HStack>
