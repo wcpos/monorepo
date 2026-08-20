@@ -15,7 +15,6 @@ import { useAddVariation } from '../../hooks/use-add-variation';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { TileImage } from './tile-image';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 
 interface GridFields {
@@ -31,7 +30,6 @@ interface GridFields {
 }
 
 interface VariableProductTileProps {
-	product: ProductDocument;
 	record: EngineRecord<'products'>;
 	gridFields: GridFields;
 }
@@ -90,7 +88,7 @@ function VariablePriceRange({
 }
 
 /** Renders a variable product tile with the fields enabled for the product grid. */
-export function VariableProductTile({ product, record, gridFields }: VariableProductTileProps) {
+export function VariableProductTile({ record, gridFields }: VariableProductTileProps) {
 	const t = useT();
 	const { addVariation } = useAddVariation();
 	const { format } = useCurrencyFormat();
@@ -141,7 +139,7 @@ export function VariableProductTile({ product, record, gridFields }: VariablePro
 			<PopoverTrigger ref={triggerRef as React.RefObject<never>} asChild>
 				<Pressable className="flex-1" testID="variable-product-tile">
 					<View className="aspect-square">
-						<TileImage product={product} record={record} />
+						<TileImage record={record} />
 						<View className="absolute top-1 right-1 rounded bg-black/50 px-1 py-0.5">
 							<Text className="text-xs text-white">{t('common.variants')}</Text>
 						</View>

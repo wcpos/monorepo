@@ -2,7 +2,9 @@ import * as React from 'react';
 
 import { isRxDocument } from 'rxdb';
 
-type RxDocument = import('rxdb').RxDocument;
+import { isEngineRecordFace } from './types';
+
+import type { ImageAttachmentSource } from './types';
 
 /**
  * Electron-specific image attachment hook.
@@ -25,13 +27,13 @@ function toImageCacheUrl(url: string): string {
 	return `wcpos-image://cache/${toBase64UrlUtf8(url)}`;
 }
 
-export const useImageAttachment = (document: RxDocument, imageUrl: string) => {
+export const useImageAttachment = (source: ImageAttachmentSource, imageUrl: string) => {
 	const uri = React.useMemo(() => {
-		if (!isRxDocument(document) || !imageUrl) {
+		if ((!isEngineRecordFace(source) && !isRxDocument(source)) || !imageUrl) {
 			return undefined;
 		}
 		return toImageCacheUrl(imageUrl);
-	}, [document, imageUrl]);
+	}, [source, imageUrl]);
 
 	return {
 		uri,

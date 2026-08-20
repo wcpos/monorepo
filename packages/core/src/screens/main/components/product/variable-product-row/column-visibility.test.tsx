@@ -83,8 +83,8 @@ jest.mock('./variations/filters', () => ({
 jest.mock('./variations/footer', () => ({
 	VariationTableFooter: () => null,
 }));
-jest.mock('../../text-cell', () => ({
-	TextCell: () => null,
+jest.mock('../../record-text-cell', () => ({
+	RecordTextCell: () => null,
 }));
 jest.mock('../resolve-stock', () => ({
 	resolveStock: () => ({ sellable: true }),

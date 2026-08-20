@@ -123,7 +123,7 @@ jest.mock('./cells/stock-quantity', () => ({ StockQuantity: () => null }));
 jest.mock('./cells/stock-status', () => ({ StockStatus: () => null }));
 jest.mock('./cells/variation-actions', () => ({ VariationActions: () => null }));
 jest.mock('./cells/variation-name', () => ({ ProductVariationName: () => null }));
-jest.mock('../components/date', () => ({ DateCell: () => null }));
+jest.mock('../components/record-date-cell', () => ({ RecordDateCell: () => null }));
 jest.mock('../components/product/brands', () => ({ ProductBrands: () => null }));
 jest.mock('../components/product/categories', () => ({ ProductCategories: () => null }));
 jest.mock('../components/product/image', () => ({ ProductImage: () => null }));
@@ -133,7 +133,7 @@ jest.mock('../components/product/variable-image', () => ({ VariableProductImage:
 jest.mock('../components/product/variable-price', () => ({ VariableProductPrice: () => null }));
 jest.mock('../components/product/variable-product-row', () => ({ VariableProductRow: () => null }));
 jest.mock('../components/product/variation-image', () => ({ ProductVariationImage: () => null }));
-jest.mock('../components/text-cell', () => ({ TextCell: () => null }));
+jest.mock('../components/record-text-cell', () => ({ RecordTextCell: () => null }));
 
 function latestState(): QueryStateOf<'products'> {
 	const call = mockUseRelationalCollectionBinding.mock.calls.at(-1);

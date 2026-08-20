@@ -19,15 +19,14 @@ export function EditablePrice({
 	column,
 	table,
 }: CellContext<
-	{ document: ProductDocument | ProductVariationDocument },
+	{
+		document: ProductDocument | ProductVariationDocument;
+		record: EngineRecord<'products'> | EngineRecord<'variations'>;
+	},
 	'sale_price' | 'regular_price'
 >) {
 	const item = row.original.document;
-	const record = (
-		row.original as typeof row.original & {
-			record: EngineRecord<'products'> | EngineRecord<'variations'>;
-		}
-	).record;
+	const record = row.original.record;
 	const priceKey = column.id as 'sale_price' | 'regular_price';
 	const price = useRecordField(record, ({ payload }) => payload[priceKey]) as string;
 	const fields = useRecordField(record, ({ payload }) => ({

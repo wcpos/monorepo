@@ -21,7 +21,7 @@ import {
 } from '@wcpos/components/dropdown-menu';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
-import { useQueryRuntime } from '@wcpos/query';
+import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -42,10 +42,18 @@ const syncLogger = getLogger(['wcpos', 'products', 'variation-actions', 'sync'])
  */
 export function VariationActions({
 	row,
-}: CellContext<{ document: ProductVariationDocument }, 'actions'>) {
-	const variation = row.original.document;
+}: CellContext<
+	{ document: ProductVariationDocument; record: EngineRecord<'variations'> },
+	'actions'
+>) {
+	const record = row.original.record;
+	const variation = useRecordField(record, ({ payload }) => ({
+		id: payload.id,
+		name: payload.name,
+	}));
 	const parentRow = row.getParentRow()!;
-	const parent = (parentRow.original as { document: { name: string } }).document;
+	const parentRecord = (parentRow.original as { record: EngineRecord<'products'> }).record;
+	const parentName = useRecordField(parentRecord, ({ payload }) => payload.name);
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const router = useRouter();
 	const t = useT();
@@ -82,9 +90,9 @@ export function VariationActions({
 	const handleDelete = React.useCallback(async () => {
 		await requestServerDelete(runtime.engine, {
 			collection: 'variations',
-			recordId: variation.uuid!,
+			recordId: record.uuid,
 		});
-	}, [runtime, variation.uuid]);
+	}, [runtime, record.uuid]);
 
 	if (readOnly) {
 		return null;
@@ -106,7 +114,7 @@ export function VariationActions({
 							onPress={() =>
 								router.push({
 									pathname: '/(app)/(drawer)/products/(modals)/edit/variation/[variationId]',
-									params: { variationId: variation.uuid! },
+									params: { variationId: record.uuid },
 								})
 							}
 						>
@@ -140,7 +148,7 @@ export function VariationActions({
 						<AlertDialogHeader>
 							<AlertDialogTitle>
 								{t('products.delete', {
-									product: `${parent.name} - ${variation.name}`,
+									product: `${parentName} - ${variation.name}`,
 								})}
 							</AlertDialogTitle>
 							<AlertDialogDescription>

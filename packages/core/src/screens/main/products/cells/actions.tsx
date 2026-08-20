@@ -22,7 +22,7 @@ import {
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
-import { useQueryRuntime } from '@wcpos/query';
+import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -38,9 +38,15 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 
 const syncLogger = getLogger(['wcpos', 'products', 'actions', 'sync']);
 
-export function Actions({ row }: CellContext<{ document: ProductDocument }, 'actions'>) {
+export function Actions({
+	row,
+}: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'actions'>) {
 	const router = useRouter();
-	const product = row.original.document;
+	const record = row.original.record;
+	const product = useRecordField(record, ({ payload }) => ({
+		id: payload.id,
+		name: payload.name,
+	}));
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
 	const runtime = useQueryRuntime();
@@ -76,9 +82,9 @@ export function Actions({ row }: CellContext<{ document: ProductDocument }, 'act
 	const handleDelete = React.useCallback(async () => {
 		await requestServerDelete(runtime.engine, {
 			collection: 'products',
-			recordId: product.uuid!,
+			recordId: record.uuid,
 		});
-	}, [runtime, product.uuid]);
+	}, [runtime, record.uuid]);
 
 	if (readOnly) {
 		return null;
@@ -101,7 +107,7 @@ export function Actions({ row }: CellContext<{ document: ProductDocument }, 'act
 							onPress={() => {
 								router.push({
 									pathname: '/(app)/(drawer)/products/(modals)/edit/product/[productId]',
-									params: { productId: product.uuid! },
+									params: { productId: record.uuid },
 								});
 							}}
 						>

@@ -1,6 +1,15 @@
-import type { ProductDocument, ProductVariationDocument } from '@wcpos/database';
+import type { ProductDocument } from '@wcpos/database';
+import type { EngineRecord } from '@wcpos/query';
 
 import { getDisabledVariationOptions, parseAttributes } from './utils';
+
+type VariationHit = { record: EngineRecord<'variations'> };
+
+function variationRecord(
+	payload: EngineRecord<'variations'>['payload']
+): EngineRecord<'variations'> {
+	return { payload } as unknown as EngineRecord<'variations'>;
+}
 
 /**
  * PARSEATTRIBUTES TEST SUITE
@@ -65,40 +74,52 @@ describe('parseAttributes', () => {
 	];
 
 	// Full set of 4 possible variations
-	const hits: { document: ProductVariationDocument }[] = [
+	const hits: VariationHit[] = [
 		{
-			document: {
+			record: variationRecord({
 				attributes: [
 					{ id: 1, name: 'Color', option: 'Red' },
 					{ id: 2, name: 'Size', option: 'Small' },
 				],
-			} as ProductVariationDocument,
+			}),
 		},
 		{
-			document: {
+			record: variationRecord({
 				attributes: [
 					{ id: 1, name: 'Color', option: 'Red' },
 					{ id: 2, name: 'Size', option: 'Large' },
 				],
-			} as ProductVariationDocument,
+			}),
 		},
 		{
-			document: {
+			record: variationRecord({
 				attributes: [
 					{ id: 1, name: 'Color', option: 'Blue' },
 					{ id: 2, name: 'Size', option: 'Small' },
 				],
-			} as ProductVariationDocument,
+			}),
 		},
 		{
-			document: {
+			record: variationRecord({
 				attributes: [
 					{ id: 1, name: 'Color', option: 'Blue' },
 					{ id: 2, name: 'Size', option: 'Large' },
 				],
-			} as ProductVariationDocument,
+			}),
 		},
 	];
+
+	it('reads variation attributes from record payloads', () => {
+		const recordHit: VariationHit = {
+			record: variationRecord({
+				attributes: [{ id: 1, name: 'Color', option: 'Red' }],
+			}),
+		};
+
+		const result = parseAttributes([attributes[0]], undefined, [recordHit]);
+
+		expect(result[0].optionCounts).toEqual({ Red: 1, Blue: 0 });
+	});
 
 	it('should calculate option counts and character counts correctly', () => {
 		const selectedAttributes = undefined;
@@ -138,12 +159,12 @@ describe('parseAttributes', () => {
 		// Only one hit, meaning only one viable option for each attribute
 		const singleHit = [
 			{
-				document: {
+				record: variationRecord({
 					attributes: [
 						{ id: 1, name: 'Color', option: 'Red' },
 						{ id: 2, name: 'Size', option: 'Small' },
 					],
-				} as ProductVariationDocument,
+				}),
 			},
 		];
 		const selectedAttributes = undefined;
@@ -190,22 +211,22 @@ describe('parseAttributes', () => {
 	it('should not calculate option counts if attribute is already selected', () => {
 		const selectedAttributes = [{ id: 1, name: 'Color', option: 'Red' }];
 
-		const hits: { document: ProductVariationDocument }[] = [
+		const hits: VariationHit[] = [
 			{
-				document: {
+				record: variationRecord({
 					attributes: [
 						{ id: 1, name: 'Color', option: 'Red' },
 						{ id: 2, name: 'Size', option: 'Small' },
 					],
-				} as ProductVariationDocument,
+				}),
 			},
 			{
-				document: {
+				record: variationRecord({
 					attributes: [
 						{ id: 1, name: 'Color', option: 'Red' },
 						{ id: 2, name: 'Size', option: 'Large' },
 					],
-				} as ProductVariationDocument,
+				}),
 			},
 		];
 
@@ -247,14 +268,14 @@ describe('parseAttributes', () => {
 			{ id: 2, name: 'Size', option: 'Small' },
 		];
 
-		const hits: { document: ProductVariationDocument }[] = [
+		const hits: VariationHit[] = [
 			{
-				document: {
+				record: variationRecord({
 					attributes: [
 						{ id: 1, name: 'Color', option: 'Red' },
 						{ id: 2, name: 'Size', option: 'Small' },
 					],
-				} as ProductVariationDocument,
+				}),
 			},
 		];
 
@@ -327,7 +348,7 @@ describe('parseAttributes', () => {
 
 	it('should return zero counts if there are no hits', () => {
 		const selectedAttributes = undefined;
-		const emptyHits: { document: ProductVariationDocument }[] = [];
+		const emptyHits: VariationHit[] = [];
 
 		const result = parseAttributes(attributes, selectedAttributes, emptyHits);
 
@@ -362,14 +383,14 @@ describe('parseAttributes', () => {
 	});
 
 	it('should handle missing variations', () => {
-		const hits: { document: ProductVariationDocument }[] = [
+		const hits: VariationHit[] = [
 			{
-				document: {
+				record: variationRecord({
 					attributes: [
 						{ id: 1, name: 'Color', option: 'Blue' },
 						{ id: 2, name: 'Size', option: 'Large' },
 					],
-				} as ProductVariationDocument,
+				}),
 			},
 		];
 		const selectedAttributes = [{ id: 1, name: 'Color', option: 'Blue' }];
@@ -427,14 +448,14 @@ describe('parseAttributes', () => {
 
 		const selectedAttributes = [{ id: 1, name: 'Color', option: 'Red' }];
 
-		const hits: { document: ProductVariationDocument }[] = [
+		const hits: VariationHit[] = [
 			{
-				document: {
+				record: variationRecord({
 					attributes: [
 						{ id: 1, name: 'Color', option: 'Red' },
 						{ id: 0, name: 'Logo', option: 'No' },
 					],
-				} as ProductVariationDocument,
+				}),
 			},
 		];
 
@@ -497,7 +518,7 @@ describe('parseAttributes', () => {
 		];
 		const hits = [
 			{
-				document: {
+				record: variationRecord({
 					attributes: [
 						{
 							id: 1,
@@ -508,10 +529,10 @@ describe('parseAttributes', () => {
 					id: 30,
 					name: 'Green',
 					parent_id: 15,
-				},
+				}),
 			},
 			{
-				document: {
+				record: variationRecord({
 					attributes: [
 						{
 							id: 1,
@@ -522,10 +543,10 @@ describe('parseAttributes', () => {
 					id: 29,
 					name: 'Red',
 					parent_id: 15,
-				},
+				}),
 			},
 			{
-				document: {
+				record: variationRecord({
 					attributes: [
 						{
 							id: 1,
@@ -536,9 +557,9 @@ describe('parseAttributes', () => {
 					id: 31,
 					name: 'Blue',
 					parent_id: 15,
-				},
+				}),
 			},
-		] as { document: ProductVariationDocument }[];
+		];
 		const result = parseAttributes(attributes, selectedAttributes, hits);
 		expect(result).toEqual([
 			{
@@ -592,12 +613,12 @@ describe('parseAttributes', () => {
 
 		const hits = ['Blue', 'Red', 'Yellow'].flatMap((colour) =>
 			['1L', '5L', '25L'].map((size) => ({
-				document: {
+				record: variationRecord({
 					attributes: [
 						{ name: 'Colour', option: colour },
 						{ name: 'Size', option: size },
 					],
-				} as ProductVariationDocument,
+				}),
 			}))
 		);
 
@@ -636,12 +657,12 @@ describe('parseAttributes', () => {
 	it('should preserve global attribute id matching when variation attribute names are absent', () => {
 		const namelessHits = ['Red', 'Blue'].flatMap((color) =>
 			['Small', 'Large'].map((size) => ({
-				document: {
+				record: variationRecord({
 					attributes: [
 						{ id: 1, option: color },
 						{ id: 2, option: size },
 					],
-				} as ProductVariationDocument,
+				}),
 			}))
 		);
 
@@ -673,19 +694,19 @@ describe('parseAttributes', () => {
 			},
 		];
 		const selectedAttributes = [{ id: 0, name: 'Colour', option: 'Blue' }];
-		const hits: { document: ProductVariationDocument }[] = [
+		const hits: VariationHit[] = [
 			{
-				document: {
+				record: variationRecord({
 					attributes: [{ id: 0, name: 'Colour', option: 'Blue' }],
-				} as ProductVariationDocument,
+				}),
 			},
 			{
-				document: {
+				record: variationRecord({
 					attributes: [
 						{ id: 0, name: 'Colour', option: 'Blue' },
 						{ id: 0, name: 'Size', option: '5L' },
 					],
-				} as ProductVariationDocument,
+				}),
 			},
 		];
 
@@ -711,16 +732,16 @@ describe('parseAttributes', () => {
 			const selectedAttributes = undefined;
 
 			// Two variations: Red (any size), Blue (any size)
-			const anyHits: { document: ProductVariationDocument }[] = [
+			const anyHits: VariationHit[] = [
 				{
-					document: {
+					record: variationRecord({
 						attributes: [{ id: 1, name: 'Color', option: 'Red' }],
-					} as ProductVariationDocument,
+					}),
 				},
 				{
-					document: {
+					record: variationRecord({
 						attributes: [{ id: 1, name: 'Color', option: 'Blue' }],
-					} as ProductVariationDocument,
+					}),
 				},
 			];
 
@@ -764,9 +785,9 @@ describe('parseAttributes', () => {
 			// Only one hit, meaning only one viable option for each attribute
 			const singleHit = [
 				{
-					document: {
+					record: variationRecord({
 						attributes: [{ id: 1, name: 'Color', option: 'Red' }],
-					} as ProductVariationDocument,
+					}),
 				},
 			];
 			const selectedAttributes = [{ id: 1, name: 'Color', option: 'Red' }];
@@ -809,11 +830,11 @@ describe('parseAttributes', () => {
 		it('should not calculate option counts if attribute is already selected', () => {
 			const selectedAttributes = [{ id: 1, name: 'Color', option: 'Red' }];
 
-			const anyhits: { document: ProductVariationDocument }[] = [
+			const anyhits: VariationHit[] = [
 				{
-					document: {
+					record: variationRecord({
 						attributes: [{ id: 1, name: 'Color', option: 'Red' }],
-					} as ProductVariationDocument,
+					}),
 				},
 			];
 
@@ -878,11 +899,11 @@ describe('parseAttributes', () => {
 			}
 
 			// Single variation with NO attributes specified (all are "any option")
-			const anyOptionHits: { document: ProductVariationDocument }[] = [
+			const anyOptionHits: VariationHit[] = [
 				{
-					document: {
+					record: variationRecord({
 						attributes: [], // Empty = "any option" for ALL attributes
-					} as unknown as ProductVariationDocument,
+					}),
 				},
 			];
 
@@ -911,11 +932,11 @@ describe('parseAttributes', () => {
 			}
 
 			// Single variation with all "any option"
-			const hits: { document: ProductVariationDocument }[] = [
+			const hits: VariationHit[] = [
 				{
-					document: {
+					record: variationRecord({
 						attributes: [],
-					} as unknown as ProductVariationDocument,
+					}),
 				},
 			];
 
@@ -944,21 +965,21 @@ describe('parseAttributes', () => {
 				});
 			}
 
-			const hits: { document: ProductVariationDocument }[] = [
+			const hits: VariationHit[] = [
 				{
-					document: {
+					record: variationRecord({
 						attributes: [{ id: 1, name: 'Attr1', option: 'O1' }],
-					} as ProductVariationDocument,
+					}),
 				},
 				{
-					document: {
+					record: variationRecord({
 						attributes: [{ id: 2, name: 'Attr2', option: 'O2' }],
-					} as ProductVariationDocument,
+					}),
 				},
 				{
-					document: {
+					record: variationRecord({
 						attributes: [{ id: 3, name: 'Attr3', option: 'O3' }],
-					} as ProductVariationDocument,
+					}),
 				},
 			];
 
@@ -984,9 +1005,9 @@ describe('getDisabledVariationOptions', () => {
 	const hit = (
 		color: string,
 		size: string,
-		stock: Partial<ProductVariationDocument>
-	): { document: ProductVariationDocument } => ({
-		document: {
+		stock: Partial<EngineRecord<'variations'>['payload']>
+	): VariationHit => ({
+		record: variationRecord({
 			attributes: [
 				{ id: 1, name: 'Color', option: color },
 				{ id: 2, name: 'Size', option: size },
@@ -995,7 +1016,7 @@ describe('getDisabledVariationOptions', () => {
 			stock_status: 'instock',
 			backorders: 'no',
 			...stock,
-		} as ProductVariationDocument,
+		}),
 	});
 	const hits = [
 		hit('Red', 'Small', { stock_status: 'outofstock' }),

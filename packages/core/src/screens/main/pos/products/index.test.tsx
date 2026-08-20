@@ -150,7 +150,7 @@ jest.mock('../../components/product/variable-product-row', () => ({
 jest.mock('../../components/product/variation-image', () => ({
 	ProductVariationImage: () => null,
 }));
-jest.mock('../../components/text-cell', () => ({ TextCell: () => null }));
+jest.mock('../../components/record-text-cell', () => ({ RecordTextCell: () => null }));
 
 function latestState(): QueryStateOf<'products'> {
 	const call = mockUseRelationalCollectionBinding.mock.calls.at(-1);

@@ -20,10 +20,9 @@ export function ProductVariationImage({
 	{ document: ProductVariationDocument; record: EngineRecord<'variations'> },
 	'image'
 >) {
-	const variation = row.original.document;
 	const image = useRecordField(row.original.record, (record) => record.payload.image);
 	const imageURL = get(image, 'src', undefined);
-	const { uri } = useImageAttachment(variation, imageURL ?? '');
+	const { uri } = useImageAttachment(row.original.record, imageURL ?? '');
 
 	return (
 		<>

@@ -43,7 +43,7 @@ import { UISettingsDialog } from '../../components/ui-settings';
 import { useTaxSettings } from '../../contexts/tax-rates';
 import { useUISettings } from '../../contexts/ui-settings';
 import initialSettings from '../../contexts/ui-settings/initial-settings.json';
-import { TextCell } from '../../components/text-cell';
+import { RecordTextCell } from '../../components/record-text-cell';
 import { COGS } from './cells/cogs';
 import {
 	QueryStateProvider,
@@ -144,7 +144,7 @@ function renderCell(columnKey: string, info: any) {
 		return <Renderer {...info} />;
 	}
 
-	return <TextCell {...info} />;
+	return <RecordTextCell {...info} />;
 }
 
 /**

@@ -20,10 +20,9 @@ export function VariableProductImage({
 	row,
 	table,
 }: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'image'>) {
-	const product = row.original.document;
 	const images = useRecordField(row.original.record, (record) => record.payload.images);
 	const imageURL = get(images, [0, 'src'], undefined);
-	const { uri } = useImageAttachment(product, imageURL ?? '');
+	const { uri } = useImageAttachment(row.original.record, imageURL ?? '');
 
 	/**
 	 * Use setRowExpanded from table meta to bypass TanStack's buggy updater function

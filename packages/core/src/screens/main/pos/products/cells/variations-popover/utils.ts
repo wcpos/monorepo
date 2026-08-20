@@ -1,4 +1,5 @@
-import type { ProductDocument, ProductVariationDocument } from '@wcpos/database';
+import type { ProductDocument } from '@wcpos/database';
+import type { EngineRecord } from '@wcpos/query';
 
 import { resolveStock } from '../../../../components/product/resolve-stock';
 
@@ -37,6 +38,7 @@ import { resolveStock } from '../../../../components/product/resolve-stock';
  */
 
 type SelectedAttribute = { id: number; name: string; option: string };
+type VariationHit = { record: EngineRecord<'variations'> };
 
 /**
  * WooCommerce global attributes have stable IDs, but custom/local attributes use id=0.
@@ -67,13 +69,13 @@ function isSameAttribute(
  * - The hit doesn't specify the attribute at all ("any option" = matches everything)
  */
 function hitMatchesOption(
-	hit: { document: ProductVariationDocument },
+	hit: VariationHit,
 	targetAttrId: number,
 	targetAttrName: string,
 	targetOption: string,
 	selectedAttributes: SelectedAttribute[] | undefined
 ): boolean {
-	const hitAttrs = hit.document.attributes || [];
+	const hitAttrs = hit.record.payload.attributes || [];
 
 	// Check if hit is compatible with the target option
 	const targetHitAttr = hitAttrs.find((a) => isSameAttribute(a, targetAttrId, targetAttrName));
@@ -108,7 +110,7 @@ function hitMatchesOption(
 export const parseAttributes = (
 	attributes: ProductDocument['attributes'],
 	selectedAttributes: SelectedAttribute[] | undefined,
-	hits: { document: ProductVariationDocument }[]
+	hits: VariationHit[]
 ) => {
 	return (attributes || [])
 		.filter((attribute) => attribute.variation)
@@ -163,7 +165,7 @@ export const parseAttributes = (
 export function getDisabledVariationOptions(
 	attribute: NonNullable<ProductDocument['attributes']>[number],
 	selectedAttributes: SelectedAttribute[] | undefined,
-	hits: { document: ProductVariationDocument }[],
+	hits: VariationHit[],
 	hideOutOfStock: boolean
 ): Record<string, boolean> {
 	const disabledOptions: Record<string, boolean> = {};
@@ -183,7 +185,8 @@ export function getDisabledVariationOptions(
 			hitMatchesOption(hit, targetAttrId, targetAttrName, option, partialSelection)
 		);
 		disabledOptions[option] =
-			matchingHits.length > 0 && matchingHits.every((hit) => !resolveStock(hit.document).sellable);
+			matchingHits.length > 0 &&
+			matchingHits.every((hit) => !resolveStock(hit.record.payload).sellable);
 	}
 
 	return disabledOptions;

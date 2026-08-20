@@ -49,13 +49,15 @@ export function Variations({
 }: VariationPopoverProps) {
 	const result = useObservableSuspense(binding.resource);
 	const allVariationsResult = useObservableSuspense(allVariationsResource ?? binding.resource);
+	const hits = result.hits as { record: EngineRecord<'variations'> }[];
+	const allVariationHits = allVariationsResult.hits as { record: EngineRecord<'variations'> }[];
 	const loading = useObservableEagerState(binding.active$);
 	const selectedAttributes = useQueryState<
 		'variations',
 		import('../../../../../../query').VariationMatch[]
 	>((state) => state.filters.attributeMatches);
 	const actions = useQueryStateActions<'variations'>();
-	const selectedVariation = result.count === 1 && result.hits[0].record;
+	const selectedVariation = result.count === 1 && hits[0].record;
 	const parentAttributes = useRecordField(parent, (record) => record.payload.attributes);
 	const t = useT();
 
@@ -63,8 +65,8 @@ export function Variations({
 	 *
 	 */
 	const attributeOptions = React.useMemo(
-		() => parseAttributes(parentAttributes, selectedAttributes, result.hits),
-		[parentAttributes, selectedAttributes, result.hits]
+		() => parseAttributes(parentAttributes, selectedAttributes, hits),
+		[parentAttributes, selectedAttributes, hits]
 	);
 
 	/**
@@ -113,7 +115,7 @@ export function Variations({
 				const disabledOptions = getDisabledVariationOptions(
 					attribute,
 					selectedAttributes,
-					allVariationsResult.hits,
+					allVariationHits,
 					hideOutOfStock
 				);
 				return (

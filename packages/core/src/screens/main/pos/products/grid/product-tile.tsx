@@ -11,8 +11,6 @@ import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useAddProduct } from '../../hooks/use-add-product';
 import { TileImage } from './tile-image';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
-
 interface GridFields {
 	name: boolean;
 	price: boolean;
@@ -26,13 +24,12 @@ interface GridFields {
 }
 
 interface ProductTileProps {
-	product: ProductDocument;
 	record: EngineRecord<'products'>;
 	gridFields: GridFields;
 }
 
 /** Renders a product tile with the fields enabled for the product grid. */
-export function ProductTile({ product, record, gridFields }: ProductTileProps) {
+export function ProductTile({ record, gridFields }: ProductTileProps) {
 	const t = useT();
 	const { addProduct } = useAddProduct();
 	const { format } = useCurrencyFormat();
@@ -73,7 +70,7 @@ export function ProductTile({ product, record, gridFields }: ProductTileProps) {
 			testID="product-tile"
 		>
 			<View className="aspect-square" testID={`product-tile-${record.remoteId ?? record.uuid}`}>
-				<TileImage product={product} record={record} />
+				<TileImage record={record} />
 			</View>
 			{hasAnyField && (
 				<VStack className="p-2" space="xs">
