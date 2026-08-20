@@ -10,7 +10,7 @@ import {
 	ComboboxTrigger,
 } from '@wcpos/components/combobox';
 import { Suspense } from '@wcpos/components/suspense';
-import type { CustomerDocument } from '@wcpos/database';
+import type { EngineRecord } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
 import { useQueryState, useQueryStateActions, useSearchSelect } from '../../../../../query';
@@ -19,12 +19,12 @@ import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
 import { CustomerList } from '../../customer-select';
 import { isIdOnlyCustomerEntity } from './customer-filter-utils';
 
+import type { CustomerData } from '../../../hooks/use-customer-name-format/helpers';
+
 interface CashierPillProps {
-	resource: ObservableResource<CustomerDocument>;
+	resource: ObservableResource<EngineRecord<'customers'> | null>;
 	onMissing?: () => void;
 }
-
-type CashierWithLoadingMarker = CustomerDocument & { __isLoading?: boolean };
 
 /**
  * Cashier Search
@@ -59,10 +59,9 @@ export function CashierPill({ resource, onMissing }: CashierPillProps) {
 	);
 	const actions = useQueryStateActions<'orders'>();
 	const resolvedCashier = useObservableSuspense(resource);
-	let cashier = resolvedCashier;
+	let cashier = resolvedCashier?.payload;
 	const { format } = useCustomerNameFormat();
 	const t = useT();
-	const isCashierLoading = (cashier as CashierWithLoadingMarker | null)?.__isLoading;
 	const isActive = cashierID !== null && cashierID !== undefined;
 
 	React.useEffect(() => {
@@ -74,17 +73,17 @@ export function CashierPill({ resource, onMissing }: CashierPillProps) {
 	 * @FIXME - if the customers are cleared, it's possible that the cashier will be null
 	 */
 	if (!cashier && isActive) {
-		cashier = { id: cashierID } as CustomerDocument;
+		cashier = { id: parseRemoteId(cashierID) };
 	}
 	const cashierEntity = isActive ? cashier : null;
-	const isLoading = isActive && (!!isCashierLoading || isIdOnlyCustomerEntity(cashierEntity));
+	const isLoading = isActive && isIdOnlyCustomerEntity(cashierEntity);
 
 	const handleRemove = React.useCallback(() => {
 		actions.clearFilter('cashier');
 	}, [actions]);
 
 	return (
-		<Combobox
+		<Combobox<CustomerData>
 			onValueChange={(option) => {
 				if (!option) return;
 				const cashierID = parseRemoteId(option.value);

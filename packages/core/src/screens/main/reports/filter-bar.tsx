@@ -19,7 +19,7 @@ import { CustomerPill } from '../components/order/filter-bar/customer-pill';
 import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
 import { StatusPill } from '../components/order/filter-bar/status-pill';
 import { StorePill } from '../components/order/filter-bar/store-pill';
-import { useEngineDocumentByWooId } from '../hooks/use-engine-document';
+import { useEngineRecordByWooId } from '../hooks/use-engine-document';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
 
 /**
@@ -35,14 +35,8 @@ export function FilterBar() {
 	const cashierID = cashierFilter === undefined ? undefined : Number(cashierFilter);
 	const actions = useQueryStateActions<'orders'>();
 	const guestCustomer = useGuestCustomer();
-	const customerResource = useEngineDocumentByWooId<import('@wcpos/database').CustomerDocument>(
-		'customers',
-		customerID ?? 0
-	);
-	const cashierResource = useEngineDocumentByWooId<import('@wcpos/database').CustomerDocument>(
-		'customers',
-		cashierID ?? 0
-	);
+	const customerResource = useEngineRecordByWooId('customers', customerID ?? 0);
+	const cashierResource = useEngineRecordByWooId('customers', cashierID ?? 0);
 	const { wpCredentials } = useAppState();
 	const runtime = useQueryRuntime();
 
@@ -79,7 +73,7 @@ export function FilterBar() {
 					<Suspense>
 						<CustomerPill
 							resource={customerResource}
-							guestCustomer={guestCustomer as unknown as import('@wcpos/database').CustomerDocument}
+							guestCustomer={guestCustomer}
 							onMissing={refreshCustomer}
 						/>
 					</Suspense>

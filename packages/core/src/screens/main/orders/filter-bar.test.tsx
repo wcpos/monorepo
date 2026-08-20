@@ -14,7 +14,7 @@ const mockManager = { engine: {} };
 const mockForceRefresh = jest.fn(
 	async (_manager: unknown, _wooId: number, _role: string) => undefined
 );
-const mockUseEngineDocumentByWooId = jest.fn(
+const mockUseEngineRecordByWooId = jest.fn(
 	(_collection: string, _wooId: number) => new ObservableResource(of(null as unknown as object))
 );
 
@@ -24,8 +24,8 @@ jest.mock('./force-refresh-filter-customer', () => ({
 		mockForceRefresh(manager, wooId, role),
 }));
 jest.mock('../hooks/use-engine-document', () => ({
-	useEngineDocumentByWooId: (collection: string, wooId: number) =>
-		mockUseEngineDocumentByWooId(collection, wooId),
+	useEngineRecordByWooId: (collection: string, wooId: number) =>
+		mockUseEngineRecordByWooId(collection, wooId),
 }));
 jest.mock('../../../contexts/app-state', () => ({
 	useAppState: () => ({ wpCredentials: { populate$: () => of([]) } }),
@@ -68,8 +68,8 @@ describe('orders FilterBar selected-label bindings', () => {
 			</QueryStateProvider>
 		);
 
-		expect(mockUseEngineDocumentByWooId).toHaveBeenNthCalledWith(1, 'customers', 42);
-		expect(mockUseEngineDocumentByWooId).toHaveBeenNthCalledWith(2, 'customers', 7);
+		expect(mockUseEngineRecordByWooId).toHaveBeenNthCalledWith(1, 'customers', 42);
+		expect(mockUseEngineRecordByWooId).toHaveBeenNthCalledWith(2, 'customers', 7);
 
 		fireEvent.click(screen.getByTestId('missing-customer'));
 		fireEvent.click(screen.getByTestId('missing-cashier'));

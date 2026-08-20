@@ -18,12 +18,14 @@ import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { CustomerDocument } from '@wcpos/database';
+import type { EngineRecord } from '@wcpos/query';
 import { GUEST_CUSTOMER_ID, isGuestCustomer } from '@wcpos/sync-core';
 
 import { useT } from '../../../contexts/translations';
 import { useSearchSelect } from '../../../query';
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format/use-customer-name-format';
+
+import type { CustomerData } from '../hooks/use-customer-name-format/helpers';
 
 export function CustomerSelect({
 	withGuest,
@@ -80,7 +82,13 @@ export function CustomerSearch({ withGuest = false }: { withGuest?: boolean }) {
 
 interface CustomerHit {
 	id: string;
-	document: CustomerDocument;
+	record: EngineRecord<'customers'>;
+}
+
+interface CustomerListItem {
+	id: string;
+	recordUUID: string;
+	customer: CustomerData;
 }
 
 type CustomerListProps = {
@@ -95,30 +103,39 @@ export function CustomerList({ resource, withGuest }: CustomerListProps) {
 	/**
 	 *
 	 */
-	const data = React.useMemo(
-		() =>
-			withGuest
-				? [
-						{ id: 'guest', document: { id: GUEST_CUSTOMER_ID } as CustomerDocument },
-						...result.hits.filter((hit: CustomerHit) => hit.id !== 'guest'),
-					]
-				: result.hits,
-		[result.hits, withGuest]
-	);
+	const data = React.useMemo(() => {
+		const customers = result.hits
+			.filter((hit: CustomerHit) => hit.id !== 'guest')
+			.map(({ id, record }): CustomerListItem => ({
+				id,
+				recordUUID: record.uuid,
+				customer: record.payload,
+			}));
+		return withGuest
+			? [
+					{
+						id: 'guest',
+						recordUUID: 'guest',
+						customer: { id: GUEST_CUSTOMER_ID },
+					},
+					...customers,
+				]
+			: customers;
+	}, [result.hits, withGuest]);
 
 	return (
 		<ComboboxList
 			data={data as unknown as import('@wcpos/components/combobox').Option[]}
 			shouldFilter={false}
 			renderItem={({ item }) => {
-				const hit = item as unknown as CustomerHit;
+				const hit = item as unknown as CustomerListItem;
 				return (
 					<ComboboxItem
-						value={String(hit.document.id)}
-						label={String(hit.document.id)}
-						item={hit.document}
+						value={String(hit.customer.id)}
+						label={String(hit.customer.id)}
+						item={hit.customer}
 					>
-						<CustomerSelectItem customer={hit.document} />
+						<CustomerSelectItem customer={hit.customer} recyclingKey={hit.recordUUID} />
 					</ComboboxItem>
 				);
 			}}
@@ -128,7 +145,13 @@ export function CustomerList({ resource, withGuest }: CustomerListProps) {
 	);
 }
 
-function CustomerSelectItem({ customer }: { customer: CustomerDocument }) {
+function CustomerSelectItem({
+	customer,
+	recyclingKey,
+}: {
+	customer: CustomerData;
+	recyclingKey: string;
+}) {
 	const t = useT();
 	const { format } = useCustomerNameFormat();
 
@@ -145,7 +168,7 @@ function CustomerSelectItem({ customer }: { customer: CustomerDocument }) {
 	} else {
 		return (
 			<HStack className="items-start">
-				<Avatar source={customer.avatar_url} recyclingKey={customer.uuid} />
+				<Avatar source={customer.avatar_url} recyclingKey={recyclingKey} />
 				<VStack space="xs">
 					<Text>{format(customer)}</Text>
 

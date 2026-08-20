@@ -4,7 +4,7 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import { Combobox, ComboboxContent, ComboboxTrigger } from '@wcpos/components/combobox';
-import type { CustomerDocument } from '@wcpos/database';
+import type { EngineRecord } from '@wcpos/query';
 import { isGuestCustomer } from '@wcpos/sync-core';
 
 import { useT } from '../../../../../contexts/translations';
@@ -13,13 +13,13 @@ import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
 import { CustomerSearch } from '../../customer-select';
 import { isIdOnlyCustomerEntity, resolveCustomerPillEntity } from './customer-filter-utils';
 
+import type { CustomerData } from '../../../hooks/use-customer-name-format/helpers';
+
 interface CustomerPillProps {
-	resource: ObservableResource<CustomerDocument>;
-	guestCustomer: CustomerDocument;
+	resource: ObservableResource<EngineRecord<'customers'> | null>;
+	guestCustomer: CustomerData;
 	onMissing?: () => void;
 }
-
-type CustomerWithLoadingMarker = CustomerDocument & { __isLoading?: boolean };
 
 /**
  *
@@ -30,12 +30,11 @@ export function CustomerPill({ resource, guestCustomer, onMissing }: CustomerPil
 	);
 	const actions = useQueryStateActions<'orders'>();
 	const resolvedCustomer = useObservableSuspense(resource);
-	let customer = isGuestCustomer(customerID) ? guestCustomer : resolvedCustomer;
+	let customer = isGuestCustomer(customerID) ? guestCustomer : resolvedCustomer?.payload;
 	const { format } = useCustomerNameFormat();
 	const t = useT();
-	const isCustomerLoading = (customer as CustomerWithLoadingMarker | null)?.__isLoading;
 	const isActive = customerID !== null && customerID !== undefined;
-	const [selectedCustomer, setSelectedCustomer] = React.useState<CustomerDocument | null>(null);
+	const [selectedCustomer, setSelectedCustomer] = React.useState<CustomerData | null>(null);
 
 	React.useEffect(() => {
 		// Missing labels escalate through the engine demand seam after the resident lookup settles.
@@ -46,7 +45,7 @@ export function CustomerPill({ resource, guestCustomer, onMissing }: CustomerPil
 	 * @FIXME - if the customers are cleared, it's possible that the customer will be null
 	 */
 	if (!customer && isActive) {
-		customer = { id: customerID } as CustomerDocument;
+		customer = { id: customerID };
 	}
 
 	// Reconcile the local selection with the active customerID. Implemented as the
@@ -72,13 +71,13 @@ export function CustomerPill({ resource, guestCustomer, onMissing }: CustomerPil
 			}),
 		[customer, customerID, isActive, selectedCustomer]
 	);
-	const isLoading = isActive && (!!isCustomerLoading || isIdOnlyCustomerEntity(customerEntity));
+	const isLoading = isActive && isIdOnlyCustomerEntity(customerEntity);
 
 	/**
 	 *
 	 */
 	return (
-		<Combobox<CustomerDocument>
+		<Combobox<CustomerData>
 			onValueChange={(option) => {
 				if (!option) return;
 				setSelectedCustomer(option.item ?? null);

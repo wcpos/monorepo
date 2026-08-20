@@ -13,18 +13,10 @@ import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useGuestCustomer } from '../../hooks/use-guest-customer';
 import { useCurrentOrder } from '../contexts/current-order';
 
+import type { CustomerData } from '../../hooks/use-customer-name-format/helpers';
+
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
-type Customer =
-	| CustomerDocument
-	| {
-			id: number;
-			billing?: object;
-			shipping?: object;
-			first_name?: string;
-			last_name?: string;
-			email?: string;
-			username?: string;
-	  };
+type Customer = CustomerDocument | CustomerData;
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
@@ -56,8 +48,9 @@ export const useAddCustomer = () => {
 	const addCustomer = React.useCallback(
 		async (customer: Customer) => {
 			// if RxDocument, get plain object
-			let data: Record<string, unknown> & { id?: number; billing?: object; shipping?: object } =
-				isRxDocument(customer) ? (customer as CustomerDocument).toMutableJSON() : customer;
+			let data: CustomerData = isRxDocument(customer)
+				? (customer as CustomerDocument).toMutableJSON()
+				: customer;
 
 			// a guest id with no billing or shipping means "use the guest customer defaults"
 			const isGuest = isGuestCustomer(data.id) && !data.billing && !data.shipping;
@@ -66,9 +59,7 @@ export const useAddCustomer = () => {
 			// Get customer display name
 			const customerName = isGuestCustomer(data.id)
 				? t('common.guest')
-				: `${(data as Record<string, unknown>).first_name || ''} ${(data as Record<string, unknown>).last_name || ''}`.trim() ||
-					(data as Record<string, unknown>).email ||
-					`#${data.id}`;
+				: `${data.first_name || ''} ${data.last_name || ''}`.trim() || data.email || `#${data.id}`;
 
 			const result = await localPatch({
 				document: currentOrder,
@@ -82,7 +73,7 @@ export const useAddCustomer = () => {
 			orderLogger.success(t('pos.customer_assigned', { customerName }), {
 				context: {
 					customerId: data.id,
-					customerEmail: (data as Record<string, unknown>).email,
+					customerEmail: data.email,
 					isGuest,
 				},
 			});

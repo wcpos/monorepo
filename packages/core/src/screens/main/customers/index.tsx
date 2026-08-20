@@ -11,6 +11,7 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent } from '@wcpos/components/tooltip';
+import type { EngineRecord } from '@wcpos/query';
 
 import { Actions } from './cells/actions';
 import { Address } from './cells/address';
@@ -22,8 +23,8 @@ import { useProAccess } from '../contexts/pro-access';
 import { CapabilityTooltipTrigger } from '../components/capability-tooltip';
 import { DataTable } from '../components/data-table';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
-import { TextCell } from '../components/text-cell';
-import { DateCell } from '../components/date';
+import { RecordTextCell } from '../components/record-text-cell';
+import { RecordDateCell } from '../components/record-date-cell';
 import { UISettingsDialog } from '../components/ui-settings';
 import { QuerySearchInput } from '../components/query-search-input';
 import { useUISettings } from '../contexts/ui-settings';
@@ -39,6 +40,7 @@ import type { QueryStateActions, QueryStateOf } from '../../../query';
 import type { SortFieldsByCollection } from '../../../query/query-state-types';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
+type CustomerRow = { document: CustomerDocument; record: EngineRecord<'customers'> };
 
 const cells = {
 	avatar_url: Avatar,
@@ -46,8 +48,8 @@ const cells = {
 	shipping: Address,
 	actions: Actions,
 	email: CustomerEmail,
-	date_created_gmt: DateCell,
-	date_modified_gmt: DateCell,
+	date_created_gmt: RecordDateCell,
+	date_modified_gmt: RecordDateCell,
 };
 
 const CUSTOMERS_PAGE_SIZE = 10;
@@ -85,7 +87,7 @@ function renderCell(columnKey: string, info: Record<string, unknown>) {
 		return <Renderer {...(info as any)} />;
 	}
 
-	return <TextCell {...(info as any)} />;
+	return <RecordTextCell {...(info as any)} />;
 }
 
 function CustomersScreenContent() {
@@ -153,7 +155,7 @@ function CustomersScreenContent() {
 				<CardContent className="border-border flex-1 border-t p-0">
 					<ErrorBoundary>
 						<Suspense fallback={<DataTableSkeleton id="customers" />}>
-							<DataTable<CustomerDocument>
+							<DataTable<CustomerRow>
 								id="customers"
 								collectionName="customers"
 								resource={binding.resource}

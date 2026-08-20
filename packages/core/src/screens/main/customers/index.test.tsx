@@ -122,8 +122,8 @@ jest.mock('./cells/actions', () => ({ Actions: () => null }));
 jest.mock('./cells/address', () => ({ Address: () => null }));
 jest.mock('./cells/avatar', () => ({ Avatar: () => null }));
 jest.mock('./cells/email', () => ({ CustomerEmail: () => null }));
-jest.mock('../components/text-cell', () => ({ TextCell: () => null }));
-jest.mock('../components/date', () => ({ DateCell: () => null }));
+jest.mock('../components/record-text-cell', () => ({ RecordTextCell: () => null }));
+jest.mock('../components/record-date-cell', () => ({ RecordDateCell: () => null }));
 
 function latestState(): QueryStateOf<'customers'> {
 	const call = mockUseCollectionBinding.mock.calls.at(-1);

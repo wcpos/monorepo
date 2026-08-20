@@ -1,10 +1,11 @@
-export interface JSON {
+export interface CustomerData {
 	id?: number;
 	customer_id?: number;
 	first_name?: string;
 	last_name?: string;
 	username?: string;
 	email?: string;
+	avatar_url?: string;
 	billing?: {
 		first_name?: string;
 		last_name?: string;
@@ -30,7 +31,7 @@ function extractFullName(firstName: string, lastName: string): string {
 	return '';
 }
 
-export function extractNameFromJSON(json: JSON) {
+export function extractNameFromJSON(json: CustomerData) {
 	const firstName = getTrimmedValue(json.first_name);
 	const lastName = getTrimmedValue(json.last_name);
 

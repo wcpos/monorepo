@@ -1,24 +1,20 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
-import { of } from 'rxjs';
+import { map } from 'rxjs/operators';
 
-import { useQueryRuntime } from '@wcpos/query';
+import type { EngineRecord } from '@wcpos/query';
 
-import { engineDocumentByWooId$ } from './use-engine-document';
+import { useEngineRecordByWooId } from './use-engine-document';
 import { parseRemoteId } from '../../../utils/parse-remote-id';
 import { useCustomerNameFormat } from './use-customer-name-format';
 
 export { parseRemoteId } from '../../../utils/parse-remote-id';
 
-type CustomerDocument = import('@wcpos/database').CustomerDocument;
-
-type CashierDocument = CustomerDocument | null | undefined;
-
 interface CashierLabel {
 	id: number | undefined;
 	label: string;
-	document: CustomerDocument | undefined;
+	record: EngineRecord<'customers'> | undefined;
 }
 
 /**
@@ -29,25 +25,21 @@ interface CashierLabel {
  */
 export function useCashierLabel(value: unknown): CashierLabel {
 	const id = parseRemoteId(value);
-	const runtime = useQueryRuntime();
 	const { format } = useCustomerNameFormat();
-
-	const cashier$ = React.useMemo(
-		() =>
-			id === undefined
-				? of(undefined)
-				: engineDocumentByWooId$<CustomerDocument>(runtime, 'customers', id),
-		[id, runtime]
+	const resource = useEngineRecordByWooId('customers', id ?? 0);
+	const record$ = React.useMemo(
+		() => resource.valueRef$$.pipe(map((value) => value?.current)),
+		[resource]
 	);
-	const cashier = useObservableState(cashier$, undefined) as CashierDocument;
+	const record = useObservableState(record$, undefined);
 
 	if (id === undefined) {
-		return { id, label: '', document: undefined };
+		return { id, label: '', record: undefined };
 	}
 
-	if (cashier) {
-		return { id, label: format(cashier), document: cashier };
+	if (record) {
+		return { id, label: format(record.payload), record };
 	}
 
-	return { id, label: format({ id }), document: undefined };
+	return { id, label: format({ id }), record: undefined };
 }

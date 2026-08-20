@@ -1,24 +1,19 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { FormatAddress } from '@wcpos/components/format';
 import type { FormatAddressProps } from '@wcpos/components/format/address';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
-
-type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
 type AddressData = FormatAddressProps['address'];
 
 export function Address({
 	row,
 	column,
-}: CellContext<{ document: CustomerDocument }, 'billing' | 'shipping'>) {
-	const customer = row.original.document;
+}: CellContext<{ record: EngineRecord<'customers'> }, 'billing' | 'shipping'>) {
 	const key = column.id as 'billing' | 'shipping';
-	const obs$ = key === 'billing' ? customer.billing$ : customer.shipping$;
-	// @ts-expect-error: RxDB observable type uses a different Observable brand than observable-hooks expects
-	const address = useObservableEagerState(obs$) as AddressData | undefined;
+	const address = useRecordField(row.original.record, ({ payload }) => payload[key]) as
+		AddressData | undefined;
 
 	return <FormatAddress address={address ?? {}} showName={true} />;
 }

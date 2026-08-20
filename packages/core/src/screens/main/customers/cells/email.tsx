@@ -1,19 +1,16 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-import { of } from 'rxjs';
-
 import { Text } from '@wcpos/components/text';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
-
-type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
 /**
  *
  */
-export function CustomerEmail({ row }: CellContext<{ document: CustomerDocument }, 'email'>) {
-	const customer = row.original.document;
-	const email = useObservableEagerState(customer.email$ ?? of(undefined as string | undefined));
+export function CustomerEmail({
+	row,
+}: CellContext<{ record: EngineRecord<'customers'> }, 'email'>) {
+	const email = useRecordField(row.original.record, ({ payload }) => payload.email);
 
 	return <Text numberOfLines={1}>{email}</Text>;
 }
