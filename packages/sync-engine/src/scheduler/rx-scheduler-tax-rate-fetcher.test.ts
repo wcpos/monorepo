@@ -104,10 +104,9 @@ describe('createTaxRateSchedulerFetcher', () => {
 			nowMs: 10_000,
 			freshForMs: 300_000,
 		});
-		expect(cacheQueryTotals.mock.calls).toEqual([
-			[{ queryKeys: ['census:taxRates'], totalMatchingRecords: 3 }],
-			[{ queryKeys: ['census:taxRates'], totalMatchingRecords: 1 }],
-		]);
+		// The greedy pull no longer writes the census — the query-total lane's
+		// probe is the single writer (#1400).
+		expect(cacheQueryTotals).not.toHaveBeenCalled();
 		expect(first).toEqual({
 			taskId: 'taxRates:all:greedy',
 			documentCount: 2,

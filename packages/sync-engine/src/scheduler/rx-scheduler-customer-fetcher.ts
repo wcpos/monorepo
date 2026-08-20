@@ -20,7 +20,6 @@ import {
 	parseCustomerBrowseWindowDescriptor,
 } from './customer-browse-window-descriptor';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
-import { censusQueryKey } from './census';
 import { queryTotalFromResponse } from './query-total-requests';
 import {
 	type CollectionSchedulerCoverageRepository,
@@ -212,8 +211,12 @@ async function fetchCustomerBrowseWindow(
 		exhausted && payloads.length <= limit
 	);
 	if (input.cacheQueryTotals && totalRecords !== null) {
+		// Window total only — census keys have exactly ONE writer, the
+		// query-total lane's probe (#1400). This endpoint happens to match the
+		// customers census route today, but the invariant is uniform so no
+		// future route change can reopen the two-writer race.
 		await input.cacheQueryTotals({
-			queryKeys: [task.queryKey, censusQueryKey('customers')],
+			queryKeys: [task.queryKey],
 			totalMatchingRecords: totalRecords,
 		});
 	}

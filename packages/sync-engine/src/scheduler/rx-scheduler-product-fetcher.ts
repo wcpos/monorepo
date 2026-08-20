@@ -42,11 +42,9 @@ import {
 	PRODUCT_BROWSE_WINDOW_ORDERBY,
 	PRODUCT_BROWSE_WINDOW_STEP,
 	type ProductBrowseWindowDescriptor,
-	productBrowseWindowFilterPart,
 	productBrowseWindowPredecessorQueryKey,
 	productBrowseWindowQueryParams,
 } from './product-browse-window-descriptor';
-import { censusQueryKey } from './census';
 import { type CacheQueryTotals, queryTotalFromResponse } from './query-total-requests';
 import {
 	assertReturnedRequestedIds,
@@ -591,11 +589,13 @@ async function tryProductBrowseWindowWalk(
 			(serverExhausted && covered + windowPayloads.length >= totalMatchingRecords)) &&
 		input.cacheQueryTotals
 	) {
+		// The walk records ONLY its own browse total. `census:products` has one
+		// writer — the query-total lane's probe against the census route — so the
+		// health page and the serve-local gate never oscillate between two
+		// endpoints' populations (#1400: this pull counts wcpos/v2, the census
+		// counts wc/v3).
 		await input.cacheQueryTotals({
-			queryKeys: [
-				task.queryKey,
-				...(productBrowseWindowFilterPart(descriptor) === '' ? [censusQueryKey('products')] : []),
-			],
+			queryKeys: [task.queryKey],
 			totalMatchingRecords,
 		});
 	}

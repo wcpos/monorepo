@@ -48,13 +48,16 @@ const cat = (id: number): WooReferencePayload => ({
 
 describe('createReferenceCollectionFetcher set-difference deletion', () => {
 	it.each([
-		[CATEGORY_REFERENCE_CONFIG, 'census:categories'],
-		[BRAND_REFERENCE_CONFIG, 'census:brands'],
-		[TAG_REFERENCE_CONFIG, 'census:tags'],
-		[COUPON_REFERENCE_CONFIG, 'census:coupons'],
+		[CATEGORY_REFERENCE_CONFIG],
+		[BRAND_REFERENCE_CONFIG],
+		[TAG_REFERENCE_CONFIG],
+		[COUPON_REFERENCE_CONFIG],
 	] as const)(
-		'caches the %s response total under %s',
-		async (config: ReferenceCollectionConfig, censusKey) => {
+		'%s pull never writes the census — the query-total probe is its single writer (#1400)',
+		async (config: ReferenceCollectionConfig) => {
+			// The greedy pull counts wcpos/v2 while the census probes wc/v3; a
+			// self-write here would let two endpoints' populations race for the
+			// same cache key.
 			const cacheQueryTotals = vi.fn(async () => undefined);
 			const schedulerFetcher = createReferenceCollectionFetcher(config, {
 				baseUrl: 'http://x/v1',
@@ -73,10 +76,7 @@ describe('createReferenceCollectionFetcher set-difference deletion', () => {
 				queryKey: config.queryKey,
 			});
 
-			expect(cacheQueryTotals).toHaveBeenCalledWith({
-				queryKeys: [censusKey],
-				totalMatchingRecords: 12,
-			});
+			expect(cacheQueryTotals).not.toHaveBeenCalled();
 		}
 	);
 

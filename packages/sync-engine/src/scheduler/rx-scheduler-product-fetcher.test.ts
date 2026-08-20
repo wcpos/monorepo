@@ -348,11 +348,14 @@ describe('createProductsSchedulerFetcher', () => {
 
 	it.each([
 		{
+			// Even an unfiltered walk records ONLY its own browse total —
+			// census:products is probe-owned (#1400: the walk counts wcpos/v2,
+			// the census counts wc/v3).
 			name: 'unfiltered browse',
 			queryKey: 'products:browse-window:limit=100',
 			total: '42',
 			brands: undefined,
-			queryKeys: ['products:browse-window:limit=100', 'census:products'],
+			queryKeys: ['products:browse-window:limit=100'],
 		},
 		{
 			name: 'filtered browse',

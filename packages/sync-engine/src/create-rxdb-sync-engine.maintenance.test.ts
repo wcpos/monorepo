@@ -888,7 +888,7 @@ describe('maintenance lanes through the public handle', () => {
 		await engine.dispose();
 	});
 
-	it('reuses scheduler response totals instead of probing observed census collections', async () => {
+	it('probes every census collection even after a drain observed their totals (#1400)', async () => {
 		const fetchWooQueryTotal = vi.fn(async (_input: { request: { queryKey: string } }) => 40);
 		const engine = engineWith({
 			fetcher: vi.fn(async (url: string) => {
@@ -910,6 +910,9 @@ describe('maintenance lanes through the public handle', () => {
 		await engine.sync('scheduler-drain');
 		await engine.sync('query-total-retry');
 
+		// The census probe is the SINGLE writer of census keys (#1400): scheduler
+		// drains no longer stand in for it, so every census collection is probed
+		// even right after a drain observed those endpoints' totals.
 		const requested = fetchWooQueryTotal.mock.calls.map(([input]) => input.request.queryKey).sort();
 		expect(requested).toEqual([
 			'census:brands',
@@ -917,11 +920,11 @@ describe('maintenance lanes through the public handle', () => {
 			'census:coupons',
 			'census:customers',
 			'census:orders',
+			'census:products',
 			'census:tags',
+			'census:taxRates',
 			'census:variations',
 		]);
-		expect(requested).not.toContain('census:products');
-		expect(requested).not.toContain('census:taxRates');
 		await engine.dispose();
 	});
 
