@@ -20,6 +20,14 @@ describe('displayStockStatus', () => {
 			expected: 'outofstock',
 		},
 		{
+			label: 'a missing backorders field sells out at zero, like the online store',
+			// WooCommerce defaults backorders to 'no' and allows only 'yes'/'notify'
+			// (backorders_allowed, abstract-wc-product.php) — a partial payload
+			// must not invent a backorder.
+			input: { manage_stock: true, stock_quantity: 0, stock_status: 'instock' },
+			expected: 'outofstock',
+		},
+		{
 			label: 'derives onbackorder when backorders are allowed at zero stock',
 			input: {
 				manage_stock: true,

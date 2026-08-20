@@ -83,6 +83,20 @@ describe('evaluateStockForCartChange', () => {
 		).toEqual({ allowed: false, warning: null, available: 0 });
 	});
 
+	it('blocks a managed product at zero when the backorders field is missing', () => {
+		// WooCommerce defaults backorders to 'no' and allows only 'yes'/'notify'
+		// — the cart guard must agree with the badge and scan gate, never
+		// fail-open on a partial payload (owner ruling 2026-08-20, #1403).
+		const { backorders: _omitted, ...withoutBackorders } = managedProduct;
+		expect(
+			evaluateStockForCartChange({
+				product: { ...withoutBackorders, stock_quantity: 0 },
+				existingCartQuantity: 0,
+				requestedQuantity: 1,
+			})
+		).toEqual({ allowed: false, warning: null, available: 0 });
+	});
+
 	it('allows backorders silently', () => {
 		expect(
 			evaluateStockForCartChange({

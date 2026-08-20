@@ -1,5 +1,7 @@
 import { wooMetaCarrier } from '@wcpos/sync-core';
 
+import { backordersAllowed } from '../../components/product/resolve-stock';
+
 export interface StockFields {
 	manage_stock?: boolean | 'parent';
 	stock_quantity?: number | null;
@@ -100,7 +102,10 @@ export function evaluateStockForCartChange({
 		if (!exceedsAvailable) {
 			return { allowed: true, warning: null, available };
 		}
-		if (owner.backorders === 'no') {
+		// The shared WooCommerce allow-list — a missing/unknown backorders value
+		// blocks the sale at zero, exactly like the badge, the scan gate, and
+		// the online store (owner ruling 2026-08-20).
+		if (!backordersAllowed(owner.backorders)) {
 			return { allowed: false, warning: null, available };
 		}
 		if (owner.backorders === 'notify') {
