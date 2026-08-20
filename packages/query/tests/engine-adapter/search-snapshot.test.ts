@@ -79,10 +79,13 @@ describe('legacySearchSnapshot', () => {
 			remoteId: '43',
 			payload: {
 				sku: 'CHAI-L',
-				attributes: [{ id: 0, name: 'Size', option: ' Large ' }],
+				attributes: [
+					{ id: 0, name: 'Size', option: ' Large ' },
+					{ id: 1, name: 'Malformed' },
+				],
 			},
 		} as EngineDocument);
-		expect(Array.isArray(withAttributes.attributes)).toBe(true);
+		expect(withAttributes.attributes).toEqual([{ id: 0, name: 'Size', option: ' Large ' }]);
 
 		const withoutAttributes = snapshot('variations', {
 			uuid: 'v-2',
