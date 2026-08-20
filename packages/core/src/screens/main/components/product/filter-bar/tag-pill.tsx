@@ -5,13 +5,14 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import { Combobox, ComboboxContent, ComboboxTrigger } from '@wcpos/components/combobox';
+import type { EngineRecord } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
 import { useQueryStateActions } from '../../../../../query';
 import { TagSearch } from '../tag-select';
 
 interface Props {
-	resource: ObservableResource<import('@wcpos/database').ProductTagDocument>;
+	resource: ObservableResource<EngineRecord<'tags'> | null>;
 	selectedID?: number;
 }
 
@@ -50,7 +51,7 @@ export function TagPill({ resource, selectedID }: Props) {
 					onRemove={() => actions.clearFilter('tags')}
 				>
 					<ButtonText decodeHtml>
-						{isActive ? tag?.name || t('common.id_2', { id: selectedID }) : t('common.tag')}
+						{isActive ? tag?.payload.name || t('common.id_2', { id: selectedID }) : t('common.tag')}
 					</ButtonText>
 				</ButtonPill>
 			</ComboboxTrigger>

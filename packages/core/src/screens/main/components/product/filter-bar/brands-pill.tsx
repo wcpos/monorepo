@@ -5,13 +5,14 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import { Combobox, ComboboxContent, ComboboxTrigger } from '@wcpos/components/combobox';
+import type { EngineRecord } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
 import { useQueryStateActions } from '../../../../../query';
 import { BrandSearch } from '../brand-select';
 
 interface Props {
-	resource: ObservableResource<import('@wcpos/database').ProductCategoryDocument>;
+	resource: ObservableResource<EngineRecord<'brands'> | null>;
 	selectedID?: number;
 }
 
@@ -50,7 +51,9 @@ export function BrandsPill({ resource, selectedID }: Props) {
 					onRemove={() => actions.clearFilter('brands')}
 				>
 					<ButtonText decodeHtml>
-						{isActive ? brand?.name || t('common.id_2', { id: selectedID }) : t('common.brand')}
+						{isActive
+							? brand?.payload.name || t('common.id_2', { id: selectedID })
+							: t('common.brand')}
 					</ButtonText>
 				</ButtonPill>
 			</ComboboxTrigger>

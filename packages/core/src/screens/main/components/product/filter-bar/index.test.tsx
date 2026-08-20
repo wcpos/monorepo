@@ -8,13 +8,13 @@ import { render, screen } from '@testing-library/react';
 import { QueryStateProvider } from '../../../../../query';
 import { FilterBar } from './index';
 
-const mockUseEngineDocumentByWooId = jest.fn((_collection: string, _id: number) => ({
+const mockUseEngineRecordByWooId = jest.fn((_collection: string, _id: number) => ({
 	kind: 'resource',
 }));
 
 jest.mock('../../../hooks/use-engine-document', () => ({
-	useEngineDocumentByWooId: (collection: string, id: number) =>
-		mockUseEngineDocumentByWooId(collection, id),
+	useEngineRecordByWooId: (collection: string, id: number) =>
+		mockUseEngineRecordByWooId(collection, id),
 }));
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -47,7 +47,7 @@ describe('product FilterBar query-state fan-out', () => {
 		for (const name of ['stock-status', 'featured', 'on-sale', 'category', 'tag', 'brands']) {
 			expect(screen.getByTestId(`${name}-pill`)).toBeTruthy();
 		}
-		expect(mockUseEngineDocumentByWooId).toHaveBeenCalledWith('products/tags', 17);
-		expect(mockUseEngineDocumentByWooId).toHaveBeenCalledWith('products/brands', 29);
+		expect(mockUseEngineRecordByWooId).toHaveBeenCalledWith('tags', 17);
+		expect(mockUseEngineRecordByWooId).toHaveBeenCalledWith('brands', 29);
 	});
 });

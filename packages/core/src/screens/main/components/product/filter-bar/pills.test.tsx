@@ -113,7 +113,7 @@ jest.mock('../../../hooks/use-stock-status-label', () => ({
 	}),
 }));
 jest.mock('../../../hooks/use-engine-document', () => ({
-	useEngineDocumentsByWooId: () => ({ value: [] }),
+	useEngineRecordsByWooId: () => ({ value: [] }),
 }));
 jest.mock('../brand-select', () => ({ BrandSearch: () => null }));
 jest.mock('../category-select', () => ({ CategoryTreeLoader: () => null }));

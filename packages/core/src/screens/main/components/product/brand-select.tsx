@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 
 import { useObservableSuspense } from 'observable-hooks';
 
@@ -15,6 +15,7 @@ import {
 } from '@wcpos/components/combobox';
 import { Suspense } from '@wcpos/components/suspense';
 import { useT } from '@wcpos/core/contexts/translations';
+import type { EngineRecord } from '@wcpos/query';
 
 import { useSearchSelect } from '../../../../query';
 
@@ -23,16 +24,14 @@ import { useSearchSelect } from '../../../../query';
  */
 function BrandList({ resource }: { resource: ReturnType<typeof useSearchSelect>['resource'] }) {
 	const result = useObservableSuspense(resource) as {
-		hits: { id: string; document: { id?: number; name?: string } }[];
+		hits: { id: string; record: EngineRecord<'brands'> }[];
 	};
 	const t = useT();
 
-	const data = result.hits.map(
-		({ id, document }: { id: string; document: { id?: number; name?: string } }) => ({
-			value: String(document.id),
-			label: document.name ?? '',
-		})
-	);
+	const data = result.hits.map(({ record }) => ({
+		value: String(record.payload.id),
+		label: record.payload.name ?? '',
+	}));
 
 	return (
 		<ComboboxList
