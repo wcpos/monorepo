@@ -17,6 +17,7 @@ import {
 	type EngineRxDocument,
 	executeAdapterQuery,
 } from './engine-adapter/execute-query';
+import { legacySearchSnapshot } from './engine-adapter/search-snapshot';
 import { recoverEngineCollectionStorage } from './logs-storage-recovery';
 
 import type { LegacyMangoSelector } from './engine-adapter/translate-selector';
@@ -115,7 +116,7 @@ function matchingSelectors$(
 		SearchableCollection | undefined;
 	if (!collection?.initSearch) return of(withSearchSelector(selector, []));
 	const documentSnapshot = (document: EngineRxDocument): Record<string, unknown> =>
-		(wrapEngineDocument(descriptor.collection, document).toJSON as () => Record<string, unknown>)();
+		legacySearchSnapshot(descriptor.collection, document);
 
 	if (search.length < FLEXSEARCH_MIN_TERM_LENGTH) {
 		const prefix = search.toLowerCase();
