@@ -179,6 +179,19 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
+	it('never requests a response envelope for plain-permalink push routes', async () => {
+		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
+		const { fetcher } = createFetcherHarness({ fetch });
+
+		await fetcher('https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fpush%2Forders&cursor=7', {
+			method: 'POST',
+		});
+
+		expect(
+			new URL(fetch.mock.calls[0]![0] as string).searchParams.get('_wcpos_envelope')
+		).toBeNull();
+	});
+
 	it('records server load from the body envelope when the header is stripped', async () => {
 		const fetch = jest
 			.fn()

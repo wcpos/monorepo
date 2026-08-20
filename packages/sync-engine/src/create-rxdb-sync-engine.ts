@@ -737,8 +737,18 @@ export function createRxdbSyncEngine(
 			if (!abortedYoung) observe(0);
 			throw error;
 		}
+		// Plain permalinks carry the REST route in ?rest_route= with pathname '/',
+		// so the push exemption must classify from the route, not the path.
+		const requestRoute = (() => {
+			try {
+				const parsed = new URL(url);
+				return parsed.searchParams.get('rest_route') ?? parsed.pathname;
+			} catch {
+				return url.split(/[?#]/, 1)[0] ?? '';
+			}
+		})();
 		response = await hydrateResponse(response, {
-			envelopeRequested: !url.split(/[?#]/, 1)[0]?.includes('/push/'),
+			envelopeRequested: !requestRoute.split('/').includes('push'),
 			transportState: responseEnvelopeTransport,
 			onDiagnostic: (kind) =>
 				diagnostics({

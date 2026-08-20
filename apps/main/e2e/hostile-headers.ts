@@ -6,6 +6,12 @@ import {
 	hydrateAuthenticatedPage,
 	navigateToPage,
 } from './fixtures';
+import {
+	createSearchProbe,
+	deleteSearchProbe,
+	mintSearchProbeToken,
+	productWriterAuthorization,
+} from './search-probe';
 
 const STRIPPED_HEADERS = [
 	'access-control-expose-headers',
@@ -45,27 +51,61 @@ const test = authenticatedTest.extend({
 	},
 });
 
-test('census and order browse survive stripped Tier 2 headers', async ({ posPage: page }) => {
-	const posScreen = page.getByTestId('screen-pos').filter({ visible: true }).first();
-	const productTotal = posScreen.getByTestId('data-table-total-count');
-	const emptyState = posScreen.getByTestId('no-data-message');
-	// Store-agnostic gate: a settled empty grid (the app's own zero-rows state,
-	// with no error toast) is a declared-missing environment and skips; a grid
-	// that never settles under stripped headers is the regression and fails.
-	await expect
-		.poll(
-			async () => {
-				if (await emptyState.isVisible().catch(() => false)) return 'empty';
-				const total = Number(await productTotal.textContent().catch(() => null));
-				return Number.isFinite(total) && total > 0 ? 'populated' : 'pending';
-			},
-			{ timeout: 120_000 }
-		)
-		.not.toBe('pending');
-	test.skip(
-		await emptyState.isVisible().catch(() => false),
-		'Store has zero products in scope — declared-missing environment per the store-agnostic policy.'
-	);
+test('census and order browse survive stripped Tier 2 headers', async ({
+	posPage: page,
+	request,
+	storeAuthorization,
+}, testInfo) => {
+	// Create-and-find (store-agnostic policy): the spec provisions its own
+	// probe product so it passes against ANY store — the probe's arrival under
+	// stripped headers exercises the full pipeline (server write → sync demand
+	// via body-envelope totals → materialization → rendered row). Only a store
+	// that declares no writer capability skips, with the helper's reason.
+	const storeUrl = getStoreUrl(testInfo);
+	const writer = await productWriterAuthorization(request, storeUrl);
+	const authorization = writer ?? storeAuthorization();
+	const token = mintSearchProbeToken(testInfo.workerIndex);
+	const created = await createSearchProbe({
+		request,
+		storeUrl,
+		authorization,
+		collection: 'products',
+		workerIndex: testInfo.workerIndex,
+		token,
+		writerConfigured: Boolean(writer),
+	});
+	if (!created.ok) {
+		test.skip(true, created.reason);
+		return;
+	}
+
+	try {
+		const posScreen = page.getByTestId('screen-pos').filter({ visible: true }).first();
+		const search = posScreen.getByTestId('search-products').filter({ visible: true }).first();
+		await expect(search).toBeVisible({ timeout: 30_000 });
+		await search.fill(token);
+
+		if (!created.probe.rowTestId) {
+			throw new Error('Hostile-header probe is missing its slug-derived row testID');
+		}
+		await expect(
+			posScreen.getByTestId(created.probe.rowTestId),
+			'a product created on the server must reach the grid with every Tier 2 header stripped'
+		).toBeVisible({ timeout: 120_000 });
+		// Rendered-row count on its own (display:none — text assertion, never visibility).
+		await expect(posScreen.getByTestId('data-table-loaded-count')).toHaveText(/[1-9]/, {
+			timeout: 30_000,
+		});
+		await search.fill('');
+	} finally {
+		await deleteSearchProbe({
+			request,
+			storeUrl,
+			authorization,
+			collection: 'products',
+			id: created.probe.id,
+		}).catch(() => undefined);
+	}
 
 	await navigateToPage(page, 'orders');
 	const orders = page.getByTestId('screen-orders');

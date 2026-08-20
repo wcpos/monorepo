@@ -135,7 +135,10 @@ export function createEngineFetcher(input: {
 				}
 			}
 			const parsedUrl = new URL(finalUrl);
-			const envelopeRequested = !parsedUrl.pathname.split('/').includes('push');
+			// Plain permalinks carry the REST route in ?rest_route= with pathname
+			// '/', so the push exemption must classify from the route, not the path.
+			const restRoutePath = parsedUrl.searchParams.get('rest_route') ?? parsedUrl.pathname;
+			const envelopeRequested = !restRoutePath.split('/').includes('push');
 			if (envelopeRequested) {
 				parsedUrl.searchParams.set('_wcpos_envelope', '1');
 				finalUrl = parsedUrl.toString();
