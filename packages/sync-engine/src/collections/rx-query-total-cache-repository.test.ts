@@ -7,8 +7,11 @@ import type { QueryTotalCacheEntry } from '../scheduler';
 type StoredEntry = QueryTotalCacheEntry & { schemaVersion: 1 };
 
 /** In-memory stand-in for the queryTotalCacheEntries collection — just enough
- * of find/bulkUpsert for readForQueryKeys/expire. */
-function fakeDatabase(seed: QueryTotalCacheEntry[]) {
+ * of find/bulkUpsert/findOne/incrementalModify for readForQueryKeys/expire. */
+function fakeDatabase(
+	seed: QueryTotalCacheEntry[],
+	beforeModify?: (queryKey: string, entries: Map<string, StoredEntry>) => void
+) {
 	const byKey = new Map<string, StoredEntry>(
 		seed.map((entry) => [entry.queryKey, { ...entry, schemaVersion: 1 }])
 	);
@@ -25,6 +28,19 @@ function fakeDatabase(seed: QueryTotalCacheEntry[]) {
 			for (const document of documents) byKey.set(document.queryKey, document);
 			return { success: documents, error: [] };
 		},
+		findOne: (queryKey: string) => ({
+			exec: async () => {
+				if (!byKey.has(queryKey)) return null;
+				return {
+					toJSON: () => byKey.get(queryKey),
+					incrementalModify: async (modify: (document: StoredEntry) => StoredEntry) => {
+						beforeModify?.(queryKey, byKey);
+						const current = byKey.get(queryKey);
+						if (current) byKey.set(queryKey, modify(current));
+					},
+				};
+			},
+		}),
 	};
 	return { byKey, database: { queryTotalCacheEntries: collection as never } };
 }
@@ -83,5 +99,23 @@ describe('RxQueryTotalCacheRepository.expire', () => {
 			failures: [],
 		});
 		expect(byKey.get('census:products')?.freshUntilMs).toBe(10_000);
+	});
+
+	it('preserves a fresh recount written after the expiry read', async () => {
+		const freshRecount = entry('census:products', {
+			totalMatchingRecords: 204,
+			freshUntilMs: 20_000,
+			updatedAtMs: 2_000,
+		});
+		const { byKey, database } = fakeDatabase([entry('census:products')], (queryKey, entries) => {
+			entries.set(queryKey, { ...freshRecount, schemaVersion: 1 });
+		});
+		const repository = new RxQueryTotalCacheRepository(database as never);
+
+		await expect(repository.expire(['census:products'], 5_000)).resolves.toEqual({
+			expired: [],
+			failures: [],
+		});
+		expect(byKey.get('census:products')).toEqual({ ...freshRecount, schemaVersion: 1 });
 	});
 });

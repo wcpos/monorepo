@@ -68,8 +68,15 @@ export class RxQueryTotalCacheRepository {
 			if (entry.freshUntilMs <= nowMs) continue;
 			const rewritten = { ...entry, freshUntilMs: nowMs };
 			try {
-				await this.keyed.upsert(rewritten);
-				expired.push(rewritten);
+				const replaced = await this.keyed.replaceIfCurrent(
+					entry,
+					rewritten,
+					(current, expected) =>
+						current.totalMatchingRecords === expected.totalMatchingRecords &&
+						current.freshUntilMs === expected.freshUntilMs &&
+						current.updatedAtMs === expected.updatedAtMs
+				);
+				if (replaced) expired.push(rewritten);
 			} catch (error) {
 				failures.push({ queryKey: entry.queryKey, error });
 			}

@@ -300,7 +300,7 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 						deps.barcodeSelectorsFor === undefined
 							? undefined
 							: () => deps.barcodeSelectorsFor!(scopeId)?.current();
-					await applyReplicationActions(
+					const applyResult = await applyReplicationActions(
 						actions,
 						buildReplicationHandlers({
 							database,
@@ -342,6 +342,13 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 					// force a replay — the freshness TTL stays the backstop.
 					try {
 						const changedCollections = censusCollectionsForActions(actions);
+						for (const result of applyResult.reDerived) {
+							if (result.rederived) continue;
+							const collection = COLLECTION_FOR_HYBRID.get(result.collection);
+							if (collection !== undefined && !changedCollections.includes(collection)) {
+								changedCollections.push(collection);
+							}
+						}
 						if (changedCollections.length > 0) {
 							const cacheRepository = new RxQueryTotalCacheRepository(database as never);
 							const expiry = await cacheRepository.expire(
