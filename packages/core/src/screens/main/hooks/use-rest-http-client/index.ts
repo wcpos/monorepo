@@ -248,30 +248,34 @@ export const useRestHttpClient = (endpoint = '') => {
 			},
 			put(url: string, data: any, config: RequestConfig = {}) {
 				/**
-				 * Some servers don't allow PUT requests, so we can use POST instead
-				 * and add a _method=PUT query param and header
+				 * Tunnel through POST because some servers don't allow PUT requests.
+				 * CRS 920450 denylists the override header, and WP core reads the
+				 * _method query param first, so the param alone is sufficient.
 				 */
 				const newConfig = {
 					...config,
-					headers: { ...config.headers, 'X-HTTP-Method-Override': 'PUT' },
 					params: { ...config.params, _method: 'PUT' },
 				};
 				return request({ ...newConfig, method: 'POST', url, data });
 			},
 			patch(url: string, data: any, config: RequestConfig = {}) {
 				/**
-				 * Some servers don't allow PUT requests, so we can use POST instead
-				 * and add a _method=PUT query param and header
+				 * Tunnel through POST because some servers don't allow PATCH requests.
+				 * CRS 920450 denylists the override header, and WP core reads the
+				 * _method query param first, so the param alone is sufficient.
 				 */
 				const newConfig = {
 					...config,
-					headers: { ...config.headers, 'X-HTTP-Method-Override': 'PATCH' },
 					params: { ...config.params, _method: 'PATCH' },
 				};
 				return request({ ...newConfig, method: 'POST', url, data });
 			},
 			delete(url: string, config: RequestConfig = {}) {
-				return request({ ...config, method: 'DELETE', url });
+				const newConfig = {
+					...config,
+					params: { ...config.params, _method: 'DELETE' },
+				};
+				return request({ ...newConfig, method: 'POST', url });
 			},
 			head(url: string, config: RequestConfig = {}) {
 				return request({ ...config, method: 'HEAD', url });
