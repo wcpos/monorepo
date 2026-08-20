@@ -201,9 +201,9 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 		}
 
 		const detectedNewUUIDs = detectNewCartLines(prevDataRef.current, data);
+		prevDataRef.current = data;
 
 		if (detectedNewUUIDs.length > 0) {
-			prevDataRef.current = data;
 			for (const uuid of detectedNewUUIDs) {
 				rowRefs.current.get(uuid)?.pulseAdd();
 			}
