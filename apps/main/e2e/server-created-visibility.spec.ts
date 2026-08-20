@@ -167,6 +167,25 @@ test('a product created on the server reaches the products grid without a search
 	await expect(screen.getByTestId('data-table-count')).toBeVisible({
 		timeout: 60_000,
 	});
+	// Put the grid on another field first, so clicking Name deterministically selects ascending.
+	const priceProductsPending = page.waitForResponse(
+		(response) => {
+			if (response.request().method() !== 'GET') return false;
+			const url = new URL(response.url());
+			const route = url.searchParams.get('rest_route');
+			const isProductsBrowse =
+				url.pathname.endsWith('/wp-json/wcpos/v2/products') || route === '/wcpos/v2/products';
+			return isProductsBrowse && url.searchParams.get('orderby') === 'price';
+		},
+		{ timeout: 60_000 }
+	);
+	priceProductsPending.catch(() => {});
+	await screen.getByTestId('data-table-header-price').first().click();
+	const priceProducts = await priceProductsPending;
+	if (!priceProducts.ok()) {
+		throw new Error(`Products price browse failed: HTTP ${priceProducts.status()}`);
+	}
+
 	const sortedProductsPending = page.waitForResponse(
 		(response) => {
 			if (response.request().method() !== 'GET') return false;
@@ -174,7 +193,11 @@ test('a product created on the server reaches the products grid without a search
 			const route = url.searchParams.get('rest_route');
 			const isProductsBrowse =
 				url.pathname.endsWith('/wp-json/wcpos/v2/products') || route === '/wcpos/v2/products';
-			return isProductsBrowse && url.searchParams.get('orderby') === NAME_SORT_WIRE_ORDERBY;
+			return (
+				isProductsBrowse &&
+				url.searchParams.get('orderby') === NAME_SORT_WIRE_ORDERBY &&
+				url.searchParams.get('order') === 'asc'
+			);
 		},
 		{ timeout: 60_000 }
 	);
