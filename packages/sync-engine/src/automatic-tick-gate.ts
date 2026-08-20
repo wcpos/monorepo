@@ -5,6 +5,16 @@ import type { EngineConnectivity, EngineLane, SyncReport } from './create-rxdb-s
 export type AutomaticTickGate = {
 	run(tick: () => Promise<SyncReport>): Promise<void>;
 	runLane(lane: EngineLane): Promise<void>;
+	/**
+	 * A lane run that STARTS at or after this call. `runLane` dedupes into an
+	 * already-active run — correct for interval timers, but an enqueue-time
+	 * nudge needs a run whose queue snapshot postdates the enqueue: a drain
+	 * that was already in flight read its work list before the mutation landed.
+	 * When the lane is active this chains ONE follow-up after it (concurrent
+	 * fresh requests coalesce into that same follow-up via runLane's own
+	 * reservation); when idle it is exactly runLane.
+	 */
+	runLaneFresh(lane: EngineLane): Promise<void>;
 };
 
 export function createAutomaticTickGate(options: {
@@ -90,5 +100,11 @@ export function createAutomaticTickGate(options: {
 		);
 		return started;
 	};
-	return { run, runLane };
+	const runLaneFresh = (lane: EngineLane): Promise<void> => {
+		const active = laneRuns.get(lane);
+		if (active === undefined) return runLane(lane);
+		const followUp = () => runLane(lane);
+		return active.then(followUp, followUp);
+	};
+	return { run, runLane, runLaneFresh };
 }

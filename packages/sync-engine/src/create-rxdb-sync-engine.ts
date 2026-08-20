@@ -124,6 +124,7 @@ import { EngineOrderRepository } from './write-path/engine-order-repository';
 import { armReadinessWatchdog } from './readiness-watchdog';
 import { createCensusPublisher } from './census-publisher';
 import { createAutomaticTickGate } from './automatic-tick-gate';
+import { createWriteDrainNudge } from './write-path/write-drain-nudge';
 import { type CadenceController, createCadenceController } from './cadence-controller';
 import { CHANGE_SIGNAL_STATE_ID } from './change-signal/change-signal-state-schema';
 import { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
@@ -1860,6 +1861,29 @@ export function createRxdbSyncEngine(
 		...(ports.timers === undefined ? {} : { timers: ports.timers }),
 	});
 
+	// Enqueue-time drain kick: write() is durable-enqueue-only, and while online
+	// the interval timer was the only push trigger — a cashier's optimistic edit
+	// waited out up to a full writeDrainPollMs before its PATCH even left the
+	// device. First-edge coalesced; the gate's per-lane reservation dedupes
+	// against the interval timer.
+	const writeDrainNudge = createWriteDrainNudge({
+		// Fresh, not deduped: a drain already in flight snapshotted its queue
+		// before this nudge's mutation landed, so joining it would strand the
+		// mutation until the interval.
+		runLane: () => void automaticTickGate.runLaneFresh('write-drain'),
+		isOffline: () => readConnectivity() === 'offline',
+		enabled: () => mode === 'auto' && !disposed,
+		...(ports.timers === undefined ? {} : { timers: ports.timers }),
+	});
+	// A FOLLOWER tab's enqueue arrives here (see write() below) — only the
+	// leader's drain tick does work, so only the leader spends the nudge. A
+	// follower receiving a peer's nudge stays quiet: its own tick would no-op,
+	// and if leadership later moves here the interval timer still backstops.
+	const unsubscribeDrainNudgeBridge = ports.writeOutcomeBridge?.subscribeDrainNudge(() => {
+		if (disposed || !writePlaneOwner()) return;
+		writeDrainNudge.nudge();
+	});
+
 	const cadenceController = createCadenceController({
 		mode,
 		intervals,
@@ -2012,7 +2036,21 @@ export function createRxdbSyncEngine(
 				});
 			},
 		},
-		write: (intent) => writePlane.write(intent),
+		write: async (intent) => {
+			const receipt = await writePlane.write(intent);
+			// An annihilated delete never enqueued anything — nothing to drain.
+			if (!receipt.annihilated) {
+				writeDrainNudge.nudge();
+				// A follower's drain tick is a no-op (write-plane.ts leader gate), so
+				// the LEADER must hear about this enqueue or the shared queue waits
+				// out the leader's interval. In auto mode, the local nudge stays armed
+				// regardless — leadership can move to this tab before the timer fires.
+				if (mode === 'auto' && !writePlaneOwner()) {
+					ports.writeOutcomeBridge?.publishDrainNudge();
+				}
+			}
+			return receipt;
+		},
 		conflicts: () => writePlane.conflicts(),
 		resolveConflict: (mutationId, resolution) => writePlane.resolveConflict(mutationId, resolution),
 		require: (requirement) => {
@@ -2187,8 +2225,10 @@ export function createRxdbSyncEngine(
 			// subscription would fan a peer's outcome into a disposed instance's
 			// subscribers.
 			unsubscribeWriteOutcomeBridge?.();
+			unsubscribeDrainNudgeBridge?.();
 			cancelPendingRebaselineAudit();
 			for (const collection of SYNC_COLLECTION_NAMES) collectionActivity.set(collection, 0);
+			writeDrainNudge.dispose();
 			cadenceController.stop();
 			// Synchronous, unlike the census expiry timer below: these are live RxDB query
 			// subscriptions, and the lifecycle turn that runs next CLOSES every scope database

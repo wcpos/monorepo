@@ -90,6 +90,57 @@ describe('createAutomaticTickGate', () => {
 		await Promise.all([first, second]);
 	});
 
+	it('runLaneFresh chains one follow-up run behind an active drain instead of joining it', async () => {
+		// An active run snapshotted its queue BEFORE the fresh request's mutation
+		// landed — joining it (runLane's dedupe) would strand that mutation until
+		// the interval timer (Codex P1 on #1383).
+		let release!: () => void;
+		const held = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		let calls = 0;
+		const tickLane = vi.fn(async (lane: EngineLane) => {
+			calls += 1;
+			if (calls === 1) await held;
+			return report(lane);
+		});
+		const gate = createAutomaticTickGate({
+			isGated: () => false,
+			connectivity: () => 'online',
+			now: () => 0,
+			diagnostics: vi.fn(),
+			onStatusChange: vi.fn(),
+			tickLane,
+			recordTick: vi.fn(),
+			seedRetickLanes: [],
+		});
+
+		const active = gate.runLane('write-drain');
+		// Two fresh requests during the active run coalesce into ONE follow-up.
+		const freshA = gate.runLaneFresh('write-drain');
+		const freshB = gate.runLaneFresh('write-drain');
+		expect(tickLane).toHaveBeenCalledTimes(1);
+		release();
+		await Promise.all([active, freshA, freshB]);
+		expect(tickLane).toHaveBeenCalledTimes(2);
+	});
+
+	it('runLaneFresh with no active run behaves exactly like runLane', async () => {
+		const tickLane = vi.fn(async (lane: EngineLane) => report(lane));
+		const gate = createAutomaticTickGate({
+			isGated: () => false,
+			connectivity: () => 'online',
+			now: () => 0,
+			diagnostics: vi.fn(),
+			onStatusChange: vi.fn(),
+			tickLane,
+			recordTick: vi.fn(),
+			seedRetickLanes: [],
+		});
+		await gate.runLaneFresh('write-drain');
+		expect(tickLane).toHaveBeenCalledTimes(1);
+	});
+
 	it('reports a rejected lane tick without rejecting the automatic path', async () => {
 		const diagnostics = vi.fn();
 		const now = vi.fn().mockReturnValueOnce(25).mockReturnValue(40);

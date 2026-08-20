@@ -56,6 +56,15 @@ export type WriteOutcomeBridge = {
 	publish(event: BroadcastWriteOutcome): void;
 	/** Observe outcomes peers produced. Never receives this instance's own. */
 	subscribe(listener: (event: BroadcastWriteOutcome) => void): () => void;
+	/**
+	 * A follower's enqueue-time drain request: the queue is shared but only the
+	 * elected leader's drain tick does anything, so a follower-authored write
+	 * must ask the leader to drain soon or it waits out the leader's interval.
+	 * Payload-free — the channel is already scope-namespaced.
+	 */
+	publishDrainNudge(): void;
+	/** Observe peers' drain requests. Only the leader should act on one. */
+	subscribeDrainNudge(listener: () => void): () => void;
 };
 
 /** The minimal slice of `BroadcastChannel` this module uses — injectable so the
@@ -81,6 +90,19 @@ export function writeOutcomeChannelName(databaseName: string): string {
 const ENVELOPE_VERSION = 1;
 
 type Envelope = { wcpos: 'write-outcome'; v: number; event: unknown };
+
+/** The drain-nudge envelope rides the same channel under its own kind, so a
+ * build that predates it drops it at the `wcpos` check (an unreadable-message
+ * diagnostic, never a misread) and the outcome parser stays untouched. */
+const DRAIN_NUDGE_VERSION = 1;
+
+type DrainNudgeEnvelope = { wcpos: 'write-drain-nudge'; v: number };
+
+export function isDrainNudgeEnvelope(data: unknown): boolean {
+	if (typeof data !== 'object' || data === null) return false;
+	const envelope = data as Partial<DrainNudgeEnvelope>;
+	return envelope.wcpos === 'write-drain-nudge' && envelope.v === DRAIN_NUDGE_VERSION;
+}
 
 const BROADCAST_TYPES = new Set<BroadcastWriteOutcome['type']>([
 	'write-acknowledged',
@@ -162,6 +184,7 @@ export function createWriteOutcomeBridge(
 ): ScopedWriteOutcomeBridge {
 	const openChannel = options.openChannel ?? defaultOpenChannel;
 	const listeners = new Set<(event: BroadcastWriteOutcome) => void>();
+	const drainNudgeListeners = new Set<() => void>();
 	let channel: WriteOutcomeChannel | null = null;
 	let closed = false;
 
@@ -196,6 +219,22 @@ export function createWriteOutcomeBridge(
 			listeners.add(listener);
 			return () => listeners.delete(listener);
 		},
+		publishDrainNudge: () => {
+			if (closed || !channel) return;
+			try {
+				channel.postMessage({
+					wcpos: 'write-drain-nudge',
+					v: DRAIN_NUDGE_VERSION,
+				} satisfies DrainNudgeEnvelope);
+			} catch {
+				// Best-effort like publish(): the write is durably queued either way —
+				// a lost nudge only costs the peer's interval-timer latency.
+			}
+		},
+		subscribeDrainNudge: (listener) => {
+			drainNudgeListeners.add(listener);
+			return () => drainNudgeListeners.delete(listener);
+		},
 		moveTo: (channelName) => {
 			if (closed) return;
 			detach();
@@ -203,6 +242,16 @@ export function createWriteOutcomeBridge(
 			const opened = openChannel(channelName);
 			if (!opened) return;
 			opened.onmessage = (message) => {
+				if (isDrainNudgeEnvelope(message.data)) {
+					for (const listener of [...drainNudgeListeners]) {
+						try {
+							listener();
+						} catch {
+							// Same containment as the outcome fan-out below.
+						}
+					}
+					return;
+				}
 				const event = parseWriteOutcomeEnvelope(message.data);
 				if (!event) {
 					options.onUnreadableMessage?.();
@@ -226,6 +275,7 @@ export function createWriteOutcomeBridge(
 			closed = true;
 			detach();
 			listeners.clear();
+			drainNudgeListeners.clear();
 		},
 	};
 }
