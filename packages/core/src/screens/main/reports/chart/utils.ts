@@ -11,12 +11,10 @@ import {
 	startOfMonth,
 } from 'date-fns';
 
-import type { OrderDocument } from '@wcpos/database';
-
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 
 import type { Locale } from 'date-fns/locale';
-import type { DateRange } from '../context';
+import type { DateRange, OrderPayload } from '../context';
 
 export type Interval = 'months' | 'days' | 'minutes';
 
@@ -94,7 +92,7 @@ export const getStartOfMinuteInterval = (date: Date, minuteStep: number): Date =
  * @returns Object with earliest and latest dates, or null if no valid orders
  */
 export const getOrderTimeBounds = (
-	orders: OrderDocument[]
+	orders: OrderPayload[]
 ): { earliest: Date; latest: Date } | null => {
 	let earliest: Date | null = null;
 	let latest: Date | null = null;
@@ -131,18 +129,31 @@ export const determineInterval = (startDate: Date, endDate: Date): IntervalConfi
 
 	if (diffInDays > 30) {
 		// More than a month: show months with year
-		return { keyFormat: 'yyyy-MM', labelFormat: 'MMM yyyy', interval: 'months' };
+		return {
+			keyFormat: 'yyyy-MM',
+			labelFormat: 'MMM yyyy',
+			interval: 'months',
+		};
 	} else if (diffInDays > 7) {
 		// 8-30 days: show day name and day number
 		return { keyFormat: 'yyyy-MM-dd', labelFormat: 'EEE d', interval: 'days' };
 	} else if (diffInDays > 1) {
 		// 2-7 days: show day name, day number, and month
-		return { keyFormat: 'yyyy-MM-dd', labelFormat: 'EEE d MMM', interval: 'days' };
+		return {
+			keyFormat: 'yyyy-MM-dd',
+			labelFormat: 'EEE d MMM',
+			interval: 'days',
+		};
 	} else {
 		// Single day: use minute-based intervals
 		const spanMinutes = differenceInMinutes(endDate, startDate);
 		const minuteStep = getNiceMinuteInterval(spanMinutes);
-		return { keyFormat: 'yyyy-MM-dd HH:mm', labelFormat: 'HH:mm', interval: 'minutes', minuteStep };
+		return {
+			keyFormat: 'yyyy-MM-dd HH:mm',
+			labelFormat: 'HH:mm',
+			interval: 'minutes',
+			minuteStep,
+		};
 	}
 };
 
@@ -161,7 +172,10 @@ export const generateAllDates = (
 	minuteStep?: number
 ): Date[] => {
 	if (interval === 'months') {
-		return eachMonthOfInterval({ start: startOfMonth(startDate), end: endDate });
+		return eachMonthOfInterval({
+			start: startOfMonth(startDate),
+			end: endDate,
+		});
 	} else if (interval === 'days') {
 		return eachDayOfInterval({ start: startOfDay(startDate), end: endDate });
 	} else {
@@ -189,7 +203,7 @@ export const generateAllDates = (
  */
 export const getEffectiveDailyRange = (
 	dateRange: DateRange,
-	orders: OrderDocument[]
+	orders: OrderPayload[]
 ): { start: Date; end: Date } => {
 	const bounds = getOrderTimeBounds(orders);
 
@@ -228,7 +242,7 @@ export const getEffectiveDailyRange = (
  * - Uses dynamic minute intervals (30min, 60min, etc.) to keep max 12 steps
  */
 export const aggregateData = (
-	orders: OrderDocument[],
+	orders: OrderPayload[],
 	dateRange: DateRange,
 	locale?: Locale
 ): AggregatedDataPoint[] => {

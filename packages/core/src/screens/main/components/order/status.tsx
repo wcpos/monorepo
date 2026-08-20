@@ -1,11 +1,11 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { useObservableEagerState } from 'observable-hooks';
 
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
@@ -56,9 +56,11 @@ const iconMap = {
 /**
  *
  */
-export function Status({ table, row }: CellContext<{ document: OrderDocument }, 'status'>) {
-	const order = row.original.document;
-	const status = useObservableEagerState(order.status$!);
+export function Status({
+	table,
+	row,
+}: CellContext<{ document: OrderDocument; record: EngineRecord<'orders'> }, 'status'>) {
+	const status = useRecordField(row.original.record, ({ payload }) => payload.status);
 	const iconName = get(iconMap, [status ?? '', 'name'], 'circleQuestion') as string;
 	const iconType = get(iconMap, [status ?? '', 'type'], 'disabled') as string;
 	const actions = (

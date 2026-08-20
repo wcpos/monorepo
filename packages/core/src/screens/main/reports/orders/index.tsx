@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
-import type { OrderDocument } from '@wcpos/database';
+import type { EngineRecord } from '@wcpos/query';
 
 import { TableHeaderSelect } from './header-select';
 import { TableRowSelect } from './row-select';
@@ -19,7 +19,8 @@ import {
 	type RenderHeaderProps,
 } from '../../components/data-table';
 import { DataTableSkeleton } from '../../components/data-table/skeleton';
-import { DateCell } from '../../components/date';
+import { RecordDateCell } from '../../components/record-date-cell';
+import { RecordTextCell } from '../../components/record-text-cell';
 import { Cashier } from '../../components/order/cashier';
 import { CreatedVia } from '../../components/order/created-via';
 import { Customer } from '../../components/order/customer';
@@ -30,22 +31,24 @@ import { Total } from '../../components/order/total';
 import { UISettingsDialog } from '../../components/ui-settings';
 import { useReportsBinding, useReportsData, useReportsSelection } from '../context';
 import { UISettingsForm } from '../ui-settings-form';
-import { TextCell } from '../../components/text-cell';
 import { useQueryState, useQueryStateActions } from '../../../../query';
 
 import type { QueryStateActions } from '../../../../query';
 import type { RowSelectionState } from '@tanstack/react-table';
 import type { Observable } from 'rxjs';
 
+type OrderDocument = import('@wcpos/database').OrderDocument;
+type OrderRow = { document: OrderDocument; record: EngineRecord<'orders'> };
+
 const cells = {
 	select: TableRowSelect,
 	customer_id: Customer,
 	status: Status,
 	total: Total,
-	date_created_gmt: DateCell,
-	date_modified_gmt: DateCell,
-	date_completed_gmt: DateCell,
-	date_paid_gmt: DateCell,
+	date_created_gmt: RecordDateCell,
+	date_modified_gmt: RecordDateCell,
+	date_completed_gmt: RecordDateCell,
+	date_paid_gmt: RecordDateCell,
 	payment_method: PaymentMethod,
 	created_via: CreatedVia,
 	cashier: Cashier,
@@ -60,7 +63,7 @@ function renderCell(columnKey: string, info: Record<string, unknown>) {
 		return <Renderer {...info} />;
 	}
 
-	return <TextCell {...(info as unknown as React.ComponentProps<typeof TextCell>)} />;
+	return <RecordTextCell {...(info as unknown as React.ComponentProps<typeof RecordTextCell>)} />;
 }
 
 const headers: Record<string, React.ComponentType<Record<string, unknown>>> = {
@@ -212,7 +215,7 @@ export function Orders() {
 				<CardContent className="border-border flex-1 border-t p-0">
 					<ErrorBoundary>
 						<Suspense fallback={<DataTableSkeleton id="reports-orders" />}>
-							<DataTable<OrderDocument>
+							<DataTable<OrderRow>
 								id="reports-orders"
 								collectionName="orders"
 								resource={binding.resource}

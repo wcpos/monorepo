@@ -1,8 +1,7 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { Text } from '@wcpos/components/text';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
@@ -12,13 +11,22 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 /**
  *
  */
-export function Total({ row, column }: CellContext<{ document: OrderDocument }, 'total'>) {
-	const order = row.original.document;
-	const total = useObservableEagerState(order.total$!);
-	const currencySymbol = useObservableEagerState(order.currency_symbol$!);
-	const payment_method_title = useObservableEagerState(order.payment_method_title$!);
-	const refunds = useObservableEagerState(order.refunds$!);
-	const { format } = useCurrencyFormat({ currencySymbol: currencySymbol as string });
+export function Total({
+	row,
+	column,
+}: CellContext<{ document: OrderDocument; record: EngineRecord<'orders'> }, 'total'>) {
+	const { total, currencySymbol, paymentMethodTitle, refunds } = useRecordField(
+		row.original.record,
+		({ payload }) => ({
+			total: payload.total,
+			currencySymbol: payload.currency_symbol,
+			paymentMethodTitle: payload.payment_method_title,
+			refunds: payload.refunds,
+		})
+	);
+	const { format } = useCurrencyFormat({
+		currencySymbol: currencySymbol as string,
+	});
 	const show = (column.columnDef.meta as { show?: (key: string) => boolean } | undefined)?.show;
 
 	const refundTotal = React.useMemo(() => {
@@ -33,7 +41,7 @@ export function Total({ row, column }: CellContext<{ document: OrderDocument }, 
 				<Text className="text-destructive text-right text-sm">{format(-refundTotal)}</Text>
 			)}
 			{show?.('payment_method') && (
-				<Text className="text-muted-foreground text-right text-sm">{payment_method_title}</Text>
+				<Text className="text-muted-foreground text-right text-sm">{paymentMethodTitle}</Text>
 			)}
 		</>
 	);

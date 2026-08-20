@@ -57,7 +57,7 @@ jest.mock('../../components/data-table', () => ({
 	},
 }));
 jest.mock('../../components/data-table/skeleton', () => ({ DataTableSkeleton: () => null }));
-jest.mock('../../components/date', () => ({ DateCell: () => null }));
+jest.mock('../../components/record-date-cell', () => ({ RecordDateCell: () => null }));
 jest.mock('../../components/order/created-via', () => ({ CreatedVia: () => null }));
 jest.mock('../../components/order/order-number', () => ({ OrderNumber: () => null }));
 jest.mock('../../components/order/payment-method', () => ({ PaymentMethod: () => null }));
@@ -74,7 +74,7 @@ jest.mock('../../components/order/status', () => ({
 jest.mock('../../components/ui-settings', () => ({
 	UISettingsDialog: ({ children }: { children: React.ReactNode }) => children,
 }));
-jest.mock('../../components/text-cell', () => ({ TextCell: () => null }));
+jest.mock('../../components/record-text-cell', () => ({ RecordTextCell: () => null }));
 jest.mock('./header-select', () => ({ TableHeaderSelect: () => null }));
 jest.mock('./row-select', () => ({ TableRowSelect: () => null }));
 jest.mock('../context', () => ({

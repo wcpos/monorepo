@@ -3,7 +3,7 @@ import * as React from 'react';
 import { endOfDay, startOfDay } from 'date-fns';
 import { useObservableSuspense } from 'observable-hooks';
 
-import type { OrderDocument } from '@wcpos/database';
+import type { EngineRecord } from '@wcpos/query';
 
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
 import { useQueryState } from '../../../query';
@@ -15,6 +15,12 @@ export interface DateRange {
 	start: Date;
 	end: Date;
 }
+
+/** Order wire payload plus the engine identity used by the report table selection. */
+export type OrderPayload = EngineRecord<'orders'>['payload'];
+export type ReportOrder = OrderPayload & {
+	uuid: EngineRecord<'orders'>['uuid'];
+};
 
 /** The query binding. Changes only when the provider is handed a new one. */
 export interface ReportsBinding {
@@ -29,8 +35,8 @@ export interface ReportsSelection {
 
 /** The orders themselves. Rebuilt on every query emission. */
 export interface ReportsData {
-	allOrders: OrderDocument[];
-	selectedOrders: OrderDocument[];
+	allOrders: ReportOrder[];
+	selectedOrders: ReportOrder[];
 	dateRange: DateRange;
 }
 
@@ -116,7 +122,11 @@ export function ReportsProvider({ binding, children }: ReportsProviderProps) {
 	 *
 	 */
 	const allOrders = React.useMemo(
-		() => result.hits.map((hit) => hit.document as OrderDocument),
+		() =>
+			result.hits.map((hit) => {
+				const record = hit.record as EngineRecord<'orders'>;
+				return { ...record.payload, uuid: record.uuid };
+			}),
 		[result.hits]
 	);
 

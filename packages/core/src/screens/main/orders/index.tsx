@@ -8,6 +8,7 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { VStack } from '@wcpos/components/vstack';
+import type { EngineRecord } from '@wcpos/query';
 
 import { Actions } from './cells/actions';
 import { Address } from './cells/address';
@@ -19,7 +20,8 @@ import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { DataTable } from '../components/data-table';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
-import { DateCell } from '../components/date';
+import { RecordDateCell } from '../components/record-date-cell';
+import { RecordTextCell } from '../components/record-text-cell';
 import { Cashier } from '../components/order/cashier';
 import { CreatedVia } from '../components/order/created-via';
 import { Customer } from '../components/order/customer';
@@ -31,7 +33,6 @@ import { QuerySearchInput } from '../components/query-search-input';
 import { UISettingsDialog } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
 import { useReferencedCustomerDemand } from '../hooks/use-referenced-customer-demand';
-import { TextCell } from '../components/text-cell';
 import {
 	QueryStateProvider,
 	useCollectionBinding,
@@ -43,6 +44,7 @@ import type { FiltersOf, QueryStateActions, QueryStateOf } from '../../../query'
 import type { SortFieldsByCollection } from '../../../query/query-state-types';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
+type OrderRow = { document: OrderDocument; record: EngineRecord<'orders'> };
 
 const cells = {
 	actions: Actions,
@@ -52,10 +54,10 @@ const cells = {
 	customer_note: Note,
 	status: Status,
 	total: Total,
-	date_created_gmt: DateCell,
-	date_modified_gmt: DateCell,
-	date_completed_gmt: DateCell,
-	date_paid_gmt: DateCell,
+	date_created_gmt: RecordDateCell,
+	date_modified_gmt: RecordDateCell,
+	date_completed_gmt: RecordDateCell,
+	date_paid_gmt: RecordDateCell,
 	payment_method: PaymentMethod,
 	created_via: CreatedVia,
 	cashier: Cashier,
@@ -75,7 +77,10 @@ const ORDER_SORT_FIELDS = [
 	'date_paid_gmt',
 	'payment_method',
 ] as const satisfies readonly SortFieldsByCollection['orders'][];
-const DEFAULT_ORDER_SORT = { field: 'date_created_gmt', direction: 'desc' } as const;
+const DEFAULT_ORDER_SORT = {
+	field: 'date_created_gmt',
+	direction: 'desc',
+} as const;
 
 function isOrderSortField(field: unknown): field is SortFieldsByCollection['orders'] {
 	return ORDER_SORT_FIELDS.some((sortField) => sortField === field);
@@ -96,7 +101,7 @@ function renderCell(columnKey: string, info: any) {
 		return <Renderer {...info} />;
 	}
 
-	return <TextCell {...info} />;
+	return <RecordTextCell {...info} />;
 }
 
 function OrdersScreenContent() {
@@ -148,7 +153,7 @@ function OrdersScreenContent() {
 				<CardContent className="border-border flex-1 border-t p-0">
 					<ErrorBoundary>
 						<Suspense fallback={<DataTableSkeleton id="orders" />}>
-							<DataTable<OrderDocument>
+							<DataTable<OrderRow>
 								id="orders"
 								collectionName="orders"
 								resource={binding.resource}

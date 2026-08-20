@@ -5,17 +5,16 @@ import type { CellContext } from '@wcpos/core/table-types';
 import { Checkbox } from '@wcpos/components/checkbox';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import type { EngineRecord } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
 
 import type { DataTableFeatures } from '../../components/data-table';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
+type OrderRow = { document: OrderDocument; record: EngineRecord<'orders'> };
 
-export function TableRowSelect({
-	row,
-	table,
-}: CellContext<OrderDocument, boolean, DataTableFeatures>) {
+export function TableRowSelect({ row, table }: CellContext<OrderRow, boolean, DataTableFeatures>) {
 	const t = useT();
 
 	return (

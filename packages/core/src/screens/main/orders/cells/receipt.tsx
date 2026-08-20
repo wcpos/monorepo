@@ -1,11 +1,11 @@
 import * as React from 'react';
 
 import { useRouter } from 'expo-router';
-import { useObservableEagerState } from 'observable-hooks';
 
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../contexts/translations';
@@ -15,9 +15,11 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 /**
  *
  */
-export function Receipt({ row }: CellContext<{ document: OrderDocument }, any>) {
+export function Receipt({
+	row,
+}: CellContext<{ document: OrderDocument; record: EngineRecord<'orders'> }, unknown>) {
 	const order = row.original.document;
-	const orderHasID = !!useObservableEagerState(order.id$!);
+	const orderHasID = !!useRecordField(row.original.record, ({ payload }) => payload.id);
 	const t = useT();
 	const router = useRouter();
 
