@@ -28,6 +28,22 @@ export function getNextExpandedSiteUuid(
 	return currentSiteUuids[0] ?? '';
 }
 
+/**
+ * Initial accordion state for a fresh mount. Prefers the site a pending
+ * redirect-return login belongs to: its consumers must be mounted to claim
+ * the result, and a collapsed section is unmounted.
+ */
+export function getInitialAccordionState(
+	siteUuids: string[],
+	preferredSiteUuid?: string
+): SitesAccordionState {
+	const base = getNextAccordionState({ siteUuids: [], expandedSiteUuid: undefined }, siteUuids);
+	if (preferredSiteUuid && siteUuids.includes(preferredSiteUuid)) {
+		return { ...base, expandedSiteUuid: preferredSiteUuid };
+	}
+	return base;
+}
+
 export function getNextAccordionState(
 	previousState: SitesAccordionState,
 	currentSiteUuids: string[]

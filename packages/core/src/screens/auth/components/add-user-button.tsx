@@ -27,6 +27,9 @@ export function AddUserButton({ site, hasExistingUsers }: Props) {
 			wcpos_login_url: site.wcpos_login_url ?? '',
 			name: site.name ?? '',
 		},
+		// Redirect-return results for "add a user" must never be claimed by a
+		// WpUser re-auth row (which adopts the returned token for active requests).
+		claimKey: 'add-user',
 	});
 
 	React.useEffect(() => {

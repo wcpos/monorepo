@@ -45,21 +45,31 @@ export function buildAuthUrl(
 }
 
 /**
+ * Extract the auth parameters from a redirect URL.
+ * Supports both query params and hash fragments.
+ */
+export function extractAuthParams(url: string): URLSearchParams | null {
+	try {
+		const urlObj = new URL(url);
+		if (!urlObj.search && !urlObj.hash) return null;
+		// Merge both sources (query wins) so an unrelated query param can't hide
+		// tokens returned in the fragment.
+		const merged = new URLSearchParams(urlObj.hash ? urlObj.hash.slice(1) : '');
+		urlObj.searchParams.forEach((value, key) => merged.set(key, value));
+		return merged;
+	} catch {
+		return null;
+	}
+}
+
+/**
  * Parse auth tokens from a redirect URL
  * Supports both query params and hash fragments
  */
 export function parseAuthResult(url: string): WcposAuthResult {
 	try {
-		const urlObj = new URL(url);
-
-		// Try query params first, then hash fragment
-		let params: URLSearchParams;
-		if (urlObj.search) {
-			params = urlObj.searchParams;
-		} else if (urlObj.hash) {
-			// Remove leading # and parse
-			params = new URLSearchParams(urlObj.hash.slice(1));
-		} else {
+		const params = extractAuthParams(url);
+		if (!params) {
 			return {
 				type: 'error',
 				error: 'No auth parameters found in URL',

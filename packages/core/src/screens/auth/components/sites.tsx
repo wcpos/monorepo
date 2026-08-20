@@ -29,7 +29,8 @@ import { Text } from '@wcpos/components/text';
 import type { SiteDocument, UserDocument } from '@wcpos/database';
 
 import { Site, SiteHeader } from './site';
-import { getNextAccordionState } from './sites-expansion';
+import { getInitialAccordionState, getNextAccordionState } from './sites-expansion';
+import { peekRedirectLoginUrl } from '../../../hooks/use-wcpos-auth/redirect-result';
 import { WPUsers } from './wp-users';
 import { useT } from '../../../contexts/translations';
 import { useSiteInfo } from '../../../hooks/use-site-info';
@@ -52,9 +53,17 @@ export function Sites({ user }: SitesProps) {
 	);
 
 	const siteUuids = React.useMemo(() => sites?.map((site) => site.uuid ?? '') ?? [], [sites]);
-	const [accordionState, setAccordionState] = React.useState(() =>
-		getNextAccordionState({ siteUuids: [], expandedSiteUuid: undefined }, siteUuids)
-	);
+	const [accordionState, setAccordionState] = React.useState(() => {
+		// A web redirect-return login must land in an EXPANDED section — its
+		// consumers are unmounted otherwise and the one-shot result would go
+		// unclaimed. peek is idempotent and non-consuming, so a discarded render
+		// is harmless. Resolves to null on native/electron and normal loads.
+		const pendingLoginUrl = peekRedirectLoginUrl();
+		const pendingSiteUuid = pendingLoginUrl
+			? (sites?.find((site) => site.wcpos_login_url === pendingLoginUrl)?.uuid ?? undefined)
+			: undefined;
+		return getInitialAccordionState(siteUuids, pendingSiteUuid);
+	});
 	const nextAccordionState = getNextAccordionState(accordionState, siteUuids);
 
 	if (nextAccordionState !== accordionState) {

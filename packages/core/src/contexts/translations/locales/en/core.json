@@ -30,6 +30,7 @@
 	"auth.session_expired_for": "Session expired for {name}",
 	"auth.session_renewed_automatically": "Session renewed automatically",
 	"auth.sign_in_with_wordpress": "Sign in with WordPress",
+	"auth.signed_in_as_different_user": "Signed in as a different user — they were added to the list, but the selected user is still logged out.",
 	"auth.site_connected_successfully": "Site connected successfully!",
 	"auth.site_does_not_seem_to_be": "Site does not seem to be a WordPress site",
 	"auth.site_took_too_long_to_respond": "The site took too long to respond — check the server and try again",

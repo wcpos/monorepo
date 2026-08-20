@@ -1,4 +1,8 @@
-import { getNextAccordionState, getNextExpandedSiteUuid } from './sites-expansion';
+import {
+	getInitialAccordionState,
+	getNextAccordionState,
+	getNextExpandedSiteUuid,
+} from './sites-expansion';
 
 describe('getNextExpandedSiteUuid', () => {
 	it('expands a newly added site instead of keeping the previously expanded site', () => {
@@ -27,5 +31,28 @@ describe('getNextAccordionState', () => {
 				'site-c',
 			])
 		).toEqual({ siteUuids: ['site-a', 'site-b', 'site-c'], expandedSiteUuid: 'site-c' });
+	});
+});
+
+describe('getInitialAccordionState', () => {
+	it('expands the first site by default', () => {
+		expect(getInitialAccordionState(['site-a', 'site-b'])).toEqual({
+			siteUuids: ['site-a', 'site-b'],
+			expandedSiteUuid: 'site-a',
+		});
+	});
+
+	it('expands the preferred site (pending redirect-return login) instead', () => {
+		expect(getInitialAccordionState(['site-a', 'site-b'], 'site-b')).toEqual({
+			siteUuids: ['site-a', 'site-b'],
+			expandedSiteUuid: 'site-b',
+		});
+	});
+
+	it('ignores a preferred site that no longer exists', () => {
+		expect(getInitialAccordionState(['site-a', 'site-b'], 'site-gone')).toEqual({
+			siteUuids: ['site-a', 'site-b'],
+			expandedSiteUuid: 'site-a',
+		});
 	});
 });
