@@ -1867,7 +1867,10 @@ export function createRxdbSyncEngine(
 	// device. First-edge coalesced; the gate's per-lane reservation dedupes
 	// against the interval timer.
 	const writeDrainNudge = createWriteDrainNudge({
-		runLane: () => void automaticTickGate.runLane('write-drain'),
+		// Fresh, not deduped: a drain already in flight snapshotted its queue
+		// before this nudge's mutation landed, so joining it would strand the
+		// mutation until the interval.
+		runLane: () => void automaticTickGate.runLaneFresh('write-drain'),
 		isOffline: () => readConnectivity() === 'offline',
 		enabled: () => mode === 'auto' && !disposed,
 		...(ports.timers === undefined ? {} : { timers: ports.timers }),
