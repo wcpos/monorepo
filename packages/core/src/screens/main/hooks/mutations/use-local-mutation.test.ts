@@ -58,6 +58,8 @@ jest.mock('@wcpos/query', () => ({
 			jest.requireActual('@wcpos/query');
 		return { COLLECTION_VOCABULARY, promotedColumnsFor, adapterDerivedFieldsFor };
 	})(),
+	engineCollection: (database: { collections?: Record<string, unknown> } | null, name: string) =>
+		database?.collections?.[name] ?? null,
 	useQueryRuntime: () => ({
 		engine: {
 			active: () => {

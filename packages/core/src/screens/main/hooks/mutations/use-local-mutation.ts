@@ -14,6 +14,7 @@ import type {
 import {
 	adapterDerivedFieldsFor,
 	COLLECTION_VOCABULARY,
+	engineCollection,
 	promotedColumnsFor,
 	useQueryRuntime,
 	type WriteableCollection,
@@ -128,7 +129,7 @@ function scopeBarcodeSelectors(
 }
 
 function residentCollectionIn(scope: EngineScope, collection: WriteableCollection) {
-	const residentCollection = scope.database.collections[collection];
+	const residentCollection = engineCollection(scope.database, collection);
 	if (!residentCollection) {
 		throw new Error(`Engine collection "${collection}" is unavailable`);
 	}
@@ -142,7 +143,7 @@ async function findEngineResidentIn(
 ): Promise<EngineResident | null> {
 	return (await residentCollectionIn(scope, collection)
 		.findOne(recordId)
-		.exec()) as EngineResident | null;
+		.exec()) as unknown as EngineResident | null;
 }
 
 export async function findEngineResident(
@@ -317,7 +318,7 @@ export async function insertEngineResident(input: {
 		...common,
 		remoteId,
 	});
-	return (await residentCollection.insert(resident)) as EngineResident;
+	return (await residentCollection.insert(resident)) as unknown as EngineResident;
 }
 
 async function patchLocalResident<T extends Document>(

@@ -6,8 +6,8 @@ import { map, switchMap } from 'rxjs/operators';
 
 import {
 	declareRequirements,
-	engineCollectionNameFor,
-	type EngineRxDocument,
+	engineCollection,
+	type EngineRecord,
 	resolveLegacyField,
 	useQueryRuntime,
 	wrapEngineDocument,
@@ -19,18 +19,10 @@ import {
 	requirementsForCompiledQuery,
 } from '../../../../../query/query-state-translator';
 
+import type { RxDatabase } from 'rxdb';
+
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type OpenOrderHit = { id: string; document: OrderDocument };
-
-type EngineDatabase = {
-	collections: Record<string, unknown>;
-};
-
-type EngineOrderCollection = {
-	find(query: { selector: Record<string, unknown> }): {
-		$: Observable<EngineRxDocument[]>;
-	};
-};
 
 const OPEN_ORDERS_COMPILED = compileQuery(
 	'orders',
@@ -43,9 +35,9 @@ const OPEN_ORDERS_COMPILED = compileQuery(
 	{ id: 'pos:open-orders' }
 );
 
-function orderMeta(document: EngineRxDocument) {
-	const payload = (document as unknown as { payload?: Record<string, unknown> }).payload;
-	return Array.isArray(payload?.meta_data) ? payload.meta_data : undefined;
+function orderMeta(document: EngineRecord<'orders'>) {
+	const meta = document.payload?.meta_data;
+	return Array.isArray(meta) ? meta : undefined;
 }
 
 export function useOpenOrdersResource(
@@ -54,16 +46,12 @@ export function useOpenOrdersResource(
 ): ObservableResource<OpenOrderHit[]> {
 	const runtime = useQueryRuntime();
 	const resource = React.useMemo(() => {
-		const openOrders$ = new Observable<EngineDatabase | null>((subscriber) => {
-			return runtime.engine.db$((database) =>
-				subscriber.next(database as unknown as EngineDatabase | null)
-			);
+		const openOrders$ = new Observable<RxDatabase | null>((subscriber) => {
+			return runtime.engine.db$((database) => subscriber.next(database));
 		}).pipe(
 			switchMap((database) => {
-				if (!database) return of([] as EngineRxDocument[]);
-				const collection = database.collections[engineCollectionNameFor('orders')] as unknown as
-					EngineOrderCollection | undefined;
-				if (!collection) return of([] as EngineRxDocument[]);
+				const collection = engineCollection(database, 'orders');
+				if (!collection) return of([] as EngineRecord<'orders'>[]);
 				const statusPath = resolveLegacyField('orders', 'status').enginePath;
 				return collection.find({ selector: { [statusPath]: 'pos-open' } }).$;
 			}),
@@ -77,7 +65,7 @@ export function useOpenOrdersResource(
 						if (storeID === undefined || storeID === NO_STORE) return posUser === String(cashierID);
 						return posUser === String(cashierID) && posStore === String(storeID);
 					})
-					.map((document) => wrapEngineDocument<OrderDocument>('orders', document))
+					.map((document) => wrapEngineDocument<OrderDocument>('orders', document as never))
 					.sort((a, b) => (a.date_created_gmt ?? '').localeCompare(b.date_created_gmt ?? ''))
 					.map((document) => ({ id: document.uuid!, document }))
 			)
