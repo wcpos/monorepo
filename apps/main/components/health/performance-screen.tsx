@@ -328,10 +328,10 @@ export function PerformanceScreen() {
 									? `${t('health.performance.right_now', {
 											every:
 												nextCheck.unit === 's' ? `${nextCheck.value} s` : `${nextCheck.value} min`,
-										})} · ${t('health.performance.math_line', {
+										})} · ${t('health.performance.math_line_hourly', {
 											perHour: hourlyRequests.toLocaleString(),
 										})}`
-									: t('health.performance.math_line', {
+									: t('health.performance.math_line_hourly', {
 											perHour: hourlyRequests.toLocaleString(),
 										})}
 							</Text>
@@ -380,7 +380,7 @@ export function PerformanceScreen() {
 
 				{/* One link out — everything deeper lives in the docs */}
 				<DocsLink testID="performance-docs-link" href={DOCS_URL}>
-					{t('health.performance.docs_link')}
+					{t('health.performance.learn_more_in_docs')}
 				</DocsLink>
 				<View className="h-4" />
 			</VStack>

@@ -128,7 +128,7 @@ function HelpLink({ code }: { code: string }) {
 	const t = useT();
 	return (
 		<DocsLink testID={`logs-help-${code}`} href={getErrorCodeDocURL(code)}>
-			{t('health.logs.help_code', { code })}
+			{t('health.logs.help_link', { code })}
 		</DocsLink>
 	);
 }
