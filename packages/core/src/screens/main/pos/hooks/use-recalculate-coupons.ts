@@ -6,7 +6,11 @@ import { useQueryRuntime } from '@wcpos/query';
 import { wooIdOf } from '@wcpos/sync-core';
 
 import { buildEnrichedProductCategories } from './coupon-helpers';
-import { recalculateCoupons, type RecalculateResult } from './coupon-recalculate';
+import {
+	recalculateCoupons,
+	type RecalculateInput,
+	type RecalculateResult,
+} from './coupon-recalculate';
 import {
 	readEngineCategories,
 	readEngineCoupons,
@@ -99,7 +103,7 @@ export const useRecalculateCoupons = () => {
 				couponConfigs,
 				pricesIncludeTax,
 				calcDiscountsSequentially,
-				taxRates: taxRates as any,
+				taxRates: taxRates as RecalculateInput['taxRates'],
 				productCategories,
 				taxRoundAtSubtotal,
 				dp: priceNumDecimals,

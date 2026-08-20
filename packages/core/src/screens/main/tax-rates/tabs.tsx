@@ -6,6 +6,7 @@ import { useObservableEagerState, useObservableSuspense } from 'observable-hooks
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
+import type { EngineRecord } from '@wcpos/query';
 
 import { TaxRatesFooter } from './footer';
 import { TaxRateTable } from './rate-table';
@@ -13,8 +14,7 @@ import { useCollectionBinding, useQueryState } from '../../../query';
 import { useExtraData } from '../contexts/extra-data';
 
 import type { Observable } from 'rxjs';
-
-type TaxRateDocument = import('@wcpos/database').TaxRateDocument;
+import type { TaxRateData } from '../contexts/tax-rates';
 
 interface TaxClass {
 	name: string;
@@ -22,7 +22,7 @@ interface TaxClass {
 }
 
 interface QueryResult {
-	hits: { document: TaxRateDocument }[];
+	hits: { record: EngineRecord<'taxRates'> }[];
 }
 
 /**
@@ -32,7 +32,7 @@ export function TaxRatesTabs() {
 	const state = useQueryState<'tax-rates'>();
 	const binding = useCollectionBinding('tax-rates', state);
 	const result = useObservableSuspense(binding.resource) as QueryResult;
-	const rates = result.hits.map(({ document }: { document: TaxRateDocument }) => document);
+	const rates = result.hits.map((hit) => hit.record.payload);
 	const { extraData } = useExtraData();
 	const taxClasses = useObservableEagerState(
 		(extraData as unknown as Record<string, Observable<TaxClass[]>>).taxClasses$
@@ -59,13 +59,13 @@ export function TaxRatesTabs() {
 		<>
 			<Tabs value={value} onValueChange={setValue}>
 				<TabsList className="w-full flex-row">
-					{grouped.map((group: { slug: string; name: string; rates: TaxRateDocument[] }) => (
+					{grouped.map((group: { slug: string; name: string; rates: TaxRateData[] }) => (
 						<TabsTrigger key={group.slug} value={group.slug}>
 							<Text>{group.name}</Text>
 						</TabsTrigger>
 					))}
 				</TabsList>
-				{grouped.map((group: { slug: string; name: string; rates: TaxRateDocument[] }) => (
+				{grouped.map((group: { slug: string; name: string; rates: TaxRateData[] }) => (
 					<TabsContent key={group.slug} value={group.slug}>
 						<TaxRateTable rates={group.rates} />
 					</TabsContent>

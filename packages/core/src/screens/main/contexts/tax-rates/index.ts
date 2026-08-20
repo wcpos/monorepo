@@ -11,5 +11,6 @@ export type {
 	TaxLocation,
 	TaxLocationContextProps,
 	TaxRatesContextProps,
+	TaxRateData,
 	TaxSettingsContextProps,
 } from './provider';

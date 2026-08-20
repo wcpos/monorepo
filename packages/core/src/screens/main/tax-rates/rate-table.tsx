@@ -13,8 +13,10 @@ import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../contexts/translations';
 
+import type { TaxRateData } from '../contexts/tax-rates';
+
 interface TaxRateTableProps {
-	rates: import('@wcpos/database').TaxRateDocument[];
+	rates: TaxRateData[];
 }
 
 /**
