@@ -110,6 +110,7 @@ import {
 	decodeCustomerTrickleState,
 } from './maintenance/customer-trickle';
 import { PRODUCT_TRICKLE_STATE_KEY } from './maintenance/product-trickle';
+import { purgeMisfiledVariationProducts } from './maintenance/purge-misfiled-variation-products';
 import { VARIATION_PREFETCH_STATE_KEY } from './maintenance/variation-prefetch';
 import { createLocalCoverage, type LocalCoverage } from './local-coverage/local-coverage';
 import { withLedgerRecovery } from './local-coverage/ledger-storage-recovery';
@@ -917,6 +918,8 @@ export function createRxdbSyncEngine(
 					});
 				}
 			}
+			setLifecyclePhase('purge-misfiled-variations');
+			await purgeMisfiledVariationProducts(db as never);
 		} catch (error) {
 			await db.close();
 			throw error;
