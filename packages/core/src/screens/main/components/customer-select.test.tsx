@@ -7,8 +7,11 @@ import { render, screen } from '@testing-library/react';
 
 import { CustomerList } from './customer-select';
 
+let mockResult: { hits: unknown[] } = { hits: [] };
+const mockComboboxItem = jest.fn();
+
 jest.mock('observable-hooks', () => ({
-	useObservableSuspense: () => ({ hits: [] }),
+	useObservableSuspense: () => mockResult,
 }));
 
 jest.mock('@wcpos/components/avatar', () => ({ Avatar: () => null }));
@@ -28,7 +31,10 @@ jest.mock('@wcpos/components/combobox', () => {
 				))}
 			</>
 		),
-		ComboboxItem: ({ children }: React.PropsWithChildren) => <>{children}</>,
+		ComboboxItem: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => {
+			mockComboboxItem(props);
+			return <>{children}</>;
+		},
 		ComboboxEmpty: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	};
 });
@@ -54,9 +60,38 @@ jest.mock('../hooks/use-customer-name-format/use-customer-name-format', () => ({
 }));
 
 describe('CustomerList', () => {
+	beforeEach(() => {
+		mockResult = { hits: [] };
+		mockComboboxItem.mockClear();
+	});
+
 	it('renders the configured guest sentinel with the guest label', () => {
 		render(<CustomerList resource={{} as never} withGuest={true} />);
 
 		expect(screen.getByText('common.guest')).toBeTruthy();
+	});
+
+	it('emits the engine record payload as the selected item', () => {
+		const payload = {
+			id: 42,
+			first_name: 'Ada',
+			last_name: 'Lovelace',
+			email: 'ada@example.test',
+		};
+		mockResult = {
+			hits: [
+				{
+					id: 'customer-uuid',
+					record: { uuid: 'customer-uuid', payload },
+					document: { id: 999, first_name: 'Legacy' },
+				},
+			],
+		};
+
+		render(<CustomerList resource={{} as never} withGuest={false} />);
+
+		expect(mockComboboxItem).toHaveBeenCalledWith(
+			expect.objectContaining({ value: '42', label: '42', item: payload })
+		);
 	});
 });

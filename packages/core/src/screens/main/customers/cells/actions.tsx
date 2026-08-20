@@ -26,7 +26,7 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { useQueryRuntime } from '@wcpos/query';
+import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -46,8 +46,11 @@ const syncLogger = getLogger(['wcpos', 'customers', 'actions', 'sync']);
 /**
  *
  */
-export function Actions({ row }: CellContext<{ document: CustomerDocument }, 'actions'>) {
-	const customer = row.original.document;
+export function Actions({
+	row,
+}: CellContext<{ document: CustomerDocument; record: EngineRecord<'customers'> }, 'actions'>) {
+	const record = row.original.record;
+	const customer = useRecordField(record, ({ payload }) => payload);
 	const router = useRouter();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
@@ -86,9 +89,9 @@ export function Actions({ row }: CellContext<{ document: CustomerDocument }, 'ac
 	const handleDelete = React.useCallback(async () => {
 		await requestServerDelete(runtime.engine, {
 			collection: 'customers',
-			recordId: customer.uuid!,
+			recordId: record.uuid,
 		});
-	}, [customer.uuid, runtime]);
+	}, [record.uuid, runtime]);
 
 	if (readOnly) {
 		return null;
@@ -110,7 +113,7 @@ export function Actions({ row }: CellContext<{ document: CustomerDocument }, 'ac
 							onPress={() =>
 								router.push({
 									pathname: '/customers/edit/[customerId]',
-									params: { customerId: customer.uuid! },
+									params: { customerId: record.uuid },
 								})
 							}
 						>

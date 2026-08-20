@@ -3,7 +3,6 @@ import * as React from 'react';
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import { Combobox, ComboboxContent, ComboboxTrigger } from '@wcpos/components/combobox';
 import type { Option } from '@wcpos/components/combobox/types';
-import type { CustomerDocument } from '@wcpos/database';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
@@ -15,6 +14,8 @@ import { useT } from '../../../../contexts/translations';
 import { CustomerSearch } from '../../components/customer-select';
 import { UISettingsDialog } from '../../components/ui-settings';
 import { useAddCustomer } from '../hooks/use-add-customer';
+
+import type { CustomerData } from '../../hooks/use-customer-name-format/helpers';
 
 /**
  *
@@ -28,7 +29,7 @@ export function CartHeader() {
 	 *
 	 */
 	const handleSelectCustomer = React.useCallback(
-		async (option: Option<CustomerDocument> | undefined) => {
+		async (option: Option<CustomerData> | undefined) => {
 			if (option?.item) {
 				await addCustomer(option.item);
 			}
@@ -71,7 +72,7 @@ export function CartHeader() {
 				<Text className="font-bold">{t('common.customer')}:</Text>
 				<ErrorBoundary>
 					{showCustomerSelect ? (
-						<Combobox<CustomerDocument>
+						<Combobox<CustomerData>
 							onValueChange={handleSelectCustomer}
 							onOpenChange={delayedCloseHandler}
 						>

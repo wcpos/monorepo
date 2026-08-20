@@ -8,7 +8,8 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { ObservableResource } from 'observable-hooks';
 import { of } from 'rxjs';
 
-import type { CustomerDocument, StoreDocument } from '@wcpos/database';
+import type { StoreDocument } from '@wcpos/database';
+import type { EngineRecord } from '@wcpos/query';
 
 import { QueryStateProvider, useQueryState } from '../../../../../query';
 import { CashierPill } from './cashier-pill';
@@ -157,6 +158,10 @@ function filters(): FiltersOf<'orders'> {
 	return JSON.parse(screen.getByTestId('order-filters').textContent ?? '{}') as FiltersOf<'orders'>;
 }
 
+function customerRecord(payload: { id: number }): EngineRecord<'customers'> {
+	return { uuid: `customer-${payload.id}`, payload } as EngineRecord<'customers'>;
+}
+
 describe('order filter pills', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
@@ -174,8 +179,10 @@ describe('order filter pills', () => {
 	});
 
 	it('sets and clears customer_id', () => {
-		const resource = new ObservableResource(of({ id: 42 } as CustomerDocument));
-		renderPill(<CustomerPill resource={resource} guestCustomer={{ id: 0 } as CustomerDocument} />);
+		const resource = new ObservableResource<EngineRecord<'customers'> | null>(
+			of(customerRecord({ id: 42 }))
+		);
+		renderPill(<CustomerPill resource={resource} guestCustomer={{ id: 0 }} />);
 		fireEvent.click(screen.getByTestId('select-combobox'));
 		expect(filters()).toEqual({ customer_id: 42 });
 		fireEvent.click(screen.getByTestId('clear-filter'));
@@ -184,7 +191,9 @@ describe('order filter pills', () => {
 
 	it('sets and clears cashier and binds its dropdown through useSearchSelect', () => {
 		mockComboboxOption = { value: ' 0007 ', item: { id: 7, first_name: 'Grace' } };
-		const resource = new ObservableResource(of({ id: 7 } as CustomerDocument));
+		const resource = new ObservableResource<EngineRecord<'customers'> | null>(
+			of(customerRecord({ id: 7 }))
+		);
 		renderPill(<CashierPill resource={resource} />);
 
 		fireEvent.change(screen.getByTestId('cashier-search'), { target: { value: 'gra' } });
@@ -244,14 +253,10 @@ describe('order filter pills', () => {
 	});
 
 	it('escalates missing active customer and cashier labels', () => {
-		const missing = new ObservableResource(of(null as unknown as CustomerDocument));
+		const missing = new ObservableResource<EngineRecord<'customers'> | null>(of(null));
 		const onMissingCustomer = jest.fn();
 		const { unmount } = renderPill(
-			<CustomerPill
-				resource={missing}
-				guestCustomer={{ id: 0 } as CustomerDocument}
-				onMissing={onMissingCustomer}
-			/>,
+			<CustomerPill resource={missing} guestCustomer={{ id: 0 }} onMissing={onMissingCustomer} />,
 			{ customer_id: 42 }
 		);
 		expect(onMissingCustomer).toHaveBeenCalledTimes(1);

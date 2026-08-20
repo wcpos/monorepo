@@ -2,8 +2,10 @@ import * as React from 'react';
 
 import { isGuestCustomer } from '@wcpos/sync-core';
 
-import { extractNameFromJSON, JSON } from './helpers';
+import { extractNameFromJSON } from './helpers';
 import { useT } from '../../../../contexts/translations';
+
+import type { CustomerData } from './helpers';
 
 /**
  *
@@ -15,7 +17,7 @@ export function useCustomerNameFormat() {
 	 *
 	 */
 	const format = React.useCallback(
-		(json: JSON) => {
+		(json: CustomerData) => {
 			const name = extractNameFromJSON(json);
 
 			if (name) {

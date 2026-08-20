@@ -11,7 +11,7 @@ import type { RxDocument } from 'rxdb';
 type EngineDocument = {
 	uuid: string;
 	remoteId: string;
-	payload: { first_name?: string; last_name?: string };
+	payload: { id?: number; first_name?: string; last_name?: string };
 };
 
 const mockFormat = jest.fn((json: { id?: number; first_name?: string; last_name?: string }) => {
@@ -46,7 +46,7 @@ function fakeCustomer(): RxDocument<EngineDocument> {
 	const json = {
 		uuid: 'customer-uuid',
 		remoteId: '42',
-		payload: { first_name: 'Ada', last_name: 'Lovelace' },
+		payload: { id: 42, first_name: 'Ada', last_name: 'Lovelace' },
 	};
 	return {
 		...json,
@@ -74,42 +74,40 @@ describe('useCashierLabel', () => {
 		document$.next(null);
 	});
 
-	it('resolves and formats an engine-resident customer document', async () => {
+	it('resolves and formats an engine-resident customer record', async () => {
 		document$.next(fakeCustomer());
 
 		const { result } = renderHook(() => useCashierLabel('42'));
 
 		await waitFor(() => expect(result.current.label).toBe('Ada Lovelace'));
 		expect(findOne).toHaveBeenCalledWith({ selector: { remoteId: '42' } });
-		expect(result.current.document?.uuid).toBe('customer-uuid');
-		expect(result.current.document?.id).toBe(42);
-		expect(result.current.document?.first_name).toBe('Ada');
-		expect(result.current.document?.last_name).toBe('Lovelace');
+		expect(result.current.record?.uuid).toBe('customer-uuid');
+		expect(result.current.record?.payload.id).toBe(42);
+		expect(result.current.record?.payload.first_name).toBe('Ada');
+		expect(result.current.record?.payload.last_name).toBe('Lovelace');
 	});
 
 	it('falls back to the formatted id when the engine document is absent', () => {
 		const { result } = renderHook(() => useCashierLabel(99));
 
-		expect(result.current).toEqual({ id: 99, label: 'ID: 99', document: undefined });
+		expect(result.current).toEqual({ id: 99, label: 'ID: 99', record: undefined });
 	});
 
 	it('updates one mounted label when the cashier document arrives', async () => {
 		const { result } = renderHook(() => useCashierLabel(42));
 
-		expect(result.current).toEqual({ id: 42, label: 'ID: 42', document: undefined });
+		expect(result.current).toEqual({ id: 42, label: 'ID: 42', record: undefined });
 
 		act(() => document$.next(fakeCustomer()));
 
 		await waitFor(() => expect(result.current.label).toBe('Ada Lovelace'));
-		expect(result.current.document?.id).toBe(42);
+		expect(result.current.record?.payload.id).toBe(42);
 	});
 
 	it.each([undefined, 'not-a-number'])('returns an empty label without querying for %p', (id) => {
 		const { result } = renderHook(() => useCashierLabel(id));
 
 		expect(findOne).not.toHaveBeenCalled();
-		expect(active).not.toHaveBeenCalled();
-		expect(db$).not.toHaveBeenCalled();
-		expect(result.current).toEqual({ id: undefined, label: '', document: undefined });
+		expect(result.current).toEqual({ id: undefined, label: '', record: undefined });
 	});
 });

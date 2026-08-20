@@ -1,9 +1,10 @@
 import toNumber from 'lodash/toNumber';
 
-import type { CustomerDocument } from '@wcpos/database';
 import { isGuestCustomer } from '@wcpos/sync-core';
 
 import { extractNameFromJSON } from '../../../hooks/use-customer-name-format/helpers';
+
+import type { CustomerData } from '../../../hooks/use-customer-name-format/helpers';
 
 export function normalizeSelectedCustomerID(rawCustomerID: string | number | null | undefined) {
 	if (rawCustomerID === null || rawCustomerID === undefined || rawCustomerID === '') {
@@ -14,14 +15,14 @@ export function normalizeSelectedCustomerID(rawCustomerID: string | number | nul
 	return Number.isFinite(normalizedCustomerID) ? normalizedCustomerID : undefined;
 }
 
-export function isIdOnlyCustomerEntity(entity: CustomerDocument | null | undefined): boolean {
+export function isIdOnlyCustomerEntity(entity: CustomerData | null | undefined): boolean {
 	if (!entity) return false;
 	return !!entity.id && !extractNameFromJSON(entity);
 }
 
 interface ResolveCustomerPillEntityArgs {
-	customer: CustomerDocument | null | undefined;
-	selectedCustomer: CustomerDocument | null | undefined;
+	customer: CustomerData | null | undefined;
+	selectedCustomer: CustomerData | null | undefined;
 	customerID?: number;
 	isActive: boolean;
 }
