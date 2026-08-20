@@ -70,12 +70,11 @@ export function syncTemplates(
 						context: {
 							rejected: errors.length,
 							total: rows.length,
-							first: {
-								documentId: errors[0]?.documentId,
-								status: errors[0]?.status,
-								validationErrors:
-									errors[0]?.status === 422 ? errors[0].validationErrors : undefined,
-							},
+							rejectedDocuments: errors.map((rejection) => ({
+								documentId: rejection.documentId,
+								status: rejection.status,
+								validationErrors: rejection.status === 422 ? rejection.validationErrors : undefined,
+							})),
 						},
 					});
 				}
