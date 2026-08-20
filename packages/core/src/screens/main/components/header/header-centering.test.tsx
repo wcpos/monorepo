@@ -159,6 +159,23 @@ describe('header title centering', () => {
 		expect(titleContainer().style.paddingLeft).toBe('132px');
 	});
 
+	it('waits for a current left measurement when entering medium', () => {
+		mockScreenSize = 'sm';
+		const { rerender } = renderHeader();
+		fireLayout('header-left-section', 80);
+		measureAll({ container: 900 });
+
+		mockScreenSize = 'md';
+		rerender(
+			<Header options={{ title: 'POS' } as never} showUpgrade={false} setShowUpgrade={jest.fn()} />
+		);
+		expect(titleText().style.opacity).toBe('0');
+
+		fireLayout('header-left-section', 96);
+		expect(titleText().style.opacity).not.toBe('0');
+		expect(titleContainer().style.paddingLeft).toBe('116px');
+	});
+
 	it('drops the stale left measurement when resizing into the large layout', () => {
 		mockScreenSize = 'md';
 		const { rerender } = renderHeader();

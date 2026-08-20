@@ -40,7 +40,10 @@ export function Header({ options, showUpgrade, setShowUpgrade }: Props) {
 	const { screenSize } = useTheme();
 
 	// Track widths for centering calculation
-	const [leftWidth, setLeftWidth] = React.useState(0);
+	const [leftMeasurement, setLeftMeasurement] = React.useState<{
+		width: number;
+		screenSize: typeof screenSize;
+	} | null>(null);
 	const [rightWidth, setRightWidth] = React.useState(0);
 	const [titleContainerWidth, setTitleContainerWidth] = React.useState(0);
 	const [titleTextWidth, setTitleTextWidth] = React.useState(0);
@@ -52,7 +55,9 @@ export function Header({ options, showUpgrade, setShowUpgrade }: Props) {
 	// Large screens render no left button, so the true left width there is zero
 	// regardless of what was measured before a resize; deriving it (instead of
 	// resetting state) keeps the zero-report filter below unconditional.
-	const effectiveLeftWidth = isLargeScreen ? 0 : leftWidth;
+	const hasCurrentLeftMeasurement = leftMeasurement?.screenSize === screenSize;
+	const effectiveLeftWidth =
+		isLargeScreen || !hasCurrentLeftMeasurement ? 0 : leftMeasurement.width;
 
 	// Calculate centering offset: positive means right is wider, negative means left is wider
 	// Only apply centering when the title actually fits - otherwise use all available space
@@ -70,7 +75,7 @@ export function Header({ options, showUpgrade, setShowUpgrade }: Props) {
 		titleTextWidth > 0 &&
 		titleContainerWidth > 0 &&
 		rightWidth > 0 &&
-		(isLargeScreen || leftWidth > 0);
+		(isLargeScreen || hasCurrentLeftMeasurement);
 
 	// Inactive drawer screens are hidden with display:none on web, so every
 	// element in this header reports a zero-width layout while another screen is
@@ -79,10 +84,13 @@ export function Header({ options, showUpgrade, setShowUpgrade }: Props) {
 	// Zero is never a real measurement here — the one legitimate zero (no left
 	// button on large screens) is derived above — so zero reports keep the last
 	// real value.
-	const handleLeftLayout = React.useCallback((event: LayoutChangeEvent) => {
-		const { width } = event.nativeEvent.layout;
-		setLeftWidth((previous) => (width > 0 ? width : previous));
-	}, []);
+	const handleLeftLayout = React.useCallback(
+		(event: LayoutChangeEvent) => {
+			const { width } = event.nativeEvent.layout;
+			setLeftMeasurement((previous) => (width > 0 ? { width, screenSize } : previous));
+		},
+		[screenSize]
+	);
 
 	const handleRightLayout = React.useCallback((event: LayoutChangeEvent) => {
 		const { width } = event.nativeEvent.layout;
