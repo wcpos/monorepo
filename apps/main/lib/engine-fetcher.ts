@@ -135,7 +135,8 @@ export function createEngineFetcher(input: {
 				}
 			}
 			const parsedUrl = new URL(finalUrl);
-			if (!parsedUrl.pathname.split('/').includes('push')) {
+			const envelopeRequested = !parsedUrl.pathname.split('/').includes('push');
+			if (envelopeRequested) {
 				parsedUrl.searchParams.set('_wcpos_envelope', '1');
 				finalUrl = parsedUrl.toString();
 			}
@@ -223,6 +224,26 @@ export function createEngineFetcher(input: {
 				bytes,
 				ok: accepted,
 				epoch: epochAtStart,
+			});
+
+			// Hydrate BEFORE sampling diagnostics: on a header-stripping host the
+			// server-load value exists only in the _wcpos body envelope, and the
+			// engine wrapper's own hydration runs after this fetcher returns —
+			// too late for the perf screen's recordServerLoad sample below. The
+			// wrapper's second pass is an idempotent passthrough (memoized body,
+			// patched headers).
+			let transportState = envelopeTransportByFetcher.get(fetcher);
+			if (!transportState) {
+				transportState = { responseHeadersReadable: true };
+				envelopeTransportByFetcher.set(fetcher, transportState);
+			}
+			response = await hydrateResponse(response, {
+				envelopeRequested,
+				transportState,
+				onDiagnostic: (kind) =>
+					engineLogger.debug(`Response envelope metadata is ${kind}`, {
+						context: { responseHeadersReadable: transportState.responseHeadersReadable },
+					}),
 			});
 
 			const serverLoad = response.headers.get('X-Server-Load');

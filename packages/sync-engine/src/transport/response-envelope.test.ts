@@ -117,6 +117,16 @@ describe('hydrateResponse', () => {
 		await expect(hydrated.json()).rejects.toThrow();
 	});
 
+	it('drops a malformed validator instead of rejecting the response', async () => {
+		const response = enveloped({ total: 12, validator: 'bad\nvalidator' });
+
+		const hydrated = await hydrateResponse(response, { envelopeRequested: true });
+
+		expect(hydrated.headers.get('X-WP-Total')).toBe('12');
+		expect(hydrated.headers.get('ETag')).toBeNull();
+		expect(await hydrated.json()).toEqual([{ id: 7 }]);
+	});
+
 	it('tolerates a Headers-compatible stub whose get method throws', async () => {
 		const response = enveloped({ total: 12 });
 		Object.defineProperty(response, 'headers', {

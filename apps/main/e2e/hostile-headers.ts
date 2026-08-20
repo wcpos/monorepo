@@ -46,16 +46,26 @@ const test = authenticatedTest.extend({
 });
 
 test('census and order browse survive stripped Tier 2 headers', async ({ posPage: page }) => {
-	const productTotal = page
-		.getByTestId('screen-pos')
-		.filter({ visible: true })
-		.first()
-		.getByTestId('data-table-total-count');
+	const posScreen = page.getByTestId('screen-pos').filter({ visible: true }).first();
+	const productTotal = posScreen.getByTestId('data-table-total-count');
+	const emptyState = posScreen.getByTestId('no-data-message');
+	// Store-agnostic gate: a settled empty grid (the app's own zero-rows state,
+	// with no error toast) is a declared-missing environment and skips; a grid
+	// that never settles under stripped headers is the regression and fails.
 	await expect
-		.poll(async () => Number(await productTotal.textContent()), {
-			timeout: 120_000,
-		})
-		.toBeGreaterThan(0);
+		.poll(
+			async () => {
+				if (await emptyState.isVisible().catch(() => false)) return 'empty';
+				const total = Number(await productTotal.textContent().catch(() => null));
+				return Number.isFinite(total) && total > 0 ? 'populated' : 'pending';
+			},
+			{ timeout: 120_000 }
+		)
+		.not.toBe('pending');
+	test.skip(
+		await emptyState.isVisible().catch(() => false),
+		'Store has zero products in scope — declared-missing environment per the store-agnostic policy.'
+	);
 
 	await navigateToPage(page, 'orders');
 	const orders = page.getByTestId('screen-orders');

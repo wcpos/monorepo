@@ -53,6 +53,14 @@ function validLoadHeader(raw: string | null): boolean {
 		return false;
 	}
 }
+function safeHeaderSet(headers: Headers, name: string, value: string): void {
+	try {
+		headers.set(name, value);
+	} catch {
+		// A malformed envelope value (forbidden header characters) must never
+		// turn a readable response into a transport failure — drop the mirror.
+	}
+}
 function copyHeaders(headers: Headers): Headers {
 	try {
 		return new Headers(headers);
@@ -130,21 +138,21 @@ export async function hydrateResponse(
 			reads.validator.trim() !== metadata.validator);
 	if (divergent) options.onDiagnostic?.('divergent');
 	if (!validIntegerHeader(reads.total, 0) && isSafeInteger(metadata.total, 0))
-		headers.set('X-WP-Total', String(metadata.total));
+		safeHeaderSet(headers, 'X-WP-Total', String(metadata.total));
 	if (!validIntegerHeader(reads.totalPages, 1) && isSafeInteger(metadata.total_pages, 1))
-		headers.set('X-WP-TotalPages', String(metadata.total_pages));
+		safeHeaderSet(headers, 'X-WP-TotalPages', String(metadata.total_pages));
 	if (!validPressure(reads.pressure) && validPressure(metadata.pressure ?? null))
-		headers.set('X-WCPOS-Pressure', metadata.pressure!);
+		safeHeaderSet(headers, 'X-WCPOS-Pressure', metadata.pressure!);
 	if (!validLoadHeader(reads.serverLoad) && isLoad(metadata.server_load))
-		headers.set('X-Server-Load', JSON.stringify(metadata.server_load));
+		safeHeaderSet(headers, 'X-Server-Load', JSON.stringify(metadata.server_load));
 	if (!validIntegerHeader(reads.memoryPeak, 0) && isSafeInteger(metadata.memory_peak_bytes, 0))
-		headers.set('X-WCPOS-Memory-Peak', String(metadata.memory_peak_bytes));
+		safeHeaderSet(headers, 'X-WCPOS-Memory-Peak', String(metadata.memory_peak_bytes));
 	if (
 		(reads.validator === null || reads.validator.trim() === '') &&
 		typeof metadata.validator === 'string' &&
 		metadata.validator.trim() !== ''
 	)
-		headers.set('ETag', metadata.validator);
+		safeHeaderSet(headers, 'ETag', metadata.validator);
 	if (Object.values(reads).every((value) => value === null)) {
 		const state = options.transportState;
 		if (state?.responseHeadersReadable !== false) {

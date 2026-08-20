@@ -179,6 +179,19 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
+	it('records server load from the body envelope when the header is stripped', async () => {
+		const fetch = jest
+			.fn()
+			.mockResolvedValue(
+				Response.json({ data: [], _wcpos: { v: 1, server_load: [0.7, 0.4, 0.2] } })
+			);
+		const { fetcher, recordServerLoad } = createFetcherHarness({ fetch });
+
+		await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+
+		expect(recordServerLoad).toHaveBeenCalledWith(0.7, 0);
+	});
+
 	it('reads a census total from the response body envelope when headers are stripped', async () => {
 		const fetch = jest
 			.fn()
@@ -332,7 +345,7 @@ describe('createEngineFetcher', () => {
 		});
 	});
 
-	it('wires diagnostics and records response metrics without reading the body', async () => {
+	it('wires diagnostics, records response metrics, and keeps the body readable through hydration', async () => {
 		const now = jest.spyOn(Date, 'now').mockReturnValueOnce(1_000).mockReturnValueOnce(1_025);
 		const response = new Response('do not read', {
 			status: 200,
@@ -347,7 +360,11 @@ describe('createEngineFetcher', () => {
 
 		const result = await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
 
-		expect(result).toBe(response);
+		// Envelope hydration shape-detects the body, so the returned response is
+		// a hydrated view of the original; the contract that matters is that the
+		// body stays fully readable and metrics come from content-length alone.
+		expect(await result.text()).toBe('do not read');
+		expect(result.status).toBe(200);
 		expect(emitTransport).toEqual(expect.any(Function));
 		expect(appMetricsObserver).toHaveBeenCalledWith({
 			type: 'transport.request',
@@ -369,7 +386,6 @@ describe('createEngineFetcher', () => {
 			epoch: 0,
 		});
 		expect(recordServerLoad).toHaveBeenCalledWith(0.5, 0);
-		expect(response.bodyUsed).toBe(false);
 		now.mockRestore();
 		fetch.mockReset();
 	});
