@@ -16,6 +16,7 @@ import {
 import { Suspense } from '@wcpos/components/suspense';
 import { useT } from '@wcpos/core/contexts/translations';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
+import type { EngineRecord } from '@wcpos/query';
 
 import { useAllCategoriesBinding, useSearchSelect } from '../../../../query';
 
@@ -24,16 +25,14 @@ import { useAllCategoriesBinding, useSearchSelect } from '../../../../query';
  */
 function CategoryList({ resource }: { resource: ReturnType<typeof useSearchSelect>['resource'] }) {
 	const result = useObservableSuspense(resource) as {
-		hits: { id: string; document: { id?: number; name?: string } }[];
+		hits: { id: string; record: EngineRecord<'categories'> }[];
 	};
 	const t = useT();
 
-	const data = result.hits.map(
-		({ id, document }: { id: string; document: { id?: number; name?: string } }) => ({
-			value: String(document.id),
-			label: document.name ?? '',
-		})
-	);
+	const data = result.hits.map(({ record }) => ({
+		value: String(record.payload.id),
+		label: record.payload.name ?? '',
+	}));
 
 	return (
 		<ComboboxList
@@ -88,17 +87,20 @@ function CategoryTreeLoaderInner({
 	const binding = useAllCategoriesBinding();
 
 	const result = useObservableSuspense(binding.resource) as {
-		hits: { id: string; document: { id?: number; name?: string; parent?: number } }[];
+		hits: { id: string; record: EngineRecord<'categories'> }[];
 	};
 
 	const options = React.useMemo<HierarchicalOption[]>(
 		() =>
 			result.hits
-				.filter(({ document: doc }) => doc.id != null)
-				.map(({ document: doc }) => ({
-					value: String(doc.id),
-					label: doc.name ?? '',
-					parentId: doc.parent && doc.parent > 0 ? String(doc.parent) : undefined,
+				.filter(({ record }) => record.payload.id != null)
+				.map(({ record }) => ({
+					value: String(record.payload.id),
+					label: record.payload.name ?? '',
+					parentId:
+						record.payload.parent && record.payload.parent > 0
+							? String(record.payload.parent)
+							: undefined,
 				})),
 		[result.hits]
 	);

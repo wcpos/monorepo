@@ -8,6 +8,8 @@ import {
 	useEngineDocument,
 	useEngineDocumentByWooId,
 	useEngineDocumentsByWooId,
+	useEngineRecordByWooId,
+	useEngineRecordsByWooId,
 } from './use-engine-document';
 
 import type { RxDocument } from 'rxdb';
@@ -201,6 +203,48 @@ describe('useEngineDocument', () => {
 		expect(result.current.read().map((document: Record<string, unknown>) => document.id)).toEqual([
 			12, 38,
 		]);
+	});
+
+	it('returns an engine record by Woo ID without wrapping its payload', () => {
+		const source = fakeRxDocument({
+			uuid: 'tag-42',
+			remoteId: '42',
+			payload: { id: 42, name: 'Featured' },
+		});
+		const document$ = new BehaviorSubject<RxDocument<EngineDocument> | null>(source.document);
+		const findOne = jest.fn(() => ({ $: document$.asObservable() }));
+		activeDatabase = databaseWithCollection('tags', findOne);
+
+		const { result } = renderHook(() => useEngineRecordByWooId('tags', 42));
+
+		expect(findOne).toHaveBeenCalledWith({ selector: { remoteId: '42' } });
+		const record = result.current.read();
+		expect(record).toBe(source.document);
+		expect(record?.payload.name).toBe('Featured');
+	});
+
+	it('returns engine records in requested Woo ID order and leaves missing IDs absent', () => {
+		const hardware = fakeRxDocument({
+			uuid: 'category-38',
+			remoteId: '38',
+			payload: { id: 38, name: 'Hardware' },
+		});
+		const tools = fakeRxDocument({
+			uuid: 'category-12',
+			remoteId: '12',
+			payload: { id: 12, name: 'Tools' },
+		});
+		const documents$ = new BehaviorSubject<RxDocument<EngineDocument>[]>([
+			hardware.document,
+			tools.document,
+		]);
+		const find = jest.fn(() => ({ $: documents$.asObservable() }));
+		activeDatabase = databaseWithCollection('categories', jest.fn(), find);
+
+		const { result } = renderHook(() => useEngineRecordsByWooId('categories', [12, 999, 38]));
+
+		expect(find).toHaveBeenCalledWith({ selector: { remoteId: { $in: ['12', '999', '38'] } } });
+		expect(result.current.read()).toEqual([tools.document, hardware.document]);
 	});
 
 	it('emits null when the record is not found', () => {

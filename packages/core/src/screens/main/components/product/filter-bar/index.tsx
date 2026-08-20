@@ -9,7 +9,7 @@ import { FeaturedPill } from './featured-pill';
 import { OnSalePill } from './on-sale-pill';
 import { StockStatusPill } from './stock-status-pill';
 import { TagPill } from './tag-pill';
-import { useEngineDocumentByWooId } from '../../../hooks/use-engine-document';
+import { useEngineRecordByWooId } from '../../../hooks/use-engine-document';
 import { useQueryState } from '../../../../../query';
 
 /**
@@ -23,12 +23,8 @@ export function FilterBar() {
 		selectedTagID: state.filters.tags[0],
 		selectedBrandID: state.filters.brands[0],
 	}));
-	const selectedTagResource = useEngineDocumentByWooId<
-		import('@wcpos/database').ProductTagDocument
-	>('products/tags', selectedTagID ?? 0);
-	const selectedBrandResource = useEngineDocumentByWooId<
-		import('@wcpos/database').ProductCategoryDocument
-	>('products/brands', selectedBrandID ?? 0);
+	const selectedTagResource = useEngineRecordByWooId('tags', selectedTagID ?? 0);
+	const selectedBrandResource = useEngineRecordByWooId('brands', selectedBrandID ?? 0);
 
 	/**
 	 *

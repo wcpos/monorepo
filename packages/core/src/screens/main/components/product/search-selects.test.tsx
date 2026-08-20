@@ -13,7 +13,16 @@ const setSearch = jest.fn();
 const mockUseSearchSelect = jest.fn((collection: string) => ({
 	resource: {
 		value: {
-			hits: [{ id: `${collection}-uuid`, document: { id: 42, name: `${collection} name` } }],
+			hits: [
+				{
+					id: `${collection}-uuid`,
+					record: {
+						uuid: `${collection}-uuid`,
+						remoteId: '42',
+						payload: { id: 42, name: `${collection} name` },
+					},
+				},
+			],
 		},
 	},
 	search: '',
@@ -42,8 +51,32 @@ jest.mock('@wcpos/components/combobox', () => ({
 		value: string;
 		onChangeText: (value: string) => void;
 	}) => <input value={value} onChange={(event) => onChangeText(event.currentTarget.value)} />,
-	ComboboxList: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	ComboboxItem: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	ComboboxList: ({
+		data,
+		renderItem,
+	}: {
+		data: { value: string; label: string }[];
+		renderItem: (info: { item: { value: string; label: string } }) => React.ReactNode;
+	}) => (
+		<div>
+			{data.map((item) => (
+				<React.Fragment key={item.value}>{renderItem({ item })}</React.Fragment>
+			))}
+		</div>
+	),
+	ComboboxItem: ({
+		value,
+		label,
+		children,
+	}: {
+		value: string;
+		label: string;
+		children: React.ReactNode;
+	}) => (
+		<div data-testid="search-option" data-value={value} data-label={label}>
+			{children}
+		</div>
+	),
 	ComboboxItemText: () => null,
 	ComboboxEmpty: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -64,5 +97,12 @@ describe('product filter search selects', () => {
 		expect(mockUseSearchSelect).toHaveBeenCalledWith(collection);
 		fireEvent.change(screen.getByRole('textbox'), { target: { value: 'summer' } });
 		expect(setSearch).toHaveBeenCalledWith('summer');
+	});
+
+	it('builds a category option value and label from the engine record payload', () => {
+		render(<CategorySearch />);
+
+		expect(screen.getByTestId('search-option').getAttribute('data-value')).toBe('42');
+		expect(screen.getByTestId('search-option').getAttribute('data-label')).toBe('category name');
 	});
 });

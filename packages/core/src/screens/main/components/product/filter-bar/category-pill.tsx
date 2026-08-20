@@ -4,6 +4,7 @@ import toNumber from 'lodash/toNumber';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import type { EngineRecord } from '@wcpos/query';
 import {
 	TreeCombobox,
 	TreeComboboxContent,
@@ -13,24 +14,22 @@ import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 import type { Option } from '@wcpos/components/combobox/types';
 
 import { useT } from '../../../../../contexts/translations';
-import { useEngineDocumentsByWooId } from '../../../hooks/use-engine-document';
+import { useEngineRecordsByWooId } from '../../../hooks/use-engine-document';
 import { CategoryTreeLoader } from '../category-select';
 import { useQueryState, useQueryStateActions } from '../../../../../query';
-
-type ProductCategoryDocument = import('@wcpos/database').ProductCategoryDocument;
 
 function CategoryPillLabel({
 	resource,
 	fallbackLabel,
 }: {
-	resource: ObservableResource<ProductCategoryDocument[]>;
+	resource: ObservableResource<EngineRecord<'categories'>[]>;
 	fallbackLabel: string;
 }) {
 	const selected = useObservableSuspense(resource);
 	const displayText = React.useMemo(() => {
 		if (selected.length === 0) return fallbackLabel;
-		if (selected.length === 1) return selected[0].name;
-		return `${selected[0].name} +${selected.length - 1}`;
+		if (selected.length === 1) return selected[0].payload.name;
+		return `${selected[0].payload.name} +${selected.length - 1}`;
 	}, [fallbackLabel, selected]);
 
 	return <ButtonText decodeHtml>{displayText}</ButtonText>;
@@ -46,10 +45,7 @@ export function CategoryPill() {
 		(state) => state.filters.categories
 	);
 	const actions = useQueryStateActions<'products'>();
-	const selectedCategoriesResource = useEngineDocumentsByWooId<ProductCategoryDocument>(
-		'products/categories',
-		activeCategoryIds
-	);
+	const selectedCategoriesResource = useEngineRecordsByWooId('categories', activeCategoryIds);
 	const selected = React.useMemo<Option[]>(() => {
 		if (!activeCategoryIds || activeCategoryIds.length === 0) return [];
 		return activeCategoryIds.map((id) => {

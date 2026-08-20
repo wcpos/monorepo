@@ -10,12 +10,12 @@ import { BehaviorSubject } from 'rxjs';
 import { QueryStateProvider } from '../../../../../query';
 import { CategoryPill } from './category-pill';
 
-type Category = { id: number; name: string };
+type CategoryRecord = { payload: { id: number; name: string }; uuid: string; remoteId: string };
 
-let mockSelectedResource: ObservableResource<Category[]>;
+let mockSelectedResource: ObservableResource<CategoryRecord[]>;
 
 jest.mock('../../../hooks/use-engine-document', () => ({
-	useEngineDocumentsByWooId: () => mockSelectedResource,
+	useEngineRecordsByWooId: () => mockSelectedResource,
 }));
 jest.mock('@wcpos/components/button', () => ({
 	ButtonPill: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -36,7 +36,7 @@ jest.mock('../category-select', () => ({ CategoryTreeLoader: () => null }));
 
 describe('selected category labels', () => {
 	it('keeps a safe fallback until a refreshed category emits its real name', async () => {
-		const categories$ = new BehaviorSubject<Category[]>([]);
+		const categories$ = new BehaviorSubject<CategoryRecord[]>([]);
 		mockSelectedResource = new ObservableResource(categories$);
 
 		render(
@@ -53,7 +53,11 @@ describe('selected category labels', () => {
 		expect(screen.getByText('Category')).toBeTruthy();
 		expect(screen.queryByText('38')).toBeNull();
 
-		act(() => categories$.next([{ id: 38, name: 'Hardware' }]));
+		act(() =>
+			categories$.next([
+				{ payload: { id: 38, name: 'Hardware' }, uuid: 'category-38', remoteId: '38' },
+			])
+		);
 
 		await waitFor(() => expect(screen.getByText('Hardware')).toBeTruthy());
 		expect(screen.queryByText('38')).toBeNull();
