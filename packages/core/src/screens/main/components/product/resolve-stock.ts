@@ -13,6 +13,18 @@ export interface ResolveStockInput {
 }
 
 /**
+ * WooCommerce's backorder rule, pinned in ONE place: `backorders_allowed()` is
+ * an explicit 'yes'/'notify' allow-list and the field defaults to 'no'
+ * (abstract-wc-product.php:86, :1897) — a payload missing the field sells out
+ * at zero exactly like the online store would (owner ruling 2026-08-20).
+ * Shared by the resolver below and the cart oversell guard so the badge, the
+ * scan gate, and Add to Cart can never disagree about it.
+ */
+export function backordersAllowed(backorders: string | undefined): boolean {
+	return backorders === 'yes' || backorders === 'notify';
+}
+
+/**
  * Pure stock resolver shared by the products grid badge, variation lists,
  * selectors, and barcode scans.
  *
@@ -30,11 +42,7 @@ export function resolveStock({
 		if ((stockQuantity as number) > 0) {
 			return { status: 'instock', quantity: stockQuantity as number, sellable: true };
 		}
-		// WooCommerce's own rule (owner ruling 2026-08-20): backorders_allowed()
-		// is an explicit 'yes' || 'notify' allow-list and the field DEFAULTS to
-		// 'no' (abstract-wc-product.php) — so a payload missing the field sells
-		// out at zero exactly like the online store would.
-		if (backorders === 'yes' || backorders === 'notify') {
+		if (backordersAllowed(backorders)) {
 			return { status: 'onbackorder', quantity: null, sellable: true };
 		}
 		return { status: 'outofstock', quantity: null, sellable: false };
