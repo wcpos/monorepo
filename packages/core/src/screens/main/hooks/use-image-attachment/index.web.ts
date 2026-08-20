@@ -7,7 +7,9 @@ import { catchError, map } from 'rxjs/operators';
 
 import { useHttpClient } from '@wcpos/hooks/use-http-client';
 
-type RxDocument = import('rxdb').RxDocument;
+import { isEngineRecordFace } from './types';
+
+import type { ImageAttachmentSource } from './types';
 type HttpGet = ReturnType<typeof useHttpClient>['get'];
 
 export interface ImageAttachmentState {
@@ -32,7 +34,7 @@ const emptyResource: ImageResource = new ObservableResource(of(EMPTY_STATE));
 export const ERROR_RETRY_DELAY_MS = 30_000;
 
 async function fetchImageBlob(
-	_document: RxDocument,
+	_source: ImageAttachmentSource,
 	imageUrl: string,
 	get: HttpGet
 ): Promise<Blob> {
@@ -78,10 +80,14 @@ async function fetchImageBlob(
 	return blob;
 }
 
-function getImageResource(document: RxDocument, imageUrl: string, get: HttpGet): ImageResource {
+function getImageResource(
+	source: ImageAttachmentSource,
+	imageUrl: string,
+	get: HttpGet
+): ImageResource {
 	let resource = imageResourceCache.get(imageUrl);
 	if (!resource) {
-		const state$ = defer(() => fetchImageBlob(document, imageUrl, get)).pipe(
+		const state$ = defer(() => fetchImageBlob(source, imageUrl, get)).pipe(
 			map((blob): ImageAttachmentState => ({ uri: URL.createObjectURL(blob), error: null })),
 			catchError((err) => {
 				// Keep the errored resource cached: a Suspense retry re-renders with
@@ -106,15 +112,15 @@ function getImageResource(document: RxDocument, imageUrl: string, get: HttpGet):
  * boundary above them. Errors are returned as state, not thrown, so callers
  * can fall back to a placeholder.
  */
-export const useImageAttachment = (document: RxDocument, imageUrl: string) => {
+export const useImageAttachment = (source: ImageAttachmentSource, imageUrl: string) => {
 	const { get } = useHttpClient();
-	const hasValidSource = isRxDocument(document) && !!imageUrl;
+	const hasValidSource = (isEngineRecordFace(source) || isRxDocument(source)) && !!imageUrl;
 
 	// Memoized so a re-render of a mounted component keeps its (possibly
 	// errored) resource; only a fresh mount or a source change retries.
 	const resource = React.useMemo(
-		() => (hasValidSource ? getImageResource(document, imageUrl, get) : emptyResource),
-		[document, imageUrl, get, hasValidSource]
+		() => (hasValidSource ? getImageResource(source, imageUrl, get) : emptyResource),
+		[source, imageUrl, get, hasValidSource]
 	);
 
 	return useObservableSuspense(resource);

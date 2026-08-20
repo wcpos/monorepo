@@ -27,7 +27,7 @@ import { useBarcode } from './use-barcode';
 import { useT } from '../../../contexts/translations';
 import { DataTable, DataTableFooter, defaultRenderItem } from '../components/data-table';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
-import { DateCell } from '../components/date';
+import { RecordDateCell } from '../components/record-date-cell';
 import { ProductCategories } from '../components/product/categories';
 import { FilterBar } from '../components/product/filter-bar';
 import { ProductImage } from '../components/product/image';
@@ -41,7 +41,7 @@ import { QuerySearchInput } from '../components/query-search-input';
 import { UISettingsDialog } from '../components/ui-settings';
 import { useTaxSettings } from '../contexts/tax-rates';
 import { useMutation } from '../hooks/mutations/use-mutation';
-import { TextCell } from '../components/text-cell';
+import { RecordTextCell } from '../components/record-text-cell';
 import { ProductBrands } from '../components/product/brands';
 import { COGS } from './cells/cogs';
 import {
@@ -67,8 +67,8 @@ const cells = {
 		price: Price,
 		regular_price: EditablePrice,
 		sale_price: EditablePrice,
-		date_created_gmt: DateCell,
-		date_modified_gmt: DateCell,
+		date_created_gmt: RecordDateCell,
+		date_modified_gmt: RecordDateCell,
 		stock_quantity: StockQuantity,
 		stock_status: StockStatus,
 		categories: ProductCategories,
@@ -84,8 +84,8 @@ const cells = {
 		regular_price: VariableProductPrice,
 		price: VariableProductPrice,
 		sale_price: VariableProductPrice,
-		date_created_gmt: DateCell,
-		date_modified_gmt: DateCell,
+		date_created_gmt: RecordDateCell,
+		date_modified_gmt: RecordDateCell,
 		stock_quantity: StockQuantity,
 		stock_status: StockStatus,
 		categories: ProductCategories,
@@ -102,8 +102,8 @@ const variationCells = {
 	sale_price: EditablePrice,
 	regular_price: EditablePrice,
 	stock_quantity: StockQuantity,
-	date_created_gmt: DateCell,
-	date_modified_gmt: DateCell,
+	date_created_gmt: RecordDateCell,
+	date_modified_gmt: RecordDateCell,
 	barcode: Barcode,
 	stock_status: StockStatus,
 	image: ProductVariationImage,
@@ -126,7 +126,7 @@ function renderCell(columnKey: string, info: any) {
 		return <Renderer {...info} />;
 	}
 
-	return <TextCell {...info} />;
+	return <RecordTextCell {...info} />;
 }
 
 /**

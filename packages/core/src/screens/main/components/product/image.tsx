@@ -17,10 +17,9 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 export function ProductImage({
 	row,
 }: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'image'>) {
-	const product = row.original.document;
 	const images = useRecordField(row.original.record, (record) => record.payload.images);
 	const imageURL = get(images, [0, 'src'], undefined);
-	const { uri, error } = useImageAttachment(product, imageURL ?? '');
+	const { uri, error } = useImageAttachment(row.original.record, imageURL ?? '');
 
 	if (error) {
 		return (

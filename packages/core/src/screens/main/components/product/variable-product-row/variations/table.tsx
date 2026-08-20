@@ -13,7 +13,7 @@ import type { EngineRecord } from '@wcpos/query';
 
 import { VariationTableFooter } from './footer';
 import { resolveStock } from '../../resolve-stock';
-import { TextCell } from '../../../../components/text-cell';
+import { RecordTextCell } from '../../../../components/record-text-cell';
 import { getColumnStyle } from '../../../data-table';
 
 import type { DataTableFeatures } from '../../../data-table';
@@ -28,7 +28,8 @@ interface Props {
 }
 
 interface TableCellRow {
-	document: Record<string, unknown>;
+	document: ProductVariationDocument;
+	record: EngineRecord<'variations'>;
 }
 
 interface VariationHit {
@@ -57,7 +58,7 @@ const cellRenderer = (props: CellContext<TableCellRow, unknown, DataTableFeature
 		);
 	}
 
-	return <TextCell {...(props as CellContext<TableCellRow, string, DataTableFeatures>)} />;
+	return <RecordTextCell {...(props as CellContext<TableCellRow, string, DataTableFeatures>)} />;
 };
 
 /**

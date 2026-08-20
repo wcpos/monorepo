@@ -21,9 +21,7 @@ import type { QueryStateActions } from '../../../../../query';
 
 const gridLogger = getLogger(['wcpos', 'pos', 'products', 'grid']);
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductHit = {
-	document: ProductDocument;
 	record: EngineRecord<'products'>;
 };
 
@@ -101,21 +99,15 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 					renderItem={({ item: row }) => (
 						<VirtualizedList.Item>
 							<View className="flex-row">
-								{row?.map(({ document, record }) =>
+								{row?.map(({ record }) =>
 									record.payload.type === 'variable' ? (
 										<VariableProductTile
 											key={record.uuid}
-											product={document}
 											record={record}
 											gridFields={gridFields}
 										/>
 									) : (
-										<ProductTile
-											key={record.uuid}
-											product={document}
-											record={record}
-											gridFields={gridFields}
-										/>
+										<ProductTile key={record.uuid} record={record} gridFields={gridFields} />
 									)
 								)}
 								{/* Spacers for incomplete last row */}

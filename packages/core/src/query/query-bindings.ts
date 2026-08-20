@@ -633,7 +633,7 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 			switchMap(([direct, children]) => {
 				const counts = new Map<number, number>();
 				for (const hit of children.hits) {
-					const parentId = Number((hit.document as unknown as Record<string, unknown>).parent_id);
+					const parentId = Number(hit.record.payload.parent_id);
 					if (Number.isFinite(parentId)) counts.set(parentId, (counts.get(parentId) ?? 0) + 1);
 				}
 				const parentIds = [...counts.keys()];
@@ -656,7 +656,7 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 						...result,
 						searchActive: Boolean(compiled.read.search),
 						hits: result.hits.map((hit) => {
-							const wooId = Number((hit.document as unknown as Record<string, unknown>).id);
+							const wooId = Number(hit.record.payload.id);
 							return {
 								...hit,
 								childrenSearchCount: counts.get(wooId) ?? 0,
