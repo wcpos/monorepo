@@ -293,7 +293,7 @@ describe('scheduler drain through the public handle', () => {
 		await engine.dispose();
 	});
 
-	it('stores a response total with query and census freshness from the drain clock', async () => {
+	it('stores a response total with query freshness and never touches the census (#1400)', async () => {
 		const nowMs = 10_000;
 		const server = scriptedProductServer([], 42);
 		const engine = engineWith(server.fetch, {
@@ -314,11 +314,9 @@ describe('scheduler drain through the public handle', () => {
 			updatedAtMs: nowMs,
 			freshUntilMs: nowMs + 300_000,
 		});
-		expect((await cache.findOne('census:products').exec())?.toJSON()).toMatchObject({
-			totalMatchingRecords: 42,
-			updatedAtMs: nowMs,
-			freshUntilMs: nowMs + 60_000,
-		});
+		// The walk counts wcpos/v2; census:products is owned by the query-total
+		// probe against the wc/v3 census route — one writer, no oscillation.
+		expect(await cache.findOne('census:products').exec()).toBeNull();
 		await engine.dispose();
 	});
 

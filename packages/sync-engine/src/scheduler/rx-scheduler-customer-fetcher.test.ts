@@ -521,8 +521,9 @@ describe('createCustomerSchedulerFetcher', () => {
 
 			await kit.schedulerFetcher(browseTask(100));
 
+			// Window total only — census:customers is probe-owned (#1400).
 			expect(kit.cacheQueryTotals).toHaveBeenCalledWith({
-				queryKeys: ['customers:browse-window:limit=100', 'census:customers'],
+				queryKeys: ['customers:browse-window:limit=100'],
 				totalMatchingRecords: 4_200,
 			});
 			// 100 of 4,200 is NOT a complete lane — recording it as one is the false-complete bug.

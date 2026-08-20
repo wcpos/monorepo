@@ -19,7 +19,6 @@ import { type RemoteId, type SyncObserver, wooIdOf } from '@wcpos/sync-core';
 import { manifestRowsForApplied } from '../local-coverage/existence-manifest-population';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import { chunk } from './chunk';
-import { censusQueryKey } from './census';
 import { type CacheQueryTotals, queryTotalFromResponse } from './query-total-requests';
 import {
 	parseReferenceLaneQueryKey,
@@ -220,13 +219,9 @@ export function createGreedyCollectionFetcher<Doc, Payload>(
 			throw new Error(`Woo REST ${spec.collection} request failed: ${response.status}`);
 
 		const payloads = JSON.parse(await response.text()) as Payload[];
-		const totalMatchingRecords = queryTotalFromResponse(response);
-		if (page === 1 && totalMatchingRecords !== null && input.cacheQueryTotals) {
-			await input.cacheQueryTotals({
-				queryKeys: [censusQueryKey(spec.collection)],
-				totalMatchingRecords,
-			});
-		}
+		// This pull counts wcpos/v2 while the census probes the wc/v3 census
+		// route — the census key keeps ONE writer, the query-total lane, so the
+		// health page never oscillates between two endpoints' populations (#1400).
 		const documents = payloads.map(spec.documentFromPayload);
 		await input.repository.upsertMany(documents);
 
