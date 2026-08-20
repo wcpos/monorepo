@@ -105,6 +105,8 @@ function loadCreateAppEngine(
 	jest.doMock('@wcpos/sync-engine', () => ({
 		createRxdbSyncEngine,
 		createWriteOutcomeBridge,
+		// The engine fetcher hydrates 2xx responses through this seam (B9); an
+		// identity stub keeps these engine-lifecycle tests transport-free.
 		hydrateResponse: jest.fn(async (response: Response) => response),
 		writeOutcomeChannelName,
 	}));

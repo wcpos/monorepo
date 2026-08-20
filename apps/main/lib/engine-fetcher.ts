@@ -232,19 +232,24 @@ export function createEngineFetcher(input: {
 			// too late for the perf screen's recordServerLoad sample below. The
 			// wrapper's second pass is an idempotent passthrough (memoized body,
 			// patched headers).
-			let transportState = envelopeTransportByFetcher.get(fetcher);
-			if (!transportState) {
-				transportState = { responseHeadersReadable: true };
-				envelopeTransportByFetcher.set(fetcher, transportState);
+			// Scoped to 2xx: the server never envelopes errors or 304s, and the
+			// auth-retry path must keep un-consumed 401 bodies clone-able.
+			if (response.ok) {
+				let transportState = envelopeTransportByFetcher.get(fetcher);
+				if (!transportState) {
+					transportState = { responseHeadersReadable: true };
+					envelopeTransportByFetcher.set(fetcher, transportState);
+				}
+				const state = transportState;
+				response = await hydrateResponse(response, {
+					envelopeRequested,
+					transportState: state,
+					onDiagnostic: (kind) =>
+						engineLogger.debug(`Response envelope metadata is ${kind}`, {
+							context: { responseHeadersReadable: state.responseHeadersReadable },
+						}),
+				});
 			}
-			response = await hydrateResponse(response, {
-				envelopeRequested,
-				transportState,
-				onDiagnostic: (kind) =>
-					engineLogger.debug(`Response envelope metadata is ${kind}`, {
-						context: { responseHeadersReadable: transportState.responseHeadersReadable },
-					}),
-			});
 
 			const serverLoad = response.headers.get('X-Server-Load');
 			if (serverLoad !== null) {
