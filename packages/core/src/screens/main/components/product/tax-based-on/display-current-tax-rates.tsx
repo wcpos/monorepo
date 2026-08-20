@@ -16,12 +16,13 @@ import {
 } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { TaxRateDocument } from '@wcpos/database';
 
 import { useT } from '../../../../../contexts/translations';
 
+import type { TaxRateData } from '../../../contexts/tax-rates';
+
 interface DisplayCurrentTaxRatesProps {
-	rates: TaxRateDocument[];
+	rates: TaxRateData[];
 	country?: string;
 	state?: string;
 	city?: string;

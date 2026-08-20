@@ -21,12 +21,12 @@ const allRates = [
 	{ id: 1, class: 'standard', country: '', state: '', cities: [], postcodes: [] },
 	{ id: 2, class: 'reduced-rate', country: '', state: '', cities: [], postcodes: [] },
 ];
-const mockResource = { hits: allRates.map((document) => ({ document })) };
+const mockResource = { hits: allRates.map((payload) => ({ record: { payload } })) };
 
 /**
  * Swappable so the address tests can supply country-specific rates; reset in `beforeEach`.
  */
-let activeResource: { hits: { document: unknown }[] } = mockResource;
+let activeResource: { hits: { record: { payload: unknown }; document?: unknown }[] } = mockResource;
 
 const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown) => ({
 	resource: activeResource,
@@ -103,6 +103,11 @@ describe('TaxRatesProvider query-state consumption', () => {
 		return <output data-testid="context">{JSON.stringify(useTaxRates())}</output>;
 	}
 
+	function RatesProbe() {
+		const { rates } = useTaxLocation();
+		return <output data-testid="rate-ids">{rates.map((rate) => rate.id).join(',')}</output>;
+	}
+
 	it('owns an all-rates binding and does not republish its query object', () => {
 		render(
 			<TaxRatesProvider>
@@ -124,6 +129,25 @@ describe('TaxRatesProvider query-state consumption', () => {
 		expect(context.allRates).toHaveLength(2);
 		expect(context.taxClasses).toEqual(['standard', 'reduced-rate']);
 		expect(context).not.toHaveProperty('taxQuery');
+	});
+
+	it('uses the plain payload id as the equal-priority tax-rate tiebreak', () => {
+		const higherPayloadId = { ...allRates[0], id: 9, country: 'US', priority: 1 };
+		const lowerPayloadId = { ...allRates[0], id: 4, country: 'US', priority: 1 };
+		activeResource = {
+			hits: [
+				{ record: { payload: higherPayloadId }, document: { ...higherPayloadId, id: 1 } },
+				{ record: { payload: lowerPayloadId }, document: { ...lowerPayloadId, id: 2 } },
+			],
+		};
+
+		render(
+			<TaxRatesProvider>
+				<RatesProbe />
+			</TaxRatesProvider>
+		);
+
+		expect(screen.getByTestId('rate-ids').textContent).toBe('4');
 	});
 });
 
@@ -282,7 +306,7 @@ describe('tax follows the customer address', () => {
 	}
 
 	beforeEach(() => {
-		activeResource = { hits: [usRate, gbRate].map((document) => ({ document })) };
+		activeResource = { hits: [usRate, gbRate].map((payload) => ({ record: { payload } })) };
 	});
 
 	it('re-filters the rates when the billing address changes', () => {

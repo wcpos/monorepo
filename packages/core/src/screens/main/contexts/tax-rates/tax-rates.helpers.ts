@@ -6,7 +6,8 @@ import isEmpty from 'lodash/isEmpty';
 import map from 'lodash/map';
 import replace from 'lodash/replace';
 import some from 'lodash/some';
-type TaxRate = import('@wcpos/database').TaxRateDocument;
+
+import type { TaxRateData } from './provider';
 
 /**
  * Normalize a given postcode by removing spaces and converting it to uppercase.
@@ -65,9 +66,9 @@ type MatchedLocationCounts = { postcodes: number; cities: number };
 
 /** Mirrors `WC_Tax::sort_rates_callback`: priority, then location specificity, then id. */
 function compareTaxRates(
-	rate1: TaxRate,
-	rate2: TaxRate,
-	matchedCounts: Map<TaxRate, MatchedLocationCounts>
+	rate1: TaxRateData,
+	rate2: TaxRateData,
+	matchedCounts: Map<TaxRateData, MatchedLocationCounts>
 ): number {
 	const priority1 = rate1.priority ?? 0;
 	const priority2 = rate2.priority ?? 0;
@@ -125,17 +126,17 @@ function compareTaxRates(
  * Filter tax rates based on the provided country, state, postcode, and city.
  */
 export function filterTaxRates(
-	taxRates: TaxRate[],
+	taxRates: TaxRateData[],
 	country: string = '',
 	state: string = '',
 	postcode: string = '',
 	city: string = ''
-): TaxRate[] {
+): TaxRateData[] {
 	const taxRatesByClass = groupBy(taxRates, 'class');
 	const normalizedPostcode = normalizePostcode(postcode);
 	const filteredTaxRatesByClass = map(taxRatesByClass, (taxRatesInClass) => {
 		const cityUpperCase = city.toUpperCase();
-		const matchedCounts = new Map<TaxRate, MatchedLocationCounts>(
+		const matchedCounts = new Map<TaxRateData, MatchedLocationCounts>(
 			taxRatesInClass.map((rate) => [
 				rate,
 				{

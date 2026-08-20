@@ -4,6 +4,7 @@ import { useObservable, useObservableEagerState, useObservableSuspense } from 'o
 import { combineLatest, of } from 'rxjs';
 import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
+import type { EngineRecord } from '@wcpos/query';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import { filterTaxRates } from './tax-rates.helpers';
@@ -13,11 +14,12 @@ import { TAX_RATES_ALL_RESULTS_LIMIT, TAX_RATES_INITIAL_SORT } from '../../tax-r
 import { useBaseTaxLocation } from '../../hooks/use-base-tax-location';
 import { useCurrentOrderOptional } from '../../pos/contexts/current-order/context';
 
-type TaxRateDocument = import('@wcpos/database').TaxRateDocument;
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
+export type TaxRateData = EngineRecord<'taxRates'>['payload'];
+
 interface QueryResult {
-	hits: { document: TaxRateDocument }[];
+	hits: { record: EngineRecord<'taxRates'> }[];
 }
 
 /** Address fields used to select the applicable tax rates. */
@@ -36,7 +38,7 @@ export type TaxBasedOn = 'base' | 'shipping' | 'billing';
  * current order, so this context does NOT tick when the cart is written to.
  */
 export interface TaxSettingsContextProps {
-	allRates: TaxRateDocument[];
+	allRates: TaxRateData[];
 	shippingTaxClass: string;
 	calcTaxes: boolean;
 	pricesIncludeTax: boolean;
@@ -50,7 +52,7 @@ export interface TaxSettingsContextProps {
  * filtered to it. Only consumers that actually need the resolved location subscribe here.
  */
 export interface TaxLocationContextProps {
-	rates: TaxRateDocument[];
+	rates: TaxRateData[];
 	taxBasedOn: TaxBasedOn;
 	location: TaxLocation;
 }
@@ -107,7 +109,7 @@ function TaxSettingsProvider({ children }: { children: React.ReactNode }) {
 	const state = useQueryState<'tax-rates'>();
 	const binding = useCollectionBinding('tax-rates', state);
 	const result = useObservableSuspense(binding.resource) as QueryResult;
-	const allRates = React.useMemo(() => result.hits.map((hit) => hit.document), [result.hits]);
+	const allRates = React.useMemo(() => result.hits.map((hit) => hit.record.payload), [result.hits]);
 
 	const { store } = useAppState();
 	const shippingTaxClass = useObservableEagerState(store.shipping_tax_class$);

@@ -18,7 +18,7 @@ const rates = [
 	{ id: 3, name: 'Second standard', class: 'standard' },
 ];
 const mockBinding = {
-	resource: { hits: rates.map((document) => ({ document })) },
+	resource: { hits: rates.map((payload) => ({ record: { payload } })) },
 	active$: of(false),
 	total$: of(3),
 	totalSource$: of('coverage' as const),
