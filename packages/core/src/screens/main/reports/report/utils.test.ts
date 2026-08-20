@@ -1,6 +1,6 @@
-import type { OrderDocument } from '@wcpos/database';
-
 import { calculateTotals } from './utils';
+
+import type { OrderPayload } from '../context';
 
 describe('calculateTotals', () => {
 	const mockOrders = [
@@ -58,7 +58,7 @@ describe('calculateTotals', () => {
 				{ key: '_pos_store', value: 'store_1' },
 			],
 		},
-	] as OrderDocument[];
+	] as OrderPayload[];
 
 	it('calculates the total correctly', () => {
 		const result = calculateTotals({ orders: mockOrders });
@@ -184,7 +184,7 @@ describe('calculateTotals', () => {
 				meta_data: [],
 				refunds: [{ id: 3, reason: '', total: '-10.00' }],
 			},
-		] as unknown as OrderDocument[];
+		] as unknown as OrderPayload[];
 
 		const result = calculateTotals({ orders: ordersWithRefunds });
 		expect(result.refundTotal).toBe(32); // 17 + 5 + 10

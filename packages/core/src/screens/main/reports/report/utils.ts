@@ -2,10 +2,11 @@ import round from 'lodash/round';
 import toNumber from 'lodash/toNumber';
 
 import { wooMetaCarrier } from '@wcpos/sync-core';
-import type { OrderDocument } from '@wcpos/database';
+
+import type { OrderPayload } from '../context';
 
 interface CalculateTotalsProps {
-	orders: OrderDocument[];
+	orders: OrderPayload[];
 	num_decimals?: number;
 }
 

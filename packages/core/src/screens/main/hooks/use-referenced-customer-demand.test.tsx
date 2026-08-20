@@ -8,12 +8,18 @@ import { useReferencedCustomerDemand } from './use-referenced-customer-demand';
 
 type Result = {
 	hits: {
-		document: {
-			customer_id?: unknown;
-			meta_data?: { key?: string; value?: unknown }[];
+		record: {
+			payload: {
+				customer_id?: number;
+				meta_data?: { key?: string; value?: unknown }[];
+			};
 		};
 	}[];
 };
+
+const hit = (payload: Result['hits'][number]['record']['payload']): Result['hits'][number] => ({
+	record: { payload },
+});
 
 const requireCustomer = jest.fn();
 const engine = { require: requireCustomer };
@@ -49,14 +55,12 @@ describe('useReferencedCustomerDemand', () => {
 		await act(async () => {
 			result$.next({
 				hits: [
-					{ document: { customer_id: 5 } },
-					{ document: { customer_id: 0 } },
-					{
-						document: {
-							customer_id: 5,
-							meta_data: [{ key: '_pos_user', value: '7' }],
-						},
-					},
+					hit({ customer_id: 5 }),
+					hit({ customer_id: 0 }),
+					hit({
+						customer_id: 5,
+						meta_data: [{ key: '_pos_user', value: '7' }],
+					}),
 				],
 			});
 			await firstHandle.ready;
@@ -74,12 +78,10 @@ describe('useReferencedCustomerDemand', () => {
 		act(() => {
 			result$.next({
 				hits: [
-					{
-						document: {
-							customer_id: 5,
-							meta_data: [{ key: '_pos_user', value: 7 }],
-						},
-					},
+					hit({
+						customer_id: 5,
+						meta_data: [{ key: '_pos_user', value: 7 }],
+					}),
 				],
 			});
 		});
@@ -88,13 +90,11 @@ describe('useReferencedCustomerDemand', () => {
 		act(() => {
 			result$.next({
 				hits: [
-					{
-						document: {
-							customer_id: 5,
-							meta_data: [{ key: '_pos_user', value: 7 }],
-						},
-					},
-					{ document: { customer_id: 9 } },
+					hit({
+						customer_id: 5,
+						meta_data: [{ key: '_pos_user', value: 7 }],
+					}),
+					hit({ customer_id: 9 }),
 				],
 			});
 		});
@@ -120,12 +120,12 @@ describe('useReferencedCustomerDemand', () => {
 		renderHook(() => useReferencedCustomerDemand(result$));
 
 		await act(async () => {
-			result$.next({ hits: [{ document: { customer_id: 5 } }] });
+			result$.next({ hits: [hit({ customer_id: 5 })] });
 			await rejectedHandle.ready.catch(() => undefined);
 		});
 		act(() => {
 			result$.next({
-				hits: [{ document: { customer_id: 5 } }, { document: { customer_id: 9 } }],
+				hits: [hit({ customer_id: 5 }), hit({ customer_id: 9 })],
 			});
 		});
 
@@ -162,12 +162,12 @@ describe('useReferencedCustomerDemand', () => {
 		requireCustomer.mockReturnValueOnce(handle).mockImplementation(resolvedHandle);
 		renderHook(() => useReferencedCustomerDemand(result$));
 
-		act(() => result$.next({ hits: [{ document: { customer_id: 12 } }] }));
+		act(() => result$.next({ hits: [hit({ customer_id: 12 })] }));
 		act(() => result$.next({ hits: [] }));
 		await act(async () => {
 			await ready;
 		});
-		act(() => result$.next({ hits: [{ document: { customer_id: 12 } }] }));
+		act(() => result$.next({ hits: [hit({ customer_id: 12 })] }));
 
 		expect(requireCustomer).toHaveBeenCalledTimes(2);
 	});
@@ -179,11 +179,11 @@ describe('useReferencedCustomerDemand', () => {
 		act(() => {
 			result$.next({
 				hits: [
-					{ document: { customer_id: -1 } },
-					{ document: { customer_id: Number.NaN } },
-					{ document: { customer_id: 1.5 } },
-					{ document: { meta_data: [{ key: '_pos_user', value: 'cashier' }] } },
-					{ document: { meta_data: [{ key: '_pos_user', value: '0' }] } },
+					hit({ customer_id: -1 }),
+					hit({ customer_id: Number.NaN }),
+					hit({ customer_id: 1.5 }),
+					hit({ meta_data: [{ key: '_pos_user', value: 'cashier' }] }),
+					hit({ meta_data: [{ key: '_pos_user', value: '0' }] }),
 				],
 			});
 		});

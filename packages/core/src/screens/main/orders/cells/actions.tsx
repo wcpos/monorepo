@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import { useRouter } from 'expo-router';
-import { useObservableEagerState } from 'observable-hooks';
 
 import {
 	AlertDialog,
@@ -23,7 +22,13 @@ import {
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
-import { awaitWriteOutcome, useQueryRuntime, WriteOutcomeError } from '@wcpos/query';
+import {
+	awaitWriteOutcome,
+	type EngineRecord,
+	useQueryRuntime,
+	useRecordField,
+	WriteOutcomeError,
+} from '@wcpos/query';
 import {
 	NO_STORE,
 	POS_META_KEYS,
@@ -51,27 +56,30 @@ const REFUNDABLE_STATUSES: readonly string[] = ['completed', 'processing', 'on-h
 /**
  *
  */
-export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actions'>) {
+export function Actions({
+	row,
+}: CellContext<{ document: OrderDocument; record: EngineRecord<'orders'> }, 'actions'>) {
 	const order = row.original.document;
+	const record = row.original.record;
 	const router = useRouter();
-	const status = useObservableEagerState(order.status$!);
+	const status = useRecordField(record, ({ payload }) => payload.status);
 	const { localPatch } = useLocalMutation();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
 	const { store, wpCredentials } = useAppState();
-	const orderHasID = useObservableEagerState(order.id$!); // we need to update the menu with change to order.id
+	const orderID = useRecordField(record, ({ payload }) => payload.id);
 	const runtime = useQueryRuntime();
 	const { readOnly } = useProAccess();
 	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
-	const canRefund = orderHasID && !!status && REFUNDABLE_STATUSES.includes(status);
+	const canRefund = orderID && !!status && REFUNDABLE_STATUSES.includes(status);
 
 	const handleRefresh = React.useCallback(() => {
-		if (!orderHasID) return;
+		if (!orderID) return;
 		const handle = runtime.engine.require({
-			id: `order-actions:refresh:${orderHasID}`,
+			id: `order-actions:refresh:${orderID}`,
 			collection: 'orders',
 			kind: 'targeted-records',
-			remoteIds: [orderHasID].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
+			remoteIds: [orderID].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 			forceRefresh: true,
 		});
 		void handle.ready
@@ -81,12 +89,12 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 					code: ERROR_CODES.SYNC_UNEXPECTED,
 					showToast: true,
 					context: {
-						orderId: orderHasID,
+						orderId: orderID,
 						error: getErrorMessage(error),
 					},
 				});
 			});
-	}, [runtime, orderHasID]);
+	}, [runtime, orderID]);
 
 	/**
 	 * To re-open an order, we need to:
@@ -111,7 +119,10 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 			meta_data = meta_data.filter((entry) => entry.key !== POS_META_KEYS.store);
 		}
 
-		await localPatch({ document: order, data: { status: 'pos-open', meta_data } });
+		await localPatch({
+			document: order,
+			data: { status: 'pos-open', meta_data },
+		});
 		if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
 		router.push({
 			pathname: '/cart/[...orderId]',
@@ -129,7 +140,10 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 	 */
 	const handleRefund = React.useCallback(() => {
 		if (blockIfDegraded('refund', { orderId: order.uuid })) return;
-		router.push({ pathname: '/orders/refund/[orderId]', params: { orderId: order.uuid! } });
+		router.push({
+			pathname: '/orders/refund/[orderId]',
+			params: { orderId: order.uuid! },
+		});
 	}, [blockIfDegraded, order.uuid, router]);
 
 	const handleDelete = React.useCallback(async () => {
@@ -199,7 +213,7 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 						<Icon name="cartShopping" />
 						<Text>{t('orders.re-open')}</Text>
 					</DropdownMenuItem>
-					{orderHasID && (
+					{orderID && (
 						<>
 							<DropdownMenuItem
 								onPress={() =>
@@ -247,14 +261,14 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 				<AlertDialogContent>
 					<AlertDialogHeader>
 						<AlertDialogTitle>
-							{order.id
+							{orderID
 								? t('orders.delete_order_2', {
-										id: order.id,
+										id: orderID,
 									})
 								: t('orders.delete_order')}
 						</AlertDialogTitle>
 						<AlertDialogDescription>
-							{order.id
+							{orderID
 								? t('orders.are_you_sure_you_want_to')
 								: t('orders.are_you_sure_you_want_to_2')}
 						</AlertDialogDescription>

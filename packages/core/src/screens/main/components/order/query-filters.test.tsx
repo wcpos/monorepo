@@ -4,13 +4,16 @@
 import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
-import { BehaviorSubject } from 'rxjs';
 
 import { Cashier } from './cashier';
 import { Customer } from './customer';
 import { Status } from './status';
 
 const mockSetFilter = jest.fn();
+
+jest.mock('@wcpos/query', () => ({
+	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
+}));
 
 jest.mock('@wcpos/components/button', () => ({
 	ButtonPill: ({ children, onPress }: { children: React.ReactNode; onPress: () => void }) => (
@@ -46,10 +49,10 @@ jest.mock('../../hooks/use-order-status-label', () => ({
 	useOrderStatusLabel: () => ({ getLabel: (status: string) => status }),
 }));
 
-function context(document: Record<string, unknown>, columnMeta: Record<string, unknown> = {}) {
+function context(payload: Record<string, unknown>, columnMeta: Record<string, unknown> = {}) {
 	return {
 		table: { options: { meta: { actions: { setFilter: mockSetFilter } } } },
-		row: { original: { document } },
+		row: { original: { document: payload, record: { payload } } },
 		column: { columnDef: { meta: columnMeta } },
 	} as unknown as React.ComponentProps<typeof Cashier>;
 }
@@ -61,7 +64,7 @@ describe('order table-cell query filters', () => {
 		render(
 			<Cashier
 				{...context({
-					meta_data$: new BehaviorSubject([{ key: '_pos_user', value: ' 0007 ' }]),
+					meta_data: [{ key: '_pos_user', value: ' 0007 ' }],
 				})}
 			/>
 		);
@@ -73,9 +76,9 @@ describe('order table-cell query filters', () => {
 		render(
 			<Customer
 				{...(context({
-					customer_id$: new BehaviorSubject(42),
-					billing$: new BehaviorSubject({}),
-					shipping$: new BehaviorSubject({}),
+					customer_id: 42,
+					billing: {},
+					shipping: {},
 				}) as unknown as React.ComponentProps<typeof Customer>)}
 			/>
 		);
@@ -87,7 +90,7 @@ describe('order table-cell query filters', () => {
 		render(
 			<Status
 				{...(context({
-					status$: new BehaviorSubject('processing'),
+					status: 'processing',
 				}) as unknown as React.ComponentProps<typeof Status>)}
 			/>
 		);

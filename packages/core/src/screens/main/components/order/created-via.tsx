@@ -1,11 +1,11 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { useObservableEagerState } from 'observable-hooks';
 
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../contexts/translations';
@@ -30,9 +30,10 @@ const iconMap = {
 /**
  *
  */
-export function CreatedVia({ row }: CellContext<{ document: OrderDocument }, 'created_via'>) {
-	const order = row.original.document;
-	const createdVia = useObservableEagerState(order.created_via$!);
+export function CreatedVia({
+	row,
+}: CellContext<{ document: OrderDocument; record: EngineRecord<'orders'> }, 'created_via'>) {
+	const createdVia = useRecordField(row.original.record, ({ payload }) => payload.created_via);
 	const iconName = get(iconMap, [createdVia ?? '', 'name'], 'circleQuestion') as string;
 	const iconType = get(iconMap, [createdVia ?? '', 'type'], 'muted') as string;
 	const t = useT();

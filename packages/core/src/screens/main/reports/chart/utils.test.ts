@@ -14,8 +14,6 @@
 
 import { format } from 'date-fns';
 
-import type { OrderDocument } from '@wcpos/database';
-
 import {
 	aggregateData,
 	determineInterval,
@@ -26,7 +24,7 @@ import {
 	getStartOfMinuteInterval,
 } from './utils';
 
-import type { DateRange } from '../context';
+import type { DateRange, OrderPayload } from '../context';
 
 // Simple mock - treats timestamps as-is (consistent with how dateRange is created in tests)
 jest.mock('../../../../hooks/use-local-date', () => ({
@@ -109,7 +107,7 @@ describe('Chart Utils', () => {
 			const orders = [
 				{ date_created_gmt: null },
 				{ date_created_gmt: undefined },
-			] as OrderDocument[];
+			] as OrderPayload[];
 			expect(getOrderTimeBounds(orders)).toBeNull();
 		});
 
@@ -118,7 +116,7 @@ describe('Chart Utils', () => {
 				{ date_created_gmt: '2023-01-01T10:30:00' },
 				{ date_created_gmt: '2023-01-01T08:00:00' },
 				{ date_created_gmt: '2023-01-01T14:45:00' },
-			] as OrderDocument[];
+			] as OrderPayload[];
 
 			const bounds = getOrderTimeBounds(orders);
 			expect(bounds).not.toBeNull();
@@ -127,7 +125,7 @@ describe('Chart Utils', () => {
 		});
 
 		it('should handle single order', () => {
-			const orders = [{ date_created_gmt: '2023-01-01T12:00:00' }] as OrderDocument[];
+			const orders = [{ date_created_gmt: '2023-01-01T12:00:00' }] as OrderPayload[];
 
 			const bounds = getOrderTimeBounds(orders);
 			expect(bounds).not.toBeNull();
@@ -153,7 +151,7 @@ describe('Chart Utils', () => {
 			const orders = [
 				{ date_created_gmt: '2023-01-01T10:30:00' },
 				{ date_created_gmt: '2023-01-01T14:15:00' },
-			] as OrderDocument[];
+			] as OrderPayload[];
 
 			const dateRange: DateRange = {
 				start: new Date('2023-01-01T00:00:00'),
@@ -278,7 +276,7 @@ describe('Chart Utils', () => {
 				{ date_created_gmt: '2023-01-20T00:00:00', total: '200', total_tax: '20' },
 				{ date_created_gmt: '2023-02-10T00:00:00', total: '150', total_tax: '15' },
 				{ date_created_gmt: '2023-03-05T00:00:00', total: '120', total_tax: '12' },
-			] as OrderDocument[];
+			] as OrderPayload[];
 
 			const dateRange: DateRange = {
 				start: new Date('2023-01-01'),
@@ -315,7 +313,7 @@ describe('Chart Utils', () => {
 			const orders = [
 				{ date_created_gmt: '2023-01-15T00:00:00', total: '100', total_tax: '10' },
 				{ date_created_gmt: '2023-03-05T00:00:00', total: '120', total_tax: '12' },
-			] as OrderDocument[];
+			] as OrderPayload[];
 
 			const dateRange: DateRange = {
 				start: new Date('2023-01-01'),
@@ -336,7 +334,7 @@ describe('Chart Utils', () => {
 				{ date_created_gmt: '2023-01-01T12:00:00', total: '200', total_tax: '20' },
 				{ date_created_gmt: '2023-01-05T00:00:00', total: '150', total_tax: '15' },
 				{ date_created_gmt: '2023-01-10T00:00:00', total: '120', total_tax: '12' },
-			] as OrderDocument[];
+			] as OrderPayload[];
 
 			const dateRange: DateRange = {
 				start: new Date('2023-01-01'),
@@ -371,7 +369,7 @@ describe('Chart Utils', () => {
 				{ date_created_gmt: '2023-01-02T00:00:00', total: '100', total_tax: '10' }, // Monday
 				{ date_created_gmt: '2023-01-03T00:00:00', total: '200', total_tax: '20' }, // Tuesday
 				{ date_created_gmt: '2023-01-04T00:00:00', total: '150', total_tax: '15' }, // Wednesday
-			] as OrderDocument[];
+			] as OrderPayload[];
 
 			const dateRange: DateRange = {
 				start: new Date('2023-01-02'),
@@ -390,7 +388,7 @@ describe('Chart Utils', () => {
 			const orders = [
 				{ date_created_gmt: '2023-01-01T00:00:00', total: '100', total_tax: '10' },
 				{ date_created_gmt: '2023-01-03T00:00:00', total: '120', total_tax: '12' },
-			] as OrderDocument[];
+			] as OrderPayload[];
 
 			const dateRange: DateRange = {
 				start: new Date('2023-01-01'),
@@ -412,7 +410,7 @@ describe('Chart Utils', () => {
 					{ date_created_gmt: '2023-01-01T10:45:00', total: '200', total_tax: '20' },
 					{ date_created_gmt: '2023-01-01T12:30:00', total: '150', total_tax: '15' },
 					{ date_created_gmt: '2023-01-01T13:45:00', total: '120', total_tax: '12' },
-				] as OrderDocument[];
+				] as OrderPayload[];
 
 				const dateRange: DateRange = {
 					start: new Date('2023-01-01T00:00:00'),
@@ -436,7 +434,7 @@ describe('Chart Utils', () => {
 					{ date_created_gmt: '2023-01-01T10:20:00', total: '50', total_tax: '5' },
 					{ date_created_gmt: '2023-01-01T10:35:00', total: '200', total_tax: '20' },
 					{ date_created_gmt: '2023-01-01T11:00:00', total: '120', total_tax: '12' },
-				] as OrderDocument[];
+				] as OrderPayload[];
 
 				const dateRange: DateRange = {
 					start: new Date('2023-01-01T00:00:00'),
@@ -462,7 +460,7 @@ describe('Chart Utils', () => {
 				const orders = [
 					{ date_created_gmt: '2023-01-01T08:00:00', total: '100', total_tax: '10' },
 					{ date_created_gmt: '2023-01-01T18:00:00', total: '200', total_tax: '20' },
-				] as OrderDocument[];
+				] as OrderPayload[];
 
 				const dateRange: DateRange = {
 					start: new Date('2023-01-01T00:00:00'),
@@ -484,7 +482,7 @@ describe('Chart Utils', () => {
 			});
 
 			it('should show full day with 2-hour intervals when no orders', () => {
-				const orders = [] as OrderDocument[];
+				const orders = [] as OrderPayload[];
 
 				const dateRange: DateRange = {
 					start: new Date('2023-01-01T00:00:00'),
@@ -503,7 +501,7 @@ describe('Chart Utils', () => {
 		});
 
 		it('should handle empty orders array with multi-day range', () => {
-			const orders = [] as OrderDocument[];
+			const orders = [] as OrderPayload[];
 
 			const dateRange: DateRange = {
 				start: new Date('2023-01-01'),
@@ -522,7 +520,7 @@ describe('Chart Utils', () => {
 				{ date_created_gmt: '2022-12-31T00:00:00', total: '100', total_tax: '10' }, // Before range
 				{ date_created_gmt: '2023-01-02T00:00:00', total: '200', total_tax: '20' }, // In range
 				{ date_created_gmt: '2023-01-04T00:00:00', total: '150', total_tax: '15' }, // After range
-			] as OrderDocument[];
+			] as OrderPayload[];
 
 			const dateRange: DateRange = {
 				start: new Date('2023-01-01'),
@@ -551,7 +549,7 @@ describe('Chart Utils', () => {
 				// The mock ensures consistency - if either path was different, orders would be missed
 				const orders = [
 					{ date_created_gmt: '2023-01-01T10:30:00', total: '100', total_tax: '10' },
-				] as OrderDocument[];
+				] as OrderPayload[];
 
 				const dateRange: DateRange = {
 					start: new Date('2023-01-01T00:00:00'),
@@ -570,7 +568,7 @@ describe('Chart Utils', () => {
 				const orders = [
 					{ date_created_gmt: '2023-01-01T10:15:00', total: '100', total_tax: '10' },
 					{ date_created_gmt: '2023-01-02T14:30:00', total: '200', total_tax: '20' },
-				] as OrderDocument[];
+				] as OrderPayload[];
 
 				const dateRange: DateRange = {
 					start: new Date('2023-01-01'),
@@ -591,7 +589,7 @@ describe('Chart Utils', () => {
 				// A range within the same calendar day should use minute-based intervals
 				const orders = [
 					{ date_created_gmt: '2023-01-01T14:00:00', total: '100', total_tax: '10' },
-				] as OrderDocument[];
+				] as OrderPayload[];
 
 				const dateRange: DateRange = {
 					start: new Date('2023-01-01T00:00:00'),

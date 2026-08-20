@@ -1,10 +1,9 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -12,9 +11,10 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 /**
  *
  */
-export function Note({ row }: CellContext<{ document: OrderDocument }, 'customer_note'>) {
-	const order = row.original.document;
-	const note = useObservableEagerState(order.customer_note$!);
+export function Note({
+	row,
+}: CellContext<{ document: OrderDocument; record: EngineRecord<'orders'> }, 'customer_note'>) {
+	const note = useRecordField(row.original.record, ({ payload }) => payload.customer_note);
 
 	if (!note) {
 		return null;

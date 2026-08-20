@@ -14,10 +14,22 @@ jest.mock('../../../hooks/use-local-date', () => ({
 	convertUTCStringToLocalDate: (value: string) => new Date(value),
 }));
 
-const orders = [{ uuid: 'one' }, { uuid: 'two' }] as import('@wcpos/database').OrderDocument[];
+const orders = [
+	{ uuid: 'one', total: 'legacy-one' },
+	{ uuid: 'two', total: 'legacy-two' },
+] as import('@wcpos/database').OrderDocument[];
 const binding = {
 	resource: new ObservableResource(
-		of({ hits: orders.map((document) => ({ id: document.uuid, document })) })
+		of({
+			hits: orders.map((document) => ({
+				id: document.uuid,
+				document,
+				record: {
+					uuid: document.uuid,
+					payload: { total: `engine-${document.uuid}` },
+				},
+			})),
+		})
 	),
 };
 const Provider = ReportsProvider as unknown as React.ComponentType<{
@@ -56,7 +68,30 @@ function Probe() {
 	);
 }
 
+function PayloadProbe() {
+	const { allOrders } = useReportsData();
+	return <div data-testid="order-totals">{allOrders.map((order) => order.total).join(',')}</div>;
+}
+
 describe('ReportsProvider binding context', () => {
+	it('maps report rows from engine record payloads rather than legacy documents', () => {
+		render(
+			<QueryStateProvider
+				collection="orders"
+				initialPageSize={Number.MAX_SAFE_INTEGER}
+				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+			>
+				<React.Suspense fallback={null}>
+					<Provider binding={binding}>
+						<PayloadProbe />
+					</Provider>
+				</React.Suspense>
+			</QueryStateProvider>
+		);
+
+		expect(screen.getByTestId('order-totals').textContent).toBe('engine-one,engine-two');
+	});
+
 	it('derives orders, selection, and dates from the binding result plus query state', () => {
 		render(
 			<QueryStateProvider

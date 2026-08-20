@@ -104,7 +104,7 @@ jest.mock('./cells/actions', () => ({ Actions: () => null }));
 jest.mock('./cells/address', () => ({ Address: () => null }));
 jest.mock('./cells/note', () => ({ Note: () => null }));
 jest.mock('./cells/receipt', () => ({ Receipt: () => null }));
-jest.mock('../components/date', () => ({ DateCell: () => null }));
+jest.mock('../components/record-date-cell', () => ({ RecordDateCell: () => null }));
 jest.mock('../components/order/cashier', () => ({ Cashier: () => null }));
 jest.mock('../components/order/created-via', () => ({ CreatedVia: () => null }));
 jest.mock('../components/order/customer', () => ({ Customer: () => null }));
@@ -112,7 +112,7 @@ jest.mock('../components/order/order-number', () => ({ OrderNumber: () => null }
 jest.mock('../components/order/payment-method', () => ({ PaymentMethod: () => null }));
 jest.mock('../components/order/status', () => ({ Status: () => null }));
 jest.mock('../components/order/total', () => ({ Total: () => null }));
-jest.mock('../components/text-cell', () => ({ TextCell: () => null }));
+jest.mock('../components/record-text-cell', () => ({ RecordTextCell: () => null }));
 jest.mock('../hooks/use-referenced-customer-demand', () => ({
 	useReferencedCustomerDemand: jest.fn(),
 }));

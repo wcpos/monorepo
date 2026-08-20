@@ -1,8 +1,7 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { FormatAddress } from '@wcpos/components/format';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -13,11 +12,13 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 export function Address({
 	row,
 	column,
-}: CellContext<{ document: OrderDocument }, 'billing' | 'shipping'>) {
-	const order = row.original.document;
-	const address = useObservableEagerState(
-		(order as unknown as Record<string, import('rxjs').Observable<unknown>>)[`${column.id}$`]
-	) as Record<string, string> | undefined;
+}: CellContext<
+	{ document: OrderDocument; record: EngineRecord<'orders'> },
+	'billing' | 'shipping'
+>) {
+	const key = column.id as 'billing' | 'shipping';
+	const address = useRecordField(row.original.record, ({ payload }) => payload[key]) as
+		Record<string, string> | undefined;
 
 	return address ? <FormatAddress address={address} showName={false} /> : null;
 }

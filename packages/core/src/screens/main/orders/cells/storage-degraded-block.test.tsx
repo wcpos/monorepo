@@ -4,7 +4,6 @@
 import * as React from 'react';
 
 import { act, render } from '@testing-library/react';
-import { BehaviorSubject } from 'rxjs';
 
 import {
 	clearStorageDegradation,
@@ -18,7 +17,10 @@ import { Actions } from './actions';
  * delete is a void, both writes the device cannot record while the storage
  * worker is dead.
  */
-const mockEngineWrite = jest.fn(async () => ({ mutationId: 'delete-1', annihilated: true }));
+const mockEngineWrite = jest.fn(async () => ({
+	mutationId: 'delete-1',
+	annihilated: true,
+}));
 const mockLocalPatch = jest.fn();
 const mockPush = jest.fn();
 const mockHandlers = new Map<string, () => unknown>();
@@ -27,7 +29,10 @@ const mockDisabled = new Map<string, boolean>();
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 
 jest.mock('@wcpos/query', () => ({
-	useQueryRuntime: () => ({ engine: { write: mockEngineWrite, require: jest.fn() } }),
+	useQueryRuntime: () => ({
+		engine: { write: mockEngineWrite, require: jest.fn() },
+	}),
+	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 	awaitWriteOutcome: jest.fn(async () => undefined),
 	WriteOutcomeError: class WriteOutcomeError extends Error {},
 }));
@@ -53,7 +58,11 @@ jest.mock('@wcpos/components/dropdown-menu', () => ({
 		onPress,
 		testID,
 		disabled,
-	}: React.PropsWithChildren<{ onPress?: () => unknown; testID?: string; disabled?: boolean }>) => {
+	}: React.PropsWithChildren<{
+		onPress?: () => unknown;
+		testID?: string;
+		disabled?: boolean;
+	}>) => {
 		recordAction(testID, onPress, disabled);
 		return <div data-testid={testID}>{children}</div>;
 	},
@@ -72,7 +81,11 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 		onPress,
 		testID,
 		disabled,
-	}: React.PropsWithChildren<{ onPress?: () => unknown; testID?: string; disabled?: boolean }>) => {
+	}: React.PropsWithChildren<{
+		onPress?: () => unknown;
+		testID?: string;
+		disabled?: boolean;
+	}>) => {
 		recordAction(testID, onPress, disabled);
 		return <div data-testid={testID}>{children}</div>;
 	},
@@ -88,9 +101,13 @@ jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ store: { id: 1 }, wpCredentials: { id: 7 } }),
 }));
 
-jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('../../../../contexts/translations', () => ({
+	useT: () => (key: string) => key,
+}));
 
-jest.mock('../../contexts/pro-access', () => ({ useProAccess: () => ({ readOnly: false }) }));
+jest.mock('../../contexts/pro-access', () => ({
+	useProAccess: () => ({ readOnly: false }),
+}));
 
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
@@ -99,14 +116,17 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 const mockOrder = {
 	uuid: 'order-1',
 	id: 42,
-	status$: new BehaviorSubject('completed'),
-	id$: new BehaviorSubject(42),
 	getLatest: () => ({ toMutableJSON: () => ({ meta_data: [] }) }),
 };
 
-const cellProps = { row: { original: { document: mockOrder } } } as unknown as React.ComponentProps<
-	typeof Actions
->;
+const cellProps = {
+	row: {
+		original: {
+			document: mockOrder,
+			record: { payload: { id: 42, status: 'completed' } },
+		},
+	},
+} as unknown as React.ComponentProps<typeof Actions>;
 
 async function degradeStorage(databaseName: string) {
 	const instance = {

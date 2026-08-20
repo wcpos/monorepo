@@ -1,10 +1,9 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { ButtonPill } from '@wcpos/components/button';
 import { FormatAddress } from '@wcpos/components/format';
 import { VStack } from '@wcpos/components/vstack';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
@@ -21,17 +20,18 @@ export function Customer({
 	table,
 	row,
 	column,
-}: CellContext<{ document: OrderDocument }, 'customer_id'>) {
-	const order = row.original.document;
+}: CellContext<{ document: OrderDocument; record: EngineRecord<'orders'> }, 'customer_id'>) {
 	const actions = (
 		table.options.meta as {
 			actions?: Pick<QueryStateActions<'orders'>, 'setFilter'>;
 		}
 	)?.actions;
 	const { format } = useCustomerNameFormat();
-	const customerID = useObservableEagerState(order.customer_id$!);
-	const billing = useObservableEagerState(order.billing$!);
-	const shipping = useObservableEagerState(order.shipping$!);
+	const { customerID, billing, shipping } = useRecordField(row.original.record, ({ payload }) => ({
+		customerID: payload.customer_id,
+		billing: payload.billing,
+		shipping: payload.shipping,
+	}));
 	const show = (column.columnDef.meta as { show?: (key: string) => boolean } | undefined)?.show;
 
 	return (
@@ -41,7 +41,11 @@ export function Customer({
 				size="xs"
 				onPress={() => actions?.setFilter('customer_id', customerID)}
 			>
-				{format({ billing, shipping, id: customerID } as unknown as CustomerDocument)}
+				{format({
+					billing,
+					shipping,
+					id: customerID,
+				} as unknown as CustomerDocument)}
 			</ButtonPill>
 			{show?.('billing') && (
 				<FormatAddress
