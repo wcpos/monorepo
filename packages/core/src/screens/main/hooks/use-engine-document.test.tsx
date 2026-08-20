@@ -223,6 +223,16 @@ describe('useEngineDocument', () => {
 		expect(record?.payload.name).toBe('Featured');
 	});
 
+	it('resolves null for an invalid Woo ID without querying the collection', () => {
+		const findOne = jest.fn();
+		activeDatabase = databaseWithCollection('tags', findOne);
+
+		const { result } = renderHook(() => useEngineRecordByWooId('tags', 0));
+
+		expect(findOne).not.toHaveBeenCalled();
+		expect(result.current.read()).toBeNull();
+	});
+
 	it('returns engine records in requested Woo ID order and leaves missing IDs absent', () => {
 		const hardware = fakeRxDocument({
 			uuid: 'category-38',

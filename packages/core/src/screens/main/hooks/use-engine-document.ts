@@ -97,14 +97,21 @@ export function useEngineRecordByWooId<C extends EngineRecordCollectionName>(
 ): ObservableResource<EngineRecord<C> | null> {
 	const runtime = useQueryRuntime();
 	const resource = React.useMemo(() => {
+		// An invalid Woo id (0, negative, NaN) must resolve to null rather than query
+		// `remoteId: null`, which would match a locally-created unacknowledged record
+		// on writeable collections.
+		const remoteId = remoteIdOrNull(wooId);
 		const record$ = observeEngineDatabases(runtime.engine).pipe(
 			switchMap((database) => {
 				const collection = engineCollection(database, collectionName);
 				if (!collection) {
 					return EMPTY;
 				}
+				if (remoteId === null) {
+					return of(null);
+				}
 
-				return collection.findOne({ selector: { remoteId: remoteIdOrNull(wooId) } }).$;
+				return collection.findOne({ selector: { remoteId } }).$;
 			})
 		);
 		return new ObservableResource(record$);
