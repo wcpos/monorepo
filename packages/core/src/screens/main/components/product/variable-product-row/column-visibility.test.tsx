@@ -86,8 +86,8 @@ jest.mock('./variations/footer', () => ({
 jest.mock('../../text-cell', () => ({
 	TextCell: () => null,
 }));
-jest.mock('../../../pos/products/cells/variations-popover/variation-stock', () => ({
-	resolveVariationStock: () => ({ sellable: true }),
+jest.mock('../resolve-stock', () => ({
+	resolveStock: () => ({ sellable: true }),
 }));
 
 const variationHits$ = new BehaviorSubject({

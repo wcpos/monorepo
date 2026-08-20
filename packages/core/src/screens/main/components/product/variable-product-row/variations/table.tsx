@@ -12,7 +12,7 @@ import type { ProductDocument } from '@wcpos/database';
 import type { EngineRecord } from '@wcpos/query';
 
 import { VariationTableFooter } from './footer';
-import { resolveVariationStock } from '../../../../pos/products/cells/variations-popover/variation-stock';
+import { resolveStock } from '../../resolve-stock';
 import { TextCell } from '../../../../components/text-cell';
 import { getColumnStyle } from '../../../data-table';
 
@@ -80,7 +80,7 @@ export function VariationsTable({ binding, row, hideOutOfStock }: Props) {
 	const hits = React.useMemo(
 		() =>
 			hideOutOfStock
-				? result.hits.filter((hit) => resolveVariationStock(hit.record.payload).sellable)
+				? result.hits.filter((hit) => resolveStock(hit.record.payload).sellable)
 				: result.hits,
 		[hideOutOfStock, result.hits]
 	);

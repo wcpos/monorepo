@@ -534,6 +534,45 @@ describe('useBarcode online escalation', () => {
 		expect(mockBarcodeLogger.warn).not.toHaveBeenCalled();
 	});
 
+	it('adds a managed product whose optimistic quantity outranks a stale out-of-stock flag', async () => {
+		// The badge derives sellability from quantity (#1380); the scan gate must
+		// agree — a raw stock_status check here would refuse the product the grid
+		// is showing as in stock.
+		mockShowOutOfStock = false;
+		const product = productDocument();
+		product.payload.manage_stock = true;
+		product.payload.stock_quantity = 3;
+		product.payload.stock_status = 'outofstock';
+		engineProducts.push(product);
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockAddProduct).toHaveBeenCalledTimes(1);
+		expect(mockBarcodeLogger.warn).not.toHaveBeenCalled();
+	});
+
+	it('does not add an unsellable managed product when out-of-stock items are hidden', async () => {
+		mockShowOutOfStock = false;
+		const product = productDocument();
+		product.payload.manage_stock = true;
+		product.payload.stock_quantity = 0;
+		product.payload.stock_status = 'instock';
+		product.payload.backorders = 'no';
+		engineProducts.push(product);
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockAddProduct).not.toHaveBeenCalled();
+		expect(mockToastShow).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: 'warning',
+				title: 'pos_products.out_of_stock:{"name":"Keyboard"}',
+			})
+		);
+	});
+
 	it('target-requires a missing parent for a local variation before adding it', async () => {
 		const parent = productDocument(41, 'PARENT');
 		engineVariations.push(variationDocument());
