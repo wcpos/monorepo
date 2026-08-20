@@ -36,7 +36,6 @@ interface SavedRedirectState {
 	loginUrl?: string;
 	/** Identifies the consumer that initiated the redirect (see WcposAuthConfig.claimKey) */
 	claimKey?: string;
-	timestamp: number;
 }
 
 interface PendingRedirectResult {
@@ -60,7 +59,6 @@ export function saveRedirectState(loginUrl: string, csrfState: string, claimKey?
 		returnPath: window.location.pathname + window.location.search,
 		loginUrl,
 		claimKey,
-		timestamp: Date.now(),
 	};
 	sessionStorage.setItem(AUTH_STATE_KEY, JSON.stringify(state));
 	sessionStorage.setItem(AUTH_CSRF_STATE_KEY, csrfState);
@@ -105,7 +103,10 @@ export function captureRedirectResult(): void {
 	if (captured) return;
 	captured = true;
 
-	if (typeof window === 'undefined') return;
+	// React Native defines `window` (as the global object) without `location`/
+	// `history`, and the cross-platform Sites screen reaches this module via
+	// peekRedirectLoginUrl — a bare `typeof window` check is not enough.
+	if (typeof window === 'undefined' || !window.location || !window.history) return;
 
 	const { hash, search } = window.location;
 	if (!hash && !search) return;
@@ -120,14 +121,17 @@ export function captureRedirectResult(): void {
 
 	// Validate CSRF state against the raw URL param. (WcposAuthParams doesn't
 	// carry `state`, so the comparison must read the URL, not result.params.)
-	// A success return REQUIRES a saved state: the app always saves one before
-	// its own fallback redirect, so tokens arriving without it did not
-	// originate from this tab — accepting them would be a login-CSRF hole.
+	// A success return REQUIRES a saved state WITH routing metadata: the app
+	// always saves both before its own fallback redirect, so tokens arriving
+	// without them did not originate from this implementation — accepting them
+	// would be a login-CSRF hole (no CSRF key) or an unroutable success that
+	// bypasses site/claimKey matching (legacy saved state without loginUrl).
 	if (result.type === 'success') {
 		const returnedState = extractAuthParams(url)?.get('state') ?? null;
-		if (!savedCsrf) {
-			oauthLogger.error('Auth tokens returned without a saved state - rejecting', {
+		if (!savedCsrf || !saved?.loginUrl) {
+			oauthLogger.error('Auth tokens returned without complete saved state - rejecting', {
 				code: ERROR_CODES.AUTH_UNEXPECTED,
+				context: { hasSavedCsrf: !!savedCsrf, hasSavedLoginUrl: !!saved?.loginUrl },
 			});
 			result = {
 				type: 'error',

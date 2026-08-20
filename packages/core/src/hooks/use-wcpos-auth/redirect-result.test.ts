@@ -203,6 +203,43 @@ describe('redirect-result', () => {
 		expect(result?.type).toBe('success');
 	});
 
+	it('finds fragment tokens even when an unrelated query param is present', () => {
+		// extractAuthParams merges query + hash; previously a non-empty search
+		// string made the fragment invisible ("Missing required auth parameters").
+		simulateRedirectReturn({ returnUrl: `https://app.test/pos?foo=bar#${TOKEN_QUERY}` });
+
+		const result = claimRedirectResult(LOGIN_URL);
+		expect(result?.type).toBe('success');
+	});
+
+	it('rejects a success return whose saved state lacks routing metadata (legacy format)', () => {
+		// A redirect started by a previously deployed bundle saved only
+		// { returnPath } plus a valid CSRF key. Without a saved loginUrl the
+		// result would bypass site/claimKey matching entirely — reject instead.
+		setLocation('https://app.test/pos');
+		(globalThis as any).sessionStorage.setItem(
+			'wcpos_auth_state',
+			JSON.stringify({ returnPath: '/pos' })
+		);
+		(globalThis as any).sessionStorage.setItem('wcpos_auth_csrf_state', CSRF);
+		setLocation(`https://app.test/pos?${TOKEN_QUERY}`);
+
+		const result = claimRedirectResult(LOGIN_URL);
+		expect(result?.type).toBe('error');
+		expect(result?.params).toBeUndefined();
+	});
+
+	it('is inert when window lacks location/history (React Native global shape)', () => {
+		// RN defines `window` as the global object without location/history, and
+		// the cross-platform Sites screen calls peekRedirectLoginUrl on mount.
+		delete (globalThis as any).sessionStorage;
+		(globalThis as any).window = {};
+
+		expect(() => captureRedirectResult()).not.toThrow();
+		expect(peekRedirectLoginUrl()).toBeNull();
+		expect(claimRedirectResult(LOGIN_URL)).toBeNull();
+	});
+
 	it('does nothing when the URL has no auth params', () => {
 		setLocation('https://app.test/pos?foo=bar');
 		saveRedirectState(LOGIN_URL, CSRF);
