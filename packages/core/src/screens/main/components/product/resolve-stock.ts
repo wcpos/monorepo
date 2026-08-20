@@ -45,19 +45,33 @@ export function resolveStock({
 	return { status: 'instock', quantity: null, sellable: true };
 }
 
+/** The statuses WooCommerce itself computes for self-managed stock — the only
+ * vocabulary a quantity derivation may speak for. */
+const BUILT_IN_STOCK_STATUSES: ReadonlySet<string> = new Set([
+	'instock',
+	'outofstock',
+	'onbackorder',
+]);
+
 /**
  * The status a stock BADGE should display, tracking a quantity edit the moment
  * it lands locally instead of waiting for the server's ack to rewrite
  * `stock_status` (the ack is what makes the payload flag current again).
  *
  * Derivation applies ONLY when the record self-manages stock — there the
- * quantity is the truth and the flag is a server-computed echo. Everything
- * else passes the payload flag through untouched, so custom statuses
- * (e.g. a plugin's 'lowstock') and parent-managed records keep the server's
- * word verbatim.
+ * quantity is the truth and the flag is a server-computed echo — and ONLY over
+ * the built-in statuses that echo can hold. A status outside that vocabulary
+ * (e.g. a plugin's 'lowstock') is server-owned even on a self-managed record:
+ * deriving over it would clobber it on every read, and the ack — which follows
+ * this same branch — could never put it back. Parent-managed records likewise
+ * keep the server's word verbatim.
  */
 export function displayStockStatus(input: ResolveStockInput): string | undefined {
-	if (input.manage_stock === true && Number.isFinite(input.stock_quantity)) {
+	if (
+		input.manage_stock === true &&
+		Number.isFinite(input.stock_quantity) &&
+		(input.stock_status === undefined || BUILT_IN_STOCK_STATUSES.has(input.stock_status))
+	) {
 		return resolveStock(input).status;
 	}
 	return input.stock_status;

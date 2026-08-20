@@ -42,6 +42,14 @@ describe('displayStockStatus', () => {
 			expected: 'lowstock',
 		},
 		{
+			label: 'passes a custom status through even when stock is self-managed',
+			// A plugin-owned status is outside the vocabulary the quantity can
+			// derive — clobbering it would be permanent, since the ack follows
+			// this same branch (Codex P1 on #1380).
+			input: { manage_stock: true, stock_quantity: 4, stock_status: 'lowstock' },
+			expected: 'lowstock',
+		},
+		{
 			label: 'passes the flag through for parent-managed variations',
 			input: { manage_stock: 'parent' as const, stock_quantity: 0, stock_status: 'instock' },
 			expected: 'instock',
