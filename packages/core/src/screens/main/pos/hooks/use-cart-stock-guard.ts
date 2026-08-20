@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { isEngineRxDocument, resolveLegacyField, useQueryRuntime } from '@wcpos/query';
+import { engineCollection, useQueryRuntime } from '@wcpos/query';
 import { catalogDocumentId, MISC_PRODUCT_ID, remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -57,13 +57,12 @@ export const useCartStockGuard = () => {
 
 	const readStockDocument = React.useCallback(
 		async (collectionName: 'products' | 'variations', wooId: number) => {
-			const collection = runtime.engine.active()?.database.collections[collectionName];
+			const collection = engineCollection(runtime.engine.active()?.database, collectionName);
 			if (!collection) return null;
 			const remoteId = remoteIdOrNull(wooId);
 			if (remoteId === null) return null;
-			const field = resolveLegacyField(collectionName, 'id').enginePath;
-			const result = await collection.findOne({ selector: { [field]: remoteId } }).exec();
-			if (isEngineRxDocument(result)) {
+			const result = await collection.findOne({ selector: { remoteId } }).exec();
+			if (result) {
 				return result.getLatest().payload as StockDocument;
 			}
 			const documentId = catalogDocumentId(

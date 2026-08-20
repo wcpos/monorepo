@@ -5,28 +5,18 @@ import { EMPTY, Observable, of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 
 import {
+	engineCollection,
 	engineCollectionNameFor,
-	type EngineRxDocument,
+	type EngineRecord,
+	type EngineRecordCollectionName,
 	type LegacyCollectionName,
 	observeEngineDatabases,
-	resolveLegacyField,
 	useQueryRuntime,
 	wrapEngineDocument,
 } from '@wcpos/query';
 import { remoteIdOrNull, wooIdOf } from '@wcpos/sync-core';
 
-type EngineCollection = {
-	findOne(query: string | { selector: Record<string, unknown> }): {
-		$: Observable<EngineRxDocument | null>;
-	};
-	find(query: { selector: Record<string, unknown> }): {
-		$: Observable<EngineRxDocument[]>;
-	};
-};
-
-type EngineDatabase = {
-	collections: Record<string, unknown>;
-};
+type AnyEngineRecord = EngineRecord<EngineRecordCollectionName>;
 
 type DocumentKey = { type: 'uuid'; value: string } | { type: 'woo-id'; value: number };
 
@@ -34,30 +24,17 @@ function engineDocument$(
 	runtime: ReturnType<typeof useQueryRuntime>,
 	collectionName: LegacyCollectionName,
 	key: DocumentKey
-): Observable<EngineRxDocument | null> {
+): Observable<AnyEngineRecord | null> {
 	return observeEngineDatabases(runtime.engine).pipe(
-		map((database) => database as unknown as EngineDatabase | null),
 		switchMap((database) => {
-			if (!database) {
-				return EMPTY;
-			}
-
 			// Resolve after every db$ emission: scope moves and resets replace collection residents.
-			const collection = database.collections[
-				engineCollectionNameFor(collectionName)
-			] as unknown as EngineCollection | undefined;
+			const collection = engineCollection(database, engineCollectionNameFor(collectionName));
 			if (!collection) {
 				return EMPTY;
 			}
 
 			const query =
-				key.type === 'uuid'
-					? key.value
-					: {
-							selector: {
-								[resolveLegacyField(collectionName, 'id').enginePath]: remoteIdOrNull(key.value),
-							},
-						};
+				key.type === 'uuid' ? key.value : { selector: { remoteId: remoteIdOrNull(key.value) } };
 			return collection.findOne(query).$;
 		})
 	);
@@ -69,7 +46,7 @@ export function engineDocumentByWooId$<TDocument extends object>(
 	wooId: number
 ): Observable<TDocument | null> {
 	return engineDocument$(runtime, collectionName, { type: 'woo-id', value: wooId }).pipe(
-		map((document) => document && wrapEngineDocument<TDocument>(collectionName, document))
+		map((document) => document && wrapEngineDocument<TDocument>(collectionName, document as never))
 	);
 }
 
@@ -81,7 +58,7 @@ function useEngineDocumentResource<TDocument extends object>(
 	const resource = React.useMemo(() => {
 		const document$ = engineDocument$(runtime, collectionName, key).pipe(
 			map((document) =>
-				document === null ? null : wrapEngineDocument<TDocument>(collectionName, document)
+				document === null ? null : wrapEngineDocument<TDocument>(collectionName, document as never)
 			)
 		);
 		return new ObservableResource(document$ as Observable<TDocument>);
@@ -130,32 +107,18 @@ export function useEngineDocumentsByWooId<TDocument extends object>(
 	);
 	const resource = React.useMemo(() => {
 		const documents$ = observeEngineDatabases(runtime.engine).pipe(
-			map((database) => database as unknown as EngineDatabase | null),
 			switchMap((database) => {
-				if (!database) {
-					return of([] as EngineRxDocument[]);
-				}
-
-				const collection = database.collections[
-					engineCollectionNameFor(collectionName)
-				] as unknown as EngineCollection | undefined;
+				const collection = engineCollection(database, engineCollectionNameFor(collectionName));
 				if (!collection || stableWooIds.length === 0) {
-					return of([] as EngineRxDocument[]);
+					return of([] as AnyEngineRecord[]);
 				}
 
-				const wooIdPath = resolveLegacyField(collectionName, 'id').enginePath;
-				return collection.find({ selector: { [wooIdPath]: { $in: stableRemoteIds } } }).$.pipe(
+				return collection.find({ selector: { remoteId: { $in: stableRemoteIds } } }).$.pipe(
 					map((documents) => {
 						const order = new Map(stableWooIds.map((id, index) => [id, index]));
 						return [...documents].sort((a, b) => {
-							const aRemoteId = remoteIdOrNull(
-								(a as unknown as Record<string, unknown>)[wooIdPath]
-							);
-							const bRemoteId = remoteIdOrNull(
-								(b as unknown as Record<string, unknown>)[wooIdPath]
-							);
-							const aId = aRemoteId === null ? undefined : wooIdOf(aRemoteId);
-							const bId = bRemoteId === null ? undefined : wooIdOf(bRemoteId);
+							const aId = a.remoteId === null ? undefined : wooIdOf(a.remoteId);
+							const bId = b.remoteId === null ? undefined : wooIdOf(b.remoteId);
 							const aOrder = aId === undefined ? undefined : order.get(aId);
 							const bOrder = bId === undefined ? undefined : order.get(bId);
 							return (aOrder ?? Number.MAX_SAFE_INTEGER) - (bOrder ?? Number.MAX_SAFE_INTEGER);
@@ -164,7 +127,9 @@ export function useEngineDocumentsByWooId<TDocument extends object>(
 				);
 			}),
 			map((documents) =>
-				documents.map((document) => wrapEngineDocument<TDocument>(collectionName, document))
+				documents.map((document) =>
+					wrapEngineDocument<TDocument>(collectionName, document as never)
+				)
 			)
 		);
 		return new ObservableResource(documents$);

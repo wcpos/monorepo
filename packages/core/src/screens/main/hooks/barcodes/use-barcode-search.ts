@@ -1,11 +1,6 @@
 import * as React from 'react';
 
-import {
-	type EngineRecord,
-	type EngineRxDocument,
-	isEngineRxDocument,
-	useQueryRuntime,
-} from '@wcpos/query';
+import { engineCollection, type EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { barcodeMatchCandidates, buildLocalBarcodeIndex, remoteIdOrNull } from '@wcpos/sync-core';
 
 /**
@@ -16,12 +11,10 @@ import { barcodeMatchCandidates, buildLocalBarcodeIndex, remoteIdOrNull } from '
 type ActiveBarcodeSelectors = { products: readonly string[]; variations: readonly string[] };
 const NO_BARCODE_SELECTORS: ActiveBarcodeSelectors = { products: [], variations: [] };
 
-function engineDocuments(value: unknown): EngineRxDocument[] {
-	return Array.isArray(value) ? value.filter(isEngineRxDocument) : [];
-}
+type CatalogRecord = EngineRecord<'products'> | EngineRecord<'variations'>;
 
 /** The document carries the scanned code verbatim in a barcode-symbology field. */
-function matchesExactSymbology(document: EngineRxDocument, barcode: string): boolean {
+function matchesExactSymbology(document: CatalogRecord, barcode: string): boolean {
 	const materialized = document.payload?.barcode;
 	return typeof materialized === 'string' && materialized.trim() === barcode;
 }
@@ -33,7 +26,7 @@ function matchesExactSymbology(document: EngineRxDocument, barcode: string): boo
  * this is strictly the equivalence match.
  */
 function matchesEquivalentSymbology(
-	document: EngineRxDocument,
+	document: CatalogRecord,
 	barcode: string,
 	selectors: ActiveBarcodeSelectors
 ): boolean {
@@ -51,7 +44,7 @@ function matchesEquivalentSymbology(
 }
 
 /** The document carries the scanned code verbatim in any discovery field (incl. SKU). */
-function matchesExactAnyField(document: EngineRxDocument, barcode: string): boolean {
+function matchesExactAnyField(document: CatalogRecord, barcode: string): boolean {
 	const payload = document.payload;
 	if (!payload) {
 		return false;
@@ -59,7 +52,7 @@ function matchesExactAnyField(document: EngineRxDocument, barcode: string): bool
 	return buildLocalBarcodeIndex([{ id: document.uuid, payload }]).index.has(barcode);
 }
 
-function matchesEquivalentGlobalId(document: EngineRxDocument, barcode: string): boolean {
+function matchesEquivalentGlobalId(document: CatalogRecord, barcode: string): boolean {
 	const value = document.payload?.global_unique_id;
 	return typeof value === 'string' && barcodeMatchCandidates(barcode).includes(value.trim());
 }
@@ -84,9 +77,8 @@ export const useBarcodeSearch = () => {
 			// database AND its barcode carriers — read both off the same scope.
 			const scope = runtime.engine.active();
 			const selectors: ActiveBarcodeSelectors = scope?.barcodeSelectors ?? NO_BARCODE_SELECTORS;
-			const collections = scope?.database.collections;
-			const productCollection = collections?.products;
-			const variationsCollection = collections?.variations;
+			const productCollection = engineCollection(scope?.database, 'products');
+			const variationsCollection = engineCollection(scope?.database, 'variations');
 			if (!productCollection || !variationsCollection) {
 				return [];
 			}
@@ -97,20 +89,16 @@ export const useBarcodeSearch = () => {
 				productCollection.find().exec(),
 				variationsCollection.find().exec(),
 			]);
-			const products = engineDocuments(productResult).filter(
+			const products = productResult.filter(
 				(document) => selectors.products.length > 0 && document.payload?.status === 'publish'
 			);
-			const variations = engineDocuments(variationResult).filter(
+			const variations = variationResult.filter(
 				(document) => selectors.variations.length > 0 && document.payload?.status === 'publish'
 			);
 
-			const select = (predicate: (document: EngineRxDocument) => boolean) => [
-				...products
-					.filter(predicate)
-					.map((document) => document as unknown as EngineRecord<'products'>),
-				...variations
-					.filter(predicate)
-					.map((document) => document as unknown as EngineRecord<'variations'>),
+			const select = (predicate: (document: CatalogRecord) => boolean) => [
+				...products.filter(predicate),
+				...variations.filter(predicate),
 			];
 
 			// Precedence (#740), first non-empty tier wins so a scan never turns
@@ -150,14 +138,13 @@ export const useBarcodeSearch = () => {
 	const findProductById = React.useCallback(
 		async (productId: number): Promise<EngineRecord<'products'> | null> => {
 			// Resolve on every call so parent lookup follows a concurrent store-scope move.
-			const productCollection = runtime.engine.active()?.database.collections.products;
+			const productCollection = engineCollection(runtime.engine.active()?.database, 'products');
 			if (!productCollection) {
 				return null;
 			}
-			const result = await productCollection
+			return productCollection
 				.findOne({ selector: { remoteId: remoteIdOrNull(productId) } })
 				.exec();
-			return isEngineRxDocument(result) ? (result as unknown as EngineRecord<'products'>) : null;
 		},
 		[runtime]
 	);

@@ -52,6 +52,8 @@ jest.mock('@wcpos/query', () => ({
 			}),
 		},
 	}),
+	engineCollection: (database: { collections?: Record<string, unknown> } | null, name: string) =>
+		database?.collections?.[name] ?? null,
 	isEngineRxDocument: () => true,
 	// wrapEngineDocument is identity-ish for the test — we assert on ids.
 	wrapEngineDocument: (_name: string, document: FakeDoc) => document,
