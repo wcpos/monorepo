@@ -30,7 +30,11 @@ export function resolveStock({
 		if ((stockQuantity as number) > 0) {
 			return { status: 'instock', quantity: stockQuantity as number, sellable: true };
 		}
-		if (backorders !== 'no') {
+		// WooCommerce's own rule (owner ruling 2026-08-20): backorders_allowed()
+		// is an explicit 'yes' || 'notify' allow-list and the field DEFAULTS to
+		// 'no' (abstract-wc-product.php) — so a payload missing the field sells
+		// out at zero exactly like the online store would.
+		if (backorders === 'yes' || backorders === 'notify') {
 			return { status: 'onbackorder', quantity: null, sellable: true };
 		}
 		return { status: 'outofstock', quantity: null, sellable: false };

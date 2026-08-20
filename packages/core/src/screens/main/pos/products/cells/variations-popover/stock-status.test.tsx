@@ -165,6 +165,18 @@ describe('resolveStock', () => {
 			expected: { status: 'onbackorder', quantity: null, sellable: true },
 		},
 		{
+			// WooCommerce defaults backorders to 'no' (abstract-wc-product.php) —
+			// a partial payload missing the field must sell out at zero, exactly
+			// like the online store (owner ruling 2026-08-20).
+			name: 'managed depleted stock with the backorders field missing',
+			input: {
+				manage_stock: true,
+				stock_quantity: 0,
+				stock_status: 'instock',
+			},
+			expected: { status: 'outofstock', quantity: null, sellable: false },
+		},
+		{
 			name: 'unmanaged out-of-stock status',
 			input: {
 				manage_stock: false,
