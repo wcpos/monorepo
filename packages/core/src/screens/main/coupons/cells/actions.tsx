@@ -26,7 +26,7 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { useQueryRuntime } from '@wcpos/query';
+import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { CellContext } from '@wcpos/core/table-types';
@@ -41,12 +41,18 @@ type CouponDocument = import('@wcpos/database').CouponDocument;
 
 const syncLogger = getLogger(['wcpos', 'coupons', 'actions', 'sync']);
 
-export function Actions({ row }: CellContext<{ document: CouponDocument }, 'actions'>) {
-	const coupon = row.original.document;
+export function Actions({
+	row,
+}: CellContext<{ document: CouponDocument; record: EngineRecord<'coupons'> }, 'actions'>) {
+	const record = row.original.record;
+	const fields = useRecordField(record, ({ payload }) => ({
+		id: payload.id,
+		code: payload.code,
+	}));
 	const router = useRouter();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
-	const initialForce = !coupon.id;
+	const initialForce = !fields.id;
 	const [force, setForce] = React.useState(initialForce);
 	const runtime = useQueryRuntime();
 	const { readOnly } = useProAccess();
@@ -75,9 +81,9 @@ export function Actions({ row }: CellContext<{ document: CouponDocument }, 'acti
 	const handleDelete = React.useCallback(async () => {
 		await requestServerDelete(runtime.engine, {
 			collection: 'coupons',
-			recordId: coupon.uuid!,
+			recordId: record.uuid,
 		});
-	}, [coupon.uuid, runtime]);
+	}, [record.uuid, runtime]);
 
 	if (readOnly) {
 		return null;
@@ -96,7 +102,7 @@ export function Actions({ row }: CellContext<{ document: CouponDocument }, 'acti
 							onPress={() =>
 								router.push({
 									pathname: '/coupons/edit/[couponId]',
-									params: { couponId: coupon.uuid },
+									params: { couponId: record.uuid },
 								})
 							}
 						>
@@ -104,7 +110,7 @@ export function Actions({ row }: CellContext<{ document: CouponDocument }, 'acti
 							<Text>{t('common.edit')}</Text>
 						</DropdownMenuItem>
 					</CapabilityTooltip>
-					{coupon.id && (
+					{fields.id && (
 						<DropdownMenuItem onPress={handleRefresh}>
 							<Icon name="arrowRotateRight" />
 							<Text>{t('common.sync')}</Text>
@@ -136,7 +142,7 @@ export function Actions({ row }: CellContext<{ document: CouponDocument }, 'acti
 				>
 					<AlertDialogContent>
 						<AlertDialogHeader>
-							<AlertDialogTitle>{t('coupons.delete', { name: coupon.code })}</AlertDialogTitle>
+							<AlertDialogTitle>{t('coupons.delete', { name: fields.code })}</AlertDialogTitle>
 							<AlertDialogDescription>
 								<VStack>
 									<Text className="text-destructive">{t('coupons.are_you_sure_you_want_to')}</Text>

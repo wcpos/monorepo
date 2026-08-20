@@ -1,13 +1,10 @@
-import { useObservableEagerState } from 'observable-hooks';
-
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../contexts/translations';
 
 import type { QueryStateActions } from '../../../../query';
-
-type CouponDocument = import('@wcpos/database').CouponDocument;
 
 const labelMap: Record<string, string> = {
 	publish: 'coupons.publish',
@@ -15,9 +12,8 @@ const labelMap: Record<string, string> = {
 	pending: 'coupons.pending',
 };
 
-export function Status({ row, table }: CellContext<{ document: CouponDocument }, 'status'>) {
-	const coupon = row.original.document;
-	const status = useObservableEagerState(coupon.status$!) as string;
+export function Status({ row, table }: CellContext<{ record: EngineRecord<'coupons'> }, 'status'>) {
+	const status = useRecordField(row.original.record, ({ payload }) => payload.status) ?? '';
 	const t = useT();
 	const actions = (
 		table.options.meta as {

@@ -9,8 +9,11 @@ import { QueryStateProvider, useQueryState, useQueryStateActions } from '../../.
 import { DiscountType } from './discount-type';
 import { Status } from './status';
 
-jest.mock('observable-hooks', () => ({
-	useObservableEagerState: (value: unknown) => value,
+jest.mock('@wcpos/query', () => ({
+	useRecordField: (
+		record: Record<string, unknown>,
+		select: (value: Record<string, unknown>) => unknown
+	) => select(record),
 }));
 jest.mock('@wcpos/components/button', () => ({
 	ButtonPill: ({ children, onPress }: { children: React.ReactNode; onPress?: () => void }) => (
@@ -25,9 +28,9 @@ jest.mock('../../../../contexts/translations', () => ({
 function Harness({ cell }: { cell: 'discount_type' | 'status' }) {
 	const actions = useQueryStateActions<'coupons'>();
 	const filters = useQueryState<'coupons', string>((state) => JSON.stringify(state.filters));
-	const document = { discount_type$: 'fixed_cart', status$: 'draft' };
+	const record = { payload: { discount_type: 'fixed_cart', status: 'draft' } };
 	const props = {
-		row: { original: { document } },
+		row: { original: { record } },
 		table: { options: { meta: { actions: { setFilter: actions.setFilter } } } },
 	};
 	const Cell = (cell === 'discount_type' ? DiscountType : Status) as unknown as React.ComponentType<

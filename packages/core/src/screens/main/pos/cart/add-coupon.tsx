@@ -18,7 +18,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import type { CouponDocument } from '@wcpos/database';
+import type { EngineRecord } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
 import { useSearchSelect } from '../../../../query';
@@ -27,19 +27,21 @@ import { useAddCoupon } from '../hooks/use-add-coupon';
 
 interface CouponHit {
 	id: string;
-	document: CouponDocument;
+	record: EngineRecord<'coupons'>;
 }
+
+type CouponPayload = EngineRecord<'coupons'>['payload'];
 
 export function AddCoupon() {
 	const t = useT();
 	const { addCoupon } = useAddCoupon();
 	const { onOpenChange } = useRootContext();
 	const [error, setError] = React.useState<string | null>(null);
-	const [selected, setSelected] = React.useState<CouponDocument | null>(null);
+	const [selected, setSelected] = React.useState<CouponPayload | null>(null);
 	const [isApplying, setIsApplying] = React.useState(false);
 
 	const handleValueChange = React.useCallback(
-		(option: { value: string; label: string; item?: CouponDocument } | undefined) => {
+		(option: { value: string; label: string; item?: CouponPayload } | undefined) => {
 			setSelected(option?.item ?? null);
 			setError(null);
 		},
@@ -129,14 +131,15 @@ function CouponList({ resource }: { resource: ReturnType<typeof useSearchSelect>
 			shouldFilter={false}
 			renderItem={({ item }) => {
 				const hit = item as unknown as CouponHit;
+				const coupon = hit.record.payload;
 				return (
 					<ComboboxItem
-						testID={`add-coupon-option-${hit.document.id}`}
-						value={String(hit.document.id)}
-						label={hit.document.code ?? ''}
-						item={hit.document}
+						testID={`add-coupon-option-${coupon.id}`}
+						value={String(coupon.id)}
+						label={coupon.code ?? ''}
+						item={coupon}
 					>
-						<CouponItemContent coupon={hit.document} />
+						<CouponItemContent coupon={coupon} />
 					</ComboboxItem>
 				);
 			}}
@@ -146,7 +149,7 @@ function CouponList({ resource }: { resource: ReturnType<typeof useSearchSelect>
 	);
 }
 
-function CouponItemContent({ coupon }: { coupon: CouponDocument }) {
+function CouponItemContent({ coupon }: { coupon: CouponPayload }) {
 	const t = useT();
 	const { format } = useCurrencyFormat();
 

@@ -1,7 +1,6 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { DatePickerInput } from '../../components/coupon/date-picker-input';
@@ -11,13 +10,13 @@ import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
 type CouponDocument = import('@wcpos/database').CouponDocument;
 
-export function EditableDate({ row, table }: CellContext<{ document: CouponDocument }, string>) {
+export function EditableDate({
+	row,
+	table,
+}: CellContext<{ document: CouponDocument; record: EngineRecord<'coupons'> }, string>) {
 	const item = row.original.document;
-	const dateExpiresGmt = useObservableEagerState(
-		(item as unknown as Record<string, unknown>).date_expires_gmt$ as import('rxjs').Observable<
-			string | null | undefined
-		>
-	) as string | null;
+	const dateExpiresGmt =
+		useRecordField(row.original.record, ({ payload }) => payload.date_expires_gmt) ?? null;
 	const meta = table.options.meta as unknown as {
 		onChange: (arg: { document: CouponDocument; changes: Record<string, unknown> }) => void;
 	};

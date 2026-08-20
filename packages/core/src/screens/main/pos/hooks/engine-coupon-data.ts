@@ -1,5 +1,6 @@
 import {
 	engineCollection,
+	type EngineRecord,
 	type EngineRecordCollectionName,
 	wrapEngineDocument,
 } from '@wcpos/query';
@@ -11,13 +12,10 @@ function activeCollection<C extends EngineRecordCollectionName>(manager: QueryMa
 	return engineCollection(manager.engine.active()?.database, name);
 }
 
-export async function readEngineCoupons(manager: QueryManager) {
+export async function readEngineCoupons(manager: QueryManager): Promise<EngineRecord<'coupons'>[]> {
 	const collection = activeCollection(manager, 'coupons');
 	if (!collection) return [];
-	const records = await collection.find().exec();
-	return records.map((record) =>
-		wrapEngineDocument<import('@wcpos/database').CouponDocument>('coupons', record as never)
-	);
+	return collection.find().exec();
 }
 
 export async function readEngineProductRecordsByWooId(manager: QueryManager, wooIds: number[]) {

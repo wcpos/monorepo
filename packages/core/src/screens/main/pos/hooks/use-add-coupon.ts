@@ -71,7 +71,7 @@ export const useAddCoupon = () => {
 				// then match payload.code exactly against the resident Tier-0 coupon scan.
 				const coupons = await readEngineCoupons(runtime);
 				const coupon = coupons.find(
-					(document) => document.code === couponCode.toLowerCase().trim()
+					(record) => record.payload.code === couponCode.toLowerCase().trim()
 				);
 
 				if (!coupon) {
@@ -91,8 +91,8 @@ export const useAddCoupon = () => {
 				// 2. Look up applied coupons that have individual_use for reverse check
 				const appliedCouponsWithIndividualUse: string[] = [];
 				for (const cl of appliedCouponLines) {
-					const appliedCouponDoc = coupons.find((document) => document.code === cl.code);
-					if (appliedCouponDoc?.toJSON().individual_use && cl.code) {
+					const appliedCoupon = coupons.find((record) => record.payload.code === cl.code);
+					if (appliedCoupon?.payload.individual_use && cl.code) {
 						appliedCouponsWithIndividualUse.push(cl.code);
 					}
 				}
@@ -148,7 +148,7 @@ export const useAddCoupon = () => {
 					0
 				);
 
-				const validation = validateCoupon(coupon.toJSON(), {
+				const validation = validateCoupon(coupon.payload, {
 					lineItems: couponLineItems,
 					appliedCoupons,
 					appliedCouponsWithIndividualUse,
@@ -165,7 +165,7 @@ export const useAddCoupon = () => {
 				if (!validation.valid) return rejectCoupon(validation.error ?? 'Coupon validation failed.');
 
 				// 5. Create new coupon line and recalculate all coupons from scratch
-				const couponData = coupon.toJSON();
+				const couponData = coupon.payload;
 
 				const newCouponLineData = {
 					code: couponData.code,
