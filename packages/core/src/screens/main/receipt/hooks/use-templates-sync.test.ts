@@ -19,7 +19,7 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
 
 import '@wcpos/database/plugins';
-import { storeCollections } from '@wcpos/database/collections';
+import { storeCollections, type TemplateCollection } from '@wcpos/database/collections';
 
 import { syncTemplates } from './use-templates-sync';
 
@@ -101,16 +101,16 @@ const serverPayload = [
 	})),
 ];
 
-let db: RxDatabase;
+let db: RxDatabase<{ templates: TemplateCollection }>;
 
 beforeEach(async () => {
-	db = await createRxDatabase({
+	db = await createRxDatabase<{ templates: TemplateCollection }>({
 		name: `templates-sync-${Math.random().toString(36).slice(2)}`,
 		storage: wrappedValidateZSchemaStorage({ storage: getRxStorageMemory() }),
 		multiInstance: false,
 		ignoreDuplicate: true,
 	});
-	await db.addCollections({ templates: storeCollections.templates as never });
+	await db.addCollections({ templates: storeCollections.templates });
 });
 
 afterEach(async () => {
@@ -129,7 +129,7 @@ void invalidHttpClient;
 
 describe('syncTemplates', () => {
 	it('upserts every template despite undeclared server fields on validating storage', async () => {
-		await syncTemplates(db.collections.templates as never, fakeHttpClient(serverPayload));
+		await syncTemplates(db.collections.templates, fakeHttpClient(serverPayload));
 
 		// The exact read useActiveTemplates performs, including its publish/virtual filter.
 		const docs = await db.collections.templates
@@ -144,7 +144,7 @@ describe('syncTemplates', () => {
 	});
 
 	it('re-syncing the same payload is a stable upsert, not an insert conflict', async () => {
-		const collection = db.collections.templates as never;
+		const collection = db.collections.templates;
 		await syncTemplates(collection, fakeHttpClient(serverPayload));
 		await syncTemplates(collection, fakeHttpClient(serverPayload));
 
@@ -153,10 +153,7 @@ describe('syncTemplates', () => {
 	});
 
 	it('ignores a non-array response body', async () => {
-		await syncTemplates(
-			db.collections.templates as never,
-			fakeHttpClient({ code: 'rest_no_route' })
-		);
+		await syncTemplates(db.collections.templates, fakeHttpClient({ code: 'rest_no_route' }));
 
 		const docs = await db.collections.templates.find().exec();
 		expect(docs).toHaveLength(0);
