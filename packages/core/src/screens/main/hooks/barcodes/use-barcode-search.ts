@@ -90,7 +90,18 @@ export const useBarcodeSearch = () => {
 				variationsCollection.find().exec(),
 			]);
 			const products = productResult.filter(
-				(document) => selectors.products.length > 0 && document.payload?.status === 'publish'
+				(document) =>
+					selectors.products.length > 0 &&
+					document.payload?.status === 'publish' &&
+					// A products-collection document claiming to be a variation is misfiled
+					// (Woo's products route answers sku= filters with variation rows; the
+					// search lane drops them and scope-open purges old residue). Guarding
+					// here too keeps a scan from turning falsely ambiguous — the same
+					// record matching once per collection — while a polluted store is
+					// still open, or if any future path misfiles again. String() because
+					// the payload TYPE already forbids 'variation'; this guards data
+					// written outside that contract.
+					String(document.payload?.type) !== 'variation'
 			);
 			const variations = variationResult.filter(
 				(document) => selectors.variations.length > 0 && document.payload?.status === 'publish'

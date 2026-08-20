@@ -690,7 +690,18 @@ async function fetchProductSearch(
 		pageSize,
 		context
 	);
-	const payloads = uniqueProductPayloads([...skuLeg.payloads, ...(searchLeg?.payloads ?? [])]);
+	// Woo answers a sku= filter from BOTH post types: a variation whose sku matches the
+	// term comes back as a `type: 'variation'` row on the PRODUCTS route (WC core widens
+	// post_type for sku filters; verified live on dev-pro 2026-08-20). Persisting such a
+	// row here would put the variation into the PRODUCTS collection — and the barcode
+	// scan reads products AND variations, so the one record would match twice and every
+	// scan of that code turns falsely ambiguous ("2 products found locally"), permanently.
+	// Variations are materialized only by the variations lanes; drop the rows before
+	// they reach documents, counts, or coverage.
+	const payloads = uniqueProductPayloads([
+		...skuLeg.payloads,
+		...(searchLeg?.payloads ?? []),
+	]).filter((payload) => payload.type !== 'variation');
 	const documents = payloads
 		.slice(0, limit)
 		.map((payload) => productDocumentFromWooPayload(payload, input.barcodeSelectors?.()));

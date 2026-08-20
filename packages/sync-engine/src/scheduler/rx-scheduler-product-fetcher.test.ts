@@ -2362,6 +2362,55 @@ describe('createProductsSchedulerFetcher', () => {
 		expect(fetcher).not.toHaveBeenCalled();
 		expect(repository.upsertMany).not.toHaveBeenCalled();
 	});
+
+	it('never persists a variation-typed row from the sku leg into the products collection', async () => {
+		// Woo's products route answers a sku= filter with matching VARIATIONS as rows
+		// (verified live on dev-pro 2026-08-20: GET wcpos/v1/products?sku=733620209958
+		// returns {id: 68023, type: 'variation', parent_id: 66566}). Persisting that row
+		// here puts the variation into the PRODUCTS collection; the barcode scan then
+		// finds the same record in both collections and every scan of that code turns
+		// falsely ambiguous ("2 products found locally") — permanently, since both
+		// copies share one uuid and sync maintains each in its own collection.
+		const upserted: { payload: { id: number; type?: string } }[][] = [];
+		const repository = {
+			upsertMany: vi.fn(async (documents: unknown[]) => {
+				upserted.push(documents as { payload: { id: number; type?: string } }[]);
+			}),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const variationRow = {
+			id: 68023,
+			name: 'Troy Yoga Short - 32, Green',
+			type: 'variation',
+			parent_id: 66566,
+			status: 'publish',
+			sku: '733620209958',
+			date_modified_gmt: '2026-08-20T15:01:04',
+			meta_data: posMeta(68023),
+		};
+		const fetcher = vi.fn(async (url: string) =>
+			new URL(url).searchParams.has('sku') ? response([variationRow]) : response([])
+		);
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			fetcher,
+			barcodeSelectors: () => ({ products: ['sku'], variations: ['sku'] }),
+		});
+
+		await schedulerFetcher(
+			productTask({
+				id: 'products:search:733620209958:windowed',
+				queryKey: 'products:search:733620209958',
+			})
+		);
+
+		// Both legs ran (the term is long enough for the search leg).
+		const requestLegs = fetcher.mock.calls.map(([url]) => new URL(url).searchParams.has('sku'));
+		expect(requestLegs).toContain(true);
+		expect(requestLegs).toContain(false);
+		expect(upserted.flat()).toEqual([]);
+	});
 });
 
 describe('coverageRecordId', () => {

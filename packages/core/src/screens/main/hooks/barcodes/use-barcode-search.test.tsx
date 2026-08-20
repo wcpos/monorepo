@@ -117,6 +117,27 @@ describe('barcodeSearch product visibility', () => {
 
 		expect(await search('DRAFT-VARIATION')).toEqual([]);
 	});
+
+	it('ignores a misfiled variation-typed document in the products collection (no false ambiguity)', async () => {
+		// The dev-pro 733620209958 pollution (2026-08-20): the pre-fix products search
+		// lane persisted Woo's variation-typed sku-leg rows into the PRODUCTS
+		// collection, so the one variation matched once per collection and every scan
+		// of its code reported "2 products found locally". The scan must resolve to
+		// exactly the variations-collection document.
+		productDocs = [
+			doc('misfiled-variation', {
+				type: 'variation',
+				sku: '733620209958',
+				barcode: '733620209958',
+			}),
+		];
+		variationDocs = [
+			doc('real-variation', { sku: '733620209958', barcode: '733620209958' }, 'variations'),
+		];
+
+		const results = (await search('733620209958')) as unknown as FakeDoc[];
+		expect(results.map((r) => r.id)).toEqual(['real-variation']);
+	});
 });
 
 describe('barcodeSearch UPC-A ↔ EAN-13 equivalence (#740)', () => {
