@@ -1,7 +1,6 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { EditableField } from '../../components/editable-field';
@@ -14,13 +13,9 @@ type CouponDocument = import('@wcpos/database').CouponDocument;
 export function EditableDescription({
 	row,
 	table,
-}: CellContext<{ document: CouponDocument }, string>) {
+}: CellContext<{ document: CouponDocument; record: EngineRecord<'coupons'> }, string>) {
 	const item = row.original.document;
-	const description = useObservableEagerState(
-		(item as unknown as Record<string, unknown>).description$ as import('rxjs').Observable<
-			string | undefined
-		>
-	) as string;
+	const description = useRecordField(row.original.record, ({ payload }) => payload.description);
 	const meta = table.options.meta as unknown as {
 		onChange: (arg: { document: CouponDocument; changes: Record<string, unknown> }) => void;
 	};

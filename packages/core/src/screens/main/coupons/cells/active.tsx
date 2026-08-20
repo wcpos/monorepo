@@ -1,25 +1,19 @@
-import { useObservableEagerState } from 'observable-hooks';
-
 import { Icon } from '@wcpos/components/icon';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 
-type CouponDocument = import('@wcpos/database').CouponDocument;
+export function Active({ row }: CellContext<{ record: EngineRecord<'coupons'> }, string>) {
+	const fields = useRecordField(row.original.record, ({ payload }) => ({
+		status: payload.status,
+		dateExpiresGmt: payload.date_expires_gmt,
+	}));
 
-export function Active({ row }: CellContext<{ document: CouponDocument }, string>) {
-	const coupon = row.original.document;
-	const status = useObservableEagerState(coupon.status$!) as string;
-	const dateExpiresGmt = useObservableEagerState(
-		(coupon as unknown as Record<string, unknown>).date_expires_gmt$ as import('rxjs').Observable<
-			string | null | undefined
-		>
-	) as string | null;
-
-	const isExpired = dateExpiresGmt
-		? convertUTCStringToLocalDate(dateExpiresGmt) < new Date()
+	const isExpired = fields.dateExpiresGmt
+		? convertUTCStringToLocalDate(fields.dateExpiresGmt) < new Date()
 		: false;
-	const isActive = status === 'publish' && !isExpired;
+	const isActive = fields.status === 'publish' && !isExpired;
 
 	if (!isActive) return null;
 

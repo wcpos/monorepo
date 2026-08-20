@@ -12,6 +12,8 @@ import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
+import type { CellContext } from '@wcpos/core/table-types';
 
 import { Actions } from './cells/actions';
 import { Active } from './cells/active';
@@ -29,11 +31,10 @@ import { useProAccess } from '../contexts/pro-access';
 import { CapabilityTooltipTrigger } from '../components/capability-tooltip';
 import { DataTable } from '../components/data-table';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
-import { TextCell } from '../components/text-cell';
-import { DateCell } from '../components/date';
 import { UISettingsDialog } from '../components/ui-settings';
 import { QuerySearchInput } from '../components/query-search-input';
 import { useUISettings } from '../contexts/ui-settings';
+import { useDateFormat } from '../hooks/use-date-format';
 import { useMutation } from '../hooks/mutations/use-mutation';
 import { useUserCapabilities } from '../hooks/use-user-capabilities';
 import {
@@ -48,6 +49,24 @@ import type { SortFieldsByCollection } from '../../../query/query-state-types';
 
 type CouponDocument = import('@wcpos/database').CouponDocument;
 
+function RecordTextCell({ row, column }: CellContext<{ record: EngineRecord<'coupons'> }, string>) {
+	const value = useRecordField(
+		row.original.record,
+		({ payload }) => payload[column.id as keyof typeof payload]
+	);
+
+	return <Text>{value == null ? '' : String(value)}</Text>;
+}
+
+function RecordDateCell({ row, column }: CellContext<{ record: EngineRecord<'coupons'> }, string>) {
+	const key = (column.id.endsWith('_gmt') ? column.id : `${column.id}_gmt`) as
+		'date_created_gmt' | 'date_modified_gmt';
+	const dateGmt = useRecordField(row.original.record, ({ payload }) => payload[key]);
+	const dateFormatted = useDateFormat(dateGmt);
+
+	return <Text>{dateFormatted}</Text>;
+}
+
 const cells = {
 	active: Active,
 	code: EditableCode,
@@ -58,8 +77,8 @@ const cells = {
 	usage_count: Usage,
 	actions: Actions,
 	date_expires_gmt: EditableDate,
-	date_created_gmt: DateCell,
-	date_modified_gmt: DateCell,
+	date_created_gmt: RecordDateCell,
+	date_modified_gmt: RecordDateCell,
 };
 
 const COUPONS_PAGE_SIZE = 10;
@@ -97,7 +116,7 @@ function renderCell(columnKey: string, info: Record<string, unknown>) {
 		return <Renderer {...(info as any)} />;
 	}
 
-	return <TextCell {...(info as any)} />;
+	return <RecordTextCell {...(info as any)} />;
 }
 
 function CouponsScreenContent() {

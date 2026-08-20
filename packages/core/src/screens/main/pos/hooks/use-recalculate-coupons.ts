@@ -49,14 +49,14 @@ export const useRecalculateCoupons = () => {
 			const coupons = await readEngineCoupons(runtime);
 			const couponConfigs = new Map<string, CouponDiscountConfig>();
 			for (const code of activeCodes) {
-				const couponDoc = coupons.find((document) => document.code === code);
-				if (!couponDoc) {
+				const coupon = coupons.find((record) => record.payload.code === code);
+				if (!coupon) {
 					// Fail the recalculation when an active coupon is missing locally.
 					// Returning stale lineItems with mutated couponLines would persist
 					// mismatched discounts. Callers should catch and handle this.
 					throw new Error(`Coupon "${code}" not found in local collection`);
 				}
-				const cd = couponDoc.toJSON();
+				const cd = coupon.payload;
 				couponConfigs.set(code, {
 					discount_type: cd.discount_type as any,
 					amount: cd.amount || '0',

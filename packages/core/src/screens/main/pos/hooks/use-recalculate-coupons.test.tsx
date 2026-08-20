@@ -45,13 +45,16 @@ type EngineDocument = Record<string, unknown> & {
 	payload: Record<string, unknown>;
 };
 
-function engineDocument(document: EngineDocument) {
+function engineDocument(document: EngineDocument, throwOnToJSON = false) {
 	return {
 		...document,
 		$: of(document),
 		collection: { name: 'engine' },
 		getLatest: () => engineDocument(document),
-		toJSON: () => document,
+		toJSON: () => {
+			if (throwOnToJSON) throw new Error('legacy coupon toJSON reached');
+			return document;
+		},
 	};
 }
 
@@ -88,8 +91,11 @@ const lineItems = [
 	},
 ] as NonNullable<import('@wcpos/database').OrderDocument['line_items']>;
 
-function installEngineFixture(couponPayload: Record<string, unknown>) {
-	const coupon = engineDocument({ uuid: 'coupon-uuid', remoteId: '501', payload: couponPayload });
+function installEngineFixture(couponPayload: Record<string, unknown>, throwOnCouponToJSON = false) {
+	const coupon = engineDocument(
+		{ uuid: 'coupon-uuid', remoteId: '501', payload: couponPayload },
+		throwOnCouponToJSON
+	);
 	const products = [
 		engineDocument({
 			uuid: 'product-83',
@@ -180,6 +186,35 @@ describe('useRecalculateCoupons engine reads', () => {
 			lineItems,
 			couponLines,
 			couponConfigs: new Map([['tshirt-only', config]]),
+			pricesIncludeTax: false,
+			calcDiscountsSequentially: false,
+			taxRates: [],
+			productCategories: new Map([
+				[83, [{ id: 19 }]],
+				[82, [{ id: 17 }, { id: 16 }]],
+			]),
+			taxRoundAtSubtotal: false,
+			dp: 2,
+		});
+		const { result } = renderHook(() => useRecalculateCoupons());
+
+		await expect(result.current.recalculate(lineItems, couponLines)).resolves.toEqual(expected);
+	});
+
+	it('builds the replay config directly from the coupon record payload', async () => {
+		const config = couponConfig({
+			amount: '3',
+			limit_usage_to_x_items: 1,
+			product_ids: [82],
+		});
+		installEngineFixture({ code: 'record-only', ...config }, true);
+		const couponLines = [
+			{ code: 'record-only', discount: '0', discount_tax: '0', meta_data: [] },
+		] as NonNullable<import('@wcpos/database').OrderDocument['coupon_lines']>;
+		const expected = recalculateCoupons({
+			lineItems,
+			couponLines,
+			couponConfigs: new Map([['record-only', config]]),
 			pricesIncludeTax: false,
 			calcDiscountsSequentially: false,
 			taxRates: [],

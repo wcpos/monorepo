@@ -125,6 +125,9 @@ jest.mock('../hooks/use-user-capabilities', () => ({
 jest.mock('../hooks/mutations/use-mutation', () => ({
 	useMutation: () => ({ patch: mockPatch }),
 }));
+jest.mock('../hooks/use-date-format', () => ({
+	useDateFormat: (value: string | undefined) => value ?? '',
+}));
 jest.mock('./filter-bar', () => ({ FilterBar: () => null }));
 jest.mock('./ui-settings-form', () => ({ UISettingsForm: () => null }));
 jest.mock('./cells/actions', () => ({ Actions: () => null }));
