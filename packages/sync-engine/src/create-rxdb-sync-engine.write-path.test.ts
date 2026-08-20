@@ -54,6 +54,7 @@ function engineWith(input: {
 	mode?: 'auto' | 'manual';
 	writeDrainPollMs?: number;
 	barcodeFields?: Record<string, string[]>;
+	ports?: Record<string, unknown>;
 }): RxdbSyncEngine {
 	return createEngineHarness({
 		site: SITE,
@@ -72,6 +73,7 @@ function engineWith(input: {
 		},
 		ports: {
 			...(input.uuid ? { uuid: input.uuid } : {}),
+			...(input.ports ?? {}),
 		},
 		...(input.writeDrainPollMs !== undefined
 			? { intervals: { writeDrainPollMs: input.writeDrainPollMs } }
@@ -380,6 +382,71 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			const pushes = () => server.received.filter((env) => env.mutationId !== undefined);
 			expect(pushes()).toHaveLength(0);
 			await vi.waitFor(() => expect(pushes()).toHaveLength(1), { timeout: 3_000 });
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('a follower enqueue forwards the drain nudge to the elected leader', async () => {
+		// A follower's own drain tick is a no-op (leader gate in write-plane.ts),
+		// so the enqueue must cross the bridge or the shared queue waits out the
+		// leader's interval (Codex P1).
+		const server = createFakeWriteServer();
+		const publishDrainNudge = vi.fn();
+		const bridge = {
+			publish: vi.fn(),
+			subscribe: () => () => undefined,
+			publishDrainNudge,
+			subscribeDrainNudge: () => () => undefined,
+		};
+		const engine = engineWith({
+			fetch: (url, init) => server.fetch(url, init as never),
+			ports: { writePlaneOwner: () => false, writeOutcomeBridge: bridge },
+		});
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, undefined, 'pos-open');
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { status: 'pos-open' },
+				explicit: true,
+			} as never);
+			expect(publishDrainNudge).toHaveBeenCalledTimes(1);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('a peer drain nudge makes the leader run the drain lane', async () => {
+		const server = createFakeWriteServer();
+		let bridgedNudge: (() => void) | null = null;
+		const bridge = {
+			publish: vi.fn(),
+			subscribe: () => () => undefined,
+			publishDrainNudge: vi.fn(),
+			subscribeDrainNudge: (listener: () => void) => {
+				bridgedNudge = listener;
+				return () => undefined;
+			},
+		};
+		const engine = engineWith({
+			fetch: (url, init) => server.fetch(url, init as never),
+			mode: 'auto',
+			// The interval alone could never fire inside this test.
+			writeDrainPollMs: 600_000,
+			ports: { writeOutcomeBridge: bridge },
+		});
+		try {
+			await engine.ready;
+			const drainRuns: number[] = [];
+			engine.events((event) => {
+				if (event.type === 'lane-start' && event.lane === 'write-drain') drainRuns.push(1);
+			});
+			expect(bridgedNudge).not.toBeNull();
+			bridgedNudge!();
+			await vi.waitFor(() => expect(drainRuns.length).toBeGreaterThan(0), { timeout: 3_000 });
 		} finally {
 			await engine.dispose();
 		}

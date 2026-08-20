@@ -1875,6 +1875,14 @@ export function createRxdbSyncEngine(
 		enabled: () => mode === 'auto' && !disposed,
 		...(ports.timers === undefined ? {} : { timers: ports.timers }),
 	});
+	// A FOLLOWER tab's enqueue arrives here (see write() below) — only the
+	// leader's drain tick does work, so only the leader spends the nudge. A
+	// follower receiving a peer's nudge stays quiet: its own tick would no-op,
+	// and if leadership later moves here the interval timer still backstops.
+	const unsubscribeDrainNudgeBridge = ports.writeOutcomeBridge?.subscribeDrainNudge(() => {
+		if (disposed || !writePlaneOwner()) return;
+		writeDrainNudge.nudge();
+	});
 
 	const cadenceController = createCadenceController({
 		mode,
@@ -2031,7 +2039,14 @@ export function createRxdbSyncEngine(
 		write: async (intent) => {
 			const receipt = await writePlane.write(intent);
 			// An annihilated delete never enqueued anything — nothing to drain.
-			if (!receipt.annihilated) writeDrainNudge.nudge();
+			if (!receipt.annihilated) {
+				writeDrainNudge.nudge();
+				// A follower's drain tick is a no-op (write-plane.ts leader gate), so
+				// the LEADER must hear about this enqueue or the shared queue waits
+				// out the leader's interval. Local nudge stays armed regardless —
+				// leadership can move to this tab before the timer fires.
+				if (!writePlaneOwner()) ports.writeOutcomeBridge?.publishDrainNudge();
+			}
 			return receipt;
 		},
 		conflicts: () => writePlane.conflicts(),
@@ -2208,6 +2223,7 @@ export function createRxdbSyncEngine(
 			// subscription would fan a peer's outcome into a disposed instance's
 			// subscribers.
 			unsubscribeWriteOutcomeBridge?.();
+			unsubscribeDrainNudgeBridge?.();
 			cancelPendingRebaselineAudit();
 			for (const collection of SYNC_COLLECTION_NAMES) collectionActivity.set(collection, 0);
 			writeDrainNudge.dispose();

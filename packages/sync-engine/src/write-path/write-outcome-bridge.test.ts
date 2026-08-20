@@ -205,4 +205,48 @@ describe('write-outcome bridge (#1209)', () => {
 			expect(onUnreadableMessage).toHaveBeenCalledTimes(1);
 		});
 	});
+
+	describe('drain nudge (#1383)', () => {
+		it('carries a follower nudge to the peer, never back, and never into the outcome lane', () => {
+			const world = channelWorld();
+			const name = writeOutcomeChannelName('wcpos-store-1');
+			const leader = createWriteOutcomeBridge({ openChannel: world.open });
+			const follower = createWriteOutcomeBridge({ openChannel: world.open });
+			leader.moveTo(name);
+			follower.moveTo(name);
+			const nudgedAtLeader = vi.fn();
+			const nudgedAtFollower = vi.fn();
+			const outcomeAtLeader = vi.fn();
+			leader.subscribeDrainNudge(nudgedAtLeader);
+			follower.subscribeDrainNudge(nudgedAtFollower);
+			leader.subscribe(outcomeAtLeader);
+
+			follower.publishDrainNudge();
+
+			expect(nudgedAtLeader).toHaveBeenCalledTimes(1);
+			expect(nudgedAtFollower).not.toHaveBeenCalled();
+			expect(outcomeAtLeader).not.toHaveBeenCalled();
+		});
+
+		it('an outcome never reaches drain-nudge listeners', () => {
+			const world = channelWorld();
+			const name = writeOutcomeChannelName('wcpos-store-1');
+			const leader = createWriteOutcomeBridge({ openChannel: world.open });
+			const follower = createWriteOutcomeBridge({ openChannel: world.open });
+			leader.moveTo(name);
+			follower.moveTo(name);
+			const nudged = vi.fn();
+			follower.subscribeDrainNudge(nudged);
+
+			leader.publish(rejected);
+
+			expect(nudged).not.toHaveBeenCalled();
+		});
+
+		it('a nudge envelope is unreadable to the outcome parser (old-build safety)', () => {
+			// A build that predates the nudge drops it at the wcpos-kind check — a
+			// diagnostic, never a misread event.
+			expect(parseWriteOutcomeEnvelope({ wcpos: 'write-drain-nudge', v: 1 })).toBeNull();
+		});
+	});
 });

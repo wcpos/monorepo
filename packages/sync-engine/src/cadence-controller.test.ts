@@ -21,7 +21,7 @@ function harness(random: () => number = () => 0.5) {
 	};
 	const intervals = { ...DEFAULT_LANE_INTERVALS };
 	const diagnostics = vi.fn();
-	const gate: AutomaticTickGate = { run: vi.fn(), runLane: vi.fn() };
+	const gate: AutomaticTickGate = { run: vi.fn(), runLane: vi.fn(), runLaneFresh: vi.fn() };
 	const controller = createCadenceController({
 		mode: 'auto',
 		intervals,
