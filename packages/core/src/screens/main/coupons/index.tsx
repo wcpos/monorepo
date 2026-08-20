@@ -212,7 +212,6 @@ function CouponsScreenContent() {
 								actions={tableActions}
 								active$={binding.active$}
 								total$={binding.total$}
-								totalSource$={binding.totalSource$}
 								sync={binding.sync}
 								renderCell={renderCell}
 								noDataMessage={t('common.no_coupons_found')}

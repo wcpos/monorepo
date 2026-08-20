@@ -15,7 +15,6 @@ const mockBinding = {
 	resource: { kind: 'reports-orders-resource' },
 	active$: of(false),
 	total$: of(24),
-	totalSource$: of('coverage' as const),
 	sync: jest.fn(async () => undefined),
 };
 const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown) => mockBinding);

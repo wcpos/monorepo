@@ -42,6 +42,7 @@ jest.mock('@wcpos/database', () => ({
 	scheduleClearLocalDataOnNextLoad: jest.fn(),
 }));
 jest.mock('@wcpos/utils/unsent-changes', () => ({ forgetUnsentChanges: jest.fn() }));
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('../../../../utils/reload-app', () => ({ reloadApp: jest.fn() }));
 
 jest.mock('@wcpos/utils/platform', () => ({

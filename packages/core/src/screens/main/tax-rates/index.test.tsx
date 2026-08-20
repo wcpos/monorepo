@@ -21,7 +21,6 @@ const mockBinding = {
 	resource: { hits: rates.map((payload) => ({ record: { payload } })) },
 	active$: of(false),
 	total$: of(3),
-	totalSource$: of('coverage' as const),
 	sync: jest.fn(async () => undefined),
 };
 const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown) => mockBinding);
@@ -115,7 +114,6 @@ describe('tax-rates query-state wiring', () => {
 			count: 3,
 			active$: mockBinding.active$,
 			total$: mockBinding.total$,
-			totalSource$: mockBinding.totalSource$,
 			sync: mockBinding.sync,
 		});
 		expect(mockFooter.mock.calls[0]?.[0]).not.toHaveProperty('query');

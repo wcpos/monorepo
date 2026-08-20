@@ -1,10 +1,11 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
+import { DocsLink } from '@wcpos/components/docs-link';
 import { Form, FormField, FormSwitch, useFormChangeHandler } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import {
@@ -19,7 +20,6 @@ import { Slider } from '@wcpos/components/slider';
 import { Text } from '@wcpos/components/text';
 import { ToggleGroup, ToggleGroupItem } from '@wcpos/components/toggle-group';
 import { VStack } from '@wcpos/components/vstack';
-import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { MetaDataKeysField } from './meta-data-keys-field';
 import { useT } from '../../../../contexts/translations';
@@ -261,11 +261,9 @@ export function UISettingsForm() {
 					<View className="gap-1 px-1">
 						<HStack className="items-center justify-between">
 							<Text>{getUILabel('metaDataKeys')}</Text>
-							<Pressable onPress={() => openExternalURL(META_DATA_KEYS_DOCS_URL)}>
-								<Text variant="link" className="text-sm">
-									{t('common.learn_more')}
-								</Text>
-							</Pressable>
+							<DocsLink testID="meta-data-keys-docs-link" href={META_DATA_KEYS_DOCS_URL}>
+								{t('common.learn_more')}
+							</DocsLink>
 						</HStack>
 						<FormField
 							control={form.control}

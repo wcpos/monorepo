@@ -156,7 +156,6 @@ function OrdersScreenContent() {
 								actions={tableActions}
 								active$={binding.active$}
 								total$={binding.total$}
-								totalSource$={binding.totalSource$}
 								sync={binding.sync}
 								renderCell={renderCell}
 								noDataMessage={t('common.no_orders_found')}

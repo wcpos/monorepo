@@ -1,7 +1,8 @@
 import * as React from 'react';
-import { Linking, Platform, Share, View } from 'react-native';
+import { Platform, Share, View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
+import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
@@ -119,22 +120,16 @@ function EventCode({ eventType, logId }: { eventType: string; logId: string }) {
 }
 
 /**
- * "Help — CODE ›" goes straight to the code's docs page — no in-app modal
+ * "Help — CODE" goes straight to the code's docs page — no in-app modal
  * (owner ruling 2026-08-14: link to docs, never verbose in-app copy; the docs
  * carry the registry body and troubleshooting).
  */
 function HelpLink({ code }: { code: string }) {
 	const t = useT();
 	return (
-		<Button
-			variant="ghost-quiet"
-			size="compact"
-			testID={`logs-help-${code}`}
-			className="self-start px-0"
-			onPress={() => Linking.openURL(getErrorCodeDocURL(code))}
-		>
-			<ButtonText className="font-semibold">{t('health.logs.help_code', { code })}</ButtonText>
-		</Button>
+		<DocsLink testID={`logs-help-${code}`} href={getErrorCodeDocURL(code)}>
+			{t('health.logs.help_code', { code })}
+		</DocsLink>
 	);
 }
 

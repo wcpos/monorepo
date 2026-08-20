@@ -150,7 +150,6 @@ describe('DataTable binding contract', () => {
 		const resource = { kind: 'resource' };
 		const active$ = of(false);
 		const total$ = of(27);
-		const totalSource$ = of('local' as const);
 		const sync = jest.fn(async () => undefined);
 		const BindingDataTable = DataTable as unknown as React.ComponentType<Record<string, unknown>>;
 
@@ -172,7 +171,6 @@ describe('DataTable binding contract', () => {
 					}}
 					active$={active$}
 					total$={total$}
-					totalSource$={totalSource$}
 					sync={sync}
 					renderItem={({ table }: { table: { options: { meta?: Record<string, unknown> } } }) => {
 						mockTableMeta = table.options.meta;
@@ -196,7 +194,6 @@ describe('DataTable binding contract', () => {
 			count: 1,
 			active$,
 			total$,
-			totalSource$,
 			sync,
 		});
 		expect(mockFooterProps).not.toHaveProperty('query');
@@ -208,7 +205,6 @@ describe('DataTable binding contract', () => {
 		const resource = { kind: 'resource' };
 		const active$ = of(false);
 		const total$ = of(27);
-		const totalSource$ = of('coverage' as const);
 		const sync = jest.fn(async () => undefined);
 		const BindingDataTable = DataTable as unknown as React.ComponentType<Record<string, unknown>>;
 
@@ -230,7 +226,6 @@ describe('DataTable binding contract', () => {
 					}}
 					active$={active$}
 					total$={total$}
-					totalSource$={totalSource$}
 					sync={sync}
 				/>
 			</QueryStateProvider>
@@ -241,7 +236,6 @@ describe('DataTable binding contract', () => {
 			count: 1,
 			active$,
 			total$,
-			totalSource$,
 			sync,
 		});
 		expect(mockDefaultFooterProps).not.toHaveProperty('query');
@@ -268,7 +262,6 @@ describe('DataTable binding contract', () => {
 					}}
 					active$={of(false)}
 					total$={of(27)}
-					totalSource$={of('coverage' as const)}
 					sync={jest.fn(async () => undefined)}
 					TableFooterComponent={TaxFooter}
 				/>
@@ -312,7 +305,6 @@ describe('DataTable binding contract', () => {
 			},
 			active$: of(false),
 			total$: of(27),
-			totalSource$: of('local' as const),
 			sync: jest.fn(async () => undefined),
 			TableFooterComponent: Footer,
 		};

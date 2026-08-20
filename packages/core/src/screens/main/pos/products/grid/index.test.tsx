@@ -58,7 +58,7 @@ describe('ProductGrid stale-hit reporting', () => {
 
 	it('logs a replacement stale-hit set when the skipped count is unchanged', async () => {
 		const props = {
-			binding: { resource: {}, active$: {}, total$: {}, totalSource$: {}, sync: jest.fn() },
+			binding: { resource: {}, active$: {}, total$: {}, sync: jest.fn() },
 			actions: { extendLimit: jest.fn() },
 		} as unknown as React.ComponentProps<typeof ProductGrid>;
 		const { rerender } = render(<ProductGrid {...props} />);

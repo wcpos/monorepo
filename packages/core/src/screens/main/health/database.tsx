@@ -12,6 +12,7 @@ import {
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
 import { Button, ButtonText } from '@wcpos/components/button';
+import { DocsLink } from '@wcpos/components/docs-link';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -27,7 +28,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/toolt
 import { VStack } from '@wcpos/components/vstack';
 import { COLLECTION_VOCABULARY, runResetRefill, useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage } from '@wcpos/utils/logger';
-import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { AttentionPanel } from './attention-panel';
 import { ConflictedMutationsPanel } from './conflicted-mutations';
@@ -492,17 +492,9 @@ const HOW_SYNCING_WORKS_DOCS_URL = 'https://docs.wcpos.com/products/sync';
 function HowSyncingWorksLink() {
 	const t = useT();
 	return (
-		<Button
-			variant="ghost"
-			size="sm"
-			testID="db-how-syncing-works"
-			onPress={() => openExternalURL(HOW_SYNCING_WORKS_DOCS_URL)}
-		>
-			<HStack className="items-center gap-1">
-				<Icon name="circleInfo" size="sm" className="text-muted-foreground" />
-				<Text className="text-muted-foreground text-xs">{t('health.database.how_title')}</Text>
-			</HStack>
-		</Button>
+		<DocsLink testID="db-how-syncing-works" href={HOW_SYNCING_WORKS_DOCS_URL}>
+			{t('health.database.how_title')}
+		</DocsLink>
 	);
 }
 

@@ -33,6 +33,10 @@ jest.mock('@wcpos/components/input', () => ({
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));
+jest.mock('@wcpos/components/hstack', () => ({
+	HStack: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+}));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/toast', () => ({
 	Toast: { show: (...args: unknown[]) => mockToastShow(...args) },
 }));

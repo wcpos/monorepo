@@ -51,6 +51,7 @@ type ButtonProps = PressableProps &
 
 function IconButton({
 	className,
+	iconClassName,
 	name,
 	variant,
 	size,
@@ -85,7 +86,7 @@ function IconButton({
 				variant={variant}
 				size={size}
 				loading={loading}
-				className={className}
+				className={cn(className, iconClassName)}
 				pointerEvents="none"
 			/>
 		</Pressable>

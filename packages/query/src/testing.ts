@@ -11,6 +11,7 @@ import {
 	productBrowseWindowQueryKeyFromDimensions,
 } from '@wcpos/sync-engine/testing';
 import type {
+	CensusTotals,
 	CoverageTarget,
 	CoverageVerdict,
 	EngineRequirement,
@@ -111,6 +112,17 @@ export interface FakeEngine extends RxdbSyncEngine {
 		collection: SyncCollectionName,
 		state: Partial<EngineStatus['collections'][SyncCollectionName]>
 	): void;
+	/**
+	 * How many times `censusChanges` has been subscribed. A binding that must NOT read the
+	 * whole-collection census — anything filtered, searched or targeted — is proved by this
+	 * staying 0, the same never-asked discipline `coverageSubscribeCalls` pins for coverage.
+	 */
+	censusSubscribeCount: number;
+	/**
+	 * Seed the engine's census total for one collection (null clears it). Live subscribers are
+	 * notified synchronously.
+	 */
+	setCensusTotal(collection: SyncCollectionName, total: number | null): void;
 }
 
 export interface RecordedSearchRequirement {
@@ -303,6 +315,19 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 		coverageVerdicts.set(key, next);
 		for (const listener of [...(coverageListeners.get(key) ?? [])]) listener(next);
 	};
+	let censusSubscribeCount = 0;
+	let censusTotals = {} as CensusTotals;
+	const censusListeners = new Set<(totals: CensusTotals) => void>();
+	const setCensusTotal = (collection: SyncCollectionName, total: number | null) => {
+		censusTotals = {
+			...censusTotals,
+			[collection]:
+				total === null
+					? null
+					: { total, updatedAtMs: 0, freshUntilMs: Number.MAX_SAFE_INTEGER, fresh: true },
+		};
+		for (const listener of [...censusListeners]) listener(censusTotals);
+	};
 	const collectionNames: SyncCollectionName[] = [
 		'orders',
 		'products',
@@ -413,6 +438,18 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 			return { lane: (lane ?? 'all') as never, status: 'ran' as const };
 		},
 		events: () => () => undefined,
+		get censusSubscribeCount() {
+			return censusSubscribeCount;
+		},
+		setCensusTotal,
+		censusChanges: (cb: (totals: CensusTotals) => void) => {
+			censusSubscribeCount += 1;
+			censusListeners.add(cb);
+			cb(censusTotals);
+			return () => {
+				censusListeners.delete(cb);
+			};
+		},
 		coverageChanges: (target: CoverageTarget, cb: (verdict: CoverageVerdict) => void) => {
 			const key = coverageTargetKey(target);
 			coverageSubscribeCalls.push(target);
@@ -529,6 +566,12 @@ export function createPendingFakeEngine(database: RxDatabase): PendingFakeEngine
 			cb(UNKNOWN_COVERAGE_VERDICT);
 			return () => undefined;
 		},
+		censusChanges: (cb: (totals: CensusTotals) => void) => {
+			cb({} as CensusTotals);
+			return () => undefined;
+		},
+		setCensusTotal: () => undefined,
+		censusSubscribeCount: 0,
 		setCollectionStatus: () => undefined,
 		onScopeEvent: () => () => undefined,
 		status,

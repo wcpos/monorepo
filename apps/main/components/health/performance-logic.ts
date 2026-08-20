@@ -13,10 +13,10 @@ import type { MetricsBucket } from '../../lib/metrics';
  * the top of the slider stays reachable only through Custom, for merchants who know their
  * server can take it.
  *
- *   Eco       5 min · 25   —   288 checks/day, lightest possible page
- *   Balanced   60 s · 50   — 1,440 checks/day (Paul's anchor: 10s was over-ambitious
+ *   Eco       5 min · 25   —  12 checks/hour, lightest possible page
+ *   Balanced   60 s · 50   —  60 checks/hour (Paul's anchor: 10s was over-ambitious
  *                            for the average server)
- *   Realtime   10 s · 75   — 8,640 checks/day, fast but still not max-weight pages
+ *   Realtime   10 s · 75   — 360 checks/hour, fast but still not max-weight pages
  *
  * These numbers are deliberately in one table so they are easy to re-tune.
  */
@@ -41,6 +41,15 @@ export function presetBudget(name: PresetName): { intervalSeconds: number; recor
 		intervalSeconds: Math.round(PRESETS[name].checkIntervalMs / 1000),
 		records: PRESETS[name].pullBatchSize,
 	};
+}
+
+/**
+ * The math line's request estimate. Per HOUR, not per day — an hourly rate is a number a
+ * merchant can sanity-check against their own sense of "right now", where a per-day figure
+ * in the thousands just reads as alarming.
+ */
+export function requestsPerHour(checkIntervalMs: number): number {
+	return Math.round(3_600_000 / checkIntervalMs);
 }
 
 export function presetFor(checkIntervalMs: number, pullBatchSize: number): PresetName | 'custom' {

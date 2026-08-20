@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Linking, View } from 'react-native';
+import { View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import {
@@ -43,6 +43,7 @@ import { useQueryRuntime } from '@wcpos/query';
 import { Platform } from '@wcpos/utils/platform';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { openExternalURL } from '@wcpos/utils/open-external-url';
 import { forgetUnsentChanges, type UnsentChanges } from '@wcpos/utils/unsent-changes';
 
 import { useAppState } from '../../../../contexts/app-state';
@@ -267,7 +268,7 @@ export function UserMenu() {
 				</DropdownMenuItem>
 				{Platform.isWeb && (
 					<DropdownMenuItem
-						onPress={() => Linking.openURL('https://github.com/wcpos/electron/releases')}
+						onPress={() => openExternalURL('https://github.com/wcpos/electron/releases')}
 					>
 						<Icon name="download" />
 						<Text>{t('common.desktop_app')}</Text>
@@ -302,7 +303,7 @@ export function UserMenu() {
 				</DropdownMenuItem>
 				<DropdownMenuSeparator />
 				{Platform.isWeb && (
-					<DropdownMenuItem onPress={() => Linking.openURL(`${site.home}/wp-admin`)}>
+					<DropdownMenuItem onPress={() => openExternalURL(`${site.home}/wp-admin`)}>
 						<Icon name="wordpress" />
 						<Text>{t('common.wordpress_admin')}</Text>
 					</DropdownMenuItem>

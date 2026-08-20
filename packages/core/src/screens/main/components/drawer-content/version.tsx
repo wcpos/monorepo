@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Linking, Pressable } from 'react-native';
+import { Pressable } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
 import {
@@ -19,6 +19,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useTheme } from '@wcpos/core/contexts/theme';
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
+import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 /**
  * Row component for displaying version info
@@ -99,7 +100,7 @@ function AboutDialogContent() {
 				</VStack>
 			</DialogBody>
 			<DialogFooter>
-				<Button variant="outline" onPress={() => Linking.openURL('https://updates.wcpos.com')}>
+				<Button variant="outline" onPress={() => openExternalURL('https://updates.wcpos.com')}>
 					<HStack>
 						<Icon name="globe" size="sm" />
 						<Text>{t('common.release_notes')}</Text>

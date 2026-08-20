@@ -344,6 +344,14 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 		};
 	});
 	const search = state.search.trim();
+	/**
+	 * Does this query span the ENTIRE collection — no filter, no search, no targeted
+	 * subset, no residual predicate? Only then may a consumer treat the engine's
+	 * whole-collection census total as this query's total (the footer's fallback when
+	 * no per-query server total has been recorded yet).
+	 */
+	const wholeCollection =
+		active.length === 0 && !search && targeted === undefined && !options.residual;
 	const read: CompiledQueryRead = {
 		prefilter: (prefilters.length === 1 ? prefilters[0] : { $and: prefilters }) as never,
 		residual: (document) => readFilters.every((filter) => filter.matches(document)),
@@ -364,6 +372,7 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 			collection: legacyCollection,
 			demand: [],
 			represented: false,
+			wholeCollection,
 			read,
 		};
 	}
@@ -391,7 +400,8 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 			...(state.limit !== undefined ? { limit: state.limit } : {}),
 		} as EngineRequirement);
 	}
-	if (demand.length > 0) return { collection: legacyCollection, demand, represented: false, read };
+	if (demand.length > 0)
+		return { collection: legacyCollection, demand, represented: false, wholeCollection, read };
 
 	let represented =
 		!options.residual &&
@@ -525,5 +535,5 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 		});
 		represented = false;
 	} else represented = false;
-	return { collection: legacyCollection, demand, represented, read };
+	return { collection: legacyCollection, demand, represented, wholeCollection, read };
 }

@@ -135,7 +135,6 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 						collectionName="products"
 						active$={binding.active$}
 						total$={binding.total$}
-						totalSource$={binding.totalSource$}
 						sync={binding.sync}
 						count={deferredResult.hits.length}
 					>
@@ -146,7 +145,6 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 						collectionName="products"
 						active$={binding.active$}
 						total$={binding.total$}
-						totalSource$={binding.totalSource$}
 						sync={binding.sync}
 						count={deferredResult.hits.length}
 					/>

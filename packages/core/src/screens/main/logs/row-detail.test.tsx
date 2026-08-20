@@ -18,11 +18,14 @@ const mockOpenURL = jest.fn().mockResolvedValue(undefined);
 jest.mock('react-native', () => ({
 	Platform: { OS: 'web' },
 	Share: { share: jest.fn() },
-	Linking: { openURL: (url: string) => mockOpenURL(url) },
 	View: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
 		<div data-testid={testID}>{children}</div>
 	),
 }));
+jest.mock('@wcpos/utils/open-external-url', () => ({
+	openExternalURL: (url: string) => mockOpenURL(url),
+}));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
 		children,
@@ -89,7 +92,6 @@ describe('RowDetail', () => {
 		render(<RowDetail row={codedRow} kind="error" title="Local save failed" />);
 
 		const helpButton = screen.getByTestId('logs-help-SYNC101');
-		expect(helpButton.getAttribute('data-size')).toBe('compact');
 		fireEvent.click(helpButton);
 
 		expect(mockOpenURL).toHaveBeenCalledWith('https://docs.wcpos.com/error-codes/SYNC101');

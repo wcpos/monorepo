@@ -52,6 +52,14 @@ jest.mock('@wcpos/components/vstack', () => {
 			R.createElement('div', { 'data-testid': testID }, children as never),
 	};
 });
+jest.mock('@wcpos/components/hstack', () => {
+	const R = require('react');
+	return {
+		HStack: ({ children, testID }: Record<string, unknown>) =>
+			R.createElement('div', { 'data-testid': testID }, children as never),
+	};
+});
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () =>
 		jest

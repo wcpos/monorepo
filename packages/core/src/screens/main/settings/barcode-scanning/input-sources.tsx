@@ -1,9 +1,10 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
+import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
 import { Input } from '@wcpos/components/input';
 import { Text } from '@wcpos/components/text';
@@ -11,7 +12,6 @@ import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import type { ScannerProfileDocument } from '@wcpos/database';
 import { getErrorMessage } from '@wcpos/utils/logger';
-import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { useT } from '../../../../contexts/translations';
 import { useDeviceScanControls } from '../../hooks/barcodes/device-scan-context';
@@ -138,14 +138,9 @@ export function InputSources() {
 					) : null}
 					{/* The wizard link renders on every platform with an input source —
 					    on Android it is the only in-app pointer to scanner setup help. */}
-					<Pressable
-						testID="scanner-mode-docs-link"
-						onPress={() => openExternalURL(WIZARD_DOCS_URL)}
-					>
-						<Text className="text-primary text-xs font-medium">
-							{t('settings.scanner_mode_docs_link')} ↗
-						</Text>
-					</Pressable>
+					<DocsLink testID="scanner-mode-docs-link" href={WIZARD_DOCS_URL}>
+						{t('settings.scanner_mode_docs_link')}
+					</DocsLink>
 				</VStack>
 
 				{/* Electron surfaces its serial/HID chooser candidates here; inert elsewhere. */}
