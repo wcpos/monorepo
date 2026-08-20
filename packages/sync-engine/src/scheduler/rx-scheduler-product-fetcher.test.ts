@@ -2403,9 +2403,10 @@ describe('createProductsSchedulerFetcher', () => {
 		);
 
 		// Both legs ran (the term is long enough for the search leg).
-		expect(fetcher.mock.calls.map(([url]) => new URL(url).searchParams.has('sku'))).toContain(true);
-		const persisted = upserted.flat();
-		expect(persisted.filter(({ payload }) => payload.type === 'variation')).toEqual([]);
+		const requestLegs = fetcher.mock.calls.map(([url]) => new URL(url).searchParams.has('sku'));
+		expect(requestLegs).toContain(true);
+		expect(requestLegs).toContain(false);
+		expect(upserted.flat()).toEqual([]);
 	});
 });
 

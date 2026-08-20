@@ -1,5 +1,3 @@
-import { assertBulkSuccess } from '@wcpos/sync-core';
-
 import { hasPendingLocalWork } from '../write-path/local-work-guard';
 
 import type { RxDatabase } from 'rxdb';
@@ -30,21 +28,16 @@ export async function purgeMisfiledVariationProducts(db: RxDatabase): Promise<nu
 		.exec();
 	if (misfiled.length === 0) return 0;
 
-	const removable: string[] = [];
+	const removable: (typeof misfiled)[number][] = [];
 	const removableWooIds: number[] = [];
 	for (const doc of misfiled) {
 		const row = doc.toJSON() as { remoteId?: string | null };
 		if (hasPendingLocalWork(row)) continue;
-		removable.push(doc.primary);
+		removable.push(doc);
 		const wooId = Number(row.remoteId);
 		if (Number.isSafeInteger(wooId) && wooId > 0) removableWooIds.push(wooId);
 	}
 	if (removable.length === 0) return 0;
-
-	assertBulkSuccess(
-		await db.collections.products.bulkRemove(removable),
-		'purge-misfiled-variation-products remove'
-	);
 
 	if (removableWooIds.length > 0) {
 		const manifestRows = await db.collections.existenceManifest
@@ -56,12 +49,11 @@ export async function purgeMisfiledVariationProducts(db: RxDatabase): Promise<nu
 			})
 			.exec();
 		if (manifestRows.length > 0) {
-			assertBulkSuccess(
-				await db.collections.existenceManifest.bulkRemove(manifestRows.map((row) => row.primary)),
-				'purge-misfiled-variation-products manifest remove'
-			);
+			await Promise.all(manifestRows.map((row) => row.incrementalRemove()));
 		}
 	}
+
+	await Promise.all(removable.map((doc) => doc.incrementalRemove()));
 
 	return removable.length;
 }

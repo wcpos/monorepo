@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { createRxDatabase } from 'rxdb';
+import { addRxPlugin, createRxDatabase } from 'rxdb';
+import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 
 import { existenceManifestSchema } from '../local-coverage/existence-manifest-schema';
 import { productSchema } from '../collections/product-schema';
@@ -9,6 +10,8 @@ import { purgeMisfiledVariationProducts } from './purge-misfiled-variation-produ
 
 import type { RxDatabase } from 'rxdb';
 
+addRxPlugin(RxDBDevModePlugin);
+
 let dbSeq = 0;
 
 async function openDb(): Promise<RxDatabase> {
@@ -16,6 +19,23 @@ async function openDb(): Promise<RxDatabase> {
 		name: `purge-misfiled-${(dbSeq += 1)}`,
 		storage: memoryEngineStorage(),
 		multiInstance: false,
+	});
+	await db.addCollections({
+		products: { schema: productSchema },
+		existenceManifest: { schema: existenceManifestSchema },
+	} as never);
+	return db as RxDatabase;
+}
+
+async function openSharedDb(
+	name: string,
+	storage: ReturnType<typeof memoryEngineStorage>
+): Promise<RxDatabase> {
+	const db = await createRxDatabase({
+		name,
+		storage,
+		multiInstance: true,
+		ignoreDuplicate: true,
 	});
 	await db.addCollections({
 		products: { schema: productSchema },
@@ -135,6 +155,69 @@ describe('purgeMisfiledVariationProducts', () => {
 		const remaining = await db.collections.products.find().exec();
 		expect(remaining.map((doc) => doc.primary)).toEqual(['uuid-dirty']);
 		await db.close();
+	});
+
+	it('tolerates concurrent purges of the same scope', async () => {
+		const storage = memoryEngineStorage();
+		const name = `purge-misfiled-shared-${(dbSeq += 1)}`;
+		const firstDb = await openSharedDb(name, storage);
+		const secondDb = await openSharedDb(name, storage);
+		await firstDb.collections.products.insert(
+			productDocument({
+				uuid: 'uuid-misfiled',
+				wooId: 68023,
+				type: 'variation',
+				sku: '733620209958',
+			})
+		);
+		await firstDb.collections.existenceManifest.insert(manifestRow(68023, 'product'));
+
+		try {
+			await expect(
+				Promise.all([
+					purgeMisfiledVariationProducts(firstDb),
+					purgeMisfiledVariationProducts(secondDb),
+				])
+			).resolves.toEqual([1, 1]);
+			expect(await firstDb.collections.products.find().exec()).toEqual([]);
+			expect(await firstDb.collections.existenceManifest.find().exec()).toEqual([]);
+		} finally {
+			await Promise.all([firstDb.close(), secondDb.close()]);
+		}
+	});
+
+	it('retains cleanup targets when manifest removal is interrupted', async () => {
+		const db = await openDb();
+		await db.collections.products.insert(
+			productDocument({
+				uuid: 'uuid-misfiled',
+				wooId: 68023,
+				type: 'variation',
+				sku: '733620209958',
+			})
+		);
+		await db.collections.existenceManifest.insert(manifestRow(68023, 'product'));
+		let interruptRemoval = true;
+		db.collections.existenceManifest.preRemove(() => {
+			if (!interruptRemoval) return;
+			interruptRemoval = false;
+			throw new Error('manifest removal interrupted');
+		}, false);
+
+		try {
+			await expect(purgeMisfiledVariationProducts(db)).rejects.toThrow(
+				'manifest removal interrupted'
+			);
+			expect((await db.collections.products.find().exec()).map((doc) => doc.primary)).toEqual([
+				'uuid-misfiled',
+			]);
+
+			await expect(purgeMisfiledVariationProducts(db)).resolves.toBe(1);
+			expect(await db.collections.products.find().exec()).toEqual([]);
+			expect(await db.collections.existenceManifest.find().exec()).toEqual([]);
+		} finally {
+			await db.close();
+		}
 	});
 
 	it('is a no-op on a clean store', async () => {
