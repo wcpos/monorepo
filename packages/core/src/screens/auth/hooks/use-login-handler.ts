@@ -51,11 +51,12 @@ export const useLoginHandler = (
 			setError(null);
 
 			try {
-				authLogger.debug('Processing login success response', {
-					context: { response },
-				});
-
 				const { params } = response;
+
+				// Never log the raw response - it carries access/refresh tokens.
+				authLogger.debug('Processing login success response', {
+					context: { uuid: params.uuid, id: params.id, display_name: params.display_name },
+				});
 
 				// Validate required response parameters
 				if (!params.uuid || !params.access_token || !params.refresh_token) {

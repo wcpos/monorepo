@@ -30,9 +30,9 @@ function setUrl(pathAndQuery: string) {
 	window.history.replaceState({}, '', pathAndQuery);
 }
 
-function simulateRedirectReturn(csrf: string = CSRF) {
+function simulateRedirectReturn(csrf: string = CSRF, claimKey?: string) {
 	setUrl('/pos');
-	saveRedirectState(LOGIN_URL, csrf);
+	saveRedirectState(LOGIN_URL, csrf, claimKey);
 	setUrl(
 		`/pos?access_token=at123&refresh_token=rt456&uuid=uuid-1&id=7` +
 			`&display_name=Paul&expires_at=1755648000&state=${CSRF}`
@@ -89,6 +89,23 @@ describe('useWcposAuth (web) redirect-return delivery', () => {
 		const consumer = renderHook(() => useWcposAuth({ site: siteFor(LOGIN_URL) }));
 		expect(consumer.result.current.response?.type).toBe('error');
 		expect(consumer.result.current.response?.error).toMatch(/State parameter mismatch/);
+	});
+
+	it('routes an add-user login past earlier-mounting re-auth consumers', () => {
+		// On a site with existing users, WpUser rows mount (and would claim)
+		// before AddUserButton. The claimKey keeps the add-user result out of the
+		// re-auth rows, which adopt the returned token for active requests.
+		simulateRedirectReturn(CSRF, 'add-user');
+
+		const reauthRow = renderHook(() =>
+			useWcposAuth({ site: siteFor(LOGIN_URL), claimKey: 'reauth:alice-uuid' })
+		);
+		expect(reauthRow.result.current.response).toBeNull();
+
+		const addUser = renderHook(() =>
+			useWcposAuth({ site: siteFor(LOGIN_URL), claimKey: 'add-user' })
+		);
+		expect(addUser.result.current.response?.type).toBe('success');
 	});
 
 	it('returns no response when the URL has no auth params', () => {

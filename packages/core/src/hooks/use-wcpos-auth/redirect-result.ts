@@ -34,12 +34,15 @@ interface SavedRedirectState {
 	returnPath: string;
 	/** wcpos_login_url of the site that initiated the redirect */
 	loginUrl?: string;
+	/** Identifies the consumer that initiated the redirect (see WcposAuthConfig.claimKey) */
+	claimKey?: string;
 	timestamp: number;
 }
 
 interface PendingRedirectResult {
-	/** null when the saved state was missing, i.e. the initiating site is unknown */
+	/** null when the saved state was missing — only possible for error results */
 	loginUrl: string | null;
+	claimKey: string | null;
 	result: WcposAuthResult;
 }
 
@@ -47,15 +50,16 @@ let captured = false;
 let pending: PendingRedirectResult | null = null;
 
 /**
- * Save the return location, initiating site, and CSRF state before the
- * fallback redirect navigates away.
+ * Save the return location, initiating site/consumer, and CSRF state before
+ * the fallback redirect navigates away.
  */
-export function saveRedirectState(loginUrl: string, csrfState: string): void {
+export function saveRedirectState(loginUrl: string, csrfState: string, claimKey?: string): void {
 	if (typeof sessionStorage === 'undefined') return;
 
 	const state: SavedRedirectState = {
 		returnPath: window.location.pathname + window.location.search,
 		loginUrl,
+		claimKey,
 		timestamp: Date.now(),
 	};
 	sessionStorage.setItem(AUTH_STATE_KEY, JSON.stringify(state));
@@ -116,9 +120,20 @@ export function captureRedirectResult(): void {
 
 	// Validate CSRF state against the raw URL param. (WcposAuthParams doesn't
 	// carry `state`, so the comparison must read the URL, not result.params.)
+	// A success return REQUIRES a saved state: the app always saves one before
+	// its own fallback redirect, so tokens arriving without it did not
+	// originate from this tab — accepting them would be a login-CSRF hole.
 	if (result.type === 'success') {
 		const returnedState = extractAuthParams(url)?.get('state') ?? null;
-		if (savedCsrf && returnedState !== savedCsrf) {
+		if (!savedCsrf) {
+			oauthLogger.error('Auth tokens returned without a saved state - rejecting', {
+				code: ERROR_CODES.AUTH_UNEXPECTED,
+			});
+			result = {
+				type: 'error',
+				error: 'Authentication did not originate from this app session - rejected for security',
+			};
+		} else if (returnedState !== savedCsrf) {
 			oauthLogger.error('State parameter mismatch - possible CSRF attack', {
 				code: ERROR_CODES.AUTH_UNEXPECTED,
 				context: {
@@ -140,26 +155,47 @@ export function captureRedirectResult(): void {
 	clearRedirectState();
 	window.history.replaceState({}, document.title, cleanUrl);
 
-	pending = { loginUrl: saved?.loginUrl ?? null, result };
+	pending = { loginUrl: saved?.loginUrl ?? null, claimKey: saved?.claimKey ?? null, result };
 }
 
 /**
- * Claim the pending redirect result for a site. One-shot: the first matching
- * claimant consumes it. A pending result keyed to a site is only handed to a
- * consumer configured with the same wcpos_login_url; a result with an unknown
- * initiating site goes to the first consumer that has any site configured.
+ * Claim the pending redirect result. One-shot: the first matching claimant
+ * consumes it. A result whose origin is known is handed only to the consumer
+ * with the same wcpos_login_url AND the same claimKey — several consumers for
+ * one site share the hook (WpUser rows, AddUserButton) and are not
+ * interchangeable: a WpUser row adopts the returned token for active requests,
+ * so an add-user login must never be claimed by a re-auth row. An error result
+ * of unknown origin (success results always have a saved origin — see
+ * captureRedirectResult) goes to the first consumer with any site configured,
+ * so the failure is at least surfaced.
  */
-export function claimRedirectResult(loginUrl: string | null | undefined): WcposAuthResult | null {
+export function claimRedirectResult(
+	loginUrl: string | null | undefined,
+	claimKey?: string
+): WcposAuthResult | null {
 	captureRedirectResult();
 
 	if (!pending) return null;
 	// A consumer without a configured site can't own a login result.
 	if (!loginUrl) return null;
-	if (pending.loginUrl && pending.loginUrl !== loginUrl) return null;
+	if (pending.loginUrl) {
+		if (pending.loginUrl !== loginUrl) return null;
+		if ((pending.claimKey ?? null) !== (claimKey ?? null)) return null;
+	}
 
 	const { result } = pending;
 	pending = null;
 	return result;
+}
+
+/**
+ * Non-consuming look at the pending result's initiating site. Lets the Sites
+ * screen expand the right accordion section on the redirect return — a
+ * collapsed section's consumers are unmounted and could never claim.
+ */
+export function peekRedirectLoginUrl(): string | null {
+	captureRedirectResult();
+	return pending?.loginUrl ?? null;
 }
 
 /**

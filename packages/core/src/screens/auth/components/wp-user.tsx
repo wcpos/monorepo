@@ -44,6 +44,9 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 			wcpos_login_url: site.wcpos_login_url ?? '',
 			name: site.name ?? '',
 		},
+		// Redirect-return results are claimed per initiating consumer: this row's
+		// re-auth must not swallow an add-user login (or another row's re-auth).
+		claimKey: `reauth:${wpUser.uuid}`,
 	});
 
 	const displayName = wpUser.display_name || 'Unknown User';
@@ -87,8 +90,18 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 					// Re-auth can be reached after a pre-flight auth-required block;
 					// clear the flag so subsequent requests aren't rejected despite
 					// the newly-saved tokens (mirrors auth-error-handler.ts:203).
-					requestStateManager.setRefreshedToken(params.access_token);
-					requestStateManager.setAuthFailed(false);
+					// Only adopt the token globally when the server authenticated THIS
+					// row's user — the login page lets anyone sign in, and the refreshed
+					// token overrides the selected user's token on every request.
+					if (Number.parseInt(params.id, 10) === Number(wpUser.id)) {
+						requestStateManager.setRefreshedToken(params.access_token);
+						requestStateManager.setAuthFailed(false);
+					} else {
+						authLogger.warn(
+							'Re-authentication returned a different user; credentials saved but token not adopted for active requests',
+							{ context: { expectedId: wpUser.id, returnedId: params.id } }
+						);
+					}
 				} catch (error) {
 					processedResponseRef.current = null;
 					authLogger.error('Failed to finish re-authentication', {
@@ -106,7 +119,7 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 			});
 			processedResponseRef.current = responseKey;
 		}
-	}, [response, handleLoginSuccess, site.name]);
+	}, [response, handleLoginSuccess, site.name, wpUser.id]);
 
 	const handleRemoveWpUser = React.useCallback(async () => {
 		await wpUser.incrementalRemove();

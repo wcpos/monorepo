@@ -57,12 +57,12 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 	// long after the first instances, so the claim has to survive until then.
 	React.useEffect(() => {
 		captureRedirectResult();
-		const pendingResult = claimRedirectResult(loginUrl);
+		const pendingResult = claimRedirectResult(loginUrl, config.claimKey);
 		if (pendingResult) {
 			// eslint-disable-next-line react-hooks/set-state-in-effect -- claiming consumes a one-shot external store (the parsed redirect URL); it must happen post-commit, never during render, so a Suspense-discarded render can't eat the token.
 			setImperativeResult(pendingResult);
 		}
-	}, [loginUrl]);
+	}, [loginUrl, config.claimKey]);
 
 	const redirectUri = React.useMemo(() => getRedirectUri(), []);
 
@@ -135,7 +135,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 		return null;
 	}, [response]);
 
-	// A live response supersedes the seeded URL/prompt result.
+	// A live response supersedes the claimed redirect-return/prompt result.
 	const authResult = responseResult ?? imperativeResult;
 
 	// Clear saved auth state once a live response resolves successfully or errors.
@@ -174,7 +174,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 				state,
 				mergedExtraParams
 			);
-			saveRedirectState(config.site!.wcpos_login_url, state);
+			saveRedirectState(config.site!.wcpos_login_url, state, config.claimKey);
 			oauthLogger.debug('Redirecting to auth URL', { context: { authUrl } });
 			navigateToUrl(authUrl);
 		};
@@ -233,7 +233,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 			setImperativeResult(errorResult);
 			return errorResult;
 		}
-	}, [request, config.site, mergedExtraParams, redirectUri, expoPromptAsync]);
+	}, [request, config.site, config.claimKey, mergedExtraParams, redirectUri, expoPromptAsync]);
 
 	return {
 		isReady: !!request,

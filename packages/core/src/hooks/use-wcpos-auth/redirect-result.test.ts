@@ -5,6 +5,7 @@ import {
 	__resetRedirectResultForTesting,
 	captureRedirectResult,
 	claimRedirectResult,
+	peekRedirectLoginUrl,
 	saveRedirectState,
 } from './redirect-result';
 
@@ -69,10 +70,11 @@ afterEach(() => {
 function simulateRedirectReturn({
 	loginUrl = LOGIN_URL,
 	csrf = CSRF,
+	claimKey,
 	returnUrl = `https://app.test/pos?${TOKEN_QUERY}`,
-}: { loginUrl?: string; csrf?: string; returnUrl?: string } = {}) {
+}: { loginUrl?: string; csrf?: string; claimKey?: string; returnUrl?: string } = {}) {
 	setLocation('https://app.test/pos?foo=bar');
-	saveRedirectState(loginUrl, csrf);
+	saveRedirectState(loginUrl, csrf, claimKey);
 	setLocation(returnUrl);
 }
 
@@ -134,13 +136,44 @@ describe('redirect-result', () => {
 		expect(result?.error).toMatch(/State parameter mismatch/);
 	});
 
-	it('delivers to the first site-bearing consumer when the initiating site is unknown', () => {
-		// No saveRedirectState — e.g. storage was cleared mid-flight. Stay lenient
-		// (pre-existing behavior) but never hand a login to a site-less consumer.
+	it('rejects tokens that arrive without a saved state (login-CSRF guard)', () => {
+		// No saveRedirectState — the flow did not originate from this tab (e.g. a
+		// crafted link). The tokens must never be accepted; the error is handed to
+		// the first site-bearing consumer so the failure is visible.
 		setLocation(`https://app.test/pos?${TOKEN_QUERY}`);
 
 		expect(claimRedirectResult(null)).toBeNull();
-		expect(claimRedirectResult(OTHER_LOGIN_URL)?.type).toBe('success');
+		const result = claimRedirectResult(OTHER_LOGIN_URL);
+		expect(result?.type).toBe('error');
+		expect(result?.error).toMatch(/did not originate/);
+		expect(result?.params).toBeUndefined();
+	});
+
+	it('delivers only to the consumer with the initiating claimKey', () => {
+		// WpUser rows mount (and claim) before AddUserButton; without the key an
+		// add-user login would be swallowed by a re-auth row, which adopts the
+		// returned token for active requests — cross-user attribution.
+		simulateRedirectReturn({ claimKey: 'add-user' });
+
+		expect(claimRedirectResult(LOGIN_URL, 'reauth:alice-uuid')).toBeNull();
+		expect(claimRedirectResult(LOGIN_URL)).toBeNull();
+		expect(claimRedirectResult(LOGIN_URL, 'add-user')?.type).toBe('success');
+	});
+
+	it('a result saved without a claimKey is not claimable by a keyed consumer', () => {
+		simulateRedirectReturn();
+
+		expect(claimRedirectResult(LOGIN_URL, 'reauth:alice-uuid')).toBeNull();
+		expect(claimRedirectResult(LOGIN_URL)?.type).toBe('success');
+	});
+
+	it('peekRedirectLoginUrl reveals the initiating site without consuming', () => {
+		simulateRedirectReturn();
+
+		expect(peekRedirectLoginUrl()).toBe(LOGIN_URL);
+		expect(peekRedirectLoginUrl()).toBe(LOGIN_URL);
+		expect(claimRedirectResult(LOGIN_URL)?.type).toBe('success');
+		expect(peekRedirectLoginUrl()).toBeNull();
 	});
 
 	it('delivers a server error response to the initiating site', () => {

@@ -9,6 +9,13 @@ export interface WcposAuthConfig {
 	} | null;
 	/** Extra parameters to pass to the auth URL */
 	extraParams?: Record<string, string>;
+	/**
+	 * Identifies this consumer for the web redirect-return fallback: the result
+	 * of a fallback redirect is delivered only to the consumer whose claimKey
+	 * matches the one saved when the redirect started (e.g. 'add-user' vs
+	 * 'reauth:<uuid>'). Ignored on native/electron, which have no fallback.
+	 */
+	claimKey?: string;
 }
 
 /**
