@@ -65,7 +65,12 @@ test.describe('POS open-orders tab switching', () => {
 		await page.getByTestId('new-order-tab').click();
 		await expect(cartRows(page)).toHaveCount(0, { timeout: 15_000 });
 
-		// Order 2 is born the same way; its tab becomes active.
+		// Order 2 is born the same way; its tab becomes active. Clear the product search
+		// first: the writer-credentials path searches the SAME probe token, and an
+		// identical fill fires no change event -> no server demand -> searchAndWaitForServer
+		// hangs its full 120s (observed in CI shard 4; the secretless tile fallback never
+		// searches, which is why local runs cannot reproduce it).
+		await page.getByTestId('search-products').fill('');
 		await addCheckoutProbeProduct(page);
 		await expect(cartRows(page)).toHaveCount(1, { timeout: 15_000 });
 		const order2TabId = await activeOrderTabId(page, order1TabId);
