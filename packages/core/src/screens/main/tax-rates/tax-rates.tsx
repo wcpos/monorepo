@@ -90,7 +90,6 @@ export function TaxRates() {
 						count={rates.length}
 						active$={binding.active$}
 						total$={binding.total$}
-						totalSource$={binding.totalSource$}
 						sync={binding.sync}
 					/>
 				</ModalBody>

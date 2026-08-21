@@ -1,9 +1,10 @@
 import React from 'react';
-import { Linking, View } from 'react-native';
+import { View } from 'react-native';
 
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
+import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { useT } from '../../../../contexts/translations';
 
@@ -34,7 +35,7 @@ export function UpgradeNotice({ setShowUpgrade }: { setShowUpgrade: (show: boole
 				<Text
 					className="text-attention-foreground mx-auto text-sm"
 					variant="link"
-					onPress={() => Linking.openURL('https://wcpos.com/pro')}
+					onPress={() => openExternalURL('https://wcpos.com/pro')}
 				>
 					{upgradeToProText}
 				</Text>
@@ -42,7 +43,7 @@ export function UpgradeNotice({ setShowUpgrade }: { setShowUpgrade: (show: boole
 			<IconButton
 				name="xmark"
 				size="sm"
-				className="text-attention-foreground"
+				iconClassName="text-attention-foreground"
 				onPress={() => setShowUpgrade(false)}
 			/>
 		</HStack>

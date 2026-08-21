@@ -93,7 +93,6 @@ const renderHeader = (props: RenderHeaderProps) => {
 function ReportsOrdersFooter(props: {
 	active$: Observable<boolean>;
 	total$: Observable<number>;
-	totalSource$: Observable<'coverage' | 'local'>;
 	sync: () => Promise<void>;
 	count: number;
 }) {
@@ -223,7 +222,6 @@ export function Orders() {
 								actions={tableActions}
 								active$={binding.active$}
 								total$={binding.total$}
-								totalSource$={binding.totalSource$}
 								sync={binding.sync}
 								renderCell={renderCell}
 								renderHeader={renderHeader}

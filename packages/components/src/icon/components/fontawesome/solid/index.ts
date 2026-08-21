@@ -6,6 +6,7 @@ export { SvgArrowRight as arrowRight } from './arrowRight';
 export { SvgArrowRotateLeft as arrowRotateLeft } from './arrowRotateLeft';
 export { SvgArrowRotateRight as arrowRotateRight } from './arrowRotateRight';
 export { SvgArrowUp as arrowUp } from './arrowUp';
+export { SvgArrowUpRight as arrowUpRight } from './arrowUpRight';
 export { SvgArrowsFromLine as arrowsFromLine } from './arrowsFromLine';
 export { SvgArrowsToLine as arrowsToLine } from './arrowsToLine';
 export { SvgBadgeDollar as badgeDollar } from './badgeDollar';

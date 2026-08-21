@@ -12,6 +12,7 @@ import {
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
 import { Button, ButtonText } from '@wcpos/components/button';
+import { DocsLink } from '@wcpos/components/docs-link';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -27,7 +28,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/toolt
 import { VStack } from '@wcpos/components/vstack';
 import { COLLECTION_VOCABULARY, runResetRefill, useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage } from '@wcpos/utils/logger';
-import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { AttentionPanel } from './attention-panel';
 import { ConflictedMutationsPanel } from './conflicted-mutations';
@@ -492,17 +492,14 @@ const HOW_SYNCING_WORKS_DOCS_URL = 'https://docs.wcpos.com/products/sync';
 function HowSyncingWorksLink() {
 	const t = useT();
 	return (
-		<Button
-			variant="ghost"
-			size="sm"
+		<DocsLink
 			testID="db-how-syncing-works"
-			onPress={() => openExternalURL(HOW_SYNCING_WORKS_DOCS_URL)}
+			href={HOW_SYNCING_WORKS_DOCS_URL}
+			// Indented to sit in the freshness station's text column, under the status lines.
+			className="mt-0.5 ml-3.5"
 		>
-			<HStack className="items-center gap-1">
-				<Icon name="circleInfo" size="sm" className="text-muted-foreground" />
-				<Text className="text-muted-foreground text-xs">{t('health.database.how_title')}</Text>
-			</HStack>
-		</Button>
+			{t('health.database.how_title')}
+		</DocsLink>
 	);
 }
 
@@ -786,20 +783,22 @@ export function DatabaseScreen() {
 								/>
 							</View>
 						) : null}
-					</VStack>
-					<HStack className="items-center gap-2">
 						<HowSyncingWorksLink />
-						<Button
-							testID="db-check-everything"
-							variant="outline"
-							size="sm"
-							loading={syncing}
-							disabled={checking !== null}
-							onPress={() => void sync()}
-						>
-							<ButtonText>{t('health.database.check_everything')}</ButtonText>
-						</Button>
-					</HStack>
+					</VStack>
+					{/* ml-auto keeps the action pinned to the table's right edge — under the
+					    size column — even when the flex-wrap row breaks (owner request
+					    2026-08-20); justify-between alone left-aligns a wrapped item. */}
+					<Button
+						testID="db-check-everything"
+						variant="outline"
+						size="sm"
+						className="ml-auto"
+						loading={syncing}
+						disabled={checking !== null}
+						onPress={() => void sync()}
+					>
+						<ButtonText>{t('health.database.check_everything')}</ButtonText>
+					</Button>
 				</HStack>
 
 				<View className="h-4" />

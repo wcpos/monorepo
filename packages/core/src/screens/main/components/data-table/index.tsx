@@ -97,7 +97,6 @@ type BindingProps<TSortField extends string> = {
 	TableFooterComponent?: React.ComponentType<BindingDataTableFooterProps>;
 	active$: import('rxjs').Observable<boolean>;
 	total$: import('rxjs').Observable<number>;
-	totalSource$: import('rxjs').Observable<'coverage' | 'local'>;
 	sync: () => Promise<void>;
 };
 
@@ -271,7 +270,6 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 							collectionName={props.collectionName}
 							active$={props.active$}
 							total$={props.total$}
-							totalSource$={props.totalSource$}
 							sync={props.sync}
 							count={result.hits.length}
 						/>
@@ -280,7 +278,6 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 							collectionName={props.collectionName}
 							active$={props.active$}
 							total$={props.total$}
-							totalSource$={props.totalSource$}
 							sync={props.sync}
 							count={result.hits.length}
 						/>

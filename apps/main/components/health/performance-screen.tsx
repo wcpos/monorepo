@@ -1,9 +1,10 @@
 import * as React from 'react';
-import { Linking, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { useObservableEagerState } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
+import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
 import { Label } from '@wcpos/components/label';
 import { cn } from '@wcpos/components/lib/utils';
@@ -27,6 +28,7 @@ import {
 	presetFor,
 	type PresetName,
 	PRESETS,
+	requestsPerHour,
 	summarizeLast24h,
 } from './performance-logic';
 import { TrendLine } from './trend-line';
@@ -135,7 +137,7 @@ export function PerformanceScreen() {
 	const pullBatchSize = draft.sync_pull_batch_size ?? storedPullBatchSize;
 
 	const preset = presetFor(checkIntervalMs, pullBatchSize);
-	const requestsPerDay = Math.round((86_400_000 / checkIntervalMs) * 10) / 10;
+	const hourlyRequests = requestsPerHour(checkIntervalMs);
 	const uptimeCells = deriveUptimeCells(snapshot.buckets, snapshot.nowMs);
 
 	// The armed next-due boundary is the only honest schedule signal the facade
@@ -326,11 +328,11 @@ export function PerformanceScreen() {
 									? `${t('health.performance.right_now', {
 											every:
 												nextCheck.unit === 's' ? `${nextCheck.value} s` : `${nextCheck.value} min`,
-										})} · ${t('health.performance.math_line', {
-											perDay: Math.round(requestsPerDay).toLocaleString(),
+										})} · ${t('health.performance.math_line_hourly', {
+											perHour: hourlyRequests.toLocaleString(),
 										})}`
-									: t('health.performance.math_line', {
-											perDay: Math.round(requestsPerDay).toLocaleString(),
+									: t('health.performance.math_line_hourly', {
+											perHour: hourlyRequests.toLocaleString(),
 										})}
 							</Text>
 							<Button variant="outline" size="sm" onPress={() => void applyPreset('balanced')}>
@@ -377,14 +379,9 @@ export function PerformanceScreen() {
 				</Section>
 
 				{/* One link out — everything deeper lives in the docs */}
-				<Text
-					className="text-primary text-sm"
-					role="link"
-					testID="performance-docs-link"
-					onPress={() => void Linking.openURL(DOCS_URL)}
-				>
-					{t('health.performance.docs_link')}
-				</Text>
+				<DocsLink testID="performance-docs-link" href={DOCS_URL}>
+					{t('health.performance.learn_more_in_docs')}
+				</DocsLink>
 				<View className="h-4" />
 			</VStack>
 		</ScrollView>

@@ -15,7 +15,6 @@ const mockBinding = {
 	resource: { kind: 'customers-resource' },
 	active$: of(false),
 	total$: of(7),
-	totalSource$: of('local' as const),
 	sync: mockSync,
 };
 const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown) => mockBinding);
@@ -159,7 +158,6 @@ describe('CustomersScreen query-state wiring', () => {
 			sort: { field: 'last_name', direction: 'asc' },
 			active$: mockBinding.active$,
 			total$: mockBinding.total$,
-			totalSource$: mockBinding.totalSource$,
 			sync: mockBinding.sync,
 		});
 		expect(mockDataTableProps).not.toHaveProperty('query');

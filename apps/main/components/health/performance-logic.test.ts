@@ -17,6 +17,15 @@ describe('performance page logic', () => {
 		expect(presetFor(10_000, 50)).toBe('custom');
 	});
 
+	it('estimates requests per hour from the check interval', () => {
+		const { requestsPerHour, PRESETS } = loadLogic();
+		expect(requestsPerHour(PRESETS.eco.checkIntervalMs)).toBe(12);
+		expect(requestsPerHour(PRESETS.balanced.checkIntervalMs)).toBe(60);
+		expect(requestsPerHour(PRESETS.realtime.checkIntervalMs)).toBe(360);
+		// A non-divisor interval rounds to a whole request count.
+		expect(requestsPerHour(7_000)).toBe(514);
+	});
+
 	// #908 — the presets price TWO independent budget lines, and the shipped default is
 	// Balanced. These assertions are the guard rail for re-tuning the numbers.
 	it('moves both budget lines across the tiers and never ships a max-weight page', () => {

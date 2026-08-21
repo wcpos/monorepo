@@ -2,9 +2,9 @@ import * as React from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
+import { DocsLink } from '@wcpos/components/docs-link';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { useT } from '../../../../contexts/translations';
 
@@ -136,14 +136,9 @@ export function ScannerDeviceChooser() {
 							{t('settings.scanner_chooser_empty_hint')}
 						</Text>
 					</View>
-					<Pressable
-						testID="scanner-chooser-wizard-link"
-						onPress={() => openExternalURL(WIZARD_DOCS_URL)}
-					>
-						<Text className="text-primary text-xs font-medium">
-							{t('settings.scanner_mode_docs_link')} ↗
-						</Text>
-					</Pressable>
+					<DocsLink testID="scanner-chooser-wizard-link" href={WIZARD_DOCS_URL}>
+						{t('settings.scanner_mode_docs_link')}
+					</DocsLink>
 				</VStack>
 			) : (
 				candidates.map((device) => (

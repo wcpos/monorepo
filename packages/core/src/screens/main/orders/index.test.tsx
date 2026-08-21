@@ -14,7 +14,6 @@ const mockBinding = {
 	resource: { kind: 'orders-resource' },
 	active$: of(false),
 	total$: of(27),
-	totalSource$: of('coverage' as const),
 	sync: jest.fn(async () => undefined),
 };
 const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown) => mockBinding);
@@ -149,7 +148,6 @@ describe('OrdersScreen query-state wiring', () => {
 			sort: { field: 'date_created_gmt', direction: 'desc' },
 			active$: mockBinding.active$,
 			total$: mockBinding.total$,
-			totalSource$: mockBinding.totalSource$,
 			sync: mockBinding.sync,
 		});
 		expect(mockDataTableProps).not.toHaveProperty('query');

@@ -11,7 +11,14 @@ import {
 	race,
 	timer,
 } from 'rxjs';
-import { distinctUntilChanged, filter, map, shareReplay, switchMap } from 'rxjs/operators';
+import {
+	distinctUntilChanged,
+	filter,
+	map,
+	shareReplay,
+	startWith,
+	switchMap,
+} from 'rxjs/operators';
 
 import {
 	declareRequirements,
@@ -26,6 +33,7 @@ import {
 	useQueryRuntime,
 } from '@wcpos/query';
 import type {
+	CensusTotals,
 	CoverageOutcome,
 	CoverageTarget,
 	CoverageVerdict,
@@ -46,7 +54,6 @@ import type { RxCollection } from 'rxdb';
 
 type LegacyCollectionName = EngineQueryDescriptor['collection'];
 type CompiledQuery = ReturnType<typeof compileQuery>;
-type TotalSource = 'coverage' | 'local';
 
 /**
  * How much of a fetch-to-completion lane has landed locally, while it is still landing (#954).
@@ -68,13 +75,12 @@ export interface QueryBinding {
 	result$: Observable<QueryResult<RxCollection>>;
 	active$: Observable<boolean>;
 	total$: Observable<number>;
-	totalSource$: Observable<TotalSource>;
 	laneProgress$: Observable<QueryLaneProgress | null>;
 	sync(): Promise<void>;
 }
 
 const DEMAND_RETRY_BACKOFF_MS = 250;
-const LOCAL_TOTAL_SOURCE$ = of('local' as const);
+const NO_CENSUS_TOTAL$ = of(null as number | null);
 const INACTIVE$ = of(false);
 const NO_LANE_PROGRESS$ = of(null as QueryLaneProgress | null);
 
@@ -357,21 +363,43 @@ function coverageTargetKey(target: CoverageTarget | null): string {
 }
 
 /**
- * The footer's three numbers, composed from the engine's verdict and this binding's own
- * resident count.
+ * The engine's whole-collection census total — the same number the Store Health › Database
+ * page shows. `null` until the engine has recorded a census answer for the collection.
+ */
+function censusTotal$(
+	engine: RxdbSyncEngine,
+	collection: SyncCollectionName
+): Observable<number | null> {
+	return new Observable<CensusTotals>((subscriber) =>
+		engine.censusChanges((totals) => subscriber.next(totals))
+	).pipe(
+		map((totals) => totals[collection]?.total ?? null),
+		// The census snapshot arrives async (a cache read); nothing may hold the footer's
+		// combineLatest hostage to it, so open with "no answer yet".
+		startWith(null as number | null),
+		distinctUntilChanged()
+	);
+}
+
+/**
+ * The footer's numbers, composed from the engine's verdict, the collection census, and this
+ * binding's own resident count — one source of truth, so the footer and the Store Health ›
+ * Database page can never disagree about a total.
  *
- * Precedence, freshness and ranged-walk progress live behind `coverageChanges`. What stays here
- * is the one thing the engine cannot know: the local count. It is the fallback when the engine
- * declines to vouch (`total: null`) — and it OUTRANKS a recorded total it exceeds, because more
- * residents than the server's last count proves that count outdated. The number published then
- * IS the local count, so it carries `source: 'local'`: the footer must render a locally derived
- * lower bound as `N+`, never dress it up as an exact server total.
+ * Precedence, freshness and ranged-walk progress live behind `coverageChanges`. When the
+ * engine has no per-query answer (`total: null`), a whole-collection browse falls back to the
+ * census total (`census$` is `NO_CENSUS_TOTAL$` for anything narrower — a filtered or searched
+ * set must never borrow the whole collection's size). The local resident count is the floor:
+ * more residents than the server's last count proves that count outdated, so the larger number
+ * wins — stated plainly, never dressed up with a `N+` suffix (owner ruling 2026-08-20: the
+ * `+` read as noise, and every locale translated it differently).
  */
 function coverageProjection$(
 	engine: RxdbSyncEngine,
 	result$: Observable<QueryResult<RxCollection>>,
-	coverageTarget$: Observable<CoverageTarget | null>
-): Observable<{ total: number; source: TotalSource; laneProgress: QueryLaneProgress | null }> {
+	coverageTarget$: Observable<CoverageTarget | null>,
+	census$: Observable<number | null>
+): Observable<{ total: number; laneProgress: QueryLaneProgress | null }> {
 	const verdict$ = coverageTarget$.pipe(
 		distinctUntilChanged(
 			(previous, current) => coverageTargetKey(previous) === coverageTargetKey(current)
@@ -381,16 +409,18 @@ function coverageProjection$(
 	return combineLatest([
 		result$.pipe(map((result) => result.count ?? result.hits.length)),
 		verdict$,
+		census$,
 	]).pipe(
-		map(([localCount, verdict]) =>
-			verdict.total === null || verdict.total < localCount
-				? { total: localCount, source: 'local' as const, laneProgress: verdict.progress }
-				: { total: verdict.total, source: 'coverage' as const, laneProgress: verdict.progress }
-		),
+		map(([localCount, verdict, censusTotal]) => {
+			const serverTotal = verdict.total ?? censusTotal;
+			return {
+				total: serverTotal === null ? localCount : Math.max(serverTotal, localCount),
+				laneProgress: verdict.progress,
+			};
+		}),
 		distinctUntilChanged(
 			(previous, current) =>
 				previous.total === current.total &&
-				previous.source === current.source &&
 				previous.laneProgress?.downloaded === current.laneProgress?.downloaded &&
 				previous.laneProgress?.total === current.laneProgress?.total
 		),
@@ -420,7 +450,6 @@ export function useLogsBinding(state: QueryStateOf<'logs'>): QueryBinding {
 		resource: local.resource as unknown as ObservableResource<QueryResult<RxCollection>>,
 		result$: local.result$ as unknown as Observable<QueryResult<RxCollection>>,
 		total$: local.total$,
-		totalSource$: LOCAL_TOTAL_SOURCE$,
 		laneProgress$: NO_LANE_PROGRESS$,
 		active$: INACTIVE$,
 		sync: async () => undefined,
@@ -473,16 +502,19 @@ function useEngineBinding(
 			shareReplay({ bufferSize: 1, refCount: true })
 		);
 	}, [descriptor, enabled, runtime.engine, runtime.locale]);
+	const census$ = React.useMemo(
+		() =>
+			compiled.wholeCollection
+				? censusTotal$(runtime.engine, engineCollectionNameFor(descriptor.collection))
+				: NO_CENSUS_TOTAL$,
+		[compiled.wholeCollection, descriptor.collection, runtime.engine]
+	);
 	const projection$ = React.useMemo(
-		() => coverageProjection$(runtime.engine, result$, demand.coverageTarget$),
-		[demand.coverageTarget$, result$, runtime.engine]
+		() => coverageProjection$(runtime.engine, result$, demand.coverageTarget$, census$),
+		[census$, demand.coverageTarget$, result$, runtime.engine]
 	);
 	const resource = useObservableResource(result$);
 	const total$ = React.useMemo(() => projection$.pipe(map(({ total }) => total)), [projection$]);
-	const totalSource$ = React.useMemo(
-		() => projection$.pipe(map(({ source }) => source)),
-		[projection$]
-	);
 	const laneProgress$ = React.useMemo(
 		() => projection$.pipe(map(({ laneProgress }) => laneProgress)),
 		[projection$]
@@ -495,14 +527,13 @@ function useEngineBinding(
 			result$,
 			active$,
 			total$,
-			totalSource$,
 			laneProgress$,
 			sync: demand.sync,
 			whenReady: demand.whenReady,
 			declareOnce: demand.declareOnce,
 			generation: demand.generation,
 		}),
-		[resource, result$, active$, total$, totalSource$, laneProgress$, demand]
+		[resource, result$, active$, total$, laneProgress$, demand]
 	);
 }
 
@@ -670,9 +701,13 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 		);
 	}, [bindingId, childDescriptor, compiled.read, descriptor, runtime.engine, runtime.locale]);
 	const resource = useObservableResource(result$);
+	const census$ = React.useMemo(
+		() => (compiled.wholeCollection ? censusTotal$(runtime.engine, 'products') : NO_CENSUS_TOTAL$),
+		[compiled.wholeCollection, runtime.engine]
+	);
 	const projection$ = React.useMemo(
-		() => coverageProjection$(runtime.engine, result$, parentDemand.coverageTarget$),
-		[parentDemand.coverageTarget$, result$, runtime.engine]
+		() => coverageProjection$(runtime.engine, result$, parentDemand.coverageTarget$, census$),
+		[census$, parentDemand.coverageTarget$, result$, runtime.engine]
 	);
 	const active$ = React.useMemo(
 		() =>
@@ -707,18 +742,14 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 	 * the POS products panel uses, and it did not.
 	 */
 	const total$ = React.useMemo(() => projection$.pipe(map(({ total }) => total)), [projection$]);
-	const totalSource$ = React.useMemo(
-		() => projection$.pipe(map(({ source }) => source)),
-		[projection$]
-	);
 	const laneProgress$ = React.useMemo(
 		() => projection$.pipe(map(({ laneProgress }) => laneProgress)),
 		[projection$]
 	);
 
 	return React.useMemo(
-		() => ({ resource, result$, active$, total$, totalSource$, laneProgress$, sync }),
-		[resource, result$, active$, total$, totalSource$, laneProgress$, sync]
+		() => ({ resource, result$, active$, total$, laneProgress$, sync }),
+		[resource, result$, active$, total$, laneProgress$, sync]
 	);
 }
 

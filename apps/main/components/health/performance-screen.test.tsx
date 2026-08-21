@@ -89,6 +89,7 @@ jest.mock('@wcpos/components/hstack', () => {
 	const { View } = jest.requireActual('react-native');
 	return { HStack: View };
 });
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/label', () => {
 	const { Text } = jest.requireActual('react-native');
 	return { Label: Text };
@@ -225,5 +226,12 @@ describe('PerformanceScreen · server over time', () => {
 		const formatValue = trend('server-load-trend')?.formatValue;
 		expect(formatValue).toBeDefined();
 		expect([1, 14].map((value) => formatValue?.(value))).toEqual(['1.0', '14.0']);
+	});
+
+	it('states the request budget per hour, not per day', () => {
+		const renderer = renderScreen([]);
+		const mathLine = renderer.root.findByProps({ testID: 'settings-math-line' });
+		// Default 60 s interval → 60 requests/hour, rendered from the shipped en catalogue.
+		expect(String(mathLine.props.children)).toContain('~60 requests per hour');
 	});
 });

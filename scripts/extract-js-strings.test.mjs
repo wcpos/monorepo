@@ -65,7 +65,7 @@ test("--check ignores translation calls inside source comments", () => {
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
 });
 
-test("--check sees both footer count keys as literal calls", () => {
+test("--check sees the footer count key as a literal call", () => {
   const footerPaths = [
     "packages/core/src/screens/main/components/data-table/footer.tsx",
     "packages/core/src/screens/main/tax-rates/footer.tsx",
@@ -91,8 +91,11 @@ test("--check sees both footer count keys as literal calls", () => {
     const output = `${result.stdout}\n${result.stderr}`;
 
     assert.notEqual(result.status, 0, `${footerPath}\n${output}`);
+    // Both footers render exactly one count string: the `N+` at-least variant was
+    // retired so every locale converges on one "Showing…" phrasing. The trailing
+    // quote keeps this anchored to the whole key, so a future `common.showing_of_*`
+    // cannot satisfy it by prefix.
     assert.match(output, /common\.showing_of"/, footerPath);
-    assert.match(output, /common\.showing_of_at_least/, footerPath);
   }
 });
 

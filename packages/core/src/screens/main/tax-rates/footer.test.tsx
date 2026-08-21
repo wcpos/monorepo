@@ -67,7 +67,7 @@ function QueryStateProbe() {
 	);
 }
 
-function renderFooter(source: 'coverage' | 'local') {
+function renderFooter() {
 	const Footer = TaxRatesFooter as unknown as React.ComponentType<Record<string, unknown>>;
 	return render(
 		<QueryStateProvider
@@ -76,13 +76,7 @@ function renderFooter(source: 'coverage' | 'local') {
 			initialSort={{ field: 'id', direction: 'asc' }}
 		>
 			<QueryStateProbe />
-			<Footer
-				count={3}
-				active$={of(false)}
-				total$={of(5)}
-				totalSource$={of(source)}
-				sync={mockSync}
-			/>
+			<Footer count={3} active$={of(false)} total$={of(5)} sync={mockSync} />
 		</QueryStateProvider>
 	);
 }
@@ -96,20 +90,20 @@ function currentState(): QueryStateOf<'tax-rates'> {
 describe('TaxRatesFooter binding projections', () => {
 	beforeEach(() => jest.clearAllMocks());
 
-	it('shows Tier-0 coverage totals and keeps direct sync', () => {
-		renderFooter('coverage');
+	it('shows the plain showing-of total and keeps direct sync', () => {
+		renderFooter();
 
 		expect(screen.getByText('common.showing_of:3/5')).toBeTruthy();
 		fireEvent.click(screen.getByTestId('sync'));
 		expect(mockSync).toHaveBeenCalledTimes(1);
 	});
 
-	it('labels local fallback totals and resets query state before clear-and-sync', () => {
-		renderFooter('local');
+	it('resets query state before clear-and-sync', () => {
+		renderFooter();
 		fireEvent.click(screen.getByTestId('activate-query'));
 		expect(currentState()).toMatchObject({ search: 'not-a-screen-feature', limit: 20 });
 
-		expect(screen.getByText('common.showing_of_at_least:3/5')).toBeTruthy();
+		expect(screen.getByText('common.showing_of:3/5')).toBeTruthy();
 		fireEvent.click(screen.getByTestId('clear-and-sync'));
 		expect(currentState()).toEqual({
 			search: '',

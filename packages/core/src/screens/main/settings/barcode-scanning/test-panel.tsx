@@ -2,7 +2,6 @@ import * as React from 'react';
 import {
 	type NativeSyntheticEvent,
 	Platform,
-	Pressable,
 	ScrollView,
 	type TextInputKeyPressEventData,
 	View,
@@ -11,13 +10,13 @@ import {
 import { useObservablePickState, useObservableState } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
+import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
 import { Input } from '@wcpos/components/input';
 import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { analyzeScanTrace, type TraceAnalysis, type TraceSuggestion } from '@wcpos/scanner';
-import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { useScanTraceCapture } from './use-scan-trace-capture';
 import { useAppState } from '../../../../contexts/app-state';
@@ -193,11 +192,9 @@ export function TestPanel() {
 
 			{history.length > 0 ? <History history={history} /> : null}
 
-			<Pressable onPress={() => openExternalURL(DOCS_URL)}>
-				<Text className="text-primary text-sm font-medium">
-					{t('settings.barcode_test_docs_link')} ↗
-				</Text>
-			</Pressable>
+			<DocsLink testID="barcode-test-docs-link" href={DOCS_URL}>
+				{t('settings.barcode_test_docs_link')}
+			</DocsLink>
 		</VStack>
 	);
 }

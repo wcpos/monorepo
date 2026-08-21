@@ -14,7 +14,6 @@ const mockBinding = {
 	resource: { kind: 'relational-products-resource' },
 	active$: of(false),
 	total$: of(31),
-	totalSource$: of('coverage' as const),
 	sync: jest.fn(async () => undefined),
 };
 const mockUseRelationalCollectionBinding = jest.fn((_state: unknown) => mockBinding);
@@ -166,7 +165,6 @@ describe('ProductsScreen query-state wiring', () => {
 			sort: { field: 'name', direction: 'asc' },
 			active$: mockBinding.active$,
 			total$: mockBinding.total$,
-			totalSource$: mockBinding.totalSource$,
 			sync: mockBinding.sync,
 		});
 		expect(mockDataTableProps).not.toHaveProperty('query');

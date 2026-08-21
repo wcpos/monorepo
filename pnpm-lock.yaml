@@ -484,6 +484,9 @@ importers:
       '@uiw/react-json-view':
         specifier: 2.0.0-alpha.43
         version: 2.0.0-alpha.43(@babel/runtime@7.29.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@wcpos/utils':
+        specifier: workspace:*
+        version: link:../utils
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1

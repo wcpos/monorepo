@@ -485,10 +485,7 @@ describe('query bindings', () => {
 	 * resident count. So the fixture seeds the verdict for the exact key it expects the binding
 	 * to ask about — seeding the wrong key is indistinguishable from asking the wrong question.
 	 */
-	async function expectCoverageTotalSource(
-		queryKey: string,
-		filters: QueryStateOf<'orders'>['filters']
-	) {
+	async function expectCoverageTotal(queryKey: string, filters: QueryStateOf<'orders'>['filters']) {
 		engine.setCoverageVerdict(
 			{ collection: 'orders', queryKey },
 			{ total: 2, source: 'lane', complete: true, fresh: true }
@@ -504,13 +501,15 @@ describe('query bindings', () => {
 			{ wrapper: Provider }
 		);
 
+		// The seeded verdict's total (no residents exist), proving the binding asked about
+		// exactly this coverage key.
 		await expect(
-			firstValueFrom(result.current.totalSource$.pipe(filter((source) => source === 'coverage')))
-		).resolves.toBe('coverage');
+			firstValueFrom(result.current.total$.pipe(filter((total) => total === 2)))
+		).resolves.toBe(2);
 	}
 
 	it('uses coverage for an order status and date-range selector', async () => {
-		await expectCoverageTotalSource(
+		await expectCoverageTotal(
 			'orders:browser:status=processing:after=1782864000:before=1783987200:orderby=date:order=desc:search=:limit=25',
 			{
 				status: 'processing',
@@ -520,7 +519,7 @@ describe('query bindings', () => {
 	});
 
 	it('uses coverage for an order status and customer selector', async () => {
-		await expectCoverageTotalSource(
+		await expectCoverageTotal(
 			'orders:browser:status=processing:customer=42:orderby=date:order=desc:search=:limit=25',
 			{ status: 'processing', customer_id: 42 }
 		);
@@ -604,18 +603,19 @@ describe('query bindings', () => {
 			{ wrapper: Provider }
 		);
 
-		const sources: string[] = [];
-		const subscription = result.current.totalSource$.subscribe((source) => sources.push(source));
+		const totals: number[] = [];
+		const subscription = result.current.total$.subscribe((total) => totals.push(total));
 		await new Promise((resolve) => setTimeout(resolve, 50));
 		subscription.unsubscribe();
-		expect(sources.length).toBeGreaterThan(0);
-		expect(sources).not.toContain('coverage');
-		// Not merely "the answer was local": the binding never ASKED, which is the gate working.
+		expect(totals.length).toBeGreaterThan(0);
+		// The seeded unranged lane's total (2) must never surface for the ranged grid.
+		expect(totals).not.toContain(2);
+		// Not merely "the answer stayed local": the binding never ASKED, which is the gate working.
 		expect(engine.coverageSubscribeCalls).toEqual([]);
 	});
 
 	it('uses coverage for a reports-shaped order selector (cashier, store and range)', async () => {
-		await expectCoverageTotalSource(
+		await expectCoverageTotal(
 			'orders:browser:status=completed:cashier=7:store=12:after=1782864000:before=1783987200:orderby=date:order=desc:search=:limit=25',
 			{
 				status: 'completed',
@@ -668,7 +668,7 @@ describe('query bindings', () => {
 		await waitFor(() => expect(view.getByTestId('rows').textContent).toBe('15'));
 	});
 
-	it('exposes coverage-aware total and totalSource rather than the loaded window', async () => {
+	it('exposes the coverage-aware total rather than the loaded window', async () => {
 		await engineDB.collections.products.insert(
 			engineProduct({ uuid: 'resident', id: 1, name: 'Resident' })
 		);
@@ -685,9 +685,6 @@ describe('query bindings', () => {
 		await expect(
 			firstValueFrom(result.current.total$.pipe(filter((total) => total === 1)))
 		).resolves.toBe(1);
-		await expect(
-			firstValueFrom(result.current.totalSource$.pipe(filter((source) => source === 'local')))
-		).resolves.toBe('local');
 
 		// #909: the browse-window coverage key follows the DESCRIPTOR — this grid sorts by
 		// name, so it reports against the title-sorted window, not a hardcoded limit=100.
@@ -703,18 +700,15 @@ describe('query bindings', () => {
 		await expect(
 			firstValueFrom(result.current.total$.pipe(filter((total) => total === 3)))
 		).resolves.toBe(3);
-		await expect(
-			firstValueFrom(result.current.totalSource$.pipe(filter((source) => source === 'coverage')))
-		).resolves.toBe('coverage');
 		await expect(firstValueFrom(result.current.active$)).resolves.toBe(false);
 		await act(async () => result.current.sync());
 		expect(engine.syncCalls).toContain('scheduler-drain');
 	});
 
 	// A recorded total below the resident count is proven outdated — the projection publishes
-	// the resident count instead, and because that number is locally derived it must carry
-	// `source: 'local'` (the footer's `N+`), not pose as an exact server total.
-	it('demotes to a local lower bound when residents exceed the recorded total', async () => {
+	// the resident count instead: more residents than the server's last count proves that
+	// count stale, so the larger number wins.
+	it('publishes the resident count when residents exceed the recorded total', async () => {
 		await engineDB.collections.products.bulkInsert([
 			engineProduct({ uuid: 'resident-1', id: 1, name: 'Resident One' }),
 			engineProduct({ uuid: 'resident-2', id: 2, name: 'Resident Two' }),
@@ -740,9 +734,8 @@ describe('query bindings', () => {
 		await expect(
 			firstValueFrom(result.current.total$.pipe(filter((total) => total === 2)))
 		).resolves.toBe(2);
-		await expect(firstValueFrom(result.current.totalSource$)).resolves.toBe('local');
 
-		// The moment the recorded total catches back up, server provenance returns.
+		// The moment the recorded total catches back up, the server's number returns.
 		engine.setCoverageVerdict(
 			{
 				collection: 'products',
@@ -753,9 +746,59 @@ describe('query bindings', () => {
 		await expect(
 			firstValueFrom(result.current.total$.pipe(filter((total) => total === 5)))
 		).resolves.toBe(5);
+	});
+
+	// One source of truth with the Store Health › Database page: until the engine records a
+	// per-query answer for a plain whole-collection browse, the collection CENSUS — the very
+	// number the Database page shows — stands in as the total, instead of the resident count
+	// posing as one.
+	it('falls back to the census total for a plain browse with no recorded per-query total', async () => {
+		await engineDB.collections.products.insert(
+			engineProduct({ uuid: 'resident', id: 1, name: 'Resident' })
+		);
+		engine.setCensusTotal('products', 42);
+		const state: QueryStateOf<'products'> = {
+			search: '',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'name', direction: 'asc' },
+			limit: 25,
+		};
+		const { result } = renderHook(() => useCollectionBinding('products', state), {
+			wrapper: Provider,
+		});
+
+		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
 		await expect(
-			firstValueFrom(result.current.totalSource$.pipe(filter((source) => source === 'coverage')))
-		).resolves.toBe('coverage');
+			firstValueFrom(result.current.total$.pipe(filter((total) => total === 42)))
+		).resolves.toBe(42);
+		expect(engine.censusSubscribeCount).toBeGreaterThan(0);
+	});
+
+	it('prefers the per-query verdict over the census total', async () => {
+		engine.setCensusTotal('products', 42);
+		engine.setCoverageVerdict(
+			{
+				collection: 'products',
+				queryKey: 'products:browse-window:limit=100:orderby=title:order=asc',
+			},
+			{ total: 3, source: 'query-total', complete: false, fresh: true }
+		);
+		const state: QueryStateOf<'products'> = {
+			search: '',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'name', direction: 'asc' },
+			limit: 25,
+		};
+		const { result } = renderHook(() => useCollectionBinding('products', state), {
+			wrapper: Provider,
+		});
+
+		const totals: number[] = [];
+		const subscription = result.current.total$.subscribe((total) => totals.push(total));
+		await waitFor(() => expect(totals).toContain(3));
+		subscription.unsubscribe();
+		// The per-query answer wins outright — the census may never override it.
+		expect(totals).not.toContain(42);
 	});
 
 	// The POS products grid's own filter shape — `status: 'publish'` on every browse, plus
@@ -789,9 +832,6 @@ describe('query bindings', () => {
 			wrapper: Provider,
 		});
 		await waitFor(() => expect(current(result.current.resource)).toBeTruthy());
-		await expect(
-			firstValueFrom(result.current.totalSource$.pipe(filter((source) => source === 'coverage')))
-		).resolves.toBe('coverage');
 		await expect(
 			firstValueFrom(result.current.total$.pipe(filter((total) => total === 5)))
 		).resolves.toBe(5);
@@ -830,13 +870,16 @@ describe('query bindings', () => {
 			wrapper: Provider,
 		});
 		await waitFor(() => expect(current(result.current.resource)).toBeTruthy());
-		const sources: string[] = [];
-		const subscription = result.current.totalSource$.subscribe((source) => sources.push(source));
+		const totals: number[] = [];
+		const subscription = result.current.total$.subscribe((total) => totals.push(total));
 		await new Promise((resolve) => setTimeout(resolve, 20));
 		subscription.unsubscribe();
-		expect(sources).not.toContain('coverage');
-		// The superset lane exists and is fresh; the binding simply never asks about it.
+		// The superset lane's total (4) must never surface for the narrower grid.
+		expect(totals).not.toContain(4);
+		// The superset lane exists and is fresh; the binding simply never asks about it. The
+		// filtered shape must not borrow the whole-collection census either.
 		expect(engine.coverageSubscribeCalls).toEqual([]);
+		expect(engine.censusSubscribeCount).toBe(0);
 	});
 
 	it('uses coupons:all coverage only for the unfiltered reference lane', async () => {
@@ -872,17 +915,12 @@ describe('query bindings', () => {
 		await expect(
 			firstValueFrom(result.current.total$.pipe(filter((total) => total === 3)))
 		).resolves.toBe(3);
-		await expect(
-			firstValueFrom(result.current.totalSource$.pipe(filter((source) => source === 'coverage')))
-		).resolves.toBe('coverage');
 
+		// Filtered, the reference lane's total no longer applies — the resident count carries.
 		rerender({ state: { ...base, filters: { status: 'publish' } } });
 		await expect(
 			firstValueFrom(result.current.total$.pipe(filter((total) => total === 1)))
 		).resolves.toBe(1);
-		await expect(
-			firstValueFrom(result.current.totalSource$.pipe(filter((source) => source === 'local')))
-		).resolves.toBe('local');
 	});
 
 	// Tier 0. Tax rates are seeded by the engine's BOOT lane, so compiled query demand declares
@@ -914,9 +952,6 @@ describe('query bindings', () => {
 		await expect(
 			firstValueFrom(result.current.total$.pipe(filter((total) => total === 2)))
 		).resolves.toBe(2);
-		await expect(
-			firstValueFrom(result.current.totalSource$.pipe(filter((source) => source === 'coverage')))
-		).resolves.toBe('coverage');
 
 		await expect(firstValueFrom(result.current.active$)).resolves.toBe(false);
 	});
@@ -950,9 +985,6 @@ describe('query bindings', () => {
 		await expect(
 			firstValueFrom(result.current.total$.pipe(filter((total) => total === 0)))
 		).resolves.toBe(0);
-		await expect(
-			firstValueFrom(result.current.totalSource$.pipe(filter((source) => source === 'local')))
-		).resolves.toBe('local');
 
 		await engineDB.collections.customers.insert({
 			uuid: 'customer-ada',
@@ -970,6 +1002,8 @@ describe('query bindings', () => {
 		).resolves.toBe(1);
 		expect(engine.searchRequireCalls).toHaveLength(1);
 		expect(engine.coverageSubscribeCalls).toEqual([]);
+		// A search is not the whole collection — the census must never stand in for its total.
+		expect(engine.censusSubscribeCount).toBe(0);
 	});
 
 	// #951. A sorted customers grid declares a browse window, and its footer must report the
@@ -1016,9 +1050,6 @@ describe('query bindings', () => {
 		await expect(
 			firstValueFrom(result.current.total$.pipe(filter((total) => total === 4_200)))
 		).resolves.toBe(4_200);
-		await expect(
-			firstValueFrom(result.current.totalSource$.pipe(filter((source) => source === 'coverage')))
-		).resolves.toBe('coverage');
 	});
 
 	// #1028 follow-on: the plugin proxy (#1488/#1500) now handles last_name, so the grid's
@@ -1184,7 +1215,6 @@ describe('query bindings', () => {
 		await expect(
 			firstValueFrom(result.current.total$.pipe(filter((total) => total === 2)))
 		).resolves.toBe(2);
-		await expect(firstValueFrom(result.current.totalSource$)).resolves.toBe('local');
 		await expect(firstValueFrom(result.current.active$)).resolves.toBe(false);
 
 		const syncCalls = [...engine.syncCalls];
@@ -1786,7 +1816,7 @@ describe('query bindings', () => {
 	 * what crashed, the value a component destructures was.
 	 */
 	describe('first render never yields an undefined binding (resurrected 1.9 guard)', () => {
-		const BINDING_FIELDS = ['resource', 'result$', 'active$', 'total$', 'totalSource$'] as const;
+		const BINDING_FIELDS = ['resource', 'result$', 'active$', 'total$', 'laneProgress$'] as const;
 
 		const productsState: QueryStateOf<'products'> = {
 			search: '',
@@ -1817,7 +1847,7 @@ describe('query bindings', () => {
 				// What every consuming screen does immediately. If `binding` is
 				// undefined this line throws "Cannot destructure property ... of
 				// undefined", which is the bug this guard exists to catch.
-				const { resource, result$, active$, total$, totalSource$, sync } = binding;
+				const { resource, result$, active$, total$, laneProgress$, sync } = binding;
 				if (renders === 1) {
 					captured.binding = binding;
 					captured.hadValueOnFirstRender =
@@ -1825,7 +1855,7 @@ describe('query bindings', () => {
 				}
 				return (
 					<div>
-						{[resource, result$, active$, total$, totalSource$, sync].every(
+						{[resource, result$, active$, total$, laneProgress$, sync].every(
 							(field) => field !== undefined && field !== null
 						)
 							? 'valid'
@@ -1854,7 +1884,7 @@ describe('query bindings', () => {
 			}
 			// The observables must be subscribable and `sync` callable straight away —
 			// "defined" is not enough if the field is a placeholder a consumer cannot use.
-			for (const field of ['result$', 'active$', 'total$', 'totalSource$'] as const) {
+			for (const field of ['result$', 'active$', 'total$', 'laneProgress$'] as const) {
 				expect(typeof (captured.binding?.[field] as { subscribe?: unknown })?.subscribe).toBe(
 					'function'
 				);

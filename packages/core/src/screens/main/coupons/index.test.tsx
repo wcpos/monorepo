@@ -15,7 +15,6 @@ const mockBinding = {
 	resource: { kind: 'coupons-resource' },
 	active$: of(false),
 	total$: of(27),
-	totalSource$: of('coverage' as const),
 	sync: mockSync,
 };
 const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown) => mockBinding);
@@ -177,7 +176,6 @@ describe('CouponsScreen query-state wiring', () => {
 			sort: { field: 'date_created_gmt', direction: 'desc' },
 			active$: mockBinding.active$,
 			total$: mockBinding.total$,
-			totalSource$: mockBinding.totalSource$,
 			sync: mockBinding.sync,
 		});
 		expect(mockDataTableProps).not.toHaveProperty('query');

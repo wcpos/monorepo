@@ -22,12 +22,11 @@ export type BindingDataTableFooterProps = CommonProps & {
 	collectionName: CollectionKey;
 	active$: Observable<boolean>;
 	total$: Observable<number>;
-	totalSource$: Observable<'coverage' | 'local'>;
 	sync: () => Promise<void>;
 };
 
 type FooterContentProps = CommonProps &
-	Pick<BindingDataTableFooterProps, 'active$' | 'sync' | 'total$' | 'totalSource$'> & {
+	Pick<BindingDataTableFooterProps, 'active$' | 'sync' | 'total$'> & {
 		clearAndSync: () => Promise<void>;
 	};
 
@@ -39,13 +38,11 @@ function FooterContent({
 	count,
 	active$,
 	total$,
-	totalSource$,
 	sync,
 	clearAndSync,
 }: FooterContentProps) {
 	const loading = useObservableEagerState(active$);
 	const total = useObservableState(total$, 0);
-	const totalSource = useObservableState(totalSource$, 'local');
 	const t = useT();
 
 	return (
@@ -53,9 +50,7 @@ function FooterContent({
 			<HStack className="flex-1 justify-start *:flex-1">{children}</HStack>
 			<HStack className="justify-end gap-0">
 				<Text testID="data-table-count" className="text-xs">
-					{totalSource === 'local'
-						? t('common.showing_of_at_least', { shown: count, total })
-						: t('common.showing_of', { shown: count, total })}
+					{t('common.showing_of', { shown: count, total })}
 				</Text>
 				<Text testID="data-table-loaded-count" className="hidden">
 					{count}

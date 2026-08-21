@@ -52,7 +52,7 @@ jest.mock('../../../../contexts/translations', () => ({
 		values ? `${key}:${values.shown}/${values.total}` : key,
 }));
 
-function renderBindingFooter(source: 'coverage' | 'local') {
+function renderBindingFooter() {
 	const BindingFooter = DataTableFooter as unknown as React.ComponentType<Record<string, unknown>>;
 	return render(
 		<QueryStateProvider
@@ -64,7 +64,6 @@ function renderBindingFooter(source: 'coverage' | 'local') {
 				collectionName="coupons"
 				count={10}
 				total$={of(27)}
-				totalSource$={of(source)}
 				active$={of(false)}
 				sync={mockSync}
 			/>
@@ -99,8 +98,8 @@ function currentCouponQueryState(): QueryStateOf<'coupons'> {
 describe('DataTableFooter binding projections', () => {
 	beforeEach(() => jest.clearAllMocks());
 
-	it('shows a coverage total without the local-items affordance', () => {
-		renderBindingFooter('coverage');
+	it('shows the plain showing-of total — never an at-least suffix', () => {
+		renderBindingFooter();
 
 		expect(screen.getByTestId('data-table-count').textContent).toBe('common.showing_of:10/27');
 		expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('10');
@@ -108,12 +107,9 @@ describe('DataTableFooter binding projections', () => {
 		expect(mockUseCollectionReset).toHaveBeenCalledWith('coupons');
 	});
 
-	it('shows an at-least local total and retains sync/reset actions', () => {
-		renderBindingFooter('local');
+	it('retains sync/reset actions', () => {
+		renderBindingFooter();
 
-		expect(screen.getByTestId('data-table-count').textContent).toBe(
-			'common.showing_of_at_least:10/27'
-		);
 		fireEvent.click(screen.getByTestId('sync'));
 		fireEvent.click(screen.getByTestId('clear-and-sync'));
 		expect(mockSync).toHaveBeenCalledTimes(1);
@@ -136,7 +132,6 @@ describe('DataTableFooter binding projections', () => {
 					collectionName="coupons"
 					count={0}
 					total$={of(27)}
-					totalSource$={of('coverage')}
 					active$={of(false)}
 					sync={mockSync}
 				/>
