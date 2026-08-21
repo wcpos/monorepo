@@ -105,6 +105,9 @@ function loadCreateAppEngine(
 	jest.doMock('@wcpos/sync-engine', () => ({
 		createRxdbSyncEngine,
 		createWriteOutcomeBridge,
+		// The engine fetcher hydrates 2xx responses through this seam (B9); an
+		// identity stub keeps these engine-lifecycle tests transport-free.
+		hydrateResponse: jest.fn(async (response: Response) => response),
 		writeOutcomeChannelName,
 	}));
 	jest.doMock('@wcpos/hooks', () => ({ reportNetworkResponse }), {
@@ -255,6 +258,7 @@ describe('createAppSyncEngine scope cache', () => {
 		createAppSyncEngine({ ...BASE_OPTIONS, refreshAuth });
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
 		const priorRequest = fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+		await Promise.resolve();
 		await Promise.resolve();
 		await Promise.resolve();
 		expect(refreshAuth).toHaveBeenCalledTimes(1);
@@ -908,7 +912,7 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(initialRefreshAuth).not.toHaveBeenCalled();
 		expect(latestRefreshAuth).toHaveBeenCalledTimes(1);
 		expect(fetch).toHaveBeenCalledWith(
-			'https://store.example.test/wp-json/wcpos/v2/products?authorization=Bearer+latest-token',
+			'https://store.example.test/wp-json/wcpos/v2/products?authorization=Bearer+latest-token&_wcpos_envelope=1',
 			expect.objectContaining({ headers: expect.objectContaining({}) })
 		);
 		const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];

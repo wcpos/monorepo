@@ -26,6 +26,10 @@ describe('package exports', () => {
 				// the factory and the naming rule are both part of the public door.
 				'createWriteOutcomeBridge',
 				'writeOutcomeChannelName',
+				// The app's engine fetcher hydrates census/query-total responses
+				// through the same body-envelope seam the engine uses internally
+				// (B9, hostile-headers program) — one unwrap rule, two seams.
+				'hydrateResponse',
 			].sort()
 		);
 	});

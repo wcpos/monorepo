@@ -760,7 +760,7 @@ async function fetchBrowserOrderQuery(
 			remainingTotal =
 				totalHeader !== null && Number.isSafeInteger(total) && total >= 0 ? total : null;
 		}
-		const rawPayloads = JSON.parse(await response.text()) as WooOrderPayload[];
+		const rawPayloads = (await response.json()) as WooOrderPayload[];
 		// Rows of the resume page the covered prefix already holds — dropped before they
 		// are counted or persisted, so a continuation never double-counts the seam. Always a
 		// no-op on the ranged path (`covered` is 0) and, since #957's continuation gate only
@@ -986,7 +986,7 @@ async function fetchTargetedOrders(
 			throw new Error(`Woo REST targeted order request failed: ${response.status}`);
 		}
 
-		const payloads = JSON.parse(await response.text()) as WooOrderPayload[];
+		const payloads = (await response.json()) as WooOrderPayload[];
 		assertReturnedRequestedIds(
 			{ restLabel: 'order', payloadWooId: (payload: WooOrderPayload) => Number(payload.id) },
 			idsBatch,

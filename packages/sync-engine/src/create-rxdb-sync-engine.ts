@@ -88,6 +88,10 @@ import {
 	type ScopeBarcodeSelectors,
 } from './materialization/barcode-selectors';
 import {
+	hydrateResponse,
+	type ResponseEnvelopeTransportState,
+} from './transport/response-envelope';
+import {
 	createRequirePlane,
 	type EngineRequirement,
 	type RequirementHandle,
@@ -682,6 +686,9 @@ export function createRxdbSyncEngine(
 	// fetches are human-bounded — a cashier can only ask so fast — and delaying
 	// one would trade the merchant's server load for the merchant's queue.
 	const serverPressure = createServerPressureMonitor();
+	const responseEnvelopeTransport: ResponseEnvelopeTransportState = {
+		responseHeadersReadable: true,
+	};
 	// Assigned below, once the change-signal timer exists — a transition observed
 	// before then (there is no transport before `ready`) is simply dropped.
 	let cadence: CadenceController | null = null;
@@ -731,6 +738,30 @@ export function createRxdbSyncEngine(
 			if (!abortedYoung) observe(0);
 			throw error;
 		}
+		// Plain permalinks carry the REST route in ?rest_route= with pathname '/',
+		// so the push exemption must classify from the route, not the path.
+		const requestRoute = (() => {
+			try {
+				const parsed = new URL(url);
+				return parsed.searchParams.get('rest_route') ?? parsed.pathname;
+			} catch {
+				return url.split(/[?#]/, 1)[0] ?? '';
+			}
+		})();
+		response = await hydrateResponse(response, {
+			envelopeRequested: !requestRoute.split('/').includes('push'),
+			transportState: responseEnvelopeTransport,
+			onDiagnostic: (kind) =>
+				diagnostics({
+					type: 'transport.request',
+					level: 'debug',
+					message: `Response envelope metadata is ${kind}`,
+					fields: {
+						status: response.status,
+						responseHeadersReadable: responseEnvelopeTransport.responseHeadersReadable,
+					},
+				}),
+		});
 		let retryAfter: string | null = null;
 		let pressure: ServerPressure | undefined;
 		let serverLoad1m: number | undefined;
@@ -2086,7 +2117,9 @@ export function createRxdbSyncEngine(
 								status: 'skipped',
 								reason: 'no queryTotal port provided',
 							})
-						: maintenanceLanes.queryTotalRetry.tick(signal, { forceCensusCollection: name })
+						: maintenanceLanes.queryTotalRetry.tick(signal, {
+								forceCensusCollection: name,
+							})
 				),
 				startedAt
 			);
@@ -2151,7 +2184,9 @@ export function createRxdbSyncEngine(
 											status: 'skipped',
 											reason: 'no queryTotal port provided',
 										})
-									: maintenanceLanes.queryTotalRetry.tick(signal, { forceAllCensus: true })
+									: maintenanceLanes.queryTotalRetry.tick(signal, {
+											forceAllCensus: true,
+										})
 						: undefined
 				);
 				laneLastTick.set(name, {

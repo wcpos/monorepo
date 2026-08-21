@@ -1,6 +1,12 @@
 import { COLLECTION_VOCABULARY } from '@wcpos/query';
 import type { SyncEvent } from '@wcpos/sync-core';
-import type { EngineFetcher, QueryTotalWooRequest, SyncCollectionName } from '@wcpos/sync-engine';
+import {
+	type EngineFetcher,
+	hydrateResponse,
+	type QueryTotalWooRequest,
+	type ResponseEnvelopeTransportState,
+	type SyncCollectionName,
+} from '@wcpos/sync-engine';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { evaluateClockSkew } from './clock-skew';
@@ -12,6 +18,7 @@ import {
 } from './metrics';
 
 const engineLogger = getLogger(['wcpos', 'sync', 'engine']);
+const envelopeTransportByFetcher = new WeakMap<EngineFetcher, ResponseEnvelopeTransportState>();
 
 export type EngineFetcherAuth = {
 	credentials: { getLatest: () => { access_token?: string } };
@@ -127,7 +134,16 @@ export function createEngineFetcher(input: {
 					headers.set('Authorization', `Bearer ${token}`);
 				}
 			}
-			const path = new URL(finalUrl).pathname;
+			const parsedUrl = new URL(finalUrl);
+			// Plain permalinks carry the REST route in ?rest_route= with pathname
+			// '/', so the push exemption must classify from the route, not the path.
+			const restRoutePath = parsedUrl.searchParams.get('rest_route') ?? parsedUrl.pathname;
+			const envelopeRequested = !restRoutePath.split('/').includes('push');
+			if (envelopeRequested) {
+				parsedUrl.searchParams.set('_wcpos_envelope', '1');
+				finalUrl = parsedUrl.toString();
+			}
+			const path = parsedUrl.pathname;
 			const startedAtMs = now();
 			// Captured at start: a completion after a store switch (epoch bump) is the
 			// outgoing store's traffic and must not land in the new store's buckets.
@@ -156,7 +172,13 @@ export function createEngineFetcher(input: {
 					},
 					(error as { name?: unknown } | null)?.name !== 'AbortError'
 				);
-				recordTransport({ atMs, durationMs, bytes: 0, ok: false, epoch: epochAtStart });
+				recordTransport({
+					atMs,
+					durationMs,
+					bytes: 0,
+					ok: false,
+					epoch: epochAtStart,
+				});
 				throw error;
 			}
 
@@ -199,7 +221,38 @@ export function createEngineFetcher(input: {
 			// but logging it as a failure would record ~360 phantom errors/hour per idle
 			// terminal and corrupt the transport health counters.
 			const accepted = response.ok || response.status === 304;
-			recordTransport({ atMs, durationMs, bytes, ok: accepted, epoch: epochAtStart });
+			recordTransport({
+				atMs,
+				durationMs,
+				bytes,
+				ok: accepted,
+				epoch: epochAtStart,
+			});
+
+			// Hydrate BEFORE sampling diagnostics: on a header-stripping host the
+			// server-load value exists only in the _wcpos body envelope, and the
+			// engine wrapper's own hydration runs after this fetcher returns —
+			// too late for the perf screen's recordServerLoad sample below. The
+			// wrapper's second pass is an idempotent passthrough (memoized body,
+			// patched headers).
+			// Scoped to 2xx: the server never envelopes errors or 304s, and the
+			// auth-retry path must keep un-consumed 401 bodies clone-able.
+			if (response.ok) {
+				let transportState = envelopeTransportByFetcher.get(fetcher);
+				if (!transportState) {
+					transportState = { responseHeadersReadable: true };
+					envelopeTransportByFetcher.set(fetcher, transportState);
+				}
+				const state = transportState;
+				response = await hydrateResponse(response, {
+					envelopeRequested,
+					transportState: state,
+					onDiagnostic: (kind) =>
+						engineLogger.debug(`Response envelope metadata is ${kind}`, {
+							context: { responseHeadersReadable: state.responseHeadersReadable },
+						}),
+				});
+			}
 
 			const serverLoad = response.headers.get('X-Server-Load');
 			if (serverLoad !== null) {
@@ -341,10 +394,25 @@ export async function fetchWooQueryTotal(
 	}
 	url.searchParams.set('page', '1');
 	url.searchParams.set('per_page', '1');
-	const response = await fetcher(
+	const rawResponse = await fetcher(
 		url.toString(),
 		input.signal !== undefined ? { signal: input.signal } : undefined
 	);
+	let transportState = envelopeTransportByFetcher.get(fetcher);
+	if (!transportState) {
+		transportState = { responseHeadersReadable: true };
+		envelopeTransportByFetcher.set(fetcher, transportState);
+	}
+	const response = await hydrateResponse(rawResponse, {
+		envelopeRequested: true,
+		transportState,
+		onDiagnostic: (kind) =>
+			engineLogger.debug(`Response envelope metadata is ${kind}`, {
+				context: {
+					responseHeadersReadable: transportState.responseHeadersReadable,
+				},
+			}),
+	});
 	if (!response.ok) {
 		throw new Error(`Query total request failed: ${response.status}`);
 	}

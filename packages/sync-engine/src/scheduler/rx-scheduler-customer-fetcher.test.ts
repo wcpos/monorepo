@@ -2,6 +2,7 @@
 import { describe, expect, it, type Mock, vi } from 'vitest';
 
 import { remoteId } from '../testing';
+import { hydrateResponse } from '../transport/response-envelope';
 import { createCustomerSchedulerFetcher } from './rx-scheduler-customer-fetcher';
 
 import type { FetchTask } from './replication-policy';
@@ -140,8 +141,18 @@ describe('createCustomerSchedulerFetcher', () => {
 			manifestSink,
 			fetcher: vi.fn(async () =>
 				response([
-					{ id: 12, email: 'ada@example.test', meta_data: uuidMeta(12), _rxdb_digest: 'd12' },
-					{ id: 34, email: 'grace@example.test', meta_data: uuidMeta(34), _rxdb_digest: 'd34' },
+					{
+						id: 12,
+						email: 'ada@example.test',
+						meta_data: uuidMeta(12),
+						_rxdb_digest: 'd12',
+					},
+					{
+						id: 34,
+						email: 'grace@example.test',
+						meta_data: uuidMeta(34),
+						_rxdb_digest: 'd34',
+					},
 				])
 			),
 		});
@@ -191,7 +202,9 @@ describe('createCustomerSchedulerFetcher', () => {
 		const repository = {
 			upsertMany: vi.fn(async (_documents: LocalCustomerDocument[]) => undefined),
 		};
-		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+		};
 		const fetcher = vi.fn(async () => response([]));
 		const schedulerFetcher = createCustomerSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -218,7 +231,11 @@ describe('createCustomerSchedulerFetcher', () => {
 				uuid: 'customer:default',
 				remoteId: null,
 				payload: {},
-				sync: expect.objectContaining({ revision: '', source: 'woo-rest', partial: true }),
+				sync: expect.objectContaining({
+					revision: '',
+					source: 'woo-rest',
+					partial: true,
+				}),
 			}),
 		]);
 		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith({
@@ -241,7 +258,9 @@ describe('createCustomerSchedulerFetcher', () => {
 		const repository = {
 			upsertMany: vi.fn(async (_documents: LocalCustomerDocument[]) => undefined),
 		};
-		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+		};
 		const fetcher = vi.fn(async () =>
 			response([
 				{
@@ -315,7 +334,9 @@ describe('createCustomerSchedulerFetcher', () => {
 		const repository = {
 			upsertMany: vi.fn(async (_documents: LocalCustomerDocument[]) => undefined),
 		};
-		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+		};
 		const firstPage = Array.from({ length: 100 }, (_, index) => ({
 			id: index + 1,
 			email: `page-one-${index}@example.test`,
@@ -368,7 +389,9 @@ describe('createCustomerSchedulerFetcher', () => {
 		const repository = {
 			upsertMany: vi.fn(async (_documents: LocalCustomerDocument[]) => undefined),
 		};
-		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+		};
 		const firstPage = Array.from({ length: 100 }, (_, index) => ({
 			id: index + 1,
 			email: `page-one-${index}@example.test`,
@@ -401,7 +424,9 @@ describe('createCustomerSchedulerFetcher', () => {
 		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith({
 			collection: 'customers',
 			queryKey: 'customers:search=alex:limit=150',
-			records: Array.from({ length: 150 }, (_, index) => ({ id: `woo-customer:${index + 1}` })),
+			records: Array.from({ length: 150 }, (_, index) => ({
+				id: `woo-customer:${index + 1}`,
+			})),
 			complete: false,
 			nowMs: 10_000,
 			freshForMs: 300_000,
@@ -423,7 +448,9 @@ describe('createCustomerSchedulerFetcher', () => {
 			const repository = {
 				upsertMany: vi.fn(async (_documents: LocalCustomerDocument[]) => undefined),
 			};
-			const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+			const coverageRepository = {
+				recordQueryResult: vi.fn(async () => undefined),
+			};
 			const cacheQueryTotals = vi.fn(async () => undefined);
 			const schedulerFetcher = createCustomerSchedulerFetcher({
 				baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -434,8 +461,51 @@ describe('createCustomerSchedulerFetcher', () => {
 				nowMs: () => 10_000,
 				...overrides,
 			});
-			return { repository, coverageRepository, cacheQueryTotals, schedulerFetcher };
+			return {
+				repository,
+				coverageRepository,
+				cacheQueryTotals,
+				schedulerFetcher,
+			};
 		};
+
+		it.each(['header-only', 'body-only', 'both'] as const)(
+			'produces the same browse outcome from a %s response',
+			async (mode) => {
+				const payloads = [customerPayload(1)];
+				const body =
+					mode === 'header-only'
+						? payloads
+						: { data: payloads, _wcpos: { v: 1, total: 1, total_pages: 1 } };
+				const headers: Record<string, string> =
+					mode === 'body-only'
+						? { 'content-type': 'application/json' }
+						: {
+								'content-type': 'application/json',
+								'X-WP-Total': '1',
+								'X-WP-TotalPages': '1',
+							};
+				const fetcher = vi.fn(async () =>
+					hydrateResponse(new Response(JSON.stringify(body), { headers }), {
+						envelopeRequested: true,
+					})
+				);
+				const kit = browseFetcher(fetcher);
+
+				const result = await kit.schedulerFetcher(browseTask(100));
+
+				expect(result).toMatchObject({
+					documentCount: 1,
+					requestCount: 1,
+					completed: true,
+				});
+				expect(kit.cacheQueryTotals).toHaveBeenCalledWith({
+					// Window total only — census:customers is probe-owned (#1400).
+					queryKeys: ['customers:browse-window:limit=100'],
+					totalMatchingRecords: 1,
+				});
+			}
+		);
 
 		// #1028 follow-on: the five WCPOS plugin sorts (#1488/#1500) travel to the wire exactly
 		// like the wc/v3-native ones — the fetcher re-parses the queryKey and forwards `orderby`
@@ -469,14 +539,20 @@ describe('createCustomerSchedulerFetcher', () => {
 			const manifestSink = vi.fn(async (_rows: unknown[]) => undefined);
 			const fetcher = vi.fn(async (_url: string) =>
 				response(
-					[1, 2, 2].map((id) => ({ ...customerPayload(id), _rxdb_digest: `d${id}` })),
+					[1, 2, 2].map((id) => ({
+						...customerPayload(id),
+						_rxdb_digest: `d${id}`,
+					})),
 					{ 'X-WP-Total': '3', 'X-WP-TotalPages': '1' }
 				)
 			);
 			const guardedRepository = {
 				upsertMany: vi.fn(async (documents: LocalCustomerDocument[]) => documents.slice(0, 1)),
 			};
-			const kit = browseFetcher(fetcher, { repository: guardedRepository, manifestSink });
+			const kit = browseFetcher(fetcher, {
+				repository: guardedRepository,
+				manifestSink,
+			});
 
 			await kit.schedulerFetcher(browseTask(100));
 
@@ -507,7 +583,11 @@ describe('createCustomerSchedulerFetcher', () => {
 			expect(url.searchParams.get('per_page')).toBe('25');
 			expect(url.searchParams.get('page')).toBe('1');
 			expect(kit.repository.upsertMany.mock.calls[0]?.[0]).toHaveLength(25);
-			expect(result).toMatchObject({ documentCount: 25, requestCount: 1, completed: true });
+			expect(result).toMatchObject({
+				documentCount: 25,
+				requestCount: 1,
+				completed: true,
+			});
 		});
 
 		it('reports the SERVER total for the sorted view, not the resident count (#894/#945)', async () => {
@@ -553,7 +633,10 @@ describe('createCustomerSchedulerFetcher', () => {
 			const fetcher = vi.fn(async (_url: string) => {
 				const page = Array.from({ length: 25 }, (_, index) => customerPayload(served + index + 1));
 				served += 25;
-				return response(page, { 'X-WP-Total': '4200', 'X-WP-TotalPages': '168' });
+				return response(page, {
+					'X-WP-Total': '4200',
+					'X-WP-TotalPages': '168',
+				});
 			});
 			const kit = browseFetcher(fetcher, { pullBatchSize: () => 25 });
 

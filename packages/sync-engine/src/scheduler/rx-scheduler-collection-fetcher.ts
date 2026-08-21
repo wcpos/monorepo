@@ -218,7 +218,7 @@ export function createGreedyCollectionFetcher<Doc, Payload>(
 		if (!response.ok)
 			throw new Error(`Woo REST ${spec.collection} request failed: ${response.status}`);
 
-		const payloads = JSON.parse(await response.text()) as Payload[];
+		const payloads = (await response.json()) as Payload[];
 		// This pull counts wcpos/v2 while the census probes the wc/v3 census
 		// route — the census key keeps ONE writer, the query-total lane, so the
 		// health page never oscillates between two endpoints' populations (#1400).
