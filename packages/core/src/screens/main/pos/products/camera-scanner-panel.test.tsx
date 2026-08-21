@@ -125,8 +125,8 @@ jest.mock('./scanner-viewfinder', () => ({
 jest.mock('./use-camera-scan', () => ({
 	useCameraScan: () => ({ onScan: mockOnScan, reset: mockReset }),
 }));
-jest.mock('../../hooks/barcodes/camera-scan-context', () => ({
-	useCameraScanBus: () => ({ events$: cameraEvents$, emit: jest.fn() }),
+jest.mock('../../hooks/barcodes/scan-hub-context', () => ({
+	useScanHub: () => ({ events$: cameraEvents$, emit: jest.fn(), registerSource: jest.fn() }),
 }));
 jest.mock('../../../../contexts/translations', () => {
 	const { createTestT } = jest.requireActual<typeof import('../../../../../jest/translate')>(

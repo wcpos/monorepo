@@ -33,8 +33,11 @@ export {
 } from './wedge-detector';
 export {
 	createScanBus,
+	createScanHub,
+	inertScanHub,
 	type ScanBus,
 	type ScanEvent,
+	type ScanHub,
 	type ScanSource,
 	type ScanSourceKind,
 } from './scan-events';

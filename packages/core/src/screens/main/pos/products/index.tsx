@@ -28,7 +28,6 @@ import { StorageOutageBanner } from './storage-outage-banner';
 import { ProductGrid } from './grid';
 import { UISettingsForm } from './ui-settings-form';
 import { useBarcode } from './use-barcode';
-import { CameraScanProvider } from '../../hooks/barcodes/camera-scan-context';
 import { ViewModeToggle } from './view-mode-toggle';
 import { useT } from '../../../../contexts/translations';
 import { DataTable, DataTableFooter, defaultRenderItem } from '../../components/data-table';
@@ -372,9 +371,7 @@ export function POSProducts({ isColumn = false }) {
 			initialSort={initialSort}
 			initialFilters={initialFilters}
 		>
-			<CameraScanProvider>
-				<POSProductsContent isColumn={isColumn} showOutOfStock={showOutOfStock} />
-			</CameraScanProvider>
+			<POSProductsContent isColumn={isColumn} showOutOfStock={showOutOfStock} />
 		</QueryStateProvider>
 	);
 }

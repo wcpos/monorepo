@@ -17,7 +17,7 @@ import { UnsentChangesBridge } from '@wcpos/core/screens/main/components/unsent-
 import { ReceiptEmailQueueBridge } from '@wcpos/core/screens/main/receipt/email-queue/bridge';
 import { ExtraDataProvider } from '@wcpos/core/screens/main/contexts/extra-data';
 import { UISettingsProvider } from '@wcpos/core/screens/main/contexts/ui-settings';
-import { DeviceScanProvider } from '@wcpos/core/screens/main/hooks/barcodes/device-scan-context';
+import { ScanHubProvider } from '@wcpos/core/screens/main/hooks/barcodes/scan-hub-context';
 import { UpgradeRequired } from '@wcpos/core/screens/main/upgrade-required';
 import { useCollection } from '@wcpos/core/screens/main/hooks/use-collection';
 import { createRefreshHttpClient } from '@wcpos/core/screens/main/hooks/use-rest-http-client/refresh-http-client';
@@ -139,7 +139,7 @@ function AppStack() {
 				<ReceiptEmailQueueBridge />
 				<UISettingsProvider>
 					<CompatGate>
-						<DeviceScanProvider>
+						<ScanHubProvider>
 							<View
 								className="bg-background flex-1"
 								onStartShouldSetResponderCapture={captureUserActivity}
@@ -175,7 +175,7 @@ function AppStack() {
 									<PortalHost />
 								</ErrorBoundary>
 							</View>
-						</DeviceScanProvider>
+						</ScanHubProvider>
 					</CompatGate>
 				</UISettingsProvider>
 			</ExtraDataProvider>

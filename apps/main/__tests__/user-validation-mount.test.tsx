@@ -38,8 +38,8 @@ jest.mock('@wcpos/core/screens/main/receipt/email-queue/bridge', () => ({
 jest.mock('@wcpos/core/screens/main/contexts/ui-settings', () => ({
 	UISettingsProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
-jest.mock('@wcpos/core/screens/main/hooks/barcodes/device-scan-context', () => ({
-	DeviceScanProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+jest.mock('@wcpos/core/screens/main/hooks/barcodes/scan-hub-context', () => ({
+	ScanHubProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 jest.mock('@wcpos/core/screens/main/upgrade-required', () => ({ UpgradeRequired: () => null }));
 jest.mock('@wcpos/core/screens/main/hooks/use-collection', () => ({

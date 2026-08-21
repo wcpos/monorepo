@@ -1,11 +1,13 @@
 import * as React from 'react';
 
+import { useSegments } from 'expo-router';
+
 import { createScanSession, type ScanSession } from '@wcpos/scanner';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { useCameraScanBus } from '../../hooks/barcodes/camera-scan-context';
+import { useScanHub } from '../../hooks/barcodes/scan-hub-context';
 import { showTooShortFeedback } from '../../hooks/barcodes/too-short-feedback';
 
 // The retail set we ask the camera decoder for (spec §4: narrowing formats is a
@@ -24,10 +26,21 @@ export interface CameraScanResult {
  * which useBarcodeDetection merges into scanEvents$.
  */
 export const useCameraScan = () => {
-	const { emit } = useCameraScanBus();
+	const { emit } = useScanHub();
 	const { store } = useAppState();
 	const minChars = useDocField(store, (value) => value.barcode_scanning_min_chars) as number;
 	const t = useT();
+
+	// The POS section owns scans (#1438 ruling). The viewfinder's decode loop
+	// keeps running in a backgrounded POS tree and the hub is app-scoped, so a
+	// decode arriving while another section is focused must be dropped at the
+	// source — the old POS-scoped bus never delivered these beyond the section.
+	const segments: string[] = useSegments();
+	const posSectionActive = segments.includes('(pos)');
+	const posSectionActiveRef = React.useRef(posSectionActive);
+	React.useEffect(() => {
+		posSectionActiveRef.current = posSectionActive;
+	}, [posSectionActive]);
 
 	const emitRef = React.useRef(emit);
 	const minCharsRef = React.useRef(Number(minChars));
@@ -54,6 +67,9 @@ export const useCameraScan = () => {
 						// cashier learns why nothing was added and can adjust the
 						// minimum-length setting if it's misconfigured.
 						showTooShortFeedback(tRef.current, code, minCharsRef.current);
+						return;
+					}
+					if (!posSectionActiveRef.current) {
 						return;
 					}
 					emitRef.current({

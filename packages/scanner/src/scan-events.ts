@@ -1,4 +1,4 @@
-import { Observable, Subject } from 'rxjs';
+import { EMPTY, Observable, Subject } from 'rxjs';
 
 /**
  * The normalized scan event every input source emits (architecture: wcpos/monorepo#715).
@@ -31,6 +31,39 @@ export interface ScanBus {
 	 * barcodes) plugs in here as upstream filters when those features land.
 	 */
 	events$: Observable<ScanEvent>;
+}
+
+export interface ScanHub {
+	/** All scan events from every registered source, hot and multicast. */
+	readonly events$: Observable<ScanEvent>;
+	/** Register a source and return a function that unregisters it. */
+	registerSource(source$: Observable<ScanEvent>): () => void;
+	/** Emit from a push-style producer such as the camera decoder. */
+	emit(event: ScanEvent): void;
+}
+
+export const inertScanHub: ScanHub = {
+	events$: EMPTY,
+	registerSource: () => () => undefined,
+	emit: () => undefined,
+};
+
+export function createScanHub(): ScanHub {
+	const subject = new Subject<ScanEvent>();
+	return {
+		events$: subject.asObservable(),
+		registerSource: (source$) => {
+			// A failing source must not take down the shared channel: scanning from
+			// every other registered source keeps working; the errored source is
+			// simply dropped (its owner is responsible for reconnect/retry).
+			const subscription = source$.subscribe({
+				next: (event) => subject.next(event),
+				error: () => undefined,
+			});
+			return () => subscription.unsubscribe();
+		},
+		emit: (event) => subject.next(event),
+	};
 }
 
 /**

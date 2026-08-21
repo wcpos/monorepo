@@ -80,7 +80,7 @@ const unavailableControl = {
 	disconnect: jest.fn(),
 };
 let mockSerialControl = unavailableControl;
-jest.mock('../../hooks/barcodes/device-scan-context', () => ({
+jest.mock('../../hooks/barcodes/scan-hub-context', () => ({
 	useDeviceScanControls: () => ({ serial: mockSerialControl, hid: unavailableControl }),
 }));
 

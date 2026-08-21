@@ -14,7 +14,7 @@ import type { ScannerProfileDocument } from '@wcpos/database';
 import { getErrorMessage } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../contexts/translations';
-import { useDeviceScanControls } from '../../hooks/barcodes/device-scan-context';
+import { useDeviceScanControls } from '../../hooks/barcodes/scan-hub-context';
 import { useScannerRegistration } from '../../hooks/barcodes/use-scanner-registration';
 import { useCollection } from '../../hooks/use-collection';
 import { ScannerDeviceChooser } from './scanner-device-chooser';

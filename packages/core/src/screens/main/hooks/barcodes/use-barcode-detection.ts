@@ -12,8 +12,7 @@ import { useDocField } from '@wcpos/query';
 
 import { showHeuristicTooShortFeedback } from './too-short-feedback';
 import { useAttributedWedge } from './use-attributed-wedge';
-import { useCameraScanBus } from './camera-scan-context';
-import { useDeviceScanBus } from './device-scan-context';
+import { useScanHub } from './scan-hub-context';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 
@@ -181,38 +180,31 @@ export const useBarcodeDetection = (
 	 * wedge, serial, HID-POS, camera) will feed the same shape.
 	 */
 	const attributed = useAttributedWedge(isActive);
-	const camera = useCameraScanBus();
-	const device = useDeviceScanBus();
+	const hub = useScanHub();
 	const barcode$ = React.useMemo(
 		() =>
 			merge(
 				wedgeBarcode$,
 				attributed.scanEvents$.pipe(map((event) => event.code)),
-				camera.events$.pipe(map((event) => event.code)),
-				device.events$.pipe(map((event) => event.code))
+				hub.events$.pipe(map((event) => event.code))
 			).pipe(
-				// Blurred drawer consumers stay mounted/subscribed while camera/device
-				// buses are shared; drop events here (#1409).
+				// Blurred drawer consumers stay mounted/subscribed while the app-scoped
+				// hub is shared; drop events here (#1409).
 				withLatestFrom(isActive$),
 				filter(([, active]) => active),
 				map(([code]) => code)
 			),
-		[wedgeBarcode$, attributed.scanEvents$, camera.events$, device.events$, isActive$]
+		[wedgeBarcode$, attributed.scanEvents$, hub.events$, isActive$]
 	);
 	const scanEvents$ = React.useMemo(
 		() =>
-			merge(
-				wedgeBarcode$.pipe(map(toWedgeScanEvent)),
-				attributed.scanEvents$,
-				camera.events$,
-				device.events$
-			).pipe(
+			merge(wedgeBarcode$.pipe(map(toWedgeScanEvent)), attributed.scanEvents$, hub.events$).pipe(
 				withLatestFrom(isActive$),
 				filter(([, active]) => active),
 				map(([event]) => event),
 				tap(() => markUserActivity())
 			),
-		[wedgeBarcode$, attributed.scanEvents$, camera.events$, device.events$, isActive$]
+		[wedgeBarcode$, attributed.scanEvents$, hub.events$, isActive$]
 	);
 
 	/**
