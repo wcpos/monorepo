@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
+import { wrapEngineDocument } from '@wcpos/query';
 import { Platform } from '@wcpos/utils/platform';
 
 import {
@@ -70,9 +71,13 @@ export function CurrentOrderProvider({
 		}
 	}
 
-	// Determine current order from internal state
+	// Determine current order from internal state. The temporary order is engine-shaped
+	// since ADR 0028 stage I, so BOTH branches of the union now present the same legacy
+	// face through the same wrapper (the proxy passes the temp doc's `.isNew` through);
+	// mutation paths resolve the raw temp document via the temp-order repository, never
+	// through this context value.
 	const currentOrder = (openOrders.find((order) => order.id === internalOrderId)?.document ??
-		newOrder) as OrderDocument;
+		wrapEngineDocument('orders', newOrder as never)) as OrderDocument;
 
 	/**
 	 * Update the current order without causing a full navigation/remount.

@@ -29,6 +29,7 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
+import { patchTemporaryOrderPayload } from '../../pos/contexts/current-order/temporary-order';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 
 import type { RxDocument } from 'rxdb';
@@ -351,10 +352,12 @@ export const useLocalMutation = () => {
 				const isTemporaryOrder =
 					engineCollection === 'orders' &&
 					Boolean((document as unknown as { isNew?: boolean }).isNew);
-				const hasDate =
-					engineCollection && !isTemporaryOrder
-						? true
-						: get(document, 'collection.schema.jsonSchema.properties.date_modified_gmt');
+				// Engine-writeable documents (including the engine-shaped temporary order,
+				// whose date lives inside its payload) always stamp; genuinely-local
+				// documents consult their own schema.
+				const hasDate = engineCollection
+					? true
+					: get(document, 'collection.schema.jsonSchema.properties.date_modified_gmt');
 				if (hasDate) {
 					patchData.date_modified_gmt = convertLocalDateToUTCString(new Date());
 				}
@@ -381,7 +384,18 @@ export const useLocalMutation = () => {
 					);
 				}
 
-				if (engineCollection && !isTemporaryOrder) {
+				if (isTemporaryOrder) {
+					// The temporary order is engine-shaped (ADR 0028 stage I); the context
+					// hands out a read-only wrapped face, so the write resolves the RAW
+					// template through the temp-order repository and merges into its payload.
+					const recordId = documentRecordId(document);
+					if (!recordId) throw new Error('Missing uuid for temporary order mutation');
+					const patched = await patchTemporaryOrderPayload(recordId, changes);
+					if (!patched) throw new Error('Temporary order is missing from the temporary DB');
+					return { changes, document: document.getLatest() };
+				}
+
+				if (engineCollection) {
 					const recordId = documentRecordId(document);
 					if (!recordId) throw new Error(`Missing uuid for ${engineCollection} mutation`);
 					const syncChanges = syncableChanges(engineCollection, changes);

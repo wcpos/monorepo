@@ -5,6 +5,12 @@ import { act, renderHook } from '@testing-library/react';
 
 import { usePushDocument } from './use-push-document';
 
+jest.mock('../pos/contexts/current-order/temporary-order', () => ({
+	patchTemporaryOrderPayload: jest.fn(),
+	getTemporaryOrder: jest.fn(),
+	removeTemporaryOrder: jest.fn(),
+}));
+
 jest.mock('lodash/isBuffer', () => (value: unknown) => {
 	const structuredClone = (input: unknown) => {
 		const { MessageChannel } =

@@ -18,6 +18,8 @@ const mockWrapEngineDocument = jest.fn();
 const mockCalculateLineItemTaxesAndTotals = jest.fn();
 let mockStockGuardEnabled = false;
 
+const mockRemoveTemporaryOrder = jest.fn();
+
 jest.mock('observable-hooks', () => ({
 	useObservableEagerState: () => 'billing',
 }));
@@ -67,6 +69,10 @@ jest.mock('@wcpos/query', () => ({
 
 jest.mock('uuid', () => ({
 	v4: () => 'line-item-uuid',
+}));
+
+jest.mock('../contexts/current-order/temporary-order', () => ({
+	removeTemporaryOrder: (uuid: string) => mockRemoveTemporaryOrder(uuid),
 }));
 
 jest.mock('../../../../hooks/use-local-date', () => ({
