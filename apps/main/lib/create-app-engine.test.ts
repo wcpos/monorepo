@@ -949,6 +949,23 @@ describe('createAppSyncEngine scope cache', () => {
 		fetch.mockRestore();
 	});
 
+	it('uses the latest transport mode after a same-scope cache hit', async () => {
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValue(new Response(null, { status: 200 }));
+		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
+		createAppSyncEngine(BASE_OPTIONS);
+
+		createAppSyncEngine({ ...BASE_OPTIONS, useRestRouteParam: true });
+		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+
+		expect(fetch.mock.calls[0]?.[0]).toBe(
+			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&wcpos=1&store_id=store-1&_wcpos_envelope=1'
+		);
+		fetch.mockRestore();
+	});
+
 	it('does not persist a sync completion after the active store changes', async () => {
 		const fetch = jest
 			.spyOn(globalThis, 'fetch')

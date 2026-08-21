@@ -86,6 +86,21 @@ describe('useRestHttpClient methods', () => {
 		});
 	});
 
+	it('never composes a double slash from a trailing-slash stored base in query mode', async () => {
+		// Discovery stores wcpos_api_url WITH a trailing slash; rest_route matching
+		// is strict, so `/wcpos/v2//orders` would 404 where pretty routing shrugged.
+		mockSite.use_rest_route_param = true;
+		mockSite.wcpos_api_url = 'https://example.com/wp-json/wcpos/v2/';
+		const { result } = renderHook(() => useRestHttpClient('orders'));
+
+		await result.current.get('/42');
+
+		expect(latestRequest()).toMatchObject({
+			baseURL: 'https://example.com/?rest_route=/wcpos/v2/orders',
+			url: '/42',
+		});
+	});
+
 	it('normalizes a query-shaped stored API base before composing axios baseURL', async () => {
 		mockSite.wp_api_url = 'https://example.com/blog/?rest_route=/';
 		mockSite.wcpos_api_url = 'https://example.com/blog/?rest_route=/wcpos/v2';

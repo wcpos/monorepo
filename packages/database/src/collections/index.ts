@@ -70,6 +70,11 @@ const sites: RxCollectionCreator<SiteDocumentType> = {
 			// v3 adds the optional `locale` property; existing documents need no change.
 			return oldDoc;
 		},
+		4(oldDoc) {
+			// v4 adds the optional `use_rest_route_param` flag; absent reads as
+			// path transport, so existing documents need no change.
+			return oldDoc;
+		},
 	},
 };
 

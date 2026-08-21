@@ -1,6 +1,6 @@
 export const sitesLiteral = {
 	title: 'Site schema',
-	version: 3,
+	version: 4,
 	description: 'WordPress site',
 	type: 'object',
 	primaryKey: 'uuid',

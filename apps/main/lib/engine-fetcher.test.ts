@@ -75,12 +75,11 @@ function createFetcherHarness(
 	};
 	const scope = input.scope ?? {};
 	const fetcher = createEngineFetcher({
-		auth: input.auth ?? BASE_AUTH,
+		auth: input.auth ?? { ...BASE_AUTH, useRestRouteParam: input.useRestRouteParam ?? false },
 		clockSkew: input.clockSkew ?? { generation: 0, evaluated: false },
 		scope,
 		emitTransport,
 		fetch: input.fetch,
-		useRestRouteParam: input.useRestRouteParam ?? false,
 		wpJsonRoot: input.wpJsonRoot ?? 'https://store.example.test/wp-json/',
 	});
 	return {

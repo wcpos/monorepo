@@ -250,7 +250,10 @@ export const useRestHttpClient = (endpoint = '') => {
 				await site.incrementalPatch({ wcpos_api_url: apiURL });
 			}
 
-			const pathFormBaseURL = apiURL + '/' + endpoint;
+			// Discovery stores wcpos_api_url WITH a trailing slash; strip it before
+			// joining so the composed path never carries `//`. Pretty routing
+			// tolerated the double slash, but rest_route matching is strict.
+			const pathFormBaseURL = apiURL.replace(/\/+$/, '') + '/' + endpoint;
 			const defaultConfig = {
 				baseURL:
 					resolveRestTransport(site) === 'query'
