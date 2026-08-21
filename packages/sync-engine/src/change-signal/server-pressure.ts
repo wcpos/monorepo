@@ -162,59 +162,21 @@ export function parseRetryAfterMs(value: string | null | undefined, atMs: number
  * invented) is treated as invalid — conservatively falling back to the body
  * mirror beats honouring a delay the server never named.
  */
-const HTTP_DATE_WEEKDAYS = [
-	'Sunday',
-	'Monday',
-	'Tuesday',
-	'Wednesday',
-	'Thursday',
-	'Friday',
-	'Saturday',
-] as const;
-const HTTP_DATE_MONTHS = [
-	'Jan',
-	'Feb',
-	'Mar',
-	'Apr',
-	'May',
-	'Jun',
-	'Jul',
-	'Aug',
-	'Sep',
-	'Oct',
-	'Nov',
-	'Dec',
-] as const;
-
+/**
+ * Accept exactly IMF-fixdate — the round-trip through toUTCString is
+ * timezone-safe, pivot-free, and rejects Date.parse's calendar normalization.
+ *
+ * The obsolete RFC 9110 forms (rfc850, asctime) are DELIBERATELY invalid:
+ * Date.parse reads asctime in LOCAL time and applies a fixed two-digit-year
+ * pivot to rfc850, so a "successful" parse of either is wrong on real devices.
+ * No real server has emitted them in decades, and an invalid header is not a
+ * dead end here — it falls back to the error body's mirrored
+ * `retry_after_seconds` (B10, free#1649), which carries server-computed whole
+ * seconds with no date parsing at all. Conservative-invalid beats honouring a
+ * delay the server never named.
+ */
 function isHttpDateShape(value: string, parsedMs: number): boolean {
-	if (new Date(parsedMs).toUTCString() === value) return true;
-	// Obsolete but valid RFC 9110 forms. Shape alone is not enough: Date.parse
-	// NORMALIZES invalid calendars (`Sunday, 31-Nov-94` becomes 1 Dec) and
-	// ignores mismatched weekdays, so the parsed components must round-trip
-	// against the tokens or a mangled header reads as a delay the server never
-	// named.
-	const date = new Date(parsedMs);
-	const rfc850 = /^([A-Za-z]{6,9}), (\d{2})-([A-Za-z]{3})-(\d{2}) \d{2}:\d{2}:\d{2} GMT$/.exec(
-		value
-	);
-	if (rfc850) {
-		return (
-			HTTP_DATE_WEEKDAYS[date.getUTCDay()] === rfc850[1] &&
-			date.getUTCDate() === Number(rfc850[2]) &&
-			HTTP_DATE_MONTHS[date.getUTCMonth()] === rfc850[3] &&
-			date.getUTCFullYear() % 100 === Number(rfc850[4])
-		);
-	}
-	const asctime = /^([A-Za-z]{3}) ([A-Za-z]{3}) ([ \d]\d) \d{2}:\d{2}:\d{2} (\d{4})$/.exec(value);
-	if (asctime) {
-		return (
-			HTTP_DATE_WEEKDAYS[date.getUTCDay()]!.slice(0, 3) === asctime[1] &&
-			HTTP_DATE_MONTHS[date.getUTCMonth()] === asctime[2] &&
-			date.getUTCDate() === Number(asctime[3]) &&
-			date.getUTCFullYear() === Number(asctime[4])
-		);
-	}
-	return false;
+	return new Date(parsedMs).toUTCString() === value;
 }
 
 export function parseServerPressure(value: string | null | undefined): ServerPressure | undefined {

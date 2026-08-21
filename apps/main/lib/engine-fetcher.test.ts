@@ -173,7 +173,7 @@ describe('createEngineFetcher', () => {
 		).toBeNull();
 	});
 
-	it('sends the explicit product User-Agent on every request (B10)', async () => {
+	it('stamps the native-variant product User-Agent on engine requests (B10)', async () => {
 		// A blank or library UA on a POST earns a permanent AIOS IP ban; browsers
 		// drop the forbidden header and keep their own, which is fine on web.
 		const { AppInfo } =
