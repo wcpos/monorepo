@@ -4,6 +4,12 @@ import { createStoreDB, createUserDB, sanitizeWPCredentialsData } from '@wcpos/d
 import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { Platform } from '@wcpos/utils/platform';
+import {
+	deriveSyntheticPathBase,
+	deriveSyntheticPathRoot,
+	isRestRouteBase,
+	toRestRouteUrl,
+} from '@wcpos/utils/rest-transport';
 import type {
 	SiteDocument,
 	StoreDatabase,
@@ -81,9 +87,11 @@ async function generateHashId(dataObject: any): Promise<string> {
 /**
  * Test authorization with Bearer token in header
  */
-async function testHeaderAuth(wcposApiUrl: string, token: string): Promise<boolean> {
+type AuthProbeVerdict = 'success' | 'auth-failed' | 'transport-dead';
+
+async function testHeaderAuth(authTestUrl: string, token: string): Promise<AuthProbeVerdict> {
 	try {
-		const result = await fetchJsonWithTimeout(`${wcposApiUrl}auth/test`, {
+		const result = await fetchJsonWithTimeout(authTestUrl, {
 			method: 'GET',
 			headers: {
 				'X-WCPOS': '1',
@@ -91,19 +99,22 @@ async function testHeaderAuth(wcposApiUrl: string, token: string): Promise<boole
 			},
 		});
 
-		const data = result?.data as { status?: string } | null | undefined;
-		return data?.status === 'success';
+		if (!result || result.response.status === 403 || result.response.status === 404) {
+			return 'transport-dead';
+		}
+		const data = result.data as { status?: string } | null;
+		return data?.status === 'success' ? 'success' : 'auth-failed';
 	} catch {
-		return false;
+		return 'transport-dead';
 	}
 }
 
 /**
  * Test authorization with token as query parameter
  */
-async function testParamAuth(wcposApiUrl: string, token: string, bareSupported: boolean) {
+async function testParamAuth(authTestUrl: string, token: string, bareSupported: boolean) {
 	try {
-		const url = new URL(`${wcposApiUrl}auth/test`);
+		const url = new URL(authTestUrl);
 		url.searchParams.set('authorization', formatAuthorizationParam(token, bareSupported));
 
 		const result = await fetchJsonWithTimeout(url.toString(), {
@@ -113,10 +124,13 @@ async function testParamAuth(wcposApiUrl: string, token: string, bareSupported: 
 			},
 		});
 
-		const data = result?.data as { status?: string } | null | undefined;
-		return data?.status === 'success';
+		if (!result || result.response.status === 403 || result.response.status === 404) {
+			return 'transport-dead';
+		}
+		const data = result.data as { status?: string } | null;
+		return data?.status === 'success' ? 'success' : 'auth-failed';
 	} catch {
-		return false;
+		return 'transport-dead';
 	}
 }
 
@@ -129,23 +143,24 @@ interface HeaderEchoResult {
 	params: Record<string, boolean>;
 }
 
+type EchoProbeVerdict = HeaderEchoResult | number | null;
+
 /**
  * Probe which request headers survive to the server (B8, wcpos-infra#72).
  *
  * ONE request carrying all eight client headers AND every fallback query
  * param; the public `/wcpos/v2/echo` route (free plugin >= 1.10) reports what
  * arrived, so both credential channels are measured in a single round trip.
- * Returns null when the endpoint is unavailable (older server, network
- * failure, or a host that answers with something other than the probe body) —
- * the caller then falls back to the legacy two-request auth test.
+ * Classifies valid echo replies, HTTP answers, and transport-dead responses so
+ * the caller can distinguish an old server from a blocked REST spelling.
  */
 async function probeHeaderEcho(
-	wcposApiUrl: string,
+	echoUrl: string,
 	accessToken: string,
 	wcposVersion?: string
-): Promise<HeaderEchoResult | null> {
+): Promise<EchoProbeVerdict> {
 	try {
-		const url = new URL(`${wcposApiUrl}echo`);
+		const url = new URL(echoUrl);
 		// The URL must never carry the real token — query strings persist in
 		// server/proxy/telemetry logs, and this probe runs every boot even when
 		// header auth is healthy. Masking char-for-char keeps what a WAF keys
@@ -179,8 +194,9 @@ async function probeHeaderEcho(
 			AUTH_PROBE_TIMEOUT_MS
 		);
 
-		if (!result || !result.response.ok) {
-			return null;
+		if (!result) return null;
+		if (!result.response.ok) {
+			return result.response.status || 401;
 		}
 
 		const data = result.data as
@@ -200,13 +216,30 @@ async function probeHeaderEcho(
 			typeof data.headers.authorization?.received !== 'boolean' ||
 			typeof data.params.authorization !== 'boolean'
 		) {
-			return null;
+			// Answered, but not by the echo route (cache garbage, WP Hide homepage,
+			// an incomplete body). A numeric verdict keeps this distinct from
+			// network-dead (null) so the caller still reaches the legacy ladder.
+			return result.response.status || 200;
 		}
 
 		return data as HeaderEchoResult;
 	} catch {
 		return null;
 	}
+}
+
+async function probeLegacyAuth(
+	authTestUrl: string,
+	accessToken: string,
+	wcposVersion?: string
+): Promise<{ headerSupported: boolean; paramSupported: boolean } | 'transport-dead'> {
+	const header = await testHeaderAuth(authTestUrl, accessToken);
+	if (header === 'success') return { headerSupported: true, paramSupported: false };
+	if (header === 'transport-dead') return 'transport-dead';
+	const param = await testParamAuth(authTestUrl, accessToken, bareAuthParamSupported(wcposVersion));
+	return param === 'transport-dead'
+		? 'transport-dead'
+		: { headerSupported: false, paramSupported: param === 'success' };
 }
 
 /**
@@ -216,14 +249,47 @@ async function probeHeaderEcho(
 export async function testAuthorizationMethod(
 	wcposApiUrl: string,
 	accessToken: string,
-	wcposVersion?: string
-): Promise<{ useJwtAsParam: boolean } | null> {
+	wcposVersion?: string,
+	wpApiUrl?: string
+): Promise<{ useJwtAsParam: boolean; useRestRouteParam: boolean } | null> {
 	try {
-		// Echo probe first (B8): one request measures every header and both
-		// credential channels at once, and names exactly which headers a
-		// hostile host eats. Falls through to the legacy two-request test when
-		// the endpoint is unavailable (servers < 1.10).
-		const echo = await probeHeaderEcho(wcposApiUrl, accessToken, wcposVersion);
+		const pathBase = deriveSyntheticPathBase(wcposApiUrl);
+		const pathRoot = wpApiUrl
+			? deriveSyntheticPathRoot(wpApiUrl)
+			: pathBase.replace(/wcpos\/v2\/?$/, '');
+		const queryOnly = isRestRouteBase(wcposApiUrl);
+		const pathEchoUrl = `${pathBase}echo`;
+		const queryEchoUrl = toRestRouteUrl(pathEchoUrl, pathRoot);
+		let echo: HeaderEchoResult | null = null;
+		let useRestRouteParam = queryOnly;
+		let pathEcho: EchoProbeVerdict | undefined;
+		if (!queryOnly) {
+			pathEcho = await probeHeaderEcho(pathEchoUrl, accessToken, wcposVersion);
+			if (pathEcho && typeof pathEcho !== 'number') {
+				echo = pathEcho;
+			}
+		}
+
+		const pathStatus = typeof pathEcho === 'number' ? pathEcho : undefined;
+		// A 2xx that failed the echo shape guard is a host answering the path with
+		// something other than WordPress REST (WP Hide's homepage-200 profile) —
+		// that is the path-blocked shape, same as 403/404/network.
+		const pathAnswerNotEcho = pathStatus !== undefined && pathStatus >= 200 && pathStatus < 300;
+		const pathTriggersQuery =
+			!echo &&
+			(queryOnly ||
+				pathStatus === 403 ||
+				pathStatus === 404 ||
+				pathAnswerNotEcho ||
+				pathEcho === null);
+		let queryEcho: EchoProbeVerdict | undefined;
+		if (pathTriggersQuery) {
+			queryEcho = await probeHeaderEcho(queryEchoUrl, accessToken, wcposVersion);
+			if (queryEcho && typeof queryEcho !== 'number') {
+				echo = queryEcho;
+				useRestRouteParam = true;
+			}
+		}
 		if (echo) {
 			const deadHeaders = Object.entries(echo.headers)
 				.filter(([, state]) => state?.received !== true)
@@ -239,10 +305,10 @@ export async function testAuthorizationMethod(
 				context: { wcposApiUrl, headerAuthArrives, paramAuthArrives, deadHeaders },
 			});
 			if (headerAuthArrives) {
-				return { useJwtAsParam: false };
+				return { useJwtAsParam: false, useRestRouteParam };
 			}
 			if (paramAuthArrives) {
-				return { useJwtAsParam: true };
+				return { useJwtAsParam: true, useRestRouteParam };
 			}
 			// Both credential channels are blocked — the probe measured this
 			// authoritatively, so the legacy test would only fail slower.
@@ -253,9 +319,41 @@ export async function testAuthorizationMethod(
 			return null;
 		}
 
-		// Test the Authorization header first. Only send the JWT in the query string if the
-		// safer header path fails.
-		const headerSupported = await testHeaderAuth(wcposApiUrl, accessToken);
+		// No transport produced a valid echo. Only network-dead on every spelling
+		// ends the ladder here — any HTTP answer (404 route-absent, 401 namespace
+		// gate, cache-garbage 200, WAF 403) leaves auth/test worth probing, which
+		// is exactly where the pre-ladder code always fell through to.
+		const networkDeadEverywhere = queryOnly
+			? queryEcho === null
+			: pathEcho === null && queryEcho === null;
+		if (networkDeadEverywhere) {
+			appLogger.warn('REST transport probes failed', {
+				context: { wcposApiUrl, verdict: 'both-transports-blocked' },
+			});
+			return null;
+		}
+
+		const pathAuthUrl = `${pathBase}auth/test`;
+		const queryAuthUrl = toRestRouteUrl(pathAuthUrl, pathRoot);
+		let legacy: { headerSupported: boolean; paramSupported: boolean } | 'transport-dead' =
+			'transport-dead';
+		// Path-form legacy first whenever the path answered at route level (401
+		// namespace gate, 404 route-absent, 5xx) — but not for 403 or a non-echo
+		// 2xx, which are the path-blocked shapes.
+		const tryLegacyPath =
+			!queryOnly && pathStatus !== undefined && pathStatus !== 403 && !pathAnswerNotEcho;
+		if (tryLegacyPath) legacy = await probeLegacyAuth(pathAuthUrl, accessToken, wcposVersion);
+		if (legacy === 'transport-dead') {
+			legacy = await probeLegacyAuth(queryAuthUrl, accessToken, wcposVersion);
+			useRestRouteParam = true;
+		}
+		if (legacy === 'transport-dead') {
+			appLogger.warn('REST transport probes failed', {
+				context: { wcposApiUrl, verdict: 'both-transports-blocked' },
+			});
+			return null;
+		}
+		const { headerSupported, paramSupported } = legacy;
 		if (headerSupported) {
 			appLogger.debug('Authorization method test results', {
 				context: {
@@ -265,14 +363,8 @@ export async function testAuthorizationMethod(
 				},
 			});
 
-			return { useJwtAsParam: false };
+			return { useJwtAsParam: false, useRestRouteParam };
 		}
-
-		const paramSupported = await testParamAuth(
-			wcposApiUrl,
-			accessToken,
-			bareAuthParamSupported(wcposVersion)
-		);
 
 		appLogger.debug('Authorization method test results', {
 			context: {
@@ -287,7 +379,7 @@ export async function testAuthorizationMethod(
 			appLogger.warn('Server does not support Authorization headers, using query parameters', {
 				context: { wcposApiUrl },
 			});
-			return { useJwtAsParam: true };
+			return { useJwtAsParam: true, useRestRouteParam };
 		}
 
 		// Neither work - log but don't fail hydration.
@@ -629,7 +721,8 @@ const testAuthorizationStep: HydrationStep = {
 		const result = await testAuthorizationMethod(
 			wcposApiUrl,
 			accessToken,
-			initialSite.wcpos_version
+			initialSite.wcpos_version,
+			typeof initialSite.wp_api_url === 'string' ? initialSite.wp_api_url : undefined
 		);
 
 		if (result) {
@@ -643,6 +736,7 @@ const testAuthorizationStep: HydrationStep = {
 			if (siteDoc) {
 				await siteDoc.getLatest().incrementalPatch({
 					use_jwt_as_param: !!result.useJwtAsParam,
+					use_rest_route_param: !!result.useRestRouteParam,
 				});
 				if (result.useJwtAsParam) {
 					appLogger.info('Site configured to use JWT as query parameter', {

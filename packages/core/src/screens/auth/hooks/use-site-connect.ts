@@ -4,10 +4,10 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAppState } from '../../../contexts/app-state';
+import { testAuthorizationMethod } from '../../../contexts/app-state/hydration-steps';
 import { useT } from '../../../contexts/translations';
 import { upsertSiteData } from '../../../utils/site-writes';
 import { useApiDiscovery } from './use-api-discovery';
-import { useAuthTesting } from './use-auth-testing';
 import { useUrlDiscovery } from './use-url-discovery';
 
 const siteLogger = getLogger(['wcpos', 'auth', 'site']);
@@ -56,6 +56,7 @@ interface ExtendedSiteData extends WpJsonResponse {
 	wcpos_api_url: string;
 	wcpos_login_url: string;
 	use_jwt_as_param: boolean;
+	use_rest_route_param: boolean;
 }
 
 export type SiteConnectStatus =
@@ -90,7 +91,6 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 	// Individual discovery hooks
 	const urlDiscovery = useUrlDiscovery();
 	const apiDiscovery = useApiDiscovery();
-	const authTesting = useAuthTesting();
 
 	const loading = status !== 'idle' && status !== 'success' && status !== 'error';
 
@@ -129,6 +129,7 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 					...siteData,
 					...endpoints,
 					use_jwt_as_param: authResult.useJwtAsParam,
+					use_rest_route_param: authResult.useRestRouteParam,
 				};
 
 				// Parse and validate the data using the database schema
@@ -237,13 +238,14 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 				updateProgress(3, t('auth.testing_authorization_methods'));
 				setStatus('testing-auth');
 
-				const authResult = await authTesting.testAuthorizationMethod(
+				const authResult = await testAuthorizationMethod(
 					apiResult.endpoints.wcpos_api_url,
-					undefined,
-					apiResult.siteData.wcpos_version
+					'mock.connect.test',
+					apiResult.siteData.wcpos_version,
+					wpApiUrl
 				);
 				if (!authResult) {
-					throw new Error(authTesting.error || t('auth.failed_to_test_authorization_methods'));
+					throw new Error(t('auth.failed_to_test_authorization_methods'));
 				}
 
 				// Step 4: Save to database
@@ -273,7 +275,7 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 				return null;
 			}
 		},
-		[urlDiscovery, apiDiscovery, authTesting, saveSiteData, updateProgress, t]
+		[urlDiscovery, apiDiscovery, saveSiteData, updateProgress, t]
 	);
 
 	return {
