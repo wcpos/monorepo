@@ -8,6 +8,7 @@ import {
 } from './checkout-probe';
 import {
 	createRunPrivateProduct,
+	deleteSearchProbe,
 	findCreatedProductRecord,
 	plainPermalinkUrl,
 	productProbeFailureAction,
@@ -131,7 +132,9 @@ test.describe('search-probe pure logic', () => {
 		const states: string[] = [];
 		const request = {
 			get: async (url: string) => {
-				states.push(new URL(url).searchParams.get('state') ?? '');
+				// The transport-verification read has no state param — record login fetches only.
+				const state = new URL(url).searchParams.get('state');
+				if (state !== null) states.push(state);
 				return {
 					ok: () => true,
 					status: () => 200,
@@ -158,6 +161,100 @@ test.describe('search-probe pure logic', () => {
 			if (previousPass === undefined) delete process.env.E2E_PRODUCT_WRITER_PASS;
 			else process.env.E2E_PRODUCT_WRITER_PASS = previousPass;
 		}
+	});
+
+	test('writer authorization falls back to the query param when the header is stripped', async () => {
+		const previousUser = process.env.E2E_PRODUCT_WRITER_USER;
+		const previousPass = process.env.E2E_PRODUCT_WRITER_PASS;
+		process.env.E2E_PRODUCT_WRITER_USER = 'writer';
+		process.env.E2E_PRODUCT_WRITER_PASS = 'secret';
+		// Simulates a hostile proxy (wcpos-infra#72 Tier 3) that strips the
+		// Authorization header: only the ?authorization= param authenticates.
+		const productReads: { header: string | null; param: string | null }[] = [];
+		const request = {
+			get: async (
+				url: string,
+				options?: { headers?: Record<string, string>; params?: Record<string, string> }
+			) => {
+				if (new URL(url).pathname.includes('wcpos-auth')) {
+					return {
+						ok: () => true,
+						status: () => 200,
+						text: async () =>
+							'<input name="_wpnonce" value="nonce"><input name="auth_session" value="session">',
+					};
+				}
+				const authorized = options?.params?.authorization === 'token';
+				productReads.push({
+					header: options?.headers?.Authorization ?? null,
+					param: options?.params?.authorization ?? null,
+				});
+				return {
+					ok: () => authorized,
+					status: () => (authorized ? 200 : 401),
+					json: async () => [],
+				};
+			},
+			post: async () => ({
+				status: () => 302,
+				headers: () => ({ location: 'https://localhost/cb?access_token=token' }),
+			}),
+		};
+
+		try {
+			const authorization = await productWriterAuthorization(
+				request as never,
+				'https://example.test'
+			);
+			expect(authorization).toEqual({ transport: 'query', value: 'token' });
+			expect(productReads).toEqual([
+				{ header: 'Bearer token', param: null },
+				{ header: null, param: 'token' },
+			]);
+		} finally {
+			if (previousUser === undefined) delete process.env.E2E_PRODUCT_WRITER_USER;
+			else process.env.E2E_PRODUCT_WRITER_USER = previousUser;
+			if (previousPass === undefined) delete process.env.E2E_PRODUCT_WRITER_PASS;
+			else process.env.E2E_PRODUCT_WRITER_PASS = previousPass;
+		}
+	});
+
+	test('probe deletes travel as POST with a _method=DELETE override', async () => {
+		// A WAF method policy (wcpos-infra#72 Tier 4) 403s DELETE before
+		// WordPress sees it; the POST + ?_method=DELETE escape must be the only
+		// wire shape the helper emits.
+		const calls: { method: string; url: string; params?: Record<string, string> }[] = [];
+		const stub = async (
+			method: string,
+			url: string,
+			options?: { params?: Record<string, string> }
+		) => {
+			calls.push({ method, url, ...(options?.params ? { params: options.params } : {}) });
+			return { ok: () => true, status: () => 200, json: async () => ({}) };
+		};
+		const request = {
+			post: (url: string, options?: { params?: Record<string, string> }) =>
+				stub('post', url, options),
+			delete: (url: string, options?: { params?: Record<string, string> }) =>
+				stub('delete', url, options),
+		};
+
+		await deleteSearchProbe({
+			request: request as never,
+			storeUrl: 'https://example.test',
+			authorization: { transport: 'query', value: 'token' },
+			collection: 'products',
+			id: 7,
+		});
+
+		expect(calls).toHaveLength(1);
+		expect(calls[0].method).toBe('post');
+		expect(calls[0].url).toBe('https://example.test/wp-json/wc/v3/products/7');
+		expect(calls[0].params).toMatchObject({
+			_method: 'DELETE',
+			force: 'true',
+			authorization: 'token',
+		});
 	});
 
 	test('adopts only the exact product identified by the create token', () => {
@@ -215,8 +312,8 @@ test.describe('search-probe pure logic', () => {
 						date_created_gmt: '2020-01-01T00:00:00',
 					},
 				]),
-			delete: async (url: string) => {
-				deleted.push(url);
+			post: async (url: string, options?: { params?: Record<string, string> }) => {
+				if (options?.params?._method === 'DELETE') deleted.push(url);
 				return response(200, {});
 			},
 		};
@@ -248,10 +345,12 @@ test.describe('search-probe pure logic', () => {
 	test('deletes a created variable parent whose response omits its slug', async () => {
 		let deletedUrl = '';
 		const request = {
-			post: async () => response(201, { id: 42 }),
-			delete: async (url: string) => {
-				deletedUrl = url;
-				return response(200, {});
+			post: async (url: string, options?: { params?: Record<string, string> }) => {
+				if (options?.params?._method === 'DELETE') {
+					deletedUrl = url;
+					return response(200, {});
+				}
+				return response(201, { id: 42 });
 			},
 		};
 
