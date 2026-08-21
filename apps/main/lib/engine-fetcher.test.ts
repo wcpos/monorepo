@@ -186,6 +186,9 @@ describe('createEngineFetcher', () => {
 
 		expect(new URL(fetch.mock.calls[0]![0] as string).searchParams.get('wcpos')).toBe('1');
 		expect(new URL(fetch.mock.calls[1]![0] as string).searchParams.get('wcpos')).toBe('1');
+		expect(
+			new URL(fetch.mock.calls[1]![0] as string).searchParams.get('_wcpos_envelope')
+		).toBeNull();
 	});
 
 	it('reports an unknown census collection as unsupported without making a request', async () => {

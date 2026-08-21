@@ -131,7 +131,7 @@ async function interceptRefundDependencies(page: Page) {
 		});
 	});
 
-	await page.route('**/wp-json/wcpos/v2/push/orders', async (route) => {
+	await page.route('**/wp-json/wcpos/v2/push/orders{,?*}', async (route) => {
 		const mutation = route.request().postDataJSON() as {
 			operation: 'create' | 'update';
 			payload: Record<string, unknown>;
