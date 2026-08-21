@@ -40,6 +40,9 @@ jest.mock('react-native', () => ({
 	View: ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
 		<div className={className}>{children}</div>
 	),
+	ScrollView: ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
+		<div className={className}>{children}</div>
+	),
 }));
 jest.mock('observable-hooks', () => ({
 	useObservableState: () => 2,
@@ -64,7 +67,9 @@ jest.mock('@wcpos/components/hstack', () => ({
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
+	Text: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
+		<span data-testid={testID}>{children}</span>
+	),
 }));
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
@@ -153,5 +158,19 @@ describe('Ledger (layout B2)', () => {
 		renderLedger();
 		const codeBadges = screen.getAllByTestId('logs-code-log-1');
 		expect(codeBadges[codeBadges.length - 1].closest('.absolute')).not.toBeNull();
+	});
+
+	it('pins the showing count footer with loaded and total values', () => {
+		renderLedger();
+
+		expect(screen.getByText('common.showing_of')).not.toBeNull();
+		expect(screen.getByTestId('logs-loaded-count').textContent).toBe('2');
+		expect(screen.getByTestId('logs-total-count').textContent).toBe('2');
+	});
+
+	it('renders the footer accessory', () => {
+		renderLedger({ footerAccessory: <span data-testid="footer-accessory">status</span> });
+
+		expect(screen.getByTestId('footer-accessory')).not.toBeNull();
 	});
 });

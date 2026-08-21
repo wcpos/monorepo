@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform, ScrollView, Share, View } from 'react-native';
+import { Platform, Share, View } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
 import { useObservableEagerState, useObservableState } from 'observable-hooks';
@@ -322,16 +322,11 @@ function LogsScreenContent() {
 	]);
 
 	return (
-		<ScrollView
-			className="flex-1"
-			onScroll={handleScroll}
-			onContentSizeChange={handleContentSizeChange}
-			onLayout={handleLayout}
-			scrollEventThrottle={64}
-		>
-			<VStack testID="screen-logs" className="mx-auto w-full max-w-4xl gap-3 p-4 md:p-6">
-				<StatusLine />
-
+		<View className="flex-1">
+			<VStack
+				testID="screen-logs"
+				className="mx-auto min-h-0 w-full max-w-4xl flex-1 gap-3 p-4 md:p-6"
+			>
 				<StatHeader
 					testID="logs-stats"
 					actions={
@@ -418,25 +413,32 @@ function LogsScreenContent() {
 					</Chip>
 				</HStack>
 
-				<ErrorBoundary>
-					<Suspense
-						fallback={
-							<View className="items-center py-8">
-								<Loader />
-							</View>
-						}
-					>
-						<Ledger
-							resource={binding.resource}
-							total$={binding.total$}
-							activeKind={activeKind}
-							onKindPress={toggleKind}
-							onRenderedCount={handleRenderedCount}
-						/>
-					</Suspense>
-				</ErrorBoundary>
+				<View className="min-h-0 flex-1">
+					<ErrorBoundary>
+						<Suspense
+							fallback={
+								<View className="min-h-0 flex-1 items-center justify-center py-8">
+									<Loader />
+								</View>
+							}
+						>
+							<Ledger
+								resource={binding.resource}
+								total$={binding.total$}
+								activeKind={activeKind}
+								onKindPress={toggleKind}
+								onRenderedCount={handleRenderedCount}
+								onScroll={handleScroll}
+								onContentSizeChange={handleContentSizeChange}
+								onLayout={handleLayout}
+								scrollEventThrottle={64}
+								footerAccessory={<StatusLine />}
+							/>
+						</Suspense>
+					</ErrorBoundary>
+				</View>
 			</VStack>
-		</ScrollView>
+		</View>
 	);
 }
 
