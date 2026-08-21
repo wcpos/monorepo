@@ -20,7 +20,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { Platform } from '@wcpos/utils/platform';
 import { useDocField } from '@wcpos/query';
 
-import { useAppState } from '../../../../contexts/app-state';
+import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { FormErrors } from '../../components/form-errors';
 import { playScanFailure, playScanSuccess } from '../../pos/products/play-scan-sound';
@@ -52,7 +52,7 @@ const formSchema = z.object({
  *
  */
 export function BarcodeSettings() {
-	const { store } = useAppState();
+	const { store } = useStoreSession();
 	const t = useT();
 	const { localPatch } = useLocalMutation();
 

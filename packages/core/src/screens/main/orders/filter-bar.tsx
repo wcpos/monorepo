@@ -8,7 +8,7 @@ import { useQueryRuntime } from '@wcpos/query';
 import { isGuestCustomer } from '@wcpos/sync-core';
 
 import { forceRefreshFilterCustomer } from './force-refresh-filter-customer';
-import { useAppState } from '../../../contexts/app-state';
+import { useStoreSession } from '../../../contexts/app-state';
 import { useQueryState } from '../../../query';
 import { CashierPill } from '../components/order/filter-bar/cashier-pill';
 import { CustomerPill } from '../components/order/filter-bar/customer-pill';
@@ -32,7 +32,7 @@ export function FilterBar() {
 	const guestCustomer = useGuestCustomer();
 	const customerResource = useEngineRecordByWooId('customers', customerID ?? 0);
 	const cashierResource = useEngineRecordByWooId('customers', cashierID ?? 0);
-	const { wpCredentials } = useAppState();
+	const { wpCredentials } = useStoreSession();
 	const runtime = useQueryRuntime();
 
 	const refreshCustomer = React.useCallback(() => {

@@ -13,12 +13,12 @@ import {
 } from './available-printer-profiles';
 import { toPrinterProfile } from './printer-profile';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
-import { useAppState } from '../../../../contexts/app-state';
+import { useStoreSession } from '../../../../contexts/app-state';
 
 const printerLogger = getLogger(['wcpos', 'printer', 'available-profiles']);
 
 export function useAvailablePrinterProfiles(): PrinterProfile[] {
-	const { storeDB } = useAppState();
+	const { storeDB } = useStoreSession();
 	const http = useRestHttpClient();
 	const [cloudPayload, setCloudPayload] = React.useState<CloudPrintResponse | null>(null);
 

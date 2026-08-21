@@ -9,7 +9,7 @@ import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-
 import { useCartStockGuard } from './use-cart-stock-guard';
 import { enqueueOrderMutation } from './order-mutation-queue';
 import { ensurePosOrderIdentityMeta, findByProductVariationID } from './utils';
-import { useAppState } from '../../../../contexts/app-state';
+import { useStoreSession } from '../../../../contexts/app-state';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 import {
 	documentRecordId,
@@ -74,10 +74,10 @@ export const useAddItemToOrder = () => {
 	const { localPatch } = useLocalMutation();
 	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
 	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
-	const { store, wpCredentials } = useAppState();
+	const { store, wpCredentials } = useStoreSession();
 	const taxBasedOn = useDocField(store, (value) => value.tax_based_on) as string | undefined;
 	const identity = React.useMemo(
-		() => ({ userId: wpCredentials.id, storeId: store.id, taxBasedOn }),
+		() => ({ userId: wpCredentials.id!, storeId: store.id!, taxBasedOn }),
 		[store.id, taxBasedOn, wpCredentials.id]
 	);
 

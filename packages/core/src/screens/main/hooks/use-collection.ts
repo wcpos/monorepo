@@ -7,7 +7,7 @@ import { storeCollections } from '@wcpos/database';
 import type { StoreCollections } from '@wcpos/database';
 import type { LegacyCollectionName } from '@wcpos/query';
 
-import { useAppState } from '../../../contexts/app-state';
+import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 
 export type CollectionKey = keyof typeof storeCollections | LegacyCollectionName;
@@ -35,14 +35,14 @@ export const useCollection = <K extends keyof StoreCollections>(
 	key: K
 ): { collection: StoreCollections[K]; collectionLabel: string } => {
 	const t = useT();
-	const { storeDB } = useAppState();
+	const { storeDB } = useStoreSession();
 
 	/**
 	 * Subscribe to reset$ to get the new collection reference when reset.
 	 * Initial value is the current collection from storeDB.
 	 */
 	const reset$ = React.useMemo(
-		() => storeDB.reset$.pipe(filter((collection: { name: string }) => collection.name === key)),
+		() => storeDB.reset$!.pipe(filter((collection: { name: string }) => collection.name === key)),
 		[storeDB.reset$, key]
 	);
 	const collection = useObservableState(reset$, storeDB.collections[key]) as StoreCollections[K];

@@ -1,7 +1,7 @@
 /// <reference path="./rxdb-premium.d.ts" />
 
 import type { Observable } from 'rxjs';
-import type { RxCollection } from 'rxdb';
+import type { RxCollection, RxDocument } from 'rxdb';
 
 /**
  * FlexSearch instance returned by rxdb-premium/plugins/flexsearch
@@ -27,6 +27,14 @@ export interface SearchInitializationOptions {
  * `type RxCollection<...>` from rxdb is not shadowed.
  */
 declare module 'rxdb' {
+	interface RxDocumentBase<RxDocType, OrmMethods = {}, Reactivity = unknown> {
+		populate$(key: string): Observable<RxDocument[]>;
+
+		toPopulatedJSON(): Promise<Record<string, unknown>>;
+
+		populateResource(key: string): import('observable-hooks').ObservableResource<RxDocument[]>;
+	}
+
 	interface RxCollectionBase {
 		/**
 		 * Parse a WC REST API response, pruning and coercing data to match the schema.

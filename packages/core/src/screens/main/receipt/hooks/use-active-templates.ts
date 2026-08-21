@@ -6,7 +6,7 @@ import { map } from 'rxjs/operators';
 import type { TemplateDocument } from '@wcpos/database';
 import { useDocField } from '@wcpos/query';
 
-import { useAppState } from '../../../../contexts/app-state';
+import { useStoreSession } from '../../../../contexts/app-state';
 import { useAppInfo } from '../../../../hooks/use-app-info';
 import { useTemplatesSync } from './use-templates-sync';
 
@@ -18,7 +18,7 @@ import { useTemplatesSync } from './use-templates-sync';
  * Otherwise: returns all published + virtual templates, sorted by menu_order.
  */
 export function useActiveTemplates(): TemplateDocument[] {
-	const { store, storeDB } = useAppState();
+	const { store, storeDB } = useStoreSession();
 	const { license } = useAppInfo();
 	const isPro = !!license?.isPro;
 

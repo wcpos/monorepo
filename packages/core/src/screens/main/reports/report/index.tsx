@@ -17,7 +17,7 @@ import { useDocField } from '@wcpos/query';
 import { ZReport } from './template';
 import { generateZReportHTML } from './generate-html';
 import { calculateTotals } from './utils';
-import { useAppState } from '../../../../contexts/app-state';
+import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
@@ -33,7 +33,7 @@ import { useQueryState } from '../../../../query';
 export function Report() {
 	const t = useT();
 	const contentRef = React.useRef<View>(null);
-	const { store, wpCredentials } = useAppState();
+	const { store, wpCredentials } = useStoreSession();
 	const storeName = useDocField(store, (value) => value.name) as string;
 	const num_decimals = useDocField(store, (value) => value.price_num_decimals) as number;
 	const { selectedOrders } = useReportsData();
@@ -90,11 +90,11 @@ export function Report() {
 	const html = React.useMemo(() => {
 		return generateZReportHTML({
 			storeName,
-			storeId: store.id,
+			storeId: store.id!,
 			reportGenerated,
 			reportPeriod,
-			cashierName: formatName(wpCredentials),
-			cashierId: wpCredentials.id,
+			cashierName: formatName(wpCredentials.toJSON()),
+			cashierId: wpCredentials.id!,
 			totalOrders: selectedOrders?.length || 0,
 			total: formatCurrency(total),
 			totalTax: formatCurrency(totalTax),

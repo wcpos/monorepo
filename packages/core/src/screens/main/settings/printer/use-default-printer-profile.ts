@@ -7,7 +7,7 @@ import type { PrinterProfile } from '@wcpos/printer';
 import type { PrinterProfileDocument } from '@wcpos/database';
 
 import { toPrinterProfile } from './printer-profile';
-import { useAppState } from '../../../../contexts/app-state';
+import { useStoreSession } from '../../../../contexts/app-state';
 
 export { toPrinterProfile } from './printer-profile';
 
@@ -18,7 +18,7 @@ export { toPrinterProfile } from './printer-profile';
  * Reactively updates whenever the collection changes.
  */
 export function useDefaultPrinterProfile(): PrinterProfile | undefined {
-	const { storeDB } = useAppState();
+	const { storeDB } = useStoreSession();
 
 	const profile$ = React.useMemo(
 		() =>

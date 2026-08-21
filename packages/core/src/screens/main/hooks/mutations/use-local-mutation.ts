@@ -39,7 +39,8 @@ export type MutationDocument =
 	| EngineRecord<'variations'>
 	| EngineRecord<'customers'>
 	| EngineRecord<'coupons'>
-	| import('@wcpos/database').TemporaryOrderDocument;
+	| import('@wcpos/database').TemporaryOrderDocument
+	| import('@wcpos/database').StoreDocument;
 
 const WRITEABLE_COLLECTIONS = new Set<WriteableCollection>(
 	Object.entries(COLLECTION_VOCABULARY)

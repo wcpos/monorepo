@@ -16,7 +16,7 @@ import {
 	UISettingSchema,
 	UISettingState,
 } from './utils';
-import { useAppState } from '../../../../contexts/app-state';
+import { useStoreSession } from '../../../../contexts/app-state';
 
 const uiLogger = getLogger(['wcpos', 'ui', 'settings']);
 
@@ -48,7 +48,7 @@ export const UISettingsContext = React.createContext<UISettingsContextValue | nu
  *
  */
 export function UISettingsProvider({ children }: UISettingsProviderProps) {
-	const { storeDB } = useAppState();
+	const { storeDB } = useStoreSession();
 	const { getLabel } = useUILabel();
 
 	/**

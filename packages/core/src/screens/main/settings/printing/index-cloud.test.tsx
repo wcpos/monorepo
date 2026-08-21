@@ -193,8 +193,8 @@ jest.mock('../../receipt/hooks/use-active-templates', () => ({
 	useActiveTemplates: () => [],
 }));
 
-jest.mock('../../../../contexts/app-state', () => ({
-	useAppState: () => ({
+jest.mock('../../../../contexts/app-state', () => {
+	const useAppState = () => ({
 		storeDB: {
 			collections: {
 				printer_profiles: {
@@ -206,8 +206,9 @@ jest.mock('../../../../contexts/app-state', () => ({
 				},
 			},
 		},
-	}),
-}));
+	});
+	return { useAppState, useStoreSession: useAppState };
+});
 
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () =>

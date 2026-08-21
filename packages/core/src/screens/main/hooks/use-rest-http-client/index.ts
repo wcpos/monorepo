@@ -16,7 +16,7 @@ import {
 	toRestRouteUrl,
 } from '@wcpos/utils/rest-transport';
 
-import { useAppState } from '../../../../contexts/app-state';
+import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { errorSubject, useAuthErrorHandler } from './auth-error-handler';
 import { createRefreshHttpClient } from './refresh-http-client';
@@ -118,7 +118,7 @@ export function unwrapResponseEnvelope<T>(response: T): T {
 }
 
 export const useRestHttpClient = (endpoint = '') => {
-	const { site, wpCredentials, store, logout } = useAppState();
+	const { site, wpCredentials, store, logout } = useStoreSession();
 	const { status: onlineStatus } = useOnlineStatus();
 	const t = useT();
 
@@ -236,7 +236,7 @@ export const useRestHttpClient = (endpoint = '') => {
 			const wcposVersion = site.wcpos_version;
 
 			let apiURL = site.wcpos_api_url;
-			const pathFormRoot = deriveSyntheticPathRoot(site.wp_api_url).replace(/\/?$/, '/');
+			const pathFormRoot = deriveSyntheticPathRoot(site.wp_api_url!).replace(/\/?$/, '/');
 			const wpApiURL = pathFormRoot;
 
 			if (apiURL) apiURL = deriveSyntheticPathBase(apiURL);
@@ -262,7 +262,7 @@ export const useRestHttpClient = (endpoint = '') => {
 
 			if (shouldUseJwtAsParam) {
 				const params = {
-					authorization: formatAuthorizationParam(jwt, bareAuthParamSupported(wcposVersion)),
+					authorization: formatAuthorizationParam(jwt!, bareAuthParamSupported(wcposVersion)),
 				};
 				defaultConfig.params = merge(params, defaultConfig.params);
 			}

@@ -5,7 +5,7 @@ import { Stack } from 'expo-router';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';
-import { useAppState } from '@wcpos/core/contexts/app-state';
+import { useStoreSession } from '@wcpos/core/contexts/app-state';
 import { useT } from '@wcpos/core/contexts/translations';
 import { registerEngineScopeSwitcher } from '@wcpos/core/contexts/app-state/engine-scope-port';
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
@@ -21,7 +21,6 @@ import { ScanHubProvider } from '@wcpos/core/screens/main/hooks/barcodes/scan-hu
 import { UpgradeRequired } from '@wcpos/core/screens/main/upgrade-required';
 import { useCollection } from '@wcpos/core/screens/main/hooks/use-collection';
 import { createRefreshHttpClient } from '@wcpos/core/screens/main/hooks/use-rest-http-client/refresh-http-client';
-import type { StoreDatabase } from '@wcpos/database';
 import { refreshAccessToken } from '@wcpos/hooks/use-http-client/refresh-access-token';
 import { OnlineStatusProvider, useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { RasterizeProvider } from '@wcpos/printer';
@@ -57,7 +56,7 @@ export const unstable_settings = {
 
 function AppStack() {
 	const screenBackgroundColor = useNavigationBackground();
-	const { storeDB, site, wpCredentials, store } = useAppState();
+	const { storeDB, site, wpCredentials, store } = useStoreSession();
 	const { locale } = useLocale();
 	const t = useT();
 
@@ -236,7 +235,7 @@ function EngineConnectivityBridge() {
 }
 
 function MetricsPersistenceBridge() {
-	const { storeDB } = useAppState() as { storeDB?: StoreDatabase };
+	const { storeDB } = useStoreSession();
 
 	// Bridge the module-level metrics store to the active per-store RxDB lifecycle.
 	React.useEffect(() => {
@@ -298,7 +297,7 @@ function MetricsPersistenceBridge() {
 }
 
 export default function AppLayout() {
-	const { site, wpCredentials } = useAppState();
+	const { site, wpCredentials } = useStoreSession();
 	const wpAPIURL = useDocField(site, (value) => value.wp_api_url) as string;
 	const { collection: logCollection } = useCollection('logs');
 	useUserValidation({ site, wpUser: wpCredentials });

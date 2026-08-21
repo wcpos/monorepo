@@ -9,7 +9,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
 import { SettingsSection } from './components/settings-section';
-import { useAppState } from '../../../contexts/app-state';
+import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
 
@@ -137,7 +137,7 @@ function ThemeGrid({
  */
 export function ThemeSettings() {
 	const t = useT();
-	const { store } = useAppState();
+	const { store } = useStoreSession();
 	const { localPatch } = useLocalMutation();
 
 	/**
