@@ -16,6 +16,7 @@ import { Note } from './cells/note';
 import { Receipt } from './cells/receipt';
 import { FilterBar } from './filter-bar';
 import { UISettingsForm } from './ui-settings-form';
+import { useBarcode } from './use-barcode';
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { DataTable } from '../components/data-table';
@@ -106,6 +107,7 @@ function renderCell(columnKey: string, info: any) {
 function OrdersScreenContent() {
 	const state = useQueryState<'orders'>();
 	const actions = useQueryStateActions<'orders'>();
+	useBarcode(actions.setSearch);
 	const binding = useCollectionBinding('orders', state);
 	useReferencedCustomerDemand(binding.result$);
 	const tableActions = React.useMemo<
