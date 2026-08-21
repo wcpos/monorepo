@@ -5,10 +5,15 @@ import { memoryEngineStorage } from './testing';
 import {
 	createRxdbSyncEngine,
 	type EngineEvent,
+	type EngineFetcher,
 	type EngineStatus,
 } from './create-rxdb-sync-engine';
 
 setPremiumFlag();
+
+const stubFetcher: EngineFetcher = async () => {
+	throw new Error('no network in this test');
+};
 
 vi.mock('./scheduler/rx-pos-bootstrap-seeder', () => ({
 	seedPosBootstrapLanes: vi.fn(async () => {
@@ -26,6 +31,7 @@ describe('bootstrap failure honesty', () => {
 					wpJsonRoot: 'https://example.test/wp-json',
 				},
 				storage: memoryEngineStorage(),
+				fetcher: stubFetcher,
 				mode: 'manual',
 				diagnostics,
 			},
