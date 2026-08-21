@@ -10,6 +10,7 @@ import {
 import { AppInfo } from '@wcpos/utils/app-info';
 import { formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getLogger } from '@wcpos/utils/logger';
+import { toRestRouteUrl } from '@wcpos/utils/rest-transport';
 
 import { evaluateClockSkew } from './clock-skew';
 import {
@@ -27,6 +28,9 @@ export type EngineFetcherAuth = {
 	refreshAuth?: (context?: { operationId?: string }) => Promise<string | null>;
 	useJwtAsParam?: boolean;
 	bareAuthParam?: boolean;
+	/** Rides the same live-options ref as the auth flags: cache hits mutate it
+	 * in place, so a probe-driven transport flip reaches the cached fetcher. */
+	useRestRouteParam?: boolean;
 };
 
 export type ClockSkewGate = { generation: number; evaluated: boolean };
@@ -80,6 +84,7 @@ export function createEngineFetcher(input: {
 	scope?: EngineFetcherScope;
 	fetch?: typeof globalThis.fetch;
 	now?: () => number;
+	wpJsonRoot: string;
 }): EngineFetcher {
 	const now = input.now ?? Date.now;
 
@@ -134,6 +139,7 @@ export function createEngineFetcher(input: {
 				// An unscoped engine must not inherit a stale header from init.
 				headers.delete(STORE_SCOPE_HEADER);
 			}
+			if (input.auth.useRestRouteParam) url = toRestRouteUrl(url, input.wpJsonRoot);
 			let finalUrl = url;
 			if (token) {
 				if (input.auth.useJwtAsParam) {

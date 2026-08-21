@@ -2,6 +2,8 @@ import * as React from 'react';
 
 import { useNetInfoInstance } from '@react-native-community/netinfo';
 
+import { pingProbeUrl } from './reachability-url';
+
 export type OnlineStatus = 'offline' | 'online-website-unavailable' | 'online-website-available';
 
 interface OnlineStatusState {
@@ -24,9 +26,7 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 
 	const config = React.useMemo(
 		() => ({
-			reachabilityUrl: useLegacyReachabilityURL
-				? wpAPIURL
-				: `${wpAPIURL.replace(/\/$/, '')}/wcpos/v2/ping`,
+			reachabilityUrl: useLegacyReachabilityURL ? wpAPIURL : pingProbeUrl(wpAPIURL),
 			reachabilityTest: async (response: Response) => {
 				if (!useLegacyReachabilityURL && response.status === 404) {
 					setUseLegacyReachabilityURL(true);

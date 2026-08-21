@@ -16,6 +16,7 @@ const mockSetOffline = jest.fn();
 const mockSite = {
 	incrementalPatch: jest.fn(),
 	use_jwt_as_param: false,
+	use_rest_route_param: false,
 	wcpos_version: '',
 	wcpos_api_url: 'https://example.com/wp-json/wcpos/v2',
 	wp_api_url: 'https://example.com/wp-json/',
@@ -67,7 +68,51 @@ describe('useRestHttpClient methods', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockSite.use_jwt_as_param = false;
+		mockSite.use_rest_route_param = false;
 		mockSite.wcpos_version = '';
+		mockSite.wcpos_api_url = 'https://example.com/wp-json/wcpos/v2';
+		mockSite.wp_api_url = 'https://example.com/wp-json/';
+	});
+
+	it('composes a query-form axios base URL when query transport is enabled', async () => {
+		mockSite.use_rest_route_param = true;
+		const { result } = renderHook(() => useRestHttpClient('orders'));
+
+		await result.current.get('/42', { params: { page: 2 } });
+
+		expect(latestRequest()).toMatchObject({
+			baseURL: 'https://example.com/?rest_route=/wcpos/v2/orders',
+			url: '/42',
+			params: { page: 2 },
+		});
+	});
+
+	it('never composes a double slash from a trailing-slash stored base in query mode', async () => {
+		// Discovery stores wcpos_api_url WITH a trailing slash; rest_route matching
+		// is strict, so `/wcpos/v2//orders` would 404 where pretty routing shrugged.
+		mockSite.use_rest_route_param = true;
+		mockSite.wcpos_api_url = 'https://example.com/wp-json/wcpos/v2/';
+		const { result } = renderHook(() => useRestHttpClient('orders'));
+
+		await result.current.get('/42');
+
+		expect(latestRequest()).toMatchObject({
+			baseURL: 'https://example.com/?rest_route=/wcpos/v2/orders',
+			url: '/42',
+		});
+	});
+
+	it('normalizes a query-shaped stored API base before composing axios baseURL', async () => {
+		mockSite.wp_api_url = 'https://example.com/blog/?rest_route=/';
+		mockSite.wcpos_api_url = 'https://example.com/blog/?rest_route=/wcpos/v2';
+		const { result } = renderHook(() => useRestHttpClient('orders'));
+
+		await result.current.get('/42');
+
+		expect(latestRequest()).toMatchObject({
+			baseURL: 'https://example.com/blog/?rest_route=/wcpos/v2/orders',
+			url: '/42',
+		});
 	});
 
 	it.each([

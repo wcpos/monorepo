@@ -1,3 +1,5 @@
+import { deriveSyntheticPathRoot } from '@wcpos/utils/rest-transport';
+
 /**
  * The ONE place the engine's sync base URL is derived (ADR 0023 increment 1b).
  *
@@ -21,7 +23,8 @@ export interface SyncSite {
  * (`site.wp_api_url`, e.g. `https://example.com/wp-json/`).
  */
 export function deriveSyncSite(wpApiUrl: string): SyncSite {
-	const wpJsonRoot = wpApiUrl.endsWith('/') ? wpApiUrl : `${wpApiUrl}/`;
+	const pathRoot = deriveSyntheticPathRoot(wpApiUrl);
+	const wpJsonRoot = pathRoot.endsWith('/') ? pathRoot : `${pathRoot}/`;
 	return {
 		syncBaseUrl: `${wpJsonRoot}${SYNC_NAMESPACE}`,
 		wpJsonRoot,
