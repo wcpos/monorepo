@@ -56,6 +56,9 @@ export function InputSources() {
 	const [label, setLabel] = React.useState('');
 	const [bluetoothServiceClassId, setBluetoothServiceClassId] = React.useState('');
 	const [bluetoothServiceClassIdInvalid, setBluetoothServiceClassIdInvalid] = React.useState(false);
+	// Synchronous in-flight guard: a second Add press while insert() is pending
+	// would re-read the same pre-insert profiles snapshot and create a duplicate.
+	const addingBluetoothServiceClassIdRef = React.useRef(false);
 
 	// The section renders if any input source can be added on this platform:
 	// the attributed wedge (Android) or a direct Web Serial / WebHID connection.
@@ -94,6 +97,9 @@ export function InputSources() {
 	};
 
 	const handleAddBluetoothServiceClassId = async () => {
+		if (addingBluetoothServiceClassIdRef.current) {
+			return;
+		}
 		const normalized = bluetoothServiceClassId.trim().toLowerCase();
 		if (!BLUETOOTH_SERVICE_CLASS_ID_PATTERN.test(normalized)) {
 			setBluetoothServiceClassIdInvalid(true);
@@ -116,6 +122,7 @@ export function InputSources() {
 			return;
 		}
 
+		addingBluetoothServiceClassIdRef.current = true;
 		try {
 			await collection.insert({
 				id: uuidv4(),
@@ -137,6 +144,8 @@ export function InputSources() {
 				title: t('common.error'),
 				description: getErrorMessage(error),
 			});
+		} finally {
+			addingBluetoothServiceClassIdRef.current = false;
 		}
 	};
 

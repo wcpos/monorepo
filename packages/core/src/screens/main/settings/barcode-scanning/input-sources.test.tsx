@@ -197,6 +197,26 @@ describe('InputSources manual Bluetooth service UUID', () => {
 		expect(mockInsert).not.toHaveBeenCalled();
 	});
 
+	it('ignores a second Add press while the first insert is pending', async () => {
+		let resolveInsert: (value?: unknown) => void = () => {};
+		mockInsert.mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					resolveInsert = resolve;
+				})
+		);
+		render(<InputSources />);
+
+		fireEvent.change(screen.getByTestId('bluetooth-service-class-id-input'), {
+			target: { value: '49535343-fe7d-4ae5-8fa9-9fafd205e455' },
+		});
+		fireEvent.click(screen.getByTestId('bluetooth-service-class-id-add'));
+		fireEvent.click(screen.getByTestId('bluetooth-service-class-id-add'));
+
+		resolveInsert();
+		await waitFor(() => expect(mockInsert).toHaveBeenCalledTimes(1));
+	});
+
 	it('does not insert a duplicate serial service UUID', () => {
 		mockProfiles = [
 			{
