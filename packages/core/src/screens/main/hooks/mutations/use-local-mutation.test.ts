@@ -9,6 +9,7 @@ const mockUseT = jest.fn();
 const mockConvertLocalDateToUTCString = jest.fn((_date: Date) => '2026-03-02T00:00:00');
 const mockWrite = jest.fn();
 const mockFindOneExec = jest.fn();
+const mockGetTemporaryOrder = jest.fn();
 const mockPatchTemporaryOrderPayload = jest.fn();
 const mockStatus = jest.fn();
 type ScopeSelectors = { products: readonly string[]; variations: readonly string[] };
@@ -61,6 +62,7 @@ jest.mock('@wcpos/query', () => ({
 	})(),
 	engineCollection: (database: { collections?: Record<string, unknown> } | null, name: string) =>
 		database?.collections?.[name] ?? null,
+	wrapEngineDocument: (_collection: string, document: unknown) => document,
 	useQueryRuntime: () => ({
 		engine: {
 			active: () => {
@@ -83,6 +85,7 @@ jest.mock('../../../../contexts/translations', () => ({
 }));
 
 jest.mock('../../pos/contexts/current-order/temporary-order', () => ({
+	getTemporaryOrder: (uuid: string) => mockGetTemporaryOrder(uuid),
 	patchTemporaryOrderPayload: (uuid: string, changes: Record<string, unknown>) =>
 		mockPatchTemporaryOrderPayload(uuid, changes),
 }));
@@ -144,6 +147,63 @@ describe('useLocalMutation', () => {
 			);
 
 			expect(stored.payload).toMatchObject({ barcode: 'EDITED', ...carrier });
+		}
+	);
+
+	it.each(['proxy', 'record'] as const)(
+		'builds dotted-path changes from the resident payload for a %s-face document',
+		async (face) => {
+			const stored: Record<string, unknown> = {
+				uuid: 'order-uuid',
+				remoteId: '42',
+				payload: {
+					id: 42,
+					billing: { first_name: 'Resident', last_name: 'Customer', city: 'Old City' },
+				},
+				sync: { revision: 'rev-1' },
+				local: { dirty: false, pendingMutationIds: [] },
+			};
+			const resident = {
+				...stored,
+				incrementalModify: async (
+					modifier: (old: Record<string, unknown>) => Record<string, unknown>
+				) => {
+					Object.assign(stored, modifier(stored));
+					return stored;
+				},
+				toJSON: () => JSON.parse(JSON.stringify(stored)),
+			};
+			mockFindOneExec.mockResolvedValue(resident);
+			const document = {
+				uuid: 'order-uuid',
+				id: 42,
+				collection: { name: 'orders' },
+				getLatest: () => document,
+				toMutableJSON: () =>
+					face === 'proxy'
+						? { billing: { first_name: 'Stale proxy' } }
+						: { payload: { billing: { first_name: 'Stale record' } } },
+			};
+
+			const { result } = renderHook(() => useLocalMutation());
+			await act(() =>
+				result.current.localPatch({
+					document: document as never,
+					data: { 'billing.city': 'New City' } as never,
+				})
+			);
+
+			expect(mockWrite).toHaveBeenCalledWith(
+				expect.objectContaining({
+					payload: expect.objectContaining({
+						billing: {
+							first_name: 'Resident',
+							last_name: 'Customer',
+							city: 'New City',
+						},
+					}),
+				})
+			);
 		}
 	);
 
@@ -271,13 +331,16 @@ describe('useLocalMutation', () => {
 				return stored;
 			}
 		);
-		const latest = { uuid: 'temporary-order-uuid' };
+		mockGetTemporaryOrder.mockResolvedValue({
+			...stored,
+			toMutableJSON: () => JSON.parse(JSON.stringify(stored)),
+		});
 		const document = {
 			uuid: 'temporary-order-uuid',
 			id: 0,
 			isNew: true,
 			collection: { name: 'orders' },
-			getLatest: () => latest,
+			getLatest: () => ({ uuid: 'temporary-order-uuid' }),
 		};
 
 		const { result } = renderHook(() => useLocalMutation());
@@ -297,7 +360,7 @@ describe('useLocalMutation', () => {
 			customer_id: 91,
 			date_modified_gmt: '2026-03-02T00:00:00',
 		});
-		expect(patchResult?.document).toBe(latest);
+		expect(patchResult?.document).toBe(stored);
 		expect(mockFindOneExec).not.toHaveBeenCalled();
 		expect(mockWrite).not.toHaveBeenCalled();
 	});

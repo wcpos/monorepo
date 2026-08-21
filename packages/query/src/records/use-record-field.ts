@@ -3,6 +3,8 @@ import { combineLatest, defer, type Observable, of } from 'rxjs';
 import { distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
 import { deepEqual } from 'rxdb/plugins/utils';
 
+import type { TemporaryOrderDocument } from '@wcpos/database';
+
 import type { EngineRecord, EngineRecordCollectionName, EngineRecordShape } from './engine-record';
 import type { RxDocument, RxState } from 'rxdb';
 
@@ -27,6 +29,7 @@ import type { RxDocument, RxState } from 'rxdb';
  */
 
 type Selector<TData, R> = (data: TData) => R;
+type TemporaryOrderShape = TemporaryOrderDocument extends RxDocument<infer TData> ? TData : never;
 
 /** Duck-type for RxState containers (`uiSettings`, app state): reactive `$` + plain `get()`. */
 type RxStateLike<TState> = {
@@ -94,6 +97,13 @@ export function useRecordField<C extends EngineRecordCollectionName, R>(
 	record: EngineRecord<C> | null | undefined,
 	select: Selector<EngineRecordShape<C>, R>
 ): R | undefined;
+// Interim overload for the POS current-order union (engine order | per-till temporary
+// template, ADR 0028 stage I). The union of two RxDocument instantiations matches neither
+// generic overload, so it needs its own. Dies with the temporary order in ADR 0030.
+export function useRecordField<R>(
+	record: EngineRecord<'orders'> | TemporaryOrderDocument,
+	select: Selector<EngineRecordShape<'orders'> | TemporaryOrderShape, R>
+): R;
 export function useRecordField<TDoc extends Record<string, unknown>, R>(
 	record: RxDocument<TDoc>,
 	select: Selector<NoInfer<TDoc>, R>

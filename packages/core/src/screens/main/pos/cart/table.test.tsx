@@ -94,7 +94,7 @@ jest.mock('../../contexts/ui-settings', () => ({
 }));
 
 jest.mock('../contexts/current-order', () => ({
-	useCurrentOrder: () => ({ currentOrder: { uuid: 'order-1' } }),
+	useCurrentOrder: () => ({ currentOrderRecord: { uuid: 'order-1' } }),
 }));
 
 jest.mock('../hooks/use-cart-lines', () => ({

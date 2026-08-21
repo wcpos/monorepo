@@ -24,6 +24,7 @@ import {
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { WebViewHandle } from '@wcpos/components/webview';
+import { useRecordField } from '@wcpos/query';
 
 import { type PaymentFrameStatus, PaymentWebview } from './components/payment-webview';
 import { CheckoutTitle } from './components/title';
@@ -32,6 +33,7 @@ import { useT } from '../../../../contexts/translations';
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 import { TotalsChangedBanner } from '../cart/totals-changed-banner';
 import { stockRejection$ } from '../hooks/stock-rejection';
+import { useCurrentOrderRecord } from '../contexts/current-order';
 
 interface Props {
 	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
@@ -62,7 +64,9 @@ export function Checkout({ resource }: Props) {
 }
 
 function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDocument }) {
-	const orderNumber = useObservableEagerState(order.number$!);
+	// stage-I2: left on proxy face — checkout write/session props are stage-J paths; display reads use the record.
+	const currentOrderRecord = useCurrentOrderRecord();
+	const orderNumber = useRecordField(currentOrderRecord, (record) => record.payload.number);
 	const stockRejection = useObservableEagerState(stockRejection$);
 	const router = useRouter();
 	const t = useT();
@@ -112,7 +116,7 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 	const showStockRejection =
 		error === 'insufficient_stock' &&
 		stockRejection !== null &&
-		stockRejection.orderUuid === order.uuid &&
+		stockRejection.orderUuid === currentOrderRecord.uuid &&
 		stockRejection.items.length > 0;
 
 	/**
@@ -163,7 +167,7 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 				</ModalHeader>
 				<ModalBody contentContainerStyle={{ height: '100%' }}>
 					<VStack className="flex-1">
-						<CheckoutTitle order={order} />
+						<CheckoutTitle order={currentOrderRecord} />
 						{/* R1. The cart's copy of this banner is behind this full-height
 						    modal, and the write that produces a divergence is usually the
 						    Pay button's own save — so without a mount HERE the cashier can
@@ -172,7 +176,7 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 						    hands. It does not gate Process Payment; the server's totals
 						    stand, and the cashier decides. */}
 						<TotalsChangedBanner
-							orderId={order.uuid as string | undefined}
+							orderId={currentOrderRecord.uuid}
 							testID="checkout-totals-changed-banner"
 						/>
 						{storageDegraded && !showStockRejection ? (

@@ -17,9 +17,9 @@ const mockLoggerInfo = jest.fn();
 const mockLoggerSuccess = jest.fn();
 
 type TestOrder = {
-	id: number;
 	isNew: boolean;
-	getLatest: () => { line_items: object[] };
+	payload: { id: number; line_items: object[] };
+	getLatest: () => { payload: { line_items: object[] } };
 };
 
 let mockCurrentOrder: TestOrder;
@@ -67,7 +67,7 @@ jest.mock('../../contexts/ui-settings', () => ({
 
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrderActions: () => ({
-		getCurrentOrder: () => mockCurrentOrder,
+		getCurrentOrderRecord: () => mockCurrentOrder,
 		setCurrentOrderID: jest.fn(),
 	}),
 }));
@@ -108,9 +108,9 @@ const parentDocument = {
 
 function makeOrder(id: number, lineItems: object[]): TestOrder {
 	return {
-		id,
 		isNew: false,
-		getLatest: () => ({ line_items: lineItems }),
+		payload: { id, line_items: lineItems },
+		getLatest: () => ({ payload: { line_items: lineItems } }),
 	};
 }
 

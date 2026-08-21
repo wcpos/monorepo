@@ -34,7 +34,16 @@ const COMPUTED = {
 	tax_lines: [{ rate_id: 1, tax_total: '5.994000' }],
 };
 
-let currentOrder: Record<string, unknown> = { uuid: 'order-a', ...COMPUTED };
+function orderRecord(payload: Record<string, unknown>) {
+	const record = {
+		uuid: payload.uuid,
+		payload,
+		getLatest: () => record,
+	};
+	return record;
+}
+
+let currentOrderRecord = orderRecord({ uuid: 'order-a', ...COMPUTED });
 
 const engine = {
 	status: () => ({ activeScopeId: 'scope-1' }),
@@ -64,7 +73,7 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch }),
 }));
 jest.mock('../contexts/current-order', () => ({
-	useCurrentOrder: () => ({ currentOrder }),
+	useCurrentOrder: () => ({ currentOrderRecord }),
 }));
 
 function Harness() {
@@ -100,7 +109,7 @@ function emitDivergence(orderId: string, mutationId = 'm1') {
 beforeEach(() => {
 	listeners.clear();
 	localPatch.mockClear();
-	currentOrder = { uuid: 'order-a', ...COMPUTED };
+	currentOrderRecord = orderRecord({ uuid: 'order-a', ...COMPUTED });
 });
 
 describe('useOrderTotals re-push guard', () => {
@@ -114,7 +123,12 @@ describe('useOrderTotals re-push guard', () => {
 	});
 
 	it('patches while the cashier is building the sale', () => {
-		currentOrder = { uuid: 'order-a', ...COMPUTED, total: '0.00', total_tax: '0.00' };
+		currentOrderRecord = orderRecord({
+			uuid: 'order-a',
+			...COMPUTED,
+			total: '0.00',
+			total_tax: '0.00',
+		});
 		renderHarness();
 		expect(localPatch).toHaveBeenCalledTimes(1);
 		expect(localPatch.mock.calls[0]?.[0]?.data).toMatchObject({ total: '36.683280' });
@@ -125,7 +139,7 @@ describe('useOrderTotals re-push guard', () => {
 		// old behaviour patched 36.68 straight back — pushing the till's
 		// arithmetic over the source of truth, and provoking the same divergence
 		// again on the next drain.
-		currentOrder = { uuid: 'order-a', ...COMPUTED, total: '50.07' };
+		currentOrderRecord = orderRecord({ uuid: 'order-a', ...COMPUTED, total: '50.07' });
 		renderHarness();
 		expect(localPatch).toHaveBeenCalledTimes(1);
 
@@ -135,14 +149,14 @@ describe('useOrderTotals re-push guard', () => {
 	});
 
 	it('leaves other orders alone — a divergence on one tab does not freeze another', () => {
-		currentOrder = { uuid: 'order-a', ...COMPUTED, total: '50.07' };
+		currentOrderRecord = orderRecord({ uuid: 'order-a', ...COMPUTED, total: '50.07' });
 		renderHarness();
 		localPatch.mockClear();
 
 		emitDivergence('order-b');
 		// `order-a` still has no held divergence, so its totals patch normally.
 		act(() => {
-			currentOrder = { uuid: 'order-a', ...COMPUTED, total: '49.00' };
+			currentOrderRecord = orderRecord({ uuid: 'order-a', ...COMPUTED, total: '49.00' });
 		});
 		expect(localPatch).not.toHaveBeenCalled();
 	});
@@ -151,7 +165,7 @@ describe('useOrderTotals re-push guard', () => {
 	// it, or a later clean save retiring it, would otherwise re-arm the very
 	// re-push this guard exists to stop — one click later.
 	it('stays suppressed after the cashier DISMISSES the banner', () => {
-		currentOrder = { uuid: 'order-a', ...COMPUTED, total: '50.07' };
+		currentOrderRecord = orderRecord({ uuid: 'order-a', ...COMPUTED, total: '50.07' });
 		const { rerender } = renderHarness();
 		emitDivergence('order-a');
 		localPatch.mockClear();
@@ -178,7 +192,7 @@ describe('useOrderTotals re-push guard', () => {
 	});
 
 	it('converges again once the cashier actually changes the cart', () => {
-		currentOrder = { uuid: 'order-a', ...COMPUTED, total: '50.07' };
+		currentOrderRecord = orderRecord({ uuid: 'order-a', ...COMPUTED, total: '50.07' });
 		renderHarness();
 		emitDivergence('order-a');
 		localPatch.mockClear();

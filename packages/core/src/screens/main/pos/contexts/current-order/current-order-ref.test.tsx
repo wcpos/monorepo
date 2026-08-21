@@ -7,7 +7,12 @@ import { act, render } from '@testing-library/react';
 import { ObservableResource } from 'observable-hooks';
 import { BehaviorSubject } from 'rxjs';
 
-import { type CurrentOrderActions, CurrentOrderProvider, useCurrentOrderActions } from './index';
+import {
+	type CurrentOrderActions,
+	CurrentOrderProvider,
+	type OpenOrderHit,
+	useCurrentOrderActions,
+} from './index';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -25,6 +30,10 @@ jest.mock('./use-new-order', () => ({
 
 function orderDocument(uuid: string): OrderDocument {
 	return { uuid } as unknown as OrderDocument;
+}
+
+function orderRecord(uuid: string) {
+	return { uuid, payload: {} } as unknown as import('@wcpos/query').EngineRecord<'orders'>;
 }
 
 let actions: CurrentOrderActions | undefined;
@@ -60,7 +69,7 @@ function App({
 	resource,
 }: {
 	marker: string;
-	resource: ObservableResource<{ id: string; document: OrderDocument }[]>;
+	resource: ObservableResource<OpenOrderHit[]>;
 }) {
 	return (
 		<React.Suspense fallback={null}>
@@ -87,8 +96,8 @@ describe('CurrentOrderProvider getCurrentOrder', () => {
 	 */
 	it('resolves the just-switched order for readers that run before the provider passive effects', () => {
 		const orders$ = new BehaviorSubject([
-			{ id: 'order-a', document: orderDocument('order-a') },
-			{ id: 'order-b', document: orderDocument('order-b') },
+			{ id: 'order-a', document: orderDocument('order-a'), record: orderRecord('record-a') },
+			{ id: 'order-b', document: orderDocument('order-b'), record: orderRecord('record-b') },
 		]);
 		const resource = new ObservableResource(orders$);
 
@@ -96,6 +105,13 @@ describe('CurrentOrderProvider getCurrentOrder', () => {
 
 		expect(actions).toBeDefined();
 		expect((actions!.getCurrentOrder() as { uuid?: string })?.uuid).toBe('order-a');
+		expect(
+			(
+				actions as unknown as {
+					getCurrentOrderRecord: () => { uuid?: string };
+				}
+			).getCurrentOrderRecord().uuid
+		).toBe('record-a');
 
 		act(() => {
 			// One batch: switch the order and give the reader a new marker so its passive
@@ -107,5 +123,12 @@ describe('CurrentOrderProvider getCurrentOrder', () => {
 		const switchedRead = reads.find((read) => read.marker === 'switched');
 		expect(switchedRead).toBeDefined();
 		expect(switchedRead!.uuid).toBe('order-b');
+		expect(
+			(
+				actions as unknown as {
+					getCurrentOrderRecord: () => { uuid?: string };
+				}
+			).getCurrentOrderRecord().uuid
+		).toBe('record-b');
 	});
 });

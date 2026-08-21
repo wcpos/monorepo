@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { Button } from '@wcpos/components/button';
 import {
 	Dialog,
@@ -15,6 +13,7 @@ import {
 	DialogTrigger,
 } from '@wcpos/components/dialog';
 import { Textarea } from '@wcpos/components/textarea';
+import { useRecordField } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../../contexts/translations';
@@ -27,8 +26,8 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
  *
  */
 export function AddNoteButton() {
-	const { currentOrder } = useCurrentOrder();
-	const note = useObservableEagerState(currentOrder.customer_note$!);
+	const { currentOrderRecord } = useCurrentOrder();
+	const note = useRecordField(currentOrderRecord, (order) => order.payload.customer_note);
 	const t = useT();
 	const { localPatch } = useLocalMutation();
 	const [open, setOpen] = React.useState(false);
@@ -48,17 +47,20 @@ export function AddNoteButton() {
 	 */
 	const handleSave = React.useCallback(async () => {
 		const result = await localPatch({
-			document: currentOrder,
+			document: currentOrderRecord,
 			data: {
 				customer_note: text,
 			},
 		});
 		if (!result) return;
 		cartLogger.info('Order note updated', {
-			context: { event: 'cart.order-note.updated', orderId: currentOrder.uuid ?? currentOrder.id },
+			context: {
+				event: 'cart.order-note.updated',
+				orderId: currentOrderRecord.uuid ?? currentOrderRecord.payload.id,
+			},
 		});
 		setOpen(false);
-	}, [currentOrder, localPatch, text]);
+	}, [currentOrderRecord, localPatch, text]);
 
 	/**
 	 *

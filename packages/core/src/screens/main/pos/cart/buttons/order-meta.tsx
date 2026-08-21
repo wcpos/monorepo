@@ -19,6 +19,7 @@ import { useCurrentOrder } from '../../contexts/current-order';
  */
 export function OrderMetaButton() {
 	const { currentOrder } = useCurrentOrder();
+	// stage-I2: left on proxy face — EditOrderMeta is an edit modal owned by stage J.
 	const t = useT();
 
 	return (

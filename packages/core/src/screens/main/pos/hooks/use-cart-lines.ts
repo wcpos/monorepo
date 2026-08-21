@@ -1,10 +1,11 @@
 import * as React from 'react';
 
-import { useObservable, useObservableEagerState, useSubscription } from 'observable-hooks';
+import { useObservable, useSubscription } from 'observable-hooks';
 import { distinctUntilChanged, map, skip } from 'rxjs/operators';
 
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { useRecordField } from '@wcpos/query';
 
 import { useAppliedCouponReferenceDemand } from '../../../../query';
 import { calculateOrderTotals } from './calculate-order-totals';
@@ -14,7 +15,7 @@ import { useUpdateFeeLine } from './use-update-fee-line';
 import { getUuidFromLineItem } from './utils';
 import { useTaxSettings } from '../../contexts/tax-rates';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
-import { useCurrentOrder } from '../contexts/current-order';
+import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
 import { useT } from '../../../../contexts/translations';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -25,10 +26,8 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'lines']);
 /**
  * Which order STATE a replay was computed for.
  *
- * `currentOrder.getLatest()` cannot be compared by reference: the engine adapter wraps every
- * read in a fresh Proxy and `getLatest()` returns `wrapEngineDocument(collection, …)` on EVERY
- * call, so `getLatest() !== captured` is true even when nothing changed. Compare the state
- * instead.
+ * The record face makes `getLatest()` identity-stable. Stage I2 nevertheless keeps this value
+ * guard unchanged so retiring a money-path concurrency check remains a separate reviewed change.
  *
  * `id`, `status` and `date_modified_gmt` are in the key on purpose, not just the lines the
  * replay reads: ANY write to the order moves one of them — a newer cart edit, a status
@@ -36,16 +35,17 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'lines']);
  * create-ack grafts the Woo id onto an order that had none). A replay computed before such a
  * write must never land on top of it.
  */
-function replayStateKey(order: OrderDocument): string {
+// stage-I2 note: replayStateKey retirable now that getLatest() is identity-stable — kept pending review
+function replayStateKey(order: CurrentOrderRecord): string {
 	return JSON.stringify([
 		order.uuid ?? null,
-		order.id ?? null,
-		order.status ?? null,
-		order.date_modified_gmt ?? null,
-		order.line_items ?? [],
-		order.fee_lines ?? [],
-		order.shipping_lines ?? [],
-		order.coupon_lines ?? [],
+		order.payload.id ?? null,
+		order.payload.status ?? null,
+		order.payload.date_modified_gmt ?? null,
+		order.payload.line_items ?? [],
+		order.payload.fee_lines ?? [],
+		order.payload.shipping_lines ?? [],
+		order.payload.coupon_lines ?? [],
 	]);
 }
 
@@ -62,18 +62,18 @@ type ReplayContinuation = {
 	stateKey: string;
 	generation: number;
 	abort: AbortController;
-	replay: (order: OrderDocument) => Promise<void>;
+	replay: (order: CurrentOrderRecord) => Promise<void>;
 };
 
 /**
  * @NOTE - when current order is updated, eg: date_modified, the cart lines will re-subscribe.
  */
 export const useCartLines = () => {
-	const { currentOrder } = useCurrentOrder();
-	const lineItems = useObservableEagerState(currentOrder.line_items$!);
-	const feeLines = useObservableEagerState(currentOrder.fee_lines$!);
-	const shippingLines = useObservableEagerState(currentOrder.shipping_lines$!);
-	const couponLines = useObservableEagerState(currentOrder.coupon_lines$!);
+	const { currentOrderRecord } = useCurrentOrder();
+	const lineItems = useRecordField(currentOrderRecord, (order) => order.payload.line_items);
+	const feeLines = useRecordField(currentOrderRecord, (order) => order.payload.fee_lines);
+	const shippingLines = useRecordField(currentOrderRecord, (order) => order.payload.shipping_lines);
+	const couponLines = useRecordField(currentOrderRecord, (order) => order.payload.coupon_lines);
 	const { getFeeLineData } = useFeeLineData();
 	const { updateFeeLine } = useUpdateFeeLine();
 	const { localPatch } = useLocalMutation();
@@ -146,7 +146,7 @@ export const useCartLines = () => {
 	 * moment as a cart edit must not apply the same recalculation twice.
 	 */
 	const replayCoupons = React.useCallback(
-		async (freshOrder: OrderDocument) => {
+		async (freshOrder: CurrentOrderRecord) => {
 			const stateKey = replayStateKey(freshOrder);
 			if (replayingRef.current === stateKey) return;
 			replayingRef.current = stateKey;
@@ -158,21 +158,21 @@ export const useCartLines = () => {
 				// - Sequential discount mode
 				// - Correct tax-inclusive/exclusive rounding
 				const result = await recalculate(
-					freshOrder.line_items || [],
-					freshOrder.coupon_lines || []
+					freshOrder.payload.line_items || [],
+					freshOrder.payload.coupon_lines || []
 				);
 				if (!result) return; // coupon missing locally — bail to avoid partial data
 				// Bail if the order moved during the async replay — a concurrent cart edit, a
 				// checkout push, or a status change — rather than overwriting it.
-				if (replayStateKey(currentOrder.getLatest()) !== stateKey) return;
+				if (replayStateKey(currentOrderRecord.getLatest()) !== stateKey) return;
 
 				// Compute order totals from the coupon-adjusted line items in the same
 				// tick. This prevents useOrderTotals from running with stale pre-coupon
 				// line items and flashing incorrect tax values.
 				const totals = calculateOrderTotals({
 					lineItems: result.lineItems.filter((item) => item.product_id !== null),
-					feeLines: (freshOrder.fee_lines || []).filter((item) => item.name !== null),
-					shippingLines: (freshOrder.shipping_lines || []).filter(
+					feeLines: (freshOrder.payload.fee_lines || []).filter((item) => item.name !== null),
+					shippingLines: (freshOrder.payload.shipping_lines || []).filter(
 						(item) => item.method_id !== null
 					),
 					couponLines: result.couponLines.filter((item) => item.code != null),
@@ -203,7 +203,7 @@ export const useCartLines = () => {
 		},
 		[
 			allRates,
-			currentOrder,
+			currentOrderRecord,
 			localPatch,
 			priceNumDecimals,
 			pricesIncludeTax,
@@ -232,7 +232,7 @@ export const useCartLines = () => {
 	 * any other pair aborts it because the newer edit's own replay now owns the order.
 	 */
 	const armReplayContinuation = React.useCallback(
-		(freshOrder: OrderDocument) => {
+		(freshOrder: CurrentOrderRecord) => {
 			const stateKey = replayStateKey(freshOrder);
 			const armed = continuationRef.current;
 			if (
@@ -269,11 +269,11 @@ export const useCartLines = () => {
 					});
 					return;
 				}
-				const latest = currentOrder.getLatest();
+				const latest = currentOrderRecord.getLatest();
 				// Belt to the state key's braces: a delayed write must never reach an order that
 				// is no longer an editable cart, whatever else moved. The foreground replay does
 				// not need this — it is driven by an edit the cashier just made.
-				if (latest.status !== POS_OPEN_STATUS) return;
+				if (latest.payload.status !== POS_OPEN_STATUS) return;
 				// The order moved on — a newer edit, a checkout push, or a status change. That
 				// write owns the order now; a replay computed against the old state must not
 				// land on top of it.
@@ -288,7 +288,7 @@ export const useCartLines = () => {
 		},
 		[
 			couponReferenceGeneration,
-			currentOrder,
+			currentOrderRecord,
 			disarmReplayContinuation,
 			replayCoupons,
 			t,
@@ -300,12 +300,11 @@ export const useCartLines = () => {
 	// (`setCurrentOrderID` swaps the context value without a remount) or unmounting aborts it and
 	// drops the captured document, so nothing can fire against an order this tab no longer owns.
 	//
-	// Keyed on the uuid, deliberately not on `currentOrder` itself: the open-orders resource
-	// re-runs `wrapEngineDocument` on every emission of its `pos-open` query, so the context
-	// object is replaced whenever ANY open order is written — routine background sync during
+	// Keyed on the uuid, deliberately not on `currentOrderRecord` itself: RxDB replaces the
+	// immutable record instance whenever this order is written — routine background sync during
 	// exactly the slow reference pull this continuation exists to outlast. Keying on the object
 	// would abandon the replay for the very reason it was armed.
-	const currentOrderUUID = currentOrder.uuid;
+	const currentOrderUUID = currentOrderRecord.uuid;
 	React.useEffect(
 		() => () => {
 			continuationRef.current?.abort.abort();
@@ -329,8 +328,8 @@ export const useCartLines = () => {
 			}
 		}
 
-		const freshOrder = currentOrder.getLatest();
-		const hasActiveCoupons = (freshOrder.coupon_lines || []).some((cl) => cl.code != null);
+		const freshOrder = currentOrderRecord.getLatest();
+		const hasActiveCoupons = (freshOrder.payload.coupon_lines || []).some((cl) => cl.code != null);
 		if (hasActiveCoupons) {
 			// The demand declared above is asynchronous, and this edit can land while the pull
 			// is still in flight — scanning now would hit the still-empty collections and throw

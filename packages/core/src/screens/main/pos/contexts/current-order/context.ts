@@ -1,10 +1,16 @@
 import * as React from 'react';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
+type TemporaryOrderDocument = import('@wcpos/database').TemporaryOrderDocument;
+type EngineOrderRecord = import('@wcpos/query').EngineRecord<'orders'>;
+
+export type CurrentOrderRecord = EngineOrderRecord | TemporaryOrderDocument;
+export type OpenOrderHit = { id: string; document: OrderDocument; record: EngineOrderRecord };
 
 export interface CurrentOrderContextProps {
 	currentOrder: OrderDocument;
-	openOrders: { id: string; document: OrderDocument }[];
+	currentOrderRecord: CurrentOrderRecord;
+	openOrders: OpenOrderHit[];
 	setCurrentOrderID: (id: string) => void;
 }
 
@@ -46,9 +52,18 @@ export const useCurrentOrderOptional = (): OrderDocument | undefined => {
 	return context?.currentOrder;
 };
 
+export const useCurrentOrderRecord = (): CurrentOrderRecord => {
+	const context = React.useContext(CurrentOrderContext);
+	if (!context) {
+		throw new Error(`useCurrentOrderRecord must be called within CurrentOrderProvider`);
+	}
+	return context.currentOrderRecord;
+};
+
 export interface CurrentOrderActions {
 	/** The current order AT CALL TIME. Never call during render — that is the whole point. */
 	getCurrentOrder: () => OrderDocument;
+	getCurrentOrderRecord: () => CurrentOrderRecord;
 	setCurrentOrderID: (id: string) => void;
 }
 

@@ -98,13 +98,14 @@ const orderSnapshot = {
 	customer_id: 7,
 };
 
-const currentOrder = {
-	...orderSnapshot,
-	getLatest: () => orderSnapshot,
+const currentOrderRecord = {
+	uuid: orderSnapshot.uuid,
+	payload: orderSnapshot,
+	getLatest: () => currentOrderRecord,
 };
 
 jest.mock('../contexts/current-order', () => ({
-	useCurrentOrder: () => ({ currentOrder }),
+	useCurrentOrder: () => ({ currentOrderRecord }),
 }));
 
 function engineDocument(document: Record<string, unknown> & { uuid: string; payload: object }) {

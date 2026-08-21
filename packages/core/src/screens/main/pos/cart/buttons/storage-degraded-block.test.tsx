@@ -80,6 +80,7 @@ jest.mock('@wcpos/query', () => ({
 		},
 	}),
 	awaitWriteOutcome: jest.fn(async () => undefined),
+	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 	WriteOutcomeError: class WriteOutcomeError extends Error {},
 }));
 
@@ -116,9 +117,16 @@ const mockCurrentOrder = {
 	toMutableJSON: () => ({ uuid: 'order-1', id: 42, number: '42' }),
 	getLatest: () => ({ uuid: 'order-1', id: 42, number: '42' }),
 };
+const mockCurrentOrderRecord = {
+	uuid: 'order-1',
+	payload: { id: 42, number: '42', line_items: [], total: '10.00', refunds: [] },
+};
 
 jest.mock('../../contexts/current-order', () => ({
-	useCurrentOrder: () => ({ currentOrder: mockCurrentOrder }),
+	useCurrentOrder: () => ({
+		currentOrder: mockCurrentOrder,
+		currentOrderRecord: mockCurrentOrderRecord,
+	}),
 }));
 
 jest.mock('../../../../../contexts/translations', () => {

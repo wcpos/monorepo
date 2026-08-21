@@ -23,6 +23,7 @@ const mockUseObservableSuspense = jest.fn();
 const mockUseObservableEagerState = jest.fn();
 const mockIsRxDocument = jest.fn();
 const mockPostMessage = jest.fn();
+const mockCurrentOrderRecord = { uuid: 'order-1', payload: { number: '100' } };
 
 interface MockPaymentWebviewProps {
 	setFrameStatus: (status: PaymentFrameStatus) => void;
@@ -59,6 +60,12 @@ jest.mock('observable-hooks', () => ({
 
 jest.mock('rxdb', () => ({ isRxDocument: (...args: unknown[]) => mockIsRxDocument(...args) }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ replace: jest.fn() }) }));
+jest.mock('@wcpos/query', () => ({
+	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
+}));
+jest.mock('../contexts/current-order', () => ({
+	useCurrentOrderRecord: () => mockCurrentOrderRecord,
+}));
 
 jest.mock('./hooks/use-checkout-session', () => ({
 	useCheckoutSession: (...args: unknown[]) => mockUseCheckoutSession(...args),
@@ -144,7 +151,7 @@ describe('Checkout', () => {
 	it('shows only Return to Cart after a stock rejection', () => {
 		mockUseObservableSuspense.mockReturnValue({ uuid: 'order-1', number$: {} });
 		mockIsRxDocument.mockReturnValue(true);
-		mockUseObservableEagerState.mockReturnValueOnce('100').mockReturnValueOnce({
+		mockUseObservableEagerState.mockReturnValueOnce({
 			orderUuid: 'order-1',
 			items: [{ product_id: 1, variation_id: 0, available: 0 }],
 		});
@@ -163,7 +170,7 @@ describe('Checkout', () => {
 	it('shows stock rejection detail in legacy webview mode', () => {
 		mockUseObservableSuspense.mockReturnValue({ uuid: 'order-1', number$: {} });
 		mockIsRxDocument.mockReturnValue(true);
-		mockUseObservableEagerState.mockReturnValueOnce('100').mockReturnValueOnce({
+		mockUseObservableEagerState.mockReturnValueOnce({
 			orderUuid: 'order-1',
 			items: [{ product_id: 1, variation_id: 0, available: 0 }],
 		});
@@ -188,7 +195,7 @@ describe('Checkout', () => {
 		mockBlockIfDegraded.mockReturnValue(true);
 		mockUseObservableSuspense.mockReturnValue({ uuid: 'order-1', number$: {} });
 		mockIsRxDocument.mockReturnValue(true);
-		mockUseObservableEagerState.mockReturnValueOnce('100').mockReturnValueOnce(null);
+		mockUseObservableEagerState.mockReturnValueOnce(null);
 		const startCheckout = jest.fn();
 		mockUseCheckoutSession.mockReturnValue({
 			mode: 'contract',
@@ -211,7 +218,7 @@ describe('Checkout', () => {
 		mockBlockIfDegraded.mockReturnValue(true);
 		mockUseObservableSuspense.mockReturnValue({ uuid: 'order-1', number$: {} });
 		mockIsRxDocument.mockReturnValue(true);
-		mockUseObservableEagerState.mockReturnValueOnce('100').mockReturnValueOnce(null);
+		mockUseObservableEagerState.mockReturnValueOnce(null);
 		const startCheckout = jest.fn();
 		mockUseCheckoutSession.mockReturnValue({
 			mode: 'contract',

@@ -109,20 +109,23 @@ describe('useOpenOrdersResource', () => {
 		expect(firstDatabase.collections.orders.find).toHaveBeenCalledWith({
 			selector: { status: 'pos-open' },
 		});
-		type Hit = { id: string; document: { id?: number } };
-		expect(result.current.read().map((hit: Hit) => [hit.id, hit.document.id])).toEqual([
+		expect(result.current.read().map((hit) => [hit.id, hit.document.id])).toEqual([
 			['early', 2],
 			['late', 3],
+		]);
+		expect(result.current.read().map((hit) => [hit.id, hit.record.uuid])).toEqual([
+			['early', 'early'],
+			['late', 'late'],
 		]);
 
 		act(() => {
 			orders$.next([...orders$.value, order('new', 6, '2026-07-14T13:00:00', 7, 2)]);
 		});
-		expect(result.current.read().map((hit: Hit) => hit.id)).toEqual(['early', 'late', 'new']);
+		expect(result.current.read().map((hit) => hit.id)).toEqual(['early', 'late', 'new']);
 
 		const nextOrders$ = new BehaviorSubject([order('next-scope', 10, '2026-07-14T14:00:00', 7, 2)]);
 		act(() => emitDatabase(databaseWith(nextOrders$)));
-		expect(result.current.read().map((hit: Hit) => hit.id)).toEqual(['next-scope']);
+		expect(result.current.read().map((hit) => hit.id)).toEqual(['next-scope']);
 	});
 
 	it('rebinds when a replacement database has the same number of open orders', () => {

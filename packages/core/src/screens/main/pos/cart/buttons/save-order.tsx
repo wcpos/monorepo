@@ -19,7 +19,7 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'save']);
  *
  */
 export function SaveButton() {
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrderRecord } = useCurrentOrder();
 	const pushDocument = usePushDocument();
 	const [loading, setLoading] = React.useState(false);
 	const t = useT();
@@ -33,7 +33,7 @@ export function SaveButton() {
 		// cashier with a "saved" order that exists nowhere on this device.
 		if (
 			blockIfDegraded('save-order', {
-				orderId: currentOrder.uuid ?? currentOrder.id,
+				orderId: currentOrderRecord.uuid ?? currentOrderRecord.payload.id,
 			})
 		) {
 			return;
@@ -41,7 +41,7 @@ export function SaveButton() {
 
 		setLoading(true);
 		try {
-			await pushDocument(currentOrder).then((savedDoc) => {
+			await pushDocument(currentOrderRecord).then((savedDoc) => {
 				/**
 				 * TODO; move this generic sanckbar to the pushDocument hook
 				 */
@@ -63,14 +63,14 @@ export function SaveButton() {
 				code: ERROR_CODES.SYNC_UNEXPECTED,
 				toast: { title: t('common.failed_to_save_order') },
 				context: {
-					orderId: currentOrder.id,
+					orderId: currentOrderRecord.payload.id,
 					error: errorMessage,
 				},
 			});
 		} finally {
 			setLoading(false);
 		}
-	}, [blockIfDegraded, currentOrder, pushDocument, t]);
+	}, [blockIfDegraded, currentOrderRecord, pushDocument, t]);
 
 	/**
 	 *

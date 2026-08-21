@@ -34,7 +34,7 @@ interface MetaData {
 export const useAddVariation = () => {
 	const { addItemToOrder } = useAddItemToOrder();
 	// Event-time resolution — every variable product tile mounts this hook.
-	const { getCurrentOrder } = useCurrentOrderActions();
+	const { getCurrentOrderRecord } = useCurrentOrderActions();
 	const { incrementLineItem } = useUpdateLineItem();
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
@@ -64,11 +64,11 @@ export const useAddVariation = () => {
 				...parentRecord.payload,
 				id: parentRecord.remoteId === null ? 0 : wooIdOf(parentRecord.remoteId),
 			} as ProductDocument;
-			const currentOrder = getCurrentOrder();
-			const lineItems = currentOrder.getLatest().line_items ?? [];
+			const currentOrderRecord = getCurrentOrderRecord();
+			const lineItems = currentOrderRecord.getLatest().payload.line_items ?? [];
 
 			// check if variation is already in order, if so increment quantity
-			if (!(currentOrder as unknown as { isNew?: boolean }).isNew && parent.id !== 0) {
+			if (!(currentOrderRecord as { isNew?: boolean }).isNew && parent.id !== 0) {
 				const matches = findByProductVariationID(lineItems, parent.id ?? 0, variation.id);
 				if (matches && matches.length === 1) {
 					const uuid = getUuidFromLineItem(matches[0]);
@@ -97,7 +97,7 @@ export const useAddVariation = () => {
 						variationId: variation.id,
 						productId: parent.id,
 						productName: parent.name,
-						orderId: currentOrder.id,
+						orderId: currentOrderRecord.payload.id,
 					},
 				});
 				return true;
@@ -108,14 +108,14 @@ export const useAddVariation = () => {
 						variationId: variation.id,
 						productId: parent.id,
 						productName: parent.name,
-						orderId: currentOrder.id,
+						orderId: currentOrderRecord.payload.id,
 					},
 				});
 				return false;
 			}
 		},
 		[
-			getCurrentOrder,
+			getCurrentOrderRecord,
 			incrementLineItem,
 			metaDataKeys,
 			calculateLineItemTaxesAndTotals,

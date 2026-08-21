@@ -29,7 +29,7 @@ interface Props {
  */
 export function ProductName({ row, column, table }: CellContext<Props, 'name'>) {
 	const { item, uuid } = row.original;
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrderRecord } = useCurrentOrder();
 	const { updateLineItem } = useUpdateLineItem();
 	const stockRejection = useObservableEagerState(stockRejection$);
 	const t = useT();
@@ -42,13 +42,13 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 		() =>
 			getStockRejectionForLine({
 				stockRejection,
-				orderUuid: currentOrder.uuid ?? '',
+				orderUuid: currentOrderRecord.uuid ?? '',
 				lineItems: table.options.data
 					.filter((line) => line.type === 'line_items')
 					.map((line) => line.item),
 				lineItem: item,
 			}),
-		[stockRejection, currentOrder.uuid, table.options.data, item]
+		[stockRejection, currentOrderRecord.uuid, table.options.data, item]
 	);
 
 	/**

@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Dialog,
@@ -11,6 +9,7 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from '@wcpos/components/dialog';
+import { useRecordField } from '@wcpos/query';
 
 import { EditCartCustomerForm } from './edit-cart-customer';
 import { useT } from '../../../../contexts/translations';
@@ -25,10 +24,10 @@ export function Customer({
 }: {
 	onShowCustomerSelect: (show: boolean) => void;
 }) {
-	const { currentOrder } = useCurrentOrder();
-	const billing = useObservableEagerState(currentOrder.billing$!);
-	const shipping = useObservableEagerState(currentOrder.shipping$!);
-	const customer_id = useObservableEagerState(currentOrder.customer_id$!);
+	const { currentOrderRecord } = useCurrentOrder();
+	const billing = useRecordField(currentOrderRecord, (order) => order.payload.billing);
+	const shipping = useRecordField(currentOrderRecord, (order) => order.payload.shipping);
+	const customer_id = useRecordField(currentOrderRecord, (order) => order.payload.customer_id);
 	const { format } = useCustomerNameFormat();
 	const name = format({ billing, shipping, id: customer_id });
 	const t = useT();

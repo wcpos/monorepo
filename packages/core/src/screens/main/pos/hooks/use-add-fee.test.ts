@@ -47,7 +47,7 @@ jest.mock('../../../../contexts/translations', () => ({
 
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({
-		currentOrder: { uuid: 'order-uuid', id: 17, number: '17' },
+		currentOrderRecord: { uuid: 'order-uuid', payload: { id: 17, number: '17' } },
 	}),
 }));
 

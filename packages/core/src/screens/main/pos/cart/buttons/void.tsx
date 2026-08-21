@@ -33,6 +33,7 @@ const LATE_OUTCOME_TIMEOUT_MS = 120_000;
  *
  */
 export function VoidButton() {
+	// stage-I2: left on proxy face — void/undo reconstructs legacy snapshots across delete outcomes.
 	const { currentOrder } = useCurrentOrder();
 	const router = useRouter();
 	const manager = useQueryRuntime();

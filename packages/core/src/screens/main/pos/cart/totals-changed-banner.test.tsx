@@ -64,7 +64,7 @@ jest.mock('@wcpos/components/icon-button', () => {
 });
 
 jest.mock('../contexts/current-order', () => ({
-	useCurrentOrder: () => ({ currentOrder: { uuid: currentOrderUuid } }),
+	useCurrentOrder: () => ({ currentOrderRecord: { uuid: currentOrderUuid } }),
 }));
 
 jest.mock('../../../../contexts/translations', () => {

@@ -32,6 +32,17 @@ const currentOrder = {
 	shipping$: new BehaviorSubject(formValues.shipping),
 	tax_ids$: new BehaviorSubject(formValues.tax_ids),
 };
+const currentOrderRecord = {
+	uuid: 'order-uuid',
+	get payload() {
+		return {
+			customer_id: currentOrder.customer_id$.value,
+			billing: currentOrder.billing$.value,
+			shipping: currentOrder.shipping$.value,
+			tax_ids: currentOrder.tax_ids$.value,
+		};
+	},
+};
 
 jest.mock('observable-hooks', () => ({
 	useObservableEagerState: (observable: BehaviorSubject<unknown>) => observable.value,
@@ -48,6 +59,7 @@ jest.mock('react-hook-form', () => ({
 
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => manager,
+	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 	wrapEngineDocument: (_collection: string, document: unknown) => document,
 }));
 
@@ -118,7 +130,7 @@ jest.mock('../../hooks/use-user-capabilities', () => ({
 	useUserCapabilities: () => ({ caps: { canEditCustomers }, known: true }),
 }));
 jest.mock('../contexts/current-order', () => ({
-	useCurrentOrder: () => ({ currentOrder }),
+	useCurrentOrder: () => ({ currentOrderRecord }),
 }));
 
 describe('EditCartCustomerForm', () => {

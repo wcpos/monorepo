@@ -36,10 +36,8 @@ describe('useCalculateFeeLineTaxAndTotals', () => {
 
 		// Default mock for currentOrder
 		(useCurrentOrder as jest.Mock).mockReturnValue({
-			currentOrder: {
-				getLatest: jest.fn(() => ({
-					line_items: [],
-				})),
+			currentOrderRecord: {
+				getLatest: jest.fn(() => ({ payload: { line_items: [] } })),
 			},
 		});
 	});
@@ -126,12 +124,14 @@ describe('useCalculateFeeLineTaxAndTotals', () => {
 
 	it('should calculate percent-based fee from cart total (excluding tax)', () => {
 		(useCurrentOrder as jest.Mock).mockReturnValue({
-			currentOrder: {
+			currentOrderRecord: {
 				getLatest: jest.fn(() => ({
-					line_items: [
-						{ product_id: 1, total: '100', total_tax: '20' },
-						{ product_id: 2, total: '50', total_tax: '10' },
-					],
+					payload: {
+						line_items: [
+							{ product_id: 1, total: '100', total_tax: '20' },
+							{ product_id: 2, total: '50', total_tax: '10' },
+						],
+					},
 				})),
 			},
 		});
@@ -172,12 +172,14 @@ describe('useCalculateFeeLineTaxAndTotals', () => {
 
 	it('should calculate percent-based fee from cart total (including tax)', () => {
 		(useCurrentOrder as jest.Mock).mockReturnValue({
-			currentOrder: {
+			currentOrderRecord: {
 				getLatest: jest.fn(() => ({
-					line_items: [
-						{ product_id: 1, total: '100', total_tax: '20' },
-						{ product_id: 2, total: '50', total_tax: '10' },
-					],
+					payload: {
+						line_items: [
+							{ product_id: 1, total: '100', total_tax: '20' },
+							{ product_id: 2, total: '50', total_tax: '10' },
+						],
+					},
 				})),
 			},
 		});
@@ -218,12 +220,14 @@ describe('useCalculateFeeLineTaxAndTotals', () => {
 
 	it('should skip items with null product_id when calculating cart total', () => {
 		(useCurrentOrder as jest.Mock).mockReturnValue({
-			currentOrder: {
+			currentOrderRecord: {
 				getLatest: jest.fn(() => ({
-					line_items: [
-						{ product_id: 1, total: '100', total_tax: '20' },
-						{ product_id: null, total: '50', total_tax: '10' }, // This should be skipped
-					],
+					payload: {
+						line_items: [
+							{ product_id: 1, total: '100', total_tax: '20' },
+							{ product_id: null, total: '50', total_tax: '10' }, // This should be skipped
+						],
+					},
 				})),
 			},
 		});
@@ -264,10 +268,8 @@ describe('useCalculateFeeLineTaxAndTotals', () => {
 
 	it('should handle empty cart for percent-based fee', () => {
 		(useCurrentOrder as jest.Mock).mockReturnValue({
-			currentOrder: {
-				getLatest: jest.fn(() => ({
-					line_items: [],
-				})),
+			currentOrderRecord: {
+				getLatest: jest.fn(() => ({ payload: { line_items: [] } })),
 			},
 		});
 		(useFeeLineData as jest.Mock).mockReturnValue({

@@ -59,6 +59,7 @@ export function createCheckoutIdempotencyKey(
 }
 
 export function useCheckoutSession(order: OrderDocument) {
+	// stage-I2: left on proxy face — this is a checkout write path owned by stage J.
 	const http = useRestHttpClient();
 	const runtime = useQueryRuntime();
 	const { stockAdjustment } = useStockAdjustment();

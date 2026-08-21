@@ -36,7 +36,7 @@ export const useAddProduct = () => {
 	 * cart write re-rendered every visible tile — measured at 20 tiles x 4 writes = 80 commits
 	 * per add or remove. Nothing this hook does needs the order until the user acts.
 	 */
-	const { getCurrentOrder } = useCurrentOrderActions();
+	const { getCurrentOrderRecord } = useCurrentOrderActions();
 	const { incrementLineItem } = useUpdateLineItem();
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
@@ -55,13 +55,13 @@ export const useAddProduct = () => {
 			let success;
 			let product: ProductDocument | { id: number; [key: string]: any };
 
-			const currentOrder = getCurrentOrder();
+			const currentOrderRecord = getCurrentOrderRecord();
 			// Built here rather than memoised in render, so this hook reads nothing
 			// order-shaped until the press happens.
 			const orderLogger = cartLogger.with({
-				orderUUID: currentOrder.uuid,
-				orderID: currentOrder.id,
-				orderNumber: currentOrder.number,
+				orderUUID: currentOrderRecord.uuid,
+				orderID: currentOrderRecord.payload.id,
+				orderNumber: currentOrderRecord.payload.number,
 			});
 
 			// always make sure we have the latest product document
@@ -97,10 +97,10 @@ export const useAddProduct = () => {
 				product = data as { id: number; [key: string]: any };
 			}
 
-			const lineItems = currentOrder.getLatest().line_items ?? [];
+			const lineItems = currentOrderRecord.getLatest().payload.line_items ?? [];
 
 			// check if product is already in order, if so increment quantity
-			if (!(currentOrder as unknown as { isNew?: boolean }).isNew && product.id !== 0) {
+			if (!(currentOrderRecord as { isNew?: boolean }).isNew && product.id !== 0) {
 				const matches = findByProductVariationID(lineItems, product.id ?? 0);
 				if (matches && matches.length === 1) {
 					const uuid = getUuidFromLineItem(matches[0]);
@@ -143,7 +143,7 @@ export const useAddProduct = () => {
 			}
 		},
 		[
-			getCurrentOrder,
+			getCurrentOrderRecord,
 			incrementLineItem,
 			metaDataKeys,
 			calculateLineItemTaxesAndTotals,

@@ -36,7 +36,7 @@ export function AddNewCustomer() {
 	const { create } = useMutation({ collectionName: 'customers' });
 	const [loading, setLoading] = React.useState(false);
 	const { format } = useCustomerNameFormat();
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrderRecord } = useCurrentOrder();
 	const { localPatch } = useLocalMutation();
 
 	/**
@@ -74,10 +74,10 @@ export function AddNewCustomer() {
 							customerName: format(savedDoc as any),
 						},
 					});
-					if (currentOrder) {
+					if (currentOrderRecord) {
 						const json = (savedDoc as any).toJSON();
 						await localPatch({
-							document: currentOrder,
+							document: currentOrderRecord,
 							data: {
 								customer_id: json.id,
 								billing: json.billing,
@@ -101,7 +101,7 @@ export function AddNewCustomer() {
 				setLoading(false);
 			}
 		},
-		[create, currentOrder, format, localPatch, t]
+		[create, currentOrderRecord, format, localPatch, t]
 	);
 
 	return (
@@ -147,7 +147,7 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
 	const { create } = useMutation({ collectionName: 'customers' });
 	const [loading, setLoading] = React.useState(false);
 	const { format } = useCustomerNameFormat();
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrderRecord } = useCurrentOrder();
 	const { localPatch } = useLocalMutation();
 
 	const form = useForm<z.infer<typeof customerFormSchema>>({
@@ -174,10 +174,10 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
 							customerName: format(savedDoc as any),
 						},
 					});
-					if (currentOrder) {
+					if (currentOrderRecord) {
 						const json = (savedDoc as any).toJSON();
 						await localPatch({
-							document: currentOrder,
+							document: currentOrderRecord,
 							data: {
 								customer_id: json.id,
 								billing: json.billing,
@@ -201,7 +201,7 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
 				setLoading(false);
 			}
 		},
-		[create, currentOrder, format, localPatch, onOpenChange, t]
+		[create, currentOrderRecord, format, localPatch, onOpenChange, t]
 	);
 
 	return (

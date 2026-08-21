@@ -40,18 +40,18 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 export const useAddCoupon = () => {
 	const { localPatch } = useLocalMutation();
 	const t = useT();
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrderRecord } = useCurrentOrder();
 	const runtime = useQueryRuntime();
 	const { recalculate } = useRecalculateCoupons();
 
 	const orderLogger = React.useMemo(
 		() =>
 			cartLogger.with({
-				orderUUID: currentOrder.uuid,
-				orderID: currentOrder.id,
-				orderNumber: currentOrder.number,
+				orderUUID: currentOrderRecord.uuid,
+				orderID: currentOrderRecord.payload.id,
+				orderNumber: currentOrderRecord.payload.number,
 			}),
-		[currentOrder.uuid, currentOrder.id, currentOrder.number]
+		[currentOrderRecord]
 	);
 
 	const addCoupon = React.useCallback(
@@ -81,9 +81,11 @@ export const useAddCoupon = () => {
 					};
 				}
 
-				const order = currentOrder.getLatest();
-				const lineItems = (order.line_items || []).filter((item: any) => item.product_id !== null);
-				const appliedCouponLines = (order.coupon_lines || []).filter(
+				const order = currentOrderRecord.getLatest();
+				const lineItems = (order.payload.line_items || []).filter(
+					(item: any) => item.product_id !== null
+				);
+				const appliedCouponLines = (order.payload.coupon_lines || []).filter(
 					(cl: any): cl is any & { code: string } => cl.code != null
 				);
 				const appliedCoupons = appliedCouponLines.map((cl: any) => cl.code);
@@ -153,13 +155,13 @@ export const useAddCoupon = () => {
 					appliedCoupons,
 					appliedCouponsWithIndividualUse,
 					cartSubtotal,
-					customerEmail: order.billing?.email || '',
+					customerEmail: order.payload.billing?.email || '',
 					// customer_id 0 = guest: WC records guest coupon usage by email, so guests
 					// must map to null here to trigger the email-based used_by check
 					customerId:
-						order.customer_id == null || isGuestCustomer(order.customer_id)
+						order.payload.customer_id == null || isGuestCustomer(order.payload.customer_id)
 							? null
-							: order.customer_id,
+							: order.payload.customer_id,
 				});
 
 				if (!validation.valid) return rejectCoupon(validation.error ?? 'Coupon validation failed.');
@@ -176,17 +178,15 @@ export const useAddCoupon = () => {
 				const newCouponLine = wooMetaCarrier.ensureLineUuid(newCouponLineData, uuidv4);
 
 				const cartSnapshot = {
-					line_items: order.line_items,
-					coupon_lines: order.coupon_lines,
+					line_items: order.payload.line_items,
+					coupon_lines: order.payload.coupon_lines,
 				};
 
-				// Adapter getLatest() returns a fresh proxy, so compare the cart fields rather than
-				// proxy object identity when detecting an intervening edit.
-				const latestBeforeRecalculate = currentOrder.getLatest();
+				const latestBeforeRecalculate = currentOrderRecord.getLatest();
 				if (
 					!isEqual(cartSnapshot, {
-						line_items: latestBeforeRecalculate.line_items,
-						coupon_lines: latestBeforeRecalculate.coupon_lines,
+						line_items: latestBeforeRecalculate.payload.line_items,
+						coupon_lines: latestBeforeRecalculate.payload.coupon_lines,
 					})
 				) {
 					return {
@@ -195,7 +195,7 @@ export const useAddCoupon = () => {
 					};
 				}
 
-				const allCouponLines = [...(order.coupon_lines || []), newCouponLine];
+				const allCouponLines = [...(order.payload.coupon_lines || []), newCouponLine];
 
 				// Note: recalculate() re-queries coupon/product docs from the engine, so
 				// there's a theoretical TOCTOU gap if a background sync changes docs
@@ -203,15 +203,15 @@ export const useAddCoupon = () => {
 				// is milliseconds and the server will re-validate on sync. A full fix
 				// would require passing pre-loaded docs into recalculate(), which we
 				// defer to avoid over-engineering.
-				const result = await recalculate(order.line_items || [], allCouponLines);
+				const result = await recalculate(order.payload.line_items || [], allCouponLines);
 
 				// Re-check freshness after async recalculate — the order may have
 				// changed during engine lookups inside recalculate()
-				const latestOrder = currentOrder.getLatest();
+				const latestOrder = currentOrderRecord.getLatest();
 				if (
 					!isEqual(cartSnapshot, {
-						line_items: latestOrder.line_items,
-						coupon_lines: latestOrder.coupon_lines,
+						line_items: latestOrder.payload.line_items,
+						coupon_lines: latestOrder.payload.coupon_lines,
 					})
 				) {
 					return {
@@ -256,7 +256,7 @@ export const useAddCoupon = () => {
 				return { success: false, error: message };
 			}
 		},
-		[runtime, currentOrder, localPatch, t, orderLogger, recalculate]
+		[runtime, currentOrderRecord, localPatch, t, orderLogger, recalculate]
 	);
 
 	return { addCoupon };
