@@ -197,4 +197,31 @@ describe('useHttpClient network audit logs', () => {
 
 		expect(loggerMock.__info).not.toHaveBeenCalled();
 	});
+
+	it('applies the default request timeout when none is provided', async () => {
+		(http.request as jest.Mock).mockResolvedValue({ status: 200, data: {} });
+		const { result } = renderHook(() => useHttpClient());
+
+		await result.current.get('/wc/v3/products');
+
+		expect(http.request).toHaveBeenCalledWith(expect.objectContaining({ timeout: 30_000 }));
+	});
+
+	it('preserves an explicit request timeout', async () => {
+		(http.request as jest.Mock).mockResolvedValue({ status: 200, data: {} });
+		const { result } = renderHook(() => useHttpClient());
+
+		await result.current.get('/wc/v3/products', { timeout: 5_000 });
+
+		expect(http.request).toHaveBeenCalledWith(expect.objectContaining({ timeout: 5_000 }));
+	});
+
+	it('preserves zero as an explicit request timeout opt-out', async () => {
+		(http.request as jest.Mock).mockResolvedValue({ status: 200, data: {} });
+		const { result } = renderHook(() => useHttpClient());
+
+		await result.current.get('/wc/v3/products', { timeout: 0 });
+
+		expect(http.request).toHaveBeenCalledWith(expect.objectContaining({ timeout: 0 }));
+	});
 });
