@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { useSegments } from 'expo-router';
 import { useSubscription } from 'observable-hooks';
 
 import { isStorageWorkerFailure } from '@wcpos/database/plugins/wrapped-error-handler-storage';
@@ -69,7 +70,10 @@ function isVariationDocument(
 }
 
 export const useBarcode = (setSearch: (search: string) => void, clearSearch: () => void) => {
-	const { scanEvents$, onKeyPress } = useBarcodeDetection();
+	const segments: string[] = useSegments();
+	// The POS section owns scans (#1438 ruling): Cart and checkout still add products to the cart.
+	const posSectionActive = segments.includes('(pos)');
+	const { scanEvents$, onKeyPress } = useBarcodeDetection({ isActive: posSectionActive });
 	const { barcodeSearch, findProductById } = useBarcodeSearch();
 	const { addProduct } = useAddProduct();
 	const { addVariation } = useAddVariation();

@@ -99,12 +99,16 @@ jest.mock('../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { showOutOfStock$: {} } }),
 }));
 
+const mockUseBarcodeDetection = jest.fn();
 jest.mock('../../hooks/barcodes', () => ({
-	useBarcodeDetection: () => ({
-		barcode$: {},
-		scanEvents$: {},
-		onKeyPress: mockOnKeyPress,
-	}),
+	useBarcodeDetection: (options?: { isActive?: boolean }) => {
+		mockUseBarcodeDetection(options);
+		return {
+			barcode$: {},
+			scanEvents$: {},
+			onKeyPress: mockOnKeyPress,
+		};
+	},
 }));
 
 jest.mock('../hooks/use-add-product', () => ({
@@ -126,8 +130,13 @@ jest.mock('../../../../contexts/app-state', () => ({
 
 // useScanFeedback links the offline toast to the health screen.
 const mockRouterPush = jest.fn();
+// The POS section owns scans (#1438): useBarcode derives its scan scope from
+// the active route segments, so tests steer this list to move the cashier
+// inside/outside the (pos) group.
+let mockSegments: string[] = ['(app)', '(drawer)', '(pos)', '(tabs)', 'index'];
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ push: mockRouterPush }),
+	useSegments: () => mockSegments,
 }));
 
 // Scan sounds are exercised in play-scan-sound's own tests; here they are no-ops
@@ -256,6 +265,8 @@ describe('useBarcode online escalation', () => {
 		setSelectors('variations', ['barcode']);
 		mockShowOutOfStock = true;
 		mockSoundEnabled = false;
+		mockSegments = ['(app)', '(drawer)', '(pos)', '(tabs)', 'index'];
+		mockUseBarcodeDetection.mockClear();
 		for (const mock of [
 			mockAddProduct,
 			mockAddVariation,
@@ -1305,5 +1316,19 @@ describe('useBarcode online escalation', () => {
 		// "Searching store…" toast in place instead of leaving it up indefinitely.
 		expect(failed.id).toBe(searching.id);
 		expect(mockClearSearch).not.toHaveBeenCalled();
+	});
+
+	it('keeps the scan scope active anywhere inside the (pos) section (#1438)', () => {
+		mockSegments = ['(app)', '(drawer)', '(pos)', '(tabs)', 'cart'];
+		renderBarcodeHook();
+
+		expect(mockUseBarcodeDetection).toHaveBeenLastCalledWith({ isActive: true });
+	});
+
+	it('deactivates the scan scope outside the (pos) section', () => {
+		mockSegments = ['(app)', '(drawer)', 'products'];
+		renderBarcodeHook();
+
+		expect(mockUseBarcodeDetection).toHaveBeenLastCalledWith({ isActive: false });
 	});
 });

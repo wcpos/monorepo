@@ -41,6 +41,10 @@ function ThemedTabs({ tabPressListener }: { tabPressListener: { tabPress: () => 
 		<Tabs
 			screenOptions={{
 				headerShown: false,
+				// Mount both tabs immediately: POSProducts owns the barcode scan
+				// subscription and the POS section owns scans (#1438) — a lazy
+				// products tab would leave a direct /cart entry with no scan handler.
+				lazy: false,
 				sceneStyle: { backgroundColor: screenBackgroundColor },
 				tabBarStyle: {
 					backgroundColor: cardColor,

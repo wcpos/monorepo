@@ -48,21 +48,22 @@ export default function ResizablePOSColumns() {
 	if (screenSize === 'sm') {
 		return (
 			<View testID="screen-pos" style={{ flex: 1, paddingBottom: bottom }}>
-				{/* Tab content */}
-				<View style={{ flex: 1 }}>
-					{activeTab === 'products' ? (
-						<Suspense>
-							<ErrorBoundary>
-								<POSProducts />
-							</ErrorBoundary>
-						</Suspense>
-					) : (
-						<Suspense>
-							<ErrorBoundary>
-								<OpenOrders />
-							</ErrorBoundary>
-						</Suspense>
-					)}
+				{/* Tab content. Both panes stay MOUNTED and toggle visibility: POSProducts
+				    owns the barcode scan subscription, and the POS section owns scans
+				    (#1438) — unmounting it on the Cart tab would drop every scan. */}
+				<View style={{ flex: 1, display: activeTab === 'products' ? 'flex' : 'none' }}>
+					<Suspense>
+						<ErrorBoundary>
+							<POSProducts />
+						</ErrorBoundary>
+					</Suspense>
+				</View>
+				<View style={{ flex: 1, display: activeTab === 'cart' ? 'flex' : 'none' }}>
+					<Suspense>
+						<ErrorBoundary>
+							<OpenOrders />
+						</ErrorBoundary>
+					</Suspense>
 				</View>
 				{/* Tab bar */}
 				<View className="border-border bg-card flex-row justify-around border-t py-2">
