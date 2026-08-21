@@ -12,6 +12,7 @@ import {
 	mintSearchProbeToken,
 	productWriterAuthorization,
 } from './search-probe';
+import { unwrapWireBody } from './wire-envelope';
 
 /**
  * The wire `orderby` the app emits when the cashier sorts the products grid by the
@@ -212,7 +213,9 @@ test('a product created on the server reaches the products grid without a search
 	if (order !== 'asc' && order !== 'desc') {
 		throw new Error('Products name browse did not declare an asc/desc order');
 	}
-	const sortedBody: unknown = await sortedProducts.json().catch(() => null);
+	// The raw wire body is B9-enveloped ({ data, _wcpos }) — the app reads the
+	// hydrated view, but response.json() here reads the wire.
+	const sortedBody = unwrapWireBody(await sortedProducts.json().catch(() => null));
 	if (!Array.isArray(sortedBody)) {
 		throw new Error('Products name browse returned a malformed product list');
 	}

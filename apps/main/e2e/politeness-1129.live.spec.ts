@@ -6,6 +6,7 @@ import {
 } from '../../../packages/sync-engine/src/change-signal/server-pressure';
 import { LOADED_COUNT_READY, LOADED_COUNT_TEST_ID } from './catalogue-readiness';
 import { authenticateWithStore, navigateToPage } from './fixtures';
+import { unwrapWireBody } from './wire-envelope';
 
 import type { Page, Request } from '@playwright/test';
 import type { ServerPressure } from '../../../packages/sync-engine/src/change-signal/server-pressure';
@@ -215,9 +216,14 @@ async function forceRebaselineViaEpoch(
 				await route.fulfill({ response });
 				return;
 			}
-			const body = (await response.json()) as { checkpoint?: Record<string, unknown> };
+			// The raw wire body is B9-enveloped ({ data, _wcpos }); mutate the inner
+			// payload in place so the served envelope carries the forced epoch —
+			// rewriting a top-level `checkpoint` beside `data` would be discarded
+			// by client hydration and the premise would silently not apply.
+			const wireBody = (await response.json()) as unknown;
+			const body = unwrapWireBody(wireBody) as { checkpoint?: Record<string, unknown> };
 			body.checkpoint = { ...body.checkpoint, epoch: FORCED_EPOCH };
-			await route.fulfill({ response, json: body });
+			await route.fulfill({ response, json: wireBody });
 			if (!mutatedResponseServed) firstMutationRequestCount = requestCount();
 			mutatedResponseServed = true;
 		} catch {

@@ -11,6 +11,7 @@ import {
 	productWriterCredentialsConfigured,
 	searchAndWaitForServer,
 } from './search-probe';
+import { rewrapWireBody, unwrapWireBody } from './wire-envelope';
 
 import type { APIRequestContext, Page, Response, Route, TestInfo } from '@playwright/test';
 
@@ -460,7 +461,11 @@ test.describe('Products Page (Pro)', () => {
 				}
 
 				const response = await route.fetch();
-				const body: unknown = await response.json();
+				// The raw wire body is B9-enveloped ({ data, _wcpos }); poison the
+				// inner payload and serve the envelope back, or hydration would
+				// discard the mutation before the app ever saw it.
+				const wireBody: unknown = await response.json();
+				const body = unwrapWireBody(wireBody);
 				if (!Array.isArray(body)) {
 					await route.fulfill({ response });
 					return;
@@ -472,7 +477,10 @@ test.describe('Products Page (Pro)', () => {
 						: product
 				);
 				poisonedProducts += poisonedBody.length;
-				await route.fulfill({ response, body: JSON.stringify(poisonedBody) });
+				await route.fulfill({
+					response,
+					body: JSON.stringify(rewrapWireBody(wireBody, poisonedBody)),
+				});
 			} catch {
 				await route.fallback().catch(() => {});
 			}
