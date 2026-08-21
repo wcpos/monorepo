@@ -610,6 +610,61 @@ describe('applyReplicationActions — escalations are surfaced, never pulled', (
 		]);
 		expect(result.escalationClears).toEqual([cleared]);
 	});
+
+	it('emits clears BEFORE persist and escalations AFTER persist (crash-ordering contract)', async () => {
+		// A recovered row must be durable before the ledger deletion is (a crash in
+		// between re-clears idempotently), and an escalation row may only exist once
+		// its ledger entry is durable (or a crash strands a banner entry the
+		// restored engine cannot clear — the #1338 defect).
+		const { handlers } = fakeHandlers();
+		const trace: string[] = [];
+		const basePersist = handlers.persistState;
+		handlers.persistState = async (state) => {
+			trace.push('persistState');
+			await basePersist(state);
+		};
+		const baseObserve = handlers.observe;
+		handlers.observe = (event) => {
+			if (event.type === 'apply.escalation' || event.type === 'apply.escalation-cleared') {
+				trace.push(event.type);
+			}
+			baseObserve?.(event);
+		};
+
+		await applyReplicationActions(
+			actions({
+				escalations: [
+					{ id: 80, collection: 'products', status: 'changed', detector: 'hash-checksum' },
+				],
+				escalationClears: [
+					{ id: 81, collection: 'products', status: 'changed', detector: 'hash-checksum' },
+				],
+			}),
+			handlers
+		);
+
+		expect(trace).toEqual(['apply.escalation-cleared', 'persistState', 'apply.escalation']);
+	});
+
+	it('does not emit an escalation when persistState rejects — no row without a durable ledger entry', async () => {
+		const { handlers, calls } = fakeHandlers();
+		handlers.persistState = async () => {
+			throw new Error('persist failed');
+		};
+
+		await expect(
+			applyReplicationActions(
+				actions({
+					escalations: [
+						{ id: 80, collection: 'products', status: 'changed', detector: 'hash-checksum' },
+					],
+				}),
+				handlers
+			)
+		).rejects.toThrow('persist failed');
+
+		expect(calls.events.filter((event) => event.type === 'apply.escalation')).toEqual([]);
+	});
 });
 
 describe('applyReplicationActions — persist-only-after-every-handler-succeeded (ADR 0005)', () => {

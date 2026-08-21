@@ -518,19 +518,13 @@ export async function applyReplicationActions(
 		emitCount('apply.delete', 'customers', customerDeleteIds.length, appliedCustomerDeleteCount);
 	}
 
-	// 8) Escalations — surface/alert only; NEVER auto-loop a pull (a stuck record a
-	//    pull is not fixing would just spin).
-	for (const escalation of actions.escalations) {
-		log(
-			`change-signal: ESCALATION ${escalation.collection} id ${escalation.id} (${escalation.status}, ${escalation.detector}) — stuck, NOT auto-pulled`
-		);
-		emit({
-			type: 'apply.escalation',
-			level: 'warn',
-			collection: escalation.collection,
-			fields: { id: escalation.id, status: escalation.status, detector: escalation.detector },
-		});
-	}
+	// 8) Escalation CLEARS — emitted BEFORE persistState on purpose: the
+	//    `recovered` row must be durable before the ledger entry's deletion is.
+	//    A crash between the two leaves the entry in the persisted ledger, so the
+	//    next complete sweep re-clears it — a duplicate recovered row re-decides
+	//    the same way in deriveStuckRecords — while the reverse order could
+	//    persist the deletion with no row ever written and re-strand the banner
+	//    (#1338).
 	for (const cleared of actions.escalationClears) {
 		log(
 			`change-signal: escalation CLEARED ${cleared.collection} id ${cleared.id} — verified matching by a complete integrity sweep`
@@ -548,6 +542,25 @@ export async function applyReplicationActions(
 	//    unprocessed work (a failed poll re-drains; redelivery is safe, skipping is
 	//    not — ADR 0005).
 	await handlers.persistState(actions.nextState);
+
+	// 10) Escalations — surface/alert only; NEVER auto-loop a pull (a stuck record
+	//    a pull is not fixing would just spin). Emitted AFTER persistState on
+	//    purpose: an escalation row may only exist once its ledger entry is
+	//    durable, or a crash in the gap would strand a banner entry the restored
+	//    engine has no memory of — the exact defect #1338 fixes. A crash BEFORE
+	//    this emit loses nothing: recurring drift re-escalates on the next sweep,
+	//    and a cured one at worst yields an orphan recovered row.
+	for (const escalation of actions.escalations) {
+		log(
+			`change-signal: ESCALATION ${escalation.collection} id ${escalation.id} (${escalation.status}, ${escalation.detector}) — stuck, NOT auto-pulled`
+		);
+		emit({
+			type: 'apply.escalation',
+			level: 'warn',
+			collection: escalation.collection,
+			fields: { id: escalation.id, status: escalation.status, detector: escalation.detector },
+		});
+	}
 
 	return {
 		targetedProductIds,
