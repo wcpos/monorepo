@@ -35,7 +35,8 @@ function actions(overrides: Partial<ReplicationActions> = {}): ReplicationAction
 		reDeriveBarcode: [],
 		reFetchCollections: [],
 		escalations: [],
-		nextState: { cursor: { sequence: 0 }, baselineDigests: new Map() },
+		escalationClears: [],
+		nextState: { cursor: { sequence: 0 }, baselineDigests: new Map(), escalations: [] },
 		...overrides,
 	};
 }
@@ -185,7 +186,7 @@ function fakeHandlers(opts: FakeOptions = {}): {
 
 describe('applyReplicationActions — rebaseline', () => {
 	it('rebaselines every hybrid collection through its arm before persisting head', async () => {
-		const nextState = { cursor: { sequence: 9_000 }, baselineDigests: new Map() };
+		const nextState = { cursor: { sequence: 9_000 }, baselineDigests: new Map(), escalations: [] };
 		const { handlers, calls } = fakeHandlers({
 			rebaseline: (collection) =>
 				collection === 'customers'
@@ -238,7 +239,7 @@ describe('applyReplicationActions — rebaseline', () => {
 	});
 
 	it('persists head even when rebaseline finds nothing local to reconcile', async () => {
-		const nextState = { cursor: { sequence: 700 }, baselineDigests: new Map() };
+		const nextState = { cursor: { sequence: 700 }, baselineDigests: new Map(), escalations: [] };
 		const { handlers, calls } = fakeHandlers();
 
 		await applyReplicationActions(
@@ -585,6 +586,85 @@ describe('applyReplicationActions — escalations are surfaced, never pulled', (
 		expect(calls.pulledIds).toEqual([]);
 		expect(calls.logs.some((line) => /escalat/i.test(line) && line.includes('80'))).toBe(true);
 	});
+
+	it('emits an info clearing event for every cured escalation', async () => {
+		const { handlers, calls } = fakeHandlers();
+		const cleared = {
+			id: 80,
+			collection: 'products' as const,
+			status: 'changed' as const,
+			detector: 'hash-checksum' as const,
+		};
+		const result = await applyReplicationActions(
+			actions({ escalationClears: [cleared] }),
+			handlers
+		);
+
+		expect(calls.events.filter((event) => event.type === 'apply.escalation-cleared')).toEqual([
+			{
+				type: 'apply.escalation-cleared',
+				level: 'info',
+				collection: 'products',
+				fields: { id: 80, detector: 'hash-checksum' },
+			},
+		]);
+		expect(result.escalationClears).toEqual([cleared]);
+	});
+
+	it('emits clears BEFORE persist and escalations AFTER persist (crash-ordering contract)', async () => {
+		// A recovered row must be durable before the ledger deletion is (a crash in
+		// between re-clears idempotently), and an escalation row may only exist once
+		// its ledger entry is durable (or a crash strands a banner entry the
+		// restored engine cannot clear — the #1338 defect).
+		const { handlers } = fakeHandlers();
+		const trace: string[] = [];
+		const basePersist = handlers.persistState;
+		handlers.persistState = async (state) => {
+			trace.push('persistState');
+			await basePersist(state);
+		};
+		const baseObserve = handlers.observe;
+		handlers.observe = (event) => {
+			if (event.type === 'apply.escalation' || event.type === 'apply.escalation-cleared') {
+				trace.push(event.type);
+			}
+			baseObserve?.(event);
+		};
+
+		await applyReplicationActions(
+			actions({
+				escalations: [
+					{ id: 80, collection: 'products', status: 'changed', detector: 'hash-checksum' },
+				],
+				escalationClears: [
+					{ id: 81, collection: 'products', status: 'changed', detector: 'hash-checksum' },
+				],
+			}),
+			handlers
+		);
+
+		expect(trace).toEqual(['apply.escalation-cleared', 'persistState', 'apply.escalation']);
+	});
+
+	it('does not emit an escalation when persistState rejects — no row without a durable ledger entry', async () => {
+		const { handlers, calls } = fakeHandlers();
+		handlers.persistState = async () => {
+			throw new Error('persist failed');
+		};
+
+		await expect(
+			applyReplicationActions(
+				actions({
+					escalations: [
+						{ id: 80, collection: 'products', status: 'changed', detector: 'hash-checksum' },
+					],
+				}),
+				handlers
+			)
+		).rejects.toThrow('persist failed');
+
+		expect(calls.events.filter((event) => event.type === 'apply.escalation')).toEqual([]);
+	});
 });
 
 describe('applyReplicationActions — persist-only-after-every-handler-succeeded (ADR 0005)', () => {
@@ -592,6 +672,7 @@ describe('applyReplicationActions — persist-only-after-every-handler-succeeded
 		const nextState = {
 			cursor: { sequence: 42 },
 			baselineDigests: new Map(),
+			escalations: [],
 			configBaseline: { products: 'abc' },
 		};
 		const { handlers, calls } = fakeHandlers();

@@ -414,6 +414,25 @@ describe('deriveStuckRecords', () => {
 		expect(deriveStuckRecords(rows)).toHaveLength(0);
 	});
 
+	it('clears a pull escalation after a newer recovered row for the same record', () => {
+		const rows = [
+			recordRow('cleared', 300, 'recovered', {
+				recordId: 812,
+				collection: 'products',
+				type: 'apply.escalation-cleared',
+				direction: 'pull',
+			}),
+			recordRow('escalated', 200, 'failed', {
+				recordId: 812,
+				collection: 'products',
+				type: 'apply.escalation',
+				direction: 'pull',
+			}),
+		];
+
+		expect(deriveStuckRecords(rows)).toEqual([]);
+	});
+
 	it('clears a rejected record once a requeue-rebuilt row says it is back in flight', () => {
 		const rows = [
 			recordRow('requeued', 300, 'recovered', {

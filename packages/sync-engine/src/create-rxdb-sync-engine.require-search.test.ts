@@ -68,6 +68,15 @@ function productPayload(id: number, name: string): Record<string, unknown> {
 	};
 }
 
+function customerPayload(id: number): Record<string, unknown> {
+	return {
+		id,
+		email: `customer-${id}@example.test`,
+		date_modified_gmt: '2026-07-10T00:00:00',
+		meta_data: posMeta(customerUuid(id)),
+	};
+}
+
 function variationEnvelopeDocument(
 	id: number,
 	parentId: number,
@@ -349,6 +358,107 @@ describe('require() for search — the public search-demand verb', () => {
 			reason: 'customers catalogue is fully resident locally',
 		});
 		expect(server.state.pulls).toBe(0);
+		await engine.dispose();
+	});
+
+	it('keeps customer catalogue completion while a re-sort restarts the trickle', async () => {
+		const tricklePages: string[] = [];
+		let searchPulls = 0;
+		const engine = engineWith(async (url) => {
+			const parsed = new URL(url);
+			if (!parsed.pathname.endsWith('/customers')) return json([]);
+			if (parsed.searchParams.has('search')) {
+				searchPulls += 1;
+				return json([]);
+			}
+			if (parsed.searchParams.get('per_page') !== '10') return json([]);
+			tricklePages.push(parsed.searchParams.get('page')!);
+			return json(
+				tricklePages.length === 1
+					? []
+					: Array.from({ length: 10 }, (_, i) => customerPayload(i + 1))
+			);
+		});
+		const scope = await engine.ready;
+		await engine.sync('customer-trickle');
+		const browse = engine.require({
+			id: 'sorted-grid',
+			collection: 'customers',
+			kind: 'customer-browse',
+			limit: 100,
+			orderby: 'last_name',
+			order: 'asc',
+		});
+		await browse.ready;
+		browse.release();
+		await engine.sync('customer-trickle');
+		await scope.database.collections.queryTotalCacheEntries.upsert({
+			queryKey: 'census:customers',
+			totalMatchingRecords: 10,
+			freshUntilMs: Date.now() + 60_000,
+			updatedAtMs: Date.now(),
+			schemaVersion: 1,
+		});
+
+		expect(tricklePages).toEqual(['1', '1']);
+		await expect(
+			engine.require({
+				id: 'sticky-catalogue',
+				collection: 'customers',
+				kind: 'search',
+				term: 'ada',
+			}).ready
+		).resolves.toMatchObject({ action: 'serve-local' });
+		expect(searchPulls).toBe(0);
+		await engine.dispose();
+	});
+
+	it('withdraws customer catalogue completion until a census deficit re-walk completes', async () => {
+		let tricklePulls = 0;
+		let searchPulls = 0;
+		const engine = engineWith(async (url) => {
+			const parsed = new URL(url);
+			if (!parsed.pathname.endsWith('/customers')) return json([]);
+			if (parsed.searchParams.has('search')) {
+				searchPulls += 1;
+				return json([]);
+			}
+			tricklePulls += 1;
+			return json(
+				tricklePulls === 2 ? Array.from({ length: 10 }, (_, i) => customerPayload(i + 1)) : []
+			);
+		});
+		const scope = await engine.ready;
+		await engine.sync('customer-trickle');
+		await scope.database.collections.queryTotalCacheEntries.upsert({
+			queryKey: 'census:customers',
+			totalMatchingRecords: 1,
+			freshUntilMs: Date.now() + 60_000,
+			updatedAtMs: Date.now(),
+			schemaVersion: 1,
+		});
+
+		await engine.sync('customer-trickle');
+		await expect(
+			engine.require({
+				id: 're-armed-catalogue',
+				collection: 'customers',
+				kind: 'search',
+				term: 'ada',
+			}).ready
+		).resolves.toMatchObject({ action: 'fetched' });
+		expect(searchPulls).toBe(1);
+
+		await engine.sync('customer-trickle');
+		await expect(
+			engine.require({
+				id: 're-complete-catalogue',
+				collection: 'customers',
+				kind: 'search',
+				term: 'grace',
+			}).ready
+		).resolves.toMatchObject({ action: 'serve-local' });
+		expect(searchPulls).toBe(1);
 		await engine.dispose();
 	});
 

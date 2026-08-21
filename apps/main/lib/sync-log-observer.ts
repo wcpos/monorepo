@@ -289,6 +289,17 @@ export const CONFORMANCE_TABLE = {
 		code: 'SYNC331',
 		message: recordMessage('pull escalation'),
 	},
+	// A previously-escalated record was verified matching by a complete integrity
+	// sweep — the evidence-driven clearing signal for the attention banner (#1338).
+	// outcome 'recovered' is what deriveStuckRecords reads as "no longer stuck"
+	// (ruling #1082); direction 'pull' matches the escalation row it clears.
+	'apply.escalation-cleared': {
+		operationType: 'sync.record',
+		outcome: 'recovered',
+		code: null,
+		level: 'info',
+		message: recordMessage('pull escalation cleared'),
+	},
 	'coverage.require.outcome': {
 		operationType: 'sync.coverage',
 		outcome: 'ok',
@@ -774,7 +785,10 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 			}
 		}
 		if (conformance.operationType === 'sync.record') {
-			context.direction = event.type === 'apply.escalation' ? 'pull' : 'push';
+			context.direction =
+				event.type === 'apply.escalation' || event.type === 'apply.escalation-cleared'
+					? 'pull'
+					: 'push';
 			const recordId = recordIdOf(fields);
 			if (recordId !== undefined && context.recordId === undefined) context.recordId = recordId;
 		}

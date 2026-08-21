@@ -387,6 +387,24 @@ describe('createSyncLogObserver', () => {
 		expect(rows[0].code).not.toBe('SYNC101');
 	});
 
+	it('records a cleared pull escalation as recovered with the same record key', () => {
+		observer.observe(
+			event({
+				type: 'apply.escalation-cleared',
+				level: 'info',
+				collection: 'products',
+				fields: { id: 88, detector: 'hash-checksum' },
+			})
+		);
+
+		expect(rows[0]).toMatchObject({
+			level: 'info',
+			context: { direction: 'pull', collection: 'products', recordId: 88 },
+			terminal: { operationType: 'sync.record', outcome: 'recovered' },
+		});
+		expect(rows[0].code).toBeUndefined();
+	});
+
 	// Review #854: a table outcome is the SUCCESS-path outcome. A row may only wear
 	// it when the event actually succeeded, or filtering by outcome hides incidents.
 	it('derives a failed outcome from a raised level', () => {

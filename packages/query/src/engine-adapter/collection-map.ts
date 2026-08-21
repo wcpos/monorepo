@@ -709,9 +709,16 @@ export const collectionMap = {
 			discount_type: queryPayloadField('discount_type', 'local-only'),
 			status: queryPayloadField('status', 'local-only'),
 			date_expires_gmt: queryPayloadField('date_expires_gmt', 'local-only'),
-			// The two wire-sortable coupon columns (#1347). `code` stays local-only:
-			// its server mapping (orderby=title) exists on wcpos/v1 only and was
-			// deliberately not ported to v2.
+			// The wire-sortable coupon columns (#1347). A coupon's post_title IS its
+			// code, and `title` is in the native wc/v3 coupons orderby enum, so the
+			// mapping needs no plugin support (v1's custom orderby=code enum extension
+			// stays unported).
+			code: {
+				legacy: 'code',
+				kind: 'payload',
+				enginePath: 'payload.code',
+				sort: { wooOrderby: 'title' },
+			},
 			date_created_gmt: {
 				legacy: 'date_created_gmt',
 				kind: 'payload',

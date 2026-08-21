@@ -47,30 +47,37 @@ export const mergeWithInitalValues = async (
 			const mergedColumns = currentColumns.map((currentColumn) => {
 				const initialColumn = initialColumns.find((column) => column.key === currentColumn.key);
 
+				// A column the initial settings don't declare (e.g. injected by Pro)
+				// passes through untouched.
 				if (!initialColumn) {
 					return currentColumn;
 				}
 
-				if (Array.isArray(initialColumn.display) && Array.isArray(currentColumn.display)) {
-					return {
-						...initialColumn,
-						...currentColumn,
-						display: [
-							...currentColumn.display,
-							...initialColumn.display.filter(
-								(initialDisplay: DisplayConfig) =>
-									!currentColumn.display?.some(
-										(display: DisplayConfig) => display.key === initialDisplay.key
-									)
-							),
-						],
-					};
+				// The initial settings are authoritative for capability/presentation
+				// keys (disableSort, width, flex, align, hideLabel, …); only the
+				// user's actual preferences survive from persisted state: column
+				// order (the order of `currentColumns`), `show`, and the `show` of
+				// display sub-entries. Spreading the persisted column wholesale kept
+				// stale capability flags alive forever on upgraded installs — a sort
+				// un-disabled in initial-settings.json (#1347 coupons `code`, #1207
+				// products `type`) never reached existing profiles.
+				const merged: ColumnConfig = { ...initialColumn };
+				if (typeof currentColumn.show === 'boolean') {
+					merged.show = currentColumn.show;
 				}
-
-				return {
-					...initialColumn,
-					...currentColumn,
-				};
+				if (Array.isArray(initialColumn.display)) {
+					merged.display = initialColumn.display.map((initialDisplay: DisplayConfig) => {
+						const currentDisplay = Array.isArray(currentColumn.display)
+							? currentColumn.display.find(
+									(display: DisplayConfig) => display.key === initialDisplay.key
+								)
+							: undefined;
+						return typeof currentDisplay?.show === 'boolean'
+							? { ...initialDisplay, show: currentDisplay.show }
+							: { ...initialDisplay };
+					});
+				}
+				return merged;
 			});
 
 			const missingColumns = initialColumns.filter(

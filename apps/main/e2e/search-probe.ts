@@ -102,6 +102,12 @@ export function mintSearchProbeToken(workerIndex: number): string {
  *
  * The token is never logged. Missing credentials return null; declared but
  * broken credentials throw so CI cannot disguise a provisioning failure as a skip.
+ *
+ * The minted JWT's transport is resolved per store: a hostile proxy tier can
+ * strip the Authorization header from every request (wcpos-infra#72 Tier 3,
+ * always-on at dev-free since 2026-08-21), silently degrading a header-carried
+ * token to an anonymous 401 — so the helper verifies the header with one read
+ * and falls back to the `?authorization=` param.
  */
 export async function productWriterAuthorization(
 	request: APIRequestContext,
@@ -146,7 +152,7 @@ export async function productWriterAuthorization(
 			const location = submit.headers()['location'] ?? '';
 			const token = /access_token=([^&]+)/.exec(location)?.[1];
 			if (!token) throw new WriterAuthenticationFailure('http', submit.status());
-			return { transport: 'header', value: `Bearer ${token}` };
+			return await resolveWriterTransport(request, storeUrl, token);
 		} catch (error) {
 			const failure =
 				error instanceof WriterAuthenticationFailure
@@ -176,8 +182,43 @@ export async function productWriterAuthorization(
 	throw new Error('Configured product-writer authentication failed');
 }
 
+/**
+ * Decide which transport actually delivers the writer JWT to wc/v3 — by
+ * evidence, not assumption. Try the header first, then the `Bearer`-prefixed
+ * query form required by older servers, then the bare query form that survives
+ * WAF prefix rules on newer servers. Only then declare the credentials broken.
+ */
+async function resolveWriterTransport(
+	request: APIRequestContext,
+	storeUrl: string,
+	token: string
+): Promise<StoreAuthorization> {
+	let lastFailure = new WriterAuthenticationFailure('http', null);
+	const candidates: StoreAuthorization[] = [
+		{ transport: 'header', value: `Bearer ${token}` },
+		{ transport: 'query', value: `Bearer ${token}` },
+		{ transport: 'query', value: token },
+	];
+	for (const candidate of candidates) {
+		const options = storeRequestOptions(candidate);
+		try {
+			const response = await probeRequest(request, 'get', storeUrl, 'products', undefined, {
+				...options,
+				params: { ...options.params, per_page: '1' },
+			});
+			if (response.ok()) return candidate;
+			lastFailure = new WriterAuthenticationFailure('http', response.status());
+		} catch {
+			lastFailure = new WriterAuthenticationFailure('transport', null);
+		}
+	}
+	throw lastFailure;
+}
+
 function collectionUrl(storeUrl: string, collection: ProbeCollection, id?: number): string {
-	// wc/v3 accepts the captured Bearer JWT; query-param JWT auth may remain wcpos/v2-only.
+	// wc/v3 accepts the JWT via Authorization header or ?authorization= param
+	// (param verified against wc/v3 on 2026-08-21); the transport is chosen by
+	// resolveWriterTransport, or captured from the app's own traffic.
 	const base = `${storeUrl.replace(/\/+$/, '')}/wp-json/wc/v3/${collection}`;
 	return id === undefined ? base : `${base}/${id}`;
 }
@@ -213,9 +254,16 @@ async function probeRequest(
 	id: number | undefined,
 	options: ProbeRequestOptions
 ) {
-	const pretty = await request[method](collectionUrl(storeUrl, collection, id), options);
+	// A WAF method policy (wcpos-infra#72 Tier 4, always-on at dev-free) 403s
+	// DELETE at the proxy before WordPress sees it; WP core treats a POST with
+	// `?_method=DELETE` as the same request, so deletes travel that way.
+	const send = (url: string) =>
+		method === 'delete'
+			? request.post(url, { ...options, params: { ...options.params, _method: 'DELETE' } })
+			: request[method](url, options);
+	const pretty = await send(collectionUrl(storeUrl, collection, id));
 	if (pretty.status() !== 404) return pretty;
-	return request[method](plainPermalinkUrl(storeUrl, collection, id), options);
+	return send(plainPermalinkUrl(storeUrl, collection, id));
 }
 
 async function productCreateResponse(
