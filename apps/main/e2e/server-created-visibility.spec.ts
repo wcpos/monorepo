@@ -347,6 +347,45 @@ test('an order created on the server reaches the orders grid without a search', 
 	const screen = page.getByTestId('screen-orders').filter({ visible: true });
 	await expect(screen.getByTestId('search-orders')).toBeVisible({ timeout: 60_000 });
 
+	/**
+	 * Land the probe in the FIRST rendered rows: put the grid on `date_created_gmt`
+	 * DESC, where a just-created order sorts first under both the server's ordering
+	 * and the renderer's local comparator (ISO date strings compare identically
+	 * either way — no products-spec collation trap here).
+	 *
+	 * Sort steering happens BEFORE the scope pills are cleared, and the ordering is
+	 * load-bearing: each sort change re-keys the orders browse lane and seeds a new
+	 * wire walk (sort is part of the demand dimensions even though the fetcher puts
+	 * no `orderby` on the URL), and a walk still in flight at probe-creation time
+	 * could fetch the new order directly — a pass that says nothing about the
+	 * change-signal path this spec exists to prove. Steered while the grid is still
+	 * cashier+store-scoped, those walks carry `pos_cashier`/`pos_store` and CANNOT
+	 * contain the scope-free probe; the only lane that can — the unscoped one — is
+	 * seeded last by the pill-clears and its response is awaited before creation.
+	 *
+	 * The click path is deterministic from ANY persisted sort: a click on an
+	 * unsorted column always selects ascending and a click on the sorted column
+	 * flips it (header.tsx). The sacrificial `number` click asserts EITHER
+	 * direction — if the persisted sort was already `number`, the click flips it,
+	 * and either way the goal is only "date is no longer the sorted column", which
+	 * makes the next date click deterministically ascending. Each click is
+	 * confirmed via the header's sort-state testID before the next — for orders the
+	 * DOM signal is the only confirmation there is, and unconfirmed rapid clicks
+	 * could race the re-render and read stale sort state.
+	 */
+	await screen.getByTestId('data-table-header-number').first().click();
+	await expect(screen.getByTestId(/^data-table-sort-number-(asc|desc)$/).first()).toBeVisible({
+		timeout: 15_000,
+	});
+	await screen.getByTestId('data-table-header-date_created_gmt').first().click();
+	await expect(screen.getByTestId('data-table-sort-date_created_gmt-asc').first()).toBeVisible({
+		timeout: 15_000,
+	});
+	await screen.getByTestId('data-table-header-date_created_gmt').first().click();
+	await expect(screen.getByTestId('data-table-sort-date_created_gmt-desc').first()).toBeVisible({
+		timeout: 15_000,
+	});
+
 	// The unscoped browse the pill-clears must reissue. Scoped browses carry
 	// pos_cashier/pos_store (rx-scheduler-order-fetcher.ts), the maintenance and
 	// POS open-orders lanes always carry `status`, and change-signal pulls carry
@@ -377,34 +416,6 @@ test('an order created on the server reaches the orders grid without a search', 
 	if (!unscopedBrowse.ok()) {
 		throw new Error(`Unscoped orders browse failed: HTTP ${unscopedBrowse.status()}`);
 	}
-
-	/**
-	 * Land the probe in the FIRST rendered rows: put the grid on `date_created_gmt`
-	 * DESC, where a just-created order sorts first under both the server's ordering
-	 * and the renderer's local comparator (ISO date strings compare identically
-	 * either way — no products-spec collation trap here).
-	 *
-	 * The three clicks are the one DETERMINISTIC path to desc from ANY starting
-	 * sort: a click on an unsorted column always selects ascending and a click on
-	 * the sorted column flips it (header.tsx), so number → date → date lands on
-	 * date-desc no matter what the restored snapshot carried. Each click is
-	 * confirmed via the header's sort-state testID before the next — orders sorts
-	 * resolve locally (the wire browse never carries an orderby), so the DOM signal
-	 * is the only confirmation there is, and unconfirmed rapid clicks could race
-	 * the re-render and read stale sort state.
-	 */
-	await screen.getByTestId('data-table-header-number').first().click();
-	await expect(screen.getByTestId('data-table-sort-number-asc').first()).toBeVisible({
-		timeout: 15_000,
-	});
-	await screen.getByTestId('data-table-header-date_created_gmt').first().click();
-	await expect(screen.getByTestId('data-table-sort-date_created_gmt-asc').first()).toBeVisible({
-		timeout: 15_000,
-	});
-	await screen.getByTestId('data-table-header-date_created_gmt').first().click();
-	await expect(screen.getByTestId('data-table-sort-date_created_gmt-desc').first()).toBeVisible({
-		timeout: 15_000,
-	});
 
 	// An EMPTY unscoped grid is a legitimate starting state (a store with no web
 	// orders yet) — unlike the products spec there is no skip here, because the
@@ -531,8 +542,11 @@ test('a customer created on the server reaches the customers grid without a sear
 	 * confirmed via the header's sort-state testID before the next, so a rapid
 	 * second click can never read stale sort state.
 	 */
+	// The sacrificial email click asserts EITHER direction: if the persisted sort
+	// was already `email`, the click flips it, and either way the goal is only
+	// "last_name is no longer the sorted column".
 	await screen.getByTestId('data-table-header-email').first().click();
-	await expect(screen.getByTestId('data-table-sort-email-asc').first()).toBeVisible({
+	await expect(screen.getByTestId(/^data-table-sort-email-(asc|desc)$/).first()).toBeVisible({
 		timeout: 15_000,
 	});
 	await screen.getByTestId('data-table-header-last_name').first().click();
@@ -575,7 +589,14 @@ test('a customer created on the server reaches the customers grid without a sear
 		workerIndex: testInfo.workerIndex,
 		token,
 		customerData: {
-			last_name: `${ARRIVAL_PROBE_LEAD.desc} Arrival ${token}`,
+			// Timestamp BEFORE the token: some stores accept the customer create but
+			// 403 the delete (wc/v3 customer deletion needs user-deletion caps the
+			// writer may not hold), so orphaned probes accumulate. All probes share
+			// the 'zzzz' lead, so among them the descending sort is decided at the
+			// next field — a base36 timestamp guarantees the NEWEST probe sorts first
+			// under both orderings, where the raw token would let an older probe from
+			// a higher worker index outrank it and push it off the rendered window.
+			last_name: `${ARRIVAL_PROBE_LEAD.desc} ${Date.now().toString(36)} Arrival ${token}`,
 		},
 	});
 	if (!created.ok) {
