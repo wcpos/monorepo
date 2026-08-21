@@ -87,16 +87,30 @@ function isValidBaselineEntry(entry: unknown): boolean {
 	);
 }
 
+/**
+ * The collections each detector can actually surface (hash-checksum spans the
+ * wp_posts id space, so products AND variations; range-checksum is tax rates
+ * only). A restored entry outside these pairs is malformed: no sweep could ever
+ * produce cure evidence for it, and treating it as covered by the WRONG
+ * detector's sweep would fabricate a `recovered` row that can mask a genuinely
+ * stuck record with the same collection:id key.
+ */
+const ESCALATION_COLLECTIONS_BY_DETECTOR: Record<string, readonly string[]> = {
+	'hash-checksum': ['products', 'variations'],
+	'range-checksum': ['tax_rates'],
+};
+
 function isValidEscalation(value: unknown): value is EngineState['escalations'][number] {
 	if (!value || typeof value !== 'object') return false;
 	const entry = value as Record<string, unknown>;
 	return (
 		Number.isSafeInteger(entry.id) &&
-		typeof entry.collection === 'string' &&
 		(entry.status === 'changed' ||
 			entry.status === 'deleted' ||
 			entry.status === 'missing_stored') &&
-		(entry.detector === 'hash-checksum' || entry.detector === 'range-checksum')
+		typeof entry.detector === 'string' &&
+		typeof entry.collection === 'string' &&
+		(ESCALATION_COLLECTIONS_BY_DETECTOR[entry.detector] ?? []).includes(entry.collection)
 	);
 }
 

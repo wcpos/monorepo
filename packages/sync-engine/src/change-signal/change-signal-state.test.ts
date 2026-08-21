@@ -51,6 +51,12 @@ describe('change-signal state journal epoch', () => {
 					{ id: 80, collection: 'products', status: 'changed', detector: 'hash-checksum' },
 					{ id: 81.5, collection: 'products', status: 'changed', detector: 'hash-checksum' },
 					{ id: 82, collection: 'products', status: 'invalid', detector: 'hash-checksum' },
+					// Detector/collection pairs outside what a sweep can actually surface:
+					// no detector could ever produce cure evidence for these, and clearing
+					// them against the wrong detector's sweep would fabricate a recovered
+					// row that can mask a genuinely stuck record with the same key.
+					{ id: 83, collection: 'products', status: 'changed', detector: 'range-checksum' },
+					{ id: 84, collection: 'customers', status: 'changed', detector: 'hash-checksum' },
 				],
 			})
 		);
