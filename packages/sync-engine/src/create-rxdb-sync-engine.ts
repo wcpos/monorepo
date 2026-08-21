@@ -248,13 +248,16 @@ export type RxdbSyncEnginePorts = {
 	/** Optional host lifecycle barrier. Initial database creation waits for this
 	 * while the engine handle itself remains synchronously constructible. */
 	databaseOpenBarrier?: Promise<void>;
-	/** The ONLY required adapter port. A factory receives the full scope
+	/** One of the two required adapter ports. A factory receives the full scope
 	 * identity so per-scope storage decisions stay possible. */
 	storage:
 		RxStorage<unknown, unknown> | ((identity: StoreScopeIdentity) => RxStorage<unknown, unknown>);
-	/** Default: globalThis.fetch. Used by change-signal, scheduler, maintenance,
-	 * conflict-resolution, and write-drain transport paths. */
-	fetcher?: EngineFetcher;
+	/** Raw transport for change-signal, scheduler, maintenance, conflict-resolution,
+	 * and write-drain. Hosts MUST inject a fetcher that satisfies the backend's
+	 * transport contract (for WCPOS: marker header, auth, and store scope; see
+	 * apps/main/lib/engine-fetcher.ts). Deliberately no default: a bare fetch cannot
+	 * reach a WCPOS backend. */
+	fetcher: EngineFetcher;
 	/** Default: the engine-owned kv collection INSIDE each scope db — a
 	 * volatile database gets a volatile cursor for free. */
 	checkpoints?: EngineStringStore;
@@ -692,7 +695,7 @@ export function createRxdbSyncEngine(
 	// Assigned below, once the change-signal timer exists — a transition observed
 	// before then (there is no transport before `ready`) is simply dropped.
 	let cadence: CadenceController | null = null;
-	const rawFetcher: EngineFetcher = ports.fetcher ?? ((url, init) => globalThis.fetch(url, init));
+	const rawFetcher: EngineFetcher = ports.fetcher;
 	const fetcher: EngineFetcher = async (url, init) => {
 		const startedAtMs = nowMs();
 		const observe = (

@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { StoreScopeIdentity } from './create-rxdb-sync-engine';
+import type { EngineFetcher, StoreScopeIdentity } from './create-rxdb-sync-engine';
+
+const stubFetcher: EngineFetcher = async () => {
+	throw new Error('no network in this test');
+};
 
 const setupFailureState = vi.hoisted(() => ({
 	closes: 0,
@@ -43,6 +47,7 @@ describe('createRxdbSyncEngine setup failure cleanup', () => {
 			{
 				site: { syncBaseUrl: `${SITE}/wp-json/wcpos/v2`, wpJsonRoot: `${SITE}/wp-json` },
 				storage: memoryEngineStorage(),
+				fetcher: stubFetcher,
 			},
 			identityFor('setup-failure')
 		);

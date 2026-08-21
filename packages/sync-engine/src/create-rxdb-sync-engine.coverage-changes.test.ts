@@ -13,6 +13,7 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import {
 	createRxdbSyncEngine,
+	type EngineFetcher,
 	type RxdbSyncEngine,
 	type RxdbSyncEnginePorts,
 	type StoreScopeIdentity,
@@ -37,6 +38,9 @@ afterEach(() => {
 });
 
 const SITE = 'https://lab.example.test';
+const stubFetcher: EngineFetcher = async () => {
+	throw new Error('no network in this test');
+};
 let uniqueStore = 0;
 
 function freshIdentity(): StoreScopeIdentity {
@@ -52,6 +56,7 @@ function engineWith(
 		{
 			site: { syncBaseUrl: `${SITE}/wp-json/wcpos/v2`, wpJsonRoot: `${SITE}/wp-json` },
 			storage: memoryEngineStorage(),
+			fetcher: stubFetcher,
 			mode: 'manual',
 			...overrides,
 		},

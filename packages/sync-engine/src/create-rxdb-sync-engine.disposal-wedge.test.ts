@@ -3,6 +3,12 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { memoryEngineStorage } from './testing';
 
+import type { EngineFetcher } from './create-rxdb-sync-engine';
+
+const stubFetcher: EngineFetcher = async () => {
+	throw new Error('no network in this test');
+};
+
 const coverageState = vi.hoisted(() => ({
 	calls: 0,
 	closeAttempts: 0,
@@ -57,6 +63,7 @@ describe('createRxdbSyncEngine disposal after setup failure', () => {
 				wpJsonRoot: `${identity.site}/wp-json`,
 			},
 			storage: memoryEngineStorage(),
+			fetcher: stubFetcher,
 			mode: 'manual' as const,
 		};
 		const first = createRxdbSyncEngine(ports, identity);

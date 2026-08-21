@@ -3,13 +3,20 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import type { SyncEvent, SyncEventType } from '@wcpos/sync-core';
 
-import { createRxdbSyncEngine, type RxdbSyncEnginePorts } from './create-rxdb-sync-engine';
+import {
+	createRxdbSyncEngine,
+	type EngineFetcher,
+	type RxdbSyncEnginePorts,
+} from './create-rxdb-sync-engine';
 import { memoryEngineStorage } from './testing';
 
 setPremiumFlag();
 
 const SITE = 'https://lab.example.test';
 const SYNC_BASE = `${SITE}/wp-json/wcpos/v2`;
+const stubFetcher: EngineFetcher = async () => {
+	throw new Error('no network in this test');
+};
 let uniqueStore = 0;
 
 function engineWith(events: SyncEvent[], overrides: Partial<RxdbSyncEnginePorts> = {}) {
@@ -18,6 +25,7 @@ function engineWith(events: SyncEvent[], overrides: Partial<RxdbSyncEnginePorts>
 		{
 			site: { syncBaseUrl: SYNC_BASE, wpJsonRoot: `${SITE}/wp-json` },
 			storage: memoryEngineStorage(),
+			fetcher: stubFetcher,
 			mode: 'manual',
 			diagnostics: (event) => events.push(event),
 			...overrides,

@@ -11,7 +11,11 @@ import { describe, expect, it } from 'vitest';
 // recipe is now 22 collections per scope, past the open-core 13 cap.
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
-import { createRxdbSyncEngine, type StoreScopeIdentity } from '../create-rxdb-sync-engine';
+import {
+	createRxdbSyncEngine,
+	type EngineFetcher,
+	type StoreScopeIdentity,
+} from '../create-rxdb-sync-engine';
 import { memoryEngineStorage } from '../testing';
 import {
 	DERIVABLE_METADATA_COLLECTIONS,
@@ -22,6 +26,9 @@ import {
 setPremiumFlag();
 
 const SITE = 'https://lab.example.test';
+const stubFetcher: EngineFetcher = async () => {
+	throw new Error('no network in this test');
+};
 let uniqueStore = 0;
 
 function freshIdentity(): StoreScopeIdentity {
@@ -75,6 +82,7 @@ describe('engine scope recipe: the scheduler/coverage tier', () => {
 			{
 				site: { syncBaseUrl: `${SITE}/wp-json/wcpos/v2`, wpJsonRoot: `${SITE}/wp-json` },
 				storage: memoryEngineStorage(),
+				fetcher: stubFetcher,
 			},
 			freshIdentity()
 		);
