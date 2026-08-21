@@ -11,6 +11,7 @@ import {
 	useHttpClient,
 } from '@wcpos/hooks/use-http-client';
 import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
+import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -61,6 +62,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 	const siteUrl = site.url;
 	const apiUrl = site.wcpos_api_url;
 	const useJwtAsParam = site.use_jwt_as_param;
+	const wcposVersion = site.wcpos_version;
 
 	// Get userDB and user for store merging
 	const { userDB, user } = useAppState();
@@ -74,6 +76,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 			site: {
 				wcpos_api_url: apiUrl,
 				use_jwt_as_param: useJwtAsParam,
+				wcpos_version: wcposVersion,
 				url: siteUrl,
 			},
 			wpUser: {
@@ -84,7 +87,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 			},
 			getHttpClient: () => baseHttpClient,
 		});
-	}, [apiUrl, useJwtAsParam, siteUrl, userId, refreshToken, baseHttpClient, wpUser]);
+	}, [apiUrl, useJwtAsParam, wcposVersion, siteUrl, userId, refreshToken, baseHttpClient, wpUser]);
 
 	// Create HTTP client with token refresh handler
 	const httpClient = useHttpClient([tokenRefreshHandler]);
@@ -168,7 +171,10 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					// Handle authentication based on site configuration
 					if (useJwtAsParam) {
 						// Use JWT as query parameter
-						requestConfig.params.authorization = `Bearer ${accessToken}`;
+						requestConfig.params.authorization = formatAuthorizationParam(
+							accessToken,
+							bareAuthParamSupported(wcposVersion)
+						);
 					} else {
 						// Use JWT as Authorization header
 						requestConfig.headers.Authorization = `Bearer ${accessToken}`;
@@ -429,6 +435,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 		httpClient,
 		apiUrl,
 		useJwtAsParam,
+		wcposVersion,
 		siteUrl,
 		userId,
 		accessToken,

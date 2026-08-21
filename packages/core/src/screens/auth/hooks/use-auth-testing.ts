@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { useHttpClient } from '@wcpos/hooks/use-http-client';
+import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -22,7 +23,8 @@ interface UseAuthTestingReturn {
 	testResult: AuthTestResult | null;
 	testAuthorizationMethod: (
 		wcposApiUrl: string,
-		accessToken?: string
+		accessToken?: string,
+		wcposVersion?: string
 	) => Promise<AuthTestResult | null>;
 }
 
@@ -65,11 +67,11 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 	 * Test authorization with token as query parameter
 	 */
 	const testParamAuth = React.useCallback(
-		async (wcposApiUrl: string, token: string): Promise<boolean> => {
+		async (wcposApiUrl: string, token: string, bareSupported: boolean): Promise<boolean> => {
 			try {
 				const response = await http.get(`${wcposApiUrl}auth/test`, {
 					params: {
-						authorization: `Bearer ${token}`,
+						authorization: formatAuthorizationParam(token, bareSupported),
 					},
 					headers: {
 						'X-WCPOS': '1',
@@ -108,7 +110,11 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 	 * Main testing function
 	 */
 	const testAuthorizationMethod = React.useCallback(
-		async (wcposApiUrl: string, accessToken?: string): Promise<AuthTestResult | null> => {
+		async (
+			wcposApiUrl: string,
+			accessToken?: string,
+			wcposVersion?: string
+		): Promise<AuthTestResult | null> => {
 			if (!wcposApiUrl || wcposApiUrl.trim() === '') {
 				setError(t('auth.wcpos_api_url_is_required'));
 				return null;
@@ -129,7 +135,11 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 				let useJwtAsParam = false;
 
 				if (!headerSupported) {
-					paramSupported = await testParamAuth(wcposApiUrl, testToken);
+					paramSupported = await testParamAuth(
+						wcposApiUrl,
+						testToken,
+						bareAuthParamSupported(wcposVersion)
+					);
 					useJwtAsParam = paramSupported;
 				}
 

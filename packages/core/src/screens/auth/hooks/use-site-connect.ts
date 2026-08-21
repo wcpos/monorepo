@@ -238,7 +238,9 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 				setStatus('testing-auth');
 
 				const authResult = await authTesting.testAuthorizationMethod(
-					apiResult.endpoints.wcpos_api_url
+					apiResult.endpoints.wcpos_api_url,
+					undefined,
+					apiResult.siteData.wcpos_version
 				);
 				if (!authResult) {
 					throw new Error(authTesting.error || t('auth.failed_to_test_authorization_methods'));

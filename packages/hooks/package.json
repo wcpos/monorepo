@@ -41,6 +41,7 @@
     "react-native-reanimated": "~4.5.0"
   },
   "dependencies": {
+    "@wcpos/utils": "workspace:*",
     "axios": "^1.19.0",
     "bottleneck": "^2.19.5",
     "lodash": "^4.18.1",

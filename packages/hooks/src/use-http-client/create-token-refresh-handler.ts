@@ -70,6 +70,7 @@
  * @see README.md - Full architecture documentation
  */
 
+import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -167,6 +168,7 @@ export const createTokenRefreshHandler = ({
 					originalConfig,
 					freshToken,
 					site.use_jwt_as_param,
+					bareAuthParamSupported(site.wcpos_version),
 					retryRequest
 				);
 			} catch (retryError: unknown) {
@@ -207,6 +209,7 @@ async function retryWithNewToken(
 	originalConfig: AxiosRequestConfig,
 	token: string,
 	useJwtAsParam: boolean | undefined,
+	bareAuthParam: boolean,
 	retryRequest: HttpErrorHandlerContext['retryRequest']
 ) {
 	const updatedConfig = { ...originalConfig };
@@ -214,7 +217,7 @@ async function retryWithNewToken(
 	if (useJwtAsParam) {
 		updatedConfig.params = {
 			...updatedConfig.params,
-			authorization: `Bearer ${token}`,
+			authorization: formatAuthorizationParam(token, bareAuthParam),
 		};
 	} else {
 		updatedConfig.headers = {

@@ -26,6 +26,7 @@ export interface RefreshAccessTokenConfig {
 		wcpos_api_url?: string;
 		wp_api_url?: string;
 		use_jwt_as_param?: boolean;
+		wcpos_version?: string;
 		url?: string;
 	};
 	wpUser: WPCredentialsDocument;

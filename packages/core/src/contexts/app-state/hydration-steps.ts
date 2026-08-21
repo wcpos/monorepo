@@ -2,6 +2,7 @@ import * as Crypto from 'expo-crypto';
 
 import { createStoreDB, createUserDB, sanitizeWPCredentialsData } from '@wcpos/database';
 import type { UserDatabase } from '@wcpos/database';
+import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { Platform } from '@wcpos/utils/platform';
 
@@ -78,10 +79,10 @@ async function testHeaderAuth(wcposApiUrl: string, token: string): Promise<boole
 /**
  * Test authorization with token as query parameter
  */
-async function testParamAuth(wcposApiUrl: string, token: string): Promise<boolean> {
+async function testParamAuth(wcposApiUrl: string, token: string, bareSupported: boolean) {
 	try {
 		const url = new URL(`${wcposApiUrl}auth/test`);
-		url.searchParams.set('authorization', `Bearer ${token}`);
+		url.searchParams.set('authorization', formatAuthorizationParam(token, bareSupported));
 
 		const response = await fetchWithTimeout(url.toString(), {
 			method: 'GET',
@@ -107,7 +108,8 @@ async function testParamAuth(wcposApiUrl: string, token: string): Promise<boolea
  */
 export async function testAuthorizationMethod(
 	wcposApiUrl: string,
-	accessToken: string
+	accessToken: string,
+	wcposVersion?: string
 ): Promise<{ useJwtAsParam: boolean } | null> {
 	try {
 		// Test the Authorization header first. Only send the JWT in the query string if the
@@ -125,7 +127,11 @@ export async function testAuthorizationMethod(
 			return { useJwtAsParam: false };
 		}
 
-		const paramSupported = await testParamAuth(wcposApiUrl, accessToken);
+		const paramSupported = await testParamAuth(
+			wcposApiUrl,
+			accessToken,
+			bareAuthParamSupported(wcposVersion)
+		);
 
 		appLogger.debug('Authorization method test results', {
 			context: {
@@ -439,7 +445,11 @@ const testAuthorizationStep: HydrationStep = {
 			return {};
 		}
 
-		const result = await testAuthorizationMethod(wcposApiUrl, accessToken);
+		const result = await testAuthorizationMethod(
+			wcposApiUrl,
+			accessToken,
+			initialProps.site?.wcpos_version
+		);
 
 		if (result) {
 			/**
