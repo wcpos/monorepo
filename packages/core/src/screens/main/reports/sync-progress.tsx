@@ -21,6 +21,7 @@ import { useReportsBinding } from './context';
  */
 export function ReportsSyncProgress() {
 	const { binding } = useReportsBinding();
+	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- Query binding exposes a stable stream property, not an RxDB $-getter; exception dated 2026-08-21.
 	const progress = useObservableState(binding.laneProgress$, null);
 	const t = useT();
 

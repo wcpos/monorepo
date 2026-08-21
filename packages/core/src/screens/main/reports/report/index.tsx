@@ -1,8 +1,6 @@
 import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@wcpos/components/card';
 import { HStack } from '@wcpos/components/hstack';
@@ -14,6 +12,7 @@ import {
 	SelectValue,
 } from '@wcpos/components/select';
 import { Text } from '@wcpos/components/text';
+import { useDocField } from '@wcpos/query';
 
 import { ZReport } from './template';
 import { generateZReportHTML } from './generate-html';
@@ -35,8 +34,8 @@ export function Report() {
 	const t = useT();
 	const contentRef = React.useRef<View>(null);
 	const { store, wpCredentials } = useAppState();
-	const storeName = useObservableEagerState(store.name$) as string;
-	const num_decimals = useObservableEagerState(store.price_num_decimals$) as number;
+	const storeName = useDocField(store, (value) => value.name) as string;
+	const num_decimals = useDocField(store, (value) => value.price_num_decimals) as number;
 	const { selectedOrders } = useReportsData();
 	const selectedDateRange = useQueryState<'orders', { from: string; to: string } | undefined>(
 		(state) => state.filters.dateRange

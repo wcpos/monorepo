@@ -1,10 +1,9 @@
 import React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
@@ -21,7 +20,7 @@ interface Props {
  */
 export function Taxes({ totalTax, taxLines = [] }: Props) {
 	const { store } = useAppState();
-	const taxTotalDisplay = useObservableEagerState(store.tax_total_display$);
+	const taxTotalDisplay = useDocField(store, (value) => value.tax_total_display);
 	const { format } = useCurrentOrderCurrencyFormat();
 	const { inclOrExcl } = useTaxInclOrExcl({ context: 'cart' });
 	const t = useT();

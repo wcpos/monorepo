@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
+import { useDocField } from '@wcpos/query';
 
 import { useExtraData } from '../contexts/extra-data';
 
@@ -11,7 +11,8 @@ interface OrderStatus {
 
 export const useOrderStatusLabel = () => {
 	const { extraData } = useExtraData();
-	let orderStatuses = useObservableEagerState(extraData.orderStatuses$) as OrderStatus[] | unknown;
+	let orderStatuses = useDocField(extraData, (value) => value.orderStatuses) as
+		OrderStatus[] | unknown;
 	if (!Array.isArray(orderStatuses)) {
 		orderStatuses = [] as OrderStatus[];
 	}

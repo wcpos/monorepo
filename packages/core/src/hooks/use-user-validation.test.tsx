@@ -13,6 +13,10 @@ const mockAuthenticatedHttpClient = { get: mockGet };
 const mockRefreshHandler = jest.fn();
 const mockWakeCallbacks: (() => void)[] = [];
 
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
+
 jest.mock('observable-hooks', () => ({
 	useObservableEagerState: (observable: { value: unknown }) => observable.value,
 }));

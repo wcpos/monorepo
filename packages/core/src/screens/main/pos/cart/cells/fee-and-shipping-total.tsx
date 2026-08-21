@@ -1,10 +1,9 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { CellContext } from '@wcpos/core/table-types';
+import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../../../contexts/app-state';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
@@ -24,7 +23,7 @@ export function FeeAndShippingTotal({ row, column }: CellContext<Props, 'total'>
 	const item = row.original.item;
 	const { format } = useCurrentOrderCurrencyFormat();
 	const { store } = useAppState();
-	const taxDisplayCart = useObservableEagerState(store.tax_display_cart$);
+	const taxDisplayCart = useDocField(store, (value) => value.tax_display_cart);
 
 	/**
 	 * Get display values if cart includes tax

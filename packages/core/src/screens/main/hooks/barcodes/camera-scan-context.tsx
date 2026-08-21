@@ -17,6 +17,7 @@ const noopContext: CameraScanContextValue = {
 	emit: () => undefined,
 };
 
+// eslint-disable-next-line wcpos/no-rx-in-context-value -- The consumer-scoped scan bus is structurally an Observable event stream; sanctioned exception dated 2026-08-21.
 const CameraScanContext = React.createContext<CameraScanContextValue>(noopContext);
 
 /**

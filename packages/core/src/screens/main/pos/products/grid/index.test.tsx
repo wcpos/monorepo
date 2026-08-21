@@ -11,6 +11,10 @@ import { ProductGrid } from './index';
 
 let mockResult: { hits: object[] };
 
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
+
 jest.mock('observable-hooks', () => ({
 	useObservableEagerState: (value: unknown) => value,
 	useObservableSuspense: () => mockResult,

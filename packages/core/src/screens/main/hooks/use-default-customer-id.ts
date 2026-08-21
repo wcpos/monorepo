@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
+import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';
 
@@ -12,8 +12,8 @@ import { useAppState } from '../../../contexts/app-state';
  */
 export const useDefaultCustomerID = () => {
 	const { store, wpCredentials } = useAppState();
-	const is_casher = useObservableEagerState(store.default_customer_is_cashier$);
-	const default_customer = useObservableEagerState(store.default_customer$);
+	const is_casher = useDocField(store, (value) => value.default_customer_is_cashier);
+	const default_customer = useDocField(store, (value) => value.default_customer);
 
 	return React.useMemo(
 		() => (is_casher ? wpCredentials.id : default_customer),

@@ -76,6 +76,7 @@ jest.mock('observable-hooks', () => ({
 
 jest.mock('@wcpos/query', () => ({
 	...jest.requireActual('@wcpos/query'),
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 	useQueryRuntime: () => ({
 		engine: {
 			active: mockEngineActive,

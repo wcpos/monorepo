@@ -357,7 +357,8 @@ export async function switchUserSessionStore(
  * Context that accumulates data as hydration steps complete
  */
 // NOTE: the loose `any` fields are deliberate for now — typing them to the real database
-// documents surfaces ~270 consumer errors (census 2026-08-19) and needs its own pass.
+// documents surfaces ~270 consumer errors (census 2026-08-19) and needs its own pass. This is
+// the known HydrationContext hole: those RxDB members evade wcpos/no-rx-in-context-value.
 export interface HydrationContext {
 	userDB?: UserDatabase;
 	/** RxState from `userDB.addState('v2')` — session pointer (`current`). */

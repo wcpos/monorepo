@@ -1,8 +1,6 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
-import { engineCollection, useQueryRuntime } from '@wcpos/query';
+import { engineCollection, useDocField, useQueryRuntime } from '@wcpos/query';
 import { catalogDocumentId, MISC_PRODUCT_ID, remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -51,7 +49,7 @@ function latest(document: StockDocument): StockDocument {
 
 export const useCartStockGuard = () => {
 	const { store } = useAppState();
-	const preventOverselling = useObservableEagerState(store.prevent_overselling$!);
+	const preventOverselling = useDocField(store, (value) => value.prevent_overselling);
 	const runtime = useQueryRuntime();
 	const t = useT();
 

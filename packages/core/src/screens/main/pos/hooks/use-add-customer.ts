@@ -1,9 +1,8 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { isGuestCustomer } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
+import { useDocField } from '@wcpos/query';
 
 import { transformCustomerJSONToOrderJSON } from './utils';
 import { useAppState } from '../../../../contexts/app-state';
@@ -24,7 +23,7 @@ export const useAddCustomer = () => {
 	const guestCustomer = useGuestCustomer();
 	const { localPatch } = useLocalMutation();
 	const { store } = useAppState();
-	const country = useObservableEagerState(store.store_country$);
+	const country = useDocField(store, (value) => value.store_country);
 	const t = useT();
 
 	// Create order-specific logger

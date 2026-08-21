@@ -25,6 +25,10 @@ type TestOrder = {
 
 let mockCurrentOrder: TestOrder;
 
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
+
 jest.mock('observable-hooks', () => ({
 	useObservableEagerState: () => undefined,
 }));

@@ -9,7 +9,6 @@ import {
 } from '@tanstack/react-table';
 import find from 'lodash/find';
 import get from 'lodash/get';
-import { useObservableEagerState } from 'observable-hooks';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { getFlexAlign } from '@wcpos/components/lib/utils';
@@ -24,6 +23,7 @@ import {
 } from '@wcpos/components/table';
 import type { PulseTableRowRef } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
+import { useDocField } from '@wcpos/query';
 
 import { Actions } from './cells/actions';
 import { FeeAndShippingTotal } from './cells/fee-and-shipping-total';
@@ -130,7 +130,7 @@ interface CartTableProps {
 
 export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 	const { uiSettings, getUILabel } = useUISettings('pos-cart');
-	const uiColumns = useObservableEagerState(uiSettings.columns$);
+	const uiColumns = useDocField(uiSettings, (value) => value.columns);
 	const { line_items, fee_lines, shipping_lines } = useCartLines();
 	const rowRefs = React.useRef<Map<string, PulseTableRowRef | null>>(new Map());
 	const rowLayouts = React.useRef<Map<string, { y: number; height: number }>>(new Map());

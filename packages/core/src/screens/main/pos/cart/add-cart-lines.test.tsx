@@ -15,6 +15,10 @@ const mockAddProduct = jest.fn(() => Promise.resolve());
 const mockAddShipping = jest.fn(() => Promise.resolve());
 const mockOnOpenChange = jest.fn();
 
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
+
 jest.mock('@wcpos/components/dialog', () => ({
 	DialogAction: ({
 		children,

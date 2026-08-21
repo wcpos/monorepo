@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useObservablePickState, useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
@@ -18,6 +18,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { SERVER_OWNED_STORE_FIELDS } from '@wcpos/database/collections/schemas/stores';
+import { useDocField } from '@wcpos/query';
 
 import { SettingsDangerZone } from './components/settings-danger-zone';
 import { SettingsRow } from './components/settings-row';
@@ -65,42 +66,24 @@ const formSchema = z.object({
  */
 export function GeneralSettings() {
 	const { store } = useAppState();
-	const formData = useObservablePickState(
-		store.$,
-		() => {
-			const latest = store.getLatest();
-			return {
-				name: latest.name,
-				store_country: latest.store_country,
-				store_state: latest.store_state,
-				store_city: latest.store_city,
-				store_postcode: latest.store_postcode,
-				locale: latest.locale,
-				default_customer: latest.default_customer,
-				default_customer_is_cashier: latest.default_customer_is_cashier,
-				currency: latest.currency,
-				currency_pos: latest.currency_pos,
-				price_thousand_sep: latest.price_thousand_sep,
-				price_decimal_sep: latest.price_decimal_sep,
-				price_num_decimals: latest.price_num_decimals,
-				thousands_group_style: latest.thousands_group_style,
-			};
-		},
-		'name',
-		'store_country',
-		'store_state',
-		'store_city',
-		'store_postcode',
-		'locale',
-		'default_customer',
-		'default_customer_is_cashier',
-		'currency',
-		'currency_pos',
-		'price_thousand_sep',
-		'price_decimal_sep',
-		'price_num_decimals',
-		'thousands_group_style'
-	);
+	const formData = useDocField(store, (latest) => {
+		return {
+			name: latest.name,
+			store_country: latest.store_country,
+			store_state: latest.store_state,
+			store_city: latest.store_city,
+			store_postcode: latest.store_postcode,
+			locale: latest.locale,
+			default_customer: latest.default_customer,
+			default_customer_is_cashier: latest.default_customer_is_cashier,
+			currency: latest.currency,
+			currency_pos: latest.currency_pos,
+			price_thousand_sep: latest.price_thousand_sep,
+			price_decimal_sep: latest.price_decimal_sep,
+			price_num_decimals: latest.price_num_decimals,
+			thousands_group_style: latest.thousands_group_style,
+		};
+	});
 	const { defaultCustomerResource } = useDefaultCustomer();
 	const defaultCustomer = useObservableSuspense(defaultCustomerResource);
 	// The resource emits an engine record for a configured customer (guest is plain data);

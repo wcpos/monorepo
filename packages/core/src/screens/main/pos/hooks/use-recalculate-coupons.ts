@@ -1,8 +1,6 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
-import { useQueryRuntime } from '@wcpos/query';
+import { useDocField, useQueryRuntime } from '@wcpos/query';
 import { wooIdOf } from '@wcpos/sync-core';
 
 import { buildEnrichedProductCategories } from './coupon-helpers';
@@ -33,10 +31,11 @@ type CouponLine = NonNullable<import('@wcpos/database').OrderDocument['coupon_li
  */
 export const useRecalculateCoupons = () => {
 	const { store } = useAppState();
-	const woocommerceSequential = useObservableEagerState(
-		(store as any).woocommerce_calc_discounts_sequentially$
+	const woocommerceSequential = useDocField(
+		store,
+		(value) => value.woocommerce_calc_discounts_sequentially
 	);
-	const legacySequential = useObservableEagerState((store as any).calc_discounts_sequentially$);
+	const legacySequential = useDocField(store, (value) => value.calc_discounts_sequentially);
 	const calcDiscountsSequentially = woocommerceSequential === 'yes' || legacySequential === 'yes';
 
 	const runtime = useQueryRuntime();

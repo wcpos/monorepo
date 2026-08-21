@@ -1,13 +1,10 @@
 import { decode } from 'html-entities';
-import {
-	ObservableResource,
-	useObservableEagerState,
-	useObservableSuspense,
-} from 'observable-hooks';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import useDeepCompareEffect from 'use-deep-compare-effect';
 
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { useDocField } from '@wcpos/query';
 
 import { newOrder$, patchTemporaryOrderPayload } from './temporary-order';
 import { useAppState } from '../../../../../contexts/app-state';
@@ -34,10 +31,10 @@ export const useNewOrder = () => {
 	const { defaultCustomerResource } = useDefaultCustomer();
 
 	const defaultCustomer = useObservableSuspense(defaultCustomerResource);
-	const currency = useObservableEagerState(store.currency$);
-	const prices_include_tax = useObservableEagerState(store.prices_include_tax$);
-	const tax_based_on = useObservableEagerState(store.tax_based_on$);
-	const country = useObservableEagerState(store.store_country$);
+	const currency = useDocField(store, (value) => value.currency);
+	const prices_include_tax = useDocField(store, (value) => value.prices_include_tax);
+	const tax_based_on = useDocField(store, (value) => value.tax_based_on);
+	const country = useDocField(store, (value) => value.store_country);
 
 	const newOrder = useObservableSuspense(newOrderResource);
 

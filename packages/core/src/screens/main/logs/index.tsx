@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Platform, ScrollView, Share, View } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
-import { useObservableEagerState, useObservableState } from 'observable-hooks';
+import { useObservableState } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -12,7 +12,7 @@ import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
-import { useQueryRuntime } from '@wcpos/query';
+import { useDocField, useQueryRuntime } from '@wcpos/query';
 import { isVerboseDiagnostics } from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../contexts/app-state';
@@ -117,7 +117,7 @@ function LogsScreenContent() {
 	const mutations = useMutationCounts();
 	const { appVersion, platform, platformVersion, site } = useAppInfo();
 	const { store } = useAppState();
-	const storeName = useObservableEagerState(store.name$) as string;
+	const storeName = useDocField(store, (value) => value.name) as string;
 	const { verbose, setVerbose } = useVerboseDiagnostics();
 	const [preset, setPreset] = React.useState<LogPreset>('all');
 
@@ -165,6 +165,7 @@ function LogsScreenContent() {
 	// (shouldExtendLedger), keyed on MATERIALIZED rows — one extend per
 	// materialized window (#1132) — and it re-arms when the query identity
 	// changes, because filters/search reset the window to page one.
+	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- Query binding exposes a stable stream property, not an RxDB $-getter; exception dated 2026-08-21.
 	const total = useObservableState(binding.total$, 0);
 	// State mirror of the rendered-row count: the pinned footer lives outside
 	// the ledger's Suspense boundary, so it can't read rows.length itself.

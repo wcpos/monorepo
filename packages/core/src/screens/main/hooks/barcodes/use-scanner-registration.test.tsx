@@ -25,6 +25,10 @@ const mockAddListener = jest.fn((_event: string, listener: (payload: WedgeKeyPay
 });
 const mockInsert = jest.fn();
 
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
+
 jest.mock('./use-attributed-wedge', () => ({
 	wedgeKeyEventsModule: {
 		setCaptureAll: (...args: unknown[]) => mockSetCaptureAll(...args),

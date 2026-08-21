@@ -36,6 +36,11 @@ jest.mock('observable-hooks', () => {
 		useLayoutObservable: jest.fn(actual.useLayoutObservable),
 	};
 });
+
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
+
 jest.mock('expo-router', () => ({
 	useFocusEffect: (callback: () => void | (() => void)) => {
 		const cleanup = callback();

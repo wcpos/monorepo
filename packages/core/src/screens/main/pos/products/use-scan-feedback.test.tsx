@@ -13,6 +13,10 @@ const mockToastShow = jest.fn();
 
 let soundSettings: Record<string, unknown> = {};
 
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
+
 jest.mock('./play-scan-sound', () => ({
 	playScanSuccess: (...args: unknown[]) => mockPlayScanSuccess(...args),
 	playScanFailure: (...args: unknown[]) => mockPlayScanFailure(...args),

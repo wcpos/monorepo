@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import toNumber from 'lodash/toNumber';
-import { useObservableEagerState } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
@@ -9,6 +8,7 @@ import { cn } from '@wcpos/components/lib/utils';
 import { Numpad } from '@wcpos/components/numpad';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 import { VStack } from '@wcpos/components/vstack';
+import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
@@ -54,7 +54,8 @@ export function NumberInput({
 	...props
 }: NumberInputProps) {
 	const { store } = useAppState();
-	const decimalSeparator = useObservableEagerState(store.price_decimal_sep$) as string | undefined;
+	const decimalSeparator = useDocField(store, (value) => value.price_decimal_sep) as
+		string | undefined;
 	const t = useT();
 	const triggerRef = React.useRef<{ close: () => void }>(null);
 	const numpadRef = React.useRef<{ getValue: () => number }>(null);

@@ -11,6 +11,10 @@ import { QueryStateProvider } from '../../../../query';
 
 const mockGenerateZReportHTML = jest.fn((_input: unknown) => '<html />');
 
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
+
 jest.mock('react-native', () => ({
 	ScrollView: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 	View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,

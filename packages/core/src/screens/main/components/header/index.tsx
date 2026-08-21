@@ -1,12 +1,12 @@
 import * as React from 'react';
 import { type LayoutChangeEvent, View } from 'react-native';
 
-import { useObservableState } from 'observable-hooks';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
+import { useDocField } from '@wcpos/query';
 
 import { HeaderLeft as Left } from './left';
 import { HeaderRight as Right } from './right';
@@ -36,7 +36,7 @@ interface Props {
 export function Header({ options, showUpgrade, setShowUpgrade }: Props) {
 	const insets = useSafeAreaInsets();
 	const { store } = useAppState();
-	const storeName = useObservableState(store.name$, store.name);
+	const storeName = useDocField(store, (value) => value.name);
 	const { screenSize } = useTheme();
 
 	// Track widths for centering calculation

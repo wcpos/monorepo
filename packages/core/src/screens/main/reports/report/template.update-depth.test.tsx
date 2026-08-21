@@ -9,6 +9,10 @@ import { BehaviorSubject } from 'rxjs';
 import { ZReport } from './template';
 import { QueryStateProvider } from '../../../../query';
 
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
+
 jest.mock('react-native', () => ({
 	View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense } from 'observable-hooks';
 
 import {
 	Accordion,
@@ -27,6 +27,7 @@ import { StatusBadge } from '@wcpos/components/status-badge';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import type { SiteDocument, UserDocument } from '@wcpos/database';
+import { useDocField } from '@wcpos/query';
 
 import { Site, SiteHeader } from './site';
 import { getInitialAccordionState, getNextAccordionState } from './sites-expansion';
@@ -142,7 +143,7 @@ function AccordionSite({
 		}
 	}, [site, user]);
 
-	const wpCredentials = useObservableEagerState(site.wp_credentials$!);
+	const wpCredentials = useDocField(site, (value) => value.wp_credentials);
 	const userCount = Array.isArray(wpCredentials) ? wpCredentials.length : 0;
 
 	return (

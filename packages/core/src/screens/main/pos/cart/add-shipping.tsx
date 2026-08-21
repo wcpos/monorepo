@@ -3,7 +3,6 @@ import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import isEmpty from 'lodash/isEmpty';
-import { useObservableEagerState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
@@ -18,6 +17,7 @@ import {
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
+import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -48,7 +48,7 @@ export function AddShipping() {
 	const { addShipping } = useAddShipping();
 	const { onOpenChange } = useRootContext();
 	const { store } = useAppState();
-	const shippingTaxClass = useObservableEagerState(store.shipping_tax_class$);
+	const shippingTaxClass = useDocField(store, (value) => value.shipping_tax_class);
 
 	/**
 	 *

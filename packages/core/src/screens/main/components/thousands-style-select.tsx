@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import {
 	Select,
 	SelectContent,
@@ -12,6 +10,7 @@ import {
 } from '@wcpos/components/select';
 import type { SelectSingleRootProps } from '@wcpos/components/select';
 import { Text } from '@wcpos/components/text';
+import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
@@ -22,7 +21,7 @@ import { useT } from '../../../contexts/translations';
 export function ThousandsStyleSelect({ value, ...props }: SelectSingleRootProps) {
 	const t = useT();
 	const { store } = useAppState();
-	const price_thousand_sep = useObservableEagerState(store.price_thousand_sep$);
+	const price_thousand_sep = useDocField(store, (value) => value.price_thousand_sep);
 
 	/**
 	 * Use price_thousand_sep from store for formatting examples

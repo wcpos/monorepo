@@ -1,9 +1,8 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
 import { v4 as uuidv4 } from 'uuid';
 
-import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
+import { type EngineRecord, useDocField, useQueryRuntime } from '@wcpos/query';
 import { isMiscProductLine, MISC_PRODUCT_ID, wooMetaCarrier } from '@wcpos/sync-core';
 
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
@@ -76,7 +75,7 @@ export const useAddItemToOrder = () => {
 	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
 	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
 	const { store, wpCredentials } = useAppState();
-	const taxBasedOn = useObservableEagerState(store.tax_based_on$) as string | undefined;
+	const taxBasedOn = useDocField(store, (value) => value.tax_based_on) as string | undefined;
 	const identity = React.useMemo(
 		() => ({ userId: wpCredentials.id, storeId: store.id, taxBasedOn }),
 		[store.id, taxBasedOn, wpCredentials.id]

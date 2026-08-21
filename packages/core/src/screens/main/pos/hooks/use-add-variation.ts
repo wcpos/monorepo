@@ -1,10 +1,9 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { getLogger } from '@wcpos/utils/logger';
 import type { EngineRecord } from '@wcpos/query';
 import { wooIdOf } from '@wcpos/sync-core';
+import { useDocField } from '@wcpos/query';
 
 import { reportCartFailure } from './cart-failure';
 import { useAddItemToOrder } from './use-add-item-to-order';
@@ -38,7 +37,7 @@ export const useAddVariation = () => {
 	const { incrementLineItem } = useUpdateLineItem();
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
-	const metaDataKeys = useObservableEagerState(uiSettings.metaDataKeys$);
+	const metaDataKeys = useDocField(uiSettings, (value) => value.metaDataKeys);
 	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
 
 	/**
