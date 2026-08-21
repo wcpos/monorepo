@@ -10,12 +10,15 @@ import { addCheckoutProbeProduct, isolatedProductTest as test } from './checkout
  * `useRecordField` subscriptions, `getLatest()` sync reads, the write handoffs keyed on
  * the record captured at press time — must follow the swap. This spec exercises the full
  * loop live: two orders born through the POS UI, tab switches both ways, an edit landed
- * after a round-trip switch, contents asserted per order via value-bearing testIDs
- * (selector policy: no text selectors; reading a testID-addressed cell's text is fine).
+ * after a round-trip switch.
  *
- * Store-agnostic: both orders are created in-run through the UI; assertions are relative
- * (this run's own carts), never fixture contents. The isolatedProductTest fixture's
- * teardown finalizes this run's pos-open orders.
+ * Store-agnostic: the open-orders strip is shared cashier state, and concurrent CI shards
+ * sync THEIR pos-open orders into this client too — so this spec never asserts tab
+ * counts. Each order this test creates is identified at birth via the ACTIVE tab (the
+ * birth selects the new order locally; active state is this client's own), and every
+ * later assertion targets those two captured uuid-bearing testIDs. Cart-row assertions
+ * are scoped to the selected order, which is always one of ours. The
+ * isolatedProductTest fixture's teardown finalizes this run's pos-open orders.
  */
 
 /** Rows currently rendered in the cart table (one quantity input per line-item row). */
@@ -29,30 +32,48 @@ async function firstRowQuantityDigits(page: Page): Promise<string> {
 	return text.replace(/\D/g, '');
 }
 
+/**
+ * The uuid-bearing testID of the currently ACTIVE order tab — used right after a birth,
+ * when the newly born order is the selected one. `expect.poll` because birth
+ * (temp-template swap -> resident -> tab materialization -> selection) is async.
+ */
+async function activeOrderTabId(page: Page, notId?: string): Promise<string> {
+	const active = page.locator('[data-testid^="open-order-tab-"][data-state="active"]');
+	await expect
+		.poll(
+			async () => {
+				const id = await active.first().getAttribute('data-testid');
+				return id && id !== notId ? id : null;
+			},
+			{ timeout: 15_000 }
+		)
+		.not.toBeNull();
+	const id = await active.first().getAttribute('data-testid');
+	expect(id).toBeTruthy();
+	return id!;
+}
+
 test.describe('POS open-orders tab switching', () => {
 	test('cart contents follow the selected order tab across switches', async ({ posPage: page }) => {
-		// Order 1 is born from the first add (temporary template -> engine resident).
+		// Order 1 is born from the first add (temporary template -> engine resident) and
+		// becomes the selected order; capture ITS tab id — never a count.
 		await addCheckoutProbeProduct(page);
 		await expect(cartRows(page)).toHaveCount(1, { timeout: 15_000 });
-
-		// The birth materializes a tab for order 1; capture its uuid-bearing testID.
-		const orderTabs = page.locator('[data-testid^="open-order-tab-"]');
-		await expect(orderTabs).toHaveCount(1, { timeout: 15_000 });
-		const order1TabId = await orderTabs.first().getAttribute('data-testid');
-		expect(order1TabId).toBeTruthy();
+		const order1TabId = await activeOrderTabId(page);
 
 		// Switch to the NEW order tab: the cart must present the empty template.
 		await page.getByTestId('new-order-tab').click();
 		await expect(cartRows(page)).toHaveCount(0, { timeout: 15_000 });
 
-		// Order 2 is born the same way; a second tab appears.
+		// Order 2 is born the same way; its tab becomes active.
 		await addCheckoutProbeProduct(page);
 		await expect(cartRows(page)).toHaveCount(1, { timeout: 15_000 });
-		await expect(orderTabs).toHaveCount(2, { timeout: 15_000 });
+		const order2TabId = await activeOrderTabId(page, order1TabId);
+		expect(order2TabId).not.toBe(order1TabId);
 
 		// Back to order 1, then give it a distinctive quantity: the numpad APPENDS to the
 		// default 1, so typing "2" yields 12 — a value order 2 cannot have.
-		await page.getByTestId(order1TabId!).click();
+		await page.getByTestId(order1TabId).click();
 		await expect(cartRows(page)).toHaveCount(1, { timeout: 15_000 });
 		await cartRows(page).first().click();
 		const numpad = page.locator('[data-radix-popper-content-wrapper]').first();
@@ -65,15 +86,12 @@ test.describe('POS open-orders tab switching', () => {
 		await expect.poll(() => firstRowQuantityDigits(page), { timeout: 15_000 }).toMatch(/^12$/);
 
 		// Switch to order 2: its cart is untouched by the edit (quantity still 1).
-		const order2Tab = page
-			.locator('[data-testid^="open-order-tab-"]')
-			.and(page.locator(`:not([data-testid="${order1TabId}"])`));
-		await order2Tab.first().click();
+		await page.getByTestId(order2TabId).click();
 		await expect(cartRows(page)).toHaveCount(1, { timeout: 15_000 });
 		await expect.poll(() => firstRowQuantityDigits(page), { timeout: 15_000 }).toMatch(/^1$/);
 
 		// And back: order 1 kept the edit across the round trip.
-		await page.getByTestId(order1TabId!).click();
+		await page.getByTestId(order1TabId).click();
 		await expect(cartRows(page)).toHaveCount(1, { timeout: 15_000 });
 		await expect.poll(() => firstRowQuantityDigits(page), { timeout: 15_000 }).toMatch(/^12$/);
 	});
