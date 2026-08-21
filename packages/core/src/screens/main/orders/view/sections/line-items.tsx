@@ -5,14 +5,15 @@ import toNumber from 'lodash/toNumber';
 
 import { Image } from '@wcpos/components/image';
 import { Text } from '@wcpos/components/text';
+import type { EngineRecord } from '@wcpos/query';
 
 import { Section } from './_section';
 import { useT } from '../../../../../contexts/translations';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-type LineItem = NonNullable<OrderDocument['line_items']>[number];
-type FeeLine = NonNullable<OrderDocument['fee_lines']>[number];
+type OrderPayload = EngineRecord<'orders'>['payload'];
+type LineItem = NonNullable<OrderPayload['line_items']>[number];
+type FeeLine = NonNullable<OrderPayload['fee_lines']>[number];
 
 function visibleMeta(metaData: LineItem['meta_data']) {
 	return (metaData || []).filter((entry) => entry.key && !String(entry.key).startsWith('_'));
@@ -118,7 +119,7 @@ function FeeRow({
 	);
 }
 
-export function LineItemsSection({ order }: { order: OrderDocument }) {
+export function LineItemsSection({ order }: { order: OrderPayload }) {
 	const t = useT();
 	const { format } = useCurrencyFormat({ currencySymbol: order.currency_symbol });
 	const lineItems = order.line_items || [];

@@ -21,9 +21,7 @@ jest.mock('../../hooks/use-storage-health', () => ({
 }));
 const mockUseObservableSuspense = jest.fn();
 const mockUseObservableEagerState = jest.fn();
-const mockIsRxDocument = jest.fn();
 const mockPostMessage = jest.fn();
-const mockCurrentOrderRecord = { uuid: 'order-1', payload: { number: '100' } };
 
 interface MockPaymentWebviewProps {
 	setFrameStatus: (status: PaymentFrameStatus) => void;
@@ -58,13 +56,9 @@ jest.mock('observable-hooks', () => ({
 	useObservableEagerState: (...args: unknown[]) => mockUseObservableEagerState(...args),
 }));
 
-jest.mock('rxdb', () => ({ isRxDocument: (...args: unknown[]) => mockIsRxDocument(...args) }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ replace: jest.fn() }) }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
-}));
-jest.mock('../contexts/current-order', () => ({
-	useCurrentOrderRecord: () => mockCurrentOrderRecord,
 }));
 
 jest.mock('./hooks/use-checkout-session', () => ({
@@ -141,7 +135,6 @@ describe('Checkout', () => {
 
 	it('renders not-found before accessing document observables when the resource emits null', () => {
 		mockUseObservableSuspense.mockReturnValue(null);
-		mockIsRxDocument.mockReturnValue(false);
 		render(<Checkout resource={{} as never} />);
 
 		expect(screen.getByText('common.no_order_found')).toBeTruthy();
@@ -149,8 +142,7 @@ describe('Checkout', () => {
 	});
 
 	it('shows only Return to Cart after a stock rejection', () => {
-		mockUseObservableSuspense.mockReturnValue({ uuid: 'order-1', number$: {} });
-		mockIsRxDocument.mockReturnValue(true);
+		mockUseObservableSuspense.mockReturnValue(makeOrder());
 		mockUseObservableEagerState.mockReturnValueOnce({
 			orderUuid: 'order-1',
 			items: [{ product_id: 1, variation_id: 0, available: 0 }],
@@ -168,8 +160,7 @@ describe('Checkout', () => {
 	});
 
 	it('shows stock rejection detail in legacy webview mode', () => {
-		mockUseObservableSuspense.mockReturnValue({ uuid: 'order-1', number$: {} });
-		mockIsRxDocument.mockReturnValue(true);
+		mockUseObservableSuspense.mockReturnValue(makeOrder());
 		mockUseObservableEagerState.mockReturnValueOnce({
 			orderUuid: 'order-1',
 			items: [{ product_id: 1, variation_id: 0, available: 0 }],
@@ -193,8 +184,7 @@ describe('Checkout', () => {
 	it('disables Process Payment while storage is degraded', () => {
 		mockStorageDegraded = true;
 		mockBlockIfDegraded.mockReturnValue(true);
-		mockUseObservableSuspense.mockReturnValue({ uuid: 'order-1', number$: {} });
-		mockIsRxDocument.mockReturnValue(true);
+		mockUseObservableSuspense.mockReturnValue(makeOrder());
 		mockUseObservableEagerState.mockReturnValueOnce(null);
 		const startCheckout = jest.fn();
 		mockUseCheckoutSession.mockReturnValue({
@@ -216,8 +206,7 @@ describe('Checkout', () => {
 	it('refuses to start a payment when the latch fires after render', () => {
 		mockStorageDegraded = false;
 		mockBlockIfDegraded.mockReturnValue(true);
-		mockUseObservableSuspense.mockReturnValue({ uuid: 'order-1', number$: {} });
-		mockIsRxDocument.mockReturnValue(true);
+		mockUseObservableSuspense.mockReturnValue(makeOrder());
 		mockUseObservableEagerState.mockReturnValueOnce(null);
 		const startCheckout = jest.fn();
 		mockUseCheckoutSession.mockReturnValue({
@@ -249,21 +238,16 @@ describe('Checkout', () => {
  * until the payment frame signals it has loaded.
  */
 
-// Sentinel observables so the eager-state mock can answer per-subject rather
-// than by call order — the component re-renders when the gate flips, and a
-// call-order mock would go out of phase on the second render.
-const NUMBER$ = { __kind: 'number$' };
-const PAYMENT_URL$ = { __kind: 'paymentURL$' };
-
 const PAYMENT_URL = 'https://shop.example.com/wcpos-checkout/order-pay/42';
 
-function makeOrder() {
+function makeOrder(paymentURL = PAYMENT_URL) {
 	return {
 		uuid: 'order-1',
-		id: 42,
-		number$: NUMBER$,
-		links$: { pipe: () => PAYMENT_URL$ },
-		links: { payment: [{ href: PAYMENT_URL }] },
+		payload: {
+			id: 42,
+			number: '100',
+			links: paymentURL ? { payment: [{ href: paymentURL }] } : {},
+		},
 	};
 }
 
@@ -284,13 +268,8 @@ function renderCheckout({
 }) {
 	mockStorageDegraded = storageDegraded;
 	mockBlockIfDegraded.mockReturnValue(storageDegraded);
-	mockUseObservableSuspense.mockReturnValue(makeOrder());
-	mockIsRxDocument.mockReturnValue(true);
-	mockUseObservableEagerState.mockImplementation((observable: unknown) => {
-		if (observable === NUMBER$) return '100';
-		if (observable === PAYMENT_URL$) return paymentURL;
-		return null; // stockRejection$
-	});
+	mockUseObservableSuspense.mockReturnValue(makeOrder(paymentURL));
+	mockUseObservableEagerState.mockReturnValue(null);
 	mockUseCheckoutSession.mockReturnValue({
 		loading,
 		mode,
@@ -310,7 +289,6 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 		mockUseObservableEagerState.mockReset();
 		mockUseObservableSuspense.mockReset();
 		mockUseCheckoutSession.mockReset();
-		mockIsRxDocument.mockReset();
 		// `clearAllMocks` does not drop implementations, and the #1019 suite above
 		// leaves this returning true — reset it so each case states its own storage
 		// health rather than inheriting the previous describe's.

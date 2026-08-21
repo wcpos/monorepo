@@ -90,6 +90,34 @@ export function useEngineDocumentByWooId<TDocument extends object>(
 	return useEngineDocumentResource(collectionName, key);
 }
 
+/** Bind one engine-native record by its UUID primary key. */
+export function useEngineRecord<C extends EngineRecordCollectionName>(
+	collectionName: C,
+	uuid: string
+): ObservableResource<EngineRecord<C> | null> {
+	const runtime = useQueryRuntime();
+	const resource = React.useMemo(() => {
+		const record$ = observeEngineDatabases(runtime.engine).pipe(
+			switchMap((database) => {
+				const collection = engineCollection(database, collectionName);
+				if (!collection) {
+					return EMPTY;
+				}
+
+				return collection.findOne(uuid).$;
+			})
+		);
+		return new ObservableResource(record$);
+	}, [collectionName, runtime, uuid]);
+
+	React.useEffect(() => {
+		// ObservableResource owns the db$/RxDB subscriptions and must release them on rebind/unmount.
+		return () => resource.destroy();
+	}, [resource]);
+
+	return resource;
+}
+
 /** Bind one engine-native record by its numeric Woo identifier. */
 export function useEngineRecordByWooId<C extends EngineRecordCollectionName>(
 	collectionName: C,

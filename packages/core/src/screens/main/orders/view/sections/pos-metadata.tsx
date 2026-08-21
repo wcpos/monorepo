@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { Text } from '@wcpos/components/text';
+import type { EngineRecord } from '@wcpos/query';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import { RailSection } from './_section';
@@ -9,7 +10,7 @@ import { useT } from '../../../../../contexts/translations';
 import { useCashierLabel } from '../../../hooks/use-cashier-label';
 import { useStoreLabel } from '../../../hooks/use-store-label';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
+type OrderPayload = EngineRecord<'orders'>['payload'];
 
 function KV({ k, v }: { k: string; v?: string }) {
 	if (!v) return null;
@@ -23,7 +24,7 @@ function KV({ k, v }: { k: string; v?: string }) {
 	);
 }
 
-export function POSMetadataSection({ order, last }: { order: OrderDocument; last?: boolean }) {
+export function POSMetadataSection({ order, last }: { order: OrderPayload; last?: boolean }) {
 	const t = useT();
 	const { cashierId, storeId } = wooMetaCarrier.readIdentity(order.meta_data);
 	const cashierID = cashierId ?? undefined;

@@ -14,7 +14,7 @@ import { EditVariationScreen } from './products/edit/variation';
 import { ReceiptScreen } from './receipt';
 
 const mockResource = { marker: 'engine-resource' };
-const mockUseEngineDocument = jest.fn((_collection: unknown, _uuid: unknown) => mockResource);
+const mockUseEngineRecord = jest.fn((_collection: unknown, _uuid: unknown) => mockResource);
 let mockRouteParams: Record<string, string> = {};
 
 jest.mock('expo-router', () => ({
@@ -22,8 +22,7 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('./hooks/use-engine-document', () => ({
-	useEngineDocument: (collection: unknown, uuid: unknown) =>
-		mockUseEngineDocument(collection, uuid),
+	useEngineRecord: (collection: unknown, uuid: unknown) => mockUseEngineRecord(collection, uuid),
 }));
 
 jest.mock('@wcpos/components/suspense', () => ({
@@ -62,7 +61,7 @@ describe('engine modal/detail reads', () => {
 
 			render(<Screen />);
 
-			expect(mockUseEngineDocument).toHaveBeenCalledWith(collection, uuid);
+			expect(mockUseEngineRecord).toHaveBeenCalledWith(collection, uuid);
 		}
 	);
 });

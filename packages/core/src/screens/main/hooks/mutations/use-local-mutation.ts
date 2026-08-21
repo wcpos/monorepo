@@ -44,7 +44,13 @@ const mutationLogger = getLogger(['wcpos', 'mutations', 'local']);
 type Document =
 	OrderDocument | ProductDocument | CustomerDocument | ProductVariationDocument | CouponDocument;
 type MutationDocument =
-	Document | EngineRecord<'orders'> | import('@wcpos/database').TemporaryOrderDocument;
+	| Document
+	| EngineRecord<'orders'>
+	| EngineRecord<'products'>
+	| EngineRecord<'variations'>
+	| EngineRecord<'customers'>
+	| EngineRecord<'coupons'>
+	| import('@wcpos/database').TemporaryOrderDocument;
 
 const WRITEABLE_COLLECTIONS = new Set<WriteableCollection>(
 	Object.entries(COLLECTION_VOCABULARY)

@@ -17,6 +17,8 @@ import { FormErrors } from '../../../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-form';
 import { useLocalMutation } from '../../../../hooks/mutations/use-local-mutation';
 
+import type { CurrentOrderRecord } from '../../../contexts/current-order';
+
 /**
  *
  */
@@ -37,7 +39,7 @@ export function EditOrderMetaForm({
 	order,
 	formData,
 }: {
-	order: OrderDocument;
+	order: CurrentOrderRecord;
 	formData: FormValues;
 }) {
 	const t = useT();

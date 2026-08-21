@@ -18,6 +18,7 @@ import {
 import { HStack } from '@wcpos/components/hstack';
 import { ModalAction, ModalClose, ModalFooter, useModal } from '@wcpos/components/modal';
 import { VStack } from '@wcpos/components/vstack';
+import type { EngineRecord } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
@@ -57,7 +58,7 @@ const schema = z.object({
 });
 
 interface Props {
-	product: import('@wcpos/database').ProductDocument;
+	product: EngineRecord<'products'>;
 }
 
 /**
@@ -69,6 +70,7 @@ export function EditProductForm({ product }: Props) {
 	const { localPatch } = useLocalMutation();
 	const { close } = useModal();
 	const [categoryOptions, setCategoryOptions] = React.useState<HierarchicalOption[]>([]);
+	const productData = product.toMutableJSON().payload;
 
 	if (!product) {
 		throw new Error(t('products.product_not_found'));
@@ -80,25 +82,25 @@ export function EditProductForm({ product }: Props) {
 	const form = useForm<z.infer<typeof schema>>({
 		resolver: zodResolver(schema as never) as never,
 		defaultValues: {
-			name: product.name,
+			name: productData.name,
 			categories:
-				product.categories?.map((c) => ({
+				productData.categories?.map((c) => ({
 					value: String(c.id),
 					label: c.name ?? '',
 				})) ?? [],
-			status: product.status,
-			featured: product.featured,
-			virtual: product.virtual ?? false,
-			downloadable: product.downloadable ?? false,
-			sku: product.sku,
-			regular_price: product.regular_price,
-			sale_price: product.sale_price,
-			stock_quantity: product.stock_quantity,
-			manage_stock: product.manage_stock,
-			barcode: product.barcode,
-			tax_status: product.tax_status,
-			tax_class: taxClassFromWire(product.tax_class),
-			meta_data: product.meta_data,
+			status: productData.status,
+			featured: productData.featured,
+			virtual: productData.virtual ?? false,
+			downloadable: productData.downloadable ?? false,
+			sku: productData.sku,
+			regular_price: productData.regular_price,
+			sale_price: productData.sale_price,
+			stock_quantity: productData.stock_quantity,
+			manage_stock: productData.manage_stock,
+			barcode: productData.barcode,
+			tax_status: productData.tax_status,
+			tax_class: taxClassFromWire(productData.tax_class),
+			meta_data: productData.meta_data,
 		},
 	});
 
@@ -126,11 +128,12 @@ export function EditProductForm({ product }: Props) {
 				if (!patched?.document) {
 					throw new Error('Local patch failed');
 				}
-				mutationLogger.success(t('common.saved', { name: product.name }), {
+				const saved = product.getLatest().payload;
+				mutationLogger.success(t('common.saved', { name: saved.name }), {
 					showToast: true,
 					context: {
-						productId: product.id,
-						productName: product.name,
+						productId: saved.id,
+						productName: saved.name,
 					},
 				});
 				close();
@@ -141,7 +144,7 @@ export function EditProductForm({ product }: Props) {
 					code: ERROR_CODES.PRODUCT_SAVE_FAILED,
 					toast: { title: t('products.failed_to_save_product') },
 					context: {
-						productId: product.id,
+						productId: product.getLatest().payload.id,
 						error: errorMessage,
 					},
 				});

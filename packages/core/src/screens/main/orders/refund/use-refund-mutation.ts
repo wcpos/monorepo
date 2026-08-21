@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { v4 as uuidv4 } from 'uuid';
 
-import { useQueryRuntime } from '@wcpos/query';
+import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
@@ -28,7 +28,7 @@ interface BuildRefundPayloadArgs {
 }
 
 interface RefundMutationArgs extends BuildRefundPayloadArgs {
-	order: import('@wcpos/database').OrderDocument;
+	order: EngineRecord<'orders'>;
 }
 
 /**
@@ -77,7 +77,8 @@ export function useRefundMutation() {
 
 	return React.useCallback(
 		async ({ order, amount, reason, lineItems, refundDestination }: RefundMutationArgs) => {
-			if (!order.id) {
+			const orderId = order.getLatest().payload.id;
+			if (!orderId) {
 				throw new Error('refund_requires_persisted_order');
 			}
 
@@ -85,7 +86,7 @@ export function useRefundMutation() {
 			// synchronous point before the POST — past it the money has moved and the
 			// idempotency key makes a retry mint a SECOND refund. It throws rather
 			// than returning quietly so the form cannot toast a refund as successful.
-			if (blockIfDegraded('refund', { orderId: order.id })) {
+			if (blockIfDegraded('refund', { orderId })) {
 				throw new StorageBlockedError('refund');
 			}
 
@@ -96,19 +97,19 @@ export function useRefundMutation() {
 				refundDestination,
 			});
 
-			const response = await http.post(`orders/${order.id}/refunds`, payload, {
+			const response = await http.post(`orders/${orderId}/refunds`, payload, {
 				headers: {
-					'X-WCPOS-Idempotency-Key': createRefundIdempotencyKey(order.id),
+					'X-WCPOS-Idempotency-Key': createRefundIdempotencyKey(orderId),
 				},
 			});
 
 			let handle;
 			try {
 				handle = runtime.engine.require({
-					id: `refund:order-refresh:${order.id}`,
+					id: `refund:order-refresh:${orderId}`,
 					collection: 'orders',
 					kind: 'targeted-records',
-					remoteIds: [order.id].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
+					remoteIds: [orderId].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 					forceRefresh: true,
 				});
 				await handle.ready;
@@ -120,7 +121,7 @@ export function useRefundMutation() {
 				// the next sync pass.
 				refundLogger.warn('Refund succeeded but the local order refresh failed', {
 					context: {
-						orderId: order.id,
+						orderId,
 						error: getErrorMessage(error),
 					},
 				});

@@ -1,15 +1,11 @@
 import * as React from 'react';
 
 import { useRouter } from 'expo-router';
-import get from 'lodash/get';
 import {
 	ObservableResource,
 	useObservableEagerState,
 	useObservableSuspense,
 } from 'observable-hooks';
-import { isRxDocument } from 'rxdb';
-import { of } from 'rxjs';
-import { map } from 'rxjs/operators';
 
 import {
 	Modal,
@@ -24,7 +20,7 @@ import {
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { WebViewHandle } from '@wcpos/components/webview';
-import { useRecordField } from '@wcpos/query';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { type PaymentFrameStatus, PaymentWebview } from './components/payment-webview';
 import { CheckoutTitle } from './components/title';
@@ -33,10 +29,9 @@ import { useT } from '../../../../contexts/translations';
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 import { TotalsChangedBanner } from '../cart/totals-changed-banner';
 import { stockRejection$ } from '../hooks/stock-rejection';
-import { useCurrentOrderRecord } from '../contexts/current-order';
 
 interface Props {
-	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
+	resource: ObservableResource<EngineRecord<'orders'> | null>;
 }
 
 /**
@@ -46,7 +41,7 @@ export function Checkout({ resource }: Props) {
 	const order = useObservableSuspense(resource);
 	const t = useT();
 
-	if (!isRxDocument(order)) {
+	if (!order) {
 		return (
 			<Modal>
 				<ModalContent testID="checkout-dialog" size="lg">
@@ -63,10 +58,9 @@ export function Checkout({ resource }: Props) {
 	return <CheckoutDocument order={order} />;
 }
 
-function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDocument }) {
-	// stage-I2: left on proxy face — checkout write/session props are stage-J paths; display reads use the record.
-	const currentOrderRecord = useCurrentOrderRecord();
-	const orderNumber = useRecordField(currentOrderRecord, (record) => record.payload.number);
+function CheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
+	const orderData = useRecordField(order, (record) => record.payload);
+	const orderNumber = orderData.number;
 	const stockRejection = useObservableEagerState(stockRejection$);
 	const router = useRouter();
 	const t = useT();
@@ -88,9 +82,7 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 		frameStatusRef.current = next;
 		setFrameStatus(next);
 	}, []);
-	const { loading, mode, error, startCheckout, handleStockRejection } = useCheckoutSession(
-		order as import('@wcpos/database').OrderDocument
-	);
+	const { loading, mode, error, startCheckout, handleStockRejection } = useCheckoutSession(order);
 	// #163 ruling R5. This modal is where a checkout already in progress is caught:
 	// it was opened while storage was healthy, and the worker can die at any point
 	// before the cashier presses Process Payment.
@@ -98,14 +90,7 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 	// The legacy webview can only process a payment when the server has supplied a
 	// payment link; without it the modal body shows an error and processing must stay
 	// disabled (a click would otherwise post into a null webview ref and spin forever).
-	const paymentURL$ = React.useMemo(
-		() =>
-			order.links$
-				? order.links$.pipe(map((links) => get(links, ['payment', 0, 'href'])))
-				: of(get(order, ['links', 'payment', 0, 'href'])),
-		[order]
-	);
-	const paymentURL = useObservableEagerState(paymentURL$);
+	const paymentURL = orderData.links?.payment?.[0]?.href;
 	const paymentLinkMissing = mode === 'webview' && !paymentURL;
 	// Scoped to the legacy webview path — contract checkout posts nothing into a
 	// frame, so it has nothing to wait for. When the link is missing no frame is
@@ -116,7 +101,7 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 	const showStockRejection =
 		error === 'insufficient_stock' &&
 		stockRejection !== null &&
-		stockRejection.orderUuid === currentOrderRecord.uuid &&
+		stockRejection.orderUuid === order.uuid &&
 		stockRejection.items.length > 0;
 
 	/**
@@ -127,7 +112,7 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 			return;
 		}
 
-		if (blockIfDegraded('process-payment', { orderId: order.uuid ?? order.id })) {
+		if (blockIfDegraded('process-payment', { orderId: order.uuid })) {
 			return;
 		}
 
@@ -148,7 +133,7 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 		if (webViewRef.current && webViewRef.current.postMessage) {
 			webViewRef.current.postMessage({ action: 'wcpos-process-payment' });
 		}
-	}, [blockIfDegraded, mode, order.id, order.uuid, startCheckout]);
+	}, [blockIfDegraded, mode, order.uuid, startCheckout]);
 
 	/**
 	 *
@@ -167,7 +152,7 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 				</ModalHeader>
 				<ModalBody contentContainerStyle={{ height: '100%' }}>
 					<VStack className="flex-1">
-						<CheckoutTitle order={currentOrderRecord} />
+						<CheckoutTitle order={order} />
 						{/* R1. The cart's copy of this banner is behind this full-height
 						    modal, and the write that produces a divergence is usually the
 						    Pay button's own save — so without a mount HERE the cashier can
@@ -175,10 +160,7 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 						    This is the exact moment the ruling names: before goods change
 						    hands. It does not gate Process Payment; the server's totals
 						    stand, and the cashier decides. */}
-						<TotalsChangedBanner
-							orderId={currentOrderRecord.uuid}
-							testID="checkout-totals-changed-banner"
-						/>
+						<TotalsChangedBanner orderId={order.uuid} testID="checkout-totals-changed-banner" />
 						{storageDegraded && !showStockRejection ? (
 							<VStack
 								space="xs"

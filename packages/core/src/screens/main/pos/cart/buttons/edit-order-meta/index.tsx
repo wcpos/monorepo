@@ -1,16 +1,17 @@
 import * as React from 'react';
 
-import { useObservablePickState } from 'observable-hooks';
-
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import { Tree } from '@wcpos/components/tree';
+import { useRecordField } from '@wcpos/query';
 
 import { EditOrderMetaForm } from './form';
 import { useT } from '../../../../../../contexts/translations';
 
+import type { CurrentOrderRecord } from '../../../contexts/current-order';
+
 interface Props {
-	order: import('@wcpos/database').OrderDocument;
+	order: CurrentOrderRecord;
 }
 
 /**
@@ -23,20 +24,14 @@ export function EditOrderMeta({ order }: Props) {
 	/**
 	 * We need to refresh the component when the order data changes
 	 */
-	const formData = useObservablePickState(
-		order.$,
-		() => {
-			const latest = order.getLatest();
-			return {
-				currency: latest.currency,
-				transaction_id: latest.transaction_id,
-				meta_data: latest.meta_data,
-			};
-		},
-		'currency',
-		'transaction_id',
-		'meta_data'
-	);
+	const payload = useRecordField(order, (record) => record.payload);
+	const formData = React.useMemo(() => {
+		return {
+			currency: payload.currency,
+			transaction_id: payload.transaction_id,
+			meta_data: payload.meta_data,
+		};
+	}, [payload]);
 
 	return (
 		<Tabs value={value} onValueChange={setValue}>
@@ -55,7 +50,7 @@ export function EditOrderMeta({ order }: Props) {
 				/>
 			</TabsContent>
 			<TabsContent value="json">
-				<Tree value={order.getLatest().toJSON()} />
+				<Tree value={payload} />
 			</TabsContent>
 		</Tabs>
 	);

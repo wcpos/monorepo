@@ -28,6 +28,7 @@ jest.mock('../../../../../contexts/translations', () => ({
 }));
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine: { require: mockEngineRequire } }),
+	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));
 jest.mock('../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { autoShowReceipt: false } }),
@@ -45,14 +46,20 @@ jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({ success: jest.fn(), error: jest.fn() }),
 }));
 
-const order = {
-	id: 42,
-	number: '42',
-	uuid: 'uuid-42',
-	collection: {},
-	payment_method: 'stripe_terminal_for_woocommerce',
-	getLatest: () => ({ line_items: [] }),
-} as never;
+const makeOrder = (paymentMethod = 'stripe_terminal_for_woocommerce') => {
+	const record = {
+		uuid: 'uuid-42',
+		payload: {
+			id: 42,
+			number: '42',
+			payment_method: paymentMethod,
+			line_items: [],
+		},
+		getLatest: () => record,
+	};
+	return record;
+};
+const order = makeOrder() as never;
 
 describe('useCheckoutSession', () => {
 	beforeEach(() => {
@@ -101,10 +108,7 @@ describe('useCheckoutSession', () => {
 				],
 			});
 
-			const legacyOrder = {
-				...(order as Record<string, unknown>),
-				payment_method: gatewayId,
-			} as never;
+			const legacyOrder = makeOrder(gatewayId) as never;
 			const { result } = renderHook(() => useCheckoutSession(legacyOrder));
 
 			await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
@@ -251,10 +255,10 @@ describe('useCheckoutSession', () => {
 				},
 			},
 		});
-		mockEngineRequire.mockReturnValue({
+		mockEngineRequire.mockImplementation(() => ({
 			ready: Promise.reject(new Error('refresh failed')),
 			release,
-		});
+		}));
 
 		const { result } = renderHook(() => useCheckoutSession(order));
 		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));

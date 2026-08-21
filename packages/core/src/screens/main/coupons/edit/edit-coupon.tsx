@@ -1,26 +1,28 @@
 import * as React from 'react';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
-import { isRxDocument } from 'rxdb';
 
 import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import { Tree } from '@wcpos/components/tree';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { EditCouponForm } from './form';
 import { useT } from '../../../../contexts/translations';
 
 interface Props {
-	resource: ObservableResource<import('@wcpos/database').CouponDocument>;
+	resource: ObservableResource<EngineRecord<'coupons'> | null>;
 }
 
 export function EditCoupon({ resource }: Props) {
 	const coupon = useObservableSuspense(resource);
 	const t = useT();
 	const [value, setValue] = React.useState('form');
+	const code = useRecordField(coupon, (record) => record.payload.code);
+	const payload = useRecordField(coupon, (record) => record.payload);
 
-	if (!isRxDocument(coupon)) {
+	if (!coupon) {
 		return (
 			<Modal>
 				<ModalContent size="lg">
@@ -39,7 +41,7 @@ export function EditCoupon({ resource }: Props) {
 			<ModalContent size="lg">
 				<ModalHeader>
 					<ModalTitle>
-						<Text>{t('common.edit_2', { name: coupon.code })}</Text>
+						<Text>{t('common.edit_2', { name: code })}</Text>
 					</ModalTitle>
 				</ModalHeader>
 				<ModalBody>
@@ -56,7 +58,7 @@ export function EditCoupon({ resource }: Props) {
 							<EditCouponForm coupon={coupon} />
 						</TabsContent>
 						<TabsContent value="json">
-							<Tree value={coupon.toJSON()} />
+							<Tree value={payload} />
 						</TabsContent>
 					</Tabs>
 				</ModalBody>

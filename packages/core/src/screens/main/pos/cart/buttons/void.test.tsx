@@ -38,8 +38,10 @@ const mockOrderJson = {
 	status: 'pos-open',
 };
 const mockCurrentOrder = {
-	...mockOrderJson,
-	toMutableJSON: () => ({ ...mockOrderJson }),
+	uuid: 'order-1',
+	payload: mockOrderJson,
+	getLatest: () => mockCurrentOrder,
+	toMutableJSON: () => ({ payload: { ...mockOrderJson } }),
 };
 
 jest.mock('expo-router', () => ({
@@ -114,7 +116,7 @@ jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 }));
 
 jest.mock('../../contexts/current-order', () => ({
-	useCurrentOrder: () => ({ currentOrder: mockCurrentOrder }),
+	useCurrentOrderRecord: () => mockCurrentOrder,
 }));
 
 describe('VoidButton', () => {

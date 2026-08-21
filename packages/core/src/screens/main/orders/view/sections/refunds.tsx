@@ -7,6 +7,7 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
 import { refundValue } from '@wcpos/order-math';
+import type { EngineRecord } from '@wcpos/query';
 
 import { Section } from './_section';
 import { totalRefunded } from './total-refunded';
@@ -15,8 +16,8 @@ import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useDateFormat } from '../../../hooks/use-date-format';
 import { WCRefund } from '../use-order-refunds';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-type LocalRefund = NonNullable<OrderDocument['refunds']>[number];
+type OrderPayload = EngineRecord<'orders'>['payload'];
+type LocalRefund = NonNullable<OrderPayload['refunds']>[number];
 
 function RefundCard({ refund, currencySymbol }: { refund: WCRefund; currencySymbol?: string }) {
 	const t = useT();
@@ -167,7 +168,7 @@ function RefundsDetail({
 	order,
 	resource,
 }: {
-	order: OrderDocument;
+	order: OrderPayload;
 	resource: ObservableResource<WCRefund[]>;
 }) {
 	const t = useT();
@@ -204,7 +205,7 @@ export function RefundsSection({
 	order,
 	resource,
 }: {
-	order: OrderDocument;
+	order: OrderPayload;
 	resource?: ObservableResource<WCRefund[]>;
 }) {
 	if (!order.id || !resource) {

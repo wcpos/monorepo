@@ -33,9 +33,7 @@ export const useDefaultCustomer = () => {
 		(inputs$) =>
 			inputs$.pipe(
 				switchMap(([result$, guest]) =>
-					result$.pipe(
-						map((result) => (result.hits.length === 1 ? result.hits[0].document : guest))
-					)
+					result$.pipe(map((result) => (result.hits.length === 1 ? result.hits[0].record : guest)))
 				)
 			),
 		[binding.result$, guestCustomer]

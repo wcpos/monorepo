@@ -1,18 +1,18 @@
 import * as React from 'react';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
-import { isRxDocument } from 'rxdb';
 
 import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import { Tree } from '@wcpos/components/tree';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { EditVariationForm } from './form';
 import { useT } from '../../../../../contexts/translations';
 
 interface Props {
-	resource: ObservableResource<import('@wcpos/database').ProductVariationDocument>;
+	resource: ObservableResource<EngineRecord<'variations'> | null>;
 	parentID?: string;
 }
 
@@ -20,8 +20,10 @@ export function EditVariationModal({ resource }: Props) {
 	const variation = useObservableSuspense(resource);
 	const t = useT();
 	const [value, setValue] = React.useState('form');
+	const name = useRecordField(variation, (record) => record.payload.name);
+	const payload = useRecordField(variation, (record) => record.payload);
 
-	if (!isRxDocument(variation)) {
+	if (!variation) {
 		return (
 			<Modal>
 				<ModalContent size="lg">
@@ -40,7 +42,7 @@ export function EditVariationModal({ resource }: Props) {
 			<ModalContent size="lg">
 				<ModalHeader>
 					<ModalTitle>
-						<Text>{t('common.edit_2', { name: variation.name })}</Text>
+						<Text>{t('common.edit_2', { name })}</Text>
 					</ModalTitle>
 				</ModalHeader>
 				<ModalBody>
@@ -57,7 +59,7 @@ export function EditVariationModal({ resource }: Props) {
 							<EditVariationForm variation={variation} />
 						</TabsContent>
 						<TabsContent value="json">
-							<Tree value={variation.toJSON()} />
+							<Tree value={payload} />
 						</TabsContent>
 					</Tabs>
 				</ModalBody>

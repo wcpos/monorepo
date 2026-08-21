@@ -1,9 +1,4 @@
-import {
-	engineCollection,
-	type EngineRecord,
-	type EngineRecordCollectionName,
-	wrapEngineDocument,
-} from '@wcpos/query';
+import { engineCollection, type EngineRecord, type EngineRecordCollectionName } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 
 type QueryManager = ReturnType<typeof import('@wcpos/query').useQueryRuntime>;
@@ -28,9 +23,7 @@ export async function readEngineProductRecordsByWooId(manager: QueryManager, woo
 
 export async function readEngineProductsByWooId(manager: QueryManager, wooIds: number[]) {
 	const records = await readEngineProductRecordsByWooId(manager, wooIds);
-	return records.map((record) =>
-		wrapEngineDocument<import('@wcpos/database').ProductDocument>('products', record as never)
-	);
+	return records.map((record) => record.payload);
 }
 
 export async function readEngineCategories(manager: QueryManager) {

@@ -1,19 +1,19 @@
 import * as React from 'react';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
-import { isRxDocument } from 'rxdb';
 
 import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import { Tree } from '@wcpos/components/tree';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { EditCustomerForm } from './form';
 import { useT } from '../../../../contexts/translations';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 
 interface Props {
-	resource: ObservableResource<import('@wcpos/database').CustomerDocument>;
+	resource: ObservableResource<EngineRecord<'customers'> | null>;
 }
 
 export function EditCustomer({ resource }: Props) {
@@ -21,8 +21,9 @@ export function EditCustomer({ resource }: Props) {
 	const t = useT();
 	const [value, setValue] = React.useState('form');
 	const { format } = useCustomerNameFormat();
+	const payload = useRecordField(customer, (record) => record.payload);
 
-	if (!isRxDocument(customer)) {
+	if (!customer) {
 		return (
 			<Modal>
 				<ModalContent size="xl">
@@ -41,7 +42,7 @@ export function EditCustomer({ resource }: Props) {
 			<ModalContent size="xl">
 				<ModalHeader>
 					<ModalTitle>
-						<Text>{t('common.edit_2', { name: format(customer) })}</Text>
+						<Text>{t('common.edit_2', { name: format(payload ?? {}) })}</Text>
 					</ModalTitle>
 				</ModalHeader>
 				<ModalBody>
@@ -58,7 +59,7 @@ export function EditCustomer({ resource }: Props) {
 							<EditCustomerForm customer={customer} />
 						</TabsContent>
 						<TabsContent value="json">
-							<Tree value={customer.toJSON()} />
+							<Tree value={payload} />
 						</TabsContent>
 					</Tabs>
 				</ModalBody>

@@ -10,9 +10,8 @@ import { ViewOrderModal } from './modal';
 
 const push = jest.fn();
 const mockOrder = {
-	id: 23858,
 	uuid: 'order-uuid',
-	status: 'completed',
+	payload: { id: 23858, status: 'completed' },
 } as any;
 
 jest.mock('react-native', () => ({
@@ -29,8 +28,9 @@ jest.mock('observable-hooks', () => ({
 	useObservableSuspense: () => mockOrder,
 }));
 
-jest.mock('rxdb', () => ({
-	isRxDocument: () => true,
+jest.mock('@wcpos/query', () => ({
+	useRecordField: (record: typeof mockOrder, select: (record: typeof mockOrder) => unknown) =>
+		select(record),
 }));
 
 jest.mock('@wcpos/components/button', () => ({

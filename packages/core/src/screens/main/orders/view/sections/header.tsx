@@ -5,6 +5,7 @@ import toNumber from 'lodash/toNumber';
 
 import { Text } from '@wcpos/components/text';
 import { ModalHeader } from '@wcpos/components/modal';
+import type { EngineRecord } from '@wcpos/query';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import { StatusPill } from './_status-pill';
@@ -15,10 +16,10 @@ import { useStoreLabel } from '../../../hooks/use-store-label';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useDateFormat } from '../../../hooks/use-date-format';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
+type OrderPayload = EngineRecord<'orders'>['payload'];
 
 interface Props {
-	order: OrderDocument;
+	order: OrderPayload;
 }
 
 export function HeaderSection({ order }: Props) {

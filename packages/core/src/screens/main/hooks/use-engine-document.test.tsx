@@ -8,6 +8,7 @@ import {
 	useEngineDocument,
 	useEngineDocumentByWooId,
 	useEngineDocumentsByWooId,
+	useEngineRecord,
 	useEngineRecordByWooId,
 	useEngineRecordsByWooId,
 } from './use-engine-document';
@@ -221,6 +222,29 @@ describe('useEngineDocument', () => {
 		const record = result.current.read();
 		expect(record).toBe(source.document);
 		expect(record?.payload.name).toBe('Featured');
+	});
+
+	it('keeps the last UUID record when a replacement database lacks the collection', () => {
+		const source = fakeRxDocument({
+			uuid: 'product-uuid',
+			remoteId: '42',
+			payload: { id: 42, name: 'Coffee' },
+		});
+		const document$ = new BehaviorSubject<RxDocument<EngineDocument> | null>(source.document);
+		activeDatabase = databaseWith(document$);
+
+		const { result } = renderHook(() => useEngineRecord('products', 'product-uuid'));
+		const emissions: unknown[] = [];
+		const subscription = result.current.valueRef$$.subscribe((value) =>
+			emissions.push(value?.current)
+		);
+
+		act(() => emitDatabase({ collections: {} }));
+
+		expect(result.current.read()).toBe(source.document);
+		expect(emissions).toEqual([source.document]);
+		expect(() => result.current.read()).not.toThrow();
+		subscription.unsubscribe();
 	});
 
 	it('resolves null for an invalid Woo ID without querying the collection', () => {

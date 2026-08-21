@@ -1,16 +1,11 @@
 import * as React from 'react';
 
 import { useNavigationState } from 'expo-router/react-navigation';
-import get from 'lodash/get';
 import {
 	ObservableResource,
 	useObservableEagerState,
-	useObservableState,
 	useObservableSuspense,
 } from 'observable-hooks';
-import { isRxDocument } from 'rxdb';
-import { of } from 'rxjs';
-import { map } from 'rxjs/operators';
 
 import {
 	Dialog,
@@ -35,6 +30,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { WebView } from '@wcpos/components/webview';
 import { usePrint } from '@wcpos/printer';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -59,7 +55,7 @@ import { useTaxSettingsOptional } from '../contexts/tax-rates/provider';
 import { resolvePriceNumDecimals } from '../contexts/tax-rates/resolve-price-num-decimals';
 
 interface Props {
-	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
+	resource: ObservableResource<EngineRecord<'orders'> | null>;
 }
 
 const CHECKOUT_ROUTE_NAMES = ['Checkout', '(modals)/cart/[orderId]/checkout'] as const;
@@ -71,7 +67,7 @@ export function Receipt({ resource }: Props) {
 	const order = useObservableSuspense(resource);
 	const t = useT();
 
-	if (!isRxDocument(order)) {
+	if (!order) {
 		return (
 			<Modal>
 				<ModalContent size="lg">
@@ -88,7 +84,7 @@ export function Receipt({ resource }: Props) {
 	return <ReceiptDocument order={order} />;
 }
 
-function ReceiptDocument({ order }: { order: import('@wcpos/database').OrderDocument }) {
+function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 	const t = useT();
 	const iframeRef = React.useRef<HTMLIFrameElement>(null);
 	const { store } = useAppState();
@@ -103,16 +99,13 @@ function ReceiptDocument({ order }: { order: import('@wcpos/database').OrderDocu
 		contextDp: taxRates?.priceNumDecimals,
 		storeDp,
 	});
+	const orderData = useRecordField(order, (record) => record.payload);
 
 	// Get the WC order ID for the receipts API
-	const orderId = useObservableEagerState(order.id$ ?? of(undefined as number | undefined));
+	const orderId = orderData.id;
 
 	// Legacy receipt URL from order links
-	const links$ = order.links$ ?? of(undefined);
-	const baseReceiptURL = useObservableState(
-		links$.pipe(map((links) => get(links, ['receipt', 0, 'href']) as string | undefined)),
-		get(order, ['links', 'receipt', 0, 'href']) as string | undefined
-	);
+	const baseReceiptURL = orderData.links?.receipt?.[0]?.href;
 
 	// Template renderer — provides template list, selection, and rendered output
 	const {
@@ -131,7 +124,7 @@ function ReceiptDocument({ order }: { order: import('@wcpos/database').OrderDocu
 		orderId,
 		baseReceiptURL,
 		mode: 'live',
-		order,
+		order: orderData,
 	});
 
 	// Build template info for routing

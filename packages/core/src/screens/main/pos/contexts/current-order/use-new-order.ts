@@ -4,7 +4,6 @@ import {
 	useObservableEagerState,
 	useObservableSuspense,
 } from 'observable-hooks';
-import { isRxDocument } from 'rxdb';
 import useDeepCompareEffect from 'use-deep-compare-effect';
 
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -46,9 +45,8 @@ export const useNewOrder = () => {
 	 *
 	 */
 	useDeepCompareEffect(() => {
-		const customer = isRxDocument(defaultCustomer)
-			? defaultCustomer.toMutableJSON()
-			: defaultCustomer;
+		const customer =
+			'getLatest' in defaultCustomer ? defaultCustomer.toMutableJSON().payload : defaultCustomer;
 		const baseData = transformCustomerJSONToOrderJSON(
 			customer as import('@wcpos/database').CustomerDocument,
 			country as string

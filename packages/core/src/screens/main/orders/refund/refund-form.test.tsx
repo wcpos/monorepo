@@ -139,6 +139,11 @@ jest.mock('observable-hooks', () => {
 	};
 });
 
+jest.mock('@wcpos/query', () => ({
+	useRecordField: (record: any, select: (value: any) => unknown) =>
+		select(record?.payload ? record : { payload: record }),
+}));
+
 const mockUseRefundMutation = jest.fn(() => jest.fn());
 const mockUseRouter = jest.fn(() => ({ back: jest.fn() }));
 const mockGet = jest.fn();

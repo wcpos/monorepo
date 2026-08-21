@@ -2,9 +2,8 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useObservableEagerState, useObservablePickState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
-import { isRxDocument } from 'rxdb';
 import { map } from 'rxjs/operators';
 import * as z from 'zod';
 
@@ -21,6 +20,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { ModalAction, ModalClose, ModalFooter, useModal } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { GUEST_CUSTOMER_ID, isGuestCustomer } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -37,14 +37,14 @@ import { ShippingAddressForm, shippingAddressSchema } from '../../components/shi
 import { usePushDocument } from '../../contexts/use-push-document';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
-import { useEngineDocumentByWooId } from '../../hooks/use-engine-document';
+import { useEngineRecordByWooId } from '../../hooks/use-engine-document';
 import { useGuestCustomer } from '../../hooks/use-guest-customer';
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'order']);
 
 interface Props {
-	order: import('@wcpos/database').OrderDocument;
+	order: EngineRecord<'orders'>;
 }
 
 const formSchema = z.object({
@@ -75,16 +75,13 @@ export function EditOrderForm({ order }: Props) {
 	const { format } = useCustomerNameFormat();
 	const [customerIdToLoad, setCustomerIdToLoad] = React.useState<number | null>(null);
 	const customerIdForLookup = customerIdToLoad ?? 0;
-	const customerResource = useEngineDocumentByWooId<import('@wcpos/database').CustomerDocument>(
-		'customers',
-		customerIdForLookup
-	);
+	const customerResource = useEngineRecordByWooId('customers', customerIdForLookup);
 	const customerLookup$ = React.useMemo(
 		() =>
 			customerResource.valueRef$$.pipe(
 				map((valueRef) => ({
 					requestedId: customerIdForLookup,
-					document: valueRef?.current,
+					record: valueRef?.current,
 				}))
 			),
 		[customerIdForLookup, customerResource]
@@ -99,38 +96,23 @@ export function EditOrderForm({ order }: Props) {
 	/**
 	 * We need to refresh the component when the order data changes
 	 */
-	const formData = useObservablePickState(
-		order.$,
-		() => {
-			const latest = order.getLatest();
-			return {
-				status: latest.status,
-				parent_id: latest.parent_id,
-				currency: latest.currency,
-				customer_id: latest.customer_id,
-				customer_note: latest.customer_note,
-				billing: latest.billing,
-				shipping: latest.shipping,
-				payment_method: latest.payment_method,
-				payment_method_title: latest.payment_method_title,
-				transaction_id: latest.transaction_id,
-				meta_data: latest.meta_data,
-				tax_ids: (latest as { tax_ids?: unknown[] }).tax_ids ?? [],
-			};
-		},
-		'status',
-		'parent_id',
-		'currency',
-		'customer_id',
-		'customer_note',
-		'billing',
-		'shipping',
-		'payment_method',
-		'payment_method_title',
-		'transaction_id',
-		'meta_data',
-		'tax_ids' as never
-	);
+	const formData = useRecordField(order, (record) => {
+		const latest = record.payload;
+		return {
+			status: latest.status,
+			parent_id: latest.parent_id,
+			currency: latest.currency,
+			customer_id: latest.customer_id,
+			customer_note: latest.customer_note,
+			billing: latest.billing,
+			shipping: latest.shipping,
+			payment_method: latest.payment_method,
+			payment_method_title: latest.payment_method_title,
+			transaction_id: latest.transaction_id,
+			meta_data: latest.meta_data,
+			tax_ids: (latest as { tax_ids?: unknown[] }).tax_ids ?? [],
+		};
+	});
 
 	/**
 	 * Use `values` instead of `defaultValues` + useEffect reset pattern.
@@ -150,7 +132,7 @@ export function EditOrderForm({ order }: Props) {
 			// #163 ruling R5: this is an order save. `localPatch` swallows storage
 			// failures, so without this guard the push would go out built on a local
 			// patch that never landed.
-			if (blockIfDegraded('save-order', { orderId: order.uuid ?? order.id })) return;
+			if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
 
 			setLoading(true);
 			try {
@@ -163,15 +145,15 @@ export function EditOrderForm({ order }: Props) {
 				if (!patched?.document) {
 					throw new Error('Local patch failed');
 				}
-				if (blockIfDegraded('save-order', { orderId: order.uuid ?? order.id })) return;
+				if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
 				await pushDocument(order).then((savedDoc) => {
-					if (isRxDocument(savedDoc)) {
-						const doc = savedDoc as unknown as { id?: number; number?: string };
-						mutationLogger.success(t('common.order_saved', { number: doc.number }), {
+					if (savedDoc) {
+						const saved = order.getLatest().payload;
+						mutationLogger.success(t('common.order_saved', { number: saved.number }), {
 							showToast: true,
 							context: {
-								orderId: doc.id,
-								orderNumber: doc.number,
+								orderId: saved.id,
+								orderNumber: saved.number,
 							},
 						});
 						close();
@@ -184,7 +166,7 @@ export function EditOrderForm({ order }: Props) {
 					code: ERROR_CODES.SYNC_UNEXPECTED,
 					toast: { title: t('common.failed_to_save_order') },
 					context: {
-						orderId: order.id,
+						orderId: order.getLatest().payload.id,
 						error: errorMessage,
 					},
 				});
@@ -206,20 +188,20 @@ export function EditOrderForm({ order }: Props) {
 	const handleCustomerChange = React.useCallback(
 		(
 			customerId: number,
-			selectedCustomer:
-				import('@wcpos/database').CustomerDocument | ReturnType<typeof useGuestCustomer>
+			selectedCustomer: EngineRecord<'customers'> | ReturnType<typeof useGuestCustomer>
 		) => {
 			// customerId can be 0
 			if (customerId === undefined || customerId === null) return;
 
 			try {
-				const customer = isGuestCustomer(customerId) ? guestCustomer : selectedCustomer;
+				const customerData = (
+					'getLatest' in selectedCustomer ? selectedCustomer.getLatest().payload : selectedCustomer
+				) as EngineRecord<'customers'>['payload'];
 
 				/**
 				 * @FIXME - this is similar to the transformCustomerJSONToOrderJSON function
 				 * Should we set the store country if there is no country in the billing object?
 				 */
-				const customerData = customer as any;
 				const billing = {
 					...customerData.billing,
 					first_name: customerData.billing?.first_name || customerData.first_name,
@@ -234,9 +216,13 @@ export function EditOrderForm({ order }: Props) {
 				// Snapshot the customer's tax IDs onto the order at attach time
 				// (mirrors `transformCustomerJSONToOrderJSON`). Empty array
 				// when the customer has none — overrides the prior snapshot.
-				form.setValue('tax_ids', Array.isArray(customerData.tax_ids) ? customerData.tax_ids : [], {
-					shouldValidate: true,
-				});
+				form.setValue(
+					'tax_ids',
+					(Array.isArray(customerData.tax_ids) ? customerData.tax_ids : []) as z.infer<
+						typeof formSchema
+					>['tax_ids'],
+					{ shouldValidate: true }
+				);
 
 				form.setValue('customer_id', customerId);
 			} catch (error) {
@@ -250,7 +236,7 @@ export function EditOrderForm({ order }: Props) {
 				});
 			}
 		},
-		[form, guestCustomer]
+		[form]
 	);
 
 	/**
@@ -261,7 +247,7 @@ export function EditOrderForm({ order }: Props) {
 		const selectedCustomer = isGuestCustomer(customerIdToLoad)
 			? guestCustomer
 			: customerLookup?.requestedId === customerIdToLoad
-				? customerLookup.document
+				? customerLookup.record
 				: undefined;
 		if (selectedCustomer === undefined) return;
 		if (selectedCustomer === null) {

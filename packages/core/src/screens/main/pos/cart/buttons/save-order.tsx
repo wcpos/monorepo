@@ -1,12 +1,9 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { isRxDocument } from 'rxdb';
-
 import { Button } from '@wcpos/components/button';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import type { OrderDocument } from '@wcpos/database';
 
 import { useT } from '../../../../../contexts/translations';
 import { usePushDocument } from '../../../contexts/use-push-document';
@@ -45,13 +42,13 @@ export function SaveButton() {
 				/**
 				 * TODO; move this generic sanckbar to the pushDocument hook
 				 */
-				if (isRxDocument(savedDoc)) {
-					const orderDoc = savedDoc as unknown as OrderDocument;
-					cartLogger.success(t('common.order_saved', { number: orderDoc.number }), {
+				if (savedDoc) {
+					const saved = currentOrderRecord.getLatest().payload;
+					cartLogger.success(t('common.order_saved', { number: saved.number }), {
 						showToast: true,
 						context: {
-							orderId: orderDoc.id,
-							orderNumber: orderDoc.number,
+							orderId: saved.id,
+							orderNumber: saved.number,
 						},
 					});
 				}

@@ -1,13 +1,11 @@
 import { useLocalSearchParams } from 'expo-router';
 
 import { EditVariationModal } from './modal';
-import { useEngineDocument } from '../../../hooks/use-engine-document';
-
-type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
+import { useEngineRecord } from '../../../hooks/use-engine-document';
 
 export function EditVariationScreen() {
 	const { variationId } = useLocalSearchParams<{ variationId: string }>();
-	const resource = useEngineDocument<ProductVariationDocument>('variations', variationId);
+	const resource = useEngineRecord('variations', variationId);
 
 	return <EditVariationModal resource={resource} />;
 }

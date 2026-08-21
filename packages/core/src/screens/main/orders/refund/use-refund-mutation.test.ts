@@ -18,6 +18,14 @@ import { StorageBlockedError } from '../../hooks/use-storage-health';
 const mockPost = jest.fn();
 const mockEngineRequire = jest.fn();
 
+const makeOrder = (id: number | undefined) => {
+	const order = {
+		payload: { id },
+		getLatest: () => order,
+	};
+	return order;
+};
+
 jest.mock('uuid', () => ({
 	v4: jest.fn(() => 'mock-uuid'),
 }));
@@ -113,10 +121,7 @@ describe('useRefundMutation', () => {
 	});
 
 	it('posts the stable refund payload with an idempotency header and refreshes the order', async () => {
-		const order = {
-			id: 77,
-			collection: {},
-		};
+		const order = makeOrder(77);
 
 		const { result } = renderHook(() => useRefundMutation());
 
@@ -154,10 +159,7 @@ describe('useRefundMutation', () => {
 	});
 
 	it('resolves when engine.require itself throws synchronously — the refund already succeeded', async () => {
-		const order = {
-			id: 78,
-			collection: {},
-		};
+		const order = makeOrder(78);
 		mockEngineRequire.mockImplementationOnce(() => {
 			throw new Error('engine_disposed');
 		});
@@ -183,10 +185,7 @@ describe('useRefundMutation', () => {
 	});
 
 	it('resolves when the engine refresh fails — the refund already succeeded server-side', async () => {
-		const order = {
-			id: 77,
-			collection: {},
-		};
+		const order = makeOrder(77);
 		const release = jest.fn();
 		mockEngineRequire.mockReturnValueOnce({
 			get ready() {
@@ -218,10 +217,7 @@ describe('useRefundMutation', () => {
 	});
 
 	it('fails fast when attempting to refund an order without a persisted id', async () => {
-		const order = {
-			id: undefined,
-			collection: {},
-		};
+		const order = makeOrder(undefined);
 
 		const { result } = renderHook(() => useRefundMutation());
 
@@ -294,7 +290,7 @@ describe('useRefundMutation while storage is degraded', () => {
 		await act(async () => {
 			await expect(
 				result.current({
-					order: { id: 42 } as never,
+					order: makeOrder(42) as never,
 					amount: '10.00',
 					reason: '',
 					lineItems: [],

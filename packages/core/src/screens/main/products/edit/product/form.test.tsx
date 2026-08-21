@@ -5,6 +5,8 @@ import * as React from 'react';
 
 import { act, render } from '@testing-library/react';
 
+import type { EngineRecord } from '@wcpos/query';
+
 import { EditProductForm } from './form';
 
 const mockLocalPatch = jest.fn();
@@ -32,9 +34,10 @@ const form = {
 			callback({ ...formValues, categories: [...formValues.categories] })
 	),
 };
+const mockUseForm = jest.fn((_options: unknown) => form);
 
 jest.mock('react-hook-form', () => ({
-	useForm: () => form,
+	useForm: (options: unknown) => mockUseForm(options),
 }));
 
 jest.mock('@wcpos/components/form', () => ({
@@ -104,12 +107,19 @@ jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
 }));
 
-const product = {
+const productData = {
 	id: 5,
 	name: 'Test product',
 	categories: [],
 	meta_data: [],
-} as unknown as import('@wcpos/database').ProductDocument;
+};
+const product = {
+	uuid: 'product-5',
+	payload: productData,
+	toMutableJSON: () => ({ payload: productData }),
+	getLatest: () => product,
+	collection: { name: 'products' },
+} as unknown as EngineRecord<'products'>;
 
 /**
  * The edit modal must dismiss itself after a successful save, but a failed
@@ -119,6 +129,14 @@ describe('EditProductForm save', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		modalActions.clear();
+	});
+
+	it('reads initial form values from the record payload', () => {
+		render(<EditProductForm product={product} />);
+
+		expect(mockUseForm).toHaveBeenCalledWith(
+			expect.objectContaining({ defaultValues: expect.objectContaining({ name: 'Test product' }) })
+		);
 	});
 
 	it('closes the modal after a successful save', async () => {

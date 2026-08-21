@@ -13,8 +13,7 @@ import { useCurrentOrder } from '../contexts/current-order';
  *
  */
 export function OpenOrderTabs() {
-	// stage-I2: left on proxy face — the open-orders tab strip is explicitly out of scope.
-	const { currentOrder, openOrders, setCurrentOrderID } = useCurrentOrder();
+	const { currentOrderRecord, openOrders, setCurrentOrderID } = useCurrentOrder();
 	const t = useT();
 
 	/**
@@ -36,17 +35,15 @@ export function OpenOrderTabs() {
 	 */
 	return (
 		<Tabs
-			value={
-				(currentOrder as unknown as { isNew: boolean }).isNew ? 'new' : (currentOrder.uuid ?? '')
-			}
+			value={(currentOrderRecord as { isNew?: boolean }).isNew ? 'new' : currentOrderRecord.uuid}
 			onValueChange={handleTabPress}
 			orientation="horizontal"
 			className=""
 		>
 			<ScrollableTabsList className="bg-transparent p-0">
-				{openOrders.map(({ id, document }) => (
+				{openOrders.map(({ id, record }) => (
 					<TabsTrigger key={id} value={id} testID={`open-order-tab-${id}`}>
-						<CartTabTitle order={document} />
+						<CartTabTitle order={record} />
 					</TabsTrigger>
 				))}
 				<TabsTrigger value="new" testID="new-order-tab">

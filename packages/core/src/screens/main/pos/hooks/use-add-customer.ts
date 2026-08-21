@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
-import { isRxDocument } from 'rxdb';
 
 import { isGuestCustomer } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
@@ -14,9 +13,6 @@ import { useGuestCustomer } from '../../hooks/use-guest-customer';
 import { useCurrentOrder } from '../contexts/current-order';
 
 import type { CustomerData } from '../../hooks/use-customer-name-format/helpers';
-
-type CustomerDocument = import('@wcpos/database').CustomerDocument;
-type Customer = CustomerDocument | CustomerData;
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
@@ -43,14 +39,11 @@ export const useAddCustomer = () => {
 	);
 
 	/**
-	 * Customer can be RxDocument or plain object
+	 * Customer selection already supplies payload-shaped data.
 	 */
 	const addCustomer = React.useCallback(
-		async (customer: Customer) => {
-			// if RxDocument, get plain object
-			let data: CustomerData = isRxDocument(customer)
-				? (customer as CustomerDocument).toMutableJSON()
-				: customer;
+		async (customer: CustomerData) => {
+			let data = customer;
 
 			// a guest id with no billing or shipping means "use the guest customer defaults"
 			const isGuest = isGuestCustomer(data.id) && !data.billing && !data.shipping;
@@ -64,7 +57,7 @@ export const useAddCustomer = () => {
 			const result = await localPatch({
 				document: currentOrderRecord,
 				data: transformCustomerJSONToOrderJSON(
-					data as unknown as CustomerDocument,
+					data as unknown as import('@wcpos/database').CustomerDocument,
 					country as string
 				),
 			});

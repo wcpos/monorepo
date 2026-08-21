@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import { useRouter } from 'expo-router';
-import { isRxDocument } from 'rxdb';
 
 import { Button } from '@wcpos/components/button';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -52,7 +51,7 @@ export function PayButton() {
 
 		try {
 			await pushDocument(currentOrderRecord).then((savedDoc) => {
-				if (isRxDocument(savedDoc)) {
+				if (savedDoc) {
 					// Re-checked after the await: the worker can die mid-push, and
 					// opening the payment modal then would let the cashier take money
 					// for an order this device can no longer record.

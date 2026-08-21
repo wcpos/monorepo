@@ -1,23 +1,24 @@
 import * as React from 'react';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
-import { isRxDocument } from 'rxdb';
 
 import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { RefundOrderForm } from './form';
 import { useT } from '../../../../contexts/translations';
 
 interface Props {
-	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
+	resource: ObservableResource<EngineRecord<'orders'> | null>;
 }
 
 export function RefundOrderModal({ resource }: Props) {
 	const order = useObservableSuspense(resource);
 	const t = useT();
+	const orderId = useRecordField(order, (record) => record.payload.id);
 
-	if (!isRxDocument(order)) {
+	if (!order) {
 		return (
 			<Modal>
 				<ModalContent size="xl">
@@ -36,7 +37,7 @@ export function RefundOrderModal({ resource }: Props) {
 			<ModalContent size="xl">
 				<ModalHeader>
 					<ModalTitle>
-						<Text>{t('orders.refund_order', { number: order.id || '' })}</Text>
+						<Text>{t('orders.refund_order', { number: orderId || '' })}</Text>
 					</ModalTitle>
 				</ModalHeader>
 				<ModalBody>

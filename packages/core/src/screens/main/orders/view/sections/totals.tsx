@@ -4,13 +4,14 @@ import { View } from 'react-native';
 import toNumber from 'lodash/toNumber';
 
 import { Text } from '@wcpos/components/text';
+import type { EngineRecord } from '@wcpos/query';
 
 import { Section } from './_section';
 import { totalRefunded } from './total-refunded';
 import { useT } from '../../../../../contexts/translations';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
+type OrderPayload = EngineRecord<'orders'>['payload'];
 
 function Row({
 	label,
@@ -33,7 +34,7 @@ function Row({
 	);
 }
 
-export function TotalsSection({ order }: { order: OrderDocument }) {
+export function TotalsSection({ order }: { order: OrderPayload }) {
 	const t = useT();
 	const { format } = useCurrencyFormat({ currencySymbol: order.currency_symbol });
 
