@@ -209,6 +209,7 @@ test.describe('search-probe pure logic', () => {
 			expect(authorization).toEqual({ transport: 'query', value: 'token' });
 			expect(productReads).toEqual([
 				{ header: 'Bearer token', param: null },
+				{ header: null, param: 'Bearer token' },
 				{ header: null, param: 'token' },
 			]);
 		} finally {
