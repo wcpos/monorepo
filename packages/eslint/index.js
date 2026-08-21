@@ -116,19 +116,50 @@ export const wcposRules = {
 			if (/(^|\/)packages\/query\/src\/records\//.test(context.filename.replaceAll('\\', '/'))) {
 				return {};
 			}
+			// Resolve hook identity from the observable-hooks IMPORT bindings, not the
+			// call-site spelling: aliased/namespace imports stay guarded, and unrelated
+			// local functions that merely share a hook's name are not flagged.
+			const localHookNames = new Set();
+			const namespaceNames = new Set();
+			const checkArguments = (node) => {
+				for (const argument of node.arguments) {
+					const expression = unwrapTypeScriptExpression(argument);
+					if (
+						expression?.type === 'MemberExpression' &&
+						String(memberPropertyName(expression)).endsWith('$')
+					) {
+						context.report({ node: argument, messageId: 'useFieldHook' });
+					}
+				}
+			};
 			return {
+				ImportDeclaration(node) {
+					if (node.source.value !== 'observable-hooks') return;
+					for (const specifier of node.specifiers) {
+						if (
+							specifier.type === 'ImportSpecifier' &&
+							specifier.imported.type === 'Identifier' &&
+							observableHookNames.has(specifier.imported.name)
+						) {
+							localHookNames.add(specifier.local.name);
+						} else if (specifier.type === 'ImportNamespaceSpecifier') {
+							namespaceNames.add(specifier.local.name);
+						}
+					}
+				},
 				CallExpression(node) {
-					if (node.callee.type !== 'Identifier' || !observableHookNames.has(node.callee.name)) {
+					const callee = node.callee;
+					if (callee.type === 'Identifier' && localHookNames.has(callee.name)) {
+						checkArguments(node);
 						return;
 					}
-					for (const argument of node.arguments) {
-						const expression = unwrapTypeScriptExpression(argument);
-						if (
-							expression?.type === 'MemberExpression' &&
-							String(memberPropertyName(expression)).endsWith('$')
-						) {
-							context.report({ node: argument, messageId: 'useFieldHook' });
-						}
+					if (
+						callee.type === 'MemberExpression' &&
+						callee.object.type === 'Identifier' &&
+						namespaceNames.has(callee.object.name) &&
+						observableHookNames.has(memberPropertyName(callee))
+					) {
+						checkArguments(node);
 					}
 				},
 			};

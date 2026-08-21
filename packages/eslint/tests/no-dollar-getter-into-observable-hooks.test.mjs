@@ -16,41 +16,60 @@ const ruleTester = new RuleTester({
   },
 });
 
+// Hook identity comes from the observable-hooks IMPORT binding, so every case that
+// expects the guard to fire imports the hook (aliased and namespace forms included).
+const importHooks =
+  "import { useObservable, useObservableState, useObservableEagerState, useObservableSuspense, useObservablePickState, useSubscription } from 'observable-hooks';\n";
+
 ruleTester.run(
   "wcpos/no-dollar-getter-into-observable-hooks",
   wcposRules["no-dollar-getter-into-observable-hooks"],
   {
     valid: [
-      "useObservableState(stockRejection$);",
-      "useObservable((inputs$) => inputs$.pipe(switchMap(() => store.currency$)), []);",
+      `${importHooks}useObservableState(stockRejection$);`,
+      `${importHooks}useObservable((inputs$) => inputs$.pipe(switchMap(() => store.currency$)), []);`,
       {
-        code: "useObservableEagerState(record.total$);",
+        code: `${importHooks}useObservableEagerState(record.total$);`,
         filename: "packages/query/src/records/use-record-field.ts",
       },
+      // An unrelated local function that merely shares a hook's name is NOT the guarded hook.
+      "function useObservableEagerState(x) { return x; }\nuseObservableEagerState(store.currency$);",
+      // Importing something else from observable-hooks does not arm unrelated names.
+      "import { useLayoutObservable } from 'observable-hooks';\nsomethingElse(store.currency$);",
     ],
     invalid: [
       {
-        code: "useObservable(store.currency$);",
+        code: `${importHooks}useObservable(store.currency$);`,
         errors: [{ messageId: "useFieldHook" }],
       },
       {
-        code: "useObservableState(store['currency$']);",
+        code: `${importHooks}useObservableState(store['currency$']);`,
         errors: [{ messageId: "useFieldHook" }],
       },
       {
-        code: "useObservableEagerState(store?.currency$);",
+        code: `${importHooks}useObservableEagerState(store?.currency$);`,
         errors: [{ messageId: "useFieldHook" }],
       },
       {
-        code: "useObservableSuspense(store.currency$!);",
+        code: `${importHooks}useObservableSuspense(store.currency$!);`,
         errors: [{ messageId: "useFieldHook" }],
       },
       {
-        code: "useObservablePickState(store.$, () => store.currency, 'currency');",
+        code: `${importHooks}useObservablePickState(store.$, () => store.currency, 'currency');`,
         errors: [{ messageId: "useFieldHook" }],
       },
       {
-        code: "useSubscription(store.currency$ as Observable<string>);",
+        code: `${importHooks}useSubscription(store.currency$ as Observable<string>);`,
+        errors: [{ messageId: "useFieldHook" }],
+      },
+      // Aliased import stays guarded.
+      {
+        code: "import { useObservableEagerState as useEager } from 'observable-hooks';\nuseEager(store.currency$);",
+        errors: [{ messageId: "useFieldHook" }],
+      },
+      // Namespace import stays guarded.
+      {
+        code: "import * as hooks from 'observable-hooks';\nhooks.useObservableEagerState(store.currency$);",
         errors: [{ messageId: "useFieldHook" }],
       },
     ],
