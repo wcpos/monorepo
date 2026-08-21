@@ -67,21 +67,22 @@ export function AddNewCustomer() {
 			try {
 				const savedDoc = await create({ data, awaitRemoteId: true });
 				if (savedDoc) {
-					cartLogger.success(t('common.saved', { name: format(savedDoc as any) }), {
+					// create() returns the raw engine record — the customer body is its payload.
+					const saved = (savedDoc as any).getLatest?.().payload ?? (savedDoc as any).payload;
+					cartLogger.success(t('common.saved', { name: format(saved) }), {
 						showToast: true,
 						context: {
-							customerId: (savedDoc as any).id,
-							customerName: format(savedDoc as any),
+							customerId: saved?.id,
+							customerName: format(saved),
 						},
 					});
 					if (currentOrderRecord) {
-						const json = (savedDoc as any).toJSON();
 						await localPatch({
 							document: currentOrderRecord,
 							data: {
-								customer_id: json.id,
-								billing: json.billing,
-								shipping: json.shipping,
+								customer_id: saved?.id,
+								billing: saved?.billing,
+								shipping: saved?.shipping,
 							},
 						});
 						setOpen(false);
@@ -167,21 +168,22 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
 			try {
 				const savedDoc = await create({ data, awaitRemoteId: true });
 				if (savedDoc) {
-					cartLogger.success(t('common.saved', { name: format(savedDoc as any) }), {
+					// create() returns the raw engine record — the customer body is its payload.
+					const saved = (savedDoc as any).getLatest?.().payload ?? (savedDoc as any).payload;
+					cartLogger.success(t('common.saved', { name: format(saved) }), {
 						showToast: true,
 						context: {
-							customerId: (savedDoc as any).id,
-							customerName: format(savedDoc as any),
+							customerId: saved?.id,
+							customerName: format(saved),
 						},
 					});
 					if (currentOrderRecord) {
-						const json = (savedDoc as any).toJSON();
 						await localPatch({
 							document: currentOrderRecord,
 							data: {
-								customer_id: json.id,
-								billing: json.billing,
-								shipping: json.shipping,
+								customer_id: saved?.id,
+								billing: saved?.billing,
+								shipping: saved?.shipping,
 							},
 						});
 						onOpenChange(false);
