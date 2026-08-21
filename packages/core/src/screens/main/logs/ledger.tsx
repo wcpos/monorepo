@@ -3,7 +3,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import type { ScrollViewProps } from 'react-native';
 
 import { isToday } from 'date-fns';
-import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense } from 'observable-hooks';
 
 import { cn } from '@wcpos/components/lib/utils';
 import { HStack } from '@wcpos/components/hstack';
@@ -34,7 +34,6 @@ import { RowDetail } from './row-detail';
 
 import type { ObservableResource } from 'observable-hooks';
 import type { RxCollection } from 'rxdb';
-import type { Observable } from 'rxjs';
 
 type LedgerResource = ObservableResource<QueryResult<RxCollection>>;
 
@@ -298,7 +297,6 @@ function LedgerRow({
  */
 export function Ledger({
 	resource,
-	total$,
 	activeKind,
 	onKindPress,
 	onRenderedCount,
@@ -306,10 +304,8 @@ export function Ledger({
 	onContentSizeChange,
 	onLayout,
 	scrollEventThrottle,
-	footerAccessory,
 }: {
 	resource: LedgerResource;
-	total$: Observable<number>;
 	activeKind: LevelKind | undefined;
 	onKindPress: (kind: LevelKind) => void;
 	onRenderedCount?: (count: number) => void;
@@ -317,12 +313,10 @@ export function Ledger({
 	onContentSizeChange?: ScrollViewProps['onContentSizeChange'];
 	onLayout?: ScrollViewProps['onLayout'];
 	scrollEventThrottle?: ScrollViewProps['scrollEventThrottle'];
-	footerAccessory?: React.ReactNode;
 }) {
 	const t = useT();
 	const { formatDate } = useLocalDate();
 	const result = useObservableSuspense(resource);
-	const total = useObservableState(total$, 0);
 	const levelLabel = useLevelLabel();
 	const eventTitle = useEventTitle();
 	const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
@@ -400,19 +394,38 @@ export function Ledger({
 					))
 				)}
 			</ScrollView>
-
-			<HStack className="border-border/50 items-center justify-between border-t py-2">
-				<Text className="text-muted-foreground text-xs">
-					{t('common.showing_of', { shown: rows.length, total })}
-				</Text>
-				<Text testID="logs-loaded-count" className="hidden">
-					{rows.length}
-				</Text>
-				<Text testID="logs-total-count" className="hidden">
-					{total}
-				</Text>
-				{footerAccessory}
-			</HStack>
 		</VStack>
+	);
+}
+
+/**
+ * Pinned honest-count footer. Rendered by the screen OUTSIDE the ledger's
+ * Suspense/error boundary so the count and the live status accessory stay
+ * mounted while the log query is loading or broken. flex-wrap lets the
+ * accessory drop to its own line instead of clipping on narrow layouts.
+ */
+export function LedgerFooter({
+	shown,
+	total,
+	accessory,
+}: {
+	shown: number;
+	total: number;
+	accessory?: React.ReactNode;
+}) {
+	const t = useT();
+	return (
+		<HStack className="border-border/50 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t py-2">
+			<Text className="text-muted-foreground text-xs">
+				{t('common.showing_of', { shown, total })}
+			</Text>
+			<Text testID="logs-loaded-count" className="hidden">
+				{shown}
+			</Text>
+			<Text testID="logs-total-count" className="hidden">
+				{total}
+			</Text>
+			{accessory}
+		</HStack>
 	);
 }
