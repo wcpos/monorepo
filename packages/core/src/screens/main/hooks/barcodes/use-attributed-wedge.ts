@@ -2,14 +2,11 @@ import * as React from 'react';
 import { Platform } from 'react-native';
 
 import { requireOptionalNativeModule } from 'expo-modules-core';
-import {
-	useObservableCallback,
-	useObservableEagerState,
-	useObservableState,
-} from 'observable-hooks';
+import { useObservableCallback, useObservableState } from 'observable-hooks';
 
 import type { ScannerProfileDocument } from '@wcpos/database';
 import { type BurstAssembler, createBurstAssembler, type ScanEvent } from '@wcpos/scanner';
+import { useDocField } from '@wcpos/query';
 
 import { showTooShortFeedback } from './too-short-feedback';
 import { useAppState } from '../../../../contexts/app-state';
@@ -63,9 +60,9 @@ export const useAttributedWedge = (enabled = true) => {
 		NO_PROFILES
 	) as ScannerProfileDocument[];
 
-	const prefix = useObservableEagerState(store.barcode_scanning_prefix$) as string;
-	const suffix = useObservableEagerState(store.barcode_scanning_suffix$) as string;
-	const minChars = useObservableEagerState(store.barcode_scanning_min_chars$) as number;
+	const prefix = useDocField(store, (value) => value.barcode_scanning_prefix) as string;
+	const suffix = useDocField(store, (value) => value.barcode_scanning_suffix) as string;
+	const minChars = useDocField(store, (value) => value.barcode_scanning_min_chars) as number;
 
 	// Latest reactive values behind refs for event-time reads (refs must not be
 	// written during render; sync effects keep them fresh).

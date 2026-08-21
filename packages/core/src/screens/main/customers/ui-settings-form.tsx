@@ -1,12 +1,12 @@
 import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useObservableState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { Form, useFormChangeHandler } from '@wcpos/components/form';
 import { VStack } from '@wcpos/components/vstack';
+import { useDocField } from '@wcpos/query';
 
 import {
 	columnsFormSchema,
@@ -24,7 +24,7 @@ export const schema = z.object({
  */
 export function UISettingsForm() {
 	const { uiSettings, getUILabel, resetUI, patchUI } = useUISettings('customers');
-	const formData = useObservableState(uiSettings.$, uiSettings.get());
+	const formData = useDocField(uiSettings, (value) => value);
 	const { setButtonPressHandler } = useDialogContext();
 
 	React.useEffect(() => {

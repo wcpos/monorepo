@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import get from 'lodash/get';
 import omit from 'lodash/omit';
-import { useObservableEagerState, useObservableRef } from 'observable-hooks';
+import { useObservableRef } from 'observable-hooks';
 import { type ExpandedState } from '@tanstack/react-table';
 
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
@@ -12,6 +12,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord } from '@wcpos/query';
+import { useDocField } from '@wcpos/query';
 
 import { Actions } from './cells/actions';
 import { Name } from './cells/name';
@@ -207,9 +208,9 @@ function POSProductsContent({
 		[actions]
 	);
 	const { calcTaxes } = useTaxSettings();
-	const viewMode = useObservableEagerState(uiSettings.viewMode$);
-	const sortBy = useObservableEagerState(uiSettings.sortBy$);
-	const sortDirection = useObservableEagerState(uiSettings.sortDirection$);
+	const viewMode = useDocField(uiSettings, (value) => value.viewMode);
+	const sortBy = useDocField(uiSettings, (value) => value.sortBy);
+	const sortDirection = useDocField(uiSettings, (value) => value.sortDirection);
 	const [expandedRef, expanded$] = useObservableRef<ExpandedState>({} as ExpandedState);
 	const [scannerOpen, setScannerOpen] = React.useState(false);
 	const t = useT();
@@ -357,7 +358,7 @@ function POSProductsContent({
 
 export function POSProducts({ isColumn = false }) {
 	const { uiSettings } = useUISettings('pos-products');
-	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
+	const showOutOfStock = useDocField(uiSettings, (value) => value.showOutOfStock);
 	const initialSort = getPOSProductSort(uiSettings.sortBy, uiSettings.sortDirection);
 	const initialFilters = {
 		status: 'publish' as const,

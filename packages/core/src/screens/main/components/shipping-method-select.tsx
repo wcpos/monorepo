@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import {
 	Select,
 	SelectContent,
@@ -12,6 +10,7 @@ import {
 } from '@wcpos/components/select';
 import type { SelectSingleRootProps } from '@wcpos/components/select';
 import { Text } from '@wcpos/components/text';
+import { useDocField } from '@wcpos/query';
 
 import { useT } from '../../../contexts/translations';
 import { useExtraData } from '../contexts/extra-data';
@@ -21,7 +20,7 @@ import { useExtraData } from '../contexts/extra-data';
  */
 export function ShippingMethodSelect({ value, ...props }: SelectSingleRootProps) {
 	const { extraData } = useExtraData();
-	const shippingMethods = useObservableEagerState(extraData.shippingMethods$);
+	const shippingMethods = useDocField(extraData, (value) => value.shippingMethods);
 	const t = useT();
 
 	/**

@@ -1,10 +1,9 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { type PreviewTemplateEngine, renderPreview } from '@wcpos/printer/encoder/render-preview';
 import type { TemplateDocument } from '@wcpos/database';
+import { useDocField } from '@wcpos/query';
 
 import { useActiveTemplates } from './use-active-templates';
 import { useReceiptData } from './use-receipt-data';
@@ -79,7 +78,7 @@ export function useTemplateRenderer({
 	const templates = useActiveTemplates();
 	const { store } = useAppState();
 	const taxRates = useTaxSettingsOptional();
-	const storeDp = useObservableEagerState(store?.wc_price_decimals$) as number | undefined;
+	const storeDp = useDocField(store, (value) => value.wc_price_decimals) as number | undefined;
 	const dp = resolvePriceNumDecimals({
 		contextDp: taxRates?.priceNumDecimals,
 		storeDp,

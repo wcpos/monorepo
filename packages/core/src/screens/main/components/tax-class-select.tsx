@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import {
 	Select,
 	SelectContent,
@@ -12,6 +10,7 @@ import {
 } from '@wcpos/components/select';
 import type { SelectSingleRootProps } from '@wcpos/components/select';
 import { Text } from '@wcpos/components/text';
+import { useDocField } from '@wcpos/query';
 
 import { useT } from '../../../contexts/translations';
 import { useExtraData } from '../contexts/extra-data';
@@ -22,7 +21,7 @@ import { useExtraData } from '../contexts/extra-data';
 export function TaxClassSelect({ value, ...props }: SelectSingleRootProps) {
 	const t = useT();
 	const { extraData } = useExtraData();
-	const taxClasses = useObservableEagerState(extraData.taxClasses$);
+	const taxClasses = useDocField(extraData, (value) => value.taxClasses);
 
 	/**
 	 * @NOTE: Because the WC REST API is trash, it won't accept 'standard' as a tax class,

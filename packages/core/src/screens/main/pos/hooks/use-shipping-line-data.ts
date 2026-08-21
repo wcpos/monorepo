@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
+import { useDocField } from '@wcpos/query';
 
 import { extractShippingLineData } from './utils';
 import { useAppState } from '../../../../contexts/app-state';
@@ -12,8 +12,8 @@ type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shippin
  */
 export const useShippingLineData = () => {
 	const { store } = useAppState();
-	const shippingTaxClass = useObservableEagerState(store.shipping_tax_class$);
-	const pricesIncludeTax = useObservableEagerState(store.prices_include_tax$) === 'yes';
+	const shippingTaxClass = useDocField(store, (value) => value.shipping_tax_class);
+	const pricesIncludeTax = useDocField(store, (value) => value.prices_include_tax) === 'yes';
 
 	/**
 	 * Retrieves and processes the shipping line data.

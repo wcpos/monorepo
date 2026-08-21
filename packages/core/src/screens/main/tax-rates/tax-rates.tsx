@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import groupBy from 'lodash/groupBy';
-import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense } from 'observable-hooks';
 
 import {
 	Modal,
@@ -16,6 +16,7 @@ import {
 import { ScrollableTabsList, Tabs, TabsContent, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import type { EngineRecord } from '@wcpos/query';
+import { useDocField } from '@wcpos/query';
 
 import { TaxRatesFooter } from './footer';
 import { TaxRateTable } from './rate-table';
@@ -23,7 +24,6 @@ import { useT } from '../../../contexts/translations';
 import { useCollectionBinding, useQueryState } from '../../../query';
 import { useExtraData } from '../contexts/extra-data';
 
-import type { Observable } from 'rxjs';
 import type { TaxRateData } from '../contexts/tax-rates';
 
 interface TaxClass {
@@ -41,9 +41,7 @@ export function TaxRates() {
 	const result = useObservableSuspense(binding.resource) as QueryResult;
 	const rates = result.hits.map((hit) => hit.record.payload);
 	const { extraData } = useExtraData();
-	const taxClasses = useObservableEagerState(
-		(extraData as unknown as Record<string, Observable<TaxClass[]>>).taxClasses$
-	);
+	const taxClasses = useDocField(extraData, (value) => value.taxClasses) as TaxClass[] | undefined;
 	const [value, setValue] = React.useState(get(taxClasses, [0, 'slug'], ''));
 	const t = useT();
 

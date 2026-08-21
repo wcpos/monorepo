@@ -7,7 +7,7 @@ import AppLayout from '../app/(app)/_layout';
 // Avoid jest-expo's winter runtime resolving lazy globals between tests.
 jest.resetModules();
 
-const mockSite = { wp_api_url$: { value: 'https://example.com/wp-json/' } };
+const mockSite = { wp_api_url: 'https://example.com/wp-json/' };
 const mockWpCredentials = { uuid: 'cashier-1' };
 const mockUseUserValidation = jest.fn();
 
@@ -69,6 +69,9 @@ jest.mock('@wcpos/printer', () => ({
 }));
 jest.mock('@wcpos/query', () => ({
 	QueryProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+	// Field-hook passthrough: reads the plain fixture field synchronously.
+	useDocField: (source: Record<string, unknown>, select: (value: unknown) => unknown) =>
+		select(source),
 }));
 jest.mock('@wcpos/utils/user-activity', () => ({ markUserActivity: jest.fn() }));
 jest.mock('@wcpos/utils/logger', () => ({

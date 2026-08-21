@@ -2,9 +2,9 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { useFocusEffect } from 'expo-router';
-import { useObservableEagerState } from 'observable-hooks';
 
 import { Br, Line, Row, Text } from '@wcpos/components/print';
+import { useDocField } from '@wcpos/query';
 
 import { calculateTotals } from './utils';
 import { useAppState } from '../../../../contexts/app-state';
@@ -22,8 +22,8 @@ import { useQueryState } from '../../../../query';
 export function ZReport() {
 	const t = useT();
 	const { store, wpCredentials } = useAppState();
-	const storeName = useObservableEagerState(store.name$) as string;
-	const num_decimals = useObservableEagerState(store.price_num_decimals$) as number;
+	const storeName = useDocField(store, (value) => value.name) as string;
+	const num_decimals = useDocField(store, (value) => value.price_num_decimals) as number;
 	const { selectedOrders } = useReportsData();
 	const selectedDateRange = useQueryState<'orders', { from: string; to: string } | undefined>(
 		(state) => state.filters.dateRange

@@ -28,6 +28,10 @@ interface ResizeHandleProps {
 
 let capturedResizeHandleProps: ResizeHandleProps | null = null;
 
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
+
 jest.mock('expo-camera', () => ({
 	useCameraPermissions: () => [{ granted: mockGranted }, mockRequestPermission],
 }));

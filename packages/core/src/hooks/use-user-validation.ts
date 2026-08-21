@@ -1,8 +1,6 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { useObservableEagerState } from 'observable-hooks';
-import { of } from 'rxjs';
 
 import {
 	createTokenRefreshHandler,
@@ -14,6 +12,7 @@ import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error
 import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../contexts/app-state';
 import { mergeStoresWithResponse } from '../utils/merge-stores';
@@ -50,13 +49,9 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 	const [error, setError] = React.useState<string | null>(null);
 
 	// Use reactive state for access token to get latest value
-	const accessToken = useObservableEagerState(
-		wpUser.access_token$ ?? of(undefined as string | undefined)
-	);
-	const refreshToken = useObservableEagerState(
-		wpUser.refresh_token$ ?? of(undefined as string | undefined)
-	);
-	const userId = useObservableEagerState(wpUser.id$ ?? of(undefined as number | undefined));
+	const accessToken = useDocField(wpUser, (value) => value.access_token);
+	const refreshToken = useDocField(wpUser, (value) => value.refresh_token);
+	const userId = useDocField(wpUser, (value) => value.id);
 
 	// Use stable values for site to avoid unnecessary re-renders
 	const siteUrl = site.url;

@@ -1,9 +1,7 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { useAppState } from '@wcpos/core/contexts/app-state';
-import { useQueryRuntime } from '@wcpos/query';
+import { useDocField, useQueryRuntime } from '@wcpos/query';
 
 /**
  * Applies the store document's sync tuning (#559 knob contract) to the live
@@ -16,9 +14,10 @@ import { useQueryRuntime } from '@wcpos/query';
 export function SyncConfigBridge() {
 	const { engine } = useQueryRuntime();
 	const { store } = useAppState();
-	const checkIntervalMs = useObservableEagerState(store.sync_check_interval_ms$) as
+	const checkIntervalMs = useDocField(store, (value) => value.sync_check_interval_ms) as
 		number | undefined;
-	const pullBatchSize = useObservableEagerState(store.sync_pull_batch_size$) as number | undefined;
+	const pullBatchSize = useDocField(store, (value) => value.sync_pull_batch_size) as
+		number | undefined;
 
 	React.useEffect(() => {
 		if (checkIntervalMs === undefined && pullBatchSize === undefined) return;

@@ -2,8 +2,9 @@ import * as React from 'react';
 
 type TemporaryOrderDocument = import('@wcpos/database').TemporaryOrderDocument;
 type EngineOrderRecord = import('@wcpos/query').EngineRecord<'orders'>;
+type CurrentOrderRxDocument = EngineOrderRecord | TemporaryOrderDocument;
 
-export type CurrentOrderRecord = EngineOrderRecord | TemporaryOrderDocument;
+export type CurrentOrderRecord = CurrentOrderRxDocument;
 export type OpenOrderHit = { id: string; record: EngineOrderRecord };
 
 export interface CurrentOrderContextProps {
@@ -22,6 +23,7 @@ export interface CurrentOrderContextProps {
  *
  * Readers import from here; only the provider imports the provider.
  */
+// eslint-disable-next-line wcpos/no-rx-in-context-value -- ADR 0030 (post-GA) removes the record from context; sanctioned exception dated 2026-08-21, see #1385 stage K.
 export const CurrentOrderContext = React.createContext<CurrentOrderContextProps>(
 	null as unknown as CurrentOrderContextProps
 );
@@ -76,6 +78,7 @@ export interface CurrentOrderActions {
  * commits per add or remove, and no amount of memoisation further down could help, because
  * the tiles were genuinely subscribed to a value that genuinely changed.
  */
+// eslint-disable-next-line wcpos/no-rx-in-context-value -- ADR 0030 (post-GA) removes the record-returning action from context; sanctioned exception dated 2026-08-21, see #1385 stage K.
 export const CurrentOrderActionsContext = React.createContext<CurrentOrderActions | null>(null);
 
 /**

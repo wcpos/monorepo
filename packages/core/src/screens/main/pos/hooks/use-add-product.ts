@@ -1,8 +1,6 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
-import { type EngineRecord } from '@wcpos/query';
+import { type EngineRecord, useDocField } from '@wcpos/query';
 import { MISC_PRODUCT_ID, wooIdOf } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -40,7 +38,7 @@ export const useAddProduct = () => {
 	const { incrementLineItem } = useUpdateLineItem();
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
-	const metaDataKeys = useObservableEagerState(uiSettings.metaDataKeys$);
+	const metaDataKeys = useDocField(uiSettings, (value) => value.metaDataKeys);
 
 	/**
 	 * Add product to order, or increment quantity if already in order

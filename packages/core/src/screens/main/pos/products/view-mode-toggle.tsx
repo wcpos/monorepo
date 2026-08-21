@@ -1,17 +1,16 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import { useDocField } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';
 
 export function ViewModeToggle() {
 	const { uiSettings, patchUI } = useUISettings('pos-products');
-	const viewMode = useObservableEagerState(uiSettings.viewMode$);
+	const viewMode = useDocField(uiSettings, (value) => value.viewMode);
 	const t = useT();
 
 	const handlePress = React.useCallback(() => {

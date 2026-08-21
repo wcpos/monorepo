@@ -2,7 +2,6 @@ import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
-import { useObservableEagerState } from 'observable-hooks';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
@@ -30,7 +29,7 @@ import {
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
-import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -123,8 +122,8 @@ export function RefundOrderForm({ order }: Props) {
 	const http = useRestHttpClient();
 	const router = useRouter();
 	const taxRates = useTaxSettingsOptional();
-	const storeDp = useObservableEagerState(store?.wc_price_decimals$) as number | undefined;
-	const taxDisplayCart = useObservableEagerState(store?.tax_display_cart$) as
+	const storeDp = useDocField(store, (value) => value.wc_price_decimals) as number | undefined;
+	const taxDisplayCart = useDocField(store, (value) => value.tax_display_cart) as
 		'incl' | 'excl' | undefined;
 	const displayTax: 'incl' | 'excl' = taxDisplayCart === 'excl' ? 'excl' : 'incl';
 	const dp = resolvePriceNumDecimals({

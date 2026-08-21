@@ -37,6 +37,11 @@ const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown)
 }));
 const mockUseObservableSuspense = jest.fn((resource: unknown) => resource);
 
+jest.mock('@wcpos/query', () => ({
+	...jest.requireActual('@wcpos/query'),
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
+
 jest.mock('../../../../query', () => {
 	const actual = jest.requireActual('../../../../query');
 	return {

@@ -1,9 +1,9 @@
 import * as React from 'react';
 
 import { useRouter } from 'expo-router';
-import { useObservablePickState } from 'observable-hooks';
 
 import { Toast } from '@wcpos/components/toast';
+import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -46,28 +46,16 @@ export const useScanFeedback = () => {
 	// Scan sounds are opt-in per station (#717). Success plays the theme's
 	// success tone; every non-success terminal outcome plays its failure tone
 	// (plus a native error haptic unless disabled). Searching-online stays silent.
-	const sound = useObservablePickState(
-		store.$,
-		() => {
-			const latest = store.getLatest();
-			return {
-				barcode_scanning_sound_enabled: latest.barcode_scanning_sound_enabled ?? false,
-				barcode_scanning_sound_theme: latest.barcode_scanning_sound_theme,
-				barcode_scanning_sound_volume: latest.barcode_scanning_sound_volume,
-				barcode_scanning_sound_success_enabled:
-					latest.barcode_scanning_sound_success_enabled ?? true,
-				barcode_scanning_sound_failure_enabled:
-					latest.barcode_scanning_sound_failure_enabled ?? true,
-				barcode_scanning_sound_haptic_enabled: latest.barcode_scanning_sound_haptic_enabled ?? true,
-			};
-		},
-		'barcode_scanning_sound_enabled',
-		'barcode_scanning_sound_theme',
-		'barcode_scanning_sound_volume',
-		'barcode_scanning_sound_success_enabled',
-		'barcode_scanning_sound_failure_enabled',
-		'barcode_scanning_sound_haptic_enabled'
-	);
+	const sound = useDocField(store, (latest) => {
+		return {
+			barcode_scanning_sound_enabled: latest.barcode_scanning_sound_enabled ?? false,
+			barcode_scanning_sound_theme: latest.barcode_scanning_sound_theme,
+			barcode_scanning_sound_volume: latest.barcode_scanning_sound_volume,
+			barcode_scanning_sound_success_enabled: latest.barcode_scanning_sound_success_enabled ?? true,
+			barcode_scanning_sound_failure_enabled: latest.barcode_scanning_sound_failure_enabled ?? true,
+			barcode_scanning_sound_haptic_enabled: latest.barcode_scanning_sound_haptic_enabled ?? true,
+		};
+	});
 	// A handle outlives begin() (an online lookup can terminate seconds later), so
 	// read the settings at play-time via a ref — toggling them off silences even
 	// an in-flight scan instead of playing the values captured when begin() ran.

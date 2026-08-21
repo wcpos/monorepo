@@ -2,7 +2,6 @@ import * as React from 'react';
 import { Platform, View } from 'react-native';
 
 import { Stack } from 'expo-router';
-import { useObservableEagerState } from 'observable-hooks';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';
@@ -26,7 +25,7 @@ import type { StoreDatabase } from '@wcpos/database';
 import { refreshAccessToken } from '@wcpos/hooks/use-http-client/refresh-access-token';
 import { OnlineStatusProvider, useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { RasterizeProvider } from '@wcpos/printer';
-import { QueryProvider } from '@wcpos/query';
+import { QueryProvider, useDocField } from '@wcpos/query';
 import { bareAuthParamSupported } from '@wcpos/utils/auth-param';
 import { getLogger, setDatabase } from '@wcpos/utils/logger';
 import { markUserActivity } from '@wcpos/utils/user-activity';
@@ -78,12 +77,12 @@ function AppStack() {
 	 * site + scope identity — store switching via `scope.switch()` is a
 	 * follow-up (increment-3).
 	 */
-	const wpApiUrl = useObservableEagerState(site.wp_api_url$) as string;
-	const wcposApiUrl = useObservableEagerState(site.wcpos_api_url$) as string;
-	const storeID = useObservableEagerState(store.id$) as number;
-	const cashierID = useObservableEagerState(wpCredentials.id$) as number;
-	const useJwtAsParam = useObservableEagerState(site.use_jwt_as_param$) as boolean;
-	const wcposVersion = useObservableEagerState(site.wcpos_version$) as string;
+	const wpApiUrl = useDocField(site, (value) => value.wp_api_url) as string;
+	const wcposApiUrl = useDocField(site, (value) => value.wcpos_api_url) as string;
+	const storeID = useDocField(store, (value) => value.id) as number;
+	const cashierID = useDocField(wpCredentials, (value) => value.id) as number;
+	const useJwtAsParam = useDocField(site, (value) => value.use_jwt_as_param) as boolean;
+	const wcposVersion = useDocField(site, (value) => value.wcpos_version) as string;
 	const bareAuthParam = bareAuthParamSupported(wcposVersion);
 
 	// The credentials DOCUMENT is a stable identity; the engine reads the JWT
@@ -277,7 +276,7 @@ function MetricsPersistenceBridge() {
 
 export default function AppLayout() {
 	const { site, wpCredentials } = useAppState();
-	const wpAPIURL = useObservableEagerState(site.wp_api_url$) as string;
+	const wpAPIURL = useDocField(site, (value) => value.wp_api_url) as string;
 	const { collection: logCollection } = useCollection('logs');
 	useUserValidation({ site, wpUser: wpCredentials });
 

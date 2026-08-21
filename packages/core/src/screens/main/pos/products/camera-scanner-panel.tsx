@@ -2,7 +2,6 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { useCameraPermissions } from 'expo-camera';
-import { useObservableEagerState } from 'observable-hooks';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { Button, ButtonText } from '@wcpos/components/button';
@@ -11,6 +10,7 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { VStack } from '@wcpos/components/vstack';
+import { useDocField } from '@wcpos/query';
 
 import { ScannerViewfinder } from './scanner-viewfinder';
 import { type ViewfinderStatus } from './scanner-viewfinder-types';
@@ -63,7 +63,7 @@ export function CameraScannerPanel({ onClose }: CameraScannerPanelProps) {
 	const { status: onlineStatus } = useOnlineStatus();
 	const storageDegraded = useStorageDegraded();
 	const { uiSettings, patchUI } = useUISettings('pos-products');
-	const savedHeight = useObservableEagerState(uiSettings.scannerHeight$);
+	const savedHeight = useDocField(uiSettings, (value) => value.scannerHeight);
 	const [status, setStatus] = React.useState<ViewfinderStatus>('initializing');
 	const [flash, setFlash] = React.useState(false);
 	const flashTimeout = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);

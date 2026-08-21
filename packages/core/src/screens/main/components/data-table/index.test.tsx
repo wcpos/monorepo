@@ -22,6 +22,10 @@ const mockClearAndRefresh = jest.fn();
 // default matches the original single-column fixture.
 let mockColumns: { key: string; show: boolean }[] = [{ key: 'level', show: true }];
 
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
+
 jest.mock('observable-hooks', () => ({
 	useObservableEagerState: () => mockColumns,
 	useObservableSuspense: () => ({

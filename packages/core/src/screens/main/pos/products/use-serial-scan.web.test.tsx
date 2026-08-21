@@ -24,6 +24,10 @@ const minCharsObs = {};
 const prefixObs = {};
 const suffixObs = {};
 
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
+
 jest.mock('uuid', () => ({ v4: () => 'test-uuid' }));
 
 jest.mock('@wcpos/utils/logger', () => ({

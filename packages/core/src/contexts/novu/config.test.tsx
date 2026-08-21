@@ -41,6 +41,10 @@ const store = {
 };
 const wpCredentials = { uuid: 'creds-1' };
 
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
+
 jest.mock('../app-state', () => ({
 	useAppState: () => ({ site, store, wpCredentials }),
 }));

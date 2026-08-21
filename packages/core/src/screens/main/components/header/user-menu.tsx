@@ -2,11 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { useRouter } from 'expo-router';
-import {
-	ObservableResource,
-	useObservableEagerState,
-	useObservableSuspense,
-} from 'observable-hooks';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import {
@@ -39,7 +35,7 @@ import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { clearAllDB, scheduleClearLocalDataOnNextLoad } from '@wcpos/database';
-import { useQueryRuntime } from '@wcpos/query';
+import { useDocField, useQueryRuntime } from '@wcpos/query';
 import { Platform } from '@wcpos/utils/platform';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -96,7 +92,7 @@ function UserAvatarImage({
 	wpCredentials: WPCredentialsDocument;
 	displayName?: string;
 }) {
-	const avatarUrl = useObservableEagerState(wpCredentials.avatar_url$!);
+	const avatarUrl = useDocField(wpCredentials, (value) => value.avatar_url);
 	const { uri } = useImageAttachment(wpCredentials, avatarUrl as string);
 
 	return <Avatar source={{ uri }} fallback={getInitials(displayName)} />;
@@ -124,11 +120,12 @@ export function UserMenu() {
 	const router = useRouter();
 	const { screenSize } = useTheme();
 	const { engine } = useQueryRuntime();
-	const stores = useObservableEagerState(wpCredentials?.stores$);
+	const stores = useDocField(wpCredentials, (value) => value.stores);
 	// Subscribed, not read off the document: `display_name` is rendered in the trigger and
 	// in both avatar fallbacks, but the only subscriptions here were stores$/avatar_url$, so
 	// a rename never reached the header.
-	const displayName = useObservableEagerState(wpCredentials?.display_name$) as string | undefined;
+	const displayName = useDocField(wpCredentials, (value) => value.display_name) as
+		string | undefined;
 	const t = useT();
 	const [isSwitching, setIsSwitching] = React.useState(false);
 	/** Non-null while the reset confirm is open, carrying the reading it must state. */

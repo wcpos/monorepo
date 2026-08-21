@@ -25,6 +25,10 @@ const mockBuildReceiptData = jest.fn(
 	})
 );
 
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
+
 jest.mock('./use-receipt-data', () => ({
 	useReceiptData: (...args: unknown[]) => mockUseReceiptData(...args),
 }));

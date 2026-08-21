@@ -36,6 +36,7 @@ jest.mock('../../../query', () => {
 	};
 });
 jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 	useQuery: () => {
 		throw new Error('legacy useQuery reached');
 	},

@@ -16,6 +16,10 @@ type LayoutHandler = (event: { nativeEvent: { layout: { width: number } } }) => 
 const mockLayoutHandlers: Record<string, LayoutHandler> = {};
 let mockScreenSize = 'lg';
 
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
+
 jest.mock('react-native', () => {
 	const R = require('react');
 	return {

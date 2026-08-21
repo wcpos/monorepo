@@ -22,13 +22,12 @@
  */
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-import { of } from 'rxjs';
 // @ts-expect-error: semver lacks type declarations in this project
 import semver from 'semver';
 
 import type { SiteDocument } from '@wcpos/database';
 import { AppInfo } from '@wcpos/utils/app-info';
+import { useDocField } from '@wcpos/query';
 
 import { AppStateContext } from '../contexts/app-state';
 
@@ -123,26 +122,13 @@ interface UseAppInfoOptions {
  * Internal hook that subscribes to site observables.
  * Always calls hooks in the same order regardless of whether site exists.
  */
-const EMPTY_STRING$ = of(undefined as string | undefined);
-const EMPTY_LICENSE$ = of(
-	undefined as
-		| {
-				key?: string;
-				status?: string;
-				instance?: string;
-				expiration?: string;
-		  }
-		| undefined
-);
-
 function useSiteObservables(site: SiteDocument | undefined) {
-	// These hooks must always be called in the same order
-	// Use fallback observables when site is undefined to keep hook order consistent
-	const wcposVersion = useObservableEagerState(site?.wcpos_version$ ?? EMPTY_STRING$);
-	const wcposProVersion = useObservableEagerState(site?.wcpos_pro_version$ ?? EMPTY_STRING$);
-	const wcVersion = useObservableEagerState(site?.wc_version$ ?? EMPTY_STRING$);
-	const wpVersion = useObservableEagerState(site?.wp_version$ ?? EMPTY_STRING$);
-	const license = useObservableEagerState(site?.license$ ?? EMPTY_LICENSE$);
+	// These hooks must always be called in the same order; useDocField handles an absent site.
+	const wcposVersion = useDocField(site, (value) => value.wcpos_version);
+	const wcposProVersion = useDocField(site, (value) => value.wcpos_pro_version);
+	const wcVersion = useDocField(site, (value) => value.wc_version);
+	const wpVersion = useDocField(site, (value) => value.wp_version);
+	const license = useDocField(site, (value) => value.license);
 
 	if (!site) {
 		return null;

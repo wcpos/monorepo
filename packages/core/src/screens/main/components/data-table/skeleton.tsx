@@ -1,24 +1,15 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { Table, TableFooter, TableHead, TableHeader, TableRow } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 import { HStack } from '@wcpos/components/hstack';
 import { Loader } from '@wcpos/components/loader';
+import { useDocField } from '@wcpos/query';
 
 import { UISettingID, useUISettings } from '../../contexts/ui-settings';
 import { DataTableHeader } from './header';
 import { getHeaderStyle } from './index';
-
-type SkeletonColumn = {
-	key: string;
-	show: boolean;
-	width?: number;
-	flex?: number;
-	align?: 'left' | 'right' | 'center';
-};
 
 interface Props {
 	id: UISettingID;
@@ -30,9 +21,7 @@ interface Props {
  */
 export function DataTableSkeleton({ id }: Props) {
 	const { uiSettings, getUILabel } = useUISettings(id);
-	const uiColumns = useObservableEagerState(
-		uiSettings.columns$ as import('rxjs').Observable<SkeletonColumn[]>
-	);
+	const uiColumns = useDocField(uiSettings, (value) => value.columns);
 
 	return (
 		<Table className="flex h-full flex-col">

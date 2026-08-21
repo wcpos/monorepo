@@ -7,7 +7,7 @@ import {
 	View,
 } from 'react-native';
 
-import { useObservablePickState, useObservableState } from 'observable-hooks';
+import { useObservableState } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
@@ -17,6 +17,7 @@ import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { analyzeScanTrace, type TraceAnalysis, type TraceSuggestion } from '@wcpos/scanner';
+import { useDocField } from '@wcpos/query';
 
 import { useScanTraceCapture } from './use-scan-trace-capture';
 import { useAppState } from '../../../../contexts/app-state';
@@ -103,22 +104,14 @@ export function TestPanel() {
 		[captureOnKeyPress, detectorOnKeyPress]
 	);
 
-	const storeSettings = useObservablePickState(
-		store.$,
-		() => {
-			const latest = store.getLatest();
-			return {
-				barcode_scanning_avg_time_input_threshold: latest.barcode_scanning_avg_time_input_threshold,
-				barcode_scanning_min_chars: latest.barcode_scanning_min_chars,
-				barcode_scanning_prefix: latest.barcode_scanning_prefix || '',
-				barcode_scanning_suffix: latest.barcode_scanning_suffix || '',
-			};
-		},
-		'barcode_scanning_avg_time_input_threshold',
-		'barcode_scanning_min_chars',
-		'barcode_scanning_prefix',
-		'barcode_scanning_suffix'
-	);
+	const storeSettings = useDocField(store, (latest) => {
+		return {
+			barcode_scanning_avg_time_input_threshold: latest.barcode_scanning_avg_time_input_threshold,
+			barcode_scanning_min_chars: latest.barcode_scanning_min_chars,
+			barcode_scanning_prefix: latest.barcode_scanning_prefix || '',
+			barcode_scanning_suffix: latest.barcode_scanning_suffix || '',
+		};
+	});
 
 	const settings = React.useMemo(
 		() => ({
