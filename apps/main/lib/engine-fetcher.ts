@@ -144,10 +144,18 @@ export function createEngineFetcher(input: {
 			// '/', so the push exemption must classify from the route, not the path.
 			const restRoutePath = parsedUrl.searchParams.get('rest_route') ?? parsedUrl.pathname;
 			const envelopeRequested = !restRoutePath.split('/').includes('push');
+			// Marker parity with the X-WCPOS header set above: hostile proxies
+			// strip custom request headers, and an unmarked request answers
+			// rest_no_route. The query-var twin (`wcpos`, registered in the
+			// plugin's Init::query_vars) rides the URL, which a header-stripping
+			// proxy cannot touch — sent unconditionally, pushes included, so
+			// marker delivery never depends on header survival (B7,
+			// wcpos-infra#72; prerequisite for B12's strict marker gating).
+			parsedUrl.searchParams.set('wcpos', '1');
 			if (envelopeRequested) {
 				parsedUrl.searchParams.set('_wcpos_envelope', '1');
-				finalUrl = parsedUrl.toString();
 			}
+			finalUrl = parsedUrl.toString();
 			const path = parsedUrl.pathname;
 			const startedAtMs = now();
 			// Captured at start: a completion after a store switch (epoch bump) is the
