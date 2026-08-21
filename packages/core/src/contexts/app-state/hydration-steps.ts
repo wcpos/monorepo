@@ -17,20 +17,34 @@ import { initialProps } from './initial-props';
 const appLogger = getLogger(['wcpos', 'app', 'hydration']);
 const AUTH_TEST_TIMEOUT_MS = 10000;
 
-async function fetchWithTimeout(
+/**
+ * Fetch JSON with the abort timer spanning BOTH the request and the body
+ * read: a host that returns headers and then stalls the body would otherwise
+ * hang hydration forever (the #1155 infinite-spinner class). Returns null on
+ * abort/network failure; otherwise the response plus its parsed body (`data`
+ * is null for a non-OK response or a non-JSON body).
+ */
+async function fetchJsonWithTimeout(
 	input: Parameters<typeof fetch>[0],
 	init: Parameters<typeof fetch>[1] = {}
-): Promise<Response> {
+): Promise<{ response: Response; data: unknown } | null> {
 	const controller = new AbortController();
 	const timeout = setTimeout(() => {
 		controller.abort();
 	}, AUTH_TEST_TIMEOUT_MS);
 
 	try {
-		return await fetch(input, {
+		const response = await fetch(input, {
 			...init,
 			signal: controller.signal,
 		});
+		if (!response.ok) {
+			return { response, data: null };
+		}
+		const data: unknown = await response.json().catch(() => null);
+		return { response, data };
+	} catch {
+		return null;
 	} finally {
 		clearTimeout(timeout);
 	}
@@ -57,7 +71,7 @@ async function generateHashId(dataObject: any): Promise<string> {
  */
 async function testHeaderAuth(wcposApiUrl: string, token: string): Promise<boolean> {
 	try {
-		const response = await fetchWithTimeout(`${wcposApiUrl}auth/test`, {
+		const result = await fetchJsonWithTimeout(`${wcposApiUrl}auth/test`, {
 			method: 'GET',
 			headers: {
 				'X-WCPOS': '1',
@@ -65,12 +79,8 @@ async function testHeaderAuth(wcposApiUrl: string, token: string): Promise<boole
 			},
 		});
 
-		if (!response.ok) {
-			return false;
-		}
-
-		const data = await response.json();
-		return data && data.status === 'success';
+		const data = result?.data as { status?: string } | null | undefined;
+		return data?.status === 'success';
 	} catch {
 		return false;
 	}
@@ -84,19 +94,15 @@ async function testParamAuth(wcposApiUrl: string, token: string, bareSupported: 
 		const url = new URL(`${wcposApiUrl}auth/test`);
 		url.searchParams.set('authorization', formatAuthorizationParam(token, bareSupported));
 
-		const response = await fetchWithTimeout(url.toString(), {
+		const result = await fetchJsonWithTimeout(url.toString(), {
 			method: 'GET',
 			headers: {
 				'X-WCPOS': '1',
 			},
 		});
 
-		if (!response.ok) {
-			return false;
-		}
-
-		const data = await response.json();
-		return data && data.status === 'success';
+		const data = result?.data as { status?: string } | null | undefined;
+		return data?.status === 'success';
 	} catch {
 		return false;
 	}
@@ -128,14 +134,22 @@ async function probeHeaderEcho(
 ): Promise<HeaderEchoResult | null> {
 	try {
 		const url = new URL(`${wcposApiUrl}echo`);
+		// The URL must never carry the real token — query strings persist in
+		// server/proxy/telemetry logs, and this probe runs every boot even when
+		// header auth is healthy. Masking char-for-char keeps what a WAF keys
+		// on: the value's SHAPE (Bearer prefix decision, JWT charset and dots)
+		// and its LENGTH (P17-class size ceilings). The Authorization HEADER
+		// keeps the real token: headers do not land in URL logs, and header
+		// arrival is the channel being measured.
+		const probeToken = accessToken.replace(/[A-Za-z0-9]/g, 'x');
 		url.searchParams.set(
 			'authorization',
-			formatAuthorizationParam(accessToken, bareAuthParamSupported(wcposVersion))
+			formatAuthorizationParam(probeToken, bareAuthParamSupported(wcposVersion))
 		);
 		url.searchParams.set('wcpos', '1');
 		url.searchParams.set('store_id', '1');
 
-		const response = await fetchWithTimeout(url.toString(), {
+		const result = await fetchJsonWithTimeout(url.toString(), {
 			method: 'GET',
 			headers: {
 				Authorization: `Bearer ${accessToken}`,
@@ -149,18 +163,26 @@ async function probeHeaderEcho(
 			},
 		});
 
-		if (!response.ok) {
+		if (!result || !result.response.ok) {
 			return null;
 		}
 
-		const data = await response.json();
+		const data = result.data as
+			(HeaderEchoResult & { v?: unknown; headers: Record<string, { received?: unknown }> }) | null;
+		// The guard must reject not just non-probe bodies but INCOMPLETE probe
+		// bodies: `{ v: 1, headers: {}, params: {} }` would otherwise read as
+		// "both channels blocked" and skip the legacy fallback. Both
+		// channel-deciding fields must be present as booleans, or the probe is
+		// treated as unavailable.
 		if (
 			!data ||
 			data.v !== 1 ||
 			typeof data.headers !== 'object' ||
 			data.headers === null ||
 			typeof data.params !== 'object' ||
-			data.params === null
+			data.params === null ||
+			typeof data.headers.authorization?.received !== 'boolean' ||
+			typeof data.params.authorization !== 'boolean'
 		) {
 			return null;
 		}

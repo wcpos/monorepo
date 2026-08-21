@@ -462,8 +462,10 @@ describe('testAuthorizationMethod', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 		const echoUrl = String(fetchMock.mock.calls[0][0]);
 		expect(echoUrl).toContain('/wp-json/wcpos/v2/echo');
-		// Both credential channels ride the single probe request.
-		expect(echoUrl).toContain('authorization=Bearer+token');
+		// Both credential channels ride the single probe request — but the URL
+		// carries a MASKED token (same shape and length), never the secret.
+		expect(echoUrl).toContain('authorization=Bearer+xxxxx');
+		expect(echoUrl).not.toContain('token');
 		expect(echoUrl).toContain('wcpos=1');
 		expect(echoUrl).toContain('store_id=1');
 		expect(fetchMock.mock.calls[0][1]).toMatchObject({
@@ -507,6 +509,25 @@ describe('testAuthorizationMethod', () => {
 		).resolves.toBeNull();
 
 		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it('falls back to the legacy auth test when the echo body is incomplete', async () => {
+		// { v: 1, headers: {}, params: {} } must read as probe-UNAVAILABLE, not
+		// as "both channels blocked" — an empty map would otherwise skip the
+		// legacy fallback on a healthy server.
+		fetchMock
+			.mockResolvedValueOnce({
+				ok: true,
+				json: jest.fn(async () => ({ v: 1, headers: {}, params: {} })),
+			})
+			.mockResolvedValueOnce({ ok: true, json: jest.fn(async () => ({ status: 'success' })) });
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+		).resolves.toEqual({ useJwtAsParam: false });
+
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+		expect(fetchMock.mock.calls[1][0]).toBe('https://example.com/wp-json/wcpos/v2/auth/test');
 	});
 
 	it('falls back to the legacy auth test when the echo body is not the probe shape', async () => {
