@@ -205,7 +205,7 @@ In Electron, HTTP requests are made in the **main process** (Node.js) and result
 │  │    ├─ Setup AbortSignal/CancelToken listeners              │ │
 │  │    ├─ Send: { type: 'request', requestId, config }         │ │
 │  │    │                                                       │ │
-│  │    │  ┌─────── IPC invoke('axios', ...) ───────┐           │ │
+│  │    │  ┌──── IPC invoke('http-request', ...) ────┐          │ │
 │  │    │  │                                        │           │ │
 │  │    │  ▼                                        │           │ │
 │  │    │  (waits for response)                     │           │ │
@@ -225,12 +225,12 @@ In Electron, HTTP requests are made in the **main process** (Node.js) and result
 ┌─────────────────────────────▼───────────────────────────────────┐
 │  MAIN PROCESS (Node.js)                                         │
 │                                                                 │
-│  apps/electron/src/main/axios.ts                                │
+│  apps/electron/src/main/http-bridge.ts                          │
 │  ┌───────────────────────────────────────────────────────────┐ │
-│  │  ipcMain.handle('axios', async (event, data) => {          │ │
+│  │  ipcMain.handle('http-request', async (event, data) => {   │ │
 │  │    if (data.type === 'request') {                          │ │
 │  │      try {                                                 │ │
-│  │        const response = await axios.request(data.config);  │ │
+│  │        const response = await netFetchAsAxios(data.config);│ │
 │  │        return { success: true, ...response };              │ │
 │  │      } catch (error) {                                     │ │
 │  │        return serializeAxiosError(error);                  │ │
@@ -321,7 +321,7 @@ This ensures the promise chain is fully established before the rejection propaga
 // Renderer: Setup cancellation
 const requestId = crypto.randomUUID();
 signal.addEventListener('abort', () => {
-  window.ipcRenderer.invoke('axios', { type: 'cancel', requestId });
+  window.ipcRenderer.invoke('http-request', { type: 'cancel', requestId });
 });
 
 // Main: Handle cancellation

@@ -16,7 +16,8 @@ jest.mock('@wcpos/query', () => ({
 		select: (value: { payload: { variations: number[] } }) => unknown
 	) => {
 		const { useObservableEagerState } = jest.requireActual('observable-hooks');
-		return select({ payload: { variations: useObservableEagerState(record.variations$) } });
+		const variations$ = record.variations$;
+		return select({ payload: { variations: useObservableEagerState(variations$) } });
 	},
 }));
 const clearAndSync = jest.fn(async () => undefined);

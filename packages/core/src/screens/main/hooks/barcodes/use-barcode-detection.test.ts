@@ -37,6 +37,12 @@ jest.mock('observable-hooks', () => {
 		useLayoutObservable: jest.fn(actual.useLayoutObservable),
 	};
 });
+
+// ADR 0028: settings reads go through useDocField; the shared mock bridges to
+// the doc's `${field}$` observables so tests keep steering the subjects.
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
 jest.mock('expo-router/react-navigation', () => ({
 	useIsFocused: () => mockIsFocused,
 }));

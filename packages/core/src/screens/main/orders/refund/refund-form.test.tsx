@@ -140,6 +140,7 @@ jest.mock('observable-hooks', () => {
 });
 
 jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 	useRecordField: (record: any, select: (value: any) => unknown) =>
 		select(record?.payload ? record : { payload: record }),
 }));

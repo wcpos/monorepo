@@ -1,8 +1,7 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { GUEST_CUSTOMER_ID } from '@wcpos/sync-core';
+import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
@@ -12,7 +11,7 @@ import { useT } from '../../../contexts/translations';
  */
 export const useGuestCustomer = () => {
 	const { store } = useAppState();
-	const country = useObservableEagerState(store.store_country$);
+	const country = useDocField(store, (value) => value.store_country);
 	const t = useT();
 
 	return React.useMemo(

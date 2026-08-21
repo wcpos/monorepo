@@ -1,10 +1,10 @@
 import * as React from 'react';
 
 import { useSegments } from 'expo-router';
-import { useObservableEagerState, useSubscription } from 'observable-hooks';
+import { useSubscription } from 'observable-hooks';
 
 import { isStorageWorkerFailure } from '@wcpos/database/plugins/wrapped-error-handler-storage';
-import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
+import { type EngineRecord, useDocField, useQueryRuntime } from '@wcpos/query';
 import { sanitizeVariationAttributesRead } from '@wcpos/query/collection-map';
 import { type ScanEvent } from '@wcpos/scanner';
 import { type BarcodeResolveFetcher, remoteIdOrNull, resolveScan, wooIdOf } from '@wcpos/sync-core';
@@ -80,7 +80,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 	const runtime = useQueryRuntime();
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
-	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
+	const showOutOfStock = useDocField(uiSettings, (value) => value.showOutOfStock);
 	const { begin } = useScanFeedback();
 	// Rapid scans run concurrent async handlers; only the newest one may touch
 	// the shared search-box state, so a slow older scan can't clobber it.

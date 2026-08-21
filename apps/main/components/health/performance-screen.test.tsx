@@ -35,6 +35,11 @@ jest.mock('./trend-line', () => ({
 }));
 jest.mock('./uptime-strip', () => ({ UptimeStrip: () => null }));
 jest.mock('observable-hooks', () => ({ useObservableEagerState: () => undefined }));
+jest.mock('@wcpos/query', () => ({
+	...jest.requireActual('@wcpos/query'),
+	// Mirrors the observable-hooks stub above: settings fields read as undefined -> defaults.
+	useDocField: () => undefined,
+}));
 jest.mock('@wcpos/core/contexts/app-state', () => ({
 	useAppState: () => ({ store: {} }),
 }));

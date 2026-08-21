@@ -1,12 +1,13 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense } from 'observable-hooks';
 
 import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import type { EngineRecord } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
+import { useDocField } from '@wcpos/query';
 
 import { useGuardedExtendLimit } from '../../../../../query';
 import { ProductTile } from './product-tile';
@@ -44,8 +45,8 @@ interface GridFields {
 
 export function ProductGrid({ binding, actions }: ProductGridProps) {
 	const { uiSettings } = useUISettings('pos-products');
-	const gridColumns = useObservableEagerState(uiSettings.gridColumns$);
-	const gridFields = useObservableEagerState(uiSettings.gridFields$) as GridFields;
+	const gridColumns = useDocField(uiSettings, (value) => value.gridColumns);
+	const gridFields = useDocField(uiSettings, (value) => value.gridFields) as GridFields;
 	const { calcTaxes } = useTaxSettings();
 	const t = useT();
 

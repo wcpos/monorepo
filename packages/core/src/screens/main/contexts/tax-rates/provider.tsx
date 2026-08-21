@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import { filterTaxRates } from './tax-rates.helpers';
@@ -112,7 +112,7 @@ function TaxSettingsProvider({ children }: { children: React.ReactNode }) {
 	const allRates = React.useMemo(() => result.hits.map((hit) => hit.record.payload), [result.hits]);
 
 	const { store } = useAppState();
-	const shippingTaxClass = useObservableEagerState(store.shipping_tax_class$);
+	const shippingTaxClass = useDocField(store, (value) => value.shipping_tax_class);
 
 	/**
 	 * Convert WooCommerce settings into sensible primatives.
@@ -138,7 +138,7 @@ function TaxSettingsProvider({ children }: { children: React.ReactNode }) {
 	const taxRoundAtSubtotal = useObservableEagerState(taxRoundAtSubtotal$);
 	// Use wc_price_decimals (server-authoritative) for calculations, NOT price_num_decimals
 	// (which users can override locally for display formatting).
-	const priceNumDecimals = useObservableEagerState(store.wc_price_decimals$) as number;
+	const priceNumDecimals = useDocField(store, (value) => value.wc_price_decimals) as number;
 
 	const taxClasses = React.useMemo(
 		() => [...new Set(allRates.map((r) => r.class).filter(Boolean))] as string[],
@@ -219,7 +219,7 @@ function TaxLocationProvider({ children, order: orderProp }: TaxRatesProviderPro
 	 * The record-field subscription keeps a payload override reactive without exposing the
 	 * legacy flattened document face.
 	 */
-	const storeTaxBasedOn = useObservableEagerState(store.tax_based_on$);
+	const storeTaxBasedOn = useDocField(store, (value) => value.tax_based_on);
 	const override = wooMetaCarrier.taxBasedOnOverride(meta);
 	const taxBasedOn = (isTaxBasedOn(override) ? override : storeTaxBasedOn) as TaxBasedOn;
 	const hasOrder = Boolean(order);

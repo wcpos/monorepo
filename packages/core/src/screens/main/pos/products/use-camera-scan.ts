@@ -1,8 +1,7 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { createScanSession, type ScanSession } from '@wcpos/scanner';
+import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -27,7 +26,7 @@ export interface CameraScanResult {
 export const useCameraScan = () => {
 	const { emit } = useCameraScanBus();
 	const { store } = useAppState();
-	const minChars = useObservableEagerState(store.barcode_scanning_min_chars$) as number;
+	const minChars = useDocField(store, (value) => value.barcode_scanning_min_chars) as number;
 	const t = useT();
 
 	const emitRef = React.useRef(emit);

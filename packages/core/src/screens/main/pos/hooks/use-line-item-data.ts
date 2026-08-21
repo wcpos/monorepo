@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
+import { useDocField } from '@wcpos/query';
 
 import { extractLineItemData } from './utils';
 import { useAppState } from '../../../../contexts/app-state';
@@ -12,7 +12,7 @@ type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items'
  */
 export const useLineItemData = () => {
 	const { store } = useAppState();
-	const pricesIncludeTax = useObservableEagerState(store.prices_include_tax$!) === 'yes';
+	const pricesIncludeTax = useDocField(store, (value) => value.prices_include_tax) === 'yes';
 
 	/**
 	 * Retrieves and processes the line item data.

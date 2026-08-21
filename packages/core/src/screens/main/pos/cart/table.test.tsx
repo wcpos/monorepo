@@ -14,6 +14,10 @@ const mockCartLines = {
 	shipping_lines: [],
 };
 
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
+
 jest.mock('@tanstack/react-table', () => ({
 	columnVisibilityFeature: {},
 	flexRender: () => null,

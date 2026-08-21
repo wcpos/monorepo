@@ -23,6 +23,7 @@ interface VariationTableFooterProps {
  *
  */
 export function VariationTableFooter({ binding, parent, count }: VariationTableFooterProps) {
+	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- Query binding exposes a stable stream property, not an RxDB $-getter; exception dated 2026-08-21.
 	const loading = useObservableEagerState(binding.active$);
 	const { clearAndSync } = useCollectionReset('variations');
 
@@ -41,6 +42,7 @@ export function VariationTableFooter({ binding, parent, count }: VariationTableF
 	/**
 	 * Prefer the parent product's server variation ids over the local collection total.
 	 */
+	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- Query binding exposes a stable stream property, not an RxDB $-getter; exception dated 2026-08-21.
 	const localTotal = useObservableState(binding.total$, 0);
 	const parentVariations = useRecordField(parent, (record) => record.payload.variations);
 	const total = parentVariations?.length ? parentVariations.length : localTotal;

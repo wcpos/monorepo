@@ -1,11 +1,7 @@
 import * as React from 'react';
 
 import { useNavigationState } from 'expo-router/react-navigation';
-import {
-	ObservableResource,
-	useObservableEagerState,
-	useObservableSuspense,
-} from 'observable-hooks';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import {
 	Dialog,
@@ -30,7 +26,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { WebView } from '@wcpos/components/webview';
 import { usePrint } from '@wcpos/printer';
-import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -94,7 +90,7 @@ function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 		[cloudHttp]
 	);
 	const taxRates = useTaxSettingsOptional();
-	const storeDp = useObservableEagerState(store?.wc_price_decimals$) as number | undefined;
+	const storeDp = useDocField(store, (value) => value.wc_price_decimals) as number | undefined;
 	const dp = resolvePriceNumDecimals({
 		contextDp: taxRates?.priceNumDecimals,
 		storeDp,

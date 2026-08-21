@@ -1,11 +1,10 @@
 import * as React from 'react';
 
 import { useRouter } from 'expo-router';
-import { useObservableState } from 'observable-hooks';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { WebView } from '@wcpos/components/webview';
-import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
+import { type EngineRecord, useDocField, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -54,7 +53,7 @@ export function PaymentWebview({
 	const orderId = orderData.id;
 	const orderNumber = orderData.number;
 	const { wpCredentials } = useAppState();
-	const jwt = useObservableState(wpCredentials.access_token$, wpCredentials.access_token);
+	const jwt = useDocField(wpCredentials, (value) => value.access_token);
 	const { stockAdjustment } = useStockAdjustment();
 	const { uiSettings } = useUISettings('pos-cart');
 	const t = useT();

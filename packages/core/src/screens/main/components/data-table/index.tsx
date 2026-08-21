@@ -11,7 +11,7 @@ import {
 	tableFeatures,
 	useTable,
 } from '@tanstack/react-table';
-import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense } from 'observable-hooks';
 import { find } from 'lodash';
 
 import {
@@ -28,6 +28,7 @@ import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import type { QueryResult } from '@wcpos/query';
+import { useDocField } from '@wcpos/query';
 
 import { useGuardedExtendLimit } from '../../../../query';
 import { UISettingID, useUISettings } from '../../contexts/ui-settings';
@@ -137,9 +138,7 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 	} = props;
 	const resource = props.resource;
 	const { uiSettings, getUILabel, patchUI } = useUISettings(id);
-	const uiColumns = useObservableEagerState(
-		uiSettings.columns$ as import('rxjs').Observable<Record<string, unknown>[]>
-	);
+	const uiColumns = useDocField(uiSettings, (value) => value.columns);
 	const t = useT();
 	const result = useObservableSuspense(resource);
 	const deferredResult = React.useDeferredValue(result);

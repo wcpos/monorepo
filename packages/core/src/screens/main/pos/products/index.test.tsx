@@ -38,6 +38,7 @@ jest.mock('../../../../query', () => {
 	};
 });
 jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 	useRelationalQuery: () => {
 		throw new Error('legacy POS relational query reached');
 	},

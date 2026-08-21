@@ -1,9 +1,9 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
 import { v4 as uuidv4 } from 'uuid';
 
 import { createWedgeState, foldWedgeKey, type WedgeState } from '@wcpos/scanner';
+import { useDocField } from '@wcpos/query';
 
 import { wedgeKeyEventsModule, type WedgeKeyPayload } from './use-attributed-wedge';
 import { useAppState } from '../../../../contexts/app-state';
@@ -39,10 +39,11 @@ export const useScannerRegistration = () => {
 	// One folded-average detector per device seen during this capture session.
 	const detectorsRef = React.useRef<Map<string, WedgeState>>(new Map());
 
-	const threshold = useObservableEagerState(
-		store.barcode_scanning_avg_time_input_threshold$
+	const threshold = useDocField(
+		store,
+		(value) => value.barcode_scanning_avg_time_input_threshold
 	) as number;
-	const minChars = useObservableEagerState(store.barcode_scanning_min_chars$) as number;
+	const minChars = useDocField(store, (value) => value.barcode_scanning_min_chars) as number;
 	// Event-time reads of the latest settings (refs must not be written in render).
 	const settingsRef = React.useRef({ threshold: Number(threshold), minChars: Number(minChars) });
 	React.useEffect(() => {

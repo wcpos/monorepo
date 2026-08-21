@@ -51,6 +51,7 @@ export function Variations({
 	const allVariationsResult = useObservableSuspense(allVariationsResource ?? binding.resource);
 	const hits = result.hits as { record: EngineRecord<'variations'> }[];
 	const allVariationHits = allVariationsResult.hits as { record: EngineRecord<'variations'> }[];
+	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- Query binding exposes a stable stream property, not an RxDB $-getter; exception dated 2026-08-21.
 	const loading = useObservableEagerState(binding.active$);
 	const selectedAttributes = useQueryState<
 		'variations',

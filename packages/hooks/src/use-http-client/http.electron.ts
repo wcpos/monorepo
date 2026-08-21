@@ -2,14 +2,14 @@
  * Electron HTTP Adapter
  *
  * This module bridges HTTP requests from the renderer process (React Native) to the
- * main process (Node.js) via Electron's IPC mechanism.
+ * main process via Electron's IPC mechanism ('http-request' channel).
  *
  * ## Why IPC?
  * In Electron, the renderer process runs in a sandboxed Chromium environment. While it
  * CAN make HTTP requests directly, routing through the main process provides:
  * - Better cookie/session handling
- * - Access to Node.js networking features
- * - Consistent behavior with native Node.js axios
+ * - Chromium's network stack (net.fetch): system proxy, OS trust store, HTTP/2
+ * - One place to attribute, cancel and instrument every desktop request
  *
  * ## IPC Serialization Boundary
  * Data crossing IPC must be JSON-serializable. This means:
@@ -37,7 +37,7 @@
  * catch handlers run, causing Redbox errors. We use queueMicrotask() to defer
  * rejections until the promise chain is fully established.
  *
- * @see apps/electron/src/main/axios.ts - Main process handler
+ * @see apps/electron/src/main/http-bridge.ts - Main process handler ('http-request' channel over net.fetch)
  * @see README.md - Full architecture documentation
  */
 
@@ -169,7 +169,7 @@ const setupCancellation = (
 	if (signal) {
 		signal.addEventListener('abort', () => {
 			void window.ipcRenderer
-				.invoke('axios', { type: 'cancel', requestId })
+				.invoke('http-request', { type: 'cancel', requestId })
 				.catch((error) => httpLogger.warn('Failed to cancel IPC request', { context: { error } }));
 		});
 	}
@@ -178,7 +178,7 @@ const setupCancellation = (
 	if (cancelToken) {
 		cancelToken.promise.then(() => {
 			void window.ipcRenderer
-				.invoke('axios', { type: 'cancel', requestId })
+				.invoke('http-request', { type: 'cancel', requestId })
 				.catch((error) => httpLogger.warn('Failed to cancel IPC request', { context: { error } }));
 		});
 	}
@@ -209,7 +209,7 @@ const request = (config: AxiosRequestConfig = {}): Promise<any> => {
 
 	return new Promise((resolve, reject) => {
 		window.ipcRenderer
-			.invoke('axios', { type: 'request', requestId, config: configToSend })
+			.invoke('http-request', { type: 'request', requestId, config: configToSend })
 			.then((result: IpcResponse) => {
 				if (result.success === false) {
 					// Reconstruct appropriate error type

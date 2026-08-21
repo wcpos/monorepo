@@ -2,7 +2,8 @@ import * as React from 'react';
 
 import { decode } from 'html-entities';
 import defaults from 'lodash/defaults';
-import { useObservableEagerState } from 'observable-hooks';
+
+import { useDocField } from '@wcpos/query';
 
 import { NumberFormatOptions, useNumberFormat } from './use-number-format';
 import { useAppState } from '../../../contexts/app-state';
@@ -19,8 +20,8 @@ export interface CurrencyFormatOptions extends NumberFormatOptions {
  */
 export const useCurrencyFormat = (options?: CurrencyFormatOptions) => {
 	const { store } = useAppState();
-	const currency = useObservableEagerState(store?.currency$) as string;
-	const currencyPosition = useObservableEagerState(store?.currency_pos$) as string;
+	const currency = useDocField(store, (value) => value.currency) as string;
+	const currencyPosition = useDocField(store, (value) => value.currency_pos) as string;
 
 	/**
 	 * Get currency symbol

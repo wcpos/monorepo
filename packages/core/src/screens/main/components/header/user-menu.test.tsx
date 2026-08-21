@@ -36,7 +36,10 @@ jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn(), replace: 
 
 jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'lg' }) }));
 
-jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => ({ engine: {} }) }));
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+	useQueryRuntime: () => ({ engine: {} }),
+}));
 jest.mock('@wcpos/database', () => ({
 	clearAllDB: jest.fn().mockResolvedValue({ success: true, message: 'cleared' }),
 	scheduleClearLocalDataOnNextLoad: jest.fn(),

@@ -17,6 +17,7 @@ const noopContext: CameraScanContextValue = {
 	emit: () => undefined,
 };
 
+// eslint-disable-next-line wcpos/no-rx-in-context-value -- Sanctioned Observable-in-context exception: a stable-for-the-provider's-lifetime EVENT CHANNEL, never a data source; consumers subscribe only in effects/pipelines, never read it in render (owner ruling 2026-08-21, #1385 stage K). ScanHub consolidation (see #1259) removes this exception.
 const CameraScanContext = React.createContext<CameraScanContextValue>(noopContext);
 
 /**

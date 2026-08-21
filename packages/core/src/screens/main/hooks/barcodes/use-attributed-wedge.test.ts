@@ -14,6 +14,10 @@ const mockSetCaptureAll = jest.fn();
 const mockRemove = jest.fn();
 let capturedListener: ((payload: unknown) => void) | undefined;
 
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
+
 jest.mock('react-native', () => ({
 	Platform: { OS: 'android' },
 }));

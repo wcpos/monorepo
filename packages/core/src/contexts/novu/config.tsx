@@ -1,7 +1,6 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-import { of } from 'rxjs';
+import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../app-state';
 import { useLocale } from '../../hooks/use-locale';
@@ -48,13 +47,6 @@ export interface NovuContextValue {
 
 const NovuContext = React.createContext<NovuContextValue | undefined>(undefined);
 
-/**
- * Stand-in for "no document yet". Module scope so it keeps a stable identity —
- * `useObservableEagerState` keys its subscription on the observable, so an inline `of()`
- * here would resubscribe on every render.
- */
-const UNDEFINED$ = of(undefined);
-
 interface NovuConfigProviderProps {
 	children: React.ReactNode;
 }
@@ -85,16 +77,15 @@ export function NovuConfigProvider({ children }: NovuConfigProviderProps) {
 	 * and never resynced to Novu, so a merchant could sit on stale targeting metadata
 	 * indefinitely.
 	 */
-	const siteUrl = useObservableEagerState(site?.url$ ?? UNDEFINED$) as string | undefined;
-	const license = useObservableEagerState(site?.license$ ?? UNDEFINED$) as
+	const siteUrl = useDocField(site, (value) => value.url) as string | undefined;
+	const license = useDocField(site, (value) => value.license) as
 		{ key?: string; status?: string } | undefined;
-	const wcposVersion = useObservableEagerState(site?.wcpos_version$ ?? UNDEFINED$) as
+	const wcposVersion = useDocField(site, (value) => value.wcpos_version) as string | undefined;
+	const wcposProVersion = useDocField(site, (value) => value.wcpos_pro_version) as
 		string | undefined;
-	const wcposProVersion = useObservableEagerState(site?.wcpos_pro_version$ ?? UNDEFINED$) as
-		string | undefined;
-	const storeId = useObservableEagerState(store?.id$ ?? UNDEFINED$) as number | undefined;
+	const storeId = useDocField(store, (value) => value.id) as number | undefined;
 	const storeLocalID = store?.localID;
-	const storeLocale = useObservableEagerState(store?.locale$ ?? UNDEFINED$) as string | undefined;
+	const storeLocale = useDocField(store, (value) => value.locale) as string | undefined;
 
 	const value = React.useMemo<NovuContextValue>(() => {
 		// Check if we have all required data to generate subscriber ID

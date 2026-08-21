@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
 import { v4 as uuidv4 } from 'uuid';
 
 import type { ScannerProfileDocument } from '@wcpos/database';
@@ -12,6 +11,7 @@ import {
 	type ScanSession,
 } from '@wcpos/scanner';
 import { getLogger } from '@wcpos/utils/logger';
+import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useCollection } from '../../hooks/use-collection';
@@ -68,7 +68,7 @@ function dataViewToBytes(view: DataView): number[] {
 export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 	const { store } = useAppState();
 	const { collection } = useCollection('scanner_profiles');
-	const minChars = useObservableEagerState(store.barcode_scanning_min_chars$) as number;
+	const minChars = useDocField(store, (value) => value.barcode_scanning_min_chars) as number;
 
 	const [connected, setConnected] = React.useState(false);
 

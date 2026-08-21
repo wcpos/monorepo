@@ -1,10 +1,10 @@
 import * as React from 'react';
 
-import { useObservableEagerState, useObservableState } from 'observable-hooks';
-import { of } from 'rxjs';
+import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import type { TemplateDocument } from '@wcpos/database';
+import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useAppInfo } from '../../../../hooks/use-app-info';
@@ -30,8 +30,9 @@ export function useActiveTemplates(): TemplateDocument[] {
 
 	// Read per-store template assignments (will be empty until store schema v5)
 	type TemplateAssignment = { template_id: string | number; sort_order: number };
-	const activeTemplates = useObservableEagerState(
-		store.active_templates$ ?? of([] as TemplateAssignment[])
+	const activeTemplates = useDocField(
+		store,
+		(value) => value.active_templates ?? []
 	) as TemplateAssignment[];
 
 	// Query all receipt templates from RxDB

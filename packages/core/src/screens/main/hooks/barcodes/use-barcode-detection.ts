@@ -2,16 +2,13 @@ import * as React from 'react';
 import { NativeSyntheticEvent, Platform, TextInputKeyPressEventData } from 'react-native';
 
 import { useIsFocused } from 'expo-router/react-navigation';
-import {
-	useLayoutObservable,
-	useObservableCallback,
-	useObservableEagerState,
-} from 'observable-hooks';
+import { useLayoutObservable, useObservableCallback } from 'observable-hooks';
 import { merge } from 'rxjs';
 import { filter, map, tap, withLatestFrom } from 'rxjs/operators';
 
 import { createWedgeDetector, type ScanEvent, type WedgeDetector } from '@wcpos/scanner';
 import { markUserActivity } from '@wcpos/utils/user-activity';
+import { useDocField } from '@wcpos/query';
 
 import { showHeuristicTooShortFeedback } from './too-short-feedback';
 import { useAttributedWedge } from './use-attributed-wedge';
@@ -49,10 +46,11 @@ export const useBarcodeDetection = (
 	const leafFocused = useIsFocused();
 	const isActive = options.isActive ?? leafFocused;
 	const { store } = useAppState();
-	const prefix = useObservableEagerState(store.barcode_scanning_prefix$) as string;
-	const suffix = useObservableEagerState(store.barcode_scanning_suffix$) as string;
-	const avgTimeInputThreshold = useObservableEagerState(
-		store.barcode_scanning_avg_time_input_threshold$
+	const prefix = useDocField(store, (value) => value.barcode_scanning_prefix) as string;
+	const suffix = useDocField(store, (value) => value.barcode_scanning_suffix) as string;
+	const avgTimeInputThreshold = useDocField(
+		store,
+		(value) => value.barcode_scanning_avg_time_input_threshold
 	) as number;
 
 	// Subject to emit detected barcodes

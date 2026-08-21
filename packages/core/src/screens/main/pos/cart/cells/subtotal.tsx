@@ -1,10 +1,9 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { CellContext } from '@wcpos/core/table-types';
+import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../../../contexts/app-state';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
@@ -23,7 +22,7 @@ export function Subtotal({ row, column }: CellContext<Props, 'subtotal'>) {
 	const item = row.original.item;
 	const { format } = useCurrencyFormat();
 	const { store } = useAppState();
-	const taxDisplayCart = useObservableEagerState(store.tax_display_cart$);
+	const taxDisplayCart = useDocField(store, (value) => value.tax_display_cart);
 
 	/**
 	 * Get display values if cart includes tax

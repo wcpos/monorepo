@@ -33,6 +33,7 @@ jest.mock('observable-hooks', () => ({
 }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace }) }));
 jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 	useQueryRuntime: () => ({ engine: { require: mockEngineRequire } }),
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));

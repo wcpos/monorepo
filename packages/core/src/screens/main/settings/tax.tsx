@@ -3,7 +3,6 @@ import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
-import { useObservablePickState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
@@ -20,6 +19,7 @@ import {
 import { VStack } from '@wcpos/components/vstack';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { useDocField } from '@wcpos/query';
 
 import { SettingsDangerZone } from './components/settings-danger-zone';
 import { SettingsRow } from './components/settings-row';
@@ -62,32 +62,19 @@ export function TaxSettings() {
 	/**
 	 *
 	 */
-	const formData = useObservablePickState(
-		store.$,
-		() => {
-			const latest = store.getLatest();
-			return {
-				calc_taxes: latest.calc_taxes,
-				prices_include_tax: latest.prices_include_tax,
-				tax_based_on: latest.tax_based_on,
-				shipping_tax_class: latest.shipping_tax_class,
-				tax_round_at_subtotal: latest.tax_round_at_subtotal,
-				tax_display_shop: latest.tax_display_shop,
-				tax_display_cart: latest.tax_display_cart,
-				price_display_suffix: latest.price_display_suffix,
-				tax_total_display: latest.tax_total_display,
-			};
-		},
-		'calc_taxes',
-		'prices_include_tax',
-		'tax_based_on',
-		'shipping_tax_class',
-		'tax_round_at_subtotal',
-		'tax_display_shop',
-		'tax_display_cart',
-		'price_display_suffix',
-		'tax_total_display'
-	);
+	const formData = useDocField(store, (latest) => {
+		return {
+			calc_taxes: latest.calc_taxes,
+			prices_include_tax: latest.prices_include_tax,
+			tax_based_on: latest.tax_based_on,
+			shipping_tax_class: latest.shipping_tax_class,
+			tax_round_at_subtotal: latest.tax_round_at_subtotal,
+			tax_display_shop: latest.tax_display_shop,
+			tax_display_cart: latest.tax_display_cart,
+			price_display_suffix: latest.price_display_suffix,
+			tax_total_display: latest.tax_total_display,
+		};
+	});
 
 	/**
 	 * Use `values` instead of `defaultValues` + useEffect reset pattern.

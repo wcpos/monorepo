@@ -1,8 +1,7 @@
 import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
-import { useObservableEagerState } from 'observable-hooks';
-
+import { useDocField } from '@wcpos/query';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
@@ -57,10 +56,10 @@ export function PerformanceScreen() {
 	const status = useEngineStatus();
 
 	const storedCheckIntervalMs =
-		(useObservableEagerState(store.sync_check_interval_ms$) as number | undefined) ??
+		(useDocField(store, (value) => value.sync_check_interval_ms) as number | undefined) ??
 		DEFAULT_CHECK_INTERVAL_MS;
 	const storedPullBatchSize =
-		(useObservableEagerState(store.sync_pull_batch_size$) as number | undefined) ??
+		(useDocField(store, (value) => value.sync_pull_batch_size) as number | undefined) ??
 		DEFAULT_PULL_BATCH_SIZE;
 
 	// The buckets are plain module state — re-read on a slow tick so the page

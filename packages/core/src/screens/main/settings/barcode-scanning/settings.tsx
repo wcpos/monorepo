@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useObservablePickState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
@@ -19,6 +18,7 @@ import { Slider } from '@wcpos/components/slider';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { Platform } from '@wcpos/utils/platform';
+import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -59,38 +59,22 @@ export function BarcodeSettings() {
 	/**
 	 *
 	 */
-	const formData = useObservablePickState(
-		store.$,
-		() => {
-			const latest = store.getLatest();
-			return {
-				barcode_scanning_avg_time_input_threshold: latest.barcode_scanning_avg_time_input_threshold,
-				barcode_scanning_min_chars: latest.barcode_scanning_min_chars,
-				barcode_scanning_prefix: latest.barcode_scanning_prefix || '',
-				barcode_scanning_suffix: latest.barcode_scanning_suffix || '',
-				barcode_scanning_sound_enabled: latest.barcode_scanning_sound_enabled ?? false,
-				barcode_scanning_sound_theme: (latest.barcode_scanning_sound_theme ??
-					'classic') as ScanSoundTheme,
-				barcode_scanning_sound_volume:
-					latest.barcode_scanning_sound_volume ?? DEFAULT_SCAN_SOUND_VOLUME,
-				barcode_scanning_sound_success_enabled:
-					latest.barcode_scanning_sound_success_enabled ?? true,
-				barcode_scanning_sound_failure_enabled:
-					latest.barcode_scanning_sound_failure_enabled ?? true,
-				barcode_scanning_sound_haptic_enabled: latest.barcode_scanning_sound_haptic_enabled ?? true,
-			};
-		},
-		'barcode_scanning_avg_time_input_threshold',
-		'barcode_scanning_min_chars',
-		'barcode_scanning_prefix',
-		'barcode_scanning_suffix',
-		'barcode_scanning_sound_enabled',
-		'barcode_scanning_sound_theme',
-		'barcode_scanning_sound_volume',
-		'barcode_scanning_sound_success_enabled',
-		'barcode_scanning_sound_failure_enabled',
-		'barcode_scanning_sound_haptic_enabled'
-	);
+	const formData = useDocField(store, (latest) => {
+		return {
+			barcode_scanning_avg_time_input_threshold: latest.barcode_scanning_avg_time_input_threshold,
+			barcode_scanning_min_chars: latest.barcode_scanning_min_chars,
+			barcode_scanning_prefix: latest.barcode_scanning_prefix || '',
+			barcode_scanning_suffix: latest.barcode_scanning_suffix || '',
+			barcode_scanning_sound_enabled: latest.barcode_scanning_sound_enabled ?? false,
+			barcode_scanning_sound_theme: (latest.barcode_scanning_sound_theme ??
+				'classic') as ScanSoundTheme,
+			barcode_scanning_sound_volume:
+				latest.barcode_scanning_sound_volume ?? DEFAULT_SCAN_SOUND_VOLUME,
+			barcode_scanning_sound_success_enabled: latest.barcode_scanning_sound_success_enabled ?? true,
+			barcode_scanning_sound_failure_enabled: latest.barcode_scanning_sound_failure_enabled ?? true,
+			barcode_scanning_sound_haptic_enabled: latest.barcode_scanning_sound_haptic_enabled ?? true,
+		};
+	});
 
 	/**
 	 * Use `values` instead of `defaultValues` + useEffect reset pattern.

@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
 import { v4 as uuidv4 } from 'uuid';
 
 import type { ScannerProfileDocument } from '@wcpos/database';
@@ -13,6 +12,7 @@ import {
 	type SerialLineDecoder,
 } from '@wcpos/scanner';
 import { getLogger } from '@wcpos/utils/logger';
+import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useCollection } from '../../hooks/use-collection';
@@ -67,9 +67,9 @@ function getSerial(): SerialLike | undefined {
 export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 	const { store } = useAppState();
 	const { collection } = useCollection('scanner_profiles');
-	const minChars = useObservableEagerState(store.barcode_scanning_min_chars$) as number;
-	const prefix = useObservableEagerState(store.barcode_scanning_prefix$) as string;
-	const suffix = useObservableEagerState(store.barcode_scanning_suffix$) as string;
+	const minChars = useDocField(store, (value) => value.barcode_scanning_min_chars) as number;
+	const prefix = useDocField(store, (value) => value.barcode_scanning_prefix) as string;
+	const suffix = useDocField(store, (value) => value.barcode_scanning_suffix) as string;
 
 	const [connected, setConnected] = React.useState(false);
 
