@@ -113,4 +113,62 @@ describe('mergeWithInitalValues', () => {
 
 		expect(state.set).not.toHaveBeenCalled();
 	});
+
+	it('heals stale capability flags from initial settings while keeping user preferences (#1347)', async () => {
+		// An upgraded install: the persisted coupons columns were seeded before
+		// `code` became sortable, so they still carry `disableSort: true` — and the
+		// user has hidden the column and moved it after `amount`. The merge must
+		// take `disableSort` (a capability flag) from the initial settings and keep
+		// `show` + order (the preferences).
+		const currentState = {
+			sortBy: 'date_created_gmt',
+			sortDirection: 'desc',
+			columns: [
+				{ key: 'amount', show: true, align: 'right', disableSort: true },
+				{ key: 'code', show: false, flex: 2, disableSort: true },
+			],
+		};
+
+		const state = {
+			get: () => currentState,
+			set: jest.fn(async (key, updater) => {
+				currentState[key as keyof typeof currentState] = updater(
+					currentState[key as keyof typeof currentState]
+				);
+			}),
+		};
+
+		await mergeWithInitalValues('coupons', state as never);
+
+		const code = currentState.columns.find((column) => column.key === 'code');
+		expect(code).toEqual({ key: 'code', show: false, flex: 2 });
+		expect(code).not.toHaveProperty('disableSort');
+		// Order and the still-disabled sibling's capability flag are untouched.
+		expect(currentState.columns[0]).toEqual(
+			expect.objectContaining({ key: 'amount', show: true, disableSort: true })
+		);
+	});
+
+	it('passes through persisted columns the initial settings do not declare', async () => {
+		const currentState = {
+			columns: [{ key: 'pro_only_column', show: true, disableSort: true }],
+		};
+
+		const state = {
+			get: () => currentState,
+			set: jest.fn(async (key, updater) => {
+				currentState[key as keyof typeof currentState] = updater(
+					currentState[key as keyof typeof currentState]
+				);
+			}),
+		};
+
+		await mergeWithInitalValues('coupons', state as never);
+
+		expect(currentState.columns.find((column) => column.key === 'pro_only_column')).toEqual({
+			key: 'pro_only_column',
+			show: true,
+			disableSort: true,
+		});
+	});
 });

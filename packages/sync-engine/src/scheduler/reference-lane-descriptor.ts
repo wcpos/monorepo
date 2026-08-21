@@ -19,8 +19,9 @@ export type ParsedReferenceLaneQueryKey = {
  * Per-collection default sorts (Paul's ruling, 2026-08-19): the term lanes
  * default to `name asc` — the server's own default and the only order any UI
  * shows — spelled as the legacy `<collection>:all` key so the change carries
- * ZERO key migration. Coupons keep `id asc`: their grid states its date sort
- * explicitly and the picker's `code` sort has no wire mapping on v2.
+ * ZERO key migration. Coupons keep `id asc`: their grid and picker both state
+ * their sorts explicitly (`date desc` and `title asc` — a coupon's post_title
+ * IS its code), so the default only serves sortless callers.
  */
 const TERM_DEFAULT = { orderby: 'name', order: 'asc' } as const;
 const COUPON_DEFAULT = { orderby: 'id', order: 'asc' } as const;
