@@ -77,7 +77,7 @@ describe('refreshAccessToken', () => {
 		});
 	});
 
-	it('includes the platform User-Agent on native and Electron refresh requests', async () => {
+	it('includes the platform User-Agent on native refresh requests', async () => {
 		const webUserAgentHeader = AppInfo.userAgentHeader;
 		AppInfo.userAgentHeader = { 'User-Agent': 'WCPOS/1.2.3 (android; build 45)' };
 		const post = jest.fn().mockResolvedValue({
