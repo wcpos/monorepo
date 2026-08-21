@@ -98,7 +98,10 @@ async function addTestProductToCart(page: Page) {
 
 // Keep the server-omits-payment-link premise independent of woocommerce-pos#1352's ack shape.
 async function omitPaymentLinkFromPushAcks(page: Page) {
-	await page.route('**/wp-json/wcpos/v2/push/orders{,?*}', async (route) => {
+	const isPushOrders = (url: URL) =>
+		url.pathname.endsWith('/wp-json/wcpos/v2/push/orders') ||
+		url.searchParams.get('rest_route') === '/wcpos/v2/push/orders';
+	await page.route(isPushOrders, async (route) => {
 		try {
 			const response = await route.fetch();
 			let body: { document?: { links?: { payment?: unknown } } };
