@@ -56,6 +56,49 @@ function extractValidJSON(responseString: string) {
 	return null;
 }
 
+export function unwrapResponseEnvelope<T>(response: T): T {
+	if (typeof response !== 'object' || response === null) return response;
+
+	const mutableResponse = response as { data?: unknown; headers?: unknown };
+	const envelope = mutableResponse.data;
+	if (
+		typeof envelope !== 'object' ||
+		envelope === null ||
+		!Object.prototype.hasOwnProperty.call(envelope, 'data')
+	) {
+		return response;
+	}
+
+	const envelopeRecord = envelope as Record<string, unknown>;
+	const metadata = envelopeRecord._wcpos;
+	if (typeof metadata !== 'object' || metadata === null || (metadata as { v?: unknown }).v !== 1) {
+		return response;
+	}
+
+	if (mutableResponse.headers === undefined) mutableResponse.headers = {};
+	if (typeof mutableResponse.headers === 'object' && mutableResponse.headers !== null) {
+		const headers = mutableResponse.headers as Record<string, unknown>;
+		const { total, total_pages: totalPages } = metadata as Record<string, unknown>;
+		if (
+			(headers['x-wp-total'] === undefined || headers['x-wp-total'] === '') &&
+			Number.isSafeInteger(total) &&
+			(total as number) >= 0
+		) {
+			headers['x-wp-total'] = String(total);
+		}
+		if (
+			(headers['x-wp-totalpages'] === undefined || headers['x-wp-totalpages'] === '') &&
+			Number.isSafeInteger(totalPages) &&
+			(totalPages as number) >= 1
+		) {
+			headers['x-wp-totalpages'] = String(totalPages);
+		}
+	}
+
+	mutableResponse.data = envelopeRecord.data;
+	return response;
+}
+
 export const useRestHttpClient = (endpoint = '') => {
 	const { site, wpCredentials, store, logout } = useAppState();
 	const { status: onlineStatus } = useOnlineStatus();
@@ -198,6 +241,14 @@ export const useRestHttpClient = (endpoint = '') => {
 				defaultConfig.params = merge(params, defaultConfig.params);
 			}
 
+			if ((reqConfig.method ?? 'GET').toUpperCase() === 'GET') {
+				// Axios lane's single envelope opt-in point, mirroring apps/main/lib/engine-fetcher.ts.
+				// Unwrapping keeps header readers such as refund pagination working when a proxy
+				// strips X-WP-TotalPages.
+				const params = { _wcpos_envelope: 1 };
+				defaultConfig.params = merge(params, defaultConfig.params);
+			}
+
 			const config = merge({}, defaultConfig, reqConfig);
 
 			try {
@@ -222,7 +273,7 @@ export const useRestHttpClient = (endpoint = '') => {
 						httpLogger.debug('Successfully recovered valid JSON from response');
 					}
 				}
-				return response;
+				return unwrapResponseEnvelope(response);
 			} catch (error) {
 				// Re-throw the error - it will be caught by DataFetcher or other callers
 				// Using try/catch ensures the rejection is properly handled in this async context

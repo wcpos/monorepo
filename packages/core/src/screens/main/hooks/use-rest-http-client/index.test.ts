@@ -5,7 +5,13 @@ import { renderHook } from '@testing-library/react';
 
 import { useRestHttpClient } from './index';
 
-const mockRequest = jest.fn(async (_config: Record<string, unknown>) => ({ data: null }));
+const mockRequest = jest.fn(
+	async (
+		_config: Record<string, unknown>
+	): Promise<{ data: unknown; headers?: Record<string, string> }> => ({
+		data: null,
+	})
+);
 const mockSetOffline = jest.fn();
 
 jest.mock('@wcpos/hooks/use-http-client', () => ({
@@ -77,6 +83,7 @@ describe('useRestHttpClient methods', () => {
 				data,
 				params: { _method: method },
 			});
+			expect(config.params).not.toHaveProperty('_wcpos_envelope');
 			expect(config.headers).not.toHaveProperty('X-HTTP-Method-Override');
 		}
 	);
@@ -87,7 +94,12 @@ describe('useRestHttpClient methods', () => {
 		await result.current.delete('/42');
 
 		const config = latestRequest();
-		expect(config).toMatchObject({ method: 'POST', url: '/42', params: { _method: 'DELETE' } });
+		expect(config).toMatchObject({
+			method: 'POST',
+			url: '/42',
+			params: { _method: 'DELETE' },
+		});
+		expect(config.params).not.toHaveProperty('_wcpos_envelope');
 		expect(config).not.toHaveProperty('data');
 		expect(config.headers).not.toHaveProperty('X-HTTP-Method-Override');
 	});
@@ -97,12 +109,78 @@ describe('useRestHttpClient methods', () => {
 		const { result } = renderHook(() => useRestHttpClient('orders'));
 
 		await result.current.get('/42');
-		expect(latestRequest()).toMatchObject({ method: 'GET', url: '/42' });
+		expect(latestRequest()).toMatchObject({
+			method: 'GET',
+			url: '/42',
+			params: { _wcpos_envelope: 1 },
+		});
+
+		await result.current.request({ url: '/42' });
+		expect(latestRequest()).toMatchObject({
+			url: '/42',
+			params: { _wcpos_envelope: 1 },
+		});
 
 		await result.current.post('/42', data);
 		expect(latestRequest()).toMatchObject({ method: 'POST', url: '/42', data });
+		expect(latestRequest().params).not.toHaveProperty('_wcpos_envelope');
 
 		await result.current.head('/42');
 		expect(latestRequest()).toMatchObject({ method: 'HEAD', url: '/42' });
+		expect(latestRequest().params).not.toHaveProperty('_wcpos_envelope');
 	});
+
+	it('unwraps envelope data and restores stripped pagination headers', async () => {
+		mockRequest.mockResolvedValueOnce({
+			data: { data: [{ id: 1 }], _wcpos: { v: 1, total: 150, total_pages: 2 } },
+			headers: {},
+		});
+		const { result } = renderHook(() => useRestHttpClient('orders'));
+
+		const response = await result.current.get('/');
+
+		expect(response.data).toEqual([{ id: 1 }]);
+		expect(response.headers?.['x-wp-total']).toBe('150');
+		expect(response.headers?.['x-wp-totalpages']).toBe('2');
+	});
+
+	it('preserves a non-empty pagination header while unwrapping data', async () => {
+		mockRequest.mockResolvedValueOnce({
+			data: { data: [{ id: 1 }], _wcpos: { v: 1, total_pages: 2 } },
+			headers: { 'x-wp-totalpages': '3' },
+		});
+		const { result } = renderHook(() => useRestHttpClient('orders'));
+
+		const response = await result.current.get('/');
+
+		expect(response.data).toEqual([{ id: 1 }]);
+		expect(response.headers?.['x-wp-totalpages']).toBe('3');
+	});
+
+	it('passes through a non-envelope body without inventing headers', async () => {
+		const data = [{ id: 1 }];
+		mockRequest.mockResolvedValueOnce({ data });
+		const { result } = renderHook(() => useRestHttpClient('orders'));
+
+		const response = await result.current.get('/');
+
+		expect(response.data).toBe(data);
+		expect(response.headers).toBeUndefined();
+	});
+
+	it.each([-2, '2'])(
+		'ignores invalid total_pages metadata %p while unwrapping data',
+		async (totalPages) => {
+			mockRequest.mockResolvedValueOnce({
+				data: { data: [{ id: 1 }], _wcpos: { v: 1, total_pages: totalPages } },
+				headers: {},
+			});
+			const { result } = renderHook(() => useRestHttpClient('orders'));
+
+			const response = await result.current.get('/');
+
+			expect(response.data).toEqual([{ id: 1 }]);
+			expect(response.headers).not.toHaveProperty('x-wp-totalpages');
+		}
+	);
 });
