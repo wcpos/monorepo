@@ -3,6 +3,7 @@ import * as path from 'path';
 import { expect, test } from '@playwright/test';
 
 import { authenticateWithStore, navigateToPage } from './fixtures';
+import { unwrapWireBody } from './wire-envelope';
 import { resolveIdleSoakMs } from './idle-backfill-soak-duration';
 import { compareBundleIdentity, entryFromHtml, localEntry } from './served-bundle-identity';
 
@@ -66,10 +67,13 @@ type WireLog = {
 
 /** Records nested under `payload`, an envelope's `documents`, or a bare array. */
 function recordsOf(body: unknown): Record<string, unknown>[] {
-	const list = Array.isArray(body)
-		? body
-		: Array.isArray((body as { documents?: unknown } | null)?.documents)
-			? (body as { documents: unknown[] }).documents
+	// The raw wire body is B9-enveloped ({ data, _wcpos }) — unwrap before
+	// looking for the pull shapes, or every parent-walk observation reads [].
+	const payload = unwrapWireBody(body);
+	const list = Array.isArray(payload)
+		? payload
+		: Array.isArray((payload as { documents?: unknown } | null)?.documents)
+			? (payload as { documents: unknown[] }).documents
 			: [];
 	return list.filter((entry): entry is Record<string, unknown> => typeof entry === 'object');
 }
