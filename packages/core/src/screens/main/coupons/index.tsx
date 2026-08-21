@@ -47,7 +47,7 @@ import {
 import type { QueryStateActions, QueryStateOf } from '../../../query';
 import type { SortFieldsByCollection } from '../../../query/query-state-types';
 
-type CouponDocument = import('@wcpos/database').CouponDocument;
+type CouponRow = { record: EngineRecord<'coupons'> };
 
 function RecordTextCell({ row, column }: CellContext<{ record: EngineRecord<'coupons'> }, string>) {
 	const value = useRecordField(
@@ -147,7 +147,7 @@ function CouponsScreenContent() {
 					document,
 					changes,
 				}: {
-					document: CouponDocument;
+					document: EngineRecord<'coupons'>;
 					changes: Record<string, unknown>;
 				}) => {
 					void patch({ document, data: changes });
@@ -204,7 +204,7 @@ function CouponsScreenContent() {
 				<CardContent className="border-border flex-1 border-t p-0">
 					<ErrorBoundary>
 						<Suspense fallback={<DataTableSkeleton id="coupons" />}>
-							<DataTable<CouponDocument>
+							<DataTable<CouponRow>
 								id="coupons"
 								collectionName="coupons"
 								resource={binding.resource}

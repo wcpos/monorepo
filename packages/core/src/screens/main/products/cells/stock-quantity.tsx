@@ -12,9 +12,6 @@ import { NumberInput } from '../../components/number-input';
 import { useProAccess } from '../../contexts/pro-access';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
-type ProductDocument =
-	import('@wcpos/database').ProductDocument | import('@wcpos/database').ProductVariationDocument;
-
 /**
  *
  */
@@ -23,12 +20,11 @@ export function StockQuantity({
 	table,
 }: CellContext<
 	{
-		document: ProductDocument;
 		record: EngineRecord<'products'> | EngineRecord<'variations'>;
 	},
 	'stock_quantity'
 >) {
-	const product = row.original.document;
+	const product = row.original.record;
 	const stockQuantity = useRecordField(
 		row.original.record,
 		(record) => record.payload.stock_quantity
@@ -37,7 +33,10 @@ export function StockQuantity({
 	const type = useRecordField(row.original.record, (record) => record.payload.type);
 	const t = useT();
 	const meta = table.options.meta as unknown as {
-		onChange: (arg: { document: ProductDocument; changes: Record<string, unknown> }) => void;
+		onChange: (arg: {
+			document: EngineRecord<'products'> | EngineRecord<'variations'>;
+			changes: Record<string, unknown>;
+		}) => void;
 	};
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();

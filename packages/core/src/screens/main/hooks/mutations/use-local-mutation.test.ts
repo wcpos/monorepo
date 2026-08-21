@@ -62,7 +62,6 @@ jest.mock('@wcpos/query', () => ({
 	})(),
 	engineCollection: (database: { collections?: Record<string, unknown> } | null, name: string) =>
 		database?.collections?.[name] ?? null,
-	wrapEngineDocument: (_collection: string, document: unknown) => document,
 	useQueryRuntime: () => ({
 		engine: {
 			active: () => {

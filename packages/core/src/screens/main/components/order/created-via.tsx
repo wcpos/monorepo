@@ -10,8 +10,6 @@ import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../contexts/translations';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-
 const iconMap = {
 	'woocommerce-pos': {
 		name: 'wcpos',
@@ -32,7 +30,7 @@ const iconMap = {
  */
 export function CreatedVia({
 	row,
-}: CellContext<{ document: OrderDocument; record: EngineRecord<'orders'> }, 'created_via'>) {
+}: CellContext<{ record: EngineRecord<'orders'> }, 'created_via'>) {
 	const createdVia = useRecordField(row.original.record, ({ payload }) => payload.created_via);
 	const iconName = get(iconMap, [createdVia ?? '', 'name'], 'circleQuestion') as string;
 	const iconType = get(iconMap, [createdVia ?? '', 'type'], 'muted') as string;

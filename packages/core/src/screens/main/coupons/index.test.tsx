@@ -140,8 +140,6 @@ jest.mock('./cells/editable-description', () => ({
 }));
 jest.mock('./cells/status', () => ({ Status: () => null }));
 jest.mock('./cells/usage', () => ({ Usage: () => null }));
-jest.mock('../components/text-cell', () => ({ TextCell: () => null }));
-jest.mock('../components/date', () => ({ DateCell: () => null }));
 
 function latestState(): QueryStateOf<'coupons'> {
 	const call = mockUseCollectionBinding.mock.calls.at(-1);

@@ -820,12 +820,6 @@ export function adapterDerivedFieldsFor(collection: LegacyCollectionName): reado
 		.map((field) => field.legacy);
 }
 
-/** Legacy fields whose reads are sanitized at the materialization boundary (#811). */
-export function readSanitizedFieldsFor(collection: LegacyCollectionName): readonly string[] {
-	const fields = Object.values(collectionMap[collection].fields as Record<string, FieldMapEntry>);
-	return fields.filter((field) => field.read).map((field) => field.legacy);
-}
-
 /** The engine RxDB collection name backing a legacy collection (`taxes` →
  * `taxRates`, `products/categories` → `categories`, …). */
 export function engineCollectionNameFor(collection: LegacyCollectionName): EngineCollectionName {
@@ -851,6 +845,7 @@ export function isWriteableCollection(name: string): name is WriteableCollection
 	return Object.prototype.hasOwnProperty.call(WRITEABLE_REMOTE_ID_FIELD, name);
 }
 
+/** Search-snapshot's legacy projection; query execution resolves engine paths directly. */
 export function readLegacyField(
 	collection: LegacyCollectionName,
 	document: EngineDocument,

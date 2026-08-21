@@ -87,7 +87,7 @@ describe('useLocalQuery', () => {
 
 		rerender({ search: 'three' });
 		await waitFor(() =>
-			expect(result.current.resource.valueRef$$.value?.current?.hits[0]?.document.code).toBe('C')
+			expect(result.current.resource.valueRef$$.value?.current?.hits[0]?.record.code).toBe('C')
 		);
 		await expect(firstValueFrom(result.current.total$)).resolves.toBe(1);
 	});

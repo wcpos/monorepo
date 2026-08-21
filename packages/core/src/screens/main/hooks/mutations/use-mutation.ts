@@ -5,9 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import {
 	awaitWriteOutcome,
 	COLLECTION_VOCABULARY,
-	type LegacyCollectionName,
 	useQueryRuntime,
-	wrapEngineDocument,
 	type WriteableCollection,
 } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -87,13 +85,14 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 
 	const handleSuccess = React.useCallback(
 		(document: Record<string, unknown>) => {
-			mutationLogger.success(t('common.saved_2', { id: document.id, title: collectionLabel }), {
+			const payload = document.payload as Record<string, unknown> | undefined;
+			mutationLogger.success(t('common.saved_2', { id: payload?.id, title: collectionLabel }), {
 				showToast: true,
 				context: {
-					documentId: document.id,
+					documentId: payload?.id,
 					collectionName,
 					collectionLabel,
-					couponCode: document.code,
+					couponCode: payload?.code,
 				},
 			});
 		},
@@ -189,12 +188,8 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 					}
 					currentResident = refreshed;
 				}
-				const document = wrapEngineDocument(
-					collectionName as LegacyCollectionName,
-					currentResident as never
-				);
-				handleSuccess(document);
-				return document;
+				handleSuccess(currentResident as unknown as Record<string, unknown>);
+				return currentResident;
 			} catch (error) {
 				handleError(error);
 				if (awaitRemoteId || error instanceof ActiveScopeChangedTwiceError) {

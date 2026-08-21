@@ -9,15 +9,13 @@ import { useStockStatusLabel } from '../../hooks/use-stock-status-label';
 
 import type { QueryStateActions } from '../../../../query';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
-
 /**
  *
  */
 export function StockStatus({
 	table,
 	row,
-}: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'stock_status'>) {
+}: CellContext<{ record: EngineRecord<'products'> }, 'stock_status'>) {
 	// Derived at read time so a quantity edit flips the badge the moment the
 	// optimistic patch lands — payload.stock_status is a server-computed echo
 	// that only updates when the push acks (0–10s later, never offline).

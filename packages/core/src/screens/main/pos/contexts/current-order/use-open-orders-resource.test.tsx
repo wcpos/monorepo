@@ -95,7 +95,7 @@ describe('useOpenOrdersResource', () => {
 		databaseSubscribers.clear();
 	});
 
-	it('reactively filters pos-open orders by cashier/store, sorts, proxies, and rebinds scopes', () => {
+	it('reactively filters pos-open orders by cashier/store, sorts records, and rebinds scopes', () => {
 		const orders$ = new BehaviorSubject([
 			order('late', 3, '2026-07-14T12:00:00', 7, 2),
 			order('wrong-store', 4, '2026-07-14T09:00:00', 7, 9),
@@ -109,10 +109,6 @@ describe('useOpenOrdersResource', () => {
 		expect(firstDatabase.collections.orders.find).toHaveBeenCalledWith({
 			selector: { status: 'pos-open' },
 		});
-		expect(result.current.read().map((hit) => [hit.id, hit.document.id])).toEqual([
-			['early', 2],
-			['late', 3],
-		]);
 		expect(result.current.read().map((hit) => [hit.id, hit.record.uuid])).toEqual([
 			['early', 'early'],
 			['late', 'late'],

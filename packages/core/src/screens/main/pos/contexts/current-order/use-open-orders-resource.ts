@@ -10,7 +10,6 @@ import {
 	type EngineRecord,
 	resolveLegacyField,
 	useQueryRuntime,
-	wrapEngineDocument,
 } from '@wcpos/query';
 import { NO_STORE, wooMetaCarrier } from '@wcpos/sync-core';
 
@@ -21,8 +20,6 @@ import {
 
 import type { OpenOrderHit } from './context';
 import type { RxDatabase } from 'rxdb';
-
-type OrderDocument = import('@wcpos/database').OrderDocument;
 
 const OPEN_ORDERS_COMPILED = compileQuery(
 	'orders',
@@ -65,16 +62,13 @@ export function useOpenOrdersResource(
 						if (storeID === undefined || storeID === NO_STORE) return posUser === String(cashierID);
 						return posUser === String(cashierID) && posStore === String(storeID);
 					})
-					.map((record) => ({
-						record,
-						document: wrapEngineDocument<OrderDocument>('orders', record as never),
-					}))
+					.map((record) => ({ record }))
 					.sort((a, b) =>
 						(a.record.payload.date_created_gmt ?? '').localeCompare(
 							b.record.payload.date_created_gmt ?? ''
 						)
 					)
-					.map(({ document, record }) => ({ id: String(record.uuid), document, record }))
+					.map(({ record }) => ({ id: String(record.uuid), record }))
 			)
 		);
 		return new ObservableResource(openOrders$);

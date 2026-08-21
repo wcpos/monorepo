@@ -39,8 +39,7 @@ import {
 import type { QueryStateActions, QueryStateOf } from '../../../query';
 import type { SortFieldsByCollection } from '../../../query/query-state-types';
 
-type CustomerDocument = import('@wcpos/database').CustomerDocument;
-type CustomerRow = { document: CustomerDocument; record: EngineRecord<'customers'> };
+type CustomerRow = { record: EngineRecord<'customers'> };
 
 const cells = {
 	avatar_url: Avatar,

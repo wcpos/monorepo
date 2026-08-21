@@ -3,7 +3,6 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import { wrapEngineDocument } from '@wcpos/query';
 import { Platform } from '@wcpos/utils/platform';
 
 import {
@@ -27,8 +26,6 @@ export {
 	type CurrentOrderRecord,
 	type OpenOrderHit,
 } from './context';
-
-type OrderDocument = import('@wcpos/database').OrderDocument;
 
 interface CurrentOrderContextProviderProps {
 	children: React.ReactNode;
@@ -74,14 +71,9 @@ export function CurrentOrderProvider({
 		}
 	}
 
-	// Determine current order from internal state. The temporary order is engine-shaped
-	// since ADR 0028 stage I, so BOTH branches of the union now present the same legacy
-	// face through the same wrapper (the proxy passes the temp doc's `.isNew` through);
-	// mutation paths resolve the raw temp document via the temp-order repository, never
-	// through this context value.
+	// Determine the current record from internal state. The temporary order has the same
+	// engine-shaped record face as resident orders since ADR 0028 stage I.
 	const selectedOrder = openOrders.find((order) => order.id === internalOrderId);
-	const currentOrder = (selectedOrder?.document ??
-		wrapEngineDocument('orders', newOrder as never)) as OrderDocument;
 	const currentOrderRecord = selectedOrder?.record ?? newOrder;
 
 	/**
@@ -112,20 +104,18 @@ export function CurrentOrderProvider({
 	);
 
 	/**
-	 * Kept current so `getCurrentOrder()` can resolve the order at event time without anyone
-	 * having to subscribe to it.
+	 * Kept current so `getCurrentOrderRecord()` can resolve the order at event time without
+	 * anyone having to subscribe to it.
 	 *
 	 * Updated in a LAYOUT effect — react-compiler forbids touching a ref while rendering,
 	 * and the write must be commit-synchronous: subscription callbacks (e.g. the hardware
 	 * barcode scan) can fire after the commit that switched orders but before passive
 	 * effects flush, and a passive-effect write would hand them the previous order (#1294).
 	 */
-	const currentOrderRef = React.useRef(currentOrder);
 	const currentOrderRecordRef = React.useRef(currentOrderRecord);
 	React.useLayoutEffect(() => {
-		currentOrderRef.current = currentOrder;
 		currentOrderRecordRef.current = currentOrderRecord;
-	}, [currentOrder, currentOrderRecord]);
+	}, [currentOrderRecord]);
 
 	/**
 	 * Stable for the provider's lifetime — `setCurrentOrderID` is a useCallback on the router
@@ -134,7 +124,6 @@ export function CurrentOrderProvider({
 	 */
 	const actions = React.useMemo<CurrentOrderActions>(
 		() => ({
-			getCurrentOrder: () => currentOrderRef.current,
 			getCurrentOrderRecord: () => currentOrderRecordRef.current,
 			setCurrentOrderID,
 		}),
@@ -145,7 +134,6 @@ export function CurrentOrderProvider({
 		<CurrentOrderActionsContext.Provider value={actions}>
 			<CurrentOrderContext.Provider
 				value={{
-					currentOrder,
 					currentOrderRecord,
 					openOrders,
 					setCurrentOrderID,

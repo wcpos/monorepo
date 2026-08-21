@@ -47,8 +47,6 @@ import { useProAccess } from '../../contexts/pro-access';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-
 const syncLogger = getLogger(['wcpos', 'orders', 'actions', 'sync']);
 
 const REFUNDABLE_STATUSES: readonly string[] = ['completed', 'processing', 'on-hold'];
@@ -56,11 +54,9 @@ const REFUNDABLE_STATUSES: readonly string[] = ['completed', 'processing', 'on-h
 /**
  *
  */
-export function Actions({
-	row,
-}: CellContext<{ document: OrderDocument; record: EngineRecord<'orders'> }, 'actions'>) {
-	const order = row.original.document;
-	const record = row.original.record;
+export function Actions({ row }: CellContext<{ record: EngineRecord<'orders'> }, 'actions'>) {
+	const order = row.original.record;
+	const record = order;
 	const router = useRouter();
 	const status = useRecordField(record, ({ payload }) => payload.status);
 	const { localPatch } = useLocalMutation();
@@ -109,7 +105,7 @@ export function Actions({
 		// in could not be checked out anyway.
 		if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
 
-		const existingMeta = order.getLatest().toMutableJSON()?.meta_data || [];
+		const existingMeta = order.payload.meta_data ?? [];
 		const existingStoreId = wooMetaCarrier.readIdentity(existingMeta).storeId;
 		let meta_data = wooMetaCarrier.stampIdentity(existingMeta, {
 			userId: wpCredentials.id,

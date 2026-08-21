@@ -34,13 +34,9 @@ import { useProAccess } from '../../contexts/pro-access';
 import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
-
 const syncLogger = getLogger(['wcpos', 'products', 'actions', 'sync']);
 
-export function Actions({
-	row,
-}: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'actions'>) {
+export function Actions({ row }: CellContext<{ record: EngineRecord<'products'> }, 'actions'>) {
 	const router = useRouter();
 	const record = row.original.record;
 	const product = useRecordField(record, ({ payload }) => ({

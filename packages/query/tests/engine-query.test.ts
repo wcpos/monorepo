@@ -27,7 +27,7 @@ describe('observeEngineQuery', () => {
 			);
 			const hit = result.hits[0];
 
-			expect(hit.document.name).toBe('Native record');
+			expect(hit.record.payload.name).toBe('Native record');
 			expect(hit.record).toBe(await database.collections.products.findOne('native-record').exec());
 			expect(hit.record.payload.name).toBe('Native record');
 		} finally {

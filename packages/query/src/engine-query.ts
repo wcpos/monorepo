@@ -10,7 +10,6 @@ import {
 	type EngineDocument,
 	type LegacyCollectionName,
 } from './engine-adapter/collection-map';
-import { wrapEngineDocument } from './engine-adapter/document-proxy';
 import {
 	type AdapterDatabase,
 	type CompiledQueryRead,
@@ -214,7 +213,6 @@ export function observeEngineQuery(
 					hits: result.hits.map((document) => ({
 						id: document.primary,
 						record: document,
-						document: wrapEngineDocument(descriptor.collection, document),
 					})),
 				})),
 				catchError((error) => {

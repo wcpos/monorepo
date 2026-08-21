@@ -10,7 +10,6 @@ import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 
 import type { QueryStateActions } from '../../../../query';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
 /**
@@ -20,7 +19,7 @@ export function Customer({
 	table,
 	row,
 	column,
-}: CellContext<{ document: OrderDocument; record: EngineRecord<'orders'> }, 'customer_id'>) {
+}: CellContext<{ record: EngineRecord<'orders'> }, 'customer_id'>) {
 	const actions = (
 		table.options.meta as {
 			actions?: Pick<QueryStateActions<'orders'>, 'setFilter'>;

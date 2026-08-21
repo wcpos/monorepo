@@ -5,18 +5,13 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
-type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
-
 /**
  *
  */
 export function ProductVariationName({
 	row,
 	column,
-}: CellContext<
-	{ document: ProductVariationDocument; record: EngineRecord<'variations'> },
-	'name'
->) {
+}: CellContext<{ record: EngineRecord<'variations'> }, 'name'>) {
 	const variation = useRecordField(row.original.record, ({ payload }) => ({
 		name: payload.name,
 		sku: payload.sku,

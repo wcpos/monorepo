@@ -60,7 +60,6 @@ jest.mock('react-hook-form', () => ({
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => manager,
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
-	wrapEngineDocument: (_collection: string, document: unknown) => document,
 }));
 
 jest.mock('@wcpos/components/button', () => ({

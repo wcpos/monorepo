@@ -6,15 +6,10 @@ import type { CellContext } from '@wcpos/core/table-types';
 
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-
 /**
  *
  */
-export function Total({
-	row,
-	column,
-}: CellContext<{ document: OrderDocument; record: EngineRecord<'orders'> }, 'total'>) {
+export function Total({ row, column }: CellContext<{ record: EngineRecord<'orders'> }, 'total'>) {
 	const { total, currencySymbol, paymentMethodTitle, refunds } = useRecordField(
 		row.original.record,
 		({ payload }) => ({

@@ -39,16 +39,12 @@ import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
-type CustomerDocument = import('@wcpos/database').CustomerDocument;
-
 const syncLogger = getLogger(['wcpos', 'customers', 'actions', 'sync']);
 
 /**
  *
  */
-export function Actions({
-	row,
-}: CellContext<{ document: CustomerDocument; record: EngineRecord<'customers'> }, 'actions'>) {
+export function Actions({ row }: CellContext<{ record: EngineRecord<'customers'> }, 'actions'>) {
 	const record = row.original.record;
 	const customer = useRecordField(record, ({ payload }) => payload);
 	const router = useRouter();

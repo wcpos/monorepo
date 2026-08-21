@@ -4,9 +4,7 @@ import cloneDeep from 'lodash/cloneDeep';
 
 import {
 	awaitWriteOutcome,
-	type LegacyCollectionName,
 	useQueryRuntime,
-	wrapEngineDocument,
 	WRITEABLE_REMOTE_ID_FIELD,
 	type WriteableCollection,
 } from '@wcpos/query';
@@ -82,7 +80,7 @@ export const usePushDocument = () => {
 					currentResident = refreshed;
 				}
 
-				return wrapEngineDocument(collectionName as LegacyCollectionName, currentResident as never);
+				return currentResident;
 			} catch (error) {
 				const message = getErrorMessage(error);
 				syncLogger.error('Failed to send document to server', {

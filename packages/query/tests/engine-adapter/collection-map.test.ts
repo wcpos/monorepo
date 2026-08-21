@@ -7,7 +7,6 @@ import {
 	LEGACY_SEARCH_FIELDS,
 	promotedColumnsFor,
 	readLegacyField,
-	readSanitizedFieldsFor,
 	resolveLegacyField,
 	sanitizeVariationAttributesRead,
 	sortAliasFor,
@@ -60,7 +59,6 @@ describe('variation attribute read boundary (#811)', () => {
 		expect(read([])).toEqual([]);
 		expect(read(undefined, false)).toBeUndefined();
 		expect(sanitizeVariationAttributesRead(undefined)).toBeUndefined();
-		expect(readSanitizedFieldsFor('variations')).toEqual(['id', 'attributes', 'parent_id']);
 	});
 });
 

@@ -34,9 +34,7 @@ jest.mock('@wcpos/query', () => ({
 	}),
 	engineCollection: (database: { collections?: Record<string, unknown> } | null, name: string) =>
 		database?.collections?.[name] ?? null,
-	isEngineRxDocument: () => false,
 	resolveLegacyField: () => ({ enginePath: 'remoteId' }),
-	wrapEngineDocument: (_collection: string, document: unknown) => document,
 }));
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ store: { prevent_overselling$: {} } }),

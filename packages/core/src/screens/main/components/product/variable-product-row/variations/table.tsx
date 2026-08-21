@@ -8,7 +8,6 @@ import { cn } from '@wcpos/components/lib/utils';
 import { Suspense } from '@wcpos/components/suspense';
 import { TableCell, TableRow } from '@wcpos/components/table';
 import { VStack } from '@wcpos/components/vstack';
-import type { ProductDocument } from '@wcpos/database';
 import type { EngineRecord } from '@wcpos/query';
 
 import { VariationTableFooter } from './footer';
@@ -19,22 +18,18 @@ import { getColumnStyle } from '../../../data-table';
 import type { DataTableFeatures } from '../../../data-table';
 import type { Cell, CellContext, Row } from '../../../../../../table-types';
 
-type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
-
 interface Props {
 	binding: ReturnType<typeof import('../../../../../../query').useCollectionBinding<'variations'>>;
-	row: Row<{ document: ProductDocument; record: EngineRecord<'products'> }, DataTableFeatures>;
+	row: Row<{ record: EngineRecord<'products'> }, DataTableFeatures>;
 	hideOutOfStock?: boolean;
 }
 
 interface TableCellRow {
-	document: ProductVariationDocument;
 	record: EngineRecord<'variations'>;
 }
 
 interface VariationHit {
 	id: string;
-	document: ProductVariationDocument;
 	record: EngineRecord<'variations'>;
 }
 
@@ -99,11 +94,7 @@ export function VariationsTable({ binding, row, hideOutOfStock }: Props) {
 							.getVisibleCells()
 							.map(
 								(
-									cell: Cell<
-										{ document: ProductDocument; record: EngineRecord<'products'> },
-										unknown,
-										DataTableFeatures
-									>,
+									cell: Cell<{ record: EngineRecord<'products'> }, unknown, DataTableFeatures>,
 									cellIndex: number
 								) => {
 									/**

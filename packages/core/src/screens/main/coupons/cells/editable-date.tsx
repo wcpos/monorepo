@@ -8,17 +8,18 @@ import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { useProAccess } from '../../contexts/pro-access';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
-type CouponDocument = import('@wcpos/database').CouponDocument;
-
 export function EditableDate({
 	row,
 	table,
-}: CellContext<{ document: CouponDocument; record: EngineRecord<'coupons'> }, string>) {
-	const item = row.original.document;
+}: CellContext<{ record: EngineRecord<'coupons'> }, string>) {
+	const item = row.original.record;
 	const dateExpiresGmt =
 		useRecordField(row.original.record, ({ payload }) => payload.date_expires_gmt) ?? null;
 	const meta = table.options.meta as unknown as {
-		onChange: (arg: { document: CouponDocument; changes: Record<string, unknown> }) => void;
+		onChange: (arg: {
+			document: EngineRecord<'coupons'>;
+			changes: Record<string, unknown>;
+		}) => void;
 	};
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();

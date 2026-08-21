@@ -4,7 +4,9 @@
 import * as React from 'react';
 
 import { act, render, screen } from '@testing-library/react';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, map } from 'rxjs';
+
+import type { EngineRecord } from '@wcpos/query';
 
 import { TaxRatesProvider, useTaxLocation, useTaxSettings } from './provider';
 import { useTaxRates } from './use-tax-rates';
@@ -15,7 +17,9 @@ import {
 
 import type { QueryStateOf } from '../../../../query';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
+type TestOrderRecord = EngineRecord<'orders'> & {
+	patchPayload: (patch: Record<string, unknown>) => void;
+};
 
 const allRates = [
 	{ id: 1, class: 'standard', country: '', state: '', cities: [], postcodes: [] },
@@ -78,12 +82,30 @@ type OrderMeta = { key?: string; value?: unknown };
  * the tests below swap the object while leaving the underlying values alone — exactly the
  * shape of the bug this split fixes.
  */
-function makeOrder(meta: OrderMeta[] = []): OrderDocument {
-	return {
-		meta_data$: new BehaviorSubject<OrderMeta[]>(meta),
-		billing$: new BehaviorSubject<Record<string, string | undefined>>({}),
-		shipping$: new BehaviorSubject<Record<string, string | undefined>>({}),
-	} as unknown as OrderDocument;
+function makeOrder(meta: OrderMeta[] = []): TestOrderRecord {
+	const payload$ = new BehaviorSubject<Record<string, unknown>>({
+		meta_data: meta,
+		billing: {},
+		shipping: {},
+	});
+	const record = {
+		uuid: 'order-uuid',
+		remoteId: null,
+		get payload() {
+			return payload$.value;
+		},
+		collection: { name: 'orders' },
+		getLatest: () => record,
+		toJSON: () => ({ uuid: 'order-uuid', remoteId: null, payload: payload$.value }),
+		$: payload$.pipe(
+			map((payload) => ({
+				toJSON: () => ({ uuid: 'order-uuid', remoteId: null, payload }),
+			}))
+		),
+		patchPayload: (patch: Record<string, unknown>) =>
+			payload$.next({ ...payload$.value, ...patch }),
+	};
+	return record as unknown as TestOrderRecord;
 }
 
 function latestState(): QueryStateOf<'tax-rates'> {
@@ -174,7 +196,7 @@ describe('order identity churn', () => {
 		return <output data-testid="based-on">{taxBasedOn}</output>;
 	});
 
-	function Tree({ order }: { order?: OrderDocument }) {
+	function Tree({ order }: { order?: TestOrderRecord }) {
 		return (
 			<TaxRatesProvider order={order}>
 				<SettingsConsumer />
@@ -239,27 +261,29 @@ describe('order identity churn', () => {
 	 * re-render the provider.
 	 */
 	it('reacts to a tax_based_on override written to the live order document', () => {
-		const meta$ = new BehaviorSubject<OrderMeta[]>([]);
-		const order = { ...makeOrder(), meta_data$: meta$ } as unknown as OrderDocument;
+		const order = makeOrder();
 
 		render(<Tree order={order} />);
 		expect(screen.getByTestId('based-on').textContent).toBe('base');
 
 		act(() => {
-			meta$.next([{ key: '_woocommerce_pos_tax_based_on', value: 'billing' }]);
+			order.patchPayload({
+				meta_data: [{ key: '_woocommerce_pos_tax_based_on', value: 'billing' }],
+			});
 		});
 
 		expect(screen.getByTestId('based-on').textContent).toBe('billing');
 	});
 
 	it('ignores a meta override that is not a valid tax basis', () => {
-		const meta$ = new BehaviorSubject<OrderMeta[]>([]);
-		const order = { ...makeOrder(), meta_data$: meta$ } as unknown as OrderDocument;
+		const order = makeOrder();
 
 		render(<Tree order={order} />);
 
 		act(() => {
-			meta$.next([{ key: '_woocommerce_pos_tax_based_on', value: 'nonsense' }]);
+			order.patchPayload({
+				meta_data: [{ key: '_woocommerce_pos_tax_based_on', value: 'nonsense' }],
+			});
 		});
 
 		expect(screen.getByTestId('based-on').textContent).toBe('base');
@@ -297,7 +321,7 @@ describe('tax follows the customer address', () => {
 		return <output data-testid="rate-ids">{rates.map((rate) => rate.id).join(',')}</output>;
 	}
 
-	function renderWithOrder(order: OrderDocument) {
+	function renderWithOrder(order: TestOrderRecord) {
 		return render(
 			<TaxRatesProvider order={order}>
 				<RatesProbe />
@@ -311,14 +335,14 @@ describe('tax follows the customer address', () => {
 
 	it('re-filters the rates when the billing address changes', () => {
 		storeSubjects.tax_based_on$.next('billing');
-		const billing$ = new BehaviorSubject<Record<string, string | undefined>>({ country: 'US' });
-		const order = { ...makeOrder(), billing$ } as unknown as OrderDocument;
+		const order = makeOrder();
+		order.patchPayload({ billing: { country: 'US' } });
 
 		renderWithOrder(order);
 		expect(screen.getByTestId('rate-ids').textContent).toBe('10');
 
 		act(() => {
-			billing$.next({ country: 'GB' });
+			order.patchPayload({ billing: { country: 'GB' } });
 		});
 
 		expect(screen.getByTestId('rate-ids').textContent).toBe('20');
@@ -326,14 +350,14 @@ describe('tax follows the customer address', () => {
 
 	it('re-filters the rates when the shipping address changes', () => {
 		storeSubjects.tax_based_on$.next('shipping');
-		const shipping$ = new BehaviorSubject<Record<string, string | undefined>>({ country: 'US' });
-		const order = { ...makeOrder(), shipping$ } as unknown as OrderDocument;
+		const order = makeOrder();
+		order.patchPayload({ shipping: { country: 'US' } });
 
 		renderWithOrder(order);
 		expect(screen.getByTestId('rate-ids').textContent).toBe('10');
 
 		act(() => {
-			shipping$.next({ country: 'GB' });
+			order.patchPayload({ shipping: { country: 'GB' } });
 		});
 
 		expect(screen.getByTestId('rate-ids').textContent).toBe('20');
@@ -341,14 +365,14 @@ describe('tax follows the customer address', () => {
 
 	it('ignores the customer address while tax is based on the shop base address', () => {
 		// baseLocation is mocked to US, so the US rate must hold regardless of billing.
-		const billing$ = new BehaviorSubject<Record<string, string | undefined>>({ country: 'GB' });
-		const order = { ...makeOrder(), billing$ } as unknown as OrderDocument;
+		const order = makeOrder();
+		order.patchPayload({ billing: { country: 'GB' } });
 
 		renderWithOrder(order);
 		expect(screen.getByTestId('rate-ids').textContent).toBe('10');
 
 		act(() => {
-			billing$.next({ country: 'GB', city: 'London' });
+			order.patchPayload({ billing: { country: 'GB', city: 'London' } });
 		});
 
 		expect(screen.getByTestId('rate-ids').textContent).toBe('10');
@@ -359,15 +383,16 @@ describe('tax follows the customer address', () => {
 	 * and the rates must follow the customer address from that point on.
 	 */
 	it('switches to the billing address when the order meta override lands', () => {
-		const meta$ = new BehaviorSubject<OrderMeta[]>([]);
-		const billing$ = new BehaviorSubject<Record<string, string | undefined>>({ country: 'GB' });
-		const order = { ...makeOrder(), meta_data$: meta$, billing$ } as unknown as OrderDocument;
+		const order = makeOrder();
+		order.patchPayload({ billing: { country: 'GB' } });
 
 		renderWithOrder(order);
 		expect(screen.getByTestId('rate-ids').textContent).toBe('10');
 
 		act(() => {
-			meta$.next([{ key: '_woocommerce_pos_tax_based_on', value: 'billing' }]);
+			order.patchPayload({
+				meta_data: [{ key: '_woocommerce_pos_tax_based_on', value: 'billing' }],
+			});
 		});
 
 		expect(screen.getByTestId('rate-ids').textContent).toBe('20');
@@ -389,10 +414,10 @@ describe('current-order subscription', () => {
 		return <output data-testid="based-on">{taxBasedOn}</output>;
 	}
 
-	function withOrder(order: OrderDocument, children: React.ReactNode) {
+	function withOrder(order: TestOrderRecord, children: React.ReactNode) {
 		return (
 			<CurrentOrderContext.Provider
-				value={{ currentOrder: order } as unknown as CurrentOrderContextProps}
+				value={{ currentOrderRecord: order } as unknown as CurrentOrderContextProps}
 			>
 				{children}
 			</CurrentOrderContext.Provider>
@@ -400,10 +425,7 @@ describe('current-order subscription', () => {
 	}
 
 	it('resolves the order from context when no order prop is given', () => {
-		const meta$ = new BehaviorSubject<OrderMeta[]>([
-			{ key: '_woocommerce_pos_tax_based_on', value: 'billing' },
-		]);
-		const order = { ...makeOrder(), meta_data$: meta$ } as unknown as OrderDocument;
+		const order = makeOrder([{ key: '_woocommerce_pos_tax_based_on', value: 'billing' }]);
 
 		render(
 			withOrder(
@@ -418,8 +440,7 @@ describe('current-order subscription', () => {
 	});
 
 	it('follows a live write to the context order', () => {
-		const meta$ = new BehaviorSubject<OrderMeta[]>([]);
-		const order = { ...makeOrder(), meta_data$: meta$ } as unknown as OrderDocument;
+		const order = makeOrder();
 
 		render(
 			withOrder(
@@ -432,7 +453,9 @@ describe('current-order subscription', () => {
 		expect(screen.getByTestId('based-on').textContent).toBe('base');
 
 		act(() => {
-			meta$.next([{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' }]);
+			order.patchPayload({
+				meta_data: [{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' }],
+			});
 		});
 
 		expect(screen.getByTestId('based-on').textContent).toBe('shipping');
@@ -449,11 +472,8 @@ describe('current-order subscription', () => {
 	});
 
 	it('still honours an explicit order prop, which overrides context', () => {
-		const contextOrder = { ...makeOrder() } as unknown as OrderDocument;
-		const propMeta$ = new BehaviorSubject<OrderMeta[]>([
-			{ key: '_woocommerce_pos_tax_based_on', value: 'billing' },
-		]);
-		const propOrder = { ...makeOrder(), meta_data$: propMeta$ } as unknown as OrderDocument;
+		const contextOrder = makeOrder();
+		const propOrder = makeOrder([{ key: '_woocommerce_pos_tax_based_on', value: 'billing' }]);
 
 		render(
 			withOrder(

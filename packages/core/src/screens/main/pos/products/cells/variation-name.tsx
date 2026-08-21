@@ -7,16 +7,11 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { StockQuantity } from './stock-quantity';
 
-type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
-
 /**
  *
  */
 export function ProductVariationName(
-	props: CellContext<
-		{ document: ProductVariationDocument; record: EngineRecord<'variations'> },
-		'name'
-	>
+	props: CellContext<{ record: EngineRecord<'variations'> }, 'name'>
 ) {
 	const { row, column } = props;
 	const variation = useRecordField(row.original.record, ({ payload }) => ({

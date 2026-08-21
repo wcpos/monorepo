@@ -9,15 +9,13 @@ import { useCashierLabel } from '../../hooks/use-cashier-label';
 
 import type { QueryStateActions } from '../../../../query';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-
 /**
  *
  */
 export function Cashier({
 	table,
 	row,
-}: CellContext<{ document: OrderDocument; record: EngineRecord<'orders'> }, 'cashier'>) {
+}: CellContext<{ record: EngineRecord<'orders'> }, 'cashier'>) {
 	const cashierID = useRecordField(
 		row.original.record,
 		({ payload }) => wooMetaCarrier.readIdentity(payload.meta_data).cashierId ?? undefined

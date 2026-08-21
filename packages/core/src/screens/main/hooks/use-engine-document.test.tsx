@@ -5,9 +5,6 @@ import { act, renderHook } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
 import {
-	useEngineDocument,
-	useEngineDocumentByWooId,
-	useEngineDocumentsByWooId,
 	useEngineRecord,
 	useEngineRecordByWooId,
 	useEngineRecordsByWooId,
@@ -97,113 +94,11 @@ function databaseWithCollection(
 	};
 }
 
-function current(resource: ReturnType<typeof useEngineDocument<Record<string, unknown>>>) {
-	return resource.valueRef$$.value?.current as Record<string, unknown> | null | undefined;
-}
-
-describe('useEngineDocument', () => {
+describe('useEngineRecord', () => {
 	beforeEach(() => {
 		activeDatabase = null;
 		engineReady = new Promise(() => undefined);
 		databaseSubscribers.clear();
-	});
-
-	it('resolves a UUID from the active engine collection and wraps the legacy shape', () => {
-		const source = fakeRxDocument({
-			uuid: 'product-uuid',
-			remoteId: '42',
-			payload: { name: 'Coffee' },
-		});
-		const document$ = new BehaviorSubject<RxDocument<EngineDocument> | null>(source.document);
-		const database = databaseWith(document$);
-		activeDatabase = database;
-
-		const { result } = renderHook(() =>
-			useEngineDocument<Record<string, unknown>>('products', 'product-uuid')
-		);
-
-		expect(database.collections.products.findOne).toHaveBeenCalledWith('product-uuid');
-		const document = current(result.current);
-		expect(document?.uuid).toBe('product-uuid');
-		expect(document?.id).toBe(42);
-		expect(document?.name).toBe('Coffee');
-	});
-
-	it('resolves a Woo ID through the collection-specific promoted field', () => {
-		const source = fakeRxDocument({
-			uuid: 'product-uuid',
-			remoteId: '42',
-			payload: { name: 'Coffee' },
-		});
-		const document$ = new BehaviorSubject<RxDocument<EngineDocument> | null>(source.document);
-		const database = databaseWith(document$);
-		activeDatabase = database;
-
-		const { result } = renderHook(() =>
-			useEngineDocumentByWooId<Record<string, unknown>>('products', 42)
-		);
-
-		expect(database.collections.products.findOne).toHaveBeenCalledWith({
-			selector: { remoteId: '42' },
-		});
-		const document = current(result.current);
-		expect(document?.uuid).toBe('product-uuid');
-		expect(document?.id).toBe(42);
-	});
-
-	it.each([
-		['category-pill', 'products/categories', 'categories'],
-		['product-filter tag', 'products/tags', 'tags'],
-		['product-filter brand', 'products/brands', 'brands'],
-		['order-edit customer', 'customers', 'customers'],
-		['edit-cart-customer', 'customers', 'customers'],
-	] as const)(
-		'resolves the %s key path through %s by its adapter-mapped Woo ID field',
-		(_site, legacyCollection, engineCollection) => {
-			const source = fakeRxDocument({
-				uuid: `${engineCollection}-uuid`,
-				remoteId: '42',
-				payload: { name: 'Selected record' },
-			});
-			const document$ = new BehaviorSubject<RxDocument<EngineDocument> | null>(source.document);
-			const findOne = jest.fn(() => ({ $: document$.asObservable() }));
-			activeDatabase = databaseWithCollection(engineCollection, findOne);
-
-			const { result } = renderHook(() =>
-				useEngineDocumentByWooId<Record<string, unknown>>(legacyCollection, 42)
-			);
-
-			expect(findOne).toHaveBeenCalledWith({ selector: { remoteId: '42' } });
-			expect(current(result.current)?.id).toBe(42);
-		}
-	);
-
-	it('resolves selected categories as an ordered list and leaves missing IDs absent', () => {
-		const hardware = fakeRxDocument({
-			uuid: 'category-38',
-			remoteId: '38',
-			payload: { name: 'Hardware' },
-		});
-		const tools = fakeRxDocument({
-			uuid: 'category-12',
-			remoteId: '12',
-			payload: { name: 'Tools' },
-		});
-		const documents$ = new BehaviorSubject<RxDocument<EngineDocument>[]>([
-			hardware.document,
-			tools.document,
-		]);
-		const find = jest.fn(() => ({ $: documents$.asObservable() }));
-		activeDatabase = databaseWithCollection('categories', jest.fn(), find);
-
-		const { result } = renderHook(() =>
-			useEngineDocumentsByWooId<Record<string, unknown>>('products/categories', [12, 999, 38])
-		);
-
-		expect(find).toHaveBeenCalledWith({ selector: { remoteId: { $in: ['12', '999', '38'] } } });
-		expect(result.current.read().map((document: Record<string, unknown>) => document.id)).toEqual([
-			12, 38,
-		]);
 	});
 
 	it('returns an engine record by Woo ID without wrapping its payload', () => {
@@ -285,19 +180,15 @@ describe('useEngineDocument', () => {
 		const document$ = new BehaviorSubject<RxDocument<EngineDocument> | null>(null);
 		activeDatabase = databaseWith(document$);
 
-		const { result } = renderHook(() =>
-			useEngineDocument<Record<string, unknown>>('products', 'missing-uuid')
-		);
+		const { result } = renderHook(() => useEngineRecord('products', 'missing-uuid'));
 
-		expect(current(result.current)).toBeNull();
+		expect(result.current.read()).toBeNull();
 	});
 
 	it('stays pending while the database opens and emits null only after a live query misses', async () => {
-		const { result } = renderHook(() =>
-			useEngineDocument<Record<string, unknown>>('products', 'product-uuid')
-		);
+		const { result } = renderHook(() => useEngineRecord('products', 'product-uuid'));
 
-		expect(current(result.current)).toBeUndefined();
+		expect(result.current.valueRef$$.value?.current).toBeUndefined();
 
 		const database = databaseWith(new BehaviorSubject<RxDocument<EngineDocument> | null>(null));
 		await act(async () => {
@@ -305,18 +196,16 @@ describe('useEngineDocument', () => {
 		});
 
 		expect(database.collections.products.findOne).toHaveBeenCalledWith('product-uuid');
-		expect(current(result.current)).toBeNull();
+		expect(result.current.read()).toBeNull();
 	});
 
 	it('resolves an empty document list while the database opens', () => {
-		const { result } = renderHook(() =>
-			useEngineDocumentsByWooId<Record<string, unknown>>('products/categories', [42])
-		);
+		const { result } = renderHook(() => useEngineRecordsByWooId('categories', [42]));
 
 		expect(result.current.valueRef$$.value?.current).toEqual([]);
 	});
 
-	it('emits a newly wrapped document when the engine query updates', () => {
+	it('emits a new record when the engine query updates', () => {
 		const first = fakeRxDocument({
 			uuid: 'product-uuid',
 			remoteId: '42',
@@ -324,9 +213,7 @@ describe('useEngineDocument', () => {
 		});
 		const document$ = new BehaviorSubject<RxDocument<EngineDocument> | null>(first.document);
 		activeDatabase = databaseWith(document$);
-		const { result } = renderHook(() =>
-			useEngineDocument<Record<string, unknown>>('products', 'product-uuid')
-		);
+		const { result } = renderHook(() => useEngineRecord('products', 'product-uuid'));
 
 		const updated = fakeRxDocument({
 			uuid: 'product-uuid',
@@ -335,7 +222,7 @@ describe('useEngineDocument', () => {
 		});
 		act(() => document$.next(updated.document));
 
-		expect(current(result.current)?.name).toBe('Tea');
+		expect(result.current.read()?.payload.name).toBe('Tea');
 	});
 
 	it('rebinds the query when the engine moves to another scope', () => {
@@ -356,22 +243,17 @@ describe('useEngineDocument', () => {
 			new BehaviorSubject<RxDocument<EngineDocument> | null>(second.document)
 		);
 		activeDatabase = firstDatabase;
-		const { result } = renderHook(() =>
-			useEngineDocument<Record<string, unknown>>('products', 'product-uuid')
-		);
+		const { result } = renderHook(() => useEngineRecord('products', 'product-uuid'));
 
 		act(() => emitDatabase(secondDatabase));
 
 		expect(secondDatabase.collections.products.findOne).toHaveBeenCalledWith('product-uuid');
-		expect(current(result.current)?.name).toBe('New scope');
+		expect(result.current.read()?.payload.name).toBe('New scope');
 	});
 
 	it.each([
-		['single-document', () => useEngineDocument<Record<string, unknown>>('products', 'missing')],
-		[
-			'multi-document',
-			() => useEngineDocumentsByWooId<Record<string, unknown>>('products/categories', [42]),
-		],
+		['single-record', () => useEngineRecord('products', 'missing')],
+		['multi-record', () => useEngineRecordsByWooId('categories', [42])],
 	] as const)('releases the %s db$ subscriber across repeated mounts', (_name, useResource) => {
 		for (let mount = 0; mount < 2; mount += 1) {
 			const { unmount } = renderHook(() => {

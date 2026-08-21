@@ -13,8 +13,6 @@ import { useCollectionBinding } from '../../../../query';
 
 import type { QueryStateOf } from '../../../../query';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
-
 /**
  *
  */
@@ -43,9 +41,7 @@ function GroupedNamesList({
 /**
  *
  */
-export function GroupedNames({
-	row,
-}: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'name'>) {
+export function GroupedNames({ row }: CellContext<{ record: EngineRecord<'products'> }, 'name'>) {
 	const wooIds =
 		useRecordField(row.original.record, (parent) => parent.payload.grouped_products) ?? [];
 	const remoteIds = wooIds.map(remoteIdOrNull).filter((remoteId) => remoteId !== null);

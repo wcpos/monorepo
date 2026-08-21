@@ -6,7 +6,7 @@ import {
 	collectionMap,
 	type EngineDocument,
 	type LegacyCollectionName,
-	readLegacyField,
+	readEnginePath,
 	resolveLegacyField,
 } from './collection-map';
 import { type LegacyMangoSelector, translateSelector } from './translate-selector';
@@ -70,13 +70,16 @@ function comparableValue(
 	document: EngineRxDocument,
 	legacyField: string
 ): unknown {
-	const value = readLegacyField(collection, document as EngineDocument, legacyField);
 	const mapping = resolveLegacyField(collection, legacyField);
+	const value = mapping.compute
+		? mapping.compute(document as EngineDocument)
+		: readEnginePath(document as EngineDocument, mapping.readEnginePath ?? mapping.enginePath);
+	const projected = mapping.read ? mapping.read(value) : value;
 	if (mapping.numeric) {
-		const numeric = Number(value);
+		const numeric = Number(projected);
 		return Number.isNaN(numeric) ? Number.NEGATIVE_INFINITY : numeric;
 	}
-	return value;
+	return projected;
 }
 
 function compareValues(left: unknown, right: unknown): number {

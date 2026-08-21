@@ -25,7 +25,7 @@ let mockColumns: { key: string; show: boolean }[] = [{ key: 'level', show: true 
 jest.mock('observable-hooks', () => ({
 	useObservableEagerState: () => mockColumns,
 	useObservableSuspense: () => ({
-		hits: [{ id: 'log-1', document: { level: 'error' } }],
+		hits: [{ id: 'log-1', record: { payload: { level: 'error' } } }],
 	}),
 }));
 
@@ -122,7 +122,7 @@ jest.mock('./footer', () => ({
 	},
 }));
 jest.mock('./list-footer', () => ({ ListFooterComponent: () => null }));
-jest.mock('../../components/text-cell', () => ({ TextCell: () => null }));
+jest.mock('../../components/record-text-cell', () => ({ RecordTextCell: () => null }));
 
 function Footer(props: Record<string, unknown>) {
 	mockFooterProps = props;

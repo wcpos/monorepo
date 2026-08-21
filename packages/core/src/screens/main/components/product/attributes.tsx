@@ -13,14 +13,12 @@ import { useQueryState, useQueryStateActions } from '../../../../query';
 import { setVariationMatch } from './variation-matches';
 import { useT } from '../../../../contexts/translations';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
-
 /**
  *
  */
 export function PlainAttributes({
 	row,
-}: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'name'>) {
+}: CellContext<{ record: EngineRecord<'products'> }, 'name'>) {
 	const attributes = useRecordField(row.original.record, (product) => product.payload.attributes);
 
 	/**
@@ -50,7 +48,6 @@ export function PlainAttributes({
  *
  */
 type ProductRowOriginal = {
-	document: ProductDocument;
 	record: EngineRecord<'products'>;
 	childrenSearchCount?: number;
 	parentSearchTerm?: string;

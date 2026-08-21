@@ -37,13 +37,9 @@ import { useProAccess } from '../../contexts/pro-access';
 import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
-type CouponDocument = import('@wcpos/database').CouponDocument;
-
 const syncLogger = getLogger(['wcpos', 'coupons', 'actions', 'sync']);
 
-export function Actions({
-	row,
-}: CellContext<{ document: CouponDocument; record: EngineRecord<'coupons'> }, 'actions'>) {
+export function Actions({ row }: CellContext<{ record: EngineRecord<'coupons'> }, 'actions'>) {
 	const record = row.original.record;
 	const fields = useRecordField(record, ({ payload }) => ({
 		id: payload.id,

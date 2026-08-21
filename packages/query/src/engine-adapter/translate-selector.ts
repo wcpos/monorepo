@@ -4,7 +4,6 @@ import {
 	type EngineDocument,
 	type LegacyCollectionName,
 	readEnginePath,
-	readLegacyField,
 	resolveLegacyField,
 } from './collection-map';
 
@@ -289,7 +288,12 @@ function legacyValue(
 	if (collection === 'variations' && field === 'attributes') {
 		return document.attributes;
 	}
-	return readLegacyField(collection, document, field);
+	const mapping = resolveLegacyField(collection, field);
+	if (mapping.compute) {
+		return mapping.compute(document);
+	}
+	const value = readEnginePath(document, mapping.readEnginePath ?? mapping.enginePath);
+	return mapping.read ? mapping.read(value) : value;
 }
 
 function matchesLegacySelector(

@@ -47,7 +47,7 @@ jest.mock('react-native', () => ({
 jest.mock('observable-hooks', () => ({
 	useObservableState: () => 2,
 	useObservableSuspense: () => ({
-		hits: [{ document: { toJSON: () => row } }, { document: { toJSON: () => quietRow } }],
+		hits: [{ record: { toJSON: () => row } }, { record: { toJSON: () => quietRow } }],
 	}),
 }));
 jest.mock('@wcpos/components/button', () => ({

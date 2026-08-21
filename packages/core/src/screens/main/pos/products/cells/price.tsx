@@ -6,15 +6,10 @@ import type { CellContext } from '@wcpos/core/table-types';
 
 import { PriceWithTax } from '../../../components/product/price-with-tax';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
-
 /**
  *
  */
-export function Price({
-	row,
-	column,
-}: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'price'>) {
+export function Price({ row, column }: CellContext<{ record: EngineRecord<'products'> }, 'price'>) {
 	const price = useRecordField(row.original.record, (product) => product.payload.price);
 	const regular_price = useRecordField(
 		row.original.record,
