@@ -113,6 +113,21 @@ describe('useUserValidation capabilities', () => {
 		);
 		expect(mockIncrementalModify).not.toHaveBeenCalled();
 	});
+
+	it('validates the cashier through query transport when enabled', async () => {
+		mockGet.mockResolvedValue({ status: 200, data: { id: 7, display_name: 'Demo Cashier' } });
+		const wpUser = makeWpUser({ stores: [] });
+		const querySite = {
+			...site,
+			wp_api_url: 'https://example.com/?rest_route=/',
+			use_rest_route_param: true,
+		};
+
+		renderHook(() => useUserValidation({ site: querySite as never, wpUser: wpUser as never }));
+
+		await waitFor(() => expect(mockGet).toHaveBeenCalled());
+		expect(mockGet.mock.calls[0]?.[0]).toBe('https://example.com/?rest_route=/wcpos/v2/cashier/7');
+	});
 });
 
 describe('useUserValidation while the app is asleep', () => {

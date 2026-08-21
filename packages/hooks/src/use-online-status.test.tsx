@@ -40,8 +40,9 @@ describe('OnlineStatusProvider', () => {
 	});
 
 	it.each([
-		['https://example.com/wp-json', 'https://example.com/wp-json/wcpos/v2/ping'],
-		['https://example.com/wp-json/', 'https://example.com/wp-json/wcpos/v2/ping'],
+		['https://example.com/wp-json', 'https://example.com/wp-json/wcpos/v2/ping?wcpos=1'],
+		['https://example.com/wp-json/', 'https://example.com/wp-json/wcpos/v2/ping?wcpos=1'],
+		['https://example.com/?rest_route=/', 'https://example.com/?rest_route=/wcpos/v2/ping&wcpos=1'],
 	])('derives the ping URL from %s', (wpAPIURL, expectedPingURL) => {
 		renderProvider(wpAPIURL);
 
@@ -71,6 +72,8 @@ describe('OnlineStatusProvider', () => {
 		if (!reachabilityTest) throw new Error('Expected reachability test');
 
 		await expect(reachabilityTest({ status: 200 } as Response)).resolves.toBe(true);
-		expect(getLatestConfig().reachabilityUrl).toBe('https://example.com/wp-json/wcpos/v2/ping');
+		expect(getLatestConfig().reachabilityUrl).toBe(
+			'https://example.com/wp-json/wcpos/v2/ping?wcpos=1'
+		);
 	});
 });

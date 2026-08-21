@@ -29,7 +29,11 @@ function createDeferred<T>() {
 
 function makeConfig(
 	post: jest.Mock,
-	site: { wcpos_api_url?: string; wp_api_url?: string } = {
+	site: {
+		wcpos_api_url?: string;
+		wp_api_url?: string;
+		use_rest_route_param?: boolean;
+	} = {
 		wcpos_api_url: 'https://example.test/wp-json/wcpos/v2/',
 	}
 ) {
@@ -187,6 +191,35 @@ describe('refreshAccessToken', () => {
 			{ refresh_token: 'refresh-token' },
 			{ headers: { 'X-WCPOS': '1' } }
 		);
+	});
+
+	it('posts refresh to the query-form transport', async () => {
+		const post = jest.fn().mockResolvedValue({
+			data: { access_token: 'new-token', expires_at: 9999 },
+			status: 200,
+		});
+		const { config } = makeConfig(post, {
+			wp_api_url: 'https://example.test/?rest_route=/',
+			wcpos_api_url: 'https://example.test/wp-json/wcpos/v2/',
+			use_rest_route_param: true,
+		});
+
+		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
+		expect(post.mock.calls[0]?.[0]).toBe('https://example.test/?rest_route=/wcpos/v2/auth/refresh');
+	});
+
+	it('keeps the path form when the flag is set but wp_api_url is absent', async () => {
+		const post = jest.fn().mockResolvedValue({
+			data: { access_token: 'new-token', expires_at: 9999 },
+			status: 200,
+		});
+		const { config } = makeConfig(post, {
+			wcpos_api_url: 'https://example.test/wp-json/wcpos/v2/',
+			use_rest_route_param: true,
+		});
+
+		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
+		expect(post.mock.calls[0]?.[0]).toBe('https://example.test/wp-json/wcpos/v2/auth/refresh');
 	});
 
 	it('awaits an in-flight refresh instead of posting a duplicate', async () => {

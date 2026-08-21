@@ -65,6 +65,7 @@ export interface CreateAppSyncEngineOptions {
 	credentials: { getLatest: () => { access_token?: string } };
 	/** Query-param auth mode and whether that server accepts a bare token. */
 	useJwtAsParam?: boolean;
+	useRestRouteParam: boolean;
 	bareAuthParam?: boolean;
 	/**
 	 * Refresh an expired access token after an unauthorized response. The driving
@@ -426,6 +427,8 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		clockSkew,
 		scope: fetcherScope,
 		emitTransport,
+		useRestRouteParam: options.useRestRouteParam,
+		wpJsonRoot: site.wpJsonRoot,
 		...(platformEngineFetch ? { fetch: platformEngineFetch } : {}),
 	});
 

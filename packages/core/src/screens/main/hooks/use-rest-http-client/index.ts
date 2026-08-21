@@ -9,6 +9,12 @@ import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import {
+	deriveSyntheticPathRoot,
+	isRestRouteBase,
+	resolveRestTransport,
+	toRestRouteUrl,
+} from '@wcpos/utils/rest-transport';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -230,7 +236,13 @@ export const useRestHttpClient = (endpoint = '') => {
 			const wcposVersion = site.wcpos_version;
 
 			let apiURL = site.wcpos_api_url;
-			const wpApiURL = site.wp_api_url.replace(/\/?$/, '/');
+			const pathFormRoot = deriveSyntheticPathRoot(site.wp_api_url).replace(/\/?$/, '/');
+			const wpApiURL = pathFormRoot;
+
+			if (apiURL && isRestRouteBase(apiURL)) {
+				const route = new URL(apiURL).searchParams.get('rest_route') ?? '/';
+				apiURL = `${deriveSyntheticPathRoot(apiURL)}${route.replace(/^\//, '')}`;
+			}
 
 			// Migrate missing and persisted v1 service bases to v2.
 			if (!apiURL || /\/wcpos\/v1\/?$/.test(apiURL)) {
@@ -238,8 +250,12 @@ export const useRestHttpClient = (endpoint = '') => {
 				await site.incrementalPatch({ wcpos_api_url: apiURL });
 			}
 
+			const pathFormBaseURL = apiURL + '/' + endpoint;
 			const defaultConfig = {
-				baseURL: apiURL + '/' + endpoint,
+				baseURL:
+					resolveRestTransport(site) === 'query'
+						? toRestRouteUrl(pathFormBaseURL, pathFormRoot)
+						: pathFormBaseURL,
 				headers: shouldUseJwtAsParam ? {} : { Authorization: `Bearer ${jwt}` },
 				params: {},
 			};

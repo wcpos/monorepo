@@ -28,5 +28,6 @@ export interface Site {
 	wcpos_login_url: string;
 	wp_api_url: string;
 	use_jwt_as_param?: boolean;
+	use_rest_route_param?: boolean;
 	incrementalPatch: (data: any) => void;
 }

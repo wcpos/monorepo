@@ -4,10 +4,28 @@ import { useHttpClient } from '@wcpos/hooks/use-http-client';
 import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import {
+	deriveSyntheticPathRoot,
+	isRestRouteBase,
+	resolveRestTransport,
+	toRestRouteUrl,
+} from '@wcpos/utils/rest-transport';
 
 import { useT } from '../../../contexts/translations';
 
 const authTestLogger = getLogger(['wcpos', 'auth', 'testing']);
+
+function authTestUrl(wcposApiUrl: string): string {
+	const pathRoot = deriveSyntheticPathRoot(wcposApiUrl);
+	const route = isRestRouteBase(wcposApiUrl)
+		? (new URL(wcposApiUrl).searchParams.get('rest_route') ?? '/')
+		: '';
+	const pathApiUrl = route ? `${pathRoot}${route.replace(/^\//, '')}` : wcposApiUrl;
+	const pathUrl = `${pathApiUrl}auth/test`;
+	return resolveRestTransport({ wp_api_url: wcposApiUrl }) === 'query'
+		? toRestRouteUrl(pathUrl, pathRoot)
+		: pathUrl;
+}
 
 export type AuthTestingStatus = 'idle' | 'testing' | 'success' | 'error';
 
@@ -45,7 +63,7 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 	const testHeaderAuth = React.useCallback(
 		async (wcposApiUrl: string, token: string): Promise<boolean> => {
 			try {
-				const response = await http.get(`${wcposApiUrl}auth/test`, {
+				const response = await http.get(authTestUrl(wcposApiUrl), {
 					headers: {
 						'X-WCPOS': '1',
 						Authorization: `Bearer ${token}`,
@@ -69,7 +87,7 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 	const testParamAuth = React.useCallback(
 		async (wcposApiUrl: string, token: string, bareSupported: boolean): Promise<boolean> => {
 			try {
-				const response = await http.get(`${wcposApiUrl}auth/test`, {
+				const response = await http.get(authTestUrl(wcposApiUrl), {
 					params: {
 						authorization: formatAuthorizationParam(token, bareSupported),
 					},

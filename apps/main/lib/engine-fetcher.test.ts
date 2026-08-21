@@ -42,6 +42,8 @@ function createFetcherHarness(
 		clockSkew?: { generation: number; evaluated: boolean };
 		scope?: { storeId?: number | string | null };
 		fetch?: typeof globalThis.fetch;
+		useRestRouteParam?: boolean;
+		wpJsonRoot?: string;
 	} = {}
 ) {
 	const { createEngineFetcher, fetchWooQueryTotal } = loadEngineFetcher();
@@ -78,6 +80,8 @@ function createFetcherHarness(
 		scope,
 		emitTransport,
 		fetch: input.fetch,
+		useRestRouteParam: input.useRestRouteParam ?? false,
+		wpJsonRoot: input.wpJsonRoot ?? 'https://store.example.test/wp-json/',
 	});
 	return {
 		fetcher,
@@ -103,6 +107,40 @@ beforeEach(() => {
 });
 
 describe('createEngineFetcher', () => {
+	it('emits an exact query-form GET URL with caller params', async () => {
+		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
+		const { fetcher } = createFetcherHarness({
+			fetch,
+			useRestRouteParam: true,
+			wpJsonRoot: 'https://store.example.test/wp-json/',
+		});
+
+		await fetcher('https://store.example.test/wp-json/wcpos/v2/products?page=2&per_page=50');
+
+		expect(fetch).toHaveBeenCalledWith(
+			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&page=2&per_page=50&wcpos=1&_wcpos_envelope=1',
+			expect.any(Object)
+		);
+	});
+
+	it('emits an exact query-form push POST URL', async () => {
+		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
+		const { fetcher } = createFetcherHarness({
+			fetch,
+			useRestRouteParam: true,
+			wpJsonRoot: 'https://store.example.test/wp-json/',
+		});
+
+		await fetcher('https://store.example.test/wp-json/wcpos/v2/push/orders?cursor=7', {
+			method: 'POST',
+		});
+
+		expect(fetch).toHaveBeenCalledWith(
+			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fpush%2Forders&cursor=7&wcpos=1',
+			expect.objectContaining({ method: 'POST' })
+		);
+	});
+
 	it.each([
 		[true, 'test-token'],
 		[false, 'Bearer test-token'],

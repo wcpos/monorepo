@@ -12,6 +12,12 @@ import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error
 import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import {
+	deriveSyntheticPathRoot,
+	isRestRouteBase,
+	resolveRestTransport,
+	toRestRouteUrl,
+} from '@wcpos/utils/rest-transport';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../contexts/app-state';
@@ -56,7 +62,9 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 	// Use stable values for site to avoid unnecessary re-renders
 	const siteUrl = site.url;
 	const apiUrl = site.wcpos_api_url;
+	const wpApiUrl = site.wp_api_url;
 	const useJwtAsParam = site.use_jwt_as_param;
+	const useRestRouteParam = site.use_rest_route_param;
 	const wcposVersion = site.wcpos_version;
 
 	// Get userDB and user for store merging
@@ -70,7 +78,9 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 		return createTokenRefreshHandler({
 			site: {
 				wcpos_api_url: apiUrl,
+				wp_api_url: wpApiUrl,
 				use_jwt_as_param: useJwtAsParam,
+				use_rest_route_param: useRestRouteParam,
 				wcpos_version: wcposVersion,
 				url: siteUrl,
 			},
@@ -82,7 +92,18 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 			},
 			getHttpClient: () => baseHttpClient,
 		});
-	}, [apiUrl, useJwtAsParam, wcposVersion, siteUrl, userId, refreshToken, baseHttpClient, wpUser]);
+	}, [
+		apiUrl,
+		wpApiUrl,
+		useJwtAsParam,
+		useRestRouteParam,
+		wcposVersion,
+		siteUrl,
+		userId,
+		refreshToken,
+		baseHttpClient,
+		wpUser,
+	]);
 
 	// Create HTTP client with token refresh handler
 	const httpClient = useHttpClient([tokenRefreshHandler]);
@@ -153,7 +174,20 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 			const fetchUserData = async () => {
 				try {
 					// Build the endpoint URL
-					const endpoint = `${apiUrl}cashier/${userId}`;
+					let pathApiUrl = apiUrl;
+					if (isRestRouteBase(pathApiUrl)) {
+						const route = new URL(pathApiUrl).searchParams.get('rest_route') ?? '/';
+						pathApiUrl = `${deriveSyntheticPathRoot(pathApiUrl)}${route.replace(/^\//, '')}`;
+					}
+					const pathRoot = deriveSyntheticPathRoot(wpApiUrl ?? pathApiUrl);
+					const pathEndpoint = `${pathApiUrl}cashier/${userId}`;
+					const endpoint =
+						resolveRestTransport({
+							wp_api_url: wpApiUrl,
+							use_rest_route_param: useRestRouteParam,
+						}) === 'query'
+							? toRestRouteUrl(pathEndpoint, pathRoot)
+							: pathEndpoint;
 
 					// Prepare request config
 					const requestConfig: any = {
@@ -429,7 +463,9 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 	}, [
 		httpClient,
 		apiUrl,
+		wpApiUrl,
 		useJwtAsParam,
+		useRestRouteParam,
 		wcposVersion,
 		siteUrl,
 		userId,

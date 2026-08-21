@@ -86,5 +86,8 @@ export const sitesLiteral = {
 		use_jwt_as_param: {
 			type: 'boolean',
 		},
+		use_rest_route_param: {
+			type: 'boolean',
+		},
 	},
 } as const;

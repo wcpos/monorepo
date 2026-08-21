@@ -11,6 +11,7 @@ const BASE_OPTIONS = {
 		cashierId: 'cashier-1',
 	},
 	multiInstance: false,
+	useRestRouteParam: false,
 } satisfies CreateAppSyncEngineOptions;
 
 const OTHER_SITE_OPTIONS = {
@@ -166,6 +167,32 @@ function loadCreateAppEngine(
 }
 
 describe('createAppSyncEngine scope cache', () => {
+	it('passes query transport through to exact GET and push POST URLs', async () => {
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValue(new Response(null, { status: 200 }));
+		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
+		createAppSyncEngine({
+			...BASE_OPTIONS,
+			wpApiUrl: 'https://store.example.test/?rest_route=/',
+			useRestRouteParam: true,
+		});
+		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products?page=2');
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/push/orders?cursor=7', {
+			method: 'POST',
+		});
+
+		expect(fetch.mock.calls[0]?.[0]).toBe(
+			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&page=2&wcpos=1&store_id=store-1&_wcpos_envelope=1'
+		);
+		expect(fetch.mock.calls[1]?.[0]).toBe(
+			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fpush%2Forders&cursor=7&wcpos=1&store_id=store-1'
+		);
+		fetch.mockRestore();
+	});
+
 	it('reports settled non-server-error transport responses as network pulses', async () => {
 		const now = jest.spyOn(Date, 'now').mockReturnValue(1234);
 		const fetch = jest

@@ -191,6 +191,7 @@ describe('host metrics buckets', () => {
 describe('collectionFromSyncUrl', () => {
 	it.each([
 		['https://s.test/wp-json/wcpos/v2/products?per_page=50', 'products'],
+		['https://s.test/?rest_route=/wcpos/v2/products/categories&page=2', 'categories'],
 		['https://s.test/wp-json/wcpos/v2/products/categories', 'categories'],
 		['https://s.test/wp-json/wcpos/v2/products/brands?page=2', 'brands'],
 		['https://s.test/wp-json/wcpos/v2/products/tags', 'tags'],

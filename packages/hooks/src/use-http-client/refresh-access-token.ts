@@ -1,6 +1,12 @@
 import { AppInfo } from '@wcpos/utils/app-info';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import {
+	deriveSyntheticPathRoot,
+	isRestRouteBase,
+	resolveRestTransport,
+	toRestRouteUrl,
+} from '@wcpos/utils/rest-transport';
 
 import { pauseQueue, resumeQueue } from './request-queue';
 import { requestStateManager } from './request-state-manager';
@@ -27,6 +33,7 @@ export interface RefreshAccessTokenConfig {
 		wcpos_api_url?: string;
 		wp_api_url?: string;
 		use_jwt_as_param?: boolean;
+		use_rest_route_param?: boolean;
 		wcpos_version?: string;
 		url?: string;
 	};
@@ -83,8 +90,11 @@ export async function refreshAccessToken({
 	const latestDoc = wpUser.getLatest();
 	const refreshToken = latestDoc?.refresh_token;
 	const persistedApiBaseUrl = site.wcpos_api_url?.replace(/\/wcpos\/v1\/?$/, '/wcpos/v2/');
-	const apiBaseUrl =
-		persistedApiBaseUrl || (site.wp_api_url ? `${site.wp_api_url}wcpos/v2/` : null);
+	let apiBaseUrl = persistedApiBaseUrl || (site.wp_api_url ? `${site.wp_api_url}wcpos/v2/` : null);
+	if (apiBaseUrl && isRestRouteBase(apiBaseUrl)) {
+		const route = new URL(apiBaseUrl).searchParams.get('rest_route') ?? '/';
+		apiBaseUrl = `${deriveSyntheticPathRoot(apiBaseUrl)}${route.replace(/^\//, '')}`;
+	}
 	// Normalize the trailing slash so `${apiUrl}auth/refresh` never collapses into
 	// `.../wcpos/v2auth/refresh` when wcpos_api_url is stored without one.
 	const apiUrl = apiBaseUrl ? (apiBaseUrl.endsWith('/') ? apiBaseUrl : `${apiBaseUrl}/`) : null;
@@ -117,8 +127,16 @@ export async function refreshAccessToken({
 		await requestStateManager.startTokenRefresh(async () => {
 			pauseQueue();
 			try {
+				// Rewrite only when wp_api_url can supply the REST root: apiUrl is a
+				// namespace base (…/wcpos/v2/), and deriving a root from it would
+				// strip the wrong segment and emit a malformed home URL.
+				const pathUrl = `${apiUrl}auth/refresh`;
+				const refreshUrl =
+					site.wp_api_url && resolveRestTransport(site) === 'query'
+						? toRestRouteUrl(pathUrl, deriveSyntheticPathRoot(site.wp_api_url))
+						: pathUrl;
 				const response = await getHttpClient().post(
-					`${apiUrl}auth/refresh`,
+					refreshUrl,
 					{ refresh_token: refreshToken },
 					// The refresh POST is exactly the request class a blank/library UA
 					// gets IP-banned for (B10) — stamp it like every other lane. The

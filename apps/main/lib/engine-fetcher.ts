@@ -10,6 +10,7 @@ import {
 import { AppInfo } from '@wcpos/utils/app-info';
 import { formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getLogger } from '@wcpos/utils/logger';
+import { toRestRouteUrl } from '@wcpos/utils/rest-transport';
 
 import { evaluateClockSkew } from './clock-skew';
 import {
@@ -80,6 +81,8 @@ export function createEngineFetcher(input: {
 	scope?: EngineFetcherScope;
 	fetch?: typeof globalThis.fetch;
 	now?: () => number;
+	useRestRouteParam: boolean;
+	wpJsonRoot: string;
 }): EngineFetcher {
 	const now = input.now ?? Date.now;
 
@@ -134,6 +137,7 @@ export function createEngineFetcher(input: {
 				// An unscoped engine must not inherit a stale header from init.
 				headers.delete(STORE_SCOPE_HEADER);
 			}
+			if (input.useRestRouteParam) url = toRestRouteUrl(url, input.wpJsonRoot);
 			let finalUrl = url;
 			if (token) {
 				if (input.auth.useJwtAsParam) {

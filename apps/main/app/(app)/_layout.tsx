@@ -28,6 +28,7 @@ import { RasterizeProvider } from '@wcpos/printer';
 import { QueryProvider, useDocField } from '@wcpos/query';
 import { bareAuthParamSupported } from '@wcpos/utils/auth-param';
 import { getLogger, setDatabase } from '@wcpos/utils/logger';
+import { resolveRestTransport } from '@wcpos/utils/rest-transport';
 import { markUserActivity } from '@wcpos/utils/user-activity';
 
 import { SyncConfigBridge } from '../../components/sync-config-bridge';
@@ -82,6 +83,15 @@ function AppStack() {
 	const storeID = useDocField(store, (value) => value.id) as number;
 	const cashierID = useDocField(wpCredentials, (value) => value.id) as number;
 	const useJwtAsParam = useDocField(site, (value) => value.use_jwt_as_param) as boolean;
+	const useRestRouteParamField = useDocField(
+		site,
+		(value) => value.use_rest_route_param
+	) as boolean;
+	const useRestRouteParam =
+		resolveRestTransport({
+			wp_api_url: wpApiUrl,
+			use_rest_route_param: useRestRouteParamField,
+		}) === 'query';
 	const wcposVersion = useDocField(site, (value) => value.wcpos_version) as string;
 	const bareAuthParam = bareAuthParamSupported(wcposVersion);
 
@@ -105,6 +115,7 @@ function AppStack() {
 				wpApiUrl,
 				credentials: wpCredentials,
 				useJwtAsParam,
+				useRestRouteParam,
 				bareAuthParam,
 				refreshAuth: (context) =>
 					refreshAccessToken({
@@ -114,6 +125,7 @@ function AppStack() {
 							// when wcpos_api_url is transiently unset (e.g. after a web wake).
 							wp_api_url: wpApiUrl,
 							use_jwt_as_param: useJwtAsParam,
+							use_rest_route_param: useRestRouteParamField,
 						},
 						wpUser: wpCredentials,
 						getHttpClient: createRefreshHttpClient,
@@ -122,7 +134,18 @@ function AppStack() {
 					}),
 				scope: { site: wpApiUrl, storeId: storeID, cashierId: cashierID },
 			}),
-		[wpApiUrl, wcposApiUrl, storeID, cashierID, useJwtAsParam, bareAuthParam, wpCredentials, t]
+		[
+			wpApiUrl,
+			wcposApiUrl,
+			storeID,
+			cashierID,
+			useJwtAsParam,
+			useRestRouteParam,
+			useRestRouteParamField,
+			bareAuthParam,
+			wpCredentials,
+			t,
+		]
 	);
 
 	return (

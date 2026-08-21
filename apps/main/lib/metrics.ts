@@ -65,7 +65,10 @@ function pruneMetricsBuckets(): void {
 export function collectionFromSyncUrl(url: string): string | undefined {
 	let segments: string[];
 	try {
-		segments = new URL(url).pathname.split('/').filter(Boolean);
+		const parsed = new URL(url);
+		segments = (parsed.searchParams.get('rest_route') ?? parsed.pathname)
+			.split('/')
+			.filter(Boolean);
 	} catch {
 		return undefined;
 	}
