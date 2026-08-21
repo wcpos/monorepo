@@ -34,8 +34,7 @@ test('connects and finds an owned product through query-form REST when path rout
 		productData: { name: `E2E Probe ${token} transport` },
 	});
 	if (!created.ok) {
-		test.skip(true, created.reason);
-		return;
+		throw new Error(created.reason);
 	}
 	if (!created.probe.rowTestId) {
 		throw new Error('Transport probe product is missing its slug-derived row testID');
