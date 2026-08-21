@@ -25,8 +25,7 @@ packages/
 │   ├── request-queue.ts                 # Global Bottleneck queue
 │   ├── parse-wp-error.ts                # WordPress/WooCommerce error parsing
 │   ├── types.ts                         # TypeScript interfaces
-│   ├── http.ts                          # Platform-agnostic export
-│   ├── http.web.ts                      # Web/Native: direct axios
+│   ├── http.ts                          # Web/Native: direct axios (default)
 │   └── http.electron.ts                 # Electron: IPC bridge to main process
 │
 └── core/src/screens/main/hooks/use-rest-http-client/  # High-level REST Client
@@ -71,10 +70,10 @@ packages/
                             │ uses
 ┌───────────────────────────▼─────────────────────────────────────────┐
 │           Platform HTTP Adapter (http.ts)                            │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────┐  │
-│  │  http.web.ts    │  │  http.ts        │  │  http.electron.ts   │  │
-│  │  Direct axios   │  │  (native)       │  │  IPC → Main Process │  │
-│  └─────────────────┘  └─────────────────┘  └─────────────────────┘  │
+│  ┌───────────────────────────┐  ┌─────────────────────┐             │
+│  │  http.ts                  │  │  http.electron.ts   │             │
+│  │  Direct axios (web/native)│  │  IPC → Main Process │             │
+│  └───────────────────────────┘  └─────────────────────┘             │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -110,7 +109,7 @@ Request fails with error
        ▼
 ┌──────────────────────────────────────────────────────────────┐
 │  useHttpClient post-processing                                │
-│  - If CanceledError: return pending promise (suppress error)  │
+│  - If CanceledError: re-throw it (callers see the cancel)     │
 │  - Otherwise: Enrich with WP error details, re-throw          │
 └──────────────────────────────────────────────────────────────┘
 ```
