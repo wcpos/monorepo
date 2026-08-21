@@ -19,8 +19,7 @@ const avgThreshold$ = new BehaviorSubject(24);
 const mockToastShow = jest.fn();
 const mockMarkUserActivity = jest.fn();
 const attributedEvents$ = new Subject<ScanEvent>();
-const cameraEvents$ = new Subject<ScanEvent>();
-const deviceEvents$ = new Subject<ScanEvent>();
+const hubEvents$ = new Subject<ScanEvent>();
 const mockUseAttributedWedge = jest.fn((_enabled?: boolean) => ({
 	scanEvents$: attributedEvents$,
 	available: true,
@@ -49,11 +48,8 @@ jest.mock('expo-router/react-navigation', () => ({
 jest.mock('./use-attributed-wedge', () => ({
 	useAttributedWedge: (enabled?: boolean) => mockUseAttributedWedge(enabled),
 }));
-jest.mock('./camera-scan-context', () => ({
-	useCameraScanBus: () => ({ events$: cameraEvents$, emit: jest.fn() }),
-}));
-jest.mock('./device-scan-context', () => ({
-	useDeviceScanBus: () => ({ events$: deviceEvents$ }),
+jest.mock('./scan-hub-context', () => ({
+	useScanHub: () => ({ events$: hubEvents$, emit: jest.fn(), registerSource: jest.fn() }),
 }));
 
 // Stable storeDB stub: the attributed-wedge source (merged into scanEvents$)
@@ -363,9 +359,9 @@ describe('useBarcodeDetection', () => {
 
 		act(() => {
 			attributedEvents$.next(events[0]!);
-			cameraEvents$.next(events[1]!);
-			deviceEvents$.next(events[2]!);
-			deviceEvents$.next(events[3]!);
+			hubEvents$.next(events[1]!);
+			hubEvents$.next(events[2]!);
+			hubEvents$.next(events[3]!);
 		});
 
 		expect(mockMarkUserActivity).toHaveBeenCalledTimes(4);
@@ -386,7 +382,7 @@ describe('useBarcodeDetection', () => {
 
 		mockIsFocused = false;
 		rerender();
-		act(() => deviceEvents$.next(deviceEvent));
+		act(() => hubEvents$.next(deviceEvent));
 
 		expect(barcodes).toEqual([]);
 		expect(events).toEqual([]);
@@ -394,7 +390,7 @@ describe('useBarcodeDetection', () => {
 
 		mockIsFocused = true;
 		rerender();
-		act(() => deviceEvents$.next(deviceEvent));
+		act(() => hubEvents$.next(deviceEvent));
 
 		expect(barcodes).toEqual(['9310988001234']);
 		expect(events).toEqual([deviceEvent]);
@@ -417,7 +413,7 @@ describe('useBarcodeDetection', () => {
 		};
 
 		act(() => {
-			deviceEvents$.next(deviceEvent);
+			hubEvents$.next(deviceEvent);
 			dispatchBarcode('12345678');
 			jest.advanceTimersByTime(151);
 		});
@@ -436,7 +432,7 @@ describe('useBarcodeDetection', () => {
 		const eventSubscription = result.current.scanEvents$.subscribe((event) => events.push(event));
 
 		act(() => {
-			deviceEvents$.next({
+			hubEvents$.next({
 				code: '9310988001234',
 				source: { kind: 'serial' },
 				timestamp: 123,

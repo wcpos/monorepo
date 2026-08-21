@@ -5,7 +5,7 @@ import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { useCameraScanBus } from '../../hooks/barcodes/camera-scan-context';
+import { useScanHub } from '../../hooks/barcodes/scan-hub-context';
 import { showTooShortFeedback } from '../../hooks/barcodes/too-short-feedback';
 
 // The retail set we ask the camera decoder for (spec §4: narrowing formats is a
@@ -24,7 +24,7 @@ export interface CameraScanResult {
  * which useBarcodeDetection merges into scanEvents$.
  */
 export const useCameraScan = () => {
-	const { emit } = useCameraScanBus();
+	const { emit } = useScanHub();
 	const { store } = useAppState();
 	const minChars = useDocField(store, (value) => value.barcode_scanning_min_chars) as number;
 	const t = useT();

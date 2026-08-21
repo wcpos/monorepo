@@ -17,7 +17,7 @@ import { type ViewfinderStatus } from './scanner-viewfinder-types';
 import { useCameraScan } from './use-camera-scan';
 import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';
-import { useCameraScanBus } from '../../hooks/barcodes/camera-scan-context';
+import { useScanHub } from '../../hooks/barcodes/scan-hub-context';
 import { useEngineStatus } from '../../hooks/use-engine-monitor';
 import { useStorageDegraded } from '../../hooks/use-storage-health';
 
@@ -58,7 +58,7 @@ export function CameraScannerPanel({ onClose }: CameraScannerPanelProps) {
 	const t = useT();
 	const [permission, requestPermission] = useCameraPermissions();
 	const { onScan, reset } = useCameraScan();
-	const { events$ } = useCameraScanBus();
+	const { events$ } = useScanHub();
 	const engineStatus = useEngineStatus();
 	const { status: onlineStatus } = useOnlineStatus();
 	const storageDegraded = useStorageDegraded();
