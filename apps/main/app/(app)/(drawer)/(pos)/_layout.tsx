@@ -2,8 +2,8 @@ import React from 'react';
 import { View } from 'react-native';
 
 import { Stack, useGlobalSearchParams, useSegments } from 'expo-router';
-import { useObservableEagerState } from 'observable-hooks';
 
+import { useDocField } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';
 import { Suspense } from '@wcpos/components/suspense';
@@ -24,8 +24,8 @@ export const unstable_settings = {
 
 export default function POSLayout() {
 	const { wpCredentials, store } = useAppState();
-	const cashierID = useObservableEagerState<number | undefined>(wpCredentials.id$);
-	const storeID = useObservableEagerState<number | undefined>(store.id$);
+	const cashierID = useDocField(wpCredentials, (value) => value.id) as number | undefined;
+	const storeID = useDocField(store, (value) => value.id) as number | undefined;
 	const segments: string[] = useSegments();
 	// Handle catch-all route param - [...orderId] returns an array (could be empty array for /cart)
 	const params = useGlobalSearchParams<{ orderId: string | string[] }>();
