@@ -2054,6 +2054,153 @@ describe('TIER 3 — escalation to revision-hash', () => {
 	});
 });
 
+describe('TIER 3 — escalation clearing', () => {
+	it('clears a cured escalation once after the next complete clean sweep', async () => {
+		const { source } = makeFakeSource({
+			hashScansBySweep: [
+				[hashBucket({ bucket: 0, current_digest: '222', match: false })],
+				[hashBucket({ bucket: 0, current_digest: '222', match: false })],
+				[hashBucket({ bucket: 0, current_digest: '222', match: true })],
+			],
+			drillDowns: { '1000:0': [{ id: 8001, status: 'changed' }] },
+			withRevisionHash: true,
+		});
+		const engine = createHybridChangeSignalEngine({
+			source,
+			policy: { sweepEveryNPolls: 1, sweepIntervalMs: 0, escalateToRevisionHashAfter: 2 },
+		});
+
+		await engine.poll();
+		const escalated = await engine.poll();
+		const cleared = await engine.poll();
+		const after = await engine.poll();
+
+		expect(escalated.escalationLedger).toEqual([repairTarget(8001)]);
+		expect(cleared.clearedEscalations).toEqual([repairTarget(8001)]);
+		expect(cleared.escalationLedger).toEqual([]);
+		expect(after.clearedEscalations).toEqual([]);
+	});
+
+	it('keeps and re-escalates a record that is still drifting', async () => {
+		const { source } = makeFakeSource({
+			hashScansBySweep: [[hashBucket({ bucket: 0, current_digest: '222', match: false })]],
+			drillDowns: { '1000:0': [{ id: 8001, status: 'changed' }] },
+			withRevisionHash: true,
+		});
+		const engine = createHybridChangeSignalEngine({
+			source,
+			policy: { sweepEveryNPolls: 1, sweepIntervalMs: 0, escalateToRevisionHashAfter: 2 },
+		});
+
+		await engine.poll();
+		await engine.poll();
+		const stillDrifting = await engine.poll();
+
+		expect(stillDrifting.escalatedIds).toEqual([repairTarget(8001)]);
+		expect(stillDrifting.clearedEscalations).toEqual([]);
+		expect(stillDrifting.escalationLedger).toEqual([repairTarget(8001)]);
+	});
+
+	it('clears only the cured record when another record keeps its bucket mismatched', async () => {
+		const { source } = makeFakeSource({
+			hashScansBySweep: [[hashBucket({ bucket: 0, current_digest: '222', match: false })]],
+			drillDowns: { '1000:0': [{ id: 8002, status: 'changed' }] },
+		});
+		const engine = createHybridChangeSignalEngine({
+			source,
+			initialEscalations: [repairTarget(8001), repairTarget(8002)],
+			policy: { sweepEveryNPolls: 1, sweepIntervalMs: 0 },
+		});
+
+		const outcome = await engine.poll();
+
+		expect(outcome.clearedEscalations).toEqual([repairTarget(8001)]);
+		expect(outcome.escalationLedger).toEqual([repairTarget(8002)]);
+	});
+
+	it('keeps the ledger when a stalled sweep provides no complete evidence', async () => {
+		const { source: base } = makeFakeSource({});
+		let stalled = true;
+		const source: ChangeSignalSource = {
+			...base,
+			async hashChecksumScan() {
+				return { buckets: [], complete: !stalled, nextAfterId: 0 };
+			},
+		};
+		const engine = createHybridChangeSignalEngine({
+			source,
+			initialEscalations: [repairTarget(8001)],
+			policy: { sweepEveryNPolls: 1, sweepIntervalMs: 0 },
+		});
+
+		await expect(engine.poll()).rejects.toThrow(/stalled hash-checksum scan/i);
+		stalled = false;
+		const recovered = await engine.poll();
+
+		expect(recovered.clearedEscalations).toEqual([repairTarget(8001)]);
+	});
+
+	it('keeps the ledger through rebaseline and clears on a later complete sweep', async () => {
+		const { source } = makeFakeSource({
+			sequencePages: [
+				{
+					rows: [{ sequence: 1, id: 1, collection: 'products', deleted: false }],
+					cursor: { sequence: 1 },
+					hasMore: false,
+					head: 100,
+				},
+				{ rows: [], cursor: { sequence: 100 }, hasMore: false, head: 100 },
+			],
+			hashScansBySweep: [[]],
+		});
+		const engine = createHybridChangeSignalEngine({
+			source,
+			initialEscalations: [repairTarget(8001)],
+			policy: { maxReplayBacklog: 50, sweepEveryNPolls: 1, sweepIntervalMs: 0 },
+		});
+
+		const rebaseline = await engine.poll();
+		const cleared = await engine.poll();
+
+		expect(rebaseline.clearedEscalations).toEqual([]);
+		expect(rebaseline.escalationLedger).toEqual([repairTarget(8001)]);
+		expect(cleared.clearedEscalations).toEqual([repairTarget(8001)]);
+	});
+
+	it('does not clear range escalations when the range detector did not run', async () => {
+		const hash = repairTarget(8001);
+		const range = repairTarget(12, { collection: 'tax_rates', detector: 'range-checksum' });
+		const { source } = makeFakeSource({ hashScansBySweep: [[]] });
+		const engine = createHybridChangeSignalEngine({
+			source,
+			initialEscalations: [range, hash],
+			policy: { sweepEveryNPolls: 1, sweepIntervalMs: 0, sweepTaxRates: false },
+		});
+
+		const outcome = await engine.poll();
+
+		expect(outcome.clearedEscalations).toEqual([hash]);
+		expect(outcome.escalationLedger).toEqual([range]);
+	});
+
+	it('clears a restored escalation on the first complete clean sweep', async () => {
+		const restored = repairTarget(8001);
+		const { source } = makeFakeSource({
+			hashScansBySweep: [[hashBucket({ bucket: 0, match: true })]],
+		});
+		const engine = createHybridChangeSignalEngine({
+			source,
+			initialEscalations: [restored],
+			policy: { sweepEveryNPolls: 1, sweepIntervalMs: 0 },
+		});
+
+		const outcome = await engine.poll();
+
+		expect(outcome.clearedEscalations).toEqual([restored]);
+		expect(outcome.escalationLedger).toEqual([]);
+	});
+});
+
 // --- Provenance + policy defaults --------------------------------------------
 
 describe('provenance + policy', () => {

@@ -43,6 +43,7 @@ export type SyncEventType =
 	| 'apply.barcode-rederive'
 	| 'apply.delete'
 	| 'apply.escalation'
+	| 'apply.escalation-cleared'
 	| 'apply.pull'
 	| 'apply.rebaseline'
 	| 'apply.refetch'
@@ -178,6 +179,10 @@ export type SyncEventFieldsByType = {
 	};
 	'apply.pull': ApplyCountFields;
 	'apply.delete': ApplyCountFields;
+	'apply.escalation-cleared': {
+		readonly id: number;
+		readonly detector: 'hash-checksum' | 'range-checksum';
+	};
 	'apply.refetch': { readonly refetched: number; readonly reason?: string };
 	'coverage.require.outcome': {
 		readonly requirementId?: string;

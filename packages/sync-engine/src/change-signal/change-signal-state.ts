@@ -19,6 +19,7 @@ type BaselineEntries = [
 type SerializedEngineState = {
 	cursor: EngineState['cursor'];
 	baselineDigests: BaselineEntries;
+	escalations: EngineState['escalations'];
 	configBaseline?: EngineState['configBaseline'];
 	epoch?: string;
 };
@@ -27,6 +28,7 @@ type SerializedEngineState = {
 export type RestoredEngineState = {
 	initialCursor: EngineState['cursor'];
 	baselineDigests: EngineState['baselineDigests'];
+	escalations: EngineState['escalations'];
 	configBaseline?: EngineState['configBaseline'];
 	epoch?: string;
 };
@@ -35,6 +37,7 @@ export function serializeChangeSignalState(state: EngineState): string {
 	const serialized: SerializedEngineState = {
 		cursor: state.cursor,
 		baselineDigests: Array.from(state.baselineDigests.entries()) as BaselineEntries,
+		escalations: state.escalations.map((escalation) => ({ ...escalation })),
 		...(state.configBaseline !== undefined ? { configBaseline: state.configBaseline } : {}),
 		...(state.epoch !== undefined ? { epoch: state.epoch } : {}),
 	};
@@ -84,6 +87,19 @@ function isValidBaselineEntry(entry: unknown): boolean {
 	);
 }
 
+function isValidEscalation(value: unknown): value is EngineState['escalations'][number] {
+	if (!value || typeof value !== 'object') return false;
+	const entry = value as Record<string, unknown>;
+	return (
+		Number.isSafeInteger(entry.id) &&
+		typeof entry.collection === 'string' &&
+		(entry.status === 'changed' ||
+			entry.status === 'deleted' ||
+			entry.status === 'missing_stored') &&
+		(entry.detector === 'hash-checksum' || entry.detector === 'range-checksum')
+	);
+}
+
 /** Migrate a legacy NUMERIC hash-checksum digest to a string (64-bit digests are strings — ADR 0014 M1). */
 function migrateBaselineEntry([key, digest]: [string, Record<string, unknown>]): [
 	string,
@@ -114,6 +130,9 @@ export function deserializeChangeSignalState(json: string): RestoredEngineState 
 					migrateBaselineEntry
 				)
 			) as EngineState['baselineDigests'],
+			escalations: (Array.isArray(parsed.escalations) ? parsed.escalations : [])
+				.filter(isValidEscalation)
+				.map((escalation) => ({ ...escalation })),
 			...(parsed.configBaseline !== undefined ? { configBaseline: parsed.configBaseline } : {}),
 			...(parsed.epoch !== undefined ? { epoch: parsed.epoch } : {}),
 		};

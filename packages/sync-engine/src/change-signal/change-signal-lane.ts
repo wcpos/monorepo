@@ -191,6 +191,7 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 			...(initial.baselineDigests !== undefined
 				? { baselineDigests: initial.baselineDigests }
 				: {}),
+			...(restored?.escalations !== undefined ? { initialEscalations: restored.escalations } : {}),
 			...(restored?.configBaseline !== undefined
 				? { configBaseline: restored.configBaseline }
 				: {}),

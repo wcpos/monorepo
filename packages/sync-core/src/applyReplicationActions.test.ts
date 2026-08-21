@@ -35,7 +35,8 @@ function actions(overrides: Partial<ReplicationActions> = {}): ReplicationAction
 		reDeriveBarcode: [],
 		reFetchCollections: [],
 		escalations: [],
-		nextState: { cursor: { sequence: 0 }, baselineDigests: new Map() },
+		escalationClears: [],
+		nextState: { cursor: { sequence: 0 }, baselineDigests: new Map(), escalations: [] },
 		...overrides,
 	};
 }
@@ -185,7 +186,7 @@ function fakeHandlers(opts: FakeOptions = {}): {
 
 describe('applyReplicationActions — rebaseline', () => {
 	it('rebaselines every hybrid collection through its arm before persisting head', async () => {
-		const nextState = { cursor: { sequence: 9_000 }, baselineDigests: new Map() };
+		const nextState = { cursor: { sequence: 9_000 }, baselineDigests: new Map(), escalations: [] };
 		const { handlers, calls } = fakeHandlers({
 			rebaseline: (collection) =>
 				collection === 'customers'
@@ -238,7 +239,7 @@ describe('applyReplicationActions — rebaseline', () => {
 	});
 
 	it('persists head even when rebaseline finds nothing local to reconcile', async () => {
-		const nextState = { cursor: { sequence: 700 }, baselineDigests: new Map() };
+		const nextState = { cursor: { sequence: 700 }, baselineDigests: new Map(), escalations: [] };
 		const { handlers, calls } = fakeHandlers();
 
 		await applyReplicationActions(
@@ -585,6 +586,30 @@ describe('applyReplicationActions — escalations are surfaced, never pulled', (
 		expect(calls.pulledIds).toEqual([]);
 		expect(calls.logs.some((line) => /escalat/i.test(line) && line.includes('80'))).toBe(true);
 	});
+
+	it('emits an info clearing event for every cured escalation', async () => {
+		const { handlers, calls } = fakeHandlers();
+		const cleared = {
+			id: 80,
+			collection: 'products' as const,
+			status: 'changed' as const,
+			detector: 'hash-checksum' as const,
+		};
+		const result = await applyReplicationActions(
+			actions({ escalationClears: [cleared] }),
+			handlers
+		);
+
+		expect(calls.events.filter((event) => event.type === 'apply.escalation-cleared')).toEqual([
+			{
+				type: 'apply.escalation-cleared',
+				level: 'info',
+				collection: 'products',
+				fields: { id: 80, detector: 'hash-checksum' },
+			},
+		]);
+		expect(result.escalationClears).toEqual([cleared]);
+	});
 });
 
 describe('applyReplicationActions — persist-only-after-every-handler-succeeded (ADR 0005)', () => {
@@ -592,6 +617,7 @@ describe('applyReplicationActions — persist-only-after-every-handler-succeeded
 		const nextState = {
 			cursor: { sequence: 42 },
 			baselineDigests: new Map(),
+			escalations: [],
 			configBaseline: { products: 'abc' },
 		};
 		const { handlers, calls } = fakeHandlers();

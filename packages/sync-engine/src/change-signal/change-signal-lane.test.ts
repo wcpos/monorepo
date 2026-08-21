@@ -58,6 +58,8 @@ describe('change-signal cursor observability', () => {
 			integrityMismatches: [],
 			idsToPull: [],
 			escalatedIds: [],
+			clearedEscalations: [],
+			escalationLedger: [],
 			baselineDigests: new Map(),
 		};
 		mocks.poll.mockResolvedValueOnce(outcome);
@@ -103,6 +105,8 @@ describe('config change events', () => {
 			integrityMismatches: [],
 			idsToPull: [],
 			escalatedIds: [],
+			clearedEscalations: [],
+			escalationLedger: [],
 			baselineDigests: new Map(),
 			configChanges: [],
 		};
@@ -184,6 +188,8 @@ describe('hydration-miss recovery accounting', () => {
 			integrityMismatches: [],
 			idsToPull: [],
 			escalatedIds: [],
+			clearedEscalations: [],
+			escalationLedger: [],
 			baselineDigests: new Map(),
 		};
 		mocks.poll.mockResolvedValueOnce(outcome);
@@ -195,6 +201,7 @@ describe('hydration-miss recovery accounting', () => {
 				await handlers.persistState({
 					cursor: { sequence: 1 },
 					baselineDigests: new Map(),
+					escalations: [],
 				});
 			return { reDerived: [] };
 		}) as never);
@@ -330,6 +337,8 @@ describe('census expiry on applied changes', () => {
 			integrityMismatches: [],
 			idsToPull: [],
 			escalatedIds: [],
+			clearedEscalations: [],
+			escalationLedger: [],
 			baselineDigests: new Map(),
 		};
 		mocks.poll.mockResolvedValueOnce(outcome);

@@ -422,6 +422,10 @@ export type HybridPollOutcome = {
 	idsToPull: HybridRepairTarget[];
 	/** Ids escalated to revisionHashForIds — the deepest repair signal. */
 	escalatedIds: HybridRepairTarget[];
+	/** Previously escalated ids verified matching by this complete sweep. */
+	clearedEscalations: HybridRepairTarget[];
+	/** Cloned snapshot of escalations still awaiting cure evidence. */
+	escalationLedger: HybridRepairTarget[];
 	/** Updated retained digests; cloned so hosts can persist without mutating the engine. */
 	baselineDigests: BaselineDigests;
 	/**
@@ -487,6 +491,10 @@ function repairKey(target: HybridRepairTarget): string {
 	return `${target.collection}:${target.id}:${target.status}`;
 }
 
+function escalationKey(target: HybridRepairTarget): string {
+	return `${target.collection}:${target.id}`;
+}
+
 function cloneBaselines(baselines: BaselineDigests): BaselineDigests {
 	return new Map(
 		[...baselines].map(([key, digest]) => [
@@ -519,6 +527,8 @@ export function createHybridChangeSignalEngine(input: {
 	 * nothing to diff yet) and subsequent sweeps detect drift from it.
 	 */
 	baselineDigests?: BaselineDigests;
+	/** Persisted escalations still awaiting evidence of cure. */
+	initialEscalations?: HybridRepairTarget[];
 	/** Injected clock for the wall-clock sweep cadence. Defaults to Date.now. */
 	now?: () => number;
 	/**
@@ -565,6 +575,9 @@ export function createHybridChangeSignalEngine(input: {
 	// also honors the absolute `match` signal, then compares seeded buckets to
 	// the retained baseline so rebuilt stored digests do not mask drift.
 	const baselines: BaselineDigests = cloneBaselines(new Map(input.baselineDigests ?? []));
+	const escalatedLedger = new Map(
+		(input.initialEscalations ?? []).map((target) => [escalationKey(target), { ...target }])
+	);
 	// Consecutive post-pull mismatch count per bucket key, for TIER 3 escalation.
 	const consecutiveMismatches = new Map<string, number>();
 
@@ -986,6 +999,8 @@ export function createHybridChangeSignalEngine(input: {
 					integrityMismatches: [],
 					idsToPull: [],
 					escalatedIds: [],
+					clearedEscalations: [],
+					escalationLedger: [...escalatedLedger.values()].map((target) => ({ ...target })),
 					baselineDigests: cloneBaselines(baselines),
 					...configTier,
 				};
@@ -1009,6 +1024,8 @@ export function createHybridChangeSignalEngine(input: {
 					integrityMismatches: [],
 					idsToPull: [],
 					escalatedIds: [],
+					clearedEscalations: [],
+					escalationLedger: [...escalatedLedger.values()].map((target) => ({ ...target })),
 					baselineDigests: cloneBaselines(baselines),
 					...configTier,
 				};
@@ -1018,6 +1035,18 @@ export function createHybridChangeSignalEngine(input: {
 			// marks a retry and rethrows with the committed cursor untouched.
 			const { mismatches, scanned } = await runSweep();
 			const { idsToPull, escalatedIds } = await resolveMismatches(mismatches, scanned);
+			for (const escalation of escalatedIds) {
+				escalatedLedger.set(escalationKey(escalation), { ...escalation });
+			}
+			const driftKeys = new Set([...idsToPull, ...escalatedIds].map(escalationKey));
+			const clearedEscalations: HybridRepairTarget[] = [];
+			for (const [key, escalation] of escalatedLedger) {
+				const detectorRan = escalation.detector === 'hash-checksum' || policy.sweepTaxRates;
+				if (detectorRan && !driftKeys.has(key)) {
+					escalatedLedger.delete(key);
+					clearedEscalations.push({ ...escalation });
+				}
+			}
 
 			// Everything succeeded — commit the cursor and the sweep clock together,
 			// and clear any pending retry.
@@ -1040,6 +1069,8 @@ export function createHybridChangeSignalEngine(input: {
 				integrityMismatches: mismatches,
 				idsToPull,
 				escalatedIds,
+				clearedEscalations,
+				escalationLedger: [...escalatedLedger.values()].map((target) => ({ ...target })),
 				baselineDigests: cloneBaselines(baselines),
 				...configTier,
 			};

@@ -150,7 +150,8 @@ export type ReplicationActionHandlers = {
 	/**
 	 * Optional structured telemetry seam. Each apply arm emits one `SyncEvent`
 	 * (`apply.pull` / `apply.delete` / `apply.refresh` / `apply.refetch` /
-	 * `apply.barcode-rederive` / `apply.escalation`) with the `collection` and a
+	 * `apply.barcode-rederive` / `apply.escalation` /
+	 * `apply.escalation-cleared`) with the `collection` and a
 	 * `{ requested, applied }` (or `{ refetched }` / `{ id, status, detector }`)
 	 * field payload — `warn` level on a shortfall. Feeds the metrics + logging
 	 * spine; omit it (or pass `undefined`) for no telemetry.
@@ -202,6 +203,8 @@ export type ApplyReplicationActionsResult = {
 	reDerived: ReDeriveResult[];
 	/** Escalations surfaced this tick (logged, NEVER auto-pulled). */
 	escalations: HybridRepairTarget[];
+	/** Escalations verified matching by a complete sweep. */
+	escalationClears: HybridRepairTarget[];
 	/** Whether `persistState` ran (always true on a non-throwing tick). */
 	persisted: boolean;
 	/** The routed plan, for callers that want the raw actions. */
@@ -528,6 +531,17 @@ export async function applyReplicationActions(
 			fields: { id: escalation.id, status: escalation.status, detector: escalation.detector },
 		});
 	}
+	for (const cleared of actions.escalationClears) {
+		log(
+			`change-signal: escalation CLEARED ${cleared.collection} id ${cleared.id} — verified matching by a complete integrity sweep`
+		);
+		emit({
+			type: 'apply.escalation-cleared',
+			level: 'info',
+			collection: cleared.collection,
+			fields: { id: cleared.id, detector: cleared.detector },
+		});
+	}
 
 	// 9) Persist the advanced state — ONLY now, after every handler above resolved.
 	//    A thrown handler skips this, so the cursor/baselines never advance past
@@ -554,6 +568,7 @@ export async function applyReplicationActions(
 		appliedTaxRateDeleteCount,
 		reDerived,
 		escalations: actions.escalations,
+		escalationClears: actions.escalationClears,
 		persisted: true,
 		actions,
 	};
