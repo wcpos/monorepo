@@ -433,6 +433,36 @@ describe('testAuthorizationMethod', () => {
 		expect(fetchMock.mock.calls[2][1].signal).toBeInstanceOf(AbortSignal);
 	});
 
+	it('keeps the auth probe timeout active while reading the response body', async () => {
+		jest.useFakeTimers();
+		try {
+			let resolveBody!: (value: unknown) => void;
+			const body = new Promise<unknown>((resolve) => {
+				resolveBody = resolve;
+			});
+			fetchMock
+				.mockResolvedValueOnce({ ok: true, json: jest.fn(() => body) })
+				.mockResolvedValueOnce({ ok: false, json: jest.fn() })
+				.mockResolvedValueOnce({ ok: false, json: jest.fn() });
+
+			const authorization = testAuthorizationMethod(
+				'https://example.com/wp-json/wcpos/v2/',
+				'token'
+			);
+			await Promise.resolve();
+			const signal = fetchMock.mock.calls[0][1].signal as AbortSignal;
+
+			expect(signal.aborted).toBe(false);
+			jest.advanceTimersByTime(10000);
+			expect(signal.aborted).toBe(true);
+
+			resolveBody(null);
+			await expect(authorization).resolves.toBeNull();
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
 	const echoBody = (overrides: Record<string, unknown> = {}) => ({
 		v: 1,
 		headers: {
