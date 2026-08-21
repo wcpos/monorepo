@@ -64,11 +64,20 @@ export const useNewOrder = () => {
 			taxBasedOn: typeof tax_based_on === 'string' ? tax_based_on : undefined,
 		});
 
-		patchTemporaryOrderPayload(newOrder.uuid, data).catch((error) => {
-			newOrderLogger.error(getErrorMessage(error), {
-				code: ERROR_CODES.CHECKOUT_UNEXPECTED,
+		patchTemporaryOrderPayload(newOrder.uuid, data)
+			.then((patched) => {
+				// null = the template this effect captured is gone (repository could not
+				// resolve the uuid). Pre-stage-I this surfaced as a deleted-document throw
+				// from incrementalPatch; keep it loud rather than silently unseeded.
+				if (!patched) {
+					throw new Error(`Temporary order "${newOrder.uuid}" not found while seeding`);
+				}
+			})
+			.catch((error) => {
+				newOrderLogger.error(getErrorMessage(error), {
+					code: ERROR_CODES.CHECKOUT_UNEXPECTED,
+				});
 			});
-		});
 	}, [newOrder, defaultCustomer, currency, prices_include_tax, tax_based_on, country]);
 
 	return { newOrder };
