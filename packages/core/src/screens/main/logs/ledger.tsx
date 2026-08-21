@@ -1,8 +1,9 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
+import type { ScrollViewProps } from 'react-native';
 
 import { isToday } from 'date-fns';
-import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense } from 'observable-hooks';
 
 import { cn } from '@wcpos/components/lib/utils';
 import { HStack } from '@wcpos/components/hstack';
@@ -33,7 +34,6 @@ import { RowDetail } from './row-detail';
 
 import type { ObservableResource } from 'observable-hooks';
 import type { RxCollection } from 'rxdb';
-import type { Observable } from 'rxjs';
 
 type LedgerResource = ObservableResource<QueryResult<RxCollection>>;
 
@@ -292,26 +292,31 @@ function LedgerRow({
 /**
  * The flat ledger (TIME / LEVEL / EVENT / TOOK / STATUS — layout B2, map
  * #1136): hairline rows, chain edge-marks, whole-row expand, tappable level
- * pills, inline detail. Pagination is infinite scroll driven by the screen's
- * ScrollView (no "Show more" button); the footer keeps the honest count.
+ * pills, inline detail. Pagination is driven by the row-only ScrollView (no
+ * "Show more" button); the header and honest-count footer stay pinned.
  */
 export function Ledger({
 	resource,
-	total$,
 	activeKind,
 	onKindPress,
 	onRenderedCount,
+	onScroll,
+	onContentSizeChange,
+	onLayout,
+	scrollEventThrottle,
 }: {
 	resource: LedgerResource;
-	total$: Observable<number>;
 	activeKind: LevelKind | undefined;
 	onKindPress: (kind: LevelKind) => void;
 	onRenderedCount?: (count: number) => void;
+	onScroll?: ScrollViewProps['onScroll'];
+	onContentSizeChange?: ScrollViewProps['onContentSizeChange'];
+	onLayout?: ScrollViewProps['onLayout'];
+	scrollEventThrottle?: ScrollViewProps['scrollEventThrottle'];
 }) {
 	const t = useT();
 	const { formatDate } = useLocalDate();
 	const result = useObservableSuspense(resource);
-	const total = useObservableState(total$, 0);
 	const levelLabel = useLevelLabel();
 	const eventTitle = useEventTitle();
 	const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
@@ -342,7 +347,7 @@ export function Ledger({
 	}, []);
 
 	return (
-		<VStack testID="logs-ledger" className="gap-0">
+		<VStack testID="logs-ledger" className="min-h-0 flex-1 gap-0">
 			<HairlineHeaderRow className="hidden pl-2 md:flex">
 				<HairlineHeaderCell testID="logs-heading-time" className="w-20">
 					{t('health.logs.col_time')}
@@ -361,32 +366,66 @@ export function Ledger({
 				</HairlineHeaderCell>
 			</HairlineHeaderRow>
 
-			{rows.length === 0 ? (
-				<Text className="text-muted-foreground py-6 text-center text-sm">
-					{t('logs.no_logs_found')}
-				</Text>
-			) : (
-				rows.map((row) => (
-					<LedgerRow
-						key={row.logId}
-						row={row}
-						chained={chained.has(row.logId)}
-						expanded={!!expanded[row.logId]}
-						onToggle={() => toggle(row.logId)}
-						timeText={timeTextFor(row.timestamp)}
-						levelLabel={levelLabel(displayKind(row))}
-						title={eventTitle(row)}
-						kindActive={activeKind !== undefined && displayKind(row) === activeKind}
-						onKindPress={onKindPress}
-					/>
-				))
-			)}
-
-			<HStack className="items-center justify-between py-3">
-				<Text className="text-muted-foreground text-xs">
-					{t('common.showing_of', { shown: rows.length, total })}
-				</Text>
-			</HStack>
+			<ScrollView
+				className="min-h-0 flex-1"
+				onScroll={onScroll}
+				onContentSizeChange={onContentSizeChange}
+				onLayout={onLayout}
+				scrollEventThrottle={scrollEventThrottle}
+			>
+				{rows.length === 0 ? (
+					<Text className="text-muted-foreground py-6 text-center text-sm">
+						{t('logs.no_logs_found')}
+					</Text>
+				) : (
+					rows.map((row) => (
+						<LedgerRow
+							key={row.logId}
+							row={row}
+							chained={chained.has(row.logId)}
+							expanded={!!expanded[row.logId]}
+							onToggle={() => toggle(row.logId)}
+							timeText={timeTextFor(row.timestamp)}
+							levelLabel={levelLabel(displayKind(row))}
+							title={eventTitle(row)}
+							kindActive={activeKind !== undefined && displayKind(row) === activeKind}
+							onKindPress={onKindPress}
+						/>
+					))
+				)}
+			</ScrollView>
 		</VStack>
+	);
+}
+
+/**
+ * Pinned honest-count footer. Rendered by the screen OUTSIDE the ledger's
+ * Suspense/error boundary so the count and the live status accessory stay
+ * mounted while the log query is loading or broken. flex-wrap lets the
+ * accessory drop to its own line instead of clipping on narrow layouts.
+ */
+export function LedgerFooter({
+	shown,
+	total,
+	accessory,
+}: {
+	shown: number;
+	total: number;
+	accessory?: React.ReactNode;
+}) {
+	const t = useT();
+	return (
+		<HStack className="border-border/50 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t py-2">
+			<Text className="text-muted-foreground text-xs">
+				{t('common.showing_of', { shown, total })}
+			</Text>
+			<Text testID="logs-loaded-count" className="hidden">
+				{shown}
+			</Text>
+			<Text testID="logs-total-count" className="hidden">
+				{total}
+			</Text>
+			{accessory}
+		</HStack>
 	);
 }

@@ -4,6 +4,7 @@ import { Platform, Share, View } from 'react-native';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
+import { cn } from '@wcpos/components/lib/utils';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { Tree } from '@wcpos/components/tree';
@@ -18,7 +19,7 @@ import {
 
 import { useT } from '../../../contexts/translations';
 import { useLocalDate } from '../../../hooks/use-local-date';
-import { Callout, type KVEntry, KVGrid, type LevelKind } from '../health/components';
+import { type KVEntry, KVGrid, type LevelKind } from '../health/components';
 import { translateEventDescription } from './generated/event-titles.generated';
 import { eventTypeOf, type LogRow, rowDetailData } from './logs-logic';
 
@@ -134,9 +135,8 @@ function HelpLink({ code }: { code: string }) {
 }
 
 /**
- * Inline expandable detail under a ledger row. Problems get the callout
- * treatment (plain-language reason, one guidance line, help link, correlation
- * KV); quiet rows get the correlation KV and raw context.
+ * Inline expandable detail under a ledger row. Every kind shares one aligned
+ * prose, facts, and context stack; problem rows add only a tone bar.
  *
  * `title` is the row's rendered (translated) title, passed in so the detail can
  * show the raw engine event code — the greppable identity support asks for —
@@ -189,52 +189,71 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 		});
 	}
 
-	if (!isProblem) {
-		const hasContext = Object.keys(context).length > 0;
-		// The persisted message is the emitter's own narration. It is not the
-		// title any more (that is translated from the event code), so show it
-		// here when it adds something the title does not already say.
-		const narration = row.message && row.message !== title ? row.message : null;
-		return (
-			<VStack testID={`logs-detail-${row.logId}`} className="gap-2 py-2 pl-4">
-				{description ? <Text className="text-sm">{description}</Text> : null}
-				{narration ? <Text className="text-muted-foreground text-xs">{narration}</Text> : null}
-				{eventType ? <EventCode eventType={eventType} logId={row.logId} /> : null}
-				{entries.length > 0 ? <KVGrid entries={entries} /> : null}
-				{hasContext ? <Tree value={context} collapsed /> : null}
-				{entries.length === 0 && !hasContext && !narration && !description ? (
-					<Text className="text-muted-foreground text-xs">{t('health.logs.no_detail')}</Text>
-				) : null}
-			</VStack>
-		);
-	}
-
 	// "The server said" framing only when the reason genuinely came back from
 	// the server (push rejection / mapped server code) — client-side reasons
 	// must not be put in the server's mouth.
 	const isServerReason =
 		reason !== null && (detail.serverCode !== undefined || context.direction === 'push');
-	const explanation = isServerReason
-		? t('health.logs.server_said', { reason })
-		: (entry?.summary ?? reason ?? row.message ?? '');
+	const explanation = isProblem
+		? isServerReason
+			? t('health.logs.server_said', { reason })
+			: (entry?.summary ?? reason)
+		: null;
+	const narration =
+		!isProblem && row.message && row.message !== title && row.message !== eventType
+			? row.message
+			: null;
+	const hasContext = Object.keys(context).length > 0;
+	const hasProse = isProblem
+		? Boolean(explanation || guidance || (entry && row.code))
+		: Boolean(description || narration);
+	const hasFacts = Boolean(eventType || entries.length > 0);
 
 	return (
-		<View testID={`logs-detail-${row.logId}`} className="py-2">
-			<Callout tone={kind === 'error' ? 'destructive' : 'warning'}>
-				<View className="flex-col gap-x-8 gap-y-2 md:flex-row">
-					<VStack className="flex-1 gap-1">
-						<Text className="font-medium">{explanation}</Text>
-						{guidance ? <Text className="text-sm font-medium">{guidance}</Text> : null}
-						{entry && row.code ? <HelpLink code={row.code} /> : null}
-					</VStack>
-					{eventType || entries.length > 0 ? (
-						<View className="md:w-72">
-							{eventType ? <EventCode eventType={eventType} logId={row.logId} /> : null}
-							{entries.length > 0 ? <KVGrid entries={entries} /> : null}
-						</View>
-					) : null}
-				</View>
-			</Callout>
-		</View>
+		<VStack testID={`logs-detail-${row.logId}`} className="relative py-2 pl-4 md:ml-42 md:pl-0">
+			{isProblem ? (
+				<View
+					className={cn(
+						'absolute top-2 bottom-2 left-0 w-[3px] rounded-full md:-left-4',
+						kind === 'error' ? 'bg-destructive' : 'bg-warning'
+					)}
+				/>
+			) : null}
+			{hasProse ? (
+				<VStack className="gap-1">
+					{isProblem ? (
+						<>
+							{explanation ? <Text className="font-medium">{explanation}</Text> : null}
+							{guidance ? <Text className="text-sm font-medium">{guidance}</Text> : null}
+							{entry && row.code ? <HelpLink code={row.code} /> : null}
+						</>
+					) : (
+						<>
+							{description ? <Text className="text-sm">{description}</Text> : null}
+							{narration ? (
+								<Text className="text-muted-foreground text-xs">{narration}</Text>
+							) : null}
+						</>
+					)}
+				</VStack>
+			) : null}
+			{hasFacts ? (
+				<VStack className="gap-1">
+					{eventType ? <EventCode eventType={eventType} logId={row.logId} /> : null}
+					{entries.length > 0 ? <KVGrid entries={entries} /> : null}
+				</VStack>
+			) : null}
+			{hasContext ? (
+				<HStack className="items-baseline gap-3">
+					<Text className="text-muted-foreground w-24 text-xs">{t('health.logs.kv_details')}</Text>
+					<View className="flex-1">
+						<Tree value={context} collapsed />
+					</View>
+				</HStack>
+			) : null}
+			{!hasProse && !hasFacts && !hasContext ? (
+				<Text className="text-muted-foreground text-xs">{t('health.logs.no_detail')}</Text>
+			) : null}
+		</VStack>
 	);
 }

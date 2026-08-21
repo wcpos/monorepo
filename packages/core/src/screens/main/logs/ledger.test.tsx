@@ -5,7 +5,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { Ledger } from './ledger';
+import { Ledger, LedgerFooter } from './ledger';
 
 const row = {
 	logId: 'log-1',
@@ -40,6 +40,9 @@ jest.mock('react-native', () => ({
 	View: ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
 		<div className={className}>{children}</div>
 	),
+	ScrollView: ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
+		<div className={className}>{children}</div>
+	),
 }));
 jest.mock('observable-hooks', () => ({
 	useObservableState: () => 2,
@@ -64,7 +67,9 @@ jest.mock('@wcpos/components/hstack', () => ({
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
+	Text: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
+		<span data-testid={testID}>{children}</span>
+	),
 }));
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
@@ -98,13 +103,7 @@ jest.mock('./row-detail', () => ({
 describe('Ledger (layout B2)', () => {
 	const renderLedger = (props: Partial<React.ComponentProps<typeof Ledger>> = {}) =>
 		render(
-			<Ledger
-				resource={null as never}
-				total$={null as never}
-				activeKind={undefined}
-				onKindPress={jest.fn()}
-				{...props}
-			/>
+			<Ledger resource={null as never} activeKind={undefined} onKindPress={jest.fn()} {...props} />
 		);
 
 	it('never nests a button inside a button', () => {
@@ -153,5 +152,35 @@ describe('Ledger (layout B2)', () => {
 		renderLedger();
 		const codeBadges = screen.getAllByTestId('logs-code-log-1');
 		expect(codeBadges[codeBadges.length - 1].closest('.absolute')).not.toBeNull();
+	});
+
+	// The footer is a standalone component: the screen renders it OUTSIDE the
+	// ledger's Suspense/error boundary so the count and status accessory stay
+	// mounted while the log query loads or breaks.
+	it('shows the honest count with loaded and total values', () => {
+		render(<LedgerFooter shown={2} total={7} />);
+
+		expect(screen.getByText('common.showing_of')).not.toBeNull();
+		expect(screen.getByTestId('logs-loaded-count').textContent).toBe('2');
+		expect(screen.getByTestId('logs-total-count').textContent).toBe('7');
+	});
+
+	it('renders the footer accessory and wraps instead of clipping', () => {
+		const { container } = render(
+			<LedgerFooter
+				shown={2}
+				total={7}
+				accessory={<span data-testid="footer-accessory">status</span>}
+			/>
+		);
+
+		expect(screen.getByTestId('footer-accessory')).not.toBeNull();
+		expect(container.firstElementChild?.className.split(/\s+/)).toContain('flex-wrap');
+	});
+
+	it('renders no footer of its own inside the suspending ledger', () => {
+		renderLedger();
+
+		expect(screen.queryByTestId('logs-loaded-count')).toBeNull();
 	});
 });

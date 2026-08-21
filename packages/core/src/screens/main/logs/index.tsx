@@ -28,7 +28,7 @@ import { QuerySearchInput } from '../components/query-search-input';
 import { Chip, type LevelKind, Stat, StatHeader } from '../health/components';
 import { useNowMs, useRelativeTime } from '../health/use-relative-time';
 import { useEngineStatus, useMutationCounts } from '../hooks/use-engine-monitor';
-import { Ledger, useLevelLabel } from './ledger';
+import { Ledger, LedgerFooter, useLevelLabel } from './ledger';
 import {
 	buildDebugInfo,
 	formatCadence,
@@ -166,10 +166,17 @@ function LogsScreenContent() {
 	// materialized window (#1132) — and it re-arms when the query identity
 	// changes, because filters/search reset the window to page one.
 	const total = useObservableState(binding.total$, 0);
+	// State mirror of the rendered-row count: the pinned footer lives outside
+	// the ledger's Suspense boundary, so it can't read rows.length itself.
+	const [renderedCount, setRenderedCount] = React.useState(0);
 	const renderedCountRef = React.useRef(0);
 	const lastExtendCountRef = React.useRef<number | null>(null);
 	const queryIdentityRef = React.useRef('');
-	const geometryRef = React.useRef({ offsetY: 0, contentHeight: 0, viewportHeight: 0 });
+	const geometryRef = React.useRef({
+		offsetY: 0,
+		contentHeight: 0,
+		viewportHeight: 0,
+	});
 
 	// Computed in render (pure); consumed only at event time — the compiler
 	// forbids ref access during render (#1130 lesson).
@@ -229,6 +236,7 @@ function LogsScreenContent() {
 	const handleRenderedCount = React.useCallback(
 		(count: number) => {
 			renderedCountRef.current = count;
+			setRenderedCount(count);
 			maybeExtend();
 		},
 		[maybeExtend]
@@ -322,121 +330,138 @@ function LogsScreenContent() {
 	]);
 
 	return (
-		<ScrollView
-			className="flex-1"
-			onScroll={handleScroll}
-			onContentSizeChange={handleContentSizeChange}
-			onLayout={handleLayout}
-			scrollEventThrottle={64}
-		>
-			<VStack testID="screen-logs" className="mx-auto w-full max-w-4xl gap-3 p-4 md:p-6">
-				<StatusLine />
+		<View className="flex-1">
+			<VStack
+				testID="screen-logs"
+				className="mx-auto min-h-0 w-full max-w-4xl flex-1 gap-3 p-4 md:p-6"
+			>
+				{/* Compact-height escape hatch: the pinned controls yield to the
+				    ledger (which keeps a min-h floor) and scroll internally instead
+				    of squeezing the rows out of reach on short viewports. On normal
+				    viewports this ScrollView sizes to its content and never scrolls. */}
+				<ScrollView className="min-h-0 shrink grow-0">
+					<VStack className="gap-3">
+						<StatHeader
+							testID="logs-stats"
+							actions={
+								canCopy || canShare ? (
+									<Button
+										variant="outline"
+										size="sm"
+										testID="logs-copy-debug"
+										onPress={() => void handleCopy()}
+									>
+										<ButtonText>
+											{canShare ? t('health.logs.share_debug') : t('health.logs.copy_debug')}
+										</ButtonText>
+									</Button>
+								) : null
+							}
+						>
+							<Stat
+								value={stats.eventsToday}
+								label={t('health.logs.events_today')}
+								onPress={() => applyPreset('all')}
+								testID="logs-stat-events"
+							/>
+							<Stat
+								value={stats.errorsToday}
+								tone={stats.errorsToday > 0 ? 'bad' : 'default'}
+								label={t('health.logs.errors_today')}
+								onPress={() => applyPreset('errors')}
+								testID="logs-stat-errors"
+							/>
+							<Stat
+								value={stats.stuck.length}
+								tone={stats.stuck.length > 0 ? 'bad' : 'good'}
+								label={t('health.logs.stuck_records')}
+								// Sync preset, not Errors: stuck rows are sync-domain terminal rows
+								// that can persist at WARN level — the error-only filter would hide
+								// the very rows this number counts.
+								onPress={() => applyPreset('sync')}
+								testID="logs-stat-stuck"
+							/>
+							<Stat
+								value={mutations.pending}
+								tone={mutations.pending > 0 ? 'bad' : 'good'}
+								label={t('health.database.waiting_to_send')}
+								testID="logs-stat-waiting"
+							/>
+						</StatHeader>
 
-				<StatHeader
-					testID="logs-stats"
-					actions={
-						canCopy || canShare ? (
-							<Button
-								variant="outline"
-								size="sm"
-								testID="logs-copy-debug"
-								onPress={() => void handleCopy()}
-							>
-								<ButtonText>
-									{canShare ? t('health.logs.share_debug') : t('health.logs.copy_debug')}
-								</ButtonText>
-							</Button>
-						) : null
-					}
-				>
-					<Stat
-						value={stats.eventsToday}
-						label={t('health.logs.events_today')}
-						onPress={() => applyPreset('all')}
-						testID="logs-stat-events"
-					/>
-					<Stat
-						value={stats.errorsToday}
-						tone={stats.errorsToday > 0 ? 'bad' : 'default'}
-						label={t('health.logs.errors_today')}
-						onPress={() => applyPreset('errors')}
-						testID="logs-stat-errors"
-					/>
-					<Stat
-						value={stats.stuck.length}
-						tone={stats.stuck.length > 0 ? 'bad' : 'good'}
-						label={t('health.logs.stuck_records')}
-						// Sync preset, not Errors: stuck rows are sync-domain terminal rows
-						// that can persist at WARN level — the error-only filter would hide
-						// the very rows this number counts.
-						onPress={() => applyPreset('sync')}
-						testID="logs-stat-stuck"
-					/>
-					<Stat
-						value={mutations.pending}
-						tone={mutations.pending > 0 ? 'bad' : 'good'}
-						label={t('health.database.waiting_to_send')}
-						testID="logs-stat-waiting"
-					/>
-				</StatHeader>
-
-				<QuerySearchInput
-					collectionName="logs"
-					placeholder={t('logs.search_logs')}
-					testID="search-logs"
-				/>
-
-				<HStack className="flex-wrap items-center gap-2">
-					<Chip on={preset === 'all'} onPress={() => applyPreset('all')} testID="logs-chip-all">
-						{t('health.logs.preset_all')}
-					</Chip>
-					<Chip
-						on={preset === 'actions'}
-						onPress={() => applyPreset('actions')}
-						testID="logs-chip-actions"
-					>
-						{t('health.logs.preset_actions')}
-					</Chip>
-					<Chip
-						on={preset === 'errors'}
-						onPress={() => applyPreset('errors')}
-						testID="logs-chip-errors"
-					>
-						{t('health.logs.preset_errors')}
-					</Chip>
-					<Chip on={preset === 'sync'} onPress={() => applyPreset('sync')} testID="logs-chip-sync">
-						{t('health.logs.preset_sync')}
-					</Chip>
-					{activeKind ? (
-						<Chip on onPress={() => actions.clearFilter('kind')} testID="logs-chip-kind">
-							{`${levelLabel(activeKind)} ×`}
-						</Chip>
-					) : null}
-					<View className="flex-1" />
-					<Chip on={verbose} onPress={toggleVerbose} testID="logs-chip-verbose">
-						{verbose ? t('health.logs.verbose_on') : t('health.logs.verbose_off')}
-					</Chip>
-				</HStack>
-
-				<ErrorBoundary>
-					<Suspense
-						fallback={
-							<View className="items-center py-8">
-								<Loader />
-							</View>
-						}
-					>
-						<Ledger
-							resource={binding.resource}
-							total$={binding.total$}
-							activeKind={activeKind}
-							onKindPress={toggleKind}
-							onRenderedCount={handleRenderedCount}
+						<QuerySearchInput
+							collectionName="logs"
+							placeholder={t('logs.search_logs')}
+							testID="search-logs"
 						/>
-					</Suspense>
-				</ErrorBoundary>
+
+						<HStack className="flex-wrap items-center gap-2">
+							<Chip on={preset === 'all'} onPress={() => applyPreset('all')} testID="logs-chip-all">
+								{t('health.logs.preset_all')}
+							</Chip>
+							<Chip
+								on={preset === 'actions'}
+								onPress={() => applyPreset('actions')}
+								testID="logs-chip-actions"
+							>
+								{t('health.logs.preset_actions')}
+							</Chip>
+							<Chip
+								on={preset === 'errors'}
+								onPress={() => applyPreset('errors')}
+								testID="logs-chip-errors"
+							>
+								{t('health.logs.preset_errors')}
+							</Chip>
+							<Chip
+								on={preset === 'sync'}
+								onPress={() => applyPreset('sync')}
+								testID="logs-chip-sync"
+							>
+								{t('health.logs.preset_sync')}
+							</Chip>
+							{activeKind ? (
+								<Chip on onPress={() => actions.clearFilter('kind')} testID="logs-chip-kind">
+									{`${levelLabel(activeKind)} ×`}
+								</Chip>
+							) : null}
+							<View className="flex-1" />
+							<Chip on={verbose} onPress={toggleVerbose} testID="logs-chip-verbose">
+								{verbose ? t('health.logs.verbose_on') : t('health.logs.verbose_off')}
+							</Chip>
+						</HStack>
+					</VStack>
+				</ScrollView>
+
+				<View className="min-h-32 flex-1">
+					<ErrorBoundary>
+						<Suspense
+							fallback={
+								<View className="min-h-0 flex-1 items-center justify-center py-8">
+									<Loader />
+								</View>
+							}
+						>
+							<Ledger
+								resource={binding.resource}
+								activeKind={activeKind}
+								onKindPress={toggleKind}
+								onRenderedCount={handleRenderedCount}
+								onScroll={handleScroll}
+								onContentSizeChange={handleContentSizeChange}
+								onLayout={handleLayout}
+								scrollEventThrottle={64}
+							/>
+						</Suspense>
+					</ErrorBoundary>
+				</View>
+
+				{/* Outside the ledger's boundaries on purpose: the honest count and
+				    the live watching line stay pinned even while the log query is
+				    loading or broken (Codex P2, PR #1421). */}
+				<LedgerFooter shown={renderedCount} total={total} accessory={<StatusLine />} />
 			</VStack>
-		</ScrollView>
+		</View>
 	);
 }
 

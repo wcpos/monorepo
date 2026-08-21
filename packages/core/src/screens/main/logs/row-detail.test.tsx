@@ -43,17 +43,22 @@ jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
+	Text: ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
+		<span className={className}>{children}</span>
+	),
 }));
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
-jest.mock('@wcpos/components/tree', () => ({ Tree: () => null }));
+jest.mock('@wcpos/components/tree', () => ({
+	Tree: ({ value }: { value: unknown }) => (
+		<div data-testid="logs-context">{JSON.stringify(value)}</div>
+	),
+}));
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
 		<div data-testid={testID}>{children}</div>
 	),
 }));
 jest.mock('../health/components', () => ({
-	Callout: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 	KVGrid: ({ entries }: { entries: { label: string; value: string }[] }) => (
 		<div>
 			{entries.map(({ label, value }) => (
@@ -118,6 +123,32 @@ describe('RowDetail', () => {
 		render(<RowDetail row={row} kind="error" title="Saved updates from your store" />);
 
 		expect(screen.queryByText(description)).toBeNull();
+	});
+
+	it('renders context for a problem row', () => {
+		render(
+			<RowDetail
+				row={{ ...row, level: 'error', context: { detail: 'problem context' } }}
+				kind="error"
+			/>
+		);
+
+		expect(screen.getByTestId('logs-context').textContent).toContain('problem context');
+	});
+
+	it('does not use an event-code message as problem prose', () => {
+		const { container } = render(
+			<RowDetail row={{ ...row, level: 'error', message: 'apply.pull' }} kind="error" />
+		);
+
+		expect(container.querySelector('.font-medium')).toBeNull();
+		expect(screen.getAllByText('apply.pull')).toHaveLength(1);
+	});
+
+	it('does not repeat an event-code message as quiet narration', () => {
+		render(<RowDetail row={{ ...row, message: 'apply.pull' }} kind="sync" title="Sync event" />);
+
+		expect(screen.getAllByText('apply.pull')).toHaveLength(1);
 	});
 
 	it('shows the labelled event code with a copy button', async () => {
