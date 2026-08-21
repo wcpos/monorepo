@@ -170,7 +170,7 @@ export const wcposRules = {
 			type: 'problem',
 			docs: {
 				description:
-					'Disallow Rx documents, state, collections, databases, and observables in React context values. ObservableResource is excluded because it is the sanctioned Suspense carrier.',
+					'Disallow Rx documents, state, collections, databases, and observables in React context values. ObservableResource is excluded because it is the sanctioned Suspense carrier. Exception criteria (owner ruling 2026-08-21): an Observable may live in a context value ONLY as a stable-for-the-provider-lifetime event channel (never a data source), consumed exclusively in effects/pipelines — dated inline disables state the reason.',
 			},
 			schema: [],
 			messages: {

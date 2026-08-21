@@ -35,7 +35,7 @@ const noopContext: DeviceScanContextValue = {
 	hid: inertHid,
 };
 
-// eslint-disable-next-line wcpos/no-rx-in-context-value -- The app-scoped device scan bus is structurally an Observable event stream; sanctioned exception dated 2026-08-21.
+// eslint-disable-next-line wcpos/no-rx-in-context-value -- Sanctioned Observable-in-context exception: a stable-for-the-provider's-lifetime EVENT CHANNEL, never a data source; consumers subscribe only in effects/pipelines, never read it in render (owner ruling 2026-08-21, #1385 stage K). ScanHub consolidation (see #1259) removes this exception.
 const DeviceScanContext = React.createContext<DeviceScanContextValue>(noopContext);
 
 /**
