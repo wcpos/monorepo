@@ -83,6 +83,7 @@ jest.mock('../components/data-table/skeleton', () => ({ DataTableSkeleton: () =>
 jest.mock('../components/ui-settings', () => ({
 	UISettingsDialog: ({ children }: { children: React.ReactNode }) => children,
 }));
+jest.mock('./use-barcode', () => ({ useBarcode: jest.fn(() => ({ onKeyPress: jest.fn() })) }));
 jest.mock('../contexts/ui-settings', () => ({
 	useUISettings: () => ({
 		uiSettings: { sortBy: mockSortBy, sortDirection: mockSortDirection },
