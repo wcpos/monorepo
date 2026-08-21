@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { NativeSyntheticEvent, Platform, TextInputKeyPressEventData } from 'react-native';
 
-import { useFocusEffect } from 'expo-router';
 import { useIsFocused } from 'expo-router/react-navigation';
 import {
 	useLayoutObservable,
@@ -33,6 +32,8 @@ type BarcodeScanEvent = {
 	terminated: boolean;
 };
 
+const noopBarcodeCallback = () => {};
+
 /**
  * The wedge (HID keyboard mode) input source. Keystroke timing/latching lives
  * in `@wcpos/scanner`'s wedge detector — the same implementation the settings
@@ -40,9 +41,13 @@ type BarcodeScanEvent = {
  * keydown on web, TextInput onKeyPress on native) and to the app pipeline
  * (min-length gate → `barcode$` / `scanEvents$`).
  */
-export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
+export const useBarcodeDetection = (
+	options: { callback?: (barcode: string) => void; isActive?: boolean } = {}
+) => {
 	const t = useT();
-	const isFocused = useIsFocused();
+	const callback = options.callback ?? noopBarcodeCallback;
+	const leafFocused = useIsFocused();
+	const isActive = options.isActive ?? leafFocused;
 	const { store } = useAppState();
 	const prefix = useObservableEagerState(store.barcode_scanning_prefix$) as string;
 	const suffix = useObservableEagerState(store.barcode_scanning_suffix$) as string;
@@ -79,14 +84,16 @@ export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 		([barcode, eventCallback, terminated]) => ({ barcode, callback: eventCallback, terminated })
 	);
 
-	// Focus as a stream for event-time gating below (a ref read inside the
-	// memoized pipelines would trip the react-compiler render-purity lint).
+	// Active scope as a stream for event-time gating below (a ref read inside
+	// the memoized pipelines would trip the react-compiler render-purity lint).
 	// Layout variant: the gate must update in the same commit as the blur — a
-	// device event arriving before passive effects flush would otherwise still
-	// see the previous focus value and slip through.
-	const isFocused$ = useLayoutObservable(
-		(inputs$) => inputs$.pipe(map(([focused]) => focused)),
-		[isFocused]
+	// device event arriving before passive effects flush would otherwise see the
+	// previous value and slip through. The consumer decides scope via
+	// options.isActive; the default leaf focus prevents #1409 while POS section
+	// ownership keeps Cart and checkout active (#1438).
+	const isActive$ = useLayoutObservable(
+		(inputs$) => inputs$.pipe(map(([active]) => active)),
+		[isActive]
 	);
 
 	// Live values behind stable refs so the long-lived detector always reads the
@@ -144,36 +151,35 @@ export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 	);
 
 	/**
-	 * Enable/Disable barcode detection when the screen is not focused.
+	 * Enable/Disable web barcode detection for the active scan scope.
 	 *
 	 * A user was experiencing an issue where keyup events were only giving the lowercase, even
 	 * though the barcode was uppercase. They recommend to not use keydown events, but it should
 	 * still work on almost all browsers.
 	 */
-	useFocusEffect(
-		React.useCallback(() => {
-			if (Platform.OS === 'web') {
-				// reverted to keydown, because keyup was only giving lowercase
-				document.addEventListener('keydown', onKeyUp);
+	// Platform listener lifecycle follows the consumer-selected scan scope.
+	React.useEffect(() => {
+		if (Platform.OS === 'web' && isActive) {
+			// reverted to keydown, because keyup was only giving lowercase
+			document.addEventListener('keydown', onKeyUp);
 
-				return () => {
-					document.removeEventListener('keydown', onKeyUp);
-					// Drop the detector with its latched state: a partial burst must not
-					// survive refocus and corrupt the next scan. A fresh detector is
-					// created lazily on the next keystroke.
-					detectorRef.current?.dispose();
-					detectorRef.current = null;
-				};
-			}
-		}, [onKeyUp])
-	);
+			return () => {
+				document.removeEventListener('keydown', onKeyUp);
+				// Drop the detector with its latched state: a partial burst must not
+				// survive refocus and corrupt the next scan. A fresh detector is
+				// created lazily on the next keystroke.
+				detectorRef.current?.dispose();
+				detectorRef.current = null;
+			};
+		}
+	}, [isActive, onKeyUp]);
 
 	/**
 	 * Post-gate scan events (architecture: wcpos/monorepo#715). Consumers like
 	 * the POS product route subscribe here; additional sources (attributed
 	 * wedge, serial, HID-POS, camera) will feed the same shape.
 	 */
-	const attributed = useAttributedWedge(isFocused);
+	const attributed = useAttributedWedge(isActive);
 	const camera = useCameraScanBus();
 	const device = useDeviceScanBus();
 	const barcode$ = React.useMemo(
@@ -186,11 +192,11 @@ export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 			).pipe(
 				// Blurred drawer consumers stay mounted/subscribed while camera/device
 				// buses are shared; drop events here (#1409).
-				withLatestFrom(isFocused$),
-				filter(([, focused]) => focused),
+				withLatestFrom(isActive$),
+				filter(([, active]) => active),
 				map(([code]) => code)
 			),
-		[wedgeBarcode$, attributed.scanEvents$, camera.events$, device.events$, isFocused$]
+		[wedgeBarcode$, attributed.scanEvents$, camera.events$, device.events$, isActive$]
 	);
 	const scanEvents$ = React.useMemo(
 		() =>
@@ -200,12 +206,12 @@ export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 				camera.events$,
 				device.events$
 			).pipe(
-				withLatestFrom(isFocused$),
-				filter(([, focused]) => focused),
+				withLatestFrom(isActive$),
+				filter(([, active]) => active),
 				map(([event]) => event),
 				tap(() => markUserActivity())
 			),
-		[wedgeBarcode$, attributed.scanEvents$, camera.events$, device.events$, isFocused$]
+		[wedgeBarcode$, attributed.scanEvents$, camera.events$, device.events$, isActive$]
 	);
 
 	/**

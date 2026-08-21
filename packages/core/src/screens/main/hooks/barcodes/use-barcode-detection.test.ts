@@ -14,7 +14,6 @@ const prefix$ = new BehaviorSubject('');
 const suffix$ = new BehaviorSubject('');
 const avgThreshold$ = new BehaviorSubject(24);
 
-const focusEffectCleanups: (() => void)[] = [];
 const mockToastShow = jest.fn();
 const mockMarkUserActivity = jest.fn();
 const attributedEvents$ = new Subject<ScanEvent>();
@@ -36,14 +35,6 @@ jest.mock('observable-hooks', () => {
 		useLayoutObservable: jest.fn(actual.useLayoutObservable),
 	};
 });
-jest.mock('expo-router', () => ({
-	useFocusEffect: (callback: () => void | (() => void)) => {
-		const cleanup = callback();
-		if (cleanup) {
-			focusEffectCleanups.push(cleanup);
-		}
-	},
-}));
 jest.mock('expo-router/react-navigation', () => ({
 	useIsFocused: () => mockIsFocused,
 }));
@@ -125,9 +116,6 @@ describe('useBarcodeDetection', () => {
 
 	afterEach(() => {
 		jest.runOnlyPendingTimers();
-		for (const cleanup of focusEffectCleanups.splice(0)) {
-			cleanup();
-		}
 		jest.useRealTimers();
 	});
 
@@ -241,7 +229,7 @@ describe('useBarcodeDetection', () => {
 	it('uses the latest minimum length when scanner settings change during scan timeout', () => {
 		const detected: string[] = [];
 		const callback = jest.fn();
-		const { result } = renderHook(() => useBarcodeDetection(callback));
+		const { result } = renderHook(() => useBarcodeDetection({ callback }));
 		const subscription = result.current.barcode$.subscribe((barcode) =>
 			detected.push(String(barcode))
 		);
@@ -407,6 +395,73 @@ describe('useBarcodeDetection', () => {
 		eventSubscription.unsubscribe();
 	});
 
+	it('handles device and document scans when explicitly active despite leaf blur', () => {
+		mockIsFocused = false;
+		const barcodes: string[] = [];
+		const events: ScanEvent[] = [];
+		const { result } = renderHook(() => useBarcodeDetection({ isActive: true }));
+		const barcodeSubscription = result.current.barcode$.subscribe((code) => barcodes.push(code));
+		const eventSubscription = result.current.scanEvents$.subscribe((event) => events.push(event));
+		const deviceEvent: ScanEvent = {
+			code: '9310988001234',
+			source: { kind: 'serial' },
+			timestamp: 123,
+		};
+
+		act(() => {
+			deviceEvents$.next(deviceEvent);
+			dispatchBarcode('12345678');
+			jest.advanceTimersByTime(151);
+		});
+
+		expect(barcodes).toEqual(['9310988001234', '12345678']);
+		expect(events.map((event) => event.code)).toEqual(['9310988001234', '12345678']);
+		barcodeSubscription.unsubscribe();
+		eventSubscription.unsubscribe();
+	});
+
+	it('drops device and document scans when explicitly inactive despite leaf focus', () => {
+		const barcodes: string[] = [];
+		const events: ScanEvent[] = [];
+		const { result } = renderHook(() => useBarcodeDetection({ isActive: false }));
+		const barcodeSubscription = result.current.barcode$.subscribe((code) => barcodes.push(code));
+		const eventSubscription = result.current.scanEvents$.subscribe((event) => events.push(event));
+
+		act(() => {
+			deviceEvents$.next({
+				code: '9310988001234',
+				source: { kind: 'serial' },
+				timestamp: 123,
+			});
+			dispatchBarcode('12345678');
+			jest.advanceTimersByTime(151);
+		});
+
+		expect(barcodes).toEqual([]);
+		expect(events).toEqual([]);
+		barcodeSubscription.unsubscribe();
+		eventSubscription.unsubscribe();
+	});
+
+	it('drops a partial document burst when scan scope deactivates', () => {
+		const detected: string[] = [];
+		const { result, rerender } = renderHook(() => useBarcodeDetection());
+		const subscription = result.current.barcode$.subscribe((barcode) => detected.push(barcode));
+
+		act(() => dispatchBarcode('1234'));
+		mockIsFocused = false;
+		rerender();
+		mockIsFocused = true;
+		rerender();
+		act(() => {
+			dispatchBarcode('5678');
+			jest.advanceTimersByTime(151);
+		});
+
+		expect(detected).toEqual([]);
+		subscription.unsubscribe();
+	});
+
 	it('propagates focus to the gate in the layout phase, not a passive effect', () => {
 		// The race this pins (a device event delivered after a blur commit but
 		// before passive effects flush) cannot be opened black-box on React 19:
@@ -428,5 +483,12 @@ describe('useBarcodeDetection', () => {
 		rerender();
 
 		expect(mockUseAttributedWedge).toHaveBeenLastCalledWith(false);
+	});
+
+	it('passes the active override to attributed capture', () => {
+		mockIsFocused = false;
+		renderHook(() => useBarcodeDetection({ isActive: true }));
+
+		expect(mockUseAttributedWedge).toHaveBeenLastCalledWith(true);
 	});
 });
