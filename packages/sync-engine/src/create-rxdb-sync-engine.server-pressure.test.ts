@@ -507,6 +507,23 @@ describe('change-signal server-pressure adaptation', () => {
 		await context.engine.dispose();
 	});
 
+	it('honours the body mirror when Retry-After is present but invalid', async () => {
+		const context = await harness();
+		context.diagnostics.length = 0;
+
+		await context.respond(
+			new Response(JSON.stringify({ code: 'x', data: { retry_after_seconds: 60 } }), {
+				status: 503,
+				headers: { 'content-type': 'application/json', 'retry-after': '0.5' },
+			})
+		);
+
+		expect(armedDelay(context.engine, context.now())).toBeGreaterThanOrEqual(60_000);
+		const [backoff] = cadenceEvents(context.diagnostics, 'cadence.backoff');
+		expect(backoff!.fields).toMatchObject({ retryAfterMs: 60_000 });
+		await context.engine.dispose();
+	});
+
 	it('prefers a readable, valid Retry-After header over a divergent body value', async () => {
 		const context = await harness();
 		context.diagnostics.length = 0;

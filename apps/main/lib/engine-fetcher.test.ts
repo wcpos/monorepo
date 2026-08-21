@@ -186,8 +186,10 @@ describe('createEngineFetcher', () => {
 		const headers = new Headers(
 			(fetch.mock.calls[0] as [string, RequestInit])[1].headers as HeadersInit
 		);
-		expect(headers.get('User-Agent')).toBe(AppInfo.userAgent);
-		expect(AppInfo.userAgent).toMatch(/^WCPOS\//);
+		const expectedUserAgent = AppInfo.userAgentHeader['User-Agent'];
+		expect(expectedUserAgent).toBeDefined();
+		expect(headers.get('User-Agent')).toBe(expectedUserAgent);
+		expect(expectedUserAgent).toMatch(/^WCPOS\//);
 	});
 
 	it('marks every request with the wcpos query var, pushes included', async () => {
