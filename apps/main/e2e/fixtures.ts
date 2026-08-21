@@ -89,10 +89,19 @@ export function storeRequestOptions(authorization: StoreAuthorization | null): {
 			'X-WCPOS': '1',
 			...(header && authorization ? { Authorization: authorization.value } : {}),
 		},
-		// The param takes the bare JWT (the app's own param-mode spelling); a
-		// `both` value carries the header's `Bearer ` prefix, so strip it here.
+		// A `both` value carries the header's `Bearer ` prefix, so the param strips
+		// it to the bare JWT (>=1.10's param spelling — dev stores all qualify).
+		// Captured `query` values stay VERBATIM: they mirror the app, which keeps
+		// the `Bearer ` prefix for pre-1.10 param-mode stores (see auth-param.ts).
 		params:
-			param && authorization ? { authorization: authorization.value.replace(/^Bearer /, '') } : {},
+			param && authorization
+				? {
+						authorization:
+							authorization.transport === 'both'
+								? authorization.value.replace(/^Bearer /, '')
+								: authorization.value,
+					}
+				: {},
 	};
 }
 

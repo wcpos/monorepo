@@ -86,6 +86,12 @@ test.describe('search-probe pure logic', () => {
 			headers: { 'X-WCPOS': '1' },
 			params: { authorization: 'jwt.like.token' },
 		});
+		// Captured query values mirror the app VERBATIM — pre-1.10 param-mode
+		// stores require the `Bearer ` prefix in the param, so never strip it here.
+		expect(storeRequestOptions({ transport: 'query', value: 'Bearer jwt.like.token' })).toEqual({
+			headers: { 'X-WCPOS': '1' },
+			params: { authorization: 'Bearer jwt.like.token' },
+		});
 		expect(storeRequestOptions(null)).toEqual({ headers: { 'X-WCPOS': '1' }, params: {} });
 	});
 
