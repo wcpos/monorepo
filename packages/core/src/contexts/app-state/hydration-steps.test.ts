@@ -5,6 +5,12 @@ jest.mock('expo-crypto', () => ({
 }));
 
 const createStoreDBMock = jest.fn();
+const mockAppLogger = {
+	debug: jest.fn(),
+	info: jest.fn(),
+	warn: jest.fn(),
+	error: jest.fn(),
+};
 
 jest.mock('@wcpos/database', () => ({
 	createStoreDB: (...args: unknown[]) => createStoreDBMock(...args),
@@ -14,12 +20,7 @@ jest.mock('@wcpos/database', () => ({
 
 jest.mock('@wcpos/utils/logger', () => ({
 	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
-	getLogger: () => ({
-		debug: jest.fn(),
-		info: jest.fn(),
-		warn: jest.fn(),
-		error: jest.fn(),
-	}),
+	getLogger: () => mockAppLogger,
 }));
 
 jest.mock('@wcpos/utils/platform', () => ({
@@ -300,6 +301,7 @@ describe('TEST_AUTHORIZATION', () => {
 
 	beforeEach(() => {
 		fetchMock.mockReset();
+		mockAppLogger.warn.mockClear();
 		global.fetch = fetchMock as unknown as typeof fetch;
 	});
 
@@ -316,9 +318,12 @@ describe('TEST_AUTHORIZATION', () => {
 		});
 		const siteDoc = {
 			use_jwt_as_param: true,
-			incrementalPatch: jest.fn(async (patch: { use_jwt_as_param: boolean }) => {
-				Object.assign(siteDoc, patch);
-			}),
+			use_rest_route_param: true,
+			incrementalPatch: jest.fn(
+				async (patch: { use_jwt_as_param: boolean; use_rest_route_param: boolean }) => {
+					Object.assign(siteDoc, patch);
+				}
+			),
 			getLatest: jest.fn(),
 		};
 		siteDoc.getLatest.mockReturnValue(siteDoc);
@@ -336,8 +341,12 @@ describe('TEST_AUTHORIZATION', () => {
 			},
 		});
 
-		expect(siteDoc.incrementalPatch).toHaveBeenCalledWith({ use_jwt_as_param: false });
+		expect(siteDoc.incrementalPatch).toHaveBeenCalledWith({
+			use_jwt_as_param: false,
+			use_rest_route_param: false,
+		});
 		expect(siteDoc.use_jwt_as_param).toBe(false);
+		expect(siteDoc.use_rest_route_param).toBe(false);
 	});
 });
 
@@ -346,6 +355,7 @@ describe('testAuthorizationMethod', () => {
 
 	beforeEach(() => {
 		fetchMock.mockReset();
+		mockAppLogger.warn.mockClear();
 		global.fetch = fetchMock as unknown as typeof fetch;
 	});
 
@@ -359,6 +369,7 @@ describe('testAuthorizationMethod', () => {
 			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
 		).resolves.toEqual({
 			useJwtAsParam: false,
+			useRestRouteParam: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -384,6 +395,7 @@ describe('testAuthorizationMethod', () => {
 			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
 		).resolves.toEqual({
 			useJwtAsParam: true,
+			useRestRouteParam: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(3);
@@ -487,7 +499,7 @@ describe('testAuthorizationMethod', () => {
 
 		await expect(
 			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({ useJwtAsParam: false });
+		).resolves.toEqual({ useJwtAsParam: false, useRestRouteParam: false });
 
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 		const echoUrl = String(fetchMock.mock.calls[0][0]);
@@ -511,6 +523,104 @@ describe('testAuthorizationMethod', () => {
 		});
 	});
 
+	it('retries a 404 path echo in query form and derives auth from that response', async () => {
+		const body = echoBody();
+		(body.headers as Record<string, { received: boolean; length: number }>).authorization = {
+			received: false,
+			length: 0,
+		};
+		fetchMock
+			.mockResolvedValueOnce({ ok: false, status: 404, json: jest.fn() })
+			.mockResolvedValueOnce({ ok: true, status: 200, json: jest.fn(async () => body) });
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+		).resolves.toEqual({ useJwtAsParam: true, useRestRouteParam: true });
+
+		expect(String(fetchMock.mock.calls[0][0])).toContain('/wp-json/wcpos/v2/echo');
+		expect(String(fetchMock.mock.calls[1][0])).toContain('rest_route=%2Fwcpos%2Fv2%2Fecho');
+	});
+
+	it('retries a network-failed path echo in query form', async () => {
+		fetchMock
+			.mockRejectedValueOnce(new Error('blocked'))
+			.mockResolvedValueOnce({ ok: true, status: 200, json: jest.fn(async () => echoBody()) });
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+		).resolves.toEqual({ useJwtAsParam: false, useRestRouteParam: true });
+	});
+
+	it('probes only query form when the stored base is already query form', async () => {
+		fetchMock.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: jest.fn(async () => echoBody()),
+		});
+
+		await expect(
+			testAuthorizationMethod('https://example.com/?rest_route=/wcpos/v2/', 'token')
+		).resolves.toEqual({ useJwtAsParam: false, useRestRouteParam: true });
+
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(String(fetchMock.mock.calls[0][0])).toContain('rest_route=%2Fwcpos%2Fv2%2Fecho');
+		expect(String(fetchMock.mock.calls[0][0])).not.toContain('/wp-json/');
+	});
+
+	it('returns null and warns when both echo transports are blocked', async () => {
+		fetchMock
+			.mockRejectedValueOnce(new Error('path blocked'))
+			.mockRejectedValueOnce(new Error('query blocked'));
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+		).resolves.toBeNull();
+
+		expect(mockAppLogger.warn).toHaveBeenCalledWith(expect.any(String), {
+			context: {
+				wcposApiUrl: 'https://example.com/wp-json/wcpos/v2/',
+				verdict: 'both-transports-blocked',
+			},
+		});
+		expect(mockAppLogger.warn).toHaveBeenCalledTimes(1);
+	});
+
+	it('treats a path echo 401 as an auth-level answer and skips query echo', async () => {
+		fetchMock
+			.mockResolvedValueOnce({ ok: false, status: 401, json: jest.fn() })
+			.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: jest.fn(async () => ({ status: 'success' })),
+			});
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+		).resolves.toEqual({ useJwtAsParam: false, useRestRouteParam: false });
+
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+		expect(fetchMock.mock.calls[1][0]).toBe('https://example.com/wp-json/wcpos/v2/auth/test');
+	});
+
+	it('retries the legacy auth test in query form after path transport 404s', async () => {
+		fetchMock
+			.mockResolvedValueOnce({ ok: false, status: 404, json: jest.fn() })
+			.mockResolvedValueOnce({ ok: false, status: 404, json: jest.fn() })
+			.mockResolvedValueOnce({ ok: false, status: 404, json: jest.fn() })
+			.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: jest.fn(async () => ({ status: 'success' })),
+			});
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+		).resolves.toEqual({ useJwtAsParam: false, useRestRouteParam: true });
+
+		expect(String(fetchMock.mock.calls[2][0])).toContain('/wp-json/wcpos/v2/auth/test');
+		expect(String(fetchMock.mock.calls[3][0])).toContain('rest_route=/wcpos/v2/auth/test');
+	});
+
 	it('flips to param mode when the echo shows the Authorization header stripped', async () => {
 		const body = echoBody();
 		(body.headers as Record<string, { received: boolean; length: number }>).authorization = {
@@ -521,7 +631,7 @@ describe('testAuthorizationMethod', () => {
 
 		await expect(
 			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({ useJwtAsParam: true });
+		).resolves.toEqual({ useJwtAsParam: true, useRestRouteParam: false });
 
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
@@ -550,14 +660,15 @@ describe('testAuthorizationMethod', () => {
 				ok: true,
 				json: jest.fn(async () => ({ v: 1, headers: {}, params: {} })),
 			})
+			.mockResolvedValueOnce({ ok: false, status: 404, json: jest.fn() })
 			.mockResolvedValueOnce({ ok: true, json: jest.fn(async () => ({ status: 'success' })) });
 
 		await expect(
 			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({ useJwtAsParam: false });
+		).resolves.toEqual({ useJwtAsParam: false, useRestRouteParam: true });
 
-		expect(fetchMock).toHaveBeenCalledTimes(2);
-		expect(fetchMock.mock.calls[1][0]).toBe('https://example.com/wp-json/wcpos/v2/auth/test');
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(String(fetchMock.mock.calls[2][0])).toContain('rest_route=/wcpos/v2/auth/test');
 	});
 
 	it('falls back to the legacy auth test when the echo body is not the probe shape', async () => {
@@ -565,13 +676,14 @@ describe('testAuthorizationMethod', () => {
 		// must treat that as echo-unavailable, not as an empty header map.
 		fetchMock
 			.mockResolvedValueOnce({ ok: true, json: jest.fn(async () => ({ status: 'success' })) })
+			.mockResolvedValueOnce({ ok: false, status: 404, json: jest.fn() })
 			.mockResolvedValueOnce({ ok: true, json: jest.fn(async () => ({ status: 'success' })) });
 
 		await expect(
 			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({ useJwtAsParam: false });
+		).resolves.toEqual({ useJwtAsParam: false, useRestRouteParam: true });
 
-		expect(fetchMock).toHaveBeenCalledTimes(2);
-		expect(fetchMock.mock.calls[1][0]).toBe('https://example.com/wp-json/wcpos/v2/auth/test');
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(String(fetchMock.mock.calls[2][0])).toContain('rest_route=/wcpos/v2/auth/test');
 	});
 });
