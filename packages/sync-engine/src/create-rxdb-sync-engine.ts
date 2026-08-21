@@ -77,6 +77,7 @@ import {
 } from './change-signal/change-signal-lane';
 import {
 	createServerPressureMonitor,
+	parseRetryAfterMs,
 	parseServerLoad1m,
 	parseServerPressure,
 	type ServerPressure,
@@ -775,6 +776,32 @@ export function createRxdbSyncEngine(
 		} catch {
 			// A host fetch stub may hand back a header-less object; never let
 			// telemetry break a real response.
+		}
+		// B10 (wcpos-infra#72): hostile hosts strip Access-Control-Expose-Headers,
+		// blinding web clients to Retry-After even when the wire carries it. The
+		// plugin mirrors the delay into the error body as data.retry_after_seconds
+		// (free#1649) — read it only when the header is absent or unparseable, so
+		// a readable, valid header always wins on disagreement.
+		if (response.status >= 400 && parseRetryAfterMs(retryAfter, nowMs()) === null) {
+			let body: unknown;
+			try {
+				// clone() first: on an unhydrated response (push lane) it leaves the
+				// real body untouched for downstream error handling. On a hydrated
+				// response the original body is already consumed and clone() throws —
+				// there the proxy's memoized json() is the safe, side-effect-free read.
+				body = await response.clone().json();
+			} catch {
+				try {
+					body = await response.json();
+				} catch {
+					body = undefined; // Non-JSON error bodies (edge HTML) never affect telemetry.
+				}
+			}
+			const seconds = (body as { data?: { retry_after_seconds?: unknown } } | null | undefined)
+				?.data?.retry_after_seconds;
+			if (typeof seconds === 'number' && Number.isSafeInteger(seconds) && seconds >= 0) {
+				retryAfter = String(seconds);
+			}
 		}
 		observe(response.status, retryAfter, pressure, serverLoad1m);
 		return response;

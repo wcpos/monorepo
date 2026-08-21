@@ -52,6 +52,23 @@ describe('useHttpClient network audit logs', () => {
 		(requestStateManager.isTokenRefreshing as jest.Mock).mockReturnValue(false);
 	});
 
+	it('stamps the WCPOS marker and explicit product User-Agent on requests (B10)', async () => {
+		const { AppInfo } =
+			jest.requireActual<typeof import('@wcpos/utils/app-info')>('@wcpos/utils/app-info');
+		(http.request as jest.Mock).mockResolvedValue({ status: 200, data: {} });
+		const { result } = renderHook(() => useHttpClient());
+
+		await result.current.request({
+			method: 'GET',
+			url: 'https://example.com/wp-json/wcpos/v2/products',
+		});
+
+		const config = (http.request as jest.Mock).mock.calls[0][0];
+		expect(config.headers['X-WCPOS']).toBe(1);
+		expect(config.headers['User-Agent']).toBe(AppInfo.userAgent);
+		expect(AppInfo.userAgent).toMatch(/^WCPOS\//);
+	});
+
 	it('persists mutating responses with a sanitized searchable endpoint', async () => {
 		(http.request as jest.Mock).mockResolvedValue({ status: 201, data: {} });
 		const { result } = renderHook(() => useHttpClient());

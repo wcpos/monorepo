@@ -173,6 +173,23 @@ describe('createEngineFetcher', () => {
 		).toBeNull();
 	});
 
+	it('sends the explicit product User-Agent on every request (B10)', async () => {
+		// A blank or library UA on a POST earns a permanent AIOS IP ban; browsers
+		// drop the forbidden header and keep their own, which is fine on web.
+		const { AppInfo } =
+			jest.requireActual<typeof import('@wcpos/utils/app-info')>('@wcpos/utils/app-info');
+		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
+		const { fetcher } = createFetcherHarness({ fetch });
+
+		await fetcher('https://store.example.test/wp-json/wcpos/v2/products?page=1');
+
+		const headers = new Headers(
+			(fetch.mock.calls[0] as [string, RequestInit])[1].headers as HeadersInit
+		);
+		expect(headers.get('User-Agent')).toBe(AppInfo.userAgent);
+		expect(AppInfo.userAgent).toMatch(/^WCPOS\//);
+	});
+
 	it('marks every request with the wcpos query var, pushes included', async () => {
 		// The header marker dies on header-stripping proxies; the query-var twin
 		// must ride pulls AND pushes or the marked surface answers rest_no_route.
