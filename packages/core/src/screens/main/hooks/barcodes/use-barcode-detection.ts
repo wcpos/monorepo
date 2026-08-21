@@ -3,7 +3,11 @@ import { NativeSyntheticEvent, Platform, TextInputKeyPressEventData } from 'reac
 
 import { useFocusEffect } from 'expo-router';
 import { useIsFocused } from 'expo-router/react-navigation';
-import { useObservable, useObservableCallback, useObservableEagerState } from 'observable-hooks';
+import {
+	useLayoutObservable,
+	useObservableCallback,
+	useObservableEagerState,
+} from 'observable-hooks';
 import { merge } from 'rxjs';
 import { filter, map, tap, withLatestFrom } from 'rxjs/operators';
 
@@ -77,7 +81,10 @@ export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 
 	// Focus as a stream for event-time gating below (a ref read inside the
 	// memoized pipelines would trip the react-compiler render-purity lint).
-	const isFocused$ = useObservable(
+	// Layout variant: the gate must update in the same commit as the blur — a
+	// device event arriving before passive effects flush would otherwise still
+	// see the previous focus value and slip through.
+	const isFocused$ = useLayoutObservable(
 		(inputs$) => inputs$.pipe(map(([focused]) => focused)),
 		[isFocused]
 	);

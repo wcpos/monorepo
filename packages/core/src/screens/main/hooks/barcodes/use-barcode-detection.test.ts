@@ -27,6 +27,15 @@ const mockUseAttributedWedge = jest.fn((_enabled?: boolean) => ({
 }));
 let mockIsFocused = true;
 
+// Pass-through mock: the focus gate must use the layout-effect variant so a
+// blur reaches the gate in the same commit (see the layout-phase test below).
+jest.mock('observable-hooks', () => {
+	const actual = jest.requireActual('observable-hooks');
+	return {
+		...actual,
+		useLayoutObservable: jest.fn(actual.useLayoutObservable),
+	};
+});
 jest.mock('expo-router', () => ({
 	useFocusEffect: (callback: () => void | (() => void)) => {
 		const cleanup = callback();
@@ -396,6 +405,19 @@ describe('useBarcodeDetection', () => {
 		expect(mockMarkUserActivity).toHaveBeenCalledTimes(1);
 		barcodeSubscription.unsubscribe();
 		eventSubscription.unsubscribe();
+	});
+
+	it('propagates focus to the gate in the layout phase, not a passive effect', () => {
+		// The race this pins (a device event delivered after a blur commit but
+		// before passive effects flush) cannot be opened black-box on React 19:
+		// a rerender nested in act() defers the commit itself, and flushSync
+		// drains the new passive effects before returning, inside and outside
+		// act. So the pin is the mechanism: the focus stream must be built on
+		// the layout-effect observable variant.
+		const { useLayoutObservable } = jest.requireMock('observable-hooks');
+		(useLayoutObservable as jest.Mock).mockClear();
+		renderHook(() => useBarcodeDetection());
+		expect(useLayoutObservable).toHaveBeenCalled();
 	});
 
 	it('disables attributed capture when the screen loses focus', () => {
