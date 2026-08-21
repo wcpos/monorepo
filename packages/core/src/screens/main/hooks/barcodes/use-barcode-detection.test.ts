@@ -367,6 +367,37 @@ describe('useBarcodeDetection', () => {
 		subscription.unsubscribe();
 	});
 
+	it('drops device scans while blurred and resumes them when focused', () => {
+		const barcodes: string[] = [];
+		const events: ScanEvent[] = [];
+		const { result, rerender } = renderHook(() => useBarcodeDetection());
+		const barcodeSubscription = result.current.barcode$.subscribe((code) => barcodes.push(code));
+		const eventSubscription = result.current.scanEvents$.subscribe((event) => events.push(event));
+		const deviceEvent: ScanEvent = {
+			code: '9310988001234',
+			source: { kind: 'serial' },
+			timestamp: 123,
+		};
+
+		mockIsFocused = false;
+		rerender();
+		act(() => deviceEvents$.next(deviceEvent));
+
+		expect(barcodes).toEqual([]);
+		expect(events).toEqual([]);
+		expect(mockMarkUserActivity).not.toHaveBeenCalled();
+
+		mockIsFocused = true;
+		rerender();
+		act(() => deviceEvents$.next(deviceEvent));
+
+		expect(barcodes).toEqual(['9310988001234']);
+		expect(events).toEqual([deviceEvent]);
+		expect(mockMarkUserActivity).toHaveBeenCalledTimes(1);
+		barcodeSubscription.unsubscribe();
+		eventSubscription.unsubscribe();
+	});
+
 	it('disables attributed capture when the screen loses focus', () => {
 		const { rerender } = renderHook(() => useBarcodeDetection());
 		expect(mockUseAttributedWedge).toHaveBeenLastCalledWith(true);

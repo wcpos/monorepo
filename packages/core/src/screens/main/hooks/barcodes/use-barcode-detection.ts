@@ -3,7 +3,7 @@ import { NativeSyntheticEvent, Platform, TextInputKeyPressEventData } from 'reac
 
 import { useFocusEffect } from 'expo-router';
 import { useIsFocused } from 'expo-router/react-navigation';
-import { useObservableCallback, useObservableEagerState } from 'observable-hooks';
+import { useObservable, useObservableCallback, useObservableEagerState } from 'observable-hooks';
 import { merge } from 'rxjs';
 import { filter, map, tap, withLatestFrom } from 'rxjs/operators';
 
@@ -73,6 +73,13 @@ export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 				map(([event]) => event.barcode)
 			),
 		([barcode, eventCallback, terminated]) => ({ barcode, callback: eventCallback, terminated })
+	);
+
+	// Focus as a stream for event-time gating below (a ref read inside the
+	// memoized pipelines would trip the react-compiler render-purity lint).
+	const isFocused$ = useObservable(
+		(inputs$) => inputs$.pipe(map(([focused]) => focused)),
+		[isFocused]
 	);
 
 	// Live values behind stable refs so the long-lived detector always reads the
@@ -169,8 +176,14 @@ export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 				attributed.scanEvents$.pipe(map((event) => event.code)),
 				camera.events$.pipe(map((event) => event.code)),
 				device.events$.pipe(map((event) => event.code))
+			).pipe(
+				// Blurred drawer consumers stay mounted/subscribed while camera/device
+				// buses are shared; drop events here (#1409).
+				withLatestFrom(isFocused$),
+				filter(([, focused]) => focused),
+				map(([code]) => code)
 			),
-		[wedgeBarcode$, attributed.scanEvents$, camera.events$, device.events$]
+		[wedgeBarcode$, attributed.scanEvents$, camera.events$, device.events$, isFocused$]
 	);
 	const scanEvents$ = React.useMemo(
 		() =>
@@ -179,8 +192,13 @@ export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 				attributed.scanEvents$,
 				camera.events$,
 				device.events$
-			).pipe(tap(() => markUserActivity())),
-		[wedgeBarcode$, attributed.scanEvents$, camera.events$, device.events$]
+			).pipe(
+				withLatestFrom(isFocused$),
+				filter(([, focused]) => focused),
+				map(([event]) => event),
+				tap(() => markUserActivity())
+			),
+		[wedgeBarcode$, attributed.scanEvents$, camera.events$, device.events$, isFocused$]
 	);
 
 	/**
