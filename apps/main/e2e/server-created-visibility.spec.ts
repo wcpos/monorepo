@@ -307,11 +307,6 @@ test('a product created on the server reaches the products grid without a search
 	}
 });
 
-/** Anchor a Playwright text filter to the WHOLE cell value, not a substring of it. */
-function exactCellText(value: string): RegExp {
-	return new RegExp(`^\\s*${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`);
-}
-
 /**
  * Directional coverage for ORDERS (#1321). The issue's audit argued orders are
  * structurally immune to the #1302 suppression class because the maintenance seed,
@@ -325,11 +320,10 @@ function exactCellText(value: string): RegExp {
  * (`initialFilters` in packages/core/src/screens/main/orders/index.tsx), and a web
  * order carries neither scope — so the spec first removes both filter pills, which
  * is exactly what a cashier does to see web orders. The arrival assertion then
- * targets the order-number CELL (testID `order-number`) by its exact rendered
- * value: order rows key their testID on a client-side uuid that does not exist
- * until the record materializes, so the number — which the create response hands
- * us — is the only value-bearing anchor knowable in advance. The number is record
- * DATA, not localized UI copy, which is what the selector policy guards against.
+ * targets the order-number cell's value-bearing testID (`order-number-<number>`):
+ * order rows key their own testID on a client-side uuid that does not exist until
+ * the record materializes, so the number — which the create response hands us —
+ * is the only anchor knowable in advance.
  */
 test('an order created on the server reaches the orders grid without a search', async ({
 	posPage: page,
@@ -455,11 +449,8 @@ test('an order created on the server reaches the orders grid without a search', 
 	test.setTimeout(testInfo.timeout + ARRIVAL_GRANT_MS);
 
 	try {
-		const numberCell = screen.getByTestId('order-number').filter({
-			hasText: exactCellText(created.number),
-		});
 		await expect(
-			numberCell.first(),
+			screen.getByTestId(`order-number-${created.number}`).first(),
 			'an order created on the server must reach the orders grid without a search or manual sync'
 		).toBeVisible({ timeout: ARRIVAL_TIMEOUT_MS });
 	} finally {
@@ -487,10 +478,10 @@ test('an order created on the server reaches the orders grid without a search', 
  * reach the wire — `orderby=last_name` via the plugin's #1488 proxy seam — so the
  * steering click is also what proves the sorted browse demand reaches the server.
  *
- * The arrival anchor filters testID-addressed rows by the probe's unique token —
- * customer rows, like orders, key their testID on a client-side uuid that cannot be
- * known in advance, and the token (rendered in the First Name and Email columns) is
- * record DATA, not the localized UI copy the selector policy guards against.
+ * The arrival anchor is the email cell's value-bearing testID
+ * (`customer-email-<email>`) — customer rows, like orders, key their own testID on
+ * a client-side uuid that cannot be known in advance, and the probe's email is the
+ * value the spec controls.
  */
 test('a customer created on the server reaches the customers grid without a search', async ({
 	posPage: page,
@@ -581,6 +572,10 @@ test('a customer created on the server reaches the customers grid without a sear
 	// token sorts first under both the server's collation and the renderer's
 	// code-unit comparator — see ARRIVAL_PROBE_LEAD.
 	const token = mintSearchProbeToken(testInfo.workerIndex);
+	// The email doubles as the arrival anchor (the email cell exposes it as a
+	// value-bearing testID), so the spec states it explicitly rather than relying
+	// on the helper's default happening to match.
+	const probeEmail = `${token}@example.invalid`;
 	const created = await createSearchProbe({
 		request,
 		storeUrl,
@@ -589,6 +584,7 @@ test('a customer created on the server reaches the customers grid without a sear
 		workerIndex: testInfo.workerIndex,
 		token,
 		customerData: {
+			email: probeEmail,
 			// Timestamp BEFORE the token: some stores accept the customer create but
 			// 403 the delete (wc/v3 customer deletion needs user-deletion caps the
 			// writer may not hold), so orphaned probes accumulate. All probes share
@@ -612,9 +608,8 @@ test('a customer created on the server reaches the customers grid without a sear
 	test.setTimeout(testInfo.timeout + ARRIVAL_GRANT_MS);
 
 	try {
-		const probeRow = screen.getByTestId(/^data-table-row-/).filter({ hasText: token });
 		await expect(
-			probeRow.first(),
+			screen.getByTestId(`customer-email-${probeEmail}`).first(),
 			'a customer created on the server must reach the customers grid without a search or manual sync'
 		).toBeVisible({ timeout: ARRIVAL_TIMEOUT_MS });
 	} finally {

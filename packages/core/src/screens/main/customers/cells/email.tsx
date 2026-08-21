@@ -12,5 +12,13 @@ export function CustomerEmail({
 }: CellContext<{ record: EngineRecord<'customers'> }, 'email'>) {
 	const email = useRecordField(row.original.record, ({ payload }) => payload.email);
 
-	return <Text numberOfLines={1}>{email}</Text>;
+	// Value-bearing testID: customer rows key their row testID on a client uuid
+	// that server-side E2E probes cannot know in advance, so the email — which the
+	// probe chooses — is the addressable anchor (E2E selector policy: testIDs, not
+	// text narrowing).
+	return (
+		<Text testID={email ? `customer-email-${email}` : undefined} numberOfLines={1}>
+			{email}
+		</Text>
+	);
 }
