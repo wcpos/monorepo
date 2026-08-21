@@ -2,7 +2,8 @@
  * @jest-environment jsdom
  */
 import { act, renderHook } from '@testing-library/react';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, combineLatest } from 'rxjs';
+import { map } from 'rxjs/operators';
 
 import { useCartLines } from './use-cart-lines';
 
@@ -47,13 +48,6 @@ const feeLines$ = new BehaviorSubject<unknown[]>([]);
 const shippingLines$ = new BehaviorSubject<unknown[]>([]);
 const couponLines$ = new BehaviorSubject<CouponLine[]>([]);
 
-/**
- * The engine adapter wraps every order in a fresh Proxy, and `getLatest()` calls
- * `wrapEngineDocument(collection, rxDocument.getLatest())` — so it hands back a NEW object on
- * EVERY call, even when nothing changed (packages/query/src/engine-adapter/document-proxy.ts).
- * The fake has to behave the same way, or the tests pass against reference comparisons that can
- * never hold in production.
- */
 let revision = buildRevision();
 
 function buildRevision(overrides: Record<string, unknown> = {}) {
@@ -71,30 +65,65 @@ function buildRevision(overrides: Record<string, unknown> = {}) {
 	};
 }
 
-/**
- * A brand-new object per call, exactly like the production proxy. `_readSeq` marks WHICH read a
- * handle came from, so a test can tell a freshly-read document from one captured earlier —
- * otherwise every handle looks alike and "wrote through the stale handle" is unobservable.
- */
 let readSeq = 0;
-const getLatest = () => ({ ...revision, _readSeq: ++readSeq });
+
+function currentPayload() {
+	return {
+		...revision,
+		line_items: lineItems$.value,
+		fee_lines: feeLines$.value,
+		shipping_lines: shippingLines$.value,
+		coupon_lines: couponLines$.value,
+	};
+}
+
+type TestOrderRecord = {
+	uuid: string;
+	payload: ReturnType<typeof currentPayload>;
+	_readSeq: number;
+	toMutableJSON: () => { uuid: string; payload: ReturnType<typeof currentPayload> };
+};
+
+let latestRecord: TestOrderRecord | undefined;
+let latestState: unknown[] | undefined;
+
+function getLatest(): TestOrderRecord {
+	const state = [
+		revision,
+		lineItems$.value,
+		feeLines$.value,
+		shippingLines$.value,
+		couponLines$.value,
+	];
+	if (latestRecord && latestState?.every((value, index) => value === state[index])) {
+		return latestRecord;
+	}
+	const payload = currentPayload();
+	latestState = state;
+	latestRecord = {
+		uuid: String(payload.uuid),
+		payload,
+		_readSeq: ++readSeq,
+		toMutableJSON: () => ({ uuid: payload.uuid, payload }),
+	};
+	return latestRecord;
+}
 
 /**
- * A fresh context value per call, like the open-orders resource: every emission of the
- * `status: 'pos-open'` query re-runs `wrapEngineDocument`, so `currentOrder` is a NEW object
- * whenever ANY open order is written — not only when the cashier switches order tabs. `uuid` is
- * what actually identifies the order, and the proxy exposes it directly.
+ * A raw record-shaped current-order fixture. Its `$` stream follows the four cart arrays and
+ * `getLatest()` retains identity until one of those resident values changes.
  */
-const buildCurrentOrder = (uuid = 'order-uuid-1') => ({
+const buildCurrentOrderRecord = (uuid = 'order-uuid-1') => ({
 	uuid,
-	line_items$: lineItems$,
-	fee_lines$: feeLines$,
-	shipping_lines$: shippingLines$,
-	coupon_lines$: couponLines$,
+	payload: currentPayload(),
+	$: combineLatest([lineItems$, feeLines$, shippingLines$, couponLines$]).pipe(
+		map(() => ({ toJSON: () => ({ uuid, payload: currentPayload() }) }))
+	),
+	collection: { name: 'orders' },
 	getLatest,
 });
 
-let currentOrder = buildCurrentOrder();
+let currentOrderRecord = buildCurrentOrderRecord();
 
 function editCart(lineItems: LineItem[]) {
 	lineItems$.next(lineItems);
@@ -108,7 +137,7 @@ function applyCoupon(couponLines: CouponLine[]) {
 
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({
-		currentOrder,
+		currentOrderRecord,
 	}),
 }));
 
@@ -200,7 +229,7 @@ describe('useCartLines reference demand (#952)', () => {
 		feeLines$.next([]);
 		shippingLines$.next([]);
 		revision = buildRevision();
-		currentOrder = buildCurrentOrder();
+		currentOrderRecord = buildCurrentOrderRecord();
 	});
 
 	it('declares no coupon reference demand for a cart without coupon lines', () => {
@@ -264,9 +293,7 @@ describe('useCartLines reference demand (#952)', () => {
 	});
 
 	it('writes the replayed totals through localPatch when the references are ready', async () => {
-		// Regression guard: the "has the order moved?" check used to compare `getLatest()` by
-		// reference. The engine adapter mints a new proxy per call, so that comparison was
-		// ALWAYS unequal and the replay bailed before every write — the totals never updated.
+		// Regression guard: the value guard must allow an unchanged resident through to the write.
 		applyCoupon([{ code: 'bonus' }]);
 		renderHook(() => useCartLines());
 
@@ -301,14 +328,17 @@ describe('useCartLines reference demand (#952)', () => {
 
 			// Local mutations stamp whole seconds. Replace only the totals input while preserving
 			// the captured timestamp and every other replay-identity field.
+			const changedLines =
+				field === 'fee_lines'
+					? [{ name: 'Handling', total: '3.00' }]
+					: [{ method_id: 'flat_rate', total: '4.00' }];
 			revision = {
 				...revision,
-				[field]:
-					field === 'fee_lines'
-						? [{ name: 'Handling', total: '3.00' }]
-						: [{ method_id: 'flat_rate', total: '4.00' }],
+				[field]: changedLines,
 			};
 			await act(async () => {
+				if (field === 'fee_lines') feeLines$.next(changedLines);
+				else shippingLines$.next(changedLines);
 				releaseRecalculate?.();
 			});
 
@@ -353,7 +383,7 @@ describe('useCartLines background coupon replay (#963)', () => {
 		priceNumDecimals = 2;
 		pricesIncludeTax = false;
 		revision = buildRevision();
-		currentOrder = buildCurrentOrder();
+		currentOrderRecord = buildCurrentOrderRecord();
 	});
 
 	it('replays the coupon once the references land after the foreground barrier expired', async () => {
@@ -379,28 +409,28 @@ describe('useCartLines background coupon replay (#963)', () => {
 			expect.objectContaining({
 				document: expect.objectContaining({
 					uuid: 'order-uuid-1',
-					line_items: revision.line_items,
+					payload: expect.objectContaining({ line_items: revision.line_items }),
 				}),
 				data: expect.objectContaining({ discount_total: '5.00', total: '5.00' }),
 			})
 		);
-		// The write goes through a handle read AFTER the wait settled, not the one captured when
-		// the continuation was armed — the continuation holds no document alive across its wait.
-		expect(localPatch.mock.calls[0][0].document._readSeq).toBeGreaterThan(seqWhenArmed);
+		// The raw record is identity-stable, so the fresh read resolves to the same resident handle.
+		expect(localPatch.mock.calls[0][0].document).toBe(currentOrderRecord.getLatest());
+		expect(localPatch.mock.calls[0][0].document._readSeq).toBe(seqWhenArmed);
 	});
 
 	it('arms exactly one continuation for the same order revision and demand generation', async () => {
 		const background = deferredBackgroundWait();
 		applyCoupon([{ code: 'bonus' }]);
-		renderHook(() => useCartLines());
+		const { rerender } = renderHook(() => useCartLines());
 
 		await act(async () => {
 			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
 		});
 		await act(async () => {
-			// Same revision (price-decimals style re-run, not a new order): must not stack a
-			// second wait on top of the one already running.
-			lineItems$.next([{ total: '11.00', total_tax: '0.00', product_id: 1 }]);
+			// Same resident revision, different calculation context: must not stack a second wait.
+			priceNumDecimals = 3;
+			rerender();
 		});
 
 		expect(whenSettledInBackground).toHaveBeenCalledTimes(1);
@@ -474,7 +504,7 @@ describe('useCartLines background coupon replay (#963)', () => {
 		// A different order now owns the cart surface (setCurrentOrderID swaps the context
 		// value without a remount), so the wait for the previous one must be abandoned.
 		await act(async () => {
-			currentOrder = buildCurrentOrder('order-uuid-2');
+			currentOrderRecord = buildCurrentOrderRecord('order-uuid-2');
 			revision = buildRevision({ uuid: 'order-uuid-2' });
 			rerender();
 		});
@@ -502,7 +532,7 @@ describe('useCartLines background coupon replay (#963)', () => {
 		expect(background.signals[0].aborted).toBe(false);
 
 		await act(async () => {
-			currentOrder = buildCurrentOrder();
+			currentOrderRecord = buildCurrentOrderRecord();
 			rerender();
 		});
 		expect(background.signals[0].aborted).toBe(false);
@@ -534,7 +564,9 @@ describe('useCartLines background coupon replay (#963)', () => {
 		expect(localPatch).toHaveBeenCalledTimes(1);
 		expect(localPatch.mock.calls[0][0]).toEqual(
 			expect.objectContaining({
-				document: expect.objectContaining({ line_items: revision.line_items }),
+				document: expect.objectContaining({
+					payload: expect.objectContaining({ line_items: revision.line_items }),
+				}),
 			})
 		);
 		expect(background.signals[0].aborted).toBe(true);
@@ -547,7 +579,9 @@ describe('useCartLines background coupon replay (#963)', () => {
 		expect(localPatch).toHaveBeenCalledTimes(1);
 		expect(localPatch).not.toHaveBeenCalledWith(
 			expect.objectContaining({
-				document: expect.objectContaining({ line_items: staleLineItems }),
+				document: expect.objectContaining({
+					payload: expect.objectContaining({ line_items: staleLineItems }),
+				}),
 			})
 		);
 	});
@@ -631,7 +665,7 @@ describe('useCartLines background coupon replay (#963)', () => {
 	it('collapses a foreground replay that overlaps the continuation into a single write', async () => {
 		const background = deferredBackgroundWait();
 		applyCoupon([{ code: 'bonus' }]);
-		renderHook(() => useCartLines());
+		const { rerender } = renderHook(() => useCartLines());
 
 		await act(async () => {
 			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
@@ -652,12 +686,13 @@ describe('useCartLines background coupon replay (#963)', () => {
 		expect(recalculate).toHaveBeenCalledTimes(1);
 		expect(localPatch).not.toHaveBeenCalled();
 
-		// A same-revision re-run of the cart subscription (the #222 price-decimals path) reaches
+		// A same-revision re-render (the #222 price-decimals path) reaches
 		// the replay while the continuation's recalculation is still in flight. Both hold the
 		// SAME order revision, so single-flight has to collapse them into one write.
 		whenSettled = jest.fn(async () => true);
 		await act(async () => {
-			lineItems$.next([{ total: '15.00', total_tax: '0.00', product_id: 1 }]);
+			priceNumDecimals = 3;
+			rerender();
 		});
 		expect(recalculate).toHaveBeenCalledTimes(1);
 

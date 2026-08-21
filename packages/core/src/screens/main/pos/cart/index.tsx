@@ -25,13 +25,13 @@ import { useCurrentOrder } from '../contexts/current-order';
 
  */
 export function OpenOrders({ isColumn = false }) {
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrderRecord } = useCurrentOrder();
 
-	if (!currentOrder) {
+	if (!currentOrderRecord) {
 		throw new Error('Current order is not defined');
 	}
 
-	const isNewOrder = (currentOrder as unknown as { isNew: boolean }).isNew;
+	const isNewOrder = (currentOrderRecord as { isNew?: boolean }).isNew;
 
 	/**
 	 * Remember the draft (unsaved) order's uuid. The first add saves the draft
@@ -44,7 +44,7 @@ export function OpenOrders({ isColumn = false }) {
 		// This runs AFTER CartTable's effects in the same commit (parent effects
 		// follow child effects), so on the commit where the draft becomes a real
 		// order the table reads the uuid first, then it is cleared here.
-		lastDraftOrderUuidRef.current = isNewOrder ? currentOrder.uuid : undefined;
+		lastDraftOrderUuidRef.current = isNewOrder ? currentOrderRecord.uuid : undefined;
 	});
 
 	/**

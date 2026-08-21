@@ -2,7 +2,6 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import isEmpty from 'lodash/isEmpty';
-import { useObservableEagerState } from 'observable-hooks';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
@@ -10,6 +9,7 @@ import { Pressable } from '@wcpos/components/pressable';
 import { Text } from '@wcpos/components/text';
 import { Textarea } from '@wcpos/components/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import { useRecordField } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
@@ -20,8 +20,8 @@ import { useCurrentOrder } from '../../contexts/current-order';
  */
 export function CustomerNote() {
 	const [isEditing, setIsEditing] = React.useState(false);
-	const { currentOrder } = useCurrentOrder();
-	const note = useObservableEagerState(currentOrder.customer_note$!);
+	const { currentOrderRecord } = useCurrentOrder();
+	const note = useRecordField(currentOrderRecord, (order) => order.payload.customer_note);
 	const [value, setValue] = React.useState(note);
 	const t = useT();
 	const { localPatch } = useLocalMutation();
@@ -40,11 +40,11 @@ export function CustomerNote() {
 	 */
 	const handleSaveNote = React.useCallback(async () => {
 		await localPatch({
-			document: currentOrder,
+			document: currentOrderRecord,
 			data: { customer_note: (value ?? '').replace(/^\s+|\s+$/g, '').trim() },
 		});
 		setIsEditing(false);
-	}, [currentOrder, localPatch, value]);
+	}, [currentOrderRecord, localPatch, value]);
 
 	/**
 	 *

@@ -52,6 +52,7 @@ export function PaymentWebview({
 	onStockRejection,
 	...props
 }: PaymentWebviewProps) {
+	// stage-I2: left on proxy face — legacy payment processing is a checkout write path.
 	const router = useRouter();
 	// Memoised on the document wrapper: the engine adapter's `$` getter builds a new
 	// observable per property access, so an inline `.pipe()` resubscribed on every render of

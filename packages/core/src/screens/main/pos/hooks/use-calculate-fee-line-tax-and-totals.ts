@@ -16,7 +16,7 @@ export const useCalculateFeeLineTaxAndTotals = () => {
 	const { pricesIncludeTax, taxRoundAtSubtotal, priceNumDecimals } = useTaxSettings();
 	const { calculateTaxesFromValue } = useCalculateTaxesFromValue();
 	const { getFeeLineData } = useFeeLineData();
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrderRecord } = useCurrentOrder();
 
 	/**
 	 * If fee is a fixed percent of the order total, calculate the amount.
@@ -29,11 +29,11 @@ export const useCalculateFeeLineTaxAndTotals = () => {
 			amount: number;
 			percent_of_cart_total_with_tax: boolean;
 		}) => {
-			const order = currentOrder.getLatest();
+			const order = currentOrderRecord.getLatest();
 			const percentAmount = amount / 100;
 
 			// Sum the total and total_tax of all line items
-			const { cart_total, cart_total_tax } = (order.line_items || []).reduce(
+			const { cart_total, cart_total_tax } = (order.payload.line_items || []).reduce(
 				(acc, item) => {
 					if (item.product_id !== null) {
 						acc.cart_total += parseFloat(item.total ?? '0');
@@ -48,7 +48,7 @@ export const useCalculateFeeLineTaxAndTotals = () => {
 
 			return total * percentAmount;
 		},
-		[currentOrder]
+		[currentOrderRecord]
 	);
 
 	/**

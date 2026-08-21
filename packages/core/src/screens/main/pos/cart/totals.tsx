@@ -1,5 +1,4 @@
 import toNumber from 'lodash/toNumber';
-import { useObservableEagerState } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import { getNetPaymentTotal, refundValue } from '@wcpos/order-math';
@@ -7,6 +6,7 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { useRecordField } from '@wcpos/query';
 
 import { CustomerNote } from './totals/customer-note';
 import { Taxes } from './totals/taxes';
@@ -38,9 +38,9 @@ export function Totals() {
 	} = useOrderTotals();
 	const { coupon_lines } = useCartLines();
 	const { removeCoupon } = useRemoveCoupon();
-	const { currentOrder } = useCurrentOrder();
-	const refunds = useObservableEagerState(currentOrder.refunds$!);
-	const orderTotal = useObservableEagerState(currentOrder.total$!);
+	const { currentOrderRecord } = useCurrentOrder();
+	const refunds = useRecordField(currentOrderRecord, (order) => order.payload.refunds);
+	const orderTotal = useRecordField(currentOrderRecord, (order) => order.payload.total);
 
 	/**
 	 * Convert to numbers

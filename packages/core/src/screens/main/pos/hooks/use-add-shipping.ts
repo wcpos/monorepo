@@ -28,17 +28,17 @@ export const useAddShipping = () => {
 	const { addItemToOrder } = useAddItemToOrder();
 	const t = useT();
 	const { calculateShippingLineTaxesAndTotals } = useCalculateShippingLineTaxAndTotals();
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrderRecord } = useCurrentOrder();
 
 	// Create order-specific logger
 	const orderLogger = React.useMemo(
 		() =>
 			cartLogger.with({
-				orderUUID: currentOrder.uuid,
-				orderID: currentOrder.id,
-				orderNumber: currentOrder.number,
+				orderUUID: currentOrderRecord.uuid,
+				orderID: currentOrderRecord.payload.id,
+				orderNumber: currentOrderRecord.payload.number,
 			}),
-		[currentOrder.uuid, currentOrder.id, currentOrder.number]
+		[currentOrderRecord]
 	);
 
 	/**

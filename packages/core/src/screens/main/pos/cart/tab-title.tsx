@@ -14,6 +14,7 @@ interface Props {
  *
  */
 export function CartTabTitle({ order }: Props) {
+	// stage-I2: left on proxy face — the open-orders tab strip is explicitly out of scope.
 	const total = useObservableEagerState(order.total$!);
 	const refunds = useObservableEagerState(order.refunds$!);
 	const currencySymbol = useObservableEagerState(order.currency_symbol$!);

@@ -17,7 +17,7 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
  * After removal, recalculates all remaining coupon discounts from scratch.
  */
 export const useRemoveCoupon = () => {
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrderRecord } = useCurrentOrder();
 	const { localPatch } = useLocalMutation();
 	const t = useT();
 	const { recalculate } = useRecalculateCoupons();
@@ -25,17 +25,17 @@ export const useRemoveCoupon = () => {
 	const orderLogger = React.useMemo(
 		() =>
 			cartLogger.with({
-				orderUUID: currentOrder.uuid,
-				orderID: currentOrder.id,
-				orderNumber: currentOrder.number,
+				orderUUID: currentOrderRecord.uuid,
+				orderID: currentOrderRecord.payload.id,
+				orderNumber: currentOrderRecord.payload.number,
 			}),
-		[currentOrder.uuid, currentOrder.id, currentOrder.number]
+		[currentOrderRecord]
 	);
 
 	const removeCoupon = React.useCallback(
 		async (couponCode: string) => {
-			const order = currentOrder.getLatest();
-			const couponLines = order.coupon_lines || [];
+			const order = currentOrderRecord.getLatest();
+			const couponLines = order.payload.coupon_lines || [];
 			const normalizedCode = couponCode.toLowerCase().trim();
 
 			let removed = false;
@@ -56,7 +56,7 @@ export const useRemoveCoupon = () => {
 
 			if (!removed) return;
 
-			const result = await recalculate(order.line_items || [], updatedCouponLines);
+			const result = await recalculate(order.payload.line_items || [], updatedCouponLines);
 			if (!result) return;
 
 			const patchResult = await localPatch({
@@ -75,7 +75,7 @@ export const useRemoveCoupon = () => {
 				context: { couponCode },
 			});
 		},
-		[currentOrder, localPatch, t, orderLogger, recalculate]
+		[currentOrderRecord, localPatch, t, orderLogger, recalculate]
 	);
 
 	return { removeCoupon };

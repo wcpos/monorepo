@@ -16,7 +16,7 @@ type Totals = ReturnType<typeof calculateOrderTotals>;
  *
  */
 export const useOrderTotals = () => {
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrderRecord } = useCurrentOrder();
 	const { allRates, taxRoundAtSubtotal, priceNumDecimals, pricesIncludeTax } = useTaxSettings();
 	const { localPatch } = useLocalMutation();
 	const { line_items, fee_lines, shipping_lines, coupon_lines } = useCartLines();
@@ -84,9 +84,7 @@ export const useOrderTotals = () => {
 	 *
 	 * Latched per order, so a divergence on one open tab never freezes another.
 	 */
-	const { divergence } = useOrderMoneyDivergence(
-		(currentOrder as unknown as { uuid?: string } | undefined)?.uuid
-	);
+	const { divergence } = useOrderMoneyDivergence(currentOrderRecord.uuid);
 	const overruledTotals = React.useRef<string | null>(null);
 
 	useDeepCompareEffect(() => {
@@ -111,7 +109,7 @@ export const useOrderTotals = () => {
 		if (overruledTotals.current === computed) return;
 		overruledTotals.current = null;
 
-		const currentTotals = pick(currentOrder, [
+		const currentTotals = pick(currentOrderRecord.getLatest().payload, [
 			'discount_tax',
 			'discount_total',
 			'shipping_tax',
@@ -127,7 +125,7 @@ export const useOrderTotals = () => {
 		}
 
 		void localPatch({
-			document: currentOrder,
+			document: currentOrderRecord,
 			data: {
 				discount_tax: totals.discount_tax,
 				discount_total: totals.discount_total,

@@ -13,6 +13,7 @@ import { useCurrentOrder } from '../contexts/current-order';
  *
  */
 export function OpenOrderTabs() {
+	// stage-I2: left on proxy face — the open-orders tab strip is explicitly out of scope.
 	const { currentOrder, openOrders, setCurrentOrderID } = useCurrentOrder();
 	const t = useT();
 

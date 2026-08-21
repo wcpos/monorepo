@@ -10,7 +10,7 @@ import {
 	type CurrentOrderActions,
 	CurrentOrderActionsContext,
 	CurrentOrderContext,
-	type CurrentOrderContextProps,
+	type OpenOrderHit,
 } from './context';
 import { useNewOrder } from './use-new-order';
 
@@ -21,15 +21,18 @@ export {
 	useCurrentOrder,
 	useCurrentOrderActions,
 	useCurrentOrderOptional,
+	useCurrentOrderRecord,
 	type CurrentOrderActions,
 	type CurrentOrderContextProps,
+	type CurrentOrderRecord,
+	type OpenOrderHit,
 } from './context';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
 interface CurrentOrderContextProviderProps {
 	children: React.ReactNode;
-	resource: ObservableResource<{ id: string; document: OrderDocument }[]>;
+	resource: ObservableResource<OpenOrderHit[]>;
 	currentOrderUUID?: string;
 }
 
@@ -76,8 +79,10 @@ export function CurrentOrderProvider({
 	// face through the same wrapper (the proxy passes the temp doc's `.isNew` through);
 	// mutation paths resolve the raw temp document via the temp-order repository, never
 	// through this context value.
-	const currentOrder = (openOrders.find((order) => order.id === internalOrderId)?.document ??
+	const selectedOrder = openOrders.find((order) => order.id === internalOrderId);
+	const currentOrder = (selectedOrder?.document ??
 		wrapEngineDocument('orders', newOrder as never)) as OrderDocument;
+	const currentOrderRecord = selectedOrder?.record ?? newOrder;
 
 	/**
 	 * Update the current order without causing a full navigation/remount.
@@ -116,9 +121,11 @@ export function CurrentOrderProvider({
 	 * effects flush, and a passive-effect write would hand them the previous order (#1294).
 	 */
 	const currentOrderRef = React.useRef(currentOrder);
+	const currentOrderRecordRef = React.useRef(currentOrderRecord);
 	React.useLayoutEffect(() => {
 		currentOrderRef.current = currentOrder;
-	}, [currentOrder]);
+		currentOrderRecordRef.current = currentOrderRecord;
+	}, [currentOrder, currentOrderRecord]);
 
 	/**
 	 * Stable for the provider's lifetime — `setCurrentOrderID` is a useCallback on the router
@@ -128,6 +135,7 @@ export function CurrentOrderProvider({
 	const actions = React.useMemo<CurrentOrderActions>(
 		() => ({
 			getCurrentOrder: () => currentOrderRef.current,
+			getCurrentOrderRecord: () => currentOrderRecordRef.current,
 			setCurrentOrderID,
 		}),
 		[setCurrentOrderID]
@@ -138,6 +146,7 @@ export function CurrentOrderProvider({
 			<CurrentOrderContext.Provider
 				value={{
 					currentOrder,
+					currentOrderRecord,
 					openOrders,
 					setCurrentOrderID,
 				}}

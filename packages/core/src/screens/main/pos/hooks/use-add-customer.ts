@@ -24,7 +24,7 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
  *
  */
 export const useAddCustomer = () => {
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrderRecord } = useCurrentOrder();
 	const guestCustomer = useGuestCustomer();
 	const { localPatch } = useLocalMutation();
 	const { store } = useAppState();
@@ -35,11 +35,11 @@ export const useAddCustomer = () => {
 	const orderLogger = React.useMemo(
 		() =>
 			cartLogger.with({
-				orderUUID: currentOrder.uuid,
-				orderID: currentOrder.id,
-				orderNumber: currentOrder.number,
+				orderUUID: currentOrderRecord.uuid,
+				orderID: currentOrderRecord.payload.id,
+				orderNumber: currentOrderRecord.payload.number,
 			}),
-		[currentOrder.uuid, currentOrder.id, currentOrder.number]
+		[currentOrderRecord]
 	);
 
 	/**
@@ -62,7 +62,7 @@ export const useAddCustomer = () => {
 				: `${data.first_name || ''} ${data.last_name || ''}`.trim() || data.email || `#${data.id}`;
 
 			const result = await localPatch({
-				document: currentOrder,
+				document: currentOrderRecord,
 				data: transformCustomerJSONToOrderJSON(
 					data as unknown as CustomerDocument,
 					country as string
@@ -80,7 +80,7 @@ export const useAddCustomer = () => {
 
 			return result;
 		},
-		[country, currentOrder, guestCustomer, localPatch, orderLogger, t]
+		[country, currentOrderRecord, guestCustomer, localPatch, orderLogger, t]
 	);
 
 	return {

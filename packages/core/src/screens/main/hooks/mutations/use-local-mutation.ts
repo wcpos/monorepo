@@ -15,8 +15,10 @@ import {
 	adapterDerivedFieldsFor,
 	COLLECTION_VOCABULARY,
 	engineCollection,
+	type EngineRecord,
 	promotedColumnsFor,
 	useQueryRuntime,
+	wrapEngineDocument,
 	type WriteableCollection,
 } from '@wcpos/query';
 import {
@@ -29,7 +31,10 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
-import { patchTemporaryOrderPayload } from '../../pos/contexts/current-order/temporary-order';
+import {
+	getTemporaryOrder,
+	patchTemporaryOrderPayload,
+} from '../../pos/contexts/current-order/temporary-order';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 
 import type { RxDocument } from 'rxdb';
@@ -38,6 +43,8 @@ const mutationLogger = getLogger(['wcpos', 'mutations', 'local']);
 
 type Document =
 	OrderDocument | ProductDocument | CustomerDocument | ProductVariationDocument | CouponDocument;
+type MutationDocument =
+	Document | EngineRecord<'orders'> | import('@wcpos/database').TemporaryOrderDocument;
 
 const WRITEABLE_COLLECTIONS = new Set<WriteableCollection>(
 	Object.entries(COLLECTION_VOCABULARY)
@@ -55,9 +62,9 @@ class ActiveScopeChangedTwiceError extends Error {
 	}
 }
 
-interface LocalPatchProps<T extends Document> {
-	document: T;
-	data: Partial<T>;
+interface LocalPatchProps<TDocument extends MutationDocument, TData extends object> {
+	document: TDocument;
+	data: TData;
 }
 
 function writeableCollection(name: string | undefined): WriteableCollection | null {
@@ -105,6 +112,11 @@ function ensureRecordMetadata(
 	return { ...payload, meta_data: metadata };
 }
 
+function residentPayload(document: EngineResident): Record<string, unknown> {
+	const snapshot = document.toMutableJSON?.() ?? document.toJSON();
+	return (snapshot.payload ?? {}) as Record<string, unknown>;
+}
+
 type EngineScope = NonNullable<ReturnType<QueryManager['engine']['active']>>;
 
 /**
@@ -147,12 +159,24 @@ async function findEngineResidentIn(
 		.exec()) as unknown as EngineResident | null;
 }
 
+type ScopedEngineResident = { scope: EngineScope; resident: EngineResident };
+
+async function resolveEngineResident(
+	manager: QueryManager,
+	collection: WriteableCollection,
+	recordId: string
+): Promise<ScopedEngineResident | null> {
+	const scope = await activeScope(manager);
+	const resident = await findEngineResidentIn(scope, collection, recordId);
+	return resident ? { scope, resident } : null;
+}
+
 export async function findEngineResident(
 	manager: QueryManager,
 	collection: WriteableCollection,
 	recordId: string
 ): Promise<EngineResident | null> {
-	return findEngineResidentIn(await activeScope(manager), collection, recordId);
+	return (await resolveEngineResident(manager, collection, recordId))?.resident ?? null;
 }
 
 export async function patchEngineResident(input: {
@@ -233,7 +257,8 @@ export async function patchAndEnqueueEngineResident(input: {
 	collection: WriteableCollection;
 	recordId: string;
 	changes: Record<string, unknown>;
-}): Promise<void> {
+	initial?: ScopedEngineResident;
+}): Promise<EngineResident> {
 	for (let attempt = 0; attempt < 2; attempt += 1) {
 		// The rollback guard's baseline is the CAPTURED scope's own id, not a
 		// second `status()` read. The resident, the barcode carriers and the
@@ -241,9 +266,11 @@ export async function patchAndEnqueueEngineResident(input: {
 		// independent reads the property held only because `engine.active()` is
 		// evaluated in the same synchronous turn as `status()`, which is a fact
 		// about the engine's internals rather than something this file states.
-		const scope = await activeScope(input.manager);
+		const initial = attempt === 0 ? input.initial : undefined;
+		const scope = initial?.scope ?? (await activeScope(input.manager));
 		const scopeId = scope.scopeId;
-		const resident = await findEngineResidentIn(scope, input.collection, input.recordId);
+		const resident =
+			initial?.resident ?? (await findEngineResidentIn(scope, input.collection, input.recordId));
 		if (!resident) {
 			throw new Error(`Engine resident "${input.recordId}" is missing from "${input.collection}"`);
 		}
@@ -286,8 +313,9 @@ export async function patchAndEnqueueEngineResident(input: {
 			await resident.incrementalModify(() => previousResident);
 			throw writeError;
 		}
-		return;
+		return resident;
 	}
+	throw new Error(`Unable to patch engine resident "${input.recordId}"`);
 }
 
 export async function insertEngineResident(input: {
@@ -344,7 +372,10 @@ export const useLocalMutation = () => {
 	const manager = useQueryRuntime();
 
 	const localPatch = React.useCallback(
-		async <T extends Document>({ document, data }: LocalPatchProps<T>) => {
+		async <TDocument extends MutationDocument, TData extends object>({
+			document,
+			data,
+		}: LocalPatchProps<TDocument, TData>) => {
 			try {
 				const patchData = { ...(data as Record<string, unknown>) };
 				const collectionName = document.collection?.name;
@@ -362,13 +393,31 @@ export const useLocalMutation = () => {
 					patchData.date_modified_gmt = convertLocalDateToUTCString(new Date());
 				}
 
-				const latest = document.getLatest();
 				const patchEntries = Object.entries(patchData).filter(([, value]) => value !== undefined);
 				if (patchEntries.length === 0) {
-					return { changes: {}, document: latest };
+					return { changes: {}, document };
 				}
 
-				const snapshot = latest.toMutableJSON?.() ?? (latest as unknown as Record<string, unknown>);
+				const recordId = engineCollection ? documentRecordId(document) : null;
+				if (engineCollection && !recordId) {
+					throw new Error(`Missing uuid for ${engineCollection} mutation`);
+				}
+				let snapshot: Record<string, unknown>;
+				let scopedEngineResident: ScopedEngineResident | null = null;
+				if (isTemporaryOrder) {
+					const resident = await getTemporaryOrder(recordId!);
+					if (!resident) throw new Error('Temporary order is missing from the temporary DB');
+					snapshot = residentPayload(resident as unknown as EngineResident);
+				} else if (engineCollection) {
+					scopedEngineResident = await resolveEngineResident(manager, engineCollection, recordId!);
+					if (!scopedEngineResident) {
+						throw new Error(`Engine resident "${recordId}" is missing from "${engineCollection}"`);
+					}
+					snapshot = residentPayload(scopedEngineResident.resident);
+				} else {
+					const latest = document.getLatest();
+					snapshot = latest.toMutableJSON?.() ?? (latest as unknown as Record<string, unknown>);
+				}
 				const changes: Record<string, unknown> = {};
 				for (const [key, value] of patchEntries) {
 					const [root, ...path] = key.split('.');
@@ -388,35 +437,40 @@ export const useLocalMutation = () => {
 					// The temporary order is engine-shaped (ADR 0028 stage I); the context
 					// hands out a read-only wrapped face, so the write resolves the RAW
 					// template through the temp-order repository and merges into its payload.
-					const recordId = documentRecordId(document);
-					if (!recordId) throw new Error('Missing uuid for temporary order mutation');
-					const patched = await patchTemporaryOrderPayload(recordId, changes);
+					const patched = await patchTemporaryOrderPayload(recordId!, changes);
 					if (!patched) throw new Error('Temporary order is missing from the temporary DB');
-					return { changes, document: document.getLatest() };
+					return {
+						changes,
+						document: wrapEngineDocument('orders', patched as never) as TDocument,
+					};
 				}
 
 				if (engineCollection) {
-					const recordId = documentRecordId(document);
-					if (!recordId) throw new Error(`Missing uuid for ${engineCollection} mutation`);
 					const syncChanges = syncableChanges(engineCollection, changes);
+					let patched: EngineResident;
 					if (Object.keys(syncChanges).length > 0) {
-						await patchAndEnqueueEngineResident({
+						patched = await patchAndEnqueueEngineResident({
 							manager,
 							collection: engineCollection,
-							recordId,
+							recordId: recordId!,
 							changes: syncChanges,
+							initial: scopedEngineResident!,
 						});
 					} else {
-						await patchEngineResident({
-							manager,
-							collection: engineCollection,
-							recordId,
-							changes: syncChanges,
-						});
+						patched = await applyEngineResidentChanges(
+							scopedEngineResident!.resident,
+							engineCollection,
+							syncChanges,
+							scopeBarcodeSelectors(scopedEngineResident!.scope, engineCollection)
+						);
 					}
-					return { changes, document: document.getLatest() };
+					return {
+						changes,
+						document: wrapEngineDocument(engineCollection, patched as never) as TDocument,
+					};
 				}
 
+				const latest = (document as Document).getLatest();
 				const doc = await patchLocalResident(latest, changes);
 				return { changes, document: doc };
 			} catch (error) {
@@ -432,7 +486,7 @@ export const useLocalMutation = () => {
 					showToast: true,
 					toast: { title: t('common.there_was_an_error', { message }) },
 					context: {
-						documentId: document.id,
+						documentId: documentRecordId(document),
 						collectionName: document.collection?.name,
 						error: message,
 					},

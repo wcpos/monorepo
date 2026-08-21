@@ -68,6 +68,7 @@ function hasQueuedOrAcknowledgedCreate(resident: EngineResident): boolean {
 export const useAddItemToOrder = () => {
 	// Event-time resolution: every product tile mounts this hook via useAddProduct, so a
 	// render-time subscription re-rendered the whole grid on every cart write.
+	// stage-I2: left on proxy face — order birth crosses temporary and resident queue state.
 	const { getCurrentOrder, setCurrentOrderID } = useCurrentOrderActions();
 	const runtime = useQueryRuntime();
 	const { localPatch } = useLocalMutation();

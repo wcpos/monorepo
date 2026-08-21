@@ -236,6 +236,42 @@ export async function addCheckoutProbeProduct(page: Page): Promise<void> {
 	await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
 }
 
+/**
+ * Add a product a SECOND time in the same session, without any server wait.
+ *
+ * `addCheckoutProbeProduct` cannot be called twice: its writer path re-searches the same
+ * probe token, and the sync engine's demand coverage means an already-satisfied search
+ * fires no second wire request — `searchAndWaitForServer` then hangs its full 120s
+ * (observed on CI shard 4, 2026-08-21). After the first add the probe product is resident
+ * locally and its row is still on the grid (the search filter persists across cart-tab
+ * switches), so a second add only needs the row click. Secretless environments fall back
+ * to the first visible product — identity is the caller's concern only when it matters.
+ */
+export async function addCheckoutProbeProductAgain(page: Page): Promise<void> {
+	const probes = simpleProbesByPage.get(page);
+	if (probes === undefined) {
+		throw new Error(
+			'addCheckoutProbeProductAgain requires isolatedProductTest fixture registration'
+		);
+	}
+	const probe = probes?.[0] ?? null;
+	if (probe && probe.rowTestId) {
+		const posScreen = page.getByTestId('screen-pos').filter({ visible: true });
+		const tile = posScreen.getByTestId(`product-tile-${probe.id}`);
+		const tableButton = posScreen.getByTestId(probe.rowTestId).getByTestId('add-to-cart-button');
+		await expect(tile.or(tableButton).first()).toBeVisible({ timeout: 30_000 });
+		if (await tile.isVisible()) await tile.click();
+		else await tableButton.click();
+	} else {
+		const tile = page.getByTestId('product-tile').first();
+		const tableButton = page.getByTestId('add-to-cart-button').first();
+		await expect(tile.or(tableButton).first()).toBeVisible({ timeout: 30_000 });
+		if (await tile.isVisible()) await tile.click();
+		else await tableButton.click();
+	}
+	await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
+}
+
 /** Search a private variable product, with the current sample-data fallback for forks. */
 export async function findVariableProduct(page: Page, search: Locator): Promise<void> {
 	const probe = variableProbeByPage.get(page);

@@ -30,7 +30,7 @@ interface Changes extends Partial<FeeLine> {
  *
  */
 export const useUpdateFeeLine = () => {
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrderRecord } = useCurrentOrder();
 	const { localPatch } = useLocalMutation();
 	const { calculateFeeLineTaxesAndTotals } = useCalculateFeeLineTaxAndTotals();
 	const { getFeeLineData } = useFeeLineData();
@@ -41,8 +41,8 @@ export const useUpdateFeeLine = () => {
 	 */
 	const updateFeeLine = React.useCallback(
 		async (uuid: string, changes: Changes) => {
-			const order = currentOrder.getLatest();
-			const json = order.toMutableJSON();
+			const order = currentOrderRecord.getLatest();
+			const json = order.toMutableJSON().payload;
 			let updated = false;
 
 			const updatedLineItems = json.fee_lines?.map((feeLine) => {
@@ -87,11 +87,11 @@ export const useUpdateFeeLine = () => {
 				'Fee line update targeted a line that is no longer in the cart',
 				{
 					toastTitle: t('pos_cart.update_fee_not_found'),
-					context: { uuid, orderId: order.id },
+					context: { uuid, orderId: order.payload.id },
 				}
 			);
 		},
-		[calculateFeeLineTaxesAndTotals, currentOrder, getFeeLineData, localPatch, t]
+		[calculateFeeLineTaxesAndTotals, currentOrderRecord, getFeeLineData, localPatch, t]
 	);
 
 	return { updateFeeLine };

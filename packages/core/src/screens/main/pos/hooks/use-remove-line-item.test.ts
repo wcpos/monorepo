@@ -13,8 +13,9 @@ const mockLoggerSuccess = jest.fn();
 
 let mockLines: object[] = [];
 const mockOrder = {
-	id: 17,
-	getLatest: () => ({ id: 17, line_items: mockLines }),
+	uuid: 'order-uuid',
+	payload: { id: 17 },
+	getLatest: () => ({ uuid: 'order-uuid', payload: { id: 17, line_items: mockLines } }),
 };
 
 jest.mock('@wcpos/utils/logger', () => {
@@ -55,7 +56,7 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 }));
 
 jest.mock('../contexts/current-order', () => ({
-	useCurrentOrder: () => ({ currentOrder: mockOrder }),
+	useCurrentOrder: () => ({ currentOrderRecord: mockOrder }),
 }));
 
 describe('useRemoveLineItem', () => {
@@ -81,7 +82,7 @@ describe('useRemoveLineItem', () => {
 		});
 
 		expect(mockLocalPatch).toHaveBeenCalledWith({
-			document: expect.objectContaining({ id: 17 }),
+			document: expect.objectContaining({ payload: expect.objectContaining({ id: 17 }) }),
 			data: {
 				line_items: [expect.objectContaining({ id: 11, product_id: null })],
 			},

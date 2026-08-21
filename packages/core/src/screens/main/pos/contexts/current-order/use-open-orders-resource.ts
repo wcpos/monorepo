@@ -19,10 +19,10 @@ import {
 	requirementsForCompiledQuery,
 } from '../../../../../query/query-state-translator';
 
+import type { OpenOrderHit } from './context';
 import type { RxDatabase } from 'rxdb';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
-type OpenOrderHit = { id: string; document: OrderDocument };
 
 const OPEN_ORDERS_COMPILED = compileQuery(
 	'orders',
@@ -65,9 +65,16 @@ export function useOpenOrdersResource(
 						if (storeID === undefined || storeID === NO_STORE) return posUser === String(cashierID);
 						return posUser === String(cashierID) && posStore === String(storeID);
 					})
-					.map((document) => wrapEngineDocument<OrderDocument>('orders', document as never))
-					.sort((a, b) => (a.date_created_gmt ?? '').localeCompare(b.date_created_gmt ?? ''))
-					.map((document) => ({ id: document.uuid!, document }))
+					.map((record) => ({
+						record,
+						document: wrapEngineDocument<OrderDocument>('orders', record as never),
+					}))
+					.sort((a, b) =>
+						(a.record.payload.date_created_gmt ?? '').localeCompare(
+							b.record.payload.date_created_gmt ?? ''
+						)
+					)
+					.map(({ document, record }) => ({ id: String(record.uuid), document, record }))
 			)
 		);
 		return new ObservableResource(openOrders$);

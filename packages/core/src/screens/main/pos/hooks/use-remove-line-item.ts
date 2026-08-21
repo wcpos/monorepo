@@ -21,7 +21,7 @@ type LineItem =
  *
  */
 export const useRemoveLineItem = () => {
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrderRecord } = useCurrentOrder();
 	const { localPatch } = useLocalMutation();
 	const t = useT();
 
@@ -30,10 +30,10 @@ export const useRemoveLineItem = () => {
 	 */
 	const undoRemove = React.useCallback(
 		async (uuid: string, type: Line, itemToRestore: LineItem) => {
-			const order = currentOrder.getLatest();
+			const order = currentOrderRecord.getLatest();
 
 			// Determine if the item with this UUID exists in the current list
-			const items = (order[type] ?? []) as LineItem[];
+			const items = (order.payload[type] ?? []) as LineItem[];
 			const itemIndex = items.findIndex((item) => wooMetaCarrier.lineUuid(item) === uuid);
 
 			let updatedLines: LineItem[];
@@ -55,7 +55,7 @@ export const useRemoveLineItem = () => {
 				},
 			});
 		},
-		[currentOrder, localPatch]
+		[currentOrderRecord, localPatch]
 	);
 
 	/**
@@ -66,10 +66,10 @@ export const useRemoveLineItem = () => {
 	 */
 	const removeLineItem = React.useCallback(
 		async (uuid: string, type: Line) => {
-			const order = currentOrder.getLatest();
+			const order = currentOrderRecord.getLatest();
 			let itemToRestore: LineItem | undefined;
 
-			const items = (order[type] ?? []) as LineItem[];
+			const items = (order.payload[type] ?? []) as LineItem[];
 			const updatedLines = items
 				.map((item) => {
 					if (wooMetaCarrier.lineUuid(item) === uuid) {
@@ -122,7 +122,7 @@ export const useRemoveLineItem = () => {
 						context: {
 							itemName,
 							itemType: type,
-							orderId: currentOrder.id,
+							orderId: currentOrderRecord.payload.id,
 						},
 					}
 				);
@@ -131,11 +131,11 @@ export const useRemoveLineItem = () => {
 				// (multi-tab is first-class). Cashier-full-information ruling: say so.
 				reportStaleCartLine(cartLogger, 'Remove tapped for a line that is no longer in the cart', {
 					toastTitle: t('pos_cart.remove_line_not_found'),
-					context: { uuid, itemType: type, orderId: currentOrder.id },
+					context: { uuid, itemType: type, orderId: currentOrderRecord.payload.id },
 				});
 			}
 		},
-		[currentOrder, localPatch, t, undoRemove]
+		[currentOrderRecord, localPatch, t, undoRemove]
 	);
 
 	return { removeLineItem };

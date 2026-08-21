@@ -30,7 +30,7 @@ interface Changes extends Partial<ShippingLine> {
  *
  */
 export const useUpdateShippingLine = () => {
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrderRecord } = useCurrentOrder();
 	const { localPatch } = useLocalMutation();
 	const { calculateShippingLineTaxesAndTotals } = useCalculateShippingLineTaxAndTotals();
 	const { getShippingLineData } = useShippingLineData();
@@ -43,8 +43,8 @@ export const useUpdateShippingLine = () => {
 	 */
 	const updateShippingLine = React.useCallback(
 		async (uuid: string, changes: Changes) => {
-			const order = currentOrder.getLatest();
-			const json = order.toMutableJSON();
+			const order = currentOrderRecord.getLatest();
+			const json = order.toMutableJSON().payload;
 			let updated = false;
 
 			// get matching shipping line
@@ -90,11 +90,11 @@ export const useUpdateShippingLine = () => {
 				'Shipping line update targeted a line that is no longer in the cart',
 				{
 					toastTitle: t('pos_cart.update_shipping_not_found'),
-					context: { uuid, orderId: order.id },
+					context: { uuid, orderId: order.payload.id },
 				}
 			);
 		},
-		[calculateShippingLineTaxesAndTotals, currentOrder, getShippingLineData, localPatch, t]
+		[calculateShippingLineTaxesAndTotals, currentOrderRecord, getShippingLineData, localPatch, t]
 	);
 
 	return { updateShippingLine };

@@ -39,7 +39,7 @@ import { ShippingPrice } from './cells/shipping-price';
 import { ShippingTitle } from './cells/shipping-title';
 import { Subtotal } from './cells/subtotal';
 import { useUISettings } from '../../contexts/ui-settings';
-import { useCurrentOrder } from '../contexts/current-order';
+import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
 import { useCartLines } from '../hooks/use-cart-lines';
 import { CartLine, detectNewCartLines, getUuidFromLineItem } from '../hooks/utils';
 import { SKU } from './cells/sku';
@@ -53,7 +53,6 @@ type CartTableFeatures = typeof cartTableFeatures;
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
-type OrderDocument = import('@wcpos/database').OrderDocument;
 
 /**
  * CartTableLine wraps a CartLine (LineItem | FeeLine | ShippingLine) with display metadata.
@@ -136,18 +135,18 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 	const rowRefs = React.useRef<Map<string, PulseTableRowRef | null>>(new Map());
 	const rowLayouts = React.useRef<Map<string, { y: number; height: number }>>(new Map());
 	const scrollViewRef = React.useRef<ScrollView>(null);
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrderRecord } = useCurrentOrder();
 
 	// Track previous cart data
 	const prevDataRef = React.useRef<CartTableLine[]>([]);
-	const prevOrderRef = React.useRef<OrderDocument | null>(null);
-	const currentOrderRef = React.useRef<OrderDocument | null>(null);
+	const prevOrderRef = React.useRef<CurrentOrderRecord | null>(null);
+	const currentOrderRef = React.useRef<CurrentOrderRecord | null>(null);
 
 	/**
 	 * Latest-value ref for the effect below, which must react to `data` alone and
-	 * so cannot take `currentOrder` as a dependency.
+	 * so cannot take `currentOrderRecord` as a dependency.
 	 *
-	 * This used to be a bare `currentOrderRef.current = currentOrder` during
+	 * This used to be a bare `currentOrderRef.current = currentOrderRecord` during
 	 * render. That was invisible to the React Compiler while react-table v8 made
 	 * it skip this component wholesale ("Compilation Skipped: Use of incompatible
 	 * library"); v9 is compiler-compatible, so the component is compiled now and
@@ -156,7 +155,7 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 	 * what the render-phase assignment produced.
 	 */
 	React.useEffect(() => {
-		currentOrderRef.current = currentOrder;
+		currentOrderRef.current = currentOrderRecord;
 	});
 
 	/**

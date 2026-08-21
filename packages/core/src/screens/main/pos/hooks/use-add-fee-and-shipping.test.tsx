@@ -26,7 +26,7 @@ jest.mock('./use-calculate-shipping-line-tax-and-totals', () => ({
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({
-		currentOrder: { uuid: 'order-uuid', id: 7, number: '7' },
+		currentOrderRecord: { uuid: 'order-uuid', payload: { id: 7, number: '7' } },
 	}),
 }));
 

@@ -15,10 +15,11 @@ const mockLoggerSuccess = jest.fn();
 
 let mockFeeLines: object[] = [];
 const mockOrder = {
-	id: 17,
+	uuid: 'order-uuid',
+	payload: { id: 17 },
 	getLatest: () => ({
-		id: 17,
-		toMutableJSON: () => ({ fee_lines: mockFeeLines }),
+		payload: { id: 17 },
+		toMutableJSON: () => ({ payload: { fee_lines: mockFeeLines } }),
 	}),
 };
 
@@ -60,7 +61,7 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 }));
 
 jest.mock('../contexts/current-order', () => ({
-	useCurrentOrder: () => ({ currentOrder: mockOrder }),
+	useCurrentOrder: () => ({ currentOrderRecord: mockOrder }),
 }));
 
 jest.mock('./use-calculate-fee-line-tax-and-totals', () => ({
@@ -104,7 +105,7 @@ describe('useUpdateFeeLine', () => {
 		});
 
 		expect(mockLocalPatch).toHaveBeenCalledWith({
-			document: expect.objectContaining({ id: 17 }),
+			document: expect.objectContaining({ payload: expect.objectContaining({ id: 17 }) }),
 			data: { fee_lines: [expect.objectContaining({ total: '3' })] },
 		});
 		expect(mockLoggerWarn).not.toHaveBeenCalled();

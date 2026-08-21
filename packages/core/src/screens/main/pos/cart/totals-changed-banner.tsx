@@ -82,10 +82,6 @@ export function TotalsChangedBanner({
 
 /** The cart mount: the current order, read from context. */
 export function CartTotalsChangedBanner() {
-	const { currentOrder } = useCurrentOrder();
-	return (
-		<TotalsChangedBanner
-			orderId={(currentOrder as unknown as { uuid?: string } | undefined)?.uuid}
-		/>
-	);
+	const { currentOrderRecord } = useCurrentOrder();
+	return <TotalsChangedBanner orderId={currentOrderRecord.uuid} />;
 }

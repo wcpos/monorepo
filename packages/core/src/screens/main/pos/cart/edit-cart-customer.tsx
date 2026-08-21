@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useObservableEagerState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
@@ -12,7 +11,12 @@ import { Form } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { type EngineRxDocument, useQueryRuntime, wrapEngineDocument } from '@wcpos/query';
+import {
+	type EngineRxDocument,
+	useQueryRuntime,
+	useRecordField,
+	wrapEngineDocument,
+} from '@wcpos/query';
 import { isGuestCustomer, remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -61,13 +65,11 @@ const formSchema = z.object({
  */
 export function EditCartCustomerForm() {
 	const t = useT();
-	const { currentOrder } = useCurrentOrder();
-	const customerID = useObservableEagerState(currentOrder.customer_id$!);
-	const billingProxy = useObservableEagerState(currentOrder.billing$!);
-	const shippingProxy = useObservableEagerState(currentOrder.shipping$!);
-	const taxIdsProxy = useObservableEagerState(
-		(currentOrder as { tax_ids$?: import('rxjs').Observable<unknown> }).tax_ids$!
-	);
+	const { currentOrderRecord } = useCurrentOrder();
+	const customerID = useRecordField(currentOrderRecord, (order) => order.payload.customer_id);
+	const billingProxy = useRecordField(currentOrderRecord, (order) => order.payload.billing);
+	const shippingProxy = useRecordField(currentOrderRecord, (order) => order.payload.shipping);
+	const taxIdsProxy = useRecordField(currentOrderRecord, (order) => order.payload.tax_ids);
 	const billing = React.useMemo(() => JSON.parse(JSON.stringify(billingProxy)), [billingProxy]);
 	const shipping = React.useMemo(() => JSON.parse(JSON.stringify(shippingProxy)), [shippingProxy]);
 	const tax_ids = React.useMemo(
@@ -98,7 +100,7 @@ export function EditCartCustomerForm() {
 	 */
 	const handleSaveToOrder = async (data: FormValues) => {
 		await localPatch({
-			document: currentOrder,
+			document: currentOrderRecord,
 			data: {
 				billing: data.billing,
 				shipping: data.shipping,
