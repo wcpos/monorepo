@@ -63,7 +63,13 @@ export function DataTableHeader({
 			}) => {
 				const showIcon = hovered || isSorted;
 				return (
-					<HStack className="gap-1">
+					<HStack
+						className="gap-1"
+						// E2E's only observable for "the sort actually applied": header clicks
+						// resolve locally (some collections never put orderby on the wire), so
+						// specs steering the sort need a DOM signal, not a network one.
+						testID={isSorted ? `data-table-sort-${columnId}-${sortDirection}` : undefined}
+					>
 						<Text className={'text-muted-foreground font-medium'} numberOfLines={1}>
 							{header}
 						</Text>

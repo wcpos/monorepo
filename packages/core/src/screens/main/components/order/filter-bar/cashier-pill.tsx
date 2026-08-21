@@ -93,11 +93,13 @@ export function CashierPill({ resource, onMissing }: CashierPillProps) {
 		>
 			<ComboboxTrigger asChild>
 				<ButtonPill
+					testID="order-filter-cashier"
 					size="xs"
 					leftIcon="userCrown"
 					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
 					onRemove={handleRemove}
+					removeTestID="order-filter-cashier-remove"
 				>
 					<ButtonText>
 						{isLoading

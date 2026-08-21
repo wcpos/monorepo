@@ -7,6 +7,7 @@ import {
 	authenticatedTest as test,
 } from './fixtures';
 import {
+	createOrderArrivalProbe,
 	createSearchProbe,
 	deleteSearchProbe,
 	mintSearchProbeToken,
@@ -64,14 +65,20 @@ const ARRIVAL_TIMEOUT_MS = 6 * 60_000 + 30_000;
 const FIXTURE_BUDGET_MS = 120_000;
 
 /**
- * The explicit deadlines inside the test body before the arrival assertion:
- * navigate (12s) + grid census (60s) + name browse (60s) + anchor row (30s) =
- * 162s, rounded up to 180s for the wc/v3 writer login and probe-creation round
- * trips. Those round trips are request-timeout bounded and their pathological
- * paths throw rather than return late, so they cannot silently stretch the window
- * this budget guards.
+ * The explicit deadlines inside a test body before its arrival assertion, sized to
+ * the WIDEST of the three setups in this file:
+ *  - products: navigate (12s) + grid census (60s) + name browse (60s) + anchor row
+ *    (30s) = 162s
+ *  - orders: search visible (60s) + unscoped browse (60s) + three confirmed sort
+ *    clicks (45s) + grid-or-empty poll (30s) = 195s
+ *  - customers: search visible (60s) + three confirmed sort clicks (45s) + sorted
+ *    browse (60s) + anchor row (30s) = 195s
+ * rounded up to 240s for the wc/v3 writer login and probe-creation round trips.
+ * Those round trips are request-timeout bounded and their pathological paths throw
+ * rather than return late, so they cannot silently stretch the window this budget
+ * guards.
  */
-const SETUP_BUDGET_MS = 180_000;
+const SETUP_BUDGET_MS = 240_000;
 
 /** Force-deleting the probe in the `finally` also spends the test budget. */
 const TEARDOWN_BUDGET_MS = 30_000;
@@ -295,6 +302,306 @@ test('a product created on the server reaches the products grid without a search
 			storeUrl,
 			authorization,
 			collection: 'products',
+			id: created.probe.id,
+		});
+	}
+});
+
+/** Anchor a Playwright text filter to the WHOLE cell value, not a substring of it. */
+function exactCellText(value: string): RegExp {
+	return new RegExp(`^\\s*${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`);
+}
+
+/**
+ * Directional coverage for ORDERS (#1321). The issue's audit argued orders are
+ * structurally immune to the #1302 suppression class because the maintenance seed,
+ * the POS open-orders demand and the grid browse all carry different task keys —
+ * but the coupon bug proved code reading cannot promise two descriptor spaces never
+ * coincide, so the guard is empirical: create an order the way a WEB order arrives
+ * (bare wc/v3 POST, no POS scope) and require it to surface in the Orders grid a
+ * cashier is looking at, without a search and without a manual sync.
+ *
+ * The grid boots scoped to the signed-in cashier and the active store
+ * (`initialFilters` in packages/core/src/screens/main/orders/index.tsx), and a web
+ * order carries neither scope — so the spec first removes both filter pills, which
+ * is exactly what a cashier does to see web orders. The arrival assertion then
+ * targets the order-number CELL (testID `order-number`) by its exact rendered
+ * value: order rows key their testID on a client-side uuid that does not exist
+ * until the record materializes, so the number — which the create response hands
+ * us — is the only value-bearing anchor knowable in advance. The number is record
+ * DATA, not localized UI copy, which is what the selector policy guards against.
+ */
+test('an order created on the server reaches the orders grid without a search', async ({
+	posPage: page,
+	request,
+	storeAuthorization,
+}, testInfo) => {
+	// The Orders page is a Pro-only drawer screen — on free there is no grid.
+	test.skip(getStoreVariant(testInfo) !== 'pro', 'Orders page requires Pro');
+
+	const storeUrl = getStoreUrl(testInfo);
+	const writer = await productWriterAuthorization(request, storeUrl);
+	const authorization = writer ?? storeAuthorization();
+
+	await navigateToPage(page, 'orders');
+	const screen = page.getByTestId('screen-orders').filter({ visible: true });
+	await expect(screen.getByTestId('search-orders')).toBeVisible({ timeout: 60_000 });
+
+	// The unscoped browse the pill-clears must reissue. Scoped browses carry
+	// pos_cashier/pos_store (rx-scheduler-order-fetcher.ts), the maintenance and
+	// POS open-orders lanes always carry `status`, and change-signal pulls carry
+	// `include` — absence of all of them identifies the grid's own unscoped browse.
+	const unscopedBrowsePending = page.waitForResponse(
+		(response) => {
+			if (response.request().method() !== 'GET') return false;
+			const url = new URL(response.url());
+			const route = url.searchParams.get('rest_route');
+			const isOrdersBrowse =
+				url.pathname.endsWith('/wp-json/wcpos/v2/orders') || route === '/wcpos/v2/orders';
+			return (
+				isOrdersBrowse &&
+				!url.searchParams.has('pos_cashier') &&
+				!url.searchParams.has('pos_store') &&
+				!url.searchParams.has('created_via') &&
+				!url.searchParams.has('status') &&
+				!url.searchParams.has('search') &&
+				!url.searchParams.has('include')
+			);
+		},
+		{ timeout: 60_000 }
+	);
+	unscopedBrowsePending.catch(() => {});
+	await screen.getByTestId('order-filter-cashier-remove').click();
+	await screen.getByTestId('order-filter-store-remove').click();
+	const unscopedBrowse = await unscopedBrowsePending;
+	if (!unscopedBrowse.ok()) {
+		throw new Error(`Unscoped orders browse failed: HTTP ${unscopedBrowse.status()}`);
+	}
+
+	/**
+	 * Land the probe in the FIRST rendered rows: put the grid on `date_created_gmt`
+	 * DESC, where a just-created order sorts first under both the server's ordering
+	 * and the renderer's local comparator (ISO date strings compare identically
+	 * either way — no products-spec collation trap here).
+	 *
+	 * The three clicks are the one DETERMINISTIC path to desc from ANY starting
+	 * sort: a click on an unsorted column always selects ascending and a click on
+	 * the sorted column flips it (header.tsx), so number → date → date lands on
+	 * date-desc no matter what the restored snapshot carried. Each click is
+	 * confirmed via the header's sort-state testID before the next — orders sorts
+	 * resolve locally (the wire browse never carries an orderby), so the DOM signal
+	 * is the only confirmation there is, and unconfirmed rapid clicks could race
+	 * the re-render and read stale sort state.
+	 */
+	await screen.getByTestId('data-table-header-number').first().click();
+	await expect(screen.getByTestId('data-table-sort-number-asc').first()).toBeVisible({
+		timeout: 15_000,
+	});
+	await screen.getByTestId('data-table-header-date_created_gmt').first().click();
+	await expect(screen.getByTestId('data-table-sort-date_created_gmt-asc').first()).toBeVisible({
+		timeout: 15_000,
+	});
+	await screen.getByTestId('data-table-header-date_created_gmt').first().click();
+	await expect(screen.getByTestId('data-table-sort-date_created_gmt-desc').first()).toBeVisible({
+		timeout: 15_000,
+	});
+
+	// An EMPTY unscoped grid is a legitimate starting state (a store with no web
+	// orders yet) — unlike the products spec there is no skip here, because the
+	// probe itself provides the row the assertion needs.
+	await expect
+		.poll(
+			async () => {
+				const hasOrders = await screen
+					.getByTestId('data-table-count')
+					.isVisible()
+					.catch(() => false);
+				const noOrders = await screen
+					.getByTestId('no-data-message')
+					.isVisible()
+					.catch(() => false);
+				return hasOrders || noOrders;
+			},
+			{ timeout: 30_000 }
+		)
+		.toBeTruthy();
+
+	const token = mintSearchProbeToken(testInfo.workerIndex);
+	const created = await createOrderArrivalProbe({
+		request,
+		storeUrl,
+		authorization,
+		token,
+		writerConfigured: Boolean(writer),
+	});
+	if (!created.ok) {
+		test.skip(true, created.reason);
+		return;
+	}
+
+	// Setup is provably complete — grant the full arrival window on top of whatever
+	// setup actually cost (TIMEOUT ARITHMETIC above).
+	test.setTimeout(testInfo.timeout + ARRIVAL_GRANT_MS);
+
+	try {
+		const numberCell = screen.getByTestId('order-number').filter({
+			hasText: exactCellText(created.number),
+		});
+		await expect(
+			numberCell.first(),
+			'an order created on the server must reach the orders grid without a search or manual sync'
+		).toBeVisible({ timeout: ARRIVAL_TIMEOUT_MS });
+	} finally {
+		await deleteSearchProbe({
+			request,
+			storeUrl,
+			authorization,
+			collection: 'orders',
+			id: created.id,
+		});
+	}
+});
+
+/**
+ * Directional coverage for CUSTOMERS (#1321). The audit found no shared descriptor
+ * key between the customers trickle lane and the grid's demand browse — but that is
+ * the same kind of reading that missed the coupon bug, so the guard is the same
+ * empirical contract: a customer registered on the SERVER must surface in the
+ * Customers grid without a search and without a manual sync.
+ *
+ * Sort steering follows the products spec's method, but lands on last_name
+ * DESCENDING (see the in-body comment for why ascending would be wrong here), and
+ * the probe's last name sorts first under BOTH the server's collation and the
+ * renderer's code-unit comparator (see ARRIVAL_PROBE_LEAD). Customers sorts DO
+ * reach the wire — `orderby=last_name` via the plugin's #1488 proxy seam — so the
+ * steering click is also what proves the sorted browse demand reaches the server.
+ *
+ * The arrival anchor filters testID-addressed rows by the probe's unique token —
+ * customer rows, like orders, key their testID on a client-side uuid that cannot be
+ * known in advance, and the token (rendered in the First Name and Email columns) is
+ * record DATA, not the localized UI copy the selector policy guards against.
+ */
+test('a customer created on the server reaches the customers grid without a search', async ({
+	posPage: page,
+	request,
+	storeAuthorization,
+}, testInfo) => {
+	// The Customers page is a Pro-only drawer screen — on free there is no grid.
+	test.skip(getStoreVariant(testInfo) !== 'pro', 'Customers page requires Pro');
+
+	const storeUrl = getStoreUrl(testInfo);
+	const writer = await productWriterAuthorization(request, storeUrl);
+	const authorization = writer ?? storeAuthorization();
+
+	await navigateToPage(page, 'customers');
+	const screen = page.getByTestId('screen-customers').filter({ visible: true });
+	await expect(screen.getByTestId('search-customers')).toBeVisible({ timeout: 60_000 });
+
+	const customersBrowseResponse = (orderby: string, order: string) =>
+		page.waitForResponse(
+			(response) => {
+				if (response.request().method() !== 'GET') return false;
+				const url = new URL(response.url());
+				const route = url.searchParams.get('rest_route');
+				const isCustomersBrowse =
+					url.pathname.endsWith('/wp-json/wcpos/v2/customers') || route === '/wcpos/v2/customers';
+				return (
+					isCustomersBrowse &&
+					url.searchParams.get('orderby') === orderby &&
+					url.searchParams.get('order') === order &&
+					!url.searchParams.has('search') &&
+					!url.searchParams.has('include')
+				);
+			},
+			{ timeout: 60_000 }
+		);
+
+	/**
+	 * Steer to last_name DESCENDING — the direction is load-bearing, not stylistic.
+	 * Customers with an EMPTY last name are common (admin and subscriber accounts),
+	 * '' sorts before every possible probe lead under ascending code-unit order, and
+	 * enough of them would hold the probe out of the first rendered rows for a
+	 * reason that has nothing to do with arrival. Under descending they sort LAST,
+	 * and the 'zzzz' lead outranks every letter under both the server's collation
+	 * and the renderer's comparator (see ARRIVAL_PROBE_LEAD).
+	 *
+	 * The click path is the deterministic one from ANY starting sort (a click on an
+	 * unsorted column always selects ascending, a click on the sorted column flips
+	 * it — header.tsx): email → asc(last_name) → desc(last_name). Each click is
+	 * confirmed via the header's sort-state testID before the next, so a rapid
+	 * second click can never read stale sort state.
+	 */
+	await screen.getByTestId('data-table-header-email').first().click();
+	await expect(screen.getByTestId('data-table-sort-email-asc').first()).toBeVisible({
+		timeout: 15_000,
+	});
+	await screen.getByTestId('data-table-header-last_name').first().click();
+	await expect(screen.getByTestId('data-table-sort-last_name-asc').first()).toBeVisible({
+		timeout: 15_000,
+	});
+	const sortedBrowsePending = customersBrowseResponse('last_name', 'desc');
+	sortedBrowsePending.catch(() => {});
+	await screen.getByTestId('data-table-header-last_name').first().click();
+	await expect(screen.getByTestId('data-table-sort-last_name-desc').first()).toBeVisible({
+		timeout: 15_000,
+	});
+	const sortedBrowse = await sortedBrowsePending;
+	if (!sortedBrowse.ok()) {
+		throw new Error(`Customers last-name browse failed: HTTP ${sortedBrowse.status()}`);
+	}
+	// The raw wire body is B9-enveloped ({ data, _wcpos }) — response.json() reads the wire.
+	const sortedBody = unwrapWireBody(await sortedBrowse.json().catch(() => null));
+	if (!Array.isArray(sortedBody)) {
+		throw new Error('Customers last-name browse returned a malformed customer list');
+	}
+	// Anchor on the RENDERED grid, never on the wire body's ordering (see the
+	// products spec above for why the two disagree). An empty store needs no
+	// anchor — the probe itself provides the first row.
+	if (sortedBody.length > 0) {
+		await expect(screen.getByTestId(/^data-table-row-/).first()).toBeVisible({
+			timeout: 30_000,
+		});
+	}
+
+	// Land the probe in the first rendered rows under the applied sort: the lead
+	// token sorts first under both the server's collation and the renderer's
+	// code-unit comparator — see ARRIVAL_PROBE_LEAD.
+	const token = mintSearchProbeToken(testInfo.workerIndex);
+	const created = await createSearchProbe({
+		request,
+		storeUrl,
+		authorization,
+		collection: 'customers',
+		workerIndex: testInfo.workerIndex,
+		token,
+		customerData: {
+			last_name: `${ARRIVAL_PROBE_LEAD.desc} Arrival ${token}`,
+		},
+	});
+	if (!created.ok) {
+		// Elevated writer credentials are a DECLARED capability: with them in play a
+		// failed create is a failure, never a skip (store-agnostic E2E policy).
+		if (writer) throw new Error(created.reason);
+		test.skip(true, created.reason);
+		return;
+	}
+
+	// Setup is provably complete — grant the full arrival window on top of whatever
+	// setup actually cost (TIMEOUT ARITHMETIC above).
+	test.setTimeout(testInfo.timeout + ARRIVAL_GRANT_MS);
+
+	try {
+		const probeRow = screen.getByTestId(/^data-table-row-/).filter({ hasText: token });
+		await expect(
+			probeRow.first(),
+			'a customer created on the server must reach the customers grid without a search or manual sync'
+		).toBeVisible({ timeout: ARRIVAL_TIMEOUT_MS });
+	} finally {
+		await deleteSearchProbe({
+			request,
+			storeUrl,
+			authorization,
+			collection: 'customers',
 			id: created.probe.id,
 		});
 	}
