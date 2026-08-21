@@ -164,7 +164,9 @@ export function parseRetryAfterMs(value: string | null | undefined, atMs: number
  */
 function isHttpDateShape(value: string, parsedMs: number): boolean {
 	if (new Date(parsedMs).toUTCString() === value) return true;
-	return /^[A-Za-z]{3} [A-Za-z]{3} [ \d]\d \d{2}:\d{2}:\d{2} \d{4}$/.test(value);
+	// Obsolete but valid RFC 9110 forms: asctime and rfc850.
+	if (/^[A-Za-z]{3} [A-Za-z]{3} [ \d]\d \d{2}:\d{2}:\d{2} \d{4}$/.test(value)) return true;
+	return /^[A-Za-z]{6,9}, \d{2}-[A-Za-z]{3}-\d{2} \d{2}:\d{2}:\d{2} GMT$/.test(value);
 }
 
 export function parseServerPressure(value: string | null | undefined): ServerPressure | undefined {

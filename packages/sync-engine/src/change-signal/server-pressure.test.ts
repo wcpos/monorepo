@@ -34,6 +34,12 @@ describe('parseRetryAfterMs', () => {
 		expect(parseRetryAfterMs('0.5', 1_000)).toBeNull();
 	});
 
+	it('accepts the obsolete rfc850 HTTP-date form', () => {
+		// 06-Nov-94 is in the past relative to any modern atMs, so a valid parse
+		// clamps to 0 rather than null.
+		expect(parseRetryAfterMs('Sunday, 06-Nov-94 08:49:37 GMT', Date.UTC(2026, 0, 1))).toBe(0);
+	});
+
 	it('never parks the till for longer than the sanity clamp, and never negative', () => {
 		expect(parseRetryAfterMs('86400', 0)).toBe(15 * 60_000);
 		expect(parseRetryAfterMs(new Date(0).toUTCString(), 60_000)).toBe(0);

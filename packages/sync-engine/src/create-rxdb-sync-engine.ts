@@ -783,19 +783,24 @@ export function createRxdbSyncEngine(
 		// (free#1649) — read it only when the header is absent or unparseable, so
 		// a readable, valid header always wins on disagreement.
 		if (response.status >= 400 && parseRetryAfterMs(retryAfter, nowMs()) === null) {
+			// clone() first: on an unhydrated response (push lane) it leaves the
+			// real body untouched for downstream error handling. On a hydrated
+			// response the original body is already consumed and clone() itself
+			// throws — there the proxy's memoized json() is the safe read. The
+			// original is read ONLY when clone() threw: a clone whose json()
+			// rejects (malformed push body) must not trigger a read that consumes
+			// the real stream downstream error handling still needs.
 			let body: unknown;
+			let cloned: Response | null = null;
 			try {
-				// clone() first: on an unhydrated response (push lane) it leaves the
-				// real body untouched for downstream error handling. On a hydrated
-				// response the original body is already consumed and clone() throws —
-				// there the proxy's memoized json() is the safe, side-effect-free read.
-				body = await response.clone().json();
+				cloned = response.clone();
 			} catch {
-				try {
-					body = await response.json();
-				} catch {
-					body = undefined; // Non-JSON error bodies (edge HTML) never affect telemetry.
-				}
+				cloned = null;
+			}
+			try {
+				body = cloned ? await cloned.json() : await response.json();
+			} catch {
+				body = undefined; // Non-JSON error bodies (edge HTML) never affect telemetry.
 			}
 			const seconds = (body as { data?: { retry_after_seconds?: unknown } } | null | undefined)
 				?.data?.retry_after_seconds;
