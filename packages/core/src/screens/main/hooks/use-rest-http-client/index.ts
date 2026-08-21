@@ -10,7 +10,7 @@ import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/a
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { useAppState } from '../../../../contexts/app-state';
+import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { errorSubject, useAuthErrorHandler } from './auth-error-handler';
 import { createRefreshHttpClient } from './refresh-http-client';
@@ -112,7 +112,7 @@ export function unwrapResponseEnvelope<T>(response: T): T {
 }
 
 export const useRestHttpClient = (endpoint = '') => {
-	const { site, wpCredentials, store, logout } = useAppState();
+	const { site, wpCredentials, store, logout } = useStoreSession();
 	const { status: onlineStatus } = useOnlineStatus();
 	const t = useT();
 
@@ -230,7 +230,7 @@ export const useRestHttpClient = (endpoint = '') => {
 			const wcposVersion = site.wcpos_version;
 
 			let apiURL = site.wcpos_api_url;
-			const wpApiURL = site.wp_api_url.replace(/\/?$/, '/');
+			const wpApiURL = site.wp_api_url!.replace(/\/?$/, '/');
 
 			// Migrate missing and persisted v1 service bases to v2.
 			if (!apiURL || /\/wcpos\/v1\/?$/.test(apiURL)) {
@@ -246,7 +246,7 @@ export const useRestHttpClient = (endpoint = '') => {
 
 			if (shouldUseJwtAsParam) {
 				const params = {
-					authorization: formatAuthorizationParam(jwt, bareAuthParamSupported(wcposVersion)),
+					authorization: formatAuthorizationParam(jwt!, bareAuthParamSupported(wcposVersion)),
 				};
 				defaultConfig.params = merge(params, defaultConfig.params);
 			}

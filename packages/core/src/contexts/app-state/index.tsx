@@ -1,22 +1,50 @@
 import * as React from 'react';
 
-import type { StoreDocument, UserDatabase } from '@wcpos/database';
+import type {
+	SiteDocument,
+	StoreDatabase,
+	StoreDocument,
+	UserDatabase,
+	UserDocument,
+	WPCredentialsDocument,
+} from '@wcpos/database';
 import { Platform } from '@wcpos/utils/platform';
 
 import { useHydrationSuspense } from './use-hydration-suspense';
 import { getEngineScopeSwitcher } from './engine-scope-port';
 import { hydrateUserSession, switchUserSessionStore } from './hydration-steps';
 
-import type { HydrationContext } from './hydration-steps';
+import type {
+	ExtraDataState,
+	HydrationContext,
+	SessionAppState,
+	TranslationsState,
+} from './hydration-steps';
 
 /** The context value: the hydrated session plus the session actions. */
 export interface AppState extends HydrationContext {
-	/** Always present after hydration — the first hydration step throws without it. */
+	/** Always present after hydration — the first hydration step throws without them. */
 	userDB: UserDatabase;
+	appState: SessionAppState;
+	translationsState: TranslationsState;
+	user: UserDocument;
 	updateAppState: (updates: Partial<HydrationContext>) => void;
 	login: (args: { siteID: string; wpCredentialsID: string; storeID: string }) => Promise<void>;
 	logout: () => Promise<void>;
 	switchStore: (store: StoreDocument) => Promise<void>;
+}
+
+/**
+ * AppState narrowed to an active store session — everything the logged-in area
+ * may assume present. Login and store-switch write these fields together, and
+ * the `(app)` stack is mounted behind `Stack.Protected guard={!!storeDB}`.
+ */
+export interface StoreSessionState extends AppState {
+	site: SiteDocument;
+	wpCredentials: WPCredentialsDocument;
+	store: StoreDocument;
+	storeDB: StoreDatabase;
+	extraData: ExtraDataState;
 }
 
 export const AppStateContext = React.createContext<AppState | undefined>(undefined);
@@ -59,7 +87,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 			storeID: string;
 		}) => {
 			// Update database state
-			await state.appState.set('current', () => ({
+			await state.appState!.set('current', () => ({
 				siteID,
 				wpCredentialsID,
 				storeID,
@@ -92,7 +120,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 		}
 
 		// Clear session state in database
-		await state.appState.set('current', () => null);
+		await state.appState!.set('current', () => null);
 
 		// Clear React state
 		updateAppState({
@@ -106,14 +134,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 
 	const switchStore = React.useCallback(
 		async (store: StoreDocument): Promise<void> => {
-			const current = await state.appState.get('current');
+			const current = await state.appState!.get('current');
 			if (store.localID === current?.storeID) {
 				return;
 			}
 
 			const sessionData = await switchUserSessionStore(
 				state.userDB!,
-				state.appState,
+				state.appState!,
 				store.localID!,
 				{ switchEngineScope: getEngineScopeSwitcher() ?? undefined }
 			);
@@ -125,8 +153,11 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 	const value = React.useMemo<AppState>(() => {
 		return {
 			...state,
-			// Present after hydration by construction — the first step throws without it.
+			// Present after hydration by construction — the first step throws without them.
 			userDB: state.userDB!,
+			appState: state.appState!,
+			translationsState: state.translationsState!,
+			user: state.user!,
 			updateAppState,
 			login,
 			logout,
@@ -144,4 +175,26 @@ export const useAppState = (): AppState => {
 	}
 
 	return context;
+};
+
+/**
+ * `useAppState` asserted to an active store session. For consumers inside the
+ * `(app)` stack, which only mounts behind `Stack.Protected guard={!!storeDB}` —
+ * a missing field here is session-state corruption, and throwing a named error
+ * beats the undefined-property crash it would otherwise become. Sessionless
+ * surfaces (auth screens, connect flow) must stay on `useAppState`.
+ */
+export const useStoreSession = (): StoreSessionState => {
+	const context = useAppState();
+	if (
+		!context.storeDB ||
+		!context.store ||
+		!context.site ||
+		!context.wpCredentials ||
+		!context.extraData
+	) {
+		throw new Error(`useStoreSession must be called within an active store session`);
+	}
+
+	return context as StoreSessionState;
 };

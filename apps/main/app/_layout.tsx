@@ -59,7 +59,7 @@ function useThemeRestorer() {
 		if (!store) return;
 		const savedTheme = store.theme;
 		if (savedTheme && savedTheme !== 'system') {
-			Uniwind.setTheme(savedTheme);
+			Uniwind.setTheme(savedTheme as Parameters<typeof Uniwind.setTheme>[0]);
 		}
 	}, [store]);
 

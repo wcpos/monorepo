@@ -7,7 +7,7 @@ import { Br, Line, Row, Text } from '@wcpos/components/print';
 import { useDocField } from '@wcpos/query';
 
 import { calculateTotals } from './utils';
-import { useAppState } from '../../../../contexts/app-state';
+import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
@@ -21,7 +21,7 @@ import { useQueryState } from '../../../../query';
  */
 export function ZReport() {
 	const t = useT();
-	const { store, wpCredentials } = useAppState();
+	const { store, wpCredentials } = useStoreSession();
 	const storeName = useDocField(store, (value) => value.name) as string;
 	const num_decimals = useDocField(store, (value) => value.price_num_decimals) as number;
 	const { selectedOrders } = useReportsData();
@@ -92,12 +92,12 @@ export function ZReport() {
 	return (
 		<View>
 			<Text bold>
-				{storeName} (ID: {store.id})
+				{storeName} (ID: {store.id!})
 			</Text>
 			<Text>{`${t('reports.report_generated')}: ${reportGenerated}`}</Text>
 			<Text>{`${t('reports.report_period_start')}: ${reportPeriod.from}`}</Text>
 			<Text>{`${t('reports.report_period_end')}: ${reportPeriod.to}`}</Text>
-			<Text>{`${t('common.cashier')}: ${formatName(wpCredentials)} (ID: ${wpCredentials.id})`}</Text>
+			<Text>{`${t('common.cashier')}: ${formatName(wpCredentials.toJSON())} (ID: ${wpCredentials.id!})`}</Text>
 			<Br />
 
 			<Line />

@@ -13,7 +13,7 @@ import { useDocField } from '@wcpos/query';
 import { showHeuristicTooShortFeedback } from './too-short-feedback';
 import { useAttributedWedge } from './use-attributed-wedge';
 import { useScanHub } from './scan-hub-context';
-import { useAppState } from '../../../../contexts/app-state';
+import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 
 // Runs at scan time (not render): wraps a detected code in the normalized event.
@@ -44,7 +44,7 @@ export const useBarcodeDetection = (
 	const callback = options.callback ?? noopBarcodeCallback;
 	const leafFocused = useIsFocused();
 	const isActive = options.isActive ?? leafFocused;
-	const { store } = useAppState();
+	const { store } = useStoreSession();
 	const prefix = useDocField(store, (value) => value.barcode_scanning_prefix) as string;
 	const suffix = useDocField(store, (value) => value.barcode_scanning_suffix) as string;
 	const avgTimeInputThreshold = useDocField(
@@ -60,7 +60,7 @@ export const useBarcodeDetection = (
 	>(
 		(event$) =>
 			event$.pipe(
-				withLatestFrom(store.barcode_scanning_min_chars$),
+				withLatestFrom(store.barcode_scanning_min_chars$!),
 				filter(([event, currentMinLength]) => {
 					const currentMinLengthNumber = Number(currentMinLength);
 					if (event.barcode.length >= currentMinLengthNumber) {

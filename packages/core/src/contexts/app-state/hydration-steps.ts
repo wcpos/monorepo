@@ -1,10 +1,17 @@
 import * as Crypto from 'expo-crypto';
 
 import { createStoreDB, createUserDB, sanitizeWPCredentialsData } from '@wcpos/database';
-import type { UserDatabase } from '@wcpos/database';
 import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { Platform } from '@wcpos/utils/platform';
+import type {
+	SiteDocument,
+	StoreDatabase,
+	StoreDocument,
+	UserDatabase,
+	UserDocument,
+	WPCredentialsDocument,
+} from '@wcpos/database';
 
 import {
 	mergeServerOwnedStoreFields,
@@ -13,6 +20,9 @@ import {
 } from '../../utils/merge-stores';
 import { upsertSiteData } from '../../utils/site-writes';
 import { initialProps } from './initial-props';
+
+import type { RxState } from 'rxdb';
+import type { InitialProps } from './initial-props.types';
 
 const appLogger = getLogger(['wcpos', 'app', 'hydration']);
 const AUTH_TEST_TIMEOUT_MS = 10000;
@@ -333,7 +343,7 @@ export const hydrateUserSession = async (
 
 export async function switchUserSessionStore(
 	userDB: UserDatabase,
-	appState: any,
+	appState: SessionAppState,
 	storeLocalID: string,
 	opts?: {
 		switchEngineScope?: (
@@ -354,25 +364,53 @@ export async function switchUserSessionStore(
 }
 
 /**
- * Context that accumulates data as hydration steps complete
+ * The session pointer persisted in the user DB's `v2` RxState under `current`.
  */
-// NOTE: the loose `any` fields are deliberate for now — typing them to the real database
-// documents surfaces ~270 consumer errors (census 2026-08-19) and needs its own pass. This is
-// the known HydrationContext hole: those RxDB members evade wcpos/no-rx-in-context-value.
+export interface CurrentSessionIDs {
+	siteID?: string;
+	wpCredentialsID?: string;
+	storeID?: string;
+}
+
+/** RxState from `userDB.addState('v2')`. */
+export type SessionAppState = RxState<{ current: CurrentSessionIDs | null }>;
+
+/** RxState from `userDB.addState('translations_v2')` — locale resource cache. */
+export type TranslationsState = RxState<Record<string, unknown>>;
+
+/** RxState from `storeDB.addState('data_v2')` — server-derived extras (tax classes, order statuses…). */
+export type ExtraDataState = RxState<Record<string, unknown>>;
+
+/** A store payload from the embedded page, normalized and stamped with its local id. */
+export type PreparedStorePayload = ServerStorePayload & { localID: string };
+
+/**
+ * Context that accumulates data as hydration steps complete.
+ *
+ * The document fields are nullable because hydration legitimately produces a
+ * sessionless state (logged out, standalone web before connect) — consumers
+ * inside the logged-in area are gated on `storeDB` (`Stack.Protected`) and
+ * assert presence via `useStoreSession()`, not through these types.
+ *
+ * KNOWN HOLE (owner-tolerated): these RxDB members live in a React context
+ * value, which wcpos/no-rx-in-context-value forbids in general — this context
+ * IS the app's session carrier and predates the rule. The named aliases keep
+ * the members typed without widening the exception.
+ */
 export interface HydrationContext {
 	userDB?: UserDatabase;
-	/** RxState from `userDB.addState('v2')` — session pointer (`current`). */
-	appState?: any;
-	translationsState?: any;
-	user?: any;
-	initialProps?: any;
-	site?: any;
-	wpCredentials?: any;
-	store?: any;
-	storeDB?: any;
-	/** RxState from `storeDB.addState('data_v2')`. */
-	extraData?: any;
-	stores?: any[];
+	/** Session pointer (`current`). */
+	appState?: SessionAppState;
+	translationsState?: TranslationsState;
+	user?: UserDocument | null;
+	/** Embedded-mode boot payload; null in standalone web, `{}` on native/electron. */
+	initialProps?: InitialProps | null;
+	site?: SiteDocument | null;
+	wpCredentials?: WPCredentialsDocument | null;
+	store?: StoreDocument | null;
+	storeDB?: StoreDatabase | null;
+	extraData?: ExtraDataState;
+	stores?: PreparedStorePayload[];
 	storeLocalIDs?: string[];
 }
 
@@ -445,18 +483,26 @@ const processInitialPropsStep: HydrationStep = {
 	 */
 	failSoft: true,
 	execute: async (context) => {
-		if (!context.initialProps || !context.userDB || !context.appState || !context.user) {
+		const initialSite = context.initialProps?.site;
+		if (
+			!context.initialProps ||
+			!initialSite ||
+			!context.userDB ||
+			!context.appState ||
+			!context.user
+		) {
 			throw new Error('Missing required context for initial props processing');
 		}
 
 		const { initialProps, userDB, appState, user } = context;
+		const initialStores = initialProps.stores ?? [];
 		const oldState = await appState.get('current');
 
 		// Upsert site and credentials.
 		// `upsertSiteData` merges instead of overwriting: a plain `upsert()` is a
 		// full-document write and would drop the locally-owned `wp_credentials`
 		// link array, which the embedded payload never carries (#902).
-		const siteDoc = await upsertSiteData(userDB.sites, initialProps.site);
+		const siteDoc = await upsertSiteData(userDB.sites, initialSite);
 		const wpCredentialsDoc = await userDB.wp_credentials.upsert(
 			sanitizeWPCredentialsData(initialProps.wp_credentials)
 		);
@@ -477,7 +523,7 @@ const processInitialPropsStep: HydrationStep = {
 		// Process stores and generate local IDs
 		let selectedStoreID: string | undefined;
 		const stores = await Promise.all(
-			initialProps.stores.map(async (store: ServerStorePayload) => {
+			initialStores.map(async (store: ServerStorePayload) => {
 				const normalizedStore = normalizeStorePayload(store);
 				const localID = await generateHashId({
 					user: user.uuid,
@@ -519,10 +565,7 @@ const processInitialPropsStep: HydrationStep = {
 			const preparedStore = stores[index];
 			const existingStore = await userDB.stores.findOne(preparedStore.localID).exec();
 			if (existingStore) {
-				await mergeServerOwnedStoreFields(
-					existingStore,
-					initialProps.stores[index] as ServerStorePayload
-				);
+				await mergeServerOwnedStoreFields(existingStore, initialStores[index]);
 			} else {
 				newStores.push(preparedStore);
 			}
@@ -569,18 +612,24 @@ const testAuthorizationStep: HydrationStep = {
 		}
 
 		const { initialProps, userDB } = context;
-		const wcposApiUrl = initialProps.site?.wcpos_api_url;
+		const initialSite = initialProps.site;
+		const wcposApiUrl = initialSite?.wcpos_api_url;
 		const accessToken = initialProps.wp_credentials?.access_token;
 
-		if (!wcposApiUrl || !accessToken) {
-			appLogger.debug('Skipping authorization test - missing wcpos_api_url or access_token');
+		// The uuid guard also keeps the write below off `findOne(undefined)`,
+		// which RxDB resolves to an arbitrary document — a payload without a
+		// site uuid would otherwise patch `use_jwt_as_param` onto the wrong site.
+		if (!initialSite?.uuid || !wcposApiUrl || !accessToken) {
+			appLogger.debug(
+				'Skipping authorization test - missing site uuid, wcpos_api_url or access_token'
+			);
 			return {};
 		}
 
 		const result = await testAuthorizationMethod(
 			wcposApiUrl,
 			accessToken,
-			initialProps.site?.wcpos_version
+			initialSite.wcpos_version
 		);
 
 		if (result) {
@@ -590,14 +639,14 @@ const testAuthorizationStep: HydrationStep = {
 			 * overwrites (#902), so a stale `true` from an earlier session would
 			 * otherwise keep JWTs in the query string forever.
 			 */
-			const siteDoc = await userDB.sites.findOne(initialProps.site.uuid).exec();
+			const siteDoc = await userDB.sites.findOne(initialSite.uuid).exec();
 			if (siteDoc) {
 				await siteDoc.getLatest().incrementalPatch({
 					use_jwt_as_param: !!result.useJwtAsParam,
 				});
 				if (result.useJwtAsParam) {
 					appLogger.info('Site configured to use JWT as query parameter', {
-						context: { siteId: initialProps.site.uuid },
+						context: { siteId: initialSite.uuid },
 					});
 				}
 			}
@@ -615,8 +664,8 @@ const hydrateUserSessionStep: HydrationStep = {
 	message: 'Loading user session...',
 	progressIncrement: 50,
 	execute: async (context) => {
-		if (!context.userDB) {
-			throw new Error('Missing userDB in hydration context');
+		if (!context.userDB || !context.appState) {
+			throw new Error('Missing userDB or appState in hydration context');
 		}
 		const current = await context.appState.get('current');
 		return await hydrateUserSession(context.userDB, current || {});

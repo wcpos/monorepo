@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useQueryRuntime } from '@wcpos/query';
 
-import { useAppState } from '../../../../contexts/app-state';
+import { useStoreSession } from '../../../../contexts/app-state';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 
 interface ExtraDataContextProps {
@@ -26,7 +26,7 @@ function isMissing(value: unknown): boolean {
  */
 export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 	const http = useRestHttpClient();
-	const { extraData } = useAppState();
+	const { extraData } = useStoreSession();
 	const { engine } = useQueryRuntime();
 
 	React.useEffect(() => {
@@ -37,7 +37,7 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 				.get('/taxes/classes')
 				.then((response) => {
 					if (generation === refreshGeneration && response?.status === 200) {
-						extraData.set('taxClasses', () => response.data);
+						void extraData.set('taxClasses', () => response.data);
 					}
 				})
 				.catch(() => undefined);
@@ -46,7 +46,7 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 				.get('/shipping_methods')
 				.then((response) => {
 					if (generation === refreshGeneration && response?.status === 200) {
-						extraData.set('shippingMethods', () => response.data);
+						void extraData.set('shippingMethods', () => response.data);
 					}
 				})
 				.catch(() => undefined);
@@ -55,7 +55,7 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 				.get('/data/order_statuses')
 				.then((response) => {
 					if (generation === refreshGeneration && response?.status === 200) {
-						extraData.set('orderStatuses', () => response.data);
+						void extraData.set('orderStatuses', () => response.data);
 					}
 				})
 				.catch(() => undefined);

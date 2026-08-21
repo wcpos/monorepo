@@ -8,13 +8,7 @@
  *
  * We export null when there are no valid initialProps to ensure truthy checks work correctly.
  */
-interface InitialProps {
-	site: Record<string, unknown>;
-	wp_credentials: Record<string, unknown>;
-	stores: Record<string, unknown>[];
-	logout_url?: string;
-	[key: string]: unknown;
-}
+import type { InitialProps } from './initial-props.types';
 
 function getInitialProps(): InitialProps | null {
 	const props = (globalThis as any).initialProps;

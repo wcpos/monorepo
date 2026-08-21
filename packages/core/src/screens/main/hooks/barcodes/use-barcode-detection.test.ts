@@ -60,8 +60,8 @@ const mockStoreDB = {
 	collections: { scanner_profiles: mockScannerProfiles },
 };
 
-jest.mock('../../../../contexts/app-state', () => ({
-	useAppState: () => ({
+jest.mock('../../../../contexts/app-state', () => {
+	const useAppState = () => ({
 		store: {
 			barcode_scanning_min_chars$: minChars$,
 			barcode_scanning_prefix$: prefix$,
@@ -69,8 +69,9 @@ jest.mock('../../../../contexts/app-state', () => ({
 			barcode_scanning_avg_time_input_threshold$: avgThreshold$,
 		},
 		storeDB: mockStoreDB,
-	}),
-}));
+	});
+	return { useAppState, useStoreSession: useAppState };
+});
 
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string, values?: Record<string, unknown>) =>

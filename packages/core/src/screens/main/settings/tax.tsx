@@ -24,7 +24,7 @@ import { useDocField } from '@wcpos/query';
 import { SettingsDangerZone } from './components/settings-danger-zone';
 import { SettingsRow } from './components/settings-row';
 import { SettingsSection } from './components/settings-section';
-import { useAppState } from '../../../contexts/app-state';
+import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { FormErrors } from '../components/form-errors';
 import { InclExclRadioGroup } from '../components/incl-excl-tax-radio-group';
@@ -52,7 +52,7 @@ const formSchema = z.object({
  *
  */
 export function TaxSettings() {
-	const { store } = useAppState();
+	const { store } = useStoreSession();
 	const t = useT();
 	const router = useRouter();
 	const { localPatch } = useLocalMutation();

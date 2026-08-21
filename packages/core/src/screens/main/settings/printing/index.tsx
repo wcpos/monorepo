@@ -29,12 +29,12 @@ import { useAvailablePrinterProfiles } from '../printer/use-available-printer-pr
 import { createCloudEnqueueFactory } from '../../hooks/use-cloud-enqueue';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { useActiveTemplates } from '../../receipt/hooks/use-active-templates';
-import { useAppState } from '../../../../contexts/app-state';
+import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 
 export function PrintingSettings() {
 	const t = useT();
-	const { storeDB } = useAppState();
+	const { storeDB } = useStoreSession();
 	const [dialogOpen, setDialogOpen] = React.useState(false);
 	const [editingPrinter, setEditingPrinter] = React.useState<PrinterProfile | undefined>();
 	const [prefilledPrinter, setPrefilledPrinter] = React.useState<

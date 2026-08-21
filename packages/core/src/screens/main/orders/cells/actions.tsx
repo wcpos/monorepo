@@ -40,7 +40,7 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { useAppState } from '../../../../contexts/app-state';
+import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
 import { useProAccess } from '../../contexts/pro-access';
@@ -62,7 +62,7 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'orders'> },
 	const { localPatch } = useLocalMutation();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
-	const { store, wpCredentials } = useAppState();
+	const { store, wpCredentials } = useStoreSession();
 	const orderID = useRecordField(record, ({ payload }) => payload.id);
 	const runtime = useQueryRuntime();
 	const { readOnly } = useProAccess();
@@ -108,8 +108,8 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'orders'> },
 		const existingMeta = order.payload.meta_data ?? [];
 		const existingStoreId = wooMetaCarrier.readIdentity(existingMeta).storeId;
 		let meta_data = wooMetaCarrier.stampIdentity(existingMeta, {
-			userId: wpCredentials.id,
-			storeId: store.id === NO_STORE ? (existingStoreId ?? NO_STORE) : store.id,
+			userId: wpCredentials.id!,
+			storeId: store.id === NO_STORE ? (existingStoreId ?? NO_STORE) : store.id!,
 		});
 		if (store.id === NO_STORE && existingStoreId === null) {
 			meta_data = meta_data.filter((entry) => entry.key !== POS_META_KEYS.store);

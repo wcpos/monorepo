@@ -42,7 +42,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 import { forgetUnsentChanges, type UnsentChanges } from '@wcpos/utils/unsent-changes';
 
-import { useAppState } from '../../../../contexts/app-state';
+import { useStoreSession } from '../../../../contexts/app-state';
 import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 import { reloadApp } from '../../../../utils/reload-app';
@@ -116,7 +116,7 @@ function UserAvatar({
  * @TODO - remove hardcoded screensize
  */
 export function UserMenu() {
-	const { wpCredentials, site, store, logout, switchStore } = useAppState();
+	const { wpCredentials, site, store, logout, switchStore } = useStoreSession();
 	const router = useRouter();
 	const { screenSize } = useTheme();
 	const { engine } = useQueryRuntime();
@@ -283,7 +283,7 @@ export function UserMenu() {
 								<StoreSubMenu
 									storesResource={storesResource}
 									switchStore={handleSwitchStore}
-									currentStoreID={store.localID}
+									currentStoreID={store.localID!}
 								/>
 							</DropdownMenuSubContent>
 						</DropdownMenuSub>

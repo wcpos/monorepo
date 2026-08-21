@@ -15,7 +15,7 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import type { ConnectionDiagnostics, PrinterProfile, PrinterServiceOptions } from '@wcpos/printer';
 
 import { buildPrinterProfileFields, type PrinterDialogPrefill } from '../profile-config';
-import { useAppState } from '../../../../../contexts/app-state';
+import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 
 import type * as z from 'zod';
@@ -91,7 +91,7 @@ export function usePrinterDialogForm({
 	onSave,
 }: UsePrinterDialogFormArgs) {
 	const t = useT();
-	const { storeDB } = useAppState();
+	const { storeDB } = useStoreSession();
 	const printerService = React.useMemo(() => new PrinterService(), []);
 	const isEditing = !!printer;
 

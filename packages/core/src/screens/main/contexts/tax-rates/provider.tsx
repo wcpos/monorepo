@@ -7,7 +7,7 @@ import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import { filterTaxRates } from './tax-rates.helpers';
-import { useAppState } from '../../../../contexts/app-state';
+import { useStoreSession } from '../../../../contexts/app-state';
 import { QueryStateProvider, useCollectionBinding, useQueryState } from '../../../../query';
 import { TAX_RATES_ALL_RESULTS_LIMIT, TAX_RATES_INITIAL_SORT } from '../../tax-rates/query-state';
 import { useBaseTaxLocation } from '../../hooks/use-base-tax-location';
@@ -111,7 +111,7 @@ function TaxSettingsProvider({ children }: { children: React.ReactNode }) {
 	const result = useObservableSuspense(binding.resource) as QueryResult;
 	const allRates = React.useMemo(() => result.hits.map((hit) => hit.record.payload), [result.hits]);
 
-	const { store } = useAppState();
+	const { store } = useStoreSession();
 	const shippingTaxClass = useDocField(store, (value) => value.shipping_tax_class);
 
 	/**
@@ -121,15 +121,15 @@ function TaxSettingsProvider({ children }: { children: React.ReactNode }) {
 	 * the observable identity, so building them inline resubscribed on every render.
 	 */
 	const calcTaxes$ = React.useMemo(
-		() => store.calc_taxes$.pipe(map((val) => val === 'yes')),
+		() => store.calc_taxes$!.pipe(map((val) => val === 'yes')),
 		[store]
 	);
 	const pricesIncludeTax$ = React.useMemo(
-		() => store.prices_include_tax$.pipe(map((val) => val === 'yes')),
+		() => store.prices_include_tax$!.pipe(map((val) => val === 'yes')),
 		[store]
 	);
 	const taxRoundAtSubtotal$ = React.useMemo(
-		() => store.tax_round_at_subtotal$.pipe(map((val) => val === 'yes')),
+		() => store.tax_round_at_subtotal$!.pipe(map((val) => val === 'yes')),
 		[store]
 	);
 
@@ -187,7 +187,7 @@ function addressValue(value: unknown): string {
  */
 function TaxLocationProvider({ children, order: orderProp }: TaxRatesProviderProps) {
 	const { allRates } = useTaxSettings();
-	const { store } = useAppState();
+	const { store } = useStoreSession();
 	const baseLocation = useBaseTaxLocation();
 
 	/**

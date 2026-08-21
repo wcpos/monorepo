@@ -88,7 +88,7 @@ describe('switchUserSessionStore', () => {
 					wp_credentials: documentLookup({ uuid: 'cred-1' }),
 					stores: documentLookup({ localID: 'store-2' }),
 				} as any,
-				appState,
+				appState as any,
 				'store-2'
 			)
 		).rejects.toBe(error);
@@ -121,7 +121,7 @@ describe('switchUserSessionStore', () => {
 				wp_credentials: documentLookup(wpCredentials),
 				stores: documentLookup(store),
 			} as any,
-			appState,
+			appState as any,
 			'store-2'
 		);
 		for (let turn = 0; turn < 5; turn += 1) {
@@ -167,7 +167,7 @@ describe('switchUserSessionStore', () => {
 					wp_credentials: documentLookup({ uuid: 'cred-1' }),
 					stores: documentLookup({ localID: 'store-2' }),
 				} as any,
-				appState,
+				appState as any,
 				'store-2',
 				{ switchEngineScope }
 			)
@@ -202,7 +202,7 @@ describe('switchUserSessionStore', () => {
 				wp_credentials: documentLookup({ uuid: 'cred-1' }),
 				stores: documentLookup(store),
 			} as any,
-			appState,
+			appState as any,
 			'store-2',
 			{ switchEngineScope }
 		);
@@ -270,8 +270,8 @@ describe('PROCESS_INITIAL_PROPS', () => {
 
 		await step!.execute({
 			userDB: userDB as any,
-			appState,
-			user: { uuid: 'user-1' },
+			appState: appState as any,
+			user: { uuid: 'user-1' } as any,
 			initialProps: {
 				site: siteDoc,
 				wp_credentials: wpCredentialsDoc,

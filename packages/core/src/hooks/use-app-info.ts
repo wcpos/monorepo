@@ -166,7 +166,7 @@ export function useAppInfo(options?: UseAppInfoOptions): AppInfoResult {
 	const site = options?.site ?? context?.site;
 
 	// Subscribe to site observables
-	const siteData = useSiteObservables(site);
+	const siteData = useSiteObservables(site ?? undefined);
 
 	// Compute version compatibility
 	const wcposVersionPass = React.useMemo(() => {

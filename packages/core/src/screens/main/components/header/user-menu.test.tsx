@@ -20,15 +20,16 @@ const wpCredentials = {
 	populate$: () => new BehaviorSubject<unknown[]>([]),
 };
 
-jest.mock('../../../../contexts/app-state', () => ({
-	useAppState: () => ({
+jest.mock('../../../../contexts/app-state', () => {
+	const useAppState = () => ({
 		wpCredentials,
 		site: { name: 'Test Site' },
 		store: { localID: 'store-1', name: 'Test Store' },
 		logout: jest.fn(),
 		switchStore: jest.fn(),
-	}),
-}));
+	});
+	return { useAppState, useStoreSession: useAppState };
+});
 
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 
