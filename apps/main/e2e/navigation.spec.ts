@@ -38,6 +38,19 @@ authenticatedTest.describe('Drawer Navigation', () => {
 		}
 	});
 
+	authenticatedTest(
+		'drawer items below the fold stay reachable on very short viewports',
+		async ({ posPage: page }) => {
+			// Regression for #1425: at landscape-phone height the drawer's item column
+			// overflows the viewport, so the drawer must scroll for the bottom group
+			// (health/settings/support) to be clickable at all.
+			await page.setViewportSize({ width: 700, height: 360 });
+			await page.getByTestId('drawer-open-button').click();
+			await page.getByTestId('drawer-item-health').click();
+			await expect(page.getByTestId('health-nav-logs')).toBeVisible({ timeout: 30_000 });
+		}
+	);
+
 	authenticatedTest('should navigate to Logs inside Store health', async ({ posPage: page }) => {
 		await navigateToPage(page, 'health');
 		await page.getByTestId('health-nav-logs').click();

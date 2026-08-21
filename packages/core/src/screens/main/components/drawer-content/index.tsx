@@ -23,7 +23,10 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 				paddingStart: 0,
 				paddingEnd: 0,
 				justifyContent: 'flex-start',
-				height: '100%',
+				// flexGrow (not height: '100%') so the bottom group's marginTop: 'auto'
+				// still anchors when content fits, while overflowing items stay scrollable
+				// on short viewports (#1425).
+				flexGrow: 1,
 			}}
 		>
 			<DrawerItemList {...props} />
