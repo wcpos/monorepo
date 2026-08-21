@@ -1,3 +1,4 @@
+import { AppInfo } from '@wcpos/utils/app-info';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -119,7 +120,10 @@ export async function refreshAccessToken({
 				const response = await getHttpClient().post(
 					`${apiUrl}auth/refresh`,
 					{ refresh_token: refreshToken },
-					{ headers: { 'X-WCPOS': '1' } }
+					// The refresh POST is exactly the request class a blank/library UA
+					// gets IP-banned for (B10) — stamp it like every other lane. The
+					// fragment is empty on web, which keeps the browser UA.
+					{ headers: { 'X-WCPOS': '1', ...AppInfo.userAgentHeader } }
 				);
 
 				const responseData = getResponseData(response);

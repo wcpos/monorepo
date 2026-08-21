@@ -60,6 +60,9 @@ module.exports = {
 		'^@wcpos/receipt-renderer/(.*)$': '<rootDir>/../receipt-renderer/src/$1',
 		'^@wcpos/printer/(.*)$': '<rootDir>/../printer/src/$1',
 		'^@wcpos/components/(.*)$': '<rootDir>/../components/src/$1',
+		// jsdom jest has no platform-extension resolution, and the default
+		// app-info variant imports expo-constants — map to the web variant.
+		'^@wcpos/utils/app-info$': '<rootDir>/../utils/src/app-info/index.web',
 		// Fallback for other @wcpos/utils imports
 		'^@wcpos/utils/(.*)$': '<rootDir>/../utils/src/$1',
 		'^@wcpos/database$': '<rootDir>/../database/src',

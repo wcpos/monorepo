@@ -52,9 +52,12 @@ describe('useHttpClient network audit logs', () => {
 		(requestStateManager.isTokenRefreshing as jest.Mock).mockReturnValue(false);
 	});
 
-	it('stamps the WCPOS marker and explicit product User-Agent on requests (B10)', async () => {
-		const { AppInfo } =
-			jest.requireActual<typeof import('@wcpos/utils/app-info')>('@wcpos/utils/app-info');
+	it('stamps the WCPOS marker but authors NO User-Agent on web (B10)', async () => {
+		// This suite maps @wcpos/utils/app-info to the WEB variant, whose UA
+		// fragment is empty: Firefox honours fetch UA overrides, and replacing
+		// the browser UA with a product string reads as a bot to WAF heuristics.
+		// The native/Electron fragment (UA present) is pinned in
+		// apps/main/lib/engine-fetcher.test.ts, which resolves the native variant.
 		(http.request as jest.Mock).mockResolvedValue({ status: 200, data: {} });
 		const { result } = renderHook(() => useHttpClient());
 
@@ -65,8 +68,7 @@ describe('useHttpClient network audit logs', () => {
 
 		const config = (http.request as jest.Mock).mock.calls[0][0];
 		expect(config.headers['X-WCPOS']).toBe(1);
-		expect(config.headers['User-Agent']).toBe(AppInfo.userAgent);
-		expect(AppInfo.userAgent).toMatch(/^WCPOS\//);
+		expect(config.headers).not.toHaveProperty('User-Agent');
 	});
 
 	it('persists mutating responses with a sanitized searchable endpoint', async () => {

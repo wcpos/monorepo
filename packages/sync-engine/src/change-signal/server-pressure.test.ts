@@ -26,6 +26,14 @@ describe('parseRetryAfterMs', () => {
 		expect(parseRetryAfterMs('soon', 0)).toBeNull();
 	});
 
+	it('rejects Date.parse-lenient values that are not HTTP-date shaped (B10)', () => {
+		// An ISO stamp Date.parses fine but is not an HTTP-date — treating it as
+		// valid would block the error-body mirror fallback behind a delay the
+		// server never named. (All-digit strings are valid DELAY-SECONDS.)
+		expect(parseRetryAfterMs('2026-08-21T12:00:00Z', 1_000)).toBeNull();
+		expect(parseRetryAfterMs('0.5', 1_000)).toBeNull();
+	});
+
 	it('never parks the till for longer than the sanity clamp, and never negative', () => {
 		expect(parseRetryAfterMs('86400', 0)).toBe(15 * 60_000);
 		expect(parseRetryAfterMs(new Date(0).toUTCString(), 60_000)).toBe(0);

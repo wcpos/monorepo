@@ -222,11 +222,13 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 			(processedConfig as any).wcposHeaders !== false
 		) {
 			set(processedConfig, ['headers', 'X-WCPOS'], 1);
-			// Explicit product UA (B10, wcpos-infra#72): a blank or library UA on a
-			// POST earns a permanent AIOS IP ban. Browsers drop the forbidden header
-			// and keep their own UA; native and the Electron main-process transport
-			// apply it.
-			set(processedConfig, ['headers', 'User-Agent'], AppInfo.userAgent);
+			// Explicit product UA on native/Electron (B10, wcpos-infra#72): a blank
+			// or library UA on a POST earns a permanent AIOS IP ban. The fragment is
+			// EMPTY on web — Firefox honours fetch UA overrides, and replacing the
+			// battle-tested browser UA with a product string reads as a bot.
+			for (const [name, value] of Object.entries(AppInfo.userAgentHeader)) {
+				set(processedConfig, ['headers', name], value);
+			}
 		}
 
 		if (processedConfig.method?.toLowerCase() === 'head') {
