@@ -433,7 +433,7 @@ describe('testAuthorizationMethod', () => {
 		expect(fetchMock.mock.calls[2][1].signal).toBeInstanceOf(AbortSignal);
 	});
 
-	it('keeps the auth probe timeout active while reading the response body', async () => {
+	it('keeps the shorter echo timeout active while reading the response body', async () => {
 		jest.useFakeTimers();
 		try {
 			let resolveBody!: (value: unknown) => void;
@@ -453,7 +453,7 @@ describe('testAuthorizationMethod', () => {
 			const signal = fetchMock.mock.calls[0][1].signal as AbortSignal;
 
 			expect(signal.aborted).toBe(false);
-			jest.advanceTimersByTime(10000);
+			jest.advanceTimersByTime(3000);
 			expect(signal.aborted).toBe(true);
 
 			resolveBody(null);

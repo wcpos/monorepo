@@ -16,6 +16,7 @@ import { initialProps } from './initial-props';
 
 const appLogger = getLogger(['wcpos', 'app', 'hydration']);
 const AUTH_TEST_TIMEOUT_MS = 10000;
+const AUTH_PROBE_TIMEOUT_MS = 3000;
 
 /**
  * Fetch JSON with the abort timer spanning BOTH the request and the body
@@ -26,12 +27,13 @@ const AUTH_TEST_TIMEOUT_MS = 10000;
  */
 async function fetchJsonWithTimeout(
 	input: Parameters<typeof fetch>[0],
-	init: Parameters<typeof fetch>[1] = {}
+	init: Parameters<typeof fetch>[1] = {},
+	timeoutMs = AUTH_TEST_TIMEOUT_MS
 ): Promise<{ response: Response; data: unknown } | null> {
 	const controller = new AbortController();
 	const timeout = setTimeout(() => {
 		controller.abort();
-	}, AUTH_TEST_TIMEOUT_MS);
+	}, timeoutMs);
 
 	try {
 		const response = await fetch(input, {
@@ -149,19 +151,23 @@ async function probeHeaderEcho(
 		url.searchParams.set('wcpos', '1');
 		url.searchParams.set('store_id', '1');
 
-		const result = await fetchJsonWithTimeout(url.toString(), {
-			method: 'GET',
-			headers: {
-				Authorization: `Bearer ${accessToken}`,
-				'Content-Type': 'application/json',
-				'X-WCPOS': '1',
-				'X-WCPOS-Store': '1',
-				'Idempotency-Key': 'wcpos-echo-probe',
-				'If-Match': '"wcpos-echo-probe"',
-				'If-None-Match': '"wcpos-echo-probe"',
-				'X-WCPOS-Idempotency-Key': 'wcpos-echo-probe',
+		const result = await fetchJsonWithTimeout(
+			url.toString(),
+			{
+				method: 'GET',
+				headers: {
+					Authorization: `Bearer ${accessToken}`,
+					'Content-Type': 'application/json',
+					'X-WCPOS': '1',
+					'X-WCPOS-Store': '1',
+					'Idempotency-Key': 'wcpos-echo-probe',
+					'If-Match': '"wcpos-echo-probe"',
+					'If-None-Match': '"wcpos-echo-probe"',
+					'X-WCPOS-Idempotency-Key': 'wcpos-echo-probe',
+				},
 			},
-		});
+			AUTH_PROBE_TIMEOUT_MS
+		);
 
 		if (!result || !result.response.ok) {
 			return null;
