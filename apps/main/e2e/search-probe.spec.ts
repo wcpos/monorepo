@@ -6,6 +6,7 @@ import {
 	isolatedVariableProductTest,
 	tryAddRunPrivateSimpleProduct,
 } from './checkout-probe';
+import { storeRequestOptions } from './fixtures';
 import {
 	createRunPrivateProduct,
 	findCreatedProductRecord,
@@ -67,6 +68,27 @@ automaticVariableProductTest('provisions a variable product before a test reques
 });
 
 test.describe('search-probe pure logic', () => {
+	test('writer credentials ride both auth transports (hostile Tier 3 strips the header)', () => {
+		// Self-minted writer JWTs send header AND param: the param is what
+		// survives dev-free's header-stripping tier (header-only writer calls
+		// 401'd every free lane, 2026-08-21); the header serves servers without
+		// param auth. The param takes the bare JWT, matching Auth::extract_token.
+		expect(storeRequestOptions({ transport: 'both', value: 'Bearer jwt.like.token' })).toEqual({
+			headers: { 'X-WCPOS': '1', Authorization: 'Bearer jwt.like.token' },
+			params: { authorization: 'jwt.like.token' },
+		});
+		// App-captured transports still mirror the app exactly.
+		expect(storeRequestOptions({ transport: 'header', value: 'Bearer jwt.like.token' })).toEqual({
+			headers: { 'X-WCPOS': '1', Authorization: 'Bearer jwt.like.token' },
+			params: {},
+		});
+		expect(storeRequestOptions({ transport: 'query', value: 'jwt.like.token' })).toEqual({
+			headers: { 'X-WCPOS': '1' },
+			params: { authorization: 'jwt.like.token' },
+		});
+		expect(storeRequestOptions(null)).toEqual({ headers: { 'X-WCPOS': '1' }, params: {} });
+	});
+
 	test('accepts matching variations demand while searching products', async () => {
 		const matchingResponse = {
 			request: () => ({ method: () => 'GET' }),

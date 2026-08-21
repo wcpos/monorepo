@@ -46,9 +46,12 @@ const AUTH_ENTRY_RETRY_DELAY_MS = 15_000;
 /**
  * How the app presents its store credentials: some sites accept the JWT in an
  * `Authorization` header, others (when `use_jwt_as_param` is set) can only take
- * it as a query parameter.
+ * it as a query parameter. `both` is for credentials the harness minted itself
+ * (no app transport to mirror): the header serves servers without param auth,
+ * the param survives header-stripping proxies (dev-free's hostile Tier 3) —
+ * whichever arrives wins, so sending both is safe everywhere.
  */
-export type StoreAuthorization = { transport: 'header' | 'query'; value: string };
+export type StoreAuthorization = { transport: 'header' | 'query' | 'both'; value: string };
 
 /**
  * Record the header or query-parameter authorization the app sends to the
@@ -79,12 +82,17 @@ export function storeRequestOptions(authorization: StoreAuthorization | null): {
 	headers: Record<string, string>;
 	params: Record<string, string>;
 } {
+	const header = authorization?.transport === 'header' || authorization?.transport === 'both';
+	const param = authorization?.transport === 'query' || authorization?.transport === 'both';
 	return {
 		headers: {
 			'X-WCPOS': '1',
-			...(authorization?.transport === 'header' ? { Authorization: authorization.value } : {}),
+			...(header && authorization ? { Authorization: authorization.value } : {}),
 		},
-		params: authorization?.transport === 'query' ? { authorization: authorization.value } : {},
+		// The param takes the bare JWT (the app's own param-mode spelling); a
+		// `both` value carries the header's `Bearer ` prefix, so strip it here.
+		params:
+			param && authorization ? { authorization: authorization.value.replace(/^Bearer /, '') } : {},
 	};
 }
 

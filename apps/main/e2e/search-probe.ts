@@ -146,7 +146,12 @@ export async function productWriterAuthorization(
 			const location = submit.headers()['location'] ?? '';
 			const token = /access_token=([^&]+)/.exec(location)?.[1];
 			if (!token) throw new WriterAuthenticationFailure('http', submit.status());
-			return { transport: 'header', value: `Bearer ${token}` };
+			// Self-minted credential with no app transport to mirror: send BOTH the
+			// header and the param. dev-free's hostile Tier 3 strips the
+			// Authorization header (header-only writer calls 401'd every lane,
+			// 2026-08-21); servers without param auth read the header. Live-verified
+			// on hostile dev-free: wc/v3 header-only 401s, the param form 200s.
+			return { transport: 'both', value: `Bearer ${token}` };
 		} catch (error) {
 			const failure =
 				error instanceof WriterAuthenticationFailure
@@ -177,7 +182,9 @@ export async function productWriterAuthorization(
 }
 
 function collectionUrl(storeUrl: string, collection: ProbeCollection, id?: number): string {
-	// wc/v3 accepts the captured Bearer JWT; query-param JWT auth may remain wcpos/v2-only.
+	// wc/v3 accepts the JWT via header AND via `?authorization=` (B4's
+	// Auth::extract_token hooks determine_current_user, so it is route-agnostic —
+	// live-verified on dev-free wc/v3, 2026-08-21).
 	const base = `${storeUrl.replace(/\/+$/, '')}/wp-json/wc/v3/${collection}`;
 	return id === undefined ? base : `${base}/${id}`;
 }

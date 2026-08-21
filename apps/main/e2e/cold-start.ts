@@ -40,6 +40,7 @@ import {
 	hydrateAuthenticatedPage,
 	isRouteTeardownError,
 	type StoreAuthorization,
+	storeRequestOptions,
 } from './fixtures';
 
 /**
@@ -184,16 +185,10 @@ export async function probeVariationSearch(
 		return { supported: false, reason: 'no store authorization was observed' };
 	}
 	const endpoint = `${storeUrl.replace(/\/+$/, '')}/wp-json/wcpos/v2/variations`;
+	const auth = storeRequestOptions(authorization);
 	const response = await request.get(endpoint, {
-		params: {
-			search: term,
-			per_page: 1,
-			...(authorization.transport === 'query' ? { authorization: authorization.value } : {}),
-		},
-		headers: {
-			...(authorization.transport === 'header' ? { Authorization: authorization.value } : {}),
-			'X-WCPOS': '1',
-		},
+		params: { search: term, per_page: 1, ...auth.params },
+		headers: auth.headers,
 		failOnStatusCode: false,
 	});
 	if (response.status() === 400) {
