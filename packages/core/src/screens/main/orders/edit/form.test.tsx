@@ -32,7 +32,14 @@ type Customer = {
 	tax_ids: unknown[];
 };
 
-type CustomerValueRef = { current: Customer | null };
+type CustomerRecord = {
+	uuid: string;
+	payload: Customer;
+	getLatest: () => CustomerRecord;
+	toMutableJSON: () => { payload: Customer };
+	collection: { name: string };
+};
+type CustomerValueRef = { current: CustomerRecord | null };
 
 const customerResources = new Map<number, { valueRef$$: Subject<CustomerValueRef> }>();
 const setValue = jest.fn();
@@ -172,8 +179,11 @@ const order = {
 	collection: { name: 'orders' },
 } as unknown as EngineRecord<'orders'>;
 
-function customer(id: number): Customer {
-	return {
+function customer(id: number): CustomerRecord {
+	// Engine-record-shaped on purpose: the production hook returns EngineRecord<'customers'>,
+	// and a flat fixture would exercise only the guest-object branch of handleCustomerChange —
+	// leaving getLatest().payload extraction untested.
+	const payload: Customer = {
 		id,
 		first_name: `Customer ${id}`,
 		last_name: '',
@@ -182,6 +192,14 @@ function customer(id: number): Customer {
 		shipping: { first_name: `Shipping ${id}` },
 		tax_ids: [{ id }],
 	};
+	const record: CustomerRecord = {
+		uuid: `customer-${id}`,
+		payload,
+		getLatest: () => record,
+		toMutableJSON: () => ({ payload }),
+		collection: { name: 'customers' },
+	};
+	return record;
 }
 
 async function degradeStorage(databaseName: string) {
