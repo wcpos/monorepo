@@ -50,6 +50,23 @@ describe('ScanHub', () => {
 		expect(received).toEqual([]);
 	});
 
+	it('keeps delivering other sources after one source errors', () => {
+		const hub = createScanHub();
+		const failing$ = new Subject<ScanEvent>();
+		const healthy$ = new Subject<ScanEvent>();
+		const received: ScanEvent[] = [];
+		hub.registerSource(failing$);
+		hub.registerSource(healthy$);
+		hub.events$.subscribe((event) => received.push(event));
+
+		failing$.next(scan('OK-BEFORE', 'serial'));
+		failing$.error(new Error('device gone'));
+		healthy$.next(scan('STILL-ALIVE', 'hid-pos'));
+		hub.emit(scan('EMIT-ALIVE', 'wedge'));
+
+		expect(received.map((event) => event.code)).toEqual(['OK-BEFORE', 'STILL-ALIVE', 'EMIT-ALIVE']);
+	});
+
 	it('matches createScanBus hot no-replay semantics for late subscribers', () => {
 		for (const channel of [createScanBus(), createScanHub()]) {
 			const received: ScanEvent[] = [];

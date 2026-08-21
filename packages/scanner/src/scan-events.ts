@@ -53,7 +53,13 @@ export function createScanHub(): ScanHub {
 	return {
 		events$: subject.asObservable(),
 		registerSource: (source$) => {
-			const subscription = source$.subscribe((event) => subject.next(event));
+			// A failing source must not take down the shared channel: scanning from
+			// every other registered source keeps working; the errored source is
+			// simply dropped (its owner is responsible for reconnect/retry).
+			const subscription = source$.subscribe({
+				next: (event) => subject.next(event),
+				error: () => undefined,
+			});
 			return () => subscription.unsubscribe();
 		},
 		emit: (event) => subject.next(event),
