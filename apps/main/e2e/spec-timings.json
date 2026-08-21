@@ -22,9 +22,11 @@
     "order-lifecycle.unit.spec.ts": 0.2,
     "order-cleanup.spec.ts": 0.1,
     "search-probe.spec.ts": 0.0,
-    "cashier-slot.spec.ts": 0.0
+    "cashier-slot.spec.ts": 0.0,
+    "server-created-visibility.spec.ts": 950.0
   },
   "_notes": {
-    "pos-coupon-apply.spec.ts": "Measured at 70.0s for ONE store. Now runs once per store (3 on dev-next) and the non-default stores each pay a lazy OAuth, so it is weighted at 210 rather than its last measurement. Re-measure once a full run lands."
+    "pos-coupon-apply.spec.ts": "Measured at 70.0s for ONE store. Now runs once per store (3 on dev-next) and the non-default stores each pay a lazy OAuth, so it is weighted at 210 rather than its last measurement. Re-measure once a full run lands.",
+    "server-created-visibility.spec.ts": "Measured 15.7m locally against dev-pro (2026-08-21, 3 directional tests, one worker): each arrival rode the ~5-min eco cadence poll rather than the fast change-signal path. Weighted at the slow-path cost so the shard planner never packs it as a median spec; re-measure once a CI run lands."
   }
 }

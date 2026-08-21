@@ -88,12 +88,14 @@ export function StorePill({ resource }: Props) {
 		<Select value={value} onOpenChange={setOpen} onValueChange={handleSelect}>
 			<SelectPrimitiveTrigger asChild>
 				<ButtonPill
+					testID="order-filter-store"
 					size="xs"
 					leftIcon="shop"
 					variant={isActive ? undefined : 'muted'}
 					onPress={() => setOpen(!open)}
 					removable={isActive}
 					onRemove={handleRemove}
+					removeTestID="order-filter-store-remove"
 				>
 					<ButtonText>{value?.label || t('common.created_via_2')}</ButtonText>
 				</ButtonPill>

@@ -6,8 +6,16 @@ import { type StoreAuthorization, storeRequestOptions } from './fixtures';
 
 import type { APIRequestContext, APIResponse, Locator, Page } from '@playwright/test';
 
+/** Collections createSearchProbe can create records in. */
 type ProbeCollection = 'products' | 'customers';
-type SearchCollection = ProbeCollection | 'orders';
+/**
+ * Collections the wc/v3 request/delete plumbing can address. Orders are deletable
+ * (arrival probes clean up after themselves) but are never created through
+ * createSearchProbe — see createOrderArrivalProbe for why an order probe is its
+ * own, deliberately scope-free, creation path.
+ */
+type WcRestCollection = ProbeCollection | 'orders';
+type SearchCollection = WcRestCollection;
 
 export interface SearchProbe {
 	collection: ProbeCollection;
@@ -34,6 +42,8 @@ interface CreateSearchProbeOptions {
 	writerConfigured?: boolean;
 	/** Extra wc/v3 fields merged over the default product probe payload (products only). */
 	productData?: Record<string, unknown>;
+	/** Extra wc/v3 fields merged over the default customer probe payload (customers only). */
+	customerData?: Record<string, unknown>;
 }
 
 export function productWriterCredentialsDecision(
@@ -215,7 +225,7 @@ async function resolveWriterTransport(
 	throw lastFailure;
 }
 
-function collectionUrl(storeUrl: string, collection: ProbeCollection, id?: number): string {
+function collectionUrl(storeUrl: string, collection: WcRestCollection, id?: number): string {
 	// wc/v3 accepts the JWT via Authorization header or ?authorization= param
 	// (param verified against wc/v3 on 2026-08-21); the transport is chosen by
 	// resolveWriterTransport, or captured from the app's own traffic.
@@ -226,7 +236,7 @@ function collectionUrl(storeUrl: string, collection: ProbeCollection, id?: numbe
 /** The plain-permalink spelling of the same route: /index.php?rest_route=/wc/v3/… */
 export function plainPermalinkUrl(
 	storeUrl: string,
-	collection: ProbeCollection,
+	collection: WcRestCollection,
 	id?: number
 ): string {
 	const route = id === undefined ? `/wc/v3/${collection}` : `/wc/v3/${collection}/${id}`;
@@ -250,7 +260,7 @@ async function probeRequest(
 	request: APIRequestContext,
 	method: 'get' | 'post' | 'delete',
 	storeUrl: string,
-	collection: ProbeCollection,
+	collection: WcRestCollection,
 	id: number | undefined,
 	options: ProbeRequestOptions
 ) {
@@ -439,6 +449,7 @@ export async function createSearchProbe(
 		token: suppliedToken,
 		writerConfigured = false,
 		productData,
+		customerData,
 	} = options;
 	const token = suppliedToken ?? mintSearchProbeToken(workerIndex);
 	// Custom names must use a prefix recognized by sweepOrphanedProductProbes.
@@ -458,6 +469,7 @@ export async function createSearchProbe(
 					email: `${token}@example.invalid`,
 					first_name: `E2E ${token}`,
 					last_name: 'Probe',
+					...customerData,
 				};
 
 	try {
@@ -647,10 +659,81 @@ export async function fetchProductRecord(
 	return record;
 }
 
+export type OrderArrivalProbeResult =
+	{ ok: true; id: number; number: string } | { ok: false; reason: string };
+
+/**
+ * Create an order the way a WEB order reaches the store — a bare wc/v3 POST with no
+ * POS scope meta and no cashier attribution. This is deliberately the opposite of
+ * the "orders are created through the POS UI" policy: the directional arrival spec
+ * exists to prove a record created OUTSIDE the POS reaches the till, so the probe
+ * must not carry the scope the POS would stamp. An empty, zero-total order is
+ * enough — arrival is about the record existing, not its contents — and it keeps
+ * the probe out of every revenue-shaped report.
+ */
+export async function createOrderArrivalProbe(options: {
+	request: APIRequestContext;
+	storeUrl: string;
+	authorization: StoreAuthorization | null;
+	token: string;
+	/** True when elevated writer credentials were used; failures must then fail, never skip. */
+	writerConfigured: boolean;
+}): Promise<OrderArrivalProbeResult> {
+	const { request, storeUrl, authorization, token, writerConfigured } = options;
+	const failure = `Store rejected orders arrival-probe creation`;
+	try {
+		const response = await probeRequest(request, 'post', storeUrl, 'orders', undefined, {
+			...storeRequestOptions(authorization),
+			data: {
+				// 'processing' is what a paid web order lands as — squarely inside the
+				// maintenance open-recent window, so suppression (the #1302 class) is
+				// exactly what this probe would collide with if the class regressed.
+				status: 'processing',
+				billing: { first_name: 'E2E Arrival', last_name: token },
+			},
+		});
+		if (!response.ok()) {
+			const reason = `${failure} (HTTP ${response.status()}); server write access is required`;
+			if (writerConfigured) throw new Error(reason);
+			return { ok: false, reason };
+		}
+		const record = unwrapRecord(await response.json().catch(() => null));
+		const id = positiveId(record);
+		if (!record || id === null) {
+			throw new Error('orders arrival-probe create succeeded without a record id');
+		}
+		// Sequential-order-number plugins make `number` differ from `id`; the grid
+		// renders `number`, so that is the value the arrival assertion must use.
+		const rawNumber = record.number;
+		const number =
+			typeof rawNumber === 'string' && rawNumber
+				? rawNumber
+				: typeof rawNumber === 'number'
+					? String(rawNumber)
+					: String(id);
+		return { ok: true, id, number };
+	} catch (error) {
+		if (
+			writerConfigured ||
+			(error instanceof Error && error.message.includes('create succeeded'))
+		) {
+			throw error instanceof Error ? error : new Error(`${failure}: transport error`);
+		}
+		return {
+			ok: false,
+			reason: 'Store could not create the orders arrival probe; server write access is required',
+		};
+	}
+}
+
 /** Force-delete a probe without ever turning teardown trouble into a test failure. */
-export async function deleteSearchProbe(
-	options: Omit<CreateSearchProbeOptions, 'workerIndex'> & { id: number }
-): Promise<void> {
+export async function deleteSearchProbe(options: {
+	request: APIRequestContext;
+	storeUrl: string;
+	authorization: StoreAuthorization | null;
+	collection: WcRestCollection;
+	id: number;
+}): Promise<void> {
 	const { request, storeUrl, authorization, collection, id } = options;
 	try {
 		const response = await probeRequest(request, 'delete', storeUrl, collection, id, {
