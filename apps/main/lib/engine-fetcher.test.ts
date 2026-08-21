@@ -153,7 +153,7 @@ describe('createEngineFetcher', () => {
 
 		expect(total).toBe(17);
 		expect(fetch).toHaveBeenCalledWith(
-			`https://store.example.test/wp-json/${route}?ignored=value&page=1&per_page=1&_wcpos_envelope=1`,
+			`https://store.example.test/wp-json/${route}?ignored=value&page=1&per_page=1&wcpos=1&_wcpos_envelope=1`,
 			expect.objectContaining({ headers: expect.any(Headers) })
 		);
 		expect(recordTransport).toHaveBeenCalledTimes(1);
@@ -170,6 +170,24 @@ describe('createEngineFetcher', () => {
 
 		expect(
 			new URL(fetch.mock.calls[0]![0] as string).searchParams.get('_wcpos_envelope')
+		).toBeNull();
+	});
+
+	it('marks every request with the wcpos query var, pushes included', async () => {
+		// The header marker dies on header-stripping proxies; the query-var twin
+		// must ride pulls AND pushes or the marked surface answers rest_no_route.
+		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
+		const { fetcher } = createFetcherHarness({ fetch });
+
+		await fetcher('https://store.example.test/wp-json/wcpos/v2/products?page=1');
+		await fetcher('https://store.example.test/wp-json/wcpos/v2/push/orders?cursor=7', {
+			method: 'POST',
+		});
+
+		expect(new URL(fetch.mock.calls[0]![0] as string).searchParams.get('wcpos')).toBe('1');
+		expect(new URL(fetch.mock.calls[1]![0] as string).searchParams.get('wcpos')).toBe('1');
+		expect(
+			new URL(fetch.mock.calls[1]![0] as string).searchParams.get('_wcpos_envelope')
 		).toBeNull();
 	});
 
