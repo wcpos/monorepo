@@ -443,3 +443,24 @@ describe('wrapEngineDocument identity across emissions', () => {
 		expect('isInstanceOfRxDocument' in cached).toBe(true);
 	});
 });
+
+describe('temporary-order isNew passthrough (ADR 0028 stage I interim scaffolding)', () => {
+	it("passes an instance-level isNew marker through the wrapper's get and has traps", () => {
+		const { document } = fakeRxDocument({ uuid: 'tmp-1', payload: { status: 'pos-open' } });
+		Object.defineProperty(document, 'isNew', { get: () => true });
+
+		const wrapped = wrapEngineDocument<{ isNew?: boolean }>('orders', document);
+
+		expect(wrapped.isNew).toBe(true);
+		expect('isNew' in wrapped).toBe(true);
+	});
+
+	it('reports isNew undefined (and absent) for ordinary engine documents', () => {
+		const { document } = fakeRxDocument({ uuid: 'o-1', payload: { status: 'pos-open' } });
+
+		const wrapped = wrapEngineDocument<{ isNew?: boolean }>('orders', document);
+
+		expect(wrapped.isNew).toBeUndefined();
+		expect('isNew' in wrapped).toBe(false);
+	});
+});

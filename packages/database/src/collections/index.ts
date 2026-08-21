@@ -22,7 +22,6 @@ import { wpCredentialsLiteral } from './schemas/wp-credientials';
 import { printerProfilesLiteral } from './schemas/printer-profiles';
 import { scannerProfilesLiteral } from './schemas/scanner-profiles';
 import { templatePrinterOverridesLiteral } from './schemas/template-printer-overrides';
-import { toSortableInteger } from './utils';
 import { sanitizeWPCredentialsData } from './wp-credentials';
 
 import type { RxCollection, RxCollectionCreator, RxDatabase, RxDocument } from 'rxdb';
@@ -274,65 +273,49 @@ type OrderDocumentType = WithNestedJsonMetaData<
 	WithJsonMetaData<ExtractDocumentTypeFromTypedRxJsonSchema<typeof ordersLiteral>>,
 	'line_items' | 'tax_lines' | 'shipping_lines' | 'fee_lines' | 'coupon_lines'
 >;
-const orderSchema: RxJsonSchema<OrderDocumentType> = ordersLiteral;
 export type OrderDocument = RxDocument<OrderDocumentType> & {
 	readonly isNew?: boolean;
 };
 export type OrderCollection = RxCollection<OrderDocumentType>;
-const orders: RxCollectionCreator<OrderDocumentType> = {
-	schema: orderSchema,
-	options: {
-		searchFields: [
-			'number',
-			'billing.first_name',
-			'billing.last_name',
-			'billing.email',
-			'billing.company',
-			'billing.phone',
-		],
-		middlewares: {
-			preInsert: {
-				handle: (doc: OrderDocumentType) => {
-					doc.sortable_total = toSortableInteger(doc.total);
-					return doc;
-				},
-				parallel: false,
+
+/**
+ * Temporary order (the POS "new order" template document, ADR 0028 stage I).
+ *
+ * Engine-shaped on purpose: `{ uuid, payload }` — the same face an engine order resident
+ * presents — so the cart reads exactly one shape whether the current order is a real
+ * resident or the per-till template. The temp DB itself, the `.isNew` marker, and the
+ * birth heuristic all stay (ADR 0030 deletes them post-GA); only the stored shape aligns.
+ * `payload` is deliberately unvalidated interior (same stance as the engine's collections):
+ * the wire-faithful order body lives inside it.
+ */
+type TemporaryOrderDocumentType = {
+	uuid: string;
+	payload: OrderDocumentType;
+};
+export type TemporaryOrderDocument = RxDocument<TemporaryOrderDocumentType> & {
+	readonly isNew?: boolean;
+};
+export type TemporaryOrderCollection = RxCollection<TemporaryOrderDocumentType>;
+const temporaryOrders: RxCollectionCreator<TemporaryOrderDocumentType> = {
+	schema: {
+		title: 'Temporary POS order (engine-shaped template)',
+		version: 0,
+		type: 'object',
+		primaryKey: 'uuid',
+		properties: {
+			uuid: {
+				description: 'Template document identity (engine record uuid once born).',
+				type: 'string',
+				maxLength: 36,
 			},
-			preSave: {
-				handle: (doc: OrderDocumentType) => {
-					doc.sortable_total = toSortableInteger(doc.total);
-					return doc;
-				},
-				parallel: false,
+			payload: {
+				description: 'The order body, wire-shaped — same interior as an engine resident.',
+				type: 'object',
+				additionalProperties: true,
 			},
 		},
-	},
-	migrationStrategies: {
-		1(oldDoc) {
-			oldDoc.sortable_total = toSortableInteger(oldDoc.total);
-			return oldDoc;
-		},
-		2(oldDoc) {
-			return oldDoc;
-		},
-		// v3: Removed multipleOf constraint from sortable_total (floating-point incompatibility)
-		3(oldDoc) {
-			return oldDoc;
-		},
-		// v4: Allow null coupon_lines code for WooCommerce deletion markers
-		4(oldDoc) {
-			return oldDoc;
-		},
-		// v5: Allow null line_items image for misc products without images
-		5(oldDoc) {
-			return oldDoc;
-		},
-		// v6: Added top-level tax_ids: TaxId[] (customer tax-ID snapshot on the order)
-		6(oldDoc) {
-			oldDoc.tax_ids = Array.isArray(oldDoc.tax_ids) ? oldDoc.tax_ids : [];
-			return oldDoc;
-		},
-	},
+		required: ['uuid', 'payload'],
+	} as RxJsonSchema<TemporaryOrderDocumentType>,
 };
 
 /**
@@ -584,7 +567,7 @@ export type StoreCollections = {
 };
 
 export type TemporaryCollections = {
-	orders: OrderCollection;
+	orders: TemporaryOrderCollection;
 };
 
 export type UserDatabase = RxDatabase<UserCollections>;
@@ -610,5 +593,5 @@ export const storeCollections = {
 };
 
 export const temporaryCollections = {
-	orders,
+	orders: temporaryOrders,
 };

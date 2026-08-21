@@ -58,6 +58,8 @@ export type {
 	SiteCollection,
 	SiteDocument,
 	StoreCollections,
+	TemporaryOrderCollection,
+	TemporaryOrderDocument,
 	StoreDatabase,
 	StoreDocument,
 	TaxRateDocument,

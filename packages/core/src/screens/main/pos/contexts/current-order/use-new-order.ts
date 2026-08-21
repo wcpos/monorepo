@@ -5,41 +5,18 @@ import {
 	useObservableSuspense,
 } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
-import { from } from 'rxjs';
-import { distinctUntilChanged, filter, shareReplay, switchMap, tap } from 'rxjs/operators';
 import useDeepCompareEffect from 'use-deep-compare-effect';
 
-import { createTemporaryDB } from '@wcpos/database';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { newOrder$, patchTemporaryOrderPayload } from './temporary-order';
 import { useAppState } from '../../../../../contexts/app-state';
 import allCurrencies from '../../../../../contexts/currencies/currencies.json';
 import { useDefaultCustomer } from '../../../hooks/use-default-customer';
 import { ensurePosOrderIdentityMeta, transformCustomerJSONToOrderJSON } from '../../hooks/utils';
 
-const temporaryDB$ = from(createTemporaryDB()).pipe(shareReplay(1));
 const newOrderLogger = getLogger(['wcpos', 'pos', 'new-order']);
-
-const newOrder$ = temporaryDB$.pipe(
-	switchMap((db) => {
-		if (!db) throw new Error('Temporary DB not initialized');
-		return db.orders.findOne().$.pipe(
-			tap((order) => {
-				if (!isRxDocument(order)) {
-					void db.orders.insert({
-						status: 'pos-open',
-						created_via: 'woocommerce-pos',
-						billing: {},
-						shipping: {},
-					});
-				}
-			}),
-			filter((order) => isRxDocument(order))
-		);
-	}),
-	distinctUntilChanged((prev, next) => prev?.uuid === next?.uuid)
-);
 
 /**
  * @FIXME: This will subscribe and emit a new order on app load, I should be careful about
@@ -48,9 +25,10 @@ const newOrder$ = temporaryDB$.pipe(
 const newOrderResource = new ObservableResource(newOrder$);
 
 /**
- * Provides a temporary order populated from the current customer and store state.
- *
- * @returns An object containing the current temporary order document.
+ * Provides the temporary (engine-shaped) order populated from the current customer and
+ * store state. The returned document is the RAW temp record — the current-order provider
+ * wraps it for the legacy face; all seeding writes here go through the temp-order
+ * repository's payload merge.
  */
 export const useNewOrder = () => {
 	const { store, wpCredentials } = useAppState();
@@ -86,11 +64,20 @@ export const useNewOrder = () => {
 			taxBasedOn: typeof tax_based_on === 'string' ? tax_based_on : undefined,
 		});
 
-		newOrder!.incrementalPatch(data).catch((error) => {
-			newOrderLogger.error(getErrorMessage(error), {
-				code: ERROR_CODES.CHECKOUT_UNEXPECTED,
+		patchTemporaryOrderPayload(newOrder.uuid, data)
+			.then((patched) => {
+				// null = the template this effect captured is gone (repository could not
+				// resolve the uuid). Pre-stage-I this surfaced as a deleted-document throw
+				// from incrementalPatch; keep it loud rather than silently unseeded.
+				if (!patched) {
+					throw new Error(`Temporary order "${newOrder.uuid}" not found while seeding`);
+				}
+			})
+			.catch((error) => {
+				newOrderLogger.error(getErrorMessage(error), {
+					code: ERROR_CODES.CHECKOUT_UNEXPECTED,
+				});
 			});
-		});
 	}, [newOrder, defaultCustomer, currency, prices_include_tax, tax_based_on, country]);
 
 	return { newOrder };

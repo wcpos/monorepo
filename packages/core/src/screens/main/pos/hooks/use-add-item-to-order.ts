@@ -20,6 +20,7 @@ import {
 	useLocalMutation,
 } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrderActions } from '../contexts/current-order';
+import { removeTemporaryOrder } from '../contexts/current-order/temporary-order';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
@@ -205,7 +206,9 @@ export const useAddItemToOrder = () => {
 				'orders',
 				resident as never
 			) as unknown as import('@wcpos/database').OrderDocument;
-			await order.remove();
+			// The context hands out a read-only wrapped face; the remove-and-swap resolves
+			// the RAW template through the temp-order repository (ADR 0028 stage I).
+			await removeTemporaryOrder(recordId);
 			setCurrentOrderID(recordId);
 			return savedOrder;
 		},

@@ -9,6 +9,7 @@ const mockUseT = jest.fn();
 const mockConvertLocalDateToUTCString = jest.fn((_date: Date) => '2026-03-02T00:00:00');
 const mockWrite = jest.fn();
 const mockFindOneExec = jest.fn();
+const mockPatchTemporaryOrderPayload = jest.fn();
 const mockStatus = jest.fn();
 type ScopeSelectors = { products: readonly string[]; variations: readonly string[] };
 
@@ -79,6 +80,11 @@ jest.mock('@wcpos/query', () => ({
 
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => mockUseT(),
+}));
+
+jest.mock('../../pos/contexts/current-order/temporary-order', () => ({
+	patchTemporaryOrderPayload: (uuid: string, changes: Record<string, unknown>) =>
+		mockPatchTemporaryOrderPayload(uuid, changes),
 }));
 
 jest.mock('../../../../hooks/use-local-date', () => ({
@@ -252,29 +258,25 @@ describe('useLocalMutation', () => {
 		}
 	);
 
-	it('patches a brand-new temporary order locally without requiring an engine resident', async () => {
+	it('patches a brand-new temporary order through the temp-order repository payload merge', async () => {
+		// Engine-shaped template (ADR 0028 stage I): the write goes through
+		// patchTemporaryOrderPayload, never through the passed document face.
 		const stored: Record<string, unknown> = {
 			uuid: 'temporary-order-uuid',
-			status: 'pos-open',
-			customer_id: 0,
+			payload: { status: 'pos-open', customer_id: 0 },
 		};
-		const incrementalModify = jest.fn(
-			async (modifier: (old: Record<string, unknown>) => Record<string, unknown>) => {
-				Object.assign(stored, modifier(stored));
+		mockPatchTemporaryOrderPayload.mockImplementation(
+			async (_uuid: string, changes: Record<string, unknown>) => {
+				stored.payload = { ...(stored.payload as Record<string, unknown>), ...changes };
 				return stored;
 			}
 		);
-		const latest = { incrementalModify };
+		const latest = { uuid: 'temporary-order-uuid' };
 		const document = {
 			uuid: 'temporary-order-uuid',
 			id: 0,
 			isNew: true,
-			collection: {
-				name: 'orders',
-				schema: {
-					jsonSchema: { properties: { date_modified_gmt: { type: 'string' } } },
-				},
-			},
+			collection: { name: 'orders' },
 			getLatest: () => latest,
 		};
 
@@ -286,11 +288,16 @@ describe('useLocalMutation', () => {
 			})
 		);
 
-		expect(stored).toMatchObject({
+		expect(mockPatchTemporaryOrderPayload).toHaveBeenCalledWith('temporary-order-uuid', {
 			customer_id: 91,
 			date_modified_gmt: '2026-03-02T00:00:00',
 		});
-		expect(patchResult?.document).toBe(stored);
+		expect(stored.payload).toMatchObject({
+			status: 'pos-open',
+			customer_id: 91,
+			date_modified_gmt: '2026-03-02T00:00:00',
+		});
+		expect(patchResult?.document).toBe(latest);
 		expect(mockFindOneExec).not.toHaveBeenCalled();
 		expect(mockWrite).not.toHaveBeenCalled();
 	});

@@ -137,6 +137,7 @@ export function wrapEngineDocument<TDocument extends object = Record<string, unk
 				return (
 					property === 'isInstanceOfRxDocument' ||
 					property === 'primary' ||
+					(property === 'isNew' && (rxDocument as { isNew?: boolean }).isNew !== undefined) ||
 					READ_METHODS.has(property) ||
 					MUTATION_METHODS.has(property) ||
 					property.endsWith('$') ||
@@ -149,6 +150,13 @@ export function wrapEngineDocument<TDocument extends object = Record<string, unk
 				}
 				if (property === 'isInstanceOfRxDocument') {
 					return true;
+				}
+				// Interim scaffolding for ADR 0028 stage I (dies with this proxy in stage J):
+				// the temporary POS order is now engine-shaped and wrappable, but its `.isNew`
+				// marker is an instance property (create-db postCreate), not payload data —
+				// pass it through so the birth-path probes keep working on the wrapped face.
+				if (property === 'isNew') {
+					return (rxDocument as { isNew?: boolean }).isNew;
 				}
 				if (property === 'primary') {
 					return readLegacyField(collection, engineDocument(rxDocument), 'uuid');
