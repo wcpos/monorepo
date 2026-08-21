@@ -16,21 +16,37 @@ import { initialProps } from './initial-props';
 
 const appLogger = getLogger(['wcpos', 'app', 'hydration']);
 const AUTH_TEST_TIMEOUT_MS = 10000;
+const AUTH_PROBE_TIMEOUT_MS = 3000;
 
-async function fetchWithTimeout(
+/**
+ * Fetch JSON with the abort timer spanning BOTH the request and the body
+ * read: a host that returns headers and then stalls the body would otherwise
+ * hang hydration forever (the #1155 infinite-spinner class). Returns null on
+ * abort/network failure; otherwise the response plus its parsed body (`data`
+ * is null for a non-OK response or a non-JSON body).
+ */
+async function fetchJsonWithTimeout(
 	input: Parameters<typeof fetch>[0],
-	init: Parameters<typeof fetch>[1] = {}
-): Promise<Response> {
+	init: Parameters<typeof fetch>[1] = {},
+	timeoutMs = AUTH_TEST_TIMEOUT_MS
+): Promise<{ response: Response; data: unknown } | null> {
 	const controller = new AbortController();
 	const timeout = setTimeout(() => {
 		controller.abort();
-	}, AUTH_TEST_TIMEOUT_MS);
+	}, timeoutMs);
 
 	try {
-		return await fetch(input, {
+		const response = await fetch(input, {
 			...init,
 			signal: controller.signal,
 		});
+		if (!response.ok) {
+			return { response, data: null };
+		}
+		const data: unknown = await response.json().catch(() => null);
+		return { response, data };
+	} catch {
+		return null;
 	} finally {
 		clearTimeout(timeout);
 	}
@@ -57,7 +73,7 @@ async function generateHashId(dataObject: any): Promise<string> {
  */
 async function testHeaderAuth(wcposApiUrl: string, token: string): Promise<boolean> {
 	try {
-		const response = await fetchWithTimeout(`${wcposApiUrl}auth/test`, {
+		const result = await fetchJsonWithTimeout(`${wcposApiUrl}auth/test`, {
 			method: 'GET',
 			headers: {
 				'X-WCPOS': '1',
@@ -65,12 +81,8 @@ async function testHeaderAuth(wcposApiUrl: string, token: string): Promise<boole
 			},
 		});
 
-		if (!response.ok) {
-			return false;
-		}
-
-		const data = await response.json();
-		return data && data.status === 'success';
+		const data = result?.data as { status?: string } | null | undefined;
+		return data?.status === 'success';
 	} catch {
 		return false;
 	}
@@ -84,21 +96,106 @@ async function testParamAuth(wcposApiUrl: string, token: string, bareSupported: 
 		const url = new URL(`${wcposApiUrl}auth/test`);
 		url.searchParams.set('authorization', formatAuthorizationParam(token, bareSupported));
 
-		const response = await fetchWithTimeout(url.toString(), {
+		const result = await fetchJsonWithTimeout(url.toString(), {
 			method: 'GET',
 			headers: {
 				'X-WCPOS': '1',
 			},
 		});
 
-		if (!response.ok) {
-			return false;
-		}
-
-		const data = await response.json();
-		return data && data.status === 'success';
+		const data = result?.data as { status?: string } | null | undefined;
+		return data?.status === 'success';
 	} catch {
 		return false;
+	}
+}
+
+/**
+ * The echo probe's response: which of the client's request headers and
+ * fallback query params actually reached the server's REST stack.
+ */
+interface HeaderEchoResult {
+	headers: Record<string, { received?: boolean; length?: number }>;
+	params: Record<string, boolean>;
+}
+
+/**
+ * Probe which request headers survive to the server (B8, wcpos-infra#72).
+ *
+ * ONE request carrying all eight client headers AND every fallback query
+ * param; the public `/wcpos/v2/echo` route (free plugin >= 1.10) reports what
+ * arrived, so both credential channels are measured in a single round trip.
+ * Returns null when the endpoint is unavailable (older server, network
+ * failure, or a host that answers with something other than the probe body) —
+ * the caller then falls back to the legacy two-request auth test.
+ */
+async function probeHeaderEcho(
+	wcposApiUrl: string,
+	accessToken: string,
+	wcposVersion?: string
+): Promise<HeaderEchoResult | null> {
+	try {
+		const url = new URL(`${wcposApiUrl}echo`);
+		// The URL must never carry the real token — query strings persist in
+		// server/proxy/telemetry logs, and this probe runs every boot even when
+		// header auth is healthy. Masking char-for-char keeps what a WAF keys
+		// on: the value's SHAPE (Bearer prefix decision, JWT charset and dots)
+		// and its LENGTH (P17-class size ceilings). The Authorization HEADER
+		// keeps the real token: headers do not land in URL logs, and header
+		// arrival is the channel being measured.
+		const probeToken = accessToken.replace(/[A-Za-z0-9]/g, 'x');
+		url.searchParams.set(
+			'authorization',
+			formatAuthorizationParam(probeToken, bareAuthParamSupported(wcposVersion))
+		);
+		url.searchParams.set('wcpos', '1');
+		url.searchParams.set('store_id', '1');
+
+		const result = await fetchJsonWithTimeout(
+			url.toString(),
+			{
+				method: 'GET',
+				headers: {
+					Authorization: `Bearer ${accessToken}`,
+					'Content-Type': 'application/json',
+					'X-WCPOS': '1',
+					'X-WCPOS-Store': '1',
+					'Idempotency-Key': 'wcpos-echo-probe',
+					'If-Match': '"wcpos-echo-probe"',
+					'If-None-Match': '"wcpos-echo-probe"',
+					'X-WCPOS-Idempotency-Key': 'wcpos-echo-probe',
+				},
+			},
+			AUTH_PROBE_TIMEOUT_MS
+		);
+
+		if (!result || !result.response.ok) {
+			return null;
+		}
+
+		const data = result.data as
+			(HeaderEchoResult & { v?: unknown; headers: Record<string, { received?: unknown }> }) | null;
+		// The guard must reject not just non-probe bodies but INCOMPLETE probe
+		// bodies: `{ v: 1, headers: {}, params: {} }` would otherwise read as
+		// "both channels blocked" and skip the legacy fallback. Both
+		// channel-deciding fields must be present as booleans, or the probe is
+		// treated as unavailable.
+		if (
+			!data ||
+			data.v !== 1 ||
+			typeof data.headers !== 'object' ||
+			data.headers === null ||
+			typeof data.params !== 'object' ||
+			data.params === null ||
+			typeof data.headers.authorization?.received !== 'boolean' ||
+			typeof data.params.authorization !== 'boolean'
+		) {
+			return null;
+		}
+
+		return data as HeaderEchoResult;
+	} catch {
+		return null;
 	}
 }
 
@@ -112,6 +209,40 @@ export async function testAuthorizationMethod(
 	wcposVersion?: string
 ): Promise<{ useJwtAsParam: boolean } | null> {
 	try {
+		// Echo probe first (B8): one request measures every header and both
+		// credential channels at once, and names exactly which headers a
+		// hostile host eats. Falls through to the legacy two-request test when
+		// the endpoint is unavailable (servers < 1.10).
+		const echo = await probeHeaderEcho(wcposApiUrl, accessToken, wcposVersion);
+		if (echo) {
+			const deadHeaders = Object.entries(echo.headers)
+				.filter(([, state]) => state?.received !== true)
+				.map(([name]) => name);
+			if (deadHeaders.length > 0) {
+				appLogger.warn('Some POS request headers do not reach this server', {
+					context: { wcposApiUrl, deadHeaders, params: echo.params },
+				});
+			}
+			const headerAuthArrives = echo.headers.authorization?.received === true;
+			const paramAuthArrives = echo.params.authorization === true;
+			appLogger.debug('Header echo probe results', {
+				context: { wcposApiUrl, headerAuthArrives, paramAuthArrives, deadHeaders },
+			});
+			if (headerAuthArrives) {
+				return { useJwtAsParam: false };
+			}
+			if (paramAuthArrives) {
+				return { useJwtAsParam: true };
+			}
+			// Both credential channels are blocked — the probe measured this
+			// authoritatively, so the legacy test would only fail slower.
+			// Naming this condition for the cashier is Package C's first error.
+			appLogger.warn('Server blocks the login token on both channels', {
+				context: { wcposApiUrl, deadHeaders },
+			});
+			return null;
+		}
+
 		// Test the Authorization header first. Only send the JWT in the query string if the
 		// safer header path fails.
 		const headerSupported = await testHeaderAuth(wcposApiUrl, accessToken);
