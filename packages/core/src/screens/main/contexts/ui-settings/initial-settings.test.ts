@@ -83,9 +83,10 @@ const SORT_SEAM_GRIDS: SortSeamGrid[] = [
 	{ grid: 'reports-orders', collection: 'orders', localOnlySorts: [], nonSortColumns: ['select'] },
 	{ grid: 'customers', collection: 'customers', localOnlySorts: ['date_modified_gmt'] },
 	// Coupons joined the wire vocabulary with #1347 part 2 (refresh lanes, not a
-	// browse window). Every column ships `disableSort` today except the two hidden
-	// date columns, so the per-column sweep is a tripwire for whichever column is
-	// un-disabled first; the default-sort assertion is live immediately.
+	// browse window). Cashier-sortable columns: `code` (rides the wire as `title`
+	// — a coupon's post_title IS its code) plus the two hidden date columns;
+	// everything else ships `disableSort`, so the per-column sweep trips for
+	// whichever column is un-disabled next.
 	{ grid: 'coupons', collection: 'coupons', localOnlySorts: [] },
 ];
 

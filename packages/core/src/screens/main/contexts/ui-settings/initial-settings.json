@@ -461,8 +461,7 @@
       {
         "key": "code",
         "show": true,
-        "flex": 2,
-        "disableSort": true
+        "flex": 2
       },
       {
         "key": "amount",

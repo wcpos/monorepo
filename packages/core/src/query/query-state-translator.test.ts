@@ -699,6 +699,25 @@ describe('query-state translator', () => {
 			orderby: 'date',
 			order: 'desc',
 		});
+
+		// The coupon picker's `code` rides the wire as `title` — a coupon's
+		// post_title IS its code, and `title` is in the native wc/v3 enum.
+		const picker = compileQuery(
+			'coupons',
+			{
+				search: '',
+				filters: {},
+				sort: { field: 'code', direction: 'asc' },
+				limit: 10,
+			},
+			{ id: 'coupon-picker' }
+		);
+		expect(picker.demand[0]).toMatchObject({
+			kind: 'refresh',
+			collection: 'coupons',
+			orderby: 'title',
+			order: 'asc',
+		});
 	});
 
 	it('omits the sort ENTIRELY when the wire cannot express it — the engine reads absence as "no opinion"', () => {
@@ -707,7 +726,7 @@ describe('query-state translator', () => {
 			{
 				search: '',
 				filters: {},
-				sort: { field: 'code', direction: 'asc' },
+				sort: { field: 'amount', direction: 'asc' },
 				limit: 10,
 			},
 			{ id: 'coupon-picker' }
@@ -747,6 +766,8 @@ describe('query-state translator', () => {
 				collection: 'coupons',
 				kind: 'refresh',
 				priority: 700,
+				orderby: 'title',
+				order: 'asc',
 			},
 		]);
 		expect(

@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
+import { v4 as uuidv4 } from 'uuid';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
@@ -22,6 +23,8 @@ import { SettingsSection } from '../components/settings-section';
 
 const NO_PROFILES: ScannerProfileDocument[] = [];
 const WIZARD_DOCS_URL = 'https://docs.wcpos.com/hardware/scanner-setup-wizard';
+const BLUETOOTH_SERVICE_CLASS_ID_PATTERN =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** Secondary identity line for a saved profile: USB vid:pid, BT UUID, or nothing. */
 function profileIdentity(profile: ScannerProfileDocument, bluetoothDeviceName: string): string {
@@ -51,6 +54,11 @@ export function InputSources() {
 	const registration = useScannerRegistration();
 	const { serial, hid } = useDeviceScanControls();
 	const [label, setLabel] = React.useState('');
+	const [bluetoothServiceClassId, setBluetoothServiceClassId] = React.useState('');
+	const [bluetoothServiceClassIdInvalid, setBluetoothServiceClassIdInvalid] = React.useState(false);
+	// Synchronous in-flight guard: a second Add press while insert() is pending
+	// would re-read the same pre-insert profiles snapshot and create a duplicate.
+	const addingBluetoothServiceClassIdRef = React.useRef(false);
 
 	// The section renders if any input source can be added on this platform:
 	// the attributed wedge (Android) or a direct Web Serial / WebHID connection.
@@ -85,6 +93,59 @@ export function InputSources() {
 				title: t('common.error'),
 				description: getErrorMessage(error),
 			});
+		}
+	};
+
+	const handleAddBluetoothServiceClassId = async () => {
+		if (addingBluetoothServiceClassIdRef.current) {
+			return;
+		}
+		const normalized = bluetoothServiceClassId.trim().toLowerCase();
+		if (!BLUETOOTH_SERVICE_CLASS_ID_PATTERN.test(normalized)) {
+			setBluetoothServiceClassIdInvalid(true);
+			return;
+		}
+
+		setBluetoothServiceClassIdInvalid(false);
+		const duplicate = profiles.some(
+			(profile) =>
+				profile.connectionType === 'serial' &&
+				typeof profile.bluetoothServiceClassId === 'string' &&
+				profile.bluetoothServiceClassId.toLowerCase() === normalized
+		);
+		if (duplicate) {
+			Toast.show({
+				type: 'info',
+				title: t('settings.scanner_bluetooth_uuid_duplicate'),
+				duration: 2500,
+			});
+			return;
+		}
+
+		addingBluetoothServiceClassIdRef.current = true;
+		try {
+			await collection.insert({
+				id: uuidv4(),
+				label: '',
+				connectionType: 'serial',
+				deviceName: 'bluetooth-serial',
+				bluetoothServiceClassId: normalized,
+				createdAt: new Date().toISOString(),
+			});
+			setBluetoothServiceClassId('');
+			Toast.show({
+				type: 'success',
+				title: t('settings.scanner_bluetooth_uuid_added'),
+				duration: 2500,
+			});
+		} catch (error) {
+			Toast.show({
+				type: 'error',
+				title: t('common.error'),
+				description: getErrorMessage(error),
+			});
+		} finally {
+			addingBluetoothServiceClassIdRef.current = false;
 		}
 	};
 
@@ -126,6 +187,38 @@ export function InputSources() {
 							</Button>
 						) : null}
 					</HStack>
+				) : null}
+
+				{serial.available ? (
+					<VStack space="xs" testID="bluetooth-service-class-id-control">
+						<HStack space="sm">
+							<Input
+								className="flex-1 font-mono"
+								value={bluetoothServiceClassId}
+								onChangeText={(value) => {
+									setBluetoothServiceClassId(value);
+									setBluetoothServiceClassIdInvalid(false);
+								}}
+								placeholder={t('settings.scanner_bluetooth_uuid_placeholder')}
+								testID="bluetooth-service-class-id-input"
+							/>
+							<Button
+								size="sm"
+								onPress={handleAddBluetoothServiceClassId}
+								testID="bluetooth-service-class-id-add"
+							>
+								<ButtonText>{t('settings.scanner_bluetooth_uuid_add')}</ButtonText>
+							</Button>
+						</HStack>
+						{bluetoothServiceClassIdInvalid ? (
+							<Text className="text-destructive text-xs" testID="bluetooth-service-class-id-error">
+								{t('settings.scanner_bluetooth_uuid_invalid')}
+							</Text>
+						) : null}
+						<DocsLink testID="bluetooth-service-class-id-docs-link" href={WIZARD_DOCS_URL}>
+							{t('settings.scanner_bluetooth_uuid_docs_link')}
+						</DocsLink>
+					</VStack>
 				) : null}
 
 				<VStack space="xs">

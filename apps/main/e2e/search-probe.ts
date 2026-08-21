@@ -112,6 +112,12 @@ export function mintSearchProbeToken(workerIndex: number): string {
  *
  * The token is never logged. Missing credentials return null; declared but
  * broken credentials throw so CI cannot disguise a provisioning failure as a skip.
+ *
+ * The minted JWT's transport is resolved per store: a hostile proxy tier can
+ * strip the Authorization header from every request (wcpos-infra#72 Tier 3,
+ * always-on at dev-free since 2026-08-21), silently degrading a header-carried
+ * token to an anonymous 401 — so the helper verifies the header with one read
+ * and falls back to the `?authorization=` param.
  */
 export async function productWriterAuthorization(
 	request: APIRequestContext,
@@ -156,7 +162,7 @@ export async function productWriterAuthorization(
 			const location = submit.headers()['location'] ?? '';
 			const token = /access_token=([^&]+)/.exec(location)?.[1];
 			if (!token) throw new WriterAuthenticationFailure('http', submit.status());
-			return await pickWriterTransport(request, storeUrl, `Bearer ${token}`);
+			return await resolveWriterAuthorization(request, storeUrl, token);
 		} catch (error) {
 			const failure =
 				error instanceof WriterAuthenticationFailure
@@ -187,51 +193,43 @@ export async function productWriterAuthorization(
 }
 
 /**
- * Choose the transport the freshly minted writer token actually WORKS over.
- *
- * A hostile proxy tier strips `Authorization` headers — dev-free has done so
- * deterministically since the hostile-headers rollout (2026-08-21, wcpos-infra#72),
- * which turned every header-transport writer probe into a WooCommerce
- * `woocommerce_rest_cannot_view` 401 with credentials that were perfectly valid
- * (measured: header 401 five-of-five, query-param 200 on the same token, both
- * wc/v3 and wcpos/v2). The app survives the strip by falling back to query-param
- * auth; the writer identity must make the same choice, so verify the token with a
- * cheap read and keep whichever transport survives. Header is tried first: on a
- * non-hostile store it works immediately, and query-param support on plain wc/v3
- * routes is the newer of the two contracts.
- *
- * A 401 on BOTH transports is a genuinely rejected token and stays an
- * authentication failure; any other failing status is not an auth-transport
- * problem and switching transports will not fix it, so it fails the same way.
+ * Pick the transport the minted writer JWT actually authenticates with, by
+ * reading one product with each candidate. Header first (the least surprising
+ * shape on a friendly store), then the bare `?authorization=` param — bare,
+ * not `Bearer `-prefixed, because the prefix is what trips WAF regexes (the
+ * B4 form; wc/v3 verified to accept it on dev-free, 2026-08-21). Both failing
+ * is a declared capability failing: throw into the caller's retry/fail
+ * machinery, never skip.
  */
-async function pickWriterTransport(
+async function resolveWriterAuthorization(
 	request: APIRequestContext,
 	storeUrl: string,
-	bearer: string
+	token: string
 ): Promise<StoreAuthorization> {
+	const candidates: StoreAuthorization[] = [
+		{ transport: 'header', value: `Bearer ${token}` },
+		{ transport: 'query', value: token },
+	];
 	let lastStatus: number | null = null;
-	for (const transport of ['header', 'query'] as const) {
-		const candidate: StoreAuthorization = { transport, value: bearer };
-		const options = storeRequestOptions(candidate);
-		const check = await probeRequest(request, 'get', storeUrl, 'products', undefined, {
-			...options,
-			params: { ...options.params, per_page: '1' },
+	for (const candidate of candidates) {
+		const auth = storeRequestOptions(candidate);
+		const response = await probeRequest(request, 'get', storeUrl, 'products', undefined, {
+			...auth,
+			params: { ...auth.params, per_page: '1' },
 		});
-		if (check.ok()) return candidate;
-		lastStatus = check.status();
-		// Only an auth rejection can be a transport problem — anything else
-		// (500, 429, …) fails identically over both and retrying the other
-		// transport would just mask it.
-		if (lastStatus !== 401 && lastStatus !== 403) break;
+		if (response.ok()) return candidate;
+		lastStatus = response.status();
+		if (isNetworkishStatus(lastStatus)) {
+			throw new WriterAuthenticationFailure('transport', lastStatus);
+		}
 	}
-	throw new WriterAuthenticationFailure(
-		lastStatus !== null && isNetworkishStatus(lastStatus) ? 'transport' : 'http',
-		lastStatus
-	);
+	throw new WriterAuthenticationFailure('http', lastStatus);
 }
 
 function collectionUrl(storeUrl: string, collection: WcRestCollection, id?: number): string {
-	// wc/v3 accepts the captured Bearer JWT; query-param JWT auth may remain wcpos/v2-only.
+	// wc/v3 accepts the JWT via Authorization header or ?authorization= param
+	// (param verified against wc/v3 on 2026-08-21); the transport is chosen by
+	// resolveWriterAuthorization, or captured from the app's own traffic.
 	const base = `${storeUrl.replace(/\/+$/, '')}/wp-json/wc/v3/${collection}`;
 	return id === undefined ? base : `${base}/${id}`;
 }
@@ -267,9 +265,16 @@ async function probeRequest(
 	id: number | undefined,
 	options: ProbeRequestOptions
 ) {
-	const pretty = await request[method](collectionUrl(storeUrl, collection, id), options);
+	// A WAF method policy (wcpos-infra#72 Tier 4, always-on at dev-free) 403s
+	// DELETE at the proxy before WordPress sees it; WP core treats a POST with
+	// `?_method=DELETE` as the same request, so deletes travel that way.
+	const send = (url: string) =>
+		method === 'delete'
+			? request.post(url, { ...options, params: { ...options.params, _method: 'DELETE' } })
+			: request[method](url, options);
+	const pretty = await send(collectionUrl(storeUrl, collection, id));
 	if (pretty.status() !== 404) return pretty;
-	return request[method](plainPermalinkUrl(storeUrl, collection, id), options);
+	return send(plainPermalinkUrl(storeUrl, collection, id));
 }
 
 async function productCreateResponse(
