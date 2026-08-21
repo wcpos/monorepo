@@ -60,7 +60,7 @@ export function createRefreshHttpClient(): RefreshHttpClient {
 			};
 
 			// Send request through IPC to main process
-			const result = (await window.ipcRenderer.invoke('axios', {
+			const result = (await window.ipcRenderer.invoke('http-request', {
 				type: 'request',
 				requestId,
 				config: axiosConfig,

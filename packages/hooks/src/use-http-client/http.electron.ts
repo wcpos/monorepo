@@ -169,7 +169,7 @@ const setupCancellation = (
 	if (signal) {
 		signal.addEventListener('abort', () => {
 			void window.ipcRenderer
-				.invoke('axios', { type: 'cancel', requestId })
+				.invoke('http-request', { type: 'cancel', requestId })
 				.catch((error) => httpLogger.warn('Failed to cancel IPC request', { context: { error } }));
 		});
 	}
@@ -178,7 +178,7 @@ const setupCancellation = (
 	if (cancelToken) {
 		cancelToken.promise.then(() => {
 			void window.ipcRenderer
-				.invoke('axios', { type: 'cancel', requestId })
+				.invoke('http-request', { type: 'cancel', requestId })
 				.catch((error) => httpLogger.warn('Failed to cancel IPC request', { context: { error } }));
 		});
 	}
@@ -209,7 +209,7 @@ const request = (config: AxiosRequestConfig = {}): Promise<any> => {
 
 	return new Promise((resolve, reject) => {
 		window.ipcRenderer
-			.invoke('axios', { type: 'request', requestId, config: configToSend })
+			.invoke('http-request', { type: 'request', requestId, config: configToSend })
 			.then((result: IpcResponse) => {
 				if (result.success === false) {
 					// Reconstruct appropriate error type

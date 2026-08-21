@@ -58,7 +58,7 @@ describe('platformEngineFetch', () => {
 
 		await platformEngineFetch('https://example.com/wp-json/wcpos/v1/orders', { headers });
 
-		expect(invoke).toHaveBeenCalledWith('axios', {
+		expect(invoke).toHaveBeenCalledWith('http-request', {
 			type: 'request',
 			requestId: expect.any(String),
 			config: {
@@ -94,7 +94,7 @@ describe('platformEngineFetch', () => {
 		});
 
 		expect(invoke).toHaveBeenCalledWith(
-			'axios',
+			'http-request',
 			expect.objectContaining({
 				config: expect.objectContaining({ data: '{"name":"Desk"}' }),
 			})
