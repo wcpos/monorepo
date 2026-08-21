@@ -156,7 +156,7 @@ export async function productWriterAuthorization(
 			const location = submit.headers()['location'] ?? '';
 			const token = /access_token=([^&]+)/.exec(location)?.[1];
 			if (!token) throw new WriterAuthenticationFailure('http', submit.status());
-			return { transport: 'header', value: `Bearer ${token}` };
+			return await pickWriterTransport(request, storeUrl, `Bearer ${token}`);
 		} catch (error) {
 			const failure =
 				error instanceof WriterAuthenticationFailure
@@ -184,6 +184,50 @@ export async function productWriterAuthorization(
 		}
 	}
 	throw new Error('Configured product-writer authentication failed');
+}
+
+/**
+ * Choose the transport the freshly minted writer token actually WORKS over.
+ *
+ * A hostile proxy tier strips `Authorization` headers — dev-free has done so
+ * deterministically since the hostile-headers rollout (2026-08-21, wcpos-infra#72),
+ * which turned every header-transport writer probe into a WooCommerce
+ * `woocommerce_rest_cannot_view` 401 with credentials that were perfectly valid
+ * (measured: header 401 five-of-five, query-param 200 on the same token, both
+ * wc/v3 and wcpos/v2). The app survives the strip by falling back to query-param
+ * auth; the writer identity must make the same choice, so verify the token with a
+ * cheap read and keep whichever transport survives. Header is tried first: on a
+ * non-hostile store it works immediately, and query-param support on plain wc/v3
+ * routes is the newer of the two contracts.
+ *
+ * A 401 on BOTH transports is a genuinely rejected token and stays an
+ * authentication failure; any other failing status is not an auth-transport
+ * problem and switching transports will not fix it, so it fails the same way.
+ */
+async function pickWriterTransport(
+	request: APIRequestContext,
+	storeUrl: string,
+	bearer: string
+): Promise<StoreAuthorization> {
+	let lastStatus: number | null = null;
+	for (const transport of ['header', 'query'] as const) {
+		const candidate: StoreAuthorization = { transport, value: bearer };
+		const options = storeRequestOptions(candidate);
+		const check = await probeRequest(request, 'get', storeUrl, 'products', undefined, {
+			...options,
+			params: { ...options.params, per_page: '1' },
+		});
+		if (check.ok()) return candidate;
+		lastStatus = check.status();
+		// Only an auth rejection can be a transport problem — anything else
+		// (500, 429, …) fails identically over both and retrying the other
+		// transport would just mask it.
+		if (lastStatus !== 401 && lastStatus !== 403) break;
+	}
+	throw new WriterAuthenticationFailure(
+		lastStatus !== null && isNetworkishStatus(lastStatus) ? 'transport' : 'http',
+		lastStatus
+	);
 }
 
 function collectionUrl(storeUrl: string, collection: WcRestCollection, id?: number): string {
