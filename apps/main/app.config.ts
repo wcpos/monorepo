@@ -92,6 +92,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		plugins: [
 			'./plugins/with-printer-support',
 			'./plugins/with-wedge-key-events',
+			// Android trusts user-installed CAs on dev/adhoc builds ONLY (ruling
+			// 2026-08-21, #1415): self-signed/enterprise dev stores become testable
+			// on-device; production keeps the platform default (system CAs only).
+			...(isDev || isAdhoc ? ['./plugins/with-user-ca-trust'] : []),
 			[
 				'expo-camera',
 				{

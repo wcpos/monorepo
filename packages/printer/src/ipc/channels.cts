@@ -91,9 +91,11 @@ export type NovuBridgeEvent =
  * on = main→render push (renderer subscribes).
  */
 export interface IpcInvokeChannels {
-	'print-raw-tcp': { req: { host: string; port: number; data: number[] }; res: void };
-	'print-raw-usb': { req: { device: string; data: number[] }; res: void };
-	'print-raw-serial': { req: { device: string; data: number[] }; res: void };
+	// data crosses IPC as a structured-cloned Uint8Array; number[] is the legacy
+	// wire shape, still accepted by main (wcpos/electron#353).
+	'print-raw-tcp': { req: { host: string; port: number; data: Uint8Array | number[] }; res: void };
+	'print-raw-usb': { req: { device: string; data: Uint8Array | number[] }; res: void };
+	'print-raw-serial': { req: { device: string; data: Uint8Array | number[] }; res: void };
 	'printer-discovery': {
 		req: { action?: 'start' | 'stop'; timeoutMs?: number };
 		res: DiscoveredNetworkPrinter[];
