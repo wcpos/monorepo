@@ -42,10 +42,10 @@ function ThemeOptionButton({
 			}}
 			accessibilityRole="button"
 			accessibilityState={{ selected: isActive }}
-			// min-h-36 clears the tallest possible card (icon + label + the
-			// 2-line description cap) so all six tiles match across rows and
-			// locales, not just within a stretched row.
-			className={`bg-card min-h-36 flex-1 items-center justify-center gap-2 rounded-lg border-2 p-3 ${
+			// min-h-40 clears the tallest possible card — icon + 2-line label cap
+			// + 2-line description cap (≈9.4rem) — so all six tiles match across
+			// rows, locales, and widths, not just within a stretched row.
+			className={`bg-card min-h-40 flex-1 items-center justify-center gap-2 rounded-lg border-2 p-3 ${
 				isActive ? 'border-primary' : 'border-border/60 web:hover:border-border'
 			}`}
 		>
@@ -54,7 +54,10 @@ function ThemeOptionButton({
 				size="xl"
 				className={isActive ? 'text-primary' : 'text-muted-foreground'}
 			/>
-			<Text className={`text-sm font-medium ${isActive ? 'text-primary' : 'text-foreground'}`}>
+			<Text
+				className={`text-center text-sm font-medium ${isActive ? 'text-primary' : 'text-foreground'}`}
+				numberOfLines={2}
+			>
 				{t(option.labelKey)}
 			</Text>
 			<Text className="text-muted-foreground text-center text-xs" numberOfLines={2}>
