@@ -9,6 +9,7 @@ import { InputSources } from './input-sources';
 const mockToastShow = jest.fn();
 const mockSave = jest.fn();
 const mockRemove = jest.fn();
+const mockInsert = jest.fn();
 const mockOpenExternalURL = jest.fn();
 
 jest.mock('@wcpos/utils/open-external-url', () => ({
@@ -28,10 +29,24 @@ jest.mock('@wcpos/components/button', () => ({
 	ButtonText: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 jest.mock('@wcpos/components/input', () => ({
-	Input: (props: { testID?: string }) => <input data-testid={props.testID} />,
+	Input: (props: {
+		testID?: string;
+		value?: string;
+		placeholder?: string;
+		onChangeText?: (value: string) => void;
+	}) => (
+		<input
+			data-testid={props.testID}
+			value={props.value}
+			placeholder={props.placeholder}
+			onChange={(event) => props.onChangeText?.(event.target.value)}
+		/>
+	),
 }));
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
+	Text: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
+		<span data-testid={testID}>{children}</span>
+	),
 }));
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
@@ -50,7 +65,12 @@ const profile = {
 	getLatest: () => ({ remove: mockRemove }),
 };
 let mockProfiles: Record<string, unknown>[] = [profile];
-const collection = { find: () => ({ $: of(mockProfiles) }) };
+const collection = {
+	find: () => ({ $: of(mockProfiles) }),
+	insert: (...args: unknown[]) => mockInsert(...args),
+};
+
+jest.mock('uuid', () => ({ v4: () => 'manual-profile-uuid' }));
 
 jest.mock('../../hooks/use-collection', () => ({
 	useCollection: () => ({ collection }),
@@ -127,6 +147,95 @@ describe('InputSources mode explainer', () => {
 		render(<InputSources />);
 
 		expect(screen.getByText('Bluetooth serial')).toBeTruthy();
+	});
+});
+
+describe('InputSources manual Bluetooth service UUID', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockSerialControl = { ...unavailableControl, available: true };
+		mockProfiles = [profile];
+	});
+
+	afterEach(() => {
+		mockSerialControl = unavailableControl;
+		mockProfiles = [profile];
+	});
+
+	it('adds a serial profile with a normalized canonical UUID', async () => {
+		render(<InputSources />);
+
+		fireEvent.change(screen.getByTestId('bluetooth-service-class-id-input'), {
+			target: { value: ' 49535343-FE7D-4AE5-8FA9-9FAFD205E455 ' },
+		});
+		fireEvent.click(screen.getByTestId('bluetooth-service-class-id-add'));
+
+		await waitFor(() =>
+			expect(mockInsert).toHaveBeenCalledWith({
+				id: 'manual-profile-uuid',
+				label: '',
+				connectionType: 'serial',
+				deviceName: 'bluetooth-serial',
+				bluetoothServiceClassId: '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+				createdAt: expect.any(String),
+			})
+		);
+		expect((screen.getByTestId('bluetooth-service-class-id-input') as HTMLInputElement).value).toBe(
+			''
+		);
+	});
+
+	it('rejects a non-canonical UUID without inserting a profile', () => {
+		render(<InputSources />);
+
+		fireEvent.change(screen.getByTestId('bluetooth-service-class-id-input'), {
+			target: { value: '1101' },
+		});
+		fireEvent.click(screen.getByTestId('bluetooth-service-class-id-add'));
+
+		expect(screen.getByTestId('bluetooth-service-class-id-error')).toBeTruthy();
+		expect(mockInsert).not.toHaveBeenCalled();
+	});
+
+	it('ignores a second Add press while the first insert is pending', async () => {
+		let resolveInsert: (value?: unknown) => void = () => {};
+		mockInsert.mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					resolveInsert = resolve;
+				})
+		);
+		render(<InputSources />);
+
+		fireEvent.change(screen.getByTestId('bluetooth-service-class-id-input'), {
+			target: { value: '49535343-fe7d-4ae5-8fa9-9fafd205e455' },
+		});
+		fireEvent.click(screen.getByTestId('bluetooth-service-class-id-add'));
+		fireEvent.click(screen.getByTestId('bluetooth-service-class-id-add'));
+
+		resolveInsert();
+		await waitFor(() => expect(mockInsert).toHaveBeenCalledTimes(1));
+	});
+
+	it('does not insert a duplicate serial service UUID', () => {
+		mockProfiles = [
+			{
+				...profile,
+				connectionType: 'serial',
+				bluetoothServiceClassId: '49535343-FE7D-4AE5-8FA9-9FAFD205E455',
+			},
+		];
+		render(<InputSources />);
+
+		fireEvent.change(screen.getByTestId('bluetooth-service-class-id-input'), {
+			target: { value: '49535343-fe7d-4ae5-8fa9-9fafd205e455' },
+		});
+		fireEvent.click(screen.getByTestId('bluetooth-service-class-id-add'));
+
+		expect(mockInsert).not.toHaveBeenCalled();
+		expect(mockToastShow).toHaveBeenCalledWith(
+			expect.objectContaining({ type: 'info', title: expect.any(String) })
+		);
 	});
 });
 

@@ -175,4 +175,18 @@ describe('useSerialScan (web) — Bluetooth RFCOMM support', () => {
 			)
 		);
 	});
+
+	it('does not save a duplicate Bluetooth profile for the same service class id', async () => {
+		const btPort = fakePort({ bluetoothServiceClassId: CUSTOM_SERVICE_CLASS.toUpperCase() });
+		mockProfiles = [{ connectionType: 'serial', bluetoothServiceClassId: CUSTOM_SERVICE_CLASS }];
+		mockRequestPort.mockResolvedValue(btPort);
+
+		const { result } = renderHook(() => useSerialScan(jest.fn()));
+		await act(async () => {
+			await result.current.connect();
+		});
+
+		await waitFor(() => expect(btPort.open).toHaveBeenCalled());
+		expect(mockInsert).not.toHaveBeenCalled();
+	});
 });

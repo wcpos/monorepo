@@ -277,12 +277,14 @@ describe('engine adapter collection map', () => {
 			role: 'role',
 		});
 		// Reference collections joined the wire sort vocabulary with #1347 part 2.
-		// `code` (coupons) is absent by design: its server mapping (orderby=title)
-		// exists on wcpos/v1 only and was deliberately not ported to v2.
+		// `code` rides the wire as `title` (a coupon's post_title IS its code, and
+		// `title` is in the native wc/v3 coupons orderby enum — no plugin support
+		// needed).
 		for (const terms of ['products/categories', 'products/tags', 'products/brands'] as const) {
 			expect(declaredValues(terms, wooOrderbyFor)).toEqual({ name: 'name' });
 		}
 		expect(declaredValues('coupons', wooOrderbyFor)).toEqual({
+			code: 'title',
 			date_created_gmt: 'date',
 			date_modified_gmt: 'modified',
 		});

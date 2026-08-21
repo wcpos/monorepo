@@ -5,6 +5,7 @@ import { scopeKeyFor } from '@wcpos/sync-core';
 
 import { createEngineHarness, memoryEngineStorage, memoryStringStore, remoteId } from './testing';
 import { type RxdbSyncEnginePorts, type StoreScopeIdentity } from './create-rxdb-sync-engine';
+import { decodeCustomerTrickleState } from './maintenance/customer-trickle';
 
 setPremiumFlag();
 
@@ -89,6 +90,40 @@ function engineWith(overrides: Partial<RxdbSyncEnginePorts> = {}, storeIdentity 
 }
 
 describe('customer-trickle maintenance lane', () => {
+	it.each([
+		[true, true],
+		[false, false],
+	] as const)('decodes legacy walkComplete=%s as everComplete=%s', (walkComplete, everComplete) => {
+		expect(
+			decodeCustomerTrickleState(
+				JSON.stringify({
+					viewKey: 'customers:browse-window:limit=',
+					page: 2,
+					walkComplete,
+				})
+			)
+		).toMatchObject({ walkComplete, everComplete });
+	});
+
+	it('rejects a persisted non-boolean everComplete', () => {
+		expect(
+			decodeCustomerTrickleState(
+				JSON.stringify({
+					viewKey: 'customers:browse-window:limit=',
+					page: 2,
+					walkComplete: true,
+					everComplete: 'true',
+				})
+			)
+		).toEqual({
+			viewKey: '',
+			page: 1,
+			walkComplete: false,
+			everComplete: false,
+			observedCensusTotal: null,
+		});
+	});
+
 	it('fetches one ordered page, upserts customers and manifests, then advances to page 2', async () => {
 		const urls: string[] = [];
 		const engine = engineWith({
@@ -441,6 +476,7 @@ describe('customer-trickle maintenance lane', () => {
 				viewKey: 'customers:browse-window:limit=',
 				page: 2,
 				walkComplete: false,
+				everComplete: false,
 				observedCensusTotal: null,
 			})
 		);
