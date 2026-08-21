@@ -38,6 +38,18 @@ describe('parseRetryAfterMs', () => {
 		// 06-Nov-94 is in the past relative to any modern atMs, so a valid parse
 		// clamps to 0 rather than null.
 		expect(parseRetryAfterMs('Sunday, 06-Nov-94 08:49:37 GMT', Date.UTC(2026, 0, 1))).toBe(0);
+		// A FUTURE rfc850 date yields the positive delay, not just the clamp.
+		const target = Date.UTC(2026, 7, 21, 12, 0, 0); // a Friday
+		expect(parseRetryAfterMs('Friday, 21-Aug-26 12:00:00 GMT', target - 90_000)).toBe(90_000);
+	});
+
+	it('rejects date-shaped values whose calendar components do not round-trip', () => {
+		// Date.parse NORMALIZES these (31-Nov becomes 1 Dec; weekday mismatches
+		// are ignored) — honouring them would trust a delay the server never
+		// named instead of falling back to the body mirror.
+		expect(parseRetryAfterMs('Sunday, 31-Nov-94 08:49:37 GMT', 0)).toBeNull();
+		expect(parseRetryAfterMs('Monday, 06-Nov-94 08:49:37 GMT', 0)).toBeNull();
+		expect(parseRetryAfterMs('Mon Nov 31 08:49:37 1994', 0)).toBeNull();
 	});
 
 	it('never parks the till for longer than the sanity clamp, and never negative', () => {

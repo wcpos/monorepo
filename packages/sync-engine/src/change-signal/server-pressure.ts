@@ -162,11 +162,59 @@ export function parseRetryAfterMs(value: string | null | undefined, atMs: number
  * invented) is treated as invalid — conservatively falling back to the body
  * mirror beats honouring a delay the server never named.
  */
+const HTTP_DATE_WEEKDAYS = [
+	'Sunday',
+	'Monday',
+	'Tuesday',
+	'Wednesday',
+	'Thursday',
+	'Friday',
+	'Saturday',
+] as const;
+const HTTP_DATE_MONTHS = [
+	'Jan',
+	'Feb',
+	'Mar',
+	'Apr',
+	'May',
+	'Jun',
+	'Jul',
+	'Aug',
+	'Sep',
+	'Oct',
+	'Nov',
+	'Dec',
+] as const;
+
 function isHttpDateShape(value: string, parsedMs: number): boolean {
 	if (new Date(parsedMs).toUTCString() === value) return true;
-	// Obsolete but valid RFC 9110 forms: asctime and rfc850.
-	if (/^[A-Za-z]{3} [A-Za-z]{3} [ \d]\d \d{2}:\d{2}:\d{2} \d{4}$/.test(value)) return true;
-	return /^[A-Za-z]{6,9}, \d{2}-[A-Za-z]{3}-\d{2} \d{2}:\d{2}:\d{2} GMT$/.test(value);
+	// Obsolete but valid RFC 9110 forms. Shape alone is not enough: Date.parse
+	// NORMALIZES invalid calendars (`Sunday, 31-Nov-94` becomes 1 Dec) and
+	// ignores mismatched weekdays, so the parsed components must round-trip
+	// against the tokens or a mangled header reads as a delay the server never
+	// named.
+	const date = new Date(parsedMs);
+	const rfc850 = /^([A-Za-z]{6,9}), (\d{2})-([A-Za-z]{3})-(\d{2}) \d{2}:\d{2}:\d{2} GMT$/.exec(
+		value
+	);
+	if (rfc850) {
+		return (
+			HTTP_DATE_WEEKDAYS[date.getUTCDay()] === rfc850[1] &&
+			date.getUTCDate() === Number(rfc850[2]) &&
+			HTTP_DATE_MONTHS[date.getUTCMonth()] === rfc850[3] &&
+			date.getUTCFullYear() % 100 === Number(rfc850[4])
+		);
+	}
+	const asctime = /^([A-Za-z]{3}) ([A-Za-z]{3}) ([ \d]\d) \d{2}:\d{2}:\d{2} (\d{4})$/.exec(value);
+	if (asctime) {
+		return (
+			HTTP_DATE_WEEKDAYS[date.getUTCDay()]!.slice(0, 3) === asctime[1] &&
+			HTTP_DATE_MONTHS[date.getUTCMonth()] === asctime[2] &&
+			date.getUTCDate() === Number(asctime[3]) &&
+			date.getUTCFullYear() === Number(asctime[4])
+		);
+	}
+	return false;
 }
 
 export function parseServerPressure(value: string | null | undefined): ServerPressure | undefined {
