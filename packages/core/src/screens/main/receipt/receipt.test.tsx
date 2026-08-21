@@ -26,9 +26,7 @@ let mockSuspenseValue: unknown;
 
 const mockOrder = {
 	uuid: 'local-order-42',
-	id$: new BehaviorSubject(42),
-	links$: new BehaviorSubject(undefined),
-	billing: {},
+	payload: { id: 42, links: undefined, billing: {} },
 };
 
 const defaultTemplateRenderer = {
@@ -213,11 +211,11 @@ jest.mock('expo-router/react-navigation', () => ({
 jest.mock('observable-hooks', () => ({
 	useObservableSuspense: () => mockSuspenseValue,
 	useObservableEagerState: (subject: BehaviorSubject<unknown>) => subject?.getValue?.(),
-	useObservableState: (_source: unknown, initialValue: unknown) => initialValue,
 }));
 
-jest.mock('rxdb', () => ({
-	isRxDocument: (value: unknown) => value === mockOrder,
+jest.mock('@wcpos/query', () => ({
+	useRecordField: (record: typeof mockOrder, select: (record: typeof mockOrder) => unknown) =>
+		select(record),
 }));
 
 describe('Receipt preview content size', () => {
@@ -268,14 +266,14 @@ describe('Receipt auto-print', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		capturedLoadHandlers.length = 0;
-		mockOrder.id$.next(42);
+		mockOrder.payload.id = 42;
 		mockSuspenseValue = mockOrder;
 		mockUseUISettings.mockReturnValue({ uiSettings: { autoPrintReceipt: true } });
 		mockUseNavigationState.mockImplementation((selector) => selector({ routeNames: ['Checkout'] }));
 		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, hasFinalData: false });
 	});
 	afterEach(() => {
-		mockOrder.id$.next(42);
+		mockOrder.payload.id = 42;
 	});
 
 	it('waits for final data after the receipt frame loads and prints exactly once', () => {
@@ -311,7 +309,7 @@ describe('Receipt auto-print', () => {
 		expect(mockPrint).toHaveBeenCalledTimes(1);
 
 		act(() => {
-			mockOrder.id$.next(43);
+			mockOrder.payload.id = 43;
 			rerender(<Receipt resource={{} as never} />);
 		});
 		expect(mockPrint).toHaveBeenCalledTimes(1);

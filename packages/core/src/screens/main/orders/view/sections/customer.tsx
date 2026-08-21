@@ -4,14 +4,15 @@ import { View } from 'react-native';
 import { Avatar, getInitials } from '@wcpos/components/avatar';
 import { FormatAddress } from '@wcpos/components/format';
 import { Text } from '@wcpos/components/text';
+import type { EngineRecord } from '@wcpos/query';
 
 import { RailSection, Section } from './_section';
 import { useT } from '../../../../../contexts/translations';
 import { TAX_ID_LABEL_KEYS, type TaxId, type TaxIdType } from '../../../../../lib/tax-id';
 import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-type Address = NonNullable<OrderDocument['billing']> | NonNullable<OrderDocument['shipping']>;
+type OrderPayload = EngineRecord<'orders'>['payload'];
+type Address = NonNullable<OrderPayload['billing']> | NonNullable<OrderPayload['shipping']>;
 
 function addressKey(address?: Address) {
 	if (!address) return '';
@@ -45,7 +46,7 @@ function hasAddress(address?: Address) {
 /**
  * Compact customer card for the right rail.
  */
-export function CustomerRail({ order, last }: { order: OrderDocument; last?: boolean }) {
+export function CustomerRail({ order, last }: { order: OrderPayload; last?: boolean }) {
 	const t = useT();
 	const { format: formatCustomerName } = useCustomerNameFormat();
 	const name = formatCustomerName({
@@ -80,7 +81,7 @@ export function CustomerRail({ order, last }: { order: OrderDocument; last?: boo
 /**
  * Addresses block for the right rail.
  */
-export function AddressesRail({ order, last }: { order: OrderDocument; last?: boolean }) {
+export function AddressesRail({ order, last }: { order: OrderPayload; last?: boolean }) {
 	const t = useT();
 	const billing = order.billing;
 	const shipping = order.shipping;
@@ -117,7 +118,7 @@ export function AddressesRail({ order, last }: { order: OrderDocument; last?: bo
  * (not the live customer record), since the order owns its own copy from
  * sale-time. Hidden when the order has none.
  */
-export function TaxIdsRail({ order, last }: { order: OrderDocument; last?: boolean }) {
+export function TaxIdsRail({ order, last }: { order: OrderPayload; last?: boolean }) {
 	const t = useT();
 	const rawTaxIds = (order as { tax_ids?: unknown }).tax_ids;
 	const taxIds = Array.isArray(rawTaxIds) ? (rawTaxIds as TaxId[]) : [];
@@ -144,7 +145,7 @@ export function TaxIdsRail({ order, last }: { order: OrderDocument; last?: boole
 /**
  * Customer note callout in the main column.
  */
-export function CustomerNoteSection({ order }: { order: OrderDocument }) {
+export function CustomerNoteSection({ order }: { order: OrderPayload }) {
 	const t = useT();
 	if (!order.customer_note) return null;
 	return (

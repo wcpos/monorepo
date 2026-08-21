@@ -1,26 +1,28 @@
 import * as React from 'react';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
-import { isRxDocument } from 'rxdb';
 
 import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import { Tree } from '@wcpos/components/tree';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { EditProductForm } from './form';
 import { useT } from '../../../../../contexts/translations';
 
 interface Props {
-	resource: ObservableResource<import('@wcpos/database').ProductDocument>;
+	resource: ObservableResource<EngineRecord<'products'> | null>;
 }
 
 export function EditProductModal({ resource }: Props) {
 	const product = useObservableSuspense(resource);
 	const t = useT();
 	const [value, setValue] = React.useState('form');
+	const name = useRecordField(product, (record) => record.payload.name);
+	const payload = useRecordField(product, (record) => record.payload);
 
-	if (!isRxDocument(product)) {
+	if (!product) {
 		return (
 			<Modal>
 				<ModalContent size="lg">
@@ -36,7 +38,7 @@ export function EditProductModal({ resource }: Props) {
 		<Modal>
 			<ModalContent testID="product-edit-modal" size="lg">
 				<ModalHeader>
-					<ModalTitle>{t('common.edit_2', { name: product.name })}</ModalTitle>
+					<ModalTitle>{t('common.edit_2', { name })}</ModalTitle>
 				</ModalHeader>
 				<ModalBody>
 					<Tabs value={value} onValueChange={setValue}>
@@ -52,7 +54,7 @@ export function EditProductModal({ resource }: Props) {
 							<EditProductForm product={product} />
 						</TabsContent>
 						<TabsContent value="json">
-							<Tree value={product.toJSON()} />
+							<Tree value={payload} />
 						</TabsContent>
 					</Tabs>
 				</ModalBody>

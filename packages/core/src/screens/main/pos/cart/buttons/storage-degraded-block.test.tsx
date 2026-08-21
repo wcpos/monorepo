@@ -120,6 +120,8 @@ const mockCurrentOrder = {
 const mockCurrentOrderRecord = {
 	uuid: 'order-1',
 	payload: { id: 42, number: '42', line_items: [], total: '10.00', refunds: [] },
+	getLatest: () => mockCurrentOrderRecord,
+	toMutableJSON: () => ({ payload: { ...mockCurrentOrderRecord.payload } }),
 };
 
 jest.mock('../../contexts/current-order', () => ({
@@ -127,6 +129,7 @@ jest.mock('../../contexts/current-order', () => ({
 		currentOrder: mockCurrentOrder,
 		currentOrderRecord: mockCurrentOrderRecord,
 	}),
+	useCurrentOrderRecord: () => mockCurrentOrderRecord,
 }));
 
 jest.mock('../../../../../contexts/translations', () => {

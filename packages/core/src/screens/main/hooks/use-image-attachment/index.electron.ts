@@ -1,9 +1,5 @@
 import * as React from 'react';
 
-import { isRxDocument } from 'rxdb';
-
-import { isEngineRecordFace } from './types';
-
 import type { ImageAttachmentSource } from './types';
 
 /**
@@ -27,13 +23,13 @@ function toImageCacheUrl(url: string): string {
 	return `wcpos-image://cache/${toBase64UrlUtf8(url)}`;
 }
 
-export const useImageAttachment = (source: ImageAttachmentSource, imageUrl: string) => {
+export const useImageAttachment = (_source: ImageAttachmentSource, imageUrl: string) => {
 	const uri = React.useMemo(() => {
-		if ((!isEngineRecordFace(source) && !isRxDocument(source)) || !imageUrl) {
+		if (!imageUrl) {
 			return undefined;
 		}
 		return toImageCacheUrl(imageUrl);
-	}, [source, imageUrl]);
+	}, [imageUrl]);
 
 	return {
 		uri,

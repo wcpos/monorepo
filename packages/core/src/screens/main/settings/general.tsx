@@ -103,6 +103,10 @@ export function GeneralSettings() {
 	);
 	const { defaultCustomerResource } = useDefaultCustomer();
 	const defaultCustomer = useObservableSuspense(defaultCustomerResource);
+	// The resource emits an engine record for a configured customer (guest is plain data);
+	// the name formatter takes the WIRE shape, so unwrap the payload before formatting.
+	const defaultCustomerData =
+		'getLatest' in defaultCustomer ? defaultCustomer.getLatest().payload : defaultCustomer;
 	const t = useT();
 	const { localPatch } = useLocalMutation();
 	const { format } = useCustomerNameFormat();
@@ -262,7 +266,7 @@ export function GeneralSettings() {
 									{...rest}
 									{...({ withGuest: true } as Record<string, unknown>)}
 									// override value with defaultCustomer
-									value={{ value, label: format(defaultCustomer) } as never}
+									value={{ value, label: format(defaultCustomerData) } as never}
 									disabled={toggleCustomerSelect}
 								/>
 							</SettingsRow>

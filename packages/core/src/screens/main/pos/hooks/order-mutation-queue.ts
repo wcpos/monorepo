@@ -1,8 +1,7 @@
-// stage-I2: left on proxy face — the order-birth queue carries the cross-face handoff.
-type OrderDocument = import('@wcpos/database').OrderDocument;
+import type { CurrentOrderRecord } from '../contexts/current-order';
 
 interface OrderMutationContext {
-	order?: OrderDocument;
+	order?: CurrentOrderRecord;
 }
 
 interface OrderMutationQueueEntry {

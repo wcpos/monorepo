@@ -34,6 +34,7 @@ jest.mock('observable-hooks', () => ({
 jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace }) }));
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine: { require: mockEngineRequire } }),
+	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));
 jest.mock('../../../../../contexts/app-state', () => ({
 	useAppState: () => ({
@@ -51,15 +52,20 @@ jest.mock('../../../hooks/use-stock-adjustment', () => ({
 	useStockAdjustment: () => ({ stockAdjustment: mockStockAdjustment }),
 }));
 
-const makeOrder = (href = 'https://shop.example.com/wcpos-checkout/order-pay/42') =>
-	({
-		id: 42,
+const makeOrder = (href = 'https://shop.example.com/wcpos-checkout/order-pay/42') => {
+	const order = {
 		uuid: 'uuid-42',
-		number: '42',
-		links: { payment: [{ href }] },
-		links$: { pipe: () => ({}) },
-		getLatest: () => ({ status: 'pos-open', links: {}, line_items: [] }),
-	}) as never;
+		payload: {
+			id: 42,
+			number: '42',
+			status: 'pos-open',
+			links: { payment: [{ href }] },
+			line_items: [],
+		},
+		getLatest: () => order,
+	};
+	return order as never;
+};
 
 describe('PaymentWebview fallback order refresh', () => {
 	beforeEach(() => {

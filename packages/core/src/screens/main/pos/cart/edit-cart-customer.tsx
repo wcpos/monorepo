@@ -11,12 +11,7 @@ import { Form } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import {
-	type EngineRxDocument,
-	useQueryRuntime,
-	useRecordField,
-	wrapEngineDocument,
-} from '@wcpos/query';
+import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { isGuestCustomer, remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -33,22 +28,19 @@ import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 import { useCurrentOrder } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
-type CustomerDocument = import('@wcpos/database').CustomerDocument;
 type QueryManager = ReturnType<typeof useQueryRuntime>;
 
 async function findCustomerByWooId(
 	runtime: QueryManager,
 	wooCustomerId: number
-): Promise<CustomerDocument | null> {
+): Promise<EngineRecord<'customers'> | null> {
 	const scope = runtime.engine.active() ?? (await runtime.engine.ready);
 	const collection = scope.database.collections.customers;
 	if (!collection) return null;
 	const document = await collection
 		.findOne({ selector: { remoteId: remoteIdOrNull(wooCustomerId) } })
 		.exec();
-	return document
-		? wrapEngineDocument<CustomerDocument>('customers', document as unknown as EngineRxDocument)
-		: null;
+	return document;
 }
 
 /**
@@ -139,11 +131,12 @@ export function EditCartCustomerForm() {
 				},
 			});
 			if (savedDoc) {
-				cartLogger.success(t('common.saved', { name: format(savedDoc as any) }), {
+				const saved = customer.getLatest().payload;
+				cartLogger.success(t('common.saved', { name: format(saved) }), {
 					showToast: true,
 					context: {
-						customerId: (savedDoc as any).id,
-						customerName: format(savedDoc as any),
+						customerId: saved.id,
+						customerName: format(saved),
 					},
 				});
 			}

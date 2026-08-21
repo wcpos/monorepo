@@ -17,7 +17,7 @@ import {
 	patchEngineResident,
 } from '../../../hooks/mutations/use-local-mutation';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
-import { useCurrentOrder } from '../../contexts/current-order';
+import { useCurrentOrderRecord } from '../../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'void']);
 
@@ -33,8 +33,7 @@ const LATE_OUTCOME_TIMEOUT_MS = 120_000;
  *
  */
 export function VoidButton() {
-	// stage-I2: left on proxy face — void/undo reconstructs legacy snapshots across delete outcomes.
-	const { currentOrder } = useCurrentOrder();
+	const currentOrder = useCurrentOrderRecord();
 	const router = useRouter();
 	const manager = useQueryRuntime();
 	const t = useT();
@@ -44,17 +43,15 @@ export function VoidButton() {
 	 *
 	 */
 	const undoRemove = React.useCallback(
-		async (orderJson: Record<string, unknown>) => {
+		async (recordId: string, orderPayload: Record<string, unknown>) => {
 			try {
-				const recordId = String(orderJson.uuid ?? '');
-				if (!recordId) throw new Error('Cannot restore an order without a uuid');
 				const existing = await findEngineResident(manager, 'orders', recordId);
 				if (existing) {
 					const restored = await patchEngineResident({
 						manager,
 						collection: 'orders',
 						recordId,
-						changes: orderJson,
+						changes: orderPayload,
 					});
 					await manager.engine.write({
 						collection: 'orders',
@@ -63,7 +60,7 @@ export function VoidButton() {
 						payload: restored.get('payload') as Record<string, unknown>,
 					});
 				} else {
-					const payload = { ...orderJson, id: 0 };
+					const payload = { ...orderPayload, id: 0 };
 					const resident = await insertEngineResident({
 						manager,
 						collection: 'orders',
@@ -83,7 +80,7 @@ export function VoidButton() {
 					showToast: true,
 					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 					context: {
-						orderId: orderJson.uuid,
+						orderId: recordId,
 						error: getErrorMessage(err),
 					},
 				});
@@ -99,12 +96,12 @@ export function VoidButton() {
 		// #163 ruling R5: voiding writes a delete (or a status change) that must be
 		// recorded locally. With the worker dead the order's fate is unknowable from
 		// this device, and the undo path below could not restore it either.
-		if (blockIfDegraded('void', { orderId: currentOrder.uuid ?? currentOrder.id })) {
+		if (blockIfDegraded('void', { orderId: currentOrder.uuid })) {
 			return;
 		}
 
-		const orderJson = currentOrder.toMutableJSON();
-		const recordId = currentOrder.uuid!;
+		const orderPayload = currentOrder.getLatest().toMutableJSON().payload;
+		const recordId = currentOrder.uuid;
 		let undone = false;
 		const showSuccess = (message: string) => {
 			cartLogger.success(message, {
@@ -115,13 +112,13 @@ export function VoidButton() {
 						label: t('common.undo'),
 						onClick: () => {
 							undone = true;
-							void undoRemove(orderJson);
+							void undoRemove(recordId, orderPayload);
 						},
 					},
 				},
 				context: {
-					orderId: currentOrder.uuid ?? currentOrder.id,
-					orderNumber: currentOrder.number,
+					orderId: recordId,
+					orderNumber: orderPayload.number,
 				},
 			});
 		};

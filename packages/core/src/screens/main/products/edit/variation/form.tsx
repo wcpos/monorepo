@@ -16,6 +16,7 @@ import {
 import { HStack } from '@wcpos/components/hstack';
 import { ModalAction, ModalClose, ModalFooter, useModal } from '@wcpos/components/modal';
 import { VStack } from '@wcpos/components/vstack';
+import type { EngineRecord } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -46,7 +47,7 @@ const schema = z.object({
 });
 
 interface Props {
-	variation: import('@wcpos/database').ProductVariationDocument;
+	variation: EngineRecord<'variations'>;
 }
 
 /**
@@ -57,6 +58,7 @@ export function EditVariationForm({ variation }: Props) {
 	const [loading, setLoading] = React.useState(false);
 	const { localPatch } = useLocalMutation();
 	const { close } = useModal();
+	const variationData = variation.toMutableJSON().payload;
 
 	if (!variation) {
 		throw new Error('Variation not found');
@@ -68,16 +70,16 @@ export function EditVariationForm({ variation }: Props) {
 	const form = useForm<z.infer<typeof schema>>({
 		resolver: zodResolver(schema as never) as never,
 		defaultValues: {
-			status: variation.status,
-			sku: variation.sku,
-			regular_price: variation.regular_price,
-			sale_price: variation.sale_price,
-			stock_quantity: variation.stock_quantity,
-			manage_stock: variation.manage_stock,
-			barcode: variation.barcode,
-			tax_status: variation.tax_status,
-			tax_class: taxClassFromWire(variation.tax_class),
-			meta_data: variation.meta_data,
+			status: variationData.status,
+			sku: variationData.sku,
+			regular_price: variationData.regular_price,
+			sale_price: variationData.sale_price,
+			stock_quantity: variationData.stock_quantity,
+			manage_stock: variationData.manage_stock,
+			barcode: variationData.barcode,
+			tax_status: variationData.tax_status,
+			tax_class: taxClassFromWire(variationData.tax_class),
+			meta_data: variationData.meta_data,
 		},
 	});
 
@@ -97,11 +99,12 @@ export function EditVariationForm({ variation }: Props) {
 				if (!patched?.document) {
 					throw new Error('Local patch failed');
 				}
-				mutationLogger.success(t('common.saved', { name: variation.name }), {
+				const saved = variation.getLatest().payload;
+				mutationLogger.success(t('common.saved', { name: saved.name }), {
 					showToast: true,
 					context: {
-						variationId: variation.id,
-						variationName: variation.name,
+						variationId: saved.id,
+						variationName: saved.name,
 					},
 				});
 				close();
@@ -112,7 +115,7 @@ export function EditVariationForm({ variation }: Props) {
 					code: ERROR_CODES.PRODUCT_UNEXPECTED,
 					toast: { title: t('products.failed_to_save_variation') },
 					context: {
-						variationId: variation.id,
+						variationId: variation.getLatest().payload.id,
 						error: errorMessage,
 					},
 				});

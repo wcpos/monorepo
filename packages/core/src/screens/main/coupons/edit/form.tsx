@@ -2,10 +2,10 @@ import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
 import { useModal } from '@wcpos/components/modal';
+import type { EngineRecord } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -17,7 +17,7 @@ import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 const mutationLogger = getLogger(['wcpos', 'mutations', 'coupon']);
 
 interface Props {
-	coupon: import('@wcpos/database').CouponDocument;
+	coupon: EngineRecord<'coupons'>;
 }
 
 export function EditCouponForm({ coupon }: Props) {
@@ -30,7 +30,7 @@ export function EditCouponForm({ coupon }: Props) {
 	const form = useForm<z.infer<typeof couponFormSchema>>({
 		resolver: zodResolver(couponFormSchema as never) as never,
 		defaultValues: {
-			...(coupon.toJSON() as Record<string, unknown>),
+			...coupon.toMutableJSON().payload,
 		} as z.infer<typeof couponFormSchema>,
 	});
 
@@ -45,15 +45,16 @@ export function EditCouponForm({ coupon }: Props) {
 				if (!patched?.document) {
 					throw new Error('Local patch failed');
 				}
-				const savedDoc = await pushDocument(patched.document);
-				if (!isRxDocument(savedDoc)) {
+				const savedDoc = await pushDocument(coupon);
+				if (!savedDoc) {
 					throw new Error('Failed to save coupon');
 				}
-				mutationLogger.success(t('common.saved', { name: (savedDoc as { code?: string }).code }), {
+				const saved = coupon.getLatest().payload;
+				mutationLogger.success(t('common.saved', { name: saved.code }), {
 					showToast: true,
 					context: {
-						couponId: (savedDoc as { id?: number }).id,
-						couponCode: (savedDoc as { code?: string }).code,
+						couponId: saved.id,
+						couponCode: saved.code,
 					},
 				});
 				close();
@@ -64,7 +65,7 @@ export function EditCouponForm({ coupon }: Props) {
 					code: ERROR_CODES.SYNC_UNEXPECTED,
 					toast: { title: t('coupons.failed_to_save_coupon') },
 					context: {
-						couponId: coupon.id,
+						couponId: coupon.getLatest().payload.id,
 						error: errorMessage,
 					},
 				});

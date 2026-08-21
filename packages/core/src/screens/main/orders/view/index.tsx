@@ -1,13 +1,11 @@
 import { useLocalSearchParams } from 'expo-router';
 
 import { ViewOrderModal } from './modal';
-import { useEngineDocument } from '../../hooks/use-engine-document';
-
-type OrderDocument = import('@wcpos/database').OrderDocument;
+import { useEngineRecord } from '../../hooks/use-engine-document';
 
 export function ViewOrderScreen() {
 	const { orderId } = useLocalSearchParams<{ orderId: string }>();
-	const resource = useEngineDocument<OrderDocument>('orders', orderId);
+	const resource = useEngineRecord('orders', orderId);
 
 	return <ViewOrderModal resource={resource} />;
 }

@@ -1,13 +1,11 @@
 import * as React from 'react';
 
 import { useRouter } from 'expo-router';
-import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
-import { map } from 'rxjs/operators';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { WebView } from '@wcpos/components/webview';
-import { useQueryRuntime } from '@wcpos/query';
+import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -19,8 +17,6 @@ import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 
 const paymentLogger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
-
-type OrderDocument = import('@wcpos/database').OrderDocument;
 
 /**
  * Whether the store's payment document is in a position to receive
@@ -35,7 +31,7 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 export type PaymentFrameStatus = 'loading' | 'ready' | 'failed';
 
 export interface PaymentWebviewProps extends Partial<React.ComponentProps<typeof WebView>> {
-	order: OrderDocument;
+	order: EngineRecord<'orders'>;
 	setLoading: React.Dispatch<React.SetStateAction<boolean>>;
 	/** Reports frame readiness to the checkout footer, which gates on it. */
 	setFrameStatus: (status: PaymentFrameStatus) => void;
@@ -52,16 +48,11 @@ export function PaymentWebview({
 	onStockRejection,
 	...props
 }: PaymentWebviewProps) {
-	// stage-I2: left on proxy face — legacy payment processing is a checkout write path.
 	const router = useRouter();
-	// Memoised on the document wrapper: the engine adapter's `$` getter builds a new
-	// observable per property access, so an inline `.pipe()` resubscribed on every render of
-	// the checkout modal — which re-renders on every order write.
-	const paymentURL$ = React.useMemo(
-		() => order.links$!.pipe(map((links) => get(links, ['payment', 0, 'href']))),
-		[order]
-	);
-	const paymentURL = useObservableState(paymentURL$, get(order, ['links', 'payment', 0, 'href']));
+	const orderData = useRecordField(order, (record) => record.payload);
+	const paymentURL = orderData.links?.payment?.[0]?.href;
+	const orderId = orderData.id;
+	const orderNumber = orderData.number;
 	const { wpCredentials } = useAppState();
 	const jwt = useObservableState(wpCredentials.access_token$, wpCredentials.access_token);
 	const { stockAdjustment } = useStockAdjustment();
@@ -77,10 +68,10 @@ export function PaymentWebview({
 	const orderLogger = React.useMemo(
 		() =>
 			paymentLogger.with({
-				orderId: order.uuid!,
-				orderNumber: order.number,
+				orderId: order.uuid,
+				orderNumber,
 			}),
-		[order.uuid, order.number]
+		[order.uuid, orderNumber]
 	);
 
 	/**
@@ -95,14 +86,14 @@ export function PaymentWebview({
 	}, [paymentURL, jwt]);
 
 	const refreshOrder = React.useCallback(async () => {
-		if (!order.id) {
+		if (!orderId) {
 			throw new Error('payment_refresh_requires_persisted_order');
 		}
 		const handle = runtime.engine.require({
-			id: `checkout:order-refresh:${order.id}`,
+			id: `checkout:order-refresh:${orderId}`,
 			collection: 'orders',
 			kind: 'targeted-records',
-			remoteIds: [order.id].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
+			remoteIds: [orderId].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 			forceRefresh: true,
 		});
 		try {
@@ -110,7 +101,7 @@ export function PaymentWebview({
 		} finally {
 			handle.release();
 		}
-	}, [runtime, order.id]);
+	}, [runtime, orderId]);
 
 	/**
 	 *
@@ -139,7 +130,7 @@ export function PaymentWebview({
 
 					orderLogger.success(
 						t('pos_checkout.payment_completed_for_order', {
-							orderNumber: payload.number || order.number,
+							orderNumber: payload.number || orderNumber,
 						}),
 						{
 							showToast: true,
@@ -157,7 +148,7 @@ export function PaymentWebview({
 					if (uiSettings.autoShowReceipt) {
 						router.replace({
 							pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
-							params: { orderId: order.uuid! },
+							params: { orderId: order.uuid },
 						});
 					} else {
 						router.replace({
@@ -179,6 +170,7 @@ export function PaymentWebview({
 			}
 		},
 		[
+			orderNumber,
 			router,
 			order,
 			stockAdjustment,
@@ -224,12 +216,12 @@ export function PaymentWebview({
 
 				// Check local status first - if it's no longer pos-open,
 				// the postMessage path already handled the update
-				const localStatus = order.getLatest().status;
+				const localStatus = order.getLatest().payload.status;
 				if (!localStatus || localStatus !== 'pos-open') return;
 
 				try {
 					orderLogger.debug('No postMessage received, checking server order status', {
-						context: { orderId: order.id },
+						context: { orderId },
 					});
 
 					// The decision reads SERVER truth directly (the sync surface's
@@ -238,7 +230,7 @@ export function PaymentWebview({
 					// resident tasks, dirty-row protection), so it cannot prove
 					// payment state. The engine refresh below is local catch-up only.
 					const response = await http.get('orders', {
-						params: { include: order.id, per_page: 1 },
+						params: { include: orderId, per_page: 1 },
 					});
 					const serverOrder = response?.data?.[0] as Record<string, unknown> | undefined;
 					if (!serverOrder) return;
@@ -264,7 +256,7 @@ export function PaymentWebview({
 
 					orderLogger.success(
 						t('pos_checkout.payment_completed_for_order', {
-							orderNumber: (serverOrder.number as string) || order.number,
+							orderNumber: (serverOrder.number as string) || orderNumber,
 						}),
 						{
 							showToast: true,
@@ -281,7 +273,7 @@ export function PaymentWebview({
 					if (uiSettings.autoShowReceipt) {
 						router.replace({
 							pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
-							params: { orderId: order.uuid! },
+							params: { orderId: order.uuid },
 						});
 					} else {
 						router.replace({ pathname: '/cart' });
@@ -305,7 +297,10 @@ export function PaymentWebview({
 			fallbackTimerRef.current = setTimeout(() => void checkFallback(), 1000);
 		},
 		[
+			http,
 			order,
+			orderId,
+			orderNumber,
 			stockAdjustment,
 			uiSettings.autoShowReceipt,
 			router,

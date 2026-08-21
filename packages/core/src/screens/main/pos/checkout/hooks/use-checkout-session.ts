@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useRouter } from 'expo-router';
 
-import { useQueryRuntime } from '@wcpos/query';
+import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -26,8 +26,6 @@ import {
 import { useCartStockGuard } from '../../hooks/use-cart-stock-guard';
 
 const checkoutLogger = getLogger(['wcpos', 'pos', 'checkout', 'contract']);
-
-type OrderDocument = import('@wcpos/database').OrderDocument;
 
 export type GatewayContract = PaymentGatewayContract;
 
@@ -58,8 +56,7 @@ export function createCheckoutIdempotencyKey(
 	return `checkout-${orderId}-${gatewayId}-${attemptId}`;
 }
 
-export function useCheckoutSession(order: OrderDocument) {
-	// stage-I2: left on proxy face — this is a checkout write path owned by stage J.
+export function useCheckoutSession(order: EngineRecord<'orders'>) {
 	const http = useRestHttpClient();
 	const runtime = useQueryRuntime();
 	const { stockAdjustment } = useStockAdjustment();
@@ -72,8 +69,14 @@ export function useCheckoutSession(order: OrderDocument) {
 	// Error raised by the checkout flow itself (set imperatively in handlers).
 	const [checkoutError, setError] = React.useState<string | null>(null);
 	const checkoutAttemptIdRef = React.useRef<string | null>(null);
+	const orderData = useRecordField(order, (record) => record.payload);
+	const orderId = orderData.id;
+	const orderNumber = orderData.number;
 
-	const gatewayId = React.useMemo(() => order.payment_method || 'pos_cash', [order.payment_method]);
+	const gatewayId = React.useMemo(
+		() => orderData.payment_method || 'pos_cash',
+		[orderData.payment_method]
+	);
 	const {
 		gateway,
 		loading: gatewayLoading,
@@ -89,17 +92,17 @@ export function useCheckoutSession(order: OrderDocument) {
 
 	React.useEffect(() => {
 		checkoutAttemptIdRef.current = null;
-	}, [gatewayId, order.id]);
+	}, [gatewayId, orderId]);
 
 	const completeOrderFlow = React.useCallback(async () => {
-		if (!order.id) {
+		if (!orderId) {
 			throw new Error('checkout_refresh_requires_persisted_order');
 		}
 		const handle = runtime.engine.require({
-			id: `checkout:order-refresh:${order.id}`,
+			id: `checkout:order-refresh:${orderId}`,
 			collection: 'orders',
 			kind: 'targeted-records',
-			remoteIds: [order.id].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
+			remoteIds: [orderId].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 			forceRefresh: true,
 		});
 		try {
@@ -108,7 +111,7 @@ export function useCheckoutSession(order: OrderDocument) {
 			handle.release();
 		}
 
-		const latest = order.getLatest();
+		const latest = order.getLatest().payload;
 		const reducedStockItems = (latest.line_items || []).filter((item) =>
 			(item.meta_data as { key: string }[] | undefined)?.some(
 				(meta) => meta.key === '_reduced_stock'
@@ -124,7 +127,7 @@ export function useCheckoutSession(order: OrderDocument) {
 		} else {
 			router.replace({ pathname: '/cart' });
 		}
-	}, [runtime, order, router, stockAdjustment, uiSettings.autoShowReceipt]);
+	}, [runtime, order, orderId, router, stockAdjustment, uiSettings.autoShowReceipt]);
 
 	const handleStockRejection = React.useCallback(
 		(error: unknown) => {
@@ -146,7 +149,7 @@ export function useCheckoutSession(order: OrderDocument) {
 			] as const) {
 				if (wooIds.length === 0) continue;
 				const handle = runtime.engine.require({
-					id: `checkout:stock-rejection:${collection}:${order.id}`,
+					id: `checkout:stock-rejection:${collection}:${orderId}`,
 					collection,
 					kind: 'targeted-records',
 					remoteIds: wooIds.map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
@@ -178,12 +181,12 @@ export function useCheckoutSession(order: OrderDocument) {
 				.catch(() => undefined);
 			return true;
 		},
-		[runtime, order.id, order.uuid, resolveStockOwnerId]
+		[runtime, orderId, order.uuid, resolveStockOwnerId]
 	);
 
 	const startCheckout = React.useCallback(async () => {
-		if (!order.id || !gatewayResolved) return;
-		if (blockIfDegraded('process-payment', { orderId: order.id })) return;
+		if (!orderId || !gatewayResolved) return;
+		if (blockIfDegraded('process-payment', { orderId: orderId })) return;
 		setLoading(true);
 		setError(null);
 
@@ -203,7 +206,7 @@ export function useCheckoutSession(order: OrderDocument) {
 			}
 
 			await http.post(`payment-gateways/${resolvedGateway.id}/bootstrap`, {
-				context: { order_id: order.id },
+				context: { order_id: orderId },
 			});
 
 			// Last point at which no money has moved (#163 ruling R5). The gateway
@@ -211,10 +214,10 @@ export function useCheckoutSession(order: OrderDocument) {
 			// under, so re-read the latch here rather than trusting the check made
 			// when Process Payment was pressed. Past this POST the payment is with
 			// the gateway and the client cannot recall it — see the PR body.
-			if (blockIfDegraded('process-payment', { orderId: order.id })) return;
+			if (blockIfDegraded('process-payment', { orderId: orderId })) return;
 
 			const response = await http.post(
-				`orders/${order.id}/checkout`,
+				`orders/${orderId}/checkout`,
 				{
 					gateway_id: resolvedGateway.id,
 					action: 'start',
@@ -223,7 +226,7 @@ export function useCheckoutSession(order: OrderDocument) {
 				{
 					headers: {
 						'X-WCPOS-Idempotency-Key': createCheckoutIdempotencyKey(
-							order.id,
+							orderId,
 							resolvedGateway.id,
 							checkoutAttemptIdRef.current
 						),
@@ -240,7 +243,7 @@ export function useCheckoutSession(order: OrderDocument) {
 				}
 
 				await new Promise((resolve) => setTimeout(resolve, 750));
-				const poll = await http.get(`orders/${order.id}/checkout`);
+				const poll = await http.get(`orders/${orderId}/checkout`);
 				state = (poll?.data || {}) as CheckoutState;
 			}
 
@@ -250,12 +253,12 @@ export function useCheckoutSession(order: OrderDocument) {
 				clearStockRejection();
 				checkoutLogger.success(
 					t('pos_checkout.payment_completed_for_order', {
-						orderNumber: order.number,
+						orderNumber: orderNumber,
 					}),
 					{
 						showToast: true,
 						context: {
-							orderId: order.id,
+							orderId: orderId,
 							gatewayId: resolvedGateway.id,
 							checkoutId: state.checkout_id,
 						},
@@ -279,7 +282,7 @@ export function useCheckoutSession(order: OrderDocument) {
 				showToast: true,
 				code: ERROR_CODES.CHECKOUT_OUTCOME_UNKNOWN,
 				context: {
-					orderId: order.id,
+					orderId: orderId,
 					gatewayId: resolvedGateway?.id,
 				},
 			});
@@ -294,7 +297,8 @@ export function useCheckoutSession(order: OrderDocument) {
 		gatewayResolved,
 		handleStockRejection,
 		http,
-		order,
+		orderId,
+		orderNumber,
 		refetch,
 		t,
 	]);

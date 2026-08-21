@@ -1,13 +1,10 @@
 import * as React from 'react';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
-import { isRxDocument } from 'rxdb';
 import { defer, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 
 import { useHttpClient } from '@wcpos/hooks/use-http-client';
-
-import { isEngineRecordFace } from './types';
 
 import type { ImageAttachmentSource } from './types';
 type HttpGet = ReturnType<typeof useHttpClient>['get'];
@@ -114,7 +111,7 @@ function getImageResource(
  */
 export const useImageAttachment = (source: ImageAttachmentSource, imageUrl: string) => {
 	const { get } = useHttpClient();
-	const hasValidSource = (isEngineRecordFace(source) || isRxDocument(source)) && !!imageUrl;
+	const hasValidSource = !!imageUrl;
 
 	// Memoized so a re-render of a mounted component keeps its (possibly
 	// errored) resource; only a fresh mount or a source change retries.

@@ -11,6 +11,7 @@ import {
 	wrappedErrorHandlerStorage,
 } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { getLogger } from '@wcpos/utils/logger';
+import type { EngineRecord } from '@wcpos/query';
 
 import { EditOrderForm } from './form';
 
@@ -31,7 +32,14 @@ type Customer = {
 	tax_ids: unknown[];
 };
 
-type CustomerValueRef = { current: Customer | null };
+type CustomerRecord = {
+	uuid: string;
+	payload: Customer;
+	getLatest: () => CustomerRecord;
+	toMutableJSON: () => { payload: Customer };
+	collection: { name: string };
+};
+type CustomerValueRef = { current: CustomerRecord | null };
 
 const customerResources = new Map<number, { valueRef$$: Subject<CustomerValueRef> }>();
 const setValue = jest.fn();
@@ -147,27 +155,35 @@ jest.mock('../../hooks/use-customer-name-format', () => ({
 	useCustomerNameFormat: () => ({ format: () => 'Customer' }),
 }));
 jest.mock('../../hooks/use-engine-document', () => ({
-	useEngineDocumentByWooId: (_collection: string, wooId: number) => customerResources.get(wooId),
+	useEngineRecordByWooId: (_collection: string, wooId: number) => customerResources.get(wooId),
 }));
 jest.mock('../../hooks/use-guest-customer', () => ({
 	useGuestCustomer: () => ({ billing: {}, shipping: {}, tax_ids: [] }),
 }));
 
-const order = {
+const orderPayload = {
 	id: 50,
-	$: new BehaviorSubject({}),
-	getLatest: () => ({
-		status: 'pending',
-		customer_id: 1,
-		billing: { first_name: 'Previous' },
-		shipping: { first_name: 'Previous' },
-		meta_data: [],
-		tax_ids: [],
-	}),
-} as unknown as import('@wcpos/database').OrderDocument;
+	status: 'pending',
+	customer_id: 1,
+	billing: { first_name: 'Previous' },
+	shipping: { first_name: 'Previous' },
+	meta_data: [],
+	tax_ids: [],
+};
+const order = {
+	uuid: 'order-50',
+	payload: orderPayload,
+	$: new BehaviorSubject({ toJSON: () => ({ payload: orderPayload }) }),
+	getLatest: () => order,
+	toMutableJSON: () => ({ payload: orderPayload }),
+	collection: { name: 'orders' },
+} as unknown as EngineRecord<'orders'>;
 
-function customer(id: number): Customer {
-	return {
+function customer(id: number): CustomerRecord {
+	// Engine-record-shaped on purpose: the production hook returns EngineRecord<'customers'>,
+	// and a flat fixture would exercise only the guest-object branch of handleCustomerChange —
+	// leaving getLatest().payload extraction untested.
+	const payload: Customer = {
 		id,
 		first_name: `Customer ${id}`,
 		last_name: '',
@@ -176,6 +192,14 @@ function customer(id: number): Customer {
 		shipping: { first_name: `Shipping ${id}` },
 		tax_ids: [{ id }],
 	};
+	const record: CustomerRecord = {
+		uuid: `customer-${id}`,
+		payload,
+		getLatest: () => record,
+		toMutableJSON: () => ({ payload }),
+		collection: { name: 'customers' },
+	};
+	return record;
 }
 
 async function degradeStorage(databaseName: string) {
@@ -343,8 +367,7 @@ describe('EditOrderForm save', () => {
 
 	it('closes the modal after a successful save', async () => {
 		mockLocalPatch.mockResolvedValue({ changes: {}, document: order });
-		// isRxDocument only checks for this marker property
-		mockPushDocument.mockResolvedValue({ id: 50, number: '50', isInstanceOfRxDocument: true });
+		mockPushDocument.mockResolvedValue(order);
 		render(<EditOrderForm order={order} />);
 
 		await act(async () => {
@@ -370,7 +393,7 @@ describe('EditOrderForm save', () => {
 	it('does not push or close when the local patch fails', async () => {
 		// localPatch swallows write errors and resolves undefined
 		mockLocalPatch.mockResolvedValue(undefined);
-		mockPushDocument.mockResolvedValue({ id: 50, number: '50', isInstanceOfRxDocument: true });
+		mockPushDocument.mockResolvedValue(order);
 		render(<EditOrderForm order={order} />);
 
 		await act(async () => {

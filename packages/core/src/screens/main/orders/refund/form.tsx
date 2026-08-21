@@ -30,6 +30,7 @@ import {
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -58,8 +59,8 @@ import { isStorageBlockedError, useStorageMoneyPathGuard } from '../../hooks/use
 
 const refundLogger = getLogger(['wcpos', 'mutations', 'refund']);
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-type RefundDetail = NonNullable<OrderDocument['refunds']>[number] & {
+type OrderPayload = EngineRecord<'orders'>['payload'];
+type RefundDetail = NonNullable<OrderPayload['refunds']>[number] & {
 	amount?: string | number | null;
 	line_items?: {
 		id?: number;
@@ -70,7 +71,7 @@ type RefundDetail = NonNullable<OrderDocument['refunds']>[number] & {
 };
 
 interface Props {
-	order: OrderDocument;
+	order: EngineRecord<'orders'>;
 }
 
 function createRefundFormSchema(dp: number) {
@@ -132,11 +133,12 @@ export function RefundOrderForm({ order }: Props) {
 	});
 	const [loading, setLoading] = React.useState(false);
 	const [confirmOpen, setConfirmOpen] = React.useState(false);
+	const orderData = useRecordField(order, (record) => record.payload);
 	const [refundDetails, setRefundDetails] = React.useState<RefundDetail[]>(() =>
-		normalizeRefundDetails(order.refunds || [])
+		normalizeRefundDetails(orderData.refunds || [])
 	);
-	const [refundDetailsLoading, setRefundDetailsLoading] = React.useState(Boolean(order.id));
-	const refundsFallback = JSON.stringify(order.refunds || []);
+	const [refundDetailsLoading, setRefundDetailsLoading] = React.useState(Boolean(orderData.id));
+	const refundsFallback = JSON.stringify(orderData.refunds || []);
 	const getRefundsFallback = React.useCallback(() => {
 		const refunds = JSON.parse(refundsFallback) as RefundDetail[];
 		return normalizeRefundDetails(Array.isArray(refunds) ? refunds : []);
@@ -147,12 +149,12 @@ export function RefundOrderForm({ order }: Props) {
 		gateway,
 		loading: gatewaysLoading,
 		error: gatewaysError,
-	} = usePaymentGateways(order.payment_method || '');
+	} = usePaymentGateways(orderData.payment_method || '');
 	const { format } = useCurrencyFormat({
-		currencySymbol: order.currency_symbol || '',
+		currencySymbol: orderData.currency_symbol || '',
 	});
 	const refundOptions = React.useMemo(() => deriveRefundDestinationOptions(gateway), [gateway]);
-	const isPosCash = order.payment_method === 'pos_cash';
+	const isPosCash = orderData.payment_method === 'pos_cash';
 	const defaultDestination: RefundDestination = isPosCash
 		? 'cash'
 		: refundOptions[0]?.enabled
@@ -162,7 +164,7 @@ export function RefundOrderForm({ order }: Props) {
 	React.useEffect(() => {
 		let mounted = true;
 
-		if (!order.id) {
+		if (!orderData.id) {
 			setRefundDetails(getRefundsFallback());
 			setRefundDetailsLoading(false);
 			return;
@@ -171,7 +173,7 @@ export function RefundOrderForm({ order }: Props) {
 		setRefundDetailsLoading(true);
 
 		void http
-			.get(`orders/${order.id}/refunds`, { params: { page: 1, per_page: 100 } })
+			.get(`orders/${orderData.id}/refunds`, { params: { page: 1, per_page: 100 } })
 			.then(async (response) => {
 				if (!mounted) return;
 				const firstPage = Array.isArray(response?.data) ? response.data : [];
@@ -179,7 +181,7 @@ export function RefundOrderForm({ order }: Props) {
 				const remainingPages = await Promise.all(
 					Array.from({ length: Math.max(0, totalPages - 1) }, (_, index) =>
 						http
-							.get(`orders/${order.id}/refunds`, {
+							.get(`orders/${orderData.id}/refunds`, {
 								params: { page: index + 2, per_page: 100 },
 							})
 							.then((pageResponse) => (Array.isArray(pageResponse?.data) ? pageResponse.data : []))
@@ -198,17 +200,17 @@ export function RefundOrderForm({ order }: Props) {
 		return () => {
 			mounted = false;
 		};
-	}, [getRefundsFallback, http, order.id]);
+	}, [getRefundsFallback, http, orderData.id]);
 
 	const previousRefundTotal = React.useMemo(() => {
 		if (!refundDetails.length) return 0;
 		return refundDetails.reduce((sum, r) => sum + Math.abs(parseFloat(r.total || '0')), 0);
 	}, [refundDetails]);
 
-	const maxRefundable = computeMaxRefundable(order.total || '0', refundDetails, dp);
+	const maxRefundable = computeMaxRefundable(orderData.total || '0', refundDetails, dp);
 
 	const initialLineItems = React.useMemo(() => {
-		return (order.line_items || []).map((item) => ({
+		return (orderData.line_items || []).map((item) => ({
 			id: item.id ?? 0,
 			name: item.name || '',
 			quantity: item.quantity ?? 0,
@@ -227,7 +229,7 @@ export function RefundOrderForm({ order }: Props) {
 			})),
 			refund_qty: 0,
 		}));
-	}, [order.line_items, refundDetails, refundDetailsLoading]);
+	}, [orderData.line_items, refundDetails, refundDetailsLoading]);
 
 	const form = useForm<RefundFormValues>({
 		resolver: zodResolver(refundFormSchema as never) as never,
@@ -308,10 +310,10 @@ export function RefundOrderForm({ order }: Props) {
 
 	const handleSubmit = React.useCallback(async () => {
 		if (loading || refundDetailsLoading) return;
-		if (!order.id) return;
+		if (!orderData.id) return;
 		// #163 follow-up ruling: the latch can fire while the confirm dialog sits
 		// open, so re-read it here rather than trusting the rendered disabled state.
-		if (blockIfDegraded('refund', { orderId: order.id })) {
+		if (blockIfDegraded('refund', { orderId: orderData.id })) {
 			setConfirmOpen(false);
 			return;
 		}
@@ -369,7 +371,7 @@ export function RefundOrderForm({ order }: Props) {
 			refundLogger.success(t('orders.refund_processed', { amount: freshRefundTotal }), {
 				showToast: true,
 				context: {
-					orderId: order.id,
+					orderId: orderData.id,
 					amount: freshRefundTotal,
 					reason: values.reason || '',
 				},
@@ -386,21 +388,32 @@ export function RefundOrderForm({ order }: Props) {
 				showToast: true,
 				code: ERROR_CODES.PAYMENT_UNEXPECTED,
 				context: {
-					orderId: order.id,
+					orderId: orderData.id,
 					error: getErrorMessage(err),
 				},
 			});
 		} finally {
 			setLoading(false);
 		}
-	}, [blockIfDegraded, loading, refundDetailsLoading, form, order, refundMutation, router, t, dp]);
+	}, [
+		blockIfDegraded,
+		loading,
+		refundDetailsLoading,
+		form,
+		order,
+		orderData.id,
+		refundMutation,
+		router,
+		t,
+		dp,
+	]);
 
 	return (
 		<Form {...form}>
 			<VStack className="gap-4">
 				<HStack className="justify-between">
 					<Text className="text-muted-foreground">
-						{t('common.total')}: {format(parseFloat(order.total || '0'))}
+						{t('common.total')}: {format(parseFloat(orderData.total || '0'))}
 					</Text>
 					{previousRefundTotal > 0 && (
 						<Text className="text-muted-foreground">
@@ -505,7 +518,7 @@ export function RefundOrderForm({ order }: Props) {
 								{
 									value: 'original_method',
 									label: t('orders.refund_to_original_method', {
-										gateway: order.payment_method_title || order.payment_method || '',
+										gateway: orderData.payment_method_title || orderData.payment_method || '',
 									}),
 									description: refundOptions[0].enabled
 										? undefined
@@ -555,7 +568,7 @@ export function RefundOrderForm({ order }: Props) {
 						<AlertDialogDescription>
 							{t('orders.confirm_refund_description', {
 								amount: formattedRefundTotal,
-								number: order.id,
+								number: orderData.id,
 							})}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
@@ -578,7 +591,7 @@ export function RefundOrderForm({ order }: Props) {
 
 /**
  * Deliberately NOT @wcpos/order-math's `refundValue`: this form needs the SIGNED
- * display string (embedded order.refunds[] rows carry negative totals; full refund
+ * display string (embedded orderData.refunds[] rows carry negative totals; full refund
  * documents carry positive amounts), and it prefers `total` because that is the
  * signed spelling when both exist. `refundValue` is the positive-magnitude rule
  * for sums and deductions — converting this site would flip the sign in the

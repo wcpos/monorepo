@@ -4,7 +4,8 @@
 import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { BehaviorSubject } from 'rxjs';
+
+import type { EngineRecord } from '@wcpos/query';
 
 import { EmailForm } from './email';
 
@@ -78,6 +79,13 @@ jest.mock('@wcpos/components/toast', () => ({ Toast: { show: (a: unknown) => moc
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: onlineStatus }),
 }));
+jest.mock('@wcpos/query', () => ({
+	...jest.requireActual('@wcpos/query'),
+	useRecordField: (
+		record: EngineRecord<'orders'>,
+		select: (record: EngineRecord<'orders'>) => unknown
+	) => select(record),
+}));
 jest.mock('@wcpos/utils/logger', () => ({
 	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 	// Lazy wrappers: `getLogger` runs at module load, before the mock consts above
@@ -105,10 +113,12 @@ jest.mock('../../../contexts/translations', () => {
 });
 
 const order = {
-	id$: new BehaviorSubject<number | undefined>(42),
-	number$: new BehaviorSubject<string | undefined>('1042'),
-	billing: { email: 'customer@example.com' },
-} as unknown as import('@wcpos/database').OrderDocument;
+	payload: {
+		id: 42,
+		number: '1042',
+		billing: { email: 'customer@example.com' },
+	},
+} as unknown as EngineRecord<'orders'>;
 
 const send = async () => {
 	await act(async () => {

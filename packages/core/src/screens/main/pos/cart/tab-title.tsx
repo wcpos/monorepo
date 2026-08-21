@@ -1,23 +1,21 @@
-import { useObservableEagerState } from 'observable-hooks';
-
 import { Text } from '@wcpos/components/text';
 import { getNetPaymentTotal } from '@wcpos/order-math';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 
 interface Props {
-	order: import('@wcpos/database').OrderDocument;
+	order: EngineRecord<'orders'>;
 }
 
 /**
  *
  */
 export function CartTabTitle({ order }: Props) {
-	// stage-I2: left on proxy face — the open-orders tab strip is explicitly out of scope.
-	const total = useObservableEagerState(order.total$!);
-	const refunds = useObservableEagerState(order.refunds$!);
-	const currencySymbol = useObservableEagerState(order.currency_symbol$!);
+	const total = useRecordField(order, (record) => record.payload.total);
+	const refunds = useRecordField(order, (record) => record.payload.refunds);
+	const currencySymbol = useRecordField(order, (record) => record.payload.currency_symbol);
 	const { format } = useCurrencyFormat({ currencySymbol: currencySymbol ?? '' });
 	const t = useT();
 

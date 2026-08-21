@@ -3,6 +3,8 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
+import type { EngineRecord } from '@wcpos/query';
+
 import { useMutation } from './use-mutation';
 
 const mockInsertEngineResident = jest.fn();
@@ -11,6 +13,8 @@ const mockStatus = jest.fn();
 const mockAwaitWriteOutcome = jest.fn();
 const mockFindEngineResident = jest.fn();
 const mockWrapEngineDocument = jest.fn();
+const mockLocalPatch = jest.fn();
+const mockLoggerError = jest.fn();
 
 jest.mock('uuid', () => ({
 	v4: () => 'born-local-uuid',
@@ -24,9 +28,18 @@ jest.mock('@wcpos/query', () => ({
 }));
 
 jest.mock('./use-local-mutation', () => ({
+	documentRecordId: (document: { uuid?: unknown; id?: unknown }) => document.uuid ?? document.id,
 	insertEngineResident: (...args: unknown[]) => mockInsertEngineResident(...args),
 	findEngineResident: (...args: unknown[]) => mockFindEngineResident(...args),
-	useLocalMutation: () => ({ localPatch: jest.fn() }),
+	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
+}));
+
+jest.mock('@wcpos/utils/logger', () => ({
+	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+	getLogger: () => ({
+		error: (...args: unknown[]) => mockLoggerError(...args),
+		success: jest.fn(),
+	}),
 }));
 
 jest.mock('../../../../contexts/translations', () => ({
@@ -176,6 +189,29 @@ describe('useMutation', () => {
 
 		expect(mockWrite).toHaveBeenCalledWith(
 			expect.not.objectContaining({ explicit: expect.anything() })
+		);
+	});
+
+	it('preserves an engine record UUID when a customer patch does not update', async () => {
+		const customer = {
+			uuid: 'customer-local-uuid',
+			collection: { name: 'customers' },
+			payload: { id: 42 },
+		} as unknown as EngineRecord<'customers'>;
+		mockLocalPatch.mockResolvedValueOnce(undefined);
+		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
+
+		await act(() => result.current.patch({ document: customer, data: { first_name: 'Ada' } }));
+
+		expect(mockLocalPatch).toHaveBeenCalledWith({
+			document: customer,
+			data: { first_name: 'Ada' },
+		});
+		expect(mockLoggerError).toHaveBeenCalledWith(
+			'common.not_updated',
+			expect.objectContaining({
+				context: expect.objectContaining({ documentId: 'customer-local-uuid' }),
+			})
 		);
 	});
 

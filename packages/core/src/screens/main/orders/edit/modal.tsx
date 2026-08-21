@@ -1,26 +1,27 @@
 import * as React from 'react';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
-import { isRxDocument } from 'rxdb';
 
 import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import { Tree } from '@wcpos/components/tree';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { EditOrderForm } from './form';
 import { useT } from '../../../../contexts/translations';
 
 interface Props {
-	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
+	resource: ObservableResource<EngineRecord<'orders'> | null>;
 }
 
 export function EditOrderModal({ resource }: Props) {
 	const order = useObservableSuspense(resource);
 	const t = useT();
 	const [value, setValue] = React.useState('form');
+	const payload = useRecordField(order, (record) => record.payload);
 
-	if (!isRxDocument(order)) {
+	if (!order) {
 		return (
 			<Modal>
 				<ModalContent size="xl">
@@ -40,7 +41,9 @@ export function EditOrderModal({ resource }: Props) {
 				<ModalHeader>
 					<ModalTitle>
 						<Text>
-							{order.id ? t('orders.edit_order_2', { number: order.id }) : t('orders.edit_order')}
+							{payload?.id
+								? t('orders.edit_order_2', { number: payload.id })
+								: t('orders.edit_order')}
 						</Text>
 					</ModalTitle>
 				</ModalHeader>
@@ -58,7 +61,7 @@ export function EditOrderModal({ resource }: Props) {
 							<EditOrderForm order={order} />
 						</TabsContent>
 						<TabsContent value="json">
-							<Tree value={order.toJSON()} />
+							<Tree value={payload} />
 						</TabsContent>
 					</Tabs>
 				</ModalBody>

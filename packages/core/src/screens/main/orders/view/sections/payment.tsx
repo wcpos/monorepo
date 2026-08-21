@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { Text } from '@wcpos/components/text';
+import type { EngineRecord } from '@wcpos/query';
 
 import { RailSection } from './_section';
 import { totalRefunded } from './total-refunded';
@@ -9,7 +10,7 @@ import { useT } from '../../../../../contexts/translations';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useDateFormat } from '../../../hooks/use-date-format';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
+type OrderPayload = EngineRecord<'orders'>['payload'];
 
 function KV({
 	k,
@@ -30,7 +31,7 @@ function KV({
 	);
 }
 
-export function PaymentSection({ order, last }: { order: OrderDocument; last?: boolean }) {
+export function PaymentSection({ order, last }: { order: OrderPayload; last?: boolean }) {
 	const t = useT();
 	const { format } = useCurrencyFormat({ currencySymbol: order.currency_symbol });
 	const datePaid = useDateFormat(order.date_paid_gmt);

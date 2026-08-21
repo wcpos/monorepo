@@ -2,10 +2,10 @@ import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
 import { useModal } from '@wcpos/components/modal';
+import type { EngineRecord } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -18,7 +18,7 @@ import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 const mutationLogger = getLogger(['wcpos', 'mutations', 'customer']);
 
 interface Props {
-	customer: import('@wcpos/database').CustomerDocument;
+	customer: EngineRecord<'customers'>;
 }
 
 /**
@@ -38,7 +38,7 @@ export function EditCustomerForm({ customer }: Props) {
 	const form = useForm<z.infer<typeof customerFormSchema>>({
 		resolver: zodResolver(customerFormSchema as never) as never,
 		defaultValues: {
-			...(customer.toJSON() as Record<string, unknown>),
+			...customer.toMutableJSON().payload,
 		} as z.infer<typeof customerFormSchema>,
 	});
 
@@ -62,16 +62,17 @@ export function EditCustomerForm({ customer }: Props) {
 					throw new Error('Local patch failed');
 				}
 				await pushDocument(customer).then((savedDoc: unknown) => {
-					if (isRxDocument(savedDoc)) {
+					if (savedDoc) {
+						const saved = customer.getLatest().payload;
 						mutationLogger.success(
 							t('common.saved', {
-								name: format(savedDoc as import('@wcpos/database').CustomerDocument),
+								name: format(saved),
 							}),
 							{
 								showToast: true,
 								context: {
-									customerId: (savedDoc as { id?: number }).id,
-									customerName: format(savedDoc as import('@wcpos/database').CustomerDocument),
+									customerId: saved.id,
+									customerName: format(saved),
 								},
 							}
 						);
@@ -85,7 +86,7 @@ export function EditCustomerForm({ customer }: Props) {
 					code: ERROR_CODES.SYNC_UNEXPECTED,
 					toast: { title: t('common.failed_to_save_customer') },
 					context: {
-						customerId: customer.id,
+						customerId: customer.getLatest().payload.id,
 						error: errorMessage,
 					},
 				});

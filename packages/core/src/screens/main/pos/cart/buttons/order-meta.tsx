@@ -12,14 +12,13 @@ import {
 
 import { EditOrderMeta } from './edit-order-meta';
 import { useT } from '../../../../../contexts/translations';
-import { useCurrentOrder } from '../../contexts/current-order';
+import { useCurrentOrderRecord } from '../../contexts/current-order';
 
 /**
  *
  */
 export function OrderMetaButton() {
-	const { currentOrder } = useCurrentOrder();
-	// stage-I2: left on proxy face — EditOrderMeta is an edit modal owned by stage J.
+	const currentOrder = useCurrentOrderRecord();
 	const t = useT();
 
 	return (

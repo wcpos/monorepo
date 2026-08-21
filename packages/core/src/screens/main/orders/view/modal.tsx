@@ -3,12 +3,12 @@ import { View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
-import { isRxDocument } from 'rxdb';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Modal, ModalBody, ModalClose, ModalContent, ModalFooter } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { AddressesRail, CustomerNoteSection, CustomerRail, TaxIdsRail } from './sections/customer';
 import { HeaderSection } from './sections/header';
@@ -21,8 +21,10 @@ import { useOrderRefunds } from './use-order-refunds';
 import { useT } from '../../../../contexts/translations';
 
 interface Props {
-	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
+	resource: ObservableResource<EngineRecord<'orders'> | null>;
 }
+
+type OrderPayload = EngineRecord<'orders'>['payload'];
 
 const REFUNDABLE_STATUSES: readonly string[] = ['completed', 'processing', 'on-hold'];
 
@@ -31,8 +33,9 @@ export function ViewOrderModal({ resource }: Props) {
 	const t = useT();
 	const router = useRouter();
 	const [refundsRetryKey, setRefundsRetryKey] = React.useState(0);
+	const payload = useRecordField(order, (record) => record.payload);
 
-	if (!isRxDocument(order)) {
+	if (!order || !payload) {
 		return (
 			<Modal>
 				<ModalContent size="xl" className="gap-0 py-0">
@@ -46,45 +49,45 @@ export function ViewOrderModal({ resource }: Props) {
 		);
 	}
 
-	const handlePrintReceipt = order.uuid
-		? () => router.push({ pathname: '/orders/receipt/[orderId]', params: { orderId: order.uuid! } })
-		: undefined;
+	const handlePrintReceipt = () =>
+		router.push({ pathname: '/orders/receipt/[orderId]', params: { orderId: order.uuid } });
 
-	const canRefund = !!order.id && !!order.status && REFUNDABLE_STATUSES.includes(order.status);
+	const canRefund =
+		!!payload.id && !!payload.status && REFUNDABLE_STATUSES.includes(payload.status);
 	const handleRefund = canRefund
-		? () => router.push({ pathname: '/orders/refund/[orderId]', params: { orderId: order.uuid! } })
+		? () => router.push({ pathname: '/orders/refund/[orderId]', params: { orderId: order.uuid } })
 		: undefined;
 
 	return (
 		<Modal>
 			<ModalContent size="2xl" className="gap-0">
-				<HeaderSection order={order} />
+				<HeaderSection order={payload} />
 				<ModalBody className="p-0">
 					<View className="w-full flex-col sm:flex-row">
 						{/* Main column */}
 						<View className="min-w-0 flex-1">
-							<LineItemsSection order={order} />
-							<TotalsSection order={order} />
+							<LineItemsSection order={payload} />
+							<TotalsSection order={payload} />
 							<RefundsBoundary
 								key={refundsRetryKey}
-								order={order}
+								order={payload}
 								onRetry={() => setRefundsRetryKey((key) => key + 1)}
 							/>
-							<CustomerNoteSection order={order} />
+							<CustomerNoteSection order={payload} />
 						</View>
 
 						{/* Rail */}
 						<View className="border-border bg-muted/30 border-t sm:w-80 sm:shrink-0 sm:border-t-0 sm:border-l">
-							<CustomerRail order={order} />
-							<AddressesRail order={order} />
-							<TaxIdsRail order={order} />
-							<PaymentSection order={order} />
-							<POSMetadataSection order={order} last />
+							<CustomerRail order={payload} />
+							<AddressesRail order={payload} />
+							<TaxIdsRail order={payload} />
+							<PaymentSection order={payload} />
+							<POSMetadataSection order={payload} last />
 						</View>
 					</View>
 				</ModalBody>
 				<ModalFooter className="border-border border-t pt-4">
-					{order.id && handlePrintReceipt ? (
+					{payload.id ? (
 						<Button variant="outline" onPress={handlePrintReceipt} leftIcon="receipt">
 							<ButtonText>{t('receipt.print_receipt')}</ButtonText>
 						</Button>
@@ -101,13 +104,7 @@ export function ViewOrderModal({ resource }: Props) {
 	);
 }
 
-function RefundsBoundary({
-	order,
-	onRetry,
-}: {
-	order: import('@wcpos/database').OrderDocument;
-	onRetry: () => void;
-}) {
+function RefundsBoundary({ order, onRetry }: { order: OrderPayload; onRetry: () => void }) {
 	if (!order.id) {
 		return null;
 	}
@@ -120,7 +117,7 @@ function RefundsResourceBoundary({
 	orderId,
 	onRetry,
 }: {
-	order: import('@wcpos/database').OrderDocument;
+	order: OrderPayload;
 	orderId: number;
 	onRetry: () => void;
 }) {

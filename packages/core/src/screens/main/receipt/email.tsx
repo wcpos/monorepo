@@ -1,8 +1,6 @@
 import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useObservableEagerState } from 'observable-hooks';
-import { of } from 'rxjs';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
@@ -12,6 +10,7 @@ import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -31,7 +30,7 @@ const formSchema = z.object({
 });
 
 interface Props {
-	order: import('@wcpos/database').OrderDocument;
+	order: EngineRecord<'orders'>;
 }
 
 /**
@@ -51,9 +50,10 @@ export function EmailForm({ order }: Props) {
 	const { status } = useOnlineStatus();
 	const [loading, setLoading] = React.useState(false);
 	const t = useT();
-	const orderID = useObservableEagerState(order.id$ ?? of(undefined as number | undefined));
-	const orderNumber = useObservableEagerState(order.number$ ?? of(undefined as string | undefined));
-	const defaultEmail = order.billing?.email ?? '';
+	const orderData = useRecordField(order, (record) => record.payload);
+	const orderID = orderData.id;
+	const orderNumber = orderData.number;
+	const defaultEmail = orderData.billing?.email ?? '';
 
 	// 'online-website-unavailable' counts as offline here: the device has a
 	// network but the store cannot be reached, which fails exactly the same way.

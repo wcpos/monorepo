@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 import { v4 as uuidv4 } from 'uuid';
 
-import { useQueryRuntime, wrapEngineDocument } from '@wcpos/query';
+import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { isMiscProductLine, MISC_PRODUCT_ID, wooMetaCarrier } from '@wcpos/sync-core';
 
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
@@ -21,6 +21,8 @@ import {
 } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrderActions } from '../contexts/current-order';
 import { removeTemporaryOrder } from '../contexts/current-order/temporary-order';
+
+import type { CurrentOrderRecord } from '../contexts/current-order';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
@@ -68,8 +70,7 @@ function hasQueuedOrAcknowledgedCreate(resident: EngineResident): boolean {
 export const useAddItemToOrder = () => {
 	// Event-time resolution: every product tile mounts this hook via useAddProduct, so a
 	// render-time subscription re-rendered the whole grid on every cart write.
-	// stage-I2: left on proxy face — order birth crosses temporary and resident queue state.
-	const { getCurrentOrder, setCurrentOrderID } = useCurrentOrderActions();
+	const { getCurrentOrderRecord, setCurrentOrderID } = useCurrentOrderActions();
 	const runtime = useQueryRuntime();
 	const { localPatch } = useLocalMutation();
 	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
@@ -127,7 +128,7 @@ export const useAddItemToOrder = () => {
 	 */
 	const saveNewOrder = React.useCallback(
 		async (
-			order: import('@wcpos/database').OrderDocument,
+			order: CurrentOrderRecord,
 			type: CartLineType,
 			data: CartLine,
 			options?: { orphanedSkeleton?: EngineResident | null }
@@ -160,7 +161,7 @@ export const useAddItemToOrder = () => {
 					},
 				});
 			} else {
-				const orderData = order.toMutableJSON();
+				const orderData = order.toMutableJSON().payload;
 				const orderJSON: Record<string, unknown> = {
 					...orderData,
 					meta_data: ensurePosOrderIdentityMeta(orderData.meta_data, identity),
@@ -203,12 +204,7 @@ export const useAddItemToOrder = () => {
 				}
 				throw error;
 			}
-			const savedOrder = wrapEngineDocument(
-				'orders',
-				resident as never
-			) as unknown as import('@wcpos/database').OrderDocument;
-			// The context hands out a read-only wrapped face; the remove-and-swap resolves
-			// the RAW template through the temp-order repository (ADR 0028 stage I).
+			const savedOrder = resident as unknown as EngineRecord<'orders'>;
 			await removeTemporaryOrder(recordId);
 			setCurrentOrderID(recordId);
 			return savedOrder;
@@ -221,7 +217,7 @@ export const useAddItemToOrder = () => {
 	 */
 	const addItemToOrder = React.useCallback(
 		async (type: CartLineType, data: CartLine) => {
-			const order = getCurrentOrder().getLatest();
+			const order = getCurrentOrderRecord().getLatest();
 
 			data = wooMetaCarrier.ensureLineUuid(data, uuidv4);
 
@@ -230,15 +226,12 @@ export const useAddItemToOrder = () => {
 			return enqueueOrderMutation(recordId, async (context) => {
 				const temporaryOrder = order.getLatest();
 				let latest = context.order?.getLatest() ?? temporaryOrder;
-				let isNew = Boolean((latest as unknown as { isNew?: boolean }).isNew);
+				let isNew = Boolean((latest as { isNew?: boolean }).isNew);
 				let orphanedSkeleton: EngineResident | null = null;
 				if (isNew && !context.order) {
 					const resident = await findEngineResident(runtime, 'orders', recordId);
 					if (resident) {
-						latest = wrapEngineDocument(
-							'orders',
-							resident as never
-						) as unknown as import('@wcpos/database').OrderDocument;
+						latest = resident as unknown as EngineRecord<'orders'>;
 						if (hasQueuedOrAcknowledgedCreate(resident)) {
 							context.order = latest;
 							isNew = false;
@@ -254,7 +247,7 @@ export const useAddItemToOrder = () => {
 				if (type === 'line_items' && stockGuardEnabled && !isMiscProductLine(data as LineItem)) {
 					const lineItem = data as LineItem;
 					const stockResult = await checkCartStock({
-						lineItems: latest.line_items ?? [],
+						lineItems: latest.payload.line_items ?? [],
 						productId: lineItem.product_id ?? MISC_PRODUCT_ID,
 						variationId: lineItem.variation_id ?? 0,
 						requestedQuantity: lineItem.quantity ?? 1,
@@ -277,7 +270,11 @@ export const useAddItemToOrder = () => {
 					result = await localPatch({
 						document: latest,
 						data: {
-							[type]: buildCartLines((latest[type] as CartLine[] | undefined) ?? [], type, data),
+							[type]: buildCartLines(
+								(latest.payload[type] as CartLine[] | undefined) ?? [],
+								type,
+								data
+							),
 						} as never,
 					});
 				}
@@ -288,7 +285,7 @@ export const useAddItemToOrder = () => {
 		[
 			buildCartLines,
 			checkCartStock,
-			getCurrentOrder,
+			getCurrentOrderRecord,
 			localPatch,
 			runtime,
 			saveNewOrder,
