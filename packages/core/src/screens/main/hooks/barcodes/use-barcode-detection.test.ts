@@ -1,6 +1,8 @@
 /**
  * @jest-environment jsdom
  */
+import { Platform } from 'react-native';
+
 import { act, renderHook } from '@testing-library/react';
 import { BehaviorSubject, Subject } from 'rxjs';
 
@@ -460,6 +462,43 @@ describe('useBarcodeDetection', () => {
 
 		expect(detected).toEqual([]);
 		subscription.unsubscribe();
+	});
+
+	it('disposes a partial native burst when the scan scope deactivates', () => {
+		// Native has no document listener, so the disposal must not live only in
+		// the web branch — a surviving detector would join 1234+5678 into a
+		// valid 8-char scan after refocus.
+		const platform = Platform as { OS: string };
+		const originalOS = platform.OS;
+		platform.OS = 'ios';
+		try {
+			const detected: string[] = [];
+			const { result, rerender } = renderHook(() => useBarcodeDetection());
+			const subscription = result.current.barcode$.subscribe((barcode) => detected.push(barcode));
+			const pressKeys = (keys: string) => {
+				for (const key of keys) {
+					result.current.onKeyPress({
+						nativeEvent: { key },
+					} as Parameters<typeof result.current.onKeyPress>[0]);
+					jest.advanceTimersByTime(10);
+				}
+			};
+
+			act(() => pressKeys('1234'));
+			mockIsFocused = false;
+			rerender();
+			mockIsFocused = true;
+			rerender();
+			act(() => {
+				pressKeys('5678');
+				jest.advanceTimersByTime(200);
+			});
+
+			expect(detected).toEqual([]);
+			subscription.unsubscribe();
+		} finally {
+			platform.OS = originalOS;
+		}
 	});
 
 	it('propagates focus to the gate in the layout phase, not a passive effect', () => {
