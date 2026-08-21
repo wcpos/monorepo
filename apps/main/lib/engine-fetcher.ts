@@ -159,6 +159,10 @@ export function createEngineFetcher(input: {
 			// transit — exactly the hostile case (B6, wcpos-infra#72).
 			if (storeScope !== null) {
 				parsedUrl.searchParams.set('store_id', storeScope);
+			} else {
+				// An unscoped engine must not inherit a stale param from the caller
+				// URL — mirror of the header delete above.
+				parsedUrl.searchParams.delete('store_id');
 			}
 			if (envelopeRequested) {
 				parsedUrl.searchParams.set('_wcpos_envelope', '1');

@@ -341,6 +341,15 @@ describe('createEngineFetcher', () => {
 			expect(new URL(fetch.mock.calls[0]![0] as string).searchParams.has('store_id')).toBe(false);
 		});
 
+		it('strips a stale store_id from the caller URL when the engine is unscoped', async () => {
+			// Mirror of the header delete: a store switch to unscoped must not let
+			// a scope baked into a caller URL keep naming the outgoing store.
+			const fetch = jest.fn().mockResolvedValue(okResponse());
+			const { fetcher } = createFetcherHarness({ fetch, scope: { storeId: null } });
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/products?store_id=9&page=1');
+			expect(new URL(fetch.mock.calls[0]![0] as string).searchParams.has('store_id')).toBe(false);
+		});
+
 		it('re-reads the scope per attempt so a store switch retargets in-flight lanes', async () => {
 			const fetch = jest.fn().mockResolvedValue(okResponse());
 			const { fetcher, scope } = createFetcherHarness({
