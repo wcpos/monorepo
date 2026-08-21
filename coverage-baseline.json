@@ -1,6 +1,6 @@
 {
   "_comment": "Coverage baseline \u2014 ratchet ensures these numbers never decrease. Values are floored to allow for minor CI variance.",
-  "_updated": "2026-08-21",
+  "_updated": "2026-08-05",
   "packages": {
     "utils": {
       "statements": 35,
