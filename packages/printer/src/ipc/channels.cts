@@ -102,7 +102,9 @@ export interface IpcInvokeChannels {
 	};
 	'usb-discovery': { req: Record<string, never>; res: UsbPrinterInfo[] };
 	'serial-discovery': { req: Record<string, never>; res: DiscoveredSerialPrinter[] };
-	'axios': { req: unknown; res: unknown };
+	// axios-shaped request/response payloads over Chromium net.fetch (the channel
+	// was named 'axios' until the library left the main process — wcpos/electron#354).
+	'http-request': { req: unknown; res: unknown };
 	'auth:prompt': { req: AuthPromptParams; res: AuthResult };
 	'novu': { req: NovuBridgeRequest; res: NovuBridgeResponse };
 	'storage:measure': {
@@ -137,7 +139,7 @@ export const INVOKE_CHANNELS = [
 	'printer-discovery',
 	'usb-discovery',
 	'serial-discovery',
-	'axios',
+	'http-request',
 	'auth:prompt',
 	'novu',
 	'storage:measure',
