@@ -37,6 +37,7 @@ function createFetcherHarness(
 		auth?: typeof BASE_AUTH & {
 			refreshAuth?: (context?: { operationId?: string }) => Promise<string | null>;
 			useJwtAsParam?: boolean;
+			bareAuthParam?: boolean;
 		};
 		clockSkew?: { generation: number; evaluated: boolean };
 		scope?: { storeId?: number | string | null };
@@ -102,6 +103,23 @@ beforeEach(() => {
 });
 
 describe('createEngineFetcher', () => {
+	it.each([
+		[true, 'test-token'],
+		[false, 'Bearer test-token'],
+		[undefined, 'Bearer test-token'],
+	])('formats parameter auth when bareAuthParam is %s', async (bareAuthParam, authorization) => {
+		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
+		const { fetcher } = createFetcherHarness({
+			fetch,
+			auth: { ...BASE_AUTH, useJwtAsParam: true, bareAuthParam },
+		});
+
+		await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+
+		const requestedUrl = new URL(fetch.mock.calls[0][0]);
+		expect(requestedUrl.searchParams.get('authorization')).toBe(authorization);
+	});
+
 	it.each([
 		['orders', 'wc/v3/orders'],
 		['products', 'wc/v3/products'],

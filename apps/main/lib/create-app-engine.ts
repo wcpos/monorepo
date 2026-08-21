@@ -63,8 +63,9 @@ export interface CreateAppSyncEngineOptions {
 	 * scope (react-compiler forbids it in components).
 	 */
 	credentials: { getLatest: () => { access_token?: string } };
-	/** When the site authenticates via a query param instead of a header. */
+	/** Query-param auth mode and whether that server accepts a bare token. */
 	useJwtAsParam?: boolean;
+	bareAuthParam?: boolean;
 	/**
 	 * Refresh an expired access token after an unauthorized response. The driving
 	 * request's arc id is passed so the refresh layer's "Session renewed
@@ -89,7 +90,7 @@ export interface CreateAppSyncEngineOptions {
 // scope's close to settle.
 type MutableFetcherOptions = Pick<
 	CreateAppSyncEngineOptions,
-	'credentials' | 'refreshAuth' | 'useJwtAsParam'
+	'credentials' | 'refreshAuth' | 'useJwtAsParam' | 'bareAuthParam'
 >;
 type WriteLeaderState = {
 	current: ReturnType<typeof electWriteLeader>;
@@ -298,6 +299,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		cachedEngine.fetcherOptions.credentials = options.credentials;
 		cachedEngine.fetcherOptions.refreshAuth = options.refreshAuth;
 		cachedEngine.fetcherOptions.useJwtAsParam = options.useJwtAsParam;
+		cachedEngine.fetcherOptions.bareAuthParam = options.bareAuthParam;
 		cachedEngine.fetcherScope.storeId = options.scope.storeId;
 		// The engine IS on this scope, so these are committed values, not
 		// optimistic ones — a later failed switch must fall back to them.
@@ -328,6 +330,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				credentials: options.credentials,
 				refreshAuth: options.refreshAuth,
 				useJwtAsParam: options.useJwtAsParam,
+				bareAuthParam: options.bareAuthParam,
 			},
 		};
 		const switching = entry.engine.scope.switch(options.scope);
@@ -337,6 +340,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		entry.fetcherOptions.credentials = options.credentials;
 		entry.fetcherOptions.refreshAuth = options.refreshAuth;
 		entry.fetcherOptions.useJwtAsParam = options.useJwtAsParam;
+		entry.fetcherOptions.bareAuthParam = options.bareAuthParam;
 		entry.fetcherScope.storeId = options.scope.storeId;
 		entry.clockSkew.generation += 1;
 		entry.clockSkew.evaluated = false;
@@ -365,6 +369,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 					entry.fetcherOptions.credentials = committed.fetcherOptions.credentials;
 					entry.fetcherOptions.refreshAuth = committed.fetcherOptions.refreshAuth;
 					entry.fetcherOptions.useJwtAsParam = committed.fetcherOptions.useJwtAsParam;
+					entry.fetcherOptions.bareAuthParam = committed.fetcherOptions.bareAuthParam;
 					entry.fetcherScope.storeId = committed.storeId;
 					entry.clockSkew.generation += 1;
 					entry.clockSkew.evaluated = previousClockSkewEvaluated;
@@ -389,6 +394,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		credentials: options.credentials,
 		refreshAuth: options.refreshAuth,
 		useJwtAsParam: options.useJwtAsParam,
+		bareAuthParam: options.bareAuthParam,
 	};
 	const fetcherScope: EngineFetcherScope = { storeId: options.scope.storeId };
 	const clockSkew = { generation: 0, evaluated: false };

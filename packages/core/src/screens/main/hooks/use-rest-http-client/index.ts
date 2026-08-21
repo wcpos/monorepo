@@ -6,6 +6,7 @@ import merge from 'lodash/merge';
 import { RequestConfig, requestStateManager, useHttpClient } from '@wcpos/hooks/use-http-client';
 import { createTokenRefreshHandler } from '@wcpos/hooks/use-http-client/create-token-refresh-handler';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -226,6 +227,7 @@ export const useRestHttpClient = (endpoint = '') => {
 				['initialProps', 'site', 'use_jwt_as_param'],
 				site.use_jwt_as_param
 			);
+			const wcposVersion = site.wcpos_version;
 
 			let apiURL = site.wcpos_api_url;
 			const wpApiURL = site.wp_api_url.replace(/\/?$/, '/');
@@ -243,7 +245,9 @@ export const useRestHttpClient = (endpoint = '') => {
 			};
 
 			if (shouldUseJwtAsParam) {
-				const params = { authorization: `Bearer ${jwt}` };
+				const params = {
+					authorization: formatAuthorizationParam(jwt, bareAuthParamSupported(wcposVersion)),
+				};
 				defaultConfig.params = merge(params, defaultConfig.params);
 			}
 

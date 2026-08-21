@@ -27,6 +27,7 @@ import { refreshAccessToken } from '@wcpos/hooks/use-http-client/refresh-access-
 import { OnlineStatusProvider, useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { RasterizeProvider } from '@wcpos/printer';
 import { QueryProvider } from '@wcpos/query';
+import { bareAuthParamSupported } from '@wcpos/utils/auth-param';
 import { getLogger, setDatabase } from '@wcpos/utils/logger';
 import { markUserActivity } from '@wcpos/utils/user-activity';
 
@@ -82,6 +83,8 @@ function AppStack() {
 	const storeID = useObservableEagerState(store.id$) as number;
 	const cashierID = useObservableEagerState(wpCredentials.id$) as number;
 	const useJwtAsParam = useObservableEagerState(site.use_jwt_as_param$) as boolean;
+	const wcposVersion = useObservableEagerState(site.wcpos_version$) as string;
+	const bareAuthParam = bareAuthParamSupported(wcposVersion);
 
 	// The credentials DOCUMENT is a stable identity; the engine reads the JWT
 	// fresh at request time via getLatest() inside the lib module, so token
@@ -103,6 +106,7 @@ function AppStack() {
 				wpApiUrl,
 				credentials: wpCredentials,
 				useJwtAsParam,
+				bareAuthParam,
 				refreshAuth: (context) =>
 					refreshAccessToken({
 						site: {
@@ -119,7 +123,7 @@ function AppStack() {
 					}),
 				scope: { site: wpApiUrl, storeId: storeID, cashierId: cashierID },
 			}),
-		[wpApiUrl, wcposApiUrl, storeID, cashierID, useJwtAsParam, wpCredentials, t]
+		[wpApiUrl, wcposApiUrl, storeID, cashierID, useJwtAsParam, bareAuthParam, wpCredentials, t]
 	);
 
 	return (

@@ -7,6 +7,7 @@ import {
 	type ResponseEnvelopeTransportState,
 	type SyncCollectionName,
 } from '@wcpos/sync-engine';
+import { formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { evaluateClockSkew } from './clock-skew';
@@ -24,6 +25,7 @@ export type EngineFetcherAuth = {
 	credentials: { getLatest: () => { access_token?: string } };
 	refreshAuth?: (context?: { operationId?: string }) => Promise<string | null>;
 	useJwtAsParam?: boolean;
+	bareAuthParam?: boolean;
 };
 
 export type ClockSkewGate = { generation: number; evaluated: boolean };
@@ -128,7 +130,10 @@ export function createEngineFetcher(input: {
 			if (token) {
 				if (input.auth.useJwtAsParam) {
 					const parsed = new URL(url);
-					parsed.searchParams.set('authorization', `Bearer ${token}`);
+					parsed.searchParams.set(
+						'authorization',
+						formatAuthorizationParam(token, input.auth.bareAuthParam ?? false)
+					);
 					finalUrl = parsed.toString();
 				} else {
 					headers.set('Authorization', `Bearer ${token}`);

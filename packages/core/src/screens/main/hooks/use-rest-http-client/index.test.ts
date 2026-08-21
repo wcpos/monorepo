@@ -13,6 +13,13 @@ const mockRequest = jest.fn(
 	})
 );
 const mockSetOffline = jest.fn();
+const mockSite = {
+	incrementalPatch: jest.fn(),
+	use_jwt_as_param: false,
+	wcpos_version: '',
+	wcpos_api_url: 'https://example.com/wp-json/wcpos/v2',
+	wp_api_url: 'https://example.com/wp-json/',
+};
 
 jest.mock('@wcpos/hooks/use-http-client', () => ({
 	requestStateManager: {
@@ -33,12 +40,7 @@ jest.mock('@wcpos/utils/logger', () => ({
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({
 		logout: jest.fn(),
-		site: {
-			incrementalPatch: jest.fn(),
-			use_jwt_as_param: false,
-			wcpos_api_url: 'https://example.com/wp-json/wcpos/v2',
-			wp_api_url: 'https://example.com/wp-json/',
-		},
+		site: mockSite,
 		store: { id: 0 },
 		wpCredentials: { access_token: 'test-token' },
 	}),
@@ -63,6 +65,21 @@ function latestRequest(): Record<string, unknown> {
 describe('useRestHttpClient methods', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockSite.use_jwt_as_param = false;
+		mockSite.wcpos_version = '';
+	});
+
+	it.each([
+		['1.10.0', 'test-token'],
+		['1.9.17', 'Bearer test-token'],
+	])('formats parameter auth for WCPOS %s', async (wcposVersion, authorization) => {
+		mockSite.use_jwt_as_param = true;
+		mockSite.wcpos_version = wcposVersion;
+		const { result } = renderHook(() => useRestHttpClient('orders'));
+
+		await result.current.get('/');
+
+		expect(latestRequest()).toMatchObject({ params: { authorization } });
 	});
 
 	it.each([
