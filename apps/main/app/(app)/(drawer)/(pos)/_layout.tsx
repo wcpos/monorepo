@@ -7,7 +7,7 @@ import { useDocField } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';
 import { Suspense } from '@wcpos/components/suspense';
-import { useAppState } from '@wcpos/core/contexts/app-state';
+import { useStoreSession } from '@wcpos/core/contexts/app-state';
 import { TaxRatesProvider } from '@wcpos/core/screens/main/contexts/tax-rates';
 import {
 	CurrentOrderProvider,
@@ -23,7 +23,7 @@ export const unstable_settings = {
 };
 
 export default function POSLayout() {
-	const { wpCredentials, store } = useAppState();
+	const { wpCredentials, store } = useStoreSession();
 	const cashierID = useDocField(wpCredentials, (value) => value.id) as number | undefined;
 	const storeID = useDocField(store, (value) => value.id) as number | undefined;
 	const segments: string[] = useSegments();

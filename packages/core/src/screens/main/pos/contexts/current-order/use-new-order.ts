@@ -7,7 +7,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { useDocField } from '@wcpos/query';
 
 import { newOrder$, patchTemporaryOrderPayload } from './temporary-order';
-import { useAppState } from '../../../../../contexts/app-state';
+import { useStoreSession } from '../../../../../contexts/app-state';
 import allCurrencies from '../../../../../contexts/currencies/currencies.json';
 import { useDefaultCustomer } from '../../../hooks/use-default-customer';
 import { ensurePosOrderIdentityMeta, transformCustomerJSONToOrderJSON } from '../../hooks/utils';
@@ -27,7 +27,7 @@ const newOrderResource = new ObservableResource(newOrder$);
  * repository's payload merge.
  */
 export const useNewOrder = () => {
-	const { store, wpCredentials } = useAppState();
+	const { store, wpCredentials } = useStoreSession();
 	const { defaultCustomerResource } = useDefaultCustomer();
 
 	const defaultCustomer = useObservableSuspense(defaultCustomerResource);
@@ -54,8 +54,8 @@ export const useNewOrder = () => {
 		data.currency_symbol = decode(currencyData.symbol || '');
 		data.prices_include_tax = prices_include_tax === 'yes';
 		data.meta_data = ensurePosOrderIdentityMeta(undefined, {
-			userId: wpCredentials.id,
-			storeId: store.id,
+			userId: wpCredentials.id!,
+			storeId: store.id!,
 			taxBasedOn: typeof tax_based_on === 'string' ? tax_based_on : undefined,
 		});
 

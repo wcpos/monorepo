@@ -8,7 +8,7 @@ import { detectMismatch, resolvePrinter } from '@wcpos/printer';
 import type { TemplatePrinterOverrideDocument } from '@wcpos/database';
 
 import { useAvailablePrinterProfiles } from '../../settings/printer/use-available-printer-profiles';
-import { useAppState } from '../../../../contexts/app-state';
+import { useStoreSession } from '../../../../contexts/app-state';
 
 export type PrinterSelection =
 	{ type: 'auto' } | { type: 'system' } | { type: 'manual'; printerId: string };
@@ -29,7 +29,7 @@ interface UseResolvedPrinterResult {
 export function useResolvedPrinter({
 	template,
 }: UseResolvedPrinterOptions): UseResolvedPrinterResult {
-	const { storeDB } = useAppState();
+	const { storeDB } = useStoreSession();
 	// Track the user's explicit selection together with the template it was made
 	// for. When the template changes the selection resets to 'auto' - this is
 	// derived during render rather than reset via an effect.

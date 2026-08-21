@@ -97,9 +97,10 @@ jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));
 
-jest.mock('../../../../contexts/app-state', () => ({
-	useAppState: () => ({ store: { id: 1 }, wpCredentials: { id: 7 } }),
-}));
+jest.mock('../../../../contexts/app-state', () => {
+	const useAppState = () => ({ store: { id: 1 }, wpCredentials: { id: 7 } });
+	return { useAppState, useStoreSession: useAppState };
+});
 
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,

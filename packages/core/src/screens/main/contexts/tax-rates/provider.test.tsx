@@ -73,9 +73,10 @@ const storeSubjects = {
 	tax_based_on$: new BehaviorSubject('base'),
 };
 
-jest.mock('../../../../contexts/app-state', () => ({
-	useAppState: () => ({ store: storeSubjects }),
-}));
+jest.mock('../../../../contexts/app-state', () => {
+	const useAppState = () => ({ store: storeSubjects });
+	return { useAppState, useStoreSession: useAppState };
+});
 jest.mock('../../hooks/use-base-tax-location', () => ({
 	useBaseTaxLocation: () => ({ country: 'US', state: 'CA', city: '', postcode: '' }),
 }));

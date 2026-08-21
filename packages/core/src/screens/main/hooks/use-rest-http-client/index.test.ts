@@ -37,14 +37,15 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({ debug: jest.fn(), error: jest.fn(), warn: jest.fn() }),
 }));
-jest.mock('../../../../contexts/app-state', () => ({
-	useAppState: () => ({
+jest.mock('../../../../contexts/app-state', () => {
+	const useAppState = () => ({
 		logout: jest.fn(),
 		site: mockSite,
 		store: { id: 0 },
 		wpCredentials: { access_token: 'test-token' },
-	}),
-}));
+	});
+	return { useAppState, useStoreSession: useAppState };
+});
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));

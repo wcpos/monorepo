@@ -5,7 +5,10 @@ import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 import type { RxDatabase } from 'rxdb';
 
 /** Runtime dependencies shared by the direct query bindings and local-only hooks. */
-export interface QueryRuntime<T extends RxDatabase = RxDatabase> {
+// The constraint is RxDatabase<any>, not bare RxDatabase: a typed database
+// (e.g. RxDatabase<StoreCollections>) is not assignable to the default
+// RxDatabase<CollectionsOfDatabase> because of variance in exportJSON's return.
+export interface QueryRuntime<T extends RxDatabase<any> = RxDatabase<any>> {
 	/** Local database containing only dedicated local collections such as logs and templates. */
 	localDB: T;
 	engine: RxdbSyncEngine;
@@ -14,14 +17,14 @@ export interface QueryRuntime<T extends RxDatabase = RxDatabase> {
 
 const QueryContext = React.createContext<QueryRuntime | undefined>(undefined);
 
-interface QueryProviderProps<T extends RxDatabase> {
+interface QueryProviderProps<T extends RxDatabase<any>> {
 	localDB: T;
 	engine: RxdbSyncEngine;
 	locale: string;
 	children: React.ReactNode;
 }
 
-export function QueryProvider<T extends RxDatabase>({
+export function QueryProvider<T extends RxDatabase<any>>({
 	localDB,
 	engine,
 	children,

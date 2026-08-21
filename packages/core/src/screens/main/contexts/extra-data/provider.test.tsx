@@ -52,11 +52,12 @@ function emit(engine: ReturnType<typeof createMockEngine>, event: EngineEvent) {
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine: mockEngine }),
 }));
-jest.mock('../../../../contexts/app-state', () => ({
-	useAppState: () => ({
+jest.mock('../../../../contexts/app-state', () => {
+	const useAppState = () => ({
 		extraData: mockExtraData,
-	}),
-}));
+	});
+	return { useAppState, useStoreSession: useAppState };
+});
 jest.mock('../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => mockUseRestHttpClient(),
 }));

@@ -11,7 +11,7 @@ import { RadioGroup, RadioGroupItem } from '@wcpos/components/radio-group';
 import { Slider } from '@wcpos/components/slider';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { useAppState } from '@wcpos/core/contexts/app-state';
+import { useStoreSession } from '@wcpos/core/contexts/app-state';
 import { useT } from '@wcpos/core/contexts/translations';
 import { Section } from '@wcpos/core/screens/main/health/components';
 import { formatCadence } from '@wcpos/core/screens/main/logs/logs-logic';
@@ -51,7 +51,7 @@ const formatCount = (value: number) => value.toLocaleString();
  */
 export function PerformanceScreen() {
 	const t = useT();
-	const { store } = useAppState();
+	const { store } = useStoreSession();
 	const { localPatch } = useLocalMutation();
 	const status = useEngineStatus();
 

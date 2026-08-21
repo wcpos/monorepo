@@ -23,7 +23,7 @@ import { useDocField } from '@wcpos/query';
 import { SettingsDangerZone } from './components/settings-danger-zone';
 import { SettingsRow } from './components/settings-row';
 import { SettingsSection } from './components/settings-section';
-import { useAppState } from '../../../contexts/app-state';
+import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { getServerOwnedStorePatch } from '../../../utils/merge-stores';
 import { CountryCombobox } from '../components/country-state-select/country-combobox';
@@ -65,7 +65,7 @@ const formSchema = z.object({
  *
  */
 export function GeneralSettings() {
-	const { store } = useAppState();
+	const { store } = useStoreSession();
 	const formData = useDocField(store, (latest) => {
 		return {
 			name: latest.name,

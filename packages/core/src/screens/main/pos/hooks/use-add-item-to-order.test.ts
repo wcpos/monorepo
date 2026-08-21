@@ -29,12 +29,13 @@ jest.mock('observable-hooks', () => ({
 	useObservableEagerState: () => 'billing',
 }));
 
-jest.mock('../../../../contexts/app-state', () => ({
-	useAppState: () => ({
+jest.mock('../../../../contexts/app-state', () => {
+	const useAppState = () => ({
 		wpCredentials: { id: 7 },
 		store: { id: 11, tax_based_on$: {} },
-	}),
-}));
+	});
+	return { useAppState, useStoreSession: useAppState };
+});
 
 /** The state a resident carries once its create is durably enqueued. */
 const CREATE_QUEUED = { local: { dirty: true, pendingMutationIds: ['mutation-1'] } };

@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useDocField } from '@wcpos/query';
 
-import { useAppState } from '../../../contexts/app-state';
+import { useStoreSession } from '../../../contexts/app-state';
 
 /**
  * Hook to get the default customer ID, used for new orders.
@@ -11,7 +11,7 @@ import { useAppState } from '../../../contexts/app-state';
  * Memoized to prevent unnecessary fetches.
  */
 export const useDefaultCustomerID = () => {
-	const { store, wpCredentials } = useAppState();
+	const { store, wpCredentials } = useStoreSession();
 	const is_casher = useDocField(store, (value) => value.default_customer_is_cashier);
 	const default_customer = useDocField(store, (value) => value.default_customer);
 

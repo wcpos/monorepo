@@ -35,9 +35,10 @@ jest.mock('../hooks/use-engine-document', () => ({
 	useEngineRecordByWooId: (collection: string, wooId: number) =>
 		mockUseEngineRecordByWooId(collection, wooId),
 }));
-jest.mock('../../../contexts/app-state', () => ({
-	useAppState: () => ({ wpCredentials: { populate$: () => of([]) } }),
-}));
+jest.mock('../../../contexts/app-state', () => {
+	const useAppState = () => ({ wpCredentials: { populate$: () => of([]) } });
+	return { useAppState, useStoreSession: useAppState };
+});
 jest.mock('../hooks/use-guest-customer', () => ({
 	useGuestCustomer: () => ({ id: 0 }),
 }));

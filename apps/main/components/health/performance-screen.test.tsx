@@ -40,9 +40,10 @@ jest.mock('@wcpos/query', () => ({
 	// Mirrors the observable-hooks stub above: settings fields read as undefined -> defaults.
 	useDocField: () => undefined,
 }));
-jest.mock('@wcpos/core/contexts/app-state', () => ({
-	useAppState: () => ({ store: {} }),
-}));
+jest.mock('@wcpos/core/contexts/app-state', () => {
+	const useAppState = () => ({ store: {} });
+	return { useAppState, useStoreSession: useAppState };
+});
 jest.mock('@wcpos/core/contexts/translations', () => {
 	// Resolve from the catalog the app actually registers as its `en` resource,
 	// so assertions on rendered copy match what ships.

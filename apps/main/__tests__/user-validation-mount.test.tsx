@@ -14,9 +14,10 @@ const mockUseUserValidation = jest.fn();
 jest.mock('observable-hooks', () => ({
 	useObservableEagerState: (observable: { value?: unknown }) => observable?.value,
 }));
-jest.mock('@wcpos/core/contexts/app-state', () => ({
-	useAppState: () => ({ site: mockSite, wpCredentials: mockWpCredentials }),
-}));
+jest.mock('@wcpos/core/contexts/app-state', () => {
+	const useAppState = () => ({ site: mockSite, wpCredentials: mockWpCredentials });
+	return { useAppState, useStoreSession: useAppState };
+});
 jest.mock('@wcpos/core/hooks/use-user-validation', () => ({
 	useUserValidation: (props: unknown) => mockUseUserValidation(props),
 }));

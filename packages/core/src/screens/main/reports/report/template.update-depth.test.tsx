@@ -37,16 +37,17 @@ jest.mock('./utils', () => ({
 		averageOrderValue: 10,
 	}),
 }));
-jest.mock('../../../../contexts/app-state', () => ({
-	useAppState: () => ({
+jest.mock('../../../../contexts/app-state', () => {
+	const useAppState = () => ({
 		store: {
 			id: 9,
 			name$: new BehaviorSubject('Madrid'),
 			price_num_decimals$: new BehaviorSubject(2),
 		},
-		wpCredentials: { id: 7 },
-	}),
-}));
+		wpCredentials: { id: 7, toJSON: () => ({ id: 7 }) },
+	});
+	return { useAppState, useStoreSession: useAppState };
+});
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));

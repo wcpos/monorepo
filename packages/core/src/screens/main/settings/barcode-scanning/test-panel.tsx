@@ -20,7 +20,7 @@ import { analyzeScanTrace, type TraceAnalysis, type TraceSuggestion } from '@wcp
 import { useDocField } from '@wcpos/query';
 
 import { useScanTraceCapture } from './use-scan-trace-capture';
-import { useAppState } from '../../../../contexts/app-state';
+import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useBarcodeDetection } from '../../hooks/barcodes';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
@@ -86,7 +86,7 @@ function TimingChart({
 
 export function TestPanel() {
 	const t = useT();
-	const { store } = useAppState();
+	const { store } = useStoreSession();
 	const { localPatch } = useLocalMutation();
 	const { barcode$, onKeyPress: detectorOnKeyPress } = useBarcodeDetection();
 	const detectedBarcode = useObservableState(barcode$) as string | undefined;

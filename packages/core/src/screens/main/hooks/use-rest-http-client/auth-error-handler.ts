@@ -102,8 +102,15 @@ export const useAuthErrorHandler = (
 	 */
 	const processedResponseRef = React.useRef<string | null>(null);
 
-	// Setup OAuth flow via platform-specific useWcposAuth hook
-	const { response, promptAsync } = useWcposAuth({ site });
+	// Setup OAuth flow via platform-specific useWcposAuth hook. The narrow site
+	// object matches the auth-screen caller idiom (see add-user-button); memoized
+	// so the config's site identity stays stable across renders like the document
+	// it replaces.
+	const authSite = React.useMemo(
+		() => ({ wcpos_login_url: site.wcpos_login_url ?? '', name: site.name ?? '' }),
+		[site.wcpos_login_url, site.name]
+	);
+	const { response, promptAsync } = useWcposAuth({ site: authSite });
 
 	// Keep a ref so the error handler always calls the latest promptAsync.
 	// The ref write is done in an effect (not during render) to avoid mutating a
