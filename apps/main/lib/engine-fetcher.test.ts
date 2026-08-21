@@ -324,6 +324,32 @@ describe('createEngineFetcher', () => {
 			expect((await requestHeaders({ storeId })).has('X-WCPOS-Store')).toBe(false);
 		});
 
+		// B6 (wcpos-infra#72): the scope also rides the URL as store_id, which a
+		// header-stripping proxy cannot touch. The server honours the param only
+		// when NO header arrived (free#1646), so header-wins is preserved.
+		it('republishes the scope as a store_id query param beside the header', async () => {
+			const fetch = jest.fn().mockResolvedValue(okResponse());
+			const { fetcher } = createFetcherHarness({ fetch, scope: { storeId: 7 } });
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/products?page=1');
+			expect(new URL(fetch.mock.calls[0]![0] as string).searchParams.get('store_id')).toBe('7');
+		});
+
+		it('sends no store_id param when the engine is unscoped', async () => {
+			const fetch = jest.fn().mockResolvedValue(okResponse());
+			const { fetcher } = createFetcherHarness({ fetch, scope: { storeId: 0 } });
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/products?page=1');
+			expect(new URL(fetch.mock.calls[0]![0] as string).searchParams.has('store_id')).toBe(false);
+		});
+
+		it('strips a stale store_id from the caller URL when the engine is unscoped', async () => {
+			// Mirror of the header delete: a store switch to unscoped must not let
+			// a scope baked into a caller URL keep naming the outgoing store.
+			const fetch = jest.fn().mockResolvedValue(okResponse());
+			const { fetcher } = createFetcherHarness({ fetch, scope: { storeId: null } });
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/products?store_id=9&page=1');
+			expect(new URL(fetch.mock.calls[0]![0] as string).searchParams.has('store_id')).toBe(false);
+		});
+
 		it('re-reads the scope per attempt so a store switch retargets in-flight lanes', async () => {
 			const fetch = jest.fn().mockResolvedValue(okResponse());
 			const { fetcher, scope } = createFetcherHarness({
