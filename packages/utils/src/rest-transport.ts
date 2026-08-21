@@ -26,7 +26,13 @@ export function deriveSyntheticPathBase(serviceUrl: string): string {
 	try {
 		const route = new URL(serviceUrl).searchParams.get('rest_route') ?? '/';
 		const root = deriveSyntheticPathRoot(serviceUrl);
-		const trimmed = route.replace(/^\/+/, '').replace(/\/+$/, '');
+		// Loop-trimmed rather than /^\/+|\/+$/ — CodeQL flags anchored + runs on
+		// request-derived strings as polynomial ReDoS (js/polynomial-redos).
+		let start = 0;
+		let end = route.length;
+		while (start < end && route[start] === '/') start++;
+		while (end > start && route[end - 1] === '/') end--;
+		const trimmed = route.slice(start, end);
 		return trimmed ? `${root}${trimmed}/` : root;
 	} catch {
 		return serviceUrl;
