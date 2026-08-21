@@ -15,6 +15,24 @@ export function deriveSyntheticPathRoot(wpApiUrl: string): string {
 	}
 }
 
+/**
+ * Convert a query-form service base (`https://shop/?rest_route=/wcpos/v2`) to
+ * its synthetic path form with a guaranteed trailing slash
+ * (`https://shop/wp-json/wcpos/v2/`), so `${base}route` joins never collapse
+ * into `...v2route`. Path-form input is returned unchanged.
+ */
+export function deriveSyntheticPathBase(serviceUrl: string): string {
+	if (!isRestRouteBase(serviceUrl)) return serviceUrl;
+	try {
+		const route = new URL(serviceUrl).searchParams.get('rest_route') ?? '/';
+		const root = deriveSyntheticPathRoot(serviceUrl);
+		const trimmed = route.replace(/^\/+/, '').replace(/\/+$/, '');
+		return trimmed ? `${root}${trimmed}/` : root;
+	} catch {
+		return serviceUrl;
+	}
+}
+
 export function toRestRouteUrl(url: string, wpJsonRoot: string): string {
 	if (isRestRouteBase(url)) return url;
 	try {

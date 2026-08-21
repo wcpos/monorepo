@@ -2,8 +2,8 @@ import { AppInfo } from '@wcpos/utils/app-info';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
+	deriveSyntheticPathBase,
 	deriveSyntheticPathRoot,
-	isRestRouteBase,
 	resolveRestTransport,
 	toRestRouteUrl,
 } from '@wcpos/utils/rest-transport';
@@ -91,10 +91,7 @@ export async function refreshAccessToken({
 	const refreshToken = latestDoc?.refresh_token;
 	const persistedApiBaseUrl = site.wcpos_api_url?.replace(/\/wcpos\/v1\/?$/, '/wcpos/v2/');
 	let apiBaseUrl = persistedApiBaseUrl || (site.wp_api_url ? `${site.wp_api_url}wcpos/v2/` : null);
-	if (apiBaseUrl && isRestRouteBase(apiBaseUrl)) {
-		const route = new URL(apiBaseUrl).searchParams.get('rest_route') ?? '/';
-		apiBaseUrl = `${deriveSyntheticPathRoot(apiBaseUrl)}${route.replace(/^\//, '')}`;
-	}
+	if (apiBaseUrl) apiBaseUrl = deriveSyntheticPathBase(apiBaseUrl);
 	// Normalize the trailing slash so `${apiUrl}auth/refresh` never collapses into
 	// `.../wcpos/v2auth/refresh` when wcpos_api_url is stored without one.
 	const apiUrl = apiBaseUrl ? (apiBaseUrl.endsWith('/') ? apiBaseUrl : `${apiBaseUrl}/`) : null;

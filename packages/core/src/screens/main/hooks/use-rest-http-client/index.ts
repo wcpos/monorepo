@@ -10,8 +10,8 @@ import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/a
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
+	deriveSyntheticPathBase,
 	deriveSyntheticPathRoot,
-	isRestRouteBase,
 	resolveRestTransport,
 	toRestRouteUrl,
 } from '@wcpos/utils/rest-transport';
@@ -239,10 +239,7 @@ export const useRestHttpClient = (endpoint = '') => {
 			const pathFormRoot = deriveSyntheticPathRoot(site.wp_api_url).replace(/\/?$/, '/');
 			const wpApiURL = pathFormRoot;
 
-			if (apiURL && isRestRouteBase(apiURL)) {
-				const route = new URL(apiURL).searchParams.get('rest_route') ?? '/';
-				apiURL = `${deriveSyntheticPathRoot(apiURL)}${route.replace(/^\//, '')}`;
-			}
+			if (apiURL) apiURL = deriveSyntheticPathBase(apiURL);
 
 			// Migrate missing and persisted v1 service bases to v2.
 			if (!apiURL || /\/wcpos\/v1\/?$/.test(apiURL)) {

@@ -114,6 +114,22 @@ describe('useUserValidation capabilities', () => {
 		expect(mockIncrementalModify).not.toHaveBeenCalled();
 	});
 
+	it('joins the cashier route from a query-shaped base without a trailing slash', async () => {
+		mockGet.mockResolvedValue({ status: 200, data: { id: 7, display_name: 'Demo Cashier' } });
+		const wpUser = makeWpUser({ stores: [] });
+		const querySite = {
+			...site,
+			wp_api_url: 'https://example.com/?rest_route=/',
+			wcpos_api_url: 'https://example.com/?rest_route=/wcpos/v2',
+			use_rest_route_param: true,
+		};
+
+		renderHook(() => useUserValidation({ site: querySite as never, wpUser: wpUser as never }));
+
+		await waitFor(() => expect(mockGet).toHaveBeenCalled());
+		expect(mockGet.mock.calls[0]?.[0]).toBe('https://example.com/?rest_route=/wcpos/v2/cashier/7');
+	});
+
 	it('validates the cashier through query transport when enabled', async () => {
 		mockGet.mockResolvedValue({ status: 200, data: { id: 7, display_name: 'Demo Cashier' } });
 		const wpUser = makeWpUser({ stores: [] });

@@ -5,8 +5,8 @@ import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/a
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
+	deriveSyntheticPathBase,
 	deriveSyntheticPathRoot,
-	isRestRouteBase,
 	resolveRestTransport,
 	toRestRouteUrl,
 } from '@wcpos/utils/rest-transport';
@@ -17,11 +17,7 @@ const authTestLogger = getLogger(['wcpos', 'auth', 'testing']);
 
 function authTestUrl(wcposApiUrl: string): string {
 	const pathRoot = deriveSyntheticPathRoot(wcposApiUrl);
-	const route = isRestRouteBase(wcposApiUrl)
-		? (new URL(wcposApiUrl).searchParams.get('rest_route') ?? '/')
-		: '';
-	const pathApiUrl = route ? `${pathRoot}${route.replace(/^\//, '')}` : wcposApiUrl;
-	const pathUrl = `${pathApiUrl}auth/test`;
+	const pathUrl = `${deriveSyntheticPathBase(wcposApiUrl)}auth/test`;
 	return resolveRestTransport({ wp_api_url: wcposApiUrl }) === 'query'
 		? toRestRouteUrl(pathUrl, pathRoot)
 		: pathUrl;

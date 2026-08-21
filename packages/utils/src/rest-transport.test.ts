@@ -1,4 +1,5 @@
 import {
+	deriveSyntheticPathBase,
 	deriveSyntheticPathRoot,
 	isRestRouteBase,
 	resolveRestTransport,
@@ -18,6 +19,16 @@ describe('REST transport', () => {
 		['https://shop.test/blog/wp-json/', 'https://shop.test/blog/wp-json/'],
 	])('derives the synthetic path root for %s', (input, expected) => {
 		expect(deriveSyntheticPathRoot(input)).toBe(expected);
+	});
+
+	it.each([
+		['https://shop.test/?rest_route=/wcpos/v2', 'https://shop.test/wp-json/wcpos/v2/'],
+		['https://shop.test/?rest_route=/wcpos/v2/', 'https://shop.test/wp-json/wcpos/v2/'],
+		['https://shop.test/blog/?rest_route=/wcpos/v2/', 'https://shop.test/blog/wp-json/wcpos/v2/'],
+		['https://shop.test/?rest_route=/', 'https://shop.test/wp-json/'],
+		['https://shop.test/wp-json/wcpos/v2/', 'https://shop.test/wp-json/wcpos/v2/'],
+	])('derives the synthetic path base for %s', (input, expected) => {
+		expect(deriveSyntheticPathBase(input)).toBe(expected);
 	});
 
 	it.each([

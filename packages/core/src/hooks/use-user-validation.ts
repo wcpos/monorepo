@@ -13,8 +13,8 @@ import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/a
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
+	deriveSyntheticPathBase,
 	deriveSyntheticPathRoot,
-	isRestRouteBase,
 	resolveRestTransport,
 	toRestRouteUrl,
 } from '@wcpos/utils/rest-transport';
@@ -174,11 +174,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 			const fetchUserData = async () => {
 				try {
 					// Build the endpoint URL
-					let pathApiUrl = apiUrl;
-					if (isRestRouteBase(pathApiUrl)) {
-						const route = new URL(pathApiUrl).searchParams.get('rest_route') ?? '/';
-						pathApiUrl = `${deriveSyntheticPathRoot(pathApiUrl)}${route.replace(/^\//, '')}`;
-					}
+					const pathApiUrl = deriveSyntheticPathBase(apiUrl);
 					const pathRoot = deriveSyntheticPathRoot(wpApiUrl ?? pathApiUrl);
 					const pathEndpoint = `${pathApiUrl}cashier/${userId}`;
 					const endpoint =
