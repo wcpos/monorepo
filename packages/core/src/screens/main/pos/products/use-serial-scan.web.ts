@@ -197,6 +197,18 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 					info.usbVendorId === undefined &&
 					info.usbProductId === undefined &&
 					info.bluetoothServiceClassId !== undefined;
+				if (isBluetooth) {
+					const profiles = await collection.find({ selector: { connectionType: 'serial' } }).exec();
+					const duplicate = profiles.some(
+						(profile: ScannerProfileDocument) =>
+							typeof profile.bluetoothServiceClassId === 'string' &&
+							profile.bluetoothServiceClassId.toLowerCase() ===
+								info.bluetoothServiceClassId?.toLowerCase()
+					);
+					if (duplicate) {
+						return;
+					}
+				}
 				await collection.insert({
 					id: uuidv4(),
 					label: '',
