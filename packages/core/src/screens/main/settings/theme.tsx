@@ -42,7 +42,10 @@ function ThemeOptionButton({
 			}}
 			accessibilityRole="button"
 			accessibilityState={{ selected: isActive }}
-			className={`bg-card flex-1 items-center gap-2 rounded-lg border-2 p-3 ${
+			// min-h-40 clears the tallest possible card — icon + 2-line label cap
+			// + 2-line description cap (≈9.4rem) — so all six tiles match across
+			// rows, locales, and widths, not just within a stretched row.
+			className={`bg-card min-h-40 flex-1 items-center justify-center gap-2 rounded-lg border-2 p-3 ${
 				isActive ? 'border-primary' : 'border-border/60 web:hover:border-border'
 			}`}
 		>
@@ -51,7 +54,10 @@ function ThemeOptionButton({
 				size="xl"
 				className={isActive ? 'text-primary' : 'text-muted-foreground'}
 			/>
-			<Text className={`text-sm font-medium ${isActive ? 'text-primary' : 'text-foreground'}`}>
+			<Text
+				className={`text-center text-sm font-medium ${isActive ? 'text-primary' : 'text-foreground'}`}
+				numberOfLines={2}
+			>
 				{t(option.labelKey)}
 			</Text>
 			<Text className="text-muted-foreground text-center text-xs" numberOfLines={2}>
@@ -85,8 +91,10 @@ function ThemeGrid({
 	return (
 		<>
 			<VStack className="gap-3 pt-2">
-				{/* First row: System, Light, Dark */}
-				<HStack className="gap-3">
+				{/* First row: System, Light, Dark. items-stretch so every card in a
+				    row takes the tallest card's height (HStack defaults to
+				    items-center, which lets short-description cards float shorter). */}
+				<HStack className="items-stretch gap-3">
 					{themeOptions.slice(0, 3).map((option) => (
 						<ThemeOptionButton
 							key={option.name}
@@ -98,7 +106,7 @@ function ThemeGrid({
 					))}
 				</HStack>
 				{/* Second row: Ocean, Sunset, Monochrome */}
-				<HStack className="gap-3">
+				<HStack className="items-stretch gap-3">
 					{themeOptions.slice(3, 6).map((option) => (
 						<ThemeOptionButton
 							key={option.name}
