@@ -9,6 +9,7 @@ export const SYNC_EVENT_TYPES = [
 	'apply.barcode-rederive',
 	'apply.delete',
 	'apply.escalation',
+	'apply.escalation-cleared',
 	'apply.pull',
 	'apply.rebaseline',
 	'apply.refetch',
@@ -133,6 +134,13 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.apply_escalation',
 		label: 'A record on this device does not match your store',
+		introducedIn: '1.10.0',
+	},
+	'apply.escalation-cleared': {
+		type: 'apply.escalation-cleared',
+		domain: 'SYNC',
+		key: 'health.logs.event.apply_escalation_cleared',
+		label: 'A record on this device matches your store again',
 		introducedIn: '1.10.0',
 	},
 	'apply.pull': {

@@ -31,6 +31,8 @@ function baseOutcome(overrides: Partial<HybridPollOutcome> = {}): HybridPollOutc
 		integrityMismatches: [],
 		idsToPull: [],
 		escalatedIds: [],
+		clearedEscalations: [],
+		escalationLedger: [],
 		baselineDigests,
 		...overrides,
 	};
@@ -176,6 +178,17 @@ describe('planReplicationActions — escalations are surfaced, never pulled', ()
 		expect(actions.escalations).toEqual(escalated);
 		expect(actions.targetedPulls).toEqual([]);
 		expect(actions.deletes).toEqual([]);
+	});
+
+	it('threads escalation clears and the retained ledger verbatim', () => {
+		const cleared = [repair(80, 'products')];
+		const retained = [repair(81, 'variations')];
+		const actions = planReplicationActions(
+			baseOutcome({ clearedEscalations: cleared, escalationLedger: retained })
+		);
+
+		expect(actions.escalationClears).toEqual(cleared);
+		expect(actions.nextState.escalations).toEqual(retained);
 	});
 });
 
