@@ -56,6 +56,7 @@ function extractValidJSON(responseString: string) {
 	return null;
 }
 
+/** Unwraps a WCPOS v1 response envelope and restores missing pagination headers in place. */
 export function unwrapResponseEnvelope<T>(response: T): T {
 	if (typeof response !== 'object' || response === null) return response;
 
@@ -79,19 +80,29 @@ export function unwrapResponseEnvelope<T>(response: T): T {
 	if (typeof mutableResponse.headers === 'object' && mutableResponse.headers !== null) {
 		const headers = mutableResponse.headers as Record<string, unknown>;
 		const { total, total_pages: totalPages } = metadata as Record<string, unknown>;
+		const totalHeader = Object.keys(headers).find(
+			(header) => header.toLowerCase() === 'x-wp-total'
+		);
 		if (
-			(headers['x-wp-total'] === undefined || headers['x-wp-total'] === '') &&
+			(totalHeader === undefined ||
+				headers[totalHeader] === undefined ||
+				headers[totalHeader] === '') &&
 			Number.isSafeInteger(total) &&
 			(total as number) >= 0
 		) {
-			headers['x-wp-total'] = String(total);
+			headers[totalHeader ?? 'x-wp-total'] = String(total);
 		}
+		const totalPagesHeader = Object.keys(headers).find(
+			(header) => header.toLowerCase() === 'x-wp-totalpages'
+		);
 		if (
-			(headers['x-wp-totalpages'] === undefined || headers['x-wp-totalpages'] === '') &&
+			(totalPagesHeader === undefined ||
+				headers[totalPagesHeader] === undefined ||
+				headers[totalPagesHeader] === '') &&
 			Number.isSafeInteger(totalPages) &&
 			(totalPages as number) >= 1
 		) {
-			headers['x-wp-totalpages'] = String(totalPages);
+			headers[totalPagesHeader ?? 'x-wp-totalpages'] = String(totalPages);
 		}
 	}
 

@@ -157,6 +157,30 @@ describe('useRestHttpClient methods', () => {
 		expect(response.headers?.['x-wp-totalpages']).toBe('3');
 	});
 
+	it('preserves non-empty mixed-case pagination headers without adding lowercase duplicates', async () => {
+		mockRequest.mockResolvedValueOnce({
+			data: { data: [{ id: 1 }], _wcpos: { v: 1, total: 150, total_pages: 2 } },
+			headers: { 'X-WP-Total': '200', 'X-WP-TotalPages': '3' },
+		});
+		const { result } = renderHook(() => useRestHttpClient('orders'));
+
+		const response = await result.current.get('/');
+
+		expect(response.headers).toEqual({ 'X-WP-Total': '200', 'X-WP-TotalPages': '3' });
+	});
+
+	it('fills empty mixed-case pagination headers using their existing keys', async () => {
+		mockRequest.mockResolvedValueOnce({
+			data: { data: [{ id: 1 }], _wcpos: { v: 1, total: 150, total_pages: 2 } },
+			headers: { 'X-WP-Total': '', 'X-WP-TotalPages': '' },
+		});
+		const { result } = renderHook(() => useRestHttpClient('orders'));
+
+		const response = await result.current.get('/');
+
+		expect(response.headers).toEqual({ 'X-WP-Total': '150', 'X-WP-TotalPages': '2' });
+	});
+
 	it('passes through a non-envelope body without inventing headers', async () => {
 		const data = [{ id: 1 }];
 		mockRequest.mockResolvedValueOnce({ data });
