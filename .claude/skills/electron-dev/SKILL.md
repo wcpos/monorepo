@@ -67,10 +67,12 @@ cd <worktree-path> && pnpm install --no-frozen-lockfile
 ### 5. Rebuild native modules
 
 ```bash
-cd <worktree-path> && pnpm electron rebuild:all
+cd <worktree-path> && CXXFLAGS="-std=c++17" pnpm electron rebuild:all
 ```
 
 This is required — Electron needs native modules rebuilt for its Node version.
+
+`CXXFLAGS="-std=c++17"` is required since 2026-08-14: the fresh `--no-frozen-lockfile` install resolves `usb`'s `node-addon-api` to ≥8.9, which needs C++17 (`std::void_t`, `is_null_pointer_v` errors in napi.h), while the `usb` gyp file still compiles at C++14.
 
 ### 6. Kill conflicting ports
 
@@ -80,27 +82,47 @@ Kill any existing processes on ports 8088 (Expo/Metro) and 9000 (Electron Forge 
 lsof -ti :8088 | xargs kill 2>/dev/null; lsof -ti :9000 | xargs kill 2>/dev/null; echo "Ports cleared"
 ```
 
-### 7. Launch in a visible Terminal window
+### 7. Launch in TWO visible Terminal windows
 
-**CRITICAL: Write the launch script to a temp file, then execute it.**
+**Do NOT use `pnpm --filter @wcpos/app-electron dev`.** On electron `next`, the packaged `dev` script is broken in monorepo context (electron#321): its `dev:expo` half silently no-ops because electron's own nested `pnpm-workspace.yaml` (added in electron#279) re-roots pnpm at `apps/electron`, so `--filter @wcpos/main` matches nothing and Electron opens against a dev server that never started. Launch the two halves separately from the **worktree root**.
 
-Inline osascript drops the `cd` from the command string. Always use a temp file:
+**CRITICAL: Write each launch script to a temp file, then execute it.** Inline osascript drops the `cd` from the command string.
+
+First window — Expo dev server:
 
 ```bash
 WORKTREE_PATH="<absolute-worktree-path>"
-cat > /tmp/launch-electron-dev.sh << SCRIPT
+cat > /tmp/launch-expo-dev.sh << SCRIPT
 #!/usr/bin/env bash
 osascript <<'APPLESCRIPT'
 tell application "Terminal"
-  do script "cd \"$WORKTREE_PATH\" && pnpm --filter @wcpos/app-electron dev"
+  do script "cd \"$WORKTREE_PATH\" && ELECTRON=true EXPO_NO_METRO_LAZY=true BROWSER=none pnpm --filter @wcpos/main dev --web --port 8088 --clear"
   activate
 end tell
 APPLESCRIPT
 SCRIPT
-bash /tmp/launch-electron-dev.sh
+bash /tmp/launch-expo-dev.sh
 ```
 
-Report: "Electron dev launched in Terminal window. Logs are visible there."
+Poll until the server responds (`curl -s -o /dev/null http://localhost:8088`), then launch the second window — Electron Forge, also from the worktree ROOT (running `pnpm run dev:electron` with cwd `apps/electron` fails with `electron-forge: command not found` — the bin is hoisted to the monorepo root):
+
+```bash
+WORKTREE_PATH="<absolute-worktree-path>"
+cat > /tmp/launch-forge-dev.sh << SCRIPT
+#!/usr/bin/env bash
+osascript <<'APPLESCRIPT'
+tell application "Terminal"
+  do script "cd \"$WORKTREE_PATH\" && pnpm --filter @wcpos/app-electron dev:electron"
+  activate
+end tell
+APPLESCRIPT
+SCRIPT
+bash /tmp/launch-forge-dev.sh
+```
+
+Verify launch: within ~90s an Electron process matching the worktree path should appear (`pgrep -f "electron-dev.*Electron.app"`). If not, read the Forge window's output via `osascript` (`history of selected tab`) — a preload/webpack compile error kills Forge before any window opens.
+
+Report: "Electron dev launched in Terminal windows. Logs are visible there."
 
 ## Things that will break if you get them wrong
 
@@ -114,6 +136,8 @@ Report: "Electron dev launched in Terminal window. Logs are visible there."
 | Use `run_in_background` | User can't see logs |
 | Use inline osascript | `cd` gets dropped, runs from `~`, pnpm can't find workspace |
 | Use `EXPO_PORT` env var | Not supported in current electron submodule, does nothing |
+| Use the packaged `pnpm dev` script (next lane) | `dev:expo` no-ops (nested workspace re-roots pnpm, electron#321) — Electron opens with no dev server |
+| Run `pnpm run dev:electron` with cwd `apps/electron` | `electron-forge: command not found` — bin hoisted to monorepo root; use the root filter |
 
 ## Never
 
