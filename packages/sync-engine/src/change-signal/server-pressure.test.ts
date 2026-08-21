@@ -26,6 +26,28 @@ describe('parseRetryAfterMs', () => {
 		expect(parseRetryAfterMs('soon', 0)).toBeNull();
 	});
 
+	it('rejects Date.parse-lenient values that are not HTTP-date shaped (B10)', () => {
+		// An ISO stamp Date.parses fine but is not an HTTP-date — treating it as
+		// valid would block the error-body mirror fallback behind a delay the
+		// server never named. (All-digit strings are valid DELAY-SECONDS.)
+		expect(parseRetryAfterMs('2026-08-21T12:00:00Z', 1_000)).toBeNull();
+		expect(parseRetryAfterMs('0.5', 1_000)).toBeNull();
+	});
+
+	it('accepts a future IMF-fixdate with the exact positive delay', () => {
+		const target = Date.UTC(2026, 7, 21, 12, 0, 0);
+		expect(parseRetryAfterMs(new Date(target).toUTCString(), target - 90_000)).toBe(90_000);
+	});
+
+	it('treats the obsolete rfc850 and asctime forms as invalid', () => {
+		// Deliberate: Date.parse reads asctime in LOCAL time and pivots rfc850
+		// two-digit years, so a "successful" parse of either is wrong on real
+		// devices — and an invalid header falls back to the error body's
+		// mirrored retry_after_seconds, which needs no date parsing at all.
+		expect(parseRetryAfterMs('Sunday, 06-Nov-94 08:49:37 GMT', 0)).toBeNull();
+		expect(parseRetryAfterMs('Sun Nov  6 08:49:37 1994', 0)).toBeNull();
+	});
+
 	it('never parks the till for longer than the sanity clamp, and never negative', () => {
 		expect(parseRetryAfterMs('86400', 0)).toBe(15 * 60_000);
 		expect(parseRetryAfterMs(new Date(0).toUTCString(), 60_000)).toBe(0);

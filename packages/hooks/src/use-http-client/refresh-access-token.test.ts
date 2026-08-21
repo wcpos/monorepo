@@ -1,3 +1,5 @@
+import { AppInfo } from '@wcpos/utils/app-info';
+
 import { refreshAccessToken } from './refresh-access-token';
 import { requestStateManager } from './request-state-manager';
 
@@ -73,6 +75,33 @@ describe('refreshAccessToken', () => {
 			access_token: 'new-token',
 			expires_at: 9999,
 		});
+	});
+
+	it('includes the platform User-Agent on native refresh requests', async () => {
+		const webUserAgentHeader = AppInfo.userAgentHeader;
+		AppInfo.userAgentHeader = { 'User-Agent': 'WCPOS/1.2.3 (android; build 45)' };
+		const post = jest.fn().mockResolvedValue({
+			data: { access_token: 'new-token', expires_at: 9999 },
+			status: 200,
+		});
+		const { config } = makeConfig(post);
+
+		try {
+			await refreshAccessToken(config);
+
+			expect(post).toHaveBeenCalledWith(
+				'https://example.test/wp-json/wcpos/v2/auth/refresh',
+				{ refresh_token: 'refresh-token' },
+				{
+					headers: {
+						'X-WCPOS': '1',
+						'User-Agent': 'WCPOS/1.2.3 (android; build 45)',
+					},
+				}
+			);
+		} finally {
+			AppInfo.userAgentHeader = webUserAgentHeader;
+		}
 	});
 
 	it('returns null and marks authentication failed when refresh fails', async () => {

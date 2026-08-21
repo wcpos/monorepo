@@ -17,6 +17,15 @@ interface AppInfo {
 	platform: 'ios' | 'android' | 'web' | 'electron';
 	/** User agent string for API requests */
 	userAgent: string;
+	/**
+	 * The User-Agent header this platform should stamp on WCPOS requests, as a
+	 * spreadable header fragment. Empty on web: browsers that honour fetch UA
+	 * overrides (Firefox) would REPLACE the battle-tested browser UA with a
+	 * product string that reads as a bot to WAF heuristics — on web the browser
+	 * UA is the safe one. Native and Electron stamp the explicit product UA
+	 * (B10, wcpos-infra#72): a blank or library UA on a POST earns AIOS bans.
+	 */
+	userAgentHeader: Record<string, string>;
 }
 
 const version = Constants.expoConfig?.version ?? '0.0.0';
@@ -32,6 +41,7 @@ const AppInfo: AppInfo = {
 	buildNumber: platformVersion, // Alias for backwards compatibility
 	platform: Platform.OS as 'ios' | 'android',
 	userAgent: `WCPOS/${version} (${Platform.OS}; build ${platformVersion})`,
+	userAgentHeader: { 'User-Agent': `WCPOS/${version} (${Platform.OS}; build ${platformVersion})` },
 };
 
 export { AppInfo };

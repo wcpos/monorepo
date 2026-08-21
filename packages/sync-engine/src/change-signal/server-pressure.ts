@@ -145,10 +145,38 @@ export function parseRetryAfterMs(value: string | null | undefined, atMs: number
 	} else {
 		const parsed = Date.parse(trimmed);
 		if (Number.isNaN(parsed)) return null;
+		// Date.parse is lenient ('2026' parses as a year): accept only values
+		// shaped like an RFC 9110 HTTP-date, or a mangled header would read as
+		// VALID and block the error-body mirror fallback (B10, wcpos-infra#72).
+		if (!isHttpDateShape(trimmed, parsed)) return null;
 		delayMs = parsed - atMs;
 	}
 	if (!Number.isFinite(delayMs)) return null;
 	return Math.min(Math.max(0, Math.round(delayMs)), MAX_RETRY_AFTER_MS);
+}
+
+/**
+ * Whether a Date.parse-able string is actually shaped like an HTTP-date:
+ * IMF-fixdate round-trips through toUTCString exactly; the obsolete asctime
+ * form is tolerated by regex. Anything else (bare years, ISO stamps a proxy
+ * invented) is treated as invalid — conservatively falling back to the body
+ * mirror beats honouring a delay the server never named.
+ */
+/**
+ * Accept exactly IMF-fixdate — the round-trip through toUTCString is
+ * timezone-safe, pivot-free, and rejects Date.parse's calendar normalization.
+ *
+ * The obsolete RFC 9110 forms (rfc850, asctime) are DELIBERATELY invalid:
+ * Date.parse reads asctime in LOCAL time and applies a fixed two-digit-year
+ * pivot to rfc850, so a "successful" parse of either is wrong on real devices.
+ * No real server has emitted them in decades, and an invalid header is not a
+ * dead end here — it falls back to the error body's mirrored
+ * `retry_after_seconds` (B10, free#1649), which carries server-computed whole
+ * seconds with no date parsing at all. Conservative-invalid beats honouring a
+ * delay the server never named.
+ */
+function isHttpDateShape(value: string, parsedMs: number): boolean {
+	return new Date(parsedMs).toUTCString() === value;
 }
 
 export function parseServerPressure(value: string | null | undefined): ServerPressure | undefined {

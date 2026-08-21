@@ -487,6 +487,76 @@ describe('change-signal server-pressure adaptation', () => {
 		await context.engine.dispose();
 	});
 
+	it('honours a Retry-After mirrored into the error body when the header is stripped (B10)', async () => {
+		// Hostile hosts strip Access-Control-Expose-Headers, so the header can be
+		// unreadable while the plugin's body mirror (data.retry_after_seconds,
+		// free#1649) still names the pause.
+		const context = await harness();
+		context.diagnostics.length = 0;
+
+		await context.respond(
+			new Response(JSON.stringify({ code: 'x', data: { retry_after_seconds: 60 } }), {
+				status: 503,
+				headers: { 'content-type': 'application/json' },
+			})
+		);
+
+		expect(armedDelay(context.engine, context.now())).toBeGreaterThanOrEqual(60_000);
+		const [backoff] = cadenceEvents(context.diagnostics, 'cadence.backoff');
+		expect(backoff!.fields).toMatchObject({ retryAfterMs: 60_000 });
+		await context.engine.dispose();
+	});
+
+	it('honours the body mirror when Retry-After is present but invalid', async () => {
+		const context = await harness();
+		context.diagnostics.length = 0;
+
+		await context.respond(
+			new Response(JSON.stringify({ code: 'x', data: { retry_after_seconds: 60 } }), {
+				status: 503,
+				headers: { 'content-type': 'application/json', 'retry-after': '0.5' },
+			})
+		);
+
+		expect(armedDelay(context.engine, context.now())).toBeGreaterThanOrEqual(60_000);
+		const [backoff] = cadenceEvents(context.diagnostics, 'cadence.backoff');
+		expect(backoff!.fields).toMatchObject({ retryAfterMs: 60_000 });
+		await context.engine.dispose();
+	});
+
+	it('prefers a readable, valid Retry-After header over a divergent body value', async () => {
+		const context = await harness();
+		context.diagnostics.length = 0;
+
+		await context.respond(
+			new Response(JSON.stringify({ code: 'x', data: { retry_after_seconds: 600 } }), {
+				status: 503,
+				headers: { 'content-type': 'application/json', 'retry-after': '60' },
+			})
+		);
+
+		const [backoff] = cadenceEvents(context.diagnostics, 'cadence.backoff');
+		expect(backoff!.fields).toMatchObject({ retryAfterMs: 60_000 });
+		await context.engine.dispose();
+	});
+
+	it('ignores a malformed body retry_after_seconds', async () => {
+		const context = await harness();
+		context.diagnostics.length = 0;
+
+		// One 503 is below the three-strike burst, so with no VALID pause named
+		// anywhere there must be no back-off at all.
+		await context.respond(
+			new Response(JSON.stringify({ code: 'x', data: { retry_after_seconds: -5 } }), {
+				status: 503,
+				headers: { 'content-type': 'application/json' },
+			})
+		);
+
+		expect(cadenceEvents(context.diagnostics, 'cadence.backoff')).toHaveLength(0);
+		await context.engine.dispose();
+	});
+
 	it('never re-arms a back-off to an earlier deadline than the one already set', async () => {
 		// A high jitter draw arms the first tick long; the redraw on a pause-only
 		// transition must not be allowed to pull it closer.

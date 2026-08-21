@@ -7,6 +7,7 @@ import {
 	type ResponseEnvelopeTransportState,
 	type SyncCollectionName,
 } from '@wcpos/sync-engine';
+import { AppInfo } from '@wcpos/utils/app-info';
 import { formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -117,6 +118,13 @@ export function createEngineFetcher(input: {
 			// (woocommerce_pos_request()) — without this header every sync route
 			// answers rest_no_route and the engine stays degraded-empty.
 			headers.set('X-WCPOS', '1');
+			// Explicit product UA on native/Electron (B10, wcpos-infra#72): a blank
+			// or library UA on a POST earns a permanent AIOS IP ban. The fragment is
+			// EMPTY on web — Firefox honours fetch UA overrides, and replacing the
+			// battle-tested browser UA with a product string reads as a bot.
+			for (const [name, value] of Object.entries(AppInfo.userAgentHeader)) {
+				headers.set(name, value);
+			}
 			// Re-read per attempt: a store switch that lands between the absorbed 401
 			// and its retry must send the retry under the NEW scope, never the old one.
 			const storeScope = normalizeStoreScope(input.scope?.storeId);

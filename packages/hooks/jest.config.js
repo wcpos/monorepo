@@ -26,6 +26,9 @@ module.exports = {
 	coveragePathIgnorePatterns: ['(tests/.*.mock).(jsx?|tsx?)$'],
 	verbose: true,
 	moduleNameMapper: {
+		// jsdom jest has no platform-extension resolution, and the default
+		// app-info variant imports react-native — map to the web variant.
+		'^@wcpos/utils/app-info$': '<rootDir>/../utils/src/app-info/index.web',
 		'^@wcpos/utils/(.*)$': '<rootDir>/../utils/src/$1',
 	},
 	globals: {
