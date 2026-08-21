@@ -152,7 +152,7 @@ export async function productWriterAuthorization(
 			const location = submit.headers()['location'] ?? '';
 			const token = /access_token=([^&]+)/.exec(location)?.[1];
 			if (!token) throw new WriterAuthenticationFailure('http', submit.status());
-			return await resolveWriterAuthorization(request, storeUrl, token);
+			return await resolveWriterTransport(request, storeUrl, token);
 		} catch (error) {
 			const failure =
 				error instanceof WriterAuthenticationFailure
@@ -183,43 +183,42 @@ export async function productWriterAuthorization(
 }
 
 /**
- * Pick the transport the minted writer JWT actually authenticates with, by
- * reading one product with each candidate. Header first (the least surprising
- * shape on a friendly store), then the bare `?authorization=` param — bare,
- * not `Bearer `-prefixed, because the prefix is what trips WAF regexes (the
- * B4 form; wc/v3 verified to accept it on dev-free, 2026-08-21). Both failing
- * is a declared capability failing: throw into the caller's retry/fail
- * machinery, never skip.
+ * Decide which transport actually delivers the writer JWT to wc/v3 — by
+ * evidence, not assumption. Try the header first, then the `Bearer`-prefixed
+ * query form required by older servers, then the bare query form that survives
+ * WAF prefix rules on newer servers. Only then declare the credentials broken.
  */
-async function resolveWriterAuthorization(
+async function resolveWriterTransport(
 	request: APIRequestContext,
 	storeUrl: string,
 	token: string
 ): Promise<StoreAuthorization> {
+	let lastFailure = new WriterAuthenticationFailure('http', null);
 	const candidates: StoreAuthorization[] = [
 		{ transport: 'header', value: `Bearer ${token}` },
+		{ transport: 'query', value: `Bearer ${token}` },
 		{ transport: 'query', value: token },
 	];
-	let lastStatus: number | null = null;
 	for (const candidate of candidates) {
-		const auth = storeRequestOptions(candidate);
-		const response = await probeRequest(request, 'get', storeUrl, 'products', undefined, {
-			...auth,
-			params: { ...auth.params, per_page: '1' },
-		});
-		if (response.ok()) return candidate;
-		lastStatus = response.status();
-		if (isNetworkishStatus(lastStatus)) {
-			throw new WriterAuthenticationFailure('transport', lastStatus);
+		const options = storeRequestOptions(candidate);
+		try {
+			const response = await probeRequest(request, 'get', storeUrl, 'products', undefined, {
+				...options,
+				params: { ...options.params, per_page: '1' },
+			});
+			if (response.ok()) return candidate;
+			lastFailure = new WriterAuthenticationFailure('http', response.status());
+		} catch {
+			lastFailure = new WriterAuthenticationFailure('transport', null);
 		}
 	}
-	throw new WriterAuthenticationFailure('http', lastStatus);
+	throw lastFailure;
 }
 
 function collectionUrl(storeUrl: string, collection: ProbeCollection, id?: number): string {
 	// wc/v3 accepts the JWT via Authorization header or ?authorization= param
 	// (param verified against wc/v3 on 2026-08-21); the transport is chosen by
-	// resolveWriterAuthorization, or captured from the app's own traffic.
+	// resolveWriterTransport, or captured from the app's own traffic.
 	const base = `${storeUrl.replace(/\/+$/, '')}/wp-json/wc/v3/${collection}`;
 	return id === undefined ? base : `${base}/${id}`;
 }
