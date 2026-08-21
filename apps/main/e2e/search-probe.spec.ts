@@ -131,10 +131,12 @@ test.describe('search-probe pure logic', () => {
 		process.env.E2E_PRODUCT_WRITER_PASS = 'secret';
 		const states: string[] = [];
 		const request = {
+			// The helper also issues wc/v3 transport-verification reads; only the
+			// wcpos-auth login pages carry the session state this test counts.
 			get: async (url: string) => {
-				// The transport-verification read has no state param — record login fetches only.
-				const state = new URL(url).searchParams.get('state');
-				if (state !== null) states.push(state);
+				if (url.includes('/wcpos-auth/')) {
+					states.push(new URL(url).searchParams.get('state') ?? '');
+				}
 				return {
 					ok: () => true,
 					status: () => 200,
@@ -212,6 +214,45 @@ test.describe('search-probe pure logic', () => {
 				{ header: null, param: 'Bearer token' },
 				{ header: null, param: 'token' },
 			]);
+		} finally {
+			if (previousUser === undefined) delete process.env.E2E_PRODUCT_WRITER_USER;
+			else process.env.E2E_PRODUCT_WRITER_USER = previousUser;
+			if (previousPass === undefined) delete process.env.E2E_PRODUCT_WRITER_PASS;
+			else process.env.E2E_PRODUCT_WRITER_PASS = previousPass;
+		}
+	});
+
+	test('uses prefixed query transport when an older server accepts it', async () => {
+		const previousUser = process.env.E2E_PRODUCT_WRITER_USER;
+		const previousPass = process.env.E2E_PRODUCT_WRITER_PASS;
+		process.env.E2E_PRODUCT_WRITER_USER = 'writer';
+		process.env.E2E_PRODUCT_WRITER_PASS = 'secret';
+		const request = {
+			get: async (
+				url: string,
+				options?: { headers?: Record<string, string>; params?: Record<string, string> }
+			) => {
+				if (url.includes('/wcpos-auth/')) {
+					return {
+						ok: () => true,
+						status: () => 200,
+						text: async () =>
+							'<input name="_wpnonce" value="nonce"><input name="auth_session" value="session">',
+					};
+				}
+				const authorized = options?.params?.authorization === 'Bearer token';
+				return response(authorized ? 200 : 401, {});
+			},
+			post: async () => ({
+				status: () => 302,
+				headers: () => ({ location: 'https://localhost/cb?access_token=token' }),
+			}),
+		};
+
+		try {
+			await expect(
+				productWriterAuthorization(request as never, 'https://example.test')
+			).resolves.toEqual({ transport: 'query', value: 'Bearer token' });
 		} finally {
 			if (previousUser === undefined) delete process.env.E2E_PRODUCT_WRITER_USER;
 			else process.env.E2E_PRODUCT_WRITER_USER = previousUser;
