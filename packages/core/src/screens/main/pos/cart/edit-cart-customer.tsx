@@ -123,7 +123,7 @@ export function EditCartCustomerForm() {
 				return;
 			}
 			const savedDoc = await patch({
-				document: customer as never,
+				document: customer,
 				data: {
 					billing: data.billing,
 					shipping: data.shipping,

@@ -2,13 +2,6 @@ import * as React from 'react';
 
 import { v4 as uuidv4 } from 'uuid';
 
-import type {
-	CouponDocument,
-	CustomerDocument,
-	OrderDocument,
-	ProductDocument,
-	ProductVariationDocument,
-} from '@wcpos/database';
 import {
 	awaitWriteOutcome,
 	COLLECTION_VOCABULARY,
@@ -20,14 +13,17 @@ import {
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { findEngineResident, insertEngineResident, useLocalMutation } from './use-local-mutation';
+import {
+	documentRecordId,
+	findEngineResident,
+	insertEngineResident,
+	type MutationDocument,
+	useLocalMutation,
+} from './use-local-mutation';
 import { useT } from '../../../../contexts/translations';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'document']);
-
-type Document =
-	OrderDocument | ProductDocument | CustomerDocument | ProductVariationDocument | CouponDocument;
 
 interface Props {
 	collectionName: WriteableCollection;
@@ -105,14 +101,14 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 	);
 
 	const patch = React.useCallback(
-		async ({ document, data }: { document: Document; data: Record<string, unknown> }) => {
+		async ({ document, data }: { document: MutationDocument; data: Record<string, unknown> }) => {
 			const result = await localPatch({ document, data: data as never });
 			if (result?.document) {
 				handleSuccess(result.document as unknown as Record<string, unknown>);
 				return result.document;
 			}
 			handleError(new Error(t('common.not_updated', { title: collectionLabel })), {
-				documentId: document.id,
+				documentId: documentRecordId(document),
 			});
 		},
 		[collectionLabel, handleError, handleSuccess, localPatch, t]

@@ -43,7 +43,7 @@ const mutationLogger = getLogger(['wcpos', 'mutations', 'local']);
 
 type Document =
 	OrderDocument | ProductDocument | CustomerDocument | ProductVariationDocument | CouponDocument;
-type MutationDocument =
+export type MutationDocument =
 	| Document
 	| EngineRecord<'orders'>
 	| EngineRecord<'products'>
