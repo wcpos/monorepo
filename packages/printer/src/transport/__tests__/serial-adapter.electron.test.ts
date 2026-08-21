@@ -33,7 +33,7 @@ describe('SerialElectronAdapter', () => {
 		vi.useRealTimers();
 	});
 
-	it('printRaw invokes print-raw-serial with device key and data array', async () => {
+	it('printRaw invokes print-raw-serial with device key and typed-array data', async () => {
 		const adapter = new SerialElectronAdapter('serial:/dev/cu.TM-P20');
 		const bytes = new Uint8Array([0x1b, 0x40, 0x41]);
 
@@ -43,9 +43,10 @@ describe('SerialElectronAdapter', () => {
 
 		await adapter.printRaw(bytes);
 
+		// Bytes cross IPC as the structured-cloned Uint8Array itself — no number[] copy.
 		expect(ipc.invoke).toHaveBeenCalledWith('print-raw-serial', {
 			device: 'serial:/dev/cu.TM-P20',
-			data: [0x1b, 0x40, 0x41],
+			data: Uint8Array.from([0x1b, 0x40, 0x41]),
 		});
 	});
 
