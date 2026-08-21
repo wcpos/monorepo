@@ -20,6 +20,12 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "apply.escalation-cleared",
+		"domain": "SYNC",
+		"label": "A record on this device matches your store again",
+		"introducedIn": "1.10.0"
+	},
+	{
 		"type": "apply.pull",
 		"domain": "SYNC",
 		"label": "Saved updates from your store",

@@ -26,8 +26,9 @@
  *   - escalations — `escalatedIds` verbatim: the deepest repair signal. SURFACE
  *     / alert these; the host must NEVER auto-loop a pull on them (a stuck record
  *     a pull is not fixing — auto-pulling would just spin).
- *   - nextState — cursor / baselineDigests / configBaseline threaded straight
- *     through so the host persists exactly what the engine advanced.
+ *   - escalationClears — complete-sweep cure evidence, surfaced verbatim.
+ *   - nextState — cursor / baselines / escalation ledger threaded straight through
+ *     so the host persists exactly what the engine advanced.
  */
 
 import type { ConfigFingerprintBaseline } from './configChangeSignal';
@@ -53,10 +54,13 @@ export type ReplicationActions = {
 	reFetchCollections: BarcodeConfigCollection[];
 	/** escalatedIds — surface/alert, NEVER auto-loop a pull. */
 	escalations: HybridRepairTarget[];
+	/** Previously escalated ids verified matching by a complete sweep. */
+	escalationClears: HybridRepairTarget[];
 	/** What the host persists: exactly what the engine advanced this poll. */
 	nextState: {
 		cursor: SequenceCursor;
 		baselineDigests: BaselineDigests;
+		escalations: HybridRepairTarget[];
 		configBaseline?: ConfigFingerprintBaseline;
 		epoch?: string;
 	};
@@ -153,6 +157,7 @@ export function planReplicationActions(outcome: HybridPollOutcome): ReplicationA
 	const nextState: ReplicationActions['nextState'] = {
 		cursor: outcome.cursor,
 		baselineDigests: outcome.baselineDigests,
+		escalations: outcome.escalationLedger,
 		...(outcome.configBaseline !== undefined ? { configBaseline: outcome.configBaseline } : {}),
 		...(outcome.epoch !== undefined ? { epoch: outcome.epoch } : {}),
 	};
@@ -164,6 +169,7 @@ export function planReplicationActions(outcome: HybridPollOutcome): ReplicationA
 		reDeriveBarcode,
 		reFetchCollections,
 		escalations: outcome.escalatedIds,
+		escalationClears: outcome.clearedEscalations,
 		nextState,
 	};
 }

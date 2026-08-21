@@ -1562,7 +1562,7 @@ export function createRxdbSyncEngine(
 			const database = scopeId === null ? null : databaseByScopeId.get(scopeId);
 			if (!scopeId || !database) return false;
 			const state = decodeCustomerTrickleState(await readBlob(scopeId, CUSTOMER_TRICKLE_STATE_KEY));
-			if (!state.walkComplete) return false;
+			if (!state.everComplete) return false;
 			const entry = await censusPublisher.freshEntry('customers', database);
 			if (entry === null || entry.updatedAtMs < engineStartedAtMs) return false;
 			// The born-local customer:default sentinel is not part of the server census — counting

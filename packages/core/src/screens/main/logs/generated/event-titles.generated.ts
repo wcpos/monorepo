@@ -22,6 +22,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.apply_delete');
 		case 'apply.escalation':
 			return t('health.logs.event.apply_escalation');
+		case 'apply.escalation-cleared':
+			return t('health.logs.event.apply_escalation_cleared');
 		case 'apply.pull':
 			return t('health.logs.event.apply_pull');
 		case 'apply.rebaseline':

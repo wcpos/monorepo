@@ -165,6 +165,9 @@ describe('compiled demand pins for the retired raw-selector callers', () => {
 				collection: 'coupons',
 				kind: 'refresh',
 				priority: 700,
+				// #1347 part 3: `code` rides the wire as `title` (post_title IS the code).
+				orderby: 'title',
+				order: 'asc',
 			},
 		},
 	] as const)('pins useSearchSelect for $name', (fixture) => {
@@ -257,6 +260,9 @@ describe('compiled demand pins for the retired raw-selector callers', () => {
 				collection: 'coupons',
 				kind: 'refresh',
 				priority: 700,
+				// #1347 part 3: `code` rides the wire as `title` (post_title IS the code).
+				orderby: 'title',
+				order: 'asc',
 			},
 		},
 		{

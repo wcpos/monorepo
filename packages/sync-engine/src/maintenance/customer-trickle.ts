@@ -23,7 +23,8 @@
  * RE-POINTING IS A RESTART, deliberately. The durable cursor is keyed by the window's VIEW
  * identity (the sort, limit-independent), so SCROLLING does not restart the walk but
  * RE-SORTING does — which is exactly what the ruling asks for. Re-downloading a page of
- * already-local customers is the price; `bulkUpsert` absorbs it.
+ * already-local customers is the price; `bulkUpsert` absorbs it. The completeness signal
+ * remains sticky across that restart (#1350).
  *
  * The gating is untouched (idle >= 60s, no interactive demand, write-plane owner,
  * pressure-deferred, one request per tick, `manualSync: false`).
@@ -69,6 +70,11 @@ export type CustomerTrickleState = {
 	page: number;
 	walkComplete: boolean;
 	/**
+	 * Records that the directory has EVER been fully walked under some sort; survives view-key
+	 * restarts and is cleared only by a census deficit re-arm.
+	 */
+	everComplete: boolean;
+	/**
 	 * The fresh census total that last triggered a deficit re-walk. A completed walk
 	 * re-arms on a deficit only while the total DIFFERS from this — one re-walk per
 	 * observed total, so a record the server permanently omits (id drift, duplicate
@@ -88,6 +94,7 @@ const DEFAULT_STATE: CustomerTrickleState = {
 	viewKey: '',
 	page: 1,
 	walkComplete: false,
+	everComplete: false,
 	observedCensusTotal: null,
 };
 
@@ -99,6 +106,7 @@ export function decodeCustomerTrickleState(raw: string | null): CustomerTrickleS
 			!Number.isSafeInteger(parsed.page) ||
 			(parsed.page ?? 0) < 1 ||
 			typeof parsed.walkComplete !== 'boolean' ||
+			(parsed.everComplete !== undefined && typeof parsed.everComplete !== 'boolean') ||
 			typeof parsed.viewKey !== 'string' ||
 			(parsed.observedCensusTotal != null &&
 				(!Number.isSafeInteger(parsed.observedCensusTotal) || parsed.observedCensusTotal < 0))
@@ -109,6 +117,7 @@ export function decodeCustomerTrickleState(raw: string | null): CustomerTrickleS
 			viewKey: parsed.viewKey,
 			page: parsed.page!,
 			walkComplete: parsed.walkComplete,
+			everComplete: parsed.everComplete ?? parsed.walkComplete,
 			// Absent on states persisted before #1345 — decode as "no re-walk recorded".
 			observedCensusTotal: parsed.observedCensusTotal ?? null,
 		};
@@ -182,8 +191,12 @@ async function runCustomerTrickle(deps: CustomerTrickleDeps): Promise<CustomerTr
 	}
 
 	const { browseWindow, viewKey } = resolveBrowseWindow(deps);
-	const restart: CustomerTrickleState = { ...DEFAULT_STATE, viewKey };
 	let state = decodeCustomerTrickleState(await deps.stateStore.get(CUSTOMER_TRICKLE_STATE_KEY));
+	const restart: CustomerTrickleState = {
+		...DEFAULT_STATE,
+		viewKey,
+		everComplete: state.everComplete,
+	};
 	// The cashier re-sorted the grid (or this is the first tick since the old id-walk): the
 	// order changed, so the walk starts again in the new order.
 	if (state.viewKey !== viewKey) state = restart;
@@ -198,7 +211,7 @@ async function runCustomerTrickle(deps: CustomerTrickleDeps): Promise<CustomerTr
 			// unchanged total otherwise re-walks the whole directory every cadence,
 			// forever (#1345 mechanism 2d).
 			if (census.total > localCount && census.total !== state.observedCensusTotal) {
-				state = { ...restart, observedCensusTotal: census.total };
+				state = { ...restart, everComplete: false, observedCensusTotal: census.total };
 			} else {
 				if (census.total <= localCount && census.total !== state.observedCensusTotal) {
 					await deps.stateStore.set(
@@ -282,12 +295,14 @@ async function runCustomerTrickle(deps: CustomerTrickleDeps): Promise<CustomerTr
 					viewKey,
 					page: state.page,
 					walkComplete: true,
+					everComplete: true,
 					observedCensusTotal: state.observedCensusTotal,
 				}
 			: {
 					viewKey,
 					page: state.page + 1,
 					walkComplete: false,
+					everComplete: state.everComplete,
 					observedCensusTotal: state.observedCensusTotal,
 				};
 	await deps.stateStore.set(CUSTOMER_TRICKLE_STATE_KEY, JSON.stringify(nextState));
