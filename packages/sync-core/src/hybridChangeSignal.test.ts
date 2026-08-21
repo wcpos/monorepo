@@ -2183,6 +2183,25 @@ describe('TIER 3 — escalation clearing', () => {
 		expect(outcome.escalationLedger).toEqual([range]);
 	});
 
+	it('never clears range escalations even when the range detector runs clean', async () => {
+		const hash = repairTarget(8001);
+		const range = repairTarget(12, { collection: 'tax_rates', detector: 'range-checksum' });
+		const { source } = makeFakeSource({ hashScansBySweep: [[]], rangeScansBySweep: [[]] });
+		const engine = createHybridChangeSignalEngine({
+			source,
+			initialEscalations: [range, hash],
+			// A clean range scan is NOT cure evidence: range-checksum has no absolute
+			// match verdict and cold-starts (adopt, never flag) after a rebaseline, so
+			// only hash-checksum escalations may sweep-clear.
+			policy: { sweepEveryNPolls: 1, sweepIntervalMs: 0, sweepTaxRates: true },
+		});
+
+		const outcome = await engine.poll();
+
+		expect(outcome.clearedEscalations).toEqual([hash]);
+		expect(outcome.escalationLedger).toEqual([range]);
+	});
+
 	it('clears a restored escalation on the first complete clean sweep', async () => {
 		const restored = repairTarget(8001);
 		const { source } = makeFakeSource({

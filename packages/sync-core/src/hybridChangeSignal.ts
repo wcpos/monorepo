@@ -1041,8 +1041,15 @@ export function createHybridChangeSignalEngine(input: {
 			const driftKeys = new Set([...idsToPull, ...escalatedIds].map(escalationKey));
 			const clearedEscalations: HybridRepairTarget[] = [];
 			for (const [key, escalation] of escalatedLedger) {
-				const detectorRan = escalation.detector === 'hash-checksum' || policy.sweepTaxRates;
-				if (detectorRan && !driftKeys.has(key)) {
+				// Only hash-checksum evidence can clear: its per-bucket `match` verdict
+				// is ABSOLUTE (server stored-vs-current digest), so a complete sweep that
+				// does not re-flag a record has positively verified it. range-checksum
+				// has no such verdict — its only signal is a cross-sweep digest diff, and
+				// after a rebaseline clears the baselines a scan cold-starts every bucket
+				// (adopt, never flag), so a "clean" range sweep can be vacuous. Range
+				// escalations therefore stay until that detector gains an absolute
+				// signal (the same residual the sweepTaxRates policy note documents).
+				if (escalation.detector === 'hash-checksum' && !driftKeys.has(key)) {
 					escalatedLedger.delete(key);
 					clearedEscalations.push({ ...escalation });
 				}
