@@ -103,6 +103,75 @@ async function testParamAuth(wcposApiUrl: string, token: string, bareSupported: 
 }
 
 /**
+ * The echo probe's response: which of the client's request headers and
+ * fallback query params actually reached the server's REST stack.
+ */
+interface HeaderEchoResult {
+	headers: Record<string, { received?: boolean; length?: number }>;
+	params: Record<string, boolean>;
+}
+
+/**
+ * Probe which request headers survive to the server (B8, wcpos-infra#72).
+ *
+ * ONE request carrying all eight client headers AND every fallback query
+ * param; the public `/wcpos/v2/echo` route (free plugin >= 1.10) reports what
+ * arrived, so both credential channels are measured in a single round trip.
+ * Returns null when the endpoint is unavailable (older server, network
+ * failure, or a host that answers with something other than the probe body) —
+ * the caller then falls back to the legacy two-request auth test.
+ */
+async function probeHeaderEcho(
+	wcposApiUrl: string,
+	accessToken: string,
+	wcposVersion?: string
+): Promise<HeaderEchoResult | null> {
+	try {
+		const url = new URL(`${wcposApiUrl}echo`);
+		url.searchParams.set(
+			'authorization',
+			formatAuthorizationParam(accessToken, bareAuthParamSupported(wcposVersion))
+		);
+		url.searchParams.set('wcpos', '1');
+		url.searchParams.set('store_id', '1');
+
+		const response = await fetchWithTimeout(url.toString(), {
+			method: 'GET',
+			headers: {
+				Authorization: `Bearer ${accessToken}`,
+				'Content-Type': 'application/json',
+				'X-WCPOS': '1',
+				'X-WCPOS-Store': '1',
+				'Idempotency-Key': 'wcpos-echo-probe',
+				'If-Match': '"wcpos-echo-probe"',
+				'If-None-Match': '"wcpos-echo-probe"',
+				'X-WCPOS-Idempotency-Key': 'wcpos-echo-probe',
+			},
+		});
+
+		if (!response.ok) {
+			return null;
+		}
+
+		const data = await response.json();
+		if (
+			!data ||
+			data.v !== 1 ||
+			typeof data.headers !== 'object' ||
+			data.headers === null ||
+			typeof data.params !== 'object' ||
+			data.params === null
+		) {
+			return null;
+		}
+
+		return data as HeaderEchoResult;
+	} catch {
+		return null;
+	}
+}
+
+/**
  * Test authorization methods for a site
  * This is important because some servers block Authorization headers for security reasons
  */
@@ -112,6 +181,40 @@ export async function testAuthorizationMethod(
 	wcposVersion?: string
 ): Promise<{ useJwtAsParam: boolean } | null> {
 	try {
+		// Echo probe first (B8): one request measures every header and both
+		// credential channels at once, and names exactly which headers a
+		// hostile host eats. Falls through to the legacy two-request test when
+		// the endpoint is unavailable (servers < 1.10).
+		const echo = await probeHeaderEcho(wcposApiUrl, accessToken, wcposVersion);
+		if (echo) {
+			const deadHeaders = Object.entries(echo.headers)
+				.filter(([, state]) => state?.received !== true)
+				.map(([name]) => name);
+			if (deadHeaders.length > 0) {
+				appLogger.warn('Some POS request headers do not reach this server', {
+					context: { wcposApiUrl, deadHeaders, params: echo.params },
+				});
+			}
+			const headerAuthArrives = echo.headers.authorization?.received === true;
+			const paramAuthArrives = echo.params.authorization === true;
+			appLogger.debug('Header echo probe results', {
+				context: { wcposApiUrl, headerAuthArrives, paramAuthArrives, deadHeaders },
+			});
+			if (headerAuthArrives) {
+				return { useJwtAsParam: false };
+			}
+			if (paramAuthArrives) {
+				return { useJwtAsParam: true };
+			}
+			// Both credential channels are blocked — the probe measured this
+			// authoritatively, so the legacy test would only fail slower.
+			// Naming this condition for the cashier is Package C's first error.
+			appLogger.warn('Server blocks the login token on both channels', {
+				context: { wcposApiUrl, deadHeaders },
+			});
+			return null;
+		}
+
 		// Test the Authorization header first. Only send the JWT in the query string if the
 		// safer header path fails.
 		const headerSupported = await testHeaderAuth(wcposApiUrl, accessToken);

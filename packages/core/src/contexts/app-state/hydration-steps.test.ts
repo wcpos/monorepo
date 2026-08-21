@@ -304,9 +304,15 @@ describe('TEST_AUTHORIZATION', () => {
 	});
 
 	it('clears stale query parameter auth when Authorization headers work', async () => {
+		// First call is the B8 echo probe — answer with the probe body so the
+		// step resolves header mode from it directly.
 		fetchMock.mockResolvedValueOnce({
 			ok: true,
-			json: jest.fn(async () => ({ status: 'success' })),
+			json: jest.fn(async () => ({
+				v: 1,
+				headers: { authorization: { received: true, length: 12 } },
+				params: { authorization: true, wcpos: true, store_id: true },
+			})),
 		});
 		const siteDoc = {
 			use_jwt_as_param: true,
@@ -344,7 +350,7 @@ describe('testAuthorizationMethod', () => {
 	});
 
 	it('uses Authorization headers without testing query parameter auth when headers work', async () => {
-		fetchMock.mockResolvedValueOnce({
+		fetchMock.mockResolvedValueOnce({ ok: false, json: jest.fn() }).mockResolvedValueOnce({
 			ok: true,
 			json: jest.fn(async () => ({ status: 'success' })),
 		});
@@ -355,9 +361,10 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: false,
 		});
 
-		expect(fetchMock).toHaveBeenCalledTimes(1);
-		expect(fetchMock.mock.calls[0][0]).toBe('https://example.com/wp-json/wcpos/v2/auth/test');
-		expect(fetchMock.mock.calls[0][1]).toMatchObject({
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+		expect(String(fetchMock.mock.calls[0][0])).toContain('/wp-json/wcpos/v2/echo');
+		expect(fetchMock.mock.calls[1][0]).toBe('https://example.com/wp-json/wcpos/v2/auth/test');
+		expect(fetchMock.mock.calls[1][1]).toMatchObject({
 			headers: {
 				Authorization: 'Bearer token',
 			},
@@ -365,10 +372,13 @@ describe('testAuthorizationMethod', () => {
 	});
 
 	it('falls back to query parameter auth when headers fail', async () => {
-		fetchMock.mockResolvedValueOnce({ ok: false, json: jest.fn() }).mockResolvedValueOnce({
-			ok: true,
-			json: jest.fn(async () => ({ status: 'success' })),
-		});
+		fetchMock
+			.mockResolvedValueOnce({ ok: false, json: jest.fn() })
+			.mockResolvedValueOnce({ ok: false, json: jest.fn() })
+			.mockResolvedValueOnce({
+				ok: true,
+				json: jest.fn(async () => ({ status: 'success' })),
+			});
 
 		await expect(
 			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
@@ -376,9 +386,9 @@ describe('testAuthorizationMethod', () => {
 			useJwtAsParam: true,
 		});
 
-		expect(fetchMock).toHaveBeenCalledTimes(2);
-		expect(String(fetchMock.mock.calls[1][0])).toContain('authorization=Bearer+token');
-		expect(fetchMock.mock.calls[1][1]).toMatchObject({
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(String(fetchMock.mock.calls[2][0])).toContain('authorization=Bearer+token');
+		expect(fetchMock.mock.calls[2][1]).toMatchObject({
 			headers: {
 				'X-WCPOS': '1',
 			},
@@ -388,21 +398,22 @@ describe('testAuthorizationMethod', () => {
 	it('returns null when neither header nor query parameter auth works', async () => {
 		fetchMock
 			.mockResolvedValueOnce({ ok: false, json: jest.fn() })
+			.mockResolvedValueOnce({ ok: false, json: jest.fn() })
 			.mockResolvedValueOnce({ ok: false, json: jest.fn() });
 
 		await expect(
 			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
 		).resolves.toBeNull();
 
-		expect(fetchMock).toHaveBeenCalledTimes(2);
-		expect(fetchMock.mock.calls[0][1]).toMatchObject({
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(fetchMock.mock.calls[1][1]).toMatchObject({
 			headers: {
 				Authorization: 'Bearer token',
 				'X-WCPOS': '1',
 			},
 		});
-		expect(String(fetchMock.mock.calls[1][0])).toContain('authorization=Bearer+token');
-		expect(fetchMock.mock.calls[1][1]).toMatchObject({
+		expect(String(fetchMock.mock.calls[2][0])).toContain('authorization=Bearer+token');
+		expect(fetchMock.mock.calls[2][1]).toMatchObject({
 			headers: {
 				'X-WCPOS': '1',
 			},
@@ -412,11 +423,104 @@ describe('testAuthorizationMethod', () => {
 	it('passes abort signals to auth probes so requests can time out', async () => {
 		fetchMock
 			.mockResolvedValueOnce({ ok: false, json: jest.fn() })
+			.mockResolvedValueOnce({ ok: false, json: jest.fn() })
 			.mockResolvedValueOnce({ ok: false, json: jest.fn() });
 
 		await testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token');
 
 		expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
 		expect(fetchMock.mock.calls[1][1].signal).toBeInstanceOf(AbortSignal);
+		expect(fetchMock.mock.calls[2][1].signal).toBeInstanceOf(AbortSignal);
+	});
+
+	const echoBody = (overrides: Record<string, unknown> = {}) => ({
+		v: 1,
+		headers: {
+			authorization: { received: true, length: 12 },
+			'content-type': { received: true, length: 16 },
+			'x-wcpos': { received: true, length: 1 },
+			'x-wcpos-store': { received: true, length: 1 },
+			'idempotency-key': { received: true, length: 16 },
+			'if-match': { received: true, length: 18 },
+			'if-none-match': { received: true, length: 18 },
+			'x-wcpos-idempotency-key': { received: true, length: 16 },
+		},
+		params: { authorization: true, wcpos: true, store_id: true },
+		...overrides,
+	});
+
+	it('resolves header mode from ONE echo probe when the Authorization header arrives', async () => {
+		fetchMock.mockResolvedValueOnce({
+			ok: true,
+			json: jest.fn(async () => echoBody()),
+		});
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+		).resolves.toEqual({ useJwtAsParam: false });
+
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		const echoUrl = String(fetchMock.mock.calls[0][0]);
+		expect(echoUrl).toContain('/wp-json/wcpos/v2/echo');
+		// Both credential channels ride the single probe request.
+		expect(echoUrl).toContain('authorization=Bearer+token');
+		expect(echoUrl).toContain('wcpos=1');
+		expect(echoUrl).toContain('store_id=1');
+		expect(fetchMock.mock.calls[0][1]).toMatchObject({
+			headers: {
+				Authorization: 'Bearer token',
+				'X-WCPOS': '1',
+				'X-WCPOS-Store': '1',
+				'Idempotency-Key': 'wcpos-echo-probe',
+				'If-Match': '"wcpos-echo-probe"',
+				'If-None-Match': '"wcpos-echo-probe"',
+				'X-WCPOS-Idempotency-Key': 'wcpos-echo-probe',
+			},
+		});
+	});
+
+	it('flips to param mode when the echo shows the Authorization header stripped', async () => {
+		const body = echoBody();
+		(body.headers as Record<string, { received: boolean; length: number }>).authorization = {
+			received: false,
+			length: 0,
+		};
+		fetchMock.mockResolvedValueOnce({ ok: true, json: jest.fn(async () => body) });
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+		).resolves.toEqual({ useJwtAsParam: true });
+
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it('returns null without the legacy fallback when the echo shows both channels blocked', async () => {
+		const body = echoBody({ params: { authorization: false, wcpos: true, store_id: true } });
+		(body.headers as Record<string, { received: boolean; length: number }>).authorization = {
+			received: false,
+			length: 0,
+		};
+		fetchMock.mockResolvedValueOnce({ ok: true, json: jest.fn(async () => body) });
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+		).resolves.toBeNull();
+
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it('falls back to the legacy auth test when the echo body is not the probe shape', async () => {
+		// A hostile host can answer 200 with an interstitial page; the guard
+		// must treat that as echo-unavailable, not as an empty header map.
+		fetchMock
+			.mockResolvedValueOnce({ ok: true, json: jest.fn(async () => ({ status: 'success' })) })
+			.mockResolvedValueOnce({ ok: true, json: jest.fn(async () => ({ status: 'success' })) });
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+		).resolves.toEqual({ useJwtAsParam: false });
+
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+		expect(fetchMock.mock.calls[1][0]).toBe('https://example.com/wp-json/wcpos/v2/auth/test');
 	});
 });
