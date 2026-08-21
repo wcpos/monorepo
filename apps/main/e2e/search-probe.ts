@@ -193,25 +193,26 @@ async function resolveWriterTransport(
 	storeUrl: string,
 	token: string
 ): Promise<StoreAuthorization> {
+	let lastFailure = new WriterAuthenticationFailure('http', null);
 	const candidates: StoreAuthorization[] = [
 		{ transport: 'header', value: `Bearer ${token}` },
 		{ transport: 'query', value: `Bearer ${token}` },
 		{ transport: 'query', value: token },
 	];
-	let lastStatus: number | null = null;
 	for (const candidate of candidates) {
-		const auth = storeRequestOptions(candidate);
-		const response = await probeRequest(request, 'get', storeUrl, 'products', undefined, {
-			...auth,
-			params: { ...auth.params, per_page: '1' },
-		});
-		if (response.ok()) return candidate;
-		lastStatus = response.status();
-		if (isNetworkishStatus(lastStatus)) {
-			throw new WriterAuthenticationFailure('transport', lastStatus);
+		const options = storeRequestOptions(candidate);
+		try {
+			const response = await probeRequest(request, 'get', storeUrl, 'products', undefined, {
+				...options,
+				params: { ...options.params, per_page: '1' },
+			});
+			if (response.ok()) return candidate;
+			lastFailure = new WriterAuthenticationFailure('http', response.status());
+		} catch {
+			lastFailure = new WriterAuthenticationFailure('transport', null);
 		}
 	}
-	throw new WriterAuthenticationFailure('http', lastStatus);
+	throw lastFailure;
 }
 
 function collectionUrl(storeUrl: string, collection: ProbeCollection, id?: number): string {

@@ -299,6 +299,50 @@ test.describe('search-probe pure logic', () => {
 		});
 	});
 
+	test('continues to query writer auth when the header probe throws', async () => {
+		const previousUser = process.env.E2E_PRODUCT_WRITER_USER;
+		const previousPass = process.env.E2E_PRODUCT_WRITER_PASS;
+		process.env.E2E_PRODUCT_WRITER_USER = 'writer';
+		process.env.E2E_PRODUCT_WRITER_PASS = 'secret';
+		const attempts: string[] = [];
+		const request = {
+			get: async (
+				url: string,
+				options?: { headers?: Record<string, string>; params?: Record<string, string> }
+			) => {
+				if (url.includes('/wcpos-auth/')) {
+					return {
+						ok: () => true,
+						status: () => 200,
+						text: async () =>
+							'<input name="_wpnonce" value="nonce"><input name="auth_session" value="session">',
+					};
+				}
+				const header = options?.headers?.Authorization;
+				const query = options?.params?.authorization;
+				attempts.push(header ? `header:${header}` : `query:${query}`);
+				if (header) throw new Error('connection reset');
+				return response(200, {});
+			},
+			post: async () => ({
+				status: () => 302,
+				headers: () => ({ location: 'https://localhost/cb?access_token=token' }),
+			}),
+		};
+
+		try {
+			await expect(
+				productWriterAuthorization(request as never, 'https://example.test')
+			).resolves.toEqual({ transport: 'query', value: 'Bearer token' });
+			expect(attempts).toEqual(['header:Bearer token', 'query:Bearer token']);
+		} finally {
+			if (previousUser === undefined) delete process.env.E2E_PRODUCT_WRITER_USER;
+			else process.env.E2E_PRODUCT_WRITER_USER = previousUser;
+			if (previousPass === undefined) delete process.env.E2E_PRODUCT_WRITER_PASS;
+			else process.env.E2E_PRODUCT_WRITER_PASS = previousPass;
+		}
+	});
+
 	test('adopts only the exact product identified by the create token', () => {
 		const exact = { id: 42, name: 'E2E Probe zxexact', slug: 'e2e-probe-zxexact' };
 		const custom = {
