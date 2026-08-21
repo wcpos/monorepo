@@ -216,7 +216,10 @@ async function probeHeaderEcho(
 			typeof data.headers.authorization?.received !== 'boolean' ||
 			typeof data.params.authorization !== 'boolean'
 		) {
-			return null;
+			// Answered, but not by the echo route (cache garbage, WP Hide homepage,
+			// an incomplete body). A numeric verdict keeps this distinct from
+			// network-dead (null) so the caller still reaches the legacy ladder.
+			return result.response.status || 200;
 		}
 
 		return data as HeaderEchoResult;
@@ -268,8 +271,17 @@ export async function testAuthorizationMethod(
 		}
 
 		const pathStatus = typeof pathEcho === 'number' ? pathEcho : undefined;
+		// A 2xx that failed the echo shape guard is a host answering the path with
+		// something other than WordPress REST (WP Hide's homepage-200 profile) —
+		// that is the path-blocked shape, same as 403/404/network.
+		const pathAnswerNotEcho = pathStatus !== undefined && pathStatus >= 200 && pathStatus < 300;
 		const pathTriggersQuery =
-			!echo && (queryOnly || pathStatus === 403 || pathStatus === 404 || pathEcho === null);
+			!echo &&
+			(queryOnly ||
+				pathStatus === 403 ||
+				pathStatus === 404 ||
+				pathAnswerNotEcho ||
+				pathEcho === null);
 		let queryEcho: EchoProbeVerdict | undefined;
 		if (pathTriggersQuery) {
 			queryEcho = await probeHeaderEcho(queryEchoUrl, accessToken, wcposVersion);
@@ -307,12 +319,14 @@ export async function testAuthorizationMethod(
 			return null;
 		}
 
-		const queryStatus = typeof queryEcho === 'number' ? queryEcho : undefined;
-		const echoRouteAbsent =
-			(!pathTriggersQuery && typeof pathEcho === 'number') ||
-			queryStatus === 401 ||
-			queryStatus === 404;
-		if (!echoRouteAbsent) {
+		// No transport produced a valid echo. Only network-dead on every spelling
+		// ends the ladder here — any HTTP answer (404 route-absent, 401 namespace
+		// gate, cache-garbage 200, WAF 403) leaves auth/test worth probing, which
+		// is exactly where the pre-ladder code always fell through to.
+		const networkDeadEverywhere = queryOnly
+			? queryEcho === null
+			: pathEcho === null && queryEcho === null;
+		if (networkDeadEverywhere) {
 			appLogger.warn('REST transport probes failed', {
 				context: { wcposApiUrl, verdict: 'both-transports-blocked' },
 			});
@@ -323,8 +337,11 @@ export async function testAuthorizationMethod(
 		const queryAuthUrl = toRestRouteUrl(pathAuthUrl, pathRoot);
 		let legacy: { headerSupported: boolean; paramSupported: boolean } | 'transport-dead' =
 			'transport-dead';
+		// Path-form legacy first whenever the path answered at route level (401
+		// namespace gate, 404 route-absent, 5xx) — but not for 403 or a non-echo
+		// 2xx, which are the path-blocked shapes.
 		const tryLegacyPath =
-			!queryOnly && (!pathTriggersQuery || (pathStatus === 404 && queryStatus === 404));
+			!queryOnly && pathStatus !== undefined && pathStatus !== 403 && !pathAnswerNotEcho;
 		if (tryLegacyPath) legacy = await probeLegacyAuth(pathAuthUrl, accessToken, wcposVersion);
 		if (legacy === 'transport-dead') {
 			legacy = await probeLegacyAuth(queryAuthUrl, accessToken, wcposVersion);

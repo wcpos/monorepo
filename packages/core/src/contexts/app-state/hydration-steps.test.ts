@@ -651,6 +651,42 @@ describe('testAuthorizationMethod', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
+	it('reaches the path legacy test when the query echo answers with a non-probe 200', async () => {
+		// Old server behind a sloppy cache: path echo 404 (route absent), query
+		// echo answers 200 with garbage. Neither is network-dead, so the ladder
+		// must fall through to auth/test — path first, since the path answered
+		// at route level — never to both-transports-blocked.
+		fetchMock
+			.mockResolvedValueOnce({ ok: false, status: 404, json: jest.fn() })
+			.mockResolvedValueOnce({ ok: true, status: 200, json: jest.fn(async () => '<html>') })
+			.mockResolvedValueOnce({ ok: true, json: jest.fn(async () => ({ status: 'success' })) });
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+		).resolves.toEqual({ useJwtAsParam: false, useRestRouteParam: false });
+
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(String(fetchMock.mock.calls[2][0])).toContain('/wp-json/wcpos/v2/auth/test');
+		expect(String(fetchMock.mock.calls[2][0])).not.toContain('rest_route');
+	});
+
+	it('retries the legacy test in query form when the path legacy transport is dead too', async () => {
+		// path echo 404 → query echo garbage 200 → path auth/test 404 → query
+		// auth/test succeeds: the query spelling carries the site.
+		fetchMock
+			.mockResolvedValueOnce({ ok: false, status: 404, json: jest.fn() })
+			.mockResolvedValueOnce({ ok: true, status: 200, json: jest.fn(async () => '<html>') })
+			.mockResolvedValueOnce({ ok: false, status: 404, json: jest.fn() })
+			.mockResolvedValueOnce({ ok: true, json: jest.fn(async () => ({ status: 'success' })) });
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+		).resolves.toEqual({ useJwtAsParam: false, useRestRouteParam: true });
+
+		expect(fetchMock).toHaveBeenCalledTimes(4);
+		expect(String(fetchMock.mock.calls[3][0])).toContain('rest_route=/wcpos/v2/auth/test');
+	});
+
 	it('falls back to the legacy auth test when the echo body is incomplete', async () => {
 		// { v: 1, headers: {}, params: {} } must read as probe-UNAVAILABLE, not
 		// as "both channels blocked" — an empty map would otherwise skip the
