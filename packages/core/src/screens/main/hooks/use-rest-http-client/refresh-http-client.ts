@@ -10,6 +10,8 @@
  * @see refresh-http-client.electron.ts - Electron-specific implementation
  */
 
+import { REFRESH_TIMEOUT_MS } from './refresh-timeout';
+
 interface RefreshHttpClient {
 	post: (
 		url: string,
@@ -36,24 +38,32 @@ interface RefreshHttpClient {
 export function createRefreshHttpClient(): RefreshHttpClient {
 	return {
 		post: async (url: string, data: any, config: { headers?: Record<string, string> } = {}) => {
-			const response = await fetch(url, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					...config.headers,
-				},
-				body: JSON.stringify(data),
-			});
+			const controller = new AbortController();
+			const timeoutId = setTimeout(() => controller.abort(), REFRESH_TIMEOUT_MS);
 
-			if (!response.ok) {
-				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+			try {
+				const response = await fetch(url, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						...config.headers,
+					},
+					body: JSON.stringify(data),
+					signal: controller.signal,
+				});
+
+				if (!response.ok) {
+					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+				}
+
+				return {
+					data: await response.json(),
+					status: response.status,
+					statusText: response.statusText,
+				};
+			} finally {
+				clearTimeout(timeoutId);
 			}
-
-			return {
-				data: await response.json(),
-				status: response.status,
-				statusText: response.statusText,
-			};
 		},
 	};
 }

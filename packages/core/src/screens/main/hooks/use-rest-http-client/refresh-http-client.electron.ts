@@ -12,6 +12,8 @@
  * @see packages/hooks/src/use-http-client/http.electron.ts - Main IPC HTTP
  */
 
+import { REFRESH_TIMEOUT_MS } from './refresh-timeout';
+
 import type { AxiosRequestConfig } from 'axios';
 
 declare global {
@@ -50,6 +52,7 @@ export function createRefreshHttpClient(): RefreshHttpClient {
 				method: 'POST',
 				url,
 				data,
+				timeout: REFRESH_TIMEOUT_MS,
 				headers: {
 					'Content-Type': 'application/json',
 					...config.headers,

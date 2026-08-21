@@ -13,6 +13,9 @@ import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
 
 const httpLogger = getLogger(['wcpos', 'http', 'client']);
 
+// Axios default is 0 (wait forever); a black-holed connection on a merchant network otherwise hangs the UI spinner indefinitely. Callers with long transfers pass their own larger value (or 0 to opt out).
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+
 type AxiosRequestConfig = import('axios').AxiosRequestConfig;
 type AxiosError = import('axios').AxiosError;
 type AxiosResponse = import('axios').AxiosResponse;
@@ -209,6 +212,9 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 		}
 
 		const processedConfig = { ...config };
+		if (processedConfig.timeout === undefined) {
+			processedConfig.timeout = DEFAULT_REQUEST_TIMEOUT_MS;
+		}
 
 		if (
 			processedConfig.method?.toLowerCase() !== 'head' &&
