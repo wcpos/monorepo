@@ -152,6 +152,14 @@ export function createEngineFetcher(input: {
 			// marker delivery never depends on header survival (B7,
 			// wcpos-infra#72; prerequisite for B12's strict marker gating).
 			parsedUrl.searchParams.set('wcpos', '1');
+			// Scope parity with the X-WCPOS-Store header set above: the server
+			// honours the store_id param only when NO header arrived (free#1646 —
+			// a stripping proxy produces absence; a sent header always wins), so
+			// republishing the scope here is a no-op until the header dies in
+			// transit — exactly the hostile case (B6, wcpos-infra#72).
+			if (storeScope !== null) {
+				parsedUrl.searchParams.set('store_id', storeScope);
+			}
 			if (envelopeRequested) {
 				parsedUrl.searchParams.set('_wcpos_envelope', '1');
 			}
