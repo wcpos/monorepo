@@ -14,10 +14,8 @@ import { useCollectionBinding, useQueryState, useQueryStateActions } from '../..
 import type { DataTableFeatures } from '../../../data-table';
 import type { Row } from '../../../../../../table-types';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
-
 interface Props {
-	row: Row<{ document: ProductDocument; record: EngineRecord<'products'> }, DataTableFeatures>;
+	row: Row<{ record: EngineRecord<'products'> }, DataTableFeatures>;
 	hideOutOfStock?: boolean;
 }
 

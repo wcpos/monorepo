@@ -14,8 +14,6 @@ import {
 	useCurrentOrderActions,
 } from './index';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ setParams: jest.fn() }),
 }));
@@ -27,10 +25,6 @@ jest.mock('@wcpos/utils/platform', () => ({
 jest.mock('./use-new-order', () => ({
 	useNewOrder: () => ({ newOrder: { uuid: 'new-order' } }),
 }));
-
-function orderDocument(uuid: string): OrderDocument {
-	return { uuid } as unknown as OrderDocument;
-}
 
 function orderRecord(uuid: string) {
 	return { uuid, payload: {} } as unknown as import('@wcpos/query').EngineRecord<'orders'>;
@@ -48,7 +42,7 @@ function CaptureActions() {
 }
 
 /**
- * Reads getCurrentOrder() from a passive effect. Child passive effects run BEFORE the
+ * Reads getCurrentOrderRecord() from a passive effect. Child passive effects run BEFORE the
  * parent provider's passive effects, so this stands in for any post-commit callback
  * (e.g. the hardware-scan RxJS subscription) that fires before the provider's own
  * passive effects flush.
@@ -58,7 +52,7 @@ function ReadOnMarkerChange({ marker }: { marker: string }) {
 	React.useEffect(() => {
 		reads.push({
 			marker,
-			uuid: (currentOrderActions.getCurrentOrder() as { uuid?: string })?.uuid,
+			uuid: currentOrderActions.getCurrentOrderRecord().uuid,
 		});
 	}, [marker, currentOrderActions]);
 	return null;
@@ -81,14 +75,14 @@ function App({
 	);
 }
 
-describe('CurrentOrderProvider getCurrentOrder', () => {
+describe('CurrentOrderProvider getCurrentOrderRecord', () => {
 	beforeEach(() => {
 		actions = undefined;
 		reads.length = 0;
 	});
 
 	/**
-	 * #1294 P1: a scan subscription callback can resolve getCurrentOrder() after the
+	 * #1294 P1: a scan subscription callback can resolve getCurrentOrderRecord() after the
 	 * commit that switched orders but before the provider's passive effects run. If the
 	 * currentOrderRef write lives in a passive useEffect, that reader gets the PREVIOUS
 	 * order and the scanned item lands in the wrong cart. The ref write must be
@@ -96,22 +90,15 @@ describe('CurrentOrderProvider getCurrentOrder', () => {
 	 */
 	it('resolves the just-switched order for readers that run before the provider passive effects', () => {
 		const orders$ = new BehaviorSubject([
-			{ id: 'order-a', document: orderDocument('order-a'), record: orderRecord('record-a') },
-			{ id: 'order-b', document: orderDocument('order-b'), record: orderRecord('record-b') },
+			{ id: 'order-a', record: orderRecord('record-a') },
+			{ id: 'order-b', record: orderRecord('record-b') },
 		]);
 		const resource = new ObservableResource(orders$);
 
 		const { rerender } = render(<App marker="initial" resource={resource} />);
 
 		expect(actions).toBeDefined();
-		expect((actions!.getCurrentOrder() as { uuid?: string })?.uuid).toBe('order-a');
-		expect(
-			(
-				actions as unknown as {
-					getCurrentOrderRecord: () => { uuid?: string };
-				}
-			).getCurrentOrderRecord().uuid
-		).toBe('record-a');
+		expect(actions!.getCurrentOrderRecord().uuid).toBe('record-a');
 
 		act(() => {
 			// One batch: switch the order and give the reader a new marker so its passive
@@ -122,13 +109,7 @@ describe('CurrentOrderProvider getCurrentOrder', () => {
 
 		const switchedRead = reads.find((read) => read.marker === 'switched');
 		expect(switchedRead).toBeDefined();
-		expect(switchedRead!.uuid).toBe('order-b');
-		expect(
-			(
-				actions as unknown as {
-					getCurrentOrderRecord: () => { uuid?: string };
-				}
-			).getCurrentOrderRecord().uuid
-		).toBe('record-b');
+		expect(switchedRead!.uuid).toBe('record-b');
+		expect(actions!.getCurrentOrderRecord().uuid).toBe('record-b');
 	});
 });

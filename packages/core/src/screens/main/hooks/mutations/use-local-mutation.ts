@@ -4,13 +4,6 @@ import cloneDeep from 'lodash/cloneDeep';
 import get from 'lodash/get';
 import set from 'lodash/set';
 
-import type {
-	CouponDocument,
-	CustomerDocument,
-	OrderDocument,
-	ProductDocument,
-	ProductVariationDocument,
-} from '@wcpos/database';
 import {
 	adapterDerivedFieldsFor,
 	COLLECTION_VOCABULARY,
@@ -18,7 +11,6 @@ import {
 	type EngineRecord,
 	promotedColumnsFor,
 	useQueryRuntime,
-	wrapEngineDocument,
 	type WriteableCollection,
 } from '@wcpos/query';
 import {
@@ -41,10 +33,7 @@ import type { RxDocument } from 'rxdb';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'local']);
 
-type Document =
-	OrderDocument | ProductDocument | CustomerDocument | ProductVariationDocument | CouponDocument;
 export type MutationDocument =
-	| Document
 	| EngineRecord<'orders'>
 	| EngineRecord<'products'>
 	| EngineRecord<'variations'>
@@ -356,7 +345,7 @@ export async function insertEngineResident(input: {
 	return (await residentCollection.insert(resident)) as unknown as EngineResident;
 }
 
-async function patchLocalResident<T extends Document>(
+async function patchLocalResident<T extends EngineResident>(
 	document: T,
 	changes: Record<string, unknown>
 ): Promise<T> {
@@ -441,13 +430,13 @@ export const useLocalMutation = () => {
 
 				if (isTemporaryOrder) {
 					// The temporary order is engine-shaped (ADR 0028 stage I); the context
-					// hands out a read-only wrapped face, so the write resolves the RAW
-					// template through the temp-order repository and merges into its payload.
+					// hands out the record face, so the write resolves the RAW template
+					// through the temp-order repository and merges into its payload.
 					const patched = await patchTemporaryOrderPayload(recordId!, changes);
 					if (!patched) throw new Error('Temporary order is missing from the temporary DB');
 					return {
 						changes,
-						document: wrapEngineDocument('orders', patched as never) as TDocument,
+						document: patched as TDocument,
 					};
 				}
 
@@ -472,13 +461,13 @@ export const useLocalMutation = () => {
 					}
 					return {
 						changes,
-						document: wrapEngineDocument(engineCollection, patched as never) as TDocument,
+						document: patched as TDocument,
 					};
 				}
 
-				const latest = (document as Document).getLatest();
+				const latest = document.getLatest() as unknown as EngineResident;
 				const doc = await patchLocalResident(latest, changes);
-				return { changes, document: doc };
+				return { changes, document: doc as TDocument };
 			} catch (error) {
 				const err = error as Record<string, unknown>;
 				let message = getErrorMessage(error);

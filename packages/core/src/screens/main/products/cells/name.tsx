@@ -12,15 +12,10 @@ import { GroupedNames } from '../../components/product/grouped-names';
 import { useProAccess } from '../../contexts/pro-access';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
-
 /**
  *
  */
-export function ProductName(
-	props: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'name'>
-) {
-	const product = props.row.original.document;
+export function ProductName(props: CellContext<{ record: EngineRecord<'products'> }, 'name'>) {
 	const record = props.row.original.record;
 	const show = props.column.columnDef.meta?.show;
 	const fields = useRecordField(record, ({ payload }) => ({
@@ -33,7 +28,10 @@ export function ProductName(
 	const { caps } = useUserCapabilities();
 	const canEdit = caps.canEditProducts;
 	const meta = props.table.options.meta as unknown as {
-		onChange: (arg: { document: ProductDocument; changes: Record<string, unknown> }) => void;
+		onChange: (arg: {
+			document: EngineRecord<'products'>;
+			changes: Record<string, unknown>;
+		}) => void;
 	};
 
 	/**
@@ -47,7 +45,7 @@ export function ProductName(
 					onChangeText={
 						readOnly || !canEdit
 							? undefined
-							: (name) => meta.onChange({ document: product, changes: { name } })
+							: (name) => meta.onChange({ document: record, changes: { name } })
 					}
 					editable={!readOnly && canEdit}
 				/>

@@ -3,7 +3,6 @@ import * as React from 'react';
 import { ButtonPill } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
-import type { ProductDocument } from '@wcpos/database';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { VariationSelect } from '../../variation-select';
@@ -19,7 +18,7 @@ import type { DataTableFeatures } from '../../../data-table';
 import type { Row } from '../../../../../../table-types';
 
 interface Props {
-	row: Row<{ document: ProductDocument; record: EngineRecord<'products'> }, DataTableFeatures>;
+	row: Row<{ record: EngineRecord<'products'> }, DataTableFeatures>;
 }
 
 /**

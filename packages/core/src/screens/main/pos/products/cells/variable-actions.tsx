@@ -8,7 +8,6 @@ import type { CellContext } from '@wcpos/core/table-types';
 import { VariationsPopover } from './variations-popover';
 import { useAddVariation } from '../../hooks/use-add-variation';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 
 /**
@@ -16,7 +15,7 @@ type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items'
  */
 export function VariableActions({
 	row,
-}: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'actions'>) {
+}: CellContext<{ record: EngineRecord<'products'> }, 'actions'>) {
 	const parent = row.original.record;
 	const { addVariation } = useAddVariation();
 	const triggerRef = React.useRef<{ close: () => void } | null>(null);

@@ -10,7 +10,6 @@ import { PriceWithTax } from './price-with-tax';
 
 import type { VariablePrices } from './get-variable-prices';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
 type PriceKey = keyof VariablePrices;
 
 /**
@@ -20,10 +19,7 @@ export function VariableProductPrice({
 	table,
 	row,
 	column,
-}: CellContext<
-	{ document: ProductDocument; record: EngineRecord<'products'> },
-	'price' | 'regular_price' | 'sale_price'
->) {
+}: CellContext<{ record: EngineRecord<'products'> }, 'price' | 'regular_price' | 'sale_price'>) {
 	const taxStatus = useRecordField(row.original.record, (product) => product.payload.tax_status);
 	const taxClass = useRecordField(row.original.record, (product) => product.payload.tax_class);
 	const metaData = useRecordField(row.original.record, (product) => product.payload.meta_data);

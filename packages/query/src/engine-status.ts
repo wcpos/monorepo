@@ -2,6 +2,7 @@ import { distinctUntilChanged, map, Observable, shareReplay } from 'rxjs';
 
 import type { EngineStatus, RxdbSyncEngine, SyncCollectionName } from '@wcpos/sync-engine';
 
+// Per-engine memo over the public statusChanges API; deliberately not a #1249/#1250 cache.
 const snapshots = new WeakMap<RxdbSyncEngine, Observable<EngineStatus['collections']>>();
 function observeEngineCollections(engine: RxdbSyncEngine): Observable<EngineStatus['collections']> {
 	const existing = snapshots.get(engine);

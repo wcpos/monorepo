@@ -4,14 +4,10 @@ import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
-
 /**
  *
  */
-export function SKU({
-	row,
-}: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'sku'>) {
+export function SKU({ row }: CellContext<{ record: EngineRecord<'products'> }, 'sku'>) {
 	const sku = useRecordField(row.original.record, (product) => product.payload.sku);
 
 	return <Text>{sku}</Text>;

@@ -55,8 +55,7 @@ import type { QueryStateActions } from '../../../query';
 import type { BindingDataTableFooterProps, DataTableFeatures } from '../components/data-table';
 import type { Row, Table } from '../../../table-types';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
-type ProductRow = { document: ProductDocument; record: EngineRecord<'products'> };
+type ProductRow = { record: EngineRecord<'products'> };
 
 const cells = {
 	simple: {
@@ -234,12 +233,10 @@ export function Products() {
 					document,
 					changes,
 				}: {
-					document:
-						| import('@wcpos/database').ProductDocument
-						| import('@wcpos/database').ProductVariationDocument;
+					document: EngineRecord<'products'> | EngineRecord<'variations'>;
 					changes: Record<string, unknown>;
 				}) => {
-					if (document.type === 'variation') {
+					if (document.payload.type === 'variation') {
 						void variationsPatch({ document, data: changes });
 					} else {
 						void productsPatch({ document, data: changes });
@@ -290,7 +287,7 @@ export function Products() {
 				<CardContent className="border-border flex-1 border-t p-0">
 					<ErrorBoundary>
 						<Suspense fallback={<DataTableSkeleton id="products" />}>
-							<DataTable<ProductDocument>
+							<DataTable<ProductRow>
 								id="products"
 								collectionName="products"
 								resource={binding.resource}

@@ -37,8 +37,7 @@ import type { QueryStateActions } from '../../../../query';
 import type { RowSelectionState } from '@tanstack/react-table';
 import type { Observable } from 'rxjs';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-type OrderRow = { document: OrderDocument; record: EngineRecord<'orders'> };
+type OrderRow = { record: EngineRecord<'orders'> };
 
 const cells = {
 	select: TableRowSelect,

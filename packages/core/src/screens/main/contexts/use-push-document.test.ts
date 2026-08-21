@@ -194,7 +194,7 @@ describe('usePushDocument', () => {
 		expect(mockWrite.mock.calls[0][0].payload.billing.email).toBe('shopper@example.com');
 	});
 
-	it('waits for an order acknowledgement and returns the rematerialized document id', async () => {
+	it('waits for an order acknowledgement and returns the rematerialized record id', async () => {
 		const resident: Record<string, unknown> = {
 			remoteId: null,
 			payload: { status: 'pos-open' },
@@ -222,7 +222,7 @@ describe('usePushDocument', () => {
 			expect.objectContaining({ write: mockWrite }),
 			'mutation-1'
 		);
-		expect((saved as unknown as { id: number }).id).toBe(987);
+		expect((saved as unknown as { payload: { id: number } }).payload.id).toBe(987);
 		expect(mockFindOneExec).toHaveBeenCalledTimes(2);
 	});
 

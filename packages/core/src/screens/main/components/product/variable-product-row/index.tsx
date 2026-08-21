@@ -25,8 +25,7 @@ import { Variations } from './variations';
 import type { DataTableFeatures } from '../../data-table';
 import type { Cell, Row, Table } from '../../../../../table-types';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
-type ProductRow = { document: ProductDocument; record: EngineRecord<'products'> };
+type ProductRow = { record: EngineRecord<'products'> };
 
 const duration = 500;
 

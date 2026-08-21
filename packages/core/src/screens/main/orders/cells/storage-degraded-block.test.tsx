@@ -115,15 +115,13 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 
 const mockOrder = {
 	uuid: 'order-1',
-	id: 42,
-	getLatest: () => ({ toMutableJSON: () => ({ meta_data: [] }) }),
+	payload: { id: 42, status: 'completed', meta_data: [] },
 };
 
 const cellProps = {
 	row: {
 		original: {
-			document: mockOrder,
-			record: { payload: { id: 42, status: 'completed' } },
+			record: mockOrder,
 		},
 	},
 } as unknown as React.ComponentProps<typeof Actions>;

@@ -8,9 +8,6 @@ import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { useProAccess } from '../../contexts/pro-access';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
-type ProductDocument =
-	import('@wcpos/database').ProductDocument | import('@wcpos/database').ProductVariationDocument;
-
 /**
  *
  */
@@ -19,12 +16,11 @@ export function Barcode({
 	table,
 }: CellContext<
 	{
-		document: ProductDocument;
 		record: EngineRecord<'products'> | EngineRecord<'variations'>;
 	},
 	'name'
 >) {
-	const product = row.original.document;
+	const product = row.original.record;
 	const barcode = useRecordField(row.original.record, (record) => record.payload.barcode);
 	const type = useRecordField(row.original.record, (record) => record.payload.type);
 	const [value, setValue] = React.useState(barcode);
@@ -33,7 +29,10 @@ export function Barcode({
 	const canEdit = type === 'variation' ? caps.canEditVariations : caps.canEditProducts;
 	const disabled = readOnly || !canEdit;
 	const meta = table.options.meta as unknown as {
-		onChange: (arg: { document: ProductDocument; changes: Record<string, unknown> }) => void;
+		onChange: (arg: {
+			document: EngineRecord<'products'> | EngineRecord<'variations'>;
+			changes: Record<string, unknown>;
+		}) => void;
 	};
 
 	// Update value if the underlying barcode changes. Implemented as the React

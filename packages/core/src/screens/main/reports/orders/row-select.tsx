@@ -11,8 +11,7 @@ import { useT } from '../../../../contexts/translations';
 
 import type { DataTableFeatures } from '../../components/data-table';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-type OrderRow = { document: OrderDocument; record: EngineRecord<'orders'> };
+type OrderRow = { record: EngineRecord<'orders'> };
 
 export function TableRowSelect({ row, table }: CellContext<OrderRow, boolean, DataTableFeatures>) {
 	const t = useT();

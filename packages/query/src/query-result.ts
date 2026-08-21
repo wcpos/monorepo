@@ -10,9 +10,7 @@ export interface QueryResult<TCollection = RxCollection> {
 	count?: number;
 	hits: {
 		id: string;
-		document: DocumentType<TCollection>;
-		/** Native engine record when the result comes from an engine query. */
-		record?: DocumentType<TCollection>;
+		record: DocumentType<TCollection>;
 		childrenSearchCount?: number;
 		parentSearchTerm?: string;
 	}[];

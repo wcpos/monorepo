@@ -12,8 +12,6 @@ import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
 
 import type { QueryStateActions } from '../../../../query';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-
 const iconMap = {
 	pending: {
 		name: 'clock',
@@ -56,10 +54,7 @@ const iconMap = {
 /**
  *
  */
-export function Status({
-	table,
-	row,
-}: CellContext<{ document: OrderDocument; record: EngineRecord<'orders'> }, 'status'>) {
+export function Status({ table, row }: CellContext<{ record: EngineRecord<'orders'> }, 'status'>) {
 	const status = useRecordField(row.original.record, ({ payload }) => payload.status);
 	const iconName = get(iconMap, [status ?? '', 'name'], 'circleQuestion') as string;
 	const iconType = get(iconMap, [status ?? '', 'type'], 'disabled') as string;

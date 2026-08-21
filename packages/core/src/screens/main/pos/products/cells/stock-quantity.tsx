@@ -9,11 +9,8 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { useT } from '../../../../../contexts/translations';
 import { useNumberFormat } from '../../../hooks/use-number-format';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
-type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 type Props = CellContext<
 	{
-		document: ProductDocument | ProductVariationDocument;
 		record: EngineRecord<'products'> | EngineRecord<'variations'>;
 	},
 	string

@@ -7,15 +7,13 @@ import type { CellContext } from '@wcpos/core/table-types';
 
 import type { QueryStateActions } from '../../../../query';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
-
 /**
  *
  */
 export function ProductCategories({
 	table,
 	row,
-}: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'categories'>) {
+}: CellContext<{ record: EngineRecord<'products'> }, 'categories'>) {
 	const categories =
 		useRecordField(row.original.record, (product) => product.payload.categories) || [];
 

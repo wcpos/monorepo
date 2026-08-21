@@ -7,9 +7,9 @@ import type { RxDocument } from 'rxdb';
 
 /**
  * These tests pin the SHAPE the search plane depends on (LEGACY_SEARCH_FIELDS spellings
- * resolved by lodash/get, FlexSearch docToString). The document proxy's toJSON aliases this
- * same implementation, so there is deliberately no proxy-parity test — it would compare the
- * function against itself. If the snapshot output ever changes, SEARCH_INDEX_VERSION in
+ * resolved by lodash/get, FlexSearch docToString). Golden fixtures below pin the exact object
+ * independently of the deleted document proxy. If the snapshot output ever changes,
+ * SEARCH_INDEX_VERSION in
  * @wcpos/database's search plugin must be bumped (the index is checkpoint-persisted and
  * never re-tokenized).
  */
@@ -27,6 +27,143 @@ function snapshot(collection: LegacyCollectionName, document: EngineDocument) {
 }
 
 describe('legacySearchSnapshot', () => {
+	const goldenFixtures: {
+		collection: LegacyCollectionName;
+		document: EngineDocument;
+		expected: Record<string, unknown>;
+	}[] = [
+		{
+			collection: 'products',
+			document: {
+				uuid: 'product-uuid',
+				remoteId: '101',
+				payload: { name: 'Golden coffee', sku: 'GOLD-COFFEE', barcode: '101010' },
+			},
+			expected: {
+				name: 'Golden coffee',
+				sku: 'GOLD-COFFEE',
+				barcode: '101010',
+				uuid: 'product-uuid',
+				id: 101,
+			},
+		},
+		{
+			collection: 'variations',
+			document: {
+				uuid: 'variation-uuid',
+				remoteId: '102',
+				payload: {
+					sku: 'GOLD-COFFEE-L',
+					barcode: '102102',
+					attributes: [
+						{ id: 0, name: 'Size', option: 'Large' },
+						{ id: 1, name: 'Malformed' },
+					],
+				},
+			},
+			expected: {
+				sku: 'GOLD-COFFEE-L',
+				barcode: '102102',
+				attributes: [{ id: 0, name: 'Size', option: 'Large' }],
+				uuid: 'variation-uuid',
+				id: 102,
+			},
+		},
+		{
+			collection: 'orders',
+			document: {
+				uuid: 'order-uuid',
+				remoteId: '103',
+				payload: {
+					number: '103',
+					billing: {
+						first_name: 'Ada',
+						last_name: 'Lovelace',
+						email: 'ada@example.com',
+						company: 'Analytical Engines',
+						phone: '555-0103',
+					},
+				},
+			},
+			expected: {
+				number: '103',
+				billing: {
+					first_name: 'Ada',
+					last_name: 'Lovelace',
+					email: 'ada@example.com',
+					company: 'Analytical Engines',
+					phone: '555-0103',
+				},
+				uuid: 'order-uuid',
+				id: 103,
+			},
+		},
+		{
+			collection: 'customers',
+			document: {
+				uuid: 'customer-uuid',
+				remoteId: '104',
+				payload: {
+					first_name: 'Grace',
+					last_name: 'Hopper',
+					email: 'grace@example.com',
+					username: 'grace',
+					billing: {
+						first_name: 'Grace',
+						last_name: 'Hopper',
+						email: 'billing@example.com',
+						company: 'Navy',
+						phone: '555-0104',
+					},
+				},
+			},
+			expected: {
+				first_name: 'Grace',
+				last_name: 'Hopper',
+				email: 'grace@example.com',
+				username: 'grace',
+				billing: {
+					first_name: 'Grace',
+					last_name: 'Hopper',
+					email: 'billing@example.com',
+					company: 'Navy',
+					phone: '555-0104',
+				},
+				uuid: 'customer-uuid',
+				id: 104,
+			},
+		},
+		...(
+			[
+				['products/categories', 'category', '105', 'Golden category'],
+				['products/tags', 'tag', '106', 'Golden tag'],
+				['products/brands', 'brand', '107', 'Golden brand'],
+			] as const
+		).map(([collection, kind, remoteId, name]) => ({
+			collection,
+			document: { uuid: `${kind}-uuid`, remoteId, payload: { name } },
+			expected: { name, uuid: `${kind}-uuid`, id: Number(remoteId) },
+		})),
+		{
+			collection: 'coupons',
+			document: {
+				uuid: 'coupon-uuid',
+				remoteId: '108',
+				payload: { code: 'GOLDEN', description: 'Golden coupon' },
+			},
+			expected: {
+				code: 'GOLDEN',
+				description: 'Golden coupon',
+				uuid: 'coupon-uuid',
+				id: 108,
+			},
+		},
+	];
+
+	it.each(goldenFixtures)('matches the $collection golden fixture exactly', (fixture) => {
+		expect(snapshot(fixture.collection, fixture.document)).toEqual(fixture.expected);
+	});
+
 	it('flattens payload fields to the top level (the LEGACY_SEARCH_FIELDS shape)', () => {
 		const result = snapshot('orders', {
 			uuid: 'o-1',

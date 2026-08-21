@@ -43,8 +43,7 @@ import {
 import type { FiltersOf, QueryStateActions, QueryStateOf } from '../../../query';
 import type { SortFieldsByCollection } from '../../../query/query-state-types';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-type OrderRow = { id: string; document: OrderDocument; record: EngineRecord<'orders'> };
+type OrderRow = { id: string; record: EngineRecord<'orders'> };
 
 const cells = {
 	actions: Actions,

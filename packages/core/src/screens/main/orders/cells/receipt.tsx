@@ -10,16 +10,12 @@ import type { CellContext } from '@wcpos/core/table-types';
 
 import { useT } from '../../../../contexts/translations';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-
 /**
  *
  */
-export function Receipt({
-	row,
-}: CellContext<{ document: OrderDocument; record: EngineRecord<'orders'> }, unknown>) {
-	const order = row.original.document;
-	const orderHasID = !!useRecordField(row.original.record, ({ payload }) => payload.id);
+export function Receipt({ row }: CellContext<{ record: EngineRecord<'orders'> }, unknown>) {
+	const order = row.original.record;
+	const orderHasID = !!useRecordField(order, ({ payload }) => payload.id);
 	const t = useT();
 	const router = useRouter();
 

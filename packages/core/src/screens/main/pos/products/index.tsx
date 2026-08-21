@@ -58,8 +58,7 @@ import type { SortFieldsByCollection } from '../../../../query/query-state-types
 import type { BindingDataTableFooterProps, DataTableFeatures } from '../../components/data-table';
 import type { Row, Table } from '../../../../table-types';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
-type ProductRow = { document: ProductDocument; record: EngineRecord<'products'> };
+type ProductRow = { record: EngineRecord<'products'> };
 
 const POS_PRODUCTS_PAGE_SIZE = 10;
 const POS_PRODUCT_SORT_FIELDS = [
@@ -330,7 +329,7 @@ function POSProductsContent({
 							{viewMode === 'grid' ? (
 								<ProductGrid binding={binding} actions={tableActions} />
 							) : (
-								<DataTable<ProductDocument>
+								<DataTable<ProductRow>
 									id="pos-products"
 									collectionName="products"
 									resource={binding.resource}

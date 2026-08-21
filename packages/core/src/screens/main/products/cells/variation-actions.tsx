@@ -33,8 +33,6 @@ import { useProAccess } from '../../contexts/pro-access';
 import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
-type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
-
 const syncLogger = getLogger(['wcpos', 'products', 'variation-actions', 'sync']);
 
 /**
@@ -42,10 +40,7 @@ const syncLogger = getLogger(['wcpos', 'products', 'variation-actions', 'sync'])
  */
 export function VariationActions({
 	row,
-}: CellContext<
-	{ document: ProductVariationDocument; record: EngineRecord<'variations'> },
-	'actions'
->) {
+}: CellContext<{ record: EngineRecord<'variations'> }, 'actions'>) {
 	const record = row.original.record;
 	const variation = useRecordField(record, ({ payload }) => ({
 		id: payload.id,

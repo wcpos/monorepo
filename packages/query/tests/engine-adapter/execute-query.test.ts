@@ -6,7 +6,6 @@ import { filter, take } from 'rxjs/operators';
 import { engineSyncCollectionCreators, memoryEngineStorage } from '@wcpos/sync-engine/testing';
 
 import { executeAdapterQuery } from '../../src/engine-adapter/execute-query';
-import { wrapEngineDocument } from '../../src/engine-adapter/document-proxy';
 import { engineVariation } from '../../src/testing';
 
 import type { EngineDocument } from '../../src/engine-adapter/collection-map';
@@ -658,23 +657,6 @@ describe('executeAdapterQuery', () => {
 
 		expect(results.some((result) => result.count === 2)).toBe(true);
 		expect(results.at(-1)?.hits.map((document) => document.uuid)).toEqual(['product-a']);
-		subscription.unsubscribe();
-		await database.close();
-	});
-
-	it('drives proxy field observables from a real engine RxDocument update', async () => {
-		const { database, products } = await openProductsDatabase();
-		const document = await products.insert(product('product-a', 1, 'A', '1.00'));
-		const proxy = wrapEngineDocument('products', document) as {
-			name$: Observable<unknown>;
-		};
-		const values: unknown[] = [];
-		const subscription = proxy.name$.subscribe((value) => values.push(value));
-		await document.incrementalPatch({
-			payload: { ...document.payload, name: 'B' },
-		});
-
-		expect(values).toEqual(['A', 'B']);
 		subscription.unsubscribe();
 		await database.close();
 	});

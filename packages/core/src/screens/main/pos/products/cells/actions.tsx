@@ -6,14 +6,10 @@ import type { EngineRecord } from '@wcpos/query';
 
 import { useAddProduct } from '../../hooks/use-add-product';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
-
 /**
  *
  */
-export function Actions({
-	row,
-}: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'actions'>) {
+export function Actions({ row }: CellContext<{ record: EngineRecord<'products'> }, 'actions'>) {
 	const { addProduct } = useAddProduct();
 
 	/**

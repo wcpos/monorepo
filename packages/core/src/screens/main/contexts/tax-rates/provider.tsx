@@ -1,10 +1,9 @@
 import * as React from 'react';
 
-import { useObservable, useObservableEagerState, useObservableSuspense } from 'observable-hooks';
-import { combineLatest, of } from 'rxjs';
-import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
+import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
+import { map } from 'rxjs/operators';
 
-import type { EngineRecord } from '@wcpos/query';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 
 import { filterTaxRates } from './tax-rates.helpers';
@@ -12,9 +11,10 @@ import { useAppState } from '../../../../contexts/app-state';
 import { QueryStateProvider, useCollectionBinding, useQueryState } from '../../../../query';
 import { TAX_RATES_ALL_RESULTS_LIMIT, TAX_RATES_INITIAL_SORT } from '../../tax-rates/query-state';
 import { useBaseTaxLocation } from '../../hooks/use-base-tax-location';
-import { useCurrentOrderOptional } from '../../pos/contexts/current-order/context';
-
-type OrderDocument = import('@wcpos/database').OrderDocument;
+import {
+	type CurrentOrderRecord,
+	useCurrentOrderOptional,
+} from '../../pos/contexts/current-order/context';
 
 export type TaxRateData = EngineRecord<'taxRates'>['payload'];
 
@@ -72,7 +72,7 @@ interface TaxRatesProviderProps {
 	 * Escape hatch for tests and for callers that already hold an order. Production does NOT
 	 * pass this — see `TaxLocationProvider`, which subscribes to the current order itself.
 	 */
-	order?: OrderDocument;
+	order?: CurrentOrderRecord;
 }
 
 /**
@@ -177,6 +177,10 @@ function isTaxBasedOn(value: unknown): value is TaxBasedOn {
 	return value === 'base' || value === 'shipping' || value === 'billing';
 }
 
+function addressValue(value: unknown): string {
+	return typeof value === 'string' ? value : '';
+}
+
 /**
  * Order-dependent. Re-renders when the order identity changes, but the value it publishes
  * is deduped, so consumers only re-render when the tax basis or address actually moved.
@@ -202,84 +206,49 @@ function TaxLocationProvider({ children, order: orderProp }: TaxRatesProviderPro
 	 * Optional because this provider is also mounted on the standalone Products screen, which
 	 * has no current order at all; there it resolves to the shop base address, as before.
 	 */
-	const currentOrder = useCurrentOrderOptional();
-	const order = orderProp ?? currentOrder;
+	const currentOrderRecord = useCurrentOrderOptional();
+	const order = orderProp ?? currentOrderRecord;
+	const meta = useRecordField(order, (record) => record.payload.meta_data);
+	const billing = useRecordField(order, (record) => record.payload.billing);
+	const shipping = useRecordField(order, (record) => record.payload.shipping);
 
 	/**
 	 * Tax Based On
 	 * If there is an order and it has a tax based on meta, use that.
 	 *
-	 * Subscribed rather than read off the document during render: `order.meta_data` is a
-	 * plain read, so a change to the override only landed if something else happened to
-	 * re-render the provider.
+	 * The record-field subscription keeps a payload override reactive without exposing the
+	 * legacy flattened document face.
 	 */
 	const storeTaxBasedOn = useObservableEagerState(store.tax_based_on$);
-	const taxBasedOn$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(([order, storeTaxBasedOn]) => {
-					if (!order) return of(storeTaxBasedOn);
-					return (
-						order.meta_data$ as import('rxjs').Observable<
-							{ key?: string; value?: unknown }[] | undefined
-						>
-					).pipe(
-						map((meta) => {
-							const override = wooMetaCarrier.taxBasedOnOverride(meta);
-							return isTaxBasedOn(override) ? override : storeTaxBasedOn;
-						})
-					);
-				}),
-				distinctUntilChanged()
-			),
-		[order, storeTaxBasedOn]
-	);
-	const taxBasedOn = useObservableEagerState(taxBasedOn$) as TaxBasedOn;
+	const override = wooMetaCarrier.taxBasedOnOverride(meta);
+	const taxBasedOn = (isTaxBasedOn(override) ? override : storeTaxBasedOn) as TaxBasedOn;
+	const hasOrder = Boolean(order);
+	const baseCountry = addressValue(baseLocation.country);
+	const baseState = addressValue(baseLocation.state);
+	const baseCity = addressValue(baseLocation.city);
+	const basePostcode = addressValue(baseLocation.postcode);
 
 	/**
 	 * The tax rates causes a render and recalculates the all the tax in the app,
 	 * so we want to make sure we only emit rates when they have actually changed
 	 */
-	const location$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(([order, taxBasedOn, baseLocation]) => {
-					// if no order, use the base location
-					if (!order || taxBasedOn === 'base') {
-						return of(baseLocation);
-					}
-					// subscribe to the order billing and shipping addresses
-					return combineLatest([
-						order.billing$ as import('rxjs').Observable<Record<string, string | undefined>>,
-						order.shipping$ as import('rxjs').Observable<Record<string, string | undefined>>,
-					]).pipe(
-						map(([billing, shipping]) => {
-							if (taxBasedOn === 'billing') {
-								return {
-									country: billing?.country ?? '',
-									state: billing?.state ?? '',
-									city: billing?.city ?? '',
-									postcode: billing?.postcode ?? '',
-								};
-							}
-							if (taxBasedOn === 'shipping') {
-								return {
-									country: shipping?.country ?? '',
-									state: shipping?.state ?? '',
-									city: shipping?.city ?? '',
-									postcode: shipping?.postcode ?? '',
-								};
-							}
-							return baseLocation;
-						})
-					);
-				}),
-				distinctUntilChanged((prev, next) => JSON.stringify(prev) === JSON.stringify(next))
-			),
-		[order, taxBasedOn, baseLocation]
-	);
-
-	const location = useObservableEagerState(location$) as TaxLocation;
+	const location = React.useMemo<TaxLocation>(() => {
+		if (!hasOrder || taxBasedOn === 'base') {
+			return {
+				country: baseCountry,
+				state: baseState,
+				city: baseCity,
+				postcode: basePostcode,
+			};
+		}
+		const address = taxBasedOn === 'billing' ? billing : shipping;
+		return {
+			country: addressValue(address?.country),
+			state: addressValue(address?.state),
+			city: addressValue(address?.city),
+			postcode: addressValue(address?.postcode),
+		};
+	}, [baseCity, baseCountry, basePostcode, baseState, billing, hasOrder, shipping, taxBasedOn]);
 
 	/**
 	 * Filter tax rates based on address - store, billing or shipping

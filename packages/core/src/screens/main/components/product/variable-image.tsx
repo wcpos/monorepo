@@ -11,15 +11,13 @@ import type { CellContext } from '@wcpos/core/table-types';
 
 import { useImageAttachment } from '../../hooks/use-image-attachment';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
-
 /**
  *
  */
 export function VariableProductImage({
 	row,
 	table,
-}: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'image'>) {
+}: CellContext<{ record: EngineRecord<'products'> }, 'image'>) {
 	const images = useRecordField(row.original.record, (record) => record.payload.images);
 	const imageURL = get(images, [0, 'src'], undefined);
 	const { uri } = useImageAttachment(row.original.record, imageURL ?? '');

@@ -12,9 +12,9 @@ const mockWrite = jest.fn();
 const mockStatus = jest.fn();
 const mockAwaitWriteOutcome = jest.fn();
 const mockFindEngineResident = jest.fn();
-const mockWrapEngineDocument = jest.fn();
 const mockLocalPatch = jest.fn();
 const mockLoggerError = jest.fn();
+const mockLoggerSuccess = jest.fn();
 
 jest.mock('uuid', () => ({
 	v4: () => 'born-local-uuid',
@@ -24,7 +24,6 @@ jest.mock('@wcpos/query', () => ({
 	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
 	useQueryRuntime: () => ({ engine: { write: mockWrite, status: mockStatus } }),
 	awaitWriteOutcome: (...args: unknown[]) => mockAwaitWriteOutcome(...args),
-	wrapEngineDocument: (...args: unknown[]) => mockWrapEngineDocument(...args),
 }));
 
 jest.mock('./use-local-mutation', () => ({
@@ -38,7 +37,7 @@ jest.mock('@wcpos/utils/logger', () => ({
 	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 	getLogger: () => ({
 		error: (...args: unknown[]) => mockLoggerError(...args),
-		success: jest.fn(),
+		success: (...args: unknown[]) => mockLoggerSuccess(...args),
 	}),
 }));
 
@@ -60,11 +59,6 @@ describe('useMutation', () => {
 		mockWrite.mockResolvedValue({ mutationId: 'mutation-1', recordId: 'born-local-uuid' });
 		mockStatus.mockReturnValue({ activeScopeId: 'scope-1' });
 		mockAwaitWriteOutcome.mockResolvedValue('success');
-		mockWrapEngineDocument.mockImplementation(
-			(_collection: string, resident: { get: (field: string) => unknown }) => ({
-				id: Number(resident.get('remoteId')),
-			})
-		);
 	});
 
 	it('removes a born-local resident when its create intent cannot be enqueued', async () => {
@@ -148,6 +142,7 @@ describe('useMutation', () => {
 			remove: jest.fn().mockResolvedValue(undefined),
 		};
 		const refreshed = {
+			payload: { id: 321, first_name: 'Ada' },
 			get: (field: string) =>
 				field === 'payload'
 					? { id: 321, first_name: 'Ada' }
@@ -175,7 +170,7 @@ describe('useMutation', () => {
 			'customers',
 			'born-local-uuid'
 		);
-		expect((created as { id: number }).id).toBe(321);
+		expect((created as unknown as { payload: { id: number } }).payload.id).toBe(321);
 	});
 
 	it('does not mark a create explicit when no remote id is awaited', async () => {
@@ -211,6 +206,25 @@ describe('useMutation', () => {
 			'common.not_updated',
 			expect.objectContaining({
 				context: expect.objectContaining({ documentId: 'customer-local-uuid' }),
+			})
+		);
+	});
+
+	it('logs the payload id from a record-shaped patch result', async () => {
+		const customer = {
+			uuid: 'customer-local-uuid',
+			collection: { name: 'customers' },
+			payload: { id: 42, first_name: 'Ada' },
+		} as unknown as EngineRecord<'customers'>;
+		mockLocalPatch.mockResolvedValueOnce({ changes: {}, document: customer });
+		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
+
+		await act(() => result.current.patch({ document: customer, data: { first_name: 'Ada' } }));
+
+		expect(mockLoggerSuccess).toHaveBeenCalledWith(
+			'common.saved_2',
+			expect.objectContaining({
+				context: expect.objectContaining({ documentId: 42 }),
 			})
 		);
 	});

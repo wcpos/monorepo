@@ -31,7 +31,7 @@ import type { QueryResult } from '@wcpos/query';
 
 import { useGuardedExtendLimit } from '../../../../query';
 import { UISettingID, useUISettings } from '../../contexts/ui-settings';
-import { TextCell } from '../../components/text-cell';
+import { RecordTextCell } from '../../components/record-text-cell';
 import { useT } from '../../../../contexts/translations';
 import { DataTableHeader } from './header';
 import { DataTableFooter } from './footer';
@@ -289,9 +289,9 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 }
 
 function getRowTestID(item: any) {
-	const document = item?.original?.document;
+	const record = item?.original?.record;
 	// Woo numeric ids can appear after a create ack; the adapter uuid/hit id is stable for the row.
-	const stableId = document?.slug ?? document?.uuid ?? item?.id;
+	const stableId = record?.payload?.slug ?? record?.uuid ?? item?.id;
 	return stableId !== null && stableId !== undefined && stableId !== ''
 		? `data-table-row-${stableId}`
 		: undefined;
@@ -333,7 +333,7 @@ function buildColumns(
 					return !!(d && d.show);
 				},
 			},
-			cell: (info: any) => (renderCell ? renderCell(c.key, info) : <TextCell {...info} />),
+			cell: (info: any) => (renderCell ? renderCell(c.key, info) : <RecordTextCell {...info} />),
 			header: c.hideLabel ? '' : getUILabel(c.key),
 		};
 	});

@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { type EngineRecord, isEngineRxDocument } from '@wcpos/query';
+import { type EngineRecord } from '@wcpos/query';
 import { MISC_PRODUCT_ID, wooIdOf } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -65,8 +65,8 @@ export const useAddProduct = () => {
 			});
 
 			// always make sure we have the latest product document
-			if (isEngineRxDocument(data)) {
-				const latest = data.getLatest() as unknown as EngineRecord<'products'>;
+			if (typeof (data as { getLatest?: unknown }).getLatest === 'function') {
+				const latest = (data as EngineRecord<'products'>).getLatest();
 				// A products-collection document claiming to be a variation is misfiled
 				// (the pre-fix products search lane persisted Woo's variation-typed
 				// sku-leg rows; scope-open purges residue, but a document made dirty

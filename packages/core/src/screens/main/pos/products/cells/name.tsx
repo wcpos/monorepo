@@ -13,14 +13,10 @@ import { ProductTags } from '../../../components/product/tags';
 import { StockQuantity } from '../cells/stock-quantity';
 import { ProductBrands } from '../../../components/product/brands';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
-
 /**
  *
  */
-export function Name(
-	props: CellContext<{ document: ProductDocument; record: EngineRecord<'products'> }, 'name'>
-) {
+export function Name(props: CellContext<{ record: EngineRecord<'products'> }, 'name'>) {
 	const record = props.row.original.record;
 	const meta = props.column.columnDef.meta;
 	const show = meta?.show ?? (() => false);

@@ -104,6 +104,10 @@ export function useRecordField<R>(
 	record: EngineRecord<'orders'> | TemporaryOrderDocument,
 	select: Selector<EngineRecordShape<'orders'> | TemporaryOrderShape, R>
 ): R;
+export function useRecordField<R>(
+	record: EngineRecord<'orders'> | TemporaryOrderDocument | null | undefined,
+	select: Selector<EngineRecordShape<'orders'> | TemporaryOrderShape, R>
+): R | undefined;
 export function useRecordField<TDoc extends Record<string, unknown>, R>(
 	record: RxDocument<TDoc>,
 	select: Selector<NoInfer<TDoc>, R>

@@ -10,9 +10,6 @@ import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { useProAccess } from '../../contexts/pro-access';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
-type ProductDocument =
-	import('@wcpos/database').ProductDocument | import('@wcpos/database').ProductVariationDocument;
-
 /**
  *
  */
@@ -21,17 +18,19 @@ export function COGS({
 	row,
 }: CellContext<
 	{
-		document: ProductDocument;
 		record: EngineRecord<'products'> | EngineRecord<'variations'>;
 	},
 	'cost_of_goods_sold'
 >) {
-	const product = row.original.document;
+	const product = row.original.record;
 	const cogs = useRecordField(row.original.record, (record) => record.payload.cost_of_goods_sold);
 	const type = useRecordField(row.original.record, (record) => record.payload.type);
 	const defined_value = get(cogs, ['values', 0, 'defined_value'], 0);
 	const meta = table.options.meta as unknown as {
-		onChange: (arg: { document: ProductDocument; changes: Record<string, unknown> }) => void;
+		onChange: (arg: {
+			document: EngineRecord<'products'> | EngineRecord<'variations'>;
+			changes: Record<string, unknown>;
+		}) => void;
 	};
 	const { readOnly } = useProAccess();
 	const { caps } = useUserCapabilities();

@@ -100,7 +100,7 @@ function localQueryResult$(
 					count,
 					hits: documents.map((document) => ({
 						id: String(document.primary),
-						document,
+						record: document,
 					})),
 				}))
 			);

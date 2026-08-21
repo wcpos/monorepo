@@ -322,7 +322,7 @@ export function Ledger({
 	const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
 
 	const rows = React.useMemo(
-		() => result.hits.map((hit) => (hit.document as { toJSON(): LogRow }).toJSON()),
+		() => result.hits.map((hit) => (hit.record as { toJSON(): LogRow }).toJSON()),
 		[result.hits]
 	);
 	const chained = React.useMemo(() => chainMarkedIds(rows), [rows]);

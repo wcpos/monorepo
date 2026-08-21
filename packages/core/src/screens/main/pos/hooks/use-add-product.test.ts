@@ -58,11 +58,6 @@ jest.mock('@wcpos/utils/logger/generated/error-codes.generated', () => ({
 	ERROR_CODES: { CART_UPDATE_FAILED: 'CART_UPDATE_FAILED' },
 }));
 
-jest.mock('@wcpos/query', () => ({
-	isEngineRxDocument: (candidate: unknown) =>
-		Boolean(candidate && typeof (candidate as { getLatest?: unknown }).getLatest === 'function'),
-}));
-
 jest.mock('@wcpos/sync-core', () => ({
 	MISC_PRODUCT_ID: 0,
 	wooIdOf: (remoteId: string) => Number(remoteId),

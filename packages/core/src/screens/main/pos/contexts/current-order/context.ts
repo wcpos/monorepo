@@ -1,14 +1,12 @@
 import * as React from 'react';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
 type TemporaryOrderDocument = import('@wcpos/database').TemporaryOrderDocument;
 type EngineOrderRecord = import('@wcpos/query').EngineRecord<'orders'>;
 
 export type CurrentOrderRecord = EngineOrderRecord | TemporaryOrderDocument;
-export type OpenOrderHit = { id: string; document: OrderDocument; record: EngineOrderRecord };
+export type OpenOrderHit = { id: string; record: EngineOrderRecord };
 
 export interface CurrentOrderContextProps {
-	currentOrder: OrderDocument;
 	currentOrderRecord: CurrentOrderRecord;
 	openOrders: OpenOrderHit[];
 	setCurrentOrderID: (id: string) => void;
@@ -47,9 +45,9 @@ export const useCurrentOrder = () => {
  * order itself instead of being handed it as a prop from an ancestor — which is what
  * dragged the whole POS navigator into every cart write.
  */
-export const useCurrentOrderOptional = (): OrderDocument | undefined => {
+export const useCurrentOrderOptional = (): CurrentOrderRecord | undefined => {
 	const context = React.useContext(CurrentOrderContext);
-	return context?.currentOrder;
+	return context?.currentOrderRecord;
 };
 
 export const useCurrentOrderRecord = (): CurrentOrderRecord => {
@@ -61,8 +59,6 @@ export const useCurrentOrderRecord = (): CurrentOrderRecord => {
 };
 
 export interface CurrentOrderActions {
-	/** The current order AT CALL TIME. Never call during render — that is the whole point. */
-	getCurrentOrder: () => OrderDocument;
 	getCurrentOrderRecord: () => CurrentOrderRecord;
 	setCurrentOrderID: (id: string) => void;
 }

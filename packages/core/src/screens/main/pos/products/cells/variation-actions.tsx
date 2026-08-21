@@ -14,10 +14,7 @@ type ProductVariationDocument = import('@wcpos/database').ProductVariationDocume
  */
 export function ProductVariationActions({
 	row,
-}: CellContext<
-	{ document: ProductVariationDocument; record: EngineRecord<'variations'> },
-	'actions'
->) {
+}: CellContext<{ record: EngineRecord<'variations'> }, 'actions'>) {
 	const variation = row.original.record;
 	const attributes = useRecordField(variation, (record) => record.payload.attributes);
 	const parentRow = row.getParentRow();
