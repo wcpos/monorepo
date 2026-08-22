@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
 import { useFormField } from './context';
+import { optionToFieldValue } from './option-value';
 import { Option, Select } from '../select';
 
 import type { FormItemProps } from './common';
@@ -39,7 +40,7 @@ export function FormSelect({
 			if (multiple) {
 				onChange?.(val ?? []);
 			} else {
-				onChange?.(val?.value || '');
+				onChange?.(optionToFieldValue(val));
 			}
 		},
 		[multiple, onChange]
