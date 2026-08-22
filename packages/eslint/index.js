@@ -5,6 +5,8 @@ import expoConfig from 'eslint-config-expo/flat.js';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
 import reactCompiler from 'eslint-plugin-react-compiler';
 
+import prettierConfig from '../../prettier.config.mjs';
+
 const observableHookNames = new Set([
 	'useObservable',
 	'useObservableState',
@@ -245,6 +247,24 @@ export const config = [
 	eslintPluginPrettierRecommended,
 	...expoConfig,
 	{
+		// Repo tooling is Node, not React Native: `.mjs`/`.cjs` here are build guards,
+		// codegen and CI checks that legitimately use Node globals. Without this they
+		// report `'Buffer' is not defined` once the prettier glob covers them.
+		files: ['**/*.{mjs,cjs}'],
+		languageOptions: {
+			globals: {
+				Buffer: 'readonly',
+				process: 'readonly',
+				console: 'readonly',
+				__dirname: 'readonly',
+				__filename: 'readonly',
+				URL: 'readonly',
+				TextEncoder: 'readonly',
+				TextDecoder: 'readonly',
+			},
+		},
+	},
+	{
 		files: ['**/*.{ts,tsx}'],
 		ignores: ['**/*.test.{ts,tsx}', '**/e2e/**', '**/*.config.{ts,tsx}'],
 		languageOptions: {
@@ -263,7 +283,7 @@ export const config = [
 		},
 	},
 	{
-		files: ['**/*.{js,jsx,ts,tsx}'],
+		files: ['**/*.{js,jsx,mjs,cjs,ts,tsx}'],
 		settings: {
 			'import/resolver': {
 				typescript: {
@@ -272,18 +292,7 @@ export const config = [
 			},
 		},
 		rules: {
-			'prettier/prettier': [
-				'error',
-				{
-					useTabs: true,
-					singleQuote: true,
-					trailingComma: 'es5',
-					printWidth: 100,
-					endOfLine: 'lf',
-					plugins: ['prettier-plugin-tailwindcss'],
-					tailwindFunctions: ['cn', 'cva'],
-				},
-			],
+			'prettier/prettier': ['error', prettierConfig],
 
 			// 1) import/order for grouping/newlines only — no alphabetize
 			'import/order': [
