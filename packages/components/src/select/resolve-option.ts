@@ -20,5 +20,6 @@ export function resolveOption(
 	if (!emitted) {
 		return undefined;
 	}
-	return options.find((candidate) => candidate.value === emitted.value) ?? emitted;
+	// `SelectPrimitive.Option` includes `undefined`, so array entries are optional.
+	return options.find((candidate) => candidate?.value === emitted.value) ?? emitted;
 }
