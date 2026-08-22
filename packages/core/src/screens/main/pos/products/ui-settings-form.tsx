@@ -93,6 +93,12 @@ export function UISettingsForm() {
 
 	const viewMode = form.watch('viewMode');
 
+	/**
+	 * The reset button lives in the dialog footer, outside this form's subtree, so the
+	 * handler has to be published back up to UISettingsDialog. It lands in a ref there,
+	 * and writing a ref during render is not allowed — hence an effect rather than a
+	 * plain call. Nothing here derives state; it only registers the callback.
+	 */
 	React.useEffect(() => {
 		setButtonPressHandler(() => void resetUI());
 	}, [setButtonPressHandler, resetUI]);
