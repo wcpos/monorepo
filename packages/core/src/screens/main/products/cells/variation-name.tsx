@@ -25,7 +25,9 @@ export function ProductVariationName({
 
 	return (
 		<VStack space="xs">
-			<Text className="font-bold">{variation.name}</Text>
+			<Text className="font-bold" decodeHtml>
+				{variation.name}
+			</Text>
 			{show?.('sku') && <Text className="text-sm">{variation.sku}</Text>}
 			{show?.('barcode') && <Text className="text-sm">{variation.barcode}</Text>}
 		</VStack>
