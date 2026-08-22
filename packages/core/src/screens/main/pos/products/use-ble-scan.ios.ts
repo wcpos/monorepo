@@ -135,6 +135,7 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 		subscription: Subscription;
 		cancel: () => void;
 	} | null>(null);
+	const scanWaitRef = React.useRef<{ cancel: () => void } | null>(null);
 	const deviceIdRef = React.useRef<string | null>(null);
 	const monitorRef = React.useRef<Subscription | null>(null);
 	const unregisterRef = React.useRef<(() => void) | null>(null);
@@ -162,6 +163,11 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 		const bleModule = await loadModule();
 		if (!bleModule) {
 			if (mountedRef.current) setAvailable(false);
+			return null;
+		}
+		// The module load may resolve after unmount cleanup ran; constructing a
+		// manager then would leak the native instance with nothing to destroy it.
+		if (!mountedRef.current) {
 			return null;
 		}
 		try {
@@ -218,6 +224,9 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 		const stateWait = stateWaitRef.current;
 		stateWaitRef.current = null;
 		if (stateWait) stateWait.cancel();
+		const scanWait = scanWaitRef.current;
+		scanWaitRef.current = null;
+		if (scanWait) scanWait.cancel();
 		if (scanningRef.current) {
 			scanningRef.current = false;
 			await manager?.stopDeviceScan().catch((error) => {
@@ -266,7 +275,9 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 			const discovered = await device.discoverAllServicesAndCharacteristics();
 			if (!mountedRef.current || request !== attachRequestRef.current) {
 				// The racing teardown may have read deviceIdRef before the assignment
-				// above, so release the peripheral here as well.
+				// above, so release the peripheral here as well (a connected BLE
+				// peripheral stops advertising and would block rediscovery).
+				if (deviceIdRef.current === device.id) deviceIdRef.current = null;
 				await device.cancelConnection().catch((error) => {
 					warn('Failed to cancel stale BLE scanner connection', error);
 				});
@@ -363,6 +374,7 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 				const fail = (error: unknown) => {
 					if (claimed) return;
 					claimed = true;
+					scanWaitRef.current = null;
 					if (timeout) clearTimeout(timeout);
 					reject(error);
 				};
@@ -370,6 +382,11 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 					() => fail(new Error('BLE scanner discovery timed out')),
 					BLE_DISCOVERY_TIMEOUT_MS
 				);
+				// teardown() settles this wait so a disconnect/unmount/newer connect
+				// doesn't leave the gesture pending for the rest of the scan window.
+				scanWaitRef.current = {
+					cancel: () => fail(new Error('BLE discovery cancelled')),
+				};
 				scanningRef.current = true;
 				void manager
 					.startDeviceScan(BLE_SERVICE_UUIDS, null, (error, discovered) => {
@@ -382,6 +399,7 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 						// V1 deliberately connects the first allowlisted scanner; a
 						// multi-scanner chooser is out of scope for the settings action.
 						claimed = true;
+						scanWaitRef.current = null;
 						if (timeout) clearTimeout(timeout);
 						void (async () => {
 							scanningRef.current = false;
