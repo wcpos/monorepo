@@ -1,11 +1,7 @@
 import * as React from 'react';
 
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import {
-	ERROR_CATALOGUE,
-	ERROR_CODES,
-	type ErrorCode,
-} from '@wcpos/utils/logger/generated/error-codes.generated';
+import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAppState } from '../../../contexts/app-state';
 import { testAuthorizationMethod } from '../../../contexts/app-state/hydration-steps';
@@ -253,15 +249,16 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 					wpApiUrl
 				);
 				if (!authResult.ok) {
-					const authErrorCode =
-						authResult.blocked === 'credential-channels'
-							? ERROR_CODES.AUTH_TOKEN_BLOCKED_BY_HOST
-							: authResult.blocked === 'transports'
-								? ERROR_CODES.REST_TRANSPORT_BLOCKED
-								: null;
-					if (authErrorCode) {
-						throw Object.assign(new Error(ERROR_CATALOGUE[authErrorCode].summary), {
-							errorCode: authErrorCode,
+					// The inline message is translated; the registry summary stays the
+					// docs/logs voice. errorCode drives the DocsLink to the full page.
+					if (authResult.blocked === 'credential-channels') {
+						throw Object.assign(new Error(t('auth.server_blocks_login_token')), {
+							errorCode: ERROR_CODES.AUTH_TOKEN_BLOCKED_BY_HOST,
+						});
+					}
+					if (authResult.blocked === 'transports') {
+						throw Object.assign(new Error(t('auth.store_rest_api_unreachable')), {
+							errorCode: ERROR_CODES.REST_TRANSPORT_BLOCKED,
 						});
 					}
 					throw new Error(t('auth.failed_to_test_authorization_methods'));
