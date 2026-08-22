@@ -158,6 +158,7 @@ interface ReceiptTaxSection {
 }
 
 export interface ReceiptData {
+	i18n?: Record<string, string>;
 	order: ReceiptOrder;
 	store: ReceiptStore;
 	customer: ReceiptCustomer;
@@ -762,8 +763,19 @@ export function buildReceiptData(
 		}
 		printedDatetime = new Intl.DateTimeFormat('en-US', printedFormatOptions).format(printedAt);
 	}
+	const receiptI18n: Record<string, string> =
+		store.receipt_i18n !== null &&
+		typeof store.receipt_i18n === 'object' &&
+		!Array.isArray(store.receipt_i18n)
+			? Object.fromEntries(
+					Object.entries(store.receipt_i18n).filter(
+						(entry): entry is [string, string] => typeof entry[1] === 'string'
+					)
+				)
+			: {};
 
 	return {
+		...(Object.keys(receiptI18n).length > 0 ? { i18n: receiptI18n } : {}),
 		order: {
 			id: typeof order.id === 'number' ? order.id : Number(order.id) || 0,
 			number: order.number || String(order.id || ''),

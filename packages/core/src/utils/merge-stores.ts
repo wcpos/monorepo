@@ -1,5 +1,6 @@
 import * as Crypto from 'expo-crypto';
 import isEqual from 'lodash/isEqual';
+import isPlainObject from 'lodash/isPlainObject';
 
 import type { StoreDocument, UserDatabase, WPCredentialsDocument } from '@wcpos/database';
 import { AUTO_SYNCED_STORE_FIELDS } from '@wcpos/database/collections/schemas/stores';
@@ -96,6 +97,16 @@ export function normalizeStorePayload(store: ServerStorePayload): ServerStorePay
 				...(typeof entry.country === 'string' ? { country: entry.country } : {}),
 				...(typeof entry.label === 'string' ? { label: entry.label } : {}),
 			}));
+	}
+
+	if (!isPlainObject(out.receipt_i18n)) {
+		out.receipt_i18n = {};
+	} else {
+		out.receipt_i18n = Object.fromEntries(
+			Object.entries(out.receipt_i18n as Record<string, unknown>).filter(
+				([, value]) => typeof value === 'string'
+			)
+		);
 	}
 
 	return out;

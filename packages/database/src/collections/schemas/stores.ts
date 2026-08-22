@@ -1,6 +1,6 @@
 export const storesLiteral = {
 	title: 'WCPOS Store schema',
-	version: 12,
+	version: 13,
 	description: 'WooCommerce POS Store',
 	type: 'object',
 	primaryKey: 'localID',
@@ -514,6 +514,13 @@ export const storesLiteral = {
 				'zul',
 			],
 		},
+		receipt_i18n: {
+			title: 'Receipt labels',
+			description:
+				"Translated receipt label dictionary (label key → localized string), resolved server-side from the store locale by the plugin's Receipt_I18n_Labels::get_labels(). Stays empty until a plugin version that emits receipt_i18n has synced.",
+			type: 'object',
+			default: {},
+		},
 		barcode_scanning_avg_time_input_threshold: {
 			title: 'Barcode scanning average time input threshold',
 			type: 'integer',
@@ -639,6 +646,7 @@ export const SERVER_OWNED_STORE_FIELDS = [
 	'id',
 	'name',
 	'locale',
+	'receipt_i18n',
 	'timezone',
 	'default_customer',
 	'default_customer_is_cashier',

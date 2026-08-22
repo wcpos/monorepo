@@ -24,4 +24,12 @@ describe('stores migration strategy', () => {
 		expect(migrated.barcode_scanning_sound_failure_enabled).toBe(true);
 		expect(migrated.barcode_scanning_sound_haptic_enabled).toBe(true);
 	});
+
+	it('migration 13 initializes receipt labels', async () => {
+		const { userCollections } = await import('./index');
+		const migrate = userCollections.stores.migrationStrategies?.[13];
+		if (!migrate) throw new Error('stores migration 13 missing');
+		const migrated = migrate({});
+		expect(migrated.receipt_i18n).toEqual({});
+	});
 });
