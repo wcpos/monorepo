@@ -586,6 +586,43 @@ describe('testAuthorizationMethod', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(3);
 	});
 
+	it('does not read a Cloudflare-branded plain error page as a bot challenge', async () => {
+		// A CF-branded 520/maintenance page carries the brand name but no
+		// challenge machinery — it must stay on the transport/outage diagnosis.
+		const cfErrorPage = {
+			ok: false,
+			status: 520,
+			headers: { get: jest.fn(() => 'text/html; charset=UTF-8') },
+			text: jest.fn(
+				async () => '<html><body>Web server is down — cloudflare performance & security</body>'
+			),
+		};
+		fetchMock
+			.mockResolvedValueOnce(cfErrorPage)
+			.mockResolvedValueOnce({ ...cfErrorPage, text: jest.fn(async () => '<html>down') })
+			.mockResolvedValueOnce({ ok: false, status: 404, text: jest.fn(async () => '') })
+			.mockResolvedValueOnce({ ok: false, status: 404, text: jest.fn(async () => '') });
+
+		const result = await testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token');
+		expect(result).toMatchObject({ ok: false });
+		expect((result as { code: unknown }).code).not.toBe(ERROR_CODES.BOT_CHALLENGE_BLOCKING_API);
+	});
+
+	it('treats a 503 pair with a 5xx ping as an outage, not a header limit', async () => {
+		// The header-limit diagnosis needs the MINIMAL-header lane healthy; a
+		// 503-answering ping is the same outage answering everywhere.
+		fetchMock
+			.mockResolvedValueOnce({ ok: false, status: 503, text: jest.fn(async () => '') })
+			.mockResolvedValueOnce({ ok: false, status: 503, text: jest.fn(async () => '') })
+			.mockResolvedValueOnce({ ok: false, status: 503, text: jest.fn(async () => '') });
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+		).resolves.toEqual({ ok: false, code: null });
+
+		expect(mockAppLogger.error).not.toHaveBeenCalled();
+	});
+
 	it('classifies legacy header 400 plus parameter 414 as an oversized token', async () => {
 		fetchMock
 			.mockResolvedValueOnce({ ok: false, status: 401, text: jest.fn(async () => '') })

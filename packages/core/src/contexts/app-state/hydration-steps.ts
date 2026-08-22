@@ -254,7 +254,9 @@ async function probeHeaderEcho(
 				result.response.headers?.get('content-type')?.includes('text/html') === true ||
 				bodyText.trimStart().startsWith('<'),
 			challenge:
-				/cloudflare|cf-chl|cf_chl|captcha|challenge-platform|attention required|ddos/i.test(
+				(result.response.headers?.get('content-type')?.includes('text/html') === true ||
+					bodyText.trimStart().startsWith('<')) &&
+				/cf-chl|cf_chl|challenge-platform|captcha|turnstile|checking your browser|just a moment|attention required|enable javascript and cookies/i.test(
 					bodyText
 				),
 		};
@@ -319,7 +321,10 @@ interface HostBlockEvidence {
 	legacyHeaderStatus?: number;
 	legacyParamStatus?: number;
 	credentialChannels?: boolean;
-	pingSucceeded?: boolean;
+	/** The cors-mode ping fetch resolved (any readable status — server alive). */
+	pingResolved?: boolean;
+	/** The ping answered with a non-5xx — the minimal-header lane is healthy. */
+	pingHealthy?: boolean;
 	simpleEchoSucceeded?: boolean;
 	noCorsPingResolved?: boolean;
 }
@@ -350,19 +355,22 @@ function classifyHostBlock(evidence: HostBlockEvidence): ErrorCode | null {
 	}
 	if (
 		echoHasStatus(evidence.pathEcho, 503) &&
-		echoHasStatus(evidence.queryEcho, 503) &&
-		evidence.pingSucceeded
+		echoHasStatus(evidence.queryEcho, 503)
 	) {
-		return ERROR_CODES.RESPONSE_HEADERS_REJECTED;
+		// The header-limit diagnosis needs the MINIMAL-header lane to succeed
+		// while heavy responses 503. A 5xx ping is the same outage answering
+		// everywhere — not evidence of a header ceiling.
+		if (evidence.pingHealthy) return ERROR_CODES.RESPONSE_HEADERS_REJECTED;
+		return null;
 	}
 	if (evidence.platform === 'web' && echoesNetworkDead(evidence)) {
 		if (evidence.simpleEchoSucceeded) return ERROR_CODES.CORS_PREFLIGHT_BLOCKED;
-		if (evidence.pingSucceeded === false && evidence.noCorsPingResolved) {
+		if (evidence.pingResolved === false && evidence.noCorsPingResolved) {
 			return ERROR_CODES.CORS_MISCONFIGURED;
 		}
 	}
 	if (evidence.credentialChannels) return ERROR_CODES.AUTH_TOKEN_BLOCKED_BY_HOST;
-	if (echoesNetworkDead(evidence) && evidence.pingSucceeded !== true) return null;
+	if (echoesNetworkDead(evidence) && evidence.pingResolved !== true) return null;
 	return ERROR_CODES.REST_TRANSPORT_BLOCKED;
 }
 
@@ -384,12 +392,13 @@ async function finishHostBlock(
 	const networkDeadEchoes = echoesNetworkDead(evidence);
 	if (bothEchoes503 || networkDeadEchoes) {
 		const ping = await fetchWithProbeTimeout(pingUrl);
-		evidence.pingSucceeded = ping !== null && typeof ping.status === 'number';
+		evidence.pingResolved = ping !== null;
+		evidence.pingHealthy = ping !== null && ping.status < 500;
 	}
 	if (evidence.platform === 'web' && networkDeadEchoes) {
 		const simpleEcho = await fetchWithProbeTimeout(simpleEchoUrl);
 		evidence.simpleEchoSucceeded = simpleEcho !== null && typeof simpleEcho.status === 'number';
-		if (!evidence.simpleEchoSucceeded && evidence.pingSucceeded === false) {
+		if (!evidence.simpleEchoSucceeded && evidence.pingResolved === false) {
 			evidence.noCorsPingResolved =
 				(await fetchWithProbeTimeout(pingUrl, { mode: 'no-cors' })) !== null;
 		}
