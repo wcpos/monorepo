@@ -7,7 +7,9 @@ import {
 	buildBarcodeSymbologyIndex,
 	buildLocalBarcodeIndex,
 	buildResolveBarcodeUrl,
+	compressToUpcE,
 	deriveBarcodeFromPayload,
+	expandUpcE,
 	type ResolveBarcodeResponse,
 	resolveScan,
 	type ScanEvent,
@@ -131,8 +133,113 @@ describe('barcodeMatchCandidates (UPC-A ↔ EAN-13 equivalence, #740)', () => {
 		expect(barcodeMatchCandidates('12345')).toEqual(['12345']);
 	});
 
+	it('offers the UPC-E form of a compressible UPC-A', () => {
+		// Same GTIN, printed two ways: a small package carries the 8-digit UPC-E,
+		// supplier data carries the 12. A store may hold either.
+		expect(barcodeMatchCandidates('012345000065')).toEqual([
+			'012345000065',
+			'0012345000065',
+			'01234565',
+		]);
+	});
+
+	it('never expands an UNLABELLED 8-digit scan, which EAN-8 and UPC-E both claim', () => {
+		// 01234565 is a valid UPC-E for 012345000065 AND a valid EAN-8. That is not
+		// a coincidence: whenever the last data digit is 5-9 the expansion inserts
+		// four zeros, an even shift that leaves every other digit's weight — and so
+		// the check digit — untouched. With nothing to disambiguate, guessing could
+		// put an unrelated product in the cart, so the code is matched as itself.
+		expect(barcodeMatchCandidates('01234565')).toEqual(['01234565']);
+		expect(barcodeMatchCandidates('01234565', 'ean8')).toEqual(['01234565']);
+	});
+
+	it('expands an 8-digit scan the source labelled UPC-E', () => {
+		// The wedge read the symbol and told us what it was, so there is nothing to
+		// guess: the store may hold this GTIN as the printed 8 or as the 12/13 that
+		// supplier data carries.
+		expect(barcodeMatchCandidates('01234565', 'upc_e')).toEqual([
+			'01234565',
+			'012345000065',
+			'0012345000065',
+		]);
+		expect(barcodeMatchCandidates('01234565', 'UPC-E')).toEqual([
+			'01234565',
+			'012345000065',
+			'0012345000065',
+		]);
+	});
+
+	it('offers nothing extra for a UPC-E label on a code that cannot be one', () => {
+		expect(barcodeMatchCandidates('96385074', 'upc_e')).toEqual(['96385074']);
+		expect(barcodeMatchCandidates('04825303', 'upc_e')).toEqual(['04825303']);
+	});
+
+	it('reaches the UPC-E form from the 13-digit reading too', () => {
+		expect(barcodeMatchCandidates('0012345000065')).toEqual([
+			'0012345000065',
+			'012345000065',
+			'01234565',
+		]);
+	});
+
+	it('offers no UPC-E form for a UPC-A that has none', () => {
+		// 733620209958 is number system 7 — outside UPC-E's 0/1 range entirely.
+		expect(barcodeMatchCandidates('733620209958')).toEqual(['733620209958', '0733620209958']);
+		// Number system 0, but no squeezable zero run.
+		expect(barcodeMatchCandidates('012345678905')).toEqual(['012345678905', '0012345678905']);
+	});
+
+	it('does not treat an EAN-8 as a UPC-E', () => {
+		expect(barcodeMatchCandidates('09638507')).toEqual(['09638507']);
+		expect(barcodeMatchCandidates('96385074')).toEqual(['96385074']);
+	});
+
 	it('trims before classifying', () => {
 		expect(barcodeMatchCandidates('  012345678905  ')).toEqual(['012345678905', '0012345678905']);
+	});
+});
+
+describe('UPC-E ↔ UPC-A conversion', () => {
+	// One pair per zero-run rule — which run the expansion restores is decided by
+	// the last data digit — plus a number-system-1 code.
+	const PAIRS: [upce: string, upca: string][] = [
+		['04825302', '048000002532'], // last data digit 0
+		['04825311', '048100002531'], // 1
+		['07391422', '073200009142'], // 2
+		['01862736', '018600000276'], // 3
+		['09253847', '092530000087'], // 4
+		['06401979', '064019000079'], // 5-9
+		['12837465', '128374000065'], // number system 1
+	];
+
+	it.each(PAIRS)('expands %s to %s', (upce, upca) => {
+		expect(expandUpcE(upce)).toBe(upca);
+	});
+
+	it.each(PAIRS)('compresses %s back from %s', (upce, upca) => {
+		expect(compressToUpcE(upca)).toBe(upce);
+	});
+
+	it('rejects an 8-digit code whose check digit contradicts its expansion', () => {
+		expect(expandUpcE('04825303')).toBeNull();
+	});
+
+	it('rejects inputs that are not UPC-E shaped', () => {
+		expect(expandUpcE('24825302')).toBeNull(); // number system 2
+		expect(expandUpcE('0482530')).toBeNull(); // too short
+		expect(expandUpcE('0482530A')).toBeNull(); // not all digits
+	});
+
+	it('returns null for a UPC-A with no UPC-E form', () => {
+		expect(compressToUpcE('012345678905')).toBeNull(); // no squeezable zero run
+		expect(compressToUpcE('733620209958')).toBeNull(); // number system 7
+		expect(compressToUpcE('0123456789')).toBeNull(); // wrong length
+	});
+
+	it('refuses a candidate that does not survive the round trip', () => {
+		// The zero run matches a rule, but the code's own check digit belongs to a
+		// different number — expanding the candidate back does not reproduce it.
+		expect(compressToUpcE('048000002533')).toBeNull();
 	});
 });
 
@@ -337,6 +444,121 @@ describe('resolveScan online outcomes', () => {
 		if (result.outcome === 'error') {
 			expect(result.message).toContain('socket hang up');
 		}
+	});
+});
+
+describe('resolveScan UPC-A/EAN-13 equivalence (#740)', () => {
+	// The physical UPC-A on a retail package. zxing-wasm 3.x (the web/Electron
+	// camera decoder) and the iOS camera both report it as the 13-digit GTIN
+	// form; HID wedges and Android report the bare 12 digits printed under the
+	// bars. Either form must resolve against a store keyed on the other.
+	const UPC_A = '733620209958';
+	const EAN_13 = '0733620209958';
+
+	it('matches the local index on the scanned form ONLY', async () => {
+		// `input.index` may be the all-fields index, whose entries carry no field
+		// provenance — so a counterpart probe here could hand a numeric SKU the
+		// 0-prefixed twin barcodeMatchCandidates forbids and resolve the scan to an
+		// unrelated product. Equivalence is use-barcode-search's job; it knows the
+		// store's declared barcode carrier. This flow goes online instead.
+		const fetcher = vi.fn<BarcodeResolveFetcher>(async () => jsonResponse(resolveResponse()));
+		const { index } = buildLocalBarcodeIndex([{ id: 'doc-sku', payload: { sku: UPC_A } }]);
+		const events: ScanEvent[] = [];
+		const result = await resolveScan(
+			scanInput({ code: EAN_13, fetcher, index, onEvent: (event) => events.push(event) })
+		);
+		expect(result.outcome).toBe('not-found');
+		expect(events.map((event) => event.type)).toEqual(['searching-online', 'not-found']);
+	});
+
+	it('still takes a local hit when the scanned form itself is indexed', async () => {
+		const fetcher = vi.fn<BarcodeResolveFetcher>();
+		const { index } = buildLocalBarcodeIndex([{ id: 'doc-upc', payload: { barcode: EAN_13 } }]);
+		const result = await resolveScan(scanInput({ code: EAN_13, fetcher, index }));
+		expect(result).toMatchObject({ outcome: 'local', docId: 'doc-upc', code: EAN_13 });
+		expect(fetcher).not.toHaveBeenCalled();
+	});
+
+	it('retries the online resolve with the counterpart after found:false', async () => {
+		const match = {
+			id: 41,
+			type: 'product' as const,
+			parent_id: 0,
+			payload: { name: 'Hand Lotion' },
+		};
+		const fetcher = vi.fn<BarcodeResolveFetcher>(async (url) =>
+			jsonResponse(
+				new URL(url).searchParams.get('code') === UPC_A
+					? resolveResponse({ code: UPC_A, found: true, match })
+					: resolveResponse({ code: EAN_13 })
+			)
+		);
+		const events: ScanEvent[] = [];
+		const result = await resolveScan(
+			scanInput({ code: EAN_13, fetcher, onEvent: (event) => events.push(event) })
+		);
+
+		expect(result).toMatchObject({ outcome: 'online', code: EAN_13, match });
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		expect(new URL(fetcher.mock.calls[0][0]).searchParams.get('code')).toBe(EAN_13);
+		expect(new URL(fetcher.mock.calls[1][0]).searchParams.get('code')).toBe(UPC_A);
+		// One searching-online for the whole scan: the retry is an implementation
+		// detail, not a second thing the cashier is told about.
+		expect(events.map((event) => event.type)).toEqual(['searching-online', 'resolved-online']);
+	});
+
+	it('reports not-found only after every candidate misses', async () => {
+		const fetcher = vi.fn<BarcodeResolveFetcher>(async () => jsonResponse(resolveResponse()));
+		const events: ScanEvent[] = [];
+		const result = await resolveScan(
+			scanInput({ code: UPC_A, fetcher, onEvent: (event) => events.push(event) })
+		);
+		expect(result.outcome).toBe('not-found');
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		expect(new URL(fetcher.mock.calls[1][0]).searchParams.get('code')).toBe(EAN_13);
+		expect(events.map((event) => event.type)).toEqual(['searching-online', 'not-found']);
+	});
+
+	it('carries the scan symbology into the online candidate forms', async () => {
+		// Without it an 8-digit UPC-E would only ever be asked for as itself, and a
+		// store keyed on the 12-digit GTIN would answer not-found.
+		const fetcher = vi.fn<BarcodeResolveFetcher>(async () => jsonResponse(resolveResponse()));
+		await resolveScan(scanInput({ code: '01234565', symbology: 'upc_e', fetcher }));
+		expect(fetcher.mock.calls.map((call) => new URL(call[0]).searchParams.get('code'))).toEqual([
+			'01234565',
+			'012345000065',
+			'0012345000065',
+		]);
+	});
+
+	it('asks only for the scanned form when the source gave no symbology', async () => {
+		const fetcher = vi.fn<BarcodeResolveFetcher>(async () => jsonResponse(resolveResponse()));
+		await resolveScan(scanInput({ code: '01234565', fetcher }));
+		expect(fetcher).toHaveBeenCalledTimes(1);
+	});
+
+	it('spends no extra request on a code with no counterpart', async () => {
+		const fetcher = vi.fn<BarcodeResolveFetcher>(async () => jsonResponse(resolveResponse()));
+		// A genuine EAN-13 (non-zero prefix) has exactly one form.
+		const result = await resolveScan(scanInput({ code: '5901234123457', fetcher }));
+		expect(result.outcome).toBe('not-found');
+		expect(fetcher).toHaveBeenCalledTimes(1);
+	});
+
+	it('stops at a transport failure instead of burning the counterpart on a dead network', async () => {
+		const fetcher = vi.fn<BarcodeResolveFetcher>(async () => {
+			throw new Error('socket hang up');
+		});
+		const result = await resolveScan(scanInput({ code: EAN_13, fetcher }));
+		expect(result.outcome).toBe('error');
+		expect(fetcher).toHaveBeenCalledTimes(1);
+	});
+
+	it('stops at a non-2xx instead of retrying the counterpart', async () => {
+		const fetcher = vi.fn<BarcodeResolveFetcher>(async () => new Response('boom', { status: 500 }));
+		const result = await resolveScan(scanInput({ code: EAN_13, fetcher }));
+		expect(result.outcome).toBe('error');
+		expect(fetcher).toHaveBeenCalledTimes(1);
 	});
 });
 

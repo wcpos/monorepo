@@ -26,8 +26,27 @@ const barcodeLogger = getLogger(['wcpos', 'barcode', 'pos']);
 const BARCODE_LOOKUP_TIMEOUT_MS = 10_000;
 const AMBIGUOUS_HYDRATION_LIMIT = 10;
 
+/**
+ * One deadline for the whole scan, not one per request. resolveScan may probe
+ * more than one equivalent form of a code (#740), and each probe used to get its
+ * own full timer — so a slow first probe answering `found:false` at 9s could
+ * hand the retry another 10s and blow the documented ~10s scan budget. Each call
+ * now gets only what is LEFT of the budget, measured from the first request.
+ */
 function withBarcodeLookupDeadline(fetcher: BarcodeResolveFetcher): BarcodeResolveFetcher {
+	let deadlineAt: number | null = null;
+
 	return async (url, init) => {
+		const now = Date.now();
+		deadlineAt ??= now + BARCODE_LOOKUP_TIMEOUT_MS;
+		const remainingMs = deadlineAt - now;
+		const expired = new Error(
+			`barcode online lookup timed out after ${BARCODE_LOOKUP_TIMEOUT_MS}ms`
+		);
+		if (remainingMs <= 0) {
+			throw expired;
+		}
+
 		const controller = new AbortController();
 		const callerSignal = init?.signal;
 		let rejectCancellation: (error: Error) => void = () => undefined;
@@ -40,10 +59,8 @@ function withBarcodeLookupDeadline(fetcher: BarcodeResolveFetcher): BarcodeResol
 		};
 		const timeout = setTimeout(() => {
 			controller.abort();
-			rejectCancellation(
-				new Error(`barcode online lookup timed out after ${BARCODE_LOOKUP_TIMEOUT_MS}ms`)
-			);
-		}, BARCODE_LOOKUP_TIMEOUT_MS);
+			rejectCancellation(expired);
+		}, remainingMs);
 
 		if (callerSignal?.aborted) {
 			abortFromCaller();
@@ -128,7 +145,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		const guardedClearSearch = () => {
 			if (scanTicketRef.current === scanTicket) clearSearch();
 		};
-		let results = await barcodeSearch(barcodeStr);
+		let results = await barcodeSearch(barcodeStr, event.symbology);
 		let onlineParentRequired = false;
 		// The online lookup shows a persistent "Searching store…" toast; track it so a
 		// later failure can replace it with terminal feedback instead of leaving it up.
@@ -210,6 +227,9 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			const { fetcher, syncBaseUrl } = runtime.engine.hostTransport();
 			const resolution = await resolveScan({
 				code: barcodeStr,
+				// The scan's own symbology, read here rather than inside onEvent below,
+				// whose parameter shadows this `event` with the resolve-flow's own.
+				symbology: event.symbology,
 				index: new Map(),
 				syncBaseUrl,
 				fetcher: withBarcodeLookupDeadline(fetcher),
@@ -302,7 +322,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 						}
 					}
 
-					results = await barcodeSearch(barcodeStr);
+					results = await barcodeSearch(barcodeStr, event.symbology);
 					if (results.length === 0) {
 						showNotFound();
 						return;
@@ -367,7 +387,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 					}
 				}
 
-				results = await barcodeSearch(barcodeStr);
+				results = await barcodeSearch(barcodeStr, event.symbology);
 				if (results.length === 0) {
 					showNotFound();
 					return;

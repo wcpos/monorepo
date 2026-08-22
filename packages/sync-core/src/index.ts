@@ -3,8 +3,8 @@ export { applyReplicationActions, type RebaselineTargetedResult, type Replicatio
 export { assertBulkSuccess } from './assertBulkSuccess';
 // prettier-ignore
 export {
-	barcodeMatchCandidates, buildLocalBarcodeIndex, deriveBarcodeFromPayload,
-	mapBarcodeEditToPayload, resolveScan,
+	barcodeMatchCandidates, buildLocalBarcodeIndex, compressToUpcE, deriveBarcodeFromPayload,
+	expandUpcE, mapBarcodeEditToPayload, resolveScan,
 	type BarcodeMaterializedCollection, type BarcodeResolveFetcher,
 } from './barcodeResolve';
 export { planReplicationActions, type ReplicationActions } from './changeSignalReplication';

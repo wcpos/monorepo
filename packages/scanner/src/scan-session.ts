@@ -32,9 +32,54 @@ export interface ScanSession {
 
 // Symbologies whose check digit is the standard alternating-weight mod-10 over
 // the literal digits (see hasValidRetailCheckDigit). UPC-E is deliberately
-// excluded: its check digit is computed over the *expanded* UPC-A, so running
-// the EAN-8 algorithm on its 8 literal digits would wrongly reject valid codes.
+// excluded: a UPC-E's check digit is computed over the *expanded* UPC-A, so a
+// source that reports the 8 printed digits would be wrongly rejected by the
+// EAN-8 algorithm. (A source that reports the expansion — which is what the
+// camera decoders do, and what normalizeRetailCode then trims to 12 digits —
+// would validate fine, but the set can't tell the two report styles apart.)
 const RETAIL_SYMBOLOGIES = new Set(['ean13', 'ean8', 'upc_a', 'ean-13', 'ean-8', 'upc-a']);
+
+/**
+ * Symbologies whose 13-digit reading may carry an implied leading zero (see
+ * normalizeRetailCode). UPC-E belongs here too: decoders expand it to its
+ * 12-digit UPC-A and then pad that to 13, so the same trailing artifact applies.
+ */
+const ZERO_PADDED_SYMBOLOGIES = new Set(['ean13', 'upc_a', 'upc_e', 'ean-13', 'upc-a', 'upc-e']);
+
+/**
+ * Report the digits printed on the package, whichever device did the reading.
+ *
+ * A UPC-A symbol and an EAN-13 symbol are the same bars. EAN-13 draws only 12
+ * digits; its leading digit is carried by the odd/even parity pattern of the
+ * left-hand six, and the all-odd pattern a UPC-A prints means that digit is
+ * zero. So a camera decoder reports a UPC-A as the 13-digit GTIN-13 form
+ * (zxing-wasm and the iOS camera both do), while the package — and a HID wedge
+ * in its default mode — shows the bare 12. Same identifier, two printing
+ * conventions, and a cashier who scans the bottle in front of them sees digits
+ * that appear nowhere on it.
+ *
+ * Dropping the zero is unambiguous: GS1 reserves the entire leading-0 prefix
+ * range for GTIN-12, so a 13-digit retail code beginning with 0 always came
+ * from a 12-digit symbol. No genuine EAN-13 can be mangled by this. Only codes
+ * a source labelled EAN-13/UPC-A are touched — an unlabelled wedge read or a
+ * numeric Code 128 SKU that happens to start with 0 is left alone, and #740's
+ * lookup equivalence still tries both forms for those.
+ *
+ * A UPC-E read is trimmed the same way, landing on the 12-digit UPC-A the
+ * decoder expanded it to rather than the 8 digits printed on the small package.
+ * That expansion is the GTIN supplier data carries and the form a catalog
+ * usually holds, and a store that keyed the printed 8 still resolves because
+ * `barcodeMatchCandidates` offers the UPC-E form of any compressible UPC-A. A
+ * source that reports UPC-E as those 8 printed digits is left alone: 8 digits
+ * beginning 0 or 1 are ambiguous with EAN-8 and no check digit separates them,
+ * so rewriting on a guess could put the wrong item in the cart.
+ */
+export function normalizeRetailCode(code: string, symbology?: string): string {
+	if (symbology === undefined || !ZERO_PADDED_SYMBOLOGIES.has(symbology.toLowerCase())) {
+		return code;
+	}
+	return /^0\d{12}$/.test(code) ? code.slice(1) : code;
+}
 
 /**
  * Validates the check digit of an EAN-13/EAN-8/UPC-A code (UPC-A is a 12-digit
@@ -86,8 +131,12 @@ export function createScanSession(options: ScanSessionOptions): ScanSession {
 	// code -> timestamp of the first-of-two read awaiting confirmation.
 	let pending: { code: string; at: number } | null = null;
 
-	const offer = (code: string, symbology?: string): ScanOfferResult => {
+	const offer = (rawCode: string, symbology?: string): ScanOfferResult => {
 		const at = now();
+		// Normalize before anything else so the dedup window, the cooldown key and
+		// every downstream consumer (cart lookup, search box, toast, logs) all see
+		// the one form the cashier can read off the package.
+		const code = normalizeRetailCode(rawCode, symbology);
 
 		if (looksRetail(code, symbology) && !hasValidRetailCheckDigit(code)) {
 			return { accepted: false, reason: 'bad-check-digit' };

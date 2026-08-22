@@ -1017,6 +1017,55 @@ describe('useBarcode online escalation', () => {
 		}
 	});
 
+	it('spends ONE ten-second deadline across both probes of an equivalent code pair', async () => {
+		// A UPC-A resolves through two forms (#740). The first probe answering
+		// found:false at 9s must leave the retry 1s, not hand it a fresh 10 — the
+		// scan budget belongs to the scan, not to each request.
+		jest.useFakeTimers();
+		try {
+			const signals: (AbortSignal | null | undefined)[] = [];
+			let releaseFirst: ((value: Response) => void) | undefined;
+			mockFetcher.mockImplementation((_url: string, init?: RequestInit) => {
+				signals.push(init?.signal);
+				if (signals.length === 1) {
+					return new Promise<Response>((resolve) => {
+						releaseFirst = resolve;
+					});
+				}
+				return new Promise<Response>(() => undefined);
+			});
+			renderBarcodeHook();
+
+			let scanPromise: Promise<void> | undefined;
+			await act(async () => {
+				scanPromise = scan('733620209958');
+				await Promise.resolve();
+			});
+
+			// First probe answers "not here" just before the budget runs out.
+			await act(async () => {
+				jest.advanceTimersByTime(9_000);
+				releaseFirst?.(onlineResponse());
+				await Promise.resolve();
+			});
+			expect(mockFetcher).toHaveBeenCalledTimes(2);
+			expect(new URL(mockFetcher.mock.calls[1][0]).searchParams.get('code')).toBe('0733620209958');
+			expect(signals[1]?.aborted).toBe(false);
+
+			// The remaining second of the budget, not another ten.
+			await act(async () => {
+				jest.advanceTimersByTime(1_000);
+				await scanPromise;
+			});
+			expect(signals[1]?.aborted).toBe(true);
+			expect(mockToastShow).toHaveBeenLastCalledWith(
+				expect.objectContaining({ type: 'error', title: 'pos_products.scan_lookup_failed' })
+			);
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
 	it.each([
 		{
 			name: 'not found online',
