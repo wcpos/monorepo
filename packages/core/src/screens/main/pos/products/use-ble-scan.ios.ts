@@ -53,7 +53,13 @@ const BLE_GATT_FAMILIES: BleGattFamily[] = [
 	},
 ];
 const BLE_SERVICE_UUIDS = BLE_GATT_FAMILIES.map((family) => family.serviceUuid);
+// With no allowlisted scanner advertising (powered off / still in HID mode) a
+// scan would otherwise run forever; fail the connect gesture instead.
 const BLE_DISCOVERY_TIMEOUT_MS = 30_000;
+// Core Bluetooth initializes asynchronously (State.Unknown while the permission
+// prompt is showing). Without a bound, a denied Bluetooth permission would hang
+// the state wait forever; 10s covers the first-launch prompt on slow devices.
+const BLE_POWERED_ON_TIMEOUT_MS = 10_000;
 
 type BlePlxModule = Pick<typeof import('react-native-ble-plx'), 'BleManager' | 'State'>;
 
@@ -175,14 +181,20 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 			await new Promise<void>((resolve, reject) => {
 				let settled = false;
 				let subscription: Subscription | null = null;
+				let timer: ReturnType<typeof setTimeout> | null = null;
 				const settle = (error?: Error) => {
 					if (settled) return;
 					settled = true;
 					stateWaitRef.current = null;
+					if (timer) clearTimeout(timer);
 					subscription?.remove();
 					if (error) reject(error);
 					else resolve();
 				};
+				timer = setTimeout(
+					() => settle(new Error('Bluetooth did not reach PoweredOn')),
+					BLE_POWERED_ON_TIMEOUT_MS
+				);
 				subscription = manager.onStateChange((state) => {
 					if (state === bleModule.State.PoweredOn) settle();
 				}, true);
@@ -252,7 +264,14 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 
 			deviceIdRef.current = device.id;
 			const discovered = await device.discoverAllServicesAndCharacteristics();
-			if (!mountedRef.current || request !== attachRequestRef.current) return;
+			if (!mountedRef.current || request !== attachRequestRef.current) {
+				// The racing teardown may have read deviceIdRef before the assignment
+				// above, so release the peripheral here as well.
+				await device.cancelConnection().catch((error) => {
+					warn('Failed to cancel stale BLE scanner connection', error);
+				});
+				return;
+			}
 			const characteristics = await discovered.characteristicsForService(family.serviceUuid);
 			const notify = findNotifyCharacteristic(family, characteristics);
 			if (!notify) {
