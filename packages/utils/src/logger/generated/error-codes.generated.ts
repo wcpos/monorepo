@@ -65,6 +65,9 @@ export type ErrorCode =
 	| 'HOST111'
 	| 'HOST121'
 	| 'HOST131'
+	| 'HOST141'
+	| 'HOST151'
+	| 'HOST161'
 	| 'SYNC151'
 	| 'SYNC161'
 	| 'SYNC171'
@@ -1061,6 +1064,51 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		introducedIn: '1.10.0',
 		evidence: 'wcpos-infra#73 §5 row 13 (research §c13, P26)',
 	},
+	HOST141: {
+		code: 'HOST141',
+		symbol: 'SEARCH_BLOCKED_BY_WAF',
+		domain: 'HOST',
+		severity: 'warn',
+		safeAction: 'contact-support',
+		retryPolicy: 'after-change',
+		dataSafety: 'no-impact',
+		escalation: 'none',
+		summary: "The host's security filter is blocking product searches.",
+		docsBody:
+			"A firewall rule on this host rejects REST requests whose query string contains non-ASCII characters or SQL-looking words. Product names with accents, and searches containing words like 'select' or 'union', will fail with a 403 even though they are ordinary catalogue searches. The till works otherwise; searches will be unreliable until the rule is relaxed.",
+		introducedIn: '1.10.0',
+		evidence: 'wcpos-infra#73 §5 row 12 (P15/P16)',
+	},
+	HOST151: {
+		code: 'HOST151',
+		symbol: 'CACHE_SHARED_REPLAY',
+		domain: 'HOST',
+		severity: 'error',
+		safeAction: 'contact-support',
+		retryPolicy: 'after-change',
+		dataSafety: 'data-at-risk',
+		escalation: 'support-with-export',
+		summary: "A cache in front of the store is replaying one person's API responses to everyone.",
+		docsBody:
+			"A caching layer is serving stored REST API responses without checking who is asking: the app sent two differently-authenticated probes and received the first probe's answer both times. On a live store this means one cashier could see another's data, so connecting is blocked until the cache excludes the store's API. This is a hosting-layer problem — WordPress itself always answers per-user.",
+		introducedIn: '1.10.0',
+		evidence: 'wcpos-infra#73 §5 row 8 (research §c8, P25/P30)',
+	},
+	HOST161: {
+		code: 'HOST161',
+		symbol: 'HOST_RATE_LIMITED',
+		domain: 'HOST',
+		severity: 'warn',
+		safeAction: 'verify-first',
+		retryPolicy: 'automatic',
+		dataSafety: 'no-impact',
+		escalation: 'none',
+		summary: "The host is rate-limiting this store's tills.",
+		docsBody:
+			"The server keeps answering 429 (too many requests) even though the app is already backing off and honoring the server's Retry-After delays. Several tills on one internet connection share one address, so per-source rate limits treat them as a single very busy client. Syncing continues automatically but will lag until the limit is raised.",
+		introducedIn: '1.10.0',
+		evidence: 'wcpos-infra#73 §5 row 11 (research §c11)',
+	},
 	SYNC151: {
 		code: 'SYNC151',
 		symbol: 'STORE_RESPONSE_MALFORMED',
@@ -1250,6 +1298,9 @@ export const ERROR_CODES = {
 	CORS_MISCONFIGURED: 'HOST111',
 	BOT_CHALLENGE_BLOCKING_API: 'HOST121',
 	RESPONSE_HEADERS_REJECTED: 'HOST131',
+	SEARCH_BLOCKED_BY_WAF: 'HOST141',
+	CACHE_SHARED_REPLAY: 'HOST151',
+	HOST_RATE_LIMITED: 'HOST161',
 	STORE_RESPONSE_MALFORMED: 'SYNC151',
 	LOCAL_DB_UNAVAILABLE: 'SYNC161',
 	LOCAL_DB_SETUP_FAILED: 'SYNC171',

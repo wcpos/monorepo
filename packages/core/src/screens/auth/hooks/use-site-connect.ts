@@ -2,9 +2,13 @@ import * as React from 'react';
 
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { deriveSyntheticPathBase, deriveSyntheticPathRoot } from '@wcpos/utils/rest-transport';
 
 import { useAppState } from '../../../contexts/app-state';
-import { testAuthorizationMethod } from '../../../contexts/app-state/hydration-steps';
+import {
+	runConnectCompatibilityProbes,
+	testAuthorizationMethod,
+} from '../../../contexts/app-state/hydration-steps';
 import { useT } from '../../../contexts/translations';
 import { upsertSiteData } from '../../../utils/site-writes';
 import { useApiDiscovery } from './use-api-discovery';
@@ -264,6 +268,16 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 						});
 					}
 					throw new Error(t('auth.failed_to_test_authorization_methods'));
+				}
+				const compatibility = await runConnectCompatibilityProbes({
+					pathBase: deriveSyntheticPathBase(apiResult.endpoints.wcpos_api_url),
+					pathRoot: deriveSyntheticPathRoot(wpApiUrl),
+					useRestRouteParam: authResult.useRestRouteParam,
+				});
+				if (compatibility.blocking) {
+					throw Object.assign(new Error(t('auth.host_compatibility_problem')), {
+						errorCode: compatibility.blocking,
+					});
 				}
 
 				// Step 4: Save to database

@@ -38,6 +38,7 @@ jest.mock('./initial-props', () => ({
 import {
 	hydrateUserSession,
 	hydrationSteps,
+	runConnectCompatibilityProbes,
 	switchUserSessionStore,
 	testAuthorizationMethod,
 } from './hydration-steps';
@@ -310,7 +311,7 @@ describe('TEST_AUTHORIZATION', () => {
 		global.fetch = fetchMock as unknown as typeof fetch;
 	});
 
-	it('clears stale query parameter auth when Authorization headers work', async () => {
+	it('clears stale query auth without running connect-only compatibility probes', async () => {
 		// First call is the B8 echo probe — answer with the probe body so the
 		// step resolves header mode from it directly.
 		fetchMock.mockResolvedValueOnce({
@@ -352,6 +353,7 @@ describe('TEST_AUTHORIZATION', () => {
 		});
 		expect(siteDoc.use_jwt_as_param).toBe(false);
 		expect(siteDoc.use_rest_route_param).toBe(false);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
 	it('continues without persisting transport settings when authorization is blocked', async () => {
@@ -385,6 +387,108 @@ describe('TEST_AUTHORIZATION', () => {
 		).resolves.toEqual({});
 
 		expect(siteDoc.incrementalPatch).not.toHaveBeenCalled();
+	});
+});
+
+describe('runConnectCompatibilityProbes', () => {
+	const fetchMock = jest.fn();
+	const echoBody = (received: boolean, length: number) => ({
+		v: 1,
+		headers: { authorization: { received, length } },
+		params: { authorization: false, wcpos: true, store_id: true },
+	});
+	const response = (status: number, data: unknown = null) => ({
+		ok: status >= 200 && status < 300,
+		status,
+		json: jest.fn(async () => data),
+		text: jest.fn(async () => (data === null ? '' : JSON.stringify(data))),
+	});
+	const run = () =>
+		runConnectCompatibilityProbes({
+			pathBase: 'https://example.com/wp-json/wcpos/v2/',
+			pathRoot: 'https://example.com/wp-json/',
+			useRestRouteParam: false,
+		});
+
+	beforeEach(() => {
+		fetchMock.mockReset();
+		mockAppLogger.warn.mockClear();
+		mockAppLogger.error.mockClear();
+		global.fetch = fetchMock as unknown as typeof fetch;
+	});
+
+	it('warns only when the bare ping is readable and the nasty search is blocked', async () => {
+		fetchMock
+			.mockResolvedValueOnce(response(200))
+			.mockResolvedValueOnce(response(403))
+			.mockResolvedValueOnce(response(500))
+			.mockResolvedValueOnce(response(500));
+
+		await expect(run()).resolves.toEqual({
+			blocking: null,
+			warnings: [ERROR_CODES.SEARCH_BLOCKED_BY_WAF],
+		});
+		expect(String(fetchMock.mock.calls[1][0])).toContain('s=%C3%9Cnion+select+caf%C3%A9');
+		expect(mockAppLogger.warn).toHaveBeenCalledWith(
+			'Host security filter blocks ordinary search terms',
+			{
+				code: ERROR_CODES.SEARCH_BLOCKED_BY_WAF,
+				showToast: true,
+				context: { classification: 'SEARCH_BLOCKED_BY_WAF' },
+			}
+		);
+	});
+
+	it.each([
+		['both pings are forbidden', response(403), response(403)],
+		['the bare ping fails', new Error('offline'), response(403)],
+	])('does not infer search blocking when %s', async (_name, bare, nasty) => {
+		if (bare instanceof Error) fetchMock.mockRejectedValueOnce(bare);
+		else fetchMock.mockResolvedValueOnce(bare);
+		fetchMock
+			.mockResolvedValueOnce(nasty)
+			.mockResolvedValueOnce(response(500))
+			.mockResolvedValueOnce(response(500));
+
+		await expect(run()).resolves.toEqual({ blocking: null, warnings: [] });
+		expect(mockAppLogger.warn).not.toHaveBeenCalled();
+	});
+
+	it('blocks when the second authenticated echo replays the first token length', async () => {
+		fetchMock
+			.mockResolvedValueOnce(response(200))
+			.mockResolvedValueOnce(response(200))
+			.mockResolvedValueOnce(response(200, echoBody(true, 24)))
+			.mockResolvedValueOnce(response(200, echoBody(true, 24)));
+
+		await expect(run()).resolves.toEqual({
+			blocking: ERROR_CODES.CACHE_SHARED_REPLAY,
+			warnings: [],
+		});
+		expect(fetchMock).toHaveBeenCalledTimes(4);
+		expect(fetchMock.mock.calls[2][0]).toBe(fetchMock.mock.calls[3][0]);
+		expect(fetchMock.mock.calls[2][1].headers.Authorization).toHaveLength(24);
+		expect(fetchMock.mock.calls[3][1].headers.Authorization).toHaveLength(36);
+		expect(mockAppLogger.error).toHaveBeenCalledWith('Shared cache replay detected', {
+			code: ERROR_CODES.CACHE_SHARED_REPLAY,
+			showToast: true,
+		});
+	});
+
+	it.each([
+		['healthy echoes', echoBody(true, 24), echoBody(true, 36)],
+		['stripped Authorization headers', echoBody(false, 0), echoBody(false, 0)],
+		['a malformed second echo', echoBody(true, 24), { status: 'success' }],
+	])('does not infer cache replay from %s', async (_name, first, second) => {
+		fetchMock
+			.mockResolvedValueOnce(response(200))
+			.mockResolvedValueOnce(response(200))
+			.mockResolvedValueOnce(response(200, first))
+			.mockResolvedValueOnce(response(200, second));
+
+		await expect(run()).resolves.toEqual({ blocking: null, warnings: [] });
+		expect(fetchMock).toHaveBeenCalledTimes(4);
+		expect(mockAppLogger.error).not.toHaveBeenCalled();
 	});
 });
 

@@ -1419,6 +1419,66 @@
 			"introducedIn": "1.10.0"
 		},
 		{
+			"code": "HOST141",
+			"symbol": "SEARCH_BLOCKED_BY_WAF",
+			"domain": "HOST",
+			"severity": "warn",
+			"safeAction": "contact-support",
+			"retryPolicy": "after-change",
+			"dataSafety": "no-impact",
+			"escalation": "none",
+			"summary": "The host's security filter is blocking product searches.",
+			"docsBody": "A firewall rule on this host rejects REST requests whose query string contains non-ASCII characters or SQL-looking words. Product names with accents, and searches containing words like 'select' or 'union', will fail with a 403 even though they are ordinary catalogue searches. The till works otherwise; searches will be unreliable until the rule is relaxed.",
+			"troubleshooting": [
+				"Ask the host to allow-list the store's own REST search parameters (/wcpos/ and /wc/ routes) in the query-string firewall rules.",
+				"On OWASP CRS-based firewalls, the SQL-injection rules on the 's' and 'search' arguments are the usual culprits — exclude those arguments for REST API routes.",
+				"Security plugins with a 'filter suspicious query strings' toggle need an exception for the REST API, not a global off switch."
+			],
+			"logSources": [],
+			"evidence": "wcpos-infra#73 §5 row 12 (P15/P16)",
+			"introducedIn": "1.10.0"
+		},
+		{
+			"code": "HOST151",
+			"symbol": "CACHE_SHARED_REPLAY",
+			"domain": "HOST",
+			"severity": "error",
+			"safeAction": "contact-support",
+			"retryPolicy": "after-change",
+			"dataSafety": "data-at-risk",
+			"escalation": "support-with-export",
+			"summary": "A cache in front of the store is replaying one person's API responses to everyone.",
+			"docsBody": "A caching layer is serving stored REST API responses without checking who is asking: the app sent two differently-authenticated probes and received the first probe's answer both times. On a live store this means one cashier could see another's data, so connecting is blocked until the cache excludes the store's API. This is a hosting-layer problem — WordPress itself always answers per-user.",
+			"troubleshooting": [
+				"Exclude the store's REST API paths (/wp-json/ and /?rest_route=) from page caching — on LiteSpeed disable REST caching or add a no-cache rule; on WP Engine extend the WooCommerce exclusion to /wp-json/wcpos; on Sucuri set the caching level to honor Cache-Control.",
+				"The store's API already sends Cache-Control: no-store and Vary: Authorization — the cache layer is ignoring them; point the host at those headers.",
+				"After changing cache settings, purge the cache before reconnecting."
+			],
+			"logSources": [],
+			"evidence": "wcpos-infra#73 §5 row 8 (research §c8, P25/P30)",
+			"introducedIn": "1.10.0"
+		},
+		{
+			"code": "HOST161",
+			"symbol": "HOST_RATE_LIMITED",
+			"domain": "HOST",
+			"severity": "warn",
+			"safeAction": "verify-first",
+			"retryPolicy": "automatic",
+			"dataSafety": "no-impact",
+			"escalation": "none",
+			"summary": "The host is rate-limiting this store's tills.",
+			"docsBody": "The server keeps answering 429 (too many requests) even though the app is already backing off and honoring the server's Retry-After delays. Several tills on one internet connection share one address, so per-source rate limits treat them as a single very busy client. Syncing continues automatically but will lag until the limit is raised.",
+			"troubleshooting": [
+				"Ask the host to raise or exempt the REST API rate limit for the store's own traffic — name the shop's static IP if it has one.",
+				"Security services that count 30x responses toward a block (for example Sucuri's IDS) may need the store's API excluded from that counter.",
+				"If several tills share one connection, mention that to the host: one IP here is a whole shop, not one user."
+			],
+			"logSources": [],
+			"evidence": "wcpos-infra#73 §5 row 11 (research §c11)",
+			"introducedIn": "1.10.0"
+		},
+		{
 			"code": "SYNC151",
 			"symbol": "STORE_RESPONSE_MALFORMED",
 			"domain": "SYNC",

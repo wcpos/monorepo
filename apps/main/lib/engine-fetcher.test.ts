@@ -1,3 +1,5 @@
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+
 const mockNetworkInfo = jest.fn();
 const mockNetworkWarn = jest.fn();
 const mockNetworkError = jest.fn();
@@ -106,6 +108,102 @@ beforeEach(() => {
 });
 
 describe('createEngineFetcher', () => {
+	it('logs one coded warning when six consecutive responses are rate-limited', async () => {
+		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
+		const { fetcher, networkWarn } = createFetcherHarness({ fetch });
+		await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+		networkWarn.mockClear();
+		fetch.mockResolvedValue(new Response(null, { status: 429 }));
+
+		const responses = [];
+		for (let count = 0; count < 6; count++) {
+			responses.push(await fetcher('https://store.example.test/wp-json/wcpos/v2/products'));
+		}
+
+		expect(responses.map(({ status }) => status)).toEqual([429, 429, 429, 429, 429, 429]);
+		expect(
+			networkWarn.mock.calls.filter(
+				([, options]) => options?.code === ERROR_CODES.HOST_RATE_LIMITED
+			)
+		).toEqual([
+			[
+				'Host persistently rate-limited sync requests',
+				{
+					code: ERROR_CODES.HOST_RATE_LIMITED,
+					showToast: true,
+					context: { consecutive429s: 6 },
+				},
+			],
+		]);
+	});
+
+	it('resets the consecutive rate-limit count on any non-429 response', async () => {
+		const statuses = [200, ...Array(5).fill(429), 200, ...Array(5).fill(429)];
+		const fetch = jest.fn(async () => new Response(null, { status: statuses.shift() ?? 500 }));
+		const { fetcher, networkWarn } = createFetcherHarness({ fetch });
+
+		while (statuses.length > 0) {
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+		}
+
+		expect(
+			networkWarn.mock.calls.filter(
+				([, options]) => options?.code === ERROR_CODES.HOST_RATE_LIMITED
+			)
+		).toHaveLength(0);
+	});
+
+	it('latches the rate-limit warning for the remainder of one streak', async () => {
+		const fetch = jest
+			.fn()
+			.mockResolvedValueOnce(new Response(null, { status: 200 }))
+			.mockResolvedValue(new Response(null, { status: 429 }));
+		const { fetcher, networkWarn } = createFetcherHarness({ fetch });
+
+		for (let count = 0; count < 11; count++) {
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+		}
+
+		expect(
+			networkWarn.mock.calls.filter(
+				([, options]) => options?.code === ERROR_CODES.HOST_RATE_LIMITED
+			)
+		).toHaveLength(1);
+	});
+
+	it('starts a fresh streak for each fetcher so a store switch cannot inherit one', async () => {
+		// The outgoing site's streak must not fire (or suppress) the warning on
+		// the incoming site: a fetcher is built per engine, so the count and the
+		// latch belong to the fetcher, never to the module.
+		const outgoingFetch = jest
+			.fn()
+			.mockResolvedValueOnce(new Response(null, { status: 200 }))
+			.mockResolvedValue(new Response(null, { status: 429 }));
+		const outgoing = createFetcherHarness({ fetch: outgoingFetch });
+		// A clean 200 first: this test must measure THIS fetcher's streak, not a
+		// latch left behind by an earlier case in the file.
+		await outgoing.fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+		for (let count = 0; count < 5; count++) {
+			await outgoing.fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+		}
+		expect(
+			outgoing.networkWarn.mock.calls.filter(
+				([, options]) => options?.code === ERROR_CODES.HOST_RATE_LIMITED
+			)
+		).toHaveLength(0);
+
+		const incomingFetch = jest.fn().mockResolvedValue(new Response(null, { status: 429 }));
+		const incoming = createFetcherHarness({ fetch: incomingFetch });
+		await incoming.fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+
+		// One 429 on the new fetcher: nowhere near the threshold on its own.
+		expect(
+			incoming.networkWarn.mock.calls.filter(
+				([, options]) => options?.code === ERROR_CODES.HOST_RATE_LIMITED
+			)
+		).toHaveLength(0);
+	});
+
 	it('emits an exact query-form GET URL with caller params', async () => {
 		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
 		const { fetcher } = createFetcherHarness({
