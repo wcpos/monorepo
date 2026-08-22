@@ -32,6 +32,7 @@ import { TaxBasedOnSelect } from '../components/tax-based-on-select';
 import { TaxClassSelect } from '../components/tax-class-select';
 import { TaxDisplayRadioGroup } from '../components/tax-display-radio-group';
 import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
+import { taxClassFromWire, taxClassToWire } from '../hooks/tax-class';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
 
 const uiLogger = getLogger(['wcpos', 'ui', 'settings']);
@@ -67,7 +68,7 @@ export function TaxSettings() {
 			calc_taxes: latest.calc_taxes,
 			prices_include_tax: latest.prices_include_tax,
 			tax_based_on: latest.tax_based_on,
-			shipping_tax_class: latest.shipping_tax_class,
+			shipping_tax_class: taxClassFromWire(latest.shipping_tax_class),
 			tax_round_at_subtotal: latest.tax_round_at_subtotal,
 			tax_display_shop: latest.tax_display_shop,
 			tax_display_cart: latest.tax_display_cart,
@@ -90,9 +91,13 @@ export function TaxSettings() {
 	 */
 	const handleChange = React.useCallback(
 		async (data: z.infer<typeof formSchema>) => {
+			const patch =
+				'shipping_tax_class' in data
+					? { ...data, shipping_tax_class: taxClassToWire(data.shipping_tax_class) }
+					: data;
 			await localPatch({
 				document: store,
-				data,
+				data: patch,
 			});
 		},
 		[localPatch, store]
@@ -117,6 +122,7 @@ export function TaxSettings() {
 					calc_taxes: data.calc_taxes,
 					prices_include_tax: data.prices_include_tax,
 					tax_based_on: data.tax_based_on,
+					// The HTTP response already uses the wire spelling ('' for standard).
 					shipping_tax_class: data.shipping_tax_class,
 					tax_round_at_subtotal: data.tax_round_at_subtotal,
 					tax_display_shop: data.tax_display_shop,
