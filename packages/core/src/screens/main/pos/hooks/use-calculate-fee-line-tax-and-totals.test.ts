@@ -3,12 +3,13 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
+import { calculateTaxes } from '@wcpos/order-math/internal';
+
 import { useCalculateFeeLineTaxAndTotals } from './use-calculate-fee-line-tax-and-totals';
 import { useFeeLineData } from './use-fee-line-data';
 import { useTaxSettings } from '../../contexts/tax-rates';
 import { useCalculateTaxesFromValue } from '../../hooks/use-calculate-taxes-from-value';
 import { useCurrentOrder } from '../contexts/current-order';
-import { calculateTaxes } from '../../hooks/utils/calculate-taxes';
 
 // Mock the external hooks
 jest.mock('./use-fee-line-data', () => ({

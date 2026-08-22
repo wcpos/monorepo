@@ -1,9 +1,10 @@
 import * as React from 'react';
 
+import { getRoundingPrecision, roundHalfUp, roundTaxTotal } from '@wcpos/order-math/internal';
+
 import { useFeeLineData } from './use-fee-line-data';
 import { useTaxSettings } from '../../contexts/tax-rates';
 import { useCalculateTaxesFromValue } from '../../hooks/use-calculate-taxes-from-value';
-import { getRoundingPrecision, roundHalfUp, roundTaxTotal } from '../../hooks/utils/precision';
 import { useCurrentOrder } from '../contexts/current-order';
 
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];

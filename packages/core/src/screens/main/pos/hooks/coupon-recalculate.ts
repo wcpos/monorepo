@@ -1,5 +1,5 @@
-// MIGRATION SHIM: coupon-recalculate.ts moved to @wcpos/order-math/internal.
-// Re-exported here so existing imports keep working.
+// Boundary adapter: narrows the pure coupon engine's structural types back to
+// the RxDB document element types that core callers persist.
 //
 // The pure engine is typed against the package's structural input types
 // (LineItemInput/CouponLineInput — supertypes of the DB element types, see

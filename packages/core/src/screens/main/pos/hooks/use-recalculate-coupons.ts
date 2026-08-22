@@ -2,8 +2,9 @@ import * as React from 'react';
 
 import { useDocField, useQueryRuntime } from '@wcpos/query';
 import { wooIdOf } from '@wcpos/sync-core';
+import type { CouponDiscountConfig } from '@wcpos/order-math/internal';
 
-import { buildEnrichedProductCategories } from './coupon-helpers';
+import { buildEnrichedProductCategories } from './coupon-helpers-engine';
 import {
 	recalculateCoupons,
 	type RecalculateInput,
@@ -16,8 +17,6 @@ import {
 } from './engine-coupon-data';
 import { useAppState } from '../../../../contexts/app-state';
 import { useTaxRates } from '../../contexts/tax-rates';
-
-import type { CouponDiscountConfig } from './coupon-discount';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type CouponLine = NonNullable<import('@wcpos/database').OrderDocument['coupon_lines']>[number];

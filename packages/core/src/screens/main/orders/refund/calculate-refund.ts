@@ -1,4 +1,4 @@
-import { roundHalfUp } from '../../hooks/utils/precision';
+import { roundHalfUp } from '@wcpos/order-math/internal';
 
 interface LineItemInput {
 	quantity: number;

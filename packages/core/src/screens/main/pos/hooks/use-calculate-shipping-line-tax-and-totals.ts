@@ -1,9 +1,10 @@
 import * as React from 'react';
 
+import { getRoundingPrecision, roundHalfUp, roundTaxTotal } from '@wcpos/order-math/internal';
+
 import { useShippingLineData } from './use-shipping-line-data';
 import { useTaxSettings } from '../../contexts/tax-rates';
 import { useCalculateTaxesFromValue } from '../../hooks/use-calculate-taxes-from-value';
-import { getRoundingPrecision, roundHalfUp, roundTaxTotal } from '../../hooks/utils/precision';
 
 type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 
