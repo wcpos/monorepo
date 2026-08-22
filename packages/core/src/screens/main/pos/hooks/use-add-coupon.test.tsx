@@ -99,7 +99,7 @@ const baseOrderSnapshot = {
 };
 
 /** Mutable per-test copy — tests override customer_id, billing and coupon_lines. */
-let orderSnapshot: Record<string, any> = { ...baseOrderSnapshot };
+let orderSnapshot: typeof baseOrderSnapshot = { ...baseOrderSnapshot };
 
 const currentOrderRecord = {
 	uuid: baseOrderSnapshot.uuid,
