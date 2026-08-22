@@ -190,6 +190,44 @@ describe('drainMutationQueue — order conflict auto-recovery (#1204)', () => {
 		expect((await queue.all())[0]).toMatchObject({ status: 'rejected' });
 	});
 
+	it('grants a 428 on the re-anchored push the same one-refresh retry as a first push', async () => {
+		// The initial-push path spends ONE targeted refreshRevision + re-push on a
+		// 428 (see this module's header contract). The auto-recovery re-push is a
+		// push like any other, so a FIRST 428 there must buy the same refresh —
+		// dead-lettering it spends none of the allowance and permanently rejects an
+		// order write that had only hit 409-then-428.
+		const { queue, server, events, push } = await harness(mut());
+		server.seed('order-A', { id: 900, revision: 'sha256:server-moved', collection: 'orders' });
+		let attempts = 0;
+		server.script(() => {
+			attempts += 1;
+			// 1st: stale base, so the contract's own 409 runs. 2nd: the re-anchored
+			// push is met with a transient precondition demand. 3rd: unscripted, so
+			// the refreshed base is checked against the server for real.
+			return attempts === 2 ? { kind: 'precondition_required' } : undefined;
+		});
+
+		const result = await drainMutationQueue({
+			queue,
+			push,
+			autoRecoverConflict: () => true,
+			refreshRevision: async () => 'sha256:server-moved',
+			observe: (event) => events.push(event),
+		});
+
+		// Three envelopes: stale → re-anchored (428) → refreshed, which lands.
+		expect(server.received.map((envelope) => envelope.baseRevision)).toEqual([
+			'sha256:stale',
+			'sha256:server-moved',
+			'sha256:server-moved',
+		]);
+		expect(result.rejected).toEqual([]);
+		expect(result.conflicts).toEqual([]);
+		expect(result.pushed).toBe(1);
+		// Released, not parked — a rejected row would block every later write to the order.
+		expect(await queue.all()).toEqual([]);
+	});
+
 	it('does not recover when the host supplies no policy (every legacy caller unchanged)', async () => {
 		const { queue, server, push } = await harness(mut());
 		server.seed('order-A', { id: 900, revision: 'sha256:server-moved', collection: 'orders' });
