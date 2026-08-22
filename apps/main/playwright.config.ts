@@ -228,6 +228,12 @@ export default defineConfig<WcposTestOptions>({
 				command: 'pnpm run build:web && npx serve web-build -p 8081 -s',
 				url: 'http://localhost:8081',
 				reuseExistingServer: !process.env.CI,
-				timeout: 180 * 1000,
+				// This budget covers a full cold `build:web`, not just `serve`
+				// coming up. On a warm CI runner that export takes ~120 s, so the
+				// old 180 s left ~60 s of headroom and the cold-start nightly blew
+				// through it on 2026-08-22 when GitHub's cache service was
+				// answering 400 and every cache missed. A stuck build is still
+				// bounded by the job's own timeout-minutes.
+				timeout: 7 * 60 * 1000,
 			},
 });

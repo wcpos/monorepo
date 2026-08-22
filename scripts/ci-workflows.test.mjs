@@ -143,16 +143,35 @@ test('both lanes run four E2E shards', () => {
 
 test('cold-start dispatches bind raw refs to an explicit store lane', () => {
 	const workflow = readWorkflow('e2e-cold-start.yml');
-	const lane = workflow.on.workflow_dispatch.inputs.lane;
+	const { ref, lane } = workflow.on.workflow_dispatch.inputs;
+	const checkoutStep = findStep(workflow, 'cold-start', '🏗 Setup repository');
 	const validateStep = findStep(workflow, 'cold-start', '🔒 Validate trusted ref');
 	const runStep = findStep(workflow, 'cold-start', '🥶 Run cold-start E2E');
 
 	assert.equal(lane.required, true);
-	assert.equal(lane.default, 'next');
 	assert.deepEqual(lane.options, ['main', 'next']);
-	assert.match(validateStep.env.E2E_LANE, /github\.event\.inputs\.lane/);
+
+	// The nightly tests main. It tested `next` until 2026-08-22, which was right
+	// while the cold-start profile was next-only — but the lanes converged on
+	// 2026-08-15 and `next` stopped moving on 2026-08-18, so the gate spent four
+	// days reporting green on a branch nobody ships (#1486).
+	assert.equal(lane.default, 'main');
+
+	// The ref and lane defaults must agree. Otherwise a SCHEDULED run checks out
+	// one lane's code and points it at the other lane's store — the same
+	// mis-routing the validate step below prevents for dispatch inputs, arriving
+	// instead through the defaults, where nothing was watching.
+	assert.equal(ref.default, lane.default);
+	assert.match(checkoutStep.with.ref, /github\.event\.inputs\.ref \|\| 'main'/);
+
+	assert.match(validateStep.env.E2E_LANE, /github\.event\.inputs\.lane \|\| 'main'/);
 	assert.match(validateStep.run, /origin\/\$E2E_LANE/);
-	assert.match(runStep.env.E2E_STORE_URL_PRO, /github\.event\.inputs\.lane == 'main'/);
+
+	// The store is derived from that same validated lane, each lane bound to its
+	// own store, with the absent-input fallback matching the defaults above.
+	assert.match(runStep.env.E2E_STORE_URL_PRO, /github\.event\.inputs\.lane \|\| 'main'/);
+	assert.match(runStep.env.E2E_STORE_URL_PRO, /'next' && 'https:\/\/dev-next\.wcpos\.com'/);
+	assert.match(runStep.env.E2E_STORE_URL_PRO, /'https:\/\/dev-pro\.wcpos\.com'/);
 });
 
 test('the E2E auth-state cache is shard- and lane-scoped', () => {
