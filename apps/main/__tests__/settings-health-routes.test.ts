@@ -53,9 +53,6 @@ describe('settings and Store health route structure', () => {
 		expect(
 			source('../../packages/core/src/screens/main/components/header/user-menu.tsx')
 		).toContain("router.push('/settings')");
-		expect(
-			source('../../packages/core/src/screens/main/hooks/use-keyboard-shortcuts.ts')
-		).toContain("router.push('/settings')");
 	});
 
 	it('renders the existing logs screen at the nested health route', () => {

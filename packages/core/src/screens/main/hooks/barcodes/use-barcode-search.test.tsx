@@ -56,9 +56,9 @@ jest.mock('@wcpos/query', () => ({
 		database?.collections?.[name] ?? null,
 }));
 
-function search(code: string) {
+function search(code: string, symbology?: string) {
 	const { result } = renderHook(() => useBarcodeSearch());
-	return result.current.barcodeSearch(code);
+	return result.current.barcodeSearch(code, symbology);
 }
 
 beforeEach(() => {
@@ -169,11 +169,16 @@ describe('barcodeSearch UPC-A ↔ EAN-13 equivalence (#740)', () => {
 		expect(exact.map((r) => r.id)).toEqual(['sku-only']);
 	});
 
-	it('does not apply UPC equivalence when the active materialized carrier is SKU', async () => {
+	it('applies UPC equivalence when the store declares SKU as its barcode carrier', async () => {
+		// A store with barcode_field = _sku has said its SKUs are barcodes, so the
+		// materialized value is a barcode and gets the leading-zero twin. Without
+		// this, a UPC-A read by the camera as the 13-digit GTIN form missed a
+		// product a HID wedge resolved from the same symbol.
 		setSelectors('products', ['sku']);
 		productDocs = [doc('active-sku', { sku: '012345678905', barcode: '012345678905' })];
 
-		expect(await search('0012345678905')).toEqual([]);
+		const results = (await search('0012345678905')) as unknown as FakeDoc[];
+		expect(results.map((r) => r.id)).toEqual(['active-sku']);
 	});
 
 	it('ranks a global-id equivalence above a coincidental exact SKU match', async () => {
@@ -204,6 +209,22 @@ describe('barcodeSearch UPC-A ↔ EAN-13 equivalence (#740)', () => {
 		expect((await search('0012345678905')) as unknown as FakeDoc[]).toMatchObject([
 			{ id: 'global-fallback' },
 		]);
+	});
+
+	it('resolves a UPC-E wedge read against a store keyed on the 12-digit GTIN', async () => {
+		// A small package prints 8 digits; the store holds the GTIN supplier data
+		// gave it. The wedge reports the symbology, so the expansion is known rather
+		// than guessed.
+		productDocs = [doc('upce', { barcode: '012345000065' })];
+		const results = (await search('01234565', 'upc_e')) as unknown as FakeDoc[];
+		expect(results.map((r) => r.id)).toEqual(['upce']);
+	});
+
+	it('leaves an unlabelled 8-digit scan unexpanded — it may be an EAN-8', async () => {
+		// Same digits, no symbology: 01234565 is a valid EAN-8 as well as a valid
+		// UPC-E, so expanding would risk resolving to an unrelated product.
+		productDocs = [doc('upca', { barcode: '012345000065' })];
+		expect(await search('01234565')).toEqual([]);
 	});
 
 	it('does not let an exact SKU preempt a barcode-equivalence match (#740 P1)', async () => {

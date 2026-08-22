@@ -53,7 +53,6 @@
 import * as React from 'react';
 
 import { CanceledError } from 'axios';
-import { BehaviorSubject } from 'rxjs';
 
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -67,12 +66,6 @@ import { useLoginHandler } from '../../../auth/hooks/use-login-handler';
 import type { Site, WPCredentials } from './types';
 
 const authLogger = getLogger(['wcpos', 'auth', 'error']);
-
-/**
- * RxJS subject for error events.
- * Components can subscribe to be notified of auth errors.
- */
-const errorSubject = new BehaviorSubject<import('axios').AxiosError | null>(null);
 
 /**
  * Hook that creates the fallback authentication error handler.
@@ -372,10 +365,6 @@ export const useAuthErrorHandler = (
 					authLogger.debug('Token refresh failed, attempting OAuth flow');
 					triggerAuthFlow();
 				}
-
-				// Notify subscribers of the auth error
-				errorSubject.next(context.error);
-
 				// Throw CanceledError to:
 				// 1. Stop the error handler chain
 				// 2. Prevent upstream error logging (useHttpClient suppresses this)
@@ -386,6 +375,3 @@ export const useAuthErrorHandler = (
 		[triggerAuthFlow, site.name]
 	);
 };
-
-// Export the error subject for other components to subscribe to
-export { errorSubject };

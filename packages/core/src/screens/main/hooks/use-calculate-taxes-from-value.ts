@@ -1,7 +1,8 @@
 import * as React from 'react';
 
+import { calculateTaxes } from '@wcpos/order-math/internal';
+
 import { taxClassFromWire } from './tax-class';
-import { calculateTaxes } from './utils/calculate-taxes';
 import { useTaxRates } from '../contexts/tax-rates';
 
 /**

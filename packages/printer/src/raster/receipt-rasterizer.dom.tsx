@@ -96,7 +96,7 @@ export default function ReceiptRasterizer({
 }: ReceiptRasterizerProps) {
 	React.useEffect(() => {
 		let cancelled = false;
-		(async () => {
+		void (async () => {
 			let host: HTMLDivElement | null = null;
 			try {
 				// 0. Ensure the paper-frame CSS (ported from template-studio) is present.

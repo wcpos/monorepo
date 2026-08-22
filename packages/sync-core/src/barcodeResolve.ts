@@ -169,24 +169,170 @@ export function buildBarcodeSymbologyIndex(
  * while Android/HID wedges report the bare 12 digits, so a store keyed on one
  * form would otherwise miss scans from the other source.
  *
- * Return the scanned code plus its UPC-A/EAN-13 counterpart (scanned form first)
- * so a lookup can try both — this never rewrites the scanned code, so genuine
+ * The same GTIN can also print as an 8-digit UPC-E on a small package, so a
+ * 12-digit scan additionally offers the UPC-E it compresses to — a store that
+ * keyed what was printed still resolves. The reverse needs `symbology`: 8 digits
+ * alone cannot be told apart from an EAN-8 (see the note in the body), so pass
+ * the symbology the scan source reported whenever there is one.
+ *
+ * Return the scanned code plus every equivalent form (scanned form first) so a
+ * lookup can try them all — this never rewrites the scanned code, so genuine
  * EAN-13 codes (13 digits not starting with 0) are returned unchanged. The
  * prepended/stripped zero doesn't change the check digit, so no recomputation is
  * needed. Apply the candidates only against a barcode-symbology index (see
  * `buildBarcodeSymbologyIndex`) so a numeric SKU never gains an equivalent form.
  */
-export function barcodeMatchCandidates(code: string): string[] {
+export function barcodeMatchCandidates(code: string, symbology?: string): string[] {
 	const trimmed = code.trim();
-	// 13-digit, leading zero → also try the 12-digit UPC-A form.
+	const candidates = [trimmed];
+	const add = (value: string | null): void => {
+		if (value !== null && !candidates.includes(value)) {
+			candidates.push(value);
+		}
+	};
+
+	// The 12-digit UPC-A this scan denotes, if any — the hub every other retail
+	// form converts through.
+	let upcA: string | null = null;
 	if (/^0\d{12}$/.test(trimmed)) {
-		return [trimmed, trimmed.slice(1)];
+		// 13-digit, leading zero → also try the 12-digit UPC-A form.
+		upcA = trimmed.slice(1);
+		add(upcA);
+	} else if (/^\d{12}$/.test(trimmed)) {
+		// 12-digit UPC-A → also try its 13-digit EAN-13 encoding.
+		upcA = trimmed;
+		add(`0${trimmed}`);
+	} else if (isUpcE(symbology) && /^[01]\d{7}$/.test(trimmed)) {
+		// 8-digit UPC-E as printed on a small package → the UPC-A it expands to and
+		// that form's 13-digit encoding.
+		//
+		// ONLY when the source told us the symbol was a UPC-E. Eight digits
+		// beginning 0 or 1 are otherwise irreducibly ambiguous with EAN-8, and no
+		// check digit separates them: whenever the last data digit is 5-9 the
+		// expansion inserts FOUR zeros, an even shift that leaves every other
+		// digit's weight — and so the check digit — unchanged, making a valid
+		// UPC-E in that family ALWAYS a valid EAN-8 too. Guessing would let an
+		// EAN-8 missing from the catalog resolve to an unrelated product: a
+		// silently wrong line on a receipt, far worse than a not-found the cashier
+		// can see and act on. Absent the symbology the code is matched as itself,
+		// so a caller that cannot supply one loses a capability, never gains a
+		// wrong answer.
+		upcA = expandUpcE(trimmed);
+		add(upcA);
+		if (upcA !== null) {
+			add(`0${upcA}`);
+		}
 	}
-	// 12-digit UPC-A → also try its 13-digit EAN-13 encoding.
-	if (/^\d{12}$/.test(trimmed)) {
-		return [trimmed, `0${trimmed}`];
+
+	// …and the UPC-E the same GTIN prints as, when it has one. Deduped, so a scan
+	// that already IS the UPC-E form doesn't repeat itself.
+	if (upcA !== null) {
+		add(compressToUpcE(upcA));
 	}
-	return [trimmed];
+
+	return candidates;
+}
+
+// --- UPC-E ↔ UPC-A equivalence ---------------------------------------------------
+
+/**
+ * UPC-E is a UPC-A with a run of zeros squeezed out so the symbol fits on a
+ * small package: `01234565` and `012345000065` are the same GTIN. Which one a
+ * store holds depends on where the merchant got it — reading the package gives
+ * the 8 printed digits, supplier data gives the 12 — and decoders disagree the
+ * same way (zxing-wasm expands to the 12-digit form; some native readers report
+ * the 8). Offering both means the item reaches the cart either way.
+ */
+
+/**
+ * The symbology names a scan source may use for UPC-E. Both the expo-camera
+ * style (`upc_e`, what the web viewfinder maps its decoder formats to) and the
+ * hyphenated spelling are accepted, matching how `RETAIL_SYMBOLOGIES` in
+ * @wcpos/scanner tolerates both.
+ */
+function isUpcE(symbology?: string): boolean {
+	if (symbology === undefined) {
+		return false;
+	}
+	const normalized = symbology.toLowerCase();
+	return normalized === 'upc_e' || normalized === 'upc-e';
+}
+
+/** The mod-10 check digit for a GTIN body (mirrors `hasValidRetailCheckDigit`). */
+function gtinCheckDigit(body: string): string {
+	let sum = 0;
+	for (let i = body.length - 1, weight = 3; i >= 0; i -= 1, weight = weight === 3 ? 1 : 3) {
+		sum += Number(body[i]) * weight;
+	}
+	return String((10 - (sum % 10)) % 10);
+}
+
+/**
+ * Expands an 8-digit UPC-E to its 12-digit UPC-A. Returns null when the input
+ * isn't a valid UPC-E — including an EAN-8 that happens to start with 0 or 1,
+ * which the check-digit test rejects (a UPC-E's last digit is the check digit of
+ * the EXPANDED code, so a genuine UPC-E always agrees with its expansion).
+ */
+export function expandUpcE(code: string): string | null {
+	if (!/^[01]\d{7}$/.test(code)) {
+		return null;
+	}
+	const numberSystem = code[0];
+	const [x1, x2, x3, x4, x5, x6] = code.slice(1, 7);
+	const check = code[7];
+	// The last data digit says which zero run was squeezed out.
+	let body: string;
+	switch (x6) {
+		case '0':
+		case '1':
+		case '2':
+			body = `${x1}${x2}${x6}0000${x3}${x4}${x5}`;
+			break;
+		case '3':
+			body = `${x1}${x2}${x3}00000${x4}${x5}`;
+			break;
+		case '4':
+			body = `${x1}${x2}${x3}${x4}00000${x5}`;
+			break;
+		default:
+			body = `${x1}${x2}${x3}${x4}${x5}0000${x6}`;
+	}
+	const upcA = `${numberSystem}${body}${check}`;
+	return gtinCheckDigit(upcA.slice(0, 11)) === check ? upcA : null;
+}
+
+/**
+ * Compresses a 12-digit UPC-A to its UPC-E, or null when the code has no UPC-E
+ * form (most don't — only number system 0/1 with the right zero run qualifies).
+ * The candidate is confirmed by expanding it back, so a subtle mistake in the
+ * pattern rules yields no candidate rather than a wrong one.
+ */
+export function compressToUpcE(upcA: string): string | null {
+	if (!/^[01]\d{11}$/.test(upcA)) {
+		return null;
+	}
+	const d = upcA;
+	let middle: string | null = null;
+	if (d[4] === '0' && d[5] === '0' && d[6] === '0' && d[7] === '0' && '012'.includes(d[3])) {
+		middle = `${d[1]}${d[2]}${d[8]}${d[9]}${d[10]}${d[3]}`;
+	} else if (d[4] === '0' && d[5] === '0' && d[6] === '0' && d[7] === '0' && d[8] === '0') {
+		middle = `${d[1]}${d[2]}${d[3]}${d[9]}${d[10]}3`;
+	} else if (d[5] === '0' && d[6] === '0' && d[7] === '0' && d[8] === '0' && d[9] === '0') {
+		middle = `${d[1]}${d[2]}${d[3]}${d[4]}${d[10]}4`;
+	} else if (
+		d[6] === '0' &&
+		d[7] === '0' &&
+		d[8] === '0' &&
+		d[9] === '0' &&
+		'56789'.includes(d[10])
+	) {
+		middle = `${d[1]}${d[2]}${d[3]}${d[4]}${d[5]}${d[10]}`;
+	}
+	if (middle === null) {
+		return null;
+	}
+	const candidate = `${d[0]}${middle}${d[11]}`;
+	return expandUpcE(candidate) === upcA ? candidate : null;
 }
 
 // --- Config-driven re-derivation (ADR 0006, products specialization) ----------
@@ -320,6 +466,12 @@ export type ScanResult =
 
 export type ResolveScanInput = {
 	code: string;
+	/**
+	 * The symbology the scan source reported, when it reported one. Only used to
+	 * disambiguate an 8-digit UPC-E from an EAN-8 (see barcodeMatchCandidates);
+	 * omitting it costs a candidate form, never correctness.
+	 */
+	symbology?: string;
 	index: Map<string, BarcodeIndexEntry>;
 	syncBaseUrl: string;
 	fetcher: BarcodeResolveFetcher;
@@ -348,10 +500,14 @@ export function buildResolveBarcodeUrl(input: {
  * invoked (the contract — pinned by tests), then the resolve endpoint
  * answers with resolved-online / not-found / error.
  *
- * Normalization is trim-only here; UPC-A/EAN-13 leading-zero equivalence (#740)
- * is applied by the POS barcode-search layer, which owns local matching (this
- * flow is invoked with an empty local index and drives the online resolve).
- * Check-digit normalization is still future work.
+ * UPC-A/EAN-13 leading-zero equivalence (#740) applies to BOTH lookups here:
+ * the local index is probed with every `barcodeMatchCandidates` form, and a
+ * server `found:false` for the scanned form is retried with the counterpart
+ * before the scan is called a miss. Without the online half, a UPC-A scanned by
+ * a decoder that reports the 13-digit GTIN form (zxing-wasm 3.x normalizes
+ * every UPC symbol that way, as does the iOS camera) could never resolve
+ * against a store keyed on the bare 12 digits unless the product happened to be
+ * materialized locally. Check-digit normalization is still future work.
  */
 export async function resolveScan(input: ResolveScanInput): Promise<ScanResult> {
 	const startMs = input.now();
@@ -375,6 +531,14 @@ export async function resolveScan(input: ResolveScanInput): Promise<ScanResult> 
 		};
 	}
 
+	// EXACT only against `input.index`. That map may be the all-fields index from
+	// buildLocalBarcodeIndex, which includes `sku`, and an entry carries no field
+	// provenance — so probing equivalent forms here would hand a numeric stock
+	// code the `0`-prefixed twin that barcodeMatchCandidates explicitly forbids,
+	// resolving a scan to an unrelated product. Equivalent-form matching belongs
+	// to use-barcode-search, which knows the store's declared barcode carrier;
+	// this flow is invoked with an empty index and exists to drive the online
+	// resolve below.
 	const hit = input.index.get(code);
 	if (hit) {
 		const terminal = emit('local-hit');
@@ -390,36 +554,49 @@ export async function resolveScan(input: ResolveScanInput): Promise<ScanResult> 
 	// Contract: the cashier sees "searching online" before any network await.
 	const feedback = emit('searching-online');
 	const scanToFeedbackMs = feedback.atMs;
-	const url = buildResolveBarcodeUrl({
-		syncBaseUrl: input.syncBaseUrl,
-		code,
-		profile: input.profile,
-	});
 
-	let body: ResolveBarcodeResponse;
-	try {
-		const response = await input.fetcher(url);
-		const text = await response.text();
-		if (!response.ok) {
+	// Seeded not-found rather than null: barcodeMatchCandidates always yields at
+	// least the scanned code, so the loop always assigns — the seed keeps the type
+	// honest without an unreachable branch to explain.
+	let body: ResolveBarcodeResponse = { code, found: false, match: null, ambiguous: [] };
+	// Only a clean `found:false` advances to the next form: a transport error or a
+	// non-2xx is terminal for the whole scan, so a dead network costs one request
+	// rather than one per candidate. The caller's lookup deadline spans the whole
+	// loop (see withBarcodeLookupDeadline) — a slow first probe eats into the
+	// budget instead of granting the retry a fresh one.
+	for (const candidate of barcodeMatchCandidates(code, input.symbology)) {
+		const url = buildResolveBarcodeUrl({
+			syncBaseUrl: input.syncBaseUrl,
+			code: candidate,
+			profile: input.profile,
+		});
+		try {
+			const response = await input.fetcher(url);
+			const text = await response.text();
+			if (!response.ok) {
+				const terminal = emit('error');
+				return {
+					outcome: 'error',
+					code,
+					message: `resolve/barcode failed: ${response.status} ${text.slice(0, 200)}`,
+					timings: { scanToFeedbackMs, scanToResolutionMs: terminal.atMs },
+					events,
+				};
+			}
+			body = JSON.parse(text) as ResolveBarcodeResponse;
+		} catch (error) {
 			const terminal = emit('error');
 			return {
 				outcome: 'error',
 				code,
-				message: `resolve/barcode failed: ${response.status} ${text.slice(0, 200)}`,
+				message: `resolve/barcode request failed: ${error instanceof Error ? error.message : String(error)}`,
 				timings: { scanToFeedbackMs, scanToResolutionMs: terminal.atMs },
 				events,
 			};
 		}
-		body = JSON.parse(text) as ResolveBarcodeResponse;
-	} catch (error) {
-		const terminal = emit('error');
-		return {
-			outcome: 'error',
-			code,
-			message: `resolve/barcode request failed: ${error instanceof Error ? error.message : String(error)}`,
-			timings: { scanToFeedbackMs, scanToResolutionMs: terminal.atMs },
-			events,
-		};
+		if (body.found) {
+			break;
+		}
 	}
 
 	const serverMeta = body.meta ?? null;

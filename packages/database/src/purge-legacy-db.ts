@@ -30,8 +30,25 @@ const deleteLegacySQLiteDatabases = () => {
 		return 0;
 	}
 
-	LEGACY_SQLITE_DIRECTORY.delete();
-	return 1;
+	// `Documents/SQLite` is expo-sqlite's SHARED directory, not a WCPOS-owned one,
+	// so name what goes: legacy WCPOS databases and their sidecars. Removing the
+	// directory wholesale also took anything else living there, and reported a
+	// flat 1 — which the cashier reads as "purged 1 legacy database entries".
+	const legacyEntries = LEGACY_SQLITE_DIRECTORY.list().filter((entry) =>
+		isLegacyAppDatabaseName(entry.name)
+	);
+
+	for (const entry of legacyEntries) {
+		dbLogger.debug(`Deleting legacy SQLite database entry: ${entry.name}`);
+		entry.delete();
+	}
+
+	// `-wal`/`-shm` are SQLite's sidecars for a database already counted below —
+	// they are deleted with it, but they are not themselves databases, and this
+	// count is what the user-facing message reports.
+	return legacyEntries.filter(
+		(entry) => !entry.name.endsWith('-wal') && !entry.name.endsWith('-shm')
+	).length;
 };
 
 const deleteLegacyFilesystemDatabases = () => {

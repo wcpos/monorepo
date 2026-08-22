@@ -55,8 +55,7 @@ function removeIpc() {
 /** Fire the 'connected' handler captured by addEventListenerMock (call index 0 by default). */
 function emitConnected(device: PosConnectedDevice, callIdx = 0) {
 	const call = addEventListenerMock.mock.calls[callIdx] as
-		| [string, (device: PosConnectedDevice) => void]
-		| undefined;
+		[string, (device: PosConnectedDevice) => void] | undefined;
 	if (!call) throw new Error(`No addEventListener call at index ${callIdx}`);
 	call[1](device);
 }

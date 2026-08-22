@@ -5,62 +5,17 @@ import WebBluetoothReceiptPrinter from '@point-of-sale/webbluetooth-receipt-prin
 import WebUSBReceiptPrinter from '@point-of-sale/webusb-receipt-printer';
 
 import { mapWebDeviceToDiscoveredPrinter } from '../discovery/map-web-device';
+import { mergePrinters } from '../discovery/merge-printers';
 import { saveWebDevice } from '../transport/web-device-store';
 
-import type { DiscoveredPrinter, DiscoveryError } from '../types';
-
-interface UsePrinterDiscoveryResult {
-	printers: DiscoveredPrinter[];
-	isScanning: boolean;
-	scanCandidates: string[];
-	/** Live HTTP-sweep progress; reset to {0,0} at each scan start and on stop. */
-	scanProgress: { tested: number; total: number };
-	startScan: () => void;
-	stopScan: () => void;
-	addManualPrinter: (
-		name: string,
-		address: string,
-		port?: number,
-		vendor?: 'epson' | 'star' | 'generic'
-	) => void;
-	removeDiscoveredPrinter: (id: string) => void;
-	/** Web only — open the browser USB chooser and add the chosen printer. */
-	connectUsbDevice?: () => void;
-	/** Web only — open the browser Bluetooth chooser and add the chosen printer. */
-	connectBluetoothDevice?: () => void;
-	isUsbScanning?: boolean;
-	isBluetoothScanning?: boolean;
-	bluetoothCandidates?: { id: string; name: string }[];
-	selectBluetoothCandidate?: (id: string) => void;
-	cancelBluetoothScan?: () => void;
-	/** Electron — list OS-paired Bluetooth Classic printers via serial device paths. */
-	connectSerialDevice?: () => void;
-	/** True while the serial-discovery IPC round trip is pending. */
-	isSerialScanning?: boolean;
-	error: DiscoveryError | null;
-}
-
-function mergePrinters(
-	existing: DiscoveredPrinter[],
-	discovered: DiscoveredPrinter[]
-): DiscoveredPrinter[] {
-	const ids = new Set(existing.map((p) => p.id));
-	const merged = [...existing];
-	for (const p of discovered) {
-		if (!ids.has(p.id)) {
-			merged.push(p);
-			ids.add(p.id);
-		}
-	}
-	return merged;
-}
+import type { DiscoveredPrinter, DiscoveryError, PrinterDiscovery } from '../types';
 
 /**
  * Web variant — best-effort network discovery via an HTTP sweep over probeVendor.
  * Bounded by browser reality (mixed-content / self-signed TLS on https origins); finds
  * the dev virtual printer on localhost with no special flag.
  */
-export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
+export function usePrinterDiscovery(): PrinterDiscovery {
 	const [printers, setPrinters] = React.useState<DiscoveredPrinter[]>([]);
 	const [isScanning, setIsScanning] = React.useState(false);
 	const [scanCandidates, setScanCandidates] = React.useState<string[]>([]);
