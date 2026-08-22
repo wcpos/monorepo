@@ -14,6 +14,7 @@ import { useSiteInfo } from '@wcpos/core/hooks/use-site-info';
 import { useUserValidation } from '@wcpos/core/hooks/use-user-validation';
 import { OnlineStatusLogger } from '@wcpos/core/screens/main/components/online-status/online-status-logger';
 import { UnsentChangesBridge } from '@wcpos/core/screens/main/components/unsent-changes-bridge';
+import { VariationParentBridge } from '@wcpos/core/screens/main/components/variation-parent-bridge';
 import { ReceiptEmailQueueBridge } from '@wcpos/core/screens/main/receipt/email-queue/bridge';
 import { ExtraDataProvider } from '@wcpos/core/screens/main/contexts/extra-data';
 import { UISettingsProvider } from '@wcpos/core/screens/main/contexts/ui-settings';
@@ -159,6 +160,12 @@ function AppStack() {
 			    screens, because the promise made at the Send button has to be kept
 			    whether or not the receipt modal is still open. */}
 				<ReceiptEmailQueueBridge />
+				{/* A variable product's price range is recomputed from its children on
+				    every read, so an acknowledged variation write leaves the parent's row
+				    stale with nothing to pull it (#1495). Here, not on the Products
+				    screen: an offline edit is acknowledged whenever it drains, routinely
+				    after the cashier has navigated away. */}
+				<VariationParentBridge />
 				<UISettingsProvider>
 					<CompatGate>
 						<ScanHubProvider>
