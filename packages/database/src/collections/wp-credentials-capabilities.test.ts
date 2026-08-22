@@ -59,8 +59,8 @@ describe('wp_credentials capabilities writes', () => {
 			capabilities: ['edit_products'],
 		});
 
-		await doc.incrementalModify((docData) => {
-			delete (docData as { capabilities?: string[] }).capabilities;
+		await doc.incrementalModify((docData: { capabilities?: string[] }) => {
+			delete docData.capabilities;
 			return docData;
 		});
 

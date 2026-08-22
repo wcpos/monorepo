@@ -16,7 +16,7 @@ import type { RxCollection } from 'rxdb';
 
 describe('reset-collection plugin', () => {
 	it('returns the post-close reset work to the RxDB hook runner', async () => {
-		let finishAddCollections = (_collections: Record<string, unknown>) => undefined;
+		let finishAddCollections: (_collections: Record<string, unknown>) => void = () => undefined;
 		const addCollections = jest.fn(
 			() =>
 				new Promise<Record<string, unknown>>((resolve) => {

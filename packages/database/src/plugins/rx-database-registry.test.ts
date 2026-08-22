@@ -28,8 +28,8 @@ function createControlledCloseStorage(): {
 				params: RxStorageInstanceCreationParams<RxDocType, RxStorageMemoryInstanceCreationOptions>
 			) {
 				const instance = await storage.createStorageInstance(params);
-				let signalStarted = () => undefined;
-				let release = () => undefined;
+				let signalStarted: () => void = () => undefined;
+				let release: () => void = () => undefined;
 				const started = new Promise<void>((resolve) => {
 					signalStarted = () => resolve();
 				});
