@@ -1,5 +1,4 @@
 import { TERMINAL_WRITE_EVENT_TYPES } from '@wcpos/sync-engine';
-
 import type { EngineEvent, RxdbSyncEngine } from '@wcpos/sync-engine';
 
 type AwaitedWriteOutcome = 'success' | 'success-local';
@@ -23,9 +22,6 @@ export class WriteOutcomeError extends Error {
 	}
 }
 
-/** The engine is the producer of these, so the list is imported rather than mirrored. */
-const TERMINAL_WRITE_EVENTS = TERMINAL_WRITE_EVENT_TYPES;
-
 export function awaitWriteOutcome(
 	engine: Pick<RxdbSyncEngine, 'events' | 'sync'>,
 	mutationId: string,
@@ -48,32 +44,36 @@ export function awaitWriteOutcome(
 			settle();
 		};
 
-		unsubscribe = engine.events((event) => {
-			if (
-				!TERMINAL_WRITE_EVENTS.has(event.type) ||
-				!('mutationId' in event) ||
-				event.mutationId !== mutationId
-			) {
-				return;
-			}
+		unsubscribe = engine.events(
+			(event) => {
+				if (
+					// The engine is the producer of this set, so it is imported, not mirrored.
+					!TERMINAL_WRITE_EVENT_TYPES.has(event.type) ||
+					!('mutationId' in event) ||
+					event.mutationId !== mutationId
+				) {
+					return;
+				}
 
-			switch (event.type) {
-				case 'write-acknowledged':
-				case 'write-ack-rematerialized':
-					finish(() => resolve('success'));
-					break;
-				case 'write-annihilated':
-					finish(() => resolve('success-local'));
-					break;
-				case 'write-conflict':
-				case 'write-rejected':
-					finish(() => {
-						const detail = event as { status?: number; reason?: string };
-						reject(new WriteOutcomeError(event.type, mutationId, detail.status, detail.reason));
-					});
-					break;
-			}
-		}, { replayWriteOutcomeFor: mutationId });
+				switch (event.type) {
+					case 'write-acknowledged':
+					case 'write-ack-rematerialized':
+						finish(() => resolve('success'));
+						break;
+					case 'write-annihilated':
+						finish(() => resolve('success-local'));
+						break;
+					case 'write-conflict':
+					case 'write-rejected':
+						finish(() => {
+							const detail = event as { status?: number; reason?: string };
+							reject(new WriteOutcomeError(event.type, mutationId, detail.status, detail.reason));
+						});
+						break;
+				}
+			},
+			{ replayWriteOutcomeFor: mutationId }
+		);
 		// The replay fires synchronously inside events(), so `settled` may already
 		// be true here — this is what releases the subscription in that case.
 		if (settled) unsubscribe();
