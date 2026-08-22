@@ -8,7 +8,7 @@ import { withUniwind } from 'uniwind';
 import { HStack } from '../hstack';
 import { IconButton } from '../icon-button';
 import { cn } from '../lib/utils';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../select';
+import { OptionSelect } from '../select';
 import { TextClassContext } from '../text';
 
 // Wrap ScrollView with uniwind to support className prop
@@ -34,7 +34,7 @@ function getTabsSelectOptions(children: React.ReactNode) {
 			return {
 				value: String(props.value),
 				label: props.label ?? String(props.value),
-				disabled: props.disabled,
+				disabled: props.disabled ?? undefined,
 			};
 		});
 }
@@ -42,33 +42,22 @@ function getTabsSelectOptions(children: React.ReactNode) {
 function TabsListAsSelect({ className, children, ...props }: TabsPrimitive.ListProps) {
 	const { value, onValueChange } = TabsPrimitive.useRootContext();
 	const options = React.useMemo(() => getTabsSelectOptions(children), [children]);
-	const selected = options.find((option) => option.value === value);
 
 	return (
 		<>
 			<StyledView className="w-full sm:hidden">
-				<Select
-					value={selected ? { value: selected.value, label: selected.label } : undefined}
-					onValueChange={(option) => {
-						if (option?.value) {
-							onValueChange(option.value);
+				<OptionSelect
+					options={options}
+					value={value}
+					onChange={(nextValue) => {
+						if (nextValue) {
+							onValueChange(nextValue);
 						}
 					}}
-				>
-					<SelectTrigger className="w-full">
-						<SelectValue placeholder={selected?.label ?? options[0]?.label ?? ''} />
-					</SelectTrigger>
-					<SelectContent matchWidth>
-						{options.map((option) => (
-							<SelectItem
-								key={option.value}
-								value={option.value}
-								label={option.label}
-								disabled={option.disabled}
-							/>
-						))}
-					</SelectContent>
-				</Select>
+					placeholder={options[0]?.label ?? ''}
+					triggerClassName="w-full"
+					matchWidth
+				/>
 			</StyledView>
 			<TabsPrimitive.List
 				className={cn(

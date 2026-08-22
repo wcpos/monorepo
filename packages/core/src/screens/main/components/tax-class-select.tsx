@@ -1,15 +1,7 @@
 import * as React from 'react';
 
-import {
-	Select,
-	SelectContent,
-	SelectGroup,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '@wcpos/components/select';
+import { OptionSelect } from '@wcpos/components/select';
 import type { SelectSingleRootProps } from '@wcpos/components/select';
-import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 
 import { useT } from '../../../contexts/translations';
@@ -18,7 +10,7 @@ import { useExtraData } from '../contexts/extra-data';
 /**
  *
  */
-export function TaxClassSelect({ value, ...props }: SelectSingleRootProps) {
+export function TaxClassSelect({ value, onValueChange, ...props }: SelectSingleRootProps) {
 	const t = useT();
 	const { extraData } = useExtraData();
 	const taxClasses = useDocField(extraData, (value) => value.taxClasses);
@@ -41,27 +33,15 @@ export function TaxClassSelect({ value, ...props }: SelectSingleRootProps) {
 	/**
 	 *
 	 */
-	const label = options.find(
-		(option: { value: string; label: string }) => option.value === value?.value
-	)?.label;
-
-	/**
-	 *
-	 */
 	return (
-		<Select value={value ? { ...value, label: label ?? '' } : undefined} {...props}>
-			<SelectTrigger>
-				<SelectValue placeholder={t('common.select_tax_class')} />
-			</SelectTrigger>
-			<SelectContent matchWidth>
-				<SelectGroup>
-					{options.map((option) => (
-						<SelectItem key={option.value} label={option.label} value={option.value}>
-							<Text>{option.label}</Text>
-						</SelectItem>
-					))}
-				</SelectGroup>
-			</SelectContent>
-		</Select>
+		<OptionSelect
+			options={options}
+			value={value?.value}
+			onChange={(_nextValue, option) => onValueChange?.(option)}
+			placeholder={t('common.select_tax_class')}
+			fallbackLabel=""
+			matchWidth
+			{...props}
+		/>
 	);
 }

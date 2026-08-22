@@ -21,14 +21,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/comp
 import { FormField, FormInput, FormSelect } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
-import {
-	Select,
-	SelectContent,
-	SelectGroup,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '@wcpos/components/select';
+import { OptionSelect } from '@wcpos/components/select';
 import type { SelectSingleRootProps } from '@wcpos/components/select';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
@@ -65,7 +58,7 @@ const DEFAULT_ROW = {
  * Inner Select bound to the FormSelect's `customComponent` slot. Renders the
  * TAX_ID_TYPES catalogue with translated labels.
  */
-function TaxIdTypeSelect({ value, ...props }: SelectSingleRootProps) {
+function TaxIdTypeSelect({ value, onValueChange, ...props }: SelectSingleRootProps) {
 	const t = useT();
 	const options = React.useMemo(
 		() =>
@@ -75,26 +68,16 @@ function TaxIdTypeSelect({ value, ...props }: SelectSingleRootProps) {
 			})),
 		[t]
 	);
-	const selectedLabel =
-		options.find((option) => option.value === value?.value)?.label ??
-		value?.label ??
-		value?.value ??
-		'';
 	return (
-		<Select value={value ? { ...value, label: selectedLabel } : undefined} {...props}>
-			<SelectTrigger>
-				<SelectValue placeholder={t('tax_id.type_label', { _: 'Type' })} />
-			</SelectTrigger>
-			<SelectContent matchWidth>
-				<SelectGroup>
-					{options.map((option) => (
-						<SelectItem key={option.value} label={option.label} value={option.value}>
-							<Text>{option.label}</Text>
-						</SelectItem>
-					))}
-				</SelectGroup>
-			</SelectContent>
-		</Select>
+		<OptionSelect
+			options={options}
+			value={value?.value}
+			onChange={(_nextValue, option) => onValueChange?.(option)}
+			placeholder={t('tax_id.type_label', { _: 'Type' })}
+			fallbackLabel={value?.label ?? value?.value ?? ''}
+			matchWidth
+			{...props}
+		/>
 	);
 }
 

@@ -1,12 +1,6 @@
 import * as React from 'react';
 
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '@wcpos/components/select';
+import { OptionSelect } from '@wcpos/components/select';
 import type { SelectSingleRootProps } from '@wcpos/components/select';
 
 import { StatesProvider, useStates } from '../../../../contexts/countries';
@@ -15,7 +9,11 @@ import { useT } from '../../../../contexts/translations';
 /**
  *
  */
-export function StateSelectBase({ value, ...props }: Omit<SelectSingleRootProps, 'children'>) {
+export function StateSelectBase({
+	value,
+	onValueChange,
+	...props
+}: Omit<SelectSingleRootProps, 'children'>) {
 	const t = useT();
 	const states = useStates();
 	const options: { label: string; value: string }[] = React.useMemo(
@@ -38,31 +36,14 @@ export function StateSelectBase({ value, ...props }: Omit<SelectSingleRootProps,
 	// }, [onChange, options, value]);
 
 	return (
-		<Select
-			value={
-				value
-					? {
-							...value,
-							label:
-								options.find(
-									(option: { value: string; label: string }) => option.value === value?.value
-								)?.label ?? '',
-						}
-					: undefined
-			}
+		<OptionSelect
+			options={options}
+			value={value?.value}
+			onChange={(_nextValue, option) => onValueChange?.(option)}
+			placeholder={t('common.select_state')}
+			fallbackLabel=""
 			{...props}
-		>
-			<SelectTrigger>
-				<SelectValue placeholder={t('common.select_state')} />
-			</SelectTrigger>
-			<SelectContent>
-				{options.map((option) => (
-					<SelectItem key={option.value} value={option.value} label={option.label}>
-						{option.label}
-					</SelectItem>
-				))}
-			</SelectContent>
-		</Select>
+		/>
 	);
 }
 

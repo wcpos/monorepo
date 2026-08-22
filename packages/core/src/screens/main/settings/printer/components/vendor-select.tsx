@@ -1,15 +1,7 @@
 import * as React from 'react';
 
-import {
-	Select,
-	SelectContent,
-	SelectGroup,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '@wcpos/components/select';
+import { OptionSelect } from '@wcpos/components/select';
 import type { SelectSingleRootProps } from '@wcpos/components/select';
-import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../../contexts/translations';
 
@@ -19,24 +11,17 @@ interface VendorSelectProps extends SelectSingleRootProps {
 	options: VendorOption[];
 }
 
-export function VendorSelect({ value, options, ...props }: VendorSelectProps) {
+export function VendorSelect({ value, options, onValueChange, ...props }: VendorSelectProps) {
 	const t = useT();
-	const selectedLabel =
-		options.find((o) => o.value === value?.value)?.label ?? value?.label ?? value?.value ?? '';
 	return (
-		<Select value={value ? { ...value, label: selectedLabel } : undefined} {...props}>
-			<SelectTrigger>
-				<SelectValue placeholder={t('settings.select_vendor')} />
-			</SelectTrigger>
-			<SelectContent matchWidth>
-				<SelectGroup>
-					{options.map((option) => (
-						<SelectItem key={option.value} label={option.label} value={option.value}>
-							<Text>{option.label}</Text>
-						</SelectItem>
-					))}
-				</SelectGroup>
-			</SelectContent>
-		</Select>
+		<OptionSelect
+			options={options}
+			value={value?.value}
+			onChange={(_nextValue, option) => onValueChange?.(option)}
+			placeholder={t('settings.select_vendor')}
+			fallbackLabel={value?.label ?? value?.value ?? ''}
+			matchWidth
+			{...props}
+		/>
 	);
 }

@@ -64,21 +64,24 @@ jest.mock('../text', () => ({
 }));
 
 jest.mock('../select', () => ({
-	Select: ({ children, onValueChange }: any) => (
-		<div data-testid="tabs-select" data-on-value-change={Boolean(onValueChange)}>
-			{children}
-		</div>
-	),
-	SelectContent: ({ children }: any) => <div data-testid="tabs-select-content">{children}</div>,
-	SelectItem: ({ label, value }: any) => (
-		<button data-testid={`tabs-select-item-${value}`} value={value}>
-			{label}
-		</button>
-	),
-	SelectTrigger: ({ children }: any) => (
-		<button data-testid="tabs-select-trigger">{children}</button>
-	),
-	SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
+	OptionSelect: ({ onChange, options, placeholder, value }: any) => {
+		const selected = options.find((option: any) => option.value === value);
+		return (
+			<div data-testid="tabs-select">
+				<button data-testid="tabs-select-trigger">{selected?.label ?? placeholder}</button>
+				{options.map((option: any) => (
+					<button
+						key={option.value}
+						data-testid={`tabs-select-item-${option.value}`}
+						onClick={() => onChange(option.value, option)}
+					>
+						{option.label}
+					</button>
+				))}
+				<button data-testid="tabs-select-clear" onClick={() => onChange(undefined, undefined)} />
+			</div>
+		);
+	},
 }));
 
 describe('TabsList', () => {
@@ -102,6 +105,9 @@ describe('TabsList', () => {
 		expect(screen.getByTestId('tabs-list')).toHaveClass('hidden', 'sm:inline-flex');
 		expect(screen.getByTestId('tabs-select-trigger')).toHaveTextContent('General Settings');
 		expect(screen.getByTestId('tabs-select-item-tax')).toHaveTextContent('Tax Settings');
+
+		screen.getByTestId('tabs-select-clear').click();
+		expect(onValueChange).not.toHaveBeenCalled();
 	});
 
 	it('keeps the regular tab list when asSelect is omitted', () => {

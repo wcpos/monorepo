@@ -1,12 +1,6 @@
 import * as React from 'react';
 
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '@wcpos/components/select';
+import { OptionSelect } from '@wcpos/components/select';
 import type { SelectSingleRootProps } from '@wcpos/components/select';
 
 import { useT } from '../../../../contexts/translations';
@@ -15,24 +9,19 @@ import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
 /**
  *
  */
-export function OrderStatusSelect({ value, ...props }: SelectSingleRootProps) {
+export function OrderStatusSelect({ value, onValueChange, ...props }: SelectSingleRootProps) {
 	const t = useT();
 	const { items } = useOrderStatusLabel();
 
-	const label = items.find(
-		(item: { value: string; label: string }) => item.value === value?.value
-	)?.label;
-
 	return (
-		<Select value={value ? { ...value, label: label ?? '' } : undefined} {...props}>
-			<SelectTrigger>
-				<SelectValue className="text-foreground text-sm" placeholder={t('common.select_status')} />
-			</SelectTrigger>
-			<SelectContent>
-				{items.map((item: { value: string; label: string }) => (
-					<SelectItem key={item.label} label={item.label} value={item.value} />
-				))}
-			</SelectContent>
-		</Select>
+		<OptionSelect
+			options={items}
+			value={value?.value}
+			onChange={(_nextValue, option) => onValueChange?.(option)}
+			placeholder={t('common.select_status')}
+			fallbackLabel=""
+			valueClassName="text-foreground text-sm"
+			{...props}
+		/>
 	);
 }
