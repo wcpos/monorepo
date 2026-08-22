@@ -345,13 +345,29 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 	});
 	const search = state.search.trim();
 	/**
-	 * Does this query span the ENTIRE collection — no filter, no search, no targeted
-	 * subset, no residual predicate? Only then may a consumer treat the engine's
-	 * whole-collection census total as this query's total (the footer's fallback when
-	 * no per-query server total has been recorded yet).
+	 * May this query's footer report the collection CENSUS as its total?
+	 *
+	 * Deliberately blind to filters and search (owner ruling 2026-08-22). The total is a
+	 * property of the STORE, not of the current view: "Showing 3 of 203" says this till
+	 * knows about 203 products and 3 of them match, and it holds still while the cashier
+	 * types. A denominator that moved with every keystroke was the confusing part — and
+	 * the old "Showing 0 of 0" on a failed search read like an empty till rather than a
+	 * product the shop does not stock.
+	 *
+	 * What DOES disqualify a query is a narrower SCOPE — a set the collection's census cannot
+	 * stand for however the page is filtered. That is `targeted`: the variations under ONE
+	 * product are addressed by id, and the variations census counts every variation in the
+	 * store. `options.residual` is a read-side FILTER, so like every other filter it leaves
+	 * the denominator alone.
+	 *
+	 * Orders used to be excluded here on the belief that its grid was "this cashier at this
+	 * till" — a fixed scope rather than a filter. It is not: the cashier and store pills are
+	 * removable and re-selectable (`cashier-pill.tsx`, `store-pill.tsx`), so they are pre-set
+	 * FILTERS, and the page can be widened to the whole store. Treating them as scope cut the
+	 * orders grid off from the census, left it with no denominator at all, and produced
+	 * "Showing 20 of 20" — the loaded-row count standing in for a total.
 	 */
-	const wholeCollection =
-		active.length === 0 && !search && targeted === undefined && !options.residual;
+	const censusScoped = targeted === undefined;
 	const read: CompiledQueryRead = {
 		prefilter: (prefilters.length === 1 ? prefilters[0] : { $and: prefilters }) as never,
 		residual: (document) => readFilters.every((filter) => filter.matches(document)),
@@ -372,7 +388,7 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 			collection: legacyCollection,
 			demand: [],
 			represented: false,
-			wholeCollection,
+			censusScoped,
 			read,
 		};
 	}
@@ -401,7 +417,7 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 		} as EngineRequirement);
 	}
 	if (demand.length > 0)
-		return { collection: legacyCollection, demand, represented: false, wholeCollection, read };
+		return { collection: legacyCollection, demand, represented: false, censusScoped, read };
 
 	let represented =
 		!options.residual &&
@@ -535,5 +551,5 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 		});
 		represented = false;
 	} else represented = false;
-	return { collection: legacyCollection, demand, represented, wholeCollection, read };
+	return { collection: legacyCollection, demand, represented, censusScoped, read };
 }

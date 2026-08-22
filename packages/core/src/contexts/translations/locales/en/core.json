@@ -312,6 +312,7 @@
 	"common.shipping_address": "Shipping Address",
 	"common.shop_base_address": "Shop base address",
 	"common.show_out-of-stock_products": "Show out-of-stock products",
+	"common.showing_n": "Showing {shown}",
 	"common.showing_of": "Showing {shown} of {total}",
 	"common.site_not_reachable": "Site not reachable",
 	"common.sku": "SKU",

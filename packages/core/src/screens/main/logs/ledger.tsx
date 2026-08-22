@@ -417,7 +417,12 @@ export function LedgerFooter({
 	return (
 		<HStack className="border-border/50 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t py-2">
 			<Text className="text-muted-foreground text-xs">
-				{t('common.showing_of', { shown, total })}
+				{/* Grouped to match every other footer and the Database page; the hidden
+				    markers below stay raw digits for E2E. */}
+				{t('common.showing_of', {
+					shown: shown.toLocaleString(),
+					total: total.toLocaleString(),
+				})}
 			</Text>
 			<Text testID="logs-loaded-count" className="hidden">
 				{shown}

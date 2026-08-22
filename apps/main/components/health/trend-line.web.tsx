@@ -3,6 +3,8 @@ import * as React from 'react';
 import { WithSkiaWeb } from '@shopify/react-native-skia/lib/module/web';
 import { version } from 'canvaskit-wasm/package.json';
 
+import { useLocalDate } from '@wcpos/core/hooks/use-local-date';
+
 import { MIN_TREND_POINTS, TrendFrame, type TrendPoint } from './trend-frame';
 
 /**
@@ -22,12 +24,14 @@ export const TrendLine = React.memo(
 		testID: string;
 		formatValue?: (value: number) => string;
 	}) => {
+		const { formatDate } = useLocalDate();
 		const frame = (
 			<TrendFrame
 				points={props.points}
 				label={props.label}
 				testID={props.testID}
 				formatValue={props.formatValue}
+				formatTime={(x) => formatDate(new Date(x), 'p')}
 			/>
 		);
 

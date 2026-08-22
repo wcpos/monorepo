@@ -74,7 +74,16 @@ export interface QueryBinding {
 	resource: ObservableResource<QueryResult<RxCollection>>;
 	result$: Observable<QueryResult<RxCollection>>;
 	active$: Observable<boolean>;
-	total$: Observable<number>;
+	/**
+	 * The size of the set this screen is about, or `null` when nothing can vouch for one.
+	 *
+	 * `null` is a real answer, not a missing one: it means neither a server count nor a claim
+	 * of local completeness exists, so the only number available is "how many rows are loaded"
+	 * — and printing THAT as a total is how the orders footer came to say "Showing 20 of 20"
+	 * at a page size of 20, telling a cashier they had 20 orders when the next scroll found
+	 * more. Consumers render a count without a denominator instead of inventing one.
+	 */
+	total$: Observable<number | null>;
 	laneProgress$: Observable<QueryLaneProgress | null>;
 	sync(): Promise<void>;
 }
@@ -386,20 +395,34 @@ function censusTotal$(
  * binding's own resident count — one source of truth, so the footer and the Store Health ›
  * Database page can never disagree about a total.
  *
- * Precedence, freshness and ranged-walk progress live behind `coverageChanges`. When the
- * engine has no per-query answer (`total: null`), a whole-collection browse falls back to the
- * census total (`census$` is `NO_CENSUS_TOTAL$` for anything narrower — a filtered or searched
- * set must never borrow the whole collection's size). The local resident count is the floor:
- * more residents than the server's last count proves that count outdated, so the larger number
- * wins — stated plainly, never dressed up with a `N+` suffix (owner ruling 2026-08-20: the
- * `+` read as noise, and every locale translated it differently).
+ * Wherever a census stands for the screen's scope it wins OUTRIGHT — it is the very number the
+ * Database page prints in its "on server" column, and it does not move when the cashier filters
+ * or types (owner ruling 2026-08-22: one total, all the time). "Showing 3 of 203" says this
+ * till knows about 203 products and three of them match; the old per-query denominator made
+ * that second number move with every keystroke, and turned a failed search into "Showing 0 of
+ * 0" — which reads like an empty till rather than a product the shop does not stock.
+ *
+ * Preferring the verdict was also not a tie-break between equivalent counts: the browse-window
+ * total and the census deliberately count different populations (#1400: the walk counts
+ * `wcpos/v2`, the census probe counts `wc/v3`), which is how the footer and the Database page
+ * came to disagree by a handful of records on the same catalogue.
+ *
+ * `census$` is `NO_CENSUS_TOTAL$` only where the census cannot honestly stand for the screen at
+ * all — a `targeted` subset, addressed by id (the variations under ONE product). Everything
+ * else, however it is filtered, reports the collection's census. Those exceptions keep the
+ * engine's per-query answer, and name no total at all when there is no answer (below).
+ *
+ * The local resident count stays the floor in every branch: more residents than the server's
+ * last count proves that count outdated, so the larger number wins — stated plainly, never
+ * dressed up with a `N+` suffix (owner ruling 2026-08-20: the `+` read as noise, and every
+ * locale translated it differently).
  */
 function coverageProjection$(
 	engine: RxdbSyncEngine,
 	result$: Observable<QueryResult<RxCollection>>,
 	coverageTarget$: Observable<CoverageTarget | null>,
 	census$: Observable<number | null>
-): Observable<{ total: number; laneProgress: QueryLaneProgress | null }> {
+): Observable<{ total: number | null; laneProgress: QueryLaneProgress | null }> {
 	const verdict$ = coverageTarget$.pipe(
 		distinctUntilChanged(
 			(previous, current) => coverageTargetKey(previous) === coverageTargetKey(current)
@@ -412,9 +435,19 @@ function coverageProjection$(
 		census$,
 	]).pipe(
 		map(([localCount, verdict, censusTotal]) => {
-			const serverTotal = verdict.total ?? censusTotal;
+			// `censusTotal` is non-null only where the census honestly stands for this screen
+			// (see `censusScoped`) and has landed.
+			const serverTotal = censusTotal ?? verdict.total;
+			if (serverTotal !== null) {
+				return { total: Math.max(serverTotal, localCount), laneProgress: verdict.progress };
+			}
+			// No server count anywhere. The resident count is a truthful TOTAL only when the
+			// engine claims to hold the whole matching set — `complete` is exactly that claim,
+			// and a windowed browse lane deliberately never makes it (coverage-verdicts.ts).
+			// Otherwise the resident count is just "what has loaded so far", and passing it off
+			// as the size of the set is the "Showing 20 of 20" lie.
 			return {
-				total: serverTotal === null ? localCount : Math.max(serverTotal, localCount),
+				total: verdict.complete ? localCount : null,
 				laneProgress: verdict.progress,
 			};
 		}),
@@ -504,10 +537,10 @@ function useEngineBinding(
 	}, [descriptor, enabled, runtime.engine, runtime.locale]);
 	const census$ = React.useMemo(
 		() =>
-			compiled.wholeCollection
+			compiled.censusScoped
 				? censusTotal$(runtime.engine, engineCollectionNameFor(descriptor.collection))
 				: NO_CENSUS_TOTAL$,
-		[compiled.wholeCollection, descriptor.collection, runtime.engine]
+		[compiled.censusScoped, descriptor.collection, runtime.engine]
 	);
 	const projection$ = React.useMemo(
 		() => coverageProjection$(runtime.engine, result$, demand.coverageTarget$, census$),
@@ -702,8 +735,8 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 	}, [bindingId, childDescriptor, compiled.read, descriptor, runtime.engine, runtime.locale]);
 	const resource = useObservableResource(result$);
 	const census$ = React.useMemo(
-		() => (compiled.wholeCollection ? censusTotal$(runtime.engine, 'products') : NO_CENSUS_TOTAL$),
-		[compiled.wholeCollection, runtime.engine]
+		() => (compiled.censusScoped ? censusTotal$(runtime.engine, 'products') : NO_CENSUS_TOTAL$),
+		[compiled.censusScoped, runtime.engine]
 	);
 	const projection$ = React.useMemo(
 		() => coverageProjection$(runtime.engine, result$, parentDemand.coverageTarget$, census$),
