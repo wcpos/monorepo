@@ -394,7 +394,7 @@ async function finishHostBlock(
 	}
 	if (evidence.platform === 'web' && networkDeadEchoes) {
 		const simpleEcho = await fetchWithProbeTimeout(simpleEchoUrl);
-		evidence.simpleEchoSucceeded = simpleEcho !== null && typeof simpleEcho.status === 'number';
+		evidence.simpleEchoSucceeded = simpleEcho !== null && simpleEcho.ok;
 		if (!evidence.simpleEchoSucceeded && evidence.pingResolved === false) {
 			evidence.noCorsPingResolved =
 				(await fetchWithProbeTimeout(pingUrl, { mode: 'no-cors' })) !== null;

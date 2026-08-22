@@ -652,7 +652,7 @@ describe('testAuthorizationMethod', () => {
 			.mockRejectedValueOnce(new Error('path CORS failure'))
 			.mockRejectedValueOnce(new Error('query CORS failure'))
 			.mockResolvedValueOnce({ status: 200 })
-			.mockResolvedValueOnce({ status: 403 });
+			.mockResolvedValueOnce({ ok: true, status: 200 });
 
 		await expect(
 			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
@@ -661,6 +661,18 @@ describe('testAuthorizationMethod', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(4);
 		expect(fetchMock.mock.calls[3][1]).toMatchObject({ cache: 'no-store' });
 		expect(fetchMock.mock.calls[3][1]).not.toHaveProperty('headers');
+	});
+
+	it('does not classify a readable simple-echo error as preflight blocking', async () => {
+		fetchMock
+			.mockRejectedValueOnce(new Error('path CORS failure'))
+			.mockRejectedValueOnce(new Error('query CORS failure'))
+			.mockResolvedValueOnce({ status: 200 })
+			.mockResolvedValueOnce({ ok: false, status: 403 });
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+		).resolves.toEqual({ ok: false, code: ERROR_CODES.REST_TRANSPORT_BLOCKED });
 	});
 
 	it('classifies broken web CORS when only a no-cors ping resolves', async () => {
