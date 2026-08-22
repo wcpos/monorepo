@@ -11,8 +11,9 @@ import { storesLiteral } from './stores';
  */
 // The package is CJS with a `default` key; whether the import already unwraps it
 // depends on the interop setting, so accept either shape.
-const ZSchema = ((ZSchemaModule as unknown as { default?: unknown }).default ??
-	ZSchemaModule) as { create: () => { validate: (doc: unknown, schema: unknown) => boolean } };
+const ZSchema = ((ZSchemaModule as unknown as { default?: unknown }).default ?? ZSchemaModule) as {
+	create: () => { validate: (doc: unknown, schema: unknown) => boolean };
+};
 
 function validateStore(doc: Record<string, unknown>) {
 	// This z-schema build throws on an invalid document rather than returning false.
