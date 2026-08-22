@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const BANNER = '// GENERATED — do not edit by hand; run pnpm generate:error-codes';
-const DOMAINS = ['AUTH', 'SYNC', 'CHECKOUT', 'PAYMENT', 'PRINT', 'PRODUCT', 'LICENSE', 'CLIENT'];
+const DOMAINS = ['AUTH', 'SYNC', 'CHECKOUT', 'PAYMENT', 'PRINT', 'PRODUCT', 'LICENSE', 'CLIENT', 'HOST'];
 const SEVERITIES = ['info', 'warn', 'error'];
 const SAFE_ACTIONS = ['retry', 'retry-after-edit', 'verify-first', 'continue', 'repair-local', 'reconfigure', 'contact-support'];
 const RETRY_POLICIES = ['automatic', 'manual', 'after-change', 'never'];

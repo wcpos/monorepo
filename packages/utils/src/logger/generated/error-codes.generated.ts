@@ -60,6 +60,11 @@ export type ErrorCode =
 	| 'AUTH411'
 	| 'AUTH421'
 	| 'AUTH431'
+	| 'AUTH441'
+	| 'HOST101'
+	| 'HOST111'
+	| 'HOST121'
+	| 'HOST131'
 	| 'SYNC151'
 	| 'SYNC161'
 	| 'SYNC171'
@@ -69,7 +74,7 @@ export type ErrorCode =
 	| 'PRINT311'
 	| 'CLIENT131';
 export type ErrorDomain =
-	'AUTH' | 'SYNC' | 'CHECKOUT' | 'PAYMENT' | 'PRINT' | 'PRODUCT' | 'LICENSE' | 'CLIENT';
+	'AUTH' | 'SYNC' | 'CHECKOUT' | 'PAYMENT' | 'PRINT' | 'PRODUCT' | 'LICENSE' | 'CLIENT' | 'HOST';
 export type ErrorSeverity = 'info' | 'warn' | 'error';
 export type SafeAction =
 	| 'retry'
@@ -978,6 +983,84 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		introducedIn: '1.10.0',
 		evidence: 'wcpos-infra#73 §5 (B5 both-transports verdict, ADR 0031 §3)',
 	},
+	AUTH441: {
+		code: 'AUTH441',
+		symbol: 'AUTH_TOKEN_TOO_LARGE',
+		domain: 'AUTH',
+		severity: 'error',
+		safeAction: 'contact-support',
+		retryPolicy: 'after-change',
+		dataSafety: 'no-impact',
+		escalation: 'none',
+		summary: 'The login token is larger than this server accepts.',
+		docsBody:
+			"The server rejected the login token for size: a 400 when it travels in the Authorization header, or a 414 when it travels in the URL. No client-side encoding can shrink it — the server's header/URL size limits must be raised, or the token made smaller.",
+		introducedIn: '1.10.0',
+		evidence: 'wcpos-infra#73 §5 row 7 (research §c7)',
+	},
+	HOST101: {
+		code: 'HOST101',
+		symbol: 'CORS_PREFLIGHT_BLOCKED',
+		domain: 'HOST',
+		severity: 'error',
+		safeAction: 'contact-support',
+		retryPolicy: 'after-change',
+		dataSafety: 'no-impact',
+		escalation: 'none',
+		summary:
+			"The server is blocking the browser's permission check (CORS preflight), so the web app cannot reach it.",
+		docsBody:
+			'Browsers send an OPTIONS request before any cross-origin API call that carries custom headers. Something in front of this store — usually a firewall rule — is blocking OPTIONS, so the browser never sends the real request. Native apps are unaffected; the fix is server-side.',
+		introducedIn: '1.10.0',
+		evidence: 'wcpos-infra#73 §5 row 2 (research §c2)',
+	},
+	HOST111: {
+		code: 'HOST111',
+		symbol: 'CORS_MISCONFIGURED',
+		domain: 'HOST',
+		severity: 'error',
+		safeAction: 'contact-support',
+		retryPolicy: 'after-change',
+		dataSafety: 'no-impact',
+		escalation: 'none',
+		summary:
+			"The server's cross-origin (CORS) configuration is broken, so the browser refuses its responses.",
+		docsBody:
+			'The store answers, but its CORS response headers are wrong — duplicated, set to the wrong origin, or missing on error responses. The browser then hides the real answer from the web app, which also masks every other error behind a generic network failure. The fix is server-side: exactly one Access-Control-Allow-Origin, present on every status code.',
+		introducedIn: '1.10.0',
+		evidence: 'wcpos-infra#73 §5 rows 3/4 (research §c3/§c4)',
+	},
+	HOST121: {
+		code: 'HOST121',
+		symbol: 'BOT_CHALLENGE_BLOCKING_API',
+		domain: 'HOST',
+		severity: 'error',
+		safeAction: 'contact-support',
+		retryPolicy: 'after-change',
+		dataSafety: 'no-impact',
+		escalation: 'none',
+		summary: "A bot-protection page is answering instead of the store's API.",
+		docsBody:
+			"The store's REST API is returning an HTML challenge page (bot protection, CAPTCHA, or DDoS interstitial) where the app expects JSON. A point-of-sale app cannot solve a browser challenge; the store's REST API needs to be allow-listed in the protection service.",
+		introducedIn: '1.10.0',
+		evidence: 'wcpos-infra#73 §5 row 10 (research §c10)',
+	},
+	HOST131: {
+		code: 'HOST131',
+		symbol: 'RESPONSE_HEADERS_REJECTED',
+		domain: 'HOST',
+		severity: 'error',
+		safeAction: 'contact-support',
+		retryPolicy: 'after-change',
+		dataSafety: 'no-impact',
+		escalation: 'none',
+		summary:
+			"A proxy in front of the store rejects the server's responses for having too many headers.",
+		docsBody:
+			"A cache or proxy layer (commonly Varnish) enforces a limit on response header count or size. The store's lightweight endpoints fit, but full API responses exceed the limit and come back as 503s from the proxy, not from WordPress. The limit must be raised on that layer.",
+		introducedIn: '1.10.0',
+		evidence: 'wcpos-infra#73 §5 row 13 (research §c13, P26)',
+	},
 	SYNC151: {
 		code: 'SYNC151',
 		symbol: 'STORE_RESPONSE_MALFORMED',
@@ -1162,6 +1245,11 @@ export const ERROR_CODES = {
 	STORE_URL_INVALID: 'AUTH411',
 	AUTH_TOKEN_BLOCKED_BY_HOST: 'AUTH421',
 	REST_TRANSPORT_BLOCKED: 'AUTH431',
+	AUTH_TOKEN_TOO_LARGE: 'AUTH441',
+	CORS_PREFLIGHT_BLOCKED: 'HOST101',
+	CORS_MISCONFIGURED: 'HOST111',
+	BOT_CHALLENGE_BLOCKING_API: 'HOST121',
+	RESPONSE_HEADERS_REJECTED: 'HOST131',
 	STORE_RESPONSE_MALFORMED: 'SYNC151',
 	LOCAL_DB_UNAVAILABLE: 'SYNC161',
 	LOCAL_DB_SETUP_FAILED: 'SYNC171',

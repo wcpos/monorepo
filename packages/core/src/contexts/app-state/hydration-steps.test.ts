@@ -13,6 +13,7 @@ const mockAppLogger = {
 	warn: jest.fn(),
 	error: jest.fn(),
 };
+const mockPlatform = { isWeb: true };
 
 jest.mock('@wcpos/database', () => ({
 	createStoreDB: (...args: unknown[]) => createStoreDBMock(...args),
@@ -26,7 +27,7 @@ jest.mock('@wcpos/utils/logger', () => ({
 }));
 
 jest.mock('@wcpos/utils/platform', () => ({
-	Platform: { isWeb: true },
+	Platform: mockPlatform,
 }));
 
 jest.mock('./initial-props', () => ({
@@ -303,6 +304,7 @@ describe('TEST_AUTHORIZATION', () => {
 
 	beforeEach(() => {
 		fetchMock.mockReset();
+		mockPlatform.isWeb = true;
 		mockAppLogger.warn.mockClear();
 		mockAppLogger.error.mockClear();
 		global.fetch = fetchMock as unknown as typeof fetch;
@@ -454,7 +456,7 @@ describe('testAuthorizationMethod', () => {
 
 		await expect(
 			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({ ok: false, blocked: null });
+		).resolves.toEqual({ ok: false, code: null });
 
 		expect(fetchMock).toHaveBeenCalledTimes(3);
 		expect(fetchMock.mock.calls[1][1]).toMatchObject({
@@ -509,7 +511,10 @@ describe('testAuthorizationMethod', () => {
 			expect(signal.aborted).toBe(true);
 
 			resolveBody(null);
-			await expect(authorization).resolves.toEqual({ ok: false, blocked: 'transports' });
+			await expect(authorization).resolves.toEqual({
+				ok: false,
+				code: ERROR_CODES.REST_TRANSPORT_BLOCKED,
+			});
 		} finally {
 			jest.useRealTimers();
 		}
@@ -531,7 +536,7 @@ describe('testAuthorizationMethod', () => {
 		...overrides,
 	});
 
-	it('resolves header mode from ONE echo probe when the Authorization header arrives', async () => {
+	it('resolves header mode from ONE echo probe without failure discriminators', async () => {
 		fetchMock.mockResolvedValueOnce({
 			ok: true,
 			json: jest.fn(async () => echoBody()),
@@ -561,6 +566,80 @@ describe('testAuthorizationMethod', () => {
 				'X-WCPOS-Idempotency-Key': 'wcpos-echo-probe',
 			},
 		});
+	});
+
+	it('classifies a challenge page returned by the path echo', async () => {
+		fetchMock
+			.mockResolvedValueOnce({
+				ok: false,
+				status: 403,
+				headers: { get: jest.fn(() => 'text/html; charset=UTF-8') },
+				text: jest.fn(async () => '<html><script src="/cdn-cgi/challenge-platform/cf-chl.js">'),
+			})
+			.mockRejectedValueOnce(new Error('query echo blocked'))
+			.mockResolvedValueOnce({ ok: false, status: 404, text: jest.fn(async () => '') });
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+		).resolves.toEqual({ ok: false, code: ERROR_CODES.BOT_CHALLENGE_BLOCKING_API });
+
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+	});
+
+	it('classifies legacy header 400 plus parameter 414 as an oversized token', async () => {
+		fetchMock
+			.mockResolvedValueOnce({ ok: false, status: 401, text: jest.fn(async () => '') })
+			.mockResolvedValueOnce({ ok: false, status: 400, text: jest.fn(async () => '') })
+			.mockResolvedValueOnce({ ok: false, status: 414, text: jest.fn(async () => '') });
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+		).resolves.toEqual({ ok: false, code: ERROR_CODES.AUTH_TOKEN_TOO_LARGE });
+	});
+
+	it('classifies two 503 echo spellings when the bare ping answers', async () => {
+		fetchMock
+			.mockResolvedValueOnce({ ok: false, status: 503, text: jest.fn(async () => '') })
+			.mockResolvedValueOnce({ ok: false, status: 503, text: jest.fn(async () => '') })
+			.mockResolvedValueOnce({ status: 200 });
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+		).resolves.toEqual({ ok: false, code: ERROR_CODES.RESPONSE_HEADERS_REJECTED });
+
+		expect(String(fetchMock.mock.calls[2][0])).toContain('/wp-json/wcpos/v2/ping?wcpos=1');
+	});
+
+	it('classifies web preflight blocking when an unheadered echo remains readable', async () => {
+		fetchMock
+			.mockRejectedValueOnce(new Error('path CORS failure'))
+			.mockRejectedValueOnce(new Error('query CORS failure'))
+			.mockResolvedValueOnce({ status: 200 })
+			.mockResolvedValueOnce({ status: 403 });
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+		).resolves.toEqual({ ok: false, code: ERROR_CODES.CORS_PREFLIGHT_BLOCKED });
+
+		expect(fetchMock).toHaveBeenCalledTimes(4);
+		expect(fetchMock.mock.calls[3][1]).toMatchObject({ cache: 'no-store' });
+		expect(fetchMock.mock.calls[3][1]).not.toHaveProperty('headers');
+	});
+
+	it('classifies broken web CORS when only a no-cors ping resolves', async () => {
+		fetchMock
+			.mockRejectedValueOnce(new Error('path CORS failure'))
+			.mockRejectedValueOnce(new Error('query CORS failure'))
+			.mockRejectedValueOnce(new Error('cors ping failure'))
+			.mockRejectedValueOnce(new Error('simple echo failure'))
+			.mockResolvedValueOnce({ type: 'opaque', status: 0 });
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+		).resolves.toEqual({ ok: false, code: ERROR_CODES.CORS_MISCONFIGURED });
+
+		expect(fetchMock).toHaveBeenCalledTimes(5);
+		expect(fetchMock.mock.calls[4][1]).toMatchObject({ cache: 'no-store', mode: 'no-cors' });
 	});
 
 	it('retries a 404 path echo in query form and derives auth from that response', async () => {
@@ -607,21 +686,43 @@ describe('testAuthorizationMethod', () => {
 		expect(String(fetchMock.mock.calls[0][0])).not.toContain('/wp-json/');
 	});
 
-	it('returns and logs the transport-blocked verdict when both echo transports are blocked', async () => {
+	it('treats native network-dead-with-dead-ping as offline, not hostile', async () => {
+		// Everything network-dead INCLUDING the ping discriminator is the
+		// store-offline shape (finding d9): no host-blocked code, no toast —
+		// the online-status UX owns outages.
+		mockPlatform.isWeb = false;
 		fetchMock
 			.mockRejectedValueOnce(new Error('path blocked'))
-			.mockRejectedValueOnce(new Error('query blocked'));
+			.mockRejectedValueOnce(new Error('query blocked'))
+			.mockRejectedValueOnce(new Error('ping dead'));
 
 		await expect(
 			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({ ok: false, blocked: 'transports' });
+		).resolves.toEqual({ ok: false, code: null });
 
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(String(fetchMock.mock.calls[2][0])).toContain('/wcpos/v2/ping');
+		expect(mockAppLogger.error).not.toHaveBeenCalled();
+	});
+
+	it('names the transport block on native when the ping proves the store alive', async () => {
+		mockPlatform.isWeb = false;
+		fetchMock
+			.mockRejectedValueOnce(new Error('path blocked'))
+			.mockRejectedValueOnce(new Error('query blocked'))
+			.mockResolvedValueOnce({ ok: true, status: 200, json: jest.fn() });
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
+		).resolves.toEqual({ ok: false, code: ERROR_CODES.REST_TRANSPORT_BLOCKED });
+
+		expect(fetchMock).toHaveBeenCalledTimes(3);
 		expect(mockAppLogger.error).toHaveBeenCalledWith(expect.any(String), {
 			code: ERROR_CODES.REST_TRANSPORT_BLOCKED,
 			showToast: true,
 			context: {
 				wcposApiUrl: 'https://example.com/wp-json/wcpos/v2/',
-				verdict: 'both-transports-blocked',
+				classification: 'REST_TRANSPORT_BLOCKED',
 			},
 		});
 	});
@@ -635,14 +736,14 @@ describe('testAuthorizationMethod', () => {
 
 		await expect(
 			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({ ok: false, blocked: 'transports' });
+		).resolves.toEqual({ ok: false, code: ERROR_CODES.REST_TRANSPORT_BLOCKED });
 
 		expect(mockAppLogger.error).toHaveBeenCalledWith(expect.any(String), {
 			code: ERROR_CODES.REST_TRANSPORT_BLOCKED,
 			showToast: true,
 			context: {
 				wcposApiUrl: 'https://example.com/wp-json/wcpos/v2/',
-				verdict: 'both-transports-blocked',
+				classification: 'REST_TRANSPORT_BLOCKED',
 			},
 		});
 	});
@@ -708,7 +809,7 @@ describe('testAuthorizationMethod', () => {
 
 		await expect(
 			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
-		).resolves.toEqual({ ok: false, blocked: 'credential-channels' });
+		).resolves.toEqual({ ok: false, code: ERROR_CODES.AUTH_TOKEN_BLOCKED_BY_HOST });
 
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 		expect(mockAppLogger.error).toHaveBeenCalledWith(expect.any(String), {
@@ -716,7 +817,7 @@ describe('testAuthorizationMethod', () => {
 			showToast: true,
 			context: {
 				wcposApiUrl: 'https://example.com/wp-json/wcpos/v2/',
-				deadHeaders: ['authorization'],
+				classification: 'AUTH_TOKEN_BLOCKED_BY_HOST',
 			},
 		});
 	});

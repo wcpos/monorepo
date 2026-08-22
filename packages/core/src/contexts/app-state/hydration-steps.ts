@@ -3,7 +3,11 @@ import * as Crypto from 'expo-crypto';
 import { createStoreDB, createUserDB, sanitizeWPCredentialsData } from '@wcpos/database';
 import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import {
+	ERROR_CATALOGUE,
+	ERROR_CODES,
+	type ErrorCode,
+} from '@wcpos/utils/logger/generated/error-codes.generated';
 import { Platform } from '@wcpos/utils/platform';
 import {
 	deriveSyntheticPathBase,
@@ -34,6 +38,7 @@ import type { InitialProps } from './initial-props.types';
 const appLogger = getLogger(['wcpos', 'app', 'hydration']);
 const AUTH_TEST_TIMEOUT_MS = 10000;
 const AUTH_PROBE_TIMEOUT_MS = 3000;
+const PROBE_BODY_SNIPPET_LENGTH = 2048;
 
 /**
  * Fetch JSON with the abort timer spanning BOTH the request and the body
@@ -46,7 +51,7 @@ async function fetchJsonWithTimeout(
 	input: Parameters<typeof fetch>[0],
 	init: Parameters<typeof fetch>[1] = {},
 	timeoutMs = AUTH_TEST_TIMEOUT_MS
-): Promise<{ response: Response; data: unknown } | null> {
+): Promise<{ response: Response; data: unknown; text: string } | null> {
 	const controller = new AbortController();
 	const timeout = setTimeout(() => {
 		controller.abort();
@@ -57,11 +62,35 @@ async function fetchJsonWithTimeout(
 			...init,
 			signal: controller.signal,
 		});
-		if (!response.ok) {
-			return { response, data: null };
-		}
+		const readText = async (target: Response) =>
+			typeof target.text === 'function'
+				? (await target.text().catch(() => '')).slice(0, PROBE_BODY_SNIPPET_LENGTH)
+				: '';
+		if (!response.ok) return { response, data: null, text: await readText(response) };
+		const bodyCopy = typeof response.clone === 'function' ? response.clone() : null;
 		const data: unknown = await response.json().catch(() => null);
-		return { response, data };
+		const text =
+			typeof data === 'string'
+				? data.slice(0, PROBE_BODY_SNIPPET_LENGTH)
+				: data === null && bodyCopy
+					? await readText(bodyCopy)
+					: '';
+		return { response, data, text };
+	} catch {
+		return null;
+	} finally {
+		clearTimeout(timeout);
+	}
+}
+
+async function fetchWithProbeTimeout(
+	input: Parameters<typeof fetch>[0],
+	init: Parameters<typeof fetch>[1] = {}
+): Promise<Response | null> {
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), AUTH_PROBE_TIMEOUT_MS);
+	try {
+		return (await fetch(input, { cache: 'no-store', ...init, signal: controller.signal })) ?? null;
 	} catch {
 		return null;
 	} finally {
@@ -88,9 +117,9 @@ async function generateHashId(dataObject: any): Promise<string> {
 /**
  * Test authorization with Bearer token in header
  */
-type AuthProbeVerdict = 'success' | 'auth-failed' | 'transport-dead';
+type AuthProbeResult = { verdict: 'success' | 'auth-failed' | 'transport-dead'; status?: number };
 
-async function testHeaderAuth(authTestUrl: string, token: string): Promise<AuthProbeVerdict> {
+async function testHeaderAuth(authTestUrl: string, token: string): Promise<AuthProbeResult> {
 	try {
 		const result = await fetchJsonWithTimeout(authTestUrl, {
 			method: 'GET',
@@ -101,19 +130,26 @@ async function testHeaderAuth(authTestUrl: string, token: string): Promise<AuthP
 		});
 
 		if (!result || result.response.status === 403 || result.response.status === 404) {
-			return 'transport-dead';
+			return { verdict: 'transport-dead', status: result?.response.status };
 		}
 		const data = result.data as { status?: string } | null;
-		return data?.status === 'success' ? 'success' : 'auth-failed';
+		return {
+			verdict: data?.status === 'success' ? 'success' : 'auth-failed',
+			status: result.response.status,
+		};
 	} catch {
-		return 'transport-dead';
+		return { verdict: 'transport-dead' };
 	}
 }
 
 /**
  * Test authorization with token as query parameter
  */
-async function testParamAuth(authTestUrl: string, token: string, bareSupported: boolean) {
+async function testParamAuth(
+	authTestUrl: string,
+	token: string,
+	bareSupported: boolean
+): Promise<AuthProbeResult> {
 	try {
 		const url = new URL(authTestUrl);
 		url.searchParams.set('authorization', formatAuthorizationParam(token, bareSupported));
@@ -126,12 +162,15 @@ async function testParamAuth(authTestUrl: string, token: string, bareSupported: 
 		});
 
 		if (!result || result.response.status === 403 || result.response.status === 404) {
-			return 'transport-dead';
+			return { verdict: 'transport-dead', status: result?.response.status };
 		}
 		const data = result.data as { status?: string } | null;
-		return data?.status === 'success' ? 'success' : 'auth-failed';
+		return {
+			verdict: data?.status === 'success' ? 'success' : 'auth-failed',
+			status: result.response.status,
+		};
 	} catch {
-		return 'transport-dead';
+		return { verdict: 'transport-dead' };
 	}
 }
 
@@ -144,11 +183,18 @@ interface HeaderEchoResult {
 	params: Record<string, boolean>;
 }
 
-type EchoProbeVerdict = HeaderEchoResult | number | null;
+interface EchoAnsweredVerdict {
+	kind: 'answered';
+	status: number;
+	isHtml: boolean;
+	challenge: boolean;
+}
+
+type EchoProbeVerdict = HeaderEchoResult | EchoAnsweredVerdict | null;
 
 export type AuthTransportResolution =
 	| { ok: true; useJwtAsParam: boolean; useRestRouteParam: boolean }
-	| { ok: false; blocked: 'credential-channels' | 'transports' | null };
+	| { ok: false; code: ErrorCode | null };
 
 /**
  * Probe which request headers survive to the server (B8, wcpos-infra#72).
@@ -200,9 +246,19 @@ async function probeHeaderEcho(
 		);
 
 		if (!result) return null;
-		if (!result.response.ok) {
-			return result.response.status || 401;
-		}
+		const bodyText = result.text.slice(0, PROBE_BODY_SNIPPET_LENGTH);
+		const answered: EchoAnsweredVerdict = {
+			kind: 'answered',
+			status: result.response.status || (result.response.ok ? 200 : 401),
+			isHtml:
+				result.response.headers?.get('content-type')?.includes('text/html') === true ||
+				bodyText.trimStart().startsWith('<'),
+			challenge:
+				/cloudflare|cf-chl|cf_chl|captcha|challenge-platform|attention required|ddos/i.test(
+					bodyText
+				),
+		};
+		if (!result.response.ok) return answered;
 
 		const data = result.data as
 			(HeaderEchoResult & { v?: unknown; headers: Record<string, { received?: unknown }> }) | null;
@@ -222,9 +278,9 @@ async function probeHeaderEcho(
 			typeof data.params.authorization !== 'boolean'
 		) {
 			// Answered, but not by the echo route (cache garbage, WP Hide homepage,
-			// an incomplete body). A numeric verdict keeps this distinct from
+			// an answered verdict keeps this distinct from
 			// network-dead (null) so the caller still reaches the legacy ladder.
-			return result.response.status || 200;
+			return answered;
 		}
 
 		return data as HeaderEchoResult;
@@ -237,14 +293,120 @@ async function probeLegacyAuth(
 	authTestUrl: string,
 	accessToken: string,
 	wcposVersion?: string
-): Promise<{ headerSupported: boolean; paramSupported: boolean } | 'transport-dead'> {
+): Promise<
+	| { headerSupported: boolean; paramSupported: boolean; statuses?: [number?, number?] }
+	| 'transport-dead'
+> {
 	const header = await testHeaderAuth(authTestUrl, accessToken);
-	if (header === 'success') return { headerSupported: true, paramSupported: false };
-	if (header === 'transport-dead') return 'transport-dead';
+	if (header.verdict === 'success')
+		return { headerSupported: true, paramSupported: false, statuses: [header.status] };
+	if (header.verdict === 'transport-dead') return 'transport-dead';
 	const param = await testParamAuth(authTestUrl, accessToken, bareAuthParamSupported(wcposVersion));
-	return param === 'transport-dead'
+	return param.verdict === 'transport-dead'
 		? 'transport-dead'
-		: { headerSupported: false, paramSupported: param === 'success' };
+		: {
+				headerSupported: false,
+				paramSupported: param.verdict === 'success',
+				statuses: [header.status, param.status],
+			};
+}
+
+interface HostBlockEvidence {
+	platform: 'web' | 'native';
+	queryOnly: boolean;
+	pathEcho?: EchoProbeVerdict;
+	queryEcho?: EchoProbeVerdict;
+	legacyHeaderStatus?: number;
+	legacyParamStatus?: number;
+	credentialChannels?: boolean;
+	pingSucceeded?: boolean;
+	simpleEchoSucceeded?: boolean;
+	noCorsPingResolved?: boolean;
+}
+
+const isAnsweredEcho = (verdict: EchoProbeVerdict | undefined): verdict is EchoAnsweredVerdict =>
+	verdict !== null && verdict !== undefined && 'kind' in verdict && verdict.kind === 'answered';
+const echoHasStatus = (verdict: EchoProbeVerdict | undefined, status: number) =>
+	isAnsweredEcho(verdict) && verdict.status === status;
+const echoesNetworkDead = (evidence: HostBlockEvidence) =>
+	evidence.queryOnly
+		? evidence.queryEcho === null
+		: evidence.pathEcho === null && evidence.queryEcho === null;
+
+/**
+ * Null means "not provably hostile": every spelling network-died AND the ping
+ * discriminator (research finding d9 — reachable-vs-hostile) found nothing
+ * alive. That is a store-offline shape, owned by the online-status UX — a
+ * host-blocked toast there would mislabel every outage as a hosting problem.
+ */
+function classifyHostBlock(evidence: HostBlockEvidence): ErrorCode | null {
+	const answered = [evidence.pathEcho, evidence.queryEcho].filter(isAnsweredEcho);
+	if (answered.some(({ challenge }) => challenge)) return ERROR_CODES.BOT_CHALLENGE_BLOCKING_API;
+	if (
+		(evidence.legacyHeaderStatus === 400 && evidence.legacyParamStatus === 414) ||
+		(echoHasStatus(evidence.pathEcho, 400) && echoHasStatus(evidence.queryEcho, 414))
+	) {
+		return ERROR_CODES.AUTH_TOKEN_TOO_LARGE;
+	}
+	if (
+		echoHasStatus(evidence.pathEcho, 503) &&
+		echoHasStatus(evidence.queryEcho, 503) &&
+		evidence.pingSucceeded
+	) {
+		return ERROR_CODES.RESPONSE_HEADERS_REJECTED;
+	}
+	if (evidence.platform === 'web' && echoesNetworkDead(evidence)) {
+		if (evidence.simpleEchoSucceeded) return ERROR_CODES.CORS_PREFLIGHT_BLOCKED;
+		if (evidence.pingSucceeded === false && evidence.noCorsPingResolved) {
+			return ERROR_CODES.CORS_MISCONFIGURED;
+		}
+	}
+	if (evidence.credentialChannels) return ERROR_CODES.AUTH_TOKEN_BLOCKED_BY_HOST;
+	if (echoesNetworkDead(evidence) && evidence.pingSucceeded !== true) return null;
+	return ERROR_CODES.REST_TRANSPORT_BLOCKED;
+}
+
+/** Mirrors @wcpos/hooks/src/reachability-url without importing package internals. */
+function pingProbeUrl(wpApiRoot: string): string {
+	const base = wpApiRoot.endsWith('/') ? wpApiRoot : `${wpApiRoot}/`;
+	const querySeparator = wpApiRoot.includes('rest_route=') ? '&' : '?';
+	return `${base}wcpos/v2/ping${querySeparator}wcpos=1`;
+}
+
+async function finishHostBlock(
+	wcposApiUrl: string,
+	pingUrl: string,
+	simpleEchoUrl: string,
+	evidence: HostBlockEvidence
+): Promise<AuthTransportResolution> {
+	const bothEchoes503 =
+		echoHasStatus(evidence.pathEcho, 503) && echoHasStatus(evidence.queryEcho, 503);
+	const networkDeadEchoes = echoesNetworkDead(evidence);
+	if (bothEchoes503 || networkDeadEchoes) {
+		const ping = await fetchWithProbeTimeout(pingUrl);
+		evidence.pingSucceeded = ping !== null && typeof ping.status === 'number';
+	}
+	if (evidence.platform === 'web' && networkDeadEchoes) {
+		const simpleEcho = await fetchWithProbeTimeout(simpleEchoUrl);
+		evidence.simpleEchoSucceeded = simpleEcho !== null && typeof simpleEcho.status === 'number';
+		if (!evidence.simpleEchoSucceeded && evidence.pingSucceeded === false) {
+			evidence.noCorsPingResolved =
+				(await fetchWithProbeTimeout(pingUrl, { mode: 'no-cors' })) !== null;
+		}
+	}
+	const code = classifyHostBlock(evidence);
+	if (code === null) {
+		appLogger.warn('Authorization probes unreachable — store appears offline', {
+			context: { wcposApiUrl },
+		});
+		return { ok: false, code: null };
+	}
+	appLogger.error('Store host blocked authorization probes', {
+		code,
+		showToast: true,
+		context: { wcposApiUrl, classification: ERROR_CATALOGUE[code].symbol },
+	});
+	return { ok: false, code };
 }
 
 /**
@@ -270,12 +432,12 @@ export async function testAuthorizationMethod(
 		let pathEcho: EchoProbeVerdict | undefined;
 		if (!queryOnly) {
 			pathEcho = await probeHeaderEcho(pathEchoUrl, accessToken, wcposVersion);
-			if (pathEcho && typeof pathEcho !== 'number') {
+			if (pathEcho && !isAnsweredEcho(pathEcho)) {
 				echo = pathEcho;
 			}
 		}
 
-		const pathStatus = typeof pathEcho === 'number' ? pathEcho : undefined;
+		const pathStatus = isAnsweredEcho(pathEcho) ? pathEcho.status : undefined;
 		// A 2xx that failed the echo shape guard is a host answering the path with
 		// something other than WordPress REST (WP Hide's homepage-200 profile) —
 		// that is the path-blocked shape, same as 403/404/network.
@@ -285,16 +447,26 @@ export async function testAuthorizationMethod(
 			(queryOnly ||
 				pathStatus === 403 ||
 				pathStatus === 404 ||
+				pathStatus === 400 ||
+				pathStatus === 503 ||
 				pathAnswerNotEcho ||
 				pathEcho === null);
 		let queryEcho: EchoProbeVerdict | undefined;
 		if (pathTriggersQuery) {
 			queryEcho = await probeHeaderEcho(queryEchoUrl, accessToken, wcposVersion);
-			if (queryEcho && typeof queryEcho !== 'number') {
+			if (queryEcho && !isAnsweredEcho(queryEcho)) {
 				echo = queryEcho;
 				useRestRouteParam = true;
 			}
 		}
+		const hostEvidence: HostBlockEvidence = {
+			platform: Platform.isWeb ? 'web' : 'native',
+			queryOnly,
+			pathEcho,
+			queryEcho,
+		};
+		const pingUrl = pingProbeUrl(pathRoot);
+		const simpleEchoUrl = queryOnly ? queryEchoUrl : pathEchoUrl;
 		if (echo) {
 			const deadHeaders = Object.entries(echo.headers)
 				.filter(([, state]) => state?.received !== true)
@@ -318,12 +490,10 @@ export async function testAuthorizationMethod(
 			// Both credential channels are blocked — the probe measured this
 			// authoritatively, so the legacy test would only fail slower.
 			// Naming this condition for the cashier is Package C's first error.
-			appLogger.error('Server blocks the login token on both channels', {
-				code: ERROR_CODES.AUTH_TOKEN_BLOCKED_BY_HOST,
-				showToast: true,
-				context: { wcposApiUrl, deadHeaders },
+			return finishHostBlock(wcposApiUrl, pingUrl, simpleEchoUrl, {
+				...hostEvidence,
+				credentialChannels: true,
 			});
-			return { ok: false, blocked: 'credential-channels' };
 		}
 
 		// No transport produced a valid echo. Only network-dead on every spelling
@@ -334,18 +504,18 @@ export async function testAuthorizationMethod(
 			? queryEcho === null
 			: pathEcho === null && queryEcho === null;
 		if (networkDeadEverywhere) {
-			appLogger.error('REST transport probes failed', {
-				code: ERROR_CODES.REST_TRANSPORT_BLOCKED,
-				showToast: true,
-				context: { wcposApiUrl, verdict: 'both-transports-blocked' },
-			});
-			return { ok: false, blocked: 'transports' };
+			return finishHostBlock(wcposApiUrl, pingUrl, simpleEchoUrl, hostEvidence);
+		}
+		if (
+			(echoHasStatus(pathEcho, 400) && echoHasStatus(queryEcho, 414)) ||
+			(echoHasStatus(pathEcho, 503) && echoHasStatus(queryEcho, 503))
+		) {
+			return finishHostBlock(wcposApiUrl, pingUrl, simpleEchoUrl, hostEvidence);
 		}
 
 		const pathAuthUrl = `${pathBase}auth/test`;
 		const queryAuthUrl = toRestRouteUrl(pathAuthUrl, pathRoot);
-		let legacy: { headerSupported: boolean; paramSupported: boolean } | 'transport-dead' =
-			'transport-dead';
+		let legacy: Awaited<ReturnType<typeof probeLegacyAuth>> = 'transport-dead';
 		// Path-form legacy first whenever the path answered at route level (401
 		// namespace gate, 404 route-absent, 5xx) — but not for 403 or a non-echo
 		// 2xx, which are the path-blocked shapes.
@@ -357,12 +527,7 @@ export async function testAuthorizationMethod(
 			useRestRouteParam = true;
 		}
 		if (legacy === 'transport-dead') {
-			appLogger.error('REST transport probes failed', {
-				code: ERROR_CODES.REST_TRANSPORT_BLOCKED,
-				showToast: true,
-				context: { wcposApiUrl, verdict: 'both-transports-blocked' },
-			});
-			return { ok: false, blocked: 'transports' };
+			return finishHostBlock(wcposApiUrl, pingUrl, simpleEchoUrl, hostEvidence);
 		}
 		const { headerSupported, paramSupported } = legacy;
 		if (headerSupported) {
@@ -392,12 +557,19 @@ export async function testAuthorizationMethod(
 			});
 			return { ok: true, useJwtAsParam: true, useRestRouteParam };
 		}
+		if (legacy.statuses?.[0] === 400 && legacy.statuses[1] === 414) {
+			return finishHostBlock(wcposApiUrl, pingUrl, simpleEchoUrl, {
+				...hostEvidence,
+				legacyHeaderStatus: legacy.statuses[0],
+				legacyParamStatus: legacy.statuses[1],
+			});
+		}
 
 		// Neither work - log but don't fail hydration.
 		appLogger.warn('Authorization test failed for both methods', {
 			context: { wcposApiUrl },
 		});
-		return { ok: false, blocked: null };
+		return { ok: false, code: null };
 	} catch (err) {
 		appLogger.warn('Authorization method test error', {
 			context: {
@@ -405,7 +577,7 @@ export async function testAuthorizationMethod(
 				error: getErrorMessage(err),
 			},
 		});
-		return { ok: false, blocked: null };
+		return { ok: false, code: null };
 	}
 }
 
