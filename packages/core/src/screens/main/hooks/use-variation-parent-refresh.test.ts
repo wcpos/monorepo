@@ -19,7 +19,9 @@ jest.mock('@wcpos/query', () => ({
 		engine: {
 			events: mockEvents,
 			require: mockRequire,
+			status: () => ({ activeScopeId }),
 			active: () => ({
+				scopeId: residentScopeId,
 				database: {
 					variations: {
 						findOne: (recordId: string) => ({ exec: () => mockFindEngineResident(recordId) }),
@@ -29,6 +31,10 @@ jest.mock('@wcpos/query', () => ({
 		},
 	}),
 }));
+
+/** The scope the resident is read in, and the scope live when the fetch is declared. */
+let residentScopeId = 'scope-1';
+let activeScopeId = 'scope-1';
 
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({ error: (...args: unknown[]) => mockLoggerError(...args) }),
@@ -56,6 +62,8 @@ const ack = (recordId: string, type = 'write-acknowledged') =>
 
 beforeEach(() => {
 	jest.clearAllMocks();
+	residentScopeId = 'scope-1';
+	activeScopeId = 'scope-1';
 	readyControls = [];
 	releases = [];
 	unsubscribe = jest.fn();
@@ -187,6 +195,39 @@ it('re-runs once when a sibling is acknowledged mid-fetch, rather than racing it
 	await act(async () => readyControls[1].resolve());
 	// ...and settles there — the re-run is once, not a loop.
 	expect(mockRequire).toHaveBeenCalledTimes(2);
+});
+
+/**
+ * The parent id is resolved from the outgoing store's resident, and the switch
+ * lands while that lookup is in flight. Product ids are site-wide, so nothing
+ * here is obviously wrong to look at — which is why it has to be checked: the
+ * incoming store's catalog need not contain that product at all.
+ */
+it('fetches nothing when the store switched under the resident lookup', async () => {
+	mount();
+	mockFindEngineResident.mockImplementation(async () => {
+		activeScopeId = 'scope-2';
+		return resident(41);
+	});
+
+	act(() => emit(ack('variation-uuid')));
+
+	await waitFor(() => expect(mockFindEngineResident).toHaveBeenCalled());
+	expect(mockRequire).not.toHaveBeenCalled();
+});
+
+it('does not re-run into a scope that changed while the first fetch was in flight', async () => {
+	mount();
+
+	act(() => emit(ack('variation-l-blue')));
+	await waitFor(() => expect(mockRequire).toHaveBeenCalledTimes(1));
+	act(() => emit(ack('variation-l-green')));
+	await waitFor(() => expect(mockFindEngineResident).toHaveBeenCalledTimes(2));
+
+	activeScopeId = 'scope-2';
+	await act(async () => readyControls[0].resolve());
+
+	expect(mockRequire).toHaveBeenCalledTimes(1);
 });
 
 it('releases the requirement and logs without a toast when the fetch fails', async () => {

@@ -10,28 +10,31 @@ const parentLogger = getLogger(['wcpos', 'products', 'variation-parent']);
 
 /**
  * The parent of the variation the engine just acknowledged, read from the
- * ACTIVE scope's resident.
+ * ACTIVE scope's resident — reported WITH the scope it was read in.
  *
  * The id is read from the resident rather than carried on the event because an
  * acknowledgement can re-materialize the variation from the server's response,
  * and `parent_id` joined the variation schema later than the collection itself
  * — a resident written before that learns its parent exactly here.
  *
- * Resolving against the active scope is also the store-switch guard: an
- * acknowledgement for a write made in a scope the cashier has since left finds
- * no resident and refreshes nothing, rather than fetching a product id into a
- * store it does not belong to.
+ * The scope id travels with it because a product id means nothing on its own
+ * here: reading the resident straddles an await, so by the time the caller acts
+ * the cashier may have switched stores, and the caller must be able to tell that
+ * the id it holds belongs to the scope it is about to fetch into. One resolution
+ * of the scope, reported once — the same discipline `use-local-mutation` applies
+ * to a barcode edit for the same reason.
  */
 async function parentOfAcknowledgedVariation(
 	engine: ReturnType<typeof useQueryRuntime>['engine'],
 	recordId: string
-): Promise<RemoteId | null> {
+): Promise<{ parentRemoteId: RemoteId; scopeId: string } | null> {
 	const scope = engine.active() ?? (await engine.ready);
 	const variations = engineCollection(scope.database, 'variations');
 	const resident = await variations?.findOne(recordId).exec();
 	const payload = (resident?.toJSON() as { payload?: Record<string, unknown> } | undefined)
 		?.payload;
-	return remoteIdOrNull(payload?.parent_id);
+	const parentRemoteId = remoteIdOrNull(payload?.parent_id);
+	return parentRemoteId === null ? null : { parentRemoteId, scopeId: scope.scopeId };
 }
 
 /**
@@ -81,7 +84,14 @@ export function useVariationParentRefresh(): void {
 		const inFlight = new Map<RemoteId, boolean>();
 		let disposed = false;
 
-		const refresh = async (parentRemoteId: RemoteId): Promise<void> => {
+		const refresh = async (parentRemoteId: RemoteId, scopeId: string): Promise<void> => {
+			// The scope the parent id was RESOLVED in. Every path into this function
+			// has crossed at least one await — the resident lookup, or a prior fetch
+			// before the re-run below — and a store switch landing in that window
+			// would otherwise declare the outgoing store's product against the
+			// incoming scope, materializing a record that may not be in its catalog.
+			if (engine.status().activeScopeId !== scopeId) return;
+
 			if (inFlight.has(parentRemoteId)) {
 				// A second child of the same parent was acknowledged after the in-flight
 				// fetch was issued, so that response cannot be assumed to include this
@@ -116,7 +126,7 @@ export function useVariationParentRefresh(): void {
 
 			const acknowledgedAgain = inFlight.get(parentRemoteId);
 			inFlight.delete(parentRemoteId);
-			if (acknowledgedAgain && !disposed) await refresh(parentRemoteId);
+			if (acknowledgedAgain && !disposed) await refresh(parentRemoteId, scopeId);
 		};
 
 		const unsubscribe = engine.events((event) => {
@@ -128,9 +138,9 @@ export function useVariationParentRefresh(): void {
 			if (!recordId) return;
 
 			void (async () => {
-				const parentRemoteId = await parentOfAcknowledgedVariation(engine, recordId);
-				if (parentRemoteId === null || disposed) return;
-				await refresh(parentRemoteId);
+				const resolved = await parentOfAcknowledgedVariation(engine, recordId);
+				if (!resolved || disposed) return;
+				await refresh(resolved.parentRemoteId, resolved.scopeId);
 			})().catch((error: unknown) => {
 				parentLogger.error('Failed to resolve the parent of an acknowledged variation write', {
 					code: ERROR_CODES.PRODUCT_UNEXPECTED,
