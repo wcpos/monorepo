@@ -108,7 +108,7 @@ export function normalizeStorePayload(store: ServerStorePayload): ServerStorePay
 	} else {
 		out.receipt_i18n = Object.fromEntries(
 			Object.entries(out.receipt_i18n as Record<string, unknown>).filter(
-				([, value]) => typeof value === 'string' && value !== ''
+				([, value]) => typeof value === 'string' && value.trim() !== ''
 			)
 		);
 	}

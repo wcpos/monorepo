@@ -82,10 +82,12 @@ describe('normalizeStorePayload', () => {
 		expect(normalizeStorePayload({ id: 1, receipt_i18n: value }).receipt_i18n).toEqual({});
 	});
 
-	it('drops blank receipt_i18n values so the printer default still applies', () => {
+	it('drops blank and whitespace-only receipt_i18n values', () => {
 		expect(
-			normalizeStorePayload({ id: 1, receipt_i18n: { order: 'Bestelling', total: '' } })
-				.receipt_i18n
+			normalizeStorePayload({
+				id: 1,
+				receipt_i18n: { order: 'Bestelling', total: '', subtotal: '   ', tax: '\n' },
+			}).receipt_i18n
 		).toEqual({ order: 'Bestelling' });
 	});
 

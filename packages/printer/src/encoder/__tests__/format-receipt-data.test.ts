@@ -352,6 +352,25 @@ describe('formatReceiptData', () => {
 		});
 	});
 
+	it.each([
+		['an empty string', ''],
+		['whitespace only', '   '],
+		['a newline', '\n'],
+	])('keeps the English default when a label is %s', (_label, value) => {
+		// A blank label would override the default and print an unlabelled row —
+		// the symptom #1252 exists to remove. Filtered where the dictionary meets
+		// the defaults, so it holds for the receipts API payload too, not just the
+		// offline builder.
+		const data = structuredClone(sampleReceiptData);
+		data.i18n = { ...data.i18n, total: value, subtotal: 'Tussentotaal' };
+
+		const result = formatReceiptData(data);
+
+		expect(result.i18n.total).toBe('Total');
+		// A real label alongside it still wins.
+		expect(result.i18n.subtotal).toBe('Tussentotaal');
+	});
+
 	it('passes through a fully populated data.order without clobbering its date object', () => {
 		const data = structuredClone(sampleReceiptData);
 		const fullDate = {

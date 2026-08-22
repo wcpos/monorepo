@@ -260,10 +260,11 @@ describe('buildReceiptData', () => {
 
 	it('drops blank receipt labels so the English default still applies', () => {
 		// A passed-through '' would override formatReceiptData's default and print
-		// an unlabelled row — the symptom #1252 exists to remove.
+		// an unlabelled row — the symptom #1252 exists to remove. Whitespace-only
+		// prints just as blank, so it counts as absent too.
 		const result = buildReceiptData(mockOrder, {
 			...mockStore,
-			receipt_i18n: { order: 'Bestelling', total: '' },
+			receipt_i18n: { order: 'Bestelling', total: '', subtotal: '   ', tax: '\n' },
 		});
 
 		expect(result.i18n).toEqual({ order: 'Bestelling' });
