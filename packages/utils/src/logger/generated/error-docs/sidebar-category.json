@@ -39,6 +39,8 @@
 				"error-codes/AUTH321",
 				"error-codes/AUTH401",
 				"error-codes/AUTH411",
+				"error-codes/AUTH421",
+				"error-codes/AUTH431",
 				"error-codes/AUTH999"
 			]
 		},
