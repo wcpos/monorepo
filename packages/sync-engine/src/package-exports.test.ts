@@ -30,6 +30,11 @@ describe('package exports', () => {
 				// through the same body-envelope seam the engine uses internally
 				// (B9, hostile-headers program) — one unwrap rule, two seams.
 				'hydrateResponse',
+				// Which write events END a mutation: the engine emits them and
+				// @wcpos/query's awaitWriteOutcome settles on them, so the set is
+				// exported rather than mirrored. A mirrored copy that missed a new
+				// terminal type would hang every waiter on it.
+				'TERMINAL_WRITE_EVENT_TYPES',
 			].sort()
 		);
 	});

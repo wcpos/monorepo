@@ -181,6 +181,68 @@ describe('cross-tab write outcomes (#1209)', () => {
 		}
 	});
 
+	it('replays a terminal outcome to a waiter that subscribes AFTER it fired', async () => {
+		// `events()` is fire-and-forget, so an outcome that lands before the waiter
+		// subscribes is gone. The drain now starts at ENQUEUE (c4e9accc5c), so that
+		// window is routinely open: `awaitWriteOutcome` subscribes after `write()`
+		// returns its receipt, and a fast drain can settle first. The waiter then
+		// sits out its 15 s and rejects a write that actually succeeded.
+		const server = createFakeWriteServer();
+		server.seed(ORDER_ID, { id: 900, revision: 'sha256:client-held', collection: 'orders' });
+		const tabs = twoTabs(server.fetch);
+		try {
+			await insertServerOrder(tabs.leader.engine);
+			const receipt = await tabs.leader.engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: ORDER_ID,
+				payload: { status: 'completed' },
+			});
+			await tabs.leader.engine.sync('write-drain');
+
+			// Subscribing only NOW — the outcome is already in the past.
+			const late: EngineEvent[] = [];
+			const unsubscribe = tabs.leader.engine.events((event) => late.push(event), {
+				replayWriteOutcomeFor: receipt.mutationId,
+			});
+			unsubscribe();
+
+			expect(outcomesFor(late, receipt.mutationId)).toEqual([
+				expect.objectContaining({ type: 'write-acknowledged', mutationId: receipt.mutationId }),
+			]);
+		} finally {
+			await tabs.dispose();
+		}
+	});
+
+	it('replays nothing for an unrelated mutation, and never a non-terminal event', async () => {
+		const server = createFakeWriteServer();
+		server.seed(ORDER_ID, { id: 900, revision: 'sha256:client-held', collection: 'orders' });
+		const tabs = twoTabs(server.fetch);
+		try {
+			await insertServerOrder(tabs.leader.engine);
+			await tabs.leader.engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: ORDER_ID,
+				payload: { status: 'completed' },
+			});
+			await tabs.leader.engine.sync('write-drain');
+
+			const late: EngineEvent[] = [];
+			const unsubscribe = tabs.leader.engine.events((event) => late.push(event), {
+				replayWriteOutcomeFor: 'some-other-mutation',
+			});
+			unsubscribe();
+
+			// The replay is keyed: one waiter must never inherit another's verdict,
+			// and the buffer holds terminal write outcomes only.
+			expect(late).toEqual([]);
+		} finally {
+			await tabs.dispose();
+		}
+	});
+
 	it('composes with #1204: a 409 that auto-recovers reaches the follower as ONE success', async () => {
 		const server = createFakeWriteServer();
 		// The server moved on without the client — the #1204 wedge, whose 409
