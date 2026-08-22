@@ -4,64 +4,9 @@ import {
 	classifyDiscoveryFailure,
 	formatDiscoveryFailureMessage,
 } from '../discovery/discovery-errors';
+import { mergePrinters } from '../discovery/merge-printers';
 
-import type { DiscoveredPrinter, DiscoveryError } from '../types';
-
-interface UsePrinterDiscoveryResult {
-	/** Currently discovered/added printers */
-	printers: DiscoveredPrinter[];
-	/** Whether an auto-scan is running */
-	isScanning: boolean;
-	scanCandidates: string[];
-	/** Scan progress; always {0,0} on native (no HTTP sweep). */
-	scanProgress: { tested: number; total: number };
-	/** Start auto-discovery scan */
-	startScan: () => void;
-	/** Stop auto-discovery scan */
-	stopScan: () => void;
-	/** Manually add a printer by IP address and port */
-	addManualPrinter: (
-		name: string,
-		address: string,
-		port?: number,
-		vendor?: 'epson' | 'star' | 'generic'
-	) => void;
-	/** Remove a discovered printer by id */
-	removeDiscoveredPrinter: (id: string) => void;
-	/** Web only — open the browser USB chooser and add the chosen printer. */
-	connectUsbDevice?: () => void;
-	/** Web only — open the browser Bluetooth chooser and add the chosen printer. */
-	connectBluetoothDevice?: () => void;
-	isUsbScanning?: boolean;
-	isBluetoothScanning?: boolean;
-	bluetoothCandidates?: { id: string; name: string }[];
-	selectBluetoothCandidate?: (id: string) => void;
-	cancelBluetoothScan?: () => void;
-	/** Electron — list OS-paired Bluetooth Classic printers via serial device paths. */
-	connectSerialDevice?: () => void;
-	/** True while the serial-discovery IPC round trip is pending. */
-	isSerialScanning?: boolean;
-	/** Structured error if scanning fails */
-	error: DiscoveryError | null;
-}
-
-/**
- * Merge newly discovered printers into the existing list, avoiding duplicates.
- */
-function mergePrinters(
-	existing: DiscoveredPrinter[],
-	discovered: DiscoveredPrinter[]
-): DiscoveredPrinter[] {
-	const ids = new Set(existing.map((p) => p.id));
-	const merged = [...existing];
-	for (const p of discovered) {
-		if (!ids.has(p.id)) {
-			merged.push(p);
-			ids.add(p.id);
-		}
-	}
-	return merged;
-}
+import type { DiscoveredPrinter, DiscoveryError, PrinterDiscovery } from '../types';
 
 /**
  * React Native variant — attempts native SDK discovery for Epson and Star printers.
@@ -69,7 +14,7 @@ function mergePrinters(
  * Uses dynamic imports so the native SDKs are only loaded if installed as
  * peer dependencies. If neither SDK is installed, startScan is a no-op.
  */
-export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
+export function usePrinterDiscovery(): PrinterDiscovery {
 	const [printers, setPrinters] = React.useState<DiscoveredPrinter[]>([]);
 	const [isScanning, setIsScanning] = React.useState(false);
 	const [error, setError] = React.useState<DiscoveryError | null>(null);

@@ -10,45 +10,15 @@ import {
 	createBluetoothScanSession,
 } from '../discovery/bluetooth-scan-session';
 import { mapWebDeviceToDiscoveredPrinter } from '../discovery/map-web-device';
+import { mergePrinters } from '../discovery/merge-printers';
 import { saveWebDevice } from '../transport/web-device-store';
 
-import type { BluetoothCandidate, DiscoveredPrinter, DiscoveryError } from '../types';
-
-interface UsePrinterDiscoveryResult {
-	printers: DiscoveredPrinter[];
-	isScanning: boolean;
-	scanCandidates: string[];
-	/** Scan progress; always {0,0} on electron (mDNS, no HTTP sweep). */
-	scanProgress: { tested: number; total: number };
-	startScan: () => void;
-	stopScan: () => void;
-	addManualPrinter: (
-		name: string,
-		address: string,
-		port?: number,
-		vendor?: 'epson' | 'star' | 'generic'
-	) => void;
-	removeDiscoveredPrinter: (id: string) => void;
-	/** Electron — list installed/USB printers via the main process. */
-	connectUsbDevice?: () => void;
-	/** True while the usb-discovery IPC round trip is pending. */
-	isUsbScanning?: boolean;
-	/** Electron — open a managed Web Bluetooth chooser session. */
-	connectBluetoothDevice?: () => void;
-	/** True while a Bluetooth chooser session is active. */
-	isBluetoothScanning?: boolean;
-	/** Chooser candidates forwarded from the main process during a session. */
-	bluetoothCandidates?: BluetoothCandidate[];
-	/** Pick a chooser candidate by id. */
-	selectBluetoothCandidate?: (id: string) => void;
-	/** End the active chooser session. */
-	cancelBluetoothScan?: () => void;
-	/** Electron — list OS-paired Bluetooth Classic printers via serial device paths. */
-	connectSerialDevice?: () => void;
-	/** True while the serial-discovery IPC round trip is pending. */
-	isSerialScanning?: boolean;
-	error: DiscoveryError | null;
-}
+import type {
+	BluetoothCandidate,
+	DiscoveredPrinter,
+	DiscoveryError,
+	PrinterDiscovery,
+} from '../types';
 
 function getIpcRenderer(): TypedIpcRenderer | null {
 	const w = window as {
@@ -58,26 +28,11 @@ function getIpcRenderer(): TypedIpcRenderer | null {
 	return w.ipcRenderer ?? w.electronAPI?.ipcRenderer ?? null;
 }
 
-function mergePrinters(
-	existing: DiscoveredPrinter[],
-	discovered: DiscoveredPrinter[]
-): DiscoveredPrinter[] {
-	const ids = new Set(existing.map((p) => p.id));
-	const merged = [...existing];
-	for (const p of discovered) {
-		if (!ids.has(p.id)) {
-			merged.push(p);
-			ids.add(p.id);
-		}
-	}
-	return merged;
-}
-
 /**
  * Electron-specific printer discovery: mDNS via the main process, installed/USB printers
  * via usb-discovery, and a managed Web Bluetooth chooser session (BLE only).
  */
-export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
+export function usePrinterDiscovery(): PrinterDiscovery {
 	const [printers, setPrinters] = React.useState<DiscoveredPrinter[]>([]);
 	const [isScanning, setIsScanning] = React.useState(false);
 	const [isUsbScanning, setIsUsbScanning] = React.useState(false);
