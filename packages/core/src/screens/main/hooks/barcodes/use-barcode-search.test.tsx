@@ -169,11 +169,16 @@ describe('barcodeSearch UPC-A ↔ EAN-13 equivalence (#740)', () => {
 		expect(exact.map((r) => r.id)).toEqual(['sku-only']);
 	});
 
-	it('does not apply UPC equivalence when the active materialized carrier is SKU', async () => {
+	it('applies UPC equivalence when the store declares SKU as its barcode carrier', async () => {
+		// A store with barcode_field = _sku has said its SKUs are barcodes, so the
+		// materialized value is a barcode and gets the leading-zero twin. Without
+		// this, a UPC-A read by the camera as the 13-digit GTIN form missed a
+		// product a HID wedge resolved from the same symbol.
 		setSelectors('products', ['sku']);
 		productDocs = [doc('active-sku', { sku: '012345678905', barcode: '012345678905' })];
 
-		expect(await search('0012345678905')).toEqual([]);
+		const results = (await search('0012345678905')) as unknown as FakeDoc[];
+		expect(results.map((r) => r.id)).toEqual(['active-sku']);
 	});
 
 	it('ranks a global-id equivalence above a coincidental exact SKU match', async () => {
