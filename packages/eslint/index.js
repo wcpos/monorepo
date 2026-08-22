@@ -5,7 +5,7 @@ import expoConfig from 'eslint-config-expo/flat.js';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
 import reactCompiler from 'eslint-plugin-react-compiler';
 
-import prettierConfig from '../../prettier.config.mjs';
+import prettierConfig from './prettier.js';
 
 const observableHookNames = new Set([
 	'useObservable',
@@ -242,8 +242,18 @@ const appCodeFiles = cwd.endsWith('/packages/core')
 		: ['**/packages/core/src/**/*.{ts,tsx}', '**/apps/main/**/*.{js,jsx,ts,tsx}'];
 
 export const config = [
-	// Global ignores - git submodules manage their own linting
-	{ ignores: ['apps/electron/**', 'apps/web/**'] },
+	{
+		ignores: [
+			// Git submodules manage their own linting.
+			'apps/electron/**',
+			'apps/web/**',
+			// Targeted recovery is vendored three ways, and the electron copy lives in
+			// another repository. Never let eslint --fix break their byte identity.
+			// Matched by filename, not path: packages lint with `eslint src` from
+			// their own directory, so a repo-relative pattern silently misses.
+			'**/opfs-targeted-recovery.mjs',
+		],
+	},
 	eslintPluginPrettierRecommended,
 	...expoConfig,
 	{
@@ -251,6 +261,9 @@ export const config = [
 		// codegen and CI checks that legitimately use Node globals. Without this they
 		// report `'Buffer' is not defined` once the prettier glob covers them.
 		files: ['**/*.{mjs,cjs}'],
+		// These modules form the browser-bundled OPFS worker graph, so Node globals
+		// must remain unavailable even though they use the `.mjs` extension.
+		ignores: ['**/opfs-worker-entry.mjs', '**/opfs-targeted-recovery.mjs'],
 		languageOptions: {
 			globals: {
 				Buffer: 'readonly',
@@ -503,7 +516,11 @@ export const config = [
 			'app/**/*.{ts,tsx}', // Expo Router requires default exports
 			'**/app/**/*.{ts,tsx}', // Same Expo Router convention when linting from repo root
 			'app.config.ts', // Expo config
-			'**/*.config.{ts,js}', // Config files (playwright, etc.)
+			'**/*.config.ts', // TypeScript config files (playwright, etc.)
+			'**/*.config.{js,mjs,cjs}', // JavaScript config modules require default exports
+			'**/eslint.config.mjs', // ESLint flat config uses its conventional default export
+			'prettier.js', // Canonical prettier config when linting this package directly
+			'**/packages/eslint/prettier.js', // Same config when linting from the repo root
 			'**/*.stories.{ts,tsx}', // Storybook
 			'**/e2e/global-setup.ts', // Playwright global setup
 			'**/tree-dom.tsx', // Expo "use dom" requires default export
