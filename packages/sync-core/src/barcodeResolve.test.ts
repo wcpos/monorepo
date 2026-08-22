@@ -340,6 +340,94 @@ describe('resolveScan online outcomes', () => {
 	});
 });
 
+describe('resolveScan UPC-A/EAN-13 equivalence (#740)', () => {
+	// The physical UPC-A on a retail package. zxing-wasm 3.x (the web/Electron
+	// camera decoder) and the iOS camera both report it as the 13-digit GTIN
+	// form; HID wedges and Android report the bare 12 digits printed under the
+	// bars. Either form must resolve against a store keyed on the other.
+	const UPC_A = '733620209958';
+	const EAN_13 = '0733620209958';
+
+	it('finds a local hit on the counterpart form', async () => {
+		const fetcher = vi.fn<BarcodeResolveFetcher>();
+		const { index } = buildLocalBarcodeIndex([{ id: 'doc-upc', payload: { barcode: UPC_A } }]);
+		const events: ScanEvent[] = [];
+		const result = await resolveScan(
+			scanInput({ code: EAN_13, fetcher, index, onEvent: (event) => events.push(event) })
+		);
+		expect(result).toMatchObject({ outcome: 'local', docId: 'doc-upc' });
+		// The scanned form is echoed back, not the form that matched — callers key
+		// their toasts and feedback on what the cashier actually scanned.
+		expect(result.code).toBe(EAN_13);
+		expect(events.map((event) => event.type)).toEqual(['local-hit']);
+		expect(fetcher).not.toHaveBeenCalled();
+	});
+
+	it('retries the online resolve with the counterpart after found:false', async () => {
+		const match = {
+			id: 41,
+			type: 'product' as const,
+			parent_id: 0,
+			payload: { name: 'Hand Lotion' },
+		};
+		const fetcher = vi.fn<BarcodeResolveFetcher>(async (url) =>
+			jsonResponse(
+				new URL(url).searchParams.get('code') === UPC_A
+					? resolveResponse({ code: UPC_A, found: true, match })
+					: resolveResponse({ code: EAN_13 })
+			)
+		);
+		const events: ScanEvent[] = [];
+		const result = await resolveScan(
+			scanInput({ code: EAN_13, fetcher, onEvent: (event) => events.push(event) })
+		);
+
+		expect(result).toMatchObject({ outcome: 'online', code: EAN_13, match });
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		expect(new URL(fetcher.mock.calls[0][0]).searchParams.get('code')).toBe(EAN_13);
+		expect(new URL(fetcher.mock.calls[1][0]).searchParams.get('code')).toBe(UPC_A);
+		// One searching-online for the whole scan: the retry is an implementation
+		// detail, not a second thing the cashier is told about.
+		expect(events.map((event) => event.type)).toEqual(['searching-online', 'resolved-online']);
+	});
+
+	it('reports not-found only after every candidate misses', async () => {
+		const fetcher = vi.fn<BarcodeResolveFetcher>(async () => jsonResponse(resolveResponse()));
+		const events: ScanEvent[] = [];
+		const result = await resolveScan(
+			scanInput({ code: UPC_A, fetcher, onEvent: (event) => events.push(event) })
+		);
+		expect(result.outcome).toBe('not-found');
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		expect(new URL(fetcher.mock.calls[1][0]).searchParams.get('code')).toBe(EAN_13);
+		expect(events.map((event) => event.type)).toEqual(['searching-online', 'not-found']);
+	});
+
+	it('spends no extra request on a code with no counterpart', async () => {
+		const fetcher = vi.fn<BarcodeResolveFetcher>(async () => jsonResponse(resolveResponse()));
+		// A genuine EAN-13 (non-zero prefix) has exactly one form.
+		const result = await resolveScan(scanInput({ code: '5901234123457', fetcher }));
+		expect(result.outcome).toBe('not-found');
+		expect(fetcher).toHaveBeenCalledTimes(1);
+	});
+
+	it('stops at a transport failure instead of burning the counterpart on a dead network', async () => {
+		const fetcher = vi.fn<BarcodeResolveFetcher>(async () => {
+			throw new Error('socket hang up');
+		});
+		const result = await resolveScan(scanInput({ code: EAN_13, fetcher }));
+		expect(result.outcome).toBe('error');
+		expect(fetcher).toHaveBeenCalledTimes(1);
+	});
+
+	it('stops at a non-2xx instead of retrying the counterpart', async () => {
+		const fetcher = vi.fn<BarcodeResolveFetcher>(async () => new Response('boom', { status: 500 }));
+		const result = await resolveScan(scanInput({ code: EAN_13, fetcher }));
+		expect(result.outcome).toBe('error');
+		expect(fetcher).toHaveBeenCalledTimes(1);
+	});
+});
+
 describe('resolveScan request URL', () => {
 	async function requestedUrl(profile?: ScanArgs['profile']): Promise<URL> {
 		const fetcher = vi.fn<BarcodeResolveFetcher>(async () => jsonResponse(resolveResponse()));

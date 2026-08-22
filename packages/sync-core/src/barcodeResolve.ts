@@ -348,10 +348,14 @@ export function buildResolveBarcodeUrl(input: {
  * invoked (the contract — pinned by tests), then the resolve endpoint
  * answers with resolved-online / not-found / error.
  *
- * Normalization is trim-only here; UPC-A/EAN-13 leading-zero equivalence (#740)
- * is applied by the POS barcode-search layer, which owns local matching (this
- * flow is invoked with an empty local index and drives the online resolve).
- * Check-digit normalization is still future work.
+ * UPC-A/EAN-13 leading-zero equivalence (#740) applies to BOTH lookups here:
+ * the local index is probed with every `barcodeMatchCandidates` form, and a
+ * server `found:false` for the scanned form is retried with the counterpart
+ * before the scan is called a miss. Without the online half, a UPC-A scanned by
+ * a decoder that reports the 13-digit GTIN form (zxing-wasm 3.x normalizes
+ * every UPC symbol that way, as does the iOS camera) could never resolve
+ * against a store keyed on the bare 12 digits unless the product happened to be
+ * materialized locally. Check-digit normalization is still future work.
  */
 export async function resolveScan(input: ResolveScanInput): Promise<ScanResult> {
 	const startMs = input.now();
@@ -375,48 +379,75 @@ export async function resolveScan(input: ResolveScanInput): Promise<ScanResult> 
 		};
 	}
 
-	const hit = input.index.get(code);
-	if (hit) {
-		const terminal = emit('local-hit');
-		return {
-			outcome: 'local',
-			code,
-			docId: hit.docId,
-			timings: { scanToFeedbackMs: terminal.atMs, scanToResolutionMs: terminal.atMs },
-			events,
-		};
+	// The scanned form first, so a store keyed the way the decoder reports
+	// answers on the first probe and the counterpart costs nothing.
+	const candidates = barcodeMatchCandidates(code);
+
+	for (const candidate of candidates) {
+		const hit = input.index.get(candidate);
+		if (hit) {
+			const terminal = emit('local-hit');
+			return {
+				outcome: 'local',
+				code,
+				docId: hit.docId,
+				timings: { scanToFeedbackMs: terminal.atMs, scanToResolutionMs: terminal.atMs },
+				events,
+			};
+		}
 	}
 
 	// Contract: the cashier sees "searching online" before any network await.
 	const feedback = emit('searching-online');
 	const scanToFeedbackMs = feedback.atMs;
-	const url = buildResolveBarcodeUrl({
-		syncBaseUrl: input.syncBaseUrl,
-		code,
-		profile: input.profile,
-	});
 
-	let body: ResolveBarcodeResponse;
-	try {
-		const response = await input.fetcher(url);
-		const text = await response.text();
-		if (!response.ok) {
+	let body: ResolveBarcodeResponse | null = null;
+	// Only a clean `found:false` advances to the counterpart: a transport error
+	// or a non-2xx is terminal for the whole scan, so a dead network still costs
+	// exactly one request (and one lookup deadline), not one per candidate.
+	for (const candidate of candidates) {
+		const url = buildResolveBarcodeUrl({
+			syncBaseUrl: input.syncBaseUrl,
+			code: candidate,
+			profile: input.profile,
+		});
+		try {
+			const response = await input.fetcher(url);
+			const text = await response.text();
+			if (!response.ok) {
+				const terminal = emit('error');
+				return {
+					outcome: 'error',
+					code,
+					message: `resolve/barcode failed: ${response.status} ${text.slice(0, 200)}`,
+					timings: { scanToFeedbackMs, scanToResolutionMs: terminal.atMs },
+					events,
+				};
+			}
+			body = JSON.parse(text) as ResolveBarcodeResponse;
+		} catch (error) {
 			const terminal = emit('error');
 			return {
 				outcome: 'error',
 				code,
-				message: `resolve/barcode failed: ${response.status} ${text.slice(0, 200)}`,
+				message: `resolve/barcode request failed: ${error instanceof Error ? error.message : String(error)}`,
 				timings: { scanToFeedbackMs, scanToResolutionMs: terminal.atMs },
 				events,
 			};
 		}
-		body = JSON.parse(text) as ResolveBarcodeResponse;
-	} catch (error) {
+		if (body.found) {
+			break;
+		}
+	}
+
+	// `candidates` is never empty (barcodeMatchCandidates always returns the
+	// trimmed code), so the loop above always assigned a body or returned.
+	if (body === null) {
 		const terminal = emit('error');
 		return {
 			outcome: 'error',
 			code,
-			message: `resolve/barcode request failed: ${error instanceof Error ? error.message : String(error)}`,
+			message: 'resolve/barcode produced no response',
 			timings: { scanToFeedbackMs, scanToResolutionMs: terminal.atMs },
 			events,
 		};
