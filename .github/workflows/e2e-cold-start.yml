@@ -1,10 +1,15 @@
 name: E2E Cold Start
 
-# Nightly thin-local-DB E2E profile (#991 / PR #996). Scheduled workflows only
-# fire from the default branch, so this file lives on main — but the profile
-# and specs live on the next lane, so the job checks out `next` (or the
-# dispatch input) and runs the opt-in `pro-cold-start` Playwright project.
-# Without BASE_URL the Playwright config builds and serves the web app itself.
+# Nightly thin-local-DB E2E profile (#991 / PR #996): the only gate that boots
+# the app against an EMPTY database, so it is what catches a schema or startup
+# fault that every warm profile survives. Runs the opt-in `pro-cold-start`
+# Playwright project; without BASE_URL the config builds and serves the web app
+# itself.
+#
+# Tests `main`. It tested `next` until 2026-08-22 — a leftover from when the
+# profile and specs were next-only — but the lanes converged on 2026-08-15 and
+# `next` has not moved since 2026-08-18, so the nightly was reporting green on a
+# branch nobody ships. `next` stays available as a dispatch option.
 on:
   schedule:
     - cron: '23 3 * * *'
@@ -13,12 +18,12 @@ on:
       ref:
         description: Branch to test
         type: string
-        default: next
+        default: main
       lane:
         description: Store lane containing the selected ref
         type: choice
         required: true
-        default: next
+        default: main
         options:
           - main
           - next
@@ -35,16 +40,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - name: 🏗 Setup repository (next lane)
+      - name: 🏗 Setup repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.event.inputs.ref || 'next' }}
+          ref: ${{ github.event.inputs.ref || 'main' }}
           fetch-depth: 0
           submodules: false
 
       - name: 🔒 Validate trusted ref
         env:
-          E2E_LANE: ${{ github.event.inputs.lane || 'next' }}
+          E2E_LANE: ${{ github.event.inputs.lane || 'main' }}
         run: |
           git fetch origin "$E2E_LANE"
           if ! git merge-base --is-ancestor HEAD "origin/$E2E_LANE"; then
@@ -52,11 +57,6 @@ jobs:
             exit 1
           fi
 
-      # No uniwind-auth-token here, deliberately: this job checks out `next`, so
-      # it runs *next's* copy of the composite action, and next dropped the
-      # uniwind-pro auth plumbing in 0e9d5b761 (pro's download quota was
-      # exhausted; the override is free uniwind@1.10.0, which installs with no
-      # token). Passing it would be an undeclared input — a warning and a no-op.
       - name: 🏗 Setup monorepo
         uses: ./.github/actions/setup-monorepo
         with:
@@ -80,11 +80,11 @@ jobs:
         env:
           E2E_COLD_START: '1'
           CI: true
-          # Scheduled runs default to next. Manual runs bind arbitrary refs to
-          # an explicit validated lane, so a main-lane tag or SHA cannot be
-          # silently routed to dev-next. This selects `pro-cold-start` alone,
-          # so no free store is needed or bootstrapped.
-          E2E_STORE_URL_PRO: ${{ github.event.inputs.lane == 'main' && 'https://dev-pro.wcpos.com' || 'https://dev-next.wcpos.com' }}
+          # The store follows the lane (ruled: an E2E store always matches the
+          # lane under test), and the lane is validated above, so a main-lane ref
+          # cannot be silently routed at dev-next or vice versa. Selects
+          # `pro-cold-start` alone, so no free store is needed or bootstrapped.
+          E2E_STORE_URL_PRO: ${{ (github.event.inputs.lane || 'main') == 'next' && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}
 
       - name: 📸 Upload results on failure
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
