@@ -1,22 +1,14 @@
 import * as React from 'react';
 
-import {
-	Select,
-	SelectContent,
-	SelectGroup,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '@wcpos/components/select';
+import { OptionSelect } from '@wcpos/components/select';
 import type { SelectSingleRootProps } from '@wcpos/components/select';
-import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../contexts/translations';
 
 /**
  *
  */
-export function ProductStatusSelect({ value, ...props }: SelectSingleRootProps) {
+export function ProductStatusSelect({ value, onValueChange, ...props }: SelectSingleRootProps) {
 	const t = useT();
 
 	/**
@@ -35,25 +27,19 @@ export function ProductStatusSelect({ value, ...props }: SelectSingleRootProps) 
 	/**
 	 *
 	 */
-	const label = options.find((option) => option.value === value?.value)?.label;
 
 	/**
 	 *
 	 */
 	return (
-		<Select value={value ? { ...value, label: label ?? '' } : undefined} {...props}>
-			<SelectTrigger>
-				<SelectValue placeholder={t('common.select_status')} />
-			</SelectTrigger>
-			<SelectContent matchWidth>
-				<SelectGroup>
-					{options.map((option) => (
-						<SelectItem key={option.value} label={option.label} value={option.value}>
-							<Text>{option.label}</Text>
-						</SelectItem>
-					))}
-				</SelectGroup>
-			</SelectContent>
-		</Select>
+		<OptionSelect
+			options={options}
+			value={value?.value}
+			onChange={(_nextValue, option) => onValueChange?.(option)}
+			placeholder={t('common.select_status')}
+			fallbackLabel=""
+			matchWidth
+			{...props}
+		/>
 	);
 }

@@ -1,22 +1,14 @@
 import * as React from 'react';
 
-import {
-	Select,
-	SelectContent,
-	SelectGroup,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '@wcpos/components/select';
+import { OptionSelect } from '@wcpos/components/select';
 import type { SelectSingleRootProps } from '@wcpos/components/select';
-import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../contexts/translations';
 
 /**
  *
  */
-export function CurrencyPositionSelect({ value, ...props }: SelectSingleRootProps) {
+export function CurrencyPositionSelect({ value, onValueChange, ...props }: SelectSingleRootProps) {
 	const t = useT();
 
 	/**
@@ -34,25 +26,19 @@ export function CurrencyPositionSelect({ value, ...props }: SelectSingleRootProp
 	/**
 	 *
 	 */
-	const label = options.find((option) => option.value === value?.value)?.label;
 
 	/**
 	 *
 	 */
 	return (
-		<Select value={value ? { ...value, label: label ?? '' } : undefined} {...props}>
-			<SelectTrigger>
-				<SelectValue placeholder={t('common.select_a_currency_position')} />
-			</SelectTrigger>
-			<SelectContent matchWidth>
-				<SelectGroup>
-					{options.map((option) => (
-						<SelectItem key={option.value} label={option.label} value={option.value}>
-							<Text>{option.label}</Text>
-						</SelectItem>
-					))}
-				</SelectGroup>
-			</SelectContent>
-		</Select>
+		<OptionSelect
+			options={options}
+			value={value?.value}
+			onChange={(_nextValue, option) => onValueChange?.(option)}
+			placeholder={t('common.select_a_currency_position')}
+			fallbackLabel=""
+			matchWidth
+			{...props}
+		/>
 	);
 }

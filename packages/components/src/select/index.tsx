@@ -18,7 +18,7 @@ import { useLayoutWidth } from '../lib/use-layout-width';
 import { cn } from '../lib/utils';
 
 import type { ButtonProps } from '../button';
-import type { Option, SelectRootProps, SelectValueProps } from './types';
+import type { Option, SelectRootProps, SelectSingleRootProps, SelectValueProps } from './types';
 
 /**
  * Context to signal multi-select mode to child components.
@@ -325,7 +325,63 @@ function SelectScrollDownButton({ className, ...props }: SelectPrimitive.ScrollD
 	);
 }
 
+type OptionSelectOption = Option & { disabled?: boolean };
+
+type OptionSelectProps = Omit<SelectSingleRootProps, 'children' | 'onValueChange' | 'value'> & {
+	options: OptionSelectOption[];
+	value?: string;
+	onChange?: (value: string | undefined, option: Option | undefined) => void;
+	placeholder: string;
+	fallbackLabel?: string;
+	matchWidth?: boolean;
+	triggerClassName?: string;
+	valueClassName?: string;
+};
+
+function OptionSelect({
+	options,
+	value,
+	onChange,
+	placeholder,
+	fallbackLabel,
+	matchWidth,
+	triggerClassName,
+	valueClassName,
+	...props
+}: OptionSelectProps) {
+	const selected = options.find((option) => option.value === value);
+	const selectedValue =
+		value !== undefined && (selected || fallbackLabel !== undefined)
+			? { value, label: selected?.label ?? fallbackLabel ?? '' }
+			: undefined;
+
+	return (
+		<Select
+			value={selectedValue}
+			onValueChange={(option) => onChange?.(option?.value, option)}
+			{...props}
+		>
+			<SelectTrigger className={triggerClassName}>
+				<SelectValue className={valueClassName} placeholder={placeholder} />
+			</SelectTrigger>
+			<SelectContent matchWidth={matchWidth}>
+				<SelectGroup>
+					{options.map((option) => (
+						<SelectItem
+							key={option.value}
+							value={option.value}
+							label={option.label}
+							disabled={option.disabled}
+						/>
+					))}
+				</SelectGroup>
+			</SelectContent>
+		</Select>
+	);
+}
+
 export {
+	OptionSelect,
 	Select,
 	SelectContent,
 	SelectGroup,
@@ -348,3 +404,5 @@ export type {
 	SelectMultiRootProps,
 	SelectValueProps,
 } from './types';
+
+export type { OptionSelectOption, OptionSelectProps };

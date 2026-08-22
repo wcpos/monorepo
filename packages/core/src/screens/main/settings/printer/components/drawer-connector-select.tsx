@@ -1,19 +1,11 @@
 import * as React from 'react';
 
-import {
-	Select,
-	SelectContent,
-	SelectGroup,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '@wcpos/components/select';
+import { OptionSelect } from '@wcpos/components/select';
 import type { SelectSingleRootProps } from '@wcpos/components/select';
-import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../../contexts/translations';
 
-export function DrawerConnectorSelect({ value, ...props }: SelectSingleRootProps) {
+export function DrawerConnectorSelect({ value, onValueChange, ...props }: SelectSingleRootProps) {
 	const t = useT();
 
 	const options = React.useMemo(
@@ -24,26 +16,15 @@ export function DrawerConnectorSelect({ value, ...props }: SelectSingleRootProps
 		[t]
 	);
 
-	const selectedLabel =
-		options.find((option) => option.value === value?.value)?.label ??
-		value?.label ??
-		value?.value ??
-		'';
-
 	return (
-		<Select value={value ? { ...value, label: selectedLabel } : undefined} {...props}>
-			<SelectTrigger>
-				<SelectValue placeholder={t('settings.select_drawer_connector')} />
-			</SelectTrigger>
-			<SelectContent matchWidth>
-				<SelectGroup>
-					{options.map((option) => (
-						<SelectItem key={option.value} label={option.label} value={option.value}>
-							<Text>{option.label}</Text>
-						</SelectItem>
-					))}
-				</SelectGroup>
-			</SelectContent>
-		</Select>
+		<OptionSelect
+			options={options}
+			value={value?.value}
+			onChange={(_nextValue, option) => onValueChange?.(option)}
+			placeholder={t('settings.select_drawer_connector')}
+			fallbackLabel={value?.label ?? value?.value ?? ''}
+			matchWidth
+			{...props}
+		/>
 	);
 }
