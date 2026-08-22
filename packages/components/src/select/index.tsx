@@ -5,6 +5,7 @@ import * as SelectPrimitive from '@rn-primitives/select';
 import Animated from 'react-native-reanimated';
 
 import { Trigger as SelectPrimitiveTrigger, Value as SelectPrimitiveValue } from './trigger';
+import { resolveOption } from './resolve-option';
 import {
 	SelectMultiContent,
 	SelectMultiItem,
@@ -358,7 +359,7 @@ function OptionSelect({
 	return (
 		<Select
 			value={selectedValue}
-			onValueChange={(option) => onChange?.(option?.value, option)}
+			onValueChange={(option) => onChange?.(option?.value, resolveOption(options, option))}
 			{...props}
 		>
 			<SelectTrigger className={triggerClassName}>
