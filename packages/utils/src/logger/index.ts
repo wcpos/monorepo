@@ -662,6 +662,9 @@ const mainTransport = (props: any) => {
 		const toastConfig: any = {
 			type: toastType,
 			title: options.toast?.title ?? message, // New format uses 'title' not 'text1'
+			// Lets E2E assert WHICH coded condition surfaced, without selecting
+			// on translated copy (the repo's E2E selector policy).
+			...(errorCode && { testId: `toast-${errorCode}` }),
 		};
 
 		// Add secondary message (description in new format)

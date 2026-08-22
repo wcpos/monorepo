@@ -27,7 +27,9 @@ jest.mock('@wcpos/components/label', () => ({
 	Label: ({ children }: { children: React.ReactNode }) => <label>{children}</label>,
 }));
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
+		<span data-testid={testID}>{children}</span>
+	),
 }));
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -69,8 +71,13 @@ describe('UrlInput', () => {
 
 		render(<UrlInput />);
 
-		const link = screen.getByTestId('connect-error-docs-link');
+		// NOTE: DocsLink is mocked here as an anchor, so href is readable. The
+		// real component renders a role="link" div (RNW Pressable) with NO href
+		// — which is why the code rides the testID and why E2E asserts on that,
+		// never on href.
+		const link = screen.getByTestId('connect-error-docs-link-AUTH431');
 		expect(link.getAttribute('href')).toBe('https://docs.wcpos.com/error-codes/AUTH431');
 		expect(link.textContent).toBe('common.learn_more');
+		expect(screen.getByTestId('connect-error-message')).toBeTruthy();
 	});
 });
