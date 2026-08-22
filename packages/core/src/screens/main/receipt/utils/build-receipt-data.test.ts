@@ -258,6 +258,17 @@ describe('buildReceiptData', () => {
 		expect(result.i18n).toEqual({ order: 'Bestelling' });
 	});
 
+	it('drops blank receipt labels so the English default still applies', () => {
+		// A passed-through '' would override formatReceiptData's default and print
+		// an unlabelled row — the symptom #1252 exists to remove.
+		const result = buildReceiptData(mockOrder, {
+			...mockStore,
+			receipt_i18n: { order: 'Bestelling', total: '' },
+		});
+
+		expect(result.i18n).toEqual({ order: 'Bestelling' });
+	});
+
 	it('prefers the receiptI18n option over the store field', () => {
 		// The renderer passes a reactively-subscribed dictionary so a store sync
 		// mid-screen rebuilds memoized receipt data (see BuildReceiptDataOptions).

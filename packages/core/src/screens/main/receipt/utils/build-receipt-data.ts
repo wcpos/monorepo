@@ -775,7 +775,10 @@ export function buildReceiptData(
 		rawReceiptI18n !== null && typeof rawReceiptI18n === 'object' && !Array.isArray(rawReceiptI18n)
 			? Object.fromEntries(
 					Object.entries(rawReceiptI18n).filter(
-						(entry): entry is [string, string] => typeof entry[1] === 'string'
+						// Blank values are dropped, not passed through: formatReceiptData
+						// spreads this over its English defaults, so an empty string would
+						// print an unlabelled row instead of falling back to the default.
+						(entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1] !== ''
 					)
 				)
 			: {};
