@@ -6,6 +6,7 @@ import {
 	prepareThermalPrintAssets,
 	renderThermalBarcodeAsset,
 } from '../encoder/thermal-print';
+import { sampleReceiptData } from '../encoder/__tests__/fixtures';
 
 const ONE_PIXEL_PNG =
 	'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
@@ -72,6 +73,22 @@ function countSequence(bytes: Uint8Array, sequence: readonly number[]): number {
 }
 
 describe('encodeThermalTemplateForPrint', () => {
+	it('uses ISO currency text when the INR symbol would be substituted', async () => {
+		const data = structuredClone(sampleReceiptData);
+		data.order.currency = 'INR';
+		const bytes = await encodeThermalTemplateForPrint({
+			templateXml: '<receipt><text>{{totals.total_incl_display}}</text></receipt>',
+			receiptData: data,
+			maxWidthDots: 384,
+			encodeOptions: { language: 'star-prnt' },
+		});
+
+		const text = new TextDecoder().decode(bytes);
+		expect(text).toContain('INR');
+		expect(text).toContain('25.00');
+		expect(Array.from(bytes)).not.toContain(0x3f);
+	});
+
 	it('matches Template Studio by rasterizing logo and barcode assets before encoding', async () => {
 		mockImageAndCanvas(64, 32);
 
