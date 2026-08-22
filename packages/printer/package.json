@@ -25,6 +25,7 @@
 		"ipc-channels.d.ts"
 	],
 	"scripts": {
+		"lint": "eslint src",
 		"test": "vitest run"
 	},
 	"dependencies": {
