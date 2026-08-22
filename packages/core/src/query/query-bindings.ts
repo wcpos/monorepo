@@ -386,17 +386,23 @@ function censusTotal$(
  * binding's own resident count — one source of truth, so the footer and the Store Health ›
  * Database page can never disagree about a total.
  *
- * For a WHOLE-COLLECTION browse the census wins outright: it is the very number the Database
- * page prints in its "on server" column, and the two displays must agree (owner ruling
- * 2026-08-22). This is not a tie-break between equivalent counts — the per-query browse-window
- * total and the census deliberately count different populations (#1400: the browse walk counts
- * `wcpos/v2`, the census probe counts `wc/v3`), so preferring the verdict here is what made the
- * footer and the Database page disagree by a handful of records.
+ * Wherever a census stands for the screen's scope it wins OUTRIGHT — it is the very number the
+ * Database page prints in its "on server" column, and it does not move when the cashier filters
+ * or types (owner ruling 2026-08-22: one total, all the time). "Showing 3 of 203" says this
+ * till knows about 203 products and three of them match; the old per-query denominator made
+ * that second number move with every keystroke, and turned a failed search into "Showing 0 of
+ * 0" — which reads like an empty till rather than a product the shop does not stock.
  *
- * Anything narrower — a filter, a search, a targeted subset — has no counterpart on the
- * Database page, so it keeps the engine's per-query answer (`census$` is `NO_CENSUS_TOTAL$`
- * there: a filtered set must never borrow the whole collection's size), falling back to the
- * resident count when the engine has no answer at all.
+ * Preferring the verdict was also not a tie-break between equivalent counts: the browse-window
+ * total and the census deliberately count different populations (#1400: the walk counts
+ * `wcpos/v2`, the census probe counts `wc/v3`), which is how the footer and the Database page
+ * came to disagree by a handful of records on the same catalogue.
+ *
+ * `census$` is `NO_CENSUS_TOTAL$` when the census cannot honestly stand for the screen —
+ * a targeted subset, or a scope-narrowed collection (see SCOPE_NARROWED_COLLECTIONS: the
+ * orders grid is this cashier at this till, and the store's order count would claim thousands
+ * of missing rows). Those keep the engine's per-query answer, falling back to the resident
+ * count when there is no answer at all.
  *
  * The local resident count stays the floor in every branch: more residents than the server's
  * last count proves that count outdated, so the larger number wins — stated plainly, never
@@ -421,8 +427,8 @@ function coverageProjection$(
 		census$,
 	]).pipe(
 		map(([localCount, verdict, censusTotal]) => {
-			// `censusTotal` is non-null only for a whole-collection browse whose census has
-			// landed — exactly the case the Database page also displays.
+			// `censusTotal` is non-null only where the census honestly stands for this screen
+			// (see `censusScoped`) and has landed.
 			const serverTotal = censusTotal ?? verdict.total;
 			return {
 				total: serverTotal === null ? localCount : Math.max(serverTotal, localCount),
@@ -515,10 +521,10 @@ function useEngineBinding(
 	}, [descriptor, enabled, runtime.engine, runtime.locale]);
 	const census$ = React.useMemo(
 		() =>
-			compiled.wholeCollection
+			compiled.censusScoped
 				? censusTotal$(runtime.engine, engineCollectionNameFor(descriptor.collection))
 				: NO_CENSUS_TOTAL$,
-		[compiled.wholeCollection, descriptor.collection, runtime.engine]
+		[compiled.censusScoped, descriptor.collection, runtime.engine]
 	);
 	const projection$ = React.useMemo(
 		() => coverageProjection$(runtime.engine, result$, demand.coverageTarget$, census$),
@@ -713,8 +719,8 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 	}, [bindingId, childDescriptor, compiled.read, descriptor, runtime.engine, runtime.locale]);
 	const resource = useObservableResource(result$);
 	const census$ = React.useMemo(
-		() => (compiled.wholeCollection ? censusTotal$(runtime.engine, 'products') : NO_CENSUS_TOTAL$),
-		[compiled.wholeCollection, runtime.engine]
+		() => (compiled.censusScoped ? censusTotal$(runtime.engine, 'products') : NO_CENSUS_TOTAL$),
+		[compiled.censusScoped, runtime.engine]
 	);
 	const projection$ = React.useMemo(
 		() => coverageProjection$(runtime.engine, result$, parentDemand.coverageTarget$, census$),

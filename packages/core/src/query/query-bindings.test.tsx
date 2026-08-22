@@ -881,10 +881,8 @@ describe('query bindings', () => {
 		subscription.unsubscribe();
 		// The superset lane's total (4) must never surface for the narrower grid.
 		expect(totals).not.toContain(4);
-		// The superset lane exists and is fresh; the binding simply never asks about it. The
-		// filtered shape must not borrow the whole-collection census either.
+		// The superset lane exists and is fresh; the binding simply never asks about it.
 		expect(engine.coverageSubscribeCalls).toEqual([]);
-		expect(engine.censusSubscribeCount).toBe(0);
 	});
 
 	it('uses coupons:all coverage only for the unfiltered reference lane', async () => {
@@ -1007,7 +1005,56 @@ describe('query bindings', () => {
 		).resolves.toBe(1);
 		expect(engine.searchRequireCalls).toHaveLength(1);
 		expect(engine.coverageSubscribeCalls).toEqual([]);
-		// A search is not the whole collection — the census must never stand in for its total.
+	});
+
+	// Owner ruling 2026-08-22: the denominator is a property of the STORE, not of the current
+	// view, so it holds still while the cashier types. "Showing 1 of 203" says this till knows
+	// 203 products and one matches; the old "Showing 1 of 1" made the denominator move with
+	// every keystroke, and "Showing 0 of 0" on a failed search read like an empty till.
+	it('keeps the census as the total while a search narrows the rendered rows', async () => {
+		await engineDB.collections.products.bulkInsert([
+			engineProduct({ uuid: 'match', id: 1, name: 'Blue Shirt' }),
+			engineProduct({ uuid: 'other', id: 2, name: 'Red Hat' }),
+		]);
+		engine.setCensusTotal('products', 203);
+		const searched: QueryStateOf<'products'> = {
+			search: 'blue',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'name', direction: 'asc' },
+			limit: 25,
+		};
+		const { result } = renderHook(() => useCollectionBinding('products', searched), {
+			wrapper: Provider,
+		});
+
+		await expect(
+			firstValueFrom(result.current.total$.pipe(filter((total) => total === 203)))
+		).resolves.toBe(203);
+		expect(engine.censusSubscribeCount).toBeGreaterThan(0);
+	});
+
+	// The counter-case, and the reason "always the census" is NOT the rule. The orders grid is
+	// this cashier at this till — a scope the screen IS, which no control on the page widens.
+	// The census counts every order in the store, so borrowing it would tell a cashier that
+	// thousands of their orders had gone missing.
+	it('never borrows the census for the cashier-scoped orders grid', async () => {
+		engine.setCensusTotal('orders', 4_312);
+		const scoped: QueryStateOf<'orders'> = {
+			search: '',
+			filters: { cashier: '7', store: '24128' },
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+			limit: 25,
+		};
+		const { result } = renderHook(() => useCollectionBinding('orders', scoped), {
+			wrapper: Provider,
+		});
+
+		await waitFor(() => expect(current(result.current.resource)).toBeTruthy());
+		const totals: number[] = [];
+		const subscription = result.current.total$.subscribe((total) => totals.push(total));
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		subscription.unsubscribe();
+		expect(totals).not.toContain(4_312);
 		expect(engine.censusSubscribeCount).toBe(0);
 	});
 

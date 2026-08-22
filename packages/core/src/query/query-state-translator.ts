@@ -286,6 +286,18 @@ export function requirementsForCompiledQuery(
 	}));
 }
 
+/**
+ * Collections whose grid is narrower than the whole collection by DESIGN, not by a filter
+ * the cashier applied.
+ *
+ * The orders grid is *this cashier at this till* — that scope is what the screen is, and no
+ * control on the page widens it. The census counts every order in the store, so borrowing it
+ * here would tell a cashier that thousands of orders are missing from a grid that was never
+ * going to show them. These keep the engine's per-query total, which describes the grid they
+ * are actually looking at.
+ */
+const SCOPE_NARROWED_COLLECTIONS: ReadonlySet<string> = new Set(['orders']);
+
 /** Compile UI query state once into its remote-demand and local-read faces. */
 export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 	collection: C,
@@ -345,13 +357,21 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 	});
 	const search = state.search.trim();
 	/**
-	 * Does this query span the ENTIRE collection — no filter, no search, no targeted
-	 * subset, no residual predicate? Only then may a consumer treat the engine's
-	 * whole-collection census total as this query's total (the footer's fallback when
-	 * no per-query server total has been recorded yet).
+	 * May this query's footer report the collection CENSUS as its total?
+	 *
+	 * Deliberately blind to filters and search (owner ruling 2026-08-22). The total is a
+	 * property of the STORE, not of the current view: "Showing 3 of 203" says this till
+	 * knows about 203 products and 3 of them match, and it holds still while the cashier
+	 * types. A denominator that moved with every keystroke was the confusing part — and
+	 * the old "Showing 0 of 0" on a failed search read like an empty till rather than a
+	 * product the shop does not stock.
+	 *
+	 * What DOES disqualify a query is a narrower SCOPE — something the screen IS, which
+	 * no control on the page widens: a targeted subset (the variations under one product)
+	 * or a collection in SCOPE_NARROWED_COLLECTIONS. `options.residual` is a read-side
+	 * FILTER, so like every other filter it leaves the denominator alone.
 	 */
-	const wholeCollection =
-		active.length === 0 && !search && targeted === undefined && !options.residual;
+	const censusScoped = targeted === undefined && !SCOPE_NARROWED_COLLECTIONS.has(collection);
 	const read: CompiledQueryRead = {
 		prefilter: (prefilters.length === 1 ? prefilters[0] : { $and: prefilters }) as never,
 		residual: (document) => readFilters.every((filter) => filter.matches(document)),
@@ -372,7 +392,7 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 			collection: legacyCollection,
 			demand: [],
 			represented: false,
-			wholeCollection,
+			censusScoped,
 			read,
 		};
 	}
@@ -401,7 +421,7 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 		} as EngineRequirement);
 	}
 	if (demand.length > 0)
-		return { collection: legacyCollection, demand, represented: false, wholeCollection, read };
+		return { collection: legacyCollection, demand, represented: false, censusScoped, read };
 
 	let represented =
 		!options.residual &&
@@ -535,5 +555,5 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 		});
 		represented = false;
 	} else represented = false;
-	return { collection: legacyCollection, demand, represented, wholeCollection, read };
+	return { collection: legacyCollection, demand, represented, censusScoped, read };
 }
