@@ -258,6 +258,19 @@ describe('buildReceiptData', () => {
 		expect(result.i18n).toEqual({ order: 'Bestelling' });
 	});
 
+	it('prefers the receiptI18n option over the store field', () => {
+		// The renderer passes a reactively-subscribed dictionary so a store sync
+		// mid-screen rebuilds memoized receipt data (see BuildReceiptDataOptions).
+		const result = buildReceiptData(
+			mockOrder,
+			{ ...mockStore, receipt_i18n: { order: 'Stale' } },
+			2,
+			{ receiptI18n: { order: 'Bestelling' } }
+		);
+
+		expect(result.i18n).toEqual({ order: 'Bestelling' });
+	});
+
 	it('maps customer section from billing', () => {
 		const result = buildReceiptData(mockOrder, mockStore);
 		expect(result.customer.name).toBe('John Doe');
