@@ -171,6 +171,39 @@ describe('createEngineFetcher', () => {
 		).toHaveLength(1);
 	});
 
+	it('starts a fresh streak for each fetcher so a store switch cannot inherit one', async () => {
+		// The outgoing site's streak must not fire (or suppress) the warning on
+		// the incoming site: a fetcher is built per engine, so the count and the
+		// latch belong to the fetcher, never to the module.
+		const outgoingFetch = jest
+			.fn()
+			.mockResolvedValueOnce(new Response(null, { status: 200 }))
+			.mockResolvedValue(new Response(null, { status: 429 }));
+		const outgoing = createFetcherHarness({ fetch: outgoingFetch });
+		// A clean 200 first: this test must measure THIS fetcher's streak, not a
+		// latch left behind by an earlier case in the file.
+		await outgoing.fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+		for (let count = 0; count < 5; count++) {
+			await outgoing.fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+		}
+		expect(
+			outgoing.networkWarn.mock.calls.filter(
+				([, options]) => options?.code === ERROR_CODES.HOST_RATE_LIMITED
+			)
+		).toHaveLength(0);
+
+		const incomingFetch = jest.fn().mockResolvedValue(new Response(null, { status: 429 }));
+		const incoming = createFetcherHarness({ fetch: incomingFetch });
+		await incoming.fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+
+		// One 429 on the new fetcher: nowhere near the threshold on its own.
+		expect(
+			incoming.networkWarn.mock.calls.filter(
+				([, options]) => options?.code === ERROR_CODES.HOST_RATE_LIMITED
+			)
+		).toHaveLength(0);
+	});
+
 	it('emits an exact query-form GET URL with caller params', async () => {
 		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
 		const { fetcher } = createFetcherHarness({

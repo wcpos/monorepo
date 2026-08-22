@@ -26,24 +26,32 @@ const envelopeTransportByFetcher = new WeakMap<EngineFetcher, ResponseEnvelopeTr
 // Six consecutive 429s approximates all lanes being rejected across multiple
 // ticks, beyond the automatic-backoff regime that already handles brief bursts.
 const PERSISTENT_RATE_LIMIT_THRESHOLD = 6;
-let consecutive429s = 0;
-let rateLimitWarningLatched = false;
 
-function observeResponseStatus(status: number): void {
-	if (status !== 429) {
-		consecutive429s = 0;
-		rateLimitWarningLatched = false;
-		return;
-	}
-	consecutive429s += 1;
-	if (consecutive429s === PERSISTENT_RATE_LIMIT_THRESHOLD && !rateLimitWarningLatched) {
-		rateLimitWarningLatched = true;
-		engineLogger.warn('Host persistently rate-limited sync requests', {
-			code: ERROR_CODES.HOST_RATE_LIMITED,
-			showToast: true,
-			context: { consecutive429s },
-		});
-	}
+/**
+ * Per-fetcher 429 streak observer. Deliberately NOT module state: a fetcher is
+ * built per engine, and a store switch must start the new site's streak from
+ * zero — otherwise the outgoing site's count could fire this warning on the
+ * incoming site's first 429, or its latch could suppress a real one.
+ */
+function createRateLimitObserver(): (status: number) => void {
+	let consecutive429s = 0;
+	let latched = false;
+	return (status: number) => {
+		if (status !== 429) {
+			consecutive429s = 0;
+			latched = false;
+			return;
+		}
+		consecutive429s += 1;
+		if (consecutive429s === PERSISTENT_RATE_LIMIT_THRESHOLD && !latched) {
+			latched = true;
+			engineLogger.warn('Host persistently rate-limited sync requests', {
+				code: ERROR_CODES.HOST_RATE_LIMITED,
+				showToast: true,
+				context: { consecutive429s },
+			});
+		}
+	};
 }
 
 export type EngineFetcherAuth = {
@@ -110,6 +118,7 @@ export function createEngineFetcher(input: {
 	wpJsonRoot: string;
 }): EngineFetcher {
 	const now = input.now ?? Date.now;
+	const observeResponseStatus = createRateLimitObserver();
 
 	// One logical request = one arc. When a 401 enters the refresh path, the arc's
 	// rows — the absorbed attempt, the refresh layer's "Session renewed
