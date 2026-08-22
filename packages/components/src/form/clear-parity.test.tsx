@@ -45,7 +45,9 @@ function Harness({
 	Field,
 	onChange,
 }: {
-	Field: typeof FormSelect | typeof FormCombobox;
+	// Widened deliberately: the two components have different prop unions, so a
+	// shared harness cannot satisfy both without narrowing to one of them.
+	Field: React.ComponentType<any>;
 	onChange: (value: unknown) => void;
 }) {
 	const form = useForm({ defaultValues: { country: 'AU' } });
@@ -53,7 +55,14 @@ function Harness({
 	return (
 		<FormProvider {...form}>
 			<FormFieldContext.Provider value={{ name: 'country' }}>
-				<Field value="AU" onChange={onChange} customComponent={StubControl} label="Country" />
+				<Field
+					name="country"
+					value="AU"
+					onChange={onChange}
+					onBlur={jest.fn()}
+					customComponent={StubControl}
+					label="Country"
+				/>
 			</FormFieldContext.Provider>
 		</FormProvider>
 	);
