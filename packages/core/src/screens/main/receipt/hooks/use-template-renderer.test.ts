@@ -17,7 +17,12 @@ const mockUseOnlineStatus = jest.fn(() => ({
 	status: 'online-website-available',
 }));
 const mockBuildReceiptData = jest.fn(
-	(order: Record<string, unknown>, store: Record<string, unknown>, dp?: number) => ({
+	(
+		order: Record<string, unknown>,
+		store: Record<string, unknown>,
+		dp?: number,
+		_options?: Record<string, unknown>
+	) => ({
 		source: 'local',
 		order,
 		store,
@@ -56,8 +61,12 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 }));
 
 jest.mock('../utils/build-receipt-data', () => ({
-	buildReceiptData: (order: Record<string, unknown>, store: Record<string, unknown>, dp?: number) =>
-		mockBuildReceiptData(order, store, dp),
+	buildReceiptData: (
+		order: Record<string, unknown>,
+		store: Record<string, unknown>,
+		dp?: number,
+		options?: Record<string, unknown>
+	) => mockBuildReceiptData(order, store, dp, options),
 }));
 
 jest.mock('@wcpos/printer', () => ({
@@ -117,7 +126,8 @@ describe('useTemplateRenderer', () => {
 					name: 'Test Store',
 					wc_price_decimals$: expect.anything(),
 				},
-				2
+				2,
+				expect.objectContaining({ getStatusLabel: expect.any(Function) })
 			);
 		});
 
@@ -136,7 +146,52 @@ describe('useTemplateRenderer', () => {
 			expect(mockBuildReceiptData).toHaveBeenCalledWith(
 				defaultOptions.order,
 				expect.objectContaining({ name: 'Test Store' }),
-				3
+				3,
+				expect.objectContaining({ getStatusLabel: expect.any(Function) })
+			);
+		});
+
+		it('passes the store receipt label dictionary to the local builder', () => {
+			const store = {
+				...createStore(),
+				receipt_i18n$: new BehaviorSubject({ order: 'Bestelling' }),
+			};
+			mockUseAppState.mockReturnValue({ store });
+
+			renderHook(() => useTemplateRenderer(defaultOptions));
+
+			expect(mockBuildReceiptData).toHaveBeenLastCalledWith(
+				defaultOptions.order,
+				expect.anything(),
+				2,
+				expect.objectContaining({ receiptI18n: { order: 'Bestelling' } })
+			);
+		});
+
+		it('rebuilds the fallback render when the dictionary syncs in mid-screen', () => {
+			// The store RxDocument identity is stable, so without the useDocField
+			// subscription the memo would never recompute and a dictionary arriving
+			// after mount would keep rendering English defaults (#1252).
+			const receiptI18n$ = new BehaviorSubject<Record<string, string>>({});
+			const store = { ...createStore(), receipt_i18n$: receiptI18n$ };
+			mockUseAppState.mockReturnValue({ store });
+
+			renderHook(() => useTemplateRenderer(defaultOptions));
+
+			expect(mockBuildReceiptData).toHaveBeenLastCalledWith(
+				defaultOptions.order,
+				expect.anything(),
+				2,
+				expect.objectContaining({ receiptI18n: {} })
+			);
+
+			act(() => receiptI18n$.next({ order: 'Bestelling' }));
+
+			expect(mockBuildReceiptData).toHaveBeenLastCalledWith(
+				defaultOptions.order,
+				expect.anything(),
+				2,
+				expect.objectContaining({ receiptI18n: { order: 'Bestelling' } })
 			);
 		});
 
