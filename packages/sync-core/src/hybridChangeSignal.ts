@@ -644,10 +644,27 @@ export function createHybridChangeSignalEngine(input: {
 				head = page.head;
 			}
 			const effectiveEpoch = observedEpoch ?? epoch;
+			// Two cursors are comparable when they address the same sequence
+			// generation: the server named one and it matches (or we hold none), or
+			// NEITHER side names one. A server reporting no epoch used to make
+			// `sameEpoch` false and so disable the horizon/head guards entirely,
+			// silently ignoring a valid pruning boundary (free#1560 review, S1).
 			const sameEpoch =
-				page.epoch !== undefined && (effectiveEpoch === undefined || effectiveEpoch === page.epoch);
+				page.epoch !== undefined
+					? effectiveEpoch === undefined || effectiveEpoch === page.epoch
+					: effectiveEpoch === undefined;
 			const epochMismatch =
 				effectiveEpoch !== undefined && page.epoch !== undefined && effectiveEpoch !== page.epoch;
+			// A stored NON-ZERO cursor with no remembered epoch cannot be proven to
+			// address the generation now being served. Adopting it silently skips
+			// rows 1…cursor of a fresh journal whenever that journal's head has
+			// already passed the cursor — the past-head guard only catches
+			// head < cursor, so that loss is permanent and invisible. Rebaseline
+			// instead: a re-seed costs one burst, adoption costs correctness
+			// (free#1560 review, blocker B2). A zero cursor addresses nothing and
+			// still adopts the epoch as before.
+			const unprovenGeneration =
+				effectiveEpoch === undefined && page.epoch !== undefined && nextCursor.sequence > 0;
 			const belowHorizon =
 				sameEpoch && page.horizon !== undefined && nextCursor.sequence < page.horizon;
 			const cursorPastHead =
@@ -661,7 +678,7 @@ export function createHybridChangeSignalEngine(input: {
 				reportedCursor = page.reportedCursor;
 			}
 			configFingerprint = page.configFingerprint ?? configFingerprint;
-			if (epochMismatch || belowHorizon || cursorPastHead) {
+			if (epochMismatch || unprovenGeneration || belowHorizon || cursorPastHead) {
 				if (typeof page.head !== 'number' || !Number.isFinite(page.head)) {
 					throw new Error('Sequence-log rebaseline requires a finite head');
 				}

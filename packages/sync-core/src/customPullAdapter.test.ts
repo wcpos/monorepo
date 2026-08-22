@@ -289,6 +289,42 @@ describe('syncCustomPullBatchIntoRepository journal epoch (F8)', () => {
 		expect(result.checkpoint).toEqual(next);
 	});
 
+	it('resyncs a NON-ZERO checkpoint the client holds no epoch for', async () => {
+		// The cursor may address a previous generation. Adopting it skips rows
+		// 1…cursor of the generation now being served whenever that head has moved
+		// past the cursor — the past-head trigger only catches head < cursor
+		// (free#1560 review, blocker B2).
+		const server = createFakePullServer({ epoch: 'epoch-FIRST' });
+		server.seed({
+			uuid: fakeUuid(1),
+			wooOrderId: 1,
+			sequence: 5001, // head ABOVE the stored cursor, so past-head cannot be the trigger
+			modifiedGmt: '2026-05-20 10:05:00',
+			revision: 'r',
+		});
+		const repository = {
+			upsertMany: vi.fn(async (_documents: PullResponse['documents']) => undefined),
+		};
+		const store = epochStore(undefined); // stored checkpoint sequence 5000, no epoch
+
+		const result = await syncCustomPullBatchIntoRepository({
+			baseUrl: BASE_URL,
+			limit: 50,
+			repository,
+			fetcher: server.fetch,
+			checkpointStore: store,
+		});
+
+		expect(repository.upsertMany).not.toHaveBeenCalled();
+		expect(store.writeCustomPullCheckpoint).toHaveBeenCalledWith(normalizeCheckpoint(null));
+		expect(store.writeJournalEpoch).toHaveBeenCalledWith('epoch-FIRST');
+		expect(result).toEqual({
+			documents: 0,
+			hasMore: true,
+			checkpoint: normalizeCheckpoint(null),
+		});
+	});
+
 	it('adopts the epoch on a first pull (no stored epoch) without resyncing', async () => {
 		const server = createFakePullServer({ epoch: 'epoch-FIRST' });
 		server.seed({ uuid: fakeUuid(1), wooOrderId: 1 });

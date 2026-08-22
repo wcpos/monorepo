@@ -695,7 +695,7 @@ describe('TIER 1 — journal generation guards', () => {
 		expect(outcome.baselineDigests).toEqual(new Map());
 	});
 
-	it('adopts a first-seen epoch without re-baselining', async () => {
+	it('adopts a first-seen epoch on a fresh cursor without re-baselining', async () => {
 		const { source } = makeFakeSource({
 			sequencePages: [
 				{
@@ -711,16 +711,16 @@ describe('TIER 1 — journal generation guards', () => {
 					cursor: { sequence: 11 },
 					hasMore: false,
 					head: 11,
-					horizon: 9,
+					horizon: 0,
 					epoch: 'epoch-FIRST',
 				},
 			],
 		});
 		const engine = createHybridChangeSignalEngine({
 			source,
-			initialCursor: { sequence: 10 },
+			initialCursor: { sequence: 0 },
 			baselineDigests: baseline,
-			policy: { maxReplayBacklog: 0, sweepEveryNPolls: 2, sweepIntervalMs: 0 },
+			policy: { maxReplayBacklog: 100, sweepEveryNPolls: 2, sweepIntervalMs: 0 },
 		});
 
 		const outcome = await engine.poll();
@@ -740,6 +740,37 @@ describe('TIER 1 — journal generation guards', () => {
 			rebaseline: false,
 		});
 		expect(outcome.baselineDigests).toEqual(baseline);
+	});
+
+	it('re-baselines a NON-ZERO cursor whose generation it cannot prove', async () => {
+		// A stored cursor with no remembered epoch may address a previous journal
+		// generation. Adopting it skips rows 1…cursor of the generation now being
+		// served, permanently and invisibly, whenever that head has passed the
+		// cursor — the past-head guard only fires when head < cursor.
+		const { source } = makeFakeSource({
+			sequencePages: [
+				{
+					rows: [{ sequence: 11, id: 11, collection: 'products', deleted: false }],
+					cursor: { sequence: 11 },
+					hasMore: false,
+					head: 40,
+					horizon: 0,
+					epoch: 'epoch-FIRST',
+				},
+			],
+		});
+		const engine = createHybridChangeSignalEngine({
+			source,
+			initialCursor: { sequence: 10 },
+			policy: { maxReplayBacklog: 100, sweepEveryNPolls: 2, sweepIntervalMs: 0 },
+		});
+
+		await expect(engine.poll()).resolves.toMatchObject({
+			changes: [],
+			cursor: { sequence: 40 },
+			epoch: 'epoch-FIRST',
+			rebaseline: true,
+		});
 	});
 
 	it('re-baselines an epoch-less cursor that is below the first served horizon', async () => {
@@ -790,6 +821,7 @@ describe('TIER 1 — journal generation guards', () => {
 		const engine = createHybridChangeSignalEngine({
 			source,
 			initialCursor: { sequence: 10 },
+			initialEpoch: 'epoch-A',
 			policy: { maxReplayBacklog: 0, sweepEveryNPolls: 2, sweepIntervalMs: 0 },
 		});
 

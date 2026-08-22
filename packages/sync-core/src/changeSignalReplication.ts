@@ -17,7 +17,10 @@
  *     a tombstone'd id never fetches.
  *   - deletes — tombstones: delete/trash-type `changes` and `idsToPull` with
  *     status 'deleted'. These are LOCAL deletes, never a fetch. A delete WINS
- *     over a pull for the same id (the record is gone; do not re-fetch it).
+ *     over a pull for the same id (the record is gone; do not re-fetch it) —
+ *     but `changes` is first collapsed to ONE net event per (collection, id),
+ *     because the catalogue lane serves raw event rows and the last event in
+ *     sequence order is the record's current state, not the harshest one.
  *   - reDeriveBarcode / reFetchCollections — the config tier's stale collections
  *     split by whether the snapshot reported `configBarcodeFields` for that
  *     collection: present + non-empty → the host can re-derive its local barcode
@@ -112,9 +115,23 @@ export function planReplicationActions(outcome: HybridPollOutcome): ReplicationA
 	const pulls = new CollectionIdGroups();
 	const deletes = new CollectionIdGroups();
 
-	// First pass — collect deletes so a delete always WINS over a pull for the
-	// same (collection, id): a tombstone'd record must not be re-fetched.
+	// The catalogue lane serves RAW journal event rows — only the order lane is
+	// coalesced server-side — so one drain can carry delete-then-restore for the
+	// same record (trash then untrash inside a poll window). `changes` arrives in
+	// ascending sequence order, so the LAST event for an id is its net state:
+	// collapse to it before routing, or an "any delete wins" rule would leave a
+	// restored record locally deleted until the next integrity sweep repaired it
+	// (free#1560 review, blocker B5).
+	const netChanges = new Map<string, (typeof outcome.changes)[number]>();
 	for (const change of outcome.changes) {
+		netChanges.set(`${change.collection}:${change.id}`, change);
+	}
+
+	// First pass — collect deletes so a delete WINS over a pull for the same
+	// (collection, id): a tombstone'd record must not be re-fetched. Across the
+	// two SOURCES the tombstone still wins outright: the TIER 2/3 sweep runs
+	// AFTER the drain, so its 'deleted' verdict is the newer observation.
+	for (const change of netChanges.values()) {
 		if (change.deleted) {
 			deletes.add(change.collection, change.id);
 		}
@@ -132,7 +149,7 @@ export function planReplicationActions(outcome: HybridPollOutcome): ReplicationA
 			pulls.add(collection, id);
 		}
 	};
-	for (const change of outcome.changes) {
+	for (const change of netChanges.values()) {
 		if (!change.deleted) {
 			addPull(change.collection, change.id);
 		}
