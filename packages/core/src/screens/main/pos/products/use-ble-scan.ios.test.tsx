@@ -23,14 +23,22 @@ const mockStartDeviceScan = jest.fn();
 const mockStopDeviceScan = jest.fn(async () => undefined);
 const mockDevices = jest.fn(async (): Promise<FakeDevice[]> => []);
 const mockConnectToDevice = jest.fn();
+const mockOnStateChange = jest.fn();
 const mockCancelDeviceConnection = jest.fn(async () => undefined);
 const mockDestroy = jest.fn(async () => undefined);
 const mockInsert = jest.fn();
 const mockMonitorRemove = jest.fn();
+const mockStateSubscriptionRemove = jest.fn();
 const mockUuid = jest.fn(() => 'new-profile-id');
 let mockProfiles: Record<string, unknown>[] = [];
+let mockBleState = 'PoweredOn';
+let mockStateListener: ((state: string) => void) | undefined;
 let scanListener: ScanListener | undefined;
 let monitorListener: MonitorListener | undefined;
+let mockCollection: {
+	find: () => { exec: () => Promise<Record<string, unknown>[]> };
+	insert: (row: Record<string, unknown>) => Promise<void>;
+};
 
 jest.mock('react-native', () => ({
 	NativeModules: { BlePlx: {} },
@@ -43,9 +51,11 @@ jest.mock('react-native-ble-plx', () => ({
 		stopDeviceScan: mockStopDeviceScan,
 		devices: mockDevices,
 		connectToDevice: mockConnectToDevice,
+		onStateChange: mockOnStateChange,
 		cancelDeviceConnection: mockCancelDeviceConnection,
 		destroy: mockDestroy,
 	})),
+	State: { Unknown: 'Unknown', PoweredOn: 'PoweredOn' },
 }));
 
 jest.mock('uuid', () => ({ v4: () => mockUuid() }));
@@ -65,10 +75,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 
 jest.mock('../../hooks/use-collection', () => ({
 	useCollection: () => ({
-		collection: {
-			find: () => ({ exec: async () => mockProfiles }),
-			insert: (row: Record<string, unknown>) => mockInsert(row),
-		},
+		collection: mockCollection,
 	}),
 }));
 
@@ -78,6 +85,7 @@ interface FakeDevice {
 	localName: string | null;
 	serviceUUIDs: string[] | null;
 	connect: jest.Mock<Promise<FakeDevice>>;
+	cancelConnection: jest.Mock<Promise<FakeDevice>>;
 	discoverAllServicesAndCharacteristics: jest.Mock<Promise<FakeDevice>>;
 	characteristicsForService: jest.Mock<Promise<Record<string, unknown>[]>>;
 	monitorCharacteristicForService: jest.Mock;
@@ -90,6 +98,7 @@ function device(overrides: Partial<FakeDevice> = {}): FakeDevice {
 		localName: null,
 		serviceUUIDs: [FFF0_SERVICE],
 		connect: jest.fn<Promise<FakeDevice>, []>(),
+		cancelConnection: jest.fn<Promise<FakeDevice>, []>(),
 		discoverAllServicesAndCharacteristics: jest.fn<Promise<FakeDevice>, []>(),
 		characteristicsForService: jest.fn(async () => [{ uuid: FFF1_NOTIFY, isNotifiable: true }]),
 		monitorCharacteristicForService: jest.fn(
@@ -101,6 +110,7 @@ function device(overrides: Partial<FakeDevice> = {}): FakeDevice {
 		...overrides,
 	} as FakeDevice;
 	value.connect.mockResolvedValue(value);
+	value.cancelConnection.mockResolvedValue(value);
 	value.discoverAllServicesAndCharacteristics.mockResolvedValue(value);
 	return value;
 }
@@ -119,7 +129,11 @@ function hubHarness() {
 	return {
 		events,
 		unregister,
-		hub: { events$: {} as Observable<ScanEvent>, emit: jest.fn(), registerSource } as ScanHub,
+		hub: {
+			events$: {} as Observable<ScanEvent>,
+			emit: jest.fn(),
+			registerSource,
+		} as ScanHub,
 	};
 }
 
@@ -146,8 +160,23 @@ describe('useBleScan (iOS)', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockProfiles = [];
+		mockBleState = 'PoweredOn';
+		mockStateListener = undefined;
 		scanListener = undefined;
 		monitorListener = undefined;
+		mockCollection = {
+			find: () => ({ exec: async () => mockProfiles }),
+			insert: async (row: Record<string, unknown>) => {
+				mockInsert(row);
+			},
+		};
+		mockOnStateChange.mockImplementation(
+			(listener: (state: string) => void, emitCurrentState: boolean) => {
+				mockStateListener = listener;
+				if (emitCurrentState) listener(mockBleState);
+				return { remove: mockStateSubscriptionRemove };
+			}
+		);
 		mockStartDeviceScan.mockImplementation(
 			async (_services: string[], _options: null, listener: ScanListener) => {
 				scanListener = listener;
@@ -156,6 +185,137 @@ describe('useBleScan (iOS)', () => {
 		mockInsert.mockImplementation(async (row: Record<string, unknown>) => {
 			mockProfiles.push(row);
 		});
+	});
+
+	afterEach(() => {
+		jest.useRealTimers();
+	});
+
+	it('cancels a connected device when its attach request becomes stale', async () => {
+		const harness = hubHarness();
+		const discovered = device();
+		let finishConnection: ((value: FakeDevice) => void) | undefined;
+		discovered.connect.mockImplementation(
+			() => new Promise((resolve) => (finishConnection = resolve))
+		);
+		const { result } = renderHook(() => useBleScan(harness.hub));
+		await waitUntilAvailable(result);
+
+		let pending: Promise<void>;
+		act(() => {
+			pending = result.current.connect();
+		});
+		await waitFor(() => expect(scanListener).toBeDefined());
+		act(() => scanListener?.(null, discovered));
+		await waitFor(() => expect(discovered.connect).toHaveBeenCalled());
+		await act(async () => result.current.disconnect());
+		await act(async () => {
+			finishConnection?.(discovered);
+			await pending!;
+		});
+
+		expect(discovered.cancelConnection).toHaveBeenCalledTimes(1);
+	});
+
+	it('waits for PoweredOn before starting an explicit scan', async () => {
+		mockBleState = 'Unknown';
+		const harness = hubHarness();
+		const discovered = device();
+		const { result } = renderHook(() => useBleScan(harness.hub));
+		await waitUntilAvailable(result);
+
+		let pending: Promise<void>;
+		act(() => {
+			pending = result.current.connect();
+		});
+		await waitFor(() => expect(mockStateListener).toBeDefined());
+		expect(mockStartDeviceScan).not.toHaveBeenCalled();
+		act(() => mockStateListener?.('PoweredOn'));
+		await waitFor(() => expect(scanListener).toBeDefined());
+		await act(async () => {
+			scanListener?.(null, discovered);
+			await pending!;
+		});
+	});
+
+	it('waits for PoweredOn before reconnecting a saved profile', async () => {
+		mockBleState = 'Unknown';
+		mockProfiles = [
+			{
+				id: 'saved-profile',
+				connectionType: 'ble',
+				blePeripheralId: 'saved-peripheral',
+				bleServiceUuid: FFF0_SERVICE,
+			},
+		];
+		const known = device({ id: 'saved-peripheral' });
+		mockConnectToDevice.mockResolvedValue(known);
+
+		renderHook(() => useBleScan(hubHarness().hub));
+		await waitFor(() => expect(mockStateListener).toBeDefined());
+		expect(mockConnectToDevice).not.toHaveBeenCalled();
+		act(() => mockStateListener?.('PoweredOn'));
+
+		await waitFor(() => expect(mockConnectToDevice).toHaveBeenCalledWith('saved-peripheral'));
+	});
+
+	it('stops discovery after the connection timeout', async () => {
+		const harness = hubHarness();
+		const { result } = renderHook(() => useBleScan(harness.hub));
+		await waitUntilAvailable(result);
+		jest.useFakeTimers();
+
+		let pending: Promise<void>;
+		act(() => {
+			pending = result.current.connect();
+		});
+		await act(async () => {
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+		expect(scanListener).toBeDefined();
+		await act(async () => {
+			jest.advanceTimersByTime(30_000);
+			await pending!;
+		});
+
+		expect(mockStopDeviceScan).toHaveBeenCalled();
+	});
+
+	it('restarts saved-profile reconnect when the profile collection changes', async () => {
+		mockProfiles = [
+			{
+				id: 'first-profile',
+				connectionType: 'ble',
+				blePeripheralId: 'first-peripheral',
+				bleServiceUuid: FFF0_SERVICE,
+			},
+		];
+		const first = device({ id: 'first-peripheral' });
+		const second = device({ id: 'second-peripheral' });
+		mockConnectToDevice.mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+		const harness = hubHarness();
+		const { rerender } = renderHook(() => useBleScan(harness.hub));
+		await waitFor(() => expect(mockConnectToDevice).toHaveBeenCalledWith('first-peripheral'));
+
+		mockProfiles = [
+			{
+				id: 'second-profile',
+				connectionType: 'ble',
+				blePeripheralId: 'second-peripheral',
+				bleServiceUuid: FFF0_SERVICE,
+			},
+		];
+		mockCollection = {
+			find: () => ({ exec: async () => mockProfiles }),
+			insert: async (row: Record<string, unknown>) => {
+				mockInsert(row);
+			},
+		};
+		rerender();
+
+		await waitFor(() => expect(mockConnectToDevice).toHaveBeenCalledWith('second-peripheral'));
+		expect(mockCancelDeviceConnection).toHaveBeenCalledWith('first-peripheral');
 	});
 
 	it('scans the three-service allowlist and ignores a non-matching advertisement', async () => {

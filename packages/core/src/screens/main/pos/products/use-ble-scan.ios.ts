@@ -53,8 +53,9 @@ const BLE_GATT_FAMILIES: BleGattFamily[] = [
 	},
 ];
 const BLE_SERVICE_UUIDS = BLE_GATT_FAMILIES.map((family) => family.serviceUuid);
+const BLE_DISCOVERY_TIMEOUT_MS = 30_000;
 
-type BlePlxModule = Pick<typeof import('react-native-ble-plx'), 'BleManager'>;
+type BlePlxModule = Pick<typeof import('react-native-ble-plx'), 'BleManager' | 'State'>;
 
 function findFamily(serviceUuids: string[] | null | undefined): BleGattFamily | undefined {
 	const advertised = new Set(serviceUuids?.map((uuid) => uuid.toLowerCase()));
@@ -124,6 +125,10 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 	const modulePromiseRef = React.useRef<Promise<BlePlxModule | null> | null>(null);
 	const managerRef = React.useRef<BleManager | null>(null);
 	const scanningRef = React.useRef(false);
+	const stateWaitRef = React.useRef<{
+		subscription: Subscription;
+		cancel: () => void;
+	} | null>(null);
 	const deviceIdRef = React.useRef<string | null>(null);
 	const monitorRef = React.useRef<Subscription | null>(null);
 	const unregisterRef = React.useRef<(() => void) | null>(null);
@@ -163,10 +168,44 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 		}
 	}, [loadModule]);
 
+	const waitForPoweredOn = React.useCallback(
+		async (manager: BleManager) => {
+			const bleModule = await loadModule();
+			if (!bleModule) throw new Error('BLE native module is unavailable');
+			await new Promise<void>((resolve, reject) => {
+				let settled = false;
+				let subscription: Subscription | null = null;
+				const settle = (error?: Error) => {
+					if (settled) return;
+					settled = true;
+					stateWaitRef.current = null;
+					subscription?.remove();
+					if (error) reject(error);
+					else resolve();
+				};
+				subscription = manager.onStateChange((state) => {
+					if (state === bleModule.State.PoweredOn) settle();
+				}, true);
+				if (settled) {
+					subscription.remove();
+				} else {
+					stateWaitRef.current = {
+						subscription,
+						cancel: () => settle(new Error('BLE state wait cancelled')),
+					};
+				}
+			});
+		},
+		[loadModule]
+	);
+
 	const teardown = React.useCallback(async () => {
 		const manager = managerRef.current;
 		const deviceId = deviceIdRef.current;
 		deviceIdRef.current = null;
+		const stateWait = stateWaitRef.current;
+		stateWaitRef.current = null;
+		if (stateWait) stateWait.cancel();
 		if (scanningRef.current) {
 			scanningRef.current = false;
 			await manager?.stopDeviceScan().catch((error) => {
@@ -197,9 +236,19 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 			request: number,
 			savedProfile?: ScannerProfileDocument
 		) => {
-			if (!mountedRef.current || request !== attachRequestRef.current) return;
+			if (!mountedRef.current || request !== attachRequestRef.current) {
+				await device.cancelConnection().catch((error) => {
+					warn('Failed to cancel stale BLE scanner connection', error);
+				});
+				return;
+			}
 			await teardown();
-			if (!mountedRef.current || request !== attachRequestRef.current) return;
+			if (!mountedRef.current || request !== attachRequestRef.current) {
+				await device.cancelConnection().catch((error) => {
+					warn('Failed to cancel stale BLE scanner connection', error);
+				});
+				return;
+			}
 
 			deviceIdRef.current = device.id;
 			const discovered = await device.discoverAllServicesAndCharacteristics();
@@ -287,13 +336,21 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 		try {
 			await teardown();
 			if (!mountedRef.current || request !== attachRequestRef.current) return;
+			await waitForPoweredOn(manager);
+			if (!mountedRef.current || request !== attachRequestRef.current) return;
 			await new Promise<void>((resolve, reject) => {
 				let claimed = false;
+				let timeout: ReturnType<typeof setTimeout> | null = null;
 				const fail = (error: unknown) => {
 					if (claimed) return;
 					claimed = true;
+					if (timeout) clearTimeout(timeout);
 					reject(error);
 				};
+				timeout = setTimeout(
+					() => fail(new Error('BLE scanner discovery timed out')),
+					BLE_DISCOVERY_TIMEOUT_MS
+				);
 				scanningRef.current = true;
 				void manager
 					.startDeviceScan(BLE_SERVICE_UUIDS, null, (error, discovered) => {
@@ -306,6 +363,7 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 						// V1 deliberately connects the first allowlisted scanner; a
 						// multi-scanner chooser is out of scope for the settings action.
 						claimed = true;
+						if (timeout) clearTimeout(timeout);
 						void (async () => {
 							scanningRef.current = false;
 							await manager.stopDeviceScan();
@@ -322,7 +380,7 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 				await teardown();
 			}
 		}
-	}, [attachDevice, getManager, teardown]);
+	}, [attachDevice, getManager, teardown, waitForPoweredOn]);
 
 	const disconnect = React.useCallback(async () => {
 		attachRequestRef.current += 1;
@@ -330,11 +388,15 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 	}, [teardown]);
 
 	const startup = React.useEffectEvent(async () => {
+		const request = ++attachRequestRef.current;
+		await teardown();
+		if (!mountedRef.current || request !== attachRequestRef.current) return;
 		const bleModule = await loadModule();
-		if (!mountedRef.current) return;
+		if (!mountedRef.current || request !== attachRequestRef.current) return;
 		setAvailable(Boolean(bleModule));
 		if (!bleModule) return;
 		const profiles = await collection.find({ selector: { connectionType: 'ble' } }).exec();
+		if (!mountedRef.current || request !== attachRequestRef.current) return;
 		if (profiles.length !== 1) return;
 		const profile = profiles[0] as ScannerProfileDocument;
 		const family = BLE_GATT_FAMILIES.find(
@@ -342,10 +404,12 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 		);
 		if (!profile.blePeripheralId || !family) return;
 		const manager = await getManager();
-		if (!manager || !mountedRef.current) return;
-		const request = ++attachRequestRef.current;
+		if (!manager || !mountedRef.current || request !== attachRequestRef.current) return;
 		try {
+			await waitForPoweredOn(manager);
+			if (!mountedRef.current || request !== attachRequestRef.current) return;
 			await manager.devices([profile.blePeripheralId]);
+			if (!mountedRef.current || request !== attachRequestRef.current) return;
 			const device = await manager.connectToDevice(profile.blePeripheralId);
 			await attachDevice(device, family, request, profile);
 		} catch (error) {
@@ -365,16 +429,20 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 		});
 	});
 
-	// Load the optional module and attempt one unambiguous saved-profile reconnect.
+	// The native BLE manager exists for the lifetime of this mounted hook.
 	React.useEffect(() => {
 		mountedRef.current = true;
-		void startup().catch((error) => warn('Failed to reconnect saved BLE scanner', error));
 		return () => {
 			mountedRef.current = false;
 			attachRequestRef.current += 1;
 			void unmount();
 		};
 	}, []);
+
+	// A replaced store supplies a new collection and requires a fresh saved-profile reconnect.
+	React.useEffect(() => {
+		void startup().catch((error) => warn('Failed to reconnect saved BLE scanner', error));
+	}, [collection]);
 
 	return { available, connect, disconnect, connected };
 };
