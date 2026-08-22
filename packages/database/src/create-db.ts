@@ -27,6 +27,11 @@ export const createUserDB = async () => {
 			name,
 			...defaultConfig,
 			localDocuments: true,
+			// A hard hydration failure clears the cached promise and retries from
+			// step 1, which re-enters this function while the previous user database
+			// is still open. Without this, that retry throws DB8 (duplicate name) and
+			// reports it as the failure — masking whatever actually broke downstream.
+			closeDuplicates: true,
 		});
 		await db?.addCollections(userCollections);
 		return db;

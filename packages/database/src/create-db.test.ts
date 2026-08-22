@@ -68,6 +68,25 @@ describe('create-db', () => {
 		}
 	);
 
+	it.each([
+		['createUserDB', async (module: typeof import('./create-db')) => module.createUserDB()],
+		[
+			'createStoreDB',
+			async (module: typeof import('./create-db')) => module.createStoreDB('abc123'),
+		],
+	])(
+		'lets %s reclaim its name, so a hydration retry does not throw DB8 over the real failure',
+		async (_label, factory) => {
+			const module = await import('./create-db');
+
+			await factory(module);
+
+			expect(mockCreateRxDatabase).toHaveBeenCalledWith(
+				expect.objectContaining({ closeDuplicates: true })
+			);
+		}
+	);
+
 	it('creates the temporary database and installs its post-create hook', async () => {
 		const module = await import('./create-db');
 
