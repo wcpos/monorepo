@@ -1118,11 +1118,10 @@ describe('query bindings', () => {
 		).resolves.toBe(2);
 	});
 
-	// The counter-case, and the reason "always the census" is NOT the rule. The orders grid is
-	// this cashier at this till — a scope the screen IS, which no control on the page widens.
-	// The census counts every order in the store, so borrowing it would tell a cashier that
-	// thousands of their orders had gone missing.
-	it('never borrows the census for the cashier-scoped orders grid', async () => {
+	// The orders grid's cashier and store pills are pre-set FILTERS, not a fixed scope — both
+	// are removable and re-selectable, so the page can be widened to the whole store. Treating
+	// them as scope is what cut this grid off from the census and left "Showing 20 of 20".
+	it('reports the census for the orders grid even with the cashier and store pills set', async () => {
 		engine.setCensusTotal('orders', 4_312);
 		const scoped: QueryStateOf<'orders'> = {
 			search: '',
@@ -1134,13 +1133,10 @@ describe('query bindings', () => {
 			wrapper: Provider,
 		});
 
-		await waitFor(() => expect(current(result.current.resource)).toBeTruthy());
-		const totals: (number | null)[] = [];
-		const subscription = result.current.total$.subscribe((total) => totals.push(total));
-		await new Promise((resolve) => setTimeout(resolve, 20));
-		subscription.unsubscribe();
-		expect(totals).not.toContain(4_312);
-		expect(engine.censusSubscribeCount).toBe(0);
+		await expect(
+			firstValueFrom(result.current.total$.pipe(filter((total) => total === 4_312)))
+		).resolves.toBe(4_312);
+		expect(engine.censusSubscribeCount).toBeGreaterThan(0);
 	});
 
 	// #951. A sorted customers grid declares a browse window, and its footer must report the

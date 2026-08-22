@@ -407,11 +407,10 @@ function censusTotal$(
  * `wcpos/v2`, the census probe counts `wc/v3`), which is how the footer and the Database page
  * came to disagree by a handful of records on the same catalogue.
  *
- * `census$` is `NO_CENSUS_TOTAL$` when the census cannot honestly stand for the screen —
- * a targeted subset, or a scope-narrowed collection (see SCOPE_NARROWED_COLLECTIONS: the
- * orders grid is this cashier at this till, and the store's order count would claim thousands
- * of missing rows). Those keep the engine's per-query answer, falling back to the resident
- * count when there is no answer at all.
+ * `census$` is `NO_CENSUS_TOTAL$` only where the census cannot honestly stand for the screen at
+ * all — a `targeted` subset, addressed by id (the variations under ONE product). Everything
+ * else, however it is filtered, reports the collection's census. Those exceptions keep the
+ * engine's per-query answer, and name no total at all when there is no answer (below).
  *
  * The local resident count stays the floor in every branch: more residents than the server's
  * last count proves that count outdated, so the larger number wins — stated plainly, never

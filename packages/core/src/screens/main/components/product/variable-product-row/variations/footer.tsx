@@ -56,8 +56,11 @@ export function VariationTableFooter({ binding, parent, count }: VariationTableF
 		<HStack space="xs" className="border-border bg-footer justify-end border-b p-2">
 			<Text className="text-xs">
 				{total === null
-					? t('common.showing_n', { shown: count })
-					: t('common.showing_of', { shown: count, total })}
+					? t('common.showing_n', { shown: count.toLocaleString() })
+					: t('common.showing_of', {
+							shown: count.toLocaleString(),
+							total: total.toLocaleString(),
+						})}
 			</Text>
 			<SyncButton sync={binding.sync} clearAndSync={handleClearVariations} active={loading} />
 		</HStack>

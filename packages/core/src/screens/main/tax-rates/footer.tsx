@@ -38,8 +38,11 @@ export function TaxRatesFooter({ count, active$, total$, sync }: TaxRatesFooterP
 			<Text className="text-xs">
 				{/* Only print a denominator something vouches for — see QueryBinding.total$. */}
 				{total === null
-					? t('common.showing_n', { shown: count })
-					: t('common.showing_of', { shown: count, total })}
+					? t('common.showing_n', { shown: count.toLocaleString() })
+					: t('common.showing_of', {
+							shown: count.toLocaleString(),
+							total: total.toLocaleString(),
+						})}
 			</Text>
 			<SyncButton sync={sync} clearAndSync={resetQueryAndCollection} active={active} />
 		</HStack>

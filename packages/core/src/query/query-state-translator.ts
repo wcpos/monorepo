@@ -286,18 +286,6 @@ export function requirementsForCompiledQuery(
 	}));
 }
 
-/**
- * Collections whose grid is narrower than the whole collection by DESIGN, not by a filter
- * the cashier applied.
- *
- * The orders grid is *this cashier at this till* — that scope is what the screen is, and no
- * control on the page widens it. The census counts every order in the store, so borrowing it
- * here would tell a cashier that thousands of orders are missing from a grid that was never
- * going to show them. These keep the engine's per-query total, which describes the grid they
- * are actually looking at.
- */
-const SCOPE_NARROWED_COLLECTIONS: ReadonlySet<string> = new Set(['orders']);
-
 /** Compile UI query state once into its remote-demand and local-read faces. */
 export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 	collection: C,
@@ -366,12 +354,20 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 	 * the old "Showing 0 of 0" on a failed search read like an empty till rather than a
 	 * product the shop does not stock.
 	 *
-	 * What DOES disqualify a query is a narrower SCOPE — something the screen IS, which
-	 * no control on the page widens: a targeted subset (the variations under one product)
-	 * or a collection in SCOPE_NARROWED_COLLECTIONS. `options.residual` is a read-side
-	 * FILTER, so like every other filter it leaves the denominator alone.
+	 * What DOES disqualify a query is a narrower SCOPE — a set the collection's census cannot
+	 * stand for however the page is filtered. That is `targeted`: the variations under ONE
+	 * product are addressed by id, and the variations census counts every variation in the
+	 * store. `options.residual` is a read-side FILTER, so like every other filter it leaves
+	 * the denominator alone.
+	 *
+	 * Orders used to be excluded here on the belief that its grid was "this cashier at this
+	 * till" — a fixed scope rather than a filter. It is not: the cashier and store pills are
+	 * removable and re-selectable (`cashier-pill.tsx`, `store-pill.tsx`), so they are pre-set
+	 * FILTERS, and the page can be widened to the whole store. Treating them as scope cut the
+	 * orders grid off from the census, left it with no denominator at all, and produced
+	 * "Showing 20 of 20" — the loaded-row count standing in for a total.
 	 */
-	const censusScoped = targeted === undefined && !SCOPE_NARROWED_COLLECTIONS.has(collection);
+	const censusScoped = targeted === undefined;
 	const read: CompiledQueryRead = {
 		prefilter: (prefilters.length === 1 ? prefilters[0] : { $and: prefilters }) as never,
 		residual: (document) => readFilters.every((filter) => filter.matches(document)),
