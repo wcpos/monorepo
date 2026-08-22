@@ -724,14 +724,61 @@ export async function drainMutationQueue(input: {
 					if (input.signal?.aborted) {
 						break;
 					}
-					if (isNonRetryable(retryError)) {
+					if ((retryError as { status?: unknown } | null)?.status === 428) {
+						// "Settled exactly as a first attempt would be" has to include the
+						// 428 carve-out above: this row has spent NO refresh yet, so it is
+						// owed the one targeted refreshRevision + re-push this module's
+						// header contract promises. Dead-lettering here permanently rejects
+						// a write that had only hit 409-then-428, having never offered it a
+						// fresh precondition.
+						let revision: string | null | undefined;
+						try {
+							revision = await input.refreshRevision?.(reanchored);
+						} catch {
+							if (input.signal?.aborted) {
+								break;
+							}
+							failed += 1;
+							blockedRecords.add(mutation.recordId);
+							await applyBackoff({ ...reanchored, status: 'pending' });
+							continue;
+						}
+						if (!revision) {
+							// No adapter, or a born-local create with no remote identity to
+							// refresh against — the same terminal split the first-push path makes.
+							if (reanchored.operation === 'create') await deadLetter(reanchored, retryError);
+							else await parkNeedsRevision(reanchored);
+							continue;
+						}
+						const restamped = { ...reanchored, baseRevision: revision };
+						try {
+							retry = await input.push(restamped);
+						} catch (refreshedError) {
+							if (input.signal?.aborted) {
+								break;
+							}
+							// A second 428 proves the refreshed revision was itself ineffective;
+							// isNonRetryable already treats 428 as terminal, so that dead-letters
+							// rather than looping on the same base.
+							if (isNonRetryable(refreshedError)) {
+								await deadLetter(restamped, refreshedError);
+							} else {
+								failed += 1;
+								blockedRecords.add(mutation.recordId);
+								await applyBackoff({ ...restamped, status: 'pending' });
+							}
+							continue;
+						}
+						// Fall through carrying the refreshed push's verdict.
+					} else if (isNonRetryable(retryError)) {
 						await deadLetter(reanchored, retryError);
+						continue;
 					} else {
 						failed += 1;
 						blockedRecords.add(mutation.recordId);
 						await applyBackoff({ ...reanchored, status: 'pending' });
+						continue;
 					}
-					continue;
 				}
 				if (input.signal?.aborted) {
 					break;

@@ -1,8 +1,15 @@
 /**
- * MIGRATION SHIM: validation moved to @wcpos/order-math with typed rejections.
- * This wrapper reproduces the legacy string interface until the PR 2 cutover.
- * The pure function takes an explicit clock (context.now); legacy callers do
- * not pass one, so the shim injects Date.now() to keep PR 1 behavior identical.
+ * Boundary adapter for coupon validation. Two jobs:
+ *
+ *   1. Injects the clock. The pure validator takes an explicit `context.now`;
+ *      core callers do not have one to give.
+ *   2. Flattens the typed `CouponRejection` to a display string.
+ *
+ * Job 2 is a known defect, not a design: `rejectionToEnglish` produces
+ * hardcoded English that reaches the cashier untranslated (there are no `t()`
+ * keys for the 11 rejection reasons). The typed `{ code, params }` needed to
+ * fix it already exists upstream — mapping it to translation keys at the call
+ * site, and deleting this flattening, is tracked in #1472.
  */
 import { validateCoupon as pureValidate } from '@wcpos/order-math/internal';
 import type { CouponValidationContext as PureCouponValidationContext } from '@wcpos/order-math/internal';

@@ -74,6 +74,7 @@ export type {
 	DiscoveryErrorCode,
 	DiscoveryError,
 	BluetoothCandidate,
+	PrinterDiscovery,
 	DrawerConnector,
 } from './types';
 export { buildPrintableReceiptHtml, normalizeReceiptPaperWidth } from './print-html';

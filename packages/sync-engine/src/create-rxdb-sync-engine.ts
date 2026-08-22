@@ -332,6 +332,27 @@ export type EngineIntervals = Record<LaneIntervalKey, number> & {
  * imposes on hostTransport) and is five times the sustained-slowness threshold.
  */
 const ABORT_AS_TIMEOUT_AFTER_MS = 10_000;
+
+/**
+ * The write outcomes that END a mutation's life. Exported because `awaitWriteOutcome`
+ * in @wcpos/query keys on the same set: the engine is the producer, so the list lives
+ * here rather than being mirrored (and drifting) at the consumer.
+ */
+export const TERMINAL_WRITE_EVENT_TYPES = new Set<EngineEvent['type']>([
+	'write-acknowledged',
+	'write-ack-rematerialized',
+	'write-annihilated',
+	'write-conflict',
+	'write-rejected',
+]);
+
+/**
+ * How many terminal write outcomes stay replayable. A waiter subscribes within a
+ * tick of its own `write()`, so this only has to outlive that hop — but a busy
+ * checkout can settle a burst, and each entry is one small event object. 256 is
+ * far above any real in-flight burst and still trivially bounded.
+ */
+const REPLAYABLE_WRITE_OUTCOMES = 256;
 export const REBASELINE_AUDIT_DELAY_MS = 60_000;
 
 const DEFAULT_INTERVALS: EngineIntervals = {
@@ -621,7 +642,16 @@ export type RxdbSyncEngine = {
 		name: SyncCollectionName,
 		options?: { signal?: AbortSignal }
 	): Promise<CollectionCheckReport>;
-	events(cb: (e: EngineEvent) => void): Unsubscribe;
+	/**
+	 * Subscribe to engine events.
+	 *
+	 * `replayWriteOutcomeFor` closes the gap between `write()` handing back a
+	 * receipt and a waiter subscribing: if that mutation's terminal outcome has
+	 * ALREADY fired, it is delivered synchronously on subscribe. Without it a
+	 * fast drain settles into an empty room and the waiter times out on a write
+	 * that succeeded.
+	 */
+	events(cb: (e: EngineEvent) => void, options?: { replayWriteOutcomeFor?: string }): Unsubscribe;
 	status(): EngineStatus;
 	/** Emits the current status immediately, then coalesced status snapshots as it changes. */
 	statusChanges(cb: (status: EngineStatus) => void): Unsubscribe;
@@ -823,6 +853,8 @@ export function createRxdbSyncEngine(
 	const localCoverageByScopeId = new Map<string, LocalCoverage>();
 	const dbSubscribers = new Set<(db: RxDatabase | null) => void>();
 	const eventSubscribers = new Set<(e: EngineEvent) => void>();
+	/** mutationId → its terminal outcome, for waiters that subscribe after it fired. */
+	const recentWriteOutcomes = new Map<string, EngineEvent>();
 	const statusSubscribers = new Set<(status: EngineStatus) => void>();
 	let statusNotificationQueued = false;
 	const scheduleStatusChange = (): void => {
@@ -1182,6 +1214,19 @@ export function createRxdbSyncEngine(
 	}
 
 	const emitEngineEvent = (event: EngineEvent): void => {
+		// Recorded at the fan-out, so a BRIDGED peer outcome (which enters here, not
+		// at emitWriteEvent — see below) is replayable in the follower too.
+		if (TERMINAL_WRITE_EVENT_TYPES.has(event.type) && 'mutationId' in event) {
+			const { mutationId } = event;
+			// Re-insert to move it to the back of the insertion order, so eviction
+			// drops the genuinely oldest outcome.
+			recentWriteOutcomes.delete(mutationId);
+			recentWriteOutcomes.set(mutationId, event);
+			if (recentWriteOutcomes.size > REPLAYABLE_WRITE_OUTCOMES) {
+				const oldest = recentWriteOutcomes.keys().next();
+				if (!oldest.done) recentWriteOutcomes.delete(oldest.value);
+			}
+		}
 		for (const cb of [...eventSubscribers]) {
 			try {
 				cb(event);
@@ -2258,9 +2303,26 @@ export function createRxdbSyncEngine(
 					: {}),
 			});
 		},
-		events: (cb) => {
+		events: (cb, options) => {
 			assertNotDisposed();
 			eventSubscribers.add(cb);
+			const replayFor = options?.replayWriteOutcomeFor;
+			if (replayFor !== undefined) {
+				const settled = recentWriteOutcomes.get(replayFor);
+				// Synchronous, like statusChanges' first emit: the caller may unsubscribe
+				// immediately after this returns, and a deferred replay would miss it.
+				if (settled) {
+					try {
+						cb(settled);
+					} catch (error) {
+						diagnostics({
+							type: 'engine.listener-error',
+							level: 'error',
+							message: `events() replay listener threw: ${error instanceof Error ? error.message : String(error)}`,
+						});
+					}
+				}
+			}
 			return () => {
 				eventSubscribers.delete(cb);
 			};

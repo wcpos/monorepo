@@ -1,8 +1,9 @@
 import * as React from 'react';
 
+import { calculateTaxes } from '@wcpos/order-math/internal';
+
 import { taxClassFromWire } from './tax-class';
 import { useTaxInclOrExcl } from './use-tax-incl-or-excl';
-import { calculateTaxes } from './utils/calculate-taxes';
 import { useTaxRates } from '../contexts/tax-rates';
 
 interface TaxDisplayValuesProps {

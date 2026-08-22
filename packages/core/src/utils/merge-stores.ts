@@ -99,12 +99,16 @@ export function normalizeStorePayload(store: ServerStorePayload): ServerStorePay
 			}));
 	}
 
+	// Empty strings are dropped alongside non-strings: the dictionary is spread
+	// over the printer's English defaults, so a blank value would override the
+	// default with nothing and print an unlabelled row — the exact symptom #1252
+	// exists to remove. Absent means "use the default".
 	if (!isPlainObject(out.receipt_i18n)) {
 		out.receipt_i18n = {};
 	} else {
 		out.receipt_i18n = Object.fromEntries(
 			Object.entries(out.receipt_i18n as Record<string, unknown>).filter(
-				([, value]) => typeof value === 'string'
+				([, value]) => typeof value === 'string' && value.trim() !== ''
 			)
 		);
 	}

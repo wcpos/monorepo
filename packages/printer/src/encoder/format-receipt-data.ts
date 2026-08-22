@@ -116,7 +116,16 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 	const displayTax = resolveDisplayValueSide(data);
 	const i18n = {
 		...DEFAULT_I18N,
-		...data.i18n,
+		// A blank or whitespace-only label would OVERRIDE the English default and
+		// print an unlabelled row — the symptom #1252 exists to remove. Filtered
+		// HERE, at the one place the dictionary meets the defaults, so it holds for
+		// every producer: the local offline builder, the receipts API payload, and
+		// the template studio alike. Absent and blank mean the same thing.
+		...Object.fromEntries(
+			Object.entries(data.i18n ?? {}).filter(
+				([, value]) => typeof value === 'string' && value.trim() !== ''
+			)
+		),
 	};
 
 	// narrowSymbol matches the server's wc_price() output, which always prints

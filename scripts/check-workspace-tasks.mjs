@@ -24,12 +24,6 @@ export const ALLOWLIST = [
     tasks: ["typecheck"],
     reason: "eslint config package itself, plain .js",
   },
-  {
-    dir: "packages/printer",
-    tasks: ["lint"],
-    reason:
-      "TODO(#1478): 119 eslint findings (111 prettier autofixable, 8 rule violations) must be cleared before this can be wired",
-  },
 ];
 
 export function readWorkspacePackages(root = repoRoot) {

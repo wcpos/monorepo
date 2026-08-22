@@ -140,3 +140,42 @@ export interface BluetoothCandidate {
 	id: string;
 	name: string;
 }
+
+interface UsbDiscoveryCapabilities {
+	connectUsbDevice: () => void | Promise<void>;
+	isUsbScanning: boolean;
+}
+
+interface BluetoothDiscoveryCapabilities {
+	connectBluetoothDevice: () => void;
+	isBluetoothScanning: boolean;
+	bluetoothCandidates: BluetoothCandidate[];
+	selectBluetoothCandidate: (id: string) => void;
+	cancelBluetoothScan: () => void;
+}
+
+interface SerialDiscoveryCapabilities {
+	connectSerialDevice: () => Promise<void>;
+	isSerialScanning: boolean;
+}
+
+export interface PrinterDiscovery
+	extends
+		Partial<UsbDiscoveryCapabilities>,
+		Partial<BluetoothDiscoveryCapabilities>,
+		Partial<SerialDiscoveryCapabilities> {
+	printers: DiscoveredPrinter[];
+	isScanning: boolean;
+	scanCandidates: string[];
+	scanProgress: { tested: number; total: number };
+	startScan: () => Promise<void>;
+	stopScan: () => void | Promise<void>;
+	addManualPrinter: (
+		name: string,
+		address: string,
+		port?: number,
+		vendor?: 'epson' | 'star' | 'generic'
+	) => void;
+	removeDiscoveredPrinter: (id: string) => void;
+	error: DiscoveryError | null;
+}

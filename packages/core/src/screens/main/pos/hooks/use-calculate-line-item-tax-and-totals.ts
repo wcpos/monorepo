@@ -3,10 +3,11 @@ import * as React from 'react';
 import find from 'lodash/find';
 import uniq from 'lodash/uniq';
 
+import { getRoundingPrecision, roundHalfUp, roundTaxTotal } from '@wcpos/order-math/internal';
+
 import { useLineItemData } from './use-line-item-data';
 import { useTaxSettings } from '../../contexts/tax-rates';
 import { useCalculateTaxesFromValue } from '../../hooks/use-calculate-taxes-from-value';
-import { getRoundingPrecision, roundHalfUp, roundTaxTotal } from '../../hooks/utils/precision';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type Tax = { id: number; total: number };
