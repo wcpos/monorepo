@@ -1,6 +1,7 @@
 import { encodeThermalTemplate } from '../renderer';
 import { DEFAULT_THERMAL_TEMPLATE } from './default-thermal-template';
-import { formatEscposMoney } from './format-money';
+import { isEscposTextEncodable } from './escpos-text';
+import { formatMoney } from './format-money';
 
 import type { ReceiptData } from './types';
 import type { DrawerConnector } from '../types';
@@ -44,8 +45,9 @@ export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions =
 
 	const currency = data.order.currency;
 	const locale = data.presentation_hints?.locale;
+	const isSymbolEncodable = (symbol: string): boolean => isEscposTextEncodable(symbol, language);
 	const fmt = (value: number, decimals?: number): string =>
-		formatEscposMoney(value, currency, locale, decimals, language);
+		formatMoney(value, currency, locale, decimals, isSymbolEncodable);
 
 	// Compute column widths
 	const infoColRight = Math.max(12, Math.floor(columns / 2));

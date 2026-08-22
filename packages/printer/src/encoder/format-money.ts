@@ -1,5 +1,3 @@
-import { isEscposTextEncodable } from './escpos-text';
-
 /**
  * narrowSymbol matches the server's wc_price() output, which always prints
  * the bare currency symbol ("42,84 £"). The default 'symbol' display falls
@@ -11,8 +9,7 @@ export function formatMoney(
 	currency: string,
 	locale?: string,
 	decimals?: number,
-	requireEncodableCurrency = false,
-	printerLanguage: 'esc-pos' | 'star-prnt' | 'star-line' = 'esc-pos'
+	isSymbolEncodable?: (symbol: string) => boolean
 ): string {
 	const normalizedLocale = (locale || 'en-US').trim().replace(/_/g, '-') || 'en-US';
 	const fractionDigits =
@@ -27,11 +24,11 @@ export function formatMoney(
 			currencyDisplay: 'narrowSymbol',
 			...fractionDigits,
 		});
-		if (requireEncodableCurrency) {
+		if (isSymbolEncodable) {
 			const currencySymbol = formatter
 				.formatToParts(value)
 				.find((part) => part.type === 'currency')?.value;
-			if (currencySymbol && !isEscposTextEncodable(currencySymbol, printerLanguage)) {
+			if (currencySymbol && !isSymbolEncodable(currencySymbol)) {
 				return new Intl.NumberFormat(normalizedLocale, {
 					style: 'currency',
 					currency,
@@ -55,14 +52,4 @@ export function formatMoney(
 				: value.toFixed(fallbackDecimals);
 		}
 	}
-}
-
-export function formatEscposMoney(
-	value: number,
-	currency: string,
-	locale?: string,
-	decimals?: number,
-	printerLanguage: 'esc-pos' | 'star-prnt' | 'star-line' = 'esc-pos'
-): string {
-	return formatMoney(value, currency, locale, decimals, true, printerLanguage);
 }

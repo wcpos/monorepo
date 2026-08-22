@@ -1,4 +1,4 @@
-import { formatEscposMoney, formatMoney } from './format-money';
+import { formatMoney } from './format-money';
 
 import type { ReceiptData } from './types';
 
@@ -111,7 +111,7 @@ function resolveTaxIdLabel(
  */
 export function formatReceiptData(
 	data: ReceiptData,
-	options: { printerLanguage?: 'esc-pos' | 'star-prnt' | 'star-line' } = {}
+	options: { isSymbolEncodable?: (symbol: string) => boolean } = {}
 ): Record<string, any> {
 	const currency = data.order.currency;
 	if (!currency) {
@@ -125,9 +125,7 @@ export function formatReceiptData(
 	};
 
 	const fmt = (value: number): string =>
-		options.printerLanguage
-			? formatEscposMoney(value, currency, locale, undefined, options.printerLanguage)
-			: formatMoney(value, currency, locale);
+		formatMoney(value, currency, locale, undefined, options.isSymbolEncodable);
 	const perUnit = (total: number | undefined, qty: number): number | undefined => {
 		if (total == null || qty === 0) return undefined;
 		return total / qty;
