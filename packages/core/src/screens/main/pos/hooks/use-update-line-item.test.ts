@@ -519,6 +519,46 @@ describe('useUpdateLineItem', () => {
 		);
 	});
 
+	it('splits the latest line items after an earlier queued mutation completes', async () => {
+		mockLineItemQuantity = 2;
+		let resolveFirstPatch: (() => void) | undefined;
+		mockLocalPatch.mockImplementationOnce(
+			({ data }: { data: { line_items: { quantity?: number }[] } }) =>
+				new Promise((resolve) => {
+					resolveFirstPatch = () => {
+						mockLineItemQuantity = data.line_items[1]?.quantity ?? mockLineItemQuantity;
+						resolve({ changes: data });
+					};
+				})
+		);
+		const { result } = renderHook(() => useUpdateLineItem());
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+
+		await act(async () => {
+			const firstMutation = result.current.updateLineItem(
+				uuid,
+				{ quantity: 3 },
+				{ skipStockGuard: true }
+			);
+			await Promise.resolve();
+			const split = result.current.splitLineItem(uuid);
+
+			resolveFirstPatch?.();
+			await Promise.all([firstMutation, split]);
+		});
+
+		const splitLineItems = mockLocalPatch.mock.calls[1][0].data.line_items as {
+			quantity?: number;
+		}[];
+		expect(splitLineItems.map((lineItem) => lineItem.quantity)).toEqual([
+			undefined,
+			1,
+			1,
+			1,
+			undefined,
+		]);
+	});
+
 	it('reports the invariant when split targets a missing line item without a toast', async () => {
 		const { result } = renderHook(() => useUpdateLineItem());
 

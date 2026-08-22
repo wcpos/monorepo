@@ -1,10 +1,4 @@
-import {
-	addRxPlugin,
-	createRxDatabase,
-	type HashFunction,
-	type RxDatabase,
-	type RxStorage,
-} from 'rxdb';
+import { addRxPlugin, createRxDatabase, type RxDatabase, type RxStorage } from 'rxdb';
 import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 
 /**
@@ -291,10 +285,6 @@ export type RxdbSyncEnginePorts = {
 	 * single-writer web context) ⇒ in-process events exactly as before.
 	 */
 	writeOutcomeBridge?: WriteOutcomeBridge;
-	/** RxDB hashFunction for the engine's scope databases. Default: RxDB's
-	 * WebCrypto-based sha256. apps/main injects its platform hash implementation
-	 * where WebCrypto is unavailable. */
-	hashFunction?: HashFunction;
 	intervals?: Partial<EngineIntervals>;
 	/** Host-executed query-total fetch. The query-total retry lane arms ONLY
 	 * when this port is provided (the engine cannot guess the host's total
@@ -996,7 +986,6 @@ export function createRxdbSyncEngine(
 			// apps/main enables this where it runs multiple instances; harnesses and
 			// single-window hosts keep the single-instance default.
 			multiInstance: ports.multiInstance ?? false,
-			...(ports.hashFunction !== undefined ? { hashFunction: ports.hashFunction } : {}),
 		});
 		try {
 			setLifecyclePhase('add-collections');

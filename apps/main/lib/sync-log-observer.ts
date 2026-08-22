@@ -5,6 +5,7 @@ import type {
 	SyncEventType,
 	SyncObserver,
 } from '@wcpos/sync-core';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { isVerboseDiagnostics, type LogTerminalFields, promoteRecorder } from '@wcpos/utils/logger';
 
@@ -184,19 +185,27 @@ export const CONFORMANCE_TABLE = {
 		code: null,
 		didWork: (f) => num(f.pulls) + num(f.deletes) > 0,
 	},
-	'signal.cursor': { operationType: 'sync.cursor', outcome: 'unknown', code: 'SYNC301' },
+	'signal.cursor': {
+		operationType: 'sync.cursor',
+		outcome: 'unknown',
+		code: ERROR_CODES.SYNC_BEHIND_HEAD,
+	},
 	'signal.tick.error': {
 		operationType: 'sync.cycle',
 		outcome: 'failed',
 		// No status field means the failure was local (bulkUpsert and friends), not
 		// transport — stamping an "unreachable" code there would mislead (#836).
 		code: (_event, fields) =>
-			typeof fields.status !== 'number' ? 'SYNC401' : fields.status >= 500 ? 'SYNC131' : 'SYNC121',
+			typeof fields.status !== 'number'
+				? ERROR_CODES.SYNC_TASK_CRASHED
+				: fields.status >= 500
+					? ERROR_CODES.STORE_SERVER_ERROR
+					: ERROR_CODES.SYNC_UNREACHABLE,
 	},
 	'engine.lane.tick': {
 		operationType: 'sync.lane',
 		outcome: 'ok',
-		code: 'SYNC401',
+		code: ERROR_CODES.SYNC_TASK_CRASHED,
 		didWork: (f) =>
 			f.status === 'error' ||
 			num(f.pushed) + num(f.conflicts) + num(f.deferred) + num(f.failed) + num(f.rejected) > 0,
@@ -213,11 +222,15 @@ export const CONFORMANCE_TABLE = {
 	'cadence.backoff': { operationType: 'sync.cadence', outcome: 'ok', code: null },
 	'cadence.recovered': { operationType: 'sync.cadence', outcome: 'ok', code: null },
 	'engine.ready': { operationType: 'sync.startup', outcome: 'ok', code: null },
-	'engine.ready-failed': { operationType: 'sync.startup', outcome: 'failed', code: 'CLIENT101' },
+	'engine.ready-failed': {
+		operationType: 'sync.startup',
+		outcome: 'failed',
+		code: ERROR_CODES.APP_START_FAILED,
+	},
 	'engine.ready-stalled': {
 		operationType: 'sync.startup',
 		outcome: 'unknown',
-		code: 'CLIENT111',
+		code: ERROR_CODES.APP_START_SLOW,
 		// The watchdog emits at error, but the CLIENT111 ruling is warn severity —
 		// a stall that usually self-resolves must not read as a failure.
 		level: 'warn',
@@ -233,12 +246,12 @@ export const CONFORMANCE_TABLE = {
 	'engine.connectivity-error': {
 		operationType: 'sync.lifecycle',
 		outcome: 'failed',
-		code: 'SYNC121',
+		code: ERROR_CODES.SYNC_UNREACHABLE,
 	},
 	'engine.pos-bootstrap-error': {
 		operationType: 'sync.startup',
 		outcome: 'failed',
-		code: 'CLIENT101',
+		code: ERROR_CODES.APP_START_FAILED,
 	},
 	'engine.guard': {
 		operationType: 'sync.scope',
@@ -249,16 +262,20 @@ export const CONFORMANCE_TABLE = {
 	'apply.pull': {
 		operationType: 'sync.apply',
 		outcome: 'ok',
-		code: 'SYNC321',
+		code: ERROR_CODES.SYNC_PARTIAL,
 		didWork: (f) => num(f.applied) > 0,
 	},
 	'apply.delete': {
 		operationType: 'sync.apply',
 		outcome: 'ok',
-		code: 'SYNC321',
+		code: ERROR_CODES.SYNC_PARTIAL,
 		didWork: (f) => num(f.applied) > 0,
 	},
-	'apply.rebaseline': { operationType: 'sync.apply', outcome: 'ok', code: 'SYNC321' },
+	'apply.rebaseline': {
+		operationType: 'sync.apply',
+		outcome: 'ok',
+		code: ERROR_CODES.SYNC_PARTIAL,
+	},
 	'apply.refetch': {
 		operationType: 'sync.apply',
 		outcome: 'ok',
@@ -286,7 +303,7 @@ export const CONFORMANCE_TABLE = {
 	'apply.escalation': {
 		operationType: 'sync.record',
 		outcome: 'failed',
-		code: 'SYNC331',
+		code: ERROR_CODES.LOCAL_RECORD_DIVERGED,
 		message: recordMessage('pull escalation'),
 	},
 	// A previously-escalated record was verified matching by a complete integrity
@@ -306,7 +323,11 @@ export const CONFORMANCE_TABLE = {
 		code: null,
 		didWork: (f) => num(f.documents) > 0 || num(f.requests) > 0,
 	},
-	'coverage.require.error': { operationType: 'sync.coverage', outcome: 'failed', code: 'SYNC321' },
+	'coverage.require.error': {
+		operationType: 'sync.coverage',
+		outcome: 'failed',
+		code: ERROR_CODES.SYNC_PARTIAL,
+	},
 	'coverage.existence-prime': { operationType: 'sync.coverage', outcome: 'ok', code: null },
 	'coverage.existence-reconcile': {
 		operationType: 'sync.coverage',
@@ -331,10 +352,10 @@ export const CONFORMANCE_TABLE = {
 		outcome: 'ok',
 		code: (_event, fields) => {
 			const status = num(fields.status);
-			if (status === 401) return 'AUTH101';
-			if (status === 403) return 'AUTH201';
-			if (status === 429) return 'SYNC141';
-			if (status === 0) return 'SYNC121';
+			if (status === 401) return ERROR_CODES.SESSION_EXPIRED;
+			if (status === 403) return ERROR_CODES.INSUFFICIENT_ROLE;
+			if (status === 429) return ERROR_CODES.STORE_RATE_LIMITED;
+			if (status === 0) return ERROR_CODES.SYNC_UNREACHABLE;
 			// A response IS reachability — only status 0 (no response at all) may say
 			// "cannot be reached". A 409 is the conflict the record-level events
 			// already narrate (SYNC221); any other 4xx/5xx is the server answering
@@ -342,9 +363,9 @@ export const CONFORMANCE_TABLE = {
 			// to SYNC121, so a slow-but-answered 409 read as an unreachable store
 			// (dev-next 2026-08-14: a 14.8s conflicted push labeled "cannot be
 			// reached" while the server had refused it in plain HTTP).
-			if (status === 409) return 'SYNC221';
-			if (status >= 400) return 'SYNC131';
-			return 'SYNC121';
+			if (status === 409) return ERROR_CODES.RECORD_CONFLICT;
+			if (status >= 400) return ERROR_CODES.STORE_SERVER_ERROR;
+			return ERROR_CODES.SYNC_UNREACHABLE;
 		},
 		// Failures only. A successful data-bearing request is a unit of work, but
 		// the engine issues them continuously (a poll every few seconds, several
@@ -373,14 +394,14 @@ export const CONFORMANCE_TABLE = {
 		// SYNC_PARTIAL until #1150's generic codes offer a sharper home.
 		code: (_event, fields) => {
 			const status = typeof fields.status === 'number' ? fields.status : 0;
-			if (status === 401) return 'AUTH101';
-			if (status === 403) return 'AUTH201';
-			if (status === 429) return 'SYNC141';
-			if (status >= 500) return 'SYNC131';
-			if (fields.reason === 'pos_data_invalid') return 'SYNC211';
-			if (status >= 400) return 'SYNC201';
-			if (status >= 200 && status < 300) return 'SYNC321';
-			return 'SYNC121';
+			if (status === 401) return ERROR_CODES.SESSION_EXPIRED;
+			if (status === 403) return ERROR_CODES.INSUFFICIENT_ROLE;
+			if (status === 429) return ERROR_CODES.STORE_RATE_LIMITED;
+			if (status >= 500) return ERROR_CODES.STORE_SERVER_ERROR;
+			if (fields.reason === 'pos_data_invalid') return ERROR_CODES.RECORD_INVALID_FIELD;
+			if (status >= 400) return ERROR_CODES.RECORD_REJECTED;
+			if (status >= 200 && status < 300) return ERROR_CODES.SYNC_PARTIAL;
+			return ERROR_CODES.SYNC_UNREACHABLE;
 		},
 		message: recordMessage('push failed'),
 	},
@@ -393,7 +414,7 @@ export const CONFORMANCE_TABLE = {
 	'push.conflict': {
 		operationType: 'sync.record',
 		outcome: 'failed',
-		code: 'SYNC221',
+		code: ERROR_CODES.RECORD_CONFLICT,
 		message: recordMessage('push conflict'),
 	},
 	'push.in_progress': {
@@ -406,7 +427,7 @@ export const CONFORMANCE_TABLE = {
 	'push.rejected': {
 		operationType: 'sync.record',
 		outcome: 'rejected',
-		code: 'SYNC201',
+		code: ERROR_CODES.RECORD_REJECTED,
 		message: recordMessage('rejected by server'),
 	},
 	// R1: the write SUCCEEDED — the server accepted the order and the till
@@ -430,19 +451,19 @@ export const CONFORMANCE_TABLE = {
 	'push.money-divergence': {
 		operationType: 'sync.money',
 		outcome: 'failed',
-		code: 'CHECKOUT401',
+		code: ERROR_CODES.TOTALS_DIVERGED,
 		message: recordMessage('server totals differ from the till'),
 	},
 	'queue.write.needs-revision': {
 		operationType: 'sync.record',
 		outcome: 'rejected',
-		code: 'SYNC211',
+		code: ERROR_CODES.RECORD_INVALID_FIELD,
 		message: recordMessage('needs revision'),
 	},
 	'queue.write.auto-reverted': {
 		operationType: 'sync.record',
 		outcome: 'recovered',
-		code: 'SYNC201',
+		code: ERROR_CODES.RECORD_REJECTED,
 		level: 'error',
 		toast(event, fields) {
 			// The server's human-readable message ("Sorry, you are not allowed to
@@ -472,13 +493,13 @@ export const CONFORMANCE_TABLE = {
 	'queue.write.conflict-transition': {
 		operationType: 'sync.record',
 		outcome: 'failed',
-		code: 'SYNC221',
+		code: ERROR_CODES.RECORD_CONFLICT,
 		message: recordMessage('conflict transition failed'),
 	},
 	'queue.write.reschedule-failed': {
 		operationType: 'sync.record',
 		outcome: 'failed',
-		code: 'SYNC321',
+		code: ERROR_CODES.SYNC_PARTIAL,
 		message: recordMessage('reschedule failed'),
 	},
 	'queue.write.resolve': {
@@ -510,17 +531,21 @@ export const CONFORMANCE_TABLE = {
 	'queue.scheduler.drain': {
 		operationType: 'sync.queue',
 		outcome: 'ok',
-		code: 'SYNC321',
+		code: ERROR_CODES.SYNC_PARTIAL,
 		didWork: (f) => num(f.succeeded) + num(f.failed) > 0,
 	},
 	'queue.write.enqueued': { operationType: 'sync.queue', outcome: 'ok', code: null },
 	'queue.write.annihilate': { operationType: 'sync.queue', outcome: 'ok', code: null },
 	'queue.write.coalesce': { operationType: 'sync.queue', outcome: 'ok', code: null },
-	'queue.write.tick.error': { operationType: 'sync.queue', outcome: 'failed', code: 'SYNC321' },
+	'queue.write.tick.error': {
+		operationType: 'sync.queue',
+		outcome: 'failed',
+		code: ERROR_CODES.SYNC_PARTIAL,
+	},
 	'engine.listener-error': {
 		operationType: 'sync.lifecycle',
 		outcome: 'failed',
-		code: 'CLIENT999',
+		code: ERROR_CODES.UNEXPECTED_ERROR,
 	},
 
 	// ————————————————————————————————————————————————————————————————————————
@@ -565,7 +590,7 @@ export const CONFORMANCE_TABLE = {
 	'demand.flood-detected': {
 		operationType: 'sync.coverage',
 		outcome: 'unknown',
-		code: 'SYNC411',
+		code: ERROR_CODES.DEMAND_REQUEST_FLOOD,
 		level: 'warn',
 		didWork: () => true,
 	},
@@ -573,7 +598,7 @@ export const CONFORMANCE_TABLE = {
 	'engine.barcode-selector-hydrate-failed': {
 		operationType: 'sync.startup',
 		outcome: 'failed',
-		code: 'PRODUCT411',
+		code: ERROR_CODES.BARCODE_CONFIG_UNAVAILABLE,
 		level: 'warn',
 		didWork: () => true,
 	},
@@ -583,14 +608,14 @@ export const CONFORMANCE_TABLE = {
 	'engine.write-leader.degraded': {
 		operationType: 'sync.lifecycle',
 		outcome: 'unknown',
-		code: 'CLIENT121',
+		code: ERROR_CODES.MULTI_TAB_LIMITED,
 		didWork: () => true,
 	},
 	// decided: visible — a crashed background lane is cashier-visible degradation until retry.
 	'maintenance.lane.error': {
 		operationType: 'sync.lane',
 		outcome: 'failed',
-		code: 'SYNC401',
+		code: ERROR_CODES.SYNC_TASK_CRASHED,
 		level: 'warn',
 		didWork: () => true,
 	},
@@ -614,7 +639,7 @@ export const CONFORMANCE_TABLE = {
 	'push.dead-letter-unpersisted': {
 		operationType: 'sync.record',
 		outcome: 'failed',
-		code: 'SYNC101',
+		code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 		didWork: () => true,
 		message: recordMessage('rejected change could not be saved for recovery'),
 	},
