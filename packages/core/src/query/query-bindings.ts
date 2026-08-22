@@ -74,7 +74,16 @@ export interface QueryBinding {
 	resource: ObservableResource<QueryResult<RxCollection>>;
 	result$: Observable<QueryResult<RxCollection>>;
 	active$: Observable<boolean>;
-	total$: Observable<number>;
+	/**
+	 * The size of the set this screen is about, or `null` when nothing can vouch for one.
+	 *
+	 * `null` is a real answer, not a missing one: it means neither a server count nor a claim
+	 * of local completeness exists, so the only number available is "how many rows are loaded"
+	 * — and printing THAT as a total is how the orders footer came to say "Showing 20 of 20"
+	 * at a page size of 20, telling a cashier they had 20 orders when the next scroll found
+	 * more. Consumers render a count without a denominator instead of inventing one.
+	 */
+	total$: Observable<number | null>;
 	laneProgress$: Observable<QueryLaneProgress | null>;
 	sync(): Promise<void>;
 }
@@ -414,7 +423,7 @@ function coverageProjection$(
 	result$: Observable<QueryResult<RxCollection>>,
 	coverageTarget$: Observable<CoverageTarget | null>,
 	census$: Observable<number | null>
-): Observable<{ total: number; laneProgress: QueryLaneProgress | null }> {
+): Observable<{ total: number | null; laneProgress: QueryLaneProgress | null }> {
 	const verdict$ = coverageTarget$.pipe(
 		distinctUntilChanged(
 			(previous, current) => coverageTargetKey(previous) === coverageTargetKey(current)
@@ -430,8 +439,16 @@ function coverageProjection$(
 			// `censusTotal` is non-null only where the census honestly stands for this screen
 			// (see `censusScoped`) and has landed.
 			const serverTotal = censusTotal ?? verdict.total;
+			if (serverTotal !== null) {
+				return { total: Math.max(serverTotal, localCount), laneProgress: verdict.progress };
+			}
+			// No server count anywhere. The resident count is a truthful TOTAL only when the
+			// engine claims to hold the whole matching set — `complete` is exactly that claim,
+			// and a windowed browse lane deliberately never makes it (coverage-verdicts.ts).
+			// Otherwise the resident count is just "what has loaded so far", and passing it off
+			// as the size of the set is the "Showing 20 of 20" lie.
 			return {
-				total: serverTotal === null ? localCount : Math.max(serverTotal, localCount),
+				total: verdict.complete ? localCount : null,
 				laneProgress: verdict.progress,
 			};
 		}),

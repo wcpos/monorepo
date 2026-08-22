@@ -603,7 +603,7 @@ describe('query bindings', () => {
 			{ wrapper: Provider }
 		);
 
-		const totals: number[] = [];
+		const totals: (number | null)[] = [];
 		const subscription = result.current.total$.subscribe((total) => totals.push(total));
 		await new Promise((resolve) => setTimeout(resolve, 50));
 		subscription.unsubscribe();
@@ -682,9 +682,12 @@ describe('query bindings', () => {
 			wrapper: Provider,
 		});
 		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
+		// Nothing vouches for a size yet — one resident under a limit of 1 is "what has
+		// loaded", not "how many there are", so the binding declines to name a total rather
+		// than publishing the loaded-row count as one.
 		await expect(
-			firstValueFrom(result.current.total$.pipe(filter((total) => total === 1)))
-		).resolves.toBe(1);
+			firstValueFrom(result.current.total$.pipe(filter((total) => total === null)))
+		).resolves.toBeNull();
 
 		// #909: the browse-window coverage key follows the DESCRIPTOR — this grid sorts by
 		// name, so it reports against the title-sorted window, not a hardcoded limit=100.
@@ -797,7 +800,7 @@ describe('query bindings', () => {
 			wrapper: Provider,
 		});
 
-		const totals: number[] = [];
+		const totals: (number | null)[] = [];
 		const subscription = result.current.total$.subscribe((total) => totals.push(total));
 		await waitFor(() => expect(totals).toContain(42));
 		subscription.unsubscribe();
@@ -875,7 +878,7 @@ describe('query bindings', () => {
 			wrapper: Provider,
 		});
 		await waitFor(() => expect(current(result.current.resource)).toBeTruthy());
-		const totals: number[] = [];
+		const totals: (number | null)[] = [];
 		const subscription = result.current.total$.subscribe((total) => totals.push(total));
 		await new Promise((resolve) => setTimeout(resolve, 20));
 		subscription.unsubscribe();
@@ -919,11 +922,13 @@ describe('query bindings', () => {
 			firstValueFrom(result.current.total$.pipe(filter((total) => total === 3)))
 		).resolves.toBe(3);
 
-		// Filtered, the reference lane's total no longer applies — the resident count carries.
+		// Filtered, the reference lane's total no longer applies, and no census was recorded —
+		// so there is no size to report. The footer states its count without a denominator
+		// rather than passing the single loaded row off as "1 of 1".
 		rerender({ state: { ...base, filters: { status: 'publish' } } });
 		await expect(
-			firstValueFrom(result.current.total$.pipe(filter((total) => total === 1)))
-		).resolves.toBe(1);
+			firstValueFrom(result.current.total$.pipe(filter((total) => total === null)))
+		).resolves.toBeNull();
 	});
 
 	// Tier 0. Tax rates are seeded by the engine's BOOT lane, so compiled query demand declares
@@ -959,10 +964,11 @@ describe('query bindings', () => {
 		await expect(firstValueFrom(result.current.active$)).resolves.toBe(false);
 	});
 
-	it('keeps customer search cold until engine results land locally and reports local totals', async () => {
+	it('keeps customer search cold until engine results land locally, naming no total', async () => {
 		// A search lane exists and is complete, but a search is not a browse: the engine hands
-		// out no queryKey for it, so the binding has no coverage target and must report the
-		// residents it can actually show. The lane is seeded to prove it is IGNORED.
+		// out no queryKey for it, so the binding has no coverage target. With no census either,
+		// nobody can say how many customers match — so it names no total at all rather than
+		// dressing the loaded-row count up as one. The lane is seeded to prove it is IGNORED.
 		engine.setCoverageVerdict(
 			{ collection: 'customers', queryKey: 'customers:search=ada:limit=10' },
 			{ total: 9, source: 'lane', complete: true, fresh: true }
@@ -986,8 +992,8 @@ describe('query bindings', () => {
 			limit: 10,
 		});
 		await expect(
-			firstValueFrom(result.current.total$.pipe(filter((total) => total === 0)))
-		).resolves.toBe(0);
+			firstValueFrom(result.current.total$.pipe(filter((total) => total === null)))
+		).resolves.toBeNull();
 
 		await engineDB.collections.customers.insert({
 			uuid: 'customer-ada',
@@ -1001,8 +1007,8 @@ describe('query bindings', () => {
 			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['customer-ada'])
 		);
 		await expect(
-			firstValueFrom(result.current.total$.pipe(filter((total) => total === 1)))
-		).resolves.toBe(1);
+			firstValueFrom(result.current.total$.pipe(filter((total) => total === null)))
+		).resolves.toBeNull();
 		expect(engine.searchRequireCalls).toHaveLength(1);
 		expect(engine.coverageSubscribeCalls).toEqual([]);
 	});
@@ -1033,6 +1039,85 @@ describe('query bindings', () => {
 		expect(engine.censusSubscribeCount).toBeGreaterThan(0);
 	});
 
+	// The "Showing 20 of 20" defect, pinned. A windowed browse lane is deliberately INCOMPLETE
+	// (coverage-verdicts.ts), the orders fetcher records no query total, and orders is
+	// scope-narrowed so no census stands in — leaving the loaded-row count as the only number
+	// in the room. Publishing THAT as the total made a page of 20 read "Showing 20 of 20",
+	// which tells a cashier those are all their orders right up until the next scroll finds
+	// more. There is no honest denominator here, so the binding names none.
+	it('names no total for a windowed browse the engine cannot size', async () => {
+		await engineDB.collections.orders.bulkInsert(
+			Array.from({ length: 3 }, (_, index) =>
+				engineOrder({
+					uuid: `windowed-order-${index}`,
+					id: index + 1,
+					date_created_gmt: `2026-02-${String(index + 1).padStart(2, '0')}T00:00:00`,
+				})
+			)
+		);
+		// Exactly what a windowed browse reports: it holds a window, it does not claim the set.
+		engine.setCoverageVerdict(
+			{
+				collection: 'orders',
+				queryKey: 'orders:browser:status=all:orderby=date:order=desc:search=:limit=3',
+			},
+			{ total: null, source: 'unknown', complete: false, fresh: true }
+		);
+		const windowed: QueryStateOf<'orders'> = {
+			search: '',
+			filters: {},
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+			limit: 3,
+		};
+		const { result } = renderHook(() => useCollectionBinding('orders', windowed), {
+			wrapper: Provider,
+		});
+
+		await waitFor(() => expect(current(result.current.resource)).toBeTruthy());
+		const totals: (number | null)[] = [];
+		const subscription = result.current.total$.subscribe((total) => totals.push(total));
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		subscription.unsubscribe();
+		// The page size must never surface as the size of the set.
+		expect(totals).not.toContain(3);
+		expect(totals).toContain(null);
+	});
+
+	// The other side of it: once the engine DOES claim local completeness, the resident count
+	// is a truthful total — the reports date-range walk runs to completion, and "12 of 12"
+	// there is a fact, not a page boundary.
+	it('reports the resident count as the total once the lane claims completeness', async () => {
+		await engineDB.collections.orders.bulkInsert(
+			Array.from({ length: 2 }, (_, index) =>
+				engineOrder({
+					uuid: `complete-order-${index}`,
+					id: index + 10,
+					date_created_gmt: `2026-03-${String(index + 1).padStart(2, '0')}T00:00:00`,
+				})
+			)
+		);
+		engine.setCoverageVerdict(
+			{
+				collection: 'orders',
+				queryKey: 'orders:browser:status=all:orderby=date:order=desc:search=:limit=100',
+			},
+			{ total: null, source: 'unknown', complete: true, fresh: true }
+		);
+		const complete: QueryStateOf<'orders'> = {
+			search: '',
+			filters: {},
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+			limit: 100,
+		};
+		const { result } = renderHook(() => useCollectionBinding('orders', complete), {
+			wrapper: Provider,
+		});
+
+		await expect(
+			firstValueFrom(result.current.total$.pipe(filter((total) => total === 2)))
+		).resolves.toBe(2);
+	});
+
 	// The counter-case, and the reason "always the census" is NOT the rule. The orders grid is
 	// this cashier at this till — a scope the screen IS, which no control on the page widens.
 	// The census counts every order in the store, so borrowing it would tell a cashier that
@@ -1050,7 +1135,7 @@ describe('query bindings', () => {
 		});
 
 		await waitFor(() => expect(current(result.current.resource)).toBeTruthy());
-		const totals: number[] = [];
+		const totals: (number | null)[] = [];
 		const subscription = result.current.total$.subscribe((total) => totals.push(total));
 		await new Promise((resolve) => setTimeout(resolve, 20));
 		subscription.unsubscribe();

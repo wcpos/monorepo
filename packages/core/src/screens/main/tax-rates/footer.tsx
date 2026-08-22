@@ -30,12 +30,17 @@ export function TaxRatesFooter({ count, active$, total$, sync }: TaxRatesFooterP
 		return clearAndSync();
 	}, [clearAndSync, clearSearch, resetFilters]);
 	const active = useObservableEagerState(active$);
-	const total = useObservableState(total$, 0);
+	const total = useObservableState(total$, null);
 	const t = useT();
 
 	return (
 		<HStack className="border-border bg-footer justify-end gap-0 border-t p-2">
-			<Text className="text-xs">{t('common.showing_of', { shown: count, total })}</Text>
+			<Text className="text-xs">
+				{/* Only print a denominator something vouches for — see QueryBinding.total$. */}
+				{total === null
+					? t('common.showing_n', { shown: count })
+					: t('common.showing_of', { shown: count, total })}
+			</Text>
 			<SyncButton sync={sync} clearAndSync={resetQueryAndCollection} active={active} />
 		</HStack>
 	);

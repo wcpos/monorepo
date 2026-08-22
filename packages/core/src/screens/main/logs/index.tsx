@@ -182,8 +182,11 @@ function LogsScreenContent() {
 	// (shouldExtendLedger), keyed on MATERIALIZED rows — one extend per
 	// materialized window (#1132) — and it re-arms when the query identity
 	// changes, because filters/search reset the window to page one.
+	// Logs is a local-only collection: its count IS the whole set, so this stream never
+	// publishes the "no denominator" null that server-backed collections can (see
+	// QueryBinding.total$). Coalesced so the pagination guard below keeps a number.
 	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- Query binding exposes a stable stream property, not an RxDB $-getter; exception dated 2026-08-21.
-	const total = useObservableState(binding.total$, 0);
+	const total = useObservableState(binding.total$, 0) ?? 0;
 	// State mirror of the rendered-row count: the pinned footer lives outside
 	// the ledger's Suspense boundary, so it can't read rows.length itself.
 	const [renderedCount, setRenderedCount] = React.useState(0);

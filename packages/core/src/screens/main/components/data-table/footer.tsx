@@ -21,7 +21,7 @@ interface CommonProps {
 export type BindingDataTableFooterProps = CommonProps & {
 	collectionName: CollectionKey;
 	active$: Observable<boolean>;
-	total$: Observable<number>;
+	total$: Observable<number | null>;
 	sync: () => Promise<void>;
 };
 
@@ -42,7 +42,7 @@ function FooterContent({
 	clearAndSync,
 }: FooterContentProps) {
 	const loading = useObservableEagerState(active$);
-	const total = useObservableState(total$, 0);
+	const total = useObservableState(total$, null);
 	const t = useT();
 
 	return (
@@ -50,13 +50,18 @@ function FooterContent({
 			<HStack className="flex-1 justify-start *:flex-1">{children}</HStack>
 			<HStack className="justify-end gap-0">
 				<Text testID="data-table-count" className="text-xs">
-					{t('common.showing_of', { shown: count, total })}
+					{/* No denominator unless something vouches for one (binding.total$). Falling
+					    back to the loaded-row count printed "Showing 20 of 20" on a page of 20
+					    and told the cashier that was all their orders. */}
+					{total === null
+						? t('common.showing_n', { shown: count })
+						: t('common.showing_of', { shown: count, total })}
 				</Text>
 				<Text testID="data-table-loaded-count" className="hidden">
 					{count}
 				</Text>
 				<Text testID="data-table-total-count" className="hidden">
-					{total}
+					{total === null ? '' : total}
 				</Text>
 				<SyncButton sync={sync} clearAndSync={clearAndSync} active={loading} />
 			</HStack>

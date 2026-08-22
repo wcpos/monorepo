@@ -40,17 +40,25 @@ export function VariationTableFooter({ binding, parent, count }: VariationTableF
 	}, [binding, clearAndSync]);
 
 	/**
-	 * Prefer the parent product's server variation ids over the local collection total.
+	 * Prefer the parent product's server variation ids over the local collection total — the
+	 * parent's own payload names every variation the server has, which is the one denominator
+	 * here that is always true. `binding.total$` is the fallback, and it is null when nothing
+	 * vouches for a size (see QueryBinding.total$); then the footer states the count alone
+	 * rather than passing the loaded-row count off as the total.
 	 */
 	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- Query binding exposes a stable stream property, not an RxDB $-getter; exception dated 2026-08-21.
-	const localTotal = useObservableState(binding.total$, 0);
+	const localTotal = useObservableState(binding.total$, null);
 	const parentVariations = useRecordField(parent, (record) => record.payload.variations);
 	const total = parentVariations?.length ? parentVariations.length : localTotal;
 	const t = useT();
 
 	return (
 		<HStack space="xs" className="border-border bg-footer justify-end border-b p-2">
-			<Text className="text-xs">{t('common.showing_of', { shown: count, total })}</Text>
+			<Text className="text-xs">
+				{total === null
+					? t('common.showing_n', { shown: count })
+					: t('common.showing_of', { shown: count, total })}
+			</Text>
 			<SyncButton sync={binding.sync} clearAndSync={handleClearVariations} active={loading} />
 		</HStack>
 	);

@@ -91,7 +91,7 @@ const renderHeader = (props: RenderHeaderProps) => {
 
 function ReportsOrdersFooter(props: {
 	active$: Observable<boolean>;
-	total$: Observable<number>;
+	total$: Observable<number | null>;
 	sync: () => Promise<void>;
 	count: number;
 }) {

@@ -97,7 +97,7 @@ type BindingProps<TSortField extends string> = {
 	actions: BindingActions<TSortField>;
 	TableFooterComponent?: React.ComponentType<BindingDataTableFooterProps>;
 	active$: import('rxjs').Observable<boolean>;
-	total$: import('rxjs').Observable<number>;
+	total$: import('rxjs').Observable<number | null>;
 	sync: () => Promise<void>;
 };
 
