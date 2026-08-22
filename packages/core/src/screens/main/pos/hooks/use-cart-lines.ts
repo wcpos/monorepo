@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import pick from 'lodash/pick';
 import { useObservable, useSubscription } from 'observable-hooks';
 import { distinctUntilChanged, map, skip } from 'rxjs/operators';
 
@@ -9,12 +10,14 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { useDocField, useRecordField } from '@wcpos/query';
 
 import { useAppliedCouponReferenceDemand } from '../../../../query';
+import { evaluateRepush } from './repush-guard';
 import { useCouponContext } from './use-coupon-context';
 import { useAppState } from '../../../../contexts/app-state';
 import { useTaxLocation, useTaxSettings } from '../../contexts/tax-rates';
 import { taxClassFromWire, taxClassToWire } from '../../hooks/tax-class';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
+import { useOrderMoneyDivergence } from '../contexts/order-money-divergence';
 import { useT } from '../../../../contexts/translations';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -47,6 +50,21 @@ function replayStateKey(order: CurrentOrderRecord): string {
 	]);
 }
 
+/**
+ * The money the settle patch asserts onto the order. Kept separate from the
+ * structural fields because the R1 re-push guard latches on this subset alone.
+ */
+const MONEY_FIELDS = [
+	'discount_tax',
+	'discount_total',
+	'shipping_tax',
+	'shipping_total',
+	'cart_tax',
+	'total_tax',
+	'total',
+	'tax_lines',
+] as const;
+
 /** The only status a POS cart is editable in — see use-open-orders-resource / use-new-order. */
 const POS_OPEN_STATUS = 'pos-open';
 
@@ -74,6 +92,8 @@ export const useCartLines = () => {
 	const couponLines = useRecordField(currentOrderRecord, (order) => order.payload.coupon_lines);
 	const { localPatch } = useLocalMutation();
 	const { getCouponContext } = useCouponContext();
+	const { divergence } = useOrderMoneyDivergence(currentOrderRecord.uuid);
+	const overruledTotals = React.useRef<string | null>(null);
 	const { rates } = useTaxLocation();
 	const {
 		allRates,
@@ -189,6 +209,33 @@ export const useCartLines = () => {
 				if (replayStateKey(currentOrderRecord.getLatest()) !== stateKey) return;
 				if (!result.changed) return;
 
+				/**
+				 * R1 re-push guard (woocommerce-pos#1548). This write ENQUEUES A SERVER
+				 * UPDATE for an engine-backed order. That is right while the cashier is
+				 * building a sale and wrong once the server has already answered with
+				 * different money: WooCommerce's calculation is the source of truth, so
+				 * re-asserting the till's number here would push it back over the
+				 * server's and provoke the identical divergence on the next drain.
+				 *
+				 * Latched on the ARITHMETIC, not the banner. Keying it to `divergence`
+				 * alone made dismissing the alert — or any later clean save retiring it —
+				 * flip the guard off while the cart still computed the same overruled
+				 * numbers, and the very next run pushed them straight back: the loop
+				 * again, one click later. So the overruled totals are remembered and stay
+				 * suppressed until the cart inputs actually change.
+				 *
+				 * This guard lived in use-order-totals until #1472 moved the write here.
+				 * It applies to every cart now, where before a couponed cart's replay
+				 * bypassed it — see the PR for why that asymmetry was not preserved.
+				 */
+				const decision = evaluateRepush({
+					diverged: divergence !== null,
+					latched: overruledTotals.current,
+					computed: JSON.stringify(pick(result.patch, MONEY_FIELDS)),
+				});
+				overruledTotals.current = decision.nextLatch;
+				if (decision.suppress) return;
+
 				await localPatch({
 					document: freshOrder,
 					// settle outputs structural line types; this boundary writes them back to
@@ -204,6 +251,7 @@ export const useCartLines = () => {
 			calcDiscountsSequentially,
 			calcTaxes,
 			currentOrderRecord,
+			divergence,
 			getCouponContext,
 			localPatch,
 			priceNumDecimals,
@@ -314,6 +362,10 @@ export const useCartLines = () => {
 		() => () => {
 			continuationRef.current?.abort.abort();
 			continuationRef.current = null;
+			// The latch is per ORDER. Switching tabs swaps the context value without a
+			// remount, so without this a divergence on one order would suppress the
+			// next order's first write if their arithmetic happened to match.
+			overruledTotals.current = null;
 		},
 		[currentOrderUUID]
 	);
