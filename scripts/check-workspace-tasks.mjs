@@ -28,7 +28,7 @@ export const ALLOWLIST = [
     dir: "packages/printer",
     tasks: ["lint"],
     reason:
-      "TODO(#PRINTER-LINT): 119 eslint findings (111 prettier autofixable, 8 rule violations) must be cleared before this can be wired",
+      "TODO(#1478): 119 eslint findings (111 prettier autofixable, 8 rule violations) must be cleared before this can be wired",
   },
 ];
 
