@@ -217,7 +217,17 @@ export async function syncCustomPullBatchIntoRepository(input: {
 	// epoch this cursor may belong to a previous journal, and if the new one's head
 	// has already passed it, its rows 1…cursor are skipped for good — (b) only
 	// catches the opposite, head < cursor (free#1560 review, blocker B2).
-	const unprovenGeneration = Boolean(!storedEpoch && result.epoch && checkpoint.sequence > 0);
+	//
+	// Epoch persistence is OPTIONAL on this store interface, and a client that
+	// cannot remember an epoch can never prove a generation: firing (c) for it
+	// would reset to zero on every batch forever. Such a client keeps the
+	// pre-epoch contract — triggers (a) and (b) only.
+	const remembersEpoch =
+		typeof input.checkpointStore?.readJournalEpoch === 'function' &&
+		typeof input.checkpointStore?.writeJournalEpoch === 'function';
+	const unprovenGeneration = Boolean(
+		remembersEpoch && !storedEpoch && result.epoch && checkpoint.sequence > 0
+	);
 	const cursorBelowHorizon =
 		sameEpoch &&
 		checkpoint.sequence > 0 &&
