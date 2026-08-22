@@ -3,26 +3,67 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const BANNER = '// GENERATED — do not edit by hand; run pnpm generate:error-codes';
-const DOMAINS = ['AUTH', 'SYNC', 'CHECKOUT', 'PAYMENT', 'PRINT', 'PRODUCT', 'LICENSE', 'CLIENT', 'HOST'];
+const DOMAINS = [
+	'AUTH',
+	'SYNC',
+	'CHECKOUT',
+	'PAYMENT',
+	'PRINT',
+	'PRODUCT',
+	'LICENSE',
+	'CLIENT',
+	'HOST',
+];
 const SEVERITIES = ['info', 'warn', 'error'];
-const SAFE_ACTIONS = ['retry', 'retry-after-edit', 'verify-first', 'continue', 'repair-local', 'reconfigure', 'contact-support'];
+const SAFE_ACTIONS = [
+	'retry',
+	'retry-after-edit',
+	'verify-first',
+	'continue',
+	'repair-local',
+	'reconfigure',
+	'contact-support',
+];
 const RETRY_POLICIES = ['automatic', 'manual', 'after-change', 'never'];
-const DATA_SAFETY = ['no-impact', 'local-only', 'order-safe', 'money-moved', 'outcome-unknown', 'data-at-risk'];
-const ESCALATIONS = ['none', 'store-admin', 'site-admin', 'support-with-export', 'payment-provider'];
-const TITLE_TOKENS = { DB: 'DB', TLS: 'TLS', URL: 'URL', SKU: 'SKU', WOOCOMMERCE: 'WooCommerce', WCPOS: 'WCPOS', PRO: 'Pro' };
+const DATA_SAFETY = [
+	'no-impact',
+	'local-only',
+	'order-safe',
+	'money-moved',
+	'outcome-unknown',
+	'data-at-risk',
+];
+const ESCALATIONS = [
+	'none',
+	'store-admin',
+	'site-admin',
+	'support-with-export',
+	'payment-provider',
+];
+const TITLE_TOKENS = {
+	DB: 'DB',
+	TLS: 'TLS',
+	URL: 'URL',
+	SKU: 'SKU',
+	WOOCOMMERCE: 'WooCommerce',
+	WCPOS: 'WCPOS',
+	PRO: 'Pro',
+};
 const SAFE_ACTION_COPY = {
 	retry: 'Try the action again.',
 	'retry-after-edit': 'Correct the highlighted details, then try again.',
 	continue: 'You can keep working — WCPOS handles this automatically.',
 	'verify-first': 'Check the details below before trying again.',
 	reconfigure: 'A settings change is needed before this will work.',
-	'repair-local': 'Restart WCPOS; if this keeps happening the local data on this device needs repair.',
+	'repair-local':
+		'Restart WCPOS; if this keeps happening the local data on this device needs repair.',
 	'contact-support': 'Export diagnostics and contact support.',
 };
 const RETRY_POLICY_COPY = {
 	automatic: 'WCPOS retries this automatically.',
 	manual: 'WCPOS does not retry this by itself — retry when you are ready.',
-	'after-change': 'Retry after making the change above; retrying without it will fail the same way.',
+	'after-change':
+		'Retry after making the change above; retrying without it will fail the same way.',
 	never: 'Do not retry — the result will not change.',
 };
 // A blanket "the result will not change" is dangerously wrong when the outcome
@@ -147,7 +188,9 @@ function validateRegistry(registry) {
 			const strings = typeof value === 'string' ? [value] : Array.isArray(value) ? value : [];
 			for (const item of strings) {
 				if (typeof item === 'string' && /[\u0000-\u001F\u007F]/.test(item)) {
-					throw new Error(`Entry ${entry.code ?? index} field ${field} contains control characters`);
+					throw new Error(
+						`Entry ${entry.code ?? index} field ${field} contains control characters`
+					);
 				}
 			}
 		}
@@ -163,9 +206,7 @@ function validateRegistry(registry) {
 // (an apostrophe in a docsBody would otherwise fail prettier/prettier every time).
 const quote = (value) => {
 	const escaped = value.replaceAll('\\', '\\\\');
-	return escaped.includes("'")
-		? `"${escaped.replaceAll('"', '\\"')}"`
-		: `'${escaped}'`;
+	return escaped.includes("'") ? `"${escaped.replaceAll('"', '\\"')}"` : `'${escaped}'`;
 };
 const union = (name, values) => {
 	const joined = values.map(quote).join(' | ');
@@ -183,11 +224,19 @@ function renderTypescript(registry) {
 		const line = `\t\t${field}: ${quote(entry[field])},`;
 		return line.length <= 97 ? line : `\t\t${field}:\n\t\t\t${quote(entry[field])},`;
 	};
-	const catalogue = registry.map((entry) => `\t${entry.code}: {\n${fields.map(([field]) => renderField(entry, field)).join('\n')}\n\t},`).join('\n');
+	const catalogue = registry
+		.map(
+			(entry) =>
+				`\t${entry.code}: {\n${fields.map(([field]) => renderField(entry, field)).join('\n')}\n\t},`
+		)
+		.join('\n');
 	const symbols = registry.map((entry) => `\t${entry.symbol}: ${quote(entry.code)},`).join('\n');
 	return `${BANNER}
 
-${union('ErrorCode', registry.map(({ code }) => code))}
+${union(
+	'ErrorCode',
+	registry.map(({ code }) => code)
+)}
 ${union('ErrorDomain', DOMAINS)}
 ${union('ErrorSeverity', SEVERITIES)}
 ${union('SafeAction', SAFE_ACTIONS)}
@@ -210,11 +259,15 @@ ${symbols}
 }
 
 const yamlString = (value) => `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
-const humanizeTitle = (symbol) => symbol.split('_').map((token, index) => {
-	if (TITLE_TOKENS[token]) return TITLE_TOKENS[token];
-	const lower = token.toLowerCase();
-	return index === 0 ? `${lower[0].toUpperCase()}${lower.slice(1)}` : lower;
-}).join(' ');
+const humanizeTitle = (symbol) =>
+	symbol
+		.split('_')
+		.map((token, index) => {
+			if (TITLE_TOKENS[token]) return TITLE_TOKENS[token];
+			const lower = token.toLowerCase();
+			return index === 0 ? `${lower[0].toUpperCase()}${lower.slice(1)}` : lower;
+		})
+		.join(' ');
 
 function renderDocsPage(entry) {
 	const escalation = ESCALATION_COPY[entry.escalation];
@@ -262,11 +315,19 @@ function renderSidebar(registry) {
 		if (!domains.has(entry.domain)) domains.set(entry.domain, []);
 		domains.get(entry.domain).push(`error-codes/${entry.code}`);
 	}
-	return `${JSON.stringify({
-		type: 'category',
-		label: 'Error codes (1.10+)',
-		items: [...domains].map(([label, items]) => ({ type: 'category', label, items: items.sort() })),
-	}, null, '\t')}\n`;
+	return `${JSON.stringify(
+		{
+			type: 'category',
+			label: 'Error codes (1.10+)',
+			items: [...domains].map(([label, items]) => ({
+				type: 'category',
+				label,
+				items: items.sort(),
+			})),
+		},
+		null,
+		'\t'
+	)}\n`;
 }
 
 async function writeDocs(outputDirectory, registry) {
@@ -274,7 +335,9 @@ async function writeDocs(outputDirectory, registry) {
 	await rm(docsDirectory, { recursive: true, force: true });
 	await mkdir(docsDirectory, { recursive: true });
 	await Promise.all([
-		...registry.map((entry) => writeFile(path.join(docsDirectory, `${entry.code}.mdx`), renderDocsPage(entry))),
+		...registry.map((entry) =>
+			writeFile(path.join(docsDirectory, `${entry.code}.mdx`), renderDocsPage(entry))
+		),
 		writeFile(path.join(docsDirectory, 'sidebar-category.json'), renderSidebar(registry)),
 	]);
 }
@@ -286,7 +349,8 @@ function parseArguments(args) {
 	};
 	for (let index = 0; index < args.length; index += 2) {
 		if (args[index] === '--registry') options.registry = path.resolve(args[index + 1]);
-		else if (args[index] === '--output-dir') options.outputDirectory = path.resolve(args[index + 1]);
+		else if (args[index] === '--output-dir')
+			options.outputDirectory = path.resolve(args[index + 1]);
 		else throw new Error(`Unknown argument: ${args[index]}`);
 	}
 	return options;
@@ -297,8 +361,14 @@ export async function generateErrorCodes(options = parseArguments([])) {
 	validateRegistry(registry);
 	await mkdir(options.outputDirectory, { recursive: true });
 	await Promise.all([
-		writeFile(path.join(options.outputDirectory, 'error-codes.generated.ts'), renderTypescript(registry)),
-		writeFile(path.join(options.outputDirectory, 'error-catalogue.json'), `${JSON.stringify({ [BANNER]: true, entries: registry }, null, '\t')}\n`),
+		writeFile(
+			path.join(options.outputDirectory, 'error-codes.generated.ts'),
+			renderTypescript(registry)
+		),
+		writeFile(
+			path.join(options.outputDirectory, 'error-catalogue.json'),
+			`${JSON.stringify({ [BANNER]: true, entries: registry }, null, '\t')}\n`
+		),
 		writeDocs(options.outputDirectory, registry),
 	]);
 }

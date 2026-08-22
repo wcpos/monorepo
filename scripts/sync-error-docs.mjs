@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 const BANNER =
 	'GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json';
 const sourceDir = fileURLToPath(
-	new URL('../packages/utils/src/logger/generated/error-docs/', import.meta.url),
+	new URL('../packages/utils/src/logger/generated/error-docs/', import.meta.url)
 );
 
 const docsRoot = process.argv[2];
@@ -60,6 +60,6 @@ execFileSync(process.execPath, [
 ]);
 
 console.log(
-	`Synced ${sourcePages.length} page(s) to ${targetDir}${removed ? `, removed ${removed} stale` : ''}, sidebar spliced.`,
+	`Synced ${sourcePages.length} page(s) to ${targetDir}${removed ? `, removed ${removed} stale` : ''}, sidebar spliced.`
 );
 console.log('Review the diff in the docs clone and open a PR.');

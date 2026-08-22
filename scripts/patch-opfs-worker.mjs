@@ -1,7 +1,7 @@
-import { readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-const MARKER = "WCPOS_OPFS_COMPLETE_WRITES";
+const MARKER = 'WCPOS_OPFS_COMPLETE_WRITES';
 
 const WRITE_ALL_SHIM = `/* ${MARKER} */
 (() => {
@@ -41,27 +41,25 @@ const WRITE_ALL_SHIM = `/* ${MARKER} */
 `;
 
 export function patchOpfsWorker(source) {
-  return source.includes(MARKER) ? source : WRITE_ALL_SHIM + source;
+	return source.includes(MARKER) ? source : WRITE_ALL_SHIM + source;
 }
 
 function main(paths) {
-  if (paths.length === 0) {
-    throw new Error(
-      "Usage: node scripts/patch-opfs-worker.mjs <worker-path> [...]",
-    );
-  }
+	if (paths.length === 0) {
+		throw new Error('Usage: node scripts/patch-opfs-worker.mjs <worker-path> [...]');
+	}
 
-  for (const path of paths) {
-    const source = readFileSync(path, "utf8");
-    const temporaryPath = `${path}.${process.pid}.tmp`;
-    writeFileSync(temporaryPath, patchOpfsWorker(source));
-    renameSync(temporaryPath, path);
-  }
+	for (const path of paths) {
+		const source = readFileSync(path, 'utf8');
+		const temporaryPath = `${path}.${process.pid}.tmp`;
+		writeFileSync(temporaryPath, patchOpfsWorker(source));
+		renameSync(temporaryPath, path);
+	}
 }
 
 if (
-  process.argv[1] &&
-  realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])
+	process.argv[1] &&
+	realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])
 ) {
-  main(process.argv.slice(2));
+	main(process.argv.slice(2));
 }

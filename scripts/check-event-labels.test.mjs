@@ -75,10 +75,12 @@ describe('collectEmittedEventTypes', () => {
 		// the second pass — which needs the `apply` namespace to be known already.
 		const emitted = await collectEmittedEventTypes([directory], ['apply.refresh']);
 
-		assert.deepStrictEqual(
-			[...emitted.keys()].sort(),
-			['apply.pull', 'push.aborted', 'push.error', 'signal.cycle']
-		);
+		assert.deepStrictEqual([...emitted.keys()].sort(), [
+			'apply.pull',
+			'push.aborted',
+			'push.error',
+			'signal.cycle',
+		]);
 	});
 
 	it('ignores test files, which invent event types freely', async () => {
@@ -123,10 +125,13 @@ describe('collectEmittedEventTypes', () => {
 			`,
 		});
 
-		assert.deepStrictEqual(
-			[...(await collectEmittedEventTypes([directory])).keys()].sort(),
-			['push.aborted', 'push.conflict', 'push.error', 'push.outcome', 'signal.cycle']
-		);
+		assert.deepStrictEqual([...(await collectEmittedEventTypes([directory])).keys()].sort(), [
+			'push.aborted',
+			'push.conflict',
+			'push.error',
+			'push.outcome',
+			'signal.cycle',
+		]);
 	});
 
 	// These roots are full of `type:` properties that are not events: RxDB JSON
@@ -155,7 +160,10 @@ describe('collectEmittedEventTypes', () => {
 			].join('\n'),
 		});
 
-		assert.deepStrictEqual([...(await collectEmittedEventTypes([directory])).keys()], ['signal.cycle']);
+		assert.deepStrictEqual(
+			[...(await collectEmittedEventTypes([directory])).keys()],
+			['signal.cycle']
+		);
 	});
 });
 

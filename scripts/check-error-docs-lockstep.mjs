@@ -2,7 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 const registryUrl = new URL('../packages/utils/src/logger/error-registry.json', import.meta.url);
-const docsBaseUrl = 'https://raw.githubusercontent.com/wcpos/docs/main/versioned_docs/version-1.x/error-codes';
+const docsBaseUrl =
+	'https://raw.githubusercontent.com/wcpos/docs/main/versioned_docs/version-1.x/error-codes';
 
 const REQUEST_TIMEOUT_MS = 10_000;
 

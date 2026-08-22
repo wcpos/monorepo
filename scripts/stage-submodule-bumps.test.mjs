@@ -69,7 +69,8 @@ function makeFixture(t) {
 }
 
 const stagedGitlink = (superRepo) => git(superRepo, 'rev-parse', ':apps/electron');
-const run = (superRepo) => syncSubmoduleGitlinks({ repoRoot: superRepo, paths: ['apps/electron'], ...quiet });
+const run = (superRepo) =>
+	syncSubmoduleGitlinks({ repoRoot: superRepo, paths: ['apps/electron'], ...quiet });
 
 test('stages the gitlink when the checkout is a descendant of the committed pointer', (t) => {
 	const { superRepo, subPath, C } = makeFixture(t);
@@ -131,7 +132,10 @@ test('respects an explicitly staged gitlink deletion', (t) => {
 	const [result] = run(superRepo);
 
 	assert.equal(result.action, 'kept-explicit-stage');
-	assert.equal(git(superRepo, 'diff', '--cached', '--name-status', '--', 'apps/electron'), 'D\tapps/electron');
+	assert.equal(
+		git(superRepo, 'diff', '--cached', '--name-status', '--', 'apps/electron'),
+		'D\tapps/electron'
+	);
 });
 
 test('skips submodules that are not initialized', (t) => {

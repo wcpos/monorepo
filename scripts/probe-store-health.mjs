@@ -72,7 +72,9 @@ const timings = results.map((result) => result.ms).sort((a, b) => a - b);
 const median = timings[Math.floor(timings.length / 2)];
 const failures = results.filter((result) => result.status === 0).length;
 const summary = results
-	.map((result) => (result.status === 0 ? `timeout(${result.ms}ms)` : `${result.status}/${result.ms}ms`))
+	.map((result) =>
+		result.status === 0 ? `timeout(${result.ms}ms)` : `${result.status}/${result.ms}ms`
+	)
 	.join(' ');
 
 console.log(`[store-health] ${label} ${endpoint}`);
