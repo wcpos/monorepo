@@ -5,7 +5,7 @@ describe('stores migration strategy', () => {
 		const { userCollections } = await import('./index');
 		const migrate = userCollections.stores.migrationStrategies?.[10];
 		if (!migrate) throw new Error('stores migration 10 missing');
-		const migrated = migrate({});
+		const migrated = migrate({}, undefined as never);
 		expect(migrated.sync_check_interval_ms).toBe(60_000);
 		expect(migrated.sync_pull_batch_size).toBe(50);
 	});
@@ -16,7 +16,7 @@ describe('stores migration strategy', () => {
 		const { userCollections } = await import('./index');
 		const migrate = userCollections.stores.migrationStrategies?.[12];
 		if (!migrate) throw new Error('stores migration 12 missing');
-		const migrated = migrate({});
+		const migrated = migrate({}, undefined as never);
 		expect(migrated.barcode_scanning_sound_enabled).toBe(false);
 		expect(migrated.barcode_scanning_sound_theme).toBe('classic');
 		expect(migrated.barcode_scanning_sound_volume).toBe(0.15);
@@ -29,7 +29,7 @@ describe('stores migration strategy', () => {
 		const { userCollections } = await import('./index');
 		const migrate = userCollections.stores.migrationStrategies?.[13];
 		if (!migrate) throw new Error('stores migration 13 missing');
-		const migrated = migrate({});
+		const migrated = migrate({}, undefined as never);
 		expect(migrated.receipt_i18n).toEqual({});
 	});
 });

@@ -30,22 +30,25 @@ describe('printer_profiles schema cloud connection type + provider', () => {
 
 		expect(typeof migrateToV6).toBe('function');
 
-		const migrated = migrateToV6?.({
-			id: 'p1',
-			name: 'Front Counter',
-			connectionType: 'network',
-			vendor: 'epson',
-			address: '192.168.1.50',
-			port: 9100,
-			language: 'esc-pos',
-			columns: 42,
-			emitEscPrintMode: true,
-			fullReceiptRaster: false,
-			autoCut: true,
-			autoOpenDrawer: false,
-			isDefault: true,
-			isBuiltIn: false,
-		});
+		const migrated = migrateToV6?.(
+			{
+				id: 'p1',
+				name: 'Front Counter',
+				connectionType: 'network',
+				vendor: 'epson',
+				address: '192.168.1.50',
+				port: 9100,
+				language: 'esc-pos',
+				columns: 42,
+				emitEscPrintMode: true,
+				fullReceiptRaster: false,
+				autoCut: true,
+				autoOpenDrawer: false,
+				isDefault: true,
+				isBuiltIn: false,
+			},
+			undefined as never
+		);
 
 		expect(migrated).toMatchObject({ id: 'p1', connectionType: 'network', isDefault: true });
 	});
@@ -55,22 +58,25 @@ describe('printer_profiles schema cloud connection type + provider', () => {
 
 		expect(typeof migrateToV7).toBe('function');
 
-		const migrated = migrateToV7?.({
-			id: 'p1',
-			name: 'Front Counter',
-			connectionType: 'network',
-			vendor: 'epson',
-			address: '192.168.1.50',
-			port: 9100,
-			language: 'esc-pos',
-			columns: 42,
-			emitEscPrintMode: true,
-			fullReceiptRaster: false,
-			autoCut: true,
-			autoOpenDrawer: false,
-			isDefault: true,
-			isBuiltIn: false,
-		});
+		const migrated = migrateToV7?.(
+			{
+				id: 'p1',
+				name: 'Front Counter',
+				connectionType: 'network',
+				vendor: 'epson',
+				address: '192.168.1.50',
+				port: 9100,
+				language: 'esc-pos',
+				columns: 42,
+				emitEscPrintMode: true,
+				fullReceiptRaster: false,
+				autoCut: true,
+				autoOpenDrawer: false,
+				isDefault: true,
+				isBuiltIn: false,
+			},
+			undefined as never
+		);
 
 		expect(migrated).toMatchObject({ id: 'p1', connectionType: 'network', isDefault: true });
 	});
@@ -93,23 +99,26 @@ describe('printer_profiles schema v8 (drawer connector)', () => {
 
 		expect(typeof migrateToV8).toBe('function');
 
-		const migrated = migrateToV8?.({
-			id: 'p1',
-			name: 'Front Counter',
-			connectionType: 'network',
-			vendor: 'epson',
-			address: '192.168.1.50',
-			port: 9100,
-			language: 'esc-pos',
-			columns: 42,
-			emitEscPrintMode: true,
-			fullReceiptRaster: false,
-			autoCut: true,
-			autoOpenDrawer: false,
-			drawerConnector: 'pin5',
-			isDefault: true,
-			isBuiltIn: false,
-		});
+		const migrated = migrateToV8?.(
+			{
+				id: 'p1',
+				name: 'Front Counter',
+				connectionType: 'network',
+				vendor: 'epson',
+				address: '192.168.1.50',
+				port: 9100,
+				language: 'esc-pos',
+				columns: 42,
+				emitEscPrintMode: true,
+				fullReceiptRaster: false,
+				autoCut: true,
+				autoOpenDrawer: false,
+				drawerConnector: 'pin5',
+				isDefault: true,
+				isBuiltIn: false,
+			},
+			undefined as never
+		);
 
 		expect(migrated).toMatchObject({ drawerConnector: 'pin5' });
 	});
@@ -119,22 +128,25 @@ describe('printer_profiles schema v8 (drawer connector)', () => {
 
 		expect(typeof migrateToV8).toBe('function');
 
-		const migrated = migrateToV8?.({
-			id: 'p1',
-			name: 'Front Counter',
-			connectionType: 'network',
-			vendor: 'epson',
-			address: '192.168.1.50',
-			port: 9100,
-			language: 'esc-pos',
-			columns: 42,
-			emitEscPrintMode: true,
-			fullReceiptRaster: false,
-			autoCut: true,
-			autoOpenDrawer: false,
-			isDefault: true,
-			isBuiltIn: false,
-		});
+		const migrated = migrateToV8?.(
+			{
+				id: 'p1',
+				name: 'Front Counter',
+				connectionType: 'network',
+				vendor: 'epson',
+				address: '192.168.1.50',
+				port: 9100,
+				language: 'esc-pos',
+				columns: 42,
+				emitEscPrintMode: true,
+				fullReceiptRaster: false,
+				autoCut: true,
+				autoOpenDrawer: false,
+				isDefault: true,
+				isBuiltIn: false,
+			},
+			undefined as never
+		);
 
 		expect(migrated).toMatchObject({ drawerConnector: 'pin2' });
 	});

@@ -11,7 +11,7 @@ jest.mock('rxdb/plugins/electron', () => ({
 }));
 
 describe('electron storage', () => {
-	const runtime = globalThis as typeof globalThis & { window?: unknown };
+	const runtime = globalThis as unknown as { window?: { ipcRenderer: typeof mockIpcRenderer } };
 
 	beforeEach(() => {
 		jest.clearAllMocks();
