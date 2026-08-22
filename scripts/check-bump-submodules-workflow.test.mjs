@@ -22,6 +22,47 @@ test("accepts a workflow with the required GitHub App auth wiring", () => {
   assert.doesNotThrow(() => checkBumpSubmodulesWorkflow(validWorkflow));
 });
 
+test("accepts required auth wiring in a later job", () => {
+  const multiJobWorkflow = `
+jobs:
+  prepare:
+    steps:
+      - uses: example/prepare@v1
+  bump:
+      steps:
+        - id: app-token
+          uses: actions/create-github-app-token@v2
+          with:
+            owner: wcpos
+            repositories: |
+              monorepo
+            app-id: \${{ secrets.WCPOS_BOT_APP_ID }}
+            private-key: \${{ secrets.WCPOS_BOT_PRIVATE_KEY }}
+        - uses: actions/checkout@v4
+          with:
+            token: \${{ steps.app-token.outputs.token }}
+`;
+
+  assert.doesNotThrow(() => checkBumpSubmodulesWorkflow(multiJobWorkflow));
+});
+
+test("rejects multi-job workflows missing auth wiring in every job", () => {
+  const multiJobWorkflow = `
+jobs:
+  prepare:
+    steps:
+      - uses: example/prepare@v1
+  bump:
+    steps:
+      - uses: example/bump@v1
+`;
+
+  assert.throws(
+    () => checkBumpSubmodulesWorkflow(multiJobWorkflow),
+    /creates a GitHub App token step/,
+  );
+});
+
 const requiredWiring = [
   [
     "the App token action",

@@ -31,31 +31,33 @@ function getStepBlocks(workflow) {
   const lines = workflow
     .split("\n")
     .map((line) => line.replace(/#.*$/, ""));
-  const stepsIndex = lines.findIndex((line) => /^\s*steps:\s*$/.test(line));
-
-  if (stepsIndex === -1) return [];
-
-  const stepsIndent = lines[stepsIndex].search(/\S/);
   const blocks = [];
-  let stepIndent;
-  let currentBlock = [];
 
-  for (const line of lines.slice(stepsIndex + 1)) {
-    const indent = line.search(/\S/);
-    if (indent !== -1 && indent <= stepsIndent) break;
+  for (let stepsIndex = 0; stepsIndex < lines.length; stepsIndex += 1) {
+    if (!/^\s*steps:\s*$/.test(lines[stepsIndex])) continue;
 
-    const bullet = line.match(/^(\s*)-\s+/);
-    if (bullet && stepIndent === undefined) stepIndent = bullet[1].length;
+    const stepsIndent = lines[stepsIndex].search(/\S/);
+    let stepIndent;
+    let currentBlock = [];
 
-    if (bullet && bullet[1].length === stepIndent) {
-      if (currentBlock.length > 0) blocks.push(currentBlock.join("\n"));
-      currentBlock = [line];
-    } else if (currentBlock.length > 0) {
-      currentBlock.push(line);
+    for (const line of lines.slice(stepsIndex + 1)) {
+      const indent = line.search(/\S/);
+      if (indent !== -1 && indent <= stepsIndent) break;
+
+      const bullet = line.match(/^(\s*)-\s+/);
+      if (bullet && stepIndent === undefined) stepIndent = bullet[1].length;
+
+      if (bullet && bullet[1].length === stepIndent) {
+        if (currentBlock.length > 0) blocks.push(currentBlock.join("\n"));
+        currentBlock = [line];
+      } else if (currentBlock.length > 0) {
+        currentBlock.push(line);
+      }
     }
+
+    if (currentBlock.length > 0) blocks.push(currentBlock.join("\n"));
   }
 
-  if (currentBlock.length > 0) blocks.push(currentBlock.join("\n"));
   return blocks;
 }
 
