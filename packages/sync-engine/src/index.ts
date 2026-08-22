@@ -19,6 +19,7 @@ export {
 	type RxdbSyncEngine,
 	type StoreScopeIdentity,
 	type SyncCollectionName,
+	TERMINAL_WRITE_EVENT_TYPES,
 } from './create-rxdb-sync-engine';
 export {
 	hydrateResponse,

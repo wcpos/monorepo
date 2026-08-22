@@ -1,3 +1,5 @@
+import { TERMINAL_WRITE_EVENT_TYPES } from '@wcpos/sync-engine';
+
 import type { EngineEvent, RxdbSyncEngine } from '@wcpos/sync-engine';
 
 type AwaitedWriteOutcome = 'success' | 'success-local';
@@ -21,13 +23,8 @@ export class WriteOutcomeError extends Error {
 	}
 }
 
-const TERMINAL_WRITE_EVENTS = new Set<EngineEvent['type']>([
-	'write-acknowledged',
-	'write-ack-rematerialized',
-	'write-annihilated',
-	'write-conflict',
-	'write-rejected',
-]);
+/** The engine is the producer of these, so the list is imported rather than mirrored. */
+const TERMINAL_WRITE_EVENTS = TERMINAL_WRITE_EVENT_TYPES;
 
 export function awaitWriteOutcome(
 	engine: Pick<RxdbSyncEngine, 'events' | 'sync'>,
@@ -76,7 +73,9 @@ export function awaitWriteOutcome(
 					});
 					break;
 			}
-		});
+		}, { replayWriteOutcomeFor: mutationId });
+		// The replay fires synchronously inside events(), so `settled` may already
+		// be true here — this is what releases the subscription in that case.
 		if (settled) unsubscribe();
 
 		void engine.sync('write-drain').catch((error) => finish(() => reject(error)));
