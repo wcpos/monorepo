@@ -75,6 +75,28 @@ test.describe('Store health · Logs', () => {
 		});
 	});
 
+	// The header block used to carry `shrink grow-0` utility classes, which are
+	// inert on a react-native-web ScrollView (RNW's own `flexGrow: 1` base wins),
+	// so it grew to fill the column and left a third of the page blank above a
+	// squeezed ledger. Measured, not eyeballed: the ledger has to start right
+	// under the controls.
+	test('the ledger starts directly below the controls, not down the page', async ({
+		posPage: page,
+	}) => {
+		await page.setViewportSize({ width: 1400, height: 1000 });
+		const screen = await openLogs(page);
+		await expect(screen.locator('[data-testid^="logs-row-"]').first()).toBeVisible({
+			timeout: 30_000,
+		});
+
+		const controls = await screen.getByTestId('logs-chip-verbose').boundingBox();
+		const ledger = await screen.getByTestId('logs-ledger').boundingBox();
+		expect(controls).not.toBeNull();
+		expect(ledger).not.toBeNull();
+		// One row gap's worth of slack; the bug left ~345 px here.
+		expect(ledger!.y - (controls!.y + controls!.height)).toBeLessThan(48);
+	});
+
 	test('searches logs without breaking the ledger', async ({ posPage: page }) => {
 		const screen = await openLogs(page);
 		const searchInput = screen.getByTestId('search-logs');

@@ -386,13 +386,22 @@ function censusTotal$(
  * binding's own resident count — one source of truth, so the footer and the Store Health ›
  * Database page can never disagree about a total.
  *
- * Precedence, freshness and ranged-walk progress live behind `coverageChanges`. When the
- * engine has no per-query answer (`total: null`), a whole-collection browse falls back to the
- * census total (`census$` is `NO_CENSUS_TOTAL$` for anything narrower — a filtered or searched
- * set must never borrow the whole collection's size). The local resident count is the floor:
- * more residents than the server's last count proves that count outdated, so the larger number
- * wins — stated plainly, never dressed up with a `N+` suffix (owner ruling 2026-08-20: the
- * `+` read as noise, and every locale translated it differently).
+ * For a WHOLE-COLLECTION browse the census wins outright: it is the very number the Database
+ * page prints in its "on server" column, and the two displays must agree (owner ruling
+ * 2026-08-22). This is not a tie-break between equivalent counts — the per-query browse-window
+ * total and the census deliberately count different populations (#1400: the browse walk counts
+ * `wcpos/v2`, the census probe counts `wc/v3`), so preferring the verdict here is what made the
+ * footer and the Database page disagree by a handful of records.
+ *
+ * Anything narrower — a filter, a search, a targeted subset — has no counterpart on the
+ * Database page, so it keeps the engine's per-query answer (`census$` is `NO_CENSUS_TOTAL$`
+ * there: a filtered set must never borrow the whole collection's size), falling back to the
+ * resident count when the engine has no answer at all.
+ *
+ * The local resident count stays the floor in every branch: more residents than the server's
+ * last count proves that count outdated, so the larger number wins — stated plainly, never
+ * dressed up with a `N+` suffix (owner ruling 2026-08-20: the `+` read as noise, and every
+ * locale translated it differently).
  */
 function coverageProjection$(
 	engine: RxdbSyncEngine,
@@ -412,7 +421,9 @@ function coverageProjection$(
 		census$,
 	]).pipe(
 		map(([localCount, verdict, censusTotal]) => {
-			const serverTotal = verdict.total ?? censusTotal;
+			// `censusTotal` is non-null only for a whole-collection browse whose census has
+			// landed — exactly the case the Database page also displays.
+			const serverTotal = censusTotal ?? verdict.total;
 			return {
 				total: serverTotal === null ? localCount : Math.max(serverTotal, localCount),
 				laneProgress: verdict.progress,

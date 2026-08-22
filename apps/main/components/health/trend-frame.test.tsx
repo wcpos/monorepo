@@ -119,6 +119,43 @@ describe('TrendFrame', () => {
 		expect(textOf(renderer, 'pos-requests-trend-latest')).toBe('20');
 	});
 
+	// The hover readout (#2 of the 1.10 UI pass): pointing at a bucket has to
+	// report THAT bucket, time included, or the chart's numbers stay unreadable.
+	it('reports the pointed-at sample, with its clock time, instead of the latest', () => {
+		const renderer = renderFrame(
+			<TrendFrame
+				points={[point(1_000, 10), point(2_000, 20), point(3_000, 30)]}
+				label="POS requests"
+				testID="pos-requests-trend"
+				active={point(2_000, 20)}
+				formatTime={(x) => `t${x}`}
+			>
+				<ChartStub />
+			</TrendFrame>
+		);
+
+		expect(textOf(renderer, 'pos-requests-trend-latest')).toBe('20');
+		expect(textOf(renderer, 'pos-requests-trend-time')).toBe('t2000');
+	});
+
+	it('falls back to the latest sample when nothing is pointed at', () => {
+		const renderer = renderFrame(
+			<TrendFrame
+				points={[point(1_000, 10), point(2_000, 20)]}
+				label="POS requests"
+				testID="pos-requests-trend"
+				formatTime={(x) => `t${x}`}
+			>
+				<ChartStub />
+			</TrendFrame>
+		);
+
+		expect(textOf(renderer, 'pos-requests-trend-latest')).toBe('20');
+		// The resting readout carries a time too, so following the line with a
+		// cursor only ever changes the header's contents, never its shape.
+		expect(textOf(renderer, 'pos-requests-trend-time')).toBe('t2000');
+	});
+
 	it('holds the frame with no line while the chart engine loads', () => {
 		// The web fallback path: enough points to draw, but CanvasKit hasn't landed.
 		const renderer = renderFrame(

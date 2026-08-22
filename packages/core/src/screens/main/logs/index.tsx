@@ -43,6 +43,23 @@ import { useVerboseDiagnostics } from './use-verbose-diagnostics';
 const LOGS_PAGE_SIZE = 20;
 const NOW_TICK_MS = 5_000;
 
+/**
+ * The header block's flex behaviour, as a style object rather than utility
+ * classes.
+ *
+ * react-native-web gives every ScrollView a base `flexGrow: 1`, and uniwind's
+ * flex utilities cannot beat it on web: measured 2026-08-22, `grow-0`,
+ * `shrink`, `flex-none`, `flex-initial` and `flex-auto` ALL resolve to
+ * `1 1 auto` on a ScrollView (only `flex-1` lands, because it sets a
+ * flex-basis RNW leaves alone). So `className="shrink grow-0"` was inert and
+ * this block grew to fill the column — 345 px of dead space above the ledger
+ * on a 1000 px viewport, with the ledger squeezed into the bottom third.
+ * A style object is merged over RNW's base, so it wins on web, and it states
+ * the same intent on native (where Yoga's default flexShrink is 0, hence
+ * spelling both out).
+ */
+const HEADER_BLOCK_STYLE = { flexGrow: 0, flexShrink: 1 } as const;
+
 type LogsCollectionLike = {
 	find(query: {
 		selector: Record<string, unknown>;
@@ -340,7 +357,7 @@ function LogsScreenContent() {
 				    ledger (which keeps a min-h floor) and scroll internally instead
 				    of squeezing the rows out of reach on short viewports. On normal
 				    viewports this ScrollView sizes to its content and never scrolls. */}
-				<ScrollView className="min-h-0 shrink grow-0">
+				<ScrollView className="min-h-0" style={HEADER_BLOCK_STYLE}>
 					<VStack className="gap-3">
 						<StatHeader
 							testID="logs-stats"

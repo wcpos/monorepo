@@ -13,8 +13,8 @@ export const MIN_TREND_POINTS = 2;
 const defaultFormatValue = (value: number) => value.toLocaleString();
 
 /**
- * The frame every Store health trend lives in: a label/latest header row over a
- * fixed-height plot area tall enough to carry real axes.
+ * The frame every Store health trend lives in: a label/readout header row over
+ * a fixed-height plot area tall enough to carry real axes.
  *
  * The frame is drawn from the first render, before there is anything to plot —
  * a chart that appears only once history exists reads as a broken page on a
@@ -24,6 +24,11 @@ const defaultFormatValue = (value: number) => value.toLocaleString();
  * reports the genuine latest value when one exists — a single sample is not a
  * trend, but it is still true.
  *
+ * The readout is the chart's numbers in words: the clock time and the value of
+ * whichever point is being pointed at, falling back to the latest sample when
+ * nothing is. Time and value are both always shown, so following the line with
+ * a cursor never changes the header's shape — only its contents.
+ *
  * Populating the frame is purely additive (line replaces the waiting line
  * inside the same footprint), so nothing on the page moves when data arrives.
  */
@@ -31,19 +36,33 @@ export function TrendFrame({
 	points,
 	label,
 	testID,
+	active = null,
 	formatValue = defaultFormatValue,
+	formatTime,
 	children,
 }: {
 	points: TrendPoint[];
 	label: string;
 	testID: string;
-	/** Formats the latest value (and, in the chart, the y-axis ticks). */
+	/**
+	 * The point the reader is pointing at, or null when they are not pointing at
+	 * one — then the header reports the latest sample.
+	 */
+	active?: TrendPoint | null;
+	/** Formats the readout value (and, in the chart, the y-axis ticks). */
 	formatValue?: (value: number) => string;
+	/**
+	 * Formats the readout's clock time. Supplied by the caller rather than
+	 * defaulted here, so the readout and the chart's own x-axis labels are
+	 * formatted by the same locale-aware function — a frame that invented its
+	 * own format would disagree with the axis right under it.
+	 */
+	formatTime?: (x: number) => string;
 	/** The drawn trend. Omitted while the chart engine loads (web). */
 	children?: React.ReactNode;
 }) {
 	const t = useT();
-	const latest = points.at(-1);
+	const readout = active ?? points.at(-1);
 
 	return (
 		<View testID={testID} className="gap-2">
@@ -51,9 +70,14 @@ export function TrendFrame({
 				<Text testID={`${testID}-label`} className="text-sm font-medium">
 					{label}
 				</Text>
-				<Text testID={`${testID}-latest`} className="text-sm font-semibold">
-					{latest !== undefined ? formatValue(latest.y) : '—'}
-				</Text>
+				<HStack className="items-baseline gap-1.5">
+					<Text testID={`${testID}-time`} className="text-muted-foreground text-xs tabular-nums">
+						{readout !== undefined && formatTime ? formatTime(readout.x) : ''}
+					</Text>
+					<Text testID={`${testID}-latest`} className="text-sm font-semibold tabular-nums">
+						{readout !== undefined ? formatValue(readout.y) : '—'}
+					</Text>
+				</HStack>
 			</HStack>
 			<View className="h-40">
 				{points.length >= MIN_TREND_POINTS ? (

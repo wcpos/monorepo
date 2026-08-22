@@ -774,7 +774,11 @@ describe('query bindings', () => {
 		expect(engine.censusSubscribeCount).toBeGreaterThan(0);
 	});
 
-	it('prefers the per-query verdict over the census total', async () => {
+	// One source of truth with the Store Health › Database page (owner ruling 2026-08-22).
+	// The browse-window verdict and the census count DIFFERENT populations on purpose (#1400:
+	// the walk counts `wcpos/v2`, the census probe counts `wc/v3`), so a whole-collection
+	// browse that preferred the verdict printed a total the Database page contradicted.
+	it('prefers the census total over the per-query verdict for a whole-collection browse', async () => {
 		engine.setCensusTotal('products', 42);
 		engine.setCoverageVerdict(
 			{
@@ -795,10 +799,11 @@ describe('query bindings', () => {
 
 		const totals: number[] = [];
 		const subscription = result.current.total$.subscribe((total) => totals.push(total));
-		await waitFor(() => expect(totals).toContain(3));
+		await waitFor(() => expect(totals).toContain(42));
 		subscription.unsubscribe();
-		// The per-query answer wins outright — the census may never override it.
-		expect(totals).not.toContain(42);
+		// The Database page's number wins outright — the browse walk's own tally may not
+		// override it.
+		expect(totals).not.toContain(3);
 	});
 
 	// The POS products grid's own filter shape — `status: 'publish'` on every browse, plus
