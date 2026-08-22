@@ -1271,6 +1271,48 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"code": "AUTH421",
+		"symbol": "AUTH_TOKEN_BLOCKED_BY_HOST",
+		"domain": "AUTH",
+		"severity": "error",
+		"safeAction": "contact-support",
+		"retryPolicy": "after-change",
+		"dataSafety": "no-impact",
+		"escalation": "none",
+		"summary": "The store's server is blocking the login token on every channel this app can use.",
+		"docsBody": "The app confirmed the store is reachable, but the server (or a firewall, proxy, or security plugin in front of it) strips the Authorization header and also blocks the token when it is sent as a URL parameter. There is no third way to deliver a login token, so this must be fixed on the server.",
+		"troubleshooting": [
+			"Ask your host to allow the Authorization header through to WordPress — on Apache this is usually one line: SetEnvIf Authorization \"(.*)\" HTTP_AUTHORIZATION=$1.",
+			"If the site uses .htaccess rewrites, keep WordPress's generated RewriteRule line that passes HTTP_AUTHORIZATION — security plugins sometimes remove it.",
+			"Behind a proxy or CDN, check its header allow-list: the Authorization request header must be forwarded to the origin.",
+			"If a web application firewall (WAF) is filtering URL parameters, ask the host to allow the authorization parameter on /wcpos/ REST routes."
+		],
+		"logSources": [],
+		"evidence": "wcpos-infra#73 §5 row 1 (research §c1)",
+		"introducedIn": "1.10.0"
+	},
+	{
+		"code": "AUTH431",
+		"symbol": "REST_TRANSPORT_BLOCKED",
+		"domain": "AUTH",
+		"severity": "error",
+		"safeAction": "contact-support",
+		"retryPolicy": "after-change",
+		"dataSafety": "no-impact",
+		"escalation": "none",
+		"summary": "The store's REST API did not answer on any address form this app can use.",
+		"docsBody": "The app tried the store's REST API at its normal address (/wp-json/...) and at WordPress's built-in fallback address (/?rest_route=...), and neither answered. The store's website itself may be up — this is specifically the REST API being unreachable, usually a security plugin hiding it or a firewall rule blocking it.",
+		"troubleshooting": [
+			"If a security plugin hides or renames /wp-json/ (for example WP Hide), allow WordPress's built-in /?rest_route= form as well — the app falls back to it automatically.",
+			"Check firewall (WAF) rules for anything matching wp-json or rest_route and allow the store's own REST API through.",
+			"Test from a browser: https://your-store.com/?rest_route=/ should return JSON, not a 403 page or the site's homepage.",
+			"If the server is behind a maintenance page or bot challenge, REST requests may be answered with an HTML page — disable the challenge for the REST API."
+		],
+		"logSources": [],
+		"evidence": "wcpos-infra#73 §5 (B5 both-transports verdict, ADR 0031 §3)",
+		"introducedIn": "1.10.0"
+	},
+	{
 		"code": "SYNC151",
 		"symbol": "STORE_RESPONSE_MALFORMED",
 		"domain": "SYNC",

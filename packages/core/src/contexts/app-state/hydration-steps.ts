@@ -3,6 +3,7 @@ import * as Crypto from 'expo-crypto';
 import { createStoreDB, createUserDB, sanitizeWPCredentialsData } from '@wcpos/database';
 import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { Platform } from '@wcpos/utils/platform';
 import {
 	deriveSyntheticPathBase,
@@ -145,6 +146,10 @@ interface HeaderEchoResult {
 
 type EchoProbeVerdict = HeaderEchoResult | number | null;
 
+export type AuthTransportResolution =
+	| { ok: true; useJwtAsParam: boolean; useRestRouteParam: boolean }
+	| { ok: false; blocked: 'credential-channels' | 'transports' | null };
+
 /**
  * Probe which request headers survive to the server (B8, wcpos-infra#72).
  *
@@ -251,7 +256,7 @@ export async function testAuthorizationMethod(
 	accessToken: string,
 	wcposVersion?: string,
 	wpApiUrl?: string
-): Promise<{ useJwtAsParam: boolean; useRestRouteParam: boolean } | null> {
+): Promise<AuthTransportResolution> {
 	try {
 		const pathBase = deriveSyntheticPathBase(wcposApiUrl);
 		const pathRoot = wpApiUrl
@@ -305,18 +310,20 @@ export async function testAuthorizationMethod(
 				context: { wcposApiUrl, headerAuthArrives, paramAuthArrives, deadHeaders },
 			});
 			if (headerAuthArrives) {
-				return { useJwtAsParam: false, useRestRouteParam };
+				return { ok: true, useJwtAsParam: false, useRestRouteParam };
 			}
 			if (paramAuthArrives) {
-				return { useJwtAsParam: true, useRestRouteParam };
+				return { ok: true, useJwtAsParam: true, useRestRouteParam };
 			}
 			// Both credential channels are blocked — the probe measured this
 			// authoritatively, so the legacy test would only fail slower.
 			// Naming this condition for the cashier is Package C's first error.
-			appLogger.warn('Server blocks the login token on both channels', {
+			appLogger.error('Server blocks the login token on both channels', {
+				code: ERROR_CODES.AUTH_TOKEN_BLOCKED_BY_HOST,
+				showToast: true,
 				context: { wcposApiUrl, deadHeaders },
 			});
-			return null;
+			return { ok: false, blocked: 'credential-channels' };
 		}
 
 		// No transport produced a valid echo. Only network-dead on every spelling
@@ -327,10 +334,12 @@ export async function testAuthorizationMethod(
 			? queryEcho === null
 			: pathEcho === null && queryEcho === null;
 		if (networkDeadEverywhere) {
-			appLogger.warn('REST transport probes failed', {
+			appLogger.error('REST transport probes failed', {
+				code: ERROR_CODES.REST_TRANSPORT_BLOCKED,
+				showToast: true,
 				context: { wcposApiUrl, verdict: 'both-transports-blocked' },
 			});
-			return null;
+			return { ok: false, blocked: 'transports' };
 		}
 
 		const pathAuthUrl = `${pathBase}auth/test`;
@@ -348,10 +357,12 @@ export async function testAuthorizationMethod(
 			useRestRouteParam = true;
 		}
 		if (legacy === 'transport-dead') {
-			appLogger.warn('REST transport probes failed', {
+			appLogger.error('REST transport probes failed', {
+				code: ERROR_CODES.REST_TRANSPORT_BLOCKED,
+				showToast: true,
 				context: { wcposApiUrl, verdict: 'both-transports-blocked' },
 			});
-			return null;
+			return { ok: false, blocked: 'transports' };
 		}
 		const { headerSupported, paramSupported } = legacy;
 		if (headerSupported) {
@@ -363,7 +374,7 @@ export async function testAuthorizationMethod(
 				},
 			});
 
-			return { useJwtAsParam: false, useRestRouteParam };
+			return { ok: true, useJwtAsParam: false, useRestRouteParam };
 		}
 
 		appLogger.debug('Authorization method test results', {
@@ -379,14 +390,14 @@ export async function testAuthorizationMethod(
 			appLogger.warn('Server does not support Authorization headers, using query parameters', {
 				context: { wcposApiUrl },
 			});
-			return { useJwtAsParam: true, useRestRouteParam };
+			return { ok: true, useJwtAsParam: true, useRestRouteParam };
 		}
 
 		// Neither work - log but don't fail hydration.
 		appLogger.warn('Authorization test failed for both methods', {
 			context: { wcposApiUrl },
 		});
-		return null;
+		return { ok: false, blocked: null };
 	} catch (err) {
 		appLogger.warn('Authorization method test error', {
 			context: {
@@ -394,7 +405,7 @@ export async function testAuthorizationMethod(
 				error: getErrorMessage(err),
 			},
 		});
-		return null;
+		return { ok: false, blocked: null };
 	}
 }
 
@@ -725,7 +736,7 @@ const testAuthorizationStep: HydrationStep = {
 			typeof initialSite.wp_api_url === 'string' ? initialSite.wp_api_url : undefined
 		);
 
-		if (result) {
+		if (result.ok) {
 			/**
 			 * Write the outcome both ways. The embedded payload never carries
 			 * `use_jwt_as_param`, and the site write above merges rather than

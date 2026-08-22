@@ -3,17 +3,19 @@ import * as React from 'react';
 import isEmpty from 'lodash/isEmpty';
 
 import { Button, ButtonText } from '@wcpos/components/button';
+import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
 import { Input } from '@wcpos/components/input';
 import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { getErrorCodeDocURL } from '@wcpos/utils/logger/constants';
 
 import { useT } from '../../../contexts/translations';
 import { useSiteConnect } from '../hooks/use-site-connect';
 
 export function UrlInput() {
-	const { onConnect, loading, error, reset } = useSiteConnect();
+	const { onConnect, loading, error, errorCode, reset } = useSiteConnect();
 	const [url, setURL] = React.useState('');
 	const t = useT();
 
@@ -45,6 +47,11 @@ export function UrlInput() {
 				</Button>
 			</HStack>
 			{error ? <Text className="text-destructive text-sm">{error}</Text> : null}
+			{errorCode ? (
+				<DocsLink testID="connect-error-docs-link" href={getErrorCodeDocURL(errorCode)}>
+					{t('common.learn_more', { _tags: 'core' })}
+				</DocsLink>
+			) : null}
 		</VStack>
 	);
 }

@@ -72,6 +72,7 @@ interface UseSiteConnectReturn {
 	status: SiteConnectStatus;
 	progress: SiteConnectProgress | null;
 	error: string | null;
+	errorCode: ErrorCode | null;
 	loading: boolean;
 	onConnect: (url: string) => Promise<SiteDocument | null>;
 	reset: () => void;
@@ -86,6 +87,7 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 	const [status, setStatus] = React.useState<SiteConnectStatus>('idle');
 	const [progress, setProgress] = React.useState<SiteConnectProgress | null>(null);
 	const [error, setError] = React.useState<string | null>(null);
+	const [errorCode, setErrorCode] = React.useState<ErrorCode | null>(null);
 	const t = useT();
 
 	// Individual discovery hooks
@@ -112,6 +114,7 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 		setStatus('idle');
 		setProgress(null);
 		setError(null);
+		setErrorCode(null);
 	}, []);
 
 	/**
@@ -207,6 +210,7 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 	 */
 	const onConnect = React.useCallback(
 		async (url: string): Promise<SiteDocument | null> => {
+			setErrorCode(null);
 			if (!url || url.trim() === '') {
 				const errorMsg = t('auth.url_is_required');
 				siteLogger.error(errorMsg, {
@@ -244,7 +248,19 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 					apiResult.siteData.wcpos_version,
 					wpApiUrl
 				);
-				if (!authResult) {
+				if (!authResult.ok) {
+					// The inline message is translated; the registry summary stays the
+					// docs/logs voice. errorCode drives the DocsLink to the full page.
+					if (authResult.blocked === 'credential-channels') {
+						throw Object.assign(new Error(t('auth.server_blocks_login_token')), {
+							errorCode: ERROR_CODES.AUTH_TOKEN_BLOCKED_BY_HOST,
+						});
+					}
+					if (authResult.blocked === 'transports') {
+						throw Object.assign(new Error(t('auth.store_rest_api_unreachable')), {
+							errorCode: ERROR_CODES.REST_TRANSPORT_BLOCKED,
+						});
+					}
 					throw new Error(t('auth.failed_to_test_authorization_methods'));
 				}
 
@@ -271,6 +287,11 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 				const errorMessage =
 					err instanceof Error && err.message ? err.message : t('auth.failed_to_connect_to_site');
 				setError(errorMessage);
+				setErrorCode(
+					err instanceof Error
+						? ((err as Error & { errorCode?: ErrorCode }).errorCode ?? null)
+						: null
+				);
 				setStatus('error');
 				return null;
 			}
@@ -282,6 +303,7 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 		status,
 		progress,
 		error,
+		errorCode,
 		loading,
 		onConnect,
 		reset,

@@ -58,6 +58,8 @@ export type ErrorCode =
 	| 'AUTH121'
 	| 'AUTH321'
 	| 'AUTH411'
+	| 'AUTH421'
+	| 'AUTH431'
 	| 'SYNC151'
 	| 'SYNC161'
 	| 'SYNC171'
@@ -946,6 +948,36 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		introducedIn: '1.10.0',
 		evidence: 'monorepo#1151 legacy-table migration',
 	},
+	AUTH421: {
+		code: 'AUTH421',
+		symbol: 'AUTH_TOKEN_BLOCKED_BY_HOST',
+		domain: 'AUTH',
+		severity: 'error',
+		safeAction: 'contact-support',
+		retryPolicy: 'after-change',
+		dataSafety: 'no-impact',
+		escalation: 'none',
+		summary: "The store's server is blocking the login token on every channel this app can use.",
+		docsBody:
+			'The app confirmed the store is reachable, but the server (or a firewall, proxy, or security plugin in front of it) strips the Authorization header and also blocks the token when it is sent as a URL parameter. There is no third way to deliver a login token, so this must be fixed on the server.',
+		introducedIn: '1.10.0',
+		evidence: 'wcpos-infra#73 §5 row 1 (research §c1)',
+	},
+	AUTH431: {
+		code: 'AUTH431',
+		symbol: 'REST_TRANSPORT_BLOCKED',
+		domain: 'AUTH',
+		severity: 'error',
+		safeAction: 'contact-support',
+		retryPolicy: 'after-change',
+		dataSafety: 'no-impact',
+		escalation: 'none',
+		summary: "The store's REST API did not answer on any address form this app can use.",
+		docsBody:
+			"The app tried the store's REST API at its normal address (/wp-json/...) and at WordPress's built-in fallback address (/?rest_route=...), and neither answered. The store's website itself may be up — this is specifically the REST API being unreachable, usually a security plugin hiding it or a firewall rule blocking it.",
+		introducedIn: '1.10.0',
+		evidence: 'wcpos-infra#73 §5 (B5 both-transports verdict, ADR 0031 §3)',
+	},
 	SYNC151: {
 		code: 'SYNC151',
 		symbol: 'STORE_RESPONSE_MALFORMED',
@@ -1128,6 +1160,8 @@ export const ERROR_CODES = {
 	SIGNED_IN_AS_WRONG_USER: 'AUTH121',
 	WOOCOMMERCE_MISSING: 'AUTH321',
 	STORE_URL_INVALID: 'AUTH411',
+	AUTH_TOKEN_BLOCKED_BY_HOST: 'AUTH421',
+	REST_TRANSPORT_BLOCKED: 'AUTH431',
 	STORE_RESPONSE_MALFORMED: 'SYNC151',
 	LOCAL_DB_UNAVAILABLE: 'SYNC161',
 	LOCAL_DB_SETUP_FAILED: 'SYNC171',
