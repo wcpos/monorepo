@@ -171,8 +171,9 @@ export function buildBarcodeSymbologyIndex(
  *
  * The same GTIN can also print as an 8-digit UPC-E on a small package, so a
  * 12-digit scan additionally offers the UPC-E it compresses to — a store that
- * keyed what was printed still resolves. The reverse is deliberately absent; see
- * the note in the body.
+ * keyed what was printed still resolves. The reverse needs `symbology`: 8 digits
+ * alone cannot be told apart from an EAN-8 (see the note in the body), so pass
+ * the symbology the scan source reported whenever there is one.
  *
  * Return the scanned code plus every equivalent form (scanned form first) so a
  * lookup can try them all — this never rewrites the scanned code, so genuine
@@ -181,7 +182,7 @@ export function buildBarcodeSymbologyIndex(
  * needed. Apply the candidates only against a barcode-symbology index (see
  * `buildBarcodeSymbologyIndex`) so a numeric SKU never gains an equivalent form.
  */
-export function barcodeMatchCandidates(code: string): string[] {
+export function barcodeMatchCandidates(code: string, symbology?: string): string[] {
 	const trimmed = code.trim();
 	const candidates = [trimmed];
 	const add = (value: string | null): void => {
@@ -201,17 +202,27 @@ export function barcodeMatchCandidates(code: string): string[] {
 		// 12-digit UPC-A → also try its 13-digit EAN-13 encoding.
 		upcA = trimmed;
 		add(`0${trimmed}`);
+	} else if (isUpcE(symbology) && /^[01]\d{7}$/.test(trimmed)) {
+		// 8-digit UPC-E as printed on a small package → the UPC-A it expands to and
+		// that form's 13-digit encoding.
+		//
+		// ONLY when the source told us the symbol was a UPC-E. Eight digits
+		// beginning 0 or 1 are otherwise irreducibly ambiguous with EAN-8, and no
+		// check digit separates them: whenever the last data digit is 5-9 the
+		// expansion inserts FOUR zeros, an even shift that leaves every other
+		// digit's weight — and so the check digit — unchanged, making a valid
+		// UPC-E in that family ALWAYS a valid EAN-8 too. Guessing would let an
+		// EAN-8 missing from the catalog resolve to an unrelated product: a
+		// silently wrong line on a receipt, far worse than a not-found the cashier
+		// can see and act on. Absent the symbology the code is matched as itself,
+		// so a caller that cannot supply one loses a capability, never gains a
+		// wrong answer.
+		upcA = expandUpcE(trimmed);
+		add(upcA);
+		if (upcA !== null) {
+			add(`0${upcA}`);
+		}
 	}
-	// Deliberately NOT the reverse: an 8-digit scan is never expanded to the UPC-A
-	// it might be the UPC-E of. Eight digits beginning 0 or 1 can be either
-	// symbology, and a check digit cannot tell them apart — for the x6∈5..9 family
-	// (half the UPC-E space, and its commonest form) a valid UPC-E is ALWAYS also
-	// a valid EAN-8, because the four zeros the expansion inserts shift the other
-	// digits by an even number of places and so leave the weighted sum unchanged.
-	// Expanding on a guess would let an EAN-8 that isn't in the catalog resolve to
-	// an unrelated product: a silently wrong line on the receipt, which is far
-	// worse than a not-found the cashier can see and act on. The 12→8 direction
-	// below is safe because a 12-digit code is unambiguous.
 
 	// …and the UPC-E the same GTIN prints as, when it has one. Deduped, so a scan
 	// that already IS the UPC-E form doesn't repeat itself.
@@ -232,6 +243,20 @@ export function barcodeMatchCandidates(code: string): string[] {
  * same way (zxing-wasm expands to the 12-digit form; some native readers report
  * the 8). Offering both means the item reaches the cart either way.
  */
+
+/**
+ * The symbology names a scan source may use for UPC-E. Both the expo-camera
+ * style (`upc_e`, what the web viewfinder maps its decoder formats to) and the
+ * hyphenated spelling are accepted, matching how `RETAIL_SYMBOLOGIES` in
+ * @wcpos/scanner tolerates both.
+ */
+function isUpcE(symbology?: string): boolean {
+	if (symbology === undefined) {
+		return false;
+	}
+	const normalized = symbology.toLowerCase();
+	return normalized === 'upc_e' || normalized === 'upc-e';
+}
 
 /** The mod-10 check digit for a GTIN body (mirrors `hasValidRetailCheckDigit`). */
 function gtinCheckDigit(body: string): string {
@@ -441,6 +466,12 @@ export type ScanResult =
 
 export type ResolveScanInput = {
 	code: string;
+	/**
+	 * The symbology the scan source reported, when it reported one. Only used to
+	 * disambiguate an 8-digit UPC-E from an EAN-8 (see barcodeMatchCandidates);
+	 * omitting it costs a candidate form, never correctness.
+	 */
+	symbology?: string;
 	index: Map<string, BarcodeIndexEntry>;
 	syncBaseUrl: string;
 	fetcher: BarcodeResolveFetcher;
@@ -533,7 +564,7 @@ export async function resolveScan(input: ResolveScanInput): Promise<ScanResult> 
 	// rather than one per candidate. The caller's lookup deadline spans the whole
 	// loop (see withBarcodeLookupDeadline) — a slow first probe eats into the
 	// budget instead of granting the retry a fresh one.
-	for (const candidate of barcodeMatchCandidates(code)) {
+	for (const candidate of barcodeMatchCandidates(code, input.symbology)) {
 		const url = buildResolveBarcodeUrl({
 			syncBaseUrl: input.syncBaseUrl,
 			code: candidate,

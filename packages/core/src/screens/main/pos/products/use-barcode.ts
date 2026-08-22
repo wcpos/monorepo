@@ -145,7 +145,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		const guardedClearSearch = () => {
 			if (scanTicketRef.current === scanTicket) clearSearch();
 		};
-		let results = await barcodeSearch(barcodeStr);
+		let results = await barcodeSearch(barcodeStr, event.symbology);
 		let onlineParentRequired = false;
 		// The online lookup shows a persistent "Searching store…" toast; track it so a
 		// later failure can replace it with terminal feedback instead of leaving it up.
@@ -227,6 +227,9 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			const { fetcher, syncBaseUrl } = runtime.engine.hostTransport();
 			const resolution = await resolveScan({
 				code: barcodeStr,
+				// The scan's own symbology, read here rather than inside onEvent below,
+				// whose parameter shadows this `event` with the resolve-flow's own.
+				symbology: event.symbology,
 				index: new Map(),
 				syncBaseUrl,
 				fetcher: withBarcodeLookupDeadline(fetcher),
@@ -319,7 +322,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 						}
 					}
 
-					results = await barcodeSearch(barcodeStr);
+					results = await barcodeSearch(barcodeStr, event.symbology);
 					if (results.length === 0) {
 						showNotFound();
 						return;
@@ -384,7 +387,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 					}
 				}
 
-				results = await barcodeSearch(barcodeStr);
+				results = await barcodeSearch(barcodeStr, event.symbology);
 				if (results.length === 0) {
 					showNotFound();
 					return;

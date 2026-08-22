@@ -143,13 +143,35 @@ describe('barcodeMatchCandidates (UPC-A ↔ EAN-13 equivalence, #740)', () => {
 		]);
 	});
 
-	it('never expands an 8-digit scan, which EAN-8 and UPC-E both lay claim to', () => {
+	it('never expands an UNLABELLED 8-digit scan, which EAN-8 and UPC-E both claim', () => {
 		// 01234565 is a valid UPC-E for 012345000065 AND a valid EAN-8. That is not
 		// a coincidence: whenever the last data digit is 5-9 the expansion inserts
 		// four zeros, an even shift that leaves every other digit's weight — and so
-		// the check digit — untouched. Guessing here could put an unrelated product
-		// in the cart, so an 8-digit scan is only ever matched as itself.
+		// the check digit — untouched. With nothing to disambiguate, guessing could
+		// put an unrelated product in the cart, so the code is matched as itself.
 		expect(barcodeMatchCandidates('01234565')).toEqual(['01234565']);
+		expect(barcodeMatchCandidates('01234565', 'ean8')).toEqual(['01234565']);
+	});
+
+	it('expands an 8-digit scan the source labelled UPC-E', () => {
+		// The wedge read the symbol and told us what it was, so there is nothing to
+		// guess: the store may hold this GTIN as the printed 8 or as the 12/13 that
+		// supplier data carries.
+		expect(barcodeMatchCandidates('01234565', 'upc_e')).toEqual([
+			'01234565',
+			'012345000065',
+			'0012345000065',
+		]);
+		expect(barcodeMatchCandidates('01234565', 'UPC-E')).toEqual([
+			'01234565',
+			'012345000065',
+			'0012345000065',
+		]);
+	});
+
+	it('offers nothing extra for a UPC-E label on a code that cannot be one', () => {
+		expect(barcodeMatchCandidates('96385074', 'upc_e')).toEqual(['96385074']);
+		expect(barcodeMatchCandidates('04825303', 'upc_e')).toEqual(['04825303']);
 	});
 
 	it('reaches the UPC-E form from the 13-digit reading too', () => {
@@ -495,6 +517,24 @@ describe('resolveScan UPC-A/EAN-13 equivalence (#740)', () => {
 		expect(fetcher).toHaveBeenCalledTimes(2);
 		expect(new URL(fetcher.mock.calls[1][0]).searchParams.get('code')).toBe(EAN_13);
 		expect(events.map((event) => event.type)).toEqual(['searching-online', 'not-found']);
+	});
+
+	it('carries the scan symbology into the online candidate forms', async () => {
+		// Without it an 8-digit UPC-E would only ever be asked for as itself, and a
+		// store keyed on the 12-digit GTIN would answer not-found.
+		const fetcher = vi.fn<BarcodeResolveFetcher>(async () => jsonResponse(resolveResponse()));
+		await resolveScan(scanInput({ code: '01234565', symbology: 'upc_e', fetcher }));
+		expect(fetcher.mock.calls.map((call) => new URL(call[0]).searchParams.get('code'))).toEqual([
+			'01234565',
+			'012345000065',
+			'0012345000065',
+		]);
+	});
+
+	it('asks only for the scanned form when the source gave no symbology', async () => {
+		const fetcher = vi.fn<BarcodeResolveFetcher>(async () => jsonResponse(resolveResponse()));
+		await resolveScan(scanInput({ code: '01234565', fetcher }));
+		expect(fetcher).toHaveBeenCalledTimes(1);
 	});
 
 	it('spends no extra request on a code with no counterpart', async () => {

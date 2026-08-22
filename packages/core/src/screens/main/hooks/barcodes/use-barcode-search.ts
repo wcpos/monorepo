@@ -36,12 +36,16 @@ function matchesExactSymbology(document: CatalogRecord, barcode: string): boolea
  * product that a HID wedge, reading the same symbol as the printed 12 digits,
  * resolved and added to the cart.
  */
-function matchesEquivalentSymbology(document: CatalogRecord, barcode: string): boolean {
+function matchesEquivalentSymbology(
+	document: CatalogRecord,
+	barcode: string,
+	symbology?: string
+): boolean {
 	const materialized = document.payload?.barcode;
 	if (typeof materialized !== 'string') {
 		return false;
 	}
-	return barcodeMatchCandidates(barcode).some(
+	return barcodeMatchCandidates(barcode, symbology).some(
 		(candidate) => candidate !== barcode && candidate === materialized.trim()
 	);
 }
@@ -55,9 +59,15 @@ function matchesExactAnyField(document: CatalogRecord, barcode: string): boolean
 	return buildLocalBarcodeIndex([{ id: document.uuid, payload }]).index.has(barcode);
 }
 
-function matchesEquivalentGlobalId(document: CatalogRecord, barcode: string): boolean {
+function matchesEquivalentGlobalId(
+	document: CatalogRecord,
+	barcode: string,
+	symbology?: string
+): boolean {
 	const value = document.payload?.global_unique_id;
-	return typeof value === 'string' && barcodeMatchCandidates(barcode).includes(value.trim());
+	return (
+		typeof value === 'string' && barcodeMatchCandidates(barcode, symbology).includes(value.trim())
+	);
 }
 
 export const useBarcodeSearch = () => {
@@ -70,7 +80,14 @@ export const useBarcodeSearch = () => {
 	 * @returns {Promise<(ProductDocument | ProductVariationDocument)[]>} - A promise that resolves to an array containing the search results.
 	 */
 	const barcodeSearch = React.useCallback(
-		async (barcode: string): Promise<(EngineRecord<'products'> | EngineRecord<'variations'>)[]> => {
+		async (
+			barcode: string,
+			// The symbology the scan source reported, when there was one. Only an
+			// 8-digit UPC-E needs it — it is otherwise indistinguishable from an
+			// EAN-8 — so a caller without one (the products screen's plain barcode
+			// stream, a typed search) still resolves every other form.
+			symbology?: string
+		): Promise<(EngineRecord<'products'> | EngineRecord<'variations'>)[]> => {
 			const normalizedBarcode = barcode.trim();
 			if (normalizedBarcode === '') {
 				return [];
@@ -133,13 +150,13 @@ export const useBarcodeSearch = () => {
 				return symbologyExact;
 			}
 			const symbologyEquivalent = select((document) =>
-				matchesEquivalentSymbology(document, normalizedBarcode)
+				matchesEquivalentSymbology(document, normalizedBarcode, symbology)
 			);
 			if (symbologyEquivalent.length > 0) {
 				return symbologyEquivalent;
 			}
 			const globalIdEquivalent = select((document) =>
-				matchesEquivalentGlobalId(document, normalizedBarcode)
+				matchesEquivalentGlobalId(document, normalizedBarcode, symbology)
 			);
 			if (globalIdEquivalent.length > 0) {
 				return globalIdEquivalent;
