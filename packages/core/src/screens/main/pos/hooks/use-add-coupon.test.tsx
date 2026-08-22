@@ -75,7 +75,7 @@ jest.mock('../../hooks/use-collection', () => ({
 	},
 }));
 
-const orderSnapshot = {
+const baseOrderSnapshot = {
 	uuid: 'order-uuid',
 	id: 99,
 	number: '99',
@@ -98,9 +98,14 @@ const orderSnapshot = {
 	customer_id: 7,
 };
 
+/** Mutable per-test copy — tests override customer_id, billing and coupon_lines. */
+let orderSnapshot: typeof baseOrderSnapshot = { ...baseOrderSnapshot };
+
 const currentOrderRecord = {
-	uuid: orderSnapshot.uuid,
-	payload: orderSnapshot,
+	uuid: baseOrderSnapshot.uuid,
+	get payload() {
+		return orderSnapshot;
+	},
 	getLatest: () => currentOrderRecord,
 };
 
@@ -118,7 +123,11 @@ function engineDocument(document: Record<string, unknown> & { uuid: string; payl
 	};
 }
 
-function couponPayload(code: string, individualUse: boolean) {
+function couponPayload(
+	code: string,
+	individualUse: boolean,
+	overrides: Record<string, unknown> = {}
+) {
 	return {
 		code,
 		individual_use: individualUse,
@@ -136,37 +145,42 @@ function couponPayload(code: string, individualUse: boolean) {
 		minimum_amount: '',
 		maximum_amount: '',
 		email_restrictions: [],
+		...overrides,
 	};
+}
+
+function mockEngineData(coupons: ReturnType<typeof engineDocument>[]) {
+	const products = [
+		engineDocument({
+			uuid: 'product-82',
+			remoteId: '82',
+			payload: { id: 82, categories: [{ id: 17 }] },
+		}),
+	];
+	engine.active.mockReturnValue({
+		database: {
+			collections: {
+				coupons: { find: jest.fn(() => ({ exec: async () => coupons })) },
+				products: { find: jest.fn(() => ({ exec: async () => products })) },
+				categories: { find: jest.fn(() => ({ exec: async () => [] })) },
+			},
+		},
+	});
 }
 
 describe('useAddCoupon engine reads', () => {
 	beforeEach(() => {
 		localPatch.mockReset();
 		recalculate.mockReset();
-		const coupons = [
+		orderSnapshot = { ...baseOrderSnapshot };
+		mockEngineData([
 			engineDocument({
 				uuid: 'coupon-bonus',
 				remoteId: '1',
 				payload: couponPayload('bonus', false),
 			}),
 			engineDocument({ uuid: 'coupon-solo', remoteId: '2', payload: couponPayload('solo', true) }),
-		];
-		const products = [
-			engineDocument({
-				uuid: 'product-82',
-				remoteId: '82',
-				payload: { id: 82, categories: [{ id: 17 }] },
-			}),
-		];
-		engine.active.mockReturnValue({
-			database: {
-				collections: {
-					coupons: { find: jest.fn(() => ({ exec: async () => coupons })) },
-					products: { find: jest.fn(() => ({ exec: async () => products })) },
-					categories: { find: jest.fn(() => ({ exec: async () => [] })) },
-				},
-			},
-		});
+		]);
 	});
 
 	it('preserves trimmed lowercase lookup and rejects against an applied individual-use coupon', async () => {
@@ -206,5 +220,95 @@ describe('useAddCoupon engine reads', () => {
 			toast: { title: 'There was an error: kaboom' },
 			context: { error: 'kaboom' },
 		});
+	});
+});
+
+/**
+ * Guest orders carry `customer_id: 0`. WooCommerce records guest coupon usage by
+ * billing email and never as customer `0`, so the hook must collapse `0 → null`
+ * before validating — passing `0` straight through silently disables per-user
+ * usage limits for every guest sale (#976).
+ */
+describe('useAddCoupon per-user usage limits', () => {
+	const GUEST_EMAIL = 'shopper@example.com';
+
+	beforeEach(() => {
+		localPatch.mockReset();
+		recalculate.mockReset();
+		mockEngineData([
+			engineDocument({
+				uuid: 'coupon-once',
+				remoteId: '3',
+				payload: couponPayload('once', false, {
+					usage_limit_per_user: 1,
+					used_by: [GUEST_EMAIL, '7'],
+				}),
+			}),
+		]);
+		// No applied coupons: the base fixture's individual-use coupon would reject
+		// first and mask the per-user check under test.
+		orderSnapshot = { ...baseOrderSnapshot, coupon_lines: [] };
+	});
+
+	const stubSuccessfulApply = () => {
+		const couponLines = [{ code: 'once', discount: '1.8', discount_tax: '0', meta_data: [] }];
+		recalculate.mockResolvedValue({ couponLines, lineItems: orderSnapshot.line_items });
+		localPatch.mockResolvedValue({ uuid: 'order-uuid' });
+		return couponLines;
+	};
+
+	it('rejects a guest order whose billing email has already used the coupon', async () => {
+		orderSnapshot = { ...orderSnapshot, customer_id: 0, billing: { email: GUEST_EMAIL } };
+		const { result } = renderHook(() => useAddCoupon());
+
+		await expect(result.current.addCoupon('once')).resolves.toEqual({
+			success: false,
+			error: 'Coupon usage limit has been reached for this customer.',
+		});
+		expect(recalculate).not.toHaveBeenCalled();
+		expect(localPatch).not.toHaveBeenCalled();
+	});
+
+	it('applies the coupon to a guest order with a different billing email', async () => {
+		orderSnapshot = {
+			...orderSnapshot,
+			customer_id: 0,
+			billing: { email: 'someone-else@example.com' },
+		};
+		const couponLines = stubSuccessfulApply();
+		const { result } = renderHook(() => useAddCoupon());
+
+		await expect(result.current.addCoupon('once')).resolves.toEqual({ success: true });
+		expect(localPatch).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({ coupon_lines: couponLines }),
+			})
+		);
+	});
+
+	it('rejects a logged-in customer whose ID has already used the coupon', async () => {
+		orderSnapshot = {
+			...orderSnapshot,
+			customer_id: 7,
+			billing: { email: 'someone-else@example.com' },
+		};
+		const { result } = renderHook(() => useAddCoupon());
+
+		await expect(result.current.addCoupon('once')).resolves.toEqual({
+			success: false,
+			error: 'Coupon usage limit has been reached for this customer.',
+		});
+		expect(recalculate).not.toHaveBeenCalled();
+		expect(localPatch).not.toHaveBeenCalled();
+	});
+
+	it('applies the coupon to a logged-in customer whose email — but not ID — is in used_by', async () => {
+		// WooCommerce identifies an account holder by ID only, so guest usage
+		// recorded against this email must not count against them.
+		orderSnapshot = { ...orderSnapshot, customer_id: 8, billing: { email: GUEST_EMAIL } };
+		stubSuccessfulApply();
+		const { result } = renderHook(() => useAddCoupon());
+
+		await expect(result.current.addCoupon('once')).resolves.toEqual({ success: true });
 	});
 });
