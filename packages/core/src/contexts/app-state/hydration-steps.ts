@@ -353,10 +353,7 @@ function classifyHostBlock(evidence: HostBlockEvidence): ErrorCode | null {
 	) {
 		return ERROR_CODES.AUTH_TOKEN_TOO_LARGE;
 	}
-	if (
-		echoHasStatus(evidence.pathEcho, 503) &&
-		echoHasStatus(evidence.queryEcho, 503)
-	) {
+	if (echoHasStatus(evidence.pathEcho, 503) && echoHasStatus(evidence.queryEcho, 503)) {
 		// The header-limit diagnosis needs the MINIMAL-header lane to succeed
 		// while heavy responses 503. A 5xx ping is the same outage answering
 		// everywhere — not evidence of a header ceiling.
