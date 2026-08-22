@@ -40,9 +40,7 @@ export function descriptionKey(type) {
 // the string contains an apostrophe.
 const quote = (value) => {
 	const escaped = value.replace(/\\/g, '\\\\');
-	return escaped.includes("'")
-		? `"${escaped.replace(/"/g, '\\"')}"`
-		: `'${escaped}'`;
+	return escaped.includes("'") ? `"${escaped.replace(/"/g, '\\"')}"` : `'${escaped}'`;
 };
 
 // Prettier wraps an object-property value onto its own continuation line when the

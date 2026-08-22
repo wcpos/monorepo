@@ -93,9 +93,6 @@ for (const op of ['hookdelete', 'ghostdelete']) {
 
 		assert.equal(result.stderr, '');
 		assert.equal(result.status, 0);
-		assert.equal(
-			result.stdout,
-			`OK\nDELETED:101\nQUERIES:${op === 'ghostdelete' ? '2' : '0'}\n`
-		);
+		assert.equal(result.stdout, `OK\nDELETED:101\nQUERIES:${op === 'ghostdelete' ? '2' : '0'}\n`);
 	});
 }

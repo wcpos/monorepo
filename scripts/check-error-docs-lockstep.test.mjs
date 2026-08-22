@@ -38,10 +38,14 @@ test('a hung request times out into a warning, not a failure', async () => {
 		timeoutMs: 5,
 		fetchImpl: (url, { signal }) =>
 			new Promise((resolve, reject) => {
-				signal.addEventListener('abort', () => {
-					wasAborted = true;
-					reject(signal.reason);
-				}, { once: true });
+				signal.addEventListener(
+					'abort',
+					() => {
+						wasAborted = true;
+						reject(signal.reason);
+					},
+					{ once: true }
+				);
 			}),
 		warn: (message) => warnings.push(message),
 	});
@@ -85,7 +89,9 @@ test('warns but exits zero for network errors other than 404', async () => {
 });
 
 test('the lockstep workflow checkout does not persist credentials', () => {
-	const workflow = parse(readFileSync(new URL('../.github/workflows/test.yml', import.meta.url), 'utf8'));
+	const workflow = parse(
+		readFileSync(new URL('../.github/workflows/test.yml', import.meta.url), 'utf8')
+	);
 	const checkout = workflow.jobs['error-docs-lockstep'].steps.find(({ uses }) =>
 		uses?.startsWith('actions/checkout@')
 	);

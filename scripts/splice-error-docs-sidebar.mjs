@@ -2,7 +2,10 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const generatedCategoryPath = new URL('../packages/utils/src/logger/generated/error-docs/sidebar-category.json', import.meta.url);
+const generatedCategoryPath = new URL(
+	'../packages/utils/src/logger/generated/error-docs/sidebar-category.json',
+	import.meta.url
+);
 
 function editCategory(value, generatedCategory, insert) {
 	if (!Array.isArray(value)) return false;

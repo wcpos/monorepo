@@ -27,69 +27,77 @@ const ANDROID_PACKAGE = 'com.wcpos.main.dev';
 const APP_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'apps', 'main');
 
 const run = (cmd, args) => {
-  try {
-    return execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-  } catch {
-    return '';
-  }
+	try {
+		return execFileSync(cmd, args, {
+			encoding: 'utf8',
+			stdio: ['ignore', 'pipe', 'ignore'],
+		}).trim();
+	} catch {
+		return '';
+	}
 };
 
 const isMetroProcess = (pid) => {
-  const command = run('ps', ['-p', pid, '-o', 'command=']).toLowerCase();
-  return /\b(expo|metro|react-native)\b|node_modules\/metro/.test(command);
+	const command = run('ps', ['-p', pid, '-o', 'command=']).toLowerCase();
+	return /\b(expo|metro|react-native)\b|node_modules\/metro/.test(command);
 };
 
 // 1. Kill any Metro listener holding the port (graceful, then hard).
-const candidateListenerPids = () => run('lsof', ['-t', `-iTCP:${PORT}`, '-sTCP:LISTEN']).split('\n').filter(Boolean);
+const candidateListenerPids = () =>
+	run('lsof', ['-t', `-iTCP:${PORT}`, '-sTCP:LISTEN'])
+		.split('\n')
+		.filter(Boolean);
 const confirmedMetroPids = () => candidateListenerPids().filter(isMetroProcess);
 const pids = confirmedMetroPids();
 if (pids.length > 0) {
-  console.log(`[start-dev] killing stale Metro-like process on port ${PORT} (pid ${pids.join(', ')})`);
-  run('kill', pids);
-  const deadline = Date.now() + 3000;
-  while (confirmedMetroPids().length > 0 && Date.now() < deadline) {
-    execFileSync('sleep', ['0.2']);
-  }
-  const survivors = confirmedMetroPids();
-  if (survivors.length > 0) {
-    console.log(`[start-dev] force-killing pid ${survivors.join(', ')}`);
-    run('kill', ['-9', ...survivors]);
-  }
+	console.log(
+		`[start-dev] killing stale Metro-like process on port ${PORT} (pid ${pids.join(', ')})`
+	);
+	run('kill', pids);
+	const deadline = Date.now() + 3000;
+	while (confirmedMetroPids().length > 0 && Date.now() < deadline) {
+		execFileSync('sleep', ['0.2']);
+	}
+	const survivors = confirmedMetroPids();
+	if (survivors.length > 0) {
+		console.log(`[start-dev] force-killing pid ${survivors.join(', ')}`);
+		run('kill', ['-9', ...survivors]);
+	}
 }
 
 // 2. Force-quit the app on all booted iOS simulators.
 const simctlJson = run('xcrun', ['simctl', 'list', 'devices', 'booted', '-j']);
 if (simctlJson) {
-  try {
-    const booted = Object.values(JSON.parse(simctlJson).devices)
-      .flat()
-      .filter((device) => device.state === 'Booted');
-    for (const device of booted) {
-      run('xcrun', ['simctl', 'terminate', device.udid, IOS_BUNDLE_ID]);
-      console.log(`[start-dev] terminated ${IOS_BUNDLE_ID} on ${device.name}`);
-    }
-  } catch {
-    // simctl output unparsable — nothing to terminate
-  }
+	try {
+		const booted = Object.values(JSON.parse(simctlJson).devices)
+			.flat()
+			.filter((device) => device.state === 'Booted');
+		for (const device of booted) {
+			run('xcrun', ['simctl', 'terminate', device.udid, IOS_BUNDLE_ID]);
+			console.log(`[start-dev] terminated ${IOS_BUNDLE_ID} on ${device.name}`);
+		}
+	} catch {
+		// simctl output unparsable — nothing to terminate
+	}
 }
 
 // 3. Force-quit the app on all connected Android devices/emulators.
 const adbDevices = run('adb', ['devices'])
-  .split('\n')
-  .slice(1)
-  .map((line) => line.split('\t'))
-  .filter(([, state]) => state === 'device')
-  .map(([serial]) => serial);
+	.split('\n')
+	.slice(1)
+	.map((line) => line.split('\t'))
+	.filter(([, state]) => state === 'device')
+	.map(([serial]) => serial);
 for (const serial of adbDevices) {
-  run('adb', ['-s', serial, 'shell', 'am', 'force-stop', ANDROID_PACKAGE]);
-  console.log(`[start-dev] force-stopped ${ANDROID_PACKAGE} on ${serial}`);
+	run('adb', ['-s', serial, 'shell', 'am', 'force-stop', ANDROID_PACKAGE]);
+	console.log(`[start-dev] force-stopped ${ANDROID_PACKAGE} on ${serial}`);
 }
 
 // 4. Start Metro in the foreground with lazy bundling disabled.
 console.log(`[start-dev] starting Metro on port ${PORT} (lazy bundling disabled)`);
 const child = spawn('npx', ['expo', 'start', '--port', PORT, ...process.argv.slice(2)], {
-  cwd: APP_DIR,
-  stdio: 'inherit',
-  env: { ...process.env, EXPO_NO_METRO_LAZY: '1' },
+	cwd: APP_DIR,
+	stdio: 'inherit',
+	env: { ...process.env, EXPO_NO_METRO_LAZY: '1' },
 });
 child.on('exit', (code) => process.exit(code ?? 0));

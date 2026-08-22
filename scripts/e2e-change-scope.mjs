@@ -31,40 +31,34 @@
  * Usage: node scripts/e2e-change-scope.mjs <baseRef>
  */
 
-import { spawnSync } from "node:child_process";
+import { spawnSync } from 'node:child_process';
 
 const baseRef = process.argv[2];
 
-function emit({ behavioural = true, onlySpecs = "", reason }) {
-  console.error(`[e2e-change-scope] ${reason}`);
-  console.log(`behavioural=${behavioural}`);
-  console.log(`only_specs=${onlySpecs}`);
-  process.exit(0);
+function emit({ behavioural = true, onlySpecs = '', reason }) {
+	console.error(`[e2e-change-scope] ${reason}`);
+	console.log(`behavioural=${behavioural}`);
+	console.log(`only_specs=${onlySpecs}`);
+	process.exit(0);
 }
 
 const runEverything = (reason) => emit({ reason: `full suite: ${reason}` });
 
-if (!baseRef) runEverything("no base ref given");
+if (!baseRef) runEverything('no base ref given');
 
-const nameOnly = spawnSync(
-  "git",
-  ["diff", "--name-only", `${baseRef}...HEAD`],
-  {
-    encoding: "utf8",
-  },
-);
+const nameOnly = spawnSync('git', ['diff', '--name-only', `${baseRef}...HEAD`], {
+	encoding: 'utf8',
+});
 if (nameOnly.status !== 0) {
-  runEverything(
-    `git diff against ${baseRef} failed (${(nameOnly.stderr || "").trim()})`,
-  );
+	runEverything(`git diff against ${baseRef} failed (${(nameOnly.stderr || '').trim()})`);
 }
 
 const changed = nameOnly.stdout
-  .split("\n")
-  .map((line) => line.trim())
-  .filter(Boolean);
+	.split('\n')
+	.map((line) => line.trim())
+	.filter(Boolean);
 
-if (changed.length === 0) runEverything("no changed files detected");
+if (changed.length === 0) runEverything('no changed files detected');
 
 /* ---------- 1. comment/markdown-only? ---------- */
 
@@ -79,59 +73,55 @@ if (changed.length === 0) runEverything("no changed files detected");
  * unchanged lines whose execution they can alter, so they run the full suite.
  */
 function isCommentOnlyLine(content) {
-  // `//` comments the rest of the line, so nothing can follow it.
-  if (content.startsWith("//")) return true;
-  if (content.startsWith("/*")) {
-    const closed = content.lastIndexOf("*/");
-    if (closed === -1) return false;
-    // Closed: anything after the final `*/` is code.
-    return content.slice(closed + 2).trim() === "";
-  }
-  if (content.includes("*/")) return false;
-  return false;
+	// `//` comments the rest of the line, so nothing can follow it.
+	if (content.startsWith('//')) return true;
+	if (content.startsWith('/*')) {
+		const closed = content.lastIndexOf('*/');
+		if (closed === -1) return false;
+		// Closed: anything after the final `*/` is code.
+		return content.slice(closed + 2).trim() === '';
+	}
+	if (content.includes('*/')) return false;
+	return false;
 }
 const CODE_EXTENSIONS = /\.(ts|tsx|js|jsx|mjs|cjs)$/;
 const DOC_EXTENSIONS = /\.(md|mdx)$/;
 
 function isNonBehavioural() {
-  // Every file must be either documentation or a code file we can prove only
-  // changed in its comments.
-  if (
-    !changed.every(
-      (file) => DOC_EXTENSIONS.test(file) || CODE_EXTENSIONS.test(file),
-    )
-  ) {
-    return false;
-  }
-  const hunks = spawnSync("git", ["diff", "-U0", `${baseRef}...HEAD`, "--"], {
-    encoding: "utf8",
-  });
-  if (hunks.status !== 0) return false;
+	// Every file must be either documentation or a code file we can prove only
+	// changed in its comments.
+	if (!changed.every((file) => DOC_EXTENSIONS.test(file) || CODE_EXTENSIONS.test(file))) {
+		return false;
+	}
+	const hunks = spawnSync('git', ['diff', '-U0', `${baseRef}...HEAD`, '--'], {
+		encoding: 'utf8',
+	});
+	if (hunks.status !== 0) return false;
 
-  let file = "";
-  for (const line of hunks.stdout.split("\n")) {
-    if (line.startsWith("+++ b/")) {
-      file = line.slice(6).trim();
-      continue;
-    }
-    if (line.startsWith("--- ") || line.startsWith("+++ ")) continue;
-    if (!line.startsWith("+") && !line.startsWith("-")) continue;
-    // Markdown content is never executed.
-    if (DOC_EXTENSIONS.test(file)) continue;
-    const content = line.slice(1).trim();
-    if (content === "") continue;
-    if (!isCommentOnlyLine(content)) return false;
-  }
-  return true;
+	let file = '';
+	for (const line of hunks.stdout.split('\n')) {
+		if (line.startsWith('+++ b/')) {
+			file = line.slice(6).trim();
+			continue;
+		}
+		if (line.startsWith('--- ') || line.startsWith('+++ ')) continue;
+		if (!line.startsWith('+') && !line.startsWith('-')) continue;
+		// Markdown content is never executed.
+		if (DOC_EXTENSIONS.test(file)) continue;
+		const content = line.slice(1).trim();
+		if (content === '') continue;
+		if (!isCommentOnlyLine(content)) return false;
+	}
+	return true;
 }
 
 if (isNonBehavioural()) {
-  emit({
-    behavioural: false,
-    reason:
-      "comments and docs only — nothing executable changed, so deploy and E2E are skipped " +
-      `(${changed.length} file(s))`,
-  });
+	emit({
+		behavioural: false,
+		reason:
+			'comments and docs only — nothing executable changed, so deploy and E2E are skipped ' +
+			`(${changed.length} file(s))`,
+	});
 }
 
 /* ---------- 2. spec-only? ---------- */
@@ -143,20 +133,20 @@ if (isNonBehavioural()) {
 const E2E_SPEC = /^apps\/main\/e2e\/([A-Za-z0-9._-]+\.spec\.ts)$/;
 const specs = new Set();
 for (const file of changed) {
-  const match = E2E_SPEC.exec(file);
-  if (!match) runEverything(`${file} is not a spec file`);
-  const name = match[1];
-  // Cold-start specs belong to their own workflow; live specs never run here.
-  if (name.endsWith(".cold.spec.ts") || name.endsWith(".live.spec.ts")) {
-    runEverything(`${name} runs outside the default matrix`);
-  }
-  specs.add(name);
+	const match = E2E_SPEC.exec(file);
+	if (!match) runEverything(`${file} is not a spec file`);
+	const name = match[1];
+	// Cold-start specs belong to their own workflow; live specs never run here.
+	if (name.endsWith('.cold.spec.ts') || name.endsWith('.live.spec.ts')) {
+		runEverything(`${name} runs outside the default matrix`);
+	}
+	specs.add(name);
 }
 
-if (specs.size === 0) runEverything("no runnable specs in the diff");
+if (specs.size === 0) runEverything('no runnable specs in the diff');
 
 const list = [...specs].sort();
 emit({
-  onlySpecs: list.join(" "),
-  reason: `spec-only PR — narrowing to: ${list.join(", ")}`,
+	onlySpecs: list.join(' '),
+	reason: `spec-only PR — narrowing to: ${list.join(', ')}`,
 });

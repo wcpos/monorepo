@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -194,11 +194,15 @@ test('the E2E auth-state cache is shard- and lane-scoped', () => {
 	// ONLY ciphertext may be cached. Pin that no step caches the plaintext dir
 	// and that both crypto steps are secret-gated.
 	assert.ok(
-		!steps.some((candidate) => candidate.with && String(candidate.with.path ?? '').includes('.auth-state')),
+		!steps.some(
+			(candidate) => candidate.with && String(candidate.with.path ?? '').includes('.auth-state')
+		),
 		'a cache step points at the PLAINTEXT auth state — credentials would reach the Actions cache'
 	);
 	const decrypt = steps.find((candidate) => /Decrypt cached auth state/.test(candidate.name ?? ''));
-	const encrypt = steps.find((candidate) => /Encrypt auth state for cache/.test(candidate.name ?? ''));
+	const encrypt = steps.find((candidate) =>
+		/Encrypt auth state for cache/.test(candidate.name ?? '')
+	);
 	assert.ok(decrypt && encrypt, 'auth-state crypto steps missing');
 	for (const crypto of [decrypt, encrypt]) {
 		assert.match(crypto.if ?? '', /E2E_AUTH_CACHE_KEY/);
@@ -259,7 +263,10 @@ test('E2E declares store-health probes and a bounded worker count', () => {
 	assert.match(postFailure.run, /after the tests failed/);
 
 	// Workers per shard multiply against shard count and concurrent runs.
-	const config = readFileSync(new URL('../apps/main/playwright.config.ts', import.meta.url), 'utf8');
+	const config = readFileSync(
+		new URL('../apps/main/playwright.config.ts', import.meta.url),
+		'utf8'
+	);
 	const workers = /workers:[\s\S]{0,200}?process\.env\.CI\s*\n?\s*\?\s*(\d+)/.exec(config);
 	assert.ok(workers, 'could not read the CI worker count from playwright.config.ts');
 	assert.ok(
@@ -338,11 +345,7 @@ exit 64
 			/plugin boom/
 		);
 
-		const summaryStep = findStep(
-			workflow,
-			'unit-tests',
-			'📊 Generate test failure summary'
-		);
+		const summaryStep = findStep(workflow, 'unit-tests', '📊 Generate test failure summary');
 		const isolatedSummaryScript = summaryStep.run.replaceAll(
 			'/tmp/test-summary',
 			path.join(workspace, 'test-summary')
@@ -368,11 +371,10 @@ exit 64
 test('coverage baseline metadata uses the measured commit date', () => {
 	const baseline = JSON.parse(readFileSync(path.join(ROOT, 'coverage-baseline.json'), 'utf8'));
 	const measuredCommit = 'd62440926';
-	const commitDate = spawnSync(
-		'git',
-		['show', '-s', '--format=%as', measuredCommit],
-		{ cwd: ROOT, encoding: 'utf8' }
-	).stdout.trim();
+	const commitDate = spawnSync('git', ['show', '-s', '--format=%as', measuredCommit], {
+		cwd: ROOT,
+		encoding: 'utf8',
+	}).stdout.trim();
 
 	assert.equal(baseline._updated, commitDate);
 	for (const packageName of ['order-math', 'sync-core', 'sync-engine']) {
@@ -428,8 +430,9 @@ test('deploy.yml names BOTH lane stores for the E2E job', () => {
 	// opens — but it also means a lane that forgets E2E_STORE_URL_FREE loses its
 	// free coverage in silence. That is exactly how dev-free coverage vanished
 	// for weeks. This pin is where that risk is closed.
-	const runStep = readWorkflow('deploy.yml')
-		.jobs.e2e.steps.find((step) => step.env && 'E2E_STORE_URL_PRO' in step.env);
+	const runStep = readWorkflow('deploy.yml').jobs.e2e.steps.find(
+		(step) => step.env && 'E2E_STORE_URL_PRO' in step.env
+	);
 
 	assert.ok(runStep, 'deploy.yml e2e job no longer names a pro store');
 
@@ -450,10 +453,10 @@ test('deploy.yml names BOTH lane stores for the E2E job', () => {
 		"(inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next')))";
 	assert.equal(
 		runStep.env.E2E_STORE_URL_PRO,
-		"${{ " + nextLane + " && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}"
+		'${{ ' + nextLane + " && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}"
 	);
 	assert.equal(
 		runStep.env.E2E_STORE_URL_FREE,
-		"${{ " + nextLane + " && 'https://dev-next.wcpos.com' || 'https://dev-free.wcpos.com' }}"
+		'${{ ' + nextLane + " && 'https://dev-next.wcpos.com' || 'https://dev-free.wcpos.com' }}"
 	);
 });

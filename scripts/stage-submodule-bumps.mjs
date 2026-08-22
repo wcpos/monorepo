@@ -24,7 +24,14 @@ export const SUBMODULE_PATHS = ['apps/electron', 'apps/web'];
 
 function git(args, { cwd, allowFailure = false } = {}) {
 	try {
-		return { ok: true, out: execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim() };
+		return {
+			ok: true,
+			out: execFileSync('git', args, {
+				cwd,
+				encoding: 'utf8',
+				stdio: ['ignore', 'pipe', 'pipe'],
+			}).trim(),
+		};
 	} catch (error) {
 		if (!allowFailure) throw error;
 		return { ok: false, out: '', status: error.status };
@@ -34,12 +41,19 @@ function git(args, { cwd, allowFailure = false } = {}) {
 function isFastForward(subDir, from, to) {
 	// exit 0 = ancestor, exit 1 = not an ancestor, anything else = commit not
 	// present in the submodule clone (treat as "cannot prove it's safe").
-	const result = git(['-C', subDir, 'merge-base', '--is-ancestor', from, to], { allowFailure: true });
+	const result = git(['-C', subDir, 'merge-base', '--is-ancestor', from, to], {
+		allowFailure: true,
+	});
 	if (result.ok) return 'yes';
 	return result.status === 1 ? 'no' : 'unknown';
 }
 
-export function syncSubmoduleGitlinks({ repoRoot, paths = SUBMODULE_PATHS, log = console.log, warn = console.error } = {}) {
+export function syncSubmoduleGitlinks({
+	repoRoot,
+	paths = SUBMODULE_PATHS,
+	log = console.log,
+	warn = console.error,
+} = {}) {
 	const results = [];
 
 	for (const path of paths) {
@@ -51,8 +65,14 @@ export function syncSubmoduleGitlinks({ repoRoot, paths = SUBMODULE_PATHS, log =
 			continue;
 		}
 
-		const committed = git(['rev-parse', '--verify', '--quiet', `HEAD:${path}`], { cwd: repoRoot, allowFailure: true });
-		const staged = git(['rev-parse', '--verify', '--quiet', `:${path}`], { cwd: repoRoot, allowFailure: true });
+		const committed = git(['rev-parse', '--verify', '--quiet', `HEAD:${path}`], {
+			cwd: repoRoot,
+			allowFailure: true,
+		});
+		const staged = git(['rev-parse', '--verify', '--quiet', `:${path}`], {
+			cwd: repoRoot,
+			allowFailure: true,
+		});
 		const checkout = git(['-C', subDir, 'rev-parse', 'HEAD'], { cwd: repoRoot }).out;
 
 		if (committed.ok && (!staged.ok || staged.out !== committed.out)) {
@@ -63,7 +83,9 @@ export function syncSubmoduleGitlinks({ repoRoot, paths = SUBMODULE_PATHS, log =
 		}
 
 		if (!committed.ok) {
-			warn(`${path}: no committed gitlink for this path; stage it explicitly with \`git add ${path}\` if intended`);
+			warn(
+				`${path}: no committed gitlink for this path; stage it explicitly with \`git add ${path}\` if intended`
+			);
 			record('needs-explicit-stage');
 			continue;
 		}
@@ -76,7 +98,9 @@ export function syncSubmoduleGitlinks({ repoRoot, paths = SUBMODULE_PATHS, log =
 		const fastForward = isFastForward(subDir, committed.out, checkout);
 		if (fastForward === 'yes') {
 			git(['add', path], { cwd: repoRoot });
-			log(`${path}: advanced gitlink ${committed.out.slice(0, 12)} -> ${checkout.slice(0, 12)} (fast-forward)`);
+			log(
+				`${path}: advanced gitlink ${committed.out.slice(0, 12)} -> ${checkout.slice(0, 12)} (fast-forward)`
+			);
 			record('staged');
 			continue;
 		}

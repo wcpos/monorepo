@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 
 import {
-  ALLOWED_DUPLICATES,
-  parseImporters,
-  findDuplicateResolutions,
-  formatDuplicates,
+	ALLOWED_DUPLICATES,
+	findDuplicateResolutions,
+	formatDuplicates,
+	parseImporters,
 } from './check-dep-duplicates.mjs';
 
 const lockfile = `lockfileVersion: '9.0'
@@ -64,97 +64,104 @@ packages:
 `;
 
 test('parseImporters extracts resolved versions with peer suffixes stripped', () => {
-  const importers = parseImporters(lockfile);
-  assert.deepEqual(importers['apps/main']['@shopify/flash-list'], {
-    specifier: '2.0.2',
-    version: '2.0.2',
-  });
-  assert.deepEqual(importers['packages/components']['@shopify/flash-list'], {
-    specifier: '^2.2.2',
-    version: '2.3.2',
-  });
+	const importers = parseImporters(lockfile);
+	assert.deepEqual(importers['apps/main']['@shopify/flash-list'], {
+		specifier: '2.0.2',
+		version: '2.0.2',
+	});
+	assert.deepEqual(importers['packages/components']['@shopify/flash-list'], {
+		specifier: '^2.2.2',
+		version: '2.3.2',
+	});
 });
 
 test('parseImporters skips workspace link: resolutions', () => {
-  const importers = parseImporters(lockfile);
-  assert.equal(importers['apps/main']['@wcpos/components'], undefined);
+	const importers = parseImporters(lockfile);
+	assert.equal(importers['apps/main']['@wcpos/components'], undefined);
 });
 
 test('parseImporters keeps npm: alias target versions', () => {
-  const importers = parseImporters(lockfile);
-  assert.deepEqual(importers['apps/main'].uniwind, {
-    specifier: 'npm:uniwind-pro@1.3.0',
-    version: 'uniwind-pro@1.3.0',
-  });
+	const importers = parseImporters(lockfile);
+	assert.deepEqual(importers['apps/main'].uniwind, {
+		specifier: 'npm:uniwind-pro@1.3.0',
+		version: 'uniwind-pro@1.3.0',
+	});
 });
 
 test('parseImporters ignores sections outside importers', () => {
-  const importers = parseImporters(lockfile);
-  assert.equal('@shopify/flash-list@2.0.2' in importers, false);
+	const importers = parseImporters(lockfile);
+	assert.equal('@shopify/flash-list@2.0.2' in importers, false);
 });
 
 test('findDuplicateResolutions flags deps resolving to more than one version', () => {
-  const duplicates = findDuplicateResolutions(parseImporters(lockfile), new Map());
-  assert.deepEqual(
-    duplicates.map(({ name }) => name),
-    ['@shopify/flash-list', 'date-fns']
-  );
-  const flashList = duplicates[0];
-  assert.deepEqual(flashList.versions['2.0.2'], [{ importer: 'apps/main', specifier: '2.0.2' }]);
-  assert.deepEqual(flashList.versions['2.3.2'], [
-    { importer: 'packages/components', specifier: '^2.2.2' },
-  ]);
+	const duplicates = findDuplicateResolutions(parseImporters(lockfile), new Map());
+	assert.deepEqual(
+		duplicates.map(({ name }) => name),
+		['@shopify/flash-list', 'date-fns']
+	);
+	const flashList = duplicates[0];
+	assert.deepEqual(flashList.versions['2.0.2'], [{ importer: 'apps/main', specifier: '2.0.2' }]);
+	assert.deepEqual(flashList.versions['2.3.2'], [
+		{ importer: 'packages/components', specifier: '^2.2.2' },
+	]);
 });
 
 test('findDuplicateResolutions ignores specifier-only differences', () => {
-  // typescript: ^5.9.3 vs 5.9.3 both resolve to 5.9.3 — not a duplicate
-  const duplicates = findDuplicateResolutions(parseImporters(lockfile), new Map());
-  assert.equal(duplicates.some(({ name }) => name === 'typescript'), false);
+	// typescript: ^5.9.3 vs 5.9.3 both resolve to 5.9.3 — not a duplicate
+	const duplicates = findDuplicateResolutions(parseImporters(lockfile), new Map());
+	assert.equal(
+		duplicates.some(({ name }) => name === 'typescript'),
+		false
+	);
 });
 
 test('findDuplicateResolutions respects the allowlist', () => {
-  const allowed = new Map([['@shopify/flash-list', 'testing']]);
-  const duplicates = findDuplicateResolutions(parseImporters(lockfile), allowed);
-  assert.deepEqual(
-    duplicates.map(({ name }) => name),
-    ['date-fns']
-  );
+	const allowed = new Map([['@shopify/flash-list', 'testing']]);
+	const duplicates = findDuplicateResolutions(parseImporters(lockfile), allowed);
+	assert.deepEqual(
+		duplicates.map(({ name }) => name),
+		['date-fns']
+	);
 });
 
 test('default allowlist permits the intentional expo-constants split', () => {
-  const importers = {
-    'apps/main': {
-      'expo-constants': { specifier: '~56.0.18', version: '56.0.18' },
-    },
-    'packages/core': {
-      'expo-constants': { specifier: '~56.0.16', version: '56.0.21' },
-    },
-  };
+	const importers = {
+		'apps/main': {
+			'expo-constants': { specifier: '~56.0.18', version: '56.0.18' },
+		},
+		'packages/core': {
+			'expo-constants': { specifier: '~56.0.16', version: '56.0.21' },
+		},
+	};
 
-  assert.equal(ALLOWED_DUPLICATES.has('expo-constants'), true);
-  assert.deepEqual(findDuplicateResolutions(importers), []);
+	assert.equal(ALLOWED_DUPLICATES.has('expo-constants'), true);
+	assert.deepEqual(findDuplicateResolutions(importers), []);
 });
 
 test('formatDuplicates renders versions with their importers and specifiers', () => {
-  const duplicates = findDuplicateResolutions(parseImporters(lockfile), new Map());
-  const output = formatDuplicates(duplicates);
-  assert.match(output, /@shopify\/flash-list:/);
-  assert.match(output, /2\.0\.2 {2}<- apps\/main \(2\.0\.2\)/);
-  assert.match(output, /2\.3\.2 {2}<- packages\/components \(\^2\.2\.2\)/);
+	const duplicates = findDuplicateResolutions(parseImporters(lockfile), new Map());
+	const output = formatDuplicates(duplicates);
+	assert.match(output, /@shopify\/flash-list:/);
+	assert.match(output, /2\.0\.2 {2}<- apps\/main \(2\.0\.2\)/);
+	assert.match(output, /2\.3\.2 {2}<- packages\/components \(\^2\.2\.2\)/);
 });
 
 test('workspace resolves one react-native-reanimated version', () => {
-  const workspaces = JSON.parse(
-    execFileSync('pnpm', ['list', '-r', 'react-native-reanimated', '--depth', 'Infinity', '--json'], {
-      encoding: 'utf8',
-    })
-  );
-  const versions = new Set();
+	const workspaces = JSON.parse(
+		execFileSync(
+			'pnpm',
+			['list', '-r', 'react-native-reanimated', '--depth', 'Infinity', '--json'],
+			{
+				encoding: 'utf8',
+			}
+		)
+	);
+	const versions = new Set();
 
-  JSON.stringify(workspaces, (key, value) => {
-    if (key === 'react-native-reanimated' && value?.version) versions.add(value.version);
-    return value;
-  });
+	JSON.stringify(workspaces, (key, value) => {
+		if (key === 'react-native-reanimated' && value?.version) versions.add(value.version);
+		return value;
+	});
 
-  assert.deepEqual([...versions], ['4.5.1']);
+	assert.deepEqual([...versions], ['4.5.1']);
 });

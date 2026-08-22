@@ -1,8 +1,8 @@
-import { exposeWorkerRxStorage } from "rxdb-premium/plugins/storage-worker";
-import { getRxStorageOPFS } from "rxdb-premium/plugins/storage-opfs";
+import { exposeWorkerRxStorage } from 'rxdb-premium/plugins/storage-worker';
+import { getRxStorageOPFS } from 'rxdb-premium/plugins/storage-opfs';
 
-import { withTargetedOpfsRecovery } from "./opfs-targeted-recovery.mjs";
+import { withTargetedOpfsRecovery } from './opfs-targeted-recovery.mjs';
 
 exposeWorkerRxStorage({
-  storage: withTargetedOpfsRecovery(getRxStorageOPFS()),
+	storage: withTargetedOpfsRecovery(getRxStorageOPFS()),
 });
