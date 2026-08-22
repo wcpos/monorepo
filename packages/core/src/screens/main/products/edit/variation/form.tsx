@@ -16,7 +16,7 @@ import {
 import { HStack } from '@wcpos/components/hstack';
 import { ModalAction, ModalClose, ModalFooter, useModal } from '@wcpos/components/modal';
 import { VStack } from '@wcpos/components/vstack';
-import type { EngineRecord } from '@wcpos/query';
+import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -28,6 +28,7 @@ import { NumberInput } from '../../../components/number-input';
 import { ProductStatusSelect } from '../../../components/product/status-select';
 import { TaxClassSelect } from '../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../components/tax-status-radio-group';
+import { refreshVariationParent } from '../../../hooks/mutations/refresh-variation-parent';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { taxClassFromWire, taxClassToWire } from '../../../hooks/tax-class';
 
@@ -57,6 +58,7 @@ export function EditVariationForm({ variation }: Props) {
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
 	const { localPatch } = useLocalMutation();
+	const runtime = useQueryRuntime();
 	const { close } = useModal();
 	const variationData = variation.toMutableJSON().payload;
 
@@ -99,6 +101,16 @@ export function EditVariationForm({ variation }: Props) {
 				if (!patched?.document) {
 					throw new Error('Local patch failed');
 				}
+				if (patched.mutationId) {
+					// The parent's price range is recomputed from its children on every
+					// read, so a price edit here leaves the products grid rendering the
+					// old range until the parent is fetched again.
+					void refreshVariationParent(runtime.engine, {
+						document: variation,
+						changes: patched.changes,
+						mutationId: patched.mutationId,
+					});
+				}
 				const saved = variation.getLatest().payload;
 				mutationLogger.success(t('common.saved', { name: saved.name }), {
 					showToast: true,
@@ -123,7 +135,7 @@ export function EditVariationForm({ variation }: Props) {
 				setLoading(false);
 			}
 		},
-		[close, localPatch, variation, t]
+		[close, localPatch, runtime, variation, t]
 	);
 
 	/**
