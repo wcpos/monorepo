@@ -254,7 +254,7 @@ export async function patchAndEnqueueEngineResident(input: {
 	recordId: string;
 	changes: Record<string, unknown>;
 	initial?: ScopedEngineResident;
-}): Promise<{ resident: EngineResident; mutationId: string }> {
+}): Promise<EngineResident> {
 	for (let attempt = 0; attempt < 2; attempt += 1) {
 		// The rollback guard's baseline is the CAPTURED scope's own id, not a
 		// second `status()` read. The resident, the barcode carriers and the
@@ -279,9 +279,8 @@ export async function patchAndEnqueueEngineResident(input: {
 		);
 
 		let writeError: unknown;
-		let receipt: Awaited<ReturnType<QueryManager['engine']['write']>> | undefined;
 		try {
-			receipt = await input.manager.engine.write({
+			await input.manager.engine.write({
 				collection: input.collection,
 				// Creation funnels insert the resident and enqueue the create first.
 				// Later local edits are updates; the write plane folds create + update
@@ -306,11 +305,11 @@ export async function patchAndEnqueueEngineResident(input: {
 			continue;
 		}
 
-		if (writeError || !receipt) {
+		if (writeError) {
 			await resident.incrementalModify(() => previousResident);
-			throw writeError ?? new Error(`Engine write for "${input.recordId}" returned no receipt`);
+			throw writeError;
 		}
-		return { resident, mutationId: receipt.mutationId };
+		return resident;
 	}
 	throw new Error(`Unable to patch engine resident "${input.recordId}"`);
 }
@@ -392,7 +391,7 @@ export const useLocalMutation = () => {
 
 				const patchEntries = Object.entries(patchData).filter(([, value]) => value !== undefined);
 				if (patchEntries.length === 0) {
-					return { changes: {}, document, mutationId: undefined };
+					return { changes: {}, document };
 				}
 
 				const recordId = engineCollection ? documentRecordId(document) : null;
@@ -439,27 +438,20 @@ export const useLocalMutation = () => {
 					return {
 						changes,
 						document: patched as TDocument,
-						mutationId: undefined,
 					};
 				}
 
 				if (engineCollection) {
 					const syncChanges = syncableChanges(engineCollection, changes);
 					let patched: EngineResident;
-					// The receipt of the enqueued write, surfaced so a caller can wait for
-					// the server's verdict on THIS mutation (`awaitWriteOutcome`). Absent
-					// when nothing was enqueued — an adapter-derived-only change.
-					let mutationId: string | undefined;
 					if (Object.keys(syncChanges).length > 0) {
-						const enqueued = await patchAndEnqueueEngineResident({
+						patched = await patchAndEnqueueEngineResident({
 							manager,
 							collection: engineCollection,
 							recordId: recordId!,
 							changes: syncChanges,
 							initial: scopedEngineResident!,
 						});
-						patched = enqueued.resident;
-						mutationId = enqueued.mutationId;
 					} else {
 						patched = await applyEngineResidentChanges(
 							scopedEngineResident!.resident,
@@ -471,13 +463,12 @@ export const useLocalMutation = () => {
 					return {
 						changes,
 						document: patched as TDocument,
-						mutationId,
 					};
 				}
 
 				const latest = document.getLatest() as unknown as EngineResident;
 				const doc = await patchLocalResident(latest, changes);
-				return { changes, document: doc as TDocument, mutationId: undefined };
+				return { changes, document: doc as TDocument };
 			} catch (error) {
 				const err = error as Record<string, unknown>;
 				let message = getErrorMessage(error);

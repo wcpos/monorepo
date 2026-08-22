@@ -11,7 +11,6 @@ import {
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { refreshVariationParent } from './refresh-variation-parent';
 import {
 	documentRecordId,
 	findEngineResident,
@@ -105,24 +104,13 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 			const result = await localPatch({ document, data: data as never });
 			if (result?.document) {
 				handleSuccess(result.document as unknown as Record<string, unknown>);
-				if (collectionName === 'variations' && result.mutationId) {
-					// A variable parent renders a price range computed from its children at
-					// serve time, so a child price edit leaves the parent's row stale with
-					// nothing to pull it. Detached on purpose: the refresh waits on the
-					// server's verdict, which the caller must not be held for.
-					void refreshVariationParent(runtime.engine, {
-						document,
-						changes: result.changes,
-						mutationId: result.mutationId,
-					});
-				}
 				return result.document;
 			}
 			handleError(new Error(t('common.not_updated', { title: collectionLabel })), {
 				documentId: documentRecordId(document),
 			});
 		},
-		[collectionLabel, collectionName, handleError, handleSuccess, localPatch, runtime, t]
+		[collectionLabel, handleError, handleSuccess, localPatch, t]
 	);
 
 	const create = React.useCallback(
