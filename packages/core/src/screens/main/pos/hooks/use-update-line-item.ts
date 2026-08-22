@@ -204,73 +204,78 @@ export const useUpdateLineItem = () => {
 	 */
 	const splitLineItem = React.useCallback(
 		async (uuid: string) => {
-			const order = getCurrentOrderRecord().getLatest();
-			const lineItemIndex = (order.payload.line_items ?? []).findIndex(
-				(item) => wooMetaCarrier.lineUuid(item) === uuid
-			);
+			const capturedOrder = getCurrentOrderRecord();
+			const recordId = documentRecordId(capturedOrder.getLatest());
+			if (!recordId) throw new Error('Order is missing its uuid');
+			return enqueueOrderMutation(recordId, async () => {
+				const order = capturedOrder.getLatest();
+				const lineItemIndex = (order.payload.line_items ?? []).findIndex(
+					(item) => wooMetaCarrier.lineUuid(item) === uuid
+				);
 
-			if (lineItemIndex === -1) {
-				// Unreachable through the UI (the Split link only renders on an existing
-				// line) — an invariant break, so log with a code rather than toasting.
-				reportCartInvariant(cartLogger, 'Split targeted a line item that is not in the cart', {
-					uuid,
-					orderId: order.payload.id,
-				});
-				return;
-			}
+				if (lineItemIndex === -1) {
+					// Unreachable through the UI (the Split link only renders on an existing
+					// line) — an invariant break, so log with a code rather than toasting.
+					reportCartInvariant(cartLogger, 'Split targeted a line item that is not in the cart', {
+						uuid,
+						orderId: order.payload.id,
+					});
+					return;
+				}
 
-			const lineItemToSplit = (order.payload.line_items ?? [])[lineItemIndex];
+				const lineItemToSplit = (order.payload.line_items ?? [])[lineItemIndex];
 
-			if ((lineItemToSplit?.quantity ?? 0) <= 1) {
-				// Unreachable through the UI (Split only renders when quantity > 1).
-				reportCartInvariant(cartLogger, 'Split requires a line item quantity greater than 1', {
-					uuid,
-					quantity: lineItemToSplit?.quantity ?? 0,
-					orderId: order.payload.id,
-				});
-				return;
-			}
+				if ((lineItemToSplit?.quantity ?? 0) <= 1) {
+					// Unreachable through the UI (Split only renders when quantity > 1).
+					reportCartInvariant(cartLogger, 'Split requires a line item quantity greater than 1', {
+						uuid,
+						quantity: lineItemToSplit?.quantity ?? 0,
+						orderId: order.payload.id,
+					});
+					return;
+				}
 
-			const lineItemToCopy = calculateLineItemTaxesAndTotals({ ...lineItemToSplit, quantity: 1 });
-			const quantity = Math.floor(lineItemToSplit?.quantity ?? 0);
-			const rawRemainder = (lineItemToSplit?.quantity ?? 0) - quantity;
-			const remainder = parseFloat(rawRemainder.toFixed(6));
-			const newLineItems = [{ ...lineItemToCopy }];
-			unset(lineItemToCopy, 'id'); // remove id so it is treated as a new item
+				const lineItemToCopy = calculateLineItemTaxesAndTotals({ ...lineItemToSplit, quantity: 1 });
+				const quantity = Math.floor(lineItemToSplit?.quantity ?? 0);
+				const rawRemainder = (lineItemToSplit?.quantity ?? 0) - quantity;
+				const remainder = parseFloat(rawRemainder.toFixed(6));
+				const newLineItems = [{ ...lineItemToCopy }];
+				unset(lineItemToCopy, 'id'); // remove id so it is treated as a new item
 
-			for (let i = 1; i < quantity; i++) {
-				const newItem = {
-					...lineItemToCopy,
-					meta_data: (lineItemToCopy.meta_data ?? []).map((meta) =>
-						meta.key === POS_META_KEYS.lineUuid ? { ...meta, value: uuidv4() } : meta
-					),
-				};
-				newLineItems.push(newItem);
-			}
+				for (let i = 1; i < quantity; i++) {
+					const newItem = {
+						...lineItemToCopy,
+						meta_data: (lineItemToCopy.meta_data ?? []).map((meta) =>
+							meta.key === POS_META_KEYS.lineUuid ? { ...meta, value: uuidv4() } : meta
+						),
+					};
+					newLineItems.push(newItem);
+				}
 
-			if (remainder > 0) {
-				const remainderLineItem = calculateLineItemTaxesAndTotals({
-					...lineItemToCopy,
-					quantity: remainder,
-				});
-				const newItem = {
-					...remainderLineItem,
-					quantity: remainder,
-					meta_data: (remainderLineItem.meta_data ?? []).map((meta) =>
-						meta.key === POS_META_KEYS.lineUuid ? { ...meta, value: uuidv4() } : meta
-					),
-				};
-				newLineItems.push(newItem);
-			}
+				if (remainder > 0) {
+					const remainderLineItem = calculateLineItemTaxesAndTotals({
+						...lineItemToCopy,
+						quantity: remainder,
+					});
+					const newItem = {
+						...remainderLineItem,
+						quantity: remainder,
+						meta_data: (remainderLineItem.meta_data ?? []).map((meta) =>
+							meta.key === POS_META_KEYS.lineUuid ? { ...meta, value: uuidv4() } : meta
+						),
+					};
+					newLineItems.push(newItem);
+				}
 
-			// Replace the original item with the new items in the order
-			const updatedLineItems = [
-				...(order.payload.line_items ?? []).slice(0, lineItemIndex),
-				...newLineItems,
-				...(order.payload.line_items ?? []).slice(lineItemIndex + 1),
-			];
+				// Replace the original item with the new items in the order
+				const updatedLineItems = [
+					...(order.payload.line_items ?? []).slice(0, lineItemIndex),
+					...newLineItems,
+					...(order.payload.line_items ?? []).slice(lineItemIndex + 1),
+				];
 
-			return localPatch({ document: order, data: { line_items: updatedLineItems } });
+				return localPatch({ document: order, data: { line_items: updatedLineItems } });
+			});
 		},
 		[calculateLineItemTaxesAndTotals, getCurrentOrderRecord, localPatch]
 	);
