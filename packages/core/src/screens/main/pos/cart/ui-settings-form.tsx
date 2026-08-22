@@ -95,7 +95,7 @@ export function UISettingsForm() {
 						name="quickDiscounts"
 						render={({ field }) => <FormInput label={getUILabel('quickDiscounts')} {...field} />}
 					/>
-					<UISettingsColumnsForm columns={formData.columns} getUILabel={getUILabel} />
+					<UISettingsColumnsForm getUILabel={getUILabel} />
 				</VStack>
 			</Form>
 		</VStack>

@@ -53,7 +53,7 @@ export function UISettingsForm() {
 	return (
 		<Form {...form}>
 			<VStack>
-				<UISettingsColumnsForm columns={formData.columns} getUILabel={getUILabel} />
+				<UISettingsColumnsForm getUILabel={getUILabel} />
 			</VStack>
 		</Form>
 	);

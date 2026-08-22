@@ -15,7 +15,7 @@ jest.mock('@wcpos/components/form', () => {
 	// `Form` is react-hook-form's FormProvider (packages/components/src/form/index.tsx).
 	// The columns renderer reaches the field array through that context, so the double
 	// has to provide the real thing rather than pass children through.
-	const { FormProvider } = require('react-hook-form');
+	const { FormProvider } = jest.requireActual('react-hook-form');
 	return { Form: FormProvider, useFormChangeHandler: jest.fn() };
 });
 jest.mock('@wcpos/components/vstack', () => ({
@@ -28,7 +28,7 @@ jest.mock('@wcpos/query', () => ({
 	) => selector(document.get()),
 }));
 jest.mock('../components/ui-settings', () => {
-	const { useFieldArray, useFormContext } = require('react-hook-form');
+	const { useFieldArray, useFormContext } = jest.requireActual('react-hook-form');
 	return {
 		columnsFormSchema: { shape: {} },
 		/**

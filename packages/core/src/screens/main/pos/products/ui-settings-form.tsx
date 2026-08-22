@@ -250,7 +250,7 @@ export function UISettingsForm() {
 							</View>
 						</VStack>
 					) : (
-						<UISettingsColumnsForm columns={formData.columns} getUILabel={getUILabel} />
+						<UISettingsColumnsForm getUILabel={getUILabel} />
 					)}
 					<View className="gap-1 px-1">
 						<HStack className="items-center justify-between">
