@@ -10,6 +10,7 @@ import {
 import { AppInfo } from '@wcpos/utils/app-info';
 import { formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { toRestRouteUrl } from '@wcpos/utils/rest-transport';
 
 import { evaluateClockSkew } from './clock-skew';
@@ -22,6 +23,28 @@ import {
 
 const engineLogger = getLogger(['wcpos', 'sync', 'engine']);
 const envelopeTransportByFetcher = new WeakMap<EngineFetcher, ResponseEnvelopeTransportState>();
+// Six consecutive 429s approximates all lanes being rejected across multiple
+// ticks, beyond the automatic-backoff regime that already handles brief bursts.
+const PERSISTENT_RATE_LIMIT_THRESHOLD = 6;
+let consecutive429s = 0;
+let rateLimitWarningLatched = false;
+
+function observeResponseStatus(status: number): void {
+	if (status !== 429) {
+		consecutive429s = 0;
+		rateLimitWarningLatched = false;
+		return;
+	}
+	consecutive429s += 1;
+	if (consecutive429s === PERSISTENT_RATE_LIMIT_THRESHOLD && !rateLimitWarningLatched) {
+		rateLimitWarningLatched = true;
+		engineLogger.warn('Host persistently rate-limited sync requests', {
+			code: ERROR_CODES.HOST_RATE_LIMITED,
+			showToast: true,
+			context: { consecutive429s },
+		});
+	}
+}
 
 export type EngineFetcherAuth = {
 	credentials: { getLatest: () => { access_token?: string } };
@@ -220,6 +243,7 @@ export function createEngineFetcher(input: {
 				});
 				throw error;
 			}
+			observeResponseStatus(response.status);
 
 			const atMs = now();
 			const durationMs = atMs - startedAtMs;

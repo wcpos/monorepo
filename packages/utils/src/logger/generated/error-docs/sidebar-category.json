@@ -125,7 +125,10 @@
 				"error-codes/HOST101",
 				"error-codes/HOST111",
 				"error-codes/HOST121",
-				"error-codes/HOST131"
+				"error-codes/HOST131",
+				"error-codes/HOST141",
+				"error-codes/HOST151",
+				"error-codes/HOST161"
 			]
 		}
 	]

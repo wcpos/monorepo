@@ -183,6 +183,25 @@ interface HeaderEchoResult {
 	params: Record<string, boolean>;
 }
 
+function parseHeaderEcho(data: unknown): HeaderEchoResult | null {
+	const candidate = data as
+		| (HeaderEchoResult & {
+				v?: unknown;
+				headers: Record<string, { received?: unknown }>;
+		  })
+		| null;
+	return candidate &&
+		candidate.v === 1 &&
+		typeof candidate.headers === 'object' &&
+		candidate.headers !== null &&
+		typeof candidate.params === 'object' &&
+		candidate.params !== null &&
+		typeof candidate.headers.authorization?.received === 'boolean' &&
+		typeof candidate.params.authorization === 'boolean'
+		? (candidate as HeaderEchoResult)
+		: null;
+}
+
 interface EchoAnsweredVerdict {
 	kind: 'answered';
 	status: number;
@@ -262,30 +281,20 @@ async function probeHeaderEcho(
 		};
 		if (!result.response.ok) return answered;
 
-		const data = result.data as
-			(HeaderEchoResult & { v?: unknown; headers: Record<string, { received?: unknown }> }) | null;
+		const echo = parseHeaderEcho(result.data);
 		// The guard must reject not just non-probe bodies but INCOMPLETE probe
 		// bodies: `{ v: 1, headers: {}, params: {} }` would otherwise read as
 		// "both channels blocked" and skip the legacy fallback. Both
 		// channel-deciding fields must be present as booleans, or the probe is
 		// treated as unavailable.
-		if (
-			!data ||
-			data.v !== 1 ||
-			typeof data.headers !== 'object' ||
-			data.headers === null ||
-			typeof data.params !== 'object' ||
-			data.params === null ||
-			typeof data.headers.authorization?.received !== 'boolean' ||
-			typeof data.params.authorization !== 'boolean'
-		) {
+		if (!echo) {
 			// Answered, but not by the echo route (cache garbage, WP Hide homepage,
 			// an answered verdict keeps this distinct from
 			// network-dead (null) so the caller still reaches the legacy ladder.
 			return answered;
 		}
 
-		return data as HeaderEchoResult;
+		return echo;
 	} catch {
 		return null;
 	}
@@ -376,6 +385,76 @@ function pingProbeUrl(wpApiRoot: string): string {
 	const base = wpApiRoot.endsWith('/') ? wpApiRoot : `${wpApiRoot}/`;
 	const querySeparator = wpApiRoot.includes('rest_route=') ? '&' : '?';
 	return `${base}wcpos/v2/ping${querySeparator}wcpos=1`;
+}
+
+export async function runConnectCompatibilityProbes(input: {
+	pathBase: string;
+	pathRoot: string;
+	useRestRouteParam: boolean;
+}): Promise<{ blocking: ErrorCode | null; warnings: ErrorCode[] }> {
+	const resolvedUrl = (pathUrl: string) =>
+		input.useRestRouteParam ? toRestRouteUrl(pathUrl, input.pathRoot) : pathUrl;
+	const ping = new URL(`${input.pathBase}ping`);
+	ping.searchParams.set('wcpos', '1');
+	const barePingUrl = resolvedUrl(ping.toString());
+	const nastyPing = new URL(barePingUrl);
+	nastyPing.searchParams.set('s', 'Ünion select café');
+	const bare = await fetchWithProbeTimeout(barePingUrl, { method: 'GET' });
+	const nasty = await fetchWithProbeTimeout(nastyPing.toString(), { method: 'GET' });
+	const warnings: ErrorCode[] = [];
+	if (bare !== null && bare.status !== 403 && nasty?.status === 403) {
+		const code = ERROR_CODES.SEARCH_BLOCKED_BY_WAF;
+		warnings.push(code);
+		appLogger.warn('Host security filter blocks ordinary search terms', {
+			code,
+			showToast: true,
+			context: { classification: ERROR_CATALOGUE[code].symbol },
+		});
+	}
+
+	const echo = new URL(`${input.pathBase}echo`);
+	echo.searchParams.set('wcpos', '1');
+	echo.searchParams.set('store_id', '1');
+	const echoUrl = resolvedUrl(echo.toString());
+	const requestEcho = async (token: string): Promise<HeaderEchoResult | null> => {
+		const result = await fetchJsonWithTimeout(
+			echoUrl,
+			{ method: 'GET', headers: { Authorization: `Bearer ${token}` } },
+			AUTH_PROBE_TIMEOUT_MS
+		);
+		return result ? parseHeaderEcho(result.data) : null;
+	};
+	// Two DIFFERENT lengths by construction: a replaying cache answers the
+	// second probe with the first probe's reported length.
+	const FIRST_PROBE_TOKEN = 'cache.probe.12345';
+	const SECOND_PROBE_TOKEN = 'cache.probe.second.token.1234';
+	// The echo reports the whole header value, prefix included (verified live:
+	// a 17-char token reports 24). Derived, never hardcoded — a changed literal
+	// must not silently turn this comparison into a constant.
+	const secondSentLength = `Bearer ${SECOND_PROBE_TOKEN}`.length;
+	const first = await requestEcho(FIRST_PROBE_TOKEN);
+	const second = await requestEcho(SECOND_PROBE_TOKEN);
+	const firstReported = first?.headers.authorization?.length;
+	const secondReported = second?.headers.authorization?.length;
+	if (
+		first &&
+		second &&
+		// Load-bearing: a host that STRIPS Authorization reports {received:false,
+		// length:0} on both probes — identical, and unequal to what was sent.
+		// Without this guard every header-stripping host (the commonest hostile
+		// profile) would be told its cache leaks data between cashiers. A
+		// stripped header is AUTH421's condition, not evidence of replay.
+		first.headers.authorization?.received === true &&
+		typeof firstReported === 'number' &&
+		secondReported === firstReported &&
+		secondReported !== secondSentLength
+	) {
+		const code = ERROR_CODES.CACHE_SHARED_REPLAY;
+		appLogger.error('Shared cache replay detected', { code, showToast: true });
+		return { blocking: code, warnings };
+	}
+
+	return { blocking: null, warnings };
 }
 
 async function finishHostBlock(
