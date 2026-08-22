@@ -46,9 +46,20 @@ export function UrlInput() {
 					<ButtonText>{t('auth.connect')}</ButtonText>
 				</Button>
 			</HStack>
-			{error ? <Text className="text-destructive text-sm">{error}</Text> : null}
+			{error ? (
+				<Text testID="connect-error-message" className="text-destructive text-sm">
+					{error}
+				</Text>
+			) : null}
 			{errorCode ? (
-				<DocsLink testID="connect-error-docs-link" href={getErrorCodeDocURL(errorCode)}>
+				// The code rides the testID: DocsLink renders a role="link" div (RNW
+				// Pressable), so there is no href in the DOM for a test to read, and
+				// the message itself is translated. This is the value-bearing
+				// referent for "which condition surfaced".
+				<DocsLink
+					testID={`connect-error-docs-link-${errorCode}`}
+					href={getErrorCodeDocURL(errorCode)}
+				>
 					{t('common.learn_more', { _tags: 'core' })}
 				</DocsLink>
 			) : null}

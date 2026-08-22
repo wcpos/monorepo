@@ -73,12 +73,13 @@ async function connectStore(page: Page, storeUrl: string): Promise<void> {
 }
 
 async function expectBlockingError(page: Page, code: string): Promise<void> {
-	const docsLink = page.getByTestId('connect-error-docs-link');
-	await expect(docsLink).toBeVisible({ timeout: 60_000 });
-	await expect(docsLink).toHaveAttribute('href', new RegExp(`/error-codes/${code}$`));
-	// The translated Text has no testID. Anchor its structural assertion to the
-	// coded docs-link testID rather than selecting localized copy.
-	await expect(docsLink.locator('xpath=preceding-sibling::*[1]')).toBeVisible();
+	// The code rides the testID: DocsLink renders as a role="link" div (RNW
+	// Pressable), so there is no href attribute in the DOM to read, and the
+	// message copy is translated. The code-bearing testID is the referent.
+	await expect(page.getByTestId(`connect-error-docs-link-${code}`)).toBeVisible({
+		timeout: 60_000,
+	});
+	await expect(page.getByTestId('connect-error-message')).toBeVisible();
 	await expect(page.getByTestId('logged-in-users-label')).not.toBeVisible();
 }
 
