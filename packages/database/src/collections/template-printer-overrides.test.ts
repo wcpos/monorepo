@@ -32,6 +32,6 @@ describe('template_printer_overrides schema v1 (printer target ids)', () => {
 		};
 
 		expect(typeof migrateToV1).toBe('function');
-		expect(migrateToV1?.(legacyOverride)).toEqual(legacyOverride);
+		expect(migrateToV1?.(legacyOverride, undefined as never)).toEqual(legacyOverride);
 	});
 });

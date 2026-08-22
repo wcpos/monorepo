@@ -25,7 +25,8 @@
 		"ipc-channels.d.ts"
 	],
 	"scripts": {
-		"test": "vitest run"
+		"test": "vitest run",
+		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
 		"@point-of-sale/receipt-printer-encoder": "^3.0.3",

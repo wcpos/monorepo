@@ -594,10 +594,10 @@ describe('wrappedErrorHandlerStorage', () => {
 		});
 
 		it('fails post-mark RPCs fast except for close', async () => {
-			const bulkWrite = jest.fn(() => new Promise(() => undefined));
-			const findDocumentsById = jest.fn(() => new Promise(() => undefined));
-			const query = jest.fn(() => new Promise(() => undefined));
-			const close = jest.fn(() => new Promise(() => undefined));
+			const bulkWrite = jest.fn(() => new Promise<never>(() => undefined));
+			const findDocumentsById = jest.fn(() => new Promise<never>(() => undefined));
+			const query = jest.fn(() => new Promise<never>(() => undefined));
+			const close = jest.fn(() => new Promise<never>(() => undefined));
 			const instance = createMockStorageInstance({
 				bulkWrite,
 				findDocumentsById,

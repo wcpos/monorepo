@@ -1,35 +1,35 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import test from "node:test";
+import assert from "node:assert/strict";
 
-const scriptSource = readFileSync(new URL('./check-bump-submodules-workflow.mjs', import.meta.url), 'utf8');
+import { checkBumpSubmodulesWorkflow } from "./check-bump-submodules-workflow.mjs";
 
-const requiredChecks = [
-  {
-    description: 'targets the wcpos owner',
-    patternSource: 'pattern: /owner:\\s*wcpos/m',
-  },
-  {
-    description: 'scopes token to monorepo repository',
-    patternSource: 'pattern: /repositories:\\s*\\|[\\s\\S]*?\\n\\s*monorepo\\s*$/m',
-  },
-  {
-    description: 'uses the WCPOS bot app id secret',
-    patternSource: 'pattern: /app-id:\\s*\\$\\{\\{\\s*secrets\\.WCPOS_BOT_APP_ID\\s*\\}\\}/m',
-  },
-  {
-    description: 'uses the WCPOS bot private key secret',
-    patternSource: 'pattern: /private-key:\\s*\\$\\{\\{\\s*secrets\\.WCPOS_BOT_PRIVATE_KEY\\s*\\}\\}/m',
-  },
-  {
-    description: 'checks out submodules with the app token',
-    patternSource: 'pattern: /token:\\s*\\$\\{\\{\\s*steps\\.app-token\\.outputs\\.token\\s*\\}\\}/m',
-  },
-];
+const validWorkflow = `
+steps:
+  - id: app-token
+    uses: actions/create-github-app-token@v2
+    with:
+      owner: wcpos
+      repositories: |
+        monorepo
+      app-id: \${{ secrets.WCPOS_BOT_APP_ID }}
+      private-key: \${{ secrets.WCPOS_BOT_PRIVATE_KEY }}
+  - uses: actions/checkout@v4
+    with:
+      token: \${{ steps.app-token.outputs.token }}
+`;
 
-test('workflow guard asserts all required GitHub App auth invariants', () => {
-  for (const { description, patternSource } of requiredChecks) {
-    assert.ok(scriptSource.includes(description), `missing description: ${description}`);
-    assert.ok(scriptSource.includes(patternSource), `missing pattern source: ${patternSource}`);
-  }
+test("accepts a workflow with the required GitHub App auth wiring", () => {
+  assert.doesNotThrow(() => checkBumpSubmodulesWorkflow(validWorkflow));
+});
+
+test("rejects a workflow missing required GitHub App auth wiring", () => {
+  const withoutPrivateKey = validWorkflow.replace(
+    "      private-key: ${{ secrets.WCPOS_BOT_PRIVATE_KEY }}\n",
+    "",
+  );
+
+  assert.throws(
+    () => checkBumpSubmodulesWorkflow(withoutPrivateKey),
+    /uses the WCPOS bot private key secret/,
+  );
 });

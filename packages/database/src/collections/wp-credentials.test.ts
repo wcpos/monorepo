@@ -90,12 +90,15 @@ describe('wp_credentials migration strategy', () => {
 
 		expect(typeof migrateToV3).toBe('function');
 		expect(
-			migrateToV3?.({
-				uuid: 'cred-1',
-				role: 'administrator',
-				token_type: 'Bearer',
-				access_token: 'access-token',
-			})
+			migrateToV3?.(
+				{
+					uuid: 'cred-1',
+					role: 'administrator',
+					token_type: 'Bearer',
+					access_token: 'access-token',
+				},
+				undefined as never
+			)
 		).toEqual({
 			uuid: 'cred-1',
 			roles: ['administrator'],
@@ -109,13 +112,16 @@ describe('wp_credentials migration strategy', () => {
 
 		expect(typeof migrateToV4).toBe('function');
 		expect(
-			migrateToV4?.({
-				uuid: 'cred-1',
-				roles: ['administrator'],
-				token_type: 'Bearer',
-				access_token: 'access-token',
-				unexpected_server_field: 'do-not-persist',
-			})
+			migrateToV4?.(
+				{
+					uuid: 'cred-1',
+					roles: ['administrator'],
+					token_type: 'Bearer',
+					access_token: 'access-token',
+					unexpected_server_field: 'do-not-persist',
+				},
+				undefined as never
+			)
 		).toEqual({
 			uuid: 'cred-1',
 			roles: ['administrator'],
@@ -128,6 +134,6 @@ describe('wp_credentials migration strategy', () => {
 		const migrateToV5 = userCollections.wp_credentials.migrationStrategies?.[5];
 		const document = { uuid: 'cred-1', roles: ['administrator'] };
 
-		expect(migrateToV5?.(document)).toBe(document);
+		expect(migrateToV5?.(document, undefined as never)).toBe(document);
 	});
 });
