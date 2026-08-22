@@ -50,29 +50,17 @@ const handleApiDiscovery = async () => {
 };
 ```
 
-### 3. `useAuthTesting`
-Tests authorization methods to determine if the server supports Authorization headers or requires query parameters.
+### 3. Authorization-method testing
 
-**Features:**
-- Tests Authorization header support
-- Tests query parameter authorization as fallback
-- Mock token generation for testing
-- Determines optimal authorization method
-- Comprehensive error handling
+Determining whether a server supports Authorization headers or needs the token
+as a query parameter is **not** a hook. It lives in
+`contexts/app-state/hydration-steps.ts` as `testAuthorizationMethod`, and
+`use-site-connect.ts` is what calls it.
 
-**Usage:**
-```typescript
-const { status, error, testResult, testAuthorizationMethod } = useAuthTesting();
-
-const handleAuthTesting = async () => {
-  const result = await testAuthorizationMethod('https://mystore.com/wp-json/wcpos/v1/');
-  if (result) {
-    console.log('Use JWT as param:', result.useJwtAsParam);
-    console.log('Supports header auth:', result.supportsHeaderAuth);
-    console.log('Supports param auth:', result.supportsParamAuth);
-  }
-};
-```
+There used to be a `useAuthTesting` hook here that did the same job over the
+axios lane. It was a stale duplicate with no production callers — connect went
+through the `hydration-steps` version instead — so it was deleted rather than
+left as a second, divergent answer to the same question.
 
 ### 4. `useLoginHandler`
 Handles OAuth login responses and saves credentials to the database.

@@ -18,7 +18,7 @@ import {
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { errorSubject, useAuthErrorHandler } from './auth-error-handler';
+import { useAuthErrorHandler } from './auth-error-handler';
 import { createRefreshHttpClient } from './refresh-http-client';
 
 const httpLogger = getLogger(['wcpos', 'http', 'rest']);
@@ -362,11 +362,6 @@ export const useRestHttpClient = (endpoint = '') => {
 			head(url: string, config: RequestConfig = {}) {
 				return request({ ...config, method: 'HEAD', url });
 			},
-
-			/**
-			 * @TODO - this is just an experiment to see if the httpClient should manage it's own error state
-			 */
-			error$: errorSubject.asObservable(),
 		}),
 		[endpoint, request, onlineStatus]
 	);
