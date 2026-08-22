@@ -91,6 +91,7 @@
 		"react": "19.2.3",
 		"react-dom": "19.2.3",
 		"react-native": "0.86.2",
+		"react-native-ble-plx": "3.5.1",
 		"react-native-device-info": "^15.0.2",
 		"react-native-edge-to-edge": "^1.8.1",
 		"react-native-esc-pos-printer": "4.5.0",

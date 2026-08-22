@@ -2,12 +2,14 @@ import * as React from 'react';
 
 import { createScanHub, inertScanHub, type ScanHub } from '@wcpos/scanner';
 
+import { useBleScan, type UseBleScanResult } from '../../pos/products/use-ble-scan';
 import { useHidScan, type UseHidScanResult } from '../../pos/products/use-hid-scan';
 import { useSerialScan, type UseSerialScanResult } from '../../pos/products/use-serial-scan';
 
 interface DeviceScanControls {
 	serial: UseSerialScanResult;
 	hid: UseHidScanResult;
+	ble: UseBleScanResult;
 }
 
 const inertSerial: UseSerialScanResult = {
@@ -22,7 +24,13 @@ const inertHid: UseHidScanResult = {
 	disconnect: async () => undefined,
 	connected: false,
 };
-const inertControls: DeviceScanControls = { serial: inertSerial, hid: inertHid };
+const inertBle: UseBleScanResult = {
+	available: false,
+	connect: async () => undefined,
+	disconnect: async () => undefined,
+	connected: false,
+};
+const inertControls: DeviceScanControls = { serial: inertSerial, hid: inertHid, ble: inertBle };
 
 const ScanHubContext = React.createContext<ScanHub>(inertScanHub);
 const DeviceScanControlsContext = React.createContext<DeviceScanControls>(inertControls);
@@ -35,7 +43,11 @@ export function ScanHubProvider({ children }: { children: React.ReactNode }) {
 	const [hub] = React.useState(() => createScanHub());
 	const serial = useSerialScan(hub.emit);
 	const hid = useHidScan(hub.emit);
-	const controls = React.useMemo<DeviceScanControls>(() => ({ serial, hid }), [serial, hid]);
+	const ble = useBleScan(hub);
+	const controls = React.useMemo<DeviceScanControls>(
+		() => ({ serial, hid, ble }),
+		[serial, hid, ble]
+	);
 
 	return (
 		<ScanHubContext.Provider value={hub}>

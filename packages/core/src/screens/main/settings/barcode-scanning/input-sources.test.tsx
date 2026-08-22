@@ -100,14 +100,35 @@ const unavailableControl = {
 	disconnect: jest.fn(),
 };
 let mockSerialControl = unavailableControl;
+let mockBleControl = unavailableControl;
 jest.mock('../../hooks/barcodes/scan-hub-context', () => ({
-	useDeviceScanControls: () => ({ serial: mockSerialControl, hid: unavailableControl }),
+	useDeviceScanControls: () => ({
+		serial: mockSerialControl,
+		hid: unavailableControl,
+		ble: mockBleControl,
+	}),
 }));
 
 describe('InputSources mode explainer', () => {
 	afterEach(() => {
 		mockSerialControl = unavailableControl;
+		mockBleControl = unavailableControl;
 		mockProfiles = [profile];
+	});
+
+	it('connects and disconnects an available BLE scanner', () => {
+		const connect = jest.fn();
+		const disconnect = jest.fn();
+		mockBleControl = { available: true, connected: false, connect, disconnect };
+		const { rerender } = render(<InputSources />);
+
+		fireEvent.click(screen.getByTestId('ble-connect-button'));
+		expect(connect).toHaveBeenCalledTimes(1);
+
+		mockBleControl = { ...mockBleControl, connected: true };
+		rerender(<InputSources />);
+		fireEvent.click(screen.getByTestId('ble-connect-button'));
+		expect(disconnect).toHaveBeenCalledTimes(1);
 	});
 
 	it('shows the keyboard-mode note when a direct connection is available', () => {

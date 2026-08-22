@@ -44,9 +44,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			infoPlist: {
 				...iosInfoPlist,
 				ITSAppUsesNonExemptEncryption: false,
+				// Keep in step with the react-native-ble-plx plugin entry below — the
+				// plugin's withInfoPlist mod runs after this static merge, so both must
+				// carry the same combined printers+scanners wording.
 				NSBluetoothAlwaysUsageDescription:
 					iosInfoPlist.NSBluetoothAlwaysUsageDescription ??
-					'WCPOS uses Bluetooth to discover and connect to supported receipt printers.',
+					'WCPOS uses Bluetooth to connect supported barcode scanners and receipt printers.',
 				// Local network access for printer discovery
 				NSLocalNetworkUsageDescription:
 					iosInfoPlist.NSLocalNetworkUsageDescription ??
@@ -101,6 +104,17 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 				{
 					cameraPermission: 'WCPOS uses the camera to scan product barcodes.',
 					recordAudioAndroid: false,
+				},
+			],
+			[
+				'react-native-ble-plx',
+				{
+					// iOS app-mode scanning for supported BLE barcode scanners (#1461).
+					// Foreground only — no background modes requested. This overwrites the
+					// static infoPlist NSBluetoothAlwaysUsageDescription above at prebuild;
+					// both carry the same combined printers+scanners wording.
+					bluetoothAlwaysPermission:
+						'WCPOS uses Bluetooth to connect supported barcode scanners and receipt printers.',
 				},
 			],
 			[

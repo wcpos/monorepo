@@ -5,7 +5,7 @@ import { EMPTY, Observable, Subject } from 'rxjs';
  * Structured sources (serial, HID-POS, camera) bypass the wedge timing heuristic
  * and construct these directly; the wedge detector wraps its emissions in one.
  */
-export type ScanSourceKind = 'wedge' | 'wedge-attributed' | 'serial' | 'hid-pos' | 'camera';
+export type ScanSourceKind = 'wedge' | 'wedge-attributed' | 'serial' | 'hid-pos' | 'ble' | 'camera';
 
 export interface ScanSource {
 	kind: ScanSourceKind;
