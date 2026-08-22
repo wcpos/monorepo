@@ -229,14 +229,108 @@ describe('coupon-validation', () => {
 				});
 			});
 
-			it('should skip the check when there is no customer on the order', () => {
+			it('should not match customer IDs in used_by against a guest identifier', () => {
 				const coupon = createCoupon({
 					usage_limit_per_user: 1,
 					used_by: ['42', '42', '42'],
 				});
+				// customerId null = guest: the identifier is the email, so account
+				// usage recorded under id 42 is not this guest's usage.
 				const context = createContext({ customerId: null });
 
-				// Cannot verify per-user limit without a customer, so pass
+				const result = validateCoupon(coupon, context);
+				expect(result.valid).toBe(true);
+			});
+
+			it('should skip the check when there is neither a customer ID nor an email', () => {
+				const coupon = createCoupon({
+					usage_limit_per_user: 1,
+					used_by: ['', 'test@example.com'],
+				});
+				const context = createContext({ customerId: null, customerEmail: '' });
+
+				// Nothing to identify the shopper by, so the limit cannot be enforced
+				const result = validateCoupon(coupon, context);
+				expect(result.valid).toBe(true);
+			});
+
+			// WooCommerce records guest coupon usage by billing email, never as
+			// customer 0 — so a guest order must reach here with customerId null
+			// for the email fallback to fire (#976).
+			it('should fail when a guest email has reached the per-user limit', () => {
+				const coupon = createCoupon({
+					usage_limit_per_user: 1,
+					used_by: ['guest@example.com', '42'],
+				});
+				const context = createContext({
+					customerId: null,
+					customerEmail: 'guest@example.com',
+				});
+
+				const result = validateCoupon(coupon, context);
+				expect(result).toEqual({
+					valid: false,
+					rejection: { code: 'usage_limit_reached_for_customer' },
+				});
+			});
+
+			it('should match guest emails case-insensitively', () => {
+				const coupon = createCoupon({
+					usage_limit_per_user: 1,
+					used_by: ['Guest@Example.com'],
+				});
+				const context = createContext({
+					customerId: null,
+					customerEmail: 'GUEST@EXAMPLE.COM',
+				});
+
+				const result = validateCoupon(coupon, context);
+				expect(result).toEqual({
+					valid: false,
+					rejection: { code: 'usage_limit_reached_for_customer' },
+				});
+			});
+
+			it('should pass when a guest email is below the per-user limit', () => {
+				const coupon = createCoupon({
+					usage_limit_per_user: 2,
+					used_by: ['guest@example.com', 'other@example.com'],
+				});
+				const context = createContext({
+					customerId: null,
+					customerEmail: 'guest@example.com',
+				});
+
+				const result = validateCoupon(coupon, context);
+				expect(result.valid).toBe(true);
+			});
+
+			it('should pass when a different guest email used the coupon', () => {
+				const coupon = createCoupon({
+					usage_limit_per_user: 1,
+					used_by: ['someone-else@example.com'],
+				});
+				const context = createContext({
+					customerId: null,
+					customerEmail: 'guest@example.com',
+				});
+
+				const result = validateCoupon(coupon, context);
+				expect(result.valid).toBe(true);
+			});
+
+			it('should ignore the billing email once a customer ID is present', () => {
+				const coupon = createCoupon({
+					usage_limit_per_user: 1,
+					used_by: ['guest@example.com'],
+				});
+				// A logged-in customer is identified by ID only — WooCommerce records
+				// their usage as the ID, so an email match here would be a false reject.
+				const context = createContext({
+					customerId: 42,
+					customerEmail: 'guest@example.com',
+				});
+
 				const result = validateCoupon(coupon, context);
 				expect(result.valid).toBe(true);
 			});
