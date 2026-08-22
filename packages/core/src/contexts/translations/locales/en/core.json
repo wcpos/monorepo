@@ -14,6 +14,7 @@
 	"auth.failed_to_save_site_data": "Failed to save site data",
 	"auth.failed_to_test_authorization_methods": "Failed to test authorization methods",
 	"auth.forced_logout_failed": "Sign out failed — you may still be signed in as the previous user.",
+	"auth.host_compatibility_problem": "This store's hosting setup is blocking the app — the details page names the exact cause and fix.",
 	"auth.logged_in_users": "Logged in users",
 	"auth.no_store_selected": "No store selected",
 	"auth.no_stores_available": "No stores found for this user. Ensure POS is set up on the server.",

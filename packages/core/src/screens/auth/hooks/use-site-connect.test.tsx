@@ -40,23 +40,20 @@ describe('useSiteConnect', () => {
 	});
 
 	it.each([
-		// The inline message is TRANSLATED (the t mock returns the key); the
-		// registry summary stays the docs/logs voice.
-		[
-			'credential-channels',
-			ERROR_CODES.AUTH_TOKEN_BLOCKED_BY_HOST,
-			'auth.server_blocks_login_token',
-		],
-		['transports', ERROR_CODES.REST_TRANSPORT_BLOCKED, 'auth.store_rest_api_unreachable'],
-	] as const)('exposes and resets the %s coded connect error', async (blocked, code, summary) => {
-		mockTestAuthorizationMethod.mockResolvedValue({ ok: false, blocked });
+		// Inline copy is TRANSLATED (the t mock returns the key); dedicated keys
+		// for the two anchor codes, the generic host line for classifier codes.
+		[ERROR_CODES.AUTH_TOKEN_BLOCKED_BY_HOST, 'auth.server_blocks_login_token'],
+		[ERROR_CODES.BOT_CHALLENGE_BLOCKING_API, 'auth.host_compatibility_problem'],
+		[ERROR_CODES.REST_TRANSPORT_BLOCKED, 'auth.store_rest_api_unreachable'],
+	] as const)('exposes and resets the %s coded connect error', async (code, messageKey) => {
+		mockTestAuthorizationMethod.mockResolvedValue({ ok: false, code });
 		const { result } = renderHook(() => useSiteConnect());
 
 		await act(async () => {
 			await result.current.onConnect('https://example.com');
 		});
 
-		expect(result.current.error).toBe(summary);
+		expect(result.current.error).toBe(messageKey);
 		expect(result.current.errorCode).toBe(code);
 
 		act(() => result.current.reset());

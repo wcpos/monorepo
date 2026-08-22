@@ -249,16 +249,18 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 					wpApiUrl
 				);
 				if (!authResult.ok) {
-					// The inline message is translated; the registry summary stays the
-					// docs/logs voice. errorCode drives the DocsLink to the full page.
-					if (authResult.blocked === 'credential-channels') {
-						throw Object.assign(new Error(t('auth.server_blocks_login_token')), {
-							errorCode: ERROR_CODES.AUTH_TOKEN_BLOCKED_BY_HOST,
-						});
-					}
-					if (authResult.blocked === 'transports') {
-						throw Object.assign(new Error(t('auth.store_rest_api_unreachable')), {
-							errorCode: ERROR_CODES.REST_TRANSPORT_BLOCKED,
+					if (authResult.code) {
+						// Inline copy is translated; the registry summary stays the
+						// docs/logs voice. Codes without a dedicated key share the
+						// generic host line — the DocsLink names the exact cause.
+						const messageKey =
+							authResult.code === ERROR_CODES.AUTH_TOKEN_BLOCKED_BY_HOST
+								? 'auth.server_blocks_login_token'
+								: authResult.code === ERROR_CODES.REST_TRANSPORT_BLOCKED
+									? 'auth.store_rest_api_unreachable'
+									: 'auth.host_compatibility_problem';
+						throw Object.assign(new Error(t(messageKey)), {
+							errorCode: authResult.code,
 						});
 					}
 					throw new Error(t('auth.failed_to_test_authorization_methods'));

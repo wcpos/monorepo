@@ -41,6 +41,7 @@
 				"error-codes/AUTH411",
 				"error-codes/AUTH421",
 				"error-codes/AUTH431",
+				"error-codes/AUTH441",
 				"error-codes/AUTH999"
 			]
 		},
@@ -115,6 +116,16 @@
 				"error-codes/CLIENT201",
 				"error-codes/CLIENT211",
 				"error-codes/CLIENT999"
+			]
+		},
+		{
+			"type": "category",
+			"label": "HOST",
+			"items": [
+				"error-codes/HOST101",
+				"error-codes/HOST111",
+				"error-codes/HOST121",
+				"error-codes/HOST131"
 			]
 		}
 	]

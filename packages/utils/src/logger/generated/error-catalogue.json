@@ -1315,6 +1315,110 @@
 			"introducedIn": "1.10.0"
 		},
 		{
+			"code": "AUTH441",
+			"symbol": "AUTH_TOKEN_TOO_LARGE",
+			"domain": "AUTH",
+			"severity": "error",
+			"safeAction": "contact-support",
+			"retryPolicy": "after-change",
+			"dataSafety": "no-impact",
+			"escalation": "none",
+			"summary": "The login token is larger than this server accepts.",
+			"docsBody": "The server rejected the login token for size: a 400 when it travels in the Authorization header, or a 414 when it travels in the URL. No client-side encoding can shrink it — the server's header/URL size limits must be raised, or the token made smaller.",
+			"troubleshooting": [
+				"On Apache, raise LimitRequestFieldSize (header path) or LimitRequestLine (URL path) in the vhost config.",
+				"On nginx, raise large_client_header_buffers.",
+				"Behind a proxy or CDN, the limit may be at that layer — check both.",
+				"If limits cannot change, contact support about issuing a smaller token for this site."
+			],
+			"logSources": [],
+			"evidence": "wcpos-infra#73 §5 row 7 (research §c7)",
+			"introducedIn": "1.10.0"
+		},
+		{
+			"code": "HOST101",
+			"symbol": "CORS_PREFLIGHT_BLOCKED",
+			"domain": "HOST",
+			"severity": "error",
+			"safeAction": "contact-support",
+			"retryPolicy": "after-change",
+			"dataSafety": "no-impact",
+			"escalation": "none",
+			"summary": "The server is blocking the browser's permission check (CORS preflight), so the web app cannot reach it.",
+			"docsBody": "Browsers send an OPTIONS request before any cross-origin API call that carries custom headers. Something in front of this store — usually a firewall rule — is blocking OPTIONS, so the browser never sends the real request. Native apps are unaffected; the fix is server-side.",
+			"troubleshooting": [
+				"Check the firewall (WAF) for a rule blocking the OPTIONS method and allow it on /wcpos/ REST routes.",
+				"Some security plugins have a 'block uncommon request methods' toggle — OPTIONS must stay allowed.",
+				"Test: an OPTIONS request to the store's REST API should not return 403.",
+				"The desktop and mobile apps do not use CORS and will still work while this is being fixed."
+			],
+			"logSources": [],
+			"evidence": "wcpos-infra#73 §5 row 2 (research §c2)",
+			"introducedIn": "1.10.0"
+		},
+		{
+			"code": "HOST111",
+			"symbol": "CORS_MISCONFIGURED",
+			"domain": "HOST",
+			"severity": "error",
+			"safeAction": "contact-support",
+			"retryPolicy": "after-change",
+			"dataSafety": "no-impact",
+			"escalation": "none",
+			"summary": "The server's cross-origin (CORS) configuration is broken, so the browser refuses its responses.",
+			"docsBody": "The store answers, but its CORS response headers are wrong — duplicated, set to the wrong origin, or missing on error responses. The browser then hides the real answer from the web app, which also masks every other error behind a generic network failure. The fix is server-side: exactly one Access-Control-Allow-Origin, present on every status code.",
+			"troubleshooting": [
+				"Look for a second CORS layer (a plugin AND the server config both adding headers) and remove one — duplicated Access-Control-Allow-Origin is a fatal browser error.",
+				"On nginx, add_header lines skip error responses unless they end with 'always' — CORS headers must be on 4xx/5xx too.",
+				"If a CDN or proxy adds CORS headers, make sure it does not conflict with WordPress's own.",
+				"The desktop and mobile apps do not use CORS and will still work while this is being fixed."
+			],
+			"logSources": [],
+			"evidence": "wcpos-infra#73 §5 rows 3/4 (research §c3/§c4)",
+			"introducedIn": "1.10.0"
+		},
+		{
+			"code": "HOST121",
+			"symbol": "BOT_CHALLENGE_BLOCKING_API",
+			"domain": "HOST",
+			"severity": "error",
+			"safeAction": "contact-support",
+			"retryPolicy": "after-change",
+			"dataSafety": "no-impact",
+			"escalation": "none",
+			"summary": "A bot-protection page is answering instead of the store's API.",
+			"docsBody": "The store's REST API is returning an HTML challenge page (bot protection, CAPTCHA, or DDoS interstitial) where the app expects JSON. A point-of-sale app cannot solve a browser challenge; the store's REST API needs to be allow-listed in the protection service.",
+			"troubleshooting": [
+				"Identify the protection layer from the challenge page (Cloudflare, Sucuri, Kinsta and others each brand theirs) and open its settings.",
+				"Allow-list the store's own REST API paths (/wp-json/ and /?rest_route=) for API traffic.",
+				"On Cloudflare, Bot Fight Mode cannot be bypassed per-path — use Super Bot Fight Mode's 'definitely automated' allow rules or disable it for this zone.",
+				"On Kinsta, enable the /wp-json/ allow toggle; on Sucuri, avoid the JavaScript-challenge DDoS mode for API routes."
+			],
+			"logSources": [],
+			"evidence": "wcpos-infra#73 §5 row 10 (research §c10)",
+			"introducedIn": "1.10.0"
+		},
+		{
+			"code": "HOST131",
+			"symbol": "RESPONSE_HEADERS_REJECTED",
+			"domain": "HOST",
+			"severity": "error",
+			"safeAction": "contact-support",
+			"retryPolicy": "after-change",
+			"dataSafety": "no-impact",
+			"escalation": "none",
+			"summary": "A proxy in front of the store rejects the server's responses for having too many headers.",
+			"docsBody": "A cache or proxy layer (commonly Varnish) enforces a limit on response header count or size. The store's lightweight endpoints fit, but full API responses exceed the limit and come back as 503s from the proxy, not from WordPress. The limit must be raised on that layer.",
+			"troubleshooting": [
+				"On Varnish, raise http_max_hdr (header count) and http_resp_hdr_len / http_resp_size (sizes).",
+				"Ask the host which proxy layer returns the 503 — the WordPress error log will show nothing because the request never fails there.",
+				"A quick check: the store's /wcpos/v2/ping answers fine while data endpoints 503."
+			],
+			"logSources": [],
+			"evidence": "wcpos-infra#73 §5 row 13 (research §c13, P26)",
+			"introducedIn": "1.10.0"
+		},
+		{
 			"code": "SYNC151",
 			"symbol": "STORE_RESPONSE_MALFORMED",
 			"domain": "SYNC",
