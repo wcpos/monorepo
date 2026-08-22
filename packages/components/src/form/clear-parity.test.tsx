@@ -41,13 +41,25 @@ function StubControl({ onValueChange }: { onValueChange?: (v: undefined) => void
 	return <button data-testid="clear" onClick={() => onValueChange?.(undefined)} />;
 }
 
+/**
+ * The minimal props both form components accept. Typed rather than `any` so that a
+ * later incompatible change to either component's prop contract breaks this file
+ * instead of silently passing invalid props through a widened seam.
+ */
+type SharedFieldProps = {
+	name: string;
+	value: string;
+	onChange: (value: unknown) => void;
+	onBlur: () => void;
+	customComponent: React.ComponentType<{ onValueChange?: (v: undefined) => void }>;
+	label: string;
+};
+
 function Harness({
 	Field,
 	onChange,
 }: {
-	// Widened deliberately: the two components have different prop unions, so a
-	// shared harness cannot satisfy both without narrowing to one of them.
-	Field: React.ComponentType<any>;
+	Field: React.ComponentType<SharedFieldProps>;
 	onChange: (value: unknown) => void;
 }) {
 	const form = useForm({ defaultValues: { country: 'AU' } });
