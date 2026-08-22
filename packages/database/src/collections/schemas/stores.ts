@@ -1,6 +1,6 @@
 export const storesLiteral = {
 	title: 'WCPOS Store schema',
-	version: 13,
+	version: 14,
 	description: 'WooCommerce POS Store',
 	type: 'object',
 	primaryKey: 'localID',
@@ -264,13 +264,16 @@ export const storesLiteral = {
 				'Optionally control which tax class shipping gets, or leave it so shipping tax is based on the cart items themselves.',
 			type: 'string',
 			default: 'inherit',
-			enum: ['inherit', '', 'reduced-rate', 'zero-rate'],
-			enumNames: [
-				'Shipping tax class based on cart items',
-				'Standard',
-				'Reduced rate',
-				'Zero rate',
-			],
+			// Deliberately unconstrained. This used to enum WooCommerce's four
+			// built-in classes, but tax classes are user-definable: a merchant can
+			// add "luxury" in WooCommerce settings, and TaxClassSelect builds its
+			// options from the server's tax-class list, so that value is selectable
+			// here. The enum rejected it.
+			//
+			// Two of the values are still special and are not slugs: 'inherit'
+			// means "follow the cart items", and '' is how WooCommerce REST spells
+			// the standard class — see taxClassFromWire/taxClassToWire, which is
+			// where that translation lives.
 		},
 		tax_round_at_subtotal: {
 			title: 'Rounding',

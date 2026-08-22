@@ -187,6 +187,13 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			oldDoc.receipt_i18n = {};
 			return oldDoc;
 		},
+		14(oldDoc: StoreDocumentType) {
+			// v14 only widens shipping_tax_class: the enum of WooCommerce's four
+			// built-in classes is gone, because merchant-defined tax classes are
+			// selectable and were being rejected. Widening never invalidates a
+			// value that already validated, so existing documents pass through.
+			return oldDoc;
+		},
 	},
 };
 
