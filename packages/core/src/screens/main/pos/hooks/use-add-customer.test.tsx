@@ -154,7 +154,7 @@ describe('useAddCustomer', () => {
 		});
 	});
 
-	it('still logs assignment success when the local write returns no result', async () => {
+	it('does not log assignment success when the local write returns no result', async () => {
 		localPatch.mockResolvedValue(undefined);
 		const { result } = renderHook(() => useAddCustomer());
 
@@ -162,12 +162,8 @@ describe('useAddCustomer', () => {
 			result.current.addCustomer({ id: 42, email: 'ada@example.com' })
 		).resolves.toBeUndefined();
 
-		expect(getLogger([]).success).toHaveBeenCalledWith('Customer assigned: ada@example.com', {
-			context: {
-				customerId: 42,
-				customerEmail: 'ada@example.com',
-				isGuest: false,
-			},
-		});
+		// A success entry for a write that failed is what anyone debugging a lost
+		// customer assignment would read first, and believe.
+		expect(getLogger([]).success).not.toHaveBeenCalled();
 	});
 });

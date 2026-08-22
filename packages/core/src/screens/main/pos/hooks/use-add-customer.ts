@@ -61,6 +61,13 @@ export const useAddCustomer = () => {
 				),
 			});
 
+			// A failed local write returns a falsy result. Logging success anyway records
+			// an assignment that never happened, which is what anyone debugging a lost
+			// customer would read first. Same guard as useRemoveCoupon.
+			if (!result) {
+				return result;
+			}
+
 			// Log customer assignment
 			orderLogger.success(t('pos.customer_assigned', { customerName }), {
 				context: {
