@@ -11,8 +11,9 @@ import {
 } from '@wcpos/sync-core';
 import { useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import type { CouponLineItem } from '@wcpos/order-math/internal';
 
-import { buildEnrichedProductCategories } from './coupon-helpers';
+import { buildEnrichedProductCategories } from './coupon-helpers-engine';
 import { validateCoupon } from './coupon-validation';
 import {
 	readEngineCategories,
@@ -25,8 +26,6 @@ import { parsePosData } from './utils';
 import { useT } from '../../../../contexts/translations';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
-
-import type { CouponLineItem } from './coupon-helpers';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 

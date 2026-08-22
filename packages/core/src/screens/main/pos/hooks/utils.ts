@@ -19,8 +19,10 @@ import {
 import type { CartLine } from '@wcpos/order-math/internal';
 import { MISC_PRODUCT_ID, NO_STORE, POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 
-// MIGRATION SHIM: these names moved to @wcpos/order-math; re-exported here so
-// existing './utils' imports keep working until the PR 2 adapter cutover.
+// Local barrel: the POS cart's line vocabulary in one import. These are pure
+// functions owned by @wcpos/order-math/internal, re-exported alongside the
+// cart-local helpers below so a call site needing both takes one import.
+// Deliberate, not transitional — @wcpos/order-math/internal stays the owner.
 export {
 	sanitizePrice,
 	parsePosData,
