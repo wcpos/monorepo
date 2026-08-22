@@ -86,7 +86,7 @@ export function DemoButton() {
 			setConnectedSite(site);
 		} catch (err) {
 			// Don't show toast here - specific error messages are already displayed
-			// by the hooks (use-url-discovery, use-api-discovery, use-auth-testing)
+			// by the hooks (use-url-discovery, use-api-discovery) and testAuthorizationMethod
 			authLogger.error(`Demo connection failed: ${getErrorMessage(err)}`, {
 				code: ERROR_CODES.AUTH_UNEXPECTED,
 			});

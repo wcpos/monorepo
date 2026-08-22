@@ -51,7 +51,6 @@ jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 jest.mock('./auth-error-handler', () => ({
-	errorSubject: { asObservable: () => ({}) },
 	useAuthErrorHandler: () => jest.fn(),
 }));
 jest.mock('./refresh-http-client', () => ({

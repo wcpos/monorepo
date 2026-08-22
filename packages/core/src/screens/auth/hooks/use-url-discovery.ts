@@ -19,7 +19,8 @@ export type UrlDiscoveryStatus = 'idle' | 'discovering' | 'success' | 'error';
  * (observed on dev-next 2026-08-11, monorepo#1155: the HEAD never returned
  * while /wp-json/ still answered in seconds), and an unbounded request leaves
  * the cashier staring at an infinite Connect spinner with no error and no
- * fallback. Matches the 10s auth/test timeout in use-auth-testing.
+ * fallback. Matches the 10s auth/test timeout in testAuthorizationMethod
+ * (contexts/app-state/hydration-steps.ts).
  */
 const DISCOVERY_PROBE_TIMEOUT_MS = 10_000;
 
