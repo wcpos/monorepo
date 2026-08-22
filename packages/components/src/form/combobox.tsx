@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
 import { useFormField } from './context';
+import { optionToFieldValue } from './option-value';
 import { Combobox } from '../combobox';
 
 import type { Option } from '../combobox';
@@ -40,7 +41,7 @@ export function FormCombobox({
 			if (multiple) {
 				onChange?.((val as Option[] | undefined) ?? []);
 			} else {
-				onChange?.((val as Option | undefined)?.value);
+				onChange?.(optionToFieldValue(val as Option | undefined));
 			}
 		},
 		[multiple, onChange]
