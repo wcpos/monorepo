@@ -35,7 +35,10 @@ function resolverProjects() {
 // pre-commit hook for every worktree commit.
 test("resolver tsconfig projects are anchored to this repo, not the CWD", () => {
   for (const project of resolverProjects()) {
-    assert.ok(isAbsolute(project), `expected an absolute path, got "${project}"`);
+    assert.ok(
+      isAbsolute(project),
+      `expected an absolute path, got "${project}"`,
+    );
     assert.ok(
       project.startsWith(`${REPO_ROOT}/`),
       `expected "${project}" to stay inside ${REPO_ROOT}`,
