@@ -1,5 +1,7 @@
 import { encodeThermalTemplate } from '../renderer';
 import { DEFAULT_THERMAL_TEMPLATE } from './default-thermal-template';
+import { isEscposTextEncodable } from './escpos-text';
+import { formatMoney } from './format-money';
 
 import type { ReceiptData } from './types';
 import type { DrawerConnector } from '../types';
@@ -28,10 +30,6 @@ export interface EncodeReceiptOptions {
 	decimals?: number;
 }
 
-function formatMoney(value: number, currency: string, dp: number = 2): string {
-	return `${currency} ${value.toFixed(dp)}`;
-}
-
 export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions = {}): Uint8Array {
 	const {
 		printerModel,
@@ -42,10 +40,14 @@ export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions =
 		cut = true,
 		openDrawer = false,
 		drawerConnector = 'pin2',
-		decimals: dp = 2,
+		decimals: dp,
 	} = options;
 
 	const currency = data.order.currency;
+	const locale = data.presentation_hints?.locale;
+	const isSymbolEncodable = (symbol: string): boolean => isEscposTextEncodable(symbol, language);
+	const fmt = (value: number, decimals?: number): string =>
+		formatMoney(value, currency, locale, decimals, isSymbolEncodable);
 
 	// Compute column widths
 	const infoColRight = Math.max(12, Math.floor(columns / 2));
@@ -94,31 +96,31 @@ export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions =
 		has_customer_tax_ids: !!(data.customer?.tax_ids && data.customer.tax_ids.length > 0),
 		formatted_lines: data.lines.map((item) => ({
 			name: item.name,
-			detail: `  x${item.qty} @ ${formatMoney(item.unit_price_incl, currency, dp)}`,
-			line_total_fmt: formatMoney(item.line_total_incl, currency, dp),
+			detail: `  x${item.qty} @ ${fmt(item.unit_price_incl, dp)}`,
+			line_total_fmt: fmt(item.line_total_incl, dp),
 			nameColWidth,
 			priceColWidth,
 		})),
-		subtotal_fmt: formatMoney(data.totals.subtotal_incl, currency, dp),
+		subtotal_fmt: fmt(data.totals.subtotal_incl, dp),
 		has_discount: discountTotalIncl > 0,
-		discount_fmt: `-${formatMoney(discountTotalIncl, currency, dp)}`,
+		discount_fmt: `-${fmt(discountTotalIncl, dp)}`,
 		show_tax: data.presentation_hints.display_tax !== 'hidden' && data.totals.tax_total > 0,
 		tax_lines: data.tax_summary.map((tax) => ({
 			label: tax.rate ? `${tax.label} (${tax.rate}%)` : tax.label,
-			amount_fmt: formatMoney(tax.tax_amount, currency, dp),
+			amount_fmt: fmt(tax.tax_amount, dp),
 			nameColWidth,
 			priceColWidth,
 		})),
-		total_fmt: formatMoney(data.totals.total_incl, currency, dp),
+		total_fmt: fmt(data.totals.total_incl, dp),
 		has_total_saved:
 			data.totals.total_saved_complete === true && totalSavedIncl !== null && totalSavedIncl > 0,
-		total_saved_fmt: formatMoney(totalSavedIncl ?? 0, currency, dp),
+		total_saved_fmt: fmt(totalSavedIncl ?? 0, dp),
 		payments: data.payments.map((payment) => ({
 			method_title: payment.method_title,
-			amount_fmt: formatMoney(payment.amount, currency, dp),
+			amount_fmt: fmt(payment.amount, dp),
 			has_tendered: !!(payment.tendered && payment.tendered > 0),
-			tendered_fmt: formatMoney(payment.tendered ?? 0, currency, dp),
-			change_fmt: formatMoney(payment.change ?? 0, currency, dp),
+			tendered_fmt: fmt(payment.tendered ?? 0, dp),
+			change_fmt: fmt(payment.change ?? 0, dp),
 			nameColWidth,
 			priceColWidth,
 		})),

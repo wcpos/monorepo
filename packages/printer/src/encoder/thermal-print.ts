@@ -13,6 +13,7 @@ import type {
 	ThermalRasterImage,
 } from '@wcpos/receipt-renderer';
 
+import { isEscposTextEncodable } from './escpos-text';
 import { formatReceiptData } from './format-receipt-data';
 import { mapReceiptData } from './map-receipt-data';
 
@@ -137,7 +138,10 @@ export async function encodeThermalTemplateForPrint(
 	input: EncodeThermalTemplateForPrintInput
 ): Promise<Uint8Array> {
 	const canonical = mapReceiptData((input.receiptData ?? {}) as Record<string, unknown>);
-	const formatted = formatReceiptData(canonical);
+	const language = input.encodeOptions?.language ?? 'esc-pos';
+	const formatted = formatReceiptData(canonical, {
+		isSymbolEncodable: (symbol) => isEscposTextEncodable(symbol, language),
+	});
 	const renderedTemplateXml = renderTemplatePlaceholders(
 		input.templateXml,
 		formatted as Record<string, unknown>
