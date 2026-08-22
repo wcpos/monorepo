@@ -40,8 +40,8 @@ import { ListFooterComponent as DefaultListFooterComponent } from './list-footer
 
 import type { SortingChange } from './sort-field';
 import type { CollectionKey as QueryCollectionKey } from '../../../../query';
-import type { RowData } from '@tanstack/react-table';
-import type { ColumnDef, Header, Table as TanStackTable } from '../../../../table-types';
+import type { RowData, TableOptions } from '@tanstack/react-table';
+import type { ColumnDef, Header, Row, Table as TanStackTable } from '../../../../table-types';
 
 const dataTableFeatures = tableFeatures({
 	columnVisibilityFeature,
@@ -53,6 +53,15 @@ const dataTableFeatures = tableFeatures({
 
 type DataTableFeatures = typeof dataTableFeatures;
 type DataTableRow = QueryResult<import('rxdb').RxCollection>['hits'][number];
+type CellComponent = React.ElementType;
+type CellMap = Record<string, CellComponent>;
+type DataTableConfig<TData extends RowData> = Omit<
+	Partial<TableOptions<DataTableFeatures, TData>>,
+	'meta'
+> & {
+	meta?: Record<string, unknown>;
+	extraData?: unknown;
+};
 
 type DataTableCollectionKey = Exclude<QueryCollectionKey, 'tax-rates'>;
 
@@ -73,7 +82,7 @@ interface BindingActions<TSortField extends string> {
 	setFilter: (...args: never[]) => void;
 }
 
-interface CommonProps {
+interface CommonProps<TData extends RowData> {
 	id: UISettingID;
 	noDataMessage?: string;
 	estimatedItemSize?: number;
@@ -83,9 +92,10 @@ interface CommonProps {
 		index: number;
 		table: any;
 	}) => React.ReactElement<React.ComponentProps<typeof VirtualizedList.Item>>;
-	renderCell?: (columnKey: string, info: any) => React.ReactNode;
+	cells?: CellMap;
+	cellsForRow?: (row: Row<TData, DataTableFeatures>) => CellMap;
 	renderHeader?: (props: RenderHeaderProps) => React.ReactNode;
-	tableConfig?: any;
+	tableConfig?: DataTableConfig<TData>;
 	getItemType?: (row: any) => string;
 	ListFooterComponent?: React.ComponentType<any>;
 }
@@ -101,10 +111,11 @@ type BindingProps<TSortField extends string> = {
 	sync: () => Promise<void>;
 };
 
-type Props<TSortField extends string> = CommonProps & BindingProps<TSortField>;
+type Props<TData extends RowData, TSortField extends string> = CommonProps<TData> &
+	BindingProps<TSortField>;
 
 function DataTable<TData extends RowData, TSortField extends string = string>(
-	props: Props<TSortField>
+	props: Props<TData, TSortField>
 ) {
 	/*
 	 * NOTE (react-table v9): this component is now compiled by the React
@@ -130,7 +141,8 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 		estimatedItemSize,
 		showFooter = true,
 		renderItem,
-		renderCell,
+		cells,
+		cellsForRow,
 		renderHeader,
 		tableConfig,
 		getItemType,
@@ -144,8 +156,8 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 	const deferredResult = React.useDeferredValue(result);
 
 	const columns = React.useMemo(
-		() => buildColumns(uiColumns, getUILabel, renderCell),
-		[uiColumns, getUILabel, renderCell]
+		() => buildColumns(uiColumns, getUILabel, cells, cellsForRow),
+		[uiColumns, getUILabel, cells, cellsForRow]
 	);
 
 	const columnVisibility = React.useMemo(
@@ -177,12 +189,12 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 		columns,
 		data: deferredResult.hits,
 		getRowId: (row) => row.id,
-		...tableConfig,
+		...(tableConfig as unknown as Partial<TableOptions<DataTableFeatures, DataTableRow>>),
 		state: { columnVisibility, ...tableConfig?.state },
 		meta: {
 			...tableConfig?.meta,
 			actions: { setFilter: props.actions.setFilter },
-		},
+		} as unknown as TableOptions<DataTableFeatures, DataTableRow>['meta'],
 	});
 
 	/**
@@ -201,7 +213,7 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 				{table.getHeaderGroups().map((headerGroup) => (
 					<TableRow key={headerGroup.id}>
 						{headerGroup.headers.map((header) => (
-							<TableHead key={header.id} style={getHeaderStyle(header.column.columnDef.meta)}>
+							<TableHead key={header.id} style={getColumnStyle(header.column.columnDef.meta)}>
 								{renderHeader ? (
 									renderHeader({
 										header,
@@ -314,11 +326,12 @@ function defaultRenderItem({ item, index, table }: { item: any; index: number; t
 	);
 }
 
-function buildColumns(
+function buildColumns<TData extends RowData>(
 	columns: any,
 	getUILabel: (key: string) => string,
-	renderCell?: (columnKey: string, info: any) => React.ReactNode
-): ColumnDef<any, any, DataTableFeatures>[] {
+	cells?: CellMap,
+	cellsForRow?: (row: Row<TData, DataTableFeatures>) => CellMap
+): ColumnDef<DataTableRow, unknown, DataTableFeatures>[] {
 	return columns.map((c: any) => {
 		return {
 			accessorKey: c.key,
@@ -332,7 +345,11 @@ function buildColumns(
 					return !!(d && d.show);
 				},
 			},
-			cell: (info: any) => (renderCell ? renderCell(c.key, info) : <RecordTextCell {...info} />),
+			cell: (info: any) => {
+				const rowCells = cellsForRow ? cellsForRow(info.row) : cells;
+				const Cell = rowCells?.[c.key] ?? RecordTextCell;
+				return <Cell {...info} />;
+			},
 			header: c.hideLabel ? '' : getUILabel(c.key),
 		};
 	});
@@ -368,31 +385,7 @@ function getColumnStyle(meta: any): ViewStyle {
 	};
 }
 
-function getHeaderStyle(meta: any): ViewStyle {
-	if (meta?.width) {
-		return {
-			flexGrow: 0,
-			flexShrink: 0,
-			flexBasis: meta.width,
-			alignItems: getFlexAlign(meta.align || 'left'),
-		};
-	}
-	return {
-		flexGrow: meta?.flex ?? 1,
-		flexShrink: 0,
-		flexBasis: '0%',
-		alignItems: getFlexAlign(meta?.align || 'left'),
-	};
-}
-
-export {
-	DataTable,
-	DataTableHeader,
-	DataTableFooter,
-	defaultRenderItem,
-	getColumnStyle,
-	getHeaderStyle,
-};
+export { DataTable, DataTableHeader, DataTableFooter, defaultRenderItem, getColumnStyle };
 export type { RenderHeaderProps, SortingChange };
 export type { BindingDataTableFooterProps };
-export type { DataTableFeatures };
+export type { CellComponent, DataTableFeatures };

@@ -9,7 +9,7 @@ import { useDocField } from '@wcpos/query';
 
 import { UISettingID, useUISettings } from '../../contexts/ui-settings';
 import { DataTableHeader } from './header';
-import { getHeaderStyle } from './index';
+import { getColumnStyle } from './index';
 
 interface Props {
 	id: UISettingID;
@@ -30,7 +30,7 @@ export function DataTableSkeleton({ id }: Props) {
 					{uiColumns
 						.filter((c) => c.show)
 						.map((c) => (
-							<TableHead key={c.key} style={getHeaderStyle(c)}>
+							<TableHead key={c.key} style={getColumnStyle(c)}>
 								<DataTableHeader
 									columnId={c.key}
 									header={getUILabel(c.key)}

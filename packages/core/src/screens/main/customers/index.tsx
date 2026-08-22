@@ -23,7 +23,6 @@ import { useProAccess } from '../contexts/pro-access';
 import { CapabilityTooltipTrigger } from '../components/capability-tooltip';
 import { DataTable } from '../components/data-table';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
-import { RecordTextCell } from '../components/record-text-cell';
 import { RecordDateCell } from '../components/record-date-cell';
 import { UISettingsDialog } from '../components/ui-settings';
 import { QuerySearchInput } from '../components/query-search-input';
@@ -78,15 +77,6 @@ function getInitialCustomerSort(
 		field: sortBy,
 		direction: sortDirection === 'desc' ? 'desc' : 'asc',
 	};
-}
-
-function renderCell(columnKey: string, info: Record<string, unknown>) {
-	const Renderer = cells[columnKey as keyof typeof cells];
-	if (Renderer) {
-		return <Renderer {...(info as any)} />;
-	}
-
-	return <RecordTextCell {...(info as any)} />;
 }
 
 function CustomersScreenContent() {
@@ -163,7 +153,7 @@ function CustomersScreenContent() {
 								active$={binding.active$}
 								total$={binding.total$}
 								sync={binding.sync}
-								renderCell={renderCell}
+								cells={cells}
 								noDataMessage={t('common.no_customers_found')}
 								estimatedItemSize={100}
 							/>

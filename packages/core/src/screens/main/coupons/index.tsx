@@ -49,15 +49,6 @@ import type { SortFieldsByCollection } from '../../../query/query-state-types';
 
 type CouponRow = { record: EngineRecord<'coupons'> };
 
-function RecordTextCell({ row, column }: CellContext<{ record: EngineRecord<'coupons'> }, string>) {
-	const value = useRecordField(
-		row.original.record,
-		({ payload }) => payload[column.id as keyof typeof payload]
-	);
-
-	return <Text>{value == null ? '' : String(value)}</Text>;
-}
-
 function RecordDateCell({ row, column }: CellContext<{ record: EngineRecord<'coupons'> }, string>) {
 	const key = (column.id.endsWith('_gmt') ? column.id : `${column.id}_gmt`) as
 		'date_created_gmt' | 'date_modified_gmt';
@@ -108,15 +99,6 @@ function getInitialCouponSort(
 	if (!isCouponSortField(sortBy)) return DEFAULT_COUPON_SORT;
 
 	return { field: sortBy, direction: sortDirection === 'asc' ? 'asc' : 'desc' };
-}
-
-function renderCell(columnKey: string, info: Record<string, unknown>) {
-	const Renderer = cells[columnKey as keyof typeof cells];
-	if (Renderer) {
-		return <Renderer {...(info as any)} />;
-	}
-
-	return <RecordTextCell {...(info as any)} />;
 }
 
 function CouponsScreenContent() {
@@ -213,7 +195,7 @@ function CouponsScreenContent() {
 								active$={binding.active$}
 								total$={binding.total$}
 								sync={binding.sync}
-								renderCell={renderCell}
+								cells={cells}
 								noDataMessage={t('common.no_coupons_found')}
 								estimatedItemSize={100}
 								tableConfig={tableConfig}
