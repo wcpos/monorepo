@@ -15,10 +15,10 @@ export const scannerProfilesLiteral = {
 		},
 		connectionType: {
 			type: 'string',
-			enum: ['wedge-attributed', 'serial', 'hid-pos'],
+			enum: ['wedge-attributed', 'serial', 'hid-pos', 'ble'],
 			default: 'wedge-attributed',
 			description:
-				'How this scanner connects: wedge-attributed = device-identified HID keyboard (Android); serial = Web Serial (USB-CDC / BT-SPP); hid-pos = WebHID USB HID POS',
+				'How this scanner connects: wedge-attributed = device-identified HID keyboard (Android); serial = Web Serial (USB-CDC / BT-SPP); hid-pos = WebHID USB HID POS; ble = vendor-GATT Bluetooth Low Energy (iOS app mode, #1461)',
 		},
 		deviceName: {
 			type: 'string',
@@ -44,6 +44,16 @@ export const scannerProfilesLiteral = {
 		hidUsagePage: {
 			type: 'integer',
 			description: 'For hid-pos: the HID usage page (0x8C for POS) used to re-open the device',
+		},
+		blePeripheralId: {
+			type: 'string',
+			description:
+				'For ble: the platform peripheral identifier (iOS CBPeripheral identifier UUID — stable per device+phone). The silent-reconnect key; BLE peripherals expose no USB ids',
+		},
+		bleServiceUuid: {
+			type: 'string',
+			description:
+				'For ble: the vendor GATT service UUID this scanner matched from the probe allowlist (varies by BLE module within a vendor line)',
 		},
 		createdAt: {
 			type: 'string',
