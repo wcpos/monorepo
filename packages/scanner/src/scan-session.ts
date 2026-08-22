@@ -37,6 +37,40 @@ export interface ScanSession {
 const RETAIL_SYMBOLOGIES = new Set(['ean13', 'ean8', 'upc_a', 'ean-13', 'ean-8', 'upc-a']);
 
 /**
+ * Symbologies whose 13-digit reading may carry an implied leading zero (see
+ * normalizeRetailCode). UPC-E is excluded: its printed form is 8 digits and
+ * decoders expand it to the 12-digit UPC-A rather than shortening it, so
+ * "what's on the package" is a separate question there.
+ */
+const ZERO_PADDED_SYMBOLOGIES = new Set(['ean13', 'upc_a', 'ean-13', 'upc-a']);
+
+/**
+ * Report the digits printed on the package, whichever device did the reading.
+ *
+ * A UPC-A symbol and an EAN-13 symbol are the same bars. EAN-13 draws only 12
+ * digits; its leading digit is carried by the odd/even parity pattern of the
+ * left-hand six, and the all-odd pattern a UPC-A prints means that digit is
+ * zero. So a camera decoder reports a UPC-A as the 13-digit GTIN-13 form
+ * (zxing-wasm and the iOS camera both do), while the package — and a HID wedge
+ * in its default mode — shows the bare 12. Same identifier, two printing
+ * conventions, and a cashier who scans the bottle in front of them sees digits
+ * that appear nowhere on it.
+ *
+ * Dropping the zero is unambiguous: GS1 reserves the entire leading-0 prefix
+ * range for GTIN-12, so a 13-digit retail code beginning with 0 always came
+ * from a 12-digit symbol. No genuine EAN-13 can be mangled by this. Only codes
+ * a source labelled EAN-13/UPC-A are touched — an unlabelled wedge read or a
+ * numeric Code 128 SKU that happens to start with 0 is left alone, and #740's
+ * lookup equivalence still tries both forms for those.
+ */
+export function normalizeRetailCode(code: string, symbology?: string): string {
+	if (symbology === undefined || !ZERO_PADDED_SYMBOLOGIES.has(symbology.toLowerCase())) {
+		return code;
+	}
+	return /^0\d{12}$/.test(code) ? code.slice(1) : code;
+}
+
+/**
  * Validates the check digit of an EAN-13/EAN-8/UPC-A code (UPC-A is a 12-digit
  * EAN-13 with an implicit leading zero). Returns true for non-retail-length
  * inputs so only genuine retail codes are gated.
@@ -86,8 +120,12 @@ export function createScanSession(options: ScanSessionOptions): ScanSession {
 	// code -> timestamp of the first-of-two read awaiting confirmation.
 	let pending: { code: string; at: number } | null = null;
 
-	const offer = (code: string, symbology?: string): ScanOfferResult => {
+	const offer = (rawCode: string, symbology?: string): ScanOfferResult => {
 		const at = now();
+		// Normalize before anything else so the dedup window, the cooldown key and
+		// every downstream consumer (cart lookup, search box, toast, logs) all see
+		// the one form the cashier can read off the package.
+		const code = normalizeRetailCode(rawCode, symbology);
 
 		if (looksRetail(code, symbology) && !hasValidRetailCheckDigit(code)) {
 			return { accepted: false, reason: 'bad-check-digit' };

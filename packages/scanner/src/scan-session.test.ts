@@ -1,6 +1,47 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createScanSession, hasValidRetailCheckDigit } from './scan-session';
+import { createScanSession, hasValidRetailCheckDigit, normalizeRetailCode } from './scan-session';
+
+describe('normalizeRetailCode', () => {
+	// The bottle from the bench report: UPC-A printed 7 33620 20995 8, which
+	// zxing reports as the 13-digit GTIN form and labels EAN-13.
+	const PRINTED = '733620209958';
+	const DECODED = '0733620209958';
+
+	it.each(['ean13', 'EAN13', 'upc_a', 'ean-13', 'upc-a'])(
+		'drops the implied leading zero for a %s read',
+		(symbology) => {
+			expect(normalizeRetailCode(DECODED, symbology)).toBe(PRINTED);
+		}
+	);
+
+	it('leaves a genuine EAN-13 alone', () => {
+		// GS1 reserves leading 0 for GTIN-12, so a non-zero prefix is never padded.
+		expect(normalizeRetailCode('4006381333931', 'ean13')).toBe('4006381333931');
+	});
+
+	it('leaves an already-12-digit UPC-A alone', () => {
+		expect(normalizeRetailCode(PRINTED, 'upc_a')).toBe(PRINTED);
+	});
+
+	it('leaves codes from non-EAN/UPC symbologies alone', () => {
+		// A numeric Code 128 SKU may legitimately start with 0 and mean it.
+		expect(normalizeRetailCode(DECODED, 'code128')).toBe(DECODED);
+		expect(normalizeRetailCode(DECODED, 'qr')).toBe(DECODED);
+		// UPC-E prints 8 digits and decoders expand it to 12 — out of scope here.
+		expect(normalizeRetailCode('0012345000065', 'upc_e')).toBe('0012345000065');
+	});
+
+	it('leaves an unlabelled read alone', () => {
+		// A keyboard wedge reports no symbology; #740 lookup equivalence covers it.
+		expect(normalizeRetailCode(DECODED)).toBe(DECODED);
+	});
+
+	it('leaves wrong-length numerics alone', () => {
+		expect(normalizeRetailCode('012345678', 'ean13')).toBe('012345678');
+		expect(normalizeRetailCode('00733620209958', 'ean13')).toBe('00733620209958');
+	});
+});
 
 describe('hasValidRetailCheckDigit', () => {
 	it.each([
@@ -118,5 +159,32 @@ describe('createScanSession', () => {
 		instance.offer('4006381333931');
 		instance.reset();
 		expect(instance.offer('4006381333931').accepted).toBe(true);
+	});
+
+	it('emits the printed 12-digit form for a UPC-A the camera read as 13 digits', () => {
+		const { accepted, instance } = session();
+		expect(instance.offer('0733620209958', 'ean13').accepted).toBe(true);
+		expect(accepted).toEqual(['733620209958']);
+	});
+
+	it('treats both forms of one UPC-A as the same code for dedup', () => {
+		// A wedge sending 12 and a camera sending 13 must not double-add the item.
+		const { accepted, instance, tick } = session({ cooldownMs: 1000 });
+		expect(instance.offer('733620209958', 'upc_a').accepted).toBe(true);
+		tick(100);
+		expect(instance.offer('0733620209958', 'ean13')).toEqual({
+			accepted: false,
+			reason: 'cooldown',
+		});
+		expect(accepted).toEqual(['733620209958']);
+	});
+
+	it('still rejects a bad check digit after normalization', () => {
+		const { accepted, instance } = session();
+		expect(instance.offer('0733620209957', 'ean13')).toEqual({
+			accepted: false,
+			reason: 'bad-check-digit',
+		});
+		expect(accepted).toEqual([]);
 	});
 });

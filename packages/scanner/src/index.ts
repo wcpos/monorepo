@@ -13,6 +13,7 @@ export { decodeHidPosReport, type HidPosDecodeOptions, type HidPosResult } from 
 export {
 	createScanSession,
 	hasValidRetailCheckDigit,
+	normalizeRetailCode,
 	type ScanSession,
 	type ScanSessionOptions,
 	type ScanOfferResult,
