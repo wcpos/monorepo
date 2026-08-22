@@ -70,13 +70,29 @@ describe('VariationTableFooter', () => {
 		expect(screen.getByText('Showing 2 of 5')).toBeTruthy();
 	});
 
-	it('falls back to the binding total when the parent variation list is empty', () => {
+	// A parent payload that has not caught up must never claim fewer variations than are
+	// already on screen — "Showing 2 of 0" is self-contradicting. Same resident-count floor
+	// every other footer applies.
+	it('never claims fewer variations than the rows on screen', () => {
 		const variations$ = new BehaviorSubject<number[]>([]);
 		const parent = { id: 1, variations: variations$.value, variations$ } as never;
 
 		render(<VariationTableFooter binding={binding} parent={parent} count={2} />);
 
 		expect(screen.getByText('Showing 2 of 2')).toBeTruthy();
+	});
+
+	// The other half of the same rule (CodeRabbit, #1492): an EMPTY parent list is the server
+	// authoritatively reporting zero variations, so it must not fall through to the local
+	// collection's count — which is stale by construction the moment the variations are gone.
+	it('preserves an authoritative zero from the parent payload', () => {
+		const variations$ = new BehaviorSubject<number[]>([]);
+		const parent = { id: 1, variations: variations$.value, variations$ } as never;
+
+		// `binding.total$` is 2 — the stale local collection. It must not surface.
+		render(<VariationTableFooter binding={binding} parent={parent} count={0} />);
+
+		expect(screen.getByText('Showing 0 of 0')).toBeTruthy();
 	});
 
 	// #1093: clear-and-refresh is a LOCAL cache eviction. It must ride the

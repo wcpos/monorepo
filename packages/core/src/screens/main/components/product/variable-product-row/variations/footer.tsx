@@ -40,16 +40,23 @@ export function VariationTableFooter({ binding, parent, count }: VariationTableF
 	}, [binding, clearAndSync]);
 
 	/**
-	 * Prefer the parent product's server variation ids over the local collection total — the
-	 * parent's own payload names every variation the server has, which is the one denominator
-	 * here that is always true. `binding.total$` is the fallback, and it is null when nothing
-	 * vouches for a size (see QueryBinding.total$); then the footer states the count alone
-	 * rather than passing the loaded-row count off as the total.
+	 * The parent product's own payload names every variation the server has, so it is the
+	 * authoritative denominator here — INCLUDING a genuine zero, which is why an empty list
+	 * must not fall through to the local count (CodeRabbit, #1492).
+	 *
+	 * It can still be stale, so it never claims fewer variations than are on screen: the same
+	 * resident-count floor `coverageProjection$` applies to every other footer. Without it a
+	 * parent whose payload had not caught up would read "Showing 2 of 0".
+	 *
+	 * With no parent list at all, `binding.total$` carries the answer — and it is null when
+	 * nothing vouches for a size (see QueryBinding.total$), in which case the footer states
+	 * the count alone rather than passing the loaded-row count off as a total.
 	 */
 	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- Query binding exposes a stable stream property, not an RxDB $-getter; exception dated 2026-08-21.
 	const localTotal = useObservableState(binding.total$, null);
 	const parentVariations = useRecordField(parent, (record) => record.payload.variations);
-	const total = parentVariations?.length ? parentVariations.length : localTotal;
+	const parentCount = parentVariations?.length;
+	const total = parentCount === undefined ? localTotal : Math.max(parentCount, count);
 	const t = useT();
 
 	return (
