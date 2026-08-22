@@ -6,6 +6,7 @@ import * as z from 'zod';
 
 import { Form, useFormChangeHandler } from '@wcpos/components/form';
 import { VStack } from '@wcpos/components/vstack';
+import { useDocField } from '@wcpos/query';
 
 import {
 	columnsFormSchema,
@@ -23,8 +24,7 @@ export const schema = z.object({
  */
 export function UISettingsForm() {
 	const { uiSettings, getUILabel, patchUI, resetUI } = useUISettings('products');
-	// Get initial data once - don't subscribe to changes while editing
-	const initialData = React.useMemo(() => uiSettings.get(), [uiSettings]);
+	const formData = useDocField(uiSettings, (value) => value);
 	const { setButtonPressHandler } = useDialogContext();
 
 	/**
@@ -32,28 +32,19 @@ export function UISettingsForm() {
 	 */
 	const form = useForm<z.infer<typeof schema>>({
 		resolver: zodResolver(schema as never) as never,
-		defaultValues: initialData,
+		values: formData,
 	});
 
 	/**
-	 * Handle reset button - reset form and RxDB to initial values
-	 * Set handler in effect to avoid mutating ref during render
+	 * The reset button lives in the dialog footer, outside this form's subtree, so the
+	 * handler has to be published back up to UISettingsDialog. It lands in a ref there,
+	 * and writing a ref during render is not allowed — hence an effect rather than a
+	 * plain call. Nothing here derives state; it only registers the callback.
 	 */
-	const handleReset = React.useCallback(async () => {
-		await resetUI();
-		// After reset, get fresh data and reset the form
-		form.reset(uiSettings.get());
-	}, [resetUI, form, uiSettings]);
-
 	React.useEffect(() => {
-		setButtonPressHandler(() => void handleReset());
-	}, [setButtonPressHandler, handleReset]);
+		setButtonPressHandler(() => void resetUI());
+	}, [setButtonPressHandler, resetUI]);
 
-	/**
-	 * Handle form changes and patch UI
-	 * The form is the source of truth during editing.
-	 * Changes are saved to RxDB but we don't re-sync back to avoid loops.
-	 */
 	useFormChangeHandler({ form: form as never, onChange: (changes) => void patchUI(changes) });
 
 	/**
@@ -62,7 +53,7 @@ export function UISettingsForm() {
 	return (
 		<Form {...form}>
 			<VStack>
-				<UISettingsColumnsForm columns={initialData.columns} getUILabel={getUILabel} />
+				<UISettingsColumnsForm getUILabel={getUILabel} />
 			</VStack>
 		</Form>
 	);

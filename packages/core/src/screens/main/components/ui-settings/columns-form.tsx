@@ -35,14 +35,13 @@ type ColumnsFormValues = z.infer<typeof columnsFormSchema>;
 type ColumnField = ColumnsFormValues['columns'][number] & { id: string };
 
 interface UISettingsColumnsFormProps {
-	columns: ColumnsFormValues['columns'];
 	getUILabel: (key: string) => string;
 }
 
 /**
  *
  */
-export function UISettingsColumnsForm({ columns, getUILabel }: UISettingsColumnsFormProps) {
+export function UISettingsColumnsForm({ getUILabel }: UISettingsColumnsFormProps) {
 	const t = useT();
 	const [openColumns, setOpenColumns] = React.useState<Record<string, boolean>>({});
 	const form = useFormContext();
