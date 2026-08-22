@@ -100,6 +100,25 @@ describe('useRemoveCoupon', () => {
 		expect(localPatch).toHaveBeenCalledTimes(1);
 	});
 
+	/**
+	 * The case above only exercises the REQUESTED code's normalization, because every
+	 * stored fixture code is already lowercase — dropping `.toLowerCase()` from the
+	 * STORED side left all seven tests green. WooCommerce preserves the case a
+	 * merchant typed when creating a coupon, so a stored `SaVe10` is ordinary.
+	 */
+	it('matches a stored coupon code whose case differs from the requested one', async () => {
+		orderSnapshot.coupon_lines = [couponLine('SaVe10', 12)];
+		recalculate.mockResolvedValue({ couponLines: [], lineItems });
+		localPatch.mockResolvedValue({ uuid: 'order-uuid' });
+		const { result } = renderHook(() => useRemoveCoupon());
+
+		await result.current.removeCoupon('save10');
+
+		expect(recalculate).toHaveBeenCalledWith(lineItems, [
+			{ id: 12, code: null, discount: '1.80', discount_tax: '0', meta_data: [] },
+		]);
+	});
+
 	it('keeps a synced coupon as a code-null tombstone for recalculation', async () => {
 		orderSnapshot.coupon_lines = [couponLine('save10', 12), couponLine('other', 13)];
 		recalculate.mockResolvedValue({ couponLines: [], lineItems });
