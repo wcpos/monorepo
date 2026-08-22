@@ -152,14 +152,22 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 	 * servers in tests, and small labs, drain honestly). A failed head fetch
 	 * throws: the tick reports error and the NEXT tick re-primes (lazy,
 	 * retried — a transient startup failure never disables the loop). */
-	async function fetchHeadSequence(): Promise<number> {
+	async function fetchHeadCheckpoint(): Promise<{ head: number; epoch?: string }> {
 		const response = await sourceFetcher(
 			`${deps.syncBaseUrl}/changes/sequence-log?collection=all&since=0&limit=1`
 		);
 		if (!response.ok) throw new Error(`change-signal head fetch failed: HTTP ${response.status}`);
-		const body = (await response.json()) as { checkpoint?: { head?: number } };
+		const body = (await response.json()) as { checkpoint?: { head?: number; epoch?: string } };
 		const head = body.checkpoint?.head;
-		return typeof head === 'number' && Number.isFinite(head) ? head : 0;
+		// The epoch travels WITH the primed head: a cursor adopted from this
+		// checkpoint provably addresses this generation, and an engine that could
+		// not name the generation would treat its own primed cursor as unproven
+		// and rebaseline the whole catalogue on the very first poll.
+		const epoch = body.checkpoint?.epoch;
+		return {
+			head: typeof head === 'number' && Number.isFinite(head) ? head : 0,
+			...(typeof epoch === 'string' && epoch !== '' ? { epoch } : {}),
+		};
 	}
 
 	async function engineFor(scopeId: string): Promise<HybridChangeSignalEngine> {
@@ -167,10 +175,12 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 		if (existing) return existing;
 		const blob = await deps.readBlob(scopeId, CHANGE_SIGNAL_STATE_KEY);
 		const restored = blob === null ? null : deserializeChangeSignalState(blob);
+		const primed = restored === null ? await fetchHeadCheckpoint() : null;
 		const initial = restored ?? {
-			initialCursor: { sequence: await fetchHeadSequence() },
+			initialCursor: { sequence: primed?.head ?? 0 },
 			baselineDigests: undefined,
 		};
+		const initialEpoch = restored?.epoch ?? primed?.epoch;
 		const engine = createHybridChangeSignalEngine({
 			source: createLiveChangeSignalSource({
 				syncBaseUrl: deps.syncBaseUrl,
@@ -187,7 +197,7 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 					deps.barcodeSelectorsFor?.(scopeId)?.publish(collection, selectors),
 			}),
 			initialCursor: initial.initialCursor,
-			...(restored?.epoch !== undefined ? { initialEpoch: restored.epoch } : {}),
+			...(initialEpoch !== undefined ? { initialEpoch } : {}),
 			...(initial.baselineDigests !== undefined
 				? { baselineDigests: initial.baselineDigests }
 				: {}),

@@ -199,21 +199,42 @@ export async function syncCustomPullBatchIntoRepository(input: {
 		? await input.refreshPendingMutationOrderIds()
 		: input.pendingMutationOrderIds;
 
-	// F8 journal epoch: detect a reset `sequence` generation BEFORE applying or advancing. Two
+	// F8 journal epoch: detect a reset `sequence` generation BEFORE applying or advancing. Three
 	// triggers — (a) the epoch we stored differs from the server's (a new generation: fresh install /
 	// cleared option); (b) our cursor sequence exceeds the server's head (the AUTO_INCREMENT space
-	// reset beneath us: restore/truncate). Either way this batch was pulled with an invalid cursor, so
+	// reset beneath us: restore/truncate); (c) a non-zero cursor we hold no epoch for, so we cannot
+	// prove it addresses this generation. Either way this batch was pulled with an invalid cursor, so
 	// discard it, reset the checkpoint to zero, adopt the new epoch, and signal a re-pull from scratch.
 	const storedEpoch = await input.checkpointStore?.readJournalEpoch?.();
 	const epochMismatch = Boolean(storedEpoch && result.epoch && storedEpoch !== result.epoch);
-	const sameEpoch = Boolean(storedEpoch && result.epoch && storedEpoch === result.epoch);
+	// Same generation when both sides name it and agree, or when NEITHER does —
+	// an epoch-less server's horizon is still a real pruning boundary and must not
+	// be ignored (free#1560 review, S1; mirrors hybridChangeSignal).
+	const sameEpoch = Boolean(
+		(storedEpoch && result.epoch && storedEpoch === result.epoch) || (!storedEpoch && !result.epoch)
+	);
+	// (c) a NON-ZERO checkpoint we cannot attribute to a generation: with no stored
+	// epoch this cursor may belong to a previous journal, and if the new one's head
+	// has already passed it, its rows 1…cursor are skipped for good — (b) only
+	// catches the opposite, head < cursor (free#1560 review, blocker B2).
+	//
+	// Epoch persistence is OPTIONAL on this store interface, and a client that
+	// cannot remember an epoch can never prove a generation: firing (c) for it
+	// would reset to zero on every batch forever. Such a client keeps the
+	// pre-epoch contract — triggers (a) and (b) only.
+	const remembersEpoch =
+		typeof input.checkpointStore?.readJournalEpoch === 'function' &&
+		typeof input.checkpointStore?.writeJournalEpoch === 'function';
+	const unprovenGeneration = Boolean(
+		remembersEpoch && !storedEpoch && result.epoch && checkpoint.sequence > 0
+	);
 	const cursorBelowHorizon =
 		sameEpoch &&
 		checkpoint.sequence > 0 &&
 		typeof result.horizon === 'number' &&
 		checkpoint.sequence < result.horizon;
 	const cursorPastHead = typeof result.head === 'number' && checkpoint.sequence > result.head;
-	if (epochMismatch || cursorBelowHorizon || cursorPastHead) {
+	if (epochMismatch || unprovenGeneration || cursorBelowHorizon || cursorPastHead) {
 		const zero = normalizeCheckpoint(null);
 		// Reconcile the local collection before the re-pull so an order absent from the new generation
 		// doesn't linger as a phantom — the fresh pending set keeps a mutation queued mid-pull.

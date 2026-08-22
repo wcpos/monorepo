@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
 	applyReplicationActions,
+	createHybridChangeSignalEngine,
 	type HybridPollOutcome,
 	type ScopeDatabase,
 	StoreScopeManager,
@@ -252,6 +253,71 @@ describe('hydration-miss recovery accounting', () => {
 
 	it('keeps the recovery owed when the tick never persisted', async () => {
 		expect(await runTick(false)).toEqual(['products', 'variations']);
+	});
+});
+
+describe('cold-start priming', () => {
+	/** The head-priming response the engine primes a fresh scope from. */
+	function primingFetcher(checkpoint: Record<string, unknown>) {
+		return vi.fn(async () => ({
+			ok: true,
+			status: 200,
+			json: async () => ({ checkpoint }),
+		})) as never;
+	}
+
+	async function primeScope(checkpoint: Record<string, unknown>) {
+		const manager = new StoreScopeManager({
+			createDatabase: async () => stubDatabase(),
+		});
+		await manager.switchTo('scope-a');
+		mocks.poll.mockResolvedValueOnce({
+			changes: [],
+			cursor: { sequence: 40 },
+			rebaseline: false,
+			sweepRan: false,
+			sweepIncomplete: false,
+			integrityMismatches: [],
+			idsToPull: [],
+			escalatedIds: [],
+			clearedEscalations: [],
+			escalationLedger: [],
+			baselineDigests: new Map(),
+		} as HybridPollOutcome);
+		vi.mocked(createHybridChangeSignalEngine).mockClear();
+		const lane = createChangeSignalLane({
+			manager,
+			databaseFor: () => ({ collections: {} }) as never,
+			fetcher: primingFetcher(checkpoint),
+			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+			// No stored state: this tick primes from the server's head.
+			readBlob: async () => null,
+			writeBlob: vi.fn(async () => undefined),
+			connectivity: () => 'online',
+			diagnostics: () => undefined,
+			emitEvent: () => undefined,
+		});
+		await lane.tick();
+		return vi.mocked(createHybridChangeSignalEngine).mock.calls[0]?.[0] as {
+			initialCursor: { sequence: number };
+			initialEpoch?: string;
+		};
+	}
+
+	it('primes the cursor WITH the generation that head belongs to', async () => {
+		// Without the epoch, the engine cannot prove its own primed cursor and
+		// rebaselines the whole catalogue on the first poll (free#1560 review).
+		const input = await primeScope({ head: 40, epoch: 'epoch-FIRST', horizon: 0 });
+
+		expect(input.initialCursor).toEqual({ sequence: 40 });
+		expect(input.initialEpoch).toBe('epoch-FIRST');
+	});
+
+	it('primes without an epoch when the server names none', async () => {
+		const input = await primeScope({ head: 40 });
+
+		expect(input.initialCursor).toEqual({ sequence: 40 });
+		expect(input.initialEpoch).toBeUndefined();
 	});
 });
 

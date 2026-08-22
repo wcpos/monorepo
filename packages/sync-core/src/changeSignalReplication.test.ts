@@ -124,6 +124,48 @@ describe('planReplicationActions — delete tombstones', () => {
 		expect(actions.deletes).toEqual([{ collection: 'products', ids: [70] }]);
 		expect(actions.targetedPulls).toEqual([]);
 	});
+
+	it('a restore AFTER a delete in the same drain pulls the record back, not deletes it', () => {
+		// Trash then untrash inside one poll window: the catalogue lane serves raw
+		// event rows in sequence order, so the last event is the net state.
+		const actions = planReplicationActions(
+			baseOutcome({
+				changes: [change(71, 'products', true), change(71, 'products')],
+			})
+		);
+		expect(actions.targetedPulls).toEqual([{ collection: 'products', ids: [71] }]);
+		expect(actions.deletes).toEqual([]);
+	});
+
+	it('collapses each (collection, id) independently within one drain', () => {
+		const actions = planReplicationActions(
+			baseOutcome({
+				changes: [
+					change(72, 'products', true),
+					change(73, 'products'),
+					change(72, 'products'),
+					change(73, 'products', true),
+					change(72, 'variations', true),
+				],
+			})
+		);
+		expect(actions.targetedPulls).toEqual([{ collection: 'products', ids: [72] }]);
+		expect(actions.deletes).toEqual([
+			{ collection: 'products', ids: [73] },
+			{ collection: 'variations', ids: [72] },
+		]);
+	});
+
+	it('a sweep tombstone still beats a restore in the same poll — the sweep observes later state', () => {
+		const actions = planReplicationActions(
+			baseOutcome({
+				changes: [change(74, 'products', true), change(74, 'products')],
+				idsToPull: [repair(74, 'products', 'deleted', 'hash-checksum')],
+			})
+		);
+		expect(actions.deletes).toEqual([{ collection: 'products', ids: [74] }]);
+		expect(actions.targetedPulls).toEqual([]);
+	});
 });
 
 describe('planReplicationActions — config staleness split', () => {
