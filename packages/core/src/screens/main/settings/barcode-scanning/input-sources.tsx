@@ -52,7 +52,7 @@ export function InputSources() {
 		NO_PROFILES
 	) as ScannerProfileDocument[];
 	const registration = useScannerRegistration();
-	const { serial, hid } = useDeviceScanControls();
+	const { serial, hid, ble } = useDeviceScanControls();
 	const [label, setLabel] = React.useState('');
 	const [bluetoothServiceClassId, setBluetoothServiceClassId] = React.useState('');
 	const [bluetoothServiceClassIdInvalid, setBluetoothServiceClassIdInvalid] = React.useState(false);
@@ -61,8 +61,8 @@ export function InputSources() {
 	const addingBluetoothServiceClassIdRef = React.useRef(false);
 
 	// The section renders if any input source can be added on this platform:
-	// the attributed wedge (Android) or a direct Web Serial / WebHID connection.
-	if (!registration.available && !serial.available && !hid.available) {
+	// the attributed wedge (Android) or a direct scanner connection.
+	if (!registration.available && !serial.available && !hid.available && !ble.available) {
 		return null;
 	}
 
@@ -156,7 +156,7 @@ export function InputSources() {
 			description={t('settings.barcode_input_sources_description')}
 		>
 			<VStack space="sm" className="pt-1">
-				{serial.available || hid.available ? (
+				{serial.available || hid.available || ble.available ? (
 					<HStack space="sm" testID="add-scanner-direct">
 						{serial.available ? (
 							<Button
@@ -183,6 +183,20 @@ export function InputSources() {
 									{hid.connected
 										? t('settings.scanner_hid_disconnect')
 										: t('settings.scanner_connect_hid')}
+								</ButtonText>
+							</Button>
+						) : null}
+						{ble.available ? (
+							<Button
+								size="sm"
+								variant={ble.connected ? 'outline' : 'default'}
+								onPress={() => (ble.connected ? ble.disconnect() : ble.connect())}
+								testID="ble-connect-button"
+							>
+								<ButtonText>
+									{ble.connected
+										? t('settings.scanner_ble_disconnect')
+										: t('settings.scanner_connect_ble')}
 								</ButtonText>
 							</Button>
 						) : null}
@@ -222,7 +236,7 @@ export function InputSources() {
 				) : null}
 
 				<VStack space="xs">
-					{serial.available || hid.available ? (
+					{serial.available || hid.available || ble.available ? (
 						<View testID="scanner-mode-note">
 							<Text className="text-muted-foreground text-xs">
 								{t('settings.scanner_mode_note')}
