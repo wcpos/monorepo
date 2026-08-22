@@ -20,22 +20,25 @@ function matchesExactSymbology(document: CatalogRecord, barcode: string): boolea
 }
 
 /**
- * The document carries the UPC-A/EAN-13 counterpart of the scanned code in a
- * barcode-symbology field (#740). Scoped to barcode fields so a numeric SKU
- * never gains an equivalent form, and excludes the exact code (a higher tier) so
- * this is strictly the equivalence match.
+ * The document carries the UPC-A/EAN-13 counterpart of the scanned code in its
+ * MATERIALIZED barcode field (#740) — the value of whichever carrier the store's
+ * representation config declares to be its barcode. Excludes the exact code (a
+ * higher tier) so this is strictly the equivalence match.
+ *
+ * Reading only `payload.barcode` is what keeps #740's protection intact: a raw
+ * `sku` the store has NOT declared as its barcode carrier is never materialized
+ * into `payload.barcode`, so an arbitrary numeric stock code still cannot gain a
+ * 0-prefixed twin. This deliberately no longer excludes a store whose declared
+ * carrier IS `sku` — there the merchant has said those values are barcodes, and
+ * refusing equivalence disabled the feature for exactly the stores that keep
+ * their GTINs in the SKU field. That exclusion is how a UPC-A scanned by the
+ * camera (zxing reports every UPC symbol in its 13-digit GTIN form) missed a
+ * product that a HID wedge, reading the same symbol as the printed 12 digits,
+ * resolved and added to the cart.
  */
-function matchesEquivalentSymbology(
-	document: CatalogRecord,
-	barcode: string,
-	selectors: ActiveBarcodeSelectors
-): boolean {
+function matchesEquivalentSymbology(document: CatalogRecord, barcode: string): boolean {
 	const materialized = document.payload?.barcode;
-	const collection = document.collection.name;
-	const skuActive =
-		(collection === 'products' || collection === 'variations') &&
-		selectors[collection][0] === 'sku';
-	if (typeof materialized !== 'string' || skuActive) {
+	if (typeof materialized !== 'string') {
 		return false;
 	}
 	return barcodeMatchCandidates(barcode).some(
@@ -130,7 +133,7 @@ export const useBarcodeSearch = () => {
 				return symbologyExact;
 			}
 			const symbologyEquivalent = select((document) =>
-				matchesEquivalentSymbology(document, normalizedBarcode, selectors)
+				matchesEquivalentSymbology(document, normalizedBarcode)
 			);
 			if (symbologyEquivalent.length > 0) {
 				return symbologyEquivalent;
