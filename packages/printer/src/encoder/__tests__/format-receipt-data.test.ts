@@ -45,6 +45,13 @@ describe('formatReceiptData', () => {
 		expect(result.payments[0].change_display).toBe('$5.00');
 	});
 
+	it('keeps the INR symbol in preview formatting', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.order.currency = 'INR';
+		const result = formatReceiptData(data);
+		expect(result.totals.total_incl_display).toBe('₹25.00');
+	});
+
 	it('uses the ISO code and two decimals as the last-resort currency fallback', () => {
 		const data = structuredClone(sampleReceiptData);
 		data.order.currency = 'INVALID';

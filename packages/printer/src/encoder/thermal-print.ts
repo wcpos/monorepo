@@ -137,7 +137,8 @@ export async function encodeThermalTemplateForPrint(
 	input: EncodeThermalTemplateForPrintInput
 ): Promise<Uint8Array> {
 	const canonical = mapReceiptData((input.receiptData ?? {}) as Record<string, unknown>);
-	const formatted = formatReceiptData(canonical);
+	const language = input.encodeOptions?.language ?? 'esc-pos';
+	const formatted = formatReceiptData(canonical, { printerLanguage: language });
 	const renderedTemplateXml = renderTemplatePlaceholders(
 		input.templateXml,
 		formatted as Record<string, unknown>

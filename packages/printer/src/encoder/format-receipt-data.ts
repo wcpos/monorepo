@@ -1,4 +1,4 @@
-import { formatMoney } from './format-money';
+import { formatEscposMoney, formatMoney } from './format-money';
 
 import type { ReceiptData } from './types';
 
@@ -109,7 +109,10 @@ function resolveTaxIdLabel(
  *
  * Returns a new object suitable for Mustache template rendering.
  */
-export function formatReceiptData(data: ReceiptData): Record<string, any> {
+export function formatReceiptData(
+	data: ReceiptData,
+	options: { printerLanguage?: 'esc-pos' | 'star-prnt' | 'star-line' } = {}
+): Record<string, any> {
 	const currency = data.order.currency;
 	if (!currency) {
 		console.warn('formatReceiptData: missing currency in order, formatting may be incomplete');
@@ -121,7 +124,10 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 		...data.i18n,
 	};
 
-	const fmt = (value: number): string => formatMoney(value, currency, locale);
+	const fmt = (value: number): string =>
+		options.printerLanguage
+			? formatEscposMoney(value, currency, locale, undefined, options.printerLanguage)
+			: formatMoney(value, currency, locale);
 	const perUnit = (total: number | undefined, qty: number): number | undefined => {
 		if (total == null || qty === 0) return undefined;
 		return total / qty;
