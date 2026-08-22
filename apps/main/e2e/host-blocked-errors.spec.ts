@@ -37,7 +37,31 @@ const isRoute = (url: URL, suffix: string) =>
 	url.pathname.includes(`/wcpos/v2/${suffix}`) ||
 	(url.searchParams.get('rest_route') ?? '').includes(`/wcpos/v2/${suffix}`);
 
-type StoreFixture = (route: Route, url: URL) => Promise<boolean>;
+/**
+ * A fixture is a matcher plus a response, so a preflight can be answered by
+ * whoever answers the real request.
+ *
+ * The app and the store are different origins in every E2E lane, and the app
+ * sends custom headers (X-WCPOS, Authorization), so each probe is preflighted.
+ * A fulfilled response without CORS headers is rejected by the browser as a
+ * network error, which silently rewrites the condition under test: a mocked
+ * echo body meant to prove AUTH421 becomes "network dead everywhere" and the
+ * ladder answers AUTH431 instead. That mismatch showed up as flakiness before
+ * these headers existed.
+ */
+interface StoreFixture {
+	matches: (url: URL, request: Request) => boolean;
+	response: { status: number; contentType: string; body: string };
+}
+
+type Request = ReturnType<Route['request']>;
+
+const CORS_HEADERS: Record<string, string> = {
+	'access-control-allow-origin': '*',
+	'access-control-allow-methods': 'GET,POST,OPTIONS',
+	'access-control-allow-headers': '*',
+	'access-control-max-age': '600',
+};
 
 async function installStoreFixture(
 	page: Page,
@@ -46,9 +70,23 @@ async function installStoreFixture(
 ): Promise<void> {
 	const storeOrigin = new URL(storeUrl).origin;
 	await page.context().route('**/*', async (route) => {
-		const url = new URL(route.request().url());
-		if (url.origin === storeOrigin && (await fixture(route, url))) return;
-		await route.continue();
+		try {
+			const request = route.request();
+			const url = new URL(request.url());
+			if (url.origin !== storeOrigin || !fixture.matches(url, request)) {
+				await route.continue();
+				return;
+			}
+			if (request.method() === 'OPTIONS') {
+				await route.fulfill({ status: 204, headers: CORS_HEADERS, body: '' });
+				return;
+			}
+			await route.fulfill({ ...fixture.response, headers: CORS_HEADERS });
+		} catch (error) {
+			// The context can close mid-flight at teardown; a rejected handler
+			// surfaces as a spurious test error rather than a real failure.
+			if (!/closed|Target page|context or browser/i.test(String(error))) throw error;
+		}
 	});
 
 	// Registered second so the discovery-only version stub gets first refusal;
@@ -89,14 +127,9 @@ test('AUTH431 names REST transport blocked when both auth routes are absent', as
 	const storeUrl = (testInfo.project.use as { storeUrl?: string }).storeUrl;
 	test.skip(!storeUrl, 'E2E_STORE_URL_FREE is not configured');
 
-	await installStoreFixture(page, storeUrl!, async (route, url) => {
-		if (!isRoute(url, 'echo') && !isRoute(url, 'auth/test')) return false;
-		await route.fulfill({
-			status: 404,
-			contentType: 'text/plain',
-			body: 'blocked by E2E',
-		});
-		return true;
+	await installStoreFixture(page, storeUrl!, {
+		matches: (url) => isRoute(url, 'echo') || isRoute(url, 'auth/test'),
+		response: { status: 404, contentType: 'text/plain', body: 'blocked by E2E' },
 	});
 	await connectStore(page, storeUrl!);
 
@@ -107,14 +140,13 @@ test('AUTH421 names hosts that strip every credential channel', async ({ page },
 	const storeUrl = (testInfo.project.use as { storeUrl?: string }).storeUrl;
 	test.skip(!storeUrl, 'E2E_STORE_URL_FREE is not configured');
 
-	await installStoreFixture(page, storeUrl!, async (route, url) => {
-		if (!isRoute(url, 'echo')) return false;
-		await route.fulfill({
+	await installStoreFixture(page, storeUrl!, {
+		matches: (url) => isRoute(url, 'echo'),
+		response: {
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify(DEAD_CREDENTIAL_CHANNELS),
-		});
-		return true;
+		},
 	});
 	await connectStore(page, storeUrl!);
 
@@ -125,14 +157,9 @@ test('HOST121 names bot challenges blocking the API', async ({ page }, testInfo)
 	const storeUrl = (testInfo.project.use as { storeUrl?: string }).storeUrl;
 	test.skip(!storeUrl, 'E2E_STORE_URL_FREE is not configured');
 
-	await installStoreFixture(page, storeUrl!, async (route, url) => {
-		if (!isRoute(url, 'echo') && !isRoute(url, 'auth/test')) return false;
-		await route.fulfill({
-			status: 403,
-			contentType: 'text/html',
-			body: CHALLENGE_HTML,
-		});
-		return true;
+	await installStoreFixture(page, storeUrl!, {
+		matches: (url) => isRoute(url, 'echo') || isRoute(url, 'auth/test'),
+		response: { status: 403, contentType: 'text/html', body: CHALLENGE_HTML },
 	});
 	await connectStore(page, storeUrl!);
 
@@ -145,20 +172,19 @@ test('HOST151 blocks an authenticated echo replayed from shared cache', async ({
 	const storeUrl = (testInfo.project.use as { storeUrl?: string }).storeUrl;
 	test.skip(!storeUrl, 'E2E_STORE_URL_FREE is not configured');
 
-	await installStoreFixture(page, storeUrl!, async (route, url) => {
-		const request = route.request();
-		const isReplayProbe =
-			request.method() === 'GET' &&
+	await installStoreFixture(page, storeUrl!, {
+		// The replay probes are the echo GETs that carry an Authorization header
+		// but NO authorization query param — the ladder's own echo carries the
+		// masked param, so it still reaches the real store.
+		matches: (url, request) =>
+			(request.method() === 'GET' || request.method() === 'OPTIONS') &&
 			isRoute(url, 'echo') &&
-			Boolean(request.headers()['authorization']) &&
-			!url.searchParams.has('authorization');
-		if (!isReplayProbe) return false;
-		await route.fulfill({
+			!url.searchParams.has('authorization'),
+		response: {
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify(REPLAYED_ECHO),
-		});
-		return true;
+		},
 	});
 	await connectStore(page, storeUrl!);
 
@@ -171,14 +197,9 @@ test('HOST141 warns when search-like ping requests are blocked without blocking 
 	const storeUrl = (testInfo.project.use as { storeUrl?: string }).storeUrl;
 	test.skip(!storeUrl, 'E2E_STORE_URL_FREE is not configured');
 
-	await installStoreFixture(page, storeUrl!, async (route, url) => {
-		if (!isRoute(url, 'ping') || !url.searchParams.has('s')) return false;
-		await route.fulfill({
-			status: 403,
-			contentType: 'text/plain',
-			body: 'blocked by E2E',
-		});
-		return true;
+	await installStoreFixture(page, storeUrl!, {
+		matches: (url) => isRoute(url, 'ping') && url.searchParams.has('s'),
+		response: { status: 403, contentType: 'text/plain', body: 'blocked by E2E' },
 	});
 	await connectStore(page, storeUrl!);
 
