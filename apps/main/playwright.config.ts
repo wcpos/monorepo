@@ -141,7 +141,11 @@ export default defineConfig<WcposTestOptions>({
 			? [
 					{
 						name: 'free-unauthenticated',
-						testMatch: [/auth\.spec\.ts/, /rest-route-transport\.spec\.ts/],
+						testMatch: [
+							/auth\.spec\.ts/,
+							/rest-route-transport\.spec\.ts/,
+							/host-blocked-errors\.spec\.ts/,
+						],
 						use: {
 							...devices['Desktop Chrome'],
 							storeVariant: 'free' as const,
@@ -150,7 +154,13 @@ export default defineConfig<WcposTestOptions>({
 					},
 					{
 						name: 'free-authenticated',
-						testIgnore: [/auth\.spec\.ts/, /rest-route-transport\.spec\.ts/, COLD_SPEC, LIVE_SPEC],
+						testIgnore: [
+							/auth\.spec\.ts/,
+							/rest-route-transport\.spec\.ts/,
+							/host-blocked-errors\.spec\.ts/,
+							COLD_SPEC,
+							LIVE_SPEC,
+						],
 						use: {
 							...devices['Desktop Chrome'],
 							storeVariant: 'free' as const,
@@ -180,7 +190,13 @@ export default defineConfig<WcposTestOptions>({
 		},
 		{
 			name: 'pro-authenticated',
-			testIgnore: [/auth\.spec\.ts/, /rest-route-transport\.spec\.ts/, COLD_SPEC, LIVE_SPEC],
+			testIgnore: [
+				/auth\.spec\.ts/,
+				/rest-route-transport\.spec\.ts/,
+				/host-blocked-errors\.spec\.ts/,
+				COLD_SPEC,
+				LIVE_SPEC,
+			],
 			use: {
 				...devices['Desktop Chrome'],
 				storeVariant: 'pro',

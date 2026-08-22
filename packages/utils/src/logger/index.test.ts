@@ -272,6 +272,18 @@ describe('logger/index', () => {
 			const mockToast = jest.fn();
 			expect(() => setToast(mockToast)).not.toThrow();
 		});
+
+		it('passes an error-code test ID to coded toasts', () => {
+			const mockToast = jest.fn();
+			setToast(mockToast);
+
+			getLogger(['wcpos', 'test']).warn('Host warning', {
+				code: 'HOST141',
+				showToast: true,
+			});
+
+			expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ testId: 'toast-HOST141' }));
+		});
 	});
 
 	describe('setDatabase', () => {
