@@ -169,9 +169,10 @@ export function buildBarcodeSymbologyIndex(
  * while Android/HID wedges report the bare 12 digits, so a store keyed on one
  * form would otherwise miss scans from the other source.
  *
- * The same GTIN can also print as an 8-digit UPC-E on a small package, so the
- * candidate set spans all three retail forms: whichever one the merchant keyed —
- * read off the package, or taken from supplier data — the scan reaches it.
+ * The same GTIN can also print as an 8-digit UPC-E on a small package, so a
+ * 12-digit scan additionally offers the UPC-E it compresses to — a store that
+ * keyed what was printed still resolves. The reverse is deliberately absent; see
+ * the note in the body.
  *
  * Return the scanned code plus every equivalent form (scanned form first) so a
  * lookup can try them all — this never rewrites the scanned code, so genuine
@@ -200,16 +201,17 @@ export function barcodeMatchCandidates(code: string): string[] {
 		// 12-digit UPC-A → also try its 13-digit EAN-13 encoding.
 		upcA = trimmed;
 		add(`0${trimmed}`);
-	} else if (/^[01]\d{7}$/.test(trimmed)) {
-		// 8-digit UPC-E as printed on a small package → also try the UPC-A it
-		// expands to, and that form's 13-digit encoding. expandUpcE validates the
-		// check digit, so an EAN-8 that merely starts with 0 or 1 yields nothing.
-		upcA = expandUpcE(trimmed);
-		add(upcA);
-		if (upcA !== null) {
-			add(`0${upcA}`);
-		}
 	}
+	// Deliberately NOT the reverse: an 8-digit scan is never expanded to the UPC-A
+	// it might be the UPC-E of. Eight digits beginning 0 or 1 can be either
+	// symbology, and a check digit cannot tell them apart — for the x6∈5..9 family
+	// (half the UPC-E space, and its commonest form) a valid UPC-E is ALWAYS also
+	// a valid EAN-8, because the four zeros the expansion inserts shift the other
+	// digits by an even number of places and so leave the weighted sum unchanged.
+	// Expanding on a guess would let an EAN-8 that isn't in the catalog resolve to
+	// an unrelated product: a silently wrong line on the receipt, which is far
+	// worse than a not-found the cashier can see and act on. The 12→8 direction
+	// below is safe because a 12-digit code is unambiguous.
 
 	// …and the UPC-E the same GTIN prints as, when it has one. Deduped, so a scan
 	// that already IS the UPC-E form doesn't repeat itself.
@@ -498,33 +500,40 @@ export async function resolveScan(input: ResolveScanInput): Promise<ScanResult> 
 		};
 	}
 
-	// The scanned form first, so a store keyed the way the decoder reports
-	// answers on the first probe and the counterpart costs nothing.
-	const candidates = barcodeMatchCandidates(code);
-
-	for (const candidate of candidates) {
-		const hit = input.index.get(candidate);
-		if (hit) {
-			const terminal = emit('local-hit');
-			return {
-				outcome: 'local',
-				code,
-				docId: hit.docId,
-				timings: { scanToFeedbackMs: terminal.atMs, scanToResolutionMs: terminal.atMs },
-				events,
-			};
-		}
+	// EXACT only against `input.index`. That map may be the all-fields index from
+	// buildLocalBarcodeIndex, which includes `sku`, and an entry carries no field
+	// provenance — so probing equivalent forms here would hand a numeric stock
+	// code the `0`-prefixed twin that barcodeMatchCandidates explicitly forbids,
+	// resolving a scan to an unrelated product. Equivalent-form matching belongs
+	// to use-barcode-search, which knows the store's declared barcode carrier;
+	// this flow is invoked with an empty index and exists to drive the online
+	// resolve below.
+	const hit = input.index.get(code);
+	if (hit) {
+		const terminal = emit('local-hit');
+		return {
+			outcome: 'local',
+			code,
+			docId: hit.docId,
+			timings: { scanToFeedbackMs: terminal.atMs, scanToResolutionMs: terminal.atMs },
+			events,
+		};
 	}
 
 	// Contract: the cashier sees "searching online" before any network await.
 	const feedback = emit('searching-online');
 	const scanToFeedbackMs = feedback.atMs;
 
-	let body: ResolveBarcodeResponse | null = null;
-	// Only a clean `found:false` advances to the counterpart: a transport error
-	// or a non-2xx is terminal for the whole scan, so a dead network still costs
-	// exactly one request (and one lookup deadline), not one per candidate.
-	for (const candidate of candidates) {
+	// Seeded not-found rather than null: barcodeMatchCandidates always yields at
+	// least the scanned code, so the loop always assigns — the seed keeps the type
+	// honest without an unreachable branch to explain.
+	let body: ResolveBarcodeResponse = { code, found: false, match: null, ambiguous: [] };
+	// Only a clean `found:false` advances to the next form: a transport error or a
+	// non-2xx is terminal for the whole scan, so a dead network costs one request
+	// rather than one per candidate. The caller's lookup deadline spans the whole
+	// loop (see withBarcodeLookupDeadline) — a slow first probe eats into the
+	// budget instead of granting the retry a fresh one.
+	for (const candidate of barcodeMatchCandidates(code)) {
 		const url = buildResolveBarcodeUrl({
 			syncBaseUrl: input.syncBaseUrl,
 			code: candidate,
@@ -557,19 +566,6 @@ export async function resolveScan(input: ResolveScanInput): Promise<ScanResult> 
 		if (body.found) {
 			break;
 		}
-	}
-
-	// `candidates` is never empty (barcodeMatchCandidates always returns the
-	// trimmed code), so the loop above always assigned a body or returned.
-	if (body === null) {
-		const terminal = emit('error');
-		return {
-			outcome: 'error',
-			code,
-			message: 'resolve/barcode produced no response',
-			timings: { scanToFeedbackMs, scanToResolutionMs: terminal.atMs },
-			events,
-		};
 	}
 
 	const serverMeta = body.meta ?? null;

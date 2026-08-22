@@ -7,7 +7,9 @@ import {
 	buildBarcodeSymbologyIndex,
 	buildLocalBarcodeIndex,
 	buildResolveBarcodeUrl,
+	compressToUpcE,
 	deriveBarcodeFromPayload,
+	expandUpcE,
 	type ResolveBarcodeResponse,
 	resolveScan,
 	type ScanEvent,
@@ -141,12 +143,13 @@ describe('barcodeMatchCandidates (UPC-A ↔ EAN-13 equivalence, #740)', () => {
 		]);
 	});
 
-	it('offers the UPC-A and EAN-13 forms of a UPC-E scan', () => {
-		expect(barcodeMatchCandidates('01234565')).toEqual([
-			'01234565',
-			'012345000065',
-			'0012345000065',
-		]);
+	it('never expands an 8-digit scan, which EAN-8 and UPC-E both lay claim to', () => {
+		// 01234565 is a valid UPC-E for 012345000065 AND a valid EAN-8. That is not
+		// a coincidence: whenever the last data digit is 5-9 the expansion inserts
+		// four zeros, an even shift that leaves every other digit's weight — and so
+		// the check digit — untouched. Guessing here could put an unrelated product
+		// in the cart, so an 8-digit scan is only ever matched as itself.
+		expect(barcodeMatchCandidates('01234565')).toEqual(['01234565']);
 	});
 
 	it('reaches the UPC-E form from the 13-digit reading too', () => {
@@ -165,13 +168,56 @@ describe('barcodeMatchCandidates (UPC-A ↔ EAN-13 equivalence, #740)', () => {
 	});
 
 	it('does not treat an EAN-8 as a UPC-E', () => {
-		// 8 digits starting with 0, but the check digit disagrees with any UPC-A
-		// expansion, so no bogus candidate is offered.
 		expect(barcodeMatchCandidates('09638507')).toEqual(['09638507']);
+		expect(barcodeMatchCandidates('96385074')).toEqual(['96385074']);
 	});
 
 	it('trims before classifying', () => {
 		expect(barcodeMatchCandidates('  012345678905  ')).toEqual(['012345678905', '0012345678905']);
+	});
+});
+
+describe('UPC-E ↔ UPC-A conversion', () => {
+	// One pair per zero-run rule — which run the expansion restores is decided by
+	// the last data digit — plus a number-system-1 code.
+	const PAIRS: [upce: string, upca: string][] = [
+		['04825302', '048000002532'], // last data digit 0
+		['04825311', '048100002531'], // 1
+		['07391422', '073200009142'], // 2
+		['01862736', '018600000276'], // 3
+		['09253847', '092530000087'], // 4
+		['06401979', '064019000079'], // 5-9
+		['12837465', '128374000065'], // number system 1
+	];
+
+	it.each(PAIRS)('expands %s to %s', (upce, upca) => {
+		expect(expandUpcE(upce)).toBe(upca);
+	});
+
+	it.each(PAIRS)('compresses %s back from %s', (upce, upca) => {
+		expect(compressToUpcE(upca)).toBe(upce);
+	});
+
+	it('rejects an 8-digit code whose check digit contradicts its expansion', () => {
+		expect(expandUpcE('04825303')).toBeNull();
+	});
+
+	it('rejects inputs that are not UPC-E shaped', () => {
+		expect(expandUpcE('24825302')).toBeNull(); // number system 2
+		expect(expandUpcE('0482530')).toBeNull(); // too short
+		expect(expandUpcE('0482530A')).toBeNull(); // not all digits
+	});
+
+	it('returns null for a UPC-A with no UPC-E form', () => {
+		expect(compressToUpcE('012345678905')).toBeNull(); // no squeezable zero run
+		expect(compressToUpcE('733620209958')).toBeNull(); // number system 7
+		expect(compressToUpcE('0123456789')).toBeNull(); // wrong length
+	});
+
+	it('refuses a candidate that does not survive the round trip', () => {
+		// The zero run matches a rule, but the code's own check digit belongs to a
+		// different number — expanding the candidate back does not reproduce it.
+		expect(compressToUpcE('048000002533')).toBeNull();
 	});
 });
 
@@ -387,18 +433,27 @@ describe('resolveScan UPC-A/EAN-13 equivalence (#740)', () => {
 	const UPC_A = '733620209958';
 	const EAN_13 = '0733620209958';
 
-	it('finds a local hit on the counterpart form', async () => {
-		const fetcher = vi.fn<BarcodeResolveFetcher>();
-		const { index } = buildLocalBarcodeIndex([{ id: 'doc-upc', payload: { barcode: UPC_A } }]);
+	it('matches the local index on the scanned form ONLY', async () => {
+		// `input.index` may be the all-fields index, whose entries carry no field
+		// provenance — so a counterpart probe here could hand a numeric SKU the
+		// 0-prefixed twin barcodeMatchCandidates forbids and resolve the scan to an
+		// unrelated product. Equivalence is use-barcode-search's job; it knows the
+		// store's declared barcode carrier. This flow goes online instead.
+		const fetcher = vi.fn<BarcodeResolveFetcher>(async () => jsonResponse(resolveResponse()));
+		const { index } = buildLocalBarcodeIndex([{ id: 'doc-sku', payload: { sku: UPC_A } }]);
 		const events: ScanEvent[] = [];
 		const result = await resolveScan(
 			scanInput({ code: EAN_13, fetcher, index, onEvent: (event) => events.push(event) })
 		);
-		expect(result).toMatchObject({ outcome: 'local', docId: 'doc-upc' });
-		// The scanned form is echoed back, not the form that matched — callers key
-		// their toasts and feedback on what the cashier actually scanned.
-		expect(result.code).toBe(EAN_13);
-		expect(events.map((event) => event.type)).toEqual(['local-hit']);
+		expect(result.outcome).toBe('not-found');
+		expect(events.map((event) => event.type)).toEqual(['searching-online', 'not-found']);
+	});
+
+	it('still takes a local hit when the scanned form itself is indexed', async () => {
+		const fetcher = vi.fn<BarcodeResolveFetcher>();
+		const { index } = buildLocalBarcodeIndex([{ id: 'doc-upc', payload: { barcode: EAN_13 } }]);
+		const result = await resolveScan(scanInput({ code: EAN_13, fetcher, index }));
+		expect(result).toMatchObject({ outcome: 'local', docId: 'doc-upc', code: EAN_13 });
 		expect(fetcher).not.toHaveBeenCalled();
 	});
 

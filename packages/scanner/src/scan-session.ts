@@ -65,11 +65,14 @@ const ZERO_PADDED_SYMBOLOGIES = new Set(['ean13', 'upc_a', 'upc_e', 'ean-13', 'u
  * numeric Code 128 SKU that happens to start with 0 is left alone, and #740's
  * lookup equivalence still tries both forms for those.
  *
- * A UPC-E read lands on its 12-digit UPC-A expansion rather than the 8 digits
- * printed on the package, because that expansion is the GTIN a merchant gets
- * from supplier data and the form the catalog usually holds. A store that keyed
- * the printed 8 instead still resolves: `barcodeMatchCandidates` offers the
- * UPC-E form of any compressible UPC-A.
+ * A UPC-E read is trimmed the same way, landing on the 12-digit UPC-A the
+ * decoder expanded it to rather than the 8 digits printed on the small package.
+ * That expansion is the GTIN supplier data carries and the form a catalog
+ * usually holds, and a store that keyed the printed 8 still resolves because
+ * `barcodeMatchCandidates` offers the UPC-E form of any compressible UPC-A. A
+ * source that reports UPC-E as those 8 printed digits is left alone: 8 digits
+ * beginning 0 or 1 are ambiguous with EAN-8 and no check digit separates them,
+ * so rewriting on a guess could put the wrong item in the cart.
  */
 export function normalizeRetailCode(code: string, symbology?: string): string {
 	if (symbology === undefined || !ZERO_PADDED_SYMBOLOGIES.has(symbology.toLowerCase())) {
