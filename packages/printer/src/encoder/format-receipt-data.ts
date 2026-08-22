@@ -27,7 +27,7 @@ const DEFAULT_I18N = {
 	tax_amount_short: 'Tax',
 	taxable_excl_short: 'Taxable excl.',
 	taxable_incl_short: 'Taxable incl.',
-	refund_total: 'Refund Total',
+	total_refunded: 'Total Refunded',
 	refunded: 'Refunded',
 	net_total: 'Net Total',
 	tendered: 'Tendered',

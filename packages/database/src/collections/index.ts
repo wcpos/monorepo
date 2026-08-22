@@ -182,6 +182,11 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			oldDoc.barcode_scanning_sound_haptic_enabled = true;
 			return oldDoc;
 		},
+		13(oldDoc: StoreDocumentType) {
+			// The next server sync populates the real receipt label dictionary.
+			oldDoc.receipt_i18n = {};
+			return oldDoc;
+		},
 	},
 };
 

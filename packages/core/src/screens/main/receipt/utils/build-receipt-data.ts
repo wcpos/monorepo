@@ -158,6 +158,7 @@ interface ReceiptTaxSection {
 }
 
 export interface ReceiptData {
+	i18n?: Record<string, string>;
 	order: ReceiptOrder;
 	store: ReceiptStore;
 	customer: ReceiptCustomer;
@@ -555,6 +556,13 @@ export interface BuildReceiptDataOptions {
 	 * Falls back to a capitalized raw status when omitted.
 	 */
 	getStatusLabel?: (status: string) => string;
+	/**
+	 * Receipt label dictionary to use instead of `store.receipt_i18n`. Pass a
+	 * reactively-subscribed value (useDocField) so a store sync that delivers
+	 * the dictionary mid-screen rebuilds memoized receipt data — reading it off
+	 * a stable RxDocument identity inside a memo would go stale.
+	 */
+	receiptI18n?: Record<string, string>;
 }
 
 export function buildReceiptData(
@@ -762,8 +770,18 @@ export function buildReceiptData(
 		}
 		printedDatetime = new Intl.DateTimeFormat('en-US', printedFormatOptions).format(printedAt);
 	}
+	const rawReceiptI18n = options.receiptI18n ?? store.receipt_i18n;
+	const receiptI18n: Record<string, string> =
+		rawReceiptI18n !== null && typeof rawReceiptI18n === 'object' && !Array.isArray(rawReceiptI18n)
+			? Object.fromEntries(
+					Object.entries(rawReceiptI18n).filter(
+						(entry): entry is [string, string] => typeof entry[1] === 'string'
+					)
+				)
+			: {};
 
 	return {
+		...(Object.keys(receiptI18n).length > 0 ? { i18n: receiptI18n } : {}),
 		order: {
 			id: typeof order.id === 'number' ? order.id : Number(order.id) || 0,
 			number: order.number || String(order.id || ''),

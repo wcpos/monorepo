@@ -231,6 +231,46 @@ describe('buildReceiptData', () => {
 		expect(result.store.tax_ids).toEqual([]);
 	});
 
+	it('includes translated receipt labels from the store', () => {
+		const result = buildReceiptData(mockOrder, {
+			...mockStore,
+			receipt_i18n: { order: 'Bestelling', total: 'Totaal' },
+		});
+
+		expect(result.i18n).toEqual({ order: 'Bestelling', total: 'Totaal' });
+	});
+
+	it.each([mockStore, { ...mockStore, receipt_i18n: {} }])(
+		'omits empty receipt labels',
+		(store) => {
+			const result = buildReceiptData(mockOrder, store);
+
+			expect(result).not.toHaveProperty('i18n');
+		}
+	);
+
+	it('drops non-string receipt label values', () => {
+		const result = buildReceiptData(mockOrder, {
+			...mockStore,
+			receipt_i18n: { order: 'Bestelling', junk: 5 },
+		});
+
+		expect(result.i18n).toEqual({ order: 'Bestelling' });
+	});
+
+	it('prefers the receiptI18n option over the store field', () => {
+		// The renderer passes a reactively-subscribed dictionary so a store sync
+		// mid-screen rebuilds memoized receipt data (see BuildReceiptDataOptions).
+		const result = buildReceiptData(
+			mockOrder,
+			{ ...mockStore, receipt_i18n: { order: 'Stale' } },
+			2,
+			{ receiptI18n: { order: 'Bestelling' } }
+		);
+
+		expect(result.i18n).toEqual({ order: 'Bestelling' });
+	});
+
 	it('maps customer section from billing', () => {
 		const result = buildReceiptData(mockOrder, mockStore);
 		expect(result.customer.name).toBe('John Doe');

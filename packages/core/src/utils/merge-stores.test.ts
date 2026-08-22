@@ -1,4 +1,8 @@
-import { getServerOwnedStorePatch, mergeStoresWithResponse } from './merge-stores';
+import {
+	getServerOwnedStorePatch,
+	mergeStoresWithResponse,
+	normalizeStorePayload,
+} from './merge-stores';
 
 // Mock expo-crypto
 jest.mock('expo-crypto', () => ({
@@ -68,6 +72,25 @@ const makeStoreDocument = (data: Record<string, unknown>) => {
 	document.getLatest = jest.fn(() => document);
 	return document;
 };
+
+describe('normalizeStorePayload', () => {
+	it('defaults absent receipt_i18n to an empty object', () => {
+		expect(normalizeStorePayload({ id: 1 }).receipt_i18n).toEqual({});
+	});
+
+	it.each([[], 'invalid', null])('defaults malformed receipt_i18n to an empty object', (value) => {
+		expect(normalizeStorePayload({ id: 1, receipt_i18n: value }).receipt_i18n).toEqual({});
+	});
+
+	it('keeps only string-valued receipt_i18n entries', () => {
+		expect(
+			normalizeStorePayload({
+				id: 1,
+				receipt_i18n: { order: 'Bestelling', total: 'Totaal', junk: 5, empty: null },
+			}).receipt_i18n
+		).toEqual({ order: 'Bestelling', total: 'Totaal' });
+	});
+});
 
 describe('mergeStoresWithResponse', () => {
 	it('updates changed server-owned fields on an existing store and preserves local preferences', async () => {

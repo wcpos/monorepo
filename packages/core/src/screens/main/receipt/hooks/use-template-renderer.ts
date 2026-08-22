@@ -83,6 +83,10 @@ export function useTemplateRenderer({
 		contextDp: taxRates?.priceNumDecimals,
 		storeDp,
 	});
+	// Subscribed (not read off the stable `store` identity inside the memo) so a
+	// sync that delivers the dictionary mid-screen re-renders the fallback.
+	const receiptI18n = useDocField(store, (value) => value.receipt_i18n) as
+		Record<string, string> | undefined;
 	const { status } = useOnlineStatus();
 	const isOffline = status !== 'online-website-available';
 	const { getLabel: getStatusLabel } = useOrderStatusLabel();
@@ -110,10 +114,10 @@ export function useTemplateRenderer({
 	const receiptData = React.useMemo(() => {
 		if (apiReceiptData) return apiReceiptData;
 		if (order && store) {
-			return buildReceiptData(order, store, dp, { getStatusLabel });
+			return buildReceiptData(order, store, dp, { getStatusLabel, receiptI18n });
 		}
 		return null;
-	}, [apiReceiptData, order, store, dp, getStatusLabel]);
+	}, [apiReceiptData, order, store, dp, getStatusLabel, receiptI18n]);
 
 	// Syncing: API fetch is in flight and we're still showing local data
 	const isSyncing = isLoading && !apiReceiptData && !deadlinePassed;
