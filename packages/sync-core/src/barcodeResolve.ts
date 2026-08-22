@@ -169,8 +169,12 @@ export function buildBarcodeSymbologyIndex(
  * while Android/HID wedges report the bare 12 digits, so a store keyed on one
  * form would otherwise miss scans from the other source.
  *
- * Return the scanned code plus its UPC-A/EAN-13 counterpart (scanned form first)
- * so a lookup can try both — this never rewrites the scanned code, so genuine
+ * The same GTIN can also print as an 8-digit UPC-E on a small package, so the
+ * candidate set spans all three retail forms: whichever one the merchant keyed —
+ * read off the package, or taken from supplier data — the scan reaches it.
+ *
+ * Return the scanned code plus every equivalent form (scanned form first) so a
+ * lookup can try them all — this never rewrites the scanned code, so genuine
  * EAN-13 codes (13 digits not starting with 0) are returned unchanged. The
  * prepended/stripped zero doesn't change the check digit, so no recomputation is
  * needed. Apply the candidates only against a barcode-symbology index (see
@@ -178,15 +182,130 @@ export function buildBarcodeSymbologyIndex(
  */
 export function barcodeMatchCandidates(code: string): string[] {
 	const trimmed = code.trim();
-	// 13-digit, leading zero → also try the 12-digit UPC-A form.
+	const candidates = [trimmed];
+	const add = (value: string | null): void => {
+		if (value !== null && !candidates.includes(value)) {
+			candidates.push(value);
+		}
+	};
+
+	// The 12-digit UPC-A this scan denotes, if any — the hub every other retail
+	// form converts through.
+	let upcA: string | null = null;
 	if (/^0\d{12}$/.test(trimmed)) {
-		return [trimmed, trimmed.slice(1)];
+		// 13-digit, leading zero → also try the 12-digit UPC-A form.
+		upcA = trimmed.slice(1);
+		add(upcA);
+	} else if (/^\d{12}$/.test(trimmed)) {
+		// 12-digit UPC-A → also try its 13-digit EAN-13 encoding.
+		upcA = trimmed;
+		add(`0${trimmed}`);
+	} else if (/^[01]\d{7}$/.test(trimmed)) {
+		// 8-digit UPC-E as printed on a small package → also try the UPC-A it
+		// expands to, and that form's 13-digit encoding. expandUpcE validates the
+		// check digit, so an EAN-8 that merely starts with 0 or 1 yields nothing.
+		upcA = expandUpcE(trimmed);
+		add(upcA);
+		if (upcA !== null) {
+			add(`0${upcA}`);
+		}
 	}
-	// 12-digit UPC-A → also try its 13-digit EAN-13 encoding.
-	if (/^\d{12}$/.test(trimmed)) {
-		return [trimmed, `0${trimmed}`];
+
+	// …and the UPC-E the same GTIN prints as, when it has one. Deduped, so a scan
+	// that already IS the UPC-E form doesn't repeat itself.
+	if (upcA !== null) {
+		add(compressToUpcE(upcA));
 	}
-	return [trimmed];
+
+	return candidates;
+}
+
+// --- UPC-E ↔ UPC-A equivalence ---------------------------------------------------
+
+/**
+ * UPC-E is a UPC-A with a run of zeros squeezed out so the symbol fits on a
+ * small package: `01234565` and `012345000065` are the same GTIN. Which one a
+ * store holds depends on where the merchant got it — reading the package gives
+ * the 8 printed digits, supplier data gives the 12 — and decoders disagree the
+ * same way (zxing-wasm expands to the 12-digit form; some native readers report
+ * the 8). Offering both means the item reaches the cart either way.
+ */
+
+/** The mod-10 check digit for a GTIN body (mirrors `hasValidRetailCheckDigit`). */
+function gtinCheckDigit(body: string): string {
+	let sum = 0;
+	for (let i = body.length - 1, weight = 3; i >= 0; i -= 1, weight = weight === 3 ? 1 : 3) {
+		sum += Number(body[i]) * weight;
+	}
+	return String((10 - (sum % 10)) % 10);
+}
+
+/**
+ * Expands an 8-digit UPC-E to its 12-digit UPC-A. Returns null when the input
+ * isn't a valid UPC-E — including an EAN-8 that happens to start with 0 or 1,
+ * which the check-digit test rejects (a UPC-E's last digit is the check digit of
+ * the EXPANDED code, so a genuine UPC-E always agrees with its expansion).
+ */
+export function expandUpcE(code: string): string | null {
+	if (!/^[01]\d{7}$/.test(code)) {
+		return null;
+	}
+	const numberSystem = code[0];
+	const [x1, x2, x3, x4, x5, x6] = code.slice(1, 7);
+	const check = code[7];
+	// The last data digit says which zero run was squeezed out.
+	let body: string;
+	switch (x6) {
+		case '0':
+		case '1':
+		case '2':
+			body = `${x1}${x2}${x6}0000${x3}${x4}${x5}`;
+			break;
+		case '3':
+			body = `${x1}${x2}${x3}00000${x4}${x5}`;
+			break;
+		case '4':
+			body = `${x1}${x2}${x3}${x4}00000${x5}`;
+			break;
+		default:
+			body = `${x1}${x2}${x3}${x4}${x5}0000${x6}`;
+	}
+	const upcA = `${numberSystem}${body}${check}`;
+	return gtinCheckDigit(upcA.slice(0, 11)) === check ? upcA : null;
+}
+
+/**
+ * Compresses a 12-digit UPC-A to its UPC-E, or null when the code has no UPC-E
+ * form (most don't — only number system 0/1 with the right zero run qualifies).
+ * The candidate is confirmed by expanding it back, so a subtle mistake in the
+ * pattern rules yields no candidate rather than a wrong one.
+ */
+export function compressToUpcE(upcA: string): string | null {
+	if (!/^[01]\d{11}$/.test(upcA)) {
+		return null;
+	}
+	const d = upcA;
+	let middle: string | null = null;
+	if (d[4] === '0' && d[5] === '0' && d[6] === '0' && d[7] === '0' && '012'.includes(d[3])) {
+		middle = `${d[1]}${d[2]}${d[8]}${d[9]}${d[10]}${d[3]}`;
+	} else if (d[4] === '0' && d[5] === '0' && d[6] === '0' && d[7] === '0' && d[8] === '0') {
+		middle = `${d[1]}${d[2]}${d[3]}${d[9]}${d[10]}3`;
+	} else if (d[5] === '0' && d[6] === '0' && d[7] === '0' && d[8] === '0' && d[9] === '0') {
+		middle = `${d[1]}${d[2]}${d[3]}${d[4]}${d[10]}4`;
+	} else if (
+		d[6] === '0' &&
+		d[7] === '0' &&
+		d[8] === '0' &&
+		d[9] === '0' &&
+		'56789'.includes(d[10])
+	) {
+		middle = `${d[1]}${d[2]}${d[3]}${d[4]}${d[5]}${d[10]}`;
+	}
+	if (middle === null) {
+		return null;
+	}
+	const candidate = `${d[0]}${middle}${d[11]}`;
+	return expandUpcE(candidate) === upcA ? candidate : null;
 }
 
 // --- Config-driven re-derivation (ADR 0006, products specialization) ----------

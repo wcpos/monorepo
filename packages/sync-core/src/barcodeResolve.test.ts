@@ -131,6 +131,45 @@ describe('barcodeMatchCandidates (UPC-A ↔ EAN-13 equivalence, #740)', () => {
 		expect(barcodeMatchCandidates('12345')).toEqual(['12345']);
 	});
 
+	it('offers the UPC-E form of a compressible UPC-A', () => {
+		// Same GTIN, printed two ways: a small package carries the 8-digit UPC-E,
+		// supplier data carries the 12. A store may hold either.
+		expect(barcodeMatchCandidates('012345000065')).toEqual([
+			'012345000065',
+			'0012345000065',
+			'01234565',
+		]);
+	});
+
+	it('offers the UPC-A and EAN-13 forms of a UPC-E scan', () => {
+		expect(barcodeMatchCandidates('01234565')).toEqual([
+			'01234565',
+			'012345000065',
+			'0012345000065',
+		]);
+	});
+
+	it('reaches the UPC-E form from the 13-digit reading too', () => {
+		expect(barcodeMatchCandidates('0012345000065')).toEqual([
+			'0012345000065',
+			'012345000065',
+			'01234565',
+		]);
+	});
+
+	it('offers no UPC-E form for a UPC-A that has none', () => {
+		// 733620209958 is number system 7 — outside UPC-E's 0/1 range entirely.
+		expect(barcodeMatchCandidates('733620209958')).toEqual(['733620209958', '0733620209958']);
+		// Number system 0, but no squeezable zero run.
+		expect(barcodeMatchCandidates('012345678905')).toEqual(['012345678905', '0012345678905']);
+	});
+
+	it('does not treat an EAN-8 as a UPC-E', () => {
+		// 8 digits starting with 0, but the check digit disagrees with any UPC-A
+		// expansion, so no bogus candidate is offered.
+		expect(barcodeMatchCandidates('09638507')).toEqual(['09638507']);
+	});
+
 	it('trims before classifying', () => {
 		expect(barcodeMatchCandidates('  012345678905  ')).toEqual(['012345678905', '0012345678905']);
 	});

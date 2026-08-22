@@ -32,17 +32,19 @@ export interface ScanSession {
 
 // Symbologies whose check digit is the standard alternating-weight mod-10 over
 // the literal digits (see hasValidRetailCheckDigit). UPC-E is deliberately
-// excluded: its check digit is computed over the *expanded* UPC-A, so running
-// the EAN-8 algorithm on its 8 literal digits would wrongly reject valid codes.
+// excluded: a UPC-E's check digit is computed over the *expanded* UPC-A, so a
+// source that reports the 8 printed digits would be wrongly rejected by the
+// EAN-8 algorithm. (A source that reports the expansion — which is what the
+// camera decoders do, and what normalizeRetailCode then trims to 12 digits —
+// would validate fine, but the set can't tell the two report styles apart.)
 const RETAIL_SYMBOLOGIES = new Set(['ean13', 'ean8', 'upc_a', 'ean-13', 'ean-8', 'upc-a']);
 
 /**
  * Symbologies whose 13-digit reading may carry an implied leading zero (see
- * normalizeRetailCode). UPC-E is excluded: its printed form is 8 digits and
- * decoders expand it to the 12-digit UPC-A rather than shortening it, so
- * "what's on the package" is a separate question there.
+ * normalizeRetailCode). UPC-E belongs here too: decoders expand it to its
+ * 12-digit UPC-A and then pad that to 13, so the same trailing artifact applies.
  */
-const ZERO_PADDED_SYMBOLOGIES = new Set(['ean13', 'upc_a', 'ean-13', 'upc-a']);
+const ZERO_PADDED_SYMBOLOGIES = new Set(['ean13', 'upc_a', 'upc_e', 'ean-13', 'upc-a', 'upc-e']);
 
 /**
  * Report the digits printed on the package, whichever device did the reading.
@@ -62,6 +64,12 @@ const ZERO_PADDED_SYMBOLOGIES = new Set(['ean13', 'upc_a', 'ean-13', 'upc-a']);
  * a source labelled EAN-13/UPC-A are touched — an unlabelled wedge read or a
  * numeric Code 128 SKU that happens to start with 0 is left alone, and #740's
  * lookup equivalence still tries both forms for those.
+ *
+ * A UPC-E read lands on its 12-digit UPC-A expansion rather than the 8 digits
+ * printed on the package, because that expansion is the GTIN a merchant gets
+ * from supplier data and the form the catalog usually holds. A store that keyed
+ * the printed 8 instead still resolves: `barcodeMatchCandidates` offers the
+ * UPC-E form of any compressible UPC-A.
  */
 export function normalizeRetailCode(code: string, symbology?: string): string {
 	if (symbology === undefined || !ZERO_PADDED_SYMBOLOGIES.has(symbology.toLowerCase())) {

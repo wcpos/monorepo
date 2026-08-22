@@ -28,8 +28,16 @@ describe('normalizeRetailCode', () => {
 		// A numeric Code 128 SKU may legitimately start with 0 and mean it.
 		expect(normalizeRetailCode(DECODED, 'code128')).toBe(DECODED);
 		expect(normalizeRetailCode(DECODED, 'qr')).toBe(DECODED);
-		// UPC-E prints 8 digits and decoders expand it to 12 — out of scope here.
-		expect(normalizeRetailCode('0012345000065', 'upc_e')).toBe('0012345000065');
+	});
+
+	it('trims a UPC-E read to its 12-digit UPC-A expansion', () => {
+		// zxing expands UPC-E 01234565 to the UPC-A 012345000065, then pads it to
+		// 13. The pad is the artifact; the expansion is the GTIN the catalog holds.
+		expect(normalizeRetailCode('0012345000065', 'upc_e')).toBe('012345000065');
+	});
+
+	it('leaves a UPC-E a source reported as the printed 8 digits alone', () => {
+		expect(normalizeRetailCode('01234565', 'upc_e')).toBe('01234565');
 	});
 
 	it('leaves an unlabelled read alone', () => {
