@@ -1,3 +1,6 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import expoConfig from 'eslint-config-expo/flat.js';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
 import reactCompiler from 'eslint-plugin-react-compiler';
@@ -212,6 +215,23 @@ export const wcposRules = {
 
 const wcposPlugin = { rules: wcposRules };
 
+/**
+ * tsconfig list for eslint-import-resolver-typescript, anchored to THIS file
+ * rather than to process.cwd().
+ *
+ * The resolver globs `project` from the CWD, so CWD-relative entries resolve to
+ * a different set of tsconfigs per invocation. `../../tsconfig.json` lands on
+ * the repo root when eslint runs from `packages/<pkg>` (turbo lint) but escapes
+ * the repo when it runs from the repo root (lint-staged). From a git worktree
+ * under `.claude/worktrees/<name>/` it escaped into the *main* checkout, whose
+ * tsconfig extends `expo/tsconfig.base` and is unresolvable without an
+ * installed node_modules — which broke the pre-commit hook in every worktree.
+ */
+const repoRoot = path
+	.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
+	.replaceAll('\\', '/');
+const resolverProjects = [`${repoRoot}/tsconfig.json`, `${repoRoot}/packages/*/tsconfig.json`];
+
 const cwd = process.cwd().replaceAll('\\', '/');
 const appCodeFiles = cwd.endsWith('/packages/core')
 	? ['src/**/*.{ts,tsx}']
@@ -247,7 +267,7 @@ export const config = [
 		settings: {
 			'import/resolver': {
 				typescript: {
-					project: ['../../tsconfig.json', './packages/*/tsconfig.json'],
+					project: resolverProjects,
 				},
 			},
 		},
