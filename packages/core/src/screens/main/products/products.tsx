@@ -41,7 +41,6 @@ import { QuerySearchInput } from '../components/query-search-input';
 import { UISettingsDialog } from '../components/ui-settings';
 import { useTaxSettings } from '../contexts/tax-rates';
 import { useMutation } from '../hooks/mutations/use-mutation';
-import { RecordTextCell } from '../components/record-text-cell';
 import { ProductBrands } from '../components/product/brands';
 import { COGS } from './cells/cogs';
 import {
@@ -115,17 +114,8 @@ const variationCells = {
 /**
  *
  */
-function renderCell(columnKey: string, info: any) {
-	let type = 'simple';
-	if (info.row.original.record.payload.type === 'variable') {
-		type = 'variable';
-	}
-	const Renderer = get(cells, [type, columnKey]);
-	if (Renderer) {
-		return <Renderer {...info} />;
-	}
-
-	return <RecordTextCell {...info} />;
+export function cellsForRow(row: Row<ProductRow, DataTableFeatures>) {
+	return row.original.record.payload.type === 'variable' ? cells.variable : cells.simple;
 }
 
 /**
@@ -297,7 +287,7 @@ export function Products() {
 								total$={binding.total$}
 								sync={binding.sync}
 								renderItem={renderItem}
-								renderCell={renderCell}
+								cellsForRow={cellsForRow}
 								noDataMessage={t('common.no_products_found')}
 								estimatedItemSize={100}
 								TableFooterComponent={calcTaxes ? TableFooter : DataTableFooter}

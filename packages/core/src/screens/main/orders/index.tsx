@@ -22,7 +22,6 @@ import { useT } from '../../../contexts/translations';
 import { DataTable } from '../components/data-table';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
 import { RecordDateCell } from '../components/record-date-cell';
-import { RecordTextCell } from '../components/record-text-cell';
 import { Cashier } from '../components/order/cashier';
 import { CreatedVia } from '../components/order/created-via';
 import { Customer } from '../components/order/customer';
@@ -95,15 +94,6 @@ function getInitialOrderSort(
 	return { field: sortBy, direction: sortDirection === 'asc' ? 'asc' : 'desc' };
 }
 
-function renderCell(columnKey: string, info: any) {
-	const Renderer = cells[columnKey as keyof typeof cells];
-	if (Renderer) {
-		return <Renderer {...info} />;
-	}
-
-	return <RecordTextCell {...info} />;
-}
-
 function OrdersScreenContent() {
 	const state = useQueryState<'orders'>();
 	const actions = useQueryStateActions<'orders'>();
@@ -163,7 +153,7 @@ function OrdersScreenContent() {
 								active$={binding.active$}
 								total$={binding.total$}
 								sync={binding.sync}
-								renderCell={renderCell}
+								cells={cells}
 								noDataMessage={t('common.no_orders_found')}
 								estimatedItemSize={100}
 							/>

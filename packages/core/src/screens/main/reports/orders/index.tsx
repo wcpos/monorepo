@@ -20,7 +20,6 @@ import {
 } from '../../components/data-table';
 import { DataTableSkeleton } from '../../components/data-table/skeleton';
 import { RecordDateCell } from '../../components/record-date-cell';
-import { RecordTextCell } from '../../components/record-text-cell';
 import { Cashier } from '../../components/order/cashier';
 import { CreatedVia } from '../../components/order/created-via';
 import { Customer } from '../../components/order/customer';
@@ -53,17 +52,6 @@ const cells = {
 	cashier: Cashier,
 	number: OrderNumber,
 };
-
-function renderCell(columnKey: string, info: Record<string, unknown>) {
-	const Renderer = (
-		cells as unknown as Record<string, React.ComponentType<Record<string, unknown>>>
-	)[columnKey];
-	if (Renderer) {
-		return <Renderer {...info} />;
-	}
-
-	return <RecordTextCell {...(info as unknown as React.ComponentProps<typeof RecordTextCell>)} />;
-}
 
 const headers: Record<string, React.ComponentType<Record<string, unknown>>> = {
 	select: TableHeaderSelect as unknown as React.ComponentType<Record<string, unknown>>,
@@ -222,7 +210,7 @@ export function Orders() {
 								active$={binding.active$}
 								total$={binding.total$}
 								sync={binding.sync}
-								renderCell={renderCell}
+								cells={cells}
 								renderHeader={renderHeader}
 								noDataMessage={t('common.no_orders_found')}
 								estimatedItemSize={100}

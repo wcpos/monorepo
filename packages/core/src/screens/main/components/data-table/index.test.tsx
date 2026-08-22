@@ -126,7 +126,11 @@ jest.mock('./footer', () => ({
 	},
 }));
 jest.mock('./list-footer', () => ({ ListFooterComponent: () => null }));
-jest.mock('../../components/record-text-cell', () => ({ RecordTextCell: () => null }));
+jest.mock('../../components/record-text-cell', () => ({
+	RecordTextCell: ({ column }: { column: { id: string } }) => (
+		<div data-testid={`record-text-${column.id}`} />
+	),
+}));
 
 function Footer(props: Record<string, unknown>) {
 	mockFooterProps = props;
@@ -243,6 +247,54 @@ describe('DataTable binding contract', () => {
 			sync,
 		});
 		expect(mockDefaultFooterProps).not.toHaveProperty('query');
+	});
+
+	it('resolves row cell maps and keeps the text fallback inside the table', () => {
+		mockColumns = [
+			{ key: 'level', show: true },
+			{ key: 'timestamp', show: true },
+		];
+		const BindingDataTable = DataTable as unknown as React.ComponentType<Record<string, unknown>>;
+		function FlatCell() {
+			return <div data-testid="flat-cell" />;
+		}
+		function RowCell() {
+			return <div data-testid="row-cell" />;
+		}
+		const cellsForRow = jest.fn(() => ({ level: RowCell }));
+
+		render(
+			<QueryStateProvider
+				collection="logs"
+				initialPageSize={1}
+				initialSort={{ field: 'level', direction: 'asc' }}
+			>
+				<BindingDataTable
+					id="logs"
+					collectionName="logs"
+					resource={{ kind: 'resource' }}
+					sort={{ field: 'level', direction: 'asc' }}
+					actions={{
+						setSort: mockSetSort,
+						extendLimit: mockExtendLimit,
+						setFilter: mockSetFilter,
+					}}
+					active$={of(false)}
+					total$={of(1)}
+					sync={jest.fn(async () => undefined)}
+					cells={{ level: FlatCell, timestamp: FlatCell }}
+					cellsForRow={cellsForRow}
+					showFooter={false}
+				/>
+			</QueryStateProvider>
+		);
+
+		expect(screen.getByTestId('row-cell')).toBeTruthy();
+		expect(screen.queryByTestId('flat-cell')).toBeNull();
+		expect(screen.getByTestId('record-text-timestamp')).toBeTruthy();
+		expect(cellsForRow).toHaveBeenCalledWith(
+			expect.objectContaining({ original: expect.objectContaining({ id: 'log-1' }) })
+		);
 	});
 
 	it('clears the explicit products collection when the table id names a screen', () => {

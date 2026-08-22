@@ -6,7 +6,9 @@ import * as React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { of } from 'rxjs';
 
-import { POSProducts } from './index';
+import { cellsForRow, POSProducts } from './index';
+import { ProductImage } from '../../components/product/image';
+import { VariableProductImage } from '../../components/product/variable-image';
 
 import type { QueryStateOf } from '../../../../query';
 
@@ -151,6 +153,16 @@ function latestState(): QueryStateOf<'products'> {
 	return call[0] as QueryStateOf<'products'>;
 }
 
+describe('cellsForRow', () => {
+	it('selects variable cells only for variable products', () => {
+		const row = (type: 'simple' | 'variable') =>
+			({ original: { record: { payload: { type } } } }) as Parameters<typeof cellsForRow>[0];
+
+		expect(cellsForRow(row('variable')).image).toBe(VariableProductImage);
+		expect(cellsForRow(row('simple')).image).toBe(ProductImage);
+	});
+});
+
 describe('POSProducts query-state wiring', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
@@ -201,6 +213,8 @@ describe('POSProducts query-state wiring', () => {
 		render(<POSProducts />);
 
 		expect(mockDataTableProps.tableConfig).toMatchObject({ manualExpanding: true });
+		expect(mockDataTableProps.cellsForRow).toEqual(expect.any(Function));
+		expect(mockDataTableProps).not.toHaveProperty('renderCell');
 	});
 
 	it('maps showOutOfStock and runtime sort changes exactly onto products query state', () => {

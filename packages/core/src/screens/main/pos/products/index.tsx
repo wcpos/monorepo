@@ -43,7 +43,6 @@ import { UISettingsDialog } from '../../components/ui-settings';
 import { useTaxSettings } from '../../contexts/tax-rates';
 import { useUISettings } from '../../contexts/ui-settings';
 import initialSettings from '../../contexts/ui-settings/initial-settings.json';
-import { RecordTextCell } from '../../components/record-text-cell';
 import { COGS } from './cells/cogs';
 import {
 	QueryStateProvider,
@@ -133,17 +132,8 @@ const variationCells = {
 /**
  *
  */
-function renderCell(columnKey: string, info: any) {
-	let type = 'simple';
-	if (info.row.original.record.payload.type === 'variable') {
-		type = 'variable';
-	}
-	const Renderer = get(cells, [type, columnKey]);
-	if (Renderer) {
-		return <Renderer {...info} />;
-	}
-
-	return <RecordTextCell {...info} />;
+export function cellsForRow(row: Row<ProductRow, DataTableFeatures>) {
+	return row.original.record.payload.type === 'variable' ? cells.variable : cells.simple;
 }
 
 /**
@@ -339,7 +329,7 @@ function POSProductsContent({
 									total$={binding.total$}
 									sync={binding.sync}
 									renderItem={renderItem}
-									renderCell={renderCell}
+									cellsForRow={cellsForRow}
 									noDataMessage={t('common.no_products_found')}
 									estimatedItemSize={100}
 									TableFooterComponent={calcTaxes ? TableFooter : DataTableFooter}

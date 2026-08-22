@@ -37,15 +37,15 @@ jest.mock('@wcpos/components/suspense', () => ({
 jest.mock('../../components/data-table', () => ({
 	DataTable: (props: Record<string, unknown>) => {
 		mockDataTableProps = props;
-		const renderCell = props.renderCell as (
-			columnKey: string,
-			info: Record<string, unknown>
-		) => React.ReactNode;
+		const cells = props.cells as Record<string, React.ElementType>;
+		const CustomerCell = cells.customer_id;
+		const CashierCell = cells.cashier;
+		const StatusCell = cells.status;
 		return (
 			<div data-testid="reports-orders-table">
-				{renderCell('customer_id', {})}
-				{renderCell('cashier', {})}
-				{renderCell('status', {})}
+				<CustomerCell />
+				<CashierCell />
+				<StatusCell />
 			</div>
 		);
 	},
