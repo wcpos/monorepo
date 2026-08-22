@@ -85,7 +85,7 @@ test.describe('Store health · Logs', () => {
 	}) => {
 		await page.setViewportSize({ width: 1400, height: 1000 });
 		const screen = await openLogs(page);
-		await expect(screen.locator('[data-testid^="logs-row-"]').first()).toBeVisible({
+		await expect(screen.getByTestId('logs-ledger')).toBeVisible({
 			timeout: 30_000,
 		});
 
@@ -94,7 +94,9 @@ test.describe('Store health · Logs', () => {
 		expect(controls).not.toBeNull();
 		expect(ledger).not.toBeNull();
 		// One row gap's worth of slack; the bug left ~345 px here.
-		expect(ledger!.y - (controls!.y + controls!.height)).toBeLessThan(48);
+		const gap = ledger!.y - (controls!.y + controls!.height);
+		expect(gap).toBeGreaterThanOrEqual(0);
+		expect(gap).toBeLessThan(48);
 	});
 
 	test('searches logs without breaking the ledger', async ({ posPage: page }) => {
