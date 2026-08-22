@@ -2,9 +2,12 @@ import * as React from 'react';
 
 import { useDocField, useQueryRuntime } from '@wcpos/query';
 import { wooIdOf } from '@wcpos/sync-core';
-import type { CouponDiscountConfig } from '@wcpos/order-math/internal';
+import {
+	type CouponDiscountConfig,
+	enrichCategoriesWithAncestors,
+} from '@wcpos/order-math/internal';
 
-import { buildEnrichedProductCategories } from './coupon-helpers-engine';
+import { buildCategoryParents } from './coupon-helpers-engine';
 import {
 	recalculateCoupons,
 	type RecalculateInput,
@@ -92,7 +95,10 @@ export const useRecalculateCoupons = () => {
 				}
 
 				// Enrich with ancestor categories from the category tree
-				productCategories = buildEnrichedProductCategories(productCategories, categories);
+				productCategories = enrichCategoriesWithAncestors(
+					productCategories,
+					buildCategoryParents(categories)
+				);
 			}
 
 			return recalculateCoupons({

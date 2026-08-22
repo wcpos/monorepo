@@ -3,23 +3,21 @@ import * as React from 'react';
 import { useObservable, useSubscription } from 'observable-hooks';
 import { distinctUntilChanged, map, skip } from 'rxjs/operators';
 
+import { createCartConfig, settleCart, snapshotFromOrderJSON } from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import { useRecordField } from '@wcpos/query';
+import { useDocField, useRecordField } from '@wcpos/query';
 
 import { useAppliedCouponReferenceDemand } from '../../../../query';
-import { calculateOrderTotals } from './calculate-order-totals';
-import { useFeeLineData } from './use-fee-line-data';
-import { useRecalculateCoupons } from './use-recalculate-coupons';
-import { useUpdateFeeLine } from './use-update-fee-line';
-import { getUuidFromLineItem } from './utils';
-import { useTaxSettings } from '../../contexts/tax-rates';
+import { useCouponContext } from './use-coupon-context';
+import { useAppState } from '../../../../contexts/app-state';
+import { useTaxLocation, useTaxSettings } from '../../contexts/tax-rates';
+import { taxClassFromWire, taxClassToWire } from '../../hooks/tax-class';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
 import { useT } from '../../../../contexts/translations';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
-type FeeLine = NonNullable<OrderDocument['fee_lines']>[number];
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'lines']);
 
@@ -74,11 +72,24 @@ export const useCartLines = () => {
 	const feeLines = useRecordField(currentOrderRecord, (order) => order.payload.fee_lines);
 	const shippingLines = useRecordField(currentOrderRecord, (order) => order.payload.shipping_lines);
 	const couponLines = useRecordField(currentOrderRecord, (order) => order.payload.coupon_lines);
-	const { getFeeLineData } = useFeeLineData();
-	const { updateFeeLine } = useUpdateFeeLine();
 	const { localPatch } = useLocalMutation();
-	const { recalculate } = useRecalculateCoupons();
-	const { allRates, taxRoundAtSubtotal, priceNumDecimals, pricesIncludeTax } = useTaxSettings();
+	const { getCouponContext } = useCouponContext();
+	const { rates } = useTaxLocation();
+	const {
+		allRates,
+		shippingTaxClass,
+		calcTaxes,
+		taxRoundAtSubtotal,
+		priceNumDecimals,
+		pricesIncludeTax,
+	} = useTaxSettings();
+	const { store } = useAppState();
+	const woocommerceSequential = useDocField(
+		store,
+		(value) => value.woocommerce_calc_discounts_sequentially
+	);
+	const legacySequential = useDocField(store, (value) => value.calc_discounts_sequentially);
+	const calcDiscountsSequentially = woocommerceSequential === 'yes' || legacySequential === 'yes';
 	const t = useT();
 
 	/**
@@ -111,35 +122,22 @@ export const useCartLines = () => {
 	const replayingRef = React.useRef<string | null>(null);
 
 	/**
-	 * If line items change, and we have a percentage fee line, we need to recalculate the fee line total.
-	 * Also triggers coupon replay when priceNumDecimals changes (issue #222).
-	 *
-	 * @TODO - this is a bit hacky, we should probably have a better way to handle this.
+	 * Settle every cart-line edit, plus priceNumDecimals changes (issue #222).
+	 * `changed` suppresses the follow-up emission when settle itself rewrites arrays.
 	 */
 	const cartTotal$ = useObservable(
 		(inputs$) =>
 			inputs$.pipe(
 				skip(1),
-				map(([items, dp]) => {
-					const totals = (items || []).reduce(
-						(acc, item) => {
-							acc.cart_total += parseFloat(item.total ?? '0');
-							acc.cart_total_tax += parseFloat(item.total_tax ?? '0');
-							return acc;
-						},
-						{ cart_total: 0, cart_total_tax: 0 }
-					);
-					return { ...totals, dp };
-				}),
-				distinctUntilChanged((prev, next) => JSON.stringify(prev) === JSON.stringify(next))
-				// @TODO - this gets triggered twice, because if fee updates, line items will be a new array.
+				map((cartInputs) => JSON.stringify(cartInputs)),
+				distinctUntilChanged()
 			),
-		[lineItems, priceNumDecimals]
+		[lineItems, feeLines, shippingLines, couponLines, priceNumDecimals]
 	);
 
 	/**
-	 * The coupon replay write, extracted so the background continuation reaches the order
-	 * through the SAME path a cart edit does — same recalculation, same identity guards, same
+	 * The settle write, extracted so the background continuation reaches the order
+	 * through the SAME path a cart edit does — same settlement, same identity guards, same
 	 * `localPatch`. The continuation only changes WHEN this runs, never how.
 	 *
 	 * Replays are single-flight per order revision: a settle signal that lands at the same
@@ -151,51 +149,51 @@ export const useCartLines = () => {
 			if (replayingRef.current === stateKey) return;
 			replayingRef.current = stateKey;
 			try {
-				// Replay coupon discounts via recalculateCoupons() which handles:
-				// - POS price as coupon base (via _woocommerce_pos_data meta)
-				// - lineIndex-based allocation for duplicate product_id lines
-				// - Per-item capping to prevent over-allocation when stacking coupons
-				// - Sequential discount mode
-				// - Correct tax-inclusive/exclusive rounding
-				const result = await recalculate(
-					freshOrder.payload.line_items || [],
-					freshOrder.payload.coupon_lines || []
+				const hasActiveCoupons = (freshOrder.payload.coupon_lines || []).some(
+					(line) => line.code != null
 				);
-				if (!result) return; // coupon missing locally — bail to avoid partial data
+				const couponContext = hasActiveCoupons
+					? await getCouponContext(freshOrder.payload.line_items || [])
+					: undefined;
+				const config = createCartConfig({
+					rates,
+					allRates,
+					calcTaxes,
+					pricesIncludeTax,
+					taxRoundAtSubtotal,
+					dp: priceNumDecimals,
+					shippingTaxClass: taxClassToWire(taxClassFromWire(shippingTaxClass)),
+					calcDiscountsSequentially,
+				});
+				const result = settleCart(
+					snapshotFromOrderJSON(freshOrder.toMutableJSON().payload),
+					config,
+					couponContext ? { coupons: couponContext } : undefined
+				);
+				if (!result.ok) {
+					cartLogger.warn('Cart settlement failed', {
+						showToast: true,
+						toast: {
+							title: t(
+								result.error.code === 'missing_coupon'
+									? 'pos_cart.coupon_not_found'
+									: 'pos_cart.coupon_apply_failed'
+							),
+						},
+						context: result.error,
+					});
+					return;
+				}
 				// Bail if the order moved during the async replay — a concurrent cart edit, a
 				// checkout push, or a status change — rather than overwriting it.
 				if (replayStateKey(currentOrderRecord.getLatest()) !== stateKey) return;
-
-				// Compute order totals from the coupon-adjusted line items in the same
-				// tick. This prevents useOrderTotals from running with stale pre-coupon
-				// line items and flashing incorrect tax values.
-				const totals = calculateOrderTotals({
-					lineItems: result.lineItems.filter((item) => item.product_id !== null),
-					feeLines: (freshOrder.payload.fee_lines || []).filter((item) => item.name !== null),
-					shippingLines: (freshOrder.payload.shipping_lines || []).filter(
-						(item) => item.method_id !== null
-					),
-					couponLines: result.couponLines.filter((item) => item.code != null),
-					taxRates: allRates,
-					taxRoundAtSubtotal,
-					dp: priceNumDecimals,
-					pricesIncludeTax,
-				});
+				if (!result.changed) return;
 
 				await localPatch({
 					document: freshOrder,
-					data: {
-						coupon_lines: result.couponLines,
-						line_items: result.lineItems,
-						discount_tax: totals.discount_tax,
-						discount_total: totals.discount_total,
-						shipping_tax: totals.shipping_tax,
-						shipping_total: totals.shipping_total,
-						cart_tax: totals.cart_tax,
-						total_tax: totals.total_tax,
-						total: totals.total,
-						tax_lines: totals.tax_lines as NonNullable<OrderDocument['tax_lines']>,
-					},
+					// settle outputs structural line types; this boundary writes them back to
+					// the DB document they came from.
+					data: result.patch as Partial<OrderDocument>,
 				});
 			} finally {
 				if (replayingRef.current === stateKey) replayingRef.current = null;
@@ -203,12 +201,17 @@ export const useCartLines = () => {
 		},
 		[
 			allRates,
+			calcDiscountsSequentially,
+			calcTaxes,
 			currentOrderRecord,
+			getCouponContext,
 			localPatch,
 			priceNumDecimals,
 			pricesIncludeTax,
-			recalculate,
+			rates,
+			shippingTaxClass,
 			taxRoundAtSubtotal,
+			t,
 		]
 	);
 
@@ -283,7 +286,9 @@ export const useCartLines = () => {
 				// document alive for the length of its wait.
 				await continuation.replay(latest);
 			})().catch((error) =>
-				cartLogger.error(String(error), { code: ERROR_CODES.CHECKOUT_UNEXPECTED })
+				cartLogger.error(String(error), {
+					code: ERROR_CODES.CHECKOUT_UNEXPECTED,
+				})
 			);
 		},
 		[
@@ -314,20 +319,6 @@ export const useCartLines = () => {
 	);
 
 	const handleCartTotalChange = async () => {
-		// Recalculate percentage-based fee lines
-		const percentageFeeLines = (feeLines || []).filter((item: FeeLine) => {
-			const { percent } = getFeeLineData(item);
-			return percent;
-		});
-
-		if (percentageFeeLines.length > 0) {
-			// Update each percentage fee line
-			for (const feeLine of percentageFeeLines) {
-				const uuid = getUuidFromLineItem(feeLine);
-				await updateFeeLine(uuid ?? '', {});
-			}
-		}
-
 		const freshOrder = currentOrderRecord.getLatest();
 		const hasActiveCoupons = (freshOrder.payload.coupon_lines || []).some((cl) => cl.code != null);
 		if (hasActiveCoupons) {
@@ -347,15 +338,17 @@ export const useCartLines = () => {
 			// edit left waiting — a stale continuation firing behind it would re-apply the
 			// pre-edit discounts.
 			disarmReplayContinuation();
-			await replayCoupons(freshOrder);
 		}
+		await replayCoupons(freshOrder);
 	};
 
 	useSubscription(
 		cartTotal$,
 		() =>
 			void handleCartTotalChange().catch((error) =>
-				cartLogger.error(String(error), { code: ERROR_CODES.CHECKOUT_UNEXPECTED })
+				cartLogger.error(String(error), {
+					code: ERROR_CODES.CHECKOUT_UNEXPECTED,
+				})
 			)
 	);
 

@@ -11,9 +11,9 @@ import {
 } from '@wcpos/sync-core';
 import { useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import type { CouponLineItem } from '@wcpos/order-math/internal';
+import { type CouponLineItem, enrichCategoriesWithAncestors } from '@wcpos/order-math/internal';
 
-import { buildEnrichedProductCategories } from './coupon-helpers-engine';
+import { buildCategoryParents } from './coupon-helpers-engine';
 import { validateCoupon } from './coupon-validation';
 import {
 	readEngineCategories,
@@ -117,7 +117,10 @@ export const useAddCoupon = () => {
 					}
 				}
 				const categories = await readEngineCategories(runtime);
-				productCategoriesMap = buildEnrichedProductCategories(productCategoriesMap, categories);
+				productCategoriesMap = enrichCategoriesWithAncestors(
+					productCategoriesMap,
+					buildCategoryParents(categories)
+				);
 
 				// 4. Build validation context
 				// Use POS data to determine on_sale — this matches recalculateCoupons'

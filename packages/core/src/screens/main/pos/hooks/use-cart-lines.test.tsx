@@ -7,6 +7,53 @@ import { map } from 'rxjs/operators';
 
 import { useCartLines } from './use-cart-lines';
 
+const successfulSettlement = () => ({
+	ok: true as const,
+	changed: true,
+	patch: {
+		discount_tax: '0.00',
+		discount_total: '5.00',
+		shipping_tax: '0.00',
+		shipping_total: '0.00',
+		cart_tax: '0.00',
+		total_tax: '0.00',
+		total: '5.00',
+		tax_lines: [],
+	},
+	totals: {},
+	warnings: [],
+});
+const settleCart: jest.MockedFunction<
+	(snapshot: unknown, config: unknown, options?: unknown) => unknown
+> = jest.fn((_snapshot: unknown, _config: unknown, _options?: unknown) => successfulSettlement());
+const createCartConfig = jest.fn((config: Record<string, unknown>) => config);
+
+jest.mock('@wcpos/order-math', () => ({
+	createCartConfig: (config: Record<string, unknown>) => createCartConfig(config),
+	settleCart: (snapshot: unknown, config: unknown, options?: unknown) =>
+		settleCart(snapshot, config, options),
+	snapshotFromOrderJSON: (payload: Record<string, unknown>) => payload,
+}));
+
+jest.mock('@wcpos/query', () => ({
+	...jest.requireActual('@wcpos/query'),
+	useDocField: (
+		_store: unknown,
+		selector: (value: {
+			woocommerce_calc_discounts_sequentially: string;
+			calc_discounts_sequentially: string;
+		}) => unknown
+	) =>
+		selector({
+			woocommerce_calc_discounts_sequentially: 'no',
+			calc_discounts_sequentially: 'no',
+		}),
+}));
+
+jest.mock('../../../../contexts/app-state', () => ({
+	useAppState: () => ({ store: {} }),
+}));
+
 const appliedCouponReferenceDemand = jest.fn();
 let whenSettled = jest.fn(async () => true);
 let whenSettledInBackground = jest.fn(async (_signal: AbortSignal) => true);
@@ -81,7 +128,10 @@ type TestOrderRecord = {
 	uuid: string;
 	payload: ReturnType<typeof currentPayload>;
 	_readSeq: number;
-	toMutableJSON: () => { uuid: string; payload: ReturnType<typeof currentPayload> };
+	toMutableJSON: () => {
+		uuid: string;
+		payload: ReturnType<typeof currentPayload>;
+	};
 };
 
 let latestRecord: TestOrderRecord | undefined;
@@ -142,20 +192,30 @@ jest.mock('../contexts/current-order', () => ({
 }));
 
 jest.mock('./use-fee-line-data', () => ({
-	useFeeLineData: () => ({ getFeeLineData: () => ({ percent: false }) }),
+	useFeeLineData: () => ({
+		getFeeLineData: () => ({ percent: feeLineIsPercent }),
+	}),
 }));
 
-const recalculate = jest.fn(async (lineItems: LineItem[], couponLines: CouponLine[]) => ({
-	lineItems,
-	couponLines,
-}));
-
-jest.mock('./use-recalculate-coupons', () => ({
-	useRecalculateCoupons: () => ({ recalculate }),
-}));
+let feeLineIsPercent = false;
 
 jest.mock('./use-update-fee-line', () => ({
-	useUpdateFeeLine: () => ({ updateFeeLine: jest.fn() }),
+	useUpdateFeeLine: () => ({ updateFeeLine }),
+}));
+
+const updateFeeLine = jest.fn(async () => undefined);
+
+const emptyCouponContext = () => ({
+	coupons: new Map(),
+	productCategories: new Map(),
+	categoryParents: new Map(),
+});
+const getCouponContext: jest.MockedFunction<
+	(lineItems: LineItem[]) => Promise<ReturnType<typeof emptyCouponContext>>
+> = jest.fn(async (_lineItems: LineItem[]) => emptyCouponContext());
+
+jest.mock('./use-coupon-context', () => ({
+	useCouponContext: () => ({ getCouponContext }),
 }));
 
 let allRates: unknown[] = [];
@@ -164,8 +224,11 @@ let priceNumDecimals = 2;
 let pricesIncludeTax = false;
 
 jest.mock('../../contexts/tax-rates', () => ({
+	useTaxLocation: () => ({ rates: [] }),
 	useTaxSettings: () => ({
 		allRates,
+		shippingTaxClass: '',
+		calcTaxes: true,
 		taxRoundAtSubtotal,
 		priceNumDecimals,
 		pricesIncludeTax,
@@ -182,21 +245,6 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch }),
 }));
 
-const calculateOrderTotals = jest.fn((_args: Record<string, unknown>) => ({
-	discount_tax: '0.00',
-	discount_total: '5.00',
-	shipping_tax: '0.00',
-	shipping_total: '0.00',
-	cart_tax: '0.00',
-	total_tax: '0.00',
-	total: '5.00',
-	tax_lines: [],
-}));
-
-jest.mock('./calculate-order-totals', () => ({
-	calculateOrderTotals: (args: Record<string, unknown>) => calculateOrderTotals(args),
-}));
-
 /** A deferred `whenSettledInBackground` the test resolves by hand. */
 function deferredBackgroundWait() {
 	let release: ((settled: boolean) => void) | undefined;
@@ -208,15 +256,23 @@ function deferredBackgroundWait() {
 				release = resolve;
 			})
 	);
-	return { settle: () => release?.(true), giveUp: () => release?.(false), signals };
+	return {
+		settle: () => release?.(true),
+		giveUp: () => release?.(false),
+		signals,
+	};
 }
 
 describe('useCartLines reference demand (#952)', () => {
 	beforeEach(() => {
 		appliedCouponReferenceDemand.mockClear();
-		recalculate.mockClear();
-		calculateOrderTotals.mockClear();
+		createCartConfig.mockClear();
 		localPatch.mockClear();
+		settleCart.mockClear();
+		settleCart.mockImplementation(() => successfulSettlement());
+		getCouponContext.mockClear();
+		updateFeeLine.mockClear();
+		feeLineIsPercent = false;
 		whenSettled = jest.fn(async () => true);
 		whenSettledInBackground = jest.fn(async (_signal: AbortSignal) => true);
 		referenceGeneration = 0;
@@ -237,6 +293,56 @@ describe('useCartLines reference demand (#952)', () => {
 
 		expect(appliedCouponReferenceDemand).toHaveBeenCalledWith(false);
 		expect(appliedCouponReferenceDemand).not.toHaveBeenCalledWith(true);
+	});
+
+	it('persists totals through settleCart when the cart has no coupon lines', async () => {
+		renderHook(() => useCartLines());
+
+		await act(async () => {
+			editCart([{ total: '5.00', total_tax: '0.00', product_id: 1 }]);
+		});
+
+		expect(whenSettled).not.toHaveBeenCalled();
+		expect(settleCart).toHaveBeenCalledTimes(1);
+		expect(localPatch).toHaveBeenCalledTimes(1);
+		expect(localPatch.mock.calls[0][0].data).toEqual(
+			expect.objectContaining({ discount_total: '5.00', total: '5.00' })
+		);
+	});
+
+	it('shows a translated toast and writes nothing when settleCart reports a missing coupon', async () => {
+		settleCart.mockReturnValueOnce({
+			ok: false,
+			error: { code: 'missing_coupon', missingCodes: ['bonus'] },
+			warnings: [],
+		});
+		applyCoupon([{ code: 'bonus' }]);
+		renderHook(() => useCartLines());
+
+		await act(async () => {
+			editCart([{ total: '5.00', total_tax: '0.00', product_id: 1 }]);
+		});
+
+		expect(localPatch).not.toHaveBeenCalled();
+		expect(mockCartWarn).toHaveBeenCalledWith(
+			'Cart settlement failed',
+			expect.objectContaining({
+				showToast: true,
+				toast: expect.objectContaining({ title: 'Coupon not found' }),
+			})
+		);
+	});
+
+	it('does not fan out automatic writes for percentage fee lines', async () => {
+		feeLineIsPercent = true;
+		feeLines$.next([{ name: '10% service', meta_data: [] }]);
+		renderHook(() => useCartLines());
+
+		await act(async () => {
+			editCart([{ total: '5.00', total_tax: '0.00', product_id: 1 }]);
+		});
+
+		expect(updateFeeLine).not.toHaveBeenCalled();
 	});
 
 	it('declares coupon reference demand once the cart carries an applied coupon line', () => {
@@ -284,12 +390,12 @@ describe('useCartLines reference demand (#952)', () => {
 			editCart([{ total: '5.00', total_tax: '0.00', product_id: 1 }]);
 		});
 		expect(whenSettled).toHaveBeenCalled();
-		expect(recalculate).not.toHaveBeenCalled();
+		expect(getCouponContext).not.toHaveBeenCalled();
 
 		await act(async () => {
 			releaseReferences?.();
 		});
-		expect(recalculate).toHaveBeenCalled();
+		expect(getCouponContext).toHaveBeenCalled();
 	});
 
 	it('writes the replayed totals through localPatch when the references are ready', async () => {
@@ -301,7 +407,7 @@ describe('useCartLines reference demand (#952)', () => {
 			editCart([{ total: '5.00', total_tax: '0.00', product_id: 1 }]);
 		});
 
-		expect(recalculate).toHaveBeenCalledTimes(1);
+		expect(getCouponContext).toHaveBeenCalledTimes(1);
 		expect(localPatch).toHaveBeenCalledTimes(1);
 		expect(localPatch.mock.calls[0][0].data).toEqual(
 			expect.objectContaining({ discount_total: '5.00', total: '5.00' })
@@ -311,11 +417,11 @@ describe('useCartLines reference demand (#952)', () => {
 	it.each(['fee_lines', 'shipping_lines'] as const)(
 		'drops a foreground replay after a same-second %s mutation',
 		async (field) => {
-			let releaseRecalculate: (() => void) | undefined;
-			recalculate.mockImplementationOnce(
-				(lineItems: LineItem[], couponLines: CouponLine[]) =>
+			let releaseContext: (() => void) | undefined;
+			getCouponContext.mockImplementationOnce(
+				(_lineItems: LineItem[]) =>
 					new Promise((resolve) => {
-						releaseRecalculate = () => resolve({ lineItems, couponLines });
+						releaseContext = () => resolve(emptyCouponContext());
 					})
 			);
 			applyCoupon([{ code: 'bonus' }]);
@@ -324,7 +430,7 @@ describe('useCartLines reference demand (#952)', () => {
 			await act(async () => {
 				editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
 			});
-			expect(recalculate).toHaveBeenCalledTimes(1);
+			expect(getCouponContext).toHaveBeenCalledTimes(1);
 
 			// Local mutations stamp whole seconds. Replace only the totals input while preserving
 			// the captured timestamp and every other replay-identity field.
@@ -339,11 +445,16 @@ describe('useCartLines reference demand (#952)', () => {
 			await act(async () => {
 				if (field === 'fee_lines') feeLines$.next(changedLines);
 				else shippingLines$.next(changedLines);
-				releaseRecalculate?.();
+				releaseContext?.();
 			});
 
-			expect(calculateOrderTotals).not.toHaveBeenCalled();
-			expect(localPatch).not.toHaveBeenCalled();
+			expect(localPatch).not.toHaveBeenCalledWith(
+				expect.objectContaining({
+					document: expect.objectContaining({
+						payload: expect.objectContaining({ [field]: [] }),
+					}),
+				})
+			);
 		}
 	);
 
@@ -360,16 +471,19 @@ describe('useCartLines reference demand (#952)', () => {
 		});
 
 		expect(whenSettled).toHaveBeenCalled();
-		expect(recalculate).not.toHaveBeenCalled();
+		expect(getCouponContext).not.toHaveBeenCalled();
 	});
 });
 
 describe('useCartLines background coupon replay (#963)', () => {
 	beforeEach(() => {
 		appliedCouponReferenceDemand.mockClear();
-		recalculate.mockClear();
-		calculateOrderTotals.mockClear();
+		createCartConfig.mockClear();
 		localPatch.mockClear();
+		settleCart.mockClear();
+		settleCart.mockImplementation(() => successfulSettlement());
+		getCouponContext.mockClear();
+		getCouponContext.mockImplementation(async (_lineItems: LineItem[]) => emptyCouponContext());
 		// The scenario this issue is about: the reference pull outran the 10s barrier.
 		whenSettled = jest.fn(async () => false);
 		whenSettledInBackground = jest.fn(async (_signal: AbortSignal) => true);
@@ -395,7 +509,7 @@ describe('useCartLines background coupon replay (#963)', () => {
 			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
 		});
 		// Totals are stale at this point — that is the bug the continuation closes.
-		expect(recalculate).not.toHaveBeenCalled();
+		expect(getCouponContext).not.toHaveBeenCalled();
 		expect(background.signals).toHaveLength(1);
 		const seqWhenArmed = readSeq;
 
@@ -403,7 +517,7 @@ describe('useCartLines background coupon replay (#963)', () => {
 			background.settle();
 		});
 
-		expect(recalculate).toHaveBeenCalledTimes(1);
+		expect(getCouponContext).toHaveBeenCalledTimes(1);
 		expect(localPatch).toHaveBeenCalledTimes(1);
 		expect(localPatch.mock.calls[0][0]).toEqual(
 			expect.objectContaining({
@@ -411,7 +525,10 @@ describe('useCartLines background coupon replay (#963)', () => {
 					uuid: 'order-uuid-1',
 					payload: expect.objectContaining({ line_items: revision.line_items }),
 				}),
-				data: expect.objectContaining({ discount_total: '5.00', total: '5.00' }),
+				data: expect.objectContaining({
+					discount_total: '5.00',
+					total: '5.00',
+				}),
 			})
 		);
 		// The raw record is identity-stable, so the fresh read resolves to the same resident handle.
@@ -457,7 +574,7 @@ describe('useCartLines background coupon replay (#963)', () => {
 			background.settle();
 		});
 
-		expect(calculateOrderTotals).toHaveBeenCalledWith(expect.objectContaining({ dp: 3 }));
+		expect(createCartConfig).toHaveBeenCalledWith(expect.objectContaining({ dp: 3 }));
 	});
 
 	it('uses current tax settings when they change without re-arming the continuation', async () => {
@@ -482,9 +599,9 @@ describe('useCartLines background coupon replay (#963)', () => {
 			background.settle();
 		});
 
-		expect(calculateOrderTotals).toHaveBeenCalledWith(
+		expect(createCartConfig).toHaveBeenCalledWith(
 			expect.objectContaining({
-				taxRates: currentRates,
+				allRates: currentRates,
 				taxRoundAtSubtotal: true,
 				pricesIncludeTax: true,
 			})
@@ -513,7 +630,7 @@ describe('useCartLines background coupon replay (#963)', () => {
 		await act(async () => {
 			background.settle();
 		});
-		expect(recalculate).not.toHaveBeenCalled();
+		expect(getCouponContext).not.toHaveBeenCalled();
 		expect(localPatch).not.toHaveBeenCalled();
 	});
 
@@ -540,7 +657,7 @@ describe('useCartLines background coupon replay (#963)', () => {
 		await act(async () => {
 			background.settle();
 		});
-		expect(recalculate).toHaveBeenCalledTimes(1);
+		expect(getCouponContext).toHaveBeenCalledTimes(1);
 		expect(localPatch).toHaveBeenCalledTimes(1);
 	});
 
@@ -560,7 +677,7 @@ describe('useCartLines background coupon replay (#963)', () => {
 		await act(async () => {
 			editCart([{ total: '20.00', total_tax: '0.00', product_id: 1 }]);
 		});
-		expect(recalculate).toHaveBeenCalledTimes(1);
+		expect(getCouponContext).toHaveBeenCalledTimes(1);
 		expect(localPatch).toHaveBeenCalledTimes(1);
 		expect(localPatch.mock.calls[0][0]).toEqual(
 			expect.objectContaining({
@@ -575,7 +692,7 @@ describe('useCartLines background coupon replay (#963)', () => {
 		await act(async () => {
 			background.settle();
 		});
-		expect(recalculate).toHaveBeenCalledTimes(1);
+		expect(getCouponContext).toHaveBeenCalledTimes(1);
 		expect(localPatch).toHaveBeenCalledTimes(1);
 		expect(localPatch).not.toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -604,7 +721,7 @@ describe('useCartLines background coupon replay (#963)', () => {
 			background.settle();
 		});
 
-		expect(recalculate).not.toHaveBeenCalled();
+		expect(getCouponContext).not.toHaveBeenCalled();
 		expect(localPatch).not.toHaveBeenCalled();
 	});
 
@@ -626,7 +743,7 @@ describe('useCartLines background coupon replay (#963)', () => {
 			background.settle();
 		});
 
-		expect(recalculate).not.toHaveBeenCalled();
+		expect(getCouponContext).not.toHaveBeenCalled();
 		expect(localPatch).not.toHaveBeenCalled();
 	});
 
@@ -641,7 +758,7 @@ describe('useCartLines background coupon replay (#963)', () => {
 		await act(async () => {
 			background.giveUp();
 		});
-		expect(recalculate).not.toHaveBeenCalled();
+		expect(getCouponContext).not.toHaveBeenCalled();
 		expect(localPatch).not.toHaveBeenCalled();
 		// Not silent anymore: the cashier is told the shown totals may be stale
 		// (cashier-full-information ruling, 2026-08-07).
@@ -649,7 +766,9 @@ describe('useCartLines background coupon replay (#963)', () => {
 			'Coupon reference refresh timed out',
 			expect.objectContaining({
 				showToast: true,
-				toast: expect.objectContaining({ title: expect.stringContaining('out of date') }),
+				toast: expect.objectContaining({
+					title: expect.stringContaining('out of date'),
+				}),
 			})
 		);
 
@@ -658,7 +777,7 @@ describe('useCartLines background coupon replay (#963)', () => {
 		await act(async () => {
 			editCart([{ total: '30.00', total_tax: '0.00', product_id: 1 }]);
 		});
-		expect(recalculate).toHaveBeenCalledTimes(1);
+		expect(getCouponContext).toHaveBeenCalledTimes(1);
 		expect(localPatch).toHaveBeenCalledTimes(1);
 	});
 
@@ -672,18 +791,18 @@ describe('useCartLines background coupon replay (#963)', () => {
 		});
 
 		// Hold the replay open so the two callers genuinely overlap rather than running in turn.
-		let releaseRecalculate: (() => void) | undefined;
-		recalculate.mockImplementationOnce(
-			(lineItems: LineItem[], couponLines: CouponLine[]) =>
+		let releaseContext: (() => void) | undefined;
+		getCouponContext.mockImplementationOnce(
+			(_lineItems: LineItem[]) =>
 				new Promise((resolve) => {
-					releaseRecalculate = () => resolve({ lineItems, couponLines });
+					releaseContext = () => resolve(emptyCouponContext());
 				})
 		);
 
 		await act(async () => {
 			background.settle();
 		});
-		expect(recalculate).toHaveBeenCalledTimes(1);
+		expect(getCouponContext).toHaveBeenCalledTimes(1);
 		expect(localPatch).not.toHaveBeenCalled();
 
 		// A same-revision re-render (the #222 price-decimals path) reaches
@@ -694,10 +813,10 @@ describe('useCartLines background coupon replay (#963)', () => {
 			priceNumDecimals = 3;
 			rerender();
 		});
-		expect(recalculate).toHaveBeenCalledTimes(1);
+		expect(getCouponContext).toHaveBeenCalledTimes(1);
 
 		await act(async () => {
-			releaseRecalculate?.();
+			releaseContext?.();
 		});
 		expect(localPatch).toHaveBeenCalledTimes(1);
 	});
