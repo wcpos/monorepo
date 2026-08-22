@@ -39,6 +39,19 @@ describe('formatReceiptData', () => {
 		expect(result.totals.total_display).toBe('$25.00');
 	});
 
+	it('keeps the existing en-US USD preview formatting', () => {
+		const result = formatReceiptData(sampleReceiptData);
+		expect(result.totals.total_incl_display).toBe('$25.00');
+		expect(result.payments[0].change_display).toBe('$5.00');
+	});
+
+	it('uses the ISO code and two decimals as the last-resort currency fallback', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.order.currency = 'INVALID';
+		const result = formatReceiptData(data);
+		expect(result.totals.total_incl_display).toBe('INVALID 25.00');
+	});
+
 	it('formats Receipt Data v1.1 savings and keeps zero savings Mustache-falsy', () => {
 		const data = structuredClone(sampleReceiptData);
 		Object.assign(data.lines[0], {

@@ -1,3 +1,5 @@
+import { formatMoney } from './format-money';
+
 import type { ReceiptData } from './types';
 
 function resolveDisplayValueSide(data: ReceiptData): 'incl' | 'excl' {
@@ -112,35 +114,14 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 	if (!currency) {
 		console.warn('formatReceiptData: missing currency in order, formatting may be incomplete');
 	}
-	const normalizedLocale = (data.presentation_hints?.locale || 'en-US').trim().replace(/_/g, '-');
+	const locale = data.presentation_hints?.locale;
 	const displayTax = resolveDisplayValueSide(data);
 	const i18n = {
 		...DEFAULT_I18N,
 		...data.i18n,
 	};
 
-	// narrowSymbol matches the server's wc_price() output, which always prints
-	// the bare currency symbol ("42,84 £"). The default 'symbol' display falls
-	// back to ISO codes for foreign currencies in many locales (es + GBP →
-	// "42,84 GBP"), making client renders disagree with server-rendered PDFs.
-	const fmt = (value: number): string => {
-		try {
-			return new Intl.NumberFormat(normalizedLocale || 'en-US', {
-				style: 'currency',
-				currency,
-				currencyDisplay: 'narrowSymbol',
-			}).format(value);
-		} catch {
-			try {
-				return new Intl.NumberFormat(normalizedLocale || 'en-US', {
-					style: 'currency',
-					currency,
-				}).format(value);
-			} catch {
-				return currency ? `${currency} ${value.toFixed(2)}` : value.toFixed(2);
-			}
-		}
-	};
+	const fmt = (value: number): string => formatMoney(value, currency, locale);
 	const perUnit = (total: number | undefined, qty: number): number | undefined => {
 		if (total == null || qty === 0) return undefined;
 		return total / qty;
