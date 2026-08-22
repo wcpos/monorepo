@@ -104,6 +104,14 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 				},
 			],
 			[
+				'react-native-ble-plx',
+				{
+					// iOS app-mode scanning for supported BLE barcode scanners (#1461).
+					// Foreground only — no background modes requested.
+					bluetoothAlwaysPermission: 'WCPOS uses Bluetooth to connect supported barcode scanners.',
+				},
+			],
+			[
 				'expo-router',
 				{
 					sitemap: false,
