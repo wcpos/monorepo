@@ -1,8 +1,8 @@
 import { type APIRequestContext, expect, type Page } from '@playwright/test';
 
 import { LOADED_COUNT_READY, LOADED_COUNT_TEST_ID } from './catalogue-readiness';
-import { getStoreUrl, storeRequestOptions, authenticatedTest as test } from './fixtures';
-import { probeGet } from './search-probe';
+import { getStoreUrl, authenticatedTest as test } from './fixtures';
+import { probeGet, resolveProbeOptions } from './search-probe';
 import { unwrapWireBody } from './wire-envelope';
 
 /**
@@ -290,7 +290,17 @@ test.describe('Product category filter', () => {
 		storeAuthorization,
 	}, testInfo) => {
 		const storeUrl = getStoreUrl(testInfo);
-		const options = storeRequestOptions(storeAuthorization());
+
+		// Wait for the grid FIRST, then borrow the app's credential. Both halves matter:
+		// a rendering grid is proof the app is authenticating right now, and the probe
+		// options are negotiated rather than assumed. Taking the captured credential on
+		// trust made this spec report a stale-token 401 as a broken store (CI run
+		// 32663366318, shard 4); see resolveProbeOptions for the two failure modes.
+		await expect
+			.poll(() => page.getByTestId(LOADED_COUNT_TEST_ID).textContent(), { timeout: 30_000 })
+			.toMatch(LOADED_COUNT_READY);
+
+		const options = await resolveProbeOptions(request, storeUrl, storeAuthorization);
 
 		const chosen = await chooseCategory(request, storeUrl, options);
 		if (!chosen.ok) {
@@ -298,11 +308,6 @@ test.describe('Product category filter', () => {
 			return;
 		}
 		const { category, selectedIds, member } = chosen.choice;
-
-		// The grid must be rendering something before the filter means anything.
-		await expect
-			.poll(() => page.getByTestId(LOADED_COUNT_TEST_ID).textContent(), { timeout: 30_000 })
-			.toMatch(LOADED_COUNT_READY);
 
 		const nonMember = await findNonMember(page, request, storeUrl, options, selectedIds);
 		if (nonMember === null) {

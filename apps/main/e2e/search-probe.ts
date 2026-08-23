@@ -282,6 +282,102 @@ async function probeRequest(
 }
 
 /**
+ * The transports worth trying for a credential the app was seen using, in order.
+ *
+ * The captured form comes first — it demonstrably reached `wcpos/v2` — then the
+ * alternates, because a credential that works on ONE route and transport does not
+ * automatically work on another. dev-free runs an always-on hostile proxy tier
+ * that strips `Authorization` (wcpos-infra#72 Tier 3) and applies WAF prefix rules
+ * to query params, so the same JWT can need the header on one store, `?authorization=Bearer …`
+ * on the next and the bare `?authorization=…` on a third. Mirrors the candidate
+ * ladder `resolveWriterTransport` already uses for the minted writer token.
+ *
+ * Pure and exported for its own test: the ORDER is the contract.
+ */
+export function authorizationCandidates(captured: StoreAuthorization | null): StoreAuthorization[] {
+	if (!captured) return [];
+	const bare = captured.value.replace(/^Bearer\s+/i, '');
+	const ladder: StoreAuthorization[] = [
+		captured,
+		{ transport: 'header', value: `Bearer ${bare}` },
+		{ transport: 'query', value: `Bearer ${bare}` },
+		{ transport: 'query', value: bare },
+	];
+	const seen = new Set<string>();
+	return ladder.filter((candidate) => {
+		const key = `${candidate.transport}:${candidate.value}`;
+		if (seen.has(key)) return false;
+		seen.add(key);
+		return true;
+	});
+}
+
+/** How long to keep re-reading the app's credential while it is still a stale one. */
+const PROBE_CREDENTIAL_TIMEOUT_MS = 45_000;
+/** Gap between re-reads, long enough for the app to have sent another request. */
+const PROBE_CREDENTIAL_POLL_MS = 2_000;
+
+/**
+ * Resolve — by evidence, not assumption — request options that actually authenticate
+ * against wc/v3 on THIS store, starting from the credential the app was seen using.
+ *
+ * TWO independent ways the captured credential lets a spec down, both observed:
+ *
+ *  1. **Wrong transport for the route.** What reached `wcpos/v2` through whatever proxy
+ *     sits in front does not automatically reach wc/v3 — dev-free's hostile tier strips
+ *     `Authorization` outright, so only the `?authorization=` forms authenticate there.
+ *     Hence the candidate ladder.
+ *  2. **A STALE token.** `captureStoreAuthorization` reports the last credential the app
+ *     was seen SENDING, not a working one. E2E auth state is cached (per-day in CI), so
+ *     a restored session replays an access token that expired hours ago; the app refreshes
+ *     on the 401 and carries on, while the spec is left holding the dead JWT. Measured on
+ *     2026-08-23: expired by 732s at probe time, and every candidate 401s — which reads
+ *     exactly like a broken store. Hence the retry: the getter is re-read until the app's
+ *     own traffic yields a credential that works, or the budget runs out.
+ *
+ * Deliberately never inspects the token's contents. Credentials are opaque here — the only
+ * evidence that one is good is a store answering with it.
+ *
+ * Throws when nothing authenticates inside the budget: that is a genuinely broken
+ * environment, and per the E2E store-agnostic policy it must fail rather than skip.
+ */
+export async function resolveProbeOptions(
+	request: APIRequestContext,
+	storeUrl: string,
+	getAuthorization: () => StoreAuthorization | null,
+	options: { timeoutMs?: number } = {}
+): Promise<{ headers: Record<string, string>; params: Record<string, string> }> {
+	const deadline = Date.now() + (options.timeoutMs ?? PROBE_CREDENTIAL_TIMEOUT_MS);
+	let statuses: string[] = ['no credential captured'];
+	let rounds = 0;
+	for (;;) {
+		rounds += 1;
+		const candidates = authorizationCandidates(getAuthorization());
+		if (candidates.length > 0) {
+			statuses = [];
+			for (const candidate of candidates) {
+				const candidateOptions = storeRequestOptions(candidate);
+				try {
+					const response = await probeRequest(request, 'get', storeUrl, 'products', undefined, {
+						...candidateOptions,
+						params: { ...candidateOptions.params, per_page: '1' },
+					});
+					if (response.ok()) return candidateOptions;
+					statuses.push(`${candidate.transport}=${response.status()}`);
+				} catch {
+					statuses.push(`${candidate.transport}=transport-error`);
+				}
+			}
+		}
+		if (Date.now() >= deadline) break;
+		await new Promise((resolve) => setTimeout(resolve, PROBE_CREDENTIAL_POLL_MS));
+	}
+	throw new Error(
+		`the app's credential authenticated against no wc/v3 transport on ${storeUrl} after ${rounds} rounds (${statuses.join(', ')}) — the app never surfaced a working credential`
+	);
+}
+
+/**
  * GET a wc/v3 route with the app's own captured credentials, tolerating either
  * permalink style. The read half of {@link probeRequest}, exported so specs can
  * ask the store what it contains before asserting on what the UI renders.

@@ -7,6 +7,7 @@ import {
 	tryAddRunPrivateSimpleProduct,
 } from './checkout-probe';
 import {
+	authorizationCandidates,
 	createRunPrivateProduct,
 	deleteSearchProbe,
 	findCreatedProductRecord,
@@ -14,9 +15,13 @@ import {
 	productProbeFailureAction,
 	productWriterAuthorization,
 	productWriterCredentialsDecision,
+	resolveProbeOptions,
 	searchAndWaitForServer,
 	sweepOrphanedProductProbes,
 } from './search-probe';
+
+import type { APIRequestContext } from '@playwright/test';
+import type { StoreAuthorization } from './fixtures';
 
 function response(status: number, body: unknown) {
 	return {
@@ -33,6 +38,80 @@ test('builds canonical rest_route URLs for plain WordPress permalinks', () => {
 	expect(plainPermalinkUrl('https://example.test/shop/', 'customers', 42)).toBe(
 		'https://example.test/shop/index.php?rest_route=/wc/v3/customers/42'
 	);
+});
+
+test('tries the captured authorization transport first, then the alternates', () => {
+	expect(authorizationCandidates({ transport: 'header', value: 'Bearer jwt.token' })).toEqual([
+		{ transport: 'header', value: 'Bearer jwt.token' },
+		{ transport: 'query', value: 'Bearer jwt.token' },
+		{ transport: 'query', value: 'jwt.token' },
+	]);
+});
+
+test('starts from a captured QUERY credential and still offers the header form', () => {
+	// The captured form leads even though it is not the ladder's usual first rung —
+	// it is the one transport already demonstrated to reach this store.
+	expect(authorizationCandidates({ transport: 'query', value: 'jwt.token' })).toEqual([
+		{ transport: 'query', value: 'jwt.token' },
+		{ transport: 'header', value: 'Bearer jwt.token' },
+		{ transport: 'query', value: 'Bearer jwt.token' },
+	]);
+});
+
+test('offers no candidate when the app was never seen authenticating', () => {
+	// An empty ladder makes the caller throw rather than probe anonymously, which
+	// would report every store as broken.
+	expect(authorizationCandidates(null)).toEqual([]);
+});
+
+/**
+ * A store that only honours one credential, and records what it was asked with.
+ * `resolveProbeOptions` must find the good one by evidence alone — it never inspects
+ * a token, because credentials here are opaque.
+ */
+function fakeStore(accepts: string) {
+	const asked: string[] = [];
+	const context = {
+		get: async (
+			_url: string,
+			options: { headers?: Record<string, string>; params?: Record<string, string> }
+		) => {
+			const offered = options.params?.authorization ?? options.headers?.Authorization ?? '';
+			asked.push(offered);
+			return response(offered === accepts ? 200 : 401, []);
+		},
+	} as unknown as APIRequestContext;
+	return { context, asked };
+}
+
+test('re-reads the app credential until one actually authenticates', async () => {
+	// The captured credential starts STALE — the shape a restored, day-old auth state
+	// produces, where the app replays an expired token before refreshing on the 401.
+	let captured: StoreAuthorization = { transport: 'query', value: 'expired-jwt' };
+	const store = fakeStore('refreshed-jwt');
+	setTimeout(() => {
+		captured = { transport: 'query', value: 'refreshed-jwt' };
+	}, 50);
+
+	const options = await resolveProbeOptions(store.context, 'https://example.test', () => captured, {
+		timeoutMs: 8_000,
+	});
+
+	expect(options.params.authorization).toBe('refreshed-jwt');
+	// It really did try the dead one first — otherwise this test would pass on a
+	// resolver that ignored the getter entirely.
+	expect(store.asked).toContain('expired-jwt');
+});
+
+test('gives up with the statuses it saw when no credential ever authenticates', async () => {
+	const captured: StoreAuthorization = { transport: 'header', value: 'Bearer never-valid' };
+	const store = fakeStore('something-else');
+
+	await expect(
+		resolveProbeOptions(store.context, 'https://example.test', () => captured, { timeoutMs: 1 })
+	).rejects.toThrow(/authenticated against no wc\/v3 transport/);
+	// The whole ladder was walked, not just the captured form.
+	expect(store.asked.length).toBeGreaterThan(1);
 });
 
 let simpleProductWriterStarted = false;
