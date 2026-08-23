@@ -399,6 +399,41 @@ describe('PrinterService', () => {
 		expect(getTransport).not.toHaveBeenCalled();
 	});
 
+	it('still opens the drawer for Star CloudPRNT, whose receipts are server-rendered', async () => {
+		// Star is order-based for receipts but still accepts a raw drawer kick; a
+		// standalone kick has no order or template for the server to render from.
+		const service = new PrinterService();
+		const transport = {
+			name: 'cloud',
+			printRaw: vi.fn().mockResolvedValue(undefined),
+			printHtml: vi.fn().mockResolvedValue(undefined),
+		};
+		const getTransport = vi.fn().mockResolvedValue(transport);
+		(service as any).getTransport = getTransport;
+
+		const profile: PrinterProfile = {
+			id: 'cloud-2',
+			name: 'Star Cloud Printer',
+			connectionType: 'cloud',
+			vendor: 'star',
+			port: 0,
+			cloudPrinterId: 'cloud-printer-2',
+			cloudProvider: 'star-cloudprnt',
+			language: 'star-prnt',
+			columns: 48,
+			fullReceiptRaster: false,
+			autoCut: true,
+			autoOpenDrawer: false,
+			isDefault: false,
+			isBuiltIn: false,
+		};
+
+		await service.openDrawer(profile);
+
+		expect(getTransport).toHaveBeenCalled();
+		expect(transport.printRaw).toHaveBeenCalled();
+	});
+
 	it('routes Epson bluetooth profiles through the native adapter', async () => {
 		const service = new PrinterService();
 		const profile: PrinterProfile = {

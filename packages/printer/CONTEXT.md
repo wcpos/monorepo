@@ -52,8 +52,12 @@ device does not edit them. Only *routing* (template → cloud printer) is device
 
 ### Cloud Provider
 The server-side backend that delivers jobs to a Cloud Printer; drives the job format.
-One of `star-cloudprnt`, `epson-sdp`, `printnode`. `star-cloudprnt` receives raw
-pre-encoded bytes; `epson-sdp` / `printnode` receive server-rendered order jobs.
+One of `star-cloudprnt`, `epson-sdp`, `printnode`. All three receive server-rendered
+order jobs: `epson-sdp` and `printnode` always did, and `star-cloudprnt` joined them
+once the plugin could negotiate a media type with the printer and render to match
+(wcpos/woocommerce-pos#1351). Only a legacy profile with no provider still uploads
+raw pre-encoded bytes — as does any one-off payload with no order behind it, such as
+a standalone cash-drawer kick.
 
 ### Printer target id (routing)
 The stable id a template routing override points at (persisted in

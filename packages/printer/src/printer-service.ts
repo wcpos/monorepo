@@ -5,7 +5,7 @@ import { buildDiagnosticTemplate } from './encoder/diagnostic-template';
 import { encodeReceipt } from './encoder/encode-receipt';
 import { encodeThermalTemplateForPrint } from './encoder/thermal-print';
 import { encodeThermalTemplate } from './renderer';
-import { CloudAdapter, isOrderBasedCloudProfile } from './transport/cloud-adapter';
+import { acceptsRawCloudUpload, CloudAdapter } from './transport/cloud-adapter';
 import { SystemPrintAdapter } from './transport/system-print-adapter';
 
 import type { EncodeReceiptOptions } from './encoder/encode-receipt';
@@ -181,7 +181,10 @@ export class PrinterService {
 
 	/** Fire just the cash-drawer kick — no receipt. Used by the "Open drawer" button. */
 	async openDrawer(profile: PrinterProfile): Promise<void> {
-		if (isOrderBasedCloudProfile(profile)) {
+		// Deliberately not isOrderBasedCloudProfile(): Star CloudPRNT renders its
+		// receipts server-side but still accepts a raw drawer-kick payload, and a
+		// standalone kick has no order or template to render from.
+		if (!acceptsRawCloudUpload(profile)) {
 			throw new Error(
 				'Open drawer is not supported for order-based cloud printers (Epson SDP, PrintNode).'
 			);

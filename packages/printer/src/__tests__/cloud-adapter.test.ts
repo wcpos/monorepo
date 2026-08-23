@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { CloudAdapter, isOrderBasedCloudProfile } from '../transport/cloud-adapter';
+import {
+	acceptsRawCloudUpload,
+	CloudAdapter,
+	isOrderBasedCloudProfile,
+} from '../transport/cloud-adapter';
 
 import type { PrinterProfile } from '../types';
 
@@ -87,18 +91,54 @@ describe('isOrderBasedCloudProfile', () => {
 		cloudPrinterId: 'reg-1',
 	};
 
-	it('is true for epson-sdp and printnode cloud profiles', () => {
+	it('is true for every provider whose receipts the server renders', () => {
 		expect(isOrderBasedCloudProfile({ ...base, cloudProvider: 'epson-sdp' })).toBe(true);
 		expect(isOrderBasedCloudProfile({ ...base, cloudProvider: 'printnode' })).toBe(true);
+		// Star joined them once the plugin could negotiate a media type (#1351).
+		expect(isOrderBasedCloudProfile({ ...base, cloudProvider: 'star-cloudprnt' })).toBe(true);
 	});
 
-	it('is false for star-cloudprnt, missing provider, and non-cloud profiles', () => {
-		expect(isOrderBasedCloudProfile({ ...base, cloudProvider: 'star-cloudprnt' })).toBe(false);
-		// Unknown / missing provider falls back to Star (raw upload).
+	it('is false for a legacy profile with no provider, and for non-cloud profiles', () => {
+		// A profile written before the field existed keeps raw upload.
 		expect(isOrderBasedCloudProfile(base)).toBe(false);
 		expect(
 			isOrderBasedCloudProfile({ ...base, connectionType: 'network', address: '1.2.3.4' })
 		).toBe(false);
 		expect(isOrderBasedCloudProfile(undefined)).toBe(false);
+	});
+});
+
+describe('acceptsRawCloudUpload', () => {
+	const base: PrinterProfile = {
+		id: 'p1',
+		name: 'Cloud',
+		connectionType: 'cloud',
+		vendor: 'generic',
+		port: 9100,
+		language: 'esc-pos',
+		columns: 42,
+		fullReceiptRaster: false,
+		autoCut: true,
+		autoOpenDrawer: false,
+		isDefault: false,
+		isBuiltIn: false,
+		cloudPrinterId: 'reg-1',
+	};
+
+	it('is false only for providers that reject raw payloads', () => {
+		expect(acceptsRawCloudUpload({ ...base, cloudProvider: 'epson-sdp' })).toBe(false);
+		expect(acceptsRawCloudUpload({ ...base, cloudProvider: 'printnode' })).toBe(false);
+	});
+
+	it('is true for Star, whose receipts are server-rendered but which still takes a raw drawer kick', () => {
+		expect(acceptsRawCloudUpload({ ...base, cloudProvider: 'star-cloudprnt' })).toBe(true);
+	});
+
+	it('is true for legacy cloud profiles and every direct transport', () => {
+		expect(acceptsRawCloudUpload(base)).toBe(true);
+		expect(acceptsRawCloudUpload({ ...base, connectionType: 'network', address: '1.2.3.4' })).toBe(
+			true
+		);
+		expect(acceptsRawCloudUpload(undefined)).toBe(true);
 	});
 });
