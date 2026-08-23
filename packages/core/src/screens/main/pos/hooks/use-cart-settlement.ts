@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import omit from 'lodash/omit';
 import pick from 'lodash/pick';
 import { useObservable, useSubscription } from 'observable-hooks';
 import { distinctUntilChanged, map } from 'rxjs/operators';
@@ -65,6 +64,12 @@ const MONEY_FIELDS = [
 	'total',
 	'tax_lines',
 ] as const;
+
+/**
+ * The parts of a settle patch that represent a real cart change rather than a
+ * re-derived aggregate. Their presence means the cashier did something.
+ */
+const STRUCTURAL_FIELDS = ['line_items', 'coupon_lines', 'fee_lines'] as const;
 
 /** The only status a POS cart is editable in — see use-open-orders-resource / use-new-order. */
 const POS_OPEN_STATUS = 'pos-open';
@@ -307,11 +312,29 @@ export const useCartSettlement = () => {
 				 * It applies to every cart now, where before a couponed cart's replay
 				 * bypassed it — see the PR for why that asymmetry was not preserved.
 				 */
-				const decision = evaluateRepush({
-					diverged: divergence !== null,
-					latched: overruledTotals.current,
-					computed: JSON.stringify(pick(result.patch, MONEY_FIELDS)),
-				});
+				/**
+				 * The guard applies to a MONEY-ONLY patch — a re-derived aggregate, which is
+				 * the thing that can loop against the server.
+				 *
+				 * A patch carrying line_items, coupon_lines or fee_lines is the cashier
+				 * doing something, and its money has to go with it. Before #1472 this fell
+				 * out of where the guard lived: use-order-totals wrote money alone and was
+				 * guarded, while the cart replay wrote structure and money and was not. I
+				 * removed that asymmetry as a "latent instance of the same bug" — it was
+				 * not. Applying a coupon pushes to the server, the server answers with
+				 * different money, and the divergence that creates then suppressed the very
+				 * discount the cashier had just applied: the POS persisted 0.00 against the
+				 * server's 2.23 (caught by e2e/pos-coupon-apply.spec.ts, not by any unit
+				 * test).
+				 */
+				const structural = STRUCTURAL_FIELDS.some((field) => field in result.patch);
+				const decision = structural
+					? { suppress: false, nextLatch: null }
+					: evaluateRepush({
+							diverged: divergence !== null,
+							latched: overruledTotals.current,
+							computed: JSON.stringify(pick(result.patch, MONEY_FIELDS)),
+						});
 				overruledTotals.current = decision.nextLatch;
 
 				/**
@@ -326,17 +349,13 @@ export const useCartSettlement = () => {
 				 * So the money is stripped and everything else is still written. If nothing
 				 * survives the strip, there is nothing to persist.
 				 */
-				let data = result.patch as Partial<OrderDocument>;
-				if (decision.suppress) {
-					data = omit(result.patch, MONEY_FIELDS) as Partial<OrderDocument>;
-					if (Object.keys(data).length === 0) return;
-				}
+				if (decision.suppress) return;
 
 				await localPatch({
 					document: freshOrder,
 					// settle outputs structural line types; this boundary writes them back to
 					// the DB document they came from.
-					data,
+					data: result.patch as Partial<OrderDocument>,
 				});
 			} finally {
 				if (replayingRef.current === flightKey) replayingRef.current = null;

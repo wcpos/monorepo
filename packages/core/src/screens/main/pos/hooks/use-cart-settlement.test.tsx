@@ -208,6 +208,12 @@ const getCouponContext: jest.MockedFunction<
 	(lineItems: LineItem[]) => Promise<ReturnType<typeof emptyCouponContext>>
 > = jest.fn(async (_lineItems: LineItem[]) => emptyCouponContext());
 
+let divergenceValue: { serverTotal: string } | null = null;
+
+jest.mock('../contexts/order-money-divergence', () => ({
+	useOrderMoneyDivergence: () => ({ divergence: divergenceValue }),
+}));
+
 jest.mock('./use-coupon-context', () => ({
 	useCouponContext: () => ({ getCouponContext }),
 }));
@@ -299,6 +305,7 @@ describe('useCartSettlement reference demand (#952)', () => {
 		settleCart.mockImplementation(() => successfulSettlement());
 		getCouponContext.mockClear();
 		feeLineIsPercent = false;
+		divergenceValue = null;
 		whenSettled = jest.fn(async () => true);
 		whenSettledInBackground = jest.fn(async (_signal: AbortSignal) => true);
 		referenceGeneration = 0;
@@ -345,6 +352,56 @@ describe('useCartSettlement reference demand (#952)', () => {
 		await act(async () => {});
 
 		expect(settleCart).toHaveBeenCalledTimes(1);
+		expect(localPatch).not.toHaveBeenCalled();
+	});
+
+	/**
+	 * Regression for the E2E failure this PR shipped and then fixed
+	 * (e2e/pos-coupon-apply.spec.ts — "the server records the same money").
+	 *
+	 * Applying a coupon pushes to the server, the server answers with different money,
+	 * and that divergence used to suppress the very discount the cashier had just
+	 * applied: the POS persisted discount_total 0.00 against the server's 2.23.
+	 *
+	 * A patch carrying structural lines is the cashier doing something, so its money
+	 * goes with it. Only a money-only patch — a re-derived aggregate, the thing that
+	 * can loop — is suppressible.
+	 */
+	it('writes coupon money even while the order is diverged', async () => {
+		divergenceValue = { serverTotal: '9.99' };
+		applyCoupon([{ code: 'bonus' }]);
+		await renderAfterMountSettle();
+		settleCart.mockImplementation(() => ({
+			...successfulSettlement(),
+			patch: {
+				...successfulSettlement().patch,
+				coupon_lines: [{ code: 'bonus', discount: '2.23' }],
+				discount_total: '2.23',
+			},
+		}));
+
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+
+		expect(localPatch).toHaveBeenCalledTimes(1);
+		expect(localPatch.mock.calls[0][0].data).toEqual(
+			expect.objectContaining({ discount_total: '2.23' })
+		);
+	});
+
+	it('still suppresses a money-only re-derivation while diverged', async () => {
+		divergenceValue = { serverTotal: '9.99' };
+		await renderAfterMountSettle();
+		settleCart.mockImplementation(() => ({
+			...successfulSettlement(),
+			patch: { ...successfulSettlement().patch },
+		}));
+
+		await act(async () => {
+			editCart([{ total: '5.00', total_tax: '0.00', product_id: 1 }]);
+		});
+
 		expect(localPatch).not.toHaveBeenCalled();
 	});
 
