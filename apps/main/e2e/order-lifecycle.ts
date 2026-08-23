@@ -589,11 +589,24 @@ export interface CartMoney {
  * The wait on `cart-order-total` is not politeness: settlement is asynchronous,
  * so reading straight after an add would race it and hand back `''`. Waiting
  * HERE rather than in each caller means no spec can quietly compare against an
- * unsettled cart. `cart-discount-total` is read without a wait because `''` is
- * a legitimate answer for an uncouponed sale — the caller says whether it
- * expected a discount.
+ * unsettled cart.
+ *
+ * `cart-discount-total` is NOT waited on by default, because `''` is the right
+ * answer for an uncouponed sale. A couponed spec must pass `discounted: true`:
+ * adding a product already gives the TOTAL a digit, so without it the default
+ * wait is satisfied the moment the cart has any money at all, and the read
+ * races the coupon's own settlement pass — `useAddCoupon` patches the line
+ * arrays, and `discount_total` is written asynchronously after that.
+ *
+ * ONE ORDERING RULE, and it is load-bearing: call this BEFORE the push whose
+ * ack you are going to compare against. The POS adopts the server's money
+ * (ADR 0032), so a read taken after the ack has landed can BE the server's own
+ * figure — an assertion that passes whatever the server did.
  */
-export async function readCartMoney(page: Page): Promise<CartMoney> {
+export async function readCartMoney(
+	page: Page,
+	options: { discounted?: boolean } = {}
+): Promise<CartMoney> {
 	const marker = (testId: string) => page.getByTestId(testId);
 	const total = marker('cart-order-total');
 	// Exactly one: OpenOrders — and so the cart, and so these markers — is
@@ -604,6 +617,14 @@ export async function readCartMoney(page: Page): Promise<CartMoney> {
 	await expect(total, 'the cart must settle a total before it can be compared').toHaveText(/\d/, {
 		timeout: 30_000,
 	});
+	if (options.discounted) {
+		// A NON-ZERO digit, so `0.00` does not satisfy it — the referent is "the
+		// cart has applied the discount", not "the marker has rendered".
+		await expect(
+			marker('cart-discount-total'),
+			'the cart must settle the coupon discount before it can be compared'
+		).toHaveText(/[1-9]/, { timeout: 30_000 });
+	}
 	const read = async (testId: string): Promise<string> =>
 		((await marker(testId).textContent()) ?? '').trim();
 	return {

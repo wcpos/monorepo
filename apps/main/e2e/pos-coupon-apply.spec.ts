@@ -181,19 +181,23 @@ for (const targetStoreId of storeTargets) {
 					await expect(submit).toBeEnabled({ timeout: 10_000 });
 					await submit.click();
 
-					// The dialog closes on a successful apply; the cart then recomputes with
-					// the coupon before the save below captures the payload. (No text
-					// selector for the coupon line — the E2E selector policy — so the ack
-					// assertion on coupon_lines below is what proves the application.)
+					// The dialog closes on a successful apply. (No text selector for the
+					// coupon line — the E2E selector policy — so the ack assertion on
+					// coupon_lines below is what proves the application.)
 					await expect(page.getByTestId('add-coupon-submit')).not.toBeVisible({ timeout: 30_000 });
-					await page.waitForTimeout(1_000);
 
 					// The till's own money, captured before the save. Since #1507 the POS
 					// does not push the aggregate — WooCommerce authors it from the
 					// lines — so the push body cannot witness what this cart discounted
 					// and totalled. These are the figures the cashier is looking at,
 					// which is the referent ADR 0032 §2 is about.
-					const cart = await readCartMoney(page);
+					//
+					// `discounted: true` waits for the SETTLED discount rather than for a
+					// fixed delay. `useAddCoupon` patches the coupon and line arrays and
+					// the aggregate follows asynchronously, so a sleep here is a guess
+					// about how long that takes — and the total wait alone is no help,
+					// since the product had already given it a digit.
+					const cart = await readCartMoney(page, { discounted: true });
 					expect(
 						Number(cart.discountTotal),
 						'the cart must have discounted the applied coupon before saving'

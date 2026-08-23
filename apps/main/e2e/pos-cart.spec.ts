@@ -169,6 +169,13 @@ liveTest.describe('POS Cart - save to server parity (live store)', () => {
 			expect(cartTotalText, 'cart must show a total').not.toBe('');
 			expect(cartTotalText, 'cart total must contain an amount').toMatch(/\d/);
 
+			// The till's own aggregate, captured BEFORE the save — this must not move
+			// below the click. The ack is adopted into the resident order (the POS
+			// mirrors the server's money, ADR 0032), so a read taken after the
+			// response has landed can race that adoption and end up comparing the
+			// server's total against itself: green whatever the server did.
+			const cart = await readCartMoney(page);
+
 			const saved = page.waitForResponse((response) => isPushOrdersResponse(response), {
 				timeout: 90_000,
 			});
@@ -207,8 +214,7 @@ liveTest.describe('POS Cart - save to server parity (live store)', () => {
 			// no longer puts them on the wire and a sent-vs-ack comparison would be
 			// comparing against nothing. What must hold is ADR 0032 §2 — the till's
 			// arithmetic equals the store's — and the till's figure is the one the
-			// cashier is looking at.
-			const cart = await readCartMoney(page);
+			// cashier is looking at, captured above before the ack could rewrite it.
 			expectMoneyMatches(doc!.total, cart.total, 'order total parity (cart vs server)');
 
 			// The money the cashier sees must be stable across the save. Wait for the
