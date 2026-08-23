@@ -15,7 +15,5 @@ export type FormComboboxProps<TControl extends React.ElementType = typeof Combob
 export function FormCombobox<TControl extends React.ElementType = typeof Combobox>(
 	props: FormComboboxProps<TControl>
 ) {
-	// The props type is a discriminated union on `multiple`; the shared body takes the
-	// widened shape and narrows on the same flag at runtime.
-	return <FormOptionControl defaultComponent={Combobox} {...(props as Record<string, any>)} />;
+	return <FormOptionControl defaultComponent={Combobox} {...props} />;
 }

@@ -15,7 +15,5 @@ export type FormSelectProps<TControl extends React.ElementType = typeof Select> 
 export function FormSelect<TControl extends React.ElementType = typeof Select>(
 	props: FormSelectProps<TControl>
 ) {
-	// The props type is a discriminated union on `multiple`; the shared body takes the
-	// widened shape and narrows on the same flag at runtime.
-	return <FormOptionControl defaultComponent={Select} {...(props as Record<string, any>)} />;
+	return <FormOptionControl defaultComponent={Select} {...props} />;
 }

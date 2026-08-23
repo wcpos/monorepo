@@ -41,16 +41,15 @@ export type FormOptionFieldProps<TControl extends React.ElementType> = (
 		'value' | 'onValueChange' | 'multiple' | 'customComponent'
 	>;
 
-type FormOptionControlProps = {
-	label?: string;
-	description?: string;
-	multiple?: boolean;
-	value?: string | OptionLike | OptionLike[];
-	onChange?: (value: string | OptionLike[]) => void;
+/**
+ * The body's own contract, generic over the rendered control exactly as the public
+ * wrappers are, so the `multiple` / `value` / `onChange` agreement is checked at the
+ * wrapper-to-body seam rather than erased by a cast on the way in.
+ */
+type FormOptionControlProps<TControl extends React.ElementType> = FormOptionFieldProps<TControl> & {
 	/** Rendered when the caller does not override the control via `customComponent`. */
-	defaultComponent: React.ElementType<any>;
-	customComponent?: React.ElementType<any>;
-} & Record<string, any>;
+	defaultComponent: React.ElementType;
+};
 
 /**
  * Shared body behind `FormSelect` and `FormCombobox`. The two differ only in which
@@ -59,18 +58,26 @@ type FormOptionControlProps = {
  * line for line between them, and the one place they had quietly diverged was the
  * clear path (see `optionToFieldValue`).
  */
-export function FormOptionControl({
+export function FormOptionControl<TControl extends React.ElementType>({
 	label,
 	description,
 	value,
 	onChange,
 	multiple,
 	defaultComponent,
-	customComponent: Component = defaultComponent,
+	customComponent,
 	...props
-}: FormOptionControlProps) {
+}: FormOptionControlProps<TControl>) {
 	const [open, setOpen] = React.useState(false);
 	const { labelNativeID, ariaProps } = useFormControlAria({ label, description });
+
+	/**
+	 * The control is chosen at runtime, so its props cannot be resolved statically here.
+	 * `ElementType<any>` is what admits the spread below; the caller-facing contract that
+	 * matters — which props this control accepts — is enforced on `FormOptionFieldProps`,
+	 * where `TControl` is bound to the concrete component.
+	 */
+	const Component: React.ElementType<any> = customComponent ?? defaultComponent;
 
 	const controlValue = React.useMemo(() => {
 		if (multiple) {
@@ -97,8 +104,8 @@ export function FormOptionControl({
 				{...ariaProps}
 				open={open}
 				onOpenChange={setOpen}
-				multiple={multiple as any}
-				value={controlValue as any}
+				multiple={multiple}
+				value={controlValue}
 				onValueChange={handleValueChange}
 				{...props}
 			/>
