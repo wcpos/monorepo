@@ -212,6 +212,11 @@ export function calculateOrderTotals(
 	};
 
 	// Calculate fee totals
+	//
+	// Deliberately NOT rounded per line: WC's calculate_totals() sums fees with
+	// `$fees_total += (float) $item->get_total()` and feeds that raw sum straight into
+	// set_total(). Only `fee_total` below is rounded, and only because it is a display
+	// figure for the cart (matching WC Admin), never a summand of the order total.
 	activeFeeLines.forEach((line) => {
 		fee_total += parseNumber(line.total);
 		fee_tax += parseNumber(line.total_tax);
@@ -221,10 +226,22 @@ export function calculateOrderTotals(
 	});
 
 	// Calculate shipping totals
+	//
+	// WC rounds EACH shipping line to dp before summing (calculate_totals():
+	// `$shipping_total += NumberUtil::round( $shipping->get_total(), $price_decimals )`),
+	// stores that sum with set_shipping_total(), and adds the SAME rounded figure into
+	// set_total(). Unlike line items this rounding is UNCONDITIONAL — it does not depend
+	// on woocommerce_tax_round_at_subtotal, which is a tax setting and shipping is summed
+	// outside it. Fees are the opposite case and are deliberately left raw below.
+	//
+	// Summing the raw line values into `total` cost a cent on a $5 tax-inclusive shipping
+	// line: the POS sent 65.39 where WooCommerce stored 65.40, because 4.545455 went into
+	// the total where WC had already made it 4.55 (dev-free order 110921).
 	activeShippingLines.forEach((line) => {
-		shipping_total += parseNumber(line.total);
+		const roundedLineTotal = roundHalfUp(parseNumber(line.total), dp);
+		shipping_total += roundedLineTotal;
 		shipping_tax += parseNumber(line.total_tax);
-		total += parseNumber(line.total);
+		total += roundedLineTotal;
 		total_tax += parseNumber(line.total_tax);
 		accumulateTaxes(line.taxes, 'shipping_tax_total');
 	});
@@ -288,7 +305,14 @@ export function calculateOrderTotals(
 			roundTaxTotal(roundedShippingTax, dp, pricesIncludeTax, getRoundingPrecision(dp))
 		),
 		cart_tax: String(roundTaxTotal(roundedCartTax, dp, pricesIncludeTax, getRoundingPrecision(dp))),
-		total: String(roundHalfUp(total + roundedTotalTax, dp)),
+		// WC: `set_total( round( $cart_total + $fees_total + $shipping_total
+		// + $this->get_cart_tax() + $this->get_shipping_tax(), $price_decimals ) )`.
+		// The tax summands are the FULL-PRECISION props, not the display-rounded
+		// `total_tax` — rounding the tax first and rounding again here is a double
+		// rounding that can land a cent away from the store whenever the untaxed part
+		// of the sum is not itself at display decimals (a raw fee total is the common
+		// way in). `total_tax` stays its own rounded field, which is what WC stores.
+		total: String(roundHalfUp(total + roundedCartTax + roundedShippingTax, dp)),
 		total_tax: String(roundTaxTotal(roundedTotalTax, dp, pricesIncludeTax)),
 		tax_lines: filteredTaxLines,
 		/**
