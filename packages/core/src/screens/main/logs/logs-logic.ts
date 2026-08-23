@@ -413,6 +413,81 @@ export function buildDebugInfo(input: DebugInfoInput): string {
 }
 
 /**
+ * One log row as a support-ready block of text — what the row's copy/share
+ * action puts on the clipboard.
+ *
+ * It copies the ROW, not the row's identity. The button used to hand over the
+ * event code alone (`push.money-divergence`), which names the KIND of thing
+ * that happened and nothing about the one that did: not the order, not the
+ * figures, not the error code. A merchant pasting that into a support thread
+ * has told us nothing we could act on, and the numbers that mattered were
+ * sitting one line below it on screen.
+ *
+ * English and structural, for the same reason `buildDebugInfo` is: support
+ * greps these by code, and the rendered title is whatever language the till
+ * happened to be in. The engine `context` rides along verbatim — it is where
+ * every diagnostic detail lives (`detail: "total: 65.390000 -> 65.400000"`),
+ * and re-deriving a prose summary of it here would be a second opinion that
+ * goes stale the moment the producer adds a field.
+ */
+/** `Ada (cashier, id 12)` — whichever of the three the row actually carries. */
+function formatActor(actor: LogRow['actor']): string | null {
+	if (!actor) return null;
+	const name = actor.name?.trim() || null;
+	const qualifiers = [actor.role?.trim() || null, actor.id ? `id ${actor.id}` : null].filter(
+		Boolean
+	);
+	if (!name && qualifiers.length === 0) return null;
+	if (!name) return qualifiers.join(', ');
+	return qualifiers.length > 0 ? `${name} (${qualifiers.join(', ')})` : name;
+}
+
+export function buildLogEntryReport(row: LogRow): string {
+	const lines: string[] = [];
+	lines.push(`WCPOS log entry — ${new Date(row.timestamp).toISOString()}`);
+	if (row.level) lines.push(`Level: ${row.level}`);
+	const eventType = eventTypeOf(row);
+	if (eventType) lines.push(`Event: ${eventType}`);
+	if (row.code) lines.push(`Error code: ${row.code}`);
+	if (row.category) lines.push(`Category: ${row.category}`);
+	// The ledger hides attribution on purpose — the log DB is per-(site, store,
+	// cashier), so a name in the list is noise — and says so on the explicit
+	// grounds that it "stays in the data for export and support" (ledger.tsx).
+	// This IS that export: leaving the actor out would have made the ledger's
+	// reason for hiding it untrue.
+	const actor = formatActor(row.actor);
+	if (actor) lines.push(`Actor: ${actor}`);
+	if (row.outcome) lines.push(`Outcome: ${row.outcome}`);
+	if (row.message && row.message !== eventType) lines.push(`Message: ${row.message}`);
+	const detail = rowDetailData(row);
+	if (detail.operation) lines.push(`Operation: ${detail.operation}`);
+	if (detail.request) lines.push(`Request: ${detail.request}`);
+	if (detail.serverCode) lines.push(`Server code: ${detail.serverCode}`);
+	if (detail.attempts) {
+		lines.push(
+			`Attempts: ${detail.attempts.count} (${new Date(
+				detail.attempts.firstSeen
+			).toISOString()} → ${new Date(detail.attempts.lastSeen).toISOString()})`
+		);
+	}
+	if (row.operationId) lines.push(`Operation id: ${row.operationId}`);
+	if (row.logId) lines.push(`Log id: ${row.logId}`);
+
+	const context = row.context ?? {};
+	if (Object.keys(context).length > 0) {
+		lines.push('Details:');
+		// A log row that cannot be stringified must still yield a usable report —
+		// the copy action exists for the moments something is already wrong.
+		try {
+			lines.push(JSON.stringify(context, null, 2));
+		} catch {
+			lines.push('  [details could not be serialized]');
+		}
+	}
+	return lines.join('\n');
+}
+
+/**
  * Infinite-scroll guard for the ledger (A1.4: "Show more" dies; the ledger
  * extends as the cashier nears the bottom, like every other POS table).
  * Pure on purpose, and keyed on the MATERIALIZED row count, not the query

@@ -22,7 +22,7 @@ import { useLocalDate } from '../../../hooks/use-local-date';
 import { type KVEntry, KVGrid, type LevelKind } from '../health/components';
 import { translateErrorSummary } from './generated/error-summaries.generated';
 import { translateEventDescription } from './generated/event-titles.generated';
-import { eventTypeOf, type LogRow, rowDetailData } from './logs-logic';
+import { buildLogEntryReport, eventTypeOf, type LogRow, rowDetailData } from './logs-logic';
 
 export function catalogueFor(code: string | undefined): CatalogueEntry | null {
 	if (!code) return null;
@@ -77,7 +77,20 @@ function useGuidanceText(entry: CatalogueEntry | null): string | null {
 	return guidance.length > 0 ? guidance : null;
 }
 
-function EventCode({ eventType, logId }: { eventType: string; logId: string }) {
+/**
+ * The event-code line, and the row's copy/share action.
+ *
+ * The action hands over the WHOLE entry (`buildLogEntryReport`), not the event
+ * code it sits beside. Copying the code alone named the kind of thing that
+ * happened and nothing about the one that did — no order, no figures, no error
+ * code — so a merchant pasting it into a support thread said nothing anyone
+ * could act on. The button keeps its place on this line because that is where
+ * merchants have learnt to find it; only what it yields changed, which is why
+ * its label and toast keys are renamed rather than edited (a stale translation
+ * of "Copy event code" on a button that copies everything is worse than an
+ * untranslated one).
+ */
+function EventCode({ row, eventType, logId }: { row: LogRow; eventType: string; logId: string }) {
 	const t = useT();
 	const canShare = Platform.OS !== 'web';
 	// Same capability guard as the debug-copy action in logs/index.tsx: outside a
@@ -86,18 +99,19 @@ function EventCode({ eventType, logId }: { eventType: string; logId: string }) {
 	const canCopy = !canShare && typeof navigator !== 'undefined' && !!navigator.clipboard;
 	const handleCopy = React.useCallback(async () => {
 		try {
+			const report = buildLogEntryReport(row);
 			if (canShare) {
-				await Share.share({ message: eventType });
+				await Share.share({ message: report });
 				return;
 			}
-			await navigator.clipboard.writeText(eventType);
-			Toast.show({ type: 'success', text1: t('health.logs.event_code_copied') });
+			await navigator.clipboard.writeText(report);
+			Toast.show({ type: 'success', text1: t('health.logs.entry_copied') });
 		} catch {
 			if (!canShare) {
-				Toast.show({ type: 'error', text1: t('health.logs.event_code_copy_failed') });
+				Toast.show({ type: 'error', text1: t('health.logs.entry_copy_failed') });
 			}
 		}
-	}, [canShare, eventType, t]);
+	}, [canShare, row, t]);
 
 	return (
 		<HStack className="items-center gap-3">
@@ -113,7 +127,7 @@ function EventCode({ eventType, logId }: { eventType: string; logId: string }) {
 					onPress={() => void handleCopy()}
 				>
 					<ButtonText>
-						{canShare ? t('health.logs.share_event_code') : t('health.logs.copy_event_code')}
+						{canShare ? t('health.logs.share_entry') : t('health.logs.copy_entry')}
 					</ButtonText>
 				</Button>
 			) : null}
@@ -250,7 +264,7 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 			) : null}
 			{hasFacts ? (
 				<VStack className="gap-1">
-					{eventType ? <EventCode eventType={eventType} logId={row.logId} /> : null}
+					{eventType ? <EventCode row={row} eventType={eventType} logId={row.logId} /> : null}
 					{entries.length > 0 ? <KVGrid entries={entries} /> : null}
 				</VStack>
 			) : null}
