@@ -14,10 +14,22 @@ const mockFindEngineResident = jest.fn();
 const mockPatchEngineResident = jest.fn();
 const mockWrite = jest.fn();
 const mockCheckCartStock = jest.fn();
-const mockCalculateLineItemTaxesAndTotals = jest.fn();
 let mockStockGuardEnabled = false;
 
 const mockRemoveTemporaryOrder = jest.fn();
+
+/**
+ * Every line the POS creates carries `_woocommerce_pos_data` — `convertProductToLineItem`
+ * writes it — and that is where the AUTHORITATIVE per-unit price lives. Without it the
+ * engine falls back to deriving price from the line's own totals, which is wrong the
+ * moment a merge has already bumped the quantity (5/2 rather than 5). The retired hook
+ * behaved identically; the stub that used to mock it read a top-level `price` field
+ * instead, so these fixtures were passing against maths the app never ran.
+ */
+const posPrice = (price: number) => ({
+	key: '_woocommerce_pos_data',
+	value: { price, regular_price: price, tax_status: 'taxable' },
+});
 
 function completeEngineRecord(record: Record<string, any> | null) {
 	if (!record) return null;
@@ -48,12 +60,25 @@ jest.mock('./use-cart-stock-guard', () => ({
 	}),
 }));
 
-jest.mock('./use-calculate-line-item-tax-and-totals', () => ({
-	useCalculateLineItemTaxAndTotals: () => ({
-		calculateLineItemTaxesAndTotals: (...args: unknown[]) =>
-			mockCalculateLineItemTaxesAndTotals(...args),
-	}),
-}));
+// Only the store settings are stubbed; the merge recalculation runs the real engine.
+// The fixtures below therefore carry real `total`/`subtotal` values: per-unit price is
+// DERIVED from the line's totals (or from its pos_data), never read off a top-level
+// `price` field — the stub this replaced read `lineItem.price`, which the shipped code
+// has never done.
+jest.mock('./use-cart-config', () => {
+	const { createCartConfig } = jest.requireActual('@wcpos/order-math');
+	const config = createCartConfig({
+		rates: [],
+		allRates: [],
+		calcTaxes: true,
+		pricesIncludeTax: false,
+		taxRoundAtSubtotal: false,
+		dp: 2,
+		shippingTaxClass: '',
+		calcDiscountsSequentially: false,
+	});
+	return { useCartConfig: () => config };
+});
 
 const order: Record<string, unknown> & {
 	getLatest(): typeof order;
@@ -112,14 +137,6 @@ describe('useAddItemToOrder', () => {
 		jest.clearAllMocks();
 		mockStockGuardEnabled = false;
 		mockFindEngineResident.mockResolvedValue(null);
-		// Stands in for the real tax/totals recalculation: enough to prove the merged
-		// line is put back through it instead of keeping the pre-merge totals.
-		mockCalculateLineItemTaxesAndTotals.mockImplementation(
-			(lineItem: { price?: number; quantity?: number }) => ({
-				...lineItem,
-				total: String((lineItem.price ?? 0) * (lineItem.quantity ?? 0)),
-			})
-		);
 		mockCheckCartStock.mockResolvedValue({
 			allowed: true,
 			warning: null,
@@ -408,7 +425,9 @@ describe('useAddItemToOrder', () => {
 			product_id: 1,
 			quantity: 1,
 			price: 5,
-			meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-1' }],
+			total: '5',
+			subtotal: '5',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-1' }, posPrice(5)],
 		};
 		const resident = {
 			...CREATE_QUEUED,
@@ -424,7 +443,9 @@ describe('useAddItemToOrder', () => {
 				product_id: 1,
 				quantity: 1,
 				price: 5,
-				meta_data: [],
+				total: '5',
+				subtotal: '5',
+				meta_data: [posPrice(5)],
 			} as never);
 		});
 
@@ -435,7 +456,12 @@ describe('useAddItemToOrder', () => {
 		const patched = mockLocalPatch.mock.calls[0][0].data.line_items;
 		expect(patched).toHaveLength(1);
 		expect(patched[0]).toMatchObject({ product_id: 1, quantity: 2, total: '10' });
-		expect(patched[0].meta_data).toEqual([{ key: '_woocommerce_pos_uuid', value: 'line-1' }]);
+		// The merge keeps the resident line's identity and its pos_data — it must not mint a
+		// second uuid, and it must not drop the per-unit price the next recalculation reads.
+		expect(patched[0].meta_data).toEqual([
+			{ key: '_woocommerce_pos_uuid', value: 'line-1' },
+			posPrice(5),
+		]);
 	});
 
 	it('merges two overlapping scans of one product on a persisted order', async () => {
@@ -465,13 +491,17 @@ describe('useAddItemToOrder', () => {
 				product_id: 1,
 				quantity: 1,
 				price: 5,
-				meta_data: [],
+				total: '5',
+				subtotal: '5',
+				meta_data: [posPrice(5)],
 			} as never);
 			secondScan = secondHook.current.addItemToOrder('line_items', {
 				product_id: 1,
 				quantity: 1,
 				price: 5,
-				meta_data: [],
+				total: '5',
+				subtotal: '5',
+				meta_data: [posPrice(5)],
 			} as never);
 		});
 		await Promise.resolve();
@@ -492,14 +522,18 @@ describe('useAddItemToOrder', () => {
 				variation_id: 11,
 				quantity: 1,
 				price: 5,
-				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-11' }],
+				total: '5',
+				subtotal: '5',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-11' }, posPrice(5)],
 			},
 			{
 				product_id: 1,
 				variation_id: 12,
 				quantity: 1,
 				price: 5,
-				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-12' }],
+				total: '5',
+				subtotal: '5',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-12' }, posPrice(5)],
 			},
 		];
 		const resident = {
@@ -517,7 +551,9 @@ describe('useAddItemToOrder', () => {
 				variation_id: 11,
 				quantity: 1,
 				price: 5,
-				meta_data: [],
+				total: '5',
+				subtotal: '5',
+				meta_data: [posPrice(5)],
 			} as never);
 		});
 
@@ -533,8 +569,8 @@ describe('useAddItemToOrder', () => {
 	it('appends when the resident already holds more than one line for the product', async () => {
 		order.isNew = true;
 		const lines = [
-			{ product_id: 1, quantity: 1, price: 5, meta_data: [] },
-			{ product_id: 1, quantity: 1, price: 5, meta_data: [] },
+			{ product_id: 1, quantity: 1, price: 5, total: '5', subtotal: '5', meta_data: [] },
+			{ product_id: 1, quantity: 1, price: 5, total: '5', subtotal: '5', meta_data: [] },
 		];
 		const resident = {
 			...CREATE_QUEUED,
@@ -550,7 +586,9 @@ describe('useAddItemToOrder', () => {
 				product_id: 1,
 				quantity: 1,
 				price: 5,
-				meta_data: [],
+				total: '5',
+				subtotal: '5',
+				meta_data: [posPrice(5)],
 			} as never);
 		});
 
@@ -560,7 +598,9 @@ describe('useAddItemToOrder', () => {
 
 	it('keeps miscellaneous products on their own line', async () => {
 		order.isNew = true;
-		const lines = [{ product_id: 0, quantity: 1, price: 5, meta_data: [] }];
+		const lines = [
+			{ product_id: 0, quantity: 1, price: 5, total: '5', subtotal: '5', meta_data: [] },
+		];
 		const resident = {
 			...CREATE_QUEUED,
 			payload: { uuid: 'order-uuid', line_items: lines },
@@ -717,13 +757,17 @@ describe('useAddItemToOrder', () => {
 					product_id: 1,
 					quantity: 1,
 					price: 5,
-					meta_data: [],
+					total: '5',
+					subtotal: '5',
+					meta_data: [posPrice(5)],
 				} as never),
 				secondHook.current.addItemToOrder('line_items', {
 					product_id: 1,
 					quantity: 1,
 					price: 5,
-					meta_data: [],
+					total: '5',
+					subtotal: '5',
+					meta_data: [posPrice(5)],
 				} as never),
 			]);
 		});
@@ -744,7 +788,9 @@ describe('useAddItemToOrder', () => {
 			product_id: 1,
 			quantity: 1,
 			price: 5,
-			meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-1' }],
+			total: '5',
+			subtotal: '5',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-1' }, posPrice(5)],
 		};
 		const skeletonPayload = { uuid: 'order-uuid', line_items: [skeletonLine] };
 		const skeleton = {
@@ -769,7 +815,9 @@ describe('useAddItemToOrder', () => {
 				product_id: 1,
 				quantity: 1,
 				price: 5,
-				meta_data: [],
+				total: '5',
+				subtotal: '5',
+				meta_data: [posPrice(5)],
 			} as never);
 		});
 

@@ -3,6 +3,7 @@ import * as React from 'react';
 import unset from 'lodash/unset';
 import { v4 as uuidv4 } from 'uuid';
 
+import { calculateCartLine } from '@wcpos/order-math';
 import {
 	isMiscProductLine,
 	MISC_PRODUCT_ID,
@@ -12,11 +13,11 @@ import {
 import { getLogger } from '@wcpos/utils/logger';
 
 import { reportCartInvariant } from './cart-failure';
-import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
+import { useCartConfig } from './use-cart-config';
 import { useCartStockGuard } from './use-cart-stock-guard';
+// Still needed for the previous-price value in the update log, not for the merge.
 import { useLineItemData } from './use-line-item-data';
 import { enqueueOrderMutation } from './order-mutation-queue';
-import { updatePosDataMeta } from './utils';
 import { documentRecordId, useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { type CurrentOrderRecord, useCurrentOrderActions } from '../contexts/current-order';
 
@@ -28,7 +29,7 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'line-item']);
 interface Changes extends Partial<Omit<LineItem, 'price'>> {
 	price?: number;
 	regular_price?: number;
-	tax_status?: string;
+	tax_status?: 'taxable' | 'none';
 	virtual?: boolean;
 	downloadable?: boolean;
 	categories?: { id: number; name: string }[];
@@ -45,7 +46,7 @@ export const useUpdateLineItem = () => {
 	// Event-time resolution — reached from every product tile via useAddProduct.
 	const { getCurrentOrderRecord } = useCurrentOrderActions();
 	const { localPatch } = useLocalMutation();
-	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
+	const cartConfig = useCartConfig();
 	const { getLineItemData } = useLineItemData();
 	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
 
@@ -109,29 +110,21 @@ export const useUpdateLineItem = () => {
 					return lineItem;
 				}
 
-				// get previous line data from meta_data
-				const prevData = getLineItemData(lineItem);
-
-				// extract the meta_data from the changes
-				const { price, regular_price, tax_status, virtual, downloadable, categories, ...rest } =
-					changes;
-
-				// merge the previous line data with the rest of the changes
-				let updatedItem = { ...lineItem, ...rest };
-
-				// apply the changes to the shipping line
-				updatedItem = updatePosDataMeta(updatedItem, {
-					price: price ?? prevData.price,
-					regular_price: regular_price ?? prevData.regular_price,
-					tax_status: tax_status ?? prevData.tax_status,
-					...(virtual !== undefined && { virtual }),
-					...(downloadable !== undefined && { downloadable }),
-					...(categories !== undefined && { categories }),
-				});
-
-				updatedItem = calculateLineItemTaxesAndTotals(updatedItem);
+				// The changes-merge (pos_data fields with `?? previous` fallbacks, the
+				// misc-product flags written only when supplied, everything else straight
+				// through) and the tax maths are both the engine's now. See
+				// `applyLineItemChanges` / `computeLineItem` in @wcpos/order-math.
+				//
+				// `warnings` (malformed pos_data) is dropped here, as it is at every other
+				// engine call site in core — settle drops it too.
+				const { line: updatedItem } = calculateCartLine(
+					{ kind: 'line_item', line: lineItem, changes },
+					cartConfig
+				);
 				updated = true;
-				return updatedItem;
+				// The engine speaks structural line types; this boundary writes back to the
+				// DB document they came from.
+				return updatedItem as LineItem;
 			});
 
 			// if we have updated a line item, patch the order
@@ -158,7 +151,7 @@ export const useUpdateLineItem = () => {
 			}
 		},
 		[
-			calculateLineItemTaxesAndTotals,
+			cartConfig,
 			checkCartStock,
 			getLineItemData,
 			localPatch,
@@ -235,7 +228,10 @@ export const useUpdateLineItem = () => {
 					return;
 				}
 
-				const lineItemToCopy = calculateLineItemTaxesAndTotals({ ...lineItemToSplit, quantity: 1 });
+				const lineItemToCopy = calculateCartLine(
+					{ kind: 'line_item', line: { ...lineItemToSplit, quantity: 1 } },
+					cartConfig
+				).line as LineItem;
 				const quantity = Math.floor(lineItemToSplit?.quantity ?? 0);
 				const rawRemainder = (lineItemToSplit?.quantity ?? 0) - quantity;
 				const remainder = parseFloat(rawRemainder.toFixed(6));
@@ -253,10 +249,10 @@ export const useUpdateLineItem = () => {
 				}
 
 				if (remainder > 0) {
-					const remainderLineItem = calculateLineItemTaxesAndTotals({
-						...lineItemToCopy,
-						quantity: remainder,
-					});
+					const remainderLineItem = calculateCartLine(
+						{ kind: 'line_item', line: { ...lineItemToCopy, quantity: remainder } },
+						cartConfig
+					).line as LineItem;
 					const newItem = {
 						...remainderLineItem,
 						quantity: remainder,
@@ -277,7 +273,7 @@ export const useUpdateLineItem = () => {
 				return localPatch({ document: order, data: { line_items: updatedLineItems } });
 			});
 		},
-		[calculateLineItemTaxesAndTotals, getCurrentOrderRecord, localPatch]
+		[cartConfig, getCurrentOrderRecord, localPatch]
 	);
 
 	return { updateLineItem, incrementLineItem, splitLineItem };

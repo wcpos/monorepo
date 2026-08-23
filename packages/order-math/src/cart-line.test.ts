@@ -746,6 +746,80 @@ describe('calculateCartLine — changes merge', () => {
 		expect(updated.meta_data?.[0]?.id).toBe(5);
 	});
 
+	/**
+	 * The misc-product pos_data fields. `edit-line-item/form.tsx` submits all three on every
+	 * save, and `convertProductToLineItem` writes them at creation for product_id 0. They
+	 * take no `?? prev` fallback — an ABSENT key must leave pos_data's existing value alone,
+	 * which is why they are spread conditionally rather than merged with undefined.
+	 */
+	it('writes misc-product flags into pos_data when the caller supplies them', () => {
+		const line = {
+			quantity: 1,
+			meta_data: [
+				posDataMeta({
+					price: 10,
+					regular_price: 10,
+					tax_status: 'taxable',
+					virtual: false,
+					downloadable: false,
+				}),
+			],
+		};
+
+		const { line: updated } = calculateCartLine(
+			{
+				kind: 'line_item',
+				line,
+				changes: {
+					virtual: true,
+					downloadable: true,
+					categories: [{ id: 7, name: 'Services' }],
+				},
+			},
+			config
+		);
+
+		expect(getPosData(updated)).toEqual({
+			price: 10,
+			regular_price: 10,
+			tax_status: 'taxable',
+			virtual: true,
+			downloadable: true,
+			categories: [{ id: 7, name: 'Services' }],
+		});
+	});
+
+	it('leaves existing misc-product flags untouched when the changes omit them', () => {
+		const line = {
+			quantity: 1,
+			meta_data: [
+				posDataMeta({
+					price: 10,
+					regular_price: 10,
+					tax_status: 'taxable',
+					virtual: true,
+					downloadable: true,
+					categories: [{ id: 7, name: 'Services' }],
+				}),
+			],
+		};
+
+		// A quantity edit from the cart cell — it knows nothing about misc-product flags.
+		const { line: updated } = calculateCartLine(
+			{ kind: 'line_item', line, changes: { quantity: 4 } },
+			config
+		);
+
+		expect(getPosData(updated)).toEqual({
+			price: 10,
+			regular_price: 10,
+			tax_status: 'taxable',
+			virtual: true,
+			downloadable: true,
+			categories: [{ id: 7, name: 'Services' }],
+		});
+	});
+
 	it('merges line item tax_status=none into pos_data and zeroes taxes', () => {
 		const line = {
 			quantity: 1,
