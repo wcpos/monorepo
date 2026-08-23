@@ -221,8 +221,15 @@ function legacyConvergedPatch(snapshot: CartSnapshot, config: CartConfig, contex
 		total_tax: totals.total_tax,
 		total: totals.total,
 		tax_lines: totals.tax_lines,
+		// All FOUR line arrays, not just the two the aggregate is derived from. Totals
+		// exclude tombstones by construction, so comparing only totals cannot see whether
+		// the emitted arrays still CARRY them — and carrying them is the contract: a
+		// tombstone is how the server is told the line was deleted, so a settle pass that
+		// dropped one from its patch would silently resurrect the line on the next push.
 		line_items: lineItems,
 		coupon_lines: couponLines,
+		fee_lines: feeLines,
+		shipping_lines: [...(snapshot.shipping_lines ?? [])],
 	};
 }
 
@@ -445,6 +452,14 @@ it('settleCart matches the live composition field-for-field across the cutover f
 			tax_lines: settled.patch.tax_lines,
 			line_items: settled.patch.line_items ?? snapshot.line_items,
 			coupon_lines: settled.patch.coupon_lines ?? snapshot.coupon_lines,
+			fee_lines: settled.patch.fee_lines ?? snapshot.fee_lines,
+			// `shipping_lines` is not on SettlePatch's declared shape — settle has no
+			// shipping stage — but read it defensively rather than assuming, so a future
+			// stage that starts emitting one is compared instead of silently ignored.
+			shipping_lines:
+				(settled.patch as typeof settled.patch & { shipping_lines?: unknown[] }).shipping_lines ??
+				snapshot.shipping_lines ??
+				[],
 		};
 
 		try {
