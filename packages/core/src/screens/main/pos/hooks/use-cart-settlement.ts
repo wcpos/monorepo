@@ -244,8 +244,14 @@ export const useCartSettlement = () => {
 			 * prices-include-tax change while a settle is already in flight produces the
 			 * SAME stateKey, so the new pass would be discarded as a duplicate and the
 			 * configuration change would never be persisted.
+			 *
+			 * Divergence is in the key for the same reason, and it matters more: it is
+			 * captured in this callback's closure, so a divergence ARRIVING while a pass
+			 * awaits getCouponContext would otherwise be discarded as a duplicate while
+			 * the in-flight pass carried on believing nothing had diverged — and enqueued
+			 * the very money the server had just overruled.
 			 */
-			const flightKey = `${stateKey}|${configKey}`;
+			const flightKey = `${stateKey}|${configKey}|${divergence !== null}`;
 			if (replayingRef.current === flightKey) return;
 			replayingRef.current = flightKey;
 			try {

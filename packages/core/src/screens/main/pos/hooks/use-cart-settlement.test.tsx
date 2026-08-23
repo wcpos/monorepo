@@ -398,6 +398,51 @@ describe('useCartSettlement reference demand (#952)', () => {
 	 * "the cashier did something" and push WooCommerce's overruled money straight back.
 	 * What counts is whether those lines actually differ from what is persisted.
 	 */
+	/**
+	 * divergence is captured in replayCoupons' closure. If it arrives while a pass is
+	 * awaiting getCouponContext, and it is not part of the single-flight key, the
+	 * divergence-triggered pass is discarded as a duplicate and the in-flight pass
+	 * carries on believing nothing diverged — enqueueing the money the server just
+	 * overruled. It is part of the key, so the newer pass supersedes and the older one
+	 * abandons before writing.
+	 */
+	it('does not write money overruled by a divergence that arrived mid-flight', async () => {
+		applyCoupon([{ code: 'bonus' }]);
+		const { rerender } = await renderAfterMountSettle();
+
+		let releaseContext: (() => void) | undefined;
+		getCouponContext.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					releaseContext = () => resolve(emptyCouponContext());
+				})
+		);
+		settleCart.mockImplementation(() => ({
+			...successfulSettlement(),
+			patch: {
+				...successfulSettlement().patch,
+				coupon_lines: revision.coupon_lines,
+				line_items: revision.line_items,
+			},
+		}));
+
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+
+		// The server overrules the money while the pass above is still awaiting context.
+		await act(async () => {
+			divergenceValue = { serverTotal: '9.99' };
+			rerender();
+		});
+
+		await act(async () => {
+			releaseContext?.();
+		});
+
+		expect(localPatch).not.toHaveBeenCalled();
+	});
+
 	it('suppresses a couponed re-derivation whose lines match the persisted ones', async () => {
 		applyCoupon([{ code: 'bonus' }]);
 		const { rerender } = await renderAfterMountSettle();
