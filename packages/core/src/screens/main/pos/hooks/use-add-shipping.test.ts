@@ -3,10 +3,11 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
+import { calculateCartLine } from '@wcpos/order-math';
+
 import { useAddShipping } from './use-add-shipping';
 
 const mockAddItemToOrder = jest.fn();
-const mockCalculateShippingLineTaxesAndTotals = jest.fn();
 const mockLoggerError = jest.fn();
 const mockLoggerWarn = jest.fn();
 const mockLoggerInfo = jest.fn();
@@ -55,11 +56,27 @@ jest.mock('./use-add-item-to-order', () => ({
 	useAddItemToOrder: () => ({ addItemToOrder: mockAddItemToOrder }),
 }));
 
-jest.mock('./use-calculate-shipping-line-tax-and-totals', () => ({
-	useCalculateShippingLineTaxAndTotals: () => ({
-		calculateShippingLineTaxesAndTotals: mockCalculateShippingLineTaxesAndTotals,
-	}),
-}));
+// Only the store settings are stubbed; the tax maths runs for real.
+jest.mock('./use-cart-config', () => {
+	const { createCartConfig } = jest.requireActual('@wcpos/order-math');
+	const config = createCartConfig({
+		rates: [],
+		allRates: [],
+		calcTaxes: true,
+		pricesIncludeTax: false,
+		taxRoundAtSubtotal: false,
+		dp: 2,
+		shippingTaxClass: '',
+		calcDiscountsSequentially: false,
+	});
+	return { useCartConfig: () => config };
+});
+
+// Real implementation, wrapped so one case can make it throw.
+jest.mock('@wcpos/order-math', () => {
+	const actual = jest.requireActual('@wcpos/order-math');
+	return { ...actual, calculateCartLine: jest.fn(actual.calculateCartLine) };
+});
 
 const shipping = {
 	method_title: 'Local delivery',
@@ -74,10 +91,6 @@ const shipping = {
 describe('useAddShipping', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
-		mockCalculateShippingLineTaxesAndTotals.mockImplementation((line) => ({
-			...line,
-			total: '8.00',
-		}));
 		mockAddItemToOrder.mockResolvedValue(true);
 	});
 
@@ -109,7 +122,7 @@ describe('useAddShipping', () => {
 	});
 
 	it('reports a calculation error with its message in context', async () => {
-		mockCalculateShippingLineTaxesAndTotals.mockImplementation(() => {
+		(calculateCartLine as unknown as jest.Mock).mockImplementationOnce(() => {
 			throw new Error('boom');
 		});
 		const { result } = renderHook(() => useAddShipping());

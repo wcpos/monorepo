@@ -6,8 +6,6 @@ import { act, renderHook } from '@testing-library/react';
 import { useUpdateShippingLine } from './use-update-shipping-line';
 
 const mockLocalPatch = jest.fn();
-const mockCalculateShippingLineTaxesAndTotals = jest.fn();
-const mockGetShippingLineData = jest.fn();
 const mockLoggerError = jest.fn();
 const mockLoggerWarn = jest.fn();
 const mockLoggerInfo = jest.fn();
@@ -64,30 +62,27 @@ jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: mockOrder }),
 }));
 
-jest.mock('./use-calculate-shipping-line-tax-and-totals', () => ({
-	useCalculateShippingLineTaxAndTotals: () => ({
-		calculateShippingLineTaxesAndTotals: mockCalculateShippingLineTaxesAndTotals,
-	}),
-}));
-
-jest.mock('./use-shipping-line-data', () => ({
-	useShippingLineData: () => ({ getShippingLineData: mockGetShippingLineData }),
-}));
+// Only the store settings are stubbed; the tax maths and the changes-merge run for
+// real, so this suite fails if the engine port stops behaving like the hook it replaced.
+jest.mock('./use-cart-config', () => {
+	const { createCartConfig } = jest.requireActual('@wcpos/order-math');
+	const config = createCartConfig({
+		rates: [],
+		allRates: [],
+		calcTaxes: true,
+		pricesIncludeTax: false,
+		taxRoundAtSubtotal: false,
+		dp: 2,
+		shippingTaxClass: '',
+		calcDiscountsSequentially: false,
+	});
+	return { useCartConfig: () => config };
+});
 
 describe('useUpdateShippingLine', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockShippingLines = [];
-		mockGetShippingLineData.mockReturnValue({
-			amount: 2,
-			prices_include_tax: false,
-			tax_status: 'taxable',
-			tax_class: '',
-		});
-		mockCalculateShippingLineTaxesAndTotals.mockImplementation((line) => ({
-			...line,
-			total: '3',
-		}));
 		mockLocalPatch.mockResolvedValue(true);
 	});
 
@@ -106,8 +101,17 @@ describe('useUpdateShippingLine', () => {
 
 		expect(mockLocalPatch).toHaveBeenCalledWith({
 			document: expect.objectContaining({ payload: expect.objectContaining({ id: 17 }) }),
-			data: { shipping_lines: [expect.objectContaining({ total: '3' })] },
+			data: {
+				shipping_lines: [expect.objectContaining({ total: '3', total_tax: '0' })],
+			},
 		});
+		// The changes-merge is the engine's now: `amount` has to land in pos_data, not
+		// top-level, or the next recalculation reads the pre-edit amount back.
+		const [{ data }] = mockLocalPatch.mock.calls[0];
+		const posData = data.shipping_lines[0].meta_data.find(
+			(meta: { key: string }) => meta.key === '_woocommerce_pos_data'
+		);
+		expect(posData.value).toEqual(expect.objectContaining({ amount: 3, tax_status: 'taxable' }));
 		expect(mockLoggerWarn).not.toHaveBeenCalled();
 	});
 

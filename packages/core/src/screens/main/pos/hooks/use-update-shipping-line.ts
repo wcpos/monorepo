@@ -1,12 +1,11 @@
 import * as React from 'react';
 
+import { calculateCartLine } from '@wcpos/order-math';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { reportStaleCartLine } from './cart-failure';
-import { useCalculateShippingLineTaxAndTotals } from './use-calculate-shipping-line-tax-and-totals';
-import { useShippingLineData } from './use-shipping-line-data';
-import { updatePosDataMeta } from './utils';
+import { useCartConfig } from './use-cart-config';
 import { useT } from '../../../../contexts/translations';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
@@ -22,7 +21,7 @@ type ShippingLine = NonNullable<OrderDocument['shipping_lines']>[number];
 interface Changes extends Partial<ShippingLine> {
 	amount?: number;
 	prices_include_tax?: boolean;
-	tax_status?: string;
+	tax_status?: 'taxable' | 'none';
 	tax_class?: string;
 }
 
@@ -32,8 +31,7 @@ interface Changes extends Partial<ShippingLine> {
 export const useUpdateShippingLine = () => {
 	const { currentOrderRecord } = useCurrentOrder();
 	const { localPatch } = useLocalMutation();
-	const { calculateShippingLineTaxesAndTotals } = useCalculateShippingLineTaxAndTotals();
-	const { getShippingLineData } = useShippingLineData();
+	const cartConfig = useCartConfig();
 	const t = useT();
 
 	/**
@@ -53,27 +51,21 @@ export const useUpdateShippingLine = () => {
 					return shippingLine;
 				}
 
-				// get previous line data from meta_data
-				const prevData = getShippingLineData(shippingLine);
-
-				// extract the meta_data from the changes
-				const { amount, prices_include_tax, tax_class, tax_status, ...rest } = changes;
-
-				// merge the previous line data with the rest of the changes
-				let updatedItem = { ...shippingLine, ...rest };
-
-				// apply the changes to the shipping line
-				updatedItem = updatePosDataMeta(updatedItem, {
-					amount: amount ?? prevData.amount,
-					prices_include_tax: prices_include_tax ?? prevData.prices_include_tax,
-					tax_class: tax_class ?? prevData.tax_class,
-					tax_status: tax_status ?? prevData.tax_status,
-				});
-
-				// calculate the taxes and totals
-				updatedItem = calculateShippingLineTaxesAndTotals(updatedItem);
+				// The changes-merge (posData fields with `?? previous` fallbacks, everything
+				// else straight through) and the tax maths are both the engine's now. See
+				// `applyShippingLineChanges` / `computeShippingLine` in @wcpos/order-math.
+				//
+				// `warnings` (malformed posData) is dropped here, as it is at every other
+				// engine call site in core — settle drops it too. Surfacing engine warnings
+				// to the cashier is one decision for all of them, not a shipping one.
+				const { line: updatedItem } = calculateCartLine(
+					{ kind: 'shipping', line: shippingLine, changes },
+					cartConfig
+				);
 				updated = true;
-				return updatedItem;
+				// The engine speaks structural line types; this boundary writes back to the
+				// DB document they came from.
+				return updatedItem as ShippingLine;
 			});
 
 			// if we have updated a line item, patch the order
@@ -94,7 +86,7 @@ export const useUpdateShippingLine = () => {
 				}
 			);
 		},
-		[calculateShippingLineTaxesAndTotals, currentOrderRecord, getShippingLineData, localPatch, t]
+		[cartConfig, currentOrderRecord, localPatch, t]
 	);
 
 	return { updateShippingLine };

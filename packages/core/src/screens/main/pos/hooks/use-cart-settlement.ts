@@ -3,21 +3,14 @@ import * as React from 'react';
 import { useObservable, useSubscription } from 'observable-hooks';
 import { distinctUntilChanged, map } from 'rxjs/operators';
 
-import {
-	createCartConfig,
-	settleAggregate,
-	settleCart,
-	snapshotFromOrderJSON,
-} from '@wcpos/order-math';
+import { settleAggregate, settleCart, snapshotFromOrderJSON } from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import { useDocField, useRecordField } from '@wcpos/query';
+import { useRecordField } from '@wcpos/query';
 
 import { useAppliedCouponReferenceDemand } from '../../../../query';
+import { useCartConfig } from './use-cart-config';
 import { useCouponContext } from './use-coupon-context';
-import { useAppState } from '../../../../contexts/app-state';
-import { useTaxLocation, useTaxSettings } from '../../contexts/tax-rates';
-import { taxClassFromWire, taxClassToWire } from '../../hooks/tax-class';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
 import { useOrderMoneyDivergence } from '../contexts/order-money-divergence';
@@ -147,22 +140,7 @@ export const useCartSettlement = () => {
 	const { localPatch } = useLocalMutation();
 	const { getCouponContext } = useCouponContext();
 	const { serverOwnsMoney } = useOrderMoneyDivergence(currentOrderRecord.uuid);
-	const { rates } = useTaxLocation();
-	const {
-		allRates,
-		shippingTaxClass,
-		calcTaxes,
-		taxRoundAtSubtotal,
-		priceNumDecimals,
-		pricesIncludeTax,
-	} = useTaxSettings();
-	const { store } = useAppState();
-	const woocommerceSequential = useDocField(
-		store,
-		(value) => value.woocommerce_calc_discounts_sequentially
-	);
-	const legacySequential = useDocField(store, (value) => value.calc_discounts_sequentially);
-	const calcDiscountsSequentially = woocommerceSequential === 'yes' || legacySequential === 'yes';
+	const cartConfig = useCartConfig();
 	const t = useT();
 
 	/**
@@ -190,9 +168,9 @@ export const useCartSettlement = () => {
 	}, [serverOwnsMoney]);
 
 	/**
-	 * Settle every cart-line edit, plus every input `createCartConfig` reads.
+	 * Settle every cart-line edit, plus every store setting the cart config is built from.
 	 *
-	 * The config inputs are here, not just the lines, because this subscription is now
+	 * The config is here, not just the lines, because this subscription is now
 	 * the ONLY thing that persists totals. Before #1472 the use-order-totals effect
 	 * re-derived on every render and deep-compared, so a tax-rate change — changing the
 	 * customer's address, switching tax location, toggling prices-include-tax — wrote
@@ -234,56 +212,18 @@ export const useCartSettlement = () => {
 			feeLines,
 			shippingLines,
 			couponLines,
-			priceNumDecimals,
-			rates,
-			allRates,
-			calcTaxes,
-			pricesIncludeTax,
-			taxRoundAtSubtotal,
-			shippingTaxClass,
-			calcDiscountsSequentially,
+			cartConfig,
 		]
 	);
 
 	/**
-	 * Fingerprint of everything createCartConfig reads. Part of the replay's
-	 * single-flight key so a settlement already in flight does not swallow a
-	 * configuration change.
+	 * Fingerprint of the settlement configuration. Part of the replay's single-flight
+	 * key so a settlement already in flight does not swallow a configuration change.
+	 *
+	 * Serialised from the config itself rather than from the settings it was built
+	 * from: the config IS the set of values the engine reads, so the two cannot drift.
 	 */
-	const configKey = JSON.stringify([
-		rates,
-		allRates,
-		calcTaxes,
-		pricesIncludeTax,
-		taxRoundAtSubtotal,
-		priceNumDecimals,
-		shippingTaxClass,
-		calcDiscountsSequentially,
-	]);
-
-	const cartConfig = React.useMemo(
-		() =>
-			createCartConfig({
-				rates,
-				allRates,
-				calcTaxes,
-				pricesIncludeTax,
-				taxRoundAtSubtotal,
-				dp: priceNumDecimals,
-				shippingTaxClass: taxClassToWire(taxClassFromWire(shippingTaxClass)),
-				calcDiscountsSequentially,
-			}),
-		[
-			allRates,
-			calcDiscountsSequentially,
-			calcTaxes,
-			priceNumDecimals,
-			pricesIncludeTax,
-			rates,
-			shippingTaxClass,
-			taxRoundAtSubtotal,
-		]
-	);
+	const configKey = React.useMemo(() => JSON.stringify(cartConfig), [cartConfig]);
 
 	/**
 	 * Pass 1 — the money over the lines as they are persisted, right now.

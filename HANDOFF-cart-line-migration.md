@@ -1,7 +1,7 @@
 # Handoff — retire the per-line tax hooks onto `calculateCartLine`
 
 **Repo:** wcpos/monorepo · **Lane:** `main` · **Parent issue:** #1472 (open)
-**Date:** 2026-08-23 · **Prerequisite:** PR #1509 — already open, see §8
+**Date:** 2026-08-23 · **Prerequisite:** PR #1509 — MERGED (`929a33e678`), see §8
 
 ---
 
@@ -59,7 +59,7 @@ rare, so two copies of this maths quietly undermine the decision we just shipped
 |---|---|
 | `packages/core/src/screens/main/pos/hooks/use-calculate-line-item-tax-and-totals.ts` | 155 |
 | `packages/core/src/screens/main/pos/hooks/use-calculate-fee-line-tax-and-totals.ts` | 108 |
-| `packages/core/src/screens/main/pos/hooks/use-calculate-shipping-line-tax-and-totals.ts` | 69 |
+| ~~`packages/core/src/screens/main/pos/hooks/use-calculate-shipping-line-tax-and-totals.ts`~~ | ~~69~~ — **DONE**, stage 1 |
 
 **Eight call sites, all with sibling test suites already in place:**
 
@@ -114,9 +114,17 @@ not redundant. Keep it.
 
 Each stage is its own PR with its own live E2E run. **Do not big-bang this.**
 
-1. **Shipping** (69 LOC, 2 call sites: `use-add-shipping`, `use-update-shipping-line`).
-   Simplest, and the per-line-vs-store `amountIncludesTax` quirk in §2 is here — a good
-   canary that the port really is equivalent.
+0. **`useCartConfig()`** — **DONE**, landed with stage 1 at
+   `packages/core/src/screens/main/pos/hooks/use-cart-config.ts`. `use-cart-settlement.ts` now
+   reads it instead of hand-rolling the memo, and its `configKey` is serialised from the config
+   itself. Every remaining stage should call it, not rebuild it.
+1. ~~**Shipping**~~ — **DONE**, stage 1. Two notes for the stages that follow:
+   - `ShippingLineChanges` had to widen to `Partial<ShippingLineInput>` + `instance_id`: the
+     edit form submits the WHOLE line, and the narrow shape silently dropped `meta_data` from
+     the type while the runtime spread kept passing it. **Check the fee and line-item Changes
+     shapes against their real callers before assuming they are complete.**
+   - `calculateCartLine` passes tombstoned lines through untouched; the hooks did not have that
+     check. Behaviour improvement, but worth knowing it is a difference.
 2. **Fee** (108 LOC, 2 call sites). Watch the `cartLineItems` percent basis: the hook read it
    via `getLatest()` mid-calculation; `calculateCartLine` requires it as an explicit input.
    That is a deliberate design change, and the call site now has to supply it.
@@ -129,6 +137,8 @@ Each stage is its own PR with its own live E2E run. **Do not big-bang this.**
    only `pricesIncludeTax` — then delete `settle.oracle.test.ts` with a `Test-Removal:`
    trailer. Do this LAST: once the hooks are gone, the differential is comparing settle against
    a composition that actually ships, so widening it is worth more then than now.
+   **Take the compound fixture from `internal/coupons/compound-tax-priority.test.ts`, not from
+   the oracle's case 4** — see the correction in §8.2 for why.
 
 After stage 3, delete `getRoundingPrecision` / `roundHalfUp` / `roundTaxTotal` from the core
 import surface if nothing else needs them, and re-check what still imports
@@ -171,52 +181,57 @@ import surface if nothing else needs them, and re-check what still imports
 - **Do not fold this into #1472's "delete the shims" checkbox.** The nine MIGRATION SHIM files
   it names are already gone — the header says so. Open a fresh issue carrying the §1/§2
   evidence, or this reads as housekeeping to the next person and gets rushed.
-- **Do not delete `settle.oracle.test.ts` yet, whatever #1472 says.** See §8.2 — its premise
-  expired but its coverage did not, and two of the four dimensions it uniquely covers are past
-  causes of false divergence banners. Porting them into the differential is a task in §5.
+- **Do not delete `settle.oracle.test.ts` by itself, whatever #1472 says.** See §8.2 — widen
+  the differential first (task 4 in §5), and read the correction there before assuming any
+  fixture covers what its name suggests.
 
 ---
 
-## 8. Prerequisite — PR #1509, already open
+## 8. Prerequisite — PR #1509, MERGED (`929a33e678`, 2026-08-23)
 
-Two header corrections, no behaviour change, no test removed. Merge it before starting; the
-headers it fixes are the ones you will read for orientation.
+Already on `main`, so the headers below are what you will find in the tree. Two header
+corrections, no behaviour change, no test removed. Recorded here because they are the headers
+you will read for orientation, and because §8.2 carries a correction worth reading before you
+trust any fixture's name.
 
 1. **`internal/index.ts` claimed the public index "has no callers yet".** False since #1505.
    Rewritten to describe the surface as it is, name the three consumers that stay by design,
    and state that the per-line tax hooks are a second implementation rather than a settled
    arrangement.
 
-2. **`settle.oracle.test.ts` — #1472 says retire it. Do not, yet.**
+2. **`settle.oracle.test.ts` — retirable, but not by deletion alone.**
 
-   I was about to, and checking stopped me. Its premise HAS expired: it models the multi-patch
-   loop in `use-cart-lines.ts`, which #1505 replaced. But an expired premise is not redundant
-   coverage, and `settle-cart-differential.test.ts` does **not** subsume it:
+   Its premise HAS expired: it models the multi-patch loop in `use-cart-lines.ts`, which #1505
+   replaced.
 
-   | dimension | differential | oracle |
-   |---|---|---|
-   | `pricesIncludeTax` | both | both |
-   | compound tax rates | **no** | case 4 |
-   | `dp = 0` (JPY-style) | **no** (`dp: 2`) | case 5 |
-   | `taxRoundAtSubtotal` | **no** (`false`) | case 6 |
-   | tombstoned lines | **no** | case 7 |
+   `settle-cart-differential.test.ts` varies only `pricesIncludeTax` — its `makeConfig`
+   hardcodes `taxRoundAtSubtotal: false`, `dp: 2` and non-compound rates. So compound rates,
+   `dp = 0`, `taxRoundAtSubtotal` and tombstoned lines are all absent *there*.
 
-   The differential's `makeConfig` hardcodes `taxRoundAtSubtotal: false`, `dp: 2` and
-   non-compound rates; it varies only `pricesIncludeTax`.
+   **They are not absent from the package.** Compound → `settle.integration.test.ts` and
+   `internal/coupons/compound-tax-priority.test.ts`. `dp = 0` → `cart-line.test.ts`,
+   `internal/order-totals.test.ts`, `internal/money/calculate-taxes.test.ts`.
+   round-at-subtotal → four suites. Tombstones → `settle.test.ts`'s "tombstone law".
 
-   **Compound rate ordering and round-at-subtotal are past causes of false "your store changed
-   this order's totals" banners on correct sales** (see `support/orders-receipts/
-   store-changed-totals.md` — two of the three pre-1.10.0 parity defects). Dropping them
-   silently is exactly what the R15 ratchet exists to prevent, and it matters more now ADR 0032
-   makes divergence a support escalation.
+   What is unique to the oracle is only that those dimensions run through `settleCart`'s whole
+   composition rather than against the internals individually.
 
-   Retiring it therefore means: **port those four dimensions into the differential harness
-   first, then delete with a `Test-Removal:` trailer.** That is a task in §5, not a checkbox.
+   > **Correction, and a warning.** My first draft of this doc and of PR #1509 claimed deleting
+   > the oracle would silently drop the compound-ordering and round-at-subtotal parity defects
+   > behind the pre-1.10.0 divergence banners. Review corrected both. #1548's ordering
+   > regression has its own fixture — two COMPOUND rates with tied `order: 0` and differing
+   > `priority`, the actual trap. The oracle's case 4 has ONE compound rate, distinct `order`
+   > values and no `priority`, so it never touched the ordering bug. **If you port case 4
+   > expecting ordering coverage you will not get it** — take the fixture from
+   > `compound-tax-priority.test.ts` instead.
 
-   **This is also a warning about #1472's scope list generally.** It was written before the
-   cutover landed. Two of its remaining boxes turned out to be either already done (the nine
-   shim files) or resting on a false premise (this one). Verify each against the tree before
-   working it.
+   Retiring it: port the four config dimensions into the differential (parameterise its
+   `makeConfig`), then delete with a `Test-Removal:` trailer. Task 4 in §5.
+
+   **A warning about #1472's scope list generally.** It was written before the cutover landed.
+   Of its three remaining boxes, one was already done (the nine shim files), one rested on a
+   premise that had expired (this), and one is a real refactor labelled as housekeeping (§1).
+   **Verify each box against the tree before working it.**
 
 ---
 

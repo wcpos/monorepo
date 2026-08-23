@@ -18,11 +18,20 @@ jest.mock('./use-calculate-fee-line-tax-and-totals', () => ({
 		calculateFeeLineTaxesAndTotals: (line: object) => ({ ...line, total: '5' }),
 	}),
 }));
-jest.mock('./use-calculate-shipping-line-tax-and-totals', () => ({
-	useCalculateShippingLineTaxAndTotals: () => ({
-		calculateShippingLineTaxesAndTotals: (line: object) => ({ ...line, total: '5' }),
-	}),
-}));
+jest.mock('./use-cart-config', () => {
+	const { createCartConfig } = jest.requireActual('@wcpos/order-math');
+	const config = createCartConfig({
+		rates: [],
+		allRates: [],
+		calcTaxes: true,
+		pricesIncludeTax: false,
+		taxRoundAtSubtotal: false,
+		dp: 2,
+		shippingTaxClass: '',
+		calcDiscountsSequentially: false,
+	});
+	return { useCartConfig: () => config };
+});
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({

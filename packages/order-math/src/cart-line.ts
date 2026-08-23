@@ -57,13 +57,20 @@ export interface FeeLineChanges {
 	tax_class?: string;
 }
 
-export interface ShippingLineChanges {
-	method_title?: string;
-	method_id?: string;
+/**
+ * Extends `Partial<ShippingLineInput>` because the shipping edit form submits the WHOLE
+ * line — `meta_data` and `instance_id` alongside the four posData fields — and the merge
+ * below spreads everything it does not recognise straight through. Modelling only the
+ * posData fields would leave the form's `meta_data` edit legal at runtime but invisible
+ * to the type, which is how a passthrough field gets dropped by a later refactor.
+ */
+export interface ShippingLineChanges extends Partial<ShippingLineInput> {
 	amount?: number;
 	tax_status?: 'taxable' | 'none';
 	tax_class?: string;
 	prices_include_tax?: boolean;
+	/** Woo's shipping-method instance id. Carried through untouched. */
+	instance_id?: string;
 }
 
 export type CartLineInput =
@@ -411,7 +418,10 @@ function computeFeeLine(
 }
 
 /**
- * Port of `calculateShippingLineTaxesAndTotals` (use-calculate-shipping-line-tax-and-totals.ts).
+ * The shipping-line tax maths. Began as a port of `calculateShippingLineTaxesAndTotals`
+ * (use-calculate-shipping-line-tax-and-totals.ts); that hook was deleted once `useAddShipping`
+ * and `useUpdateShippingLine` came through here, so this is now the only copy — do not
+ * reintroduce a second one in `packages/core`.
  */
 function computeShippingLine(
 	shippingLine: ShippingLineInput,

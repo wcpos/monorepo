@@ -1,15 +1,18 @@
 import * as React from 'react';
 
+import { calculateCartLine } from '@wcpos/order-math';
 import { POS_META_KEYS } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { reportCartFailure } from './cart-failure';
 import { useAddItemToOrder } from './use-add-item-to-order';
-import { useCalculateShippingLineTaxAndTotals } from './use-calculate-shipping-line-tax-and-totals';
+import { useCartConfig } from './use-cart-config';
 import { useT } from '../../../../contexts/translations';
 import { useCurrentOrder } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
+
+type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 
 interface ShippingData {
 	method_title: string;
@@ -27,7 +30,7 @@ interface ShippingData {
 export const useAddShipping = () => {
 	const { addItemToOrder } = useAddItemToOrder();
 	const t = useT();
-	const { calculateShippingLineTaxesAndTotals } = useCalculateShippingLineTaxAndTotals();
+	const cartConfig = useCartConfig();
 	const { currentOrderRecord } = useCurrentOrder();
 
 	// Create order-specific logger
@@ -59,13 +62,24 @@ export const useAddShipping = () => {
 					},
 				});
 
-				const newShippingLine = calculateShippingLineTaxesAndTotals({
-					method_title: data.method_title,
-					method_id: data.method_id,
-					meta_data,
-				});
+				// `warnings` (malformed posData) is dropped here, as it is at every other
+				// engine call site in core — settle drops it too. Surfacing engine warnings
+				// to the cashier is one decision for all of them, not a shipping one.
+				const { line: newShippingLine } = calculateCartLine(
+					{
+						kind: 'shipping',
+						line: {
+							method_title: data.method_title,
+							method_id: data.method_id,
+							meta_data,
+						},
+					},
+					cartConfig
+				);
 
-				if (!(await addItemToOrder('shipping_lines', newShippingLine))) {
+				// The engine speaks structural line types; this boundary writes back to the
+				// DB document they came from.
+				if (!(await addItemToOrder('shipping_lines', newShippingLine as ShippingLine))) {
 					return;
 				}
 
@@ -89,7 +103,7 @@ export const useAddShipping = () => {
 				});
 			}
 		},
-		[addItemToOrder, calculateShippingLineTaxesAndTotals, t, orderLogger]
+		[addItemToOrder, cartConfig, t, orderLogger]
 	);
 
 	return { addShipping };
