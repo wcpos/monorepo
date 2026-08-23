@@ -2,7 +2,39 @@
  * @jest-environment node
  *
  * Legacy-convergence oracle: proves `settleCart`'s single pass reproduces the
- * converged state of today's multi-patch write loop (use-cart-lines.ts).
+ * converged state of the multi-patch write loop that used to live in
+ * `use-cart-lines.ts`.
+ *
+ * ── Status, 2026-08-23 ───────────────────────────────────────────────────────
+ *
+ * That loop is GONE. #1505 split `use-cart-lines.ts` into a pure selector and a
+ * single writer (`use-cart-settlement.ts`), and settlement is now one prompt
+ * aggregate pass plus an async coupon replay — not an iterate-to-fixed-point
+ * loop. So the choreography `legacyConvergedState` models below no longer
+ * exists in the app, and this file's ORIGINAL premise has expired.
+ *
+ * #1472 lists "retire settle.oracle.test.ts in favour of the real suites" on the
+ * strength of that. **Do not do it yet.** The premise expired; the COVERAGE did
+ * not, and `settle-cart-differential.test.ts` does not subsume this file:
+ *
+ *   | dimension               | differential | here      |
+ *   |-------------------------|--------------|-----------|
+ *   | pricesIncludeTax        | both         | both      |
+ *   | compound tax rates      | NO           | case 4    |
+ *   | dp = 0 (JPY-style)      | NO (dp: 2)   | case 5    |
+ *   | taxRoundAtSubtotal      | NO (false)   | case 6    |
+ *   | tombstoned lines        | NO           | case 7    |
+ *
+ * The differential's `makeConfig` hardcodes `taxRoundAtSubtotal: false`, `dp: 2`
+ * and non-compound rates; it varies only `pricesIncludeTax`. Two of the four
+ * dimensions only covered here — compound rate ordering and round-at-subtotal —
+ * are precisely the parity defects that produced false "your store changed this
+ * order's totals" banners on correct sales before 1.10.0 shipped. Deleting this
+ * file today would drop them silently.
+ *
+ * What this file is actually worth now is its FIXTURE MATRIX, not its legacy
+ * model. Retiring it means porting those four dimensions into the differential
+ * harness first, then deleting. Tracked with the `calculateCartLine` migration.
  *
  * The legacy loop, on every cart change:
  *   (1) recomputes each active PERCENT fee line against the CURRENT persisted
