@@ -41,11 +41,28 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'lines']);
  */
 // stage-I2 note: replayStateKey retirable now that getLatest() is identity-stable — kept pending review
 function replayStateKey(order: CurrentOrderRecord): string {
+	return JSON.stringify([replayContentKey(order), order.payload.date_modified_gmt ?? null]);
+}
+
+/**
+ * The same identity MINUS the revision stamp: which order this is, whether it is
+ * still the cart, and the lines the replay actually read.
+ *
+ * `date_modified_gmt` moves on ANY write to the order — a customer note, a
+ * customer assignment, a routine background sync — none of which touch the cart
+ * this pass computed for. Treating those as "the order moved under me" made the
+ * replay abandon and, because the settlement trigger deliberately watches the
+ * cart arrays rather than the revision stamp, nothing emitted a replacement
+ * pass: the coupon allocation stayed stale until the cashier next touched a
+ * line. So the bail asks the narrower question, and a pass whose content is
+ * still current writes through the FRESH handle rather than throwing its work
+ * away.
+ */
+function replayContentKey(order: CurrentOrderRecord): string {
 	return JSON.stringify([
 		order.uuid ?? null,
 		order.payload.id ?? null,
 		order.payload.status ?? null,
-		order.payload.date_modified_gmt ?? null,
 		order.payload.line_items ?? [],
 		order.payload.fee_lines ?? [],
 		order.payload.shipping_lines ?? [],
@@ -165,6 +182,13 @@ export const useCartSettlement = () => {
 	const continuationRef = React.useRef<ReplayContinuation | null>(null);
 	const replayingRef = React.useRef<string | null>(null);
 
+	// Read by an in-flight replay that started before the divergence arrived. See the
+	// check in replayCoupons for why the closure's own copy is not good enough.
+	const serverOwnsMoneyRef = React.useRef(serverOwnsMoney);
+	React.useEffect(() => {
+		serverOwnsMoneyRef.current = serverOwnsMoney;
+	}, [serverOwnsMoney]);
+
 	/**
 	 * Settle every cart-line edit, plus every input `createCartConfig` reads.
 	 *
@@ -264,10 +288,28 @@ export const useCartSettlement = () => {
 	/**
 	 * Pass 1 — the money over the lines as they are persisted, right now.
 	 *
-	 * Nothing is awaited before `localPatch`, and nothing may be added that is. The
-	 * one guarantee this pass makes is that the aggregate on the document matches the
-	 * lines on the document by the time the cashier's next action can read it.
+	 * Nothing is awaited before the write is HANDED OFF, and nothing may be added
+	 * that is. The one guarantee this pass makes is that the aggregate on the
+	 * document matches the lines on the document by the time the cashier's next
+	 * action can read it.
+	 *
+	 * The writes are serialized through `moneyWriteChain` because the aggregate is
+	 * asserted WHOLESALE — every money field, every time — so the last write to land
+	 * is the one that stands. `localPatch` awaits the engine resident before it
+	 * applies anything, and two passes can be inside that await at once (a tax-rate
+	 * change, or a fast second edit). Unordered, the older pass can finish last and
+	 * leave the document holding money derived from lines that have since moved.
+	 * Nothing would repair it either: the aggregate is deliberately NOT an input to
+	 * `cartTotal$`, so a stale overwrite emits no follow-up pass and the cart carries
+	 * the wrong total until the cashier happens to touch a line.
+	 *
+	 * Chaining, rather than a single-flight key like the replay's: passes are queued
+	 * in emission order and applied in emission order, so the newest is always last.
+	 * When nothing is in flight the chain is already resolved, so this costs one
+	 * microtask — the promptness the split exists to protect is untouched.
 	 */
+	const moneyWriteChain = React.useRef<Promise<unknown>>(Promise.resolve());
+
 	const settleMoney = React.useCallback(
 		async (freshOrder: CurrentOrderRecord) => {
 			const result = settleAggregate(
@@ -275,10 +317,16 @@ export const useCartSettlement = () => {
 				cartConfig
 			);
 			if (!result.changed) return;
-			await localPatch({
-				document: freshOrder,
-				data: result.patch as Partial<OrderDocument>,
-			});
+			const write = moneyWriteChain.current.then(() =>
+				localPatch({
+					document: freshOrder,
+					data: result.patch as Partial<OrderDocument>,
+				})
+			);
+			// The chain must survive a failed write, or one rejection would strand every
+			// later settlement behind it. The caller still sees the rejection.
+			moneyWriteChain.current = write.catch(() => undefined);
+			await write;
 		},
 		[cartConfig, localPatch]
 	);
@@ -338,14 +386,34 @@ export const useCartSettlement = () => {
 				 * pass wins; older ones abandon before writing.
 				 */
 				if (replayingRef.current !== flightKey) return;
-
-				// Bail if the order moved during the async replay — a concurrent cart edit, a
-				// checkout push, or a status change — rather than overwriting it.
-				if (replayStateKey(currentOrderRecord.getLatest()) !== stateKey) return;
 				if (!result.changed) return;
 
+				/**
+				 * The order moved under this pass — a concurrent cart edit, a checkout
+				 * push, a status change, or something that touched the order without
+				 * touching the cart. Only the first three invalidate the work: this pass
+				 * read the four line arrays, and if those (and the order's identity and
+				 * status) still hold, the patch it computed is still the right patch.
+				 */
+				const latest = currentOrderRecord.getLatest();
+				if (replayContentKey(latest) !== replayContentKey(freshOrder)) return;
+
+				/**
+				 * A divergence that arrived WHILE this pass was awaiting its coupon
+				 * context. `serverOwnsMoney` is a render value captured in this closure,
+				 * so the pass that started before the divergence would otherwise carry on
+				 * and assert money the server has just overruled. Read through a ref so
+				 * the check sees the divergence that landed a moment ago — this is the
+				 * hole the deleted flight-key divergence input used to paper over.
+				 */
+				if (serverOwnsMoneyRef.current) return;
+
 				await localPatch({
-					document: freshOrder,
+					// Through the handle just read, not the one this pass started with: a
+					// metadata write may have replaced the resident while the coupon
+					// context was in flight, and the content key above proved the two are
+					// equal in everything this patch depends on.
+					document: latest,
 					// settle outputs structural line types; this boundary writes them back to
 					// the DB document they came from.
 					data: result.patch as Partial<OrderDocument>,

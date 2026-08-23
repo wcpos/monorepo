@@ -63,18 +63,38 @@ export type OrderMoneyDivergence = {
 
 type DivergenceState = {
 	engine: unknown;
+	/** Display detail — the per-field comparison. Bounded; see MAX_HELD_DIVERGENCES. */
 	byOrderId: Record<string, OrderMoneyDivergence>;
 	/**
+	 * Every order whose money the server has taken over, ids only, NEVER evicted.
+	 *
+	 * Separate from `byOrderId` because the two answer different questions and must
+	 * not share a lifetime. `byOrderId` carries the `fields` payload a banner
+	 * renders, and is capped so a shift against a badly misconfigured store cannot
+	 * grow it without bound. Ownership is a correctness fact: while it holds, the
+	 * settlement writer stands down.
+	 *
+	 * Deriving ownership from the capped map — as this first did — means the 51st
+	 * divergence silently hands an earlier order's money BACK to the POS. That order
+	 * does not have to be open at the time: completed orders are never removed, so
+	 * fifty later sales are enough, and returning to a parked tab would then drop its
+	 * warning and re-enable both settlement passes against arithmetic the server has
+	 * already rejected. Ids are a few dozen bytes each; the bound belongs on the
+	 * detail, not on the fact.
+	 */
+	serverOwnedOrderIds: ReadonlySet<string>;
+	/**
 	 * Distinct orders that have diverged since this engine last reset. Counted
-	 * separately from `byOrderId` so the eviction bound below cannot quietly
-	 * reduce it — escalation is about how often the store disagrees, and that
-	 * fact does not stop being true when an old entry is dropped.
+	 * separately from `byOrderId` for the same reason — escalation is about how
+	 * often the store disagrees, and that does not stop being true when an old
+	 * entry is dropped.
 	 */
 	divergedOrderCount: number;
 };
 
 type DivergenceStore = {
 	byOrderId: Record<string, OrderMoneyDivergence>;
+	serverOwnedOrderIds: ReadonlySet<string>;
 	divergedOrderCount: number;
 };
 
@@ -89,12 +109,14 @@ type DivergenceEvent = {
 };
 
 /**
- * Diverged orders whose detail is kept for display.
+ * Diverged orders whose per-field DETAIL is kept for display.
  *
  * Sticky entries have no automatic eviction path (see the header), so a long
  * shift against a misconfigured store would otherwise grow this without bound.
  * The cap is a memory bound, not a product rule: the cashier only ever looks at
- * the order in front of them, and older ones are already counted above.
+ * the order in front of them, and older ones are already counted above — and,
+ * crucially, still owned by the server via `serverOwnedOrderIds`, which this
+ * does not touch.
  */
 const MAX_HELD_DIVERGENCES = 50;
 
@@ -106,7 +128,12 @@ const MAX_HELD_DIVERGENCES = 50;
  */
 export const STORE_LEVEL_DIVERGENCE_THRESHOLD = 3;
 
-const EMPTY_STATE: DivergenceStore = { byOrderId: {}, divergedOrderCount: 0 };
+const NO_SERVER_OWNED: ReadonlySet<string> = new Set();
+const EMPTY_STATE: DivergenceStore = {
+	byOrderId: {},
+	serverOwnedOrderIds: NO_SERVER_OWNED,
+	divergedOrderCount: 0,
+};
 
 /** Drop the oldest entries once the held set outgrows its memory bound. */
 function withinCap(byOrderId: Record<string, OrderMoneyDivergence>) {
@@ -126,6 +153,7 @@ export function OrderMoneyDivergenceProvider({ children }: { children: React.Rea
 	const [state, setState] = React.useState<DivergenceState>(() => ({
 		engine,
 		byOrderId: {},
+		serverOwnedOrderIds: NO_SERVER_OWNED,
 		divergedOrderCount: 0,
 	}));
 
@@ -146,10 +174,16 @@ export function OrderMoneyDivergenceProvider({ children }: { children: React.Rea
 			if (message.type === 'scope-switched') {
 				setState((current) =>
 					Object.keys(current.byOrderId).length === 0 &&
+					current.serverOwnedOrderIds.size === 0 &&
 					current.divergedOrderCount === 0 &&
 					current.engine === engine
 						? current
-						: { engine, byOrderId: {}, divergedOrderCount: 0 }
+						: {
+								engine,
+								byOrderId: {},
+								serverOwnedOrderIds: NO_SERVER_OWNED,
+								divergedOrderCount: 0,
+							}
 				);
 				return;
 			}
@@ -171,13 +205,16 @@ export function OrderMoneyDivergenceProvider({ children }: { children: React.Rea
 			// not how many times one sale was saved.
 			setState((current) => {
 				const sameEngine = current.engine === engine;
-				const alreadyHeld = sameEngine && orderId in current.byOrderId;
+				const alreadySeen = sameEngine && current.serverOwnedOrderIds.has(orderId);
 				return {
 					engine,
 					byOrderId: withinCap(
 						sameEngine ? { ...current.byOrderId, [orderId]: held } : { [orderId]: held }
 					),
-					divergedOrderCount: (sameEngine ? current.divergedOrderCount : 0) + (alreadyHeld ? 0 : 1),
+					serverOwnedOrderIds: new Set(
+						sameEngine ? [...current.serverOwnedOrderIds, orderId] : [orderId]
+					),
+					divergedOrderCount: (sameEngine ? current.divergedOrderCount : 0) + (alreadySeen ? 0 : 1),
 				};
 			});
 		});
@@ -185,11 +222,12 @@ export function OrderMoneyDivergenceProvider({ children }: { children: React.Rea
 
 	const sameEngine = state.engine === engine;
 	const byOrderId = sameEngine ? state.byOrderId : EMPTY_STATE.byOrderId;
+	const serverOwnedOrderIds = sameEngine ? state.serverOwnedOrderIds : NO_SERVER_OWNED;
 	const divergedOrderCount = sameEngine ? state.divergedOrderCount : 0;
 
 	const value = React.useMemo<DivergenceStore>(
-		() => ({ byOrderId, divergedOrderCount }),
-		[byOrderId, divergedOrderCount]
+		() => ({ byOrderId, serverOwnedOrderIds, divergedOrderCount }),
+		[byOrderId, serverOwnedOrderIds, divergedOrderCount]
 	);
 
 	return (
@@ -206,13 +244,15 @@ export function OrderMoneyDivergenceProvider({ children }: { children: React.Rea
  * an advisory surface, and a missing provider must never take the cart down
  * with it.
  *
- * `serverOwnsMoney` is the settlement rule, and it is deliberately a separate
- * name from `divergence !== null` even though they are the same predicate
- * today. Callers ask two different questions of this store — "do I show the
- * cashier a notice?" and "may I still derive this order's money?" — and the
- * second is the one that must never be answered by reading the banner's
- * visibility. That mistake is precisely what the old re-push guard's
- * dismiss-flips-the-latch bug was.
+ * `serverOwnsMoney` is the settlement rule, and it reads a DIFFERENT source from
+ * `divergence` on purpose. Callers ask two different questions of this store —
+ * "do I show the cashier a notice?" and "may I still derive this order's
+ * money?" — and the second must never be answered from whatever the first
+ * happens to be holding. Answering it from the banner's own state is exactly
+ * what the old re-push guard's dismiss-flips-the-latch bug was, and deriving it
+ * from the size-capped detail map reintroduced the same mistake by a quieter
+ * route: the 51st divergence would have handed an earlier order's money back to
+ * the POS. Ownership is never evicted; only the detail is.
  *
  * @param orderId - The order's uuid; `undefined` for an unsaved new order.
  */
@@ -226,7 +266,7 @@ export function useOrderMoneyDivergence(orderId: string | undefined): {
 	const divergence = orderId && store ? (store.byOrderId[orderId] ?? null) : null;
 	return {
 		divergence,
-		serverOwnsMoney: divergence !== null,
+		serverOwnsMoney: Boolean(orderId && store?.serverOwnedOrderIds.has(orderId)),
 		divergedOrderCount: store?.divergedOrderCount ?? 0,
 	};
 }

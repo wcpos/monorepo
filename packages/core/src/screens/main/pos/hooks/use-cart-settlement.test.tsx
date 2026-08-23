@@ -277,7 +277,7 @@ jest.mock('../../contexts/tax-rates', () => ({
 }));
 
 type LocalPatchArgs = {
-	document: { uuid?: string; _readSeq?: number };
+	document: { uuid?: string; _readSeq?: number; payload?: Record<string, unknown> };
 	data: Record<string, unknown>;
 };
 const localPatch = jest.fn(async (_args: LocalPatchArgs) => undefined);
@@ -343,6 +343,7 @@ describe('useCartSettlement reference demand (#952)', () => {
 		appliedCouponReferenceDemand.mockClear();
 		createCartConfig.mockClear();
 		localPatch.mockClear();
+		localPatch.mockImplementation(async () => undefined);
 		settleCart.mockClear();
 		settleCart.mockImplementation(() => successfulSettlement());
 		settleAggregate.mockClear();
@@ -434,6 +435,73 @@ describe('useCartSettlement reference demand (#952)', () => {
 		);
 		// And it did not need the coupon records to get there.
 		expect(getCouponContext).not.toHaveBeenCalled();
+	});
+
+	/**
+	 * The aggregate is asserted wholesale — every money field, every time — so the
+	 * last write to land is the one that stands. `localPatch` awaits the engine
+	 * resident before applying anything, so two passes can be inside that await at
+	 * once. Unordered, the older can finish last and leave the document holding
+	 * money derived from lines that have since moved; and because the aggregate is
+	 * deliberately NOT an input to the trigger, nothing would emit a repair pass.
+	 */
+	it('applies concurrent money writes in emission order, newest last', async () => {
+		await renderAfterMountSettle();
+
+		// The first write is held open, so the second edit's pass starts while it is
+		// still resolving — exactly the overlap that has to be ordered.
+		const releases: (() => void)[] = [];
+		localPatch.mockImplementation(
+			() =>
+				new Promise<undefined>((resolve) => {
+					releases.push(() => resolve(undefined));
+				}) as Promise<undefined>
+		);
+		settleAggregate.mockImplementationOnce(() => ({
+			...successfulAggregate(),
+			patch: { ...successfulAggregate().patch, total: 'first' },
+		}));
+		settleAggregate.mockImplementationOnce(() => ({
+			...successfulAggregate(),
+			patch: { ...successfulAggregate().patch, total: 'second' },
+		}));
+
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+		await act(async () => {
+			editCart([{ total: '20.00', total_tax: '0.00', product_id: 1 }]);
+		});
+
+		// Only the first has been handed to localPatch; the second is queued behind it.
+		expect(localPatch).toHaveBeenCalledTimes(1);
+		expect(localPatch.mock.calls[0][0].data.total).toBe('first');
+
+		// Release them in the WORST order — the older write's resident resolves last.
+		await act(async () => {
+			releases[0]?.();
+		});
+		await act(async () => {
+			releases[1]?.();
+		});
+
+		expect(localPatch).toHaveBeenCalledTimes(2);
+		const applied = localPatch.mock.calls.map(([args]) => args.data.total);
+		expect(applied).toEqual(['first', 'second']);
+	});
+
+	it('does not strand later settlements behind a failed money write', async () => {
+		await renderAfterMountSettle();
+		localPatch.mockRejectedValueOnce(new Error('resident vanished'));
+
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+		await act(async () => {
+			editCart([{ total: '20.00', total_tax: '0.00', product_id: 1 }]);
+		});
+
+		expect(localPatch).toHaveBeenCalledTimes(2);
 	});
 
 	it('does not ask for a coupon context to settle the money', async () => {
@@ -719,6 +787,118 @@ describe('useCartSettlement reference demand (#952)', () => {
 		}
 	);
 
+	/**
+	 * `date_modified_gmt` moves on ANY write to the order — a customer note, a
+	 * customer assignment, routine background sync. It used to be part of the key
+	 * the replay re-checked before writing, so one of those landing while
+	 * `getCouponContext()` was in flight made the replay abandon. Nothing emitted a
+	 * replacement pass either: the trigger watches the cart arrays, not the
+	 * revision stamp. The coupon allocation stayed stale until the cashier next
+	 * touched a line.
+	 */
+	it('still writes the replay when an unrelated write stamps the order mid-flight', async () => {
+		applyCoupon([{ code: 'bonus' }]);
+		await renderAfterMountSettle();
+
+		let releaseContext: (() => void) | undefined;
+		getCouponContext.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					releaseContext = () => resolve(emptyCouponContext());
+				})
+		);
+
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+
+		// A customer note lands: same cart, same order, new revision stamp.
+		revision = { ...revision, date_modified_gmt: '2099-01-01T00:00:00' };
+
+		await act(async () => {
+			releaseContext?.();
+		});
+
+		expect(replayWrites()).toHaveLength(1);
+		// Through the handle read AFTER the note, not the one captured before it.
+		expect(replayWrites()[0][0].document.payload?.date_modified_gmt).toBe('2099-01-01T00:00:00');
+	});
+
+	it('still abandons the replay when the CART moved mid-flight', async () => {
+		applyCoupon([{ code: 'bonus' }]);
+		await renderAfterMountSettle();
+
+		// Tag each patch with the snapshot it was computed from, so a write can be
+		// traced back to the lines its pass actually read.
+		settleCart.mockImplementation((snapshot: unknown) => ({
+			...successfulSettlement(),
+			patch: {
+				...MONEY_PATCH,
+				line_items: (snapshot as { line_items: LineItem[] }).line_items,
+				coupon_lines: couponLines$.value,
+			},
+		}));
+
+		let releaseContext: (() => void) | undefined;
+		getCouponContext.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					releaseContext = () => resolve(emptyCouponContext());
+				})
+		);
+
+		const staleLines = [{ total: '10.00', total_tax: '0.00', product_id: 1 }];
+		await act(async () => {
+			editCart(staleLines);
+		});
+
+		// A real cart move, not just a revision stamp: this pass's work is void.
+		await act(async () => {
+			editCart([{ total: '99.00', total_tax: '0.00', product_id: 7 }]);
+		});
+
+		await act(async () => {
+			releaseContext?.();
+		});
+
+		expect(replayWrites().filter(([args]) => args.data.line_items === staleLines)).toHaveLength(0);
+	});
+
+	/**
+	 * The divergence that arrives WHILE a replay is awaiting its coupon context.
+	 * `serverOwnsMoney` is a render value captured in the callback's closure, so
+	 * without a ref the pass that started before the divergence carries on and
+	 * asserts money the server has just overruled. The deleted flight-key
+	 * divergence input used to paper over this; the ref is the honest version.
+	 */
+	it('abandons an in-flight replay when a divergence arrives mid-flight', async () => {
+		applyCoupon([{ code: 'bonus' }]);
+		const { rerender } = await renderAfterMountSettle();
+
+		let releaseContext: (() => void) | undefined;
+		getCouponContext.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					releaseContext = () => resolve(emptyCouponContext());
+				})
+		);
+
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+
+		await act(async () => {
+			divergenceValue = { serverTotal: '9.99' };
+			rerender();
+		});
+
+		await act(async () => {
+			releaseContext?.();
+		});
+
+		expect(replayWrites()).toHaveLength(0);
+	});
+
 	it('skips the foreground replay when the reference wait times out', async () => {
 		// A deadline does not make unmaterialized residents trustworthy. Bailing leaves the
 		// cart on its previous totals until the references actually land.
@@ -741,6 +921,7 @@ describe('useCartSettlement background coupon replay (#963)', () => {
 		appliedCouponReferenceDemand.mockClear();
 		createCartConfig.mockClear();
 		localPatch.mockClear();
+		localPatch.mockImplementation(async () => undefined);
 		settleCart.mockClear();
 		settleCart.mockImplementation(() => successfulSettlement());
 		settleAggregate.mockClear();

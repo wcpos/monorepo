@@ -164,6 +164,31 @@ describe('TotalsChangedBanner', () => {
 		expect(screen.queryByTestId('order-totals-changed-banner-line-amounts')).toBeNull();
 	});
 
+	/**
+	 * Regression: `discount_tax` and `shipping_tax` are order-level in the
+	 * producer's ORDER_MONEY_FIELDS but were missing from the banner's list, so a
+	 * divergence in either fell through to the per-line count — the cashier saw
+	 * "1 line amount also differs" and both figures vanished. The two lists have
+	 * to agree, and this is the test that says so.
+	 */
+	it.each([
+		['discount_tax', 'Discount tax'],
+		['shipping_tax', 'Shipping tax'],
+		['cart_tax', 'Item tax'],
+		['discount_total', 'Discount'],
+		['shipping_total', 'Shipping'],
+		['total_tax', 'Tax'],
+		['total', 'Total'],
+	])('names %s as an order-level amount, not a line one', (field, label) => {
+		renderBanner();
+		emit(divergence('order-a', [{ field, expected: '1.00', got: '2.00' }]));
+
+		expect(screen.getByTestId(`order-totals-changed-banner-field-${field}`).textContent).toBe(
+			`${label}1.00 → 2.00`
+		);
+		expect(screen.queryByTestId('order-totals-changed-banner-line-amounts')).toBeNull();
+	});
+
 	it('counts the per-line amounts rather than listing payload paths at a cashier', () => {
 		renderBanner();
 		emit(
@@ -339,6 +364,62 @@ describe('lifecycle', () => {
 		emit(acknowledged('order-a', 'm2'));
 
 		expect(screen.getByTestId('order-totals-changed-banner')).toBeTruthy();
+	});
+
+	/**
+	 * The detail map is capped for memory. Server OWNERSHIP is not, and deriving
+	 * one from the other meant the 51st divergence handed an earlier order's money
+	 * back to the POS — it would settle again, against arithmetic the server had
+	 * already rejected. The order need not even be open at the time: completed
+	 * orders are never evicted, so fifty later sales are enough.
+	 */
+	it('keeps an order server-owned after its detail is evicted by the cap', () => {
+		function Probe() {
+			const { divergence: held, serverOwnsMoney } = useOrderMoneyDivergence('order-early');
+			return (
+				<span data-testid="probe">{`${held ? 'detail' : 'no-detail'}/${
+					serverOwnsMoney ? 'owned' : 'not-owned'
+				}`}</span>
+			);
+		}
+		render(
+			<OrderMoneyDivergenceProvider>
+				<Probe />
+			</OrderMoneyDivergenceProvider>
+		);
+		emit(divergence('order-early', [{ field: 'total', expected: '1.00', got: '2.00' }], 'm-early'));
+		expect(screen.getByTestId('probe').textContent).toBe('detail/owned');
+
+		// Fifty later sales, one after another, each diverging.
+		for (let i = 0; i < 50; i++) {
+			emit(divergence(`later-${i}`, [{ field: 'total', expected: '1.00', got: '2.00' }], `m${i}`));
+		}
+
+		// Its detail is gone — that is the memory bound doing its job — but the POS
+		// must NOT start deriving that order's money again.
+		expect(screen.getByTestId('probe').textContent).toBe('no-detail/owned');
+	});
+
+	it('counts a re-diverged order once even after its detail was evicted', () => {
+		function Probe() {
+			const { divergedOrderCount } = useOrderMoneyDivergence('order-early');
+			return <span data-testid="count">{String(divergedOrderCount)}</span>;
+		}
+		render(
+			<OrderMoneyDivergenceProvider>
+				<Probe />
+			</OrderMoneyDivergenceProvider>
+		);
+		emit(divergence('order-early', [{ field: 'total', expected: '1.00', got: '2.00' }], 'm-early'));
+		for (let i = 0; i < 50; i++) {
+			emit(divergence(`later-${i}`, [{ field: 'total', expected: '1.00', got: '2.00' }], `m${i}`));
+		}
+		expect(screen.getByTestId('count').textContent).toBe('51');
+
+		// Saving the evicted order again re-states its detail. It is the SAME order,
+		// so the store-level count must not move.
+		emit(divergence('order-early', [{ field: 'total', expected: '1.00', got: '3.00' }], 'm-again'));
+		expect(screen.getByTestId('count').textContent).toBe('51');
 	});
 
 	it('is NOT retired by its own acknowledgement either', () => {

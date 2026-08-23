@@ -22,13 +22,22 @@ const DOCS_URL = 'https://docs.wcpos.com/support/troubleshooting/totals-disagree
  * `tax_lines[<id>].tax_total`) and is counted rather than named: the path means
  * something to support and nothing to the person at the counter, and a cart
  * banner listing twelve of them would bury the number that matters.
+ *
+ * This list must cover `ORDER_MONEY_FIELDS` in
+ * packages/sync-engine/src/write-path/order-money-divergence.ts EXACTLY. A field
+ * the producer treats as order-level and this one omits does not go unlabelled —
+ * it falls through to the per-line count, so a divergence in `discount_tax`
+ * alone reads as "1 line amount also differs" and the two figures the cashier
+ * needs disappear entirely. Pinned in totals-changed-banner.test.tsx.
  */
 const ORDER_LEVEL_FIELDS: { field: string; labelKey: string }[] = [
 	{ field: 'total', labelKey: 'pos_cart.totals_disagree_field_total' },
 	{ field: 'total_tax', labelKey: 'pos_cart.totals_disagree_field_total_tax' },
 	{ field: 'cart_tax', labelKey: 'pos_cart.totals_disagree_field_cart_tax' },
 	{ field: 'discount_total', labelKey: 'pos_cart.totals_disagree_field_discount' },
+	{ field: 'discount_tax', labelKey: 'pos_cart.totals_disagree_field_discount_tax' },
 	{ field: 'shipping_total', labelKey: 'pos_cart.totals_disagree_field_shipping' },
+	{ field: 'shipping_tax', labelKey: 'pos_cart.totals_disagree_field_shipping_tax' },
 ];
 
 function partitionFields(fields: OrderMoneyDivergenceField[]) {
