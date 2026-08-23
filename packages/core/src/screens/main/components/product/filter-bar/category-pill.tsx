@@ -77,6 +77,7 @@ export function CategoryPill() {
 					size="xs"
 					leftIcon="folder"
 					variant={isActive ? undefined : 'muted'}
+					testID="filter-pill-categories"
 					removable={isActive}
 					removeTestID="filter-pill-remove-categories"
 					onRemove={handleRemove}

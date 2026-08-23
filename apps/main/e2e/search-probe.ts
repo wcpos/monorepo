@@ -225,7 +225,7 @@ async function resolveWriterTransport(
 	throw lastFailure;
 }
 
-function collectionUrl(storeUrl: string, collection: WcRestCollection, id?: number): string {
+function collectionUrl(storeUrl: string, collection: ProbeRoute, id?: number): string {
 	// wc/v3 accepts the JWT via Authorization header or ?authorization= param
 	// (param verified against wc/v3 on 2026-08-21); the transport is chosen by
 	// resolveWriterTransport, or captured from the app's own traffic.
@@ -234,11 +234,7 @@ function collectionUrl(storeUrl: string, collection: WcRestCollection, id?: numb
 }
 
 /** The plain-permalink spelling of the same route: /index.php?rest_route=/wc/v3/… */
-export function plainPermalinkUrl(
-	storeUrl: string,
-	collection: WcRestCollection,
-	id?: number
-): string {
+export function plainPermalinkUrl(storeUrl: string, collection: ProbeRoute, id?: number): string {
 	const route = id === undefined ? `/wc/v3/${collection}` : `/wc/v3/${collection}/${id}`;
 	return `${storeUrl.replace(/\/+$/, '')}/index.php?rest_route=${route}`;
 }
@@ -248,6 +244,15 @@ type ProbeRequestOptions = {
 	params: Record<string, string>;
 	data?: unknown;
 };
+
+/**
+ * Routes the probe plumbing can address. The writable collections plus the
+ * read-only reference routes a spec needs to ask the store what it holds —
+ * `products/categories` is how a store-agnostic spec discovers a category that
+ * actually has products instead of hard-coding one (see the E2E store-agnostic
+ * policy in CLAUDE.md).
+ */
+type ProbeRoute = WcRestCollection | 'products/categories';
 
 /**
  * Issue a wc/v3 request tolerating both permalink styles: try the pretty
@@ -260,7 +265,7 @@ async function probeRequest(
 	request: APIRequestContext,
 	method: 'get' | 'post' | 'delete',
 	storeUrl: string,
-	collection: WcRestCollection,
+	collection: ProbeRoute,
 	id: number | undefined,
 	options: ProbeRequestOptions
 ) {
@@ -274,6 +279,20 @@ async function probeRequest(
 	const pretty = await send(collectionUrl(storeUrl, collection, id));
 	if (pretty.status() !== 404) return pretty;
 	return send(plainPermalinkUrl(storeUrl, collection, id));
+}
+
+/**
+ * GET a wc/v3 route with the app's own captured credentials, tolerating either
+ * permalink style. The read half of {@link probeRequest}, exported so specs can
+ * ask the store what it contains before asserting on what the UI renders.
+ */
+export function probeGet(
+	request: APIRequestContext,
+	storeUrl: string,
+	route: ProbeRoute,
+	options: ProbeRequestOptions
+): Promise<APIResponse> {
+	return probeRequest(request, 'get', storeUrl, route, undefined, options);
 }
 
 async function productCreateResponse(

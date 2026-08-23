@@ -46,6 +46,7 @@ export function StockStatusPill() {
 					size="xs"
 					leftIcon="warehouseFull"
 					variant={isActive ? undefined : 'muted'}
+					testID="filter-pill-stock_status"
 					removable={isActive}
 					removeTestID="filter-pill-remove-stock_status"
 					onRemove={() => actions.clearFilter('stock_status')}
