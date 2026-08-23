@@ -1194,7 +1194,7 @@
 	"health.database.percent_tooltip": "{p}% on this device",
 	"health.database.n_stuck": "{n} stuck",
 	"health.database.attention_one": "1 record needs attention",
-	"health.database.attention_other": "{count} records need attention",
+	"health.database.attention_other": "{n} records need attention",
 	"health.database.attention_reason": "\"{name}\" can't upload — {reason}",
 	"health.database.attention_reason_delete": "\"{name}\" must be removed from this device — {reason}",
 	"health.database.attention_reason_pull": "\"{name}\" can't download from your store — {reason}",

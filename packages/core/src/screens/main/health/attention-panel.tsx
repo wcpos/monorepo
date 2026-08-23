@@ -116,10 +116,13 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 		<Callout tone="destructive" testID="db-attention-panel">
 			<HStack className="flex-wrap items-baseline gap-x-3 gap-y-1">
 				<Text className="font-semibold">
-					{/* Let i18next pick the plural form. Branching on `=== 1` here only ever
-					    reached two catalog entries, so locales with more CLDR categories
-					    (ru's _few for 2–4, ar's _zero/_two) could never render theirs. */}
-					{t('health.database.attention', { count: stuck.length })}
+					{/* `count` selects the plural form, `n` fills the placeholder — the
+					    published catalogues interpolate {n}, and passing only `count`
+					    renders a literal "{n}" to every non-English user. Asking for a
+					    suffixed key by hand (the old `=== 1` branch) reached at most two
+					    entries, so locales with more CLDR categories — ru's _few for 2–4,
+					    ar's _zero/_two — could never render theirs. */}
+					{t('health.database.attention', { count: stuck.length, n: stuck.length })}
 				</Text>
 				<Text className="text-muted-foreground min-w-0 flex-shrink text-sm">
 					{/* A pull-direction record never left the till in the first place —
