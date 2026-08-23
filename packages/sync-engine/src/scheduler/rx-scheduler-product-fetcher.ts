@@ -592,8 +592,10 @@ async function tryProductBrowseWindowWalk(
 		// The walk records ONLY its own browse total. `census:products` has one
 		// writer — the query-total lane's probe against the census route — so the
 		// health page and the serve-local gate never oscillate between two
-		// endpoints' populations (#1400: this pull counts wcpos/v2, the census
-		// counts wc/v3).
+		// writers of the same key (#1400). Both now read the same wcpos/v2 lane,
+		// so they also agree on the population: the census used to probe wc/v3,
+		// which cannot see POS visibility and counted online-only products this
+		// walk never fetches.
 		await input.cacheQueryTotals({
 			queryKeys: [task.queryKey],
 			totalMatchingRecords,

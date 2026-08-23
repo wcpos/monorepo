@@ -134,15 +134,15 @@ describe('engine adapter collection map', () => {
 			coupons: null,
 		});
 		expect(Object.fromEntries(entries.map(([name, row]) => [name, row.censusRoute]))).toEqual({
-			orders: 'wc/v3/orders',
-			products: 'wc/v3/products',
+			orders: 'wcpos/v2/orders',
+			products: 'wcpos/v2/products',
 			variations: 'wcpos/v1/products/variations',
 			customers: 'wcpos/v2/customers',
 			taxRates: 'wcpos/v2/taxes',
-			categories: 'wc/v3/products/categories',
-			brands: 'wc/v3/products/brands',
-			tags: 'wc/v3/products/tags',
-			coupons: 'wc/v3/coupons',
+			categories: 'wcpos/v2/products/categories',
+			brands: 'wcpos/v2/products/brands',
+			tags: 'wcpos/v2/products/tags',
+			coupons: 'wcpos/v2/coupons',
 		});
 		expect(Object.fromEntries(entries.map(([name, row]) => [name, row.writeable]))).toEqual({
 			orders: true,
@@ -382,6 +382,37 @@ describe('engine adapter collection map', () => {
 					isPayloadIdentity && Object.keys(field).every((key) => fallbackKeys.includes(key))
 				).toBe(false);
 			}
+		}
+	});
+});
+
+describe('census routes stay on the POS lane (#1400)', () => {
+	it('never probes a raw wc/v3 route for a collection total', () => {
+		/**
+		 * Two independent failures land the moment a census route points at
+		 * wc/v3, and both are silent — the row just reads "checking…" or shows a
+		 * number that is quietly wrong:
+		 *
+		 * 1. WooCommerce core does not know what the POS may be served.
+		 *    `Sync\Pos_Visibility` is the SOLE authority for that, and it is
+		 *    consulted by the plugin's own read lanes only. A wc/v3 count
+		 *    includes every `online_only` product, so the coverage bar cannot
+		 *    reach 100% on a complete catalogue and the "fully resident locally"
+		 *    serve-local gate (require-plane) can never fire. Orders are the
+		 *    exception and keep the whole-server total: the proxy narrows orders
+		 *    only by the params the request sends, and the census sends none.
+		 * 2. The total rides `X-WP-Total`, which a hostile proxy strips
+		 *    (wcpos-infra#72 Tier 2). The plugin's body envelope covers that, but
+		 *    it is granted on the route's namespace or the `X-WCPOS` request
+		 *    header — and Tier 3 strips that header, so a wc/v3 route loses the
+		 *    header AND its fallback at once.
+		 *
+		 * The plugin proxies every one of these collections, so staying in the
+		 * namespace costs nothing and fixes both.
+		 */
+		for (const [name, row] of Object.entries(COLLECTION_VOCABULARY)) {
+			if (row.censusRoute === null) continue;
+			expect([name, row.censusRoute.split('/')[0]]).toEqual([name, 'wcpos']);
 		}
 	});
 });

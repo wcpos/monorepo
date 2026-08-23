@@ -836,6 +836,16 @@ describe('maintenance lanes through the public handle', () => {
 				([input]) => input.request.queryKey === 'census:variations'
 			)?.[0].request.params
 		).toEqual({ page: 1, per_page: 1, status: 'publish' });
+		// Orders carry NO narrowing — not `pos_cashier`, `pos_store` or
+		// `created_via`. Those are view filters the browse lane sends; every order
+		// on the server is downloadable, so the orders census is the whole server
+		// population (owner ruling 2026-08-23). The proxy claims those params from
+		// the request, so sending none is what keeps this an unscoped total.
+		expect(
+			fetchWooQueryTotal.mock.calls.find(
+				([input]) => input.request.queryKey === 'census:orders'
+			)?.[0].request.params
+		).toEqual({ page: 1, per_page: 1 });
 		await vi.waitFor(() => expect(emissions.at(-1)?.orders?.total).toBe(25));
 		expect(emissions.at(-1)?.variations?.total).toBe(40);
 		expect(emissions.at(-1)?.orders).toEqual({

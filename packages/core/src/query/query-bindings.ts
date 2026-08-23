@@ -402,10 +402,11 @@ function censusTotal$(
  * that second number move with every keystroke, and turned a failed search into "Showing 0 of
  * 0" — which reads like an empty till rather than a product the shop does not stock.
  *
- * Preferring the verdict was also not a tie-break between equivalent counts: the browse-window
- * total and the census deliberately count different populations (#1400: the walk counts
- * `wcpos/v2`, the census probe counts `wc/v3`), which is how the footer and the Database page
- * came to disagree by a handful of records on the same catalogue.
+ * Preferring the census was also not a tie-break between equivalent counts. The census probe
+ * used to hit `wc/v3` while the browse walk counted `wcpos/v2`, so the two deliberately counted
+ * different populations (#1400) — which is how the footer and the Database page came to disagree
+ * by a handful of records on the same catalogue, wc/v3 being blind to POS visibility. Both read
+ * the same wcpos/v2 lane now; the preference order below stands on its own merits.
  *
  * `census$` is `NO_CENSUS_TOTAL$` only where the census cannot honestly stand for the screen at
  * all — a `targeted` subset, addressed by id (the variations under ONE product). Everything
