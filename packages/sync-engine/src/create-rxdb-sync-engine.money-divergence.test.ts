@@ -444,24 +444,41 @@ describe('divergence detection at the ack boundary', () => {
 	});
 
 	/**
-	 * The narrowing #1507 bought. WooCommerce recomputes the aggregate from the
-	 * lines on every items-bearing write, so an ack whose `total` differs from
-	 * the till's arithmetic is the NORMAL case for a store the POS does not fully
-	 * model — and the POS never claimed that figure over the wire. Alerting on it
-	 * was manufacturing a divergence out of a field the server was always going
-	 * to overwrite.
+	 * THE CASHIER'S QUESTION (owner ruling, 2026-08-23).
+	 *
+	 * #1507 took the aggregate off the wire — it is readonly and WooCommerce
+	 * recomputes it — and an earlier revision of this suite therefore expected
+	 * an aggregate-only difference to be SILENT. That was wrong, and it is the
+	 * single most important case here: `total` is the number the cashier said
+	 * out loud, took payment for and printed. If the store recorded a different
+	 * one, they have to be told before the customer leaves.
+	 *
+	 * So the till's expectation travels beside the payload rather than in it
+	 * (`tillAggregateFor`), and the alarm covers `total` exactly as it did
+	 * before the field left the wire.
 	 */
-	it('is SILENT when only the server-recomputed aggregate differs (#1507)', async () => {
+	it('is LOUD when the store total is not the total the cashier charged', async () => {
 		const run = await saveOracleOrder({
 			serialize: () => ({
 				...serverPayload(),
 				total: '50.070000',
 				total_tax: '11.100000',
-				cart_tax: '11.100000',
 			}),
 		});
 		try {
-			expect(divergenceEvents(run.events)).toEqual([]);
+			expect(divergenceEvents(run.events)).toEqual([
+				{
+					type: 'order-money-divergence',
+					collection: 'orders',
+					recordId: ORDER_UUID,
+					mutationId: expect.any(String),
+					mode: 'exact-6dp',
+					fields: [
+						{ field: 'total', expected: '36.680000', got: '50.070000', decimals: 6 },
+						{ field: 'total_tax', expected: '6.710000', got: '11.100000', decimals: 6 },
+					],
+				},
+			]);
 		} finally {
 			await run.dispose();
 		}

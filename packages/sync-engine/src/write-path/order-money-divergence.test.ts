@@ -336,14 +336,18 @@ describe('compareOrderMoney — exact-6dp mode (woocommerce-pos#1466 is live)', 
 });
 
 /**
- * #1507 / ADR 0032: the POS no longer PUSHES the order aggregate — those fields
- * are readonly in the wc/v3 schema and dropped before anything is set. The
- * comparator has always skipped a slot only one side carries, so this needs no
- * new rule; what it needs is pinning, because the whole value of the change
- * rests on it. If a future edit made an absent pushed field read as a zero,
- * every sale would report seven divergences.
+ * #1507: the POS no longer PUTS the order aggregate in a push BODY — those
+ * fields are readonly in the wc/v3 schema and dropped before anything is set.
+ *
+ * It is still COMPARED. The cashier has to be told when the store's total is
+ * not the total they charged, so the drain carries the till's aggregate beside
+ * the payload (`tillAggregateFor`) and hands the pair to `compareOrderMoney`.
+ * These cases pin the comparator's behaviour for the residue — a slot neither
+ * side supplies. The rule is unchanged and long-standing (a field only one side
+ * carries is not evidence of anything); it is pinned here because if a future
+ * edit made an absent value read as zero, every sale would report a divergence.
  */
-describe('an order pushed without its aggregate (the #1507 payload)', () => {
+describe('an order compared without an aggregate on either side', () => {
 	/** The payload as it now goes on the wire: line money, no order money. */
 	function withoutAggregate(payload: Record<string, unknown>): Record<string, unknown> {
 		const stripped = clone(payload);
@@ -362,7 +366,7 @@ describe('an order pushed without its aggregate (the #1507 payload)', () => {
 		return stripped;
 	}
 
-	it('is silent about the aggregate the server computed for itself', () => {
+	it('is silent about an aggregate the till never supplied', () => {
 		const acked = clone(server6dp);
 		acked.total = '999.99';
 		acked.cart_tax = '111.11';
@@ -383,6 +387,20 @@ describe('an order pushed without its aggregate (the #1507 payload)', () => {
 				decimals: 6,
 			},
 		]);
+	});
+
+	it('still reports the aggregate once the till supplies it (the drain always does)', () => {
+		const acked = clone(server6dp);
+		acked.total = '50.070000';
+
+		expect(
+			compareOrderMoney({
+				// What the drain hands over: the wire payload, plus the till's own
+				// aggregate captured from the resident at push time.
+				pushed: { ...withoutAggregate(pos), total: pos.total as string },
+				acked,
+			})?.fields
+		).toEqual([{ field: 'total', expected: '36.680000', got: '50.070000', decimals: 6 }]);
 	});
 
 	it('leaves adoption alone — that half reads the RESIDENT, which keeps its money', () => {

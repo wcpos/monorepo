@@ -48,6 +48,7 @@ import {
 	type MoneyPrecisionMode,
 } from './order-money-divergence';
 import { rejectionSuggestsServerRecord } from './conflict-resolution';
+import { tillAggregateFor } from './order-till-aggregate';
 import { requeueBornTwiceSnapshot } from './write-intents';
 import { type BarcodeSelectors, barcodeSelectorsFor } from '../materialization/barcode-selectors';
 import { fetchOrderServerRevision } from './order-server-revision';
@@ -102,14 +103,24 @@ async function withGraftedLineIdentity<T extends QueuedMutation>(
 /**
  * The R1 save-time mirror check, as an ack candidate.
  *
- * Compares the PUSHED envelope payload with the ACK document — never the resident,
- * which moves under an in-flight push (coupon replay, a fee recalculation, the
- * cart's own totals patch) and would make ordinary cart activity look like server
- * divergence. Returns null when there is nothing to report, so the caller stages
- * one event or none.
+ * Compares WHAT THE TILL BELIEVED with the ACK DOCUMENT — never the resident as
+ * it stands when the ack lands, which moves under an in-flight push (coupon
+ * replay, a fee recalculation) and would make ordinary cart activity look like
+ * server divergence. Returns null when there is nothing to report, so the caller
+ * stages one event or none.
+ *
+ * "What the till believed" is the pushed payload PLUS the order aggregate
+ * captured from the resident at push time (`tillAggregateFor`). Since #1507 the
+ * aggregate is not on the wire — WooCommerce authors it and discards what a
+ * client sends — but the cashier still has to be told when the store's `total`
+ * is not the total they charged, so the expectation travels beside the payload
+ * instead of inside it. The capture carries its own consistency guard; when it
+ * declines, the line-level comparison still runs.
  *
  * @param input.mutation - The mutation whose ack just landed.
  * @param input.document - The server document from that ack, or null.
+ * @param input.tillAggregate - The order aggregate the till held when this
+ *   mutation was pushed, or null when it could not be paired with this push.
  * @param input.bornTwice - True when the server answered 200 to a create and
  *   DISCARDED the pushed payload; its document answers a different write, so
  *   comparing them would report a divergence that never happened.
@@ -117,6 +128,7 @@ async function withGraftedLineIdentity<T extends QueuedMutation>(
 function orderMoneyDivergenceEvent(input: {
 	mutation: QueuedMutation;
 	document: Record<string, unknown> | null;
+	tillAggregate: Record<string, unknown> | null;
 	bornTwice: boolean;
 }): Extract<WriteOutcomeEvent, { type: 'order-money-divergence' }> | null {
 	const { mutation, document, bornTwice } = input;
@@ -125,7 +137,7 @@ function orderMoneyDivergenceEvent(input: {
 	const pushed = mutation.payload;
 	if (typeof pushed !== 'object' || pushed === null || Array.isArray(pushed)) return null;
 	const divergence = compareOrderMoney({
-		pushed: pushed as Record<string, unknown>,
+		pushed: { ...(pushed as Record<string, unknown>), ...(input.tillAggregate ?? {}) },
 		acked: document,
 	});
 	if (!divergence) return null;
@@ -342,6 +354,13 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 				// server dedupes on mutationId) — eventing it early would announce an
 				// acknowledgement the queue does not yet agree with.
 				const ackCandidates: WriteOutcomeEvent[] = [];
+				// What the till believed each pushed order was worth, captured at PUSH
+				// time (see order-till-aggregate.ts). It cannot be read when the ack
+				// lands: `facet.reconcile` runs first and adopts the server's money over
+				// the resident's, so by then the cashier's figure is gone. Per tick, and
+				// dropped with it — a mutation that outlives the tick simply re-captures
+				// on its next push.
+				const tillAggregates = new Map<string, Record<string, unknown>>();
 				let report: WriteDrainReport = { lane: 'write-drain', status: 'ran' };
 				let activeCollection: SyncCollectionName | null = null;
 				const activateCollection = (collection: SyncCollectionName): void => {
@@ -433,8 +452,25 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							},
 							push: async (mutation) => {
 								activateCollection(mutation.collectionName as SyncCollectionName);
+								const outbound = await withGraftedLineIdentity(database, mutation);
+								if (outbound.collectionName === 'orders' && outbound.operation !== 'delete') {
+									const resident = await database.collections.orders
+										?.findOne(outbound.recordId)
+										.exec();
+									const residentPayload = (resident?.toJSON() as { payload?: unknown } | undefined)
+										?.payload;
+									const till =
+										residentPayload && typeof residentPayload === 'object'
+											? tillAggregateFor(
+													(outbound.payload ?? {}) as Record<string, unknown>,
+													residentPayload as Record<string, unknown>
+												)
+											: null;
+									if (till) tillAggregates.set(outbound.mutationId, till);
+									else tillAggregates.delete(outbound.mutationId);
+								}
 								return pushRecordMutation({
-									mutation: await withGraftedLineIdentity(database, mutation),
+									mutation: outbound,
 									resolveEndpoint,
 									barcodeSelectors: barcodeSelectorsFor(
 										scopeBarcodeSelectors(),
@@ -527,8 +563,10 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									const divergence = orderMoneyDivergenceEvent({
 										mutation,
 										document: pushResult.document ?? null,
+										tillAggregate: tillAggregates.get(mutation.mutationId) ?? null,
 										bornTwice: bornTwiceCreate,
 									});
+									tillAggregates.delete(mutation.mutationId);
 									if (divergence) ackCandidates.push(divergence);
 									// BORN-TWICE honest reconcile (gate2 #516 item 1): a create the
 									// server answered 200 (not 201) matched an EXISTING document —
