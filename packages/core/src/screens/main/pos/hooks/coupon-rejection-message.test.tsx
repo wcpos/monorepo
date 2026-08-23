@@ -16,8 +16,8 @@ jest.mock('../../../../contexts/translations', () => ({
 			.createTestT(),
 }));
 
-jest.mock('../../hooks/use-currency-format', () => ({
-	useCurrencyFormat: () => ({ format: (value: number) => `$${value.toFixed(2)}` }),
+jest.mock('../../hooks/use-current-order-currency-format', () => ({
+	useCurrentOrderCurrencyFormat: () => ({ format: (value: number) => `$${value.toFixed(2)}` }),
 }));
 
 /**
@@ -77,13 +77,33 @@ describe('useCouponRejectionMessage', () => {
 		expect(message).toBe('This coupon needs a minimum spend of $50.00.');
 	});
 
-	it('formats a maximum spend in the store currency', () => {
+	/**
+	 * The threshold is INCLUSIVE, and the copy has to match the comparison.
+	 * `validate.ts` rejects on `cartSubtotal > maximum`, so a cart worth exactly
+	 * the maximum is accepted — "orders under {amount}" would tell the cashier
+	 * that a cart the coupon does accept is out of range.
+	 */
+	it('states the maximum spend inclusively, matching the validator', () => {
 		const message = renderMessage()({
 			code: 'maximum_spend_exceeded',
 			params: { amount: '250' },
 		});
 
-		expect(message).toBe('This coupon only applies to orders under $250.00.');
+		expect(message).toBe('This coupon only applies to orders of $250.00 or less.');
+		expect(message).not.toContain('under');
+	});
+
+	/**
+	 * `not_applicable_to_cart` comes from two places in the validator, and the
+	 * second (step 9b — `fixed_cart` + `exclude_sale_items` with any sale item
+	 * present) fires even when eligible non-sale items ARE in the cart. So the
+	 * message must not assert that nothing qualifies.
+	 */
+	it('does not claim nothing in the cart qualifies', () => {
+		const message = renderMessage()({ code: 'not_applicable_to_cart' });
+
+		expect(message).toBe("This coupon can't be applied to this cart.");
+		expect(message).not.toMatch(/anything|nothing|no items/i);
 	});
 
 	/**

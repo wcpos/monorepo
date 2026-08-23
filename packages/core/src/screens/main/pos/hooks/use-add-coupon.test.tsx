@@ -73,8 +73,8 @@ jest.mock('./use-recalculate-coupons', () => ({
 // which reaches app state and, through it, expo modules this environment cannot
 // transform. The symbol is fixed here so the assertions read as a cashier sees
 // them; the real formatter is exercised by its own suite.
-jest.mock('../../hooks/use-currency-format', () => ({
-	useCurrencyFormat: () => ({ format: (value: number) => `$${value.toFixed(2)}` }),
+jest.mock('../../hooks/use-current-order-currency-format', () => ({
+	useCurrentOrderCurrencyFormat: () => ({ format: (value: number) => `$${value.toFixed(2)}` }),
 }));
 
 jest.mock('../../hooks/use-collection', () => ({

@@ -3,7 +3,7 @@ import * as React from 'react';
 import type { CouponRejection } from '@wcpos/order-math/internal';
 
 import { useT } from '../../../../contexts/translations';
-import { useCurrencyFormat } from '../../hooks/use-currency-format';
+import { useCurrentOrderCurrencyFormat } from '../../hooks/use-current-order-currency-format';
 
 /**
  * Turns a typed `CouponRejection` into the sentence the cashier reads.
@@ -26,7 +26,12 @@ import { useCurrencyFormat } from '../../hooks/use-currency-format';
  */
 export function useCouponRejectionMessage() {
 	const t = useT();
-	const { format } = useCurrencyFormat();
+	// The ORDER's currency, not the store's. An open order carries its own
+	// `currency_symbol`, and every other amount on the cart surface — totals,
+	// line totals, taxes, the Pay button — formats through this hook. A spend
+	// threshold quoted in the store symbol beside a cart quoted in the order's
+	// would be two currencies in one glance.
+	const { format } = useCurrentOrderCurrencyFormat();
 
 	return React.useCallback(
 		(rejection: CouponRejection): string => {
@@ -68,6 +73,13 @@ export function useCouponRejectionMessage() {
 				case 'email_not_allowed':
 					return t('pos_cart.coupon_rejected_email_not_allowed');
 				case 'not_applicable_to_cart':
+					// Deliberately says the coupon cannot be applied to THIS CART, not
+					// that nothing in the cart qualifies. The validator emits this code
+					// from two places, and the second one (validate.ts step 9b —
+					// `fixed_cart` + `exclude_sale_items` with any sale item present)
+					// fires even when eligible non-sale items are in the cart. Claiming
+					// nothing qualifies would be false there, and would hide the fact
+					// that removing the sale item makes the coupon work.
 					return t('pos_cart.coupon_rejected_not_applicable');
 				default: {
 					const _exhaustive: never = rejection.code;
