@@ -11,9 +11,14 @@ import {
 } from '@wcpos/sync-core';
 import { useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { type CouponLineItem, enrichCategoriesWithAncestors } from '@wcpos/order-math/internal';
+import {
+	type CouponLineItem,
+	type CouponRejection,
+	enrichCategoriesWithAncestors,
+} from '@wcpos/order-math/internal';
 
 import { buildCategoryParents } from './coupon-helpers-engine';
+import { useCouponRejectionMessage } from './coupon-rejection-message';
 import { validateCoupon } from './coupon-validation';
 import {
 	readEngineCategories,
@@ -42,6 +47,7 @@ export const useAddCoupon = () => {
 	const { currentOrderRecord } = useCurrentOrder();
 	const runtime = useQueryRuntime();
 	const { recalculate } = useRecalculateCoupons();
+	const couponRejectionMessage = useCouponRejectionMessage();
 
 	const orderLogger = React.useMemo(
 		() =>
@@ -55,15 +61,24 @@ export const useAddCoupon = () => {
 
 	const addCoupon = React.useCallback(
 		async (couponCode: string) => {
-			const rejectCoupon = (reason: string) => {
+			/**
+			 * The cashier gets a translated sentence; the LOG gets the code.
+			 *
+			 * These used to be the same English string, which meant a support log
+			 * from a French till read in French once the copy was translated —
+			 * unsearchable, and untranslatable back. `reason` is now the stable
+			 * enum and `params` carries what the sentence interpolated.
+			 */
+			const rejectCoupon = (rejection: CouponRejection) => {
 				orderLogger.warn('Coupon application rejected', {
 					context: {
 						event: 'coupon.rejected',
 						couponCode: couponCode.toLowerCase().trim(),
-						reason,
+						reason: rejection.code,
+						...(rejection.params ? { params: rejection.params } : {}),
 					},
 				});
-				return { success: false, error: reason };
+				return { success: false, error: couponRejectionMessage(rejection) };
 			};
 			try {
 				// 1. Preserve the legacy selector semantics: normalize only the input value,
@@ -166,7 +181,9 @@ export const useAddCoupon = () => {
 							: order.payload.customer_id,
 				});
 
-				if (!validation.valid) return rejectCoupon(validation.error ?? 'Coupon validation failed.');
+				// No fallback string needed any more: the result is a discriminated union,
+				// so an invalid one always carries its rejection.
+				if (!validation.valid) return rejectCoupon(validation.rejection);
 
 				// 5. Create new coupon line and recalculate all coupons from scratch
 				const couponData = coupon.payload;
@@ -258,7 +275,7 @@ export const useAddCoupon = () => {
 				return { success: false, error: message };
 			}
 		},
-		[runtime, currentOrderRecord, localPatch, t, orderLogger, recalculate]
+		[runtime, currentOrderRecord, localPatch, t, orderLogger, recalculate, couponRejectionMessage]
 	);
 
 	return { addCoupon };

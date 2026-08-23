@@ -1,28 +1,27 @@
 /**
- * Boundary adapter for coupon validation. Two jobs:
+ * Boundary adapter for coupon validation. One job now: injecting the clock.
  *
- *   1. Injects the clock. The pure validator takes an explicit `context.now`;
- *      core callers do not have one to give.
- *   2. Flattens the typed `CouponRejection` to a display string.
+ * The pure validator takes an explicit `context.now`; core callers do not have
+ * one to give.
  *
- * Job 2 is a known defect, not a design: `rejectionToEnglish` produces
- * hardcoded English that reaches the cashier untranslated (there are no `t()`
- * keys for the 11 rejection reasons). The typed `{ code, params }` needed to
- * fix it already exists upstream — mapping it to translation keys at the call
- * site, and deleting this flattening, is tracked in #1472.
+ * It used to have a second job — flattening the typed `CouponRejection` to a
+ * display string — and that was a known defect rather than a design, because
+ * the string it produced was hardcoded English that reached the cashier
+ * untranslated. The rejection now travels as `{ code, params }` all the way to
+ * the hook that renders it, where `useCouponRejectionMessage` maps it to a
+ * translation key (#1472). Nothing between here and there needs the sentence,
+ * so nothing between here and there builds one.
  */
 import { validateCoupon as pureValidate } from '@wcpos/order-math/internal';
-import type { CouponValidationContext as PureCouponValidationContext } from '@wcpos/order-math/internal';
-
-import { rejectionToEnglish } from './coupon-rejection-strings';
+import type {
+	CouponRejection,
+	CouponValidationContext as PureCouponValidationContext,
+} from '@wcpos/order-math/internal';
 
 /** Legacy context shape — the pure context minus the explicit clock (injected below). */
 export type CouponValidationContext = Omit<PureCouponValidationContext, 'now'>;
 
-export interface ValidationResult {
-	valid: boolean;
-	error?: string;
-}
+export type ValidationResult = { valid: true } | { valid: false; rejection: CouponRejection };
 
 export const validateCoupon = (
 	coupon: Parameters<typeof pureValidate>[0],
@@ -30,5 +29,5 @@ export const validateCoupon = (
 ): ValidationResult => {
 	const result = pureValidate(coupon, { ...context, now: Date.now() });
 	if (result.valid) return { valid: true as const };
-	return { valid: false as const, error: rejectionToEnglish(result.rejection) };
+	return { valid: false as const, rejection: result.rejection };
 };
