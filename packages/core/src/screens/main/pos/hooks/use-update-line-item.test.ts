@@ -146,26 +146,23 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 	}),
 }));
 
-// Mock useCalculateLineItemTaxAndTotals
-jest.mock('./use-calculate-line-item-tax-and-totals', () => ({
-	useCalculateLineItemTaxAndTotals: () => ({
-		calculateLineItemTaxesAndTotals: jest.fn().mockImplementation((lineItem) => {
-			const quantity = lineItem.quantity ?? 1;
-			const price = lineItem.price ?? 10;
-			const total = price * quantity;
-			const tax = total * 0.1;
-			return {
-				...lineItem,
-				price,
-				subtotal: String(total),
-				total: String(total),
-				subtotal_tax: String(tax),
-				total_tax: String(tax),
-				taxes: [{ id: '1', subtotal: String(tax), total: String(tax) }],
-			};
-		}),
-	}),
-}));
+// Only the store settings are stubbed; the changes-merge and the tax maths run for real
+// against a single 10% rate, so this suite fails if the engine port stops behaving like
+// the hook it replaced.
+jest.mock('./use-cart-config', () => {
+	const { createCartConfig } = jest.requireActual('@wcpos/order-math');
+	const config = createCartConfig({
+		rates: [{ id: 1, rate: '10.0000', compound: false, order: 1, class: 'standard' }],
+		allRates: [],
+		calcTaxes: true,
+		pricesIncludeTax: false,
+		taxRoundAtSubtotal: false,
+		dp: 2,
+		shippingTaxClass: '',
+		calcDiscountsSequentially: false,
+	});
+	return { useCartConfig: () => config };
+});
 
 // Mock useLineItemData
 jest.mock('./use-line-item-data', () => ({
@@ -429,13 +426,20 @@ describe('useUpdateLineItem', () => {
 							meta_data: expect.arrayContaining([expect.objectContaining({ value: uuid })]),
 							quantity: 7,
 							price: 10,
+							subtotal: '70',
+							total: '70',
 							subtotal_tax: '7',
 							total_tax: '7',
+							// Per-rate taxes are authored at the FIXED six-decimal contract width
+							// and keyed by the rate's numeric id. The stub this replaced emitted
+							// `'7'` and a string id — a narrower money value than the contract,
+							// which is exactly the shape that produced false divergence banners
+							// in woocommerce-pos#1548.
 							taxes: [
 								{
-									id: '1',
-									subtotal: '7',
-									total: '7',
+									id: 1,
+									subtotal: '7.000000',
+									total: '7.000000',
 								},
 							],
 						}),
@@ -463,14 +467,14 @@ describe('useUpdateLineItem', () => {
 						expect.objectContaining({
 							meta_data: expect.arrayContaining([expect.objectContaining({ value: uuid })]),
 							quantity: 1,
-							// Taxes should be calculated (values depend on mock implementation)
-							subtotal_tax: expect.any(String),
-							total_tax: expect.any(String),
-							taxes: expect.arrayContaining([
-								expect.objectContaining({
-									id: '1',
-								}),
-							]),
+							// The new price reaches pos_data and drives the recalculation: 20 at
+							// 10% is 2, and `regular_price` keeps its pre-edit value because the
+							// change did not name it.
+							price: 20,
+							total: '20',
+							subtotal_tax: '2',
+							total_tax: '2',
+							taxes: [{ id: 1, subtotal: '2.000000', total: '2.000000' }],
 						}),
 					]),
 				}),

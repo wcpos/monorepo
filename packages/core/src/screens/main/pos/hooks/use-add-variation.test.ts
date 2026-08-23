@@ -6,7 +6,6 @@ import { act, renderHook } from '@testing-library/react';
 import { useAddVariation } from './use-add-variation';
 
 const mockAddItemToOrder = jest.fn();
-const mockCalculateLineItemTaxesAndTotals = jest.fn((lineItem) => lineItem);
 const mockConvertVariationToLineItemWithoutTax = jest.fn();
 const mockFindByProductVariationID = jest.fn();
 const mockGetUuidFromLineItem = jest.fn();
@@ -80,11 +79,21 @@ jest.mock('./use-add-item-to-order', () => ({
 	useAddItemToOrder: () => ({ addItemToOrder: mockAddItemToOrder }),
 }));
 
-jest.mock('./use-calculate-line-item-tax-and-totals', () => ({
-	useCalculateLineItemTaxAndTotals: () => ({
-		calculateLineItemTaxesAndTotals: mockCalculateLineItemTaxesAndTotals,
-	}),
-}));
+// Only the store settings are stubbed; the tax maths runs for real.
+jest.mock('./use-cart-config', () => {
+	const { createCartConfig } = jest.requireActual('@wcpos/order-math');
+	const config = createCartConfig({
+		rates: [],
+		allRates: [],
+		calcTaxes: true,
+		pricesIncludeTax: false,
+		taxRoundAtSubtotal: false,
+		dp: 2,
+		shippingTaxClass: '',
+		calcDiscountsSequentially: false,
+	});
+	return { useCartConfig: () => config };
+});
 
 jest.mock('./use-update-line-item', () => ({
 	useUpdateLineItem: () => ({ incrementLineItem: mockIncrementLineItem }),
@@ -122,10 +131,19 @@ describe('useAddVariation', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockCurrentOrder = makeOrder(1, []);
-		mockCalculateLineItemTaxesAndTotals.mockImplementation((lineItem) => lineItem);
+		// The real converter always emits a quantity and the pos_data carrying the per-unit
+		// price; the engine reads both. Without them price derives from 0/undefined and the
+		// line reaches the order with NaN totals.
 		mockConvertVariationToLineItemWithoutTax.mockReturnValue({
 			product_id: parent.id,
 			variation_id: variation.id,
+			quantity: 1,
+			meta_data: [
+				{
+					key: '_woocommerce_pos_data',
+					value: { price: 5, regular_price: 5, tax_status: 'taxable' },
+				},
+			],
 		});
 		mockGetUuidFromLineItem.mockReturnValue('line-item-uuid');
 		mockIncrementLineItem.mockResolvedValue(true);
@@ -176,10 +194,19 @@ describe('useAddVariation', () => {
 			variation.id
 		);
 		expect(mockIncrementLineItem).not.toHaveBeenCalled();
-		expect(mockAddItemToOrder).toHaveBeenCalledWith('line_items', {
-			product_id: parent.id,
-			variation_id: variation.id,
-		});
+		// The converted line reaches the order with its totals already derived — 1 x 5, no
+		// rates configured — rather than as the bare converter output.
+		expect(mockAddItemToOrder).toHaveBeenCalledWith(
+			'line_items',
+			expect.objectContaining({
+				product_id: parent.id,
+				variation_id: variation.id,
+				quantity: 1,
+				price: 5,
+				total: '5',
+				subtotal: '5',
+			})
+		);
 	});
 
 	it('reports a falsy add result with the cashier toast', async () => {

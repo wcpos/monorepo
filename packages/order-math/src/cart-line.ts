@@ -37,7 +37,14 @@ type Tax = { id: number; total: number };
 
 // ===== public types (SPEC §3) =====
 
-export interface LineItemChanges {
+/**
+ * Extends `Partial<LineItemInput>` for the same passthrough reason the fee and shipping
+ * shapes do — the line-item edit form submits the whole line, `meta_data` included.
+ *
+ * `name` and `sku` are declared explicitly because `LineItemInput` does not model them:
+ * the engine never reads either, they only ride through the merge.
+ */
+export interface LineItemChanges extends Partial<LineItemInput> {
 	quantity?: number;
 	price?: number;
 	regular_price?: number;
@@ -45,6 +52,15 @@ export interface LineItemChanges {
 	tax_class?: string;
 	name?: string;
 	sku?: string;
+	/**
+	 * Misc-product (product_id 0) pos_data fields. `convertProductToLineItem` writes them
+	 * at creation and the edit form round-trips them, so a changes-merge that dropped them
+	 * would silently strip a misc product's flags on every unrelated line edit. Written
+	 * only when present — see `applyLineItemChanges`.
+	 */
+	virtual?: boolean;
+	downloadable?: boolean;
+	categories?: { id: number; name: string }[];
 }
 
 /**
@@ -121,11 +137,17 @@ function detectMalformedPosData(
 // ===== changes merges (ports of the use-update-* hooks' merge blocks) =====
 
 /**
- * Port of the changes-merge block in `useUpdateLineItem` (use-update-line-item.ts):
+ * THE changes-merge for line items — `useUpdateLineItem` calls this rather than carrying
+ * its own copy (the block it was ported from is deleted):
  * `price`/`regular_price`/`tax_status` go into `_woocommerce_pos_data` with
- * `?? prev` fallbacks; everything else merges top-level. The hook's optional
- * `virtual`/`downloadable`/`categories` posData passthroughs have no equivalent
- * in `LineItemChanges`, so they drop out.
+ * `?? prev` fallbacks; everything else merges top-level.
+ *
+ * `virtual`/`downloadable`/`categories` are the misc-product pos_data fields, and they
+ * follow the hook's rule exactly: written only when the caller supplied them. They take
+ * NO `?? prev` fallback, because `extractLineItemData` does not surface them — an absent
+ * key must leave whatever pos_data already holds untouched, and `updatePosDataMeta`
+ * merges over the existing value, so omitting the key is what preserves it. Spreading
+ * `virtual: undefined` instead would overwrite a real flag with undefined.
  */
 function applyLineItemChanges(
 	line: LineItemInput,
@@ -136,7 +158,7 @@ function applyLineItemChanges(
 	const prevData = extractLineItemData(line as DbLineItem, config.pricesIncludeTax);
 
 	// extract the meta_data from the changes
-	const { price, regular_price, tax_status, ...rest } = changes;
+	const { price, regular_price, tax_status, virtual, downloadable, categories, ...rest } = changes;
 
 	// merge the previous line data with the rest of the changes
 	const updatedItem = { ...line, ...rest };
@@ -145,11 +167,15 @@ function applyLineItemChanges(
 		price: price ?? prevData.price,
 		regular_price: regular_price ?? prevData.regular_price,
 		tax_status: tax_status ?? prevData.tax_status,
+		...(virtual !== undefined && { virtual }),
+		...(downloadable !== undefined && { downloadable }),
+		...(categories !== undefined && { categories }),
 	});
 }
 
 /**
- * Port of the changes-merge block in `useUpdateFeeLine` (use-update-fee-line.ts):
+ * THE changes-merge for fee lines — `useUpdateFeeLine` calls this rather than carrying its
+ * own copy (the block it was ported from is deleted):
  * `amount`/`percent`/`prices_include_tax`/`percent_of_cart_total_with_tax` go into
  * `_woocommerce_pos_data` with `?? prev` fallbacks; everything else (name,
  * tax_status, tax_class, ...) merges top-level.
@@ -178,7 +204,8 @@ function applyFeeLineChanges(
 }
 
 /**
- * Port of the changes-merge block in `useUpdateShippingLine` (use-update-shipping-line.ts):
+ * THE changes-merge for shipping lines — `useUpdateShippingLine` calls this rather than
+ * carrying its own copy (the block it was ported from is deleted):
  * `amount`/`prices_include_tax`/`tax_class`/`tax_status` go into
  * `_woocommerce_pos_data` with `?? prev` fallbacks; everything else
  * (method_title, method_id, ...) merges top-level.
@@ -217,7 +244,7 @@ function applyShippingLineChanges(
  * When roundAtSubtotal=false, each per-rate tax is rounded to dp before output.
  * When roundAtSubtotal=true, taxes are left at full precision (deferred to order totals).
  *
- * Moved verbatim from use-calculate-line-item-tax-and-totals.ts.
+ * Moved verbatim from use-calculate-line-item-tax-and-totals.ts, which is now deleted.
  */
 const consolidateTaxes = (
 	subtotalTaxes: { taxes: Tax[] },
@@ -254,7 +281,10 @@ const consolidateTaxes = (
 };
 
 /**
- * Port of `calculateLineItemTaxesAndTotals` (use-calculate-line-item-tax-and-totals.ts).
+ * The line-item tax maths. Began as a port of `calculateLineItemTaxesAndTotals`
+ * (use-calculate-line-item-tax-and-totals.ts); that hook was deleted once its four call
+ * sites came through here, so this is now the only copy — do not reintroduce a second one
+ * in `packages/core`.
  */
 function computeLineItem(lineItem: LineItemInput, config: CartConfig): LineItemInput {
 	const { pricesIncludeTax, taxRoundAtSubtotal } = config;
@@ -375,7 +405,10 @@ function calculatePercentAmount(
 }
 
 /**
- * Port of `calculateFeeLineTaxesAndTotals` (use-calculate-fee-line-tax-and-totals.ts).
+ * The fee-line tax maths. Began as a port of `calculateFeeLineTaxesAndTotals`
+ * (use-calculate-fee-line-tax-and-totals.ts); that hook was deleted once `useAddFee` and
+ * `useUpdateFeeLine` came through here, so this is now the only copy — do not reintroduce
+ * a second one in `packages/core`.
  */
 function computeFeeLine(
 	feeLine: FeeLineInput,

@@ -6,7 +6,6 @@ import { act, renderHook } from '@testing-library/react';
 import { useAddProduct } from './use-add-product';
 
 const mockAddItemToOrder = jest.fn();
-const mockCalculateLineItemTaxesAndTotals = jest.fn((lineItem) => lineItem);
 const mockConvertProductToLineItemWithoutTax = jest.fn();
 const mockFindByProductVariationID = jest.fn();
 const mockGetUuidFromLineItem = jest.fn();
@@ -62,7 +61,11 @@ jest.mock('@wcpos/utils/logger/generated/error-codes.generated', () => ({
 	ERROR_CODES: { CART_UPDATE_FAILED: 'CART_UPDATE_FAILED' },
 }));
 
+// Spread the real module: @wcpos/order-math reads POS_META_KEYS from it, and this hook
+// now calls into the engine, so a mock listing only what the hook itself uses leaves the
+// engine reading `undefined.posData`.
 jest.mock('@wcpos/sync-core', () => ({
+	...jest.requireActual('@wcpos/sync-core'),
 	MISC_PRODUCT_ID: 0,
 	wooIdOf: (remoteId: string) => Number(remoteId),
 }));
@@ -86,11 +89,21 @@ jest.mock('./use-add-item-to-order', () => ({
 	useAddItemToOrder: () => ({ addItemToOrder: mockAddItemToOrder }),
 }));
 
-jest.mock('./use-calculate-line-item-tax-and-totals', () => ({
-	useCalculateLineItemTaxAndTotals: () => ({
-		calculateLineItemTaxesAndTotals: mockCalculateLineItemTaxesAndTotals,
-	}),
-}));
+// Only the store settings are stubbed; the tax maths runs for real.
+jest.mock('./use-cart-config', () => {
+	const { createCartConfig } = jest.requireActual('@wcpos/order-math');
+	const config = createCartConfig({
+		rates: [],
+		allRates: [],
+		calcTaxes: true,
+		pricesIncludeTax: false,
+		taxRoundAtSubtotal: false,
+		dp: 2,
+		shippingTaxClass: '',
+		calcDiscountsSequentially: false,
+	});
+	return { useCartConfig: () => config };
+});
 
 jest.mock('./use-update-line-item', () => ({
 	useUpdateLineItem: () => ({ incrementLineItem: mockIncrementLineItem }),
@@ -125,8 +138,19 @@ describe('useAddProduct', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockCurrentOrder = makeOrder(1, []);
-		mockCalculateLineItemTaxesAndTotals.mockImplementation((lineItem) => lineItem);
-		mockConvertProductToLineItemWithoutTax.mockReturnValue({ product_id: 101 });
+		// The real converter always emits a quantity and the pos_data carrying the per-unit
+		// price; the engine reads both. Without them price derives from 0/undefined and the
+		// line reaches the order with NaN totals.
+		mockConvertProductToLineItemWithoutTax.mockReturnValue({
+			product_id: 101,
+			quantity: 1,
+			meta_data: [
+				{
+					key: '_woocommerce_pos_data',
+					value: { price: 5, regular_price: 5, tax_status: 'taxable' },
+				},
+			],
+		});
 		mockFindByProductVariationID.mockReturnValue(null);
 		mockAddItemToOrder.mockResolvedValue(true);
 	});
@@ -142,7 +166,18 @@ describe('useAddProduct', () => {
 		});
 
 		expect(added).toBe(true);
-		expect(mockAddItemToOrder).toHaveBeenCalledWith('line_items', { product_id: 101 });
+		// The converted line reaches the order with its totals already derived — 1 x 5, no
+		// rates configured — rather than as the bare converter output.
+		expect(mockAddItemToOrder).toHaveBeenCalledWith(
+			'line_items',
+			expect.objectContaining({
+				product_id: 101,
+				quantity: 1,
+				price: 5,
+				total: '5',
+				subtotal: '5',
+			})
+		);
 	});
 
 	it('refuses a misfiled variation-typed products document instead of writing a malformed line', async () => {

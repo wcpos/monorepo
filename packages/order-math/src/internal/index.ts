@@ -32,19 +32,22 @@
  *     `pos/hooks/coupon-rejection-message` — coupon application and its typed
  *     rejections.
  *
- * Going away — the per-line tax hooks, `use-calculate-line-item-tax-and-totals`
- * and its fee and shipping siblings. They are a SECOND implementation of the
- * maths in `cart-line.ts`, which says as much in its own header ("Port of
- * calculateLineItemTaxesAndTotals"); the two `consolidateTaxes` functions are
- * logically identical. Two copies of WooCommerce's line-tax rounding is a live
- * correctness liability — the woocommerce-pos#1548 `toFixed(6)` fix had to be
- * applied to both, and the note explaining it survives in only one. Retiring
- * them onto the public `calculateCartLine` is the remaining work, tracked
- * separately from #1472.
+ * GONE — the per-line tax hooks. `use-calculate-line-item-tax-and-totals` and its
+ * fee and shipping siblings were a SECOND implementation of the maths in
+ * `cart-line.ts`; all three are deleted and their eight call sites go through the
+ * public `calculateCartLine` (#1512, #1513, #1514). There is one copy of
+ * WooCommerce's line-tax rounding now, and `cart-line.ts` says so in the headers
+ * of each compute body. **Do not reintroduce a second one in `packages/core`** —
+ * that duplication is what made the woocommerce-pos#1548 `toFixed(6)` fix need
+ * applying twice, with the note explaining it surviving in only one copy.
  *
- * If you are here to delete exports: check this inventory first. Only the last
- * group's needs (`getRoundingPrecision`, `roundHalfUp`, `roundTaxTotal`) become
- * removable, and only once those hooks are gone.
+ * Their removal took `getRoundingPrecision` and `roundTaxTotal` out of
+ * `packages/core` entirely. Both are still exported here and still used INSIDE
+ * this package; `roundHalfUp` also keeps a core consumer in
+ * `orders/refund/calculate-refund`.
+ *
+ * If you are here to delete exports: check the inventory above. Every group left
+ * in it is permanent — nothing here is now waiting on a migration.
  */
 export * from './money/precision';
 export * from './money/calculate-taxes';

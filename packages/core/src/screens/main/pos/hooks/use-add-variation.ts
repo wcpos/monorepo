@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { calculateCartLine } from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
 import type { EngineRecord } from '@wcpos/query';
 import { wooIdOf } from '@wcpos/sync-core';
@@ -7,7 +8,7 @@ import { useDocField } from '@wcpos/query';
 
 import { reportCartFailure } from './cart-failure';
 import { useAddItemToOrder } from './use-add-item-to-order';
-import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
+import { useCartConfig } from './use-cart-config';
 import { useUpdateLineItem } from './use-update-line-item';
 import {
 	convertVariationToLineItemWithoutTax,
@@ -38,7 +39,7 @@ export const useAddVariation = () => {
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
 	const metaDataKeys = useDocField(uiSettings, (value) => value.metaDataKeys);
-	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
+	const cartConfig = useCartConfig();
 
 	/**
 	 *
@@ -82,7 +83,8 @@ export const useAddVariation = () => {
 			if (!success) {
 				const keys = metaDataKeys ? metaDataKeys.split(',') : [];
 				let newLineItem = convertVariationToLineItemWithoutTax(variation, parent, metaData, keys);
-				newLineItem = calculateLineItemTaxesAndTotals(newLineItem);
+				newLineItem = calculateCartLine({ kind: 'line_item', line: newLineItem }, cartConfig)
+					.line as typeof newLineItem;
 				success = await addItemToOrder('line_items', newLineItem);
 				if (success === false) return false;
 			}
@@ -113,14 +115,7 @@ export const useAddVariation = () => {
 				return false;
 			}
 		},
-		[
-			getCurrentOrderRecord,
-			incrementLineItem,
-			metaDataKeys,
-			calculateLineItemTaxesAndTotals,
-			addItemToOrder,
-			t,
-		]
+		[getCurrentOrderRecord, incrementLineItem, metaDataKeys, cartConfig, addItemToOrder, t]
 	);
 
 	return { addVariation };

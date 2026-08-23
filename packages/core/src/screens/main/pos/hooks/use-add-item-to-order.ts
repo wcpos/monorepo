@@ -2,10 +2,11 @@ import * as React from 'react';
 
 import { v4 as uuidv4 } from 'uuid';
 
+import { calculateCartLine } from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useQueryRuntime } from '@wcpos/query';
 import { isMiscProductLine, MISC_PRODUCT_ID, wooMetaCarrier } from '@wcpos/sync-core';
 
-import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
+import { useCartConfig } from './use-cart-config';
 import { useCartStockGuard } from './use-cart-stock-guard';
 import { enqueueOrderMutation } from './order-mutation-queue';
 import { ensurePosOrderIdentityMeta, findByProductVariationID } from './utils';
@@ -73,7 +74,7 @@ export const useAddItemToOrder = () => {
 	const runtime = useQueryRuntime();
 	const { localPatch } = useLocalMutation();
 	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
-	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
+	const cartConfig = useCartConfig();
 	const { store, wpCredentials } = useStoreSession();
 	const taxBasedOn = useDocField(store, (value) => value.tax_based_on) as string | undefined;
 	const identity = React.useMemo(
@@ -111,13 +112,16 @@ export const useAddItemToOrder = () => {
 			);
 			if (!matches || matches.length !== 1) return [...existing, data];
 			const match = matches[0];
-			const merged = calculateLineItemTaxesAndTotals({
-				...match,
-				quantity: (match.quantity ?? 0) + (lineItem.quantity ?? 1),
-			}) as LineItem;
-			return (existing as LineItem[]).map((item) => (item === match ? merged : item));
+			const { line: merged } = calculateCartLine(
+				{
+					kind: 'line_item',
+					line: { ...match, quantity: (match.quantity ?? 0) + (lineItem.quantity ?? 1) },
+				},
+				cartConfig
+			);
+			return (existing as LineItem[]).map((item) => (item === match ? (merged as LineItem) : item));
 		},
-		[calculateLineItemTaxesAndTotals]
+		[cartConfig]
 	);
 
 	/**

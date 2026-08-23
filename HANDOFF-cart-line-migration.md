@@ -57,7 +57,7 @@ rare, so two copies of this maths quietly undermine the decision we just shipped
 
 | hook | LOC |
 |---|---|
-| `packages/core/src/screens/main/pos/hooks/use-calculate-line-item-tax-and-totals.ts` | 155 |
+| ~~`packages/core/src/screens/main/pos/hooks/use-calculate-line-item-tax-and-totals.ts`~~ | ~~155~~ — **DONE**, stage 3 |
 | ~~`packages/core/src/screens/main/pos/hooks/use-calculate-fee-line-tax-and-totals.ts`~~ | ~~108~~ — **DONE**, stage 2 |
 | ~~`packages/core/src/screens/main/pos/hooks/use-calculate-shipping-line-tax-and-totals.ts`~~ | ~~69~~ — **DONE**, stage 1 |
 
@@ -136,8 +136,18 @@ Each stage is its own PR with its own live E2E run. **Do not big-bang this.**
      sites the same way — the spec's shapes were written from the spec, not from the callers.
    - Folded in a real bug found on the way: `edit-fee-line/form.tsx` rendered `<MetaDataForm/>`
      and seeded it, then dropped `meta_data` on save. The sibling shipping form always sent it.
-3. **Line item** (155 LOC, 4 call sites). Hottest path in the app — every product, variation
-   and quantity change.
+3. ~~**Line item**~~ — **DONE**, stage 3. All three hooks are now gone. Two things it found:
+   - `LineItemChanges` was missing `virtual`/`downloadable`/`categories`, and
+     `applyLineItemChanges` had a header SAYING they drop out. `edit-line-item/form.tsx`
+     submits all three on every save — porting naively would have stripped a misc product's
+     flags on every line edit. The engine now writes them, conditionally (no `?? prev`
+     fallback: an absent key must leave pos_data alone).
+   - The unit fixtures for the four call sites were passing against a stub that read a
+     top-level `price` field. **The shipped code has never done that** — per-unit price comes
+     from pos_data, or is derived from the line's totals. Those suites now run the real engine
+     and their fixtures carry pos_data, as production lines always do. One assertion had also
+     pinned `taxes: [{id: '1', total: '7'}]`; the real contract is `{id: 1, total: '7.000000'}`
+     — the 6dp fixed width from woocommerce-pos#1548.
 
 4. **Widen the differential harness, then retire the oracle.** Port compound rates, `dp: 0`,
    `taxRoundAtSubtotal: true` and tombstoned lines into
@@ -148,9 +158,14 @@ Each stage is its own PR with its own live E2E run. **Do not big-bang this.**
    **Take the compound fixture from `internal/coupons/compound-tax-priority.test.ts`, not from
    the oracle's case 4** — see the correction in §8.2 for why.
 
-After stage 3, delete `getRoundingPrecision` / `roundHalfUp` / `roundTaxTotal` from the core
-import surface if nothing else needs them, and re-check what still imports
-`@wcpos/order-math/internal` (18 files today; §7 lists the three that stay by design).
+~~After stage 3, delete `getRoundingPrecision` / `roundHalfUp` / `roundTaxTotal` from the core
+import surface~~ — **checked, nothing to delete.** The three hooks were the only `packages/core`
+consumers of `getRoundingPrecision` and `roundTaxTotal`, and those imports left with them; core
+never re-exported any of the three from its own barrel, so there is no core surface to prune.
+`roundHalfUp` keeps one legitimate core consumer, `orders/refund/calculate-refund`. All three
+stay exported from `/internal` and are still used inside the package. The `/internal` header's
+inventory was re-checked and its "going away" section rewritten — every group left in it is
+permanent.
 
 ---
 
