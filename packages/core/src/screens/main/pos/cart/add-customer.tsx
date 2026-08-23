@@ -67,8 +67,12 @@ export function AddNewCustomer() {
 			try {
 				const savedDoc = await create({ data, awaitRemoteId: true });
 				if (savedDoc) {
-					// create() returns the raw engine record — the customer body is its payload.
-					const saved = (savedDoc as any).getLatest?.().payload ?? (savedDoc as any).payload;
+					// create() returns the raw engine record — the customer body is its
+					// payload. Snapshot it rather than reading fields off the record:
+					// `billing`/`shipping` come back as RxDB Proxies, and writing one onto
+					// the order below would fail the storage clone.
+					const latest = (savedDoc as any).getLatest?.() ?? savedDoc;
+					const saved = ((latest as any).toMutableJSON?.() ?? latest).payload;
 					cartLogger.success(t('common.saved', { name: format(saved) }), {
 						showToast: true,
 						context: {
@@ -168,8 +172,12 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
 			try {
 				const savedDoc = await create({ data, awaitRemoteId: true });
 				if (savedDoc) {
-					// create() returns the raw engine record — the customer body is its payload.
-					const saved = (savedDoc as any).getLatest?.().payload ?? (savedDoc as any).payload;
+					// create() returns the raw engine record — the customer body is its
+					// payload. Snapshot it rather than reading fields off the record:
+					// `billing`/`shipping` come back as RxDB Proxies, and writing one onto
+					// the order below would fail the storage clone.
+					const latest = (savedDoc as any).getLatest?.() ?? savedDoc;
+					const saved = ((latest as any).toMutableJSON?.() ?? latest).payload;
 					cartLogger.success(t('common.saved', { name: format(saved) }), {
 						showToast: true,
 						context: {

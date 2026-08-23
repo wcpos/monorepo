@@ -7,7 +7,12 @@ import {
 	navigateToPage,
 	authenticatedTest as test,
 } from './fixtures';
-import { createSearchProbe, deleteSearchProbe, searchAndWaitForServer } from './search-probe';
+import {
+	createSearchProbe,
+	deleteSearchProbe,
+	mintSearchProbeToken,
+	searchAndWaitForServer,
+} from './search-probe';
 
 async function openAddCartItemsMenu(page: Page) {
 	const menuButton = page.getByTestId('add-cart-item-menu');
@@ -58,6 +63,49 @@ test.describe('Add Customer from Cart (Pro)', () => {
 		await addCustomerMenuItem.click();
 
 		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 });
+	});
+
+	/**
+	 * The one test in this file that actually SUBMITS. Everything above stops at
+	 * "the dialog opened", which is why a create that died in the storage layer
+	 * shipped unnoticed: `use-mutation` sourced its payload from
+	 * `RxDocument.get('payload')`, an RxDB **Proxy**, and on web the storage lives
+	 * in a Worker — so the enqueue failed the structured clone with
+	 * "#<Object> could not be cloned" on every attempt, online or offline.
+	 *
+	 * Store-agnostic: the customer is minted here with a probe token and asserted
+	 * on by that token, never against anything the store is assumed to hold. The
+	 * record is left behind by design (unique per run, invisible to later runs);
+	 * cleanup would need customer-delete credentials this spec does not claim.
+	 */
+	test('should create a customer from the cart and attach it to the order', async ({
+		posPage: page,
+	}, testInfo) => {
+		const probe = mintSearchProbeToken(testInfo.workerIndex);
+
+		await openAddCartItemsMenu(page);
+		const addCustomerMenuItem = page.getByTestId('menu-add-customer');
+		await expect(addCustomerMenuItem).toBeEnabled({ timeout: 10_000 });
+		await addCustomerMenuItem.click();
+
+		const dialog = page.getByTestId('add-customer-dialog');
+		await expect(dialog).toBeVisible({ timeout: 10_000 });
+
+		await dialog.getByTestId('customer-first-name-input').fill(probe);
+		await dialog.getByTestId('customer-last-name-input').fill('Probe');
+		await dialog.getByTestId('customer-email-input').fill(`${probe}@example.com`);
+		await dialog.getByTestId('customer-form-save').click();
+
+		// The cart path awaits the Woo id before attaching the customer to the
+		// order, so the dialog closing IS the server round trip having completed —
+		// enqueue, push, ack, rematerialize. A failed create leaves it open.
+		await expect(dialog).toBeHidden({ timeout: 30_000 });
+
+		// Read the pill addressed by testID; the probe token is the referent, not
+		// the surrounding formatted name.
+		await expect(page.getByTestId('cart-customer-name')).toContainText(probe, {
+			timeout: 15_000,
+		});
 	});
 
 	test('should show customer form fields in dialog', async ({ posPage: page }) => {

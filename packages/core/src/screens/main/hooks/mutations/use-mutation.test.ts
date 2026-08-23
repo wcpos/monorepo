@@ -1,6 +1,8 @@
 /**
  * @jest-environment jsdom
  */
+import { serialize as structuredSerialize } from 'node:v8';
+
 import { act, renderHook } from '@testing-library/react';
 
 import type { EngineRecord } from '@wcpos/query';
@@ -53,6 +55,26 @@ jest.mock('../use-collection', () => ({
 	useCollection: () => ({ collectionLabel: 'Order' }),
 }));
 
+/**
+ * A faithful RxDocument stand-in for the create path.
+ *
+ * RxDB hands back a **Proxy** from `RxDocument.get()` for object-valued paths
+ * (`getDocumentProperty`), and a Proxy cannot be structured-cloned — so a
+ * payload sourced that way dies at the `postMessage` into the storage worker
+ * with "#<Object> could not be cloned". These stubs proxy `get('payload')` the
+ * same way, so a regression back to `.get()` fails here instead of in a
+ * browser.
+ */
+function residentStub(payload: Record<string, unknown>, fields: Record<string, unknown> = {}) {
+	const proxied = new Proxy({ ...payload }, {});
+	return {
+		payload,
+		get: (field: string) => (field === 'payload' ? proxied : fields[field]),
+		toMutableJSON: () => JSON.parse(JSON.stringify({ payload })) as { payload: unknown },
+		remove: jest.fn().mockResolvedValue(undefined),
+	};
+}
+
 describe('useMutation', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
@@ -64,7 +86,7 @@ describe('useMutation', () => {
 	it('removes a born-local resident when its create intent cannot be enqueued', async () => {
 		const remove = jest.fn().mockResolvedValue(undefined);
 		mockInsertEngineResident.mockResolvedValue({
-			get: () => ({ status: 'pending' }),
+			...residentStub({ status: 'pending' }),
 			remove,
 		});
 		mockWrite.mockRejectedValue(new Error('queue unavailable'));
@@ -78,14 +100,8 @@ describe('useMutation', () => {
 	it('compensates and retries a born-local insert once when the active scope changes', async () => {
 		let activeScopeId = 'scope-1';
 		mockStatus.mockImplementation(() => ({ activeScopeId }));
-		const first = {
-			get: () => ({ status: 'pending' }),
-			remove: jest.fn().mockResolvedValue(undefined),
-		};
-		const second = {
-			get: () => ({ status: 'pending' }),
-			remove: jest.fn().mockResolvedValue(undefined),
-		};
+		const first = residentStub({ status: 'pending' });
+		const second = residentStub({ status: 'pending' });
 		mockInsertEngineResident.mockResolvedValueOnce(first).mockResolvedValueOnce(second);
 		mockWrite
 			.mockImplementationOnce(async () => {
@@ -106,14 +122,8 @@ describe('useMutation', () => {
 	it('compensates and throws when a born-local insert crosses scopes twice', async () => {
 		let activeScopeId = 'scope-1';
 		mockStatus.mockImplementation(() => ({ activeScopeId }));
-		const first = {
-			get: () => ({ status: 'pending' }),
-			remove: jest.fn().mockResolvedValue(undefined),
-		};
-		const second = {
-			get: () => ({ status: 'pending' }),
-			remove: jest.fn().mockResolvedValue(undefined),
-		};
+		const first = residentStub({ status: 'pending' });
+		const second = residentStub({ status: 'pending' });
 		mockInsertEngineResident.mockResolvedValueOnce(first).mockResolvedValueOnce(second);
 		mockWrite
 			.mockImplementationOnce(async () => {
@@ -136,20 +146,8 @@ describe('useMutation', () => {
 	});
 
 	it('awaits a customer create outcome and returns the rematerialized Woo id on request', async () => {
-		const initial = {
-			get: (field: string) =>
-				field === 'payload' ? { first_name: 'Ada' } : field === 'remoteId' ? null : undefined,
-			remove: jest.fn().mockResolvedValue(undefined),
-		};
-		const refreshed = {
-			payload: { id: 321, first_name: 'Ada' },
-			get: (field: string) =>
-				field === 'payload'
-					? { id: 321, first_name: 'Ada' }
-					: field === 'remoteId'
-						? '321'
-						: undefined,
-		};
+		const initial = residentStub({ first_name: 'Ada' }, { remoteId: null });
+		const refreshed = residentStub({ id: 321, first_name: 'Ada' }, { remoteId: '321' });
 		mockInsertEngineResident.mockResolvedValue(initial);
 		mockFindEngineResident.mockResolvedValue(refreshed);
 		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
@@ -174,10 +172,7 @@ describe('useMutation', () => {
 	});
 
 	it('does not mark a create explicit when no remote id is awaited', async () => {
-		mockInsertEngineResident.mockResolvedValue({
-			get: () => ({ status: 'pos-open' }),
-			remove: jest.fn().mockResolvedValue(undefined),
-		});
+		mockInsertEngineResident.mockResolvedValue(residentStub({ status: 'pos-open' }));
 		const { result } = renderHook(() => useMutation({ collectionName: 'orders' }));
 
 		await act(() => result.current.create({ data: { status: 'pos-open' } }));
@@ -229,11 +224,32 @@ describe('useMutation', () => {
 		);
 	});
 
+	it('hands the engine a structured-cloneable customer payload', async () => {
+		// The web storage lives in a Worker and Electron's behind ipcRenderer, so the
+		// enqueued payload crosses `postMessage`. Sourcing it from `resident.get()`
+		// hands over an RxDB Proxy, which fails the write with
+		// "#<Object> could not be cloned" — customers have no rewriting outbound
+		// sanitizer to launder it away, so the create simply dies.
+		mockInsertEngineResident.mockResolvedValue(
+			residentStub({ first_name: 'Ada', billing: { email: 'ada@example.com' } })
+		);
+		const { result } = renderHook(() => useMutation({ collectionName: 'customers' }));
+
+		await act(() =>
+			result.current.create({
+				data: { first_name: 'Ada', billing: { email: 'ada@example.com' } },
+			})
+		);
+
+		const { payload } = mockWrite.mock.calls[0][0] as { payload: Record<string, unknown> };
+		// jsdom omits `structuredClone`; `v8.serialize` runs the same algorithm the
+		// storage worker's `postMessage` does, and raises the same DataCloneError.
+		expect(() => structuredSerialize(payload)).not.toThrow();
+		expect(payload).toEqual({ first_name: 'Ada', billing: { email: 'ada@example.com' } });
+	});
+
 	it('throws without removing the resident when an awaited customer create is rejected', async () => {
-		const resident = {
-			get: () => ({ first_name: 'Ada' }),
-			remove: jest.fn().mockResolvedValue(undefined),
-		};
+		const resident = residentStub({ first_name: 'Ada' });
 		mockInsertEngineResident.mockResolvedValue(resident);
 		mockAwaitWriteOutcome.mockRejectedValueOnce(
 			new Error('write-rejected for mutation "mutation-1"')

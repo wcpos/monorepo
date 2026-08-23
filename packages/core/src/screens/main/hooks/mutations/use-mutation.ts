@@ -146,7 +146,14 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 						recordId,
 						payload,
 					});
-					const residentPayload = resident.get('payload') as Record<string, unknown>;
+					// `toMutableJSON()`, never `resident.get('payload')`: RxDB hands back a
+					// *Proxy* for object-valued paths, and a Proxy cannot be structured-cloned
+					// into the storage worker — the enqueue dies with "#<Object> could not be
+					// cloned". See `residentPayload` in write-intents for the seam that now
+					// backstops this.
+					const { payload: residentPayload } = resident.toMutableJSON() as {
+						payload: Record<string, unknown>;
+					};
 					let writeError: unknown;
 					try {
 						receipt = await runtime.engine.write({

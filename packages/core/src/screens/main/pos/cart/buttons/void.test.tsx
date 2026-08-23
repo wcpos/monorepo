@@ -127,7 +127,11 @@ describe('VoidButton', () => {
 		mockConnectivity = 'online';
 		mockFindEngineResident.mockResolvedValue({});
 		mockPatchEngineResident.mockResolvedValue({
-			get: () => ({ status: 'pos-open' }),
+			// RxDB returns a *Proxy* from `get()` for object-valued paths, and a Proxy
+			// cannot be structured-cloned into the storage worker — the restore must
+			// take its payload from `toMutableJSON()`.
+			get: () => new Proxy({ status: 'pos-open' }, {}),
+			toMutableJSON: () => ({ payload: { status: 'pos-open' } }),
 		});
 		mockPatchAndEnqueueEngineResident.mockResolvedValue(undefined);
 	});
