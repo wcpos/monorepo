@@ -39,19 +39,22 @@ export function redactSensitiveFields(obj: any): any {
 		return obj.map((item) => redactSensitiveFields(item));
 	}
 
-	const result: Record<string, any> = {};
-	for (const key of Object.keys(obj)) {
-		const value = obj[key];
-		const normalizedKey = key.replace(/[^a-z0-9]/gi, '').toLowerCase();
-		if (SENSITIVE_KEYS.has(normalizedKey) && typeof value === 'string') {
-			result[key] = maskValue(value);
-		} else if (typeof value === 'string') {
-			result[key] = redactSensitiveText(value);
-		} else if (typeof value === 'object' && value !== null) {
-			result[key] = redactSensitiveFields(value);
-		} else {
-			result[key] = value;
-		}
-	}
-	return result;
+	// `Object.fromEntries`, not `result[key] = …`: the keys here come from arbitrary
+	// logged data, payloads included, and a Woo payload key can be spelled
+	// `__proto__` (stored payloads are `additionalProperties: true`). Plain
+	// assignment would run Object.prototype's setter — dropping the field from the
+	// log and re-parenting the result — which loses a field at exactly the moment
+	// someone is reading logs to find it.
+	return Object.fromEntries(
+		Object.keys(obj).map((key) => {
+			const value = obj[key];
+			const normalizedKey = key.replace(/[^a-z0-9]/gi, '').toLowerCase();
+			if (SENSITIVE_KEYS.has(normalizedKey) && typeof value === 'string') {
+				return [key, maskValue(value)];
+			}
+			if (typeof value === 'string') return [key, redactSensitiveText(value)];
+			if (typeof value === 'object' && value !== null) return [key, redactSensitiveFields(value)];
+			return [key, value];
+		})
+	);
 }

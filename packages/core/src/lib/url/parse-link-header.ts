@@ -40,13 +40,12 @@ function parseLink(link: string): Record<string, string> | null {
 		if (!m) return null;
 		const linkUrl = m[1];
 		const parts = m[2].split(';');
-		const qry: Record<string, string> = {};
 		// The origin is unused but it's required to parse relative URLs
 		const url = new URL(linkUrl, 'https://example.com');
-
-		for (const [key, value] of url.searchParams) {
-			qry[key] = value;
-		}
+		// `Object.fromEntries`, not `qry[key] = value`: these keys come off the wire
+		// (a server's Link header), so one spelled `__proto__` would run
+		// Object.prototype's setter and re-parent the object instead of storing data.
+		const qry: Record<string, string> = Object.fromEntries(url.searchParams);
 
 		parts.shift();
 

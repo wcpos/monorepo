@@ -7,6 +7,20 @@ describe('redactSensitiveFields', () => {
 		expect(result.access_token).toBe('eyJhbG...bcdef');
 	});
 
+	it('keeps an own `__proto__` key as ordinary data', () => {
+		// Stored payloads are `additionalProperties: true`, so a Woo key spelled
+		// `__proto__` reaches the logger as OWN data. Building the redacted copy with
+		// `result[key] = …` would run Object.prototype's setter, dropping the field
+		// from the log and re-parenting the result.
+		const input = JSON.parse('{"__proto__":{"note":"data"},"kept":"value"}');
+		const result = redactSensitiveFields(input);
+
+		expect(Object.prototype.hasOwnProperty.call(result, '__proto__')).toBe(true);
+		expect(result['__proto__']).toEqual({ note: 'data' });
+		expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+		expect(result.kept).toBe('value');
+	});
+
 	it('should redact refresh_token at top level', () => {
 		const input = { refresh_token: 'abc123def456ghi789' };
 		const result = redactSensitiveFields(input);

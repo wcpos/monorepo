@@ -116,6 +116,25 @@ async function enqueueCatalogPayload(
 }
 
 describe('enqueueWriteIntent', () => {
+	it('carries an own `__proto__` payload key through as ordinary data', async () => {
+		// `sanitize_key` keeps `_`, so a Woo payload key literally spelled `__proto__`
+		// survives parsing and reaches the queue — JSON.parse mints it as an OWN data
+		// property. The same case `filterPayloadFields` guards in fakePullServer:
+		// rebuilding the payload with `plain[key] = …` would run Object.prototype's
+		// setter, silently dropping the field and re-parenting the object.
+		const payload = await enqueueCatalogPayload(
+			'customers',
+			JSON.parse('{"first_name":"Ada","__proto__":{"polluted":"yes"}}') as Record<string, unknown>
+		);
+
+		expect(Object.prototype.hasOwnProperty.call(payload, '__proto__')).toBe(true);
+		expect((payload as Record<string, unknown>)['__proto__']).toEqual({ polluted: 'yes' });
+		// The accumulator itself must not have been re-parented, and the row must
+		// still survive the storage clone.
+		expect(Object.getPrototypeOf(payload)).toBe(Object.prototype);
+		expect(() => structuredSerialize(payload)).not.toThrow();
+	});
+
 	it('stores a plain payload even when the caller hands over an RxDB proxy', async () => {
 		// Every queue row crosses a structured-clone boundary — a Worker on web, IPC
 		// on Electron. `RxDocument.get()` returns a *Proxy* for object-valued paths,

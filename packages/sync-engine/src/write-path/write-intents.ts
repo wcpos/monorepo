@@ -147,11 +147,15 @@ function toPlainValue(value: unknown): unknown {
 	if (value === null || typeof value !== 'object') return value;
 	if (Array.isArray(value)) return value.map(toPlainValue);
 	if (value instanceof Date) return new Date(value.getTime());
-	const plain: Record<string, unknown> = {};
-	for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-		plain[key] = toPlainValue(item);
-	}
-	return plain;
+	// `Object.fromEntries`, not `plain[key] = …`: `sanitize_key` keeps `_`, so a
+	// payload key literally spelled `__proto__` reaches here as OWN data (JSON.parse
+	// mints it that way) — the same case `filterPayloadFields` guards in
+	// fakePullServer. Plain assignment would run Object.prototype's setter, dropping
+	// the field and re-parenting the accumulator; `fromEntries` defines an own data
+	// property, so the key survives as the ordinary payload data it is.
+	return Object.fromEntries(
+		Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, toPlainValue(item)])
+	);
 }
 
 function storablePayload(
