@@ -57,6 +57,7 @@ export type ErrorCode =
 	| 'AUTH111'
 	| 'AUTH121'
 	| 'AUTH321'
+	| 'AUTH331'
 	| 'AUTH411'
 	| 'AUTH421'
 	| 'AUTH431'
@@ -941,6 +942,21 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		introducedIn: '1.10.0',
 		evidence: 'monorepo#1151 legacy-table migration',
 	},
+	AUTH331: {
+		code: 'AUTH331',
+		symbol: 'WCPOS_PLUGIN_OUTDATED',
+		domain: 'AUTH',
+		severity: 'error',
+		safeAction: 'reconfigure',
+		retryPolicy: 'after-change',
+		dataSafety: 'no-impact',
+		escalation: 'site-admin',
+		summary: "This store's WCPOS plugin is too old for this version of the app.",
+		docsBody:
+			'The app has been updated but the WCPOS plugin on the store has not, and the two versions no longer work together. Ask whoever manages the site to update the WCPOS plugin in WP Admin, then connect again. Nothing needs to change on the till.',
+		introducedIn: '1.10.0',
+		evidence: 'monorepo: 1.9.x plugin exposes wcpos/v1 only; client requires wcpos/v2',
+	},
 	AUTH411: {
 		code: 'AUTH411',
 		symbol: 'STORE_URL_INVALID',
@@ -1290,6 +1306,7 @@ export const ERROR_CODES = {
 	CREDENTIALS_REJECTED: 'AUTH111',
 	SIGNED_IN_AS_WRONG_USER: 'AUTH121',
 	WOOCOMMERCE_MISSING: 'AUTH321',
+	WCPOS_PLUGIN_OUTDATED: 'AUTH331',
 	STORE_URL_INVALID: 'AUTH411',
 	AUTH_TOKEN_BLOCKED_BY_HOST: 'AUTH421',
 	REST_TRANSPORT_BLOCKED: 'AUTH431',

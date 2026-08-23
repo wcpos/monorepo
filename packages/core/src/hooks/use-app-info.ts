@@ -22,27 +22,17 @@
  */
 import * as React from 'react';
 
-// @ts-expect-error: semver lacks type declarations in this project
-import semver from 'semver';
-
 import type { SiteDocument } from '@wcpos/database';
 import { AppInfo } from '@wcpos/utils/app-info';
 import { useDocField } from '@wcpos/query';
 
 import { AppStateContext } from '../contexts/app-state';
+import { isWcposPluginCompatible } from '../utils/wcpos-plugin-version';
 
-export const MINIMUM_WCPOS_PLUGIN_VERSION = '1.8.0';
-
-export function isWcposPluginCompatible(pluginVersion: string | undefined): boolean {
-	if (!pluginVersion) return false;
-
-	try {
-		const coerced = semver.coerce(pluginVersion);
-		return !!coerced && semver.gte(coerced, MINIMUM_WCPOS_PLUGIN_VERSION);
-	} catch {
-		return false;
-	}
-}
+export {
+	MINIMUM_WCPOS_PLUGIN_VERSION,
+	isWcposPluginCompatible,
+} from '../utils/wcpos-plugin-version';
 
 /**
  * Static app information (always available)

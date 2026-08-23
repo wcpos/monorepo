@@ -1253,6 +1253,30 @@
 			"introducedIn": "1.10.0"
 		},
 		{
+			"code": "AUTH331",
+			"symbol": "WCPOS_PLUGIN_OUTDATED",
+			"domain": "AUTH",
+			"severity": "error",
+			"safeAction": "reconfigure",
+			"retryPolicy": "after-change",
+			"dataSafety": "no-impact",
+			"escalation": "site-admin",
+			"summary": "This store's WCPOS plugin is too old for this version of the app.",
+			"docsBody": "The app has been updated but the WCPOS plugin on the store has not, and the two versions no longer work together. Ask whoever manages the site to update the WCPOS plugin in WP Admin, then connect again. Nothing needs to change on the till.",
+			"troubleshooting": [
+				"Update WCPOS on the store: WP Admin → Plugins → update WCPOS to 1.10.0 or later. If WCPOS Pro is installed, update it to a matching version at the same time.",
+				"If no update is offered, check WP Admin → Dashboard → Updates; for Pro, an unauthorized updater blocks updates (see LICENSE301) — fix that first.",
+				"After updating, reconnect from the till — you do not need to type the store address again.",
+				"If the store cannot be updated yet, contact support: the till needs an app version that matches the plugin, and support can tell you which one."
+			],
+			"logSources": [
+				"network-inspector",
+				"wp-admin-pos-logs"
+			],
+			"evidence": "monorepo: 1.9.x plugin exposes wcpos/v1 only; client requires wcpos/v2",
+			"introducedIn": "1.10.0"
+		},
+		{
 			"code": "AUTH411",
 			"symbol": "STORE_URL_INVALID",
 			"domain": "AUTH",

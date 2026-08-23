@@ -1,22 +1,38 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-// @ts-expect-error: semver lacks type declarations in this project
-import semver from 'semver';
 
 import { useHttpClient } from '@wcpos/hooks/use-http-client';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
+import {
+	isWcposPluginCompatible,
+	MINIMUM_WCPOS_PLUGIN_VERSION,
+} from '../../../utils/wcpos-plugin-version';
 
 const discoveryLogger = getLogger(['wcpos', 'auth', 'discovery']);
+
+/** The store API namespace this app talks to. See MINIMUM_WCPOS_PLUGIN_VERSION. */
+const REQUIRED_WCPOS_NAMESPACE = 'wcpos/v2';
 
 class ApiDiscoveryError extends Error {
 	constructor(message: string) {
 		super(message);
 		this.name = 'ApiDiscoveryError';
 	}
+}
+
+/**
+ * Tag a connect failure with its error code.
+ *
+ * `useSiteConnect` reads `errorCode` off the rejected error and the connect
+ * screen turns it into a DocsLink, so an untagged throw shows the merchant a
+ * bare red line with nowhere to go next.
+ */
+function errorWithCode(message: string, code: ErrorCode): Error {
+	return Object.assign(new Error(message), { errorCode: code });
 }
 
 export type ApiDiscoveryStatus = 'idle' | 'discovering' | 'success' | 'error';
@@ -207,7 +223,6 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 		(data: WpJsonResponse): void => {
 			const namespaces = data.namespaces;
 			const wcNamespace = 'wc/v3';
-			const wcposNamespace = 'wcpos/v2';
 
 			// Check for WooCommerce API
 			if (!namespaces.includes(wcNamespace)) {
@@ -215,23 +230,54 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					showToast: true,
 					code: ERROR_CODES.WOOCOMMERCE_MISSING,
 				});
-				throw new Error(t('auth.woocommerce_api_not_found'));
+				throw errorWithCode(t('auth.woocommerce_api_not_found'), ERROR_CODES.WOOCOMMERCE_MISSING);
 			}
 
-			// Check for WCPOS API
-			if (!namespaces.includes(wcposNamespace)) {
+			// Check for the WCPOS API this app needs. A store on an older plugin
+			// registers `wcpos/v1` only: the plugin is installed and working, it is
+			// just an old version. Calling that "API not found" sends the merchant
+			// looking for a missing plugin when all they need to do is update it, so
+			// the two cases get different messages and different codes.
+			if (!namespaces.includes(REQUIRED_WCPOS_NAMESPACE)) {
+				const reportedVersion = data.wcpos_version || data.wcpos_pro_version;
+				// `isWcposPluginCompatible` is the same predicate the saved-site rows
+				// gate on, so connect and the site list agree on what "too old" means.
+				// A store reporting a compatible version with the namespace absent is a
+				// different fault — routes hidden or stripped — and keeps its own code.
+				const hasOlderWcposApi =
+					namespaces.some((namespace) => namespace.startsWith('wcpos/')) ||
+					(!!reportedVersion && !isWcposPluginCompatible(reportedVersion));
+
+				if (hasOlderWcposApi) {
+					discoveryLogger.error('WCPOS plugin on the store is out of date', {
+						showToast: true,
+						// Without an explicit title the toast shows the log message
+						// above, which is written for us, not for the merchant.
+						toast: { title: t('common.please_update_your_woocommerce_pos_plugin') },
+						code: ERROR_CODES.WCPOS_PLUGIN_OUTDATED,
+						context: {
+							reportedVersion,
+							requiredNamespace: REQUIRED_WCPOS_NAMESPACE,
+							requiredVersion: MINIMUM_WCPOS_PLUGIN_VERSION,
+							namespaces: namespaces.filter((namespace) => namespace.startsWith('wcpos/')),
+						},
+					});
+					// Same string the saved-site rows already show for a store that
+					// fails `isWcposPluginCompatible` — one message for one problem.
+					// The DocsLink says which version to update to and how.
+					throw errorWithCode(
+						t('common.please_update_your_woocommerce_pos_plugin'),
+						ERROR_CODES.WCPOS_PLUGIN_OUTDATED
+					);
+				}
+
 				discoveryLogger.error('WooCommerce POS plugin not found', {
 					showToast: true,
 					code: ERROR_CODES.REST_ROUTE_MISSING,
 				});
-				throw new Error(t('auth.woocommerce_pos_api_not_found'));
-			}
-
-			// Check WCPOS version (should be >= 1.8.0 for proper auth endpoints)
-			const wcposVersion = data.wcpos_version || data.wcpos_pro_version;
-			if (wcposVersion && !semver.gte(wcposVersion, '1.8.0')) {
-				discoveryLogger.warn(
-					`WCPOS version ${wcposVersion} may not support all features (recommend 1.8.0+)`
+				throw errorWithCode(
+					t('auth.woocommerce_pos_api_not_found'),
+					ERROR_CODES.REST_ROUTE_MISSING
 				);
 			}
 		},

@@ -13,11 +13,17 @@ jest.mock('@wcpos/utils/app-info', () => ({
 jest.mock('../contexts/app-state', () => ({ AppStateContext: undefined }));
 
 describe('isWcposPluginCompatible', () => {
-	it('accepts supported 1.8.x plugins when the app version is newer', () => {
-		expect(isWcposPluginCompatible('1.8.11')).toBe(true);
+	it('accepts the first plugin release that serves the wcpos/v2 API', () => {
+		expect(isWcposPluginCompatible('1.10.0')).toBe(true);
+		expect(isWcposPluginCompatible('1.11.2')).toBe(true);
 	});
 
-	it('rejects plugins before the auth-compatible minimum', () => {
+	/**
+	 * 1.9.x registers `wcpos/v1` only, so every store route this app calls is
+	 * absent — the saved-site gate has to fail it, not just the connect screen.
+	 */
+	it('rejects plugins older than the one that serves the wcpos/v2 API', () => {
+		expect(isWcposPluginCompatible('1.9.17')).toBe(false);
 		expect(isWcposPluginCompatible('1.7.9')).toBe(false);
 	});
 

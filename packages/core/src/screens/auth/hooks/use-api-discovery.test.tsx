@@ -3,6 +3,8 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+
 import { useApiDiscovery } from './use-api-discovery';
 
 const mockGet = jest.fn();
@@ -121,5 +123,77 @@ describe('useApiDiscovery', () => {
 		});
 
 		expect(result.current.error).toBe('WooCommerce API not found');
+	});
+
+	/**
+	 * A released 1.9.x store registers `wcpos/v1` only. Calling that "API not
+	 * found" sends the merchant hunting for a missing plugin; the actual fix is
+	 * a plugin update, so the copy and the code have to say so.
+	 */
+	it('tells a store on an older plugin to update, not that the API is missing', async () => {
+		mockGet.mockResolvedValue({
+			data: { ...siteData, namespaces: ['wc/v3', 'wcpos/v1'], wcpos_version: '1.9.17' },
+		});
+
+		const { result } = renderHook(() => useApiDiscovery());
+		await act(async () => {
+			await expect(
+				result.current.discoverApiEndpoints('https://example.com/wp-json/')
+			).rejects.toMatchObject({
+				message: 'Please update your WCPOS plugin',
+				errorCode: ERROR_CODES.WCPOS_PLUGIN_OUTDATED,
+			});
+		});
+
+		expect(result.current.error).toBe('Please update your WCPOS plugin');
+	});
+
+	/**
+	 * The version alone is enough evidence the plugin is installed: a site can
+	 * report `wcpos_version` while a security plugin hides the namespace list.
+	 */
+	it('treats a reported plugin version as an outdated plugin, not a missing one', async () => {
+		mockGet.mockResolvedValue({
+			data: { ...siteData, namespaces: ['wc/v3'], wcpos_version: '1.9.17' },
+		});
+
+		const { result } = renderHook(() => useApiDiscovery());
+		await act(async () => {
+			await expect(
+				result.current.discoverApiEndpoints('https://example.com/wp-json/')
+			).rejects.toMatchObject({ errorCode: ERROR_CODES.WCPOS_PLUGIN_OUTDATED });
+		});
+	});
+
+	it('reports hidden routes, not an outdated plugin, when the version is compatible', async () => {
+		mockGet.mockResolvedValue({
+			data: { ...siteData, namespaces: ['wc/v3'], wcpos_version: '1.10.0' },
+		});
+
+		const { result } = renderHook(() => useApiDiscovery());
+		await act(async () => {
+			await expect(
+				result.current.discoverApiEndpoints('https://example.com/wp-json/')
+			).rejects.toMatchObject({ errorCode: ERROR_CODES.REST_ROUTE_MISSING });
+		});
+	});
+
+	it('still reports a missing plugin when the store shows no WCPOS API at all', async () => {
+		const { wcpos_version, ...withoutVersion } = siteData;
+		mockGet.mockResolvedValue({
+			data: { ...withoutVersion, namespaces: ['wc/v3'] },
+		});
+
+		const { result } = renderHook(() => useApiDiscovery());
+		await act(async () => {
+			await expect(
+				result.current.discoverApiEndpoints('https://example.com/wp-json/')
+			).rejects.toMatchObject({
+				message: 'WCPOS API not found',
+				errorCode: ERROR_CODES.REST_ROUTE_MISSING,
+			});
+		});
+
+		expect(result.current.error).toBe('WCPOS API not found');
 	});
 });
