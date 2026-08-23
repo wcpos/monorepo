@@ -64,6 +64,16 @@ export interface TaxRateInput {
 	rate?: string;
 	compound?: boolean;
 	order?: number;
+	/**
+	 * WooCommerce `tax_rate_priority` — THE key WC_Tax sorts compound rates by, and the
+	 * one that decides which rate is applied outermost. The app's rate documents carry it
+	 * (see the taxRates schema), `calculateTaxes` reads it in preference to `order`, and
+	 * `createCartConfig` has always passed it through by spreading. It simply was not
+	 * declared here, so a caller assembling rates against this type could not express the
+	 * field the engine actually sorts on — which is the shape woocommerce-pos#1548 turned
+	 * on: real stores leave `order` at 0 on every rate and differentiate by priority.
+	 */
+	priority?: number;
 	class?: string;
 	shipping?: boolean;
 	country?: string;

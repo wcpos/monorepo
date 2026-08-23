@@ -149,7 +149,16 @@ Each stage is its own PR with its own live E2E run. **Do not big-bang this.**
      pinned `taxes: [{id: '1', total: '7'}]`; the real contract is `{id: 1, total: '7.000000'}`
      — the 6dp fixed width from woocommerce-pos#1548.
 
-4. **Widen the differential harness, then retire the oracle.** Port compound rates, `dp: 0`,
+4. ~~**Widen the differential harness, then retire the oracle.**~~ — **DONE.** Note the harness
+   lives at `packages/core/src/screens/main/pos/hooks/settle-cart-differential.test.ts`, NOT in
+   `packages/order-math` as the text below implies. Two things worth carrying forward:
+   `TaxRateInput` had no `priority` field even though `calculateTaxes` sorts compound rates by
+   it — the #1548 fixture could not be expressed against the public type until that was added;
+   and the tombstone scenario needed tombstones carrying STALE MONEY, because a bare
+   `{ product_id: null }` sums to nothing and every filter meant to exclude it looks correct
+   even when removed. Original text follows.
+
+   **Widen the differential harness, then retire the oracle.** Port compound rates, `dp: 0`,
    `taxRoundAtSubtotal: true` and tombstoned lines into
    `settle-cart-differential.test.ts` — parameterise its `makeConfig`, which currently takes
    only `pricesIncludeTax` — then delete `settle.oracle.test.ts` with a `Test-Removal:`
