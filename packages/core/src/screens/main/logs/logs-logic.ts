@@ -430,6 +430,18 @@ export function buildDebugInfo(input: DebugInfoInput): string {
  * and re-deriving a prose summary of it here would be a second opinion that
  * goes stale the moment the producer adds a field.
  */
+/** `Ada (cashier, id 12)` — whichever of the three the row actually carries. */
+function formatActor(actor: LogRow['actor']): string | null {
+	if (!actor) return null;
+	const name = actor.name?.trim() || null;
+	const qualifiers = [actor.role?.trim() || null, actor.id ? `id ${actor.id}` : null].filter(
+		Boolean
+	);
+	if (!name && qualifiers.length === 0) return null;
+	if (!name) return qualifiers.join(', ');
+	return qualifiers.length > 0 ? `${name} (${qualifiers.join(', ')})` : name;
+}
+
 export function buildLogEntryReport(row: LogRow): string {
 	const lines: string[] = [];
 	lines.push(`WCPOS log entry — ${new Date(row.timestamp).toISOString()}`);
@@ -438,6 +450,13 @@ export function buildLogEntryReport(row: LogRow): string {
 	if (eventType) lines.push(`Event: ${eventType}`);
 	if (row.code) lines.push(`Error code: ${row.code}`);
 	if (row.category) lines.push(`Category: ${row.category}`);
+	// The ledger hides attribution on purpose — the log DB is per-(site, store,
+	// cashier), so a name in the list is noise — and says so on the explicit
+	// grounds that it "stays in the data for export and support" (ledger.tsx).
+	// This IS that export: leaving the actor out would have made the ledger's
+	// reason for hiding it untrue.
+	const actor = formatActor(row.actor);
+	if (actor) lines.push(`Actor: ${actor}`);
 	if (row.outcome) lines.push(`Outcome: ${row.outcome}`);
 	if (row.message && row.message !== eventType) lines.push(`Message: ${row.message}`);
 	const detail = rowDetailData(row);

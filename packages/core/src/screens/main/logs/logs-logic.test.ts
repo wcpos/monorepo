@@ -702,6 +702,36 @@ describe('buildLogEntryReport', () => {
 		expect(text).toContain('"recordId": "a5d24ec5-6790-4594-940d-7db0dec10195"');
 	});
 
+	/**
+	 * The ledger hides attribution because it "stays in the data for export and
+	 * support" (ledger.tsx). This is that export — omitting the actor made the
+	 * ledger's stated reason untrue.
+	 */
+	it('carries the actor the ledger deliberately does not show', () => {
+		const text = buildLogEntryReport({
+			...divergenceRow,
+			actor: { id: '12', role: 'cashier', name: 'Ada' },
+		});
+
+		expect(text).toContain('Actor: Ada (cashier, id 12)');
+	});
+
+	it.each([
+		[{ name: 'Ada' }, 'Actor: Ada'],
+		[{ id: '12' }, 'Actor: id 12'],
+		[{ role: 'cashier', id: '12' }, 'Actor: cashier, id 12'],
+		[{ name: 'Ada', id: '12' }, 'Actor: Ada (id 12)'],
+	])('renders a partial actor %j as %s', (actor, expected) => {
+		expect(buildLogEntryReport({ ...divergenceRow, actor })).toContain(expected);
+	});
+
+	it.each([[null], [undefined], [{}], [{ name: '  ', role: '' }]])(
+		'omits the actor line entirely for %j',
+		(actor) => {
+			expect(buildLogEntryReport({ ...divergenceRow, actor })).not.toContain('Actor:');
+		}
+	);
+
 	it('does not repeat an event-code message as prose', () => {
 		const text = buildLogEntryReport({
 			...divergenceRow,
