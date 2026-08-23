@@ -35,10 +35,19 @@ import { unwrapWireBody } from './wire-envelope';
 type WcCategory = { id: number; parent: number; name: string; count: number };
 type WcProduct = { id: number; name: string; type: string; categories?: { id: number }[] };
 
-/** How many populated categories to try before giving up on finding a member product. */
-const CATEGORY_CANDIDATE_LIMIT = 5;
+/**
+ * How many populated categories to probe for a member before giving up. Bounded only
+ * so a pathological store cannot turn discovery into hundreds of requests; every
+ * populated category is eligible, most-populated first, so the bound is never the
+ * reason a normal store finds nothing.
+ */
+const CATEGORY_PROBE_BUDGET = 25;
+/** Pages of 100 categories to walk. A store past this is one this spec cannot reason about. */
+const CATEGORY_PAGE_BUDGET = 20;
 /** How many rendered tiles to resolve against the server when hunting a non-member. */
 const NON_MEMBER_SAMPLE_LIMIT = 20;
+/** wc/v3 rejects `per_page` above this, so it also bounds how many ids one probe may name. */
+const WC_MAX_PER_PAGE = 100;
 /** The filtered window has to reach the wire and come back, so this is a sync budget. */
 const FILTERED_GRID_TIMEOUT_MS = 45_000;
 
@@ -57,26 +66,58 @@ type CategoryChoice = {
 type CategoryChoiceResult = { ok: true; choice: CategoryChoice } | { ok: false; reason: string };
 
 /**
+ * Every product category the store has, walked page by page.
+ *
+ * The WHOLE tree or nothing: a partial read misclassifies a parent whose children
+ * fall on a later page as a leaf, and the spec would then pick a "non-member" out of
+ * a child category that the picker's cascade legitimately keeps on screen.
+ *
+ * A failed read THROWS. The store declares this endpoint — a 401/403/500 is a broken
+ * environment, and reporting that as a skip is how an auth regression turns CI green
+ * with the behaviour untested (CLAUDE.md, E2E store-agnostic policy).
+ */
+async function fetchAllCategories(
+	request: APIRequestContext,
+	storeUrl: string,
+	options: { headers: Record<string, string>; params: Record<string, string> }
+): Promise<WcCategory[]> {
+	const collected: WcCategory[] = [];
+	for (let page = 1; page <= CATEGORY_PAGE_BUDGET; page += 1) {
+		const response = await probeGet(request, storeUrl, 'products/categories', {
+			...options,
+			params: { ...options.params, per_page: '100', page: String(page) },
+		});
+		if (!response.ok()) {
+			throw new Error(
+				`products/categories page ${page} failed with ${response.status()} — the store serves this route, so a failed read is a broken environment, not a missing fixture`
+			);
+		}
+		const batch = await readRecords<WcCategory>(response);
+		collected.push(...batch);
+		const totalPages = Number(response.headers()['x-wp-totalpages'] ?? '1');
+		if (batch.length === 0 || !Number.isFinite(totalPages) || page >= totalPages) {
+			return collected;
+		}
+	}
+	throw new Error(
+		`the store has more than ${CATEGORY_PAGE_BUDGET * 100} product categories; this spec needs the whole tree to tell a leaf from a parent`
+	);
+}
+
+/**
  * Ask the store for a category that genuinely holds a published, in-stock product.
  *
  * Term counts alone are not trusted as the referent — a stale count would send the
  * spec after a category the products query cannot satisfy — so each candidate is
  * confirmed by the same products query the app issues, and the confirmed product
- * becomes the row the UI must render.
+ * proves the category is a real test case.
  */
 async function chooseCategory(
 	request: APIRequestContext,
 	storeUrl: string,
 	options: { headers: Record<string, string>; params: Record<string, string> }
 ): Promise<CategoryChoiceResult> {
-	const response = await probeGet(request, storeUrl, 'products/categories', {
-		...options,
-		params: { ...options.params, per_page: '100', orderby: 'count', order: 'desc' },
-	});
-	if (!response.ok()) {
-		return { ok: false, reason: `products/categories read failed with ${response.status()}` };
-	}
-	const categories = await readRecords<WcCategory>(response);
+	const categories = await fetchAllCategories(request, storeUrl, options);
 	if (categories.length === 0) {
 		return { ok: false, reason: 'the store declares no product categories' };
 	}
@@ -107,10 +148,18 @@ async function chooseCategory(
 		};
 	}
 	// Leaves first: a leaf's selection is exactly one id, so the assertion names one
-	// referent. Parents work too — the picker cascades to descendants and wc/v3's
+	// referent. Parents follow — the picker cascades to descendants and wc/v3's
 	// tax_query includes children — they just make the set harder to talk about.
+	// Within each group, most-populated first. A term COUNT does not promise a
+	// published in-stock product, so every populated category stays a candidate
+	// rather than the arbitrary top few.
+	const byCountDesc = (left: WcCategory, right: WcCategory) => right.count - left.count;
 	const leaves = populated.filter((category) => !childrenOf.has(category.id));
-	const candidates = (leaves.length > 0 ? leaves : populated).slice(0, CATEGORY_CANDIDATE_LIMIT);
+	const parents = populated.filter((category) => childrenOf.has(category.id));
+	const candidates = [...leaves.sort(byCountDesc), ...parents.sort(byCountDesc)].slice(
+		0,
+		CATEGORY_PROBE_BUDGET
+	);
 
 	for (const candidate of candidates) {
 		const products = await probeGet(request, storeUrl, 'products', {
@@ -123,7 +172,14 @@ async function chooseCategory(
 				category: String(candidate.id),
 			},
 		});
-		if (!products.ok()) continue;
+		// Same policy as the category read: an erroring products query is a broken
+		// store, not an empty category. Swallowing it here would skip the spec on
+		// exactly the auth regression it should be loudest about.
+		if (!products.ok()) {
+			throw new Error(
+				`products?category=${candidate.id} failed with ${products.status()} while looking for a member product`
+			);
+		}
 		const [member] = await readRecords<WcProduct>(products);
 		if (member) {
 			return {
@@ -134,7 +190,7 @@ async function chooseCategory(
 	}
 	return {
 		ok: false,
-		reason: `no published in-stock product in the ${candidates.length} most-populated categories (term counts disagree with the products query)`,
+		reason: `no published in-stock product in any of ${candidates.length} populated categories (of ${populated.length}) — term counts disagree with the products query`,
 	};
 }
 
@@ -158,6 +214,13 @@ async function categoryMembersAmong(
 	ids: number[]
 ): Promise<Set<number>> {
 	if (ids.length === 0) return new Set();
+	if (ids.length > WC_MAX_PER_PAGE) {
+		// One page or the intersection is a lie by omission: ids past the ceiling would
+		// come back absent and read as "rendered but not in the category".
+		throw new Error(
+			`refusing to probe ${ids.length} ids in one request — wc/v3 caps per_page at ${WC_MAX_PER_PAGE}`
+		);
+	}
 	const response = await probeGet(request, storeUrl, 'products', {
 		...options,
 		params: {
@@ -230,9 +293,11 @@ test.describe('Product category filter', () => {
 		const options = storeRequestOptions(storeAuthorization());
 
 		const chosen = await chooseCategory(request, storeUrl, options);
-		test.skip(!chosen.ok, chosen.ok ? '' : chosen.reason);
-		const { category, selectedIds, member } = (chosen as { ok: true; choice: CategoryChoice })
-			.choice;
+		if (!chosen.ok) {
+			test.skip(true, chosen.reason);
+			return;
+		}
+		const { category, selectedIds, member } = chosen.choice;
 
 		// The grid must be rendering something before the filter means anything.
 		await expect
@@ -240,19 +305,31 @@ test.describe('Product category filter', () => {
 			.toMatch(LOADED_COUNT_READY);
 
 		const nonMember = await findNonMember(page, request, storeUrl, options, selectedIds);
-		test.skip(
-			nonMember === null,
-			`no rendered product sits outside "${category.name}" — this store cannot prove the filter EXCLUDES anything`
-		);
-		const nonMemberTile = page.getByTestId(tileTestId(nonMember!));
+		if (nonMember === null) {
+			test.skip(
+				true,
+				`no rendered product sits outside "${category.name}" — this store cannot prove the filter EXCLUDES anything`
+			);
+			return;
+		}
+		const nonMemberTile = page.getByTestId(tileTestId(nonMember));
 		await expect(nonMemberTile).toBeVisible();
 
-		// The filtered window must reach the WIRE, not just re-slice the resident rows —
-		// the regression class this spec was added for (TEST-PLAN "Filtered browse").
-		// Armed before the click so the request cannot be missed.
-		const filteredWindowRequest = page.waitForRequest(
-			(wireRequest) => {
-				const url = new URL(wireRequest.url());
+		// The filtered window must reach the WIRE and come back OK — not just be
+		// dispatched, and not just re-slice the resident rows. That is the regression
+		// class this spec was added for (TEST-PLAN "Filtered browse"): a hydrated
+		// catalogue can satisfy every local assertion while the server window 401s.
+		//
+		// The predicate requires `ok()` rather than asserting on the first matching
+		// response, deliberately: a hostile proxy tier can 401 a header-carried token
+		// so the app re-negotiates its transport and retries (wcpos-infra#72, always-on
+		// at dev-free). That recovery is correct behaviour. What must not happen is
+		// NO successful filtered window inside the budget.
+		//
+		// Armed before the click so the exchange cannot be missed.
+		const filteredWindow = page.waitForResponse(
+			(response) => {
+				const url = new URL(response.url());
 				// Tolerates both permalink styles: /wp-json/…/products and ?rest_route=/…/products.
 				const addressesProducts =
 					url.pathname.includes('/products') || url.search.includes('%2Fproducts');
@@ -260,7 +337,8 @@ test.describe('Product category filter', () => {
 				return (
 					addressesProducts &&
 					wireCategory !== null &&
-					wireCategory.split(',').includes(String(category.id))
+					wireCategory.split(',').includes(String(category.id)) &&
+					response.ok()
 				);
 			},
 			{ timeout: FILTERED_GRID_TIMEOUT_MS }
@@ -286,8 +364,13 @@ test.describe('Product category filter', () => {
 		});
 
 		// --- What the filtered grid must show. ---
-		// 1. The window reached the wire carrying the selected category.
-		await filteredWindowRequest;
+		// 1. A filtered window carrying the selected category reached the wire AND
+		//    the store answered it successfully.
+		const windowResponse = await filteredWindow;
+		expect(
+			windowResponse.status(),
+			'the filtered product window did not come back OK'
+		).toBeLessThan(400);
 		// 2. The grid is not empty. The RENDERED-row count on its own, never the
 		//    "Showing X of Y" sentence, whose Y is the store-wide census and stays
 		//    non-zero over an empty grid (#1336, #1345).
@@ -304,7 +387,7 @@ test.describe('Product category filter', () => {
 		//    virtualized, so WHICH members are on screen is not the spec's business —
 		//    that they are all members is. `member` is what proved the category
 		//    non-empty during discovery; it need not be one of the rendered rows.
-		const rendered = await renderedProductIds(page);
+		const rendered = (await renderedProductIds(page)).slice(0, WC_MAX_PER_PAGE);
 		expect(rendered.length).toBeGreaterThan(0);
 		const members = await categoryMembersAmong(request, storeUrl, options, category.id, rendered);
 		expect(
