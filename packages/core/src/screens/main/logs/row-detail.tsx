@@ -20,6 +20,7 @@ import {
 import { useT } from '../../../contexts/translations';
 import { useLocalDate } from '../../../hooks/use-local-date';
 import { type KVEntry, KVGrid, type LevelKind } from '../health/components';
+import { translateErrorSummary } from './generated/error-summaries.generated';
 import { translateEventDescription } from './generated/event-titles.generated';
 import { eventTypeOf, type LogRow, rowDetailData } from './logs-logic';
 
@@ -194,10 +195,20 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 	// must not be put in the server's mouth.
 	const isServerReason =
 		reason !== null && (detail.serverCode !== undefined || context.direction === 'push');
+	// `entry.summary` is the registry's ENGLISH copy — the generated
+	// `translateErrorSummary` resolves the same string through the catalogue, so
+	// the reason renders in the language the till runs TODAY. Reading the raw
+	// field here put one English sentence between a translated title and
+	// translated guidance on every non-English till, and on a row with no
+	// registered event type (the 147 code-carrying `logger.error` call sites in
+	// packages/core, whose title falls back to the developer message) it was the
+	// only merchant-readable sentence on the row.
 	const explanation = isProblem
 		? isServerReason
 			? t('health.logs.server_said', { reason })
-			: (entry?.summary ?? reason)
+			: entry
+				? translateErrorSummary((key) => t(key), entry.code)
+				: reason
 		: null;
 	const narration =
 		!isProblem && row.message && row.message !== title && row.message !== eventType

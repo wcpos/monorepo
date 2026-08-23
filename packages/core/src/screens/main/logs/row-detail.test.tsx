@@ -11,6 +11,8 @@ import { RowDetail } from './row-detail';
 import type { LogRow } from './logs-logic';
 
 const mockT = createTestT();
+/** Swappable so one test can prove the reason resolves through `t()`, not the registry. */
+let activeT: (key: string, values?: Record<string, unknown>) => string = mockT;
 const mockWriteText = jest.fn().mockResolvedValue(undefined);
 
 const mockOpenURL = jest.fn().mockResolvedValue(undefined);
@@ -70,7 +72,7 @@ jest.mock('../health/components', () => ({
 		</div>
 	),
 }));
-jest.mock('../../../contexts/translations', () => ({ useT: () => mockT }));
+jest.mock('../../../contexts/translations', () => ({ useT: () => activeT }));
 jest.mock('../../../hooks/use-local-date', () => ({
 	useLocalDate: () => ({ formatDate: () => '10:00' }),
 }));
@@ -89,6 +91,7 @@ beforeEach(() => {
 		value: { writeText: mockWriteText },
 	});
 	mockWriteText.mockClear();
+	activeT = mockT;
 });
 
 describe('RowDetail', () => {
@@ -111,6 +114,30 @@ describe('RowDetail', () => {
 		expect(screen.queryByText(/retry/i)).toBeNull();
 		expect(screen.queryByText(/affected/i)).toBeNull();
 		expect(screen.getByTestId('logs-help-PRODUCT301')).not.toBeNull();
+	});
+
+	/**
+	 * The reason used to be read straight off the registry, which is English-only:
+	 * a French till rendered a French title, an English reason and French
+	 * guidance in one stack. It now resolves through the catalogue like every
+	 * other string, so a till that has the translation shows it.
+	 */
+	it("renders the reason through the catalogue, not the registry's English field", () => {
+		activeT = (key, values) =>
+			key === 'health.logs.error_summary.PRODUCT301'
+				? 'Aucun produit ne correspond.'
+				: mockT(key, values);
+
+		render(
+			<RowDetail
+				row={{ ...row, code: 'PRODUCT301', level: 'warn' }}
+				kind="warn"
+				title="Barcode scan did not match a product"
+			/>
+		);
+
+		expect(screen.getByText('Aucun produit ne correspond.')).not.toBeNull();
+		expect(screen.queryByText('No products matched the current search and filters.')).toBeNull();
 	});
 
 	it('leads a quiet row with its translated event description', () => {
