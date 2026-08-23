@@ -13,28 +13,45 @@
  * loop. So the choreography `legacyConvergedState` models below no longer
  * exists in the app, and this file's ORIGINAL premise has expired.
  *
- * #1472 lists "retire settle.oracle.test.ts in favour of the real suites" on the
- * strength of that. **Do not do it yet.** The premise expired; the COVERAGE did
- * not, and `settle-cart-differential.test.ts` does not subsume this file:
+ * #1472 lists "retire settle.oracle.test.ts in favour of the real suites". It is
+ * retirable, but not by deletion alone — and NOT for the reason first written
+ * here, which review corrected (#1509).
  *
- *   | dimension               | differential | here      |
- *   |-------------------------|--------------|-----------|
- *   | pricesIncludeTax        | both         | both      |
- *   | compound tax rates      | NO           | case 4    |
- *   | dp = 0 (JPY-style)      | NO (dp: 2)   | case 5    |
- *   | taxRoundAtSubtotal      | NO (false)   | case 6    |
- *   | tombstoned lines        | NO           | case 7    |
+ * ── What is actually unique to this file ─────────────────────────────────────
  *
- * The differential's `makeConfig` hardcodes `taxRoundAtSubtotal: false`, `dp: 2`
- * and non-compound rates; it varies only `pricesIncludeTax`. Two of the four
- * dimensions only covered here — compound rate ordering and round-at-subtotal —
- * are precisely the parity defects that produced false "your store changed this
- * order's totals" banners on correct sales before 1.10.0 shipped. Deleting this
- * file today would drop them silently.
+ * `settle-cart-differential.test.ts` varies only `pricesIncludeTax`; its
+ * `makeConfig` hardcodes `taxRoundAtSubtotal: false`, `dp: 2` and non-compound
+ * rates. So these config dimensions are absent THERE:
  *
- * What this file is actually worth now is its FIXTURE MATRIX, not its legacy
- * model. Retiring it means porting those four dimensions into the differential
- * harness first, then deleting. Tracked with the `calculateCartLine` migration.
+ *   | dimension          | differential | elsewhere in the package                |
+ *   |--------------------|--------------|-----------------------------------------|
+ *   | compound rates     | no           | settle.integration, compound-tax-priority |
+ *   | dp = 0             | no           | cart-line, order-totals, calculate-taxes  |
+ *   | taxRoundAtSubtotal | no           | cart-line, order-totals, discount-tax-split |
+ *   | tombstoned lines   | no           | settle.test.ts "tombstone law"            |
+ *
+ * Every one of them is covered somewhere. What is unique here is only that they
+ * are exercised through `settleCart`'s WHOLE composition at once, rather than
+ * against the internals individually.
+ *
+ * An earlier draft of this header claimed deleting the file would silently drop
+ * the compound-ordering and round-at-subtotal parity defects behind the
+ * pre-1.10.0 "your store changed this order's totals" banners. That was wrong on
+ * both counts. #1548's ordering regression has its own dedicated fixture in
+ * `internal/coupons/compound-tax-priority.test.ts` — two COMPOUND rates with
+ * tied `order: 0` and differing `priority`, which is the actual trap. Case 4
+ * below has one compound rate, distinct `order` values and no `priority` at all,
+ * so it exercises compound ARITHMETIC and never touched the ordering bug.
+ * Round-at-subtotal is covered by four other suites.
+ *
+ * ── So: retiring it ──────────────────────────────────────────────────────────
+ *
+ * Port the four config dimensions into the differential harness — parameterise
+ * its `makeConfig`, which currently takes only `pricesIncludeTax` — then delete
+ * this file with a `Test-Removal:` trailer. Worth doing AFTER the
+ * `calculateCartLine` migration, when the differential compares settle against a
+ * composition that actually ships. If you want real ordering coverage in the
+ * harness, take the fixture from `compound-tax-priority.test.ts`, not case 4.
  *
  * The legacy loop, on every cart change:
  *   (1) recomputes each active PERCENT fee line against the CURRENT persisted
