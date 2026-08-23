@@ -219,9 +219,9 @@ export function createGreedyCollectionFetcher<Doc, Payload>(
 			throw new Error(`Woo REST ${spec.collection} request failed: ${response.status}`);
 
 		const payloads = (await response.json()) as Payload[];
-		// This pull counts wcpos/v2 while the census probes the wc/v3 census
-		// route — the census key keeps ONE writer, the query-total lane, so the
-		// health page never oscillates between two endpoints' populations (#1400).
+		// The census key keeps ONE writer, the query-total lane, so the health page
+		// never oscillates (#1400). Both this pull and that probe now read the
+		// same wcpos/v2 lane, so they count the same population.
 		const documents = payloads.map(spec.documentFromPayload);
 		await input.repository.upsertMany(documents);
 

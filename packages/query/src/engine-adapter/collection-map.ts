@@ -66,19 +66,59 @@ type CollectionVocabularyEntry = {
 	writeable: boolean;
 };
 
+/**
+ * `censusRoute` is ALWAYS a WCPOS-namespace route, never `wc/v3` — the one
+ * invariant this table exists to hold (pinned by collection-map.test.ts).
+ *
+ * WooCommerce core does not know what the POS may be served, so it cannot be
+ * asked how many records the POS has. `Sync\Pos_Visibility` is the SOLE
+ * authority for that — the plugin's own read lanes all consult it, and a
+ * `wc/v3` count consults nothing. Every `online_only` product lands in a wc/v3
+ * total, so on any store using POS visibility the census over-counted a
+ * catalogue the till is never served: the coverage bar could not reach 100% on
+ * a complete till, and the "products catalogue is fully resident locally"
+ * serve-local gate (require-plane) — which fires on `local >= census` — could
+ * never fire at all, sending every product search to the server forever.
+ *
+ * Orders are the deliberate exception to the narrowing, and the count does NOT
+ * change with this move. Every orders filter the proxy can apply
+ * (`pos_cashier`, `pos_store`, `created_via`) is claimed from the REQUEST by
+ * Collection_Rules, and the census probe sends none of them — so the proxy
+ * forwards a bare `page=1&per_page=1` to wc/v3 verbatim. That is the intended
+ * reading (owner ruling 2026-08-23): cashier and store are VIEW filters, and
+ * every order on the server is downloadable, so the orders census is the whole
+ * server population and must stay that way. Do not "scope" this probe to match
+ * the browse window — the row is windowed and reports a policy, not a
+ * percentage, precisely because the two numbers are not meant to agree.
+ *
+ * The transport is the second reason. The census reads its answer from
+ * `X-WP-Total`, which a hostile proxy strips (wcpos-infra#72 Tier 2). The
+ * plugin's body envelope is the designed fallback, but
+ * `Response_Envelope::is_wcpos_request()` grants it on the route's NAMESPACE or
+ * on the `X-WCPOS` request header — and Tier 3 strips that header too. So a
+ * `wc/v3` route loses the header AND its fallback at once and the probe can
+ * never succeed; a `wcpos/*` route carries the envelope by namespace whatever
+ * the proxy does.
+ *
+ * Every route below is the plugin's own proxy for the wc/v3 counterpart
+ * (Catalog_Proxy_Controller — a faithful pass-through that preserves the
+ * pagination headers), so staying in the namespace costs nothing in fidelity.
+ * It also retires the #1400 split, where the grid footer (wcpos/v2) and this
+ * page (wc/v3) reported different totals for the same catalogue.
+ */
 export const COLLECTION_VOCABULARY = {
 	orders: {
 		legacyName: 'orders',
 		telemetryName: 'orders',
 		labelKey: 'common.orders',
-		censusRoute: 'wc/v3/orders',
+		censusRoute: 'wcpos/v2/orders',
 		writeable: true,
 	},
 	products: {
 		legacyName: 'products',
 		telemetryName: 'products',
 		labelKey: 'common.products',
-		censusRoute: 'wc/v3/products',
+		censusRoute: 'wcpos/v2/products',
 		writeable: true,
 	},
 	variations: {
@@ -103,9 +143,9 @@ export const COLLECTION_VOCABULARY = {
 		legacyName: 'taxes',
 		telemetryName: 'tax_rates',
 		labelKey: 'common.tax_rates',
-		// Raw wc/v3/taxes requires `manage_woocommerce`, which cashier-tier POS users
-		// (e.g. the demo role) don't have — every census probe 403s and spams the error
-		// log. The POS proxy serves the same rows + X-WP-Total under the POS grant.
+		// The first route moved off wc/v3 (raw wc/v3/taxes requires
+		// `manage_woocommerce`, which cashier-tier POS users don't have, so every
+		// probe 403'd) — now the rule for the whole table, see above.
 		censusRoute: 'wcpos/v2/taxes',
 		writeable: false,
 	},
@@ -113,28 +153,28 @@ export const COLLECTION_VOCABULARY = {
 		legacyName: 'products/categories',
 		telemetryName: 'categories',
 		labelKey: 'common.categories',
-		censusRoute: 'wc/v3/products/categories',
+		censusRoute: 'wcpos/v2/products/categories',
 		writeable: false,
 	},
 	brands: {
 		legacyName: 'products/brands',
 		telemetryName: 'brands',
 		labelKey: 'common.brands',
-		censusRoute: 'wc/v3/products/brands',
+		censusRoute: 'wcpos/v2/products/brands',
 		writeable: false,
 	},
 	tags: {
 		legacyName: 'products/tags',
 		telemetryName: 'tags',
 		labelKey: 'common.tags',
-		censusRoute: 'wc/v3/products/tags',
+		censusRoute: 'wcpos/v2/products/tags',
 		writeable: false,
 	},
 	coupons: {
 		legacyName: 'coupons',
 		telemetryName: 'coupons',
 		labelKey: 'common.coupons',
-		censusRoute: 'wc/v3/coupons',
+		censusRoute: 'wcpos/v2/coupons',
 		writeable: true,
 	},
 } as const satisfies Record<SyncCollectionName, CollectionVocabularyEntry>;

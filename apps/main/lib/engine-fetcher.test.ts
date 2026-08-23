@@ -256,15 +256,15 @@ describe('createEngineFetcher', () => {
 	});
 
 	it.each([
-		['orders', 'wc/v3/orders'],
-		['products', 'wc/v3/products'],
+		['orders', 'wcpos/v2/orders'],
+		['products', 'wcpos/v2/products'],
 		['variations', 'wcpos/v1/products/variations'],
 		['customers', 'wcpos/v2/customers'],
 		['taxRates', 'wcpos/v2/taxes'],
-		['categories', 'wc/v3/products/categories'],
-		['brands', 'wc/v3/products/brands'],
-		['tags', 'wc/v3/products/tags'],
-		['coupons', 'wc/v3/coupons'],
+		['categories', 'wcpos/v2/products/categories'],
+		['brands', 'wcpos/v2/products/brands'],
+		['tags', 'wcpos/v2/products/tags'],
+		['coupons', 'wcpos/v2/coupons'],
 	])('fetches the %s census through its configured route', async (collection, route) => {
 		const fetch = jest.fn().mockResolvedValue(
 			new Response(null, {
