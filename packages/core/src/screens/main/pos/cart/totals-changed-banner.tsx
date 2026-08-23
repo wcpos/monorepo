@@ -62,7 +62,7 @@ function partitionFields(fields: OrderMoneyDivergenceField[]) {
  * store computing something the POS does not model. All three are the same
  * event to the cashier, and all three are worth telling them about.
  *
- * Four deliberate choices:
+ * Five deliberate choices:
  *
  *  - INLINE, not a toast. A toast auto-dismisses while the cashier is looking
  *    at the customer, and the one thing this alert must do is still be there
@@ -82,6 +82,12 @@ function partitionFields(fields: OrderMoneyDivergenceField[]) {
  *    `got` (the store's) per field, which is enough for support to act without
  *    a screen share. Naming them here is what turns "check the total" into a
  *    report someone can do something with.
+ *  - ALWAYS LINKS OUT. The "why totals disagree" docs link shows on every
+ *    divergence, not only at store-level escalation. Encounter one is the most
+ *    confusing moment and used to be the only one with nothing to click; a
+ *    quiet standing link answers "what is this?" without pulling the cashier
+ *    off the sale, while the loud "show this to your manager" call-to-action
+ *    stays gated on escalation.
  *
  * It renders nothing on the overwhelmingly common path: a 2dp ack of the same
  * money is not divergence (#946), so this is silent on ordinary sales.
@@ -144,11 +150,22 @@ export function TotalsChangedBanner({
 						<Text className="text-muted-foreground text-sm">
 							{t('pos_cart.totals_disagree_store_level_body')}
 						</Text>
-						<DocsLink testID={`${testID}-docs-link`} href={DOCS_URL}>
-							{t('pos_cart.totals_disagree_docs_link')}
-						</DocsLink>
 					</VStack>
 				) : null}
+
+				{/*
+				 * The link is shown on EVERY divergence, not only at store-level
+				 * escalation. The first time a cashier meets this banner is the most
+				 * confusing moment, and it is the one that used to have nothing to
+				 * click: the "why totals disagree" explanation only appeared once three
+				 * sales had diverged. A quiet, standing link answers "what is this?" on
+				 * encounter one without pulling the cashier off the sale — the loud
+				 * "show this to whoever manages your store" call-to-action stays gated
+				 * on escalation above, where it belongs.
+				 */}
+				<DocsLink testID={`${testID}-docs-link`} href={DOCS_URL}>
+					{t('pos_cart.totals_disagree_docs_link')}
+				</DocsLink>
 			</VStack>
 		</View>
 	);
