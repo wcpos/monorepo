@@ -390,6 +390,38 @@ describe('useCartSettlement reference demand (#952)', () => {
 		);
 	});
 
+	/**
+	 * The other half of the coupon case, and the loop the guard exists to stop.
+	 *
+	 * settleCart emits line_items and coupon_lines on EVERY couponed replay, so testing
+	 * for the presence of those keys would mark a divergence-triggered re-derivation as
+	 * "the cashier did something" and push WooCommerce's overruled money straight back.
+	 * What counts is whether those lines actually differ from what is persisted.
+	 */
+	it('suppresses a couponed re-derivation whose lines match the persisted ones', async () => {
+		applyCoupon([{ code: 'bonus' }]);
+		const { rerender } = await renderAfterMountSettle();
+		divergenceValue = { serverTotal: '9.99' };
+		settleCart.mockImplementation(() => ({
+			...successfulSettlement(),
+			patch: {
+				...successfulSettlement().patch,
+				// Identical to what the order already holds — a re-derivation, not an edit.
+				coupon_lines: revision.coupon_lines,
+				line_items: revision.line_items,
+			},
+		}));
+
+		await act(async () => {
+			allRates = [
+				{ id: 1, name: 'VAT', rate: '20', compound: false, order: 1, class: 'standard' },
+			] as typeof allRates;
+			rerender();
+		});
+
+		expect(localPatch).not.toHaveBeenCalled();
+	});
+
 	it('still suppresses a money-only re-derivation while diverged', async () => {
 		divergenceValue = { serverTotal: '9.99' };
 		await renderAfterMountSettle();
@@ -824,9 +856,9 @@ describe('useCartSettlement background coupon replay (#963)', () => {
 		 * both — so counting calls now measures the new order's legitimate work. What
 		 * must hold is that nothing lands on the order the cashier navigated away from.
 		 */
-		expect(
-			localPatch.mock.calls.every((call) => call[0].document.uuid !== 'order-uuid-1')
-		).toBe(true);
+		expect(localPatch.mock.calls.every((call) => call[0].document.uuid !== 'order-uuid-1')).toBe(
+			true
+		);
 	});
 
 	it('survives a current-order re-emission that did not change which order is open', async () => {

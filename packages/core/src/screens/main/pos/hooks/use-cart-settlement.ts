@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import isEqual from 'lodash/isEqual';
 import pick from 'lodash/pick';
 import { useObservable, useSubscription } from 'observable-hooks';
 import { distinctUntilChanged, map } from 'rxjs/operators';
@@ -323,8 +324,13 @@ export const useCartSettlement = () => {
 				 * The guard applies to a MONEY-ONLY patch — a re-derived aggregate, which is
 				 * the thing that can loop against the server.
 				 *
-				 * A patch carrying line_items, coupon_lines or fee_lines is the cashier
-				 * doing something, and its money has to go with it. Before #1472 this fell
+				 * "Structural" means those lines actually DIFFER from what is persisted, not
+				 * merely that the patch contains the keys. settleCart emits line_items and
+				 * coupon_lines on every couponed replay, so key-presence is true even when
+				 * the pass was triggered by divergence alone — which would bypass the guard
+				 * permanently for couponed carts and rebuild the very loop it exists to
+				 * stop. Comparing content distinguishes a cashier edit from a re-derivation
+				 * of the same cart. Before #1472 this fell
 				 * out of where the guard lived: use-order-totals wrote money alone and was
 				 * guarded, while the cart replay wrote structure and money and was not. I
 				 * removed that asymmetry as a "latent instance of the same bug" — it was
@@ -334,7 +340,14 @@ export const useCartSettlement = () => {
 				 * server's 2.23 (caught by e2e/pos-coupon-apply.spec.ts, not by any unit
 				 * test).
 				 */
-				const structural = STRUCTURAL_FIELDS.some((field) => field in result.patch);
+				const structural = STRUCTURAL_FIELDS.some(
+					(field) =>
+						field in result.patch &&
+						!isEqual(
+							(result.patch as unknown as Record<string, unknown>)[field],
+							(freshOrder.payload as unknown as Record<string, unknown>)[field]
+						)
+				);
 				const decision = structural
 					? { suppress: false, nextLatch: null }
 					: evaluateRepush({
