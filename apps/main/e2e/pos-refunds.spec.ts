@@ -6,11 +6,13 @@ import {
 	expectFullPrecision,
 	expectMoneyMatches,
 	expectOrderPaid,
-	expectTaxParity,
+	expectRateSetParity,
 	liveOrderTest as liveTest,
 	newRunLabel,
 	openCheckout,
+	posAppliedRateIds,
 	processPayment,
+	readCartMoney,
 	readOrder,
 	stampRunLabel,
 } from './order-lifecycle';
@@ -73,6 +75,11 @@ async function addTestProductToCart(page: Page) {
  */
 async function createRefundableOrder(page: Page) {
 	await addTestProductToCart(page);
+	// What this order is WORTH, from the till — captured while the cart is still
+	// on screen, and deliberately not from the push body. Since #1507 the POS does
+	// not send the order aggregate (WooCommerce authors it from the lines), so
+	// reading `payload.total` off the wire yields `undefined`.
+	const { total } = await readCartMoney(page);
 	const gatewaysLoaded = page.waitForResponse('**/wp-json/wcpos/v2/payment-gateways{,?*}', {
 		timeout: 90_000,
 	});
@@ -84,13 +91,12 @@ async function createRefundableOrder(page: Page) {
 	const orderUuid = page.url().match(/\/cart\/([^/]+)\/checkout$/)?.[1];
 	expect(orderUuid).toBeTruthy();
 
-	return orderUuid!;
+	return { orderUuid: orderUuid!, total: Number(total) };
 }
 
 async function interceptRefundDependencies(page: Page) {
 	const unsupportedProviderRefundGatewayId = 'unsupported_provider_refunds';
 	let orderRevision = 0;
-	const capturedOrder = { total: 0 };
 	const gatewayIds = [
 		unsupportedProviderRefundGatewayId,
 		'stripe_terminal_for_woocommerce',
@@ -140,9 +146,6 @@ async function interceptRefundDependencies(page: Page) {
 			payload: Record<string, unknown>;
 		};
 		const currentRevision = `sha256:e2e-refund-${++orderRevision}`;
-		if (mutation.operation === 'create') {
-			capturedOrder.total = Number(mutation.payload.total);
-		}
 
 		await route.fulfill({
 			status: mutation.operation === 'create' ? 201 : 200,
@@ -153,19 +156,17 @@ async function interceptRefundDependencies(page: Page) {
 			}),
 		});
 	});
-
-	return capturedOrder;
 }
 
 async function openRefundModalForNewOrder(page: Page) {
-	const capturedOrder = await interceptRefundDependencies(page);
-	const orderUuid = await createRefundableOrder(page);
+	await interceptRefundDependencies(page);
+	const { orderUuid, total } = await createRefundableOrder(page);
 	await page.goto(`/orders/refund/${orderUuid}`);
 	await expect(page.getByTestId('refund-custom-amount')).toBeVisible({
 		timeout: 30_000,
 	});
-	expect(capturedOrder.total, 'stubbed order must have a refundable total').toBeGreaterThan(0);
-	await page.getByTestId('refund-custom-amount').fill(Math.min(capturedOrder.total, 1).toFixed(2));
+	expect(total, 'stubbed order must have a refundable total').toBeGreaterThan(0);
+	await page.getByTestId('refund-custom-amount').fill(Math.min(total, 1).toFixed(2));
 }
 
 /** The refund body the POS submits — see `buildRefundPayload` in use-refund-mutation.ts. */
@@ -307,6 +308,11 @@ liveTest.describe('POS refunds (Pro) - real refund (live store)', () => {
 			await addTestProductToCart(page);
 			await stampRunLabel(page, label);
 
+			// The till's own total, captured while the cart is still on screen and
+			// before the push whose ack it will be compared against — the POS adopts
+			// the server's money, so a later read could be the server's own figure.
+			const cart = await readCartMoney(page);
+
 			const { orderId, uuid, sent } = await openCheckout(page, {
 				onOrderCreated: (order) => trackOrder({ ...order, label }),
 			});
@@ -321,12 +327,19 @@ liveTest.describe('POS refunds (Pro) - real refund (live store)', () => {
 			// Totals parity on the SALE half (Money-oracle doctrine in TEST-PLAN.md):
 			// the order this test refunds must first be a correctly-recorded sale —
 			// otherwise "half of a wrong total" both computes and proves nothing.
-			if (sent.total !== undefined) {
-				expectMoneyMatches(paid.total, sent.total, 'parent order total parity (cart vs server)');
-			}
-			if (sent.cart_tax !== undefined) {
-				expectTaxParity(paid.cart_tax, sent.cart_tax, 'parent cart_tax parity');
-			}
+			//
+			// Against the TILL, not the push body: since #1507 the POS does not send
+			// the readonly order aggregate, so the old `if (sent.total !== undefined)`
+			// guard would never fire and this parity check would silently stop running
+			// — leaving the premise of the whole refund test unproved.
+			expectMoneyMatches(paid.total, cart.total, 'parent order total parity (cart vs server)');
+			// The client's rate set is still asserted, one level down, from the line
+			// taxes the POS does push.
+			expectRateSetParity(
+				posAppliedRateIds(sent),
+				paid.tax_lines,
+				'parent sale must keep the POS rate set'
+			);
 			const orderTotal = Number(paid.total);
 			const refundAmount = (orderTotal / 2).toFixed(2);
 			// WooCommerce will record a refund against an order that never took
