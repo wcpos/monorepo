@@ -9,6 +9,7 @@ import type { TaxRateInput } from './types';
  * - packages/core/src/screens/main/pos/hooks/use-calculate-line-item-tax-and-totals.test.ts
  * - packages/core/src/screens/main/pos/hooks/use-calculate-fee-line-tax-and-totals.test.ts
  * - packages/core/src/screens/main/pos/hooks/use-calculate-shipping-line-tax-and-totals.test.ts
+ *   (that hook and both of its suites are now DELETED — this file is the shipping coverage)
  *
  * Every expected value is pinned unchanged. The old tests mocked the data hooks
  * (getLineItemData/getFeeLineData/getShippingLineData) and the tax gate; here the
@@ -597,6 +598,90 @@ describe('calculateCartLine — shipping', () => {
 		expect(line.total).toBe('9.99');
 		// With dp=2 and roundAtSubtotal=false, tax is rounded to 2dp
 		expect(line.total_tax).toBe('2');
+	});
+});
+
+/**
+ * Migrated from use-calculate-shipping-line-tax-and-totals.tax-class.test.ts.
+ *
+ * A shipping line carrying no `_woocommerce_pos_data` falls back to the STORE's
+ * shipping tax class, so that value decides which rate the line is taxed at. The
+ * hook read the store field raw and let `taxClassFromWire` normalise it downstream;
+ * the config carries the wire spelling instead (`useCartConfig` does the round-trip),
+ * which is what these cases pin.
+ */
+describe('calculateCartLine — shipping tax class contract', () => {
+	const standardShippingRate: TaxRateInput = {
+		id: 101,
+		class: 'standard',
+		rate: '10.0000',
+		compound: false,
+		order: 1,
+		shipping: true,
+	};
+	const reducedShippingRate: TaxRateInput = {
+		id: 202,
+		class: 'reduced-rate',
+		rate: '5.0000',
+		compound: false,
+		order: 1,
+		shipping: true,
+	};
+
+	it.each([
+		// wire spelling of the store's shipping_tax_class → rate it selects
+		['', 101, '10'],
+		['reduced-rate', 202, '5'],
+		// 'inherit' is WooCommerce's "same as the cart" sentinel; extract maps it to standard.
+		['inherit', 101, '10'],
+	])(
+		'applies the matching rate when config.shippingTaxClass is %p',
+		(shippingTaxClass, expectedRateId, expectedTax) => {
+			const config = createCartConfig({
+				...baseConfig,
+				rates: [standardShippingRate, reducedShippingRate],
+				shippingTaxClass,
+			});
+
+			const { line } = calculateCartLine(
+				{
+					kind: 'shipping',
+					line: { method_title: 'Flat rate', total: '100', total_tax: '0' },
+				},
+				config
+			);
+
+			expect(line.total_tax).toBe(expectedTax);
+			expect(line.taxes).toEqual([{ id: expectedRateId, total: expectedTax }]);
+		}
+	);
+
+	it('lets the LINE own tax_class when its pos_data carries one', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [standardShippingRate, reducedShippingRate],
+			shippingTaxClass: '',
+		});
+
+		const { line } = calculateCartLine(
+			{
+				kind: 'shipping',
+				line: {
+					method_title: 'Flat rate',
+					meta_data: [
+						posDataMeta({
+							amount: 100,
+							prices_include_tax: false,
+							tax_status: 'taxable',
+							tax_class: 'reduced-rate',
+						}),
+					],
+				},
+			},
+			config
+		);
+
+		expect(line.taxes).toEqual([{ id: 202, total: '5' }]);
 	});
 });
 
