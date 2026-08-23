@@ -58,8 +58,9 @@ export function acceptsRawCloudUpload(profile: PrinterProfile | undefined): bool
  * A print job destined for the cloud queue. Two variants:
  *
  * - `raw` — pre-encoded payload bytes the client rendered locally. The printer
- *   polls and receives them as-is. Now only a legacy profile with no provider,
- *   and one-off payloads with no order behind them such as a drawer kick.
+ *   polls and receives them as-is. Now only a legacy profile with no or an
+ *   unknown provider, and one-off payloads with no order behind them such as a
+ *   drawer kick.
  * - `order` — no payload; the server renders & delivers the receipt from the
  *   order + template. Required by Epson SDP (rejects raw payloads) and PrintNode
  *   (never polls), and used by Star CloudPRNT since the server gained media-type

@@ -126,7 +126,7 @@ export function usePrint(options: UsePrintOptions) {
 			// local rendering — including fullReceiptRaster, which for Star is now
 			// the server's decision (it promotes image/png in the offer) rather than
 			// a client-side ESC/POS raster no Star printer could decode. Only a
-			// legacy profile with no provider still falls through to raw upload.
+			// legacy profile with no or an unknown provider still falls through to raw upload.
 			if (printerProfile && isOrderBasedCloudProfile(printerProfile)) {
 				if (orderId == null) {
 					throw new Error('Order-based cloud printing requires an order id');

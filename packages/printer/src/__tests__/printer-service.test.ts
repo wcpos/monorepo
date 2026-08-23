@@ -394,9 +394,32 @@ describe('PrinterService', () => {
 		};
 
 		await expect(service.openDrawer(profile)).rejects.toThrow(
-			'Open drawer is not supported for order-based cloud printers'
+			'Open drawer is not supported for this printer profile'
 		);
 		expect(getTransport).not.toHaveBeenCalled();
+	});
+
+	it('rejects system profiles before opening a drawer', async () => {
+		const service = new PrinterService();
+
+		const profile: PrinterProfile = {
+			id: 'system',
+			name: 'System Printer',
+			connectionType: 'system',
+			vendor: 'generic',
+			port: 0,
+			language: 'esc-pos',
+			columns: 48,
+			fullReceiptRaster: false,
+			autoCut: false,
+			autoOpenDrawer: false,
+			isDefault: false,
+			isBuiltIn: true,
+		};
+
+		await expect(service.openDrawer(profile)).rejects.toThrow(
+			'Open drawer is not supported for this printer profile'
+		);
 	});
 
 	it('still opens the drawer for Star CloudPRNT, whose receipts are server-rendered', async () => {
