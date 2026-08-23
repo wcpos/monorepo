@@ -444,6 +444,4 @@ export const useCartSettlement = () => {
 				})
 			)
 	);
-
 };
-
