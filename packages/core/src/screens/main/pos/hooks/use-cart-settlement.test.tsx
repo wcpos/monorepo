@@ -771,6 +771,28 @@ describe('useCartSettlement background coupon replay (#963)', () => {
 		);
 	});
 
+	/**
+	 * The mount pass gives a newly-opened order its initial settlement, but switching
+	 * tabs is NOT a remount — setCurrentOrderID swaps the context value in place. The
+	 * trigger compares serialized inputs, so two orders whose carts serialize the same
+	 * (two empty ones, most obviously) would emit nothing and the order switched TO
+	 * would keep whatever stale aggregate money it had.
+	 */
+	it('settles an order switched to whose cart serializes identically', async () => {
+		const { rerender } = await renderAfterMountSettle();
+
+		await act(async () => {
+			// Same cart contents, different order.
+			currentOrderRecord = buildCurrentOrderRecord('order-uuid-2');
+			revision = buildRevision({ uuid: 'order-uuid-2' });
+			rerender();
+		});
+
+		expect(settleCart).toHaveBeenCalledTimes(1);
+		expect(localPatch).toHaveBeenCalledTimes(1);
+		expect(localPatch.mock.calls[0][0].document.uuid).toBe('order-uuid-2');
+	});
+
 	it('aborts the continuation when the cart switches to another current order', async () => {
 		const background = deferredBackgroundWait();
 		applyCoupon([{ code: 'bonus' }]);
@@ -790,11 +812,21 @@ describe('useCartSettlement background coupon replay (#963)', () => {
 		});
 		expect(background.signals[0].aborted).toBe(true);
 
+		localPatch.mockClear();
+
 		await act(async () => {
 			background.settle();
 		});
-		expect(getCouponContext).not.toHaveBeenCalled();
-		expect(localPatch).not.toHaveBeenCalled();
+
+		/**
+		 * Asserted on the TARGET rather than on call counts. The order switched to
+		 * settles on arrival and arms its own continuation, and this deferred releases
+		 * both — so counting calls now measures the new order's legitimate work. What
+		 * must hold is that nothing lands on the order the cashier navigated away from.
+		 */
+		expect(
+			localPatch.mock.calls.every((call) => call[0].document.uuid !== 'order-uuid-1')
+		).toBe(true);
 	});
 
 	it('survives a current-order re-emission that did not change which order is open', async () => {

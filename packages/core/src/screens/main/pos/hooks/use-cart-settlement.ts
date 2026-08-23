@@ -180,6 +180,13 @@ export const useCartSettlement = () => {
 				distinctUntilChanged()
 			),
 		[
+			// The ORDER identity, not just its contents. Switching tabs swaps the context
+			// value without a remount, and distinctUntilChanged compares the serialized
+			// inputs — so moving to a different order whose cart happens to serialize
+			// identically (two empty carts, most obviously) would emit nothing, and that
+			// order would never get the initial settlement the mount pass exists to give
+			// it.
+			currentOrderRecord.uuid,
 			lineItems,
 			feeLines,
 			shippingLines,
