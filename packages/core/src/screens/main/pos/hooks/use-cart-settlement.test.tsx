@@ -199,12 +199,6 @@ jest.mock('./use-fee-line-data', () => ({
 
 let feeLineIsPercent = false;
 
-jest.mock('./use-update-fee-line', () => ({
-	useUpdateFeeLine: () => ({ updateFeeLine }),
-}));
-
-const updateFeeLine = jest.fn(async () => undefined);
-
 const emptyCouponContext = () => ({
 	coupons: new Map(),
 	productCategories: new Map(),
@@ -304,7 +298,6 @@ describe('useCartSettlement reference demand (#952)', () => {
 		settleCart.mockClear();
 		settleCart.mockImplementation(() => successfulSettlement());
 		getCouponContext.mockClear();
-		updateFeeLine.mockClear();
 		feeLineIsPercent = false;
 		whenSettled = jest.fn(async () => true);
 		whenSettledInBackground = jest.fn(async (_signal: AbortSignal) => true);
@@ -368,16 +361,34 @@ describe('useCartSettlement reference demand (#952)', () => {
 		);
 	});
 
-	it('does not fan out automatic writes for percentage fee lines', async () => {
+	/**
+	 * Percent fees used to be recomputed by a loop calling updateFeeLine() once per
+	 * fee line, each of which wrote. They now ride the settle patch instead.
+	 *
+	 * Asserting `updateFeeLine` was NOT called would be vacuous — this hook does not
+	 * import it, so that expectation cannot fail. The real behaviour is that the
+	 * recomputed fee lines reach the document through the single settle write.
+	 */
+	it('carries recomputed percentage fee lines in the single settle write', async () => {
 		feeLineIsPercent = true;
 		feeLines$.next([{ name: '10% service', meta_data: [] }]);
 		await renderAfterMountSettle();
+		settleCart.mockImplementation(() => ({
+			...successfulSettlement(),
+			patch: {
+				...successfulSettlement().patch,
+				fee_lines: [{ name: '10% service', total: '0.50' }],
+			},
+		}));
 
 		await act(async () => {
 			editCart([{ total: '5.00', total_tax: '0.00', product_id: 1 }]);
 		});
 
-		expect(updateFeeLine).not.toHaveBeenCalled();
+		expect(localPatch).toHaveBeenCalledTimes(1);
+		expect(localPatch.mock.calls[0][0].data).toEqual(
+			expect.objectContaining({ fee_lines: [{ name: '10% service', total: '0.50' }] })
+		);
 	});
 
 	it('declares coupon reference demand once the cart carries an applied coupon line', async () => {
