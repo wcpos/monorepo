@@ -143,7 +143,13 @@ const VOCABULARIES = {
 	dataSafety: DATA_SAFETY,
 	escalation: ESCALATIONS,
 };
+const SUMMARY_KEY_PREFIX = 'health.logs.error_summary.';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+/** `SYNC101` → `health.logs.error_summary.SYNC101`. */
+export function summaryKey(code) {
+	return `${SUMMARY_KEY_PREFIX}${code}`;
+}
 
 function validateRegistry(registry) {
 	if (!Array.isArray(registry)) throw new Error('Registry must be a JSON array');
@@ -342,16 +348,99 @@ async function writeDocs(outputDirectory, registry) {
 	]);
 }
 
+/**
+ * One literal `t()` call per error code, mirroring `event-titles.generated.ts`.
+ *
+ * The summary is the row's plain-language reason, and on the 147 `logger.error`
+ * call sites in packages/core that carry a code but no registered engine event
+ * type it is the ONLY merchant-readable sentence on the row — the title there
+ * falls back to the persisted developer message. Leaving it English meant a
+ * French till rendered a French title, an English reason and French guidance in
+ * one stack.
+ *
+ * Literal keys, because the string extractor only sees `t('literal')`: a
+ * computed `t(summaryKey(code))` would never reach translators.
+ *
+ * Codes are the switch cases rather than a lookup object so a code added to the
+ * registry without regenerating this file is a TYPE error, not a blank row.
+ */
+function renderSummaries(registry) {
+	const cases = registry
+		.map((entry) =>
+			[`\t\tcase ${quote(entry.code)}:`, `\t\t\treturn t(${quote(summaryKey(entry.code))});`].join(
+				'\n'
+			)
+		)
+		.join('\n');
+	return `${BANNER}
+import type { ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
+
+/** The translate function shape \`useT()\` returns. */
+type TranslateError = (key: string) => string;
+
+/**
+ * The plain-language reason for an error code, translated at render time — so a
+ * row written months ago on a Spanish till reads in whatever language the till
+ * runs today, the same contract \`translateEventTitle\` holds for row titles.
+ *
+ * No \`defaultValue\`: the English catalogue is bundled statically and IS the
+ * fallback language, and this generator writes those strings into it from the
+ * registry. A defaultValue would be a third copy of every summary that nothing
+ * renders and this generator could silently drift from.
+ */
+export function translateErrorSummary(t: TranslateError, code: ErrorCode): string {
+	switch (code) {
+${cases}
+		default: {
+			const exhaustive: never = code;
+			return exhaustive;
+		}
+	}
+}
+`;
+}
+
+/**
+ * The English source strings the generated `t()` calls resolve against.
+ *
+ * Only `health.logs.error_summary.*` keys are touched: every other key keeps its
+ * value AND its position, and the block is rewritten where it already sits, so
+ * editing a summary in the registry and regenerating produces a diff of exactly
+ * the summaries that changed. Same contract as `generate-event-labels.mjs`.
+ */
+export function renderLocale(registry, source) {
+	const existing = Object.entries(source);
+	const generated = (key) => key.startsWith(SUMMARY_KEY_PREFIX);
+	const untouched = existing.filter(([key]) => !generated(key));
+	const anchor = existing.findIndex(([key]) => generated(key));
+	const block = registry.map((entry) => [summaryKey(entry.code), entry.summary]);
+	const at = anchor === -1 ? untouched.length : anchor;
+	const merged = [...untouched.slice(0, at), ...block, ...untouched.slice(at)];
+	return `${JSON.stringify(Object.fromEntries(merged), null, '\t')}\n`;
+}
+
 function parseArguments(args) {
+	const localePath = path.join(
+		repoRoot,
+		'packages/core/src/contexts/translations/locales/en/core.json'
+	);
 	const options = {
 		registry: path.join(repoRoot, 'packages/utils/src/logger/error-registry.json'),
 		outputDirectory: path.join(repoRoot, 'packages/utils/src/logger/generated'),
+		summariesDirectory: path.join(repoRoot, 'packages/core/src/screens/main/logs/generated'),
+		localeSource: localePath,
+		localeOutput: localePath,
 	};
 	for (let index = 0; index < args.length; index += 2) {
 		if (args[index] === '--registry') options.registry = path.resolve(args[index + 1]);
-		else if (args[index] === '--output-dir')
-			options.outputDirectory = path.resolve(args[index + 1]);
-		else throw new Error(`Unknown argument: ${args[index]}`);
+		else if (args[index] === '--output-dir') {
+			// Test mode: every artifact lands in one throwaway directory, and the
+			// real English catalogue is read but never written.
+			const directory = path.resolve(args[index + 1]);
+			options.outputDirectory = directory;
+			options.summariesDirectory = directory;
+			options.localeOutput = path.join(directory, 'core.json');
+		} else throw new Error(`Unknown argument: ${args[index]}`);
 	}
 	return options;
 }
@@ -359,12 +448,19 @@ function parseArguments(args) {
 export async function generateErrorCodes(options = parseArguments([])) {
 	const registry = JSON.parse(await readFile(options.registry, 'utf8'));
 	validateRegistry(registry);
+	const locale = JSON.parse(await readFile(options.localeSource, 'utf8'));
 	await mkdir(options.outputDirectory, { recursive: true });
+	await mkdir(options.summariesDirectory, { recursive: true });
 	await Promise.all([
 		writeFile(
 			path.join(options.outputDirectory, 'error-codes.generated.ts'),
 			renderTypescript(registry)
 		),
+		writeFile(
+			path.join(options.summariesDirectory, 'error-summaries.generated.ts'),
+			renderSummaries(registry)
+		),
+		writeFile(options.localeOutput, renderLocale(registry, locale)),
 		writeFile(
 			path.join(options.outputDirectory, 'error-catalogue.json'),
 			`${JSON.stringify({ [BANNER]: true, entries: registry }, null, '\t')}\n`
