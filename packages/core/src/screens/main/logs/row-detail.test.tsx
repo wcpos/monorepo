@@ -178,13 +178,30 @@ describe('RowDetail', () => {
 		expect(screen.getAllByText('apply.pull')).toHaveLength(1);
 	});
 
-	it('shows the labelled event code with a copy button', async () => {
-		render(<RowDetail row={row} kind="sync" title="Saved updates from your store" />);
+	it('shows the labelled event code, and copies the WHOLE entry rather than the code', async () => {
+		render(
+			<RowDetail
+				row={{
+					...row,
+					level: 'error',
+					code: 'CHECKOUT401',
+					context: { ...row.context, detail: 'total: 65.390000 -> 65.400000' },
+				}}
+				kind="error"
+				title="Saved updates from your store"
+			/>
+		);
 
 		expect(screen.getByText('Event code')).not.toBeNull();
 		expect(screen.getByText('apply.pull')).not.toBeNull();
 		fireEvent.click(screen.getByTestId('logs-copy-event-log-1'));
-		await waitFor(() => expect(mockWriteText).toHaveBeenCalledWith('apply.pull'));
+
+		await waitFor(() => expect(mockWriteText).toHaveBeenCalled());
+		const copied = mockWriteText.mock.calls[0][0] as string;
+		// The regression: this used to be exactly 'apply.pull' and nothing else.
+		expect(copied).toContain('Event: apply.pull');
+		expect(copied).toContain('Error code: CHECKOUT401');
+		expect(copied).toContain('total: 65.390000 -> 65.400000');
 	});
 
 	it('hides the copy button when the Clipboard API is unavailable', () => {

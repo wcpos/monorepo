@@ -1,5 +1,6 @@
 import {
 	buildDebugInfo,
+	buildLogEntryReport,
 	chainMarkedIds,
 	deriveClockSkew,
 	deriveStuckRecords,
@@ -660,6 +661,75 @@ describe('buildDebugInfo', () => {
 		expect(text).toContain('Last server check: none yet');
 		expect(text).toContain('Recent errors (0):');
 		expect(text).toContain('  none');
+	});
+});
+
+describe('buildLogEntryReport', () => {
+	/**
+	 * The row that prompted this: the copy action used to yield
+	 * `push.money-divergence` and nothing else — the kind of thing that happened,
+	 * with no order, no figures and no error code. Everything a support thread
+	 * needs was in `context`, one line below it on screen.
+	 */
+	const divergenceRow: LogRow = {
+		logId: 'log-9',
+		timestamp: Date.parse('2026-08-23T18:16:04.000Z'),
+		level: 'error',
+		code: 'CHECKOUT401',
+		category: 'wcpos.sync.engine',
+		message: "order a5d24ec5 — the server's totals differ from the POS calculation",
+		context: {
+			type: 'push.money-divergence',
+			collection: 'orders',
+			recordId: 'a5d24ec5-6790-4594-940d-7db0dec10195',
+			mode: 'exact-6dp',
+			divergentFields: 'total',
+			detail: 'total: 65.390000 -> 65.400000',
+		},
+	};
+
+	it('carries the figures support needs, not just the event code', () => {
+		const text = buildLogEntryReport(divergenceRow);
+
+		expect(text).toContain('WCPOS log entry — 2026-08-23T18:16:04.000Z');
+		expect(text).toContain('Level: error');
+		expect(text).toContain('Event: push.money-divergence');
+		expect(text).toContain('Error code: CHECKOUT401');
+		expect(text).toContain('Category: wcpos.sync.engine');
+		expect(text).toContain("Message: order a5d24ec5 — the server's totals differ");
+		// THE line the merchant was pasting a bare event code instead of.
+		expect(text).toContain('"detail": "total: 65.390000 -> 65.400000"');
+		expect(text).toContain('"recordId": "a5d24ec5-6790-4594-940d-7db0dec10195"');
+	});
+
+	it('does not repeat an event-code message as prose', () => {
+		const text = buildLogEntryReport({
+			...divergenceRow,
+			message: 'push.money-divergence',
+		});
+
+		expect(text).toContain('Event: push.money-divergence');
+		expect(text).not.toContain('Message:');
+	});
+
+	it('reports a row that carries no context at all', () => {
+		const text = buildLogEntryReport({
+			logId: 'log-1',
+			timestamp: Date.parse('2026-08-23T18:16:04.000Z'),
+			level: 'info',
+		});
+
+		expect(text).toBe('WCPOS log entry — 2026-08-23T18:16:04.000Z\nLevel: info\nLog id: log-1');
+	});
+
+	it('still yields a report when the context cannot be serialized', () => {
+		const circular: Record<string, unknown> = { type: 'apply.pull' };
+		circular.self = circular;
+
+		const text = buildLogEntryReport({ ...divergenceRow, context: circular });
+
+		expect(text).toContain('Event: apply.pull');
+		expect(text).toContain('[details could not be serialized]');
 	});
 });
 
