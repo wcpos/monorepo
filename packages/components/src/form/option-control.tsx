@@ -26,25 +26,28 @@ export interface OptionLike {
  * (`withGuest`); before this was generic those props had no home in the type, which
  * is what drove `orders/edit/form.tsx` to `React.createElement(FormCombobox, {...} as never)`.
  *
- * Single-select: the field holds a scalar, converted to and from `Option` internally.
- * A caller whose label cannot be derived from the scalar — an id field whose label is
- * fetched separately, say — passes the pair straight through instead; the value memo
- * has always accepted that, the type just never said so.
+ * Single-select only. The field holds a scalar, converted to and from `Option`
+ * internally. A caller whose label cannot be derived from the scalar — an id field
+ * whose label is fetched separately, say — passes the pair straight through instead.
  *
- * Multi-select: the field holds `Option[]`, passed through untouched.
+ * There is deliberately no multi-select branch. `multiple` stays in the `Omit` below so
+ * a caller cannot smuggle it through to the control and silently break the scalar value
+ * contract. Multi-select goes through the raw `Combobox`/`TreeCombobox` (see
+ * `meta-data-keys-field.tsx`, `category-pill.tsx`) or `FormTreeCombobox`, which is
+ * built for it.
  */
-export type FormOptionFieldProps<TControl extends React.ElementType> = (
-	| (Omit<FormItemProps<string | OptionLike>, 'customComponent'> & { multiple?: false })
-	| (Omit<FormItemProps<OptionLike[]>, 'customComponent'> & { multiple: true })
-) & { customComponent?: TControl } & Omit<
+export type FormOptionFieldProps<TControl extends React.ElementType> = Omit<
+	FormItemProps<string | OptionLike>,
+	'customComponent'
+> & { customComponent?: TControl } & Omit<
 		Partial<React.ComponentProps<TControl>>,
 		'value' | 'onValueChange' | 'multiple' | 'customComponent'
 	>;
 
 /**
  * The body's own contract, generic over the rendered control exactly as the public
- * wrappers are, so the `multiple` / `value` / `onChange` agreement is checked at the
- * wrapper-to-body seam rather than erased by a cast on the way in.
+ * wrappers are, so the value/onChange agreement is checked at the wrapper-to-body seam
+ * rather than erased by a cast on the way in.
  */
 type FormOptionControlProps<TControl extends React.ElementType> = FormOptionFieldProps<TControl> & {
 	/** Rendered when the caller does not override the control via `customComponent`. */
@@ -63,7 +66,6 @@ export function FormOptionControl<TControl extends React.ElementType>({
 	description,
 	value,
 	onChange,
-	multiple,
 	defaultComponent,
 	customComponent,
 	...props
@@ -79,22 +81,16 @@ export function FormOptionControl<TControl extends React.ElementType>({
 	 */
 	const Component: React.ElementType<any> = customComponent ?? defaultComponent;
 
-	const controlValue = React.useMemo(() => {
-		if (multiple) {
-			return (value as OptionLike[] | undefined) ?? [];
-		}
-		return typeof value === 'string' ? { value, label: value } : value;
-	}, [multiple, value]);
+	const controlValue = React.useMemo(
+		() => (typeof value === 'string' ? { value, label: value } : value),
+		[value]
+	);
 
 	const handleValueChange = React.useCallback(
-		(val: OptionLike | OptionLike[] | undefined) => {
-			if (multiple) {
-				onChange?.((val as OptionLike[] | undefined) ?? []);
-			} else {
-				onChange?.(optionToFieldValue(val as OptionLike | undefined));
-			}
+		(val: OptionLike | undefined) => {
+			onChange?.(optionToFieldValue(val));
 		},
-		[multiple, onChange]
+		[onChange]
 	);
 
 	return (
@@ -104,7 +100,6 @@ export function FormOptionControl<TControl extends React.ElementType>({
 				{...ariaProps}
 				open={open}
 				onOpenChange={setOpen}
-				multiple={multiple}
 				value={controlValue}
 				onValueChange={handleValueChange}
 				{...props}
