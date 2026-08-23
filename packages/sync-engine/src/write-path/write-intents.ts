@@ -126,6 +126,45 @@ function sanitizeOutboundPayload(
 	return payload;
 }
 
+/**
+ * Every queue row crosses a structured-clone boundary: on web the RxDB storage
+ * lives in a Worker (`getRxStorageWorker`) and on Electron behind
+ * `getRxStorageIpcRenderer`, so `bulkUpsert` ends in a `postMessage`. A value
+ * that cannot be cloned fails the whole enqueue.
+ *
+ * `RxDocument.get(path)` returns a **Proxy** for object-valued paths (rxdb's
+ * `getDocumentProperty`), and a Proxy is not cloneable — a caller handing one
+ * through as a payload kills the write with "#<Object> could not be cloned"
+ * — the failure that broke customer create, which unlike orders/products has no
+ * rewriting sanitizer above to incidentally launder the proxy away.
+ *
+ * Callers pass plain snapshots (`toMutableJSON()`). This rebuilds one anyway so
+ * the mistake can only ever be a wasted copy, never a dead write. Payloads are
+ * JSON-shaped Woo records; `Date` is carried explicitly because the storage
+ * clone would carry it too.
+ */
+function toPlainValue(value: unknown): unknown {
+	if (value === null || typeof value !== 'object') return value;
+	if (Array.isArray(value)) return value.map(toPlainValue);
+	if (value instanceof Date) return new Date(value.getTime());
+	// `Object.fromEntries`, not `plain[key] = …`: `sanitize_key` keeps `_`, so a
+	// payload key literally spelled `__proto__` reaches here as OWN data (JSON.parse
+	// mints it that way) — the same case `filterPayloadFields` guards in
+	// fakePullServer. Plain assignment would run Object.prototype's setter, dropping
+	// the field and re-parenting the accumulator; `fromEntries` defines an own data
+	// property, so the key survives as the ordinary payload data it is.
+	return Object.fromEntries(
+		Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, toPlainValue(item)])
+	);
+}
+
+function storablePayload(
+	collectionName: string,
+	payload: Record<string, unknown>
+): Record<string, unknown> {
+	return toPlainValue(sanitizeOutboundPayload(collectionName, payload)) as Record<string, unknown>;
+}
+
 const queues = new WeakMap<object, RecordMutationQueue>();
 export function queueFor(db: RxDatabase): RecordMutationQueue {
 	const existing = queues.get(db);
@@ -167,7 +206,7 @@ export async function enqueueWriteIntent(input: {
 		input.intent.operation !== 'delete'
 			? {
 					...input.intent,
-					payload: sanitizeOutboundPayload(input.intent.collection, input.intent.payload),
+					payload: storablePayload(input.intent.collection, input.intent.payload),
 				}
 			: input.intent;
 	const deps = { mintUuid: input.mintUuid, now: input.now };

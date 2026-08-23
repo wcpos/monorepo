@@ -53,11 +53,16 @@ export function VoidButton() {
 						recordId,
 						changes: orderPayload,
 					});
+					// Plain snapshot, not `.get('payload')` — that returns an RxDB Proxy,
+					// which cannot cross postMessage into the storage worker.
+					const { payload: restoredPayload } = restored.toMutableJSON() as {
+						payload: Record<string, unknown>;
+					};
 					await manager.engine.write({
 						collection: 'orders',
 						operation: 'update',
 						recordId,
-						payload: restored.get('payload') as Record<string, unknown>,
+						payload: restoredPayload,
 					});
 				} else {
 					const payload = { ...orderPayload, id: 0 };
@@ -67,11 +72,15 @@ export function VoidButton() {
 						recordId,
 						payload,
 					});
+					// Plain snapshot, not `.get('payload')` — see above.
+					const { payload: residentPayload } = resident.toMutableJSON() as {
+						payload: Record<string, unknown>;
+					};
 					await manager.engine.write({
 						collection: 'orders',
 						operation: 'create',
 						recordId,
-						payload: resident.get('payload') as Record<string, unknown>,
+						payload: residentPayload,
 					});
 				}
 				router.setParams({ orderId: [recordId] });

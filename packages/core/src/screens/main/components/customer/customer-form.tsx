@@ -197,10 +197,10 @@ export function CustomerForm({ form, onClose, onSubmit, loading }: CustomerFormP
 				<MetaDataForm />
 				{/** TODO: move the buttons to the parent component */}
 				<HStack className="justify-end">
-					<Button variant="outline" onPress={onClose}>
+					<Button testID="customer-form-close" variant="outline" onPress={onClose}>
 						<ButtonText>{t('common.close')}</ButtonText>
 					</Button>
-					<Button loading={loading} onPress={onSave}>
+					<Button testID="customer-form-save" loading={loading} onPress={onSave}>
 						<ButtonText>{t('common.save')}</ButtonText>
 					</Button>
 				</HStack>

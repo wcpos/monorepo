@@ -1,6 +1,8 @@
 /**
  * @jest-environment jsdom
  */
+import { serialize as structuredSerialize } from 'node:v8';
+
 import { act, renderHook } from '@testing-library/react';
 
 import { useLocalMutation } from './use-local-mutation';
@@ -462,6 +464,52 @@ describe('useLocalMutation', () => {
 			status: 'processing',
 			date_modified_gmt: '2026-03-02T00:00:00',
 		});
+	});
+
+	it('stores a plain patch when the caller hands over an RxDB proxy', async () => {
+		// RxDB serves object-valued document fields as Proxies, nested ones included.
+		// A caller reading `customer.payload.billing` off a record and patching it
+		// onto the order — which is exactly what the cart's add-customer flow does —
+		// would otherwise kill the optimistic write at the storage boundary with
+		// "#<Object> could not be cloned": on web that write is a `postMessage` into
+		// the storage worker.
+		const stored: Record<string, unknown> = {
+			uuid: 'order-uuid',
+			remoteId: '42',
+			payload: { id: 42 },
+			sync: { revision: 'rev-1' },
+			local: { dirty: false, pendingMutationIds: [] },
+		};
+		const incrementalModify = jest.fn(
+			async (modifier: (old: Record<string, unknown>) => Record<string, unknown>) => {
+				Object.assign(stored, modifier(stored));
+				return stored;
+			}
+		);
+		mockFindOneExec.mockResolvedValue({
+			incrementalModify,
+			toJSON: () => JSON.parse(JSON.stringify(stored)),
+		});
+		const document = {
+			uuid: 'order-uuid',
+			id: 42,
+			collection: { name: 'orders' },
+			getLatest: () => document,
+		};
+
+		const { result } = renderHook(() => useLocalMutation());
+		await act(() =>
+			result.current.localPatch({
+				document: document as never,
+				data: { billing: new Proxy({ email: 'ada@example.com' }, {}) } as never,
+			})
+		);
+
+		// jsdom omits `structuredClone`; `v8.serialize` runs the same algorithm the
+		// storage worker's `postMessage` does, and raises the same DataCloneError.
+		expect(() => structuredSerialize(stored)).not.toThrow();
+		expect(() => structuredSerialize(mockWrite.mock.calls[0][0])).not.toThrow();
+		expect(stored.payload).toMatchObject({ billing: { email: 'ada@example.com' } });
 	});
 
 	it('enqueues born-local edits as updates for the write plane to fold into the pending create', async () => {

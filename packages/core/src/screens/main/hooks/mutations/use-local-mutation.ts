@@ -399,7 +399,14 @@ export const useLocalMutation = () => {
 			data,
 		}: LocalPatchProps<TDocument, TData>) => {
 			try {
-				const patchData = { ...(data as Record<string, unknown>) };
+				// `cloneDeep`, not a spread: RxDB serves object-valued document fields as
+				// **Proxies** (`getDocumentProperty`), nested ones included, and a Proxy
+				// cannot be structured-cloned — which is how every optimistic write ends
+				// on web (storage in a Worker) and Electron (storage behind ipcRenderer).
+				// A caller handing over a field it read off a record would otherwise kill
+				// the patch with "#<Object> could not be cloned". Callers pass plain
+				// snapshots; this makes a slip a wasted copy instead of a dead write.
+				const patchData = cloneDeep(data as Record<string, unknown>);
 				const collectionName = document.collection?.name;
 				const engineCollection = writeableCollection(collectionName);
 				const isTemporaryOrder =

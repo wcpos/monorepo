@@ -1,6 +1,16 @@
 import { parseLinkHeader as parse } from './parse-link-header';
 
 describe('Parse Link Header', () => {
+	it('keeps a `__proto__` query param as ordinary data', () => {
+		// These keys come off the wire; plain assignment would run Object.prototype's
+		// setter and re-parent the object instead of storing the param.
+		const parsed = parse('<https://example.com/x?__proto__=hack&page=2>; rel="next"');
+
+		expect(Object.prototype.hasOwnProperty.call(parsed!.next, '__proto__')).toBe(true);
+		expect(Object.getPrototypeOf(parsed!.next)).toBe(Object.prototype);
+		expect(parsed!.next.page).toBe('2');
+	});
+
 	it('parsing a proper link header with next and last', () => {
 		const link =
 			'<https://api.github.com/user/9287/repos?client_id=1&client_secret=2&page=2&per_page=100>; rel="next", ' +

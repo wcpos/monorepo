@@ -1,3 +1,5 @@
+import { serialize as structuredSerialize } from 'node:v8';
+
 import { describe, expect, it } from 'vitest';
 
 import { createFakeMutationCollection } from '@wcpos/sync-core/testing';
@@ -73,7 +75,7 @@ function revCollectionOverMap(queued: Map<string, QueuedMutation>): RxRecordMuta
 }
 
 async function enqueueCatalogPayload(
-	collectionName: 'products' | 'variations',
+	collectionName: 'products' | 'variations' | 'customers',
 	payload: Record<string, unknown>
 ) {
 	const mutationCollection = createFakeMutationCollection();
@@ -114,6 +116,48 @@ async function enqueueCatalogPayload(
 }
 
 describe('enqueueWriteIntent', () => {
+	it('carries an own `__proto__` payload key through as ordinary data', async () => {
+		// `sanitize_key` keeps `_`, so a Woo payload key literally spelled `__proto__`
+		// survives parsing and reaches the queue — JSON.parse mints it as an OWN data
+		// property. The same case `filterPayloadFields` guards in fakePullServer:
+		// rebuilding the payload with `plain[key] = …` would run Object.prototype's
+		// setter, silently dropping the field and re-parenting the object.
+		const payload = await enqueueCatalogPayload(
+			'customers',
+			JSON.parse('{"first_name":"Ada","__proto__":{"polluted":"yes"}}') as Record<string, unknown>
+		);
+
+		expect(Object.prototype.hasOwnProperty.call(payload, '__proto__')).toBe(true);
+		expect((payload as Record<string, unknown>)['__proto__']).toEqual({ polluted: 'yes' });
+		// The accumulator itself must not have been re-parented, and the row must
+		// still survive the storage clone.
+		expect(Object.getPrototypeOf(payload)).toBe(Object.prototype);
+		expect(() => structuredSerialize(payload)).not.toThrow();
+	});
+
+	it('stores a plain payload even when the caller hands over an RxDB proxy', async () => {
+		// Every queue row crosses a structured-clone boundary — a Worker on web, IPC
+		// on Electron. `RxDocument.get()` returns a *Proxy* for object-valued paths,
+		// and a Proxy is not cloneable: the write dies with "#<Object> could not be
+		// cloned". Orders and products are laundered incidentally by their outbound
+		// sanitizers rewriting the object; customers had nothing in the way, so the
+		// seam normalizes every payload itself.
+		const proxied = new Proxy(
+			{ first_name: 'Ada', billing: { email: 'ada@example.com' } },
+			{}
+		) as Record<string, unknown>;
+
+		const payload = await enqueueCatalogPayload('customers', proxied);
+
+		expect(() => structuredSerialize(payload)).not.toThrow();
+		// The nested object matters: the proxy's traps are what break the clone, and
+		// a shallow copy at the seam would leave a nested one intact.
+		expect(payload).toMatchObject({
+			first_name: 'Ada',
+			billing: { email: 'ada@example.com' },
+		});
+	});
+
 	it.each(['products', 'variations'] as const)(
 		'strips null cost_of_goods_sold values from %s payloads',
 		async (collectionName) => {
