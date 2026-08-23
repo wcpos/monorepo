@@ -239,6 +239,22 @@ describe('TotalsChangedBanner', () => {
 		emit(divergence('order-a', [{ field: 'total', expected: '36.68', got: '50.07' }]));
 		expect(document.querySelector('[role="dialog"]')).toBeNull();
 	});
+
+	/**
+	 * The "why totals disagree" link is shown on the FIRST divergence, not held
+	 * back until store-level escalation. Encounter one is the most confusing
+	 * moment for a cashier, and it used to be the one screen with nothing to
+	 * click — the explanation only appeared once three sales had diverged.
+	 */
+	it('links to the docs on a single divergence, before any escalation', () => {
+		renderBanner();
+		emit(divergence('order-a', [{ field: 'total', expected: '36.68', got: '50.07' }]));
+
+		expect(screen.queryByTestId('order-totals-changed-banner-store-level')).toBeNull();
+		expect(screen.getByTestId('order-totals-changed-banner-docs-link').getAttribute('href')).toBe(
+			'https://docs.wcpos.com/support/troubleshooting/totals-disagree'
+		);
+	});
 });
 
 describe('store-level escalation (ADR 0032 §5.3)', () => {
