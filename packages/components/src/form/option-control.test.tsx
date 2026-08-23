@@ -115,11 +115,15 @@ describe.each([
 		expect(passedValue()).toEqual({ value: '42', label: 'Ada Lovelace' });
 	});
 
-	it('substitutes an empty array for an absent multi-select value', () => {
-		render(<Harness Field={Field} fieldProps={{ multiple: true, value: undefined }} />);
+	/**
+	 * Multi-select is not part of this wrapper's contract — it goes through the raw
+	 * `Combobox`/`TreeCombobox` or `FormTreeCombobox`. `multiple` stays in the props
+	 * `Omit` so it cannot reach the control and turn the scalar value into an array.
+	 */
+	it('does not forward multiple to the control', () => {
+		render(<Harness Field={Field} fieldProps={{ value: 'AU' }} />);
 
-		expect(passedValue()).toEqual([]);
-		expect(control().getAttribute('data-multiple')).toBe('true');
+		expect(control().getAttribute('data-multiple')).toBe('false');
 	});
 
 	/**
