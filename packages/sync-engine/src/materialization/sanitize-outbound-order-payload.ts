@@ -1,3 +1,5 @@
+import { stripServerAuthoredOrderMoney } from '@wcpos/sync-core';
+
 import { stripNonStringMetaDisplayFields } from './strip-order-meta-display';
 
 /**
@@ -17,9 +19,23 @@ import { stripNonStringMetaDisplayFields } from './strip-order-meta-display';
  *    wc/v3 answers `rest_invalid_email` (400), which dead-letters the CREATE and
  *    strands the order — every later update then 404s. Absent means "no email",
  *    which is the truth. This is the #786 / woocommerce-pos#1308 incident.
+ *  - the SERVER-AUTHORED MONEY AGGREGATE (#1507, ADR 0032). Unlike the two
+ *    above this prevents no 400 — the schema drops those props silently. It is
+ *    here because this is the seam every outbound payload passes through,
+ *    INCLUDING the coalesced snapshot, which re-layers the resident record's
+ *    payload and would otherwise put the aggregate back on the wire behind a
+ *    caller that never asked to send it.
+ *
+ *    Taking it off the WIRE does not take it out of the CHECK. The cashier must
+ *    still be told when the store's `total` is not the total they charged, so
+ *    the drain carries the till's aggregate beside the payload — see
+ *    write-path/order-till-aggregate.ts. Deleting that capture would silence
+ *    the alarm on the one number a cashier reads out loud.
  */
 export function sanitizeOutboundOrderPayload<T extends Record<string, unknown>>(payload: T): T {
-	return stripEmptyBillingEmail(stripNonStringMetaDisplayFields(payload));
+	return stripServerAuthoredOrderMoney(
+		stripEmptyBillingEmail(stripNonStringMetaDisplayFields(payload))
+	);
 }
 
 function stripEmptyBillingEmail<T extends Record<string, unknown>>(payload: T): T {

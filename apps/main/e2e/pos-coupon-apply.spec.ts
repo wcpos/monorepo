@@ -7,11 +7,12 @@ import { getStoreVariant, listStoreIds, storeRequestOptions } from './fixtures';
 import {
 	expectMoneyMatches,
 	expectRateSetParity,
-	expectTaxParity,
 	isPushOrdersResponse,
 	liveOrderTest as liveTest,
 	newRunLabel,
 	type OrderPayload,
+	posAppliedRateIds,
+	readCartMoney,
 	type ServerOrder,
 	stampRunLabel,
 } from './order-lifecycle';
@@ -180,12 +181,27 @@ for (const targetStoreId of storeTargets) {
 					await expect(submit).toBeEnabled({ timeout: 10_000 });
 					await submit.click();
 
-					// The dialog closes on a successful apply; the cart then recomputes with
-					// the coupon before the save below captures the payload. (No text
-					// selector for the coupon line — the E2E selector policy — so the ack
-					// assertion on coupon_lines below is what proves the application.)
+					// The dialog closes on a successful apply. (No text selector for the
+					// coupon line — the E2E selector policy — so the ack assertion on
+					// coupon_lines below is what proves the application.)
 					await expect(page.getByTestId('add-coupon-submit')).not.toBeVisible({ timeout: 30_000 });
-					await page.waitForTimeout(1_000);
+
+					// The till's own money, captured before the save. Since #1507 the POS
+					// does not push the aggregate — WooCommerce authors it from the
+					// lines — so the push body cannot witness what this cart discounted
+					// and totalled. These are the figures the cashier is looking at,
+					// which is the referent ADR 0032 §2 is about.
+					//
+					// `discounted: true` waits for the SETTLED discount rather than for a
+					// fixed delay. `useAddCoupon` patches the coupon and line arrays and
+					// the aggregate follows asynchronously, so a sleep here is a guess
+					// about how long that takes — and the total wait alone is no help,
+					// since the product had already given it a digit.
+					const cart = await readCartMoney(page, { discounted: true });
+					expect(
+						Number(cart.discountTotal),
+						'the cart must have discounted the applied coupon before saving'
+					).toBeGreaterThan(0);
 
 					const saved = page.waitForResponse((response) => isPushOrdersResponse(response), {
 						timeout: 90_000,
@@ -228,22 +244,28 @@ for (const targetStoreId of storeTargets) {
 					// Money-oracle doctrine, coupon edition: what the POS discounted and
 					// totalled is what the server recorded. A recalculation difference here
 					// is the #1020 class — evidence, never a tolerated blanket.
-					const sentDiscount = (sent as { discount_total?: string }).discount_total;
-					if (sentDiscount !== undefined) {
-						expectMoneyMatches(
-							(doc as { discount_total?: string }).discount_total,
-							sentDiscount,
-							'discount_total parity'
-						);
-					}
-					if (sent.total !== undefined) {
-						expectMoneyMatches(doc!.total, sent.total, 'couponed order total parity');
-					}
-					if (sent.cart_tax !== undefined) {
-						expectTaxParity(doc!.cart_tax, sent.cart_tax, 'couponed cart_tax parity');
-					}
+					//
+					// Compared against the CART, not against the push body. This is the
+					// regression guard for the defect that produced ADR 0032: settleCart
+					// computed the discount correctly and the aggregate never reached the
+					// document, so the store recorded `discount_total: 0`. Since #1507 the
+					// server computes that figure from the lines, so the same defect now
+					// shows up as a cart that discounts while the server does not — which
+					// is exactly what these two assertions catch.
+					expectMoneyMatches(
+						(doc as { discount_total?: string }).discount_total,
+						cart.discountTotal,
+						'discount_total parity (cart vs server)'
+					);
+					expectMoneyMatches(
+						doc!.total,
+						cart.total,
+						'couponed order total parity (cart vs server)'
+					);
+					// The client's rate set comes from the LINE taxes it pushes: the
+					// order's `tax_lines` are readonly aggregate and no longer on the wire.
 					expectRateSetParity(
-						sent.tax_lines,
+						posAppliedRateIds(sent),
 						doc!.tax_lines,
 						'couponed sale must keep the POS rate set'
 					);

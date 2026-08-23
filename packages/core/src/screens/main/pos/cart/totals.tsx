@@ -41,6 +41,10 @@ export function Totals() {
 	const { currentOrderRecord } = useCurrentOrder();
 	const refunds = useRecordField(currentOrderRecord, (order) => order.payload.refunds);
 	const orderTotal = useRecordField(currentOrderRecord, (order) => order.payload.total);
+	const orderDiscountTotal = useRecordField(
+		currentOrderRecord,
+		(order) => order.payload.discount_total
+	);
 
 	/**
 	 * Convert to numbers
@@ -158,6 +162,25 @@ export function Totals() {
 					)}
 				</VStack>
 			) : null}
+			{/*
+			  The till's own money, raw, for E2E — same idea as the data-table
+			  footer's hidden row counts, and for the same reason.
+
+			  Since #1507 the POS no longer PUSHES the order aggregate: WooCommerce
+			  authors it, so the push body is not a witness to what this cart
+			  computed, and a spec comparing sent-against-ack aggregate would pass on
+			  an absent field rather than on agreement. These markers ARE the figures
+			  the cashier is looking at, which is the referent ADR 0032 §2 is about:
+			  the till's arithmetic must equal the store's. Empty string, never a
+			  fabricated '0.00' — an order that has not settled yet has no total, and
+			  a spec must be able to tell that from a zero one.
+			*/}
+			<Text testID="cart-order-total" className="hidden">
+				{orderTotal ?? ''}
+			</Text>
+			<Text testID="cart-discount-total" className="hidden">
+				{orderDiscountTotal ?? ''}
+			</Text>
 			<CustomerNote />
 		</>
 	);

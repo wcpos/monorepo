@@ -12,7 +12,9 @@ import {
 	newRunLabel,
 	openCheckout,
 	type OrderLineItem,
+	posAppliedRateIds,
 	processPayment,
+	readCartMoney,
 	readOrder,
 	stampRunLabel,
 } from './order-lifecycle';
@@ -336,6 +338,12 @@ liveTest.describe('POS Checkout - real payment (live store)', () => {
 			await addTestProductToCart(page);
 			await stampRunLabel(page, label);
 
+			// The till's own money, captured while the CART is still on screen — the
+			// checkout modal replaces it, and payment clears it. Since #1507 this is
+			// the client-side referent for the aggregate: WooCommerce authors `total`
+			// from the lines, so the push body no longer carries the POS's figure.
+			const cart = await readCartMoney(page);
+
 			const { orderId, sent } = await openCheckout(page, {
 				onOrderCreated: (order) => trackOrder({ ...order, label }),
 			});
@@ -454,14 +462,21 @@ liveTest.describe('POS Checkout - real payment (live store)', () => {
 			// rate ids, not amounts. Unconditional over BOTH sets (#1114 review): a
 			// serialization regression dropping the client's tax_lines on this
 			// taxable sale fails as a set mismatch instead of skipping the check.
+			// The client's rate set comes from the LINE taxes it pushes, not from
+			// `tax_lines`: since #1507 the order's tax lines are readonly aggregate
+			// WooCommerce authors, and the POS no longer sends them — reading them off
+			// the wire would compare `[]` against the server's real rates.
 			expectRateSetParity(
-				sent.tax_lines,
+				posAppliedRateIds(sent),
 				server.tax_lines,
 				'server tax rates must equal the rates the POS applied'
 			);
-			if (sent.cart_tax !== undefined) {
-				expectTaxParity(server.cart_tax, sent.cart_tax, 'cart_tax parity');
-			}
+			// `cart_tax` parity is not asserted from the push body any more, for the
+			// same reason — and it needs no replacement here: cart_tax is the sum of
+			// the per-line taxes, every one of which is compared above against the
+			// client's own figure, and the server derives its cart_tax from those same
+			// lines. A per-line drift fails there, named by line, rather than as one
+			// opaque aggregate difference.
 
 			// THE MONEY THE CASHIER WAS ASKED FOR IS THE MONEY THE SERVER RECORDED —
 			// and both equal what the cart rang up. An earlier revision only compared
@@ -474,9 +489,13 @@ liveTest.describe('POS Checkout - real payment (live store)', () => {
 			expect(digitsOf(Number(server.total).toFixed(2)), 'amount charged vs amount shown').toBe(
 				amountShown
 			);
-			if (sent.total !== undefined) {
-				expectMoneyMatches(server.total, sent.total, 'order total parity (cart vs server)');
-			}
+			// The cart's OWN arithmetic against the server's, read from the till
+			// rather than from the push body: since #1507 the POS does not send the
+			// aggregate (WooCommerce authors it from the lines), so `sent.total` is
+			// absent and a comparison guarded on it would never run. `amountShown`
+			// above is the checkout modal's rendering of this same number; `cart.total`
+			// is the cart's persisted figure at full stored precision.
+			expectMoneyMatches(server.total, cart.total, 'order total parity (cart vs server)');
 		}
 	);
 

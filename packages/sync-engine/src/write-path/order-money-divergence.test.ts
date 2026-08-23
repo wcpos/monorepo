@@ -335,6 +335,85 @@ describe('compareOrderMoney — exact-6dp mode (woocommerce-pos#1466 is live)', 
 	});
 });
 
+/**
+ * #1507: the POS no longer PUTS the order aggregate in a push BODY — those
+ * fields are readonly in the wc/v3 schema and dropped before anything is set.
+ *
+ * It is still COMPARED. The cashier has to be told when the store's total is
+ * not the total they charged, so the drain carries the till's aggregate beside
+ * the payload (`tillAggregateFor`) and hands the pair to `compareOrderMoney`.
+ * These cases pin the comparator's behaviour for the residue — a slot neither
+ * side supplies. The rule is unchanged and long-standing (a field only one side
+ * carries is not evidence of anything); it is pinned here because if a future
+ * edit made an absent value read as zero, every sale would report a divergence.
+ */
+describe('an order compared without an aggregate on either side', () => {
+	/** The payload as it now goes on the wire: line money, no order money. */
+	function withoutAggregate(payload: Record<string, unknown>): Record<string, unknown> {
+		const stripped = clone(payload);
+		for (const field of [
+			'total',
+			'total_tax',
+			'cart_tax',
+			'discount_total',
+			'discount_tax',
+			'shipping_total',
+			'shipping_tax',
+			'tax_lines',
+		]) {
+			delete stripped[field];
+		}
+		return stripped;
+	}
+
+	it('is silent about an aggregate the till never supplied', () => {
+		const acked = clone(server6dp);
+		acked.total = '999.99';
+		acked.cart_tax = '111.11';
+		acked.discount_total = '5.00';
+
+		expect(compareOrderMoney({ pushed: withoutAggregate(pos), acked })).toBeNull();
+	});
+
+	it('still reports the line money the POS DOES assert', () => {
+		const acked = clone(server6dp);
+		lineOf(acked).total = '19.980000';
+
+		expect(compareOrderMoney({ pushed: withoutAggregate(pos), acked })?.fields).toEqual([
+			{
+				field: `line_items[${ORDER_MONEY_ORACLE_LINE_UUID}].total`,
+				expected: roundDecimalString(String(lineOf(pos).total), 6),
+				got: '19.980000',
+				decimals: 6,
+			},
+		]);
+	});
+
+	it('still reports the aggregate once the till supplies it (the drain always does)', () => {
+		const acked = clone(server6dp);
+		acked.total = '50.070000';
+
+		expect(
+			compareOrderMoney({
+				// What the drain hands over: the wire payload, plus the till's own
+				// aggregate captured from the resident at push time.
+				pushed: { ...withoutAggregate(pos), total: pos.total as string },
+				acked,
+			})?.fields
+		).toEqual([{ field: 'total', expected: '36.680000', got: '50.070000', decimals: 6 }]);
+	});
+
+	it('leaves adoption alone — that half reads the RESIDENT, which keeps its money', () => {
+		// The push no longer carries the aggregate, but the resident still holds
+		// the cart's own arithmetic, so an ack that merely re-spells it must not
+		// overwrite the local spelling and restart the patch loop.
+		const adopted = preserveEquivalentLocalPrecision(clone(pos), clone(server6dp));
+
+		expect(adopted.total).toBe(pos.total);
+		expect(adopted.cart_tax).toBe(pos.cart_tax);
+	});
+});
+
 describe('preserveEquivalentLocalPrecision (the adoption half of the mirror contract)', () => {
 	it('keeps the sub-cent local value when a pre-#1466 ack says the same number at 2dp', () => {
 		const merged = preserveEquivalentLocalPrecision(pos, server2dp);

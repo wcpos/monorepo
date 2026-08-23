@@ -712,6 +712,106 @@ describe('useLocalMutation', () => {
 		expect(mockWrite).toHaveBeenCalledTimes(2);
 	});
 
+	/**
+	 * #1507 / ADR 0032. WooCommerce owns the order aggregate: those fields are
+	 * `readonly` in the wc/v3 schema and dropped before anything is set, so a
+	 * settlement that writes only money has nothing to say to the server — but
+	 * the cart still has to display it, and an offline till still has to run on
+	 * it.
+	 */
+	describe('a settlement that writes only the order aggregate', () => {
+		const AGGREGATE = {
+			discount_total: '5.00',
+			discount_tax: '0.00',
+			shipping_total: '0.00',
+			shipping_tax: '0.00',
+			cart_tax: '6.71328',
+			total_tax: '6.71',
+			total: '36.68',
+			tax_lines: [{ rate_id: 1, tax_total: '6.71328' }],
+		};
+
+		function residentOrder() {
+			const stored: Record<string, unknown> = {
+				uuid: 'order-uuid',
+				remoteId: '42',
+				status: 'pos-open',
+				payload: { id: 42, status: 'pos-open', total: '0.00' },
+				sync: { revision: 'rev-1' },
+				local: { dirty: false, pendingMutationIds: [] },
+			};
+			mockFindOneExec.mockResolvedValue({
+				incrementalModify: jest.fn(
+					async (modifier: (old: Record<string, unknown>) => Record<string, unknown>) => {
+						Object.assign(stored, modifier(stored));
+						return stored;
+					}
+				),
+				toJSON: () => JSON.parse(JSON.stringify(stored)),
+			});
+			const document = {
+				uuid: 'order-uuid',
+				id: 42,
+				collection: { name: 'orders' },
+				getLatest: () => document,
+			};
+			return { stored, document };
+		}
+
+		it('lands on the local record — the cart and the offline till read it there', async () => {
+			const { stored, document } = residentOrder();
+
+			const { result } = renderHook(() => useLocalMutation());
+			const patchResult = await act(() =>
+				result.current.localPatch({ document: document as never, data: AGGREGATE as never })
+			);
+
+			expect(stored.payload).toMatchObject({
+				...AGGREGATE,
+				date_modified_gmt: '2026-03-02T00:00:00',
+			});
+			// The promoted columns the orders grid sorts and renders on follow it.
+			expect(stored).toMatchObject({ total: '36.68' });
+			expect(patchResult?.changes).toMatchObject(AGGREGATE);
+		});
+
+		it('is not enqueued — the server discards the aggregate unread', async () => {
+			const { document } = residentOrder();
+
+			const { result } = renderHook(() => useLocalMutation());
+			await act(() =>
+				result.current.localPatch({ document: document as never, data: AGGREGATE as never })
+			);
+
+			expect(mockWrite).not.toHaveBeenCalled();
+		});
+
+		it('still enqueues once the same patch carries real intent', async () => {
+			const { document } = residentOrder();
+
+			const { result } = renderHook(() => useLocalMutation());
+			await act(() =>
+				result.current.localPatch({
+					document: document as never,
+					// The settlement's own percent-fee output: `fee_lines[].total` is
+					// writable and the server keeps it.
+					data: { ...AGGREGATE, fee_lines: [{ id: 5, total: '3.00' }] } as never,
+				})
+			);
+
+			// The aggregate rides along in the intent; the outbound seam
+			// (sanitizeOutboundOrderPayload) is what takes it off the wire.
+			expect(mockWrite).toHaveBeenCalledWith(
+				expect.objectContaining({
+					collection: 'orders',
+					operation: 'update',
+					recordId: 'order-uuid',
+					payload: expect.objectContaining({ fee_lines: [{ id: 5, total: '3.00' }] }),
+				})
+			);
+		});
+	});
+
 	it('compensates and throws when the active scope changes twice', async () => {
 		let activeScopeId = 'scope-1';
 		mockStatus.mockImplementation(() => ({ activeScopeId }));

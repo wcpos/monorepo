@@ -16,6 +16,7 @@ import {
 import {
 	deriveBarcodeFromPayload,
 	mapBarcodeEditToPayload,
+	orderChangesAssertIntent,
 	RECORD_UUID_META_KEY,
 	remoteIdOrNull,
 } from '@wcpos/sync-core';
@@ -92,6 +93,31 @@ function syncableChanges(
 	return Object.fromEntries(
 		Object.entries(changes).filter(([field]) => !adapterDerivedFields.has(field))
 	);
+}
+
+/**
+ * Is this change set worth a server request?
+ *
+ * For orders, a patch made ENTIRELY of the money aggregate is not (#1507). Those
+ * fields are `readonly` in the wc/v3 order schema and `filter_writable_props()`
+ * drops them before anything is set, so the push body would be discarded unread
+ * — and its ack would then be compared, in `compareOrderMoney`, against a
+ * payload asserting nothing but money the server was always going to overwrite.
+ * The settlement's aggregate is still applied to the local record, because that
+ * is what the cart displays and what an offline till runs on (ADR 0032 §4); it
+ * simply stops being sent.
+ *
+ * A patch mixing money with real intent — a coupon replay's lines, a percent
+ * fee's `fee_lines` — still enqueues. The aggregate riding along in it is
+ * stripped on the outbound seam (`sanitizeOutboundOrderPayload`), which is also
+ * what keeps it off a COALESCED payload: that snapshot re-layers the resident
+ * record, aggregate and all.
+ */
+function assertsSomething(
+	collection: WriteableCollection,
+	changes: Record<string, unknown>
+): boolean {
+	return collection === 'orders' ? orderChangesAssertIntent(changes) : true;
 }
 
 function ensureRecordMetadata(
@@ -444,7 +470,10 @@ export const useLocalMutation = () => {
 				if (engineCollection) {
 					const syncChanges = syncableChanges(engineCollection, changes);
 					let patched: EngineResident;
-					if (Object.keys(syncChanges).length > 0) {
+					if (
+						Object.keys(syncChanges).length > 0 &&
+						assertsSomething(engineCollection, syncChanges)
+					) {
 						patched = await patchAndEnqueueEngineResident({
 							manager,
 							collection: engineCollection,

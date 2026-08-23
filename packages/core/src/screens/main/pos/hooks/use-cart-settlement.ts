@@ -233,6 +233,15 @@ export const useCartSettlement = () => {
 	 * document matches the lines on the document by the time the cashier's next
 	 * action can read it.
 	 *
+	 * LOCAL ONLY, since #1507. Every field this patch writes is server-authored
+	 * money — `readonly` in the wc/v3 order schema, recomputed by WooCommerce
+	 * from the lines — so `localPatch` applies it to the record and enqueues
+	 * nothing. That is not a weakening of the guarantee above: the guarantee was
+	 * always about the DOCUMENT, which is what the cart displays and what an
+	 * offline till runs on. It only stops being a claim made to the server. A
+	 * pass that also recomputes a percent fee still enqueues, because
+	 * `fee_lines[].total` is the cashier's intent and the server keeps it.
+	 *
 	 * The writes are serialized through `moneyWriteChain` because the aggregate is
 	 * asserted WHOLESALE — every money field, every time — so the last write to land
 	 * is the one that stands. `localPatch` awaits the engine resident before it

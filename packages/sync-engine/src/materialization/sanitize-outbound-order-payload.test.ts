@@ -37,6 +37,26 @@ describe('sanitizeOutboundOrderPayload', () => {
 		expect(sanitizeOutboundOrderPayload(input)).toBe(input);
 	});
 
+	it('drops the server-authored money aggregate, keeping the line money (#1507)', () => {
+		const output = sanitizeOutboundOrderPayload({
+			status: 'pos-open',
+			total: '36.68',
+			total_tax: '6.71',
+			cart_tax: '6.71328',
+			discount_total: '0.00',
+			discount_tax: '0.00',
+			shipping_total: '0.00',
+			shipping_tax: '0.00',
+			tax_lines: [{ rate_id: 1, tax_total: '6.71328' }],
+			line_items: [{ id: 3, subtotal: '30.00', total: '30.00' }],
+		});
+
+		expect(output).toEqual({
+			status: 'pos-open',
+			line_items: [{ id: 3, subtotal: '30.00', total: '30.00' }],
+		});
+	});
+
 	it('ignores a billing value that is not an object', () => {
 		const input = { billing: 'nonsense' } as Record<string, unknown>;
 
