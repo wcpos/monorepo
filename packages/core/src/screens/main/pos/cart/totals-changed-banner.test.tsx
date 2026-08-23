@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 
 import {
 	OrderMoneyDivergenceProvider,
@@ -56,12 +56,15 @@ jest.mock('@wcpos/components/vstack', () => {
 	const { View } = jest.requireActual('react-native');
 	return { VStack: View };
 });
-jest.mock('@wcpos/components/icon-button', () => {
-	const { Pressable } = jest.requireActual('react-native');
-	return {
-		IconButton: (props: Record<string, unknown>) => <Pressable {...props} />,
-	};
-});
+// DocsLink reaches expo-linking through openExternalURL, which this suite's
+// transform cannot parse. Rendered as an anchor so `href` stays assertable.
+jest.mock('@wcpos/components/docs-link', () => ({
+	DocsLink: ({ href, children, testID }: Record<string, unknown>) => (
+		<a data-testid={testID as string} href={href as string}>
+			{children as string}
+		</a>
+	),
+}));
 
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: { uuid: currentOrderUuid } }),
@@ -101,6 +104,13 @@ function renderBanner() {
 	);
 }
 
+/** Diverge N DISTINCT orders — what the store-level escalation counts. */
+function divergeOrders(count: number) {
+	for (let i = 0; i < count; i++) {
+		emit(divergence(`order-${i}`, [{ field: 'total', expected: '1.00', got: '2.00' }], `m${i}`));
+	}
+}
+
 beforeEach(() => {
 	listeners.clear();
 	activeScopeId = 'scope-1';
@@ -120,24 +130,80 @@ describe('TotalsChangedBanner', () => {
 		expect(screen.getByTestId('order-totals-changed-banner').textContent).toContain(
 			"Your store changed this order's totals"
 		);
-		expect(screen.getByTestId('order-totals-changed-banner-total').textContent).toBe(
-			'Total: 36.68 → 50.07'
+		expect(screen.getByTestId('order-totals-changed-banner-field-total').textContent).toBe(
+			'Total36.68 → 50.07'
 		);
-		expect(screen.queryByTestId('order-totals-changed-banner-other')).toBeNull();
+		expect(screen.queryByTestId('order-totals-changed-banner-line-amounts')).toBeNull();
 	});
 
-	it('counts the other amounts that moved without listing payload paths at a cashier', () => {
+	/**
+	 * ADR 0032 §5: the record carries `expected` and `got` per field, and naming
+	 * them is what lets support act without a screen share. Order-level slots are
+	 * named; per-line paths are counted, because `line_items[<uuid>].total_tax`
+	 * means nothing to the person at the counter.
+	 */
+	it('names every order-level amount that moved', () => {
 		renderBanner();
 		emit(
 			divergence('order-a', [
 				{ field: 'total', expected: '36.68', got: '50.07' },
 				{ field: 'total_tax', expected: '6.71', got: '11.10' },
-				{ field: 'line_items[abc].total', expected: '29.97', got: '19.98' },
+				{ field: 'discount_total', expected: '4.00', got: '0.00' },
 			])
 		);
 
-		expect(screen.getByTestId('order-totals-changed-banner-other').textContent).toBe(
-			'2 other amounts also changed'
+		expect(screen.getByTestId('order-totals-changed-banner-field-total').textContent).toBe(
+			'Total36.68 → 50.07'
+		);
+		expect(screen.getByTestId('order-totals-changed-banner-field-total_tax').textContent).toBe(
+			'Tax6.71 → 11.10'
+		);
+		expect(screen.getByTestId('order-totals-changed-banner-field-discount_total').textContent).toBe(
+			'Discount4.00 → 0.00'
+		);
+		expect(screen.queryByTestId('order-totals-changed-banner-line-amounts')).toBeNull();
+	});
+
+	/**
+	 * Regression: `discount_tax` and `shipping_tax` are order-level in the
+	 * producer's ORDER_MONEY_FIELDS but were missing from the banner's list, so a
+	 * divergence in either fell through to the per-line count — the cashier saw
+	 * "1 line amount also differs" and both figures vanished. The two lists have
+	 * to agree, and this is the test that says so.
+	 */
+	it.each([
+		['discount_tax', 'Discount tax'],
+		['shipping_tax', 'Shipping tax'],
+		['cart_tax', 'Item tax'],
+		['discount_total', 'Discount'],
+		['shipping_total', 'Shipping'],
+		['total_tax', 'Tax'],
+		['total', 'Total'],
+	])('names %s as an order-level amount, not a line one', (field, label) => {
+		renderBanner();
+		emit(divergence('order-a', [{ field, expected: '1.00', got: '2.00' }]));
+
+		expect(screen.getByTestId(`order-totals-changed-banner-field-${field}`).textContent).toBe(
+			`${label}1.00 → 2.00`
+		);
+		expect(screen.queryByTestId('order-totals-changed-banner-line-amounts')).toBeNull();
+	});
+
+	it('counts the per-line amounts rather than listing payload paths at a cashier', () => {
+		renderBanner();
+		emit(
+			divergence('order-a', [
+				{ field: 'total', expected: '36.68', got: '50.07' },
+				{ field: 'line_items[abc].total', expected: '29.97', got: '19.98' },
+				{ field: 'tax_lines[1].tax_total', expected: '6.71', got: '11.10' },
+			])
+		);
+
+		expect(screen.getByTestId('order-totals-changed-banner-line-amounts').textContent).toBe(
+			'2 line amounts also differ'
+		);
+		expect(screen.getByTestId('order-totals-changed-banner').textContent).not.toContain(
+			'line_items['
 		);
 	});
 
@@ -146,18 +212,23 @@ describe('TotalsChangedBanner', () => {
 		emit(divergence('order-a', [{ field: 'total_tax', expected: '6.71', got: '11.10' }]));
 
 		expect(screen.getByTestId('order-totals-changed-banner')).toBeTruthy();
-		expect(screen.queryByTestId('order-totals-changed-banner-total')).toBeNull();
-		expect(screen.getByTestId('order-totals-changed-banner-other').textContent).toBe(
-			'1 other amount also changed'
+		expect(screen.queryByTestId('order-totals-changed-banner-field-total')).toBeNull();
+		expect(screen.getByTestId('order-totals-changed-banner-field-total_tax').textContent).toBe(
+			'Tax6.71 → 11.10'
 		);
 	});
 
-	it('dismisses for that order and stays dismissed', () => {
+	/**
+	 * The banner used to carry a dismiss button. ADR 0032 removed it: a divergence
+	 * is a broken product invariant, and a dismissed notice is a broken invariant
+	 * nobody reports.
+	 */
+	it('offers no way to dismiss it', () => {
 		renderBanner();
 		emit(divergence('order-a', [{ field: 'total', expected: '36.68', got: '50.07' }]));
 
-		fireEvent.click(screen.getByTestId('order-totals-changed-banner-dismiss'));
-		expect(screen.queryByTestId('order-totals-changed-banner')).toBeNull();
+		expect(screen.queryByTestId('order-totals-changed-banner-dismiss')).toBeNull();
+		expect(screen.getByTestId('order-totals-changed-banner')).toBeTruthy();
 	});
 
 	it('does not block the sale — it renders inline, not as a modal or a gate', () => {
@@ -167,6 +238,50 @@ describe('TotalsChangedBanner', () => {
 		renderBanner();
 		emit(divergence('order-a', [{ field: 'total', expected: '36.68', got: '50.07' }]));
 		expect(document.querySelector('[role="dialog"]')).toBeNull();
+	});
+});
+
+describe('store-level escalation (ADR 0032 §5.3)', () => {
+	it('stays silent about the store while only one sale has diverged', () => {
+		renderBanner();
+		emit(divergence('order-a', [{ field: 'total', expected: '1.00', got: '2.00' }]));
+
+		expect(screen.getByTestId('order-totals-changed-banner')).toBeTruthy();
+		expect(screen.queryByTestId('order-totals-changed-banner-store-level')).toBeNull();
+	});
+
+	it('escalates once enough DISTINCT orders have diverged, and links to the docs', () => {
+		currentOrderUuid = 'order-2';
+		renderBanner();
+		divergeOrders(3);
+
+		const escalation = screen.getByTestId('order-totals-changed-banner-store-level');
+		expect(escalation.textContent).toContain('This has happened on 3 sales');
+		expect(screen.getByTestId('order-totals-changed-banner-docs-link').getAttribute('href')).toBe(
+			'https://docs.wcpos.com/support/troubleshooting/totals-disagree'
+		);
+	});
+
+	it('counts orders, not saves — re-saving one bad order is still one bad order', () => {
+		renderBanner();
+		emit(divergence('order-a', [{ field: 'total', expected: '1.00', got: '2.00' }], 'm1'));
+		emit(divergence('order-a', [{ field: 'total', expected: '1.00', got: '3.00' }], 'm2'));
+		emit(divergence('order-a', [{ field: 'total', expected: '1.00', got: '4.00' }], 'm3'));
+
+		expect(screen.queryByTestId('order-totals-changed-banner-store-level')).toBeNull();
+	});
+
+	it('resets the count on a store switch — one install cannot escalate the next', () => {
+		currentOrderUuid = 'order-2';
+		renderBanner();
+		divergeOrders(3);
+		expect(screen.getByTestId('order-totals-changed-banner-store-level')).toBeTruthy();
+
+		switchScope('scope-2');
+		emit(divergence('order-2', [{ field: 'total', expected: '1.00', got: '2.00' }], 'again'));
+
+		expect(screen.getByTestId('order-totals-changed-banner')).toBeTruthy();
+		expect(screen.queryByTestId('order-totals-changed-banner-store-level')).toBeNull();
 	});
 });
 
@@ -190,17 +305,17 @@ describe('multi-tab scoping', () => {
 			</OrderMoneyDivergenceProvider>
 		);
 
-		expect(screen.getByTestId('order-totals-changed-banner-total').textContent).toBe(
-			'Total: 10.00 → 12.00'
+		expect(screen.getByTestId('order-totals-changed-banner-field-total').textContent).toBe(
+			'Total10.00 → 12.00'
 		);
 	});
 
-	it('dismissing one order leaves another order’s alert standing', () => {
+	it('holds each order’s alert independently', () => {
 		function Probe() {
 			const { divergence: held } = useOrderMoneyDivergence('order-b');
-			return <span data-testid="probe">{held ? 'held' : 'none'}</span>;
+			return <span data-testid="probe">{held ? held.fields[0].got : 'none'}</span>;
 		}
-		const { rerender } = render(
+		render(
 			<OrderMoneyDivergenceProvider>
 				<CartTotalsChangedBanner />
 				<Probe />
@@ -209,16 +324,10 @@ describe('multi-tab scoping', () => {
 		emit(divergence('order-a', [{ field: 'total', expected: '1.00', got: '2.00' }]));
 		emit(divergence('order-b', [{ field: 'total', expected: '3.00', got: '4.00' }]));
 
-		fireEvent.click(screen.getByTestId('order-totals-changed-banner-dismiss'));
-		rerender(
-			<OrderMoneyDivergenceProvider>
-				<CartTotalsChangedBanner />
-				<Probe />
-			</OrderMoneyDivergenceProvider>
+		expect(screen.getByTestId('order-totals-changed-banner-field-total').textContent).toBe(
+			'Total1.00 → 2.00'
 		);
-
-		expect(screen.queryByTestId('order-totals-changed-banner')).toBeNull();
-		expect(screen.getByTestId('probe').textContent).toBe('held');
+		expect(screen.getByTestId('probe').textContent).toBe('4.00');
 	});
 
 	it('renders nothing for an unsaved order that has no uuid yet', () => {
@@ -235,23 +344,85 @@ describe('lifecycle', () => {
 		emit(divergence('order-a', [{ field: 'total', expected: '1.00', got: '2.00' }]));
 		emit(divergence('order-a', [{ field: 'total', expected: '2.00', got: '3.00' }]));
 
-		expect(screen.getByTestId('order-totals-changed-banner-total').textContent).toBe(
-			'Total: 2.00 → 3.00'
+		expect(screen.getByTestId('order-totals-changed-banner-field-total').textContent).toBe(
+			'Total2.00 → 3.00'
 		);
 	});
 
-	it('retires the alert when a LATER save of the same order comes back clean', () => {
+	/**
+	 * This inverts the pre-ADR-0032 rule, which retired the alert on a later clean
+	 * ack. Under ADR 0032 a held divergence also tells `useCartSettlement` that
+	 * this order's money belongs to the server, so the POS stops asserting its
+	 * own — which makes every subsequent ack clean BY CONSTRUCTION. Retiring on
+	 * one would hand the money straight back to the POS, it would re-assert, the
+	 * server would overrule it again, and the order would oscillate. The alert is
+	 * sticky precisely so that cannot happen.
+	 */
+	it('is NOT retired by a later clean ack — the order stays server-owned', () => {
 		renderBanner();
 		emit(divergence('order-a', [{ field: 'total', expected: '1.00', got: '2.00' }], 'm1'));
-		expect(screen.getByTestId('order-totals-changed-banner')).toBeTruthy();
-
-		// The cashier corrected the sale and saved again; the server kept the money
-		// this time. A banner still quoting the old amounts would be a lie.
 		emit(acknowledged('order-a', 'm2'));
-		expect(screen.queryByTestId('order-totals-changed-banner')).toBeNull();
+
+		expect(screen.getByTestId('order-totals-changed-banner')).toBeTruthy();
 	});
 
-	it('is NOT retired by its own acknowledgement — both ride the same drain flush', () => {
+	/**
+	 * The detail map is capped for memory. Server OWNERSHIP is not, and deriving
+	 * one from the other meant the 51st divergence handed an earlier order's money
+	 * back to the POS — it would settle again, against arithmetic the server had
+	 * already rejected. The order need not even be open at the time: completed
+	 * orders are never evicted, so fifty later sales are enough.
+	 */
+	it('keeps an order server-owned after its detail is evicted by the cap', () => {
+		function Probe() {
+			const { divergence: held, serverOwnsMoney } = useOrderMoneyDivergence('order-early');
+			return (
+				<span data-testid="probe">{`${held ? 'detail' : 'no-detail'}/${
+					serverOwnsMoney ? 'owned' : 'not-owned'
+				}`}</span>
+			);
+		}
+		render(
+			<OrderMoneyDivergenceProvider>
+				<Probe />
+			</OrderMoneyDivergenceProvider>
+		);
+		emit(divergence('order-early', [{ field: 'total', expected: '1.00', got: '2.00' }], 'm-early'));
+		expect(screen.getByTestId('probe').textContent).toBe('detail/owned');
+
+		// Fifty later sales, one after another, each diverging.
+		for (let i = 0; i < 50; i++) {
+			emit(divergence(`later-${i}`, [{ field: 'total', expected: '1.00', got: '2.00' }], `m${i}`));
+		}
+
+		// Its detail is gone — that is the memory bound doing its job — but the POS
+		// must NOT start deriving that order's money again.
+		expect(screen.getByTestId('probe').textContent).toBe('no-detail/owned');
+	});
+
+	it('counts a re-diverged order once even after its detail was evicted', () => {
+		function Probe() {
+			const { divergedOrderCount } = useOrderMoneyDivergence('order-early');
+			return <span data-testid="count">{String(divergedOrderCount)}</span>;
+		}
+		render(
+			<OrderMoneyDivergenceProvider>
+				<Probe />
+			</OrderMoneyDivergenceProvider>
+		);
+		emit(divergence('order-early', [{ field: 'total', expected: '1.00', got: '2.00' }], 'm-early'));
+		for (let i = 0; i < 50; i++) {
+			emit(divergence(`later-${i}`, [{ field: 'total', expected: '1.00', got: '2.00' }], `m${i}`));
+		}
+		expect(screen.getByTestId('count').textContent).toBe('51');
+
+		// Saving the evicted order again re-states its detail. It is the SAME order,
+		// so the store-level count must not move.
+		emit(divergence('order-early', [{ field: 'total', expected: '1.00', got: '3.00' }], 'm-again'));
+		expect(screen.getByTestId('count').textContent).toBe('51');
+	});
+
+	it('is NOT retired by its own acknowledgement either', () => {
 		renderBanner();
 		emit(divergence('order-a', [{ field: 'total', expected: '1.00', got: '2.00' }], 'm1'));
 		emit(acknowledged('order-a', 'm1'));
@@ -348,8 +519,8 @@ describe('the checkout mount', () => {
 		emit(divergence('order-a', [{ field: 'total', expected: '36.68', got: '50.07' }]));
 
 		expect(screen.getByTestId('checkout-totals-changed-banner')).toBeTruthy();
-		expect(screen.getByTestId('checkout-totals-changed-banner-total').textContent).toBe(
-			'Total: 36.68 → 50.07'
+		expect(screen.getByTestId('checkout-totals-changed-banner-field-total').textContent).toBe(
+			'Total36.68 → 50.07'
 		);
 		// Both mounts are live at once (the cart sits behind the modal), so their
 		// selectors must not collide for E2E.
@@ -360,15 +531,5 @@ describe('the checkout mount', () => {
 		renderCheckout('order-a');
 		emit(divergence('order-b', [{ field: 'total', expected: '1.00', got: '2.00' }]));
 		expect(screen.queryByTestId('checkout-totals-changed-banner')).toBeNull();
-	});
-
-	it('dismisses from checkout without leaving the cart copy behind', () => {
-		renderCheckout('order-a');
-		emit(divergence('order-a', [{ field: 'total', expected: '36.68', got: '50.07' }]));
-
-		fireEvent.click(screen.getByTestId('checkout-totals-changed-banner-dismiss'));
-
-		expect(screen.queryByTestId('checkout-totals-changed-banner')).toBeNull();
-		expect(screen.queryByTestId('order-totals-changed-banner')).toBeNull();
 	});
 });

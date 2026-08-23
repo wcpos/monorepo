@@ -14,6 +14,7 @@ import { PayButton } from './buttons/pay';
 import { SaveButton } from './buttons/save-order';
 import { VoidButton } from './buttons/void';
 import { CartHeader } from './cart-header';
+import { useCartSettlement } from '../hooks/use-cart-settlement';
 import { CartTable } from './table';
 import { OpenOrderTabs } from './tabs';
 import { Totals } from './totals';
@@ -25,6 +26,11 @@ import { useCurrentOrder } from '../contexts/current-order';
 
  */
 export function OpenOrders({ isColumn = false }) {
+	// The cart's single writer. Mounted HERE, once, because CartTable, Totals and
+	// useOrderTotals below all mount useCartLines — and settlement state must not be
+	// duplicated across them. See use-cart-settlement.ts.
+	useCartSettlement();
+
 	const { currentOrderRecord } = useCurrentOrder();
 
 	if (!currentOrderRecord) {

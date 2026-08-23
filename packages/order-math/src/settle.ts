@@ -21,6 +21,7 @@ import type {
 	FeeLineInput,
 	LineItemInput,
 	MoneyString,
+	ShippingLineInput,
 } from './types';
 
 // DB element type — used only for the cast at the pos-data helper boundary.
@@ -194,6 +195,75 @@ function buildValidationContext(args: {
 	};
 }
 
+/**
+ * Steps 5-7 of the pipeline, over whatever lines the caller settled on: percent
+ * fees recomputed on that basis → order totals → the money patch.
+ *
+ * Shared by both entry points, which differ only in whether the coupon replay
+ * ran before it. Everything here is a pure function of the lines it is handed,
+ * needs no coupon data, and cannot fail — which is what lets `settleAggregate`
+ * exist at all.
+ *
+ * `warnings` is appended to in place; the caller owns the array.
+ */
+function settleOverLines(args: {
+	config: CartConfig;
+	lineItems: LineItemInput[];
+	feeLines: FeeLineInput[];
+	shippingLines: ShippingLineInput[];
+	couponLines: CouponLineInput[];
+	warnings: EngineWarning[];
+}): { patch: SettlePatch; totals: OrderTotals } {
+	const { config, lineItems, shippingLines, couponLines, warnings } = args;
+
+	// 5. Percent fees recomputed on the given line basis; fixed fees and
+	// tombstones pass through untouched.
+	let percentFeeRecomputed = false;
+	const postFeeLines = args.feeLines.map((fee) => {
+		if (!isActiveFeeLine(fee)) return fee;
+		const { percent } = extractFeeLineData(fee as DbFeeLine, config.pricesIncludeTax);
+		if (!percent) return fee;
+		percentFeeRecomputed = true;
+		const result = calculateCartLine({ kind: 'fee', line: fee, cartLineItems: lineItems }, config);
+		warnings.push(...result.warnings);
+		return result.line;
+	});
+
+	// 6. Order totals over (lines, post-fee fees, shipping, coupons). Full arrays
+	// incl. tombstones — calculateOrderTotals filters internally. config.allRates
+	// seeds the tax_lines labels.
+	const totals = calculateOrderTotals(
+		{
+			lineItems,
+			feeLines: postFeeLines,
+			shippingLines,
+			couponLines,
+			taxRates: [...config.allRates],
+			taxRoundAtSubtotal: config.taxRoundAtSubtotal,
+			dp: config.dp,
+			pricesIncludeTax: config.pricesIncludeTax,
+		},
+		(warning) => warnings.push(warning)
+	);
+
+	// 7. Patch assembly — array keys present only when their stage ran.
+	const patch: SettlePatch = {
+		discount_total: totals.discount_total,
+		discount_tax: totals.discount_tax,
+		shipping_total: totals.shipping_total,
+		shipping_tax: totals.shipping_tax,
+		cart_tax: totals.cart_tax,
+		total_tax: totals.total_tax,
+		total: totals.total,
+		tax_lines: totals.tax_lines,
+	};
+	if (percentFeeRecomputed) {
+		patch.fee_lines = postFeeLines;
+	}
+
+	return { patch, totals };
+}
+
 // ===== entry point 1: settleCart =====
 
 /**
@@ -328,58 +398,69 @@ export function settleCart(
 		postReplayCouponLines = replay.couponLines;
 	}
 
-	// 5. Percent fees recomputed on the POST-replay active line items; fixed fees
-	// and tombstones pass through untouched.
-	const feeBasisLineItems = postReplayLineItems ?? lineItems;
-	let percentFeeRecomputed = false;
-	const postFeeLines = feeLines.map((fee) => {
-		if (!isActiveFeeLine(fee)) return fee;
-		const { percent } = extractFeeLineData(fee as DbFeeLine, config.pricesIncludeTax);
-		if (!percent) return fee;
-		percentFeeRecomputed = true;
-		const result = calculateCartLine(
-			{ kind: 'fee', line: fee, cartLineItems: feeBasisLineItems },
-			config
-		);
-		warnings.push(...result.warnings);
-		return result.line;
+	// 5-7. Percent fees on the post-replay basis → order totals → patch.
+	const { patch, totals } = settleOverLines({
+		config,
+		lineItems: postReplayLineItems ?? lineItems,
+		feeLines,
+		shippingLines,
+		couponLines: postReplayCouponLines ?? couponLines,
+		warnings,
 	});
 
-	// 6. Order totals over (post-replay lines, post-fee fees, snapshot shipping,
-	// post-replay coupons). Full arrays incl. tombstones — calculateOrderTotals
-	// filters internally. config.allRates seeds the tax_lines labels.
-	const totals = calculateOrderTotals(
-		{
-			lineItems: feeBasisLineItems,
-			feeLines: postFeeLines,
-			shippingLines,
-			couponLines: postReplayCouponLines ?? couponLines,
-			taxRates: [...config.allRates],
-			taxRoundAtSubtotal: config.taxRoundAtSubtotal,
-			dp: config.dp,
-			pricesIncludeTax: config.pricesIncludeTax,
-		},
-		(warning) => warnings.push(warning)
-	);
-
-	// 7. Patch assembly — array keys present only when their stage ran.
-	const patch: SettlePatch = {
-		discount_total: totals.discount_total,
-		discount_tax: totals.discount_tax,
-		shipping_total: totals.shipping_total,
-		shipping_tax: totals.shipping_tax,
-		cart_tax: totals.cart_tax,
-		total_tax: totals.total_tax,
-		total: totals.total,
-		tax_lines: totals.tax_lines,
-	};
+	// The replay's own output. Present IFF stage 4 ran — zero active coupons
+	// leaves line_items and coupon_lines out of the patch entirely.
 	if (postReplayLineItems && postReplayCouponLines) {
 		patch.line_items = postReplayLineItems;
 		patch.coupon_lines = postReplayCouponLines;
 	}
-	if (percentFeeRecomputed) {
-		patch.fee_lines = postFeeLines;
-	}
 
 	return { ok: true, changed: computeChanged(snapshot, patch), patch, totals, warnings };
+}
+
+// ===== entry point 2: settleAggregate =====
+
+/** What `settleAggregate` may write: the money, and percent fees. Never the lines. */
+export type SettleAggregatePatch = Omit<SettlePatch, 'line_items' | 'coupon_lines'>;
+
+export interface SettleAggregateResult {
+	changed: boolean;
+	patch: SettleAggregatePatch;
+	totals: OrderTotals;
+	warnings: readonly EngineWarning[];
+}
+
+/**
+ * Settle the order's MONEY over the lines exactly as they are persisted.
+ *
+ * The aggregate is a pure function of the lines already on the order, so unlike
+ * `settleCart` this needs no `CouponContext` and has no failure mode. That is
+ * the entire point of it existing separately. `settleCart` gates on having every
+ * active coupon in hand, and fetching those is asynchronous — routing the money
+ * write through it left a couponed cart's `discount_total` unpersisted while the
+ * cashier saved (#1472), because the write sat behind a reference prefetch that
+ * only the coupon replay ever needed.
+ *
+ * Coupon discounts are NOT re-derived here. They are already distributed across
+ * `line_items[].total` by whoever applied the coupon, and this reads that
+ * distribution as given. Redistributing it after a cart edit is `settleCart`'s
+ * job; its output arrives as new lines, which bring this pass round again.
+ *
+ * With zero active coupon lines the two entry points are the same calculation —
+ * `settleCart` skips its replay and runs exactly these steps. Pinned in
+ * settle.test.ts.
+ */
+export function settleAggregate(snapshot: CartSnapshot, config: CartConfig): SettleAggregateResult {
+	const warnings: EngineWarning[] = [];
+
+	const { patch, totals } = settleOverLines({
+		config,
+		lineItems: [...(snapshot.line_items ?? [])],
+		feeLines: [...(snapshot.fee_lines ?? [])],
+		shippingLines: [...(snapshot.shipping_lines ?? [])],
+		couponLines: [...(snapshot.coupon_lines ?? [])],
+		warnings,
+	});
+
+	return { changed: computeChanged(snapshot, patch), patch, totals, warnings };
 }
