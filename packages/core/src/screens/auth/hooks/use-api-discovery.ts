@@ -245,8 +245,8 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 				// A store reporting a compatible version with the namespace absent is a
 				// different fault — routes hidden or stripped — and keeps its own code.
 				const hasOlderWcposApi =
-					namespaces.some((namespace) => namespace.startsWith('wcpos/')) ||
-					(!!reportedVersion && !isWcposPluginCompatible(reportedVersion));
+					(!!reportedVersion && !isWcposPluginCompatible(reportedVersion)) ||
+					(!reportedVersion && namespaces.some((namespace) => namespace.startsWith('wcpos/')));
 
 				if (hasOlderWcposApi) {
 					discoveryLogger.error('WCPOS plugin on the store is out of date', {

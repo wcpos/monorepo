@@ -178,6 +178,19 @@ describe('useApiDiscovery', () => {
 		});
 	});
 
+	it('lets a compatible version override a visible legacy namespace', async () => {
+		mockGet.mockResolvedValue({
+			data: { ...siteData, namespaces: ['wc/v3', 'wcpos/v1'], wcpos_version: '1.10.0' },
+		});
+
+		const { result } = renderHook(() => useApiDiscovery());
+		await act(async () => {
+			await expect(
+				result.current.discoverApiEndpoints('https://example.com/wp-json/')
+			).rejects.toMatchObject({ errorCode: ERROR_CODES.REST_ROUTE_MISSING });
+		});
+	});
+
 	it('still reports a missing plugin when the store shows no WCPOS API at all', async () => {
 		const { wcpos_version, ...withoutVersion } = siteData;
 		mockGet.mockResolvedValue({
