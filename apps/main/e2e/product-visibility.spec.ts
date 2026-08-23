@@ -18,46 +18,25 @@ import {
  * POS visibility, end to end: a product the merchant marks online-only must LEAVE
  * the till, and come back when the mark is removed.
  *
- * # STATUS 2026-08-23: PHASE 2 FAILS. This spec is currently RED, on purpose.
+ * # Convergence, not a single pass — the thing that makes this test non-obvious
  *
- * It is a `.live.spec.ts` (excluded from both authenticated CI projects) for two
- * reasons: it runs ~15 minutes — three full manual passes, each of which seeds every
- * collection and runs both existence lanes — and it does not yet pass.
+ * Visibility is a wp_option, so flipping it writes NO journal row and the
+ * change-signal lane never hears about it. Only the existence audit notices, and
+ * that audit is a bounded sweep: `DRILL_DOWNS_PER_TICK = 2` buckets per tick, chosen
+ * round-robin from the occupied buckets by a PERSISTED cursor, with a bucket being
+ * `floor(wooId / 1000)`.
  *
- * What is measured, against dev-free:
- *  - Phase 1 PASSES. The probe is created, syncs, and renders in the POS.
- *  - The server is CORRECT on every lane the client consults. Proved directly with
- *    `wp eval`: `servable()` goes `[id]` -> `[]`, the `wcpos/v2/products` search
- *    returns `[]`, and `bucket_listing()` — the reconcile's own authoritative source
- *    — omits the id.
- *  - The audit RUNS. `/wcpos/v2/digests`, `/integrity/scan` x5 and `/integrity/bucket`
- *    x2 all fire on the "check everything" press.
- *  - The product is STILL RESIDENT AND RENDERED afterwards, reproducibly.
- *  - It is NOT the ghost condition from ghost-prune.live.spec.ts: the run primes the
- *    manifest with a full pass BEFORE hiding, and the outcome is unchanged.
+ * So the pass that removes the product is the one whose cursor reaches ITS bucket,
+ * not the first pass after the flip. Measured on dev-free 2026-08-23, with the probe
+ * at id 111302 (bucket 111): pass 1 drilled bucket 81, pass 2 drilled 110, pass 3
+ * drilled 111 — and the row disappeared on pass 3. Asserting after one pass tests the
+ * cursor's phase, not the visibility rule, and fails ~most of the time.
  *
- * What is NOT yet isolated — do not assume either without measuring:
- *  a) the probe's row never reaches the local existence manifest (existence-prime is
- *     `maxRequestsPerTick: 5` and walks progressively, and a just-created product
- *     sits at the top of the id space), so its bucket is never a drill candidate; or
- *  b) a defect in the prune path itself.
- * Note that `reconcileScanCandidates` drills a bucket when the server's `storedCount`
- * disagrees with the local manifest length even if the aggregate reports `match`, so
- * a naive "both sides of the scan apply the servable filter" explanation does NOT
- * hold — that safety net should have caught it.
- *
- * Flip the file back to `product-visibility.spec.ts` once it is green and the runtime
- * is inside the shard budget.
- *
- * # Why this exists
- *
- * POS visibility had five plugin-side suites and zero end-to-end coverage, and all
- * five asserted row membership on a single response. None of them followed the rule
- * through the client, which is where it actually has to land — the server merely
- * stops serving a record; something on the device has to notice and delete the copy
- * it already holds. That gap is the same shape as monorepo#1520, where the client's
- * census asked `wc/v3` (which cannot see POS visibility at all) while every tested
- * plugin lane was correct and green.
+ * This is why the test loops the manual pass until the row goes, with a bounded
+ * budget, instead of forcing one pass and asserting. In production the audit runs on
+ * its own 17-minute cadence, so a store with B occupied product buckets converges in
+ * roughly B/2 ticks — worth knowing when a merchant asks why a product they just hid
+ * is still on the till.
  *
  * # Why the reveal leg matters as much as the hide leg
  *
@@ -112,8 +91,57 @@ async function checkEverything(page: Page): Promise<void> {
 	const button = page.getByTestId('db-check-everything').filter({ visible: true }).first();
 	await expect(button).toBeEnabled({ timeout: 60_000 });
 	await button.click();
+	// Wait for the pass to START before waiting for it to finish. `loading` is set in
+	// a React state update, so asserting "enabled" straight after the click passes
+	// against the not-yet-disabled button and the helper returns without waiting at
+	// all — measured 2026-08-23: two "full" passes completed in 46s total, which is
+	// not a sync, it is a no-op.
+	await expect(button).toBeDisabled({ timeout: 30_000 });
 	await expect(button).toBeEnabled({ timeout: MANUAL_SYNC_TIMEOUT_MS });
 	await navigateToPage(page, 'pos');
+}
+
+/**
+ * Audit passes to spend waiting for the cursor to reach the probe's bucket.
+ *
+ * This budget is unavoidably store-dependent: two buckets are drilled per pass and
+ * the cursor is round-robin, so the passes needed scale with how many occupied
+ * product buckets the catalogue spans (a bucket is 1000 consecutive wooIds, so it
+ * tracks id SPREAD, not product count). 15 covers ~30 occupied buckets. dev-free
+ * needed 1-3 passes when measured across four runs.
+ *
+ * A budget exhaustion is reported as its own failure message rather than a bare
+ * assertion, because "did not converge within N passes on a large catalogue" and
+ * "never converges" are different findings and must not be confused.
+ */
+const MAX_AUDIT_PASSES = 15;
+
+/**
+ * Run manual passes until the probe row reaches `want`, and return the pass number
+ * that did it (or null if the budget ran out).
+ *
+ * Re-typing the search each pass is required: `checkEverything` leaves and re-enters
+ * the POS screen, which clears the box.
+ */
+async function runPassesUntil(
+	page: Page,
+	token: string,
+	row: Locator,
+	want: boolean
+): Promise<number | null> {
+	for (let pass = 1; pass <= MAX_AUDIT_PASSES; pass += 1) {
+		await checkEverything(page);
+		await typeProbeSearch(page, token);
+		// Give the grid a beat to re-render against the post-audit local set before
+		// reading it; the query is reactive, so this is a render wait, not a sync wait.
+		await expect
+			.poll(async () => row.isVisible().catch(() => false), { timeout: 15_000 })
+			.toBe(want)
+			.catch(() => undefined);
+		if ((await row.isVisible().catch(() => false)) === want) return pass;
+		await probeSearchInput(page).fill('');
+	}
+	return null;
 }
 
 function probeSearchInput(page: Page) {
@@ -198,22 +226,19 @@ test.describe('POS visibility (online-only products)', () => {
 
 			// ---- Phase 2: depopulate ----------------------------------------------
 			await hideProductFromPos(productProbeRequest, storeUrl, productWriter, probe.id);
-			await checkEverything(page);
-			await typeProbeSearch(page, probe.token);
-			// The POSITIVE form of "it is gone": the grid's own empty state, not merely
-			// the absence of a row — `toBeHidden` alone would also pass against a grid
-			// that had not finished rendering. Phase 1 proved this row renders for this
-			// search, so an empty result here is the prune and nothing else.
-			await expect(page.getByTestId('no-data-message')).toBeVisible({
-				timeout: AUDIT_LANE_TIMEOUT_MS,
-			});
-			await expect(row).toBeHidden();
+			const removalPass = await runPassesUntil(page, probe.token, row, false);
+			expect(
+				removalPass,
+				`the online-only product was still on the till after ${MAX_AUDIT_PASSES} audit passes`
+			).not.toBeNull();
 
 			// ---- Phase 3: repopulate ----------------------------------------------
 			await revealProductToPos(productProbeRequest, storeUrl, productWriter, probe.id);
-			await checkEverything(page);
-			await typeProbeSearch(page, probe.token);
-			await expect(row).toBeVisible({ timeout: AUDIT_LANE_TIMEOUT_MS });
+			const returnPass = await runPassesUntil(page, probe.token, row, true);
+			expect(
+				returnPass,
+				`the revealed product never came back after ${MAX_AUDIT_PASSES} audit passes — a prune that cannot be undone is worse than one that never happened`
+			).not.toBeNull();
 		} finally {
 			// Teardown is best-effort and ordered: drop the visibility entry FIRST, so a
 			// failed delete cannot strand this id in a list shared with concurrent runs.
