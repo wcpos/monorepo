@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { expectRateSetParity, expectTaxParity } from './order-lifecycle';
+import { expectRateSetParity, expectTaxParity, posAppliedRateIds } from './order-lifecycle';
 
 /**
  * Unit-style pins for the money-oracle helpers — no page, no store. These exist
@@ -12,38 +12,62 @@ import { expectRateSetParity, expectTaxParity } from './order-lifecycle';
  */
 test.describe('expectRateSetParity', () => {
 	test('accepts matching numeric rate sets in any order and spelling', () => {
-		expectRateSetParity(
-			[{ rate_id: 13 }, { rate_id: '14' }],
-			[{ rate_id: '14' }, { rate_id: 13 }],
-			'spelling/order'
-		);
+		expectRateSetParity(['13', '14'], [{ rate_id: '14' }, { rate_id: 13 }], 'spelling/order');
 	});
 
 	test('treats missing arrays as the empty set (tax-free stores)', () => {
-		expectRateSetParity(undefined, undefined, 'empty');
 		expectRateSetParity([], undefined, 'empty vs missing');
 	});
 
 	test('fails on a set mismatch', () => {
 		expect(() =>
-			expectRateSetParity([{ rate_id: 13 }], [{ rate_id: 7 }, { rate_id: 10 }], 'mismatch')
+			expectRateSetParity(['13'], [{ rate_id: 7 }, { rate_id: 10 }], 'mismatch')
 		).toThrow();
 	});
 
-	test('rejects a BLANK rate_id instead of coercing it to rate 0', () => {
+	test('rejects a BLANK server rate_id instead of coercing it to rate 0', () => {
 		// Number('') === 0 and Number('  ') === 0 — both finite. Without the
 		// non-blank guard these pass as rate "0" and can collide with a real 0.
-		expect(() => expectRateSetParity([{ rate_id: '' }], [{ rate_id: 0 }], 'blank')).toThrow();
-		expect(() =>
-			expectRateSetParity([{ rate_id: '  ' }], [{ rate_id: 0 }], 'whitespace')
-		).toThrow();
+		expect(() => expectRateSetParity(['0'], [{ rate_id: '' }], 'blank')).toThrow();
+		expect(() => expectRateSetParity(['0'], [{ rate_id: '  ' }], 'whitespace')).toThrow();
 	});
 
-	test('rejects missing and non-numeric rate ids on either side', () => {
-		expect(() => expectRateSetParity([{}], [{}], 'missing')).toThrow();
-		expect(() =>
-			expectRateSetParity([{ rate_id: 'abc' }], [{ rate_id: 'abc' }], 'non-numeric')
-		).toThrow();
+	test('rejects a missing or non-numeric server rate id', () => {
+		expect(() => expectRateSetParity([], [{}], 'missing')).toThrow();
+		expect(() => expectRateSetParity(['abc'], [{ rate_id: 'abc' }], 'non-numeric')).toThrow();
+	});
+});
+
+/**
+ * #1507: the POS's applied rate set now comes from the LINE taxes, because the
+ * order's `tax_lines` are readonly aggregate the client stopped sending. The
+ * same blank/non-numeric coercion holes apply on this side of the comparison,
+ * so they are pinned here too.
+ */
+test.describe('posAppliedRateIds', () => {
+	test('unions the rate ids across every line array, deduped and sorted', () => {
+		expect(
+			posAppliedRateIds({
+				line_items: [
+					{ taxes: [{ id: 14, total: '1.00' }, { id: 13 }] },
+					{ taxes: [{ id: '13', total: '2.00' }] },
+				],
+				fee_lines: [{ taxes: [{ id: 9 }] }],
+				shipping_lines: [{ taxes: [{ id: 13 }] }],
+			})
+		).toEqual(['13', '14', '9']);
+	});
+
+	test('is the empty set for a tax-free sale, and for lines with no taxes array', () => {
+		expect(posAppliedRateIds({ line_items: [{ total: '10.00' }] })).toEqual([]);
+		expect(posAppliedRateIds({})).toEqual([]);
+	});
+
+	test('rejects a BLANK or non-numeric line tax id instead of coercing it to rate 0', () => {
+		expect(() => posAppliedRateIds({ line_items: [{ taxes: [{ id: '' }] }] })).toThrow();
+		expect(() => posAppliedRateIds({ line_items: [{ taxes: [{ id: '  ' }] }] })).toThrow();
+		expect(() => posAppliedRateIds({ line_items: [{ taxes: [{ id: 'abc' }] }] })).toThrow();
+		expect(() => posAppliedRateIds({ line_items: [{ taxes: [{}] }] })).toThrow();
 	});
 });
 

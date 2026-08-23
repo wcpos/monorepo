@@ -287,6 +287,85 @@ describe('enqueueWriteIntent', () => {
 		).toBeUndefined();
 	});
 
+	/**
+	 * #1507. The settlement's aggregate never enters the queue on its own, but it
+	 * IS on the resident record — and a coalesced snapshot re-layers that record.
+	 * Without the strip on this seam, every second cart edit would put the
+	 * aggregate back on the wire behind a caller that only asked to send a line.
+	 */
+	it('keeps the server-authored money off a coalesced payload it inherited from the resident', async () => {
+		const mutationCollection = createFakeMutationCollection();
+		const queued = {
+			values: () => [...mutationCollection.store.values()].map((entry) => entry.mutation),
+		};
+		let residentData: Record<string, unknown> = {
+			payload: {
+				status: 'pos-open',
+				total: '36.68',
+				total_tax: '6.71',
+				cart_tax: '6.71328',
+				discount_total: '0.00',
+				discount_tax: '0.00',
+				shipping_total: '0.00',
+				shipping_tax: '0.00',
+				tax_lines: [{ rate_id: 1, tax_total: '6.71328' }],
+				line_items: [{ id: 3, subtotal: '30.00', total: '30.00' }],
+			},
+			sync: { revision: 'sha256:base-r1' },
+			local: { dirty: false, pendingMutationIds: [] },
+		};
+		const resident = {
+			incrementalModify: async (
+				modify: (data: Record<string, unknown>) => Record<string, unknown>
+			) => {
+				residentData = modify(residentData);
+			},
+			remove: async () => undefined,
+			toJSON: () => residentData,
+		};
+		const db = {
+			collections: {
+				orders: { findOne: () => ({ exec: async () => resident }) },
+				recordMutations: mutationCollection,
+			},
+		} as unknown as RxDatabase;
+		let nextMutationId = 0;
+		const mintUuid = () => `mutation-${++nextMutationId}`;
+		const now = () => '2026-08-23T00:00:00.000Z';
+
+		for (const payload of [
+			{ line_items: [{ id: 3, quantity: 2 }] },
+			{ customer_note: 'ring twice' },
+		]) {
+			await enqueueWriteIntent({
+				db,
+				intent: { collection: 'orders', operation: 'update', recordId: 'order-1', payload },
+				mintUuid,
+				now,
+			});
+		}
+
+		expect([...queued.values()]).toHaveLength(1);
+		const payload = [...queued.values()][0]!.payload;
+		expect(payload).toMatchObject({
+			status: 'pos-open',
+			customer_note: 'ring twice',
+			line_items: [{ id: 3, quantity: 2 }],
+		});
+		for (const field of [
+			'total',
+			'total_tax',
+			'cart_tax',
+			'discount_total',
+			'discount_tax',
+			'shipping_total',
+			'shipping_tax',
+			'tax_lines',
+		]) {
+			expect(payload).not.toHaveProperty(field);
+		}
+	});
+
 	it('strips non-string order meta display fields from a born-twice follow-up', async () => {
 		const mutationCollection = createFakeMutationCollection();
 		const queued = {
@@ -377,13 +456,15 @@ describe('enqueueWriteIntent', () => {
 			now: () => '2026-08-04T00:00:02.000Z',
 		});
 
+		// The aggregate the original create carried is gone: the requeue passes
+		// through the same outbound sanitizer (#1507), so a rebuilt payload cannot
+		// smuggle back money the server discards unread.
 		expect([...queued.values()]).toEqual([
 			expect.objectContaining({
 				mutationId: 'follow-up-1',
 				explicit: true,
 				payload: {
 					status: 'pos-open',
-					total: '25.00',
 					customer_note: 'ring twice',
 				},
 			}),

@@ -8,11 +8,12 @@ import {
 import {
 	expectMoneyMatches,
 	expectRateSetParity,
-	expectTaxParity,
 	isPushOrdersResponse,
 	liveOrderTest as liveTest,
 	newRunLabel,
 	type OrderPayload,
+	posAppliedRateIds,
+	readCartMoney,
 	type ServerOrder,
 	stampRunLabel,
 } from './order-lifecycle';
@@ -192,19 +193,23 @@ liveTest.describe('POS Cart - save to server parity (live store)', () => {
 			// PARITY: the server recorded the numbers the POS rang up. Rate-set
 			// equality first — a tax-location mismatch swaps the rate SET even when
 			// amounts land close together. Unconditional over both sets (#1114
-			// review): [] === [] on a tax-free store, and a dropped client
-			// tax_lines fails instead of skipping.
+			// review): [] === [] on a tax-free store, and a dropped client line tax
+			// fails instead of skipping. The client's rates come from the LINE taxes
+			// it pushes, not from `tax_lines`, which is readonly aggregate the POS
+			// stopped sending in #1507.
 			expectRateSetParity(
-				sent.tax_lines,
+				posAppliedRateIds(sent),
 				doc!.tax_lines,
 				'server tax rates must equal the rates the POS applied'
 			);
-			if (sent.total !== undefined) {
-				expectMoneyMatches(doc!.total, sent.total, 'order total parity (cart vs server)');
-			}
-			if (sent.cart_tax !== undefined) {
-				expectTaxParity(doc!.cart_tax, sent.cart_tax, 'cart_tax parity');
-			}
+			// AGGREGATE PARITY against the TILL, not against the push body (#1507):
+			// WooCommerce authors `total` and `cart_tax` from the lines, so the POS
+			// no longer puts them on the wire and a sent-vs-ack comparison would be
+			// comparing against nothing. What must hold is ADR 0032 §2 — the till's
+			// arithmetic equals the store's — and the till's figure is the one the
+			// cashier is looking at.
+			const cart = await readCartMoney(page);
+			expectMoneyMatches(doc!.total, cart.total, 'order total parity (cart vs server)');
 
 			// The money the cashier sees must be stable across the save. Wait for the
 			// TERMINAL write signal first (#1114 review): the save button re-enables

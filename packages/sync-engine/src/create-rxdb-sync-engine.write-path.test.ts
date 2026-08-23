@@ -1221,10 +1221,17 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			).toHaveLength(1);
 
 			// Second drain: the follow-up update lands the edit; ITS ack adopts.
+			// The order-level `total` is deliberately NOT asserted here: since #1507
+			// the push carries no aggregate, so this fake — which stores what it is
+			// given rather than recalculating from the lines the way WooCommerce
+			// does — answers with the money it was SEEDED with. What the POS asserts,
+			// and what has to survive the round trip, is the status and the line.
 			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
 			expect(await orderJson(engine, UUID_A)).toMatchObject({
-				payload: { status: 'pos-open', total: '52.00' },
-				total: '52.00',
+				payload: {
+					status: 'pos-open',
+					line_items: [{ product_id: 123, quantity: 1, total: '52.00' }],
+				},
 				sync: { revision: server.applied.get(UUID_A)?.revision },
 				local: { dirty: false, pendingMutationIds: [] },
 			});
@@ -2135,6 +2142,7 @@ describe('#507 offline write flows through the public handle', () => {
 			await insertBornLocalOrder(engine, UUID_A, {
 				status: 'pos-paid',
 				total: '25.00',
+				customer_note: 'edited after the rejection',
 				billing: { first_name: 'Guest', email: '' },
 				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
 			});
@@ -2152,6 +2160,7 @@ describe('#507 offline write flows through the public handle', () => {
 				payload: {
 					status: 'pos-paid',
 					total: '10.00',
+					customer_note: 'as it stood when the create was refused',
 					billing: { first_name: 'Guest', email: '' },
 					meta_data: [
 						{ key: '_woocommerce_pos_uuid', value: UUID_A },
@@ -2195,12 +2204,15 @@ describe('#507 offline write flows through the public handle', () => {
 				pushed: 1,
 				rejected: 0,
 			});
-			// REBUILT, not replayed: the envelope carries the CURRENT resident's total,
-			// and the enqueue pipeline's sanitizers removed both fields the server
-			// refuses — neither of which the frozen snapshot had lost.
+			// REBUILT, not replayed: the envelope carries the CURRENT resident's note,
+			// and the enqueue pipeline's sanitizers removed every field the server
+			// refuses — none of which the frozen snapshot had lost. The readonly
+			// aggregate (#1507) goes the same way, so a dead letter frozen by an old
+			// build cannot smuggle it back onto the wire either.
 			expect(server.received).toHaveLength(1);
 			const sent = server.received[0].payload as Record<string, unknown>;
-			expect(sent.total).toBe('25.00');
+			expect(sent.customer_note).toBe('edited after the rejection');
+			expect(sent).not.toHaveProperty('total');
 			expect(sent.billing).toEqual({ first_name: 'Guest' });
 			expect(sent.meta_data).toEqual([{ key: '_woocommerce_pos_uuid', value: UUID_A }]);
 			// The sale is finally on the server, reconciled onto the resident record.
@@ -2420,9 +2432,12 @@ describe('#507 offline write flows through the public handle', () => {
 			expect(server.received).toHaveLength(1);
 			expect(server.received[0].operation).toBe('create');
 			expect(server.received[0].payload).toMatchObject({
-				total: '25.00',
+				status: 'pos-paid',
 				customer_note: 'gift wrap',
 			});
+			// The readonly aggregate never reaches the wire (#1507), whichever layer
+			// of the absorbed chain it came from.
+			expect(server.received[0].payload).not.toHaveProperty('total');
 			expect((await orderJson(engine, UUID_A))?.remoteId).toBe(remoteId(500));
 		} finally {
 			await engine.dispose();
@@ -2620,8 +2635,10 @@ describe('#507 offline write flows through the public handle', () => {
 				status: 'completed',
 				customer_note: 'gift wrap',
 				number: '1042',
-				total: '10.00',
 			});
+			// The server-adopted base carried the aggregate; the rebuild drops it
+			// again (#1507) rather than replaying money the server discards unread.
+			expect(requeued.payload).not.toHaveProperty('total');
 			// `meta_data` is NOT taken from the dead letter: the builder injects the
 			// uuid mirror into every payload, so that entry carries no cashier intent
 			// and must not replace the resident's real (server-id-bearing) array.
@@ -2639,8 +2656,9 @@ describe('#507 offline write flows through the public handle', () => {
 			expect(sent).toMatchObject({
 				status: 'completed',
 				customer_note: 'gift wrap',
-				total: '10.00',
+				number: '1042',
 			});
+			expect(sent).not.toHaveProperty('total');
 		} finally {
 			await engine.dispose();
 		}

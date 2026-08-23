@@ -105,11 +105,25 @@ export interface ServerOrder {
 	[key: string]: unknown;
 }
 
-/** The `payload` half of the mutation envelope — what the CLIENT believes. */
+/**
+ * The `payload` half of the mutation envelope — what the CLIENT ASSERTS.
+ *
+ * Since #1507 that is line money and structure only: the order aggregate
+ * (`total`, `cart_tax`, `discount_total`, `tax_lines`, …) is `readonly` in the
+ * wc/v3 schema, WooCommerce authors it from the lines, and the POS no longer
+ * puts it in a push body. `total` and `cart_tax` stay TYPED here — a spec may
+ * legitimately look for them — but nothing may make an assertion CONDITIONAL on
+ * their presence: `if (sent.total !== undefined)` is now a check that never
+ * runs. Compare the server against what the TILL shows instead
+ * ({@link readCartMoney}) — the referent ADR 0032 §2 is actually about.
+ */
 export interface OrderPayload {
 	total?: string;
 	cart_tax?: string;
+	discount_total?: string;
 	line_items?: OrderLineItem[];
+	fee_lines?: OrderLineItem[];
+	shipping_lines?: OrderLineItem[];
 	tax_lines?: OrderTaxLine[];
 	[key: string]: unknown;
 }
@@ -504,26 +518,98 @@ export function expectTaxParity(server: unknown, client: unknown, label: string)
  * either side is a failure, never a wildcard that collapses into set equality.
  */
 export function expectRateSetParity(
-	sent: OrderTaxLine[] | undefined,
+	sent: readonly string[],
 	server: OrderTaxLine[] | undefined,
 	label: string
 ): void {
-	const rateSet = (lines: OrderTaxLine[] | undefined, side: string): string[] => {
-		const rates = (lines ?? []).map((line) => {
-			// Number('') and Number('  ') coerce to 0 — finite — so a BLANK rate_id
-			// would slip a bare isFinite guard as rate "0" and could collide with a
-			// genuine rate on the other side (#1116 review, wcpos-bot escalation).
-			// Require non-blank BEFORE numeric conversion.
-			const raw = String(line.rate_id ?? '').trim();
-			expect(
-				raw !== '' && Number.isFinite(Number(raw)),
-				`${label}: ${side} tax line carries an invalid rate_id (${JSON.stringify(line.rate_id)})`
-			).toBe(true);
-			return String(Number(raw));
-		});
-		return [...new Set(rates)].sort();
+	const serverRates = (server ?? []).map((line) => {
+		// Number('') and Number('  ') coerce to 0 — finite — so a BLANK rate_id
+		// would slip a bare isFinite guard as rate "0" and could collide with a
+		// genuine rate on the other side (#1116 review, wcpos-bot escalation).
+		// Require non-blank BEFORE numeric conversion.
+		const raw = String(line.rate_id ?? '').trim();
+		expect(
+			raw !== '' && Number.isFinite(Number(raw)),
+			`${label}: server tax line carries an invalid rate_id (${JSON.stringify(line.rate_id)})`
+		).toBe(true);
+		return String(Number(raw));
+	});
+	expect([...new Set(serverRates)].sort(), label).toEqual([...new Set(sent)].sort());
+}
+
+/**
+ * The tax rates the POS APPLIED, read from the push payload.
+ *
+ * Not from `tax_lines`: since #1507 the order's tax lines are part of the
+ * readonly aggregate and never leave the client, so reading them off the wire
+ * yields an empty set and turns a rate-set comparison into `[] vs [rates]` —
+ * either a hard failure or, if guarded, a check that silently stops running.
+ *
+ * The rate set is still fully observable one level down. Every line the POS
+ * authors carries its own `taxes[]` keyed by rate id, and those lines ARE what
+ * the POS asserts — so this reads the client's applied rates from the same
+ * place the divergence comparator does.
+ */
+export function posAppliedRateIds(payload: OrderPayload, label = 'applied rates'): string[] {
+	const rates = new Set<string>();
+	for (const array of [payload.line_items, payload.fee_lines, payload.shipping_lines]) {
+		for (const line of array ?? []) {
+			const taxes = line.taxes;
+			if (!Array.isArray(taxes)) continue;
+			for (const tax of taxes as { id?: unknown }[]) {
+				const raw = String(tax?.id ?? '').trim();
+				expect(
+					raw !== '' && Number.isFinite(Number(raw)),
+					`${label}: client line tax carries an invalid rate id (${JSON.stringify(tax?.id)})`
+				).toBe(true);
+				rates.add(String(Number(raw)));
+			}
+		}
+	}
+	return [...rates].sort();
+}
+
+/** The till's own money, read from the cart's raw value-bearing markers. */
+export interface CartMoney {
+	/** The persisted order total the cart is showing, e.g. `36.68`. */
+	total: string;
+	/** The persisted discount total, e.g. `3.33`. `''` before any settlement. */
+	discountTotal: string;
+}
+
+/**
+ * Read what the CASHIER is looking at, once the cart has settled it.
+ *
+ * This is the client-side referent for every aggregate assertion since #1507.
+ * The push body no longer carries the aggregate, and the cart's visible totals
+ * are translated, currency-formatted composites — so the value-bearing hidden
+ * markers in `pos/cart/totals.tsx` are what a spec addresses, exactly as the
+ * data-table footer's row counts are read rather than its "Showing n of m".
+ *
+ * The wait on `cart-order-total` is not politeness: settlement is asynchronous,
+ * so reading straight after an add would race it and hand back `''`. Waiting
+ * HERE rather than in each caller means no spec can quietly compare against an
+ * unsettled cart. `cart-discount-total` is read without a wait because `''` is
+ * a legitimate answer for an uncouponed sale — the caller says whether it
+ * expected a discount.
+ */
+export async function readCartMoney(page: Page): Promise<CartMoney> {
+	const marker = (testId: string) => page.getByTestId(testId);
+	const total = marker('cart-order-total');
+	// Exactly one: OpenOrders — and so the cart, and so these markers — is
+	// mounted once, by design (see useCartSettlement's "mounted exactly once"
+	// note). Two would mean two carts, which is a defect in its own right and
+	// would make "the" cart total ambiguous.
+	await expect(total, 'exactly one cart-order-total must be rendered').toHaveCount(1);
+	await expect(total, 'the cart must settle a total before it can be compared').toHaveText(/\d/, {
+		timeout: 30_000,
+	});
+	const read = async (testId: string): Promise<string> =>
+		((await marker(testId).textContent()) ?? '').trim();
+	return {
+		total: await read('cart-order-total'),
+		discountTotal: await read('cart-discount-total'),
 	};
-	expect(rateSet(server, 'server'), label).toEqual(rateSet(sent, 'client'));
 }
 
 /** Terminal states that mean the sale did NOT happen. */

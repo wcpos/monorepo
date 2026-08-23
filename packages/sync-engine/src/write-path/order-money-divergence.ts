@@ -124,7 +124,19 @@ export const EXACT_COMPARISON_DECIMALS = 6;
  */
 export const ROUNDING_TIE_MICROUNITS = 1n;
 
-/** Order-level monetary fields, in the order a cashier reads them. */
+/**
+ * Order-level monetary fields, in the order a cashier reads them.
+ *
+ * Since #1507 these are normally ABSENT from the pushed payload: they are
+ * `readonly` in the wc/v3 order schema, WooCommerce recomputes them from the
+ * lines, and the POS stopped putting a figure the server discards unread into
+ * its push bodies. `compareSlot` already skips a slot only one side carries, so
+ * the walk simply finds nothing here and the comparison narrows to the line
+ * money the POS actually asserts — which is the point of the change, not a
+ * side effect of it. The list stays because the walk is shared with
+ * `preserveEquivalentLocalPrecision`, whose LOCAL side is the resident record
+ * and does still carry the aggregate.
+ */
 const ORDER_MONEY_FIELDS = [
 	'total',
 	'total_tax',

@@ -53,6 +53,11 @@ export {
 	catalogDocumentId, customerDocumentId, orderDocumentId, productDocumentId,
 	referenceDocumentId, taxRateDocumentId, variationDocumentId,
 } from './woo/documentKeys';
+export {
+	orderChangesAssertIntent,
+	SERVER_AUTHORED_ORDER_MONEY_FIELDS,
+	stripServerAuthoredOrderMoney,
+} from './woo/orderWriteContract';
 export { identifyRecord, RECORD_UUID_META_KEY, webCryptoUuid } from './recordIdentity';
 export {
 	type MetaDataEntry,

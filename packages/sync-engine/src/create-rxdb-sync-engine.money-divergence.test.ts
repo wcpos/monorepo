@@ -398,13 +398,21 @@ describe('divergence detection at the ack boundary', () => {
 		}
 	});
 
+	/**
+	 * #1507: the recalculation has to be provoked on money the POS actually
+	 * ASSERTS. `line_items[].subtotal`/`.total` are writable and the server keeps
+	 * them; the order aggregate is readonly and no longer leaves the client, so
+	 * the case above it — a server-recomputed `total` — is silent by design.
+	 */
 	it('emits a typed event naming the fields, expected and got, for a real recalculation', async () => {
 		const run = await saveOracleOrder({
-			serialize: () => ({
-				...serverPayload(),
-				total: '50.070000',
-				total_tax: '11.100000',
-			}),
+			serialize: () => {
+				const payload = serverPayload();
+				const line = (payload.line_items as Record<string, unknown>[])[0]!;
+				line.subtotal = '25.000000';
+				line.total = '25.000000';
+				return payload;
+			},
 		});
 		try {
 			expect(divergenceEvents(run.events)).toEqual([
@@ -415,8 +423,18 @@ describe('divergence detection at the ack boundary', () => {
 					mutationId: expect.any(String),
 					mode: 'exact-6dp',
 					fields: [
-						{ field: 'total', expected: '36.680000', got: '50.070000', decimals: 6 },
-						{ field: 'total_tax', expected: '6.710000', got: '11.100000', decimals: 6 },
+						{
+							field: `line_items[${ORDER_MONEY_ORACLE_LINE_UUID}].subtotal`,
+							expected: '29.970000',
+							got: '25.000000',
+							decimals: 6,
+						},
+						{
+							field: `line_items[${ORDER_MONEY_ORACLE_LINE_UUID}].total`,
+							expected: '29.970000',
+							got: '25.000000',
+							decimals: 6,
+						},
 					],
 				},
 			]);
@@ -425,9 +443,37 @@ describe('divergence detection at the ack boundary', () => {
 		}
 	});
 
+	/**
+	 * The narrowing #1507 bought. WooCommerce recomputes the aggregate from the
+	 * lines on every items-bearing write, so an ack whose `total` differs from
+	 * the till's arithmetic is the NORMAL case for a store the POS does not fully
+	 * model — and the POS never claimed that figure over the wire. Alerting on it
+	 * was manufacturing a divergence out of a field the server was always going
+	 * to overwrite.
+	 */
+	it('is SILENT when only the server-recomputed aggregate differs (#1507)', async () => {
+		const run = await saveOracleOrder({
+			serialize: () => ({
+				...serverPayload(),
+				total: '50.070000',
+				total_tax: '11.100000',
+				cart_tax: '11.100000',
+			}),
+		});
+		try {
+			expect(divergenceEvents(run.events)).toEqual([]);
+		} finally {
+			await run.dispose();
+		}
+	});
+
 	it('logs it durably at ERROR — a broken mirror is a terminal anomaly (#899)', async () => {
 		const run = await saveOracleOrder({
-			serialize: () => ({ ...serverPayload(), total: '50.070000' }),
+			serialize: () => {
+				const payload = serverPayload();
+				(payload.line_items as Record<string, unknown>[])[0]!.total = '19.980000';
+				return payload;
+			},
 		});
 		try {
 			const logged = run.diagnostics.filter((event) => event.type === 'push.money-divergence');
@@ -440,7 +486,7 @@ describe('divergence detection at the ack boundary', () => {
 					recordId: ORDER_UUID,
 					outcome: 'failed',
 					mode: 'exact-6dp',
-					divergentFields: 'total',
+					divergentFields: `line_items[${ORDER_MONEY_ORACLE_LINE_UUID}].total`,
 				}),
 			});
 		} finally {
@@ -470,7 +516,11 @@ describe('divergence detection at the ack boundary', () => {
 
 	it('fires BEFORE the acknowledgement so a listener sees the anomaly with the outcome', async () => {
 		const run = await saveOracleOrder({
-			serialize: () => ({ ...serverPayload(), total: '50.070000' }),
+			serialize: () => {
+				const payload = serverPayload();
+				(payload.line_items as Record<string, unknown>[])[0]!.total = '19.980000';
+				return payload;
+			},
 		});
 		try {
 			const types = run.events.map((event) => event.type);

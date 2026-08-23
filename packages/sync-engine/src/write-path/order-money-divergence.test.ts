@@ -335,6 +335,67 @@ describe('compareOrderMoney — exact-6dp mode (woocommerce-pos#1466 is live)', 
 	});
 });
 
+/**
+ * #1507 / ADR 0032: the POS no longer PUSHES the order aggregate — those fields
+ * are readonly in the wc/v3 schema and dropped before anything is set. The
+ * comparator has always skipped a slot only one side carries, so this needs no
+ * new rule; what it needs is pinning, because the whole value of the change
+ * rests on it. If a future edit made an absent pushed field read as a zero,
+ * every sale would report seven divergences.
+ */
+describe('an order pushed without its aggregate (the #1507 payload)', () => {
+	/** The payload as it now goes on the wire: line money, no order money. */
+	function withoutAggregate(payload: Record<string, unknown>): Record<string, unknown> {
+		const stripped = clone(payload);
+		for (const field of [
+			'total',
+			'total_tax',
+			'cart_tax',
+			'discount_total',
+			'discount_tax',
+			'shipping_total',
+			'shipping_tax',
+			'tax_lines',
+		]) {
+			delete stripped[field];
+		}
+		return stripped;
+	}
+
+	it('is silent about the aggregate the server computed for itself', () => {
+		const acked = clone(server6dp);
+		acked.total = '999.99';
+		acked.cart_tax = '111.11';
+		acked.discount_total = '5.00';
+
+		expect(compareOrderMoney({ pushed: withoutAggregate(pos), acked })).toBeNull();
+	});
+
+	it('still reports the line money the POS DOES assert', () => {
+		const acked = clone(server6dp);
+		lineOf(acked).total = '19.980000';
+
+		expect(compareOrderMoney({ pushed: withoutAggregate(pos), acked })?.fields).toEqual([
+			{
+				field: `line_items[${ORDER_MONEY_ORACLE_LINE_UUID}].total`,
+				expected: roundDecimalString(String(lineOf(pos).total), 6),
+				got: '19.980000',
+				decimals: 6,
+			},
+		]);
+	});
+
+	it('leaves adoption alone — that half reads the RESIDENT, which keeps its money', () => {
+		// The push no longer carries the aggregate, but the resident still holds
+		// the cart's own arithmetic, so an ack that merely re-spells it must not
+		// overwrite the local spelling and restart the patch loop.
+		const adopted = preserveEquivalentLocalPrecision(clone(pos), clone(server6dp));
+
+		expect(adopted.total).toBe(pos.total);
+		expect(adopted.cart_tax).toBe(pos.cart_tax);
+	});
+});
+
 describe('preserveEquivalentLocalPrecision (the adoption half of the mirror contract)', () => {
 	it('keeps the sub-cent local value when a pre-#1466 ack says the same number at 2dp', () => {
 		const merged = preserveEquivalentLocalPrecision(pos, server2dp);
