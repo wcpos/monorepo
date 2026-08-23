@@ -69,6 +69,14 @@ jest.mock('./use-recalculate-coupons', () => ({
 	useRecalculateCoupons: () => ({ recalculate }),
 }));
 
+// A rejection message that names an amount formats it in the store's currency,
+// which reaches app state and, through it, expo modules this environment cannot
+// transform. The symbol is fixed here so the assertions read as a cashier sees
+// them; the real formatter is exercised by its own suite.
+jest.mock('../../hooks/use-current-order-currency-format', () => ({
+	useCurrentOrderCurrencyFormat: () => ({ format: (value: number) => `$${value.toFixed(2)}` }),
+}));
+
 jest.mock('../../hooks/use-collection', () => ({
 	useCollection: () => {
 		throw new Error('legacy storeDB read');
@@ -186,19 +194,24 @@ describe('useAddCoupon engine reads', () => {
 	it('preserves trimmed lowercase lookup and rejects against an applied individual-use coupon', async () => {
 		const { result } = renderHook(() => useAddCoupon());
 
+		// The message names the coupon ALREADY on the order, because that is the one
+		// the cashier has to remove — `solo`, not the `bonus` they just tried.
 		await expect(result.current.addCoupon('  BoNuS  ')).resolves.toEqual({
 			success: false,
-			error: 'Coupon "solo" cannot be used with other coupons.',
+			error: "solo is already on the order, and it can't be combined with other coupons.",
 		});
 		expect(recalculate).not.toHaveBeenCalled();
 		expect(localPatch).not.toHaveBeenCalled();
+		// The LOG carries the code, not the sentence. Once the copy is translated a
+		// message-valued `reason` would arrive at support in the till's language.
 		expect(getLogger([]).warn).toHaveBeenCalledWith(
 			'Coupon application rejected',
 			expect.objectContaining({
 				context: expect.objectContaining({
 					event: 'coupon.rejected',
 					couponCode: 'bonus',
-					reason: 'Coupon "solo" cannot be used with other coupons.',
+					reason: 'individual_use_conflict',
+					params: { code: 'solo' },
 				}),
 			})
 		);
@@ -263,7 +276,7 @@ describe('useAddCoupon per-user usage limits', () => {
 
 		await expect(result.current.addCoupon('once')).resolves.toEqual({
 			success: false,
-			error: 'Coupon usage limit has been reached for this customer.',
+			error: 'This customer has already used this coupon the maximum number of times.',
 		});
 		expect(recalculate).not.toHaveBeenCalled();
 		expect(localPatch).not.toHaveBeenCalled();
@@ -296,7 +309,7 @@ describe('useAddCoupon per-user usage limits', () => {
 
 		await expect(result.current.addCoupon('once')).resolves.toEqual({
 			success: false,
-			error: 'Coupon usage limit has been reached for this customer.',
+			error: 'This customer has already used this coupon the maximum number of times.',
 		});
 		expect(recalculate).not.toHaveBeenCalled();
 		expect(localPatch).not.toHaveBeenCalled();
