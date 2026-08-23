@@ -267,6 +267,7 @@ function TreeComboboxSearchInput({
 			value={inputValue}
 			onChangeText={handleChange}
 			placeholder={placeholder}
+			testID="tree-combobox-search"
 			className="mb-2"
 		/>
 	);
@@ -323,6 +324,11 @@ function TreeComboboxContent<T>({
 						<View style={{ width: flatItem.depth * INDENT_PX }} />
 						<Pressable
 							onPress={handlePress}
+							// Keyed by the option's VALUE, not its label: the labels are server-supplied
+							// and localized, and E2E may not select by text (see the repo's E2E selector
+							// policy). Only one tree popover can be open at a time, so the value alone
+							// addresses the row unambiguously.
+							testID={`tree-combobox-item-${flatItem.value}`}
 							className="web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent flex-1 flex-row items-center gap-2 rounded-sm px-2 py-1.5"
 						>
 							{ctx.multiple ? (
@@ -350,6 +356,7 @@ function TreeComboboxContent<T>({
 						{flatItem.hasChildren ? (
 							<Pressable
 								onPress={handleToggle}
+								testID={`tree-combobox-toggle-${flatItem.value}`}
 								className="h-6 w-6 items-center justify-center"
 								hitSlop={4}
 							>

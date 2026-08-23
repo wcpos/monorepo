@@ -46,6 +46,7 @@ export function BrandsPill({ resource, selectedID }: Props) {
 					size="xs"
 					leftIcon="folder"
 					variant={isActive ? undefined : 'muted'}
+					testID="filter-pill-brands"
 					removable={isActive}
 					removeTestID="filter-pill-remove-brands"
 					onRemove={() => actions.clearFilter('brands')}

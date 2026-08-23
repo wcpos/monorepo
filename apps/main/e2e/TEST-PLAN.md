@@ -79,6 +79,24 @@ The POS product panel defaults to **grid (tile) view**; tests cover both views a
 - [x] Variation popover opens when clicking a variable product tile (grid view)
 - [x] Add product to cart via row add-to-cart button (table view)
 
+### product-category-filter.spec.ts — category filter pill (authenticated, free + pro) — 1 test
+
+Added after 2026-08-23, when the POS showed "No products found" for the Clothing
+category on dev-pro and nothing in CI had an opinion. The client was right — the
+store's whole catalogue had lost its taxonomy to the importer's translated-header
+trap — but the filter bar carried no testIDs at all, so neither a client
+regression nor a rotted fixture had anywhere to show up.
+
+- [x] Filtering by a category the SERVER says is populated: the window reaches the
+      wire carrying that category, the grid stays non-empty, a known non-member
+      disappears, and every rendered product is one the store puts in that category
+      (a set relation — the grid is title-sorted and virtualized, so WHICH members
+      are on screen is not the spec's business)
+
+Store-agnostic: the category, the member and the negative control are all discovered
+per run. A store where no category holds a product **skips with that sentence** —
+which is the signal that was missing while two dev stores sat category-less.
+
 ### products-page.spec.ts — Products drawer page — 12 tests
 
 Products Page (pro only):
@@ -411,9 +429,11 @@ Specs opt in by file name: `*.cold.spec.ts`, using `coldStartTest` instead of
 
 ### Candidates for the same profile
 
-- **Filtered browse** (#941–#945): category / tag / brand / featured / on-sale / stock
-  pills against a thin DB — the exact regression class where a filtered window that never
-  reached the wire looked fine locally.
+- **Filtered browse** (#941–#945): tag / brand / featured / on-sale / stock pills
+  against a thin DB — the exact regression class where a filtered window that never
+  reached the wire looked fine locally. The CATEGORY pill is covered on the normal
+  profile by `product-category-filter.spec.ts`; the remaining pills follow the same
+  shape, and every pill now carries a `filter-pill-<field>` testID.
 - **Customer search**: `/wcpos/v2/customers` has the same census-completeness gate as
   products, so a missing remote lane is equally invisible on a full local DB.
 - **Barcode scan of a never-seen item**: the scan path resolves by SKU/barcode and must

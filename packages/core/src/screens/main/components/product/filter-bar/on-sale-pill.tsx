@@ -19,6 +19,7 @@ export function OnSalePill() {
 			size="xs"
 			variant={isActive ? undefined : 'muted'}
 			onPress={() => actions.setFilter('on_sale', true)}
+			testID="filter-pill-on_sale"
 			removable={isActive}
 			removeTestID="filter-pill-remove-on_sale"
 			onRemove={() => actions.clearFilter('on_sale')}

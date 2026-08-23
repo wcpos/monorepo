@@ -19,6 +19,7 @@ export function FeaturedPill() {
 			size="xs"
 			variant={isActive ? undefined : 'muted'}
 			onPress={() => actions.setFilter('featured', true)}
+			testID="filter-pill-featured"
 			removable={isActive}
 			removeTestID="filter-pill-remove-featured"
 			onRemove={() => actions.clearFilter('featured')}

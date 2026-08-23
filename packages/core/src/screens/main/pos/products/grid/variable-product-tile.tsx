@@ -138,7 +138,12 @@ export function VariableProductTile({ record, gridFields }: VariableProductTileP
 		<Popover className="bg-card border-border m-1 flex-1 overflow-hidden rounded-lg border">
 			<PopoverTrigger ref={triggerRef as React.RefObject<never>} asChild>
 				<Pressable className="flex-1" testID="variable-product-tile">
-					<View className="aspect-square">
+					{/* Id-bearing testID, mirroring ProductTile: most of a real catalogue is
+					    variable, so without it no grid assertion can name WHICH product it means. */}
+					<View
+						className="aspect-square"
+						testID={`variable-product-tile-${record.remoteId ?? record.uuid}`}
+					>
 						<TileImage record={record} />
 						<View className="absolute top-1 right-1 rounded bg-black/50 px-1 py-0.5">
 							<Text className="text-xs text-white">{t('common.variants')}</Text>

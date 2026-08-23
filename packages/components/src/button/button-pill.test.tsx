@@ -71,6 +71,23 @@ describe('ButtonPill', () => {
 		expect(onParentClick).not.toHaveBeenCalled();
 	});
 
+	// The filter pills carry their testID on the ButtonPill itself, and E2E clicks
+	// them there. Both branches must forward it: a pill grows its remove control the
+	// moment a filter is set, and a testID that survives only one branch makes the
+	// selector work until the first click and then vanish.
+	it.each([
+		['inactive', false],
+		['active', true],
+	])('forwards its own testID to the label button when %s', (_label, removable) => {
+		render(
+			<ButtonPill testID="filter-pill-categories" removable={removable}>
+				Category
+			</ButtonPill>
+		);
+
+		expect(screen.getByTestId('filter-pill-categories')).toBeInTheDocument();
+	});
+
 	it('passes a testID to the remove control', () => {
 		render(
 			<ButtonPill removable removeTestID="filter-pill-remove-stock_status">
