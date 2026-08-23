@@ -74,10 +74,21 @@ const AUDIT_LANE_TIMEOUT_MS = 120_000;
  * runs both existence lanes, and its requests were still arriving 150s in. 120s was
  * not enough and failed the pass, not the product.
  */
-const MANUAL_SYNC_TIMEOUT_MS = 5 * 60_000;
+const MANUAL_SYNC_TIMEOUT_MS = 3 * 60_000;
 
-/** Writer login, probe creation, first catalogue sync, and THREE full manual passes. */
-const VISIBILITY_TEST_TIMEOUT_MS = 25 * 60_000;
+/**
+ * Wall-clock a single leg may spend converging, independent of the pass count.
+ *
+ * The pass budget alone cannot bound the runtime: 15 passes per leg at the 3-minute
+ * per-pass ceiling is far longer than any sane test timeout, so a slow store would
+ * die on a generic Playwright timeout and report nothing useful instead of the
+ * bounded, named failure below. Whichever budget runs out first stops the leg, and
+ * the message says which.
+ */
+const AUDIT_LEG_BUDGET_MS = 7 * 60_000;
+
+/** Two legs at their wall-clock budget, plus writer login, probe creation and the priming pass. */
+const VISIBILITY_TEST_TIMEOUT_MS = 20 * 60_000;
 
 /**
  * Force the audit lanes and wait for the pass to finish.
@@ -116,32 +127,92 @@ async function checkEverything(page: Page): Promise<void> {
  */
 const MAX_AUDIT_PASSES = 15;
 
+type LegOutcome = { converged: true; passes: number } | { converged: false; reason: string };
+
 /**
- * Run manual passes until the probe row reaches `want`, and return the pass number
- * that did it (or null if the budget ran out).
+ * Has the grid SETTLED on the state we are looking for, rather than merely passing
+ * through it?
  *
- * Re-typing the search each pass is required: `checkEverything` leaves and re-enters
- * the POS screen, which clears the box.
+ * Absence is the dangerous direction. Straight after typing, the freshly re-entered
+ * POS screen has not run the new query yet, so the probe row is legitimately absent
+ * for a moment — and a bare "row is not visible" poll succeeds against that transient
+ * state and declares the product pruned when it is still resident. Removal therefore
+ * requires the grid's POSITIVE empty state (`no-data-message`), which only renders
+ * once the query has settled with zero rows. Presence needs no such guard: a visible
+ * row is unambiguous.
+ */
+async function settled(page: Page, row: Locator, want: boolean): Promise<boolean> {
+	if (want) return row.isVisible().catch(() => false);
+	const [empty, present] = await Promise.all([
+		page
+			.getByTestId('no-data-message')
+			.isVisible()
+			.catch(() => false),
+		row.isVisible().catch(() => false),
+	]);
+	return empty && !present;
+}
+
+/**
+ * Run manual passes until the probe row settles into `want`.
+ *
+ * A pass that did NO audit work does not consume the budget. `useManualSync` reports
+ * a failed or skipped `engine.sync()` through a toast and then clears `syncing`
+ * regardless, so "the button went disabled and came back" cannot distinguish a
+ * completed audit from one that never ran — and counting those would burn the budget
+ * and then blame the visibility rule. The referent is whether the audit actually
+ * drilled a bucket, so that is what is counted: `integrity/bucket` requests observed
+ * during the pass. (Attempts are still capped, or a store that never audits would
+ * loop until the test timeout.)
  */
 async function runPassesUntil(
 	page: Page,
 	token: string,
 	row: Locator,
 	want: boolean
-): Promise<number | null> {
-	for (let pass = 1; pass <= MAX_AUDIT_PASSES; pass += 1) {
-		await checkEverything(page);
-		await typeProbeSearch(page, token);
-		// Give the grid a beat to re-render against the post-audit local set before
-		// reading it; the query is reactive, so this is a render wait, not a sync wait.
-		await expect
-			.poll(async () => row.isVisible().catch(() => false), { timeout: 15_000 })
-			.toBe(want)
-			.catch(() => undefined);
-		if ((await row.isVisible().catch(() => false)) === want) return pass;
-		await probeSearchInput(page).fill('');
+): Promise<LegOutcome> {
+	const startedAtMs = Date.now();
+	let drills = 0;
+	const countDrill = (request: { url: () => string }) => {
+		if (request.url().includes('/integrity/bucket')) drills += 1;
+	};
+	page.on('request', countDrill);
+	try {
+		let passes = 0;
+		for (let attempt = 1; attempt <= MAX_AUDIT_PASSES * 2; attempt += 1) {
+			if (Date.now() - startedAtMs > AUDIT_LEG_BUDGET_MS) {
+				return {
+					converged: false,
+					reason: `gave up after ${Math.round((Date.now() - startedAtMs) / 1000)}s (${passes} auditing passes) — wall-clock budget, not the visibility rule, ended this leg`,
+				};
+			}
+			const before = drills;
+			await checkEverything(page);
+			const audited = drills > before;
+			if (audited) passes += 1;
+
+			await typeProbeSearch(page, token);
+			await expect
+				.poll(() => settled(page, row, want), { timeout: 20_000 })
+				.toBe(true)
+				.catch(() => undefined);
+			if (await settled(page, row, want)) return { converged: true, passes };
+
+			if (passes >= MAX_AUDIT_PASSES) {
+				return {
+					converged: false,
+					reason: `still not ${want ? 'present' : 'gone'} after ${passes} auditing passes (~${passes * 2} buckets drilled); on a catalogue spanning more buckets than that, raise MAX_AUDIT_PASSES`,
+				};
+			}
+			await probeSearchInput(page).fill('');
+		}
+		return {
+			converged: false,
+			reason: `no manual pass performed any audit work in ${MAX_AUDIT_PASSES * 2} attempts — the sync is failing or being skipped, so this is not a visibility result`,
+		};
+	} finally {
+		page.off('request', countDrill);
 	}
-	return null;
 }
 
 function probeSearchInput(page: Page) {
@@ -208,7 +279,11 @@ test.describe('POS visibility (online-only products)', () => {
 		try {
 			// The rule is inert while the feature gate is off, so a hide would prove
 			// nothing. Left on afterwards by design — see visibility-probe.ts.
-			await ensurePosOnlyProductsEnabled(productProbeRequest, storeUrl, productWriter);
+			const gate = await ensurePosOnlyProductsEnabled(productProbeRequest, storeUrl, productWriter);
+			if (!gate.ok) {
+				test.skip(true, gate.reason);
+				return;
+			}
 
 			// ---- Phase 1: populate ------------------------------------------------
 			// The list view carries the slug-derived row testIDs; the tile view does not.
@@ -226,19 +301,19 @@ test.describe('POS visibility (online-only products)', () => {
 
 			// ---- Phase 2: depopulate ----------------------------------------------
 			await hideProductFromPos(productProbeRequest, storeUrl, productWriter, probe.id);
-			const removalPass = await runPassesUntil(page, probe.token, row, false);
+			const removal = await runPassesUntil(page, probe.token, row, false);
 			expect(
-				removalPass,
-				`the online-only product was still on the till after ${MAX_AUDIT_PASSES} audit passes`
-			).not.toBeNull();
+				removal.converged,
+				`online-only product never left the till: ${'reason' in removal ? removal.reason : ''}`
+			).toBe(true);
 
 			// ---- Phase 3: repopulate ----------------------------------------------
 			await revealProductToPos(productProbeRequest, storeUrl, productWriter, probe.id);
-			const returnPass = await runPassesUntil(page, probe.token, row, true);
+			const restored = await runPassesUntil(page, probe.token, row, true);
 			expect(
-				returnPass,
-				`the revealed product never came back after ${MAX_AUDIT_PASSES} audit passes — a prune that cannot be undone is worse than one that never happened`
-			).not.toBeNull();
+				restored.converged,
+				`revealed product never came back — a prune that cannot be undone is worse than one that never happened: ${'reason' in restored ? restored.reason : ''}`
+			).toBe(true);
 		} finally {
 			// Teardown is best-effort and ordered: drop the visibility entry FIRST, so a
 			// failed delete cannot strand this id in a list shared with concurrent runs.

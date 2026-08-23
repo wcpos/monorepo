@@ -29,10 +29,15 @@ import type { APIRequestContext } from '@playwright/test';
  * would rewrite lists this spec has no business touching. The server already does
  * `write( merge( read(), payload ) )` with `array_replace_recursive`, so each write
  * here sends only the one leaf it changes and computes that leaf's value as the
- * union of what is stored plus (or minus) this run's probe id. Two runs can still
- * interleave a read-modify-write on the SAME leaf and lose one id; that costs the
- * losing run a failed assertion, never a corrupted store, and it cannot strand a
- * foreign product in the hidden list.
+ * union of what is stored plus (or minus) this run's probe id.
+ *
+ * That is a narrowing, NOT a guarantee. Two runs can still interleave a
+ * read-modify-write on the same leaf, and the later write can drop the earlier run's
+ * change — including re-adding an id another run had just removed. Nothing available
+ * here makes the write atomic and there is no cross-run mutex by ruling, so every
+ * write is followed by a re-read that confirms the intended membership and repeats
+ * once (`rewriteAndConfirm`). A residual interleaving therefore surfaces as a named
+ * error rather than as a mystery visibility assertion failure.
  *
  * # Consequence 2: the feature gate is global, and left ON deliberately
  *
@@ -99,8 +104,18 @@ async function readSection(
 				'the product-writer identity needs manage_woocommerce_pos'
 		);
 	}
-	const body: unknown = await response.json().catch(() => null);
-	return body !== null && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+	// A successful response whose body is not an object must NOT degrade to `{}`.
+	// Every caller derives the NEW value of a shared id list from this read, so an
+	// empty default silently rewrites that list to contain only this run's probe —
+	// or, in teardown, to nothing at all — wiping every pre-existing visibility rule
+	// on the store. Unparseable is a hard failure, not an empty store.
+	const body: unknown = await response.json().catch(() => undefined);
+	if (body === undefined || body === null || typeof body !== 'object' || Array.isArray(body)) {
+		throw new Error(
+			`The ${section} settings section returned HTTP ${response.status()} with a body that is not a settings object; refusing to rewrite shared settings from it`
+		);
+	}
+	return body as Record<string, unknown>;
 }
 
 /** Positive integer ids from a stored list, dropping anything malformed. */
@@ -134,7 +149,7 @@ async function rewriteOnlineOnlyIds(
 	authorization: StoreAuthorization | null,
 	section: VisibilitySection,
 	mutate: (current: number[]) => number[]
-): Promise<void> {
+): Promise<number[]> {
 	const current = (await readSection(
 		request,
 		storeUrl,
@@ -148,24 +163,96 @@ async function rewriteOnlineOnlyIds(
 	if (!response.ok()) {
 		throw new Error(`Could not write the visibility settings (HTTP ${response.status()})`);
 	}
+	return next;
 }
 
 /**
- * Turn the POS-only/online-only feature gate on if it is off, and report whether the
- * store had it on already.
+ * Read-modify-write the online-only list, then CONFIRM the intended membership
+ * actually landed, retrying once.
  *
- * Never turns it off again — see the module docblock. Reads first and returns early
- * when it is already on (dev-free is, as of 2026-08-23), so the common path writes
- * NOTHING to the shared General section; and the write, when one is needed, patches
- * the single key rather than echoing every other general setting back.
+ * `array_replace` swaps the whole `ids` leaf, so two concurrent runs can interleave
+ * read-modify-write on that one leaf and the later write drops the earlier run's
+ * change. This does not make the write atomic — nothing available here can, and
+ * there is no cross-run mutex by ruling — but re-reading and repeating once collapses
+ * the common interleaving, and a still-wrong membership is raised instead of being
+ * left for a downstream assertion to misreport as a visibility failure.
  */
+async function rewriteAndConfirm(
+	request: APIRequestContext,
+	storeUrl: string,
+	authorization: StoreAuthorization | null,
+	section: VisibilitySection,
+	productId: number,
+	shouldContain: boolean
+): Promise<void> {
+	const mutate = (ids: number[]) =>
+		shouldContain
+			? ids.includes(productId)
+				? ids
+				: [...ids, productId]
+			: ids.filter((id) => id !== productId);
+	for (let attempt = 0; attempt < 2; attempt += 1) {
+		await rewriteOnlineOnlyIds(request, storeUrl, authorization, section, mutate);
+		const settled = (await readSection(
+			request,
+			storeUrl,
+			'visibility',
+			authorization
+		)) as VisibilitySettings;
+		if (
+			idsOf(settled[section]?.[DEFAULT_SCOPE], 'online_only').includes(productId) === shouldContain
+		)
+			return;
+	}
+	throw new Error(
+		`Visibility write did not stick for product ${productId} (wanted ${shouldContain ? 'hidden' : 'visible'}); a concurrent run is rewriting the same list`
+	);
+}
+
+/**
+ * Make sure the POS-only/online-only feature gate is on, WITHOUT ever activating
+ * rules the store already has saved.
+ *
+ * `Pos_Visibility` reports an empty hidden set while the gate is off, so a spec that
+ * hides an id without it proves nothing. But flipping the gate on is only harmless
+ * when the saved lists are EMPTY — if a store has the gate off yet still carries
+ * `online_only` / `pos_only` ids from earlier configuration, enabling it would hide
+ * all of those products from every POS client at once, and this helper deliberately
+ * never restores the previous gate state. That is a store-wide behaviour change no
+ * test may make.
+ *
+ * So: gate already on -> nothing to do. Gate off with empty lists -> enable it and
+ * leave it on (indistinguishable states, and turning it back off could blind a
+ * concurrent run's hidden probe). Gate off with saved rules -> refuse, and let the
+ * caller skip with a reason naming exactly what is in the way.
+ */
+export type GateDecision = { ok: true; alreadyEnabled: boolean } | { ok: false; reason: string };
+
 export async function ensurePosOnlyProductsEnabled(
 	request: APIRequestContext,
 	storeUrl: string,
 	authorization: StoreAuthorization | null
-): Promise<{ alreadyEnabled: boolean }> {
+): Promise<GateDecision> {
 	const general = await readSection(request, storeUrl, 'general', authorization);
-	if (general[POS_ONLY_PRODUCTS_KEY] === true) return { alreadyEnabled: true };
+	if (general[POS_ONLY_PRODUCTS_KEY] === true) return { ok: true, alreadyEnabled: true };
+
+	const visibility = (await readSection(
+		request,
+		storeUrl,
+		'visibility',
+		authorization
+	)) as VisibilitySettings;
+	const saved = (['products', 'variations'] as const).flatMap((section) => {
+		const scope = visibility[section]?.[DEFAULT_SCOPE];
+		return [...idsOf(scope, 'online_only'), ...idsOf(scope, 'pos_only')];
+	});
+	if (saved.length > 0) {
+		return {
+			ok: false,
+			reason: `pos_only_products is off but the store has ${saved.length} saved visibility id(s); enabling the gate would hide them from every POS client`,
+		};
+	}
+
 	const response = await settingsRequest(request, 'post', storeUrl, 'general', authorization, {
 		[POS_ONLY_PRODUCTS_KEY]: true,
 	});
@@ -175,7 +262,7 @@ export async function ensurePosOnlyProductsEnabled(
 				'the POS-visibility rule is inert while it is off'
 		);
 	}
-	return { alreadyEnabled: false };
+	return { ok: true, alreadyEnabled: false };
 }
 
 /** Hide one product from the POS by adding it to the online-only list. */
@@ -185,9 +272,7 @@ export async function hideProductFromPos(
 	authorization: StoreAuthorization | null,
 	productId: number
 ): Promise<void> {
-	await rewriteOnlineOnlyIds(request, storeUrl, authorization, 'products', (ids) =>
-		ids.includes(productId) ? ids : [...ids, productId]
-	);
+	await rewriteAndConfirm(request, storeUrl, authorization, 'products', productId, true);
 }
 
 /**
@@ -202,9 +287,7 @@ export async function revealProductToPos(
 	authorization: StoreAuthorization | null,
 	productId: number
 ): Promise<void> {
-	await rewriteOnlineOnlyIds(request, storeUrl, authorization, 'products', (ids) =>
-		ids.filter((id) => id !== productId)
-	);
+	await rewriteAndConfirm(request, storeUrl, authorization, 'products', productId, false);
 }
 
 /** Whether the store currently hides this product from the POS — the server's own answer. */
