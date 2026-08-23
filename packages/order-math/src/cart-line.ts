@@ -47,9 +47,19 @@ export interface LineItemChanges {
 	sku?: string;
 }
 
-export interface FeeLineChanges {
-	name?: string;
-	amount?: number;
+/**
+ * Extends `Partial<FeeLineInput>` for the same reason `ShippingLineChanges` does: the fee
+ * edit form submits the whole line, `meta_data` included, and the merge below spreads
+ * everything it does not recognise straight through.
+ */
+export interface FeeLineChanges extends Partial<FeeLineInput> {
+	/**
+	 * A STRING from every caller in the app — the two fee cells and the edit form all send
+	 * `String(amount)`, and `useAddFee` writes a string into pos_data. `extractFeeLineData`
+	 * is what converts, on read. Typing this `number` alone would have made every real call
+	 * site an error, so accept what the app actually sends.
+	 */
+	amount?: string | number;
 	percent?: boolean;
 	prices_include_tax?: boolean;
 	percent_of_cart_total_with_tax?: boolean;

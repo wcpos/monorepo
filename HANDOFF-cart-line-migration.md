@@ -58,7 +58,7 @@ rare, so two copies of this maths quietly undermine the decision we just shipped
 | hook | LOC |
 |---|---|
 | `packages/core/src/screens/main/pos/hooks/use-calculate-line-item-tax-and-totals.ts` | 155 |
-| `packages/core/src/screens/main/pos/hooks/use-calculate-fee-line-tax-and-totals.ts` | 108 |
+| ~~`packages/core/src/screens/main/pos/hooks/use-calculate-fee-line-tax-and-totals.ts`~~ | ~~108~~ — **DONE**, stage 2 |
 | ~~`packages/core/src/screens/main/pos/hooks/use-calculate-shipping-line-tax-and-totals.ts`~~ | ~~69~~ — **DONE**, stage 1 |
 
 **Eight call sites, all with sibling test suites already in place:**
@@ -125,9 +125,17 @@ Each stage is its own PR with its own live E2E run. **Do not big-bang this.**
      shapes against their real callers before assuming they are complete.**
    - `calculateCartLine` passes tombstoned lines through untouched; the hooks did not have that
      check. Behaviour improvement, but worth knowing it is a difference.
-2. **Fee** (108 LOC, 2 call sites). Watch the `cartLineItems` percent basis: the hook read it
-   via `getLatest()` mid-calculation; `calculateCartLine` requires it as an explicit input.
-   That is a deliberate design change, and the call site now has to supply it.
+2. ~~**Fee**~~ — **DONE**, stage 2. The `cartLineItems` percent basis landed as the handoff
+   predicted: `useAddFee` reads `getLatest().payload.line_items`, and `useUpdateFeeLine` takes
+   it from the SAME `json` snapshot it is patching, which is stricter than the hook was — the
+   hook's mid-arithmetic `getLatest()` could compute a percentage against a newer cart than the
+   one being written. Two notes for stage 3:
+   - `FeeLineChanges.amount` was typed `number`; **every caller in the app sends a string**
+     (`String(amount)` from both fee cells and the form, and `useAddFee` writes a string into
+     pos_data). Widened to `string | number`. Check `LineItemChanges` against its four call
+     sites the same way — the spec's shapes were written from the spec, not from the callers.
+   - Folded in a real bug found on the way: `edit-fee-line/form.tsx` rendered `<MetaDataForm/>`
+     and seeded it, then dropped `meta_data` on save. The sibling shipping form always sent it.
 3. **Line item** (155 LOC, 4 call sites). Hottest path in the app — every product, variation
    and quantity change.
 

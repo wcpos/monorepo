@@ -88,6 +88,12 @@ export function EditFeeLineForm({ uuid, item }: Props) {
 				percent: data.percent,
 				prices_include_tax: data.prices_include_tax,
 				percent_of_cart_total_with_tax: data.percent_of_cart_total_with_tax,
+				// This dialog renders <MetaDataForm/> and seeds it from the line, but used to
+				// drop the result on save — the cashier's meta edits went nowhere. The sibling
+				// shipping form has always submitted it.
+				meta_data: data.meta_data as NonNullable<
+					import('@wcpos/database').OrderDocument['fee_lines']
+				>[number]['meta_data'],
 			});
 			onOpenChange(false);
 		},

@@ -13,11 +13,6 @@ const mockAddItemToOrder = jest.fn();
 jest.mock('./use-add-item-to-order', () => ({
 	useAddItemToOrder: () => ({ addItemToOrder: mockAddItemToOrder }),
 }));
-jest.mock('./use-calculate-fee-line-tax-and-totals', () => ({
-	useCalculateFeeLineTaxAndTotals: () => ({
-		calculateFeeLineTaxesAndTotals: (line: object) => ({ ...line, total: '5' }),
-	}),
-}));
 jest.mock('./use-cart-config', () => {
 	const { createCartConfig } = jest.requireActual('@wcpos/order-math');
 	const config = createCartConfig({
@@ -35,7 +30,11 @@ jest.mock('./use-cart-config', () => {
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({
-		currentOrderRecord: { uuid: 'order-uuid', payload: { id: 7, number: '7' } },
+		currentOrderRecord: {
+			uuid: 'order-uuid',
+			payload: { id: 7, number: '7' },
+			getLatest: () => ({ payload: { id: 7, line_items: [] } }),
+		},
 	}),
 }));
 
