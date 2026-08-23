@@ -1,12 +1,11 @@
 import * as React from 'react';
 
+import { calculateCartLine } from '@wcpos/order-math';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { reportStaleCartLine } from './cart-failure';
-import { useCalculateFeeLineTaxAndTotals } from './use-calculate-fee-line-tax-and-totals';
-import { useFeeLineData } from './use-fee-line-data';
-import { updatePosDataMeta } from './utils';
+import { useCartConfig } from './use-cart-config';
 import { useT } from '../../../../contexts/translations';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
@@ -32,8 +31,7 @@ interface Changes extends Partial<FeeLine> {
 export const useUpdateFeeLine = () => {
 	const { currentOrderRecord } = useCurrentOrder();
 	const { localPatch } = useLocalMutation();
-	const { calculateFeeLineTaxesAndTotals } = useCalculateFeeLineTaxAndTotals();
-	const { getFeeLineData } = useFeeLineData();
+	const cartConfig = useCartConfig();
 	const t = useT();
 
 	/**
@@ -50,28 +48,31 @@ export const useUpdateFeeLine = () => {
 					return feeLine;
 				}
 
-				// get previous line data from meta_data
-				const prevData = getFeeLineData(feeLine);
-
-				// extract the meta_data from the changes
-				const { amount, percent, prices_include_tax, percent_of_cart_total_with_tax, ...rest } =
-					changes;
-
-				// merge the previous line data with the rest of the changes
-				let updatedItem = { ...feeLine, ...rest };
-
-				// apply the changes to the shipping line
-				updatedItem = updatePosDataMeta(updatedItem, {
-					amount: amount ?? prevData.amount,
-					percent: percent ?? prevData.percent,
-					prices_include_tax: prices_include_tax ?? prevData.prices_include_tax,
-					percent_of_cart_total_with_tax:
-						percent_of_cart_total_with_tax ?? prevData.percent_of_cart_total_with_tax,
-				});
-
-				updatedItem = calculateFeeLineTaxesAndTotals(updatedItem);
+				// The changes-merge (pos_data fields with `?? previous` fallbacks, everything
+				// else straight through) and the tax maths are both the engine's now. See
+				// `applyFeeLineChanges` / `computeFeeLine` in @wcpos/order-math.
+				//
+				// The percent basis comes from THIS snapshot's line items — the same `json`
+				// the map above is walking. The retired hook called `getLatest()` again in
+				// the middle of its arithmetic, so a percentage fee could be computed
+				// against a newer cart than the one being patched, and the write would then
+				// land carrying a total derived from lines it was not built from.
+				//
+				// `warnings` (malformed pos_data) is dropped here, as it is at every other
+				// engine call site in core — settle drops it too.
+				const { line: updatedItem } = calculateCartLine(
+					{
+						kind: 'fee',
+						line: feeLine,
+						changes,
+						cartLineItems: json.line_items ?? [],
+					},
+					cartConfig
+				);
 				updated = true;
-				return updatedItem;
+				// The engine speaks structural line types; this boundary writes back to the
+				// DB document they came from.
+				return updatedItem as FeeLine;
 			});
 
 			if (updated && updatedLineItems) {
@@ -91,7 +92,7 @@ export const useUpdateFeeLine = () => {
 				}
 			);
 		},
-		[calculateFeeLineTaxesAndTotals, currentOrderRecord, getFeeLineData, localPatch, t]
+		[cartConfig, currentOrderRecord, localPatch, t]
 	);
 
 	return { updateFeeLine };

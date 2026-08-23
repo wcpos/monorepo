@@ -6,20 +6,21 @@ import { act, renderHook } from '@testing-library/react';
 import { useUpdateFeeLine } from './use-update-fee-line';
 
 const mockLocalPatch = jest.fn();
-const mockCalculateFeeLineTaxesAndTotals = jest.fn();
-const mockGetFeeLineData = jest.fn();
 const mockLoggerError = jest.fn();
 const mockLoggerWarn = jest.fn();
 const mockLoggerInfo = jest.fn();
 const mockLoggerSuccess = jest.fn();
 
 let mockFeeLines: object[] = [];
+let mockLineItems: object[] = [];
 const mockOrder = {
 	uuid: 'order-uuid',
 	payload: { id: 17 },
 	getLatest: () => ({
 		payload: { id: 17 },
-		toMutableJSON: () => ({ payload: { fee_lines: mockFeeLines } }),
+		toMutableJSON: () => ({
+			payload: { fee_lines: mockFeeLines, line_items: mockLineItems },
+		}),
 	}),
 };
 
@@ -64,30 +65,29 @@ jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: mockOrder }),
 }));
 
-jest.mock('./use-calculate-fee-line-tax-and-totals', () => ({
-	useCalculateFeeLineTaxAndTotals: () => ({
-		calculateFeeLineTaxesAndTotals: mockCalculateFeeLineTaxesAndTotals,
-	}),
-}));
-
-jest.mock('./use-fee-line-data', () => ({
-	useFeeLineData: () => ({ getFeeLineData: mockGetFeeLineData }),
-}));
+// Only the store settings are stubbed; the tax maths, the changes-merge and the
+// percent basis all run for real, so this suite fails if the engine port stops
+// behaving like the hook it replaced.
+jest.mock('./use-cart-config', () => {
+	const { createCartConfig } = jest.requireActual('@wcpos/order-math');
+	const config = createCartConfig({
+		rates: [],
+		allRates: [],
+		calcTaxes: true,
+		pricesIncludeTax: false,
+		taxRoundAtSubtotal: false,
+		dp: 2,
+		shippingTaxClass: '',
+		calcDiscountsSequentially: false,
+	});
+	return { useCartConfig: () => config };
+});
 
 describe('useUpdateFeeLine', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockFeeLines = [];
-		mockGetFeeLineData.mockReturnValue({
-			amount: '2',
-			percent: false,
-			prices_include_tax: false,
-			percent_of_cart_total_with_tax: false,
-		});
-		mockCalculateFeeLineTaxesAndTotals.mockImplementation((line) => ({
-			...line,
-			total: '3',
-		}));
+		mockLineItems = [];
 		mockLocalPatch.mockResolvedValue(true);
 	});
 
@@ -106,9 +106,48 @@ describe('useUpdateFeeLine', () => {
 
 		expect(mockLocalPatch).toHaveBeenCalledWith({
 			document: expect.objectContaining({ payload: expect.objectContaining({ id: 17 }) }),
-			data: { fee_lines: [expect.objectContaining({ total: '3' })] },
+			data: { fee_lines: [expect.objectContaining({ total: '3', total_tax: '0' })] },
 		});
+		// The changes-merge is the engine's now: `amount` has to land in pos_data, not
+		// top-level, or the next recalculation reads the pre-edit amount back.
+		const [{ data }] = mockLocalPatch.mock.calls[0];
+		const posData = data.fee_lines[0].meta_data.find(
+			(meta: { key: string }) => meta.key === '_woocommerce_pos_data'
+		);
+		expect(posData.value).toEqual(expect.objectContaining({ amount: '3', percent: false }));
 		expect(mockLoggerWarn).not.toHaveBeenCalled();
+	});
+
+	it('computes a percentage fee from the SAME snapshot it patches', async () => {
+		// The retired hook re-read the order with getLatest() in the middle of its own
+		// arithmetic, so the basis could come from a newer cart than the one being written.
+		// The basis is an explicit input now, taken from this snapshot's line items.
+		mockLineItems = [
+			{ product_id: 1, total: '80', total_tax: '8' },
+			// Tombstoned: excluded from the basis, exactly as `product_id !== null` did.
+			{ product_id: null, total: '999', total_tax: '99' },
+		];
+		mockFeeLines = [
+			{
+				name: '10% service charge',
+				meta_data: [
+					{ key: '_woocommerce_pos_uuid', value: 'fee-1' },
+					{
+						key: '_woocommerce_pos_data',
+						value: { amount: '10', percent: true, percent_of_cart_total_with_tax: false },
+					},
+				],
+			},
+		];
+		const { result } = renderHook(() => useUpdateFeeLine());
+
+		await act(async () => {
+			await result.current.updateFeeLine('fee-1', { percent_of_cart_total_with_tax: true });
+		});
+
+		// 10% of (80 + 8), the tombstoned line contributing nothing.
+		const [{ data }] = mockLocalPatch.mock.calls[0];
+		expect(data.fee_lines[0].total).toBe('8.8');
 	});
 
 	it('warns without patching when the fee line is absent', async () => {

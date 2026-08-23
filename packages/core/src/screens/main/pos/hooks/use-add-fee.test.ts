@@ -3,10 +3,12 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
+import { calculateCartLine } from '@wcpos/order-math';
+
 import { useAddFee } from './use-add-fee';
 
 const mockAddItemToOrder = jest.fn();
-const mockCalculateFeeLineTaxesAndTotals = jest.fn();
+let mockLineItems: object[] = [];
 const mockLoggerError = jest.fn();
 const mockLoggerWarn = jest.fn();
 const mockLoggerInfo = jest.fn();
@@ -47,7 +49,12 @@ jest.mock('../../../../contexts/translations', () => ({
 
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({
-		currentOrderRecord: { uuid: 'order-uuid', payload: { id: 17, number: '17' } },
+		currentOrderRecord: {
+			uuid: 'order-uuid',
+			payload: { id: 17, number: '17' },
+			// The percent basis is read from here — an explicit input to the engine now.
+			getLatest: () => ({ payload: { id: 17, line_items: mockLineItems } }),
+		},
 	}),
 }));
 
@@ -55,11 +62,27 @@ jest.mock('./use-add-item-to-order', () => ({
 	useAddItemToOrder: () => ({ addItemToOrder: mockAddItemToOrder }),
 }));
 
-jest.mock('./use-calculate-fee-line-tax-and-totals', () => ({
-	useCalculateFeeLineTaxAndTotals: () => ({
-		calculateFeeLineTaxesAndTotals: mockCalculateFeeLineTaxesAndTotals,
-	}),
-}));
+// Only the store settings are stubbed; the tax maths runs for real.
+jest.mock('./use-cart-config', () => {
+	const { createCartConfig } = jest.requireActual('@wcpos/order-math');
+	const config = createCartConfig({
+		rates: [],
+		allRates: [],
+		calcTaxes: true,
+		pricesIncludeTax: false,
+		taxRoundAtSubtotal: false,
+		dp: 2,
+		shippingTaxClass: '',
+		calcDiscountsSequentially: false,
+	});
+	return { useCartConfig: () => config };
+});
+
+// Real implementation, wrapped so one case can make it throw.
+jest.mock('@wcpos/order-math', () => {
+	const actual = jest.requireActual('@wcpos/order-math');
+	return { ...actual, calculateCartLine: jest.fn(actual.calculateCartLine) };
+});
 
 const fee = {
 	name: 'Handling',
@@ -74,7 +97,7 @@ const fee = {
 describe('useAddFee', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
-		mockCalculateFeeLineTaxesAndTotals.mockImplementation((line) => ({ ...line, total: '4.50' }));
+		mockLineItems = [];
 		mockAddItemToOrder.mockResolvedValue(true);
 	});
 
@@ -105,7 +128,7 @@ describe('useAddFee', () => {
 	});
 
 	it('reports a calculation error with its message in context', async () => {
-		mockCalculateFeeLineTaxesAndTotals.mockImplementation(() => {
+		(calculateCartLine as unknown as jest.Mock).mockImplementationOnce(() => {
 			throw new Error('boom');
 		});
 		const { result } = renderHook(() => useAddFee());

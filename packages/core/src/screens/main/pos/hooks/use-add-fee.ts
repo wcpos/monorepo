@@ -1,15 +1,18 @@
 import * as React from 'react';
 
+import { calculateCartLine } from '@wcpos/order-math';
 import { POS_META_KEYS } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { reportCartFailure } from './cart-failure';
 import { useAddItemToOrder } from './use-add-item-to-order';
-import { useCalculateFeeLineTaxAndTotals } from './use-calculate-fee-line-tax-and-totals';
+import { useCartConfig } from './use-cart-config';
 import { useT } from '../../../../contexts/translations';
 import { useCurrentOrder } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
+
+type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 
 interface FeeData {
 	name: string;
@@ -27,7 +30,7 @@ interface FeeData {
 export const useAddFee = () => {
 	const { addItemToOrder } = useAddItemToOrder();
 	const t = useT();
-	const { calculateFeeLineTaxesAndTotals } = useCalculateFeeLineTaxAndTotals();
+	const cartConfig = useCartConfig();
 	const { currentOrderRecord } = useCurrentOrder();
 
 	// Create order-specific logger
@@ -58,14 +61,30 @@ export const useAddFee = () => {
 					},
 				});
 
-				const newFeeLine = calculateFeeLineTaxesAndTotals({
-					name: data.name,
-					tax_class: data.tax_class,
-					tax_status: data.tax_status,
-					meta_data,
-				});
+				// The percent basis is an EXPLICIT input now. The retired hook reached for
+				// `currentOrderRecord.getLatest()` in the middle of its own arithmetic; read
+				// it once, here, so the lines the fee is a percentage OF are visible at the
+				// call site rather than fetched from under it.
+				//
+				// `warnings` (malformed pos_data) is dropped here, as it is at every other
+				// engine call site in core — settle drops it too.
+				const { line: newFeeLine } = calculateCartLine(
+					{
+						kind: 'fee',
+						line: {
+							name: data.name,
+							tax_class: data.tax_class,
+							tax_status: data.tax_status,
+							meta_data,
+						},
+						cartLineItems: currentOrderRecord.getLatest().payload.line_items ?? [],
+					},
+					cartConfig
+				);
 
-				if (!(await addItemToOrder('fee_lines', newFeeLine))) {
+				// The engine speaks structural line types; this boundary writes back to the
+				// DB document they came from.
+				if (!(await addItemToOrder('fee_lines', newFeeLine as FeeLine))) {
 					return;
 				}
 
@@ -86,7 +105,7 @@ export const useAddFee = () => {
 				});
 			}
 		},
-		[calculateFeeLineTaxesAndTotals, addItemToOrder, t, orderLogger]
+		[cartConfig, currentOrderRecord, addItemToOrder, t, orderLogger]
 	);
 
 	return { addFee };
