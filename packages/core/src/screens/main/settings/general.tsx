@@ -247,9 +247,10 @@ export function GeneralSettings() {
 									customComponent={CustomerSelect}
 									onChange={onChange}
 									{...rest}
-									{...({ withGuest: true } as Record<string, unknown>)}
-									// override value with defaultCustomer
-									value={{ value, label: format(defaultCustomerData) } as never}
+									withGuest
+									// The field holds a customer id; its label comes from the resolved
+									// customer, so the pair is passed through rather than derived.
+									value={{ value: String(value), label: format(defaultCustomerData) }}
 									disabled={toggleCustomerSelect}
 								/>
 							</SettingsRow>

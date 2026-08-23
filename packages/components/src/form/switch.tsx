@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { useFormControlAria } from './aria';
 import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
-import { useFormField } from './context';
 import { Switch } from '../switch';
 
 import type { FormItemProps } from './common';
@@ -18,7 +18,7 @@ export function FormSwitch({
 	...props
 }: FormItemProps<boolean> & Partial<React.ComponentProps<typeof Switch>>) {
 	const switchRef = React.useRef<React.ComponentRef<typeof Switch>>(null);
-	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
+	const { labelNativeID, ariaProps } = useFormControlAria({ label, description });
 
 	React.useImperativeHandle(ref, () => {
 		if (!switchRef.current) {
@@ -36,19 +36,13 @@ export function FormSwitch({
 			<View className="w-full flex-row items-center gap-3">
 				<Switch
 					ref={switchRef}
-					aria-labelledby={formItemNativeID}
-					aria-describedby={
-						!error
-							? `${formDescriptionNativeID}`
-							: `${formDescriptionNativeID} ${formMessageNativeID}`
-					}
-					aria-invalid={!!error}
+					{...ariaProps}
 					onCheckedChange={onChange}
 					checked={value ?? false}
 					{...props}
 				/>
 				{!!label && (
-					<FormLabel className="grow" nativeID={formItemNativeID} onPress={handleOnLabelPress}>
+					<FormLabel className="grow" nativeID={labelNativeID} onPress={handleOnLabelPress}>
 						{label}
 					</FormLabel>
 				)}

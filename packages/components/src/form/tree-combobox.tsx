@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { useFormControlAria } from './aria';
 import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
-import { useFormField } from './context';
 import { Icon } from '../icon';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
@@ -41,7 +41,7 @@ export function FormTreeCombobox({
 	portalHost,
 	...treeProps
 }: FormTreeComboboxProps & { children?: React.ReactNode }) {
-	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
+	const { labelNativeID, ariaProps } = useFormControlAria({ label, description });
 
 	const selected = value ?? [];
 	const hasValue = selected.length > 0;
@@ -53,19 +53,13 @@ export function FormTreeCombobox({
 
 	return (
 		<FormItem>
-			{!!label && <FormLabel nativeID={formItemNativeID}>{label}</FormLabel>}
+			{!!label && <FormLabel nativeID={labelNativeID}>{label}</FormLabel>}
 			<TreeCombobox
 				options={options}
 				multiple
 				value={selected}
 				onValueChange={onChange}
-				aria-labelledby={formItemNativeID}
-				aria-describedby={
-					!error
-						? `${formDescriptionNativeID}`
-						: `${formDescriptionNativeID} ${formMessageNativeID}`
-				}
-				aria-invalid={!!error}
+				{...ariaProps}
 				{...treeProps}
 			>
 				<TreeComboboxTrigger>

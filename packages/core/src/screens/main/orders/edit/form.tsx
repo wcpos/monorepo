@@ -296,7 +296,7 @@ export function EditOrderForm({ order }: Props) {
 									<FormSelect
 										label={t('common.status')}
 										customComponent={OrderStatusSelect}
-										value={value as never}
+										value={value}
 										{...fieldRest}
 									/>
 								</View>
@@ -318,22 +318,20 @@ export function EditOrderForm({ order }: Props) {
 							name="customer_id"
 							render={({ field }) => (
 								<View className="flex-1">
-									{/* FormCombobox intersection type creates impossible string & Option for value prop */}
-									{React.createElement(FormCombobox, {
-										customComponent: CustomerSelect,
-										label: t('common.customer'),
-										withGuest: true,
-										...field,
-										onChange: (value: string) => {
+									<FormCombobox
+										customComponent={CustomerSelect}
+										label={t('common.customer')}
+										withGuest
+										{...field}
+										onChange={(value: string) => {
 											const customerId = Number(value);
 											field.onChange(customerId);
 											setCustomerIdToLoad(customerId);
-										},
-										value: {
-											value: String(field.value),
-											label: customerLabel,
-										},
-									} as never)}
+										}}
+										// The field holds a customer id; its label is resolved separately, so
+										// the pair is passed through rather than derived from the scalar.
+										value={{ value: String(field.value), label: customerLabel }}
+									/>
 								</View>
 							)}
 						/>
@@ -392,7 +390,7 @@ export function EditOrderForm({ order }: Props) {
 									<FormSelect
 										customComponent={CurrencySelect}
 										label={t('common.currency')}
-										value={value as never}
+										value={value}
 										{...fieldRest}
 									/>
 								</View>

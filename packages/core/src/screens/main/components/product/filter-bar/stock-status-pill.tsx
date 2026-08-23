@@ -55,7 +55,7 @@ export function StockStatusPill() {
 			</SelectPrimitiveTrigger>
 			<SelectContent>
 				{items.map((item) => (
-					<SelectItem key={item.label} label={item.label} value={item.value} />
+					<SelectItem key={item.value} label={item.label} value={item.value} />
 				))}
 			</SelectContent>
 		</Select>
