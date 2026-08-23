@@ -169,6 +169,25 @@ describe('AttentionPanel', () => {
 		expect(screen.getByTestId('db-attention-panel').textContent ?? '').toContain('upload');
 	});
 
+	/**
+	 * The count has to survive plural selection. i18next picks the form from
+	 * `count`, but the catalogues interpolate `{n}` — pass only `count` and every
+	 * locale renders a literal "{n}" where the number belongs.
+	 */
+	it('substitutes the record count into the plural headline', () => {
+		mockExec.mockResolvedValue(null);
+
+		render(
+			<AttentionPanel
+				stuck={[stuck('products', true), stuck('variations', true), stuck('customers', true)]}
+			/>
+		);
+
+		const text = screen.getByTestId('db-attention-panel').textContent ?? '';
+		expect(text).toContain('3 records need attention');
+		expect(text).not.toContain('{n}');
+	});
+
 	it('offers Retry for a retryable push failure', () => {
 		mockExec.mockResolvedValue(null);
 
