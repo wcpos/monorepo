@@ -321,6 +321,33 @@ describe('useCartSettlement reference demand (#952)', () => {
 		expect(appliedCouponReferenceDemand).not.toHaveBeenCalledWith(true);
 	});
 
+	/**
+	 * The mount pass is new behaviour (#1472 removed skip(1)), and it is what fixes a
+	 * new order keeping the PREVIOUS order's money: adding the first item converts a
+	 * temporary order into a persisted one, and the cart mounts with that line already
+	 * present, so there is no later edit to trigger settlement.
+	 *
+	 * It must not write when there is nothing to correct, or every cart open would
+	 * enqueue a server update. settle's own `changed` flag is what decides.
+	 */
+	it('settles on mount and writes when the persisted totals are stale', async () => {
+		renderHook(() => useCartSettlement());
+		await act(async () => {});
+
+		expect(settleCart).toHaveBeenCalledTimes(1);
+		expect(localPatch).toHaveBeenCalledTimes(1);
+	});
+
+	it('settles on mount but writes nothing when the persisted totals are already right', async () => {
+		settleCart.mockImplementation(() => ({ ...successfulSettlement(), changed: false }));
+
+		renderHook(() => useCartSettlement());
+		await act(async () => {});
+
+		expect(settleCart).toHaveBeenCalledTimes(1);
+		expect(localPatch).not.toHaveBeenCalled();
+	});
+
 	it('persists totals through settleCart when the cart has no coupon lines', async () => {
 		await renderAfterMountSettle();
 
@@ -884,19 +911,31 @@ describe('useCartSettlement background coupon replay (#963)', () => {
 		expect(getCouponContext).toHaveBeenCalledTimes(1);
 		expect(localPatch).not.toHaveBeenCalled();
 
-		// A same-revision re-render (the #222 price-decimals path) reaches
-		// the replay while the continuation's recalculation is still in flight. Both hold the
-		// SAME order revision, so single-flight has to collapse them into one write.
+		/**
+		 * A same-revision re-render (the #222 price-decimals path) reaches the replay
+		 * while the continuation's recalculation is still in flight.
+		 *
+		 * This used to assert that single-flight COLLAPSED the two, on the grounds that
+		 * both hold the same order revision. That was wrong, and #1472 changes it: the
+		 * order revision is identical but the CONFIGURATION is not, and collapsing meant
+		 * the new decimals were never applied until the cashier happened to touch a line
+		 * — defeating the point of #222, which put priceNumDecimals in the trigger in the
+		 * first place. Single-flight is now keyed on the revision AND the config, so a
+		 * configuration change starts its own pass.
+		 */
 		whenSettled = jest.fn(async () => true);
 		await act(async () => {
 			priceNumDecimals = 3;
 			rerender();
 		});
-		expect(getCouponContext).toHaveBeenCalledTimes(1);
+		expect(getCouponContext).toHaveBeenCalledTimes(2);
 
 		await act(async () => {
 			releaseContext?.();
 		});
+		// Both passes run, but only the NEWER one writes: the older pass resumes after
+		// it, finds itself superseded, and abandons rather than overwriting the money
+		// with the stale configuration. Still exactly one write.
 		expect(localPatch).toHaveBeenCalledTimes(1);
 	});
 });

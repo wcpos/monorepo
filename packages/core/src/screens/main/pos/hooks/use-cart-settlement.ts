@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import omit from 'lodash/omit';
 import pick from 'lodash/pick';
 import { useObservable, useSubscription } from 'observable-hooks';
 import { distinctUntilChanged, map } from 'rxjs/operators';
@@ -204,11 +205,36 @@ export const useCartSettlement = () => {
 	 * Replays are single-flight per order revision: a settle signal that lands at the same
 	 * moment as a cart edit must not apply the same recalculation twice.
 	 */
+	/**
+	 * Fingerprint of everything createCartConfig reads. Part of the single-flight key
+	 * so a settlement already in flight does not swallow a configuration change.
+	 */
+	const configKey = JSON.stringify([
+		rates,
+		allRates,
+		calcTaxes,
+		pricesIncludeTax,
+		taxRoundAtSubtotal,
+		priceNumDecimals,
+		shippingTaxClass,
+		calcDiscountsSequentially,
+	]);
+
 	const replayCoupons = React.useCallback(
 		async (freshOrder: CurrentOrderRecord) => {
 			const stateKey = replayStateKey(freshOrder);
-			if (replayingRef.current === stateKey) return;
-			replayingRef.current = stateKey;
+			/**
+			 * Single-flight is keyed on the order revision AND the settlement config.
+			 *
+			 * replayStateKey covers only the ORDER, which is right for the "did the order
+			 * move under us" bail below. It is wrong for single-flight: a tax rate or
+			 * prices-include-tax change while a settle is already in flight produces the
+			 * SAME stateKey, so the new pass would be discarded as a duplicate and the
+			 * configuration change would never be persisted.
+			 */
+			const flightKey = `${stateKey}|${configKey}`;
+			if (replayingRef.current === flightKey) return;
+			replayingRef.current = flightKey;
 			try {
 				const hasActiveCoupons = (freshOrder.payload.coupon_lines || []).some(
 					(line) => line.code != null
@@ -245,6 +271,18 @@ export const useCartSettlement = () => {
 					});
 					return;
 				}
+				/**
+				 * Bail if a NEWER pass superseded this one while it was in flight.
+				 *
+				 * Two passes can be live at once for the same order revision when the
+				 * settlement configuration changes mid-flight — a tax rate, or the #222
+				 * price-decimals path. Without this the older pass can finish last and
+				 * overwrite the newer one's money with the stale configuration, which is
+				 * exactly the race that made the previous "collapse them" behaviour look
+				 * correct. Newest pass wins; older ones abandon before writing.
+				 */
+				if (replayingRef.current !== flightKey) return;
+
 				// Bail if the order moved during the async replay — a concurrent cart edit, a
 				// checkout push, or a status change — rather than overwriting it.
 				if (replayStateKey(currentOrderRecord.getLatest()) !== stateKey) return;
@@ -275,21 +313,39 @@ export const useCartSettlement = () => {
 					computed: JSON.stringify(pick(result.patch, MONEY_FIELDS)),
 				});
 				overruledTotals.current = decision.nextLatch;
-				if (decision.suppress) return;
+
+				/**
+				 * Suppression applies to the MONEY only, never to the structure.
+				 *
+				 * The guard exists to stop re-asserting an aggregate the server overruled.
+				 * It reasons purely about MONEY_FIELDS, so dropping the whole patch would
+				 * also discard genuine line changes that happen to leave the totals
+				 * identical — moving quantity between two equally priced coupon-eligible
+				 * lines, say. After a divergence that edit would vanish silently.
+				 *
+				 * So the money is stripped and everything else is still written. If nothing
+				 * survives the strip, there is nothing to persist.
+				 */
+				let data = result.patch as Partial<OrderDocument>;
+				if (decision.suppress) {
+					data = omit(result.patch, MONEY_FIELDS) as Partial<OrderDocument>;
+					if (Object.keys(data).length === 0) return;
+				}
 
 				await localPatch({
 					document: freshOrder,
 					// settle outputs structural line types; this boundary writes them back to
 					// the DB document they came from.
-					data: result.patch as Partial<OrderDocument>,
+					data,
 				});
 			} finally {
-				if (replayingRef.current === stateKey) replayingRef.current = null;
+				if (replayingRef.current === flightKey) replayingRef.current = null;
 			}
 		},
 		[
 			allRates,
 			calcDiscountsSequentially,
+			configKey,
 			calcTaxes,
 			currentOrderRecord,
 			divergence,
