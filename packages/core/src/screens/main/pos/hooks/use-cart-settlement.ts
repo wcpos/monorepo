@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import isEqual from 'lodash/isEqual';
 import pick from 'lodash/pick';
 import { useObservable, useSubscription } from 'observable-hooks';
 import { distinctUntilChanged, map } from 'rxjs/operators';
@@ -70,8 +69,6 @@ const MONEY_FIELDS = [
  * The parts of a settle patch that represent a real cart change rather than a
  * re-derived aggregate. Their presence means the cashier did something.
  */
-const STRUCTURAL_FIELDS = ['line_items', 'coupon_lines', 'fee_lines'] as const;
-
 /** The only status a POS cart is editable in — see use-open-orders-resource / use-new-order. */
 const POS_OPEN_STATUS = 'pos-open';
 
@@ -308,73 +305,17 @@ export const useCartSettlement = () => {
 				if (!result.changed) return;
 
 				/**
-				 * R1 re-push guard (woocommerce-pos#1548). This write ENQUEUES A SERVER
-				 * UPDATE for an engine-backed order. That is right while the cashier is
-				 * building a sale and wrong once the server has already answered with
-				 * different money: WooCommerce's calculation is the source of truth, so
-				 * re-asserting the till's number here would push it back over the
-				 * server's and provoke the identical divergence on the next drain.
-				 *
-				 * Latched on the ARITHMETIC, not the banner. Keying it to `divergence`
-				 * alone made dismissing the alert — or any later clean save retiring it —
-				 * flip the guard off while the cart still computed the same overruled
-				 * numbers, and the very next run pushed them straight back: the loop
-				 * again, one click later. So the overruled totals are remembered and stay
-				 * suppressed until the cart inputs actually change.
-				 *
-				 * This guard lived in use-order-totals until #1472 moved the write here.
-				 * It applies to every cart now, where before a couponed cart's replay
-				 * bypassed it — see the PR for why that asymmetry was not preserved.
+				 * R1 re-push guard (woocommerce-pos#1548). See repush-guard.ts for the rule
+				 * and why the latch holds the OVERRULED money rather than the computed one.
 				 */
-				/**
-				 * The guard applies to a MONEY-ONLY patch — a re-derived aggregate, which is
-				 * the thing that can loop against the server.
-				 *
-				 * "Structural" means those lines actually DIFFER from what is persisted, not
-				 * merely that the patch contains the keys. settleCart emits line_items and
-				 * coupon_lines on every couponed replay, so key-presence is true even when
-				 * the pass was triggered by divergence alone — which would bypass the guard
-				 * permanently for couponed carts and rebuild the very loop it exists to
-				 * stop. Comparing content distinguishes a cashier edit from a re-derivation
-				 * of the same cart. Before #1472 this fell
-				 * out of where the guard lived: use-order-totals wrote money alone and was
-				 * guarded, while the cart replay wrote structure and money and was not. I
-				 * removed that asymmetry as a "latent instance of the same bug" — it was
-				 * not. Applying a coupon pushes to the server, the server answers with
-				 * different money, and the divergence that creates then suppressed the very
-				 * discount the cashier had just applied: the POS persisted 0.00 against the
-				 * server's 2.23 (caught by e2e/pos-coupon-apply.spec.ts, not by any unit
-				 * test).
-				 */
-				const structural = STRUCTURAL_FIELDS.some(
-					(field) =>
-						field in result.patch &&
-						!isEqual(
-							(result.patch as unknown as Record<string, unknown>)[field],
-							(freshOrder.payload as unknown as Record<string, unknown>)[field]
-						)
-				);
-				const decision = structural
-					? { suppress: false, nextLatch: null }
-					: evaluateRepush({
-							diverged: divergence !== null,
-							latched: overruledTotals.current,
-							computed: JSON.stringify(pick(result.patch, MONEY_FIELDS)),
-						});
+				const decision = evaluateRepush({
+					diverged: divergence !== null,
+					latched: overruledTotals.current,
+					computed: JSON.stringify(pick(result.patch, MONEY_FIELDS)),
+					persisted: JSON.stringify(pick(freshOrder.payload, MONEY_FIELDS)),
+				});
 				overruledTotals.current = decision.nextLatch;
 
-				/**
-				 * Suppression applies to the MONEY only, never to the structure.
-				 *
-				 * The guard exists to stop re-asserting an aggregate the server overruled.
-				 * It reasons purely about MONEY_FIELDS, so dropping the whole patch would
-				 * also discard genuine line changes that happen to leave the totals
-				 * identical — moving quantity between two equally priced coupon-eligible
-				 * lines, say. After a divergence that edit would vanish silently.
-				 *
-				 * So the money is stripped and everything else is still written. If nothing
-				 * survives the strip, there is nothing to persist.
-				 */
 				if (decision.suppress) return;
 
 				await localPatch({

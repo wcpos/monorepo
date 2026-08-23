@@ -7,6 +7,13 @@ import { map } from 'rxjs/operators';
 
 import { useCartSettlement } from './use-cart-settlement';
 
+/**
+ * Money the ORDER is holding. Empty for a fresh cart; tests that exercise the
+ * re-push guard set it, because "a re-derivation" means the pass computes exactly
+ * what is already persisted.
+ */
+let persistedMoney: Record<string, unknown> = {};
+
 const successfulSettlement = () => ({
 	ok: true as const,
 	changed: true,
@@ -108,6 +115,7 @@ function buildRevision(overrides: Record<string, unknown> = {}) {
 		fee_lines: [],
 		shipping_lines: [],
 		coupon_lines: couponLines$.getValue(),
+		...persistedMoney,
 		...overrides,
 	};
 }
@@ -306,6 +314,7 @@ describe('useCartSettlement reference demand (#952)', () => {
 		getCouponContext.mockClear();
 		feeLineIsPercent = false;
 		divergenceValue = null;
+		persistedMoney = {};
 		whenSettled = jest.fn(async () => true);
 		whenSettledInBackground = jest.fn(async (_signal: AbortSignal) => true);
 		referenceGeneration = 0;
@@ -408,6 +417,7 @@ describe('useCartSettlement reference demand (#952)', () => {
 	 */
 	it('does not write money overruled by a divergence that arrived mid-flight', async () => {
 		applyCoupon([{ code: 'bonus' }]);
+		persistedMoney = { ...successfulSettlement().patch };
 		const { rerender } = await renderAfterMountSettle();
 
 		let releaseContext: (() => void) | undefined;
@@ -444,6 +454,9 @@ describe('useCartSettlement reference demand (#952)', () => {
 	});
 
 	it('suppresses a couponed re-derivation whose lines match the persisted ones', async () => {
+		// Set BEFORE applyCoupon: the revision is rebuilt there, and this is the money it
+		// has to be holding for the pass below to count as a re-derivation.
+		persistedMoney = { ...successfulSettlement().patch };
 		applyCoupon([{ code: 'bonus' }]);
 		const { rerender } = await renderAfterMountSettle();
 		divergenceValue = { serverTotal: '9.99' };
@@ -468,6 +481,9 @@ describe('useCartSettlement reference demand (#952)', () => {
 	});
 
 	it('still suppresses a money-only re-derivation while diverged', async () => {
+		// The order already HOLDS this money — that is what makes the pass a
+		// re-derivation, and it is what the server overruled.
+		persistedMoney = { ...successfulSettlement().patch };
 		divergenceValue = { serverTotal: '9.99' };
 		await renderAfterMountSettle();
 		settleCart.mockImplementation(() => ({
