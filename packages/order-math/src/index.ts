@@ -13,12 +13,14 @@ export {
 } from './snapshot';
 export type { CartSnapshot } from './snapshot';
 
-export { settleCart } from './settle';
+export { settleCart, settleAggregate } from './settle';
 export type {
 	SettleOptions,
 	SettlePatch,
 	SettleError,
 	SettleResult,
+	SettleAggregatePatch,
+	SettleAggregateResult,
 	TaxLineOutput,
 } from './settle';
 

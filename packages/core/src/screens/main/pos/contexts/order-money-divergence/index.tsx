@@ -3,12 +3,15 @@ import * as React from 'react';
 import { useQueryRuntime } from '@wcpos/query';
 
 /**
- * The save-time money mirror, held for the cashier (R1).
+ * The save-time money mirror, held for the cashier (R1, ADR 0032).
  *
- * WooCommerce's calculation is the source of truth and the POS mirrors it. When
- * the engine acks a saved order whose money is NOT what the POS sent, it emits
- * `order-money-divergence` — the mirror broke, and the person about to hand
- * goods across the counter is the one who needs to know.
+ * WooCommerce owns money; the POS owns intent. `@wcpos/order-math` exists to
+ * reproduce WooCommerce's arithmetic exactly, so when the engine acks a saved
+ * order whose money is NOT what the POS sent, the reproduction is wrong —
+ * a defect in the POS, a misconfigured store, or a store deliberately computing
+ * something the POS does not model. All three are the same event here: the
+ * server's figures stand, and the cashier is told before goods leave the
+ * counter.
  *
  * Why a retained, per-order store rather than a toast at the emit site:
  *
@@ -20,8 +23,24 @@ import { useQueryRuntime } from '@wcpos/query';
  *    unmounted (small screens put the cart behind its own tab). A component-
  *    local subscription would simply miss it, so the subscription lives above
  *    the POS screens and outlives them.
- *  - Dismissal is per order and deliberate: this is not a transient
- *    notification the cashier may or may not have caught.
+ *
+ * ── Why entries are STICKY (ADR 0032, replacing the retire-on-clean-ack rule) ─
+ *
+ * A held divergence does two jobs. It shows the cashier a notice, and it tells
+ * `useCartSettlement` that this order's money now belongs to the server — so
+ * the POS stops re-deriving that aggregate (`serverOwnsMoney` below).
+ *
+ * That second job is what makes retirement wrong. Once the POS has stopped
+ * asserting its own money, every subsequent ack for the order is clean BY
+ * CONSTRUCTION — there is nothing left for the server to overrule. Retiring on
+ * a clean ack would therefore un-own the money on the very next write, the POS
+ * would re-assert its arithmetic, the server would overrule it again, and the
+ * order would oscillate: the divergence loop the old re-push guard existed to
+ * defend against, arriving through the eviction path instead.
+ *
+ * So a diverged order stays diverged for as long as it is in the till. It is
+ * not dismissible either: this is a broken product invariant, not a notice the
+ * cashier may wave away. It clears on a store switch, or when the order leaves.
  *
  * Nothing here blocks the sale. The server's totals stand — the alert exists so
  * the cashier reviews them first.
@@ -37,14 +56,26 @@ export type OrderMoneyDivergenceField = {
 
 export type OrderMoneyDivergence = {
 	orderId: string;
-	/** The write whose ack broke the mirror — the retirement key below. */
+	/** The write whose ack broke the mirror. */
 	mutationId: string;
 	fields: OrderMoneyDivergenceField[];
 };
 
+type DivergenceState = {
+	engine: unknown;
+	byOrderId: Record<string, OrderMoneyDivergence>;
+	/**
+	 * Distinct orders that have diverged since this engine last reset. Counted
+	 * separately from `byOrderId` so the eviction bound below cannot quietly
+	 * reduce it — escalation is about how often the store disagrees, and that
+	 * fact does not stop being true when an old entry is dropped.
+	 */
+	divergedOrderCount: number;
+};
+
 type DivergenceStore = {
 	byOrderId: Record<string, OrderMoneyDivergence>;
-	dismiss: (orderId: string) => void;
+	divergedOrderCount: number;
 };
 
 const OrderMoneyDivergenceContext = React.createContext<DivergenceStore | undefined>(undefined);
@@ -57,10 +88,34 @@ type DivergenceEvent = {
 	fields?: OrderMoneyDivergenceField[];
 };
 
-/** Write outcomes that prove the server ACCEPTED a later write for the record. */
-const CLEAN_ACK_EVENTS = new Set(['write-acknowledged', 'write-ack-rematerialized']);
+/**
+ * Diverged orders whose detail is kept for display.
+ *
+ * Sticky entries have no automatic eviction path (see the header), so a long
+ * shift against a misconfigured store would otherwise grow this without bound.
+ * The cap is a memory bound, not a product rule: the cashier only ever looks at
+ * the order in front of them, and older ones are already counted above.
+ */
+const MAX_HELD_DIVERGENCES = 50;
 
-const NOTHING_HELD: Record<string, OrderMoneyDivergence> = {};
+/**
+ * Distinct diverged orders that turn "this sale disagrees" into "this store
+ * disagrees" (ADR 0032 §5.3). One is an anomaly the cashier reviews; three is a
+ * condition of the install, and that is the signal that needs to reach support
+ * rather than be absorbed sale after sale.
+ */
+export const STORE_LEVEL_DIVERGENCE_THRESHOLD = 3;
+
+const EMPTY_STATE: DivergenceStore = { byOrderId: {}, divergedOrderCount: 0 };
+
+/** Drop the oldest entries once the held set outgrows its memory bound. */
+function withinCap(byOrderId: Record<string, OrderMoneyDivergence>) {
+	const ids = Object.keys(byOrderId);
+	if (ids.length <= MAX_HELD_DIVERGENCES) return byOrderId;
+	const kept: Record<string, OrderMoneyDivergence> = {};
+	for (const id of ids.slice(ids.length - MAX_HELD_DIVERGENCES)) kept[id] = byOrderId[id];
+	return kept;
+}
 
 export function OrderMoneyDivergenceProvider({ children }: { children: React.ReactNode }) {
 	const { engine } = useQueryRuntime();
@@ -68,10 +123,11 @@ export function OrderMoneyDivergenceProvider({ children }: { children: React.Rea
 	// site and never reused after disposal, so this identity check can only ever
 	// hide entries — it can never let a stale one back in, which a scope-id check
 	// would (store A → B → A matches again).
-	const [state, setState] = React.useState<{
-		engine: unknown;
-		byOrderId: Record<string, OrderMoneyDivergence>;
-	}>(() => ({ engine, byOrderId: {} }));
+	const [state, setState] = React.useState<DivergenceState>(() => ({
+		engine,
+		byOrderId: {},
+		divergedOrderCount: 0,
+	}));
 
 	React.useEffect(() => {
 		return engine.events((event) => {
@@ -83,66 +139,57 @@ export function OrderMoneyDivergenceProvider({ children }: { children: React.Rea
 			// resets state for real — no read-time mask that a switch BACK could lift
 			// again, and no setState in render or in an effect (the React compiler
 			// rejects both, and the effect form loops if `engine` is ever unstable).
+			//
+			// The escalation count resets with it: "this store disagrees repeatedly"
+			// is a claim about ONE store, and carrying a count across a switch would
+			// escalate the next till for the previous one's misconfiguration.
 			if (message.type === 'scope-switched') {
 				setState((current) =>
-					Object.keys(current.byOrderId).length === 0 && current.engine === engine
+					Object.keys(current.byOrderId).length === 0 &&
+					current.divergedOrderCount === 0 &&
+					current.engine === engine
 						? current
-						: { engine, byOrderId: {} }
+						: { engine, byOrderId: {}, divergedOrderCount: 0 }
 				);
 				return;
 			}
 
+			if (message.type !== 'order-money-divergence') return;
+
 			const orderId = message.recordId;
 			if (typeof orderId !== 'string' || orderId === '') return;
 
-			if (message.type === 'order-money-divergence') {
-				const held: OrderMoneyDivergence = {
-					orderId,
-					mutationId: typeof message.mutationId === 'string' ? message.mutationId : '',
-					fields: message.fields ?? [],
-				};
-				// Last write wins: a second save of the same order re-states the
-				// mirror, and the newest comparison is the one worth reviewing.
-				setState((current) => ({
-					engine,
-					byOrderId:
-						current.engine === engine
-							? { ...current.byOrderId, [orderId]: held }
-							: { [orderId]: held },
-				}));
-				return;
-			}
-
-			// A LATER write the server accepted without changing the money retires
-			// the alert: the mirror is whole again, and a banner still quoting the
-			// old amounts would be telling the cashier something untrue. The
-			// mutationId guard is what keeps the divergence's OWN acknowledgement —
-			// emitted in the same flush, immediately after it — from retiring it.
-			// This is also the store's only automatic eviction path, so it cannot
-			// grow without bound across a shift.
-			if (message.collection !== 'orders' || !CLEAN_ACK_EVENTS.has(message.type)) return;
+			const held: OrderMoneyDivergence = {
+				orderId,
+				mutationId: typeof message.mutationId === 'string' ? message.mutationId : '',
+				fields: message.fields ?? [],
+			};
+			// Last write wins for the DETAIL: a second save of the same order
+			// re-states the mirror, and the newest comparison is the one worth
+			// reviewing. The COUNT only moves for an order that had not diverged
+			// before — escalation measures how many sales the store disagreed on,
+			// not how many times one sale was saved.
 			setState((current) => {
-				const held = current.byOrderId[orderId];
-				if (!held || held.mutationId === message.mutationId) return current;
-				const { [orderId]: _retired, ...rest } = current.byOrderId;
-				return { engine: current.engine, byOrderId: rest };
+				const sameEngine = current.engine === engine;
+				const alreadyHeld = sameEngine && orderId in current.byOrderId;
+				return {
+					engine,
+					byOrderId: withinCap(
+						sameEngine ? { ...current.byOrderId, [orderId]: held } : { [orderId]: held }
+					),
+					divergedOrderCount: (sameEngine ? current.divergedOrderCount : 0) + (alreadyHeld ? 0 : 1),
+				};
 			});
 		});
 	}, [engine]);
 
-	const dismiss = React.useCallback((orderId: string) => {
-		setState((current) => {
-			if (!(orderId in current.byOrderId)) return current;
-			const { [orderId]: _dismissed, ...rest } = current.byOrderId;
-			return { engine: current.engine, byOrderId: rest };
-		});
-	}, []);
-
-	const byOrderId = state.engine === engine ? state.byOrderId : NOTHING_HELD;
+	const sameEngine = state.engine === engine;
+	const byOrderId = sameEngine ? state.byOrderId : EMPTY_STATE.byOrderId;
+	const divergedOrderCount = sameEngine ? state.divergedOrderCount : 0;
 
 	const value = React.useMemo<DivergenceStore>(
-		() => ({ byOrderId, dismiss }),
-		[byOrderId, dismiss]
+		() => ({ byOrderId, divergedOrderCount }),
+		[byOrderId, divergedOrderCount]
 	);
 
 	return (
@@ -153,23 +200,33 @@ export function OrderMoneyDivergenceProvider({ children }: { children: React.Rea
 }
 
 /**
- * The divergence held for one order, if any, plus its dismissal.
+ * The divergence held for one order, if any.
  *
  * Returns a null divergence outside the provider rather than throwing: this is
  * an advisory surface, and a missing provider must never take the cart down
  * with it.
  *
+ * `serverOwnsMoney` is the settlement rule, and it is deliberately a separate
+ * name from `divergence !== null` even though they are the same predicate
+ * today. Callers ask two different questions of this store — "do I show the
+ * cashier a notice?" and "may I still derive this order's money?" — and the
+ * second is the one that must never be answered by reading the banner's
+ * visibility. That mistake is precisely what the old re-push guard's
+ * dismiss-flips-the-latch bug was.
+ *
  * @param orderId - The order's uuid; `undefined` for an unsaved new order.
  */
 export function useOrderMoneyDivergence(orderId: string | undefined): {
 	divergence: OrderMoneyDivergence | null;
-	dismiss: () => void;
+	serverOwnsMoney: boolean;
+	/** Distinct orders this store has diverged on since the last scope switch. */
+	divergedOrderCount: number;
 } {
 	const store = React.useContext(OrderMoneyDivergenceContext);
 	const divergence = orderId && store ? (store.byOrderId[orderId] ?? null) : null;
-	const dismissOne = store?.dismiss;
-	const dismiss = React.useCallback(() => {
-		if (orderId && dismissOne) dismissOne(orderId);
-	}, [orderId, dismissOne]);
-	return { divergence, dismiss };
+	return {
+		divergence,
+		serverOwnsMoney: divergence !== null,
+		divergedOrderCount: store?.divergedOrderCount ?? 0,
+	};
 }

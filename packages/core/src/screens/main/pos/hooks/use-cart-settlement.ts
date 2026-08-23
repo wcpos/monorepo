@@ -1,16 +1,19 @@
 import * as React from 'react';
 
-import pick from 'lodash/pick';
 import { useObservable, useSubscription } from 'observable-hooks';
 import { distinctUntilChanged, map } from 'rxjs/operators';
 
-import { createCartConfig, settleCart, snapshotFromOrderJSON } from '@wcpos/order-math';
+import {
+	createCartConfig,
+	settleAggregate,
+	settleCart,
+	snapshotFromOrderJSON,
+} from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { useDocField, useRecordField } from '@wcpos/query';
 
 import { useAppliedCouponReferenceDemand } from '../../../../query';
-import { evaluateRepush } from './repush-guard';
 import { useCouponContext } from './use-coupon-context';
 import { useAppState } from '../../../../contexts/app-state';
 import { useTaxLocation, useTaxSettings } from '../../contexts/tax-rates';
@@ -50,27 +53,11 @@ function replayStateKey(order: CurrentOrderRecord): string {
 	]);
 }
 
-/**
- * The money the settle patch asserts onto the order. Kept separate from the
- * structural fields because the R1 re-push guard latches on this subset alone.
- */
-const MONEY_FIELDS = [
-	'discount_tax',
-	'discount_total',
-	'shipping_tax',
-	'shipping_total',
-	'cart_tax',
-	'total_tax',
-	'total',
-	'tax_lines',
-] as const;
-
-/**
- * The parts of a settle patch that represent a real cart change rather than a
- * re-derived aggregate. Their presence means the cashier did something.
- */
 /** The only status a POS cart is editable in — see use-open-orders-resource / use-new-order. */
 const POS_OPEN_STATUS = 'pos-open';
+
+const hasActiveCouponLines = (order: CurrentOrderRecord) =>
+	(order.payload.coupon_lines || []).some((line) => line.code != null);
 
 /**
  * The off-critical-path coupon replay armed when the foreground reference barrier expires (#963).
@@ -86,21 +73,52 @@ type ReplayContinuation = {
 };
 
 /**
- * @NOTE - when current order is updated, eg: date_modified, the cart lines will re-subscribe.
- */
-/**
  * The cart's single writer.
  *
  * Split out of useCartLines for #1472. useCartLines is mounted three times on the
  * cart surface — cart/table.tsx, cart/totals.tsx and use-order-totals.ts — and each
- * instance owned its own single-flight ref and re-push latch. While settlement only
- * ran for couponed carts that was survivable; once settle became the writer for
- * EVERY cart change it meant three concurrent writes per edit, each with its own
- * idea of what had already been written.
+ * instance owned its own write state. While settlement only ran for couponed carts
+ * that was survivable; once settle became the writer for EVERY cart change it meant
+ * three concurrent writes per edit, each with its own idea of what had already been
+ * written.
  *
  * So the selector stays where it is and mounts freely, and this hook — which holds
  * all the write state — is mounted exactly once, by OpenOrders. Mounting it twice
  * reintroduces the bug it exists to remove.
+ *
+ * ── Two passes, and why they are separate ───────────────────────────────────────
+ *
+ * 1. THE MONEY, promptly. `settleAggregate` over the lines exactly as persisted.
+ *    Pure, synchronous, and — this is the whole point — reached with NO await in
+ *    front of it. The cashier can save a fraction of a second after an edit, and
+ *    whatever is on the document at that moment is what the sale is worth.
+ *
+ * 2. THE COUPON REDISTRIBUTION, when it is needed. A cart edit under an active
+ *    coupon changes how that coupon's discount spreads across the lines, and
+ *    working that out needs the coupon records, which may not be resident (#952).
+ *    So it waits, and its output arrives as new LINES — which brings pass 1 round
+ *    again to re-derive the money over them.
+ *
+ * Routing pass 1 through `settleCart` is what broke `pos-coupon-apply.spec.ts`:
+ * settleCart gates on having every active coupon in hand, so the money write sat
+ * behind a reference prefetch that only pass 2 ever needed, and a couponed cart
+ * saved with `discount_total: 0`. Prompt is not an optimisation here — it is the
+ * correctness property.
+ *
+ * ── Divergence (ADR 0032) ───────────────────────────────────────────────────────
+ *
+ * WooCommerce owns money. Once the server has overruled this order's arithmetic,
+ * BOTH passes stand down for good: re-deriving an aggregate the server has already
+ * rejected is how the POS argues with its own source of truth. The cashier's
+ * structural edits still push — `use-update-line-item` sends `line_items` and no
+ * top-level money — so the order keeps moving as intent, and the server's answer is
+ * adopted on each ack. Local arithmetic carries on for DISPLAY and for offline
+ * operation; it simply stops being an assertion.
+ *
+ * There is no re-push guard here, no latch and no suppression rule. Three attempts
+ * to state that rule correctly were all wrong (see ADR 0032 §Context) because the
+ * question — "may I assert my number again?" — has no good answer. This one does
+ * not ask it.
  */
 export const useCartSettlement = () => {
 	const { currentOrderRecord } = useCurrentOrder();
@@ -111,8 +129,7 @@ export const useCartSettlement = () => {
 	const activeCouponLineCount = (couponLines || []).filter((line) => line.code != null).length;
 	const { localPatch } = useLocalMutation();
 	const { getCouponContext } = useCouponContext();
-	const { divergence } = useOrderMoneyDivergence(currentOrderRecord.uuid);
-	const overruledTotals = React.useRef<string | null>(null);
+	const { serverOwnsMoney } = useOrderMoneyDivergence(currentOrderRecord.uuid);
 	const { rates } = useTaxLocation();
 	const {
 		allRates,
@@ -150,7 +167,6 @@ export const useCartSettlement = () => {
 
 	/**
 	 * Settle every cart-line edit, plus every input `createCartConfig` reads.
-	 * `changed` suppresses the follow-up emission when settle itself rewrites arrays.
 	 *
 	 * The config inputs are here, not just the lines, because this subscription is now
 	 * the ONLY thing that persists totals. Before #1472 the use-order-totals effect
@@ -162,6 +178,11 @@ export const useCartSettlement = () => {
 	 *
 	 * Rates are arrays rebuilt each render; the JSON + distinctUntilChanged below is
 	 * what keeps that from emitting on every render.
+	 *
+	 * Divergence is NOT an input. It used to be, because a divergence arriving had to
+	 * run a pass to latch the overruled arithmetic. There is no latch now — divergence
+	 * makes this hook stand down rather than compute something — so a pass on arrival
+	 * would have nothing to do.
 	 */
 	const cartTotal$ = useObservable(
 		(inputs$) =>
@@ -172,8 +193,8 @@ export const useCartSettlement = () => {
 				// present. While use-order-totals wrote from a mount effect the initial
 				// state was covered; now nothing else would write it, and the new order
 				// would keep the previous order's aggregate money. distinctUntilChanged
-				// still collapses the no-op case, and settle's own `changed` flag plus the
-				// re-push latch stop a redundant write reaching the document.
+				// still collapses the no-op case, and settle's own `changed` flag stops a
+				// redundant write reaching the document.
 				map((cartInputs) => JSON.stringify(cartInputs)),
 				distinctUntilChanged()
 			),
@@ -197,27 +218,13 @@ export const useCartSettlement = () => {
 			taxRoundAtSubtotal,
 			shippingTaxClass,
 			calcDiscountsSequentially,
-			// A divergence ARRIVING has to run a settle pass, even though no cart input
-			// moved. The original effect listed `{ diverged: divergence !== null }` in its
-			// dependencies for exactly this reason: the pass is what evaluates
-			// evaluateRepush and latches the overruled arithmetic. Without it a divergence
-			// that arrives and is then retired never latches, and the next edit pushes the
-			// overruled numbers straight back — the loop the guard exists to stop.
-			divergence !== null,
 		]
 	);
 
 	/**
-	 * The settle write, extracted so the background continuation reaches the order
-	 * through the SAME path a cart edit does — same settlement, same identity guards, same
-	 * `localPatch`. The continuation only changes WHEN this runs, never how.
-	 *
-	 * Replays are single-flight per order revision: a settle signal that lands at the same
-	 * moment as a cart edit must not apply the same recalculation twice.
-	 */
-	/**
-	 * Fingerprint of everything createCartConfig reads. Part of the single-flight key
-	 * so a settlement already in flight does not swallow a configuration change.
+	 * Fingerprint of everything createCartConfig reads. Part of the replay's
+	 * single-flight key so a settlement already in flight does not swallow a
+	 * configuration change.
 	 */
 	const configKey = JSON.stringify([
 		rates,
@@ -230,48 +237,81 @@ export const useCartSettlement = () => {
 		calcDiscountsSequentially,
 	]);
 
+	const cartConfig = React.useMemo(
+		() =>
+			createCartConfig({
+				rates,
+				allRates,
+				calcTaxes,
+				pricesIncludeTax,
+				taxRoundAtSubtotal,
+				dp: priceNumDecimals,
+				shippingTaxClass: taxClassToWire(taxClassFromWire(shippingTaxClass)),
+				calcDiscountsSequentially,
+			}),
+		[
+			allRates,
+			calcDiscountsSequentially,
+			calcTaxes,
+			priceNumDecimals,
+			pricesIncludeTax,
+			rates,
+			shippingTaxClass,
+			taxRoundAtSubtotal,
+		]
+	);
+
+	/**
+	 * Pass 1 — the money over the lines as they are persisted, right now.
+	 *
+	 * Nothing is awaited before `localPatch`, and nothing may be added that is. The
+	 * one guarantee this pass makes is that the aggregate on the document matches the
+	 * lines on the document by the time the cashier's next action can read it.
+	 */
+	const settleMoney = React.useCallback(
+		async (freshOrder: CurrentOrderRecord) => {
+			const result = settleAggregate(
+				snapshotFromOrderJSON(freshOrder.toMutableJSON().payload),
+				cartConfig
+			);
+			if (!result.changed) return;
+			await localPatch({
+				document: freshOrder,
+				data: result.patch as Partial<OrderDocument>,
+			});
+		},
+		[cartConfig, localPatch]
+	);
+
+	/**
+	 * Pass 2 — redistribute the active coupons across the lines, then re-derive.
+	 *
+	 * Extracted so the background continuation reaches the order through the SAME path
+	 * a cart edit does — same settlement, same identity guards, same `localPatch`. The
+	 * continuation only changes WHEN this runs, never how.
+	 *
+	 * Single-flight per (order revision, settlement config): a settle signal that lands
+	 * at the same moment as a cart edit must not apply the same recalculation twice.
+	 */
 	const replayCoupons = React.useCallback(
 		async (freshOrder: CurrentOrderRecord) => {
 			const stateKey = replayStateKey(freshOrder);
 			/**
-			 * Single-flight is keyed on the order revision AND the settlement config.
-			 *
 			 * replayStateKey covers only the ORDER, which is right for the "did the order
-			 * move under us" bail below. It is wrong for single-flight: a tax rate or
-			 * prices-include-tax change while a settle is already in flight produces the
-			 * SAME stateKey, so the new pass would be discarded as a duplicate and the
-			 * configuration change would never be persisted.
-			 *
-			 * Divergence is in the key for the same reason, and it matters more: it is
-			 * captured in this callback's closure, so a divergence ARRIVING while a pass
-			 * awaits getCouponContext would otherwise be discarded as a duplicate while
-			 * the in-flight pass carried on believing nothing had diverged — and enqueued
-			 * the very money the server had just overruled.
+			 * move under us" bail below. It is wrong on its own for single-flight: a tax
+			 * rate or prices-include-tax change while a replay is already in flight
+			 * produces the SAME stateKey, so the new pass would be discarded as a
+			 * duplicate and the configuration change would never reach the lines.
 			 */
-			const flightKey = `${stateKey}|${configKey}|${divergence !== null}`;
+			const flightKey = `${stateKey}|${configKey}`;
 			if (replayingRef.current === flightKey) return;
 			replayingRef.current = flightKey;
 			try {
-				const hasActiveCoupons = (freshOrder.payload.coupon_lines || []).some(
-					(line) => line.code != null
-				);
-				const couponContext = hasActiveCoupons
-					? await getCouponContext(freshOrder.payload.line_items || [])
-					: undefined;
-				const config = createCartConfig({
-					rates,
-					allRates,
-					calcTaxes,
-					pricesIncludeTax,
-					taxRoundAtSubtotal,
-					dp: priceNumDecimals,
-					shippingTaxClass: taxClassToWire(taxClassFromWire(shippingTaxClass)),
-					calcDiscountsSequentially,
-				});
+				const couponContext = await getCouponContext(freshOrder.payload.line_items || []);
 				const result = settleCart(
 					snapshotFromOrderJSON(freshOrder.toMutableJSON().payload),
-					config,
-					couponContext ? { coupons: couponContext } : undefined
+					cartConfig,
+					{ coupons: couponContext }
 				);
 				if (!result.ok) {
 					cartLogger.warn('Cart settlement failed', {
@@ -287,15 +327,15 @@ export const useCartSettlement = () => {
 					});
 					return;
 				}
+
 				/**
 				 * Bail if a NEWER pass superseded this one while it was in flight.
 				 *
 				 * Two passes can be live at once for the same order revision when the
 				 * settlement configuration changes mid-flight — a tax rate, or the #222
 				 * price-decimals path. Without this the older pass can finish last and
-				 * overwrite the newer one's money with the stale configuration, which is
-				 * exactly the race that made the previous "collapse them" behaviour look
-				 * correct. Newest pass wins; older ones abandon before writing.
+				 * overwrite the newer one's lines with the stale configuration. Newest
+				 * pass wins; older ones abandon before writing.
 				 */
 				if (replayingRef.current !== flightKey) return;
 
@@ -303,20 +343,6 @@ export const useCartSettlement = () => {
 				// checkout push, or a status change — rather than overwriting it.
 				if (replayStateKey(currentOrderRecord.getLatest()) !== stateKey) return;
 				if (!result.changed) return;
-
-				/**
-				 * R1 re-push guard (woocommerce-pos#1548). See repush-guard.ts for the rule
-				 * and why the latch holds the OVERRULED money rather than the computed one.
-				 */
-				const decision = evaluateRepush({
-					diverged: divergence !== null,
-					latched: overruledTotals.current,
-					computed: JSON.stringify(pick(result.patch, MONEY_FIELDS)),
-					persisted: JSON.stringify(pick(freshOrder.payload, MONEY_FIELDS)),
-				});
-				overruledTotals.current = decision.nextLatch;
-
-				if (decision.suppress) return;
 
 				await localPatch({
 					document: freshOrder,
@@ -328,22 +354,7 @@ export const useCartSettlement = () => {
 				if (replayingRef.current === flightKey) replayingRef.current = null;
 			}
 		},
-		[
-			allRates,
-			calcDiscountsSequentially,
-			configKey,
-			calcTaxes,
-			currentOrderRecord,
-			divergence,
-			getCouponContext,
-			localPatch,
-			priceNumDecimals,
-			pricesIncludeTax,
-			rates,
-			shippingTaxClass,
-			taxRoundAtSubtotal,
-			t,
-		]
+		[cartConfig, configKey, currentOrderRecord, getCouponContext, localPatch, t]
 	);
 
 	// The background wait is external to React, so a tax-setting change does not re-arm it.
@@ -394,8 +405,8 @@ export const useCartSettlement = () => {
 				continuationRef.current = null;
 				if (!settled) {
 					// Capped out. The next cart edit re-runs the replay, but the cashier must
-					// hear about it NOW: the cart is showing totals the engine knows it could
-					// not refresh (cashier-full-information ruling, 2026-08-07).
+					// hear about it NOW: the cart is showing a coupon distribution the engine
+					// knows it could not refresh (cashier-full-information ruling, 2026-08-07).
 					cartLogger.warn('Coupon reference refresh timed out', {
 						showToast: true,
 						toast: { title: t('pos_cart.coupon_refresh_timeout') },
@@ -445,36 +456,48 @@ export const useCartSettlement = () => {
 		() => () => {
 			continuationRef.current?.abort.abort();
 			continuationRef.current = null;
-			// The latch is per ORDER. Switching tabs swaps the context value without a
-			// remount, so without this a divergence on one order would suppress the
-			// next order's first write if their arithmetic happened to match.
-			overruledTotals.current = null;
 		},
 		[currentOrderUUID]
 	);
 
 	const handleCartTotalChange = async () => {
 		const freshOrder = currentOrderRecord.getLatest();
-		const hasActiveCoupons = (freshOrder.payload.coupon_lines || []).some((cl) => cl.code != null);
-		if (hasActiveCoupons) {
-			// The demand declared above is asynchronous, and this edit can land while the pull
-			// is still in flight — scanning now would hit the still-empty collections and throw
-			// (or validate a category-restricted coupon against an empty tree). Wait for it, and
-			// if the wait times out, bail rather than replaying against residents we know are
-			// not ready: same "avoid partial data" rule as the missing-coupon bail below.
-			if (!(await whenCouponReferencesSettled())) {
-				// Bailing used to strand the cashier on stale totals until the next edit (#963).
-				// Keep waiting off the critical path instead and replay when the references
-				// actually land, guarded on this exact order revision.
-				armReplayContinuation(freshOrder);
-				return;
-			}
-			// The references are here, so this edit's own replay supersedes anything an earlier
-			// edit left waiting — a stale continuation firing behind it would re-apply the
-			// pre-edit discounts.
+
+		// ADR 0032: the server overruled this order's arithmetic, so its money is the
+		// server's now and the POS stops deriving it. Both passes, not just the money
+		// one — a coupon replay rewrites line-level `total`/`total_tax`, which is the
+		// same claim by another route.
+		if (serverOwnsMoney) {
 			disarmReplayContinuation();
+			return;
 		}
-		await replayCoupons(freshOrder);
+
+		// Pass 1, before anything can await. Its patch touches money and percent fees
+		// only, so it cannot race pass 2's structural output.
+		await settleMoney(freshOrder);
+
+		if (!hasActiveCouponLines(freshOrder)) return;
+
+		// Pass 1 just wrote, which moves `date_modified_gmt` and so the replay state
+		// key. Re-read rather than replaying against the handle from before the write —
+		// the stale key would make every couponed replay bail on its own predecessor.
+		const afterMoney = currentOrderRecord.getLatest();
+
+		// The demand declared above is asynchronous, and this edit can land while the pull
+		// is still in flight — scanning now would hit the still-empty collections and fail
+		// the missing-coupon gate (or validate a category-restricted coupon against an
+		// empty tree). Wait for it, and if the wait times out, keep waiting off the
+		// critical path rather than replaying against residents we know are not ready.
+		if (!(await whenCouponReferencesSettled())) {
+			// Bailing used to strand the cashier on stale totals until the next edit (#963).
+			armReplayContinuation(afterMoney);
+			return;
+		}
+		// The references are here, so this edit's own replay supersedes anything an earlier
+		// edit left waiting — a stale continuation firing behind it would re-apply the
+		// pre-edit discounts.
+		disarmReplayContinuation();
+		await replayCoupons(afterMoney);
 	};
 
 	useSubscription(

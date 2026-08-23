@@ -11,7 +11,7 @@ import { createCartConfig } from './config';
 import { calculateOrderTotals } from './internal/order-totals';
 import { recalculateCoupons } from './internal/coupons/recalculate';
 import { getOrderTotals } from './order-totals';
-import { settleCart } from './settle';
+import { settleAggregate, settleCart } from './settle';
 
 import type { CartConfigInput } from './config';
 import type { CartSnapshot } from './snapshot';
@@ -533,5 +533,129 @@ describe('settleCart', () => {
 			if (result.ok) return;
 			expect(result.error).toEqual({ code: 'missing_coupon', missingCodes: ['ghost'] });
 		});
+	});
+});
+
+// ---------------------------------------------------------------------------
+// settleAggregate — entry point 2 (#1472)
+// ---------------------------------------------------------------------------
+
+describe('settleAggregate', () => {
+	/**
+	 * The reason this entry point exists. `settleCart` refuses a couponed cart it
+	 * has no CouponContext for, and assembling that context is asynchronous — so
+	 * routing the cart's money write through it left `discount_total` unpersisted
+	 * while the cashier saved. The aggregate over the persisted lines answers
+	 * without asking anyone.
+	 */
+	it('settles a couponed cart with no coupon context, where settleCart refuses', () => {
+		// The line already carries the coupon's distributed discount: $100 item,
+		// 10% off, total 90 — exactly what use-add-coupon persists.
+		const lineItem = { ...makePosLineItem(1, 100, 100), total: '90' };
+		const snapshot: CartSnapshot = {
+			line_items: [lineItem],
+			coupon_lines: [{ ...makeCouponLine('ten'), discount: '10' }],
+		};
+		const config = makeConfig();
+
+		const refused = settleCart(snapshot, config);
+		expect(refused.ok).toBe(false);
+		if (!refused.ok) expect(refused.error.code).toBe('missing_coupon');
+
+		const aggregate = settleAggregate(snapshot, config);
+		expect(aggregate.patch.discount_total).toBe('10');
+		expect(aggregate.patch.total).toBe('90');
+	});
+
+	it('never emits line_items or coupon_lines', () => {
+		const snapshot: CartSnapshot = {
+			line_items: [{ ...makePosLineItem(1, 100, 100), total: '90' }],
+			coupon_lines: [{ ...makeCouponLine('ten'), discount: '10' }],
+		};
+
+		const patch = settleAggregate(snapshot, makeConfig()).patch as Record<string, unknown>;
+		expect(patch).not.toHaveProperty('line_items');
+		expect(patch).not.toHaveProperty('coupon_lines');
+	});
+
+	it('reads the persisted discount distribution as given — it does not re-derive it', () => {
+		// A cart edit landed a second undiscounted line under an active coupon. The
+		// aggregate reports what is actually on the order (190, discount 10), NOT
+		// what a coupon replay would eventually redistribute (180, discount 20).
+		// Persisting the honest interim is the point: the replay's own output
+		// arrives as new lines and brings this pass round again.
+		const snapshot: CartSnapshot = {
+			line_items: [{ ...makePosLineItem(1, 100, 100), total: '90' }, makePosLineItem(2, 100, 100)],
+			coupon_lines: [{ ...makeCouponLine('ten'), discount: '10' }],
+		};
+
+		const aggregate = settleAggregate(snapshot, makeConfig());
+		expect(aggregate.patch.total).toBe('190');
+		expect(aggregate.patch.discount_total).toBe('10');
+	});
+
+	describe('parity with settleCart when no coupon replay runs', () => {
+		const cases: [string, CartSnapshot][] = [
+			['bare line item', { line_items: [makePosLineItem(1, 100, 100)] }],
+			[
+				'percent fee',
+				{ line_items: [makePosLineItem(1, 100, 100)], fee_lines: [makePercentFee(10)] },
+			],
+			[
+				'tombstoned coupon line',
+				{ line_items: [makePosLineItem(1, 100, 100)], coupon_lines: [makeCouponLine(null)] },
+			],
+			[
+				'shipping line',
+				{
+					line_items: [makePosLineItem(1, 100, 100)],
+					shipping_lines: [
+						{
+							method_id: 'flat_rate',
+							method_title: 'Flat rate',
+							total: '5',
+							total_tax: '0',
+							taxes: [],
+							meta_data: [],
+						},
+					],
+				},
+			],
+		];
+
+		it.each(cases)('%s — settleAggregate equals settleCart field for field', (_label, snapshot) => {
+			const config = makeConfig();
+			const full = settleCart(snapshot, config);
+			expect(full.ok).toBe(true);
+			if (!full.ok) return;
+
+			const aggregate = settleAggregate(snapshot, config);
+			expect(aggregate.patch).toEqual(full.patch);
+			expect(aggregate.totals).toEqual(full.totals);
+			expect(aggregate.changed).toBe(full.changed);
+			expect(aggregate.warnings).toEqual(full.warnings);
+		});
+	});
+
+	it('recomputes percent fees on the persisted line basis', () => {
+		const snapshot: CartSnapshot = {
+			line_items: [{ ...makePosLineItem(1, 100, 100), total: '90' }],
+			coupon_lines: [{ ...makeCouponLine('ten'), discount: '10' }],
+			fee_lines: [makePercentFee(10)],
+		};
+
+		// 10% of the post-discount 90, not of the 100 subtotal.
+		const aggregate = settleAggregate(snapshot, makeConfig());
+		expect(aggregate.patch.fee_lines).toBeDefined();
+		expect(parseFloat(aggregate.patch.fee_lines![0].total!)).toBeCloseTo(9, 2);
+	});
+
+	it('changed is false when the snapshot already holds the settled money', () => {
+		const snapshot: CartSnapshot = { line_items: [makePosLineItem(1, 100, 100)] };
+		const first = settleAggregate(snapshot, makeConfig());
+		expect(first.changed).toBe(true);
+
+		const settled: CartSnapshot = { ...snapshot, ...first.patch };
+		expect(settleAggregate(settled, makeConfig()).changed).toBe(false);
 	});
 });

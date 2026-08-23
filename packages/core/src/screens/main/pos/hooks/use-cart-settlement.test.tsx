@@ -7,25 +7,30 @@ import { map } from 'rxjs/operators';
 
 import { useCartSettlement } from './use-cart-settlement';
 
-/**
- * Money the ORDER is holding. Empty for a fresh cart; tests that exercise the
- * re-push guard set it, because "a re-derivation" means the pass computes exactly
- * what is already persisted.
- */
-let persistedMoney: Record<string, unknown> = {};
+const MONEY_PATCH = {
+	discount_tax: '0.00',
+	discount_total: '5.00',
+	shipping_tax: '0.00',
+	shipping_total: '0.00',
+	cart_tax: '0.00',
+	total_tax: '0.00',
+	total: '5.00',
+	tax_lines: [] as unknown[],
+};
 
+/**
+ * Pass 2 — the coupon replay. `settleCart` now runs ONLY for a cart with active
+ * coupon lines, and per SPEC §4 a patch from a run whose replay fired always
+ * carries `line_items` and `coupon_lines`. The mock mirrors that, because those
+ * keys are how a test tells a replay write apart from a money write.
+ */
 const successfulSettlement = () => ({
 	ok: true as const,
 	changed: true,
 	patch: {
-		discount_tax: '0.00',
-		discount_total: '5.00',
-		shipping_tax: '0.00',
-		shipping_total: '0.00',
-		cart_tax: '0.00',
-		total_tax: '0.00',
-		total: '5.00',
-		tax_lines: [],
+		...MONEY_PATCH,
+		line_items: lineItems$.value,
+		coupon_lines: couponLines$.value,
 	},
 	totals: {},
 	warnings: [],
@@ -33,12 +38,37 @@ const successfulSettlement = () => ({
 const settleCart: jest.MockedFunction<
 	(snapshot: unknown, config: unknown, options?: unknown) => unknown
 > = jest.fn((_snapshot: unknown, _config: unknown, _options?: unknown) => successfulSettlement());
+
+/**
+ * Pass 1 — the money over the persisted lines. Separate from `settleCart`
+ * because the two are reached differently and that difference is the point: the
+ * aggregate must land with no await in front of it, while the coupon replay
+ * waits for reference data. It has no `ok` discriminant; it cannot fail, and it
+ * never emits lines.
+ */
+const successfulAggregate = () => ({
+	changed: true,
+	patch: { ...MONEY_PATCH },
+	totals: {},
+	warnings: [],
+});
+const settleAggregate: jest.MockedFunction<(snapshot: unknown, config: unknown) => unknown> =
+	jest.fn((_snapshot: unknown, _config: unknown) => successfulAggregate());
+
+/**
+ * A couponed edit produces TWO writes, and nearly every assertion below cares
+ * about one of them. The prompt money pass writes the aggregate alone; the
+ * coupon replay writes the redistributed lines with it.
+ */
+const replayWrites = () => localPatch.mock.calls.filter(([args]) => 'coupon_lines' in args.data);
+const moneyWrites = () => localPatch.mock.calls.filter(([args]) => !('coupon_lines' in args.data));
 const createCartConfig = jest.fn((config: Record<string, unknown>) => config);
 
 jest.mock('@wcpos/order-math', () => ({
 	createCartConfig: (config: Record<string, unknown>) => createCartConfig(config),
 	settleCart: (snapshot: unknown, config: unknown, options?: unknown) =>
 		settleCart(snapshot, config, options),
+	settleAggregate: (snapshot: unknown, config: unknown) => settleAggregate(snapshot, config),
 	snapshotFromOrderJSON: (payload: Record<string, unknown>) => payload,
 }));
 
@@ -115,7 +145,6 @@ function buildRevision(overrides: Record<string, unknown> = {}) {
 		fee_lines: [],
 		shipping_lines: [],
 		coupon_lines: couponLines$.getValue(),
-		...persistedMoney,
 		...overrides,
 	};
 }
@@ -219,7 +248,11 @@ const getCouponContext: jest.MockedFunction<
 let divergenceValue: { serverTotal: string } | null = null;
 
 jest.mock('../contexts/order-money-divergence', () => ({
-	useOrderMoneyDivergence: () => ({ divergence: divergenceValue }),
+	useOrderMoneyDivergence: () => ({
+		divergence: divergenceValue,
+		serverOwnsMoney: divergenceValue !== null,
+		divergedOrderCount: divergenceValue === null ? 0 : 1,
+	}),
 }));
 
 jest.mock('./use-coupon-context', () => ({
@@ -294,6 +327,7 @@ async function renderAfterMountSettle() {
 	const rendered = renderHook(() => useCartSettlement());
 	await act(async () => {});
 	settleCart.mockClear();
+	settleAggregate.mockClear();
 	localPatch.mockClear();
 	getCouponContext.mockClear();
 	whenSettledInBackground.mockClear?.();
@@ -311,10 +345,11 @@ describe('useCartSettlement reference demand (#952)', () => {
 		localPatch.mockClear();
 		settleCart.mockClear();
 		settleCart.mockImplementation(() => successfulSettlement());
+		settleAggregate.mockClear();
+		settleAggregate.mockImplementation(() => successfulAggregate());
 		getCouponContext.mockClear();
 		feeLineIsPercent = false;
 		divergenceValue = null;
-		persistedMoney = {};
 		whenSettled = jest.fn(async () => true);
 		whenSettledInBackground = jest.fn(async (_signal: AbortSignal) => true);
 		referenceGeneration = 0;
@@ -350,43 +385,43 @@ describe('useCartSettlement reference demand (#952)', () => {
 		renderHook(() => useCartSettlement());
 		await act(async () => {});
 
-		expect(settleCart).toHaveBeenCalledTimes(1);
+		expect(settleAggregate).toHaveBeenCalledTimes(1);
 		expect(localPatch).toHaveBeenCalledTimes(1);
 	});
 
 	it('settles on mount but writes nothing when the persisted totals are already right', async () => {
-		settleCart.mockImplementation(() => ({ ...successfulSettlement(), changed: false }));
+		settleAggregate.mockImplementation(() => ({ ...successfulAggregate(), changed: false }));
 
 		renderHook(() => useCartSettlement());
 		await act(async () => {});
 
-		expect(settleCart).toHaveBeenCalledTimes(1);
+		expect(settleAggregate).toHaveBeenCalledTimes(1);
 		expect(localPatch).not.toHaveBeenCalled();
 	});
 
 	/**
-	 * Regression for the E2E failure this PR shipped and then fixed
-	 * (e2e/pos-coupon-apply.spec.ts — "the server records the same money").
+	 * THE regression this split exists for (e2e/pos-coupon-apply.spec.ts — "applies a
+	 * percent coupon through the cart and the server records the same money").
 	 *
-	 * Applying a coupon pushes to the server, the server answers with different money,
-	 * and that divergence used to suppress the very discount the cashier had just
-	 * applied: the POS persisted discount_total 0.00 against the server's 2.23.
+	 * The cutover routed the money write through `settleCart`, which cannot run
+	 * without a CouponContext. On a couponed cart that put the aggregate behind
+	 * `whenCouponReferencesSettled()` and an async context fetch — and the cashier
+	 * saves within a second of applying the coupon, so the sale went to the server
+	 * with `discount_total: 0`.
 	 *
-	 * A patch carrying structural lines is the cashier doing something, so its money
-	 * goes with it. Only a money-only patch — a re-derived aggregate, the thing that
-	 * can loop — is suppressible.
+	 * The money is now derived from the lines as persisted. It must land while the
+	 * barrier is still unresolved; that is the property, not a latency preference.
 	 */
-	it('writes coupon money even while the order is diverged', async () => {
-		divergenceValue = { serverTotal: '9.99' };
+	it('writes the money before the coupon barrier resolves', async () => {
 		applyCoupon([{ code: 'bonus' }]);
 		await renderAfterMountSettle();
-		settleCart.mockImplementation(() => ({
-			...successfulSettlement(),
-			patch: {
-				...successfulSettlement().patch,
-				coupon_lines: [{ code: 'bonus', discount: '2.23' }],
-				discount_total: '2.23',
-			},
+
+		// A barrier that never settles at all: whatever reaches the document does so
+		// without its help.
+		whenSettled = jest.fn(() => new Promise<boolean>(() => {}));
+		settleAggregate.mockImplementation(() => ({
+			...successfulAggregate(),
+			patch: { ...successfulAggregate().patch, discount_total: '2.23' },
 		}));
 
 		await act(async () => {
@@ -397,108 +432,87 @@ describe('useCartSettlement reference demand (#952)', () => {
 		expect(localPatch.mock.calls[0][0].data).toEqual(
 			expect.objectContaining({ discount_total: '2.23' })
 		);
+		// And it did not need the coupon records to get there.
+		expect(getCouponContext).not.toHaveBeenCalled();
 	});
 
-	/**
-	 * The other half of the coupon case, and the loop the guard exists to stop.
-	 *
-	 * settleCart emits line_items and coupon_lines on EVERY couponed replay, so testing
-	 * for the presence of those keys would mark a divergence-triggered re-derivation as
-	 * "the cashier did something" and push WooCommerce's overruled money straight back.
-	 * What counts is whether those lines actually differ from what is persisted.
-	 */
-	/**
-	 * divergence is captured in replayCoupons' closure. If it arrives while a pass is
-	 * awaiting getCouponContext, and it is not part of the single-flight key, the
-	 * divergence-triggered pass is discarded as a duplicate and the in-flight pass
-	 * carries on believing nothing diverged — enqueueing the money the server just
-	 * overruled. It is part of the key, so the newer pass supersedes and the older one
-	 * abandons before writing.
-	 */
-	it('does not write money overruled by a divergence that arrived mid-flight', async () => {
-		applyCoupon([{ code: 'bonus' }]);
-		persistedMoney = { ...successfulSettlement().patch };
-		const { rerender } = await renderAfterMountSettle();
-
-		let releaseContext: (() => void) | undefined;
-		getCouponContext.mockImplementationOnce(
-			() =>
-				new Promise((resolve) => {
-					releaseContext = () => resolve(emptyCouponContext());
-				})
-		);
-		settleCart.mockImplementation(() => ({
-			...successfulSettlement(),
-			patch: {
-				...successfulSettlement().patch,
-				coupon_lines: revision.coupon_lines,
-				line_items: revision.line_items,
-			},
-		}));
-
-		await act(async () => {
-			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
-		});
-
-		// The server overrules the money while the pass above is still awaiting context.
-		await act(async () => {
-			divergenceValue = { serverTotal: '9.99' };
-			rerender();
-		});
-
-		await act(async () => {
-			releaseContext?.();
-		});
-
-		expect(localPatch).not.toHaveBeenCalled();
-	});
-
-	it('suppresses a couponed re-derivation whose lines match the persisted ones', async () => {
-		// Set BEFORE applyCoupon: the revision is rebuilt there, and this is the money it
-		// has to be holding for the pass below to count as a re-derivation.
-		persistedMoney = { ...successfulSettlement().patch };
-		applyCoupon([{ code: 'bonus' }]);
-		const { rerender } = await renderAfterMountSettle();
-		divergenceValue = { serverTotal: '9.99' };
-		settleCart.mockImplementation(() => ({
-			...successfulSettlement(),
-			patch: {
-				...successfulSettlement().patch,
-				// Identical to what the order already holds — a re-derivation, not an edit.
-				coupon_lines: revision.coupon_lines,
-				line_items: revision.line_items,
-			},
-		}));
-
-		await act(async () => {
-			allRates = [
-				{ id: 1, name: 'VAT', rate: '20', compound: false, order: 1, class: 'standard' },
-			] as typeof allRates;
-			rerender();
-		});
-
-		expect(localPatch).not.toHaveBeenCalled();
-	});
-
-	it('still suppresses a money-only re-derivation while diverged', async () => {
-		// The order already HOLDS this money — that is what makes the pass a
-		// re-derivation, and it is what the server overruled.
-		persistedMoney = { ...successfulSettlement().patch };
-		divergenceValue = { serverTotal: '9.99' };
+	it('does not ask for a coupon context to settle the money', async () => {
 		await renderAfterMountSettle();
-		settleCart.mockImplementation(() => ({
-			...successfulSettlement(),
-			patch: { ...successfulSettlement().patch },
-		}));
 
 		await act(async () => {
 			editCart([{ total: '5.00', total_tax: '0.00', product_id: 1 }]);
 		});
 
+		expect(settleAggregate).toHaveBeenCalledTimes(1);
+		expect(settleAggregate.mock.calls[0]).toHaveLength(2);
+	});
+
+	/**
+	 * ADR 0032. WooCommerce owns money — the aggregate fields are read-only in its
+	 * REST schema — so once the server has overruled this order's arithmetic the POS
+	 * stops deriving it. Both passes stand down, not just the money one: a coupon
+	 * replay rewrites line-level `total`/`total_tax`, which is the same claim by
+	 * another route.
+	 *
+	 * This replaces the re-push guard, the overruled-money latch and the suppression
+	 * rule, all deleted. Three attempts to state that rule correctly were wrong; the
+	 * question it asked — "may I assert my number again?" — is not asked any more.
+	 */
+	it('stops settling altogether once the server owns this order’s money', async () => {
+		divergenceValue = { serverTotal: '9.99' };
+		applyCoupon([{ code: 'bonus' }]);
+		await renderAfterMountSettle();
+
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+
+		expect(localPatch).not.toHaveBeenCalled();
+		expect(settleAggregate).not.toHaveBeenCalled();
+		expect(settleCart).not.toHaveBeenCalled();
+	});
+
+	it('does not even reach for the coupon references on a diverged order', async () => {
+		divergenceValue = { serverTotal: '9.99' };
+		applyCoupon([{ code: 'bonus' }]);
+		await renderAfterMountSettle();
+		whenSettled.mockClear();
+
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+
+		expect(whenSettled).not.toHaveBeenCalled();
+		expect(getCouponContext).not.toHaveBeenCalled();
+	});
+
+	/**
+	 * A divergence arriving mid-flight used to need a place in the single-flight key,
+	 * so the in-flight pass could not carry on believing nothing had diverged. There
+	 * is no such key input now — the hook stands down at the top of the next pass —
+	 * so what matters is that the divergence stops the NEXT settlement rather than
+	 * racing the current one.
+	 */
+	it('stands down on the next pass after a divergence arrives', async () => {
+		applyCoupon([{ code: 'bonus' }]);
+		const { rerender } = await renderAfterMountSettle();
+
+		await act(async () => {
+			divergenceValue = { serverTotal: '9.99' };
+			rerender();
+		});
+		settleAggregate.mockClear();
+		localPatch.mockClear();
+
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+
+		expect(settleAggregate).not.toHaveBeenCalled();
 		expect(localPatch).not.toHaveBeenCalled();
 	});
 
-	it('persists totals through settleCart when the cart has no coupon lines', async () => {
+	it('persists totals through settleAggregate when the cart has no coupon lines', async () => {
 		await renderAfterMountSettle();
 
 		await act(async () => {
@@ -506,14 +520,22 @@ describe('useCartSettlement reference demand (#952)', () => {
 		});
 
 		expect(whenSettled).not.toHaveBeenCalled();
-		expect(settleCart).toHaveBeenCalledTimes(1);
+		expect(settleCart).not.toHaveBeenCalled();
+		expect(settleAggregate).toHaveBeenCalledTimes(1);
 		expect(localPatch).toHaveBeenCalledTimes(1);
 		expect(localPatch.mock.calls[0][0].data).toEqual(
 			expect.objectContaining({ discount_total: '5.00', total: '5.00' })
 		);
 	});
 
-	it('shows a translated toast and writes nothing when settleCart reports a missing coupon', async () => {
+	/**
+	 * A coupon the device cannot resolve fails the REPLAY, and the cashier hears
+	 * about it. The money still settles: the aggregate reads the discount already
+	 * distributed across the persisted lines, so it has nothing to be missing.
+	 * Withholding it would leave the cart showing a total the document does not
+	 * hold — the exact failure this split fixes, arriving by a different door.
+	 */
+	it('shows a translated toast when settleCart reports a missing coupon, but still settles the money', async () => {
 		applyCoupon([{ code: 'bonus' }]);
 		await renderAfterMountSettle();
 		// Queued AFTER the mount pass, which would otherwise consume the `once`.
@@ -528,7 +550,6 @@ describe('useCartSettlement reference demand (#952)', () => {
 			editCart([{ total: '5.00', total_tax: '0.00', product_id: 1 }]);
 		});
 
-		expect(localPatch).not.toHaveBeenCalled();
 		expect(mockCartWarn).toHaveBeenCalledWith(
 			'Cart settlement failed',
 			expect.objectContaining({
@@ -536,6 +557,9 @@ describe('useCartSettlement reference demand (#952)', () => {
 				toast: expect.objectContaining({ title: 'Coupon not found' }),
 			})
 		);
+		// The aggregate wrote; the failed replay wrote nothing on top of it.
+		expect(localPatch).toHaveBeenCalledTimes(1);
+		expect(localPatch.mock.calls[0][0].data).not.toHaveProperty('line_items');
 	});
 
 	/**
@@ -550,10 +574,12 @@ describe('useCartSettlement reference demand (#952)', () => {
 		feeLineIsPercent = true;
 		feeLines$.next([{ name: '10% service', meta_data: [] }]);
 		await renderAfterMountSettle();
-		settleCart.mockImplementation(() => ({
-			...successfulSettlement(),
+		// A percent fee's basis is the persisted lines, so the aggregate pass owns it —
+		// no coupon data needed, and no reason for it to wait behind any.
+		settleAggregate.mockImplementation(() => ({
+			...successfulAggregate(),
 			patch: {
-				...successfulSettlement().patch,
+				...successfulAggregate().patch,
 				fee_lines: [{ name: '10% service', total: '0.50' }],
 			},
 		}));
@@ -631,8 +657,12 @@ describe('useCartSettlement reference demand (#952)', () => {
 		});
 
 		expect(getCouponContext).toHaveBeenCalledTimes(1);
-		expect(localPatch).toHaveBeenCalledTimes(1);
-		expect(localPatch.mock.calls[0][0].data).toEqual(
+		// The money first, then the redistributed lines — in that order, because the
+		// money is what a save half a second later has to find on the document.
+		expect(moneyWrites()).toHaveLength(1);
+		expect(replayWrites()).toHaveLength(1);
+		expect(localPatch.mock.calls[0][0].data).not.toHaveProperty('coupon_lines');
+		expect(replayWrites()[0][0].data).toEqual(
 			expect.objectContaining({ discount_total: '5.00', total: '5.00' })
 		);
 	});
@@ -674,8 +704,13 @@ describe('useCartSettlement reference demand (#952)', () => {
 				releaseContext?.();
 			});
 
+			// The REPLAY is what must not land — it was computed against the pre-mutation
+			// order. The money pass legitimately wrote against that same document a
+			// moment earlier: the aggregate it derived was correct for the lines that
+			// were there, and the mutation brings a fresh pass round for the new ones.
 			expect(localPatch).not.toHaveBeenCalledWith(
 				expect.objectContaining({
+					data: expect.objectContaining({ coupon_lines: expect.anything() }),
 					document: expect.objectContaining({
 						payload: expect.objectContaining({ [field]: [] }),
 					}),
@@ -708,6 +743,8 @@ describe('useCartSettlement background coupon replay (#963)', () => {
 		localPatch.mockClear();
 		settleCart.mockClear();
 		settleCart.mockImplementation(() => successfulSettlement());
+		settleAggregate.mockClear();
+		settleAggregate.mockImplementation(() => successfulAggregate());
 		getCouponContext.mockClear();
 		getCouponContext.mockImplementation(async (_lineItems: LineItem[]) => emptyCouponContext());
 		// The scenario this issue is about: the reference pull outran the 10s barrier.
@@ -774,8 +811,11 @@ describe('useCartSettlement background coupon replay (#963)', () => {
 		});
 
 		expect(getCouponContext).toHaveBeenCalledTimes(1);
-		expect(localPatch).toHaveBeenCalledTimes(1);
-		expect(localPatch.mock.calls[0][0]).toEqual(
+		// The continuation carries the REPLAY. The money had already landed when the
+		// edit happened, which is why the totals were only ever stale in their coupon
+		// DISTRIBUTION, not absent.
+		expect(replayWrites()).toHaveLength(1);
+		expect(replayWrites()[0][0]).toEqual(
 			expect.objectContaining({
 				document: expect.objectContaining({
 					uuid: 'order-uuid-1',
@@ -788,8 +828,8 @@ describe('useCartSettlement background coupon replay (#963)', () => {
 			})
 		);
 		// The raw record is identity-stable, so the fresh read resolves to the same resident handle.
-		expect(localPatch.mock.calls[0][0].document).toBe(currentOrderRecord.getLatest());
-		expect(localPatch.mock.calls[0][0].document._readSeq).toBe(seqWhenArmed);
+		expect(replayWrites()[0][0].document).toBe(currentOrderRecord.getLatest());
+		expect(replayWrites()[0][0].document._readSeq).toBe(seqWhenArmed);
 	});
 
 	it('arms exactly one continuation for the same order revision and demand generation', async () => {
@@ -881,7 +921,7 @@ describe('useCartSettlement background coupon replay (#963)', () => {
 			rerender();
 		});
 
-		expect(settleCart).toHaveBeenCalledTimes(1);
+		expect(settleAggregate).toHaveBeenCalledTimes(1);
 		expect(localPatch).toHaveBeenCalledTimes(1);
 		expect(localPatch.mock.calls[0][0].document.uuid).toBe('order-uuid-2');
 	});
@@ -946,7 +986,7 @@ describe('useCartSettlement background coupon replay (#963)', () => {
 			background.settle();
 		});
 		expect(getCouponContext).toHaveBeenCalledTimes(1);
-		expect(localPatch).toHaveBeenCalledTimes(1);
+		expect(replayWrites()).toHaveLength(1);
 	});
 
 	it('drops the stale continuation when the cart is edited during the background wait', async () => {
@@ -966,8 +1006,11 @@ describe('useCartSettlement background coupon replay (#963)', () => {
 			editCart([{ total: '20.00', total_tax: '0.00', product_id: 1 }]);
 		});
 		expect(getCouponContext).toHaveBeenCalledTimes(1);
-		expect(localPatch).toHaveBeenCalledTimes(1);
-		expect(localPatch.mock.calls[0][0]).toEqual(
+		// One money write per edit — both were correct for the lines in front of them —
+		// and exactly one replay, belonging to the newer edit.
+		expect(moneyWrites()).toHaveLength(2);
+		expect(replayWrites()).toHaveLength(1);
+		expect(replayWrites()[0][0]).toEqual(
 			expect.objectContaining({
 				document: expect.objectContaining({
 					payload: expect.objectContaining({ line_items: revision.line_items }),
@@ -981,9 +1024,10 @@ describe('useCartSettlement background coupon replay (#963)', () => {
 			background.settle();
 		});
 		expect(getCouponContext).toHaveBeenCalledTimes(1);
-		expect(localPatch).toHaveBeenCalledTimes(1);
+		expect(replayWrites()).toHaveLength(1);
 		expect(localPatch).not.toHaveBeenCalledWith(
 			expect.objectContaining({
+				data: expect.objectContaining({ coupon_lines: expect.anything() }),
 				document: expect.objectContaining({
 					payload: expect.objectContaining({ line_items: staleLineItems }),
 				}),
@@ -1010,7 +1054,7 @@ describe('useCartSettlement background coupon replay (#963)', () => {
 		});
 
 		expect(getCouponContext).not.toHaveBeenCalled();
-		expect(localPatch).not.toHaveBeenCalled();
+		expect(replayWrites()).toHaveLength(0);
 	});
 
 	it('does not replay after a checkout push grafted the Woo id onto the order', async () => {
@@ -1032,7 +1076,7 @@ describe('useCartSettlement background coupon replay (#963)', () => {
 		});
 
 		expect(getCouponContext).not.toHaveBeenCalled();
-		expect(localPatch).not.toHaveBeenCalled();
+		expect(replayWrites()).toHaveLength(0);
 	});
 
 	it('warns the cashier when the background wait hits its cap, and the next edit still heals', async () => {
@@ -1047,7 +1091,7 @@ describe('useCartSettlement background coupon replay (#963)', () => {
 			background.giveUp();
 		});
 		expect(getCouponContext).not.toHaveBeenCalled();
-		expect(localPatch).not.toHaveBeenCalled();
+		expect(replayWrites()).toHaveLength(0);
 		// Not silent anymore: the cashier is told the shown totals may be stale
 		// (cashier-full-information ruling, 2026-08-07).
 		expect(mockCartWarn).toHaveBeenCalledWith(
@@ -1066,7 +1110,7 @@ describe('useCartSettlement background coupon replay (#963)', () => {
 			editCart([{ total: '30.00', total_tax: '0.00', product_id: 1 }]);
 		});
 		expect(getCouponContext).toHaveBeenCalledTimes(1);
-		expect(localPatch).toHaveBeenCalledTimes(1);
+		expect(replayWrites()).toHaveLength(1);
 	});
 
 	it('collapses a foreground replay that overlaps the continuation into a single write', async () => {
@@ -1091,7 +1135,7 @@ describe('useCartSettlement background coupon replay (#963)', () => {
 			background.settle();
 		});
 		expect(getCouponContext).toHaveBeenCalledTimes(1);
-		expect(localPatch).not.toHaveBeenCalled();
+		expect(replayWrites()).toHaveLength(0);
 
 		/**
 		 * A same-revision re-render (the #222 price-decimals path) reaches the replay
@@ -1116,8 +1160,8 @@ describe('useCartSettlement background coupon replay (#963)', () => {
 			releaseContext?.();
 		});
 		// Both passes run, but only the NEWER one writes: the older pass resumes after
-		// it, finds itself superseded, and abandons rather than overwriting the money
-		// with the stale configuration. Still exactly one write.
-		expect(localPatch).toHaveBeenCalledTimes(1);
+		// it, finds itself superseded, and abandons rather than overwriting the lines
+		// with the stale configuration. Still exactly one replay write.
+		expect(replayWrites()).toHaveLength(1);
 	});
 });
