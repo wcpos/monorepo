@@ -142,8 +142,19 @@ export const useCartLines = () => {
 	const replayingRef = React.useRef<string | null>(null);
 
 	/**
-	 * Settle every cart-line edit, plus priceNumDecimals changes (issue #222).
+	 * Settle every cart-line edit, plus every input `createCartConfig` reads.
 	 * `changed` suppresses the follow-up emission when settle itself rewrites arrays.
+	 *
+	 * The config inputs are here, not just the lines, because this subscription is now
+	 * the ONLY thing that persists totals. Before #1472 the use-order-totals effect
+	 * re-derived on every render and deep-compared, so a tax-rate change — changing the
+	 * customer's address, switching tax location, toggling prices-include-tax — wrote
+	 * the new money by itself. Listing only the cart lines here would leave the
+	 * PERSISTED document stale after such a change while the on-screen totals looked
+	 * right, until the cashier happened to touch a line.
+	 *
+	 * Rates are arrays rebuilt each render; the JSON + distinctUntilChanged below is
+	 * what keeps that from emitting on every render.
 	 */
 	const cartTotal$ = useObservable(
 		(inputs$) =>
@@ -152,7 +163,20 @@ export const useCartLines = () => {
 				map((cartInputs) => JSON.stringify(cartInputs)),
 				distinctUntilChanged()
 			),
-		[lineItems, feeLines, shippingLines, couponLines, priceNumDecimals]
+		[
+			lineItems,
+			feeLines,
+			shippingLines,
+			couponLines,
+			priceNumDecimals,
+			rates,
+			allRates,
+			calcTaxes,
+			pricesIncludeTax,
+			taxRoundAtSubtotal,
+			shippingTaxClass,
+			calcDiscountsSequentially,
+		]
 	);
 
 	/**

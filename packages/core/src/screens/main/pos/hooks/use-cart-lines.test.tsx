@@ -500,6 +500,36 @@ describe('useCartLines background coupon replay (#963)', () => {
 		currentOrderRecord = buildCurrentOrderRecord();
 	});
 
+	/**
+	 * Regression guard for the trigger, not the arithmetic.
+	 *
+	 * Before #1472 the use-order-totals effect re-derived totals every render and
+	 * deep-compared them, so any settlement-config change — the customer's address
+	 * moving the tax location, prices-include-tax flipping, rounding changing — wrote
+	 * the new money by itself. After the cutover this subscription is the ONLY thing
+	 * that persists totals, so every input createCartConfig reads has to be able to
+	 * trigger it. Listing only the cart lines left the PERSISTED document stale while
+	 * the on-screen totals looked correct.
+	 */
+	it('settles when the tax rates change without any cart line changing', async () => {
+		const { rerender } = renderHook(() => useCartLines());
+
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+		localPatch.mockClear();
+
+		await act(async () => {
+			// No cart line moves — only the tax location's rates.
+			allRates = [
+				{ id: 1, name: 'VAT', rate: '20', compound: false, order: 1, class: 'standard' },
+			] as typeof allRates;
+			rerender();
+		});
+
+		expect(localPatch).toHaveBeenCalledTimes(1);
+	});
+
 	it('replays the coupon once the references land after the foreground barrier expired', async () => {
 		const background = deferredBackgroundWait();
 		applyCoupon([{ code: 'bonus' }]);
