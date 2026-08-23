@@ -6,10 +6,10 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { Toast } from '@wcpos/components/toast';
 import {
-	isOrderBasedCloudProfile,
 	isPrinterConnectionError,
 	PrinterService,
 	probeVendor,
+	canOpenDrawer as profileCanOpenDrawer,
 } from '@wcpos/printer';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import type { ConnectionDiagnostics, PrinterProfile, PrinterServiceOptions } from '@wcpos/printer';
@@ -303,15 +303,7 @@ export function usePrinterDialogForm({
 			cloudPrinterId,
 			cloudProvider,
 		});
-		if (isOrderBasedCloudProfile(profile)) {
-			return false;
-		}
-		return (
-			profile.connectionType === 'network' ||
-			profile.connectionType === 'bluetooth' ||
-			profile.connectionType === 'usb' ||
-			profile.connectionType === 'cloud'
-		);
+		return profileCanOpenDrawer(profile);
 	}, [connectionType, cloudPrinterId, cloudProvider, form, buildProfile]);
 
 	const handleOpenDrawer = React.useCallback(async () => {

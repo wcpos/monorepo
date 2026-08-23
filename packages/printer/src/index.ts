@@ -56,6 +56,7 @@ export {
 	CloudAdapter,
 	isOrderBasedCloudProfile,
 } from './transport/cloud-adapter';
+export { canOpenDrawer } from './capabilities';
 export { isWebUsbSupported, isWebBluetoothSupported } from './transport/device-capabilities';
 export type { CloudEnqueueFn, CloudPrintJob } from './transport/cloud-adapter';
 export { usePrint } from './hooks/use-print';
