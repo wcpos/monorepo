@@ -2,7 +2,56 @@
  * @jest-environment node
  *
  * Legacy-convergence oracle: proves `settleCart`'s single pass reproduces the
- * converged state of today's multi-patch write loop (use-cart-lines.ts).
+ * converged state of the multi-patch write loop that used to live in
+ * `use-cart-lines.ts`.
+ *
+ * ── Status, 2026-08-23 ───────────────────────────────────────────────────────
+ *
+ * That loop is GONE. #1505 split `use-cart-lines.ts` into a pure selector and a
+ * single writer (`use-cart-settlement.ts`), and settlement is now one prompt
+ * aggregate pass plus an async coupon replay — not an iterate-to-fixed-point
+ * loop. So the choreography `legacyConvergedState` models below no longer
+ * exists in the app, and this file's ORIGINAL premise has expired.
+ *
+ * #1472 lists "retire settle.oracle.test.ts in favour of the real suites". It is
+ * retirable, but not by deletion alone — and NOT for the reason first written
+ * here, which review corrected (#1509).
+ *
+ * ── What is actually unique to this file ─────────────────────────────────────
+ *
+ * `settle-cart-differential.test.ts` varies only `pricesIncludeTax`; its
+ * `makeConfig` hardcodes `taxRoundAtSubtotal: false`, `dp: 2` and non-compound
+ * rates. So these config dimensions are absent THERE:
+ *
+ *   | dimension          | differential | elsewhere in the package                |
+ *   |--------------------|--------------|-----------------------------------------|
+ *   | compound rates     | no           | settle.integration, compound-tax-priority |
+ *   | dp = 0             | no           | cart-line, order-totals, calculate-taxes  |
+ *   | taxRoundAtSubtotal | no           | cart-line, order-totals, discount-tax-split |
+ *   | tombstoned lines   | no           | settle.test.ts "tombstone law"            |
+ *
+ * Every one of them is covered somewhere. What is unique here is only that they
+ * are exercised through `settleCart`'s WHOLE composition at once, rather than
+ * against the internals individually.
+ *
+ * An earlier draft of this header claimed deleting the file would silently drop
+ * the compound-ordering and round-at-subtotal parity defects behind the
+ * pre-1.10.0 "your store changed this order's totals" banners. That was wrong on
+ * both counts. #1548's ordering regression has its own dedicated fixture in
+ * `internal/coupons/compound-tax-priority.test.ts` — two COMPOUND rates with
+ * tied `order: 0` and differing `priority`, which is the actual trap. Case 4
+ * below has one compound rate, distinct `order` values and no `priority` at all,
+ * so it exercises compound ARITHMETIC and never touched the ordering bug.
+ * Round-at-subtotal is covered by four other suites.
+ *
+ * ── So: retiring it ──────────────────────────────────────────────────────────
+ *
+ * Port the four config dimensions into the differential harness — parameterise
+ * its `makeConfig`, which currently takes only `pricesIncludeTax` — then delete
+ * this file with a `Test-Removal:` trailer. Worth doing AFTER the
+ * `calculateCartLine` migration, when the differential compares settle against a
+ * composition that actually ships. If you want real ordering coverage in the
+ * harness, take the fixture from `compound-tax-priority.test.ts`, not case 4.
  *
  * The legacy loop, on every cart change:
  *   (1) recomputes each active PERCENT fee line against the CURRENT persisted
