@@ -787,6 +787,116 @@ describe('calculateOrderTotals — parity regressions', () => {
  *
  * These must NOT contribute to order totals.
  */
+describe('dev-free order 110921: shipping and fees enter the total the way WC sums them', () => {
+	/**
+	 * The live sale that exposed it: three taxable products (7 + 45 + 2), a $1
+	 * tax-inclusive fee and $5 tax-inclusive local pickup, US Tax 10%, dp=2.
+	 *
+	 * The POS pushed 65.39 and dev-free stored 65.40 — verified on the store's own
+	 * receipt (`Payé 65,40 $`) and the order-pay page. The cent is the shipping line:
+	 * WooCommerce rounds EACH shipping line to display decimals before it goes
+	 * anywhere (calculate_totals()), so 4.545455 is 4.55 by the time it reaches
+	 * set_total(). The POS was adding the raw 4.545455 instead.
+	 *
+	 * Every OTHER field already agreed, which is what made it a totals-changed banner
+	 * on an otherwise correct sale rather than a visibly broken cart — so this pins
+	 * the whole shape, not just the total.
+	 */
+	const order = {
+		lineItems: [
+			{
+				product_id: 81599,
+				subtotal: '7',
+				total: '7',
+				subtotal_tax: '0.7',
+				total_tax: '0.7',
+				taxes: [{ id: 6, total: '0.700000', subtotal: '0.700000' }],
+			},
+			{
+				product_id: 81565,
+				subtotal: '45',
+				total: '45',
+				subtotal_tax: '4.5',
+				total_tax: '4.5',
+				taxes: [{ id: 6, total: '4.500000', subtotal: '4.500000' }],
+			},
+			{
+				product_id: 0,
+				subtotal: '2',
+				total: '2',
+				subtotal_tax: '0.2',
+				total_tax: '0.2',
+				taxes: [{ id: 6, total: '0.200000', subtotal: '0.200000' }],
+			},
+		],
+		// $1 including tax → 0.909091 net. WC sums fees RAW, so this one does NOT round.
+		feeLines: [
+			{
+				name: 'Frais',
+				total: '0.909091',
+				total_tax: '0.09',
+				taxes: [{ id: 6, total: '0.090909', subtotal: '' }],
+			},
+		],
+		// $5 including tax → 4.545455 net, which WC rounds to 4.55 before summing.
+		shippingLines: [
+			{
+				method_id: 'local_pickup',
+				total: '4.545455',
+				total_tax: '0.45',
+				taxes: [{ id: 6, total: '0.454546', subtotal: '' }],
+			},
+		],
+		taxRates: [{ id: 6, name: 'US Tax', rate: '10.0000', compound: false }],
+		taxRoundAtSubtotal: false,
+		pricesIncludeTax: false,
+		dp: 2,
+	} as any;
+
+	it('matches the money WooCommerce stored for order 110921', () => {
+		const result = calculateOrderTotals(order);
+
+		// 54 (items) + 0.909091 (fee, raw) + 4.55 (shipping, rounded) + 5.49 + 0.45
+		// = 65.399091 → 65.40
+		expect(result.total).toBe('65.4');
+		expect(result.shipping_total).toBe('4.55');
+		expect(result.cart_tax).toBe('5.49');
+		expect(result.shipping_tax).toBe('0.45');
+		expect(result.total_tax).toBe('5.94');
+		expect(result.subtotal).toBe('54');
+		expect(result.tax_lines).toEqual([
+			expect.objectContaining({ rate_id: 6, tax_total: '5.49', shipping_tax_total: '0.45' }),
+		]);
+	});
+
+	it('rounds each shipping line on its own, not the sum of them', () => {
+		// Two lines at 4.545455: WC makes each 4.55 → 9.10. Summing first and rounding
+		// once would give 9.09, and the same cent would go missing from the total.
+		const result = calculateOrderTotals({
+			...order,
+			shippingLines: [order.shippingLines[0], { ...order.shippingLines[0] }],
+		});
+
+		expect(result.shipping_total).toBe('9.1');
+	});
+
+	it('does not round a fee line before adding it to the total', () => {
+		// A raw fee of 0.909091 alone: WC adds it unrounded, so 10 + 0.909091 → 10.91.
+		// Rounding the fee to 0.91 first happens to agree here; rounding it DOWN to 0.9
+		// would not, and the fee_total field is display-only either way.
+		const result = calculateOrderTotals({
+			lineItems: [{ product_id: 1, subtotal: '10', total: '10', taxes: [] }],
+			feeLines: [{ name: 'Frais', total: '0.904999', total_tax: '0', taxes: [] }],
+			taxRates: [],
+			dp: 2,
+		} as any);
+
+		// 10 + 0.904999 = 10.904999 → 10.9. Pre-rounding the fee would give 10.91.
+		expect(result.total).toBe('10.9');
+		expect(result.fee_total).toBe('0.9');
+	});
+});
+
 describe('calculateOrderTotals — deleted items (order 57051)', () => {
 	// Tax rates from the real order (VAT 20% compound + Surcharge 2% compound)
 	const taxRates = [
