@@ -1,72 +1,21 @@
 import * as React from 'react';
 
-import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
-import { useFormField } from './context';
-import { optionToFieldValue } from './option-value';
+import { FormOptionControl } from './option-control';
 import { Combobox } from '../combobox';
 
-import type { Option } from '../combobox';
-import type { FormItemProps } from './common';
+import type { FormOptionFieldProps } from './option-control';
+
+export type FormComboboxProps<TControl extends React.ElementType = typeof Combobox> =
+	FormOptionFieldProps<TControl>;
 
 /**
- * Single-select: value is a string, converted to/from Option internally.
- * Multi-select: value is Option[], passed through directly.
+ * Form field backed by `Combobox`. The behaviour lives in `FormOptionControl`, which
+ * `FormSelect` shares — the two wrappers differ only in the control they default to.
  */
-type FormComboboxProps = (
-	(FormItemProps<string> & { multiple?: false }) | (FormItemProps<Option[]> & { multiple: true })
-) &
-	Omit<Partial<React.ComponentProps<typeof Combobox>>, 'value' | 'onValueChange' | 'multiple'>;
-
-export function FormCombobox({
-	label,
-	description,
-	value,
-	onChange,
-	multiple,
-	customComponent: Component = Combobox,
-	...props
-}: FormComboboxProps) {
-	const [open, setOpen] = React.useState(false);
-	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
-
-	const comboboxValue = React.useMemo(() => {
-		if (multiple) {
-			return (value as Option[] | undefined) ?? [];
-		}
-		return typeof value === 'string' ? { value, label: value } : value;
-	}, [multiple, value]);
-
-	const handleValueChange = React.useCallback(
-		(val: Option | Option[] | undefined) => {
-			if (multiple) {
-				onChange?.((val as Option[] | undefined) ?? []);
-			} else {
-				onChange?.(optionToFieldValue(val as Option | undefined));
-			}
-		},
-		[multiple, onChange]
-	);
-
-	return (
-		<FormItem>
-			{!!label && <FormLabel nativeID={formItemNativeID}>{label}</FormLabel>}
-			<Component
-				aria-labelledby={formItemNativeID}
-				aria-describedby={
-					!error
-						? `${formDescriptionNativeID}`
-						: `${formDescriptionNativeID} ${formMessageNativeID}`
-				}
-				aria-invalid={!!error}
-				open={open}
-				onOpenChange={setOpen}
-				multiple={multiple as any}
-				value={comboboxValue as any}
-				onValueChange={handleValueChange}
-				{...props}
-			/>
-			{!!description && <FormDescription>{description}</FormDescription>}
-			<FormMessage />
-		</FormItem>
-	);
+export function FormCombobox<TControl extends React.ElementType = typeof Combobox>(
+	props: FormComboboxProps<TControl>
+) {
+	// The props type is a discriminated union on `multiple`; the shared body takes the
+	// widened shape and narrows on the same flag at runtime.
+	return <FormOptionControl defaultComponent={Combobox} {...(props as Record<string, any>)} />;
 }

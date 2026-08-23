@@ -1,7 +1,7 @@
 import * as React from 'react';
 
+import { useFormControlAria } from './aria';
 import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
-import { useFormField } from './context';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
 import { ToggleGroup, ToggleGroupItem } from '../toggle-group';
@@ -30,11 +30,11 @@ export function FormToggleGroup({
 	testID,
 	...props
 }: FormItemProps<string> & { options: FormToggleGroupOption[]; testID?: string }) {
-	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
+	const { labelNativeID, ariaProps } = useFormControlAria({ label, description });
 
 	return (
 		<FormItem>
-			{!!label && <FormLabel nativeID={formItemNativeID}>{label}</FormLabel>}
+			{!!label && <FormLabel nativeID={labelNativeID}>{label}</FormLabel>}
 			<ToggleGroup
 				type="single"
 				value={value}
@@ -45,13 +45,7 @@ export function FormToggleGroup({
 				}}
 				disabled={disabled}
 				testID={testID}
-				aria-labelledby={label ? formItemNativeID : undefined}
-				aria-describedby={
-					[description && formDescriptionNativeID, error && formMessageNativeID]
-						.filter(Boolean)
-						.join(' ') || undefined
-				}
-				aria-invalid={!!error}
+				{...ariaProps}
 				className="bg-muted w-full rounded-md border-0 p-1"
 				{...props}
 			>

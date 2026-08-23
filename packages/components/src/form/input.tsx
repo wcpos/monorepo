@@ -1,7 +1,7 @@
 import * as React from 'react';
 
+import { useFormControlAria } from './aria';
 import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
-import { useFormField } from './context';
 import { Input } from '../input';
 
 import type { FormItemProps } from './common';
@@ -18,7 +18,7 @@ export function FormInput({
 }: FormItemProps<string | number> &
 	Omit<Partial<React.ComponentProps<typeof Input>>, 'value' | 'onChangeText'>) {
 	const inputRef = React.useRef<React.ComponentRef<typeof Input>>(null);
-	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
+	const { labelNativeID, ariaProps } = useFormControlAria({ label, description });
 
 	React.useImperativeHandle(ref, () => {
 		if (!inputRef.current) {
@@ -78,19 +78,13 @@ export function FormInput({
 	return (
 		<FormItem>
 			{!!label && (
-				<FormLabel nativeID={formItemNativeID} onPress={handleOnLabelPress}>
+				<FormLabel nativeID={labelNativeID} onPress={handleOnLabelPress}>
 					{label}
 				</FormLabel>
 			)}
 			<Component
 				ref={inputRef}
-				aria-labelledby={formItemNativeID}
-				aria-describedby={
-					!error
-						? `${formDescriptionNativeID}`
-						: `${formDescriptionNativeID} ${formMessageNativeID}`
-				}
-				aria-invalid={!!error}
+				{...ariaProps}
 				onChangeText={handleChangeText}
 				type={type}
 				value={normalizedValue}

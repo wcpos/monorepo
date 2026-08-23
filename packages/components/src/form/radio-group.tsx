@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { useFormControlAria } from './aria';
 import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
-import { useFormField } from './context';
 import { RadioGroup } from '../radio-group';
 
 import type { FormItemProps } from './common';
@@ -16,26 +16,15 @@ export function FormRadioGroup({
 	...props
 }: FormItemProps<string> &
 	Omit<Partial<React.ComponentProps<typeof RadioGroup>>, 'value' | 'onValueChange'>) {
-	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
+	const { labelNativeID, ariaProps } = useFormControlAria({ label, description });
 
 	return (
 		<FormItem>
 			<View>
-				{!!label && <FormLabel nativeID={formItemNativeID}>{label}</FormLabel>}
+				{!!label && <FormLabel nativeID={labelNativeID}>{label}</FormLabel>}
 				{!!description && <FormDescription className="pt-0">{description}</FormDescription>}
 			</View>
-			<Component
-				aria-labelledby={formItemNativeID}
-				aria-describedby={
-					!error
-						? `${formDescriptionNativeID}`
-						: `${formDescriptionNativeID} ${formMessageNativeID}`
-				}
-				aria-invalid={!!error}
-				onValueChange={onChange}
-				value={value}
-				{...props}
-			/>
+			<Component {...ariaProps} onValueChange={onChange} value={value} {...props} />
 
 			<FormMessage />
 		</FormItem>
