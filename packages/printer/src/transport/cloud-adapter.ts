@@ -1,18 +1,56 @@
 import type { PrinterProfile, PrinterTransport } from '../types';
 
 /**
+ * Providers that cannot accept a client-uploaded raw payload at all.
+ *
+ * Epson SDP rejects raw client payloads outright; PrintNode never polls the
+ * queue, so bytes left there are never collected.
+ */
+const RAW_REJECTING_CLOUD_PROVIDERS = ['epson-sdp', 'printnode'] as const;
+
+/**
  * Whether a profile must be printed as a server-rendered, order-based cloud job
  * rather than a client-rendered raw byte upload.
  *
- * True only for the `epson-sdp` and `printnode` providers: Epson SDP rejects raw
- * client payloads and PrintNode never polls, so the client must NOT render bytes
- * for them. Star CloudPRNT and any unknown / missing provider return false and
- * keep the raw-upload behaviour (Star is the shipped happy path).
+ * Star CloudPRNT joined the order-based providers once the plugin learned to
+ * negotiate a media type and render at fetch time (wcpos/woocommerce-pos#1351).
+ * Before that the client had to guess the wire format and upload bytes blind,
+ * which is how it ended up shipping ESC/POS to printers that cannot decode it.
+ * The server now asks the printer what it can decode and renders to match, so
+ * the client's job is to name the order and the template, nothing more.
+ *
+ * An unknown or missing provider still returns false: a legacy profile from
+ * before the field existed keeps the raw-upload behaviour it was written for.
  */
 export function isOrderBasedCloudProfile(profile: PrinterProfile | undefined): boolean {
+	if (profile?.connectionType !== 'cloud') {
+		return false;
+	}
+
 	return (
-		profile?.connectionType === 'cloud' &&
-		(profile.cloudProvider === 'epson-sdp' || profile.cloudProvider === 'printnode')
+		profile.cloudProvider === 'star-cloudprnt' ||
+		(RAW_REJECTING_CLOUD_PROVIDERS as readonly string[]).includes(profile.cloudProvider ?? '')
+	);
+}
+
+/**
+ * Whether a profile can be sent a one-off raw payload outside the receipt flow.
+ *
+ * Distinct from `isOrderBasedCloudProfile`: that answers "who renders the
+ * receipt", this answers "can we hand this printer arbitrary bytes at all". A
+ * standalone cash-drawer kick has no order and no template behind it, so it can
+ * only ever be raw — and Star CloudPRNT still accepts raw jobs even though its
+ * receipts are now server-rendered. Conflating the two would break the "Open
+ * drawer" button for every Star printer.
+ */
+export function acceptsRawCloudUpload(profile: PrinterProfile | undefined): boolean {
+	if (profile?.connectionType !== 'cloud') {
+		// Direct transports (network, USB, serial, Bluetooth) always take bytes.
+		return true;
+	}
+
+	return !(RAW_REJECTING_CLOUD_PROVIDERS as readonly string[]).includes(
+		profile.cloudProvider ?? ''
 	);
 }
 
@@ -20,12 +58,13 @@ export function isOrderBasedCloudProfile(profile: PrinterProfile | undefined): b
  * A print job destined for the cloud queue. Two variants:
  *
  * - `raw` — pre-encoded payload bytes the client rendered locally. The printer
- *   polls and receives them as-is. Used by Star CloudPRNT (and any unknown /
- *   legacy provider that falls back to Star behaviour).
+ *   polls and receives them as-is. Now only a legacy profile with no or an
+ *   unknown provider, and one-off payloads with no order behind them such as a
+ *   drawer kick.
  * - `order` — no payload; the server renders & delivers the receipt from the
  *   order + template. Required by Epson SDP (rejects raw payloads) and PrintNode
- *   (never polls), which the client must NOT render for. See cloud-print spec
- *   and wcpos/woocommerce-pos#1094.
+ *   (never polls), and used by Star CloudPRNT since the server gained media-type
+ *   negotiation. See cloud-print spec, wcpos/woocommerce-pos#1094 and #1351.
  */
 export type CloudPrintJob =
 	| {

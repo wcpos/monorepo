@@ -118,11 +118,15 @@ export function usePrint(options: UsePrintOptions) {
 			const service = getService();
 			service.setCloudEnqueueFactory(cloudEnqueueFactory);
 
-			// Order-based cloud providers (Epson SDP, PrintNode) must NOT be rendered
-			// client-side — Epson rejects raw payloads and PrintNode never polls. Send
-			// an order job and let the server render + deliver. Branch here, before any
-			// local rendering. Star CloudPRNT and unknown/legacy providers fall through
-			// to the byte-rendering paths below (raw upload, unchanged).
+			// Order-based cloud providers must NOT be rendered client-side. Epson
+			// rejects raw payloads and PrintNode never polls; Star CloudPRNT joined
+			// them once the plugin could negotiate a media type and render at fetch
+			// time, so the client no longer has to guess the wire format. Send an
+			// order job and let the server render + deliver. Branch here, before any
+			// local rendering — including fullReceiptRaster, which for Star is now
+			// the server's decision (it promotes image/png in the offer) rather than
+			// a client-side ESC/POS raster no Star printer could decode. Only a
+			// legacy profile with no or an unknown provider still falls through to raw upload.
 			if (printerProfile && isOrderBasedCloudProfile(printerProfile)) {
 				if (orderId == null) {
 					throw new Error('Order-based cloud printing requires an order id');

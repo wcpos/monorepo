@@ -68,10 +68,14 @@ export interface PrinterProfile {
 	/**
 	 * For `connectionType: 'cloud'`: the server-side print provider backing the
 	 * registered cloud printer. Drives how jobs are delivered:
-	 * - `star-cloudprnt` — the printer polls; a raw ESC/POS payload is delivered as-is.
+	 * - `star-cloudprnt` — the printer polls, and the server renders the receipt
+	 *   at fetch time in whatever media type the printer says it can decode.
+	 *   Formerly a raw ESC/POS upload, which no Star CloudPRNT printer can
+	 *   actually decode (wcpos/woocommerce-pos#1350, #1351).
 	 * - `epson-sdp` / `printnode` — raw payloads are rejected/never delivered; the
 	 *   server must render & submit an order-based job instead.
-	 * Absent/unknown profiles fall back to the raw-payload (Star) behaviour.
+	 * Absent/unknown profiles fall back to the raw-payload behaviour, which is
+	 * what a profile written before this field existed was built for.
 	 */
 	cloudProvider?: 'star-cloudprnt' | 'epson-sdp' | 'printnode';
 	printerModel?: string;

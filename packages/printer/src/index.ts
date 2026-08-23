@@ -51,7 +51,12 @@ export {
 export type { EscposRenderOptions } from './renderer';
 export { PrinterService } from './printer-service';
 export type { PrinterServiceOptions } from './printer-service';
-export { CloudAdapter, isOrderBasedCloudProfile } from './transport/cloud-adapter';
+export {
+	acceptsRawCloudUpload,
+	CloudAdapter,
+	isOrderBasedCloudProfile,
+} from './transport/cloud-adapter';
+export { canOpenDrawer } from './capabilities';
 export { isWebUsbSupported, isWebBluetoothSupported } from './transport/device-capabilities';
 export type { CloudEnqueueFn, CloudPrintJob } from './transport/cloud-adapter';
 export { usePrint } from './hooks/use-print';
