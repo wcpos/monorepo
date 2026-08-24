@@ -48,6 +48,17 @@ describe('displayKind', () => {
 		expect(displayKind({ level: 'info', category: 'wcpos.syncopation' })).toBe('info');
 	});
 
+	it('reads a sync-domain diagnostic row as debug, not as sync', () => {
+		// Verbose diagnostics exists to make the forensic rows findable; painting
+		// them with the same blue 'sync' pill as the running feed hid them among
+		// the rows already there (Paul, 2026-08-24). An ATTRIBUTED row keeps its
+		// action framing — who did it outranks how loudly it was written.
+		expect(displayKind({ level: 'debug', category: 'wcpos.sync.engine' })).toBe('debug');
+		expect(
+			displayKind({ level: 'debug', category: 'wcpos.sync.engine', actor: { name: 'Paul' } })
+		).toBe('action');
+	});
+
 	it('falls back to the record level', () => {
 		expect(displayKind({ level: 'debug' })).toBe('debug');
 		expect(displayKind({ level: 'info' })).toBe('info');
@@ -67,6 +78,20 @@ describe('presetFilters', () => {
 
 	it('narrows errors to error level only, matching the stat header count', () => {
 		expect(presetFilters('errors', true)).toEqual({ level: ['error'] });
+	});
+
+	it('keeps debug in the verbose sync preset — the preset is the DOMAIN, not the pill', () => {
+		// Reviewer suggestion, declined (#1548): the strict display-kind selector
+		// `kindConditions('sync')` excludes debug because debug outranks the domain
+		// in the LEVEL column. The PRESET answers a different question — "everything
+		// the sync engine did" — and dropping debug here would empty verbose
+		// diagnostics of the sync-domain forensic rows it exists to surface, which
+		// is the complaint that prompted the change in the first place. The two
+		// compose: Sync preset + debug pill IS that forensic feed.
+		expect(presetFilters('sync', true)).toEqual({
+			level: ['debug', 'info', 'warn', 'error'],
+			category_prefix: 'wcpos.sync',
+		});
 	});
 
 	it('scopes sync to the category prefix and actions to actor rows', () => {

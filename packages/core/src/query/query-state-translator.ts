@@ -106,8 +106,14 @@ const noActingActor = [{ 'actor.id': { $exists: false } }, { 'actor.name': { $ex
 /**
  * Strict display-kind selectors (A1.5): each kind matches exactly the rows the
  * LEVEL column renders with that kind, mirroring `displayKind`'s precedence —
- * severity wins, then actor (action), then the sync domain, then debug; info is
+ * severity wins, then actor (action), then debug, then the sync domain; info is
  * the residual, so it also absorbs absent or unrecognized levels.
+ *
+ * The precedence is a CONTRACT with `displayKind`, not a coincidence: a pill
+ * that filtered to a different set than the pill's own rows would silently drop
+ * rows the user could see. Debug ranks above the domain (see the essay there),
+ * so the sync selector excludes it and the debug selector no longer excludes
+ * the sync domain — where nearly every debug row actually lives.
  */
 function kindConditions(kind: LogKindFilter): Record<string, unknown>[] {
 	switch (kind) {
@@ -121,12 +127,12 @@ function kindConditions(kind: LogKindFilter): Record<string, unknown>[] {
 			return [
 				{ category: syncCategoryRange },
 				...noActingActor,
-				{ level: { $nin: ['error', 'warn'] } },
+				{ level: { $nin: ['error', 'warn', 'debug'] } },
 			];
 		case 'info':
 			return [{ level: { $nin: ['error', 'warn', 'debug'] } }, ...noActingActor, notSyncCategory];
 		case 'debug':
-			return [{ level: 'debug' }, ...noActingActor, notSyncCategory];
+			return [{ level: 'debug' }, ...noActingActor];
 		default: {
 			const exhaustive: never = kind;
 			return exhaustive;

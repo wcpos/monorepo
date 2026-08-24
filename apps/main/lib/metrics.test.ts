@@ -42,13 +42,13 @@ describe('host metrics buckets', () => {
 			atMs: 2 * HOUR_MS + 1_000,
 			durationMs: 25,
 			bytes: 120,
-			ok: true,
+			failed: false,
 		});
 		recordTransport({
 			atMs: 2 * HOUR_MS + 2_000,
 			durationMs: 75,
 			bytes: 30,
-			ok: false,
+			failed: true,
 		});
 		recordServerLoad(0.5);
 		recordServerLoad(0.3);
@@ -73,7 +73,7 @@ describe('host metrics buckets', () => {
 				atMs: hour * HOUR_MS,
 				durationMs: hour,
 				bytes: hour,
-				ok: true,
+				failed: false,
 			});
 		}
 
@@ -84,10 +84,10 @@ describe('host metrics buckets', () => {
 	});
 
 	it('ignores malformed byte counts instead of poisoning the bucket total', () => {
-		recordTransport({ atMs: 2 * HOUR_MS, durationMs: 10, bytes: 100, ok: true });
-		recordTransport({ atMs: 2 * HOUR_MS, durationMs: 10, bytes: Number.NaN, ok: true });
-		recordTransport({ atMs: 2 * HOUR_MS, durationMs: 10, bytes: -50, ok: true });
-		recordTransport({ atMs: 2 * HOUR_MS, durationMs: 10, bytes: 25, ok: true });
+		recordTransport({ atMs: 2 * HOUR_MS, durationMs: 10, bytes: 100, failed: false });
+		recordTransport({ atMs: 2 * HOUR_MS, durationMs: 10, bytes: Number.NaN, failed: false });
+		recordTransport({ atMs: 2 * HOUR_MS, durationMs: 10, bytes: -50, failed: false });
+		recordTransport({ atMs: 2 * HOUR_MS, durationMs: 10, bytes: 25, failed: false });
 
 		const [bucket] = getMetricsBuckets();
 		expect(bucket?.requests).toBe(4);
@@ -95,7 +95,7 @@ describe('host metrics buckets', () => {
 	});
 
 	it('resetMetricsBuckets drops in-memory buckets so metrics do not cross stores', () => {
-		recordTransport({ atMs: 2 * HOUR_MS, durationMs: 10, bytes: 20, ok: true });
+		recordTransport({ atMs: 2 * HOUR_MS, durationMs: 10, bytes: 20, failed: false });
 		expect(getMetricsBuckets()).toHaveLength(1);
 
 		resetMetricsBuckets();
@@ -117,7 +117,7 @@ describe('host metrics buckets', () => {
 
 	it('folds persisted counts into a live hour the engine already opened on startup', () => {
 		// A startup tick opens the current hour before the async hydrate resolves.
-		recordTransport({ atMs: 2 * HOUR_MS, durationMs: 10, bytes: 20, ok: true });
+		recordTransport({ atMs: 2 * HOUR_MS, durationMs: 10, bytes: 20, failed: false });
 
 		hydrateMetricsBuckets([
 			{
@@ -219,7 +219,13 @@ describe('metrics epoch', () => {
 		jest.spyOn(Date, 'now').mockReturnValue(HOUR_MS);
 		const epochAtStart = getMetricsEpoch();
 		resetMetricsBuckets();
-		recordTransport({ atMs: HOUR_MS, durationMs: 10, bytes: 100, ok: true, epoch: epochAtStart });
+		recordTransport({
+			atMs: HOUR_MS,
+			durationMs: 10,
+			bytes: 100,
+			failed: false,
+			epoch: epochAtStart,
+		});
 		expect(getMetricsBuckets()).toEqual([]);
 	});
 
@@ -229,7 +235,7 @@ describe('metrics epoch', () => {
 			atMs: HOUR_MS,
 			durationMs: 10,
 			bytes: 100,
-			ok: true,
+			failed: false,
 			epoch: getMetricsEpoch(),
 		});
 		expect(getMetricsBuckets()).toHaveLength(1);

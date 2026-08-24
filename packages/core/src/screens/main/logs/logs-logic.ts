@@ -52,14 +52,24 @@ function isSyncCategory(category: string | undefined): boolean {
 
 /**
  * Display kind for the LEVEL column. Severity wins; below that, an actor row
- * reads as an action and the sync domain reads as sync.
+ * reads as an action, a diagnostic row reads as debug, and the sync domain
+ * reads as sync.
  */
 export function displayKind(row: Pick<LogRow, 'level' | 'actor' | 'category'>): LevelKind {
 	if (row.level === 'error') return 'error';
 	if (row.level === 'warn') return 'warn';
 	if (row.actor && (row.actor.id !== undefined || row.actor.name !== undefined)) return 'action';
-	if (isSyncCategory(row.category)) return 'sync';
+	// DEBUG OUTRANKS THE DOMAIN. Debug rows exist only while verbose diagnostics
+	// is on, and that is exactly when someone needs to tell the forensic rows
+	// apart from the running narrative. Ranking the sync domain first painted
+	// every absorbed 401 and every deferred transport row with the same blue
+	// 'sync' pill as the ordinary feed, so turning verbose on added rows nobody
+	// could pick out of the 150 already there (Paul, 2026-08-24). The domain is
+	// still on the row — the category prints under every title; the level is
+	// written nowhere else. Actions stay above it: who did it is the merchant's
+	// framing, and it survives whatever level the row was written at.
 	if (row.level === 'debug') return 'debug';
+	if (isSyncCategory(row.category)) return 'sync';
 	return 'info';
 }
 
@@ -74,6 +84,16 @@ export type LogPresetFilters = {
 /**
  * Preset chip → query-state filters. Debug rows only enter the ledger while
  * verbose diagnostics is on (they only persist then, too — spec §3).
+ *
+ * THE PRESET IS A DOMAIN FILTER; THE LEVEL PILL IS A DISPLAY-KIND FILTER. They
+ * are deliberately different questions and must NOT be reconciled: `sync` here
+ * means "everything the sync engine did", so with verbose on it KEEPS the debug
+ * rows — that is the whole point of turning verbose on while looking at sync.
+ * `kindConditions('sync')` means "rows the LEVEL column renders as sync", which
+ * since debug outranks the domain (see `displayKind`) excludes them. Making the
+ * preset match the pill would empty verbose diagnostics of the rows it exists to
+ * surface; the two compose instead — Sync preset + debug pill is exactly the
+ * sync-domain forensic feed.
  */
 export function presetFilters(preset: LogPreset, verbose: boolean): LogPresetFilters {
 	const levels = verbose ? ['debug', 'info', 'warn', 'error'] : ['info', 'warn', 'error'];

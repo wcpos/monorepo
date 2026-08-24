@@ -8,11 +8,17 @@ import { act, renderHook } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 import { distinctUntilChanged } from 'rxjs/operators';
 
-import { MUTATION_QUEUE_RXDB_COLLECTION, SYNC_COLLECTION_NAMES } from '@wcpos/sync-engine';
+import {
+	MUTATION_QUEUE_RXDB_COLLECTION,
+	OPEN_CART_ORDER_STATUS,
+	SYNC_COLLECTION_NAMES,
+} from '@wcpos/sync-engine';
+import type { HoldCandidate } from '@wcpos/sync-engine';
 
 import { useCollectionCounts, useMutationCounts } from './use-engine-monitor';
 
 type FakeDatabase = { collections: Record<string, unknown> };
+type QueueRow = HoldCandidate & { mutationId: string };
 
 const mockDatabase$ = new BehaviorSubject<FakeDatabase | null>(null);
 const mockEngine = {
@@ -42,13 +48,41 @@ function countDatabase(offset: number) {
 	};
 }
 
+/** A queue row as the hook reads it: an RxDB document face over the stored row. */
+function queueRow(row: Partial<QueueRow> = {}) {
+	const value: QueueRow = {
+		mutationId: 'mutation-1',
+		collectionName: 'products',
+		operation: 'update',
+		recordId: 'record-1',
+		status: 'pending',
+		...row,
+	};
+	return { toJSON: () => value };
+}
+
+/** An `orders` collection answering the open-cart query with these record ids. */
+function openCartOrders(uuids: string[]) {
+	const orders$ = new BehaviorSubject(uuids.map((uuid) => ({ toJSON: () => ({ uuid }) })));
+	const find = jest.fn((query: { selector: { status: { $eq: string } } }) => {
+		expect(query.selector.status.$eq).toBe(OPEN_CART_ORDER_STATUS);
+		return { $: orders$ };
+	});
+	return { orders$, find, collection: { find } };
+}
+
+/** Build a mutation collection fixture with independent observable count streams. */
 function mutationDatabase(
 	pending: number,
 	conflicts: number,
 	rejected = 0,
 	unresolvedConflicts = conflicts - rejected
 ) {
-	const pending$ = new BehaviorSubject(Array.from({ length: pending }, () => ({})));
+	const pending$ = new BehaviorSubject(
+		Array.from({ length: pending }, (_unused, index) =>
+			queueRow({ mutationId: `mutation-${index}`, recordId: `record-${index}` })
+		)
+	);
 	const conflicts$ = new BehaviorSubject(Array.from({ length: conflicts }, () => ({})));
 	const rejected$ = new BehaviorSubject(Array.from({ length: rejected }, () => ({})));
 	const unresolvedConflicts$ = new BehaviorSubject(
@@ -72,7 +106,7 @@ function mutationDatabase(
 		unresolvedConflicts$,
 		find,
 		database: {
-			collections: { [MUTATION_QUEUE_RXDB_COLLECTION]: { find } },
+			collections: { [MUTATION_QUEUE_RXDB_COLLECTION]: { find } } as Record<string, unknown>,
 		},
 	};
 }
@@ -84,8 +118,9 @@ describe('engine monitor hooks', () => {
 		const source = readFileSync(join(__dirname, 'use-engine-monitor.ts'), 'utf8');
 
 		expect(source).toContain(
-			'Every outbound record waiting for the network (`pending` or `claimed`).'
+			'Every outbound record waiting for the network (`pending` or `claimed`),'
 		);
+		expect(source).toContain('MINUS the rows the engine holds by design while their cart is open');
 		expect(source).not.toContain('Every queued outbound record');
 	});
 
@@ -138,13 +173,80 @@ describe('engine monitor hooks', () => {
 			rejected: 0,
 			unresolvedConflicts: 0,
 		});
-		act(() => mutations.pending$.next([{}]));
+		act(() => mutations.pending$.next([queueRow()]));
 		expect(result.current).toEqual({
 			pending: 1,
 			conflicts: 0,
 			rejected: 0,
 			unresolvedConflicts: 0,
 		});
+
+		unmount();
+	});
+
+	it("does not count an open cart's held edit as a change waiting to send (#1546)", () => {
+		// The engine HOLDS a pos-open order's queued edits until the sale settles
+		// (write-drain-lane shouldHold). Counting them told the cashier a change was
+		// stuck with nothing anywhere to act on — the change was the cart in front
+		// of them. The moment the cart leaves pos-open the row is on its way again
+		// and the stat must say so.
+		const mutations = mutationDatabase(0, 0);
+		const orders = openCartOrders(['order-1']);
+		mutations.database.collections.orders = orders.collection;
+		mutations.pending$.next([
+			queueRow({ mutationId: 'mutation-1', collectionName: 'orders', recordId: 'order-1' }),
+		]);
+		mockDatabase$.next(mutations.database);
+		const { result, unmount } = renderHook(() => useMutationCounts());
+
+		expect(result.current.pending).toBe(0);
+
+		act(() => orders.orders$.next([]));
+		expect(result.current.pending).toBe(1);
+
+		unmount();
+	});
+
+	it('counts a cashier-triggered push on an open cart — the hold releases it', () => {
+		// `explicit` is the cashier asking for the push (and a delete is a release):
+		// the drain sends the record's whole chain, so neither row is held and the
+		// stat must not hide work that IS on its way to the store.
+		const mutations = mutationDatabase(0, 0);
+		const orders = openCartOrders(['order-1']);
+		mutations.database.collections.orders = orders.collection;
+		mutations.pending$.next([
+			queueRow({ mutationId: 'mutation-1', collectionName: 'orders', recordId: 'order-1' }),
+			queueRow({
+				mutationId: 'mutation-2',
+				collectionName: 'orders',
+				recordId: 'order-1',
+				explicit: true,
+			}),
+		]);
+		mockDatabase$.next(mutations.database);
+		const { result, unmount } = renderHook(() => useMutationCounts());
+
+		expect(result.current.pending).toBe(2);
+
+		unmount();
+	});
+
+	it('counts a claimed row on an open cart — the push is already in flight', () => {
+		const mutations = mutationDatabase(0, 0);
+		const orders = openCartOrders(['order-1']);
+		mutations.database.collections.orders = orders.collection;
+		mutations.pending$.next([
+			queueRow({
+				mutationId: 'mutation-1',
+				collectionName: 'orders',
+				recordId: 'order-1',
+				status: 'claimed',
+			}),
+		]);
+		mockDatabase$.next(mutations.database);
+		const { result, unmount } = renderHook(() => useMutationCounts());
+
+		expect(result.current.pending).toBe(1);
 
 		unmount();
 	});

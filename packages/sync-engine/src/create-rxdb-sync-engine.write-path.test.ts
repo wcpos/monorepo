@@ -26,6 +26,7 @@ import {
 } from './create-rxdb-sync-engine';
 import { writeFacetFor } from './collections/collection-descriptors';
 import { queueFor, requeueBornTwiceSnapshot } from './write-path/write-intents';
+import { heldOpenCartMutations } from './write-path/open-cart-hold';
 
 import type { RxStorage } from 'rxdb';
 
@@ -503,6 +504,39 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			expect(await engine.sync('write-drain')).toMatchObject({ held: 0, pushed: 1 });
 			expect(server.received).toHaveLength(1);
 			expect(server.received[0]).not.toHaveProperty('explicit');
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('leaves the held row where the health stat reads it, and marks it held (#1546)', async () => {
+		// THE PHANTOM. A held row sits in the queue at 'pending' — the exact status
+		// the "changes waiting to send" stat selects — for as long as the cart is
+		// open, so the stat read a red 1 the cashier could neither see nor act on.
+		// This is the join between the two: the drain holds the row, and the shared
+		// rule the stat uses classifies that same stored row as held.
+		const server = createFakeWriteServer();
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, undefined, 'pos-open');
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { status: 'pos-open' },
+			});
+			expect(await engine.sync('write-drain')).toMatchObject({ held: 1, pushed: 0 });
+
+			const rows = (await queueRows(engine)) as unknown as Parameters<
+				typeof heldOpenCartMutations
+			>[0];
+			expect(rows).toHaveLength(1);
+			expect(rows[0]).toMatchObject({ status: 'pending', collectionName: 'orders' });
+			expect(heldOpenCartMutations(rows, new Set([UUID_A]))).toHaveLength(1);
+			// …and the moment the cart is not open, the same row is work the store
+			// really is waiting for.
+			expect(heldOpenCartMutations(rows, new Set())).toHaveLength(0);
 		} finally {
 			await engine.dispose();
 		}

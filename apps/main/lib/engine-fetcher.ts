@@ -107,6 +107,7 @@ function isSyncCollectionName(name: string): name is SyncCollectionName {
 	return Object.prototype.hasOwnProperty.call(COLLECTION_VOCABULARY, name);
 }
 
+/** Build the authenticated fetch adapter used by the sync engine. */
 export function createEngineFetcher(input: {
 	auth: EngineFetcherAuth;
 	clockSkew: ClockSkewGate;
@@ -130,10 +131,19 @@ export function createEngineFetcher(input: {
 
 	type SettledAttempt = {
 		response: Response;
-		/** Emit this attempt's transport row with the level the SETTLED arc decided. */
-		emit: (level: SyncEvent['level'], extraFields?: Record<string, unknown>) => void;
+		/**
+		 * Close this attempt's books at the level the SETTLED arc decided: it writes
+		 * the transport row AND stamps the attempt into the hourly metric bucket.
+		 *
+		 * Both, from one call, on purpose — the two used to be stamped at different
+		 * moments and disagreed (#1547). Call it EXACTLY once per attempt: twice
+		 * double-counts the request, never loses it. `settle`, not `emit`, because
+		 * emitting a log row is only half of what it does.
+		 */
+		settle: (level: SyncEvent['level'], extraFields?: Record<string, unknown>) => void;
 	};
 
+	/** Execute one logical request arc, including any authentication retry. */
 	const fetcher: EngineFetcher = async (url, init) => {
 		const clockSkewGeneration = input.clockSkew.generation;
 		let tokenUsed: string | undefined;
@@ -142,11 +152,20 @@ export function createEngineFetcher(input: {
 		const isRefreshRequest = requestPath?.endsWith('/auth/refresh') ?? false;
 		const isTickProbe = requestPath?.endsWith('/changes/tick') ?? false;
 
-		// Performs one attempt. Metrics (recordTransport, server load) are recorded
-		// immediately, but the LOG emit is returned to the caller instead of fired
-		// here: a log level is a promise about how the operation ended, and inside a
-		// refresh arc the ending is not known yet (#899). The network-failure path
-		// still emits inline — a thrown fetch has no arc to wait for.
+		/**
+		 * Perform one attempt, deferring both its log row and its transport verdict
+		 * to the caller instead of firing them here.
+		 *
+		 * WHY. A log level is a promise about how the OPERATION ended, and inside a
+		 * refresh arc the ending is not known yet (#899) — a 401 that a refresh then
+		 * absorbs is not a fault, and stamping it as one before the retry has run is
+		 * exactly what surfaced the healthy TTL cycle as a failure. The hourly metric
+		 * rides with the log row for the same reason (#1547).
+		 *
+		 * Server load is still sampled immediately (it is a reading, not a verdict),
+		 * and the network-failure path emits inline — a thrown fetch has no arc to
+		 * wait for.
+		 */
 		const performAttempt = async (arcFields?: Record<string, unknown>): Promise<SettledAttempt> => {
 			const token = input.auth.credentials.getLatest().access_token;
 			tokenUsed = token;
@@ -227,6 +246,7 @@ export function createEngineFetcher(input: {
 			} catch (error) {
 				const atMs = now();
 				const durationMs = atMs - startedAtMs;
+				const aborted = (error as { name?: unknown } | null)?.name === 'AbortError';
 				input.emitTransport(
 					{
 						type: 'transport.request',
@@ -241,13 +261,17 @@ export function createEngineFetcher(input: {
 							...arcFields,
 						},
 					},
-					(error as { name?: unknown } | null)?.name !== 'AbortError'
+					!aborted
 				);
+				// The metric follows the same verdict as the row: an abort is OUR
+				// cancellation (a superseded tick, a scope switch), so it counts as a
+				// request that happened and never as a fault. Counting it turned the
+				// uptime strip amber for an hour whose log holds nothing to explain it.
 				recordTransport({
 					atMs,
 					durationMs,
 					bytes: 0,
-					ok: false,
+					failed: !aborted,
 					epoch: epochAtStart,
 				});
 				throw error;
@@ -288,19 +312,6 @@ export function createEngineFetcher(input: {
 			// poison the hourly byte totals — clamp to a finite non-negative count.
 			const bytes =
 				Number.isFinite(contentLengthRaw) && contentLengthRaw >= 0 ? contentLengthRaw : 0;
-			// 304 is the conditional-GET success path (idle sequence-log polls answer
-			// If-None-Match with Not Modified every tick) — Response.ok is false for it,
-			// but logging it as a failure would record ~360 phantom errors/hour per idle
-			// terminal and corrupt the transport health counters.
-			const accepted = response.ok || response.status === 304;
-			recordTransport({
-				atMs,
-				durationMs,
-				bytes,
-				ok: accepted,
-				epoch: epochAtStart,
-			});
-
 			// Hydrate BEFORE sampling diagnostics: on a header-stripping host the
 			// server-load value exists only in the _wcpos body envelope, and the
 			// engine wrapper's own hydration runs after this fetcher returns —
@@ -344,7 +355,19 @@ export function createEngineFetcher(input: {
 
 			return {
 				response,
-				emit: (level, extraFields) =>
+				settle: (level, extraFields) => {
+					// A failure is what the merchant would recognise as one: warn or
+					// error. Everything the rubric settles as info or debug — a 2xx, a
+					// 304 conditional poll, a tick-probe 404 the change signal is built
+					// to fall back from, an absorbed 401 whose retry then succeeded —
+					// is a healthy request, not an amber hour.
+					recordTransport({
+						atMs,
+						durationMs,
+						bytes,
+						failed: level === 'warn' || level === 'error',
+						epoch: epochAtStart,
+					});
 					input.emitTransport({
 						type: 'transport.request',
 						level,
@@ -359,27 +382,31 @@ export function createEngineFetcher(input: {
 							...arcFields,
 							...extraFields,
 						},
-					}),
+					});
+				},
 			};
 		};
 
-		// The settled classification for an attempt whose arc ends with it (#899
-		// rubric — the level reflects how the operation ended):
-		//  - 2xx/304 → info (successes are metrics-only; the observer drops them).
-		//  - tick-probe 404 → debug + outcome 'recovered': the hybrid change signal
-		//    latches tick-unsupported and falls back to sequence-log polling BY
-		//    CONSTRUCTION (its TIER 1 poll is unconditional), so this is a designed
-		//    self-healing downgrade, not a fault worth a warn in the merchant's log.
-		//  - 403 → error: a permission error, never refreshed (the 1.9 row-14 rule);
-		//    it needs attention, not a refresh loop.
-		//  - anything else !ok → warn (will need attention if it persists).
+		/**
+		 * The settled classification for an attempt whose arc ends with it (#899
+		 * rubric — the level reflects how the operation ended):
+		 *
+		 *  - 2xx/304 → info (successes are metrics-only; the observer drops them).
+		 *  - tick-probe 404 → debug + outcome 'recovered': the hybrid change signal
+		 *    latches tick-unsupported and falls back to sequence-log polling BY
+		 *    CONSTRUCTION (its TIER 1 poll is unconditional), so this is a designed
+		 *    self-healing downgrade, not a fault worth a warn in the merchant's log.
+		 *  - 403 → error: a permission error, never refreshed (the 1.9 row-14 rule);
+		 *    it needs attention, not a refresh loop.
+		 *  - anything else !ok → warn (will need attention if it persists).
+		 */
 		const emitSettled = (attempt: SettledAttempt, extraFields?: Record<string, unknown>): void => {
 			const status = attempt.response.status;
-			if (attempt.response.ok || status === 304) attempt.emit('info', extraFields);
+			if (attempt.response.ok || status === 304) attempt.settle('info', extraFields);
 			else if (status === 404 && isTickProbe)
-				attempt.emit('debug', { outcome: 'recovered', ...extraFields });
-			else if (status === 403) attempt.emit('error', extraFields);
-			else attempt.emit('warn', extraFields);
+				attempt.settle('debug', { outcome: 'recovered', ...extraFields });
+			else if (status === 403) attempt.settle('error', extraFields);
+			else attempt.settle('warn', extraFields);
 		};
 
 		const first = await performAttempt();
@@ -405,7 +432,7 @@ export function createEngineFetcher(input: {
 		} catch (error) {
 			// The refresh itself failed hard — settle the attempt as a failure and let
 			// the refresh error propagate exactly as before.
-			first.emit('warn', { outcome: 'failed', operationId });
+			first.settle('warn', { outcome: 'failed', operationId });
 			throw error;
 		}
 		if (!retryToken) {
@@ -413,7 +440,7 @@ export function createEngineFetcher(input: {
 			// refresh session' — error when the refresh token is terminally rejected),
 			// so this row records the request-level failure without double-escalating.
 			// Leave it uncorrelated so repeated post-rejection 401s can collapse.
-			first.emit('warn', { outcome: 'failed' });
+			first.settle('warn', { outcome: 'failed' });
 			return first.response;
 		}
 
@@ -424,7 +451,7 @@ export function createEngineFetcher(input: {
 			// The retry never settled (the network fell over mid-arc). Its thrown path
 			// already emitted a status-0 warn row carrying the arc id; the absorbed 401
 			// stays forensic.
-			first.emit('debug', { outcome: 'failed', operationId });
+			first.settle('debug', { outcome: 'failed', operationId });
 			throw error;
 		}
 		const retryStatus = retry.response.status;
@@ -433,17 +460,17 @@ export function createEngineFetcher(input: {
 			// forensic debug rows (visible under verbose diagnostics, chained by the
 			// arc id); the user-facing narrative is the single 'Session renewed
 			// automatically' info row the refresh layer writes.
-			first.emit('debug', { outcome: 'recovered', operationId });
-			retry.emit('debug', { operationId });
+			first.settle('debug', { outcome: 'recovered', operationId });
+			retry.settle('debug', { operationId });
 		} else if (retryStatus === 401) {
 			// Still unauthorized after a refresh — bounded-refresh exhaustion; NOW
 			// something is actually wrong and the user will need to re-authenticate.
-			first.emit('debug', { outcome: 'failed', operationId });
-			retry.emit('error', { operationId });
+			first.settle('debug', { outcome: 'failed', operationId });
+			retry.settle('error', { operationId });
 		} else {
 			// The 401 was cured but the retry hit a different failure — classify that
 			// failure on its own terms, keeping the arc id for the chain.
-			first.emit('debug', { outcome: 'recovered', operationId });
+			first.settle('debug', { outcome: 'recovered', operationId });
 			emitSettled(retry, { operationId });
 		}
 		return retry.response;

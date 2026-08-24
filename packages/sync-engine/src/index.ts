@@ -35,6 +35,15 @@ export {
 	writeOutcomeChannelName,
 } from './write-path/write-outcome-bridge';
 export { rejectionSuggestsServerRecord } from './write-path/conflict-resolution';
+/** The open-cart hold (see the module essay): the drain wiring and the health
+ * counters must decide "is this row held?" by the same rule, never by two. The
+ * per-row predicate stays inside — the door exposes the set-level answer the
+ * counter needs, so no caller can rebuild the rule from half of it. */
+export {
+	heldOpenCartMutations,
+	type HoldCandidate,
+	OPEN_CART_ORDER_STATUS,
+} from './write-path/open-cart-hold';
 export {
 	normalizeVariationAttributes,
 	promotedVariationColumns,
