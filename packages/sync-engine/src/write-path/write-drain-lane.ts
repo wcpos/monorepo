@@ -48,6 +48,7 @@ import {
 	type MoneyPrecisionMode,
 } from './order-money-divergence';
 import { rejectionSuggestsServerRecord } from './conflict-resolution';
+import { isOpenCartHoldCandidate, OPEN_CART_ORDER_STATUS } from './open-cart-hold';
 import { tillAggregateFor } from './order-till-aggregate';
 import { requeueBornTwiceSnapshot } from './write-intents';
 import { type BarcodeSelectors, barcodeSelectorsFor } from '../materialization/barcode-selectors';
@@ -374,17 +375,15 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 						const result = await drainMutationQueue({
 							queue,
 							signal: tickAbort.signal,
+							// THE OPEN-CART HOLD. The predicate is shared with the health
+							// counters (see open-cart-hold.ts) so a row this lane holds by
+							// design is never reported to the cashier as a change stuck
+							// waiting to send.
 							shouldHold: async (mutation) => {
-								if (
-									(mutation.status !== undefined && mutation.status !== 'pending') ||
-									mutation.collectionName !== 'orders' ||
-									mutation.operation === 'delete' ||
-									mutation.explicit === true
-								)
-									return false;
+								if (!isOpenCartHoldCandidate(mutation)) return false;
 								const doc = await database.collections.orders?.findOne(mutation.recordId).exec();
 								const row = doc?.toJSON() as { status?: unknown } | undefined;
-								return row?.status === 'pos-open';
+								return row?.status === OPEN_CART_ORDER_STATUS;
 							},
 							currentRevision: async (mutation) => {
 								const doc = await database.collections[mutation.collectionName]

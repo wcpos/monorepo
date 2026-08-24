@@ -97,17 +97,27 @@ export function collectionFromSyncUrl(url: string): string | undefined {
 	}
 }
 
+/**
+ * One completed request attempt.
+ *
+ * `failed` is the SETTLED verdict, not the raw HTTP status: it must agree with
+ * the level the same attempt's log row carries (#899 rubric). An attempt the
+ * log calls debug — an absorbed 401 inside a refresh arc that then succeeded, a
+ * tick-probe 404 the change signal is designed to fall back from — is not a
+ * failure here either, or the uptime strip turns amber for an hour whose log
+ * holds nothing to explain it (#1547). Same for a request WE cancelled.
+ */
 export function recordTransport({
 	atMs,
 	durationMs,
 	bytes,
-	ok,
+	failed,
 	epoch,
 }: {
 	atMs: number;
 	durationMs: number;
 	bytes: number;
-	ok: boolean;
+	failed: boolean;
 	epoch?: number;
 }): void {
 	if (epoch !== undefined && epoch !== metricsEpoch) return;
@@ -118,7 +128,7 @@ export function recordTransport({
 	if (Number.isFinite(bytes) && bytes >= 0) bucket.bytes += bytes;
 	bucket.durationTotalMs += durationMs;
 	bucket.durationCount += 1;
-	if (!ok) bucket.errors += 1;
+	if (failed) bucket.errors += 1;
 	pruneMetricsBuckets();
 }
 

@@ -227,6 +227,7 @@ export function createEngineFetcher(input: {
 			} catch (error) {
 				const atMs = now();
 				const durationMs = atMs - startedAtMs;
+				const aborted = (error as { name?: unknown } | null)?.name === 'AbortError';
 				input.emitTransport(
 					{
 						type: 'transport.request',
@@ -241,13 +242,17 @@ export function createEngineFetcher(input: {
 							...arcFields,
 						},
 					},
-					(error as { name?: unknown } | null)?.name !== 'AbortError'
+					!aborted
 				);
+				// The metric follows the same verdict as the row: an abort is OUR
+				// cancellation (a superseded tick, a scope switch), so it counts as a
+				// request that happened and never as a fault. Counting it turned the
+				// uptime strip amber for an hour whose log holds nothing to explain it.
 				recordTransport({
 					atMs,
 					durationMs,
 					bytes: 0,
-					ok: false,
+					failed: !aborted,
 					epoch: epochAtStart,
 				});
 				throw error;
@@ -288,19 +293,6 @@ export function createEngineFetcher(input: {
 			// poison the hourly byte totals — clamp to a finite non-negative count.
 			const bytes =
 				Number.isFinite(contentLengthRaw) && contentLengthRaw >= 0 ? contentLengthRaw : 0;
-			// 304 is the conditional-GET success path (idle sequence-log polls answer
-			// If-None-Match with Not Modified every tick) — Response.ok is false for it,
-			// but logging it as a failure would record ~360 phantom errors/hour per idle
-			// terminal and corrupt the transport health counters.
-			const accepted = response.ok || response.status === 304;
-			recordTransport({
-				atMs,
-				durationMs,
-				bytes,
-				ok: accepted,
-				epoch: epochAtStart,
-			});
-
 			// Hydrate BEFORE sampling diagnostics: on a header-stripping host the
 			// server-load value exists only in the _wcpos body envelope, and the
 			// engine wrapper's own hydration runs after this fetcher returns —
@@ -344,7 +336,22 @@ export function createEngineFetcher(input: {
 
 			return {
 				response,
-				emit: (level, extraFields) =>
+				// Called EXACTLY once per settled attempt, on every path below. The
+				// hourly metric rides with it so the two can never disagree: whatever
+				// verdict the log row carries is the verdict the uptime strip counts.
+				emit: (level, extraFields) => {
+					// A failure is what the merchant would recognise as one: warn or
+					// error. Everything the rubric settles as info or debug — a 2xx, a
+					// 304 conditional poll, a tick-probe 404 the change signal is built
+					// to fall back from, an absorbed 401 whose retry then succeeded —
+					// is a healthy request, not an amber hour.
+					recordTransport({
+						atMs,
+						durationMs,
+						bytes,
+						failed: level === 'warn' || level === 'error',
+						epoch: epochAtStart,
+					});
 					input.emitTransport({
 						type: 'transport.request',
 						level,
@@ -359,7 +366,8 @@ export function createEngineFetcher(input: {
 							...arcFields,
 							...extraFields,
 						},
-					}),
+					});
+				},
 			};
 		};
 

@@ -611,7 +611,7 @@ describe('createEngineFetcher', () => {
 			atMs: 1_025,
 			durationMs: 25,
 			bytes: 42,
-			ok: true,
+			failed: false,
 			epoch: 0,
 		});
 		expect(recordServerLoad).toHaveBeenCalledWith(0.5, 0);
@@ -749,7 +749,7 @@ describe('createEngineFetcher', () => {
 			atMs: 2_010,
 			durationMs: 10,
 			bytes: 0,
-			ok: true,
+			failed: false,
 			epoch: 0,
 		});
 		now.mockRestore();
@@ -799,7 +799,7 @@ describe('createEngineFetcher', () => {
 			atMs: 2_040,
 			durationMs: 40,
 			bytes: 0,
-			ok: false,
+			failed: true,
 			epoch: 0,
 		});
 		// The legacy networkLogger row is gone: the transport event now flows through
@@ -838,7 +838,11 @@ describe('createEngineFetcher', () => {
 				fields: expect.objectContaining({ status: 0 }),
 			})
 		);
-		expect(recordTransport).toHaveBeenCalledWith(expect.objectContaining({ ok: false }));
+		// The hour's failure count follows the log's verdict: this row is not
+		// persisted BECAUSE an abort is our own cancellation, so counting it as a
+		// transport failure would turn the uptime strip amber for an hour whose
+		// log holds nothing to explain it.
+		expect(recordTransport).toHaveBeenCalledWith(expect.objectContaining({ failed: false }));
 		expect(networkWarn).not.toHaveBeenCalled();
 		fetch.mockReset();
 	});
@@ -952,6 +956,76 @@ describe('createEngineFetcher', () => {
 		const retryHeaders = fetch.mock.calls[1]?.[1]?.headers as Headers;
 		expect(firstHeaders.get('Authorization')).toBe('Bearer expired-token');
 		expect(retryHeaders.get('Authorization')).toBe('Bearer refreshed-token');
+		fetch.mockReset();
+	});
+
+	it('counts no hourly failure for a 401 the refresh arc absorbed', async () => {
+		// THE PHANTOM (#1547): the log row for an absorbed 401 is debug/'recovered'
+		// and is not even persisted unless verbose diagnostics is on, but the hourly
+		// bucket used to count that same attempt as a failure the moment it landed —
+		// so a healthy token-renewal cycle painted the uptime strip amber for an hour
+		// whose log showed zero errors and zero warns.
+		let accessToken = 'expired-token';
+		const credentials = { getLatest: jest.fn(() => ({ access_token: accessToken })) };
+		const refreshAuth = jest.fn(async () => {
+			accessToken = 'refreshed-token';
+			return accessToken;
+		});
+		const fetch = jest
+			.fn()
+			.mockResolvedValueOnce(new Response(null, { status: 401 }))
+			.mockResolvedValueOnce(new Response(null, { status: 200 }));
+		const { fetcher, recordTransport } = createFetcherHarness({
+			fetch,
+			auth: { credentials, refreshAuth },
+		});
+
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+
+		// Both attempts still count as requests the till made — only the failure
+		// tally follows the settled verdict.
+		expect(recordTransport).toHaveBeenCalledTimes(2);
+		expect(recordTransport).not.toHaveBeenCalledWith(expect.objectContaining({ failed: true }));
+		fetch.mockReset();
+	});
+
+	it('counts exactly one hourly failure when the retry is still unauthorized', async () => {
+		let accessToken = 'expired-token';
+		const credentials = { getLatest: jest.fn(() => ({ access_token: accessToken })) };
+		const refreshAuth = jest.fn(async () => {
+			accessToken = 'refreshed-token';
+			return accessToken;
+		});
+		const fetch = jest
+			.fn()
+			.mockResolvedValueOnce(new Response(null, { status: 401 }))
+			.mockResolvedValueOnce(new Response(null, { status: 401 }));
+		const { fetcher, recordTransport } = createFetcherHarness({
+			fetch,
+			auth: { credentials, refreshAuth },
+		});
+
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+
+		// One arc, one fault: the absorbed 401 stays forensic (debug) and the
+		// error row the merchant reads is the retry's.
+		const failures = recordTransport.mock.calls.filter(
+			(call: unknown[]) => (call[0] as { failed: boolean }).failed
+		);
+		expect(recordTransport).toHaveBeenCalledTimes(2);
+		expect(failures).toHaveLength(1);
+		fetch.mockReset();
+	});
+
+	it('counts no hourly failure for a tick-probe 404 the change signal falls back from', async () => {
+		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 404 }));
+		const { fetcher, recordTransport } = createFetcherHarness({ fetch });
+
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/changes/tick');
+
+		// A designed self-healing downgrade settles as debug/'recovered'; an hour
+		// of them must not read as an hour of faults.
+		expect(recordTransport).toHaveBeenCalledWith(expect.objectContaining({ failed: false }));
 		fetch.mockReset();
 	});
 

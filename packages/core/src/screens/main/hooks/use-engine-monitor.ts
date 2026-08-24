@@ -4,14 +4,26 @@ import { combineLatest, Observable, of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 
 import { useQueryRuntime } from '@wcpos/query';
-import { MUTATION_QUEUE_RXDB_COLLECTION, SYNC_COLLECTION_NAMES } from '@wcpos/sync-engine';
-import type { EngineStatus, RxdbSyncEngine, SyncCollectionName } from '@wcpos/sync-engine';
+import {
+	heldOpenCartMutations,
+	MUTATION_QUEUE_RXDB_COLLECTION,
+	OPEN_CART_ORDER_STATUS,
+	SYNC_COLLECTION_NAMES,
+} from '@wcpos/sync-engine';
+import type {
+	EngineStatus,
+	HoldCandidate,
+	RxdbSyncEngine,
+	SyncCollectionName,
+} from '@wcpos/sync-engine';
 
 export type EngineCollectionCounts = Record<string, number>;
 export type EngineMutationCounts = {
 	/**
-	 * Every outbound record waiting for the network (`pending` or `claimed`).
-	 * Conflict records are reported by the separate conflict counters.
+	 * Every outbound record waiting for the network (`pending` or `claimed`),
+	 * MINUS the rows the engine holds by design while their cart is open (see
+	 * `open-cart-hold.ts`). Conflict records are reported by the separate
+	 * conflict counters.
 	 */
 	pending: number;
 	/** Every terminal row awaiting a decision: conflicted + needs-revision + rejected. */
@@ -30,11 +42,38 @@ export type EngineMutationCounts = {
 
 type CountCollection = { count(): { $: Observable<number> } };
 type EngineDatabase = NonNullable<ReturnType<RxdbSyncEngine['active']>>['database'];
+type QueueRow = HoldCandidate & { mutationId: string };
 type MutationCollection = {
 	find(query: { selector: { status: { $in: string[] }; collectionName?: { $eq: string } } }): {
-		$: Observable<readonly unknown[]>;
+		$: Observable<readonly { toJSON(): QueueRow }[]>;
 	};
 };
+type OrderCollection = {
+	find(query: { selector: { status: { $eq: string } } }): {
+		$: Observable<readonly { toJSON(): { uuid?: string } }[]>;
+	};
+};
+
+/**
+ * The records a cart is currently open on. Live, because a checkout releases the
+ * hold the instant the order leaves `pos-open` and the stat must follow it.
+ */
+function openCartRecordIds$(database: EngineDatabase): Observable<ReadonlySet<string>> {
+	const orders = database.collections.orders as unknown as OrderCollection | undefined;
+	if (!orders) return of(new Set<string>());
+	return orders
+		.find({ selector: { status: { $eq: OPEN_CART_ORDER_STATUS } } })
+		.$.pipe(
+			map(
+				(documents) =>
+					new Set(
+						documents
+							.map((document) => document.toJSON().uuid)
+							.filter((uuid): uuid is string => uuid !== undefined)
+					)
+			)
+		);
+}
 
 const EMPTY_COLLECTION_COUNTS = Object.fromEntries(
 	SYNC_COLLECTION_NAMES.map((name) => [name, 0])
@@ -94,7 +133,20 @@ function subscribeToMutationCounts(
 				const pendingSelector = {
 					status: { $in: ['pending', 'claimed'] },
 				};
-				const pending$ = mutations.find({ selector: pendingSelector }).$;
+				// An open cart's queued edits are held BY THE ENGINE until the sale
+				// settles, so they are not waiting on the store either — and unlike a
+				// conflict they have no panel: the cashier would read a red "1 change
+				// waiting to send" with nothing anywhere to act on, while the change in
+				// question was the cart open in front of them (#1546).
+				const pending$ = combineLatest([
+					mutations.find({ selector: pendingSelector }).$,
+					openCartRecordIds$(database),
+				]).pipe(
+					map(([documents, openCartRecordIds]) => {
+						const rows = documents.map((document) => document.toJSON());
+						return rows.length - heldOpenCartMutations(rows, openCartRecordIds).length;
+					})
+				);
 				const conflicts$ = mutations.find({
 					selector: { status: { $in: ['conflicted', 'needs-revision', 'rejected'] } },
 				}).$;
@@ -104,7 +156,7 @@ function subscribeToMutationCounts(
 				}).$;
 				return combineLatest([pending$, conflicts$, rejected$, unresolvedConflicts$]).pipe(
 					map(([pending, conflicts, rejected, unresolvedConflicts]) => ({
-						pending: pending.length,
+						pending,
 						conflicts: conflicts.length,
 						rejected: rejected.length,
 						unresolvedConflicts: unresolvedConflicts.length,
