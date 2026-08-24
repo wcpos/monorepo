@@ -12,7 +12,7 @@ import { AddShipping } from './add-shipping';
 
 const mockAddFee = jest.fn(() => Promise.resolve());
 const mockAddProduct = jest.fn(() => Promise.resolve());
-const mockAddShipping = jest.fn(() => Promise.resolve());
+const mockAddShipping = jest.fn((_data?: Record<string, unknown>) => Promise.resolve());
 const mockOnOpenChange = jest.fn();
 
 jest.mock('@wcpos/query', () => ({
@@ -182,9 +182,10 @@ describe('cart line dialogs', () => {
 				fireEvent.click(screen.getByTestId('add-to-cart-submit'));
 
 				await waitFor(() => expect(mockAddShipping).toHaveBeenCalledTimes(1));
-				expect(mockAddShipping).toHaveBeenCalledWith(
-					expect.not.objectContaining({ tax_class: expect.anything() })
-				);
+				// Absence of the KEY, not absence of a value. `expect.anything()` excludes
+				// undefined, so `not.objectContaining({ tax_class: expect.anything() })` would
+				// still pass on a regression that submitted `tax_class: undefined`.
+				expect(mockAddShipping.mock.calls[0][0]).not.toHaveProperty('tax_class');
 			}
 		);
 	});
