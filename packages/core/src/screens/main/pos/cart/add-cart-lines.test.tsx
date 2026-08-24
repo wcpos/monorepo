@@ -57,8 +57,11 @@ jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 
+// The store's shipping_tax_class, as read through mockUseDocField's observable path.
+let mockShippingTaxClass = '';
+
 jest.mock('observable-hooks', () => ({
-	useObservableEagerState: () => '',
+	useObservableEagerState: () => mockShippingTaxClass,
 }));
 
 jest.mock('../../../../contexts/app-state', () => ({
@@ -95,6 +98,7 @@ function deferredWrite() {
 describe('cart line dialogs', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockShippingTaxClass = '';
 	});
 
 	it('prevents duplicate fee submissions while addFee is pending', async () => {
@@ -155,5 +159,34 @@ describe('cart line dialogs', () => {
 			await write.promise;
 		});
 		await waitFor(() => expect(mockOnOpenChange).toHaveBeenCalledWith(false));
+	});
+
+	/**
+	 * The Add shipping dialog seeds its tax-class field from the store setting, and
+	 * stamps that field into the line's pos_data — where it outranks the engine's own
+	 * 'inherit' resolution. Seeded with a raw sentinel the select renders blank AND the
+	 * rate filter matches nothing, so the shipping line is added with no tax at all.
+	 * The seed is the store setting verbatim. 'inherit' is NOT collapsed to the standard
+	 * class — it reaches the line's pos_data as the sentinel, and the engine resolves it
+	 * against the cart's items (see cart-line.test.ts). Collapsing it here was the bug:
+	 * a cart of reduced-rate items got standard-rate shipping tax.
+	 */
+	describe('seeds the shipping tax class from the store setting', () => {
+		it.each([
+			// store shipping_tax_class → tax_class submitted (wire spelling)
+			['inherit', 'inherit'],
+			['', ''],
+			['reduced-rate', 'reduced-rate'],
+		])('submits %p as %p', async (storeValue, expected) => {
+			mockShippingTaxClass = storeValue;
+			render(<AddShipping />);
+
+			fireEvent.click(screen.getByTestId('add-to-cart-submit'));
+
+			await waitFor(() => expect(mockAddShipping).toHaveBeenCalledTimes(1));
+			expect(mockAddShipping).toHaveBeenCalledWith(
+				expect.objectContaining({ tax_class: expected })
+			);
+		});
 	});
 });

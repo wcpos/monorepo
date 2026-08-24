@@ -58,8 +58,17 @@ export const useUpdateShippingLine = () => {
 				// `warnings` (malformed posData) is dropped here, as it is at every other
 				// engine call site in core — settle drops it too. Surfacing engine warnings
 				// to the cashier is one decision for all of them, not a shipping one.
+				// The inheritance basis comes from THIS snapshot's line items — the same `json`
+				// the map above is walking — for the same reason the percent-fee basis does:
+				// re-reading the order mid-arithmetic would compute against a newer cart than
+				// the one being patched. Only read when the line's tax class inherits.
 				const { line: updatedItem } = calculateCartLine(
-					{ kind: 'shipping', line: shippingLine, changes },
+					{
+						kind: 'shipping',
+						line: shippingLine,
+						changes,
+						cartLineItems: json.line_items ?? [],
+					},
 					cartConfig
 				);
 				updated = true;

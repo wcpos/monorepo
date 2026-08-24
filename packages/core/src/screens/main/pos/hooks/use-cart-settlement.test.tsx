@@ -264,11 +264,16 @@ let taxRoundAtSubtotal = false;
 let priceNumDecimals = 2;
 let pricesIncludeTax = false;
 
+jest.mock('../../contexts/extra-data/use-extra-data', () => ({
+	useExtraData: () => ({ extraData: {} }),
+}));
+
 jest.mock('../../contexts/tax-rates', () => ({
 	useTaxLocation: () => ({ rates: [] }),
 	useTaxSettings: () => ({
 		allRates,
 		shippingTaxClass: '',
+		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcTaxes: true,
 		taxRoundAtSubtotal,
 		priceNumDecimals,

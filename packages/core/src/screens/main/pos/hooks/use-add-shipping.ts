@@ -73,6 +73,7 @@ export const useAddShipping = () => {
 							method_id: data.method_id,
 							meta_data,
 						},
+						cartLineItems: currentOrderRecord.getLatest().payload.line_items ?? [],
 					},
 					cartConfig
 				);

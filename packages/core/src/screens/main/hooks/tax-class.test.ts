@@ -1,4 +1,4 @@
-import { taxClassFromWire, taxClassToWire } from './tax-class';
+import { INHERIT_TAX_CLASS, taxClassFromWire, taxClassToWire } from './tax-class';
 
 describe('taxClassFromWire', () => {
 	it.each([
@@ -43,5 +43,26 @@ describe('tax class codec round trips', () => {
 		[undefined, ''],
 	])('stabilizes %p to the wire value %p', (value, expected) => {
 		expect(taxClassToWire(taxClassFromWire(value))).toBe(expected);
+	});
+});
+
+/**
+ * The 'inherit' sentinel must survive the codec untouched in BOTH directions: it is not
+ * a spelling of the standard class, and `@wcpos/order-math` resolves it against the
+ * order's line items. Collapsing it here would silently charge standard-rate shipping
+ * tax on a cart WooCommerce taxes at another class.
+ */
+describe('the inherit sentinel round-trips', () => {
+	it('survives the read side', () => {
+		expect(taxClassFromWire(INHERIT_TAX_CLASS)).toBe(INHERIT_TAX_CLASS);
+	});
+
+	it('survives the write side', () => {
+		expect(taxClassToWire(INHERIT_TAX_CLASS)).toBe(INHERIT_TAX_CLASS);
+	});
+
+	it('is distinct from every spelling of the standard class', () => {
+		expect(INHERIT_TAX_CLASS).not.toBe(taxClassFromWire(''));
+		expect(INHERIT_TAX_CLASS).not.toBe(taxClassToWire('standard'));
 	});
 });

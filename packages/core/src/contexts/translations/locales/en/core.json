@@ -339,6 +339,7 @@
 	"common.tax": "Tax",
 	"common.tax_based_on": "Tax based on",
 	"common.tax_class": "Tax Class",
+	"common.tax_class_based_on_cart_items": "Based on cart items",
 	"common.tax_rates": "Tax rates",
 	"common.tax_status": "Tax Status",
 	"common.taxable": "Taxable",
