@@ -222,6 +222,26 @@ async function saveAndCapture(
 	expect(doc?.id, 'ack must carry the created order').toBeTruthy();
 	trackOrder({ id: Number(doc!.id), uuid: envelope.recordId, label });
 
+	// The TAX REGIME this run actually exercised, recorded on every sale.
+	//
+	// Every money bug this file exists for is parameterised by the store's tax
+	// configuration — inclusive vs exclusive pricing, how many rates match a
+	// location, the currency's decimal places. A green run means nothing until you
+	// know which of those it ran against, and a fixture store's settings drift
+	// without anyone announcing it. Printing the regime turns "it passed" into "it
+	// passed on THIS configuration", which is the only form of that claim worth
+	// keeping.
+	const regime = doc as unknown as Record<string, unknown>;
+	const rates = (
+		(regime.tax_lines ?? []) as { rate_id?: unknown; rate_percent?: unknown; compound?: unknown }[]
+	)
+		.map((line) => `#${line.rate_id}@${line.rate_percent}%${line.compound ? ' compound' : ''}`)
+		.join(' + ');
+	console.log(
+		`[money-oracle] REGIME ${label} currency=${regime.currency} ` +
+			`prices_include_tax=${regime.prices_include_tax} rates=[${rates || 'none'}]`
+	);
+
 	return { sent, doc: doc!, cartTotal: cart.total };
 }
 
