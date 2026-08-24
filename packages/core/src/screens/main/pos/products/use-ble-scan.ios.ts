@@ -2,14 +2,15 @@ import * as React from 'react';
 import { NativeModules, Platform } from 'react-native';
 
 import { Subject } from 'rxjs';
-import { v4 as uuidv4 } from 'uuid';
 
 import type { ScannerProfileDocument } from '@wcpos/database';
 import {
 	createScanSession,
 	createSerialLineDecoder,
+	normalizeUuid,
 	type ScanEvent,
 	type ScanHub,
+	scannerDeviceKey,
 	type ScanSession,
 	type SerialLineDecoder,
 } from '@wcpos/scanner';
@@ -118,6 +119,7 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 
 	const [available, setAvailable] = React.useState(false);
 	const [connected, setConnected] = React.useState(false);
+	const [connectedDeviceKey, setConnectedDeviceKey] = React.useState<string | null>(null);
 	const settingsRef = React.useRef({ prefix, suffix, minChars: Number(minChars) });
 	const hubRef = React.useRef(hub);
 	// The native callback outlives renders, so it reads the latest hub/settings.
@@ -247,7 +249,10 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 				warn('Failed to cancel BLE scanner connection', error);
 			});
 		}
-		if (mountedRef.current) setConnected(false);
+		if (mountedRef.current) {
+			setConnected(false);
+			setConnectedDeviceKey(null);
+		}
 	}, []);
 
 	const attachDevice = React.useCallback(
@@ -289,14 +294,17 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 				throw new Error(`No notifiable characteristic for BLE service ${family.serviceUuid}`);
 			}
 
+			const deviceKey = scannerDeviceKey({
+				connectionType: 'bluetooth-le',
+				peripheralId: device.id,
+			});
 			const profiles = savedProfile
 				? [savedProfile]
-				: await collection.find({ selector: { connectionType: 'ble' } }).exec();
+				: await collection.find({ selector: { connectionType: 'bluetooth-le' } }).exec();
 			const existing = profiles.find(
-				(profile: ScannerProfileDocument) => profile.blePeripheralId === device.id
+				(profile: ScannerProfileDocument) => profile.deviceKey === deviceKey
 			);
-			const profileId = existing?.id ?? uuidv4();
-			const deviceName = device.name || device.localName || 'bluetooth-le';
+			const deviceName = device.name || device.localName || '';
 			const source = new Subject<ScanEvent>();
 			unregisterRef.current = hubRef.current.registerSource(source.asObservable());
 			sessionRef.current = createScanSession({
@@ -304,7 +312,7 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 					if (code.length < settingsRef.current.minChars) return;
 					source.next({
 						code,
-						source: { kind: 'ble', profileId, deviceName },
+						source: { kind: 'ble', profileId: deviceKey, deviceName },
 						timestamp: Date.now(),
 					});
 				},
@@ -338,17 +346,20 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 					}
 				}
 			);
-			if (mountedRef.current && request === attachRequestRef.current) setConnected(true);
+			if (mountedRef.current && request === attachRequestRef.current) {
+				setConnected(true);
+				setConnectedDeviceKey(deviceKey);
+			}
 
 			if (!existing) {
 				try {
-					await collection.insert({
-						id: profileId,
-						label: '',
-						connectionType: 'ble',
+					await collection.upsert({
+						deviceKey,
+						name: '',
+						connectionType: 'bluetooth-le',
 						deviceName,
-						blePeripheralId: device.id,
-						bleServiceUuid: family.serviceUuid,
+						peripheralId: normalizeUuid(device.id),
+						serviceUuid: normalizeUuid(family.serviceUuid),
 						createdAt: new Date().toISOString(),
 					});
 				} catch (error) {
@@ -432,22 +443,22 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 		if (!mountedRef.current || request !== attachRequestRef.current) return;
 		setAvailable(Boolean(bleModule));
 		if (!bleModule) return;
-		const profiles = await collection.find({ selector: { connectionType: 'ble' } }).exec();
+		const profiles = await collection.find({ selector: { connectionType: 'bluetooth-le' } }).exec();
 		if (!mountedRef.current || request !== attachRequestRef.current) return;
 		if (profiles.length !== 1) return;
 		const profile = profiles[0] as ScannerProfileDocument;
 		const family = BLE_GATT_FAMILIES.find(
-			(item) => item.serviceUuid === profile.bleServiceUuid?.toLowerCase()
+			(item) => normalizeUuid(item.serviceUuid) === normalizeUuid(profile.serviceUuid ?? '')
 		);
-		if (!profile.blePeripheralId || !family) return;
+		if (!profile.peripheralId || !family) return;
 		const manager = await getManager();
 		if (!manager || !mountedRef.current || request !== attachRequestRef.current) return;
 		try {
 			await waitForPoweredOn(manager);
 			if (!mountedRef.current || request !== attachRequestRef.current) return;
-			await manager.devices([profile.blePeripheralId]);
+			await manager.devices([profile.peripheralId]);
 			if (!mountedRef.current || request !== attachRequestRef.current) return;
-			const device = await manager.connectToDevice(profile.blePeripheralId);
+			const device = await manager.connectToDevice(profile.peripheralId);
 			await attachDevice(device, family, request, profile);
 		} catch (error) {
 			warn('Failed to reconnect saved BLE scanner', error);
@@ -481,5 +492,5 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 		void startup().catch((error) => warn('Failed to reconnect saved BLE scanner', error));
 	}, [collection]);
 
-	return { available, connect, disconnect, connected };
+	return { available, connect, disconnect, connected, connectedDeviceKey };
 };

@@ -48,7 +48,12 @@ jest.mock('../../../../contexts/translations', () => ({
 
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({
-		currentOrderRecord: { uuid: 'order-uuid', payload: { id: 17, number: '17' } },
+		currentOrderRecord: {
+			uuid: 'order-uuid',
+			payload: { id: 17, number: '17' },
+			// The inheritance basis is read from here — an explicit input to the engine now.
+			getLatest: () => ({ payload: { id: 17, line_items: [] } }),
+		},
 	}),
 }));
 
@@ -67,6 +72,7 @@ jest.mock('./use-cart-config', () => {
 		taxRoundAtSubtotal: false,
 		dp: 2,
 		shippingTaxClass: '',
+		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcDiscountsSequentially: false,
 	});
 	return { useCartConfig: () => config };

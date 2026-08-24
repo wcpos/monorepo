@@ -243,7 +243,12 @@ export const extractShippingLineData = (
 	shippingTaxClass: string
 ) => {
 	const defaultAmount = calculateDefaultAmount(item, pricesIncludeTax);
-	const defaultTaxClass = shippingTaxClass === 'inherit' ? '' : shippingTaxClass;
+	// The 'inherit' sentinel is passed straight through, NOT collapsed to the standard
+	// class. This function reports what the line is set to; resolving the sentinel needs
+	// the order's line items, which only `computeShippingLine` has. Collapsing it here
+	// was wrong twice over: it charged standard-rate tax on carts WooCommerce taxes at
+	// another class, and it left the edit form unable to show "based on cart items".
+	const defaultTaxClass = shippingTaxClass;
 	const defaultTaxStatus: TaxStatus = 'taxable';
 
 	const {

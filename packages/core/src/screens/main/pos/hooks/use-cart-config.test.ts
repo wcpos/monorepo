@@ -10,19 +10,26 @@ let mockShippingTaxClass: string | undefined;
 jest.mock('@wcpos/query', () => ({
 	useDocField: (
 		_document: unknown,
-		selector: (store: {
+		selector: (doc: {
 			woocommerce_calc_discounts_sequentially?: string;
 			calc_discounts_sequentially?: string;
+			taxClasses?: { slug: string }[];
 		}) => unknown
 	) =>
 		selector({
 			woocommerce_calc_discounts_sequentially: 'no',
 			calc_discounts_sequentially: 'no',
+			// The `wc/v3 taxes/classes` shape, standard first — the 'inherit' candidate order.
+			taxClasses: [{ slug: 'standard' }, { slug: 'reduced-rate' }, { slug: 'zero-rate' }],
 		}),
 }));
 
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ store: {} }),
+}));
+
+jest.mock('../../contexts/extra-data/use-extra-data', () => ({
+	useExtraData: () => ({ extraData: {} }),
 }));
 
 jest.mock('../../contexts/tax-rates', () => {

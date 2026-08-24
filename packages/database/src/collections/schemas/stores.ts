@@ -529,11 +529,6 @@ export const storesLiteral = {
 			type: 'integer',
 			default: 24,
 		},
-		barcode_scanning_buffer: {
-			title: 'Barcode scanning buffer',
-			type: 'integer',
-			default: 500,
-		},
 		barcode_scanning_min_chars: {
 			title: 'Barcode minimum length',
 			type: 'integer',

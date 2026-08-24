@@ -36,7 +36,6 @@ import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 
 const formSchema = z.object({
 	barcode_scanning_avg_time_input_threshold: z.number().default(24),
-	// barcode_scanning_buffer: z.number().default(500),
 	barcode_scanning_min_chars: z.number().default(8),
 	barcode_scanning_prefix: z.string().default(''),
 	barcode_scanning_suffix: z.string().default(''),

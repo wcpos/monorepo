@@ -32,6 +32,7 @@ const makeConfig = (overrides: Partial<CartConfigInput> = {}) =>
 		taxRoundAtSubtotal: false,
 		dp: 2,
 		shippingTaxClass: '',
+		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcDiscountsSequentially: false,
 		...overrides,
 	});
@@ -295,6 +296,115 @@ describe('settleCart', () => {
 	});
 
 	// -----------------------------------------------------------------------
+	// 3b. Shipping lines that inherit their tax class
+	// -----------------------------------------------------------------------
+	/**
+	 * An inheriting shipping line's tax class is a function of the CART, so — exactly
+	 * like a percent fee — a line added before the cart settled would otherwise keep a
+	 * rate derived from lines it was not built from.
+	 */
+	describe('shipping lines that inherit their tax class', () => {
+		const shippingRate = (id: number, cls: string, rate: string) => ({
+			id,
+			class: cls,
+			rate,
+			compound: false,
+			order: 1,
+			shipping: true,
+		});
+		const rates = [
+			shippingRate(101, 'standard', '10.0000'),
+			shippingRate(202, 'reduced-rate', '5.0000'),
+		];
+		const config = makeConfig({ rates, allRates: rates, shippingTaxClass: 'inherit' });
+
+		const inheritingShipping = () => ({
+			method_id: 'flat_rate',
+			method_title: 'Flat rate',
+			total: '100',
+			total_tax: '0',
+			taxes: [],
+			meta_data: [],
+		});
+
+		const reducedRateItem = () => ({
+			...makePosLineItem(1, 100),
+			tax_class: 'reduced-rate',
+		});
+
+		it('recomputes the line against the cart it is being settled with', () => {
+			const snapshot: CartSnapshot = {
+				line_items: [reducedRateItem()],
+				shipping_lines: [inheritingShipping()],
+			};
+			const before = clone(snapshot);
+
+			const result = settleCart(snapshot, config);
+			expect(result.ok).toBe(true);
+			if (!result.ok) return;
+
+			// The cart is entirely reduced-rate, so shipping is too — 5%, not 10%.
+			expect(result.patch.shipping_lines).toHaveLength(1);
+			expect(result.patch.shipping_lines![0].total_tax).toBe('5');
+			expect(result.patch.shipping_tax).toBe('5');
+
+			// inputs untouched
+			expect(snapshot).toEqual(before);
+		});
+
+		it('leaves the key out entirely when no shipping line inherits', () => {
+			const explicitShipping = {
+				...inheritingShipping(),
+				meta_data: [
+					{
+						key: '_woocommerce_pos_data',
+						value: JSON.stringify({ amount: '100', tax_class: 'standard' }),
+					},
+				],
+			};
+			const result = settleCart(
+				{ line_items: [reducedRateItem()], shipping_lines: [explicitShipping] },
+				config
+			);
+			expect(result.ok).toBe(true);
+			if (!result.ok) return;
+
+			// The merchant chose the class; settle must not touch the line.
+			expect('shipping_lines' in result.patch).toBe(false);
+		});
+
+		it('omits the array when the recompute changes nothing', () => {
+			// Already carrying the reduced rate it inherits, so the recompute is a no-op.
+			const settled = {
+				...inheritingShipping(),
+				total_tax: '5',
+				taxes: [{ id: 202, total: '5' }],
+			};
+			const result = settleCart(
+				{ line_items: [reducedRateItem()], shipping_lines: [settled] },
+				config
+			);
+			expect(result.ok).toBe(true);
+			if (!result.ok) return;
+
+			// Attaching it would turn a local-only money settle into a server push.
+			expect('shipping_lines' in result.patch).toBe(false);
+		});
+
+		it('leaves a tombstoned shipping line untouched', () => {
+			const tombstone = { ...inheritingShipping(), method_id: null };
+			const result = settleCart(
+				{ line_items: [reducedRateItem()], shipping_lines: [tombstone] },
+				config
+			);
+			expect(result.ok).toBe(true);
+			if (!result.ok) return;
+
+			expect('shipping_lines' in result.patch).toBe(false);
+		});
+	});
+
+	// -----------------------------------------------------------------------
 	// 4. Percent fee on the post-replay basis
 	// -----------------------------------------------------------------------
 	describe('percent fees on the post-replay basis', () => {
@@ -348,7 +458,20 @@ describe('settleCart', () => {
 			expect(result.changed).toBe(true);
 		});
 
-		it('settling the applied patch returns a value-identical patch with changed: false', () => {
+		/**
+		 * The fixed point, asserted as the property rather than as byte-equality of the
+		 * two patches. The second settle omits `fee_lines`, because on the applied
+		 * snapshot the percent fee recomputes to what it already holds — and an
+		 * unchanged line array must not ride along: `use-cart-settlement` writes the
+		 * patch as a whole field, and `fee_lines[].total` is cashier intent the server
+		 * keeps, so attaching it turns a local-only money settle into a server push.
+		 *
+		 * What has to hold is that re-settling changes nothing: `changed` is false, and
+		 * every key the second patch does emit is value-identical to the first's. That a
+		 * CHANGED array is still emitted is pinned separately, by the percent-fee and
+		 * inheriting-shipping cases above.
+		 */
+		it('settling the applied patch is a fixed point — changed: false, nothing re-asserted', () => {
 			const first = settleCart(snapshot, config, { coupons: context });
 			expect(first.ok).toBe(true);
 			if (!first.ok) return;
@@ -358,8 +481,13 @@ describe('settleCart', () => {
 			expect(second.ok).toBe(true);
 			if (!second.ok) return;
 
-			expect(second.patch).toEqual(first.patch);
 			expect(second.changed).toBe(false);
+			for (const [key, value] of Object.entries(second.patch)) {
+				expect([key, value]).toEqual([key, first.patch[key as keyof typeof first.patch]]);
+			}
+			// The unchanged percent fee is the key that drops out.
+			expect('fee_lines' in first.patch).toBe(true);
+			expect('fee_lines' in second.patch).toBe(false);
 		});
 	});
 

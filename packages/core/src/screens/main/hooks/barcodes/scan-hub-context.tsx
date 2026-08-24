@@ -17,18 +17,21 @@ const inertSerial: UseSerialScanResult = {
 	connect: async () => undefined,
 	disconnect: async () => undefined,
 	connected: false,
+	connectedDeviceKey: null,
 };
 const inertHid: UseHidScanResult = {
 	available: false,
 	connect: async () => undefined,
 	disconnect: async () => undefined,
 	connected: false,
+	connectedDeviceKey: null,
 };
 const inertBle: UseBleScanResult = {
 	available: false,
 	connect: async () => undefined,
 	disconnect: async () => undefined,
 	connected: false,
+	connectedDeviceKey: null,
 };
 const inertControls: DeviceScanControls = { serial: inertSerial, hid: inertHid, ble: inertBle };
 

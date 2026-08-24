@@ -48,3 +48,13 @@ export {
 	type TraceAnalysis,
 	type TraceSuggestion,
 } from './analyze-trace';
+export {
+	isCanonicalUuid,
+	normalizeUuid,
+	scannerDeviceKey,
+	scannerTransport,
+	SCANNER_DEVICE_KEY_MAX_LENGTH,
+	type ScannerConnectionType,
+	type ScannerIdentity,
+	type ScannerTransport,
+} from './device-identity';

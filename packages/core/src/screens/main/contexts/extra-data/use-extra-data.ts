@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { ExtraDataContext } from './provider';
+import { ExtraDataContext } from './context';
 
 /**
  *

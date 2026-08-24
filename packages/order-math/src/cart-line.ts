@@ -13,6 +13,11 @@ import {
 	updatePosDataMeta,
 } from './internal/lines/pos-data';
 import { getRoundingPrecision, roundHalfUp, roundTaxTotal } from './internal/money/precision';
+import {
+	INHERIT_TAX_CLASS,
+	NO_SHIPPING_TAX,
+	resolveInheritedShippingTaxClass,
+} from './internal/tax-class';
 import { isActiveFeeLine, isActiveLineItem, isActiveShippingLine } from './snapshot';
 
 import type { CartConfig } from './config';
@@ -182,7 +187,17 @@ export type CartLineInput =
 			/** Percent basis — EXPLICIT input replacing the getLatest() mid-math read. */
 			cartLineItems: readonly LineItemInput[];
 	  }
-	| { kind: 'shipping'; line: ShippingLineInput; changes?: ShippingLineChanges };
+	| {
+			kind: 'shipping';
+			line: ShippingLineInput;
+			changes?: ShippingLineChanges;
+			/**
+			 * Inheritance basis — the order's line items, needed when the line's tax class
+			 * is WooCommerce's 'inherit' sentinel. Same shape and same reason as the fee
+			 * line's percent basis: an EXPLICIT input, never a mid-math read.
+			 */
+			cartLineItems: readonly LineItemInput[];
+	  };
 
 export interface CalcLineResult<T> {
 	line: T;
@@ -537,6 +552,7 @@ function computeFeeLine(
  */
 function computeShippingLine(
 	shippingLine: ShippingLineInput,
+	cartLineItems: readonly LineItemInput[],
 	config: CartConfig
 ): ShippingLineInput {
 	const { pricesIncludeTax, taxRoundAtSubtotal } = config;
@@ -549,11 +565,29 @@ function computeShippingLine(
 	const dp = config.dp;
 	const roundingPrecision = getRoundingPrecision(dp);
 
+	// WooCommerce's 'inherit' is a whole-order property: the class comes from the line
+	// items, so it cannot be resolved when the line is authored — only here, against the
+	// cart this line is being computed for. `settleCart` re-runs inheriting lines for
+	// exactly that reason, the way it re-runs percent fees.
+	const inherited =
+		tax_class === INHERIT_TAX_CLASS
+			? resolveInheritedShippingTaxClass(
+					cartLineItems.filter(isActiveLineItem).map((item) => ({
+						tax_class: item.tax_class,
+						taxable:
+							extractLineItemData(item as DbLineItem, pricesIncludeTax).tax_status === 'taxable',
+					})),
+					config.taxClassSlugs
+				)
+			: tax_class;
+
 	const tax = calculateTaxesForValue(
 		{
 			amount,
-			taxClass: tax_class,
-			taxStatus: tax_status,
+			taxClass: inherited ?? '',
+			// An inheriting line over items that are all non-taxable resolves to no
+			// shipping tax at all, which WooCommerce distinguishes from the standard class.
+			taxStatus: inherited === NO_SHIPPING_TAX ? 'none' : tax_status,
 			amountIncludesTax,
 			shipping: true,
 		},
@@ -641,7 +675,7 @@ export function calculateCartLine(
 			const line = input.changes
 				? applyShippingLineChanges(input.line, input.changes, config)
 				: input.line;
-			return { line: computeShippingLine(line, config), warnings };
+			return { line: computeShippingLine(line, input.cartLineItems, config), warnings };
 		}
 	}
 }

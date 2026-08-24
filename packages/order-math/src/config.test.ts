@@ -8,6 +8,7 @@ const valid = {
 	taxRoundAtSubtotal: false,
 	dp: 2,
 	shippingTaxClass: '',
+	taxClassSlugs: ['standard'],
 	calcDiscountsSequentially: false,
 };
 

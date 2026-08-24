@@ -137,7 +137,7 @@ export function ScannerDeviceChooser() {
 						</Text>
 					</View>
 					<DocsLink testID="scanner-chooser-wizard-link" href={WIZARD_DOCS_URL}>
-						{t('settings.scanner_mode_docs_link')}
+						{t('settings.scanner_setup_guide')}
 					</DocsLink>
 				</VStack>
 			) : (
