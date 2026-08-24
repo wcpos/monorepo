@@ -58,6 +58,8 @@ const ADVERSARIAL = {
 	shipping: '3.33',
 	/** 9.99 → 0.999 at 10%, 1.9998 at 20%, 2.0979 at 21%. Never a whole cent. */
 	miscProduct: '9.99',
+	/** A NON-taxable line, sized to take a substantial share of the class mix. */
+	nonTaxable: '5',
 };
 
 async function openCartMenuAndClick(page: Page, menuItemTestId: string) {
@@ -90,7 +92,12 @@ async function openCartMenuAndClick(page: Page, menuItemTestId: string) {
  * point of interaction, instead of letting a silent no-op surface three steps later
  * as a green test.
  */
-async function fillCurrencyField(page: Page, testID: string, value: string) {
+async function fillCurrencyField(
+	page: Page,
+	testID: string,
+	value: string,
+	options: { negative?: boolean } = {}
+) {
 	const field = page.getByTestId(testID);
 	await expect(field).toBeVisible({ timeout: 15_000 });
 	await field.click();
@@ -113,6 +120,11 @@ async function fillCurrencyField(page: Page, testID: string, value: string) {
 		await expect(key, `numpad key for "${character}" is missing`).toBeVisible({ timeout: 5_000 });
 		await key.click();
 	}
+	if (options.negative) {
+		const sign = numpad.getByTestId('numpad-key-icon-plusMinus');
+		await expect(sign, 'numpad +/- key is missing').toBeVisible({ timeout: 5_000 });
+		await sign.click();
+	}
 	await page.getByTestId('numpad-done-button').click();
 
 	// The trigger renders the committed amount. Locale-agnostic on purpose: dev-free
@@ -126,10 +138,32 @@ async function fillCurrencyField(page: Page, testID: string, value: string) {
 	).toHaveText(/[1-9]/, { timeout: 10_000 });
 }
 
-async function addMiscProduct(page: Page, price: string) {
+async function addMiscProduct(page: Page, price: string, taxStatus?: 'taxable' | 'none') {
 	await openCartMenuAndClick(page, 'menu-add-misc-product');
 	await expect(page.getByRole('dialog')).toBeVisible({ timeout: 15_000 });
 	await fillCurrencyField(page, 'misc-product-price-input', price);
+	if (taxStatus) {
+		const option = page.getByTestId(`tax_status-option-${taxStatus}`);
+		await expect(option).toBeVisible({ timeout: 10_000 });
+		await option.click();
+	}
+	await page.getByTestId('add-to-cart-submit').click();
+	await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
+}
+
+/**
+ * A NEGATIVE fee — entered the way a cashier does, with the numpad's +/- key.
+ *
+ * WooCommerce treats a negative fee as a discount and taxes it on a completely
+ * different code path (`WC_Order_Item_Fee::calculate_taxes()`): instead of applying
+ * the fee's own tax class to the whole amount, it apportions the amount across the
+ * tax-class mix of every POSITIVE line in the order — including a `non-taxable`
+ * bucket that draws no tax at all.
+ */
+async function addNegativeFee(page: Page, amount: string) {
+	await openCartMenuAndClick(page, 'menu-add-fee');
+	await expect(page.getByTestId('add-fee-dialog')).toBeVisible({ timeout: 15_000 });
+	await fillCurrencyField(page, 'fee-amount-input', amount, { negative: true });
 	await page.getByTestId('add-to-cart-submit').click();
 	await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
 }
@@ -306,12 +340,19 @@ function expectPerRateTaxParity(sale: SavedSale, label: string) {
 					`server=${JSON.stringify(serverLine?.taxes ?? null)}`
 			);
 
+			// Both sides must AGREE about having taxes. An untaxed line legitimately has
+			// none on either side — a non-taxable misc product is exactly that, and it is
+			// how the negative-fee case builds its class mix. What must never pass quietly
+			// is one side carrying taxes the other does not: a client that stopped sending
+			// line taxes would otherwise sail through the per-rate loop below, which
+			// iterates the CLIENT's array and would simply have nothing to iterate.
 			expect(
-				(sentLine.taxes ?? []).length,
-				`${label}: ${key}[${index}] carried NO per-rate taxes on the wire, so the ` +
-					`per-rate comparison below examined nothing. Either the POS stopped sending ` +
-					`line taxes or this line is untaxed; both make the oracle silent.`
-			).toBeGreaterThan(0);
+				(sentLine.taxes ?? []).length === 0,
+				`${label}: ${key}[${index}] — the client sent ` +
+					`${(sentLine.taxes ?? []).length} per-rate taxes and the server holds ` +
+					`${(serverLine?.taxes ?? []).length}. One side is taxing this line and the ` +
+					`other is not.`
+			).toBe((serverLine?.taxes ?? []).length === 0);
 
 			for (const sentTax of sentLine.taxes ?? []) {
 				const rate = String(sentTax?.id ?? '');
@@ -427,6 +468,50 @@ liveTest.describe('POS money oracle — line taxes survive the round trip (live 
 		}
 	);
 
+	/**
+	 * NEGATIVE FEE — the POS override, NOT WooCommerce's discount path.
+	 *
+	 * `WC_Order_Item_Fee::calculate_taxes()` branches on the sign: a negative fee is
+	 * treated as a discount and apportioned across the tax-class mix of every positive
+	 * line, ignoring the fee's own `tax_status` and `tax_class` entirely. **The POS
+	 * plugin deliberately undoes that.** `WCPOS\WooCommercePOS\Orders::fee_after_calculate_taxes()`
+	 * hooks `woocommerce_order_item_fee_after_calculate_taxes` and, for any POS order,
+	 * recomputes the tax from the fee's OWN tax class — or clears it when the fee's
+	 * `tax_status` is `none`. So on a POS order the apportionment runs and is then
+	 * replaced, and the client is right to apply the fee's own class.
+	 *
+	 * This test therefore locks the OVERRIDE, not the apportionment. It goes red if the
+	 * plugin-side hook stops firing — the order gate loosens, the POS marker is dropped
+	 * from the v2 push's inner wc/v3 forward, the hook is removed — any of which would
+	 * silently hand negative-fee tax back to WooCommerce and start diverging from every
+	 * till that rang one up.
+	 *
+	 * The cart mixes a taxable line with a NON-taxable one on purpose: that is the shape
+	 * where apportionment and the override give different answers, so a green here means
+	 * the override is genuinely in force rather than the two happening to agree.
+	 *
+	 * The override is a STOPGAP with a ruling behind it (woocommerce-pos
+	 * .claude/research/2026-08-06-wc-negative-fee-tax.md): on a tax-INCLUSIVE store it
+	 * charges the customer the right amount but over-declares VAT, while WooCommerce's
+	 * own behaviour charges the wrong amount. Neither is defensible there; the plan of
+	 * record is migrating till discounts to coupon lines. When that lands, this test
+	 * changes with it — it pins today's contract, not a permanent truth.
+	 */
+	liveTest(
+		'a negative fee is taxed from its OWN class (the POS override, not WC apportionment)',
+		async ({ posPage: page, trackOrder }) => {
+			const label = newRunLabel();
+			const divergence = captureDivergenceLog(page);
+			await addCheckoutProbeProduct(page);
+			await addMiscProduct(page, ADVERSARIAL.nonTaxable, 'none');
+			await addNegativeFee(page, ADVERSARIAL.fee);
+			await stampRunLabel(page, label);
+
+			const sale = await saveAndCapture(page, trackOrder, label);
+			assertSaleParity(sale, page, 'fee_lines', 'negative-fee cart');
+			await expectNoBanner(page, 'negative-fee cart', divergence);
+		}
+	);
 	/**
 	 * The full cart — product + fee + shipping together. This is the shape of order
 	 * 111919, and it is the one that catches cross-line effects: `cart_tax` and
