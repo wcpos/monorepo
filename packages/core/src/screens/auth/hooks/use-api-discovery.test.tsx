@@ -12,9 +12,15 @@ const mockGet = jest.fn();
 jest.mock('@wcpos/hooks/use-http-client', () => ({
 	useHttpClient: () => ({ get: mockGet }),
 }));
+const mockLoggerError = jest.fn();
 jest.mock('@wcpos/utils/logger', () => ({
 	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
-	getLogger: () => ({ debug: jest.fn(), error: jest.fn(), info: jest.fn(), warn: jest.fn() }),
+	getLogger: () => ({
+		debug: jest.fn(),
+		error: (...args: unknown[]) => mockLoggerError(...args),
+		info: jest.fn(),
+		warn: jest.fn(),
+	}),
 }));
 jest.mock('../../../contexts/translations', () => {
 	const { createTestT } = jest.requireActual<typeof import('../../../../jest/translate')>(
@@ -190,6 +196,37 @@ describe('useApiDiscovery', () => {
 			).rejects.toMatchObject({ errorCode: ERROR_CODES.REST_ROUTE_MISSING });
 		});
 	});
+
+	it.each([
+		['routes stripped from a compatible plugin', ['wc/v3'], '1.10.0'],
+		['no WCPOS evidence at all', ['wc/v3'], undefined],
+	])(
+		'shows the merchant the API message, not the dev diagnosis (%s)',
+		async (_case, namespaces, wcposVersion) => {
+			// showToast with no toast.title makes the raw log message the merchant's
+			// toast (logger/index.ts: `title: options.toast?.title ?? message`), and
+			// the log message names one of the two faults this branch serves.
+			const { wcpos_version, ...withoutVersion } = siteData;
+			mockGet.mockResolvedValue({
+				data: wcposVersion
+					? { ...siteData, namespaces, wcpos_version: wcposVersion }
+					: { ...withoutVersion, namespaces },
+			});
+
+			const { result } = renderHook(() => useApiDiscovery());
+			await act(async () => {
+				await expect(
+					result.current.discoverApiEndpoints('https://example.com/wp-json/')
+				).rejects.toMatchObject({ errorCode: ERROR_CODES.REST_ROUTE_MISSING });
+			});
+
+			const [, options] = mockLoggerError.mock.calls.at(-1) as [
+				string,
+				{ toast?: { title?: string } },
+			];
+			expect(options.toast?.title).toBe('WCPOS API not found');
+		}
+	);
 
 	it('still reports a missing plugin when the store shows no WCPOS API at all', async () => {
 		const { wcpos_version, ...withoutVersion } = siteData;

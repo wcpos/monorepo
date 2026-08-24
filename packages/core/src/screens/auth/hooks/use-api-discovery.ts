@@ -271,9 +271,23 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					);
 				}
 
-				discoveryLogger.error('WCPOS plugin not found', {
+				// Two faults land here and the message must not pick one of them:
+				// a compatible plugin whose routes are hidden or stripped, and a
+				// store with no WCPOS evidence at all. `namespaces` below is the
+				// discriminator — populated means installed-but-stripped, empty
+				// means genuinely absent — so the log carries the distinction as
+				// data instead of guessing at it in prose.
+				discoveryLogger.error('WCPOS REST namespace not registered', {
 					showToast: true,
+					// Without an explicit title the toast shows the log message
+					// above, which is written for us, not for the merchant.
+					toast: { title: t('auth.woocommerce_pos_api_not_found') },
 					code: ERROR_CODES.REST_ROUTE_MISSING,
+					context: {
+						reportedVersion,
+						requiredNamespace: REQUIRED_WCPOS_NAMESPACE,
+						namespaces: namespaces.filter((namespace) => namespace.startsWith('wcpos/')),
+					},
 				});
 				throw errorWithCode(
 					t('auth.woocommerce_pos_api_not_found'),
