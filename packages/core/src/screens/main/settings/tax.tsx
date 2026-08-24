@@ -198,6 +198,7 @@ export function TaxSettings() {
 							<SettingsRow label={t('settings.shipping_tax_class')}>
 								<FormSelect
 									customComponent={TaxClassSelect}
+									includeInherit
 									value={value}
 									onChange={onChange}
 									{...rest}

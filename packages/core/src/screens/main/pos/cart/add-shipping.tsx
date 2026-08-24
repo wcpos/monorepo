@@ -26,7 +26,7 @@ import { FormErrors } from '../../components/form-errors';
 import { ShippingMethodSelect } from '../../components/shipping-method-select';
 import { TaxClassSelect } from '../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
-import { taxClassToWire } from '../../hooks/tax-class';
+import { shippingTaxClassFromStore, taxClassToWire } from '../../hooks/tax-class';
 import { useAddShipping } from '../hooks/use-add-shipping';
 
 const formSchema = z.object({
@@ -61,7 +61,9 @@ export function AddShipping() {
 			amount: '0',
 			prices_include_tax: true,
 			tax_status: 'taxable',
-			tax_class: (shippingTaxClass as string | undefined) ?? '',
+			// The store's setting is a wire value and may be WooCommerce's 'inherit'
+			// sentinel; the field holds a UI tax class. See shippingTaxClassFromStore.
+			tax_class: shippingTaxClassFromStore(shippingTaxClass as string | undefined),
 		},
 	});
 

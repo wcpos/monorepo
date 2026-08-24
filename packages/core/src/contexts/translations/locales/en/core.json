@@ -838,6 +838,7 @@
 	"settings.set_as_default_printer": "Set as default",
 	"settings.set_default": "Set Default",
 	"settings.shipping_tax_class": "Shipping tax class",
+	"settings.shipping_tax_class_inherit": "Shipping tax class based on cart items",
 	"settings.store": "Store",
 	"settings.store_base_city": "Store Base City",
 	"settings.store_base_country": "Store Base Country",
