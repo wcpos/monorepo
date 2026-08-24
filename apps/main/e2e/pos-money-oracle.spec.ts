@@ -3,6 +3,12 @@ import { expect, type Page, type TestInfo } from '@playwright/test';
 import { log } from '@wcpos/utils/logger';
 
 import { addCheckoutProbeProduct } from './checkout-probe';
+import {
+	assertDiscriminating,
+	assertMixedTaxTreatment,
+	type GuardLine,
+	linesOf,
+} from './money-oracle-guards';
 import { getStoreUrl, tryAddProductBySku } from './fixtures';
 import {
 	expectMoneyMatches,
@@ -210,45 +216,6 @@ async function addShipping(page: Page, amount: string) {
 	await expect(dialog).toBeHidden({ timeout: 15_000 });
 }
 
-/**
- * Did this sale actually mix tax treatments?
- *
- * The declared-coverage rule again, for a different claim. A cart whose lines all land
- * in the same tax class exercises nothing about class mixing, and would pass this spec
- * silently — which is exactly the state the suite was in until 2026-08-24, when not one
- * of ~2,050 products on either dev store used a non-standard class. Assert on the thing.
- */
-function assertMixedTaxTreatment(doc: ServerOrder, label: string) {
-	const signatures = linesOf(doc as unknown as Record<string, unknown>, 'line_items').map((line) =>
-		(line.taxes ?? [])
-			.map((tax) => String(tax?.id ?? ''))
-			.sort()
-			.join(',')
-	);
-	const rendered = signatures.map((sig) => `[${sig || 'untaxed'}]`).join(' ');
-
-	// TWO DISTINCT NON-EMPTY rate sets. "More than one distinct signature" is not
-	// enough: a taxed line beside an untaxed one satisfies that while never applying a
-	// second RATE, and on 2026-08-24 that is precisely what dev-pro did — its
-	// reduced-rate rate was scoped GB, its POS outlets are US:AL, so the reduced-rate
-	// fixture rang up untaxed and this assertion passed on the wrong evidence.
-	const taxed = signatures.filter((sig) => sig !== '');
-	expect(
-		new Set(taxed).size,
-		`${label}: NOT COVERED — this sale applied fewer than two distinct rate sets ` +
-			`(${rendered}). A taxed line beside an untaxed one is not a class mix. Most likely ` +
-			`the reduced-rate class has no rate for the tax location this till resolves — run ` +
-			`e2e/scripts/tax-class-fixtures.php, which provisions rates per taxing country.`
-	).toBeGreaterThan(1);
-
-	// And the untaxed path ran too — the other half of the cart's purpose.
-	expect(
-		signatures.some((sig) => sig === ''),
-		`${label}: no untaxed line on this sale (${rendered}); the tax_status=none path ` +
-			`was not exercised.`
-	).toBe(true);
-}
-
 type SavedSale = {
 	sent: OrderPayload;
 	doc: ServerOrder;
@@ -362,72 +329,6 @@ async function saveAndCapture(
 	);
 
 	return { sent, doc: doc!, cartTotal: cart.total, priceDecimals };
-}
-
-type LineWithTaxes = { taxes?: { id?: unknown; total?: unknown; subtotal?: unknown }[] };
-
-function linesOf(payload: Record<string, unknown>, key: string): LineWithTaxes[] {
-	const value = payload[key];
-	return Array.isArray(value) ? (value as LineWithTaxes[]) : [];
-}
-
-/**
- * Did this sale actually exercise the per-rate rounding contract?
- *
- * A per-rate tax that lands on the store's display precision (for example,
- * 0.700000 on a 2-decimal store) is identical whether the client rounds `taxes[]`
- * to display decimals or stores them raw — it cannot fail either way. Counting
- * such a run as proof is how the bug survived: every fixture amount in the suite
- * was clean at the configured precision.
- *
- * So coverage is DECLARED, never assumed. A run on a tax-free store, or one whose
- * rates divide the minted amounts evenly, reports itself as uncovered instead of
- * passing silently.
- */
-function assertDiscriminating(
-	doc: ServerOrder,
-	underTest: string,
-	label: string,
-	priceDecimals: number
-) {
-	const perRate: string[] = [];
-	for (const line of linesOf(doc as unknown as Record<string, unknown>, underTest)) {
-		for (const tax of line.taxes ?? []) {
-			const text = String(tax?.total ?? '').trim();
-			if (text !== '') perRate.push(text);
-		}
-	}
-	expect(
-		perRate.length,
-		`${label}: the sale recorded no per-rate taxes on ${underTest} at all`
-	).toBeGreaterThan(0);
-
-	// Beyond-display-precision content: the value differs from rounding at the store's
-	// configured price precision. That is exactly the difference the bug erased.
-	//
-	// Scoped to the LINE TYPE UNDER TEST, not to the order. An order-wide check is a
-	// proxy for the claim, and it passes on the wrong evidence: if the fee silently
-	// lands at 0.00 (a numpad interaction that did not take), its taxes are 0 on both
-	// sides and compare equal, while the probe PRODUCT's beyond-precision tax
-	// satisfies an order-wide check — a fee scenario that green-lights without ever
-	// exercising a fee. Assert on the thing, never on something correlated with it.
-	// NUMERIC comparison, deliberately. The first version of this line compared
-	// `Number(text).toFixed(2) !== Number(text).toFixed(6)` — two strings of different
-	// WIDTH, so "0.70" !== "0.700000" was true for every value ever passed and the
-	// guard declared full coverage on carts whose taxes were all whole cents. A
-	// coverage check that cannot return false is worse than no check: it reads, in the
-	// report, exactly like a real one.
-	const unrounded = perRate.filter(
-		(text) => Number(Number(text).toFixed(priceDecimals)) !== Number(text)
-	);
-	expect(
-		unrounded.length,
-		`${label}: NOT COVERED — every per-rate tax on this sale's ${underTest} is a whole ` +
-			`${priceDecimals}-decimal amount (${perRate.join(', ')}), so this run cannot distinguish rounded per-rate ` +
-			`taxes from raw ones. Either the amount never reached the line (check the ` +
-			`[money-oracle] log lines above for a 0 total) or this store's rates divide it ` +
-			`evenly. Do NOT read this run as proof.`
-	).toBeGreaterThan(0);
 }
 
 /** The line-level money slots the POS authors and the server must keep verbatim. */
