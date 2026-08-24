@@ -25,6 +25,79 @@ import type {
 	WarningSite,
 } from './types';
 
+/**
+ * PER_RATE_TAXES_ARE_UNROUNDED — the WooCommerce contract for a line's `taxes[]` array.
+ *
+ * WooCommerce stores the per-rate tax array UNROUNDED, at rounding precision (6dp), and
+ * applies `wc_round_tax_total` only when summing those values into `total_tax`. All three
+ * order-item classes are identical on this point — `class-wc-order-item-fee.php:222-230`,
+ * `-shipping.php:167-178`, `-product.php:214-231`:
+ *
+ *     $tax_data['total'] = array_map( 'wc_format_decimal', $total );   // <- NOT rounded
+ *     $this->set_prop( 'taxes', $tax_data );
+ *     if ( 'yes' === get_option( 'woocommerce_tax_round_at_subtotal' ) ) {
+ *         $this->set_total_tax( array_sum( $tax_data['total'] ) );
+ *     } else {
+ *         $this->set_total_tax( array_sum( array_map( 'wc_round_tax_total', $tax_data['total'] ) ) );
+ *     }
+ *
+ * `wc_format_decimal($n)` with `$dp === false` does not round — it renders the float at
+ * `wc_get_rounding_precision()` (6). So `woocommerce_tax_round_at_subtotal` changes
+ * `total_tax`/`subtotal_tax` and NOTHING ELSE.
+ *
+ * This package used to round `taxes[]` to `dp` as well whenever round-at-subtotal was off,
+ * on the false premise that "WC per-item rounding" applied to the stored array. Every fee
+ * and shipping fixture in cart-line.test.ts happened to use a 2dp-clean amount (10 @ 20%
+ * = 2), so the whole suite passed under either rule. It surfaced only in production: a
+ * 1.00 tax-inclusive fee at 10% on dev-free.wcpos.com (order 111919, 2026-08-24) sent
+ * `taxes[6].total = 0.090000` against the server's `0.090909`, and the cashier got the
+ * "your store changed this order's totals" banner on a correctly-rung sale.
+ *
+ * Any new fixture for line taxes MUST use an amount whose tax is not a whole cent.
+ */
+
+/**
+ * A line's `total_tax` / `subtotal_tax`, derived from its STORED per-rate array.
+ *
+ * WooCommerce never sums the raw tax. `set_taxes()` first formats every per-rate value
+ * to storage precision, and only then aggregates the FORMATTED array:
+ *
+ *     $tax_data['total'] = array_map( 'wc_format_decimal', $total );   // 6dp storage
+ *     $this->set_prop( 'taxes', $tax_data );
+ *     if ( 'yes' === get_option( 'woocommerce_tax_round_at_subtotal' ) ) {
+ *         $this->set_total_tax( array_sum( $tax_data['total'] ) );
+ *     } else {
+ *         $this->set_total_tax( array_sum( array_map( 'wc_round_tax_total', $tax_data['total'] ) ) );
+ *     }
+ *
+ * Both branches read `$tax_data['total']` — the stored array — so the rule is the same
+ * either way: ROUND EACH RATE FIRST, THEN SUM. This package used to round the raw
+ * multi-rate total instead, which is `round(a + b)` against WooCommerce's
+ * `round(a) + round(b)`. On a single-rate store the two agree and nothing shows. On a
+ * two-rate store they part company by a microunit whenever the raw sum sits on a
+ * boundary — measured on dev-pro 2026-08-24, a fee whose rates give 0.089127 and
+ * 0.019608: the till sent `total_tax` 0.108734 where the store stored 0.108735, and
+ * every such sale raised the totals-changed banner.
+ *
+ * That microunit was previously read as an unavoidable PHP-float-vs-decimal tie and
+ * written into `expectTaxParity` as a tolerance. It is not a tie. It is this.
+ *
+ * @param storedPerRate - Per-rate taxes ALREADY at storage precision (6dp).
+ */
+function sumStoredLineTax(
+	storedPerRate: readonly number[],
+	dp: number,
+	pricesIncludeTax: boolean,
+	taxRoundAtSubtotal: boolean
+): number {
+	const summands = taxRoundAtSubtotal
+		? storedPerRate
+		: storedPerRate.map((value) => roundTaxTotal(value, dp, pricesIncludeTax));
+	const total = summands.reduce((sum, value) => sum + value, 0);
+	// `wc_format_decimal( $amount )` with $dp === false renders at rounding precision.
+	return roundHalfUp(total, getRoundingPrecision(dp));
+}
+
 // DB element types — used only for casts at the pos-data helper boundary.
 // (The structural Input types are supertypes of these; see types.assignability.test.ts.)
 type DbLineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
@@ -241,18 +314,16 @@ function applyShippingLineChanges(
 /**
  * Consolidates unique taxes by combining subtotal and total tax values.
  *
- * When roundAtSubtotal=false, each per-rate tax is rounded to dp before output.
- * When roundAtSubtotal=true, taxes are left at full precision (deferred to order totals).
+ * Per-rate taxes are ALWAYS emitted unrounded, at rounding precision (6dp), whatever
+ * `taxRoundAtSubtotal` says — see PER_RATE_TAXES_ARE_UNROUNDED. That setting governs
+ * `total_tax`/`subtotal_tax` only, and those are rounded by the caller.
  *
- * Moved verbatim from use-calculate-line-item-tax-and-totals.ts, which is now deleted.
+ * Moved from use-calculate-line-item-tax-and-totals.ts, which is now deleted.
  */
 const consolidateTaxes = (
 	subtotalTaxes: { taxes: Tax[] },
 	totalTaxes: { taxes: Tax[] },
-	noSubtotal: boolean,
-	dp: number,
-	pricesIncludeTax: boolean,
-	roundAtSubtotal: boolean
+	noSubtotal: boolean
 ) => {
 	const uniqueTaxIds = uniq([
 		...subtotalTaxes.taxes.map((tax) => tax.id),
@@ -263,19 +334,10 @@ const consolidateTaxes = (
 		const subtotalTax = find(subtotalTaxes.taxes, { id }) || { total: 0 };
 		const totalTax = find(totalTaxes.taxes, { id }) || { total: 0 };
 
-		// When roundAtSubtotal=false, round each per-rate tax to dp (matches WC per-item rounding)
-		// When roundAtSubtotal=true, leave at rounding precision (deferred to order totals)
-		const roundedSubtotalTax = roundAtSubtotal
-			? subtotalTax.total
-			: roundTaxTotal(subtotalTax.total, dp, pricesIncludeTax);
-		const roundedTotalTax = roundAtSubtotal
-			? totalTax.total
-			: roundTaxTotal(totalTax.total, dp, pricesIncludeTax);
-
 		return {
 			id,
-			subtotal: noSubtotal ? '' : roundHalfUp(roundedSubtotalTax, 6).toFixed(6),
-			total: roundHalfUp(roundedTotalTax, 6).toFixed(6),
+			subtotal: noSubtotal ? '' : roundHalfUp(subtotalTax.total, 6).toFixed(6),
+			total: roundHalfUp(totalTax.total, 6).toFixed(6),
 		};
 	});
 };
@@ -328,14 +390,26 @@ function computeLineItem(lineItem: LineItemInput, config: CartConfig): LineItemI
 		config
 	);
 
-	// When roundAtSubtotal=false, round total_tax to dp (per-item rounding)
-	// When roundAtSubtotal=true, leave at rounding precision
-	const roundedTotalTax = taxRoundAtSubtotal
-		? totalTaxResult.total
-		: roundTaxTotal(totalTaxResult.total, dp, pricesIncludeTax);
-	const roundedSubtotalTax = taxRoundAtSubtotal
-		? subtotalTaxResult.total
-		: roundTaxTotal(subtotalTaxResult.total, dp, pricesIncludeTax);
+	// total_tax / subtotal_tax come from the STORED per-rate array, never from the raw
+	// multi-rate sum — see sumStoredLineTax.
+	const storedTotalTaxes = totalTaxResult.taxes.map((tax) =>
+		roundHalfUp(tax.total, roundingPrecision)
+	);
+	const storedSubtotalTaxes = subtotalTaxResult.taxes.map((tax) =>
+		roundHalfUp(tax.total, roundingPrecision)
+	);
+	const roundedTotalTax = sumStoredLineTax(
+		storedTotalTaxes,
+		dp,
+		pricesIncludeTax,
+		taxRoundAtSubtotal
+	);
+	const roundedSubtotalTax = sumStoredLineTax(
+		storedSubtotalTaxes,
+		dp,
+		pricesIncludeTax,
+		taxRoundAtSubtotal
+	);
 
 	// Calculate total and subtotal excluding tax
 	const totalExclTax = pricesIncludeTax ? total - totalTaxResult.total : total;
@@ -345,14 +419,7 @@ function computeLineItem(lineItem: LineItemInput, config: CartConfig): LineItemI
 	const priceWithoutTax = pricesIncludeTax ? price - perUnitTaxResult.total : price;
 
 	// Consolidate taxes
-	const taxes = consolidateTaxes(
-		subtotalTaxResult,
-		totalTaxResult,
-		false,
-		dp,
-		pricesIncludeTax,
-		taxRoundAtSubtotal
-	);
+	const taxes = consolidateTaxes(subtotalTaxResult, totalTaxResult, false);
 
 	// Line-level values (total, subtotal, price) are stored at rounding precision (6dp)
 	// to match WC's internal storage. WC stores these "unrounded" via wc_format_decimal()
@@ -445,18 +512,16 @@ function computeFeeLine(
 	// When roundAtSubtotal=true, leave at rounding precision
 	// QUIRK(parity): rounding mode uses STORE config.pricesIncludeTax, NOT the line's own
 	// prices_include_tax (unlike shipping). Pinned by the migrated fee tests in cart-line.test.ts.
-	const roundedTotalTax = taxRoundAtSubtotal
-		? tax.total
-		: roundTaxTotal(tax.total, dp, pricesIncludeTax);
+	const storedPerRate = tax.taxes.map((t) => roundHalfUp(t.total, roundingPrecision));
+	const roundedTotalTax = sumStoredLineTax(storedPerRate, dp, pricesIncludeTax, taxRoundAtSubtotal);
 
 	return {
 		...feeLine,
 		total: String(roundHalfUp(total, roundingPrecision)),
 		total_tax: String(roundedTotalTax),
-		taxes: tax.taxes.map((t) => ({
-			...t,
-			total: String(taxRoundAtSubtotal ? t.total : roundTaxTotal(t.total, dp, pricesIncludeTax)),
-		})),
+		// Per-rate taxes are stored unrounded whatever taxRoundAtSubtotal says; only
+		// total_tax above is rounded. See PER_RATE_TAXES_ARE_UNROUNDED.
+		taxes: tax.taxes.map((t) => ({ ...t, total: String(roundHalfUp(t.total, roundingPrecision)) })),
 	};
 }
 
@@ -495,20 +560,30 @@ function computeShippingLine(
 
 	// When roundAtSubtotal=false, round tax to dp per-item
 	// When roundAtSubtotal=true, leave at rounding precision
-	// QUIRK(parity): rounding mode uses the PER-LINE amountIncludesTax (unlike fees, which
-	// use store pricesIncludeTax). Pinned by the migrated shipping tests in cart-line.test.ts.
-	const roundedTotalTax = taxRoundAtSubtotal
-		? tax.total
-		: roundTaxTotal(tax.total, dp, amountIncludesTax);
+	//
+	// The rounding MODE is a store-level property, not a per-line one. WooCommerce
+	// defines `WC_TAX_ROUNDING_MODE` once, at boot, from the store option
+	// (class-woocommerce.php:532):
+	//
+	//     $this->define( 'WC_TAX_ROUNDING_MODE',
+	//         'yes' === get_option( 'woocommerce_prices_include_tax', 'no' ) ? 2 : 1 );
+	//
+	// and `wc_round_tax_total()` reads that constant for every value it rounds — a
+	// shipping line's own `prices_include_tax` never reaches it. This used to pass the
+	// PER-LINE `amountIncludesTax`, so a line that overrode the store setting rounded
+	// half-DOWN where the store rounds half-UP (or vice versa) and landed a cent away
+	// from the server on an exact half-cent tie. Same class as
+	// PER_RATE_TAXES_ARE_UNROUNDED: a store-level rule applied at line level.
+	const storedPerRate = tax.taxes.map((t) => roundHalfUp(t.total, roundingPrecision));
+	const roundedTotalTax = sumStoredLineTax(storedPerRate, dp, pricesIncludeTax, taxRoundAtSubtotal);
 
 	return {
 		...shippingLine,
 		total: String(roundHalfUp(total, roundingPrecision)),
 		total_tax: String(roundedTotalTax),
-		taxes: tax.taxes.map((t) => ({
-			...t,
-			total: String(taxRoundAtSubtotal ? t.total : roundTaxTotal(t.total, dp, amountIncludesTax)),
-		})),
+		// Per-rate taxes are stored unrounded whatever taxRoundAtSubtotal says; only
+		// total_tax above is rounded. See PER_RATE_TAXES_ARE_UNROUNDED.
+		taxes: tax.taxes.map((t) => ({ ...t, total: String(roundHalfUp(t.total, roundingPrecision)) })),
 	};
 }
 

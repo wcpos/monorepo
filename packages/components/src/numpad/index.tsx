@@ -79,13 +79,15 @@ interface NumpadKeyProps {
 	icon?: IconName;
 	onPress: () => void;
 	discount?: boolean;
+	/** Overrides the label-derived id, for keys whose label is locale-dependent. */
+	testID?: string;
 }
 
-function Key({ label, icon, onPress, discount }: NumpadKeyProps) {
+function Key({ label, icon, onPress, discount, testID }: NumpadKeyProps) {
 	const keyId = label ?? (icon ? `icon-${icon}` : undefined);
 	return (
 		<Button
-			testID={keyId ? `numpad-key-${keyId}` : undefined}
+			testID={testID ?? (keyId ? `numpad-key-${keyId}` : undefined)}
 			variant="muted"
 			onPress={onPress}
 			rightIcon={discount ? 'percent' : undefined}
@@ -236,6 +238,12 @@ function Numpad({
 								key={`${rowIndex}-${colIndex}`}
 								label={value === '+/-' ? undefined : value}
 								icon={value === '+/-' ? 'plusMinus' : undefined}
+								// The decimal key's label IS the store's separator, so its derived
+								// testID is `numpad-key-.` on one store and `numpad-key-,` on the
+								// next. A test that needs "the decimal key" cannot name it. Digits
+								// are stable already; this gives the separator a ROLE-based id so a
+								// spec can enter 9.99 on an fr_FR store without knowing the locale.
+								testID={value === decimalSeparator ? 'numpad-key-decimal' : undefined}
 								onPress={() => handleButtonPress(value)}
 							/>
 						))
