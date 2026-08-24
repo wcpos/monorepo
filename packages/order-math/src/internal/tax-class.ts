@@ -14,3 +14,59 @@ export const STANDARD_TAX_CLASS = 'standard';
 export function normalizeTaxClass(value?: string | null): string {
 	return value === '' || value === null || value === undefined ? STANDARD_TAX_CLASS : value;
 }
+
+/**
+ * WooCommerce's "shipping tax class based on the cart items" sentinel — the value a
+ * store's `woocommerce_shipping_tax_class` option holds by default. It is not a class:
+ * it matches no tax rate, and it must be resolved against the order's line items
+ * before any rate lookup.
+ */
+export const INHERIT_TAX_CLASS = 'inherit';
+
+/** Resolved to "no shipping tax at all", which is distinct from "the standard class". */
+export const NO_SHIPPING_TAX = null;
+
+/**
+ * Port of the `'inherit'` branch of `WC_Abstract_Order::calculate_taxes()` — the path
+ * WooCommerce takes for an order, which is what this package builds (the storefront's
+ * `WC_Tax::get_shipping_tax_rates()` reaches the same answer through the live cart).
+ *
+ * ```php
+ * $found_classes      = array_intersect( array_merge( array( '' ), WC_Tax::get_tax_class_slugs() ), $this->get_items_tax_classes() );
+ * $shipping_tax_class = count( $found_classes ) ? current( $found_classes ) : false;
+ * // Orders without product line items have no tax class to inherit, so use the standard class.
+ * if ( false === $shipping_tax_class && 0 === count( $this->get_items() ) ) {
+ *     $shipping_tax_class = '';
+ * }
+ * ```
+ *
+ * Three details the PHP encodes positionally and are easy to lose in a port:
+ *
+ * 1. `array_intersect` preserves the order of its FIRST argument, so the candidate
+ *    order is the configured tax-class order with the standard class ahead of it —
+ *    **the standard class wins whenever any line item carries it**, never "the first
+ *    class in the cart".
+ * 2. `get_items()` defaults to `'line_item'`, so **fee lines are not inherited from**,
+ *    and only line items count toward the "no items" fallback.
+ * 3. `get_items_tax_classes()` skips items that are not taxable. Line items that exist
+ *    but are all non-taxable therefore give `false`, not `''` — and WooCommerce then
+ *    charges **no shipping tax**. Returning the standard class there would invent tax
+ *    on an order WooCommerce leaves untaxed.
+ */
+export function resolveInheritedShippingTaxClass(
+	activeLineItems: readonly { tax_class?: string | null; taxable: boolean }[],
+	taxClassSlugs: readonly string[]
+): string | typeof NO_SHIPPING_TAX {
+	const itemClasses = new Set(
+		activeLineItems.filter((item) => item.taxable).map((item) => normalizeTaxClass(item.tax_class))
+	);
+
+	// Candidate order, not cart order — see (1) above.
+	const found = taxClassSlugs.find((slug) => itemClasses.has(normalizeTaxClass(slug)));
+	if (found !== undefined) return normalizeTaxClass(found);
+
+	// No line items at all (a shipping-only or fee-only order) has nothing to inherit
+	// from, and WooCommerce falls back to the standard class. Items that are all
+	// non-taxable do NOT reach this — see (3).
+	return activeLineItems.length === 0 ? STANDARD_TAX_CLASS : NO_SHIPPING_TAX;
+}

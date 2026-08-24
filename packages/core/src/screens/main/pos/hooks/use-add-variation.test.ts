@@ -90,6 +90,7 @@ jest.mock('./use-cart-config', () => {
 		taxRoundAtSubtotal: false,
 		dp: 2,
 		shippingTaxClass: '',
+		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcDiscountsSequentially: false,
 	});
 	return { useCartConfig: () => config };

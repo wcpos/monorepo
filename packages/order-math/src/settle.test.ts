@@ -32,6 +32,7 @@ const makeConfig = (overrides: Partial<CartConfigInput> = {}) =>
 		taxRoundAtSubtotal: false,
 		dp: 2,
 		shippingTaxClass: '',
+		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcDiscountsSequentially: false,
 		...overrides,
 	});
@@ -291,6 +292,97 @@ describe('settleCart', () => {
 				pricesIncludeTax: false,
 			});
 			expect(result.totals).toEqual(expectedTotals);
+		});
+	});
+
+	// -----------------------------------------------------------------------
+	// 3b. Shipping lines that inherit their tax class
+	// -----------------------------------------------------------------------
+	/**
+	 * An inheriting shipping line's tax class is a function of the CART, so — exactly
+	 * like a percent fee — a line added before the cart settled would otherwise keep a
+	 * rate derived from lines it was not built from.
+	 */
+	describe('shipping lines that inherit their tax class', () => {
+		const shippingRate = (id: number, cls: string, rate: string) => ({
+			id,
+			class: cls,
+			rate,
+			compound: false,
+			order: 1,
+			shipping: true,
+		});
+		const rates = [
+			shippingRate(101, 'standard', '10.0000'),
+			shippingRate(202, 'reduced-rate', '5.0000'),
+		];
+		const config = makeConfig({ rates, allRates: rates, shippingTaxClass: 'inherit' });
+
+		const inheritingShipping = () => ({
+			method_id: 'flat_rate',
+			method_title: 'Flat rate',
+			total: '100',
+			total_tax: '0',
+			taxes: [],
+			meta_data: [],
+		});
+
+		const reducedRateItem = () => ({
+			...makePosLineItem(1, 100),
+			tax_class: 'reduced-rate',
+		});
+
+		it('recomputes the line against the cart it is being settled with', () => {
+			const snapshot: CartSnapshot = {
+				line_items: [reducedRateItem()],
+				shipping_lines: [inheritingShipping()],
+			};
+			const before = clone(snapshot);
+
+			const result = settleCart(snapshot, config);
+			expect(result.ok).toBe(true);
+			if (!result.ok) return;
+
+			// The cart is entirely reduced-rate, so shipping is too — 5%, not 10%.
+			expect(result.patch.shipping_lines).toHaveLength(1);
+			expect(result.patch.shipping_lines![0].total_tax).toBe('5');
+			expect(result.patch.shipping_tax).toBe('5');
+
+			// inputs untouched
+			expect(snapshot).toEqual(before);
+		});
+
+		it('leaves the key out entirely when no shipping line inherits', () => {
+			const explicitShipping = {
+				...inheritingShipping(),
+				meta_data: [
+					{
+						key: '_woocommerce_pos_data',
+						value: JSON.stringify({ amount: '100', tax_class: 'standard' }),
+					},
+				],
+			};
+			const result = settleCart(
+				{ line_items: [reducedRateItem()], shipping_lines: [explicitShipping] },
+				config
+			);
+			expect(result.ok).toBe(true);
+			if (!result.ok) return;
+
+			// The merchant chose the class; settle must not touch the line.
+			expect('shipping_lines' in result.patch).toBe(false);
+		});
+
+		it('leaves a tombstoned shipping line untouched', () => {
+			const tombstone = { ...inheritingShipping(), method_id: null };
+			const result = settleCart(
+				{ line_items: [reducedRateItem()], shipping_lines: [tombstone] },
+				config
+			);
+			expect(result.ok).toBe(true);
+			if (!result.ok) return;
+
+			expect('shipping_lines' in result.patch).toBe(false);
 		});
 	});
 

@@ -1,4 +1,4 @@
-import { shippingTaxClassFromStore, taxClassFromWire, taxClassToWire } from './tax-class';
+import { INHERIT_TAX_CLASS, taxClassFromWire, taxClassToWire } from './tax-class';
 
 describe('taxClassFromWire', () => {
 	it.each([
@@ -47,26 +47,22 @@ describe('tax class codec round trips', () => {
 });
 
 /**
- * The store's shipping tax class carries one spelling the item classes do not:
- * WooCommerce's 'inherit' sentinel, which a fresh store defaults to. It matches no
- * tax rate, so a cart line authored with it gets no tax at all — see
- * add-shipping.tsx and the "seeds the tax class" cases in add-cart-lines.test.tsx.
+ * The 'inherit' sentinel must survive the codec untouched in BOTH directions: it is not
+ * a spelling of the standard class, and `@wcpos/order-math` resolves it against the
+ * order's line items. Collapsing it here would silently charge standard-rate shipping
+ * tax on a cart WooCommerce taxes at another class.
  */
-describe('shippingTaxClassFromStore', () => {
-	it.each([
-		['inherit', 'standard'],
-		['', 'standard'],
-		['standard', 'standard'],
-		[null, 'standard'],
-		[undefined, 'standard'],
-		['reduced-rate', 'reduced-rate'],
-		// Merchant-defined classes are selectable (see stores schema v14) and pass through.
-		['luxury', 'luxury'],
-	])('maps %p to %p', (value, expected) => {
-		expect(shippingTaxClassFromStore(value)).toBe(expected);
+describe('the inherit sentinel round-trips', () => {
+	it('survives the read side', () => {
+		expect(taxClassFromWire(INHERIT_TAX_CLASS)).toBe(INHERIT_TAX_CLASS);
 	});
 
-	it('resolves to a class the wire codec then spells as the standard class', () => {
-		expect(taxClassToWire(shippingTaxClassFromStore('inherit'))).toBe('');
+	it('survives the write side', () => {
+		expect(taxClassToWire(INHERIT_TAX_CLASS)).toBe(INHERIT_TAX_CLASS);
+	});
+
+	it('is distinct from every spelling of the standard class', () => {
+		expect(INHERIT_TAX_CLASS).not.toBe(taxClassFromWire(''));
+		expect(INHERIT_TAX_CLASS).not.toBe(taxClassToWire('standard'));
 	});
 });

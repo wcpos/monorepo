@@ -98,6 +98,7 @@ function settle(
 		taxRoundAtSubtotal: false,
 		dp: 2,
 		shippingTaxClass: '',
+		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcDiscountsSequentially: false,
 	});
 

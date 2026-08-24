@@ -43,7 +43,7 @@ export function TaxClassSelect({ value, onValueChange, includeInherit, ...props 
 
 		return includeInherit
 			? [
-					{ label: t('settings.shipping_tax_class_inherit'), value: INHERIT_TAX_CLASS },
+					{ label: t('common.tax_class_based_on_cart_items'), value: INHERIT_TAX_CLASS },
 					...classOptions,
 				]
 			: classOptions;

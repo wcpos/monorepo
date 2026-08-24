@@ -6,8 +6,18 @@ import { toCouponConfigs } from './internal/coupons/to-coupon-configs';
 import { validateCoupon } from './internal/coupons/validate';
 import { enrichCategoriesWithAncestors } from './internal/coupons/helpers';
 import { calculateOrderTotals } from './internal/order-totals';
-import { extractFeeLineData, parsePosData } from './internal/lines/pos-data';
-import { isActiveCouponLine, isActiveFeeLine, isActiveLineItem } from './snapshot';
+import {
+	extractFeeLineData,
+	extractShippingLineData,
+	parsePosData,
+} from './internal/lines/pos-data';
+import { INHERIT_TAX_CLASS } from './internal/tax-class';
+import {
+	isActiveCouponLine,
+	isActiveFeeLine,
+	isActiveLineItem,
+	isActiveShippingLine,
+} from './snapshot';
 
 import type { CartConfig } from './config';
 import type { CouponLineItem } from './internal/coupons/helpers';
@@ -27,6 +37,9 @@ import type {
 // DB element type — used only for the cast at the pos-data helper boundary.
 // (The structural Input types are supertypes of these; see types.assignability.test.ts.)
 type DbFeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
+type DbShippingLine = NonNullable<
+	import('@wcpos/database').OrderDocument['shipping_lines']
+>[number];
 
 // ===== public types (SPEC §3) =====
 
@@ -55,6 +68,7 @@ export interface SettlePatch {
 	line_items?: LineItemInput[]; // present IFF coupon replay ran
 	coupon_lines?: CouponLineInput[]; // present IFF coupon replay ran
 	fee_lines?: FeeLineInput[]; // present IFF >=1 active percent fee recomputed
+	shipping_lines?: ShippingLineInput[]; // present IFF >=1 active inheriting shipping line recomputed
 	discount_total: MoneyString;
 	discount_tax: MoneyString;
 	shipping_total: MoneyString;
@@ -122,6 +136,12 @@ function computeChanged(snapshot: CartSnapshot, patch: SettlePatch): boolean {
 	if (
 		patch.fee_lines &&
 		JSON.stringify(snapshot.fee_lines ?? []) !== JSON.stringify(patch.fee_lines)
+	) {
+		return true;
+	}
+	if (
+		patch.shipping_lines &&
+		JSON.stringify(snapshot.shipping_lines ?? []) !== JSON.stringify(patch.shipping_lines)
 	) {
 		return true;
 	}
@@ -229,6 +249,28 @@ function settleOverLines(args: {
 		return result.line;
 	});
 
+	// 5b. Shipping lines that inherit their tax class are recomputed on the same basis,
+	// for the same reason percent fees are: their value is a function of the cart, so a
+	// line added before the cart's tax classes settled would keep a stale rate. A line
+	// with its own tax class is never touched — the merchant chose it.
+	let inheritingShippingRecomputed = false;
+	const postShippingLines = shippingLines.map((shipping) => {
+		if (!isActiveShippingLine(shipping)) return shipping;
+		const { tax_class } = extractShippingLineData(
+			shipping as DbShippingLine,
+			config.pricesIncludeTax,
+			config.shippingTaxClass
+		);
+		if (tax_class !== INHERIT_TAX_CLASS) return shipping;
+		inheritingShippingRecomputed = true;
+		const result = calculateCartLine(
+			{ kind: 'shipping', line: shipping, cartLineItems: lineItems },
+			config
+		);
+		warnings.push(...result.warnings);
+		return result.line;
+	});
+
 	// 6. Order totals over (lines, post-fee fees, shipping, coupons). Full arrays
 	// incl. tombstones — calculateOrderTotals filters internally. config.allRates
 	// seeds the tax_lines labels.
@@ -236,7 +278,7 @@ function settleOverLines(args: {
 		{
 			lineItems,
 			feeLines: postFeeLines,
-			shippingLines,
+			shippingLines: postShippingLines,
 			couponLines,
 			taxRates: [...config.allRates],
 			taxRoundAtSubtotal: config.taxRoundAtSubtotal,
@@ -259,6 +301,9 @@ function settleOverLines(args: {
 	};
 	if (percentFeeRecomputed) {
 		patch.fee_lines = postFeeLines;
+	}
+	if (inheritingShippingRecomputed) {
+		patch.shipping_lines = postShippingLines;
 	}
 
 	return { patch, totals };
@@ -420,7 +465,10 @@ export function settleCart(
 
 // ===== entry point 2: settleAggregate =====
 
-/** What `settleAggregate` may write: the money, and percent fees. Never the lines. */
+/**
+ * What `settleAggregate` may write: the money, percent fees, and shipping lines whose
+ * tax class inherits from the cart. Never the line items.
+ */
 export type SettleAggregatePatch = Omit<SettlePatch, 'line_items' | 'coupon_lines'>;
 
 export interface SettleAggregateResult {

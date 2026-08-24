@@ -94,7 +94,7 @@ describe('TaxClassSelect', () => {
 		const inherit = props.options[0];
 		props.onChange?.(inherit.value, inherit);
 		expect(onValueChange).toHaveBeenCalledWith({
-			label: 'settings.shipping_tax_class_inherit',
+			label: 'common.tax_class_based_on_cart_items',
 			value: 'inherit',
 		});
 	});

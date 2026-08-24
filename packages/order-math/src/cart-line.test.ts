@@ -25,6 +25,7 @@ const baseConfig: Omit<CartConfigInput, 'rates'> = {
 	taxRoundAtSubtotal: false,
 	dp: 2,
 	shippingTaxClass: '',
+	taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 	calcDiscountsSequentially: false,
 };
 
@@ -449,7 +450,10 @@ describe('calculateCartLine — shipping', () => {
 			],
 		};
 
-		const { line, warnings } = calculateCartLine({ kind: 'shipping', line: shippingLine }, config);
+		const { line, warnings } = calculateCartLine(
+			{ kind: 'shipping', cartLineItems: [], line: shippingLine },
+			config
+		);
 
 		expect(warnings).toEqual([]);
 		expect(line.total).toBe('10');
@@ -476,7 +480,10 @@ describe('calculateCartLine — shipping', () => {
 			],
 		};
 
-		const { line } = calculateCartLine({ kind: 'shipping', line: shippingLine }, config);
+		const { line } = calculateCartLine(
+			{ kind: 'shipping', cartLineItems: [], line: shippingLine },
+			config
+		);
 
 		// 12 includes tax, so total = 12 - 2 = 10
 		expect(line.total).toBe('10');
@@ -497,7 +504,10 @@ describe('calculateCartLine — shipping', () => {
 			],
 		};
 
-		const { line } = calculateCartLine({ kind: 'shipping', line: shippingLine }, config);
+		const { line } = calculateCartLine(
+			{ kind: 'shipping', cartLineItems: [], line: shippingLine },
+			config
+		);
 
 		expect(line.total).toBe('0');
 		expect(line.total_tax).toBe('0');
@@ -517,7 +527,10 @@ describe('calculateCartLine — shipping', () => {
 			],
 		};
 
-		const { line } = calculateCartLine({ kind: 'shipping', line: shippingLine }, config);
+		const { line } = calculateCartLine(
+			{ kind: 'shipping', cartLineItems: [], line: shippingLine },
+			config
+		);
 
 		expect(line.total).toBe('10');
 		expect(line.total_tax).toBe('0');
@@ -545,7 +558,10 @@ describe('calculateCartLine — shipping', () => {
 			],
 		};
 
-		const { line } = calculateCartLine({ kind: 'shipping', line: shippingLine }, config);
+		const { line } = calculateCartLine(
+			{ kind: 'shipping', cartLineItems: [], line: shippingLine },
+			config
+		);
 
 		expect(line.total).toBe('100');
 		expect(line.total_tax).toBe('15');
@@ -570,7 +586,10 @@ describe('calculateCartLine — shipping', () => {
 			],
 		};
 
-		const { line } = calculateCartLine({ kind: 'shipping', line: shippingLine }, config);
+		const { line } = calculateCartLine(
+			{ kind: 'shipping', cartLineItems: [], line: shippingLine },
+			config
+		);
 
 		expect(line).toMatchObject({
 			method_id: 'flat_rate',
@@ -593,7 +612,10 @@ describe('calculateCartLine — shipping', () => {
 			],
 		};
 
-		const { line } = calculateCartLine({ kind: 'shipping', line: shippingLine }, config);
+		const { line } = calculateCartLine(
+			{ kind: 'shipping', cartLineItems: [], line: shippingLine },
+			config
+		);
 
 		expect(line.total).toBe('9.99');
 		// With dp=2 and roundAtSubtotal=false, tax is rounded to 2dp
@@ -632,7 +654,8 @@ describe('calculateCartLine — shipping tax class contract', () => {
 		// wire spelling of the store's shipping_tax_class → rate it selects
 		['', 101, '10'],
 		['reduced-rate', 202, '5'],
-		// 'inherit' is WooCommerce's "same as the cart" sentinel; extract maps it to standard.
+		// 'inherit' resolves against the cart's line items — with none, WooCommerce falls
+		// back to standard. The cart-dependent cases live in the describe below.
 		['inherit', 101, '10'],
 	])(
 		'applies the matching rate when config.shippingTaxClass is %p',
@@ -646,6 +669,7 @@ describe('calculateCartLine — shipping tax class contract', () => {
 			const { line } = calculateCartLine(
 				{
 					kind: 'shipping',
+					cartLineItems: [],
 					line: { method_title: 'Flat rate', total: '100', total_tax: '0' },
 				},
 				config
@@ -661,11 +685,13 @@ describe('calculateCartLine — shipping tax class contract', () => {
 			...baseConfig,
 			rates: [standardShippingRate, reducedShippingRate],
 			shippingTaxClass: '',
+			taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		});
 
 		const { line } = calculateCartLine(
 			{
 				kind: 'shipping',
+				cartLineItems: [],
 				line: {
 					method_title: 'Flat rate',
 					meta_data: [
@@ -709,7 +735,7 @@ describe('calculateCartLine — tombstone passthrough', () => {
 	it('returns a tombstoned shipping line unchanged', () => {
 		const line = { method_id: null, total: '7', total_tax: '1.4' };
 
-		const result = calculateCartLine({ kind: 'shipping', line }, config);
+		const result = calculateCartLine({ kind: 'shipping', line, cartLineItems: [] }, config);
 
 		expect(result.line).toBe(line);
 		expect(result.warnings).toEqual([]);
@@ -945,7 +971,12 @@ describe('calculateCartLine — changes merge', () => {
 		};
 
 		const { line: updated } = calculateCartLine(
-			{ kind: 'shipping', line, changes: { amount: 25, method_title: 'Express' } },
+			{
+				kind: 'shipping',
+				line,
+				cartLineItems: [],
+				changes: { amount: 25, method_title: 'Express' },
+			},
 			config
 		);
 
@@ -974,7 +1005,7 @@ describe('calculateCartLine — changes merge', () => {
 		};
 
 		const { line: updated } = calculateCartLine(
-			{ kind: 'shipping', line, changes: { tax_status: 'none' } },
+			{ kind: 'shipping', line, cartLineItems: [], changes: { tax_status: 'none' } },
 			config
 		);
 
@@ -1031,5 +1062,132 @@ describe('calculateCartLine — malformed pos_data warnings', () => {
 		// extract* fell back to the default amount (total = 10, prices exclude tax)
 		expect(computed.total).toBe('10');
 		expect(computed.total_tax).toBe('2');
+	});
+});
+
+/**
+ * `'inherit'` — WooCommerce's "shipping tax class based on cart items" — ported from
+ * the `'inherit'` branch of `WC_Abstract_Order::calculate_taxes()`. It is NOT a
+ * spelling of the standard class, which is what this package used to treat it as:
+ * `extractShippingLineData` collapsed it to `''`, so a cart of entirely reduced-rate
+ * items was charged standard-rate shipping tax.
+ */
+describe('calculateCartLine — inherited shipping tax class', () => {
+	const shippingRate = (id: number, cls: string, rate: string): TaxRateInput => ({
+		id,
+		class: cls,
+		rate,
+		compound: false,
+		order: 1,
+		shipping: true,
+	});
+
+	const rates = [
+		shippingRate(101, 'standard', '10.0000'),
+		shippingRate(202, 'reduced-rate', '5.0000'),
+		shippingRate(303, 'zero-rate', '0.0000'),
+	];
+
+	const config = createCartConfig({
+		...baseConfig,
+		rates,
+		shippingTaxClass: 'inherit',
+		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
+	});
+
+	const item = (tax_class: string, tax_status: 'taxable' | 'none' = 'taxable') => ({
+		name: 'Item',
+		quantity: 1,
+		tax_class,
+		meta_data: [
+			{
+				key: '_woocommerce_pos_data',
+				value: JSON.stringify({ price: '10', regular_price: '10', tax_status }),
+			},
+		],
+	});
+
+	const shippingTaxFor = (cartLineItems: ReturnType<typeof item>[]) => {
+		const { line } = calculateCartLine(
+			{
+				kind: 'shipping',
+				cartLineItems,
+				line: { method_title: 'Flat rate', total: '100', total_tax: '0' },
+			},
+			config
+		);
+		return line;
+	};
+
+	it('takes the class from a cart of a single non-standard class', () => {
+		const line = shippingTaxFor([item('reduced-rate')]);
+
+		// The bug this fixes: standard ('10') was charged here.
+		expect(line.total_tax).toBe('5');
+		expect(line.taxes).toEqual([{ id: 202, total: '5' }]);
+	});
+
+	it('lets the standard class win whenever ANY item carries it', () => {
+		// Order in the CART is reduced-first; WooCommerce's array_intersect walks the
+		// CANDIDATE order, which puts standard ahead of everything.
+		const line = shippingTaxFor([item('reduced-rate'), item('')]);
+
+		expect(line.taxes).toEqual([{ id: 101, total: '10' }]);
+	});
+
+	it('falls to the first CONFIGURED class when the cart has several non-standard ones', () => {
+		// Cart order is zero-rate first, but reduced-rate comes first in taxClassSlugs.
+		const line = shippingTaxFor([item('zero-rate'), item('reduced-rate')]);
+
+		expect(line.taxes).toEqual([{ id: 202, total: '5' }]);
+	});
+
+	it('falls back to the standard class when there are no line items at all', () => {
+		// A shipping-only order has nothing to inherit from. Matches WooCommerce's
+		// "Orders without product line items have no tax class to inherit" branch.
+		expect(shippingTaxFor([]).taxes).toEqual([{ id: 101, total: '10' }]);
+	});
+
+	it('charges NO shipping tax when every line item is non-taxable', () => {
+		// get_items_tax_classes() skips non-taxable items, so $found_classes is empty
+		// while $this->get_items() is not — WooCommerce yields false, not ''. Charging
+		// standard here would invent tax on an order WooCommerce leaves untaxed.
+		const line = shippingTaxFor([item('', 'none')]);
+
+		expect(line.total_tax).toBe('0');
+		expect(line.taxes).toEqual([]);
+	});
+
+	it('ignores tombstoned line items when inheriting', () => {
+		// Tombstone convention for line items is product_id === null (see snapshot.ts).
+		const tombstone = { ...item('reduced-rate'), product_id: null } as never;
+		const line = shippingTaxFor([tombstone]);
+
+		// Only a removed line remains, so the cart is empty for inheritance purposes.
+		expect(line.taxes).toEqual([{ id: 101, total: '10' }]);
+	});
+
+	it('never inherits when the LINE carries its own tax class', () => {
+		const { line } = calculateCartLine(
+			{
+				kind: 'shipping',
+				cartLineItems: [item('reduced-rate')],
+				line: {
+					method_title: 'Flat rate',
+					total: '100',
+					total_tax: '0',
+					meta_data: [
+						{
+							key: '_woocommerce_pos_data',
+							value: JSON.stringify({ amount: '100', tax_class: 'zero-rate' }),
+						},
+					],
+				},
+			},
+			config
+		);
+
+		// The merchant chose zero-rate; the cart does not override that.
+		expect(line.taxes).toEqual([{ id: 303, total: '0' }]);
 	});
 });

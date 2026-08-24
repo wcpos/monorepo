@@ -37,6 +37,7 @@ const config = createCartConfig({
 	taxRoundAtSubtotal: false,
 	dp: 2,
 	shippingTaxClass: 'standard',
+	taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 	calcDiscountsSequentially: false,
 });
 

@@ -180,6 +180,7 @@ export function EditShippingLineForm({ uuid, item }: Props) {
 								<FormSelect
 									label={t('common.tax_class')}
 									customComponent={TaxClassSelect}
+									includeInherit
 									value={value ?? ''}
 									onChange={onChange}
 									{...rest}

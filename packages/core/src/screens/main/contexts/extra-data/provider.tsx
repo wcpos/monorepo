@@ -4,13 +4,7 @@ import { useQueryRuntime } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
-
-interface ExtraDataContextProps {
-	extraData: import('rxdb').RxState<Record<string, unknown>>;
-}
-
-// eslint-disable-next-line wcpos/no-rx-in-context-value -- Persisted extra data is structurally an RxState shared by its writer and field-hook consumers; sanctioned exception dated 2026-08-21, see #1385 stage K.
-export const ExtraDataContext = React.createContext<ExtraDataContextProps | null>(null);
+import { ExtraDataContext } from './context';
 
 function isMissing(value: unknown): boolean {
 	return value == null;

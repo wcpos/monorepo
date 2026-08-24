@@ -88,6 +88,7 @@ function makeConfig(
 		taxRoundAtSubtotal: false,
 		dp: 2,
 		shippingTaxClass: '',
+		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
 		calcDiscountsSequentially: false,
 		...overrides,
 	});
@@ -237,6 +238,7 @@ function buildShippingLine(amount: number, config: CartConfig) {
 	return calculateCartLine(
 		{
 			kind: 'shipping',
+			cartLineItems: [],
 			line: { method_id: 'flat_rate', method_title: 'Flat rate', meta_data: [] },
 			changes: { amount, tax_status: 'taxable', prices_include_tax: config.pricesIncludeTax },
 		},

@@ -21,20 +21,9 @@ export function taxClassToWire(value?: string | null): string {
  * fresh store arrives with. It is a sentinel, not a slug, so it matches no entry in
  * the server's tax-class list and no tax rate.
  *
- * `@wcpos/order-math` already resolves the sentinel to the standard class when a
- * shipping line carries no class of its own (`extractShippingLineData`). This is the
- * UI face of that same resolution, for the one place a cart line is *authored*: the
- * Add shipping dialog seeds its tax-class field from the store setting, and seeding
- * it with the raw sentinel both blanks the select and — because the dialog stamps the
- * field into the line's pos_data, where it outranks the engine's default — filters
- * the rate list down to nothing, so the line is added with no tax at all.
- *
- * Settings deliberately does NOT go through this: there `'inherit'` is a value the
- * merchant owns and must be able to see and re-select, so `TaxClassSelect` offers it
- * as an option instead.
+ * It is NOT a spelling of the standard class. `@wcpos/order-math` resolves it against
+ * the order's line items, mirroring `WC_Abstract_Order::calculate_taxes()`, so it must
+ * survive the UI ⇄ wire codec untouched in both directions. Selects that can hold it
+ * pass `includeInherit` to `TaxClassSelect`.
  */
 export const INHERIT_TAX_CLASS = 'inherit';
-
-export function shippingTaxClassFromStore(value?: string | null): string {
-	return value === INHERIT_TAX_CLASS ? STANDARD_TAX_CLASS : taxClassFromWire(value);
-}

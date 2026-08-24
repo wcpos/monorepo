@@ -26,7 +26,7 @@ import { FormErrors } from '../../components/form-errors';
 import { ShippingMethodSelect } from '../../components/shipping-method-select';
 import { TaxClassSelect } from '../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
-import { shippingTaxClassFromStore, taxClassToWire } from '../../hooks/tax-class';
+import { taxClassFromWire, taxClassToWire } from '../../hooks/tax-class';
 import { useAddShipping } from '../hooks/use-add-shipping';
 
 const formSchema = z.object({
@@ -61,9 +61,10 @@ export function AddShipping() {
 			amount: '0',
 			prices_include_tax: true,
 			tax_status: 'taxable',
-			// The store's setting is a wire value and may be WooCommerce's 'inherit'
-			// sentinel; the field holds a UI tax class. See shippingTaxClassFromStore.
-			tax_class: shippingTaxClassFromStore(shippingTaxClass as string | undefined),
+			// The store's setting verbatim, including WooCommerce's 'inherit' sentinel —
+			// which the select can hold (see includeInherit below) and the engine resolves
+			// against the cart's line items. Only the ''/'standard' spelling is codec'd.
+			tax_class: taxClassFromWire(shippingTaxClass as string | undefined),
 		},
 	});
 
@@ -159,6 +160,7 @@ export function AddShipping() {
 								<FormSelect
 									label={t('common.tax_class')}
 									customComponent={TaxClassSelect}
+									includeInherit
 									value={value ?? ''}
 									onChange={onChange}
 									{...rest}

@@ -166,15 +166,15 @@ describe('cart line dialogs', () => {
 	 * stamps that field into the line's pos_data — where it outranks the engine's own
 	 * 'inherit' resolution. Seeded with a raw sentinel the select renders blank AND the
 	 * rate filter matches nothing, so the shipping line is added with no tax at all.
-	 * These pin the submitted value. The rendered label is the same field and the same
-	 * seed, but FormSelect is stubbed out here, so the store spellings that only differ
-	 * in what the select displays ('' and 'standard' both submit '') are pinned one
-	 * level down, on shippingTaxClassFromStore in tax-class.test.ts.
+	 * The seed is the store setting verbatim. 'inherit' is NOT collapsed to the standard
+	 * class — it reaches the line's pos_data as the sentinel, and the engine resolves it
+	 * against the cart's items (see cart-line.test.ts). Collapsing it here was the bug:
+	 * a cart of reduced-rate items got standard-rate shipping tax.
 	 */
 	describe('seeds the shipping tax class from the store setting', () => {
 		it.each([
 			// store shipping_tax_class → tax_class submitted (wire spelling)
-			['inherit', ''],
+			['inherit', 'inherit'],
 			['', ''],
 			['reduced-rate', 'reduced-rate'],
 		])('submits %p as %p', async (storeValue, expected) => {
