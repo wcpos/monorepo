@@ -157,7 +157,8 @@ async function fillCurrencyField(
 
 async function addMiscProduct(page: Page, price: string, taxStatus?: 'taxable' | 'none') {
 	await openCartMenuAndClick(page, 'menu-add-misc-product');
-	await expect(page.getByRole('dialog')).toBeVisible({ timeout: 15_000 });
+	const dialog = page.getByRole('dialog');
+	await expect(dialog).toBeVisible({ timeout: 15_000 });
 	await fillCurrencyField(page, 'misc-product-price-input', price);
 	if (taxStatus) {
 		const option = page.getByTestId(`tax_status-option-${taxStatus}`);
@@ -165,7 +166,7 @@ async function addMiscProduct(page: Page, price: string, taxStatus?: 'taxable' |
 		await option.click();
 	}
 	await page.getByTestId('add-to-cart-submit').click();
-	await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
+	await expect(dialog).toBeHidden({ timeout: 15_000 });
 }
 
 /**
@@ -179,28 +180,31 @@ async function addMiscProduct(page: Page, price: string, taxStatus?: 'taxable' |
  */
 async function addNegativeFee(page: Page, amount: string) {
 	await openCartMenuAndClick(page, 'menu-add-fee');
-	await expect(page.getByTestId('add-fee-dialog')).toBeVisible({ timeout: 15_000 });
+	const dialog = page.getByTestId('add-fee-dialog');
+	await expect(dialog).toBeVisible({ timeout: 15_000 });
 	await fillCurrencyField(page, 'fee-amount-input', amount, { negative: true });
 	await page.getByTestId('add-to-cart-submit').click();
-	await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
+	await expect(dialog).toBeHidden({ timeout: 15_000 });
 }
 
 /** Adds a fixed-amount fee. `prices_include_tax` defaults ON — the cashier's default. */
 async function addFee(page: Page, amount: string) {
 	await openCartMenuAndClick(page, 'menu-add-fee');
-	await expect(page.getByTestId('add-fee-dialog')).toBeVisible({ timeout: 15_000 });
+	const dialog = page.getByTestId('add-fee-dialog');
+	await expect(dialog).toBeVisible({ timeout: 15_000 });
 	await fillCurrencyField(page, 'fee-amount-input', amount);
 	await page.getByTestId('add-to-cart-submit').click();
-	await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
+	await expect(dialog).toBeHidden({ timeout: 15_000 });
 }
 
 /** Adds a shipping line. `prices_include_tax` defaults ON — the cashier's default. */
 async function addShipping(page: Page, amount: string) {
 	await openCartMenuAndClick(page, 'menu-add-shipping');
-	await expect(page.getByTestId('add-shipping-dialog')).toBeVisible({ timeout: 15_000 });
+	const dialog = page.getByTestId('add-shipping-dialog');
+	await expect(dialog).toBeVisible({ timeout: 15_000 });
 	await fillCurrencyField(page, 'shipping-amount-input', amount);
 	await page.getByTestId('add-to-cart-submit').click();
-	await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
+	await expect(dialog).toBeHidden({ timeout: 15_000 });
 }
 
 /**
@@ -276,20 +280,28 @@ async function saveAndCapture(
 	const storeId = pushUrl.searchParams.get('store_id');
 	const authorization = pushUrl.searchParams.get('authorization');
 	const authorizationHeader = response.request().headers().authorization;
-	const storeResponse = await page.request.get(
-		`${getStoreUrl(testInfo).replace(/\/+$/, '')}/wp-json/wcpos/v1/stores`,
-		{
-			headers: {
-				'X-WCPOS': '1',
-				...(authorizationHeader ? { Authorization: authorizationHeader } : {}),
-			},
-			params: {
-				...(storeId ? { store_id: storeId } : {}),
-				...(authorization ? { authorization } : {}),
-			},
-			failOnStatusCode: false,
-		}
+	const storeBaseUrl = getStoreUrl(testInfo).replace(/\/+$/, '');
+	const storeRequestOptions = {
+		headers: {
+			'X-WCPOS': '1',
+			...(authorizationHeader ? { Authorization: authorizationHeader } : {}),
+		},
+		params: {
+			...(storeId ? { store_id: storeId } : {}),
+			...(authorization ? { authorization } : {}),
+		},
+		failOnStatusCode: false,
+	};
+	let storeResponse = await page.request.get(
+		`${storeBaseUrl}/wp-json/wcpos/v1/stores`,
+		storeRequestOptions
 	);
+	if (storeResponse.status() === 404) {
+		storeResponse = await page.request.get(`${storeBaseUrl}/index.php`, {
+			...storeRequestOptions,
+			params: { ...storeRequestOptions.params, rest_route: '/wcpos/v1/stores' },
+		});
+	}
 	expect(storeResponse.ok(), `store settings request returned ${storeResponse.status()}`).toBe(
 		true
 	);
@@ -460,6 +472,11 @@ function expectPerRateTaxParity(sale: SavedSale, label: string) {
 
 			const serverByRate = new Map(
 				(serverLine?.taxes ?? []).map((tax) => [String(tax?.id ?? ''), tax])
+			);
+			const sentRateIds = (sentLine.taxes ?? []).map((tax) => String(tax?.id ?? '')).sort();
+			const serverRateIds = (serverLine?.taxes ?? []).map((tax) => String(tax?.id ?? '')).sort();
+			expect(serverRateIds, `${label}: ${key}[${index}] client/server rate IDs`).toEqual(
+				sentRateIds
 			);
 
 			// The per-rate values BOTH sides hold, logged for every run whether it

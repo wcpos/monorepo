@@ -525,7 +525,7 @@ function computeFeeLine(
 		total_tax: String(roundedTotalTax),
 		// Per-rate taxes are stored unrounded whatever taxRoundAtSubtotal says; only
 		// total_tax above is rounded. See PER_RATE_TAXES_ARE_UNROUNDED.
-		taxes: tax.taxes.map((t) => ({ ...t, total: String(roundHalfUp(t.total, roundingPrecision)) })),
+		taxes: tax.taxes.map((t, index) => ({ ...t, total: String(storedPerRate[index]) })),
 	};
 }
 
@@ -587,7 +587,7 @@ function computeShippingLine(
 		total_tax: String(roundedTotalTax),
 		// Per-rate taxes are stored unrounded whatever taxRoundAtSubtotal says; only
 		// total_tax above is rounded. See PER_RATE_TAXES_ARE_UNROUNDED.
-		taxes: tax.taxes.map((t) => ({ ...t, total: String(roundHalfUp(t.total, roundingPrecision)) })),
+		taxes: tax.taxes.map((t, index) => ({ ...t, total: String(storedPerRate[index]) })),
 	};
 }
 

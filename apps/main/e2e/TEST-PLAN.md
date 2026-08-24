@@ -135,8 +135,21 @@ POS Cart — save to server parity (live store, writes):
 - [x] Plain one-product cart saves with identical totals (rate-set, cart_tax, total) and no
       divergence banner (the woocommerce-pos#1545 regression oracle; see Money-oracle
       doctrine below)
+
+POS Cart — Add Items Menu (the cart "+" dropdown):
+
+- [x] Dropdown shows Misc Product, Fee, and Shipping menu items
+- [x] Add fee via the dropdown menu
+- [x] Add shipping via the dropdown menu
+- [x] Add miscellaneous product via the dropdown menu
+- [x] Close the add-item dialog (Escape) without adding
+
+### pos-money-oracle.spec.ts (authenticated, free + pro) — 6 tests
+
+POS money oracle — save to server parity (live store, writes):
+
 - [x] Fee line saves with identical per-rate taxes, on an amount whose tax is sub-cent
-      (`pos-money-oracle.spec.ts` — the order-111919 regression oracle)
+      (the order-111919 regression oracle)
 - [x] Shipping line saves with identical per-rate taxes, on a sub-cent amount
 - [x] Misc product priced to a sub-cent tax saves with identical per-rate taxes
 - [x] Product + fee + shipping together save with identical money throughout (the
@@ -147,14 +160,6 @@ POS Cart — save to server parity (live store, writes):
 - [x] Mixed-tax-class cart: standard + reduced-rate + untaxed lines in one sale, every
       line's per-rate taxes compared (needs `e2e/scripts/tax-class-fixtures.php`; skips
       with a reason on an unprovisioned store)
-
-POS Cart — Add Items Menu (the cart "+" dropdown):
-
-- [x] Dropdown shows Misc Product, Fee, and Shipping menu items
-- [x] Add fee via the dropdown menu
-- [x] Add shipping via the dropdown menu
-- [x] Add miscellaneous product via the dropdown menu
-- [x] Close the add-item dialog (Escape) without adding
 
 ### pos-checkout.spec.ts (authenticated, free + pro) — 12 tests
 
