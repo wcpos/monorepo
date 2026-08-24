@@ -30,7 +30,10 @@ describe('createTestT', () => {
 		);
 	});
 
-	it('leaves keys that merely end in a plural-looking suffix alone', () => {
-		expect(t('health.database.attention_one')).toBe('1 record needs attention');
+	it('returns a suffixed plural key verbatim when no count is given', () => {
+		// Asking for the suffixed key directly is a lookup, not a plural
+		// selection — the catalogue entry comes back untouched, placeholder and
+		// all, because there is no count to interpolate.
+		expect(t('health.database.attention_one')).toBe('{n} record needs attention');
 	});
 });
