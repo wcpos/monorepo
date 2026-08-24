@@ -142,6 +142,11 @@ POS Cart — save to server parity (live store, writes):
 - [x] Product + fee + shipping together save with identical money throughout (the
       cross-line case: `cart_tax`/`total_tax` aggregate over all three line types, so a
       per-line error that cancels on a single-line cart still shows here)
+- [x] Negative fee is taxed from its OWN class — locks the POS override, NOT WooCommerce's
+      apportionment (see the negative-fee note below)
+- [x] Mixed-tax-class cart: standard + reduced-rate + untaxed lines in one sale, every
+      line's per-rate taxes compared (needs `e2e/scripts/tax-class-fixtures.php`; skips
+      with a reason on an unprovisioned store)
 
 POS Cart — Add Items Menu (the cart "+" dropdown):
 
@@ -407,6 +412,7 @@ The rules:
    not touch. Treat any surviving microunit as an unexplained divergence to chase to its
    mechanism, exactly as this one turned out to be, and NOT as a known cost of doing
    business. That reading is what kept it alive for sixteen days.
+
 4. **Parity assertions are store-agnostic by construction** — they compare the two sides of
    the same sale, never fixture values — so they belong in every order-writing spec at no
    cost to the any-store contract.
@@ -424,6 +430,22 @@ The rules:
      0.20 — identical under the correct rule and under the bug. The suite's fee and
      shipping unit fixtures had the same defect (10 @ 20% = 2), so 566 green unit tests
      said nothing about it either.
+
+   A third form of the same blindness surfaced on 2026-08-24 and is worth naming
+   separately: **a fixture can exist and still be unreachable.** Both dev stores carried
+   `reduced-rate` and `zero-rate` tax classes with real rates behind them — and not one
+   of ~2,050 published products used either, nor had any tax status but `taxable`. Every
+   money assertion the suite had ever made ran on the standard class alone, and nothing
+   said so. Provisioned by `e2e/scripts/tax-class-fixtures.php`; the store-side contract
+   is `wcpos-infra/docs/specs/2026-08-24-dev-store-tax-profile.md`.
+
+   And a fourth, caught by the fix for the third: **dev-pro's reduced-rate rate was
+   scoped GB while its POS outlets are US:AL**, so the reduced-rate fixture rang up
+   untaxed at the till and the new mixed-class spec passed on the wrong evidence. Its
+   coverage assertion had accepted "more than one distinct rate set", which a taxed line
+   beside an untaxed one satisfies without ever applying a second rate. It now requires
+   two distinct NON-EMPTY rate sets. On a multi-store site, where the store taxes is not
+   where the till is.
 
    `pos-money-oracle.spec.ts` closes both: it MINTS its own adversarial amounts through
    the POS UI (misc product, fee, shipping all take a cashier-entered amount) rather than

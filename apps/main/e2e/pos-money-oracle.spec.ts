@@ -3,7 +3,7 @@ import { expect, type Page, type TestInfo } from '@playwright/test';
 import { log } from '@wcpos/utils/logger';
 
 import { addCheckoutProbeProduct } from './checkout-probe';
-import { getStoreUrl } from './fixtures';
+import { getStoreUrl, tryAddProductBySku } from './fixtures';
 import {
 	expectMoneyMatches,
 	expectRateSetParity,
@@ -65,6 +65,18 @@ const ADVERSARIAL = {
 	miscProduct: '9.99',
 	/** A NON-taxable line, sized to take a substantial share of the class mix. */
 	nonTaxable: '5',
+} as const;
+
+/**
+ * Catalogue fixtures provisioned by `e2e/scripts/tax-class-fixtures.php`.
+ *
+ * Keyed by well-known SKU, never by id — the same contract as the `e2e-product-writer`
+ * identity, so a new or moved store needs one command and the specs below skip with a
+ * reason until it has been run.
+ */
+const TAX_CLASS_SKU = {
+	reduced: 'e2e-tax-reduced',
+	nonTaxable: 'e2e-tax-none',
 };
 
 async function openCartMenuAndClick(page: Page, menuItemTestId: string) {
@@ -189,6 +201,45 @@ async function addShipping(page: Page, amount: string) {
 	await fillCurrencyField(page, 'shipping-amount-input', amount);
 	await page.getByTestId('add-to-cart-submit').click();
 	await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
+}
+
+/**
+ * Did this sale actually mix tax treatments?
+ *
+ * The declared-coverage rule again, for a different claim. A cart whose lines all land
+ * in the same tax class exercises nothing about class mixing, and would pass this spec
+ * silently — which is exactly the state the suite was in until 2026-08-24, when not one
+ * of ~2,050 products on either dev store used a non-standard class. Assert on the thing.
+ */
+function assertMixedTaxTreatment(doc: ServerOrder, label: string) {
+	const signatures = linesOf(doc as unknown as Record<string, unknown>, 'line_items').map((line) =>
+		(line.taxes ?? [])
+			.map((tax) => String(tax?.id ?? ''))
+			.sort()
+			.join(',')
+	);
+	const rendered = signatures.map((sig) => `[${sig || 'untaxed'}]`).join(' ');
+
+	// TWO DISTINCT NON-EMPTY rate sets. "More than one distinct signature" is not
+	// enough: a taxed line beside an untaxed one satisfies that while never applying a
+	// second RATE, and on 2026-08-24 that is precisely what dev-pro did — its
+	// reduced-rate rate was scoped GB, its POS outlets are US:AL, so the reduced-rate
+	// fixture rang up untaxed and this assertion passed on the wrong evidence.
+	const taxed = signatures.filter((sig) => sig !== '');
+	expect(
+		new Set(taxed).size,
+		`${label}: NOT COVERED — this sale applied fewer than two distinct rate sets ` +
+			`(${rendered}). A taxed line beside an untaxed one is not a class mix. Most likely ` +
+			`the reduced-rate class has no rate for the tax location this till resolves — run ` +
+			`e2e/scripts/tax-class-fixtures.php, which provisions rates per taxing country.`
+	).toBeGreaterThan(1);
+
+	// And the untaxed path ran too — the other half of the cart's purpose.
+	expect(
+		signatures.some((sig) => sig === ''),
+		`${label}: no untaxed line on this sale (${rendered}); the tax_status=none path ` +
+			`was not exercised.`
+	).toBe(true);
 }
 
 type SavedSale = {
@@ -530,6 +581,51 @@ liveTest.describe('POS money oracle — line taxes survive the round trip (live 
 		}
 	);
 
+	/**
+	 * A MIXED-TAX-CLASS cart — a standard-rate line, a reduced-rate line, and an
+	 * untaxed line in the same sale.
+	 *
+	 * Until 2026-08-24 no test could build this. Both dev stores carried `reduced-rate`
+	 * and `zero-rate` classes with real rates behind them, and not one of ~2,050
+	 * published products used either — the classes were live and unreachable. Every
+	 * money assertion the suite had ever made ran on the standard class alone.
+	 *
+	 * This is also the shape the v1.11.0 quick-discount work needs (wcpos/roadmap#91):
+	 * the whole correctness argument for moving till discounts to `percent` coupons is
+	 * that they allocate pro rata by value across tax classes, and that claim cannot be
+	 * tested on a single-class basket.
+	 *
+	 * Skips with a reason when the fixture SKUs are absent — a store that has not run
+	 * `e2e/scripts/tax-class-fixtures.php` is a declared-missing environment, not a
+	 * regression.
+	 */
+	liveTest(
+		'a mixed-tax-class cart saves with identical per-rate taxes on every line',
+		async ({ posPage: page, trackOrder }) => {
+			const label = newRunLabel();
+			const divergence = captureDivergenceLog(page);
+			await addCheckoutProbeProduct(page);
+
+			const reduced = await tryAddProductBySku(page, TAX_CLASS_SKU.reduced);
+			const untaxed = await tryAddProductBySku(page, TAX_CLASS_SKU.nonTaxable);
+			if (reduced !== 'added' || untaxed !== 'added') {
+				liveTest.skip(
+					true,
+					`tax-class fixtures unavailable on this store (${TAX_CLASS_SKU.reduced}: ` +
+						`${reduced}, ${TAX_CLASS_SKU.nonTaxable}: ${untaxed}). Run ` +
+						`e2e/scripts/tax-class-fixtures.php against it — see that file's header.`
+				);
+				return;
+			}
+
+			await stampRunLabel(page, label);
+
+			const sale = await saveAndCapture(page, trackOrder, label);
+			assertMixedTaxTreatment(sale.doc, 'mixed-class cart');
+			assertSaleParity(sale, page, 'line_items', 'mixed-class cart');
+			await expectNoBanner(page, 'mixed-class cart', divergence);
+		}
+	);
 	/**
 	 * NEGATIVE FEE — the POS override, NOT WooCommerce's discount path.
 	 *
