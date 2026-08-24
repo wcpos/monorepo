@@ -164,15 +164,17 @@ export interface FeeLineChanges extends Partial<FeeLineInput> {
 
 /**
  * Extends `Partial<ShippingLineInput>` because the shipping edit form submits the WHOLE
- * line — `meta_data` and `instance_id` alongside the four posData fields — and the merge
+ * line — `meta_data` and `instance_id` alongside the posData fields — and the merge
  * below spreads everything it does not recognise straight through. Modelling only the
  * posData fields would leave the form's `meta_data` edit legal at runtime but invisible
  * to the type, which is how a passthrough field gets dropped by a later refactor.
+ *
+ * There is deliberately no `tax_class` here: WooCommerce has no per-line shipping tax
+ * class, so a shipping line has none to change. See `extractShippingLineData`.
  */
 export interface ShippingLineChanges extends Partial<ShippingLineInput> {
 	amount?: number;
 	tax_status?: 'taxable' | 'none';
-	tax_class?: string;
 	prices_include_tax?: boolean;
 	/** Woo's shipping-method instance id. Carried through untouched. */
 	instance_id?: string;
@@ -295,9 +297,13 @@ function applyFeeLineChanges(
 /**
  * THE changes-merge for shipping lines — `useUpdateShippingLine` calls this rather than
  * carrying its own copy (the block it was ported from is deleted):
- * `amount`/`prices_include_tax`/`tax_class`/`tax_status` go into
- * `_woocommerce_pos_data` with `?? prev` fallbacks; everything else
- * (method_title, method_id, ...) merges top-level.
+ * `amount`/`prices_include_tax`/`tax_status` go into `_woocommerce_pos_data` with
+ * `?? prev` fallbacks; everything else (method_title, method_id, ...) merges top-level.
+ *
+ * `tax_class` is neither merged nor written: a shipping line has no tax class of its own
+ * (see `extractShippingLineData`). It is stripped from `rest` rather than simply left out
+ * of the type, so a stray value from an older caller cannot ride the passthrough onto the
+ * line top-level — where the wire schema has no home for it either.
  */
 function applyShippingLineChanges(
 	line: ShippingLineInput,
@@ -312,7 +318,8 @@ function applyShippingLineChanges(
 	);
 
 	// extract the meta_data from the changes
-	const { amount, prices_include_tax, tax_class, tax_status, ...rest } = changes;
+	const { amount, prices_include_tax, tax_status, ...rest } = changes;
+	delete (rest as { tax_class?: string }).tax_class;
 
 	// merge the previous line data with the rest of the changes
 	const updatedItem = { ...line, ...rest };
@@ -320,7 +327,6 @@ function applyShippingLineChanges(
 	return updatePosDataMeta(updatedItem as DbShippingLine, {
 		amount: amount ?? prevData.amount,
 		prices_include_tax: prices_include_tax ?? prevData.prices_include_tax,
-		tax_class: tax_class ?? prevData.tax_class,
 		tax_status: tax_status ?? prevData.tax_status,
 	});
 }
@@ -565,10 +571,11 @@ function computeShippingLine(
 	const dp = config.dp;
 	const roundingPrecision = getRoundingPrecision(dp);
 
-	// WooCommerce's 'inherit' is a whole-order property: the class comes from the line
-	// items, so it cannot be resolved when the line is authored — only here, against the
-	// cart this line is being computed for. `settleCart` re-runs inheriting lines for
-	// exactly that reason, the way it re-runs percent fees.
+	// The class is the store's, never the line's (see `extractShippingLineData`). When the
+	// store's setting is WooCommerce's 'inherit', it is a whole-order property: the class
+	// comes from the line items, so it cannot be resolved when the line is authored — only
+	// here, against the cart this line is being computed for. `settleCart` re-runs shipping
+	// lines for exactly that reason, the way it re-runs percent fees.
 	const inherited =
 		tax_class === INHERIT_TAX_CLASS
 			? resolveInheritedShippingTaxClass(

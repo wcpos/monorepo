@@ -23,14 +23,15 @@ import { CurrencyInput } from '../../../../components/currency-input';
 import { FormErrors } from '../../../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-form';
 import { ShippingMethodSelect } from '../../../../components/shipping-method-select';
-import { TaxClassSelect } from '../../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
-import { taxClassFromWire, taxClassToWire } from '../../../../hooks/tax-class';
 import { useShippingLineData } from '../../../hooks/use-shipping-line-data';
 import { useUpdateShippingLine } from '../../../hooks/use-update-shipping-line';
 
 /**
- *
+ * No tax class field — same reason as the Add shipping dialog: WooCommerce has no
+ * per-line shipping tax class, so the store's `shipping_tax_class` setting is the only
+ * one there is. See `extractShippingLineData` in @wcpos/order-math. Tax STATUS stays:
+ * the POS plugin honours it server-side.
  */
 const formSchema = z.object({
 	method_title: z.string().optional(),
@@ -39,7 +40,6 @@ const formSchema = z.object({
 	amount: z.number().optional(),
 	prices_include_tax: z.boolean().optional(),
 	tax_status: z.enum(['taxable', 'none']),
-	tax_class: z.string().optional(),
 	meta_data: metaDataSchema,
 });
 
@@ -56,7 +56,7 @@ export function EditShippingLineForm({ uuid, item }: Props) {
 	const { updateShippingLine } = useUpdateShippingLine();
 	const { onOpenChange } = useRootContext();
 	const { getShippingLineData } = useShippingLineData();
-	const { amount, tax_status, tax_class, prices_include_tax } = getShippingLineData(item);
+	const { amount, tax_status, prices_include_tax } = getShippingLineData(item);
 
 	/**
 	 *
@@ -72,7 +72,6 @@ export function EditShippingLineForm({ uuid, item }: Props) {
 			amount: toNumber(amount),
 			prices_include_tax,
 			tax_status,
-			tax_class: taxClassFromWire(tax_class),
 			meta_data: item.meta_data as FormValues['meta_data'],
 		},
 	});
@@ -88,7 +87,6 @@ export function EditShippingLineForm({ uuid, item }: Props) {
 				instance_id: data.instance_id,
 				amount: data.amount,
 				tax_status: data.tax_status,
-				tax_class: taxClassToWire(data.tax_class),
 				prices_include_tax: data.prices_include_tax,
 				meta_data: data.meta_data as NonNullable<
 					import('@wcpos/database').OrderDocument['shipping_lines']
@@ -171,39 +169,19 @@ export function EditShippingLineForm({ uuid, item }: Props) {
 						/>
 					</View>
 				</HStack>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="tax_class"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
-								<FormSelect
-									label={t('common.tax_class')}
-									customComponent={TaxClassSelect}
-									includeInherit
-									value={value ?? ''}
-									onChange={onChange}
-									{...rest}
-								/>
-							</View>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="tax_status"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
-								<FormRadioGroup
-									label={t('common.tax_status')}
-									customComponent={TaxStatusRadioGroup}
-									value={value}
-									onChange={onChange}
-									{...rest}
-								/>
-							</View>
-						)}
-					/>
-				</HStack>
+				<FormField
+					control={form.control}
+					name="tax_status"
+					render={({ field: { value, onChange, ...rest } }) => (
+						<FormRadioGroup
+							label={t('common.tax_status')}
+							customComponent={TaxStatusRadioGroup}
+							value={value}
+							onChange={onChange}
+							{...rest}
+						/>
+					)}
+				/>
 				<MetaDataForm />
 				<DialogFooter className="px-0">
 					<DialogClose>{t('common.close')}</DialogClose>

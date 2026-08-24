@@ -303,7 +303,7 @@ describe('settleCart', () => {
 	 * like a percent fee — a line added before the cart settled would otherwise keep a
 	 * rate derived from lines it was not built from.
 	 */
-	describe('shipping lines that inherit their tax class', () => {
+	describe('shipping lines are recomputed on the settled cart', () => {
 		const shippingRate = (id: number, cls: string, rate: string) => ({
 			id,
 			class: cls,
@@ -352,9 +352,18 @@ describe('settleCart', () => {
 			expect(snapshot).toEqual(before);
 		});
 
-		it('leaves the key out entirely when no shipping line inherits', () => {
+		/**
+		 * This used to assert the opposite — that settle skipped any line carrying its own
+		 * tax class, because "the merchant chose it". WooCommerce has no per-line shipping
+		 * tax class to choose (see `extractShippingLineData`), so a line authored with one
+		 * is exactly the line that needs healing: it is the shape that reached the server
+		 * as a money divergence on dev-pro order 99866.
+		 */
+		it('heals a line that was authored with a tax class of its own', () => {
 			const explicitShipping = {
 				...inheritingShipping(),
+				total_tax: '10',
+				taxes: [{ id: 101, total: '10' }],
 				meta_data: [
 					{
 						key: '_woocommerce_pos_data',
@@ -369,8 +378,11 @@ describe('settleCart', () => {
 			expect(result.ok).toBe(true);
 			if (!result.ok) return;
 
-			// The merchant chose the class; settle must not touch the line.
-			expect('shipping_lines' in result.patch).toBe(false);
+			// The store inherits, and the cart is entirely reduced-rate: 5%, not the 10%
+			// the line was carrying.
+			expect(result.patch.shipping_lines).toHaveLength(1);
+			expect(result.patch.shipping_lines![0].total_tax).toBe('5');
+			expect(result.patch.shipping_tax).toBe('5');
 		});
 
 		it('omits the array when the recompute changes nothing', () => {

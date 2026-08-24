@@ -236,6 +236,34 @@ export const extractFeeLineData = (item: FeeLine, pricesIncludeTax: boolean) => 
 
 /**
  * Extracts shipping line data with fallbacks for default values.
+ *
+ * `tax_class` is the ONE field here that is not read from the line: it is always the
+ * store-wide setting, and any `tax_class` in the line's `_woocommerce_pos_data` is
+ * ignored. **WooCommerce has no per-line shipping tax class** — verified against
+ * 11.0.1 and unchanged since 3.2.0:
+ *
+ * ```php
+ * // WC_Order_Item_Shipping — no 'tax_class' in $extra_data, and no set_tax_class().
+ * public function get_tax_class( $context = 'view' ) {
+ *     return get_option( 'woocommerce_shipping_tax_class' );
+ * }
+ * ```
+ *
+ * and `WC_Abstract_Order::calculate_taxes()` force-feeds that same option to every
+ * shipping line before the item calculates. The REST controller agrees:
+ * `prepare_shipping_lines()` reads only `method_id`/`method_title`/`total`/`instance_id`,
+ * so a `tax_class` sent on a shipping line is dropped and never persisted — there is no
+ * `_tax_class` itemmeta row for a shipping item. (Fee and product lines DO carry their
+ * own class; shipping is the exception.)
+ *
+ * Honouring a per-line class here is therefore a guaranteed money divergence: the till
+ * taxes shipping at one class, the store recalculates at another, and the cashier gets a
+ * totals-changed banner on an otherwise correct sale. Found on dev-pro order 99866, where
+ * a line marked `reduced-rate` (a class whose only US rate is not shipping-eligible) took
+ * £0 against the store's £0.50.
+ *
+ * The 'inherit' sentinel is still passed straight through, NOT collapsed to the standard
+ * class: resolving it needs the order's line items, which only `computeShippingLine` has.
  */
 export const extractShippingLineData = (
 	item: ShippingLine,
@@ -243,25 +271,18 @@ export const extractShippingLineData = (
 	shippingTaxClass: string
 ) => {
 	const defaultAmount = calculateDefaultAmount(item, pricesIncludeTax);
-	// The 'inherit' sentinel is passed straight through, NOT collapsed to the standard
-	// class. This function reports what the line is set to; resolving the sentinel needs
-	// the order's line items, which only `computeShippingLine` has. Collapsing it here
-	// was wrong twice over: it charged standard-rate tax on carts WooCommerce taxes at
-	// another class, and it left the edit form unable to show "based on cart items".
-	const defaultTaxClass = shippingTaxClass;
 	const defaultTaxStatus: TaxStatus = 'taxable';
 
 	const {
 		amount = defaultAmount,
 		tax_status = defaultTaxStatus,
-		tax_class = defaultTaxClass,
 		prices_include_tax = pricesIncludeTax,
 	} = parsePosData(item) || {};
 
 	return {
 		amount: toNumber(amount),
 		tax_status,
-		tax_class,
+		tax_class: shippingTaxClass,
 		prices_include_tax: toBoolean(prices_include_tax),
 	};
 };

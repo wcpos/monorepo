@@ -71,7 +71,6 @@ describe('cart fee and shipping add failure reporting', () => {
 			amount: '5',
 			prices_include_tax: false,
 			tax_status: 'none',
-			tax_class: '',
 		});
 
 		expect(getLogger([]).error).not.toHaveBeenCalled();

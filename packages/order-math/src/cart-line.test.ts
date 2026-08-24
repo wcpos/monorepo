@@ -687,7 +687,18 @@ describe('calculateCartLine — shipping tax class contract', () => {
 		}
 	);
 
-	it('lets the LINE own tax_class when its pos_data carries one', () => {
+	/**
+	 * The store's setting wins over anything the LINE carries. WooCommerce has no per-line
+	 * shipping tax class: `WC_Order_Item_Shipping::get_tax_class()` returns
+	 * `get_option('woocommerce_shipping_tax_class')` and nothing else, and
+	 * `WC_Abstract_Order::calculate_taxes()` feeds that same option to every shipping line.
+	 *
+	 * This test used to assert the opposite ("lets the LINE own tax_class"). That contract
+	 * was never real: dev-pro order 99866 shipped a line marked `reduced-rate`, the till
+	 * taxed it at that class and the store taxed it at standard, and the cashier got a
+	 * totals-changed banner on an arithmetically correct sale.
+	 */
+	it('IGNORES a tax_class in the line pos_data — the store setting decides', () => {
 		const config = createCartConfig({
 			...baseConfig,
 			rates: [standardShippingRate, reducedShippingRate],
@@ -714,7 +725,45 @@ describe('calculateCartLine — shipping tax class contract', () => {
 			config
 		);
 
-		expect(line.taxes).toEqual([{ id: 202, total: '5' }]);
+		expect(line.taxes).toEqual([{ id: 101, total: '10' }]);
+	});
+
+	/**
+	 * The dev-pro 99866 shape exactly: the line's class has a rate that is NOT
+	 * shipping-eligible, so honouring it charged nothing at all where the store charged
+	 * the standard rate. This is the case that reaches the cashier as a money divergence
+	 * rather than a few cents.
+	 */
+	it('does not zero the tax when the line names a class with no shipping-eligible rate', () => {
+		const nonShippingReduced: TaxRateInput = { ...reducedShippingRate, shipping: false };
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [standardShippingRate, nonShippingReduced],
+			shippingTaxClass: '',
+			taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
+		});
+
+		const { line } = calculateCartLine(
+			{
+				kind: 'shipping',
+				cartLineItems: [],
+				line: {
+					method_title: 'Env\u00edo',
+					meta_data: [
+						posDataMeta({
+							amount: 5,
+							prices_include_tax: true,
+							tax_status: 'taxable',
+							tax_class: 'reduced-rate',
+						}),
+					],
+				},
+			},
+			config
+		);
+
+		expect(line.total_tax).not.toBe('0');
+		expect(line.taxes).toEqual([{ id: 101, total: '0.454545' }]);
 	});
 });
 
@@ -1631,7 +1680,7 @@ describe('calculateCartLine — inherited shipping tax class', () => {
 		});
 	});
 
-	it('never inherits when the LINE carries its own tax class', () => {
+	it('still inherits when the LINE carries a tax class of its own', () => {
 		const { line } = calculateCartLine(
 			{
 				kind: 'shipping',
@@ -1651,7 +1700,8 @@ describe('calculateCartLine — inherited shipping tax class', () => {
 			config
 		);
 
-		// The merchant chose zero-rate; the cart does not override that.
-		expect(line.taxes).toEqual([{ id: 303, total: '0' }]);
+		// The line's 'zero-rate' is not a choice WooCommerce can represent, so it is
+		// ignored: the store is set to 'inherit' and the cart is reduced-rate.
+		expect(line.taxes).toEqual([{ id: 202, total: '5' }]);
 	});
 });

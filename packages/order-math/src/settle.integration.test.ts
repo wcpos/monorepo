@@ -599,3 +599,139 @@ describe('coupon integration: PHP test parity (Test_Orders_Coupon_Discount)', ()
 		expect(Math.round(orderTotal * 100)).toBe(40_230);
 	});
 });
+
+/**
+ * dev-pro order 99866 (2026-08-24) — the sale that made the shipping tax class a store
+ * property in this package.
+ *
+ * The cashier rang one £22 tax-inclusive item, a `yoyo` £2 fixed_cart coupon and a £5
+ * shipping line, and got "your store has changed this order's totals": the till pushed
+ * £25.00 and the store stored £25.50.
+ *
+ * The store (AL Store, id 24129): prices include tax, round at subtotal, 2dp,
+ * `shipping_tax_class` = '' i.e. standard. Its US rates are #13 standard 10%
+ * shipping-ELIGIBLE and #15 reduced-rate 5% NOT shipping-eligible.
+ *
+ * The shipping line had been authored with `tax_class: 'reduced-rate'` in its pos_data.
+ * Honouring that found no shipping-eligible reduced-rate rate and charged nothing, while
+ * WooCommerce taxed the same line at the store's standard class. Every divergent field in
+ * the push — total, total_tax, shipping_tax, the line's total_tax, the tax line's
+ * shipping_tax_total — was that one missing £0.50.
+ */
+describe("dev-pro order 99866: the shipping tax class is the store's, not the line's", () => {
+	const rate13: TaxRateInput = {
+		id: 13,
+		rate: '10.0000',
+		compound: true,
+		order: 1,
+		class: 'standard',
+		shipping: true,
+	};
+	const rate15: TaxRateInput = {
+		id: 15,
+		rate: '5.0000',
+		compound: false,
+		order: 1,
+		class: 'reduced-rate',
+		shipping: false,
+	};
+
+	const configInput = {
+		rates: [rate13, rate15],
+		allRates: [rate13, rate15],
+		calcTaxes: true,
+		pricesIncludeTax: true,
+		taxRoundAtSubtotal: true,
+		dp: 2,
+		shippingTaxClass: '',
+		taxClassSlugs: ['standard', 'reduced-rate', 'zero-rate'],
+		calcDiscountsSequentially: false,
+	};
+
+	/** The £5 shipping line exactly as the till authored it. */
+	const shippingLine = {
+		method_id: 'local_pickup',
+		method_title: 'Envío',
+		total: '0',
+		total_tax: '0',
+		taxes: [],
+		meta_data: [
+			{
+				key: '_woocommerce_pos_data',
+				value: JSON.stringify({
+					amount: 5,
+					prices_include_tax: true,
+					tax_class: 'reduced-rate',
+					tax_status: 'taxable',
+				}),
+			},
+		],
+	};
+
+	const snapshot: CartSnapshot = {
+		line_items: [
+			{
+				product_id: 1,
+				quantity: 1,
+				tax_class: '',
+				subtotal: '20',
+				subtotal_tax: '2',
+				total: '18.181818',
+				total_tax: '1.818182',
+				taxes: [{ id: 13, subtotal: '2', total: '1.818182' }],
+				meta_data: posData(22, 25),
+			},
+		],
+		shipping_lines: [shippingLine],
+		coupon_lines: [{ code: 'yoyo', discount: '0', discount_tax: '0', meta_data: [] }],
+	};
+
+	const context: CouponContext = {
+		coupons: new Map([
+			['yoyo', { code: 'yoyo', discount_type: 'fixed_cart' as const, amount: '2' }],
+		]),
+		productCategories: new Map(),
+	};
+
+	it('taxes shipping at the store class, and the order total holds at £25.00', () => {
+		const result = settleCart(snapshot, createCartConfig(configInput), { coupons: context });
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+
+		// The shipping line: taxed at the store's standard class, NOT silently untaxed.
+		// £5 inclusive of 10% ⇒ 4.545455 ex-tax + 0.454545 tax.
+		const settledShipping = result.patch.shipping_lines![0];
+		expect(settledShipping.total).toBe('4.545455');
+		expect(settledShipping.total_tax).toBe('0.454545');
+		expect(settledShipping.taxes).toEqual([{ id: 13, total: '0.454545' }]);
+
+		// Order money. The server's £25.50 came from taking the till's ex-tax `total: "5"`
+		// — a 5.00 that had had no tax removed from it — and adding 10% on top. Push the
+		// correct 4.545455 and WooCommerce's own arithmetic lands on the till's £25.00.
+		// `shipping_total` is the per-LINE rounded sum, not the raw 4.545455 — WooCommerce
+		// rounds each shipping line to display decimals before summing it into the order
+		// (`WC_Abstract_Order::calculate_totals`). See PR #1524.
+		expect(result.patch.shipping_total).toBe('4.55');
+		expect(result.patch.shipping_tax).toBe('0.454545');
+		// Display-rounded, exactly as the server stored them on 99866.
+		expect(result.patch.discount_total).toBe('1.82');
+		expect(result.patch.discount_tax).toBe('0.18');
+		expect(result.patch.total).toBe('25');
+
+		const shippingTaxLine = result.patch.tax_lines.find((line) => line.rate_id === 13);
+		expect(shippingTaxLine?.shipping_tax_total).toBe('0.454545');
+	});
+
+	it('reproduces the divergence when that class is the one used', () => {
+		// The pre-fix behaviour, reproduced by giving the STORE the class the line carried:
+		// no shipping-eligible reduced-rate rate ⇒ zero shipping tax ⇒ the £25.00-vs-£25.50
+		// push that raised the banner.
+		const asAuthored = createCartConfig({ ...configInput, shippingTaxClass: 'reduced-rate' });
+		const result = settleCart(snapshot, asAuthored, { coupons: context });
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+
+		expect(result.patch.shipping_lines![0].total_tax).toBe('0');
+		expect(result.patch.shipping_total).toBe('5');
+	});
+});

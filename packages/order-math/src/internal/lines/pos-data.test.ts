@@ -359,7 +359,7 @@ describe('Utilities', () => {
 				});
 			});
 
-			it('parses and uses posData values if present', () => {
+			it('parses and uses posData values if present — except tax_class', () => {
 				const metaData = [
 					{
 						key: '_woocommerce_pos_data',
@@ -371,7 +371,10 @@ describe('Utilities', () => {
 				expect(result).toEqual({
 					amount: 80, // parsed and coerced to number
 					tax_status: 'none', // parsed from posData
-					tax_class: 'reduced', // parsed from posData
+					// NOT 'reduced'. A shipping line has no tax class of its own in WooCommerce
+					// — the store setting is the only one that exists. See the doc comment on
+					// extractShippingLineData.
+					tax_class: 'standard',
 					prices_include_tax: false, // parsed as boolean
 				});
 			});
@@ -403,7 +406,10 @@ describe('Utilities', () => {
 				expect(result).toEqual({
 					amount: 120, // calculated default with tax
 					tax_status: 'taxable', // default tax status
-					tax_class: 'reduced', //
+					// The store's 'inherit' sentinel survives untouched; the line's 'reduced'
+					// is discarded. Resolving 'inherit' needs the cart, so only
+					// computeShippingLine can do it.
+					tax_class: 'inherit',
 					prices_include_tax: true, // default from pricesIncludeTax
 				});
 			});

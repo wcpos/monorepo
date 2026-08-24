@@ -16,13 +16,15 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 type ShippingLine = NonNullable<OrderDocument['shipping_lines']>[number];
 
 /**
- * Account for string or number changes just in case
+ * Account for string or number changes just in case.
+ *
+ * No `tax_class`: a shipping line has none of its own in WooCommerce, so there is nothing
+ * for the edit form to change. See `extractShippingLineData` in @wcpos/order-math.
  */
 interface Changes extends Partial<ShippingLine> {
 	amount?: number;
 	prices_include_tax?: boolean;
 	tax_status?: 'taxable' | 'none';
-	tax_class?: string;
 }
 
 /**

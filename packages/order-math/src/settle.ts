@@ -6,12 +6,7 @@ import { toCouponConfigs } from './internal/coupons/to-coupon-configs';
 import { validateCoupon } from './internal/coupons/validate';
 import { enrichCategoriesWithAncestors } from './internal/coupons/helpers';
 import { calculateOrderTotals } from './internal/order-totals';
-import {
-	extractFeeLineData,
-	extractShippingLineData,
-	parsePosData,
-} from './internal/lines/pos-data';
-import { INHERIT_TAX_CLASS } from './internal/tax-class';
+import { extractFeeLineData, parsePosData } from './internal/lines/pos-data';
 import {
 	isActiveCouponLine,
 	isActiveFeeLine,
@@ -37,9 +32,6 @@ import type {
 // DB element type — used only for the cast at the pos-data helper boundary.
 // (The structural Input types are supertypes of these; see types.assignability.test.ts.)
 type DbFeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
-type DbShippingLine = NonNullable<
-	import('@wcpos/database').OrderDocument['shipping_lines']
->[number];
 
 // ===== public types (SPEC §3) =====
 
@@ -68,7 +60,7 @@ export interface SettlePatch {
 	line_items?: LineItemInput[]; // present IFF coupon replay ran
 	coupon_lines?: CouponLineInput[]; // present IFF coupon replay ran
 	fee_lines?: FeeLineInput[]; // present IFF >=1 active percent fee actually CHANGED
-	shipping_lines?: ShippingLineInput[]; // present IFF >=1 inheriting shipping line actually CHANGED
+	shipping_lines?: ShippingLineInput[]; // present IFF >=1 active shipping line actually CHANGED
 	discount_total: MoneyString;
 	discount_tax: MoneyString;
 	shipping_total: MoneyString;
@@ -253,19 +245,18 @@ function settleOverLines(args: {
 		return result.line;
 	});
 
-	// 5b. Shipping lines that inherit their tax class are recomputed on the same basis,
-	// for the same reason percent fees are: their value is a function of the cart, so a
-	// line added before the cart's tax classes settled would keep a stale rate. A line
-	// with its own tax class is never touched — the merchant chose it.
-	let inheritingShippingRecomputed = false;
+	// 5b. Every active shipping line is recomputed on the same basis, for the same reason
+	// percent fees are: its tax is a function of the cart and of the store's shipping tax
+	// class, so a line added before either settled would keep a stale rate.
+	//
+	// This used to skip any line whose own tax class was not 'inherit' — "the merchant
+	// chose it". That premise was false: WooCommerce has no per-line shipping tax class
+	// (see `extractShippingLineData`), so the class now always comes from the store and
+	// there is no per-line choice left to respect. The recompute is idempotent for a line
+	// already on the store's class; the JSON compare below keeps it from writing.
+	let shippingRecomputed = false;
 	const postShippingLines = shippingLines.map((shipping) => {
 		if (!isActiveShippingLine(shipping)) return shipping;
-		const { tax_class } = extractShippingLineData(
-			shipping as DbShippingLine,
-			config.pricesIncludeTax,
-			config.shippingTaxClass
-		);
-		if (tax_class !== INHERIT_TAX_CLASS) return shipping;
 		const result = calculateCartLine(
 			{ kind: 'shipping', line: shipping, cartLineItems: lineItems },
 			config
@@ -276,7 +267,7 @@ function settleOverLines(args: {
 		// identical values turns a money-only settle into another line write — one that
 		// can land on top of a shipping edit the cashier made in the meantime.
 		if (JSON.stringify(result.line) !== JSON.stringify(shipping)) {
-			inheritingShippingRecomputed = true;
+			shippingRecomputed = true;
 		}
 		return result.line;
 	});
@@ -312,7 +303,7 @@ function settleOverLines(args: {
 	if (percentFeeRecomputed) {
 		patch.fee_lines = postFeeLines;
 	}
-	if (inheritingShippingRecomputed) {
+	if (shippingRecomputed) {
 		patch.shipping_lines = postShippingLines;
 	}
 
