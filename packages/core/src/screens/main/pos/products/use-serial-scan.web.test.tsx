@@ -75,11 +75,32 @@ jest.mock('../../hooks/use-collection', () => ({
 	}),
 }));
 
-function fakePort(info: Record<string, unknown>) {
+function fakeReadable() {
+	let finishRead: ((result: ReadableStreamReadDoneResult<Uint8Array>) => void) | undefined;
+	const finish = () => finishRead?.({ done: true, value: undefined });
+	return {
+		finish,
+		readable: {
+			getReader: () => ({
+				read: () =>
+					new Promise<ReadableStreamReadResult<Uint8Array>>((resolve) => {
+						finishRead = resolve;
+					}),
+				cancel: async () => finish(),
+				releaseLock: jest.fn(),
+			}),
+		} as unknown as ReadableStream<Uint8Array>,
+	};
+}
+
+function fakePort(
+	info: Record<string, unknown>,
+	readable: ReadableStream<Uint8Array> | null = null
+) {
 	return {
 		open: jest.fn(async () => undefined),
 		close: jest.fn(async () => undefined),
-		readable: null,
+		readable,
 		getInfo: () => info,
 	};
 }
@@ -100,7 +121,8 @@ describe('useSerialScan (web) — Bluetooth RFCOMM support', () => {
 	});
 
 	it('auto-reconnects a saved Bluetooth scanner by service class id on mount', async () => {
-		const btPort = fakePort({ bluetoothServiceClassId: CUSTOM_SERVICE_CLASS });
+		const stream = fakeReadable();
+		const btPort = fakePort({ bluetoothServiceClassId: CUSTOM_SERVICE_CLASS }, stream.readable);
 		mockGetPorts.mockResolvedValue([btPort]);
 		const deviceKey = scannerDeviceKey({
 			connectionType: 'bluetooth-spp',
@@ -117,6 +139,22 @@ describe('useSerialScan (web) — Bluetooth RFCOMM support', () => {
 		expect(result.current.connectedDeviceKey).toBe(deviceKey);
 		// Silent re-open must not create a duplicate profile.
 		expect(mockUpsert).not.toHaveBeenCalled();
+		await act(async () => result.current.disconnect());
+	});
+
+	it('clears live device state when the active read stream ends', async () => {
+		const stream = fakeReadable();
+		const btPort = fakePort({ bluetoothServiceClassId: CUSTOM_SERVICE_CLASS }, stream.readable);
+		mockRequestPort.mockResolvedValue(btPort);
+
+		const { result } = renderHook(() => useSerialScan(jest.fn()));
+		await act(async () => result.current.connect());
+		expect(result.current.connected).toBe(true);
+
+		await act(async () => stream.finish());
+
+		await waitFor(() => expect(result.current.connected).toBe(false));
+		expect(result.current.connectedDeviceKey).toBeNull();
 	});
 
 	it('does not auto-reconnect when multiple granted Bluetooth ports share a service class', async () => {

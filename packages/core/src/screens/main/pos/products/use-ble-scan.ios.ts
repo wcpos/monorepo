@@ -304,7 +304,7 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 			const existing = profiles.find(
 				(profile: ScannerProfileDocument) => profile.deviceKey === deviceKey
 			);
-			const deviceName = device.name || device.localName || 'Bluetooth scanner';
+			const deviceName = device.name || device.localName || '';
 			const source = new Subject<ScanEvent>();
 			unregisterRef.current = hubRef.current.registerSource(source.asObservable());
 			sessionRef.current = createScanSession({
@@ -448,7 +448,7 @@ export const useBleScan = (hub: ScanHub): UseBleScanResult => {
 		if (profiles.length !== 1) return;
 		const profile = profiles[0] as ScannerProfileDocument;
 		const family = BLE_GATT_FAMILIES.find(
-			(item) => normalizeUuid(item.serviceUuid) === profile.serviceUuid
+			(item) => normalizeUuid(item.serviceUuid) === normalizeUuid(profile.serviceUuid ?? '')
 		);
 		if (!profile.peripheralId || !family) return;
 		const manager = await getManager();

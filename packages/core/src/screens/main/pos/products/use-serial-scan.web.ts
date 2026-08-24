@@ -149,21 +149,29 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 		async (port: SerialPortLike) => {
 			const decoder = getDecoder();
 			const textDecoder = new TextDecoder();
-			while (port.readable && !closingRef.current) {
-				const reader = port.readable.getReader();
-				readerRef.current = reader;
-				try {
-					for (let result = await reader.read(); !result.done; result = await reader.read()) {
-						decoder.push(textDecoder.decode(result.value, { stream: true }));
+			try {
+				while (port.readable && !closingRef.current) {
+					const reader = port.readable.getReader();
+					readerRef.current = reader;
+					try {
+						for (let result = await reader.read(); !result.done; result = await reader.read()) {
+							decoder.push(textDecoder.decode(result.value, { stream: true }));
+						}
+					} catch {
+						// A read error usually means the port was cancelled/closed.
+						break;
+					} finally {
+						reader.releaseLock();
+						if (readerRef.current === reader) {
+							readerRef.current = null;
+						}
 					}
-				} catch {
-					// A read error usually means the port was cancelled/closed.
 					break;
-				} finally {
-					reader.releaseLock();
-					if (readerRef.current === reader) {
-						readerRef.current = null;
-					}
+				}
+			} finally {
+				if (portRef.current === port) {
+					setConnected(false);
+					setConnectedDeviceKey(null);
 				}
 			}
 		},

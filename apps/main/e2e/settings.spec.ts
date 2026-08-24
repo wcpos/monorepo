@@ -55,7 +55,8 @@ test.describe('Settings Area', () => {
 			() => 'serial' in navigator || 'hid' in navigator
 		);
 		if (directConnectAvailable) {
-			await expect(page.getByTestId('scanner-mode-note')).toBeVisible();
+			await page.getByTestId('scanner-advanced-trigger').click();
+			await expect(page.getByTestId('scanner-keyboard-wall-note')).toBeVisible();
 		}
 	});
 

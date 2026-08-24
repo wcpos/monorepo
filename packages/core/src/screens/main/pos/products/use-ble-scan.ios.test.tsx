@@ -406,7 +406,21 @@ describe('useBleScan (iOS)', () => {
 		expect(mockUpsert).toHaveBeenCalledTimes(1);
 	});
 
-	it('silently reconnects exactly one saved BLE profile by peripheral id', async () => {
+	it('leaves the stored device name empty when iOS reports no name', async () => {
+		const discovered = device({ name: null, localName: null });
+		const { result } = renderHook(() => useBleScan(hubHarness().hub));
+		await waitUntilAvailable(result);
+
+		await connectDiscovered(result, discovered);
+
+		expect(mockUpsert).toHaveBeenCalledWith(
+			expect.objectContaining({
+				deviceName: '',
+			})
+		);
+	});
+
+	it('silently reconnects a saved BLE profile when its service UUID casing differs', async () => {
 		const deviceKey = scannerDeviceKey({
 			connectionType: 'bluetooth-le',
 			peripheralId: 'saved-peripheral',
@@ -416,7 +430,7 @@ describe('useBleScan (iOS)', () => {
 			connectionType: 'bluetooth-le',
 			deviceName: 'Saved Scanner',
 			peripheralId: 'saved-peripheral',
-			serviceUuid: FFF0_SERVICE,
+			serviceUuid: FFF0_SERVICE.toUpperCase(),
 		};
 		mockProfiles = [saved];
 		const known = device({ id: 'saved-peripheral' });

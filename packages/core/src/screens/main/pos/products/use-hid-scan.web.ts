@@ -178,7 +178,7 @@ export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 					}),
 					name: '',
 					connectionType: 'hid-pos',
-					deviceName: device.productName || `HID ${device.vendorId}:${device.productId}`,
+					deviceName: device.productName || '',
 					vendorId: device.vendorId,
 					productId: device.productId,
 					createdAt: new Date().toISOString(),

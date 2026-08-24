@@ -193,6 +193,7 @@ describe('InputSources — quiet by default', () => {
 		render(<InputSources />);
 
 		expect(screen.getByTestId('scanner-no-setup-needed')).toBeTruthy();
+		expect(screen.getByText(/WCPOS recognises the scan automatically/)).toBeTruthy();
 	});
 
 	it('keeps every direct-connection control behind the disclosure until it is opened', () => {
