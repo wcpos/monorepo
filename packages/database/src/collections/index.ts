@@ -461,17 +461,11 @@ type ScannerProfileDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<
 >;
 export type ScannerProfileDocument = RxDocument<ScannerProfileDocumentType>;
 export type ScannerProfileCollection = RxCollection<ScannerProfileDocumentType>;
+// No migrationStrategies: this collection has never shipped in a released
+// build, so the only shape that exists anywhere is the current one. The version
+// history it used to carry described states no install has ever held.
 const scanner_profiles: RxCollectionCreator<ScannerProfileDocumentType> = {
 	schema: scannerProfileSchema,
-	migrationStrategies: {
-		1(oldDoc) {
-			// v1: added the serial/hid-pos connection types and their optional
-			// device-identity fields (incl. bluetoothServiceClassId — folded into
-			// v1 pre-release, 1.10.0 ships this schema fresh). Existing
-			// wedge-attributed profiles are unchanged — the new fields are optional.
-			return oldDoc;
-		},
-	},
 };
 
 /**

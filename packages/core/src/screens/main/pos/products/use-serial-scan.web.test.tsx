@@ -5,6 +5,8 @@ import { TextDecoder as NodeTextDecoder } from 'node:util';
 
 import { act, renderHook, waitFor } from '@testing-library/react';
 
+import { scannerDeviceKey } from '@wcpos/scanner';
+
 import { useSerialScan } from './use-serial-scan.web';
 
 // jsdom does not ship TextDecoder; the hook's read loop constructs one.
@@ -15,7 +17,7 @@ if (typeof globalThis.TextDecoder === 'undefined') {
 const STANDARD_SPP = '00001101-0000-1000-8000-00805f9b34fb';
 const CUSTOM_SERVICE_CLASS = '49535343-fe7d-4ae5-8fa9-9fafd205e455';
 
-const mockInsert = jest.fn();
+const mockUpsert = jest.fn();
 const mockRequestPort = jest.fn();
 const mockGetPorts = jest.fn(async (): Promise<unknown[]> => []);
 let mockProfiles: Record<string, unknown>[] = [];
@@ -28,8 +30,6 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 }));
 
-jest.mock('uuid', () => ({ v4: () => 'test-uuid' }));
-
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({
 		debug: jest.fn(),
@@ -41,6 +41,7 @@ jest.mock('@wcpos/utils/logger', () => ({
 }));
 
 jest.mock('@wcpos/scanner', () => ({
+	...jest.requireActual('@wcpos/scanner'),
 	createScanSession: () => ({ offer: jest.fn(), reset: jest.fn() }),
 	createSerialLineDecoder: () => ({ push: jest.fn(), reset: jest.fn() }),
 	isWebSerialSupported: () => true,
@@ -69,7 +70,7 @@ jest.mock('../../hooks/use-collection', () => ({
 	useCollection: () => ({
 		collection: {
 			find: () => ({ exec: async () => mockProfiles }),
-			insert: (...args: unknown[]) => mockInsert(...args),
+			upsert: (...args: unknown[]) => mockUpsert(...args),
 		},
 	}),
 }));
@@ -101,21 +102,37 @@ describe('useSerialScan (web) — Bluetooth RFCOMM support', () => {
 	it('auto-reconnects a saved Bluetooth scanner by service class id on mount', async () => {
 		const btPort = fakePort({ bluetoothServiceClassId: CUSTOM_SERVICE_CLASS });
 		mockGetPorts.mockResolvedValue([btPort]);
-		mockProfiles = [{ connectionType: 'serial', bluetoothServiceClassId: CUSTOM_SERVICE_CLASS }];
+		const deviceKey = scannerDeviceKey({
+			connectionType: 'bluetooth-spp',
+			serviceUuid: CUSTOM_SERVICE_CLASS,
+		});
+		mockProfiles = [
+			{ deviceKey, connectionType: 'bluetooth-spp', serviceUuid: CUSTOM_SERVICE_CLASS },
+		];
 
 		const { result } = renderHook(() => useSerialScan(jest.fn()));
 
 		await waitFor(() => expect(btPort.open).toHaveBeenCalled());
 		await waitFor(() => expect(result.current.connected).toBe(true));
+		expect(result.current.connectedDeviceKey).toBe(deviceKey);
 		// Silent re-open must not create a duplicate profile.
-		expect(mockInsert).not.toHaveBeenCalled();
+		expect(mockUpsert).not.toHaveBeenCalled();
 	});
 
 	it('does not auto-reconnect when multiple granted Bluetooth ports share a service class', async () => {
 		const firstPort = fakePort({ bluetoothServiceClassId: CUSTOM_SERVICE_CLASS });
 		const secondPort = fakePort({ bluetoothServiceClassId: CUSTOM_SERVICE_CLASS });
 		mockGetPorts.mockResolvedValue([firstPort, secondPort]);
-		mockProfiles = [{ connectionType: 'serial', bluetoothServiceClassId: CUSTOM_SERVICE_CLASS }];
+		mockProfiles = [
+			{
+				deviceKey: scannerDeviceKey({
+					connectionType: 'bluetooth-spp',
+					serviceUuid: CUSTOM_SERVICE_CLASS,
+				}),
+				connectionType: 'bluetooth-spp',
+				serviceUuid: CUSTOM_SERVICE_CLASS,
+			},
+		];
 
 		renderHook(() => useSerialScan(jest.fn()));
 
@@ -129,7 +146,18 @@ describe('useSerialScan (web) — Bluetooth RFCOMM support', () => {
 	it('does not auto-connect a granted Bluetooth port with no matching profile', async () => {
 		const btPort = fakePort({ bluetoothServiceClassId: CUSTOM_SERVICE_CLASS });
 		mockGetPorts.mockResolvedValue([btPort]);
-		mockProfiles = [{ connectionType: 'serial', vendorId: 1234, productId: 5678 }];
+		mockProfiles = [
+			{
+				deviceKey: scannerDeviceKey({
+					connectionType: 'usb-serial',
+					vendorId: 1234,
+					productId: 5678,
+				}),
+				connectionType: 'usb-serial',
+				vendorId: 1234,
+				productId: 5678,
+			},
+		];
 
 		renderHook(() => useSerialScan(jest.fn()));
 
@@ -141,7 +169,16 @@ describe('useSerialScan (web) — Bluetooth RFCOMM support', () => {
 	});
 
 	it('requests ports with the standard SPP id plus saved custom service classes', async () => {
-		mockProfiles = [{ connectionType: 'serial', bluetoothServiceClassId: CUSTOM_SERVICE_CLASS }];
+		mockProfiles = [
+			{
+				deviceKey: scannerDeviceKey({
+					connectionType: 'bluetooth-spp',
+					serviceUuid: CUSTOM_SERVICE_CLASS,
+				}),
+				connectionType: 'bluetooth-spp',
+				serviceUuid: CUSTOM_SERVICE_CLASS,
+			},
+		];
 		mockRequestPort.mockRejectedValue(new Error('cancelled'));
 
 		const { result } = renderHook(() => useSerialScan(jest.fn()));
@@ -164,21 +201,36 @@ describe('useSerialScan (web) — Bluetooth RFCOMM support', () => {
 		});
 
 		await waitFor(() =>
-			expect(mockInsert).toHaveBeenCalledWith(
-				expect.objectContaining({
-					connectionType: 'serial',
-					deviceName: 'bluetooth-serial',
-					bluetoothServiceClassId: CUSTOM_SERVICE_CLASS,
-					vendorId: undefined,
-					productId: undefined,
-				})
-			)
+			expect(mockUpsert).toHaveBeenCalledWith({
+				deviceKey: scannerDeviceKey({
+					connectionType: 'bluetooth-spp',
+					serviceUuid: CUSTOM_SERVICE_CLASS,
+				}),
+				name: '',
+				connectionType: 'bluetooth-spp',
+				deviceName: '',
+				vendorId: undefined,
+				productId: undefined,
+				serviceUuid: CUSTOM_SERVICE_CLASS,
+				createdAt: expect.any(String),
+			})
 		);
 	});
 
-	it('does not save a duplicate Bluetooth profile for the same service class id', async () => {
+	it('re-registers an uppercase service class id onto the existing profile, not a second one', async () => {
+		// The port reports the UUID uppercased while the saved profile holds it
+		// lowercased. Before the canonical key this compared raw on the read path
+		// and lowercased on the write path, so the same scanner registered twice.
+		// The write is now an upsert, so what proves "no duplicate" is that it
+		// addresses the SAME deviceKey the saved profile already has.
 		const btPort = fakePort({ bluetoothServiceClassId: CUSTOM_SERVICE_CLASS.toUpperCase() });
-		mockProfiles = [{ connectionType: 'serial', bluetoothServiceClassId: CUSTOM_SERVICE_CLASS }];
+		const deviceKey = scannerDeviceKey({
+			connectionType: 'bluetooth-spp',
+			serviceUuid: CUSTOM_SERVICE_CLASS,
+		});
+		mockProfiles = [
+			{ deviceKey, connectionType: 'bluetooth-spp', serviceUuid: CUSTOM_SERVICE_CLASS },
+		];
 		mockRequestPort.mockResolvedValue(btPort);
 
 		const { result } = renderHook(() => useSerialScan(jest.fn()));
@@ -187,6 +239,17 @@ describe('useSerialScan (web) — Bluetooth RFCOMM support', () => {
 		});
 
 		await waitFor(() => expect(btPort.open).toHaveBeenCalled());
-		expect(mockInsert).not.toHaveBeenCalled();
+		expect(mockUpsert).toHaveBeenCalledTimes(1);
+		expect(mockUpsert.mock.calls[0][0].deviceKey).toBe(deviceKey);
+		expect(mockUpsert).toHaveBeenCalledWith({
+			deviceKey,
+			name: '',
+			connectionType: 'bluetooth-spp',
+			deviceName: '',
+			vendorId: undefined,
+			productId: undefined,
+			serviceUuid: CUSTOM_SERVICE_CLASS,
+			createdAt: expect.any(String),
+		});
 	});
 });

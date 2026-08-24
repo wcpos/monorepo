@@ -4,7 +4,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { BehaviorSubject, of } from 'rxjs';
 
-import type { ScanEvent } from '@wcpos/scanner';
+import { type ScanEvent, scannerDeviceKey } from '@wcpos/scanner';
 
 import { useAttributedWedge } from './use-attributed-wedge';
 
@@ -44,18 +44,47 @@ jest.mock('@wcpos/utils/logger', () => {
 });
 
 const profile = {
-	id: 'profile-1',
-	label: 'Front counter',
-	connectionType: 'wedge-attributed',
+	deviceKey: scannerDeviceKey({
+		connectionType: 'keyboard',
+		vendorId: 1234,
+		productId: 5678,
+		deviceName: 'ACME Scanner',
+	}),
+	name: 'Front counter',
+	connectionType: 'keyboard',
 	deviceName: 'ACME Scanner',
 	vendorId: 1234,
 	productId: 5678,
 };
 
+// A Bluetooth profile has no vendor/product id. The hook used to read the whole
+// collection, so those rows reached the native interceptor as device 0:0 — the
+// identity Android reports for the on-screen keyboard.
+const bluetoothProfile = {
+	deviceKey: scannerDeviceKey({
+		connectionType: 'bluetooth-spp',
+		serviceUuid: '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+	}),
+	name: '',
+	connectionType: 'bluetooth-spp',
+	deviceName: '',
+	serviceUuid: '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+};
+
+let mockProfiles: Record<string, unknown>[] = [profile];
+
 // Stable collection identity — a fresh object per render would defeat the
-// hook's useMemo and loop the observable subscription.
-const mockProfiles$ = of([profile]);
-const mockCollection = { find: () => ({ $: mockProfiles$ }) };
+// hook's useMemo and loop the observable subscription. `find` honours the
+// selector so a test can prove the hook asks for keyboard profiles only.
+const mockCollection = {
+	find: (query?: { selector?: { connectionType?: string } }) => ({
+		$: of(
+			query?.selector?.connectionType
+				? mockProfiles.filter((row) => row.connectionType === query.selector?.connectionType)
+				: mockProfiles
+		),
+	}),
+};
 
 jest.mock('../use-collection', () => ({
 	useCollection: () => ({ collection: mockCollection }),
@@ -98,14 +127,32 @@ describe('useAttributedWedge', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		capturedListener = undefined;
+		mockProfiles = [profile];
 	});
-	afterEach(() => jest.useRealTimers());
+	afterEach(() => {
+		jest.useRealTimers();
+		mockProfiles = [profile];
+	});
 
 	it('registers profile identities with the native interceptor', () => {
 		renderHook(() => useAttributedWedge());
 		expect(mockSetCapturedDevices).toHaveBeenCalledWith([
 			{ vendorId: 1234, productId: 5678, deviceName: 'ACME Scanner' },
 		]);
+	});
+
+	it('never hands a Bluetooth profile to the native key interceptor', () => {
+		// A Bluetooth row carries no vendor/product id, so registering it would
+		// capture device 0:0 — Android's on-screen keyboard — and swallow the
+		// cashier's typing.
+		mockProfiles = [profile, bluetoothProfile];
+		renderHook(() => useAttributedWedge());
+
+		expect(mockSetCapturedDevices).toHaveBeenCalledWith([
+			{ vendorId: 1234, productId: 5678, deviceName: 'ACME Scanner' },
+		]);
+		const registered = mockSetCapturedDevices.mock.calls[0][0] as { vendorId: number }[];
+		expect(registered.some((device) => device.vendorId === 0)).toBe(false);
 	});
 
 	it('assembles captured keys into an attributed ScanEvent on Enter', () => {
@@ -121,7 +168,11 @@ describe('useAttributedWedge', () => {
 		expect(events).toHaveLength(1);
 		expect(events[0]).toMatchObject({
 			code: '9310988001234',
-			source: { kind: 'wedge-attributed', profileId: 'profile-1', deviceName: 'ACME Scanner' },
+			source: {
+				kind: 'wedge-attributed',
+				profileId: profile.deviceKey,
+				deviceName: 'ACME Scanner',
+			},
 		});
 		subscription.unsubscribe();
 	});

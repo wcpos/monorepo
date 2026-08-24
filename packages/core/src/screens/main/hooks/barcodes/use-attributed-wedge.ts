@@ -5,7 +5,12 @@ import { requireOptionalNativeModule } from 'expo-modules-core';
 import { useObservableCallback, useObservableState } from 'observable-hooks';
 
 import type { ScannerProfileDocument } from '@wcpos/database';
-import { type BurstAssembler, createBurstAssembler, type ScanEvent } from '@wcpos/scanner';
+import {
+	type BurstAssembler,
+	createBurstAssembler,
+	type ScanEvent,
+	scannerDeviceKey,
+} from '@wcpos/scanner';
 import { useDocField } from '@wcpos/query';
 
 import { showTooShortFeedback } from './too-short-feedback';
@@ -55,8 +60,15 @@ export const useAttributedWedge = (enabled = true) => {
 	const t = useT();
 	const { store } = useAppState();
 	const { collection } = useCollection('scanner_profiles');
+	// Only keyboard-mode profiles belong to this source. An unfiltered find()
+	// also returned the serial/BLE profiles, whose vendorId/productId are
+	// undefined — they registered as device 0:0 with the native interceptor,
+	// which is the identity Android reports for the on-screen keyboard.
 	const profiles = useObservableState(
-		React.useMemo(() => collection.find().$, [collection]),
+		React.useMemo(
+			() => collection.find({ selector: { connectionType: 'keyboard' } }).$,
+			[collection]
+		),
 		NO_PROFILES
 	) as ScannerProfileDocument[];
 
@@ -96,17 +108,21 @@ export const useAttributedWedge = (enabled = true) => {
 			if (!payload.captured) {
 				return;
 			}
-			const profile = profiles.find(
-				(candidate) =>
-					candidate.vendorId === payload.vendorId &&
-					candidate.productId === payload.productId &&
-					(!candidate.deviceName || candidate.deviceName === payload.deviceName)
-			);
+			const payloadKey = scannerDeviceKey({
+				connectionType: 'keyboard',
+				vendorId: payload.vendorId,
+				productId: payload.productId,
+				deviceName: payload.deviceName,
+			});
+			const profile = profiles.find((candidate) => candidate.deviceKey === payloadKey);
 			if (!profile) {
 				return;
 			}
-			const deviceKey = `${payload.deviceId}:${payload.vendorId}:${payload.productId}:${payload.deviceName}`;
-			let assembler = assemblers.get(deviceKey);
+			// Distinct from the profile's deviceKey: this one carries Android's
+			// session-scoped deviceId, so two identical scanners plugged into one
+			// till get their own burst assembler even though they share a profile.
+			const assemblerKey = `${payload.deviceId}:${payloadKey}`;
+			let assembler = assemblers.get(assemblerKey);
 			if (!assembler) {
 				assembler = createBurstAssembler({
 					getSettings: () => settingsRef.current,
@@ -121,14 +137,14 @@ export const useAttributedWedge = (enabled = true) => {
 							code,
 							source: {
 								kind: 'wedge-attributed',
-								profileId: profile.id,
+								profileId: profile.deviceKey,
 								deviceName: payload.deviceName,
 							},
 							timestamp: Date.now(),
 						});
 					},
 				});
-				assemblers.set(deviceKey, assembler);
+				assemblers.set(assemblerKey, assembler);
 			}
 			assembler.push(payload.key);
 		});

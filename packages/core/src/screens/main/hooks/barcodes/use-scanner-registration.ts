@@ -1,8 +1,6 @@
 import * as React from 'react';
 
-import { v4 as uuidv4 } from 'uuid';
-
-import { createWedgeState, foldWedgeKey, type WedgeState } from '@wcpos/scanner';
+import { createWedgeState, foldWedgeKey, scannerDeviceKey, type WedgeState } from '@wcpos/scanner';
 import { useDocField } from '@wcpos/query';
 
 import { wedgeKeyEventsModule, type WedgeKeyPayload } from './use-attributed-wedge';
@@ -105,14 +103,22 @@ export const useScannerRegistration = () => {
 	}, [stop]);
 
 	const save = React.useCallback(
-		async (label: string) => {
+		async (name: string) => {
 			if (!candidate) {
 				return;
 			}
-			await collection.insert({
-				id: uuidv4(),
-				label: label || candidate.deviceName,
-				connectionType: 'wedge-attributed',
+			// Upsert on the canonical key, so re-registering a scanner that is
+			// already saved renames it rather than adding a second row for the
+			// same physical device.
+			await collection.upsert({
+				deviceKey: scannerDeviceKey({
+					connectionType: 'keyboard',
+					vendorId: candidate.vendorId,
+					productId: candidate.productId,
+					deviceName: candidate.deviceName,
+				}),
+				name: name || candidate.deviceName,
+				connectionType: 'keyboard',
 				deviceName: candidate.deviceName,
 				vendorId: candidate.vendorId,
 				productId: candidate.productId,
