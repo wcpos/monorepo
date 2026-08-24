@@ -107,6 +107,7 @@ function isSyncCollectionName(name: string): name is SyncCollectionName {
 	return Object.prototype.hasOwnProperty.call(COLLECTION_VOCABULARY, name);
 }
 
+/** Build the authenticated fetch adapter used by the sync engine. */
 export function createEngineFetcher(input: {
 	auth: EngineFetcherAuth;
 	clockSkew: ClockSkewGate;
@@ -134,6 +135,7 @@ export function createEngineFetcher(input: {
 		emit: (level: SyncEvent['level'], extraFields?: Record<string, unknown>) => void;
 	};
 
+	/** Execute one logical request arc, including any authentication retry. */
 	const fetcher: EngineFetcher = async (url, init) => {
 		const clockSkewGeneration = input.clockSkew.generation;
 		let tokenUsed: string | undefined;
@@ -142,11 +144,20 @@ export function createEngineFetcher(input: {
 		const isRefreshRequest = requestPath?.endsWith('/auth/refresh') ?? false;
 		const isTickProbe = requestPath?.endsWith('/changes/tick') ?? false;
 
-		// Performs one attempt. Metrics (recordTransport, server load) are recorded
-		// immediately, but the LOG emit is returned to the caller instead of fired
-		// here: a log level is a promise about how the operation ended, and inside a
-		// refresh arc the ending is not known yet (#899). The network-failure path
-		// still emits inline — a thrown fetch has no arc to wait for.
+		/**
+		 * Perform one attempt, deferring both its log row and its transport verdict
+		 * to the caller instead of firing them here.
+		 *
+		 * WHY. A log level is a promise about how the OPERATION ended, and inside a
+		 * refresh arc the ending is not known yet (#899) — a 401 that a refresh then
+		 * absorbs is not a fault, and stamping it as one before the retry has run is
+		 * exactly what surfaced the healthy TTL cycle as a failure. The hourly metric
+		 * rides with the log row for the same reason (#1547).
+		 *
+		 * Server load is still sampled immediately (it is a reading, not a verdict),
+		 * and the network-failure path emits inline — a thrown fetch has no arc to
+		 * wait for.
+		 */
 		const performAttempt = async (arcFields?: Record<string, unknown>): Promise<SettledAttempt> => {
 			const token = input.auth.credentials.getLatest().access_token;
 			tokenUsed = token;
@@ -336,9 +347,14 @@ export function createEngineFetcher(input: {
 
 			return {
 				response,
-				// Called EXACTLY once per settled attempt, on every path below. The
-				// hourly metric rides with it so the two can never disagree: whatever
-				// verdict the log row carries is the verdict the uptime strip counts.
+				/**
+				 * Emit this attempt's row. Called EXACTLY once per settled attempt, on
+				 * every path below — the hourly metric rides with it, so a second call
+				 * would count the request twice and a missing one would lose it.
+				 *
+				 * Whatever verdict the log row carries is the verdict the uptime strip
+				 * counts: the two cannot disagree because they are stamped together.
+				 */
 				emit: (level, extraFields) => {
 					// A failure is what the merchant would recognise as one: warn or
 					// error. Everything the rubric settles as info or debug — a 2xx, a
@@ -371,16 +387,19 @@ export function createEngineFetcher(input: {
 			};
 		};
 
-		// The settled classification for an attempt whose arc ends with it (#899
-		// rubric — the level reflects how the operation ended):
-		//  - 2xx/304 → info (successes are metrics-only; the observer drops them).
-		//  - tick-probe 404 → debug + outcome 'recovered': the hybrid change signal
-		//    latches tick-unsupported and falls back to sequence-log polling BY
-		//    CONSTRUCTION (its TIER 1 poll is unconditional), so this is a designed
-		//    self-healing downgrade, not a fault worth a warn in the merchant's log.
-		//  - 403 → error: a permission error, never refreshed (the 1.9 row-14 rule);
-		//    it needs attention, not a refresh loop.
-		//  - anything else !ok → warn (will need attention if it persists).
+		/**
+		 * The settled classification for an attempt whose arc ends with it (#899
+		 * rubric — the level reflects how the operation ended):
+		 *
+		 *  - 2xx/304 → info (successes are metrics-only; the observer drops them).
+		 *  - tick-probe 404 → debug + outcome 'recovered': the hybrid change signal
+		 *    latches tick-unsupported and falls back to sequence-log polling BY
+		 *    CONSTRUCTION (its TIER 1 poll is unconditional), so this is a designed
+		 *    self-healing downgrade, not a fault worth a warn in the merchant's log.
+		 *  - 403 → error: a permission error, never refreshed (the 1.9 row-14 rule);
+		 *    it needs attention, not a refresh loop.
+		 *  - anything else !ok → warn (will need attention if it persists).
+		 */
 		const emitSettled = (attempt: SettledAttempt, extraFields?: Record<string, unknown>): void => {
 			const status = attempt.response.status;
 			if (attempt.response.ok || status === 304) attempt.emit('info', extraFields);

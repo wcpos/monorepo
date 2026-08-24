@@ -71,6 +71,7 @@ function openCartOrders(uuids: string[]) {
 	return { orders$, find, collection: { find } };
 }
 
+/** Build a mutation collection fixture with independent observable count streams. */
 function mutationDatabase(
 	pending: number,
 	conflicts: number,

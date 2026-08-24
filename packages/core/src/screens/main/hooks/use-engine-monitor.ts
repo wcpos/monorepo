@@ -106,6 +106,15 @@ function subscribeToCollectionCounts(
 	return () => subscription.unsubscribe();
 }
 
+/**
+ * Subscribe to the queue counts the health screens report, for the currently
+ * active database.
+ *
+ * Every number here is ACTIONABLE by construction: the rows a cashier is waiting
+ * on the store for, and the rows waiting on a human. Work the engine holds by
+ * design — an open cart's edits — belongs to neither and is excluded, or the
+ * screens report a fault with nothing to act on (#1546).
+ */
 function subscribeToMutationCounts(
 	engine: RxdbSyncEngine,
 	cb: (counts: EngineMutationCounts) => void

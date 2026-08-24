@@ -4,6 +4,7 @@ import { heldOpenCartMutations, isOpenCartHoldCandidate } from './open-cart-hold
 
 import type { HoldCandidate } from './open-cart-hold';
 
+/** Build a hold candidate with the ordinary pending-order defaults. */
 function row(overrides: Partial<HoldCandidate> = {}): HoldCandidate {
 	return {
 		collectionName: 'orders',

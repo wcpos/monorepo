@@ -272,7 +272,13 @@ export type WriteDrainLane = {
 	tick(signal?: AbortSignal): Promise<WriteDrainReport>;
 };
 
+/**
+ * Create the store-scoped lane that drains queued mutations: claim, push,
+ * acknowledge — and HOLD the rows that must not go yet (an open cart's edits;
+ * see `open-cart-hold.ts`). Leader-only, so a follower window never drains.
+ */
 export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
+	/** Drain one guarded tick for the active store scope. */
 	async function runTick(signal?: AbortSignal): Promise<WriteDrainReport> {
 		if (signal?.aborted) {
 			return { lane: 'write-drain', status: 'skipped', reason: 'aborted' };
@@ -375,10 +381,13 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 						const result = await drainMutationQueue({
 							queue,
 							signal: tickAbort.signal,
-							// THE OPEN-CART HOLD. The predicate is shared with the health
-							// counters (see open-cart-hold.ts) so a row this lane holds by
-							// design is never reported to the cashier as a change stuck
-							// waiting to send.
+							/**
+							 * THE OPEN-CART HOLD: hold an eligible row only while its
+							 * resident order is still open. The predicate is shared with the
+							 * health counters (see open-cart-hold.ts) so a row this lane
+							 * holds by design is never reported to the cashier as a change
+							 * stuck waiting to send.
+							 */
 							shouldHold: async (mutation) => {
 								if (!isOpenCartHoldCandidate(mutation)) return false;
 								const doc = await database.collections.orders?.findOne(mutation.recordId).exec();
