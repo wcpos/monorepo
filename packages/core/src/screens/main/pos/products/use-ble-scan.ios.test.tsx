@@ -2,7 +2,7 @@
 
 import { act, renderHook, waitFor } from '@testing-library/react';
 
-import type { ScanEvent, ScanHub } from '@wcpos/scanner';
+import { type ScanEvent, type ScanHub, scannerDeviceKey } from '@wcpos/scanner';
 
 import { useBleScan } from './use-ble-scan.ios';
 
@@ -26,10 +26,9 @@ const mockConnectToDevice = jest.fn();
 const mockOnStateChange = jest.fn();
 const mockCancelDeviceConnection = jest.fn(async () => undefined);
 const mockDestroy = jest.fn(async () => undefined);
-const mockInsert = jest.fn();
+const mockUpsert = jest.fn();
 const mockMonitorRemove = jest.fn();
 const mockStateSubscriptionRemove = jest.fn();
-const mockUuid = jest.fn(() => 'new-profile-id');
 let mockProfiles: Record<string, unknown>[] = [];
 let mockBleState = 'PoweredOn';
 let mockStateListener: ((state: string) => void) | undefined;
@@ -37,7 +36,7 @@ let scanListener: ScanListener | undefined;
 let monitorListener: MonitorListener | undefined;
 let mockCollection: {
 	find: () => { exec: () => Promise<Record<string, unknown>[]> };
-	insert: (row: Record<string, unknown>) => Promise<void>;
+	upsert: (row: Record<string, unknown>) => Promise<void>;
 };
 
 jest.mock('react-native', () => ({
@@ -57,8 +56,6 @@ jest.mock('react-native-ble-plx', () => ({
 	})),
 	State: { Unknown: 'Unknown', PoweredOn: 'PoweredOn' },
 }));
-
-jest.mock('uuid', () => ({ v4: () => mockUuid() }));
 
 jest.mock('@wcpos/query', () => ({
 	useDocField: (_store: unknown, selector: (value: Record<string, unknown>) => unknown) =>
@@ -166,8 +163,8 @@ describe('useBleScan (iOS)', () => {
 		monitorListener = undefined;
 		mockCollection = {
 			find: () => ({ exec: async () => mockProfiles }),
-			insert: async (row: Record<string, unknown>) => {
-				mockInsert(row);
+			upsert: async (row: Record<string, unknown>) => {
+				mockUpsert(row);
 			},
 		};
 		mockOnStateChange.mockImplementation(
@@ -182,7 +179,7 @@ describe('useBleScan (iOS)', () => {
 				scanListener = listener;
 			}
 		);
-		mockInsert.mockImplementation(async (row: Record<string, unknown>) => {
+		mockUpsert.mockImplementation(async (row: Record<string, unknown>) => {
 			mockProfiles.push(row);
 		});
 	});
@@ -242,10 +239,13 @@ describe('useBleScan (iOS)', () => {
 		mockBleState = 'Unknown';
 		mockProfiles = [
 			{
-				id: 'saved-profile',
-				connectionType: 'ble',
-				blePeripheralId: 'saved-peripheral',
-				bleServiceUuid: FFF0_SERVICE,
+				deviceKey: scannerDeviceKey({
+					connectionType: 'bluetooth-le',
+					peripheralId: 'saved-peripheral',
+				}),
+				connectionType: 'bluetooth-le',
+				peripheralId: 'saved-peripheral',
+				serviceUuid: FFF0_SERVICE,
 			},
 		];
 		const known = device({ id: 'saved-peripheral' });
@@ -285,10 +285,13 @@ describe('useBleScan (iOS)', () => {
 	it('restarts saved-profile reconnect when the profile collection changes', async () => {
 		mockProfiles = [
 			{
-				id: 'first-profile',
-				connectionType: 'ble',
-				blePeripheralId: 'first-peripheral',
-				bleServiceUuid: FFF0_SERVICE,
+				deviceKey: scannerDeviceKey({
+					connectionType: 'bluetooth-le',
+					peripheralId: 'first-peripheral',
+				}),
+				connectionType: 'bluetooth-le',
+				peripheralId: 'first-peripheral',
+				serviceUuid: FFF0_SERVICE,
 			},
 		];
 		const first = device({ id: 'first-peripheral' });
@@ -300,16 +303,19 @@ describe('useBleScan (iOS)', () => {
 
 		mockProfiles = [
 			{
-				id: 'second-profile',
-				connectionType: 'ble',
-				blePeripheralId: 'second-peripheral',
-				bleServiceUuid: FFF0_SERVICE,
+				deviceKey: scannerDeviceKey({
+					connectionType: 'bluetooth-le',
+					peripheralId: 'second-peripheral',
+				}),
+				connectionType: 'bluetooth-le',
+				peripheralId: 'second-peripheral',
+				serviceUuid: FFF0_SERVICE,
 			},
 		];
 		mockCollection = {
 			find: () => ({ exec: async () => mockProfiles }),
-			insert: async (row: Record<string, unknown>) => {
-				mockInsert(row);
+			upsert: async (row: Record<string, unknown>) => {
+				mockUpsert(row);
 			},
 		};
 		rerender();
@@ -364,7 +370,10 @@ describe('useBleScan (iOS)', () => {
 			code: '12345',
 			source: {
 				kind: 'ble',
-				profileId: 'new-profile-id',
+				profileId: scannerDeviceKey({
+					connectionType: 'bluetooth-le',
+					peripheralId: 'peripheral-1',
+				}),
 				deviceName: 'Netum Scanner',
 			},
 			timestamp: expect.any(Number),
@@ -378,44 +387,84 @@ describe('useBleScan (iOS)', () => {
 		await waitUntilAvailable(result);
 
 		await connectDiscovered(result, discovered);
-		expect(mockInsert).toHaveBeenCalledWith({
-			id: 'new-profile-id',
-			label: '',
-			connectionType: 'ble',
+		const deviceKey = scannerDeviceKey({
+			connectionType: 'bluetooth-le',
+			peripheralId: 'peripheral-1',
+		});
+		expect(result.current.connectedDeviceKey).toBe(deviceKey);
+		expect(mockUpsert).toHaveBeenCalledWith({
+			deviceKey,
+			name: '',
+			connectionType: 'bluetooth-le',
 			deviceName: 'Netum Scanner',
-			blePeripheralId: 'peripheral-1',
-			bleServiceUuid: FFF0_SERVICE,
+			peripheralId: 'peripheral-1',
+			serviceUuid: FFF0_SERVICE,
 			createdAt: expect.any(String),
 		});
 
 		await connectDiscovered(result, discovered);
-		expect(mockInsert).toHaveBeenCalledTimes(1);
+		expect(mockUpsert).toHaveBeenCalledTimes(1);
 	});
 
-	it('silently reconnects exactly one saved BLE profile by peripheral id', async () => {
+	it('leaves the stored device name empty when iOS reports no name', async () => {
+		const discovered = device({ name: null, localName: null });
+		const { result } = renderHook(() => useBleScan(hubHarness().hub));
+		await waitUntilAvailable(result);
+
+		await connectDiscovered(result, discovered);
+
+		expect(mockUpsert).toHaveBeenCalledWith(
+			expect.objectContaining({
+				deviceName: '',
+			})
+		);
+	});
+
+	it('silently reconnects a saved BLE profile when its service UUID casing differs', async () => {
+		const deviceKey = scannerDeviceKey({
+			connectionType: 'bluetooth-le',
+			peripheralId: 'saved-peripheral',
+		});
 		const saved = {
-			id: 'saved-profile',
-			connectionType: 'ble',
+			deviceKey,
+			connectionType: 'bluetooth-le',
 			deviceName: 'Saved Scanner',
-			blePeripheralId: 'saved-peripheral',
-			bleServiceUuid: FFF0_SERVICE,
+			peripheralId: 'saved-peripheral',
+			serviceUuid: FFF0_SERVICE.toUpperCase(),
 		};
 		mockProfiles = [saved];
 		const known = device({ id: 'saved-peripheral' });
 		mockDevices.mockResolvedValue([known]);
 		mockConnectToDevice.mockResolvedValue(known);
 
-		renderHook(() => useBleScan(hubHarness().hub));
+		const { result } = renderHook(() => useBleScan(hubHarness().hub));
 
 		await waitFor(() => expect(mockDevices).toHaveBeenCalledWith(['saved-peripheral']));
 		expect(mockConnectToDevice).toHaveBeenCalledWith('saved-peripheral');
-		expect(mockInsert).not.toHaveBeenCalled();
+		await waitFor(() => expect(result.current.connectedDeviceKey).toBe(deviceKey));
+		expect(mockUpsert).not.toHaveBeenCalled();
 	});
 
 	it('waits for explicit Connect when saved BLE profiles are ambiguous', async () => {
 		mockProfiles = [
-			{ connectionType: 'ble', blePeripheralId: 'one', bleServiceUuid: FFF0_SERVICE },
-			{ connectionType: 'ble', blePeripheralId: 'two', bleServiceUuid: FF00_SERVICE },
+			{
+				deviceKey: scannerDeviceKey({
+					connectionType: 'bluetooth-le',
+					peripheralId: 'one',
+				}),
+				connectionType: 'bluetooth-le',
+				peripheralId: 'one',
+				serviceUuid: FFF0_SERVICE,
+			},
+			{
+				deviceKey: scannerDeviceKey({
+					connectionType: 'bluetooth-le',
+					peripheralId: 'two',
+				}),
+				connectionType: 'bluetooth-le',
+				peripheralId: 'two',
+				serviceUuid: FF00_SERVICE,
+			},
 		];
 
 		renderHook(() => useBleScan(hubHarness().hub));
@@ -433,10 +482,14 @@ describe('useBleScan (iOS)', () => {
 		await waitUntilAvailable(result);
 		await connectDiscovered(result, device());
 		expect(result.current.connected).toBe(true);
+		expect(result.current.connectedDeviceKey).toBe(
+			scannerDeviceKey({ connectionType: 'bluetooth-le', peripheralId: 'peripheral-1' })
+		);
 
 		act(() => monitorListener?.(new Error('monitor failed'), null));
 
 		await waitFor(() => expect(result.current.connected).toBe(false));
+		expect(result.current.connectedDeviceKey).toBeNull();
 		expect(harness.unregister).toHaveBeenCalled();
 	});
 });

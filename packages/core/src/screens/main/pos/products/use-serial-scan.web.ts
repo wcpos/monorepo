@@ -1,13 +1,14 @@
 import * as React from 'react';
 
-import { v4 as uuidv4 } from 'uuid';
-
 import type { ScannerProfileDocument } from '@wcpos/database';
 import {
 	createScanSession,
 	createSerialLineDecoder,
 	isWebSerialSupported,
+	normalizeUuid,
 	type ScanBus,
+	scannerDeviceKey,
+	type ScannerIdentity,
 	type ScanSession,
 	type SerialLineDecoder,
 } from '@wcpos/scanner';
@@ -59,6 +60,27 @@ function getSerial(): SerialLike | undefined {
 }
 
 /**
+ * A Web Serial port is either a USB-CDC device (USB ids, no service class) or a
+ * Bluetooth RFCOMM port (service class, no USB ids). One place decides which,
+ * so the connect path and the silent-reconnect path can never disagree about a
+ * port's identity — they used to, and the Bluetooth branch compared UUIDs
+ * case-sensitively on read while writing them lowercased.
+ */
+function serialPortIdentity(info: SerialPortInfoLike): ScannerIdentity | null {
+	if (info.usbVendorId !== undefined && info.usbProductId !== undefined) {
+		return {
+			connectionType: 'usb-serial',
+			vendorId: info.usbVendorId,
+			productId: info.usbProductId,
+		};
+	}
+	if (info.bluetoothServiceClassId !== undefined) {
+		return { connectionType: 'bluetooth-spp', serviceUuid: info.bluetoothServiceClassId };
+	}
+	return null;
+}
+
+/**
  * Web Serial (USB-CDC / Bluetooth-SPP) barcode source. Reads the port's byte
  * stream, frames it into barcodes with the shared serial-line decoder, dedups
  * via the scan-session, and emits `serial` ScanEvents onto the device scan bus
@@ -72,6 +94,7 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 	const suffix = useDocField(store, (value) => value.barcode_scanning_suffix) as string;
 
 	const [connected, setConnected] = React.useState(false);
+	const [connectedDeviceKey, setConnectedDeviceKey] = React.useState<string | null>(null);
 
 	const emitRef = React.useRef(emit);
 	const settingsRef = React.useRef({ prefix, suffix, minChars: Number(minChars) });
@@ -126,21 +149,29 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 		async (port: SerialPortLike) => {
 			const decoder = getDecoder();
 			const textDecoder = new TextDecoder();
-			while (port.readable && !closingRef.current) {
-				const reader = port.readable.getReader();
-				readerRef.current = reader;
-				try {
-					for (let result = await reader.read(); !result.done; result = await reader.read()) {
-						decoder.push(textDecoder.decode(result.value, { stream: true }));
+			try {
+				while (port.readable && !closingRef.current) {
+					const reader = port.readable.getReader();
+					readerRef.current = reader;
+					try {
+						for (let result = await reader.read(); !result.done; result = await reader.read()) {
+							decoder.push(textDecoder.decode(result.value, { stream: true }));
+						}
+					} catch {
+						// A read error usually means the port was cancelled/closed.
+						break;
+					} finally {
+						reader.releaseLock();
+						if (readerRef.current === reader) {
+							readerRef.current = null;
+						}
 					}
-				} catch {
-					// A read error usually means the port was cancelled/closed.
 					break;
-				} finally {
-					reader.releaseLock();
-					if (readerRef.current === reader) {
-						readerRef.current = null;
-					}
+				}
+			} finally {
+				if (portRef.current === port) {
+					setConnected(false);
+					setConnectedDeviceKey(null);
 				}
 			}
 		},
@@ -153,6 +184,7 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 		readerRef.current = null;
 		portRef.current = null;
 		setConnected(false);
+		setConnectedDeviceKey(null);
 		closingRef.current = true;
 		try {
 			await reader?.cancel().catch(() => undefined);
@@ -183,6 +215,8 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 				}
 				portRef.current = port;
 				setConnected(true);
+				const openedIdentity = serialPortIdentity(port.getInfo());
+				setConnectedDeviceKey(openedIdentity ? scannerDeviceKey(openedIdentity) : null);
 				decoderRef.current?.reset();
 				sessionRef.current?.reset();
 				// The read loop runs for the port's lifetime; failures are logged.
@@ -193,34 +227,28 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 			await pending;
 			if (attached && save) {
 				const info = port.getInfo();
-				const isBluetooth =
-					info.usbVendorId === undefined &&
-					info.usbProductId === undefined &&
-					info.bluetoothServiceClassId !== undefined;
-				if (isBluetooth) {
-					const profiles = await collection.find({ selector: { connectionType: 'serial' } }).exec();
-					const duplicate = profiles.some(
-						(profile: ScannerProfileDocument) =>
-							typeof profile.bluetoothServiceClassId === 'string' &&
-							profile.bluetoothServiceClassId.toLowerCase() ===
-								info.bluetoothServiceClassId?.toLowerCase()
-					);
-					if (duplicate) {
-						return;
-					}
+				const identity = serialPortIdentity(info);
+				if (identity) {
+					// deviceKey is the primary key, so a re-registration of the same
+					// scanner is an upsert rather than a duplicate row — no read-then-
+					// insert dup check, and no race between two rapid Connect presses.
+					await collection.upsert({
+						deviceKey: scannerDeviceKey(identity),
+						name: '',
+						connectionType: identity.connectionType,
+						// Web Serial reports no product name for either transport, so
+						// there is nothing to record. An invented English label here
+						// would freeze one language into the document and shadow the
+						// type label the row derives from connectionType.
+						deviceName: '',
+						vendorId: info.usbVendorId,
+						productId: info.usbProductId,
+						serviceUuid: info.bluetoothServiceClassId
+							? normalizeUuid(info.bluetoothServiceClassId)
+							: undefined,
+						createdAt: new Date().toISOString(),
+					});
 				}
-				await collection.insert({
-					id: uuidv4(),
-					label: '',
-					connectionType: 'serial',
-					deviceName: isBluetooth
-						? 'bluetooth-serial'
-						: `Serial ${info.usbVendorId ?? ''}:${info.usbProductId ?? ''}`.trim(),
-					vendorId: info.usbVendorId,
-					productId: info.usbProductId,
-					bluetoothServiceClassId: info.bluetoothServiceClassId,
-					createdAt: new Date().toISOString(),
-				});
 			}
 		},
 		[collection, readLoop, teardown]
@@ -234,12 +262,14 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 		try {
 			// A previously saved scanner may use a vendor-specific RFCOMM service
 			// class; include saved UUIDs so it stays visible in the chooser.
-			const profiles = await collection.find({ selector: { connectionType: 'serial' } }).exec();
+			const profiles = await collection
+				.find({ selector: { connectionType: 'bluetooth-spp' } })
+				.exec();
 			const allowedBluetoothServiceClassIds = Array.from(
 				new Set([
 					...KNOWN_SCANNER_BLUETOOTH_SERVICE_CLASS_IDS,
 					...profiles
-						.map((profile: ScannerProfileDocument) => profile.bluetoothServiceClassId)
+						.map((profile: ScannerProfileDocument) => profile.serviceUuid)
 						.filter((id): id is string => typeof id === 'string' && id.length > 0),
 				])
 			);
@@ -263,33 +293,23 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 		(async () => {
 			const [ports, profiles] = await Promise.all([
 				serial.getPorts(),
-				collection.find({ selector: { connectionType: 'serial' } }).exec(),
+				collection
+					.find({ selector: { connectionType: { $in: ['usb-serial', 'bluetooth-spp'] } } })
+					.exec(),
 			]);
 			if (cancelled) {
 				return;
 			}
+			// Accepted contract (PR #1257 author ruling): a key identifies a service
+			// or model, not a physical unit — the same ceiling as vid:pid for two
+			// identical USB scanners. A single unambiguous match reconnects silently;
+			// ambiguity waits for an explicit chooser pick.
+			const savedKeys = new Set(
+				profiles.map((profile: ScannerProfileDocument) => profile.deviceKey)
+			);
 			const matches = ports.filter((port) => {
-				const info = port.getInfo();
-				if (info.usbVendorId !== undefined && info.usbProductId !== undefined) {
-					return profiles.some(
-						(profile: ScannerProfileDocument) =>
-							profile.vendorId === info.usbVendorId && profile.productId === info.usbProductId
-					);
-				}
-				// Bluetooth RFCOMM ports carry no USB ids — re-match on the service
-				// class UUID saved when the scanner was first registered. Accepted
-				// contract (PR #1257 author ruling): a service UUID identifies a
-				// service, not a physical unit, and Web Serial exposes nothing
-				// better for BT ports — same ceiling as vid:pid for identical USB
-				// scanners. Single unambiguous match reconnects; multiple matches
-				// wait for an explicit chooser pick.
-				if (info.bluetoothServiceClassId !== undefined) {
-					return profiles.some(
-						(profile: ScannerProfileDocument) =>
-							profile.bluetoothServiceClassId === info.bluetoothServiceClassId
-					);
-				}
-				return false;
+				const identity = serialPortIdentity(port.getInfo());
+				return identity !== null && savedKeys.has(scannerDeviceKey(identity));
 			});
 			if (matches.length === 1 && !cancelled) {
 				await attachPort(matches[0], false);
@@ -310,6 +330,7 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 		lifecycleQueueRef.current = pending.catch(() => undefined);
 		await pending;
 		setConnected(false);
+		setConnectedDeviceKey(null);
 	}, [teardown]);
 
 	// Release the port + read loop when the provider unmounts (logout / teardown).
@@ -328,5 +349,6 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 		connect,
 		disconnect,
 		connected,
+		connectedDeviceKey,
 	};
 };

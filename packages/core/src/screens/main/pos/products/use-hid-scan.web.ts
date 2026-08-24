@@ -1,13 +1,12 @@
 import * as React from 'react';
 
-import { v4 as uuidv4 } from 'uuid';
-
 import type { ScannerProfileDocument } from '@wcpos/database';
 import {
 	createScanSession,
 	decodeHidPosReport,
 	isWebHidSupported,
 	type ScanBus,
+	scannerDeviceKey,
 	type ScanSession,
 } from '@wcpos/scanner';
 import { getLogger } from '@wcpos/utils/logger';
@@ -71,6 +70,7 @@ export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 	const minChars = useDocField(store, (value) => value.barcode_scanning_min_chars) as number;
 
 	const [connected, setConnected] = React.useState(false);
+	const [connectedDeviceKey, setConnectedDeviceKey] = React.useState<string | null>(null);
 
 	const emitRef = React.useRef(emit);
 	const minCharsRef = React.useRef(Number(minChars));
@@ -113,6 +113,7 @@ export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 		deviceRef.current = null;
 		listenerRef.current = null;
 		setConnected(false);
+		setConnectedDeviceKey(null);
 		if (previous) {
 			if (listener) {
 				previous.removeEventListener('inputreport', listener);
@@ -155,19 +156,31 @@ export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 				listenerRef.current = listener;
 				sessionRef.current?.reset();
 				setConnected(true);
+				setConnectedDeviceKey(
+					scannerDeviceKey({
+						connectionType: 'hid-pos',
+						vendorId: device.vendorId,
+						productId: device.productId,
+					})
+				);
 				attached = true;
 			});
 			lifecycleQueueRef.current = pending.catch(() => undefined);
 			await pending;
 			if (attached && save) {
-				await collection.insert({
-					id: uuidv4(),
-					label: '',
+				// Upsert on the canonical key: re-connecting an already-registered
+				// scanner refreshes it instead of adding a second row.
+				await collection.upsert({
+					deviceKey: scannerDeviceKey({
+						connectionType: 'hid-pos',
+						vendorId: device.vendorId,
+						productId: device.productId,
+					}),
+					name: '',
 					connectionType: 'hid-pos',
-					deviceName: device.productName || `HID ${device.vendorId}:${device.productId}`,
+					deviceName: device.productName || '',
 					vendorId: device.vendorId,
 					productId: device.productId,
-					hidUsagePage: HID_POS_USAGE_PAGE,
 					createdAt: new Date().toISOString(),
 				});
 			}
@@ -206,10 +219,16 @@ export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 			if (cancelled) {
 				return;
 			}
+			const savedKeys = new Set(
+				profiles.map((profile: ScannerProfileDocument) => profile.deviceKey)
+			);
 			const match = devices.find((device) =>
-				profiles.some(
-					(profile: ScannerProfileDocument) =>
-						profile.vendorId === device.vendorId && profile.productId === device.productId
+				savedKeys.has(
+					scannerDeviceKey({
+						connectionType: 'hid-pos',
+						vendorId: device.vendorId,
+						productId: device.productId,
+					})
 				)
 			);
 			if (match && !cancelled) {
@@ -229,6 +248,7 @@ export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 		lifecycleQueueRef.current = pending.catch(() => undefined);
 		await pending;
 		setConnected(false);
+		setConnectedDeviceKey(null);
 	}, [detach]);
 
 	// Release the device when the provider unmounts (logout / app teardown).
@@ -247,5 +267,6 @@ export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 		connect,
 		disconnect,
 		connected,
+		connectedDeviceKey,
 	};
 };
