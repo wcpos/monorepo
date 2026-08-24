@@ -84,6 +84,16 @@ export type LogPresetFilters = {
 /**
  * Preset chip → query-state filters. Debug rows only enter the ledger while
  * verbose diagnostics is on (they only persist then, too — spec §3).
+ *
+ * THE PRESET IS A DOMAIN FILTER; THE LEVEL PILL IS A DISPLAY-KIND FILTER. They
+ * are deliberately different questions and must NOT be reconciled: `sync` here
+ * means "everything the sync engine did", so with verbose on it KEEPS the debug
+ * rows — that is the whole point of turning verbose on while looking at sync.
+ * `kindConditions('sync')` means "rows the LEVEL column renders as sync", which
+ * since debug outranks the domain (see `displayKind`) excludes them. Making the
+ * preset match the pill would empty verbose diagnostics of the rows it exists to
+ * surface; the two compose instead — Sync preset + debug pill is exactly the
+ * sync-domain forensic feed.
  */
 export function presetFilters(preset: LogPreset, verbose: boolean): LogPresetFilters {
 	const levels = verbose ? ['debug', 'info', 'warn', 'error'] : ['info', 'warn', 'error'];

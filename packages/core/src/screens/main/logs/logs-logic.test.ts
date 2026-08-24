@@ -80,6 +80,20 @@ describe('presetFilters', () => {
 		expect(presetFilters('errors', true)).toEqual({ level: ['error'] });
 	});
 
+	it('keeps debug in the verbose sync preset — the preset is the DOMAIN, not the pill', () => {
+		// Reviewer suggestion, declined (#1548): the strict display-kind selector
+		// `kindConditions('sync')` excludes debug because debug outranks the domain
+		// in the LEVEL column. The PRESET answers a different question — "everything
+		// the sync engine did" — and dropping debug here would empty verbose
+		// diagnostics of the sync-domain forensic rows it exists to surface, which
+		// is the complaint that prompted the change in the first place. The two
+		// compose: Sync preset + debug pill IS that forensic feed.
+		expect(presetFilters('sync', true)).toEqual({
+			level: ['debug', 'info', 'warn', 'error'],
+			category_prefix: 'wcpos.sync',
+		});
+	});
+
 	it('scopes sync to the category prefix and actions to actor rows', () => {
 		expect(presetFilters('sync', false)).toEqual({
 			level: ['info', 'warn', 'error'],
