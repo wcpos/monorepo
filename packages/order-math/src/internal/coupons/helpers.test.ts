@@ -505,7 +505,14 @@ describe('computeDiscountedLineItems', () => {
 	});
 
 	it('aggregates discounts from multiple coupons', () => {
-		const lineItems = [{ product_id: 1, total: '100', total_tax: '10', taxes: [] }];
+		const lineItems = [
+			{
+				product_id: 1,
+				total: '100',
+				total_tax: '10',
+				taxes: [{ id: 1, subtotal: '10', total: '10' }],
+			},
+		];
 
 		const result = computeDiscountedLineItems(lineItems, [
 			[{ product_id: 1, discount: 20 }],
@@ -551,6 +558,54 @@ describe('computeDiscountedLineItems', () => {
 		]);
 
 		expect(result[0].taxes![0].total).toBe('5.000000');
+	});
+
+	it('uses the configured storage precision when discounts match by line index', () => {
+		const lineItems = [
+			{
+				product_id: 1,
+				total: '1.0000001',
+				total_tax: '0.8888888',
+				taxes: [
+					{ id: 1, subtotal: '0.1234567', total: '0.1234567' },
+					{ id: 2, subtotal: '0.7654321', total: '0.7654321' },
+				],
+			},
+		];
+
+		const result = computeDiscountedLineItems(
+			lineItems,
+			[[{ product_id: 1, lineIndex: 0, discount: 0.0000002 }]],
+			7
+		);
+
+		expect(result[0].total).toBe('0.9999999');
+		expect(result[0].taxes!.map(({ total }) => total)).toEqual(['0.1234567', '0.7654319']);
+		expect(result[0].total_tax).toBe('0.8888886');
+	});
+
+	it('uses the configured storage precision when discounts match by product ID', () => {
+		const lineItems = [
+			{
+				product_id: 1,
+				total: '1.0000001',
+				total_tax: '0.8888888',
+				taxes: [
+					{ id: 1, subtotal: '0.1234567', total: '0.1234567' },
+					{ id: 2, subtotal: '0.7654321', total: '0.7654321' },
+				],
+			},
+		];
+
+		const result = computeDiscountedLineItems(
+			lineItems,
+			[[{ product_id: 1, discount: 0.0000002 }]],
+			7
+		);
+
+		expect(result[0].total).toBe('0.9999999');
+		expect(result[0].taxes!.map(({ total }) => total)).toEqual(['0.1234567', '0.7654319']);
+		expect(result[0].total_tax).toBe('0.8888886');
 	});
 });
 

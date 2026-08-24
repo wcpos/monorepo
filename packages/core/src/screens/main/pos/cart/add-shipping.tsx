@@ -136,6 +136,7 @@ export function AddShipping() {
 								<FormInput
 									customComponent={CurrencyInput}
 									label={t('pos_cart.amount')}
+									testID="shipping-amount-input"
 									{...field}
 								/>
 							</View>
@@ -146,7 +147,11 @@ export function AddShipping() {
 							control={form.control}
 							name="prices_include_tax"
 							render={({ field }) => (
-								<FormSwitch label={t('pos_cart.amount_includes_tax')} {...field} />
+								<FormSwitch
+									label={t('pos_cart.amount_includes_tax')}
+									testID="shipping-includes-tax-switch"
+									{...field}
+								/>
 							)}
 						/>
 					</View>

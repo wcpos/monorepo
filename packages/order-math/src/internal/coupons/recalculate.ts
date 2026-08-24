@@ -11,7 +11,7 @@ import {
 	type CouponLineItem,
 } from './helpers';
 import { calculateTaxes } from '../money/calculate-taxes';
-import { roundHalfUp } from '../money/precision';
+import { getRoundingPrecision, roundHalfUp } from '../money/precision';
 import { getLineItemTaxStatus, parsePosData } from '../lines/pos-data';
 import { normalizeTaxClass } from '../tax-class';
 
@@ -47,16 +47,16 @@ export interface RecalculateResult {
 }
 
 /**
- * Round per-rate line taxes to the 6dp wire contract — ONCE, at the exit.
+ * Round per-rate line taxes to the configured wire precision — ONCE, at the exit.
  *
  * Both halves matter and they pull against each other:
  *
  *  - WIDTH. These strings ship as `line_items[].taxes[]`. `String(n)` emits
  *    whatever the float prints — "0.0050015" (7dp) or "3.67647" (5dp) — and the
  *    divergence comparator forgives a one-microunit cross-engine tie only when
- *    BOTH sides were authored at exactly 6dp. A stray width turns a tie into a
- *    cashier-facing "your store changed this order's totals" banner on a
- *    correct sale (woocommerce-pos#1548).
+ *    BOTH sides were authored at exactly the store's rounding precision. A stray
+ *    width turns a tie into a cashier-facing "your store changed this order's
+ *    totals" banner on a correct sale (woocommerce-pos#1548).
  *
  *  - PRECISION. Rounding any EARLIER — in the reset below, or per rate as the
  *    coupon stage builds them — feeds already-rounded values into the next
@@ -67,7 +67,7 @@ export interface RecalculateResult {
  * Hence full precision all the way through, one half-up cut at the boundary.
  * Applied at BOTH exits — the no-coupon reset returns early.
  */
-function serializeLineItemTaxes<T extends LineItem>(items: T[]): T[] {
+function serializeLineItemTaxes<T extends LineItem>(items: T[], roundingPrecision: number): T[] {
 	return items.map((item) => {
 		if (!Array.isArray(item.taxes)) return item;
 		return {
@@ -80,7 +80,9 @@ function serializeLineItemTaxes<T extends LineItem>(items: T[]): T[] {
 							: typeof value === 'string' && value.trim() !== ''
 								? Number(value)
 								: NaN;
-					return Number.isFinite(parsed) ? roundHalfUp(parsed, 6).toFixed(6) : value;
+					return Number.isFinite(parsed)
+						? roundHalfUp(parsed, roundingPrecision).toFixed(roundingPrecision)
+						: value;
 				};
 				return {
 					...tax,
@@ -210,7 +212,10 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 
 	// If no active coupons, return reset items
 	if (activeCouponLines.length === 0) {
-		return { lineItems: serializeLineItemTaxes(resetItems), couponLines };
+		return {
+			lineItems: serializeLineItemTaxes(resetItems, getRoundingPrecision(dp)),
+			couponLines,
+		};
 	}
 
 	// Step 2: Build CouponLineItems using tax-inclusive POS price as the coupon base.
@@ -377,7 +382,11 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 	});
 
 	// Step 4: Apply all discounts to line items
-	const discountedLineItems = computeDiscountedLineItems(resetItems, allPerItemDiscounts);
+	const discountedLineItems = computeDiscountedLineItems(
+		resetItems,
+		allPerItemDiscounts,
+		getRoundingPrecision(dp)
+	);
 
 	// Merge updated coupon lines back, preserving non-active ones
 	const finalCouponLines = couponLines.map((cl) => {
@@ -389,7 +398,7 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 	});
 
 	return {
-		lineItems: serializeLineItemTaxes(discountedLineItems),
+		lineItems: serializeLineItemTaxes(discountedLineItems, getRoundingPrecision(dp)),
 		couponLines: finalCouponLines,
 	};
 }

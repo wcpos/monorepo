@@ -102,7 +102,12 @@ export function AddFee() {
 					control={form.control}
 					name="name"
 					render={({ field }) => (
-						<FormInput label={t('pos_cart.fee_name')} placeholder={t('pos_cart.fee')} {...field} />
+						<FormInput
+							label={t('pos_cart.fee_name')}
+							placeholder={t('pos_cart.fee')}
+							testID="fee-name-input"
+							{...field}
+						/>
 					)}
 				/>
 				<HStack className="gap-4">
@@ -114,6 +119,7 @@ export function AddFee() {
 								<FormInput
 									customComponent={togglePercentage ? NumberInput : CurrencyInput}
 									label={togglePercentage ? t('pos_cart.percent') : t('pos_cart.amount')}
+									testID="fee-amount-input"
 									{...field}
 								/>
 							</View>
@@ -124,14 +130,22 @@ export function AddFee() {
 							control={form.control}
 							name="percent"
 							render={({ field }) => (
-								<FormSwitch label={t('pos_cart.percentage_of_cart_total')} {...field} />
+								<FormSwitch
+									label={t('pos_cart.percentage_of_cart_total')}
+									testID="fee-percent-switch"
+									{...field}
+								/>
 							)}
 						/>
 						<FormField
 							control={form.control}
 							name="prices_include_tax"
 							render={({ field }) => (
-								<FormSwitch label={t('pos_cart.amount_includes_tax')} {...field} />
+								<FormSwitch
+									label={t('pos_cart.amount_includes_tax')}
+									testID="fee-includes-tax-switch"
+									{...field}
+								/>
 							)}
 						/>
 					</VStack>

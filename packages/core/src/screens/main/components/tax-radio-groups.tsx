@@ -13,7 +13,15 @@ function TaxRadioGroup({
 	return (
 		<RadioGroup {...props}>
 			{options.map((option) => (
-				<RadioGroupOption key={option.value} value={option.value} label={option.label} />
+				<RadioGroupOption
+					key={option.value}
+					value={option.value}
+					label={option.label}
+					// Keyed on the field NAME and the wire VALUE, never the label: the label is
+					// translated, and E2E may not select by text. `tax_status-option-none` is the
+					// same handle on every store in every locale.
+					testID={`${props.name}-option-${option.value}`}
+				/>
 			))}
 		</RadioGroup>
 	);

@@ -144,6 +144,23 @@ POS Cart — Add Items Menu (the cart "+" dropdown):
 - [x] Add miscellaneous product via the dropdown menu
 - [x] Close the add-item dialog (Escape) without adding
 
+### pos-money-oracle.spec.ts (authenticated, free + pro) — 6 tests
+
+POS money oracle — save to server parity (live store, writes):
+
+- [x] Fee line saves with identical per-rate taxes, on an amount whose tax is sub-cent
+      (the order-111919 regression oracle)
+- [x] Shipping line saves with identical per-rate taxes, on a sub-cent amount
+- [x] Misc product priced to a sub-cent tax saves with identical per-rate taxes
+- [x] Product + fee + shipping together save with identical money throughout (the
+      cross-line case: `cart_tax`/`total_tax` aggregate over all three line types, so a
+      per-line error that cancels on a single-line cart still shows here)
+- [x] Negative fee is taxed from its OWN class — locks the POS override, NOT WooCommerce's
+      apportionment (see the negative-fee note below)
+- [x] Mixed-tax-class cart: standard + reduced-rate + untaxed lines in one sale, every
+      line's per-rate taxes compared (needs `e2e/scripts/tax-class-fixtures.php`; skips
+      with a reason on an unprovisioned store)
+
 ### pos-checkout.spec.ts (authenticated, free + pro) — 12 tests
 
 Order Actions:
@@ -370,26 +387,77 @@ The rules:
 
    Currently-named exceptions:
 
-   **woocommerce-pos#1548 (v2 acks vs the tax_lines rounding contract)**: v2-lane acks
-   serve `tax_lines[].tax_total` UNROUNDED (`dp=6` over raw stored per-rate sums) where
-   the money contract says display-rounded-then-padded — so the totals-changed banner
-   fires on ANY sale whose tax is not 2dp-clean (plain and couponed alike); couponed
-   acks additionally swap per-line `taxes[]` rate attribution relative to their own
-   `tax_lines`. Both banner-absence assertions (`pos-cart.spec.ts`,
-   `pos-coupon-apply.spec.ts`) are parked on that issue and re-arm when it closes; every
-   parity assertion (rate set, totals, cart_tax, discount) runs strictly and passes.
+   **woocommerce-pos#1548 — CLOSED 2026-08-11, both assertions RE-ARMED.** Kept here
+   as history, not as a live exception. The v2-lane acks used to serve
+   `tax_lines[].tax_total` unrounded, so the totals-changed banner fired on any sale
+   whose tax was not 2dp-clean, and both banner-absence assertions were parked. The
+   client now emits `tax_lines` at WooCommerce storage precision (mono#1117) and both
+   assertions are live again — `pos-cart.spec.ts` and `pos-coupon-apply.spec.ts`.
 
-   **The microunit tie** (`expectTaxParity` in `order-lifecycle.ts`):
-   server-COMPUTED tax amounts may differ from the client's by **at most one microunit**
-   (0.000001) at the 6dp storage precision — a half-way rounding tie lands on different
-   sides in PHP's float path vs the client's decimal path (observed in CI 2026-08-08:
-   4.575164 vs 4.575163; rate set and 2dp money identical). Display money (2dp) is exact;
-   two microunits fails. Eliminating the tie outright (aligning the client's 6dp storage
-   rounding with `wc_round_tax_total`'s float behaviour) is a tracked follow-up in the
-   tax-parity program — this tolerance is a measured ceiling, not a settlement.
+   This paragraph claimed they were still parked for 13 days after the issue closed.
+   A named exception is a debt with an owner: when its issue closes, the doc that
+   names it is part of what re-arms.
+
+   **The microunit "tie"** (`expectTaxParity` in `order-lifecycle.ts`): tolerates a
+   one-microunit (0.000001) difference on server-COMPUTED tax amounts at 6dp storage
+   precision. Display money (2dp) is exact; two microunits fails.
+
+   It was recorded as an unavoidable half-way rounding tie between PHP's float path and
+   the client's decimal path. **On the line-level fields, it was not a tie — it was a
+   bug, and it is fixed** (2026-08-24). WooCommerce derives a line's `total_tax` from the
+   STORED per-rate array: round each rate to storage precision, THEN sum. This package
+   rounded the raw multi-rate total instead — `round(a + b)` against `round(a) + round(b)`.
+   Identical on a single-rate store, one microunit apart on a two-rate one. Measured on
+   dev-pro: a 1.00 inclusive fee at 10% + 2.2% sent 0.108734 against the store's 0.108735,
+   and EVERY such sale raised the totals-changed banner. See `sumStoredLineTax` in
+   `packages/order-math/src/cart-line.ts`.
+
+   The tolerance stays, because only the line-level source is proven eliminated — the
+   2026-08-08 CI observation was on `cart_tax`, an order-level aggregate this fix does
+   not touch. Treat any surviving microunit as an unexplained divergence to chase to its
+   mechanism, exactly as this one turned out to be, and NOT as a known cost of doing
+   business. That reading is what kept it alive for sixteen days.
+
 4. **Parity assertions are store-agnostic by construction** — they compare the two sides of
    the same sale, never fixture values — so they belong in every order-writing spec at no
    cost to the any-store contract.
+5. **Every LINE TYPE the POS can author must reach the oracle, on amounts that can
+   actually fail.** Added 2026-08-24 after order 111919 on dev-free (CHECKOUT401):
+   a 1.00 tax-inclusive fee at 10% pushed `fee_lines[…].taxes[6].total = 0.090000`
+   against the server's `0.090909`, and the cashier got the banner on a correctly rung
+   sale. The parity oracle was armed and passing throughout. It could not see it:
+
+   - **Line-type coverage.** Every parity assertion ran on a cart of products only. Fees
+     and shipping had E2E coverage that stopped at "the line appeared in the cart" — no
+     save, no push, no comparison.
+   - **Discriminating amounts.** Per-rate rounding is only observable when a line's tax
+     is NOT a whole number of cents. A store priced 7.00 and 2.00 at 10% yields 0.70 and
+     0.20 — identical under the correct rule and under the bug. The suite's fee and
+     shipping unit fixtures had the same defect (10 @ 20% = 2), so 566 green unit tests
+     said nothing about it either.
+
+   A third form of the same blindness surfaced on 2026-08-24 and is worth naming
+   separately: **a fixture can exist and still be unreachable.** Both dev stores carried
+   `reduced-rate` and `zero-rate` tax classes with real rates behind them — and not one
+   of ~2,050 published products used either, nor had any tax status but `taxable`. Every
+   money assertion the suite had ever made ran on the standard class alone, and nothing
+   said so. Provisioned by `e2e/scripts/tax-class-fixtures.php`; the store-side contract
+   is `wcpos-infra/docs/specs/2026-08-24-dev-store-tax-profile.md`.
+
+   And a fourth, caught by the fix for the third: **dev-pro's reduced-rate rate was
+   scoped GB while its POS outlets are US:AL**, so the reduced-rate fixture rang up
+   untaxed at the till and the new mixed-class spec passed on the wrong evidence. Its
+   coverage assertion had accepted "more than one distinct rate set", which a taxed line
+   beside an untaxed one satisfies without ever applying a second rate. It now requires
+   two distinct NON-EMPTY rate sets. On a multi-store site, where the store taxes is not
+   where the till is.
+
+   `pos-money-oracle.spec.ts` closes both: it MINTS its own adversarial amounts through
+   the POS UI (misc product, fee, shipping all take a cashier-entered amount) rather than
+   depending on catalogue content, and then DECLARES whether the run actually produced a
+   sub-cent tax component. A run that did not is reported as uncovered, not counted as
+   proof — `assertDiscriminating`. New fixtures for line taxes, unit or E2E, must use an
+   amount whose tax is not a whole cent.
 
 ## Cold-start profile (thin local catalogue) — #991
 

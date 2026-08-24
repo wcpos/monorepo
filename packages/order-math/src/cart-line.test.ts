@@ -97,9 +97,14 @@ describe('calculateCartLine — line_item', () => {
 			subtotal_tax: '33.33',
 			taxes: [
 				{
+					// Per-rate taxes stay UNROUNDED — see PER_RATE_TAXES_ARE_UNROUNDED in
+					// cart-line.ts. This pair previously read '33.330000': the 2dp value
+					// zero-padded to 6dp, which is visually indistinguishable from the
+					// genuine 6dp `total` two lines up. That is how the rounding bug became
+					// canon. `total_tax` above is the field round-at-subtotal governs.
 					id: 1,
-					subtotal: '33.330000',
-					total: '33.330000',
+					subtotal: '33.333333',
+					total: '33.333333',
 				},
 			],
 		});
@@ -132,22 +137,24 @@ describe('calculateCartLine — line_item', () => {
 		});
 	});
 
-	it('authors per-rate line taxes at the fixed six-decimal contract width', () => {
+	it('authors per-rate line taxes at the configured storage precision', () => {
 		const config = createCartConfig({
 			...baseConfig,
 			rates: [rate20],
 			allRates: [rate20],
 			taxRoundAtSubtotal: true,
+			dp: 5,
 		});
 		const lineItem = {
 			quantity: 1,
 			tax_class: 'standard',
-			meta_data: [posDataMeta({ price: 18.38235, tax_status: 'taxable' })],
+			meta_data: [posDataMeta({ price: 0.6172835, tax_status: 'taxable' })],
 		};
 
 		const { line } = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
 
-		expect(line.taxes).toEqual([{ id: 1, subtotal: '3.676470', total: '3.676470' }]);
+		expect(line.total_tax).toBe('0.1234567');
+		expect(line.taxes).toEqual([{ id: 1, subtotal: '0.1234567', total: '0.1234567' }]);
 	});
 
 	it('rounds half-up before padding per-rate taxes', () => {
@@ -1062,6 +1069,417 @@ describe('calculateCartLine — malformed pos_data warnings', () => {
 		// extract* fell back to the default amount (total = 10, prices exclude tax)
 		expect(computed.total).toBe('10');
 		expect(computed.total_tax).toBe('2');
+	});
+});
+
+/**
+ * WooCommerce stores the PER-RATE tax array unrounded, at rounding precision (6dp),
+ * and applies `wc_round_tax_total` only when SUMMING those values into `total_tax`.
+ * All three item classes are identical on this point:
+ *
+ *   class-wc-order-item-fee.php:222-230
+ *   class-wc-order-item-shipping.php:167-178
+ *   class-wc-order-item-product.php:214-231
+ *
+ *     $tax_data['total'] = array_map( 'wc_format_decimal', $total );   // <- NOT rounded
+ *     $this->set_prop( 'taxes', $tax_data );
+ *     if ( 'yes' === get_option( 'woocommerce_tax_round_at_subtotal' ) ) {
+ *         $this->set_total_tax( array_sum( $tax_data['total'] ) );
+ *     } else {
+ *         $this->set_total_tax( array_sum( array_map( 'wc_round_tax_total', $tax_data['total'] ) ) );
+ *     }
+ *
+ * `wc_format_decimal($n)` with `$dp === false` does not round — it renders the float at
+ * `wc_get_rounding_precision()` (6). So `taxRoundAtSubtotal === false` changes `total_tax`
+ * and NOTHING ELSE. Rounding `taxes[]` too is a client-only invention.
+ *
+ * Every fixture here is deliberately NOT 2dp-clean: the pre-existing fee/shipping cases
+ * above all use amounts whose tax lands exactly on a cent (10 @ 20% = 2), so they pass
+ * under either rule and cannot see this.
+ *
+ * Measured live on dev-free.wcpos.com 2026-08-24, order 111919 (CHECKOUT401):
+ * a 1.00 tax-inclusive fee at 10% — client sent taxes[6].total 0.090000, server stored
+ * 0.090909, and the cashier got "your store changed this order's totals".
+ */
+describe('per-rate taxes[] are stored UNROUNDED (WC set_taxes contract)', () => {
+	const rate10: TaxRateInput = {
+		id: 6,
+		rate: '10.0000',
+		compound: false,
+		order: 1,
+		class: 'standard',
+		shipping: true,
+	};
+
+	it('fee: a 1.00 tax-inclusive fee at 10% keeps 0.090909 in taxes[], rounds only total_tax', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rate10],
+			pricesIncludeTax: false,
+			taxRoundAtSubtotal: false,
+		});
+		const feeLine = {
+			tax_class: '',
+			tax_status: 'taxable' as const,
+			meta_data: [posDataMeta({ amount: '1', percent: false, prices_include_tax: true })],
+		};
+
+		const { line } = calculateCartLine({ kind: 'fee', line: feeLine, cartLineItems: [] }, config);
+
+		expect(line.total).toBe('0.909091');
+		expect(line.total_tax).toBe('0.09');
+		expect(line.taxes).toEqual([{ id: 6, total: '0.090909' }]);
+	});
+
+	it('shipping: a 1.00 tax-inclusive shipping line at 10% keeps 0.090909 in taxes[]', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rate10],
+			pricesIncludeTax: false,
+			taxRoundAtSubtotal: false,
+		});
+		const shippingLine = {
+			method_id: 'local_pickup',
+			meta_data: [
+				posDataMeta({
+					amount: '1',
+					prices_include_tax: true,
+					tax_class: '',
+					tax_status: 'taxable',
+				}),
+			],
+		};
+
+		const { line } = calculateCartLine(
+			{ kind: 'shipping', line: shippingLine, cartLineItems: [] },
+			config
+		);
+
+		expect(line.total).toBe('0.909091');
+		expect(line.total_tax).toBe('0.09');
+		expect(line.taxes).toEqual([{ id: 6, total: '0.090909' }]);
+	});
+
+	/**
+	 * The rounding MODE is store-level. WooCommerce defines `WC_TAX_ROUNDING_MODE` once
+	 * at boot from `woocommerce_prices_include_tax` (class-woocommerce.php:532) and
+	 * `wc_round_tax_total()` reads that constant for every value — a line's own
+	 * `prices_include_tax` never reaches it.
+	 *
+	 * This needs BOTH an override and an exact half-cent tie to show, which is why no
+	 * pre-existing shipping fixture caught it: 1.25 excl. at 10% is 0.125, and the two
+	 * modes land a cent apart. Store says prices include tax (HALF-DOWN → 0.12); the
+	 * line overrides to exclusive, which the old code let flip it to HALF-UP → 0.13.
+	 */
+	it('shipping: the rounding mode follows the STORE, not the line override', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rate10],
+			pricesIncludeTax: true,
+			taxRoundAtSubtotal: false,
+		});
+		const shippingLine = {
+			method_id: 'flat_rate',
+			meta_data: [
+				posDataMeta({
+					amount: '1.25',
+					prices_include_tax: false,
+					tax_class: '',
+					tax_status: 'taxable',
+				}),
+			],
+		};
+
+		const { line } = calculateCartLine(
+			{ kind: 'shipping', line: shippingLine, cartLineItems: [] },
+			config
+		);
+
+		expect(line.total).toBe('1.25');
+		// HALF-DOWN, because the STORE has prices-include-tax on. 0.13 means the line
+		// override reached the rounding mode.
+		expect(line.total_tax).toBe('0.12');
+		expect(line.taxes).toEqual([{ id: 6, total: '0.125' }]);
+	});
+
+	it('line_item: a 1.00 tax-inclusive product at 10% keeps 0.090909 in taxes[]', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rate10],
+			pricesIncludeTax: true,
+			taxRoundAtSubtotal: false,
+		});
+		const lineItem = {
+			quantity: 1,
+			tax_class: '',
+			meta_data: [posDataMeta({ price: 1, regular_price: 1, tax_status: 'taxable' })],
+		};
+
+		const { line } = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
+
+		expect(line.total_tax).toBe('0.09');
+		expect(line.taxes).toEqual([{ id: 6, subtotal: '0.090909', total: '0.090909' }]);
+	});
+});
+
+/**
+ * A line's `total_tax` is the sum of its STORED per-rate taxes — round each rate to
+ * storage precision FIRST, then add. Not `round(a + b)`. See `sumStoredLineTax` in
+ * cart-line.ts for the WooCommerce source this mirrors.
+ *
+ * Invisible on a single-rate store, which is why every fixture above missed it: with
+ * one rate, `round(a)` and `round(a)` are the same number. It takes TWO rates whose
+ * raw sum sits on a boundary.
+ *
+ * These are dev-pro's real numbers, measured 2026-08-24 on a 1.00 tax-inclusive fee
+ * at 10% + 2.2%. The till sent `total_tax` 0.108734 against the store's 0.108735 and
+ * raised the totals-changed banner on a correctly rung sale. The one-microunit gap was
+ * previously recorded in `apps/main/e2e/order-lifecycle.ts` as an unavoidable
+ * PHP-float-vs-decimal rounding tie, and tolerated. It was never a tie.
+ */
+describe('total_tax sums the STORED per-rate taxes, not the raw total', () => {
+	const rate10: TaxRateInput = {
+		id: 13,
+		rate: '10.0000',
+		compound: false,
+		order: 1,
+		class: 'standard',
+		shipping: true,
+	};
+	const rate22: TaxRateInput = {
+		id: 14,
+		rate: '2.2000',
+		compound: false,
+		order: 2,
+		class: 'standard',
+		shipping: true,
+	};
+
+	// net = 1 / 1.122 = 0.891266 → 0.089127 (10%) + 0.019608 (2.2%) = 0.108735.
+	// The raw sum is 0.1087344, which rounds to 0.108734 — one microunit low.
+	it('fee: two rates on a 1.00 inclusive fee sum to 0.108735, not 0.108734', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rate10, rate22],
+			pricesIncludeTax: false,
+			taxRoundAtSubtotal: true,
+		});
+		const feeLine = {
+			tax_class: '',
+			tax_status: 'taxable' as const,
+			meta_data: [posDataMeta({ amount: '1', percent: false, prices_include_tax: true })],
+		};
+
+		const { line } = calculateCartLine({ kind: 'fee', line: feeLine, cartLineItems: [] }, config);
+
+		expect(line.taxes).toEqual([
+			{ id: 13, total: '0.089127' },
+			{ id: 14, total: '0.019608' },
+		]);
+		expect(line.total_tax).toBe('0.108735');
+	});
+
+	it('shipping: the same two rates sum the same way', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rate10, rate22],
+			pricesIncludeTax: false,
+			taxRoundAtSubtotal: true,
+		});
+		const shippingLine = {
+			method_id: 'flat_rate',
+			meta_data: [
+				posDataMeta({
+					amount: '1',
+					prices_include_tax: true,
+					tax_class: '',
+					tax_status: 'taxable',
+				}),
+			],
+		};
+
+		const { line } = calculateCartLine(
+			{ kind: 'shipping', line: shippingLine, cartLineItems: [] },
+			config
+		);
+
+		expect(line.taxes).toEqual([
+			{ id: 13, total: '0.089127' },
+			{ id: 14, total: '0.019608' },
+		]);
+		expect(line.total_tax).toBe('0.108735');
+	});
+
+	it('line_item: total_tax and subtotal_tax both sum the stored rates', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rate10, rate22],
+			pricesIncludeTax: true,
+			taxRoundAtSubtotal: true,
+		});
+		const lineItem = {
+			quantity: 1,
+			tax_class: '',
+			meta_data: [posDataMeta({ price: 1, regular_price: 1, tax_status: 'taxable' })],
+		};
+
+		const { line } = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
+
+		expect(line.taxes).toEqual([
+			{ id: 13, subtotal: '0.089127', total: '0.089127' },
+			{ id: 14, subtotal: '0.019608', total: '0.019608' },
+		]);
+		expect(line.total_tax).toBe('0.108735');
+		expect(line.subtotal_tax).toBe('0.108735');
+	});
+});
+
+/**
+ * The three rules above, at NON-2-DECIMAL currencies.
+ *
+ * The suite already exercised dp=0 (JPY/KRW/VND) and dp=3 (KWD/BHD/OMR) — the
+ * personas page records real merchants on all of them — but every one of those cases
+ * asserted `price`, `total`, `total_tax` and `subtotal_tax` and **never `taxes[]`**.
+ * That is precisely the field all three of the 2026-08-24 bugs lived in: the suite had
+ * non-2dp coverage of everything except the thing that was broken.
+ *
+ * `getRoundingPrecision(dp) = max(dp + 2, 6)`, so per-rate storage stays at 6dp for
+ * every currency ≤ 4 decimals while `total_tax` rounds to `dp`. At dp=0 that spread is
+ * at its widest — the per-rate array holds six decimals and the sum rounds to a whole
+ * unit — which makes round-each-then-sum vs round-the-sum a WHOLE YEN apart, not a
+ * microunit.
+ */
+describe('line taxes at non-2-decimal currencies', () => {
+	const half: TaxRateInput = {
+		id: 1,
+		rate: '1.0500',
+		compound: false,
+		order: 1,
+		class: 'standard',
+		shipping: true,
+	};
+	const halfAgain: TaxRateInput = { ...half, id: 2, order: 2 };
+	const ten: TaxRateInput = {
+		id: 6,
+		rate: '10.0000',
+		compound: false,
+		order: 1,
+		class: 'standard',
+		shipping: true,
+	};
+	const twenty: TaxRateInput = { ...ten, id: 7, rate: '20.0000' };
+
+	it('dp=0 (JPY): per-rate taxes keep 6dp while total_tax rounds to a whole yen', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [ten],
+			pricesIncludeTax: true,
+			taxRoundAtSubtotal: false,
+			dp: 0,
+		});
+		const lineItem = {
+			quantity: 1,
+			tax_class: 'standard',
+			meta_data: [posDataMeta({ price: 999, regular_price: 999, tax_status: 'taxable' })],
+		};
+
+		const { line } = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
+
+		// 999 − 999/1.1 = 90.818182 stored; half-DOWN to 0dp (prices include tax) = 91.
+		expect(line.taxes).toEqual([{ id: 6, subtotal: '90.818182', total: '90.818182' }]);
+		expect(line.total_tax).toBe('91');
+	});
+
+	/**
+	 * The whole-yen case. Two rates of 1.05% on ¥1000 give 10.5 each.
+	 *
+	 *   round each, then sum (WooCommerce)  → 11 + 11 = 22
+	 *   round the raw sum (the old bug)     → round(21) = 21
+	 *
+	 * At dp=2 the same defect was worth one microunit and was written off for sixteen
+	 * days as a float tie. At dp=0 it is a whole unit of currency on the receipt.
+	 */
+	it('dp=0 (JPY): total_tax sums the ROUNDED per-rate taxes — 22, not 21', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [half, halfAgain],
+			pricesIncludeTax: false,
+			taxRoundAtSubtotal: false,
+			dp: 0,
+		});
+		const lineItem = {
+			quantity: 1,
+			tax_class: 'standard',
+			meta_data: [posDataMeta({ price: 1000, regular_price: 1000, tax_status: 'taxable' })],
+		};
+
+		const { line } = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
+
+		expect(line.taxes).toEqual([
+			{ id: 1, subtotal: '10.500000', total: '10.500000' },
+			{ id: 2, subtotal: '10.500000', total: '10.500000' },
+		]);
+		expect(line.total_tax).toBe('22');
+	});
+
+	it('dp=0 (JPY): round-at-subtotal ON sums the RAW per-rate taxes — 21', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [half, halfAgain],
+			pricesIncludeTax: false,
+			taxRoundAtSubtotal: true,
+			dp: 0,
+		});
+		const lineItem = {
+			quantity: 1,
+			tax_class: 'standard',
+			meta_data: [posDataMeta({ price: 1000, regular_price: 1000, tax_status: 'taxable' })],
+		};
+
+		const { line } = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
+
+		expect(line.total_tax).toBe('21');
+	});
+
+	it('dp=3 (KWD): per-rate taxes keep 6dp while total_tax rounds to 3', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [twenty],
+			pricesIncludeTax: false,
+			taxRoundAtSubtotal: false,
+			dp: 3,
+		});
+		const lineItem = {
+			quantity: 2,
+			tax_class: 'standard',
+			meta_data: [posDataMeta({ price: 9.999, regular_price: 9.999, tax_status: 'taxable' })],
+		};
+
+		const { line } = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
+
+		// 19.998 × 20% = 3.9996 stored; half-up to 3dp = 4.
+		expect(line.taxes).toEqual([{ id: 7, subtotal: '3.999600', total: '3.999600' }]);
+		expect(line.total_tax).toBe('4');
+	});
+
+	it('dp=0 (JPY): a fee keeps its per-rate tax unrounded too', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [ten],
+			pricesIncludeTax: false,
+			taxRoundAtSubtotal: false,
+			dp: 0,
+		});
+		const feeLine = {
+			tax_class: '',
+			tax_status: 'taxable' as const,
+			meta_data: [posDataMeta({ amount: '999', percent: false, prices_include_tax: true })],
+		};
+
+		const { line } = calculateCartLine({ kind: 'fee', line: feeLine, cartLineItems: [] }, config);
+
+		expect(line.taxes).toEqual([{ id: 6, total: '90.818182' }]);
+		expect(line.total_tax).toBe('91');
 	});
 });
 

@@ -213,7 +213,7 @@ export function computeDiscountedLineItems<
 		taxes?: { id?: number; subtotal?: string; total?: string; [key: string]: any }[];
 		[key: string]: any;
 	},
->(lineItems: T[], allPerItemDiscounts: PerItemDiscount[][]): T[] {
+>(lineItems: T[], allPerItemDiscounts: PerItemDiscount[][], roundingPrecision = 6): T[] {
 	if (allPerItemDiscounts.length === 0) return lineItems;
 
 	// Check whether any discount entry uses lineIndex — if so, prefer per-line
@@ -244,20 +244,21 @@ export function computeDiscountedLineItems<
 			const currentTotal = parseFloat(item.total || '0');
 			if (currentTotal <= 0) return item;
 
-			const currentTotalTax = parseFloat(item.total_tax || '0');
 			const newTotal = Math.max(0, currentTotal - lineDiscount);
 			const ratio = currentTotal > 0 ? newTotal / currentTotal : 0;
-			const newTotalTax = currentTotalTax * ratio;
 
 			const taxes = (item.taxes || []).map((tax) => ({
 				...tax,
-				total: roundHalfUp(parseFloat(tax.total || '0') * ratio, 6).toFixed(6),
+				total: roundHalfUp(parseFloat(tax.total || '0') * ratio, roundingPrecision).toFixed(
+					roundingPrecision
+				),
 			}));
+			const newTotalTax = taxes.reduce((sum, tax) => sum + parseFloat(tax.total), 0);
 
 			return {
 				...item,
-				total: String(round(newTotal, 6)),
-				total_tax: String(round(newTotalTax, 6)),
+				total: String(round(newTotal, roundingPrecision)),
+				total_tax: String(round(newTotalTax, roundingPrecision)),
 				taxes,
 			} as T;
 		});
@@ -292,23 +293,23 @@ export function computeDiscountedLineItems<
 		const currentTotal = parseFloat(item.total || '0');
 		if (currentTotal <= 0) return item;
 
-		const currentTotalTax = parseFloat(item.total_tax || '0');
-
 		const productTotal = totalByProductId.get(pid) || currentTotal;
 		const itemDiscount = totalDiscountForProduct * (currentTotal / productTotal);
 		const newTotal = Math.max(0, currentTotal - itemDiscount);
 		const ratio = currentTotal > 0 ? newTotal / currentTotal : 0;
-		const newTotalTax = currentTotalTax * ratio;
 
 		const taxes = (item.taxes || []).map((tax) => ({
 			...tax,
-			total: roundHalfUp(parseFloat(tax.total || '0') * ratio, 6).toFixed(6),
+			total: roundHalfUp(parseFloat(tax.total || '0') * ratio, roundingPrecision).toFixed(
+				roundingPrecision
+			),
 		}));
+		const newTotalTax = taxes.reduce((sum, tax) => sum + parseFloat(tax.total), 0);
 
 		return {
 			...item,
-			total: String(round(newTotal, 6)),
-			total_tax: String(round(newTotalTax, 6)),
+			total: String(round(newTotal, roundingPrecision)),
+			total_tax: String(round(newTotalTax, roundingPrecision)),
 			taxes,
 		} as T;
 	});
