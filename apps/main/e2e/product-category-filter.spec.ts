@@ -376,27 +376,77 @@ test.describe('Product category filter', () => {
 			windowResponse.status(),
 			'the filtered product window did not come back OK'
 		).toBeLessThan(400);
-		// 2. The grid is not empty. The RENDERED-row count on its own, never the
+		// 2. The known non-member is gone — the half that makes this a filter and not
+		//    a no-op that happened to leave the catalogue on screen.
+		//
+		//    Moved AHEAD of the count poll, and given the sync budget, because it is the
+		//    first assertion here that a pre-filter grid cannot satisfy. The poll below
+		//    reads as the wait for the filtered results and is not one: it asserts only
+		//    that the loaded count is a positive integer, and the grid was ALREADY
+		//    non-empty — `nonMemberTile` was asserted VISIBLE moments ago, off these very
+		//    rows. So it passes on the pre-filter render, and the entire wait for the
+		//    re-render fell to this line's DEFAULT 5s. As dev-next's catalogue grew, that
+		//    stopped being enough and the spec began failing on every branch, here on
+		//    some attempts and at step 4 on others (runs 32738423956, 32738568493,
+		//    32738684283).
+		await expect(nonMemberTile).not.toBeVisible({ timeout: FILTERED_GRID_TIMEOUT_MS });
+		// 3. The grid is not empty. The RENDERED-row count on its own, never the
 		//    "Showing X of Y" sentence, whose Y is the store-wide census and stays
-		//    non-zero over an empty grid (#1336, #1345).
+		//    non-zero over an empty grid (#1336, #1345). Still worth asserting: the
+		//    disappearance above cannot tell a working filter from one that emptied the
+		//    grid completely.
 		await expect
 			.poll(() => page.getByTestId(LOADED_COUNT_TEST_ID).textContent(), {
 				timeout: FILTERED_GRID_TIMEOUT_MS,
 			})
 			.toMatch(LOADED_COUNT_READY);
-		// 3. The known non-member is gone — the half that makes this a filter and not
-		//    a no-op that happened to leave the catalogue on screen.
-		await expect(nonMemberTile).not.toBeVisible();
 		// 4. Everything still rendered really is in that category, per the SERVER.
 		//    Deliberately a set relation, not a named row: the grid is title-sorted and
 		//    virtualized, so WHICH members are on screen is not the spec's business —
 		//    that they are all members is. `member` is what proved the category
 		//    non-empty during discovery; it need not be one of the rendered rows.
-		const rendered = (await renderedProductIds(page)).slice(0, WC_MAX_PER_PAGE);
-		expect(rendered.length).toBeGreaterThan(0);
-		const members = await categoryMembersAmong(request, storeUrl, options, category.id, rendered);
+		//
+		//    Polled, not sampled once. Two things put a non-member in this set without
+		//    the filter being broken: a row still on screen from the transition above,
+		//    and a product another run created, re-categorised or deleted between the
+		//    render and the probe — dev-next is written to constantly, and a deleted
+		//    product simply drops out of the membership answer. Both settle. A filter
+		//    that does not filter never does, and still fails here once the budget is
+		//    spent, naming the strays it kept rendering.
+		let strays: number[] = [];
+		let sampledRows = 0;
+		await expect
+			.poll(
+				async () => {
+					const rendered = (await renderedProductIds(page)).slice(0, WC_MAX_PER_PAGE);
+					sampledRows = rendered.length;
+					// Distinct from a clean grid: an empty grid proves nothing, and returning
+					// 0 here would pass the assertion on it.
+					if (rendered.length === 0) return -1;
+					const members = await categoryMembersAmong(
+						request,
+						storeUrl,
+						options,
+						category.id,
+						rendered
+					);
+					strays = rendered.filter((id) => !members.has(id));
+					return strays.length;
+				},
+				{
+					timeout: FILTERED_GRID_TIMEOUT_MS,
+					// Each attempt costs one wc/v3 round trip, so back off rather than spin.
+					intervals: [1_000, 2_000, 5_000],
+					message: `the filtered grid kept rendering products the store does not put in "${category.name}" (discovery product ${member.id})`,
+				}
+			)
+			.toBe(0);
 		expect(
-			rendered.filter((id) => !members.has(id)),
+			sampledRows,
+			`the filtered grid rendered no rows to check for "${category.name}"`
+		).toBeGreaterThan(0);
+		expect(
+			strays,
 			`the filtered grid rendered products the store does not put in "${category.name}" (discovery product ${member.id})`
 		).toEqual([]);
 	});
