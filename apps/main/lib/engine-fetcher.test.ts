@@ -959,6 +959,78 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
+	// THE INVARIANT BEHIND THE METRIC (#1547). `settle` writes the transport row
+	// and stamps the hourly bucket in one call, so the bucket is only right if
+	// every attempt settles EXACTLY once: a second call double-counts the
+	// request, a missing one loses it. That used to be asserted by a comment
+	// saying "called exactly once on every path below" — which is a promise, not
+	// a check, and the arc has seven endings. One request per fetch, on each of
+	// them, is the check.
+	describe('every arc ending settles each attempt exactly once', () => {
+		const arcs: {
+			name: string;
+			fetches: (Response | Error)[];
+			refresh?: () => Promise<string | null>;
+			throws?: boolean;
+		}[] = [
+			{ name: 'a 2xx that never enters the arc', fetches: [new Response(null, { status: 200 })] },
+			{ name: 'a 500 that never enters the arc', fetches: [new Response(null, { status: 500 })] },
+			{
+				name: 'a refresh that fails hard',
+				fetches: [new Response(null, { status: 401 })],
+				refresh: () => Promise.reject(new Error('refresh exploded')),
+				throws: true,
+			},
+			{
+				name: 'a refresh that yields no token',
+				fetches: [new Response(null, { status: 401 })],
+				refresh: () => Promise.resolve(null),
+			},
+			{
+				name: 'a retry that never settles',
+				fetches: [new Response(null, { status: 401 }), new Error('network down')],
+				throws: true,
+			},
+			{
+				name: 'a retry that succeeds',
+				fetches: [new Response(null, { status: 401 }), new Response(null, { status: 200 })],
+			},
+			{
+				name: 'a retry still unauthorized',
+				fetches: [new Response(null, { status: 401 }), new Response(null, { status: 401 })],
+			},
+			{
+				name: 'a retry that hits a different failure',
+				fetches: [new Response(null, { status: 401 }), new Response(null, { status: 503 })],
+			},
+		];
+
+		for (const arc of arcs) {
+			it(`settles once per attempt for ${arc.name}`, async () => {
+				const fetch = jest.fn();
+				for (const outcome of arc.fetches) {
+					if (outcome instanceof Error) fetch.mockRejectedValueOnce(outcome);
+					else fetch.mockResolvedValueOnce(outcome);
+				}
+				const { fetcher, recordTransport } = createFetcherHarness({
+					fetch,
+					auth: {
+						credentials: { getLatest: jest.fn(() => ({ access_token: 'token' })) },
+						refreshAuth: arc.refresh ?? (() => Promise.resolve('refreshed-token')),
+					},
+				});
+
+				const call = fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+				if (arc.throws) await expect(call).rejects.toThrow();
+				else await call;
+
+				expect(fetch).toHaveBeenCalledTimes(arc.fetches.length);
+				expect(recordTransport).toHaveBeenCalledTimes(arc.fetches.length);
+				fetch.mockReset();
+			});
+		}
+	});
+
 	it('counts no hourly failure for a 401 the refresh arc absorbed', async () => {
 		// THE PHANTOM (#1547): the log row for an absorbed 401 is debug/'recovered'
 		// and is not even persisted unless verbose diagnostics is on, but the hourly

@@ -131,8 +131,16 @@ export function createEngineFetcher(input: {
 
 	type SettledAttempt = {
 		response: Response;
-		/** Emit this attempt's transport row with the level the SETTLED arc decided. */
-		emit: (level: SyncEvent['level'], extraFields?: Record<string, unknown>) => void;
+		/**
+		 * Close this attempt's books at the level the SETTLED arc decided: it writes
+		 * the transport row AND stamps the attempt into the hourly metric bucket.
+		 *
+		 * Both, from one call, on purpose — the two used to be stamped at different
+		 * moments and disagreed (#1547). Call it EXACTLY once per attempt: twice
+		 * double-counts the request, never loses it. `settle`, not `emit`, because
+		 * emitting a log row is only half of what it does.
+		 */
+		settle: (level: SyncEvent['level'], extraFields?: Record<string, unknown>) => void;
 	};
 
 	/** Execute one logical request arc, including any authentication retry. */
@@ -347,15 +355,7 @@ export function createEngineFetcher(input: {
 
 			return {
 				response,
-				/**
-				 * Emit this attempt's row. Called EXACTLY once per settled attempt, on
-				 * every path below — the hourly metric rides with it, so a second call
-				 * would count the request twice and a missing one would lose it.
-				 *
-				 * Whatever verdict the log row carries is the verdict the uptime strip
-				 * counts: the two cannot disagree because they are stamped together.
-				 */
-				emit: (level, extraFields) => {
+				settle: (level, extraFields) => {
 					// A failure is what the merchant would recognise as one: warn or
 					// error. Everything the rubric settles as info or debug — a 2xx, a
 					// 304 conditional poll, a tick-probe 404 the change signal is built
@@ -402,11 +402,11 @@ export function createEngineFetcher(input: {
 		 */
 		const emitSettled = (attempt: SettledAttempt, extraFields?: Record<string, unknown>): void => {
 			const status = attempt.response.status;
-			if (attempt.response.ok || status === 304) attempt.emit('info', extraFields);
+			if (attempt.response.ok || status === 304) attempt.settle('info', extraFields);
 			else if (status === 404 && isTickProbe)
-				attempt.emit('debug', { outcome: 'recovered', ...extraFields });
-			else if (status === 403) attempt.emit('error', extraFields);
-			else attempt.emit('warn', extraFields);
+				attempt.settle('debug', { outcome: 'recovered', ...extraFields });
+			else if (status === 403) attempt.settle('error', extraFields);
+			else attempt.settle('warn', extraFields);
 		};
 
 		const first = await performAttempt();
@@ -432,7 +432,7 @@ export function createEngineFetcher(input: {
 		} catch (error) {
 			// The refresh itself failed hard — settle the attempt as a failure and let
 			// the refresh error propagate exactly as before.
-			first.emit('warn', { outcome: 'failed', operationId });
+			first.settle('warn', { outcome: 'failed', operationId });
 			throw error;
 		}
 		if (!retryToken) {
@@ -440,7 +440,7 @@ export function createEngineFetcher(input: {
 			// refresh session' — error when the refresh token is terminally rejected),
 			// so this row records the request-level failure without double-escalating.
 			// Leave it uncorrelated so repeated post-rejection 401s can collapse.
-			first.emit('warn', { outcome: 'failed' });
+			first.settle('warn', { outcome: 'failed' });
 			return first.response;
 		}
 
@@ -451,7 +451,7 @@ export function createEngineFetcher(input: {
 			// The retry never settled (the network fell over mid-arc). Its thrown path
 			// already emitted a status-0 warn row carrying the arc id; the absorbed 401
 			// stays forensic.
-			first.emit('debug', { outcome: 'failed', operationId });
+			first.settle('debug', { outcome: 'failed', operationId });
 			throw error;
 		}
 		const retryStatus = retry.response.status;
@@ -460,17 +460,17 @@ export function createEngineFetcher(input: {
 			// forensic debug rows (visible under verbose diagnostics, chained by the
 			// arc id); the user-facing narrative is the single 'Session renewed
 			// automatically' info row the refresh layer writes.
-			first.emit('debug', { outcome: 'recovered', operationId });
-			retry.emit('debug', { operationId });
+			first.settle('debug', { outcome: 'recovered', operationId });
+			retry.settle('debug', { operationId });
 		} else if (retryStatus === 401) {
 			// Still unauthorized after a refresh — bounded-refresh exhaustion; NOW
 			// something is actually wrong and the user will need to re-authenticate.
-			first.emit('debug', { outcome: 'failed', operationId });
-			retry.emit('error', { operationId });
+			first.settle('debug', { outcome: 'failed', operationId });
+			retry.settle('error', { operationId });
 		} else {
 			// The 401 was cured but the retry hit a different failure — classify that
 			// failure on its own terms, keeping the arc id for the chain.
-			first.emit('debug', { outcome: 'recovered', operationId });
+			first.settle('debug', { outcome: 'recovered', operationId });
 			emitSettled(retry, { operationId });
 		}
 		return retry.response;
