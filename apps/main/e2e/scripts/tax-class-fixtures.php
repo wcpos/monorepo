@@ -70,7 +70,22 @@ foreach ($countries as $country) {
 }
 WC_Cache_Helper::get_transient_version('taxes', true);
 
-/* 2. Products. */
+/*
+ * 2. A category of their own. Products saved without one land in the store default
+ *    ("Uncategorized"), which `product-category-filter.spec.ts` filters on and asserts
+ *    membership against — so uncategorised fixtures quietly change another spec's
+ *    subject matter on a shared store.
+ */
+$fixture_term = term_exists('E2E Tax Fixtures', 'product_cat');
+if (!$fixture_term) {
+    $fixture_term = wp_insert_term('E2E Tax Fixtures', 'product_cat', ['slug' => 'e2e-tax-fixtures']);
+    printf("CREATE category  e2e-tax-fixtures #%d\n", (int) $fixture_term['term_id']);
+} else {
+    printf("SKIP   category  e2e-tax-fixtures already present (#%d)\n", (int) $fixture_term['term_id']);
+}
+$fixture_cat_id = (int) $fixture_term['term_id'];
+
+/* 3. Products. */
 $fixtures = [
     // The STANDARD-class fixture matters as much as the others: the mixed-class spec
     // must own every line it asserts on. Relying on an arbitrary catalogue product for
@@ -98,6 +113,11 @@ foreach ($fixtures as $f) {
     $p->set_catalog_visibility('visible');
     $p->set_status('publish');
     $p->set_manage_stock(false);
+    // Own category, deliberately. A product saved with no category is auto-assigned
+    // the store default — "Uncategorized" — which is a category other specs filter on
+    // and assert membership against. Fixtures must not change what a shared store's
+    // default category contains.
+    $p->set_category_ids([$fixture_cat_id]);
     $p->update_meta_data('_wcpos_fixture_source', 'e2e-tax-classes');
     $id = $p->save();
     printf("CREATE %-18s #%d class=%s status=%s price=%s\n", $f['sku'], $id, $f['class'] ?: '(standard)', $f['status'], $f['price']);
