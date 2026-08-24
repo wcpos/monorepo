@@ -300,3 +300,58 @@ describe('observeEngineQuery', () => {
 		}
 	});
 });
+
+/**
+ * A store switch moves the engine to a new scope database, but `engine.ready` is
+ * created ONCE — `const ready = switchScope(initialScope)` in
+ * create-rxdb-sync-engine — and keeps resolving to the ActiveScope the engine
+ * BOOTED on, whose `database` reference is the outgoing scope's. Anything that
+ * subscribes AFTER the switch (a variations popover, the customer picker) must
+ * still read the ACTIVE scope.
+ */
+describe('observeEngineQuery across a store switch', () => {
+	it('reads the ACTIVE scope database, not the one `ready` still names', async () => {
+		const bootScope = await createEngineDatabase(['products']);
+		const activeScopeDatabase = await createEngineDatabase(['products']);
+		await bootScope.collections.products.insert(
+			engineProduct({ uuid: 'boot-scope', id: 1, name: 'Outgoing store' })
+		);
+		await activeScopeDatabase.collections.products.insert(
+			engineProduct({ uuid: 'active-scope', id: 2, name: 'Incoming store' })
+		);
+		const engine = createFakeEngine(activeScopeDatabase);
+		engine.ready = Promise.resolve({
+			identity: { site: 'https://test', storeId: '1', cashierId: '1' },
+			scopeId: 'boot-scope',
+			database: bootScope,
+		});
+		engine.active = () => ({
+			identity: { site: 'https://test', storeId: '2', cashierId: '1' },
+			scopeId: 'active-scope',
+			database: activeScopeDatabase,
+		});
+		engine.db$ = (listener: (database: RxDatabase | null) => void) => {
+			listener(activeScopeDatabase);
+			return () => undefined;
+		};
+
+		let ids: string[] = [];
+		const subscription = observeEngineQuery(engine, 'en', { collection: 'products' }).subscribe(
+			(result) => {
+				ids = result.hits.map((hit) => hit.id);
+			}
+		);
+
+		try {
+			await waitFor(() => expect(ids).toEqual(['active-scope']));
+			// `ready` has long since resolved, so its continuation runs a microtask after
+			// subscribe — after the first, correct emission.
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			expect(ids).toEqual(['active-scope']);
+		} finally {
+			subscription.unsubscribe();
+			await bootScope.close();
+			await activeScopeDatabase.close();
+		}
+	});
+});
