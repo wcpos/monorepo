@@ -79,7 +79,21 @@ WC_Cache_Helper::get_transient_version('taxes', true);
 $fixture_term = term_exists('E2E Tax Fixtures', 'product_cat');
 if (!$fixture_term) {
     $fixture_term = wp_insert_term('E2E Tax Fixtures', 'product_cat', ['slug' => 'e2e-tax-fixtures']);
-    printf("CREATE category  e2e-tax-fixtures #%d\n", (int) $fixture_term['term_id']);
+    // wp_insert_term returns WP_Error, and array access on it is fatal in PHP 8 — the
+    // script would die before creating a single product. The reachable case: a term
+    // already holds the slug under a different NAME, so the term_exists() lookup above
+    // misses and the insert comes back as a `term_exists` error carrying that term's id.
+    if (is_wp_error($fixture_term)) {
+        $existing_id = (int) $fixture_term->get_error_data();
+        if (!$existing_id) {
+            printf("FATAL  category  e2e-tax-fixtures: %s\n", $fixture_term->get_error_message());
+            return;
+        }
+        printf("REUSE  category  slug e2e-tax-fixtures already held by term #%d\n", $existing_id);
+        $fixture_term = ['term_id' => $existing_id];
+    } else {
+        printf("CREATE category  e2e-tax-fixtures #%d\n", (int) $fixture_term['term_id']);
+    }
 } else {
     printf("SKIP   category  e2e-tax-fixtures already present (#%d)\n", (int) $fixture_term['term_id']);
 }
