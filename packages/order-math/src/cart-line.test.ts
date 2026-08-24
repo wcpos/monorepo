@@ -1167,6 +1167,52 @@ describe('calculateCartLine — inherited shipping tax class', () => {
 		expect(line.taxes).toEqual([{ id: 101, total: '10' }]);
 	});
 
+	/**
+	 * `taxClassSlugs` comes from a lazily fetched endpoint, so an empty list is a state
+	 * the cart really reaches — first boot, or offline with the fetch failing. Treating
+	 * "not loaded" as "loaded and nothing matched" silently zeroed the shipping tax on
+	 * every inheriting cart, and kept it zero for as long as the fetch kept failing.
+	 */
+	describe('when the tax-class list has not loaded', () => {
+		const unloaded = createCartConfig({
+			...baseConfig,
+			rates,
+			shippingTaxClass: 'inherit',
+			taxClassSlugs: [],
+		});
+
+		const taxFor = (cartLineItems: ReturnType<typeof item>[]) =>
+			calculateCartLine(
+				{
+					kind: 'shipping',
+					cartLineItems,
+					line: { method_title: 'Flat rate', total: '100', total_tax: '0' },
+				},
+				unloaded
+			).line;
+
+		it('still resolves the standard class from the cart alone', () => {
+			expect(taxFor([item('')]).taxes).toEqual([{ id: 101, total: '10' }]);
+		});
+
+		it('still resolves a single non-standard class from the cart alone', () => {
+			expect(taxFor([item('reduced-rate')]).taxes).toEqual([{ id: 202, total: '5' }]);
+		});
+
+		it('falls back to standard rather than charging nothing on an ambiguous cart', () => {
+			// Two non-standard classes and no configured order to break the tie. A wrong
+			// class is recoverable; silently charging no tax is not.
+			expect(taxFor([item('reduced-rate'), item('zero-rate')]).taxes).toEqual([
+				{ id: 101, total: '10' },
+			]);
+		});
+
+		it('still charges nothing when the cart itself has no taxable class', () => {
+			// Not an unloaded-list case — the cart genuinely has nothing to inherit.
+			expect(taxFor([item('', 'none')]).taxes).toEqual([]);
+		});
+	});
+
 	it('never inherits when the LINE carries its own tax class', () => {
 		const { line } = calculateCartLine(
 			{

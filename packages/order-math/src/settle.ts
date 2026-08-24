@@ -67,8 +67,8 @@ export interface TaxLineOutput {
 export interface SettlePatch {
 	line_items?: LineItemInput[]; // present IFF coupon replay ran
 	coupon_lines?: CouponLineInput[]; // present IFF coupon replay ran
-	fee_lines?: FeeLineInput[]; // present IFF >=1 active percent fee recomputed
-	shipping_lines?: ShippingLineInput[]; // present IFF >=1 active inheriting shipping line recomputed
+	fee_lines?: FeeLineInput[]; // present IFF >=1 active percent fee actually CHANGED
+	shipping_lines?: ShippingLineInput[]; // present IFF >=1 inheriting shipping line actually CHANGED
 	discount_total: MoneyString;
 	discount_tax: MoneyString;
 	shipping_total: MoneyString;
@@ -243,9 +243,13 @@ function settleOverLines(args: {
 		if (!isActiveFeeLine(fee)) return fee;
 		const { percent } = extractFeeLineData(fee as DbFeeLine, config.pricesIncludeTax);
 		if (!percent) return fee;
-		percentFeeRecomputed = true;
 		const result = calculateCartLine({ kind: 'fee', line: fee, cartLineItems: lineItems }, config);
 		warnings.push(...result.warnings);
+		// Same rule as the shipping pass below: recomputed is not changed, and an
+		// unchanged array must not ride along in an asynchronous whole-field write.
+		if (JSON.stringify(result.line) !== JSON.stringify(fee)) {
+			percentFeeRecomputed = true;
+		}
 		return result.line;
 	});
 
@@ -262,12 +266,18 @@ function settleOverLines(args: {
 			config.shippingTaxClass
 		);
 		if (tax_class !== INHERIT_TAX_CLASS) return shipping;
-		inheritingShippingRecomputed = true;
 		const result = calculateCartLine(
 			{ kind: 'shipping', line: shipping, cartLineItems: lineItems },
 			config
 		);
 		warnings.push(...result.warnings);
+		// Recomputing is not the same as changing. The patch is applied as an
+		// asynchronous whole-field write, so attaching an array that recomputed to
+		// identical values turns a money-only settle into another line write — one that
+		// can land on top of a shipping edit the cashier made in the meantime.
+		if (JSON.stringify(result.line) !== JSON.stringify(shipping)) {
+			inheritingShippingRecomputed = true;
+		}
 		return result.line;
 	});
 

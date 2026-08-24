@@ -373,6 +373,24 @@ describe('settleCart', () => {
 			expect('shipping_lines' in result.patch).toBe(false);
 		});
 
+		it('omits the array when the recompute changes nothing', () => {
+			// Already carrying the reduced rate it inherits, so the recompute is a no-op.
+			const settled = {
+				...inheritingShipping(),
+				total_tax: '5',
+				taxes: [{ id: 202, total: '5' }],
+			};
+			const result = settleCart(
+				{ line_items: [reducedRateItem()], shipping_lines: [settled] },
+				config
+			);
+			expect(result.ok).toBe(true);
+			if (!result.ok) return;
+
+			// Attaching it would turn a local-only money settle into a server push.
+			expect('shipping_lines' in result.patch).toBe(false);
+		});
+
 		it('leaves a tombstoned shipping line untouched', () => {
 			const tombstone = { ...inheritingShipping(), method_id: null };
 			const result = settleCart(
@@ -440,7 +458,20 @@ describe('settleCart', () => {
 			expect(result.changed).toBe(true);
 		});
 
-		it('settling the applied patch returns a value-identical patch with changed: false', () => {
+		/**
+		 * The fixed point, asserted as the property rather than as byte-equality of the
+		 * two patches. The second settle omits `fee_lines`, because on the applied
+		 * snapshot the percent fee recomputes to what it already holds — and an
+		 * unchanged line array must not ride along: `use-cart-settlement` writes the
+		 * patch as a whole field, and `fee_lines[].total` is cashier intent the server
+		 * keeps, so attaching it turns a local-only money settle into a server push.
+		 *
+		 * What has to hold is that re-settling changes nothing: `changed` is false, and
+		 * every key the second patch does emit is value-identical to the first's. That a
+		 * CHANGED array is still emitted is pinned separately, by the percent-fee and
+		 * inheriting-shipping cases above.
+		 */
+		it('settling the applied patch is a fixed point — changed: false, nothing re-asserted', () => {
 			const first = settleCart(snapshot, config, { coupons: context });
 			expect(first.ok).toBe(true);
 			if (!first.ok) return;
@@ -450,8 +481,13 @@ describe('settleCart', () => {
 			expect(second.ok).toBe(true);
 			if (!second.ok) return;
 
-			expect(second.patch).toEqual(first.patch);
 			expect(second.changed).toBe(false);
+			for (const [key, value] of Object.entries(second.patch)) {
+				expect([key, value]).toEqual([key, first.patch[key as keyof typeof first.patch]]);
+			}
+			// The unchanged percent fee is the key that drops out.
+			expect('fee_lines' in first.patch).toBe(true);
+			expect('fee_lines' in second.patch).toBe(false);
 		});
 	});
 

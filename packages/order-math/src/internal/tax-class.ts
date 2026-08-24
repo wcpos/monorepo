@@ -61,12 +61,30 @@ export function resolveInheritedShippingTaxClass(
 		activeLineItems.filter((item) => item.taxable).map((item) => normalizeTaxClass(item.tax_class))
 	);
 
-	// Candidate order, not cart order — see (1) above.
+	// No taxable classes to inherit. An order with no line items at all (shipping- or
+	// fee-only) falls back to the standard class; one whose items are ALL non-taxable
+	// does not — see (3).
+	if (itemClasses.size === 0) {
+		return activeLineItems.length === 0 ? STANDARD_TAX_CLASS : NO_SHIPPING_TAX;
+	}
+
+	// (1) and (2) are decided by the cart alone. Ordering them ahead of the configured
+	// list is not just an optimisation: `taxClassSlugs` comes from a lazily fetched
+	// endpoint, and resolving the common carts without it means an unfetched list
+	// cannot silently zero the shipping tax.
+	if (itemClasses.has(STANDARD_TAX_CLASS)) return STANDARD_TAX_CLASS;
+	if (itemClasses.size === 1) return [...itemClasses][0];
+
+	// (3) Several non-standard classes: the configured order breaks the tie.
 	const found = taxClassSlugs.find((slug) => itemClasses.has(normalizeTaxClass(slug)));
 	if (found !== undefined) return normalizeTaxClass(found);
 
-	// No line items at all (a shipping-only or fee-only order) has nothing to inherit
-	// from, and WooCommerce falls back to the standard class. Items that are all
-	// non-taxable do NOT reach this — see (3).
-	return activeLineItems.length === 0 ? STANDARD_TAX_CLASS : NO_SHIPPING_TAX;
+	// Nothing matched. `wc/v3 taxes/classes` always contains the standard class, so an
+	// EMPTY list means it has not loaded yet (or its fetch failed) — not that the cart's
+	// classes were all rejected. Charging nothing on unloaded reference data would
+	// under-tax the order and stay wrong for as long as the fetch keeps failing, so the
+	// unknown case takes the standard class and only a genuinely loaded list that
+	// matches nothing yields no shipping tax.
+	if (taxClassSlugs.length === 0) return STANDARD_TAX_CLASS;
+	return NO_SHIPPING_TAX;
 }
