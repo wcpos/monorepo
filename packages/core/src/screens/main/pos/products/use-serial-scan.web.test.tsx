@@ -75,7 +75,12 @@ jest.mock('../../hooks/use-collection', () => ({
 	}),
 }));
 
-function fakeReadable() {
+/**
+ * `cancelFinishesRead: false` models a port whose reader does NOT settle when
+ * cancelled — the read loop stays parked and unwinds later, which is the only
+ * ordering in which a replaced port's loop can outlive its replacement's open.
+ */
+function fakeReadable({ cancelFinishesRead = true } = {}) {
 	let finishRead: ((result: ReadableStreamReadDoneResult<Uint8Array>) => void) | undefined;
 	const finish = () => finishRead?.({ done: true, value: undefined });
 	return {
@@ -86,7 +91,11 @@ function fakeReadable() {
 					new Promise<ReadableStreamReadResult<Uint8Array>>((resolve) => {
 						finishRead = resolve;
 					}),
-				cancel: async () => finish(),
+				cancel: async () => {
+					if (cancelFinishesRead) {
+						finish();
+					}
+				},
 				releaseLock: jest.fn(),
 			}),
 		} as unknown as ReadableStream<Uint8Array>,
@@ -155,6 +164,37 @@ describe('useSerialScan (web) — Bluetooth RFCOMM support', () => {
 
 		await waitFor(() => expect(result.current.connected).toBe(false));
 		expect(result.current.connectedDeviceKey).toBeNull();
+	});
+
+	it('does not let a replaced port’s ending read loop clear the live state of its replacement', async () => {
+		// Swapping scanners cancels the first port's reader, so its read loop
+		// unwinds AFTER the replacement is already open and marked live. Without
+		// the portRef guard that late unwind clears the new port's state and the
+		// settings row reports a connected scanner as out of range.
+		const first = fakeReadable({ cancelFinishesRead: false });
+		const firstPort = fakePort({ usbVendorId: 1, usbProductId: 2 }, first.readable);
+		const second = fakeReadable();
+		const secondPort = fakePort({ usbVendorId: 3, usbProductId: 4 }, second.readable);
+		const secondKey = scannerDeviceKey({
+			connectionType: 'usb-serial',
+			vendorId: 3,
+			productId: 4,
+		});
+
+		mockRequestPort.mockResolvedValueOnce(firstPort);
+		const { result } = renderHook(() => useSerialScan(jest.fn()));
+		await act(async () => result.current.connect());
+		expect(result.current.connected).toBe(true);
+
+		mockRequestPort.mockResolvedValueOnce(secondPort);
+		await act(async () => result.current.connect());
+
+		await waitFor(() => expect(result.current.connectedDeviceKey).toBe(secondKey));
+		// The first loop finishes unwinding only now.
+		await act(async () => first.finish());
+
+		expect(result.current.connected).toBe(true);
+		expect(result.current.connectedDeviceKey).toBe(secondKey);
 	});
 
 	it('does not auto-reconnect when multiple granted Bluetooth ports share a service class', async () => {
