@@ -13,7 +13,7 @@ const REQUIRED_FIELDS = [
 	'symbol',
 	'domain',
 	'severity',
-	'safeAction',
+	'actionHint',
 	'retryPolicy',
 	'dataSafety',
 	'escalation',

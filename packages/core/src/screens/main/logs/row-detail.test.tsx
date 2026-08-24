@@ -105,13 +105,12 @@ describe('RowDetail', () => {
 		expect(mockOpenURL).toHaveBeenCalledWith('https://docs.wcpos.com/error-codes/SYNC101');
 	});
 
-	it('renders no guidance line on a low-stakes code — summary and help link only', () => {
+	it('renders the per-code action on a low-stakes code', () => {
 		const codedRow: LogRow = { ...row, code: 'PRODUCT301', level: 'warn' };
 		render(<RowDetail row={codedRow} kind="warn" title="Barcode scan did not match a product" />);
 
 		expect(screen.getByText('No products matched the current search and filters.')).not.toBeNull();
-		// no-impact + verify-first maps to no guidance — the docs page carries it
-		expect(screen.queryByText(/retry/i)).toBeNull();
+		expect(screen.getByText('Clear the filters, or search by name.')).not.toBeNull();
 		expect(screen.queryByText(/affected/i)).toBeNull();
 		expect(screen.getByTestId('logs-help-PRODUCT301')).not.toBeNull();
 	});
@@ -217,7 +216,7 @@ describe('RowDetail', () => {
 
 		expect(
 			screen.getByText(
-				"Don't clear or reload this device's data. Contact support and include this code."
+				"Don't clear or reload this device's data. Note the unsaved change and check device storage, then restart. Do not clear local data."
 			)
 		).not.toBeNull();
 		// The registry docs body renders on the linked docs page, not in the app.
@@ -241,24 +240,28 @@ describe('RowDetail', () => {
 	});
 
 	it.each(['PAYMENT201', 'PRINT201'] as const)(
-		'keeps outcome verification domain-neutral for %s',
+		'pairs the outcome warning with the per-code action for %s',
 		(code) => {
 			render(<RowDetail row={{ ...row, code }} kind="error" />);
 
+			const action =
+				code === 'PAYMENT201'
+					? 'Check the terminal and provider dashboard before re-charging.'
+					: 'Check the printer before reprinting.';
 			expect(
-				screen.getByText("The final result couldn't be confirmed — verify before retrying.")
+				screen.getByText(
+					`The final result couldn't be confirmed — verify before retrying. ${action}`
+				)
 			).not.toBeNull();
 			expect(screen.queryByText(/check your store/i)).toBeNull();
 		}
 	);
 
-	it('directs SYNC311 users to support without telling them to reset the collection', () => {
+	it('renders the per-code database reset action for SYNC311', () => {
 		render(<RowDetail row={{ ...row, code: 'SYNC311' }} kind="error" />);
 
 		expect(
-			screen.getByText(
-				"Don't clear or reload this device's data. Contact support and include this code."
-			)
+			screen.getByText('Clear the local database and reopen. This loses any unsynced sales.')
 		).not.toBeNull();
 		expect(
 			screen.queryByText(

@@ -20,6 +20,7 @@ import {
 import { useT } from '../../../contexts/translations';
 import { useLocalDate } from '../../../hooks/use-local-date';
 import { type KVEntry, KVGrid, type LevelKind } from '../health/components';
+import { translateErrorAction } from './generated/error-actions.generated';
 import { translateErrorSummary } from './generated/error-summaries.generated';
 import { translateEventDescription } from './generated/event-titles.generated';
 import { buildLogEntryReport, eventTypeOf, type LogRow, rowDetailData } from './logs-logic';
@@ -33,9 +34,8 @@ export function catalogueFor(code: string | undefined): CatalogueEntry | null {
  * At most one guidance line per problem row, and only when it changes what the
  * cashier should do next — everything explanatory lives on the linked docs page
  * (owner ruling 2026-08-14/18). A risky data state leads; the safe next step
- * joins it as a second sentence. Benign states ("no impact", "verify first",
- * "keep working") render nothing. Literal t() calls per enum value — dynamic
- * keys are invisible to the i18n gate.
+ * joins it as a second sentence. Per-code actions resolve through generated
+ * literal t() calls so the i18n extractor sees every key.
  */
 function useGuidanceText(entry: CatalogueEntry | null): string | null {
 	const t = useT();
@@ -54,24 +54,7 @@ function useGuidanceText(entry: CatalogueEntry | null): string | null {
 			break;
 	}
 
-	let action: string | null = null;
-	switch (entry.safeAction) {
-		case 'retry':
-			action = t('health.logs.action_retry');
-			break;
-		case 'retry-after-edit':
-			action = t('health.logs.action_retry_after_edit');
-			break;
-		case 'repair-local':
-			action = t('health.logs.action_repair_local');
-			break;
-		case 'reconfigure':
-			action = t('health.logs.action_reconfigure');
-			break;
-		case 'contact-support':
-			action = t('health.logs.action_contact_support');
-			break;
-	}
+	const action = translateErrorAction((key) => t(key), entry.code);
 
 	const guidance = [risk, action].filter(Boolean).join(' ');
 	return guidance.length > 0 ? guidance : null;
