@@ -552,6 +552,25 @@ describe('computeDiscountedLineItems', () => {
 
 		expect(result[0].taxes![0].total).toBe('5.000000');
 	});
+
+	it('uses the configured storage precision when discounts match by line index', () => {
+		const lineItems = [
+			{
+				product_id: 1,
+				total: '0.10003',
+				total_tax: '0.0050015',
+				taxes: [{ id: 1, subtotal: '0.0050015', total: '0.0050015' }],
+			},
+		];
+
+		const result = computeDiscountedLineItems(
+			lineItems,
+			[[{ product_id: 1, lineIndex: 0, discount: 0.010003 }]],
+			7
+		);
+
+		expect(result[0].taxes![0].total).toBe('0.0045014');
+	});
 });
 
 describe('applyPerItemDiscountsToLineItems', () => {

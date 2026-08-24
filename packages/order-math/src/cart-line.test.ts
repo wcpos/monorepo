@@ -136,22 +136,24 @@ describe('calculateCartLine — line_item', () => {
 		});
 	});
 
-	it('authors per-rate line taxes at the fixed six-decimal contract width', () => {
+	it('authors per-rate line taxes at the configured storage precision', () => {
 		const config = createCartConfig({
 			...baseConfig,
 			rates: [rate20],
 			allRates: [rate20],
 			taxRoundAtSubtotal: true,
+			dp: 5,
 		});
 		const lineItem = {
 			quantity: 1,
 			tax_class: 'standard',
-			meta_data: [posDataMeta({ price: 18.38235, tax_status: 'taxable' })],
+			meta_data: [posDataMeta({ price: 0.6172835, tax_status: 'taxable' })],
 		};
 
 		const { line } = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
 
-		expect(line.taxes).toEqual([{ id: 1, subtotal: '3.676470', total: '3.676470' }]);
+		expect(line.total_tax).toBe('0.1234567');
+		expect(line.taxes).toEqual([{ id: 1, subtotal: '0.1234567', total: '0.1234567' }]);
 	});
 
 	it('rounds half-up before padding per-rate taxes', () => {

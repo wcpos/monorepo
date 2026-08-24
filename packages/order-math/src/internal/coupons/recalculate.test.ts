@@ -159,12 +159,13 @@ describe('recalculateCoupons', () => {
 			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(100, 2);
 		});
 
-		it('preserves fixed-width half-up taxes during the coupon reset', () => {
+		it('preserves configured-width half-up taxes during the coupon reset', () => {
 			const result = recalculateCoupons(
 				makeInput({
 					lineItems: [makePosLineItem(1, 0.10003, 0.10003)],
 					couponLines: [],
 					couponConfigs: new Map(),
+					dp: 5,
 					taxRates: [
 						{
 							id: 1,
@@ -178,7 +179,7 @@ describe('recalculateCoupons', () => {
 			);
 
 			expect(result.lineItems[0].taxes).toEqual([
-				{ id: 1, subtotal: '0.005002', total: '0.005002' },
+				{ id: 1, subtotal: '0.0050015', total: '0.0050015' },
 			]);
 		});
 

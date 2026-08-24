@@ -28,7 +28,8 @@ import type {
 /**
  * PER_RATE_TAXES_ARE_UNROUNDED — the WooCommerce contract for a line's `taxes[]` array.
  *
- * WooCommerce stores the per-rate tax array UNROUNDED, at rounding precision (6dp), and
+ * WooCommerce stores the per-rate tax array UNROUNDED, at its configured rounding precision,
+ * and
  * applies `wc_round_tax_total` only when summing those values into `total_tax`. All three
  * order-item classes are identical on this point — `class-wc-order-item-fee.php:222-230`,
  * `-shipping.php:167-178`, `-product.php:214-231`:
@@ -42,7 +43,7 @@ import type {
  *     }
  *
  * `wc_format_decimal($n)` with `$dp === false` does not round — it renders the float at
- * `wc_get_rounding_precision()` (6). So `woocommerce_tax_round_at_subtotal` changes
+ * `wc_get_rounding_precision()` (`max(dp + 2, 6)`). So `woocommerce_tax_round_at_subtotal` changes
  * `total_tax`/`subtotal_tax` and NOTHING ELSE.
  *
  * This package used to round `taxes[]` to `dp` as well whenever round-at-subtotal was off,
@@ -62,7 +63,7 @@ import type {
  * WooCommerce never sums the raw tax. `set_taxes()` first formats every per-rate value
  * to storage precision, and only then aggregates the FORMATTED array:
  *
- *     $tax_data['total'] = array_map( 'wc_format_decimal', $total );   // 6dp storage
+ *     $tax_data['total'] = array_map( 'wc_format_decimal', $total );   // storage precision
  *     $this->set_prop( 'taxes', $tax_data );
  *     if ( 'yes' === get_option( 'woocommerce_tax_round_at_subtotal' ) ) {
  *         $this->set_total_tax( array_sum( $tax_data['total'] ) );
@@ -82,7 +83,7 @@ import type {
  * That microunit was previously read as an unavoidable PHP-float-vs-decimal tie and
  * written into `expectTaxParity` as a tolerance. It is not a tie. It is this.
  *
- * @param storedPerRate - Per-rate taxes ALREADY at storage precision (6dp).
+ * @param storedPerRate - Per-rate taxes ALREADY at configured storage precision.
  */
 function sumStoredLineTax(
 	storedPerRate: readonly number[],
@@ -314,7 +315,7 @@ function applyShippingLineChanges(
 /**
  * Consolidates unique taxes by combining subtotal and total tax values.
  *
- * Per-rate taxes are ALWAYS emitted unrounded, at rounding precision (6dp), whatever
+ * Per-rate taxes are ALWAYS emitted unrounded, at the configured rounding precision, whatever
  * `taxRoundAtSubtotal` says — see PER_RATE_TAXES_ARE_UNROUNDED. That setting governs
  * `total_tax`/`subtotal_tax` only, and those are rounded by the caller.
  *
@@ -323,7 +324,8 @@ function applyShippingLineChanges(
 const consolidateTaxes = (
 	subtotalTaxes: { taxes: Tax[] },
 	totalTaxes: { taxes: Tax[] },
-	noSubtotal: boolean
+	noSubtotal: boolean,
+	roundingPrecision: number
 ) => {
 	const uniqueTaxIds = uniq([
 		...subtotalTaxes.taxes.map((tax) => tax.id),
@@ -336,8 +338,10 @@ const consolidateTaxes = (
 
 		return {
 			id,
-			subtotal: noSubtotal ? '' : roundHalfUp(subtotalTax.total, 6).toFixed(6),
-			total: roundHalfUp(totalTax.total, 6).toFixed(6),
+			subtotal: noSubtotal
+				? ''
+				: roundHalfUp(subtotalTax.total, roundingPrecision).toFixed(roundingPrecision),
+			total: roundHalfUp(totalTax.total, roundingPrecision).toFixed(roundingPrecision),
 		};
 	});
 };
@@ -419,9 +423,9 @@ function computeLineItem(lineItem: LineItemInput, config: CartConfig): LineItemI
 	const priceWithoutTax = pricesIncludeTax ? price - perUnitTaxResult.total : price;
 
 	// Consolidate taxes
-	const taxes = consolidateTaxes(subtotalTaxResult, totalTaxResult, false);
+	const taxes = consolidateTaxes(subtotalTaxResult, totalTaxResult, false, roundingPrecision);
 
-	// Line-level values (total, subtotal, price) are stored at rounding precision (6dp)
+	// Line-level values (total, subtotal, price) are stored at configured rounding precision
 	// to match WC's internal storage. WC stores these "unrounded" via wc_format_decimal()
 	// and the POS API returns them at dp=6. Only order-level totals get rounded to dp.
 	return {

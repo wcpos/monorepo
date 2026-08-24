@@ -1,6 +1,9 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Page, type TestInfo } from '@playwright/test';
+
+import { log } from '@wcpos/utils/logger';
 
 import { addCheckoutProbeProduct } from './checkout-probe';
+import { getStoreUrl } from './fixtures';
 import {
 	expectMoneyMatches,
 	expectRateSetParity,
@@ -33,21 +36,23 @@ import {
  *     push, no comparison. An e2e that never submits proves nothing.
  *
  *  2. **Its amounts are whatever the catalogue happens to cost.** The rounding
- *     contract for per-rate `taxes[]` is only observable when a line's tax is NOT a
- *     whole number of cents. A store whose products are priced 7.00 and 2.00 at 10%
- *     yields 0.70 and 0.20 — identical under the correct rule and under the bug. The
- *     oracle passed for months on arithmetic that could not discriminate.
+ *     contract for per-rate `taxes[]` is only observable when a line's tax extends
+ *     beyond the store's display precision. On a 2-decimal store, prices of 7.00
+ *     and 2.00 at 10% yield 0.70 and 0.20 — identical under the correct rule and
+ *     under the bug. The oracle passed for months on arithmetic that could not
+ *     discriminate.
  *
  * So this spec MINTS its own adversarial amounts through the POS UI (misc product,
  * fee, shipping — all of which take a cashier-entered amount) instead of hoping the
  * store's catalogue supplies one, and then DECLARES whether the run actually
- * exercised a sub-cent tax component. A green run that never produced one is
- * reported as uncovered rather than counted as proof — see `assertDiscriminating`.
+ * exercised a beyond-display-precision tax component. A green run that never
+ * produced one is reported as uncovered rather than counted as proof — see
+ * `assertDiscriminating`.
  *
  * Store-agnostic by construction: it asserts the two sides of its OWN sale against
  * each other and never against a fixture value, so it holds on any store, at any
  * tax rate, with any catalogue. Its one environmental dependency is that the store
- * charges *some* tax with a sub-cent component; that is measured, not assumed.
+ * charges *some* tax beyond its display precision; that is measured, not assumed.
  */
 
 /** Amounts whose tax is a repeating decimal at every common rate (7/9/10/17/19/20/21%). */
@@ -190,13 +195,15 @@ type SavedSale = {
 	sent: OrderPayload;
 	doc: ServerOrder;
 	cartTotal: string;
+	priceDecimals: number;
 };
 
 /** Save the open cart and return both sides of the sale. */
 async function saveAndCapture(
 	page: Page,
 	trackOrder: (order: { id: number; uuid?: string; label?: string }) => void,
-	label: string
+	label: string,
+	testInfo: TestInfo
 ): Promise<SavedSale> {
 	// The till's own aggregate, captured BEFORE the click: the ack is adopted into
 	// the resident order, so a read taken afterwards can compare the server's total
@@ -211,6 +218,33 @@ async function saveAndCapture(
 	await page.getByTestId('save-to-server-button').click();
 	const response = await saved;
 	expect(response.status(), 'save to server must succeed').toBeLessThan(400);
+	const pushUrl = new URL(response.url());
+	const storeId = pushUrl.searchParams.get('store_id');
+	expect(storeId, 'the push request must identify its POS store').toBeTruthy();
+	const authorization = pushUrl.searchParams.get('authorization');
+	const authorizationHeader = response.request().headers().authorization;
+	const storeResponse = await page.request.get(
+		`${getStoreUrl(testInfo).replace(/\/+$/, '')}/wp-json/wcpos/v1/stores`,
+		{
+			headers: {
+				'X-WCPOS': '1',
+				...(authorizationHeader ? { Authorization: authorizationHeader } : {}),
+			},
+			params: { store_id: storeId!, ...(authorization ? { authorization } : {}) },
+			failOnStatusCode: false,
+		}
+	);
+	expect(storeResponse.ok(), `store settings request returned ${storeResponse.status()}`).toBe(
+		true
+	);
+	const stores = (await storeResponse.json()) as {
+		id?: unknown;
+		price_num_decimals?: unknown;
+	}[];
+	const store = stores.find(({ id }) => String(id) === storeId);
+	expect(store, `store settings must include POS store ${storeId}`).toBeTruthy();
+	const priceDecimals = Number(store!.price_num_decimals);
+	expect(Number.isInteger(priceDecimals) && priceDecimals >= 0).toBe(true);
 
 	const envelope = (response.request().postDataJSON() ?? {}) as {
 		recordId?: string;
@@ -237,12 +271,12 @@ async function saveAndCapture(
 	)
 		.map((line) => `#${line.rate_id}@${line.rate_percent}%${line.compound ? ' compound' : ''}`)
 		.join(' + ');
-	console.log(
+	log.info(
 		`[money-oracle] REGIME ${label} currency=${regime.currency} ` +
 			`prices_include_tax=${regime.prices_include_tax} rates=[${rates || 'none'}]`
 	);
 
-	return { sent, doc: doc!, cartTotal: cart.total };
+	return { sent, doc: doc!, cartTotal: cart.total, priceDecimals };
 }
 
 type LineWithTaxes = { taxes?: { id?: unknown; total?: unknown; subtotal?: unknown }[] };
@@ -255,16 +289,22 @@ function linesOf(payload: Record<string, unknown>, key: string): LineWithTaxes[]
 /**
  * Did this sale actually exercise the per-rate rounding contract?
  *
- * A per-rate tax that lands on a whole cent (0.700000) is identical whether the
- * client rounds `taxes[]` to display decimals or stores them raw — it cannot fail
- * either way. Counting such a run as proof is how the bug survived: every fixture
- * amount in the suite was 2dp-clean.
+ * A per-rate tax that lands on the store's display precision (for example,
+ * 0.700000 on a 2-decimal store) is identical whether the client rounds `taxes[]`
+ * to display decimals or stores them raw — it cannot fail either way. Counting
+ * such a run as proof is how the bug survived: every fixture amount in the suite
+ * was clean at the configured precision.
  *
  * So coverage is DECLARED, never assumed. A run on a tax-free store, or one whose
  * rates divide the minted amounts evenly, reports itself as uncovered instead of
  * passing silently.
  */
-function assertDiscriminating(doc: ServerOrder, underTest: string, label: string) {
+function assertDiscriminating(
+	doc: ServerOrder,
+	underTest: string,
+	label: string,
+	priceDecimals: number
+) {
 	const perRate: string[] = [];
 	for (const line of linesOf(doc as unknown as Record<string, unknown>, underTest)) {
 		for (const tax of line.taxes ?? []) {
@@ -277,26 +317,28 @@ function assertDiscriminating(doc: ServerOrder, underTest: string, label: string
 		`${label}: the sale recorded no per-rate taxes on ${underTest} at all`
 	).toBeGreaterThan(0);
 
-	// Sub-cent content: the value differs from its own 2dp rounding. That is exactly
-	// the difference the bug erased.
+	// Beyond-display-precision content: the value differs from rounding at the store's
+	// configured price precision. That is exactly the difference the bug erased.
 	//
 	// Scoped to the LINE TYPE UNDER TEST, not to the order. An order-wide check is a
 	// proxy for the claim, and it passes on the wrong evidence: if the fee silently
 	// lands at 0.00 (a numpad interaction that did not take), its taxes are 0 on both
-	// sides and compare equal, while the probe PRODUCT's sub-cent tax satisfies an
-	// order-wide check — a fee scenario that green-lights without ever exercising a
-	// fee. Assert on the thing, never on something correlated with it.
+	// sides and compare equal, while the probe PRODUCT's beyond-precision tax
+	// satisfies an order-wide check — a fee scenario that green-lights without ever
+	// exercising a fee. Assert on the thing, never on something correlated with it.
 	// NUMERIC comparison, deliberately. The first version of this line compared
 	// `Number(text).toFixed(2) !== Number(text).toFixed(6)` — two strings of different
 	// WIDTH, so "0.70" !== "0.700000" was true for every value ever passed and the
 	// guard declared full coverage on carts whose taxes were all whole cents. A
 	// coverage check that cannot return false is worse than no check: it reads, in the
 	// report, exactly like a real one.
-	const subCent = perRate.filter((text) => Number(Number(text).toFixed(2)) !== Number(text));
+	const unrounded = perRate.filter(
+		(text) => Number(Number(text).toFixed(priceDecimals)) !== Number(text)
+	);
 	expect(
-		subCent.length,
+		unrounded.length,
 		`${label}: NOT COVERED — every per-rate tax on this sale's ${underTest} is a whole ` +
-			`cent (${perRate.join(', ')}), so this run cannot distinguish rounded per-rate ` +
+			`${priceDecimals}-decimal amount (${perRate.join(', ')}), so this run cannot distinguish rounded per-rate ` +
 			`taxes from raw ones. Either the amount never reached the line (check the ` +
 			`[money-oracle] log lines above for a 0 total) or this store's rates divide it ` +
 			`evenly. Do NOT read this run as proof.`
@@ -354,7 +396,7 @@ function expectPerRateTaxParity(sale: SavedSale, label: string) {
 			// passes or fails. Paul's ask: every important calculation grounded in
 			// tests AND logs. A silent green run cannot be audited after the fact —
 			// this line is how you check the oracle actually compared something.
-			console.log(
+			log.info(
 				`[money-oracle] ${label} ${key}[${index}] ` +
 					`sent=${JSON.stringify(sentLine.taxes ?? null)} ` +
 					`server=${JSON.stringify(serverLine?.taxes ?? null)}`
@@ -392,7 +434,7 @@ function expectPerRateTaxParity(sale: SavedSale, label: string) {
 }
 
 function assertSaleParity(sale: SavedSale, page: Page, underTest: string, label: string) {
-	assertDiscriminating(sale.doc, underTest, label);
+	assertDiscriminating(sale.doc, underTest, label, sale.priceDecimals);
 	expectRateSetParity(
 		posAppliedRateIds(sale.sent),
 		sale.doc.tax_lines,
@@ -446,14 +488,14 @@ function captureDivergenceLog(page: Page): () => string[] {
 liveTest.describe('POS money oracle — line taxes survive the round trip (live store)', () => {
 	liveTest(
 		'a cart with a fee saves with identical per-rate taxes',
-		async ({ posPage: page, trackOrder }) => {
+		async ({ posPage: page, trackOrder }, testInfo) => {
 			const label = newRunLabel();
 			const divergence = captureDivergenceLog(page);
 			await addCheckoutProbeProduct(page);
 			await addFee(page, ADVERSARIAL.fee);
 			await stampRunLabel(page, label);
 
-			const sale = await saveAndCapture(page, trackOrder, label);
+			const sale = await saveAndCapture(page, trackOrder, label, testInfo);
 			assertSaleParity(sale, page, 'fee_lines', 'fee cart');
 			await expectNoBanner(page, 'fee cart', divergence);
 		}
@@ -461,28 +503,28 @@ liveTest.describe('POS money oracle — line taxes survive the round trip (live 
 
 	liveTest(
 		'a cart with a shipping line saves with identical per-rate taxes',
-		async ({ posPage: page, trackOrder }) => {
+		async ({ posPage: page, trackOrder }, testInfo) => {
 			const label = newRunLabel();
 			const divergence = captureDivergenceLog(page);
 			await addCheckoutProbeProduct(page);
 			await addShipping(page, ADVERSARIAL.shipping);
 			await stampRunLabel(page, label);
 
-			const sale = await saveAndCapture(page, trackOrder, label);
+			const sale = await saveAndCapture(page, trackOrder, label, testInfo);
 			assertSaleParity(sale, page, 'shipping_lines', 'shipping cart');
 			await expectNoBanner(page, 'shipping cart', divergence);
 		}
 	);
 
 	liveTest(
-		'a misc product priced to a sub-cent tax saves with identical per-rate taxes',
-		async ({ posPage: page, trackOrder }) => {
+		'a misc product priced to a beyond-precision tax saves with identical per-rate taxes',
+		async ({ posPage: page, trackOrder }, testInfo) => {
 			const label = newRunLabel();
 			const divergence = captureDivergenceLog(page);
 			await addMiscProduct(page, ADVERSARIAL.miscProduct);
 			await stampRunLabel(page, label);
 
-			const sale = await saveAndCapture(page, trackOrder, label);
+			const sale = await saveAndCapture(page, trackOrder, label, testInfo);
 			assertSaleParity(sale, page, 'line_items', 'misc-product cart');
 			await expectNoBanner(page, 'misc-product cart', divergence);
 		}
@@ -519,7 +561,7 @@ liveTest.describe('POS money oracle — line taxes survive the round trip (live 
 	 */
 	liveTest(
 		'a negative fee is taxed from its OWN class (the POS override, not WC apportionment)',
-		async ({ posPage: page, trackOrder }) => {
+		async ({ posPage: page, trackOrder }, testInfo) => {
 			const label = newRunLabel();
 			const divergence = captureDivergenceLog(page);
 			await addCheckoutProbeProduct(page);
@@ -527,7 +569,7 @@ liveTest.describe('POS money oracle — line taxes survive the round trip (live 
 			await addNegativeFee(page, ADVERSARIAL.fee);
 			await stampRunLabel(page, label);
 
-			const sale = await saveAndCapture(page, trackOrder, label);
+			const sale = await saveAndCapture(page, trackOrder, label, testInfo);
 			assertSaleParity(sale, page, 'fee_lines', 'negative-fee cart');
 			await expectNoBanner(page, 'negative-fee cart', divergence);
 		}
@@ -540,7 +582,7 @@ liveTest.describe('POS money oracle — line taxes survive the round trip (live 
 	 */
 	liveTest(
 		'a product + fee + shipping cart saves with identical money throughout',
-		async ({ posPage: page, trackOrder }) => {
+		async ({ posPage: page, trackOrder }, testInfo) => {
 			const label = newRunLabel();
 			const divergence = captureDivergenceLog(page);
 			await addCheckoutProbeProduct(page);
@@ -549,7 +591,7 @@ liveTest.describe('POS money oracle — line taxes survive the round trip (live 
 			await addShipping(page, ADVERSARIAL.shipping);
 			await stampRunLabel(page, label);
 
-			const sale = await saveAndCapture(page, trackOrder, label);
+			const sale = await saveAndCapture(page, trackOrder, label, testInfo);
 			assertSaleParity(sale, page, 'fee_lines', 'full cart');
 			await expectNoBanner(page, 'full cart', divergence);
 		}

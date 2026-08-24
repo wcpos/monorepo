@@ -213,7 +213,7 @@ export function computeDiscountedLineItems<
 		taxes?: { id?: number; subtotal?: string; total?: string; [key: string]: any }[];
 		[key: string]: any;
 	},
->(lineItems: T[], allPerItemDiscounts: PerItemDiscount[][]): T[] {
+>(lineItems: T[], allPerItemDiscounts: PerItemDiscount[][], roundingPrecision = 6): T[] {
 	if (allPerItemDiscounts.length === 0) return lineItems;
 
 	// Check whether any discount entry uses lineIndex — if so, prefer per-line
@@ -251,7 +251,9 @@ export function computeDiscountedLineItems<
 
 			const taxes = (item.taxes || []).map((tax) => ({
 				...tax,
-				total: roundHalfUp(parseFloat(tax.total || '0') * ratio, 6).toFixed(6),
+				total: roundHalfUp(parseFloat(tax.total || '0') * ratio, roundingPrecision).toFixed(
+					roundingPrecision
+				),
 			}));
 
 			return {
@@ -302,7 +304,9 @@ export function computeDiscountedLineItems<
 
 		const taxes = (item.taxes || []).map((tax) => ({
 			...tax,
-			total: roundHalfUp(parseFloat(tax.total || '0') * ratio, 6).toFixed(6),
+			total: roundHalfUp(parseFloat(tax.total || '0') * ratio, roundingPrecision).toFixed(
+				roundingPrecision
+			),
 		}));
 
 		return {
