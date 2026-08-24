@@ -131,7 +131,7 @@ function CustomersScreenContent() {
 									{readOnly
 										? t('common.upgrade_to_pro')
 										: !caps.canCreateCustomers
-											? t('capability_hints.create_customers')
+											? t('capability_hints.create_customers_admin_path')
 											: t('common.add_new_customer')}
 								</Text>
 							</TooltipContent>

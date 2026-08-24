@@ -61,7 +61,9 @@ export function AddCartItemsMenu() {
 							</CapabilityTooltipTrigger>
 							<TooltipContent>
 								<Text>
-									{isPro ? t('capability_hints.create_customers') : t('common.upgrade_to_pro')}
+									{isPro
+										? t('capability_hints.create_customers_admin_path')
+										: t('common.upgrade_to_pro')}
 								</Text>
 							</TooltipContent>
 						</Tooltip>

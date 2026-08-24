@@ -28,11 +28,11 @@ export function CapabilityTooltip({
 }) {
 	const t = useT();
 	const messages: Record<CapabilityHint, string> = {
-		editProducts: t('capability_hints.edit_products'),
-		createCoupons: t('capability_hints.create_coupons'),
-		editCoupons: t('capability_hints.edit_coupons'),
-		createCustomers: t('capability_hints.create_customers'),
-		editCustomers: t('capability_hints.edit_customers'),
+		editProducts: t('capability_hints.edit_products_admin_path'),
+		createCoupons: t('capability_hints.create_coupons_admin_path'),
+		editCoupons: t('capability_hints.edit_coupons_admin_path'),
+		createCustomers: t('capability_hints.create_customers_admin_path'),
+		editCustomers: t('capability_hints.edit_customers_admin_path'),
 	};
 
 	if (!show) return children;
