@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,6 +48,15 @@ test('the committed artifacts are what the registry generates', async () => {
 		readFileSync(LOCALE_PATH, 'utf8'),
 		'the English catalogue is stale — run pnpm generate:error-codes'
 	);
+	assert.equal(existsSync(join(out, 'error-docs')), false);
+});
+
+test('the retired generated-doc sync path stays absent', () => {
+	const scripts = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')).scripts;
+
+	assert.equal(scripts['sync:error-docs'], undefined);
+	assert.equal(existsSync(join(repoRoot, 'scripts/sync-error-docs.mjs')), false);
+	assert.equal(existsSync(join(repoRoot, 'scripts/splice-error-docs-sidebar.mjs')), false);
 });
 
 test('every code in the registry has a summary string in the English catalogue', () => {
