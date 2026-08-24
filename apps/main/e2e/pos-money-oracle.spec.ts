@@ -270,8 +270,10 @@ async function saveAndCapture(
 	const response = await saved;
 	expect(response.status(), 'save to server must succeed').toBeLessThan(400);
 	const pushUrl = new URL(response.url());
+	// OPTIONAL. Multi-store is a Pro feature: dev-pro's push carries `store_id` because
+	// the cashier is in one of two outlets, and dev-free's does not because the free
+	// plugin has exactly one store. Requiring it failed all six free-lane tests.
 	const storeId = pushUrl.searchParams.get('store_id');
-	expect(storeId, 'the push request must identify its POS store').toBeTruthy();
 	const authorization = pushUrl.searchParams.get('authorization');
 	const authorizationHeader = response.request().headers().authorization;
 	const storeResponse = await page.request.get(
@@ -281,7 +283,10 @@ async function saveAndCapture(
 				'X-WCPOS': '1',
 				...(authorizationHeader ? { Authorization: authorizationHeader } : {}),
 			},
-			params: { store_id: storeId!, ...(authorization ? { authorization } : {}) },
+			params: {
+				...(storeId ? { store_id: storeId } : {}),
+				...(authorization ? { authorization } : {}),
+			},
 			failOnStatusCode: false,
 		}
 	);
@@ -292,10 +297,24 @@ async function saveAndCapture(
 		id?: unknown;
 		price_num_decimals?: unknown;
 	}[];
-	const store = stores.find(({ id }) => String(id) === storeId);
-	expect(store, `store settings must include POS store ${storeId}`).toBeTruthy();
+	// With a store_id, take that outlet. Without one, the free plugin serves exactly one
+	// store and that is the till's — but assert the count rather than taking [0] blindly,
+	// so a plugin that starts serving several here fails loudly instead of silently
+	// measuring against the wrong outlet's decimals.
+	const store = storeId
+		? stores.find(({ id }) => String(id) === storeId)
+		: (expect(stores, 'a single-store push must resolve exactly one store').toHaveLength(1),
+			stores[0]);
+	expect(
+		store,
+		storeId ? `store settings must include POS store ${storeId}` : 'no store settings returned'
+	).toBeTruthy();
 	const priceDecimals = Number(store!.price_num_decimals);
-	expect(Number.isInteger(priceDecimals) && priceDecimals >= 0).toBe(true);
+	expect(
+		Number.isInteger(priceDecimals) && priceDecimals >= 0,
+		`store ${storeId ?? '(single)'} reported price_num_decimals ` +
+			`${JSON.stringify(store!.price_num_decimals)}`
+	).toBe(true);
 
 	const envelope = (response.request().postDataJSON() ?? {}) as {
 		recordId?: string;
@@ -601,7 +620,7 @@ liveTest.describe('POS money oracle — line taxes survive the round trip (live 
 	 */
 	liveTest(
 		'a mixed-tax-class cart saves with identical per-rate taxes on every line',
-		async ({ posPage: page, trackOrder }) => {
+		async ({ posPage: page, trackOrder }, testInfo) => {
 			const label = newRunLabel();
 			const divergence = captureDivergenceLog(page);
 			await addCheckoutProbeProduct(page);
@@ -620,7 +639,7 @@ liveTest.describe('POS money oracle — line taxes survive the round trip (live 
 
 			await stampRunLabel(page, label);
 
-			const sale = await saveAndCapture(page, trackOrder, label);
+			const sale = await saveAndCapture(page, trackOrder, label, testInfo);
 			assertMixedTaxTreatment(sale.doc, 'mixed-class cart');
 			assertSaleParity(sale, page, 'line_items', 'mixed-class cart');
 			await expectNoBanner(page, 'mixed-class cart', divergence);
