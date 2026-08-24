@@ -1,7 +1,13 @@
 import { expect } from '@playwright/test';
 
 import { findVariableProduct, isolatedVariableProductTest as test } from './checkout-probe';
-import { getStoreUrl, getStoreVariant, navigateToPage, type StoreAuthorization } from './fixtures';
+import {
+	getStoreUrl,
+	getStoreVariant,
+	isWcposRestRoute,
+	navigateToPage,
+	type StoreAuthorization,
+} from './fixtures';
 import {
 	createSearchProbe,
 	deleteSearchProbe,
@@ -664,7 +670,7 @@ test.describe('Products Page (Pro)', () => {
 		await expect(expandLink).toBeVisible({ timeout: 30_000 });
 		await Promise.all([
 			page.waitForResponse(
-				(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+				(response) => isWcposRestRoute(response.url(), '/wcpos/v2/variations') && response.ok(),
 				{ timeout: 30_000 }
 			),
 			expandLink.click(),
@@ -688,7 +694,7 @@ test.describe('Products Page (Pro)', () => {
 		await expect(expandLink).toBeVisible({ timeout: 30_000 });
 		await Promise.all([
 			page.waitForResponse(
-				(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+				(response) => isWcposRestRoute(response.url(), '/wcpos/v2/variations') && response.ok(),
 				{ timeout: 30_000 }
 			),
 			expandLink.click(),
@@ -720,7 +726,7 @@ test.describe('Products Page (Pro)', () => {
 		await expect(expandLink).toBeVisible({ timeout: 30_000 });
 		await Promise.all([
 			page.waitForResponse(
-				(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+				(response) => isWcposRestRoute(response.url(), '/wcpos/v2/variations') && response.ok(),
 				{ timeout: 30_000 }
 			),
 			expandLink.click(),
