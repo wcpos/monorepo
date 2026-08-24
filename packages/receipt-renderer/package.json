@@ -32,7 +32,7 @@
 		"@point-of-sale/receipt-printer-encoder": "^3.0.3",
 		"@xmldom/xmldom": "0.9.11",
 		"bwip-js": "4.11.2",
-		"dompurify": "^3.4.13",
+		"dompurify": "^3.4.14",
 		"iconv-lite": "0.7.3",
 		"mustache": "^4.2.0"
 	},

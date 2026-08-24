@@ -49,8 +49,10 @@ overrides:
   "jest-environment-jsdom": "^30.4.1"
   "jest-environment-node": "^30.4.1"
   # concurrently@9.2.1 (apps/electron devDep) pins shell-quote 1.8.3 exactly — force the
-  # patched release (GHSA-w7jw-789q-3m8p, critical).
-  "shell-quote": ">=1.8.4"
+  # patched release (GHSA-w7jw-789q-3m8p, critical). Floor raised from 1.8.4 to 1.8.5 for
+  # GHSA-g4rg-993r-mgx7 (high, quadratic parse()); ">=1.8.4" had gone stale and was
+  # resolving to exactly the version the newer advisory names.
+  "shell-quote": ">=1.8.5"
   # external-editor@3.1.0 pins vulnerable tmp 0.0.33 — force the patched current release
   # (GHSA-ph9p-34f9-6g65, high).
   "external-editor@3.1.0>tmp": "0.2.7"
@@ -66,6 +68,21 @@ overrides:
   # async-test-util (rxdb-premium) pins @babel/runtime 7.24.5 exactly
   # (GHSA-968p-4wvh-cqc8 moderate, ReDoS).
   "async-test-util>@babel/runtime": ">=7.26.10"
+  # @novu/js -> socket.io-client pins socket.io-parser "~4.2.4"; the patched 4.2.7 is
+  # inside that range but `pnpm update` will not move a transitive-only dependency, so
+  # the lock sat on 4.2.6 (GHSA-wpr2-j6gr-pjw9 high, zero-attachment memory exhaustion).
+  # This one DOES reach the shipped client — @novu/js is a runtime import in
+  # packages/core/src/services/novu/client.ts.
+  "socket.io-client>socket.io-parser": ">=4.2.7 <5"
+  # ajv 8.x pins fast-uri "^3.0.1" and the lock sat on 3.1.2 (three high host-confusion
+  # advisories: GHSA-cxrh-j4jr-qwg3, GHSA-8gh8-hqwg-xf34, GHSA-mg8w-p8v4-8vhr).
+  # Audit hygiene only — ajv is test-surface here (sync-core write-contract fixtures) and
+  # rxdb's ajv path is `rxdb/plugins/validate-ajv`, which this app never imports.
+  "ajv>fast-uri": ">=3.1.5 <4"
+  # @svgr/plugin-svgo pins svgo "^3.0.2" and the lock sat on 3.3.3 (GHSA-8w2g-pf3p-2m6v
+  # high — removeScripts leaves some executable scripts intact). Build-time only, but this
+  # repo generates icon components from third-party SVG assets through @svgr/cli.
+  "@svgr/plugin-svgo>svgo": ">=3.3.4 <4"
 allowBuilds:
   "@firebase/util": false
   "@serialport/bindings-cpp": true
