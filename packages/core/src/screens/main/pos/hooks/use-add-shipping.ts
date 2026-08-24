@@ -14,13 +14,17 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
 type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 
+/**
+ * No `tax_class`: WooCommerce has no per-line shipping tax class, so the POS does not
+ * author one. The class comes from the store's `shipping_tax_class` setting, which the
+ * engine reads off `cartConfig`. See `extractShippingLineData` in @wcpos/order-math.
+ */
 interface ShippingData {
 	method_title: string;
 	method_id: string;
 	amount: string;
 	prices_include_tax: boolean;
 	tax_status: 'taxable' | 'none';
-	tax_class: string;
 	meta_data?: { key: string; value: unknown }[];
 }
 
@@ -57,7 +61,6 @@ export const useAddShipping = () => {
 					value: {
 						amount: data.amount,
 						prices_include_tax: data.prices_include_tax,
-						tax_class: data.tax_class,
 						tax_status: data.tax_status,
 					},
 				});

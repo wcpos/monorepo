@@ -12,7 +12,7 @@ import { AddShipping } from './add-shipping';
 
 const mockAddFee = jest.fn(() => Promise.resolve());
 const mockAddProduct = jest.fn(() => Promise.resolve());
-const mockAddShipping = jest.fn(() => Promise.resolve());
+const mockAddShipping = jest.fn((_data?: Record<string, unknown>) => Promise.resolve());
 const mockOnOpenChange = jest.fn();
 
 jest.mock('@wcpos/query', () => ({
@@ -162,31 +162,31 @@ describe('cart line dialogs', () => {
 	});
 
 	/**
-	 * The Add shipping dialog seeds its tax-class field from the store setting, and
-	 * stamps that field into the line's pos_data — where it outranks the engine's own
-	 * 'inherit' resolution. Seeded with a raw sentinel the select renders blank AND the
-	 * rate filter matches nothing, so the shipping line is added with no tax at all.
-	 * The seed is the store setting verbatim. 'inherit' is NOT collapsed to the standard
-	 * class — it reaches the line's pos_data as the sentinel, and the engine resolves it
-	 * against the cart's items (see cart-line.test.ts). Collapsing it here was the bug:
-	 * a cart of reduced-rate items got standard-rate shipping tax.
+	 * The Add shipping dialog used to seed a tax-class field from the store setting and
+	 * stamp it into the line's pos_data. There is no such field any more, and no
+	 * `tax_class` in what it submits: WooCommerce has no per-line shipping tax class
+	 * (`WC_Order_Item_Shipping::get_tax_class()` returns the store option and nothing
+	 * else), so a class authored on the line was discarded by the store and the cashier
+	 * got a totals-changed banner — dev-pro order 99866.
+	 *
+	 * The engine reads the store's setting off the cart config, 'inherit' sentinel and
+	 * all, so nothing is lost by not carrying it on the line.
 	 */
-	describe('seeds the shipping tax class from the store setting', () => {
-		it.each([
-			// store shipping_tax_class → tax_class submitted (wire spelling)
-			['inherit', 'inherit'],
-			['', ''],
-			['reduced-rate', 'reduced-rate'],
-		])('submits %p as %p', async (storeValue, expected) => {
-			mockShippingTaxClass = storeValue;
-			render(<AddShipping />);
+	describe('never authors a tax class on the shipping line', () => {
+		it.each(['inherit', '', 'reduced-rate'])(
+			'submits no tax_class when the store setting is %p',
+			async (storeValue) => {
+				mockShippingTaxClass = storeValue;
+				render(<AddShipping />);
 
-			fireEvent.click(screen.getByTestId('add-to-cart-submit'));
+				fireEvent.click(screen.getByTestId('add-to-cart-submit'));
 
-			await waitFor(() => expect(mockAddShipping).toHaveBeenCalledTimes(1));
-			expect(mockAddShipping).toHaveBeenCalledWith(
-				expect.objectContaining({ tax_class: expected })
-			);
-		});
+				await waitFor(() => expect(mockAddShipping).toHaveBeenCalledTimes(1));
+				// Absence of the KEY, not absence of a value. `expect.anything()` excludes
+				// undefined, so `not.objectContaining({ tax_class: expect.anything() })` would
+				// still pass on a regression that submitted `tax_class: undefined`.
+				expect(mockAddShipping.mock.calls[0][0]).not.toHaveProperty('tax_class');
+			}
+		);
 	});
 });

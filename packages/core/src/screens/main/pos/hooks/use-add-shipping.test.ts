@@ -90,7 +90,6 @@ const shipping = {
 	amount: '8.00',
 	prices_include_tax: false,
 	tax_status: 'taxable' as const,
-	tax_class: '',
 	meta_data: [{ key: 'source', value: 'cashier' }],
 };
 
@@ -116,7 +115,6 @@ describe('useAddShipping', () => {
 						value: {
 							amount: '8.00',
 							prices_include_tax: false,
-							tax_class: '',
 							tax_status: 'taxable',
 						},
 					}),

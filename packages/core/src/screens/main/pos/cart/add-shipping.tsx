@@ -17,25 +17,28 @@ import {
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
-import { useDocField } from '@wcpos/query';
 
-import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { CurrencyInput } from '../../components/currency-input';
 import { FormErrors } from '../../components/form-errors';
 import { ShippingMethodSelect } from '../../components/shipping-method-select';
-import { TaxClassSelect } from '../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
-import { taxClassFromWire, taxClassToWire } from '../../hooks/tax-class';
 import { useAddShipping } from '../hooks/use-add-shipping';
 
+/**
+ * There is no tax class field. WooCommerce has no per-line shipping tax class — the store's
+ * `shipping_tax_class` setting is the only one that exists, and the engine reads it off the
+ * cart config. Offering one here authored a value the store silently discarded, which
+ * surfaced as a totals-changed banner on dev-pro order 99866. See `extractShippingLineData`
+ * in @wcpos/order-math. Tax STATUS is different: the POS plugin honours it server-side via
+ * `woocommerce_order_item_shipping_after_calculate_taxes`, so it stays.
+ */
 const formSchema = z.object({
 	method_title: z.string().optional(),
 	method_id: z.string().optional(),
 	amount: z.string().optional(),
 	prices_include_tax: z.boolean().optional(),
 	tax_status: z.enum(['taxable', 'none']),
-	tax_class: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -47,8 +50,6 @@ export function AddShipping() {
 	const t = useT();
 	const { addShipping } = useAddShipping();
 	const { onOpenChange } = useRootContext();
-	const { store } = useAppState();
-	const shippingTaxClass = useDocField(store, (value) => value.shipping_tax_class);
 
 	/**
 	 *
@@ -61,23 +62,18 @@ export function AddShipping() {
 			amount: '0',
 			prices_include_tax: true,
 			tax_status: 'taxable',
-			// The store's setting verbatim, including WooCommerce's 'inherit' sentinel —
-			// which the select can hold (see includeInherit below) and the engine resolves
-			// against the cart's line items. Only the ''/'standard' spelling is codec'd.
-			tax_class: taxClassFromWire(shippingTaxClass as string | undefined),
 		},
 	});
 
 	const handleAdd = React.useCallback(
 		async (data: FormValues) => {
-			const { method_title, method_id, amount, tax_status, tax_class, prices_include_tax } = data;
+			const { method_title, method_id, amount, tax_status, prices_include_tax } = data;
 
 			await addShipping({
 				method_title: isEmpty(method_title) ? t('common.shipping') : (method_title ?? ''),
 				method_id: isEmpty(method_id) ? 'local_pickup' : (method_id ?? ''),
 				amount: isEmpty(amount) ? '0' : (amount ?? '0'),
 				tax_status,
-				tax_class: taxClassToWire(tax_class),
 				prices_include_tax: prices_include_tax ?? true,
 			});
 			onOpenChange(false);
@@ -156,37 +152,17 @@ export function AddShipping() {
 						/>
 					</View>
 				</HStack>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="tax_class"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<View className="flex-1">
-								<FormSelect
-									label={t('common.tax_class')}
-									customComponent={TaxClassSelect}
-									includeInherit
-									value={value ?? ''}
-									onChange={onChange}
-									{...rest}
-								/>
-							</View>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="tax_status"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormRadioGroup
-									label={t('common.tax_status')}
-									customComponent={TaxStatusRadioGroup}
-									{...field}
-								/>
-							</View>
-						)}
-					/>
-				</HStack>
+				<FormField
+					control={form.control}
+					name="tax_status"
+					render={({ field }) => (
+						<FormRadioGroup
+							label={t('common.tax_status')}
+							customComponent={TaxStatusRadioGroup}
+							{...field}
+						/>
+					)}
+				/>
 				<DialogFooter className="px-0">
 					<DialogClose>{t('common.cancel')}</DialogClose>
 					<DialogAction
