@@ -75,6 +75,7 @@ const ADVERSARIAL = {
  * reason until it has been run.
  */
 const TAX_CLASS_SKU = {
+	standard: 'e2e-tax-standard',
 	reduced: 'e2e-tax-reduced',
 	nonTaxable: 'e2e-tax-none',
 };
@@ -157,7 +158,9 @@ async function fillCurrencyField(
 
 async function addMiscProduct(page: Page, price: string, taxStatus?: 'taxable' | 'none') {
 	await openCartMenuAndClick(page, 'menu-add-misc-product');
-	const dialog = page.getByRole('dialog');
+	// testID, not getByRole('dialog') — the role selector can match any other open
+	// dialog, and this suite selects app UI by stable testID only.
+	const dialog = page.getByTestId('add-misc-product-dialog');
 	await expect(dialog).toBeVisible({ timeout: 15_000 });
 	await fillCurrencyField(page, 'misc-product-price-input', price);
 	if (taxStatus) {
@@ -640,20 +643,32 @@ liveTest.describe('POS money oracle — line taxes survive the round trip (live 
 		async ({ posPage: page, trackOrder }, testInfo) => {
 			const label = newRunLabel();
 			const divergence = captureDivergenceLog(page);
-			await addCheckoutProbeProduct(page);
-
-			const reduced = await tryAddProductBySku(page, TAX_CLASS_SKU.reduced);
-			const untaxed = await tryAddProductBySku(page, TAX_CLASS_SKU.nonTaxable);
-			if (reduced !== 'added' || untaxed !== 'added') {
+			// All three lines come from OWNED fixtures, including the standard-rate one.
+			// `addCheckoutProbeProduct` falls back to an arbitrary catalogue product on a
+			// secretless run, and that product may itself be reduced-rate or non-taxable —
+			// leaving this cart with a single non-empty rate set and failing the coverage
+			// assertion on a perfectly valid store. A spec that needs data creates and
+			// targets its own record.
+			const added = {
+				standard: await tryAddProductBySku(page, TAX_CLASS_SKU.standard),
+				reduced: await tryAddProductBySku(page, TAX_CLASS_SKU.reduced),
+				nonTaxable: await tryAddProductBySku(page, TAX_CLASS_SKU.nonTaxable),
+			};
+			const missing = Object.entries(added).filter(([, outcome]) => outcome !== 'added');
+			if (missing.length > 0) {
 				liveTest.skip(
 					true,
-					`tax-class fixtures unavailable on this store (${TAX_CLASS_SKU.reduced}: ` +
-						`${reduced}, ${TAX_CLASS_SKU.nonTaxable}: ${untaxed}). Run ` +
-						`e2e/scripts/tax-class-fixtures.php against it — see that file's header.`
+					`tax-class fixtures unavailable on this store (` +
+						missing
+							.map(
+								([role, outcome]) =>
+									`${TAX_CLASS_SKU[role as keyof typeof TAX_CLASS_SKU]}: ${outcome}`
+							)
+							.join(', ') +
+						`). Run e2e/scripts/tax-class-fixtures.php against it — see that file's header.`
 				);
 				return;
 			}
-
 			await stampRunLabel(page, label);
 
 			const sale = await saveAndCapture(page, trackOrder, label, testInfo);

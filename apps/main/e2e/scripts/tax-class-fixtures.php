@@ -36,9 +36,13 @@
  *    still went green.
  */
 global $wpdb;
+// The BLANK country scope is included deliberately. A WooCommerce "general" rate has
+// an empty tax_rate_country and applies everywhere; excluding it left such a store with
+// no reduced-rate or zero-rate rate at all, so the fixture products existed, rang up
+// untaxed, and the mixed-class spec FAILED its coverage assertion instead of skipping.
 $countries = $wpdb->get_col(
     "SELECT DISTINCT tax_rate_country FROM {$wpdb->prefix}woocommerce_tax_rates
-     WHERE tax_rate_class = '' AND tax_rate_country <> ''"
+     WHERE tax_rate_class = ''"
 );
 foreach ($countries as $country) {
     foreach ([['reduced-rate', '5.0000', 'Reduced'], ['zero-rate', '0.0000', 'Zero Rate']] as [$class, $rate, $name]) {
@@ -48,29 +52,34 @@ foreach ($countries as $country) {
             $country, $class
         ));
         if ($existing) {
-            printf("SKIP   rate %-13s %s already present (#%d)\n", $class, $country, $existing);
+            printf("SKIP   rate %-13s %s already present (#%d)\n", $class, $country ?: '(global)', $existing);
             continue;
         }
         $id = WC_Tax::_insert_tax_rate([
             'tax_rate_country'  => $country,
             'tax_rate_state'    => '',
             'tax_rate'          => $rate,
-            'tax_rate_name'     => $country . ' ' . $name,
+            'tax_rate_name'     => trim($country . ' ' . $name),
             'tax_rate_priority' => 1,
             'tax_rate_compound' => 0,
             'tax_rate_shipping' => 0,
             'tax_rate_class'    => $class,
         ]);
-        printf("CREATE rate %-13s %s #%d @ %s%%\n", $class, $country, $id, $rate);
+        printf("CREATE rate %-13s %s #%d @ %s%%\n", $class, $country ?: '(global)', $id, $rate);
     }
 }
 WC_Cache_Helper::get_transient_version('taxes', true);
 
 /* 2. Products. */
 $fixtures = [
-    ['sku' => 'e2e-tax-reduced', 'name' => 'E2E Tax Fixture - Reduced Rate', 'class' => 'reduced-rate', 'status' => 'taxable', 'price' => '9.99'],
-    ['sku' => 'e2e-tax-zero',    'name' => 'E2E Tax Fixture - Zero Rate',    'class' => 'zero-rate',    'status' => 'taxable', 'price' => '9.99'],
-    ['sku' => 'e2e-tax-none',    'name' => 'E2E Tax Fixture - Not Taxable',  'class' => '',             'status' => 'none',    'price' => '9.99'],
+    // The STANDARD-class fixture matters as much as the others: the mixed-class spec
+    // must own every line it asserts on. Relying on an arbitrary catalogue product for
+    // the standard-rate line means a store whose first product happens to be
+    // reduced-rate or non-taxable yields a single rate set and fails coverage.
+    ['sku' => 'e2e-tax-standard', 'name' => 'E2E Tax Fixture - Standard Rate', 'class' => '',             'status' => 'taxable', 'price' => '9.99'],
+    ['sku' => 'e2e-tax-reduced',  'name' => 'E2E Tax Fixture - Reduced Rate',  'class' => 'reduced-rate', 'status' => 'taxable', 'price' => '9.99'],
+    ['sku' => 'e2e-tax-zero',     'name' => 'E2E Tax Fixture - Zero Rate',     'class' => 'zero-rate',    'status' => 'taxable', 'price' => '9.99'],
+    ['sku' => 'e2e-tax-none',     'name' => 'E2E Tax Fixture - Not Taxable',   'class' => '',             'status' => 'none',    'price' => '9.99'],
 ];
 foreach ($fixtures as $f) {
     $existing = wc_get_product_id_by_sku($f['sku']);
