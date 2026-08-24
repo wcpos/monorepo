@@ -1,7 +1,13 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
 import { isolatedProductTest as test, tryAddRunPrivateSimpleProduct } from './checkout-probe';
-import { becomesVisible, isRouteTeardownError, tryAddProductBySku } from './fixtures';
+import {
+	becomesVisible,
+	isRouteTeardownError,
+	isWcposRestRoute,
+	tryAddProductBySku,
+	wcposRestRoute,
+} from './fixtures';
 import {
 	expectFullPrecision,
 	expectMoneyMatches,
@@ -19,6 +25,21 @@ import {
 	stampRunLabel,
 } from './order-lifecycle';
 
+/** The gateway list, in both permalink spellings. */
+function isPaymentGatewaysUrl(url: URL): boolean {
+	return isWcposRestRoute(url.href, '/wcpos/v2/payment-gateways');
+}
+
+/** A gateway's checkout-contract bootstrap, in both permalink spellings. */
+function isGatewayBootstrapUrl(url: URL): boolean {
+	return /^\/wcpos\/v2\/payment-gateways\/[^/]+\/bootstrap$/.test(wcposRestRoute(url.href) ?? '');
+}
+
+/** An order's checkout-contract call, in both permalink spellings. */
+function isOrderCheckoutUrl(url: URL): boolean {
+	return /^\/wcpos\/v2\/orders\/[^/]+\/checkout$/.test(wcposRestRoute(url.href) ?? '');
+}
+
 /**
  * Wait for the payment-gateways fetch the checkout modal fires on mount.
  *
@@ -28,9 +49,10 @@ import {
  * takes down the whole worker process (see #997).
  */
 function gatewaysResponse(page: Page) {
-	const pending = page.waitForResponse('**/wp-json/wcpos/v2/payment-gateways{,?*}', {
-		timeout: 90_000,
-	});
+	const pending = page.waitForResponse(
+		(response) => isWcposRestRoute(response.url(), '/wcpos/v2/payment-gateways'),
+		{ timeout: 90_000 }
+	);
 	pending.catch(() => {});
 	return pending;
 }
@@ -519,15 +541,15 @@ test('uses the legacy webview for built-in POS gateways even when supports_check
 	posPage: page,
 }) => {
 	let contractCheckoutRequested = false;
-	await page.route('**/wp-json/wcpos/v2/payment-gateways/**/bootstrap', async (route) => {
+	await page.route(isGatewayBootstrapUrl, async (route) => {
 		contractCheckoutRequested = true;
 		await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' });
 	});
-	await page.route('**/wp-json/wcpos/v2/orders/**/checkout', async (route) => {
+	await page.route(isOrderCheckoutUrl, async (route) => {
 		contractCheckoutRequested = true;
 		await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' });
 	});
-	await page.route('**/wp-json/wcpos/v2/payment-gateways{,?*}', async (route) => {
+	await page.route(isPaymentGatewaysUrl, async (route) => {
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
@@ -552,7 +574,7 @@ test('uses the legacy webview for built-in POS gateways even when supports_check
 });
 
 test('falls back to the legacy webview when supports_checkout=false', async ({ posPage: page }) => {
-	await page.route('**/wp-json/wcpos/v2/payment-gateways{,?*}', async (route) => {
+	await page.route(isPaymentGatewaysUrl, async (route) => {
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',

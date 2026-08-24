@@ -209,6 +209,48 @@ export async function tryAddProductBySku(
 	return 'added';
 }
 
+/**
+ * The `/wcpos/...` REST route a URL addresses, in EITHER permalink spelling —
+ * or null when it addresses no WCPOS route at all.
+ *
+ * A store answers the same route two ways: `/wp-json/wcpos/v2/<route>` where
+ * pretty permalinks are on, and `?rest_route=/wcpos/v2/<route>` where they are
+ * not. Which one the app sends is NOT a property of the store — it is decided
+ * per session, at hydration: `testAuthorizationMethod` probes the path form
+ * first, and any failure to answer (a saturated store aborting the probe is
+ * enough) latches `use_rest_route_param` for the rest of that session, after
+ * which EVERY request goes out in the plain spelling.
+ *
+ * So a waiter or a stub that matches only `/wp-json/...` does not fail when the
+ * store is broken — it fails when the store is merely slow, having answered
+ * every request 200. That is exactly how ten pro specs failed on 2026-08-24
+ * (run 32745293277) with nothing but 200s in the store's access log. Match the
+ * route, never one of its spellings.
+ */
+export function wcposRestRoute(url: string): string | null {
+	let parsed: URL;
+	try {
+		parsed = new URL(url);
+	} catch {
+		return null;
+	}
+
+	// URLSearchParams decodes, so `%2Fwcpos%2Fv2%2Fvariations` and the raw
+	// `/wcpos/v2/variations` both arrive here in the same shape.
+	const queryRoute = parsed.searchParams.get('rest_route');
+	if (queryRoute?.startsWith('/wcpos/')) {
+		return queryRoute;
+	}
+
+	const pathRoute = parsed.pathname.match(/\/wp-json(\/wcpos\/.*)$/);
+	return pathRoute ? pathRoute[1] : null;
+}
+
+/** Does this URL address exactly `route` (e.g. `/wcpos/v2/variations`)? See {@link wcposRestRoute}. */
+export function isWcposRestRoute(url: string, route: string): boolean {
+	return wcposRestRoute(url) === route;
+}
+
 export function isRouteTeardownError(error: unknown): boolean {
 	if (!(error instanceof Error)) {
 		return false;

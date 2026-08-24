@@ -2,7 +2,7 @@ import { errors, expect, type Locator, type Page } from '@playwright/test';
 
 import { LOADED_COUNT_READY, LOADED_COUNT_TEST_ID } from './catalogue-readiness';
 import { findVariableProduct, isolatedVariableProductTest as test } from './checkout-probe';
-import { becomesVisible } from './fixtures';
+import { becomesVisible, isWcposRestRoute } from './fixtures';
 
 /**
  * Helper: ensure the POS products are in table view (not grid view).
@@ -87,7 +87,7 @@ async function openVariationPopover(page: Page): Promise<Locator> {
 	// hidden). Mirrors the guard the expanded-row tests already use.
 	await Promise.all([
 		page.waitForResponse(
-			(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+			(response) => isWcposRestRoute(response.url(), '/wcpos/v2/variations') && response.ok(),
 			{ timeout: 30_000 }
 		),
 		popoverButton.click(),
@@ -265,7 +265,7 @@ test.describe('POS Variations', () => {
 		const expandLink = page.getByTestId('variable-product-expand').first();
 		await Promise.all([
 			page.waitForResponse(
-				(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+				(response) => isWcposRestRoute(response.url(), '/wcpos/v2/variations') && response.ok(),
 				{ timeout: 30_000 }
 			),
 			expandLink.click(),
@@ -283,7 +283,7 @@ test.describe('POS Variations', () => {
 		const expandLink = page.getByTestId('variable-product-expand').first();
 		await Promise.all([
 			page.waitForResponse(
-				(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+				(response) => isWcposRestRoute(response.url(), '/wcpos/v2/variations') && response.ok(),
 				{ timeout: 30_000 }
 			),
 			expandLink.click(),
@@ -308,7 +308,7 @@ test.describe('POS Variations', () => {
 		const expandLink = page.getByTestId('variable-product-expand').first();
 		await Promise.all([
 			page.waitForResponse(
-				(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+				(response) => isWcposRestRoute(response.url(), '/wcpos/v2/variations') && response.ok(),
 				{ timeout: 30_000 }
 			),
 			expandLink.click(),
@@ -332,7 +332,7 @@ test.describe('POS Variations', () => {
 		const expandLink = page.getByTestId('variable-product-expand').first();
 		await Promise.all([
 			page.waitForResponse(
-				(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+				(response) => isWcposRestRoute(response.url(), '/wcpos/v2/variations') && response.ok(),
 				{ timeout: 30_000 }
 			),
 			expandLink.click(),
@@ -363,7 +363,7 @@ test.describe('POS Variations', () => {
 		const expandLink = page.getByTestId('variable-product-expand').first();
 		await Promise.all([
 			page.waitForResponse(
-				(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+				(response) => isWcposRestRoute(response.url(), '/wcpos/v2/variations') && response.ok(),
 				{ timeout: 30_000 }
 			),
 			expandLink.click(),

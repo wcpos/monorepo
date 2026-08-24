@@ -1,7 +1,13 @@
 import { expect, type Page } from '@playwright/test';
 
 import { isolatedProductTest as test, tryAddRunPrivateSimpleProduct } from './checkout-probe';
-import { becomesVisible, getStoreVariant, tryAddProductBySku } from './fixtures';
+import {
+	becomesVisible,
+	getStoreVariant,
+	isWcposRestRoute,
+	tryAddProductBySku,
+	wcposRestRoute,
+} from './fixtures';
 import {
 	expectFullPrecision,
 	expectMoneyMatches,
@@ -16,6 +22,11 @@ import {
 	readOrder,
 	stampRunLabel,
 } from './order-lifecycle';
+
+/** The refunds sub-route of any order, in both permalink spellings. */
+function isOrderRefundsUrl(url: URL): boolean {
+	return /^\/wcpos\/v2\/orders\/\d+\/refunds$/.test(wcposRestRoute(url.href) ?? '');
+}
 
 /**
  * Add the dedicated E2E product to the cart. Falls back to the first catalogue
@@ -80,9 +91,10 @@ async function createRefundableOrder(page: Page) {
 	// not send the order aggregate (WooCommerce authors it from the lines), so
 	// reading `payload.total` off the wire yields `undefined`.
 	const { total } = await readCartMoney(page);
-	const gatewaysLoaded = page.waitForResponse('**/wp-json/wcpos/v2/payment-gateways{,?*}', {
-		timeout: 90_000,
-	});
+	const gatewaysLoaded = page.waitForResponse(
+		(response) => isWcposRestRoute(response.url(), '/wcpos/v2/payment-gateways'),
+		{ timeout: 90_000 }
+	);
 	gatewaysLoaded.catch(() => {});
 	await openCheckout(page);
 	await gatewaysLoaded;
@@ -197,7 +209,7 @@ test.describe('POS refunds (Pro)', () => {
 
 	test('submits refund_destination=cash for a non-cash order', async ({ posPage: page }) => {
 		const captured: { refund: RefundRequestPayload | null } = { refund: null };
-		await page.route('**/wp-json/wcpos/v2/orders/*/refunds**', async (route) => {
+		await page.route(isOrderRefundsUrl, async (route) => {
 			if (route.request().method() !== 'POST') {
 				await route.fulfill({
 					status: 200,
@@ -242,7 +254,7 @@ test.describe('POS refunds (Pro)', () => {
 		posPage: page,
 	}) => {
 		const captured: { refund: RefundRequestPayload | null } = { refund: null };
-		await page.route('**/wp-json/wcpos/v2/orders/*/refunds**', async (route) => {
+		await page.route(isOrderRefundsUrl, async (route) => {
 			if (route.request().method() !== 'POST') {
 				await route.fulfill({
 					status: 200,
@@ -358,8 +370,7 @@ liveTest.describe('POS refunds (Pro) - real refund (live store)', () => {
 
 			const refunded = page.waitForResponse(
 				(response) =>
-					/\/wp-json\/wcpos\/v2\/orders\/\d+\/refunds/.test(response.url()) &&
-					response.request().method() === 'POST',
+					isOrderRefundsUrl(new URL(response.url())) && response.request().method() === 'POST',
 				{ timeout: 90_000 }
 			);
 			refunded.catch(() => {});
