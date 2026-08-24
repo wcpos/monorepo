@@ -865,18 +865,38 @@ describe('logs preset filters', () => {
 			});
 		});
 
-		it('translates the sync kind as the domain minus acting actors and severity rows', () => {
+		it('translates the sync kind as the domain minus acting actors, severity AND debug rows', () => {
 			const translated = translateLogsQueryState({
 				...base,
 				filters: { kind: 'sync' },
 			} satisfies QueryStateOf<'logs'>);
 
+			// Debug outranks the domain in displayKind, so a sync-domain debug row
+			// renders as debug and must NOT come back under the sync pill.
 			expect(translated.selector).toEqual({
 				$and: [
 					{ category: { $gte: 'wcpos.sync', $lt: 'wcpos.sync/' } },
 					{ 'actor.id': { $exists: false } },
 					{ 'actor.name': { $exists: false } },
-					{ level: { $nin: ['error', 'warn'] } },
+					{ level: { $nin: ['error', 'warn', 'debug'] } },
+				],
+			});
+		});
+
+		it('translates the debug kind as every diagnostic row, sync domain included', () => {
+			const translated = translateLogsQueryState({
+				...base,
+				filters: { kind: 'debug' },
+			} satisfies QueryStateOf<'logs'>);
+
+			// Nearly every debug row IS a sync-domain row (transport, drain, change
+			// signal). Excluding the domain here left the pill matching almost
+			// nothing while the rows it named sat under the sync pill.
+			expect(translated.selector).toEqual({
+				$and: [
+					{ level: 'debug' },
+					{ 'actor.id': { $exists: false } },
+					{ 'actor.name': { $exists: false } },
 				],
 			});
 		});

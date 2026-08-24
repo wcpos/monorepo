@@ -48,6 +48,17 @@ describe('displayKind', () => {
 		expect(displayKind({ level: 'info', category: 'wcpos.syncopation' })).toBe('info');
 	});
 
+	it('reads a sync-domain diagnostic row as debug, not as sync', () => {
+		// Verbose diagnostics exists to make the forensic rows findable; painting
+		// them with the same blue 'sync' pill as the running feed hid them among
+		// the rows already there (Paul, 2026-08-24). An ATTRIBUTED row keeps its
+		// action framing — who did it outranks how loudly it was written.
+		expect(displayKind({ level: 'debug', category: 'wcpos.sync.engine' })).toBe('debug');
+		expect(
+			displayKind({ level: 'debug', category: 'wcpos.sync.engine', actor: { name: 'Paul' } })
+		).toBe('action');
+	});
+
 	it('falls back to the record level', () => {
 		expect(displayKind({ level: 'debug' })).toBe('debug');
 		expect(displayKind({ level: 'info' })).toBe('info');
