@@ -73,7 +73,25 @@ export function observeEngineDatabases(engine: RxdbSyncEngine): Observable<RxDat
 			subscriber.next(database);
 		});
 		subscribing = false;
-		void engine.ready.then((scope) => publishIfChanged(scope.database)).catch(() => undefined);
+		/**
+		 * The boot barrier, NOT a database: `ready` exists so a subscription taken
+		 * before the first scope opens still gets one, for a host whose `db$` does
+		 * not re-emit on open.
+		 *
+		 * It must be read for its TIMING only. `ready` is created once — `const
+		 * ready = switchScope(initialScope)` in create-rxdb-sync-engine — and a
+		 * later `scope.switch()` never replaces it, so the ActiveScope it resolves
+		 * with names the database of the scope the engine BOOTED on forever. Since
+		 * `ready` has long since resolved by the time a cashier switches store,
+		 * publishing `scope.database` here ran a microtask after subscribe and
+		 * overwrote the correct, active database with the outgoing one — every read
+		 * bound AFTER a store switch (a variations popover, the customer picker)
+		 * then served the previous scope while writes, pulls and the census went to
+		 * the new one. Ask the engine what is active NOW instead.
+		 */
+		void engine.ready
+			.then(() => publishIfChanged(engine.active()?.database ?? null))
+			.catch(() => undefined);
 		return unsubscribe;
 	});
 }
