@@ -99,6 +99,7 @@ export function VariableProductTile({ record, gridFields }: VariableProductTileP
 		metaData: payload.meta_data,
 		price: payload.price,
 		regularPrice: payload.regular_price,
+		salePrice: payload.sale_price,
 		onSale: payload.on_sale,
 		taxStatus: payload.tax_status,
 		taxClass: payload.tax_class,
@@ -109,7 +110,16 @@ export function VariableProductTile({ record, gridFields }: VariableProductTileP
 		costOfGoodsSold: payload.cost_of_goods_sold,
 	}));
 	const variablePrices = getVariablePrices(
-		fields.metaData as { key?: string; value?: string }[] | undefined
+		fields.metaData as { key?: string; value?: string }[] | undefined,
+		{
+			recordId: record.uuid,
+			remoteId: record.remoteId,
+			name: fields.name,
+			sku: fields.sku,
+			price: fields.price,
+			regularPrice: fields.regularPrice,
+			salePrice: fields.salePrice,
+		}
 	);
 
 	const safeTaxStatus = (fields.taxStatus || 'none') as 'taxable' | 'shipping' | 'none';
