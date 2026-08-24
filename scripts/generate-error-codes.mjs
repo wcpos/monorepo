@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -40,63 +40,6 @@ const ESCALATIONS = [
 	'support-with-export',
 	'payment-provider',
 ];
-const TITLE_TOKENS = {
-	DB: 'DB',
-	TLS: 'TLS',
-	URL: 'URL',
-	SKU: 'SKU',
-	WOOCOMMERCE: 'WooCommerce',
-	WCPOS: 'WCPOS',
-	PRO: 'Pro',
-};
-const SAFE_ACTION_COPY = {
-	retry: 'Try the action again.',
-	'retry-after-edit': 'Correct the highlighted details, then try again.',
-	continue: 'You can keep working — WCPOS handles this automatically.',
-	'verify-first': 'Check the details below before trying again.',
-	reconfigure: 'A settings change is needed before this will work.',
-	'repair-local':
-		'Restart WCPOS; if this keeps happening the local data on this device needs repair.',
-	'contact-support': 'Export diagnostics and contact support.',
-};
-const RETRY_POLICY_COPY = {
-	automatic: 'WCPOS retries this automatically.',
-	manual: 'WCPOS does not retry this by itself — retry when you are ready.',
-	'after-change':
-		'Retry after making the change above; retrying without it will fail the same way.',
-	never: 'Do not retry — the result will not change.',
-};
-// A blanket "the result will not change" is dangerously wrong when the outcome
-// is unknown or money may have moved — there a blind retry can duplicate a
-// charge or an order, and the right instruction is verify-first.
-const RETRY_NEVER_VERIFY_COPY =
-	'Do not retry until you have confirmed what actually happened — a blind retry can create a duplicate charge or order.';
-function retryPolicySentence(entry) {
-	if (
-		entry.retryPolicy === 'never' &&
-		(entry.dataSafety === 'outcome-unknown' || entry.dataSafety === 'money-moved')
-	) {
-		return RETRY_NEVER_VERIFY_COPY;
-	}
-	return RETRY_POLICY_COPY[entry.retryPolicy];
-}
-const DATA_SAFETY_COPY = {
-	'no-impact': 'No order or product data is affected.',
-	'local-only': 'The change is saved on this device but has not reached your store.',
-	'order-safe': 'The order itself is safe and unchanged.',
-	'data-at-risk': 'Data on this device may be at risk — do not clear local data.',
-	'money-moved': 'Money may have moved — verify the payment before acting.',
-	'outcome-unknown': 'The outcome could not be confirmed — verify before retrying.',
-};
-const ESCALATION_COPY = {
-	'store-admin': 'If this persists, ask your store administrator.',
-	'site-admin': 'If this persists, ask the person who manages your WordPress site.',
-	'payment-provider': 'If this persists, contact your payment provider.',
-	'support-with-export': 'If this persists, export diagnostics and contact WCPOS support.',
-};
-// Docs-only troubleshooting surfaces. `logSources` lists the surfaces beyond the
-// in-app Logs screen (which every code gets); the copy here is the single place
-// that knows where each surface lives, so a UI move is a one-line fix.
 const LOG_SOURCES = [
 	'network-inspector',
 	'browser-console',
@@ -105,22 +48,6 @@ const LOG_SOURCES = [
 	'host-error-log',
 	'payment-provider',
 ];
-const POS_LOGS_COPY =
-	'When WCPOS can save this error, it is recorded on the device that raised it. Open **Store health → Logs** (the heart-pulse icon at the bottom of the navigation drawer), find the entry marked with this code and expand it: the expanded row shows the plain-language reason and the context captured at the moment of failure. For a store request, that context may include the server’s own error code (`serverCode`), the HTTP `status` or the `endpoint`; the fields shown depend on where the failure occurred. When reporting a problem, use **Copy debug info** at the top of the Logs screen (**Share debug info** on phones and tablets) rather than screenshots: it bundles the app version, connection state and the most recent errors. Logs are kept for at most 30 days, so collect them while the problem is fresh. Also copy any browser-console error that appeared before the POS was able to write its own log entry.';
-const LOG_SOURCE_COPY = {
-	'network-inspector':
-		'**Network inspector** (web and desktop): open the developer tools — press F12 in the browser, or **Advanced → Toggle Developer Tools** in the desktop app’s menu — and select the **Network** tab. Follow this page’s retry guidance first; reproduce the action only when those steps say it is safe. A failing request shows the HTTP status and the raw response body, including error pages that never reach the POS log.',
-	'browser-console':
-		'**Console** (web and desktop): the **Console** tab of the same developer tools records client-side errors, including ones that happen before the POS is able to write its own log entry.',
-	'wp-admin-pos-logs':
-		'**Server-side POS logs**: in WP Admin, open **POS → Settings → Tools → Logs**. This page records POS-related warnings and errors raised on the server itself, which may never appear inside the app. A red badge on the menu means unread server-side errors.',
-	'woo-status-logs':
-		'**WooCommerce → Status → Logs**: on the WordPress site, check the newest `fatal-errors-*.log` for PHP crashes, plus any log source named after a plugin involved in the failure. A 500-class error from the store almost always leaves its cause here.',
-	'host-error-log':
-		"**The site's PHP error log**: if WooCommerce's log page shows nothing for the failure time, ask the hosting provider for the PHP error log — some fatal errors are captured only at the server level.",
-	'payment-provider':
-		'**Payment provider dashboard**: the terminal provider’s own record (for example Stripe Dashboard → Payments, or the Square Dashboard) is the authority on whether a charge went through — check it before retrying any payment.',
-};
 const FIELDS = {
 	code: 'ErrorCode',
 	symbol: 'string',
@@ -265,88 +192,6 @@ ${symbols}
 }
 
 const yamlString = (value) => `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
-const humanizeTitle = (symbol) =>
-	symbol
-		.split('_')
-		.map((token, index) => {
-			if (TITLE_TOKENS[token]) return TITLE_TOKENS[token];
-			const lower = token.toLowerCase();
-			return index === 0 ? `${lower[0].toUpperCase()}${lower.slice(1)}` : lower;
-		})
-		.join(' ');
-
-function renderDocsPage(entry) {
-	const escalation = ESCALATION_COPY[entry.escalation];
-	return `---
-title: ${yamlString(`${entry.code}: ${humanizeTitle(entry.symbol)}`)}
-sidebar_label: ${entry.code}
-description: ${yamlString(entry.summary)}
----
-
-{/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with \`pnpm generate:error-codes\`. */}
-
-## What this means {#what-this-means}
-
-${entry.summary}
-
-${entry.docsBody}
-
-## What to do {#what-to-do}
-
-${SAFE_ACTION_COPY[entry.safeAction]} ${retryPolicySentence(entry)}
-
-## Your data {#your-data}
-
-${DATA_SAFETY_COPY[entry.dataSafety]}${escalation ? ` ${escalation}` : ''}
-
-## Troubleshoot {#troubleshoot}
-
-${entry.troubleshooting.map((step, stepIndex) => `${stepIndex + 1}. ${step}`).join('\n')}
-
-## Where to look {#where-to-look}
-
-${POS_LOGS_COPY}
-${entry.logSources.length ? `\nBeyond the in-app log, this failure can leave evidence in:\n\n${entry.logSources.map((source) => `- ${LOG_SOURCE_COPY[source]}`).join('\n')}\n` : ''}
-## Details {#details}
-
-- **Code:** \`${entry.code}\` (\`${entry.symbol}\`)
-- **Severity:** ${entry.severity}
-- **Introduced in:** WCPOS ${entry.introducedIn}
-`;
-}
-
-function renderSidebar(registry) {
-	const domains = new Map();
-	for (const entry of registry) {
-		if (!domains.has(entry.domain)) domains.set(entry.domain, []);
-		domains.get(entry.domain).push(`error-codes/${entry.code}`);
-	}
-	return `${JSON.stringify(
-		{
-			type: 'category',
-			label: 'Error codes (1.10+)',
-			items: [...domains].map(([label, items]) => ({
-				type: 'category',
-				label,
-				items: items.sort(),
-			})),
-		},
-		null,
-		'\t'
-	)}\n`;
-}
-
-async function writeDocs(outputDirectory, registry) {
-	const docsDirectory = path.join(outputDirectory, 'error-docs');
-	await rm(docsDirectory, { recursive: true, force: true });
-	await mkdir(docsDirectory, { recursive: true });
-	await Promise.all([
-		...registry.map((entry) =>
-			writeFile(path.join(docsDirectory, `${entry.code}.mdx`), renderDocsPage(entry))
-		),
-		writeFile(path.join(docsDirectory, 'sidebar-category.json'), renderSidebar(registry)),
-	]);
-}
 
 /**
  * One literal `t()` call per error code, mirroring `event-titles.generated.ts`.
@@ -465,7 +310,7 @@ export async function generateErrorCodes(options = parseArguments([])) {
 			path.join(options.outputDirectory, 'error-catalogue.json'),
 			`${JSON.stringify({ [BANNER]: true, entries: registry }, null, '\t')}\n`
 		),
-		writeDocs(options.outputDirectory, registry),
+		// Error-code help pages are hand-authored in the wcpos/docs repo — the generator no longer emits them here.
 	]);
 }
 

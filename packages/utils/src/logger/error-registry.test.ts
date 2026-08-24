@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -149,42 +149,6 @@ describe('error registry', () => {
 					readFileSync(path.join(generatedDirectory, filename), 'utf8')
 				);
 			}
-
-			const generatedDocs = readdirSync(path.join(outputDirectory, 'error-docs')).sort();
-			const checkedInDocs = readdirSync(path.join(generatedDirectory, 'error-docs')).sort();
-			expect(generatedDocs).toEqual(checkedInDocs);
-			for (const filename of checkedInDocs) {
-				expect(readFileSync(path.join(outputDirectory, 'error-docs', filename), 'utf8')).toBe(
-					readFileSync(path.join(generatedDirectory, 'error-docs', filename), 'utf8')
-				);
-			}
-		} finally {
-			rmSync(outputDirectory, { recursive: true, force: true });
-		}
-	});
-
-	it('keeps shared log guidance conditional and safe to reproduce', () => {
-		const outputDirectory = mkdtempSync(path.join(tmpdir(), 'wcpos-error-codes-guidance-'));
-		try {
-			runGenerator(outputDirectory);
-			const cartSafe = readFileSync(
-				path.join(outputDirectory, 'error-docs', 'CHECKOUT101.mdx'),
-				'utf8'
-			);
-			const beforePosLog = readFileSync(
-				path.join(outputDirectory, 'error-docs', 'CLIENT999.mdx'),
-				'utf8'
-			);
-			const outcomeUnknown = readFileSync(
-				path.join(outputDirectory, 'error-docs', 'CHECKOUT201.mdx'),
-				'utf8'
-			);
-			expect(cartSafe).toContain('the fields shown depend on where the failure occurred');
-			expect(beforePosLog).toContain('When WCPOS can save this error');
-			expect(beforePosLog).not.toContain('Every occurrence of this code is recorded');
-			expect(beforePosLog).toContain('before the POS is able to write its own log entry');
-			expect(outcomeUnknown).toContain('reproduce the action only when those steps say it is safe');
-			expect(outcomeUnknown).not.toContain('select the **Network** tab and repeat the action');
 		} finally {
 			rmSync(outputDirectory, { recursive: true, force: true });
 		}
