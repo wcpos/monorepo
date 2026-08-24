@@ -15,15 +15,6 @@ const DOMAINS = [
 	'HOST',
 ];
 const SEVERITIES = ['info', 'warn', 'error'];
-const SAFE_ACTIONS = [
-	'retry',
-	'retry-after-edit',
-	'verify-first',
-	'continue',
-	'repair-local',
-	'reconfigure',
-	'contact-support',
-];
 const RETRY_POLICIES = ['automatic', 'manual', 'after-change', 'never'];
 const DATA_SAFETY = [
 	'no-impact',
@@ -53,7 +44,7 @@ const FIELDS = {
 	symbol: 'string',
 	domain: 'ErrorDomain',
 	severity: 'ErrorSeverity',
-	safeAction: 'SafeAction',
+	actionHint: 'string',
 	retryPolicy: 'RetryPolicy',
 	dataSafety: 'DataSafety',
 	escalation: 'Escalation',
@@ -65,17 +56,22 @@ const FIELDS = {
 const VOCABULARIES = {
 	domain: DOMAINS,
 	severity: SEVERITIES,
-	safeAction: SAFE_ACTIONS,
 	retryPolicy: RETRY_POLICIES,
 	dataSafety: DATA_SAFETY,
 	escalation: ESCALATIONS,
 };
 const SUMMARY_KEY_PREFIX = 'health.logs.error_summary.';
+const ACTION_KEY_PREFIX = 'health.logs.error_action.';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** `SYNC101` → `health.logs.error_summary.SYNC101`. */
 export function summaryKey(code) {
 	return `${SUMMARY_KEY_PREFIX}${code}`;
+}
+
+/** `SYNC101` → `health.logs.error_action.SYNC101`. */
+export function actionKey(code) {
+	return `${ACTION_KEY_PREFIX}${code}`;
 }
 
 function validateRegistry(registry) {
@@ -172,7 +168,6 @@ ${union(
 )}
 ${union('ErrorDomain', DOMAINS)}
 ${union('ErrorSeverity', SEVERITIES)}
-${union('SafeAction', SAFE_ACTIONS)}
 ${union('RetryPolicy', RETRY_POLICIES)}
 ${union('DataSafety', DATA_SAFETY)}
 ${union('Escalation', ESCALATIONS)}
@@ -246,22 +241,62 @@ ${cases}
 }
 
 /**
+ * One literal `t()` call per action hint, matching `renderSummaries` so the
+ * string extractor sees every key and new registry codes remain exhaustive.
+ */
+function renderActions(registry) {
+	const cases = registry
+		.map((entry) =>
+			[`		case ${quote(entry.code)}:`, `			return t(${quote(actionKey(entry.code))});`].join(
+				'\n'
+			)
+		)
+		.join('\n');
+	return `${BANNER}
+import type { ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
+
+/** The translate function shape \`useT()\` returns. */
+type TranslateError = (key: string) => string;
+
+/**
+ * The safe next step for an error code, translated at render time through the
+ * statically bundled English fallback catalogue.
+ */
+export function translateErrorAction(t: TranslateError, code: ErrorCode): string {
+	switch (code) {
+${cases}
+		default: {
+			const exhaustive: never = code;
+			return exhaustive;
+		}
+	}
+}
+`;
+}
+
+/**
  * The English source strings the generated `t()` calls resolve against.
  *
- * Only `health.logs.error_summary.*` keys are touched: every other key keeps its
- * value AND its position, and the block is rewritten where it already sits, so
- * editing a summary in the registry and regenerating produces a diff of exactly
- * the summaries that changed. Same contract as `generate-event-labels.mjs`.
+ * Only the generated summary and action keys are touched: every other key keeps
+ * its value AND its position, and each block is rewritten where it already sits.
  */
 export function renderLocale(registry, source) {
-	const existing = Object.entries(source);
-	const generated = (key) => key.startsWith(SUMMARY_KEY_PREFIX);
-	const untouched = existing.filter(([key]) => !generated(key));
-	const anchor = existing.findIndex(([key]) => generated(key));
-	const block = registry.map((entry) => [summaryKey(entry.code), entry.summary]);
-	const at = anchor === -1 ? untouched.length : anchor;
-	const merged = [...untouched.slice(0, at), ...block, ...untouched.slice(at)];
-	return `${JSON.stringify(Object.fromEntries(merged), null, '\t')}\n`;
+	const mergeBlock = (catalogue, prefix, block) => {
+		const existing = Object.entries(catalogue);
+		const generated = (key) => key.startsWith(prefix);
+		const untouched = existing.filter(([key]) => !generated(key));
+		const anchor = existing.findIndex(([key]) => generated(key));
+		const at = anchor === -1 ? untouched.length : anchor;
+		return Object.fromEntries([...untouched.slice(0, at), ...block, ...untouched.slice(at)]);
+	};
+	const summaries = registry.map((entry) => [summaryKey(entry.code), entry.summary]);
+	const actions = registry.map((entry) => [actionKey(entry.code), entry.actionHint]);
+	const merged = mergeBlock(
+		mergeBlock(source, SUMMARY_KEY_PREFIX, summaries),
+		ACTION_KEY_PREFIX,
+		actions
+	);
+	return `${JSON.stringify(merged, null, '\t')}\n`;
 }
 
 function parseArguments(args) {
@@ -304,6 +339,10 @@ export async function generateErrorCodes(options = parseArguments([])) {
 		writeFile(
 			path.join(options.summariesDirectory, 'error-summaries.generated.ts'),
 			renderSummaries(registry)
+		),
+		writeFile(
+			path.join(options.summariesDirectory, 'error-actions.generated.ts'),
+			renderActions(registry)
 		),
 		writeFile(options.localeOutput, renderLocale(registry, locale)),
 		writeFile(

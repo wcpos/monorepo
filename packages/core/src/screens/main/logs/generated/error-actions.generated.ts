@@ -1,0 +1,170 @@
+// GENERATED — do not edit by hand; run pnpm generate:error-codes
+import type { ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
+
+/** The translate function shape `useT()` returns. */
+type TranslateError = (key: string) => string;
+
+/**
+ * The safe next step for an error code, translated at render time through the
+ * statically bundled English fallback catalogue.
+ */
+export function translateErrorAction(t: TranslateError, code: ErrorCode): string {
+	switch (code) {
+		case 'SYNC101':
+			return t('health.logs.error_action.SYNC101');
+		case 'SYNC111':
+			return t('health.logs.error_action.SYNC111');
+		case 'SYNC121':
+			return t('health.logs.error_action.SYNC121');
+		case 'SYNC131':
+			return t('health.logs.error_action.SYNC131');
+		case 'SYNC141':
+			return t('health.logs.error_action.SYNC141');
+		case 'SYNC201':
+			return t('health.logs.error_action.SYNC201');
+		case 'SYNC211':
+			return t('health.logs.error_action.SYNC211');
+		case 'SYNC301':
+			return t('health.logs.error_action.SYNC301');
+		case 'SYNC311':
+			return t('health.logs.error_action.SYNC311');
+		case 'SYNC321':
+			return t('health.logs.error_action.SYNC321');
+		case 'SYNC331':
+			return t('health.logs.error_action.SYNC331');
+		case 'AUTH101':
+			return t('health.logs.error_action.AUTH101');
+		case 'AUTH201':
+			return t('health.logs.error_action.AUTH201');
+		case 'AUTH301':
+			return t('health.logs.error_action.AUTH301');
+		case 'AUTH311':
+			return t('health.logs.error_action.AUTH311');
+		case 'AUTH401':
+			return t('health.logs.error_action.AUTH401');
+		case 'CHECKOUT101':
+			return t('health.logs.error_action.CHECKOUT101');
+		case 'CHECKOUT201':
+			return t('health.logs.error_action.CHECKOUT201');
+		case 'CHECKOUT211':
+			return t('health.logs.error_action.CHECKOUT211');
+		case 'CHECKOUT301':
+			return t('health.logs.error_action.CHECKOUT301');
+		case 'PAYMENT101':
+			return t('health.logs.error_action.PAYMENT101');
+		case 'PAYMENT201':
+			return t('health.logs.error_action.PAYMENT201');
+		case 'PAYMENT301':
+			return t('health.logs.error_action.PAYMENT301');
+		case 'PAYMENT401':
+			return t('health.logs.error_action.PAYMENT401');
+		case 'PRINT101':
+			return t('health.logs.error_action.PRINT101');
+		case 'PRINT201':
+			return t('health.logs.error_action.PRINT201');
+		case 'PRINT301':
+			return t('health.logs.error_action.PRINT301');
+		case 'PRODUCT101':
+			return t('health.logs.error_action.PRODUCT101');
+		case 'PRODUCT111':
+			return t('health.logs.error_action.PRODUCT111');
+		case 'PRODUCT201':
+			return t('health.logs.error_action.PRODUCT201');
+		case 'PRODUCT301':
+			return t('health.logs.error_action.PRODUCT301');
+		case 'PRODUCT401':
+			return t('health.logs.error_action.PRODUCT401');
+		case 'LICENSE101':
+			return t('health.logs.error_action.LICENSE101');
+		case 'LICENSE201':
+			return t('health.logs.error_action.LICENSE201');
+		case 'LICENSE301':
+			return t('health.logs.error_action.LICENSE301');
+		case 'CLIENT101':
+			return t('health.logs.error_action.CLIENT101');
+		case 'CLIENT201':
+			return t('health.logs.error_action.CLIENT201');
+		case 'CLIENT211':
+			return t('health.logs.error_action.CLIENT211');
+		case 'CLIENT999':
+			return t('health.logs.error_action.CLIENT999');
+		case 'SYNC999':
+			return t('health.logs.error_action.SYNC999');
+		case 'AUTH999':
+			return t('health.logs.error_action.AUTH999');
+		case 'CHECKOUT999':
+			return t('health.logs.error_action.CHECKOUT999');
+		case 'PAYMENT999':
+			return t('health.logs.error_action.PAYMENT999');
+		case 'PRINT999':
+			return t('health.logs.error_action.PRINT999');
+		case 'PRODUCT999':
+			return t('health.logs.error_action.PRODUCT999');
+		case 'LICENSE999':
+			return t('health.logs.error_action.LICENSE999');
+		case 'SYNC401':
+			return t('health.logs.error_action.SYNC401');
+		case 'SYNC411':
+			return t('health.logs.error_action.SYNC411');
+		case 'SYNC221':
+			return t('health.logs.error_action.SYNC221');
+		case 'CHECKOUT401':
+			return t('health.logs.error_action.CHECKOUT401');
+		case 'PRODUCT411':
+			return t('health.logs.error_action.PRODUCT411');
+		case 'CLIENT111':
+			return t('health.logs.error_action.CLIENT111');
+		case 'CLIENT121':
+			return t('health.logs.error_action.CLIENT121');
+		case 'AUTH111':
+			return t('health.logs.error_action.AUTH111');
+		case 'AUTH121':
+			return t('health.logs.error_action.AUTH121');
+		case 'AUTH321':
+			return t('health.logs.error_action.AUTH321');
+		case 'AUTH331':
+			return t('health.logs.error_action.AUTH331');
+		case 'AUTH411':
+			return t('health.logs.error_action.AUTH411');
+		case 'AUTH421':
+			return t('health.logs.error_action.AUTH421');
+		case 'AUTH431':
+			return t('health.logs.error_action.AUTH431');
+		case 'AUTH441':
+			return t('health.logs.error_action.AUTH441');
+		case 'HOST101':
+			return t('health.logs.error_action.HOST101');
+		case 'HOST111':
+			return t('health.logs.error_action.HOST111');
+		case 'HOST121':
+			return t('health.logs.error_action.HOST121');
+		case 'HOST131':
+			return t('health.logs.error_action.HOST131');
+		case 'HOST141':
+			return t('health.logs.error_action.HOST141');
+		case 'HOST151':
+			return t('health.logs.error_action.HOST151');
+		case 'HOST161':
+			return t('health.logs.error_action.HOST161');
+		case 'SYNC151':
+			return t('health.logs.error_action.SYNC151');
+		case 'SYNC161':
+			return t('health.logs.error_action.SYNC161');
+		case 'SYNC171':
+			return t('health.logs.error_action.SYNC171');
+		case 'CHECKOUT111':
+			return t('health.logs.error_action.CHECKOUT111');
+		case 'PRODUCT321':
+			return t('health.logs.error_action.PRODUCT321');
+		case 'PRODUCT421':
+			return t('health.logs.error_action.PRODUCT421');
+		case 'PRINT311':
+			return t('health.logs.error_action.PRINT311');
+		case 'CLIENT131':
+			return t('health.logs.error_action.CLIENT131');
+		default: {
+			const exhaustive: never = code;
+			return exhaustive;
+		}
+	}
+}
