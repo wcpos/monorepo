@@ -271,7 +271,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					);
 				}
 
-				discoveryLogger.error('WooCommerce POS plugin not found', {
+				discoveryLogger.error('WCPOS plugin not found', {
 					showToast: true,
 					code: ERROR_CODES.REST_ROUTE_MISSING,
 				});

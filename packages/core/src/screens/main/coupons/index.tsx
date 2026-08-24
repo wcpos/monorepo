@@ -169,7 +169,7 @@ function CouponsScreenContent() {
 										{readOnly
 											? t('common.upgrade_to_pro')
 											: !caps.canCreateCoupons
-												? t('capability_hints.create_coupons')
+												? t('capability_hints.create_coupons_admin_path')
 												: t('coupons.add_coupon')}
 									</Text>
 								</TooltipContent>
