@@ -23,7 +23,16 @@ export function VariableProductPrice({
 	const taxStatus = useRecordField(row.original.record, (product) => product.payload.tax_status);
 	const taxClass = useRecordField(row.original.record, (product) => product.payload.tax_class);
 	const metaData = useRecordField(row.original.record, (product) => product.payload.meta_data);
-	const variablePrices = getVariablePrices(metaData);
+	const owner = useRecordField(row.original.record, (product) => ({
+		recordId: product.uuid,
+		remoteId: product.remoteId,
+		name: product.payload.name,
+		sku: product.payload.sku,
+		price: product.payload.price,
+		regularPrice: product.payload.regular_price,
+		salePrice: product.payload.sale_price,
+	}));
+	const variablePrices = getVariablePrices(metaData, owner);
 	const key = column.id as PriceKey;
 	const safeTaxStatus = taxStatus || 'none';
 
