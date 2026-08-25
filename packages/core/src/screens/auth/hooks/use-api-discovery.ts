@@ -199,12 +199,17 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 							[CLIENT_QUERY_PARAM]: formatClientSignal(AppInfo.platform, AppInfo.version),
 						},
 						timeout: 15_000,
+						unauthenticated: true,
 					});
 				} catch (error: unknown) {
 					if (get(error, ['response', 'status']) !== 404) {
 						throw error;
 					}
-					response = await http.get(wpApiUrl, { params: { wcpos: 1 }, timeout: 15_000 });
+					response = await http.get(wpApiUrl, {
+						params: { wcpos: 1 },
+						timeout: 15_000,
+						unauthenticated: true,
+					});
 				}
 				const data = get(response, 'data') as WpJsonResponse;
 

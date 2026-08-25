@@ -268,8 +268,8 @@ export const useHttpClient = (
 
 		const databaseEpoch = getDatabaseEpoch();
 
-		// If token refresh is in progress, wait for it to complete
-		if (requestStateManager.isTokenRefreshing()) {
+		// Only credentialed requests depend on an in-flight token refresh.
+		if (config.unauthenticated !== true && requestStateManager.isTokenRefreshing()) {
 			httpLogger.debug('Token refresh in progress, waiting before making request', {
 				context: {
 					url: config.url,
