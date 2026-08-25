@@ -40,7 +40,7 @@
  * The useEffect watching `response` handles OAuth outcomes:
  * - **success**: Save tokens, clear authFailed, show success toast
  * - **error**: Show error toast (authFailed stays true)
- * - **cancel/dismiss**: Show info toast (authFailed stays true)
+ * - **cancel/dismiss/locked**: Warn that the session expired (authFailed stays true)
  *
  * When authFailed stays true, subsequent requests are blocked at pre-flight.
  * User must click [Login] button or interact with UI to retry.
@@ -222,8 +222,14 @@ export const useAuthErrorHandler = (
 				// This allows pending requests to proceed with new token
 				requestStateManager.setAuthFailed(false);
 
+				// The silent refresh path already tells the cashier
+				// “Session renewed automatically” (auth.session_renewed_automatically),
+				// so the interactive path must use the same noun: one mechanism, one
+				// story. The log message stays as it is — that string is the
+				// developer's, and it is correct.
 				authLogger.success('Successfully logged in', {
 					showToast: true,
+					toast: { title: t('auth.session_renewed') },
 					context: {
 						siteName: site.name,
 						userId: wpCredentials.id,
@@ -263,8 +269,16 @@ export const useAuthErrorHandler = (
 			// User intentionally closed the auth window
 			// authFailed stays true - prevents background request spam
 			// User must click [Login] or interact with UI to retry
-			authLogger.info('Login cancelled', {
+			// `warn`, not `info`, and not “Login cancelled”: this branch also fires on
+			// `locked` — the device screen locking, which the cashier never chose — so
+			// “cancelled” is factually wrong for one of its three triggers. And while
+			// `authFailed` stays latched, every request to the store fails immediately
+			// with AUTH_REQUIRED (see request-state-manager.ts). The cashier knows the
+			// window closed; what they do not know is that the store is now
+			// unreachable, and that consequence is the load-bearing information.
+			authLogger.warn('Login cancelled', {
 				showToast: true,
+				toast: { title: t('auth.session_expired') },
 				context: {
 					siteName: site.name,
 					status: response.type,
