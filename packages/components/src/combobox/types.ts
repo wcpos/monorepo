@@ -16,7 +16,21 @@ interface ComboboxRootContextType {
 	disabled?: boolean;
 	filterValue: string;
 	onFilterChange: (text: string) => void;
+	decodeLabels: boolean;
 }
+
+/**
+ * Labels in this app are usually WooCommerce titles or term names, which arrive
+ * HTML-encoded — so both halves of the widget (the list and the closed trigger)
+ * decode by default. Set `decodeLabels={false}` when the label IS an opaque
+ * identifier the merchant typed or the server keys on — a meta_data key, say —
+ * where "shipping&copy;" must keep reading as "shipping&copy;". It is one switch
+ * for both halves on purpose: decoding one and not the other is the bug this
+ * flag exists to avoid.
+ */
+type ComboboxDecodeProps = {
+	decodeLabels?: boolean;
+};
 
 type ComboboxSingleRootProps<T = undefined> = {
 	children: React.ReactNode;
@@ -38,7 +52,8 @@ type ComboboxMultiRootProps<T = undefined> = {
 	disabled?: boolean;
 };
 
-type ComboboxRootProps<T = undefined> = ComboboxSingleRootProps<T> | ComboboxMultiRootProps<T>;
+type ComboboxRootProps<T = undefined> = (ComboboxSingleRootProps<T> | ComboboxMultiRootProps<T>) &
+	ComboboxDecodeProps;
 
 type ComboboxTriggerProps = object;
 

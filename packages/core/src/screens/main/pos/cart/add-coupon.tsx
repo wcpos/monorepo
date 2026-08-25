@@ -191,9 +191,15 @@ function CouponItemContent({ coupon }: { coupon: CouponPayload }) {
 	return (
 		<HStack className="flex-1 items-center justify-between">
 			<VStack className="flex-1 gap-0.5">
-				<Text className="text-sm font-medium">{coupon.code}</Text>
+				{/* This list draws its own rows instead of ComboboxItemText, so it does not
+				    inherit that decode — and the closed trigger (ComboboxValue) renders the
+				    same `code` as its label. A coupon code is the shop_coupon post title,
+				    encoded like any other title, so both ends decode. */}
+				<Text className="text-sm font-medium" decodeHtml>
+					{coupon.code}
+				</Text>
 				{coupon.description ? (
-					<Text className="text-muted-foreground text-xs" numberOfLines={1}>
+					<Text className="text-muted-foreground text-xs" numberOfLines={1} decodeHtml>
 						{coupon.description}
 					</Text>
 				) : (

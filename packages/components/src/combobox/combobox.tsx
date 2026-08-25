@@ -53,6 +53,7 @@ function Combobox<T = undefined>({
 	defaultValue,
 	onValueChange: onValueChangeProp,
 	onOpenChange: onOpenChangeProp,
+	decodeLabels = true,
 	...props
 }: ComboboxRootProps<T>) {
 	const [value, onValueChange] = useControllableState<Option<any> | Option<any>[] | undefined>({
@@ -85,6 +86,7 @@ function Combobox<T = undefined>({
 				isSelected,
 				filterValue,
 				onFilterChange: setFilterValue,
+				decodeLabels,
 			}}
 		>
 			<PopoverPrimitive.Root onOpenChange={handleOpenChange}>{children}</PopoverPrimitive.Root>
@@ -109,7 +111,7 @@ function ComboboxValue({
 	maxDisplayLength = 24,
 	...props
 }: ComboboxValueProps) {
-	const { multiple, value } = useComboboxRootContext();
+	const { multiple, value, decodeLabels } = useComboboxRootContext();
 	const Component = asChild ? Slot : Text;
 
 	const displayText = React.useMemo(() => {
@@ -135,13 +137,13 @@ function ComboboxValue({
 				<TextClassContext.Provider
 					value={cn('text-sm', hasValue ? 'text-foreground' : 'text-muted-foreground', className)}
 				>
-					{/* Same decode as ComboboxItemText below: the label shown once chosen is
-					    the label that was listed, and a term or product name arrives from
-					    WooCommerce HTML-encoded. Decoding only in the list made one widget
-					    read "Men's" open and "Men&#039;s" closed. Only on the Text path —
-					    `asChild` hands these props to a caller's component that need not
-					    understand `decodeHtml`. */}
-					<Component {...props} {...(asChild ? {} : { decodeHtml: true })}>
+					{/* Same decode as ComboboxItemText, off the same `decodeLabels` switch:
+					    the label shown once chosen is the label that was listed, and a term
+					    or product name arrives from WooCommerce HTML-encoded. Decoding only
+					    in the list made one widget read "Men's" open and "Men&#039;s" closed.
+					    Only on the Text path — `asChild` hands these props to a caller's
+					    component that need not understand `decodeHtml`. */}
+					<Component {...props} {...(asChild ? {} : { decodeHtml: decodeLabels })}>
 						{displayText}
 					</Component>
 				</TextClassContext.Provider>
@@ -364,6 +366,7 @@ function ComboboxItem({ value, label, item, className, children, ...props }: Com
 
 function ComboboxItemText({ className, ...props }: ComboboxItemTextProps) {
 	const { item } = VirtualizedListPrimitive.useItemContext();
+	const { decodeLabels } = useComboboxRootContext();
 
 	return (
 		<Text
@@ -371,7 +374,7 @@ function ComboboxItemText({ className, ...props }: ComboboxItemTextProps) {
 				'web:group-focus:text-accent-foreground text-popover-foreground text-sm',
 				className
 			)}
-			decodeHtml
+			decodeHtml={decodeLabels}
 			{...props}
 		>
 			{item.label}

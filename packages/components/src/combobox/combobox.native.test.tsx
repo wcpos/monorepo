@@ -240,6 +240,23 @@ describe('ComboboxValue', () => {
 		expect(screen.queryByText('Men&#039;s Shirts &amp; Ties')).toBeNull();
 	});
 
+	// Raised in review on #1573: a combobox whose label IS an opaque identifier —
+	// a meta_data key the merchant typed — must not have it prettified, at EITHER
+	// end. The switch is deliberately one flag for both halves, since decoding one
+	// and not the other is the bug the flag exists to avoid.
+	it('leaves the label alone when the caller opts out with decodeLabels={false}', () => {
+		render(
+			<Combobox decodeLabels={false} value={{ value: 'k', label: 'shipping&copy;' }}>
+				<ComboboxTrigger>
+					<ComboboxValue placeholder="Select a key" />
+				</ComboboxTrigger>
+			</Combobox>
+		);
+
+		expect(screen.getByText('shipping&copy;')).not.toBeNull();
+		expect(screen.queryByText('shipping©')).toBeNull();
+	});
+
 	it('still renders the placeholder when nothing is selected', () => {
 		render(
 			<Combobox>

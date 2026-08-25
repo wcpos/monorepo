@@ -98,7 +98,11 @@ export function StorePill({ resource }: Props) {
 					onRemove={handleRemove}
 					removeTestID="order-filter-store-remove"
 				>
-					<ButtonText>{value?.label || t('common.created_via_2')}</ButtonText>
+					{/* This pill is its own trigger (SelectPrimitiveTrigger asChild), so it
+					    renders the `value` memo's label rather than Select's own Value — the
+					    memo rebuilds it from raw `store.name`, and decoding only the
+					    SelectItem left the CLOSED pill showing the entity. */}
+					<ButtonText decodeHtml>{value?.label || t('common.created_via_2')}</ButtonText>
 				</ButtonPill>
 			</SelectPrimitiveTrigger>
 			<SelectContent>

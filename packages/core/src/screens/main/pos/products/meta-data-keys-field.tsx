@@ -130,7 +130,12 @@ export function MetaDataKeysField({ value, onChange }: MetaDataKeysFieldProps) {
 					))}
 				</View>
 			)}
-			<Combobox multiple value={selected} onValueChange={handleChange}>
+			{/* A meta_data key is an opaque identifier, not prose: the merchant types
+			    the literal `shipping&copy;` and the product is keyed on that exact
+			    string, so decoding it would show a key that matches nothing. The list
+			    was already decoding these — `decodeLabels={false}` turns BOTH halves
+			    off, which is the point of the switch. */}
+			<Combobox multiple decodeLabels={false} value={selected} onValueChange={handleChange}>
 				<ComboboxTrigger testID="meta-data-keys-trigger">
 					<ComboboxValue placeholder={t('common.meta_data_keys')} />
 				</ComboboxTrigger>
