@@ -13,6 +13,7 @@ import {
 	CurrentOrderProvider,
 	useOpenOrdersResource,
 } from '@wcpos/core/screens/main/pos/contexts/current-order';
+import { OrderEngineWarningsProvider } from '@wcpos/core/screens/main/pos/contexts/order-engine-warnings';
 import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/contexts/order-money-divergence';
 
 import { useNavigationBackground } from '../../../../components/use-navigation-background';
@@ -79,17 +80,25 @@ export default function POSLayout() {
 	// resource React never commits effects inside that boundary, and
 	// `engine.events()` does not replay, so a drain landing during the initial
 	// load would be missed for good.
+	//
+	// The engine-warning store (#1560) sits beside it for the narrower half of the
+	// same reason: the cart's banner and the checkout modal's are two mounts of one
+	// notice, so the store has to outlive both. It does NOT need to outlive the
+	// BOUNDARY — nothing pushes into it from outside React; every entry comes from
+	// an engine call a cart hook just made, below this point.
 	return (
 		<OrderMoneyDivergenceProvider>
-			<Suspense>
-				<CurrentOrderProvider resource={resource} currentOrderUUID={orderId}>
-					<ErrorBoundary>
-						<Suspense>
-							<POSStack />
-						</Suspense>
-					</ErrorBoundary>
-				</CurrentOrderProvider>
-			</Suspense>
+			<OrderEngineWarningsProvider>
+				<Suspense>
+					<CurrentOrderProvider resource={resource} currentOrderUUID={orderId}>
+						<ErrorBoundary>
+							<Suspense>
+								<POSStack />
+							</Suspense>
+						</ErrorBoundary>
+					</CurrentOrderProvider>
+				</Suspense>
+			</OrderEngineWarningsProvider>
 		</OrderMoneyDivergenceProvider>
 	);
 }

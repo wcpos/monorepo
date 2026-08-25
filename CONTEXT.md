@@ -43,7 +43,11 @@ Tombstones flow through the settle untouched and never enter the math.
 
 **EngineWarning**:
 A fault surfaced as data in an order-math result (e.g. `malformed_pos_data`,
-`unknown_tax_rate_id`) instead of a log call inside the math.
+`unknown_tax_rate_id`) instead of a log call inside the math. Core has ONE sink
+for them — `useReportEngineWarnings` in
+`packages/core/src/screens/main/pos/contexts/order-engine-warnings` — called at
+every engine call site in core, including settle. It logs the kind's error code
+and raises the cart's totals banner; it never toasts.
 
 **Quirk**:
 A WooCommerce-parity behavior preserved deliberately, bug-for-bug, marked

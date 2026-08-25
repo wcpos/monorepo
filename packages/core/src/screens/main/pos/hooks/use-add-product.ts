@@ -17,6 +17,7 @@ import {
 import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';
 import { useCurrentOrderActions } from '../contexts/current-order';
+import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
@@ -40,6 +41,7 @@ export const useAddProduct = () => {
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
 	const metaDataKeys = useDocField(uiSettings, (value) => value.metaDataKeys);
+	const reportEngineWarnings = useReportEngineWarnings();
 
 	/**
 	 * Add product to order, or increment quantity if already in order
@@ -114,8 +116,16 @@ export const useAddProduct = () => {
 			if (!success) {
 				const keys = metaDataKeys ? metaDataKeys.split(',') : [];
 				let newLineItem = convertProductToLineItemWithoutTax(product as ProductDocument, keys);
-				newLineItem = calculateCartLine({ kind: 'line_item', line: newLineItem }, cartConfig)
-					.line as typeof newLineItem;
+				// The POS authored this line's price basis a moment ago, so a warning here
+				// is an internal fault rather than a merchant condition — reported all the
+				// same, because "every engine call site in core reports" is the rule, and a
+				// site exempted by argument is how the dropped-warnings comment spread.
+				const computed = calculateCartLine({ kind: 'line_item', line: newLineItem }, cartConfig);
+				reportEngineWarnings(computed.warnings, {
+					orderId: currentOrderRecord.uuid,
+					site: 'useAddProduct',
+				});
+				newLineItem = computed.line as typeof newLineItem;
 				success = await addItemToOrder('line_items', newLineItem);
 				if (success === false) return false;
 			}
@@ -142,7 +152,15 @@ export const useAddProduct = () => {
 				return false;
 			}
 		},
-		[getCurrentOrderRecord, incrementLineItem, metaDataKeys, cartConfig, addItemToOrder, t]
+		[
+			getCurrentOrderRecord,
+			incrementLineItem,
+			metaDataKeys,
+			cartConfig,
+			addItemToOrder,
+			reportEngineWarnings,
+			t,
+		]
 	);
 
 	return { addProduct };

@@ -1,10 +1,15 @@
 /**
  * @jest-environment jsdom
  */
+import * as React from 'react';
+
 import { act, renderHook } from '@testing-library/react';
 import { BehaviorSubject, combineLatest } from 'rxjs';
 import { map } from 'rxjs/operators';
 
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+
+import { OrderEngineWarningsProvider } from '../contexts/order-engine-warnings';
 import { useCartSettlement } from './use-cart-settlement';
 
 const MONEY_PATCH = {
@@ -1349,5 +1354,81 @@ describe('useCartSettlement background coupon replay (#963)', () => {
 		// it, finds itself superseded, and abandons rather than overwriting the lines
 		// with the stale configuration. Still exactly one replay write.
 		expect(replayWrites()).toHaveLength(1);
+	});
+});
+
+/**
+ * The settle path is the sink that mattered (#1560): it runs on EVERY cart
+ * change and it discarded `warnings` without even the comment the five line
+ * hooks carried. These pin the two ways it used to lose them.
+ */
+describe('the settle path reports engine warnings', () => {
+	const wrapper = ({ children }: { children: React.ReactNode }) => (
+		<OrderEngineWarningsProvider>{children}</OrderEngineWarningsProvider>
+	);
+
+	const codedWarnings = () =>
+		mockCartWarn.mock.calls.filter(
+			([, options]) =>
+				(options as { code?: string } | undefined)?.code === ERROR_CODES.ORDER_TAX_RATE_UNKNOWN
+		);
+
+	beforeEach(() => {
+		localPatch.mockClear();
+		localPatch.mockImplementation(async () => undefined);
+		settleCart.mockClear();
+		settleCart.mockImplementation(() => successfulSettlement());
+		settleAggregate.mockClear();
+		settleAggregate.mockImplementation(() => successfulAggregate());
+		mockCartWarn.mockClear();
+		whenSettled = jest.fn(async () => true);
+		whenSettledInBackground = jest.fn(async (_signal: AbortSignal) => true);
+		divergenceValue = null;
+		couponLines$.next([]);
+		lineItems$.next([]);
+		feeLines$.next([]);
+		shippingLines$.next([]);
+		revision = buildRevision();
+		currentOrderRecord = buildCurrentOrderRecord();
+	});
+
+	it('reports the money pass even when its patch changes nothing', async () => {
+		// The bail this sits in front of is the trap: a cart whose money is ALREADY
+		// right can still be resting on a tax rate the store has dropped, and
+		// reporting after `if (!result.changed) return` would tell the cashier
+		// nothing about exactly that order.
+		settleAggregate.mockImplementation(() => ({
+			...successfulAggregate(),
+			changed: false,
+			warnings: [{ code: 'unknown_tax_rate_id', rateId: 42 }],
+		}));
+
+		renderHook(() => useCartSettlement(), { wrapper });
+		await act(async () => {});
+
+		expect(localPatch).not.toHaveBeenCalled();
+		expect(codedWarnings()).toHaveLength(1);
+		expect(codedWarnings()[0][1]).toMatchObject({
+			context: { site: 'settleAggregate', orderId: 'order-uuid-1', rateId: 42 },
+		});
+	});
+
+	it('reports the coupon pass on its FAILED branch, where the warnings matter most', async () => {
+		// The gate stopped the replay, so whatever the engine could not read is
+		// still on the order the cashier is about to charge for.
+		settleAggregate.mockImplementation(() => ({ ...successfulAggregate(), changed: false }));
+		settleCart.mockImplementation(() => ({
+			ok: false as const,
+			error: { code: 'missing_coupon', missingCodes: ['save10'] },
+			warnings: [{ code: 'unknown_tax_rate_id', rateId: 42 }],
+		}));
+		applyCoupon([{ code: 'save10' }]);
+
+		renderHook(() => useCartSettlement(), { wrapper });
+		await act(async () => {});
+
+		expect(settleCart).toHaveBeenCalled();
+		expect(codedWarnings()).toHaveLength(1);
+		expect(codedWarnings()[0][1]).toMatchObject({ context: { site: 'settleCart' } });
 	});
 });

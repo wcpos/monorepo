@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { calculateCartLine } from '@wcpos/order-math';
+import { calculateCartLine, type EngineWarning } from '@wcpos/order-math';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -9,6 +9,7 @@ import { useCartConfig } from './use-cart-config';
 import { useT } from '../../../../contexts/translations';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
+import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'shipping-line']);
 
@@ -34,6 +35,7 @@ export const useUpdateShippingLine = () => {
 	const { currentOrderRecord } = useCurrentOrder();
 	const { localPatch } = useLocalMutation();
 	const cartConfig = useCartConfig();
+	const reportEngineWarnings = useReportEngineWarnings();
 	const t = useT();
 
 	/**
@@ -46,6 +48,7 @@ export const useUpdateShippingLine = () => {
 			const order = currentOrderRecord.getLatest();
 			const json = order.toMutableJSON().payload;
 			let updated = false;
+			let warnings: readonly EngineWarning[] = [];
 
 			// get matching shipping line
 			const updatedShippingLines = json.shipping_lines?.map((shippingLine) => {
@@ -56,15 +59,11 @@ export const useUpdateShippingLine = () => {
 				// The changes-merge (posData fields with `?? previous` fallbacks, everything
 				// else straight through) and the tax maths are both the engine's now. See
 				// `applyShippingLineChanges` / `computeShippingLine` in @wcpos/order-math.
-				//
-				// `warnings` (malformed posData) is dropped here, as it is at every other
-				// engine call site in core — settle drops it too. Surfacing engine warnings
-				// to the cashier is one decision for all of them, not a shipping one.
 				// The inheritance basis comes from THIS snapshot's line items — the same `json`
 				// the map above is walking — for the same reason the percent-fee basis does:
 				// re-reading the order mid-arithmetic would compute against a newer cart than
 				// the one being patched. Only read when the line's tax class inherits.
-				const { line: updatedItem } = calculateCartLine(
+				const { line: updatedItem, warnings: lineWarnings } = calculateCartLine(
 					{
 						kind: 'shipping',
 						line: shippingLine,
@@ -74,10 +73,13 @@ export const useUpdateShippingLine = () => {
 					cartConfig
 				);
 				updated = true;
+				warnings = lineWarnings;
 				// The engine speaks structural line types; this boundary writes back to the
 				// DB document they came from.
 				return updatedItem as ShippingLine;
 			});
+
+			reportEngineWarnings(warnings, { orderId: order.uuid, site: 'useUpdateShippingLine' });
 
 			// if we have updated a line item, patch the order
 			if (updated && updatedShippingLines) {
@@ -97,7 +99,7 @@ export const useUpdateShippingLine = () => {
 				}
 			);
 		},
-		[cartConfig, currentOrderRecord, localPatch, t]
+		[cartConfig, currentOrderRecord, localPatch, reportEngineWarnings, t]
 	);
 
 	return { updateShippingLine };

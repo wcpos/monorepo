@@ -6,6 +6,10 @@ import * as React from 'react';
 import { act, render, screen } from '@testing-library/react';
 
 import {
+	OrderEngineWarningsProvider,
+	useReportEngineWarnings,
+} from '../contexts/order-engine-warnings';
+import {
 	OrderMoneyDivergenceProvider,
 	useOrderMoneyDivergence,
 } from '../contexts/order-money-divergence';
@@ -547,5 +551,73 @@ describe('the checkout mount', () => {
 		renderCheckout('order-a');
 		emit(divergence('order-b', [{ field: 'total', expected: '1.00', got: '2.00' }]));
 		expect(screen.queryByTestId('checkout-totals-changed-banner')).toBeNull();
+	});
+});
+
+/**
+ * The banner's second half (#1560). The two findings are independent — the store
+ * can overrule the arithmetic on an order whose inputs read fine, and vice versa
+ * — but they answer the same cashier question, "is the money on this sale
+ * right?", so they share the slot rather than stacking two banners.
+ */
+describe('the engine-warning half', () => {
+	let report: ReturnType<typeof useReportEngineWarnings> = () => undefined;
+
+	const captureReport = (next: ReturnType<typeof useReportEngineWarnings>) => {
+		report = next;
+	};
+
+	function Reporter() {
+		const reportEngineWarnings = useReportEngineWarnings();
+		// From an effect, not render: react-compiler bans writing to an outer
+		// binding during render, test components included.
+		React.useEffect(() => captureReport(reportEngineWarnings), [reportEngineWarnings]);
+		return null;
+	}
+
+	function renderBoth() {
+		return render(
+			<OrderMoneyDivergenceProvider>
+				<OrderEngineWarningsProvider>
+					<Reporter />
+					<CartTotalsChangedBanner />
+				</OrderEngineWarningsProvider>
+			</OrderMoneyDivergenceProvider>
+		);
+	}
+
+	const raiseWarning = () =>
+		act(() =>
+			report([{ code: 'unknown_tax_rate_id', rateId: 42 }], {
+				orderId: 'order-a',
+				site: 'test',
+			})
+		);
+
+	it('raises the banner on an order the server has said nothing about', () => {
+		renderBoth();
+		raiseWarning();
+
+		expect(screen.getByTestId('order-totals-changed-banner-engine-warnings')).toBeTruthy();
+		// The divergence half is absent — its title would tell the cashier the store
+		// changed totals it never touched.
+		expect(screen.queryByTestId('order-totals-changed-banner-docs-link')).toBeNull();
+		expect(screen.getByTestId('order-totals-changed-banner').textContent).not.toContain(
+			"Your store changed this order's totals"
+		);
+	});
+
+	it('shows both findings in one banner when both are true', () => {
+		renderBoth();
+		emit(divergence('order-a', [{ field: 'total', expected: '36.68', got: '50.07' }]));
+		raiseWarning();
+
+		expect(screen.getByTestId('order-totals-changed-banner-field-total').textContent).toBe(
+			'Total36.68 → 50.07'
+		);
+		expect(screen.getByTestId('order-totals-changed-banner-engine-warnings')).toBeTruthy();
+		// The "why totals disagree" page explains the SERVER disagreement and says
+		// nothing about an unreadable price basis, so it belongs to that half.
+		expect(screen.getByTestId('order-totals-changed-banner-docs-link')).toBeTruthy();
 	});
 });

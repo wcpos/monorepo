@@ -76,7 +76,9 @@ export type ErrorCode =
 	| 'PRODUCT321'
 	| 'PRODUCT421'
 	| 'PRINT311'
-	| 'CLIENT131';
+	| 'CLIENT131'
+	| 'CHECKOUT411'
+	| 'CHECKOUT421';
 export type ErrorDomain =
 	'AUTH' | 'SYNC' | 'CHECKOUT' | 'PAYMENT' | 'PRINT' | 'PRODUCT' | 'LICENSE' | 'CLIENT' | 'HOST';
 export type ErrorSeverity = 'info' | 'warn' | 'error';
@@ -787,6 +789,25 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'no-impact',
 		summary: 'WCPOS queued too many requests at once and dropped some.',
 	},
+	CHECKOUT411: {
+		code: 'CHECKOUT411',
+		symbol: 'CART_LINE_PRICE_BASIS_UNREADABLE',
+		domain: 'CHECKOUT',
+		severity: 'warn',
+		actionHint: 'Remove that line and add it again, then check the total.',
+		dataSafety: 'order-safe',
+		summary:
+			'A line on this order has price details the POS could not read, so its amount was taken from the stored totals instead.',
+	},
+	CHECKOUT421: {
+		code: 'CHECKOUT421',
+		symbol: 'ORDER_TAX_RATE_UNKNOWN',
+		domain: 'CHECKOUT',
+		severity: 'warn',
+		actionHint: 'Check the tax on this order; ask the admin whether a tax rate was deleted.',
+		dataSafety: 'order-safe',
+		summary: 'This order refers to a tax rate your store no longer has, so its tax may be wrong.',
+	},
 };
 
 export const ERROR_CODES = {
@@ -866,4 +887,6 @@ export const ERROR_CODES = {
 	VARIABLE_PRICE_META_INVALID: 'PRODUCT421',
 	RECEIPT_DELIVERY_FAILED: 'PRINT311',
 	REQUEST_QUEUE_OVERFLOW: 'CLIENT131',
+	CART_LINE_PRICE_BASIS_UNREADABLE: 'CHECKOUT411',
+	ORDER_TAX_RATE_UNKNOWN: 'CHECKOUT421',
 } as const satisfies Record<string, ErrorCode>;

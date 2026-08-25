@@ -9,6 +9,7 @@ import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCartConfig } from './use-cart-config';
 import { useT } from '../../../../contexts/translations';
 import { useCurrentOrder } from '../contexts/current-order';
+import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
@@ -36,6 +37,7 @@ export const useAddShipping = () => {
 	const t = useT();
 	const cartConfig = useCartConfig();
 	const { currentOrderRecord } = useCurrentOrder();
+	const reportEngineWarnings = useReportEngineWarnings();
 
 	// Create order-specific logger
 	const orderLogger = React.useMemo(
@@ -65,10 +67,7 @@ export const useAddShipping = () => {
 					},
 				});
 
-				// `warnings` (malformed posData) is dropped here, as it is at every other
-				// engine call site in core — settle drops it too. Surfacing engine warnings
-				// to the cashier is one decision for all of them, not a shipping one.
-				const { line: newShippingLine } = calculateCartLine(
+				const { line: newShippingLine, warnings } = calculateCartLine(
 					{
 						kind: 'shipping',
 						line: {
@@ -80,6 +79,10 @@ export const useAddShipping = () => {
 					},
 					cartConfig
 				);
+				reportEngineWarnings(warnings, {
+					orderId: currentOrderRecord.uuid,
+					site: 'useAddShipping',
+				});
 
 				// The engine speaks structural line types; this boundary writes back to the
 				// DB document they came from.
@@ -107,7 +110,7 @@ export const useAddShipping = () => {
 				});
 			}
 		},
-		[addItemToOrder, cartConfig, t, orderLogger]
+		[addItemToOrder, cartConfig, currentOrderRecord, reportEngineWarnings, t, orderLogger]
 	);
 
 	return { addShipping };

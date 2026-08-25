@@ -20,6 +20,7 @@ import {
 	useLocalMutation,
 } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrderActions } from '../contexts/current-order';
+import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 import { removeTemporaryOrder } from '../contexts/current-order/temporary-order';
 
 import type { CurrentOrderRecord } from '../contexts/current-order';
@@ -75,6 +76,7 @@ export const useAddItemToOrder = () => {
 	const { localPatch } = useLocalMutation();
 	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
 	const cartConfig = useCartConfig();
+	const reportEngineWarnings = useReportEngineWarnings();
 	const { store, wpCredentials } = useStoreSession();
 	const taxBasedOn = useDocField(store, (value) => value.tax_based_on) as string | undefined;
 	const identity = React.useMemo(
@@ -98,7 +100,7 @@ export const useAddItemToOrder = () => {
 	 * caller would have made had it seen the current cart.
 	 */
 	const buildCartLines = React.useCallback(
-		(existing: CartLine[], type: CartLineType, data: CartLine) => {
+		(orderId: string | undefined, existing: CartLine[], type: CartLineType, data: CartLine) => {
 			const lineItem = data as LineItem;
 			// A miscellaneous product (product_id 0) is always its own line, matching
 			// the duplicate check in useAddProduct/useAddVariation.
@@ -112,16 +114,19 @@ export const useAddItemToOrder = () => {
 			);
 			if (!matches || matches.length !== 1) return [...existing, data];
 			const match = matches[0];
-			const { line: merged } = calculateCartLine(
+			// The merge recomputes an EXISTING line, so an unreadable price basis is
+			// reachable here in a way it is not for a line the POS has just authored.
+			const { line: merged, warnings } = calculateCartLine(
 				{
 					kind: 'line_item',
 					line: { ...match, quantity: (match.quantity ?? 0) + (lineItem.quantity ?? 1) },
 				},
 				cartConfig
 			);
+			reportEngineWarnings(warnings, { orderId, site: 'useAddItemToOrder' });
 			return (existing as LineItem[]).map((item) => (item === match ? (merged as LineItem) : item));
 		},
-		[cartConfig]
+		[cartConfig, reportEngineWarnings]
 	);
 
 	/**
@@ -153,6 +158,7 @@ export const useAddItemToOrder = () => {
 					recordId,
 					changes: {
 						[type]: buildCartLines(
+							recordId,
 							(priorPayload[type] as CartLine[] | undefined) ?? [],
 							type,
 							data
@@ -274,6 +280,7 @@ export const useAddItemToOrder = () => {
 						document: latest,
 						data: {
 							[type]: buildCartLines(
+								latest.uuid,
 								(latest.payload[type] as CartLine[] | undefined) ?? [],
 								type,
 								data
