@@ -139,6 +139,9 @@ export function CustomerList({ binding, withGuest }: CustomerListProps) {
 				const hit = item as unknown as CustomerListItem;
 				return (
 					<ComboboxItem
+						testID={`customer-select-option-${
+							isGuestCustomer(hit.customer.id) ? 'guest' : hit.customer.id
+						}`}
 						value={String(hit.customer.id)}
 						label={String(hit.customer.id)}
 						item={hit.customer}

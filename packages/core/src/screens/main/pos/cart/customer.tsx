@@ -44,6 +44,7 @@ export function Customer({
 					size="xs"
 					leftIcon="user"
 					removable={true}
+					removeTestID="cart-customer-clear"
 					onRemove={() => onShowCustomerSelect(true)}
 				>
 					<ButtonText>{name}</ButtonText>
