@@ -1,26 +1,72 @@
 name: Cleanup E2E Screenshots
 
+# Screenshot releases are created by deploy.yml when an E2E run fails on a PR
+# (tag: e2e-screenshots-pr<N>-<sha>, marked prerelease). They are scratch
+# artifacts, not releases, so they must not accumulate on the releases page.
+#
+# Two mechanisms, because the on-close hook alone cannot be complete:
+#
+#   1. on PR close  — fast tidy-up for the common case.
+#   2. nightly sweep — the backstop. The E2E job that uploads screenshots is
+#      often STILL RUNNING when the PR closes, so it creates the release into
+#      an already-closed PR moments later and nothing fires again for it. That
+#      race orphaned 87 releases (and 87 tags) between 2026-04 and 2026-08.
+#
+# Both paths page through the full release list. The previous `--limit 100`
+# silently truncated once the backlog passed 100 releases, and `gh release
+# list` returns newest first — so the oldest, most stale entries were the first
+# to become invisible to the very job meant to delete them.
+
 on:
   pull_request:
     types: [closed]
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cleanup-e2e-screenshots
+  cancel-in-progress: false
 
 jobs:
   cleanup:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - name: 🗑️ Delete E2E screenshot releases
+      - name: 🗑️ Delete screenshot releases for this PR
+        if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          PR_NUMBER=${{ github.event.pull_request.number }}
-
-          # Find and delete all e2e-screenshots releases for this PR
-          gh release list --repo "${{ github.repository }}" --limit 100 \
-            --json tagName -q '.[].tagName' \
-            | grep "e2e-screenshots-pr${PR_NUMBER}-" \
+          gh api --paginate "repos/$REPO/releases" \
+            --jq ".[] | select(.tag_name | startswith(\"e2e-screenshots-pr${PR_NUMBER}-\")) | .tag_name" \
             | while read -r TAG; do
-                echo "Deleting release: $TAG"
-                gh release delete "$TAG" --repo "${{ github.repository }}" --yes --cleanup-tag
+                echo "Deleting $TAG"
+                gh release delete "$TAG" --repo "$REPO" --yes --cleanup-tag
               done
+
+      - name: 🧹 Sweep screenshot releases whose PR is no longer open
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api --paginate "repos/$REPO/releases" \
+            --jq '.[] | select(.tag_name | startswith("e2e-screenshots-pr")) | .tag_name' \
+            | while read -r TAG; do
+                PR="${TAG#e2e-screenshots-pr}"
+                PR="${PR%%-*}"
+                STATE=$(gh pr view "$PR" --repo "$REPO" --json state --jq .state 2>/dev/null || echo UNKNOWN)
+                # Fail closed: only delete when the PR is definitively not open.
+                if [ "$STATE" = "MERGED" ] || [ "$STATE" = "CLOSED" ]; then
+                  echo "Deleting $TAG (PR #$PR $STATE)"
+                  gh release delete "$TAG" --repo "$REPO" --yes --cleanup-tag
+                else
+                  echo "Keeping  $TAG (PR #$PR $STATE)"
+                fi
+              done
+          echo "Sweep complete."
