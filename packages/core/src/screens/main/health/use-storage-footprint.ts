@@ -48,10 +48,12 @@ export function useStorageFootprint(): StorageFootprintSummary | null {
 
 			let activeScopeDbName: string | null = null;
 			try {
-				const scope = engine.active() ?? (await engine.ready);
+				const scope = await engine.whenActive();
 				activeScopeDbName = scope.database.name;
 			} catch {
-				// Engine disposed mid-probe — classify without an active scope.
+				// No active scope (engine disposed mid-probe, or the store was
+				// removed) — classify without one rather than attributing every
+				// byte to the store the engine happened to boot on.
 			}
 
 			const knownSiteHashes = new Set<string>();

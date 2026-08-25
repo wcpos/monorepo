@@ -110,7 +110,7 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 	it('ready resolves the initial scope: ADR 0013 scope id and database name', async () => {
 		const { a } = freshIdentities();
 		const engine = engineWith(undefined, a);
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		expect(scope.scopeId).toBe(scopeKeyFor(a));
 		expect(scope.identity).toEqual(a);
 		expect(scope.database.name).toBe(scopeDatabaseName(a));
@@ -121,7 +121,7 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 	it('A→B→A switch is pause/resume: every scope keeps its data and mutation queue', async () => {
 		const { a, b } = freshIdentities();
 		const engine = engineWith(undefined, a);
-		const scopeA = await engine.ready;
+		const scopeA = await engine.whenActive();
 		await insertOrder(scopeA.database, 'order-a');
 		await enqueueMutation(scopeA.database, 'mutation-a');
 
@@ -189,7 +189,7 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 	it('resetCollection empties exactly the named collection and leaves the rest', async () => {
 		const { a } = freshIdentities();
 		const engine = engineWith(undefined, a);
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await insertOrder(scope.database, 'order-1');
 		await enqueueMutation(scope.database, 'mutation-1');
 		const events: EngineEvent[] = [];
@@ -212,7 +212,7 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 
 	it('resetCollection rejects after 30 seconds when collection re-add stalls', async () => {
 		const engine = engineWith();
-		const active = await engine.ready;
+		const active = await engine.whenActive();
 		const database = active.database;
 		const originalAddCollections = database.addCollections.bind(database);
 		let releaseReAdd!: () => void;
@@ -268,7 +268,7 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 		const { a } = freshIdentities();
 		const checkpoints = memoryStringStore();
 		const engine = engineWith({ checkpoints }, a);
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		// The HOST owns the store — seeding it is host-side state, not a backdoor.
 		await checkpoints.set(`${scope.scopeId}:checkpoint:orders`, '{"cursor":42}');
 		await checkpoints.set(`${scope.scopeId}:checkpoint:products`, '{"cursor":7}');
@@ -281,7 +281,7 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 
 	it('resetCollection clears scheduler and coverage bookkeeping for only the reset collection', async () => {
 		const engine = engineWith();
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		const collections = scope.database.collections;
 		const task = (collectionName: 'products' | 'customers') => ({
 			stateKey: `task-${collectionName}`,
@@ -341,7 +341,7 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 	it("resetCollection('orders') rewinds the syncCheckpoints custom-pull checkpoint — the persisted drain's cursor store (#430 phase 2)", async () => {
 		const { a } = freshIdentities();
 		const engine = engineWith(undefined, a);
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		const repository = new EngineOrderRepository(scope.database as never);
 		const saved = normalizeCheckpoint({
 			sequence: 42,
@@ -367,7 +367,7 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 	it('preserves local POS identity meta during clean server order upserts', async () => {
 		const { a } = freshIdentities();
 		const engine = engineWith(undefined, a);
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		const repository = new EngineOrderRepository(scope.database as never);
 		const id = 'order-identity-pull';
 		const checkpoint = normalizeCheckpoint({
@@ -436,7 +436,7 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 		const { a, b } = freshIdentities();
 		const checkpoints = memoryStringStore();
 		const engine = engineWith({ checkpoints }, a);
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await checkpoints.set(`${scope.scopeId}:checkpoint:orders`, '{"cursor":42}');
 		await engine.scope.switch(b);
 		await engine.scope.switch(a);
@@ -447,7 +447,7 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 	it("resetCollection('mutations') with pending mutations is a VALUE: needs-confirmation, queue intact", async () => {
 		const { a } = freshIdentities();
 		const engine = engineWith(undefined, a);
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await enqueueMutation(scope.database, 'mutation-1');
 		const events: EngineEvent[] = [];
 		engine.events((event) => events.push(event));
@@ -628,7 +628,7 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 	it('a reset racing a pending switch resets the FIFO-settled scope, never the outgoing one', async () => {
 		const { a, b } = freshIdentities();
 		const engine = engineWith(undefined, a);
-		const scopeA = await engine.ready;
+		const scopeA = await engine.whenActive();
 		await insertOrder(scopeA.database, 'order-a');
 		const events: EngineEvent[] = [];
 		engine.events((event) => events.push(event));

@@ -42,7 +42,7 @@ describe('bootstrap failure honesty', () => {
 		const statuses: EngineStatus[] = [];
 		engine.statusChanges((status) => statuses.push(status));
 
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 
 		expect(scope.database).toBeDefined();
 		expect(engine.status()).toMatchObject({

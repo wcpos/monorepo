@@ -95,7 +95,7 @@ describe('scope-open barcode selector hydration', () => {
 			{ site: 'https://example.test', storeId: 1, cashierId: `hydrate-${identity}` }
 		);
 
-		await expect(engine.ready).resolves.toBeDefined();
+		await expect(engine.whenActive()).resolves.toBeDefined();
 		expect(seedPosBootstrapLanes).toHaveBeenCalledOnce();
 		// A failed hydration leaves THIS scope with no carriers, so scans fall back
 		// online instead of matching on a guessed field (#869 review). Nothing has

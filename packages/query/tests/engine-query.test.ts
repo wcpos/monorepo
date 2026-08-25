@@ -132,7 +132,7 @@ describe('observeEngineQuery', () => {
 				listener(database);
 				return () => undefined;
 			},
-			ready: Promise.resolve({ database }),
+			ready: Promise.resolve(),
 			scope: { resetCollection },
 		};
 
@@ -202,7 +202,7 @@ describe('observeEngineQuery', () => {
 				listener(database);
 				return () => undefined;
 			},
-			ready: Promise.resolve({ database }),
+			ready: Promise.resolve(),
 			scope: { resetCollection },
 		};
 

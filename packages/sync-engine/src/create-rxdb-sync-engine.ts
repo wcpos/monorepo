@@ -501,9 +501,40 @@ export type Unsubscribe = () => void;
 export type EngineConflict = QueuedMutation;
 
 export type RxdbSyncEngine = {
-	/** Initial store scope open + active. */
-	ready: Promise<ActiveScope>;
+	/**
+	 * The boot barrier, and NOTHING else: it settles when the initial store
+	 * scope open finishes (rejecting if that open failed), and carries no value.
+	 *
+	 * It is deliberately valueless. `ready` is created once — `switchScope(
+	 * initialScope)` below — and a later `scope.switch()` never replaces it, so
+	 * any scope hanging off it would name the store the engine BOOTED on
+	 * forever. While it was typed `Promise<ActiveScope>` four call sites wrote
+	 * `engine.active() ?? (await engine.ready)`, which is right during boot and
+	 * wrong after a teardown — the same expression serving two situations that
+	 * nothing at the call site distinguishes (#1542, #1551, #1559). Ask
+	 * `whenActive()` for a scope; read `ready` for TIMING only.
+	 */
+	ready: Promise<void>;
 	active(): ActiveScope | null;
+	/**
+	 * The scope to read from, once one exists — the ONE way to resolve "which
+	 * database do I read?" across an await.
+	 *
+	 * Resolves with whatever is active NOW. If nothing is active yet it waits
+	 * out the boot barrier and re-reads, because during boot the initial scope
+	 * IS the scope. It rejects if no scope is active once boot has settled
+	 * (logged out, store removed, engine disposed): that state has no correct
+	 * database, and the boot scope's has been closed underneath it — a caller
+	 * must fail loudly rather than silently read a store the cashier left.
+	 *
+	 * During a `scope.switch()` this reports the OUTGOING scope until the switch
+	 * completes. That is by design, not a gap: the switch is atomic, and until
+	 * it lands the outgoing database is still open and still draining its
+	 * guarded writes, so it is genuinely the scope in effect. A read taken in
+	 * that window belongs to the store the cashier is leaving, exactly as a read
+	 * taken a tick earlier would.
+	 */
+	whenActive(): Promise<ActiveScope>;
 	/** Emits the current database immediately on subscribe, then re-emits on
 	 * every switch and reset (a reset re-emits the SAME database — captured
 	 * collection references are stale, re-resolve through the database). */
@@ -1949,7 +1980,7 @@ export function createRxdbSyncEngine(
 		);
 	});
 
-	const ready: Promise<ActiveScope> = switchScope(initialScope);
+	const ready: Promise<void> = switchScope(initialScope).then(() => undefined);
 	// sync() waits for the initial open to SETTLE (not succeed — a failed boot
 	// surfaces through `ready`; the tick then reports no-active-scope).
 	const readySettledForSync = ready.then(
@@ -2082,17 +2113,33 @@ export function createRxdbSyncEngine(
 		};
 	}
 
+	const readActiveScope = (): ActiveScope | null => {
+		if (disposed) return null;
+		const scopeId = manager.activeScope;
+		if (scopeId === null) return null;
+		try {
+			return activeScopeOf(scopeId);
+		} catch {
+			return null;
+		}
+	};
+
 	return {
 		ready,
-		active: () => {
-			if (disposed) return null;
-			const scopeId = manager.activeScope;
-			if (scopeId === null) return null;
-			try {
-				return activeScopeOf(scopeId);
-			} catch {
-				return null;
-			}
+		active: readActiveScope,
+		whenActive: async () => {
+			const current = readActiveScope();
+			if (current !== null) return current;
+			// Nothing active yet: this is either boot (the initial open is still in
+			// flight and the scope it opens is the answer) or a teardown that left
+			// no scope at all. `ready` separates them — it is awaited for TIMING,
+			// and the scope is re-read afterwards rather than taken from it.
+			await ready;
+			const afterBoot = readActiveScope();
+			if (afterBoot !== null) return afterBoot;
+			throw new Error(
+				'No active store scope: the engine has no database to read from (disposed, logged out, or the active store was removed)'
+			);
 		},
 		hostTransport: () => hostTransport,
 		reconfigure: (config) => cadenceController.reconfigure(config),

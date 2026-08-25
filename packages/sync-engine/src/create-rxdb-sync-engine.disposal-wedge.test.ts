@@ -84,7 +84,7 @@ describe('createRxdbSyncEngine disposal after setup failure', () => {
 		expect(await Promise.race([disposal, boundedFlush])).toBe('settled');
 
 		const second = createRxdbSyncEngine(ports, identity);
-		await expect(second.ready).resolves.toBeDefined();
+		await expect(second.whenActive()).resolves.toBeDefined();
 		await expect(second.dispose()).resolves.toBeUndefined();
 	});
 });

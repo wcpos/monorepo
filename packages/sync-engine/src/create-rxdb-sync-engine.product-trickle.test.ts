@@ -109,7 +109,7 @@ describe('product-trickle maintenance lane', () => {
 				return json(products((page - 1) * 10 + 1, 10));
 			},
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 
 		await expect(engine.sync('product-trickle')).resolves.toMatchObject({ status: 'ran' });
 		const first = new URL(urls[0]!);
@@ -201,7 +201,7 @@ describe('product-trickle maintenance lane', () => {
 				return json(products(1, 10));
 			},
 		});
-		const initialScope = await engine.ready;
+		const initialScope = await engine.whenActive();
 
 		await declareBrowseWindow(engine, { limit: 100, orderby: 'title', order: 'asc' });
 		await engine.scope.switch({ ...initialScope.identity, storeId: 8 });
@@ -354,7 +354,7 @@ describe('product-trickle maintenance lane', () => {
 				return json(trickled.length === 1 ? products(1, 3) : [product(4)]);
 			},
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await scope.database.collections.queryTotalCacheEntries.upsert({
 			queryKey: 'census:products',
 			totalMatchingRecords: 4,
@@ -380,7 +380,7 @@ describe('product-trickle maintenance lane', () => {
 				return json(products(1, 3));
 			},
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		const cache = scope.database.collections.queryTotalCacheEntries;
 		await cache.upsert({
 			queryKey: 'census:products',
@@ -424,7 +424,7 @@ describe('product-trickle maintenance lane', () => {
 				return json(products(1, 3));
 			},
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		const cache = scope.database.collections.queryTotalCacheEntries;
 		await cache.upsert({
 			queryKey: 'census:products',
@@ -460,7 +460,7 @@ describe('product-trickle maintenance lane', () => {
 
 	it('does not clobber a locally protected resident product', async () => {
 		const engine = engineWith({ fetcher: async () => json([product(77, 'Server Name')]) });
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await scope.database.collections.products.insert({
 			uuid: productUuid(77),
 			remoteId: remoteId(77),
@@ -503,7 +503,7 @@ describe('product-trickle maintenance lane', () => {
 				},
 			}
 		);
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 
 		await engine.sync('product-trickle');
 		expect(

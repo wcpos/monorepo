@@ -34,7 +34,7 @@ async function findCustomerByWooId(
 	runtime: QueryManager,
 	wooCustomerId: number
 ): Promise<EngineRecord<'customers'> | null> {
-	const scope = runtime.engine.active() ?? (await runtime.engine.ready);
+	const scope = await runtime.engine.whenActive();
 	const collection = scope.database.collections.customers;
 	if (!collection) return null;
 	const document = await collection

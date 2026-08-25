@@ -74,20 +74,16 @@ export function observeEngineDatabases(engine: RxdbSyncEngine): Observable<RxDat
 		});
 		subscribing = false;
 		/**
-		 * The boot barrier, NOT a database: `ready` exists so a subscription taken
-		 * before the first scope opens still gets one, for a host whose `db$` does
-		 * not re-emit on open.
+		 * The boot barrier: `ready` exists so a subscription taken before the
+		 * first scope opens still gets a database, for a host whose `db$` does not
+		 * re-emit on open. It is awaited for TIMING and the database is re-read
+		 * from `active()` afterwards — publishing a database carried BY `ready`
+		 * would name the scope the engine booted on forever (#1542; `ready` is
+		 * valueless now, so that is no longer expressible).
 		 *
-		 * It must be read for its TIMING only. `ready` is created once — `const
-		 * ready = switchScope(initialScope)` in create-rxdb-sync-engine — and a
-		 * later `scope.switch()` never replaces it, so the ActiveScope it resolves
-		 * with names the database of the scope the engine BOOTED on forever. Since
-		 * `ready` has long since resolved by the time a cashier switches store,
-		 * publishing `scope.database` here ran a microtask after subscribe and
-		 * overwrote the correct, active database with the outgoing one — every read
-		 * bound AFTER a store switch (a variations popover, the customer picker)
-		 * then served the previous scope while writes, pulls and the census went to
-		 * the new one. Ask the engine what is active NOW instead.
+		 * `whenActive()` is deliberately NOT used here: this is a subscription,
+		 * not a read, and a torn-down engine must publish `null` to its
+		 * subscribers rather than reject at nobody.
 		 */
 		void engine.ready
 			.then(() => publishIfChanged(engine.active()?.database ?? null))

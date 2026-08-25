@@ -28,7 +28,8 @@ const db$ = jest.fn((subscriber: (value: typeof database) => void) => {
 });
 const engine = {
 	active,
-	ready: Promise.resolve({ database }),
+	ready: Promise.resolve(),
+	whenActive: async () => active(),
 	db$,
 };
 const manager = { engine };

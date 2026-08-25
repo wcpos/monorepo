@@ -36,17 +36,22 @@ const mockTranslate = jest.fn((_key: string, options?: Record<string, unknown>) 
 	String(options?.error || options?.message || '')
 );
 
+/** The single source both `active()` and `whenActive()` read, as in the real
+ * engine — a mock that let them disagree would model a state it cannot be in. */
+const activeScope = () => ({
+	database: {
+		collections: {
+			orders: { findOne: () => ({ exec: mockFindOneExec }) },
+		},
+	},
+});
+
 jest.mock('@wcpos/query', () => ({
 	...jest.requireActual('@wcpos/query'),
 	useQueryRuntime: () => ({
 		engine: {
-			active: () => ({
-				database: {
-					collections: {
-						orders: { findOne: () => ({ exec: mockFindOneExec }) },
-					},
-				},
-			}),
+			active: activeScope,
+			whenActive: async () => activeScope(),
 			write: mockWrite,
 			sync: mockSync,
 			events: mockEvents,

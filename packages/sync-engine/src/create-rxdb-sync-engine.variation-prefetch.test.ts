@@ -105,7 +105,7 @@ describe('variation-prefetch maintenance lane', () => {
 				});
 			},
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await scope.database.collections.products.insert(product(10, [101, 102]) as never);
 
 		await expect(engine.sync('variation-prefetch')).resolves.toMatchObject({
@@ -127,7 +127,7 @@ describe('variation-prefetch maintenance lane', () => {
 			lastUserActivityMs: () => 100_000,
 			fetcher: activeFetch,
 		});
-		const activeScope = await active.ready;
+		const activeScope = await active.whenActive();
 		await activeScope.database.collections.products.insert(product(10, [101]) as never);
 		await expect(active.sync('variation-prefetch')).resolves.toMatchObject({
 			status: 'skipped',
@@ -154,7 +154,7 @@ describe('variation-prefetch maintenance lane', () => {
 				return json({ documents: [] });
 			},
 		});
-		const pendingScope = await pending.ready;
+		const pendingScope = await pending.whenActive();
 		await pendingScope.database.collections.products.insert(product(10, [101]) as never);
 		const requirement = pending.require({
 			id: 'interactive-customer',
@@ -181,7 +181,7 @@ describe('variation-prefetch maintenance lane', () => {
 			lastUserActivityMs: () => (activityChecks++ === 0 ? 0 : 1_000_000),
 			fetcher,
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await scope.database.collections.products.insert(product(10, [101]) as never);
 
 		await expect(engine.sync('variation-prefetch')).resolves.toMatchObject({
@@ -215,7 +215,7 @@ describe('variation-prefetch maintenance lane', () => {
 				},
 			},
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await scope.database.collections.products.insert(product(10, [101]) as never);
 		const controller = new AbortController();
 
@@ -244,7 +244,7 @@ describe('variation-prefetch maintenance lane', () => {
 				return json({ documents: [variationEnvelope(101, 10)] });
 			},
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await scope.database.collections.products.insert(product(10, [101]) as never);
 
 		await expect(engine.sync('variation-prefetch')).resolves.toMatchObject({
@@ -261,7 +261,7 @@ describe('variation-prefetch maintenance lane', () => {
 	it('skips resident variations, completes the walk, then stays idle', async () => {
 		const fetcher = vi.fn(async () => json({ documents: [] }));
 		const engine = engineWith({ fetcher });
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await scope.database.collections.products.bulkInsert([
 			product(10, [101]),
 			product(20, [201]),
@@ -291,7 +291,7 @@ describe('variation-prefetch maintenance lane', () => {
 				return json({ documents: [variationEnvelope(201, 20)] });
 			},
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await scope.database.collections.products.insert(product(10, [101]) as never);
 		await scope.database.collections.variations.insert(variation(101, 10) as never);
 		await scope.database.collections.queryTotalCacheEntries.upsert({
@@ -332,7 +332,7 @@ describe('variation-prefetch maintenance lane', () => {
 				return json({ documents: [variationEnvelope(Number(include), 20)] });
 			},
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await scope.database.collections.products.insert(product(10, [101]) as never);
 		await scope.database.collections.variations.insert(variation(101, 10) as never);
 		await scope.database.collections.queryTotalCacheEntries.upsert({
@@ -367,7 +367,7 @@ describe('variation-prefetch maintenance lane', () => {
 				return json({ documents: [variationEnvelope(Number(include), 10)] });
 			},
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await scope.database.collections.products.insert(product(10, [101]) as never);
 		await scope.database.collections.variations.insert(variation(101, 10) as never);
 		await scope.database.collections.queryTotalCacheEntries.upsert({
@@ -396,7 +396,7 @@ describe('variation-prefetch maintenance lane', () => {
 
 	it('re-arms when the variation census changes during a multi-tick walk', async () => {
 		const engine = engineWith({ now: () => 1_000_000 });
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await scope.database.collections.products.bulkInsert(
 			Array.from({ length: 26 }, (_, index) => product(index + 1, [index + 101])) as never
 		);
@@ -444,7 +444,7 @@ describe('variation-prefetch maintenance lane', () => {
 					});
 				},
 			});
-			const scope = await engine.ready;
+			const scope = await engine.whenActive();
 			await scope.database.collections.products.insert(product(10, [101]) as never);
 			await scope.database.collections.variations.insert(variation(101, 10) as never);
 			await engine.sync('variation-prefetch');
@@ -472,7 +472,7 @@ describe('variation-prefetch maintenance lane', () => {
 				});
 			},
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await scope.database.collections.products.bulkInsert([
 			product(10, [101]),
 			product(20, [201]),
@@ -495,7 +495,7 @@ describe('variation-prefetch maintenance lane', () => {
 				});
 			},
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await scope.database.collections.products.bulkInsert([
 			product(
 				10,
@@ -522,7 +522,7 @@ describe('variation-prefetch maintenance lane', () => {
 				});
 			},
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await scope.database.collections.products.bulkInsert([
 			{
 				...product(10, [101]),
@@ -551,7 +551,7 @@ describe('variation-prefetch maintenance lane', () => {
 				return json({ documents: [variationEnvelope(101, 10)] });
 			},
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await scope.database.collections.products.insert(product(10, [101]) as never);
 
 		await engine.sync('variation-prefetch');
@@ -578,7 +578,7 @@ describe('variation-prefetch maintenance lane', () => {
 				return json(isVariation ? { documents: [] } : []);
 			},
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 
 		await engine.sync();
 		expect(variationRequests).toEqual([]);
