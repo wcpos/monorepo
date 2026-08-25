@@ -79,6 +79,12 @@ const ENGINE_WARNING_ORDER: readonly EngineWarningCode[] = [
  * path, so a long shift against a store full of unreadable lines would otherwise
  * grow this without bound. The cashier only ever looks at the order in front of
  * them; the same bound, and the same reasoning, as MAX_HELD_DIVERGENCES.
+ *
+ * Eviction is by LAST REPORT, not by first — see `orderRecency`. Dropping the
+ * oldest KEY would target the order that has held a warning longest, which on a
+ * busy till is perfectly likely to be the sale in front of the cashier: the one
+ * notice that must never disappear is the one a first-insertion cap retires
+ * first.
  */
 const MAX_HELD_ORDERS = 50;
 
@@ -109,12 +115,21 @@ function detailKey(warning: EngineWarning): string {
 	return warning.code === 'unknown_tax_rate_id' ? String(warning.rateId) : warning.where.lineType;
 }
 
-/** Drop the oldest orders once the held set outgrows its memory bound. */
-function withinCap(byOrderId: WarningStore): WarningStore {
+/**
+ * Keep only the orders still named in `recency`, which holds the most recently
+ * reported ids and is already trimmed to the bound.
+ *
+ * Deliberately NOT `Object.keys(...).slice(-MAX)`: a JS object keeps a key at
+ * its ORIGINAL insertion position when it is reassigned, so key order is
+ * first-report order and has nothing to do with which order the cashier is on.
+ */
+function withinCap(byOrderId: WarningStore, recency: ReadonlySet<string>): WarningStore {
 	const ids = Object.keys(byOrderId);
-	if (ids.length <= MAX_HELD_ORDERS) return byOrderId;
+	if (ids.length <= recency.size) return byOrderId;
 	const kept: WarningStore = {};
-	for (const id of ids.slice(ids.length - MAX_HELD_ORDERS)) kept[id] = byOrderId[id];
+	for (const id of ids) {
+		if (recency.has(id)) kept[id] = byOrderId[id];
+	}
 	return kept;
 }
 
@@ -144,6 +159,19 @@ export function OrderEngineWarningsProvider({ children }: { children: React.Reac
 	// must not be reset by a re-render — a reset would re-log every held warning.
 	const loggedKeys = React.useRef<Set<string>>(new Set());
 
+	/**
+	 * Held order ids, least-recently-reported first — the eviction order.
+	 *
+	 * A ref rather than state because it must be touched on EVERY report,
+	 * including the overwhelmingly common one that changes nothing: the order the
+	 * cashier is working on re-reports the same warning on every cart change, and
+	 * that repetition is exactly what has to keep it out of reach of the cap. The
+	 * held set below deliberately does not update on that path — re-rendering
+	 * every banner mount per keystroke to store a value it already holds — so
+	 * recency cannot be derived from it.
+	 */
+	const orderRecency = React.useRef<Set<string>>(new Set());
+
 	const reportEngineWarnings = React.useCallback<ReportEngineWarnings>(
 		(warnings, { orderId, site }) => {
 			if (warnings.length === 0) return;
@@ -165,15 +193,27 @@ export function OrderEngineWarningsProvider({ children }: { children: React.Reac
 			// and the cart edit that gives the order its uuid reports again.
 			if (!orderId) return;
 
+			// Newest last. Delete-then-add is what MOVES an id already present, which
+			// a bare `add` does not do.
+			const recency = orderRecency.current;
+			recency.delete(orderId);
+			recency.add(orderId);
+			for (const oldest of recency) {
+				if (recency.size <= MAX_HELD_ORDERS) break;
+				recency.delete(oldest);
+			}
+
 			setByOrderId((current) => {
 				const held = current[orderId] ?? NO_WARNINGS;
 				const merged = ENGINE_WARNING_ORDER.filter(
 					(code) => held.includes(code) || warnings.some((warning) => warning.code === code)
 				);
 				// Same set: return the SAME state, or a settle on every cart change
-				// re-renders every banner mount for nothing.
+				// re-renders every banner mount for nothing. The held map cannot grow on
+				// this path either, so skipping the trim below is safe — it runs on every
+				// path that adds a key.
 				if (merged.length === held.length) return current;
-				return withinCap({ ...current, [orderId]: merged });
+				return withinCap({ ...current, [orderId]: merged }, recency);
 			});
 		},
 		[]

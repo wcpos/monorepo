@@ -233,6 +233,31 @@ describe('the engine-warning sink', () => {
 		expect(screen.queryByTestId('order-totals-changed-banner')).toBeNull();
 	});
 
+	/**
+	 * The cap must never be able to retire the notice on the sale in front of the
+	 * cashier. Key order is FIRST-report order — reassigning an object key leaves
+	 * it where it was — so an `Object.keys().slice(-MAX)` cap targets the order
+	 * that has held a warning longest, which on a busy till is a perfectly likely
+	 * description of the open cart.
+	 */
+	it('evicts the least recently reported order, never the one being worked on', () => {
+		const rate = (rateId: number): EngineWarning => ({ code: 'unknown_tax_rate_id', rateId });
+		renderSink('order-live');
+
+		// The cashier's order warns FIRST, so it is the oldest KEY from here on.
+		send([rate(1)], 'order-live');
+		// A shift's worth of other orders, filling the map to its bound.
+		for (let i = 0; i < 49; i++) send([rate(1)], `order-${i}`);
+		// It re-reports on every cart change — the same kind, so the held set does
+		// not change and no re-render happens, but it is the most RECENT report.
+		send([rate(1)], 'order-live');
+		// One more distinct order takes the map past the bound.
+		send([rate(1)], 'order-49');
+
+		expect(screen.getByTestId('held').textContent).toBe('unknown_tax_rate_id');
+		expect(screen.getByTestId('order-totals-changed-banner')).toBeTruthy();
+	});
+
 	it('is inert without a provider rather than taking the cart down', () => {
 		render(<Harness orderId="order-a" />);
 		act(() =>
