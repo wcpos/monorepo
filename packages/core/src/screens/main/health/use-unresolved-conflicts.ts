@@ -185,7 +185,7 @@ function conflicted$(engine: RxdbSyncEngine): Observable<UnresolvedConflictsRead
 /**
  * One resource per engine, held OUTSIDE the render lifecycle — the same
  * suspend-before-commit trap use-rejected-mutations documents: this panel only
- * mounts behind the `unresolvedConflicts > 0` gate, so its first read is always
+ * mounts behind the `needsDecisionUnresolved > 0` gate, so its first read is always
  * async and a per-render resource would suspend forever.
  */
 const resourceByEngine = new WeakMap<RxdbSyncEngine, ObservableResource<UnresolvedConflictsRead>>();

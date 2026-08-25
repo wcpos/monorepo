@@ -100,6 +100,12 @@ export function collectionFromSyncUrl(url: string): string | undefined {
 /**
  * One completed request attempt.
  *
+ * `bucket.errors` is TRANSPORT ERRORS, not a fault-counter family (CONTEXT.md
+ * § Language — Fault counters): it counts request ATTEMPTS, not records, so one
+ * queued record can contribute several and then leave the queue acknowledged.
+ * Reconciling it against the sync backlog or needs-a-decision is a category
+ * error.
+ *
  * `failed` is the SETTLED verdict, not the raw HTTP status: it must agree with
  * the level the same attempt's log row carries (#899 rubric). An attempt the
  * log calls debug — an absorbed 401 inside a refresh arc that then succeeded, a

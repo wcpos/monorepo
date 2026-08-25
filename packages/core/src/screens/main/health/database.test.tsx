@@ -13,10 +13,10 @@ type TooltipProps = { children: React.ReactNode; showOnNative?: boolean };
 
 const mockTooltip = jest.fn(({ children }: TooltipProps) => <>{children}</>);
 const mockMutationCounts = {
-	conflicts: 0,
-	pending: 0,
-	rejected: 0,
-	unresolvedConflicts: 0,
+	needsDecision: 0,
+	needsDecisionRejected: 0,
+	needsDecisionUnresolved: 0,
+	syncBacklog: 0,
 };
 const mockDeadLetterStuck: StuckRecord[] = [];
 let mockConflictedKeys = new Set<string>();
@@ -223,9 +223,9 @@ describe('DatabaseScreen coverage', () => {
 	afterEach(() => {
 		mockSync.mockReset();
 		mockCheckCollection.mockReset();
-		mockMutationCounts.conflicts = 0;
-		mockMutationCounts.rejected = 0;
-		mockMutationCounts.unresolvedConflicts = 0;
+		mockMutationCounts.needsDecision = 0;
+		mockMutationCounts.needsDecisionRejected = 0;
+		mockMutationCounts.needsDecisionUnresolved = 0;
 		mockDeadLetterStuck.length = 0;
 		mockConflictedKeys = new Set();
 		lastAttentionStuck = [];
@@ -354,9 +354,9 @@ describe('DatabaseScreen coverage', () => {
 	});
 
 	it('mounts the conflicted panel when parked conflicts exist, instead of the old anonymous count', () => {
-		mockMutationCounts.conflicts = 1;
-		mockMutationCounts.rejected = 2;
-		mockMutationCounts.unresolvedConflicts = 1;
+		mockMutationCounts.needsDecision = 1;
+		mockMutationCounts.needsDecisionRejected = 2;
+		mockMutationCounts.needsDecisionUnresolved = 1;
 
 		const { getByTestId, queryByText } = render(<DatabaseScreen />);
 
@@ -387,7 +387,7 @@ describe('DatabaseScreen coverage', () => {
 		const other: StuckRecord = { ...parked, key: 'products:other', recordId: 'other' };
 		mockLogStats = { stuck: [parked, other] };
 		mockConflictedKeys = new Set([parked.key]);
-		mockMutationCounts.unresolvedConflicts = 1;
+		mockMutationCounts.needsDecisionUnresolved = 1;
 
 		render(<DatabaseScreen />);
 

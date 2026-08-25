@@ -106,3 +106,51 @@ demoting the level, not minting a code.
 **Kind filter**:
 The Logs ledger's tappable LEVEL-pill filter: a strict display-kind match that
 intersects the active preset chip; single-select, tap-again clears.
+
+## Language — Fault counters
+
+Several numbers across the health screens answer "how much is wrong /
+outstanding". They use THREE definitions, and two of them contradict each other
+on purpose: the same held open cart is unsent work and is not sync backlog.
+Both answers are correct, because the questions differ. Unifying the numbers
+would make both wrong. Every counter names the family it answers; a counter
+whose name and exclusion rule disagree is the defect (#1561).
+
+**Unsent work**:
+The WHOLE mutation queue, no exclusions — pending, claimed, the rows held while
+a cart is open, conflicts and dead letters alike. Answers _"is it safe to
+reset?"_: a wipe destroys every one of them, so a row hidden from this count is
+a sale nobody was warned about losing. Read by `countUnsentChanges` /
+`subscribeToUnsentChanges`.
+_Avoid_: pending changes, queue depth
+
+**Sync backlog**:
+The rows actively waiting on the NETWORK (`pending` or `claimed`), minus the
+rows the engine holds by design while their cart is open, minus every terminal
+row. Answers _"is sync healthy?"_: a deliberately-held row is not a fault, and a
+terminal row waits on a human rather than on the store. Read as
+`EngineMutationCounts.syncBacklog`.
+_Avoid_: pending, unsent (that is Unsent work — a different number over the same queue)
+
+**Needs a decision**:
+The terminal rows awaiting a human: `conflicted` + `needs-revision` +
+`rejected`. Answers _"what must someone act on?"_. Counted in two halves that
+partition it, because the fixes differ — `needsDecisionUnresolved` (a 409:
+changed on the server while a till was editing) and `needsDecisionRejected` (a
+dead letter: permanently refused, nothing will retry it).
+_Avoid_: conflicts (it includes the dead letters, which are not conflicts)
+
+Two neighbouring numbers are NOT fault-counter families, and must never be
+reconciled against one:
+
+**Log volume**:
+`eventsToday` / `errorsToday` — log rows written today, derived from the row
+LEVEL. It counts what HAPPENED, not what is outstanding: a day with no errors
+can still end with a full backlog, and a backlog cleared this morning still
+leaves its errors in today's count.
+
+**Transport error**:
+`MetricsBucket.errors` — completed request attempts whose SETTLED verdict was a
+failure. It counts network ATTEMPTS, not records: one queued record can produce
+many, and a retried-then-acknowledged record leaves the queue having contributed
+several.

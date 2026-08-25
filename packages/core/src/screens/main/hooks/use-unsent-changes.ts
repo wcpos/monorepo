@@ -24,10 +24,11 @@ const healthLogger = getLogger(['wcpos', 'health']);
 type Translate = (key: string, options?: { count: number }) => string;
 
 /**
- * The engine-side half of the shared unsent-changes check (#1098). The pure
- * half — the reading, and the remembered value the crash screen falls back on —
- * lives in `@wcpos/utils/unsent-changes`; see the essay there for why the two
- * halves are split.
+ * UNSENT WORK — the fault-counter family that answers "is it safe to reset?"
+ * (CONTEXT.md § Language — Fault counters). The engine-side half of the shared
+ * unsent-changes check (#1098); the pure half — the reading, and the remembered
+ * value the crash screen falls back on — lives in `@wcpos/utils/unsent-changes`,
+ * where the essay explains why the two halves are split.
  *
  * The count is the WHOLE mutation queue, with no status selector. A row leaves
  * the queue only when the server acknowledges it, so every row still there is a
@@ -36,6 +37,13 @@ type Translate = (key: string, options?: { count: number }) => string;
  * miss the rows that legitimately carry none — the schema leaves it optional and
  * treats an absent status as pending — and a change that is invisible to the
  * count is a change a cashier is never warned about losing.
+ *
+ * IT IS SUPPOSED TO DISAGREE with the SYNC BACKLOG (`use-engine-monitor.ts`),
+ * which excludes the rows the engine holds while a cart is open and every
+ * terminal row. That number asks whether sync is healthy, and a held cart is no
+ * fault; this one asks what a wipe would destroy, and a held cart is a sale.
+ * Neither is wrong, and adopting the other's exclusions breaks one of them —
+ * see `fault-counter-families.test.tsx`, which pins both off one queue.
  */
 
 type EngineDatabase = NonNullable<ReturnType<RxdbSyncEngine['active']>>['database'];

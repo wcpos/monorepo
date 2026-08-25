@@ -20,9 +20,12 @@
  * would be a check reading a PROXY of the rule — it would drift the first time
  * the hold's terms changed.
  *
- * NOTE. Held work is still unsent work. `countUnsentChanges` — what a wipe
+ * NOTE. Held work is still UNSENT WORK. `countUnsentChanges` — what a wipe
  * warns about — deliberately counts the WHOLE queue and must never adopt this
- * exclusion: losing an open cart is losing a sale.
+ * exclusion: losing an open cart is losing a sale. That is the one place the
+ * two fault-counter families are supposed to disagree; see CONTEXT.md
+ * § Language — Fault counters for the three questions and which counter answers
+ * which.
  */
 
 import type { QueuedMutation } from '@wcpos/sync-core';

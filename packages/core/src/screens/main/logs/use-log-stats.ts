@@ -21,6 +21,14 @@ import type { Observable } from 'rxjs';
 const REFRESH_MS = 60_000;
 
 export type LogStats = {
+	/**
+	 * LOG VOLUME, not a fault-counter family (CONTEXT.md § Language — Fault
+	 * counters). These count what HAPPENED today, derived from the row level —
+	 * never what is outstanding. `errorsToday` will not agree with the sync
+	 * backlog or with needs-a-decision and is not meant to: a backlog cleared
+	 * this morning leaves its errors in today's count, and a quiet day can still
+	 * end with a full queue.
+	 */
 	eventsToday: number;
 	errorsToday: number;
 	stuck: StuckRecord[];
