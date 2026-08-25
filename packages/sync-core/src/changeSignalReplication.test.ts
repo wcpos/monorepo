@@ -184,24 +184,60 @@ describe('planReplicationActions — config staleness split', () => {
 		expect(actions.reFetchCollections).toEqual(['products']);
 	});
 
-	it('a stale collection WITHOUT configBarcodeFields is tolerated without clearing local barcodes', () => {
+	// Unchanged intent, re-expressed: an envelope the server never sent still must not cause a
+	// re-ingest, because re-ingesting with no selectors drops any payload.barcode a previous
+	// session materialized and we cannot tell what this client holds.
+	it('an ABSENT barcode-field envelope is tolerated without clearing local barcodes', () => {
 		const actions = planReplicationActions(baseOutcome({ staleCollections: ['variations'] }));
 		expect(actions.reFetchCollections).toEqual([]);
 		expect(actions.reDeriveBarcode).toEqual([]);
 	});
 
-	it('an empty barcode field list leaves the collection untouched', () => {
+	// The case the old gate collapsed into the one above, and the reason a payload-shape migration
+	// silently skipped WC 5.3-9.1 stores on the default barcode field: an EXPLICIT empty list is the
+	// server saying "no derivable carrier here", not the server saying nothing. There is nothing to
+	// preserve, so the collection must still be repaired.
+	it('an EXPLICIT empty barcode field list still repairs the collection', () => {
 		const actions = planReplicationActions(
 			baseOutcome({
 				staleCollections: ['products'],
 				configBarcodeFields: { products: [], variations: [], tax_rates: [] },
 			})
 		);
-		expect(actions.reFetchCollections).toEqual([]);
+		expect(actions.reFetchCollections).toEqual(['products']);
 		expect(actions.reDeriveBarcode).toEqual([]);
 	});
 
-	it('splits mixed stale collections by field presence', () => {
+	// The population the bug actually stranded.
+	it('repairs variations when the server reports no derivable carrier for them', () => {
+		const actions = planReplicationActions(
+			baseOutcome({
+				staleCollections: ['variations'],
+				configBarcodeFields: { products: [], variations: [], tax_rates: [] },
+			})
+		);
+		expect(actions.reFetchCollections).toEqual(['variations']);
+	});
+
+	// A PARTIAL envelope is a present object with an undefined key. The server
+	// described products and said nothing about variations, so variations keeps the
+	// protection it gets when no envelope arrives at all — re-ingesting it with no
+	// published selector would drop the stored payload.barcode.
+	it('tolerates a collection the envelope omits, even though the envelope is present', () => {
+		const actions = planReplicationActions(
+			baseOutcome({
+				staleCollections: ['products', 'variations'],
+				configBarcodeFields: { products: [] } as unknown as Record<
+					'products' | 'variations' | 'tax_rates',
+					string[]
+				>,
+			})
+		);
+
+		expect(actions.reFetchCollections).toEqual(['products']);
+	});
+
+	it('repairs every stale collection once the envelope is present', () => {
 		const actions = planReplicationActions(
 			baseOutcome({
 				staleCollections: ['products', 'tax_rates'],
