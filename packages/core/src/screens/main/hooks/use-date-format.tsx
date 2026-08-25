@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { differenceInHours, formatDistance, isToday, isValid } from 'date-fns';
 import { useFocusEffect } from 'expo-router';
-import { useObservableRef, useObservableState } from 'observable-hooks';
+import { useObservableRef, useSubscription } from 'observable-hooks';
 import { filter, switchMap } from 'rxjs/operators';
 
 import { setRefValue } from '@wcpos/components/lib/set-ref-value';
@@ -59,19 +59,26 @@ export const useDateFormat = (
 	/**
 	 * The heartbeat is a REFRESH TRIGGER, not the value.
 	 *
-	 * `useObservableState`'s second argument is the INITIAL state, read once in a
-	 * `useState` initialiser on the first render. Seeding it with `getDisplayDate()`
-	 * latched the mount-time string: this pipe only emits while the screen is focused
-	 * AND the date is today, so a date that is not today never emitted at all, and a
-	 * recycled row handed a new `gmtDate` (or a locale/format change) kept rendering
-	 * the date it was mounted with. Same class as #1542 and #1551 — guarded by
+	 * This used to be `useObservableState(refresh$, getDisplayDate())`, whose second
+	 * argument is the INITIAL state — read once in a `useState` initialiser on the first
+	 * render. That latched the mount-time string: this pipe only emits while the screen is
+	 * focused AND the date is today, so a date that is not today never emitted at all, and
+	 * a recycled row handed a new `gmtDate` (or a locale/format change) kept rendering the
+	 * date it was mounted with. Same class as #1542 and #1551 — guarded by
 	 * `wcpos/no-live-seed-in-observable-state`.
 	 *
-	 * Subscribing is the whole point of the call below; the emitted tick is discarded.
-	 * The displayed string is derived from CURRENT inputs on every render instead,
-	 * which costs nothing new — `getDisplayDate()` was already evaluated on every
-	 * render as the (ignored) seed argument.
+	 * The displayed string is derived from CURRENT inputs on every render instead, which
+	 * costs nothing new — `getDisplayDate()` was already evaluated on every render as the
+	 * (ignored) seed argument. All the subscription owes us is a re-render per tick.
+	 *
+	 * It cannot be `useObservableState(refresh$, 0)` either: `useHeartbeatObservable` is an
+	 * `interval()`, whose first emission is `0`, so `setState(0)` would match the seed and
+	 * React would bail out of the render — the first refresh after mount (and after every
+	 * `switchMap` re-subscription, which restarts the interval at `0`) would be dropped.
+	 * A reducer that ignores the emitted value and increments a tick always produces a new
+	 * state, so every heartbeat re-renders regardless of what it carried.
 	 */
+	const [, refresh] = React.useReducer((tick: number) => tick + 1, 0);
 	const refresh$ = React.useMemo(
 		() =>
 			visible$.pipe(
@@ -80,7 +87,7 @@ export const useDateFormat = (
 			),
 		[visible$, heartbeat$, date]
 	);
-	useObservableState(refresh$, 0);
+	useSubscription(refresh$, refresh);
 
 	return getDisplayDate();
 };
