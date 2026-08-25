@@ -18,7 +18,7 @@ import { mapToInternalCode, parseWpError } from './parse-wp-error';
 import { scheduleRequest } from './request-queue';
 import { requestStateManager } from './request-state-manager';
 
-import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
+import type { HttpErrorHandler, HttpErrorHandlerContext, RequestConfig } from './types';
 
 // This wrapper owns the WCPOS axios config flags: `wcposHeaders` (opt out of
 // the marker/signal headers entirely, e.g. third-party image hosts),
@@ -32,6 +32,12 @@ export type WcposRequestConfig = AxiosRequestConfig & {
 	wcposHeaders?: boolean;
 	protocolHeaders?: boolean;
 	quietErrors?: boolean;
+	/**
+	 * Marks a request that carries no credentials, so the process-wide `authFailed`
+	 * latch does not block it. Set it only when the request genuinely sends no token —
+	 * site discovery on the Connect screen is the canonical case.
+	 */
+	unauthenticated?: boolean;
 };
 
 const httpLogger = getLogger(['wcpos', 'http', 'client']);
@@ -233,8 +239,12 @@ export const useHttpClient = (
 	 * Make the actual HTTP request
 	 */
 	const makeRequest = React.useCallback(async (config: WcposRequestConfig) => {
-		// Pre-flight check: ensure request can proceed based on global state
-		const canProceed = requestStateManager.checkCanProceed() as any;
+		// Pre-flight check: ensure request can proceed based on global state.
+		// `unauthenticated: true` marks a request that sends no credentials, so the
+		// process-wide authFailed latch does not apply to it (see CanProceedOptions).
+		const canProceed = requestStateManager.checkCanProceed({
+			authenticated: config.unauthenticated !== true,
+		}) as any;
 		if (!canProceed.ok) {
 			// Create error with additional context
 			const error = new Error(canProceed.reason || 'Request blocked') as any;

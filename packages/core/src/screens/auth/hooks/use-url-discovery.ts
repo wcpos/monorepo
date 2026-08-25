@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 
-import { useHttpClient } from '@wcpos/hooks/use-http-client';
+import { PREFLIGHT_BLOCK, useHttpClient } from '@wcpos/hooks/use-http-client';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -28,7 +28,11 @@ const DISCOVERY_PROBE_TIMEOUT_MS = 10_000;
 interface ProbeResult {
 	url: string | null;
 	timedOut: boolean;
+	/** Set when the host answered with a bot challenge instead of the site. */
 	challenged: boolean;
+	/** Set when the request never left the device (pre-flight block). */
+	blocked: boolean;
+	offline: boolean;
 }
 
 /**
@@ -40,6 +44,19 @@ const isTimeoutError = (err: unknown): boolean => {
 	const code = get(err, ['code']);
 	return code === 'ECONNABORTED' || code === 'ETIMEDOUT';
 };
+
+/**
+ * A pre-flight block means the request never reached the network, so it proves
+ * NOTHING about the site. Reporting it as "not a WordPress site" blames the store
+ * for a condition inside the app — the 2026-08-25 failure, where a dead saved
+ * session latched `authFailed` and every store the cashier typed, including the
+ * demo, came back as "not a WordPress site".
+ */
+const isPreFlightBlocked = (err: unknown): boolean =>
+	(err as { isPreFlightBlocked?: boolean })?.isPreFlightBlocked === true;
+
+const isOfflineBlock = (err: unknown): boolean =>
+	isPreFlightBlocked(err) && (err as { blockCode?: string })?.blockCode === PREFLIGHT_BLOCK.OFFLINE;
 
 interface UseUrlDiscoveryReturn {
 	status: UrlDiscoveryStatus;
@@ -104,23 +121,29 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				// error level put a typo'd URL in the error log under a
 				// CLIENT999 fallback code, and raised a dev-client redbox over
 				// the connect screen (E2E flow 01, iOS, 2026-08-29).
+				// unauthenticated: the probe carries no credentials and targets a
+				// host we may never have seen, so the process-wide authFailed latch
+				// must not block it.
 				const response = await http.head(normalizedUrl, {
 					timeout: DISCOVERY_PROBE_TIMEOUT_MS,
 					quietErrors: true,
+					unauthenticated: true,
 				});
 
 				if (!response) {
-					return { url: null, timedOut: false, challenged: false };
+					return { url: null, timedOut: false, challenged: false, blocked: false, offline: false };
 				}
 
 				return {
 					url: extractWpApiUrlFromLink(get(response, ['headers', 'link'])),
 					timedOut: false,
 					challenged: false,
+					blocked: false,
+					offline: false,
 				};
 			} catch (err: unknown) {
 				if (isBotChallengeError(err)) {
-					return { url: null, timedOut: false, challenged: true };
+					return { url: null, timedOut: false, challenged: true, blocked: false, offline: false };
 				}
 
 				// Check error response headers for Link header
@@ -129,6 +152,8 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 					url: extractWpApiUrlFromLink(link),
 					timedOut: isTimeoutError(err),
 					challenged: false,
+					blocked: isPreFlightBlocked(err),
+					offline: isOfflineBlock(err),
 				};
 			}
 		},
@@ -147,27 +172,35 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				// quietErrors for the same reason as the Link-header probe: this
 				// runs precisely BECAUSE the first probe found nothing, so its
 				// failure is the expected second half of "not a WordPress site".
+				// unauthenticated for the same reason as the Link-header probe too.
 				const response = await http.head(fallbackUrl, {
 					timeout: DISCOVERY_PROBE_TIMEOUT_MS,
 					quietErrors: true,
+					unauthenticated: true,
 				});
 
 				if (response && response.status === 200) {
-					return { url: fallbackUrl, timedOut: false, challenged: false };
+					return { url: fallbackUrl, timedOut: false, challenged: false, blocked: false, offline: false };
 				}
 
-				return { url: null, timedOut: false, challenged: false };
+				return { url: null, timedOut: false, challenged: false, blocked: false, offline: false };
 			} catch (err: unknown) {
 				if (isBotChallengeError(err)) {
-					return { url: null, timedOut: false, challenged: true };
+					return { url: null, timedOut: false, challenged: true, blocked: false, offline: false };
 				}
 
 				// A WP REST API error (e.g. rest_unauthorized) proves the endpoint exists
 				if (isWpRestApiError(err)) {
-					return { url: fallbackUrl, timedOut: false, challenged: false };
+					return { url: fallbackUrl, timedOut: false, challenged: false, blocked: false, offline: false };
 				}
 
-				return { url: null, timedOut: isTimeoutError(err), challenged: false };
+				return {
+					url: null,
+					timedOut: isTimeoutError(err),
+					challenged: false,
+					blocked: isPreFlightBlocked(err),
+					offline: isOfflineBlock(err),
+				};
 			}
 		},
 		[http]
@@ -200,6 +233,8 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				let discoveredUrl = linkProbe.url;
 				let timedOut = linkProbe.timedOut;
 				let challenged = linkProbe.challenged;
+				let blocked = linkProbe.blocked;
+				let offline = linkProbe.offline;
 
 				// Step 2: If Link header failed, try fallback
 				if (!discoveredUrl) {
@@ -207,9 +242,21 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 					discoveredUrl = fallbackProbe.url;
 					timedOut = timedOut || fallbackProbe.timedOut;
 					challenged = challenged || fallbackProbe.challenged;
+					blocked = blocked || fallbackProbe.blocked;
+					offline = offline || fallbackProbe.offline;
 				}
 
 				if (!discoveredUrl) {
+					// Order matters: a probe that never left the device proves nothing
+					// about the site, so it can never justify a verdict ABOUT the site.
+					// A bot challenge is different — the host did answer — so it is
+					// reported only once we know the request actually got out.
+					if (offline) {
+						throw new Error(t('common.no_internet_connection'));
+					}
+					if (blocked) {
+						throw new Error(t('auth.could_not_send_the_request'));
+					}
 					if (challenged) {
 						discoveryLogger.error(t('auth.host_compatibility_problem'), {
 							code: ERROR_CODES.BOT_CHALLENGE_BLOCKING_API,
