@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState, useObservableState } from 'observable-hooks';
 import { type Observable, of } from 'rxjs';
 import { map, startWith } from 'rxjs/operators';
 
@@ -11,7 +11,6 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { useNovu } from './config';
 import { useAppState } from '../app-state';
 import {
-	getNovuBootstrapStatus,
 	novuBootstrapStatus$,
 	refreshNovuNotifications,
 	startNovuBootstrap,
@@ -145,8 +144,14 @@ export function NovuNotificationsProvider({ children }: NovuNotificationsProvide
 		startNovuBootstrap({ subscriberId, subscriberMetadata, notificationsCollection });
 	}, [subscriberId, subscriberMetadata, isConfigured, notificationsCollection]);
 
-	// Shared bootstrap status (one stream, every consumer reads the same values)
-	const status = useObservableState(novuBootstrapStatus$, getNovuBootstrapStatus());
+	// Shared bootstrap status (one stream, every consumer reads the same values).
+	// `useObservableEagerState`, not `useObservableState(status$, getNovuBootstrapStatus())`:
+	// `useObservableState`'s second argument is the INITIAL state, read once on the first
+	// render, so a getter there reads current state and then latches it (#1542, #1551 —
+	// guarded by `wcpos/no-live-seed-in-observable-state`). `novuBootstrapStatus$` is a
+	// BehaviorSubject's `asObservable()`, so the eager hook always gets its synchronous
+	// value and there is nothing to seed.
+	const status = useObservableEagerState(novuBootstrapStatus$);
 	const isConnected = status.subscriberId === subscriberId && status.isConnected;
 
 	// Subscribe to notifications from RxDB - one query for the whole app

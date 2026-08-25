@@ -3,7 +3,7 @@ import * as React from 'react';
 import { differenceInHours, formatDistance, isToday, isValid } from 'date-fns';
 import { useFocusEffect } from 'expo-router';
 import { useObservableRef, useObservableState } from 'observable-hooks';
-import { filter, map, switchMap } from 'rxjs/operators';
+import { filter, switchMap } from 'rxjs/operators';
 
 import { setRefValue } from '@wcpos/components/lib/set-ref-value';
 import { useHeartbeatObservable } from '@wcpos/hooks/use-heartbeat';
@@ -56,15 +56,31 @@ export const useDateFormat = (
 		}, [visibleRef])
 	);
 
-	const displayDate$ = React.useMemo(
+	/**
+	 * The heartbeat is a REFRESH TRIGGER, not the value.
+	 *
+	 * `useObservableState`'s second argument is the INITIAL state, read once in a
+	 * `useState` initialiser on the first render. Seeding it with `getDisplayDate()`
+	 * latched the mount-time string: this pipe only emits while the screen is focused
+	 * AND the date is today, so a date that is not today never emitted at all, and a
+	 * recycled row handed a new `gmtDate` (or a locale/format change) kept rendering
+	 * the date it was mounted with. Same class as #1542 and #1551 — guarded by
+	 * `wcpos/no-live-seed-in-observable-state`.
+	 *
+	 * Subscribing is the whole point of the call below; the emitted tick is discarded.
+	 * The displayed string is derived from CURRENT inputs on every render instead,
+	 * which costs nothing new — `getDisplayDate()` was already evaluated on every
+	 * render as the (ignored) seed argument.
+	 */
+	const refresh$ = React.useMemo(
 		() =>
 			visible$.pipe(
 				filter((visible) => visible && !!date && isToday(date)),
-				switchMap(() => heartbeat$),
-				map(getDisplayDate)
+				switchMap(() => heartbeat$)
 			),
-		[visible$, heartbeat$, date, getDisplayDate]
+		[visible$, heartbeat$, date]
 	);
+	useObservableState(refresh$, 0);
 
-	return useObservableState(displayDate$, getDisplayDate());
+	return getDisplayDate();
 };

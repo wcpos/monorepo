@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 import { BehaviorSubject } from 'rxjs';
 
 import { Toast } from '@wcpos/components/toast';
@@ -59,11 +59,13 @@ function showReportToast(
 export function useManualSync() {
 	const { engine } = useQueryRuntime();
 	const t = useT();
-	const syncing = useObservableState(manualSyncInFlight$, manualSyncInFlight$.getValue());
-	const checking = useObservableState(
-		collectionCheckInFlight$,
-		collectionCheckInFlight$.getValue()
-	);
+	// `useObservableEagerState`, not `useObservableState(subject$, subject$.getValue())`:
+	// the seed of `useObservableState` is the INITIAL state, read once on the first
+	// render, so a getter there reads current state and then latches it (#1542, #1551 —
+	// guarded by `wcpos/no-live-seed-in-observable-state`). The eager hook reads the
+	// BehaviorSubject's synchronous value on every render instead, with no seed to latch.
+	const syncing = useObservableEagerState(manualSyncInFlight$);
+	const checking = useObservableEagerState(collectionCheckInFlight$);
 	// Any manual pass in flight — full sync OR a row check. Controls outside the
 	// Database screen (attention Retry) disable on this, or a press during a row
 	// check would silently no-op through the duplicate-start guard.
@@ -92,10 +94,7 @@ export function useManualSync() {
 export function useCollectionCheck() {
 	const { engine } = useQueryRuntime();
 	const t = useT();
-	const checking = useObservableState(
-		collectionCheckInFlight$,
-		collectionCheckInFlight$.getValue()
-	);
+	const checking = useObservableEagerState(collectionCheckInFlight$);
 
 	const check = React.useCallback(
 		async (name: SyncCollectionName) => {

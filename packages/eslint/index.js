@@ -16,6 +16,20 @@ const observableHookNames = new Set([
 	'useSubscription',
 ]);
 
+/**
+ * observable-hooks entry points whose SECOND argument is the initial state.
+ *
+ * Deliberately excludes `useObservable(init, inputs)`, whose second argument is a
+ * dependency array, and the seedless hooks (`useObservableEagerState`,
+ * `useSubscription`, `useObservableSuspense`).
+ */
+const seedBearingObservableHookNames = new Set([
+	'useObservableState',
+	'useLayoutObservableState',
+	'useObservablePickState',
+	'useObservableGetState',
+]);
+
 const rxContextTypeNames = [
 	'RxDocument',
 	'RxCollection',
@@ -104,7 +118,148 @@ function isCreateContextCall(node) {
 	);
 }
 
+/**
+ * Resolve observable-hook identity from the `observable-hooks` IMPORT bindings rather
+ * than the call-site spelling: aliased (`useObservableState as useOState`) and namespace
+ * (`import * as hooks`) imports stay guarded, and an unrelated local function that merely
+ * shares a hook's name is never flagged.
+ *
+ * Returns a `ImportDeclaration` visitor to install, plus `isHookCall(node)`.
+ */
+function createObservableHookTracker(hookNames) {
+	const localHookNames = new Set();
+	const namespaceNames = new Set();
+	return {
+		ImportDeclaration(node) {
+			if (node.source.value !== 'observable-hooks') return;
+			for (const specifier of node.specifiers) {
+				if (
+					specifier.type === 'ImportSpecifier' &&
+					specifier.imported.type === 'Identifier' &&
+					hookNames.has(specifier.imported.name)
+				) {
+					localHookNames.add(specifier.local.name);
+				} else if (specifier.type === 'ImportNamespaceSpecifier') {
+					namespaceNames.add(specifier.local.name);
+				}
+			}
+		},
+		isHookCall(node) {
+			const callee = node.callee;
+			if (callee.type === 'Identifier') return localHookNames.has(callee.name);
+			return (
+				callee.type === 'MemberExpression' &&
+				callee.object.type === 'Identifier' &&
+				namespaceNames.has(callee.object.name) &&
+				hookNames.has(memberPropertyName(callee))
+			);
+		},
+	};
+}
+
+/** Root object of a member chain: `a.b[c].d` -> the `a` Identifier. */
+function memberChainRoot(node) {
+	let current = unwrapTypeScriptExpression(node);
+	while (current?.type === 'MemberExpression') {
+		current = unwrapTypeScriptExpression(current.object);
+	}
+	return current;
+}
+
+/**
+ * Whether an identifier is bound once for the module (a top-level const/import/function)
+ * rather than recomputed per render.
+ *
+ * This is the whole precision story for the member-expression half of
+ * `no-live-seed-in-observable-state`: a module-scope binding is one value for the life of
+ * the process, so reading a property off it at mount cannot go stale. A binding introduced
+ * inside a component — props, a hook return like `const { storeDB } = useStoreSession()`,
+ * a local — is recomputed on every render and CAN be swapped underneath a seed that is
+ * only ever read once. Unresolved names (globals) are treated as stable.
+ */
+function isModuleScopeBinding(context, identifier) {
+	let variable = null;
+	for (
+		let scope = context.sourceCode.getScope(identifier);
+		scope && !variable;
+		scope = scope.upper
+	) {
+		variable = scope.set.get(identifier.name) ?? null;
+	}
+	if (!variable) return true;
+	const scopeType = variable.scope.type;
+	return scopeType === 'module' || scopeType === 'global';
+}
+
 export const wcposRules = {
+	/**
+	 * `useObservableState(source$, seed)` reads `seed` ONCE, in a `useState` initializer on
+	 * the first render (observable-hooks `useObservableStateInternal`), and subscribes in a
+	 * plain `useEffect`. A seed that evaluates *current* state is therefore frozen at mount.
+	 *
+	 * Two live occurrences in three days motivated this rule — #1542 (reads bound after a
+	 * store switch followed the boot scope) and #1551 (`useCollection` seeded with
+	 * `storeDB.collections[key]`, so a store switch whose `reset$` never emitted kept the
+	 * logger writing into the store the cashier had just left).
+	 */
+	'no-live-seed-in-observable-state': {
+		meta: {
+			type: 'problem',
+			docs: {
+				description:
+					'Disallow live (call-expression or swappable member) seeds in observable-hook initial state.',
+			},
+			schema: [],
+			messages: {
+				liveSeed:
+					"An observable hook's second argument is the INITIAL state, read once on the first render. A call here freezes current state at mount and never re-reads it. Seed with a constant and let the observable carry the value, or recompute on render and use the observable only to trigger the refresh.",
+				behaviorSubjectSeed:
+					"Seeding from a BehaviorSubject's current value freezes it at mount. Use useObservableEagerState(source$) instead — it reads the synchronous value rather than latching a seed.",
+				swappableSeed:
+					"An observable hook's second argument is the INITIAL state, read once on the first render. Reading it off a value that can be swapped (a store database, a collections map) serves the pre-swap value forever whenever the new observable does not emit — that is #1551. Follow the value with an observable that emits on the swap, and seed with a constant.",
+			},
+		},
+		create(context) {
+			const tracker = createObservableHookTracker(seedBearingObservableHookNames);
+			return {
+				ImportDeclaration: tracker.ImportDeclaration,
+				CallExpression(node) {
+					if (!tracker.isHookCall(node)) return;
+					const seed = unwrapTypeScriptExpression(node.arguments[1]);
+					if (!seed) return;
+
+					if (seed.type === 'CallExpression') {
+						const callee = unwrapTypeScriptExpression(seed.callee);
+						const messageId =
+							callee?.type === 'MemberExpression' && memberPropertyName(callee) === 'getValue'
+								? 'behaviorSubjectSeed'
+								: 'liveSeed';
+						context.report({ node: seed, messageId });
+						return;
+					}
+
+					if (seed.type !== 'MemberExpression') return;
+
+					// `subject$.value` is the property spelling of `.getValue()`.
+					const object = unwrapTypeScriptExpression(seed.object);
+					if (
+						memberPropertyName(seed) === 'value' &&
+						((object?.type === 'Identifier' && object.name.endsWith('$')) ||
+							(object?.type === 'MemberExpression' &&
+								String(memberPropertyName(object)).endsWith('$')))
+					) {
+						context.report({ node: seed, messageId: 'behaviorSubjectSeed' });
+						return;
+					}
+
+					const root = memberChainRoot(seed);
+					if (root?.type !== 'Identifier') return;
+					if (isModuleScopeBinding(context, root)) return;
+					context.report({ node: seed, messageId: 'swappableSeed' });
+				},
+			};
+		},
+	},
 	'no-dollar-getter-into-observable-hooks': {
 		meta: {
 			type: 'problem',
@@ -121,50 +276,21 @@ export const wcposRules = {
 			if (/(^|\/)packages\/query\/src\/records\//.test(context.filename.replaceAll('\\', '/'))) {
 				return {};
 			}
-			// Resolve hook identity from the observable-hooks IMPORT bindings, not the
-			// call-site spelling: aliased/namespace imports stay guarded, and unrelated
-			// local functions that merely share a hook's name are not flagged.
-			const localHookNames = new Set();
-			const namespaceNames = new Set();
-			const checkArguments = (node) => {
-				for (const argument of node.arguments) {
-					const expression = unwrapTypeScriptExpression(argument);
-					if (
-						expression?.type === 'MemberExpression' &&
-						String(memberPropertyName(expression)).endsWith('$')
-					) {
-						context.report({ node: argument, messageId: 'useFieldHook' });
-					}
-				}
-			};
+			// Hook identity comes from the observable-hooks IMPORT bindings, not the
+			// call-site spelling — see createObservableHookTracker.
+			const tracker = createObservableHookTracker(observableHookNames);
 			return {
-				ImportDeclaration(node) {
-					if (node.source.value !== 'observable-hooks') return;
-					for (const specifier of node.specifiers) {
-						if (
-							specifier.type === 'ImportSpecifier' &&
-							specifier.imported.type === 'Identifier' &&
-							observableHookNames.has(specifier.imported.name)
-						) {
-							localHookNames.add(specifier.local.name);
-						} else if (specifier.type === 'ImportNamespaceSpecifier') {
-							namespaceNames.add(specifier.local.name);
-						}
-					}
-				},
+				ImportDeclaration: tracker.ImportDeclaration,
 				CallExpression(node) {
-					const callee = node.callee;
-					if (callee.type === 'Identifier' && localHookNames.has(callee.name)) {
-						checkArguments(node);
-						return;
-					}
-					if (
-						callee.type === 'MemberExpression' &&
-						callee.object.type === 'Identifier' &&
-						namespaceNames.has(callee.object.name) &&
-						observableHookNames.has(memberPropertyName(callee))
-					) {
-						checkArguments(node);
+					if (!tracker.isHookCall(node)) return;
+					for (const argument of node.arguments) {
+						const expression = unwrapTypeScriptExpression(argument);
+						if (
+							expression?.type === 'MemberExpression' &&
+							String(memberPropertyName(expression)).endsWith('$')
+						) {
+							context.report({ node: argument, messageId: 'useFieldHook' });
+						}
 					}
 				},
 			};
@@ -443,6 +569,7 @@ export const config = [
 		plugins: { wcpos: wcposPlugin },
 		rules: {
 			'wcpos/no-dollar-getter-into-observable-hooks': 'error',
+			'wcpos/no-live-seed-in-observable-state': 'error',
 			'wcpos/no-rx-in-context-value': 'error',
 		},
 	},
