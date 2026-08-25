@@ -134,9 +134,27 @@ function parseBareArray(body: unknown): WooPayload[] {
  * (a transport-only Leg-3 digest) is deliberately dropped.
  */
 export function parseVariationsEnvelope(body: unknown): WooPayload[] {
+	/**
+	 * A BARE wc/v3 array is accepted as well as the `{ documents: [...] }` wrapper.
+	 *
+	 * `/variations` is the only targeted lane that wraps; `/products` and `/customers` answer with a
+	 * bare array and carry their stamps on the record. The wrapper exists to supply `id` and
+	 * `parent_id`, and WooCommerce has carried BOTH in the variation payload itself since WC 8.3
+	 * (the plugin backfills them below that), so it adds nothing the payload does not already have.
+	 *
+	 * Tolerance ships FIRST and on its own. The server cannot drop the wrapper until every deployed
+	 * client can read both shapes — this function used to throw on anything else, so a plugin that
+	 * changed the envelope would have broken variation sync on every till the moment a merchant
+	 * updated. That is the standing rule for this seam: the client tolerates both shapes, the server
+	 * emits exactly one, and the tolerance is removed only once the plugin's minimum supported
+	 * version is past the release that changed it.
+	 */
+	if (Array.isArray(body)) {
+		return body as WooPayload[];
+	}
 	const documents = (body as { documents?: unknown })?.documents;
 	if (!Array.isArray(documents)) {
-		throw new Error('variations pull returned no documents array');
+		throw new Error('variations pull returned neither a documents array nor a bare array');
 	}
 	return (
 		documents as {
