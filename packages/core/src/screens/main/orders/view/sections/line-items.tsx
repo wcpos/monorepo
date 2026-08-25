@@ -44,11 +44,16 @@ function LineItemRow({
 				{item.image?.src ? <Image source={{ uri: item.image.src }} className="h-11 w-11" /> : null}
 			</View>
 			<View className="min-w-0 flex-1 gap-1">
-				<Text className="text-foreground text-sm font-medium" numberOfLines={2}>
+				{/* A line item's name is the product title copied at sale time, so it
+				    carries the same HTML entities the catalogue does — the cart decodes
+				    it via EditableField, and this read-only view must match. */}
+				<Text className="text-foreground text-sm font-medium" numberOfLines={2} decodeHtml>
 					{item.name || '—'}
 				</Text>
 				{item.parent_name && item.parent_name !== item.name ? (
-					<Text className="text-muted-foreground text-xs">{item.parent_name}</Text>
+					<Text className="text-muted-foreground text-xs" decodeHtml>
+						{item.parent_name}
+					</Text>
 				) : null}
 				<View className="flex-row flex-wrap items-center gap-x-2 gap-y-1">
 					{item.sku ? (
@@ -101,7 +106,7 @@ function FeeRow({
 				<Text className="text-primary text-base font-semibold">+</Text>
 			</View>
 			<View className="min-w-0 flex-1 gap-1">
-				<Text className="text-foreground text-sm font-medium">
+				<Text className="text-foreground text-sm font-medium" decodeHtml>
 					{fee.name || t('pos_cart.fees')}
 				</Text>
 				<Text className="text-muted-foreground text-xs">

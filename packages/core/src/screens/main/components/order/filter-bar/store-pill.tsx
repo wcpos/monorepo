@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { decode } from 'html-entities';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
@@ -97,7 +98,11 @@ export function StorePill({ resource }: Props) {
 					onRemove={handleRemove}
 					removeTestID="order-filter-store-remove"
 				>
-					<ButtonText>{value?.label || t('common.created_via_2')}</ButtonText>
+					{/* This pill is its own trigger (SelectPrimitiveTrigger asChild), so it
+					    renders the `value` memo's label rather than Select's own Value — the
+					    memo rebuilds it from raw `store.name`, and decoding only the
+					    SelectItem left the CLOSED pill showing the entity. */}
+					<ButtonText decodeHtml>{value?.label || t('common.created_via_2')}</ButtonText>
 				</ButtonPill>
 			</SelectPrimitiveTrigger>
 			<SelectContent>
@@ -119,13 +124,15 @@ export function StorePill({ resource }: Props) {
 						<SelectGroup>
 							<SelectLabel>{t('common.store')}</SelectLabel>
 							{(stores || []).map((store) => {
+								// A store name is the WP site title — HTML-encoded, exactly as the
+								// header decodes it. Decoded here because SelectItem's text is drawn
+								// by rn-primitives, where `decodeHtml` cannot reach. This covers the
+								// MENU only: the closed pill renders the `value` memo above through
+								// its own ButtonText, which decodes separately.
+								const name = decode(store.name ?? '');
 								return (
-									<SelectItem
-										key={store.id}
-										value={String(store.id ?? '')}
-										label={store.name ?? ''}
-									>
-										{store.name}
+									<SelectItem key={store.id} value={String(store.id ?? '')} label={name}>
+										{name}
 									</SelectItem>
 								);
 							})}

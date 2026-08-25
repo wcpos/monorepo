@@ -38,7 +38,11 @@ export function EditProductModal({ resource }: Props) {
 		<Modal>
 			<ModalContent testID="product-edit-modal" size="lg">
 				<ModalHeader>
-					<ModalTitle>{t('common.edit_2', { name })}</ModalTitle>
+					{/* The product name is interpolated straight into the heading, so the
+				    heading needs the same decode the grid row behind it already does. */}
+					<ModalTitle>
+						<Text decodeHtml>{t('common.edit_2', { name })}</Text>
+					</ModalTitle>
 				</ModalHeader>
 				<ModalBody>
 					<Tabs value={value} onValueChange={setValue}>

@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { decode } from 'html-entities';
+
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Combobox,
@@ -52,7 +54,7 @@ export function VariationSelect({ attribute, selected = '', onSelect, onRemove }
 	if (options.length <= 10) {
 		return (
 			<Select
-				value={{ value: selected, label: selected }}
+				value={{ value: selected, label: decode(selected) }}
 				onValueChange={(option) =>
 					option &&
 					onSelect({ id: attribute.id ?? 0, name: attribute.name ?? '', option: option.value })
@@ -66,12 +68,16 @@ export function VariationSelect({ attribute, selected = '', onSelect, onRemove }
 						removable={isActive}
 						onRemove={onRemove}
 					>
-						<ButtonText>{isActive ? `${attribute.name}: ${selected}` : attribute.name}</ButtonText>
+						<ButtonText decodeHtml>
+							{isActive ? `${attribute.name}: ${selected}` : attribute.name}
+						</ButtonText>
 					</ButtonPill>
 				</SelectPrimitiveTrigger>
 				<SelectContent>
+					{/* Decode the LABEL only — `value` is the identity sent back to
+					    onSelect and must stay the catalogue's own string. */}
 					{options.map((option: string, index: number) => (
-						<SelectItem key={index} label={option} value={option} />
+						<SelectItem key={index} label={decode(option)} value={option} />
 					))}
 				</SelectContent>
 			</Select>
@@ -101,7 +107,9 @@ export function VariationSelect({ attribute, selected = '', onSelect, onRemove }
 					removable={isActive}
 					onRemove={onRemove}
 				>
-					<ButtonText>{isActive ? `${attribute.name}: ${selected}` : attribute.name}</ButtonText>
+					<ButtonText decodeHtml>
+						{isActive ? `${attribute.name}: ${selected}` : attribute.name}
+					</ButtonText>
 				</ButtonPill>
 			</ComboboxTrigger>
 			<ComboboxContent>

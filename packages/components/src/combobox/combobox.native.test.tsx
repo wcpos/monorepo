@@ -12,6 +12,7 @@ import {
 	ComboboxInput,
 	ComboboxList,
 	ComboboxTrigger,
+	ComboboxValue,
 } from './combobox';
 
 jest.mock(
@@ -99,10 +100,17 @@ jest.mock('../icon', () => ({
 	Icon: ({ name }: any) => <span>{name}</span>,
 }));
 
-jest.mock('../text', () => ({
-	Text: ({ children }: any) => <span>{children}</span>,
-	TextClassContext: { Provider: ({ children }: any) => <>{children}</> },
-}));
+// Mirrors the real Text, `decodeHtml` included — a mock that swallowed the prop
+// would make the entity test below unfailable.
+jest.mock('../text', () => {
+	const { decode } = jest.requireActual('html-entities');
+	return {
+		Text: ({ children, decodeHtml }: any) => (
+			<span>{decodeHtml && typeof children === 'string' ? decode(children) : children}</span>
+		),
+		TextClassContext: { Provider: ({ children }: any) => <>{children}</> },
+	};
+});
 
 jest.mock('../lib/use-arrow-key-navigation', () => ({
 	useArrowKeyNavigation: jest.fn(),
@@ -209,5 +217,55 @@ describe('Combobox native content', () => {
 
 		expect(listRoot.parentElement).toHaveStyle({ height: '72px' });
 		expect(listRoot.parentElement).toHaveStyle({ maxHeight: '236px' });
+	});
+});
+
+/**
+ * ComboboxItemText has always decoded the option label, so a category named
+ * "Men&#039;s" read correctly in the open list — and then reverted to the raw
+ * entity in the closed trigger, which renders the SAME label through
+ * ComboboxValue. One widget, one string, two spellings.
+ */
+describe('ComboboxValue', () => {
+	it('decodes the selected label, matching the list it was chosen from', () => {
+		render(
+			<Combobox value={{ value: '12', label: 'Men&#039;s Shirts &amp; Ties' }}>
+				<ComboboxTrigger>
+					<ComboboxValue placeholder="Select a category" />
+				</ComboboxTrigger>
+			</Combobox>
+		);
+
+		expect(screen.getByText("Men's Shirts & Ties")).not.toBeNull();
+		expect(screen.queryByText('Men&#039;s Shirts &amp; Ties')).toBeNull();
+	});
+
+	// Raised in review on #1573: a combobox whose label IS an opaque identifier —
+	// a meta_data key the merchant typed — must not have it prettified, at EITHER
+	// end. The switch is deliberately one flag for both halves, since decoding one
+	// and not the other is the bug the flag exists to avoid.
+	it('leaves the label alone when the caller opts out with decodeLabels={false}', () => {
+		render(
+			<Combobox decodeLabels={false} value={{ value: 'k', label: 'shipping&copy;' }}>
+				<ComboboxTrigger>
+					<ComboboxValue placeholder="Select a key" />
+				</ComboboxTrigger>
+			</Combobox>
+		);
+
+		expect(screen.getByText('shipping&copy;')).not.toBeNull();
+		expect(screen.queryByText('shipping©')).toBeNull();
+	});
+
+	it('still renders the placeholder when nothing is selected', () => {
+		render(
+			<Combobox>
+				<ComboboxTrigger>
+					<ComboboxValue placeholder="Select a category" />
+				</ComboboxTrigger>
+			</Combobox>
+		);
+
+		expect(screen.getByText('Select a category')).not.toBeNull();
 	});
 });

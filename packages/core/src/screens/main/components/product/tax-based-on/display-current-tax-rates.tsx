@@ -105,7 +105,9 @@ export function DisplayCurrentTaxRates({
 							{rates.map((rate, index) => (
 								<TableRow key={rate.id} index={index}>
 									<TableCell>
-										<Text>{rate.name}</Text>
+										{/* Merchant-authored in WooCommerce settings, so a name like
+										    "VAT &amp; Duty" reaches us encoded. */}
+										<Text decodeHtml>{rate.name}</Text>
 									</TableCell>
 									<TableCell>
 										<Text>{rate.rate}</Text>

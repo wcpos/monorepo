@@ -39,10 +39,12 @@ export function MetaData({ record }: Props) {
 
 	return (
 		<VStack space="xs">
+			{/* The cart decodes this same meta once the product is added; the grid
+			    showing it encoded made one value read two ways on one screen. */}
 			{metaData.map((m: any) => (
 				<Text className="text-sm" key={`${m.id}`}>
-					<Text className="text-secondary-foreground">{`${m.key}: `}</Text>
-					{formatMetaDataValue(m.value)}
+					<Text className="text-secondary-foreground" decodeHtml>{`${m.key}: `}</Text>
+					<Text decodeHtml>{formatMetaDataValue(m.value)}</Text>
 				</Text>
 			))}
 		</VStack>

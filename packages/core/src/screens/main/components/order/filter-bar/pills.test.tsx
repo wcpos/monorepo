@@ -46,7 +46,15 @@ jest.mock('@wcpos/components/button', () => ({
 			<button data-testid="clear-filter" onClick={onRemove} />
 		</div>
 	),
-	ButtonText: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+	// Mirrors the real ButtonText (which IS Text), `decodeHtml` included — a mock
+	// that swallowed the prop would make the entity test below unfailable.
+	ButtonText: ({ children, decodeHtml }: { children: React.ReactNode; decodeHtml?: boolean }) => (
+		<span>
+			{decodeHtml && typeof children === 'string'
+				? jest.requireActual('html-entities').decode(children)
+				: children}
+		</span>
+	),
 }));
 jest.mock('@wcpos/components/combobox', () => ({
 	Combobox: ({
@@ -252,6 +260,20 @@ describe('order filter pills', () => {
 		renderPill(<StorePill resource={stores} />);
 		fireEvent.click(screen.getByTestId('select-option'));
 		expect(filters()).toEqual({ store: 'checkout' });
+	});
+
+	// Raised in review on #1573: this pill is its own Select trigger, so it renders
+	// the `value` memo's label — rebuilt from raw `store.name` — rather than
+	// Select's own Value. Decoding just the SelectItem left the CLOSED pill showing
+	// the entity while the open menu read correctly.
+	it('decodes the store name in the closed pill, not just in the menu', () => {
+		const stores = new ObservableResource(
+			of([{ id: 12, name: 'Ben &amp; Jerry&#039;s' } as StoreDocument])
+		);
+		renderPill(<StorePill resource={stores} />, { store: '12' });
+
+		expect(screen.getByText("Ben & Jerry's")).not.toBeNull();
+		expect(screen.queryByText('Ben &amp; Jerry&#039;s')).toBeNull();
 	});
 
 	it('escalates missing active customer and cashier labels', () => {
