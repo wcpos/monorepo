@@ -17,8 +17,15 @@ import { becomesVisible, authenticatedTest as test } from './fixtures';
  *
  * Store-agnostic: the assertion is "more than one page of DISTINCT customers can be reached by
  * scrolling", never a name, an id, or an absolute count. A store with less than a full first
- * page cannot demonstrate paging at all — that is a declared-missing environment, so it skips
- * with a reason rather than passing vacuously.
+ * page cannot demonstrate paging at all — that is a declared-missing environment, so it skips.
+ *
+ * The skip has to EARN itself, though, or it is just a silent green wearing a reason. Coming up
+ * short has two causes that look identical at the end of the loop: the store really holds fewer
+ * than a page of customers, or rows were still arriving when the spec ran out of patience. Only
+ * the first is skippable, so the spec proves it — the list must have been scrolled to a stable
+ * end, its own scroller reporting the bottom with nothing new arriving. Short of that proof it
+ * FAILS, because a coverage hole that reports itself as "environment" is the failure mode this
+ * repo keeps re-learning. Exactly one page (50) is never skippable: that is the bug's signature.
  *
  * WHY THIS ONE DOES NOT CREATE ITS OWN FIXTURE. Create-and-find is the house pattern and it is
  * the right default, but a page is 50 rows: forcing an extension by construction means creating
@@ -43,7 +50,10 @@ const MAX_SCROLL_ROUNDS = 40;
 /** 5s rounds spent waiting for the first synced customer row to render. */
 const CUSTOMER_ARRIVAL_ROUNDS = 12;
 
-/** Rounds with no new row before the list is declared exhausted. */
+/** How close to the bottom still counts as the end, in px — the virtualizer's own tolerance. */
+const END_TOLERANCE_PX = 5;
+
+/** Rounds with no new row AND no more to scroll before the list is declared exhausted. */
 const ROUNDS_WITHOUT_GROWTH_UNTIL_END = 10;
 
 /** Every customer row currently rendered by the virtualizer, guest sentinel excluded. */
@@ -56,6 +66,28 @@ async function renderedCustomerIds(page: Page): Promise<string[]> {
 	return ids
 		.map((id) => id.replace('customer-select-option-', ''))
 		.filter((id) => id !== '' && id !== 'guest');
+}
+
+/**
+ * Whether the picker's own scroller is at its bottom. Walks up from a row to the first
+ * scrolling ancestor INSIDE the popover; if nothing there scrolls, every row the picker holds
+ * is already on screen, which is the end by definition.
+ */
+async function listIsScrolledToEnd(page: Page): Promise<boolean> {
+	return page
+		.getByTestId(/^customer-select-option-/)
+		.first()
+		.evaluate((element, tolerance) => {
+			const stop = element.closest('[data-radix-popper-content-wrapper]');
+			let node = element.parentElement;
+			while (node && node !== stop) {
+				if (node.scrollHeight > node.clientHeight) {
+					return node.scrollHeight - (node.scrollTop + node.clientHeight) <= tolerance;
+				}
+				node = node.parentElement;
+			}
+			return true;
+		}, END_TOLERANCE_PX);
 }
 
 test.describe('POS customer picker', () => {
@@ -86,6 +118,7 @@ test.describe('POS customer picker', () => {
 
 		const seen = new Set<string>();
 		let roundsWithoutGrowth = 0;
+		let listExhausted = false;
 
 		for (let round = 0; round < MAX_SCROLL_ROUNDS; round += 1) {
 			const before = seen.size;
@@ -93,17 +126,26 @@ test.describe('POS customer picker', () => {
 			if (seen.size > PAGE_SIZE) break;
 
 			roundsWithoutGrowth = seen.size > before ? 0 : roundsWithoutGrowth + 1;
-			if (roundsWithoutGrowth >= ROUNDS_WITHOUT_GROWTH_UNTIL_END) break;
+			if (roundsWithoutGrowth >= ROUNDS_WITHOUT_GROWTH_UNTIL_END) {
+				listExhausted = await listIsScrolledToEnd(page);
+				if (listExhausted) break;
+			}
 
 			await page.mouse.wheel(0, 600);
 			// The extension is a wire fetch on a shared dev store; give it room to land.
 			await page.waitForTimeout(750);
 		}
 
-		test.skip(
-			seen.size < PAGE_SIZE,
-			`store has fewer than one page of customers (${seen.size} < ${PAGE_SIZE}) — nothing to page through`
-		);
+		if (seen.size < PAGE_SIZE) {
+			expect(
+				listExhausted,
+				`the picker showed ${seen.size} distinct customers and the list was never scrolled to a stable end — rows may still have been arriving, so this cannot be told apart from a store that simply has fewer customers. Failing rather than skipping: an unproven skip is a coverage hole that reports itself as "environment".`
+			).toBe(true);
+			test.skip(
+				true,
+				`store scope holds ${seen.size} customers, fewer than one ${PAGE_SIZE}-row page — a page extension cannot be demonstrated here`
+			);
+		}
 
 		expect(
 			seen.size,
