@@ -6,7 +6,7 @@ import { from, of } from 'rxjs';
 import { catchError, distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
 import { Badge } from '@wcpos/components/badge';
-import { recoverLogsCollectionStorage, useQueryRuntime } from '@wcpos/query';
+import { recoverLogsCollectionStorage, useLocalCollection$, useQueryRuntime } from '@wcpos/query';
 
 import type { Observable } from 'rxjs';
 
@@ -36,11 +36,15 @@ type StoreDBLike = {
 export function useUnreadErrorCount() {
 	const runtime = useQueryRuntime();
 	const storeDB = runtime.localDB as unknown as StoreDBLike;
-	const logsCollection = storeDB?.collections?.logs as
+	// Follow the collection: this badge TRIGGERS logs-storage-recovery below, which
+	// removes and re-creates `logs` in place — holding the old reference left the
+	// count frozen at 0 immediately after the repair it had just requested.
+	const logsCollection$ = useLocalCollection$('logs') as Observable<
 		| {
 				count(query: { selector: Record<string, unknown> }): { $: Observable<number> };
 		  }
-		| undefined;
+		| undefined
+	>;
 
 	const statePromise = React.useMemo(
 		() =>
@@ -60,41 +64,46 @@ export function useUnreadErrorCount() {
 
 	const count = useObservableState(
 		React.useMemo(() => {
-			if (!statePromise || !logsCollection) return of(0);
-			return from(statePromise).pipe(
-				switchMap((state) => state.get$(LAST_VIEWED_PATH)),
-				map((value) => (typeof value === 'number' ? value : 0)),
-				distinctUntilChanged(),
-				switchMap((lastViewedAt) =>
-					logsCollection
-						.count({
-							selector: {
-								level: { $eq: 'error' },
-								timestamp: { $gt: lastViewedAt },
-							},
-						})
-						.$.pipe(
-							catchError((error: unknown) =>
-								from(
-									recoverLogsCollectionStorage(
-										logsCollection as Parameters<typeof recoverLogsCollectionStorage>[0],
-										error
+			if (!statePromise) return of(0);
+			return logsCollection$.pipe(
+				switchMap((logsCollection) => {
+					if (!logsCollection) return of(0);
+					return from(statePromise).pipe(
+						switchMap((state) => state.get$(LAST_VIEWED_PATH)),
+						map((value) => (typeof value === 'number' ? value : 0)),
+						distinctUntilChanged(),
+						switchMap((lastViewedAt) =>
+							logsCollection
+								.count({
+									selector: {
+										level: { $eq: 'error' },
+										timestamp: { $gt: lastViewedAt },
+									},
+								})
+								.$.pipe(
+									catchError((error: unknown) =>
+										from(
+											recoverLogsCollectionStorage(
+												logsCollection as Parameters<typeof recoverLogsCollectionStorage>[0],
+												error
+											)
+										).pipe(
+											map((recovered) => {
+												if (!recovered) {
+													throw error;
+												}
+												return 0;
+											})
+										)
 									)
-								).pipe(
-									map((recovered) => {
-										if (!recovered) {
-											throw error;
-										}
-										return 0;
-									})
 								)
-							)
-						)
-				),
-				// The badge is decoration — storage trouble must not crash the drawer.
-				catchError(() => of(0))
+						),
+						// The badge is decoration — storage trouble must not crash the drawer.
+						catchError(() => of(0))
+					);
+				})
 			);
-		}, [logsCollection, statePromise]),
+		}, [logsCollection$, statePromise]),
 		0
 	);
 

@@ -2,9 +2,10 @@ import * as React from 'react';
 
 import { ObservableResource } from 'observable-hooks';
 import { combineLatest, defer, from, of, throwError } from 'rxjs';
-import { catchError, filter, map, shareReplay, startWith, switchMap } from 'rxjs/operators';
+import { catchError, map, shareReplay, startWith, switchMap } from 'rxjs/operators';
 
 import { useQueryRuntime } from './provider';
+import { useLocalCollection$ } from './use-local-collection';
 import { recoverLogsCollectionStorage } from './logs-storage-recovery';
 
 import type { QueryResult } from './query-result';
@@ -20,11 +21,6 @@ import type {
 type LocalDocumentData = Record<string, unknown>;
 type LocalDocument = RxDocument<LocalDocumentData>;
 type LocalCollection = RxCollection<LocalDocumentData>;
-/** `reset$` is contributed by the reset-collection plugin; absent on plain databases. */
-type LocalDatabaseWithReset = RxDatabase & {
-	collections: Record<string, unknown>;
-	reset$?: Observable<{ name: string } | undefined>;
-};
 
 type LocalSearch = {
 	collection: LocalCollection;
@@ -123,36 +119,11 @@ function localQueryResult$(
 /** Direct local-only query binding. It never registers engine demand. */
 export const useLocalQuery = (options: LocalQueryOptions) => {
 	const runtime = useQueryRuntime();
-	const localDB = runtime.localDB as LocalDatabaseWithReset;
 	const collectionName = options.collectionName;
 	const key = JSON.stringify(options);
 	const stableOptions = React.useMemo(() => JSON.parse(key) as LocalQueryOptions, [key]);
-	/**
-	 * Follow the collection, not a snapshot of it.
-	 *
-	 * `logs` is removed and re-created IN PLACE by logs-storage-recovery (an OPFS
-	 * corruption repair, reached from this very query's `recoverAsEmpty`). The
-	 * replacement is only ever announced on `reset$`, and nothing re-renders the
-	 * table when it lands — so reading `collections[name]` once left the ledger
-	 * subscribed to the removed collection, showing a frozen window while writes
-	 * went to its replacement. `startWith` also covers the plain case of a new
-	 * `localDB` arriving (store switch), which re-runs this memo.
-	 */
-	const current = localDB.collections[collectionName] as LocalCollection | undefined;
-	const collection$ = React.useMemo(
-		() =>
-			localDB.reset$
-				? localDB.reset$.pipe(
-						filter((replacement) => replacement?.name === collectionName),
-						startWith(current)
-					)
-				: of(current),
-		// `current` is a dependency on purpose: a replacement swapped into
-		// `collections` alongside a re-render must be picked up even when no
-		// `reset$` emission accompanies it. `reset$` covers the reverse — a
-		// replacement with nothing to re-render us.
-		[localDB, collectionName, current]
-	);
+	// Follow the collection rather than a snapshot of it — see useLocalCollection$.
+	const collection$ = useLocalCollection$<LocalDocumentData>(collectionName);
 	const result$ = React.useMemo(
 		() =>
 			collection$.pipe(

@@ -4,7 +4,7 @@ import { useObservableState } from 'observable-hooks';
 import { combineLatest, of, timer } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
 
-import { useQueryRuntime } from '@wcpos/query';
+import { useLocalCollection$ } from '@wcpos/query';
 
 import {
 	type ClockSkewWarning,
@@ -112,13 +112,20 @@ function createLogStats$(logsCollection: LogsCollectionLike): Observable<LogStat
  * `[category, timestamp]` index and rules per record (spec §4).
  */
 export function useLogStats(): LogStats {
-	const runtime = useQueryRuntime();
-	const logsCollection = (runtime.localDB as { collections?: Record<string, unknown> })?.collections
-		?.logs as LogsCollectionLike | undefined;
+	// Follow the collection: logs-storage-recovery removes and re-creates `logs`
+	// in place, and the stat header has nothing to re-render it when that lands.
+	const collection$ = useLocalCollection$('logs');
 
 	const stats$ = React.useMemo(
-		() => (logsCollection ? createLogStats$(logsCollection) : of(EMPTY_STATS)),
-		[logsCollection]
+		() =>
+			collection$.pipe(
+				switchMap((collection) =>
+					collection
+						? createLogStats$(collection as unknown as LogsCollectionLike)
+						: of(EMPTY_STATS)
+				)
+			),
+		[collection$]
 	);
 
 	return useObservableState(stats$, EMPTY_STATS);

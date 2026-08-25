@@ -9,15 +9,20 @@ import { useUnreadErrorCount } from './logs-badge';
 const mockRecoverLogsCollectionStorage = jest.fn();
 const mockCount = jest.fn();
 const mockAddState = jest.fn();
+const mockLogsCollection = { count: mockCount };
 const mockManager = {
 	localDB: {
 		addState: mockAddState,
-		collections: { logs: { count: mockCount } },
+		collections: { logs: mockLogsCollection },
 	},
 };
+// ONE observable for the module's lifetime: a fresh `of()` per render would give
+// the count memo a new dependency each time and spin it into a resubscribe loop.
+const mockLogsCollection$ = of(mockLogsCollection);
 
 jest.mock('@wcpos/query', () => ({
 	recoverLogsCollectionStorage: (...args: unknown[]) => mockRecoverLogsCollectionStorage(...args),
+	useLocalCollection$: () => mockLogsCollection$,
 	useQueryRuntime: () => mockManager,
 }));
 

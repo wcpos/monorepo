@@ -9,8 +9,17 @@ import { useLogStats } from './use-log-stats';
 const mockCount = jest.fn();
 const mockFind = jest.fn();
 const mockLogsCollection = { count: mockCount, find: mockFind };
+// ONE observable for the module's lifetime. A factory minting a fresh `of()` per
+// render would hand `useLogStats` a new dependency every time and spin its memo
+// into a resubscribe loop — the real hook memoizes, and the stand-in must too.
+const mockLogsCollection$ = of(mockLogsCollection);
 
 jest.mock('@wcpos/query', () => ({
+	// The hook reads the collection through `useLocalCollection$` so it follows an
+	// in-place replacement; the stand-in is the same collection as a one-shot
+	// observable. `useLocalCollection$`'s own following behaviour is covered in
+	// packages/query — this suite is about the stats derived from what it hands over.
+	useLocalCollection$: () => mockLogsCollection$,
 	useQueryRuntime: () => ({
 		localDB: { collections: { logs: mockLogsCollection } },
 	}),
