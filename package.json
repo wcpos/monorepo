@@ -9,7 +9,6 @@
     "build": "turbo build",
     "build:opfs-worker": "node scripts/build-opfs-worker.mjs",
     "generate:error-codes": "node scripts/generate-error-codes.mjs",
-    "check:error-docs-lockstep": "node scripts/check-error-docs-lockstep.mjs",
     "generate:event-labels": "node scripts/generate-event-labels.mjs",
     "report:unused-error-codes": "node scripts/report-unused-error-codes.mjs",
     "build:main": "turbo build --filter=\"...{./apps/main}\"",

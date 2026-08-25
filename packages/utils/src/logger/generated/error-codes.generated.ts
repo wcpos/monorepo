@@ -80,11 +80,8 @@ export type ErrorCode =
 export type ErrorDomain =
 	'AUTH' | 'SYNC' | 'CHECKOUT' | 'PAYMENT' | 'PRINT' | 'PRODUCT' | 'LICENSE' | 'CLIENT' | 'HOST';
 export type ErrorSeverity = 'info' | 'warn' | 'error';
-export type RetryPolicy = 'automatic' | 'manual' | 'after-change' | 'never';
 export type DataSafety =
 	'no-impact' | 'local-only' | 'order-safe' | 'money-moved' | 'outcome-unknown' | 'data-at-risk';
-export type Escalation =
-	'none' | 'store-admin' | 'site-admin' | 'support-with-export' | 'payment-provider';
 
 export interface CatalogueEntry {
 	code: ErrorCode;
@@ -92,13 +89,8 @@ export interface CatalogueEntry {
 	domain: ErrorDomain;
 	severity: ErrorSeverity;
 	actionHint: string;
-	retryPolicy: RetryPolicy;
 	dataSafety: DataSafety;
-	escalation: Escalation;
 	summary: string;
-	docsBody: string;
-	introducedIn: string;
-	evidence: string;
 }
 
 export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
@@ -109,15 +101,9 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		severity: 'error',
 		actionHint:
 			'Note the unsaved change and check device storage, then restart. Do not clear local data.',
-		retryPolicy: 'manual',
 		dataSafety: 'data-at-risk',
-		escalation: 'support-with-export',
 		summary:
 			'This change could not be saved to the local database and remains only on this device.',
-		docsBody:
-			'Do not clear or reload local data. Export diagnostics and contact support before retrying or repairing anything.',
-		introducedIn: '1.10.0',
-		evidence: 'Sentry 18V/11C; monorepo#163',
 	},
 	SYNC111: {
 		code: 'SYNC111',
@@ -125,14 +111,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'error',
 		actionHint: 'Repair from Store health → Database.',
-		retryPolicy: 'after-change',
 		dataSafety: 'data-at-risk',
-		escalation: 'support-with-export',
 		summary: 'Local store data is damaged and needs repair before syncing can continue.',
-		docsBody:
-			'Run the targeted repair for the affected data, and reset that local data only if the problem returns.',
-		introducedIn: '1.10.0',
-		evidence: 'Sentry 1RT/2GB',
 	},
 	SYNC121: {
 		code: 'SYNC121',
@@ -140,14 +120,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'warn',
 		actionHint: 'Keep working — sync resumes when the store is reachable.',
-		retryPolicy: 'automatic',
 		dataSafety: 'local-only',
-		escalation: 'none',
 		summary: 'Your store cannot be reached right now, so changes will stay on this device.',
-		docsBody:
-			'Check the connection and keep working offline; syncing will retry automatically when the store is reachable.',
-		introducedIn: '1.10.0',
-		evidence: 'Sentry QQ',
 	},
 	SYNC131: {
 		code: 'SYNC131',
@@ -155,15 +129,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'error',
 		actionHint: 'Ask the site admin to check the server logs, then retry.',
-		retryPolicy: 'manual',
 		dataSafety: 'local-only',
-		escalation: 'support-with-export',
 		summary: 'Your store returned an error, so this action did not complete.',
-		docsBody:
-			"The store was reached but its server failed to handle the request. This is a problem on the website rather than the POS, so retrying alone may not help: check the site's error log or ask the host to, then retry. Nothing was lost on this device.",
-		introducedIn: '1.10.0',
-		evidence:
-			'private mining SY02002+500; woocommerce-pos#572 (critical error on this website); woocommerce-pos#571 (PHP fatal, disk full)',
 	},
 	SYNC141: {
 		code: 'SYNC141',
@@ -171,14 +138,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'warn',
 		actionHint: 'Wait — WCPOS retries automatically.',
-		retryPolicy: 'automatic',
 		dataSafety: 'local-only',
-		escalation: 'site-admin',
 		summary: 'Your store is limiting requests temporarily, so this action will retry later.',
-		docsBody:
-			"Wait before retrying. If rate limits continue, ask the site administrator or host to review the store's request limits.",
-		introducedIn: '1.10.0',
-		evidence: 'HTTP 429; monorepo#884',
 	},
 	SYNC201: {
 		code: 'SYNC201',
@@ -186,14 +147,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'error',
 		actionHint: 'Fix the field the store refused, then retry.',
-		retryPolicy: 'after-change',
 		dataSafety: 'local-only',
-		escalation: 'support-with-export',
 		summary: 'This record was rejected by your store and is saved only on this device.',
-		docsBody:
-			'Correct the reason shown for the named record, then retry it. Export diagnostics if it remains rejected.',
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#832',
 	},
 	SYNC211: {
 		code: 'SYNC211',
@@ -201,14 +156,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'error',
 		actionHint: 'Fix the named field, then retry.',
-		retryPolicy: 'after-change',
 		dataSafety: 'local-only',
-		escalation: 'none',
 		summary: 'This record has a field your store will not accept.',
-		docsBody:
-			'Fix the named field and retry the record; the local copy remains available until it syncs.',
-		introducedIn: '1.10.0',
-		evidence: 'pos_data 400 push rejections (B14)',
 	},
 	SYNC301: {
 		code: 'SYNC301',
@@ -216,14 +165,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'warn',
 		actionHint: 'Download the affected data again.',
-		retryPolicy: 'manual',
 		dataSafety: 'no-impact',
-		escalation: 'support-with-export',
 		summary: 'Some older store changes were skipped and must be downloaded again.',
-		docsBody:
-			'Run a targeted download for the affected data and export diagnostics if the gap remains.',
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#804',
 	},
 	SYNC311: {
 		code: 'SYNC311',
@@ -231,14 +174,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'error',
 		actionHint: 'Clear the local database and reopen. This loses any unsynced sales.',
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'support-with-export',
 		summary: 'Local data is from an incompatible version and cannot open yet.',
-		docsBody:
-			'Do not reset the affected local collection when this device may hold changes that never reached your store — resetting deletes the only local copy. Export diagnostics to help support investigate, then contact support for recovery guidance.',
-		introducedIn: '1.10.0',
-		evidence: 'plugin#413',
 	},
 	SYNC321: {
 		code: 'SYNC321',
@@ -246,14 +183,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'warn',
 		actionHint: 'Retry only the records that failed.',
-		retryPolicy: 'manual',
 		dataSafety: 'local-only',
-		escalation: 'support-with-export',
 		summary: 'Some records synced, but one or more records did not.',
-		docsBody:
-			'Review the named records and their reasons before retrying only the records that did not sync.',
-		introducedIn: '1.10.0',
-		evidence: 'spec validation set: 89 of 99',
 	},
 	SYNC331: {
 		code: 'SYNC331',
@@ -261,14 +192,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'warn',
 		actionHint: 'Download the affected records again.',
-		retryPolicy: 'manual',
 		dataSafety: 'no-impact',
-		escalation: 'support-with-export',
 		summary: 'This record on the device does not match your store and needs local repair.',
-		docsBody:
-			"Nothing you entered is waiting to be sent. The device's copy of a record your store owns has drifted from the store's copy; repair it according to the status shown in the log.",
-		introducedIn: '1.10.0',
-		evidence: 'monorepo: dev-pro session 2026-08-19, 138 products escalated per sweep',
 	},
 	AUTH101: {
 		code: 'AUTH101',
@@ -276,13 +201,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'AUTH',
 		severity: 'warn',
 		actionHint: 'Sign in again.',
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'none',
 		summary: 'Your session ended and you need to sign in again.',
-		docsBody: 'Sign in again and repeat the request; no local data was lost.',
-		introducedIn: '1.10.0',
-		evidence: 'Sentry Y5/XR/18R',
 	},
 	AUTH201: {
 		code: 'AUTH201',
@@ -290,13 +210,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'AUTH',
 		severity: 'error',
 		actionHint: 'Ask your store admin to grant your account POS access.',
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'store-admin',
 		summary: 'Your account does not have permission to perform this action.',
-		docsBody: 'Ask a store administrator to grant the required POS capability, then try again.',
-		introducedIn: '1.10.0',
-		evidence: 'woocommerce_pos_rest_forbidden; plugin#396',
 	},
 	AUTH301: {
 		code: 'AUTH301',
@@ -304,14 +219,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'AUTH',
 		severity: 'error',
 		actionHint: 'Ask the site admin to exempt WCPOS in the conflicting auth plugin.',
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'site-admin',
 		summary: 'Another authentication plugin is preventing WCPOS from connecting.',
-		docsBody:
-			'Ask the site administrator to resolve the named plugin conflict before signing in again.',
-		introducedIn: '1.10.0',
-		evidence: 'plugin#743',
 	},
 	AUTH311: {
 		code: 'AUTH311',
@@ -319,14 +228,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'AUTH',
 		severity: 'error',
 		actionHint: "Ask the site admin to check WCPOS is active and REST isn't blocked.",
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'site-admin',
 		summary: 'The WCPOS store route is unavailable.',
-		docsBody:
-			'Ask the site administrator to check whether a security or proxy plugin is stripping WCPOS request headers.',
-		introducedIn: '1.10.0',
-		evidence: 'plugin#1075',
 	},
 	AUTH401: {
 		code: 'AUTH401',
@@ -334,14 +237,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'AUTH',
 		severity: 'error',
 		actionHint: "Check the store address; ask the admin to fix the site's certificate.",
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'site-admin',
 		summary: 'A secure connection to this store could not be trusted.',
-		docsBody:
-			'Use the correct store address and ask the site administrator to repair the certificate before reconnecting.',
-		introducedIn: '1.10.0',
-		evidence: 'plugin#371',
 	},
 	CHECKOUT101: {
 		code: 'CHECKOUT101',
@@ -349,13 +246,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'CHECKOUT',
 		severity: 'error',
 		actionHint: 'Review the cart and try checkout again.',
-		retryPolicy: 'manual',
 		dataSafety: 'order-safe',
-		escalation: 'none',
 		summary: 'Checkout did not finish, and the cart is still safe to retry.',
-		docsBody: 'Review the cart and retry checkout; the current cart contents have been preserved.',
-		introducedIn: '1.10.0',
-		evidence: 'plugin#572',
 	},
 	CHECKOUT201: {
 		code: 'CHECKOUT201',
@@ -363,14 +255,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'CHECKOUT',
 		severity: 'error',
 		actionHint: 'Check whether the order exists before retrying. Do not re-charge.',
-		retryPolicy: 'never',
 		dataSafety: 'outcome-unknown',
-		escalation: 'support-with-export',
 		summary: 'WCPOS could not confirm whether checkout completed.',
-		docsBody:
-			'Do not retry blindly. Check the store for the order first, then export diagnostics if its outcome is still unclear.',
-		introducedIn: '1.10.0',
-		evidence: 'email 26/103; Discord corpus',
 	},
 	CHECKOUT211: {
 		code: 'CHECKOUT211',
@@ -378,13 +264,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'CHECKOUT',
 		severity: 'error',
 		actionHint: 'Check whether the order exists before retrying. Do not re-charge.',
-		retryPolicy: 'never',
 		dataSafety: 'outcome-unknown',
-		escalation: 'support-with-export',
 		summary: 'The store returned no checkout result, so the order status is unknown.',
-		docsBody: 'Check whether the order was created before trying checkout again.',
-		introducedIn: '1.10.0',
-		evidence: 'Discord: Empty response from server x15',
 	},
 	CHECKOUT301: {
 		code: 'CHECKOUT301',
@@ -392,13 +273,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'CHECKOUT',
 		severity: 'error',
 		actionHint: 'Remove the item to finish the sale; ask the admin to fix its SKU.',
-		retryPolicy: 'after-change',
 		dataSafety: 'order-safe',
-		escalation: 'none',
 		summary: 'Checkout cannot continue because a product SKU is duplicated or invalid.',
-		docsBody: 'Change or remove the named SKU, then retry with the preserved cart.',
-		introducedIn: '1.10.0',
-		evidence: 'plugin#572',
 	},
 	PAYMENT101: {
 		code: 'PAYMENT101',
@@ -406,14 +282,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'PAYMENT',
 		severity: 'info',
 		actionHint: 'No action needed — the payment succeeded; reopen to refresh.',
-		retryPolicy: 'never',
 		dataSafety: 'money-moved',
-		escalation: 'none',
 		summary: 'Payment succeeded, but WCPOS could not refresh its status afterward.',
-		docsBody:
-			'The payment completed and should not be charged again; no action is required unless the displayed status stays stale.',
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#509',
 	},
 	PAYMENT201: {
 		code: 'PAYMENT201',
@@ -421,14 +291,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'PAYMENT',
 		severity: 'error',
 		actionHint: 'Check the terminal and provider dashboard before re-charging.',
-		retryPolicy: 'never',
 		dataSafety: 'outcome-unknown',
-		escalation: 'payment-provider',
 		summary: 'WCPOS could not confirm whether the terminal charged the payment.',
-		docsBody:
-			'Check the payment terminal before attempting another charge, and contact the payment provider if the result remains unclear.',
-		introducedIn: '1.10.0',
-		evidence: 'email: terminal charged but POS stuck',
 	},
 	PAYMENT301: {
 		code: 'PAYMENT301',
@@ -436,14 +300,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'PAYMENT',
 		severity: 'error',
 		actionHint: 'Take another payment method; ask the admin to check the gateway.',
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'site-admin',
 		summary: 'The selected payment gateway is unavailable for this store.',
-		docsBody:
-			'Ask the site administrator to verify that the gateway is supported, enabled, and correctly configured.',
-		introducedIn: '1.10.0',
-		evidence: 'plugin#367',
 	},
 	PAYMENT401: {
 		code: 'PAYMENT401',
@@ -451,14 +309,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'PAYMENT',
 		severity: 'error',
 		actionHint: 'Wake the terminal, check its connection, and re-pair.',
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'payment-provider',
 		summary: 'The payment terminal did not finish pairing with WCPOS.',
-		docsBody:
-			'Retry pairing after checking the terminal settings, and include the trace ID when contacting the payment provider.',
-		introducedIn: '1.10.0',
-		evidence: 'plugin#535',
 	},
 	PRINT101: {
 		code: 'PRINT101',
@@ -466,14 +318,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'PRINT',
 		severity: 'warn',
 		actionHint: 'Print the receipt manually.',
-		retryPolicy: 'manual',
 		dataSafety: 'no-impact',
-		escalation: 'none',
 		summary: 'Automatic printing did not start for this receipt.',
-		docsBody:
-			'Check the selected printer, template, and connection, then use Print now to print the receipt manually.',
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#121',
 	},
 	PRINT201: {
 		code: 'PRINT201',
@@ -481,13 +327,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'PRINT',
 		severity: 'error',
 		actionHint: 'Check the printer before reprinting.',
-		retryPolicy: 'manual',
 		dataSafety: 'outcome-unknown',
-		escalation: 'support-with-export',
 		summary: 'WCPOS could not confirm that the print job completed.',
-		docsBody: 'Check the printer before retrying so the receipt is not printed twice.',
-		introducedIn: '1.10.0',
-		evidence: 'plugin#1362',
 	},
 	PRINT301: {
 		code: 'PRINT301',
@@ -495,13 +336,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'PRINT',
 		severity: 'error',
 		actionHint: "Check the printer's power, cable, and network.",
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'none',
 		summary: 'The selected printer cannot be reached.',
-		docsBody: 'Check that the printer is powered on and connected, then try printing again.',
-		introducedIn: '1.10.0',
-		evidence: 'email: Waiting for printer',
 	},
 	PRODUCT101: {
 		code: 'PRODUCT101',
@@ -509,14 +345,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'PRODUCT',
 		severity: 'error',
 		actionHint: 'Fix the reported cause, then retry.',
-		retryPolicy: 'manual',
 		dataSafety: 'local-only',
-		escalation: 'support-with-export',
 		summary: 'This product could not be saved to your store.',
-		docsBody:
-			'Review the reported cause before retrying: reconnect for a network error, fix invalid fields, or refresh a conflicting product.',
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#489',
 	},
 	PRODUCT111: {
 		code: 'PRODUCT111',
@@ -524,14 +354,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'PRODUCT',
 		severity: 'error',
 		actionHint: 'Fix the variation fields, then retry.',
-		retryPolicy: 'after-change',
 		dataSafety: 'local-only',
-		escalation: 'support-with-export',
 		summary: 'This variation could not be added to the product.',
-		docsBody:
-			'Review and correct the variation fields, then retry; export diagnostics if it is still rejected.',
-		introducedIn: '1.10.0',
-		evidence: 'plugin#361',
 	},
 	PRODUCT201: {
 		code: 'PRODUCT201',
@@ -539,13 +363,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'PRODUCT',
 		severity: 'warn',
 		actionHint: 'Keep selling — the image retries in the background.',
-		retryPolicy: 'automatic',
 		dataSafety: 'no-impact',
-		escalation: 'none',
 		summary: 'This product image is unavailable, but the product can still be sold.',
-		docsBody: 'Continue the sale without the image; WCPOS will try to load it again later.',
-		introducedIn: '1.10.0',
-		evidence: 'Sentry 1QX/1PX',
 	},
 	PRODUCT301: {
 		code: 'PRODUCT301',
@@ -553,14 +372,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'PRODUCT',
 		severity: 'info',
 		actionHint: 'Clear the filters, or search by name.',
-		retryPolicy: 'manual',
 		dataSafety: 'no-impact',
-		escalation: 'none',
 		summary: 'No products matched the current search and filters.',
-		docsBody:
-			'Review spaces, category filters, and whether the local product index has finished syncing before searching again.',
-		introducedIn: '1.10.0',
-		evidence: 'plugin#1114; monorepo#750',
 	},
 	PRODUCT401: {
 		code: 'PRODUCT401',
@@ -568,14 +381,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'PRODUCT',
 		severity: 'warn',
 		actionHint: 'Confirm real stock before selling low-stock items.',
-		retryPolicy: 'manual',
 		dataSafety: 'no-impact',
-		escalation: 'site-admin',
 		summary: 'The displayed stock may be older than the store stock.',
-		docsBody:
-			'Verify current stock in the store before completing a sale that could oversell the item.',
-		introducedIn: '1.10.0',
-		evidence: 'plugin#227; plugin#389',
 	},
 	LICENSE101: {
 		code: 'LICENSE101',
@@ -583,14 +390,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'LICENSE',
 		severity: 'error',
 		actionHint: 'Re-activate the license for this store in WP Admin.',
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'support-with-export',
 		summary: 'Your WCPOS Pro license is not active for this store or device.',
-		docsBody:
-			'Check the local, licensing-server, and updater status, then activate the license for the named store.',
-		introducedIn: '1.10.0',
-		evidence: 'email: active here, inactive there',
 	},
 	LICENSE201: {
 		code: 'LICENSE201',
@@ -598,13 +399,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'LICENSE',
 		severity: 'error',
 		actionHint: 'Update the WCPOS and Pro plugins to matching versions.',
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'site-admin',
 		summary: 'WCPOS Pro is disabled because its version does not match WCPOS.',
-		docsBody: 'Update the named WCPOS or WCPOS Pro component so both versions are compatible.',
-		introducedIn: '1.10.0',
-		evidence: 'email: Pro/free version skew',
 	},
 	LICENSE301: {
 		code: 'LICENSE301',
@@ -612,13 +408,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'LICENSE',
 		severity: 'error',
 		actionHint: 'Re-authorize the license so updates can download.',
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'site-admin',
 		summary: 'The updater is not authorized to download WCPOS Pro updates.',
-		docsBody: 'Re-authorize the updater for this store, then check for updates again.',
-		introducedIn: '1.10.0',
-		evidence: 'email: updater failures',
 	},
 	CLIENT101: {
 		code: 'CLIENT101',
@@ -627,14 +418,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		severity: 'error',
 		actionHint:
 			"Restart; if it won't start, clear the local database. This loses any unsynced sales.",
-		retryPolicy: 'manual',
 		dataSafety: 'local-only',
-		escalation: 'support-with-export',
 		summary: 'WCPOS could not finish starting.',
-		docsBody:
-			'Restart once, then export diagnostics with the app version and device engine if startup still fails.',
-		introducedIn: '1.10.0',
-		evidence: 'Sentry 195; plugin#362',
 	},
 	CLIENT201: {
 		code: 'CLIENT201',
@@ -642,14 +427,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'CLIENT',
 		severity: 'error',
 		actionHint: 'Close other apps or tabs, then restart.',
-		retryPolicy: 'manual',
 		dataSafety: 'local-only',
-		escalation: 'support-with-export',
 		summary: 'WCPOS ran out of memory and could not finish the operation.',
-		docsBody:
-			'Restart WCPOS and retry once; export diagnostics if the device runs out of memory again.',
-		introducedIn: '1.10.0',
-		evidence: 'Sentry W8',
 	},
 	CLIENT211: {
 		code: 'CLIENT211',
@@ -657,13 +436,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'CLIENT',
 		severity: 'error',
 		actionHint: 'Restart, and install app and device updates.',
-		retryPolicy: 'manual',
 		dataSafety: 'local-only',
-		escalation: 'support-with-export',
 		summary: 'WCPOS stopped because of a device-level crash.',
-		docsBody: 'Restart WCPOS and export diagnostics if the crash repeats.',
-		introducedIn: '1.10.0',
-		evidence: 'Sentry 16K/1F8/2GF',
 	},
 	CLIENT999: {
 		code: 'CLIENT999',
@@ -671,14 +445,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'CLIENT',
 		severity: 'error',
 		actionHint: 'Retry once; report it with the log details if it repeats.',
-		retryPolicy: 'manual',
 		dataSafety: 'outcome-unknown',
-		escalation: 'support-with-export',
 		summary: 'WCPOS encountered an unexpected error.',
-		docsBody:
-			'Try the action once more, then export diagnostics and contact support if it fails again.',
-		introducedIn: '1.10.0',
-		evidence: 'spec §3 catch-all; Sentry audit',
 	},
 	SYNC999: {
 		code: 'SYNC999',
@@ -686,14 +454,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'error',
 		actionHint: 'Check the log — retry if it queued, otherwise re-enter and save.',
-		retryPolicy: 'automatic',
 		dataSafety: 'local-only',
-		escalation: 'support-with-export',
 		summary: 'Syncing hit an unexpected problem.',
-		docsBody:
-			'Your sales are safe on this device. Wait for the automatic retry; if this code keeps appearing, export diagnostics and contact support.',
-		introducedIn: '1.10.0',
-		evidence: 'coverage net (map #1136, A1.1): generic fallback = registry debt',
 	},
 	AUTH999: {
 		code: 'AUTH999',
@@ -701,14 +463,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'AUTH',
 		severity: 'error',
 		actionHint: 'Try again; if it repeats, contact support with the log details.',
-		retryPolicy: 'manual',
 		dataSafety: 'no-impact',
-		escalation: 'support-with-export',
 		summary: 'Signing in or staying signed in hit an unexpected problem.',
-		docsBody:
-			'Try the action once more. If it repeats, sign out and back in, then export diagnostics and contact support.',
-		introducedIn: '1.10.0',
-		evidence: 'coverage net (map #1136, A1.1)',
 	},
 	CHECKOUT999: {
 		code: 'CHECKOUT999',
@@ -716,14 +472,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'CHECKOUT',
 		severity: 'error',
 		actionHint: 'Check WooCommerce → Orders before retrying. Do not re-charge.',
-		retryPolicy: 'manual',
 		dataSafety: 'outcome-unknown',
-		escalation: 'support-with-export',
 		summary: 'Checkout hit an unexpected problem.',
-		docsBody:
-			'Check the order in your store admin before charging the customer again. Export diagnostics and contact support if the problem repeats.',
-		introducedIn: '1.10.0',
-		evidence: 'coverage net (map #1136, A1.1)',
 	},
 	PAYMENT999: {
 		code: 'PAYMENT999',
@@ -731,14 +481,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'PAYMENT',
 		severity: 'error',
 		actionHint: 'Confirm whether the payment went through before retrying.',
-		retryPolicy: 'manual',
 		dataSafety: 'outcome-unknown',
-		escalation: 'support-with-export',
 		summary: 'Payment handling hit an unexpected problem.',
-		docsBody:
-			'Confirm whether the payment went through before retrying. Export diagnostics and contact support if it is unclear.',
-		introducedIn: '1.10.0',
-		evidence: 'coverage net (map #1136, A1.1)',
 	},
 	PRINT999: {
 		code: 'PRINT999',
@@ -746,14 +490,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'PRINT',
 		severity: 'error',
 		actionHint: 'Repeat only the operation named in the log.',
-		retryPolicy: 'manual',
 		dataSafety: 'no-impact',
-		escalation: 'support-with-export',
 		summary: 'Printing hit an unexpected problem.',
-		docsBody:
-			'Try printing again. If it keeps failing, reprint from the order screen and contact support with diagnostics.',
-		introducedIn: '1.10.0',
-		evidence: 'coverage net (map #1136, A1.1)',
 	},
 	PRODUCT999: {
 		code: 'PRODUCT999',
@@ -761,14 +499,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'PRODUCT',
 		severity: 'error',
 		actionHint: 'Try again; report it if it repeats.',
-		retryPolicy: 'manual',
 		dataSafety: 'no-impact',
-		escalation: 'support-with-export',
 		summary: 'Loading or updating products hit an unexpected problem.',
-		docsBody:
-			'Try again. If product data still looks wrong afterwards, export diagnostics and contact support.',
-		introducedIn: '1.10.0',
-		evidence: 'coverage net (map #1136, A1.1)',
 	},
 	LICENSE999: {
 		code: 'LICENSE999',
@@ -776,14 +508,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'LICENSE',
 		severity: 'error',
 		actionHint: 'Keep working; re-enter the key or contact support if it persists.',
-		retryPolicy: 'automatic',
 		dataSafety: 'no-impact',
-		escalation: 'support-with-export',
 		summary: 'License checking hit an unexpected problem.',
-		docsBody:
-			'The POS keeps working. If Pro features stay locked, re-enter your license key, then contact support.',
-		introducedIn: '1.10.0',
-		evidence: 'coverage net (map #1136, A1.1)',
 	},
 	SYNC401: {
 		code: 'SYNC401',
@@ -791,14 +517,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'error',
 		actionHint: 'Nothing to do — the task restarts automatically.',
-		retryPolicy: 'automatic',
 		dataSafety: 'no-impact',
-		escalation: 'support-with-export',
 		summary: 'A background sync task stopped unexpectedly before finishing.',
-		docsBody:
-			'The POS restarts these tasks automatically and no order data is affected. If this code keeps appearing, export diagnostics and contact support.',
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#1137 inventory: engine.lane.tick, maintenance.lane.error',
 	},
 	SYNC411: {
 		code: 'SYNC411',
@@ -806,15 +526,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'warn',
 		actionHint: 'Keep working; report it if it keeps happening.',
-		retryPolicy: 'automatic',
 		dataSafety: 'no-impact',
-		escalation: 'support-with-export',
 		summary: 'This device asked the store for data far more often than normal.',
-		docsBody:
-			'Nothing was slowed down or blocked, and no order data is affected — this is a detection-only alarm. Sustained request floods usually indicate an app problem (a screen re-requesting the same data in a loop) rather than anything you did. If this code keeps appearing, export diagnostics and contact support so the loop can be found and fixed.',
-		introducedIn: '1.10.0',
-		evidence:
-			'monorepo#1134 item 2 ruling (2026-08-14): demand path stays uncapped, flood detection only; runaway class monorepo#888',
 	},
 	SYNC221: {
 		code: 'SYNC221',
@@ -822,14 +535,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'warn',
 		actionHint: 'Compare with the store, then re-apply the correct values once.',
-		retryPolicy: 'after-change',
 		dataSafety: 'order-safe',
-		escalation: 'none',
 		summary: 'A change on this device clashed with an edit made in your store.',
-		docsBody:
-			'Open the record and check which version is correct. The POS keeps both sides safe until the clash is settled — nothing is lost.',
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#1137 inventory: push.conflict, queue.write.conflict-transition',
 	},
 	CHECKOUT401: {
 		code: 'CHECKOUT401',
@@ -838,14 +545,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		severity: 'error',
 		actionHint:
 			"Stop — confirm the charge and settle to the store's total before the customer leaves.",
-		retryPolicy: 'manual',
 		dataSafety: 'money-moved',
-		escalation: 'support-with-export',
 		summary: 'Your store calculated different totals for this order than the till showed.',
-		docsBody:
-			"Check the order in your store admin before taking any further payment — the store's totals are the source of truth. If the difference is unexpected, export diagnostics and contact support.",
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#1137 inventory: push.money-divergence; server-calc ruling',
 	},
 	PRODUCT411: {
 		code: 'PRODUCT411',
@@ -853,14 +554,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'PRODUCT',
 		severity: 'warn',
 		actionHint: 'Keep working; reload once if scans keep missing.',
-		retryPolicy: 'automatic',
 		dataSafety: 'no-impact',
-		escalation: 'none',
 		summary: 'Barcode scanning settings could not be loaded, so scans may not match products.',
-		docsBody:
-			'The POS keeps trying to load these settings in the background. If scanning stays unreliable, reload the app once.',
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#1137 inventory: engine.barcode-selector-hydrate-failed',
 	},
 	CLIENT111: {
 		code: 'CLIENT111',
@@ -868,14 +563,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'CLIENT',
 		severity: 'warn',
 		actionHint: 'Wait a moment; reload once if it persists.',
-		retryPolicy: 'automatic',
 		dataSafety: 'no-impact',
-		escalation: 'none',
 		summary: 'Syncing is taking longer than expected to start.',
-		docsBody:
-			'This usually resolves by itself within a minute. If the app stays in this state, reload it once before anything else.',
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#1137 inventory: engine.ready-stalled',
 	},
 	CLIENT121: {
 		code: 'CLIENT121',
@@ -883,14 +572,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'CLIENT',
 		severity: 'warn',
 		actionHint: 'Nothing to do — one tab syncs for all.',
-		retryPolicy: 'never',
 		dataSafety: 'no-impact',
-		escalation: 'none',
 		summary: 'This browser lets only one tab send changes at a time.',
-		docsBody:
-			'You can keep using every tab — they all share the same local data. One tab quietly handles the syncing for all of them.',
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#1137 inventory: engine.write-leader.degraded',
 	},
 	AUTH111: {
 		code: 'AUTH111',
@@ -898,14 +581,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'AUTH',
 		severity: 'warn',
 		actionHint: 'Re-enter the username and password.',
-		retryPolicy: 'manual',
 		dataSafety: 'no-impact',
-		escalation: 'none',
 		summary: 'The store did not accept the sign-in credentials.',
-		docsBody:
-			'Re-enter the username and password, or reset the password in WordPress if it keeps failing. No order data is affected.',
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#1151 legacy-table migration',
 	},
 	AUTH121: {
 		code: 'AUTH121',
@@ -913,14 +590,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'AUTH',
 		severity: 'error',
 		actionHint: 'Sign in with your own account.',
-		retryPolicy: 'manual',
 		dataSafety: 'no-impact',
-		escalation: 'none',
 		summary: 'The signed-in store account does not match the cashier on this till.',
-		docsBody:
-			"Each cashier keeps their own till data, so working under another account can misfile orders. Sign out, then sign in with the cashier's own account.",
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#1151 legacy-table migration',
 	},
 	AUTH321: {
 		code: 'AUTH321',
@@ -928,14 +599,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'AUTH',
 		severity: 'error',
 		actionHint: 'Ask the site admin to reactivate WooCommerce, then reconnect.',
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'site-admin',
 		summary: 'WooCommerce is not active on this site, so WCPOS cannot connect.',
-		docsBody:
-			'WCPOS requires the WooCommerce plugin. Ask the site administrator to install or reactivate WooCommerce, then connect again.',
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#1151 legacy-table migration',
 	},
 	AUTH331: {
 		code: 'AUTH331',
@@ -943,14 +608,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'AUTH',
 		severity: 'error',
 		actionHint: 'Ask the site admin to update the WCPOS plugin on the store.',
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'site-admin',
 		summary: "This store's WCPOS plugin is too old for this version of the app.",
-		docsBody:
-			'The app has been updated but the WCPOS plugin on the store has not, and the two versions no longer work together. Ask whoever manages the site to update the WCPOS plugin in WP Admin, then connect again. Nothing needs to change on the till.',
-		introducedIn: '1.10.0',
-		evidence: 'monorepo: 1.9.x plugin exposes wcpos/v1 only; client requires wcpos/v2',
 	},
 	AUTH411: {
 		code: 'AUTH411',
@@ -958,14 +617,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'AUTH',
 		severity: 'error',
 		actionHint: 'Check the store address for typos.',
-		retryPolicy: 'manual',
 		dataSafety: 'no-impact',
-		escalation: 'none',
 		summary: 'The store address is missing or not a valid URL.',
-		docsBody:
-			"Check the address for typos and include the full https:// URL of the store's WordPress site, then try again.",
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#1151 legacy-table migration',
 	},
 	AUTH421: {
 		code: 'AUTH421',
@@ -973,14 +626,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'AUTH',
 		severity: 'error',
 		actionHint: 'Ask your host to let the Authorization header reach WordPress.',
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'none',
 		summary: "The store's server is blocking the login token on every channel this app can use.",
-		docsBody:
-			'The app confirmed the store is reachable, but the server (or a firewall, proxy, or security plugin in front of it) strips the Authorization header and also blocks the token when it is sent as a URL parameter. There is no third way to deliver a login token, so this must be fixed on the server.',
-		introducedIn: '1.10.0',
-		evidence: 'wcpos-infra#73 §5 row 1 (research §c1)',
 	},
 	AUTH431: {
 		code: 'AUTH431',
@@ -988,14 +635,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'AUTH',
 		severity: 'error',
 		actionHint: "Ask your host to allow the store's REST API through.",
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'none',
 		summary: "The store's REST API did not answer on any address form this app can use.",
-		docsBody:
-			"The app tried the store's REST API at its normal address (/wp-json/...) and at WordPress's built-in fallback address (/?rest_route=...), and neither answered. The store's website itself may be up — this is specifically the REST API being unreachable, usually a security plugin hiding it or a firewall rule blocking it.",
-		introducedIn: '1.10.0',
-		evidence: 'wcpos-infra#73 §5 (B5 both-transports verdict, ADR 0031 §3)',
 	},
 	AUTH441: {
 		code: 'AUTH441',
@@ -1003,14 +644,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'AUTH',
 		severity: 'error',
 		actionHint: 'Ask your host to raise the header and URL size limit.',
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'none',
 		summary: 'The login token is larger than this server accepts.',
-		docsBody:
-			"The server rejected the login token for size: a 400 when it travels in the Authorization header, or a 414 when it travels in the URL. No client-side encoding can shrink it — the server's header/URL size limits must be raised, or the token made smaller.",
-		introducedIn: '1.10.0',
-		evidence: 'wcpos-infra#73 §5 row 7 (research §c7)',
 	},
 	HOST101: {
 		code: 'HOST101',
@@ -1018,15 +653,9 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'HOST',
 		severity: 'error',
 		actionHint: "Ask your host to allow the API's OPTIONS preflight.",
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'none',
 		summary:
 			"The server is blocking the browser's permission check (CORS preflight), so the web app cannot reach it.",
-		docsBody:
-			'Browsers send an OPTIONS request before any cross-origin API call that carries custom headers. Something in front of this store — usually a firewall rule — is blocking OPTIONS, so the browser never sends the real request. Native apps are unaffected; the fix is server-side.',
-		introducedIn: '1.10.0',
-		evidence: 'wcpos-infra#73 §5 row 2 (research §c2)',
 	},
 	HOST111: {
 		code: 'HOST111',
@@ -1034,15 +663,9 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'HOST',
 		severity: 'error',
 		actionHint: "Ask your host to fix the store's CORS headers.",
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'none',
 		summary:
 			"The server's cross-origin (CORS) configuration is broken, so the browser refuses its responses.",
-		docsBody:
-			'The store answers, but its CORS response headers are wrong — duplicated, set to the wrong origin, or missing on error responses. The browser then hides the real answer from the web app, which also masks every other error behind a generic network failure. The fix is server-side: exactly one Access-Control-Allow-Origin, present on every status code.',
-		introducedIn: '1.10.0',
-		evidence: 'wcpos-infra#73 §5 rows 3/4 (research §c3/§c4)',
 	},
 	HOST121: {
 		code: 'HOST121',
@@ -1050,14 +673,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'HOST',
 		severity: 'error',
 		actionHint: "Ask your host to allow-list the store's API paths.",
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'none',
 		summary: "A bot-protection page is answering instead of the store's API.",
-		docsBody:
-			"The store's REST API is returning an HTML challenge page (bot protection, CAPTCHA, or DDoS interstitial) where the app expects JSON. A point-of-sale app cannot solve a browser challenge; the store's REST API needs to be allow-listed in the protection service.",
-		introducedIn: '1.10.0',
-		evidence: 'wcpos-infra#73 §5 row 10 (research §c10)',
 	},
 	HOST131: {
 		code: 'HOST131',
@@ -1065,15 +682,9 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'HOST',
 		severity: 'error',
 		actionHint: "Ask your host to raise the proxy's header limit.",
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'none',
 		summary:
 			"A proxy in front of the store rejects the server's responses for having too many headers.",
-		docsBody:
-			"A cache or proxy layer (commonly Varnish) enforces a limit on response header count or size. The store's lightweight endpoints fit, but full API responses exceed the limit and come back as 503s from the proxy, not from WordPress. The limit must be raised on that layer.",
-		introducedIn: '1.10.0',
-		evidence: 'wcpos-infra#73 §5 row 13 (research §c13, P26)',
 	},
 	HOST141: {
 		code: 'HOST141',
@@ -1081,14 +692,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'HOST',
 		severity: 'warn',
 		actionHint: 'Ask your host to allow product-search requests.',
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'none',
 		summary: "The host's security filter is blocking product searches.",
-		docsBody:
-			"A firewall rule on this host rejects REST requests whose query string contains non-ASCII characters or SQL-looking words. Product names with accents, and searches containing words like 'select' or 'union', will fail with a 403 even though they are ordinary catalogue searches. The till works otherwise; searches will be unreliable until the rule is relaxed.",
-		introducedIn: '1.10.0',
-		evidence: 'wcpos-infra#73 §5 row 12 (P15/P16)',
 	},
 	HOST151: {
 		code: 'HOST151',
@@ -1096,14 +701,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'HOST',
 		severity: 'error',
 		actionHint: 'Ask your host to exclude the API from caching.',
-		retryPolicy: 'after-change',
 		dataSafety: 'data-at-risk',
-		escalation: 'support-with-export',
 		summary: "A cache in front of the store is replaying one person's API responses to everyone.",
-		docsBody:
-			"A caching layer is serving stored REST API responses without checking who is asking: the app sent two differently-authenticated probes and received the first probe's answer both times. On a live store this means one cashier could see another's data, so connecting is blocked until the cache excludes the store's API. This is a hosting-layer problem — WordPress itself always answers per-user.",
-		introducedIn: '1.10.0',
-		evidence: 'wcpos-infra#73 §5 row 8 (research §c8, P25/P30)',
 	},
 	HOST161: {
 		code: 'HOST161',
@@ -1111,14 +710,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'HOST',
 		severity: 'warn',
 		actionHint: 'Ask your host to raise or exempt the API rate limit.',
-		retryPolicy: 'automatic',
 		dataSafety: 'no-impact',
-		escalation: 'none',
 		summary: "The host is rate-limiting this store's tills.",
-		docsBody:
-			"The server keeps answering 429 (too many requests) even though the app is already backing off and honoring the server's Retry-After delays. Several tills on one internet connection share one address, so per-source rate limits treat them as a single very busy client. Syncing continues automatically but will lag until the limit is raised.",
-		introducedIn: '1.10.0',
-		evidence: 'wcpos-infra#73 §5 row 11 (research §c11)',
 	},
 	SYNC151: {
 		code: 'SYNC151',
@@ -1126,14 +719,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'warn',
 		actionHint: 'Confirm the request succeeded; ask the admin to check for PHP notices.',
-		retryPolicy: 'automatic',
 		dataSafety: 'no-impact',
-		escalation: 'site-admin',
 		summary: 'Your store sent a malformed response that WCPOS had to repair before reading.',
-		docsBody:
-			"This usually means a plugin or PHP notice is printing extra output into store responses. WCPOS recovered this one, but repairs are not guaranteed — ask the site administrator to check the site's error log.",
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#1151 legacy-table migration',
 	},
 	SYNC161: {
 		code: 'SYNC161',
@@ -1141,15 +728,9 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'error',
 		actionHint: 'Restart WCPOS.',
-		retryPolicy: 'manual',
 		dataSafety: 'data-at-risk',
-		escalation: 'support-with-export',
 		summary:
 			'The local database on this device stopped responding, so actions that need it are paused.',
-		docsBody:
-			'Restart WCPOS to reconnect the local database. Unsaved changes on this device may not have been written; check recent orders after restarting. If it keeps happening, export diagnostics and contact support.',
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#1151 legacy-table migration',
 	},
 	SYNC171: {
 		code: 'SYNC171',
@@ -1157,14 +738,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'error',
 		actionHint: 'Free up device storage, then restart.',
-		retryPolicy: 'manual',
 		dataSafety: 'local-only',
-		escalation: 'support-with-export',
 		summary: 'A local database on this device could not be created or removed.',
-		docsBody:
-			'Restart WCPOS and try again. If it keeps failing, the device may be low on storage or the browser profile may be restricting storage; free up space, then contact support if it persists.',
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#1151 legacy-table migration',
 	},
 	CHECKOUT111: {
 		code: 'CHECKOUT111',
@@ -1172,14 +747,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'CHECKOUT',
 		severity: 'error',
 		actionHint: 'Try adding it again; try a different item if it keeps failing.',
-		retryPolicy: 'manual',
 		dataSafety: 'order-safe',
-		escalation: 'support-with-export',
 		summary: 'This change could not be applied to the cart, which is unchanged.',
-		docsBody:
-			'The item, fee, shipping line, or coupon was not added and nothing was removed. Try the action again; if it keeps failing, export diagnostics and contact support.',
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#1151 legacy-table migration',
 	},
 	PRODUCT321: {
 		code: 'PRODUCT321',
@@ -1187,14 +756,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'PRODUCT',
 		severity: 'warn',
 		actionHint: 'Search by name; ask the admin to make the barcodes unique.',
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'store-admin',
 		summary: 'More than one product matches this barcode.',
-		docsBody:
-			'WCPOS cannot pick between them safely, so nothing was added. Search for the product by name, and give each product a unique barcode in the store to fix the clash.',
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#1151 legacy-table migration',
 	},
 	PRODUCT421: {
 		code: 'PRODUCT421',
@@ -1202,15 +765,9 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'PRODUCT',
 		severity: 'warn',
 		actionHint: "Ask the admin to re-save the product's prices.",
-		retryPolicy: 'after-change',
 		dataSafety: 'no-impact',
-		escalation: 'store-admin',
 		summary:
 			"This product's variation price data could not be read, so displayed prices may be wrong or missing.",
-		docsBody:
-			'Re-save the product in WooCommerce to rebuild its price data, or contact support if many products show this.',
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#1151 legacy-table migration',
 	},
 	PRINT311: {
 		code: 'PRINT311',
@@ -1218,14 +775,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'PRINT',
 		severity: 'error',
 		actionHint: 'Retry; check the email/SMTP or download settings.',
-		retryPolicy: 'manual',
 		dataSafety: 'order-safe',
-		escalation: 'none',
 		summary: 'This receipt could not be emailed or downloaded.',
-		docsBody:
-			"The sale itself is unaffected. Check the email address and the device's connection, then try again from the order's receipt screen.",
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#1151 legacy-table migration',
 	},
 	CLIENT131: {
 		code: 'CLIENT131',
@@ -1233,14 +784,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'CLIENT',
 		severity: 'error',
 		actionHint: 'Pause a moment, confirm your last action went through, then retry.',
-		retryPolicy: 'manual',
 		dataSafety: 'no-impact',
-		escalation: 'support-with-export',
 		summary: 'WCPOS queued too many requests at once and dropped some.',
-		docsBody:
-			'This is usually an app defect rather than a store problem. Restart WCPOS; if the code returns, export diagnostics and contact support.',
-		introducedIn: '1.10.0',
-		evidence: 'monorepo#1151 legacy-table migration',
 	},
 };
 
