@@ -99,6 +99,22 @@ describe('useSiteInfo', () => {
 		);
 	});
 
+	it('does not refetch on a wake when nothing was deferred', async () => {
+		// This hook is mounted for the whole session in AppLayout, so an unconditional
+		// wake tick would re-GET and re-patch mount-only data on every tab switch or
+		// window restore.
+		renderHook(() => useSiteInfo({ site: mockSite as never }));
+
+		await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
+
+		await act(async () => {
+			for (const callback of [...mockWakeCallbacks]) callback();
+		});
+
+		expect(mockGet).toHaveBeenCalledTimes(1);
+		expect(mockIncrementalPatch).toHaveBeenCalledTimes(1);
+	});
+
 	it('retries the deferred fetch when the app wakes', async () => {
 		// Without the retry, wcpos_version — the value the plugin-compat gate reads —
 		// stays stale for the whole session, because the effect only fires on mount.
@@ -117,5 +133,12 @@ describe('useSiteInfo', () => {
 
 		await waitFor(() => expect(mockIncrementalPatch).toHaveBeenCalledTimes(1));
 		expect(mockIncrementalPatch.mock.calls[0]?.[0]).toMatchObject({ wcpos_version: '1.9.6' });
+
+		// The deferral is consumed by that retry: later wakes are routine again.
+		const callsAfterRetry = mockGet.mock.calls.length;
+		await act(async () => {
+			for (const callback of [...mockWakeCallbacks]) callback();
+		});
+		expect(mockGet).toHaveBeenCalledTimes(callsAfterRetry);
 	});
 });

@@ -30,10 +30,22 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 	const wpApiUrl = site.wp_api_url;
 	const siteUrl = site.url;
 
-	// A fetch blocked while the tab was hidden is deferred, not failed: waking bumps
-	// this tick, which re-runs the effect below.
+	// A fetch blocked while the tab was hidden is deferred, not failed: the block sets
+	// this flag, and the next wake consumes it to re-run the effect below. Gating on the
+	// flag matters because this hook is mounted for the whole session in AppLayout —
+	// bumping the tick on every wake would re-fetch and re-patch mount-only data on
+	// every tab switch or window restore.
+	const deferredRef = React.useRef(false);
 	const [wakeTick, setWakeTick] = React.useState(0);
-	React.useEffect(() => requestStateManager.onWake(() => setWakeTick((tick) => tick + 1)), []);
+	React.useEffect(
+		() =>
+			requestStateManager.onWake(() => {
+				if (!deferredRef.current) return;
+				deferredRef.current = false;
+				setWakeTick((tick) => tick + 1);
+			}),
+		[]
+	);
 
 	/**
 	 * Fetch site info on mount and when site URL changes.
@@ -95,6 +107,7 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 				}
 			} catch (err) {
 				if (isAsleepBlock(err)) {
+					deferredRef.current = true;
 					// Nothing was attempted, so nothing failed: leave `error` unset and
 					// wait for the wake tick below to re-run the fetch. Reporting this
 					// would mark a backgrounded tab as broken, and `wcpos_version` — the

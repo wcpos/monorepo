@@ -25,6 +25,14 @@ const templatesLogger = getLogger(['wcpos', 'query', 'templates']);
 const inFlight = new WeakMap<RxCollection, Promise<void>>();
 
 /**
+ * Collections whose sync was blocked by the sleeping pre-flight check. `useTemplatesSync`
+ * consumes this on wake so only a genuinely deferred sync re-runs — this hook lives for
+ * the whole session, and re-fetching on every wake would pull the full template set
+ * (`posts_per_page=-1`) on every tab switch or window restore.
+ */
+const deferredCollections = new WeakSet<RxCollection>();
+
+/**
  * Fetch the full templates set and upsert it into the local collection.
  * Best-effort: a network/parse failure is logged, never thrown into render.
  */
@@ -83,7 +91,8 @@ export function syncTemplates(
 		} catch (error: any) {
 			if (isAsleepBlock(error)) {
 				// Blocked before the request left, so the template set is untouched, not
-				// broken. The wake tick in `useTemplatesSync` re-runs this.
+				// broken. Mark it so the next wake re-runs this one.
+				deferredCollections.add(collection);
 				templatesLogger.debug('Templates sync deferred — app is in background');
 			} else {
 				templatesLogger.error('Failed to sync templates', {
@@ -106,9 +115,18 @@ export function useTemplatesSync(): void {
 	const collection = runtime.localDB.collections.templates;
 
 	// A sync deferred while the window was hidden re-runs on wake — otherwise the
-	// receipt modal shows no templates until the next remount.
+	// receipt modal shows no templates until the next remount. Only a deferred sync
+	// re-runs; a routine wake must not re-pull the whole set.
 	const [wakeTick, setWakeTick] = React.useState(0);
-	React.useEffect(() => requestStateManager.onWake(() => setWakeTick((tick) => tick + 1)), []);
+	React.useEffect(
+		() =>
+			requestStateManager.onWake(() => {
+				if (!collection || !deferredCollections.has(collection)) return;
+				deferredCollections.delete(collection);
+				setWakeTick((tick) => tick + 1);
+			}),
+		[collection]
+	);
 
 	React.useEffect(() => {
 		if (collection) void syncTemplates(collection, httpClient);
