@@ -546,7 +546,8 @@ test.describe('search-probe pure logic', () => {
 				}
 				return response(201, { id: 44 });
 			},
-			get: async (_url: string, options: { params: { sku: string } }) => {
+			get: async (url: string, options: { params: { sku: string } }) => {
+				if (!url.includes('/variations')) return response(200, []);
 				lookupCount += 1;
 				return response(200, [{ id: 43, sku: options.params.sku }]);
 			},

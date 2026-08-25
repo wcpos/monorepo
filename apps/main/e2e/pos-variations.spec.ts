@@ -1,8 +1,13 @@
 import { errors, expect, type Locator, type Page } from '@playwright/test';
 
 import { LOADED_COUNT_READY, LOADED_COUNT_TEST_ID } from './catalogue-readiness';
-import { findVariableProduct, isolatedVariableProductTest as test } from './checkout-probe';
+import {
+	findVariableProduct,
+	isolatedVariableProductTest as test,
+	variableProductProbe,
+} from './checkout-probe';
 import { becomesVisible, isWcposRestRoute } from './fixtures';
+import { unwrapWireBody } from './wire-envelope';
 import { ensureTableView } from './pos-view-mode';
 
 /**
@@ -311,6 +316,88 @@ test.describe('POS Variations', () => {
 
 		// Cart should show the checkout button
 		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 10_000 });
+	});
+
+	/**
+	 * The variation thumbnail renders the image the SERVER sent.
+	 *
+	 * This pair is the whole point. The wcpos/v2 lane hydrates variations through
+	 * WooCommerce's PRODUCTS controller, so a variation document carries `images[]`,
+	 * while the wc/v3 variations shape our v1 lane serves carries a singular `image`.
+	 * The client read only `image`, and every variation thumbnail on a 1.10.0 store
+	 * went blank (#1577) with both sides individually green — the plugin's
+	 * `Test_Catalog_Proxy_Images` asserts what the server SENDS, and nothing here
+	 * asserted what the client READS. Reading the src out of the live response and
+	 * then out of that variation's row is the only check that spans the seam.
+	 *
+	 * The probe seeds its variations with a real attachment for exactly this test, so
+	 * "no image to assert on" is an environment shortfall (a store with no product
+	 * imagery to borrow at all), never a quietly green run.
+	 */
+	test('should render the variation image the server sent', async ({ posPage: page }) => {
+		const probe = variableProductProbe(page);
+		test.skip(probe === null, 'No product-writer credentials configured — probe has no image');
+		// A store that declared writer credentials and then FAILED the donor read is a broken
+		// environment, not a bare one: fail on it, or an auth/server regression skips its way to
+		// green (E2E store-agnostic policy, CLAUDE.md).
+		expect(
+			probe!.imageLookupFailure ?? null,
+			'the donor-image lookup failed on a store with writer credentials'
+		).toBeNull();
+		test.skip(
+			probe!.imageAttachmentId === null || probe!.imageAttachmentId === undefined,
+			`No product in this store carries an image the probe could borrow (${probe!.imageLookupDetail ?? 'no detail'})`
+		);
+
+		await searchForVariableProduct(page);
+
+		// Correlate on the PARENT, not just the route. Search demand and background prefetch pull
+		// /wcpos/v2/variations too, so a route-only predicate can resolve with another product's
+		// documents — whose ids have no row under this expansion, turning a real oracle into a
+		// flake that reports the wrong thing.
+		const expandLink = page.getByTestId('variable-product-expand').first();
+		const [response] = await Promise.all([
+			page.waitForResponse(
+				async (res) => {
+					if (!isWcposRestRoute(res.url(), '/wcpos/v2/variations') || !res.ok()) return false;
+					const parsed = unwrapWireBody(await res.json().catch(() => null)) as {
+						documents?: { parent_id?: number }[];
+					} | null;
+					return (parsed?.documents ?? []).some((doc) => doc.parent_id === probe!.id);
+				},
+				{ timeout: 30_000 }
+			),
+			expandLink.click(),
+		]);
+
+		const body = unwrapWireBody(await response.json()) as {
+			documents?: {
+				id?: number;
+				parent_id?: number;
+				payload?: { images?: { src?: string }[]; image?: { src?: string } };
+			}[];
+		};
+		// The server's answer, read the way the cell reads it. A store on the v1 lane sends
+		// the singular `image`; 1.10.0+ sends `images[]`. Either resolves — neither being
+		// present is the regression, on whichever side introduced it.
+		const withImage = (body.documents ?? [])
+			.filter((doc) => doc.parent_id === probe!.id)
+			.find((doc) => doc.payload?.images?.[0]?.src || doc.payload?.image?.src);
+		expect(
+			withImage,
+			'the seeded variations came back from /wcpos/v2/variations with no image src'
+		).toBeDefined();
+
+		const row = page.getByTestId(`data-table-row-variation-${withImage!.id}`);
+		await expect(row).toBeVisible({ timeout: 30_000 });
+
+		// The cell resolves the URL to a local object URL before painting, so the rendered src
+		// can never be compared to the wire URL — its EMPTINESS is the bug's whole signature.
+		await expect
+			.poll(async () => (await row.locator('img').first().getAttribute('src')) ?? '', {
+				timeout: 30_000,
+			})
+			.not.toBe('');
 	});
 
 	test('should increment quantity when adding same variation twice', async ({ posPage: page }) => {

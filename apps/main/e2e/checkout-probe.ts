@@ -14,6 +14,7 @@ import {
 	deleteSearchProbe,
 	productWriterAuthorization,
 	productWriterCredentialsConfigured,
+	type RunPrivateProductProbe,
 	searchAndWaitForServer,
 	type SearchProbe,
 	sweepOrphanedProductProbes,
@@ -43,7 +44,7 @@ type VariationMatrixWorkerFixtures = {
 type ProductProbeTestFixtures = {};
 
 const simpleProbesByPage = new WeakMap<Page, SearchProbe[] | null>();
-const variableProbeByPage = new WeakMap<Page, SearchProbe | null>();
+const variableProbeByPage = new WeakMap<Page, RunPrivateProductProbe | null>();
 const matrixProbeByPage = new WeakMap<Page, VariationMatrixProbe | null>();
 
 function workerStoreUrl(workerInfo: WorkerInfo): string {
@@ -247,6 +248,19 @@ export function variationMatrixProbe(page: Page): VariationMatrixProbe | null {
 	const probe = matrixProbeByPage.get(page);
 	if (probe === undefined) {
 		throw new Error('variationMatrixProbe requires isolatedVariationMatrixTest registration');
+	}
+	return probe;
+}
+
+/**
+ * The worker-private variable product for the page under test, or null on a fork run that
+ * never claimed writer credentials. Specs read it for what the probe was actually seeded
+ * with — an assertion about an image cannot be honest without knowing whether one was given.
+ */
+export function variableProductProbe(page: Page): RunPrivateProductProbe | null {
+	const probe = variableProbeByPage.get(page);
+	if (probe === undefined) {
+		throw new Error('variableProductProbe requires isolatedVariableProductTest registration');
 	}
 	return probe;
 }
