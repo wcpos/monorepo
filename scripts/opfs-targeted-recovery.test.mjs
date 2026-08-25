@@ -11,7 +11,7 @@ const skipPremiumStorageTests = process.env.SKIP_RXDB_PREMIUM_TESTS === "true";
 const { getRxStorageFilesystemNode } = skipPremiumStorageTests
   ? {}
   : await import("rxdb-premium/plugins/storage-filesystem-node");
-const premiumStorageTest = skipPremiumStorageTests ? test.skip : test;
+const premiumStorageTestOptions = { skip: skipPremiumStorageTests };
 
 const schema = {
   title: "targeted recovery probe",
@@ -499,7 +499,7 @@ for (const method of [
   "query",
   "getChangedDocumentsSince",
 ]) {
-  premiumStorageTest(`${method} validates the result returned after recovery`, async () => {
+  test(`${method} validates the result returned after recovery`, premiumStorageTestOptions, async () => {
     const basePath = await mkdtemp(join(tmpdir(), "wcpos-retry-validation-"));
     const record = document(`retry:${method}`, 0);
 
@@ -545,7 +545,7 @@ for (const method of [
   });
 }
 
-premiumStorageTest("repairs one malformed record without removing its collection siblings", async () => {
+test("repairs one malformed record without removing its collection siblings", premiumStorageTestOptions, async () => {
   const basePath = await mkdtemp(join(tmpdir(), "wcpos-targeted-recovery-"));
   const ids = ["product:111", "product:6660", "product:999"];
   const records = ids.map((id, index) => document(id, index));
@@ -625,7 +625,7 @@ premiumStorageTest("repairs one malformed record without removing its collection
   }
 });
 
-premiumStorageTest("drops whitespace-only index rows after cleanup fails", async () => {
+test("drops whitespace-only index rows after cleanup fails", premiumStorageTestOptions, async () => {
   const basePath = await mkdtemp(join(tmpdir(), "wcpos-cleanup-recovery-"));
   const oldLwt = Date.now() - 10_000;
   const deleted = {
@@ -713,7 +713,7 @@ premiumStorageTest("drops whitespace-only index rows after cleanup fails", async
   }
 });
 
-premiumStorageTest("repairs a malformed record before retrying its pending write", async () => {
+test("repairs a malformed record before retrying its pending write", premiumStorageTestOptions, async () => {
   const basePath = await mkdtemp(
     join(tmpdir(), "wcpos-targeted-write-recovery-"),
   );
@@ -767,7 +767,7 @@ premiumStorageTest("repairs a malformed record before retrying its pending write
   }
 });
 
-premiumStorageTest("refuses to recover a matching nested object as the whole document", async () => {
+test("refuses to recover a matching nested object as the whole document", premiumStorageTestOptions, async () => {
   const basePath = await mkdtemp(join(tmpdir(), "wcpos-targeted-refusal-"));
   const id = "product:nested";
 
@@ -799,7 +799,7 @@ premiumStorageTest("refuses to recover a matching nested object as the whole doc
   }
 });
 
-premiumStorageTest("refuses a matching id whose recovered index values differ", async () => {
+test("refuses a matching id whose recovered index values differ", premiumStorageTestOptions, async () => {
   const basePath = await mkdtemp(
     join(tmpdir(), "wcpos-targeted-index-refusal-"),
   );
@@ -917,7 +917,7 @@ async function shiftSecondaryIndexOffsets(basePath, id, shift, position = 1) {
   await writeFile(indexPath, JSON.stringify(rows));
 }
 
-premiumStorageTest("rebuilds a secondary index whose rows point at stale byte ranges", async () => {
+test("rebuilds a secondary index whose rows point at stale byte ranges", premiumStorageTestOptions, async () => {
   const basePath = await mkdtemp(join(tmpdir(), "wcpos-index-reconcile-"));
   const ids = ["lane:aaa", "lane:bbb", "lane:ccc"];
   const records = ids.map((id, index) => laneDocument(id, index));
@@ -990,7 +990,7 @@ premiumStorageTest("rebuilds a secondary index whose rows point at stale byte ra
   }
 });
 
-premiumStorageTest("declines an index rebuild when the storage is multi-instance", async () => {
+test("declines an index rebuild when the storage is multi-instance", premiumStorageTestOptions, async () => {
   const basePath = await mkdtemp(join(tmpdir(), "wcpos-index-multi-"));
   const ids = ["lane:aaa", "lane:bbb", "lane:ccc"];
 
@@ -1031,7 +1031,7 @@ premiumStorageTest("declines an index rebuild when the storage is multi-instance
   }
 });
 
-premiumStorageTest("refuses an index rebuild when the primary index is itself unsound", async () => {
+test("refuses an index rebuild when the primary index is itself unsound", premiumStorageTestOptions, async () => {
   const basePath = await mkdtemp(join(tmpdir(), "wcpos-index-unsound-"));
   const ids = ["lane:aaa", "lane:bbb", "lane:ccc"];
 
@@ -1084,7 +1084,7 @@ premiumStorageTest("refuses an index rebuild when the primary index is itself un
   }
 });
 
-premiumStorageTest("recovers every concurrent query against the same stale index", async () => {
+test("recovers every concurrent query against the same stale index", premiumStorageTestOptions, async () => {
   const basePath = await mkdtemp(join(tmpdir(), "wcpos-index-concurrent-"));
   const ids = ["lane:aaa", "lane:bbb", "lane:ccc"];
 
@@ -1127,7 +1127,7 @@ premiumStorageTest("recovers every concurrent query against the same stale index
   }
 });
 
-premiumStorageTest("refuses a rebuild when the primary points at a stale duplicate revision", async () => {
+test("refuses a rebuild when the primary points at a stale duplicate revision", premiumStorageTestOptions, async () => {
   const basePath = await mkdtemp(join(tmpdir(), "wcpos-index-stale-rev-"));
   const ids = ["lane:aaa", "lane:bbb", "lane:ccc"];
 
@@ -1185,7 +1185,7 @@ premiumStorageTest("refuses a rebuild when the primary points at a stale duplica
   }
 });
 
-premiumStorageTest("refuses a rebuild when the primary index is missing rows", async () => {
+test("refuses a rebuild when the primary index is missing rows", premiumStorageTestOptions, async () => {
   const basePath = await mkdtemp(join(tmpdir(), "wcpos-index-truncated-"));
   const ids = ["lane:aaa", "lane:bbb", "lane:ccc"];
 
@@ -1235,7 +1235,7 @@ premiumStorageTest("refuses a rebuild when the primary index is missing rows", a
   }
 });
 
-premiumStorageTest("reports an incomplete index rollback and recovers on retry", async () => {
+test("reports an incomplete index rollback and recovers on retry", premiumStorageTestOptions, async () => {
   const basePath = await mkdtemp(join(tmpdir(), "wcpos-index-scattered-"));
   const ids = ["lane:aaa", "lane:bbb", "lane:ccc"];
 
@@ -1335,7 +1335,7 @@ premiumStorageTest("reports an incomplete index rollback and recovers on retry",
   }
 });
 
-premiumStorageTest("refuses a rebuild when index ID sets differ despite equal counts", async () => {
+test("refuses a rebuild when index ID sets differ despite equal counts", premiumStorageTestOptions, async () => {
   const basePath = await mkdtemp(join(tmpdir(), "wcpos-index-idset-"));
   const ids = ["lane:aaa", "lane:bbb", "lane:ccc"];
 
@@ -1386,7 +1386,7 @@ premiumStorageTest("refuses a rebuild when index ID sets differ despite equal co
   }
 });
 
-premiumStorageTest("refuses a rebuild when the primary index holds duplicate IDs", async () => {
+test("refuses a rebuild when the primary index holds duplicate IDs", premiumStorageTestOptions, async () => {
   const basePath = await mkdtemp(join(tmpdir(), "wcpos-index-dupid-"));
   const ids = ["lane:aaa", "lane:bbb", "lane:ccc"];
 
@@ -1445,7 +1445,7 @@ premiumStorageTest("refuses a rebuild when the primary index holds duplicate IDs
   }
 });
 
-premiumStorageTest("rebuilds a secondary index that duplicates one document and drops another", async () => {
+test("rebuilds a secondary index that duplicates one document and drops another", premiumStorageTestOptions, async () => {
   const basePath = await mkdtemp(join(tmpdir(), "wcpos-index-dup-drop-"));
   const ids = ["lane:aaa", "lane:bbb", "lane:ccc"];
 
