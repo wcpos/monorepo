@@ -17,15 +17,22 @@ import { Suspense } from '@wcpos/components/suspense';
 import { useT } from '@wcpos/core/contexts/translations';
 import type { EngineRecord } from '@wcpos/query';
 
-import { useSearchSelect } from '../../../../query';
+import { useGuardedExtension, useSearchSelect } from '../../../../query';
+
+import type { SearchSelectBinding } from '../../../../query';
 
 /**
  *
  */
-function TagList({ resource }: { resource: ReturnType<typeof useSearchSelect>['resource'] }) {
-	const result = useObservableSuspense(resource) as {
+function TagList({ binding }: { binding: SearchSelectBinding }) {
+	const result = useObservableSuspense(binding.resource) as {
 		hits: { id: string; record: EngineRecord<'tags'> }[];
 	};
+	const handleEndReached = useGuardedExtension(
+		binding.extendLimit,
+		result.hits.length,
+		binding.limit
+	);
 	const t = useT();
 
 	const data = result.hits.map(({ record }) => ({
@@ -42,6 +49,8 @@ function TagList({ resource }: { resource: ReturnType<typeof useSearchSelect>['r
 				</ComboboxItem>
 			)}
 			estimatedItemSize={44}
+			onEndReached={handleEndReached}
+			onEndReachedThreshold={0.1}
 			ListEmptyComponent={<ComboboxEmpty>{t('common.no_tag_found')}</ComboboxEmpty>}
 		/>
 	);
@@ -65,7 +74,7 @@ export function TagSearch() {
 				onChangeText={binding.setSearch}
 			/>
 			<Suspense>
-				<TagList resource={binding.resource} />
+				<TagList binding={binding} />
 			</Suspense>
 		</>
 	);

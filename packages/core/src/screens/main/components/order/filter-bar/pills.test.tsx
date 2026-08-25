@@ -34,6 +34,8 @@ jest.mock('../../../../../query', () => {
 			resource: mockCashierResource,
 			search: '',
 			setSearch: mockSetCashierSearch,
+			limit: 50,
+			extendLimit: jest.fn(),
 		})),
 	};
 });
@@ -199,7 +201,7 @@ describe('order filter pills', () => {
 		fireEvent.change(screen.getByTestId('cashier-search'), { target: { value: 'gra' } });
 		expect(mockSetCashierSearch).toHaveBeenCalledWith('gra');
 		expect(mockCustomerListProps).toMatchObject({
-			resource: mockCashierResource,
+			binding: expect.objectContaining({ resource: mockCashierResource }),
 			withGuest: false,
 		});
 		fireEvent.click(screen.getByTestId('select-combobox'));

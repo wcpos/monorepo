@@ -1656,7 +1656,7 @@ describe('query bindings', () => {
 			},
 		]);
 		const { result } = renderHook(
-			() => useSearchSelect('category', { debounceMs: 50, maxResults: 2 }),
+			() => useSearchSelect('category', { debounceMs: 50, pageSize: 2 }),
 			{ wrapper: Provider }
 		);
 		act(() => result.current.setSearch('al'));
@@ -1669,6 +1669,50 @@ describe('query bindings', () => {
 		expect(
 			(result.current.resource.valueRef$$.value?.current as QueryResult<RxCollection>)?.hits.length
 		).toBeLessThanOrEqual(2);
+	});
+
+	/**
+	 * #1553: the picker's window was a fixed 50 with no way to grow, so a 5,000-customer store
+	 * could only ever be scrolled 50 rows deep. The window is a PAGE now, and the demand the
+	 * page declares has to grow with it — a limit the engine never sees pages through
+	 * residents only and stops at whatever happens to be local.
+	 */
+	it('grows the declared window when the search-select pages', async () => {
+		const { result } = renderHook(() => useSearchSelect('customer'), { wrapper: Provider });
+
+		expect(result.current.limit).toBe(50);
+		await waitFor(() =>
+			expect(engine.requireCalls).toContainEqual(
+				expect.objectContaining({ collection: 'customers', kind: 'customer-browse', limit: 50 })
+			)
+		);
+
+		act(() => result.current.extendLimit());
+
+		expect(result.current.limit).toBe(100);
+		await waitFor(() =>
+			expect(engine.requireCalls).toContainEqual(
+				expect.objectContaining({ collection: 'customers', kind: 'customer-browse', limit: 100 })
+			)
+		);
+	});
+
+	it('starts a committed search back at the first page', async () => {
+		jest.useFakeTimers();
+		const { result } = renderHook(() => useSearchSelect('customer', { debounceMs: 50 }), {
+			wrapper: Provider,
+		});
+
+		act(() => result.current.extendLimit());
+		act(() => result.current.extendLimit());
+		expect(result.current.limit).toBe(150);
+
+		act(() => result.current.setSearch('ada'));
+		act(() => jest.advanceTimersByTime(50));
+
+		expect(result.current.committedSearch).toBe('ada');
+		expect(result.current.limit).toBe(50);
+		await act(async () => Promise.resolve());
 	});
 
 	it('declares coupon refresh demand when the cart coupon picker binding mounts', async () => {

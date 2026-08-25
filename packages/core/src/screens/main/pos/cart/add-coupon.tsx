@@ -21,9 +21,11 @@ import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
-import { useSearchSelect } from '../../../../query';
+import { useGuardedExtension, useSearchSelect } from '../../../../query';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useAddCoupon } from '../hooks/use-add-coupon';
+
+import type { SearchSelectBinding } from '../../../../query';
 
 interface CouponHit {
 	id: string;
@@ -115,20 +117,27 @@ function CouponSearch({ onSearchChange }: { onSearchChange?: () => void }) {
 				onChangeText={onSearch}
 			/>
 			<Suspense>
-				<CouponList resource={binding.resource} />
+				<CouponList binding={binding} />
 			</Suspense>
 		</>
 	);
 }
 
-function CouponList({ resource }: { resource: ReturnType<typeof useSearchSelect>['resource'] }) {
-	const result = useObservableSuspense(resource) as { hits: CouponHit[] };
+function CouponList({ binding }: { binding: SearchSelectBinding }) {
+	const result = useObservableSuspense(binding.resource) as { hits: CouponHit[] };
 	const t = useT();
+	const handleEndReached = useGuardedExtension(
+		binding.extendLimit,
+		result.hits.length,
+		binding.limit
+	);
 
 	return (
 		<ComboboxList
 			data={result.hits as unknown as import('@wcpos/components/combobox').Option[]}
 			shouldFilter={false}
+			onEndReached={handleEndReached}
+			onEndReachedThreshold={0.1}
 			renderItem={({ item }) => {
 				const hit = item as unknown as CouponHit;
 				const coupon = hit.record.payload;

@@ -4,7 +4,7 @@ export {
 	useQueryStateActions,
 	useSearchResetNonce,
 } from './query-state-store';
-export { useGuardedExtendLimit } from './use-guarded-extend-limit';
+export { useGuardedExtendLimit, useGuardedExtension } from './use-guarded-extend-limit';
 export {
 	useCollectionBinding,
 	useLogsBinding,
@@ -22,4 +22,9 @@ export type {
 	SortFieldOf,
 	VariationMatch,
 } from './query-state-types';
-export type { QueryBinding, QueryLaneProgress, SearchSelectCollection } from './query-bindings';
+export type {
+	QueryBinding,
+	QueryLaneProgress,
+	SearchSelectBinding,
+	SearchSelectCollection,
+} from './query-bindings';

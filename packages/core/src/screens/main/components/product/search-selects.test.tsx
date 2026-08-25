@@ -27,10 +27,15 @@ const mockUseSearchSelect = jest.fn((collection: string) => ({
 	},
 	search: '',
 	setSearch,
+	limit: 50,
+	extendLimit: jest.fn(),
 }));
 
 jest.mock('../../../../query', () => ({
 	useSearchSelect: (collection: string) => mockUseSearchSelect(collection),
+	useGuardedExtension: jest.requireActual<
+		typeof import('../../../../query/use-guarded-extend-limit')
+	>('../../../../query/use-guarded-extend-limit').useGuardedExtension,
 }));
 jest.mock('@wcpos/query', () => ({
 	useQuery: () => {

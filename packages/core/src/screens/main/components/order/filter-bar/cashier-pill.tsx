@@ -44,7 +44,7 @@ function CashierSearch() {
 				onChangeText={binding.setSearch}
 			/>
 			<Suspense>
-				<CustomerList resource={binding.resource} withGuest={false} />
+				<CustomerList binding={binding} withGuest={false} />
 			</Suspense>
 		</>
 	);
