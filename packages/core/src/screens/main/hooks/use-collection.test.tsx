@@ -19,14 +19,27 @@ jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 
-function makeStoreDB(label: string) {
+/**
+ * In production `reset$` is ONE module-level Subject shared by every open store
+ * database (`reset-collection.ts`), so a per-database Subject here would model
+ * a world the app does not have and hide any cross-store leak. `sharedReset$`
+ * is that single subject; give each database its own only to test the case
+ * where a database has no reset traffic at all.
+ */
+let sharedReset$: Subject<RxCollection>;
+
+function makeStoreDB(label: string, reset$: Subject<RxCollection> = sharedReset$) {
 	return {
 		collections: { logs: { name: 'logs', label } as unknown as RxCollection },
-		reset$: new Subject<RxCollection>(),
+		reset$,
 	};
 }
 
 describe('useCollection', () => {
+	beforeEach(() => {
+		sharedReset$ = new Subject<RxCollection>();
+	});
+
 	it('follows a reset of the same store database', () => {
 		const db = makeStoreDB('A');
 		currentStoreDB = db;
@@ -61,7 +74,7 @@ describe('useCollection', () => {
 			collections: {
 				scanner_profiles: { name: 'scanner_profiles', label: 'storeA' } as unknown as RxCollection,
 			},
-			reset$: new Subject<RxCollection>(),
+			reset$: sharedReset$,
 		};
 		const { result, rerender } = renderHook(() => useCollection('scanner_profiles'));
 		expect((result.current.collection as unknown as { label: string }).label).toBe('storeA');
@@ -70,8 +83,36 @@ describe('useCollection', () => {
 			collections: {
 				scanner_profiles: { name: 'scanner_profiles', label: 'storeB' } as unknown as RxCollection,
 			},
-			reset$: new Subject<RxCollection>(),
+			reset$: sharedReset$,
 		};
+		rerender();
+
+		expect((result.current.collection as unknown as { label: string }).label).toBe('storeB');
+	});
+
+	/**
+	 * The cross-store leak. `reset$` carries every open store's resets, so a
+	 * name-only filter lets store A's storage recovery — finishing after the
+	 * cashier switched to store B — hand B's mounted reader store A's
+	 * collection. Every write the component then makes lands in the wrong store.
+	 */
+	it('IGNORES a reset belonging to a different store database', () => {
+		const storeA = makeStoreDB('storeA');
+		currentStoreDB = makeStoreDB('storeB');
+		const { result, rerender } = renderHook(() => useCollection('logs'));
+		expect((result.current.collection as unknown as { label: string }).label).toBe('storeB');
+
+		// Store A's recovery completes, announcing on the shared subject.
+		const aReplacement = {
+			name: 'logs',
+			label: 'storeA-reset',
+			database: storeA,
+		} as unknown as RxCollection;
+		storeA.collections.logs = aReplacement;
+		sharedReset$.next(aReplacement);
+		// `rerender` is load-bearing: without it `result.current` is never
+		// refreshed and the assertion passes against ANY filter, leaked value
+		// included — the sibling tests above rerender for the same reason.
 		rerender();
 
 		expect((result.current.collection as unknown as { label: string }).label).toBe('storeB');

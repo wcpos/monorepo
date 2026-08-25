@@ -59,11 +59,11 @@ function ownReplacement(
  * A's storage recovery completing after the cashier switched to store B would
  * move B's mounted reader onto A's collection.
  */
-export function useLocalCollection$<T = Record<string, unknown>>(
+export function useFollowedCollection$<T = Record<string, unknown>>(
+	database: LocalDatabaseWithReset,
 	collectionName: string
 ): Observable<RxCollection<T> | undefined> {
-	const runtime = useQueryRuntime();
-	const localDB = runtime.localDB as LocalDatabaseWithReset;
+	const localDB = database;
 	const current = localDB.collections[collectionName] as RxCollection<T> | undefined;
 
 	return React.useMemo(() => {
@@ -89,4 +89,18 @@ export function useLocalCollection$<T = Record<string, unknown>>(
 		// `collections` alongside a re-render must produce a NEW observable so
 		// downstream `shareReplay` consumers re-subscribe and re-read.
 	}, [localDB, collectionName, current]) as Observable<RxCollection<T> | undefined>;
+}
+
+/**
+ * {@link useFollowedCollection$} bound to the query runtime's `localDB` — the
+ * store database, which `QueryProvider` is handed as `localDB={storeDB}`. Use
+ * this from anything already inside the provider; pass the database explicitly
+ * when the caller holds it from another context (`useCollection` reads it from
+ * the store session).
+ */
+export function useLocalCollection$<T = Record<string, unknown>>(
+	collectionName: string
+): Observable<RxCollection<T> | undefined> {
+	const runtime = useQueryRuntime();
+	return useFollowedCollection$<T>(runtime.localDB as LocalDatabaseWithReset, collectionName);
 }
