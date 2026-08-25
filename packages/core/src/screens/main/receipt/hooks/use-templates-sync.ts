@@ -10,6 +10,7 @@
 
 import * as React from 'react';
 
+import { isAsleepBlock, requestStateManager } from '@wcpos/hooks/use-http-client';
 import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -80,10 +81,16 @@ export function syncTemplates(
 				}
 			}
 		} catch (error: any) {
-			templatesLogger.error('Failed to sync templates', {
-				code: ERROR_CODES.PRINT_UNEXPECTED,
-				context: { error: error?.message },
-			});
+			if (isAsleepBlock(error)) {
+				// Blocked before the request left, so the template set is untouched, not
+				// broken. The wake tick in `useTemplatesSync` re-runs this.
+				templatesLogger.debug('Templates sync deferred — app is in background');
+			} else {
+				templatesLogger.error('Failed to sync templates', {
+					code: ERROR_CODES.PRINT_UNEXPECTED,
+					context: { error: error?.message },
+				});
+			}
 		} finally {
 			inFlight.delete(collection);
 		}
@@ -97,7 +104,13 @@ export function useTemplatesSync(): void {
 	const runtime = useQueryRuntime();
 	const httpClient = useRestHttpClient();
 	const collection = runtime.localDB.collections.templates;
+
+	// A sync deferred while the window was hidden re-runs on wake — otherwise the
+	// receipt modal shows no templates until the next remount.
+	const [wakeTick, setWakeTick] = React.useState(0);
+	React.useEffect(() => requestStateManager.onWake(() => setWakeTick((tick) => tick + 1)), []);
+
 	React.useEffect(() => {
 		if (collection) void syncTemplates(collection, httpClient);
-	}, [collection, httpClient]);
+	}, [collection, httpClient, wakeTick]);
 }

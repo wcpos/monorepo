@@ -83,6 +83,22 @@ export const PREFLIGHT_BLOCK = {
 export type PreflightBlockCode = (typeof PREFLIGHT_BLOCK)[keyof typeof PREFLIGHT_BLOCK];
 
 /**
+ * A request rejected by the sleeping pre-flight check (tab hidden / window in the
+ * background) is expected control flow, not a failure: nothing was attempted, so
+ * nothing was proven wrong. `useHttpClient` already suppresses its own transport
+ * log row for it — callers that log or surface their own errors must skip it too,
+ * or a backgrounded tab writes error rows (and "needs attention" counts) for work
+ * that was never tried.
+ *
+ * Callers that skip the log must also arrange a retry: pair this with
+ * `requestStateManager.onWake()` so the deferred work actually runs. Silence
+ * without a retry is worse than the noise it removes.
+ */
+export const isAsleepBlock = (error: unknown): boolean =>
+	(error as { isPreFlightBlocked?: boolean })?.isPreFlightBlocked === true &&
+	(error as { blockCode?: string })?.blockCode === PREFLIGHT_BLOCK.ASLEEP;
+
+/**
  * Result of pre-flight check
  */
 interface CanProceedResult {
