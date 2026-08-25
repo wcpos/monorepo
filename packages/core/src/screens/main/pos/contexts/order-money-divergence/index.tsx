@@ -128,6 +128,17 @@ const MAX_HELD_DIVERGENCES = 50;
  */
 export const STORE_LEVEL_DIVERGENCE_THRESHOLD = 3;
 
+/**
+ * The map without one order — so re-inserting it puts it at the END, which is
+ * what makes key order mean "least recently diverged first". See `withinCap`.
+ */
+function withoutOrder(byOrderId: Record<string, OrderMoneyDivergence>, orderId: string) {
+	if (!(orderId in byOrderId)) return byOrderId;
+	const rest = { ...byOrderId };
+	delete rest[orderId];
+	return rest;
+}
+
 const NO_SERVER_OWNED: ReadonlySet<string> = new Set();
 const EMPTY_STATE: DivergenceStore = {
 	byOrderId: {},
@@ -135,7 +146,23 @@ const EMPTY_STATE: DivergenceStore = {
 	divergedOrderCount: 0,
 };
 
-/** Drop the oldest entries once the held set outgrows its memory bound. */
+/**
+ * Drop the LEAST RECENTLY DIVERGED entries once the held set outgrows its bound.
+ *
+ * Recency is carried by key order, which is why the caller re-inserts the order
+ * rather than assigning over it: a JS object keeps a key at its ORIGINAL
+ * insertion position when it is reassigned, so `{ ...current, [orderId]: held }`
+ * leaves a re-diverging order exactly where it first landed. This cap would then
+ * evict by FIRST divergence — and the order that has been diverged longest is,
+ * on the misconfigured store that fills this map in the first place, a perfectly
+ * good description of the sale in front of the cashier. Losing the notice on
+ * THAT order is the failure ADR 0032 §5 spent a section refusing to allow via
+ * the dismiss button; it must not arrive through eviction instead.
+ *
+ * `serverOwnedOrderIds` is unaffected either way — it is never evicted, so the
+ * settlement writer stays stood down regardless. Only the display detail is at
+ * stake here, which is precisely the half the cashier reads.
+ */
 function withinCap(byOrderId: Record<string, OrderMoneyDivergence>) {
 	const ids = Object.keys(byOrderId);
 	if (ids.length <= MAX_HELD_DIVERGENCES) return byOrderId;
@@ -209,7 +236,9 @@ export function OrderMoneyDivergenceProvider({ children }: { children: React.Rea
 				return {
 					engine,
 					byOrderId: withinCap(
-						sameEngine ? { ...current.byOrderId, [orderId]: held } : { [orderId]: held }
+						sameEngine
+							? { ...withoutOrder(current.byOrderId, orderId), [orderId]: held }
+							: { [orderId]: held }
 					),
 					serverOwnedOrderIds: new Set(
 						sameEngine ? [...current.serverOwnedOrderIds, orderId] : [orderId]
