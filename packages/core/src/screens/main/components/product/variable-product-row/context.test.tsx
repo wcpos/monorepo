@@ -69,7 +69,7 @@ describe('VariationRowProvider', () => {
 
 		rerender(
 			<VariationRowProvider row={row}>
-				<Variations row={row} hideOutOfStock />
+				<Variations row={row} stockStatus="instock" />
 			</VariationRowProvider>
 		);
 

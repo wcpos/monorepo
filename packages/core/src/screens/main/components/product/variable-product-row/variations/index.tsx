@@ -16,13 +16,14 @@ import type { Row } from '../../../../../../table-types';
 
 interface Props {
 	row: Row<{ record: EngineRecord<'products'> }, DataTableFeatures>;
-	hideOutOfStock?: boolean;
+	/** The products list's Stock Status filter; undefined shows every variation. */
+	stockStatus?: string;
 }
 
 /**
  *
  */
-export function Variations({ row, hideOutOfStock }: Props) {
+export function Variations({ row, stockStatus }: Props) {
 	/**
 	 * React Compiler caches the <VariationsTable> element on props that are all
 	 * referentially stable across a columnVisibility change, so React bails out
@@ -69,7 +70,7 @@ export function Variations({ row, hideOutOfStock }: Props) {
 			<View className="flex-1">
 				<ErrorBoundary>
 					<Suspense>
-						<VariationsTable row={row} binding={binding} hideOutOfStock={hideOutOfStock} />
+						<VariationsTable row={row} binding={binding} stockStatus={stockStatus} />
 					</Suspense>
 				</ErrorBoundary>
 			</View>

@@ -233,9 +233,23 @@ export function Products() {
 					}
 				},
 				variationRenderCell,
+				/**
+				 * Expanded variation rows answer to the same Stock Status pill as the rows around
+				 * them. `extraData` carries it into FlashList so rendered rows refresh when the
+				 * pill changes; meta alone is invisible to the list's memoisation.
+				 */
+				variationStockStatus: state.filters.stock_status,
 			},
+			extraData: state.filters.stock_status,
 		}),
-		[expandedRef, expanded$, setRowExpanded, productsPatch, variationsPatch]
+		[
+			expandedRef,
+			expanded$,
+			setRowExpanded,
+			productsPatch,
+			variationsPatch,
+			state.filters.stock_status,
+		]
 	);
 	/* eslint-enable react-compiler/react-compiler */
 

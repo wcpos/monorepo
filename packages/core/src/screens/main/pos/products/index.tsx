@@ -186,6 +186,7 @@ function POSProductsContent({
 	const state = useQueryState<'products'>();
 	const actions = useQueryStateActions<'products'>();
 	const binding = useRelationalCollectionBinding(state);
+	const stockStatusFilter = state.filters.stock_status;
 	const tableActions = React.useMemo<
 		Pick<QueryStateActions<'products'>, 'setSort' | 'extendLimit' | 'setFilter'>
 	>(
@@ -249,6 +250,11 @@ function POSProductsContent({
 
 	/**
 	 * Table config
+	 *
+	 * The expanded variation rows read the SAME Stock Status filter as the grid around them —
+	 * the pill is the live control, `showOutOfStock` only seeds it above. `extraData` carries the
+	 * filter into FlashList so already-rendered rows re-render when it changes; meta alone is
+	 * invisible to the list's memoisation.
 	 */
 	const tableConfig = React.useMemo(
 		() => ({
@@ -264,10 +270,11 @@ function POSProductsContent({
 				expanded$,
 				setRowExpanded,
 				variationRenderCell,
-				hideOutOfStockVariations: !showOutOfStock,
+				variationStockStatus: stockStatusFilter,
 			},
+			extraData: stockStatusFilter,
 		}),
-		[expandedRef, expanded$, setRowExpanded, showOutOfStock]
+		[expandedRef, expanded$, setRowExpanded, stockStatusFilter]
 	);
 	/* eslint-enable react-compiler/react-compiler */
 

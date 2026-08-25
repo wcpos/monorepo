@@ -72,13 +72,19 @@ jest.mock('../../components/data-table', () => ({
 		const actions = useQueryStateActions();
 		mockDataTableProps = props;
 		return (
-			<button
-				data-testid="clear-and-refresh"
-				onClick={() => {
-					actions.clearSearch();
-					actions.resetFilters();
-				}}
-			/>
+			<>
+				<button
+					data-testid="clear-and-refresh"
+					onClick={() => {
+						actions.clearSearch();
+						actions.resetFilters();
+					}}
+				/>
+				<button
+					data-testid="clear-stock-filter"
+					onClick={() => actions.clearFilter('stock_status')}
+				/>
+			</>
 		);
 	},
 	DataTableFooter: () => null,
@@ -207,6 +213,33 @@ describe('POSProducts query-state wiring', () => {
 		const clearSearch = mockUseBarcode.mock.calls[0]?.[1];
 		act(() => clearSearch?.());
 		expect(latestState().search).toBe('');
+	});
+
+	it('hands expanded variation rows the live filter, not the display setting', () => {
+		render(<POSProducts />);
+
+		const meta = () => (mockDataTableProps.tableConfig as { meta: Record<string, unknown> }).meta;
+		const extraData = () => (mockDataTableProps.tableConfig as { extraData: unknown }).extraData;
+
+		// The display setting seeds the pill, and the variation rows read the pill.
+		expect(meta().variationStockStatus).toBe('instock');
+		expect(extraData()).toBe('instock');
+
+		// Clearing the pill widens the grid to every stock state; the variations under an
+		// expanded row widen with it. Reading `showOutOfStock` instead left a cleared filter
+		// bar showing 4 of a 20-colour product's variations (demo store, 2026-08-25).
+		fireEvent.click(screen.getByTestId('clear-stock-filter'));
+		expect(latestState().filters).not.toHaveProperty('stock_status');
+		expect(meta().variationStockStatus).toBeUndefined();
+		expect(extraData()).toBeUndefined();
+
+		// And a narrowed pill narrows them: out-of-stock variations only.
+		const actions = mockDataTableProps.actions as {
+			setFilter: (field: 'stock_status', value: string) => void;
+		};
+		act(() => actions.setFilter('stock_status', 'outofstock'));
+		expect(meta().variationStockStatus).toBe('outofstock');
+		expect(extraData()).toBe('outofstock');
 	});
 
 	it('keeps custom variation detail expansion under screen ownership', () => {
