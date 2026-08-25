@@ -86,8 +86,8 @@ jest.mock('./variations/footer', () => ({
 jest.mock('../../record-text-cell', () => ({
 	RecordTextCell: () => null,
 }));
-jest.mock('../resolve-stock', () => ({
-	resolveStock: () => ({ sellable: true }),
+jest.mock('../stock-filter', () => ({
+	matchesStockStatusFilter: () => true,
 }));
 
 const variationHits$ = new BehaviorSubject({

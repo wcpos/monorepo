@@ -20,6 +20,8 @@ const mockVariationDocuments = [
 		id: 12,
 		status: 'publish',
 		attributes: [{ id: 1, name: 'Color', option: 'Blue' }],
+		manage_stock: true,
+		stock_quantity: 0,
 	},
 ];
 const mockSync = jest.fn().mockResolvedValue(undefined);
@@ -83,10 +85,12 @@ jest.mock('./buttons', () => ({
 		attribute,
 		onSelect,
 		optionCounts,
+		disabledOptions,
 	}: {
 		attribute: { id: number; name: string; options: string[] };
 		onSelect: (attribute: { id: number; name: string; option?: string }) => void;
 		optionCounts: Record<string, number>;
+		disabledOptions: Record<string, boolean>;
 	}) => (
 		<>
 			{attribute.options
@@ -94,6 +98,7 @@ jest.mock('./buttons', () => ({
 				.map((option) => (
 					<button
 						key={option}
+						data-disabled={String(!!disabledOptions[option])}
 						onClick={() => onSelect({ id: attribute.id, name: attribute.name, option })}
 					>
 						{`select-${option.toLowerCase()}`}
@@ -114,9 +119,23 @@ jest.mock('../../../../../../contexts/translations', () => ({
 jest.mock('../../../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: (value: string) => value }),
 }));
-jest.mock('../../../../contexts/ui-settings', () => ({
-	useUISettings: () => ({ uiSettings: { showOutOfStock$: false } }),
-}));
+/**
+ * The popover always renders inside the POS products list, and reads that list's Stock Status
+ * pill out of its query state — the pill, not the display setting, decides whether unsellable
+ * options are greyed out.
+ */
+function withProductsState(children: React.ReactNode, stockStatus?: string) {
+	return (
+		<QueryStateProvider
+			collection="products"
+			initialPageSize={10}
+			initialSort={{ field: 'name', direction: 'asc' }}
+			initialFilters={stockStatus ? { stock_status: stockStatus } : {}}
+		>
+			{children}
+		</QueryStateProvider>
+	);
+}
 
 function StateProbe() {
 	const matches = useQueryState<'variations', import('../../../../../../query').VariationMatch[]>(
@@ -140,32 +159,56 @@ describe('Variations popover query state', () => {
 			} as never,
 			addToCart: jest.fn(),
 		};
-		const { rerender } = render(<VariationsPopover {...props} />);
+		const { rerender } = render(withProductsState(<VariationsPopover {...props} />));
 
 		expect(mockSync).toHaveBeenCalledTimes(1);
 
-		rerender(<VariationsPopover {...props} />);
+		rerender(withProductsState(<VariationsPopover {...props} />));
 
 		expect(mockSync).toHaveBeenCalledTimes(1);
 	});
 
 	it('does not show draft variations', () => {
 		render(
-			<VariationsPopover
-				parent={
-					{
-						payload: {
-							variations: [11, 12],
-							attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
-						},
-					} as never
-				}
-				addToCart={jest.fn()}
-			/>
+			withProductsState(
+				<VariationsPopover
+					parent={
+						{
+							payload: {
+								variations: [11, 12],
+								attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
+							},
+						} as never
+					}
+					addToCart={jest.fn()}
+				/>
+			)
 		);
 
 		expect(screen.queryByText('select-red')).toBeNull();
 		expect(screen.queryByText('select-blue')).not.toBeNull();
+	});
+
+	it('greys out an unsellable option only while the Stock Status pill narrows the list', () => {
+		const props = {
+			parent: {
+				payload: {
+					variations: [11, 12],
+					attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
+				},
+			} as never,
+			addToCart: jest.fn(),
+		};
+
+		// Blue holds no stock: the pill says In stock, so the option is not selectable.
+		const { unmount } = render(withProductsState(<VariationsPopover {...props} />, 'instock'));
+		expect(screen.getByText('select-blue').getAttribute('data-disabled')).toBe('true');
+		unmount();
+
+		// Pill cleared: every stock state is on show, so every colour can be picked and the
+		// disabled Add to Cart button carries the stock news instead.
+		render(withProductsState(<VariationsPopover {...props} />));
+		expect(screen.getByText('select-blue').getAttribute('data-disabled')).toBe('false');
 	});
 
 	it('adds and removes an attribute match through the provider actions', () => {

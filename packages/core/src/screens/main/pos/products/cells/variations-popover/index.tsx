@@ -2,11 +2,10 @@ import * as React from 'react';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
-import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 
 import { Variations } from './variations';
-import { useUISettings } from '../../../../contexts/ui-settings';
 import { QueryStateProvider, useCollectionBinding, useQueryState } from '../../../../../../query';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -17,10 +16,19 @@ interface VariationsPopoverProps {
 	addToCart: (variation: EngineRecord<'variations'>, metaData: LineItem['meta_data']) => void;
 }
 
+interface VariationsPopoverContentProps extends VariationsPopoverProps {
+	/** The products list's Stock Status filter, read outside the variations query state. */
+	stockStatus?: string;
+}
+
 /**
  *
  */
-function VariationsPopoverContent({ parent, addToCart }: VariationsPopoverProps) {
+function VariationsPopoverContent({
+	parent,
+	addToCart,
+	stockStatus,
+}: VariationsPopoverContentProps) {
 	const state = useQueryState<'variations'>();
 	const variationIds = useRecordField(parent, (record) => record.payload.variations);
 	const remoteIds = (variationIds ?? [])
@@ -44,9 +52,6 @@ function VariationsPopoverContent({ parent, addToCart }: VariationsPopoverProps)
 	const allVariationsBinding = useCollectionBinding('variations', allVariationsState, {
 		remoteIds,
 	});
-	const { uiSettings } = useUISettings('pos-products');
-	const showOutOfStock = useDocField(uiSettings, (settings) => settings.showOutOfStock);
-
 	return (
 		<ErrorBoundary>
 			<Suspense>
@@ -55,7 +60,7 @@ function VariationsPopoverContent({ parent, addToCart }: VariationsPopoverProps)
 					allVariationsResource={allVariationsBinding.resource}
 					parent={parent}
 					addToCart={addToCart}
-					hideOutOfStock={!showOutOfStock}
+					hideOutOfStock={stockStatus === 'instock'}
 				/>
 			</Suspense>
 		</ErrorBoundary>
@@ -63,6 +68,16 @@ function VariationsPopoverContent({ parent, addToCart }: VariationsPopoverProps)
 }
 
 export function VariationsPopover(props: VariationsPopoverProps) {
+	/**
+	 * Read OUTSIDE the variations provider below — query state is a single nearest-provider
+	 * context, so the products filter is unreachable from the popover's own subtree. Greying out
+	 * unsellable colours is the pill's rule here too: with the pill cleared every colour is
+	 * selectable and the disabled Add to Cart button carries the stock news instead.
+	 */
+	const stockStatus = useQueryState<'products', string | undefined>(
+		(state) => state.filters.stock_status
+	);
+
 	return (
 		<QueryStateProvider
 			collection="variations"
@@ -70,7 +85,7 @@ export function VariationsPopover(props: VariationsPopoverProps) {
 			initialSort={{ field: 'name', direction: 'asc' }}
 			initialFilters={{ status: 'publish' }}
 		>
-			<VariationsPopoverContent {...props} />
+			<VariationsPopoverContent {...props} stockStatus={stockStatus} />
 		</QueryStateProvider>
 	);
 }

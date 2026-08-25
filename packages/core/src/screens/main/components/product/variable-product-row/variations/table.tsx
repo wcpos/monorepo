@@ -11,7 +11,7 @@ import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord } from '@wcpos/query';
 
 import { VariationTableFooter } from './footer';
-import { resolveStock } from '../../resolve-stock';
+import { matchesStockStatusFilter } from '../../stock-filter';
 import { RecordTextCell } from '../../../../components/record-text-cell';
 import { getColumnStyle } from '../../../data-table';
 
@@ -21,7 +21,8 @@ import type { Cell, CellContext, Row } from '../../../../../../table-types';
 interface Props {
 	binding: ReturnType<typeof import('../../../../../../query').useCollectionBinding<'variations'>>;
 	row: Row<{ record: EngineRecord<'products'> }, DataTableFeatures>;
-	hideOutOfStock?: boolean;
+	/** The products list's Stock Status filter; undefined shows every variation. */
+	stockStatus?: string;
 }
 
 interface TableCellRow {
@@ -59,7 +60,7 @@ const cellRenderer = (props: CellContext<TableCellRow, unknown, DataTableFeature
 /**
  *
  */
-export function VariationsTable({ binding, row, hideOutOfStock }: Props) {
+export function VariationsTable({ binding, row, stockStatus }: Props) {
 	/**
 	 * React Compiler breaks tanstack/react-table: it caches the
 	 * row.getVisibleCells() JSX keyed on the stable Row object, so subrows keep
@@ -75,10 +76,10 @@ export function VariationsTable({ binding, row, hideOutOfStock }: Props) {
 	const result = useObservableSuspense(binding.resource) as { hits: VariationHit[] };
 	const hits = React.useMemo(
 		() =>
-			hideOutOfStock
-				? result.hits.filter((hit) => resolveStock(hit.record.payload).sellable)
+			stockStatus
+				? result.hits.filter((hit) => matchesStockStatusFilter(hit.record.payload, stockStatus))
 				: result.hits,
-		[hideOutOfStock, result.hits]
+		[stockStatus, result.hits]
 	);
 
 	/**
