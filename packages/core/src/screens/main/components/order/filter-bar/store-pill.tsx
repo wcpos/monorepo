@@ -125,10 +125,10 @@ export function StorePill({ resource }: Props) {
 							<SelectLabel>{t('common.store')}</SelectLabel>
 							{(stores || []).map((store) => {
 								// A store name is the WP site title — HTML-encoded, exactly as the
-								// header decodes it. Decoded once here rather than at the two places
-								// it renders: Select shows this same `label` in the list AND in the
-								// closed trigger, and the trigger's text is drawn by rn-primitives
-								// where `decodeHtml` cannot reach.
+								// header decodes it. Decoded here because SelectItem's text is drawn
+								// by rn-primitives, where `decodeHtml` cannot reach. This covers the
+								// MENU only: the closed pill renders the `value` memo above through
+								// its own ButtonText, which decodes separately.
 								const name = decode(store.name ?? '');
 								return (
 									<SelectItem key={store.id} value={String(store.id ?? '')} label={name}>
