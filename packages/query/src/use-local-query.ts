@@ -5,11 +5,18 @@ import { combineLatest, defer, from, of, throwError } from 'rxjs';
 import { catchError, map, shareReplay, startWith, switchMap } from 'rxjs/operators';
 
 import { useQueryRuntime } from './provider';
+import { useLocalCollection$ } from './use-local-collection';
 import { recoverLogsCollectionStorage } from './logs-storage-recovery';
 
 import type { QueryResult } from './query-result';
-import type { MonoTypeOperatorFunction } from 'rxjs';
-import type { MangoQuerySelector, MangoQuerySortPart, RxCollection, RxDocument } from 'rxdb';
+import type { MonoTypeOperatorFunction, Observable } from 'rxjs';
+import type {
+	MangoQuerySelector,
+	MangoQuerySortPart,
+	RxCollection,
+	RxDatabase,
+	RxDocument,
+} from 'rxdb';
 
 type LocalDocumentData = Record<string, unknown>;
 type LocalDocument = RxDocument<LocalDocumentData>;
@@ -112,16 +119,22 @@ function localQueryResult$(
 /** Direct local-only query binding. It never registers engine demand. */
 export const useLocalQuery = (options: LocalQueryOptions) => {
 	const runtime = useQueryRuntime();
-	const collection = runtime.localDB.collections[options.collectionName] as
-		LocalCollection | undefined;
+	const collectionName = options.collectionName;
 	const key = JSON.stringify(options);
 	const stableOptions = React.useMemo(() => JSON.parse(key) as LocalQueryOptions, [key]);
+	// Follow the collection rather than a snapshot of it — see useLocalCollection$.
+	const collection$ = useLocalCollection$<LocalDocumentData>(collectionName);
 	const result$ = React.useMemo(
 		() =>
-			collection
-				? localQueryResult$(collection, runtime.locale, stableOptions)
-				: of<QueryResult<LocalCollection>>({ searchActive: false, count: 0, hits: [] }),
-		[collection, runtime.locale, stableOptions]
+			collection$.pipe(
+				switchMap((collection) =>
+					collection
+						? localQueryResult$(collection, runtime.locale, stableOptions)
+						: of<QueryResult<LocalCollection>>({ searchActive: false, count: 0, hits: [] })
+				),
+				shareReplay({ bufferSize: 1, refCount: true })
+			),
+		[collection$, runtime.locale, stableOptions]
 	);
 	// One resource for the hook's lifetime (mirrors useObservableResource in
 	// @wcpos/core query-bindings): reloading retains the current value while the

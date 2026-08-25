@@ -9,6 +9,7 @@ import { firstValueFrom, Observable } from 'rxjs';
 import { QueryProvider } from '../src/provider';
 import { useLocalQuery } from '../src/use-local-query';
 import { createStoreDatabase } from './helpers/db';
+import { logsLiteral } from './helpers/schemas/logs';
 import { createEngineDatabase, createFakeEngine } from '../src/testing';
 
 import type { RxCollection, RxDatabase } from 'rxdb';
@@ -227,5 +228,60 @@ describe('useLocalQuery', () => {
 		await expect(firstValueFrom(query!.total$)).resolves.toBe(1);
 		expect(beforeReset.activeSubscriptions()).toBe(0);
 		expect(afterReset.activeSubscriptions()).toBe(2);
+	});
+
+	it('follows a collection replaced in place with no re-render (storage recovery)', async () => {
+		await localDB.collections.logs.bulkInsert([
+			{ logId: 'before', timestamp: 1, code: 'A', level: 'info', message: 'before switch' },
+		]);
+
+		const engine = createFakeEngine(engineDB);
+		let query: ReturnType<typeof useLocalQuery> | undefined;
+		function Probe() {
+			const currentQuery = useLocalQuery({
+				collectionName: 'logs',
+				sort: [{ timestamp: 'desc' }],
+			});
+			React.useEffect(() => {
+				query = currentQuery;
+			}, [currentQuery]);
+			return null;
+		}
+
+		render(
+			<QueryProvider localDB={localDB} engine={engine} locale="en">
+				<Probe />
+			</QueryProvider>
+		);
+
+		await waitFor(() =>
+			expect(query?.resource.valueRef$$.value?.current?.hits[0]?.id).toBe('before')
+		);
+
+		// --- the store switch: reset-collection removes and re-creates `logs` ---
+		await localDB.collections.logs.remove();
+		const recreated = await localDB.addCollections({ logs: { schema: logsLiteral } });
+		(localDB as unknown as { reset$: { next(c: RxCollection): void } }).reset$.next(
+			recreated.logs as RxCollection
+		);
+
+		// The cashier adds a product to the cart; the logger (which follows reset$)
+		// writes into the replacement collection.
+		await recreated.logs.insert({
+			logId: 'after',
+			timestamp: 2,
+			code: 'B',
+			level: 'info',
+			message: 'added product to cart',
+		});
+
+		// The row exists in the database a remount would read...
+		expect(await recreated.logs.count().exec()).toBe(1);
+
+		// ...so the mounted table must surface it too. This is the user's symptom.
+		await waitFor(
+			() => expect(query?.resource.valueRef$$.value?.current?.hits[0]?.id).toBe('after'),
+			{ timeout: 3000 }
+		);
 	});
 });
