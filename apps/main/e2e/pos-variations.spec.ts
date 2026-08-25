@@ -346,7 +346,7 @@ test.describe('POS Variations', () => {
 		).toBeNull();
 		test.skip(
 			probe!.imageAttachmentId === null || probe!.imageAttachmentId === undefined,
-			'No product in this store carries an image the probe could borrow'
+			`No product in this store carries an image the probe could borrow (${probe!.imageLookupDetail ?? 'no detail'})`
 		);
 
 		await searchForVariableProduct(page);

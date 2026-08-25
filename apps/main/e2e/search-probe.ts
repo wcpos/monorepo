@@ -39,6 +39,8 @@ export interface RunPrivateProductProbe extends SearchProbe {
 	 * test that asserts on an image, not take the other nine variation tests down with it.
 	 */
 	imageLookupFailure?: string | null;
+	/** What the donor search actually covered, so a skip states its evidence rather than a guess. */
+	imageLookupDetail?: string | null;
 }
 
 export type SearchProbeResult = { ok: true; probe: SearchProbe } | { ok: false; reason: string };
@@ -669,7 +671,21 @@ export async function createSearchProbe(
  * first is how an auth or server regression turns into a quietly skipped test on a store that
  * declared writer credentials — precisely what the E2E policy says must fail instead.
  */
-type DonorImageLookup = { ok: true; attachmentId: number | null } | { ok: false; reason: string };
+type DonorImageLookup =
+	| { ok: true; attachmentId: number; searched?: number; exhausted?: boolean }
+	| { ok: true; attachmentId: null; searched: number; exhausted: boolean }
+	| { ok: false; reason: string };
+
+/**
+ * How far the donor-image search will walk before giving up.
+ *
+ * Unbounded pagination would be its own bug on a scale-fixture store — 20k products is 200
+ * round trips before a single spec runs. Bounded, the two outcomes stay distinguishable:
+ * `exhausted: true` means the store genuinely owns no product imagery, `exhausted: false`
+ * means we stopped looking, and the skip reason says which.
+ */
+const DONOR_IMAGE_PAGE_SIZE = 100;
+const DONOR_IMAGE_MAX_PAGES = 5;
 
 /**
  * An attachment id the store already owns, borrowed so a probe product can carry a real image.
@@ -684,30 +700,47 @@ async function findDonorImageAttachmentId(
 	authorization: StoreAuthorization
 ): Promise<DonorImageLookup> {
 	const auth = storeRequestOptions(authorization);
-	let response: APIResponse;
-	try {
-		response = await probeGet(request, storeUrl, 'products', {
-			...auth,
-			params: { ...auth.params, per_page: '20', status: 'publish' },
-		});
-	} catch (error) {
-		return { ok: false, reason: `donor-image products read threw: ${String(error)}` };
+	let searched = 0;
+
+	for (let page = 1; page <= DONOR_IMAGE_MAX_PAGES; page += 1) {
+		let response: APIResponse;
+		try {
+			response = await probeGet(request, storeUrl, 'products', {
+				...auth,
+				params: {
+					...auth.params,
+					per_page: String(DONOR_IMAGE_PAGE_SIZE),
+					page: String(page),
+					status: 'publish',
+				},
+			});
+		} catch (error) {
+			return { ok: false, reason: `donor-image products read threw: ${String(error)}` };
+		}
+		if (!response.ok()) {
+			return {
+				ok: false,
+				reason: `donor-image products read returned ${response.status()} ${response.statusText()}`,
+			};
+		}
+		const body = await response.json().catch(() => null);
+		if (!Array.isArray(body)) {
+			return { ok: false, reason: 'donor-image products read returned a non-list body' };
+		}
+
+		for (const record of body) {
+			const id = (record as { images?: { id?: unknown }[] })?.images?.[0]?.id;
+			if (typeof id === 'number' && id > 0) return { ok: true, attachmentId: id };
+		}
+
+		searched += body.length;
+		// A short page is the end of the catalogue: there is nothing further to search.
+		if (body.length < DONOR_IMAGE_PAGE_SIZE) {
+			return { ok: true, attachmentId: null, searched, exhausted: true };
+		}
 	}
-	if (!response.ok()) {
-		return {
-			ok: false,
-			reason: `donor-image products read returned ${response.status()} ${response.statusText()}`,
-		};
-	}
-	const body = await response.json().catch(() => null);
-	if (!Array.isArray(body)) {
-		return { ok: false, reason: 'donor-image products read returned a non-list body' };
-	}
-	for (const record of body) {
-		const id = (record as { images?: { id?: unknown }[] })?.images?.[0]?.id;
-		if (typeof id === 'number' && id > 0) return { ok: true, attachmentId: id };
-	}
-	return { ok: true, attachmentId: null };
+
+	return { ok: true, attachmentId: null, searched, exhausted: false };
 }
 
 /** Create a worker-private purchasable product; declared writer failures always throw. */
@@ -739,6 +772,10 @@ export async function createRunPrivateProduct(
 	const donorImage = await findDonorImageAttachmentId(request, storeUrl, authorization);
 	const imageAttachmentId = donorImage.ok ? donorImage.attachmentId : null;
 	const imageLookupFailure = donorImage.ok ? null : donorImage.reason;
+	const imageLookupDetail =
+		donorImage.ok && donorImage.attachmentId === null
+			? `searched ${donorImage.searched} published products, ${donorImage.exhausted ? 'the whole catalogue' : `the first ${DONOR_IMAGE_PAGE_SIZE * DONOR_IMAGE_MAX_PAGES}`}`
+			: null;
 	const parentResult = await productCreateResponse(
 		() =>
 			probeRequest(request, 'post', storeUrl, 'products', undefined, {
@@ -821,6 +858,7 @@ export async function createRunPrivateProduct(
 		variationSku: `${token}red`,
 		imageAttachmentId,
 		imageLookupFailure,
+		imageLookupDetail,
 	};
 }
 
