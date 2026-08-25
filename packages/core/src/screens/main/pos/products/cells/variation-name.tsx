@@ -6,6 +6,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { StockQuantity } from './stock-quantity';
+import { resolveVariationName } from '../../../components/product/resolve-variation-name';
 
 /**
  *
@@ -15,7 +16,10 @@ export function ProductVariationName(
 ) {
 	const { row, column } = props;
 	const variation = useRecordField(row.original.record, ({ payload }) => ({
-		name: payload.name,
+		// Composed from the variation's OWN attributes, not the served `name` — plugin 1.10.0
+		// collapses that to just the parent name at 3+ attributes, and merchants update on their own
+		// schedule. See resolveVariationName.
+		name: resolveVariationName(payload),
 		sku: payload.sku,
 		barcode: payload.barcode,
 	}));
