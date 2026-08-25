@@ -219,6 +219,24 @@ describe('planReplicationActions — config staleness split', () => {
 		expect(actions.reFetchCollections).toEqual(['variations']);
 	});
 
+	// A PARTIAL envelope is a present object with an undefined key. The server
+	// described products and said nothing about variations, so variations keeps the
+	// protection it gets when no envelope arrives at all — re-ingesting it with no
+	// published selector would drop the stored payload.barcode.
+	it('tolerates a collection the envelope omits, even though the envelope is present', () => {
+		const actions = planReplicationActions(
+			baseOutcome({
+				staleCollections: ['products', 'variations'],
+				configBarcodeFields: { products: [] } as unknown as Record<
+					'products' | 'variations' | 'tax_rates',
+					string[]
+				>,
+			})
+		);
+
+		expect(actions.reFetchCollections).toEqual(['products']);
+	});
+
 	it('repairs every stale collection once the envelope is present', () => {
 		const actions = planReplicationActions(
 			baseOutcome({

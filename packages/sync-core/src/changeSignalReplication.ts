@@ -191,8 +191,17 @@ export function planReplicationActions(outcome: HybridPollOutcome): ReplicationA
 	 * applyReplicationActions skips `tax_rates` here because step 4 already refreshed it.
 	 */
 	const reDeriveBarcode: { collection: BarcodeConfigCollection; activeFields: string[] }[] = [];
-	const reFetchCollections: BarcodeConfigCollection[] =
-		outcome.configBarcodeFields === undefined ? [] : [...(outcome.staleCollections ?? [])];
+	//
+	// The check is PER COLLECTION, not on the envelope as a whole. A partial
+	// envelope — `barcode_fields` carrying `products` but omitting `variations` —
+	// is a present object with an undefined key, and `mapConfigFingerprintEnvelope`
+	// preserves exactly that. Gating on the envelope's presence would re-fetch the
+	// omitted collection, and on scope open it has no published selector, so
+	// rematerialization drops the stored `payload.barcode` this branch exists to
+	// protect. Absent key, absent envelope: same answer, for the same reason.
+	const reFetchCollections: BarcodeConfigCollection[] = (outcome.staleCollections ?? []).filter(
+		(collection) => outcome.configBarcodeFields?.[collection] !== undefined
+	);
 
 	const nextState: ReplicationActions['nextState'] = {
 		cursor: outcome.cursor,
