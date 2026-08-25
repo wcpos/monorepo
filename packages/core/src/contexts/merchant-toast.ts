@@ -67,6 +67,54 @@ export function resolveMerchantToastText(
 }
 
 /**
+ * The parts of a toast config this adapter reads or rewrites.
+ *
+ * Deliberately a CONSTRAINT rather than a closed shape: every other field on a
+ * toast config is a sonner option this adapter knows nothing about and must
+ * hand through untouched, so it is the caller's own config type that flows
+ * across the seam. This pins only the three fields the adapter actually
+ * touches.
+ *
+ * The `object &` is load-bearing, not decoration: with three optional fields
+ * and nothing else, this is a WEAK type, and TypeScript rejects any config
+ * that happens to share none of them — the Toaster's legacy `text1` variant,
+ * for one. Intersecting with `object` keeps the constraint honest without
+ * excluding configs the adapter simply passes through.
+ */
+export type MerchantToastConfig = object & {
+	/**
+	 * The ingredients the logger hands across the seam, stripped before the
+	 * Toaster sees them. Optional: a `Toast.show` call site with no logger
+	 * involved carries no merchant copy and is passed straight through.
+	 */
+	merchantCopy?: MerchantToastCopy;
+	/** The sentence the cashier reads. Rewritten when merchant copy is present. */
+	title?: string;
+	/**
+	 * A second sentence. The call site's own always outranks the action hint.
+	 * Deliberately open: sonner's `description` is a ReactNode, and the adapter
+	 * only ever tests it for absence and writes a plain string into it, so
+	 * narrowing it here would reject the real Toaster's config type.
+	 */
+	description?: unknown;
+};
+
+/** A config that carries merchant copy — the branch that gets rewritten. */
+type WithMerchantCopy<TConfig> = TConfig & { merchantCopy: MerchantToastCopy };
+
+/**
+ * A real type guard rather than a cast. The runtime shape checks are not
+ * redundant with the signature: the logger reaches this function through
+ * `setToast`, which is still untyped, so a non-object can arrive at runtime
+ * even though no typed caller can send one.
+ */
+function hasMerchantCopy<TConfig extends MerchantToastConfig>(
+	config: TConfig
+): config is WithMerchantCopy<TConfig> {
+	return !!config && typeof config === 'object' && !!config.merchantCopy;
+}
+
+/**
  * Wraps a toast implementation so every logger toast reaching it carries a
  * merchant sentence rather than the developer's log message.
  *
@@ -80,27 +128,32 @@ export function resolveMerchantToastText(
  * `t` is captured at call time. Re-create the adapter when `t` changes identity
  * (i.e. on a language change) so the next toast speaks the new language.
  */
-export function createMerchantToast<TShow extends (config: any) => any>(
+export function createMerchantToast<TConfig extends MerchantToastConfig, TResult>(
 	t: TranslateError,
-	show: TShow
-): (config: any) => ReturnType<TShow> {
-	return (config: any) => {
-		if (!config || typeof config !== 'object' || !config.merchantCopy) {
-			return show(config) as ReturnType<TShow>;
+	show: (config: TConfig) => TResult
+): (config: TConfig) => TResult {
+	return (config: TConfig): TResult => {
+		if (!hasMerchantCopy(config)) {
+			return show(config);
 		}
 
-		const { merchantCopy, ...rest } = config as { merchantCopy: MerchantToastCopy } & Record<
-			string,
-			unknown
-		>;
+		const { merchantCopy, ...rest } = config;
 		const { title, description } = resolveMerchantToastText(t, merchantCopy);
 
-		return show({
+		const rewritten = {
 			...rest,
 			title,
 			// An explicit `toast.text2` is the call site's own second sentence and
 			// outranks the code's action hint.
-			...(rest.description === undefined && description !== undefined ? { description } : {}),
-		}) as ReturnType<TShow>;
+			...(config.description === undefined && description !== undefined ? { description } : {}),
+		};
+
+		// The single cast at this boundary, and only because TypeScript cannot
+		// express it: a rest-spread of a generic minus one key widens to an
+		// anonymous object type, so it cannot prove that putting `title` back on
+		// it reconstitutes `TConfig`. The constraint above pins `title` and
+		// `description` to `string | undefined`, which is exactly what is written
+		// here — nothing beyond that inference gap is being asserted.
+		return show(rewritten as TConfig);
 	};
 }

@@ -577,6 +577,19 @@ function safeStringify(obj: any, maxLength = 10000): string {
 
 /**
  * Set Toast function - call when Toast component is ready
+ *
+ * The config stays `any` deliberately, and not for want of trying: the two
+ * sides of this seam genuinely disagree today. The logger emits `type` as the
+ * log level's text — `debug` and `success` included — while the Toaster's
+ * public `ModernToastProps` narrows `type` to four variants and requires a
+ * `title`. Typing this parameter to either shape makes the other side fail
+ * contravariantly, so a real type here means changing the Toaster's exported
+ * props (and deciding what a `debug` toast variant renders as) — a
+ * `packages/components` API change, not a typing tidy-up.
+ *
+ * The adapter on the far side IS typed: see `createMerchantToast` in
+ * `@wcpos/core/contexts/merchant-toast`, which pins `merchantCopy`, the two
+ * strings it rewrites, and the show callback's return type.
  */
 export const setToast = (toastShowFunction: (config: any) => void) => {
 	toastShow = toastShowFunction;
