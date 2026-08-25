@@ -31,6 +31,25 @@ const REQUIRED_FIELDS = [
 	'troubleshooting',
 	'logSources',
 ];
+/**
+ * Every symbol in the registry, and nothing else — so a new code cannot land
+ * without someone editing this list on purpose.
+ *
+ * ADDING A CODE IS A TWO-REPO JOB. The app links every code to
+ * `https://docs.wcpos.com/error-codes/{CODE}` (see `getErrorCodeDocURL`), and
+ * NOTHING generates that page: the error-docs lane was retired, and no bot
+ * mirrors this registry into wcpos/docs. A code added here and nowhere else
+ * ships a 404 behind the merchant's "Learn more" link, and no check in THIS
+ * repo will tell you — that is how CHECKOUT411 and CHECKOUT421 shipped bare
+ * (monorepo#1560, docs#399).
+ *
+ * So when you add an entry, open a companion PR on wcpos/docs adding BOTH:
+ *   - `versioned_docs/version-1.x/error-codes/{CODE}.mdx` — the help prose,
+ *     which the `docsBody` / `troubleshooting` / `actionHint` you author below
+ *     are the source material for;
+ *   - the matching entry in `src/data/error-catalogue.json` — the facts box.
+ * That repo's `pnpm check:error-codes` fails if either half is missing.
+ */
 const SEED_SYMBOLS = [
 	'APP_START_FAILED',
 	'APP_START_SLOW',
