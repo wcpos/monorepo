@@ -2,7 +2,8 @@
  * A single image entry, as it appears on either wire shape.
  */
 interface ImageLike {
-	src?: string;
+	id?: number | string | null;
+	src?: string | null;
 }
 
 /**
@@ -25,12 +26,30 @@ interface ImageBearingPayload {
  * store's plugin version serves. `images[0]` wins when present — it is the shape the
  * current (v2) lane sends; `image` is the v1 fallback.
  */
+/**
+ * The image ENTRY to display, whichever wire shape the store's plugin version serves.
+ * `images[0]` wins when present — it is the shape the current (v2) lane sends; `image` is the
+ * v1 fallback.
+ *
+ * The entry rather than just its `src`, because a cart line item carries the attachment `id`
+ * alongside the URL and the server matches on it.
+ */
+export function resolveImageEntry(
+	payload: ImageBearingPayload | null | undefined
+): ImageLike | undefined {
+	const fromArray = payload?.images?.[0];
+	if (fromArray?.src) {
+		return fromArray;
+	}
+	return payload?.image?.src ? payload.image : undefined;
+}
+
+/**
+ * Resolve the URL to display for a product or variation, whichever wire shape the store's
+ * plugin version serves.
+ */
 export function resolveImageSrc(
 	payload: ImageBearingPayload | null | undefined
 ): string | undefined {
-	const fromArray = payload?.images?.[0]?.src;
-	if (fromArray) {
-		return fromArray;
-	}
-	return payload?.image?.src || undefined;
+	return resolveImageEntry(payload)?.src || undefined;
 }
