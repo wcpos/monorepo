@@ -380,6 +380,49 @@ describe('mergeStoresWithResponse', () => {
 		);
 	});
 
+	it('should default customer_tax_id_types to [] when the server omits or mis-types it', async () => {
+		const userDB = makeUserDB();
+		const wpUser = makeWpUser([]);
+		// Store 1: older plugin, no allow-list at all. Store 2: unexpected shape.
+		const remoteStores = [
+			{ id: 1, name: 'Store 1' },
+			{ id: 2, name: 'Store 2', customer_tax_id_types: 'es_nif' },
+		];
+
+		await mergeStoresWithResponse({
+			userDB: userDB as any,
+			wpUser: wpUser as any,
+			remoteStores,
+			user: { uuid: 'user-uuid' },
+			siteID: 'site-1',
+		});
+
+		const insertedDocs = userDB.stores.bulkInsert.mock.calls[0][0];
+		expect(insertedDocs[0]).toEqual(expect.objectContaining({ customer_tax_id_types: [] }));
+		expect(insertedDocs[1]).toEqual(expect.objectContaining({ customer_tax_id_types: [] }));
+	});
+
+	it('should preserve customer_tax_id_types entries, dropping non-strings', async () => {
+		const userDB = makeUserDB();
+		const wpUser = makeWpUser([]);
+		const remoteStores = [
+			{ id: 1, name: 'Store 1', customer_tax_id_types: ['es_nif', 42, null, 'eu_vat'] },
+		];
+
+		await mergeStoresWithResponse({
+			userDB: userDB as any,
+			wpUser: wpUser as any,
+			remoteStores,
+			user: { uuid: 'user-uuid' },
+			siteID: 'site-1',
+		});
+
+		const insertedDocs = userDB.stores.bulkInsert.mock.calls[0][0];
+		expect(insertedDocs[0]).toEqual(
+			expect.objectContaining({ customer_tax_id_types: ['es_nif', 'eu_vat'] })
+		);
+	});
+
 	it('should preserve tax_ids array when server emits valid entries', async () => {
 		const userDB = makeUserDB();
 		const wpUser = makeWpUser([]);
