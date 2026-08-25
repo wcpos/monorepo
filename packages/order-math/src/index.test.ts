@@ -9,7 +9,6 @@ test('public value surface is exactly the spec', () => {
 		'calculateCartLine',
 		'createCartConfig',
 		'getNetPaymentTotal',
-		'getOrderTotals',
 		'isActiveCouponLine',
 		'isActiveFeeLine',
 		'isActiveLineItem',

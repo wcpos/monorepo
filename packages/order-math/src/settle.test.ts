@@ -10,7 +10,6 @@
 import { createCartConfig } from './config';
 import { calculateOrderTotals } from './internal/order-totals';
 import { recalculateCoupons } from './internal/coupons/recalculate';
-import { getOrderTotals } from './order-totals';
 import { settleAggregate, settleCart } from './settle';
 
 import type { CartConfigInput } from './config';
@@ -183,8 +182,24 @@ describe('settleCart', () => {
 			expect('coupon_lines' in result.patch).toBe(false);
 			expect('fee_lines' in result.patch).toBe(false);
 
-			// totals fields match the read model exactly
-			const expected = getOrderTotals(snapshot, config);
+			// totals fields match the read model exactly.
+			//
+			// Oracle: the totals recomputed from the UNTOUCHED snapshot, using the same
+			// argument mapping the settle applies. It stays independent of the code under
+			// test because settleCart feeds calculateOrderTotals its OWN pipeline output
+			// (postFeeLines / postShippingLines), while this feeds the raw snapshot
+			// arrays — so the assertion still fails if the frozen regime drops, reorders
+			// or silently recomputes a line on the way to the totals step.
+			const expected = calculateOrderTotals({
+				lineItems: [...(snapshot.line_items ?? [])],
+				feeLines: [...(snapshot.fee_lines ?? [])],
+				shippingLines: [...(snapshot.shipping_lines ?? [])],
+				couponLines: [...(snapshot.coupon_lines ?? [])],
+				taxRates: [...config.allRates],
+				taxRoundAtSubtotal: config.taxRoundAtSubtotal,
+				dp: config.dp,
+				pricesIncludeTax: config.pricesIncludeTax,
+			});
 			expect(result.totals).toEqual(expected);
 			expect(result.patch.discount_total).toBe(expected.discount_total);
 			expect(result.patch.discount_tax).toBe(expected.discount_tax);
