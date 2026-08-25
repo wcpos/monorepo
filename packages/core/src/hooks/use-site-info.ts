@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 
-import { useHttpClient } from '@wcpos/hooks/use-http-client';
+import { isAsleepBlock, requestStateManager, useHttpClient } from '@wcpos/hooks/use-http-client';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -29,6 +29,23 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 	// Use stable values to prevent unnecessary re-fetches
 	const wpApiUrl = site.wp_api_url;
 	const siteUrl = site.url;
+
+	// A fetch blocked while the tab was hidden is deferred, not failed: the block sets
+	// this flag, and the next wake consumes it to re-run the effect below. Gating on the
+	// flag matters because this hook is mounted for the whole session in AppLayout —
+	// bumping the tick on every wake would re-fetch and re-patch mount-only data on
+	// every tab switch or window restore.
+	const deferredRef = React.useRef(false);
+	const [wakeTick, setWakeTick] = React.useState(0);
+	React.useEffect(
+		() =>
+			requestStateManager.onWake(() => {
+				if (!deferredRef.current) return;
+				deferredRef.current = false;
+				setWakeTick((tick) => tick + 1);
+			}),
+		[]
+	);
 
 	/**
 	 * Fetch site info on mount and when site URL changes.
@@ -89,6 +106,18 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 					await site.incrementalPatch(patch);
 				}
 			} catch (err) {
+				if (isAsleepBlock(err)) {
+					deferredRef.current = true;
+					// Nothing was attempted, so nothing failed: leave `error` unset and
+					// wait for the wake tick below to re-run the fetch. Reporting this
+					// would mark a backgrounded tab as broken, and `wcpos_version` — the
+					// value the plugin-compat gate reads — would stay stale for the whole
+					// session because this effect only fires on mount.
+					appLogger.debug('Site info fetch deferred — app is in background', {
+						context: { siteUrl },
+					});
+					return;
+				}
 				const errorMsg = getErrorMessage(err);
 				appLogger.error('Failed to fetch site info', {
 					code: ERROR_CODES.SYNC_UNEXPECTED,
@@ -104,7 +133,7 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 		};
 
 		void fetchSiteInfo();
-	}, [http, wpApiUrl, siteUrl, site]);
+	}, [http, wpApiUrl, siteUrl, site, wakeTick]);
 
 	return { isLoading, error };
 };

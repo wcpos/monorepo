@@ -24,7 +24,10 @@ jest.mock('@wcpos/hooks/use-http-client', () => ({
 	createTokenRefreshHandler: () => mockRefreshHandler,
 	useHttpClient: (handlers?: unknown[]) =>
 		handlers ? mockAuthenticatedHttpClient : mockBaseHttpClient,
-	PREFLIGHT_BLOCK: { ASLEEP: 'preflight-asleep' },
+	// The real predicate — a hand-written stub here would ratify the test instead
+	// of checking the guard the hook actually uses.
+	isAsleepBlock: jest.requireActual('@wcpos/hooks/use-http-client/request-state-manager')
+		.isAsleepBlock,
 	requestStateManager: {
 		onWake: (callback: () => void) => {
 			mockWakeCallbacks.push(callback);

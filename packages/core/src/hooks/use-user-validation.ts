@@ -4,7 +4,7 @@ import get from 'lodash/get';
 
 import {
 	createTokenRefreshHandler,
-	PREFLIGHT_BLOCK,
+	isAsleepBlock,
 	requestStateManager,
 	useHttpClient,
 } from '@wcpos/hooks/use-http-client';
@@ -24,16 +24,6 @@ import { useAppState } from '../contexts/app-state';
 import { mergeStoresWithResponse } from '../utils/merge-stores';
 
 const appLogger = getLogger(['wcpos', 'app', 'validation']);
-
-/**
- * A request blocked by the sleeping pre-flight check (tab hidden) is expected
- * control flow, not an auth failure — the block codes are explicitly documented
- * as never-to-be-persisted log codes (see request-state-manager.ts). Validation
- * is deferred to the wake retry instead of being reported as an error.
- */
-const isAsleepBlock = (error: unknown): boolean =>
-	(error as { isPreFlightBlocked?: boolean })?.isPreFlightBlocked === true &&
-	(error as { blockCode?: string })?.blockCode === PREFLIGHT_BLOCK.ASLEEP;
 
 interface Props {
 	site: import('@wcpos/database').SiteDocument;
