@@ -212,7 +212,7 @@ One **real** test against the live store (**writes**, see below), with no stubs 
       store: the order carries this run's label, `refunds[]` holds exactly the one refund,
       recorded as a negative amount at full 6dp precision
 
-### pos-variations.spec.ts (authenticated, free + pro) — 9 tests
+### pos-variations.spec.ts (authenticated, free + pro) — 10 tests
 
 Variable product handling in the POS products **table view** (tests switch to table view
 via the toggle if needed):
@@ -225,6 +225,8 @@ via the toggle if needed):
 - [x] Add variation to cart via expanded row "+" button (success toast)
 - [x] Collapse expanded variable product row
 - [x] Add multiple variations to cart
+- [x] Expanded variation row renders the image the /wcpos/v2/variations response carried
+      (src read from the live payload, then asserted on that variation's row — #1577)
 - [x] Adding the same variation twice increments quantity to 2
 
 ### pos-coupon-apply.spec.ts — coupon application parity (pro + writer gated) — 1 test

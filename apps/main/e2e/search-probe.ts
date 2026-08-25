@@ -27,6 +27,12 @@ export interface SearchProbe {
 export type RunPrivateProductKind = 'simple' | 'variable';
 export interface RunPrivateProductProbe extends SearchProbe {
 	variationSku?: string;
+	/**
+	 * The attachment this probe's variations were given, borrowed from a product the store
+	 * already has (see {@link findDonorImageAttachmentId}). `null` means the store owns no
+	 * product imagery at all — the only honest reason an image assertion cannot run.
+	 */
+	imageAttachmentId?: number | null;
 }
 
 export type SearchProbeResult = { ok: true; probe: SearchProbe } | { ok: false; reason: string };
@@ -649,6 +655,34 @@ export async function createSearchProbe(
 }
 
 /** Create a worker-private purchasable product; declared writer failures always throw. */
+/**
+ * An attachment id the store already owns, borrowed so a probe product can carry a real image.
+ *
+ * Sideloading a fresh image would mint a new attachment on every CI run and leave it behind
+ * (probe PRODUCTS are disposable, media is not — nothing deletes it). Re-using an id costs one
+ * read and adds nothing to the store. `null` means no product on the first page carries an
+ * image, which is the one environment shortfall an image assertion may legitimately skip on.
+ */
+async function findDonorImageAttachmentId(
+	request: APIRequestContext,
+	storeUrl: string,
+	authorization: StoreAuthorization
+): Promise<number | null> {
+	const auth = storeRequestOptions(authorization);
+	const response = await probeGet(request, storeUrl, 'products', {
+		...auth,
+		params: { ...auth.params, per_page: '20', status: 'publish' },
+	}).catch(() => null);
+	if (!response || !response.ok()) return null;
+	const body = await response.json().catch(() => null);
+	const records = Array.isArray(body) ? body : [];
+	for (const record of records) {
+		const id = (record as { images?: { id?: unknown }[] })?.images?.[0]?.id;
+		if (typeof id === 'number' && id > 0) return id;
+	}
+	return null;
+}
+
 export async function createRunPrivateProduct(
 	options: Omit<CreateSearchProbeOptions, 'authorization' | 'collection' | 'writerConfigured'> & {
 		authorization: StoreAuthorization;
@@ -671,6 +705,9 @@ export async function createRunPrivateProduct(
 
 	const token = mintSearchProbeToken(workerIndex);
 	const attributeName = `Choice ${token.slice(-6)}`;
+	// Looked up BEFORE the create so parent and variations can carry it from birth — an image
+	// added later would have to race the client's already-running sync of this product.
+	const imageAttachmentId = await findDonorImageAttachmentId(request, storeUrl, authorization);
 	const parentResult = await productCreateResponse(
 		() =>
 			probeRequest(request, 'post', storeUrl, 'products', undefined, {
@@ -689,6 +726,7 @@ export async function createRunPrivateProduct(
 							options: ['Red', 'Blue'],
 						},
 					],
+					...(imageAttachmentId === null ? {} : { images: [{ id: imageAttachmentId }] }),
 				},
 			}),
 		true,
@@ -724,6 +762,10 @@ export async function createRunPrivateProduct(
 						status: 'publish',
 						manage_stock: false,
 						attributes: [{ name: attributeName, option }],
+						// Explicit, not inherited: the variation carries its OWN image so the
+						// rendered thumbnail is evidence about the variation document, never
+						// about WooCommerce's parent fallback.
+						...(imageAttachmentId === null ? {} : { image: { id: imageAttachmentId } }),
 					}),
 				true,
 				'Variation probe creation',
@@ -746,6 +788,7 @@ export async function createRunPrivateProduct(
 		rowTestId: `data-table-row-${slug}`,
 		token,
 		variationSku: `${token}red`,
+		imageAttachmentId,
 	};
 }
 
