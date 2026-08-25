@@ -1697,19 +1697,27 @@ describe('query bindings', () => {
 		);
 	});
 
-	it('starts a committed search back at the first page', async () => {
+	it('starts every committed search visit back at the first page', async () => {
 		jest.useFakeTimers();
 		const { result } = renderHook(() => useSearchSelect('customer', { debounceMs: 50 }), {
 			wrapper: Provider,
 		});
 
+		act(() => result.current.setSearch('ada'));
+		act(() => jest.advanceTimersByTime(50));
+		expect(result.current.committedSearch).toBe('ada');
+
 		act(() => result.current.extendLimit());
 		act(() => result.current.extendLimit());
 		expect(result.current.limit).toBe(150);
 
+		act(() => result.current.setSearch('grace'));
+		act(() => jest.advanceTimersByTime(50));
+		expect(result.current.committedSearch).toBe('grace');
+		expect(result.current.limit).toBe(50);
+
 		act(() => result.current.setSearch('ada'));
 		act(() => jest.advanceTimersByTime(50));
-
 		expect(result.current.committedSearch).toBe('ada');
 		expect(result.current.limit).toBe(50);
 		await act(async () => Promise.resolve());

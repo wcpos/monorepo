@@ -855,6 +855,9 @@ export function useSearchSelect(
 	 */
 	const pagingKey = `${committedSearch}|${pageSize}`;
 	const [paging, setPaging] = React.useState({ key: pagingKey, limit: pageSize });
+	if (paging.key !== pagingKey) {
+		setPaging({ key: pagingKey, limit: pageSize });
+	}
 	const limit = paging.key === pagingKey ? paging.limit : pageSize;
 	const extendLimit = React.useCallback(() => {
 		setPaging((current) => ({
