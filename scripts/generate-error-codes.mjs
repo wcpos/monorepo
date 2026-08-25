@@ -39,20 +39,38 @@ const LOG_SOURCES = [
 	'host-error-log',
 	'payment-provider',
 ];
-const FIELDS = {
+/**
+ * Emitted into `error-codes.generated.ts` and therefore into the shipped
+ * bundle. Only fields something actually READS belong here: `dataSafety` drives
+ * the risk sentence in the logs row detail, the rest identify and classify the
+ * code. The registry's authored prose (`docsBody`, `troubleshooting`,
+ * `evidence`, `logSources`, `escalation`, `retryPolicy`, `introducedIn`) is
+ * source material for the hand-authored docs pages in wcpos/docs — it stays in
+ * `error-registry.json`, where it costs nothing, and no longer rides into the
+ * app as a type nothing implements and strings nothing renders.
+ */
+const EMITTED_FIELDS = {
 	code: 'ErrorCode',
 	symbol: 'string',
 	domain: 'ErrorDomain',
 	severity: 'ErrorSeverity',
 	actionHint: 'string',
-	retryPolicy: 'RetryPolicy',
 	dataSafety: 'DataSafety',
-	escalation: 'Escalation',
 	summary: 'string',
-	docsBody: 'string',
-	introducedIn: 'string',
-	evidence: 'string',
 };
+/**
+ * Every field an entry must carry as a non-empty string. A superset of
+ * EMITTED_FIELDS: the authored prose is still required of the registry even
+ * though it is no longer emitted, so a new code cannot land undocumented.
+ */
+const REQUIRED_STRING_FIELDS = [
+	...Object.keys(EMITTED_FIELDS),
+	'retryPolicy',
+	'escalation',
+	'docsBody',
+	'introducedIn',
+	'evidence',
+];
 const VOCABULARIES = {
 	domain: DOMAINS,
 	severity: SEVERITIES,
@@ -80,7 +98,7 @@ function validateRegistry(registry) {
 	const symbols = new Set();
 	for (const [index, entry] of registry.entries()) {
 		if (!entry || typeof entry !== 'object') throw new Error(`Entry ${index} must be an object`);
-		for (const field of Object.keys(FIELDS)) {
+		for (const field of REQUIRED_STRING_FIELDS) {
 			if (typeof entry[field] !== 'string' || !entry[field].trim()) {
 				throw new Error(`Entry ${index} is missing required field ${field}`);
 			}
@@ -113,6 +131,10 @@ function validateRegistry(registry) {
 		if (new Set(entry.logSources).size !== entry.logSources.length) {
 			throw new Error(`Entry ${entry.code} has duplicate logSources`);
 		}
+		// Control characters are rejected because every registry string is emitted
+		// into a TypeScript string literal (and, for summaries and action hints,
+		// into the JSON translation catalogue). A raw newline or NUL there is a
+		// syntax error or an invisible corruption, not a formatting nuisance.
 		for (const [field, value] of Object.entries(entry)) {
 			const strings = typeof value === 'string' ? [value] : Array.isArray(value) ? value : [];
 			for (const item of strings) {
@@ -132,7 +154,7 @@ function validateRegistry(registry) {
 
 // Match Prettier's quote choice so generated output is lint-clean by construction:
 // it prefers single quotes, but switches to double when the string contains one
-// (an apostrophe in a docsBody would otherwise fail prettier/prettier every time).
+// (an apostrophe in a summary would otherwise fail prettier/prettier every time).
 const quote = (value) => {
 	const escaped = value.replaceAll('\\', '\\\\');
 	return escaped.includes("'") ? `"${escaped.replaceAll('"', '\\"')}"` : `'${escaped}'`;
@@ -148,7 +170,7 @@ const union = (name, values) => {
 };
 
 function renderTypescript(registry) {
-	const fields = Object.entries(FIELDS);
+	const fields = Object.entries(EMITTED_FIELDS);
 	const renderField = (entry, field) => {
 		const line = `\t\t${field}: ${quote(entry[field])},`;
 		return line.length <= 97 ? line : `\t\t${field}:\n\t\t\t${quote(entry[field])},`;
@@ -168,9 +190,7 @@ ${union(
 )}
 ${union('ErrorDomain', DOMAINS)}
 ${union('ErrorSeverity', SEVERITIES)}
-${union('RetryPolicy', RETRY_POLICIES)}
 ${union('DataSafety', DATA_SAFETY)}
-${union('Escalation', ESCALATIONS)}
 
 export interface CatalogueEntry {
 ${fields.map(([field, type]) => `\t${field}: ${type};`).join('\n')}
@@ -185,8 +205,6 @@ ${symbols}
 } as const satisfies Record<string, ErrorCode>;
 `;
 }
-
-const yamlString = (value) => `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
 
 /**
  * One literal `t()` call per error code, mirroring `event-titles.generated.ts`.
@@ -345,10 +363,6 @@ export async function generateErrorCodes(options = parseArguments([])) {
 			renderActions(registry)
 		),
 		writeFile(options.localeOutput, renderLocale(registry, locale)),
-		writeFile(
-			path.join(options.outputDirectory, 'error-catalogue.json'),
-			`${JSON.stringify({ [BANNER]: true, entries: registry }, null, '\t')}\n`
-		),
 		// Error-code help pages are hand-authored in the wcpos/docs repo — the generator no longer emits them here.
 	]);
 }

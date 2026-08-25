@@ -8,6 +8,13 @@ import registry from './error-registry.json';
 const DOMAINS = ['AUTH', 'SYNC', 'CHECKOUT', 'PAYMENT', 'PRINT', 'PRODUCT', 'LICENSE', 'CLIENT'];
 DOMAINS.push('HOST');
 const SEVERITIES = ['info', 'warn', 'error'];
+/**
+ * Required of every registry entry. Wider than what the generator EMITS: the
+ * authored prose (docsBody, evidence, troubleshooting, logSources, escalation,
+ * retryPolicy, introducedIn) feeds the hand-authored docs pages in wcpos/docs
+ * and stays required here, so a new code cannot land undocumented — it is just
+ * no longer bundled into the app.
+ */
 const REQUIRED_FIELDS = [
 	'code',
 	'symbol',
@@ -140,15 +147,14 @@ describe('error registry', () => {
 		}
 	});
 
-	it('regenerates byte-identical checked-in artifacts', () => {
+	it('regenerates the byte-identical checked-in catalogue', () => {
 		const outputDirectory = mkdtempSync(path.join(tmpdir(), 'wcpos-error-codes-'));
 		try {
 			runGenerator(outputDirectory);
-			for (const filename of ['error-codes.generated.ts', 'error-catalogue.json']) {
-				expect(readFileSync(path.join(outputDirectory, filename), 'utf8')).toBe(
-					readFileSync(path.join(generatedDirectory, filename), 'utf8')
-				);
-			}
+			const filename = 'error-codes.generated.ts';
+			expect(readFileSync(path.join(outputDirectory, filename), 'utf8')).toBe(
+				readFileSync(path.join(generatedDirectory, filename), 'utf8')
+			);
 		} finally {
 			rmSync(outputDirectory, { recursive: true, force: true });
 		}
@@ -215,7 +221,11 @@ describe('error registry', () => {
 		expect(entry.logSources).toEqual([]);
 	});
 
-	it('rejects control characters in registry strings — they break MDX frontmatter', () => {
+	// Every registry string is emitted into a TypeScript string literal, and the
+	// summaries and action hints into the JSON translation catalogue too — a raw
+	// newline or NUL there is a syntax error, not a formatting nuisance. (The
+	// original reason, MDX frontmatter, went away with the generated docs pages.)
+	it('rejects control characters in registry strings — they break the generated literals', () => {
 		const directory = mkdtempSync(path.join(tmpdir(), 'wcpos-error-codes-newline-'));
 		const invalidRegistry = path.join(directory, 'registry.json');
 		writeFileSync(
