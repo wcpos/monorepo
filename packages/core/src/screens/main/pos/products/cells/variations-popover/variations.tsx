@@ -34,7 +34,8 @@ interface VariationPopoverProps {
 	>['resource'];
 	parent: EngineRecord<'products'>;
 	addToCart: (variation: EngineRecord<'variations'>, metaData: LineItem['meta_data']) => void;
-	hideOutOfStock?: boolean;
+	/** The products list's Stock Status filter; undefined leaves every option selectable. */
+	stockStatus?: string;
 }
 
 /**
@@ -45,7 +46,7 @@ export function Variations({
 	allVariationsResource,
 	parent,
 	addToCart,
-	hideOutOfStock = false,
+	stockStatus,
 }: VariationPopoverProps) {
 	const result = useObservableSuspense(binding.resource);
 	const allVariationsResult = useObservableSuspense(allVariationsResource ?? binding.resource);
@@ -117,7 +118,7 @@ export function Variations({
 					attribute,
 					selectedAttributes,
 					allVariationHits,
-					hideOutOfStock
+					stockStatus
 				);
 				return (
 					<VStack key={attribute.name} space="xs">

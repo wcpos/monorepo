@@ -1,7 +1,7 @@
 import type { ProductDocument } from '@wcpos/database';
 import type { EngineRecord } from '@wcpos/query';
 
-import { resolveStock } from '../../../../components/product/resolve-stock';
+import { matchesStockStatusFilter } from '../../../../components/product/stock-filter';
 
 /**
  * VARIATIONS POPOVER - PURPOSE & LOGIC
@@ -161,12 +161,21 @@ export const parseAttributes = (
  * Resolve stock-disabled options without changing the existing availability counts.
  * The target attribute's current selection is ignored so alternative values are
  * evaluated against the rest of the partial selection.
+ *
+ * An option is disabled when every variation it leads to sits OUTSIDE the products list's
+ * Stock Status filter — the same question the expanded variations table asks before hiding a
+ * row, so the two surfaces agree. A boolean here could not: collapsing the filter to
+ * "hide out of stock" left an `onbackorder` colour selectable under an `instock` pill (it is
+ * sellable, so the old sellability test passed it) and left every `instock` colour selectable
+ * under an `outofstock` pill, both of which the table hides.
+ *
+ * An unset filter disables nothing; Add to Cart still refuses an unsellable variation on its own.
  */
 export function getDisabledVariationOptions(
 	attribute: NonNullable<ProductDocument['attributes']>[number],
 	selectedAttributes: SelectedAttribute[] | undefined,
 	hits: VariationHit[],
-	hideOutOfStock: boolean
+	stockStatus: string | undefined
 ): Record<string, boolean> {
 	const disabledOptions: Record<string, boolean> = {};
 	const targetAttrId = attribute.id ?? 0;
@@ -176,7 +185,7 @@ export function getDisabledVariationOptions(
 	);
 
 	for (const option of attribute.options ?? []) {
-		if (!hideOutOfStock) {
+		if (!stockStatus) {
 			disabledOptions[option] = false;
 			continue;
 		}
@@ -186,7 +195,7 @@ export function getDisabledVariationOptions(
 		);
 		disabledOptions[option] =
 			matchingHits.length > 0 &&
-			matchingHits.every((hit) => !resolveStock(hit.record.payload).sellable);
+			matchingHits.every((hit) => !matchesStockStatusFilter(hit.record.payload, stockStatus));
 	}
 
 	return disabledOptions;
