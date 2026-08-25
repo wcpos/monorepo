@@ -136,12 +136,17 @@ test.describe('POS variation popover option states', () => {
 		const large = dialog.getByTestId('variation-option-Large');
 		await expect(large).toBeDisabled({ timeout: 15_000 });
 
-		// Disabling is enforced twice — the control's own `disabled`, and an early return in the
-		// popover's select handler. Force past the first to prove the second holds: a click that
-		// registered would resolve Blue/Large, a combination that does not exist.
+		// Blue matches exactly one variation, so the popover has ALREADY resolved Blue/Small and
+		// is offering it. That resolution is the instrument: if the greyed click registered, the
+		// selection would move to Blue/Large — a combination the store does not have — and the
+		// popover would swap Add to Cart for its combination-unavailable notice.
+		const addToCart = page.getByTestId('variation-popover-add-to-cart');
+		await expect(addToCart).toBeVisible({ timeout: 20_000 });
+
 		await large.click({ force: true });
-		await expect(large).not.toHaveAttribute('data-state', 'on', { timeout: 5_000 });
-		await expect(page.getByTestId('variation-popover-add-to-cart')).toHaveCount(0);
+
+		await expect(dialog.getByTestId('variation-popover-unavailable')).toHaveCount(0);
+		await expect(addToCart).toBeVisible();
 	});
 
 	test('offers an unsellable combination but refuses to add it', async ({ posPage: page }) => {
