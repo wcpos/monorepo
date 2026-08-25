@@ -19,6 +19,8 @@ import {
 import type { CartLine } from '@wcpos/order-math/internal';
 import { MISC_PRODUCT_ID, NO_STORE, POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
 
+import { resolveImageEntry } from '../../components/product/resolve-image-src';
+
 // Local barrel: the POS cart's line vocabulary in one import. These are pure
 // functions owned by @wcpos/order-math/internal, re-exported alongside the
 // cart-local helpers below so a call site needing both takes one import.
@@ -317,7 +319,15 @@ export const convertVariationToLineItemWithoutTax = (
 		quantity: 1,
 		sku: variation.sku,
 		tax_class: variation.tax_class,
-		image: normalizeLineItemImage(variation.image) || normalizeLineItemImage(parent.images?.[0]),
+		/**
+		 * Both wire shapes before falling back to the parent. A 1.10.0 store serves a variation
+		 * with `images[]` and no `image`, so reading `image` alone made the parent fallback ALWAYS
+		 * win — and unlike the blank thumbnail, this one is persisted: the parent's picture is
+		 * written onto the order line and shows in the order view and on receipts (#1577).
+		 */
+		image:
+			normalizeLineItemImage(resolveImageEntry(variation)) ||
+			normalizeLineItemImage(parent.images?.[0]),
 		meta_data: new_meta_data,
 	};
 };

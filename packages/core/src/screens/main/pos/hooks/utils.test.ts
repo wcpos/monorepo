@@ -335,6 +335,43 @@ describe('Utilities', () => {
 			expect(lineItem.image).toEqual({ id: 301, src: 'https://example.com/parent.jpg' });
 		});
 
+		it('takes the variation image from the v2 `images` array, not the parent', () => {
+			/*
+			 * The shape a 1.10.0+ store actually serves. The fixture above uses the singular
+			 * `image` the wc/v3 variations controller sends, so it kept passing while every real
+			 * variation arrived with `images[]` instead — the parent fallback then won on every
+			 * line item and wrote the WRONG picture onto the order (#1577).
+			 */
+			const parentWithImage = {
+				...parentProduct,
+				images: [{ id: 301, src: 'https://example.com/parent.jpg' }],
+			} as ProductDocument;
+			const v2Variation = {
+				...variation,
+				image: undefined,
+				images: [{ id: 201, src: 'https://example.com/variation.jpg' }],
+			} as Parameters<typeof convertVariationToLineItemWithoutTax>[0];
+
+			const lineItem = convertVariationToLineItemWithoutTax(v2Variation, parentWithImage);
+
+			expect(lineItem.image).toEqual({ id: 201, src: 'https://example.com/variation.jpg' });
+		});
+
+		it('falls back to the parent only when the variation carries neither shape', () => {
+			const parentWithImage = {
+				...parentProduct,
+				images: [{ id: 301, src: 'https://example.com/parent.jpg' }],
+			} as ProductDocument;
+			const lineItem = convertVariationToLineItemWithoutTax(
+				{ ...variation, image: null, images: [] } as Parameters<
+					typeof convertVariationToLineItemWithoutTax
+				>[0],
+				parentWithImage
+			);
+
+			expect(lineItem.image).toEqual({ id: 301, src: 'https://example.com/parent.jpg' });
+		});
+
 		it('should include variation attributes in meta_data when not provided', () => {
 			const lineItem = convertVariationToLineItemWithoutTax(variation, parentProduct);
 
