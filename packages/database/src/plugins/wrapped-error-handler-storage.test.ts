@@ -11,6 +11,7 @@ import {
 	isStorageDegraded,
 	isStorageWorkerFailure,
 	resetReportedCleanupFailures,
+	STORAGE_RPC_STALL_REPORT_MS,
 	STORAGE_RPC_WATCHDOG_MS,
 	wrappedErrorHandlerStorage,
 } from './wrapped-error-handler-storage';
@@ -1461,6 +1462,132 @@ describe('wrappedErrorHandlerStorage', () => {
 			await closed;
 
 			expect(mockLoggerInstance.error).not.toHaveBeenCalled();
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// Report-only stall diagnostic
+	//
+	// The killer watchdog above condemns the WORKER, and re-arms for as long as the
+	// worker answers anything at all. A stall BELOW the worker boundary — one
+	// storage instance's serialised task queue stops advancing while the worker
+	// keeps serving every other collection — is therefore invisible to it by
+	// construction. That is the 2026-08-25 demo-store wedge: a screen spinning
+	// forever, a healthy worker, and not one line logged anywhere.
+	//
+	// These tests exist to make the instrument falsifiable. An alarm nobody has
+	// watched go red is not an alarm.
+	// ---------------------------------------------------------------------------
+	describe('stalled-RPC diagnostic', () => {
+		const pending = () => jest.fn(() => new Promise(() => undefined));
+
+		/** Untyped overrides, matching the watchdog block: a `pending()` mock is
+		 * deliberately not shaped like the RPC it stands in for. */
+		async function wrap(databaseName: string, overrides = {}) {
+			return wrappedErrorHandlerStorage({
+				storage: createMockStorage(createMockStorageInstance(overrides)),
+			}).createStorageInstance({ databaseName } as any);
+		}
+
+		beforeEach(() => {
+			jest.useFakeTimers();
+			__resetStorageLivenessForTests();
+			clearStorageDegradation();
+		});
+
+		afterEach(() => {
+			jest.restoreAllMocks();
+			jest.useRealTimers();
+			clearStorageDegradation();
+		});
+
+		it('names the collection behind a write that never returns', async () => {
+			const wrappedInstance = await wrap('stall-db', {
+				collectionName: 'coupons',
+				bulkWrite: pending(),
+			});
+
+			void wrappedInstance.bulkWrite([] as any, 'test');
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_STALL_REPORT_MS + 1);
+
+			// `bulkWrite` is deliberately absent from WATCHDOG_WATCHED_METHODS — it must
+			// never be condemned on a hunch — so without this diagnostic a wedged write
+			// produces no signal at all.
+			expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
+				'Storage call has not returned',
+				expect.objectContaining({
+					context: expect.objectContaining({
+						method: 'bulkWrite',
+						databaseName: 'stall-db',
+						collectionName: 'coupons',
+					}),
+				})
+			);
+		});
+
+		it('reports that the worker was answering others while this call hung', async () => {
+			// Seeded at construction: `wrapStorageInstance` reassigns every RPC on the
+			// instance, so the mock is unreachable once wrapping has happened.
+			const wrappedInstance = await wrap('stall-live-worker-db', {
+				collectionName: 'coupons',
+				query: pending(),
+				count: jest.fn().mockResolvedValue(1),
+			});
+
+			void wrappedInstance.query({} as any).catch(() => undefined);
+
+			// The worker answers a different call every 15s throughout — which is
+			// exactly what keeps the killer watchdog re-arming and silent. Stopping at
+			// the stall deadline keeps this about the diagnostic: advance any further
+			// and the watchdog's own two silent windows would condemn the worker.
+			for (let round = 0; round < 4; round += 1) {
+				await jest.advanceTimersByTimeAsync(STORAGE_RPC_STALL_REPORT_MS / 4);
+				await wrappedInstance.count({} as any);
+			}
+
+			const reported = (mockLoggerInstance.warn as jest.Mock).mock.calls.find(
+				([message]: [string]) => message === 'Storage call has not returned'
+			);
+			expect(reported).toBeDefined();
+			// The number that separates "the worker is gone" from "the worker is fine
+			// and THIS call is wedged". Zero would send the next reader hunting a dead
+			// worker that was never dead.
+			expect(reported![1].context.workerAnsweredMeanwhile).toBeGreaterThan(0);
+			expect(isStorageDegraded('stall-live-worker-db')).toBe(false);
+		});
+
+		it('stays quiet for a call that comes back in time', async () => {
+			const wrappedInstance = await wrap('healthy-db', {
+				query: jest.fn().mockResolvedValue([]),
+			});
+
+			await wrappedInstance.query({} as any);
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_STALL_REPORT_MS * 3);
+
+			expect(mockLoggerInstance.warn).not.toHaveBeenCalledWith(
+				'Storage call has not returned',
+				expect.anything()
+			);
+		});
+
+		it('stays quiet while an instance is being torn down', async () => {
+			const wrappedInstance = await wrap('closing-db', {
+				query: pending(),
+				close: jest.fn(() => new Promise(() => undefined)),
+			});
+
+			// The killer watchdog will condemn this read on its own schedule; that is
+			// its business, not this test's, so absorb the rejection.
+			void wrappedInstance.query({} as any).catch(() => undefined);
+			// A store switch or Clear & Sync abandons in-flight reads by design.
+			// Reporting those would train everyone to scroll past this line.
+			void wrappedInstance.close();
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_STALL_REPORT_MS + 1);
+
+			expect(mockLoggerInstance.warn).not.toHaveBeenCalledWith(
+				'Storage call has not returned',
+				expect.anything()
+			);
 		});
 	});
 });
