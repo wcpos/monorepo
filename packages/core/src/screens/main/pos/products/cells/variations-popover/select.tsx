@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { decode } from 'html-entities';
+
 import {
 	Combobox,
 	ComboboxContent,
@@ -51,7 +53,7 @@ export function VariationSelect({
 	if (options.length <= 10) {
 		return (
 			<Select
-				value={selected ? { value: selected, label: selected } : undefined}
+				value={selected ? { value: selected, label: decode(selected) } : undefined}
 				onValueChange={(option) => {
 					if (option && !disabledOptions[option.value]) {
 						onSelect({ id: attribute.id, name: attribute.name, option: option.value });
@@ -62,10 +64,12 @@ export function VariationSelect({
 					<SelectValue placeholder={t('pos_products.select_an_option')} />
 				</SelectTrigger>
 				<SelectContent>
+					{/* Decode the LABEL only — `value` is the identity sent back to onSelect
+					    and must stay the catalogue's own string. */}
 					{options.map((option: string) => (
 						<SelectItem
 							key={option}
-							label={option}
+							label={decode(option)}
 							value={option}
 							disabled={disabledOptions[option]}
 						/>

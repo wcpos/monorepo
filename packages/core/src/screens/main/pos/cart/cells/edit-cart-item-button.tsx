@@ -30,13 +30,15 @@ function EditCartItemButton({ title, children }: Props) {
 					<TooltipTrigger asChild onPress={() => setOpenDialog(true)}>
 						<IconButton name="ellipsisVertical" />
 					</TooltipTrigger>
+					{/* Every caller builds this title from a server-supplied name — a product,
+					    a fee, a shipping method — so both places it renders decode. */}
 					<TooltipContent>
-						<Text>{title}</Text>
+						<Text decodeHtml>{title}</Text>
 					</TooltipContent>
 				</Tooltip>
 				<DialogContent size="lg" portalHost="pos">
 					<DialogHeader>
-						<DialogTitle>{title}</DialogTitle>
+						<DialogTitle decodeHtml>{title}</DialogTitle>
 					</DialogHeader>
 					<DialogBody>{children}</DialogBody>
 				</DialogContent>

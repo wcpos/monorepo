@@ -135,7 +135,15 @@ function ComboboxValue({
 				<TextClassContext.Provider
 					value={cn('text-sm', hasValue ? 'text-foreground' : 'text-muted-foreground', className)}
 				>
-					<Component {...props}>{displayText}</Component>
+					{/* Same decode as ComboboxItemText below: the label shown once chosen is
+					    the label that was listed, and a term or product name arrives from
+					    WooCommerce HTML-encoded. Decoding only in the list made one widget
+					    read "Men's" open and "Men&#039;s" closed. Only on the Text path —
+					    `asChild` hands these props to a caller's component that need not
+					    understand `decodeHtml`. */}
+					<Component {...props} {...(asChild ? {} : { decodeHtml: true })}>
+						{displayText}
+					</Component>
 				</TextClassContext.Provider>
 			</View>
 			<Icon name="chevronDown" />

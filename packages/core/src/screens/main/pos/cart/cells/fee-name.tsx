@@ -64,8 +64,12 @@ export function FeeName({ row }: CellContext<Props, 'name'>) {
 					{metaData.map((meta) => {
 						return (
 							<React.Fragment key={meta.id || meta.key}>
-								<Text className="text-sm">{`${meta.key}:`}</Text>
-								<Text className="text-sm">{formatMetaDataValue(meta.value)}</Text>
+								{/* Same meta the line-item cell decodes next door — a fee's meta is
+								    no less server-supplied than a product's. */}
+								<Text className="text-sm" decodeHtml>{`${meta.key}:`}</Text>
+								<Text className="text-sm" decodeHtml>
+									{formatMetaDataValue(meta.value)}
+								</Text>
 							</React.Fragment>
 						);
 					})}

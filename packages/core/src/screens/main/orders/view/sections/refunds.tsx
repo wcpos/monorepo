@@ -79,7 +79,9 @@ function RefundCard({ refund, currencySymbol }: { refund: WCRefund; currencySymb
 							className="flex-row items-baseline gap-2 py-1"
 						>
 							<View className="flex-1 flex-row flex-wrap items-center gap-2">
-								<Text className="text-foreground text-xs">{item.name || '—'}</Text>
+								<Text className="text-foreground text-xs" decodeHtml>
+									{item.name || '—'}
+								</Text>
 								{item.sku ? (
 									<View className="bg-primary/10 rounded px-1 py-0.5">
 										<Text className="text-primary text-[10px] font-medium tabular-nums">

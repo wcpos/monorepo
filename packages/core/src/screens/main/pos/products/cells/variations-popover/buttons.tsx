@@ -45,7 +45,7 @@ export function VariationButtons({
 						disabled={optionCounts[option] === 0 || disabledOptions[option]}
 						testID={`variation-option-${option}`}
 					>
-						<Text>{option}</Text>
+						<Text decodeHtml>{option}</Text>
 					</ToggleGroupItem>
 				))}
 			</ToggleGroup>

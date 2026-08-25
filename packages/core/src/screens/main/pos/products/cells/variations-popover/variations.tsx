@@ -121,7 +121,9 @@ export function Variations({
 				);
 				return (
 					<VStack key={attribute.name} space="xs">
-						<Text>{attribute.name}</Text>
+						{/* Attribute names and options are catalogue strings — the same pair the
+					    cart's meta lines decode once the variation is added. */}
+						<Text decodeHtml>{attribute.name}</Text>
 						{attribute.characterCount < 15 ? (
 							<VariationButtons
 								attribute={attribute}

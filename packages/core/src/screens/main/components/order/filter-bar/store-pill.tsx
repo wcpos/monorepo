@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { decode } from 'html-entities';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
@@ -119,13 +120,15 @@ export function StorePill({ resource }: Props) {
 						<SelectGroup>
 							<SelectLabel>{t('common.store')}</SelectLabel>
 							{(stores || []).map((store) => {
+								// A store name is the WP site title — HTML-encoded, exactly as the
+								// header decodes it. Decoded once here rather than at the two places
+								// it renders: Select shows this same `label` in the list AND in the
+								// closed trigger, and the trigger's text is drawn by rn-primitives
+								// where `decodeHtml` cannot reach.
+								const name = decode(store.name ?? '');
 								return (
-									<SelectItem
-										key={store.id}
-										value={String(store.id ?? '')}
-										label={store.name ?? ''}
-									>
-										{store.name}
+									<SelectItem key={store.id} value={String(store.id ?? '')} label={name}>
+										{name}
 									</SelectItem>
 								);
 							})}

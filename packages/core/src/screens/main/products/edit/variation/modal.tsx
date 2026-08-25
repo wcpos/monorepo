@@ -42,7 +42,7 @@ export function EditVariationModal({ resource }: Props) {
 			<ModalContent size="lg">
 				<ModalHeader>
 					<ModalTitle>
-						<Text>{t('common.edit_2', { name })}</Text>
+						<Text decodeHtml>{t('common.edit_2', { name })}</Text>
 					</ModalTitle>
 				</ModalHeader>
 				<ModalBody>
