@@ -197,6 +197,45 @@ export const variationsLiteral = {
 		shipping_class_id: {
 			type: 'integer',
 		},
+		/**
+		 * The wcpos/v2 read lane serializes variations through WooCommerce's PRODUCTS
+		 * controller (plugin `Sync\Product_Serializer`), so a v2 variation document
+		 * carries an `images` ARRAY exactly like a product. Stores on the v1 lane
+		 * (plugin 1.9.x) answer with the singular `image` below instead, so both
+		 * shapes are part of this document's contract.
+		 */
+		images: {
+			type: 'array',
+			items: {
+				type: 'object',
+				properties: {
+					id: {
+						type: 'integer',
+					},
+					date_created: {
+						type: 'string',
+					},
+					date_created_gmt: {
+						type: 'string',
+					},
+					date_modified: {
+						type: 'string',
+					},
+					date_modified_gmt: {
+						type: 'string',
+					},
+					src: {
+						type: 'string',
+					},
+					name: {
+						type: 'string',
+					},
+					alt: {
+						type: 'string',
+					},
+				},
+			},
+		},
 		image: {
 			type: ['object', 'null'],
 			properties: {
