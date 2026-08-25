@@ -1073,7 +1073,13 @@ describe('getDisabledVariationOptions', () => {
 	 * passed every colour under an `outofstock` pill — while the expanded variations table,
 	 * reading the same pill, hid exactly those rows.
 	 */
-	it('mirrors the table under an out-of-stock pill: in-stock options are the disabled ones', () => {
+	/**
+	 * Green carries `stock_status: 'instock'` but manages its own stock at quantity 0 with
+	 * backorders off, so WooCommerce's own derivation makes it OUT of stock — which is why the
+	 * in-stock pill above disables it. Under the out-of-stock pill it is therefore in view.
+	 * Reading the literal flag instead of the derivation gets this backwards.
+	 */
+	it('keeps a derived-out-of-stock option in view under an out-of-stock pill', () => {
 		expect(
 			getDisabledVariationOptions(
 				attribute,
@@ -1082,6 +1088,29 @@ describe('getDisabledVariationOptions', () => {
 				'outofstock'
 			)
 		).toEqual({ Red: false, Blue: false, Green: false });
+	});
+
+	/**
+	 * The discriminating half: an option whose only matching variation is IN stock must be
+	 * disabled under an out-of-stock pill, exactly as the expanded table hides that row. Without
+	 * this case an implementation that ignored the filter entirely — returning all-false — would
+	 * still satisfy the assertion above.
+	 */
+	it('disables an in-stock-only option under an out-of-stock pill', () => {
+		const mixedHits = [
+			hit('Red', 'Small', { stock_status: 'outofstock' }),
+			hit('Red', 'Small', { stock_status: 'instock' }),
+			hit('Blue', 'Small', { stock_status: 'instock' }),
+		];
+
+		expect(
+			getDisabledVariationOptions(
+				attribute,
+				[{ id: 2, name: 'Size', option: 'Small' }],
+				mixedHits,
+				'outofstock'
+			)
+		).toMatchObject({ Red: false, Blue: true });
 	});
 
 	it('disables a backordered option under an in-stock pill, though it is sellable', () => {
