@@ -1,6 +1,13 @@
 import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios';
 
-export type RequestConfig = AxiosRequestConfig;
+export interface RequestConfig extends AxiosRequestConfig {
+	/**
+	 * Marks a request that carries no credentials, so the process-wide `authFailed`
+	 * latch does not block it. Set it only when the request genuinely sends no token —
+	 * site discovery on the Connect screen is the canonical case.
+	 */
+	unauthenticated?: boolean;
+}
 
 export interface HttpErrorHandlerContext {
 	/** The original error that occurred */

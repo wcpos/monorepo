@@ -10,7 +10,7 @@ import { mapToInternalCode, parseWpError } from './parse-wp-error';
 import { scheduleRequest } from './request-queue';
 import { requestStateManager } from './request-state-manager';
 
-import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
+import type { HttpErrorHandler, HttpErrorHandlerContext, RequestConfig } from './types';
 
 const httpLogger = getLogger(['wcpos', 'http', 'client']);
 
@@ -169,9 +169,13 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 	/**
 	 * Make the actual HTTP request
 	 */
-	const makeRequest = React.useCallback(async (config: AxiosRequestConfig) => {
-		// Pre-flight check: ensure request can proceed based on global state
-		const canProceed = requestStateManager.checkCanProceed() as any;
+	const makeRequest = React.useCallback(async (config: RequestConfig) => {
+		// Pre-flight check: ensure request can proceed based on global state.
+		// `unauthenticated: true` marks a request that sends no credentials, so the
+		// process-wide authFailed latch does not apply to it (see CanProceedOptions).
+		const canProceed = requestStateManager.checkCanProceed({
+			authenticated: config.unauthenticated !== true,
+		}) as any;
 		if (!canProceed.ok) {
 			// Create error with additional context
 			const error = new Error(canProceed.reason || 'Request blocked') as any;
@@ -195,8 +199,8 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 
 		const databaseEpoch = getDatabaseEpoch();
 
-		// If token refresh is in progress, wait for it to complete
-		if (requestStateManager.isTokenRefreshing()) {
+		// Only credentialed requests depend on an in-flight token refresh.
+		if (config.unauthenticated !== true && requestStateManager.isTokenRefreshing()) {
 			httpLogger.debug('Token refresh in progress, waiting before making request', {
 				context: {
 					url: config.url,
@@ -257,7 +261,7 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 	 * Main request function with error handling
 	 */
 	const request = React.useCallback(
-		async (reqConfig: AxiosRequestConfig = {}) => {
+		async (reqConfig: RequestConfig = {}) => {
 			const databaseEpoch = getDatabaseEpoch();
 			try {
 				const response = await makeRequest(reqConfig);
@@ -350,22 +354,22 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 	return React.useMemo(
 		() => ({
 			request,
-			get(url: string, config: AxiosRequestConfig = {}) {
+			get(url: string, config: RequestConfig = {}) {
 				return request({ ...config, method: 'GET', url });
 			},
-			post(url: string, data: any, config: AxiosRequestConfig = {}) {
+			post(url: string, data: any, config: RequestConfig = {}) {
 				return request({ ...config, method: 'POST', url, data });
 			},
-			put(url: string, data: any, config: AxiosRequestConfig = {}) {
+			put(url: string, data: any, config: RequestConfig = {}) {
 				return request({ ...config, method: 'PUT', url, data });
 			},
-			patch(url: string, data: any, config: AxiosRequestConfig = {}) {
+			patch(url: string, data: any, config: RequestConfig = {}) {
 				return request({ ...config, method: 'PATCH', url, data });
 			},
-			delete(url: string, config: AxiosRequestConfig = {}) {
+			delete(url: string, config: RequestConfig = {}) {
 				return request({ ...config, method: 'DELETE', url });
 			},
-			head(url: string, config: AxiosRequestConfig = {}) {
+			head(url: string, config: RequestConfig = {}) {
 				return request({ ...config, method: 'HEAD', url });
 			},
 		}),

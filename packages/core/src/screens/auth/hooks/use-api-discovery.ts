@@ -174,12 +174,17 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					response = await http.get(`${baseUrl}wcpos/v2/site`, {
 						params: { wcpos: 1 },
 						timeout: 15_000,
+						unauthenticated: true,
 					});
 				} catch (error: unknown) {
 					if (get(error, ['response', 'status']) !== 404) {
 						throw error;
 					}
-					response = await http.get(wpApiUrl, { params: { wcpos: 1 }, timeout: 15_000 });
+					response = await http.get(wpApiUrl, {
+						params: { wcpos: 1 },
+						timeout: 15_000,
+						unauthenticated: true,
+					});
 				}
 				const data = get(response, 'data') as WpJsonResponse;
 
