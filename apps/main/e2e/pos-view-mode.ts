@@ -55,7 +55,16 @@ export async function ensureGridView(page: Page) {
 	const toggle = page.getByTestId('view-mode-toggle');
 	const gridScroller = page.getByTestId('pos-products-grid-scroller');
 
-	if (await gridScroller.isVisible().catch(() => false)) {
+	// `isVisible()` samples, it does not wait (it is documented as returning immediately). On a
+	// grid that has not painted yet that sample reads false, this helper "corrects" a view that
+	// was already right, and the toggle lands the test in TABLE view — the opposite of what it
+	// was asked for. `waitFor` is the waiting form; the same reasoning is why ensureTableView
+	// above is written this way.
+	const alreadyGrid = await gridScroller
+		.waitFor({ state: 'visible', timeout: 2_000 })
+		.then(() => true)
+		.catch(() => false);
+	if (alreadyGrid) {
 		return;
 	}
 

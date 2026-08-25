@@ -830,7 +830,13 @@ export async function createVariationMatrixProduct(options: {
 			}),
 		true,
 		'Variation matrix parent creation',
-		() => findCreatedProduct(request, storeUrl, authorization, token)
+		/**
+		 * `findCreatedProductRecord` matches an ALLOWLIST of exact names, and this parent is not
+		 * one of the two built-in ones. Without naming it here, a first POST that persists but
+		 * loses its response adopts nothing, the retry creates a SECOND parent, and teardown
+		 * deletes only the id it was handed — stranding the other on the dev store.
+		 */
+		() => findCreatedProduct(request, storeUrl, authorization, token, [`E2E Matrix ${token}`])
 	);
 
 	const parent =
@@ -1037,6 +1043,7 @@ export async function sweepOrphanedProductProbes(
 				id !== null &&
 				(name.startsWith('E2E Probe ') ||
 					name.startsWith('E2E Variable ') ||
+					name.startsWith('E2E Matrix ') ||
 					// Arrival probes lead with a sort-direction token (see
 					// ARRIVAL_PROBE_LEAD in server-created-visibility.spec.ts). `aaaa`
 					// is retired but still swept, so orphans from older runs are not
