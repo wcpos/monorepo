@@ -60,7 +60,7 @@ function VariationsPopoverContent({
 					allVariationsResource={allVariationsBinding.resource}
 					parent={parent}
 					addToCart={addToCart}
-					hideOutOfStock={stockStatus === 'instock'}
+					stockStatus={stockStatus}
 				/>
 			</Suspense>
 		</ErrorBoundary>
@@ -70,9 +70,10 @@ function VariationsPopoverContent({
 export function VariationsPopover(props: VariationsPopoverProps) {
 	/**
 	 * Read OUTSIDE the variations provider below — query state is a single nearest-provider
-	 * context, so the products filter is unreachable from the popover's own subtree. Greying out
-	 * unsellable colours is the pill's rule here too: with the pill cleared every colour is
-	 * selectable and the disabled Add to Cart button carries the stock news instead.
+	 * context, so the products filter is unreachable from the popover's own subtree. The pill
+	 * governs here exactly as it does in the expanded table: a colour leading only to variations
+	 * outside the filter is greyed out. With the pill cleared every colour is selectable and the
+	 * disabled Add to Cart button carries the stock news instead.
 	 */
 	const stockStatus = useQueryState<'products', string | undefined>(
 		(state) => state.filters.stock_status
