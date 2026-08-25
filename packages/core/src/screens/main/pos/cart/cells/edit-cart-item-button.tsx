@@ -38,7 +38,9 @@ function EditCartItemButton({ title, children }: Props) {
 				</Tooltip>
 				<DialogContent size="lg" portalHost="pos">
 					<DialogHeader>
-						<DialogTitle decodeHtml>{title}</DialogTitle>
+						<DialogTitle>
+							<Text decodeHtml>{title}</Text>
+						</DialogTitle>
 					</DialogHeader>
 					<DialogBody>{children}</DialogBody>
 				</DialogContent>
