@@ -19,7 +19,7 @@
  * is the same adapter for the sync engine. Collapsing them is the obvious next
  * step and was attempted here, but its test suite mocks the bridge by package
  * specifier and this module imports it relatively, so the move needs its own
- * pass — not one riding along on a hotfix for a bricked app. See monorepo#1583.
+ * pass — not one riding along on a hotfix for a bricked app. See monorepo#1586.
  *
  * `validateStatus: null` is load-bearing — probes read non-2xx responses as
  * evidence, so a 401/403/404 must come back as a Response, not a throw.
