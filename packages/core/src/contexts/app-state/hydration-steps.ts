@@ -1,6 +1,7 @@
 import * as Crypto from 'expo-crypto';
 
 import { createStoreDB, createUserDB, sanitizeWPCredentialsData } from '@wcpos/database';
+import { platformFetch } from '@wcpos/hooks/platform-fetch';
 import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import {
@@ -58,7 +59,10 @@ async function fetchJsonWithTimeout(
 	}, timeoutMs);
 
 	try {
-		const response = await fetch(input, {
+		// platformFetch, never the global: on Electron the renderer's fetch is
+		// CORS-constrained against a `wcpos://-` origin, and these probes then fail
+		// on healthy stores whose host echoes Origin back (the 1.10.2 outage).
+		const response = await platformFetch(input, {
 			...init,
 			signal: controller.signal,
 		});
@@ -90,7 +94,10 @@ async function fetchWithProbeTimeout(
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), AUTH_PROBE_TIMEOUT_MS);
 	try {
-		return (await fetch(input, { cache: 'no-store', ...init, signal: controller.signal })) ?? null;
+		return (
+			(await platformFetch(input, { cache: 'no-store', ...init, signal: controller.signal })) ??
+			null
+		);
 	} catch {
 		return null;
 	} finally {

@@ -14,6 +14,10 @@ const mockAppLogger = {
 	error: jest.fn(),
 };
 const mockPlatform = { isWeb: true };
+// Indirection so the jest.mock factory (hoisted) can reach a mock defined later.
+const platformFetchRef: { fn: (...args: unknown[]) => unknown } = {
+	fn: (...args: unknown[]) => (globalThis.fetch as (...a: unknown[]) => unknown)(...args),
+};
 
 jest.mock('@wcpos/database', () => ({
 	createStoreDB: (...args: unknown[]) => createStoreDBMock(...args),
@@ -32,6 +36,10 @@ jest.mock('@wcpos/utils/platform', () => ({
 
 jest.mock('./initial-props', () => ({
 	initialProps: null,
+}));
+
+jest.mock('@wcpos/hooks/platform-fetch', () => ({
+	platformFetch: (...args: unknown[]) => platformFetchRef.fn(...args),
 }));
 
 // eslint-disable-next-line import/first -- Jest mocks must be registered before importing the module under test.
@@ -297,6 +305,67 @@ describe('PROCESS_INITIAL_PROPS', () => {
 				prevent_overselling: false,
 			}),
 		]);
+	});
+});
+
+describe('probe transport', () => {
+	/**
+	 * The 1.10.2 connect outage: these probes called the renderer's global fetch.
+	 * On Electron the renderer origin is the custom scheme `wcpos://-`, so every
+	 * store request is cross-origin, and a host that rewrites
+	 * Access-Control-Allow-Origin to echo the caller's Origin returns an EMPTY
+	 * value for a custom scheme. The probes threw, both echo spellings read as
+	 * dead, and the app told the merchant "The store's REST API did not answer at
+	 * any address" about a store that answered 200 over the IPC bridge.
+	 *
+	 * The existing tests here cannot catch a regression: they stub `global.fetch`,
+	 * and the web build of `platformFetch` calls exactly that, so raw fetch and
+	 * platformFetch are indistinguishable to them. This test separates the two —
+	 * the global is rigged to throw, so anything reaching it fails loudly.
+	 */
+	const platformFetchMock = jest.fn();
+	const forbiddenGlobalFetch = jest.fn(() => {
+		throw new Error('probe used the global fetch — it must go through platformFetch');
+	});
+
+	beforeEach(() => {
+		platformFetchMock.mockReset();
+		forbiddenGlobalFetch.mockClear();
+		mockPlatform.isWeb = true;
+		global.fetch = forbiddenGlobalFetch as unknown as typeof fetch;
+		// Point the mocked module at this block's spy; the default delegates to the
+		// global so every OTHER test in this file keeps its existing fetch stub.
+		platformFetchRef.fn = platformFetchMock;
+		platformFetchMock.mockResolvedValue({
+			ok: true,
+			status: 200,
+			headers: { get: () => 'application/json' },
+			clone: () => ({ text: async () => '' }),
+			text: async () => '',
+			json: async () => ({
+				v: 1,
+				headers: { authorization: { received: true, length: 12 } },
+				params: { authorization: true, wcpos: true, store_id: true },
+			}),
+		});
+	});
+
+	it('sends the authorization probes through platformFetch, never the global', async () => {
+		const result = await testAuthorizationMethod(
+			'https://example.com/wp-json/wcpos/v2/',
+			'mock.connect.test',
+			'1.10.0',
+			'https://example.com/wp-json/'
+		);
+
+		expect(platformFetchMock).toHaveBeenCalled();
+		expect(forbiddenGlobalFetch).not.toHaveBeenCalled();
+		expect(result.ok).toBe(true);
+	});
+
+	afterEach(() => {
+		platformFetchRef.fn = (...args: unknown[]) =>
+			(globalThis.fetch as (...a: unknown[]) => unknown)(...args);
 	});
 });
 
