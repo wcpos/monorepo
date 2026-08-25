@@ -235,6 +235,26 @@ describe('useHttpClient network audit logs', () => {
 		expect(http.request).toHaveBeenCalledWith(expect.objectContaining({ timeout: 5_000 }));
 	});
 
+	it('declares an unauthenticated request to the pre-flight check', async () => {
+		// The flag is only worth anything if it REACHES checkCanProceed — the fix
+		// for the 2026-08-25 lockout lives entirely in this hand-off.
+		(http.request as jest.Mock).mockResolvedValue({ status: 200, data: {} });
+		const { result } = renderHook(() => useHttpClient());
+
+		await result.current.head('https://example.com', { unauthenticated: true });
+
+		expect(requestStateManager.checkCanProceed).toHaveBeenCalledWith({ authenticated: false });
+	});
+
+	it('declares every ordinary request as authenticated', async () => {
+		(http.request as jest.Mock).mockResolvedValue({ status: 200, data: {} });
+		const { result } = renderHook(() => useHttpClient());
+
+		await result.current.get('/wc/v3/products');
+
+		expect(requestStateManager.checkCanProceed).toHaveBeenCalledWith({ authenticated: true });
+	});
+
 	it('preserves zero as an explicit request timeout opt-out', async () => {
 		(http.request as jest.Mock).mockResolvedValue({ status: 200, data: {} });
 		const { result } = renderHook(() => useHttpClient());

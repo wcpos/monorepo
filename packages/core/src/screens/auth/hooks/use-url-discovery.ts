@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 
-import { useHttpClient } from '@wcpos/hooks/use-http-client';
+import { PREFLIGHT_BLOCK, useHttpClient } from '@wcpos/hooks/use-http-client';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -27,6 +27,9 @@ const DISCOVERY_PROBE_TIMEOUT_MS = 10_000;
 interface ProbeResult {
 	url: string | null;
 	timedOut: boolean;
+	/** Set when the request never left the device (pre-flight block). */
+	blocked: boolean;
+	offline: boolean;
 }
 
 /**
@@ -38,6 +41,19 @@ const isTimeoutError = (err: unknown): boolean => {
 	const code = get(err, ['code']);
 	return code === 'ECONNABORTED' || code === 'ETIMEDOUT';
 };
+
+/**
+ * A pre-flight block means the request never reached the network, so it proves
+ * NOTHING about the site. Reporting it as "not a WordPress site" blames the store
+ * for a condition inside the app — the 2026-08-25 failure, where a dead saved
+ * session latched `authFailed` and every store the cashier typed, including the
+ * demo, came back as "not a WordPress site".
+ */
+const isPreFlightBlocked = (err: unknown): boolean =>
+	(err as { isPreFlightBlocked?: boolean })?.isPreFlightBlocked === true;
+
+const isOfflineBlock = (err: unknown): boolean =>
+	isPreFlightBlocked(err) && (err as { blockCode?: string })?.blockCode === PREFLIGHT_BLOCK.OFFLINE;
 
 interface UseUrlDiscoveryReturn {
 	status: UrlDiscoveryStatus;
@@ -95,20 +111,30 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 	const tryLinkHeaderDiscovery = React.useCallback(
 		async (normalizedUrl: string): Promise<ProbeResult> => {
 			try {
-				const response = await http.head(normalizedUrl, { timeout: DISCOVERY_PROBE_TIMEOUT_MS });
+				const response = await http.head(normalizedUrl, {
+					timeout: DISCOVERY_PROBE_TIMEOUT_MS,
+					unauthenticated: true,
+				});
 
 				if (!response) {
-					return { url: null, timedOut: false };
+					return { url: null, timedOut: false, blocked: false, offline: false };
 				}
 
 				return {
 					url: extractWpApiUrlFromLink(get(response, ['headers', 'link'])),
 					timedOut: false,
+					blocked: false,
+					offline: false,
 				};
 			} catch (err: unknown) {
 				// Check error response headers for Link header
 				const link = get(err, ['response', 'headers', 'link']);
-				return { url: extractWpApiUrlFromLink(link), timedOut: isTimeoutError(err) };
+				return {
+					url: extractWpApiUrlFromLink(link),
+					timedOut: isTimeoutError(err),
+					blocked: isPreFlightBlocked(err),
+					offline: isOfflineBlock(err),
+				};
 			}
 		},
 		[http]
@@ -123,20 +149,28 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 			const fallbackUrl = `${normalizedUrl}/wp-json/`;
 
 			try {
-				const response = await http.head(fallbackUrl, { timeout: DISCOVERY_PROBE_TIMEOUT_MS });
+				const response = await http.head(fallbackUrl, {
+					timeout: DISCOVERY_PROBE_TIMEOUT_MS,
+					unauthenticated: true,
+				});
 
 				if (response && response.status === 200) {
-					return { url: fallbackUrl, timedOut: false };
+					return { url: fallbackUrl, timedOut: false, blocked: false, offline: false };
 				}
 
-				return { url: null, timedOut: false };
+				return { url: null, timedOut: false, blocked: false, offline: false };
 			} catch (err: unknown) {
 				// A WP REST API error (e.g. rest_unauthorized) proves the endpoint exists
 				if (isWpRestApiError(err)) {
-					return { url: fallbackUrl, timedOut: false };
+					return { url: fallbackUrl, timedOut: false, blocked: false, offline: false };
 				}
 
-				return { url: null, timedOut: isTimeoutError(err) };
+				return {
+					url: null,
+					timedOut: isTimeoutError(err),
+					blocked: isPreFlightBlocked(err),
+					offline: isOfflineBlock(err),
+				};
 			}
 		},
 		[http]
@@ -168,15 +202,27 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				const linkProbe = await tryLinkHeaderDiscovery(normalizedUrl);
 				let discoveredUrl = linkProbe.url;
 				let timedOut = linkProbe.timedOut;
+				let blocked = linkProbe.blocked;
+				let offline = linkProbe.offline;
 
 				// Step 2: If Link header failed, try fallback
 				if (!discoveredUrl) {
 					const fallbackProbe = await tryFallbackDiscovery(normalizedUrl);
 					discoveredUrl = fallbackProbe.url;
 					timedOut = timedOut || fallbackProbe.timedOut;
+					blocked = blocked || fallbackProbe.blocked;
+					offline = offline || fallbackProbe.offline;
 				}
 
 				if (!discoveredUrl) {
+					// Order matters: a blocked probe never reached the site, so it can
+					// never justify a verdict ABOUT the site.
+					if (offline) {
+						throw new Error(t('common.no_internet_connection'));
+					}
+					if (blocked) {
+						throw new Error(t('auth.could_not_send_the_request'));
+					}
 					throw new Error(
 						timedOut ? t('auth.site_took_too_long_to_respond') : t('auth.site_does_not_seem_to_be')
 					);
