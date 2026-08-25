@@ -313,7 +313,7 @@ function LogsScreenContent() {
 				connectivity: status.connectivity,
 				eventsToday: stats.eventsToday,
 				errorsToday: stats.errorsToday,
-				changesWaiting: mutations.pending,
+				changesWaiting: mutations.syncBacklog,
 				stuckRecords: stats.stuck,
 				verboseDiagnostics: verbose,
 				lastCheck: lane?.lastTick ?? null,
@@ -339,7 +339,7 @@ function LogsScreenContent() {
 		appVersion,
 		canShare,
 		logsCollection,
-		mutations.pending,
+		mutations.syncBacklog,
 		platform,
 		platformVersion,
 		site,
@@ -403,8 +403,8 @@ function LogsScreenContent() {
 								testID="logs-stat-stuck"
 							/>
 							<Stat
-								value={mutations.pending}
-								tone={mutations.pending > 0 ? 'bad' : 'good'}
+								value={mutations.syncBacklog}
+								tone={mutations.syncBacklog > 0 ? 'bad' : 'good'}
 								label={t('health.database.waiting_to_send')}
 								testID="logs-stat-waiting"
 							/>

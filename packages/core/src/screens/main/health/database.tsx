@@ -592,8 +592,8 @@ export function DatabaseScreen() {
 					{/* Every queued outbound record counts the same here — a product edit
 					    stuck on this device is as lost as a sale (Paul, 2026-08-08). */}
 					<Stat
-						value={mutations.pending}
-						tone={mutations.pending > 0 ? 'bad' : 'good'}
+						value={mutations.syncBacklog}
+						tone={mutations.syncBacklog > 0 ? 'bad' : 'good'}
 						label={t('health.database.waiting_to_send')}
 						testID="db-stat-waiting"
 					/>
@@ -606,7 +606,7 @@ export function DatabaseScreen() {
 				    show. Gating the list on the precomputed count keeps the common
 				    (empty) case from mounting a Suspense boundary or querying the queue. */}
 				<AttentionPanel stuck={attentionStuck} />
-				{mutations.rejected > 0 ? (
+				{mutations.needsDecisionRejected > 0 ? (
 					<React.Suspense fallback={<Loader size="sm" />}>
 						<RejectedMutationsPanel />
 					</React.Suspense>
@@ -614,7 +614,7 @@ export function DatabaseScreen() {
 				{/* Parked 409/428 conflicts — every row named and resolvable (Send
 				    again / Use server version). Replaces the anonymous count callout
 				    that called each one a "sale" and offered nothing (2026-08-14). */}
-				{mutations.unresolvedConflicts > 0 ? (
+				{mutations.needsDecisionUnresolved > 0 ? (
 					<React.Suspense fallback={<Loader size="sm" />}>
 						<ConflictedMutationsPanel />
 					</React.Suspense>

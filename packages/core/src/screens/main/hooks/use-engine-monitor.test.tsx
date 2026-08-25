@@ -73,37 +73,39 @@ function openCartOrders(uuids: string[]) {
 
 /** Build a mutation collection fixture with independent observable count streams. */
 function mutationDatabase(
-	pending: number,
-	conflicts: number,
-	rejected = 0,
-	unresolvedConflicts = conflicts - rejected
+	syncBacklog: number,
+	needsDecision: number,
+	needsDecisionRejected = 0,
+	needsDecisionUnresolved = needsDecision - needsDecisionRejected
 ) {
-	const pending$ = new BehaviorSubject(
-		Array.from({ length: pending }, (_unused, index) =>
+	const syncBacklog$ = new BehaviorSubject(
+		Array.from({ length: syncBacklog }, (_unused, index) =>
 			queueRow({ mutationId: `mutation-${index}`, recordId: `record-${index}` })
 		)
 	);
-	const conflicts$ = new BehaviorSubject(Array.from({ length: conflicts }, () => ({})));
-	const rejected$ = new BehaviorSubject(Array.from({ length: rejected }, () => ({})));
-	const unresolvedConflicts$ = new BehaviorSubject(
-		Array.from({ length: unresolvedConflicts }, () => ({}))
+	const needsDecision$ = new BehaviorSubject(Array.from({ length: needsDecision }, () => ({})));
+	const needsDecisionRejected$ = new BehaviorSubject(
+		Array.from({ length: needsDecisionRejected }, () => ({}))
+	);
+	const needsDecisionUnresolved$ = new BehaviorSubject(
+		Array.from({ length: needsDecisionUnresolved }, () => ({}))
 	);
 	const find = jest.fn(
 		(query: { selector: { status: { $in: string[] }; collectionName?: { $eq: string } } }) => {
 			const statuses = query.selector.status.$in;
 			// The dead-letter-only query (#832) is the single-status one; the lumped
 			// terminal query also mentions 'rejected' but names two more statuses.
-			if (statuses.length === 1 && statuses[0] === 'rejected') return { $: rejected$ };
-			if (statuses.includes('rejected')) return { $: conflicts$ };
+			if (statuses.length === 1 && statuses[0] === 'rejected') return { $: needsDecisionRejected$ };
+			if (statuses.includes('rejected')) return { $: needsDecision$ };
 			if (statuses.length === 2 && statuses.includes('conflicted'))
-				return { $: unresolvedConflicts$ };
-			return { $: pending$ };
+				return { $: needsDecisionUnresolved$ };
+			return { $: syncBacklog$ };
 		}
 	);
 	return {
-		pending$,
-		rejected$,
-		unresolvedConflicts$,
+		syncBacklog$,
+		needsDecisionRejected$,
+		needsDecisionUnresolved$,
 		find,
 		database: {
 			collections: { [MUTATION_QUEUE_RXDB_COLLECTION]: { find } } as Record<string, unknown>,
@@ -114,7 +116,7 @@ function mutationDatabase(
 describe('engine monitor hooks', () => {
 	afterEach(() => mockDatabase$.next(null));
 
-	it('documents pending counts as network-waiting mutations', () => {
+	it('documents the sync backlog as network-waiting mutations', () => {
 		const source = readFileSync(join(__dirname, 'use-engine-monitor.ts'), 'utf8');
 
 		expect(source).toContain(
@@ -168,17 +170,17 @@ describe('engine monitor hooks', () => {
 			expect(call[0].selector.collectionName).toBeUndefined();
 		}
 		expect(result.current).toEqual({
-			pending: 3,
-			conflicts: 0,
-			rejected: 0,
-			unresolvedConflicts: 0,
+			syncBacklog: 3,
+			needsDecision: 0,
+			needsDecisionRejected: 0,
+			needsDecisionUnresolved: 0,
 		});
-		act(() => mutations.pending$.next([queueRow()]));
+		act(() => mutations.syncBacklog$.next([queueRow()]));
 		expect(result.current).toEqual({
-			pending: 1,
-			conflicts: 0,
-			rejected: 0,
-			unresolvedConflicts: 0,
+			syncBacklog: 1,
+			needsDecision: 0,
+			needsDecisionRejected: 0,
+			needsDecisionUnresolved: 0,
 		});
 
 		unmount();
@@ -193,16 +195,16 @@ describe('engine monitor hooks', () => {
 		const mutations = mutationDatabase(0, 0);
 		const orders = openCartOrders(['order-1']);
 		mutations.database.collections.orders = orders.collection;
-		mutations.pending$.next([
+		mutations.syncBacklog$.next([
 			queueRow({ mutationId: 'mutation-1', collectionName: 'orders', recordId: 'order-1' }),
 		]);
 		mockDatabase$.next(mutations.database);
 		const { result, unmount } = renderHook(() => useMutationCounts());
 
-		expect(result.current.pending).toBe(0);
+		expect(result.current.syncBacklog).toBe(0);
 
 		act(() => orders.orders$.next([]));
-		expect(result.current.pending).toBe(1);
+		expect(result.current.syncBacklog).toBe(1);
 
 		unmount();
 	});
@@ -214,7 +216,7 @@ describe('engine monitor hooks', () => {
 		const mutations = mutationDatabase(0, 0);
 		const orders = openCartOrders(['order-1']);
 		mutations.database.collections.orders = orders.collection;
-		mutations.pending$.next([
+		mutations.syncBacklog$.next([
 			queueRow({ mutationId: 'mutation-1', collectionName: 'orders', recordId: 'order-1' }),
 			queueRow({
 				mutationId: 'mutation-2',
@@ -226,7 +228,7 @@ describe('engine monitor hooks', () => {
 		mockDatabase$.next(mutations.database);
 		const { result, unmount } = renderHook(() => useMutationCounts());
 
-		expect(result.current.pending).toBe(2);
+		expect(result.current.syncBacklog).toBe(2);
 
 		unmount();
 	});
@@ -235,7 +237,7 @@ describe('engine monitor hooks', () => {
 		const mutations = mutationDatabase(0, 0);
 		const orders = openCartOrders(['order-1']);
 		mutations.database.collections.orders = orders.collection;
-		mutations.pending$.next([
+		mutations.syncBacklog$.next([
 			queueRow({
 				mutationId: 'mutation-1',
 				collectionName: 'orders',
@@ -246,7 +248,7 @@ describe('engine monitor hooks', () => {
 		mockDatabase$.next(mutations.database);
 		const { result, unmount } = renderHook(() => useMutationCounts());
 
-		expect(result.current.pending).toBe(1);
+		expect(result.current.syncBacklog).toBe(1);
 
 		unmount();
 	});
@@ -261,17 +263,17 @@ describe('engine monitor hooks', () => {
 
 		expect(mutations.find).toHaveBeenCalledWith({ selector: { status: { $in: ['rejected'] } } });
 		expect(result.current).toEqual({
-			pending: 0,
-			conflicts: 3,
-			rejected: 2,
-			unresolvedConflicts: 1,
+			syncBacklog: 0,
+			needsDecision: 3,
+			needsDecisionRejected: 2,
+			needsDecisionUnresolved: 1,
 		});
-		act(() => mutations.rejected$.next([]));
+		act(() => mutations.needsDecisionRejected$.next([]));
 		expect(result.current).toEqual({
-			pending: 0,
-			conflicts: 3,
-			rejected: 0,
-			unresolvedConflicts: 1,
+			syncBacklog: 0,
+			needsDecision: 3,
+			needsDecisionRejected: 0,
+			needsDecisionUnresolved: 1,
 		});
 
 		unmount();
@@ -284,24 +286,24 @@ describe('engine monitor hooks', () => {
 		const { result, unmount } = renderHook(() => useMutationCounts());
 
 		expect(result.current).toMatchObject({
-			pending: 3,
-			conflicts: 0,
-			rejected: 0,
+			syncBacklog: 3,
+			needsDecision: 0,
+			needsDecisionRejected: 0,
 		});
 		act(() => {
 			first.database.collections = reset.database.collections;
 			mockDatabase$.next(first.database);
 		});
 		expect(result.current).toMatchObject({
-			pending: 5,
-			conflicts: 1,
-			rejected: 0,
+			syncBacklog: 5,
+			needsDecision: 1,
+			needsDecisionRejected: 0,
 		});
-		act(() => first.pending$.next([]));
+		act(() => first.syncBacklog$.next([]));
 		expect(result.current).toMatchObject({
-			pending: 5,
-			conflicts: 1,
-			rejected: 0,
+			syncBacklog: 5,
+			needsDecision: 1,
+			needsDecisionRejected: 0,
 		});
 
 		unmount();
