@@ -65,10 +65,10 @@ jobs:
       # set is knowable. Empty string = run everything.
       only_specs: ${{ steps.scope.outputs.only_specs }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
           filters: |
@@ -107,7 +107,7 @@ jobs:
       is_production: ${{ steps.get-url.outputs.is_production }}
     steps:
       - name: 🏗 Setup repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           submodules: false
@@ -209,7 +209,7 @@ jobs:
         shardTotal: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || '[4]') }}
     steps:
       - name: 🏗 Setup repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           submodules: false
@@ -225,7 +225,7 @@ jobs:
         run: echo "today=$(date -u +%F)" >> "$GITHUB_OUTPUT"
 
       - name: 💾 Cache E2E auth state
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           # ONLY the encrypted archive is ever cached: the snapshot embeds the
           # cashier's access + refresh tokens and this repo is public, so the
@@ -256,7 +256,7 @@ jobs:
           fi
 
       - name: 💾 Cache Playwright browsers
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -401,7 +401,7 @@ jobs:
           fi
 
       - name: 📊 Upload blob report
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: blob-report-${{ matrix.shardIndex }}
@@ -409,7 +409,7 @@ jobs:
           retention-days: 7
 
       - name: 📸 Upload screenshots on failure
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
           name: playwright-screenshots-${{ matrix.shardIndex }}-${{ github.sha }}
@@ -495,7 +495,7 @@ jobs:
       result: ${{ needs.e2e.result }}
     steps:
       - name: 🏗 Setup Node
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 20.x
 
@@ -558,7 +558,7 @@ jobs:
           echo "📎 [View full HTML report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
 
       - name: 📊 Upload merged report
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: playwright-report-${{ github.sha }}
@@ -581,7 +581,7 @@ jobs:
       pull-requests: write
     steps:
       - name: 🏗 Checkout (for gh CLI)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: 📥 Download test results
         if: needs.e2e.result == 'failure'
@@ -668,7 +668,7 @@ jobs:
 
       - name: 💬 Comment on PR
         continue-on-error: true
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const fs = require('fs');
