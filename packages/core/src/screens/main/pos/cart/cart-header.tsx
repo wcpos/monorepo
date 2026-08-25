@@ -78,7 +78,7 @@ export function CartHeader() {
 						>
 							{/* @ts-expect-error: ComboboxTrigger ref type is more specific than our ref with open() method */}
 							<ComboboxTrigger ref={triggerRef} asChild>
-								<ButtonPill size="xs" leftIcon="user" variant="muted">
+								<ButtonPill testID="cart-customer-select" size="xs" leftIcon="user" variant="muted">
 									<ButtonText>{t('common.select_customer')}</ButtonText>
 								</ButtonPill>
 							</ComboboxTrigger>

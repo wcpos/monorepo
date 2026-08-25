@@ -17,15 +17,22 @@ import { Suspense } from '@wcpos/components/suspense';
 import { useT } from '@wcpos/core/contexts/translations';
 import type { EngineRecord } from '@wcpos/query';
 
-import { useSearchSelect } from '../../../../query';
+import { useGuardedExtension, useSearchSelect } from '../../../../query';
+
+import type { SearchSelectBinding } from '../../../../query';
 
 /**
  *
  */
-function BrandList({ resource }: { resource: ReturnType<typeof useSearchSelect>['resource'] }) {
-	const result = useObservableSuspense(resource) as {
+function BrandList({ binding }: { binding: SearchSelectBinding }) {
+	const result = useObservableSuspense(binding.resource) as {
 		hits: { id: string; record: EngineRecord<'brands'> }[];
 	};
+	const handleEndReached = useGuardedExtension(
+		binding.extendLimit,
+		result.hits.length,
+		binding.limit
+	);
 	const t = useT();
 
 	const data = result.hits.map(({ record }) => ({
@@ -42,6 +49,8 @@ function BrandList({ resource }: { resource: ReturnType<typeof useSearchSelect>[
 				</ComboboxItem>
 			)}
 			estimatedItemSize={44}
+			onEndReached={handleEndReached}
+			onEndReachedThreshold={0.1}
 			ListEmptyComponent={<ComboboxEmpty>{t('common.no_brand_found')}</ComboboxEmpty>}
 		/>
 	);
@@ -65,7 +74,7 @@ export function BrandSearch() {
 				onChangeText={binding.setSearch}
 			/>
 			<Suspense>
-				<BrandList resource={binding.resource} />
+				<BrandList binding={binding} />
 			</Suspense>
 		</>
 	);

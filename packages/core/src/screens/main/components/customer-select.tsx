@@ -22,9 +22,10 @@ import type { EngineRecord } from '@wcpos/query';
 import { GUEST_CUSTOMER_ID, isGuestCustomer } from '@wcpos/sync-core';
 
 import { useT } from '../../../contexts/translations';
-import { useSearchSelect } from '../../../query';
+import { useGuardedExtension, useSearchSelect } from '../../../query';
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format/use-customer-name-format';
 
+import type { SearchSelectBinding } from '../../../query';
 import type { CustomerData } from '../hooks/use-customer-name-format/helpers';
 
 export function CustomerSelect({
@@ -74,7 +75,7 @@ export function CustomerSearch({ withGuest = false }: { withGuest?: boolean }) {
 				onChangeText={onSearch}
 			/>
 			<Suspense>
-				<CustomerList resource={binding.resource} withGuest={withGuest} />
+				<CustomerList binding={binding} withGuest={withGuest} />
 			</Suspense>
 		</>
 	);
@@ -93,12 +94,17 @@ interface CustomerListItem {
 
 type CustomerListProps = {
 	withGuest: boolean;
-	resource: ReturnType<typeof useSearchSelect>['resource'];
+	binding: SearchSelectBinding;
 };
 
-export function CustomerList({ resource, withGuest }: CustomerListProps) {
-	const result = useObservableSuspense(resource) as { hits: CustomerHit[] };
+export function CustomerList({ binding, withGuest }: CustomerListProps) {
+	const result = useObservableSuspense(binding.resource) as { hits: CustomerHit[] };
 	const t = useT();
+	const handleEndReached = useGuardedExtension(
+		binding.extendLimit,
+		result.hits.length,
+		binding.limit
+	);
 
 	/**
 	 *
@@ -127,10 +133,15 @@ export function CustomerList({ resource, withGuest }: CustomerListProps) {
 		<ComboboxList
 			data={data as unknown as import('@wcpos/components/combobox').Option[]}
 			shouldFilter={false}
+			onEndReached={handleEndReached}
+			onEndReachedThreshold={0.1}
 			renderItem={({ item }) => {
 				const hit = item as unknown as CustomerListItem;
 				return (
 					<ComboboxItem
+						testID={`customer-select-option-${
+							isGuestCustomer(hit.customer.id) ? 'guest' : hit.customer.id
+						}`}
 						value={String(hit.customer.id)}
 						label={String(hit.customer.id)}
 						item={hit.customer}

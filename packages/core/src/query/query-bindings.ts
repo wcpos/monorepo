@@ -790,8 +790,13 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 export type SearchSelectCollection =
 	'customer' | 'category' | 'brand' | 'tag' | 'cashier' | 'coupon';
 
-const SEARCH_SELECT_LIMIT = 50;
-const SEARCH_SELECT_LIMIT_MAX = 100;
+/**
+ * One page of picker rows: the window a search-select opens with, and the step every
+ * end-reached extension adds. It is a page size, not a ceiling — the pickers page through the
+ * whole collection, exactly as the grids do (#1553).
+ */
+const SEARCH_SELECT_PAGE_SIZE = 50;
+const SEARCH_SELECT_PAGE_SIZE_MAX = 100;
 
 function searchSelectDescriptor(
 	collection: SearchSelectCollection,
@@ -825,7 +830,7 @@ function searchSelectDescriptor(
 
 export function useSearchSelect(
 	collection: SearchSelectCollection,
-	options: { debounceMs?: number; maxResults?: number } = {}
+	options: { debounceMs?: number; pageSize?: number } = {}
 ) {
 	const [search, setSearch] = React.useState('');
 	const [committedSearch, setCommittedSearch] = React.useState('');
@@ -835,10 +840,31 @@ export function useSearchSelect(
 		const timerId = setTimeout(() => setCommittedSearch(search.trim()), debounceMs);
 		return () => clearTimeout(timerId);
 	}, [debounceMs, search]);
-	const limit = Math.max(
+	const pageSize = Math.max(
 		1,
-		Math.min(options.maxResults ?? SEARCH_SELECT_LIMIT, SEARCH_SELECT_LIMIT_MAX)
+		Math.min(options.pageSize ?? SEARCH_SELECT_PAGE_SIZE, SEARCH_SELECT_PAGE_SIZE_MAX)
 	);
+	/**
+	 * Paging state, keyed by the result set it belongs to: a committed search is a DIFFERENT
+	 * result set, so it starts over at page one. Carrying the window across would hold 500 rows
+	 * of declared demand over three freshly typed characters.
+	 *
+	 * The key is compared during render rather than reset from an effect — an effect that
+	 * setStates on every search change is a cascading render, and the stale window would be
+	 * declared for one render before it healed.
+	 */
+	const pagingKey = `${committedSearch}|${pageSize}`;
+	const [paging, setPaging] = React.useState({ key: pagingKey, limit: pageSize });
+	if (paging.key !== pagingKey) {
+		setPaging({ key: pagingKey, limit: pageSize });
+	}
+	const limit = paging.key === pagingKey ? paging.limit : pageSize;
+	const extendLimit = React.useCallback(() => {
+		setPaging((current) => ({
+			key: pagingKey,
+			limit: (current.key === pagingKey ? current.limit : pageSize) + pageSize,
+		}));
+	}, [pageSize, pagingKey]);
 	const bindingId = React.useId();
 	const compiled = React.useMemo(() => {
 		const common = { search: committedSearch, filters: {}, limit } as const;
@@ -882,8 +908,10 @@ export function useSearchSelect(
 		true,
 		bindingId
 	);
-	return { ...binding, search, setSearch, committedSearch };
+	return { ...binding, search, setSearch, committedSearch, limit, extendLimit };
 }
+
+export type SearchSelectBinding = ReturnType<typeof useSearchSelect>;
 
 /** Full reference-lane category residents for the hierarchical category tree. */
 export function useAllCategoriesBinding() {

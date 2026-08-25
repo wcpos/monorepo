@@ -18,15 +18,22 @@ import { useT } from '@wcpos/core/contexts/translations';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 import type { EngineRecord } from '@wcpos/query';
 
-import { useAllCategoriesBinding, useSearchSelect } from '../../../../query';
+import { useAllCategoriesBinding, useGuardedExtension, useSearchSelect } from '../../../../query';
+
+import type { SearchSelectBinding } from '../../../../query';
 
 /**
  *
  */
-function CategoryList({ resource }: { resource: ReturnType<typeof useSearchSelect>['resource'] }) {
-	const result = useObservableSuspense(resource) as {
+function CategoryList({ binding }: { binding: SearchSelectBinding }) {
+	const result = useObservableSuspense(binding.resource) as {
 		hits: { id: string; record: EngineRecord<'categories'> }[];
 	};
+	const handleEndReached = useGuardedExtension(
+		binding.extendLimit,
+		result.hits.length,
+		binding.limit
+	);
 	const t = useT();
 
 	const data = result.hits.map(({ record }) => ({
@@ -43,6 +50,8 @@ function CategoryList({ resource }: { resource: ReturnType<typeof useSearchSelec
 				</ComboboxItem>
 			)}
 			estimatedItemSize={44}
+			onEndReached={handleEndReached}
+			onEndReachedThreshold={0.1}
 			ListEmptyComponent={<ComboboxEmpty>{t('common.no_category_found')}</ComboboxEmpty>}
 		/>
 	);
@@ -66,7 +75,7 @@ export function CategorySearch() {
 				onChangeText={binding.setSearch}
 			/>
 			<Suspense>
-				<CategoryList resource={binding.resource} />
+				<CategoryList binding={binding} />
 			</Suspense>
 		</>
 	);

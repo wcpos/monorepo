@@ -17,9 +17,16 @@ const selectLimit = (state: { limit: number }): number => state.limit;
  * Once the outstanding fetch lands enough rows to fill the limit, the data change re-arms the
  * virtualizer's end-reached and the next fire extends again — so paging through a long result
  * set still walks limit-by-limit, one outstanding extension at a time.
+ *
+ * `limit` is a parameter rather than a store read because the same guard serves two owners of
+ * a limit: the query-state store (the grids) and `useSearchSelect`'s local paging state (the
+ * comboboxes, which have no store).
  */
-export function useGuardedExtendLimit(extendLimit: () => void, resultCount: number): () => void {
-	const limit = useQueryState(selectLimit);
+export function useGuardedExtension(
+	extendLimit: () => void,
+	resultCount: number,
+	limit: number
+): () => void {
 	const extensionScheduled = React.useRef(false);
 	React.useEffect(() => {
 		extensionScheduled.current = false;
@@ -29,4 +36,10 @@ export function useGuardedExtendLimit(extendLimit: () => void, resultCount: numb
 		extensionScheduled.current = true;
 		extendLimit();
 	}, [extendLimit, limit, resultCount]);
+}
+
+/** The store-backed binding of {@link useGuardedExtension} — the grids' end-reached handler. */
+export function useGuardedExtendLimit(extendLimit: () => void, resultCount: number): () => void {
+	const limit = useQueryState(selectLimit);
+	return useGuardedExtension(extendLimit, resultCount, limit);
 }
