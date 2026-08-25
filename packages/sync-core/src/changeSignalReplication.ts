@@ -160,16 +160,39 @@ export function planReplicationActions(outcome: HybridPollOutcome): ReplicationA
 		}
 	}
 
-	// Products/variations re-fetch so ingest re-materializes barcode. Empty
-	// old-plugin envelopes leave existing values untouched.
+	/**
+	 * A stale collection is repaired whenever the server DESCRIBED its barcode carriers — even when
+	 * that description is an empty list.
+	 *
+	 * The distinction is `undefined` vs `[]`, and it is load-bearing:
+	 *
+	 *  - `undefined` — the server sent no `barcode_fields` envelope at all (an old plugin, or a
+	 *    stripped response). We cannot reason about what the client holds, and re-ingesting a
+	 *    payload with no selectors drops any `payload.barcode` a previous session materialized. Such
+	 *    a plugin also cannot announce a payload-contract change, so there is nothing to migrate.
+	 *    Skipping is the conservative and correct choice, and it is what the original gate was
+	 *    protecting.
+	 *  - `[]` — the server explicitly says this store has NO derivable barcode carrier. Nothing was
+	 *    materialized to lose; and if the setting just moved to a carrier this WooCommerce cannot
+	 *    serve, the stale local value is wrong anyway. Repairing is safe.
+	 *
+	 * The old gate collapsed those two into "non-empty", which made the second case a PERMANENT
+	 * skip: the plugin reports no barcode fields for the DEFAULT `_global_unique_id` setting on
+	 * WooCommerce below 9.2 (wc/v3 does not serve that field before then), and `nextState.configBaseline`
+	 * below advances unconditionally whether or not a repair ran. So such a store observed a
+	 * fingerprint move once, re-fetched nothing, recorded the new baseline, and never retried.
+	 *
+	 * That silently broke the migration path for a plugin payload-SHAPE change (the plugin's
+	 * `payload_contract` bump) on every WC 5.3–9.1 store using the default barcode field. A shape
+	 * change is precisely the case a client cannot self-repair: it can be taught to read two image
+	 * shapes, but a variation name the server collapsed is indistinguishable from a correct one.
+	 *
+	 * `reFetchCollection()` is a no-op for anything that is not products/variations, and
+	 * applyReplicationActions skips `tax_rates` here because step 4 already refreshed it.
+	 */
 	const reDeriveBarcode: { collection: BarcodeConfigCollection; activeFields: string[] }[] = [];
-	const reFetchCollections: BarcodeConfigCollection[] = [];
-	for (const collection of outcome.staleCollections ?? []) {
-		const activeFields = outcome.configBarcodeFields?.[collection];
-		if (collection === 'tax_rates' || (activeFields !== undefined && activeFields.length > 0)) {
-			reFetchCollections.push(collection);
-		}
-	}
+	const reFetchCollections: BarcodeConfigCollection[] =
+		outcome.configBarcodeFields === undefined ? [] : [...(outcome.staleCollections ?? [])];
 
 	const nextState: ReplicationActions['nextState'] = {
 		cursor: outcome.cursor,
