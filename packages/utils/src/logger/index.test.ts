@@ -284,6 +284,50 @@ describe('logger/index', () => {
 
 			expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ testId: 'toast-HOST141' }));
 		});
+
+		it('hands the merchant-copy ingredients across the seam', () => {
+			// This package cannot resolve the translated per-code sentence itself —
+			// it is generated into `packages/core`, which depends on this package.
+			// What it CAN do is say where a title could come from, so the adapter on
+			// the other side of `setToast` can prefer the merchant sentence over the
+			// developer message. See createMerchantToast in @wcpos/core.
+			const mockToast = jest.fn();
+			setToast(mockToast);
+
+			getLogger(['wcpos', 'test']).warn('Host security filter blocked the search', {
+				code: 'HOST141',
+				showToast: true,
+			});
+
+			expect(mockToast).toHaveBeenCalledWith(
+				expect.objectContaining({
+					merchantCopy: {
+						explicitTitle: undefined,
+						errorCode: 'HOST141',
+						logMessage: 'Host security filter blocked the search',
+					},
+				})
+			);
+		});
+
+		it('marks an explicit title as explicit so the adapter can honour it', () => {
+			const mockToast = jest.fn();
+			setToast(mockToast);
+
+			getLogger(['wcpos', 'test']).warn('Forensic message with ids', {
+				code: 'HOST141',
+				showToast: true,
+				toast: { title: 'Your store blocked the search.' },
+			});
+
+			expect(mockToast).toHaveBeenCalledWith(
+				expect.objectContaining({
+					merchantCopy: expect.objectContaining({
+						explicitTitle: 'Your store blocked the search.',
+					}),
+				})
+			);
+		});
 	});
 
 	describe('setDatabase', () => {

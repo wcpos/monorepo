@@ -56,6 +56,24 @@ export interface LoggerOptions {
 }
 
 /**
+ * What the logger knows about where a toast title could come from, handed
+ * across the `setToast` seam so the merchant sentence can be resolved on the
+ * side that has translations in scope.
+ *
+ * The precedence is applied by the consumer, not here — `packages/utils` cannot
+ * import `packages/core`, which is where the per-code translated summaries and
+ * action hints are generated. See `createMerchantToast`.
+ */
+export interface MerchantToastCopy {
+	/** An explicit `toast.title` from the call site — deliberate cashier copy. */
+	explicitTitle?: string;
+	/** The typed error code, when the call site supplied one. */
+	errorCode?: string;
+	/** The log message. Written for developers; the last resort. */
+	logMessage: string;
+}
+
+/**
  * Lazy message type - either a string or a function that returns a string
  * Use functions for expensive computations that should only run if the log level is enabled
  */
@@ -661,10 +679,22 @@ const mainTransport = (props: any) => {
 		// Build toast config using NEW format (not legacy text1/text2)
 		const toastConfig: any = {
 			type: toastType,
+			// Last-resort title only. `message` is written for developers, so a
+			// merchant must not read it while a translated sentence for the error
+			// code exists — but the translated sentences live in `packages/core`,
+			// which depends on this package, so they cannot be resolved here.
+			// `merchantCopy` below hands the raw ingredients across the `setToast`
+			// seam; `createMerchantToast` (packages/core/src/contexts/merchant-toast)
+			// applies the precedence and strips the field before the Toaster sees it.
 			title: options.toast?.title ?? message, // New format uses 'title' not 'text1'
 			// Lets E2E assert WHICH coded condition surfaced, without selecting
 			// on translated copy (the repo's E2E selector policy).
 			...(errorCode && { testId: `toast-${errorCode}` }),
+			merchantCopy: {
+				explicitTitle: options.toast?.title,
+				errorCode,
+				logMessage: message,
+			} satisfies MerchantToastCopy,
 		};
 
 		// Add secondary message (description in new format)
