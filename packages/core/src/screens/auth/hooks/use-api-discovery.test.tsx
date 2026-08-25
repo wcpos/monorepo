@@ -48,7 +48,7 @@ const siteData = {
 	_links: {},
 };
 
-const requestOptions = { params: { wcpos: 1 }, timeout: 15_000 };
+const requestOptions = { params: { wcpos: 1 }, timeout: 15_000, unauthenticated: true };
 
 describe('useApiDiscovery', () => {
 	beforeEach(() => {

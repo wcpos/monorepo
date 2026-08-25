@@ -255,6 +255,19 @@ describe('useHttpClient network audit logs', () => {
 		expect(requestStateManager.checkCanProceed).toHaveBeenCalledWith({ authenticated: true });
 	});
 
+	it('does not wait for token refresh before an unauthenticated request', async () => {
+		(requestStateManager.isTokenRefreshing as jest.Mock).mockReturnValue(true);
+		(requestStateManager.awaitTokenRefresh as jest.Mock).mockReturnValue(new Promise(() => {}));
+		(http.request as jest.Mock).mockResolvedValue({ status: 200, data: {} });
+		const { result } = renderHook(() => useHttpClient());
+
+		const request = result.current.head('https://example.com', { unauthenticated: true });
+		await Promise.resolve();
+
+		expect(requestStateManager.awaitTokenRefresh).not.toHaveBeenCalled();
+		await expect(request).resolves.toMatchObject({ status: 200 });
+	});
+
 	it('preserves zero as an explicit request timeout opt-out', async () => {
 		(http.request as jest.Mock).mockResolvedValue({ status: 200, data: {} });
 		const { result } = renderHook(() => useHttpClient());
