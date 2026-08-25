@@ -31,7 +31,8 @@ function Value({
 		<TextClassContext.Provider
 			value={cn(textClass, 'text-sm', !value?.value && 'text-muted-foreground', className)}
 		>
-			<Component {...props}>{value?.label ?? placeholder}</Component>
+			{/* An empty `value` is the cleared-selection sentinel, so it reads as no selection. */}
+			<Component {...props}>{value?.value ? value.label : placeholder}</Component>
 		</TextClassContext.Provider>
 	);
 }

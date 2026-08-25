@@ -5,6 +5,7 @@ import * as SelectPrimitive from '@rn-primitives/select';
 import Animated from 'react-native-reanimated';
 
 import { Trigger as SelectPrimitiveTrigger, Value as SelectPrimitiveValue } from './trigger';
+import { toControlledSingleProps } from './controlled-value';
 import { resolveOption } from './resolve-option';
 import {
 	SelectMultiContent,
@@ -39,7 +40,7 @@ function Select({ multiple, ...props }: SelectRootProps) {
 		</MultiModeContext.Provider>
 	) : (
 		<MultiModeContext.Provider value={false}>
-			<SelectPrimitive.Root {...(props as any)} />
+			<SelectPrimitive.Root {...(toControlledSingleProps(props) as any)} />
 		</MultiModeContext.Provider>
 	);
 

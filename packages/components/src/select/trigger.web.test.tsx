@@ -2,13 +2,15 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
+import { EMPTY_OPTION } from './controlled-value';
 import { shouldToggleFromPress } from './pointer-type';
-import { Trigger } from './trigger.web';
+import { Trigger, Value } from './trigger.web';
 
 const mockOnOpenChange = jest.fn();
+let mockRootValue: { value: string; label: string } | undefined;
 
 jest.mock('@rn-primitives/select', () => ({
-	useRootContext: () => ({ open: false, onOpenChange: mockOnOpenChange }),
+	useRootContext: () => ({ open: false, onOpenChange: mockOnOpenChange, value: mockRootValue }),
 }));
 
 // Ships untranspiled JSX, which this package's ts-only transform can't parse.
@@ -44,6 +46,7 @@ function renderTrigger() {
 
 beforeEach(() => {
 	mockOnOpenChange.mockClear();
+	mockRootValue = undefined;
 });
 
 describe('web Select trigger — pointer type gating (#863)', () => {
@@ -157,6 +160,34 @@ describe('web Select trigger — pointer type gating (#863)', () => {
 		fireEvent.keyDown(screen.getByTestId('kd-trigger'), { key: 'Enter' });
 
 		expect(onKeyDown).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('web Select value — placeholder', () => {
+	it('shows the label of the current selection', () => {
+		mockRootValue = { value: 'pending', label: 'Pending' };
+		render(<Value placeholder="Status" />);
+
+		expect(screen.getByText('Pending')).toBeTruthy();
+	});
+
+	/**
+	 * The cleared selection. A controlled select clears to `EMPTY_OPTION` rather than
+	 * `undefined` so Radix stays controlled, which means "no selection" reaches this
+	 * component as a defined Option with an empty value — reading `label ?? placeholder`
+	 * would render its blank label and the trigger would lose its placeholder.
+	 */
+	it('shows the placeholder for a cleared selection', () => {
+		mockRootValue = EMPTY_OPTION;
+		render(<Value placeholder="Status" />);
+
+		expect(screen.getByText('Status')).toBeTruthy();
+	});
+
+	it('shows the placeholder when there is no value at all', () => {
+		render(<Value placeholder="Status" />);
+
+		expect(screen.getByText('Status')).toBeTruthy();
 	});
 });
 
