@@ -231,7 +231,14 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 				<VStack className="gap-1">
 					{isProblem ? (
 						<>
-							{explanation ? <Text className="font-medium">{explanation}</Text> : null}
+							{/* On the server-said branch this IS the server's own sentence, and WP
+							    REST ships its error copy HTML-encoded — decode so the row reads
+							    as prose rather than markup. */}
+							{explanation ? (
+								<Text className="font-medium" decodeHtml>
+									{explanation}
+								</Text>
+							) : null}
 							{guidance ? <Text className="text-sm font-medium">{guidance}</Text> : null}
 							{entry && row.code ? <HelpLink code={row.code} /> : null}
 						</>

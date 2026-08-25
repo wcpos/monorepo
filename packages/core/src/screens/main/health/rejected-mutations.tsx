@@ -173,7 +173,13 @@ export function RejectedMutationsPanel() {
 									</Pill>
 								) : null}
 							</HStack>
-							<Text className="text-muted-foreground text-xs">{describeReason(row, t)}</Text>
+							{/* The server's own sentence arrives HTML-encoded — WordPress ships
+							    its REST error copy with entities baked in ("vous n&rsquo;etes
+							    pas autorise"). Rendered raw it puts markup in front of the
+							    cashier, so decode it like every other server-supplied string. */}
+							<Text className="text-muted-foreground text-xs" decodeHtml>
+								{describeReason(row, t)}
+							</Text>
 							{row.rejectedAt ? (
 								<Text className="text-muted-foreground/80 text-xs">
 									{t('health.database.rejected.when', {

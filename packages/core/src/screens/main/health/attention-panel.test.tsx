@@ -73,9 +73,17 @@ jest.mock('@wcpos/components/toast', () => ({
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
-jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-}));
+// Mirrors the real Text: `decodeHtml` runs the same html-entities decode, so a
+// panel that forgets the prop renders the raw entity here exactly as it would on
+// a till. A mock that swallowed the prop would make the entity test unfailable.
+jest.mock('@wcpos/components/text', () => {
+	const { decode } = jest.requireActual('html-entities');
+	return {
+		Text: ({ children, decodeHtml }: { children: React.ReactNode; decodeHtml?: boolean }) => (
+			<span>{decodeHtml && typeof children === 'string' ? decode(children) : children}</span>
+		),
+	};
+});
 jest.mock('./components', () => ({
 	Callout: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
 		<div data-testid={testID}>{children}</div>
@@ -159,6 +167,32 @@ describe('AttentionPanel', () => {
 		const text = screen.getByTestId('db-attention-panel').textContent ?? '';
 		expect(text).toContain('removed from this device');
 		expect(text).not.toContain('download');
+	});
+
+	// Both halves of this line are server-supplied and both arrive HTML-encoded:
+	// WordPress bakes entities into its REST error copy, and a product name is
+	// stored the way the catalogue holds it.
+	it('reads the record name and the server reason as prose, not as HTML entities', async () => {
+		mockExec.mockResolvedValue({ payload: { name: 'Men&#8217;s T-shirt' } });
+
+		render(
+			<AttentionPanel
+				stuck={[
+					{
+						...stuck('products', true),
+						reason: 'D&eacute;sol&eacute;, vous n&rsquo;&ecirc;tes pas autoris&eacute;.',
+					},
+				]}
+			/>
+		);
+
+		await waitFor(() =>
+			expect(screen.getByTestId('db-attention-panel').textContent).toContain('Men’s T-shirt')
+		);
+		const text = screen.getByTestId('db-attention-panel').textContent ?? '';
+		expect(text).toContain('Désolé, vous n’êtes pas autorisé.');
+		expect(text).not.toContain('&rsquo;');
+		expect(text).not.toContain('&#8217;');
 	});
 
 	it('still says upload for a push-direction record', () => {
