@@ -458,6 +458,12 @@ Error codes follow the format: `[DOMAIN][CATEGORY][SPECIFIC_CODE]`
 
 All error codes link to: `https://docs.wcpos.com/error-codes/{CODE}`
 
+**That page is hand-authored in [wcpos/docs](https://github.com/wcpos/docs), and
+nothing generates it.** Adding a code to `error-registry.json` without a
+companion docs PR ships a 404 behind the merchant's "Learn more" link, and no
+check in this repo catches it. See the header of `error-registry.test.ts` for
+the two-repo procedure.
+
 Error codes are:
 - **Always visible in logs UI** (pass them as top-level `code`; they persist as `context.errorCode`)
 - **Optionally shown in toasts** (default: true, can be disabled per-call with `toast.showErrorCode: false`)
