@@ -63,6 +63,8 @@ jobs:
         run: pnpm typecheck
 
       - name: "\U0001F9EA Run script tests"
+        env:
+          SKIP_RXDB_PREMIUM_TESTS: ${{ github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' }}
         run: pnpm test:scripts
 
       - name: "\U0001F310 Check translation source strings"
