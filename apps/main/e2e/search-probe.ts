@@ -33,6 +33,12 @@ export interface RunPrivateProductProbe extends SearchProbe {
 	 * product imagery at all — the only honest reason an image assertion cannot run.
 	 */
 	imageAttachmentId?: number | null;
+	/**
+	 * Why no attachment could be looked up, when the reason was a FAILED read rather than an
+	 * imageless store. Carried rather than thrown: a donor-image shortfall must fail the one
+	 * test that asserts on an image, not take the other nine variation tests down with it.
+	 */
+	imageLookupFailure?: string | null;
 }
 
 export type SearchProbeResult = { ok: true; probe: SearchProbe } | { ok: false; reason: string };
@@ -654,34 +660,57 @@ export async function createSearchProbe(
 	}
 }
 
-/** Create a worker-private purchasable product; declared writer failures always throw. */
+/**
+ * The outcome of the donor-image lookup, kept as three states rather than two.
+ *
+ * `{ ok: true, attachmentId: null }` means the read SUCCEEDED and the store owns no product
+ * imagery — the one environment shortfall an image assertion may skip on. `{ ok: false }` means
+ * the read itself failed (transport, 401/403/500, non-list body). Collapsing the second into the
+ * first is how an auth or server regression turns into a quietly skipped test on a store that
+ * declared writer credentials — precisely what the E2E policy says must fail instead.
+ */
+type DonorImageLookup = { ok: true; attachmentId: number | null } | { ok: false; reason: string };
+
 /**
  * An attachment id the store already owns, borrowed so a probe product can carry a real image.
  *
  * Sideloading a fresh image would mint a new attachment on every CI run and leave it behind
  * (probe PRODUCTS are disposable, media is not — nothing deletes it). Re-using an id costs one
- * read and adds nothing to the store. `null` means no product on the first page carries an
- * image, which is the one environment shortfall an image assertion may legitimately skip on.
+ * read and adds nothing to the store.
  */
 async function findDonorImageAttachmentId(
 	request: APIRequestContext,
 	storeUrl: string,
 	authorization: StoreAuthorization
-): Promise<number | null> {
+): Promise<DonorImageLookup> {
 	const auth = storeRequestOptions(authorization);
-	const response = await probeGet(request, storeUrl, 'products', {
-		...auth,
-		params: { ...auth.params, per_page: '20', status: 'publish' },
-	}).catch(() => null);
-	if (!response || !response.ok()) return null;
-	const body = await response.json().catch(() => null);
-	const records = Array.isArray(body) ? body : [];
-	for (const record of records) {
-		const id = (record as { images?: { id?: unknown }[] })?.images?.[0]?.id;
-		if (typeof id === 'number' && id > 0) return id;
+	let response: APIResponse;
+	try {
+		response = await probeGet(request, storeUrl, 'products', {
+			...auth,
+			params: { ...auth.params, per_page: '20', status: 'publish' },
+		});
+	} catch (error) {
+		return { ok: false, reason: `donor-image products read threw: ${String(error)}` };
 	}
-	return null;
+	if (!response.ok()) {
+		return {
+			ok: false,
+			reason: `donor-image products read returned ${response.status()} ${response.statusText()}`,
+		};
+	}
+	const body = await response.json().catch(() => null);
+	if (!Array.isArray(body)) {
+		return { ok: false, reason: 'donor-image products read returned a non-list body' };
+	}
+	for (const record of body) {
+		const id = (record as { images?: { id?: unknown }[] })?.images?.[0]?.id;
+		if (typeof id === 'number' && id > 0) return { ok: true, attachmentId: id };
+	}
+	return { ok: true, attachmentId: null };
 }
+
+/** Create a worker-private purchasable product; declared writer failures always throw. */
 
 export async function createRunPrivateProduct(
 	options: Omit<CreateSearchProbeOptions, 'authorization' | 'collection' | 'writerConfigured'> & {
@@ -707,7 +736,9 @@ export async function createRunPrivateProduct(
 	const attributeName = `Choice ${token.slice(-6)}`;
 	// Looked up BEFORE the create so parent and variations can carry it from birth — an image
 	// added later would have to race the client's already-running sync of this product.
-	const imageAttachmentId = await findDonorImageAttachmentId(request, storeUrl, authorization);
+	const donorImage = await findDonorImageAttachmentId(request, storeUrl, authorization);
+	const imageAttachmentId = donorImage.ok ? donorImage.attachmentId : null;
+	const imageLookupFailure = donorImage.ok ? null : donorImage.reason;
 	const parentResult = await productCreateResponse(
 		() =>
 			probeRequest(request, 'post', storeUrl, 'products', undefined, {
@@ -789,6 +820,7 @@ export async function createRunPrivateProduct(
 		token,
 		variationSku: `${token}red`,
 		imageAttachmentId,
+		imageLookupFailure,
 	};
 }
 
