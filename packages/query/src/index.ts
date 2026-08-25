@@ -6,7 +6,11 @@ export {
 	type EngineCollection,
 } from './records/engine-collection';
 export { useDocField, useRecordField } from './records/use-record-field';
-export { useFollowedCollection$, useLocalCollection$ } from './use-local-collection';
+export {
+	useFollowedCollection,
+	useFollowedCollection$,
+	useLocalCollection$,
+} from './use-local-collection';
 export type { LocalCollectionReset, LocalDatabaseWithReset } from './use-local-collection';
 export { useLocalQuery } from './use-local-query';
 export { awaitWriteOutcome, WriteOutcomeError } from './await-write-outcome';

@@ -91,6 +91,32 @@ describe('useCollection', () => {
 	});
 
 	/**
+	 * The store switch must be correct in the SWITCH RENDER, not one render later.
+	 *
+	 * `useObservableState`'s `useState` initializer is mount-only and its
+	 * resubscribe runs in a passive `useEffect` (observable-hooks 4.2.4:
+	 * `useSubscription` = `useSubscriptionInternal(useEffect, ...)`, keyed on the
+	 * observable). So a hook that only reads the observable renders the OUTGOING
+	 * store's collection once, after paint — and this hook hands that collection
+	 * to callers who write through it.
+	 */
+	it("never renders the previous store's collection after a switch", () => {
+		const seen: string[] = [];
+		currentStoreDB = makeStoreDB('storeA');
+		const { rerender } = renderHook(() => {
+			const { collection } = useCollection('logs');
+			seen.push((collection as unknown as { label: string }).label);
+		});
+		expect(seen).toEqual(['storeA']);
+
+		const before = seen.length;
+		currentStoreDB = makeStoreDB('storeB');
+		rerender();
+
+		expect(seen.slice(before)).not.toContain('storeA');
+	});
+
+	/**
 	 * The cross-store leak. `reset$` carries every open store's resets, so a
 	 * name-only filter lets store A's storage recovery — finishing after the
 	 * cashier switched to store B — hand B's mounted reader store A's

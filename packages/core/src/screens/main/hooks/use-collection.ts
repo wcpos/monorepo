@@ -1,16 +1,12 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
-
 import { storeCollections } from '@wcpos/database';
-import { useFollowedCollection$ } from '@wcpos/query';
+import { useFollowedCollection } from '@wcpos/query';
 import type { StoreCollections } from '@wcpos/database';
 import type { LegacyCollectionName, LocalDatabaseWithReset } from '@wcpos/query';
 
 import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
-
-import type { Observable } from 'rxjs';
 
 export type CollectionKey = keyof typeof storeCollections | LegacyCollectionName;
 
@@ -59,16 +55,11 @@ export const useCollection = <K extends keyof StoreCollections>(
 	 * as `localDB`, so the two hooks read the same database either way.
 	 */
 	// The shared hook is generic over an untyped record; this hook's contract is
-	// the concrete collection for `key`, and `storeDB.collections[key]` is what
-	// it actually emits.
-	const collection$ = useFollowedCollection$(
+	// the concrete collection for `key`, which is what it actually returns.
+	const collection = useFollowedCollection(
 		storeDB as unknown as LocalDatabaseWithReset,
 		key
-	) as unknown as Observable<StoreCollections[K]>;
-	const collection = useObservableState(
-		collection$,
-		storeDB.collections[key]
-	) as StoreCollections[K];
+	) as unknown as StoreCollections[K];
 
 	/**
 	 *

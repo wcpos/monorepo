@@ -92,6 +92,48 @@ export function useFollowedCollection$<T = Record<string, unknown>>(
 }
 
 /**
+ * The followed collection as a VALUE, correct in the render that switches it.
+ *
+ * The observable form above is right for a consumer that pipes it (a query
+ * binding subscribes, and one render of lag on an async result is invisible).
+ * It is wrong for a consumer that RETURNS the collection, because
+ * `useObservableState` cannot deliver a new observable's first value during the
+ * render that creates it: its `useState` initializer is mount-only, and
+ * `useSubscription` resubscribes in a passive `useEffect` keyed on the
+ * observable (observable-hooks 4.2.4). A store switch therefore renders the
+ * OUTGOING store's collection once, after paint — and a caller handed that
+ * collection writes into the store the cashier just left.
+ *
+ * So the base is read during render and a reset only OVERRIDES it, with the
+ * override discarded during render once it no longer belongs to the database on
+ * screen. This is the shape `useReceiptEmailQueueCollection` arrived at for the
+ * same reason; the owner check is shared with the observable form rather than
+ * restated.
+ */
+export function useFollowedCollection<T = Record<string, unknown>>(
+	database: LocalDatabaseWithReset,
+	collectionName: string
+): RxCollection<T> | undefined {
+	const [swap, setSwap] = React.useState<{
+		database: LocalDatabaseWithReset;
+		collection: RxCollection<T>;
+	} | null>(null);
+
+	React.useEffect(() => {
+		// Effect as last resort: `reset$` is an imperative RxDB notification with
+		// no render-derivable value.
+		const subscription = database.reset$?.subscribe((replacement) => {
+			if (!ownReplacement(replacement, collectionName, database)) return;
+			setSwap({ database, collection: replacement as unknown as RxCollection<T> });
+		});
+		return () => subscription?.unsubscribe();
+	}, [database, collectionName]);
+
+	if (swap && swap.database === database) return swap.collection;
+	return database.collections[collectionName] as RxCollection<T> | undefined;
+}
+
+/**
  * {@link useFollowedCollection$} bound to the query runtime's `localDB` — the
  * store database, which `QueryProvider` is handed as `localDB={storeDB}`. Use
  * this from anything already inside the provider; pass the database explicitly
