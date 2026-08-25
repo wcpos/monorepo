@@ -251,6 +251,17 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.ItemProps
 		);
 	}
 
+	/**
+	 * On web this Item is a Radix node, not a react-native-web Pressable, so nothing translates
+	 * `testID` into the `data-testid` that RNW gives every other control — the prop reaches the
+	 * DOM as an inert `testid` attribute and no test can address the option. Selecting the option
+	 * by its visible text instead is not available to us: the labels are translated, and the repo
+	 * forbids localized text as an E2E selector.
+	 */
+	const webTestProps = (
+		Platform.OS === 'web' && props.testID ? { 'data-testid': props.testID } : {}
+	) as Record<string, unknown>;
+
 	return (
 		<SelectPrimitive.Item
 			className={cn(
@@ -259,6 +270,7 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.ItemProps
 				className
 			)}
 			{...props}
+			{...webTestProps}
 		>
 			<View className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
 				<SelectPrimitive.ItemIndicator>
