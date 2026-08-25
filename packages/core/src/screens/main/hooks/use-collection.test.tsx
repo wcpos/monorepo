@@ -46,8 +46,15 @@ describe('useCollection', () => {
 		const { result, rerender } = renderHook(() => useCollection('logs'));
 		expect((result.current.collection as unknown as { label: string }).label).toBe('A');
 
-		const replacement = { name: 'logs', label: 'A-reset' } as unknown as RxCollection;
-		db.collections.logs = replacement;
+		// `collections` is deliberately NOT mutated. The hook reads its base from
+		// `collections[key]` during render, so mutating it would satisfy the
+		// assertion on its own and the test would pass with the reset override
+		// deleted outright — which it did, until this line was removed.
+		const replacement = {
+			name: 'logs',
+			label: 'A-reset',
+			database: db,
+		} as unknown as RxCollection;
 		db.reset$.next(replacement);
 		rerender();
 

@@ -47,6 +47,25 @@ describe('useLocalCollection$', () => {
 		return (seen as { label?: string } | undefined)?.label;
 	};
 
+	/**
+	 * `reset$` is one process-wide Subject shared by every open store database
+	 * (`reset-collection.ts`), so these two pin the owner check: a foreign
+	 * replacement must be refused, this database's own must still arrive.
+	 *
+	 * Both hold a LIVE subscription across the emission and read what it
+	 * delivered, rather than subscribing afterwards and reading
+	 * `collections[name]` back. A plain Subject does not replay, so a test that
+	 * subscribes after the fact never observes the reset path at all and passes
+	 * against any filter — including no filter.
+	 */
+	const track = (obs: ReturnType<typeof useLocalCollection$>) => {
+		const seen: (string | undefined)[] = [];
+		const subscription = obs.subscribe((value) =>
+			seen.push((value as { label?: string } | undefined)?.label)
+		);
+		return { seen, unsubscribe: () => subscription.unsubscribe() };
+	};
+
 	it('emits the current collection synchronously on subscribe', () => {
 		const db = { collections: { logs: collectionNamed('first') }, reset$: new Subject() };
 		const { result } = harness(db);
@@ -57,13 +76,18 @@ describe('useLocalCollection$', () => {
 		const reset$ = new Subject<RxCollection>();
 		const db = { collections: { logs: collectionNamed('before') }, reset$ };
 		const { result } = harness(db);
+		const { seen, unsubscribe } = track(result.current);
 
-		const replacement = collectionNamed('after');
-		db.collections.logs = replacement;
-		reset$.next(replacement);
+		// `collections` is deliberately NOT mutated. Mutating it lets the
+		// subscribe-time re-read alone satisfy the assertion, so the test would
+		// pass with the reset$ branch deleted entirely — proving nothing about
+		// the path it names. This replacement also carries no `database`, which
+		// is the tolerated-emitter case.
+		reset$.next(collectionNamed('after'));
+		unsubscribe();
 
 		// same observable instance, no re-render — it must carry the replacement
-		expect(latest(result.current)).toBe('after');
+		expect(seen).toEqual(['before', 'after']);
 	});
 
 	it('ignores a reset for a DIFFERENT collection', () => {
@@ -94,25 +118,6 @@ describe('useLocalCollection$', () => {
 
 		expect(latest(result.current)).toBe('storeB');
 	});
-
-	/**
-	 * `reset$` is one process-wide Subject shared by every open store database
-	 * (`reset-collection.ts`), so these two pin the owner check: a foreign
-	 * replacement must be refused, this database's own must still arrive.
-	 *
-	 * Both hold a LIVE subscription across the emission and read what it
-	 * delivered, rather than subscribing afterwards and reading
-	 * `collections[name]` back. A plain Subject does not replay, so a test that
-	 * subscribes after the fact never observes the reset path at all and passes
-	 * against any filter — including no filter.
-	 */
-	const track = (obs: ReturnType<typeof useLocalCollection$>) => {
-		const seen: (string | undefined)[] = [];
-		const subscription = obs.subscribe((value) =>
-			seen.push((value as { label?: string } | undefined)?.label)
-		);
-		return { seen, unsubscribe: () => subscription.unsubscribe() };
-	};
 
 	it('ignores a reset announced for ANOTHER open store database', () => {
 		const reset$ = new Subject<RxCollection>();
