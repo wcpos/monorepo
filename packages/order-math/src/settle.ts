@@ -5,7 +5,7 @@ import { recalculateCoupons } from './internal/coupons/recalculate';
 import { toCouponConfigs } from './internal/coupons/to-coupon-configs';
 import { validateCoupon } from './internal/coupons/validate';
 import { enrichCategoriesWithAncestors } from './internal/coupons/helpers';
-import { calculateOrderTotals } from './internal/order-totals';
+import { calculateOrderTotals, type OrderTotals } from './internal/order-totals';
 import { extractFeeLineData, parsePosData } from './internal/lines/pos-data';
 import {
 	isActiveCouponLine,
@@ -16,7 +16,6 @@ import {
 
 import type { CartConfig } from './config';
 import type { CouponLineItem } from './internal/coupons/helpers';
-import type { OrderTotals } from './order-totals';
 import type { CartSnapshot } from './snapshot';
 import type {
 	CouponContext,

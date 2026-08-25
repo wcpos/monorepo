@@ -329,3 +329,12 @@ export function calculateOrderTotals(
 		coupon_tax: String(roundHalfUp(coupon_tax, dp)),
 	};
 }
+
+/**
+ * The order-totals read model: the return shape of `calculateOrderTotals`.
+ *
+ * Named here, beside the one function that produces it, so the shape has a
+ * single author. Re-exported as a public type by the package index because
+ * `SettleResult.totals` is typed with it and callers must be able to name it.
+ */
+export type OrderTotals = ReturnType<typeof calculateOrderTotals>;

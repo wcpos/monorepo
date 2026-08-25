@@ -33,8 +33,7 @@ export type {
 	CalcLineResult,
 } from './cart-line';
 
-export { getOrderTotals } from './order-totals';
-export type { OrderTotals } from './order-totals';
+export type { OrderTotals } from './internal/order-totals';
 
 export { getNetPaymentTotal, refundValue } from './net-payment';
 
