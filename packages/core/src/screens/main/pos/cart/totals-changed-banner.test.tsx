@@ -520,6 +520,37 @@ describe('lifecycle', () => {
 	});
 });
 
+/**
+ * The detail cap is a MEMORY bound, never a product rule — so it must not be
+ * able to take the notice off the sale in front of the cashier. Key order is
+ * first-divergence order unless the caller re-inserts, and on the misconfigured
+ * store that fills this map at all, the longest-diverged order is a perfectly
+ * good description of the open cart.
+ */
+describe('the held-detail cap', () => {
+	it('evicts the least recently diverged order, never the one still diverging', () => {
+		renderBanner();
+
+		// The cashier's order diverges FIRST — the oldest key from here on.
+		emit(divergence('order-a', [{ field: 'total', expected: '1.00', got: '2.00' }], 'm-a1'));
+		// A misconfigured store's worth of other sales, filling the map to its bound.
+		for (let i = 0; i < 49; i++) {
+			emit(
+				divergence(`order-other-${i}`, [{ field: 'total', expected: '1.00', got: '2.00' }], `m${i}`)
+			);
+		}
+		// It is saved again and diverges again — the most RECENT divergence.
+		emit(divergence('order-a', [{ field: 'total', expected: '3.00', got: '4.00' }], 'm-a2'));
+		// One more distinct order takes the map past the bound.
+		emit(divergence('order-other-49', [{ field: 'total', expected: '1.00', got: '2.00' }], 'm49'));
+
+		// The cashier still sees their own order's figures, at the newest comparison.
+		expect(screen.getByTestId('order-totals-changed-banner-field-total').textContent).toBe(
+			'Total3.00 → 4.00'
+		);
+	});
+});
+
 describe('the checkout mount', () => {
 	// The Pay button's own save is usually the write that diverges, and it opens
 	// a full-height modal over the cart the instant the ack lands. Without a
