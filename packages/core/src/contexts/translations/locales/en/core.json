@@ -582,6 +582,9 @@
 	"pos_cart.coupon_removed": "Coupon removed",
 	"pos_cart.discount": "Discount",
 	"pos_cart.edit_customer_address": "Edit Customer Address",
+	"pos_cart.engine_warning_malformed_pos_data": "A line's saved price details couldn't be read, so its amount came from the totals already stored on it. Remove that line and add it again.",
+	"pos_cart.engine_warning_unknown_tax_rate_id": "This order uses a tax rate your store no longer has, so its tax may be wrong.",
+	"pos_cart.engine_warnings_title": "Check this order's amounts before taking payment",
 	"pos_cart.enter_coupon_code": "Enter coupon code",
 	"pos_cart.failed_to_apply_coupon": "Failed to apply coupon.",
 	"pos_cart.fee": "Fee",
@@ -1445,6 +1448,8 @@
 	"health.logs.error_summary.PRODUCT421": "This product's variation price data could not be read, so displayed prices may be wrong or missing.",
 	"health.logs.error_summary.PRINT311": "This receipt could not be emailed or downloaded.",
 	"health.logs.error_summary.CLIENT131": "WCPOS queued too many requests at once and dropped some.",
+	"health.logs.error_summary.CHECKOUT411": "A line on this order has price details the POS could not read, so its amount was taken from the stored totals instead.",
+	"health.logs.error_summary.CHECKOUT421": "This order refers to a tax rate your store no longer has, so its tax may be wrong.",
 	"health.logs.error_action.SYNC101": "Note the unsaved change and check device storage, then restart. Do not clear local data.",
 	"health.logs.error_action.SYNC111": "Repair from Store health → Database.",
 	"health.logs.error_action.SYNC121": "Keep working — sync resumes when the store is reachable.",
@@ -1520,5 +1525,7 @@
 	"health.logs.error_action.PRODUCT321": "Search by name; ask the admin to make the barcodes unique.",
 	"health.logs.error_action.PRODUCT421": "Ask the admin to re-save the product's prices.",
 	"health.logs.error_action.PRINT311": "Retry; check the email/SMTP or download settings.",
-	"health.logs.error_action.CLIENT131": "Pause a moment, confirm your last action went through, then retry."
+	"health.logs.error_action.CLIENT131": "Pause a moment, confirm your last action went through, then retry.",
+	"health.logs.error_action.CHECKOUT411": "Remove that line and add it again, then check the total.",
+	"health.logs.error_action.CHECKOUT421": "Check the tax on this order; ask the admin whether a tax rate was deleted."
 }

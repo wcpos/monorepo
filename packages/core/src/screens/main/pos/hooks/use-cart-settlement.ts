@@ -13,6 +13,7 @@ import { useCartConfig } from './use-cart-config';
 import { useCouponContext } from './use-coupon-context';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
+import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 import { useOrderMoneyDivergence } from '../contexts/order-money-divergence';
 import { useT } from '../../../../contexts/translations';
 
@@ -140,6 +141,7 @@ export const useCartSettlement = () => {
 	const { localPatch } = useLocalMutation();
 	const { getCouponContext } = useCouponContext();
 	const { serverOwnsMoney } = useOrderMoneyDivergence(currentOrderRecord.uuid);
+	const reportEngineWarnings = useReportEngineWarnings();
 	const cartConfig = useCartConfig();
 	const t = useT();
 
@@ -265,6 +267,13 @@ export const useCartSettlement = () => {
 				snapshotFromOrderJSON(freshOrder.toMutableJSON().payload),
 				cartConfig
 			);
+			// Before the `changed` bail, not after: a cart whose money is already
+			// correct can still be resting on a tax rate the store has dropped, and
+			// that is precisely the order the cashier must be told about.
+			reportEngineWarnings(result.warnings, {
+				orderId: freshOrder.uuid,
+				site: 'settleAggregate',
+			});
 			if (!result.changed) return;
 			const write = moneyWriteChain.current.then(() =>
 				localPatch({
@@ -277,7 +286,7 @@ export const useCartSettlement = () => {
 			moneyWriteChain.current = write.catch(() => undefined);
 			await write;
 		},
-		[cartConfig, localPatch]
+		[cartConfig, localPatch, reportEngineWarnings]
 	);
 
 	/**
@@ -310,6 +319,13 @@ export const useCartSettlement = () => {
 					cartConfig,
 					{ coupons: couponContext }
 				);
+				// BOTH branches carry warnings, and the failed one is where they matter
+				// most: the coupon gate stopped the replay, so whatever the engine could
+				// not read is still on the order the cashier is about to charge for.
+				reportEngineWarnings(result.warnings, {
+					orderId: freshOrder.uuid,
+					site: 'settleCart',
+				});
 				if (!result.ok) {
 					cartLogger.warn('Cart settlement failed', {
 						showToast: true,
@@ -371,7 +387,15 @@ export const useCartSettlement = () => {
 				if (replayingRef.current === flightKey) replayingRef.current = null;
 			}
 		},
-		[cartConfig, configKey, currentOrderRecord, getCouponContext, localPatch, t]
+		[
+			cartConfig,
+			configKey,
+			currentOrderRecord,
+			getCouponContext,
+			localPatch,
+			reportEngineWarnings,
+			t,
+		]
 	);
 
 	// The background wait is external to React, so a tax-setting change does not re-arm it.

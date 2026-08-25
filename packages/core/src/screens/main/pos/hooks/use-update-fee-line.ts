@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { calculateCartLine } from '@wcpos/order-math';
+import { calculateCartLine, type EngineWarning } from '@wcpos/order-math';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -9,6 +9,7 @@ import { useCartConfig } from './use-cart-config';
 import { useT } from '../../../../contexts/translations';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
+import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'fee-line']);
 
@@ -32,6 +33,7 @@ export const useUpdateFeeLine = () => {
 	const { currentOrderRecord } = useCurrentOrder();
 	const { localPatch } = useLocalMutation();
 	const cartConfig = useCartConfig();
+	const reportEngineWarnings = useReportEngineWarnings();
 	const t = useT();
 
 	/**
@@ -42,6 +44,7 @@ export const useUpdateFeeLine = () => {
 			const order = currentOrderRecord.getLatest();
 			const json = order.toMutableJSON().payload;
 			let updated = false;
+			let warnings: readonly EngineWarning[] = [];
 
 			const updatedLineItems = json.fee_lines?.map((feeLine) => {
 				if (updated || wooMetaCarrier.lineUuid(feeLine) !== uuid) {
@@ -57,10 +60,7 @@ export const useUpdateFeeLine = () => {
 				// the middle of its arithmetic, so a percentage fee could be computed
 				// against a newer cart than the one being patched, and the write would then
 				// land carrying a total derived from lines it was not built from.
-				//
-				// `warnings` (malformed pos_data) is dropped here, as it is at every other
-				// engine call site in core — settle drops it too.
-				const { line: updatedItem } = calculateCartLine(
+				const { line: updatedItem, warnings: lineWarnings } = calculateCartLine(
 					{
 						kind: 'fee',
 						line: feeLine,
@@ -70,10 +70,13 @@ export const useUpdateFeeLine = () => {
 					cartConfig
 				);
 				updated = true;
+				warnings = lineWarnings;
 				// The engine speaks structural line types; this boundary writes back to the
 				// DB document they came from.
 				return updatedItem as FeeLine;
 			});
+
+			reportEngineWarnings(warnings, { orderId: order.uuid, site: 'useUpdateFeeLine' });
 
 			if (updated && updatedLineItems) {
 				return localPatch({
@@ -92,7 +95,7 @@ export const useUpdateFeeLine = () => {
 				}
 			);
 		},
-		[cartConfig, currentOrderRecord, localPatch, t]
+		[cartConfig, currentOrderRecord, localPatch, reportEngineWarnings, t]
 	);
 
 	return { updateFeeLine };

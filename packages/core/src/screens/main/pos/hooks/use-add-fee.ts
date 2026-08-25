@@ -9,6 +9,7 @@ import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCartConfig } from './use-cart-config';
 import { useT } from '../../../../contexts/translations';
 import { useCurrentOrder } from '../contexts/current-order';
+import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
@@ -32,6 +33,7 @@ export const useAddFee = () => {
 	const t = useT();
 	const cartConfig = useCartConfig();
 	const { currentOrderRecord } = useCurrentOrder();
+	const reportEngineWarnings = useReportEngineWarnings();
 
 	// Create order-specific logger
 	const orderLogger = React.useMemo(
@@ -65,10 +67,7 @@ export const useAddFee = () => {
 				// `currentOrderRecord.getLatest()` in the middle of its own arithmetic; read
 				// it once, here, so the lines the fee is a percentage OF are visible at the
 				// call site rather than fetched from under it.
-				//
-				// `warnings` (malformed pos_data) is dropped here, as it is at every other
-				// engine call site in core — settle drops it too.
-				const { line: newFeeLine } = calculateCartLine(
+				const { line: newFeeLine, warnings } = calculateCartLine(
 					{
 						kind: 'fee',
 						line: {
@@ -81,6 +80,10 @@ export const useAddFee = () => {
 					},
 					cartConfig
 				);
+				reportEngineWarnings(warnings, {
+					orderId: currentOrderRecord.uuid,
+					site: 'useAddFee',
+				});
 
 				// The engine speaks structural line types; this boundary writes back to the
 				// DB document they came from.
@@ -105,7 +108,7 @@ export const useAddFee = () => {
 				});
 			}
 		},
-		[cartConfig, currentOrderRecord, addItemToOrder, t, orderLogger]
+		[cartConfig, currentOrderRecord, addItemToOrder, reportEngineWarnings, t, orderLogger]
 	);
 
 	return { addFee };

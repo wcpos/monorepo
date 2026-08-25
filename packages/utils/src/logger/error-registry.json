@@ -1676,5 +1676,53 @@
 		],
 		"evidence": "monorepo#1151 legacy-table migration",
 		"introducedIn": "1.10.0"
+	},
+	{
+		"code": "CHECKOUT411",
+		"symbol": "CART_LINE_PRICE_BASIS_UNREADABLE",
+		"domain": "CHECKOUT",
+		"severity": "warn",
+		"actionHint": "Remove that line and add it again, then check the total.",
+		"retryPolicy": "after-change",
+		"dataSafety": "order-safe",
+		"escalation": "support-with-export",
+		"summary": "A line on this order has price details the POS could not read, so its amount was taken from the stored totals instead.",
+		"docsBody": "The line's saved price basis — the price, tax status and tax-inclusive flag the POS records against it — could not be read, so the amount shown was derived from whatever totals were already on the line. Remove the line and add it again to rebuild that data, then check the order total before taking payment.",
+		"troubleshooting": [
+			"Check the order total against what you expect before taking payment — the affected line's amount came from stored totals, not from a recalculated price.",
+			"Remove the affected line and add the product, fee or shipping method again; a freshly added line always carries readable price details.",
+			"If the line was added on an older version of WCPOS, or restored from a backup, the price details it carries may predate the current format — re-adding it is the fix.",
+			"If new lines keep producing this code, export debug info and contact support with the order number: something is writing the POS price data in a format the app cannot read."
+		],
+		"logSources": [
+			"browser-console",
+			"wp-admin-pos-logs"
+		],
+		"evidence": "monorepo#1560 order-math EngineWarning malformed_pos_data",
+		"introducedIn": "1.10.0"
+	},
+	{
+		"code": "CHECKOUT421",
+		"symbol": "ORDER_TAX_RATE_UNKNOWN",
+		"domain": "CHECKOUT",
+		"severity": "warn",
+		"actionHint": "Check the tax on this order; ask the admin whether a tax rate was deleted.",
+		"retryPolicy": "after-change",
+		"dataSafety": "order-safe",
+		"escalation": "store-admin",
+		"summary": "This order refers to a tax rate your store no longer has, so its tax may be wrong.",
+		"docsBody": "A line on the order carries a tax rate id that is not in the store's current tax tables — usually because the rate was deleted or edited in WooCommerce after the order was started. Check the tax on the order before taking payment, and have whoever manages the store confirm the tax rates.",
+		"troubleshooting": [
+			"Check the tax amount on the order before taking payment — the rate it was calculated with is no longer in your store.",
+			"Ask whoever manages the store whether a tax rate was deleted or edited recently; deleting a rate that orders already reference is the usual cause.",
+			"Start the sale on a new order once the tax rates are settled — a new order picks up the store's current rates.",
+			"If the store's tax rates have not changed, the POS may be holding a stale copy: open Store health and resync tax rates, then export debug info and contact support if the code returns."
+		],
+		"logSources": [
+			"browser-console",
+			"wp-admin-pos-logs"
+		],
+		"evidence": "monorepo#1560 order-math EngineWarning unknown_tax_rate_id",
+		"introducedIn": "1.10.0"
 	}
 ]

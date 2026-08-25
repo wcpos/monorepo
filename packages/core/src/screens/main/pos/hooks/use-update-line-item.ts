@@ -3,7 +3,7 @@ import * as React from 'react';
 import unset from 'lodash/unset';
 import { v4 as uuidv4 } from 'uuid';
 
-import { calculateCartLine } from '@wcpos/order-math';
+import { calculateCartLine, type EngineWarning } from '@wcpos/order-math';
 import {
 	isMiscProductLine,
 	MISC_PRODUCT_ID,
@@ -20,6 +20,7 @@ import { useLineItemData } from './use-line-item-data';
 import { enqueueOrderMutation } from './order-mutation-queue';
 import { documentRecordId, useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { type CurrentOrderRecord, useCurrentOrderActions } from '../contexts/current-order';
+import { useReportEngineWarnings } from '../contexts/order-engine-warnings';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type LineItem = NonNullable<OrderDocument['line_items']>[number];
@@ -47,6 +48,7 @@ export const useUpdateLineItem = () => {
 	const { getCurrentOrderRecord } = useCurrentOrderActions();
 	const { localPatch } = useLocalMutation();
 	const cartConfig = useCartConfig();
+	const reportEngineWarnings = useReportEngineWarnings();
 	const { getLineItemData } = useLineItemData();
 	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
 
@@ -77,6 +79,7 @@ export const useUpdateLineItem = () => {
 			const order = capturedOrder.getLatest();
 			const json = order.toMutableJSON().payload;
 			let updated = false;
+			let warnings: readonly EngineWarning[] = [];
 			let stockWarningName: string | null = null;
 			const lineItemToUpdate = json.line_items?.find(
 				(lineItem) => wooMetaCarrier.lineUuid(lineItem) === uuid
@@ -114,18 +117,18 @@ export const useUpdateLineItem = () => {
 				// misc-product flags written only when supplied, everything else straight
 				// through) and the tax maths are both the engine's now. See
 				// `applyLineItemChanges` / `computeLineItem` in @wcpos/order-math.
-				//
-				// `warnings` (malformed pos_data) is dropped here, as it is at every other
-				// engine call site in core — settle drops it too.
-				const { line: updatedItem } = calculateCartLine(
+				const { line: updatedItem, warnings: lineWarnings } = calculateCartLine(
 					{ kind: 'line_item', line: lineItem, changes },
 					cartConfig
 				);
 				updated = true;
+				warnings = lineWarnings;
 				// The engine speaks structural line types; this boundary writes back to the
 				// DB document they came from.
 				return updatedItem as LineItem;
 			});
+
+			reportEngineWarnings(warnings, { orderId: order.uuid, site: 'useUpdateLineItem' });
 
 			// if we have updated a line item, patch the order
 			if (updated && updatedLineItems) {
@@ -155,6 +158,7 @@ export const useUpdateLineItem = () => {
 			checkCartStock,
 			getLineItemData,
 			localPatch,
+			reportEngineWarnings,
 			showBackorderWarning,
 			stockGuardEnabled,
 		]
@@ -228,10 +232,14 @@ export const useUpdateLineItem = () => {
 					return;
 				}
 
-				const lineItemToCopy = calculateCartLine(
+				const split = calculateCartLine(
 					{ kind: 'line_item', line: { ...lineItemToSplit, quantity: 1 } },
 					cartConfig
-				).line as LineItem;
+				);
+				// The split copies an EXISTING line, so an unreadable price basis is
+				// reachable here in a way it is not when a line is first authored.
+				reportEngineWarnings(split.warnings, { orderId: order.uuid, site: 'splitLineItem' });
+				const lineItemToCopy = split.line as LineItem;
 				const quantity = Math.floor(lineItemToSplit?.quantity ?? 0);
 				const rawRemainder = (lineItemToSplit?.quantity ?? 0) - quantity;
 				const remainder = parseFloat(rawRemainder.toFixed(6));
@@ -253,6 +261,8 @@ export const useUpdateLineItem = () => {
 						{ kind: 'line_item', line: { ...lineItemToCopy, quantity: remainder } },
 						cartConfig
 					).line as LineItem;
+					// Same input as the split above, already reported: the engine is pure,
+					// so this call can only repeat what that one said.
 					const newItem = {
 						...remainderLineItem,
 						quantity: remainder,
@@ -273,7 +283,7 @@ export const useUpdateLineItem = () => {
 				return localPatch({ document: order, data: { line_items: updatedLineItems } });
 			});
 		},
-		[cartConfig, getCurrentOrderRecord, localPatch]
+		[cartConfig, getCurrentOrderRecord, localPatch, reportEngineWarnings]
 	);
 
 	return { updateLineItem, incrementLineItem, splitLineItem };
