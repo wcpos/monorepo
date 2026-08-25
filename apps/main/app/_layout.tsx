@@ -11,6 +11,8 @@ import { KeyboardProvider } from '@wcpos/components/keyboard-controller';
 import { Toast, Toaster } from '@wcpos/components/toast';
 import { useAppState } from '@wcpos/core/contexts/app-state';
 import { HydrationProviders } from '@wcpos/core/contexts/hydration-providers';
+import { createMerchantToast } from '@wcpos/core/contexts/merchant-toast';
+import { useT } from '@wcpos/core/contexts/translations';
 import { setToast } from '@wcpos/utils/logger';
 
 import {
@@ -79,7 +81,12 @@ function useToastTheme(): 'light' | 'dark' {
 function RootStack() {
 	const { storeDB, store } = useAppState();
 	const { isThemeReady } = useThemeRestorer();
-	setToast(Toast.show);
+	const t = useT();
+	// `Toast.show` on its own would print the developer log message when a call
+	// site logs `showToast: true` without cashier copy. The adapter resolves the
+	// error code's translated sentence first; it is re-created whenever `t`
+	// changes identity so a language switch takes effect on the next toast.
+	setToast(createMerchantToast(t, Toast.show));
 
 	// Wait for theme to be ready when we have a store
 	// This prevents the flash of default theme colors

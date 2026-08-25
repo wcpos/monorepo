@@ -9,6 +9,7 @@
 		".": "./src/index.tsx",
 		"./contexts/app-state": "./src/contexts/app-state/index.tsx",
 		"./contexts/hydration-providers": "./src/contexts/hydration-providers.tsx",
+		"./contexts/merchant-toast": "./src/contexts/merchant-toast.ts",
 		"./contexts/theme": "./src/contexts/theme/index.tsx",
 		"./contexts/translations": "./src/contexts/translations/index.tsx",
 		"./hooks/use-app-info": "./src/hooks/use-app-info.ts",

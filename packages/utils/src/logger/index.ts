@@ -56,6 +56,24 @@ export interface LoggerOptions {
 }
 
 /**
+ * What the logger knows about where a toast title could come from, handed
+ * across the `setToast` seam so the merchant sentence can be resolved on the
+ * side that has translations in scope.
+ *
+ * The precedence is applied by the consumer, not here — `packages/utils` cannot
+ * import `packages/core`, which is where the per-code translated summaries and
+ * action hints are generated. See `createMerchantToast`.
+ */
+export interface MerchantToastCopy {
+	/** An explicit `toast.title` from the call site — deliberate cashier copy. */
+	explicitTitle?: string;
+	/** The typed error code, when the call site supplied one. */
+	errorCode?: string;
+	/** The log message. Written for developers; the last resort. */
+	logMessage: string;
+}
+
+/**
  * Lazy message type - either a string or a function that returns a string
  * Use functions for expensive computations that should only run if the log level is enabled
  */
@@ -559,6 +577,19 @@ function safeStringify(obj: any, maxLength = 10000): string {
 
 /**
  * Set Toast function - call when Toast component is ready
+ *
+ * The config stays `any` deliberately, and not for want of trying: the two
+ * sides of this seam genuinely disagree today. The logger emits `type` as the
+ * log level's text — `debug` and `success` included — while the Toaster's
+ * public `ModernToastProps` narrows `type` to four variants and requires a
+ * `title`. Typing this parameter to either shape makes the other side fail
+ * contravariantly, so a real type here means changing the Toaster's exported
+ * props (and deciding what a `debug` toast variant renders as) — a
+ * `packages/components` API change, not a typing tidy-up.
+ *
+ * The adapter on the far side IS typed: see `createMerchantToast` in
+ * `@wcpos/core/contexts/merchant-toast`, which pins `merchantCopy`, the two
+ * strings it rewrites, and the show callback's return type.
  */
 export const setToast = (toastShowFunction: (config: any) => void) => {
 	toastShow = toastShowFunction;
@@ -661,10 +692,22 @@ const mainTransport = (props: any) => {
 		// Build toast config using NEW format (not legacy text1/text2)
 		const toastConfig: any = {
 			type: toastType,
+			// Last-resort title only. `message` is written for developers, so a
+			// merchant must not read it while a translated sentence for the error
+			// code exists — but the translated sentences live in `packages/core`,
+			// which depends on this package, so they cannot be resolved here.
+			// `merchantCopy` below hands the raw ingredients across the `setToast`
+			// seam; `createMerchantToast` (packages/core/src/contexts/merchant-toast)
+			// applies the precedence and strips the field before the Toaster sees it.
 			title: options.toast?.title ?? message, // New format uses 'title' not 'text1'
 			// Lets E2E assert WHICH coded condition surfaced, without selecting
 			// on translated copy (the repo's E2E selector policy).
 			...(errorCode && { testId: `toast-${errorCode}` }),
+			merchantCopy: {
+				explicitTitle: options.toast?.title,
+				errorCode,
+				logMessage: message,
+			} satisfies MerchantToastCopy,
 		};
 
 		// Add secondary message (description in new format)
