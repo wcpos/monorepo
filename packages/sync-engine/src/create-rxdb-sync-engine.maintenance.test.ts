@@ -447,7 +447,7 @@ describe('maintenance lanes through the public handle', () => {
 			return Response.json([]);
 		});
 		const engine = engineWith({ diagnostics, fetcher, now: () => nowMs });
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		if (total !== undefined) {
 			await scope.database.collections.queryTotalCacheEntries.upsert({
 				queryKey: 'census:categories',
@@ -608,7 +608,7 @@ describe('maintenance lanes through the public handle', () => {
 				return Response.json([]);
 			},
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		// The #1282 shape: census knows the store has coupons the app never opened.
 		await scope.database.collections.queryTotalCacheEntries.upsert({
 			queryKey: 'census:coupons',

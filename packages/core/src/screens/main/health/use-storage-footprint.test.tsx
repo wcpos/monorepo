@@ -14,9 +14,11 @@ const mockSiteHashFor = jest.fn((site: string) =>
 const mockSitesExec = jest.fn();
 let mockActiveScopeId = 'scope-a';
 
+const activeScope = () => ({ database: { name: 'pos_v6_aaaaaaaaaaaa_s1_c1' } });
 const mockEngine = {
-	active: jest.fn(() => ({ database: { name: 'pos_v6_aaaaaaaaaaaa_s1_c1' } })),
-	ready: Promise.resolve({ database: { name: 'pos_v6_aaaaaaaaaaaa_s1_c1' } }),
+	active: jest.fn(activeScope),
+	ready: Promise.resolve(),
+	whenActive: jest.fn(async () => activeScope()),
 };
 const mockUserDB = {
 	name: 'wcposusers_v6',

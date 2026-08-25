@@ -149,7 +149,7 @@ type EngineScope = NonNullable<ReturnType<QueryManager['engine']['active']>>;
  * none, if that scope has not hydrated) and write it into the old scope's row.
  */
 async function activeScope(manager: QueryManager): Promise<EngineScope> {
-	return manager.engine.active() ?? (await manager.engine.ready);
+	return manager.engine.whenActive();
 }
 
 /** The barcode carriers of the scope an edit is being applied IN — never a

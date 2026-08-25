@@ -443,7 +443,7 @@ function percentile(values: readonly number[], fraction: number): number {
 beforeAll(async () => {
 	const engine = engineWith(convergedBucketFetcher(WARMUP_RESIDENTS));
 	try {
-		const active = await engine.ready;
+		const active = await engine.whenActive();
 		await seedResidentProducts(active.database, WARMUP_RESIDENTS);
 		await engine.sync('existence-reconcile');
 		await active.database.collections['products']!.find({ limit: 10 }).exec();
@@ -499,7 +499,7 @@ describe('sync-engine performance contracts (#949)', () => {
 			async () => {
 				const fetcher = convergedBucketFetcher(residents);
 				const engine = engineWith(fetcher);
-				const active = await engine.ready;
+				const active = await engine.whenActive();
 				await seedResidentProducts(active.database, residents);
 
 				const started = performance.now();
@@ -535,7 +535,7 @@ describe('sync-engine performance contracts (#949)', () => {
 		async () => {
 			const residents = 10_000;
 			const engine = engineWith(convergedBucketFetcher(residents));
-			const active = await engine.ready;
+			const active = await engine.whenActive();
 			await seedResidentProducts(active.database, residents);
 
 			const sampler = startEventLoopSampler();
@@ -578,7 +578,7 @@ describe('sync-engine performance contracts (#949)', () => {
 			`returns a first page over ${residents.toLocaleString('en-US')} local residents within budget while a bulk apply runs`,
 			async () => {
 				const engine = engineWith(convergedBucketFetcher(residents));
-				const active = await engine.ready;
+				const active = await engine.whenActive();
 				await seedResidentProducts(active.database, residents);
 
 				// A concurrent bulk apply, deliberately NOT awaited: the contract is that a
@@ -624,7 +624,7 @@ describe('sync-engine performance contracts (#949)', () => {
 		async () => {
 			const recordCount = 10_000;
 			const engine = engineWith(convergedBucketFetcher(0));
-			const active = await engine.ready;
+			const active = await engine.whenActive();
 			const documents = productDocuments(1, recordCount);
 
 			const started = performance.now();
@@ -644,7 +644,7 @@ describe('sync-engine performance contracts (#949)', () => {
 		async () => {
 			const recordCount = 5_000;
 			const engine = engineWith(convergedBucketFetcher(recordCount));
-			const active = await engine.ready;
+			const active = await engine.whenActive();
 			await seedResidentProducts(active.database, recordCount);
 
 			const started = performance.now();
@@ -702,7 +702,7 @@ describe('sync-engine performance contracts (#949)', () => {
 			const deletedCount = 2_500;
 			const fetcher = mixedShapeFetcher(serverCount);
 			const engine = engineWith(fetcher);
-			const active = await engine.ready;
+			const active = await engine.whenActive();
 			await seedResidentProductRange(active.database, 1, overlapCount);
 			await seedResidentProductRange(active.database, deletedStart, deletedCount);
 
@@ -773,7 +773,7 @@ describe('sync-engine performance contracts (#949)', () => {
 					return bucketFetcher(url);
 				});
 				const engine = engineWith(fetcher);
-				const active = await engine.ready;
+				const active = await engine.whenActive();
 				await seedResidentProducts(active.database, residents);
 				await seedProductManifestRange(active.database, residents + 1, auditSize - residents);
 
@@ -808,7 +808,7 @@ describe('sync-engine performance contracts (#949)', () => {
 		async () => {
 			const recordCount = 1_000;
 			const engine = engineWith(convergedBucketFetcher(0));
-			const active = await engine.ready;
+			const active = await engine.whenActive();
 			const concurrentApply = active.database.collections['products']!.bulkUpsert(
 				productDocuments(1, recordCount) as never[]
 			);
@@ -831,7 +831,7 @@ describe('sync-engine performance contracts (#949)', () => {
 			const batchCount = 5;
 			const batchSize = 200;
 			const engine = engineWith(convergedBucketFetcher(0));
-			const active = await engine.ready;
+			const active = await engine.whenActive();
 			let appliesSettled = false;
 			const sequentialApplies = (async () => {
 				for (let batch = 0; batch < batchCount; batch += 1) {

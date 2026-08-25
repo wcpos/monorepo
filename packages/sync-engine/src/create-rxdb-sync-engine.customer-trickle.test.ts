@@ -133,7 +133,7 @@ describe('customer-trickle maintenance lane', () => {
 				return json(customers((page - 1) * 10 + 1, 10));
 			},
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 
 		await expect(engine.sync('customer-trickle')).resolves.toMatchObject({
 			status: 'ran',
@@ -255,7 +255,7 @@ describe('customer-trickle maintenance lane', () => {
 				return json(customers(1, 10));
 			},
 		});
-		const initialScope = await engine.ready;
+		const initialScope = await engine.whenActive();
 
 		await declareBrowseWindow(engine, {
 			limit: 100,
@@ -565,7 +565,7 @@ describe('customer-trickle maintenance lane', () => {
 				return json(urls.length === 1 ? customers(1, 3) : []);
 			},
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await engine.sync('customer-trickle');
 		await scope.database.collections.queryTotalCacheEntries.upsert({
 			queryKey: 'census:customers',
@@ -593,7 +593,7 @@ describe('customer-trickle maintenance lane', () => {
 				return json(urls.length === 1 ? customers(1, 3) : []);
 			},
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await engine.sync('customer-trickle');
 		const cache = scope.database.collections.queryTotalCacheEntries;
 		await cache.upsert({
@@ -655,7 +655,7 @@ describe('customer-trickle maintenance lane', () => {
 			},
 			storeIdentity
 		);
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await scope.database.collections.queryTotalCacheEntries.upsert({
 			queryKey: 'census:customers',
 			totalMatchingRecords: 20,
@@ -683,7 +683,7 @@ describe('customer-trickle maintenance lane', () => {
 				return json(urls.length === 1 ? customers(1, 3) : []);
 			},
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		const cache = scope.database.collections.queryTotalCacheEntries;
 		await engine.sync('customer-trickle');
 		const localCount = await scope.database.collections.customers.count().exec();
@@ -757,7 +757,7 @@ describe('customers targeted-records require path', () => {
 				return json(customers(41, 2));
 			},
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		const requirement = {
 			collection: 'customers' as const,
 			kind: 'targeted-records' as const,

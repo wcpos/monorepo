@@ -28,7 +28,7 @@ async function parentOfAcknowledgedVariation(
 	engine: ReturnType<typeof useQueryRuntime>['engine'],
 	recordId: string
 ): Promise<{ parentRemoteId: RemoteId; scopeId: string } | null> {
-	const scope = engine.active() ?? (await engine.ready);
+	const scope = await engine.whenActive();
 	const variations = engineCollection(scope.database, 'variations');
 	const resident = await variations?.findOne(recordId).exec();
 	const payload = (resident?.toJSON() as { payload?: Record<string, unknown> } | undefined)

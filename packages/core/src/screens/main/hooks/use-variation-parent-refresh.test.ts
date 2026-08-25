@@ -20,17 +20,20 @@ jest.mock('@wcpos/query', () => ({
 			events: mockEvents,
 			require: mockRequire,
 			status: () => ({ activeScopeId }),
-			active: () => ({
-				scopeId: residentScopeId,
-				database: {
-					variations: {
-						findOne: (recordId: string) => ({ exec: () => mockFindEngineResident(recordId) }),
-					},
-				},
-			}),
+			active: () => residentScope(),
+			whenActive: async () => residentScope(),
 		},
 	}),
 }));
+
+const residentScope = () => ({
+	scopeId: residentScopeId,
+	database: {
+		variations: {
+			findOne: (recordId: string) => ({ exec: () => mockFindEngineResident(recordId) }),
+		},
+	},
+});
 
 /** The scope the resident is read in, and the scope live when the fetch is declared. */
 let residentScopeId = 'scope-1';

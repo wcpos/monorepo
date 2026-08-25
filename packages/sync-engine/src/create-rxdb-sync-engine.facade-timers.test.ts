@@ -436,7 +436,7 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 				},
 			});
 
-			const scope = await engine.ready;
+			const scope = await engine.whenActive();
 			await seedOrderSchedulerTasks({
 				perPage: 250,
 				nowMs: 1,

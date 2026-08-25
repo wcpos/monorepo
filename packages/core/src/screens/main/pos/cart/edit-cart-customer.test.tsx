@@ -18,11 +18,13 @@ const patchCustomer = jest.fn(() => Promise.resolve(null));
 const onOpenChange = jest.fn();
 const customerFindOne = jest.fn();
 let canEditCustomers = true;
+const activeScope = () => ({
+	database: { collections: { customers: { findOne: customerFindOne } } },
+});
 const manager = {
 	engine: {
-		active: jest.fn(() => ({
-			database: { collections: { customers: { findOne: customerFindOne } } },
-		})),
+		active: jest.fn(activeScope),
+		whenActive: jest.fn(async () => activeScope()),
 	},
 };
 

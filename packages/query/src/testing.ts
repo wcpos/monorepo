@@ -374,8 +374,9 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 		syncCalls,
 		coverageSubscribeCalls,
 		setCoverageVerdict,
-		ready: Promise.resolve(activeScope),
+		ready: Promise.resolve(),
 		active: () => activeScope,
+		whenActive: async () => activeScope,
 		db$: () => () => undefined,
 		scope: {
 			switch: async () => activeScope,
@@ -526,8 +527,8 @@ export function createPendingFakeEngine(database: RxDatabase): PendingFakeEngine
 	};
 
 	let opened = false;
-	let resolveReady!: (scope: typeof activeScope) => void;
-	const ready = new Promise<typeof activeScope>((resolve) => {
+	let resolveReady!: () => void;
+	const ready = new Promise<void>((resolve) => {
 		resolveReady = resolve;
 	});
 
@@ -538,6 +539,13 @@ export function createPendingFakeEngine(database: RxDatabase): PendingFakeEngine
 		syncCalls,
 		ready,
 		active: () => (opened ? activeScope : null),
+		// Mirrors the real engine: wait out the boot barrier, then re-read —
+		// never resolve with a scope carried by `ready`.
+		whenActive: async () => {
+			await ready;
+			if (!opened) throw new Error('No active store scope');
+			return activeScope;
+		},
 		db$: () => () => undefined,
 		scope: {
 			switch: async () => activeScope,
@@ -590,7 +598,7 @@ export function createPendingFakeEngine(database: RxDatabase): PendingFakeEngine
 		engine,
 		open: () => {
 			opened = true;
-			resolveReady(activeScope);
+			resolveReady();
 		},
 	};
 }

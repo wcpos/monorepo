@@ -35,7 +35,8 @@ function setSelectors(
  * separately so a test can drive the two apart the way the engine's fallback
  * paths can. */
 let activeScopeId: string | null = 'scope-1';
-/** Set to make `engine.active()` answer null once, forcing `?? await ready`. */
+/** Set to make `engine.active()` answer null once — the window where the scope
+ * id is set but its database/identity entry is not yet resolvable. */
 let activeReturnsNullOnce = false;
 
 const scopeDatabase = {
@@ -54,6 +55,16 @@ const engineScope = (scopeId: string | null) => ({
 	database: scopeDatabase,
 });
 
+/** The single source both `active()` and `whenActive()` read, as in the real
+ * engine — a mock that let them disagree would model a state it cannot be in. */
+const readActive = () => {
+	if (activeReturnsNullOnce) {
+		activeReturnsNullOnce = false;
+		return null;
+	}
+	return engineScope(activeScopeId);
+};
+
 jest.mock('@wcpos/query', () => ({
 	// The write-direction projections are the code under test here (parity with the
 	// old hand-written promotion switch) — pull the real implementations, mock the rest.
@@ -66,15 +77,19 @@ jest.mock('@wcpos/query', () => ({
 		database?.collections?.[name] ?? null,
 	useQueryRuntime: () => ({
 		engine: {
-			active: () => {
-				if (activeReturnsNullOnce) {
-					activeReturnsNullOnce = false;
-					return null;
-				}
-				return engineScope(activeScopeId);
+			active: readActive,
+			ready: Promise.resolve(),
+			/**
+			 * Mirrors the real engine (#1559): boot has long settled here, so with
+			 * nothing active there is no scope to hand back and it REJECTS. It must
+			 * never fall back to the initial open's scope — that fallback is the bug
+			 * this seam exists to make unexpressible.
+			 */
+			whenActive: async () => {
+				const scope = readActive();
+				if (scope === null) throw new Error('No active store scope');
+				return scope;
 			},
-			// The initial open's scope — what `?? await ready` resolves to.
-			ready: Promise.resolve(engineScope('scope-1')),
 			write: mockWrite,
 			status: mockStatus,
 		},
@@ -657,13 +672,16 @@ describe('useLocalMutation', () => {
 		expect(stored.payload).not.toHaveProperty('global_unique_id');
 	});
 
-	it('rolls back when the CAPTURED scope is not the one still active at the end', async () => {
-		// `engine.active()` can answer null while `status()` still names a scope
-		// (the engine's own fallback window), and `?? await ready` then hands back
-		// the INITIAL scope. Baselining the guard on a second `status()` read
-		// would compare scope-2 with scope-2 and keep a write whose resident and
-		// carriers came from scope-1; baselining it on the captured scope catches
-		// exactly that.
+	/**
+	 * The bug this replaces (#1559): `engine.active()` can answer null while
+	 * `status()` still names a scope, and the old `active() ?? (await ready)`
+	 * handed back the scope the engine BOOTED on — so the resident, the barcode
+	 * carriers and the write all came from scope-1 while the cashier stood in
+	 * scope-2. The guard caught it after the fact; `whenActive()` refuses up
+	 * front, before anything has been applied. No write, no resident change, and
+	 * the cashier is told.
+	 */
+	it('REFUSES the patch when no scope is active — never falls back to the boot scope', async () => {
 		activeScopeId = 'scope-2';
 		activeReturnsNullOnce = true;
 		mockStatus.mockImplementation(() => ({ activeScopeId }));
@@ -673,16 +691,10 @@ describe('useLocalMutation', () => {
 			status: 'pending',
 			payload: { id: 42, status: 'pending' },
 		};
-		const makeResident = () => ({
-			incrementalModify: jest.fn(
-				async (modifier: (old: Record<string, unknown>) => Record<string, unknown>) => {
-					Object.assign(stored, modifier(stored));
-					return stored;
-				}
-			),
+		mockFindOneExec.mockResolvedValue({
+			incrementalModify: jest.fn(),
 			toJSON: () => JSON.parse(JSON.stringify(stored)),
 		});
-		mockFindOneExec.mockResolvedValue(makeResident());
 		mockWrite.mockResolvedValue({ mutationId: 'mutation-1', recordId: 'order-uuid' });
 		const document = {
 			uuid: 'order-uuid',
@@ -692,7 +704,6 @@ describe('useLocalMutation', () => {
 		};
 
 		const { result } = renderHook(() => useLocalMutation());
-		// Attempt 1 rolls back and retries; attempt 2 captures scope-2 and agrees.
 		await act(() =>
 			result.current.localPatch({
 				document: document as never,
@@ -700,8 +711,8 @@ describe('useLocalMutation', () => {
 			})
 		);
 
-		expect(mockWrite).toHaveBeenCalledTimes(2);
-		expect(stored).toMatchObject({ status: 'processing' });
+		expect(mockWrite).not.toHaveBeenCalled();
+		expect(stored).toMatchObject({ status: 'pending' });
 	});
 
 	it('compensates and retries the resident patch once when the active scope changes', async () => {

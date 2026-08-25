@@ -333,7 +333,7 @@ describe('require() for search — the public search-demand verb', () => {
 	it('serves customer search locally only after trickle completion and a fresh resident census', async () => {
 		const server = scriptedCustomerSearchProxy([]);
 		const engine = engineWith(server.fetch);
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await scope.database.collections.engineKv.upsert({
 			key: 'customer-trickle:state',
 			value: JSON.stringify({ viewKey: CUSTOMER_DEFAULT_VIEW_KEY, page: 1, walkComplete: true }),
@@ -379,7 +379,7 @@ describe('require() for search — the public search-demand verb', () => {
 					: Array.from({ length: 10 }, (_, i) => customerPayload(i + 1))
 			);
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await engine.sync('customer-trickle');
 		const browse = engine.require({
 			id: 'sorted-grid',
@@ -428,7 +428,7 @@ describe('require() for search — the public search-demand verb', () => {
 				tricklePulls === 2 ? Array.from({ length: 10 }, (_, i) => customerPayload(i + 1)) : []
 			);
 		});
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await engine.sync('customer-trickle');
 		await scope.database.collections.queryTotalCacheEntries.upsert({
 			queryKey: 'census:customers',
@@ -471,7 +471,7 @@ describe('require() for search — the public search-demand verb', () => {
 			startAtMs: 2_000,
 			awaitReady: false,
 		}).engine;
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await scope.database.collections.engineKv.upsert({
 			key: 'customer-trickle:state',
 			value: JSON.stringify({ viewKey: CUSTOMER_DEFAULT_VIEW_KEY, page: 1, walkComplete: true }),
@@ -499,7 +499,7 @@ describe('require() for search — the public search-demand verb', () => {
 	it('does not let the customer:default sentinel satisfy the customers completeness count', async () => {
 		const server = scriptedCustomerSearchProxy([]);
 		const engine = engineWith(server.fetch);
-		const scope = await engine.ready;
+		const scope = await engine.whenActive();
 		await scope.database.collections.engineKv.upsert({
 			key: 'customer-trickle:state',
 			value: JSON.stringify({ viewKey: CUSTOMER_DEFAULT_VIEW_KEY, page: 1, walkComplete: true }),
