@@ -64,8 +64,14 @@ jobs:
 
       - name: "\U0001F9EA Run script tests"
         env:
-          SKIP_RXDB_PREMIUM_TESTS: ${{ github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' }}
-        run: pnpm test:scripts
+          SKIP_RXDB_PREMIUM_TEST_FILE: ${{ github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' }}
+        run: |
+          if [[ "$SKIP_RXDB_PREMIUM_TEST_FILE" == "true" ]]; then
+            recovery_test="$RUNNER_TEMP/opfs-targeted-recovery.test.mjs"
+            mv scripts/opfs-targeted-recovery.test.mjs "$recovery_test"
+            trap 'mv "$recovery_test" scripts/opfs-targeted-recovery.test.mjs' EXIT
+          fi
+          pnpm test:scripts
 
       - name: "\U0001F310 Check translation source strings"
         run: pnpm translations:check
