@@ -56,7 +56,12 @@ export function StockStatusPill() {
 			</SelectPrimitiveTrigger>
 			<SelectContent>
 				{items.map((item) => (
-					<SelectItem key={item.value} label={item.label} value={item.value} />
+					<SelectItem
+						key={item.value}
+						label={item.label}
+						value={item.value}
+						testID={`stock-status-option-${item.value}`}
+					/>
 				))}
 			</SelectContent>
 		</Select>

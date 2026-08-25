@@ -749,6 +749,154 @@ export async function createRunPrivateProduct(
 	};
 }
 
+/**
+ * One cell of the variation matrix below. `option`s are stable literals so a spec can address a
+ * button by `variation-option-<option>` without selecting on localized text.
+ */
+interface MatrixCell {
+	colour: 'Red' | 'Blue';
+	size: 'Small' | 'Large';
+	stock: { stock_quantity: number; backorders: 'no' | 'notify' };
+}
+
+/**
+ * The matrix a popover spec needs. Two attributes, one deliberately missing combination, and
+ * three variations that land on three different stock statuses:
+ *
+ *              Small                       Large
+ *   Red        7 in stock                  0, no backorders  -> outofstock
+ *   Blue       0, backorders notify        (does not exist)
+ *              -> onbackorder
+ *
+ * Both of the popover's greying rules need this shape, and neither is reachable on the shared
+ * single-attribute probe:
+ *
+ * - AVAILABILITY (`optionCounts[option] === 0`): only a missing combination produces it, and a
+ *   product with one attribute has no combinations to miss. Selecting `Blue` must grey `Large`.
+ * - STOCK (`disabledOptions[option]`): needs an option whose every variation sits outside the
+ *   Stock Status filter while a sibling option stays inside it. Under an `instock` pill that is
+ *   `Blue` — backordered, therefore sellable but not in stock, the exact gap that split the
+ *   popover from the expanded table in #1574.
+ *
+ * The parent keeps an in-stock child (Red/Small), so WooCommerce leaves the parent `instock` and
+ * the products list still shows it under an `instock` pill — without that the popover could not
+ * be opened to observe any of this.
+ */
+export interface VariationMatrixProbe extends SearchProbe {
+	/** Woo id keyed `${colour}/${size}`, e.g. `Red/Small`. */
+	variationIds: Record<string, number>;
+	colourAttribute: string;
+	sizeAttribute: string;
+}
+
+export async function createVariationMatrixProduct(options: {
+	request: APIRequestContext;
+	storeUrl: string;
+	authorization: StoreAuthorization;
+	workerIndex: number;
+}): Promise<VariationMatrixProbe> {
+	const { request, storeUrl, authorization, workerIndex } = options;
+	const token = mintSearchProbeToken(workerIndex);
+	const suffix = token.slice(-6);
+	const colourAttribute = `Colour ${suffix}`;
+	const sizeAttribute = `Size ${suffix}`;
+
+	const parentResult = await productCreateResponse(
+		() =>
+			probeRequest(request, 'post', storeUrl, 'products', undefined, {
+				...storeRequestOptions(authorization),
+				data: {
+					name: `E2E Matrix ${token}`,
+					type: 'variable',
+					status: 'publish',
+					manage_stock: false,
+					attributes: [
+						{
+							name: colourAttribute,
+							position: 0,
+							visible: true,
+							variation: true,
+							options: ['Red', 'Blue'],
+						},
+						{
+							name: sizeAttribute,
+							position: 1,
+							visible: true,
+							variation: true,
+							options: ['Small', 'Large'],
+						},
+					],
+				},
+			}),
+		true,
+		'Variation matrix parent creation',
+		() => findCreatedProduct(request, storeUrl, authorization, token)
+	);
+
+	const parent =
+		parentResult.adoptedRecord ??
+		unwrapRecord(await parentResult.response.json().catch(() => null));
+	const id = positiveId(parent);
+	const slug = typeof parent?.slug === 'string' && parent.slug ? parent.slug : null;
+	if (id === null || !slug) {
+		if (id !== null) {
+			await deleteSearchProbe({ request, storeUrl, authorization, collection: 'products', id });
+		}
+		throw new Error('Variation matrix parent create succeeded without its id and slug');
+	}
+
+	const cells: MatrixCell[] = [
+		{ colour: 'Red', size: 'Small', stock: { stock_quantity: 7, backorders: 'no' } },
+		{ colour: 'Red', size: 'Large', stock: { stock_quantity: 0, backorders: 'no' } },
+		{ colour: 'Blue', size: 'Small', stock: { stock_quantity: 0, backorders: 'notify' } },
+		// Blue/Large is intentionally absent — it is the hole the availability rule needs.
+	];
+
+	const variationIds: Record<string, number> = {};
+	try {
+		for (const cell of cells) {
+			const sku = `${token}${cell.colour}${cell.size}`.toLowerCase();
+			const result = await productCreateResponse(
+				() =>
+					variationCreateRequest(request, storeUrl, authorization, id, {
+						sku,
+						regular_price: '25.00',
+						status: 'publish',
+						manage_stock: true,
+						...cell.stock,
+						attributes: [
+							{ name: colourAttribute, option: cell.colour },
+							{ name: sizeAttribute, option: cell.size },
+						],
+					}),
+				true,
+				'Variation matrix cell creation',
+				() => findCreatedVariation(request, storeUrl, authorization, id, sku)
+			);
+			const variation =
+				result.adoptedRecord ?? unwrapRecord(await result.response.json().catch(() => null));
+			const variationId = positiveId(variation);
+			if (variationId === null) {
+				throw new Error(`Variation matrix cell ${cell.colour}/${cell.size} created without an id`);
+			}
+			variationIds[`${cell.colour}/${cell.size}`] = variationId;
+		}
+	} catch (error) {
+		await deleteSearchProbe({ request, storeUrl, authorization, collection: 'products', id });
+		throw error;
+	}
+
+	return {
+		collection: 'products',
+		id,
+		rowTestId: `data-table-row-${slug}`,
+		token,
+		variationIds,
+		colourAttribute,
+		sizeAttribute,
+	};
+}
+
 /** Read one product back over wc/v3 (both permalink styles); throws on any non-2xx. */
 export async function fetchProductRecord(
 	request: APIRequestContext,

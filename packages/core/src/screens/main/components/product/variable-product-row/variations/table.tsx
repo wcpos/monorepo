@@ -90,7 +90,18 @@ export function VariationsTable({ binding, row, stockStatus }: Props) {
 		<VStack className="gap-0">
 			{hits.map((hit: VariationHit, index: number) => {
 				return (
-					<TableRow key={index} index={index}>
+					<TableRow
+						key={index}
+						index={index}
+						/**
+						 * Id-bearing so a test can name WHICH variation rendered. Counting generic
+						 * cells cannot tell "the filter hid the right row" from "the filter hid a
+						 * row" — and the stock filter's whole job is which row.
+						 */
+						testID={
+							hit.record.remoteId ? `data-table-row-variation-${hit.record.remoteId}` : undefined
+						}
+					>
 						{row
 							.getVisibleCells()
 							.map(

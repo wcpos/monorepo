@@ -10,12 +10,14 @@ import {
 import { authenticatedTest, type StoreAuthorization, tryAddProductBySku } from './fixtures';
 import {
 	createRunPrivateProduct,
+	createVariationMatrixProduct,
 	deleteSearchProbe,
 	productWriterAuthorization,
 	productWriterCredentialsConfigured,
 	searchAndWaitForServer,
 	type SearchProbe,
 	sweepOrphanedProductProbes,
+	type VariationMatrixProbe,
 } from './search-probe';
 
 import type { WcposTestOptions } from '../playwright.config';
@@ -33,11 +35,16 @@ type VariableProductProbeWorkerFixtures = {
 	runPrivateVariableProduct: SearchProbe | null;
 };
 
+type VariationMatrixWorkerFixtures = {
+	runPrivateVariationMatrix: VariationMatrixProbe | null;
+};
+
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- no new test-scoped fixtures.
 type ProductProbeTestFixtures = {};
 
 const simpleProbesByPage = new WeakMap<Page, SearchProbe[] | null>();
 const variableProbeByPage = new WeakMap<Page, SearchProbe | null>();
+const matrixProbeByPage = new WeakMap<Page, VariationMatrixProbe | null>();
 
 function workerStoreUrl(workerInfo: WorkerInfo): string {
 	if (process.env.E2E_STORE_URL) return process.env.E2E_STORE_URL;
@@ -184,6 +191,65 @@ export const isolatedVariableProductTest = productProbeTest.extend<
 		}
 	},
 });
+
+/**
+ * Two attributes, a missing combination, and three stock statuses — the shape the popover's two
+ * greying rules need. See `createVariationMatrixProduct` for why each cell is what it is.
+ */
+export const isolatedVariationMatrixTest = productProbeTest.extend<
+	ProductProbeTestFixtures,
+	VariationMatrixWorkerFixtures
+>({
+	runPrivateVariationMatrix: [
+		async ({ productProbeRequest, productWriter }, use, workerInfo) => {
+			if (!productWriter) {
+				await use(null);
+				return;
+			}
+			const probe = await createVariationMatrixProduct({
+				request: productProbeRequest,
+				storeUrl: workerStoreUrl(workerInfo),
+				authorization: productWriter,
+				workerIndex: workerInfo.workerIndex,
+			});
+			try {
+				// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook.
+				await use(probe);
+			} finally {
+				await deleteSearchProbe({
+					request: productProbeRequest,
+					storeUrl: workerStoreUrl(workerInfo),
+					authorization: productWriter,
+					collection: 'products',
+					id: probe.id,
+				});
+			}
+		},
+		{ scope: 'worker', auto: true },
+	],
+	posPage: async ({ posPage, runPrivateVariationMatrix }, use) => {
+		matrixProbeByPage.set(posPage, runPrivateVariationMatrix);
+		try {
+			// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook.
+			await use(posPage);
+		} finally {
+			matrixProbeByPage.delete(posPage);
+		}
+	},
+});
+
+/**
+ * The matrix probe for the page under test, or null where this environment never claimed writer
+ * credentials (forks) — the caller skips with a reason rather than asserting against a store it
+ * was not given the means to seed.
+ */
+export function variationMatrixProbe(page: Page): VariationMatrixProbe | null {
+	const probe = matrixProbeByPage.get(page);
+	if (probe === undefined) {
+		throw new Error('variationMatrixProbe requires isolatedVariationMatrixTest registration');
+	}
+	return probe;
+}
 
 /** Bring the worker-private simple product resident and add it when provisioned. */
 export async function tryAddRunPrivateSimpleProduct(page: Page, index = 0): Promise<boolean> {
