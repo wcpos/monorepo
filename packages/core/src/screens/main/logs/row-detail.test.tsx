@@ -44,11 +44,23 @@ jest.mock('@wcpos/components/button', () => ({
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));
-jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
-		<span className={className}>{children}</span>
-	),
-}));
+// Mirrors the real Text: `decodeHtml` runs the same html-entities decode, so a
+// row that forgets the prop renders the raw entity here exactly as it would on a
+// till. A mock that swallowed the prop would make the entity test unfailable.
+jest.mock('@wcpos/components/text', () => {
+	const { decode } = jest.requireActual('html-entities');
+	return {
+		Text: ({
+			children,
+			className,
+			decodeHtml,
+		}: React.PropsWithChildren<{ className?: string; decodeHtml?: boolean }>) => (
+			<span className={className}>
+				{decodeHtml && typeof children === 'string' ? decode(children) : children}
+			</span>
+		),
+	};
+});
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 jest.mock('@wcpos/components/tree', () => ({
 	Tree: ({ value }: { value: unknown }) => (
@@ -137,6 +149,31 @@ describe('RowDetail', () => {
 
 		expect(screen.getByText('Aucun produit ne correspond.')).not.toBeNull();
 		expect(screen.queryByText('No products matched the current search and filters.')).toBeNull();
+	});
+
+	// "The server said: …" quotes WordPress verbatim, and WordPress bakes entities
+	// into its own REST error copy — quoting it raw shows the cashier markup.
+	it("quotes the server's sentence as prose, not as HTML entities", () => {
+		render(
+			<RowDetail
+				row={{
+					...row,
+					level: 'error',
+					context: {
+						type: 'push.error',
+						direction: 'push',
+						reason: 'D&eacute;sol&eacute;, vous n&rsquo;&ecirc;tes pas autoris&eacute;.',
+					},
+				}}
+				kind="error"
+				title="Change refused"
+			/>
+		);
+
+		expect(screen.getByText('The server said: Désolé, vous n’êtes pas autorisé.')).not.toBeNull();
+		// The prose line only — the Details tree below it is a raw diagnostic dump
+		// and deliberately still shows the wire bytes the server actually sent.
+		expect(screen.queryByText(/The server said: D&eacute;sol&eacute;/)).toBeNull();
 	});
 
 	it('leads a quiet row with its translated event description', () => {

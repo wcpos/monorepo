@@ -53,9 +53,17 @@ jest.mock('@wcpos/components/hstack', () => ({
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children, testID }: PressProps) => <div data-testid={testID}>{children}</div>,
 }));
-jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: Kids) => <span>{children}</span>,
-}));
+// Mirrors the real Text: `decodeHtml` runs the same html-entities decode, so a
+// panel that forgets the prop renders the raw entity here exactly as it would on
+// a till. A mock that swallowed the prop would make the entity test unfailable.
+jest.mock('@wcpos/components/text', () => {
+	const { decode } = jest.requireActual('html-entities');
+	return {
+		Text: ({ children, decodeHtml }: Kids & { decodeHtml?: boolean }) => (
+			<span>{decodeHtml && typeof children === 'string' ? decode(children) : children}</span>
+		),
+	};
+});
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: (a: unknown) => mockToast(a) } }));
 jest.mock('./components', () => ({
 	Callout: ({ children, testID }: PressProps) => <div data-testid={testID}>{children}</div>,
@@ -146,6 +154,28 @@ describe('RejectedMutationsPanel', () => {
 			'400 · rest_invalid_email · Invalid parameter(s): billing'
 		);
 		expect(listed.textContent).toContain('refused 2 months ago');
+	});
+
+	it("reads the server's sentence as prose, not as HTML entities", () => {
+		// Verbatim from a French store refusing a POS order delete: WordPress bakes
+		// entities into its own REST error copy, so the raw string carries `&rsquo;`
+		// where the cashier should see an apostrophe.
+		rows = [
+			row({
+				status: 403,
+				reason: 'woocommerce_rest_cannot_delete',
+				message:
+					'D&eacute;sol&eacute;, vous n&rsquo;&ecirc;tes pas autoris&eacute; &agrave; supprimer cette ressource.',
+			}),
+		];
+
+		const { getByTestId } = render(<RejectedMutationsPanel />);
+
+		const listed = getByTestId('db-rejected-row-m-1');
+		expect(listed.textContent).toContain(
+			'403 · woocommerce_rest_cannot_delete · Désolé, vous n’êtes pas autorisé à supprimer cette ressource.'
+		);
+		expect(listed.textContent).not.toContain('&rsquo;');
 	});
 
 	it('requeues a row through the rebuild resolution — no confirm, it is the safe action', async () => {

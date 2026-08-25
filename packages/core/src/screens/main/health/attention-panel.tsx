@@ -124,7 +124,11 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 					    ar's _zero/_two — could never render theirs. */}
 					{t('health.database.attention', { count: stuck.length, n: stuck.length })}
 				</Text>
-				<Text className="text-muted-foreground min-w-0 flex-shrink text-sm">
+				{/* Both interpolations are server-supplied and arrive HTML-encoded: the
+				    record's own name ("Men&#8217;s T-shirt") and the server's refusal
+				    sentence. Decoding here is the same treatment every other
+				    server-sourced string gets before a cashier reads it. */}
+				<Text className="text-muted-foreground min-w-0 flex-shrink text-sm" decodeHtml>
 					{/* A pull-direction record never left the till in the first place —
 					    saying "can't upload" told cashiers their sales were stranded
 					    when the engine was only re-checking the catalogue. Only a push
