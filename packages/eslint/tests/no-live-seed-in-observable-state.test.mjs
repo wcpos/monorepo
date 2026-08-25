@@ -65,6 +65,24 @@ ruleTester.run(
 
 			// Importing something else from observable-hooks does not arm unrelated names.
 			"import { useObservableRef } from 'observable-hooks';\nuseObservableState(x$, getDisplayDate());",
+
+			// SHADOWING: identity is the binding in scope at the CALL SITE, so a parameter or
+			// local that merely spells the hook's name is not the hook — even in a file that
+			// imports the real one.
+			`${importHooks}function helper(useObservableState) {
+	return useObservableState(source$, getValue());
+}`,
+			`${importHooks}function Comp() {
+	const useObservableState = (source$, seed) => seed;
+	return useObservableState(x$, getDisplayDate());
+}`,
+			`${importHooks}function Comp() {
+	{
+		let useObservableState = (source$, seed) => seed;
+		useObservableState(x$, getDisplayDate());
+	}
+}`,
+			"import * as hooks from 'observable-hooks';\nfunction helper(hooks) {\n\thooks.useObservableState(x$, getDisplayDate());\n}",
 		],
 		invalid: [
 			// A call returns CURRENT state; freezing it at mount is the bug (#-adjacent to
@@ -155,6 +173,22 @@ ruleTester.run(
 			// Namespace import stays guarded.
 			{
 				code: "import * as hooks from 'observable-hooks';\nhooks.useObservableState(displayDate$, getDisplayDate());",
+				errors: [{ messageId: 'liveSeed' }],
+			},
+
+			// A shadow in one scope does not disarm the genuine import in another: exactly one
+			// report here, on the second call.
+			{
+				code: `${importHooks}function helper(useObservableState) {
+	return useObservableState(inner$, getValue());
+}
+function Comp() {
+	return useObservableState(displayDate$, getDisplayDate());
+}`,
+				errors: [{ messageId: 'liveSeed' }],
+			},
+			{
+				code: "import * as hooks from 'observable-hooks';\nfunction helper(hooks) {\n\thooks.useObservableState(inner$, getValue());\n}\nfunction Comp() {\n\treturn hooks.useObservableState(displayDate$, getDisplayDate());\n}",
 				errors: [{ messageId: 'liveSeed' }],
 			},
 		],

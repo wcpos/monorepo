@@ -36,6 +36,13 @@ ruleTester.run(
 			'function useObservableEagerState(x) { return x; }\nuseObservableEagerState(store.currency$);',
 			// Importing something else from observable-hooks does not arm unrelated names.
 			"import { useLayoutObservable } from 'observable-hooks';\nsomethingElse(store.currency$);",
+
+			// SHADOWING: identity is the binding in scope at the CALL SITE, so a parameter that
+			// merely spells the hook's name is not the hook — even in a file that imports it.
+			`${importHooks}function helper(useObservableEagerState) {
+	return useObservableEagerState(store.currency$);
+}`,
+			"import * as hooks from 'observable-hooks';\nfunction helper(hooks) {\n\thooks.useObservableEagerState(store.currency$);\n}",
 		],
 		invalid: [
 			{
@@ -70,6 +77,18 @@ ruleTester.run(
 			// Namespace import stays guarded.
 			{
 				code: "import * as hooks from 'observable-hooks';\nhooks.useObservableEagerState(store.currency$);",
+				errors: [{ messageId: 'useFieldHook' }],
+			},
+
+			// A shadow in one scope does not disarm the genuine import in another: exactly one
+			// report here, on the second call.
+			{
+				code: `${importHooks}function helper(useObservableEagerState) {
+	return useObservableEagerState(store.currency$);
+}
+function Comp() {
+	return useObservableEagerState(store.currency$);
+}`,
 				errors: [{ messageId: 'useFieldHook' }],
 			},
 		],

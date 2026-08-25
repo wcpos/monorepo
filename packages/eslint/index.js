@@ -119,38 +119,60 @@ function isCreateContextCall(node) {
 }
 
 /**
- * Resolve observable-hook identity from the `observable-hooks` IMPORT bindings rather
- * than the call-site spelling: aliased (`useObservableState as useOState`) and namespace
- * (`import * as hooks`) imports stay guarded, and an unrelated local function that merely
- * shares a hook's name is never flagged.
+ * Innermost binding for an identifier, or `null` when it resolves to a global.
  *
- * Returns a `ImportDeclaration` visitor to install, plus `isHookCall(node)`.
+ * Real scope resolution, not name matching: the binding that wins is the one an inner
+ * scope introduces, so a parameter or local that merely spells an import's name resolves
+ * to itself.
  */
-function createObservableHookTracker(hookNames) {
-	const localHookNames = new Set();
-	const namespaceNames = new Set();
+function resolveBinding(context, identifier) {
+	for (let scope = context.sourceCode.getScope(identifier); scope; scope = scope.upper) {
+		const variable = scope.set.get(identifier.name);
+		if (variable) return variable;
+	}
+	return null;
+}
+
+/**
+ * The `observable-hooks` import specifier an identifier resolves to at THIS call site, or
+ * `null`. `def.type === 'ImportBinding'` is the check that separates the real import from
+ * anything that shadows it.
+ */
+function observableHooksImportSpecifier(context, identifier) {
+	const definition = resolveBinding(context, identifier)?.defs?.[0];
+	if (definition?.type !== 'ImportBinding') return null;
+	if (definition.parent?.type !== 'ImportDeclaration') return null;
+	if (definition.parent.source.value !== 'observable-hooks') return null;
+	return definition.node;
+}
+
+/**
+ * Resolve observable-hook identity from the binding in scope AT THE CALL SITE rather than
+ * the call-site spelling: aliased (`useObservableState as useOState`) and namespace
+ * (`import * as hooks`) imports stay guarded, while an unrelated local function — or a
+ * parameter shadowing the import inside a helper, in a file that also imports the real
+ * hook — is never flagged.
+ *
+ * Shared by `no-live-seed-in-observable-state` and
+ * `no-dollar-getter-into-observable-hooks`, so both rules resolve identity the same way.
+ */
+function createObservableHookTracker(context, hookNames) {
 	return {
-		ImportDeclaration(node) {
-			if (node.source.value !== 'observable-hooks') return;
-			for (const specifier of node.specifiers) {
-				if (
-					specifier.type === 'ImportSpecifier' &&
+		isHookCall(node) {
+			const callee = unwrapTypeScriptExpression(node.callee);
+			if (callee?.type === 'Identifier') {
+				const specifier = observableHooksImportSpecifier(context, callee);
+				return (
+					specifier?.type === 'ImportSpecifier' &&
 					specifier.imported.type === 'Identifier' &&
 					hookNames.has(specifier.imported.name)
-				) {
-					localHookNames.add(specifier.local.name);
-				} else if (specifier.type === 'ImportNamespaceSpecifier') {
-					namespaceNames.add(specifier.local.name);
-				}
+				);
 			}
-		},
-		isHookCall(node) {
-			const callee = node.callee;
-			if (callee.type === 'Identifier') return localHookNames.has(callee.name);
+			if (callee?.type !== 'MemberExpression') return false;
+			const namespace = unwrapTypeScriptExpression(callee.object);
+			if (namespace?.type !== 'Identifier') return false;
 			return (
-				callee.type === 'MemberExpression' &&
-				callee.object.type === 'Identifier' &&
-				namespaceNames.has(callee.object.name) &&
+				observableHooksImportSpecifier(context, namespace)?.type === 'ImportNamespaceSpecifier' &&
 				hookNames.has(memberPropertyName(callee))
 			);
 		},
@@ -178,14 +200,7 @@ function memberChainRoot(node) {
  * only ever read once. Unresolved names (globals) are treated as stable.
  */
 function isModuleScopeBinding(context, identifier) {
-	let variable = null;
-	for (
-		let scope = context.sourceCode.getScope(identifier);
-		scope && !variable;
-		scope = scope.upper
-	) {
-		variable = scope.set.get(identifier.name) ?? null;
-	}
+	const variable = resolveBinding(context, identifier);
 	if (!variable) return true;
 	const scopeType = variable.scope.type;
 	return scopeType === 'module' || scopeType === 'global';
@@ -220,9 +235,8 @@ export const wcposRules = {
 			},
 		},
 		create(context) {
-			const tracker = createObservableHookTracker(seedBearingObservableHookNames);
+			const tracker = createObservableHookTracker(context, seedBearingObservableHookNames);
 			return {
-				ImportDeclaration: tracker.ImportDeclaration,
 				CallExpression(node) {
 					if (!tracker.isHookCall(node)) return;
 					const seed = unwrapTypeScriptExpression(node.arguments[1]);
@@ -276,11 +290,10 @@ export const wcposRules = {
 			if (/(^|\/)packages\/query\/src\/records\//.test(context.filename.replaceAll('\\', '/'))) {
 				return {};
 			}
-			// Hook identity comes from the observable-hooks IMPORT bindings, not the
+			// Hook identity comes from the binding in scope at the call site, not the
 			// call-site spelling — see createObservableHookTracker.
-			const tracker = createObservableHookTracker(observableHookNames);
+			const tracker = createObservableHookTracker(context, observableHookNames);
 			return {
-				ImportDeclaration: tracker.ImportDeclaration,
 				CallExpression(node) {
 					if (!tracker.isHookCall(node)) return;
 					for (const argument of node.arguments) {
