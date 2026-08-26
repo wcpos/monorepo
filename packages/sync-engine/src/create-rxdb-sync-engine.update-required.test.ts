@@ -20,7 +20,7 @@ let uniqueStore = 0;
 
 const REFUSAL = {
 	code: 'wcpos_update_required',
-	message: 'This store requires a newer version of WooCommerce POS.',
+	message: 'This store requires a newer version of WCPOS.',
 	data: { status: 426, min_protocol: 2, server_protocol: 2, plugin_version: '1.11.0' },
 };
 

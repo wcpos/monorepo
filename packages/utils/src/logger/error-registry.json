@@ -267,7 +267,7 @@
 		"troubleshooting": [
 			"On the web app, reload the browser tab — the web app picks up the new version on reload. If the screen comes back, use a hard reload (hold Shift while reloading).",
 			"On desktop, install the pending update and reopen the app — the check runs when the app reconnects. If no update is offered, download the latest build from the installation guide at docs.wcpos.com.",
-			"On iPhone, iPad or Android, update WooCommerce POS through the channel you installed it from (TestFlight on iOS, the Play testing programme on Android — both linked from the installation guide), then reopen the app.",
+			"On iPhone, iPad or Android, update WCPOS through the channel you installed it from (TestFlight on iOS, the Play testing programme on Android — both linked from the installation guide), then reopen the app.",
 			"Site administrator: if no newer app is available yet, the store's WCPOS plugin was updated ahead of the matching app release. Restoring the previous WCPOS plugin version on the store resumes syncing until the newer app ships.",
 			"If neither an app update nor a plugin rollback is available to you, contact WCPOS support."
 		],

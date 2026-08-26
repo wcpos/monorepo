@@ -884,10 +884,17 @@ export function createRxdbSyncEngine(
 				}
 			}
 			// The deliberate upgrade refusal is keyed on the BODY code — hostile
-			// hosts strip response headers and middleboxes rewrite statuses, so
-			// the 426 stays advisory. Latch and tell the host exactly once.
+			// hosts strip response headers and middleboxes rewrite statuses
+			// within the error family, so the 426 stays advisory. (A rewrite all
+			// the way to 2xx is out of scope on purpose: catching it would mean
+			// parsing every successful body on the hot path, and a refusal body
+			// under a 200 already fails shape parsing downstream rather than
+			// corrupting data.) The null re-check makes the latch-and-notify
+			// exactly-once under concurrent in-flight refusals — both requests
+			// pass the short-circuit above, but only the first one landing here
+			// tells the host.
 			const refusal = parseUpdateRequiredBody(body);
-			if (refusal !== null) {
+			if (refusal !== null && updateRequiredRefusal === null) {
 				updateRequiredRefusal = { status: response.status, body: JSON.stringify(body) };
 				ports.onUpdateRequired?.({ ...refusal, status: response.status });
 			}

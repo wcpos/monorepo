@@ -66,7 +66,7 @@ describe('pullCustomBatch', () => {
 		expect(result.checkpoint).toEqual(checkpoint);
 	});
 
-	it('prefers current fields in a mixed envelope and defaults an absent completion flag to false', async () => {
+	it('prefers the unified fields in a mixed envelope (the published contract) and defaults an absent completion flag to false', async () => {
 		const checkpoint = {
 			...normalizeCheckpoint({ sequence: 12 }),
 			epoch: 'nested-epoch',
@@ -95,7 +95,9 @@ describe('pullCustomBatch', () => {
 			fetcher: async () => response({ documents: [], checkpoint: normalizeCheckpoint(null) }),
 		});
 
-		expect(mixed).toMatchObject({ hasMore: false, epoch: 'top-epoch', head: 20, horizon: 4 });
+		// complete:false → hasMore true even though the legacy flag disagrees;
+		// journal fields come from inside the checkpoint.
+		expect(mixed).toMatchObject({ hasMore: true, epoch: 'nested-epoch', head: 99, horizon: 1 });
 		expect(absent.hasMore).toBe(false);
 	});
 

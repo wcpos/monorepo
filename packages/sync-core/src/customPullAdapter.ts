@@ -66,14 +66,18 @@ export async function pullCustomBatch(input: {
 	}
 	const body = await response.text();
 	const parsed = JSON.parse(body) as WirePullBody & { metrics?: ServerMetrics };
-	// Dual-accept /orders/pull cutover #1752: old fields win; unified fields are fallbacks only.
-	// Delete the old arm only at a protocol bump after every supported plugin emits the new shape.
+	// Dual-accept /orders/pull cutover #1752, matching the published contract:
+	// the unified shape (`complete`; journal fields inside `checkpoint`) is
+	// authoritative when present, today's fields serve the deployed servers
+	// (which never emit both, so precedence changes nothing against them).
+	// Delete the legacy arm only at a protocol bump after every supported
+	// plugin emits the unified shape.
 	return {
 		...parsed,
-		hasMore: parsed.hasMore ?? (parsed.complete === undefined ? false : !parsed.complete),
-		epoch: parsed.epoch ?? parsed.checkpoint.epoch,
-		head: parsed.head ?? parsed.checkpoint.head,
-		horizon: parsed.horizon ?? parsed.checkpoint.horizon,
+		hasMore: parsed.complete === undefined ? (parsed.hasMore ?? false) : !parsed.complete,
+		epoch: parsed.checkpoint.epoch ?? parsed.epoch,
+		head: parsed.checkpoint.head ?? parsed.head,
+		horizon: parsed.checkpoint.horizon ?? parsed.horizon,
 		responseBytes: measuredResponseBytes(body),
 	};
 }
