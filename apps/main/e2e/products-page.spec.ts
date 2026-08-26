@@ -624,7 +624,7 @@ test.describe('Products Page (Pro)', () => {
 
 			// …then the rejection surfaces as a red snackbar and the cell auto-reverts
 			// to server truth (#1082 ruling: reactive revert).
-			await expect(page.getByTestId('error-toast').first()).toBeVisible({
+			await expect(page.getByTestId('toast-SYNC201').first()).toBeVisible({
 				timeout: 30_000,
 			});
 			await expect(cell).toHaveText('0', { timeout: 30_000 });
