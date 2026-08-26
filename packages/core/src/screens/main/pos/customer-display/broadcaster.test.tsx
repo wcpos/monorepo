@@ -128,7 +128,7 @@ describe('CustomerDisplayBroadcaster', () => {
 		subscription.unsubscribe();
 	});
 
-	it('holds coupon totals until they settle for 50 ms', () => {
+	it('holds one coherent coupon projection until it settles for 50 ms', () => {
 		jest.useFakeTimers();
 		const broadcast = new CustomerDisplayBroadcast();
 		const received: CustomerDisplaySnapshotV1[] = [];
@@ -146,8 +146,16 @@ describe('CustomerDisplayBroadcaster', () => {
 				},
 			]);
 		});
-		expect(received.at(-1)?.totals.total).toBe('5');
-		expect(received.map((snapshot) => snapshot.totals.total)).not.toContain('10');
+		expect(received.at(-1)).toMatchObject({
+			items: [{ price: '5', subtotal: '5', total: '5' }],
+			totals: { subtotal: '5', total: '5' },
+		});
+		expect(received).not.toContainEqual(
+			expect.objectContaining({ items: [expect.objectContaining({ total: '10' })] })
+		);
+		expect(received).not.toContainEqual(
+			expect.objectContaining({ totals: expect.objectContaining({ total: '10' }) })
+		);
 
 		act(() => {
 			jest.advanceTimersByTime(49);
@@ -160,13 +168,24 @@ describe('CustomerDisplayBroadcaster', () => {
 				},
 			]);
 		});
-		expect(received.at(-1)?.totals.total).toBe('5');
+		expect(received.at(-1)).toMatchObject({
+			items: [{ price: '5', subtotal: '5', total: '5' }],
+			totals: { subtotal: '5', total: '5' },
+		});
 
 		act(() => {
 			jest.advanceTimersByTime(50);
 		});
-		expect(received.at(-1)?.totals.total).toBe('4');
-		expect(received.map((snapshot) => snapshot.totals.total)).not.toContain('10');
+		expect(received.at(-1)).toMatchObject({
+			items: [{ price: '4', subtotal: '5', total: '4' }],
+			totals: { subtotal: '5', total: '4' },
+		});
+		expect(received).not.toContainEqual(
+			expect.objectContaining({ items: [expect.objectContaining({ total: '10' })] })
+		);
+		expect(received).not.toContainEqual(
+			expect.objectContaining({ totals: expect.objectContaining({ total: '10' }) })
+		);
 		subscription.unsubscribe();
 	});
 
@@ -187,7 +206,78 @@ describe('CustomerDisplayBroadcaster', () => {
 				},
 			]);
 		});
-		expect(received.at(-1)?.totals.total).toBe('7');
+		expect(received.at(-1)).toMatchObject({
+			items: [{ price: '7', subtotal: '7', total: '7' }],
+			totals: { subtotal: '7', total: '7' },
+		});
+		subscription.unsubscribe();
+	});
+
+	it('holds the latest coupon-free projection when a coupon is added immediately', () => {
+		jest.useFakeTimers();
+		const broadcast = new CustomerDisplayBroadcast();
+		const received: CustomerDisplaySnapshotV1[] = [];
+		const subscription = broadcast.snapshots$.subscribe((snapshot) => received.push(snapshot));
+		render(<CustomerDisplayBroadcaster status="cart" broadcast={broadcast} />);
+
+		act(() => {
+			currentOrder.line_items$.next([
+				{
+					...currentOrder.line_items$.value[0],
+					price: 7,
+					subtotal: '7',
+					total: '7',
+				},
+			]);
+		});
+		expect(received.at(-1)).toMatchObject({
+			items: [{ total: '7' }],
+			totals: { total: '7' },
+		});
+
+		act(() => {
+			currentOrder.coupon_lines$.next([{ code: 'save', discount: '1', discount_tax: '0' }]);
+			currentOrder.line_items$.next([
+				{
+					...currentOrder.line_items$.value[0],
+					price: 10,
+					subtotal: '10',
+					total: '10',
+				},
+			]);
+		});
+		expect(received.at(-1)).toMatchObject({
+			items: [{ total: '7' }],
+			totals: { total: '7' },
+		});
+		expect(received.map((snapshot) => snapshot.totals.total)).not.toContain('10');
+		subscription.unsubscribe();
+	});
+
+	it('updates authoritative checkout money while holding the calculated projection', () => {
+		jest.useFakeTimers();
+		const broadcast = new CustomerDisplayBroadcast();
+		const received: CustomerDisplaySnapshotV1[] = [];
+		const subscription = broadcast.snapshots$.subscribe((snapshot) => received.push(snapshot));
+		render(<CustomerDisplayBroadcaster status="awaiting-payment" broadcast={broadcast} />);
+
+		act(() => {
+			currentOrder.coupon_lines$.next([{ code: 'save', discount: '1', discount_tax: '0' }]);
+			currentOrder.line_items$.next([
+				{
+					...currentOrder.line_items$.value[0],
+					price: 10,
+					subtotal: '10',
+					total: '10',
+				},
+			]);
+			currentOrder.total$.next('12');
+		});
+
+		expect(received.at(-1)).toMatchObject({
+			items: [{ price: '5', subtotal: '5', total: '5' }],
+			totals: { subtotal: '5', total: '12' },
+		});
 		subscription.unsubscribe();
 	});
 
@@ -257,6 +347,7 @@ describe('CustomerDisplayBroadcaster', () => {
 		);
 
 		act(() => {
+			currentOrder.coupon_lines$.next([]);
 			currentOrder.fee_lines$.next([{ name: 'Service', total: '1', total_tax: '0', taxes: [] }]);
 			currentOrder.shipping_lines$.next([
 				{

@@ -5,7 +5,7 @@ import useDeepCompareEffect from 'use-deep-compare-effect';
 
 import { calculateOrderTotals } from './calculate-order-totals';
 import { useCartLines } from './use-cart-lines';
-import { useCouponAwareStableTotals } from './use-coupon-aware-stable-totals';
+import { useCouponAwareStableValue } from './use-coupon-aware-stable-totals';
 import { useTaxSettings } from '../../contexts/tax-rates';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
@@ -49,7 +49,7 @@ export const useOrderTotals = () => {
 		pricesIncludeTax,
 	]);
 
-	const stableTotals = useCouponAwareStableTotals(totals, hasCoupons);
+	const stableTotals = useCouponAwareStableValue(totals, hasCoupons);
 
 	/**
 	 * R1 re-push guard. This effect writes the cart's arithmetic onto the order,

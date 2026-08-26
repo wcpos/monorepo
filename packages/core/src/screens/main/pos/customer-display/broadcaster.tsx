@@ -7,7 +7,7 @@ import { useAppState } from '../../../../contexts/app-state';
 import allCurrencies from '../../../../contexts/currencies/currencies.json';
 import { getNetPaymentTotal } from '../cart/utils/get-net-payment-total';
 import { calculateOrderTotals } from '../hooks/calculate-order-totals';
-import { useCouponAwareStableTotals } from '../hooks/use-coupon-aware-stable-totals';
+import { useCouponAwareStableValue } from '../hooks/use-coupon-aware-stable-totals';
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useCurrentOrder } from '../contexts/current-order';
 import { customerDisplayBroadcast } from './broadcast';
@@ -67,22 +67,27 @@ function CustomerDisplayOrderBroadcaster({
 			: undefined) ||
 		decode(allCurrencies.find((currency) => currency.code === currencyCode)?.symbol ?? '');
 
-	const calculatedTotals = React.useMemo(() => {
+	const calculatedProjection = React.useMemo(() => {
 		const lineItems = (lineItemsValue ?? []).filter((item) => item.product_id !== null);
 		const feeLines = (feeLinesValue ?? []).filter((line) => line.name !== null);
 		const shippingLines = (shippingLinesValue ?? []).filter((line) => line.method_id !== null);
 		const couponLines = (couponLinesValue ?? []).filter((line) => line.code != null);
 
-		return calculateOrderTotals({
+		return {
 			lineItems,
 			feeLines,
 			shippingLines,
-			couponLines,
-			taxRates: allRates,
-			taxRoundAtSubtotal,
-			dp: priceNumDecimals,
-			pricesIncludeTax,
-		});
+			totals: calculateOrderTotals({
+				lineItems,
+				feeLines,
+				shippingLines,
+				couponLines,
+				taxRates: allRates,
+				taxRoundAtSubtotal,
+				dp: priceNumDecimals,
+				pricesIncludeTax,
+			}),
+		};
 	}, [
 		allRates,
 		couponLinesValue,
@@ -94,22 +99,18 @@ function CustomerDisplayOrderBroadcaster({
 		taxRoundAtSubtotal,
 	]);
 	const hasCoupons = (couponLinesValue ?? []).some((line) => line.code != null);
-	const totals = useCouponAwareStableTotals(calculatedTotals, hasCoupons);
+	const projection = useCouponAwareStableValue(calculatedProjection, hasCoupons);
 	const checkoutTotal =
 		status === 'awaiting-payment' ? getNetPaymentTotal(orderTotal, refunds) : undefined;
 
 	const state = React.useMemo(() => {
-		const lineItems = (lineItemsValue ?? []).filter((item) => item.product_id !== null);
-		const feeLines = (feeLinesValue ?? []).filter((line) => line.name !== null);
-		const shippingLines = (shippingLinesValue ?? []).filter((line) => line.method_id !== null);
-
 		return createCustomerDisplayState({
 			status,
 			currencyCode,
 			currencySymbol,
 			decimalPlaces: priceNumDecimals,
 			pricesIncludeTax,
-			lineItems: lineItems.map((item) => ({
+			lineItems: projection.lineItems.map((item) => ({
 				productId: item.product_id,
 				name: item.name,
 				quantity: item.quantity,
@@ -120,41 +121,38 @@ function CustomerDisplayOrderBroadcaster({
 				totalTax: item.total_tax,
 				image: item.image,
 			})),
-			feeLines: feeLines.map((line) => ({
+			feeLines: projection.feeLines.map((line) => ({
 				name: line.name,
 				total: line.total,
 				totalTax: line.total_tax,
 			})),
-			shippingLines: shippingLines.map((line) => ({
+			shippingLines: projection.shippingLines.map((line) => ({
 				methodId: line.method_id,
 				name: line.method_title,
 				total: line.total,
 				totalTax: line.total_tax,
 			})),
 			totals: {
-				subtotal: totals.subtotal,
-				subtotalTax: totals.subtotal_tax,
-				discount: totals.discount_total,
-				discountTax: totals.discount_tax,
-				fee: totals.fee_total,
-				feeTax: totals.fee_tax,
-				shipping: totals.shipping_total,
-				shippingTax: totals.shipping_tax,
-				tax: totals.total_tax,
-				total: checkoutTotal ?? totals.total,
+				subtotal: projection.totals.subtotal,
+				subtotalTax: projection.totals.subtotal_tax,
+				discount: projection.totals.discount_total,
+				discountTax: projection.totals.discount_tax,
+				fee: projection.totals.fee_total,
+				feeTax: projection.totals.fee_tax,
+				shipping: projection.totals.shipping_total,
+				shippingTax: projection.totals.shipping_tax,
+				tax: projection.totals.total_tax,
+				total: checkoutTotal ?? projection.totals.total,
 			},
 		});
 	}, [
 		checkoutTotal,
 		currencyCode,
 		currencySymbol,
-		feeLinesValue,
-		lineItemsValue,
 		priceNumDecimals,
 		pricesIncludeTax,
-		shippingLinesValue,
+		projection,
 		status,
-		totals,
 	]);
 
 	React.useEffect(() => {
