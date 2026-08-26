@@ -5,7 +5,9 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import { useAppState } from '../../../../contexts/app-state';
 import allCurrencies from '../../../../contexts/currencies/currencies.json';
+import { getNetPaymentTotal } from '../cart/utils/get-net-payment-total';
 import { calculateOrderTotals } from '../hooks/calculate-order-totals';
+import { useCouponAwareStableTotals } from '../hooks/use-coupon-aware-stable-totals';
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useCurrentOrder } from '../contexts/current-order';
 import { customerDisplayBroadcast } from './broadcast';
@@ -24,14 +26,36 @@ export function CustomerDisplayBroadcaster({
 	status,
 	broadcast = customerDisplayBroadcast,
 }: CustomerDisplayBroadcasterProps) {
-	const [owner] = React.useState(() => Symbol('customer-display-broadcaster'));
 	const { currentOrder } = useCurrentOrder();
+
+	return (
+		<CustomerDisplayOrderBroadcaster
+			key={currentOrder.uuid}
+			status={status}
+			broadcast={broadcast}
+			currentOrder={currentOrder}
+		/>
+	);
+}
+
+interface CustomerDisplayOrderBroadcasterProps extends CustomerDisplayBroadcasterProps {
+	currentOrder: import('@wcpos/database').OrderDocument;
+}
+
+function CustomerDisplayOrderBroadcaster({
+	status,
+	broadcast = customerDisplayBroadcast,
+	currentOrder,
+}: CustomerDisplayOrderBroadcasterProps) {
+	const [owner] = React.useState(() => Symbol('customer-display-broadcaster'));
 	const orderCurrencyCode = useObservableEagerState(currentOrder.currency$!);
 	const orderCurrencySymbol = useObservableEagerState(currentOrder.currency_symbol$!);
 	const lineItemsValue = useObservableEagerState(currentOrder.line_items$!);
 	const feeLinesValue = useObservableEagerState(currentOrder.fee_lines$!);
 	const shippingLinesValue = useObservableEagerState(currentOrder.shipping_lines$!);
 	const couponLinesValue = useObservableEagerState(currentOrder.coupon_lines$!);
+	const orderTotal = useObservableEagerState(currentOrder.total$!);
+	const refunds = useObservableEagerState(currentOrder.refunds$!);
 	const { allRates, taxRoundAtSubtotal, priceNumDecimals, pricesIncludeTax } = useTaxRates();
 	const { store } = useAppState();
 	const storeCurrencyCode = useObservableEagerState(store.currency$) as string | undefined;
@@ -43,12 +67,13 @@ export function CustomerDisplayBroadcaster({
 			: undefined) ||
 		decode(allCurrencies.find((currency) => currency.code === currencyCode)?.symbol ?? '');
 
-	const state = React.useMemo(() => {
+	const calculatedTotals = React.useMemo(() => {
 		const lineItems = (lineItemsValue ?? []).filter((item) => item.product_id !== null);
 		const feeLines = (feeLinesValue ?? []).filter((line) => line.name !== null);
 		const shippingLines = (shippingLinesValue ?? []).filter((line) => line.method_id !== null);
 		const couponLines = (couponLinesValue ?? []).filter((line) => line.code != null);
-		const totals = calculateOrderTotals({
+
+		return calculateOrderTotals({
 			lineItems,
 			feeLines,
 			shippingLines,
@@ -58,6 +83,25 @@ export function CustomerDisplayBroadcaster({
 			dp: priceNumDecimals,
 			pricesIncludeTax,
 		});
+	}, [
+		allRates,
+		couponLinesValue,
+		feeLinesValue,
+		lineItemsValue,
+		priceNumDecimals,
+		pricesIncludeTax,
+		shippingLinesValue,
+		taxRoundAtSubtotal,
+	]);
+	const hasCoupons = (couponLinesValue ?? []).some((line) => line.code != null);
+	const totals = useCouponAwareStableTotals(calculatedTotals, hasCoupons);
+	const checkoutTotal =
+		status === 'awaiting-payment' ? getNetPaymentTotal(orderTotal, refunds) : undefined;
+
+	const state = React.useMemo(() => {
+		const lineItems = (lineItemsValue ?? []).filter((item) => item.product_id !== null);
+		const feeLines = (feeLinesValue ?? []).filter((line) => line.name !== null);
+		const shippingLines = (shippingLinesValue ?? []).filter((line) => line.method_id !== null);
 
 		return createCustomerDisplayState({
 			status,
@@ -97,12 +141,11 @@ export function CustomerDisplayBroadcaster({
 				shipping: totals.shipping_total,
 				shippingTax: totals.shipping_tax,
 				tax: totals.total_tax,
-				total: totals.total,
+				total: checkoutTotal ?? totals.total,
 			},
 		});
 	}, [
-		allRates,
-		couponLinesValue,
+		checkoutTotal,
 		currencyCode,
 		currencySymbol,
 		feeLinesValue,
@@ -111,7 +154,7 @@ export function CustomerDisplayBroadcaster({
 		pricesIncludeTax,
 		shippingLinesValue,
 		status,
-		taxRoundAtSubtotal,
+		totals,
 	]);
 
 	React.useEffect(() => {

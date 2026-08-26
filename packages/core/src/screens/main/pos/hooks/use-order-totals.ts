@@ -5,12 +5,11 @@ import useDeepCompareEffect from 'use-deep-compare-effect';
 
 import { calculateOrderTotals } from './calculate-order-totals';
 import { useCartLines } from './use-cart-lines';
+import { useCouponAwareStableTotals } from './use-coupon-aware-stable-totals';
 import { useTaxSettings } from '../../contexts/tax-rates';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
 import { useOrderMoneyDivergence } from '../contexts/order-money-divergence';
-
-type Totals = ReturnType<typeof calculateOrderTotals>;
 
 /**
  *
@@ -50,21 +49,7 @@ export const useOrderTotals = () => {
 		pricesIncludeTax,
 	]);
 
-	/**
-	 * When coupons are active, debounce the returned totals so transient
-	 * intermediate values (from pre-coupon calculation or server response)
-	 * don't flash in the UI. The component keeps showing the previous
-	 * correct value until the totals settle.
-	 */
-	const [stableTotals, setStableTotals] = React.useState<Totals>(totals);
-
-	React.useEffect(() => {
-		// When coupons are active, debounce (50ms) so transient values don't flash.
-		// When they're not, sync immediately (delay 0). Either way the update goes
-		// through the timer callback so it never runs synchronously in the effect.
-		const timer = setTimeout(() => setStableTotals(totals), hasCoupons ? 50 : 0);
-		return () => clearTimeout(timer);
-	}, [totals, hasCoupons]);
+	const stableTotals = useCouponAwareStableTotals(totals, hasCoupons);
 
 	/**
 	 * R1 re-push guard. This effect writes the cart's arithmetic onto the order,

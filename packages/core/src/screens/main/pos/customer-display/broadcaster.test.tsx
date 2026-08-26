@@ -39,8 +39,11 @@ jest.mock('../hooks/calculate-order-totals', () => {
 
 function buildOrder(name = 'Coffee', total = '5') {
 	const value = {
+		uuid: `${name}-${total}`,
 		currency: 'USD',
 		currency_symbol: '$',
+		total,
+		refunds: [] as { total?: string | number | null }[],
 		line_items: [
 			{
 				product_id: 10,
@@ -62,6 +65,8 @@ function buildOrder(name = 'Coffee', total = '5') {
 		...value,
 		currency$: new BehaviorSubject<string | undefined>(value.currency),
 		currency_symbol$: new BehaviorSubject<string | undefined>(value.currency_symbol),
+		total$: new BehaviorSubject<string | number | null | undefined>(value.total),
+		refunds$: new BehaviorSubject(value.refunds),
 		line_items$: new BehaviorSubject(value.line_items),
 		fee_lines$: new BehaviorSubject<
 			{ name: string | null; total: string; total_tax: string; taxes: never[] }[]
@@ -86,6 +91,139 @@ describe('CustomerDisplayBroadcaster', () => {
 		jest.mocked(calculateOrderTotals).mockClear();
 		currency$.next('USD');
 		currentOrder = buildOrder();
+	});
+
+	afterEach(() => {
+		jest.useRealTimers();
+	});
+
+	it('uses live authoritative net money only while awaiting payment', () => {
+		const broadcast = new CustomerDisplayBroadcast();
+		const received: CustomerDisplaySnapshotV1[] = [];
+		const subscription = broadcast.snapshots$.subscribe((snapshot) => received.push(snapshot));
+		const view = render(<CustomerDisplayBroadcaster status="cart" broadcast={broadcast} />);
+
+		expect(received.at(-1)?.totals.total).toBe('5');
+		const cartSnapshotCount = received.length;
+		act(() => {
+			currentOrder.total$.next('12');
+		});
+		expect(received).toHaveLength(cartSnapshotCount);
+		expect(received.at(-1)?.totals.total).toBe('5');
+
+		act(() => {
+			view.rerender(<CustomerDisplayBroadcaster status="awaiting-payment" broadcast={broadcast} />);
+		});
+		expect(received.at(-1)?.totals.total).toBe('12');
+
+		act(() => {
+			currentOrder.total$.next('15');
+		});
+		expect(received.at(-1)?.totals.total).toBe('15');
+
+		act(() => {
+			currentOrder.refunds$.next([{ total: '-3' }]);
+		});
+		expect(received.at(-1)?.totals.total).toBe('12');
+		subscription.unsubscribe();
+	});
+
+	it('holds coupon totals until they settle for 50 ms', () => {
+		jest.useFakeTimers();
+		const broadcast = new CustomerDisplayBroadcast();
+		const received: CustomerDisplaySnapshotV1[] = [];
+		const subscription = broadcast.snapshots$.subscribe((snapshot) => received.push(snapshot));
+		render(<CustomerDisplayBroadcaster status="cart" broadcast={broadcast} />);
+
+		act(() => {
+			currentOrder.coupon_lines$.next([{ code: 'save', discount: '1', discount_tax: '0' }]);
+			currentOrder.line_items$.next([
+				{
+					...currentOrder.line_items$.value[0],
+					price: 10,
+					subtotal: '10',
+					total: '10',
+				},
+			]);
+		});
+		expect(received.at(-1)?.totals.total).toBe('5');
+		expect(received.map((snapshot) => snapshot.totals.total)).not.toContain('10');
+
+		act(() => {
+			jest.advanceTimersByTime(49);
+			currentOrder.line_items$.next([
+				{
+					...currentOrder.line_items$.value[0],
+					price: 4,
+					subtotal: '5',
+					total: '4',
+				},
+			]);
+		});
+		expect(received.at(-1)?.totals.total).toBe('5');
+
+		act(() => {
+			jest.advanceTimersByTime(50);
+		});
+		expect(received.at(-1)?.totals.total).toBe('4');
+		expect(received.map((snapshot) => snapshot.totals.total)).not.toContain('10');
+		subscription.unsubscribe();
+	});
+
+	it('publishes coupon-free totals immediately', () => {
+		jest.useFakeTimers();
+		const broadcast = new CustomerDisplayBroadcast();
+		const received: CustomerDisplaySnapshotV1[] = [];
+		const subscription = broadcast.snapshots$.subscribe((snapshot) => received.push(snapshot));
+		render(<CustomerDisplayBroadcaster status="cart" broadcast={broadcast} />);
+
+		act(() => {
+			currentOrder.line_items$.next([
+				{
+					...currentOrder.line_items$.value[0],
+					price: 7,
+					subtotal: '7',
+					total: '7',
+				},
+			]);
+		});
+		expect(received.at(-1)?.totals.total).toBe('7');
+		subscription.unsubscribe();
+	});
+
+	it('does not carry stabilized totals across selected orders', () => {
+		jest.useFakeTimers();
+		const broadcast = new CustomerDisplayBroadcast();
+		const received: CustomerDisplaySnapshotV1[] = [];
+		const subscription = broadcast.snapshots$.subscribe((snapshot) => received.push(snapshot));
+		currentOrder.coupon_lines$.next([{ code: 'first', discount: '1', discount_tax: '0' }]);
+		const view = render(<CustomerDisplayBroadcaster status="cart" broadcast={broadcast} />);
+
+		const nextOrder = buildOrder('Tea', '9');
+		nextOrder.coupon_lines$.next([{ code: 'second', discount: '1', discount_tax: '0' }]);
+		currentOrder = nextOrder;
+		act(() => {
+			view.rerender(<CustomerDisplayBroadcaster status="cart" broadcast={broadcast} />);
+		});
+
+		expect(received.at(-1)).toMatchObject({
+			items: [{ name: 'Tea' }],
+			totals: { total: '9' },
+		});
+
+		act(() => {
+			nextOrder.line_items$.next([
+				{
+					...nextOrder.line_items$.value[0],
+					price: 20,
+					subtotal: '20',
+					total: '20',
+				},
+			]);
+		});
+		expect(received.at(-1)?.totals.total).toBe('9');
+		expect(received.map((snapshot) => snapshot.totals.total)).not.toContain('20');
+		subscription.unsubscribe();
 	});
 
 	it('publishes field revisions and selected-order changes, then idles on cleanup', async () => {
