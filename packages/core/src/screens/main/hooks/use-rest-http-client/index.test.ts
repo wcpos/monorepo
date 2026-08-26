@@ -82,7 +82,7 @@ describe('useRestHttpClient methods', () => {
 		expect(latestRequest()).toMatchObject({
 			baseURL: 'https://example.com/?rest_route=/wcpos/v2/orders',
 			url: '/42',
-			params: { page: 2 },
+			params: { page: 2, wcpos_protocol: 2, wcpos_client: 'web/0.0.0' },
 		});
 	});
 

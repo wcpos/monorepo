@@ -4,6 +4,12 @@ import set from 'lodash/set';
 
 import { AppInfo } from '@wcpos/utils/app-info';
 import { getDatabaseEpoch, getLogger, mapExceptionToCode } from '@wcpos/utils/logger';
+import {
+	CLIENT_HEADER,
+	formatClientSignal,
+	PROTOCOL_HEADER,
+	SYNC_PROTOCOL_VERSION,
+} from '@wcpos/utils/sync-protocol';
 
 import { http } from './http';
 import { mapToInternalCode, parseWpError } from './parse-wp-error';
@@ -222,6 +228,14 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 			(processedConfig as any).wcposHeaders !== false
 		) {
 			set(processedConfig, ['headers', 'X-WCPOS'], 1);
+			if (AppInfo.platform !== 'web') {
+				set(processedConfig, ['headers', PROTOCOL_HEADER], String(SYNC_PROTOCOL_VERSION));
+				set(
+					processedConfig,
+					['headers', CLIENT_HEADER],
+					formatClientSignal(AppInfo.platform, AppInfo.version)
+				);
+			}
 			// Explicit product UA on native/Electron (B10, wcpos-infra#72): a blank
 			// or library UA on a POST earns a permanent AIOS IP ban. The fragment is
 			// EMPTY on web — Firefox honours fetch UA overrides, and replacing the

@@ -12,6 +12,14 @@ import { formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { toRestRouteUrl } from '@wcpos/utils/rest-transport';
+import {
+	CLIENT_HEADER,
+	CLIENT_QUERY_PARAM,
+	formatClientSignal,
+	PROTOCOL_HEADER,
+	PROTOCOL_QUERY_PARAM,
+	SYNC_PROTOCOL_VERSION,
+} from '@wcpos/utils/sync-protocol';
 
 import { evaluateClockSkew } from './clock-skew';
 import {
@@ -174,6 +182,12 @@ export function createEngineFetcher(input: {
 			// (woocommerce_pos_request()) — without this header every sync route
 			// answers rest_no_route and the engine stays degraded-empty.
 			headers.set('X-WCPOS', '1');
+			if (AppInfo.platform !== 'web') {
+				// The fleet's static CORS allow-list lacks these headers; web rides
+				// the query channel until released plugins allow-list them.
+				headers.set(PROTOCOL_HEADER, String(SYNC_PROTOCOL_VERSION));
+				headers.set(CLIENT_HEADER, formatClientSignal(AppInfo.platform, AppInfo.version));
+			}
 			// Explicit product UA on native/Electron (B10, wcpos-infra#72): a blank
 			// or library UA on a POST earns a permanent AIOS IP ban. The fragment is
 			// EMPTY on web — Firefox honours fetch UA overrides, and replacing the
@@ -217,6 +231,11 @@ export function createEngineFetcher(input: {
 			// marker delivery never depends on header survival (B7,
 			// wcpos-infra#72; prerequisite for B12's strict marker gating).
 			parsedUrl.searchParams.set('wcpos', '1');
+			parsedUrl.searchParams.set(PROTOCOL_QUERY_PARAM, String(SYNC_PROTOCOL_VERSION));
+			parsedUrl.searchParams.set(
+				CLIENT_QUERY_PARAM,
+				formatClientSignal(AppInfo.platform, AppInfo.version)
+			);
 			// Scope parity with the X-WCPOS-Store header set above: the server
 			// honours the store_id param only when NO header arrived (free#1646 —
 			// a stripping proxy produces absence; a sent header always wins), so

@@ -71,10 +71,15 @@ describe('refreshAccessToken', () => {
 
 		expect(token).toBe('new-token');
 		expect(post).toHaveBeenCalledWith(
-			'https://example.test/wp-json/wcpos/v2/auth/refresh',
+			expect.any(String),
 			{ refresh_token: 'refresh-token' },
 			{ headers: { 'X-WCPOS': '1' } }
 		);
+		const [refreshUrl, , requestConfig] = post.mock.calls[0];
+		expect(new URL(refreshUrl).searchParams.get('wcpos_protocol')).toBe('2');
+		expect(new URL(refreshUrl).searchParams.get('wcpos_client')).toBe(`web/${AppInfo.version}`);
+		expect(requestConfig.headers).not.toHaveProperty('X-WCPOS-Protocol');
+		expect(requestConfig.headers).not.toHaveProperty('X-WCPOS-Client');
 		expect(wpUser.incrementalPatch).toHaveBeenCalledWith({
 			access_token: 'new-token',
 			expires_at: 9999,
@@ -83,6 +88,8 @@ describe('refreshAccessToken', () => {
 
 	it('includes the platform User-Agent on native refresh requests', async () => {
 		const webUserAgentHeader = AppInfo.userAgentHeader;
+		const webPlatform = AppInfo.platform;
+		AppInfo.platform = 'android';
 		AppInfo.userAgentHeader = { 'User-Agent': 'WCPOS/1.2.3 (android; build 45)' };
 		const post = jest.fn().mockResolvedValue({
 			data: { access_token: 'new-token', expires_at: 9999 },
@@ -94,16 +101,19 @@ describe('refreshAccessToken', () => {
 			await refreshAccessToken(config);
 
 			expect(post).toHaveBeenCalledWith(
-				'https://example.test/wp-json/wcpos/v2/auth/refresh',
+				expect.any(String),
 				{ refresh_token: 'refresh-token' },
 				{
 					headers: {
 						'X-WCPOS': '1',
+						'X-WCPOS-Protocol': '2',
+						'X-WCPOS-Client': `android/${AppInfo.version}`,
 						'User-Agent': 'WCPOS/1.2.3 (android; build 45)',
 					},
 				}
 			);
 		} finally {
+			AppInfo.platform = webPlatform;
 			AppInfo.userAgentHeader = webUserAgentHeader;
 		}
 	});
@@ -153,7 +163,7 @@ describe('refreshAccessToken', () => {
 
 		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
 		expect(post).toHaveBeenCalledWith(
-			'https://example.test/wp-json/wcpos/v2/auth/refresh',
+			'https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=2&wcpos_client=web%2F0.0.0',
 			{ refresh_token: 'refresh-token' },
 			{ headers: { 'X-WCPOS': '1' } }
 		);
@@ -170,7 +180,7 @@ describe('refreshAccessToken', () => {
 
 		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
 		expect(post).toHaveBeenCalledWith(
-			'https://example.test/wp-json/wcpos/v2/auth/refresh',
+			'https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=2&wcpos_client=web%2F0.0.0',
 			{ refresh_token: 'refresh-token' },
 			{ headers: { 'X-WCPOS': '1' } }
 		);
@@ -187,7 +197,7 @@ describe('refreshAccessToken', () => {
 
 		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
 		expect(post).toHaveBeenCalledWith(
-			'https://example.test/wp-json/wcpos/v2/auth/refresh',
+			'https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=2&wcpos_client=web%2F0.0.0',
 			{ refresh_token: 'refresh-token' },
 			{ headers: { 'X-WCPOS': '1' } }
 		);
@@ -205,7 +215,9 @@ describe('refreshAccessToken', () => {
 		});
 
 		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
-		expect(post.mock.calls[0]?.[0]).toBe('https://example.test/?rest_route=/wcpos/v2/auth/refresh');
+		expect(post.mock.calls[0]?.[0]).toBe(
+			'https://example.test/?rest_route=%2Fwcpos%2Fv2%2Fauth%2Frefresh&wcpos_protocol=2&wcpos_client=web%2F0.0.0'
+		);
 	});
 
 	it('keeps the path form when the flag is set but wp_api_url is absent', async () => {
@@ -219,7 +231,9 @@ describe('refreshAccessToken', () => {
 		});
 
 		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
-		expect(post.mock.calls[0]?.[0]).toBe('https://example.test/wp-json/wcpos/v2/auth/refresh');
+		expect(post.mock.calls[0]?.[0]).toBe(
+			'https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=2&wcpos_client=web%2F0.0.0'
+		);
 	});
 
 	it('awaits an in-flight refresh instead of posting a duplicate', async () => {

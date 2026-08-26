@@ -1,5 +1,7 @@
 import { renderHook } from '@testing-library/react';
 
+import { AppInfo } from '@wcpos/utils/app-info';
+
 jest.mock('@wcpos/utils/logger', () => {
 	const info = jest.fn();
 	const error = jest.fn();
@@ -68,7 +70,26 @@ describe('useHttpClient network audit logs', () => {
 
 		const config = (http.request as jest.Mock).mock.calls[0][0];
 		expect(config.headers['X-WCPOS']).toBe(1);
+		expect(config.headers).not.toHaveProperty('X-WCPOS-Protocol');
+		expect(config.headers).not.toHaveProperty('X-WCPOS-Client');
 		expect(config.headers).not.toHaveProperty('User-Agent');
+	});
+
+	it('stamps protocol and client headers outside web', async () => {
+		const webPlatform = AppInfo.platform;
+		AppInfo.platform = 'electron';
+		(http.request as jest.Mock).mockResolvedValue({ status: 200, data: {} });
+		const { result } = renderHook(() => useHttpClient());
+
+		try {
+			await result.current.get('https://example.com/wp-json/wcpos/v2/products');
+
+			const config = (http.request as jest.Mock).mock.calls[0][0];
+			expect(config.headers['X-WCPOS-Protocol']).toBe('2');
+			expect(config.headers['X-WCPOS-Client']).toBe(`electron/${AppInfo.version}`);
+		} finally {
+			AppInfo.platform = webPlatform;
+		}
 	});
 
 	it('persists mutating responses with a sanitized searchable endpoint', async () => {
