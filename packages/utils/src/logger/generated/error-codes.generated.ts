@@ -12,6 +12,7 @@ export type ErrorCode =
 	| 'SYNC311'
 	| 'SYNC321'
 	| 'SYNC331'
+	| 'SYNC341'
 	| 'AUTH101'
 	| 'AUTH201'
 	| 'AUTH301'
@@ -196,6 +197,15 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		actionHint: 'Download the affected records again.',
 		dataSafety: 'no-impact',
 		summary: 'This record on the device does not match your store and needs local repair.',
+	},
+	SYNC341: {
+		code: 'SYNC341',
+		symbol: 'APP_UPDATE_REQUIRED',
+		domain: 'SYNC',
+		severity: 'error',
+		actionHint: 'Update the POS app on this device, then reopen it.',
+		dataSafety: 'no-impact',
+		summary: 'This store now requires a newer version of the POS app.',
 	},
 	AUTH101: {
 		code: 'AUTH101',
@@ -822,6 +832,7 @@ export const ERROR_CODES = {
 	SCHEMA_MISMATCH: 'SYNC311',
 	SYNC_PARTIAL: 'SYNC321',
 	LOCAL_RECORD_DIVERGED: 'SYNC331',
+	APP_UPDATE_REQUIRED: 'SYNC341',
 	SESSION_EXPIRED: 'AUTH101',
 	INSUFFICIENT_ROLE: 'AUTH201',
 	AUTH_PLUGIN_CONFLICT: 'AUTH301',

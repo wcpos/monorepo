@@ -194,8 +194,9 @@ export type PullResponse<TDocument = OrderDocument> = {
 	 * and must resync from zero — the backstop for a same-epoch reset (restore/truncate).
 	 */
 	head?: number;
-	checkpoint: SyncCheckpoint;
+	checkpoint: SyncCheckpoint & { epoch?: string; horizon?: number; head?: number };
 	hasMore: boolean;
+	complete?: boolean;
 };
 
 /** Per-phase server timings the pull endpoint may report alongside a batch (wire shape). */

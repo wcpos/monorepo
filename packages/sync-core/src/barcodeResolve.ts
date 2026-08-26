@@ -429,6 +429,10 @@ export type ResolveBarcodeResponse = {
 	meta?: ResolveBarcodeMeta;
 };
 
+type WireResolveBarcodeResponse = Omit<ResolveBarcodeResponse, 'match' | 'ambiguous'> & {
+	match: (Record<string, unknown> & { id: number; parent_id?: number }) | null;
+	ambiguous: ({ id: number; parent_id?: number } & Partial<ResolveBarcodeAmbiguous>)[];
+};
 // --- resolveScan ----------------------------------------------------------------------
 
 export type ScanEventType =
@@ -583,7 +587,23 @@ export async function resolveScan(input: ResolveScanInput): Promise<ScanResult> 
 					events,
 				};
 			}
-			body = JSON.parse(text) as ResolveBarcodeResponse;
+			const parsed = JSON.parse(text) as WireResolveBarcodeResponse;
+			body = parsed as ResolveBarcodeResponse;
+			if (parsed.match && !('payload' in parsed.match)) {
+				const parent_id = parsed.match.parent_id ?? 0;
+				body.match = {
+					id: parsed.match.id,
+					parent_id,
+					type: parent_id > 0 ? 'variation' : 'product',
+					payload: parsed.match,
+				};
+			}
+			body.ambiguous = Array.isArray(parsed.ambiguous)
+				? parsed.ambiguous.map((entry) => ({
+						id: entry.id,
+						type: entry.type ?? ((entry.parent_id ?? 0) > 0 ? 'variation' : 'product'),
+					}))
+				: [];
 		} catch (error) {
 			const terminal = emit('error');
 			return {

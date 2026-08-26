@@ -38,6 +38,8 @@ export function translateErrorSummary(t: TranslateError, code: ErrorCode): strin
 			return t('health.logs.error_summary.SYNC321');
 		case 'SYNC331':
 			return t('health.logs.error_summary.SYNC331');
+		case 'SYNC341':
+			return t('health.logs.error_summary.SYNC341');
 		case 'AUTH101':
 			return t('health.logs.error_summary.AUTH101');
 		case 'AUTH201':

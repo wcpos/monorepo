@@ -344,6 +344,66 @@ describe('resolveScan miss ordering (the contract)', () => {
 });
 
 describe('resolveScan online outcomes', () => {
+	it('preserves the current wrapped match and ambiguous shapes', async () => {
+		const match = { id: 7, type: 'variation' as const, parent_id: 3, payload: { name: 'Blue' } };
+		const ambiguous = [{ id: 8, type: 'product' as const }];
+		const result = await resolveScan(
+			scanInput({
+				code: 'CURRENT',
+				fetcher: async () => jsonResponse(resolveResponse({ found: true, match, ambiguous })),
+			})
+		);
+
+		expect(result).toMatchObject({ outcome: 'online', match, ambiguous });
+	});
+
+	it('normalizes a future bare variation match and bare ambiguous entries', async () => {
+		const bare = { id: 7, parent_id: 3, name: 'Blue' };
+		const result = await resolveScan(
+			scanInput({
+				code: 'FUTURE',
+				fetcher: async () =>
+					jsonResponse({
+						...resolveResponse(),
+						found: true,
+						match: bare,
+						ambiguous: [{ id: 8, parent_id: 2 }, { id: 9 }],
+					}),
+			})
+		);
+
+		expect(result).toMatchObject({
+			outcome: 'online',
+			match: { id: 7, parent_id: 3, type: 'variation', payload: bare },
+			ambiguous: [
+				{ id: 8, type: 'variation' },
+				{ id: 9, type: 'product' },
+			],
+		});
+	});
+
+	it('uses payload and explicit ambiguous type first in mixed entries', async () => {
+		const match = { id: 7, parent_id: 0, type: 'product' as const, payload: { id: 70 } };
+		const result = await resolveScan(
+			scanInput({
+				code: 'MIXED',
+				fetcher: async () =>
+					jsonResponse({
+						...resolveResponse(),
+						found: true,
+						match,
+						ambiguous: [{ id: 8, type: 'product', parent_id: 2 }],
+					}),
+			})
+		);
+
+		expect(result).toMatchObject({
+			outcome: 'online',
+			match,
+			ambiguous: [{ id: 8, type: 'product' }],
+		});
+	});
+
 	it('resolves a parent product match', async () => {
 		const match = {
 			id: 11,

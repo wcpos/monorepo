@@ -54,6 +54,7 @@ import type {
 	StoreScopeIdentity,
 	SyncObserver,
 } from '@wcpos/sync-core';
+import { parseUpdateRequiredBody, type UpdateRequiredDetails } from '@wcpos/utils/sync-protocol';
 
 import {
 	ENGINE_KV_COLLECTION,
@@ -264,6 +265,16 @@ export type RxdbSyncEnginePorts = {
 	/** THE telemetry port (ADR 0020): structured SyncEvents, observed and never
 	 * awaited; a throwing observer is swallowed. */
 	diagnostics?: SyncObserver;
+	/**
+	 * Host notification for the server's deliberate protocol-gate refusal
+	 * (`wcpos_update_required`, wcpos/woocommerce-pos#1752): this client is
+	 * older than the store's plugin now accepts. Fired at most once per engine
+	 * instance — the transport latches shut on first sight, and every later
+	 * request short-circuits locally with a replay of the refusal, so a blocked
+	 * till never hammers the store. Recovery is the app update itself (the
+	 * restart/reload constructs a fresh engine).
+	 */
+	onUpdateRequired?: (details: UpdateRequiredDetails & { status: number }) => void;
 	/** 'auto' (default): all periodic lanes arm after `ready`. 'manual': no
 	 * timers — callers drive deterministic ticks via sync(). */
 	mode?: 'auto' | 'manual';
@@ -748,7 +759,19 @@ export function createRxdbSyncEngine(
 	// before then (there is no transport before `ready`) is simply dropped.
 	let cadence: CadenceController | null = null;
 	const rawFetcher: EngineFetcher = ports.fetcher;
+	// The protocol-gate latch (wcpos/woocommerce-pos#1752). Instance state on
+	// purpose: a fresh engine (restart, reload, reconnect) always re-probes, and
+	// the latch never leaks across sites the way module state would (the same
+	// trap as runtime 429 counters). Once set, every lane sees a local replay of
+	// the refusal — uniform downstream error handling, zero network.
+	let updateRequiredRefusal: { status: number; body: string } | null = null;
 	const fetcher: EngineFetcher = async (url, init) => {
+		if (updateRequiredRefusal !== null) {
+			return new Response(updateRequiredRefusal.body, {
+				status: updateRequiredRefusal.status,
+				headers: { 'Content-Type': 'application/json' },
+			});
+		}
 		const startedAtMs = nowMs();
 		const observe = (
 			status: number,
@@ -833,7 +856,7 @@ export function createRxdbSyncEngine(
 		// plugin mirrors the delay into the error body as data.retry_after_seconds
 		// (free#1649) — read it only when the header is absent or unparseable, so
 		// a readable, valid header always wins on disagreement.
-		if (response.status >= 400 && parseRetryAfterMs(retryAfter, nowMs()) === null) {
+		if (response.status >= 400) {
 			// clone() first: on an unhydrated response (push lane) it leaves the
 			// real body untouched for downstream error handling. On a hydrated
 			// response the original body is already consumed and clone() itself
@@ -853,10 +876,20 @@ export function createRxdbSyncEngine(
 			} catch {
 				body = undefined; // Non-JSON error bodies (edge HTML) never affect telemetry.
 			}
-			const seconds = (body as { data?: { retry_after_seconds?: unknown } } | null | undefined)
-				?.data?.retry_after_seconds;
-			if (typeof seconds === 'number' && Number.isSafeInteger(seconds) && seconds >= 0) {
-				retryAfter = String(seconds);
+			if (parseRetryAfterMs(retryAfter, nowMs()) === null) {
+				const seconds = (body as { data?: { retry_after_seconds?: unknown } } | null | undefined)
+					?.data?.retry_after_seconds;
+				if (typeof seconds === 'number' && Number.isSafeInteger(seconds) && seconds >= 0) {
+					retryAfter = String(seconds);
+				}
+			}
+			// The deliberate upgrade refusal is keyed on the BODY code — hostile
+			// hosts strip response headers and middleboxes rewrite statuses, so
+			// the 426 stays advisory. Latch and tell the host exactly once.
+			const refusal = parseUpdateRequiredBody(body);
+			if (refusal !== null) {
+				updateRequiredRefusal = { status: response.status, body: JSON.stringify(body) };
+				ports.onUpdateRequired?.({ ...refusal, status: response.status });
 			}
 		}
 		observe(response.status, retryAfter, pressure, serverLoad1m);

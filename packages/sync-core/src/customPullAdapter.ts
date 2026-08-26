@@ -17,6 +17,7 @@ export type WirePullDocument = Pick<OrderDocument, 'payload' | 'sync' | 'local'>
 };
 
 type WirePullResponse = PullResponse<WirePullDocument>;
+type WirePullBody = Omit<WirePullResponse, 'hasMore'> & { hasMore?: boolean };
 
 type Fetcher = (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
 
@@ -64,8 +65,17 @@ export async function pullCustomBatch(input: {
 		throw new Error(`Custom pull failed: ${response.status}`);
 	}
 	const body = await response.text();
-	const parsed = JSON.parse(body) as WirePullResponse & { metrics?: ServerMetrics };
-	return { ...parsed, responseBytes: measuredResponseBytes(body) };
+	const parsed = JSON.parse(body) as WirePullBody & { metrics?: ServerMetrics };
+	// Dual-accept /orders/pull cutover #1752: old fields win; unified fields are fallbacks only.
+	// Delete the old arm only at a protocol bump after every supported plugin emits the new shape.
+	return {
+		...parsed,
+		hasMore: parsed.hasMore ?? (parsed.complete === undefined ? false : !parsed.complete),
+		epoch: parsed.epoch ?? parsed.checkpoint.epoch,
+		head: parsed.head ?? parsed.checkpoint.head,
+		horizon: parsed.horizon ?? parsed.checkpoint.horizon,
+		responseBytes: measuredResponseBytes(body),
+	};
 }
 
 export type CustomPullRepository = {
