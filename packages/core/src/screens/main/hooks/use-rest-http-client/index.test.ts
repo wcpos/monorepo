@@ -3,6 +3,8 @@
  */
 import { renderHook } from '@testing-library/react';
 
+import { clearUpdateRequired, currentUpdateRequired } from '@wcpos/utils/update-required-gate';
+
 import { useRestHttpClient } from './index';
 
 const mockRequest = jest.fn(
@@ -13,6 +15,9 @@ const mockRequest = jest.fn(
 	})
 );
 const mockSetOffline = jest.fn();
+const mockUseHttpClient = jest.fn(
+	(_handlers: unknown, _onUpdateRequired?: (details: unknown) => void) => ({ request: mockRequest })
+);
 const mockSite = {
 	incrementalPatch: jest.fn(),
 	use_jwt_as_param: false,
@@ -27,7 +32,8 @@ jest.mock('@wcpos/hooks/use-http-client', () => ({
 		getRefreshedToken: () => null,
 		setOffline: (...args: unknown[]) => mockSetOffline(...args),
 	},
-	useHttpClient: () => ({ request: mockRequest }),
+	useHttpClient: (handlers: unknown, onUpdateRequired?: (details: unknown) => void) =>
+		mockUseHttpClient(handlers, onUpdateRequired),
 }));
 jest.mock('@wcpos/hooks/use-http-client/create-token-refresh-handler', () => ({
 	createTokenRefreshHandler: () => jest.fn(),
@@ -66,11 +72,27 @@ function latestRequest(): Record<string, unknown> {
 describe('useRestHttpClient methods', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		clearUpdateRequired(mockSite.wp_api_url);
 		mockSite.use_jwt_as_param = false;
 		mockSite.use_rest_route_param = false;
 		mockSite.wcpos_version = '';
 		mockSite.wcpos_api_url = 'https://example.com/wp-json/wcpos/v2';
 		mockSite.wp_api_url = 'https://example.com/wp-json/';
+	});
+
+	it('wires Axios update-required refusals to the current site gate', () => {
+		renderHook(() => useRestHttpClient('orders'));
+
+		const onUpdateRequired = mockUseHttpClient.mock.calls.at(-1)?.[1];
+		expect(onUpdateRequired).toEqual(expect.any(Function));
+		if (!onUpdateRequired) throw new Error('update-required callback was not registered');
+		onUpdateRequired({ minProtocol: 2, pluginVersion: '1.11.0', status: 426 });
+
+		expect(currentUpdateRequired(mockSite.wp_api_url)).toEqual({
+			minProtocol: 2,
+			pluginVersion: '1.11.0',
+			status: 426,
+		});
 	});
 
 	it('composes a query-form axios base URL when query transport is enabled', async () => {

@@ -22,6 +22,7 @@ import {
 	PROTOCOL_QUERY_PARAM,
 	SYNC_PROTOCOL_VERSION,
 } from '@wcpos/utils/sync-protocol';
+import { reportUpdateRequired, type UpdateRequiredState } from '@wcpos/utils/update-required-gate';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -190,6 +191,11 @@ export const useRestHttpClient = (endpoint = '') => {
 		() => [tokenRefreshHandler, fallbackAuthHandler],
 		[tokenRefreshHandler, fallbackAuthHandler]
 	);
+	const onUpdateRequired = React.useCallback(
+		(details: Exclude<UpdateRequiredState, null>) =>
+			reportUpdateRequired(site.wp_api_url!, details),
+		[site.wp_api_url]
+	);
 
 	/**
 	 * Sync online status with the request state manager
@@ -203,7 +209,7 @@ export const useRestHttpClient = (endpoint = '') => {
 	/**
 	 *
 	 */
-	const httpClient = useHttpClient(errorHandlers);
+	const httpClient = useHttpClient(errorHandlers, onUpdateRequired);
 
 	/**
 	 * Main request function.

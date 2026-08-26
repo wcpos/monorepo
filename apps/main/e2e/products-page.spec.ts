@@ -321,7 +321,7 @@ test.describe('Products Page (Pro)', () => {
 			const cell = await editStockQuantityViaNumpad(page, rowTestId, '7');
 
 			// Optimistic outcome: green enqueue toast + the row renders the new value.
-			await expect(page.locator('[data-sonner-toast][data-type="success"]').first()).toBeVisible({
+			await expect(page.getByTestId('success-toast').first()).toBeVisible({
 				timeout: 15_000,
 			});
 			await expect(cell).toHaveText('7', { timeout: 15_000 });
@@ -624,7 +624,7 @@ test.describe('Products Page (Pro)', () => {
 
 			// …then the rejection surfaces as a red snackbar and the cell auto-reverts
 			// to server truth (#1082 ruling: reactive revert).
-			await expect(page.locator('[data-sonner-toast][data-type="error"]').first()).toBeVisible({
+			await expect(page.getByTestId('error-toast').first()).toBeVisible({
 				timeout: 30_000,
 			});
 			await expect(cell).toHaveText('0', { timeout: 30_000 });

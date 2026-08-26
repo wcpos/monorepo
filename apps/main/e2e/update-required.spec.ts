@@ -107,5 +107,5 @@ test('the gate refusal renders the blocking update screen and sync goes quiet', 
 	).toBeLessThanOrEqual(1);
 
 	// The screen is the surface — the refusal must not spray error toasts.
-	await expect(page.locator('[data-sonner-toast][data-type="error"]')).toHaveCount(0);
+	await expect(page.getByTestId('error-toast')).toHaveCount(0);
 });

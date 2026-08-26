@@ -594,7 +594,12 @@ export async function resolveScan(input: ResolveScanInput): Promise<ScanResult> 
 				body.match = {
 					id: parsed.match.id,
 					parent_id,
-					type: parent_id > 0 ? 'variation' : 'product',
+					type:
+						parsed.match.type === 'product' || parsed.match.type === 'variation'
+							? parsed.match.type
+							: parent_id > 0
+								? 'variation'
+								: 'product',
 					payload: parsed.match,
 				};
 			}

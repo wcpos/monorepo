@@ -159,6 +159,33 @@ describe('useHttpClient network audit logs', () => {
 		});
 	});
 
+	it('reports an update-required refusal before logging and rethrowing it', async () => {
+		const failure = Object.assign(new Error('update required'), {
+			response: {
+				status: 426,
+				data: {
+					code: 'wcpos_update_required',
+					message: 'This store requires a newer version of WCPOS.',
+					data: { status: 426, min_protocol: 2, plugin_version: '1.11.0' },
+				},
+			},
+		});
+		const onUpdateRequired = jest.fn();
+		(http.request as jest.Mock).mockRejectedValue(failure);
+		const { result } = renderHook(() => useHttpClient([], onUpdateRequired));
+
+		await expect(result.current.post('/wcpos/v2/orders', {})).rejects.toBe(failure);
+
+		expect(onUpdateRequired).toHaveBeenCalledWith({
+			minProtocol: 2,
+			pluginVersion: '1.11.0',
+			status: 426,
+		});
+		expect(onUpdateRequired.mock.invocationCallOrder[0]).toBeLessThan(
+			loggerMock.__error.mock.invocationCallOrder[0]
+		);
+	});
+
 	it('persists status zero for response-less transport failures', async () => {
 		const failure = new Error('network down');
 		(http.request as jest.Mock).mockRejectedValue(failure);

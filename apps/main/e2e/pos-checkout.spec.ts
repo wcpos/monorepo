@@ -201,7 +201,7 @@ test.describe('POS Cart - Order Actions', () => {
 			timeout: 30_000,
 		});
 		// Verify a success toast appeared (Sonner toast)
-		await expect(page.locator('[data-sonner-toast]').first()).toBeVisible({
+		await expect(page.getByTestId('success-toast').first()).toBeVisible({
 			timeout: 10_000,
 		});
 	});

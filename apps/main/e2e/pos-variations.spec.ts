@@ -210,7 +210,7 @@ test.describe('POS Variations', () => {
 		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 10_000 });
 
 		// Verify a success toast appeared
-		await expect(page.locator('[data-sonner-toast]').first()).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByTestId('success-toast').first()).toBeVisible({ timeout: 10_000 });
 	});
 
 	test('should show expand link on variable product name', async ({ posPage: page }) => {
@@ -260,7 +260,7 @@ test.describe('POS Variations', () => {
 		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 10_000 });
 
 		// Verify a success toast appeared
-		await expect(page.locator('[data-sonner-toast]').first()).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByTestId('success-toast').first()).toBeVisible({ timeout: 10_000 });
 	});
 
 	test('should collapse expanded variable product row', async ({ posPage: page }) => {

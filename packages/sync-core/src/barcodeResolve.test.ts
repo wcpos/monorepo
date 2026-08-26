@@ -382,6 +382,24 @@ describe('resolveScan online outcomes', () => {
 		});
 	});
 
+	it.each([
+		['product', 3],
+		['variation', 0],
+	] as const)('preserves an explicit %s type on a bare match', async (type, parent_id) => {
+		const bare = { id: 7, parent_id, type, name: 'Explicit type wins' };
+		const result = await resolveScan(
+			scanInput({
+				code: 'EXPLICIT',
+				fetcher: async () => jsonResponse({ ...resolveResponse(), found: true, match: bare }),
+			})
+		);
+
+		expect(result).toMatchObject({
+			outcome: 'online',
+			match: { id: 7, parent_id, type, payload: bare },
+		});
+	});
+
 	it('uses payload and explicit ambiguous type first in mixed entries', async () => {
 		const match = { id: 7, parent_id: 0, type: 'product' as const, payload: { id: 70 } };
 		const result = await resolveScan(
