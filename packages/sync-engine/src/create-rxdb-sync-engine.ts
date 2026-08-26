@@ -851,31 +851,28 @@ export function createRxdbSyncEngine(
 			// A host fetch stub may hand back a header-less object; never let
 			// telemetry break a real response.
 		}
+		// clone() first: on an unhydrated response (push lane) it leaves the real
+		// body untouched downstream. On a hydrated response the original body is
+		// already consumed and clone() throws, so the proxy's memoized json() is
+		// the safe read.
+		let body: unknown;
+		let cloned: Response | null = null;
+		try {
+			cloned = response.clone();
+		} catch {
+			cloned = null;
+		}
+		try {
+			body = cloned ? await cloned.json() : await response.json();
+		} catch {
+			body = undefined;
+		}
 		// B10 (wcpos-infra#72): hostile hosts strip Access-Control-Expose-Headers,
 		// blinding web clients to Retry-After even when the wire carries it. The
 		// plugin mirrors the delay into the error body as data.retry_after_seconds
 		// (free#1649) — read it only when the header is absent or unparseable, so
 		// a readable, valid header always wins on disagreement.
 		if (response.status >= 400) {
-			// clone() first: on an unhydrated response (push lane) it leaves the
-			// real body untouched for downstream error handling. On a hydrated
-			// response the original body is already consumed and clone() itself
-			// throws — there the proxy's memoized json() is the safe read. The
-			// original is read ONLY when clone() threw: a clone whose json()
-			// rejects (malformed push body) must not trigger a read that consumes
-			// the real stream downstream error handling still needs.
-			let body: unknown;
-			let cloned: Response | null = null;
-			try {
-				cloned = response.clone();
-			} catch {
-				cloned = null;
-			}
-			try {
-				body = cloned ? await cloned.json() : await response.json();
-			} catch {
-				body = undefined; // Non-JSON error bodies (edge HTML) never affect telemetry.
-			}
 			if (parseRetryAfterMs(retryAfter, nowMs()) === null) {
 				const seconds = (body as { data?: { retry_after_seconds?: unknown } } | null | undefined)
 					?.data?.retry_after_seconds;
@@ -883,25 +880,28 @@ export function createRxdbSyncEngine(
 					retryAfter = String(seconds);
 				}
 			}
-			// The deliberate upgrade refusal is keyed on the BODY code — hostile
-			// hosts strip response headers and middleboxes rewrite statuses
-			// within the error family, so the 426 stays advisory. (A rewrite all
-			// the way to 2xx is out of scope on purpose: catching it would mean
-			// parsing every successful body on the hot path, and a refusal body
-			// under a 200 already fails shape parsing downstream rather than
-			// corrupting data.) The null re-check makes the latch-and-notify
-			// exactly-once under concurrent in-flight refusals — both requests
-			// pass the short-circuit above, but only the first one landing here
-			// tells the host.
-			const refusal = parseUpdateRequiredBody(body);
-			if (refusal !== null && updateRequiredRefusal === null) {
-				updateRequiredRefusal = { status: response.status, body: JSON.stringify(body) };
-				ports.onUpdateRequired?.({ ...refusal, status: response.status });
-			}
+		}
+		// The deliberate upgrade refusal is keyed on the body code; status is
+		// advisory because middleboxes may rewrite it. The null re-check keeps
+		// latch-and-notify exactly-once for concurrent in-flight refusals.
+		const refusal = parseUpdateRequiredBody(body);
+		if (refusal !== null && updateRequiredRefusal === null) {
+			updateRequiredRefusal = { status: response.status, body: JSON.stringify(body) };
+			ports.onUpdateRequired?.({ ...refusal, status: response.status });
 		}
 		observe(response.status, retryAfter, pressure, serverLoad1m);
 		return response;
 	};
+	const rawQueryTotal = ports.queryTotal;
+	const queryTotal =
+		rawQueryTotal === undefined
+			? undefined
+			: {
+					fetchWooQueryTotal: async (
+						input: Parameters<QueryTotalPort['fetchWooQueryTotal']>[0]
+					): Promise<number | null> =>
+						updateRequiredRefusal === null ? rawQueryTotal.fetchWooQueryTotal(input) : null,
+				};
 	const hostTransport: EngineHostTransport = Object.freeze({
 		syncBaseUrl: ports.site.syncBaseUrl,
 		fetcher,
@@ -1803,7 +1803,7 @@ export function createRxdbSyncEngine(
 		withCollectionActivity,
 		ownerId: () => (maintenanceOwnerId ??= `engine-${uuid()}`),
 		pullBatchSize: () => cadence?.pullBatchSize(),
-		...(ports.queryTotal !== undefined ? { queryTotal: ports.queryTotal } : {}),
+		...(queryTotal !== undefined ? { queryTotal } : {}),
 		censusFreshForMs: intervals.censusFreshForMs,
 		customerTrickleStateFor: (scopeId) => ({
 			get: (key) => readBlob(scopeId, key),

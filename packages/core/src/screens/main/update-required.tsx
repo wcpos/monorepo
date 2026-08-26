@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
@@ -8,6 +8,7 @@ import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { getErrorCodeDocURL } from '@wcpos/utils/logger/constants';
+import { Platform } from '@wcpos/utils/platform';
 
 import { useAppState } from '../../contexts/app-state';
 import { useT } from '../../contexts/translations';
@@ -46,7 +47,7 @@ export function UpdateRequired() {
 					{t('common.learn_more', { _tags: 'core' })}
 				</DocsLink>
 				<HStack className="justify-center p-2">
-					{Platform.OS === 'web' ? (
+					{Platform.isWeb ? (
 						<Button testID="update-required-reload" onPress={() => window.location.reload()}>
 							<ButtonText>{t('common.reload', { _tags: 'core' })}</ButtonText>
 						</Button>

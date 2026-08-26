@@ -48,6 +48,10 @@ const siteData = {
 	_links: {},
 };
 
+const siteRequestOptions = {
+	params: { wcpos: 1, wcpos_protocol: 2, wcpos_client: 'web/0.0.0' },
+	timeout: 15_000,
+};
 const requestOptions = { params: { wcpos: 1 }, timeout: 15_000 };
 
 describe('useApiDiscovery', () => {
@@ -69,7 +73,7 @@ describe('useApiDiscovery', () => {
 			});
 		});
 
-		expect(mockGet).toHaveBeenCalledWith(lightApiUrl, requestOptions);
+		expect(mockGet).toHaveBeenCalledWith(lightApiUrl, siteRequestOptions);
 		expect(mockGet).not.toHaveBeenCalledWith(wpApiUrl, expect.anything());
 	});
 
@@ -89,7 +93,7 @@ describe('useApiDiscovery', () => {
 		expect(mockGet).toHaveBeenNthCalledWith(
 			1,
 			'https://example.com/wp-json/wcpos/v2/site',
-			requestOptions
+			siteRequestOptions
 		);
 		expect(mockGet).toHaveBeenNthCalledWith(2, wpApiUrl, requestOptions);
 	});

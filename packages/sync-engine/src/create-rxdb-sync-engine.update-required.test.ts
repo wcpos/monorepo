@@ -9,7 +9,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
-import { createRxdbSyncEngine } from './create-rxdb-sync-engine';
+import { createRxdbSyncEngine, type RxdbSyncEnginePorts } from './create-rxdb-sync-engine';
 import { memoryEngineStorage } from './testing';
 
 setPremiumFlag();
@@ -24,16 +24,25 @@ const REFUSAL = {
 	data: { status: 426, min_protocol: 2, server_protocol: 2, plugin_version: '1.11.0' },
 };
 
-async function buildEngine(scripted: Map<string, Response>) {
+async function buildEngine(
+	scripted: Map<string, Response | Response[] | (() => Promise<Response>)>,
+	ports?: Pick<RxdbSyncEnginePorts, 'queryTotal'>
+) {
 	uniqueStore += 1;
 	// Scripted per-route; anything else (engine boot traffic) gets a benign
 	// empty page, so the tests assert on the routes they drive, not on the
 	// engine's incidental request count.
 	const fetch = vi.fn(async (url: string) => {
-		for (const [needle, response] of scripted) {
+		for (const [needle, scriptedResponse] of scripted) {
 			if (url.includes(needle)) {
-				scripted.delete(needle);
-				return response;
+				if (typeof scriptedResponse === 'function') return scriptedResponse();
+				const response = Array.isArray(scriptedResponse)
+					? scriptedResponse.shift()
+					: scriptedResponse;
+				if (!Array.isArray(scriptedResponse) || scriptedResponse.length === 0) {
+					scripted.delete(needle);
+				}
+				if (response) return response;
 			}
 		}
 		return new Response(JSON.stringify([]), {
@@ -49,6 +58,7 @@ async function buildEngine(scripted: Map<string, Response>) {
 			mode: 'manual',
 			fetcher: fetch,
 			onUpdateRequired,
+			...ports,
 		},
 		{ site: SITE, storeId: 1, cashierId: `gate-${uniqueStore}` }
 	);
@@ -96,17 +106,55 @@ describe('update-required latch', () => {
 		await engine.dispose();
 	});
 
+	it('tells the host once when concurrent in-flight requests are refused', async () => {
+		let arrivals = 0;
+		let release!: () => void;
+		const bothRequestsArrived = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const scripted = new Map<string, Response | Response[] | (() => Promise<Response>)>();
+		const { engine, onUpdateRequired } = await buildEngine(scripted);
+		scripted.set('/changes/', async () => {
+			arrivals += 1;
+			if (arrivals === 2) release();
+			await bothRequestsArrived;
+			return jsonResponse(REFUSAL, 426);
+		});
+
+		await Promise.all([
+			engine.hostTransport().fetcher(`${SYNC_BASE}/changes/products`),
+			engine.hostTransport().fetcher(`${SYNC_BASE}/changes/orders`),
+		]);
+		expect(onUpdateRequired).toHaveBeenCalledTimes(1);
+
+		await engine.dispose();
+	});
+
 	it('recognizes the refusal by body code even when a middlebox rewrote the status', async () => {
 		const { engine, fetch, onUpdateRequired } = await buildEngine(
-			new Map([['/changes/tick', jsonResponse({ code: 'wcpos_update_required' }, 403)]])
+			new Map([['/changes/tick', jsonResponse({ code: 'wcpos_update_required' }, 200)]])
 		);
 
 		await engine.hostTransport().fetcher(`${SYNC_BASE}/changes/tick`);
-		expect(onUpdateRequired).toHaveBeenCalledWith({ status: 403 });
+		expect(onUpdateRequired).toHaveBeenCalledWith({ status: 200 });
 
 		const replay = await engine.hostTransport().fetcher(`${SYNC_BASE}/products`);
-		expect(replay.status).toBe(403);
+		expect(replay.status).toBe(200);
 		expect(callsTo(fetch, '/products')).toBe(0);
+
+		await engine.dispose();
+	});
+
+	it('does not call the query-total host port after the refusal latches', async () => {
+		const fetchWooQueryTotal = vi.fn(async () => 40);
+		const { engine } = await buildEngine(new Map([['/changes/tick', jsonResponse(REFUSAL, 426)]]), {
+			queryTotal: { fetchWooQueryTotal },
+		});
+
+		await engine.hostTransport().fetcher(`${SYNC_BASE}/changes/tick`);
+		fetchWooQueryTotal.mockClear();
+		await engine.sync('query-total-retry');
+		expect(fetchWooQueryTotal).not.toHaveBeenCalled();
 
 		await engine.dispose();
 	});
