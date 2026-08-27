@@ -22,6 +22,7 @@ const mockSite = {
 	incrementalPatch: jest.fn(),
 	use_jwt_as_param: false,
 	use_rest_route_param: false,
+	use_protocol_headers: false,
 	wcpos_version: '',
 	wcpos_api_url: 'https://example.com/wp-json/wcpos/v2',
 	wp_api_url: 'https://example.com/wp-json/',
@@ -75,6 +76,7 @@ describe('useRestHttpClient methods', () => {
 		clearUpdateRequired(mockSite.wp_api_url);
 		mockSite.use_jwt_as_param = false;
 		mockSite.use_rest_route_param = false;
+		mockSite.use_protocol_headers = false;
 		mockSite.wcpos_version = '';
 		mockSite.wcpos_api_url = 'https://example.com/wp-json/wcpos/v2';
 		mockSite.wp_api_url = 'https://example.com/wp-json/';
@@ -106,6 +108,20 @@ describe('useRestHttpClient methods', () => {
 			url: '/42',
 			params: { page: 2, wcpos_protocol: 2, wcpos_client: 'web/0.0.0' },
 		});
+	});
+
+	it('uses protocol headers and omits protocol params on capable web sites', async () => {
+		mockSite.use_protocol_headers = true;
+		const { result } = renderHook(() => useRestHttpClient('orders'));
+
+		await result.current.get('/42', { params: { page: 2 } });
+
+		expect(latestRequest()).toMatchObject({
+			protocolHeaders: true,
+			params: { page: 2 },
+		});
+		expect(latestRequest().params).not.toHaveProperty('wcpos_protocol');
+		expect(latestRequest().params).not.toHaveProperty('wcpos_client');
 	});
 
 	it('never composes a double slash from a trailing-slash stored base in query mode', async () => {

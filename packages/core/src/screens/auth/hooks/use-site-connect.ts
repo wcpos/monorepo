@@ -61,6 +61,7 @@ interface ExtendedSiteData extends WpJsonResponse {
 	wcpos_login_url: string;
 	use_jwt_as_param: boolean;
 	use_rest_route_param: boolean;
+	use_protocol_headers: boolean;
 }
 
 export type SiteConnectStatus =
@@ -137,6 +138,7 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 					...endpoints,
 					use_jwt_as_param: authResult.useJwtAsParam,
 					use_rest_route_param: authResult.useRestRouteParam,
+					use_protocol_headers: authResult.useProtocolHeaders,
 				};
 
 				// Parse and validate the data using the database schema

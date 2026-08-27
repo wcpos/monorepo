@@ -89,6 +89,7 @@ function AppStack() {
 		site,
 		(value) => value.use_rest_route_param
 	) as boolean;
+	const useProtocolHeaders = useDocField(site, (value) => value.use_protocol_headers) as boolean;
 	const useRestRouteParam =
 		resolveRestTransport({
 			wp_api_url: wpApiUrl,
@@ -119,6 +120,7 @@ function AppStack() {
 				useJwtAsParam,
 				useRestRouteParam,
 				bareAuthParam,
+				useProtocolHeaders,
 				refreshAuth: (context) =>
 					refreshAccessToken({
 						site: {
@@ -128,6 +130,7 @@ function AppStack() {
 							wp_api_url: wpApiUrl,
 							use_jwt_as_param: useJwtAsParam,
 							use_rest_route_param: useRestRouteParamField,
+							use_protocol_headers: useProtocolHeaders,
 						},
 						wpUser: wpCredentials,
 						getHttpClient: createRefreshHttpClient,
@@ -145,6 +148,7 @@ function AppStack() {
 			useRestRouteParam,
 			useRestRouteParamField,
 			bareAuthParam,
+			useProtocolHeaders,
 			wpCredentials,
 			t,
 		]

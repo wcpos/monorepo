@@ -10,6 +10,7 @@ import {
 	type ErrorCode,
 } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { Platform } from '@wcpos/utils/platform';
+import { protocolHeadersSupported } from '@wcpos/utils/sync-protocol';
 import {
 	deriveSyntheticPathBase,
 	deriveSyntheticPathRoot,
@@ -188,16 +189,19 @@ async function testParamAuth(
 interface HeaderEchoResult {
 	headers: Record<string, { received?: boolean; length?: number }>;
 	params: Record<string, boolean>;
+	cors?: { reflects_request_headers?: boolean };
 }
 
 function parseHeaderEcho(data: unknown): HeaderEchoResult | null {
 	const candidate = data as
-		| (HeaderEchoResult & {
+		| (Omit<HeaderEchoResult, 'cors'> & {
 				v?: unknown;
 				headers: Record<string, { received?: unknown }>;
+				cors?: unknown;
 		  })
 		| null;
-	return candidate &&
+	const parsed =
+		candidate &&
 		candidate.v === 1 &&
 		typeof candidate.headers === 'object' &&
 		candidate.headers !== null &&
@@ -205,8 +209,23 @@ function parseHeaderEcho(data: unknown): HeaderEchoResult | null {
 		candidate.params !== null &&
 		typeof candidate.headers.authorization?.received === 'boolean' &&
 		typeof candidate.params.authorization === 'boolean'
-		? (candidate as HeaderEchoResult)
-		: null;
+			? (candidate as HeaderEchoResult)
+			: null;
+	if (!parsed) return null;
+
+	const result: HeaderEchoResult = { headers: parsed.headers, params: parsed.params };
+	const cors = (candidate as { cors?: unknown }).cors;
+	if (
+		typeof cors === 'object' &&
+		cors !== null &&
+		typeof (cors as { reflects_request_headers?: unknown }).reflects_request_headers === 'boolean'
+	) {
+		result.cors = {
+			reflects_request_headers: (cors as { reflects_request_headers: boolean })
+				.reflects_request_headers,
+		};
+	}
+	return result;
 }
 
 interface EchoAnsweredVerdict {
@@ -219,7 +238,12 @@ interface EchoAnsweredVerdict {
 type EchoProbeVerdict = HeaderEchoResult | EchoAnsweredVerdict | null;
 
 export type AuthTransportResolution =
-	| { ok: true; useJwtAsParam: boolean; useRestRouteParam: boolean }
+	| {
+			ok: true;
+			useJwtAsParam: boolean;
+			useRestRouteParam: boolean;
+			useProtocolHeaders: boolean;
+	  }
 	| { ok: false; code: ErrorCode | null };
 
 /**
@@ -231,6 +255,24 @@ export type AuthTransportResolution =
  * Classifies valid echo replies, HTTP answers, and transport-dead responses so
  * the caller can distinguish an old server from a blocked REST spelling.
  */
+/**
+ * The lowercase names of every header probeHeaderEcho SENDS (keep in step with
+ * the fetch call below). The echo reports the server's whole allow-list floor,
+ * which can include names the probe never sent (e.g. the protocol signal
+ * headers) — those report `received: false` on a perfectly healthy store, so
+ * dead-header reasoning must only ever consider names in this set.
+ */
+const ECHO_PROBE_SENT_HEADERS: readonly string[] = [
+	'authorization',
+	'content-type',
+	'x-wcpos',
+	'x-wcpos-store',
+	'idempotency-key',
+	'if-match',
+	'if-none-match',
+	'x-wcpos-idempotency-key',
+];
+
 async function probeHeaderEcho(
 	echoUrl: string,
 	accessToken: string,
@@ -257,6 +299,8 @@ async function probeHeaderEcho(
 			url.toString(),
 			{
 				method: 'GET',
+				// Adding a header here? Add its lowercase name to
+				// ECHO_PROBE_SENT_HEADERS above, or it reads as dead.
 				headers: {
 					Authorization: `Bearer ${accessToken}`,
 					'Content-Type': 'application/json',
@@ -560,8 +604,14 @@ export async function testAuthorizationMethod(
 		const pingUrl = pingProbeUrl(pathRoot);
 		const simpleEchoUrl = queryOnly ? queryEchoUrl : pathEchoUrl;
 		if (echo) {
+			const useProtocolHeaders = protocolHeadersSupported(echo);
+			// Only names the probe actually sent can be dead — the map also
+			// carries the rest of the server's floor, which arrives
+			// `received: false` on every healthy store.
 			const deadHeaders = Object.entries(echo.headers)
-				.filter(([, state]) => state?.received !== true)
+				.filter(
+					([name, state]) => ECHO_PROBE_SENT_HEADERS.includes(name) && state?.received !== true
+				)
 				.map(([name]) => name);
 			if (deadHeaders.length > 0) {
 				appLogger.warn('Some POS request headers do not reach this server', {
@@ -574,10 +624,10 @@ export async function testAuthorizationMethod(
 				context: { wcposApiUrl, headerAuthArrives, paramAuthArrives, deadHeaders },
 			});
 			if (headerAuthArrives) {
-				return { ok: true, useJwtAsParam: false, useRestRouteParam };
+				return { ok: true, useJwtAsParam: false, useRestRouteParam, useProtocolHeaders };
 			}
 			if (paramAuthArrives) {
-				return { ok: true, useJwtAsParam: true, useRestRouteParam };
+				return { ok: true, useJwtAsParam: true, useRestRouteParam, useProtocolHeaders };
 			}
 			// Both credential channels are blocked — the probe measured this
 			// authoritatively, so the legacy test would only fail slower.
@@ -631,7 +681,12 @@ export async function testAuthorizationMethod(
 				},
 			});
 
-			return { ok: true, useJwtAsParam: false, useRestRouteParam };
+			return {
+				ok: true,
+				useJwtAsParam: false,
+				useRestRouteParam,
+				useProtocolHeaders: false,
+			};
 		}
 
 		appLogger.debug('Authorization method test results', {
@@ -647,7 +702,12 @@ export async function testAuthorizationMethod(
 			appLogger.warn('Server does not support Authorization headers, using query parameters', {
 				context: { wcposApiUrl },
 			});
-			return { ok: true, useJwtAsParam: true, useRestRouteParam };
+			return {
+				ok: true,
+				useJwtAsParam: true,
+				useRestRouteParam,
+				useProtocolHeaders: false,
+			};
 		}
 		if (legacy.statuses?.[0] === 400 && legacy.statuses[1] === 414) {
 			return finishHostBlock(wcposApiUrl, pingUrl, simpleEchoUrl, {
@@ -964,58 +1024,90 @@ const processInitialPropsStep: HydrationStep = {
 };
 
 /**
- * Step 3: Test authorization method (web only, WordPress embedded mode)
- * Some servers block Authorization headers, so we need to test if query parameters work instead
- * This step is skipped in standalone mode where initialProps is null
+ * Step 3: Test authorization method (web only)
+ * Some servers block Authorization headers or reject transports at CORS, so
+ * the probe ladder runs every web boot and persists the per-site transport
+ * flags. Embedded mode reads the boot payload; standalone mode resolves the
+ * current session's site from the user DB (the same lookup
+ * HYDRATE_USER_SESSION performs afterwards). Running on BOTH web modes is
+ * what lets a stale verdict — including `use_protocol_headers` after a
+ * plugin downgrade — self-correct at the next reload; standalone is the
+ * cross-origin deployment where that matters.
  */
 const testAuthorizationStep: HydrationStep = {
 	name: 'TEST_AUTHORIZATION',
 	message: 'Testing authorization...',
 	progressIncrement: 10,
-	shouldExecute: (context) => Platform.isWeb && !!context.initialProps?.site,
+	// Fail-soft: this step only refreshes per-site transport flags — the app
+	// boots fine on the previously persisted (or default, conservative)
+	// values, so an optional probe must never wedge hydration into the
+	// splash-retry loop. A throw skips persistence, which is the same
+	// no-write outcome as an ok:false verdict.
+	failSoft: true,
+	shouldExecute: () => Platform.isWeb,
 	execute: async (context) => {
-		if (!context.initialProps || !context.userDB) {
+		if (!context.userDB) {
 			return {};
 		}
 
-		const { initialProps, userDB } = context;
-		const initialSite = initialProps.site;
-		const wcposApiUrl = initialSite?.wcpos_api_url;
-		const accessToken = initialProps.wp_credentials?.access_token;
+		const { userDB } = context;
+		let siteUuid: string | undefined;
+		let wcposApiUrl: string | undefined;
+		let wpApiUrl: string | undefined;
+		let wcposVersion: string | undefined;
+		let accessToken: string | undefined;
+
+		const initialSite = context.initialProps?.site;
+		if (initialSite) {
+			siteUuid = initialSite.uuid;
+			wcposApiUrl = initialSite.wcpos_api_url;
+			wpApiUrl = typeof initialSite.wp_api_url === 'string' ? initialSite.wp_api_url : undefined;
+			wcposVersion = initialSite.wcpos_version;
+			accessToken = context.initialProps?.wp_credentials?.access_token;
+		} else if (context.appState) {
+			const current = await context.appState.get('current');
+			if (current?.siteID) {
+				const siteDoc = await userDB.sites.findOne(current.siteID).exec();
+				const wpCredentials = current.wpCredentialsID
+					? await userDB.wp_credentials.findOne(current.wpCredentialsID).exec()
+					: null;
+				siteUuid = siteDoc?.uuid;
+				wcposApiUrl = siteDoc?.wcpos_api_url;
+				wpApiUrl = typeof siteDoc?.wp_api_url === 'string' ? siteDoc.wp_api_url : undefined;
+				wcposVersion = siteDoc?.wcpos_version;
+				accessToken = wpCredentials?.access_token;
+			}
+		}
 
 		// The uuid guard also keeps the write below off `findOne(undefined)`,
 		// which RxDB resolves to an arbitrary document — a payload without a
 		// site uuid would otherwise patch `use_jwt_as_param` onto the wrong site.
-		if (!initialSite?.uuid || !wcposApiUrl || !accessToken) {
+		if (!siteUuid || !wcposApiUrl || !accessToken) {
 			appLogger.debug(
 				'Skipping authorization test - missing site uuid, wcpos_api_url or access_token'
 			);
 			return {};
 		}
 
-		const result = await testAuthorizationMethod(
-			wcposApiUrl,
-			accessToken,
-			initialSite.wcpos_version,
-			typeof initialSite.wp_api_url === 'string' ? initialSite.wp_api_url : undefined
-		);
+		const result = await testAuthorizationMethod(wcposApiUrl, accessToken, wcposVersion, wpApiUrl);
 
 		if (result.ok) {
 			/**
-			 * Write the outcome both ways. The embedded payload never carries
-			 * `use_jwt_as_param`, and the site write above merges rather than
+			 * Write every transport outcome both ways. The embedded payload never
+			 * carries these local flags, and the site write above merges rather than
 			 * overwrites (#902), so a stale `true` from an earlier session would
-			 * otherwise keep JWTs in the query string forever.
+			 * otherwise keep the prior transport forever.
 			 */
-			const siteDoc = await userDB.sites.findOne(initialSite.uuid).exec();
+			const siteDoc = await userDB.sites.findOne(siteUuid).exec();
 			if (siteDoc) {
 				await siteDoc.getLatest().incrementalPatch({
 					use_jwt_as_param: !!result.useJwtAsParam,
 					use_rest_route_param: !!result.useRestRouteParam,
+					use_protocol_headers: !!result.useProtocolHeaders,
 				});
 				if (result.useJwtAsParam) {
 					appLogger.info('Site configured to use JWT as query parameter', {
-						context: { siteId: initialSite.uuid },
+						context: { siteId: siteUuid },
 					});
 				}
 			}

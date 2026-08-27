@@ -13,6 +13,8 @@ import {
 	formatClientSignal,
 	PROTOCOL_HEADER,
 	PROTOCOL_QUERY_PARAM,
+	sendsProtocolHeaders,
+	sendsProtocolQueryTwins,
 	SYNC_PROTOCOL_VERSION,
 } from '@wcpos/utils/sync-protocol';
 
@@ -42,6 +44,7 @@ export interface RefreshAccessTokenConfig {
 		wp_api_url?: string;
 		use_jwt_as_param?: boolean;
 		use_rest_route_param?: boolean;
+		use_protocol_headers?: boolean;
 		wcpos_version?: string;
 		url?: string;
 	};
@@ -141,11 +144,14 @@ export async function refreshAccessToken({
 						? toRestRouteUrl(pathUrl, deriveSyntheticPathRoot(site.wp_api_url))
 						: pathUrl;
 				const signaledRefreshUrl = new URL(refreshUrl);
-				signaledRefreshUrl.searchParams.set(PROTOCOL_QUERY_PARAM, String(SYNC_PROTOCOL_VERSION));
-				signaledRefreshUrl.searchParams.set(
-					CLIENT_QUERY_PARAM,
-					formatClientSignal(AppInfo.platform, AppInfo.version)
-				);
+				const useProtocolHeaders = site.use_protocol_headers ?? false;
+				if (sendsProtocolQueryTwins(AppInfo.platform, useProtocolHeaders)) {
+					signaledRefreshUrl.searchParams.set(PROTOCOL_QUERY_PARAM, String(SYNC_PROTOCOL_VERSION));
+					signaledRefreshUrl.searchParams.set(
+						CLIENT_QUERY_PARAM,
+						formatClientSignal(AppInfo.platform, AppInfo.version)
+					);
+				}
 				const response = await getHttpClient().post(
 					signaledRefreshUrl.toString(),
 					{ refresh_token: refreshToken },
@@ -155,7 +161,7 @@ export async function refreshAccessToken({
 					{
 						headers: {
 							'X-WCPOS': '1',
-							...(AppInfo.platform !== 'web'
+							...(sendsProtocolHeaders(AppInfo.platform, useProtocolHeaders)
 								? {
 										[PROTOCOL_HEADER]: String(SYNC_PROTOCOL_VERSION),
 										[CLIENT_HEADER]: formatClientSignal(AppInfo.platform, AppInfo.version),

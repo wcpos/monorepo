@@ -33,6 +33,7 @@ function makeConfig(
 		wcpos_api_url?: string;
 		wp_api_url?: string;
 		use_rest_route_param?: boolean;
+		use_protocol_headers?: boolean;
 	} = {
 		wcpos_api_url: 'https://example.test/wp-json/wcpos/v2/',
 	}
@@ -116,6 +117,25 @@ describe('refreshAccessToken', () => {
 			AppInfo.platform = webPlatform;
 			AppInfo.userAgentHeader = webUserAgentHeader;
 		}
+	});
+
+	it('uses protocol headers and omits protocol params on capable web sites', async () => {
+		const post = jest.fn().mockResolvedValue({
+			data: { access_token: 'new-token', expires_at: 9999 },
+			status: 200,
+		});
+		const { config } = makeConfig(post, {
+			wcpos_api_url: 'https://example.test/wp-json/wcpos/v2/',
+			use_protocol_headers: true,
+		});
+
+		await refreshAccessToken(config);
+
+		const [refreshUrl, , requestConfig] = post.mock.calls[0];
+		expect(new URL(refreshUrl).searchParams.has('wcpos_protocol')).toBe(false);
+		expect(new URL(refreshUrl).searchParams.has('wcpos_client')).toBe(false);
+		expect(requestConfig.headers['X-WCPOS-Protocol']).toBe('2');
+		expect(requestConfig.headers['X-WCPOS-Client']).toBe(`web/${AppInfo.version}`);
 	});
 
 	it('returns null and marks authentication failed when refresh fails', async () => {

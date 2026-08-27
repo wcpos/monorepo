@@ -18,6 +18,8 @@ import {
 	formatClientSignal,
 	PROTOCOL_HEADER,
 	PROTOCOL_QUERY_PARAM,
+	sendsProtocolHeaders,
+	sendsProtocolQueryTwins,
 	SYNC_PROTOCOL_VERSION,
 } from '@wcpos/utils/sync-protocol';
 
@@ -67,9 +69,10 @@ export type EngineFetcherAuth = {
 	refreshAuth?: (context?: { operationId?: string }) => Promise<string | null>;
 	useJwtAsParam?: boolean;
 	bareAuthParam?: boolean;
-	/** Rides the same live-options ref as the auth flags: cache hits mutate it
+	/** These ride the same live-options ref as the auth flags: cache hits mutate it
 	 * in place, so a probe-driven transport flip reaches the cached fetcher. */
 	useRestRouteParam?: boolean;
+	useProtocolHeaders?: boolean;
 };
 
 export type ClockSkewGate = { generation: number; evaluated: boolean };
@@ -182,9 +185,7 @@ export function createEngineFetcher(input: {
 			// (woocommerce_pos_request()) — without this header every sync route
 			// answers rest_no_route and the engine stays degraded-empty.
 			headers.set('X-WCPOS', '1');
-			if (AppInfo.platform !== 'web') {
-				// The fleet's static CORS allow-list lacks these headers; web rides
-				// the query channel until released plugins allow-list them.
+			if (sendsProtocolHeaders(AppInfo.platform, input.auth.useProtocolHeaders)) {
 				headers.set(PROTOCOL_HEADER, String(SYNC_PROTOCOL_VERSION));
 				headers.set(CLIENT_HEADER, formatClientSignal(AppInfo.platform, AppInfo.version));
 			}
@@ -231,11 +232,13 @@ export function createEngineFetcher(input: {
 			// marker delivery never depends on header survival (B7,
 			// wcpos-infra#72; prerequisite for B12's strict marker gating).
 			parsedUrl.searchParams.set('wcpos', '1');
-			parsedUrl.searchParams.set(PROTOCOL_QUERY_PARAM, String(SYNC_PROTOCOL_VERSION));
-			parsedUrl.searchParams.set(
-				CLIENT_QUERY_PARAM,
-				formatClientSignal(AppInfo.platform, AppInfo.version)
-			);
+			if (sendsProtocolQueryTwins(AppInfo.platform, input.auth.useProtocolHeaders)) {
+				parsedUrl.searchParams.set(PROTOCOL_QUERY_PARAM, String(SYNC_PROTOCOL_VERSION));
+				parsedUrl.searchParams.set(
+					CLIENT_QUERY_PARAM,
+					formatClientSignal(AppInfo.platform, AppInfo.version)
+				);
+			}
 			// Scope parity with the X-WCPOS-Store header set above: the server
 			// honours the store_id param only when NO header arrived (free#1646 —
 			// a stripping proxy produces absence; a sent header always wins), so

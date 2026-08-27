@@ -20,6 +20,7 @@ import {
 	CLIENT_QUERY_PARAM,
 	formatClientSignal,
 	PROTOCOL_QUERY_PARAM,
+	sendsProtocolQueryTwins,
 	SYNC_PROTOCOL_VERSION,
 } from '@wcpos/utils/sync-protocol';
 import { reportUpdateRequired, type UpdateRequiredState } from '@wcpos/utils/update-required-gate';
@@ -246,6 +247,7 @@ export const useRestHttpClient = (endpoint = '') => {
 				['initialProps', 'site', 'use_jwt_as_param'],
 				site.use_jwt_as_param
 			);
+			const useProtocolHeaders = site.use_protocol_headers ?? false;
 			const wcposVersion = site.wcpos_version;
 
 			let apiURL = site.wcpos_api_url;
@@ -270,10 +272,16 @@ export const useRestHttpClient = (endpoint = '') => {
 						? toRestRouteUrl(pathFormBaseURL, pathFormRoot)
 						: pathFormBaseURL,
 				headers: shouldUseJwtAsParam ? {} : { Authorization: `Bearer ${jwt}` },
-				params: {
-					[PROTOCOL_QUERY_PARAM]: SYNC_PROTOCOL_VERSION,
-					[CLIENT_QUERY_PARAM]: formatClientSignal(AppInfo.platform, AppInfo.version),
-				},
+				// The interceptor owns the platform rule (sendsProtocolHeaders); this
+				// just relays the per-site verdict — inert on native, where the
+				// interceptor sends the headers regardless.
+				protocolHeaders: useProtocolHeaders ? true : undefined,
+				params: sendsProtocolQueryTwins(AppInfo.platform, useProtocolHeaders)
+					? {
+							[PROTOCOL_QUERY_PARAM]: SYNC_PROTOCOL_VERSION,
+							[CLIENT_QUERY_PARAM]: formatClientSignal(AppInfo.platform, AppInfo.version),
+						}
+					: {},
 			};
 
 			if (shouldUseJwtAsParam) {

@@ -68,6 +68,7 @@ export interface CreateAppSyncEngineOptions {
 	useJwtAsParam?: boolean;
 	useRestRouteParam: boolean;
 	bareAuthParam?: boolean;
+	useProtocolHeaders?: boolean;
 	/**
 	 * Refresh an expired access token after an unauthorized response. The driving
 	 * request's arc id is passed so the refresh layer's "Session renewed
@@ -92,7 +93,12 @@ export interface CreateAppSyncEngineOptions {
 // scope's close to settle.
 type MutableFetcherOptions = Pick<
 	CreateAppSyncEngineOptions,
-	'credentials' | 'refreshAuth' | 'useJwtAsParam' | 'bareAuthParam' | 'useRestRouteParam'
+	| 'credentials'
+	| 'refreshAuth'
+	| 'useJwtAsParam'
+	| 'bareAuthParam'
+	| 'useRestRouteParam'
+	| 'useProtocolHeaders'
 >;
 type WriteLeaderState = {
 	current: ReturnType<typeof electWriteLeader>;
@@ -303,6 +309,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		cachedEngine.fetcherOptions.useJwtAsParam = options.useJwtAsParam;
 		cachedEngine.fetcherOptions.bareAuthParam = options.bareAuthParam;
 		cachedEngine.fetcherOptions.useRestRouteParam = options.useRestRouteParam;
+		cachedEngine.fetcherOptions.useProtocolHeaders = options.useProtocolHeaders;
 		cachedEngine.fetcherScope.storeId = options.scope.storeId;
 		// The engine IS on this scope, so these are committed values, not
 		// optimistic ones — a later failed switch must fall back to them.
@@ -335,6 +342,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				useJwtAsParam: options.useJwtAsParam,
 				useRestRouteParam: options.useRestRouteParam,
 				bareAuthParam: options.bareAuthParam,
+				useProtocolHeaders: options.useProtocolHeaders,
 			},
 		};
 		const switching = entry.engine.scope.switch(options.scope);
@@ -346,6 +354,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		entry.fetcherOptions.useJwtAsParam = options.useJwtAsParam;
 		entry.fetcherOptions.useRestRouteParam = options.useRestRouteParam;
 		entry.fetcherOptions.bareAuthParam = options.bareAuthParam;
+		entry.fetcherOptions.useProtocolHeaders = options.useProtocolHeaders;
 		entry.fetcherScope.storeId = options.scope.storeId;
 		entry.clockSkew.generation += 1;
 		entry.clockSkew.evaluated = false;
@@ -376,6 +385,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 					entry.fetcherOptions.useJwtAsParam = committed.fetcherOptions.useJwtAsParam;
 					entry.fetcherOptions.useRestRouteParam = committed.fetcherOptions.useRestRouteParam;
 					entry.fetcherOptions.bareAuthParam = committed.fetcherOptions.bareAuthParam;
+					entry.fetcherOptions.useProtocolHeaders = committed.fetcherOptions.useProtocolHeaders;
 					entry.fetcherScope.storeId = committed.storeId;
 					entry.clockSkew.generation += 1;
 					entry.clockSkew.evaluated = previousClockSkewEvaluated;
@@ -402,6 +412,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		useJwtAsParam: options.useJwtAsParam,
 		bareAuthParam: options.bareAuthParam,
 		useRestRouteParam: options.useRestRouteParam,
+		useProtocolHeaders: options.useProtocolHeaders,
 	};
 	const fetcherScope: EngineFetcherScope = { storeId: options.scope.storeId };
 	const clockSkew = { generation: 0, evaluated: false };
