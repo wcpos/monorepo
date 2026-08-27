@@ -3,8 +3,15 @@ import * as React from 'react';
 import get from 'lodash/get';
 
 import { useHttpClient } from '@wcpos/hooks/use-http-client';
+import { AppInfo } from '@wcpos/utils/app-info';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
+import {
+	CLIENT_QUERY_PARAM,
+	formatClientSignal,
+	PROTOCOL_QUERY_PARAM,
+	SYNC_PROTOCOL_VERSION,
+} from '@wcpos/utils/sync-protocol';
 
 import { useT } from '../../../contexts/translations';
 import {
@@ -172,7 +179,11 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 				let response;
 				try {
 					response = await http.get(`${baseUrl}wcpos/v2/site`, {
-						params: { wcpos: 1 },
+						params: {
+							wcpos: 1,
+							[PROTOCOL_QUERY_PARAM]: SYNC_PROTOCOL_VERSION,
+							[CLIENT_QUERY_PARAM]: formatClientSignal(AppInfo.platform, AppInfo.version),
+						},
 						timeout: 15_000,
 					});
 				} catch (error: unknown) {

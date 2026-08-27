@@ -22,6 +22,85 @@ function response(body: unknown, headers: HeadersInit = {}) {
 const BASE_URL = 'http://wcpos.local/wp-json/wcpos/v2';
 
 describe('pullCustomBatch', () => {
+	it('preserves the current pull envelope fields verbatim', async () => {
+		const checkpoint = normalizeCheckpoint({ sequence: 12 });
+		const result = await pullCustomBatch({
+			baseUrl: BASE_URL,
+			checkpoint: null,
+			limit: 50,
+			fetcher: async () =>
+				response({
+					documents: [],
+					checkpoint,
+					hasMore: false,
+					epoch: 'top-epoch',
+					head: 20,
+					horizon: 4,
+				}),
+		});
+
+		expect(result).toMatchObject({
+			checkpoint,
+			hasMore: false,
+			epoch: 'top-epoch',
+			head: 20,
+			horizon: 4,
+		});
+	});
+
+	it('accepts complete and journal fields nested in the future checkpoint', async () => {
+		const checkpoint = {
+			...normalizeCheckpoint({ sequence: 12 }),
+			epoch: 'nested-epoch',
+			head: 20,
+			horizon: 4,
+		};
+		const result = await pullCustomBatch({
+			baseUrl: BASE_URL,
+			checkpoint: null,
+			limit: 50,
+			fetcher: async () => response({ documents: [], checkpoint, complete: false }),
+		});
+
+		expect(result).toMatchObject({ hasMore: true, epoch: 'nested-epoch', head: 20, horizon: 4 });
+		expect(result.checkpoint).toEqual(checkpoint);
+	});
+
+	it('prefers the unified fields in a mixed envelope (the published contract) and defaults an absent completion flag to false', async () => {
+		const checkpoint = {
+			...normalizeCheckpoint({ sequence: 12 }),
+			epoch: 'nested-epoch',
+			head: 99,
+			horizon: 1,
+		};
+		const mixed = await pullCustomBatch({
+			baseUrl: BASE_URL,
+			checkpoint: null,
+			limit: 50,
+			fetcher: async () =>
+				response({
+					documents: [],
+					checkpoint,
+					hasMore: false,
+					complete: false,
+					epoch: 'top-epoch',
+					head: 20,
+					horizon: 4,
+				}),
+		});
+		const absent = await pullCustomBatch({
+			baseUrl: BASE_URL,
+			checkpoint: null,
+			limit: 50,
+			fetcher: async () => response({ documents: [], checkpoint: normalizeCheckpoint(null) }),
+		});
+
+		// complete:false → hasMore true even though the legacy flag disagrees;
+		// journal fields come from inside the checkpoint.
+		expect(mixed).toMatchObject({ hasMore: true, epoch: 'nested-epoch', head: 99, horizon: 1 });
+		expect(absent.hasMore).toBe(false);
+	});
+
 	it('posts checkpoint parameters and returns documents', async () => {
 		const server = createFakePullServer();
 		server.seed({

@@ -364,6 +364,11 @@ export const CONFORMANCE_TABLE = {
 			// (dev-next 2026-08-14: a 14.8s conflicted push labeled "cannot be
 			// reached" while the server had refused it in plain HTTP).
 			if (status === 409) return ERROR_CODES.RECORD_CONFLICT;
+			// The protocol gate's deliberate refusal (wcpos/woocommerce-pos#1752).
+			// Authoritative detection is body-keyed in the engine transport (the
+			// status is advisory and middleboxes rewrite it); this only labels the
+			// forensic request row when the status DID survive.
+			if (status === 426) return ERROR_CODES.APP_UPDATE_REQUIRED;
 			if (status >= 400) return ERROR_CODES.STORE_SERVER_ERROR;
 			return ERROR_CODES.SYNC_UNREACHABLE;
 		},

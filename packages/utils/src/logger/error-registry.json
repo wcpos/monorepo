@@ -254,6 +254,31 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"code": "SYNC341",
+		"symbol": "APP_UPDATE_REQUIRED",
+		"domain": "SYNC",
+		"severity": "error",
+		"actionHint": "Update the POS app on this device, then reopen it.",
+		"retryPolicy": "after-change",
+		"dataSafety": "no-impact",
+		"escalation": "none",
+		"summary": "This store now requires a newer version of the POS app.",
+		"docsBody": "The store's WCPOS plugin has moved to a newer sync protocol than this app speaks, and the server deliberately pauses syncing until the app is updated — this protects the store's data from being read or written incorrectly. Nothing on the till is lost: sales and edits waiting to be sent stay safely on the device and sync once an updated app connects. On the web app, reload the page to pick up the new version; on desktop and mobile, install the app update and reopen it.",
+		"troubleshooting": [
+			"On the web app, reload the browser tab — the web app picks up the new version on reload. If the screen comes back, use a hard reload (hold Shift while reloading).",
+			"On desktop, install the pending update and reopen the app — the check runs when the app reconnects. If no update is offered, download the latest build from the installation guide at docs.wcpos.com.",
+			"On iPhone, iPad or Android, update WCPOS through the channel you installed it from (TestFlight on iOS, the Play testing programme on Android — both linked from the installation guide), then reopen the app.",
+			"Site administrator: if no newer app is available yet, the store's WCPOS plugin was updated ahead of the matching app release. Restoring the previous WCPOS plugin version on the store resumes syncing until the newer app ships.",
+			"If neither an app update nor a plugin rollback is available to you, contact WCPOS support."
+		],
+		"logSources": [
+			"network-inspector",
+			"wp-admin-pos-logs"
+		],
+		"evidence": "deliberate 426 wcpos_update_required gate refusal (wcpos/woocommerce-pos#1752); client signal monorepo#1599",
+		"introducedIn": "1.10.3"
+	},
+	{
 		"code": "AUTH101",
 		"symbol": "SESSION_EXPIRED",
 		"domain": "AUTH",

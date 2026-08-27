@@ -4,6 +4,15 @@ import set from 'lodash/set';
 
 import { AppInfo } from '@wcpos/utils/app-info';
 import { getDatabaseEpoch, getLogger, mapExceptionToCode } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import {
+	CLIENT_HEADER,
+	formatClientSignal,
+	parseUpdateRequiredBody,
+	PROTOCOL_HEADER,
+	SYNC_PROTOCOL_VERSION,
+	type UpdateRequiredDetails,
+} from '@wcpos/utils/sync-protocol';
 
 import { http } from './http';
 import { mapToInternalCode, parseWpError } from './parse-wp-error';
@@ -136,6 +145,7 @@ const processErrorHandlers = async (
 
 // Create a stable empty array to avoid recreating it on every render
 const EMPTY_ERROR_HANDLERS: HttpErrorHandler[] = [];
+type UpdateRequiredHandler = (details: UpdateRequiredDetails & { status: number }) => void;
 
 /**
  * Http Client provides a standard API for all platforms
@@ -163,7 +173,10 @@ const EMPTY_ERROR_HANDLERS: HttpErrorHandler[] = [];
  * TODO - how best to cancel requests
  * TODO - becareful to use useOnlineStatus because it emits a lot of events
  */
-export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HANDLERS) => {
+export const useHttpClient = (
+	errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HANDLERS,
+	onUpdateRequired?: UpdateRequiredHandler
+) => {
 	// const defaultErrorHandler = useHttpErrorHandler();
 
 	/**
@@ -222,6 +235,14 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 			(processedConfig as any).wcposHeaders !== false
 		) {
 			set(processedConfig, ['headers', 'X-WCPOS'], 1);
+			if (AppInfo.platform !== 'web') {
+				set(processedConfig, ['headers', PROTOCOL_HEADER], String(SYNC_PROTOCOL_VERSION));
+				set(
+					processedConfig,
+					['headers', CLIENT_HEADER],
+					formatClientSignal(AppInfo.platform, AppInfo.version)
+				);
+			}
 			// Explicit product UA on native/Electron (B10, wcpos-infra#72): a blank
 			// or library UA on a POST earns a permanent AIOS IP ban. The fragment is
 			// EMPTY on web — Firefox honours fetch UA overrides, and replacing the
@@ -310,6 +331,10 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 					(axiosError.response
 						? mapToInternalCode(null, axiosError.response.status)
 						: mappedException?.code);
+				if (errorCode === ERROR_CODES.APP_UPDATE_REQUIRED && axiosError.response) {
+					const details = parseUpdateRequiredBody(axiosError.response.data);
+					if (details) onUpdateRequired?.({ ...details, status: axiosError.response.status });
+				}
 				if (!(error as any).isPreFlightBlocked && databaseEpoch === getDatabaseEpoch()) {
 					const method = (reqConfig.method ?? 'GET').toUpperCase();
 					const endpoint = reqConfig.url
@@ -341,7 +366,7 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 				throw error;
 			}
 		},
-		[errorHandlers, makeRequest]
+		[errorHandlers, makeRequest, onUpdateRequired]
 	);
 
 	/**

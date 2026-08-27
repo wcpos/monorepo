@@ -236,14 +236,14 @@ async function openHealthDatabase(page: Page): Promise<void> {
  * `status: 'skipped'`, surfacing each only as a toast while re-enabling the
  * button either way. Waiting on the button alone therefore accepts a pass that
  * never reconciled anything — which would let the pre-fix `survive` control
- * pass for the wrong reason (codex review). Sonner tags its toasts with
- * `data-type`, so error/warning are detectable without touching localized text.
+ * pass for the wrong reason (codex review). Toasts carry semantic test IDs, so
+ * error/warning are detectable without touching localized text.
  */
 async function checkEverything(page: Page): Promise<void> {
 	const button = page.getByTestId('db-check-everything');
 	await expect(button).toBeEnabled({ timeout: 60_000 });
-	const failed = page.locator('[data-sonner-toast][data-type="error"]');
-	const skipped = page.locator('[data-sonner-toast][data-type="warning"]');
+	const failed = page.getByTestId('error-toast');
+	const skipped = page.getByTestId('warning-toast');
 	await button.click();
 	await expect(button).toBeEnabled({ timeout: 120_000 });
 	// Success emits NO toast, so any error/warning toast here is a pass that did

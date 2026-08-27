@@ -93,6 +93,11 @@ const SERVER_CODE_TO_INTERNAL: Record<string, ErrorCode> = {
 	jwt_auth_bad_request: ERROR_CODES.RECORD_INVALID_FIELD,
 	jwt_auth_bad_config: ERROR_CODES.AUTH_PLUGIN_CONFLICT,
 	jwt_auth_no_auth_header: ERROR_CODES.SESSION_EXPIRED,
+
+	// WCPOS protocol gate — the server's deliberate upgrade refusal
+	// (wcpos/woocommerce-pos#1752). The sync engine renders the blocking
+	// screen; this mapping covers the axios lanes (checkout, refunds).
+	wcpos_update_required: ERROR_CODES.APP_UPDATE_REQUIRED,
 };
 
 /**

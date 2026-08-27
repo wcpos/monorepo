@@ -67,6 +67,10 @@ describe('parse-wp-error', () => {
 				expect(mapToInternalCode('woocommerce_rest_invalid_id')).toBe('SYNC211');
 			});
 
+			it('should map the protocol-gate upgrade refusal', () => {
+				expect(mapToInternalCode('wcpos_update_required')).toBe('SYNC341');
+			});
+
 			it('should map JWT Auth errors', () => {
 				expect(mapToInternalCode('jwt_auth_failed')).toBe('AUTH101');
 				expect(mapToInternalCode('jwt_auth_invalid_token')).toBe('AUTH101');

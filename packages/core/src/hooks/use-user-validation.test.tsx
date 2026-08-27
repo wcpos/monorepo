@@ -146,6 +146,11 @@ describe('useUserValidation capabilities', () => {
 
 		await waitFor(() => expect(mockGet).toHaveBeenCalled());
 		expect(mockGet.mock.calls[0]?.[0]).toBe('https://example.com/?rest_route=/wcpos/v2/cashier/7');
+		expect(mockGet.mock.calls[0]?.[1]).toMatchObject({
+			params: { wcpos: 1, wcpos_protocol: 2, wcpos_client: 'web/0.0.0' },
+		});
+		expect(mockGet.mock.calls[0]?.[1].headers).not.toHaveProperty('X-WCPOS-Protocol');
+		expect(mockGet.mock.calls[0]?.[1].headers).not.toHaveProperty('X-WCPOS-Client');
 	});
 });
 

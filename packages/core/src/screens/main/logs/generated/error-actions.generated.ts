@@ -32,6 +32,8 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.SYNC321');
 		case 'SYNC331':
 			return t('health.logs.error_action.SYNC331');
+		case 'SYNC341':
+			return t('health.logs.error_action.SYNC341');
 		case 'AUTH101':
 			return t('health.logs.error_action.AUTH101');
 		case 'AUTH201':

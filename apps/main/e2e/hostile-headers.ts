@@ -115,7 +115,7 @@ test('census and order browse survive stripped Tier 2 headers', async ({
 	await expect(
 		orders.getByTestId('data-table-count').or(orders.getByTestId('no-data-message')).first()
 	).toBeVisible({ timeout: 60_000 });
-	await expect(page.locator('[data-sonner-toast][data-type="error"]')).toHaveCount(0);
+	await expect(page.getByTestId('error-toast')).toHaveCount(0);
 });
 
 base('URL discovery falls back successfully when Link is stripped', async ({ page }, testInfo) => {
@@ -131,5 +131,5 @@ base('URL discovery falls back successfully when Link is stripped', async ({ pag
 	await expect(page.getByTestId('logged-in-users-label')).toBeVisible({
 		timeout: 60_000,
 	});
-	await expect(page.locator('[data-sonner-toast][data-type="error"]')).toHaveCount(0);
+	await expect(page.getByTestId('error-toast')).toHaveCount(0);
 });

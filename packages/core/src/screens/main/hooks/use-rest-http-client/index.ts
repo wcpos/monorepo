@@ -6,6 +6,7 @@ import merge from 'lodash/merge';
 import { RequestConfig, requestStateManager, useHttpClient } from '@wcpos/hooks/use-http-client';
 import { createTokenRefreshHandler } from '@wcpos/hooks/use-http-client/create-token-refresh-handler';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { AppInfo } from '@wcpos/utils/app-info';
 import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -15,6 +16,13 @@ import {
 	resolveRestTransport,
 	toRestRouteUrl,
 } from '@wcpos/utils/rest-transport';
+import {
+	CLIENT_QUERY_PARAM,
+	formatClientSignal,
+	PROTOCOL_QUERY_PARAM,
+	SYNC_PROTOCOL_VERSION,
+} from '@wcpos/utils/sync-protocol';
+import { reportUpdateRequired, type UpdateRequiredState } from '@wcpos/utils/update-required-gate';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -183,6 +191,11 @@ export const useRestHttpClient = (endpoint = '') => {
 		() => [tokenRefreshHandler, fallbackAuthHandler],
 		[tokenRefreshHandler, fallbackAuthHandler]
 	);
+	const onUpdateRequired = React.useCallback(
+		(details: Exclude<UpdateRequiredState, null>) =>
+			reportUpdateRequired(site.wp_api_url!, details),
+		[site.wp_api_url]
+	);
 
 	/**
 	 * Sync online status with the request state manager
@@ -196,7 +209,7 @@ export const useRestHttpClient = (endpoint = '') => {
 	/**
 	 *
 	 */
-	const httpClient = useHttpClient(errorHandlers);
+	const httpClient = useHttpClient(errorHandlers, onUpdateRequired);
 
 	/**
 	 * Main request function.
@@ -257,7 +270,10 @@ export const useRestHttpClient = (endpoint = '') => {
 						? toRestRouteUrl(pathFormBaseURL, pathFormRoot)
 						: pathFormBaseURL,
 				headers: shouldUseJwtAsParam ? {} : { Authorization: `Bearer ${jwt}` },
-				params: {},
+				params: {
+					[PROTOCOL_QUERY_PARAM]: SYNC_PROTOCOL_VERSION,
+					[CLIENT_QUERY_PARAM]: formatClientSignal(AppInfo.platform, AppInfo.version),
+				},
 			};
 
 			if (shouldUseJwtAsParam) {

@@ -19,6 +19,7 @@ import { ReceiptEmailQueueBridge } from '@wcpos/core/screens/main/receipt/email-
 import { ExtraDataProvider } from '@wcpos/core/screens/main/contexts/extra-data';
 import { UISettingsProvider } from '@wcpos/core/screens/main/contexts/ui-settings';
 import { ScanHubProvider } from '@wcpos/core/screens/main/hooks/barcodes/scan-hub-context';
+import { UpdateRequired } from '@wcpos/core/screens/main/update-required';
 import { UpgradeRequired } from '@wcpos/core/screens/main/upgrade-required';
 import { useCollection } from '@wcpos/core/screens/main/hooks/use-collection';
 import { createRefreshHttpClient } from '@wcpos/core/screens/main/hooks/use-rest-http-client/refresh-http-client';
@@ -42,6 +43,7 @@ import {
 	resetMetricsBuckets,
 } from '../../lib/metrics';
 import { SyncStatusPersistenceBridge } from '../../lib/sync-status-persistence-bridge';
+import { currentUpdateRequired, subscribeUpdateRequired } from '../../lib/update-required-gate';
 
 const METRICS_PERSIST_INTERVAL_MS = 5 * 60 * 1000;
 const metricsLogger = getLogger(['wcpos', 'sync', 'host-metrics']);
@@ -168,27 +170,28 @@ function AppStack() {
 				<VariationParentBridge />
 				<UISettingsProvider>
 					<CompatGate>
-						<ScanHubProvider>
-							<View
-								className="bg-background flex-1"
-								onStartShouldSetResponderCapture={captureUserActivity}
-							>
-								<Stack
-									screenOptions={{
-										headerShown: false,
-										contentStyle: { backgroundColor: screenBackgroundColor },
-									}}
+						<UpdateRequiredGate site={wpApiUrl}>
+							<ScanHubProvider>
+								<View
+									className="bg-background flex-1"
+									onStartShouldSetResponderCapture={captureUserActivity}
 								>
-									<Stack.Screen name="(drawer)" />
-									<Stack.Screen
-										name="(modals)/tax-rates"
-										options={{
-											presentation: 'containedTransparentModal',
-											animation: 'fade',
-											contentStyle: { backgroundColor: 'transparent' },
+									<Stack
+										screenOptions={{
+											headerShown: false,
+											contentStyle: { backgroundColor: screenBackgroundColor },
 										}}
-									/>
-									{/* <Stack.Screen
+									>
+										<Stack.Screen name="(drawer)" />
+										<Stack.Screen
+											name="(modals)/tax-rates"
+											options={{
+												presentation: 'containedTransparentModal',
+												animation: 'fade',
+												contentStyle: { backgroundColor: 'transparent' },
+											}}
+										/>
+										{/* <Stack.Screen
 							name="(modals)/login"
 							options={{
 								presentation: 'containedTransparentModal',
@@ -196,15 +199,16 @@ function AppStack() {
 								contentStyle: { backgroundColor: 'transparent' },
 							}}
 						/> */}
-								</Stack>
-								{/**
-								 * We need to have a PortalHost inside the UISettingsProvider
-								 */}
-								<ErrorBoundary>
-									<PortalHost />
-								</ErrorBoundary>
-							</View>
-						</ScanHubProvider>
+									</Stack>
+									{/**
+									 * We need to have a PortalHost inside the UISettingsProvider
+									 */}
+									<ErrorBoundary>
+										<PortalHost />
+									</ErrorBoundary>
+								</View>
+							</ScanHubProvider>
+						</UpdateRequiredGate>
 					</CompatGate>
 				</UISettingsProvider>
 			</ExtraDataProvider>
@@ -222,6 +226,29 @@ function AppStack() {
  * second construction collided on the already-open RxDatabase (multiInstance:false)
  * and its scope never became ready, leaving every binding reading an empty engine.
  */
+/**
+ * The mirror of CompatGate: the server's protocol-gate refusal
+ * (wcpos_update_required — this APP is older than the store's plugin
+ * requires). Same placement rule: below the engine + QueryProvider, so
+ * toggling swaps only the gated content and never unmounts the engine. The
+ * engine's transport has already latched sync shut; this renders the matching
+ * blocking screen until the app is updated (reload on web, restart on native)
+ * or a fresh engine construction clears the gate.
+ */
+function UpdateRequiredGate({ site, children }: { site: string; children: React.ReactNode }) {
+	const state = React.useSyncExternalStore(
+		React.useCallback(
+			(onStoreChange: () => void) => subscribeUpdateRequired(site, onStoreChange),
+			[site]
+		),
+		() => currentUpdateRequired(site)
+	);
+	if (state) {
+		return <UpdateRequired />;
+	}
+	return <>{children}</>;
+}
+
 function CompatGate({ children }: { children: React.ReactNode }) {
 	const { compatibility, site: siteVersionInfo } = useAppInfo();
 	if (siteVersionInfo?.wcposVersion && !compatibility?.wcposVersionPass) {

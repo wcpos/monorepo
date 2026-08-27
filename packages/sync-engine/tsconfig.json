@@ -15,6 +15,9 @@
       ],
       "@wcpos/sync-engine/*": [
         "./src/*"
+      ],
+      "@wcpos/utils/*": [
+        "../utils/src/*"
       ]
     }
   },

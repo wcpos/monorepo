@@ -7,6 +7,14 @@ import {
 	resolveRestTransport,
 	toRestRouteUrl,
 } from '@wcpos/utils/rest-transport';
+import {
+	CLIENT_HEADER,
+	CLIENT_QUERY_PARAM,
+	formatClientSignal,
+	PROTOCOL_HEADER,
+	PROTOCOL_QUERY_PARAM,
+	SYNC_PROTOCOL_VERSION,
+} from '@wcpos/utils/sync-protocol';
 
 import { pauseQueue, resumeQueue } from './request-queue';
 import { requestStateManager } from './request-state-manager';
@@ -132,13 +140,30 @@ export async function refreshAccessToken({
 					site.wp_api_url && resolveRestTransport(site) === 'query'
 						? toRestRouteUrl(pathUrl, deriveSyntheticPathRoot(site.wp_api_url))
 						: pathUrl;
+				const signaledRefreshUrl = new URL(refreshUrl);
+				signaledRefreshUrl.searchParams.set(PROTOCOL_QUERY_PARAM, String(SYNC_PROTOCOL_VERSION));
+				signaledRefreshUrl.searchParams.set(
+					CLIENT_QUERY_PARAM,
+					formatClientSignal(AppInfo.platform, AppInfo.version)
+				);
 				const response = await getHttpClient().post(
-					refreshUrl,
+					signaledRefreshUrl.toString(),
 					{ refresh_token: refreshToken },
 					// The refresh POST is exactly the request class a blank/library UA
 					// gets IP-banned for (B10) — stamp it like every other lane. The
 					// fragment is empty on web, which keeps the browser UA.
-					{ headers: { 'X-WCPOS': '1', ...AppInfo.userAgentHeader } }
+					{
+						headers: {
+							'X-WCPOS': '1',
+							...(AppInfo.platform !== 'web'
+								? {
+										[PROTOCOL_HEADER]: String(SYNC_PROTOCOL_VERSION),
+										[CLIENT_HEADER]: formatClientSignal(AppInfo.platform, AppInfo.version),
+									}
+								: {}),
+							...AppInfo.userAgentHeader,
+						},
+					}
 				);
 
 				const responseData = getResponseData(response);

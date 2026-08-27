@@ -111,7 +111,7 @@ test.describe('#1135 server-down feedback (live store)', () => {
 		await expect(checkNow).toBeDisabled({ timeout: 5_000 });
 
 		// And the outcome lands as a cashier-readable error toast.
-		await expect(page.locator('[data-sonner-toast][data-type="error"]').first()).toBeVisible({
+		await expect(page.getByTestId('error-toast').first()).toBeVisible({
 			timeout: 60_000,
 		});
 	});

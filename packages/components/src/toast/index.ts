@@ -51,6 +51,7 @@ const Toast = {
 
 			const options: any = {
 				type: type,
+				testId: `${type}-toast`,
 				...(text2 && { description: text2 }),
 				...(legacyProps?.dismissable && { closeButton: true }),
 				...(legacyProps?.action && {
@@ -64,9 +65,13 @@ const Toast = {
 			return toast(text1, options);
 		} else {
 			// Handle modern props - use type directly (platform-specific conversion handled in sonner.tsx)
-			const { title, ...options } = props;
+			const { title, type, ...options } = props;
 
-			return toast(title, options);
+			return toast(title, {
+				...options,
+				type,
+				testId: options.testId ?? `${type ?? 'default'}-toast`,
+			});
 		}
 	},
 };

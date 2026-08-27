@@ -17,6 +17,7 @@ export type WirePullDocument = Pick<OrderDocument, 'payload' | 'sync' | 'local'>
 };
 
 type WirePullResponse = PullResponse<WirePullDocument>;
+type WirePullBody = Omit<WirePullResponse, 'hasMore'> & { hasMore?: boolean };
 
 type Fetcher = (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
 
@@ -64,8 +65,21 @@ export async function pullCustomBatch(input: {
 		throw new Error(`Custom pull failed: ${response.status}`);
 	}
 	const body = await response.text();
-	const parsed = JSON.parse(body) as WirePullResponse & { metrics?: ServerMetrics };
-	return { ...parsed, responseBytes: measuredResponseBytes(body) };
+	const parsed = JSON.parse(body) as WirePullBody & { metrics?: ServerMetrics };
+	// Dual-accept /orders/pull cutover #1752, matching the published contract:
+	// the unified shape (`complete`; journal fields inside `checkpoint`) is
+	// authoritative when present, today's fields serve the deployed servers
+	// (which never emit both, so precedence changes nothing against them).
+	// Delete the legacy arm only at a protocol bump after every supported
+	// plugin emits the unified shape.
+	return {
+		...parsed,
+		hasMore: parsed.complete === undefined ? (parsed.hasMore ?? false) : !parsed.complete,
+		epoch: parsed.checkpoint.epoch ?? parsed.epoch,
+		head: parsed.checkpoint.head ?? parsed.head,
+		horizon: parsed.checkpoint.horizon ?? parsed.horizon,
+		responseBytes: measuredResponseBytes(body),
+	};
 }
 
 export type CustomPullRepository = {

@@ -46,6 +46,7 @@ import { appMetricsObserver } from './metrics';
 import { createSyncLogObserver } from './sync-log-observer';
 import { deriveSyncSite } from './sync-site';
 import { markSyncStatusStale, syncStatusObserver } from './sync-status';
+import { clearUpdateRequired, reportUpdateRequired } from './update-required-gate';
 import { electWriteLeader } from './web-write-leader';
 
 const engineLogger = getLogger(['wcpos', 'sync', 'engine']);
@@ -521,11 +522,24 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	}
 
 	const hostDefaultProductBrowseSort = defaultProductBrowseSort();
+	// A fresh engine re-probes the store, so its construction clears any
+	// standing update-required gate for the site (the latch itself lives on the
+	// engine instance and died with the previous one).
+	clearUpdateRequired(options.scope.site);
 	const engine = createRxdbSyncEngine(
 		{
 			site,
 			storage: defaultConfig.storage,
 			fetcher,
+			onUpdateRequired: (details) => {
+				reportUpdateRequired(options.scope.site, details);
+				// Row + docs page; no toast — the blocking UpdateRequired screen is
+				// the cashier-facing surface.
+				engineLogger.error('Server refused sync: this app is older than the store requires', {
+					code: ERROR_CODES.APP_UPDATE_REQUIRED,
+					context: { ...details },
+				});
+			},
 			queryTotal: {
 				fetchWooQueryTotal: (input) => fetchWooQueryTotal(input, fetcher, site.wpJsonRoot),
 			},

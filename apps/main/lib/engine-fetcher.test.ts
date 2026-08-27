@@ -215,7 +215,7 @@ describe('createEngineFetcher', () => {
 		await fetcher('https://store.example.test/wp-json/wcpos/v2/products?page=2&per_page=50');
 
 		expect(fetch).toHaveBeenCalledWith(
-			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&page=2&per_page=50&wcpos=1&_wcpos_envelope=1',
+			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fproducts&page=2&per_page=50&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0&_wcpos_envelope=1',
 			expect.any(Object)
 		);
 	});
@@ -233,7 +233,7 @@ describe('createEngineFetcher', () => {
 		});
 
 		expect(fetch).toHaveBeenCalledWith(
-			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fpush%2Forders&cursor=7&wcpos=1',
+			'https://store.example.test/?rest_route=%2Fwcpos%2Fv2%2Fpush%2Forders&cursor=7&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0',
 			expect.objectContaining({ method: 'POST' })
 		);
 	});
@@ -288,7 +288,7 @@ describe('createEngineFetcher', () => {
 
 		expect(total).toBe(17);
 		expect(fetch).toHaveBeenCalledWith(
-			`https://store.example.test/wp-json/${route}?ignored=value&page=1&per_page=1&wcpos=1&_wcpos_envelope=1`,
+			`https://store.example.test/wp-json/${route}?ignored=value&page=1&per_page=1&wcpos=1&wcpos_protocol=2&wcpos_client=ios%2F0.0.0&_wcpos_envelope=1`,
 			expect.objectContaining({ headers: expect.any(Headers) })
 		);
 		expect(recordTransport).toHaveBeenCalledTimes(1);
@@ -343,6 +343,57 @@ describe('createEngineFetcher', () => {
 		expect(
 			new URL(fetch.mock.calls[1]![0] as string).searchParams.get('_wcpos_envelope')
 		).toBeNull();
+	});
+
+	it('sends protocol and client query signals in path and rest_route forms', async () => {
+		const { AppInfo } =
+			jest.requireActual<typeof import('@wcpos/utils/app-info')>('@wcpos/utils/app-info');
+		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
+		const path = createFetcherHarness({ fetch });
+		const query = createFetcherHarness({ fetch, useRestRouteParam: true });
+
+		await path.fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+		await query.fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+
+		for (const call of fetch.mock.calls) {
+			const requestedUrl = new URL(call[0] as string);
+			expect(requestedUrl.searchParams.get('wcpos_protocol')).toBe('2');
+			expect(requestedUrl.searchParams.get('wcpos_client')).toBe(
+				`${AppInfo.platform}/${AppInfo.version}`
+			);
+		}
+	});
+
+	it('sends protocol and client headers outside web', async () => {
+		const { AppInfo } =
+			jest.requireActual<typeof import('@wcpos/utils/app-info')>('@wcpos/utils/app-info');
+		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
+		const { fetcher } = createFetcherHarness({ fetch });
+
+		await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+
+		const headers = new Headers((fetch.mock.calls[0]?.[1] as RequestInit).headers);
+		expect(headers.get('X-WCPOS-Protocol')).toBe('2');
+		expect(headers.get('X-WCPOS-Client')).toBe(`${AppInfo.platform}/${AppInfo.version}`);
+	});
+
+	it('does not send protocol or client headers on web', async () => {
+		const { AppInfo } =
+			jest.requireActual<typeof import('@wcpos/utils/app-info')>('@wcpos/utils/app-info');
+		const originalPlatform = AppInfo.platform;
+		AppInfo.platform = 'web';
+		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
+
+		try {
+			const { fetcher } = createFetcherHarness({ fetch });
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+
+			const headers = new Headers((fetch.mock.calls[0]?.[1] as RequestInit).headers);
+			expect(headers.has('X-WCPOS-Protocol')).toBe(false);
+			expect(headers.has('X-WCPOS-Client')).toBe(false);
+		} finally {
+			AppInfo.platform = originalPlatform;
+		}
 	});
 
 	it('reports an unknown census collection as unsupported without making a request', async () => {

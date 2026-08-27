@@ -82,6 +82,19 @@ describe('record materialization seam', () => {
 		).toMatchObject({ sync: { revision: 'legacy' } });
 	});
 
+	it('materializes a variation with an opaque stamped revision verbatim', () => {
+		const revision = 'v2:9f8a0123-content-hash';
+		const stored = materializeTargeted('variations', {
+			id: 7,
+			parent_id: 3,
+			date_modified_gmt: '2026-08-26T10:00:00',
+			meta_data,
+			_rxdb_revision: revision,
+		}).storedDocument;
+
+		expect(stored.sync).toMatchObject({ revision });
+	});
+
 	it('projects every descriptor shape without minting a missing uuid', () => {
 		expect(() => materializeTargeted('customers', { id: 7 })).toThrow();
 		expect(

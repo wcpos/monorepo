@@ -9,6 +9,7 @@ import {
 	useHttpClient,
 } from '@wcpos/hooks/use-http-client';
 import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
+import { AppInfo } from '@wcpos/utils/app-info';
 import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -18,6 +19,14 @@ import {
 	resolveRestTransport,
 	toRestRouteUrl,
 } from '@wcpos/utils/rest-transport';
+import {
+	CLIENT_HEADER,
+	CLIENT_QUERY_PARAM,
+	formatClientSignal,
+	PROTOCOL_HEADER,
+	PROTOCOL_QUERY_PARAM,
+	SYNC_PROTOCOL_VERSION,
+} from '@wcpos/utils/sync-protocol';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../contexts/app-state';
@@ -177,9 +186,19 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 
 					// Prepare request config
 					const requestConfig: any = {
-						params: { wcpos: 1 },
+						params: {
+							wcpos: 1,
+							[PROTOCOL_QUERY_PARAM]: SYNC_PROTOCOL_VERSION,
+							[CLIENT_QUERY_PARAM]: formatClientSignal(AppInfo.platform, AppInfo.version),
+						},
 						headers: {
 							'X-WCPOS': '1',
+							...(AppInfo.platform !== 'web'
+								? {
+										[PROTOCOL_HEADER]: String(SYNC_PROTOCOL_VERSION),
+										[CLIENT_HEADER]: formatClientSignal(AppInfo.platform, AppInfo.version),
+									}
+								: {}),
 						},
 					};
 
