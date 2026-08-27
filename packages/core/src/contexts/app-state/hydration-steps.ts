@@ -1038,6 +1038,12 @@ const testAuthorizationStep: HydrationStep = {
 	name: 'TEST_AUTHORIZATION',
 	message: 'Testing authorization...',
 	progressIncrement: 10,
+	// Fail-soft: this step only refreshes per-site transport flags — the app
+	// boots fine on the previously persisted (or default, conservative)
+	// values, so an optional probe must never wedge hydration into the
+	// splash-retry loop. A throw skips persistence, which is the same
+	// no-write outcome as an ok:false verdict.
+	failSoft: true,
 	shouldExecute: () => Platform.isWeb,
 	execute: async (context) => {
 		if (!context.userDB) {

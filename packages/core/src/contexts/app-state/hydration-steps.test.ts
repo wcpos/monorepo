@@ -235,7 +235,9 @@ describe('hydration step fail modes', () => {
 		expect(failSoftByName).toEqual({
 			INITIALIZE_USER_DB: false,
 			PROCESS_INITIAL_PROPS: true,
-			TEST_AUTHORIZATION: false,
+			// Fail-soft since it runs standalone too: it only refreshes optional
+			// transport flags, and boot works on the persisted/default values.
+			TEST_AUTHORIZATION: true,
 			HYDRATE_USER_SESSION: false,
 		});
 	});
