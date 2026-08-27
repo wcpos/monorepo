@@ -12,81 +12,50 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { PanelGroupContext } from './PanelGroupContext';
 
 export type PanelResizeHandleOnDragging = (isDragging: boolean) => void;
-
 export interface PanelResizeHandleProps extends ViewProps {
-	/**
-	 * An optional style to apply to the handle View.
-	 * By default, we give it a thin touchable bar that spans the full cross‐axis.
-	 */
 	style?: StyleProp<ViewStyle>;
-
-	/** If true, the handle is disabled (no gestures). */
 	disabled?: boolean;
-
-	/**
-	 * A callback that is called when the handle is dragged.
-	 */
 	onDragging?: PanelResizeHandleOnDragging;
+	order?: number;
 }
 
-/**
- * A draggable handle between two panels. Uses React Native Gesture Handler
- * with GestureDetector + Gesture.Pan().
- */
 export function PanelResizeHandle({
 	style,
 	disabled = false,
 	onDragging,
+	order,
 	...viewProps
 }: PanelResizeHandleProps) {
 	const context = React.useContext(PanelGroupContext);
 	if (context === null) {
 		throw new Error('<PanelResizeHandle> must be rendered inside a <PanelGroup>');
 	}
-
-	const { direction, startDragging, updateLayout, stopDragging, registerHandle } = context;
-
-	// Give each handle a stable unique ID, so the parent can track them separately.
+	const { direction, model, beginDrag, drag, endDrag } = context;
 	const handleId = React.useId();
 
-	// Registration must run after the group provider is mounted.
-	React.useEffect(() => {
-		registerHandle(handleId);
-		// no cleanup needed—if the handle unmounts, the group will eventually drop its map entry
-		// (or you could add an unregisterHandle if you want).
-	}, [registerHandle]);
+	React.useLayoutEffect(() => {
+		model.registerHandle(handleId, order);
+		return () => model.unregisterHandle(handleId);
+	}, [model, handleId, order]);
 
-	// Create a Pan gesture. onBegin triggers startDragging,
-	// onUpdate runs the resize handler, onEnd calls stopDragging.
 	const panGesture = Gesture.Pan()
 		.onBegin(() => {
 			'worklet';
 			if (disabled) return;
-			if (onDragging) {
-				scheduleOnRN(onDragging, true);
-			}
-			scheduleOnRN(startDragging, handleId);
+			if (onDragging) scheduleOnRN(onDragging, true);
+			scheduleOnRN(beginDrag, handleId);
 		})
-		.onUpdate((e: GestureUpdateEvent<PanGestureHandlerEventPayload>) => {
+		.onUpdate((event: GestureUpdateEvent<PanGestureHandlerEventPayload>) => {
 			'worklet';
 			if (disabled) return;
-			scheduleOnRN(updateLayout, handleId, e);
+			scheduleOnRN(drag, event.translationX, event.translationY);
 		})
 		.onEnd(() => {
 			'worklet';
 			if (disabled) return;
-			if (onDragging) {
-				scheduleOnRN(onDragging, false);
-			}
-			scheduleOnRN(stopDragging);
+			if (onDragging) scheduleOnRN(onDragging, false);
+			scheduleOnRN(endDrag);
 		});
-
-	/**
-	 * The visual/clickable area:
-	 * • If direction is 'horizontal', we make a zero-width vertical bar.
-	 * • If direction is 'vertical', we make a zero-height horizontal bar.
-	 * Consumers should provide a touch target via style={…}.
-	 */
 	const defaultHandleStyle: ViewStyle =
 		direction === 'horizontal'
 			? { width: 0, alignSelf: 'stretch' }

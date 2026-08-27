@@ -9,10 +9,15 @@ const Panel = PanelPrimitives.Panel;
 const PanelGroup = PanelPrimitives.PanelGroup;
 const usePanelGroupContext = PanelPrimitives.usePanelGroupContext;
 
-function PanelResizeHandle() {
+function PanelResizeHandle({
+	testID,
+	order,
+}: Pick<PanelPrimitives.PanelResizeHandleProps, 'testID' | 'order'>) {
 	const { direction } = usePanelGroupContext();
 
 	const handleProps: PanelPrimitives.PanelResizeHandleProps = {
+		testID,
+		order,
 		style: {
 			width: direction === 'horizontal' ? 8 : '100%',
 			height: direction === 'horizontal' ? '100%' : 8,

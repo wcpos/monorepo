@@ -109,14 +109,19 @@ export default function ResizablePOSColumns() {
 				onLayout={([productsWidth, cartWidth]) => patchUI({ width: productsWidth })}
 				direction="horizontal"
 			>
-				<Panel defaultSize={uiSettings.width} minSize={25} id="products">
+				<Panel
+					testID="pos-products-panel"
+					defaultSize={uiSettings.width}
+					minSize={25}
+					id="products"
+				>
 					<Suspense>
 						<ErrorBoundary>
 							<POSProducts isColumn />
 						</ErrorBoundary>
 					</Suspense>
 				</Panel>
-				<PanelResizeHandle />
+				<PanelResizeHandle testID="pos-resize-handle" />
 				{/* The cart NEEDS its complementary defaultSize: before the group's
 				    layout reaches each panel's animated style, panels render with
 				    flexGrow = defaultSize ?? 1, so a sized products panel next to an
