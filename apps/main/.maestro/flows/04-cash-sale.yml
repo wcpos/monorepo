@@ -34,10 +34,13 @@ env:
     visible:
       id: "product-tile"
     timeout: 30000
+# Dismiss the keyboard BEFORE tapping the tile — with it up, the tile's
+# center sits under the overlay and the tap silently no-ops (empty cart in
+# run 33088418779; monorepo#1614 defect 2). Flow 07 already taps in this order.
+- hideKeyboard
 - tapOn:
     id: "product-tile"
     index: 0
-- hideKeyboard
 - runFlow:
     when:
       visible:

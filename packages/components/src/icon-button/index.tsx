@@ -80,6 +80,9 @@ function IconButton({
 			role="button"
 			onPress={handlePress}
 			{...props}
+			// Always a real boolean — see Button: an undefined `disabled` after a
+			// disabled render latches the Android view at enabled=false.
+			disabled={!!props.disabled}
 		>
 			<Icon
 				name={name}

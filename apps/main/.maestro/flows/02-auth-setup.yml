@@ -105,12 +105,16 @@ env:
 - tapOn:
     id: "store-option-.*"
 # StoreSelect keeps the button disabled while cashier validation is in flight;
-# tapping a disabled native button no-ops silently. On CI emulators the
-# validation takes just over 60s before the button enables (both Android jobs
-# in runs 33074068139/33081118544 timed out at 60s with the failure screenshot
-# showing the button already un-dimmed — consistent with two sequential
-# 30s DEFAULT_REQUEST_TIMEOUT_MS requests), so give it real headroom. A
-# genuinely failed validation keeps the button disabled and still fails here.
+# tapping a disabled native button no-ops silently. Validation itself is one
+# fast round-trip (~1.5s even on CI emulators — the store rows this flow just
+# tapped only render after it succeeds). The 60s/180s timeouts of runs
+# 33074068139/33081118544/33088418779 were NOT slow validation: the Button
+# component dropped its `disabled` prop (undefined) when it enabled, and RN
+# Android never re-enables a view whose accessibilityState vanishes, so the
+# node stayed enabled=false for Maestro/TalkBack while visually active
+# (monorepo#1614 defect 1; fixed in @wcpos/components Button). This wait now
+# doubles as the regression gate for that accessibility latch. A genuinely
+# failed validation keeps the button disabled and still fails here.
 - extendedWaitUntil:
     visible:
       id: "open-pos-button"
