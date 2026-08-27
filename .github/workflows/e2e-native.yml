@@ -239,6 +239,9 @@ jobs:
 
       - name: 📱 Boot simulator and install app
         run: |
+          # Diagnostic: which iOS runtimes this runner image offers — kept in
+          # the log so a future runtime pin can be chosen from evidence.
+          xcrun simctl list runtimes
           UDID=$(xcrun simctl create "e2e-${{ matrix.device.name }}" "${{ matrix.device.simulator }}")
           xcrun simctl boot "$UDID"
           xcrun simctl bootstatus "$UDID" -b
@@ -247,8 +250,20 @@ jobs:
           xcrun simctl install "$UDID" "$APP_PATH"
           echo "MAESTRO_UDID=$UDID" >> "$GITHUB_ENV"
 
+      # One `maestro test` per flow, NOT batch mode: on iOS 26.x the XCUITest
+      # driver socket can die mid-suite with no recovery (maestro#3318; both
+      # simulators in run 33074068139 lost the driver ~4 min in). Per-flow
+      # invocation is the issue's confirmed workaround — each flow gets a
+      # fresh driver, and the app's on-device state still carries across
+      # invocations, which is all the stateful suite needs. Filename order
+      # (01…08) matches config.yaml's flowsOrder; the first failure aborts,
+      # matching continueOnFailure: false.
       - name: 📱 Run Maestro suite on simulator
-        run: maestro --udid "$MAESTRO_UDID" test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" apps/main/.maestro
+        run: |
+          for flow in apps/main/.maestro/flows/*.yml; do
+            echo "▶ ${flow}"
+            maestro --udid "$MAESTRO_UDID" test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" "$flow" || exit 1
+          done
         env:
           # Maestro's XCUITest driver compiles and installs its runner on
           # first launch; macOS runners routinely exceed the 15s default —
