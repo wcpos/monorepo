@@ -9,14 +9,17 @@
  * Fuller reset (pruning accumulated E2E orders/customers) extends here later.
  *
  * Env: E2E_STORE_URL (default https://dev-pro.wcpos.com)
- *      E2E_WC_CONSUMER_KEY / E2E_WC_CONSUMER_SECRET (WooCommerce REST,
- *        read/write; plain WC_CONSUMER_KEY / WC_CONSUMER_SECRET also accepted)
+ *      E2E_PRODUCT_WRITER_USER / E2E_PRODUCT_WRITER_PASS (the standing
+ *        shop_manager identity every dev store carries — the same secrets the
+ *        web E2E's search-probe uses; a JWT is minted through /wcpos-auth/)
  *      E2E_PRODUCT_SEARCH (default "Beanie")
  */
+import { randomUUID } from 'node:crypto';
+
 const STORE_URL = (process.env.E2E_STORE_URL ?? 'https://dev-pro.wcpos.com').replace(/\/$/, '');
 const PRODUCT = process.env.E2E_PRODUCT_SEARCH ?? 'Beanie';
-const KEY = process.env.E2E_WC_CONSUMER_KEY ?? process.env.WC_CONSUMER_KEY;
-const SECRET = process.env.E2E_WC_CONSUMER_SECRET ?? process.env.WC_CONSUMER_SECRET;
+const WRITER_USER = process.env.E2E_PRODUCT_WRITER_USER;
+const WRITER_PASS = process.env.E2E_PRODUCT_WRITER_PASS;
 
 // This script sends write-capable credentials to STORE_URL — never over plain
 // HTTP, and never to a host outside the standing E2E stores.
@@ -26,22 +29,59 @@ if (!STORE_URL.startsWith('https://')) {
 	console.error(`✖ E2E_STORE_URL must use https:// (got: ${STORE_URL})`);
 	process.exit(1);
 }
-if (KEY && SECRET && !ALLOWED_WRITE_HOSTS.includes(storeHost)) {
+if (WRITER_USER && WRITER_PASS && !ALLOWED_WRITE_HOSTS.includes(storeHost)) {
 	console.error(
 		`✖ Refusing authenticated writes to ${storeHost} — allowed hosts: ${ALLOWED_WRITE_HOSTS.join(', ')}`
 	);
 	process.exit(1);
 }
 
-const api = (route, init = {}) => {
-	const url = new URL(`${STORE_URL}/wp-json/wc/v3/${route}`);
-	url.searchParams.set('consumer_key', KEY);
-	url.searchParams.set('consumer_secret', SECRET);
-	return fetch(url, {
-		...init,
-		headers: { 'content-type': 'application/json', ...init.headers },
-	});
-};
+/**
+ * Mint a writer JWT through the plugin's own /wcpos-auth/ login flow — the
+ * same mechanism the web E2E's productWriterAuthorization uses (the
+ * E2E_WC_CONSUMER_KEY/SECRET this script originally read were never
+ * provisioned as secrets, so the consumer-key path was dead config).
+ * Declared-but-broken credentials exit 1: a provisioning failure must never
+ * disguise itself as a skip.
+ */
+async function mintWriterToken() {
+	const authUrl = `${STORE_URL}/wcpos-auth/?redirect_uri=https://localhost/cb&state=e2e-native-seed-${randomUUID()}`;
+	// The login POST can transiently re-render the form with valid credentials
+	// (observed on dev-next 2026-08-08, noted in search-probe.ts) — one retry
+	// absorbs that; a genuine rejection still fails below.
+	for (let attempt = 0; attempt < 2; attempt += 1) {
+		const page = await fetch(authUrl);
+		if (!page.ok) {
+			console.error(`✖ /wcpos-auth/ login page failed: HTTP ${page.status}`);
+			process.exit(1);
+		}
+		const html = await page.text();
+		const nonce = /name="_wpnonce" value="([^"]+)"/.exec(html)?.[1];
+		const session = /name="auth_session" value="([^"]+)"/.exec(html)?.[1];
+		if (!nonce || !session) {
+			console.error('✖ /wcpos-auth/ login page did not include _wpnonce/auth_session fields');
+			process.exit(1);
+		}
+		const submit = await fetch(authUrl, {
+			method: 'POST',
+			redirect: 'manual',
+			headers: { 'content-type': 'application/x-www-form-urlencoded' },
+			body: new URLSearchParams({
+				'wcpos-log': WRITER_USER,
+				'wcpos-pwd': WRITER_PASS,
+				_wpnonce: nonce,
+				auth_session: session,
+				'wcpos-submit': '1',
+			}),
+		});
+		const location = submit.headers.get('location') ?? '';
+		const token = /access_token=([^&]+)/.exec(location)?.[1];
+		if (token) return token;
+		if (attempt === 0) continue;
+		console.error(`✖ Product-writer authentication failed (HTTP ${submit.status})`);
+		process.exit(1);
+	}
+}
 
 // Reachability first — fail loudly and early either way.
 const head = await fetch(`${STORE_URL}/wp-json`, { method: 'GET' });
@@ -51,12 +91,25 @@ if (!head.ok) {
 }
 console.log(`✔ Store reachable: ${STORE_URL}`);
 
-if (!KEY || !SECRET) {
+if (!WRITER_USER || !WRITER_PASS) {
 	console.warn(
-		'⚠ E2E_WC_CONSUMER_KEY/SECRET not set — skipping seed assertions (reachability only).'
+		'⚠ E2E_PRODUCT_WRITER_USER/PASS not set — skipping seed assertions (reachability only).'
 	);
 	process.exit(0);
 }
+
+const TOKEN = await mintWriterToken();
+console.log('✔ Product-writer JWT minted via /wcpos-auth/.');
+
+const api = (route, init = {}) =>
+	fetch(`${STORE_URL}/wp-json/wc/v3/${route}`, {
+		...init,
+		headers: {
+			'content-type': 'application/json',
+			authorization: `Bearer ${TOKEN}`,
+			...init.headers,
+		},
+	});
 
 const res = await api(`products?search=${encodeURIComponent(PRODUCT)}&per_page=20`);
 if (!res.ok) {
