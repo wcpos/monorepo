@@ -116,7 +116,11 @@ export default function TabsLayout() {
 						</Suspense>
 					</Panel>
 					<PanelResizeHandle />
-					<Panel minSize={25} id="cart">
+					{/* Complementary defaultSize — see (columns)/index.tsx: an unsized
+					    panel beside a sized one renders flexGrow 60:1 (a cart sliver)
+					    until the group layout lands, and on slow devices that
+					    pre-layout style can stick. */}
+					<Panel defaultSize={100 - uiSettings.width} minSize={25} id="cart">
 						<Suspense>
 							<ErrorBoundary>
 								<OpenOrders isColumn />

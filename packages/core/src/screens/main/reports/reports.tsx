@@ -55,7 +55,11 @@ export function Reports() {
 								</View>
 							</Panel>
 							<PanelResizeHandle />
-							<Panel>
+							{/* Complementary defaultSize — see the POS (columns) layout: an
+							    unsized panel beside a sized one renders flexGrow 40:1 until
+							    the group layout lands, and on slow devices that pre-layout
+							    style can stick. */}
+							<Panel defaultSize={60}>
 								<PanelGroup direction="horizontal">
 									<Panel>
 										<Orders />

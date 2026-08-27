@@ -73,7 +73,18 @@ env:
     timeout: 120000
 - tapOn:
     id: "receipt-close-button"
-# Back on the POS with a fresh order.
+# Back on the POS with a fresh order. Closing the receipt returns to the CART
+# route, so the small-screen layout lands on the Cart tab where the products
+# search is display:none — navigate back to the Products tab first (run
+# 33110203691: both Android-phone failures were exactly this wait). Inert in
+# two-column mode, where pos-tab-products does not exist.
+- runFlow:
+    when:
+      visible:
+        id: "pos-tab-products"
+    commands:
+      - tapOn:
+          id: "pos-tab-products"
 - extendedWaitUntil:
     visible:
       id: "search-products"
