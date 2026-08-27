@@ -5,6 +5,12 @@ env:
   # step with the seed script's VARIABLE_* constants.
   VARIABLE_PRODUCT_SEARCH: WCPOS E2E Variable
   VARIATION_OPTION: Small
+  # CI overrides this with the seeded product's remote id (the seed exports it
+  # and the workflow passes `maestro test -e VARIABLE_PRODUCT_ID=…`), pinning
+  # the tap to that product's id-bearing testID even if another catalogue
+  # record matches the search. Locally the default matches any variable tile
+  # left visible by the search filter.
+  VARIABLE_PRODUCT_ID: ".*"
 ---
 # P0-7 (added 2026-08-27): variable-product popover → pick a variation → cart.
 # The original 7-flow suite never touched variations, which is how the
@@ -38,13 +44,13 @@ env:
 # 60s: a product the seed just created may still be syncing into the local db.
 - extendedWaitUntil:
     visible:
-      id: "variable-product-tile"
+      id: "variable-product-tile-${VARIABLE_PRODUCT_ID}"
     timeout: 60000
 # Dismiss the keyboard BEFORE opening the popover — hideKeyboard afterwards
 # could dismiss the popover overlay instead.
 - hideKeyboard
 - tapOn:
-    id: "variable-product-tile"
+    id: "variable-product-tile-${VARIABLE_PRODUCT_ID}"
     index: 0
 # The popover portal mounts and renders option buttons immediately (they come
 # from the parent's attributes), but they stay DISABLED until the popover's

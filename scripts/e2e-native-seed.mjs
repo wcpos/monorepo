@@ -110,6 +110,11 @@ const VARIABLE_PRODUCT = 'WCPOS E2E Variable';
 const VARIABLE_ATTRIBUTE = 'Size';
 const VARIABLE_OPTIONS = ['Small', 'Large'];
 
+// Case-insensitive matching is for FINDING drifted records only (so a "small"
+// leftover is repaired, never duplicated). Equivalence for the app is EXACT:
+// the popover's testIDs embed the raw option string and the POS matches
+// attribute names/options with `===` (variation-matches.ts), so every repair
+// below writes back the canonical casing.
 const sameOption = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
 
 const listVariations = async (productId) => {
@@ -165,15 +170,16 @@ if (!variableProduct) {
 	console.log(`  created variable product "${VARIABLE_PRODUCT}" (#${variableProduct.id})`);
 } else {
 	// A previous run may have been interrupted between parent and variations,
-	// or the store may have drifted — repair the attribute definition if it no
-	// longer carries every option the flow can tap.
+	// or the store may have drifted — repair the attribute definition unless
+	// it carries the canonical name and every option with EXACT casing.
 	const attr = (variableProduct.attributes ?? []).find(
 		(a) => sameOption(a.name, VARIABLE_ATTRIBUTE) && a.variation
 	);
-	const missingOptions = VARIABLE_OPTIONS.filter(
-		(o) => !(attr?.options ?? []).some((existing) => sameOption(existing, o))
-	);
-	if (!attr || missingOptions.length) {
+	const attrExact =
+		attr &&
+		attr.name === VARIABLE_ATTRIBUTE &&
+		VARIABLE_OPTIONS.every((o) => (attr.options ?? []).includes(o));
+	if (!attrExact) {
 		const fixed = await api(`products/${variableProduct.id}`, {
 			method: 'PUT',
 			body: JSON.stringify({
@@ -204,8 +210,20 @@ for (const option of VARIABLE_OPTIONS) {
 		continue;
 	}
 	// The popover's Add to Cart is disabled for unsellable variations, and a
-	// price-less variation is not purchasable — repair both.
+	// price-less variation is not purchasable — repair both. Casing drift is
+	// repaired too (see sameOption above).
 	const patch = {};
+	const matchedAttr = existing.attributes.find(
+		(a) => sameOption(a.name, VARIABLE_ATTRIBUTE) && sameOption(a.option, option)
+	);
+	if (matchedAttr.name !== VARIABLE_ATTRIBUTE || matchedAttr.option !== option) {
+		patch.attributes = [{ name: VARIABLE_ATTRIBUTE, option }];
+	}
+	// Managed inventory ignores stock_status (the POS's resolveStock derives
+	// sellability from quantity + backorders), and a real quantity would
+	// decrement with every test order — unmanaged is the durable state for a
+	// suite-owned fixture.
+	if (existing.manage_stock === true) patch.manage_stock = false;
 	if (existing.stock_status !== 'instock') patch.stock_status = 'instock';
 	if (!existing.regular_price && !existing.price) patch.regular_price = '1.00';
 	if (Object.keys(patch).length) {
@@ -222,4 +240,13 @@ for (const option of VARIABLE_OPTIONS) {
 		console.log(`  repaired variation "${option}" (#${existing.id})`);
 	}
 }
-console.log(`✔ Variable product "${VARIABLE_PRODUCT}" present with sellable variations.`);
+console.log(
+	`✔ Variable product "${VARIABLE_PRODUCT}" (#${variableProduct.id}) present with sellable variations.`
+);
+
+// Hand the product id to the Maestro flows (variation flow taps the
+// id-bearing `variable-product-tile-<id>` testID, never "first result").
+if (process.env.GITHUB_OUTPUT) {
+	const { appendFileSync } = await import('node:fs');
+	appendFileSync(process.env.GITHUB_OUTPUT, `variable_product_id=${variableProduct.id}\n`);
+}

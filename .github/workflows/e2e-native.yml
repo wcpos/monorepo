@@ -38,6 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
+      variable_product_id: ${{ steps.seed.outputs.variable_product_id }}
     steps:
       - name: 🏗 Setup repository (main lane)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -69,6 +70,19 @@ jobs:
           SHA=$(git rev-parse HEAD)
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "Testing main @ $SHA"
+
+      # Seed ONCE, before the matrix fans out: the four test jobs share one
+      # store, and concurrent seeds could each miss the same variation and
+      # create it twice — the popover then never resolves to exactly one
+      # match. The workflow-level concurrency group serializes whole runs, so
+      # this is the only writer. Exports the seeded variable product's id so
+      # the flows can target it by its id-bearing testID.
+      - name: 🌱 Seed test store
+        id: seed
+        env:
+          WC_CONSUMER_KEY: ${{ secrets.E2E_WC_CONSUMER_KEY }}
+          WC_CONSUMER_SECRET: ${{ secrets.E2E_WC_CONSUMER_SECRET }}
+        run: node scripts/e2e-native-seed.mjs
 
       - name: 🏗 Setup monorepo
         uses: ./.github/actions/setup-monorepo
@@ -145,12 +159,6 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: 🌱 Seed test store
-        env:
-          WC_CONSUMER_KEY: ${{ secrets.E2E_WC_CONSUMER_KEY }}
-          WC_CONSUMER_SECRET: ${{ secrets.E2E_WC_CONSUMER_SECRET }}
-        run: node scripts/e2e-native-seed.mjs
-
       - name: 📱 Run Maestro suite on emulator
         uses: reactivecircus/android-emulator-runner@1dcd0090116d15e7c562f8db72807de5e036a4ed # v2.34.0
         with:
@@ -171,12 +179,15 @@ jobs:
           script: |
             adb wait-for-device
             adb install e2e-builds/wcpos-e2e-android.apk
-            maestro test apps/main/.maestro
+            maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" apps/main/.maestro
         env:
           # The Maestro Android driver installs its two APKs and waits for the
           # instrumentation channel; first-boot emulators on shared runners
           # regularly exceed the 15s default.
           MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'
+          # Pins flow 07 to the seeded product's id-bearing testID; the `.*`
+          # fallback (also the flow's own default) matches any variable tile.
+          VARIABLE_PRODUCT_ID: ${{ needs.build.outputs.variable_product_id }}
 
       - name: ⬆️ Upload failure artifacts
         if: failure()
@@ -221,12 +232,6 @@ jobs:
           MAESTRO_VERSION: 2.6.1
           MAESTRO_SHA256: 3440825f514f537c6a96bcf5de995780c2a4a7f83a43208fdc95d4f1fecfad3b
 
-      - name: 🌱 Seed test store
-        env:
-          WC_CONSUMER_KEY: ${{ secrets.E2E_WC_CONSUMER_KEY }}
-          WC_CONSUMER_SECRET: ${{ secrets.E2E_WC_CONSUMER_SECRET }}
-        run: node scripts/e2e-native-seed.mjs
-
       - name: 📱 Boot simulator and install app
         run: |
           UDID=$(xcrun simctl create "e2e-${{ matrix.device.name }}" "${{ matrix.device.simulator }}")
@@ -238,13 +243,16 @@ jobs:
           echo "MAESTRO_UDID=$UDID" >> "$GITHUB_ENV"
 
       - name: 📱 Run Maestro suite on simulator
-        run: maestro --udid "$MAESTRO_UDID" test apps/main/.maestro
+        run: maestro --udid "$MAESTRO_UDID" test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" apps/main/.maestro
         env:
           # Maestro's XCUITest driver compiles and installs its runner on
           # first launch; macOS runners routinely exceed the 15s default —
           # every nightly since the 2026-08-06 promotion died here with
           # "iOS driver not ready in time" before running a single flow.
           MAESTRO_DRIVER_STARTUP_TIMEOUT: '240000'
+          # Pins flow 07 to the seeded product's id-bearing testID; the `.*`
+          # fallback (also the flow's own default) matches any variable tile.
+          VARIABLE_PRODUCT_ID: ${{ needs.build.outputs.variable_product_id }}
 
       - name: ⬆️ Upload failure artifacts
         if: failure()
