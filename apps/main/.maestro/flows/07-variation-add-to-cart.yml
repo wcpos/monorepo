@@ -1,0 +1,98 @@
+appId: com.wcpos.main.dev
+env:
+  # Seeded by scripts/e2e-native-seed.mjs — the suite owns this product, so the
+  # flow never depends on a store's remembered catalogue. Keep these three in
+  # step with the seed script's VARIABLE_* constants.
+  VARIABLE_PRODUCT_SEARCH: WCPOS E2E Variable
+  VARIATION_OPTION: Small
+  # CI overrides this with the seeded product's remote id (the seed exports it
+  # and the workflow passes `maestro test -e VARIABLE_PRODUCT_ID=…`), pinning
+  # the tap to that product's id-bearing testID even if another catalogue
+  # record matches the search. Locally the default matches any variable tile
+  # left visible by the search filter.
+  VARIABLE_PRODUCT_ID: ".*"
+---
+# P0-7 (added 2026-08-27): variable-product popover → pick a variation → cart.
+# The original 7-flow suite never touched variations, which is how the
+# native-only variation-popover crash (#1574 era) shipped unseen — the popover
+# is a native portal surface, so merely opening it is half the regression test.
+# Session comes from 02; the cart already holds 06's line — do NOT clear state.
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: "search-products"
+    timeout: 120000
+# The In-Stock filter resets on every relaunch — clear it before searching.
+- runFlow:
+    when:
+      visible:
+        id: "filter-pill-remove-stock_status"
+    commands:
+      - tapOn:
+          id: "filter-pill-remove-stock_status"
+- runFlow:
+    when:
+      visible:
+        id: "pos-tab-products"
+    commands:
+      - tapOn:
+          id: "pos-tab-products"
+- tapOn:
+    id: "search-products"
+- inputText: ${VARIABLE_PRODUCT_SEARCH}
+# 60s: a product the seed just created may still be syncing into the local db.
+- extendedWaitUntil:
+    visible:
+      id: "variable-product-tile-${VARIABLE_PRODUCT_ID}"
+    timeout: 60000
+# Dismiss the keyboard BEFORE opening the popover — hideKeyboard afterwards
+# could dismiss the popover overlay instead.
+- hideKeyboard
+- tapOn:
+    id: "variable-product-tile-${VARIABLE_PRODUCT_ID}"
+    index: 0
+# The popover portal mounts and renders option buttons immediately (they come
+# from the parent's attributes), but they stay DISABLED until the popover's
+# lazy variation sync materializes locally — a tap during that window is a
+# silent no-op (the web spec documents the same race). Retry the tap until the
+# resolved-variation footer appears; re-tapping an already-selected option is
+# a no-op by design, so the retry can never deselect.
+- extendedWaitUntil:
+    visible:
+      id: "variation-option-${VARIATION_OPTION}"
+    timeout: 60000
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          id: "variation-option-${VARIATION_OPTION}"
+      # One seeded attribute → one option resolves a single variation.
+      - extendedWaitUntil:
+          visible:
+            id: "variation-popover-add-to-cart"
+          timeout: 20000
+- tapOn:
+    id: "variation-popover-add-to-cart"
+# Adding closes the popover. Phone layout: switch to the cart tab.
+- runFlow:
+    when:
+      visible:
+        id: "pos-tab-cart"
+    commands:
+      - tapOn:
+          id: "pos-tab-cart"
+- extendedWaitUntil:
+    visible:
+      id: "cart-quantity-input"
+    timeout: 30000
+# 06 left exactly one line in the cart; the variation makes two. A second
+# quantity cell (index 1) proves the variation line landed — a relative
+# assertion, no store contents named.
+- assertVisible:
+    id: "cart-quantity-input"
+    index: 1
+- assertVisible:
+    id: "cart-subtotal"
+- assertVisible:
+    id: "checkout-button"

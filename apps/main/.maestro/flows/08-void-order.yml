@@ -1,6 +1,6 @@
 appId: com.wcpos.main.dev
 ---
-# P0-7: void the open order (created by 06); relaunch must not resurrect it.
+# P0-8: void the open order (built by 06 and 07); relaunch must not resurrect it.
 - launchApp:
     stopApp: true
 - extendedWaitUntil:

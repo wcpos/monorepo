@@ -1,9 +1,8 @@
 # Maestro workspace for the WCPOS native E2E suite (P0).
 # Spec: wayfinder map wcpos/monorepo#688 handoff spec.
-# CI entry point: `.github/workflows/e2e-native.yml` on the **main** branch
-# (GitHub fires `schedule`/`workflow_dispatch` from the default branch only).
-# That workflow checks this lane out and runs the flows — the suite stays here
-# on next; only the scheduler lives on main. Locally: `maestro test apps/main/.maestro`.
+# CI entry point: `.github/workflows/e2e-native.yml`, which checks out `main`
+# (the shipping lane) and runs the flows nightly against dev-pro.wcpos.com.
+# Locally: `maestro test apps/main/.maestro`.
 # The suite is deliberately stateful: 02 authenticates once (real OAuth
 # against the dev-pro store) and every later flow reuses the SQLite-persisted
 # session, so execution order is pinned explicitly — Maestro's default flow
@@ -19,4 +18,5 @@ executionOrder:
     - 04-cash-sale
     - 05-drawer-navigation
     - 06-cart-quantity-editing
-    - 07-void-order
+    - 07-variation-add-to-cart
+    - 08-void-order
