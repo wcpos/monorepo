@@ -64,6 +64,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 	const wpApiUrl = site.wp_api_url;
 	const useJwtAsParam = site.use_jwt_as_param;
 	const useRestRouteParam = site.use_rest_route_param;
+	const useProtocolHeaders = site.use_protocol_headers ?? false;
 	const wcposVersion = site.wcpos_version;
 
 	// Get userDB and user for store merging
@@ -80,6 +81,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 				wp_api_url: wpApiUrl,
 				use_jwt_as_param: useJwtAsParam,
 				use_rest_route_param: useRestRouteParam,
+				use_protocol_headers: useProtocolHeaders,
 				wcpos_version: wcposVersion,
 				url: siteUrl,
 			},
@@ -96,6 +98,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 		wpApiUrl,
 		useJwtAsParam,
 		useRestRouteParam,
+		useProtocolHeaders,
 		wcposVersion,
 		siteUrl,
 		userId,
@@ -188,12 +191,16 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					const requestConfig: any = {
 						params: {
 							wcpos: 1,
-							[PROTOCOL_QUERY_PARAM]: SYNC_PROTOCOL_VERSION,
-							[CLIENT_QUERY_PARAM]: formatClientSignal(AppInfo.platform, AppInfo.version),
+							...(AppInfo.platform !== 'web' || !useProtocolHeaders
+								? {
+										[PROTOCOL_QUERY_PARAM]: SYNC_PROTOCOL_VERSION,
+										[CLIENT_QUERY_PARAM]: formatClientSignal(AppInfo.platform, AppInfo.version),
+									}
+								: {}),
 						},
 						headers: {
 							'X-WCPOS': '1',
-							...(AppInfo.platform !== 'web'
+							...(AppInfo.platform !== 'web' || useProtocolHeaders
 								? {
 										[PROTOCOL_HEADER]: String(SYNC_PROTOCOL_VERSION),
 										[CLIENT_HEADER]: formatClientSignal(AppInfo.platform, AppInfo.version),
@@ -471,6 +478,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 		wpApiUrl,
 		useJwtAsParam,
 		useRestRouteParam,
+		useProtocolHeaders,
 		wcposVersion,
 		siteUrl,
 		userId,

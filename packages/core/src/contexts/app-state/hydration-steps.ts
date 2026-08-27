@@ -10,6 +10,7 @@ import {
 	type ErrorCode,
 } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { Platform } from '@wcpos/utils/platform';
+import { protocolHeadersSupported } from '@wcpos/utils/sync-protocol';
 import {
 	deriveSyntheticPathBase,
 	deriveSyntheticPathRoot,
@@ -188,16 +189,19 @@ async function testParamAuth(
 interface HeaderEchoResult {
 	headers: Record<string, { received?: boolean; length?: number }>;
 	params: Record<string, boolean>;
+	cors?: { reflects_request_headers?: boolean };
 }
 
 function parseHeaderEcho(data: unknown): HeaderEchoResult | null {
 	const candidate = data as
-		| (HeaderEchoResult & {
+		| (Omit<HeaderEchoResult, 'cors'> & {
 				v?: unknown;
 				headers: Record<string, { received?: unknown }>;
+				cors?: unknown;
 		  })
 		| null;
-	return candidate &&
+	const parsed =
+		candidate &&
 		candidate.v === 1 &&
 		typeof candidate.headers === 'object' &&
 		candidate.headers !== null &&
@@ -205,8 +209,23 @@ function parseHeaderEcho(data: unknown): HeaderEchoResult | null {
 		candidate.params !== null &&
 		typeof candidate.headers.authorization?.received === 'boolean' &&
 		typeof candidate.params.authorization === 'boolean'
-		? (candidate as HeaderEchoResult)
-		: null;
+			? (candidate as HeaderEchoResult)
+			: null;
+	if (!parsed) return null;
+
+	const result: HeaderEchoResult = { headers: parsed.headers, params: parsed.params };
+	const cors = (candidate as { cors?: unknown }).cors;
+	if (
+		typeof cors === 'object' &&
+		cors !== null &&
+		typeof (cors as { reflects_request_headers?: unknown }).reflects_request_headers === 'boolean'
+	) {
+		result.cors = {
+			reflects_request_headers: (cors as { reflects_request_headers: boolean })
+				.reflects_request_headers,
+		};
+	}
+	return result;
 }
 
 interface EchoAnsweredVerdict {
@@ -219,7 +238,12 @@ interface EchoAnsweredVerdict {
 type EchoProbeVerdict = HeaderEchoResult | EchoAnsweredVerdict | null;
 
 export type AuthTransportResolution =
-	| { ok: true; useJwtAsParam: boolean; useRestRouteParam: boolean }
+	| {
+			ok: true;
+			useJwtAsParam: boolean;
+			useRestRouteParam: boolean;
+			useProtocolHeaders: boolean;
+	  }
 	| { ok: false; code: ErrorCode | null };
 
 /**
@@ -560,6 +584,7 @@ export async function testAuthorizationMethod(
 		const pingUrl = pingProbeUrl(pathRoot);
 		const simpleEchoUrl = queryOnly ? queryEchoUrl : pathEchoUrl;
 		if (echo) {
+			const useProtocolHeaders = protocolHeadersSupported(echo);
 			const deadHeaders = Object.entries(echo.headers)
 				.filter(([, state]) => state?.received !== true)
 				.map(([name]) => name);
@@ -574,10 +599,10 @@ export async function testAuthorizationMethod(
 				context: { wcposApiUrl, headerAuthArrives, paramAuthArrives, deadHeaders },
 			});
 			if (headerAuthArrives) {
-				return { ok: true, useJwtAsParam: false, useRestRouteParam };
+				return { ok: true, useJwtAsParam: false, useRestRouteParam, useProtocolHeaders };
 			}
 			if (paramAuthArrives) {
-				return { ok: true, useJwtAsParam: true, useRestRouteParam };
+				return { ok: true, useJwtAsParam: true, useRestRouteParam, useProtocolHeaders };
 			}
 			// Both credential channels are blocked — the probe measured this
 			// authoritatively, so the legacy test would only fail slower.
@@ -631,7 +656,12 @@ export async function testAuthorizationMethod(
 				},
 			});
 
-			return { ok: true, useJwtAsParam: false, useRestRouteParam };
+			return {
+				ok: true,
+				useJwtAsParam: false,
+				useRestRouteParam,
+				useProtocolHeaders: false,
+			};
 		}
 
 		appLogger.debug('Authorization method test results', {
@@ -647,7 +677,12 @@ export async function testAuthorizationMethod(
 			appLogger.warn('Server does not support Authorization headers, using query parameters', {
 				context: { wcposApiUrl },
 			});
-			return { ok: true, useJwtAsParam: true, useRestRouteParam };
+			return {
+				ok: true,
+				useJwtAsParam: true,
+				useRestRouteParam,
+				useProtocolHeaders: false,
+			};
 		}
 		if (legacy.statuses?.[0] === 400 && legacy.statuses[1] === 414) {
 			return finishHostBlock(wcposApiUrl, pingUrl, simpleEchoUrl, {
@@ -1002,16 +1037,17 @@ const testAuthorizationStep: HydrationStep = {
 
 		if (result.ok) {
 			/**
-			 * Write the outcome both ways. The embedded payload never carries
-			 * `use_jwt_as_param`, and the site write above merges rather than
+			 * Write every transport outcome both ways. The embedded payload never
+			 * carries these local flags, and the site write above merges rather than
 			 * overwrites (#902), so a stale `true` from an earlier session would
-			 * otherwise keep JWTs in the query string forever.
+			 * otherwise keep the prior transport forever.
 			 */
 			const siteDoc = await userDB.sites.findOne(initialSite.uuid).exec();
 			if (siteDoc) {
 				await siteDoc.getLatest().incrementalPatch({
 					use_jwt_as_param: !!result.useJwtAsParam,
 					use_rest_route_param: !!result.useRestRouteParam,
+					use_protocol_headers: !!result.useProtocolHeaders,
 				});
 				if (result.useJwtAsParam) {
 					appLogger.info('Site configured to use JWT as query parameter', {

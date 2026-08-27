@@ -75,6 +75,11 @@ const sites: RxCollectionCreator<SiteDocumentType> = {
 			// path transport, so existing documents need no change.
 			return oldDoc;
 		},
+		5(oldDoc) {
+			// v5 adds the optional `use_protocol_headers` flag; absent reads as
+			// query transport, so existing documents need no change.
+			return oldDoc;
+		},
 	},
 };
 

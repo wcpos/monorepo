@@ -5,13 +5,11 @@ import { authenticatedTest, getStoreUrl, hydrateAuthenticatedPage } from './fixt
 /**
  * The client protocol signal (mono#1599; gate spec wcpos/woocommerce-pos#1752).
  *
- * Every request to the store's wcpos/v2 surface must carry the query twins
- * `wcpos_protocol=2` and `wcpos_client=web/<version>` — the strip-proof channel
- * the 1.11.0 gate keys on. On WEB the matching headers must be ABSENT: the
- * released fleet's CORS allow-list is static and does not include them, so a
- * web client sending them would fail preflight on every request against every
- * released store. (Native/electron header coverage is unit-pinned in
- * engine-fetcher.test.ts — Playwright drives the web bundle only.)
+ * Every web request to the store's wcpos/v2 surface uses the transport proven
+ * by that store's echo capability. A floor containing both signal names, or an
+ * explicit reflected-header CORS capability, selects headers only; absent or
+ * partial evidence conservatively selects the query twins only. Native and
+ * Electron coverage remains unit-pinned in engine-fetcher.test.ts.
  *
  * The connect-time probes (echo, auth/test) are deliberately excluded: they
  * predate the signal and were left untouched by design.
@@ -34,10 +32,22 @@ function isSyncSurfaceRequest(url: URL, storeOrigin: string): boolean {
 	return true;
 }
 
-test('every sync request carries the query twins and web sends no signal headers', async ({
+test('every sync request uses the protocol transport proven by the store echo', async ({
 	posPage: page,
+	request,
 }, testInfo) => {
-	const storeOrigin = new URL(getStoreUrl(testInfo)).origin;
+	const storeUrl = getStoreUrl(testInfo);
+	const storeOrigin = new URL(storeUrl).origin;
+	const echoResponse = await request.get(new URL('/wp-json/wcpos/v2/echo', storeUrl).toString());
+	const echo = (await echoResponse.json().catch(() => null)) as {
+		headers?: Record<string, unknown>;
+		cors?: { reflects_request_headers?: unknown };
+	} | null;
+	const supportsProtocolHeaders =
+		(echo?.headers !== undefined &&
+			'x-wcpos-protocol' in echo.headers &&
+			'x-wcpos-client' in echo.headers) ||
+		echo?.cors?.reflects_request_headers === true;
 	const seen: { url: URL; headers: Record<string, string> }[] = [];
 	page.on('request', (request) => {
 		let url: URL;
@@ -60,14 +70,21 @@ test('every sync request carries the query twins and web sends no signal headers
 		.toBeGreaterThanOrEqual(3);
 
 	for (const { url, headers } of seen) {
-		expect(url.searchParams.get('wcpos_protocol'), `missing wcpos_protocol on ${url}`).toBe('2');
-		expect(
-			url.searchParams.get('wcpos_client'),
-			`missing/malformed wcpos_client on ${url}`
-		).toMatch(/^web\/.+/);
-		// The CORS constraint, asserted at the wire: web must NOT send the
-		// signal headers while the fleet's allow-list lacks them.
-		expect(headers['x-wcpos-protocol'], `web sent X-WCPOS-Protocol on ${url}`).toBeUndefined();
-		expect(headers['x-wcpos-client'], `web sent X-WCPOS-Client on ${url}`).toBeUndefined();
+		if (supportsProtocolHeaders) {
+			expect(headers['x-wcpos-protocol'], `missing X-WCPOS-Protocol on ${url}`).toBe('2');
+			expect(headers['x-wcpos-client'], `missing/malformed X-WCPOS-Client on ${url}`).toMatch(
+				/^web\/.+/
+			);
+			expect(url.searchParams.has('wcpos_protocol'), `sent wcpos_protocol on ${url}`).toBe(false);
+			expect(url.searchParams.has('wcpos_client'), `sent wcpos_client on ${url}`).toBe(false);
+		} else {
+			expect(url.searchParams.get('wcpos_protocol'), `missing wcpos_protocol on ${url}`).toBe('2');
+			expect(
+				url.searchParams.get('wcpos_client'),
+				`missing/malformed wcpos_client on ${url}`
+			).toMatch(/^web\/.+/);
+			expect(headers['x-wcpos-protocol'], `web sent X-WCPOS-Protocol on ${url}`).toBeUndefined();
+			expect(headers['x-wcpos-client'], `web sent X-WCPOS-Client on ${url}`).toBeUndefined();
+		}
 	}
 });

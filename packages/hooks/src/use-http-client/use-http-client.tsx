@@ -235,7 +235,10 @@ export const useHttpClient = (
 			(processedConfig as any).wcposHeaders !== false
 		) {
 			set(processedConfig, ['headers', 'X-WCPOS'], 1);
-			if (AppInfo.platform !== 'web') {
+			if (
+				AppInfo.platform !== 'web' ||
+				(processedConfig as { protocolHeaders?: unknown }).protocolHeaders === true
+			) {
 				set(processedConfig, ['headers', PROTOCOL_HEADER], String(SYNC_PROTOCOL_VERSION));
 				set(
 					processedConfig,

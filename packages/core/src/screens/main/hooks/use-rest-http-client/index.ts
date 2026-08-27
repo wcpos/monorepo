@@ -246,6 +246,7 @@ export const useRestHttpClient = (endpoint = '') => {
 				['initialProps', 'site', 'use_jwt_as_param'],
 				site.use_jwt_as_param
 			);
+			const useProtocolHeaders = site.use_protocol_headers ?? false;
 			const wcposVersion = site.wcpos_version;
 
 			let apiURL = site.wcpos_api_url;
@@ -270,10 +271,14 @@ export const useRestHttpClient = (endpoint = '') => {
 						? toRestRouteUrl(pathFormBaseURL, pathFormRoot)
 						: pathFormBaseURL,
 				headers: shouldUseJwtAsParam ? {} : { Authorization: `Bearer ${jwt}` },
-				params: {
-					[PROTOCOL_QUERY_PARAM]: SYNC_PROTOCOL_VERSION,
-					[CLIENT_QUERY_PARAM]: formatClientSignal(AppInfo.platform, AppInfo.version),
-				},
+				protocolHeaders: AppInfo.platform === 'web' && useProtocolHeaders ? true : undefined,
+				params:
+					AppInfo.platform !== 'web' || !useProtocolHeaders
+						? {
+								[PROTOCOL_QUERY_PARAM]: SYNC_PROTOCOL_VERSION,
+								[CLIENT_QUERY_PARAM]: formatClientSignal(AppInfo.platform, AppInfo.version),
+							}
+						: {},
 			};
 
 			if (shouldUseJwtAsParam) {

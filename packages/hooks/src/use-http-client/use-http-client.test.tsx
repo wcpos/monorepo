@@ -92,6 +92,21 @@ describe('useHttpClient network audit logs', () => {
 		}
 	});
 
+	it('stamps protocol and client headers on web when the request opts in', async () => {
+		(http.request as jest.Mock).mockResolvedValue({ status: 200, data: {} });
+		const { result } = renderHook(() => useHttpClient());
+
+		await result.current.request({
+			method: 'GET',
+			url: 'https://example.com/wp-json/wcpos/v2/products',
+			protocolHeaders: true,
+		} as never);
+
+		const config = (http.request as jest.Mock).mock.calls[0][0];
+		expect(config.headers['X-WCPOS-Protocol']).toBe('2');
+		expect(config.headers['X-WCPOS-Client']).toBe(`web/${AppInfo.version}`);
+	});
+
 	it('persists mutating responses with a sanitized searchable endpoint', async () => {
 		(http.request as jest.Mock).mockResolvedValue({ status: 201, data: {} });
 		const { result } = renderHook(() => useHttpClient());

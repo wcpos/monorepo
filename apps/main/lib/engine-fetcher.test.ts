@@ -40,6 +40,7 @@ function createFetcherHarness(
 			refreshAuth?: (context?: { operationId?: string }) => Promise<string | null>;
 			useJwtAsParam?: boolean;
 			bareAuthParam?: boolean;
+			useProtocolHeaders?: boolean;
 		};
 		clockSkew?: { generation: number; evaluated: boolean };
 		scope?: { storeId?: number | string | null };
@@ -345,22 +346,27 @@ describe('createEngineFetcher', () => {
 		).toBeNull();
 	});
 
-	it('sends protocol and client query signals in path and rest_route forms', async () => {
+	it('sends protocol and client query signals on web without capability evidence', async () => {
 		const { AppInfo } =
 			jest.requireActual<typeof import('@wcpos/utils/app-info')>('@wcpos/utils/app-info');
+		const originalPlatform = AppInfo.platform;
+		AppInfo.platform = 'web';
 		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
-		const path = createFetcherHarness({ fetch });
-		const query = createFetcherHarness({ fetch, useRestRouteParam: true });
 
-		await path.fetcher('https://store.example.test/wp-json/wcpos/v2/products');
-		await query.fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+		try {
+			const path = createFetcherHarness({ fetch });
+			const query = createFetcherHarness({ fetch, useRestRouteParam: true });
 
-		for (const call of fetch.mock.calls) {
-			const requestedUrl = new URL(call[0] as string);
-			expect(requestedUrl.searchParams.get('wcpos_protocol')).toBe('2');
-			expect(requestedUrl.searchParams.get('wcpos_client')).toBe(
-				`${AppInfo.platform}/${AppInfo.version}`
-			);
+			await path.fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+			await query.fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+
+			for (const call of fetch.mock.calls) {
+				const requestedUrl = new URL(call[0] as string);
+				expect(requestedUrl.searchParams.get('wcpos_protocol')).toBe('2');
+				expect(requestedUrl.searchParams.get('wcpos_client')).toBe(`web/${AppInfo.version}`);
+			}
+		} finally {
+			AppInfo.platform = originalPlatform;
 		}
 	});
 
@@ -377,7 +383,7 @@ describe('createEngineFetcher', () => {
 		expect(headers.get('X-WCPOS-Client')).toBe(`${AppInfo.platform}/${AppInfo.version}`);
 	});
 
-	it('does not send protocol or client headers on web', async () => {
+	it('sends params and no headers on web without capability evidence', async () => {
 		const { AppInfo } =
 			jest.requireActual<typeof import('@wcpos/utils/app-info')>('@wcpos/utils/app-info');
 		const originalPlatform = AppInfo.platform;
@@ -391,6 +397,34 @@ describe('createEngineFetcher', () => {
 			const headers = new Headers((fetch.mock.calls[0]?.[1] as RequestInit).headers);
 			expect(headers.has('X-WCPOS-Protocol')).toBe(false);
 			expect(headers.has('X-WCPOS-Client')).toBe(false);
+			const url = new URL(fetch.mock.calls[0]?.[0] as string);
+			expect(url.searchParams.get('wcpos_protocol')).toBe('2');
+			expect(url.searchParams.get('wcpos_client')).toBe(`web/${AppInfo.version}`);
+		} finally {
+			AppInfo.platform = originalPlatform;
+		}
+	});
+
+	it('sends headers and no params on web with capability evidence', async () => {
+		const { AppInfo } =
+			jest.requireActual<typeof import('@wcpos/utils/app-info')>('@wcpos/utils/app-info');
+		const originalPlatform = AppInfo.platform;
+		AppInfo.platform = 'web';
+		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
+
+		try {
+			const { fetcher } = createFetcherHarness({
+				fetch,
+				auth: { ...BASE_AUTH, useProtocolHeaders: true },
+			});
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
+
+			const headers = new Headers((fetch.mock.calls[0]?.[1] as RequestInit).headers);
+			expect(headers.get('X-WCPOS-Protocol')).toBe('2');
+			expect(headers.get('X-WCPOS-Client')).toBe(`web/${AppInfo.version}`);
+			const url = new URL(fetch.mock.calls[0]?.[0] as string);
+			expect(url.searchParams.has('wcpos_protocol')).toBe(false);
+			expect(url.searchParams.has('wcpos_client')).toBe(false);
 		} finally {
 			AppInfo.platform = originalPlatform;
 		}
