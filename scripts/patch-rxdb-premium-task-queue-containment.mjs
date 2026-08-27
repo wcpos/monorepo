@@ -72,9 +72,10 @@
  * (wcpos/electron#375), which is what contains filesystem-node in its main
  * process — keep the two copies identical.
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const MARKER = '__wcposInstallQueueHealer';
@@ -221,20 +222,35 @@ function commitPatches(prepared) {
 	}
 }
 
-const packageRoot = dirname(require.resolve('rxdb-premium/package.json'));
+function main() {
+	const packageRoot = dirname(require.resolve('rxdb-premium/package.json'));
 
-const prepared = DISTS.map(({ dist, ...anchors }) => {
-	const path = join(packageRoot, `dist/${dist}/plugins/storage-abstract-filesystem/task-queue.js`);
-	if (!existsSync(path)) {
-		throw new Error(`rxdb-premium ${dist} dist not found — run after the package postinstall`);
-	}
-	return { dist, ...preparePatch(path, anchors) };
-});
+	const prepared = DISTS.map(({ dist, ...anchors }) => {
+		const path = join(
+			packageRoot,
+			`dist/${dist}/plugins/storage-abstract-filesystem/task-queue.js`
+		);
+		if (!existsSync(path)) {
+			throw new Error(`rxdb-premium ${dist} dist not found — run after the package postinstall`);
+		}
+		return { dist, ...preparePatch(path, anchors) };
+	});
 
-commitPatches(prepared);
+	commitPatches(prepared);
 
-console.log(
-	`[patch-rxdb-premium-task-queue-containment] ${prepared
-		.map(({ dist, status }) => `${dist}: ${status}`)
-		.join(', ')}`
-);
+	console.log(
+		`[patch-rxdb-premium-task-queue-containment] ${prepared
+			.map(({ dist, status }) => `${dist}: ${status}`)
+			.join(', ')}`
+	);
+}
+
+// Run only when invoked as a script (postinstall/package/make/publish-app):
+// the containment test imports `preparePatch`, and an import must never carry
+// the side effect of patching node_modules. Same guard as patch-opfs-worker.mjs.
+if (
+	process.argv[1] &&
+	realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])
+) {
+	main();
+}
