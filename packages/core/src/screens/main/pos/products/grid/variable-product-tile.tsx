@@ -7,7 +7,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
-import { VariationsPopover } from '../cells/variations-popover';
+import { useProductsStockStatusFilter, VariationsPopover } from '../cells/variations-popover';
 import { useT } from '../../../../../contexts/translations';
 import { getVariablePrices } from '../../../components/product/get-variable-prices';
 import { PriceWithTax } from '../../../components/product/price-with-tax';
@@ -91,6 +91,9 @@ function VariablePriceRange({
 export function VariableProductTile({ record, gridFields }: VariableProductTileProps) {
 	const t = useT();
 	const { addVariation } = useAddVariation();
+	// Read here, inside the products QueryStateProvider — PopoverContent portals out of it
+	// on native, so the popover itself cannot reach the products filter.
+	const stockStatus = useProductsStockStatusFilter();
 	const { format } = useCurrencyFormat();
 	const triggerRef = React.useRef<{ close: () => void } | null>(null);
 
@@ -249,7 +252,7 @@ export function VariableProductTile({ record, gridFields }: VariableProductTileP
 				</Pressable>
 			</PopoverTrigger>
 			<PopoverContent side="right" align="center" className="w-auto max-w-80 p-2">
-				<VariationsPopover parent={record} addToCart={addToCart} />
+				<VariationsPopover parent={record} addToCart={addToCart} stockStatus={stockStatus} />
 			</PopoverContent>
 		</Popover>
 	);

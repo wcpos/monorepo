@@ -14,12 +14,20 @@ type LineItem = NonNullable<OrderDocument['line_items']>[number];
 interface VariationsPopoverProps {
 	parent: EngineRecord<'products'>;
 	addToCart: (variation: EngineRecord<'variations'>, metaData: LineItem['meta_data']) => void;
-}
-
-interface VariationsPopoverContentProps extends VariationsPopoverProps {
-	/** The products list's Stock Status filter, read outside the variations query state. */
+	/**
+	 * The products list's Stock Status filter. The CALLER must read this at the popover
+	 * trigger site (`useProductsStockStatusFilter`) and pass it down: on native,
+	 * PopoverContent renders through the portal host at the app root, so no screen
+	 * provider — including the products QueryStateProvider — is an ancestor of this
+	 * component, and reading it here crashes. The pill governs here exactly as it does
+	 * in the expanded table: a colour leading only to variations outside the filter is
+	 * greyed out. With the pill cleared every colour is selectable and the disabled
+	 * Add to Cart button carries the stock news instead.
+	 */
 	stockStatus?: string;
 }
+
+type VariationsPopoverContentProps = VariationsPopoverProps;
 
 /**
  *
@@ -67,18 +75,16 @@ function VariationsPopoverContent({
 	);
 }
 
-export function VariationsPopover(props: VariationsPopoverProps) {
-	/**
-	 * Read OUTSIDE the variations provider below — query state is a single nearest-provider
-	 * context, so the products filter is unreachable from the popover's own subtree. The pill
-	 * governs here exactly as it does in the expanded table: a colour leading only to variations
-	 * outside the filter is greyed out. With the pill cleared every colour is selectable and the
-	 * disabled Add to Cart button carries the stock news instead.
-	 */
-	const stockStatus = useQueryState<'products', string | undefined>(
-		(state) => state.filters.stock_status
-	);
+/**
+ * The products list's Stock Status filter, for the popover trigger site. Must be called
+ * where the trigger renders (inside the products QueryStateProvider), never inside
+ * PopoverContent — see the `stockStatus` prop above.
+ */
+export function useProductsStockStatusFilter(): string | undefined {
+	return useQueryState<'products', string | undefined>((state) => state.filters.stock_status);
+}
 
+export function VariationsPopover(props: VariationsPopoverProps) {
 	return (
 		<QueryStateProvider
 			collection="variations"
@@ -86,7 +92,7 @@ export function VariationsPopover(props: VariationsPopoverProps) {
 			initialSort={{ field: 'name', direction: 'asc' }}
 			initialFilters={{ status: 'publish' }}
 		>
-			<VariationsPopoverContent {...props} stockStatus={stockStatus} />
+			<VariationsPopoverContent {...props} />
 		</QueryStateProvider>
 	);
 }

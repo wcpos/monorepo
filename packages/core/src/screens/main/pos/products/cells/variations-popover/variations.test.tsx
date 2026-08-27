@@ -9,6 +9,7 @@ import { of } from 'rxjs';
 import { QueryStateProvider, useQueryState } from '../../../../../../query';
 import { VariationsPopover } from './index';
 import { Variations } from './variations';
+import { VariableActions } from '../variable-actions';
 
 const mockVariationDocuments = [
 	{
@@ -119,24 +120,16 @@ jest.mock('../../../../../../contexts/translations', () => ({
 jest.mock('../../../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: (value: string) => value }),
 }));
-/**
- * The popover always renders inside the POS products list, and reads that list's Stock Status
- * pill out of its query state — the pill, not the display setting, decides whether unsellable
- * options are greyed out.
- */
-function withProductsState(children: React.ReactNode, stockStatus?: string) {
-	return (
-		<QueryStateProvider
-			collection="products"
-			initialPageSize={10}
-			initialSort={{ field: 'name', direction: 'asc' }}
-			initialFilters={stockStatus ? { stock_status: stockStatus } : {}}
-		>
-			{children}
-		</QueryStateProvider>
-	);
-}
-
+// For the VariableActions wire test: render popover content inline (always open).
+jest.mock('@wcpos/components/popover', () => ({
+	Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+	PopoverTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+	PopoverContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
+jest.mock('../../../hooks/use-add-variation', () => ({
+	useAddVariation: () => ({ addVariation: jest.fn() }),
+}));
 function StateProbe() {
 	const matches = useQueryState<'variations', import('../../../../../../query').VariationMatch[]>(
 		(state) => state.filters.attributeMatches
@@ -144,6 +137,15 @@ function StateProbe() {
 	return <div data-testid="popover-matches">{JSON.stringify(matches)}</div>;
 }
 
+/**
+ * Every test here renders VariationsPopover with NO products QueryStateProvider ancestor.
+ * That is deliberate, not an omission: on native, PopoverContent portals its children to
+ * the host at the app root, outside every screen provider. Reading the products query
+ * state from inside the popover threw "Query state hooks must be used within
+ * QueryStateProvider" on iOS — the Stock Status pill now arrives as a prop read at the
+ * trigger site. Wrapping these renders in a products provider again would let that
+ * regression pass unseen.
+ */
 describe('Variations popover query state', () => {
 	beforeEach(() => {
 		mockSync.mockClear();
@@ -159,30 +161,28 @@ describe('Variations popover query state', () => {
 			} as never,
 			addToCart: jest.fn(),
 		};
-		const { rerender } = render(withProductsState(<VariationsPopover {...props} />));
+		const { rerender } = render(<VariationsPopover {...props} />);
 
 		expect(mockSync).toHaveBeenCalledTimes(1);
 
-		rerender(withProductsState(<VariationsPopover {...props} />));
+		rerender(<VariationsPopover {...props} />);
 
 		expect(mockSync).toHaveBeenCalledTimes(1);
 	});
 
 	it('does not show draft variations', () => {
 		render(
-			withProductsState(
-				<VariationsPopover
-					parent={
-						{
-							payload: {
-								variations: [11, 12],
-								attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
-							},
-						} as never
-					}
-					addToCart={jest.fn()}
-				/>
-			)
+			<VariationsPopover
+				parent={
+					{
+						payload: {
+							variations: [11, 12],
+							attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
+						},
+					} as never
+				}
+				addToCart={jest.fn()}
+			/>
 		);
 
 		expect(screen.queryByText('select-red')).toBeNull();
@@ -201,13 +201,53 @@ describe('Variations popover query state', () => {
 		};
 
 		// Blue holds no stock: the pill says In stock, so the option is not selectable.
-		const { unmount } = render(withProductsState(<VariationsPopover {...props} />, 'instock'));
+		const { unmount } = render(<VariationsPopover {...props} stockStatus="instock" />);
 		expect(screen.getByText('select-blue').getAttribute('data-disabled')).toBe('true');
 		unmount();
 
 		// Pill cleared: every stock state is on show, so every colour can be picked and the
 		// disabled Add to Cart button carries the stock news instead.
-		render(withProductsState(<VariationsPopover {...props} />));
+		render(<VariationsPopover {...props} />);
+		expect(screen.getByText('select-blue').getAttribute('data-disabled')).toBe('false');
+	});
+
+	it('threads the Stock Status pill from the trigger site into the popover', () => {
+		const row = {
+			original: {
+				record: {
+					payload: {
+						variations: [11, 12],
+						attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
+					},
+				},
+			},
+		};
+		const Cell = VariableActions as unknown as React.ComponentType<{ row: typeof row }>;
+
+		// The trigger renders inside the products provider; the pill it reads there must
+		// reach the (portal-detached) popover and grey out the out-of-stock colour.
+		const { unmount } = render(
+			<QueryStateProvider
+				collection="products"
+				initialPageSize={10}
+				initialSort={{ field: 'name', direction: 'asc' }}
+				initialFilters={{ stock_status: 'instock' }}
+			>
+				<Cell row={row} />
+			</QueryStateProvider>
+		);
+		expect(screen.getByText('select-blue').getAttribute('data-disabled')).toBe('true');
+		unmount();
+
+		render(
+			<QueryStateProvider
+				collection="products"
+				initialPageSize={10}
+				initialSort={{ field: 'name', direction: 'asc' }}
+			>
+				<Cell row={row} />
+			</QueryStateProvider>
+		);
 		expect(screen.getByText('select-blue').getAttribute('data-disabled')).toBe('false');
 	});
 
