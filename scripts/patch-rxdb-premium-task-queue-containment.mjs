@@ -163,7 +163,7 @@ const DISTS = [
  * anchor in one cannot leave the other half-patched (a retried install would
  * then start from an inconsistent tree).
  */
-function preparePatch(path, anchors) {
+export function preparePatch(path, anchors) {
 	const source = readFileSync(path, 'utf8');
 	if (source.includes(MARKER)) return { path, status: 'already patched' };
 
@@ -194,6 +194,22 @@ function preparePatch(path, anchors) {
 			.replace(anchors.readRunBefore, anchors.readRunAfter)
 			.replace(anchors.readCleanupBefore, anchors.readCleanupAfter)
 			.replace(anchors.cleanupRunBefore, anchors.cleanupRunAfter);
+
+	for (const key of [
+		'constructorAfter',
+		'writeRunAfter',
+		'writeCleanupAfter',
+		'readRunAfter',
+		'readCleanupAfter',
+		'cleanupRunAfter',
+	]) {
+		if (!next.includes(anchors[key])) {
+			throw new Error(
+				`rewrite ${key} did not apply in ${path} — ` +
+					're-derive this patch against the containment test'
+			);
+		}
+	}
 
 	return { path, next, status: 'patched' };
 }
