@@ -464,6 +464,81 @@ describe('TEST_AUTHORIZATION', () => {
 
 		expect(siteDoc.incrementalPatch).not.toHaveBeenCalled();
 	});
+
+	it('standalone web resolves the current session site and persists the transport verdict', async () => {
+		// Standalone has no boot payload; the step must resolve the session's
+		// site itself, or the whole standalone fleet never gains (or sheds) the
+		// header-transport verdict without a manual reconnect.
+		fetchMock.mockResolvedValueOnce({
+			ok: true,
+			json: jest.fn(async () => ({
+				v: 1,
+				headers: {
+					authorization: { received: true, length: 12 },
+					// Floor keys the probe never sends: they prove header capability
+					// and must NOT read as dead headers.
+					'x-wcpos-protocol': { received: false, length: 0 },
+					'x-wcpos-client': { received: false, length: 0 },
+				},
+				params: { authorization: true, wcpos: true, store_id: true },
+			})),
+		});
+		const siteDoc = {
+			uuid: 'site-1',
+			wcpos_api_url: 'https://example.com/wp-json/wcpos/v2/',
+			use_jwt_as_param: true,
+			use_protocol_headers: false,
+			incrementalPatch: jest.fn(
+				async (patch: {
+					use_jwt_as_param: boolean;
+					use_rest_route_param: boolean;
+					use_protocol_headers: boolean;
+				}) => {
+					Object.assign(siteDoc, patch);
+				}
+			),
+			getLatest: jest.fn(),
+		};
+		siteDoc.getLatest.mockReturnValue(siteDoc);
+		const step = hydrationSteps.find(({ name }) => name === 'TEST_AUTHORIZATION');
+
+		await step!.execute({
+			userDB: {
+				sites: documentLookup(siteDoc),
+				wp_credentials: documentLookup({ access_token: 'token' }),
+			} as never,
+			appState: {
+				get: jest.fn(async () => ({ siteID: 'site-1', wpCredentialsID: 'cred-1' })),
+			} as never,
+			initialProps: null,
+		});
+
+		expect(siteDoc.incrementalPatch).toHaveBeenCalledWith({
+			use_jwt_as_param: false,
+			use_rest_route_param: false,
+			use_protocol_headers: true,
+		});
+		expect(siteDoc.use_protocol_headers).toBe(true);
+		// Unsent floor names are unknown, not dead: no false alarm on a healthy store.
+		expect(mockAppLogger.warn).not.toHaveBeenCalledWith(
+			'Some POS request headers do not reach this server',
+			expect.anything()
+		);
+	});
+
+	it('standalone web with no current session skips the probe entirely', async () => {
+		const step = hydrationSteps.find(({ name }) => name === 'TEST_AUTHORIZATION');
+
+		await expect(
+			step!.execute({
+				userDB: { sites: documentLookup(null) } as never,
+				appState: { get: jest.fn(async () => null) } as never,
+				initialProps: null,
+			})
+		).resolves.toEqual({});
+
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
 });
 
 describe('runConnectCompatibilityProbes', () => {

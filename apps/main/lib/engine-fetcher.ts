@@ -18,6 +18,8 @@ import {
 	formatClientSignal,
 	PROTOCOL_HEADER,
 	PROTOCOL_QUERY_PARAM,
+	sendsProtocolHeaders,
+	sendsProtocolQueryTwins,
 	SYNC_PROTOCOL_VERSION,
 } from '@wcpos/utils/sync-protocol';
 
@@ -183,7 +185,7 @@ export function createEngineFetcher(input: {
 			// (woocommerce_pos_request()) — without this header every sync route
 			// answers rest_no_route and the engine stays degraded-empty.
 			headers.set('X-WCPOS', '1');
-			if (AppInfo.platform !== 'web' || (input.auth.useProtocolHeaders ?? false)) {
+			if (sendsProtocolHeaders(AppInfo.platform, input.auth.useProtocolHeaders)) {
 				headers.set(PROTOCOL_HEADER, String(SYNC_PROTOCOL_VERSION));
 				headers.set(CLIENT_HEADER, formatClientSignal(AppInfo.platform, AppInfo.version));
 			}
@@ -230,7 +232,7 @@ export function createEngineFetcher(input: {
 			// marker delivery never depends on header survival (B7,
 			// wcpos-infra#72; prerequisite for B12's strict marker gating).
 			parsedUrl.searchParams.set('wcpos', '1');
-			if (AppInfo.platform !== 'web' || !(input.auth.useProtocolHeaders ?? false)) {
+			if (sendsProtocolQueryTwins(AppInfo.platform, input.auth.useProtocolHeaders)) {
 				parsedUrl.searchParams.set(PROTOCOL_QUERY_PARAM, String(SYNC_PROTOCOL_VERSION));
 				parsedUrl.searchParams.set(
 					CLIENT_QUERY_PARAM,

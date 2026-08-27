@@ -10,27 +10,70 @@ export const PROTOCOL_QUERY_PARAM = 'wcpos_protocol';
 export const CLIENT_QUERY_PARAM = 'wcpos_client';
 
 export interface EchoCorsCapability {
-	headers?: Record<string, unknown>;
-	cors?: { reflects_request_headers?: unknown };
+	headers?: Record<string, unknown> | null;
+	cors?: { reflects_request_headers?: unknown } | null;
+}
+
+/** Every named header appears as a key of the echo `headers` map — the server
+ * builds that map from its own CORS allow-list floor, so key presence proves
+ * floor membership. Null-safe: malformed input is evidence of nothing. */
+function echoFloorHas(echo: EchoCorsCapability | null | undefined, names: string[]): boolean {
+	const headers = echo?.headers;
+	if (typeof headers !== 'object' || headers === null) {
+		return false;
+	}
+	return names.every((name) => Object.prototype.hasOwnProperty.call(headers, name.toLowerCase()));
 }
 
 /**
- * Whether the echo proves protocol signal headers are safe at CORS preflight.
- * The server builds its echo `headers` map from its own CORS allow-list floor,
- * so both key names prove floor membership (plugin >= 1.10 builds containing
- * the signal headers). Newer plugins can instead prove that every announced
- * `x-wcpos-*` name is pre-authorized with `cors.reflects_request_headers`.
- * Unknown, missing, or partial evidence keeps the query twins, matching the
- * conservative standing rule used by `bareAuthParamSupported`.
+ * Whether the echo proves the protocol signal headers are safe at CORS
+ * preflight: both names are in the server's allow-list floor, or the server
+ * reflects announced `x-wcpos-*` names (`cors.reflects_request_headers`).
+ * Any real server that reflects also carries both of THESE names in its
+ * floor, so here the reflection branch corroborates rather than decides.
+ *
+ * Unknown, missing, or partial evidence returns false and keeps the query
+ * twins — the same conservative default as `bareAuthParamSupported` (which
+ * derives from the server version; this derives from the echo — the
+ * parallel is the conservatism, not the mechanism).
+ *
+ * Standing pattern for the NEXT `X-WCPOS-*` request header on web: add a
+ * sibling predicate here naming its header constants, thread the verdict
+ * through a per-site flag (sites schema), and gate every send site with the
+ * `sendsProtocolHeaders` / `sendsProtocolQueryTwins` pair below. A future
+ * header that is NOT in the frozen floor cannot lean on `echoFloorHas`, and
+ * the plugin documents that `reflects_request_headers` proves the SERVER
+ * reflects — not that this store's preflights reach PHP — so that header
+ * must confirm the path with one throwaway cross-origin request carrying it
+ * before trusting reflection alone.
  */
 export function protocolHeadersSupported(echo: EchoCorsCapability | null | undefined): boolean {
-	const headers = echo?.headers;
 	return (
-		(headers !== undefined &&
-			Object.prototype.hasOwnProperty.call(headers, 'x-wcpos-protocol') &&
-			Object.prototype.hasOwnProperty.call(headers, 'x-wcpos-client')) ||
+		echoFloorHas(echo, [PROTOCOL_HEADER, CLIENT_HEADER]) ||
 		echo?.cors?.reflects_request_headers === true
 	);
+}
+
+/** Native always sends the signal headers (no CORS preflight exists there);
+ * web sends them only with a proven per-site verdict. */
+export function sendsProtocolHeaders(
+	platform: string,
+	useProtocolHeaders: boolean | undefined
+): boolean {
+	return platform !== 'web' || useProtocolHeaders === true;
+}
+
+/**
+ * Native keeps the query twins beside the headers (the strip-proof channel);
+ * web sends them only while headers are unproven. Retiring the twins is a
+ * later fleet-telemetry decision — make it by changing this predicate, not
+ * by editing the send sites.
+ */
+export function sendsProtocolQueryTwins(
+	platform: string,
+	useProtocolHeaders: boolean | undefined
+): boolean {
+	return platform !== 'web' || useProtocolHeaders !== true;
 }
 
 export function formatClientSignal(platform: string, version: string): string {

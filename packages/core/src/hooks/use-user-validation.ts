@@ -25,6 +25,8 @@ import {
 	formatClientSignal,
 	PROTOCOL_HEADER,
 	PROTOCOL_QUERY_PARAM,
+	sendsProtocolHeaders,
+	sendsProtocolQueryTwins,
 	SYNC_PROTOCOL_VERSION,
 } from '@wcpos/utils/sync-protocol';
 import { useDocField } from '@wcpos/query';
@@ -191,7 +193,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					const requestConfig: any = {
 						params: {
 							wcpos: 1,
-							...(AppInfo.platform !== 'web' || !useProtocolHeaders
+							...(sendsProtocolQueryTwins(AppInfo.platform, useProtocolHeaders)
 								? {
 										[PROTOCOL_QUERY_PARAM]: SYNC_PROTOCOL_VERSION,
 										[CLIENT_QUERY_PARAM]: formatClientSignal(AppInfo.platform, AppInfo.version),
@@ -200,7 +202,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						},
 						headers: {
 							'X-WCPOS': '1',
-							...(AppInfo.platform !== 'web' || useProtocolHeaders
+							...(sendsProtocolHeaders(AppInfo.platform, useProtocolHeaders)
 								? {
 										[PROTOCOL_HEADER]: String(SYNC_PROTOCOL_VERSION),
 										[CLIENT_HEADER]: formatClientSignal(AppInfo.platform, AppInfo.version),

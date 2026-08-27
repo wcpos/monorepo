@@ -1,5 +1,7 @@
 import { expect } from '@playwright/test';
 
+import { protocolHeadersSupported } from '@wcpos/utils/sync-protocol';
+
 import { authenticatedTest, getStoreUrl, hydrateAuthenticatedPage } from './fixtures';
 
 /**
@@ -38,16 +40,21 @@ test('every sync request uses the protocol transport proven by the store echo', 
 }, testInfo) => {
 	const storeUrl = getStoreUrl(testInfo);
 	const storeOrigin = new URL(storeUrl).origin;
-	const echoResponse = await request.get(new URL('/wp-json/wcpos/v2/echo', storeUrl).toString());
-	const echo = (await echoResponse.json().catch(() => null)) as {
-		headers?: Record<string, unknown>;
-		cors?: { reflects_request_headers?: unknown };
-	} | null;
-	const supportsProtocolHeaders =
-		(echo?.headers !== undefined &&
-			'x-wcpos-protocol' in echo.headers &&
-			'x-wcpos-client' in echo.headers) ||
-		echo?.cors?.reflects_request_headers === true;
+	// The same predicate the app gates on. Mirror the app's transport ladder:
+	// a plain-permalink store can only prove capability through the
+	// `?rest_route=` echo form, so try it when the path form proves nothing.
+	const fetchEcho = async (echoUrl: string) =>
+		(await (await request.get(echoUrl)).json().catch(() => null)) as Parameters<
+			typeof protocolHeadersSupported
+		>[0];
+	let supportsProtocolHeaders = protocolHeadersSupported(
+		await fetchEcho(new URL('/wp-json/wcpos/v2/echo', storeUrl).toString())
+	);
+	if (!supportsProtocolHeaders) {
+		supportsProtocolHeaders = protocolHeadersSupported(
+			await fetchEcho(new URL('/?rest_route=/wcpos/v2/echo', storeUrl).toString())
+		);
+	}
 	const seen: { url: URL; headers: Record<string, string> }[] = [];
 	page.on('request', (request) => {
 		let url: URL;

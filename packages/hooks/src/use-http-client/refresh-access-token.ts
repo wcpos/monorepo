@@ -13,6 +13,8 @@ import {
 	formatClientSignal,
 	PROTOCOL_HEADER,
 	PROTOCOL_QUERY_PARAM,
+	sendsProtocolHeaders,
+	sendsProtocolQueryTwins,
 	SYNC_PROTOCOL_VERSION,
 } from '@wcpos/utils/sync-protocol';
 
@@ -143,7 +145,7 @@ export async function refreshAccessToken({
 						: pathUrl;
 				const signaledRefreshUrl = new URL(refreshUrl);
 				const useProtocolHeaders = site.use_protocol_headers ?? false;
-				if (AppInfo.platform !== 'web' || !useProtocolHeaders) {
+				if (sendsProtocolQueryTwins(AppInfo.platform, useProtocolHeaders)) {
 					signaledRefreshUrl.searchParams.set(PROTOCOL_QUERY_PARAM, String(SYNC_PROTOCOL_VERSION));
 					signaledRefreshUrl.searchParams.set(
 						CLIENT_QUERY_PARAM,
@@ -159,7 +161,7 @@ export async function refreshAccessToken({
 					{
 						headers: {
 							'X-WCPOS': '1',
-							...(AppInfo.platform !== 'web' || useProtocolHeaders
+							...(sendsProtocolHeaders(AppInfo.platform, useProtocolHeaders)
 								? {
 										[PROTOCOL_HEADER]: String(SYNC_PROTOCOL_VERSION),
 										[CLIENT_HEADER]: formatClientSignal(AppInfo.platform, AppInfo.version),

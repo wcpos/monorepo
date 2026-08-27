@@ -10,6 +10,7 @@ import {
 	formatClientSignal,
 	parseUpdateRequiredBody,
 	PROTOCOL_HEADER,
+	sendsProtocolHeaders,
 	SYNC_PROTOCOL_VERSION,
 	type UpdateRequiredDetails,
 } from '@wcpos/utils/sync-protocol';
@@ -20,6 +21,17 @@ import { scheduleRequest } from './request-queue';
 import { requestStateManager } from './request-state-manager';
 
 import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
+
+// This wrapper owns both WCPOS axios config flags: `wcposHeaders` (opt out of
+// the marker/signal headers entirely, e.g. third-party image hosts) and
+// `protocolHeaders` (a per-site verdict relayed by callers that have a site in
+// scope — this interceptor does not, so the flag rides the request config).
+declare module 'axios' {
+	export interface AxiosRequestConfig {
+		wcposHeaders?: boolean;
+		protocolHeaders?: boolean;
+	}
+}
 
 const httpLogger = getLogger(['wcpos', 'http', 'client']);
 
@@ -232,13 +244,10 @@ export const useHttpClient = (
 
 		if (
 			processedConfig.method?.toLowerCase() !== 'head' &&
-			(processedConfig as any).wcposHeaders !== false
+			processedConfig.wcposHeaders !== false
 		) {
 			set(processedConfig, ['headers', 'X-WCPOS'], 1);
-			if (
-				AppInfo.platform !== 'web' ||
-				(processedConfig as { protocolHeaders?: unknown }).protocolHeaders === true
-			) {
+			if (sendsProtocolHeaders(AppInfo.platform, processedConfig.protocolHeaders)) {
 				set(processedConfig, ['headers', PROTOCOL_HEADER], String(SYNC_PROTOCOL_VERSION));
 				set(
 					processedConfig,
