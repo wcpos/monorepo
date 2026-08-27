@@ -48,8 +48,14 @@ async function fetchImageBlob(
 		}
 	}
 
-	// wcposHeaders: false prevents X-WCPOS header which triggers CORS preflight on external URLs
-	const response = await get(imageUrl, { responseType: 'arraybuffer', wcposHeaders: false });
+	// wcposHeaders: false prevents X-WCPOS header which triggers CORS preflight on external URLs.
+	// quietErrors: a missing/blocked image is decorative — log a warning, not an
+	// error (the component falls back to a placeholder).
+	const response = await get(imageUrl, {
+		responseType: 'arraybuffer',
+		wcposHeaders: false,
+		quietErrors: true,
+	});
 
 	if (!response || response.status !== 200) {
 		throw new Error(`Failed to fetch image: ${response?.status} ${response?.statusText}`);

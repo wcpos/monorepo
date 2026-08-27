@@ -5,16 +5,18 @@ import { AppInfo } from '@wcpos/utils/app-info';
 jest.mock('@wcpos/utils/logger', () => {
 	const info = jest.fn();
 	const error = jest.fn();
+	const warn = jest.fn();
 	const mapExceptionToCode = jest.fn(() => ({
 		code: 'CLIENT999',
 		context: { name: 'Error', message: 'network down' },
 	}));
 	return {
-		getLogger: jest.fn(() => ({ debug: jest.fn(), info, warn: jest.fn(), error })),
+		getLogger: jest.fn(() => ({ debug: jest.fn(), info, warn, error })),
 		getDatabaseEpoch: jest.fn(() => 0),
 		mapExceptionToCode,
 		__info: info,
 		__error: error,
+		__warn: warn,
 	};
 });
 
@@ -43,6 +45,7 @@ import { useHttpClient } from './use-http-client';
 const loggerMock = jest.requireMock('@wcpos/utils/logger') as {
 	__info: jest.Mock;
 	__error: jest.Mock;
+	__warn: jest.Mock;
 	getDatabaseEpoch: jest.Mock;
 	mapExceptionToCode: jest.Mock;
 };
@@ -218,6 +221,27 @@ describe('useHttpClient network audit logs', () => {
 			}),
 		});
 		expect(loggerMock.mapExceptionToCode).toHaveBeenCalledWith(failure);
+	});
+
+	it('demotes quietErrors transport failures to warn and still rethrows', async () => {
+		const failure = new Error('network down');
+		(http.request as jest.Mock).mockRejectedValue(failure);
+		const { result } = renderHook(() => useHttpClient());
+
+		await expect(
+			result.current.get('/wp-content/uploads/product.jpg', { quietErrors: true })
+		).rejects.toBe(failure);
+
+		expect(loggerMock.__error).not.toHaveBeenCalled();
+		expect(loggerMock.__warn).toHaveBeenCalledWith('HTTP request failed', {
+			code: 'CLIENT999',
+			context: expect.objectContaining({
+				method: 'GET',
+				endpoint: '/wp-content/uploads/product.jpg',
+				status: 0,
+				codeFallback: true,
+			}),
+		});
 	});
 
 	it('does not persist a recovered request as a failure', async () => {
