@@ -5,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popov
 import type { EngineRecord } from '@wcpos/query';
 import type { CellContext } from '@wcpos/core/table-types';
 
-import { VariationsPopover } from './variations-popover';
+import { useProductsStockStatusFilter, VariationsPopover } from './variations-popover';
 import { useAddVariation } from '../../hooks/use-add-variation';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
@@ -18,6 +18,9 @@ export function VariableActions({
 }: CellContext<{ record: EngineRecord<'products'> }, 'actions'>) {
 	const parent = row.original.record;
 	const { addVariation } = useAddVariation();
+	// Read here, inside the products QueryStateProvider — PopoverContent portals out of it
+	// on native, so the popover itself cannot reach the products filter.
+	const stockStatus = useProductsStockStatusFilter();
 	const triggerRef = React.useRef<{ close: () => void } | null>(null);
 
 	/**
@@ -47,7 +50,7 @@ export function VariableActions({
 				/>
 			</PopoverTrigger>
 			<PopoverContent side="right" className="w-auto max-w-80 p-2">
-				<VariationsPopover parent={parent} addToCart={addToCart} />
+				<VariationsPopover parent={parent} addToCart={addToCart} stockStatus={stockStatus} />
 			</PopoverContent>
 		</Popover>
 	);
