@@ -117,7 +117,15 @@ export default function ResizablePOSColumns() {
 					</Suspense>
 				</Panel>
 				<PanelResizeHandle />
-				<Panel minSize={25} id="cart">
+				{/* The cart NEEDS its complementary defaultSize: before the group's
+				    layout reaches each panel's animated style, panels render with
+				    flexGrow = defaultSize ?? 1, so a sized products panel next to an
+				    unsized cart renders 60:1 — a ~1.5% cart sliver. On slow emulators
+				    (CI, software GPU) that pre-layout style can stick for the whole
+				    session, which is how both Android nightlies lost the entire cart
+				    column (run 33110203691). With both sides sized the fallback IS
+				    the correct layout, so the race is harmless. */}
+				<Panel defaultSize={100 - uiSettings.width} minSize={25} id="cart">
 					<Suspense>
 						<ErrorBoundary>
 							<OpenOrders isColumn />
