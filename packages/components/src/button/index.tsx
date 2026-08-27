@@ -216,7 +216,15 @@ function Button({
 	onPress,
 	...props
 }: ButtonProps) {
-	const disabled = props.disabled || loading;
+	// Always a real boolean, never undefined: on Android, RN only calls
+	// `view.setEnabled(...)` when the accessibilityState map carries a
+	// `disabled` key (BaseViewManager.setViewState early-returns on null and
+	// skips absent keys). Passing `undefined` after a disabled render therefore
+	// latches the native view at enabled=false forever — invisible on screen
+	// (opacity is className-driven) and to JS touch handling, but TalkBack
+	// announces the button as disabled and E2E `enabled: true` waits never
+	// pass (monorepo#1614, defect 1).
+	const disabled = !!(props.disabled || loading);
 
 	/**
 	 * Render icon component based on type
@@ -274,8 +282,8 @@ function Button({
 				role="button"
 				{...props}
 				onPress={handlePress}
-				aria-disabled={disabled ?? undefined}
-				disabled={disabled ?? undefined}
+				aria-disabled={disabled}
+				disabled={disabled}
 			>
 				{(pressableState) =>
 					leftIcon || rightIcon || loading ? (
