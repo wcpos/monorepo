@@ -22,14 +22,18 @@ import { requestStateManager } from './request-state-manager';
 
 import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
 
-// This wrapper owns both WCPOS axios config flags: `wcposHeaders` (opt out of
-// the marker/signal headers entirely, e.g. third-party image hosts) and
+// This wrapper owns the WCPOS axios config flags: `wcposHeaders` (opt out of
+// the marker/signal headers entirely, e.g. third-party image hosts),
 // `protocolHeaders` (a per-site verdict relayed by callers that have a site in
-// scope — this interceptor does not, so the flag rides the request config).
+// scope — this interceptor does not, so the flag rides the request config) and
+// `quietErrors` (failure is routine and non-fatal for this request — e.g.
+// decorative image fetches — so log it as a warning instead of an error;
+// the error itself still throws and is enriched identically).
 declare module 'axios' {
 	export interface AxiosRequestConfig {
 		wcposHeaders?: boolean;
 		protocolHeaders?: boolean;
+		quietErrors?: boolean;
 	}
 }
 
@@ -352,18 +356,26 @@ export const useHttpClient = (
 					const endpoint = reqConfig.url
 						? new URL(reqConfig.url, 'http://localhost').pathname
 						: 'unknown';
-					httpLogger.error('HTTP request failed', {
-						code: errorCode ?? 'CLIENT999',
-						context: {
-							...(mappedException?.context ?? {}),
-							method,
-							endpoint,
-							status: axiosError.response?.status ?? 0,
-							...(mappedException?.code === 'CLIENT999' && { codeFallback: true }),
-							...(wpError?.serverCode && { serverCode: wpError.serverCode }),
-							...(wpError?.triage && { triage: true }),
-						},
-					});
+					const failureContext = {
+						...(mappedException?.context ?? {}),
+						method,
+						endpoint,
+						status: axiosError.response?.status ?? 0,
+						...(mappedException?.code === 'CLIENT999' && { codeFallback: true }),
+						...(wpError?.serverCode && { serverCode: wpError.serverCode }),
+						...(wpError?.triage && { triage: true }),
+					};
+					if (reqConfig.quietErrors) {
+						httpLogger.warn('HTTP request failed', {
+							code: errorCode ?? 'CLIENT999',
+							context: failureContext,
+						});
+					} else {
+						httpLogger.error('HTTP request failed', {
+							code: errorCode ?? 'CLIENT999',
+							context: failureContext,
+						});
+					}
 				}
 
 				// Enrich error with WordPress/WooCommerce error details before throwing
