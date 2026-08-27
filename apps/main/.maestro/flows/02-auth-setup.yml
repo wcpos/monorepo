@@ -65,21 +65,38 @@ env:
       - pressKey: Enter
 - tapOn: "Password|Contraseña"
 - inputText: ${E2E_PASSWORD}
-# Android only: the soft keyboard covers the submit button. On iOS
-# hideKeyboard cannot dismiss the ASWebAuthenticationSession's keyboard
-# ("Couldn't hide the keyboard", run 33066217397) and the Log In button is
-# visible above it anyway — skip the dismissal there.
+# Android: the soft keyboard covers the submit button — dismiss it, then tap.
+# iOS: tapping the web form's submit button killed the XCUITest runner on
+# BOTH simulators ("Failed to connect" at exactly this tap; run 33074068139,
+# iOS 26.2), while inputText into the same web view worked throughout — so
+# submit with the keyboard's return key, which activates the form's default
+# submit button without the crashing element tap.
 - runFlow:
     when:
       platform: Android
     commands:
       - hideKeyboard
-- tapOn: "Log In|Acceder"
+      - tapOn: "Log In|Acceder"
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - inputText: "\n"
 # Redirect returns through the wcpos:// deep link.
 - extendedWaitUntil:
     visible:
       id: "logged-in-users-label"
     timeout: 120000
+# Returning from the auth browser re-focuses the store-URL input and reopens
+# the soft keyboard over the store list / Open POS button — both Android jobs
+# in run 33074068139 logged in fine and then failed exactly there. Dismiss it
+# before asserting the stores. Android-scoped because hideKeyboard is broken
+# on iOS (see above) — if iOS shows the same overlay, its artifacts will say so.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - hideKeyboard
 # Select the first store and open the POS (store rows tagged in PR #730).
 - extendedWaitUntil:
     visible:
