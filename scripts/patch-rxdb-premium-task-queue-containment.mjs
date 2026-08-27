@@ -72,13 +72,23 @@
  * (wcpos/electron#375), which is what contains filesystem-node in its main
  * process — keep the two copies identical.
  */
-import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
-const MARKER = '__wcposInstallQueueHealer';
+export const MARKER = '__wcposInstallQueueHealer';
+
+/** The six rewrites, validated as `<key>Before` / verified as `<key>After`. */
+const REWRITE_KEYS = [
+	'constructor',
+	'writeRun',
+	'writeCleanup',
+	'readRun',
+	'readCleanup',
+	'cleanupRun',
+];
 
 /**
  * Prepended to the module. `globalThis.WCPOS_TASK_QUEUE_CONTAINMENT_PATCH`
@@ -166,45 +176,39 @@ const DISTS = [
  */
 export function preparePatch(path, anchors) {
 	const source = readFileSync(path, 'utf8');
-	if (source.includes(MARKER)) return { path, status: 'already patched' };
+	if (source.includes(MARKER)) {
+		// The marker alone is not proof: a file carrying it but missing a rewrite
+		// is a corrupt half-patch (the pristine text is gone, so it cannot be
+		// re-derived here) — fail the install instead of shipping it as patched.
+		for (const key of REWRITE_KEYS) {
+			if (!source.includes(anchors[`${key}After`])) {
+				throw new Error(
+					`${path} carries the patch marker but rewrite ${key} is missing — ` +
+						'the patched file is incomplete; reinstall rxdb-premium to restore a pristine dist'
+				);
+			}
+		}
+		return { path, status: 'already patched' };
+	}
 
-	for (const key of [
-		'constructorBefore',
-		'writeRunBefore',
-		'writeCleanupBefore',
-		'readRunBefore',
-		'readCleanupBefore',
-		'cleanupRunBefore',
-	]) {
-		const anchor = anchors[key];
+	for (const key of REWRITE_KEYS) {
+		const anchor = anchors[`${key}Before`];
 		const occurrences = source.split(anchor).length - 1;
 		if (occurrences !== 1) {
 			throw new Error(
-				`anchor ${key} matched ${occurrences} times in ${path} (expected exactly 1) — ` +
+				`anchor ${key}Before matched ${occurrences} times in ${path} (expected exactly 1) — ` +
 					'rxdb-premium changed; re-derive this patch against the containment test'
 			);
 		}
 	}
 
-	const next =
-		PRELUDE +
-		source
-			.replace(anchors.constructorBefore, anchors.constructorAfter)
-			.replace(anchors.writeRunBefore, anchors.writeRunAfter)
-			.replace(anchors.writeCleanupBefore, anchors.writeCleanupAfter)
-			.replace(anchors.readRunBefore, anchors.readRunAfter)
-			.replace(anchors.readCleanupBefore, anchors.readCleanupAfter)
-			.replace(anchors.cleanupRunBefore, anchors.cleanupRunAfter);
+	let next = PRELUDE + source;
+	for (const key of REWRITE_KEYS) {
+		next = next.replace(anchors[`${key}Before`], anchors[`${key}After`]);
+	}
 
-	for (const key of [
-		'constructorAfter',
-		'writeRunAfter',
-		'writeCleanupAfter',
-		'readRunAfter',
-		'readCleanupAfter',
-		'cleanupRunAfter',
-	]) {
-		if (!next.includes(anchors[key])) {
+	for (const key of REWRITE_KEYS) {
+		if (!next.includes(anchors[`${key}After`])) {
 			throw new Error(
 				`rewrite ${key} did not apply in ${path} — ` +
 					're-derive this patch against the containment test'
@@ -215,10 +219,19 @@ export function preparePatch(path, anchors) {
 	return { path, next, status: 'patched' };
 }
 
-/** Write phase: only reached once every dist validated. */
+/**
+ * Write phase: only reached once every dist validated. Written via temp file +
+ * rename (the same discipline as patch-opfs-worker.mjs) so an interrupted
+ * install can never leave a file that carries the marker with only part of the
+ * rewrites — the marked-but-incomplete check above is the backstop, not the
+ * expected path.
+ */
 function commitPatches(prepared) {
 	for (const { path, next } of prepared) {
-		if (next !== undefined) writeFileSync(path, next);
+		if (next === undefined) continue;
+		const temporaryPath = `${path}.${process.pid}.tmp`;
+		writeFileSync(temporaryPath, next);
+		renameSync(temporaryPath, path);
 	}
 }
 
