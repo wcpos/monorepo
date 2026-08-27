@@ -266,9 +266,27 @@ jobs:
       # matching continueOnFailure: false.
       - name: 📱 Run Maestro suite on simulator
         run: |
+          # Retry ONLY the "iOS driver not ready in time" startup flake
+          # (monorepo#1614 defect 3: one iPad first-boot occurrence on 18.6).
+          # That failure happens before the flow executes a single command, so
+          # a retry cannot double-apply state; any other failure is a real
+          # test failure and must not run twice.
+          run_flow() {
+            local flow="$1" log
+            log=$(mktemp)
+            if maestro --udid "$MAESTRO_UDID" test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" "$flow" 2>&1 | tee "$log"; then
+              return 0
+            fi
+            if grep -q "driver not ready in time" "$log"; then
+              echo "↻ driver startup flake — retrying ${flow} once"
+              maestro --udid "$MAESTRO_UDID" test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" "$flow"
+              return
+            fi
+            return 1
+          }
           for flow in apps/main/.maestro/flows/*.yml; do
             echo "▶ ${flow}"
-            maestro --udid "$MAESTRO_UDID" test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" "$flow" || exit 1
+            run_flow "$flow" || exit 1
           done
         env:
           # Maestro's XCUITest driver compiles and installs its runner on

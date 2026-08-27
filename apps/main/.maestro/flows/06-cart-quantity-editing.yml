@@ -32,10 +32,12 @@ env:
     visible:
       id: "product-tile"
     timeout: 30000
+# Keyboard down BEFORE the tile tap — same overlay no-op as flow 04
+# (monorepo#1614 defect 2); flow 07 set the pattern.
+- hideKeyboard
 - tapOn:
     id: "product-tile"
     index: 0
-- hideKeyboard
 - runFlow:
     when:
       visible:
