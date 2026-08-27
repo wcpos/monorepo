@@ -4,6 +4,8 @@ import get from 'lodash/get';
 
 import { FLEXSEARCH_MIN_TERM_LENGTH } from '@wcpos/sync-core';
 import type { CoverageTarget, CoverageVerdict, RxdbSyncEngine } from '@wcpos/sync-engine';
+import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
 	engineCollectionNameFor,
@@ -39,9 +41,12 @@ type SearchableCollection = {
 			documentSnapshot(document: EngineRxDocument): Record<string, unknown>;
 		}
 	): Promise<SearchInstance>;
+	recreateSearch?(locale: string): Promise<unknown>;
 };
 
 const SEARCH_INDEX_ERROR = Symbol('search-index-error');
+const rebuiltSearchIndexes = new Set<string>();
+const searchLogger = getLogger(['wcpos', 'query', 'search']);
 // Owned by the side that builds the index; re-exported for existing consumers.
 export { FLEXSEARCH_MIN_TERM_LENGTH };
 
@@ -115,6 +120,11 @@ function withSearchSelector(selector: LegacyMangoSelector, ids: string[]): Legac
 		: ({ $and: [selector, searchSelector] } as LegacyMangoSelector);
 }
 
+const DIACRITICS = /[\u0300-\u036f]/g;
+function normalizeSearchValue(value: unknown) {
+	return String(value).toLowerCase().normalize('NFD').replace(DIACRITICS, '');
+}
+
 function matchingSelectors$(
 	database: AdapterDatabase,
 	descriptor: EngineQueryDescriptor,
@@ -161,6 +171,23 @@ function matchingSelectors$(
 			)
 		);
 	}
+	const configuredFields = descriptor.read?.searchFields ?? descriptor.searchFields;
+	const searchFields = configuredFields ?? collection.options?.searchFields ?? [];
+	const findFalseHits = (documents: EngineRxDocument[]) => {
+		const tokens = normalizeSearchValue(search)
+			.split(/\s+/)
+			.filter((token) => token.length >= FLEXSEARCH_MIN_TERM_LENGTH);
+		if (searchFields.length === 0 || tokens.length === 0) return [];
+		return documents.flatMap((document) => {
+			const snapshot = documentSnapshot(document);
+			const fields = searchFields.map((field) => String(get(snapshot, field) ?? ''));
+			return tokens.some((token) =>
+				fields.every((field) => !normalizeSearchValue(field).includes(token))
+			)
+				? [{ document, uuid: document.primary, fields: fields.join(' ').slice(0, 120) }]
+				: [];
+		});
+	};
 
 	return defer(() =>
 		from(
@@ -173,7 +200,48 @@ function matchingSelectors$(
 		switchMap((searchInstance) =>
 			searchInstance.collection.$.pipe(
 				startWith(null),
-				switchMap(() => from(searchInstance.find(search)))
+				switchMap(() => from(searchInstance.find(search))),
+				switchMap(async (documents) => {
+					const falseHits = findFalseHits(documents);
+					if (falseHits.length === 0) return documents;
+					const key = `${descriptor.collection}:${locale}`;
+					const alreadyRebuilt = rebuiltSearchIndexes.has(key);
+					searchLogger.error('Search index divergence detected', {
+						code: ERROR_CODES.SEARCH_INDEX_DIVERGENCE,
+						showToast: false,
+						context: {
+							collection: descriptor.collection,
+							locale,
+							search,
+							falseHits: falseHits.slice(0, 5).map(({ uuid, fields }) => ({ uuid, fields })),
+							totalHits: documents.length,
+							falseHitCount: falseHits.length,
+							...(alreadyRebuilt ? { alreadyRebuilt: true } : {}),
+						},
+					});
+					const filtered = documents.filter((document) =>
+						falseHits.every((falseHit) => falseHit.document !== document)
+					);
+					if (alreadyRebuilt) return filtered;
+					rebuiltSearchIndexes.add(key);
+					try {
+						await collection.recreateSearch?.(locale);
+						const rebuilt = await collection.initSearch(locale, {
+							searchFields: descriptor.read?.searchFields ?? descriptor.searchFields,
+							documentSnapshot,
+						});
+						const rerun = await rebuilt.find(search);
+						const remaining = findFalseHits(rerun);
+						return rerun.filter((document) =>
+							remaining.every((falseHit) => falseHit.document !== document)
+						);
+					} catch (error) {
+						searchLogger.warn('Search index rebuild failed', {
+							context: { collection: descriptor.collection, locale, search, error },
+						});
+						return filtered;
+					}
+				})
 			)
 		),
 		map((documents) =>

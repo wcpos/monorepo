@@ -164,6 +164,8 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.PRINT311');
 		case 'CLIENT131':
 			return t('health.logs.error_action.CLIENT131');
+		case 'CLIENT141':
+			return t('health.logs.error_action.CLIENT141');
 		case 'CHECKOUT411':
 			return t('health.logs.error_action.CHECKOUT411');
 		case 'CHECKOUT421':

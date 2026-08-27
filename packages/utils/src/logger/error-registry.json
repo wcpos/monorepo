@@ -1703,6 +1703,27 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"code": "CLIENT141",
+		"symbol": "SEARCH_INDEX_DIVERGENCE",
+		"domain": "CLIENT",
+		"severity": "error",
+		"actionHint": "No action needed. If search results still look wrong, reload the app.",
+		"retryPolicy": "automatic",
+		"dataSafety": "no-impact",
+		"escalation": "support-with-export",
+		"summary": "Local search returned results that do not match the catalogue; the search index was rebuilt automatically.",
+		"docsBody": "WCPOS detected results that did not match the search term and rebuilt the local search index automatically. No catalogue data was changed.",
+		"troubleshooting": [
+			"No action is needed after the automatic rebuild. If search results still look wrong, reload the app.",
+			"If the code returns, export debug info and contact support; the log context identifies the affected catalogue and search."
+		],
+		"logSources": [
+			"browser-console"
+		],
+		"evidence": "confirmed field incident: in-memory search results diverged from catalogue documents",
+		"introducedIn": "1.10.2"
+	},
+	{
 		"code": "CHECKOUT411",
 		"symbol": "CART_LINE_PRICE_BASIS_UNREADABLE",
 		"domain": "CHECKOUT",
