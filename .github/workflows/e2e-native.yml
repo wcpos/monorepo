@@ -3,12 +3,12 @@
 # (Linux/KVM runners) against SHA-keyed cached e2e-test EAS builds.
 # Budget guardrail: $150/mo ceiling (~40 macOS-min + ~40 Linux-min per night).
 #
-# WHY THIS FILE LIVES ON main: GitHub only fires `schedule` triggers from the
-# default branch. This workflow previously existed on `next` only, so its cron
-# never ran once. The suite itself (apps/main/.maestro, scripts/e2e-native-seed.mjs,
-# the eas.json e2e-test profile) is next-lane, so every job checks out `next`
-# (or the dispatch input) — this file is the scheduler, not the test code.
-# Same arrangement as e2e-cold-start.yml.
+# Tests `main`. It tested `next` until 2026-08-27 — a leftover from when the
+# Maestro suite was next-lane — but everything ships from `main` (lanes
+# converged 2026-08-15), so the nightly was exercising a branch nobody ships
+# and could never catch regressions on shipping code (e.g. the iOS
+# variation-popover crash fixed on main, #1574). Same flip as
+# e2e-cold-start.yml on 2026-08-22.
 name: E2E Native
 
 on:
@@ -19,7 +19,7 @@ on:
       ref:
         description: Branch to test
         type: string
-        default: next
+        default: main
 
 concurrency:
   group: ${{ github.workflow }}
@@ -39,21 +39,21 @@ jobs:
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
     steps:
-      - name: 🏗 Setup repository (next lane)
+      - name: 🏗 Setup repository (main lane)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.event.inputs.ref || 'next' }}
+          ref: ${{ github.event.inputs.ref || 'main' }}
           fetch-depth: 0
           submodules: false
 
       # workflow_dispatch accepts an arbitrary ref, and the jobs below run the
       # checked-out seed script with write-capable store credentials. Refuse
-      # anything that is not already on next.
+      # anything that is not already on main.
       - name: 🔒 Validate trusted ref
         run: |
-          git fetch origin next
-          if ! git merge-base --is-ancestor HEAD origin/next; then
-            echo "::error::ref must resolve to a commit on the next branch"
+          git fetch origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::ref must resolve to a commit on the main branch"
             exit 1
           fi
 
@@ -68,7 +68,7 @@ jobs:
         run: |
           SHA=$(git rev-parse HEAD)
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-          echo "Testing next @ $SHA"
+          echo "Testing main @ $SHA"
 
       - name: 🏗 Setup monorepo
         uses: ./.github/actions/setup-monorepo
@@ -77,7 +77,7 @@ jobs:
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
 
       # EAS artifacts expire after ~2 weeks (observed in #696), so finished
-      # builds are cached on the GHA side. Nights where next hasn't moved hit
+      # builds are cached on the GHA side. Nights where main hasn't moved hit
       # the cache and cost no EAS build.
       - name: ♻️ Restore cached builds
         id: cache

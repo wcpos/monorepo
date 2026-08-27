@@ -3,9 +3,10 @@
  * Native E2E seed/reset (fixtures decision, wayfinder #692).
  *
  * Runs before each native suite against the standing public test store
- * (dev-pro.wcpos.com). v1 scope: verify the store is reachable and ensure the
- * product the flows search for exists and is in stock. Fuller reset (pruning
- * accumulated E2E orders/customers) extends here later.
+ * (dev-pro.wcpos.com). Scope: verify the store is reachable, ensure the simple
+ * product the flows search for exists and is in stock, and ensure the
+ * suite-owned variable product (flow 07) exists with sellable variations.
+ * Fuller reset (pruning accumulated E2E orders/customers) extends here later.
  *
  * Env: E2E_STORE_URL (default https://dev-pro.wcpos.com)
  *      E2E_WC_CONSUMER_KEY / E2E_WC_CONSUMER_SECRET (WooCommerce REST,
@@ -92,3 +93,133 @@ for (const p of products) {
 	}
 }
 console.log(`✔ Seed product "${PRODUCT}" present and in stock.`);
+
+// ---------------------------------------------------------------------------
+// Variable product for flow 07 (variation popover → add to cart).
+//
+// The suite OWNS this product: it is created here when missing, so the flow
+// never depends on a store's remembered catalogue (store-agnostic policy).
+// Keep the three constants in step with the flow's env block
+// (apps/main/.maestro/flows/07-variation-add-to-cart.yml).
+//
+// The options are deliberately short: the popover renders tappable
+// `variation-option-<option>` buttons only while the combined option text is
+// short; longer text falls back to a Select whose item testIDs never reach
+// the native accessibility tree, and the flow would go blind.
+const VARIABLE_PRODUCT = 'WCPOS E2E Variable';
+const VARIABLE_ATTRIBUTE = 'Size';
+const VARIABLE_OPTIONS = ['Small', 'Large'];
+
+const sameOption = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
+
+const listVariations = async (productId) => {
+	const r = await api(`products/${productId}/variations?per_page=100`);
+	if (!r.ok) {
+		console.error(`✖ WC REST error listing variations of #${productId}: HTTP ${r.status}`);
+		process.exit(1);
+	}
+	return r.json();
+};
+
+const createVariation = async (productId, option) => {
+	const r = await api(`products/${productId}/variations`, {
+		method: 'POST',
+		body: JSON.stringify({
+			regular_price: '1.00',
+			attributes: [{ name: VARIABLE_ATTRIBUTE, option }],
+		}),
+	});
+	if (!r.ok) {
+		console.error(`✖ Failed to create "${option}" variation on #${productId}: HTTP ${r.status}`);
+		process.exit(1);
+	}
+	console.log(`  created variation "${option}" on "${VARIABLE_PRODUCT}" (#${productId})`);
+};
+
+const vSearch = await api(`products?search=${encodeURIComponent(VARIABLE_PRODUCT)}&per_page=20`);
+if (!vSearch.ok) {
+	console.error(`✖ WC REST error searching for "${VARIABLE_PRODUCT}": HTTP ${vSearch.status}`);
+	process.exit(1);
+}
+let variableProduct = (await vSearch.json()).find(
+	(p) => p.name === VARIABLE_PRODUCT && p.type === 'variable'
+);
+
+if (!variableProduct) {
+	const created = await api('products', {
+		method: 'POST',
+		body: JSON.stringify({
+			name: VARIABLE_PRODUCT,
+			type: 'variable',
+			status: 'publish',
+			attributes: [
+				{ name: VARIABLE_ATTRIBUTE, visible: true, variation: true, options: VARIABLE_OPTIONS },
+			],
+		}),
+	});
+	if (!created.ok) {
+		console.error(`✖ Failed to create "${VARIABLE_PRODUCT}": HTTP ${created.status}`);
+		process.exit(1);
+	}
+	variableProduct = await created.json();
+	console.log(`  created variable product "${VARIABLE_PRODUCT}" (#${variableProduct.id})`);
+} else {
+	// A previous run may have been interrupted between parent and variations,
+	// or the store may have drifted — repair the attribute definition if it no
+	// longer carries every option the flow can tap.
+	const attr = (variableProduct.attributes ?? []).find(
+		(a) => sameOption(a.name, VARIABLE_ATTRIBUTE) && a.variation
+	);
+	const missingOptions = VARIABLE_OPTIONS.filter(
+		(o) => !(attr?.options ?? []).some((existing) => sameOption(existing, o))
+	);
+	if (!attr || missingOptions.length) {
+		const fixed = await api(`products/${variableProduct.id}`, {
+			method: 'PUT',
+			body: JSON.stringify({
+				attributes: [
+					{ name: VARIABLE_ATTRIBUTE, visible: true, variation: true, options: VARIABLE_OPTIONS },
+				],
+			}),
+		});
+		if (!fixed.ok) {
+			console.error(
+				`✖ Failed to repair attributes on "${VARIABLE_PRODUCT}" (#${variableProduct.id}): HTTP ${fixed.status}`
+			);
+			process.exit(1);
+		}
+		console.log(`  repaired "${VARIABLE_ATTRIBUTE}" attribute on #${variableProduct.id}`);
+	}
+}
+
+const variations = await listVariations(variableProduct.id);
+for (const option of VARIABLE_OPTIONS) {
+	const existing = variations.find((v) =>
+		(v.attributes ?? []).some(
+			(a) => sameOption(a.name, VARIABLE_ATTRIBUTE) && sameOption(a.option, option)
+		)
+	);
+	if (!existing) {
+		await createVariation(variableProduct.id, option);
+		continue;
+	}
+	// The popover's Add to Cart is disabled for unsellable variations, and a
+	// price-less variation is not purchasable — repair both.
+	const patch = {};
+	if (existing.stock_status !== 'instock') patch.stock_status = 'instock';
+	if (!existing.regular_price && !existing.price) patch.regular_price = '1.00';
+	if (Object.keys(patch).length) {
+		const fix = await api(`products/${variableProduct.id}/variations/${existing.id}`, {
+			method: 'PUT',
+			body: JSON.stringify(patch),
+		});
+		if (!fix.ok) {
+			console.error(
+				`✖ Failed to repair variation "${option}" (#${existing.id}): HTTP ${fix.status}`
+			);
+			process.exit(1);
+		}
+		console.log(`  repaired variation "${option}" (#${existing.id})`);
+	}
+}
+console.log(`✔ Variable product "${VARIABLE_PRODUCT}" present with sellable variations.`);
