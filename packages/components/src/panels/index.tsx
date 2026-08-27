@@ -1,7 +1,6 @@
 import { View } from 'react-native';
 
-import * as PanelPrimitives from 'react-native-resizable-panels';
-
+import * as PanelPrimitives from '@wcpos/resizable-panels';
 import { Icon } from '@wcpos/components/icon';
 
 import { cn } from '../lib/utils';
@@ -13,7 +12,7 @@ const usePanelGroupContext = PanelPrimitives.usePanelGroupContext;
 function PanelResizeHandle() {
 	const { direction } = usePanelGroupContext();
 
-	const handleProps = {
+	const handleProps: PanelPrimitives.PanelResizeHandleProps = {
 		style: {
 			width: direction === 'horizontal' ? 8 : '100%',
 			height: direction === 'horizontal' ? '100%' : 8,
@@ -25,9 +24,7 @@ function PanelResizeHandle() {
 	};
 
 	return (
-		<PanelPrimitives.PanelResizeHandle
-			{...(handleProps as React.ComponentProps<typeof PanelPrimitives.PanelResizeHandle>)}
-		>
+		<PanelPrimitives.PanelResizeHandle {...handleProps}>
 			{/* <View
 				className={cn(
 					direction === 'horizontal'

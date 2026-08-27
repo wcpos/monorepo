@@ -1,0 +1,34 @@
+{
+	"name": "@wcpos/resizable-panels",
+	"version": "0.1.0",
+	"description": "Resizable panel components for React Native.",
+	"license": "MIT",
+	"main": "src/index.ts",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"files": [
+		"src/**"
+	],
+	"scripts": {
+		"test": "jest",
+		"lint": "eslint src --ext .js,.jsx,.ts,.tsx",
+		"lint:fix": "eslint src --ext .js,.jsx,.ts,.tsx --fix",
+		"typecheck": "tsc --noEmit"
+	},
+	"peerDependencies": {
+		"react": "~19.2.3",
+		"react-native": "~0.86.0",
+		"react-native-gesture-handler": "~2.32.0",
+		"react-native-reanimated": "~4.5.0",
+		"react-native-worklets": "0.10.1"
+	},
+	"dependencies": {
+		"@wcpos/utils": "workspace:*"
+	},
+	"devDependencies": {
+		"@types/jest": "^30.0.0",
+		"jest": "^30.4.2",
+		"ts-jest": "^29.4.12"
+	}
+}
