@@ -1,7 +1,9 @@
 import { waitFor } from '@testing-library/react';
-import { firstValueFrom, of } from 'rxjs';
+import { firstValueFrom, of, Subject } from 'rxjs';
 
 import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
+import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { observeEngineQuery } from '../src/engine-query';
 import {
@@ -12,6 +14,9 @@ import {
 } from '../src/testing';
 
 import type { RxDatabase } from 'rxdb';
+
+const searchLogger = getLogger(['wcpos', 'query', 'search']);
+const searchError = jest.mocked(searchLogger.error);
 
 describe('observeEngineQuery', () => {
 	it('exposes the native engine record beside the legacy document', async () => {
@@ -219,6 +224,315 @@ describe('observeEngineQuery', () => {
 		});
 
 		expect(resetCollection).not.toHaveBeenCalled();
+	});
+
+	describe('search index divergence self-check', () => {
+		beforeEach(() => searchError.mockClear());
+
+		it('rebuilds a divergent index and emits the corrected result set', async () => {
+			const database = await createEngineDatabase(['products']);
+			const engine = createFakeEngine(database);
+			await database.collections.products.bulkInsert([
+				engineProduct({ uuid: 'false-hit', id: 1, name: 'Oxford Shorts' }),
+				engineProduct({ uuid: 'correct-hit', id: 2, name: 'Oxford Shirt' }),
+			]);
+			const falseHit = await database.collections.products.findOne('false-hit').exec();
+			const correctHit = await database.collections.products.findOne('correct-hit').exec();
+			if (!falseHit || !correctHit) throw new Error('missing divergence fixtures');
+			jest
+				.spyOn(database.collections.products, 'initSearch')
+				.mockResolvedValueOnce({
+					collection: { $: of(null) },
+					find: async () => [falseHit],
+				} as never)
+				.mockResolvedValueOnce({
+					collection: { $: of(null) },
+					find: async () => [correctHit],
+				} as never);
+			const recreateSearch = jest.fn().mockResolvedValue(null);
+			Object.assign(database.collections.products, { recreateSearch });
+
+			try {
+				const result = await firstValueFrom(
+					observeEngineQuery(engine, 'divergence-first', {
+						collection: 'products',
+						search: 'shirt',
+						searchFields: ['name'],
+					})
+				);
+
+				expect(result.hits.map((hit) => hit.id)).toEqual(['correct-hit']);
+				expect(recreateSearch).toHaveBeenCalledTimes(1);
+				expect(searchError).toHaveBeenCalledWith('Search index divergence detected', {
+					code: ERROR_CODES.SEARCH_INDEX_DIVERGENCE,
+					showToast: false,
+					context: {
+						collection: 'products',
+						locale: 'divergence-first',
+						search: 'shirt',
+						falseHits: [{ uuid: 'false-hit', fields: 'Oxford Shorts' }],
+						totalHits: 1,
+						falseHitCount: 1,
+					},
+				});
+			} finally {
+				await database.close();
+			}
+		});
+
+		it('filters a second divergence without rebuilding the same index again', async () => {
+			const database = await createEngineDatabase(['products']);
+			const engine = createFakeEngine(database);
+			await database.collections.products.bulkInsert([
+				engineProduct({ uuid: 'false-hit', id: 1, name: 'Oxford Shorts' }),
+				engineProduct({ uuid: 'correct-hit', id: 2, name: 'Oxford Shirt' }),
+			]);
+			const falseHit = await database.collections.products.findOne('false-hit').exec();
+			const correctHit = await database.collections.products.findOne('correct-hit').exec();
+			if (!falseHit || !correctHit) throw new Error('missing repeated-divergence fixtures');
+			jest
+				.spyOn(database.collections.products, 'initSearch')
+				.mockResolvedValueOnce({
+					collection: { $: of(null) },
+					find: async () => [falseHit],
+				} as never)
+				.mockResolvedValueOnce({
+					collection: { $: of(null) },
+					find: async () => [correctHit],
+				} as never)
+				.mockResolvedValueOnce({
+					collection: { $: of(null) },
+					find: async () => [falseHit, correctHit],
+				} as never);
+			const recreateSearch = jest.fn().mockResolvedValue(null);
+			Object.assign(database.collections.products, { recreateSearch });
+			const query = {
+				collection: 'products',
+				search: 'shirt',
+				searchFields: ['name'],
+			} as const;
+
+			try {
+				await firstValueFrom(observeEngineQuery(engine, 'divergence-repeat', query));
+				const result = await firstValueFrom(observeEngineQuery(engine, 'divergence-repeat', query));
+
+				expect(result.hits.map((hit) => hit.id)).toEqual(['correct-hit']);
+				expect(recreateSearch).toHaveBeenCalledTimes(1);
+				expect(searchError).toHaveBeenCalledTimes(2);
+				expect(searchError.mock.calls[1][1]?.context).toMatchObject({
+					alreadyRebuilt: true,
+					falseHitCount: 1,
+				});
+			} finally {
+				await database.close();
+			}
+		});
+
+		it('accepts legitimate plain and diacritic-normalized matches', async () => {
+			const database = await createEngineDatabase(['products']);
+			const engine = createFakeEngine(database);
+			await database.collections.products.bulkInsert([
+				engineProduct({ uuid: 'cooltech', id: 1, name: 'Cobalt CoolTech&trade; Fitness Short' }),
+				engineProduct({ uuid: 'edition', id: 2, name: 'Édition Spéciale' }),
+			]);
+			const cooltech = await database.collections.products.findOne('cooltech').exec();
+			const edition = await database.collections.products.findOne('edition').exec();
+			if (!cooltech || !edition) throw new Error('missing legitimate-match fixtures');
+			jest.spyOn(database.collections.products, 'initSearch').mockResolvedValue({
+				collection: { $: of(null) },
+				find: async (term: string) => (term === 'cooltech' ? [cooltech] : [edition]),
+			} as never);
+			const recreateSearch = jest.fn();
+			Object.assign(database.collections.products, { recreateSearch });
+
+			try {
+				for (const [search, expected] of [
+					['cooltech', 'cooltech'],
+					['edition', 'edition'],
+				] as const) {
+					const result = await firstValueFrom(
+						observeEngineQuery(engine, 'legitimate-matches', {
+							collection: 'products',
+							search,
+							searchFields: ['name'],
+						})
+					);
+					expect(result.hits.map((hit) => hit.id)).toEqual([expected]);
+				}
+				expect(searchError).not.toHaveBeenCalled();
+				expect(recreateSearch).not.toHaveBeenCalled();
+			} finally {
+				await database.close();
+			}
+		});
+
+		it('accepts a mid-word substring match', async () => {
+			const database = await createEngineDatabase(['products']);
+			const engine = createFakeEngine(database);
+			await database.collections.products.insert(
+				engineProduct({ uuid: 'sweatshirt', id: 1, name: 'Ajax Full-Zip Sweatshirt' })
+			);
+			const document = await database.collections.products.findOne('sweatshirt').exec();
+			if (!document) throw new Error('missing mid-word fixture');
+			jest.spyOn(database.collections.products, 'initSearch').mockResolvedValue({
+				collection: { $: of(null) },
+				find: async () => [document],
+			} as never);
+			const recreateSearch = jest.fn();
+			Object.assign(database.collections.products, { recreateSearch });
+
+			try {
+				const result = await firstValueFrom(
+					observeEngineQuery(engine, 'mid-word-match', {
+						collection: 'products',
+						search: 'shirt',
+						searchFields: ['name'],
+					})
+				);
+				expect(result.hits.map((hit) => hit.id)).toEqual(['sweatshirt']);
+				expect(searchError).not.toHaveBeenCalled();
+				expect(recreateSearch).not.toHaveBeenCalled();
+			} finally {
+				await database.close();
+			}
+		});
+
+		it('accepts punctuation-delimited query tokens', async () => {
+			const database = await createEngineDatabase(['products']);
+			const engine = createFakeEngine(database);
+			await database.collections.products.insert(
+				engineProduct({ uuid: 'red-shirt', id: 1, name: 'Red Shirt' })
+			);
+			const document = await database.collections.products.findOne('red-shirt').exec();
+			if (!document) throw new Error('missing punctuation fixture');
+			jest.spyOn(database.collections.products, 'initSearch').mockResolvedValue({
+				collection: { $: of(null) },
+				find: async () => [document],
+			} as never);
+			const recreateSearch = jest.fn();
+			Object.assign(database.collections.products, { recreateSearch });
+
+			try {
+				const result = await firstValueFrom(
+					observeEngineQuery(engine, 'punctuation-match', {
+						collection: 'products',
+						search: 'red-shirt',
+						searchFields: ['name'],
+					})
+				);
+				expect(result.hits.map((hit) => hit.id)).toEqual(['red-shirt']);
+				expect(searchError).not.toHaveBeenCalled();
+				expect(recreateSearch).not.toHaveBeenCalled();
+			} finally {
+				await database.close();
+			}
+		});
+
+		it('rebinds live search updates to the recreated index', async () => {
+			const database = await createEngineDatabase(['products']);
+			const engine = createFakeEngine(database);
+			await database.collections.products.bulkInsert([
+				engineProduct({ uuid: 'false-hit', id: 1, name: 'Oxford Shorts' }),
+				engineProduct({ uuid: 'correct-hit', id: 2, name: 'Oxford Shirt' }),
+				engineProduct({ uuid: 'later-hit', id: 3, name: 'Evening Shirt' }),
+			]);
+			const falseHit = await database.collections.products.findOne('false-hit').exec();
+			const correctHit = await database.collections.products.findOne('correct-hit').exec();
+			const laterHit = await database.collections.products.findOne('later-hit').exec();
+			if (!falseHit || !correctHit || !laterHit) throw new Error('missing rebind fixtures');
+			const originalUpdates = new Subject<unknown>();
+			const rebuiltUpdates = new Subject<unknown>();
+			const originalFind = jest.fn(async () => [falseHit]);
+			let rebuiltDocuments = [correctHit];
+			const rebuiltFind = jest.fn(async () => rebuiltDocuments);
+			jest
+				.spyOn(database.collections.products, 'initSearch')
+				.mockResolvedValueOnce({
+					collection: { $: originalUpdates },
+					find: originalFind,
+				} as never)
+				.mockResolvedValueOnce({
+					collection: { $: rebuiltUpdates },
+					find: rebuiltFind,
+				} as never);
+			Object.assign(database.collections.products, { recreateSearch: jest.fn() });
+			const emissions: string[][] = [];
+			const subscription = observeEngineQuery(engine, 'divergence-rebind', {
+				collection: 'products',
+				search: 'shirt',
+				searchFields: ['name'],
+			}).subscribe((result) => emissions.push(result.hits.map((hit) => hit.id)));
+
+			try {
+				await waitFor(() => expect(emissions.at(-1)).toEqual(['correct-hit']));
+				originalUpdates.next(null);
+				await waitFor(() => expect(originalFind).toHaveBeenCalledTimes(1));
+
+				rebuiltDocuments = [correctHit, laterHit];
+				rebuiltUpdates.next(null);
+				await waitFor(() => expect(emissions.at(-1)).toEqual(['correct-hit', 'later-hit']));
+				expect(rebuiltFind).toHaveBeenCalledTimes(2);
+			} finally {
+				subscription.unsubscribe();
+				await database.close();
+			}
+		});
+
+		it('rebinds every concurrent subscription after one shared rebuild', async () => {
+			const database = await createEngineDatabase(['products']);
+			const engine = createFakeEngine(database);
+			await database.collections.products.bulkInsert([
+				engineProduct({ uuid: 'false-hit', id: 1, name: 'Oxford Shorts' }),
+				engineProduct({ uuid: 'correct-hit', id: 2, name: 'Oxford Shirt' }),
+			]);
+			const falseHit = await database.collections.products.findOne('false-hit').exec();
+			const correctHit = await database.collections.products.findOne('correct-hit').exec();
+			if (!falseHit || !correctHit) throw new Error('missing shared-rebuild fixtures');
+			const originalInstance = {
+				collection: { $: new Subject<unknown>() },
+				find: jest.fn(async () => [falseHit]),
+			};
+			const rebuiltInstance = {
+				collection: { $: new Subject<unknown>() },
+				find: jest.fn(async () => [correctHit]),
+			};
+			// Mirror the plugin's shared cache: every subscriber gets the CURRENT instance,
+			// and recreateSearch swaps which instance is current.
+			let currentInstance: unknown = originalInstance;
+			jest
+				.spyOn(database.collections.products, 'initSearch')
+				.mockImplementation(async () => currentInstance as never);
+			const recreateSearch = jest.fn(async () => {
+				currentInstance = rebuiltInstance;
+			});
+			Object.assign(database.collections.products, { recreateSearch });
+			const query = {
+				collection: 'products',
+				search: 'shirt',
+				searchFields: ['name'],
+			} as const;
+			const emissionsA: string[][] = [];
+			const emissionsB: string[][] = [];
+			const subscriptionA = observeEngineQuery(engine, 'shared-rebuild', query).subscribe(
+				(result) => emissionsA.push(result.hits.map((hit) => hit.id))
+			);
+			const subscriptionB = observeEngineQuery(engine, 'shared-rebuild', query).subscribe(
+				(result) => emissionsB.push(result.hits.map((hit) => hit.id))
+			);
+
+			try {
+				// Both subscriptions converge on the rebuilt instance's results — with a
+				// per-subscription subject, the non-initiating one stays bound to the
+				// destroyed instance and never emits the corrected set.
+				await waitFor(() => expect(emissionsA.at(-1)).toEqual(['correct-hit']));
+				await waitFor(() => expect(emissionsB.at(-1)).toEqual(['correct-hit']));
+				expect(recreateSearch).toHaveBeenCalledTimes(1);
+			} finally {
+				subscriptionA.unsubscribe();
+				subscriptionB.unsubscribe();
+				await database.close();
+			}
+		});
 	});
 
 	it('runs the real products query after null-to-live and database-identity transitions', async () => {

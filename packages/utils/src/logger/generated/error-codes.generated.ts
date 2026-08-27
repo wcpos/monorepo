@@ -78,6 +78,7 @@ export type ErrorCode =
 	| 'PRODUCT421'
 	| 'PRINT311'
 	| 'CLIENT131'
+	| 'CLIENT141'
 	| 'CHECKOUT411'
 	| 'CHECKOUT421';
 export type ErrorDomain =
@@ -799,6 +800,16 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'no-impact',
 		summary: 'WCPOS queued too many requests at once and dropped some.',
 	},
+	CLIENT141: {
+		code: 'CLIENT141',
+		symbol: 'SEARCH_INDEX_DIVERGENCE',
+		domain: 'CLIENT',
+		severity: 'error',
+		actionHint: 'No action needed. If search results still look wrong, reload the app.',
+		dataSafety: 'no-impact',
+		summary:
+			'Local search returned results that do not match the catalogue; the app attempts an automatic search index rebuild.',
+	},
 	CHECKOUT411: {
 		code: 'CHECKOUT411',
 		symbol: 'CART_LINE_PRICE_BASIS_UNREADABLE',
@@ -898,6 +909,7 @@ export const ERROR_CODES = {
 	VARIABLE_PRICE_META_INVALID: 'PRODUCT421',
 	RECEIPT_DELIVERY_FAILED: 'PRINT311',
 	REQUEST_QUEUE_OVERFLOW: 'CLIENT131',
+	SEARCH_INDEX_DIVERGENCE: 'CLIENT141',
 	CART_LINE_PRICE_BASIS_UNREADABLE: 'CHECKOUT411',
 	ORDER_TAX_RATE_UNKNOWN: 'CHECKOUT421',
 } as const satisfies Record<string, ErrorCode>;

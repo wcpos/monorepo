@@ -1,9 +1,11 @@
-import { defer, EMPTY, from, Observable, of, throwError } from 'rxjs';
+import { BehaviorSubject, defer, EMPTY, from, Observable, of, throwError } from 'rxjs';
 import { catchError, distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
 import get from 'lodash/get';
 
 import { FLEXSEARCH_MIN_TERM_LENGTH } from '@wcpos/sync-core';
 import type { CoverageTarget, CoverageVerdict, RxdbSyncEngine } from '@wcpos/sync-engine';
+import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
 	engineCollectionNameFor,
@@ -39,9 +41,34 @@ type SearchableCollection = {
 			documentSnapshot(document: EngineRxDocument): Record<string, unknown>;
 		}
 	): Promise<SearchInstance>;
+	recreateSearch?(locale: string): Promise<unknown>;
 };
 
 const SEARCH_INDEX_ERROR = Symbol('search-index-error');
+const rebuiltSearchIndexes = new Set<string>();
+/**
+ * One subject per collection:locale, shared by every active subscription, so a divergence
+ * rebuild rebinds ALL of them — `recreateSearch` destroys the instance the others still hold.
+ * Entries are never deleted: the population is bounded by collections × locales, and a live
+ * subject must outlast any one subscription.
+ */
+const searchInstanceSubjects = new Map<string, BehaviorSubject<SearchInstance>>();
+const searchLogger = getLogger(['wcpos', 'query', 'search']);
+
+function sharedSearchInstances(
+	key: string,
+	instance: SearchInstance
+): BehaviorSubject<SearchInstance> {
+	const existing = searchInstanceSubjects.get(key);
+	if (!existing) {
+		const subject = new BehaviorSubject(instance);
+		searchInstanceSubjects.set(key, subject);
+		return subject;
+	}
+	// A newer instance (fresh initSearch after a database swap or rebuild) supersedes the held one.
+	if (existing.value !== instance) existing.next(instance);
+	return existing;
+}
 // Owned by the side that builds the index; re-exported for existing consumers.
 export { FLEXSEARCH_MIN_TERM_LENGTH };
 
@@ -115,6 +142,12 @@ function withSearchSelector(selector: LegacyMangoSelector, ids: string[]): Legac
 		: ({ $and: [selector, searchSelector] } as LegacyMangoSelector);
 }
 
+const DIACRITICS = /[\u0300-\u036f]/g;
+const FLEXSEARCH_TOKEN_BOUNDARY = /[\p{Z}\p{S}\p{P}\p{C}]+/u;
+function normalizeSearchValue(value: unknown) {
+	return String(value).toLowerCase().normalize('NFD').replace(DIACRITICS, '');
+}
+
 function matchingSelectors$(
 	database: AdapterDatabase,
 	descriptor: EngineQueryDescriptor,
@@ -161,6 +194,23 @@ function matchingSelectors$(
 			)
 		);
 	}
+	const configuredFields = descriptor.read?.searchFields ?? descriptor.searchFields;
+	const searchFields = configuredFields ?? collection.options?.searchFields ?? [];
+	const findFalseHits = (documents: EngineRxDocument[]) => {
+		const tokens = normalizeSearchValue(search)
+			.split(FLEXSEARCH_TOKEN_BOUNDARY)
+			.filter((token) => token.length >= FLEXSEARCH_MIN_TERM_LENGTH);
+		if (searchFields.length === 0 || tokens.length === 0) return [];
+		return documents.flatMap((document) => {
+			const snapshot = documentSnapshot(document);
+			const fields = searchFields.map((field) => String(get(snapshot, field) ?? ''));
+			return tokens.some((token) =>
+				fields.every((field) => !normalizeSearchValue(field).includes(token))
+			)
+				? [{ document, uuid: document.primary, fields: fields.join(' ').slice(0, 120) }]
+				: [];
+		});
+	};
 
 	return defer(() =>
 		from(
@@ -170,10 +220,55 @@ function matchingSelectors$(
 			})
 		)
 	).pipe(
-		switchMap((searchInstance) =>
-			searchInstance.collection.$.pipe(
+		switchMap((searchInstance) => {
+			const searchInstances = sharedSearchInstances(
+				`${descriptor.collection}:${locale}`,
+				searchInstance
+			);
+			return searchInstances.pipe(map((activeSearch) => ({ activeSearch, searchInstances })));
+		}),
+		switchMap(({ activeSearch, searchInstances }) =>
+			activeSearch.collection.$.pipe(
 				startWith(null),
-				switchMap(() => from(searchInstance.find(search)))
+				switchMap(() => from(activeSearch.find(search))),
+				switchMap(async (documents) => {
+					const falseHits = findFalseHits(documents);
+					if (falseHits.length === 0) return documents;
+					const key = `${descriptor.collection}:${locale}`;
+					const alreadyRebuilt = rebuiltSearchIndexes.has(key);
+					searchLogger.error('Search index divergence detected', {
+						code: ERROR_CODES.SEARCH_INDEX_DIVERGENCE,
+						showToast: false,
+						context: {
+							collection: descriptor.collection,
+							locale,
+							search,
+							falseHits: falseHits.slice(0, 5).map(({ uuid, fields }) => ({ uuid, fields })),
+							totalHits: documents.length,
+							falseHitCount: falseHits.length,
+							...(alreadyRebuilt ? { alreadyRebuilt: true } : {}),
+						},
+					});
+					const filtered = documents.filter((document) =>
+						falseHits.every((falseHit) => falseHit.document !== document)
+					);
+					if (alreadyRebuilt) return filtered;
+					rebuiltSearchIndexes.add(key);
+					try {
+						await collection.recreateSearch?.(locale);
+						const rebuilt = await collection.initSearch(locale, {
+							searchFields: descriptor.read?.searchFields ?? descriptor.searchFields,
+							documentSnapshot,
+						});
+						searchInstances.next(rebuilt);
+						return filtered;
+					} catch (error) {
+						searchLogger.warn('Search index rebuild failed', {
+							context: { collection: descriptor.collection, locale, search, error },
+						});
+						return filtered;
+					}
+				})
 			)
 		),
 		map((documents) =>
