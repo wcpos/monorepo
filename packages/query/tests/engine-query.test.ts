@@ -477,6 +477,62 @@ describe('observeEngineQuery', () => {
 				await database.close();
 			}
 		});
+
+		it('rebinds every concurrent subscription after one shared rebuild', async () => {
+			const database = await createEngineDatabase(['products']);
+			const engine = createFakeEngine(database);
+			await database.collections.products.bulkInsert([
+				engineProduct({ uuid: 'false-hit', id: 1, name: 'Oxford Shorts' }),
+				engineProduct({ uuid: 'correct-hit', id: 2, name: 'Oxford Shirt' }),
+			]);
+			const falseHit = await database.collections.products.findOne('false-hit').exec();
+			const correctHit = await database.collections.products.findOne('correct-hit').exec();
+			if (!falseHit || !correctHit) throw new Error('missing shared-rebuild fixtures');
+			const originalInstance = {
+				collection: { $: new Subject<unknown>() },
+				find: jest.fn(async () => [falseHit]),
+			};
+			const rebuiltInstance = {
+				collection: { $: new Subject<unknown>() },
+				find: jest.fn(async () => [correctHit]),
+			};
+			// Mirror the plugin's shared cache: every subscriber gets the CURRENT instance,
+			// and recreateSearch swaps which instance is current.
+			let currentInstance: unknown = originalInstance;
+			jest
+				.spyOn(database.collections.products, 'initSearch')
+				.mockImplementation(async () => currentInstance as never);
+			const recreateSearch = jest.fn(async () => {
+				currentInstance = rebuiltInstance;
+			});
+			Object.assign(database.collections.products, { recreateSearch });
+			const query = {
+				collection: 'products',
+				search: 'shirt',
+				searchFields: ['name'],
+			} as const;
+			const emissionsA: string[][] = [];
+			const emissionsB: string[][] = [];
+			const subscriptionA = observeEngineQuery(engine, 'shared-rebuild', query).subscribe(
+				(result) => emissionsA.push(result.hits.map((hit) => hit.id))
+			);
+			const subscriptionB = observeEngineQuery(engine, 'shared-rebuild', query).subscribe(
+				(result) => emissionsB.push(result.hits.map((hit) => hit.id))
+			);
+
+			try {
+				// Both subscriptions converge on the rebuilt instance's results — with a
+				// per-subscription subject, the non-initiating one stays bound to the
+				// destroyed instance and never emits the corrected set.
+				await waitFor(() => expect(emissionsA.at(-1)).toEqual(['correct-hit']));
+				await waitFor(() => expect(emissionsB.at(-1)).toEqual(['correct-hit']));
+				expect(recreateSearch).toHaveBeenCalledTimes(1);
+			} finally {
+				subscriptionA.unsubscribe();
+				subscriptionB.unsubscribe();
+				await database.close();
+			}
+		});
 	});
 
 	it('runs the real products query after null-to-live and database-identity transitions', async () => {

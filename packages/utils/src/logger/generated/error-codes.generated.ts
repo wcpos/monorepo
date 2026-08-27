@@ -808,7 +808,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		actionHint: 'No action needed. If search results still look wrong, reload the app.',
 		dataSafety: 'no-impact',
 		summary:
-			'Local search returned results that do not match the catalogue; the search index was rebuilt automatically.',
+			'Local search returned results that do not match the catalogue; the app attempts an automatic search index rebuild.',
 	},
 	CHECKOUT411: {
 		code: 'CHECKOUT411',

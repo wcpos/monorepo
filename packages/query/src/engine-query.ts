@@ -46,7 +46,29 @@ type SearchableCollection = {
 
 const SEARCH_INDEX_ERROR = Symbol('search-index-error');
 const rebuiltSearchIndexes = new Set<string>();
+/**
+ * One subject per collection:locale, shared by every active subscription, so a divergence
+ * rebuild rebinds ALL of them — `recreateSearch` destroys the instance the others still hold.
+ * Entries are never deleted: the population is bounded by collections × locales, and a live
+ * subject must outlast any one subscription.
+ */
+const searchInstanceSubjects = new Map<string, BehaviorSubject<SearchInstance>>();
 const searchLogger = getLogger(['wcpos', 'query', 'search']);
+
+function sharedSearchInstances(
+	key: string,
+	instance: SearchInstance
+): BehaviorSubject<SearchInstance> {
+	const existing = searchInstanceSubjects.get(key);
+	if (!existing) {
+		const subject = new BehaviorSubject(instance);
+		searchInstanceSubjects.set(key, subject);
+		return subject;
+	}
+	// A newer instance (fresh initSearch after a database swap or rebuild) supersedes the held one.
+	if (existing.value !== instance) existing.next(instance);
+	return existing;
+}
 // Owned by the side that builds the index; re-exported for existing consumers.
 export { FLEXSEARCH_MIN_TERM_LENGTH };
 
@@ -199,7 +221,10 @@ function matchingSelectors$(
 		)
 	).pipe(
 		switchMap((searchInstance) => {
-			const searchInstances = new BehaviorSubject(searchInstance);
+			const searchInstances = sharedSearchInstances(
+				`${descriptor.collection}:${locale}`,
+				searchInstance
+			);
 			return searchInstances.pipe(map((activeSearch) => ({ activeSearch, searchInstances })));
 		}),
 		switchMap(({ activeSearch, searchInstances }) =>
