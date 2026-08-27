@@ -24,6 +24,12 @@ type InFlightCall = {
 };
 type InstanceLatchState = {
 	databaseName: string;
+	/**
+	 * Carried purely so a diagnostic can name the collection that stalled.
+	 * `databaseName` alone identifies the worker, and the worker is never the
+	 * thing at fault in a per-collection wedge.
+	 */
+	collectionName: string;
 	failureReason: string | null;
 	inFlight: Set<InFlightCall>;
 	/**
@@ -140,6 +146,60 @@ export function __resetStorageLivenessForTests(): void {
 function noteStorageCompletion(error?: unknown): void {
 	if (error !== undefined && isStorageWorkerFailure(error)) return;
 	storageCompletions += 1;
+}
+
+/**
+ * How long one RPC may sit in flight before we say so out loud. Far above the
+ * killer watchdog's window on purpose: this never cancels, rejects or condemns
+ * anything, so a false positive costs one log line instead of a spurious
+ * "reload the app" in front of a queue of customers.
+ */
+export const STORAGE_RPC_STALL_REPORT_MS = 60_000;
+
+/**
+ * Report-only stall detector — the instrument that was missing on 2026-08-25,
+ * when the demo store's coupons screen span forever and every signal we had
+ * stayed silent.
+ *
+ * `createWatchdog` condemns the WORKER, and re-arms for as long as the worker
+ * answers anything at all: one worker backs every database, so any completion
+ * proves it alive. That makes it structurally blind to a stall *below* the
+ * worker boundary. rxdb-premium serialises each storage instance's work through
+ * a single per-instance promise chain, so one collection's chain can stop
+ * advancing while the worker keeps happily serving every other collection. The
+ * call never returns, the worker looks healthy, `storageCompletions` keeps
+ * climbing, the watchdog re-arms forever, and nothing anywhere says a word.
+ *
+ * `workerAnsweredMeanwhile` is the entire point of this: it separates "the
+ * worker is gone" (0 — the watchdog's case, already handled) from "the worker is
+ * fine and THIS call is wedged" (> 0 — a queue-level stall, which nothing else
+ * can see). That one number turns a silent spinner into a starting point.
+ *
+ * Diagnosis, not policy. Because it never rejects it is safe on `bulkWrite`,
+ * which the killer watchdog must never touch — rejecting a write on a hunch
+ * would tell the caller it failed while it may still commit, inviting a
+ * duplicate order on retry.
+ */
+function armStallReport(state: InstanceLatchState, methodName: StorageRpcMethod): () => void {
+	const startedAt = Date.now();
+	const completionsAtStart = storageCompletions;
+	const timer = setTimeout(() => {
+		// Teardown noise: reads and writes in flight when a store switch or
+		// Clear & Sync starts can legitimately outlive their instance.
+		if (state.closing || state.failureReason !== null) return;
+		storageLogger.warn('Storage call has not returned', {
+			context: {
+				method: methodName,
+				databaseName: state.databaseName,
+				collectionName: state.collectionName,
+				waitedMs: Date.now() - startedAt,
+				workerAnsweredMeanwhile: storageCompletions - completionsAtStart,
+			},
+		});
+	}, STORAGE_RPC_STALL_REPORT_MS);
+	// Never hold the process open for a diagnostic (node/jest); browsers ignore this.
+	(timer as unknown as { unref?: () => void }).unref?.();
+	return () => clearTimeout(timer);
 }
 
 function storageWorkerTimeoutError(methodName: StorageRpcMethod, waitedMs: number): Error {
@@ -588,12 +648,18 @@ async function raceStorageCall<T>(
 		throw error;
 	}
 	void underlying.catch((error) => noteStorageWorkerFailure(state, methodName, error));
+	// Armed for EVERY method, watched or not. A stalled `bulkWrite` is exactly
+	// what poisons a per-instance queue, and it is the one method the killer
+	// watchdog is forbidden from arming — so reporting is the only cover it has.
+	const disarmStallReport = armStallReport(state, methodName);
 	void underlying.then(
 		() => {
+			disarmStallReport();
 			noteStorageCompletion();
 			state.inFlight.delete(callState);
 		},
 		(error) => {
+			disarmStallReport();
 			noteStorageCompletion(error);
 			state.inFlight.delete(callState);
 		}
@@ -699,6 +765,7 @@ function wrapStorageInstance<RxDocType>(
 
 	const state: InstanceLatchState = {
 		databaseName,
+		collectionName: instance.collectionName,
 		failureReason: null,
 		inFlight: new Set(),
 		closing: false,

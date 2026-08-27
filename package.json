@@ -34,7 +34,7 @@
     "expo:install": "pnpm --filter main exec expo install",
     "extract:translations": "node scripts/extract-js-strings.js",
     "translations:check": "node scripts/extract-js-strings.js --check",
-    "postinstall": "node scripts/patch-rxdb-premium-resurrection-leak.mjs",
+    "postinstall": "node scripts/patch-rxdb-premium-resurrection-leak.mjs && node scripts/patch-rxdb-premium-task-queue-containment.mjs",
     "prepare": "git config core.hooksPath .githooks",
     "virtual-printer": "pnpm --filter @wcpos/virtual-printer start",
     "submodules:update": "git submodule update --init --remote apps/electron apps/web && node ./scripts/stage-submodule-bumps.mjs"
