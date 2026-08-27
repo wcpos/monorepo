@@ -105,12 +105,17 @@ env:
 - tapOn:
     id: "store-option-.*"
 # StoreSelect keeps the button disabled while cashier validation is in flight;
-# tapping a disabled native button no-ops silently.
+# tapping a disabled native button no-ops silently. On CI emulators the
+# validation takes just over 60s before the button enables (both Android jobs
+# in runs 33074068139/33081118544 timed out at 60s with the failure screenshot
+# showing the button already un-dimmed — consistent with two sequential
+# 30s DEFAULT_REQUEST_TIMEOUT_MS requests), so give it real headroom. A
+# genuinely failed validation keeps the button disabled and still fails here.
 - extendedWaitUntil:
     visible:
       id: "open-pos-button"
       enabled: true
-    timeout: 60000
+    timeout: 180000
 - tapOn:
     id: "open-pos-button"
 # Initial RxDB product sync on a cold database (240s budget was never

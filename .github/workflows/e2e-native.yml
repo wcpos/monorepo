@@ -240,9 +240,15 @@ jobs:
       - name: 📱 Boot simulator and install app
         run: |
           # Diagnostic: which iOS runtimes this runner image offers — kept in
-          # the log so a future runtime pin can be chosen from evidence.
+          # the log so the runtime pin below can be revisited from evidence.
           xcrun simctl list runtimes
-          UDID=$(xcrun simctl create "e2e-${{ matrix.device.name }}" "${{ matrix.device.simulator }}")
+          # PINNED to iOS 18.6: on the image-default iOS 26.2 runtime the
+          # Maestro 2.6.1 XCUITest driver dies mid-flow after ~4 minutes with
+          # no recovery (runs 33074068139 and 33081118544 both lost the driver
+          # port mid-run; maestro#3318 tracks the 26.x instability). The
+          # nightly's job is catching app regressions, not OS-compat testing —
+          # revisit the pin when Maestro's 26.x driver stabilizes.
+          UDID=$(xcrun simctl create "e2e-${{ matrix.device.name }}" "${{ matrix.device.simulator }}" com.apple.CoreSimulator.SimRuntime.iOS-18-6)
           xcrun simctl boot "$UDID"
           xcrun simctl bootstatus "$UDID" -b
           mkdir -p /tmp/e2e-app && tar -xzf e2e-builds/wcpos-e2e-ios.tar.gz -C /tmp/e2e-app
