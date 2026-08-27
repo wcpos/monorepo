@@ -422,6 +422,26 @@ describe('resolveScan online outcomes', () => {
 		});
 	});
 
+	it('infers an unknown ambiguous type from parent_id', async () => {
+		const result = await resolveScan(
+			scanInput({
+				code: 'UNKNOWN-TYPE',
+				fetcher: async () =>
+					jsonResponse({
+						...resolveResponse(),
+						found: true,
+						match: { id: 7, type: 'product', parent_id: 0, payload: {} },
+						ambiguous: [{ id: 8, type: 'bundle', parent_id: 2 }],
+					}),
+			})
+		);
+
+		expect(result).toMatchObject({
+			outcome: 'online',
+			ambiguous: [{ id: 8, type: 'variation' }],
+		});
+	});
+
 	it('resolves a parent product match', async () => {
 		const match = {
 			id: 11,

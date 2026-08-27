@@ -108,6 +108,18 @@ describe('useRestHttpClient methods', () => {
 		});
 	});
 
+	it('does not let request params override protocol metadata', async () => {
+		const { result } = renderHook(() => useRestHttpClient('orders'));
+
+		await result.current.get('/42', {
+			params: { wcpos_protocol: 99, wcpos_client: 'spoofed/1.0.0' },
+		});
+
+		expect(latestRequest()).toMatchObject({
+			params: { wcpos_protocol: 2, wcpos_client: 'web/0.0.0' },
+		});
+	});
+
 	it('never composes a double slash from a trailing-slash stored base in query mode', async () => {
 		// Discovery stores wcpos_api_url WITH a trailing slash; rest_route matching
 		// is strict, so `/wcpos/v2//orders` would 404 where pretty routing shrugged.

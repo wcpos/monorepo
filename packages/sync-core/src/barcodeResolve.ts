@@ -606,7 +606,12 @@ export async function resolveScan(input: ResolveScanInput): Promise<ScanResult> 
 			body.ambiguous = Array.isArray(parsed.ambiguous)
 				? parsed.ambiguous.map((entry) => ({
 						id: entry.id,
-						type: entry.type ?? ((entry.parent_id ?? 0) > 0 ? 'variation' : 'product'),
+						type:
+							entry.type === 'product' || entry.type === 'variation'
+								? entry.type
+								: (entry.parent_id ?? 0) > 0
+									? 'variation'
+									: 'product',
 					}))
 				: [];
 		} catch (error) {

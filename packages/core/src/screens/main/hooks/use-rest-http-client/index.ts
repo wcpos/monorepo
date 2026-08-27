@@ -297,6 +297,8 @@ export const useRestHttpClient = (endpoint = '') => {
 			}
 
 			const config = merge({}, defaultConfig, reqConfig);
+			config.params[PROTOCOL_QUERY_PARAM] = SYNC_PROTOCOL_VERSION;
+			config.params[CLIENT_QUERY_PARAM] = formatClientSignal(AppInfo.platform, AppInfo.version);
 
 			try {
 				const response = await httpClient.request(config);
