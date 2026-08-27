@@ -58,6 +58,25 @@ describe('pushRecordMutation', () => {
 		}
 	);
 
+	it('derives the writable date_expires on a coupon push (wc/v3 drops date_expires_gmt)', async () => {
+		const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+			jsonResponse(200, { id: 1 })
+		);
+
+		await pushRecordMutation({
+			mutation: mut({
+				collectionName: 'coupons',
+				payload: { code: 'dippy', date_expires_gmt: '2026-09-03T21:59:59' },
+			}),
+			resolveEndpoint,
+			fetcher,
+		});
+
+		const body = JSON.parse((fetcher.mock.calls[0][1] as RequestInit).body as string);
+		expect(body.payload.date_expires).toBe('2026-09-03T21:59:59Z');
+		expect(body.payload.date_expires_gmt).toBe('2026-09-03T21:59:59');
+	});
+
 	it('creates: posts the payload, returns the server document + a created outcome, emits push.outcome', async () => {
 		const events: SyncEvent[] = [];
 		const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>

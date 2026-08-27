@@ -1,6 +1,7 @@
 import { type MetaDataEntry, readRecordUuid } from './recordIdentity';
 import { type SyncEvent, type SyncObserver } from './telemetry';
 import { mapBarcodeEditToPayload } from './barcodeResolve';
+import { mapCouponExpiryToPayload } from './couponWirePayload';
 import { type RemoteId, remoteIdOrNull } from './woo/remoteIdCodec';
 
 import type { RecordMutation } from './recordMutation';
@@ -174,10 +175,13 @@ export async function pushRecordMutation(input: {
 		baseRevision: mutation.baseRevision,
 	};
 	if (mutation.operation !== 'delete') {
-		envelope.payload =
-			mutation.collectionName === 'products' || mutation.collectionName === 'variations'
-				? mapBarcodeEditToPayload(mutation.payload, input.barcodeSelectors ?? [])
-				: mutation.payload;
+		if (mutation.collectionName === 'products' || mutation.collectionName === 'variations') {
+			envelope.payload = mapBarcodeEditToPayload(mutation.payload, input.barcodeSelectors ?? []);
+		} else if (mutation.collectionName === 'coupons') {
+			envelope.payload = mapCouponExpiryToPayload(mutation.payload);
+		} else {
+			envelope.payload = mutation.payload;
+		}
 	}
 	// Standard-header MIRROR of the canonical body (ADR 0011): Idempotency-Key = mutationId, and when there's a
 	// base revision (updates/deletes) If-Match = the quoted baseRevision (an RFC 9110 entity-tag). The body stays
