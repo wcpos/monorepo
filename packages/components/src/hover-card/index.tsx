@@ -24,7 +24,13 @@ function HoverCardContent({
 			<HoverCardPrimitive.Overlay
 				style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
 			>
-				<Animated.View entering={FadeIn}>
+				{/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
+				    a11y prunes out-of-bounds children — see popover/index.tsx. */}
+				<Animated.View
+					entering={FadeIn}
+					pointerEvents="box-none"
+					style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
+				>
 					<TextClassContext.Provider value="text-popover-foreground">
 						<HoverCardPrimitive.Content
 							ref={ref}

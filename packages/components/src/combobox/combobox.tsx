@@ -178,7 +178,14 @@ function ComboboxContent({
 	return (
 		<PopoverPrimitive.Portal hostName={portalHost}>
 			<PopoverPrimitive.Overlay style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}>
-				<Animated.View entering={FadeIn.duration(200)} exiting={FadeOut}>
+				{/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
+				    a11y prunes out-of-bounds children — see popover/index.tsx. */}
+				<Animated.View
+					entering={FadeIn.duration(200)}
+					exiting={FadeOut}
+					pointerEvents="box-none"
+					style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
+				>
 					<TextClassContext.Provider value="text-popover-foreground">
 						<PopoverPrimitive.Content
 							align={align}

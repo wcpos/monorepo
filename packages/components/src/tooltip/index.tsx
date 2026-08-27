@@ -71,7 +71,14 @@ function TooltipContent({
 	return (
 		<TooltipPrimitive.Portal hostName={portalHost}>
 			<TooltipPrimitive.Overlay style={StyleSheet.absoluteFill}>
-				<Animated.View entering={FadeIn} exiting={FadeOut}>
+				{/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
+				    a11y prunes out-of-bounds children — see popover/index.tsx. */}
+				<Animated.View
+					entering={FadeIn}
+					exiting={FadeOut}
+					pointerEvents="box-none"
+					style={StyleSheet.absoluteFill}
+				>
 					<TextClassContext.Provider value="text-sm text-popover-foreground">
 						<TooltipPrimitive.Content
 							sideOffset={sideOffset}
