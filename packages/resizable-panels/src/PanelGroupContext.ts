@@ -25,7 +25,6 @@ export type TPanelGroupContext = {
 	reevaluatePanelConstraints: (panelData: PanelData, prevConstraints: PanelConstraints) => void;
 	registerPanel: (panelData: PanelData) => void;
 	registerHandle: (handleId: string) => [number, number];
-	// registerResizeHandle: () => (translationX: number, translationY: number) => void;
 	resizePanel: (panelData: PanelData, size: number) => void;
 	startDragging: (dragHandleId: string) => void;
 	stopDragging: () => void;

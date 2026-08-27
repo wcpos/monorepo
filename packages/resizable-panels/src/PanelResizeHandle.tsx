@@ -83,9 +83,9 @@ export function PanelResizeHandle({
 
 	/**
 	 * The visual/clickable area:
-	 * • If direction is 'horizontal', we make a thin vertical bar wide enough for touches.
-	 * • If direction is 'vertical', we make a thin horizontal bar tall enough for touches.
-	 * You can override via style={…}.
+	 * • If direction is 'horizontal', we make a zero-width vertical bar.
+	 * • If direction is 'vertical', we make a zero-height horizontal bar.
+	 * Consumers should provide a touch target via style={…}.
 	 */
 	const defaultHandleStyle: ViewStyle =
 		direction === 'horizontal'
