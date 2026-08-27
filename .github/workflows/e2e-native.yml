@@ -77,11 +77,16 @@ jobs:
       # match. The workflow-level concurrency group serializes whole runs, so
       # this is the only writer. Exports the seeded variable product's id so
       # the flows can target it by its id-bearing testID.
+      # The E2E_WC_CONSUMER_KEY/SECRET this step originally referenced were
+      # never provisioned (verified 2026-08-27: `gh secret list` has no such
+      # secrets), so the seed had silently run reachability-only since the
+      # workflow landed. The product-writer identity IS provisioned — the same
+      # standing shop_manager pair the web E2E uses.
       - name: 🌱 Seed test store
         id: seed
         env:
-          WC_CONSUMER_KEY: ${{ secrets.E2E_WC_CONSUMER_KEY }}
-          WC_CONSUMER_SECRET: ${{ secrets.E2E_WC_CONSUMER_SECRET }}
+          E2E_PRODUCT_WRITER_USER: ${{ secrets.E2E_PRODUCT_WRITER_USER }}
+          E2E_PRODUCT_WRITER_PASS: ${{ secrets.E2E_PRODUCT_WRITER_PASS }}
         run: node scripts/e2e-native-seed.mjs
 
       - name: 🏗 Setup monorepo
