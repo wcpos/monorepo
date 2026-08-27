@@ -1,5 +1,5 @@
 import { waitFor } from '@testing-library/react';
-import { firstValueFrom, of } from 'rxjs';
+import { firstValueFrom, of, Subject } from 'rxjs';
 
 import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 import { getLogger } from '@wcpos/utils/logger';
@@ -393,6 +393,87 @@ describe('observeEngineQuery', () => {
 				expect(searchError).not.toHaveBeenCalled();
 				expect(recreateSearch).not.toHaveBeenCalled();
 			} finally {
+				await database.close();
+			}
+		});
+
+		it('accepts punctuation-delimited query tokens', async () => {
+			const database = await createEngineDatabase(['products']);
+			const engine = createFakeEngine(database);
+			await database.collections.products.insert(
+				engineProduct({ uuid: 'red-shirt', id: 1, name: 'Red Shirt' })
+			);
+			const document = await database.collections.products.findOne('red-shirt').exec();
+			if (!document) throw new Error('missing punctuation fixture');
+			jest.spyOn(database.collections.products, 'initSearch').mockResolvedValue({
+				collection: { $: of(null) },
+				find: async () => [document],
+			} as never);
+			const recreateSearch = jest.fn();
+			Object.assign(database.collections.products, { recreateSearch });
+
+			try {
+				const result = await firstValueFrom(
+					observeEngineQuery(engine, 'punctuation-match', {
+						collection: 'products',
+						search: 'red-shirt',
+						searchFields: ['name'],
+					})
+				);
+				expect(result.hits.map((hit) => hit.id)).toEqual(['red-shirt']);
+				expect(searchError).not.toHaveBeenCalled();
+				expect(recreateSearch).not.toHaveBeenCalled();
+			} finally {
+				await database.close();
+			}
+		});
+
+		it('rebinds live search updates to the recreated index', async () => {
+			const database = await createEngineDatabase(['products']);
+			const engine = createFakeEngine(database);
+			await database.collections.products.bulkInsert([
+				engineProduct({ uuid: 'false-hit', id: 1, name: 'Oxford Shorts' }),
+				engineProduct({ uuid: 'correct-hit', id: 2, name: 'Oxford Shirt' }),
+				engineProduct({ uuid: 'later-hit', id: 3, name: 'Evening Shirt' }),
+			]);
+			const falseHit = await database.collections.products.findOne('false-hit').exec();
+			const correctHit = await database.collections.products.findOne('correct-hit').exec();
+			const laterHit = await database.collections.products.findOne('later-hit').exec();
+			if (!falseHit || !correctHit || !laterHit) throw new Error('missing rebind fixtures');
+			const originalUpdates = new Subject<unknown>();
+			const rebuiltUpdates = new Subject<unknown>();
+			const originalFind = jest.fn(async () => [falseHit]);
+			let rebuiltDocuments = [correctHit];
+			const rebuiltFind = jest.fn(async () => rebuiltDocuments);
+			jest
+				.spyOn(database.collections.products, 'initSearch')
+				.mockResolvedValueOnce({
+					collection: { $: originalUpdates },
+					find: originalFind,
+				} as never)
+				.mockResolvedValueOnce({
+					collection: { $: rebuiltUpdates },
+					find: rebuiltFind,
+				} as never);
+			Object.assign(database.collections.products, { recreateSearch: jest.fn() });
+			const emissions: string[][] = [];
+			const subscription = observeEngineQuery(engine, 'divergence-rebind', {
+				collection: 'products',
+				search: 'shirt',
+				searchFields: ['name'],
+			}).subscribe((result) => emissions.push(result.hits.map((hit) => hit.id)));
+
+			try {
+				await waitFor(() => expect(emissions.at(-1)).toEqual(['correct-hit']));
+				originalUpdates.next(null);
+				await waitFor(() => expect(originalFind).toHaveBeenCalledTimes(1));
+
+				rebuiltDocuments = [correctHit, laterHit];
+				rebuiltUpdates.next(null);
+				await waitFor(() => expect(emissions.at(-1)).toEqual(['correct-hit', 'later-hit']));
+				expect(rebuiltFind).toHaveBeenCalledTimes(2);
+			} finally {
+				subscription.unsubscribe();
 				await database.close();
 			}
 		});

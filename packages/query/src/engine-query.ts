@@ -1,4 +1,4 @@
-import { defer, EMPTY, from, Observable, of, throwError } from 'rxjs';
+import { BehaviorSubject, defer, EMPTY, from, Observable, of, throwError } from 'rxjs';
 import { catchError, distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
 import get from 'lodash/get';
 
@@ -121,6 +121,7 @@ function withSearchSelector(selector: LegacyMangoSelector, ids: string[]): Legac
 }
 
 const DIACRITICS = /[\u0300-\u036f]/g;
+const FLEXSEARCH_TOKEN_BOUNDARY = /[\p{Z}\p{S}\p{P}\p{C}]+/u;
 function normalizeSearchValue(value: unknown) {
 	return String(value).toLowerCase().normalize('NFD').replace(DIACRITICS, '');
 }
@@ -175,7 +176,7 @@ function matchingSelectors$(
 	const searchFields = configuredFields ?? collection.options?.searchFields ?? [];
 	const findFalseHits = (documents: EngineRxDocument[]) => {
 		const tokens = normalizeSearchValue(search)
-			.split(/\s+/)
+			.split(FLEXSEARCH_TOKEN_BOUNDARY)
 			.filter((token) => token.length >= FLEXSEARCH_MIN_TERM_LENGTH);
 		if (searchFields.length === 0 || tokens.length === 0) return [];
 		return documents.flatMap((document) => {
@@ -197,10 +198,14 @@ function matchingSelectors$(
 			})
 		)
 	).pipe(
-		switchMap((searchInstance) =>
-			searchInstance.collection.$.pipe(
+		switchMap((searchInstance) => {
+			const searchInstances = new BehaviorSubject(searchInstance);
+			return searchInstances.pipe(map((activeSearch) => ({ activeSearch, searchInstances })));
+		}),
+		switchMap(({ activeSearch, searchInstances }) =>
+			activeSearch.collection.$.pipe(
 				startWith(null),
-				switchMap(() => from(searchInstance.find(search))),
+				switchMap(() => from(activeSearch.find(search))),
 				switchMap(async (documents) => {
 					const falseHits = findFalseHits(documents);
 					if (falseHits.length === 0) return documents;
@@ -230,11 +235,8 @@ function matchingSelectors$(
 							searchFields: descriptor.read?.searchFields ?? descriptor.searchFields,
 							documentSnapshot,
 						});
-						const rerun = await rebuilt.find(search);
-						const remaining = findFalseHits(rerun);
-						return rerun.filter((document) =>
-							remaining.every((falseHit) => falseHit.document !== document)
-						);
+						searchInstances.next(rebuilt);
+						return filtered;
 					} catch (error) {
 						searchLogger.warn('Search index rebuild failed', {
 							context: { collection: descriptor.collection, locale, search, error },

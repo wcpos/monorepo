@@ -1561,12 +1561,14 @@ describe('query bindings', () => {
 				id: 11,
 				parent_id: 10,
 				name: 'Shared Match One',
+				sku: 'shared match one',
 			}),
 			engineVariation({
 				uuid: 'second-match',
 				id: 21,
 				parent_id: 20,
 				name: 'Shared Match Two',
+				sku: 'shared match two',
 			}),
 		]);
 		const state: QueryStateOf<'products'> = {
