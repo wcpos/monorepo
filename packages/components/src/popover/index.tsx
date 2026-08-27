@@ -29,7 +29,21 @@ function PopoverContent({
 	return (
 		<PopoverPrimitive.Portal hostName={portalHost}>
 			<PopoverPrimitive.Overlay style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}>
-				<Animated.View entering={FadeIn.duration(200)} exiting={FadeOut}>
+				{/* Full-bleed on native: unsized, this wrapper measures width×0 — its
+				    absolutely-positioned child still DRAWS (RN doesn't clip), but
+				    Android accessibility intersects every node's bounds with its
+				    ancestors', so the entire popover subtree is pruned from the a11y
+				    tree: invisible to TalkBack and to testID-driven E2E while looking
+				    perfect on screen (monorepo#1614; proven via `dumpsys activity top`
+				    showing the wrapper at 0,0-2560,0). box-none keeps outside-taps
+				    falling through to the Overlay's dismiss. Same class fixed in
+				    tooltip, hover-card, select, combobox, tree-combobox, select-multi. */}
+				<Animated.View
+					entering={FadeIn.duration(200)}
+					exiting={FadeOut}
+					pointerEvents="box-none"
+					style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
+				>
 					<TextClassContext.Provider value="text-popover-foreground">
 						<PopoverPrimitive.Content
 							align={align}

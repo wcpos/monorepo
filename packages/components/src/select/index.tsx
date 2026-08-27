@@ -171,7 +171,12 @@ function SelectSingleContent({
 	return (
 		<SelectPrimitive.Portal hostName={portalHost}>
 			<SelectPrimitive.Overlay style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}>
-				<Animated.View>
+				{/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
+				    a11y prunes out-of-bounds children — see popover/index.tsx. */}
+				<Animated.View
+					pointerEvents="box-none"
+					style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
+				>
 					<SelectPrimitive.Content
 						className={cn(
 							'border-border bg-popover data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 relative z-50 max-h-96 min-w-32 rounded-md border px-1 py-2 shadow-md',
