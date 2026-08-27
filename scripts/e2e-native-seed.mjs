@@ -91,25 +91,55 @@ if (!head.ok) {
 }
 console.log(`✔ Store reachable: ${STORE_URL}`);
 
-if (!WRITER_USER || !WRITER_PASS) {
+if (!WRITER_USER && !WRITER_PASS) {
 	console.warn(
 		'⚠ E2E_PRODUCT_WRITER_USER/PASS not set — skipping seed assertions (reachability only).'
 	);
 	process.exit(0);
 }
+// Exactly one credential set is a provisioning failure, not a missing
+// capability — fail the workflow rather than silently disabling the seed
+// again (mirrors productWriterCredentialsDecision in search-probe.ts).
+if (!WRITER_USER || !WRITER_PASS) {
+	console.error(
+		'✖ Product-writer credentials are incomplete — set E2E_PRODUCT_WRITER_USER and E2E_PRODUCT_WRITER_PASS together.'
+	);
+	process.exit(1);
+}
 
 const TOKEN = await mintWriterToken();
 console.log('✔ Product-writer JWT minted via /wcpos-auth/.');
 
-const api = (route, init = {}) =>
-	fetch(`${STORE_URL}/wp-json/wc/v3/${route}`, {
-		...init,
-		headers: {
-			'content-type': 'application/json',
-			authorization: `Bearer ${TOKEN}`,
-			...init.headers,
-		},
-	});
+const authedFetch = (route, transport, init = {}) => {
+	const url = new URL(`${STORE_URL}/wp-json/wc/v3/${route}`);
+	const headers = { 'content-type': 'application/json', ...init.headers };
+	if (transport.kind === 'header') headers.authorization = transport.value;
+	else url.searchParams.set('authorization', transport.value);
+	return fetch(url, { ...init, headers });
+};
+
+// Decide which transport actually delivers the JWT to wc/v3 — by evidence,
+// not assumption (mirrors resolveWriterTransport in search-probe.ts). The
+// allow-listed dev-free store's proxy strips the Authorization header
+// outright, silently degrading a header-carried token to an anonymous 401,
+// so probe header → Bearer query → bare query before declaring failure.
+const TRANSPORT = await (async () => {
+	const candidates = [
+		{ kind: 'header', value: `Bearer ${TOKEN}` },
+		{ kind: 'query', value: `Bearer ${TOKEN}` },
+		{ kind: 'query', value: TOKEN },
+	];
+	let lastStatus = null;
+	for (const candidate of candidates) {
+		const probe = await authedFetch('products?per_page=1', candidate);
+		if (probe.ok) return candidate;
+		lastStatus = probe.status;
+	}
+	console.error(`✖ Minted writer JWT was rejected on every transport (last HTTP ${lastStatus})`);
+	process.exit(1);
+})();
+
+const api = (route, init = {}) => authedFetch(route, TRANSPORT, init);
 
 const res = await api(`products?search=${encodeURIComponent(PRODUCT)}&per_page=20`);
 if (!res.ok) {
