@@ -180,7 +180,7 @@ may back several gateways; the app selects its driver by provider.
 
 **Capture mode**:
 How the money is taken for a payment. `manual` is the only Free mode; Pro registers the
-rest. An open vocabulary: the app must understand any ledger, and needs Pro only to
+rest. An open vocabulary: the app must understand any capture mode, and needs Pro only to
 produce non-manual payments.
 
 **Driver**:
