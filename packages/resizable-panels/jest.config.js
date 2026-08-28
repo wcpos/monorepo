@@ -10,6 +10,7 @@ module.exports = {
 		'^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: 'tsconfig.json', isolatedModules: true }],
 	},
 	testRegex: TEST_REGEX,
+	moduleNameMapper: { '^react-native$': 'react-native-web' },
 	moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
 	collectCoverageFrom: [
 		'src/**/*.{ts,tsx}',

@@ -40,26 +40,17 @@ export function verifyExpectedWarnings(callback: Function, ...expectedMessages: 
 	console.error = consoleSpy;
 	console.warn = consoleSpy;
 
-	let caughtError;
-	let didCatch = false;
 	try {
 		callback();
-	} catch (error) {
-		caughtError = error;
-		didCatch = true;
 	} finally {
 		console.error = originalError;
 		console.warn = originalWarn;
-
-		if (didCatch) {
-			throw caughtError;
-		}
-
-		// Any remaining messages indicate a failed expectations.
-		if (expectedMessages.length > 0) {
-			throw Error(`Expected message(s) not recorded:\n\n${expectedMessages.join('\n')}`);
-		}
-
-		return { pass: true };
 	}
+
+	// Any remaining messages indicate failed expectations.
+	if (expectedMessages.length > 0) {
+		throw Error(`Expected message(s) not recorded:\n\n${expectedMessages.join('\n')}`);
+	}
+
+	return { pass: true };
 }

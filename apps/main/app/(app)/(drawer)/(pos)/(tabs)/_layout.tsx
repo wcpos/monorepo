@@ -108,14 +108,19 @@ export default function TabsLayout() {
 					onLayout={([productsWidth, cartWidth]) => patchUI({ width: productsWidth })}
 					direction="horizontal"
 				>
-					<Panel defaultSize={uiSettings.width} minSize={25} id="products">
+					<Panel
+						testID="pos-products-panel"
+						defaultSize={uiSettings.width}
+						minSize={25}
+						id="products"
+					>
 						<Suspense>
 							<ErrorBoundary>
 								<POSProducts isColumn />
 							</ErrorBoundary>
 						</Suspense>
 					</Panel>
-					<PanelResizeHandle />
+					<PanelResizeHandle testID="pos-resize-handle" />
 					{/* Complementary defaultSize — see (columns)/index.tsx: an unsized
 					    panel beside a sized one renders flexGrow 60:1 (a cart sliver)
 					    until the group layout lands, and on slow devices that
