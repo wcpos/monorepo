@@ -353,7 +353,13 @@ jobs:
             # URL works on both platforms and in local runs.
             adb reverse tcp:8081 tcp:8081
             adb install e2e-builds/wcpos-e2e-android.apk
-            maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" apps/main/.maestro
+            # On failure, capture the device log BEFORE the emulator is torn
+            # down (the runner action kills it when this script exits, so a
+            # later step sees nothing). logcat is what names the mechanism
+            # behind emulator-only slowness — Maestro artifacts show WHAT
+            # stalled, logcat shows what the app was doing meanwhile.
+            maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" apps/main/.maestro \
+              || { mkdir -p ~/.maestro/tests && adb logcat -d > ~/.maestro/tests/logcat.txt 2>&1; exit 1; }
         env:
           # The Maestro Android driver installs its two APKs and waits for the
           # instrumentation channel; first-boot emulators on shared runners
