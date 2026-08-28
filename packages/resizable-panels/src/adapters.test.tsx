@@ -2,7 +2,7 @@
 
 import React from 'react';
 
-import { act, render, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, waitFor } from '@testing-library/react';
 
 import { type ImperativePanelHandle, Panel } from './Panel';
 import { type ImperativePanelGroupHandle, PanelGroup } from './PanelGroup';
@@ -34,7 +34,7 @@ async function waitForContainerLayout() {
 
 async function dragLatestHandle(translationX = 100) {
 	await waitForContainerLayout();
-	const gesture = gestureRegistry.at(-1);
+	const gesture = [...gestureRegistry].reverse().find(({ type }) => type === 'pan');
 	expect(gesture).toBeDefined();
 	act(() => {
 		gesture?.begin?.();
@@ -47,7 +47,12 @@ async function dragLatestHandle(translationX = 100) {
 beforeAll(() => {
 	window.ResizeObserver = ImmediateResizeObserver;
 	Object.defineProperties(HTMLElement.prototype, {
-		offsetWidth: { configurable: true, get: () => 1000 },
+		offsetWidth: {
+			configurable: true,
+			get(this: HTMLElement) {
+				return this.dataset.testid?.includes('handle') ? 8 : 1000;
+			},
+		},
 		offsetHeight: { configurable: true, get: () => 500 },
 	});
 });
@@ -122,6 +127,127 @@ test('recorded gesture updates layout percentages and calls onLayout', async () 
 	expect(onLayout).toHaveBeenCalledWith([60, 40]);
 });
 
+test('measured handle expands its fine-pointer hit target and honors an override', async () => {
+	const view = render(
+		<PanelGroup direction="horizontal" testID="group">
+			<Panel defaultSize={50} />
+			<PanelResizeHandle testID="handle" />
+			<Panel defaultSize={50} />
+		</PanelGroup>
+	);
+
+	await waitFor(() => {
+		const pan = [...gestureRegistry].reverse().find(({ type }) => type === 'pan');
+		expect(pan?.hitSlopValue).toEqual({ left: 9.5, right: 9.5 });
+	});
+
+	view.rerender(
+		<PanelGroup direction="horizontal" testID="group">
+			<Panel defaultSize={50} />
+			<PanelResizeHandle testID="handle-override" hitTargetSize={48} />
+			<Panel defaultSize={50} />
+		</PanelGroup>
+	);
+
+	await waitFor(() => {
+		const pan = [...gestureRegistry].reverse().find(({ type }) => type === 'pan');
+		expect(pan?.hitSlopValue).toEqual({ left: 20, right: 20 });
+	});
+
+	view.rerender(
+		<PanelGroup direction="horizontal" testID="group">
+			<Panel defaultSize={50} />
+			<PanelResizeHandle testID="handle-disabled-target" hitTargetSize={0} />
+			<Panel defaultSize={50} />
+		</PanelGroup>
+	);
+
+	await waitForContainerLayout();
+	const pan = [...gestureRegistry].reverse().find(({ type }) => type === 'pan');
+	expect(pan?.hitSlopValue).toBeUndefined();
+});
+
+test('recorded double tap resets the panel before the handle', async () => {
+	const groupRef = React.createRef<ImperativePanelGroupHandle>();
+	const view = render(
+		<PanelGroup ref={groupRef} direction="horizontal" testID="group">
+			<Panel testID="left" defaultSize={40} />
+			<PanelResizeHandle testID="handle" />
+			<Panel testID="right" defaultSize={60} />
+		</PanelGroup>
+	);
+	await waitFor(() => expect(view.getByTestId('left').style.flexGrow).toBe('40'));
+	act(() => groupRef.current?.setLayout([60, 40]));
+	await waitFor(() => expect(view.getByTestId('left').style.flexGrow).toBe('60'));
+
+	const doubleTap = [...gestureRegistry]
+		.reverse()
+		.find(({ numberOfTapsValue, type }) => type === 'tap' && numberOfTapsValue === 2);
+	act(() => doubleTap?.end?.());
+
+	await waitFor(() => expect(view.getByTestId('left').style.flexGrow).toBe('40'));
+	expect(view.getByTestId('right').style.flexGrow).toBe('60');
+});
+
+test('disableDoubleTap omits the double-tap gesture', async () => {
+	render(
+		<PanelGroup direction="horizontal">
+			<Panel defaultSize={50} />
+			<PanelResizeHandle disableDoubleTap />
+			<Panel defaultSize={50} />
+		</PanelGroup>
+	);
+	await waitForContainerLayout();
+
+	expect(gestureRegistry.some(({ type }) => type === 'tap')).toBe(false);
+});
+
+test.each([
+	['handle', false, true],
+	['group', true, false],
+] as const)(
+	'disabled %s ignores a recorded double tap',
+	async (_label, groupDisabled, handleDisabled) => {
+		const groupRef = React.createRef<ImperativePanelGroupHandle>();
+		const view = render(
+			<PanelGroup ref={groupRef} direction="horizontal" disabled={groupDisabled}>
+				<Panel testID="left" defaultSize={40} />
+				<PanelResizeHandle disabled={handleDisabled} />
+				<Panel testID="right" defaultSize={60} />
+			</PanelGroup>
+		);
+		await waitFor(() => expect(view.getByTestId('left').style.flexGrow).toBe('40'));
+		act(() => groupRef.current?.setLayout([60, 40]));
+		await waitFor(() => expect(view.getByTestId('left').style.flexGrow).toBe('60'));
+
+		const doubleTap = [...gestureRegistry]
+			.reverse()
+			.find(({ numberOfTapsValue, type }) => type === 'tap' && numberOfTapsValue === 2);
+		act(() => doubleTap?.end?.());
+
+		expect(view.getByTestId('left').style.flexGrow).toBe('60');
+	}
+);
+
+test('web separator keyboard resize updates layout and aria-valuenow', async () => {
+	const view = render(
+		<PanelGroup direction="horizontal" testID="group">
+			<Panel testID="left" defaultSize={50} />
+			<PanelResizeHandle testID="handle" />
+			<Panel testID="right" defaultSize={50} />
+		</PanelGroup>
+	);
+	const handle = view.getByTestId('handle');
+	await waitFor(() => expect(handle.getAttribute('aria-valuenow')).toBe('50'));
+
+	fireEvent.keyDown(handle, { key: 'ArrowRight' });
+
+	await waitFor(() => expect(view.getByTestId('left').style.flexGrow).toBe('55'));
+	expect(handle.getAttribute('aria-valuenow')).toBe('55');
+	expect(handle.getAttribute('role')).toBe('separator');
+	expect(handle.getAttribute('aria-orientation')).toBe('horizontal');
+});
+
 test('onLayoutChanged batches a gesture and marks it as a user interaction', async () => {
 	const onLayoutChanged = jest.fn();
 	const view = render(
@@ -151,7 +277,7 @@ test('finalized gesture restores panel interaction and reports dragging ended', 
 		</PanelGroup>
 	);
 	await waitForContainerLayout();
-	const gesture = gestureRegistry.at(-1);
+	const gesture = [...gestureRegistry].reverse().find(({ type }) => type === 'pan');
 
 	act(() => gesture?.begin?.());
 	expect(view.getByTestId('left').style.pointerEvents).toBe('none');

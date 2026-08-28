@@ -11,7 +11,7 @@ module.exports = {
 	},
 	testRegex: TEST_REGEX,
 	moduleNameMapper: { '^react-native$': 'react-native-web' },
-	moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+	moduleFileExtensions: ['web.ts', 'web.tsx', 'ts', 'tsx', 'js', 'jsx', 'json', 'node'],
 	collectCoverageFrom: [
 		'src/**/*.{ts,tsx}',
 		'!src/**/*.test.{ts,tsx}',

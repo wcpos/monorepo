@@ -5,6 +5,7 @@ import { areEqual } from '../utils/arrays';
 import { assert } from '../utils/assert';
 import { calculateUnsafeDefaultLayout } from '../utils/calculateUnsafeDefaultLayout';
 import { callPanelCallbacks } from '../utils/callPanelCallbacks';
+import { calculateAriaValues } from '../utils/calculateAriaValues';
 import { compareLayouts } from '../utils/compareLayouts';
 import { fuzzyCompareNumbers } from '../utils/numbers/fuzzyCompareNumbers';
 import { fuzzyNumbersEqual } from '../utils/numbers/fuzzyNumbersEqual';
@@ -14,6 +15,7 @@ import { validatePanelGroupLayout } from '../utils/validatePanelGroupLayout';
 
 import type { PanelConstraints, PanelData, ResolvedPanelConstraints } from '../Panel';
 import type { Direction, PanelGroupOnLayoutChanged } from '../types';
+import type { SeparatorAriaValues } from '../utils/calculateAriaValues';
 
 const log = getLogger(['wcpos', 'ui', 'resizable-panels']);
 
@@ -41,6 +43,10 @@ export type PanelGroupModel = {
 	collapsePanel: (id: string) => void;
 	expandPanel: (id: string, minSizeOverride?: number) => void;
 	resizePanel: (id: string, size: number) => void;
+	resetPanelToDefault: (handleId: string) => void;
+	nudge: (handleId: string, deltaPercent: number) => void;
+	getSeparatorAriaValues: (handleId: string) => SeparatorAriaValues;
+	toggleCollapseAdjacent: (handleId: string) => void;
 	getPanelSize: (id: string) => number;
 	isPanelCollapsed: (id: string) => boolean;
 	isPanelExpanded: (id: string) => boolean;
@@ -411,6 +417,68 @@ export function createPanelGroupModel(options: {
 			resizePanel(id, nextMax);
 		}
 	};
+	const getHandlePanelIndex = (handleId: string) => {
+		const handleIndex = handles.findIndex((handle) => handle.id === handleId);
+		return handleIndex >= 0 && handleIndex + 1 < panels.length ? handleIndex : undefined;
+	};
+	const adjustHandle = (
+		handleId: string,
+		delta: number,
+		trigger: 'imperative-api' | 'keyboard'
+	) => {
+		const panelIndex = getHandlePanelIndex(handleId);
+		if (panelIndex == null) return;
+		const prevLayout = layout;
+		const nextLayout = adjustLayoutByDelta({
+			delta,
+			initialLayout: prevLayout,
+			panelConstraints: getResolvedConstraints(),
+			pivotIndices: [panelIndex, panelIndex + 1],
+			prevLayout,
+			trigger,
+		});
+		if (!compareLayouts(prevLayout, nextLayout)) {
+			commit(nextLayout, { isUserInteraction: true });
+		}
+	};
+	const resetPanelToDefault = (handleId: string) => {
+		const panelIndex = getHandlePanelIndex(handleId);
+		if (panelIndex == null) return;
+		const panelSize = layout[panelIndex];
+		const defaultSize = resolveConstraints(panels[panelIndex]?.constraints ?? {}).defaultSize;
+		if (panelSize == null || defaultSize == null) return;
+		adjustHandle(handleId, defaultSize - panelSize, 'imperative-api');
+	};
+	const nudge = (handleId: string, deltaPercent: number) => {
+		adjustHandle(handleId, deltaPercent, 'keyboard');
+	};
+	const getSeparatorAriaValues = (handleId: string) => {
+		const panelIndex = getHandlePanelIndex(handleId);
+		return panelIndex == null
+			? { valueMin: undefined, valueMax: undefined, valueNow: undefined }
+			: calculateAriaValues({
+					layout,
+					panelConstraints: getResolvedConstraints(),
+					panelIndex,
+				});
+	};
+	const toggleCollapseAdjacent = (handleId: string) => {
+		const panelIndex = getHandlePanelIndex(handleId);
+		if (panelIndex == null) return;
+		const panel = panels[panelIndex];
+		if (!panel?.constraints.collapsible) return;
+		const panelSize = layout[panelIndex];
+		if (panelSize == null) return;
+		const { collapsedSize = 0, minSize = 0 } = resolveConstraints(panel.constraints);
+		let nextSize = collapsedSize;
+		if (fuzzyNumbersEqual(panelSize, collapsedSize)) {
+			const previousSize = panelSizeBeforeCollapse.get(panel.id);
+			nextSize = previousSize != null && previousSize >= minSize ? previousSize : minSize;
+		} else {
+			panelSizeBeforeCollapse.set(panel.id, panelSize);
+		}
+		adjustHandle(handleId, nextSize - panelSize, 'keyboard');
+	};
 	const beginDrag = (handleId: string, dragContainerSizePx: number) => {
 		const handleIndex = handles.findIndex((handle) => handle.id === handleId);
 		if (handleIndex < 0) {
@@ -476,6 +544,10 @@ export function createPanelGroupModel(options: {
 		collapsePanel,
 		expandPanel,
 		resizePanel,
+		resetPanelToDefault,
+		nudge,
+		getSeparatorAriaValues,
+		toggleCollapseAdjacent,
 		getPanelSize,
 		isPanelCollapsed,
 		isPanelExpanded,

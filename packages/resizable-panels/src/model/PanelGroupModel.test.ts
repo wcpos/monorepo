@@ -56,6 +56,83 @@ describe('PanelGroupModel', () => {
 		expect(onLayoutChanged).toHaveBeenCalledWith([60, 40], { isUserInteraction: false });
 	});
 
+	test('resets the panel before a handle to its default size as a user interaction', () => {
+		const onLayoutChanged = jest.fn();
+		const model = createPanelGroupModel({ direction: 'horizontal', onLayoutChanged });
+		model.registerPanel(panel('left', { defaultSize: 40 }));
+		model.registerPanel(panel('right', { defaultSize: 60 }));
+		model.registerHandle('handle');
+		model.flush();
+		model.setLayout([60, 40]);
+		onLayoutChanged.mockClear();
+
+		model.resetPanelToDefault('handle');
+
+		expect(model.getLayout()).toEqual([40, 60]);
+		expect(onLayoutChanged).toHaveBeenCalledWith([40, 60], { isUserInteraction: true });
+	});
+
+	test('does not reset a panel without a default size', () => {
+		const model = modelWithPanels(panel('left'), panel('right'));
+		model.registerHandle('handle');
+		model.setLayout([60, 40]);
+
+		model.resetPanelToDefault('handle');
+
+		expect(model.getLayout()).toEqual([60, 40]);
+	});
+
+	test('nudges a handle by percentage points as a user interaction', () => {
+		const onLayoutChanged = jest.fn();
+		const model = createPanelGroupModel({ direction: 'horizontal', onLayoutChanged });
+		model.registerPanel(panel('left', { defaultSize: 50 }));
+		model.registerPanel(panel('right', { defaultSize: 50 }));
+		model.registerHandle('handle');
+		model.flush();
+		onLayoutChanged.mockClear();
+
+		model.nudge('handle', 5);
+
+		expect(model.getLayout()).toEqual([55, 45]);
+		expect(onLayoutChanged).toHaveBeenCalledWith([55, 45], { isUserInteraction: true });
+	});
+
+	test('reports separator ARIA values constrained by both adjacent panels', () => {
+		const model = modelWithPanels(
+			panel('left', { defaultSize: 50, minSize: 20, maxSize: 70 }),
+			panel('right', { defaultSize: 50, minSize: 10, maxSize: 80 })
+		);
+		model.registerHandle('handle');
+
+		expect(model.getSeparatorAriaValues('handle')).toEqual({
+			valueMin: 20,
+			valueMax: 70,
+			valueNow: 50,
+		});
+	});
+
+	test('toggles the collapsible panel before a handle as a user interaction', () => {
+		const onLayoutChanged = jest.fn();
+		const model = createPanelGroupModel({ direction: 'horizontal', onLayoutChanged });
+		model.registerPanel(panel('left', { collapsible: true, defaultSize: 40, minSize: 20 }));
+		model.registerPanel(panel('right', { defaultSize: 60 }));
+		model.registerHandle('handle');
+		model.flush();
+		onLayoutChanged.mockClear();
+
+		model.toggleCollapseAdjacent('handle');
+		expect(model.getLayout()).toEqual([0, 100]);
+		model.toggleCollapseAdjacent('handle');
+
+		expect(model.getLayout()).toEqual([40, 60]);
+		expect(onLayoutChanged).toHaveBeenNthCalledWith(1, [0, 100], {
+			isUserInteraction: true,
+		});
+		expect(onLayoutChanged).toHaveBeenNthCalledWith(2, [40, 60], {
+			isUserInteraction: true,
+		});
+	});
+
 	test('does not notify onLayoutChanged for an unchanged drag', () => {
 		const onLayoutChanged = jest.fn();
 		const model = createPanelGroupModel({ direction: 'horizontal', onLayoutChanged });

@@ -13,3 +13,7 @@ Panel sizes accept percentages as numbers, unitless strings, or `%` strings. Use
 ## Ordering
 
 Panels and resize handles follow an explicit `order` when provided. Otherwise web and Fabric hosts use measured position, falling back to registration order when measurement is unavailable.
+
+## Keyboard & accessibility (web)
+
+Resize handles expose separator ARIA values and are keyboard-focusable unless disabled. Arrow keys resize by 5 percentage points, Home/End move to the available limits, and Enter toggles the collapsible panel before the handle.
