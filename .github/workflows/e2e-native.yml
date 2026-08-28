@@ -183,6 +183,12 @@ jobs:
           emulator-boot-timeout: 900
           script: |
             adb wait-for-device
+            # Cold first-boot emulators on busy runners throw system-process ANR
+            # dialogs ("Pixel Launcher isn't responding", googlesdksetup — both
+            # Android jobs in run 33127572216 died at flow 01 behind one). The
+            # dialog window sits above the app, so every assert times out.
+            # hide_error_dialogs suppresses ANR/crash dialogs system-wide.
+            adb shell settings put global hide_error_dialogs 1
             adb install e2e-builds/wcpos-e2e-android.apk
             maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" apps/main/.maestro
         env:
