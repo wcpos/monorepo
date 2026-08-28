@@ -39,10 +39,11 @@ Relevant wiki pages (paths relative to the wiki repo root):
 ## Native E2E builds cost real money
 
 The `E2E Native` workflow (Maestro) runs against EAS builds of the `e2e-test`
-profile. **Every dispatch on a commit that has never been built buys a new
+profile. **An authorized dispatch without a matching cached binary buys a new
 build** — $2 for iOS and $1 for Android on the Starter plan's usage rates, so
 $3 a pair against a $45/month credit: about 15 pairs a month for everything,
-nightly included. Nine ad-hoc dispatches verifying native fixes on 2026-08-27/28
+nightly included. Manual dispatches default to `build=false` and fail fast on a
+cache miss. Nine ad-hoc dispatches verifying native fixes on 2026-08-27/28
 took the month past 40% in its first week — and six of those nine changed only
 the workflow, the Maestro flows, or the seed script, none of which enter the app
 binary, so they bought a build byte-identical to one already cached.
@@ -60,8 +61,7 @@ binary, so they bought a build byte-identical to one already cached.
 - **A change to this workflow, to `apps/main/.maestro/**`, or to
   `scripts/e2e-native-seed.mjs` needs no build at all.** None of them enter the
   binary — the test jobs check them out fresh at runtime. The cache is keyed on
-  the commit SHA, so such a commit still misses and buys a pair unless you point
-  the run at an already-built commit.
+  native binary contents, so those changes reuse a matching cached binary.
 
 ## E2E selector policy
 
