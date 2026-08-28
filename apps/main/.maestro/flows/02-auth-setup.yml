@@ -12,16 +12,16 @@ env:
 # behind this exact sequence; keep the two flows in step.
 - clearState
 - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
-- extendedWaitUntil:
-    optional: true
-    visible:
-      text: "Toggle performance monitor"
-    timeout: 30000
+# Android-only dev-menu dismissal — see flow 01 for the full rationale
+# (Maestro 2.6.1 has no `optional` wait; iOS never shows the menu).
 - runFlow:
     when:
-      visible:
-        text: "Toggle performance monitor"
+      platform: Android
     commands:
+      - extendedWaitUntil:
+          visible:
+            text: "Toggle performance monitor"
+          timeout: 60000
       - pressKey: back
 - extendedWaitUntil:
     visible:
