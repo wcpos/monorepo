@@ -22,6 +22,28 @@ env:
 # Keep in step with flow 02.
 - clearState
 - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
+# Fourth hard-won lesson: on Android, Expo's dev MENU auto-opens over the
+# app once the JS loads after a data clear (its own onboarding — separate
+# from the launcher's disableOnboarding — and clearState wipes its
+# already-shown flag every run). It covered store-url-input in run
+# 33168085439's failure screenshot while the app sat loaded behind it.
+# Android-only (review #1637: iOS never shows it — twelve consecutive green
+# iOS suites — and an unconditional wait would cost every iOS job 30s per
+# clearState flow), and the wait is DELIBERATELY unconditional within the
+# block: Maestro 2.6.1 has no `optional` wait (review #1637 P1 — the field
+# fails schema parsing), and the menu's auto-open is mechanism-backed, so if
+# Expo ever stops showing it this fails visibly at a self-describing step
+# instead of racing. Menu text, not testID: third-party native UI — the
+# app's selector policy cannot apply.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - extendedWaitUntil:
+          visible:
+            text: "Toggle performance monitor"
+          timeout: 60000
+      - pressKey: back
 - extendedWaitUntil:
     visible:
       id: "store-url-input"
