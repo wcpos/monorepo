@@ -192,3 +192,52 @@ test('Panel rendered outside PanelGroup throws', () => {
 	expect(() => render(<Panel />)).toThrow('<Panel> must be rendered inside a <PanelGroup>');
 	error.mockRestore();
 });
+
+/**
+ * The POS split from apps/main (#1620): both panels carry complementary defaultSizes so the
+ * pre-layout fallback style (flexGrow = defaultSize ?? 1) is already the correct ratio, and the
+ * group's onLayout feeds the persisted width back in. Pins that the model flushes exactly one
+ * layout for the batch, hands the same ratio to the animated styles, and does not re-fire
+ * onLayout when the persisted width re-renders the tree with unchanged props.
+ */
+test('POS shape: complementary defaultSizes land as one layout and re-render idempotently', async () => {
+	const onLayout = jest.fn();
+	function PosSplit({ width }: { width: number }) {
+		return (
+			<PanelGroup direction="horizontal" onLayout={onLayout} testID="group">
+				<Panel testID="products" defaultSize={width} minSize={25} id="products" />
+				<PanelResizeHandle />
+				<Panel testID="cart" defaultSize={100 - width} minSize={25} id="cart" />
+			</PanelGroup>
+		);
+	}
+	const view = render(<PosSplit width={60} />);
+
+	await waitFor(() => expect(view.getByTestId('products').style.flexGrow).toBe('60'));
+	expect(view.getByTestId('cart').style.flexGrow).toBe('40');
+	expect(onLayout).toHaveBeenCalledTimes(1);
+	expect(onLayout).toHaveBeenCalledWith([60, 40]);
+
+	// patchUI({ width: 60 }) re-renders the screen with the same width.
+	view.rerender(<PosSplit width={60} />);
+	await waitForContainerLayout();
+
+	expect(onLayout).toHaveBeenCalledTimes(1);
+	expect(view.getByTestId('products').style.flexGrow).toBe('60');
+	expect(view.getByTestId('cart').style.flexGrow).toBe('40');
+});
+
+test('POS shape: a persisted width outside the constraints is clamped, not rendered as a sliver', async () => {
+	const onLayout = jest.fn();
+	const view = render(
+		<PanelGroup direction="horizontal" onLayout={onLayout} testID="group">
+			<Panel testID="products" defaultSize={90} minSize={25} id="products" />
+			<PanelResizeHandle />
+			<Panel testID="cart" defaultSize={10} minSize={25} id="cart" />
+		</PanelGroup>
+	);
+
+	await waitFor(() => expect(view.getByTestId('products').style.flexGrow).toBe('75'));
+	expect(view.getByTestId('cart').style.flexGrow).toBe('25');
+	expect(onLayout).toHaveBeenCalledWith([75, 25]);
+});
