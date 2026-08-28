@@ -7,10 +7,22 @@ env:
 # P0-2: controlled authentication — the ONE real-OAuth flow (doubles as suite
 # setup; later flows reuse the session it persists). Auth decision: #698.
 # clearState without launching, then openLink cold-starts the app with the
-# URL as its launch intent — see flow 01 for the three live failures behind
-# this exact ordering; keep the two flows in step.
+# URL as its launch intent, then dismiss the dev menu that auto-opens over
+# the app after any data clear — see flow 01 for the four live failures
+# behind this exact sequence; keep the two flows in step.
 - clearState
 - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
+- extendedWaitUntil:
+    optional: true
+    visible:
+      text: "Toggle performance monitor"
+    timeout: 30000
+- runFlow:
+    when:
+      visible:
+        text: "Toggle performance monitor"
+    commands:
+      - pressKey: back
 - extendedWaitUntil:
     visible:
       id: "store-url-input"

@@ -22,6 +22,25 @@ env:
 # Keep in step with flow 02.
 - clearState
 - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
+# Fourth hard-won lesson: Expo's dev MENU auto-opens over the app on the
+# first launch after a data clear (its own onboarding — separate from the
+# launcher's disableOnboarding, and clearState wipes its already-shown flag
+# every run). It covered store-url-input in run 33168085439's failure
+# screenshot while the app sat loaded behind it. Wait for menu-only text
+# (third-party native UI — no testIDs exist to select; the app's own testID
+# policy cannot apply) and dismiss; both steps no-op harmlessly when the
+# menu does not appear.
+- extendedWaitUntil:
+    optional: true
+    visible:
+      text: "Toggle performance monitor"
+    timeout: 30000
+- runFlow:
+    when:
+      visible:
+        text: "Toggle performance monitor"
+    commands:
+      - pressKey: back
 - extendedWaitUntil:
     visible:
       id: "store-url-input"
