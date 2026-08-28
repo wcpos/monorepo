@@ -34,8 +34,26 @@ jobs:
         with:
           fetch-depth: 0
 
+      # workflow_dispatch can be pointed at any ref. Only commits that are already on a
+      # release trunk may reach the publish step with NPM_TOKEN; `--no-git-checks` below
+      # deliberately disables pnpm's own branch check, so this is the gate.
+      - name: 🛡 Require a merged trunk commit
+        run: |
+          git fetch --no-tags origin main next 2>/dev/null || git fetch --no-tags origin main
+          for trunk in main next; do
+            if git merge-base --is-ancestor HEAD "origin/$trunk" 2>/dev/null; then
+              echo "HEAD is on $trunk"
+              exit 0
+            fi
+          done
+          echo "::error::Refusing to release: HEAD is not contained in origin/main or origin/next. Dispatch this workflow from a trunk branch."
+          exit 1
+
       - name: 🏗 Setup monorepo
         uses: ./.github/actions/setup-monorepo
+        with:
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
 
       # The composite action does not configure npm's registry or auth file.
       - name: 🏗 Configure npm registry
@@ -56,45 +74,59 @@ jobs:
       - name: 📦 Check publish tarball
         run: pnpm --filter react-native-resizable-panels check:publish
 
+      # The committed version is what gets published; bumps happen in ordinary PRs.
+      # An already-published version is not an error: it is the recovery path for a
+      # re-run after the publish succeeded but the tag/release step failed, so upload is
+      # skipped and the remaining release metadata is completed idempotently.
       - name: 🏷 Read committed version
         id: version
         working-directory: packages/resizable-panels
         run: |
-          echo "value=$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
-
-      - name: 🔍 Check version is unpublished
-        run: |
-          if npm view "react-native-resizable-panels@${{ steps.version.outputs.value }}" version >/dev/null 2>&1; then
-            echo "react-native-resizable-panels@${{ steps.version.outputs.value }} is already published" >&2
-            exit 1
+          VERSION=$(node -p 'require("./package.json").version')
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+          if npm view "react-native-resizable-panels@$VERSION" version >/dev/null 2>&1; then
+            echo "::warning::react-native-resizable-panels@$VERSION is already on npm; skipping upload and completing tag/release only."
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: 🚀 Publish to npm (dry run)
-        if: ${{ inputs.dry-run }}
+        if: ${{ inputs.dry-run && steps.version.outputs.published == 'false' }}
         working-directory: packages/resizable-panels
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: pnpm publish --access public --tag "${{ inputs.tag }}" --no-git-checks --provenance --dry-run
 
       - name: 🚀 Publish to npm
-        if: ${{ !inputs.dry-run }}
+        if: ${{ !inputs.dry-run && steps.version.outputs.published == 'false' }}
         working-directory: packages/resizable-panels
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: pnpm publish --access public --tag "${{ inputs.tag }}" --no-git-checks --provenance
 
       # Only stable releases receive a matching repository tag and GitHub release.
+      # Both steps are idempotent so a re-run can finish what a transient failure left undone.
       - name: 🔖 Create git tag
         if: ${{ !inputs.dry-run && inputs.tag == 'latest' }}
         env:
           RELEASE_TAG: react-native-resizable-panels@${{ steps.version.outputs.value }}
         run: |
-          git tag "$RELEASE_TAG"
-          git push origin "$RELEASE_TAG"
+          if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Tag $RELEASE_TAG already exists"
+          else
+            git tag "$RELEASE_TAG"
+            git push origin "$RELEASE_TAG"
+          fi
 
       - name: 📝 Create GitHub release
         if: ${{ !inputs.dry-run && inputs.tag == 'latest' }}
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: react-native-resizable-panels@${{ steps.version.outputs.value }}
-        run: gh release create "$RELEASE_TAG" --title "$RELEASE_TAG" --generate-notes
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists"
+          else
+            gh release create "$RELEASE_TAG" --title "$RELEASE_TAG" --generate-notes
+          fi
