@@ -36,32 +36,33 @@ Relevant wiki pages (paths relative to the wiki repo root):
 - `product/features.md` — feature inventory (free vs Pro)
 - `product/personas.md` — user personas and design implications
 
-## Native E2E builds cost real money
+## Native E2E: dev client + Metro — builds are rare and cost real money
 
-The `E2E Native` workflow (Maestro) runs against EAS builds of the `e2e-test`
-profile. **An authorized dispatch without a matching cached binary buys a new
-build** — $2 for iOS and $1 for Android on the Starter plan's usage rates, so
-$3 a pair against a $45/month credit: about 15 pairs a month for everything,
-nightly included. Manual dispatches default to `build=false` and fail fast on a
-cache miss. Nine ad-hoc dispatches verifying native fixes on 2026-08-27/28
-took the month past 40% in its first week — and six of those nine changed only
-the workflow, the Maestro flows, or the seed script, none of which enter the app
-binary, so they bought a build byte-identical to one already cached.
+The `E2E Native` workflow (Maestro, nightly 03:00) drives the
+`development`-profile **dev client** — the same build developers use — and the
+JS under test comes from **Metro on the test runner**, bundling the checked-out
+revision (`expo start --no-dev --minify`). The dev client contains no JS, so
+**JS-only changes never need a build**: the nightly tests every commit for
+free. An EAS build happens only when `npx @expo/fingerprint` moves — native
+deps, config plugins, app config, native code — historically once or twice a
+month.
 
-- **Do not dispatch `e2e-native.yml` to verify a fix without asking the owner.**
-  The nightly at 03:00 already covers `main` — alternating iOS and Android, so
-  your platform lands within two nights — and it costs nothing extra.
-- A dispatch now defaults to `build=false` and **fails fast rather than
-  spending**. Re-running the suite against an already-built commit is free.
-- When a build genuinely is warranted, pass `platform=ios` or `platform=android`
-  if only one is affected. Most native fixes are one-platform; paying for the
-  pair is the exception, not the default.
-- Batch fixes into one commit before building. Seven dispatches for seven
-  commits cost seven times what one dispatch after the last one would have.
-- **A change to this workflow, to `apps/main/.maestro/**`, or to
-  `scripts/e2e-native-seed.mjs` needs no build at all.** None of them enter the
-  binary — the test jobs check them out fresh at runtime. The cache is keyed on
-  native binary contents, so those changes reuse a matching cached binary.
+Builds that do happen are metered: $2 iOS / $1 Android against a $45/month
+credit **shared with release builds** (Expo Starter plan; the Free plan's hard
+limit is the same 15 + 15). History: nine ad-hoc dispatches on 2026-08-27/28
+bought nine build pairs in sixteen hours verifying fixes one commit at a time.
+
+- **Do not dispatch `e2e-native.yml` with `build=true` without asking the
+  owner.** A dispatch defaults to `build=false` and fails fast on a cache miss
+  instead of spending; a miss means the NATIVE fingerprint moved, which is
+  rare and worth a human look anyway.
+- Changes to the workflow, `apps/main/.maestro/**`, the seed script, or ANY
+  app JS/TS need no build — dispatch freely, it runs from cache.
+- When a native change genuinely needs a build, pass `platform=ios` or
+  `platform=android` if only one platform is affected ($1–$2, not $3).
+- Local runs are identical to CI: install the dev client, `npx expo start` in
+  `apps/main` (Android: `adb reverse tcp:8081 tcp:8081`), then
+  `maestro test apps/main/.maestro`.
 
 ## E2E selector policy
 

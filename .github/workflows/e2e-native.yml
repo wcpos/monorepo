@@ -1,17 +1,22 @@
 # Nightly native E2E (Maestro) — spec: wayfinder wcpos/monorepo#688.
 # Runs the P0 suite on iOS simulators (macOS runners) and Android emulators
-# (Linux/KVM runners) against SHA-keyed cached e2e-test EAS builds.
-# Budget guardrail: $150/mo ceiling (~40 macOS-min + ~40 Linux-min per night).
+# (Linux/KVM runners).
 #
-# The EAS build is metered, and the allowance is 15 iOS + 15 Android builds a
-# month — the Free plan's hard limit, and exactly what Starter's $45 credit buys
-# at $2/iOS and $1/Android. A both-platform nightly needs about 29 pairs a month
-# (measured: `main`'s binary changed on 29 of the 30 nights to 2026-08-27), which
-# is double the allowance on either plan. So the nightly ALTERNATES platforms —
-# 15 + 15 over 30 nights, each platform every other night — and the cache is
-# keyed on the binary rather than the commit, so commits that cannot change the
-# app reuse the build. A dispatch buys nothing unless it says so: see the `build`
-# input below.
+# ARCHITECTURE (owner ruling 2026-08-28: "the dev client might not change for
+# the entire month — build once, update the JavaScript"): the suite drives the
+# `development`-profile DEV CLIENT — the same build developers use — and the
+# JS under test is served to it by Metro running on the test runner
+# (`expo start --no-dev --minify`), bundling the checked-out revision. The
+# native shell is built on EAS only when `npx @expo/fingerprint` moves, i.e.
+# when native deps / config / native code actually change (historically once
+# or twice a month), and is cached on the GHA side keyed by that fingerprint.
+# JS-only nights — almost every night — build nothing and cost $0.
+#
+# Costs, for the rare build: $2 per iOS, $1 per Android on Starter usage rates;
+# the monthly allowance (15 + 15 builds — the Free plan's hard limit, and
+# exactly what Starter's $45 credit buys) is shared with RELEASE builds
+# (`build.yml`), which is why this workflow spends only on fingerprint change
+# and why a dispatch never spends without saying so (`build` input below).
 #
 # Tests `main`. It tested `next` until 2026-08-27 — a leftover from when the
 # Maestro suite was next-lane — but everything ships from `main` (lanes
@@ -23,41 +28,30 @@ name: E2E Native
 
 on:
   schedule:
-    # Every second day, not nightly. The E2E suite is not the only claim on the
-    # 15 iOS + 15 Android monthly allowance — release builds (`build.yml`, the
-    # `production` profile) come out of the same account, and they cluster:
-    # v1.10.0, .1 and .2 all shipped on 2026-08-25. A nightly on both platforms
-    # wanted ~29 pairs a month and left releases nothing. Every second day,
-    # alternating platforms, is ~15 builds a month — half the allowance, with
-    # the rest free for releases and for debugging the suite itself.
-    - cron: '0 3 */2 * *'
+    - cron: '0 3 * * *'
   workflow_dispatch:
     inputs:
       ref:
         description: Branch to test
         type: string
         default: main
-      # A dispatch on a commit that has never been built costs a fresh EAS
-      # build. Nine ad-hoc dispatches on 2026-08-27/28, each verifying one
-      # native-nightly fix on a new SHA, bought nine build pairs in sixteen
-      # hours; six of those nine changed only this workflow, the Maestro flows,
-      # or the seed script — none of which enter the binary, all of which the
-      # test jobs check out fresh — so six pairs bought a byte-identical app.
-      # So a dispatch reuses a cached
-      # build by default and refuses to spend, and paying is an explicit
-      # opt-in. Re-running the suite against an already-built commit stays
-      # free. The nightly is unaffected: it builds when `main` has moved, which
-      # is what it is for.
+      # A dispatch that finds no cached dev client for the current native
+      # fingerprint refuses to spend rather than silently billing an EAS
+      # build (the nine ad-hoc dispatches of 2026-08-27/28 bought nine build
+      # pairs in sixteen hours; under this architecture all nine would have
+      # been cache hits, but the guard stays for the day a fingerprint change
+      # and a debugging session coincide). The nightly is exempt: buying the
+      # rare fingerprint-change build is its job.
       build:
-        description: 'Spend an EAS build if this commit has none cached (iOS $2, Android $1)'
+        description: 'Spend an EAS build if no dev client is cached for this fingerprint (iOS $2, Android $1)'
         type: boolean
         default: false
-      # Most fixes are one-platform. Verifying an Android-only fix should cost
-      # an Android build, not a pair. The cache key carries the selection (see
-      # the resolve step) so a single-platform run can never satisfy a later
-      # `all` run from cache.
+      # A fingerprint change rarely lands for both platforms' sakes; verifying
+      # an Android-only native change should cost $1, not $3. The cache key
+      # carries the selection so a single-platform build can never satisfy a
+      # later `all` run from cache.
       platform:
-        description: Platform(s) to build and test (the nightly alternates; a dispatch does not)
+        description: Platform(s) to build and test
         type: choice
         default: all
         options:
@@ -78,7 +72,7 @@ permissions:
 
 jobs:
   build:
-    name: 📦 Resolve e2e-test builds
+    name: 📦 Resolve dev-client build
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
@@ -103,103 +97,80 @@ jobs:
             exit 1
           fi
 
-      # Pin the exact revision under test: the cache key and both test jobs
-      # use this SHA, so build and tests always agree on one revision, and a
-      # cached build is only reused when the code is truly identical (e2e
-      # builds embed the JS bundle — keying on the native fingerprint alone
-      # would test stale JS after JS-only changes). It also means the test
-      # jobs check out the validated revision, never a mutable branch name.
+      # Pin the exact revision under test: both test jobs check out this SHA
+      # — never a mutable branch name — and Metro on each test runner bundles
+      # THAT checkout, so the JS under test is the tested revision by
+      # construction. The dev-client binary is deliberately NOT pinned to the
+      # SHA: it carries no JS, so it is keyed on the native fingerprint below.
       - name: 🔑 Resolve revision under test
         id: resolve
         run: |
           SHA=$(git rev-parse HEAD)
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-          # The nightly ALTERNATES platforms instead of building both.
-          #
-          # The Expo allowance is 15 iOS + 15 Android builds a month (the Free
-          # plan's limit, and exactly what Starter's $45 credit buys at $2/iOS
-          # and $1/Android). A both-platform nightly is ~29 pairs a month —
-          # about double — measured over the 30 nights to 2026-08-27, on 29 of
-          # which `main`'s binary had changed. Caching cannot help there: the
-          # app genuinely differs every night. Halving the nightly is the only
-          # lever, and alternating beats running fewer nights because every
-          # night still covers something and each platform lands every other
-          # night, rather than both going dark for days at a time.
-          #
-          # Derived from the day-of-year with no stored state. The schedule
-          # fires on odd days of the month (`*/2` in cron), so consecutive runs
-          # are two days apart and raw date parity would be CONSTANT within a
-          # month — every run picking the same platform. Halving the day first
-          # turns each two-day stride into +1, so parity alternates per run.
-          # Month and year boundaries can repeat or skip one platform once;
-          # harmless, it self-corrects on the next run.
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            DOY=$(date -u +%j | sed 's/^0*//')
-            if [ $(( (DOY / 2) % 2 )) -eq 0 ]; then
-              PLATFORM=ios
-            else
-              PLATFORM=android
-            fi
-          else
-            PLATFORM="${{ github.event.inputs.platform || 'all' }}"
-          fi
+          PLATFORM="${{ github.event.inputs.platform || 'all' }}"
           echo "platform=$PLATFORM" >> "$GITHUB_OUTPUT"
-          # Key the build cache on what can actually change the BINARY, not on
-          # the commit. These three sets never enter the app: this workflow,
-          # the Maestro flows, and the runner-side seed script — the test jobs
-          # check all of them out fresh at runtime (`maestro test
-          # apps/main/.maestro`). Keying on the SHA meant a one-line YAML edit
-          # invalidated a 154 MB binary that had not changed: six of the nine
-          # ad-hoc builds on 2026-08-27/28 were exactly that, and `main` at the
-          # time of writing sat one Maestro-only commit ahead of a built
-          # revision, so the next nightly would have bought a pair for a
-          # byte-identical app.
-          #
-          # The exclusion list is deliberately short. Anything not named here
-          # counts toward the hash, so an unforeseen file causes an unnecessary
-          # build (cheap) rather than a stale binary under test (a silent lie).
-          # Blob SHAs come from the index, so any content change moves the hash.
-          BIN_HASH=$(git ls-tree -r HEAD --format='%(objectname) %(path)' \
-            | grep -vE '^[0-9a-f]+ (\.github/|apps/main/\.maestro/|scripts/e2e-native-seed\.mjs$)' \
-            | git hash-object --stdin)
-          echo "bin_hash=$BIN_HASH" >> "$GITHUB_OUTPUT"
+          echo "Testing main @ $SHA (platform: $PLATFORM)"
+
+      # The fingerprint resolves the app config (TypeScript, with imports), so
+      # dependencies must be installed first — which is why setup runs before
+      # the cache probe. A refused dispatch therefore costs a few minutes of
+      # runner time; acceptable, because refusals are rare and the fingerprint
+      # is what makes almost every night bill nothing at all.
+      - name: 🏗 Setup monorepo
+        uses: ./.github/actions/setup-monorepo
+        with:
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+
+      # `@expo/fingerprint` is Expo's own answer to "does this need a new
+      # native build?": it hashes the installed native modules, config
+      # plugins, app config and EAS profile — and deliberately ignores app
+      # JS/TS. Verified locally (2026-08-28): deterministic across runs; a
+      # core-screen edit does not move it; editing an installed native
+      # module's content does. JS changes ride in via Metro, so a stale-JS
+      # cache hit is impossible by construction.
+      - name: 🔬 Compute native fingerprint
+        id: fingerprint
+        working-directory: apps/main
+        run: |
+          FP=$(npx @expo/fingerprint . | jq -r '.hash')
+          [ -n "$FP" ] && [ "$FP" != "null" ] || { echo "::error::fingerprint computation failed"; exit 1; }
           # The key also carries the platform selection so a single-platform
           # build can never satisfy a later `all` run from cache.
+          PLATFORM="${{ steps.resolve.outputs.platform }}"
           if [ "$PLATFORM" = "all" ]; then
-            echo "cache_key=e2e-native-bin-$BIN_HASH" >> "$GITHUB_OUTPUT"
+            echo "cache_key=e2e-native-devclient-$FP" >> "$GITHUB_OUTPUT"
           else
-            echo "cache_key=e2e-native-bin-$BIN_HASH-$PLATFORM" >> "$GITHUB_OUTPUT"
+            echo "cache_key=e2e-native-devclient-$FP-$PLATFORM" >> "$GITHUB_OUTPUT"
           fi
-          echo "Testing main @ $SHA (platform: $PLATFORM, binary $BIN_HASH)"
+          echo "Native fingerprint: $FP"
 
-      # Restored BEFORE the seed and the monorepo setup, so the refusal below
-      # can stop a would-be-billing dispatch in seconds rather than after five
-      # minutes of setup it is about to throw away.
       # EAS artifacts expire after ~2 weeks (observed in #696), so finished
-      # builds are cached on the GHA side. Nights where main hasn't moved hit
-      # the cache and cost no EAS build.
+      # builds are cached on the GHA side. GHA evicts caches unused for 7
+      # days, but the nightly touches this key every night, keeping it warm
+      # for as long as the fingerprint holds.
       - name: ♻️ Restore cached builds
         id: cache
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: e2e-builds
-          key: ${{ steps.resolve.outputs.cache_key }}
+          key: ${{ steps.fingerprint.outputs.cache_key }}
 
       # A dispatch does not get to spend money by accident. Reaching here on a
-      # cache miss means this commit has never been built for this platform
-      # selection, so continuing would bill a build; a dispatch that did not
-      # ask for one stops instead. The nightly is exempt — buying a build when
-      # `main` has moved is the whole job.
+      # cache miss means no dev client exists for this native fingerprint and
+      # platform selection, so continuing would bill an EAS build; a dispatch
+      # that did not ask for one stops instead. The nightly is exempt — buying
+      # the rare fingerprint-change build is its job.
       - name: 💸 Refuse an unrequested EAS build
         if: >-
           steps.cache.outputs.cache-hit != 'true'
           && github.event_name == 'workflow_dispatch'
           && github.event.inputs.build != 'true'
         env:
-          SHA: ${{ steps.resolve.outputs.sha }}
           PLATFORM: ${{ steps.resolve.outputs.platform }}
+          CACHE_KEY: ${{ steps.fingerprint.outputs.cache_key }}
         run: |
-          echo "::error::No cached $PLATFORM build for ${SHA:0:8}. Re-running the suite against an already-built commit is free; building this one is not. Dispatch again with build=true (and platform=ios|android if only one is affected) to authorise the spend."
+          echo "::error::No cached dev client for $CACHE_KEY ($PLATFORM). JS-only changes never need a build — Metro serves the checked-out JS — so a miss means the NATIVE fingerprint moved. Dispatch again with build=true (and platform=ios|android if only one is affected) to authorise the spend (iOS \$2, Android \$1)."
           exit 1
 
       # Seed ONCE, before the matrix fans out: the four test jobs share one
@@ -220,20 +191,18 @@ jobs:
           E2E_PRODUCT_WRITER_PASS: ${{ secrets.E2E_PRODUCT_WRITER_PASS }}
         run: node scripts/e2e-native-seed.mjs
 
-      - name: 🏗 Setup monorepo
-        uses: ./.github/actions/setup-monorepo
-        with:
-          expo-token: ${{ secrets.EXPO_TOKEN }}
-          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
-
-      - name: 🛠 Build e2e-test profile on EAS (revision changed)
+      # The `development` profile — the SAME dev client developers build and
+      # use by hand. One artifact serves both audiences, which is the point:
+      # it contains no JS, so it only needs rebuilding when the native
+      # fingerprint moves.
+      - name: 🛠 Build dev client on EAS (native fingerprint changed)
         if: steps.cache.outputs.cache-hit != 'true'
         working-directory: apps/main
         env:
           PLATFORM: ${{ steps.resolve.outputs.platform }}
         run: |
           mkdir -p ../../e2e-builds
-          eas build --profile e2e-test --platform "$PLATFORM" --non-interactive --wait --json > /tmp/builds.json
+          eas build --profile development --platform "$PLATFORM" --non-interactive --wait --json > /tmp/builds.json
           IOS_URL=$(jq -r '.[] | select(.platform=="IOS") | .artifacts.buildUrl' /tmp/builds.json)
           ANDROID_URL=$(jq -r '.[] | select(.platform=="ANDROID") | .artifacts.buildUrl' /tmp/builds.json)
           # A single-platform build yields one artifact; the other URL is empty
@@ -288,6 +257,37 @@ jobs:
           name: e2e-builds
           path: e2e-builds
 
+      - name: 🏗 Setup monorepo
+        uses: ./.github/actions/setup-monorepo
+        with:
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+
+      # Metro serves the checked-out revision's JS to the dev client. The
+      # bundle is compiled here, under this step's own generous timeout, so
+      # the app's first fetch is a Metro cache hit and flow 01's 60s UI wait
+      # is never spent inside the compiler. `--no-dev --minify` serves
+      # production-mode JS — same mode the old embedded-bundle builds shipped,
+      # and it keeps dev-mode LogBox overlays from sitting above the app where
+      # they would swallow Maestro taps. `--offline` skips Expo API calls the
+      # server does not need.
+      - name: 📦 Start Metro and pre-compile the bundle
+        working-directory: apps/main
+        run: |
+          nohup npx expo start --no-dev --minify --offline --port 8081 > /tmp/metro.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:8081/status >/dev/null && break
+            if [ "$i" -eq 60 ]; then
+              echo "::error::Metro did not come up within 120s"
+              tail -50 /tmp/metro.log
+              exit 1
+            fi
+            sleep 2
+          done
+          curl -sf --max-time 900 -o /dev/null \
+            "http://localhost:8081/index.bundle?platform=android&dev=false&minify=true" \
+            || { echo "::error::Android bundle pre-compile failed"; tail -80 /tmp/metro.log; exit 1; }
+          echo "Metro up; Android bundle compiled."
+
       - name: 🧰 Install Maestro
         run: |
           curl -fsSL -o /tmp/maestro.zip \
@@ -330,6 +330,11 @@ jobs:
             # dialog window sits above the app, so every assert times out.
             # hide_error_dialogs suppresses ANR/crash dialogs system-wide.
             adb shell settings put global hide_error_dialogs 1
+            # The flows launch the dev client into http://localhost:8081 (the
+            # DEV_CLIENT_URL default in flows 01/02); adb reverse makes the
+            # emulator's localhost:8081 reach Metro on this host, so the same
+            # URL works on both platforms and in local runs.
+            adb reverse tcp:8081 tcp:8081
             adb install e2e-builds/wcpos-e2e-android.apk
             maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" apps/main/.maestro
         env:
@@ -354,7 +359,9 @@ jobs:
     needs: build
     if: needs.build.outputs.platform != 'android'
     runs-on: macos-15
-    timeout-minutes: 45
+    # 60, was 45: the dev-client architecture adds pnpm install (~3-5 min) and
+    # Metro's one-time bundle compile (~3-6 min) to the front of the job.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -373,6 +380,33 @@ jobs:
         with:
           name: e2e-builds
           path: e2e-builds
+
+      - name: 🏗 Setup monorepo
+        uses: ./.github/actions/setup-monorepo
+        with:
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+
+      # Metro serves the checked-out revision's JS to the dev client — see the
+      # Android job's twin step for the full rationale. The simulator shares
+      # the host loopback, so the flows' localhost:8081 URL needs no port
+      # plumbing here.
+      - name: 📦 Start Metro and pre-compile the bundle
+        working-directory: apps/main
+        run: |
+          nohup npx expo start --no-dev --minify --offline --port 8081 > /tmp/metro.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:8081/status >/dev/null && break
+            if [ "$i" -eq 60 ]; then
+              echo "::error::Metro did not come up within 120s"
+              tail -50 /tmp/metro.log
+              exit 1
+            fi
+            sleep 2
+          done
+          curl -sf --max-time 900 -o /dev/null \
+            "http://localhost:8081/index.bundle?platform=ios&dev=false&minify=true" \
+            || { echo "::error::iOS bundle pre-compile failed"; tail -80 /tmp/metro.log; exit 1; }
+          echo "Metro up; iOS bundle compiled."
 
       - name: 🧰 Install Maestro
         run: |
