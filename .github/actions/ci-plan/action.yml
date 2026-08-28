@@ -1,0 +1,36 @@
+name: CI plan
+description: Conservatively route pull-request changes to CI tiers
+inputs:
+  base-sha:
+    description: Pull request base commit SHA
+    required: false
+outputs:
+  lint:
+    description: Whether lint should run
+    value: ${{ steps.plan.outputs.lint }}
+  unit:
+    description: Unit package selection
+    value: ${{ steps.plan.outputs.unit }}
+  web:
+    description: Web E2E scope
+    value: ${{ steps.plan.outputs.web }}
+  only_specs:
+    description: Narrowed Playwright spec basenames
+    value: ${{ steps.plan.outputs.only_specs }}
+  native:
+    description: Native build scope
+    value: ${{ steps.plan.outputs.native }}
+  self:
+    description: Changed workflow basenames
+    value: ${{ steps.plan.outputs.self }}
+  reason:
+    description: Human-readable plan reasons
+    value: ${{ steps.plan.outputs.reason }}
+runs:
+  using: composite
+  steps:
+    - id: plan
+      shell: bash
+      env:
+        BASE_SHA: ${{ inputs.base-sha }}
+      run: node scripts/ci-plan.mjs "$BASE_SHA" >> "$GITHUB_OUTPUT"

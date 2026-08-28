@@ -34,8 +34,8 @@ on:
     # (the e2e-gate job) is a REQUIRED merge-gate check, and a check that is
     # never reported blocks the gate until it times out. The path filtering
     # moved into the `changes` job below, so the workflow always runs and the
-    # gate always gets an answer — the same pattern test.yml uses for Lint /
-    # Unit Tests.
+    # shared planner runs inside the `changes` job, so the workflow always runs
+    # and the gate always gets an answer. Ambiguous changes run every tier.
 
 # Concurrency groups are per-PR — a new push can only supersede ITS OWN PR's
 # older run (a single shared group let each new run evict another PR's queued
@@ -58,50 +58,27 @@ jobs:
     name: 🔍 Detect Deploy Changes
     runs-on: ubuntu-latest
     outputs:
-      src: ${{ steps.filter.outputs.src }}
-      # false when the diff is comments/docs only — nothing executable changed.
-      behavioural: ${{ steps.scope.outputs.behavioural }}
-      # Spec files whose behaviour this PR can actually have changed, when that
-      # set is knowable. Empty string = run everything.
-      only_specs: ${{ steps.scope.outputs.only_specs }}
+      lint: ${{ steps.plan.outputs.lint }}
+      unit: ${{ steps.plan.outputs.unit }}
+      web: ${{ steps.plan.outputs.web }}
+      only_specs: ${{ steps.plan.outputs.only_specs }}
+      native: ${{ steps.plan.outputs.native }}
+      self: ${{ steps.plan.outputs.self }}
+      reason: ${{ steps.plan.outputs.reason }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
-      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
-        id: filter
+      - uses: ./.github/actions/ci-plan
+        id: plan
         with:
-          filters: |
-            src:
-              # Deploy + E2E only matter for changes that can affect apps/main.
-              # The template-studio is an internal designer tool that ships
-              # nothing to the deployed app, so its changes shouldn't trigger a
-              # full E2E run.
-              - 'apps/**'
-              - '!apps/template-studio/**'
-              - 'packages/**'
-              - '.github/workflows/deploy.yml'
-              - 'package.json'
-              - 'pnpm-lock.yaml'
-
-      # Run only what the diff can have broken. Comments/docs-only PRs skip
-      # deploy and E2E outright (comments are stripped before anything runs);
-      # spec-only PRs run just those specs (a spec is a leaf — nothing imports
-      # it). Anything else runs the full suite. Ambiguity always resolves to
-      # "run everything" — see scripts/e2e-change-scope.mjs.
-      - name: 🎯 Scope E2E to the change
-        id: scope
-        # The PR's base SHA, not a branch name: a PR checkout does not reliably
-        # have other branches' refs, and a missing ref makes the script fall back
-        # to "run everything" — safe, but it would silently never narrow.
-        # Push builds have no base SHA and always run the full suite.
-        run: node scripts/e2e-change-scope.mjs "${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+          base-sha: ${{ github.event.pull_request.base.sha }}
 
   deploy:
     name: 🚀 Deploy
     runs-on: ubuntu-latest
     needs: changes
-    if: github.actor != 'dependabot[bot]' && needs.changes.outputs.behavioural != 'false' && (github.event_name != 'pull_request' || needs.changes.outputs.src == 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+    if: github.actor != 'dependabot[bot]' && needs.changes.outputs.web != 'none' && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
     outputs:
       deployment_url: ${{ steps.get-url.outputs.url }}
       is_production: ${{ steps.get-url.outputs.is_production }}
@@ -569,11 +546,8 @@ jobs:
 
   comment:
     name: 💬 PR Comment
-    needs: [deploy, e2e, e2e-report]
-    # `needs.deploy.result != 'skipped'` keeps the workflow quiet on PRs that
-    # touch no app-affecting paths — without it the workflow now runs on every
-    # PR and would post a misleading "❌ Failed to deploy" summary.
-    if: always() && github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && needs.deploy.result != 'skipped'
+    needs: [changes, deploy, e2e, e2e-report]
+    if: always() && github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -584,7 +558,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: 📥 Download test results
-        if: needs.e2e.result == 'failure'
+        if: needs.deploy.result == 'success' && needs.e2e.result == 'failure'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         continue-on-error: true
         with:
@@ -592,7 +566,7 @@ jobs:
           path: test-artifacts
 
       - name: 📥 Download all screenshot artifacts
-        if: needs.e2e.result == 'failure'
+        if: needs.deploy.result == 'success' && needs.e2e.result == 'failure'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         continue-on-error: true
         with:
@@ -602,7 +576,7 @@ jobs:
 
       - name: 📤 Upload screenshots for embedding
         id: upload-screenshots
-        if: needs.e2e.result == 'failure'
+        if: needs.deploy.result == 'success' && needs.e2e.result == 'failure'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -674,8 +648,10 @@ jobs:
             const fs = require('fs');
             const path = require('path');
             const deployUrl = '${{ needs.deploy.outputs.deployment_url }}';
+            const deployResult = '${{ needs.deploy.result }}';
             const isProduction = '${{ needs.deploy.outputs.is_production }}' === 'true';
             const e2eResult = '${{ needs.e2e.result }}';
+            const planReason = ${{ toJSON(needs.changes.outputs.reason) }};
             const sha = '${{ github.sha }}'.substring(0, 7);
             const runId = '${{ github.run_id }}';
 
@@ -684,7 +660,7 @@ jobs:
 
             if (e2eResult === 'success') {
               e2eStatus = '✅ Passed';
-            } else if (e2eResult === 'failure') {
+            } else if (e2eResult === 'failure' && deployResult === 'success') {
               e2eStatus = '❌ Failed';
 
               // Try to parse test results for failure details
@@ -867,7 +843,8 @@ jobs:
               quickLinks = `\n\n### 🔗 Quick Links\n- [Preview App](${deployUrl})\n- [Workflow Run](https://github.com/${{ github.repository }}/actions/runs/${runId})`;
             }
 
-            const body = `## 🚀 Deployment Summary\n\n${tableRows}${quickLinks}${e2eDetails}\n\n---\n<sub>🤖 Updated by GitHub Actions</sub>`;
+            const planBullets = planReason.split(';').map(part => `- ${part.trim()}`).join('\n');
+            const body = `### CI plan\n${planBullets}\n\n## 🚀 Deployment Summary\n\n${tableRows}${quickLinks}${e2eDetails}\n\n---\n<sub>🤖 Updated by GitHub Actions</sub>`;
 
             // Find and update existing comment
             const { data: comments } = await github.rest.issues.listComments({

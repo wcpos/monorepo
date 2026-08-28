@@ -13,6 +13,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { planFor } from './ci-plan.mjs';
 import {
 	ALLOWLIST,
 	checkCiTestMatrix,
@@ -407,13 +408,17 @@ test('the allowlist fails closed when an entry is gone or has no tests', (t) => 
 	}
 });
 
-test('the Lint change filter covers every matrix input', () => {
-	const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-	const workflow = readFileSync(path.join(root, '.github/workflows/test.yml'), 'utf8');
-
-	assert.match(workflow, /'\.github\/workflows\/\*\.yml'/);
-	assert.match(workflow, /'\.github\/workflows\/\*\.yaml'/);
-	assert.match(workflow, /'pnpm-workspace\.yaml'/);
+test('the CI planner runs Lint for every matrix input', () => {
+	// The matrix reads workflows and the workspace file; a change to any of
+	// them must reach the Lint job, where this check runs. The planner replaced
+	// the old path filter, so the guarantee is asserted against it directly.
+	for (const file of [
+		'.github/workflows/test.yml',
+		'.github/workflows/anything.yaml',
+		'pnpm-workspace.yaml',
+	]) {
+		assert.equal(planFor([file]).lint, true, `${file} must run Lint`);
+	}
 });
 
 test('package and script tests run before governance entrypoints', () => {

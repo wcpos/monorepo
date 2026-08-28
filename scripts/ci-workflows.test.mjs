@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import { parse } from 'yaml';
+
+import { classify } from './ci-plan.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -211,22 +213,24 @@ test('the E2E auth-state cache is shard- and lane-scoped', () => {
 	assert.match(encrypt.run, /rm -rf e2e\/\.auth-state/);
 });
 
-test('E2E scope narrowing cannot silently drop coverage', () => {
+test('the shared CI planner controls both change jobs without workflow path filters', () => {
 	// Narrowing is a wall-clock optimisation; it must never be able to turn a
 	// real regression into a green run.
+	for (const filename of ['deploy.yml', 'test.yml']) {
+		const raw = readFileSync(path.join(ROOT, '.github', 'workflows', filename), 'utf8');
+		const workflow = readWorkflow(filename);
+		const planner = workflow.jobs.changes.steps.find(
+			(step) => step.uses === './.github/actions/ci-plan'
+		);
+		assert.ok(planner, `${filename} changes job does not use the shared planner`);
+		assert.equal(planner.with['base-sha'], '${{ github.event.pull_request.base.sha }}');
+		assert.doesNotMatch(raw, /dorny\/paths-filter/);
+		assert.equal(workflow.on.pull_request.paths, undefined, `${filename} has workflow-level paths`);
+	}
+
 	const workflow = readWorkflow('deploy.yml');
-	const changes = workflow.jobs.changes;
-	const scope = changes.steps.find((step) => /Scope E2E to the change/.test(step.name ?? ''));
-
-	assert.ok(scope, 'the changes job no longer scopes the E2E run');
-	// A branch NAME would be missing from a PR checkout; the base SHA always resolves.
-	assert.match(scope.run, /github\.event\.pull_request\.base\.sha/);
-	assert.equal(changes.outputs.behavioural, '${{ steps.scope.outputs.behavioural }}');
-	assert.equal(changes.outputs.only_specs, '${{ steps.scope.outputs.only_specs }}');
-
-	// Deploy (and therefore E2E) skip only on an explicit false — an unset or
-	// errored scope step must leave the full pipeline running.
-	assert.match(workflow.jobs.deploy.if, /needs\.changes\.outputs\.behavioural != 'false'/);
+	assert.match(workflow.jobs.deploy.if, /needs\.changes\.outputs\.web != 'none'/);
+	assert.equal(workflow.jobs.changes.outputs.only_specs, '${{ steps.plan.outputs.only_specs }}');
 
 	// A narrowed run uses ONE shard: spreading two specs over four shards leaves
 	// shards with zero tests, and a shard that runs zero tests still exits 0.
@@ -234,6 +238,14 @@ test('E2E scope narrowing cannot silently drop coverage', () => {
 	assert.match(matrix.shardIndex, /only_specs != '' && '\[1\]'/);
 	assert.match(matrix.shardTotal, /only_specs != '' && '\[1\]'/);
 	assert.deepEqual([...workflow.jobs.e2e.needs].sort(), ['changes', 'deploy']);
+});
+
+test('every direct script path has an explicit planner rule', () => {
+	const scripts = path.join(ROOT, 'scripts');
+	for (const filename of readdirSync(scripts, { withFileTypes: true })) {
+		if (!filename.isFile()) continue;
+		assert.notEqual(classify(`scripts/${filename.name}`), 'fallback', filename.name);
+	}
 });
 
 test('E2E declares store-health probes and a bounded worker count', () => {
@@ -335,10 +347,16 @@ exit 64
 			GITHUB_STEP_SUMMARY: summaryPath,
 			MOCK_WORKSPACE: workspace,
 			PATH: `${binDir}:${process.env.PATH}`,
+			RUNNER_TEMP: workspace,
+			UNIT_PACKAGES: 'all',
 		};
 
 		const appResult = runShell(appStep.run, { cwd: workspace, env });
-		assert.notEqual(appResult.status, 0, 'failing app tests must fail the step');
+		assert.notEqual(
+			appResult.status,
+			0,
+			`failing app tests must fail the step\n${appResult.stdout}${appResult.stderr}`
+		);
 		assert.ok(readFileSync(path.join(workspace, 'apps/main/test-results.json'), 'utf8'));
 		assert.match(
 			readFileSync(path.join(workspace, 'apps/main/plugin-test-results.tap'), 'utf8'),
