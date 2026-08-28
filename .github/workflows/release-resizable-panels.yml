@@ -1,0 +1,100 @@
+name: Release react-native-resizable-panels
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: NPM distribution tag
+        type: choice
+        required: true
+        default: latest
+        options:
+          - latest
+          - beta
+          - next
+      dry-run:
+        description: Validate the publish without uploading to npm
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: 🏗 Setup repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: 🏗 Setup monorepo
+        uses: ./.github/actions/setup-monorepo
+
+      # The composite action does not configure npm's registry or auth file.
+      - name: 🏗 Configure npm registry
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.2"
+          registry-url: https://registry.npmjs.org
+
+      - name: 🔍 Typecheck
+        run: pnpm --filter react-native-resizable-panels typecheck
+
+      - name: 🧹 Lint
+        run: pnpm --filter react-native-resizable-panels lint
+
+      - name: 🧪 Test
+        run: pnpm --filter react-native-resizable-panels test --maxWorkers=2
+
+      - name: 📦 Check publish tarball
+        run: pnpm --filter react-native-resizable-panels check:publish
+
+      - name: 🏷 Read committed version
+        id: version
+        working-directory: packages/resizable-panels
+        run: |
+          echo "value=$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
+
+      - name: 🔍 Check version is unpublished
+        run: |
+          if npm view "react-native-resizable-panels@${{ steps.version.outputs.value }}" version >/dev/null 2>&1; then
+            echo "react-native-resizable-panels@${{ steps.version.outputs.value }} is already published" >&2
+            exit 1
+          fi
+
+      - name: 🚀 Publish to npm (dry run)
+        if: ${{ inputs.dry-run }}
+        working-directory: packages/resizable-panels
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm publish --access public --tag "${{ inputs.tag }}" --no-git-checks --provenance --dry-run
+
+      - name: 🚀 Publish to npm
+        if: ${{ !inputs.dry-run }}
+        working-directory: packages/resizable-panels
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm publish --access public --tag "${{ inputs.tag }}" --no-git-checks --provenance
+
+      # Only stable releases receive a matching repository tag and GitHub release.
+      - name: 🔖 Create git tag
+        if: ${{ !inputs.dry-run && inputs.tag == 'latest' }}
+        env:
+          RELEASE_TAG: react-native-resizable-panels@${{ steps.version.outputs.value }}
+        run: |
+          git tag "$RELEASE_TAG"
+          git push origin "$RELEASE_TAG"
+
+      - name: 📝 Create GitHub release
+        if: ${{ !inputs.dry-run && inputs.tag == 'latest' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: react-native-resizable-panels@${{ steps.version.outputs.value }}
+        run: gh release create "$RELEASE_TAG" --title "$RELEASE_TAG" --generate-notes

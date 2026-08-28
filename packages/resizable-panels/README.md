@@ -1,4 +1,4 @@
-# @wcpos/resizable-panels
+# react-native-resizable-panels
 
 Resizable panel groups for React Native (web, Electron, iOS, Android), built on `react-native-reanimated` and `react-native-gesture-handler`.
 
@@ -17,3 +17,10 @@ Panels and resize handles follow an explicit `order` when provided. Otherwise we
 ## Keyboard & accessibility (web)
 
 Resize handles expose separator ARIA values and are keyboard-focusable unless disabled. Arrow keys resize by 5 percentage points, Home/End move to the available limits, and Enter toggles the collapsible panel before the handle.
+
+## Releasing
+
+1. Bump `version` in `packages/resizable-panels/package.json` in a pull request.
+2. Merge the pull request.
+3. Run the **Release react-native-resizable-panels** workflow.
+4. Choose the npm tag: `latest`, `beta`, or `next`.

@@ -1,5 +1,3 @@
-import { getLogger } from '@wcpos/utils/logger';
-
 import { adjustLayoutByDelta } from '../utils/adjustLayoutByDelta';
 import { areEqual } from '../utils/arrays';
 import { assert } from '../utils/assert';
@@ -12,12 +10,11 @@ import { fuzzyNumbersEqual } from '../utils/numbers/fuzzyNumbersEqual';
 import { parseSize } from '../utils/parseSize';
 import { preserveFixedPanelSizes } from '../utils/preserveFixedPanelSizes';
 import { validatePanelGroupLayout } from '../utils/validatePanelGroupLayout';
+import { warn } from '../utils/warn';
 
 import type { PanelConstraints, PanelData, ResolvedPanelConstraints } from '../Panel';
 import type { Direction, PanelGroupOnLayoutChanged } from '../types';
 import type { SeparatorAriaValues } from '../utils/calculateAriaValues';
-
-const log = getLogger(['wcpos', 'ui', 'resizable-panels']);
 
 type LayoutListener = (layout: number[], panelIds: string[]) => void;
 type HandleData = { id: string; order?: number };
@@ -283,7 +280,7 @@ export function createPanelGroupModel(options: {
 			if (allPixelPreserving) {
 				if (!warnedAllPixelPreserving) {
 					warnedAllPixelPreserving = true;
-					log.warn('At least one panel must preserve relative size when the group resizes');
+					warn('At least one panel must preserve relative size when the group resizes');
 				}
 			} else {
 				unsafeLayout = preserveFixedPanelSizes({
@@ -482,15 +479,15 @@ export function createPanelGroupModel(options: {
 	const beginDrag = (handleId: string, dragContainerSizePx: number) => {
 		const handleIndex = handles.findIndex((handle) => handle.id === handleId);
 		if (handleIndex < 0) {
-			log.warn(`Handle "${handleId}" not found`);
+			warn(`Handle "${handleId}" not found`);
 			return false;
 		}
 		if (dragContainerSizePx <= 0) {
-			log.warn(`Cannot drag handle "${handleId}" in a ${dragContainerSizePx}px container`);
+			warn(`Cannot drag handle "${handleId}" in a ${dragContainerSizePx}px container`);
 			return false;
 		}
 		if (handleIndex + 1 >= panels.length) {
-			log.warn(`Handle "${handleId}" has no panel on both sides`);
+			warn(`Handle "${handleId}" has no panel on both sides`);
 			return false;
 		}
 		dragState = {

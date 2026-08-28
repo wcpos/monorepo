@@ -387,7 +387,9 @@ describe('PanelGroupModel', () => {
 
 		expect(model.beginDrag('handle', 0)).toBe(false);
 		expect(model.isDragging()).toBe(false);
-		expect(warning).toHaveBeenCalled();
+		expect(warning).toHaveBeenCalledWith(
+			'[react-native-resizable-panels] Cannot drag handle "handle" in a 0px container'
+		);
 		warning.mockRestore();
 	});
 

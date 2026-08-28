@@ -3,7 +3,7 @@ process.env.NODE_ENV = 'development';
 const TEST_REGEX = '(/__tests__/.*|(\\.|/)(test|spec))\\.(jsx?|js?|tsx?|ts?)$';
 
 module.exports = {
-	displayName: '@wcpos/resizable-panels',
+	displayName: 'react-native-resizable-panels',
 	preset: 'ts-jest',
 	testEnvironment: 'node',
 	transform: {
