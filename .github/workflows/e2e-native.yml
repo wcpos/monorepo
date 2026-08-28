@@ -358,8 +358,11 @@ jobs:
             # later step sees nothing). logcat is what names the mechanism
             # behind emulator-only slowness — Maestro artifacts show WHAT
             # stalled, logcat shows what the app was doing meanwhile.
-            maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" apps/main/.maestro \
-              || { mkdir -p ~/.maestro/tests && adb logcat -d > ~/.maestro/tests/logcat.txt 2>&1; exit 1; }
+            # ONE line, no continuation: the emulator-runner action executes
+            # this script LINE BY LINE, each as its own `sh -c` — a trailing
+            # `\` becomes a literal maestro argument ("Flow path does not
+            # exist: …/\", run 33153806439) and the fallback line never runs.
+            maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" apps/main/.maestro || { mkdir -p ~/.maestro/tests && adb logcat -d > ~/.maestro/tests/logcat.txt 2>&1; exit 1; }
         env:
           # The Maestro Android driver installs its two APKs and waits for the
           # instrumentation channel; first-boot emulators on shared runners
