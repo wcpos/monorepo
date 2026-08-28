@@ -107,17 +107,33 @@ jobs:
           # Scheduled runs always cover both platforms; only a dispatch narrows.
           PLATFORM="${{ github.event.inputs.platform || 'all' }}"
           echo "platform=$PLATFORM" >> "$GITHUB_OUTPUT"
-          # The key carries the platform selection so a single-platform build
-          # can never satisfy a later `all` run from cache. `all` keeps the
-          # original unsuffixed key on purpose: suffixing it would orphan every
-          # existing cache entry and make the next nightly re-buy a pair it
-          # already has (two such entries were live when this landed).
+          # Key the build cache on what can actually change the BINARY, not on
+          # the commit. These three sets never enter the app: this workflow,
+          # the Maestro flows, and the runner-side seed script — the test jobs
+          # check all of them out fresh at runtime (`maestro test
+          # apps/main/.maestro`). Keying on the SHA meant a one-line YAML edit
+          # invalidated a 154 MB binary that had not changed: six of the nine
+          # ad-hoc builds on 2026-08-27/28 were exactly that, and `main` at the
+          # time of writing sat one Maestro-only commit ahead of a built
+          # revision, so the next nightly would have bought a pair for a
+          # byte-identical app.
+          #
+          # The exclusion list is deliberately short. Anything not named here
+          # counts toward the hash, so an unforeseen file causes an unnecessary
+          # build (cheap) rather than a stale binary under test (a silent lie).
+          # Blob SHAs come from the index, so any content change moves the hash.
+          BIN_HASH=$(git ls-tree -r HEAD --format='%(objectname) %(path)' \
+            | grep -vE '^[0-9a-f]+ (\.github/|apps/main/\.maestro/|scripts/e2e-native-seed\.mjs$)' \
+            | git hash-object --stdin)
+          echo "bin_hash=$BIN_HASH" >> "$GITHUB_OUTPUT"
+          # The key also carries the platform selection so a single-platform
+          # build can never satisfy a later `all` run from cache.
           if [ "$PLATFORM" = "all" ]; then
-            echo "cache_key=e2e-native-build-$SHA" >> "$GITHUB_OUTPUT"
+            echo "cache_key=e2e-native-bin-$BIN_HASH" >> "$GITHUB_OUTPUT"
           else
-            echo "cache_key=e2e-native-build-$SHA-$PLATFORM" >> "$GITHUB_OUTPUT"
+            echo "cache_key=e2e-native-bin-$BIN_HASH-$PLATFORM" >> "$GITHUB_OUTPUT"
           fi
-          echo "Testing main @ $SHA (platform: $PLATFORM)"
+          echo "Testing main @ $SHA (platform: $PLATFORM, binary $BIN_HASH)"
 
       # Restored BEFORE the seed and the monorepo setup, so the refusal below
       # can stop a would-be-billing dispatch in seconds rather than after five
