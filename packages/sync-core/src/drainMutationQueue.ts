@@ -1,4 +1,5 @@
 import { type SyncEvent, type SyncObserver } from './telemetry';
+import { diffConflictOverwrite } from './conflictOverwriteDiff';
 import {
 	computeRetryBackoffMs,
 	DEFAULT_RETRY_BACKOFF,
@@ -312,8 +313,10 @@ export async function drainMutationQueue(input: {
 	 * re-stamped from the 409's `currentRevision` and the SAME local intent is
 	 * pushed again. The server's `current` document is NOT adopted over the local
 	 * record: for a POS the local cart is the cashier's live sale, and discarding
-	 * it to take server truth would be a lost sale. Genuine disagreement is still
-	 * surfaced — the save-time money mirror (`order-money-divergence`, #1033)
+	 * it to take server truth would be a lost sale. After successful recovery the
+	 * first 409 document is compared with the payload and any overwritten fields
+	 * are logged. This diagnostic does not prevent or alter the re-push. The
+	 * save-time money mirror (`order-money-divergence`, #1033) also
 	 * fires on the ack exactly as before — and a SECOND consecutive conflict
 	 * parks the row with the fresher server truth, byte-for-byte the pre-#1204
 	 * behaviour. The recovery is bounded per attempt-pair, so a record the server
@@ -710,6 +713,7 @@ export async function drainMutationQueue(input: {
 			// write-acknowledged — never an intermediate write-conflict (#1209: a
 			// FOLLOWER tab awaiting the outcome must see one final answer).
 			const serverRevision = result.conflict?.currentRevision ?? result.currentRevision;
+			const serverDocument = result.conflict?.current;
 			let recovered = false;
 			if (serverRevision && input.autoRecoverConflict?.(draining) === true) {
 				const reanchored = { ...draining, baseRevision: serverRevision };
@@ -794,16 +798,35 @@ export async function drainMutationQueue(input: {
 				result = retry;
 				recovered = retry.outcome !== 'conflict';
 				if (recovered) {
-					emit({
-						type: 'queue.write.conflict-recovered',
-						level: 'info',
-						collection: mutation.collectionName,
-						fields: {
-							recordId: mutation.recordId,
-							mutationId: mutation.mutationId,
-							baseRevision: serverRevision,
-						},
-					});
+					const serverDocumentCompared =
+						serverDocument !== null && typeof serverDocument === 'object';
+					const paths = serverDocumentCompared
+						? diffConflictOverwrite(reanchored.payload, serverDocument)
+						: [];
+					const fields = {
+						recordId: mutation.recordId,
+						mutationId: mutation.mutationId,
+						baseRevision: serverRevision,
+					};
+					if (paths.length > 0) {
+						emit({
+							type: 'queue.write.conflict-overwrote-server',
+							level: 'warn',
+							collection: mutation.collectionName,
+							fields: {
+								...fields,
+								overwrittenFields: paths.slice(0, 25),
+								overwrittenCount: paths.length,
+							},
+						});
+					} else {
+						emit({
+							type: 'queue.write.conflict-recovered',
+							level: 'info',
+							collection: mutation.collectionName,
+							fields: { ...fields, serverDocumentCompared },
+						});
+					}
 				}
 			}
 			if (!recovered) {

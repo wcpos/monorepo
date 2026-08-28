@@ -484,6 +484,20 @@ export const CONFORMANCE_TABLE = {
 		},
 		message: recordMessage('change reverted to server value; see Store health'),
 	},
+	'queue.write.conflict-overwrote-server': {
+		operationType: 'sync.record',
+		outcome: 'recovered',
+		code: null,
+		level: 'warn',
+		message: (event, fields) => {
+			const overwrittenFields = Array.isArray(fields.overwrittenFields)
+				? fields.overwrittenFields.filter((field) => typeof field === 'string').join(', ')
+				: '';
+			return recordMessage(
+				`overwrote ${num(fields.overwrittenCount)} store fields: ${overwrittenFields}`
+			)(event, fields);
+		},
+	},
 	'queue.write.conflict-recovered': {
 		// #1204: the clash SETTLED — the base was re-anchored to the store's own
 		// revision and the same change saved. Nothing for the cashier to do, so no

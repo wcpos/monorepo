@@ -451,6 +451,13 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "queue.write.conflict-overwrote-server",
+		"domain": "SYNC",
+		"label": "A clashing change overwrote your store's copy",
+		"description": "A change clashed with a newer copy in your store; the POS saved its own version, overwriting the fields listed in the details.",
+		"introducedIn": "1.10.3"
+	},
+	{
 		"type": "queue.write.conflict-recovered",
 		"domain": "SYNC",
 		"label": "A clashing change was re-anchored and saved",
