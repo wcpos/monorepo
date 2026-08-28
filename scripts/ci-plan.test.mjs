@@ -249,6 +249,21 @@ test('unknown paths and empty file lists return the everything-plan', () => {
 	}
 });
 
+test('a multi-line git error still emits one line per output key', () => {
+	// $GITHUB_OUTPUT is `key=value` per line; a newline inside `reason` would
+	// corrupt the file and fail the changes job instead of falling back.
+	const result = spawnSync('node', [SCRIPT, 'no-such-ref\nsecond line'], {
+		encoding: 'utf8',
+		env: { ...process.env, GITHUB_EVENT_NAME: 'pull_request' },
+	});
+	const lines = result.stdout.split('\n').filter(Boolean);
+	assert.equal(lines.length, 7, result.stdout);
+	assert.ok(lines.every((line) => /^(lint|unit|web|only_specs|native|self|reason)=/.test(line)));
+	const output = outputOf(result);
+	assert.equal(output.web, 'full');
+	assert.match(output.reason, /git diff against/);
+});
+
 test('missing base and non-PR events return the everything-plan', () => {
 	for (const [args, event] of [
 		[[], 'pull_request'],

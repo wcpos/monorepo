@@ -14,7 +14,6 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { planFor } from './ci-plan.mjs';
-
 import {
 	ALLOWLIST,
 	checkCiTestMatrix,

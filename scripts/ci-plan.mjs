@@ -2,7 +2,7 @@
 /** Conservative, change-aware CI routing for pull requests. */
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -327,8 +327,11 @@ function isNonBehavioural(changed, baseRef) {
 
 function emit(plan) {
 	console.error(`[ci-plan] ${plan.reason}`);
+	// $GITHUB_OUTPUT is one `key=value` per line; a newline inside a value (a
+	// multi-line git error in `reason`) would corrupt the file and fail the
+	// changes job instead of falling back to the everything-plan.
 	for (const key of ['lint', 'unit', 'web', 'only_specs', 'native', 'self', 'reason'])
-		console.log(`${key}=${plan[key]}`);
+		console.log(`${key}=${String(plan[key]).replace(/[\r\n]+/g, ' ')}`);
 }
 
 function main() {
