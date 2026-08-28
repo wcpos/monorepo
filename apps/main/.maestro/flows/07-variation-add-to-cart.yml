@@ -58,7 +58,10 @@ env:
     timeout: 60000
 # Dismiss the keyboard BEFORE opening the popover — hideKeyboard afterwards
 # could dismiss the popover overlay instead.
-- hideKeyboard
+# optional — see flow 01: hideKeyboard is flaky on iOS and this is
+# housekeeping; a genuinely covered target fails at its own tap.
+- hideKeyboard:
+    optional: true
 - tapOn:
     id: "variable-product-tile-${VARIABLE_PRODUCT_ID}"
     index: 0
