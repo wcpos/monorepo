@@ -253,8 +253,10 @@ export function planFor(changedFiles, { commentOnly = false } = {}) {
 				reasons.unit.add(rule);
 				widen('web', 'full', rule);
 				widen('native', 'rebuild', rule);
-			} else if (rule === 'root-deps') all(rule);
-			else if (rule === 'root-tsconfig') {
+			} else if (rule === 'root-deps') {
+				all(rule);
+				if (file !== 'turbo.json') widen('native', 'rebuild', rule);
+			} else if (rule === 'root-tsconfig') {
 				plan.unit = 'all';
 				reasons.unit.add(rule);
 				widen('web', 'full', rule);

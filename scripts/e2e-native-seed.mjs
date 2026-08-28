@@ -22,7 +22,7 @@ const WRITER_PASS = process.env.E2E_PRODUCT_WRITER_PASS;
 
 // This script sends write-capable credentials to STORE_URL — never over plain
 // HTTP, and never to a host outside the standing E2E stores.
-const ALLOWED_WRITE_HOSTS = ['dev-pro.wcpos.com', 'dev-free.wcpos.com'];
+const ALLOWED_WRITE_HOSTS = ['dev-pro.wcpos.com', 'dev-free.wcpos.com', 'dev-next.wcpos.com'];
 const storeHost = new URL(STORE_URL).hostname;
 if (!STORE_URL.startsWith('https://')) {
 	console.error(`✖ E2E_STORE_URL must use https:// (got: ${STORE_URL})`);
@@ -77,7 +77,35 @@ async function mintWriterToken() {
 		const token = /access_token=([^&]+)/.exec(location)?.[1];
 		if (token) return token;
 		if (attempt === 0) continue;
-		console.error(`✖ Product-writer authentication failed (HTTP ${submit.status})`);
+		// A 200 here is the login form re-rendered with the store's reason — bad
+		// credentials, no POS permission, a failed security check, or the
+		// plugin's own rate limit are four different problems behind one status
+		// code (2026-08-28: a day was lost to "HTTP 200"). Say which.
+		const body = await submit.text().catch(() => '');
+		const reason =
+			/color: #CD2C24[^>]*>\s*([^<]+)</.exec(body)?.[1]?.trim() ??
+			/locked|too many|security check|permission|inv[aá]lid/i.exec(body)?.[0] ??
+			'no error text in response';
+		console.error(`✖ Product-writer authentication failed (HTTP ${submit.status}): ${reason}`);
+		// No error text means the POST was answered by something other than the
+		// login handler (a challenge page, a cache, a proxy). Name the layer.
+		const title = /<title>([^<]*)<\/title>/i.exec(body)?.[1]?.trim() ?? '(no title)';
+		const headers = [
+			'server',
+			'cf-ray',
+			'cf-mitigated',
+			'cf-cache-status',
+			'x-cache',
+			'content-type',
+		]
+			.map((name) => `${name}=${submit.headers.get(name) ?? '-'}`)
+			.join(' ');
+		console.error(
+			`  response: title="${title}" bytes=${body.length} form=${/wcpos-loginform/.test(body)} ${headers}`
+		);
+		// A short body is a refusal page, not the login template — show it whole.
+		if (body.length > 0 && body.length <= 1000)
+			console.error(`  body: ${body.replace(/\s+/g, ' ')}`);
 		process.exit(1);
 	}
 }
@@ -198,14 +226,18 @@ if (Object.keys(repairs).length) {
 		body: JSON.stringify(repairs),
 	});
 	if (!fix.ok) {
-		console.error(`✖ Failed to repair "${SIMPLE_PRODUCT}" (#${simpleProduct.id}): HTTP ${fix.status}`);
+		console.error(
+			`✖ Failed to repair "${SIMPLE_PRODUCT}" (#${simpleProduct.id}): HTTP ${fix.status}`
+		);
 		process.exit(1);
 	}
 	// The PUT's response is the post-repair document — assert the EFFECTIVE
 	// sell path is healthy rather than trusting the writes landed (review,
 	// #1630: "revalidate the effective price after repairing").
 	simpleProduct = await fix.json();
-	console.log(`  repaired "${SIMPLE_PRODUCT}" (#${simpleProduct.id}): ${Object.keys(repairs).join(', ')}`);
+	console.log(
+		`  repaired "${SIMPLE_PRODUCT}" (#${simpleProduct.id}): ${Object.keys(repairs).join(', ')}`
+	);
 }
 if (
 	simpleProduct.stock_status !== 'instock' ||

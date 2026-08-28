@@ -97,6 +97,196 @@ test('the E2E aggregator fails closed when change detection fails', () => {
 	assert.equal(legitimateSkip.status, 0, legitimateSkip.stdout + legitimateSkip.stderr);
 });
 
+test('native E2E pull requests are planned and restricted to trusted non-draft changes', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	const planner = workflow.jobs.changes.steps.find(
+		(step) => step.uses === './.github/actions/ci-plan'
+	);
+
+	assert.deepEqual(workflow.on.pull_request.types, [
+		'opened',
+		'synchronize',
+		'reopened',
+		'ready_for_review',
+	]);
+	assert.ok(planner, 'e2e-native.yml changes job does not use the shared planner');
+	assert.equal(planner.with['base-sha'], '${{ github.event.pull_request.base.sha }}');
+	assert.match(workflow.jobs.build.if, /needs\.changes\.outputs\.native != 'none'/);
+	assert.match(workflow.jobs.build.if, /github\.actor != 'dependabot\[bot\]'/);
+	assert.match(
+		workflow.jobs.build.if,
+		/github\.event\.pull_request\.head\.repo\.full_name == github\.repository/
+	);
+});
+
+test('native E2E routes next-target PRs to the next store', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+
+	assert.equal(
+		workflow.env.E2E_STORE_URL,
+		"${{ github.event_name == 'pull_request' && github.base_ref == 'next' && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}"
+	);
+
+	const seed = spawnSync(
+		process.execPath,
+		[
+			'--input-type=module',
+			'--eval',
+			"globalThis.fetch = async () => new Response(null, { status: 503 }); await import('./scripts/e2e-native-seed.mjs');",
+		],
+		{
+			cwd: ROOT,
+			encoding: 'utf8',
+			env: {
+				...process.env,
+				E2E_STORE_URL: 'https://dev-next.wcpos.com',
+				E2E_PRODUCT_WRITER_USER: 'writer',
+				E2E_PRODUCT_WRITER_PASS: 'password',
+			},
+		}
+	);
+
+	assert.notEqual(seed.status, 0);
+	assert.match(seed.stderr, /Store unreachable: https:\/\/dev-next\.wcpos\.com → HTTP 503/);
+});
+
+test('native E2E concurrency is isolated per pull request', () => {
+	const { concurrency } = readWorkflow('e2e-native.yml');
+
+	assert.match(concurrency.group, /github\.event\.pull_request\.number/);
+	assert.notEqual(concurrency.group, '${{ github.workflow }}');
+});
+
+test('the native E2E aggregator fails closed except for legitimate skips', () => {
+	const gate = readWorkflow('e2e-native.yml').jobs['native-gate'];
+	const baseEnv = {
+		CHANGES_RESULT: 'success',
+		BUILD_RESULT: 'success',
+		ANDROID_RESULT: 'success',
+		IOS_RESULT: 'success',
+		NATIVE_PLAN: 'cachehit',
+		EVENT_NAME: 'pull_request',
+		IS_FORK: 'false',
+		IS_DRAFT: 'false',
+		IS_DEPENDABOT: 'false',
+	};
+	const runGate = (env) => runShell(gate.steps[0].run, { env: { ...baseEnv, ...env } });
+
+	assert.equal(gate.if, 'always()');
+	assert.deepEqual([...gate.needs].sort(), ['android', 'build', 'changes', 'ios']);
+
+	const changesFailed = runGate({ CHANGES_RESULT: 'failure' });
+	assert.notEqual(changesFailed.status, 0, changesFailed.stdout + changesFailed.stderr);
+
+	const noNativeTier = runGate({ NATIVE_PLAN: 'none' });
+	assert.equal(noNativeTier.status, 0, noNativeTier.stdout + noNativeTier.stderr);
+	assert.match(noNativeTier.stdout + noNativeTier.stderr, /skipped/i);
+
+	const fork = runGate({ IS_FORK: 'true' });
+	assert.equal(fork.status, 0, fork.stdout + fork.stderr);
+
+	// Dependabot PRs get no repository secrets, so `build` is excluded for them
+	// (as in deploy.yml) and the gate must read that as a legitimate skip.
+	const dependabot = runGate({ IS_DEPENDABOT: 'true', BUILD_RESULT: 'skipped' });
+	assert.equal(dependabot.status, 0, dependabot.stdout + dependabot.stderr);
+	assert.match(dependabot.stdout + dependabot.stderr, /skipped/i);
+
+	const buildFailed = runGate({ BUILD_RESULT: 'failure' });
+	assert.notEqual(buildFailed.status, 0, buildFailed.stdout + buildFailed.stderr);
+
+	const androidSkipped = runGate({ ANDROID_RESULT: 'skipped' });
+	assert.notEqual(androidSkipped.status, 0, androidSkipped.stdout + androidSkipped.stderr);
+
+	const allSucceeded = runGate({});
+	assert.equal(allSucceeded.status, 0, allSucceeded.stdout + allSucceeded.stderr);
+});
+
+test('the native spend guard charges the builds a run will queue and fails closed on bad data', () => {
+	// Money-bearing shell: a fake `eas` on PATH returns EAS_MOCK_BUILDS as the
+	// month's build list; the guard decides from the count, the platform's slot
+	// cost, and the plan. The ceiling is 20 development builds (10 pairs).
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-native-spend-'));
+	const binDir = path.join(workspace, 'bin');
+	mkdirSync(binDir);
+	writeFileSync(
+		path.join(binDir, 'eas'),
+		'#!/usr/bin/env bash\n[ "${EAS_MOCK_FAIL:-}" = "1" ] && exit 1\nprintf "%s" "$EAS_MOCK_BUILDS"\n',
+		{ mode: 0o755 }
+	);
+	const step = findStep(
+		readWorkflow('e2e-native.yml'),
+		'build',
+		'💸 Refuse an unrequested EAS build'
+	);
+	const month = new Date().toISOString().slice(0, 7);
+	const builds = (n) =>
+		JSON.stringify(Array.from({ length: n }, () => ({ createdAt: `${month}-02T00:00:00Z` })));
+	const run = (env) =>
+		runShell(step.run, {
+			cwd: workspace,
+			env: {
+				PATH: `${binDir}:${process.env.PATH}`,
+				GITHUB_STEP_SUMMARY: path.join(workspace, 'summary.md'),
+				PLATFORM: 'all',
+				CACHE_KEY: 'e2e-native-devclient-test',
+				NATIVE_PLAN: 'rebuild',
+				EVENT_NAME: 'pull_request',
+				BUILD_CEILING: '20',
+				EAS_MOCK_BUILDS: builds(0),
+				...env,
+			},
+		});
+
+	try {
+		const dispatch = run({ EVENT_NAME: 'workflow_dispatch' });
+		assert.notEqual(dispatch.status, 0, 'a dispatch without build=true must refuse');
+
+		const roomForTwo = run({ EAS_MOCK_BUILDS: builds(18) });
+		assert.equal(roomForTwo.status, 0, roomForTwo.stdout + roomForTwo.stderr);
+
+		// 19 + the 2 builds platform=all queues = 21 > 20.
+		const oneSlotShort = run({ EAS_MOCK_BUILDS: builds(19) });
+		assert.notEqual(oneSlotShort.status, 0, 'platform=all must charge two slots');
+		const singlePlatform = run({ EAS_MOCK_BUILDS: builds(19), PLATFORM: 'ios' });
+		assert.equal(singlePlatform.status, 0, singlePlatform.stdout + singlePlatform.stderr);
+
+		// A cachehit plan spends under the ceiling (eviction is the common cause) but warns.
+		const evicted = run({ NATIVE_PLAN: 'cachehit', EAS_MOCK_BUILDS: builds(3) });
+		assert.equal(evicted.status, 0, evicted.stdout + evicted.stderr);
+		assert.match(evicted.stdout, /::warning::.*evicted/);
+
+		// Fail closed: eas unavailable, or a build without createdAt.
+		assert.notEqual(run({ EAS_MOCK_FAIL: '1' }).status, 0);
+		assert.notEqual(run({ EAS_MOCK_BUILDS: '[{"id":"x"}]' }).status, 0);
+
+		// Builds from an earlier month do not count.
+		const lastMonth = run({
+			EAS_MOCK_BUILDS: JSON.stringify(
+				Array.from({ length: 30 }, () => ({ createdAt: '2000-01-01T00:00:00Z' }))
+			),
+		});
+		assert.equal(lastMonth.status, 0, lastMonth.stdout + lastMonth.stderr);
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
+test('the native E2E aggregator exists under the name the merge gate will require', () => {
+	// The check name is the contract: when the five-consecutive-greens bar is
+	// met, adding it to MERGE_GATE_REQUIRED_CHECKS is a one-line change and
+	// must not need a rename. Until then it is deliberately NOT required —
+	// main is red on it today (#1661) and a required red would block every PR.
+	const native = readWorkflow('e2e-native.yml').jobs['native-gate'];
+	assert.equal(native.name, '📱 Native E2E');
+
+	const workflow = readWorkflow('merge-gate.yml');
+	const gateStep = workflow.jobs['merge-gate'].steps.find(
+		({ name }) => name === 'Evaluate merge policy'
+	);
+	const required = gateStep.env.MERGE_GATE_REQUIRED_CHECKS.split('|');
+	assert.deepEqual(required, ['🧹 Lint', '🧪 Unit Tests', '🎭 E2E Tests']);
+});
+
 test('the shared-store queue stays removed', () => {
 	// The queue job (2026-08-12 → 2026-08-18) starved every merge gate once
 	// 2+ PRs were active: holders kept the store 25–45 min, the gate polls a
