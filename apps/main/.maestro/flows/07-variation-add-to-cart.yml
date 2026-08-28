@@ -38,14 +38,21 @@ env:
     commands:
       - tapOn:
           id: "pos-tab-products"
-- tapOn:
-    id: "search-products"
-- inputText: ${VARIABLE_PRODUCT_SEARCH}
-# 60s: a product the seed just created may still be syncing into the local db.
-- extendedWaitUntil:
-    visible:
-      id: "variable-product-tile-${VARIABLE_PRODUCT_ID}"
-    timeout: 60000
+# Self-healing search — see flow 04: Android inputText can drop leading
+# keystrokes racing the IME (this flow failed exactly here on the phone in
+# run 33176268259); retry re-taps, erases, retypes. 60s: a product the seed
+# just created may still be syncing into the local db.
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn:
+          id: "search-products"
+      - eraseText
+      - inputText: ${VARIABLE_PRODUCT_SEARCH}
+      - extendedWaitUntil:
+          visible:
+            id: "variable-product-tile-${VARIABLE_PRODUCT_ID}"
+          timeout: 60000
 # Dismiss the keyboard BEFORE opening the popover — hideKeyboard afterwards
 # could dismiss the popover overlay instead.
 - hideKeyboard
