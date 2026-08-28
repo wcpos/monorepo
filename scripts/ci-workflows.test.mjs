@@ -560,3 +560,22 @@ test('the iOS step still retries the driver-startup flake', () => {
 		rmSync(dir, { recursive: true, force: true });
 	}
 });
+
+test('both native platforms upload Maestro artifacts unconditionally', () => {
+	// iOS uploaded on failure() while Android uploaded on always(). Combined
+	// with the pipe bug above — a job that could not report failure —
+	// failure() never fired, so every iOS run collected no screenshots and no
+	// UI hierarchy. That is why iOS could fail every assertion of every flow
+	// for weeks without leaving a trace. Artifacts are also the only thing
+	// that separates "an assertion failed" from "the app never rendered" on a
+	// green-but-suspicious run, so both platforms collect them either way.
+	const workflow = readWorkflow('e2e-native.yml');
+
+	for (const job of ['android', 'ios']) {
+		const upload = workflow.jobs[job].steps.find(
+			(step) => step.uses?.startsWith('actions/upload-artifact') && step.with?.name?.includes('maestro')
+		);
+		assert.ok(upload, `${job} no longer uploads Maestro artifacts`);
+		assert.equal(upload.if, 'always()', `${job} collects Maestro artifacts conditionally`);
+	}
+});
