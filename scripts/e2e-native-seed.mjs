@@ -155,9 +155,12 @@ if (!sSearch.ok) {
 	process.exit(1);
 }
 // Exact-name match only: the WC search is fuzzy, and only the suite-owned
-// record is ever mutated on the shared store.
+// record is ever mutated on the shared store. Adopt only a PUBLISHED record:
+// the POS product query and sync request status=publish, so adopting a
+// draft/private leftover would suppress creation while the grid never shows
+// it — flows then time out despite a "successful" seed (review, #1630).
 let simpleProduct = (await sSearch.json()).find(
-	(p) => p.name === SIMPLE_PRODUCT && p.type === 'simple'
+	(p) => p.name === SIMPLE_PRODUCT && p.type === 'simple' && p.status === 'publish'
 );
 if (!simpleProduct) {
 	const create = await api('products', {
@@ -165,8 +168,10 @@ if (!simpleProduct) {
 		body: JSON.stringify({
 			name: SIMPLE_PRODUCT,
 			type: 'simple',
+			status: 'publish',
 			regular_price: '1.00',
 			stock_status: 'instock',
+			manage_stock: false,
 		}),
 	});
 	if (!create.ok) {
@@ -176,11 +181,17 @@ if (!simpleProduct) {
 	simpleProduct = await create.json();
 	console.log(`  created simple product "${SIMPLE_PRODUCT}" (#${simpleProduct.id})`);
 }
-// Repair drift: the flows tap the tile and expect a sellable line, so the
-// product must be in stock with a non-zero price.
+// Repair drift: the flows tap the tile and expect a sellable $1 line, so
+// every field the sell path actually reads must be right (review, #1630):
+// - managed stock ignores stock_status; a depleted quantity makes the tile
+//   unaddable even when "instock" — the fixture never manages stock.
+// - the POS sells the EFFECTIVE price: an active zero sale overrides a
+//   healthy regular_price, so repair keys on `price` and clears the sale.
 const repairs = {};
 if (simpleProduct.stock_status !== 'instock') repairs.stock_status = 'instock';
+if (simpleProduct.manage_stock) repairs.manage_stock = false;
 if (!parseFloat(simpleProduct.regular_price)) repairs.regular_price = '1.00';
+if (!parseFloat(simpleProduct.price) && simpleProduct.sale_price !== '') repairs.sale_price = '';
 if (Object.keys(repairs).length) {
 	const fix = await api(`products/${simpleProduct.id}`, {
 		method: 'PUT',
@@ -190,7 +201,22 @@ if (Object.keys(repairs).length) {
 		console.error(`✖ Failed to repair "${SIMPLE_PRODUCT}" (#${simpleProduct.id}): HTTP ${fix.status}`);
 		process.exit(1);
 	}
+	// The PUT's response is the post-repair document — assert the EFFECTIVE
+	// sell path is healthy rather than trusting the writes landed (review,
+	// #1630: "revalidate the effective price after repairing").
+	simpleProduct = await fix.json();
 	console.log(`  repaired "${SIMPLE_PRODUCT}" (#${simpleProduct.id}): ${Object.keys(repairs).join(', ')}`);
+}
+if (
+	simpleProduct.stock_status !== 'instock' ||
+	simpleProduct.manage_stock ||
+	!parseFloat(simpleProduct.price)
+) {
+	console.error(
+		`✖ "${SIMPLE_PRODUCT}" (#${simpleProduct.id}) is still not sellable after repair ` +
+			`(status=${simpleProduct.stock_status}, managed=${simpleProduct.manage_stock}, price=${simpleProduct.price})`
+	);
+	process.exit(1);
 }
 console.log(`✔ Simple product "${SIMPLE_PRODUCT}" (#${simpleProduct.id}) present and sellable.`);
 

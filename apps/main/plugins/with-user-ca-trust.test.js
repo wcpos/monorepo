@@ -55,9 +55,11 @@ test('cleartext is permitted only inside the loopback domain-config', () => {
 		/<domain-config cleartextTrafficPermitted="true">[\s\S]*?<\/domain-config>/
 	);
 	assert.ok(domain, 'loopback domain-config missing');
-	for (const host of ['localhost', '127.0.0.1', '10.0.2.2', '10.0.3.2']) {
-		assert.ok(domain[0].includes(`>${host}<`), `${host} missing from the loopback set`);
-	}
+	// EXACT set equality, not merely presence: a fifth host smuggled into the
+	// cleartext config must FAIL this test (CodeRabbit on #1634 — the
+	// presence-only loop would have passed `example.com`).
+	const hosts = [...domain[0].matchAll(/<domain[^>]*>([^<]+)<\/domain>/g)].map((m) => m[1]).sort();
+	assert.deepEqual(hosts, ['10.0.2.2', '10.0.3.2', '127.0.0.1', 'localhost']);
 	// The whole set stays scoped: exactly one domain-config, no wildcard domains.
 	assert.equal(NETWORK_SECURITY_CONFIG_XML.match(/<domain-config/g).length, 1);
 	assert.ok(!domain[0].includes('includeSubdomains="true"'));
