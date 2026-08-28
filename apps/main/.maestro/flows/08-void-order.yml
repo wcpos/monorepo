@@ -1,6 +1,11 @@
 appId: com.wcpos.main.dev
 ---
-# P0-8: void the open order (built by 06 and 07); relaunch must not resurrect it.
+# P0-8: void the open orders and prove relaunch does not resurrect them.
+# Every relaunch since 04 opened a FRESH current order, stranding each prior
+# flow's cart in its own open-order tab (06's and 07's both survive to here —
+# see run 33137492733's flow-07 screenshot). Voiding only "the current order"
+# would void a fresh EMPTY one and pass vacuously, so: void every populated
+# open-order tab in a loop, then relaunch and assert none came back.
 - launchApp:
     stopApp: true
 - extendedWaitUntil:
@@ -16,21 +21,37 @@ appId: com.wcpos.main.dev
           id: "pos-tab-cart"
 - extendedWaitUntil:
     visible:
-      id: "void-button"
+      id: "open-order-tab-.*"
     timeout: 30000
-- tapOn:
-    id: "void-button"
-# Confirm if a confirmation dialog appears.
-- runFlow:
-    when:
-      visible: "Void|Confirm"
+- repeat:
+    while:
+      visible:
+        id: "open-order-tab-.*"
     commands:
-      - tapOn: "Void|Confirm"
-- extendedWaitUntil:
-    notVisible:
-      id: "cart-quantity-input"
-    timeout: 30000
-# Relaunch: the voided order must not come back.
+      - tapOn:
+          id: "open-order-tab-.*"
+          index: 0
+      - extendedWaitUntil:
+          visible:
+            id: "void-button"
+          timeout: 30000
+      - tapOn:
+          id: "void-button"
+      # Confirm if a confirmation dialog appears.
+      - runFlow:
+          when:
+            visible: "Void|Confirm"
+          commands:
+            - tapOn: "Void|Confirm"
+      # The voided order's tab must disappear before the next iteration reads
+      # the tab list again, or the loop re-taps a ghost.
+      - extendedWaitUntil:
+          notVisible:
+            id: "cart-quantity-input"
+          timeout: 30000
+- assertNotVisible:
+    id: "cart-quantity-input"
+# Relaunch: no voided order may come back.
 - launchApp:
     stopApp: true
 - extendedWaitUntil:
@@ -46,3 +67,5 @@ appId: com.wcpos.main.dev
           id: "pos-tab-cart"
 - assertNotVisible:
     id: "cart-quantity-input"
+- assertNotVisible:
+    id: "open-order-tab-.*"

@@ -86,12 +86,17 @@ env:
     visible:
       id: "cart-quantity-input"
     timeout: 30000
-# 06 left exactly one line in the cart; the variation makes two. A second
-# quantity cell (index 1) proves the variation line landed — a relative
-# assertion, no store contents named.
+# Do NOT assume 06's line shares this cart: relaunching the app opens a FRESH
+# current order, so 06's cart survives as a separate open-order tab and the
+# variation lands alone in the new one (run 33137492733's failure screenshot:
+# one line "Size: Small", with "Carrito 18,00" as a second tab). Assert the
+# variation line in the CURRENT cart instead: a quantity cell exists and the
+# line carries the seeded attribute. "Size"/"Small" are suite-owned fixture
+# data (e2e-native-seed.mjs), not localized UI text, so a text assertion is
+# store-agnostic here.
 - assertVisible:
     id: "cart-quantity-input"
-    index: 1
+- assertVisible: "Size: ${VARIATION_OPTION}"
 - assertVisible:
     id: "cart-subtotal"
 - assertVisible:
