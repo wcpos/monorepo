@@ -1,6 +1,8 @@
 appId: com.wcpos.main.dev
 env:
-  PRODUCT_SEARCH: Beanie
+  # Seeded by scripts/e2e-native-seed.mjs — the suite owns this product
+  # (store-agnostic policy; keep in step with the seed's SIMPLE_PRODUCT).
+  PRODUCT_SEARCH: WCPOS E2E Simple
 ---
 # P0-6: cart quantity editing with the native soft keyboard (the web numpad
 # does not exist on native — number-input.tsx is a plain TextInput).
@@ -28,10 +30,12 @@ env:
 - tapOn:
     id: "search-products"
 - inputText: ${PRODUCT_SEARCH}
+# 60s, matching flow 07: a product the seed just created may still be syncing
+# into the local db on its first run.
 - extendedWaitUntil:
     visible:
       id: "product-tile"
-    timeout: 30000
+    timeout: 60000
 # Keyboard down BEFORE the tile tap — same overlay no-op as flow 04
 # (monorepo#1614 defect 2); flow 07 set the pattern.
 - hideKeyboard
