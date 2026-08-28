@@ -158,3 +158,51 @@ leaves its errors in today's count.
 failure. It counts network ATTEMPTS, not records: one queued record can produce
 many, and a retried-then-acknowledged record leaves the queue having contributed
 several.
+
+## Language — Payments
+
+Ruled 2026-08-28 on the payments-contract wayfinder map (wcpos/roadmap#97, ticket #102).
+
+**Payment method**:
+A gateway plus its POS configuration (enabled for POS, order, capture mode, defaults).
+What the cashier picks and what reports and the filter group by. Every payment method
+is backed by exactly one gateway.
+_Avoid_: gateway (for this concept), tender (as a noun)
+
+**Gateway**:
+The WooCommerce integration object (`WC_Payment_Gateway`) and the Woo-side infrastructure
+that comes with it — order-edit payment selection, refunds, the order's `payment_method`.
+Cash and Card are gateways too (POS-registered, hidden from Woo's Payments page).
+
+**Provider**:
+The processor family an integration speaks to (`stripe`, `square`, `sumup`). One provider
+may back several gateways; the app selects its driver by provider.
+
+**Capture mode**:
+How the money is taken for a payment. `manual` is the only Free mode; Pro registers the
+rest. An open vocabulary: the app must understand any ledger, and needs Pro only to
+produce non-manual payments.
+
+**Driver**:
+The app-side harness module wrapping one provider's SDK. Ships in the public app,
+disabled by default, switched on by the payment-method descriptor.
+
+**Payment**:
+One money event against an order — amount, method, status, provider references, receipt
+fields. N per order; the order's paid state is derived from its payments.
+_Avoid_: transaction (Woo's `_transaction_id` is a provider reference)
+
+**Ledger**:
+An order's payments and their refunds, in order.
+
+**Split payment**:
+An order paid by more than one payment. WooCommerce has no such concept, so split needs
+Woo-side structure (working premise: a zero-total parent with sub-orders carrying the
+partial totals). Multiple cash payments are Free.
+
+**Offline payment**:
+A payment recorded on the device before the server knows of it, identified by a
+client-minted id.
+
+**Tendered / change**:
+The cash pair. "Tender" is only ever this verb.
