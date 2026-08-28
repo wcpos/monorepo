@@ -1,6 +1,8 @@
 appId: com.wcpos.main.dev
 env:
-  PRODUCT_SEARCH: Beanie
+  # Seeded by scripts/e2e-native-seed.mjs — the suite owns this product
+  # (store-agnostic policy; keep in step with the seed's SIMPLE_PRODUCT).
+  PRODUCT_SEARCH: WCPOS E2E Simple
 ---
 # P0-4: core cash sale — Products → Cart → checkout → back to a fresh order.
 # Session comes from 02-auth-setup; do NOT clear state.
@@ -30,10 +32,12 @@ env:
 - tapOn:
     id: "search-products"
 - inputText: ${PRODUCT_SEARCH}
+# 60s, matching flow 07: a product the seed just created may still be syncing
+# into the local db on its first run.
 - extendedWaitUntil:
     visible:
       id: "product-tile"
-    timeout: 30000
+    timeout: 60000
 # Dismiss the keyboard BEFORE tapping the tile — with it up, the tile's
 # center sits under the overlay and the tap silently no-ops (empty cart in
 # run 33088418779; monorepo#1614 defect 2). Flow 07 already taps in this order.

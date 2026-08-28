@@ -3,21 +3,20 @@
  * Native E2E seed/reset (fixtures decision, wayfinder #692).
  *
  * Runs before each native suite against the standing public test store
- * (dev-pro.wcpos.com). Scope: verify the store is reachable, ensure the simple
- * product the flows search for exists and is in stock, and ensure the
- * suite-owned variable product (flow 07) exists with sellable variations.
+ * (dev-pro.wcpos.com). Scope: verify the store is reachable, and ensure the
+ * two suite-OWNED products exist and are sellable — the simple product flows
+ * 04/06 sell, and the variable product flow 07 opens (created when missing,
+ * repaired when drifted; store-agnostic policy).
  * Fuller reset (pruning accumulated E2E orders/customers) extends here later.
  *
  * Env: E2E_STORE_URL (default https://dev-pro.wcpos.com)
  *      E2E_PRODUCT_WRITER_USER / E2E_PRODUCT_WRITER_PASS (the standing
  *        shop_manager identity every dev store carries — the same secrets the
  *        web E2E's search-probe uses; a JWT is minted through /wcpos-auth/)
- *      E2E_PRODUCT_SEARCH (default "Beanie")
  */
 import { randomUUID } from 'node:crypto';
 
 const STORE_URL = (process.env.E2E_STORE_URL ?? 'https://dev-pro.wcpos.com').replace(/\/$/, '');
-const PRODUCT = process.env.E2E_PRODUCT_SEARCH ?? 'Beanie';
 const WRITER_USER = process.env.E2E_PRODUCT_WRITER_USER;
 const WRITER_PASS = process.env.E2E_PRODUCT_WRITER_PASS;
 
@@ -141,41 +140,59 @@ const TRANSPORT = await (async () => {
 
 const api = (route, init = {}) => authedFetch(route, TRANSPORT, init);
 
-const res = await api(`products?search=${encodeURIComponent(PRODUCT)}&per_page=20`);
-if (!res.ok) {
-	console.error(`✖ WC REST error listing products: HTTP ${res.status}`);
+// Simple product for flows 04/06 (cash sale, cart quantity editing).
+//
+// The suite OWNS this product — created here when missing, repaired when
+// drifted — so the flows never depend on a store's remembered catalogue
+// (store-agnostic policy; the flows previously searched a hardcoded "Beanie"
+// and the seed could only hard-fail when a store lacked it). Keep the
+// constant in step with the flows' PRODUCT_SEARCH env defaults.
+const SIMPLE_PRODUCT = 'WCPOS E2E Simple';
+
+const sSearch = await api(`products?search=${encodeURIComponent(SIMPLE_PRODUCT)}&per_page=20`);
+if (!sSearch.ok) {
+	console.error(`✖ WC REST error searching for "${SIMPLE_PRODUCT}": HTTP ${sSearch.status}`);
 	process.exit(1);
 }
-// The WC search is fuzzy — only the exact-name product is the seed target, so
-// a partial match ("Beanie with Logo") is never mutated on the shared store.
-const products = (await res.json()).filter((p) => p.name.toLowerCase() === PRODUCT.toLowerCase());
-if (!products.length) {
-	console.error(`✖ No product named exactly "${PRODUCT}" on ${STORE_URL} — flows will fail.`);
-	process.exit(1);
-}
-// The flows tap `product-tile`, which only renders for SIMPLE products
-// (variable products get `variable-product-tile`).
-const nonSimple = products.filter((p) => p.type !== 'simple');
-if (nonSimple.length === products.length) {
-	console.error(
-		`✖ "${PRODUCT}" exists but no simple-type variant — flows tap product-tile and will fail.`
-	);
-	process.exit(1);
-}
-for (const p of products) {
-	if (p.stock_status !== 'instock') {
-		const fix = await api(`products/${p.id}`, {
-			method: 'PUT',
-			body: JSON.stringify({ stock_status: 'instock' }),
-		});
-		if (!fix.ok) {
-			console.error(`✖ Failed to restock "${p.name}" (#${p.id}): HTTP ${fix.status}`);
-			process.exit(1);
-		}
-		console.log(`  restocked "${p.name}" (#${p.id})`);
+// Exact-name match only: the WC search is fuzzy, and only the suite-owned
+// record is ever mutated on the shared store.
+let simpleProduct = (await sSearch.json()).find(
+	(p) => p.name === SIMPLE_PRODUCT && p.type === 'simple'
+);
+if (!simpleProduct) {
+	const create = await api('products', {
+		method: 'POST',
+		body: JSON.stringify({
+			name: SIMPLE_PRODUCT,
+			type: 'simple',
+			regular_price: '1.00',
+			stock_status: 'instock',
+		}),
+	});
+	if (!create.ok) {
+		console.error(`✖ Failed to create "${SIMPLE_PRODUCT}": HTTP ${create.status}`);
+		process.exit(1);
 	}
+	simpleProduct = await create.json();
+	console.log(`  created simple product "${SIMPLE_PRODUCT}" (#${simpleProduct.id})`);
 }
-console.log(`✔ Seed product "${PRODUCT}" present and in stock.`);
+// Repair drift: the flows tap the tile and expect a sellable line, so the
+// product must be in stock with a non-zero price.
+const repairs = {};
+if (simpleProduct.stock_status !== 'instock') repairs.stock_status = 'instock';
+if (!parseFloat(simpleProduct.regular_price)) repairs.regular_price = '1.00';
+if (Object.keys(repairs).length) {
+	const fix = await api(`products/${simpleProduct.id}`, {
+		method: 'PUT',
+		body: JSON.stringify(repairs),
+	});
+	if (!fix.ok) {
+		console.error(`✖ Failed to repair "${SIMPLE_PRODUCT}" (#${simpleProduct.id}): HTTP ${fix.status}`);
+		process.exit(1);
+	}
+	console.log(`  repaired "${SIMPLE_PRODUCT}" (#${simpleProduct.id}): ${Object.keys(repairs).join(', ')}`);
+}
+console.log(`✔ Simple product "${SIMPLE_PRODUCT}" (#${simpleProduct.id}) present and sellable.`);
 
 // ---------------------------------------------------------------------------
 // Variable product for flow 07 (variation popover → add to cart).
