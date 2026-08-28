@@ -5,9 +5,11 @@ export type RecordedGesture = {
 	begin?: () => void;
 	update?: (event: GestureEvent) => void;
 	end?: () => void;
+	finalize?: () => void;
 	onBegin: (callback: () => void) => RecordedGesture;
 	onUpdate: (callback: (event: GestureEvent) => void) => RecordedGesture;
 	onEnd: (callback: () => void) => RecordedGesture;
+	onFinalize: (callback: () => void) => RecordedGesture;
 };
 
 export const gestureRegistry: RecordedGesture[] = [];
@@ -25,6 +27,10 @@ export const Gesture = {
 			},
 			onEnd(callback) {
 				gesture.end = callback;
+				return gesture;
+			},
+			onFinalize(callback) {
+				gesture.finalize = callback;
 				return gesture;
 			},
 		};

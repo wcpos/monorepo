@@ -40,6 +40,7 @@ async function dragLatestHandle(translationX = 100) {
 		gesture?.begin?.();
 		gesture?.update?.({ translationX, translationY: 0 });
 		gesture?.end?.();
+		gesture?.finalize?.();
 	});
 }
 
@@ -119,6 +120,27 @@ test('recorded gesture updates layout percentages and calls onLayout', async () 
 
 	await waitFor(() => expect(view.getByTestId('left').style.flexGrow).toBe('60'));
 	expect(onLayout).toHaveBeenCalledWith([60, 40]);
+});
+
+test('finalized gesture restores panel interaction and reports dragging ended', async () => {
+	const onDragging = jest.fn();
+	const view = render(
+		<PanelGroup direction="horizontal" testID="group">
+			<Panel testID="left" defaultSize={50} />
+			<PanelResizeHandle onDragging={onDragging} />
+			<Panel testID="right" defaultSize={50} />
+		</PanelGroup>
+	);
+	await waitForContainerLayout();
+	const gesture = gestureRegistry.at(-1);
+
+	act(() => gesture?.begin?.());
+	expect(view.getByTestId('left').style.pointerEvents).toBe('none');
+	expect(onDragging).toHaveBeenLastCalledWith(true);
+
+	act(() => gesture?.finalize?.());
+	expect(view.getByTestId('left').style.pointerEvents).toBe('auto');
+	expect(onDragging).toHaveBeenLastCalledWith(false);
 });
 
 test('disabled handle ignores recorded gesture updates', async () => {

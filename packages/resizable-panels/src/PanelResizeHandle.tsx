@@ -50,7 +50,7 @@ export function PanelResizeHandle({
 			if (disabled) return;
 			scheduleOnRN(drag, event.translationX, event.translationY);
 		})
-		.onEnd(() => {
+		.onFinalize(() => {
 			'worklet';
 			if (disabled) return;
 			if (onDragging) scheduleOnRN(onDragging, false);
