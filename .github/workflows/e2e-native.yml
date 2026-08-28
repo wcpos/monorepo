@@ -355,6 +355,17 @@ jobs:
           # swiftshader_indirect sidesteps the host-GPU ColorBuffer failures;
           # no-snapshot avoids stale snapshot restores on ephemeral runners.
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          # All 4 of the runner's vCPUs, not the action's default 2:
+          # swiftshader renders the GPU on these same guest cores, so the app
+          # and its renderer were sharing two virtual CPUs — the
+          # roving-starvation runs (single taps at 480-514s, run 33182224622)
+          # happened under that budget. The host-side processes (QEMU
+          # plumbing, adb, maestro, Metro) are IO-bound waiters during flows,
+          # so full oversubscription is the better bet than reserving a core
+          # — and the flow-timing triage below measures exactly this, so if 4
+          # thrashes worse than 3 the table will say so and this is a
+          # one-line revert.
+          cores: 4
           emulator-boot-timeout: 900
           script: |
             adb wait-for-device
@@ -383,7 +394,12 @@ jobs:
             # becomes a literal maestro argument (run 33153806439).
             adb logcat -G 16M
             mkdir -p ~/.maestro/tests && nohup adb logcat -v threadtime > ~/.maestro/tests/logcat.txt 2>&1 &
-            maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" apps/main/.maestro
+            # Output tees into the artifact for the timing-triage step. The
+            # runner's sh is dash (no pipefail), and each script line is its
+            # own shell — so maestro's real exit code crosses lines via a
+            # file, and the tee'd pipeline's own exit stays 0 on purpose.
+            { maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" apps/main/.maestro; echo $? > ~/.maestro/tests/exit_code; } 2>&1 | tee ~/.maestro/tests/suite.log
+            exit "$(cat ~/.maestro/tests/exit_code)"
         env:
           # The Maestro Android driver installs its two APKs and waits for the
           # instrumentation channel; first-boot emulators on shared runners
@@ -394,6 +410,38 @@ jobs:
           VARIABLE_PRODUCT_ID: ${{ needs.build.outputs.variable_product_id }}
           # Tells flow 09 whether the resize handle is required (tablet) or optional (phone).
           DEVICE_CLASS: ${{ matrix.device.name }}
+
+      # Makes a red (or slow-green) check self-explaining at a glance: the
+      # job summary carries every flow's duration, and any flow past the
+      # STARVED threshold gets a ::warning:: naming it — so "red because the
+      # device starved" and "red because an assertion failed" stop looking
+      # identical (owner complaint, 2026-08-28). Labeling only: nothing here
+      # passes or fails the job.
+      - name: 🕒 Flow timing triage
+        if: always()
+        run: |
+          LOG="$HOME/.maestro/tests/suite.log"
+          [ -f "$LOG" ] || { echo "no suite.log — the job died before Maestro ran" >> "$GITHUB_STEP_SUMMARY"; exit 0; }
+          # 600s: an order of magnitude over a healthy flow (1-2.5 min), far
+          # under the rover (27-30 min) — misclassification needs a 10x swing.
+          # POSIX awk only (runners ship mawk — no gawk 3-arg match): the
+          # duration is normalised by stripping punctuation and reading the
+          # trailing "<mins> m <secs> s" / "<secs> s" tokens.
+          grep -aoE '\[(Passed|Failed)\] [0-9a-z-]+ \(([0-9]+m )?[0-9]+s\)' "$LOG" \
+            | tr '()[]' ' ' \
+            | awk -v threshold=600 -v summary="$GITHUB_STEP_SUMMARY" '
+              BEGIN { printf "### Maestro flow timings (${{ matrix.device.name }})\n| Flow | Verdict | Duration |\n|---|---|---|\n" >> summary }
+              {
+                verdict=$1; flow=$2; total=0
+                for (i=3; i<=NF; i++) {
+                  v=$i
+                  if (v ~ /m$/) { sub(/m$/,"",v); total += v*60 }
+                  else if (v ~ /s$/) { sub(/s$/,"",v); total += v+0 }
+                }
+                printf "| %s | %s | %dm %02ds |\n", flow, verdict, total/60, total%60 >> summary
+                if (total > threshold)
+                  printf "::warning title=starvation-shaped::%s took %dm %02ds (threshold %ds) — device starvation, not necessarily an app failure\n", flow, total/60, total%60, threshold
+              }'
 
       # always(), not failure(): the roving-slow-flow evidence lives in runs
       # that PASS late or die to the job timeout — failure-only upload threw
