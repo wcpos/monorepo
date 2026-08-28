@@ -12,9 +12,15 @@ const MIN_EXPECTED_SHRINK_PX = DRAG_PX * 0.6;
 const MAX_EXPECTED_SHRINK_PX = DRAG_PX + 25;
 
 test('resizes the visible POS products panel', async ({ posPage: page }) => {
-	const screen = page.getByTestId('screen-pos').filter({ visible: true });
+	// Two POS layouts carry screen-pos (see fixtures.ts); resolve to the visible one.
+	const screen = page.getByTestId('screen-pos').filter({ visible: true }).first();
 	const handle = screen.getByTestId('pos-resize-handle');
-	test.skip(!(await handle.isVisible()), 'Small viewports do not render the split POS layout');
+	// Bounded wait before deciding to skip, so a slow mount cannot turn into a green no-op.
+	const handleRendered = await handle
+		.waitFor({ state: 'visible', timeout: 10_000 })
+		.then(() => true)
+		.catch(() => false);
+	test.skip(!handleRendered, 'Small viewports do not render the split POS layout');
 
 	const products = screen.getByTestId('pos-products-panel');
 	const before = await products.boundingBox();
