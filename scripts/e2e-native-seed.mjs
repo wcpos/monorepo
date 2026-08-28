@@ -103,6 +103,9 @@ async function mintWriterToken() {
 		console.error(
 			`  response: title="${title}" bytes=${body.length} form=${/wcpos-loginform/.test(body)} ${headers}`
 		);
+		// A short body is a refusal page, not the login template — show it whole.
+		if (body.length > 0 && body.length <= 1000)
+			console.error(`  body: ${body.replace(/\s+/g, ' ')}`);
 		process.exit(1);
 	}
 }
