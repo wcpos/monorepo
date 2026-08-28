@@ -3,12 +3,15 @@
 # (Linux/KVM runners) against SHA-keyed cached e2e-test EAS builds.
 # Budget guardrail: $150/mo ceiling (~40 macOS-min + ~40 Linux-min per night).
 #
-# The EAS build is metered: $2 per iOS build and $1 per Android on the Starter
-# plan's usage-based rates, so a both-platform pair is $3 against a $45/mo
-# credit — about 15 pairs a month in total. The nightly buys at most one pair a
-# day and skips entirely when `main` has not moved, but at one pair a night it
-# would still exceed the credit on its own if `main` moved every day. A
-# dispatch buys nothing unless it says so — see the `build` input below.
+# The EAS build is metered, and the allowance is 15 iOS + 15 Android builds a
+# month — the Free plan's hard limit, and exactly what Starter's $45 credit buys
+# at $2/iOS and $1/Android. A both-platform nightly needs about 29 pairs a month
+# (measured: `main`'s binary changed on 29 of the 30 nights to 2026-08-27), which
+# is double the allowance on either plan. So the nightly ALTERNATES platforms —
+# 15 + 15 over 30 nights, each platform every other night — and the cache is
+# keyed on the binary rather than the commit, so commits that cannot change the
+# app reuse the build. A dispatch buys nothing unless it says so: see the `build`
+# input below.
 #
 # Tests `main`. It tested `next` until 2026-08-27 — a leftover from when the
 # Maestro suite was next-lane — but everything ships from `main` (lanes
@@ -47,7 +50,7 @@ on:
       # the resolve step) so a single-platform run can never satisfy a later
       # `all` run from cache.
       platform:
-        description: Platform(s) to build and test
+        description: Platform(s) to build and test (the nightly alternates; a dispatch does not)
         type: choice
         default: all
         options:
@@ -104,8 +107,30 @@ jobs:
         run: |
           SHA=$(git rev-parse HEAD)
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-          # Scheduled runs always cover both platforms; only a dispatch narrows.
-          PLATFORM="${{ github.event.inputs.platform || 'all' }}"
+          # The nightly ALTERNATES platforms instead of building both.
+          #
+          # The Expo allowance is 15 iOS + 15 Android builds a month (the Free
+          # plan's limit, and exactly what Starter's $45 credit buys at $2/iOS
+          # and $1/Android). A both-platform nightly is ~29 pairs a month —
+          # about double — measured over the 30 nights to 2026-08-27, on 29 of
+          # which `main`'s binary had changed. Caching cannot help there: the
+          # app genuinely differs every night. Halving the nightly is the only
+          # lever, and alternating beats running fewer nights because every
+          # night still covers something and each platform lands every other
+          # night, rather than both going dark for days at a time.
+          #
+          # Parity of the day-of-year, so the two platforms interleave without
+          # any stored state. A year with an odd number of days repeats one
+          # platform across the New Year boundary; harmless.
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            if [ $(( $(date -u +%j | sed 's/^0*//') % 2 )) -eq 0 ]; then
+              PLATFORM=ios
+            else
+              PLATFORM=android
+            fi
+          else
+            PLATFORM="${{ github.event.inputs.platform || 'all' }}"
+          fi
           echo "platform=$PLATFORM" >> "$GITHUB_OUTPUT"
           # Key the build cache on what can actually change the BINARY, not on
           # the commit. These three sets never enter the app: this workflow,

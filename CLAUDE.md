@@ -48,8 +48,8 @@ the workflow, the Maestro flows, or the seed script, none of which enter the app
 binary, so they bought a build byte-identical to one already cached.
 
 - **Do not dispatch `e2e-native.yml` to verify a fix without asking the owner.**
-  The nightly at 03:00 already covers `main`; a fix landing today is tested
-  tonight for free.
+  The nightly at 03:00 already covers `main` — alternating iOS and Android, so
+  your platform lands within two nights — and it costs nothing extra.
 - A dispatch now defaults to `build=false` and **fails fast rather than
   spending**. Re-running the suite against an already-built commit is free.
 - When a build genuinely is warranted, pass `platform=ios` or `platform=android`
