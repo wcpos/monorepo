@@ -491,10 +491,12 @@ export const CONFORMANCE_TABLE = {
 		level: 'warn',
 		message: (event, fields) => {
 			const overwrittenFields = Array.isArray(fields.overwrittenFields)
-				? fields.overwrittenFields.filter((field) => typeof field === 'string').join(', ')
-				: '';
+				? fields.overwrittenFields.filter((field) => typeof field === 'string')
+				: [];
+			const overwrittenCount = num(fields.overwrittenCount);
+			const partial = overwrittenCount > overwrittenFields.length;
 			return recordMessage(
-				`overwrote ${num(fields.overwrittenCount)} store fields: ${overwrittenFields}`
+				`overwrote ${overwrittenCount} store fields${partial ? ` (showing ${overwrittenFields.length})` : ''}: ${overwrittenFields.join(', ')}`
 			)(event, fields);
 		},
 	},
