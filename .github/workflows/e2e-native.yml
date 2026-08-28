@@ -292,8 +292,16 @@ jobs:
             fi
             sleep 2
           done
-          curl -sf --max-time 900 -o /dev/null \
-            "http://localhost:8081/index.bundle?platform=android&dev=false&minify=true" \
+          # Pre-warm via the MANIFEST, exactly as the dev client will: the
+          # bundle path is entry-dependent (`/node_modules/expo-router/
+          # entry.bundle`, not `/index.bundle` — a hand-built path 404s), and
+          # the manifest's launchAsset URL carries the transform options
+          # (hermes bytecode, react-compiler, routerRoot) that key Metro's
+          # cache — a guessed URL would compile a variant the client never
+          # requests. Verified locally 2026-08-28 against this exact tree.
+          BUNDLE_URL=$(curl -sf -H "expo-platform: android" http://localhost:8081/ | jq -r '.launchAsset.url')
+          [ -n "$BUNDLE_URL" ] && [ "$BUNDLE_URL" != "null" ] || { echo "::error::manifest had no launchAsset URL"; tail -50 /tmp/metro.log; exit 1; }
+          curl -sf --max-time 900 -o /dev/null "$BUNDLE_URL" \
             || { echo "::error::Android bundle pre-compile failed"; tail -80 /tmp/metro.log; exit 1; }
           echo "Metro up; Android bundle compiled."
 
@@ -412,8 +420,11 @@ jobs:
             fi
             sleep 2
           done
-          curl -sf --max-time 900 -o /dev/null \
-            "http://localhost:8081/index.bundle?platform=ios&dev=false&minify=true" \
+          # Manifest-driven pre-warm — see the Android job's twin step for why
+          # a hand-built bundle URL is wrong twice over.
+          BUNDLE_URL=$(curl -sf -H "expo-platform: ios" http://localhost:8081/ | jq -r '.launchAsset.url')
+          [ -n "$BUNDLE_URL" ] && [ "$BUNDLE_URL" != "null" ] || { echo "::error::manifest had no launchAsset URL"; tail -50 /tmp/metro.log; exit 1; }
+          curl -sf --max-time 900 -o /dev/null "$BUNDLE_URL" \
             || { echo "::error::iOS bundle pre-compile failed"; tail -80 /tmp/metro.log; exit 1; }
           echo "Metro up; iOS bundle compiled."
 
