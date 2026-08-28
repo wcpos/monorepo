@@ -333,7 +333,13 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      # STEP timeout 10 min under the job's: `always()` cannot buy execution
+      # time past the JOB deadline — GitHub cancels the whole job there, and
+      # the streamed log would still be lost in the exact rover-hang scenario
+      # this instrumentation exists for (review #1654). A step timeout kills
+      # only the step; the job survives with headroom to upload the log.
       - name: 📱 Run Maestro suite on emulator
+        timeout-minutes: 90
         uses: reactivecircus/android-emulator-runner@1dcd0090116d15e7c562f8db72807de5e036a4ed # v2.34.0
         with:
           api-level: 35
@@ -364,16 +370,20 @@ jobs:
             # URL works on both platforms and in local runs.
             adb reverse tcp:8081 tcp:8081
             adb install e2e-builds/wcpos-e2e-android.apk
-            # On failure, capture the device log BEFORE the emulator is torn
-            # down (the runner action kills it when this script exits, so a
-            # later step sees nothing). logcat is what names the mechanism
-            # behind emulator-only slowness — Maestro artifacts show WHAT
-            # stalled, logcat shows what the app was doing meanwhile.
-            # ONE line, no continuation: the emulator-runner action executes
-            # this script LINE BY LINE, each as its own `sh -c` — a trailing
-            # `\` becomes a literal maestro argument ("Flow path does not
-            # exist: …/\", run 33153806439) and the fallback line never runs.
-            maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" apps/main/.maestro || { mkdir -p ~/.maestro/tests && adb logcat -d > ~/.maestro/tests/logcat.txt 2>&1; exit 1; }
+            # STREAM logcat from before the suite, not dump-on-failure: the
+            # "roving slow flow" (run 33183xxxx phone: flows 01-05 in ~9 min,
+            # then 40+ min creeping inside flow 06 without failing any single
+            # wait) never triggers a failure-only dump — it either passes
+            # eventually or dies to the job timeout, which kills the script
+            # mid-line so a fallback dump never runs either. A background
+            # stream captures the device story for pass, fail, AND
+            # timeout-kill alike. Buffer bumped so a long suite does not wrap.
+            # ONE line per command: the emulator-runner action executes this
+            # script LINE BY LINE, each as its own `sh -c` — a trailing `\`
+            # becomes a literal maestro argument (run 33153806439).
+            adb logcat -G 16M
+            mkdir -p ~/.maestro/tests && nohup adb logcat -v threadtime > ~/.maestro/tests/logcat.txt 2>&1 &
+            maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" apps/main/.maestro
         env:
           # The Maestro Android driver installs its two APKs and waits for the
           # instrumentation channel; first-boot emulators on shared runners
@@ -385,8 +395,12 @@ jobs:
           # Tells flow 09 whether the resize handle is required (tablet) or optional (phone).
           DEVICE_CLASS: ${{ matrix.device.name }}
 
-      - name: ⬆️ Upload failure artifacts
-        if: failure()
+      # always(), not failure(): the roving-slow-flow evidence lives in runs
+      # that PASS late or die to the job timeout — failure-only upload threw
+      # that evidence away every time. always() also survives timeout-kill
+      # (cancelled in-progress steps still reach post steps with always()).
+      - name: ⬆️ Upload device artifacts
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: maestro-android-${{ matrix.device.name }}
