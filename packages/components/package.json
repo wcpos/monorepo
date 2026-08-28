@@ -85,7 +85,7 @@
     "@svgr/cli": "^8.1.0",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "^14.6.4",
+    "@testing-library/user-event": "^14.6.6",
     "@types/lodash": "^4.17.25",
     "expo-haptics": "~57.0.1",
     "expo-image": "~57.0.3",
