@@ -106,7 +106,7 @@ jobs:
           failed=0
 
           # Run tests for each package separately to get individual coverage
-          for pkg in core components database hooks utils order-math; do
+          for pkg in core components database hooks utils order-math resizable-panels; do
             echo "::group::Testing @wcpos/$pkg"
             cd packages/$pkg
             if [ -f "jest.config.js" ]; then
@@ -204,7 +204,7 @@ jobs:
           has_failures=false
           failure_md=""
 
-          for pkg in core components database hooks utils order-math query main; do
+          for pkg in core components database hooks utils order-math resizable-panels query main; do
             if [ "$pkg" = "main" ]; then
               file="apps/main/test-results.json"
             else
@@ -301,7 +301,7 @@ jobs:
           echo "| Package | Statements | Branches | Functions | Lines |" >> $GITHUB_STEP_SUMMARY
           echo "|---------|------------|----------|-----------|-------|" >> $GITHUB_STEP_SUMMARY
 
-          for pkg in core components database hooks utils order-math query sync-core sync-engine; do
+          for pkg in core components database hooks utils order-math resizable-panels query sync-core sync-engine; do
             file="packages/$pkg/coverage/coverage-summary.json"
             if [ -f "$file" ]; then
               statements=$(jq -r '.total.statements.pct // 0' "$file")
@@ -330,7 +330,7 @@ jobs:
           script: |
             const fs = require('fs');
 
-            const packages = ['core', 'components', 'database', 'hooks', 'utils', 'order-math', 'query', 'sync-core', 'sync-engine'];
+            const packages = ['core', 'components', 'database', 'hooks', 'utils', 'order-math', 'resizable-panels', 'query', 'sync-core', 'sync-engine'];
             let coverageRows = [];
             let totalStatements = 0;
             let totalBranches = 0;
