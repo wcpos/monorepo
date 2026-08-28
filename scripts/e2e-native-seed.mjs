@@ -22,7 +22,7 @@ const WRITER_PASS = process.env.E2E_PRODUCT_WRITER_PASS;
 
 // This script sends write-capable credentials to STORE_URL — never over plain
 // HTTP, and never to a host outside the standing E2E stores.
-const ALLOWED_WRITE_HOSTS = ['dev-pro.wcpos.com', 'dev-free.wcpos.com'];
+const ALLOWED_WRITE_HOSTS = ['dev-pro.wcpos.com', 'dev-free.wcpos.com', 'dev-next.wcpos.com'];
 const storeHost = new URL(STORE_URL).hostname;
 if (!STORE_URL.startsWith('https://')) {
 	console.error(`✖ E2E_STORE_URL must use https:// (got: ${STORE_URL})`);

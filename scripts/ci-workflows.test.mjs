@@ -119,6 +119,37 @@ test('native E2E pull requests are planned and restricted to trusted non-draft c
 	);
 });
 
+test('native E2E routes next-target PRs to the next store', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+
+	assert.equal(
+		workflow.env.E2E_STORE_URL,
+		"${{ github.event_name == 'pull_request' && github.base_ref == 'next' && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}"
+	);
+
+	const seed = spawnSync(
+		process.execPath,
+		[
+			'--input-type=module',
+			'--eval',
+			"globalThis.fetch = async () => new Response(null, { status: 503 }); await import('./scripts/e2e-native-seed.mjs');",
+		],
+		{
+			cwd: ROOT,
+			encoding: 'utf8',
+			env: {
+				...process.env,
+				E2E_STORE_URL: 'https://dev-next.wcpos.com',
+				E2E_PRODUCT_WRITER_USER: 'writer',
+				E2E_PRODUCT_WRITER_PASS: 'password',
+			},
+		}
+	);
+
+	assert.notEqual(seed.status, 0);
+	assert.match(seed.stderr, /Store unreachable: https:\/\/dev-next\.wcpos\.com → HTTP 503/);
+});
+
 test('native E2E concurrency is isolated per pull request', () => {
 	const { concurrency } = readWorkflow('e2e-native.yml');
 

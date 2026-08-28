@@ -178,7 +178,7 @@ test('one representative path exercises every ordered rule', () => {
 		['apps/main/src/x.ts', 'app-src', { unit: 'main', web: 'full' }],
 		['apps/main/app.config.ts', 'native-config', { native: 'rebuild' }],
 		['apps/main/modules/scanner/android/build.gradle', 'native-config', { native: 'rebuild' }],
-		['pnpm-lock.yaml', 'root-deps', { unit: 'all', web: 'full' }],
+		['pnpm-lock.yaml', 'root-deps', { unit: 'all', web: 'full', native: 'rebuild' }],
 		['tsconfig.json', 'root-tsconfig', { unit: 'all', web: 'full' }],
 		['jest.config.js', 'root-jest', { unit: 'all', web: 'none' }],
 		['prettier.config.mjs', 'root-format', { lint: true, unit: 'none' }],
@@ -237,6 +237,18 @@ test('utils source includes transitive unit dependants including core and main',
 test('native config wins before generic app source', () => {
 	assert.equal(classify('apps/main/package.json'), 'native-config');
 	assert.equal(planFor(['apps/main/package.json'], {}).native, 'rebuild');
+});
+
+test('root dependency resolution inputs permit native rebuilds', () => {
+	for (const file of [
+		'pnpm-lock.yaml',
+		'package.json',
+		'pnpm-workspace.yaml',
+		'.npmrc',
+		'patches/native.patch',
+	])
+		assert.equal(planFor([file], {}).native, 'rebuild', file);
+	assert.equal(planFor(['turbo.json'], {}).native, 'cachehit');
 });
 
 test('unknown paths and empty file lists return the everything-plan', () => {

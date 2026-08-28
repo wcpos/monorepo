@@ -65,7 +65,7 @@ concurrency:
 
 env:
   EXPO_USE_FAST_RESOLVER: true
-  E2E_STORE_URL: https://dev-pro.wcpos.com
+  E2E_STORE_URL: ${{ github.event_name == 'pull_request' && github.base_ref == 'next' && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}
 
 permissions:
   contents: read
