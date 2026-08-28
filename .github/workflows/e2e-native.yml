@@ -90,7 +90,11 @@ jobs:
       - name: 🏗 Setup repository (main lane)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.event.inputs.ref || 'main' }}
+          # Push runs pin the TRIGGERING SHA (review #1657): checking out the
+          # mutable branch let a queued run attached to commit A test whatever
+          # main had become — misattributing B's failure to A, or letting a
+          # later fix mask A's regression. Dispatches keep their ref input.
+          ref: ${{ github.event.inputs.ref || github.sha }}
           fetch-depth: 0
           submodules: false
 
