@@ -204,8 +204,14 @@ jobs:
           key: ${{ steps.fingerprint.outputs.cache_key }}
 
       # A dispatch does not spend without explicit approval. A PR may spend
-      # only when the planner expected a rebuild and the monthly ceiling still
-      # has room. Trunk pushes remain exempt so main can mint the shared cache.
+      # while the monthly ceiling has room for the builds this run will queue
+      # (2 for platform=all, else 1). A miss on a plan that expected no
+      # rebuild is usually a cache eviction (GitHub drops entries after 7 idle
+      # days or past 10 GB), so it spends too — with a warning naming the
+      # other explanation, an undeclared native input. Trunk pushes remain
+      # exempt so main can mint the shared cache. Concurrent cache-miss PRs
+      # can each read the same count; that overshoot is bounded by how many
+      # runs overlap (2–3) and is accepted rather than serialised (#1265).
       - name: 💸 Refuse an unrequested EAS build
         if: >-
           steps.cache.outputs.cache-hit != 'true'
@@ -216,6 +222,7 @@ jobs:
           CACHE_KEY: ${{ steps.fingerprint.outputs.cache_key }}
           NATIVE_PLAN: ${{ needs.changes.outputs.native }}
           EVENT_NAME: ${{ github.event_name }}
+          BUILD_CEILING: '20'
         working-directory: apps/main
         run: |
           set -uo pipefail
@@ -224,24 +231,24 @@ jobs:
             exit 1
           fi
           if [ "$NATIVE_PLAN" != "rebuild" ]; then
-            echo "::error::The planner did not expect the native fingerprint to move for this PR's files (native=$NATIVE_PLAN); a miss here means an undeclared native input — add the path to scripts/ci-plan.mjs's native-config rule, or dispatch with build=true."
-            exit 1
+            echo "::warning::No cached dev client for $CACHE_KEY although the planner expected none to be needed (native=$NATIVE_PLAN). Either the cache was evicted (7 idle days / 10 GB LRU) or this PR touches an undeclared native input — if the latter, add the path to scripts/ci-plan.mjs's native-config rule. Spending under the ceiling either way."
           fi
+          case "$PLATFORM" in all) SLOTS=2 ;; *) SLOTS=1 ;; esac
           MONTH_START=$(date -u +%Y-%m-01T00:00:00Z)
           if ! BUILDS=$(eas build:list --json --non-interactive --limit 100 --build-profile development); then
             echo "::error::Could not read this month's EAS build count; refusing an unmetered build. Dispatch with build=true to override."
             exit 1
           fi
-          if ! COUNT=$(jq --arg start "$MONTH_START" '[.[] | select(.createdAt >= $start)] | length' <<< "$BUILDS"); then
-            echo "::error::Could not parse this month's EAS build count; refusing an unmetered build. Dispatch with build=true to override."
+          if ! COUNT=$(jq --arg start "$MONTH_START" 'if (type != "array") or any(.[]; (.createdAt|type) != "string") then error("unexpected shape") else [.[] | select(.createdAt >= $start)] | length end' <<< "$BUILDS"); then
+            echo "::error::Could not parse this month's EAS build count (unexpected list shape or a build without createdAt); refusing an unmetered build. Dispatch with build=true to override."
             exit 1
           fi
-          echo "EAS development builds since $MONTH_START: $COUNT / 20" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$COUNT" -ge 20 ]; then
-            echo "::error::EAS development builds this UTC month: $COUNT; ceiling: 20. Refusing this PR build. Dispatch with build=true to override."
+          echo "EAS development builds since $MONTH_START: $COUNT / $BUILD_CEILING (this run needs $SLOTS)" >> "$GITHUB_STEP_SUMMARY"
+          if [ $((COUNT + SLOTS)) -gt "$BUILD_CEILING" ]; then
+            echo "::error::EAS development builds this UTC month: $COUNT, this run would queue $SLOTS more; ceiling: $BUILD_CEILING. Refusing this PR build. Dispatch with build=true to override."
             exit 1
           fi
-          echo "::notice::EAS development builds this UTC month: $COUNT / 20; PR build authorised."
+          echo "::notice::EAS development builds this UTC month: $COUNT / $BUILD_CEILING; PR build authorised ($SLOTS more)."
 
       # Seed ONCE, before the matrix fans out: the four test jobs share one
       # store, so seed once before this run's matrix fans out. PR runs are not

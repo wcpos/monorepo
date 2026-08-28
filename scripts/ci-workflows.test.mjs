@@ -201,6 +201,76 @@ test('the native E2E aggregator fails closed except for legitimate skips', () =>
 	assert.equal(allSucceeded.status, 0, allSucceeded.stdout + allSucceeded.stderr);
 });
 
+test('the native spend guard charges the builds a run will queue and fails closed on bad data', () => {
+	// Money-bearing shell: a fake `eas` on PATH returns EAS_MOCK_BUILDS as the
+	// month's build list; the guard decides from the count, the platform's slot
+	// cost, and the plan. The ceiling is 20 development builds (10 pairs).
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-native-spend-'));
+	const binDir = path.join(workspace, 'bin');
+	mkdirSync(binDir);
+	writeFileSync(
+		path.join(binDir, 'eas'),
+		'#!/usr/bin/env bash\n[ "${EAS_MOCK_FAIL:-}" = "1" ] && exit 1\nprintf "%s" "$EAS_MOCK_BUILDS"\n',
+		{ mode: 0o755 }
+	);
+	const step = findStep(
+		readWorkflow('e2e-native.yml'),
+		'build',
+		'💸 Refuse an unrequested EAS build'
+	);
+	const month = new Date().toISOString().slice(0, 7);
+	const builds = (n) =>
+		JSON.stringify(Array.from({ length: n }, () => ({ createdAt: `${month}-02T00:00:00Z` })));
+	const run = (env) =>
+		runShell(step.run, {
+			cwd: workspace,
+			env: {
+				PATH: `${binDir}:${process.env.PATH}`,
+				GITHUB_STEP_SUMMARY: path.join(workspace, 'summary.md'),
+				PLATFORM: 'all',
+				CACHE_KEY: 'e2e-native-devclient-test',
+				NATIVE_PLAN: 'rebuild',
+				EVENT_NAME: 'pull_request',
+				BUILD_CEILING: '20',
+				EAS_MOCK_BUILDS: builds(0),
+				...env,
+			},
+		});
+
+	try {
+		const dispatch = run({ EVENT_NAME: 'workflow_dispatch' });
+		assert.notEqual(dispatch.status, 0, 'a dispatch without build=true must refuse');
+
+		const roomForTwo = run({ EAS_MOCK_BUILDS: builds(18) });
+		assert.equal(roomForTwo.status, 0, roomForTwo.stdout + roomForTwo.stderr);
+
+		// 19 + the 2 builds platform=all queues = 21 > 20.
+		const oneSlotShort = run({ EAS_MOCK_BUILDS: builds(19) });
+		assert.notEqual(oneSlotShort.status, 0, 'platform=all must charge two slots');
+		const singlePlatform = run({ EAS_MOCK_BUILDS: builds(19), PLATFORM: 'ios' });
+		assert.equal(singlePlatform.status, 0, singlePlatform.stdout + singlePlatform.stderr);
+
+		// A cachehit plan spends under the ceiling (eviction is the common cause) but warns.
+		const evicted = run({ NATIVE_PLAN: 'cachehit', EAS_MOCK_BUILDS: builds(3) });
+		assert.equal(evicted.status, 0, evicted.stdout + evicted.stderr);
+		assert.match(evicted.stdout, /::warning::.*evicted/);
+
+		// Fail closed: eas unavailable, or a build without createdAt.
+		assert.notEqual(run({ EAS_MOCK_FAIL: '1' }).status, 0);
+		assert.notEqual(run({ EAS_MOCK_BUILDS: '[{"id":"x"}]' }).status, 0);
+
+		// Builds from an earlier month do not count.
+		const lastMonth = run({
+			EAS_MOCK_BUILDS: JSON.stringify(
+				Array.from({ length: 30 }, () => ({ createdAt: '2000-01-01T00:00:00Z' }))
+			),
+		});
+		assert.equal(lastMonth.status, 0, lastMonth.stdout + lastMonth.stderr);
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
 test('the native E2E aggregator exists under the name the merge gate will require', () => {
 	// The check name is the contract: when the five-consecutive-greens bar is
 	// met, adding it to MERGE_GATE_REQUIRED_CHECKS is a one-line change and
