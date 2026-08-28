@@ -3,9 +3,11 @@
 # (Linux/KVM runners) against SHA-keyed cached e2e-test EAS builds.
 # Budget guardrail: $150/mo ceiling (~40 macOS-min + ~40 Linux-min per night).
 #
-# The EAS build is the expensive half, not the runner minutes: ~$12 per iOS
-# build and ~$7 per Android against a $45/mo Expo allowance. The nightly buys
-# at most one pair a day and skips entirely when `main` has not moved. A
+# The EAS build is metered: $2 per iOS build and $1 per Android on the Starter
+# plan's usage-based rates, so a both-platform pair is $3 against a $45/mo
+# credit — about 15 pairs a month in total. The nightly buys at most one pair a
+# day and skips entirely when `main` has not moved, but at one pair a night it
+# would still exceed the credit on its own if `main` moved every day. A
 # dispatch buys nothing unless it says so — see the `build` input below.
 #
 # Tests `main`. It tested `next` until 2026-08-27 — a leftover from when the
@@ -26,16 +28,18 @@ on:
         type: string
         default: main
       # A dispatch on a commit that has never been built costs a fresh EAS
-      # build — the single largest line in the monthly Expo bill. Nine ad-hoc
-      # dispatches on 2026-08-27/28, each verifying one native-nightly fix on a
-      # new SHA, burned nine build pairs in sixteen hours and took the month's
-      # build budget past 40% in its first week. So a dispatch reuses a cached
+      # build. Nine ad-hoc dispatches on 2026-08-27/28, each verifying one
+      # native-nightly fix on a new SHA, bought nine build pairs in sixteen
+      # hours; six of those nine changed only this workflow, the Maestro flows,
+      # or the seed script — none of which enter the binary, all of which the
+      # test jobs check out fresh — so six pairs bought a byte-identical app.
+      # So a dispatch reuses a cached
       # build by default and refuses to spend, and paying is an explicit
       # opt-in. Re-running the suite against an already-built commit stays
       # free. The nightly is unaffected: it builds when `main` has moved, which
       # is what it is for.
       build:
-        description: 'Spend an EAS build if this commit has none cached (iOS ~$12, Android ~$7)'
+        description: 'Spend an EAS build if this commit has none cached (iOS $2, Android $1)'
         type: boolean
         default: false
       # Most fixes are one-platform. Verifying an Android-only fix should cost
