@@ -1,0 +1,11 @@
+{
+	"$schema": "https://json.schemastore.org/claude-code-settings.json",
+	"permissions": {
+		"ask": [
+			"Bash(gh workflow run e2e-native:*)",
+			"Bash(gh workflow run e2e-native.yml:*)",
+			"Bash(gh workflow run .github/workflows/e2e-native.yml:*)",
+			"Bash(gh workflow run E2E Native:*)"
+		]
+	}
+}

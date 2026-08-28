@@ -5,12 +5,15 @@ node_modules
 .turbo
 .translations
 .worktrees
-# Ignore local Claude runtime state, but keep project rules and skills tracked.
+# Ignore local Claude runtime state, but keep project rules, skills and the
+# shared permission policy tracked. settings.local.json stays ignored — it is
+# per-machine, where settings.json is the policy everyone works under.
 .claude/*
 !.claude/rules/
 !.claude/rules/**
 !.claude/skills/
 !.claude/skills/**
+!.claude/settings.json
 docs/
 apps/main/web-build-atlas/
 

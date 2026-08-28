@@ -3,6 +3,11 @@
 # (Linux/KVM runners) against SHA-keyed cached e2e-test EAS builds.
 # Budget guardrail: $150/mo ceiling (~40 macOS-min + ~40 Linux-min per night).
 #
+# The EAS build is the expensive half, not the runner minutes: ~$12 per iOS
+# build and ~$7 per Android against a $45/mo Expo allowance. The nightly buys
+# at most one pair a day and skips entirely when `main` has not moved. A
+# dispatch buys nothing unless it says so — see the `build` input below.
+#
 # Tests `main`. It tested `next` until 2026-08-27 — a leftover from when the
 # Maestro suite was next-lane — but everything ships from `main` (lanes
 # converged 2026-08-15), so the nightly was exercising a branch nobody ships
@@ -20,6 +25,30 @@ on:
         description: Branch to test
         type: string
         default: main
+      # A dispatch on a commit that has never been built costs a fresh EAS
+      # build — the single largest line in the monthly Expo bill. Nine ad-hoc
+      # dispatches on 2026-08-27/28, each verifying one native-nightly fix on a
+      # new SHA, burned nine build pairs in sixteen hours and took the month's
+      # build budget past 40% in its first week. So a dispatch reuses a cached
+      # build by default and refuses to spend, and paying is an explicit
+      # opt-in. Re-running the suite against an already-built commit stays
+      # free. The nightly is unaffected: it builds when `main` has moved, which
+      # is what it is for.
+      build:
+        description: 'Spend an EAS build if this commit has none cached (iOS ~$12, Android ~$7)'
+        type: boolean
+        default: false
+      # Most fixes are one-platform. Verifying an Android-only fix should cost
+      # an Android build, not a pair. The cache key carries the selection so a
+      # single-platform run can never satisfy a later `all` run from cache.
+      platform:
+        description: Platform(s) to build and test
+        type: choice
+        default: all
+        options:
+          - all
+          - ios
+          - android
 
 concurrency:
   group: ${{ github.workflow }}
@@ -38,6 +67,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
+      platform: ${{ steps.resolve.outputs.platform }}
       variable_product_id: ${{ steps.seed.outputs.variable_product_id }}
     steps:
       - name: 🏗 Setup repository (main lane)
@@ -69,7 +99,40 @@ jobs:
         run: |
           SHA=$(git rev-parse HEAD)
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-          echo "Testing main @ $SHA"
+          # Scheduled runs always cover both platforms; only a dispatch narrows.
+          PLATFORM="${{ github.event.inputs.platform || 'all' }}"
+          echo "platform=$PLATFORM" >> "$GITHUB_OUTPUT"
+          echo "Testing main @ $SHA (platform: $PLATFORM)"
+
+      # Restored BEFORE the seed and the monorepo setup, so the refusal below
+      # can stop a would-be-billing dispatch in seconds rather than after five
+      # minutes of setup it is about to throw away.
+      # EAS artifacts expire after ~2 weeks (observed in #696), so finished
+      # builds are cached on the GHA side. Nights where main hasn't moved hit
+      # the cache and cost no EAS build.
+      - name: ♻️ Restore cached builds
+        id: cache
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: e2e-builds
+          key: e2e-native-build-${{ steps.resolve.outputs.sha }}-${{ steps.resolve.outputs.platform }}
+
+      # A dispatch does not get to spend money by accident. Reaching here on a
+      # cache miss means this commit has never been built for this platform
+      # selection, so continuing would bill a build; a dispatch that did not
+      # ask for one stops instead. The nightly is exempt — buying a build when
+      # `main` has moved is the whole job.
+      - name: 💸 Refuse an unrequested EAS build
+        if: >-
+          steps.cache.outputs.cache-hit != 'true'
+          && github.event_name == 'workflow_dispatch'
+          && github.event.inputs.build != 'true'
+        env:
+          SHA: ${{ steps.resolve.outputs.sha }}
+          PLATFORM: ${{ steps.resolve.outputs.platform }}
+        run: |
+          echo "::error::No cached $PLATFORM build for ${SHA:0:8}. Re-running the suite against an already-built commit is free; building this one is not. Dispatch again with build=true (and platform=ios|android if only one is affected) to authorise the spend."
+          exit 1
 
       # Seed ONCE, before the matrix fans out: the four test jobs share one
       # store, and concurrent seeds could each miss the same variation and
@@ -95,26 +158,29 @@ jobs:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
 
-      # EAS artifacts expire after ~2 weeks (observed in #696), so finished
-      # builds are cached on the GHA side. Nights where main hasn't moved hit
-      # the cache and cost no EAS build.
-      - name: ♻️ Restore cached builds
-        id: cache
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
-        with:
-          path: e2e-builds
-          key: e2e-native-build-${{ steps.resolve.outputs.sha }}
-
       - name: 🛠 Build e2e-test profile on EAS (revision changed)
         if: steps.cache.outputs.cache-hit != 'true'
         working-directory: apps/main
+        env:
+          PLATFORM: ${{ steps.resolve.outputs.platform }}
         run: |
           mkdir -p ../../e2e-builds
-          eas build --profile e2e-test --platform all --non-interactive --wait --json > /tmp/builds.json
+          eas build --profile e2e-test --platform "$PLATFORM" --non-interactive --wait --json > /tmp/builds.json
           IOS_URL=$(jq -r '.[] | select(.platform=="IOS") | .artifacts.buildUrl' /tmp/builds.json)
           ANDROID_URL=$(jq -r '.[] | select(.platform=="ANDROID") | .artifacts.buildUrl' /tmp/builds.json)
-          curl -fsSL "$IOS_URL" -o ../../e2e-builds/wcpos-e2e-ios.tar.gz
-          curl -fsSL "$ANDROID_URL" -o ../../e2e-builds/wcpos-e2e-android.apk
+          # A single-platform build yields one artifact; the other URL is empty
+          # and its test job is skipped, so there is nothing to download. Empty
+          # AND unexpectedly-missing look alike here, so assert the artifact the
+          # selection promised rather than letting a silent miss reach the test
+          # job as a confusing "file not found".
+          if [ "$PLATFORM" != "android" ]; then
+            [ -n "$IOS_URL" ] || { echo "::error::iOS build produced no artifact URL"; exit 1; }
+            curl -fsSL "$IOS_URL" -o ../../e2e-builds/wcpos-e2e-ios.tar.gz
+          fi
+          if [ "$PLATFORM" != "ios" ]; then
+            [ -n "$ANDROID_URL" ] || { echo "::error::Android build produced no artifact URL"; exit 1; }
+            curl -fsSL "$ANDROID_URL" -o ../../e2e-builds/wcpos-e2e-android.apk
+          fi
 
       - name: ⬆️ Share builds with test jobs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -126,6 +192,7 @@ jobs:
   android:
     name: 🤖 Android (${{ matrix.device.name }})
     needs: build
+    if: needs.build.outputs.platform != 'ios'
     runs-on: ubuntu-latest
     # 100, not 60: the app's ONE-TIME initial catalog sync (~40 min on these
     # 2-vCPU swiftshader emulators) slows every interaction in whichever flow
@@ -217,6 +284,7 @@ jobs:
   ios:
     name: 🍎 iOS (${{ matrix.device.name }})
     needs: build
+    if: needs.build.outputs.platform != 'android'
     runs-on: macos-15
     timeout-minutes: 45
     strategy:

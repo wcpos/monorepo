@@ -36,6 +36,25 @@ Relevant wiki pages (paths relative to the wiki repo root):
 - `product/features.md` — feature inventory (free vs Pro)
 - `product/personas.md` — user personas and design implications
 
+## Native E2E builds cost real money
+
+The `E2E Native` workflow (Maestro) runs against EAS builds of the `e2e-test`
+profile. **Every dispatch on a commit that has never been built buys a new
+build** — roughly $12 for iOS and $7 for Android against a $45/month allowance.
+Nine ad-hoc dispatches verifying native fixes on 2026-08-27/28 took the month
+past 40% in its first week.
+
+- **Do not dispatch `e2e-native.yml` to verify a fix without asking the owner.**
+  The nightly at 03:00 already covers `main`; a fix landing today is tested
+  tonight for free.
+- A dispatch now defaults to `build=false` and **fails fast rather than
+  spending**. Re-running the suite against an already-built commit is free.
+- When a build genuinely is warranted, pass `platform=ios` or `platform=android`
+  if only one is affected. Most native fixes are one-platform; paying for the
+  pair is the exception, not the default.
+- Batch fixes into one commit before building. Seven dispatches for seven
+  commits cost seven times what one dispatch after the last one would have.
+
 ## E2E selector policy
 
 E2E tests must use stable `testID` selectors for app UI. Do not use localized UI text as selectors: no `getByText`, no `getByPlaceholder`, no `getByLabel`, and no `getByRole(..., { name })` in `apps/main/e2e`. If a UI element needs to be exercised by E2E, add a stable `testID` to the component and select it with `getByTestId()`. (Reading a testID-addressed cell's `textContent` is fine; *selecting* by text is not.)
