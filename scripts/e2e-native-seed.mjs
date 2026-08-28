@@ -87,6 +87,22 @@ async function mintWriterToken() {
 			/locked|too many|security check|permission|inv[aá]lid/i.exec(body)?.[0] ??
 			'no error text in response';
 		console.error(`✖ Product-writer authentication failed (HTTP ${submit.status}): ${reason}`);
+		// No error text means the POST was answered by something other than the
+		// login handler (a challenge page, a cache, a proxy). Name the layer.
+		const title = /<title>([^<]*)<\/title>/i.exec(body)?.[1]?.trim() ?? '(no title)';
+		const headers = [
+			'server',
+			'cf-ray',
+			'cf-mitigated',
+			'cf-cache-status',
+			'x-cache',
+			'content-type',
+		]
+			.map((name) => `${name}=${submit.headers.get(name) ?? '-'}`)
+			.join(' ');
+		console.error(
+			`  response: title="${title}" bytes=${body.length} form=${/wcpos-loginform/.test(body)} ${headers}`
+		);
 		process.exit(1);
 	}
 }
