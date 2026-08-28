@@ -1,4 +1,4 @@
-# Nightly native E2E (Maestro) — spec: wayfinder wcpos/monorepo#688.
+# Native E2E (Maestro) on every merge to main — spec: wayfinder wcpos/monorepo#688.
 # Runs the P0 suite on iOS simulators (macOS runners) and Android emulators
 # (Linux/KVM runners).
 #
@@ -10,7 +10,7 @@
 # native shell is built on EAS only when `npx @expo/fingerprint` moves, i.e.
 # when native deps / config / native code actually change (historically once
 # or twice a month), and is cached on the GHA side keyed by that fingerprint.
-# JS-only nights — almost every night — build nothing and cost $0.
+# JS-only merges — almost every merge — build nothing and cost $0.
 #
 # Costs, for the rare build: $2 per iOS, $1 per Android on Starter usage rates;
 # the monthly allowance (15 + 15 builds — the Free plan's hard limit, and
@@ -27,8 +27,16 @@
 name: E2E Native
 
 on:
-  schedule:
-    - cron: '0 3 * * *'
+  # Every merge to main, not a nightly (owner ruling 2026-08-28: tests run
+  # after every PR; the 03:00 cron is gone). Merged code is validated code,
+  # so the write-capable seed credentials are legitimate here — the reason
+  # this suite must never run per-PR on unmerged branches. Runs are $0 under
+  # the fingerprint cache except when native genuinely changed. Merge bursts
+  # self-collapse: the concurrency group below holds one running + one
+  # pending run, and a newer push evicts the older pending one, so a busy
+  # day converges on testing the tip.
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       ref:
@@ -40,8 +48,8 @@ on:
       # build (the nine ad-hoc dispatches of 2026-08-27/28 bought nine build
       # pairs in sixteen hours; under this architecture all nine would have
       # been cache hits, but the guard stays for the day a fingerprint change
-      # and a debugging session coincide). The nightly is exempt: buying the
-      # rare fingerprint-change build is its job.
+      # and a debugging session coincide). Trunk (push) runs are exempt: buying the
+      # rare fingerprint-change build is their job.
       build:
         description: 'Spend an EAS build if no dev client is cached for this fingerprint (iOS $2, Android $1)'
         type: boolean
@@ -82,7 +90,11 @@ jobs:
       - name: 🏗 Setup repository (main lane)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.event.inputs.ref || 'main' }}
+          # Push runs pin the TRIGGERING SHA (review #1657): checking out the
+          # mutable branch let a queued run attached to commit A test whatever
+          # main had become — misattributing B's failure to A, or letting a
+          # later fix mask A's regression. Dispatches keep their ref input.
+          ref: ${{ github.event.inputs.ref || github.sha }}
           fetch-depth: 0
           submodules: false
 
@@ -124,7 +136,7 @@ jobs:
       # dependencies must be installed first — which is why setup runs before
       # the cache probe. A refused dispatch therefore costs a few minutes of
       # runner time; acceptable, because refusals are rare and the fingerprint
-      # is what makes almost every night bill nothing at all.
+      # is what makes almost every run bill nothing at all.
       - name: 🏗 Setup monorepo
         uses: ./.github/actions/setup-monorepo
         with:
@@ -167,7 +179,7 @@ jobs:
 
       # EAS artifacts expire after ~2 weeks (observed in #696), so finished
       # builds are cached on the GHA side. GHA evicts caches unused for 7
-      # days, but the nightly touches this key every night, keeping it warm
+      # days, but every merge touches this key, keeping it warm
       # for as long as the fingerprint holds.
       - name: ♻️ Restore cached builds
         id: cache
@@ -179,7 +191,7 @@ jobs:
       # A dispatch does not get to spend money by accident. Reaching here on a
       # cache miss means no dev client exists for this native fingerprint and
       # platform selection, so continuing would bill an EAS build; a dispatch
-      # that did not ask for one stops instead. The nightly is exempt — buying
+      # that did not ask for one stops instead. Trunk (push) runs are exempt — buying
       # the rare fingerprint-change build is its job.
       - name: 💸 Refuse an unrequested EAS build
         if: >-
