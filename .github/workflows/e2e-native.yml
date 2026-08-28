@@ -39,8 +39,9 @@ on:
         type: boolean
         default: false
       # Most fixes are one-platform. Verifying an Android-only fix should cost
-      # an Android build, not a pair. The cache key carries the selection so a
-      # single-platform run can never satisfy a later `all` run from cache.
+      # an Android build, not a pair. The cache key carries the selection (see
+      # the resolve step) so a single-platform run can never satisfy a later
+      # `all` run from cache.
       platform:
         description: Platform(s) to build and test
         type: choice
@@ -102,6 +103,16 @@ jobs:
           # Scheduled runs always cover both platforms; only a dispatch narrows.
           PLATFORM="${{ github.event.inputs.platform || 'all' }}"
           echo "platform=$PLATFORM" >> "$GITHUB_OUTPUT"
+          # The key carries the platform selection so a single-platform build
+          # can never satisfy a later `all` run from cache. `all` keeps the
+          # original unsuffixed key on purpose: suffixing it would orphan every
+          # existing cache entry and make the next nightly re-buy a pair it
+          # already has (two such entries were live when this landed).
+          if [ "$PLATFORM" = "all" ]; then
+            echo "cache_key=e2e-native-build-$SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "cache_key=e2e-native-build-$SHA-$PLATFORM" >> "$GITHUB_OUTPUT"
+          fi
           echo "Testing main @ $SHA (platform: $PLATFORM)"
 
       # Restored BEFORE the seed and the monorepo setup, so the refusal below
@@ -115,7 +126,7 @@ jobs:
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: e2e-builds
-          key: e2e-native-build-${{ steps.resolve.outputs.sha }}-${{ steps.resolve.outputs.platform }}
+          key: ${{ steps.resolve.outputs.cache_key }}
 
       # A dispatch does not get to spend money by accident. Reaching here on a
       # cache miss means this commit has never been built for this platform
