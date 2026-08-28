@@ -1,0 +1,63 @@
+appId: com.wcpos.main.dev
+env:
+  # CI passes phone|tablet from the device matrix; locally it stays 'auto' and the
+  # handle's visibility decides. On a declared tablet the handle is REQUIRED, so a
+  # regression that routes tablets to the phone layout fails instead of skipping.
+  DEVICE_CLASS: auto
+---
+# P0-9: the tablet POS split resizes by drag and the user-chosen width survives a relaunch.
+# Session comes from 02-auth-setup; do NOT clear state. Phones render the tabbed layout
+# without a resize handle and skip the guarded block.
+#
+# State is read from the handle's accessibility label ("Resize handle, NN%"), which the
+# library keeps live for VoiceOver/TalkBack. Flow 01 cleared app data, so the products
+# panel starts at the initial-settings width of 60; a LEFT swipe shrinks it (clamped to
+# minSize 25), so "less than 60" is the deterministic post-drag assertion.
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: "screen-pos"
+    timeout: 120000
+- runFlow:
+    when:
+      true: ${DEVICE_CLASS == 'tablet'}
+    commands:
+      - assertVisible:
+          id: "pos-resize-handle"
+- runFlow:
+    when:
+      visible:
+        id: "pos-resize-handle"
+    commands:
+      # Regression check for #1620: tablet launch must render the full cart column,
+      # not the pre-layout 60:1 sliver.
+      - assertVisible:
+          id: "cart-subtotal"
+      - assertVisible:
+          id: "pos-resize-handle"
+          text: "Resize handle, 60%"
+      - swipe:
+          from:
+            id: "pos-resize-handle"
+          direction: LEFT
+          duration: 600
+      # 25..59: shrunk from the default but never below minSize.
+      - extendedWaitUntil:
+          visible:
+            id: "pos-resize-handle"
+            text: "Resize handle, (2[5-9]|[3-5][0-9])%"
+          timeout: 10000
+      # A stopped relaunch reads the width persisted by onLayoutChanged → patchUI.
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible:
+            id: "screen-pos"
+          timeout: 120000
+      - assertVisible:
+          id: "pos-resize-handle"
+          text: "Resize handle, (2[5-9]|[3-5][0-9])%"
+      - assertNotVisible:
+          id: "pos-resize-handle"
+          text: "Resize handle, 60%"

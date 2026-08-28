@@ -125,8 +125,8 @@ export function PanelResizeHandle({
 			<View
 				ref={setElementRef}
 				style={[defaultHandleStyle, style]}
-				{...viewProps}
 				{...a11yProps}
+				{...viewProps}
 				onLayout={handleLayout}
 			/>
 		</GestureDetector>
