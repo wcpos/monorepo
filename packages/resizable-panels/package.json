@@ -1,6 +1,6 @@
 {
 	"name": "react-native-resizable-panels",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Resizable panel groups for React Native — web, Electron, iOS and Android",
 	"repository": {
 		"type": "git",
