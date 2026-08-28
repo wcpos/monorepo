@@ -6,11 +6,10 @@ env:
 ---
 # P0-2: controlled authentication — the ONE real-OAuth flow (doubles as suite
 # setup; later flows reuse the session it persists). Auth decision: #698.
-- launchApp:
-    clearState: true
-# clearState wiped the dev launcher's most-recent-project memory — deep-link
-# back into the Metro-served bundle. LITERAL url: Maestro does not substitute
-# ${VARS} inside openLink (see flow 01; keep the two in step).
+# clearState without launching, then openLink cold-starts the app with the
+# URL as its launch intent — see flow 01 for the three live failures behind
+# this exact ordering; keep the two flows in step.
+- clearState
 - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
 - extendedWaitUntil:
     visible:
