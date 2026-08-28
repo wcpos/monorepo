@@ -104,10 +104,19 @@ jobs:
       # SHA: it carries no JS, so it is keyed on the native fingerprint below.
       - name: 🔑 Resolve revision under test
         id: resolve
+        env:
+          # Through env, never inline `${{ }}` in the script: an API dispatch
+          # is not bound to the choice options the UI shows, and inline
+          # interpolation of an attacker-influenced value into a run script is
+          # the classic Actions injection. The allowlist below is the gate.
+          RAW_PLATFORM: ${{ github.event.inputs.platform || 'all' }}
         run: |
           SHA=$(git rev-parse HEAD)
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-          PLATFORM="${{ github.event.inputs.platform || 'all' }}"
+          case "$RAW_PLATFORM" in
+            all|ios|android) PLATFORM="$RAW_PLATFORM" ;;
+            *) echo "::error::platform must be all, ios or android (got: $RAW_PLATFORM)"; exit 1 ;;
+          esac
           echo "platform=$PLATFORM" >> "$GITHUB_OUTPUT"
           echo "Testing main @ $SHA (platform: $PLATFORM)"
 
