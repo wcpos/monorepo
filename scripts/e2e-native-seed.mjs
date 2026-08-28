@@ -77,7 +77,16 @@ async function mintWriterToken() {
 		const token = /access_token=([^&]+)/.exec(location)?.[1];
 		if (token) return token;
 		if (attempt === 0) continue;
-		console.error(`✖ Product-writer authentication failed (HTTP ${submit.status})`);
+		// A 200 here is the login form re-rendered with the store's reason — bad
+		// credentials, no POS permission, a failed security check, or the
+		// plugin's own rate limit are four different problems behind one status
+		// code (2026-08-28: a day was lost to "HTTP 200"). Say which.
+		const body = await submit.text().catch(() => '');
+		const reason =
+			/color: #CD2C24[^>]*>\s*([^<]+)</.exec(body)?.[1]?.trim() ??
+			/locked|too many|security check|permission|inv[aá]lid/i.exec(body)?.[0] ??
+			'no error text in response';
+		console.error(`✖ Product-writer authentication failed (HTTP ${submit.status}): ${reason}`);
 		process.exit(1);
 	}
 }
@@ -198,14 +207,18 @@ if (Object.keys(repairs).length) {
 		body: JSON.stringify(repairs),
 	});
 	if (!fix.ok) {
-		console.error(`✖ Failed to repair "${SIMPLE_PRODUCT}" (#${simpleProduct.id}): HTTP ${fix.status}`);
+		console.error(
+			`✖ Failed to repair "${SIMPLE_PRODUCT}" (#${simpleProduct.id}): HTTP ${fix.status}`
+		);
 		process.exit(1);
 	}
 	// The PUT's response is the post-repair document — assert the EFFECTIVE
 	// sell path is healthy rather than trusting the writes landed (review,
 	// #1630: "revalidate the effective price after repairing").
 	simpleProduct = await fix.json();
-	console.log(`  repaired "${SIMPLE_PRODUCT}" (#${simpleProduct.id}): ${Object.keys(repairs).join(', ')}`);
+	console.log(
+		`  repaired "${SIMPLE_PRODUCT}" (#${simpleProduct.id}): ${Object.keys(repairs).join(', ')}`
+	);
 }
 if (
 	simpleProduct.stock_status !== 'instock' ||
