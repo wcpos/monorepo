@@ -1,6 +1,7 @@
 import { View } from 'react-native';
 
-import * as PanelPrimitives from '@wcpos/resizable-panels';
+import * as PanelPrimitives from 'react-native-resizable-panels';
+
 import { Icon } from '@wcpos/components/icon';
 
 import { cn } from '../lib/utils';

@@ -1,0 +1,17 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"outDir": "dist",
+		"rootDir": "src",
+		"declaration": true,
+		"module": "commonjs",
+		"moduleResolution": "node",
+		"customConditions": null,
+		"target": "es2019",
+		"jsx": "react-jsx",
+		"noEmit": false,
+		"skipLibCheck": true
+	},
+	"include": ["src/**/*"],
+	"exclude": ["src/**/*.test.*", "src/test/**", "src/**/test-utils.ts"]
+}
