@@ -1,7 +1,8 @@
-import { PanelConstraints } from '../Panel';
 import { assert } from './assert';
 import { fuzzyNumbersEqual } from './numbers/fuzzyNumbersEqual';
 import { resizePanel } from './resizePanel';
+
+import type { ResolvedPanelConstraints } from '../Panel';
 
 // All units must be in percentages; pixel values should be pre-converted
 export function validatePanelGroupLayout({
@@ -9,7 +10,7 @@ export function validatePanelGroupLayout({
 	panelConstraints,
 }: {
 	layout: number[];
-	panelConstraints: PanelConstraints[];
+	panelConstraints: ResolvedPanelConstraints[];
 }): number[] {
 	const nextLayout = [...prevLayout];
 	const nextLayoutTotalSize = nextLayout.reduce((accumulated, current) => accumulated + current, 0);
@@ -43,12 +44,15 @@ export function validatePanelGroupLayout({
 
 	// First pass: Validate the proposed layout given each panel's constraints
 	for (let index = 0; index < panelConstraints.length; index++) {
+		const prevSize = prevLayout[index];
+		assert(prevSize != null, `No previous layout data found for index ${index}`);
 		const unsafeSize = nextLayout[index];
 		assert(unsafeSize != null, `No layout data found for index ${index}`);
 
 		const safeSize = resizePanel({
 			panelConstraints,
 			panelIndex: index,
+			prevSize,
 			size: unsafeSize,
 		});
 
@@ -69,6 +73,7 @@ export function validatePanelGroupLayout({
 			const safeSize = resizePanel({
 				panelConstraints,
 				panelIndex: index,
+				prevSize,
 				size: unsafeSize,
 			});
 

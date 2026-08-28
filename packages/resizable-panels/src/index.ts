@@ -10,8 +10,9 @@ export type {
 	PanelOnExpand,
 	PanelOnResize,
 	PanelProps,
+	PanelSize,
 } from './Panel';
 export type { ImperativePanelGroupHandle, PanelGroupOnLayout, PanelGroupProps } from './PanelGroup';
 export type { PanelResizeHandleOnDragging, PanelResizeHandleProps } from './PanelResizeHandle';
 export type { PanelGroupModel } from './model/PanelGroupModel';
-export type { Direction } from './types';
+export type { Direction, GroupResizeBehavior, PanelGroupOnLayoutChanged } from './types';

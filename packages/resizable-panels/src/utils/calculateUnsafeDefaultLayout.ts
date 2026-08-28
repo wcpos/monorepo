@@ -1,10 +1,13 @@
-import { PanelData } from '../Panel';
 import { assert } from './assert';
+
+import type { PanelData, ResolvedPanelConstraints } from '../Panel';
 
 export function calculateUnsafeDefaultLayout({
 	panelDataArray,
 }: {
-	panelDataArray: PanelData[];
+	panelDataArray: (Omit<PanelData, 'constraints'> & {
+		constraints: ResolvedPanelConstraints;
+	})[];
 }): number[] {
 	const layout = Array<number>(panelDataArray.length);
 

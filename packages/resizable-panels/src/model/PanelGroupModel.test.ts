@@ -24,6 +24,132 @@ function modelWithPanels(...panels: PanelData[]) {
 }
 
 describe('PanelGroupModel', () => {
+	test('batches drag notifications until endDrag and marks them as user interactions', () => {
+		const onLayoutChanged = jest.fn();
+		const model = createPanelGroupModel({ direction: 'horizontal', onLayoutChanged });
+		model.registerPanel(panel('left', { defaultSize: 50 }));
+		model.registerPanel(panel('right', { defaultSize: 50 }));
+		model.registerHandle('handle');
+		model.flush();
+		onLayoutChanged.mockClear();
+
+		model.beginDrag('handle', 1000);
+		model.drag(50);
+		model.drag(100);
+		expect(onLayoutChanged).not.toHaveBeenCalled();
+		model.endDrag();
+
+		expect(onLayoutChanged).toHaveBeenCalledTimes(1);
+		expect(onLayoutChanged).toHaveBeenCalledWith([60, 40], { isUserInteraction: true });
+	});
+
+	test('marks imperative commits as non-user interactions', () => {
+		const onLayoutChanged = jest.fn();
+		const model = createPanelGroupModel({ direction: 'horizontal', onLayoutChanged });
+		model.registerPanel(panel('left', { defaultSize: 50 }));
+		model.registerPanel(panel('right', { defaultSize: 50 }));
+		model.flush();
+		onLayoutChanged.mockClear();
+
+		model.resizePanel('left', 60);
+
+		expect(onLayoutChanged).toHaveBeenCalledWith([60, 40], { isUserInteraction: false });
+	});
+
+	test('resets the panel before a handle to its default size as a user interaction', () => {
+		const onLayoutChanged = jest.fn();
+		const model = createPanelGroupModel({ direction: 'horizontal', onLayoutChanged });
+		model.registerPanel(panel('left', { defaultSize: 40 }));
+		model.registerPanel(panel('right', { defaultSize: 60 }));
+		model.registerHandle('handle');
+		model.flush();
+		model.setLayout([60, 40]);
+		onLayoutChanged.mockClear();
+
+		model.resetPanelToDefault('handle');
+
+		expect(model.getLayout()).toEqual([40, 60]);
+		expect(onLayoutChanged).toHaveBeenCalledWith([40, 60], { isUserInteraction: true });
+	});
+
+	test('does not reset a panel without a default size', () => {
+		const model = modelWithPanels(panel('left'), panel('right'));
+		model.registerHandle('handle');
+		model.setLayout([60, 40]);
+
+		model.resetPanelToDefault('handle');
+
+		expect(model.getLayout()).toEqual([60, 40]);
+	});
+
+	test('nudges a handle by percentage points as a user interaction', () => {
+		const onLayoutChanged = jest.fn();
+		const model = createPanelGroupModel({ direction: 'horizontal', onLayoutChanged });
+		model.registerPanel(panel('left', { defaultSize: 50 }));
+		model.registerPanel(panel('right', { defaultSize: 50 }));
+		model.registerHandle('handle');
+		model.flush();
+		onLayoutChanged.mockClear();
+
+		model.nudge('handle', 5);
+
+		expect(model.getLayout()).toEqual([55, 45]);
+		expect(onLayoutChanged).toHaveBeenCalledWith([55, 45], { isUserInteraction: true });
+	});
+
+	test('reports separator ARIA values constrained by both adjacent panels', () => {
+		const model = modelWithPanels(
+			panel('left', { defaultSize: 50, minSize: 20, maxSize: 70 }),
+			panel('right', { defaultSize: 50, minSize: 10, maxSize: 80 })
+		);
+		model.registerHandle('handle');
+
+		expect(model.getSeparatorAriaValues('handle')).toEqual({
+			valueMin: 20,
+			valueMax: 70,
+			valueNow: 50,
+		});
+	});
+
+	test('toggles the collapsible panel before a handle as a user interaction', () => {
+		const onLayoutChanged = jest.fn();
+		const model = createPanelGroupModel({ direction: 'horizontal', onLayoutChanged });
+		model.registerPanel(panel('left', { collapsible: true, defaultSize: 40, minSize: 20 }));
+		model.registerPanel(panel('right', { defaultSize: 60 }));
+		model.registerHandle('handle');
+		model.flush();
+		onLayoutChanged.mockClear();
+
+		model.toggleCollapseAdjacent('handle');
+		expect(model.getLayout()).toEqual([0, 100]);
+		model.toggleCollapseAdjacent('handle');
+
+		expect(model.getLayout()).toEqual([40, 60]);
+		expect(onLayoutChanged).toHaveBeenNthCalledWith(1, [0, 100], {
+			isUserInteraction: true,
+		});
+		expect(onLayoutChanged).toHaveBeenNthCalledWith(2, [40, 60], {
+			isUserInteraction: true,
+		});
+	});
+
+	test('does not notify onLayoutChanged for an unchanged drag', () => {
+		const onLayoutChanged = jest.fn();
+		const model = createPanelGroupModel({ direction: 'horizontal', onLayoutChanged });
+		model.registerPanel(panel('left', { defaultSize: 50 }));
+		model.registerPanel(panel('right', { defaultSize: 50 }));
+		model.registerHandle('handle');
+		model.flush();
+		onLayoutChanged.mockClear();
+
+		model.beginDrag('handle', 1000);
+		model.drag(100);
+		model.drag(0);
+		model.endDrag();
+
+		expect(onLayoutChanged).not.toHaveBeenCalled();
+	});
+
 	test('flushes one three-panel registration batch into one default layout notification', () => {
 		const onLayout = jest.fn();
 		const model = createPanelGroupModel({ direction: 'horizontal', onLayout });
@@ -47,6 +173,47 @@ describe('PanelGroupModel', () => {
 
 		expect(model.getPanelIds()).toEqual(['unordered', 'one', 'two']);
 		expect(model.getLayout()).toEqual([20, 30, 50]);
+	});
+
+	test('sorts panels and handles by measured position when no child has an order', () => {
+		const model = createPanelGroupModel({ direction: 'horizontal' });
+		model.registerPanel(panel('third', { defaultSize: 40 }));
+		model.registerPanel(panel('first', { defaultSize: 30 }));
+		model.registerPanel(panel('second', { defaultSize: 30 }));
+		model.registerHandle('second-handle');
+		model.registerHandle('first-handle');
+		model.setPositions({
+			first: 0,
+			'first-handle': 100,
+			second: 200,
+			'second-handle': 300,
+			third: 400,
+		});
+		model.flush();
+
+		expect(model.getPanelIds()).toEqual(['first', 'second', 'third']);
+		expect(model.beginDrag('second-handle', 1000)).toBe(true);
+		model.drag(100);
+		expect(model.getLayout()).toEqual([30, 40, 30]);
+	});
+
+	test('uses registration order when measured positions are incomplete', () => {
+		const model = createPanelGroupModel({ direction: 'horizontal' });
+		model.registerPanel(panel('second'));
+		model.registerPanel(panel('first'));
+		model.setPositions({ first: 0 });
+		model.flush();
+
+		expect(model.getPanelIds()).toEqual(['second', 'first']);
+	});
+
+	test('setPositions does not dirty the model when ordering is unchanged', () => {
+		const model = modelWithPanels(panel('first'), panel('second'));
+		expect(model.isDirty()).toBe(false);
+
+		model.setPositions({ first: 0, second: 100 });
+
+		expect(model.isDirty()).toBe(false);
 	});
 
 	test('relayouts on the next microtask when nothing flushes explicitly', async () => {
@@ -151,6 +318,66 @@ describe('PanelGroupModel', () => {
 		model.drag(100);
 
 		expect(model.getLayout()).toEqual([55, 45]);
+	});
+
+	test('resolves pixel minimum sizes against the container size', () => {
+		const model = modelWithPanels(panel('left', { minSize: '300px' }), panel('right'));
+		model.setContainerSize(1000);
+
+		model.setLayout([20, 80]);
+
+		expect(model.getLayout()).toEqual([30, 70]);
+	});
+
+	test('defers a pixel default until the first non-zero container size', () => {
+		const model = modelWithPanels(panel('left', { defaultSize: '300px' }), panel('right'));
+		expect(model.getLayout()).toEqual([50, 50]);
+
+		model.setContainerSize(1000);
+
+		expect(model.getLayout()).toEqual([30, 70]);
+	});
+
+	test('revalidates pixel constraints when the container size changes', () => {
+		const model = modelWithPanels(
+			panel('left', { defaultSize: 30, minSize: '300px' }),
+			panel('right', { defaultSize: 70 })
+		);
+		model.setContainerSize(1000);
+
+		model.setContainerSize(500);
+
+		expect(model.getLayout()).toEqual([60, 40]);
+	});
+
+	test('preserves a pixel-sized panel when the container grows', () => {
+		const model = modelWithPanels(
+			panel('products', { defaultSize: 60 }),
+			panel('cart', { defaultSize: 40, groupResizeBehavior: 'preserve-pixel-size' })
+		);
+		model.setContainerSize(1000);
+
+		model.setContainerSize(2000);
+
+		expect(model.getLayout()).toEqual([80, 20]);
+	});
+
+	test('disabled panels keep their size during drag but allow imperative resize', () => {
+		const model = modelWithPanels(
+			panel('left', { defaultSize: 30 }),
+			panel('middle', { defaultSize: 40, disabled: true }),
+			panel('right', { defaultSize: 30 })
+		);
+		model.registerHandle('first');
+		model.registerHandle('second');
+
+		model.beginDrag('first', 1000);
+		model.drag(-100);
+		model.endDrag();
+		expect(model.getPanelSize('middle')).toBe(40);
+
+		model.resizePanel('middle', 50);
+		expect(model.getPanelSize('middle')).toBe(50);
 	});
 
 	test('rejects beginDrag when the container size is zero', () => {

@@ -5,18 +5,33 @@ import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 
 import { useUniqueId } from './hooks/useUniqueId';
 import { PanelGroupContext } from './PanelGroupContext';
+import { parseSize } from './utils/parseSize';
+
+import type { GroupResizeBehavior } from './types';
 
 export type PanelOnCollapse = () => void;
 export type PanelOnExpand = () => void;
 export type PanelOnResize = (size: number, prevSize: number | undefined) => void;
+export type PanelSize = number | string;
 export type PanelCallbacks = {
 	onCollapse?: PanelOnCollapse;
 	onExpand?: PanelOnExpand;
 	onResize?: PanelOnResize;
 };
 export type PanelConstraints = {
-	collapsedSize?: number;
+	collapsedSize?: PanelSize;
 	collapsible?: boolean;
+	defaultSize?: PanelSize;
+	disabled?: boolean;
+	groupResizeBehavior?: GroupResizeBehavior;
+	maxSize?: PanelSize;
+	minSize?: PanelSize;
+};
+export type ResolvedPanelConstraints = Omit<
+	PanelConstraints,
+	'collapsedSize' | 'defaultSize' | 'maxSize' | 'minSize'
+> & {
+	collapsedSize?: number;
 	defaultSize?: number;
 	maxSize?: number;
 	minSize?: number;
@@ -53,6 +68,8 @@ export function Panel({
 	collapsedSize,
 	collapsible,
 	defaultSize,
+	disabled,
+	groupResizeBehavior,
 	id: idFromProps,
 	maxSize,
 	minSize,
@@ -65,11 +82,20 @@ export function Panel({
 }: PanelProps) {
 	const context = React.useContext(PanelGroupContext);
 	if (context === null) throw new Error(`<Panel> must be rendered inside a <PanelGroup>`);
-	const { model, layoutShared, panelIdsShared, dragState } = context;
+	const { model, layoutShared, panelIdsShared, dragState, registerElement, unregisterElement } =
+		context;
 	const panelId = useUniqueId(idFromProps);
 	const panelDataRef = React.useRef<PanelData>({
 		callbacks: { onCollapse, onExpand, onResize },
-		constraints: { collapsedSize, collapsible, defaultSize, maxSize, minSize },
+		constraints: {
+			collapsedSize,
+			collapsible,
+			defaultSize,
+			disabled,
+			groupResizeBehavior,
+			maxSize,
+			minSize,
+		},
 		id: panelId,
 		idIsFromProps: idFromProps !== undefined,
 		order,
@@ -82,7 +108,15 @@ export function Panel({
 		panelDataRef.current.idIsFromProps = idFromProps !== undefined;
 		panelDataRef.current.order = order;
 		Object.assign(callbacks, { onCollapse, onExpand, onResize });
-		Object.assign(constraints, { collapsedSize, collapsible, defaultSize, maxSize, minSize });
+		Object.assign(constraints, {
+			collapsedSize,
+			collapsible,
+			defaultSize,
+			disabled,
+			groupResizeBehavior,
+			maxSize,
+			minSize,
+		});
 		if (
 			prevConstraints.collapsedSize !== constraints.collapsedSize ||
 			prevConstraints.collapsible !== constraints.collapsible ||
@@ -97,6 +131,13 @@ export function Panel({
 		model.registerPanel(panelData);
 		return () => model.unregisterPanel(panelData.id);
 	}, [model, order, panelId]);
+	const setElementRef = React.useCallback(
+		(element: object | null) => {
+			if (element) registerElement(panelId, element);
+			else unregisterElement(panelId);
+		},
+		[panelId, registerElement, unregisterElement]
+	);
 
 	React.useImperativeHandle(
 		ref,
@@ -112,6 +153,8 @@ export function Panel({
 		[model, panelId]
 	);
 
+	const parsedDefaultSize = defaultSize == null ? undefined : parseSize(defaultSize);
+	const defaultFlexGrow = parsedDefaultSize?.unit === 'percent' ? parsedDefaultSize.value : 1;
 	const animatedStyle = useAnimatedStyle(() => {
 		const layout = layoutShared.value;
 		const panelIds = panelIdsShared.value;
@@ -125,11 +168,7 @@ export function Panel({
 		const precision = 3;
 
 		if (size == null) {
-			if (defaultSize != null) {
-				flexGrowValue = Number(defaultSize.toPrecision(precision));
-			} else {
-				flexGrowValue = 1;
-			}
+			flexGrowValue = Number(defaultFlexGrow.toPrecision(precision));
 		} else if (panelIds.length === 1) {
 			flexGrowValue = 1;
 		} else {
@@ -143,10 +182,10 @@ export function Panel({
 			overflow: 'hidden',
 			pointerEvents: currentDragState !== null ? 'none' : 'auto',
 		};
-	}, [panelId, defaultSize]);
+	}, [panelId, defaultFlexGrow]);
 
 	return (
-		<Animated.View {...viewProps} style={[animatedStyle, styleFromProps]}>
+		<Animated.View ref={setElementRef} {...viewProps} style={[animatedStyle, styleFromProps]}>
 			{children}
 		</Animated.View>
 	);

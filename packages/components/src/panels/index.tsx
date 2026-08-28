@@ -12,12 +12,19 @@ const usePanelGroupContext = PanelPrimitives.usePanelGroupContext;
 function PanelResizeHandle({
 	testID,
 	order,
-}: Pick<PanelPrimitives.PanelResizeHandleProps, 'testID' | 'order'>) {
+	disableDoubleTap,
+	hitTargetSize,
+}: Pick<
+	PanelPrimitives.PanelResizeHandleProps,
+	'testID' | 'order' | 'disableDoubleTap' | 'hitTargetSize'
+>) {
 	const { direction } = usePanelGroupContext();
 
 	const handleProps: PanelPrimitives.PanelResizeHandleProps = {
 		testID,
 		order,
+		disableDoubleTap,
+		hitTargetSize,
 		style: {
 			width: direction === 'horizontal' ? 8 : '100%',
 			height: direction === 'horizontal' ? '100%' : 8,

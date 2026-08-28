@@ -2048,4 +2048,93 @@ describe('adjustLayoutByDelta', () => {
 			})
 		).toEqual([5, 15, 40, 40]);
 	});
+
+	describe('disabled panels', () => {
+		test.each([
+			[-50, [{ disabled: true }, {}]],
+			[50, [{ disabled: true }, {}]],
+			[-50, [{}, { disabled: true }]],
+			[50, [{}, { disabled: true }]],
+		] as const)('blocks pointer resize in a two-panel group for delta %p', (delta, constraints) => {
+			expect(
+				adjustLayoutByDelta({
+					delta,
+					initialLayout: [50, 50],
+					panelConstraints: [...constraints],
+					pivotIndices: [0, 1],
+					prevLayout: [50, 50],
+					trigger: 'mouse-or-touch',
+				})
+			).toEqual([50, 50]);
+		});
+
+		test.each([
+			[{ disabled: true }, {}, {}, [0, 1], -25, [25, 50, 25]],
+			[{ disabled: true }, {}, {}, [1, 2], -75, [25, 0, 75]],
+			[{}, { disabled: true }, {}, [0, 1], -25, [0, 50, 50]],
+			[{}, { disabled: true }, {}, [1, 2], -25, [0, 50, 50]],
+			[{}, {}, { disabled: true }, [0, 1], -25, [0, 75, 25]],
+			[{}, {}, { disabled: true }, [1, 2], -25, [25, 50, 25]],
+		] as const)(
+			'keeps a disabled panel fixed while redistributing across three panels %#',
+			(first, second, third, pivotIndices, delta, expected) => {
+				expect(
+					adjustLayoutByDelta({
+						delta,
+						initialLayout: [25, 50, 25],
+						panelConstraints: [first, second, third],
+						pivotIndices: [...pivotIndices],
+						prevLayout: [25, 50, 25],
+						trigger: 'mouse-or-touch',
+					})
+				).toEqual(expected);
+			}
+		);
+
+		test.each([
+			[-50, [{ disabled: true }, { disabled: true }, {}]],
+			[50, [{ disabled: true }, { disabled: true }, {}]],
+			[-50, [{ disabled: true }, {}, { disabled: true }]],
+			[50, [{ disabled: true }, {}, { disabled: true }]],
+			[-50, [{}, { disabled: true }, { disabled: true }]],
+			[50, [{}, { disabled: true }, { disabled: true }]],
+		] as const)(
+			'blocks pointer resize when two of three panels are disabled',
+			(delta, constraints) => {
+				for (const pivotIndices of [
+					[0, 1],
+					[1, 2],
+				]) {
+					expect(
+						adjustLayoutByDelta({
+							delta,
+							initialLayout: [25, 50, 25],
+							panelConstraints: [...constraints],
+							pivotIndices,
+							prevLayout: [25, 50, 25],
+							trigger: 'mouse-or-touch',
+						})
+					).toEqual([25, 50, 25]);
+				}
+			}
+		);
+
+		test.each([
+			[-5, [{ disabled: true }, {}], [45, 55]],
+			[5, [{ disabled: true }, {}], [55, 45]],
+			[-5, [{}, { disabled: true }], [45, 55]],
+			[5, [{}, { disabled: true }], [55, 45]],
+		] as const)('allows imperative resize for delta %p', (delta, constraints, expected) => {
+			expect(
+				adjustLayoutByDelta({
+					delta,
+					initialLayout: [50, 50],
+					panelConstraints: [...constraints],
+					pivotIndices: [0, 1],
+					prevLayout: [50, 50],
+					trigger: 'imperative-api',
+				})
+			).toEqual(expected);
+		});
+	});
 });
