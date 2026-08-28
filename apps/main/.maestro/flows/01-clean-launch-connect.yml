@@ -77,17 +77,20 @@ env:
       # yet trusted this scheme confirms it. CI creates a fresh simulator
       # every run, so it is deterministic there — runs 33217891131 (tablet)
       # and 33218641226 (phone) both sat on the springboard behind this
-      # dialog — while a reused local simulator never shows it. Hence
-      # optional: the required "Continue" wait below is the real gate, and
-      # it can only pass if the app actually launched.
+      # dialog — while a reused local simulator never shows it. The prompt
+      # can arrive more than 30s after openLink (run 33220523217), so wait for
+      # either launch surface instead of timing out the prompt independently.
       - extendedWaitUntil:
           visible:
-            text: "Open in .*WCPOS.*"
-          timeout: 30000
-          optional: true
-      - tapOn:
-          text: "Open"
-          optional: true
+            text: "Open in .*WCPOS.*|Continue"
+          timeout: 180000
+      - runFlow:
+          when:
+            visible:
+              text: "Open in .*WCPOS.*"
+          commands:
+            - tapOn:
+                text: "Open"
       # 180s, not 60s: this wait starts the moment the scheme prompt is
       # dismissed, so it spans the app's COLD start — first fetch of the
       # ~29 MB Metro bundle plus Hermes parse — and the dev menu only opens

@@ -31,16 +31,19 @@ env:
       platform: iOS
     commands:
       # SpringBoard's "Open in “WCPOS”?" prompt, then the dev-menu sheet —
-      # see flow 01 for both mechanisms and for why only the first is
-      # `optional`. Keep the two blocks identical.
+      # see flow 01 for both mechanisms and the late-prompt race. Keep the two
+      # blocks identical.
       - extendedWaitUntil:
           visible:
-            text: "Open in .*WCPOS.*"
-          timeout: 30000
-          optional: true
-      - tapOn:
-          text: "Open"
-          optional: true
+            text: "Open in .*WCPOS.*|Continue"
+          timeout: 180000
+      - runFlow:
+          when:
+            visible:
+              text: "Open in .*WCPOS.*"
+          commands:
+            - tapOn:
+                text: "Open"
       # 180s, not 60s: this wait starts the moment the scheme prompt is
       # dismissed, so it spans the app's COLD start — first fetch of the
       # ~29 MB Metro bundle plus Hermes parse — and the dev menu only opens
