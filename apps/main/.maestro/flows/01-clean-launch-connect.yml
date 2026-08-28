@@ -1,22 +1,22 @@
 appId: com.wcpos.main.dev
 env:
   STORE_URL: https://dev-pro.wcpos.com
-  # The suite drives the `development`-profile DEV CLIENT; the JS comes from
-  # Metro at localhost:8081 (CI runs `expo start --no-dev --minify` on the
-  # runner; Android reaches it via `adb reverse`; local runs are identical).
-  # `wcpos://expo-development-client/?url=...` is the dev launcher's
-  # programmatic-launch deep link; disableOnboarding skips its first-run UI.
-  DEV_CLIENT_URL: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
 ---
 # P0-1: clean launch → connect screen renders; invalid URL does not connect.
 - launchApp:
     clearState: true
 # clearState wipes app data INCLUDING the dev launcher's most-recent-project
 # memory, so a plain relaunch would land on the launcher UI, not the app.
-# Deep-link the launcher straight into the Metro bundle. Flows without
-# clearState don't need this: the dev client's default launchMode
-# ("most-recent") reconnects to the last-opened bundle on its own.
-- openLink: ${DEV_CLIENT_URL}
+# Deep-link the launcher straight into the Metro-served bundle (CI runs
+# `expo start --no-dev --minify` on the runner; Android reaches it via
+# `adb reverse`; local runs are identical). Flows without clearState don't
+# need this: the dev client's default launchMode ("most-recent") reconnects
+# to the last-opened bundle on its own.
+# LITERAL url, not an env reference: Maestro 2.6.1 does not substitute
+# ${VARS} inside openLink — run 33147024766 opened the literal string
+# "${DEV_CLIENT_URL}", the step reported COMPLETED, and the launcher sat on
+# its home screen. Keep this in step with flow 02.
+- openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
 - extendedWaitUntil:
     visible:
       id: "store-url-input"

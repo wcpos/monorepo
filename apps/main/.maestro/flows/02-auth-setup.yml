@@ -3,16 +3,15 @@ env:
   STORE_URL: https://dev-pro.wcpos.com
   E2E_USERNAME: demo
   E2E_PASSWORD: demo
-  # See flow 01: dev-client launcher deep link into the Metro-served bundle.
-  DEV_CLIENT_URL: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
 ---
 # P0-2: controlled authentication — the ONE real-OAuth flow (doubles as suite
 # setup; later flows reuse the session it persists). Auth decision: #698.
 - launchApp:
     clearState: true
 # clearState wiped the dev launcher's most-recent-project memory — deep-link
-# back into the bundle (see flow 01 for the full rationale).
-- openLink: ${DEV_CLIENT_URL}
+# back into the Metro-served bundle. LITERAL url: Maestro does not substitute
+# ${VARS} inside openLink (see flow 01; keep the two in step).
+- openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
 - extendedWaitUntil:
     visible:
       id: "store-url-input"
