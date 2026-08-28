@@ -14,7 +14,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		? iosInfoPlist.UISupportedExternalAccessoryProtocols
 		: [];
 
-	const isDev = easProfile === 'development' || easProfile === 'e2e-test';
+	// The former `e2e-test` profile is gone: native E2E drives the same
+	// `development`-profile dev client developers use, with Metro serving the
+	// JS (e2e-native.yml, 2026-08-28).
+	const isDev = easProfile === 'development';
 	const isAdhoc = easProfile === 'adhoc';
 
 	// Set env var for web builds (used by @wcpos/utils/app-info)

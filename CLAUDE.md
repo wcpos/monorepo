@@ -36,6 +36,34 @@ Relevant wiki pages (paths relative to the wiki repo root):
 - `product/features.md` — feature inventory (free vs Pro)
 - `product/personas.md` — user personas and design implications
 
+## Native E2E: dev client + Metro — builds are rare and cost real money
+
+The `E2E Native` workflow (Maestro, nightly 03:00) drives the
+`development`-profile **dev client** — the same build developers use — and the
+JS under test comes from **Metro on the test runner**, bundling the checked-out
+revision (`expo start --no-dev --minify`). The dev client contains no JS, so
+**JS-only changes never need a build**: the nightly tests every commit for
+free. An EAS build happens only when `npx @expo/fingerprint` moves — native
+deps, config plugins, app config, native code — historically once or twice a
+month.
+
+Builds that do happen are metered: $2 iOS / $1 Android against a $45/month
+credit **shared with release builds** (Expo Starter plan; the Free plan's hard
+limit is the same 15 + 15). History: nine ad-hoc dispatches on 2026-08-27/28
+bought nine build pairs in sixteen hours verifying fixes one commit at a time.
+
+- **Do not dispatch `e2e-native.yml` with `build=true` without asking the
+  owner.** A dispatch defaults to `build=false` and fails fast on a cache miss
+  instead of spending; a miss means the NATIVE fingerprint moved, which is
+  rare and worth a human look anyway.
+- Changes to the workflow, `apps/main/.maestro/**`, the seed script, or ANY
+  app JS/TS need no build — dispatch freely, it runs from cache.
+- When a native change genuinely needs a build, pass `platform=ios` or
+  `platform=android` if only one platform is affected ($1–$2, not $3).
+- Local runs are identical to CI: install the dev client, `npx expo start` in
+  `apps/main` (Android: `adb reverse tcp:8081 tcp:8081`), then
+  `maestro test apps/main/.maestro`.
+
 ## E2E selector policy
 
 E2E tests must use stable `testID` selectors for app UI. Do not use localized UI text as selectors: no `getByText`, no `getByPlaceholder`, no `getByLabel`, and no `getByRole(..., { name })` in `apps/main/e2e`. If a UI element needs to be exercised by E2E, add a stable `testID` to the component and select it with `getByTestId()`. (Reading a testID-addressed cell's `textContent` is fine; *selecting* by text is not.)
