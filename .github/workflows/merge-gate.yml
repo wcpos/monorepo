@@ -39,7 +39,13 @@ jobs:
           # check names exactly. deploy.yml always runs on pull_request now, so
           # this check is always reported (SKIPPED when the paths filter or the
           # draft guard legitimately skips the deploy).
-          MERGE_GATE_REQUIRED_CHECKS: 🧹 Lint|🧪 Unit Tests|🎭 E2E Tests|📱 Native E2E
+          # "📱 Native E2E" (e2e-native.yml's aggregator) runs on every PR that
+          # implicates native and is DELIBERATELY not required yet. The ruling
+          # (#1644) is that it blocks; the bar before it does is five consecutive
+          # green runs per platform, and today `main` itself is red on it
+          # (#1661 tablet SIGSEGV; the phone's 60 s product-tile wait vs the
+          # cold-emulator catalog sync). Add it here when the bar is met.
+          MERGE_GATE_REQUIRED_CHECKS: 🧹 Lint|🧪 Unit Tests|🎭 E2E Tests
           # 140 × 30s ≈ 70 min: covers deploy (~7 min) plus the slower of a
           # web shard (~12 min) and a native run (~32 min), with one retry.
           MERGE_GATE_MAX_ATTEMPTS: '140'

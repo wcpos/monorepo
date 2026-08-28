@@ -201,13 +201,20 @@ test('the native E2E aggregator fails closed except for legitimate skips', () =>
 	assert.equal(allSucceeded.status, 0, allSucceeded.stdout + allSucceeded.stderr);
 });
 
-test('the merge gate requires native E2E', () => {
+test('the native E2E aggregator exists under the name the merge gate will require', () => {
+	// The check name is the contract: when the five-consecutive-greens bar is
+	// met, adding it to MERGE_GATE_REQUIRED_CHECKS is a one-line change and
+	// must not need a rename. Until then it is deliberately NOT required —
+	// main is red on it today (#1661) and a required red would block every PR.
+	const native = readWorkflow('e2e-native.yml').jobs['native-gate'];
+	assert.equal(native.name, '📱 Native E2E');
+
 	const workflow = readWorkflow('merge-gate.yml');
 	const gateStep = workflow.jobs['merge-gate'].steps.find(
 		({ name }) => name === 'Evaluate merge policy'
 	);
-
-	assert.ok(gateStep.env.MERGE_GATE_REQUIRED_CHECKS.split('|').includes('📱 Native E2E'));
+	const required = gateStep.env.MERGE_GATE_REQUIRED_CHECKS.split('|');
+	assert.deepEqual(required, ['🧹 Lint', '🧪 Unit Tests', '🎭 E2E Tests']);
 });
 
 test('the shared-store queue stays removed', () => {
