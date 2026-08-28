@@ -564,6 +564,17 @@ jobs:
       # matching continueOnFailure: false.
       - name: 📱 Run Maestro suite on simulator
         run: |
+          # pipefail is LOAD-BEARING, not hygiene: `maestro … | tee "$log"`
+          # exits with tee's status, so without it every iOS flow failure
+          # reported success. GitHub's default shell for a `run:` with no
+          # `shell:` key is `bash -e {0}` — -e, but NOT -o pipefail. Run
+          # 33210992908's iOS phone job failed the FIRST assertion of all
+          # seven flows (the app never rendered at all) and went green.
+          # Set explicitly rather than via `shell: bash` so the guarantee is
+          # readable here instead of resting on shell-default trivia.
+          # scripts/ci-workflows.test.mjs runs this script against a failing
+          # fake maestro and asserts a non-zero exit.
+          set -eo pipefail
           # Retry ONLY the "iOS driver not ready in time" startup flake
           # (monorepo#1614 defect 3: one iPad first-boot occurrence on 18.6).
           # That failure happens before the flow executes a single command, so
@@ -598,8 +609,14 @@ jobs:
           # Tells flow 09 whether the resize handle is required (tablet) or optional (phone).
           DEVICE_CLASS: ${{ matrix.device.name }}
 
-      - name: ⬆️ Upload failure artifacts
-        if: failure()
+      # always(), matching the Android twin: `failure()` collects nothing when
+      # the job cannot report failure, which is precisely the state the pipe
+      # bug above left iOS in — so every iOS run to date uploaded no
+      # screenshots and no UI hierarchy, and iOS stayed a black box. Artifacts
+      # are also what distinguishes "assertion failed" from "app never
+      # rendered" on a green-but-suspicious run.
+      - name: ⬆️ Upload device artifacts
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: maestro-ios-${{ matrix.device.name }}

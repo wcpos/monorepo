@@ -478,3 +478,104 @@ test('deploy.yml names BOTH lane stores for the E2E job', () => {
 		'${{ ' + nextLane + " && 'https://dev-next.wcpos.com' || 'https://dev-free.wcpos.com' }}"
 	);
 });
+
+test('a failing Maestro flow fails the iOS job', () => {
+	// The iOS step pipes `maestro … | tee "$log"` so the driver-startup flake
+	// can be grepped out of the output. A pipeline's exit status is the LAST
+	// command's — `tee` — so without pipefail every flow failure reported
+	// success. GitHub's default shell for a `run:` with no `shell:` key is
+	// `bash -e {0}`: -e, but NOT -o pipefail. Run 33210992908's iOS phone job
+	// failed the first assertion of all seven flows — the app never rendered —
+	// and reported SUCCESS.
+	//
+	// This runs the workflow's REAL script against a maestro that always
+	// fails, so the guard cannot drift away from the step it protects.
+	const step = findStep(readWorkflow('e2e-native.yml'), 'ios', '📱 Run Maestro suite on simulator');
+
+	const dir = mkdtempSync(path.join(tmpdir(), 'maestro-exit-'));
+	try {
+		mkdirSync(path.join(dir, 'apps/main/.maestro/flows'), { recursive: true });
+		writeFileSync(path.join(dir, 'apps/main/.maestro/flows/01-fake.yml'), '');
+		mkdirSync(path.join(dir, 'bin'));
+		// Not the "driver not ready in time" text — that is the one failure the
+		// step is allowed to retry, and it would mask what this test asserts.
+		writeFileSync(path.join(dir, 'bin/maestro'), '#!/bin/sh\necho "Assertion is false"\nexit 1\n');
+		spawnSync('chmod', ['+x', path.join(dir, 'bin/maestro')]);
+
+		const result = runShell(step.run, {
+			cwd: dir,
+			env: { PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`, MAESTRO_UDID: 'fake' },
+		});
+
+		assert.notEqual(
+			result.status,
+			0,
+			'the iOS Maestro step exited 0 with a failing flow — tee is swallowing maestro exit status'
+		);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test('the iOS step still retries the driver-startup flake', () => {
+	// The pipefail fix must not turn the ONE retryable failure into a hard
+	// one. A maestro that fails the first call with the driver-startup text
+	// and succeeds on the second must leave the step green.
+	const step = findStep(readWorkflow('e2e-native.yml'), 'ios', '📱 Run Maestro suite on simulator');
+
+	const dir = mkdtempSync(path.join(tmpdir(), 'maestro-retry-'));
+	try {
+		mkdirSync(path.join(dir, 'apps/main/.maestro/flows'), { recursive: true });
+		writeFileSync(path.join(dir, 'apps/main/.maestro/flows/01-fake.yml'), '');
+		mkdirSync(path.join(dir, 'bin'));
+		writeFileSync(
+			path.join(dir, 'bin/maestro'),
+			[
+				'#!/bin/sh',
+				'C="$TMPDIR_COUNTER"',
+				'if [ -f "$C" ]; then exit 0; fi',
+				'touch "$C"',
+				'echo "iOS driver not ready in time"',
+				'exit 1',
+				'',
+			].join('\n')
+		);
+		spawnSync('chmod', ['+x', path.join(dir, 'bin/maestro')]);
+
+		const result = runShell(step.run, {
+			cwd: dir,
+			env: {
+				PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`,
+				MAESTRO_UDID: 'fake',
+				TMPDIR_COUNTER: path.join(dir, 'called-once'),
+			},
+		});
+
+		assert.equal(
+			result.status,
+			0,
+			`the driver-startup retry stopped working: ${result.stdout}${result.stderr}`
+		);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test('both native platforms upload Maestro artifacts unconditionally', () => {
+	// iOS uploaded on failure() while Android uploaded on always(). Combined
+	// with the pipe bug above — a job that could not report failure —
+	// failure() never fired, so every iOS run collected no screenshots and no
+	// UI hierarchy. That is why iOS could fail every assertion of every flow
+	// for weeks without leaving a trace. Artifacts are also the only thing
+	// that separates "an assertion failed" from "the app never rendered" on a
+	// green-but-suspicious run, so both platforms collect them either way.
+	const workflow = readWorkflow('e2e-native.yml');
+
+	for (const job of ['android', 'ios']) {
+		const upload = workflow.jobs[job].steps.find(
+			(step) => step.uses?.startsWith('actions/upload-artifact') && step.with?.name?.includes('maestro')
+		);
+		assert.ok(upload, `${job} no longer uploads Maestro artifacts`);
+		assert.equal(upload.if, 'always()', `${job} collects Maestro artifacts conditionally`);
+	}
+});
