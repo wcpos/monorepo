@@ -702,6 +702,50 @@ describe('require() for orders (the durable path)', () => {
 		);
 	});
 
+	it('carries the detail of a foreign error, not just its name', async () => {
+		// The enumerable `message` is an ALLOW-LIST — our own "require: …" text
+		// survives, anything else collapses to `error.name`. That is correct for
+		// the cashier-facing log title, but it threw away the only identifying
+		// detail for errors nobody has diagnosed yet: a products search failing
+		// on BOTH platforms logged `ERROR : Error` and nothing more, which is
+		// why monorepo#1614 stayed open. Adding errorDetail to fields surfaced
+		// the real cause on the first run —
+		// "FetchRequestCanceledException: Fetch request has been canceled".
+		const harness = orchestrationHarness();
+		vi.spyOn(orderTaskSeeder, 'seedOrderFilterSchedulerTask').mockResolvedValue({
+			...EMPTY_SEED_RESULT,
+			inserted: 1,
+		});
+		vi.spyOn(schedulerDrain, 'runEngineSchedulerDrain').mockRejectedValue(
+			// No "require: " prefix — i.e. NOT one of this plane's own throws.
+			new Error('fetch failed: FetchRequestCanceledException: Fetch request has been canceled')
+		);
+
+		await expect(
+			harness.plane.require({
+				id: 'foreign-error-detail',
+				collection: 'orders' as const,
+				kind: 'orders-browse' as const,
+				status: 'processing',
+				limit: 50,
+			}).ready
+		).rejects.toThrow(/FetchRequestCanceledException/);
+
+		expect(harness.diagnostics.mock.calls.map(([event]) => event)).toContainEqual(
+			expect.objectContaining({
+				type: 'coverage.require.error',
+				// Title unchanged: still the collapsed name, so merchant-facing
+				// log rows keep their stable enumerable text.
+				message: 'Error',
+				fields: expect.objectContaining({
+					errorName: 'Error',
+					errorDetail:
+						'fetch failed: FetchRequestCanceledException: Fetch request has been canceled',
+				}),
+			})
+		);
+	});
+
 	it('release aborts an in-flight foreground order drain and settles as released', async () => {
 		const harness = orchestrationHarness();
 		vi.spyOn(orderTaskSeeder, 'seedOrderSchedulerTasks').mockResolvedValue({
