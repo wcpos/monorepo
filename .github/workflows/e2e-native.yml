@@ -373,7 +373,7 @@ jobs:
             # this script LINE BY LINE, each as its own `sh -c` — a trailing
             # `\` becomes a literal maestro argument ("Flow path does not
             # exist: …/\", run 33153806439) and the fallback line never runs.
-            maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" apps/main/.maestro || { mkdir -p ~/.maestro/tests && adb logcat -d > ~/.maestro/tests/logcat.txt 2>&1; exit 1; }
+            maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" apps/main/.maestro || { mkdir -p ~/.maestro/tests && adb logcat -d > ~/.maestro/tests/logcat.txt 2>&1; exit 1; }
         env:
           # The Maestro Android driver installs its two APKs and waits for the
           # instrumentation channel; first-boot emulators on shared runners
@@ -382,6 +382,8 @@ jobs:
           # Pins flow 07 to the seeded product's id-bearing testID; the `.*`
           # fallback (also the flow's own default) matches any variable tile.
           VARIABLE_PRODUCT_ID: ${{ needs.build.outputs.variable_product_id }}
+          # Tells flow 09 whether the resize handle is required (tablet) or optional (phone).
+          DEVICE_CLASS: ${{ matrix.device.name }}
 
       - name: ⬆️ Upload failure artifacts
         if: failure()
@@ -496,12 +498,12 @@ jobs:
           run_flow() {
             local flow="$1" log
             log=$(mktemp)
-            if maestro --udid "$MAESTRO_UDID" test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" "$flow" 2>&1 | tee "$log"; then
+            if maestro --udid "$MAESTRO_UDID" test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" "$flow" 2>&1 | tee "$log"; then
               return 0
             fi
             if grep -q "driver not ready in time" "$log"; then
               echo "↻ driver startup flake — retrying ${flow} once"
-              maestro --udid "$MAESTRO_UDID" test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" "$flow"
+              maestro --udid "$MAESTRO_UDID" test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" "$flow"
               return
             fi
             return 1
@@ -519,6 +521,8 @@ jobs:
           # Pins flow 07 to the seeded product's id-bearing testID; the `.*`
           # fallback (also the flow's own default) matches any variable tile.
           VARIABLE_PRODUCT_ID: ${{ needs.build.outputs.variable_product_id }}
+          # Tells flow 09 whether the resize handle is required (tablet) or optional (phone).
+          DEVICE_CLASS: ${{ matrix.device.name }}
 
       - name: ⬆️ Upload failure artifacts
         if: failure()

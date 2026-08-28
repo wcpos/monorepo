@@ -27,7 +27,7 @@ export function useSeparatorA11y({
 	handleId,
 	model,
 }: SeparatorA11yOptions): SeparatorA11yProps {
-	React.useSyncExternalStore(model.subscribe, model.getLayout, model.getLayout);
+	React.useSyncExternalStore(model.subscribe, model.getVersion, model.getVersion);
 	const { valueMax, valueMin, valueNow } = model.getSeparatorAriaValues(handleId);
 	const onAccessibilityAction: NonNullable<SeparatorA11yProps['onAccessibilityAction']> = (
 		event

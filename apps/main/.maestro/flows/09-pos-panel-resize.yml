@@ -1,4 +1,9 @@
 appId: com.wcpos.main.dev
+env:
+  # CI passes phone|tablet from the device matrix; locally it stays 'auto' and the
+  # handle's visibility decides. On a declared tablet the handle is REQUIRED, so a
+  # regression that routes tablets to the phone layout fails instead of skipping.
+  DEVICE_CLASS: auto
 ---
 # P0-9: the tablet POS split resizes by drag and the user-chosen width survives a relaunch.
 # Session comes from 02-auth-setup; do NOT clear state. Phones render the tabbed layout
@@ -14,6 +19,12 @@ appId: com.wcpos.main.dev
     visible:
       id: "screen-pos"
     timeout: 120000
+- runFlow:
+    when:
+      true: ${DEVICE_CLASS == 'tablet'}
+    commands:
+      - assertVisible:
+          id: "pos-resize-handle"
 - runFlow:
     when:
       visible:

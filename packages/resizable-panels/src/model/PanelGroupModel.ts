@@ -37,6 +37,8 @@ export type PanelGroupModel = {
 	getPanelIds: () => string[];
 	setLayout: (unsafeLayout: number[]) => void;
 	subscribe: (listener: LayoutListener) => () => void;
+	/** Increments on every notification (layout commits and handle registration). Stable snapshot for useSyncExternalStore. */
+	getVersion: () => number;
 	collapsePanel: (id: string) => void;
 	expandPanel: (id: string, minSizeOverride?: number) => void;
 	resizePanel: (id: string, size: number) => void;
@@ -93,9 +95,11 @@ export function createPanelGroupModel(options: {
 	let layoutDirty = false;
 	let flushScheduled = false;
 	const listeners = new Set<LayoutListener>();
+	let version = 0;
 
 	const getPanelIds = () => panels.map((panel) => panel.id);
 	const notifyListeners = () => {
+		version += 1;
 		const panelIds = getPanelIds();
 		listeners.forEach((listener) => listener(layout, panelIds));
 	};
@@ -248,7 +252,12 @@ export function createPanelGroupModel(options: {
 		const shouldRelayout = layoutDirty;
 		dirty = false;
 		layoutDirty = false;
-		if (!shouldRelayout) return;
+		if (!shouldRelayout) {
+			// Handles changed but the layout did not: subscribers (e.g. a handle's accessibility
+			// values, which depend on its pivots) still need to re-read.
+			notifyListeners();
+			return;
+		}
 		if (containerSizePx <= 0 && hasPixelConstraints()) defaultLayoutDeferred = true;
 		const resolvedPanels = getResolvedPanels();
 		const unsafeLayout = calculateUnsafeDefaultLayout({ panelDataArray: resolvedPanels });
@@ -302,6 +311,7 @@ export function createPanelGroupModel(options: {
 		});
 		if (!areEqual(layout, nextLayout)) commit(nextLayout, { isUserInteraction: false });
 	};
+	const getVersion = () => version;
 	const subscribe = (listener: LayoutListener) => {
 		listeners.add(listener);
 		return () => {
@@ -538,6 +548,7 @@ export function createPanelGroupModel(options: {
 		getPanelIds,
 		setLayout,
 		subscribe,
+		getVersion,
 		collapsePanel,
 		expandPanel,
 		resizePanel,

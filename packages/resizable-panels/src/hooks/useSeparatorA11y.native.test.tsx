@@ -95,3 +95,22 @@ test('disabled handles ignore accessibility actions', () => {
 	expect(nudge).not.toHaveBeenCalled();
 	expect(result.current.accessibilityState).toEqual({ disabled: true });
 });
+
+test('a handle that registers after the first render gets its values on the next flush', async () => {
+	const model = createPanelGroupModel({ direction: 'horizontal' });
+	model.registerPanel(panel('left', { defaultSize: 50 }));
+	model.registerPanel(panel('right', { defaultSize: 50 }));
+	model.flush();
+	const { result } = renderHook(() =>
+		useSeparatorA11y({ direction: 'horizontal', disabled: false, handleId: 'late', model })
+	);
+	expect(result.current.accessibilityLabel).toBe('Resize handle');
+
+	act(() => {
+		model.registerHandle('late');
+		model.flush();
+	});
+
+	expect(result.current.accessibilityLabel).toBe('Resize handle, 50%');
+	expect(result.current.accessibilityValue).toMatchObject({ now: 50 });
+});
