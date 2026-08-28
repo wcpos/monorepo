@@ -15,7 +15,9 @@
  *    key on PUT, so a differing entry is not an overwrite.
  *  - money width is not a change: `"6.713280"` and `"6.71"` are the same number
  *    at two serialization widths (#946), so decimals compare at the shorter
- *    precision. `"6.72"` vs `"6.713280"` still differs.
+ *    precision. `"6.72"` vs `"6.713280"` still differs. Only CANONICAL decimal
+ *    literals qualify — a leading zero or a `+` sign (`"01234"`, `"+44123"`: a
+ *    postcode, a phone number) is text, and text compares exactly.
  *  - arrays whose server elements all carry an `id` (line items, fees, shipping)
  *    match by id — an id on one side only is one path (`line_items[12]`), a
  *    matched pair recurses. A pushed element WITHOUT an id is an append Woo will
@@ -24,7 +26,7 @@
  *  - total over any JSON-ish input: a malformed shape yields paths, never a throw.
  */
 const MAX_DEPTH = 6;
-const DECIMAL_LITERAL = /^[+-]?\d+(\.\d+)?$/;
+const DECIMAL_LITERAL = /^-?(0|[1-9]\d*)(\.\d+)?$/;
 const SKIPPED_TOP_LEVEL = new Set([
 	'date_modified',
 	'date_modified_gmt',

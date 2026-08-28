@@ -798,8 +798,13 @@ export async function drainMutationQueue(input: {
 				result = retry;
 				recovered = retry.outcome !== 'conflict';
 				if (recovered) {
+					// A delete carries no field payload (`{ id: <uuid> }`), so there is
+					// nothing to compare: the whole document going is the intent, not an
+					// overwrite of particular fields. Diffing it would name `id` alone.
 					const serverDocumentCompared =
-						serverDocument !== null && typeof serverDocument === 'object';
+						reanchored.operation !== 'delete' &&
+						serverDocument !== null &&
+						typeof serverDocument === 'object';
 					const paths = serverDocumentCompared
 						? diffConflictOverwrite(reanchored.payload, serverDocument)
 						: [];

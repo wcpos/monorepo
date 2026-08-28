@@ -85,6 +85,15 @@ describe('diffConflictOverwrite', () => {
 		).toEqual(['changed']);
 	});
 
+	it('compares numeric-looking TEXT exactly — a postcode or phone is not money', () => {
+		expect(
+			diffConflictOverwrite(
+				{ billing: { postcode: '01234', phone: '+44123', city: 'Leeds' } },
+				{ billing: { postcode: '1234', phone: '44123', city: 'Leeds' } }
+			)
+		).toEqual(['billing.phone', 'billing.postcode']);
+	});
+
 	it('never throws on malformed JSON-ish shapes', () => {
 		expect(() =>
 			diffConflictOverwrite(
