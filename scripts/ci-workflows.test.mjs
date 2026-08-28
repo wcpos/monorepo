@@ -97,6 +97,88 @@ test('the E2E aggregator fails closed when change detection fails', () => {
 	assert.equal(legitimateSkip.status, 0, legitimateSkip.stdout + legitimateSkip.stderr);
 });
 
+test('native E2E pull requests are planned and restricted to trusted non-draft changes', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	const planner = workflow.jobs.changes.steps.find(
+		(step) => step.uses === './.github/actions/ci-plan'
+	);
+
+	assert.deepEqual(workflow.on.pull_request.types, [
+		'opened',
+		'synchronize',
+		'reopened',
+		'ready_for_review',
+	]);
+	assert.ok(planner, 'e2e-native.yml changes job does not use the shared planner');
+	assert.equal(planner.with['base-sha'], '${{ github.event.pull_request.base.sha }}');
+	assert.match(workflow.jobs.build.if, /needs\.changes\.outputs\.native != 'none'/);
+	assert.match(workflow.jobs.build.if, /github\.actor != 'dependabot\[bot\]'/);
+	assert.match(
+		workflow.jobs.build.if,
+		/github\.event\.pull_request\.head\.repo\.full_name == github\.repository/
+	);
+});
+
+test('native E2E concurrency is isolated per pull request', () => {
+	const { concurrency } = readWorkflow('e2e-native.yml');
+
+	assert.match(concurrency.group, /github\.event\.pull_request\.number/);
+	assert.notEqual(concurrency.group, '${{ github.workflow }}');
+});
+
+test('the native E2E aggregator fails closed except for legitimate skips', () => {
+	const gate = readWorkflow('e2e-native.yml').jobs['native-gate'];
+	const baseEnv = {
+		CHANGES_RESULT: 'success',
+		BUILD_RESULT: 'success',
+		ANDROID_RESULT: 'success',
+		IOS_RESULT: 'success',
+		NATIVE_PLAN: 'cachehit',
+		EVENT_NAME: 'pull_request',
+		IS_FORK: 'false',
+		IS_DRAFT: 'false',
+		IS_DEPENDABOT: 'false',
+	};
+	const runGate = (env) => runShell(gate.steps[0].run, { env: { ...baseEnv, ...env } });
+
+	assert.equal(gate.if, 'always()');
+	assert.deepEqual([...gate.needs].sort(), ['android', 'build', 'changes', 'ios']);
+
+	const changesFailed = runGate({ CHANGES_RESULT: 'failure' });
+	assert.notEqual(changesFailed.status, 0, changesFailed.stdout + changesFailed.stderr);
+
+	const noNativeTier = runGate({ NATIVE_PLAN: 'none' });
+	assert.equal(noNativeTier.status, 0, noNativeTier.stdout + noNativeTier.stderr);
+	assert.match(noNativeTier.stdout + noNativeTier.stderr, /skipped/i);
+
+	const fork = runGate({ IS_FORK: 'true' });
+	assert.equal(fork.status, 0, fork.stdout + fork.stderr);
+
+	// Dependabot PRs get no repository secrets, so `build` is excluded for them
+	// (as in deploy.yml) and the gate must read that as a legitimate skip.
+	const dependabot = runGate({ IS_DEPENDABOT: 'true', BUILD_RESULT: 'skipped' });
+	assert.equal(dependabot.status, 0, dependabot.stdout + dependabot.stderr);
+	assert.match(dependabot.stdout + dependabot.stderr, /skipped/i);
+
+	const buildFailed = runGate({ BUILD_RESULT: 'failure' });
+	assert.notEqual(buildFailed.status, 0, buildFailed.stdout + buildFailed.stderr);
+
+	const androidSkipped = runGate({ ANDROID_RESULT: 'skipped' });
+	assert.notEqual(androidSkipped.status, 0, androidSkipped.stdout + androidSkipped.stderr);
+
+	const allSucceeded = runGate({});
+	assert.equal(allSucceeded.status, 0, allSucceeded.stdout + allSucceeded.stderr);
+});
+
+test('the merge gate requires native E2E', () => {
+	const workflow = readWorkflow('merge-gate.yml');
+	const gateStep = workflow.jobs['merge-gate'].steps.find(
+		({ name }) => name === 'Evaluate merge policy'
+	);
+
+	assert.ok(gateStep.env.MERGE_GATE_REQUIRED_CHECKS.split('|').includes('📱 Native E2E'));
+});
+
 test('the shared-store queue stays removed', () => {
 	// The queue job (2026-08-12 → 2026-08-18) starved every merge gate once
 	// 2+ PRs were active: holders kept the store 25–45 min, the gate polls a

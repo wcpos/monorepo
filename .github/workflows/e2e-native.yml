@@ -1,4 +1,4 @@
-# Native E2E (Maestro) on every merge to main — spec: wayfinder wcpos/monorepo#688.
+# Native E2E (Maestro) on pull requests and every merge to main.
 # Runs the P0 suite on iOS simulators (macOS runners) and Android emulators
 # (Linux/KVM runners).
 #
@@ -16,27 +16,19 @@
 # the monthly allowance (15 + 15 builds — the Free plan's hard limit, and
 # exactly what Starter's $45 credit buys) is shared with RELEASE builds
 # (`build.yml`), which is why this workflow spends only on fingerprint change
-# and why a dispatch never spends without saying so (`build` input below).
+# and why PR builds have a monthly ceiling and dispatches require explicit
+# approval (`build` input below).
 #
-# Tests `main`. It tested `next` until 2026-08-27 — a leftover from when the
-# Maestro suite was next-lane — but everything ships from `main` (lanes
-# converged 2026-08-15), so the nightly was exercising a branch nobody ships
-# and could never catch regressions on shipping code (e.g. the iOS
-# variation-popover crash fixed on main, #1574). Same flip as
-# e2e-cold-start.yml on 2026-08-22.
+# PR runs test the checked-out merge revision; push runs test `main`.
 name: E2E Native
 
 on:
-  # Every merge to main, not a nightly (owner ruling 2026-08-28: tests run
-  # after every PR; the 03:00 cron is gone). Merged code is validated code,
-  # so the write-capable seed credentials are legitimate here — the reason
-  # this suite must never run per-PR on unmerged branches. Runs are $0 under
-  # the fingerprint cache except when native genuinely changed. Merge bursts
-  # self-collapse: the concurrency group below holds one running + one
-  # pending run, and a newer push evicts the older pending one, so a busy
-  # day converges on testing the tip.
+  # Every PR and merge to main, not a nightly. The planner below skips PRs
+  # that implicate no native tier; drafts and forks report a legitimate skip.
   push:
     branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
     inputs:
       ref:
@@ -68,8 +60,8 @@ on:
           - android
 
 concurrency:
-  group: ${{ github.workflow }}
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('native-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || format('native-{0}', github.ref) }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   EXPO_USE_FAST_RESOLVER: true
@@ -79,8 +71,28 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: 🔍 Detect Native Changes
+    runs-on: ubuntu-latest
+    outputs:
+      native: ${{ steps.plan.outputs.native }}
+      reason: ${{ steps.plan.outputs.reason }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/ci-plan
+        id: plan
+        with:
+          base-sha: ${{ github.event.pull_request.base.sha }}
+
   build:
     name: 📦 Resolve dev-client build
+    needs: changes
+    # Dependabot PRs run without the repository secrets (no EXPO_TOKEN, no
+    # store writer), so they would fail here rather than skip — exclude them
+    # the way deploy.yml does; the aggregator reports the skip.
+    if: needs.changes.outputs.native != 'none' && github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.draft == false))
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
@@ -100,8 +112,11 @@ jobs:
 
       # workflow_dispatch accepts an arbitrary ref, and the jobs below run the
       # checked-out seed script with write-capable store credentials. Refuse
-      # anything that is not already on main.
+      # anything that is not already on main. Pull requests are exempt by
+      # construction: `build.if` admits only same-repo, non-draft PRs — the
+      # same trust boundary deploy.yml already grants the store secrets to.
       - name: 🔒 Validate trusted ref
+        if: github.event_name != 'pull_request'
         run: |
           git fetch origin main
           if ! git merge-base --is-ancestor HEAD origin/main; then
@@ -188,29 +203,51 @@ jobs:
           path: e2e-builds
           key: ${{ steps.fingerprint.outputs.cache_key }}
 
-      # A dispatch does not get to spend money by accident. Reaching here on a
-      # cache miss means no dev client exists for this native fingerprint and
-      # platform selection, so continuing would bill an EAS build; a dispatch
-      # that did not ask for one stops instead. Trunk (push) runs are exempt — buying
-      # the rare fingerprint-change build is its job.
+      # A dispatch does not spend without explicit approval. A PR may spend
+      # only when the planner expected a rebuild and the monthly ceiling still
+      # has room. Trunk pushes remain exempt so main can mint the shared cache.
       - name: 💸 Refuse an unrequested EAS build
         if: >-
           steps.cache.outputs.cache-hit != 'true'
-          && github.event_name == 'workflow_dispatch'
-          && github.event.inputs.build != 'true'
+          && (github.event_name == 'pull_request'
+          || (github.event_name == 'workflow_dispatch' && github.event.inputs.build != 'true'))
         env:
           PLATFORM: ${{ steps.resolve.outputs.platform }}
           CACHE_KEY: ${{ steps.fingerprint.outputs.cache_key }}
+          NATIVE_PLAN: ${{ needs.changes.outputs.native }}
+          EVENT_NAME: ${{ github.event_name }}
+        working-directory: apps/main
         run: |
-          echo "::error::No cached dev client for $CACHE_KEY ($PLATFORM). JS-only changes never need a build — Metro serves the checked-out JS — so a miss means the NATIVE fingerprint moved. Dispatch again with build=true (and platform=ios|android if only one is affected) to authorise the spend (iOS \$2, Android \$1)."
-          exit 1
+          set -uo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "::error::No cached dev client for $CACHE_KEY ($PLATFORM). JS-only changes never need a build — Metro serves the checked-out JS — so a miss means the NATIVE fingerprint moved. Dispatch again with build=true (and platform=ios|android if only one is affected) to authorise the spend (iOS \$2, Android \$1)."
+            exit 1
+          fi
+          if [ "$NATIVE_PLAN" != "rebuild" ]; then
+            echo "::error::The planner did not expect the native fingerprint to move for this PR's files (native=$NATIVE_PLAN); a miss here means an undeclared native input — add the path to scripts/ci-plan.mjs's native-config rule, or dispatch with build=true."
+            exit 1
+          fi
+          MONTH_START=$(date -u +%Y-%m-01T00:00:00Z)
+          if ! BUILDS=$(eas build:list --json --non-interactive --limit 100 --build-profile development); then
+            echo "::error::Could not read this month's EAS build count; refusing an unmetered build. Dispatch with build=true to override."
+            exit 1
+          fi
+          if ! COUNT=$(jq --arg start "$MONTH_START" '[.[] | select(.createdAt >= $start)] | length' <<< "$BUILDS"); then
+            echo "::error::Could not parse this month's EAS build count; refusing an unmetered build. Dispatch with build=true to override."
+            exit 1
+          fi
+          echo "EAS development builds since $MONTH_START: $COUNT / 20" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$COUNT" -ge 20 ]; then
+            echo "::error::EAS development builds this UTC month: $COUNT; ceiling: 20. Refusing this PR build. Dispatch with build=true to override."
+            exit 1
+          fi
+          echo "::notice::EAS development builds this UTC month: $COUNT / 20; PR build authorised."
 
       # Seed ONCE, before the matrix fans out: the four test jobs share one
-      # store, and concurrent seeds could each miss the same variation and
-      # create it twice — the popover then never resolves to exactly one
-      # match. The workflow-level concurrency group serializes whole runs, so
-      # this is the only writer. Exports the seeded variable product's id so
-      # the flows can target it by its id-bearing testID.
+      # store, so seed once before this run's matrix fans out. PR runs are not
+      # serialized across PRs; residual cross-run seed contention is accepted
+      # as a flaky red for now. Exports the seeded variable product's id so the
+      # flows can target it by its id-bearing testID.
       # The E2E_WC_CONSUMER_KEY/SECRET this step originally referenced were
       # never provisioned (verified 2026-08-27: `gh secret list` has no such
       # secrets), so the seed had silently run reachability-only since the
@@ -605,3 +642,51 @@ jobs:
           name: maestro-ios-${{ matrix.device.name }}
           path: ~/.maestro/tests
           retention-days: 7
+
+  native-gate:
+    name: 📱 Native E2E
+    needs: [changes, build, android, ios]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check native results
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          ANDROID_RESULT: ${{ needs.android.result }}
+          IOS_RESULT: ${{ needs.ios.result }}
+          NATIVE_PLAN: ${{ needs.changes.outputs.native }}
+          EVENT_NAME: ${{ github.event_name }}
+          IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+          IS_DRAFT: ${{ github.event.pull_request.draft }}
+          IS_DEPENDABOT: ${{ github.actor == 'dependabot[bot]' }}
+        run: |
+          set -uo pipefail
+          echo "changes=$CHANGES_RESULT plan=$NATIVE_PLAN build=$BUILD_RESULT android=$ANDROID_RESULT ios=$IOS_RESULT event=$EVENT_NAME"
+
+          if [ "$CHANGES_RESULT" != "success" ]; then
+            echo "::error::Change detection did not succeed (result: $CHANGES_RESULT)"
+            exit 1
+          fi
+          if [ "$NATIVE_PLAN" = "none" ]; then
+            echo "::notice::Native E2E skipped: the plan implicates no native tier"
+            exit 0
+          fi
+          if [ "$EVENT_NAME" = "pull_request" ] && { [ "$IS_FORK" = "true" ] || [ "$IS_DRAFT" = "true" ] || [ "$IS_DEPENDABOT" = "true" ]; }; then
+            echo "::notice::Native E2E skipped: fork, draft or dependabot PR (no secrets / no gate)"
+            exit 0
+          fi
+          if [ "$BUILD_RESULT" != "success" ]; then
+            echo "::error::Native dev-client resolution did not succeed (result: $BUILD_RESULT)"
+            exit 1
+          fi
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if { [ "$ANDROID_RESULT" != "success" ] && [ "$ANDROID_RESULT" != "skipped" ]; } || { [ "$IOS_RESULT" != "success" ] && [ "$IOS_RESULT" != "skipped" ]; }; then
+              echo "::error::Native platform jobs did not pass (android: $ANDROID_RESULT, ios: $IOS_RESULT)"
+              exit 1
+            fi
+          elif [ "$ANDROID_RESULT" != "success" ] || [ "$IOS_RESULT" != "success" ]; then
+            echo "::error::Native platform jobs did not pass (android: $ANDROID_RESULT, ios: $IOS_RESULT)"
+            exit 1
+          fi
+          echo "✅ Native E2E passed"
