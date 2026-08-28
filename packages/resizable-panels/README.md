@@ -24,3 +24,5 @@ Resize handles expose separator ARIA values and are keyboard-focusable unless di
 2. Merge the pull request.
 3. Run the **Release react-native-resizable-panels** workflow.
 4. Choose the npm tag: `latest`, `beta`, or `next`.
+
+Authentication is npm Trusted Publishing (GitHub OIDC for `wcpos/monorepo` + this workflow file) — there is no npm token to rotate.
