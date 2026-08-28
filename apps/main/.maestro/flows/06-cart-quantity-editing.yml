@@ -27,8 +27,9 @@ env:
     commands:
       - tapOn:
           id: "pos-tab-products"
-# Self-healing search — see flow 04: Android inputText can drop leading
-# keystrokes racing the IME; retry re-taps, erases, retypes.
+# Typing retried, search speed NOT — see flow 04 for the ruling and both
+# mechanisms. The single 60s tile wait reports a slow demand path as a
+# failure instead of absorbing it.
 - retry:
     maxRetries: 2
     commands:
@@ -36,10 +37,12 @@ env:
           id: "search-products"
       - eraseText
       - inputText: ${PRODUCT_SEARCH}
-      - extendedWaitUntil:
-          visible:
-            id: "product-tile"
-          timeout: 60000
+      - assertVisible:
+          text: ${PRODUCT_SEARCH}
+- extendedWaitUntil:
+    visible:
+      id: "product-tile"
+    timeout: 60000
 # Keyboard down BEFORE the tile tap — same overlay no-op as flow 04
 # (monorepo#1614 defect 2); flow 07 set the pattern.
 - hideKeyboard

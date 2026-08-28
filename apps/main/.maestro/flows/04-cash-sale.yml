@@ -29,13 +29,17 @@ env:
     commands:
       - tapOn:
           id: "pos-tab-products"
-# SELF-HEALING search: on Android, inputText can race the IME attaching to
-# the just-tapped field and drop the leading keystrokes — run 33176268259's
-# tablet screenshot shows "OS E2E Simple" in the box ("WCP" swallowed), so
-# the grid finds nothing and the tile wait times out. On any failure inside
-# the block, retry re-taps, ERASES the mangled text, and retypes. 60s tile
-# wait: a product the seed just created may still be syncing into the local
-# db on its first run.
+# Typing is retried; SEARCH SPEED IS NOT (owner ruling 2026-08-28: "if it
+# takes 60 seconds to return a search, that is a bug or a mis-configured
+# test"). Two separate concerns:
+# - Android inputText can race the IME and drop LEADING keystrokes (run
+#   33176268259's tablet screenshot shows "OS E2E Simple" — "WCP"
+#   swallowed). The retry block types and then ASSERTS the exact query text;
+#   a mangled entry fails fast, gets erased, and is retyped. Harness repair.
+# - The tile wait is a SINGLE 60s, deliberately outside the retry: search
+#   rides the server demand plane (require-plane `search` kind), and a
+#   correct query that cannot produce a tile in 60s is an app-side
+#   demand-path failure the suite must REPORT, never absorb.
 - retry:
     maxRetries: 2
     commands:
@@ -43,10 +47,12 @@ env:
           id: "search-products"
       - eraseText
       - inputText: ${PRODUCT_SEARCH}
-      - extendedWaitUntil:
-          visible:
-            id: "product-tile"
-          timeout: 60000
+      - assertVisible:
+          text: ${PRODUCT_SEARCH}
+- extendedWaitUntil:
+    visible:
+      id: "product-tile"
+    timeout: 60000
 # Dismiss the keyboard BEFORE tapping the tile — with it up, the tile's
 # center sits under the overlay and the tap silently no-ops (empty cart in
 # run 33088418779; monorepo#1614 defect 2). Flow 07 already taps in this order.
