@@ -100,7 +100,14 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 								className="text-muted-foreground text-xs"
 								decodeHtml
 							>{`${meta.display_key || meta.key}: `}</Text>
-							<Text className="text-xs" decodeHtml>
+							{/* testID keyed by the attribute so E2E can assert this VALUE node
+							    (id + text must sit on one node: key and value are separate
+							    Texts, so no single node contains "Size: Small"). */}
+							<Text
+								className="text-xs"
+								decodeHtml
+								testID={`cart-line-meta-${meta.display_key || meta.key}`}
+							>
 								{formatMetaDataValue(meta.display_value || meta.value)}
 							</Text>
 						</HStack>

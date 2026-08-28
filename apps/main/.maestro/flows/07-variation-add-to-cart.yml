@@ -96,7 +96,13 @@ env:
 # store-agnostic here.
 - assertVisible:
     id: "cart-quantity-input"
-- assertVisible: "Size: ${VARIATION_OPTION}"
+# The meta row renders key and value as SEPARATE Text nodes ("Size: " +
+# "Small"), so a "Size: Small" text assert full-matches neither (run
+# 33142398763). Assert the value NODE: the testID and the option text sit
+# on the same element.
+- assertVisible:
+    id: "cart-line-meta-Size"
+    text: "${VARIATION_OPTION}"
 - assertVisible:
     id: "cart-subtotal"
 - assertVisible:
