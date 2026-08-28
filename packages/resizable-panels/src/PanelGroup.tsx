@@ -7,7 +7,7 @@ import { useSharedValue } from 'react-native-reanimated';
 import { DragState, PanelGroupContext, TPanelGroupContext } from './PanelGroupContext';
 import { createPanelGroupModel } from './model/PanelGroupModel';
 
-import type { Direction } from './types';
+import type { Direction, PanelGroupOnLayoutChanged } from './types';
 
 export type ImperativePanelGroupHandle = {
 	getId: () => string;
@@ -18,7 +18,9 @@ export type PanelGroupOnLayout = (layout: number[]) => void;
 export interface PanelGroupProps extends Omit<ViewProps, 'onLayout'> {
 	ref?: React.Ref<ImperativePanelGroupHandle>;
 	direction: Direction;
+	disabled?: boolean;
 	onLayout?: PanelGroupOnLayout;
+	onLayoutChanged?: PanelGroupOnLayoutChanged;
 	style?: StyleProp<ViewStyle>;
 	children?: React.ReactNode;
 }
@@ -27,20 +29,57 @@ export function PanelGroup({
 	ref,
 	children,
 	direction,
+	disabled = false,
 	onLayout,
+	onLayoutChanged,
 	style,
 	...viewProps
 }: PanelGroupProps) {
 	const groupId = React.useId();
-	const [model] = React.useState(() => createPanelGroupModel({ direction, onLayout }));
+	const [model] = React.useState(() =>
+		createPanelGroupModel({ direction, onLayout, onLayoutChanged })
+	);
 	const dragState = useSharedValue<DragState | null>(null);
 	const layoutShared = useSharedValue<number[]>([]);
 	const panelIdsShared = useSharedValue<string[]>([]);
 	const containerSizeRef = React.useRef({ width: 0, height: 0 });
+	const elementsRef = React.useRef(new Map<string, object>());
+	const registerElement = React.useCallback((id: string, element: object) => {
+		elementsRef.current.set(id, element);
+	}, []);
+	const unregisterElement = React.useCallback((id: string) => {
+		elementsRef.current.delete(id);
+	}, []);
 
 	React.useLayoutEffect(() => {
 		model.setDirection(direction);
 		model.setOnLayout(onLayout);
+		model.setOnLayoutChanged(onLayoutChanged);
+		if (model.isDirty()) {
+			const positions: Record<string, number> = {};
+			let allPositionsValid = elementsRef.current.size > 0;
+			for (const [id, element] of elementsRef.current) {
+				if (!('getBoundingClientRect' in element)) {
+					allPositionsValid = false;
+					break;
+				}
+				const getBoundingClientRect = element.getBoundingClientRect;
+				if (typeof getBoundingClientRect !== 'function') {
+					allPositionsValid = false;
+					break;
+				}
+				const rect = getBoundingClientRect.call(element) as { left: number; top: number };
+				const position = direction === 'horizontal' ? rect.left : rect.top;
+				if (!Number.isFinite(position)) {
+					allPositionsValid = false;
+					break;
+				}
+				positions[id] = position;
+			}
+			if (allPositionsValid && Object.values(positions).some((position) => position !== 0)) {
+				model.setPositions(positions);
+			}
+		}
 		// Child layout effects register panels and handles before this parent effect flushes them.
 		model.flush();
 	});
@@ -60,10 +99,14 @@ export function PanelGroup({
 		return unsubscribe;
 	}, [model, syncSharedValues]);
 
-	const handleContainerLayout = React.useCallback((event: LayoutChangeEvent) => {
-		const { width, height } = event.nativeEvent.layout;
-		containerSizeRef.current = { width, height };
-	}, []);
+	const handleContainerLayout = React.useCallback(
+		(event: LayoutChangeEvent) => {
+			const { width, height } = event.nativeEvent.layout;
+			containerSizeRef.current = { width, height };
+			model.setContainerSize(direction === 'horizontal' ? width : height);
+		},
+		[direction, model]
+	);
 	const beginDrag = React.useCallback(
 		(handleId: string) => {
 			const size = containerSizeRef.current[direction === 'horizontal' ? 'width' : 'height'];
@@ -94,6 +137,7 @@ export function PanelGroup({
 		() => ({
 			model,
 			direction,
+			disabled,
 			groupId,
 			dragState,
 			layoutShared,
@@ -101,8 +145,23 @@ export function PanelGroup({
 			beginDrag,
 			drag,
 			endDrag,
+			registerElement,
+			unregisterElement,
 		}),
-		[beginDrag, direction, drag, dragState, endDrag, groupId, layoutShared, model, panelIdsShared]
+		[
+			beginDrag,
+			direction,
+			disabled,
+			drag,
+			dragState,
+			endDrag,
+			groupId,
+			layoutShared,
+			model,
+			panelIdsShared,
+			registerElement,
+			unregisterElement,
+		]
 	);
 	const containerStyle: StyleProp<ViewStyle> = [
 		{ flex: 1, flexDirection: direction === 'horizontal' ? 'row' : 'column' },

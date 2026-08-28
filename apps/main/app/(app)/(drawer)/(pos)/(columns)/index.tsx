@@ -106,7 +106,9 @@ export default function ResizablePOSColumns() {
 	return (
 		<View testID="screen-pos" style={{ flex: 1, paddingBottom: bottom }}>
 			<PanelGroup
-				onLayout={([productsWidth, cartWidth]) => patchUI({ width: productsWidth })}
+				onLayoutChanged={([productsWidth], { isUserInteraction }) => {
+					if (isUserInteraction) void patchUI({ width: productsWidth });
+				}}
 				direction="horizontal"
 			>
 				<Panel

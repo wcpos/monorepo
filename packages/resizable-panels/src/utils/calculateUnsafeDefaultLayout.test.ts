@@ -1,4 +1,4 @@
-import { PanelConstraints, PanelData } from '../Panel';
+import { PanelData, ResolvedPanelConstraints } from '../Panel';
 import { calculateUnsafeDefaultLayout } from './calculateUnsafeDefaultLayout';
 import { expectToBeCloseToArray } from './test-utils';
 
@@ -6,7 +6,9 @@ describe('calculateUnsafeDefaultLayout', () => {
 	let idCounter = 0;
 	let orderCounter = 0;
 
-	function createPanelData(constraints: PanelConstraints = {}): PanelData {
+	function createPanelData(
+		constraints: ResolvedPanelConstraints = {}
+	): Omit<PanelData, 'constraints'> & { constraints: ResolvedPanelConstraints } {
 		return {
 			callbacks: {
 				onCollapse: undefined,

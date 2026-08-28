@@ -9,6 +9,7 @@ export type DragState = { dragHandleId: string };
 export type TPanelGroupContext = {
 	model: PanelGroupModel;
 	direction: Direction;
+	disabled: boolean;
 	groupId: string;
 	dragState: SharedValue<DragState | null>;
 	layoutShared: SharedValue<number[]>;
@@ -16,6 +17,8 @@ export type TPanelGroupContext = {
 	beginDrag: (handleId: string) => void;
 	drag: (translationX: number, translationY: number) => void;
 	endDrag: () => void;
+	registerElement: (id: string, element: object) => void;
+	unregisterElement: (id: string) => void;
 };
 
 export const PanelGroupContext = React.createContext<TPanelGroupContext | null>(null);

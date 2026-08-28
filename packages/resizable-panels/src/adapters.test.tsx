@@ -122,6 +122,25 @@ test('recorded gesture updates layout percentages and calls onLayout', async () 
 	expect(onLayout).toHaveBeenCalledWith([60, 40]);
 });
 
+test('onLayoutChanged batches a gesture and marks it as a user interaction', async () => {
+	const onLayoutChanged = jest.fn();
+	const view = render(
+		<PanelGroup direction="horizontal" onLayoutChanged={onLayoutChanged} testID="group">
+			<Panel testID="left" defaultSize={50} />
+			<PanelResizeHandle />
+			<Panel testID="right" defaultSize={50} />
+		</PanelGroup>
+	);
+	await waitFor(() => expect(view.getByTestId('left').style.flexGrow).toBe('50'));
+	expect(onLayoutChanged).toHaveBeenLastCalledWith([50, 50], { isUserInteraction: false });
+	onLayoutChanged.mockClear();
+
+	await dragLatestHandle();
+
+	expect(onLayoutChanged).toHaveBeenCalledTimes(1);
+	expect(onLayoutChanged).toHaveBeenCalledWith([60, 40], { isUserInteraction: true });
+});
+
 test('finalized gesture restores panel interaction and reports dragging ended', async () => {
 	const onDragging = jest.fn();
 	const view = render(
@@ -148,6 +167,22 @@ test('disabled handle ignores recorded gesture updates', async () => {
 		<PanelGroup direction="horizontal" testID="group">
 			<Panel testID="left" defaultSize={50} />
 			<PanelResizeHandle disabled />
+			<Panel testID="right" defaultSize={50} />
+		</PanelGroup>
+	);
+	await waitFor(() => expect(view.getByTestId('left').style.flexGrow).toBe('50'));
+
+	await dragLatestHandle();
+
+	expect(view.getByTestId('left').style.flexGrow).toBe('50');
+	expect(view.getByTestId('right').style.flexGrow).toBe('50');
+});
+
+test('disabled group ignores recorded gesture updates', async () => {
+	const view = render(
+		<PanelGroup direction="horizontal" disabled testID="group">
+			<Panel testID="left" defaultSize={50} />
+			<PanelResizeHandle />
 			<Panel testID="right" defaultSize={50} />
 		</PanelGroup>
 	);
@@ -187,6 +222,71 @@ test('remounted handle still drags the two panels on its right and left', async 
 	expect(view.getByTestId('third').style.flexGrow).toBe('30');
 });
 
+test('measured positions order a panel and handle inserted in the middle', async () => {
+	const rect = jest
+		.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+		.mockImplementation(function (this: HTMLElement) {
+			const leftByTestId: Record<string, number> = {
+				first: 0,
+				'first-handle': 100,
+				middle: 200,
+				'middle-handle': 300,
+				last: 400,
+			};
+			const left = leftByTestId[this.dataset.testid ?? ''] ?? 0;
+			return {
+				bottom: 0,
+				height: 0,
+				left,
+				right: 0,
+				top: 0,
+				width: 0,
+				x: left,
+				y: 0,
+				toJSON: () => ({}),
+			};
+		});
+	function Harness() {
+		const [showMiddle, setShowMiddle] = React.useState(false);
+		return (
+			<>
+				<button data-testid="insert" onClick={() => setShowMiddle(true)} />
+				<PanelGroup direction="horizontal" testID="group">
+					<Panel testID="first" defaultSize={30} />
+					<PanelResizeHandle testID="first-handle" />
+					{showMiddle ? <Panel testID="middle" defaultSize={30} /> : null}
+					{showMiddle ? <PanelResizeHandle testID="middle-handle" /> : null}
+					<Panel testID="last" defaultSize={showMiddle ? 40 : 70} />
+				</PanelGroup>
+			</>
+		);
+	}
+	const view = render(<Harness />);
+	act(() => view.getByTestId('insert').click());
+	await waitFor(() => expect(view.getByTestId('middle').style.flexGrow).toBe('30'));
+
+	await dragLatestHandle();
+
+	expect(view.getByTestId('first').style.flexGrow).toBe('30');
+	expect(view.getByTestId('middle').style.flexGrow).toBe('40');
+	expect(view.getByTestId('last').style.flexGrow).toBe('30');
+	rect.mockRestore();
+});
+
+test('all-zero measured positions fall back to registration order', async () => {
+	const view = render(
+		<PanelGroup direction="horizontal" testID="group">
+			<Panel testID="left" defaultSize={50} />
+			<PanelResizeHandle testID="handle" />
+			<Panel testID="right" defaultSize={50} />
+		</PanelGroup>
+	);
+	await dragLatestHandle();
+
+	await waitFor(() => expect(view.getByTestId('left').style.flexGrow).toBe('60'));
+	expect(view.getByTestId('right').style.flexGrow).toBe('40');
+});
+
 test('Panel rendered outside PanelGroup throws', () => {
 	const error = jest.spyOn(console, 'error').mockImplementation(() => {});
 	expect(() => render(<Panel />)).toThrow('<Panel> must be rendered inside a <PanelGroup>');
@@ -196,15 +296,20 @@ test('Panel rendered outside PanelGroup throws', () => {
 /**
  * The POS split from apps/main (#1620): both panels carry complementary defaultSizes so the
  * pre-layout fallback style (flexGrow = defaultSize ?? 1) is already the correct ratio, and the
- * group's onLayout feeds the persisted width back in. Pins that the model flushes exactly one
+ * group's onLayoutChanged feeds user-driven persisted width back in. Pins that the model flushes exactly one
  * layout for the batch, hands the same ratio to the animated styles, and does not re-fire
  * onLayout when the persisted width re-renders the tree with unchanged props.
  */
 test('POS shape: complementary defaultSizes land as one layout and re-render idempotently', async () => {
-	const onLayout = jest.fn();
+	const patchUI = jest.fn();
+	const onLayoutChanged = jest.fn(
+		([productsWidth]: number[], { isUserInteraction }: { isUserInteraction: boolean }) => {
+			if (isUserInteraction) patchUI({ width: productsWidth });
+		}
+	);
 	function PosSplit({ width }: { width: number }) {
 		return (
-			<PanelGroup direction="horizontal" onLayout={onLayout} testID="group">
+			<PanelGroup direction="horizontal" onLayoutChanged={onLayoutChanged} testID="group">
 				<Panel testID="products" defaultSize={width} minSize={25} id="products" />
 				<PanelResizeHandle />
 				<Panel testID="cart" defaultSize={100 - width} minSize={25} id="cart" />
@@ -215,16 +320,20 @@ test('POS shape: complementary defaultSizes land as one layout and re-render ide
 
 	await waitFor(() => expect(view.getByTestId('products').style.flexGrow).toBe('60'));
 	expect(view.getByTestId('cart').style.flexGrow).toBe('40');
-	expect(onLayout).toHaveBeenCalledTimes(1);
-	expect(onLayout).toHaveBeenCalledWith([60, 40]);
+	expect(onLayoutChanged).toHaveBeenCalledTimes(1);
+	expect(onLayoutChanged).toHaveBeenCalledWith([60, 40], { isUserInteraction: false });
+	expect(patchUI).not.toHaveBeenCalled();
 
 	// patchUI({ width: 60 }) re-renders the screen with the same width.
 	view.rerender(<PosSplit width={60} />);
 	await waitForContainerLayout();
 
-	expect(onLayout).toHaveBeenCalledTimes(1);
+	expect(onLayoutChanged).toHaveBeenCalledTimes(1);
 	expect(view.getByTestId('products').style.flexGrow).toBe('60');
 	expect(view.getByTestId('cart').style.flexGrow).toBe('40');
+
+	await dragLatestHandle();
+	expect(patchUI).toHaveBeenCalledWith({ width: 70 });
 });
 
 test('POS shape: a persisted width outside the constraints is clamped, not rendered as a sliver', async () => {

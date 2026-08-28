@@ -1,10 +1,13 @@
-import { PanelData } from '../Panel';
 import { assert } from './assert';
 import { fuzzyNumbersEqual } from './numbers/fuzzyCompareNumbers';
 
+import type { PanelData, ResolvedPanelConstraints } from '../Panel';
+
 // Layout should be pre-converted into percentages
 export function callPanelCallbacks(
-	panelsArray: PanelData[],
+	panelsArray: (Omit<PanelData, 'constraints'> & {
+		constraints: ResolvedPanelConstraints;
+	})[],
 	layout: number[],
 	panelIdToLastNotifiedSizeMap: Record<string, number>
 ) {

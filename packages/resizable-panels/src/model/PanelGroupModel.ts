@@ -8,18 +8,27 @@ import { callPanelCallbacks } from '../utils/callPanelCallbacks';
 import { compareLayouts } from '../utils/compareLayouts';
 import { fuzzyCompareNumbers } from '../utils/numbers/fuzzyCompareNumbers';
 import { fuzzyNumbersEqual } from '../utils/numbers/fuzzyNumbersEqual';
+import { parseSize } from '../utils/parseSize';
+import { preserveFixedPanelSizes } from '../utils/preserveFixedPanelSizes';
 import { validatePanelGroupLayout } from '../utils/validatePanelGroupLayout';
 
-import type { PanelConstraints, PanelData } from '../Panel';
-import type { Direction } from '../types';
+import type { PanelConstraints, PanelData, ResolvedPanelConstraints } from '../Panel';
+import type { Direction, PanelGroupOnLayoutChanged } from '../types';
 
 const log = getLogger(['wcpos', 'ui', 'resizable-panels']);
 
 type LayoutListener = (layout: number[], panelIds: string[]) => void;
+type HandleData = { id: string; order?: number };
+type Ordered = { id: string; order?: number };
+type CommitMeta = { isUserInteraction: boolean };
 
 export type PanelGroupModel = {
 	setDirection: (direction: Direction) => void;
 	setOnLayout: (onLayout?: (layout: number[]) => void) => void;
+	setOnLayoutChanged: (onLayoutChanged?: PanelGroupOnLayoutChanged) => void;
+	setContainerSize: (size: number) => void;
+	setPositions: (positions: Record<string, number>) => void;
+	isDirty: () => boolean;
 	registerPanel: (panelData: PanelData) => void;
 	unregisterPanel: (id: string) => void;
 	registerHandle: (id: string, order?: number) => void;
@@ -43,8 +52,6 @@ export type PanelGroupModel = {
 	isDragging: () => boolean;
 };
 
-type Ordered = { order?: number };
-
 function compareOrder(a: Ordered, b: Ordered) {
 	const oa = a.order;
 	const ob = b.order;
@@ -57,12 +64,20 @@ function compareOrder(a: Ordered, b: Ordered) {
 export function createPanelGroupModel(options: {
 	direction: Direction;
 	onLayout?: (layout: number[]) => void;
+	onLayoutChanged?: PanelGroupOnLayoutChanged;
 }): PanelGroupModel {
 	let direction = options.direction;
 	let onLayout = options.onLayout;
+	let onLayoutChanged = options.onLayoutChanged;
 	let panels: PanelData[] = [];
-	let handles: { id: string; order?: number }[] = [];
+	let handles: HandleData[] = [];
+	let positions: Record<string, number> = {};
 	let layout: number[] = [];
+	let containerSizePx = 0;
+	let defaultLayoutDeferred = false;
+	let warnedAllPixelPreserving = false;
+	let registrationCounter = 0;
+	const registrationOrder = new Map<string, number>();
 	const panelIdToLastNotifiedSize: Record<string, number> = {};
 	const panelSizeBeforeCollapse = new Map<string, number>();
 	let dragState: {
@@ -72,6 +87,7 @@ export function createPanelGroupModel(options: {
 		containerSizePx: number;
 	} | null = null;
 	let dirty = false;
+	let layoutDirty = false;
 	let flushScheduled = false;
 	const listeners = new Set<LayoutListener>();
 
@@ -80,11 +96,42 @@ export function createPanelGroupModel(options: {
 		const panelIds = getPanelIds();
 		listeners.forEach((listener) => listener(layout, panelIds));
 	};
-	const commit = (nextLayout: number[]) => {
+	const resolveSize = (
+		size: number | string | undefined,
+		pixelFallback: number | undefined
+	): number | undefined => {
+		if (size == null) return undefined;
+		const parsed = parseSize(size);
+		if (parsed.unit === 'percent') return parsed.value;
+		return containerSizePx > 0 ? (parsed.value / containerSizePx) * 100 : pixelFallback;
+	};
+	const resolveConstraints = (raw: PanelConstraints): ResolvedPanelConstraints => ({
+		collapsedSize: resolveSize(raw.collapsedSize, 0),
+		collapsible: raw.collapsible,
+		defaultSize: resolveSize(raw.defaultSize, undefined),
+		disabled: raw.disabled,
+		groupResizeBehavior: raw.groupResizeBehavior,
+		maxSize: resolveSize(raw.maxSize, 100),
+		minSize: resolveSize(raw.minSize, 0),
+	});
+	const getResolvedPanels = () =>
+		panels.map((panel) => ({ ...panel, constraints: resolveConstraints(panel.constraints) }));
+	const getResolvedConstraints = () => panels.map((panel) => resolveConstraints(panel.constraints));
+	const hasPixelConstraints = () =>
+		panels.some((panel) =>
+			[
+				panel.constraints.collapsedSize,
+				panel.constraints.defaultSize,
+				panel.constraints.maxSize,
+				panel.constraints.minSize,
+			].some((size) => size != null && parseSize(size).unit === 'pixels')
+		);
+	const commit = (nextLayout: number[], meta: CommitMeta) => {
 		layout = nextLayout;
 		onLayout?.(nextLayout);
-		callPanelCallbacks(panels, nextLayout, panelIdToLastNotifiedSize);
+		callPanelCallbacks(getResolvedPanels(), nextLayout, panelIdToLastNotifiedSize);
 		notifyListeners();
+		if (!(dragState && meta.isUserInteraction)) onLayoutChanged?.(nextLayout, meta);
 	};
 	const getPanelIndex = (id: string) => panels.findIndex((panel) => panel.id === id);
 	const panelDataHelper = (id: string) => {
@@ -93,7 +140,7 @@ export function createPanelGroupModel(options: {
 		assert(panelData, `Panel data not found for panel "${id}"`);
 		const isLastPanel = panelIndex === panels.length - 1;
 		return {
-			...panelData.constraints,
+			...resolveConstraints(panelData.constraints),
 			panelData,
 			panelIndex,
 			panelSize: layout[panelIndex],
@@ -108,12 +155,16 @@ export function createPanelGroupModel(options: {
 	const setOnLayout = (nextOnLayout?: (layout: number[]) => void) => {
 		onLayout = nextOnLayout;
 	};
+	const setOnLayoutChanged = (nextOnLayoutChanged?: PanelGroupOnLayoutChanged) => {
+		onLayoutChanged = nextOnLayoutChanged;
+	};
 	// Registrations are batched: the PanelGroup adapter flushes synchronously in its layout
 	// effect after all children have registered. The microtask is the safety net for a Panel
 	// that mounts or unmounts on its own (state living between the group and the panel), where
 	// the group never re-renders and would otherwise never flush.
-	const markDirty = () => {
+	const markDirty = (requiresLayout = true) => {
 		dirty = true;
+		layoutDirty ||= requiresLayout;
 		if (flushScheduled) return;
 		flushScheduled = true;
 		queueMicrotask(() => {
@@ -121,42 +172,132 @@ export function createPanelGroupModel(options: {
 			flush();
 		});
 	};
+	const compareRegistration = (a: Ordered, b: Ordered) =>
+		(registrationOrder.get(a.id) ?? 0) - (registrationOrder.get(b.id) ?? 0);
+	const getOrdered = <T extends Ordered>(items: T[]): T[] => {
+		const allChildren: Ordered[] = [...panels, ...handles];
+		if (allChildren.some((child) => child.order != null)) {
+			return [...items].sort((a, b) => compareOrder(a, b) || compareRegistration(a, b));
+		}
+		if (
+			allChildren.length > 0 &&
+			allChildren.every((child) => Number.isFinite(positions[child.id]))
+		) {
+			return [...items].sort(
+				(a, b) => (positions[a.id] ?? 0) - (positions[b.id] ?? 0) || compareRegistration(a, b)
+			);
+		}
+		return [...items].sort(compareRegistration);
+	};
+	const applyOrdering = () => {
+		panels = getOrdered(panels);
+		handles = getOrdered(handles);
+	};
 	const registerPanel = (panelData: PanelData) => {
-		panels = [...panels, panelData].sort(compareOrder);
+		registrationOrder.set(panelData.id, registrationCounter++);
+		delete positions[panelData.id];
+		panels = [...panels, panelData];
+		applyOrdering();
 		markDirty();
 	};
 	const unregisterPanel = (id: string) => {
 		panels = panels.filter((panel) => panel.id !== id);
+		registrationOrder.delete(id);
+		delete positions[id];
 		delete panelIdToLastNotifiedSize[id];
 		markDirty();
 	};
 	const registerHandle = (id: string, order?: number) => {
-		handles = [...handles, { id, order }].sort(compareOrder);
+		registrationOrder.set(id, registrationCounter++);
+		delete positions[id];
+		handles = [...handles, { id, order }];
+		applyOrdering();
+		markDirty(false);
 	};
 	const unregisterHandle = (id: string) => {
 		handles = handles.filter((handle) => handle.id !== id);
+		registrationOrder.delete(id);
+		delete positions[id];
+		markDirty(false);
 	};
+	const setPositions = (nextPositions: Record<string, number>) => {
+		const prevPanelIds = panels.map(({ id }) => id);
+		const prevHandleIds = handles.map(({ id }) => id);
+		positions = { ...nextPositions };
+		applyOrdering();
+		const idsEqual = (prevIds: string[], nextIds: string[]) =>
+			prevIds.length === nextIds.length && prevIds.every((id, index) => id === nextIds[index]);
+		const panelOrderChanged = !idsEqual(
+			prevPanelIds,
+			panels.map(({ id }) => id)
+		);
+		const handleOrderChanged = !idsEqual(
+			prevHandleIds,
+			handles.map(({ id }) => id)
+		);
+		if (panelOrderChanged || handleOrderChanged) {
+			markDirty(panelOrderChanged);
+		}
+	};
+	const isDirty = () => dirty;
 	const flush = () => {
 		if (!dirty) return;
+		const shouldRelayout = layoutDirty;
 		dirty = false;
-		const unsafeLayout = calculateUnsafeDefaultLayout({ panelDataArray: panels });
+		layoutDirty = false;
+		if (!shouldRelayout) return;
+		if (containerSizePx <= 0 && hasPixelConstraints()) defaultLayoutDeferred = true;
+		const resolvedPanels = getResolvedPanels();
+		const unsafeLayout = calculateUnsafeDefaultLayout({ panelDataArray: resolvedPanels });
 		const nextLayout = validatePanelGroupLayout({
 			layout: unsafeLayout,
-			panelConstraints: panels.map((panel) => panel.constraints),
+			panelConstraints: resolvedPanels.map((panel) => panel.constraints),
 		});
 		if (!areEqual(layout, nextLayout)) {
-			commit(nextLayout);
+			commit(nextLayout, { isUserInteraction: false });
 		} else {
 			notifyListeners();
 		}
+	};
+	const setContainerSize = (nextSize: number) => {
+		const prevSize = containerSizePx;
+		if (nextSize === prevSize) return;
+		containerSizePx = nextSize;
+		if (nextSize <= 0 || layout.length === 0) return;
+		const panelConstraints = getResolvedConstraints();
+		let unsafeLayout = layout;
+		if (prevSize <= 0) {
+			if (!defaultLayoutDeferred) return;
+			defaultLayoutDeferred = false;
+			unsafeLayout = calculateUnsafeDefaultLayout({ panelDataArray: getResolvedPanels() });
+		} else {
+			const allPixelPreserving =
+				panels.length > 0 &&
+				panels.every((panel) => panel.constraints.groupResizeBehavior === 'preserve-pixel-size');
+			if (allPixelPreserving) {
+				if (!warnedAllPixelPreserving) {
+					warnedAllPixelPreserving = true;
+					log.warn('At least one panel must preserve relative size when the group resizes');
+				}
+			} else {
+				unsafeLayout = preserveFixedPanelSizes({
+					nextGroupSize: nextSize,
+					panelConstraints,
+					prevGroupSize: prevSize,
+					prevLayout: layout,
+				});
+			}
+		}
+		const nextLayout = validatePanelGroupLayout({ layout: unsafeLayout, panelConstraints });
+		if (!areEqual(layout, nextLayout)) commit(nextLayout, { isUserInteraction: false });
 	};
 	const getLayout = () => layout;
 	const setLayout = (unsafeLayout: number[]) => {
 		const nextLayout = validatePanelGroupLayout({
 			layout: unsafeLayout,
-			panelConstraints: panels.map((panel) => panel.constraints),
+			panelConstraints: getResolvedConstraints(),
 		});
-		if (!areEqual(layout, nextLayout)) commit(nextLayout);
+		if (!areEqual(layout, nextLayout)) commit(nextLayout, { isUserInteraction: false });
 	};
 	const subscribe = (listener: LayoutListener) => {
 		listeners.add(listener);
@@ -181,12 +322,14 @@ export function createPanelGroupModel(options: {
 		const nextLayout = adjustLayoutByDelta({
 			delta,
 			initialLayout: prevLayout,
-			panelConstraints: panels.map((panel) => panel.constraints),
+			panelConstraints: getResolvedConstraints(),
 			pivotIndices,
 			prevLayout,
 			trigger: 'imperative-api',
 		});
-		if (!compareLayouts(prevLayout, nextLayout)) commit(nextLayout);
+		if (!compareLayouts(prevLayout, nextLayout)) {
+			commit(nextLayout, { isUserInteraction: false });
+		}
 	};
 	const expandPanel = (id: string, minSizeOverride?: number) => {
 		const prevLayout = layout;
@@ -206,12 +349,14 @@ export function createPanelGroupModel(options: {
 		const nextLayout = adjustLayoutByDelta({
 			delta,
 			initialLayout: prevLayout,
-			panelConstraints: panels.map((panel) => panel.constraints),
+			panelConstraints: getResolvedConstraints(),
 			pivotIndices,
 			prevLayout,
 			trigger: 'imperative-api',
 		});
-		if (!compareLayouts(prevLayout, nextLayout)) commit(nextLayout);
+		if (!compareLayouts(prevLayout, nextLayout)) {
+			commit(nextLayout, { isUserInteraction: false });
+		}
 	};
 	const resizePanel = (id: string, unsafePanelSize: number) => {
 		const prevLayout = layout;
@@ -222,12 +367,14 @@ export function createPanelGroupModel(options: {
 		const nextLayout = adjustLayoutByDelta({
 			delta,
 			initialLayout: prevLayout,
-			panelConstraints: panels.map((panel) => panel.constraints),
+			panelConstraints: getResolvedConstraints(),
 			pivotIndices,
 			prevLayout,
-			trigger: 'mouse-or-touch',
+			trigger: 'imperative-api',
 		});
-		if (!compareLayouts(prevLayout, nextLayout)) commit(nextLayout);
+		if (!compareLayouts(prevLayout, nextLayout)) {
+			commit(nextLayout, { isUserInteraction: false });
+		}
 	};
 	const getPanelSize = (id: string) => {
 		const { panelSize } = panelDataHelper(id);
@@ -245,7 +392,9 @@ export function createPanelGroupModel(options: {
 		return !collapsible || fuzzyCompareNumbers(panelSize, collapsedSize) > 0;
 	};
 	const reevaluatePanelConstraints = (id: string, prevConstraints: PanelConstraints) => {
-		const { collapsedSize: prevCollapsed = 0, collapsible: prevCollapsible } = prevConstraints;
+		if (containerSizePx <= 0 && hasPixelConstraints()) defaultLayoutDeferred = true;
+		const { collapsedSize: prevCollapsed = 0, collapsible: prevCollapsible } =
+			resolveConstraints(prevConstraints);
 		const {
 			collapsedSize: nextCollapsed = 0,
 			collapsible: nextCollapsible,
@@ -262,14 +411,14 @@ export function createPanelGroupModel(options: {
 			resizePanel(id, nextMax);
 		}
 	};
-	const beginDrag = (handleId: string, containerSizePx: number) => {
+	const beginDrag = (handleId: string, dragContainerSizePx: number) => {
 		const handleIndex = handles.findIndex((handle) => handle.id === handleId);
 		if (handleIndex < 0) {
 			log.warn(`Handle "${handleId}" not found`);
 			return false;
 		}
-		if (containerSizePx <= 0) {
-			log.warn(`Cannot drag handle "${handleId}" in a ${containerSizePx}px container`);
+		if (dragContainerSizePx <= 0) {
+			log.warn(`Cannot drag handle "${handleId}" in a ${dragContainerSizePx}px container`);
 			return false;
 		}
 		if (handleIndex + 1 >= panels.length) {
@@ -280,7 +429,7 @@ export function createPanelGroupModel(options: {
 			handleId,
 			initialLayout: layout,
 			pivotIndices: [handleIndex, handleIndex + 1],
-			containerSizePx,
+			containerSizePx: dragContainerSizePx,
 		};
 		return true;
 	};
@@ -290,21 +439,31 @@ export function createPanelGroupModel(options: {
 		const nextLayout = adjustLayoutByDelta({
 			delta,
 			initialLayout: dragState.initialLayout,
-			panelConstraints: panels.map((panel) => panel.constraints),
+			panelConstraints: getResolvedConstraints(),
 			pivotIndices: dragState.pivotIndices,
 			prevLayout: layout,
 			trigger: 'mouse-or-touch',
 		});
-		if (!compareLayouts(layout, nextLayout)) commit(nextLayout);
+		if (!compareLayouts(layout, nextLayout)) {
+			commit(nextLayout, { isUserInteraction: true });
+		}
 	};
 	const endDrag = () => {
+		const completedDrag = dragState;
 		dragState = null;
+		if (completedDrag && !areEqual(completedDrag.initialLayout, layout)) {
+			onLayoutChanged?.(layout, { isUserInteraction: true });
+		}
 	};
 	const isDragging = () => dragState !== null;
 
 	return {
 		setDirection,
 		setOnLayout,
+		setOnLayoutChanged,
+		setContainerSize,
+		setPositions,
+		isDirty,
 		registerPanel,
 		unregisterPanel,
 		registerHandle,

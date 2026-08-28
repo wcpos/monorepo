@@ -1,9 +1,10 @@
-import { PanelConstraints } from '../Panel';
 import { assert } from './assert';
 import { fuzzyCompareNumbers } from './numbers/fuzzyCompareNumbers';
 import { fuzzyLayoutsEqual } from './numbers/fuzzyLayoutsEqual';
 import { fuzzyNumbersEqual } from './numbers/fuzzyNumbersEqual';
 import { resizePanel } from './resizePanel';
+
+import type { ResolvedPanelConstraints } from '../Panel';
 
 // All units must be in percentages; pixel values should be pre-converted
 export function adjustLayoutByDelta({
@@ -16,7 +17,7 @@ export function adjustLayoutByDelta({
 }: {
 	delta: number;
 	initialLayout: number[];
-	panelConstraints: PanelConstraints[];
+	panelConstraints: ResolvedPanelConstraints[];
 	pivotIndices: number[];
 	prevLayout: number[];
 	trigger: 'imperative-api' | 'keyboard' | 'mouse-or-touch';
@@ -24,6 +25,7 @@ export function adjustLayoutByDelta({
 	if (fuzzyNumbersEqual(delta, 0)) {
 		return initialLayout;
 	}
+	const overrideDisabledPanels = trigger === 'imperative-api';
 
 	const nextLayout = [...initialLayout];
 
@@ -127,8 +129,10 @@ export function adjustLayoutByDelta({
 			assert(prevSize != null, `Previous layout not found for panel index ${index}`);
 
 			const maxSafeSize = resizePanel({
+				overrideDisabledPanels,
 				panelConstraints: panelConstraintsArray,
 				panelIndex: index,
+				prevSize,
 				size: 100,
 			});
 			const delta = maxSafeSize - prevSize;
@@ -162,8 +166,10 @@ export function adjustLayoutByDelta({
 
 			const unsafeSize = prevSize - deltaRemaining;
 			const safeSize = resizePanel({
+				overrideDisabledPanels,
 				panelConstraints: panelConstraintsArray,
 				panelIndex: index,
+				prevSize,
 				size: unsafeSize,
 			});
 
@@ -210,8 +216,10 @@ export function adjustLayoutByDelta({
 
 		const unsafeSize = prevSize + deltaApplied;
 		const safeSize = resizePanel({
+			overrideDisabledPanels,
 			panelConstraints: panelConstraintsArray,
 			panelIndex: pivotIndex,
+			prevSize,
 			size: unsafeSize,
 		});
 
@@ -230,8 +238,10 @@ export function adjustLayoutByDelta({
 
 				const unsafeSize = prevSize + deltaRemaining;
 				const safeSize = resizePanel({
+					overrideDisabledPanels,
 					panelConstraints: panelConstraintsArray,
 					panelIndex: index,
+					prevSize,
 					size: unsafeSize,
 				});
 

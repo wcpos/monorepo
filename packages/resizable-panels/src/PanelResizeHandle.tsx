@@ -30,8 +30,25 @@ export function PanelResizeHandle({
 	if (context === null) {
 		throw new Error('<PanelResizeHandle> must be rendered inside a <PanelGroup>');
 	}
-	const { direction, model, beginDrag, drag, endDrag } = context;
+	const {
+		direction,
+		disabled: groupDisabled,
+		model,
+		beginDrag,
+		drag,
+		endDrag,
+		registerElement,
+		unregisterElement,
+	} = context;
 	const handleId = React.useId();
+	const isDisabled = disabled || groupDisabled;
+	const setElementRef = React.useCallback(
+		(element: object | null) => {
+			if (element) registerElement(handleId, element);
+			else unregisterElement(handleId);
+		},
+		[handleId, registerElement, unregisterElement]
+	);
 
 	React.useLayoutEffect(() => {
 		model.registerHandle(handleId, order);
@@ -41,18 +58,18 @@ export function PanelResizeHandle({
 	const panGesture = Gesture.Pan()
 		.onBegin(() => {
 			'worklet';
-			if (disabled) return;
+			if (isDisabled) return;
 			if (onDragging) scheduleOnRN(onDragging, true);
 			scheduleOnRN(beginDrag, handleId);
 		})
 		.onUpdate((event: GestureUpdateEvent<PanGestureHandlerEventPayload>) => {
 			'worklet';
-			if (disabled) return;
+			if (isDisabled) return;
 			scheduleOnRN(drag, event.translationX, event.translationY);
 		})
 		.onFinalize(() => {
 			'worklet';
-			if (disabled) return;
+			if (isDisabled) return;
 			if (onDragging) scheduleOnRN(onDragging, false);
 			scheduleOnRN(endDrag);
 		});
@@ -63,7 +80,7 @@ export function PanelResizeHandle({
 
 	return (
 		<GestureDetector gesture={panGesture}>
-			<View style={[defaultHandleStyle, style]} {...viewProps} />
+			<View ref={setElementRef} style={[defaultHandleStyle, style]} {...viewProps} />
 		</GestureDetector>
 	);
 }
