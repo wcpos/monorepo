@@ -18,30 +18,23 @@ jobs:
     name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
-      src: ${{ steps.filter.outputs.src }}
+      lint: ${{ steps.plan.outputs.lint }}
+      unit: ${{ steps.plan.outputs.unit }}
+      reason: ${{ steps.plan.outputs.reason }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
-      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
-        id: filter
+      - uses: ./.github/actions/ci-plan
+        id: plan
         with:
-          filters: |
-            src:
-              - 'apps/**'
-              - 'packages/**'
-              - 'scripts/**'
-              - '.github/workflows/*.yml'
-              - '.github/workflows/*.yaml'
-              - 'package.json'
-              - 'pnpm-lock.yaml'
-              - 'pnpm-workspace.yaml'
+          base-sha: ${{ github.event.pull_request.base.sha }}
 
   lint:
     name: "\U0001F9F9 Lint"
     runs-on: ubuntu-latest
     needs: changes
-    if: (needs.changes.outputs.src == 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next')
+    if: needs.changes.outputs.lint == 'true' && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next')
     steps:
       - name: "\U0001F3D7 Setup repository"
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -81,7 +74,9 @@ jobs:
     name: "\U0001F9EA Unit Tests"
     runs-on: ubuntu-latest
     needs: [changes, lint]
-    if: needs.changes.outputs.src == 'true'
+    if: needs.changes.outputs.unit != 'none'
+    env:
+      UNIT_PACKAGES: ${{ needs.changes.outputs.unit }}
     permissions:
       contents: read
       issues: write
@@ -102,11 +97,15 @@ jobs:
 
       - name: "\U0001F9EA Run tests for each package"
         run: |
+          wants() { [ "$UNIT_PACKAGES" = all ] && return 0; case ",$UNIT_PACKAGES," in *",$1,"*) return 0;; esac; return 1; }
+          rm -f "$RUNNER_TEMP/ci-unit-executed"
+          find packages apps/main -name test-results.json -delete
           # Track failures but continue to generate coverage for all packages
           failed=0
 
           # Run tests for each package separately to get individual coverage
           for pkg in core components database hooks utils order-math resizable-panels; do
+            wants "$pkg" || continue
             echo "::group::Testing @wcpos/$pkg"
             cd packages/$pkg
             if [ -f "jest.config.js" ]; then
@@ -117,11 +116,13 @@ jobs:
           done
 
           # Run query package separately (uses .cjs config)
-          echo "::group::Testing @wcpos/query"
-          cd packages/query
-          npx jest --config jest.config.cjs --ci --coverage --coverageReporters=json-summary --coverageReporters=text --json --outputFile=test-results.json || failed=1
-          cd ../..
-          echo "::endgroup::"
+          if wants query; then
+            echo "::group::Testing @wcpos/query"
+            cd packages/query
+            npx jest --config jest.config.cjs --ci --coverage --coverageReporters=json-summary --coverageReporters=text --json --outputFile=test-results.json || failed=1
+            cd ../..
+            echo "::endgroup::"
+          fi
 
           # Fail the step if any tests failed
           if [ "$failed" -ne 0 ]; then
@@ -131,6 +132,7 @@ jobs:
 
       - name: "\U0001F9EA Run vitest packages"
         run: |
+          wants() { [ "$UNIT_PACKAGES" = all ] && return 0; case ",$UNIT_PACKAGES," in *",$1,"*) return 0;; esac; return 1; }
           # sync-core and sync-engine arrived from the sync lab on vitest and
           # stay on vitest (ADR: converting ~1000 proven tests to Jest during
           # the port risks semantic drift). printer and receipt-renderer are
@@ -142,6 +144,8 @@ jobs:
           # The ratchet reads packages/<pkg>/coverage/coverage-summary.json,
           # so these must emit the json-summary reporter.
           for pkg in sync-core sync-engine; do
+            wants "$pkg" || continue
+            touch "$RUNNER_TEMP/ci-unit-executed"
             echo "::group::Testing @wcpos/$pkg"
             pnpm --filter @wcpos/$pkg exec vitest run \
               --coverage \
@@ -157,6 +161,8 @@ jobs:
           # scanner (7 suites / 63 tests) was found dark by the CI-matrix
           # tripwire and joined here (ruling R15).
           for pkg in printer receipt-renderer scanner; do
+            wants "$pkg" || continue
+            touch "$RUNNER_TEMP/ci-unit-executed"
             echo "::group::Testing @wcpos/$pkg"
             pnpm --filter @wcpos/$pkg test || failed=1
             echo "::endgroup::"
@@ -169,6 +175,9 @@ jobs:
 
       - name: "\U0001F9EA Run apps/main tests"
         run: |
+          wants() { [ "$UNIT_PACKAGES" = all ] && return 0; case ",$UNIT_PACKAGES," in *",$1,"*) return 0;; esac; return 1; }
+          wants main || exit 0
+          touch "$RUNNER_TEMP/ci-unit-executed"
           # apps/main is on jest-expo 29 while packages are on jest 30, so it
           # cannot join the loop above. Its jest config ignores e2e/ (Playwright
           # specs, see #676) and plugins/ (node:test files, run separately).
@@ -188,8 +197,19 @@ jobs:
             exit 1
           fi
 
+      - name: "\U0001F9FE Prove narrowed unit tests ran"
+        if: always() && needs.changes.outputs.unit != 'all'
+        run: |
+          ran=false; [ -f "$RUNNER_TEMP/ci-unit-executed" ] && ran=true
+          for file in packages/*/test-results.json apps/main/test-results.json; do
+            [ -f "$file" ] && node -e 'process.exit(require("./" + process.argv[1]).numTotalTests > 0 ? 0 : 1)' "$file" && ran=true
+          done
+          [ "$ran" = true ] || { echo "::error::narrowed unit run selected no tests"; exit 1; }
+
       - name: "\U0001F3C1 Run sync-engine performance contracts"
         run: |
+          wants() { [ "$UNIT_PACKAGES" = all ] && return 0; case ",$UNIT_PACKAGES," in *",$1,"*) return 0;; esac; return 1; }
+          wants sync-engine || exit 0
           # The perf lane (#949) runs ALONE via its own vitest config: those tests
           # hold 10k-50k live documents, and sharing the worker pool with the ~76
           # functional files starved them on 2-core runners. `--if-present` keeps
@@ -259,10 +279,12 @@ jobs:
             const fs = require('fs');
             const baseline = JSON.parse(fs.readFileSync('coverage-baseline.json', 'utf8'));
             const packages = Object.keys(baseline.packages);
+            const selected = new Set(process.env.UNIT_PACKAGES.split(','));
             const metrics = ['statements', 'branches', 'functions', 'lines'];
             let failed = false;
 
             for (const pkg of packages) {
+              if (!selected.has('all') && !selected.has(pkg)) continue;
               const summaryPath = 'packages/' + pkg + '/coverage/coverage-summary.json';
               if (!fs.existsSync(summaryPath)) {
                 console.error('@wcpos/' + pkg + ': coverage summary missing at ' + summaryPath);
