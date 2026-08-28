@@ -29,11 +29,26 @@ env:
     commands:
       - tapOn:
           id: "pos-tab-products"
-- tapOn:
-    id: "search-products"
-- inputText: ${PRODUCT_SEARCH}
-# 60s, matching flow 07: a product the seed just created may still be syncing
-# into the local db on its first run.
+# Typing is retried; SEARCH SPEED IS NOT (owner ruling 2026-08-28: "if it
+# takes 60 seconds to return a search, that is a bug or a mis-configured
+# test"). Two separate concerns:
+# - Android inputText can race the IME and drop LEADING keystrokes (run
+#   33176268259's tablet screenshot shows "OS E2E Simple" — "WCP"
+#   swallowed). The retry block types and then ASSERTS the exact query text;
+#   a mangled entry fails fast, gets erased, and is retyped. Harness repair.
+# - The tile wait is a SINGLE 60s, deliberately outside the retry: search
+#   rides the server demand plane (require-plane `search` kind), and a
+#   correct query that cannot produce a tile in 60s is an app-side
+#   demand-path failure the suite must REPORT, never absorb.
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn:
+          id: "search-products"
+      - eraseText
+      - inputText: ${PRODUCT_SEARCH}
+      - assertVisible:
+          text: ${PRODUCT_SEARCH}
 - extendedWaitUntil:
     visible:
       id: "product-tile"

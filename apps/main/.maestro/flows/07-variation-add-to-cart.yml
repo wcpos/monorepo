@@ -38,10 +38,20 @@ env:
     commands:
       - tapOn:
           id: "pos-tab-products"
-- tapOn:
-    id: "search-products"
-- inputText: ${VARIABLE_PRODUCT_SEARCH}
-# 60s: a product the seed just created may still be syncing into the local db.
+# Typing retried, search speed NOT — see flow 04 for the ruling and both
+# mechanisms. This flow's phone failure in run 33176268259 was the
+# demand-path case (query typed CLEAN, "Mostrando 0 de 205", spinner still
+# turning at 60s while iOS answered the same store in seconds) — exactly
+# what the single un-retried wait below must go on reporting.
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn:
+          id: "search-products"
+      - eraseText
+      - inputText: ${VARIABLE_PRODUCT_SEARCH}
+      - assertVisible:
+          text: ${VARIABLE_PRODUCT_SEARCH}
 - extendedWaitUntil:
     visible:
       id: "variable-product-tile-${VARIABLE_PRODUCT_ID}"
