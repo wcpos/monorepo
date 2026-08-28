@@ -141,6 +141,17 @@ jobs:
       - name: 🔬 Compute native fingerprint
         id: fingerprint
         working-directory: apps/main
+        env:
+          # The fingerprint MUST resolve the SAME app config the build it
+          # gates will resolve. app.config.ts gates plugins on
+          # EAS_BUILD_PROFILE (unset → 'production'), so an unset profile made
+          # profile-conditional plugins invisible to the hash: the
+          # with-user-ca-trust cleartext fix changed the dev client's native
+          # config, the fingerprint did not move, run 33162907004 cache-hit
+          # the OLD binary, and Android failed on the very bug the merge had
+          # fixed. Any profile-conditional native input has this blind spot
+          # without the env pin.
+          EAS_BUILD_PROFILE: development
         run: |
           FP=$(npx @expo/fingerprint . | jq -r '.hash')
           [ -n "$FP" ] && [ "$FP" != "null" ] || { echo "::error::fingerprint computation failed"; exit 1; }
