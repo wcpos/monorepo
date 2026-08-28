@@ -23,7 +23,14 @@ name: E2E Native
 
 on:
   schedule:
-    - cron: '0 3 * * *'
+    # Every second day, not nightly. The E2E suite is not the only claim on the
+    # 15 iOS + 15 Android monthly allowance — release builds (`build.yml`, the
+    # `production` profile) come out of the same account, and they cluster:
+    # v1.10.0, .1 and .2 all shipped on 2026-08-25. A nightly on both platforms
+    # wanted ~29 pairs a month and left releases nothing. Every second day,
+    # alternating platforms, is ~15 builds a month — half the allowance, with
+    # the rest free for releases and for debugging the suite itself.
+    - cron: '0 3 */2 * *'
   workflow_dispatch:
     inputs:
       ref:
@@ -119,11 +126,16 @@ jobs:
           # night still covers something and each platform lands every other
           # night, rather than both going dark for days at a time.
           #
-          # Parity of the day-of-year, so the two platforms interleave without
-          # any stored state. A year with an odd number of days repeats one
-          # platform across the New Year boundary; harmless.
+          # Derived from the day-of-year with no stored state. The schedule
+          # fires on odd days of the month (`*/2` in cron), so consecutive runs
+          # are two days apart and raw date parity would be CONSTANT within a
+          # month — every run picking the same platform. Halving the day first
+          # turns each two-day stride into +1, so parity alternates per run.
+          # Month and year boundaries can repeat or skip one platform once;
+          # harmless, it self-corrects on the next run.
           if [ "${{ github.event_name }}" = "schedule" ]; then
-            if [ $(( $(date -u +%j | sed 's/^0*//') % 2 )) -eq 0 ]; then
+            DOY=$(date -u +%j | sed 's/^0*//')
+            if [ $(( (DOY / 2) % 2 )) -eq 0 ]; then
               PLATFORM=ios
             else
               PLATFORM=android
