@@ -12,10 +12,11 @@ env:
 # behind this exact sequence; keep the two flows in step.
 - clearState
 - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
-# Dev-menu dismissal on BOTH platforms — see flow 01 for the full rationale
-# and for why "iOS never shows the menu" was wrong (a job that could not
-# report failure supplied the evidence; #1662). Maestro 2.6.1 has no
-# `optional` wait, so each block's waits are deliberately unconditional.
+# Launch-blocker dismissal on BOTH platforms — see flow 01 for the full
+# rationale and for why "iOS never shows the menu" was wrong (a job that
+# could not report failure supplied the evidence; #1662). Waits are
+# unconditional where the surface is deterministic and `optional` only where
+# it genuinely varies by environment (the SpringBoard scheme prompt).
 - runFlow:
     when:
       platform: Android
@@ -29,6 +30,30 @@ env:
     when:
       platform: iOS
     commands:
+      # FIRST iOS blocker, ahead of the dev menu: SpringBoard asks
+      # "Open in “WCPOS”?" and the app does not start until something taps
+      # Open. clearState on iOS is uninstall+reinstall (maestro.log:
+      # simctl uninstall → install → openurl), and a simulator that has not
+      # yet trusted this scheme confirms it. CI creates a fresh simulator
+      # every run, so it is deterministic there — runs 33217891131 (tablet)
+      # and 33218641226 (phone) both sat on the springboard behind this
+      # dialog — while a reused local simulator never shows it. Hence
+      # optional: the required "Continue" wait below is the real gate, and
+      # it can only pass if the app actually launched.
+      #
+      # optional IS supported on waits and taps in this Maestro (verified
+      # 2026-08-29: both WARN and the flow exits 0). Flows 01/02 previously
+      # carried a note that it "fails schema parsing" (review #1637 P1) —
+      # that note was wrong or has expired; do not reinstate it without
+      # re-testing.
+      - extendedWaitUntil:
+          visible:
+            text: "Open in .*WCPOS.*"
+          timeout: 30000
+          optional: true
+      - tapOn:
+          text: "Open"
+          optional: true
       - extendedWaitUntil:
           visible:
             text: "Continue"
