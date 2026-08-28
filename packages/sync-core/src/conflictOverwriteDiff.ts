@@ -15,9 +15,8 @@
  *    key on PUT, so a differing entry is not an overwrite.
  *  - money width is not a change: `"6.713280"` and `"6.71"` are the same number
  *    at two serialization widths (#946), so decimals compare at the shorter
- *    precision. `"6.72"` vs `"6.713280"` still differs. Only CANONICAL decimal
- *    literals qualify — a leading zero or a `+` sign (`"01234"`, `"+44123"`: a
- *    postcode, a phone number) is text, and text compares exactly.
+ *    precision. `"6.72"` vs `"6.713280"` still differs. The tolerance applies
+ *    only to known order-money paths; numeric-looking text compares exactly.
  *  - arrays whose server elements all carry an `id` (line items, fees, shipping)
  *    match by id — an id on one side only is one path (`line_items[12]`), a
  *    matched pair recurses. A pushed element WITHOUT an id is an append Woo will
@@ -27,6 +26,20 @@
  */
 const MAX_DEPTH = 6;
 const DECIMAL_LITERAL = /^-?(0|[1-9]\d*)(\.\d+)?$/;
+const ORDER_MONEY_PATHS = new Set([
+	'total',
+	'total_tax',
+	'cart_tax',
+	'discount_total',
+	'discount_tax',
+	'shipping_total',
+	'shipping_tax',
+]);
+const LINE_MONEY_PATH =
+	/^(?:line_items|fee_lines|shipping_lines|coupon_lines)\[[^\]]+\]\.(?:subtotal|subtotal_tax|total|total_tax|discount|discount_tax)$/;
+const LINE_TAX_MONEY_PATH =
+	/^(?:line_items|fee_lines|shipping_lines|coupon_lines)\[[^\]]+\]\.taxes\[[^\]]+\]\.(?:total|subtotal)$/;
+const TAX_LINE_MONEY_PATH = /^tax_lines\[[^\]]+\]\.(?:tax_total|shipping_tax_total)$/;
 const SKIPPED_TOP_LEVEL = new Set([
 	'date_modified',
 	'date_modified_gmt',
@@ -53,7 +66,14 @@ function decimalText(value: unknown): string | null {
 	if (decimalAt >= digits.length) return `${sign}${digits}${'0'.repeat(decimalAt - digits.length)}`;
 	return `${sign}${digits.slice(0, decimalAt)}.${digits.slice(decimalAt)}`;
 }
-function moneyEqual(left: unknown, right: unknown): boolean {
+function moneyEqual(left: unknown, right: unknown, path: string): boolean {
+	if (
+		!ORDER_MONEY_PATHS.has(path) &&
+		!LINE_MONEY_PATH.test(path) &&
+		!LINE_TAX_MONEY_PATH.test(path) &&
+		!TAX_LINE_MONEY_PATH.test(path)
+	)
+		return false;
 	const leftText = decimalText(left);
 	const rightText = decimalText(right);
 	if (leftText === null || rightText === null) return false;
@@ -72,7 +92,7 @@ function moneyEqual(left: unknown, right: unknown): boolean {
 export function diffConflictOverwrite(pushed: ObjectValue, server: ObjectValue): string[] {
 	const paths: string[] = [];
 	const compare = (left: unknown, right: unknown, path: string, depth: number): void => {
-		if (depth > MAX_DEPTH || Object.is(left, right) || moneyEqual(left, right)) return;
+		if (depth > MAX_DEPTH || Object.is(left, right) || moneyEqual(left, right, path)) return;
 		if (Array.isArray(left) && Array.isArray(right)) {
 			if (depth === MAX_DEPTH) return;
 			if (right.every(identified) && left.every(objectValue)) {

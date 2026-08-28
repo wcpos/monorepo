@@ -79,16 +79,16 @@ describe('diffConflictOverwrite', () => {
 	it('treats decimal values as equal at the shorter precision', () => {
 		expect(
 			diffConflictOverwrite(
-				{ equalWidth: '6.713280', equalType: 6.71, changed: '6.72' },
-				{ equalWidth: '6.71', equalType: '6.713280', changed: '6.713280' }
+				{ total: '6.713280', total_tax: 6.71, shipping_total: '6.72' },
+				{ total: '6.71', total_tax: '6.713280', shipping_total: '6.713280' }
 			)
-		).toEqual(['changed']);
+		).toEqual(['shipping_total']);
 	});
 
 	it('compares numeric-looking TEXT exactly — a postcode or phone is not money', () => {
 		expect(
 			diffConflictOverwrite(
-				{ billing: { postcode: '01234', phone: '+44123', city: 'Leeds' } },
+				{ billing: { postcode: '01234', phone: '44123.0', city: 'Leeds' } },
 				{ billing: { postcode: '1234', phone: '44123', city: 'Leeds' } }
 			)
 		).toEqual(['billing.phone', 'billing.postcode']);
