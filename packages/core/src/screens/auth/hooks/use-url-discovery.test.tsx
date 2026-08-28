@@ -40,7 +40,15 @@ describe('useUrlDiscovery', () => {
 			'https://example.com/wp-json/'
 		);
 
-		expect(mockHead).toHaveBeenCalledWith('https://example.com', { timeout: 10_000 });
+		// EXACT options, quietErrors included: a probe asking "is this a
+		// WordPress site?" must not log "no" as an application error. Dropping
+		// the flag put a typo'd store URL in the error log under a CLIENT999
+		// fallback and raised a dev-client redbox over the connect screen
+		// (E2E flow 01, iOS, 2026-08-29).
+		expect(mockHead).toHaveBeenCalledWith('https://example.com', {
+			timeout: 10_000,
+			quietErrors: true,
+		});
 	});
 
 	it('falls back to /wp-json/ when the front-page probe hangs past its timeout', async () => {
@@ -56,6 +64,7 @@ describe('useUrlDiscovery', () => {
 
 		expect(mockHead).toHaveBeenNthCalledWith(2, 'https://example.com/wp-json/', {
 			timeout: 10_000,
+			quietErrors: true,
 		});
 	});
 

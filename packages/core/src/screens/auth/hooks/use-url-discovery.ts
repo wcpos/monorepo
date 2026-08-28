@@ -95,7 +95,17 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 	const tryLinkHeaderDiscovery = React.useCallback(
 		async (normalizedUrl: string): Promise<ProbeResult> => {
 			try {
-				const response = await http.head(normalizedUrl, { timeout: DISCOVERY_PROBE_TIMEOUT_MS });
+				// quietErrors: this probe ASKS whether an arbitrary string is a
+				// WordPress site. "No" is the answer, not an application error —
+				// the catch below treats it as routine and the cashier gets a
+				// plain "doesn't seem to be a WordPress site". Logging it at
+				// error level put a typo'd URL in the error log under a
+				// CLIENT999 fallback code, and raised a dev-client redbox over
+				// the connect screen (E2E flow 01, iOS, 2026-08-29).
+				const response = await http.head(normalizedUrl, {
+					timeout: DISCOVERY_PROBE_TIMEOUT_MS,
+					quietErrors: true,
+				});
 
 				if (!response) {
 					return { url: null, timedOut: false };
@@ -123,7 +133,13 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 			const fallbackUrl = `${normalizedUrl}/wp-json/`;
 
 			try {
-				const response = await http.head(fallbackUrl, { timeout: DISCOVERY_PROBE_TIMEOUT_MS });
+				// quietErrors for the same reason as the Link-header probe: this
+				// runs precisely BECAUSE the first probe found nothing, so its
+				// failure is the expected second half of "not a WordPress site".
+				const response = await http.head(fallbackUrl, {
+					timeout: DISCOVERY_PROBE_TIMEOUT_MS,
+					quietErrors: true,
+				});
 
 				if (response && response.status === 200) {
 					return { url: fallbackUrl, timedOut: false };

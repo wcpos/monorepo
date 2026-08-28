@@ -12,8 +12,10 @@ env:
 # behind this exact sequence; keep the two flows in step.
 - clearState
 - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
-# Android-only dev-menu dismissal — see flow 01 for the full rationale
-# (Maestro 2.6.1 has no `optional` wait; iOS never shows the menu).
+# Dev-menu dismissal on BOTH platforms — see flow 01 for the full rationale
+# and for why "iOS never shows the menu" was wrong (a job that could not
+# report failure supplied the evidence; #1662). Maestro 2.6.1 has no
+# `optional` wait, so each block's waits are deliberately unconditional.
 - runFlow:
     when:
       platform: Android
@@ -23,6 +25,22 @@ env:
             text: "Toggle performance monitor"
           timeout: 60000
       - pressKey: back
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - extendedWaitUntil:
+          visible:
+            text: "Continue"
+          timeout: 60000
+      - tapOn:
+          text: "Continue"
+      - extendedWaitUntil:
+          visible:
+            text: "Close"
+          timeout: 30000
+      - tapOn:
+          text: "Close"
 - extendedWaitUntil:
     visible:
       id: "store-url-input"
