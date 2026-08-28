@@ -112,6 +112,7 @@ export type SyncEventType =
 	| 'queue.write.auto-reverted'
 	| 'queue.write.born-twice-requeue'
 	| 'queue.write.coalesce'
+	| 'queue.write.conflict-overwrote-server'
 	| 'queue.write.conflict-recovered'
 	| 'queue.write.conflict-transition'
 	| 'queue.write.discard-repull-deferred'
@@ -240,6 +241,19 @@ export type SyncEventFieldsByType = {
 		readonly reason?: string;
 		/** The server's human-readable (WP-localized) message, when it sent one. */
 		readonly serverMessage?: string;
+	};
+	'queue.write.conflict-overwrote-server': {
+		readonly recordId: string;
+		readonly mutationId: string;
+		readonly baseRevision: string;
+		readonly overwrittenFields: readonly string[];
+		readonly overwrittenCount: number;
+	};
+	'queue.write.conflict-recovered': {
+		readonly recordId: string;
+		readonly mutationId: string;
+		readonly baseRevision: string;
+		readonly serverDocumentCompared: boolean;
 	};
 	'queue.scheduler.drain': {
 		readonly scanned?: number;

@@ -131,7 +131,8 @@ function parseBareArray(body: unknown): WooPayload[] {
  * The lab /variations include envelope: `{ documents: [...] }`. Each wrapper
  * is flattened into the payload the projection consumes — `parent_id` rides
  * the wrapper (not the inner payload), and the wrapper-level `_rxdb_digest`
- * (a transport-only Leg-3 digest) is deliberately dropped.
+ * (a transport-only Leg-3 digest) is carried through onto the flattened row
+ * for the existence manifest.
  */
 export function parseVariationsEnvelope(body: unknown): WooPayload[] {
 	/**

@@ -77,6 +77,7 @@ export const SYNC_EVENT_TYPES = [
 	'queue.write.auto-reverted',
 	'queue.write.born-twice-requeue',
 	'queue.write.coalesce',
+	'queue.write.conflict-overwrote-server',
 	'queue.write.conflict-recovered',
 	'queue.write.conflict-transition',
 	'queue.write.discard-repull-deferred',
@@ -661,6 +662,16 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		descriptionKey: 'health.logs.event_description.queue_write_coalesce',
 		description: 'Several quick edits to the same record were combined into one send.',
 		introducedIn: '1.10.0',
+	},
+	'queue.write.conflict-overwrote-server': {
+		type: 'queue.write.conflict-overwrote-server',
+		domain: 'SYNC',
+		key: 'health.logs.event.queue_write_conflict_overwrote_server',
+		label: "A clashing change overwrote your store's copy",
+		descriptionKey: 'health.logs.event_description.queue_write_conflict_overwrote_server',
+		description:
+			'A change clashed with a newer copy in your store; the POS saved its own version, overwriting the fields listed in the details.',
+		introducedIn: '1.10.3',
 	},
 	'queue.write.conflict-recovered': {
 		type: 'queue.write.conflict-recovered',

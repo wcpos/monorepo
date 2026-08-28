@@ -294,6 +294,58 @@ describe('createSyncLogObserver', () => {
 		});
 	});
 
+	it('names the server fields overwritten by a recovered conflict', () => {
+		observer.observe(
+			event({
+				type: 'queue.write.conflict-overwrote-server',
+				level: 'warn',
+				collection: 'orders',
+				fields: {
+					recordId: 'order-9',
+					mutationId: 'mutation-9',
+					baseRevision: 'sha256:store',
+					overwrittenFields: ['line_items[12]', 'status'],
+					overwrittenCount: 2,
+				},
+			})
+		);
+
+		expect(rows[0]).toMatchObject({
+			level: 'warn',
+			message: 'orders order-9 — overwrote 2 store fields: line_items[12], status',
+			context: {
+				type: 'queue.write.conflict-overwrote-server',
+				recordId: 'order-9',
+				direction: 'push',
+				overwrittenFields: ['line_items[12]', 'status'],
+				overwrittenCount: 2,
+			},
+			terminal: { operationType: 'sync.record', outcome: 'recovered' },
+		});
+		expect(rows[0].toast).toBeUndefined();
+	});
+
+	it('marks a capped overwrite field list as partial', () => {
+		observer.observe(
+			event({
+				type: 'queue.write.conflict-overwrote-server',
+				level: 'warn',
+				collection: 'orders',
+				fields: {
+					recordId: 'order-9',
+					mutationId: 'mutation-9',
+					baseRevision: 'sha256:store',
+					overwrittenFields: ['billing.email', 'status'],
+					overwrittenCount: 3,
+				},
+			})
+		);
+
+		expect(rows[0].message).toBe(
+			'orders order-9 — overwrote 3 store fields (showing 2): billing.email, status'
+		);
+	});
+
 	it('sanitizes and truncates server reasons in record rows', () => {
 		const reason = `Contact customer@example.com ${'x'.repeat(220)}`;
 		observer.observe(

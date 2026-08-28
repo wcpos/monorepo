@@ -55,6 +55,148 @@ async function harness(mutation: RecordMutation) {
 }
 
 describe('drainMutationQueue — order conflict auto-recovery (#1204)', () => {
+	it('warns when recovery overwrites clashing server fields', async () => {
+		const { queue, server, events, push } = await harness(
+			mut({
+				payload: { id: 900, status: 'completed', line_items: [{ id: 11, quantity: 1 }] },
+			})
+		);
+		server.seed('order-A', { id: 900, revision: 'sha256:server-moved', collection: 'orders' });
+		let attempts = 0;
+		server.script(() => {
+			attempts += 1;
+			return attempts === 1
+				? {
+						kind: 'conflict',
+						current: {
+							id: 900,
+							status: 'processing',
+							line_items: [
+								{ id: 11, quantity: 1 },
+								{ id: 12, quantity: 1 },
+							],
+						},
+						currentRevision: 'sha256:server-moved',
+					}
+				: undefined;
+		});
+
+		await drainMutationQueue({
+			queue,
+			push,
+			autoRecoverConflict: () => true,
+			observe: (event) => events.push(event),
+		});
+
+		expect(
+			events.filter((event) => event.type === 'queue.write.conflict-overwrote-server')
+		).toEqual([
+			{
+				type: 'queue.write.conflict-overwrote-server',
+				level: 'warn',
+				collection: 'orders',
+				fields: {
+					recordId: 'order-A',
+					mutationId: 'm1',
+					baseRevision: 'sha256:server-moved',
+					overwrittenFields: ['line_items[12]', 'status'],
+					overwrittenCount: 2,
+				},
+			},
+		]);
+		expect(events.some((event) => event.type === 'queue.write.conflict-recovered')).toBe(false);
+	});
+
+	it('records a compared recovery when the server differs only by money width', async () => {
+		const { queue, server, events, push } = await harness(
+			mut({ payload: { id: 900, total: '6.713280' } })
+		);
+		server.seed('order-A', { id: 900, revision: 'sha256:server-moved', collection: 'orders' });
+		let attempts = 0;
+		server.script(() => {
+			attempts += 1;
+			return attempts === 1
+				? {
+						kind: 'conflict',
+						current: { id: 900, total: '6.71' },
+						currentRevision: 'sha256:server-moved',
+					}
+				: undefined;
+		});
+
+		await drainMutationQueue({
+			queue,
+			push,
+			autoRecoverConflict: () => true,
+			observe: (event) => events.push(event),
+		});
+
+		expect(events.filter((event) => event.type === 'queue.write.conflict-recovered')).toEqual([
+			expect.objectContaining({
+				fields: expect.objectContaining({ serverDocumentCompared: true }),
+			}),
+		]);
+	});
+
+	it('never diffs a recovered DELETE — its payload is the uuid, not fields', async () => {
+		const { queue, server, events, push } = await harness(
+			mut({ operation: 'delete', payload: { id: 'order-A' } })
+		);
+		server.seed('order-A', { id: 900, revision: 'sha256:server-moved', collection: 'orders' });
+		let attempts = 0;
+		server.script(() => {
+			attempts += 1;
+			return attempts === 1
+				? {
+						kind: 'conflict',
+						current: { id: 900, status: 'processing' },
+						currentRevision: 'sha256:server-moved',
+					}
+				: undefined;
+		});
+
+		await drainMutationQueue({
+			queue,
+			push,
+			autoRecoverConflict: () => true,
+			observe: (event) => events.push(event),
+		});
+
+		expect(events.some((event) => event.type === 'queue.write.conflict-overwrote-server')).toBe(
+			false
+		);
+		expect(events.filter((event) => event.type === 'queue.write.conflict-recovered')).toEqual([
+			expect.objectContaining({
+				fields: expect.objectContaining({ serverDocumentCompared: false }),
+			}),
+		]);
+	});
+
+	it('records an uncomputed recovery when the conflict has no server document', async () => {
+		const { queue, server, events, push } = await harness(mut());
+		server.seed('order-A', { id: 900, revision: 'sha256:server-moved', collection: 'orders' });
+		let attempts = 0;
+		server.script(() => {
+			attempts += 1;
+			return attempts === 1
+				? { kind: 'conflict', current: null, currentRevision: 'sha256:server-moved' }
+				: undefined;
+		});
+
+		await drainMutationQueue({
+			queue,
+			push,
+			autoRecoverConflict: () => true,
+			observe: (event) => events.push(event),
+		});
+
+		expect(events.filter((event) => event.type === 'queue.write.conflict-recovered')).toEqual([
+			expect.objectContaining({
+				fields: expect.objectContaining({ serverDocumentCompared: false }),
+			}),
+		]);
+	});
+
 	it('re-anchors from the 409 and re-pushes once, so the order lands instead of parking', async () => {
 		const { queue, server, events, push } = await harness(mut());
 		// The server moved on without the client: exactly the state a refused
