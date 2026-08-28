@@ -66,6 +66,7 @@ export function classify(file) {
 	if (
 		/^apps\/main\/app\.config\.[^/]+$/.test(file) ||
 		file.startsWith('apps/main/plugins/') ||
+		file.startsWith('apps/main/modules/') ||
 		file === 'apps/main/eas.json' ||
 		file === 'apps/main/package.json'
 	)
@@ -300,10 +301,16 @@ function isCommentOnlyLine(content) {
 function isNonBehavioural(changed, baseRef) {
 	if (!changed.every((file) => /\.(md|mdx)$/.test(file) || CODE_EXTENSIONS.test(file)))
 		return false;
-	const hunks = spawnSync('git', ['diff', '-U0', `${baseRef}...HEAD`, '--'], { encoding: 'utf8' });
+	const hunks = spawnSync('git', ['diff', '--no-renames', '-U0', `${baseRef}...HEAD`, '--'], {
+		encoding: 'utf8',
+	});
 	if (hunks.status !== 0) return false;
 	let file = '';
 	for (const line of hunks.stdout.split('\n')) {
+		if (line.startsWith('--- a/')) {
+			file = line.slice(6).trim();
+			continue;
+		}
 		if (line.startsWith('+++ b/')) {
 			file = line.slice(6).trim();
 			continue;
@@ -332,7 +339,7 @@ function main() {
 				everythingPlan(`event is ${process.env.GITHUB_EVENT_NAME || 'unset'}, not pull_request`)
 			);
 		if (!baseRef) return emit(everythingPlan('no base SHA'));
-		const diff = spawnSync('git', ['diff', '--name-only', `${baseRef}...HEAD`], {
+		const diff = spawnSync('git', ['diff', '--no-renames', '--name-only', `${baseRef}...HEAD`], {
 			encoding: 'utf8',
 		});
 		if (diff.status !== 0)

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -84,6 +84,24 @@ test('a markdown-only change skips every tier', () => {
 	assert.equal(plan.lint, 'false');
 });
 
+test('renaming source code to a documentation path remains behavioural', () => {
+	const plan = planFromDiff(({ repo }) => {
+		mkdirSync(path.join(repo, 'docs'), { recursive: true });
+		renameSync(path.join(repo, 'packages/core/src/index.ts'), path.join(repo, 'docs/index.md'));
+	});
+	assert.equal(plan.lint, 'true');
+	assert.equal(plan.web, 'full');
+});
+
+test('deleting source code alongside a markdown edit remains behavioural', () => {
+	const plan = planFromDiff(({ append, join }) => {
+		append(join('README.md'), 'more prose\n');
+		rmSync(join('packages/core/src/index.ts'));
+	});
+	assert.equal(plan.lint, 'true');
+	assert.equal(plan.web, 'full');
+});
+
 for (const [name, line] of [
 	['real code next to a comment', '// comment\nexport const y = 2;\n'],
 	['a string that merely looks like a comment', 'export const url = "https://x.test";\n'],
@@ -159,6 +177,7 @@ test('one representative path exercises every ordered rule', () => {
 		['packages/utils/src/x.ts', 'package-src', { web: 'full', native: 'cachehit' }],
 		['apps/main/src/x.ts', 'app-src', { unit: 'main', web: 'full' }],
 		['apps/main/app.config.ts', 'native-config', { native: 'rebuild' }],
+		['apps/main/modules/scanner/android/build.gradle', 'native-config', { native: 'rebuild' }],
 		['pnpm-lock.yaml', 'root-deps', { unit: 'all', web: 'full' }],
 		['tsconfig.json', 'root-tsconfig', { unit: 'all', web: 'full' }],
 		['jest.config.js', 'root-jest', { unit: 'all', web: 'none' }],
