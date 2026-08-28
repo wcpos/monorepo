@@ -127,7 +127,13 @@ jobs:
     name: 🤖 Android (${{ matrix.device.name }})
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # 100, not 60: the app's ONE-TIME initial catalog sync (~40 min on these
+    # 2-vCPU swiftshader emulators) slows every interaction in whichever flow
+    # it overlaps — a roving 20-40 min flow that still PASSES (run 33120985474:
+    # flow 06 41m; run 33131212326: flows 04+05 52m together, then cancelled at
+    # 60:00 with every completed flow green). Once the sync finishes, flows
+    # take ~1 min. Budget = worst observed sync window + full suite + headroom.
+    timeout-minutes: 100
     strategy:
       fail-fast: false
       matrix:
