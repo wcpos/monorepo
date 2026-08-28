@@ -36,7 +36,8 @@ env:
 # FIRST assertion of every flow for weeks — run 33210992908 is the record —
 # because nothing dismissed this sheet. Reproduced locally on iOS 18.6 and
 # fixed: onboarding "Continue", then "Close" on the dev menu it hands you
-# to, lands on store-url-input.
+# to, lands on store-url-input. (In CI the SpringBoard scheme prompt below
+# comes first — the app has not even launched by this point.)
 #
 # The dev-menu waits are DELIBERATELY unconditional: the auto-open is
 # mechanism-backed (it follows any data clear), so if Expo ever stops showing
@@ -79,12 +80,6 @@ env:
       # dialog — while a reused local simulator never shows it. Hence
       # optional: the required "Continue" wait below is the real gate, and
       # it can only pass if the app actually launched.
-      #
-      # optional IS supported on waits and taps in this Maestro (verified
-      # 2026-08-29: both WARN and the flow exits 0). Flows 01/02 previously
-      # carried a note that it "fails schema parsing" (review #1637 P1) —
-      # that note was wrong or has expired; do not reinstate it without
-      # re-testing.
       - extendedWaitUntil:
           visible:
             text: "Open in .*WCPOS.*"
@@ -93,10 +88,18 @@ env:
       - tapOn:
           text: "Open"
           optional: true
+      # 180s, not 60s: this wait starts the moment the scheme prompt is
+      # dismissed, so it spans the app's COLD start — first fetch of the
+      # ~29 MB Metro bundle plus Hermes parse — and the dev menu only opens
+      # once JS is up. 60s was calibrated on a warm local simulator and
+      # expired on CI with the app still on its splash screen (run
+      # 33219707312 iOS tablet: openurl 23:24:25, Open tapped 23:24:32,
+      # wait expired 23:25:32 on the splash). The suite budgets 120-240s
+      # for cold-start waits elsewhere; this one belongs in that band.
       - extendedWaitUntil:
           visible:
             text: "Continue"
-          timeout: 60000
+          timeout: 180000
       - tapOn:
           text: "Continue"
       - extendedWaitUntil:
@@ -117,7 +120,15 @@ env:
 - tapOn:
     id: "store-url-input"
 - inputText: "https://not-a-real-store.invalid"
-- hideKeyboard
+# optional: hideKeyboard is unreliable on iOS (this file already says so at
+# the two Android-gated uses below, but this one was left ungated and failed
+# a local iOS suite run 2026-08-29 at exactly this step, having passed the
+# same step minutes earlier). Dismissing the keyboard is housekeeping — if it
+# genuinely covers the next target, THAT tap fails and names the real problem.
+# Failing here instead just reports "Hide Keyboard" and hides which element
+# was blocked.
+- hideKeyboard:
+    optional: true
 - tapOn:
     id: "connect-store-button"
 # The button disables while the discovery request is in flight; waiting for it
