@@ -14,6 +14,9 @@ import type { UseWcposAuthReturn, WcposAuthConfig, WcposAuthResult } from './typ
 
 export type { WcposAuthConfig, WcposAuthResult, UseWcposAuthReturn } from './types';
 
+/**
+ * Creates the native OAuth flow for a WCPOS site.
+ */
 export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 	// Imperative error captured when promptAsync() throws before producing a
 	// response (e.g. the request could not be launched). Set in the handler, not
@@ -94,7 +97,17 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 		// Clear any stale prompt error before retrying.
 		setPromptError(null);
 		try {
-			await promptAsync();
+			// createTask: false — the Android Custom Tab must live in the APP's
+			// task, not its own. The default (true) spawns a second task under
+			// the app's package; after login both tasks sit in recents, and a
+			// later launch (app icon, or E2E launchApp) can raise the BROWSER
+			// task — a dead login page over a healthy, logged-in app. Observed
+			// three times on the native suite (runs 33176268259 tablet flow 03,
+			// 33196506511 phone flow 06 + tablet flow 04, screenshots in the
+			// maestro artifacts): the tab resurrects on relaunch. In-task, the
+			// redirect dismissal removes it from the back stack for good.
+			// No-op on iOS (ASWebAuthenticationSession has no tasks).
+			await promptAsync({ createTask: false });
 		} catch (err) {
 			setPromptError({
 				type: 'error',
