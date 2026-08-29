@@ -6,8 +6,13 @@ env:
 ---
 # P0-6: cart quantity editing with the native soft keyboard (the web numpad
 # does not exist on native — number-input.tsx is a plain TextInput).
-- launchApp:
-    stopApp: true
+# Split stop/launch + a screenshot-based settle: a combined `launchApp:
+# {stopApp: true}` can race the XCTest driver's first hierarchy query and be
+# reported as "App crashed" — see flow 08's relaunch for the evidence.
+- stopApp
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 5000
 - extendedWaitUntil:
     visible:
       id: "search-products"

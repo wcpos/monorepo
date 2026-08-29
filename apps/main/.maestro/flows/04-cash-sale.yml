@@ -6,8 +6,13 @@ env:
 ---
 # P0-4: core cash sale — Products → Cart → checkout → back to a fresh order.
 # Session comes from 02-auth-setup; do NOT clear state.
-- launchApp:
-    stopApp: true
+# Split stop/launch + a screenshot-based settle: a combined `launchApp:
+# {stopApp: true}` can race the XCTest driver's first hierarchy query and be
+# reported as "App crashed" — see flow 08's relaunch for the evidence.
+- stopApp
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 5000
 - extendedWaitUntil:
     visible:
       id: "search-products"
@@ -91,9 +96,15 @@ env:
     visible:
       id: "checkout-dialog"
     timeout: 60000
+# `enabled`, not merely visible: the button renders DISABLED until the
+# payment frame reports its load event (#1024 gate in checkout.tsx), and a
+# tap on the disabled button is a silent no-op — Maestro still reports
+# COMPLETED. Order #117904 (local run 2026-08-29 17:09) sat `pos-open` with no
+# payment method for the whole 120s receipt wait because of exactly that.
 - extendedWaitUntil:
     visible:
       id: "process-payment-button"
+      enabled: true
     timeout: 60000
 - tapOn:
     id: "process-payment-button"

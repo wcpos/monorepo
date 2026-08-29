@@ -22,95 +22,41 @@ env:
 # Keep in step with flow 02.
 - clearState
 - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
-# Fourth hard-won lesson: Expo's dev MENU auto-opens over the app once the
-# JS loads after a data clear (its own onboarding — separate from the
-# launcher's disableOnboarding — and clearState wipes its already-shown flag
-# every run). It covered store-url-input in run 33168085439's failure
-# screenshot while the app sat loaded behind it.
-#
-# BOTH platforms show it. This block was Android-only until 2026-08-29, on
-# the strength of "iOS never shows it — twelve consecutive green iOS suites"
-# (review #1637). Those suites were an artefact: the iOS job piped maestro
-# through `tee` without pipefail, so it could not report a failure and
-# uploaded no artifacts (fixed in #1662). iOS had in fact been failing the
-# FIRST assertion of every flow for weeks — run 33210992908 is the record —
-# because nothing dismissed this sheet. Reproduced locally on iOS 18.6 and
-# fixed: onboarding "Continue", then "Close" on the dev menu it hands you
-# to, lands on store-url-input. (In CI the SpringBoard scheme prompt below
-# comes first — the app has not even launched by this point.)
-#
-# The dev-menu waits are DELIBERATELY unconditional: the auto-open is
-# mechanism-backed (it follows any data clear), so if Expo ever stops showing
-# it this fails visibly at a self-describing step instead of racing. Only the
-# SpringBoard scheme prompt below is `optional`, because that one genuinely
-# varies by environment rather than by app behaviour.
-#
-# (An older note here claimed Maestro 2.6.1 rejects `optional` on a wait
-# — review #1637 P1, "the field fails schema parsing". Re-tested 2026-08-29:
-# it parses and WARNs on both extendedWaitUntil and tapOn. Corrected rather
-# than carried forward.)
-#
-# Menu text, not testID: third-party native UI — the app's selector policy
-# cannot apply.
+# Launch blockers. The dev client's own overlays (floating dev-menu button,
+# menu-at-launch, onboarding card) are switched OFF by default in the
+# development build — apps/main/plugins/with-quiet-dev-menu.js — so the only
+# surfaces between openLink and the app are system-owned:
+#   Android: a queued ANR dialog ("Wait"), when the workflow enabled
+#            hide_error_dialogs too late.
+#   iOS:     SpringBoard's "Open in “WCPOS”?" scheme confirmation. clearState
+#            on iOS is uninstall+reinstall, and a simulator that has not yet
+#            trusted the scheme asks first. CI creates a fresh simulator every
+#            run (deterministic there; runs 33217891131 and 33218641226 sat
+#            behind it); a reused local simulator never shows it, so the wait
+#            is optional. The prompt can arrive >30s after openLink (run
+#            33220523217), so it is checked AGAIN after the cold-start wait —
+#            two surfaces on independent clocks must be handled in both
+#            orders, never one.
+# If the dev menu ever comes back, the required store-url-input wait below
+# fails visibly at a self-describing step; nothing here races it.
+# Menu/prompt text, not testID: third-party native UI — the app's selector
+# policy cannot apply.
 - runFlow:
     when:
       platform: Android
     commands:
-      # OPTIONAL wait, CONDITIONAL dismissal. The dev menu's appearance is not
-      # deterministic on Android, and the old unconditional wait + blind
-      # `pressKey: back` failed BOTH ways — 5 of 15 Android job-runs surveyed
-      # on 2026-08-29:
-      #
-      #   menu never appeared  → the wait itself failed
-      #                          (runs 33236848150, 33222190589, flow 01)
-      #   menu closed itself   → `back` fell through to the APP and exited it;
-      #     before `back` landed   the failure screenshot is the launcher home
-      #                          screen (runs 33236601064, 33235312423,
-      #                          33234084368, flow 02 at store-url-input)
-      #
-      # Both disappear if the wait may find nothing and the key press only
-      # happens while the menu is actually on screen. A blind global `back` is
-      # never safe: there is no state in which "press back and hope" is the
-      # right instruction to a device that may already be showing the app.
-      # Android can queue an ANR before the workflow enables
-      # hide_error_dialogs. Clear that system-owned overlay if present.
       - tapOn:
           text: "Wait"
           optional: true
-      - extendedWaitUntil:
-          visible:
-            text: "Toggle performance monitor"
-          timeout: 60000
-          optional: true
-      - runFlow:
-          when:
-            visible:
-              text: "Toggle performance monitor"
-          commands:
-            - pressKey: back
-# iOS has no back key, and the sheet arrives in two stages: the onboarding
-# card ("This is the developer menu…") with a Continue button, which then
-# hands you the dev menu proper. "Close" is the menu's own labelled control
-# (accessibilityText "Close", resource-id "xmark") — a real selector, not a
-# coordinate tap.
 - runFlow:
     when:
       platform: iOS
     commands:
-      # FIRST iOS blocker, ahead of the dev menu: SpringBoard asks
-      # "Open in “WCPOS”?" and the app does not start until something taps
-      # Open. clearState on iOS is uninstall+reinstall (maestro.log:
-      # simctl uninstall → install → openurl), and a simulator that has not
-      # yet trusted this scheme confirms it. CI creates a fresh simulator
-      # every run, so it is deterministic there — runs 33217891131 (tablet)
-      # and 33218641226 (phone) both sat on the springboard behind this
-      # dialog — while a reused local simulator never shows it. The prompt
-      # can arrive more than 30s after openLink (run 33220523217), so wait for
-      # either launch surface instead of timing out the prompt independently.
       - extendedWaitUntil:
           visible:
-            text: "Open in .*WCPOS.*|Continue"
-          timeout: 180000
+            text: "Open in .*WCPOS.*"
+          timeout: 45000
+          optional: true
       - runFlow:
           when:
             visible:
@@ -118,54 +64,26 @@ env:
           commands:
             - tapOn:
                 text: "Open"
-      # 180s, not 60s: this wait starts the moment the scheme prompt is
-      # dismissed, so it spans the app's COLD start — first fetch of the
-      # ~29 MB Metro bundle plus Hermes parse — and the dev menu only opens
-      # once JS is up. 60s was calibrated on a warm local simulator and
-      # expired on CI with the app still on its splash screen (run
-      # 33219707312 iOS tablet: openurl 23:24:25, Open tapped 23:24:32,
-      # wait expired 23:25:32 on the splash). The suite budgets 120-240s
-      # for cold-start waits elsewhere; this one belongs in that band.
-      # CONDITIONAL from here, for the same reason the Android block above is:
-      # the dev menu's appearance is not deterministic. A required wait for
-      # "Continue" fails outright whenever the menu does not show — run
-      # 33238290876's iOS tablet died exactly there, at
-      # `Assert that "Continue" is visible FAILED`, having already cleared the
-      # scheme prompt.
-      #
-      # The either-wait above is the real gate: it does not return until one
-      # of the two launch surfaces exists. Everything after it is cleanup, and
-      # cleanup must never be the thing that fails a flow. If the menu never
-      # appears, the app is simply already usable and the required
-      # `store-url-input` wait below proves it.
+      # Cold start: first fetch of the ~29 MB Metro bundle plus Hermes parse.
+      # 60s expired on CI with the app still on its splash (run 33219707312);
+      # the suite budgets 120-240s elsewhere. Optional only so a LATE scheme
+      # prompt sitting in front of it can still be cleared next.
       - extendedWaitUntil:
           visible:
-            text: "Continue"
+            id: "store-url-input"
           timeout: 180000
           optional: true
       - runFlow:
           when:
             visible:
-              text: "Continue"
+              text: "Open in .*WCPOS.*"
           commands:
             - tapOn:
-                text: "Continue"
-            - extendedWaitUntil:
-                visible:
-                  text: "Close"
-                timeout: 30000
-                optional: true
-            - runFlow:
-                when:
-                  visible:
-                    text: "Close"
-                commands:
-                  - tapOn:
-                      text: "Close"
+                text: "Open"
 - extendedWaitUntil:
     visible:
       id: "store-url-input"
-    timeout: 60000
+    timeout: 180000
 - assertVisible:
     id: "connect-store-button"
 - assertVisible:

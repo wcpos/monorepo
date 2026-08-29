@@ -17,8 +17,13 @@ env:
 # native-only variation-popover crash (#1574 era) shipped unseen — the popover
 # is a native portal surface, so merely opening it is half the regression test.
 # Session comes from 02; the cart already holds 06's line — do NOT clear state.
-- launchApp:
-    stopApp: true
+# Split stop/launch + a screenshot-based settle: a combined `launchApp:
+# {stopApp: true}` can race the XCTest driver's first hierarchy query and be
+# reported as "App crashed" — see flow 08's relaunch for the evidence.
+- stopApp
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 5000
 - extendedWaitUntil:
     visible:
       id: "search-products"

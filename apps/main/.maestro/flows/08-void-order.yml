@@ -1,13 +1,28 @@
 appId: com.wcpos.main.dev
 ---
-# P0-8: void the open orders and prove relaunch does not resurrect them.
-# Every relaunch since 04 opened a FRESH current order, stranding each prior
-# flow's cart in its own open-order tab (06's and 07's both survive to here —
-# see run 33137492733's flow-07 screenshot). Voiding only "the current order"
-# would void a fresh EMPTY one and pass vacuously, so: void every populated
-# open-order tab in a loop, then relaunch and assert none came back.
-- launchApp:
-    stopApp: true
+# P0-8: void ONE identified order and prove relaunch does not resurrect it.
+#
+# Identity without an id. Tabs are keyed `open-order-tab-<uuid>` and Maestro
+# cannot read a testID's suffix, but every tab already renders its order's
+# total ("Cart $43,718.19" — `CartTabTitle`). This flow makes the total
+# unique, so the total IS the order's handle: create-and-find (store-agnostic
+# policy), no hidden markers, no product change.
+#
+# Why not "no open-order tab may exist": a store with many open orders is a
+# valid state (owner ruling, 2026-08-29 — dev-pro holds ~2,400 pos-open orders
+# in the E2E cashier's scope), and the old tab loop tapped index 0, the OLDEST
+# open order, i.e. it voided the store's fixture orders one by one.
+#
+# The void itself: the cashier role cannot DELETE (`woocommerce_rest_cannot_delete`),
+# so the app converts the void to `status: pending` (buttons/void.tsx). Open
+# tabs are filtered to `pos-open`, so the converted order must not return.
+# Split stop/launch + a screenshot-based settle: a combined `launchApp:
+# {stopApp: true}` can race the XCTest driver's first hierarchy query and be
+# reported as "App crashed" — see flow 08's relaunch for the evidence.
+- stopApp
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 5000
 - extendedWaitUntil:
     visible:
       id: "search-products"
@@ -19,41 +34,93 @@ appId: com.wcpos.main.dev
     commands:
       - tapOn:
           id: "pos-tab-cart"
+# A relaunch opens a FRESH current order, so the cart is empty and has no tab
+# of its own yet — it gets one on the first write below.
+- assertNotVisible:
+    id: "cart-quantity-input"
+# Mint a run-unique amount: 5-digit dollars + 2-digit cents, a 9M-value space
+# (P(collision) with ~2,400 open orders ≈ 0.03%). ES5 only — Maestro's JS
+# engine has no padStart. Typed in two bursts below because a single
+# `inputText` of ≥8 keys is a barcode scan to the wedge heuristic (#1680).
+- evalScript: ${output.dollars = String(10000 + Math.floor(Math.random() * 90000))}
+- evalScript: ${output.cents = String(Math.floor(Math.random() * 100)); if (output.cents.length < 2) { output.cents = '0' + output.cents }}
+# The referent is the AMOUNT the flow itself injected, not localized copy:
+# `.` stands in for the store's separators, `.?` for the thousands one, so the
+# pattern is currency-format-agnostic (10,000.00 / 10000,00 / 10 000.00).
+- evalScript: ${output.amountRe = '.*' + output.dollars.slice(0, 2) + '.?' + output.dollars.slice(2) + '.' + output.cents + '.*'}
+# Add a fee for exactly that amount. `prices_include_tax` defaults ON, so the
+# order total equals the typed amount whatever the store's tax setup is.
+- tapOn:
+    id: "add-cart-item-menu"
+- tapOn:
+    id: "menu-add-fee"
 - extendedWaitUntil:
     visible:
-      id: "open-order-tab-.*"
+      id: "add-fee-dialog"
     timeout: 30000
-- repeat:
-    while:
-      visible:
-        id: "open-order-tab-.*"
-    commands:
-      - tapOn:
-          id: "open-order-tab-.*"
-          index: 0
-      - extendedWaitUntil:
-          visible:
-            id: "void-button"
-          timeout: 30000
-      - tapOn:
-          id: "void-button"
-      # Confirm if a confirmation dialog appears.
-      - runFlow:
-          when:
-            visible: "Void|Confirm"
-          commands:
-            - tapOn: "Void|Confirm"
-      # The voided order's tab must disappear before the next iteration reads
-      # the tab list again, or the loop re-taps a ghost.
-      - extendedWaitUntil:
-          notVisible:
-            id: "cart-quantity-input"
-          timeout: 30000
+- tapOn:
+    id: "fee-amount-input"
+- eraseText
+- inputText: ${output.dollars}
+- inputText: ".${output.cents}"
+- assertVisible:
+    text: "${output.dollars}.${output.cents}"
+# The submit button sits UNDER the numeric keyboard on a phone (y≈543 vs a
+# keyboard top of ≈516 on an iPhone 16 Pro) and iOS `hideKeyboard` failed
+# here (run 2026-08-29 16:27, "Hide Keyboard... WARNED"), so the tap landed
+# on the keypad and the dialog never closed. Return in the optional name field
+# blurs a single-line TextInput on both platforms, which takes the keyboard
+# down deterministically; `hideKeyboard` stays as optional housekeeping.
+- tapOn:
+    id: "fee-name-input"
+- inputText: "\n"
+- hideKeyboard:
+    optional: true
+- tapOn:
+    id: "add-to-cart-submit"
+- extendedWaitUntil:
+    notVisible:
+      id: "add-fee-dialog"
+    timeout: 30000
+- extendedWaitUntil:
+    visible:
+      id: "cart-subtotal"
+    timeout: 30000
+# The order now has a tab, and the tab carries our amount. This positive
+# assertion is what makes the negative ones below meaningful.
+- extendedWaitUntil:
+    visible:
+      text: "${output.amountRe}"
+    timeout: 30000
+- tapOn:
+    id: "void-button"
+# The voided order leaves the tab strip and the cart falls back to a fresh
+# empty order.
+- extendedWaitUntil:
+    notVisible:
+      text: "${output.amountRe}"
+    timeout: 30000
 - assertNotVisible:
     id: "cart-quantity-input"
-# Relaunch: no voided order may come back.
-- launchApp:
-    stopApp: true
+# Relaunch: the voided order must not come back. Tabs sort date_created ASC
+# (use-open-orders-resource.ts), so a resurrected order would sit at the END
+# of the strip beside the "+" tab; the strip auto-scrolls to the selected
+# "new" tab on mount. Requiring the "+" tab on screen first means the
+# negative assertion is looking exactly where a ghost would appear.
+#
+# stopApp and launchApp are SEPARATE here, with a settle before the first
+# hierarchy query. A combined `launchApp: {stopApp: true}` straight after the
+# void raced the XCTest driver: the new process existed (syslog 16:36:08.97)
+# but its scene activated at 16:36:09.41, and the driver's hierarchy request
+# at 16:36:09.20 answered "Application … is not running", which Maestro
+# reports as an app crash (local iOS 18.6, 2026-08-29, three runs in a row —
+# no crash report, process alive 25s later, manual terminate+launch 3/3).
+# `waitForAnimationToEnd` is screenshot-based, so it does not query the
+# app's hierarchy while the scene is still coming up.
+- stopApp
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 5000
 - extendedWaitUntil:
     visible:
       id: "search-products"
@@ -67,5 +134,9 @@ appId: com.wcpos.main.dev
           id: "pos-tab-cart"
 - assertNotVisible:
     id: "cart-quantity-input"
+- extendedWaitUntil:
+    visible:
+      id: "new-order-tab"
+    timeout: 30000
 - assertNotVisible:
-    id: "open-order-tab-.*"
+    text: "${output.amountRe}"
