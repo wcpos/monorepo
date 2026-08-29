@@ -14,6 +14,7 @@ import { PaymentWebview } from './payment-webview';
 let webViewProps: Record<string, any> = {};
 const mockGet = jest.fn();
 const mockReplace = jest.fn();
+const mockSetCurrentOrderID = jest.fn();
 const mockStockAdjustment = jest.fn();
 const mockEngineRequire = jest.fn();
 let autoShowReceipt = false;
@@ -45,6 +46,9 @@ jest.mock('../../../../../contexts/app-state', () => ({
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { autoShowReceipt } }),
+}));
+jest.mock('../../contexts/current-order', () => ({
+	useCurrentOrderActions: () => ({ setCurrentOrderID: mockSetCurrentOrderID }),
 }));
 jest.mock('../../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({ get: mockGet }),
@@ -80,59 +84,72 @@ describe('PaymentWebview fallback order refresh', () => {
 		jest.useRealTimers();
 	});
 
-	it('refreshes the engine order before routing a successful payment to its receipt', async () => {
-		autoShowReceipt = true;
-		let resolveRefresh: (() => void) | undefined;
-		const release = jest.fn();
-		mockEngineRequire.mockReturnValue({
-			ready: new Promise<void>((resolve) => {
-				resolveRefresh = resolve;
-			}),
-			release,
-		});
-		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
-
-		render(
-			<PaymentWebview
-				order={makeOrder()}
-				setLoading={jest.fn()}
-				setFrameStatus={jest.fn()}
-				onStockRejection={() => false}
-			/>
-		);
-
-		await act(async () => {
-			webViewProps.onMessage({
-				nativeEvent: {
-					data: {
-						action: 'wcpos-payment-received',
-						payload: { number: '42', status: 'completed', line_items: [] },
-					},
-				},
+	it('routes a successful payment to its receipt WITHOUT waiting for the engine refresh', async () => {
+		// Orders #117902 / #118391 (2026-08-29): "payment completed" was logged, the
+		// server had the order paid, and the receipt never opened because the
+		// refresh's `ready` never settled and the handler awaited it. Routing must
+		// not depend on the refresh; the refresh is bounded so its handle is
+		// always released.
+		jest.useFakeTimers();
+		try {
+			autoShowReceipt = true;
+			const release = jest.fn();
+			mockEngineRequire.mockReturnValue({
+				ready: new Promise<void>(() => {
+					/* never settles */
+				}),
+				release,
 			});
-			await Promise.resolve();
-		});
+			const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+			const setLoading = jest.fn();
 
-		expect(logger.success).toHaveBeenCalled();
-		expect(mockEngineRequire).toHaveBeenCalledWith({
-			id: 'checkout:order-refresh:42',
-			collection: 'orders',
-			kind: 'targeted-records',
-			remoteIds: ['42'],
-			forceRefresh: true,
-		});
-		expect(mockReplace).not.toHaveBeenCalled();
+			render(
+				<PaymentWebview
+					order={makeOrder()}
+					setLoading={setLoading}
+					setFrameStatus={jest.fn()}
+					onStockRejection={() => false}
+				/>
+			);
 
-		await act(async () => {
-			resolveRefresh?.();
-			await Promise.resolve();
-		});
+			await act(async () => {
+				webViewProps.onMessage({
+					nativeEvent: {
+						data: {
+							action: 'wcpos-payment-received',
+							payload: { number: '42', status: 'completed', line_items: [] },
+						},
+					},
+				});
+				await Promise.resolve();
+			});
 
-		expect(release).toHaveBeenCalledTimes(1);
-		expect(mockReplace).toHaveBeenCalledWith({
-			pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
-			params: { orderId: 'uuid-42' },
-		});
+			expect(logger.success).toHaveBeenCalled();
+			expect(mockEngineRequire).toHaveBeenCalledWith({
+				id: 'checkout:order-refresh:42',
+				collection: 'orders',
+				kind: 'targeted-records',
+				remoteIds: ['42'],
+				forceRefresh: true,
+			});
+			// Routed and un-spun immediately — the refresh is still pending.
+			expect(mockReplace).toHaveBeenCalledWith({
+				pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
+				params: { orderId: 'uuid-42' },
+			});
+			expect(setLoading).toHaveBeenCalledWith(false);
+			expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+			expect(release).not.toHaveBeenCalled();
+
+			// A refresh that never settles is released at the bound, not held forever.
+			await act(async () => {
+				jest.advanceTimersByTime(10_000);
+				await Promise.resolve();
+			});
+			expect(release).toHaveBeenCalledTimes(1);
+		} finally {
+			jest.useRealTimers();
+		}
 	});
 
 	it('does not poll on the initial page load (payment cannot have completed yet)', async () => {
@@ -268,6 +285,7 @@ describe('PaymentWebview fallback order refresh', () => {
 		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
 		expect(mockEngineRequire).toHaveBeenCalledTimes(1); // best-effort local catch-up
 		expect(logger.error).not.toHaveBeenCalled();
+		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
 	});
 });
