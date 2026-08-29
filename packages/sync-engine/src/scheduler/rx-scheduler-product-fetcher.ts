@@ -7,7 +7,6 @@
  */
 
 import {
-	FLEXSEARCH_MIN_TERM_LENGTH,
 	type ProductDocument,
 	productDocumentId,
 	type StoredProductDocument,
@@ -675,16 +674,15 @@ async function fetchProductSearch(
 	const limit = taskLimit(task);
 	const pageSize = taskLimit(task, input.pullBatchSize);
 	const term = search.trim();
-	const searchLeg =
-		term.length < FLEXSEARCH_MIN_TERM_LENGTH
-			? null
-			: await fetchProductSearchLeg(
-					input,
-					(perPage, page) => productSearchParams(term, perPage, page),
-					limit,
-					pageSize,
-					context
-				);
+	const searchLeg = !term.length
+		? null
+		: await fetchProductSearchLeg(
+				input,
+				(perPage, page) => productSearchParams(term, perPage, page),
+				limit,
+				pageSize,
+				context
+			);
 	const skuLeg = await fetchProductSearchLeg(
 		input,
 		(perPage, page) => productSkuParams(term, perPage, page),

@@ -10,7 +10,7 @@ import {
 	sortTiebreakFor,
 	wooOrderbyFor,
 } from '@wcpos/query/collection-map';
-import { FLEXSEARCH_MIN_TERM_LENGTH, variationAttributesMatch } from '@wcpos/query';
+import { variationAttributesMatch } from '@wcpos/query';
 import type { CompiledQueryRead, CompiledSortPart } from '@wcpos/query';
 import type {
 	EngineRequirement,
@@ -411,8 +411,7 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 	if (
 		search &&
 		(['products', 'customers', 'variations'] as string[]).includes(collection) &&
-		(collection !== 'variations' || !targeted?.length) &&
-		(collection !== 'customers' || search.length >= FLEXSEARCH_MIN_TERM_LENGTH)
+		(collection !== 'variations' || !targeted?.length)
 	) {
 		demand.push({
 			id: requirementId(options.id, 'search'),
