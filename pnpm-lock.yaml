@@ -74,6 +74,9 @@ importers:
       rxdb-premium:
         specifier: 17.4.0
         version: 17.4.0(rxdb@17.4.0(react@19.2.3)(rxjs@7.8.2))(rxjs@7.8.2)
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
 
   apps/main:
     dependencies:
