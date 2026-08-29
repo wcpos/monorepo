@@ -49,7 +49,45 @@ env:
       - tapOn:
           id: "search-products"
       - eraseText
-      - inputText: ${VARIABLE_PRODUCT_SEARCH}
+      # Type the query in CHUNKS, because one `inputText` types like a
+      # BARCODE SCANNER and the app is right to treat it as one.
+      #
+      # The wedge heuristic dispatches a scan for an unbroken run of at least
+      # `barcode_scanning_min_chars` (8) keys averaging under
+      # `barcode_scanning_avg_time_input_threshold` (24ms) — about 480 WPM, so
+      # no cashier, but every scanner and every `inputText`. The app then puts
+      # the unresolved code in the search box, which is INTENDED behaviour
+      # (owner ruling), and the code it writes is the detector's reconstruction
+      # rather than what was typed: run 33244082123's device logs carry
+      # `"barcode":"CPOS E2E Simple"`, `"OS E2E Variable"` and `"Variable"` as
+      # dispatched scans. That is what left this box holding a mangled query.
+      #
+      # NB this corrects the note above: the dropped leading characters are not
+      # an Android IME race. They are the same on iOS, they appear in the logs
+      # as barcode scans, and `foldWedgeKey` restarts its buffer whenever an
+      # inter-key gap exceeds the threshold — which the tap-to-first-key gap
+      # always does.
+      #
+      # A burst ends after WEDGE_END_OF_SCAN_MS (150ms) of silence and separate
+      # Maestro commands are far slower than that, so each chunk is its own
+      # burst; at 6 characters each is under the 8-key minimum and is filtered
+      # before the product lookup (use-barcode-detection.ts). Nothing is
+      # dispatched, and typing at human speed is exactly what this flow means
+      # to simulate.
+      #
+      # Three chunks of 6 cover terms up to 18 characters, which both seeded
+      # fixtures are. A longer term would put >= 8 characters in the final
+      # chunk and reintroduce the scan — the assertVisible below is the
+      # backstop, and it fails loudly rather than silently.
+      #
+      # Verified on device: two runs, query intact, ZERO scans dispatched,
+      # 6 too-short bursts logged and filtered (3 chunks x 2 runs).
+      - evalScript: ${output.q1 = VARIABLE_PRODUCT_SEARCH.slice(0, 6)}
+      - evalScript: ${output.q2 = VARIABLE_PRODUCT_SEARCH.slice(6, 12)}
+      - evalScript: ${output.q3 = VARIABLE_PRODUCT_SEARCH.slice(12)}
+      - inputText: ${output.q1}
+      - inputText: ${output.q2}
+      - inputText: ${output.q3}
       - assertVisible:
           text: ${VARIABLE_PRODUCT_SEARCH}
 - extendedWaitUntil:
