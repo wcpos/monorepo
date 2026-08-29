@@ -459,6 +459,12 @@ jobs:
             # becomes a literal maestro argument (run 33153806439).
             adb logcat -G 16M
             mkdir -p ~/.maestro/tests && nohup adb logcat -v threadtime > ~/.maestro/tests/logcat.txt 2>&1 &
+            # Record the screen too — see the iOS job for why one failure
+            # screenshot is not enough. `adb shell screenrecord` stops itself at
+            # ~180s, so loop it into numbered segments for the life of the run;
+            # the loop dies with the job. ONE LINE, per the rule above: a
+            # continuation backslash here becomes a literal maestro argument.
+            nohup sh -c 'i=0; while [ $i -lt 40 ]; do adb shell screenrecord --time-limit 180 "/sdcard/screen-$i.mp4" || break; adb pull "/sdcard/screen-$i.mp4" "$HOME/.maestro/tests/screen-$i.mp4" >/dev/null 2>&1 || true; adb shell rm -f "/sdcard/screen-$i.mp4" >/dev/null 2>&1 || true; i=$((i + 1)); done' > /dev/null 2>&1 &
             # Output tees into the artifact for the timing-triage step. The
             # runner's sh is dash (no pipefail), and each script line is its
             # own shell — so maestro's real exit code crosses lines via a
@@ -537,15 +543,26 @@ jobs:
             # Logger-formatted and direct console errors. Exclude the logger's
             # console.error copy so it is reported only once.
             #
-            # {0,200} not {0,300}: BSD grep (the macOS runners the iOS job uses)
-            # refuses a repetition count over 255 — "grep: maximum repetition
-            # exceeds 255" — and the step then reports NOTHING while exiting 0.
-            # GNU grep on the Linux/Android runner accepts it, so this fails on
-            # exactly one platform, silently.
+            # sed, NOT `grep -oE '<marker>.{0,N}'`. Two scars in one line:
+            #
+            #  * BSD grep (the macOS runners the iOS job uses) refuses a
+            #    repetition count over 255 — "grep: maximum repetition exceeds
+            #    255" — and the step then reports NOTHING while exiting 0. GNU
+            #    grep on the Linux/Android runner accepts it, so a bound of
+            #    {0,300} failed on exactly one platform, silently.
+            #
+            #  * Dropping to {0,200} to satisfy BSD then TRUNCATED the answer
+            #    mid-word. Run 33241496921 captured the cause of an entire
+            #    night's hunt as `"errorDetail":"Persisted scheduler runner ab`
+            #    with the decisive word sliced off (#1677).
+            #
+            # A capture from the marker to end-of-line carries no repetition
+            # count, so it is portable AND complete. cut is a generous sanity
+            # bound against one pathological line, not a content limit.
             {
-              grep -aoE 'ERROR : .{0,200}' "$LOG" || true
-              grep -aoE 'console\.error: .{0,200}' "$LOG" | grep -av 'ERROR :' || true
-            } | sort -u | head -20 > /tmp/apperr.txt
+              sed -n 's/.*\(ERROR : .*\)/\1/p' "$LOG" || true
+              sed -n 's/.*\(console\.error: .*\)/\1/p' "$LOG" | grep -av 'ERROR :' || true
+            } | cut -c1-4000 | sort -u | head -20 > /tmp/apperr.txt
             while IFS= read -r line; do
               [ -n "$line" ] || continue
               FOUND=$((FOUND + 1))
@@ -692,6 +709,21 @@ jobs:
             --predicate 'processImagePath CONTAINS "WCPOS"' \
             > ~/.maestro/tests/app-console.log 2>&1 &
 
+          # Record the SCREEN for the whole run. Maestro saves exactly one
+          # screenshot — the frame at the moment of failure — so every
+          # diagnosis from CI is backwards inference from an end state, and a
+          # still is easy to misread (the same frame was read as a dev-launcher
+          # home screen and as a slow search before it turned out to be a red
+          # box over a fully loaded POS, #1677).
+          #
+          # A video costs a background process and ~50MB of artifact and turns
+          # "the element was missing" into "here is what covered it, and when".
+          # --force overwrites a stale file rather than failing the step; the
+          # recording is finalized with SIGINT in the upload step below (a
+          # SIGKILL leaves an unplayable mp4).
+          nohup xcrun simctl io "$UDID" recordVideo --codec h264 --force \
+            ~/.maestro/tests/screen.mp4 > /dev/null 2>&1 &
+
       # One `maestro test` per flow, NOT batch mode: on iOS 26.x the XCUITest
       # driver socket can die mid-suite with no recovery (maestro#3318; both
       # simulators in run 33074068139 lost the driver ~4 min in). Per-flow
@@ -773,15 +805,26 @@ jobs:
             # Logger-formatted and direct console errors. Exclude the logger's
             # console.error copy so it is reported only once.
             #
-            # {0,200} not {0,300}: BSD grep (the macOS runners the iOS job uses)
-            # refuses a repetition count over 255 — "grep: maximum repetition
-            # exceeds 255" — and the step then reports NOTHING while exiting 0.
-            # GNU grep on the Linux/Android runner accepts it, so this fails on
-            # exactly one platform, silently.
+            # sed, NOT `grep -oE '<marker>.{0,N}'`. Two scars in one line:
+            #
+            #  * BSD grep (the macOS runners the iOS job uses) refuses a
+            #    repetition count over 255 — "grep: maximum repetition exceeds
+            #    255" — and the step then reports NOTHING while exiting 0. GNU
+            #    grep on the Linux/Android runner accepts it, so a bound of
+            #    {0,300} failed on exactly one platform, silently.
+            #
+            #  * Dropping to {0,200} to satisfy BSD then TRUNCATED the answer
+            #    mid-word. Run 33241496921 captured the cause of an entire
+            #    night's hunt as `"errorDetail":"Persisted scheduler runner ab`
+            #    with the decisive word sliced off (#1677).
+            #
+            # A capture from the marker to end-of-line carries no repetition
+            # count, so it is portable AND complete. cut is a generous sanity
+            # bound against one pathological line, not a content limit.
             {
-              grep -aoE 'ERROR : .{0,200}' "$LOG" || true
-              grep -aoE 'console\.error: .{0,200}' "$LOG" | grep -av 'ERROR :' || true
-            } | sort -u | head -20 > /tmp/apperr.txt
+              sed -n 's/.*\(ERROR : .*\)/\1/p' "$LOG" || true
+              sed -n 's/.*\(console\.error: .*\)/\1/p' "$LOG" | grep -av 'ERROR :' || true
+            } | cut -c1-4000 | sort -u | head -20 > /tmp/apperr.txt
             while IFS= read -r line; do
               [ -n "$line" ] || continue
               FOUND=$((FOUND + 1))
@@ -817,6 +860,23 @@ jobs:
           path: /tmp/app-errors
           if-no-files-found: ignore
           retention-days: 7
+
+      # SIGINT, never SIGKILL: simctl finalizes the mp4 container on interrupt,
+      # and a killed recording uploads as an unplayable file — which looks
+      # exactly like a recording that never ran. Give it a moment to flush.
+      - name: "\U0001F3AC Finalize screen recording"
+        if: always()
+        run: |
+          pkill -INT -f 'simctl io .* recordVideo' || true
+          for _ in 1 2 3 4 5 6 7 8 9 10; do
+            pgrep -f 'simctl io .* recordVideo' > /dev/null || break
+            sleep 1
+          done
+          if [ -s ~/.maestro/tests/screen.mp4 ]; then
+            echo "screen recording: $(du -h ~/.maestro/tests/screen.mp4 | cut -f1)"
+          else
+            echo "::warning title=no screen recording::recordVideo produced no output"
+          fi
 
       - name: ⬆️ Upload device artifacts
         if: always()

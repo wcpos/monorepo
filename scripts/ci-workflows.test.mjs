@@ -206,6 +206,120 @@ test('native E2E reports logger and direct console errors on both platforms', ()
 	}
 });
 
+test('native E2E extracts app errors WITHOUT a length bound', () => {
+	// Two silent-failure scars live in this one expression, and both produced a
+	// report that looked like it worked:
+	//
+	//  * `grep -oE 'ERROR : .{0,300}'` — BSD grep (the macOS runners the iOS
+	//    job uses) refuses a repetition count over 255 and the step then reports
+	//    NOTHING while exiting 0. GNU grep on the Android runner accepts it, so
+	//    it failed on exactly one platform.
+	//
+	//  * `grep -oE 'ERROR : .{0,200}'` — portable, but it TRUNCATED the answer
+	//    mid-word: run 33241496921 captured the root cause of a full night's
+	//    diagnosis as `"errorDetail":"Persisted scheduler runner ab` (#1677).
+	//
+	// So a bounded repetition against the log is banned outright. Capture from
+	// the marker to end-of-line instead — no count, portable and complete.
+	const workflow = readWorkflow('e2e-native.yml');
+
+	for (const jobName of ['android', 'ios']) {
+		const step = findStep(workflow, jobName, '🔴 Surface app errors');
+
+		assert.doesNotMatch(
+			step.run,
+			/grep[^\n]*-o[^\n]*\{0,\d+\}/,
+			`${jobName}: bounded-repetition grep truncates app errors — capture to end-of-line`
+		);
+		assert.match(step.run, /sed -n 's\/\.\*\\\(ERROR : \.\*\\\)\/\\1\/p'/);
+	}
+});
+
+test('native E2E keeps the whole error line, not a prefix of it', () => {
+	// Behavioural, not textual: feed the step the exact line that was truncated
+	// in run 33241496921 and assert the decisive word survives. The literal
+	// below is 268 characters from `ERROR : `, past both the 200 bound that
+	// truncated it and the 255 BSD ceiling.
+	const workflow = readWorkflow('e2e-native.yml');
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-native-untruncated-'));
+	const longError =
+		'08-29 08:16:38.100 E unknown:ReactNative: console.error: 8:16:38 AM | ERROR : Error | Context: ' +
+		'{"category":"wcpos.sync.engine","requirementId":"_r_12_:parent:products-browse-window",' +
+		'"kind":"query","durationMs":561,"errorName":"Error",' +
+		'"errorDetail":"Persisted scheduler runner aborted",' +
+		'"type":"coverage.require.error","collection":"products","errorCode":"SYNC321"}';
+
+	try {
+		for (const [jobName, logName] of [
+			['android', 'logcat.txt'],
+			['ios', 'app-console.log'],
+		]) {
+			const maestroDir = path.join(workspace, jobName, '.maestro', 'tests');
+			const summaryPath = path.join(workspace, `${jobName}-summary.md`);
+			mkdirSync(maestroDir, { recursive: true });
+			writeFileSync(path.join(maestroDir, logName), `${longError}\n`);
+
+			const step = findStep(workflow, jobName, '🔴 Surface app errors');
+			const script = step.run
+				.replaceAll('${{ matrix.device.name }}', 'phone')
+				.replaceAll('/tmp/apperr', path.join(workspace, `${jobName}-apperr`))
+				.replaceAll('/tmp/app-errors', path.join(workspace, `${jobName}-app-errors`));
+			const result = runShell(script, {
+				env: {
+					GITHUB_STEP_SUMMARY: summaryPath,
+					HOME: path.join(workspace, jobName),
+					RUNNER_OS: jobName === 'android' ? 'Linux' : 'macOS',
+				},
+			});
+
+			assert.equal(result.status, 0, result.stdout + result.stderr);
+			// The word the 200-char bound sliced off, and the tail after it.
+			const summary = readFileSync(summaryPath, 'utf8');
+			assert.match(summary, /Persisted scheduler runner aborted/, `${jobName}: truncated`);
+			assert.match(summary, /SYNC321/, `${jobName}: lost the trailing error code`);
+		}
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
+test('both native platforms record the screen for the whole run', () => {
+	// Maestro saves ONE screenshot, at the moment of failure. Every CI
+	// diagnosis is therefore backwards inference from an end state, and a still
+	// is easy to misread — the same frame was read as a dev-launcher home
+	// screen and as a slow product search before it turned out to be a red box
+	// over a fully loaded POS (#1677). A recording is a background process and
+	// ~50MB of artifact; it is the cheapest diagnostic in the suite.
+	const workflow = readWorkflow('e2e-native.yml');
+
+	const iosCapture = findStep(workflow, 'ios', '📱 Boot simulator and install app');
+	assert.match(iosCapture.run, /simctl io "\$UDID" recordVideo/);
+	assert.match(iosCapture.run, /--force/);
+
+	// SIGINT, not SIGKILL: simctl finalizes the container on interrupt and a
+	// killed recording uploads as an unplayable file, which is indistinguishable
+	// from a recording that never ran.
+	const finalize = findStep(workflow, 'ios', '🎬 Finalize screen recording');
+	assert.match(finalize.run, /pkill -INT -f 'simctl io \.\* recordVideo'/);
+	assert.equal(finalize.if, 'always()');
+
+	// The Android emulator step carries its shell in `with.script`, and the
+	// emulator-runner action executes that script LINE BY LINE, each line its
+	// own `sh -c`. A continuation backslash there becomes a literal maestro
+	// argument (run 33153806439), so the recorder must be a single line.
+	const androidCapture = findStep(workflow, 'android', '📱 Run Maestro suite on emulator');
+	const androidScript = androidCapture.with.script;
+	assert.match(androidScript, /screenrecord/);
+	const recorderLine = androidScript
+		.split('\n')
+		.find((line) => line.includes('screenrecord'));
+	assert.doesNotMatch(
+		recorderLine,
+		/\\$/,
+		'the screen recorder must be ONE line — a trailing backslash becomes a maestro argument'
+	);
+});
+
 test('native E2E searches every issue-comment page for its sticky report', () => {
 	const workflow = readWorkflow('e2e-native.yml');
 	const step = findStep(workflow, 'app-errors', '💬 Comment when the app logged errors');

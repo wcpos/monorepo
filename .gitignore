@@ -33,3 +33,6 @@ docs/
 # Local scratch (Paul) — real store data / local wiki checkout, never commit
 /paper-current.html
 /.wiki/
+
+# Local native E2E runs (video + logs, ~15MB each)
+.e2e-local/
