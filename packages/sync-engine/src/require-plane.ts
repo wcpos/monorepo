@@ -1298,6 +1298,20 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 								requirementId: next.requirement.id,
 								kind: next.requirement.kind,
 								durationMs: Date.now() - startedAt,
+								// `message` above is an ALLOW-LIST: it keeps our own
+								// `require: …` text and collapses everything else to
+								// `error.name`, which for a plain Error is the string
+								// "Error". That is the right call for the enumerable
+								// title (it drives the cashier-facing log row), but it
+								// meant the diagnostic threw away the detail for exactly
+								// the errors nobody has identified yet — a search
+								// requirement failing on both platforms logged
+								// `ERROR : Error` and nothing else, which is why
+								// monorepo#1614 stayed open. Detail goes in `fields`,
+								// where this codebase already carries technical context
+								// (the HTTP client logs a full stack there).
+								errorName: error instanceof Error ? error.name : typeof error,
+								errorDetail: error instanceof Error ? error.message : String(error),
 							},
 						});
 						for (const subscriber of next.subscribers) {
