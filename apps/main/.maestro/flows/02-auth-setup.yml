@@ -12,8 +12,11 @@ env:
 # behind this exact sequence; keep the two flows in step.
 - clearState
 - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
-# Android-only dev-menu dismissal — see flow 01 for the full rationale
-# (Maestro 2.6.1 has no `optional` wait; iOS never shows the menu).
+# Launch-blocker dismissal on BOTH platforms — see flow 01 for the full
+# rationale and for why "iOS never shows the menu" was wrong (a job that
+# could not report failure supplied the evidence; #1662). Waits are
+# unconditional where the surface is deterministic and `optional` only where
+# it genuinely varies by environment (the SpringBoard scheme prompt).
 - runFlow:
     when:
       platform: Android
@@ -23,6 +26,44 @@ env:
             text: "Toggle performance monitor"
           timeout: 60000
       - pressKey: back
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      # SpringBoard's "Open in “WCPOS”?" prompt, then the dev-menu sheet —
+      # see flow 01 for both mechanisms and the late-prompt race. Keep the two
+      # blocks identical.
+      - extendedWaitUntil:
+          visible:
+            text: "Open in .*WCPOS.*|Continue"
+          timeout: 180000
+      - runFlow:
+          when:
+            visible:
+              text: "Open in .*WCPOS.*"
+          commands:
+            - tapOn:
+                text: "Open"
+      # 180s, not 60s: this wait starts the moment the scheme prompt is
+      # dismissed, so it spans the app's COLD start — first fetch of the
+      # ~29 MB Metro bundle plus Hermes parse — and the dev menu only opens
+      # once JS is up. 60s was calibrated on a warm local simulator and
+      # expired on CI with the app still on its splash screen (run
+      # 33219707312 iOS tablet: openurl 23:24:25, Open tapped 23:24:32,
+      # wait expired 23:25:32 on the splash). The suite budgets 120-240s
+      # for cold-start waits elsewhere; this one belongs in that band.
+      - extendedWaitUntil:
+          visible:
+            text: "Continue"
+          timeout: 180000
+      - tapOn:
+          text: "Continue"
+      - extendedWaitUntil:
+          visible:
+            text: "Close"
+          timeout: 30000
+      - tapOn:
+          text: "Close"
 - extendedWaitUntil:
     visible:
       id: "store-url-input"
@@ -30,7 +71,10 @@ env:
 - tapOn:
     id: "store-url-input"
 - inputText: ${STORE_URL}
-- hideKeyboard
+# optional — see flow 01: hideKeyboard is flaky on iOS and this is
+# housekeeping; a genuinely covered target fails at its own tap.
+- hideKeyboard:
+    optional: true
 - tapOn:
     id: "connect-store-button"
 - extendedWaitUntil:

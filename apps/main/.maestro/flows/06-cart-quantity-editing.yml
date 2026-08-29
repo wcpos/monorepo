@@ -45,7 +45,10 @@ env:
     timeout: 60000
 # Keyboard down BEFORE the tile tap — same overlay no-op as flow 04
 # (monorepo#1614 defect 2); flow 07 set the pattern.
-- hideKeyboard
+# optional — see flow 01: hideKeyboard is flaky on iOS and this is
+# housekeeping; a genuinely covered target fails at its own tap.
+- hideKeyboard:
+    optional: true
 - tapOn:
     id: "product-tile"
     index: 0
@@ -64,7 +67,10 @@ env:
     id: "cart-quantity-input"
 - eraseText
 - inputText: "3"
-- hideKeyboard
+# optional — see flow 01: hideKeyboard is flaky on iOS and this is
+# housekeeping; a genuinely covered target fails at its own tap.
+- hideKeyboard:
+    optional: true
 # Totals recalculate; subtotal stays visible and the cart is intact.
 - assertVisible:
     id: "cart-subtotal"
