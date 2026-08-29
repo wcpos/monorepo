@@ -31,6 +31,19 @@ describe('escpos-decoder', () => {
 		expect(segments[0]?.decoded).toBe('GS 56 — partial cut');
 	});
 
+	it('decodes the 4-byte GS V feed-and-cut command the renderer emits', () => {
+		const segments = decodeEscposBytes(new Uint8Array([0x1d, 0x56, 0x42, 0x00, 0x41]));
+		expect(segments).toEqual([
+			{
+				offset: 0,
+				hex: '1D 56 42 00',
+				ascii: '.VB.',
+				decoded: 'GS 56 — feed to cut position + 0, partial cut',
+			},
+			{ offset: 4, hex: '41', ascii: 'A', decoded: 'text: "A"' },
+		]);
+	});
+
 	it('does not consume the next byte after a 3-byte GS V cut command', () => {
 		const segments = decodeEscposBytes(new Uint8Array([0x1d, 0x56, 0x01, 0x41]));
 		expect(segments).toEqual([

@@ -610,6 +610,80 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(html).not.toContain('<img');
 	});
 
+	it('uses the ESC/POS feed-and-partial-cut command', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text>Hi</text><feed lines="2" /><cut /></receipt>',
+			{},
+			{ language: 'esc-pos' }
+		);
+
+		expect(includesSequence(bytes, [0x1d, 0x56, 0x42, 0x00])).toBe(true);
+		expect(includesSequence(bytes, [0x1d, 0x56, 0x01])).toBe(false);
+	});
+
+	it('uses the ESC/POS feed-and-full-cut command', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><cut type="full" /></receipt>',
+			{},
+			{ language: 'esc-pos' }
+		);
+
+		expect(includesSequence(bytes, [0x1d, 0x56, 0x41, 0x00])).toBe(true);
+	});
+
+	it('ends ESC/POS text with a newline before cutting', () => {
+		// Bare receipt-level text is raw-text: nothing else terminates the line,
+		// so this exercises the guard in writeCut() itself.
+		const bytes = encodeThermalTemplate(
+			'<receipt>Hi<cut /></receipt>',
+			{},
+			{ language: 'esc-pos' }
+		);
+		const textIndex = sequenceIndex(bytes, [0x48, 0x69]);
+		const newlineIndex = sequenceIndex(bytes, [0x0a], textIndex + 2);
+		const cutIndex = sequenceIndex(bytes, [0x1d, 0x56, 0x42, 0x00]);
+
+		expect(textIndex).toBeGreaterThanOrEqual(0);
+		expect(newlineIndex).toBeGreaterThan(textIndex);
+		expect(cutIndex).toBeGreaterThan(newlineIndex);
+	});
+
+	it('does not add another ESC/POS newline before cutting after a terminal line break', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt>Hi\n<cut /></receipt>',
+			{},
+			{ language: 'esc-pos' }
+		);
+		const bytesWithoutLineBreak = encodeThermalTemplate(
+			'<receipt>Hi<cut /></receipt>',
+			{},
+			{ language: 'esc-pos' }
+		);
+		const textIndex = sequenceIndex(bytes, [0x48, 0x69]);
+		const cutIndex = sequenceIndex(bytes, [0x1d, 0x56, 0x42, 0x00]);
+		const textIndexWithoutLineBreak = sequenceIndex(bytesWithoutLineBreak, [0x48, 0x69]);
+		const cutIndexWithoutLineBreak = sequenceIndex(bytesWithoutLineBreak, [0x1d, 0x56, 0x42, 0x00]);
+
+		expect(textIndex).toBeGreaterThanOrEqual(0);
+		expect(cutIndex).toBeGreaterThan(textIndex);
+		expect(countSequence(bytes.slice(textIndex + 2, cutIndex), [0x0a])).toBe(
+			countSequence(
+				bytesWithoutLineBreak.slice(textIndexWithoutLineBreak + 2, cutIndexWithoutLineBreak),
+				[0x0a]
+			) + 1
+		);
+	});
+
+	it('keeps the Star partial-cut command unchanged', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><cut /></receipt>',
+			{},
+			{ language: 'star-prnt' }
+		);
+
+		expect(includesSequence(bytes, [0x1b, 0x64, 0x01])).toBe(true);
+	});
+
 	it('prints resolved image assets as ESC/POS raster images when imageMode is raster', () => {
 		const ast = parseXml('<receipt><image src="logo://store" width="64" /></receipt>');
 		const bytes = renderEscpos(ast, {
