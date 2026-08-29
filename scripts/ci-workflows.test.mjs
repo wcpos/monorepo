@@ -552,7 +552,10 @@ test('both native platforms record the screen for the whole run', () => {
 	);
 	const exitIndex = androidLines.findIndex((line) => line.includes('exit "$(cat'));
 	assert.notEqual(finalizeIndex, -1, 'missing Android screenrecord finalization command');
-	assert.ok(finalizeIndex < exitIndex, 'Android screenrecord must finalize before the action exits');
+	assert.ok(
+		finalizeIndex < exitIndex,
+		'Android screenrecord must finalize before the action exits'
+	);
 	assert.match(androidLines[finalizeIndex], /kill -2/);
 	assert.match(androidLines[finalizeIndex], /kill -0/);
 	assert.match(androidLines[finalizeIndex], /SCREENRECORD_SIGNALLED/);
@@ -1167,6 +1170,64 @@ test('the iOS step still retries the driver-startup flake', () => {
 			0,
 			`the driver-startup retry stopped working: ${result.stdout}${result.stderr}`
 		);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test('a watchdog kill is never retried, even when the log carries the startup-flake text', () => {
+	// `with_deadline` returns 124 after killing a hung maestro. `run_flow`'s
+	// only retry greps the captured log for "driver not ready in time" — a hung
+	// process that happened to print it must not buy a second deadline's worth
+	// of wall clock (CodeRabbit on #1686). This runs the REAL step script against
+	// a maestro that prints the retryable text and then hangs.
+	const step = findStep(readWorkflow('e2e-native.yml'), 'ios', '📱 Run Maestro suite on simulator');
+	// The workflow keeps a plain constant; the test shortens it in the script
+	// text and says so, rather than teaching the workflow an env var.
+	assert.ok(
+		step.run.includes('FLOW_DEADLINE_SECONDS=1200'),
+		'the per-flow deadline constant moved — update this substitution'
+	);
+	const script = step.run.replace('FLOW_DEADLINE_SECONDS=1200', 'FLOW_DEADLINE_SECONDS=2');
+
+	const dir = mkdtempSync(path.join(tmpdir(), 'maestro-watchdog-'));
+	try {
+		mkdirSync(path.join(dir, 'apps/main/.maestro/flows'), { recursive: true });
+		writeFileSync(path.join(dir, 'apps/main/.maestro/flows/01-fake.yml'), '');
+		mkdirSync(path.join(dir, 'bin'));
+		const counter = path.join(dir, 'calls');
+		writeFileSync(
+			path.join(dir, 'bin/maestro'),
+			[
+				'#!/bin/sh',
+				'echo "$$" >> "$TMPDIR_COUNTER"',
+				'echo "iOS driver not ready in time"',
+				'sleep 60',
+				'exit 1',
+				'',
+			].join('\n')
+		);
+		spawnSync('chmod', ['+x', path.join(dir, 'bin/maestro')]);
+
+		const started = Date.now();
+		const result = runShell(script, {
+			cwd: dir,
+			env: {
+				PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`,
+				MAESTRO_UDID: 'fake',
+				TMPDIR_COUNTER: counter,
+			},
+		});
+		const elapsed = (Date.now() - started) / 1000;
+		const output = `${result.stdout}${result.stderr}`;
+
+		assert.notEqual(result.status, 0, `a killed flow reported success: ${output}`);
+		const calls = readFileSync(counter, 'utf8').split('\n').filter(Boolean).length;
+		assert.equal(calls, 1, `a killed flow was retried (${calls} maestro invocations): ${output}`);
+		assert.match(output, /flow exceeded 2s/, `the watchdog did not report the kill: ${output}`);
+		// 2 s deadline + 5 s grace; anything near a minute means the hang leaked
+		// through (a `sleep` holding the tee pipe, or a retry).
+		assert.ok(elapsed < 30, `the step did not end promptly after the kill (${elapsed}s)`);
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}
