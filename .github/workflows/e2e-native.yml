@@ -597,13 +597,19 @@ jobs:
         run: |
           if adb root >/dev/null 2>&1; then
             sleep 3
-            adb wait-for-device
-            mkdir -p ~/.maestro/tests/tombstones
-            adb pull /data/tombstones ~/.maestro/tests/tombstones >/dev/null 2>&1 || true
-            if ls ~/.maestro/tests/tombstones/*/tombstone_* >/dev/null 2>&1; then
-              ls -la ~/.maestro/tests/tombstones/*
+            if timeout 30s adb wait-for-device; then
+              mkdir -p ~/.maestro/tests/tombstones
+              if adb pull /data/tombstones ~/.maestro/tests/tombstones >/dev/null 2>&1; then
+                if ls ~/.maestro/tests/tombstones/*/tombstone_* >/dev/null 2>&1; then
+                  ls -la ~/.maestro/tests/tombstones/*
+                else
+                  echo "no tombstones"
+                fi
+              else
+                echo "tombstone collection failed: adb pull failed"
+              fi
             else
-              echo "no tombstones"
+              echo "tombstone collection failed: device did not return after adb root"
             fi
           else
             echo "adb root unavailable; tombstones not collected"

@@ -1567,6 +1567,62 @@ test('both native Metro-log collectors create their artifact directory', () => {
 	}
 });
 
+test('Android tombstone collection bounds reconnects and reports collection outcomes', () => {
+	const step = findStep(readWorkflow('e2e-native.yml'), 'android', '🪦 Collect tombstones');
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-native-tombstones-'));
+	const bin = path.join(workspace, 'bin');
+	const trace = path.join(workspace, 'commands.log');
+	mkdirSync(bin);
+	writeFileSync(
+		path.join(bin, 'timeout'),
+		`#!/bin/sh
+printf 'timeout %s\\n' "$*" >> "$COMMAND_TRACE"
+if [ "\${TIMEOUT_FAIL:-0}" = 1 ]; then exit 124; fi
+shift
+exec "$@"
+`
+	);
+	writeFileSync(
+		path.join(bin, 'adb'),
+		`#!/bin/sh
+printf 'adb %s\\n' "$*" >> "$COMMAND_TRACE"
+if [ "$1" = pull ] && [ "\${ADB_PULL_FAIL:-0}" = 1 ]; then exit 1; fi
+exit 0
+`
+	);
+	writeFileSync(path.join(bin, 'sleep'), '#!/bin/sh\nexit 0\n');
+	for (const command of ['timeout', 'adb', 'sleep']) chmodSync(path.join(bin, command), 0o755);
+
+	const run = (env = {}) =>
+		runShell(step.run, {
+			env: {
+				HOME: workspace,
+				PATH: `${bin}:${process.env.PATH}`,
+				COMMAND_TRACE: trace,
+				...env,
+			},
+		});
+
+	try {
+		const timedOut = run({ TIMEOUT_FAIL: '1' });
+		assert.equal(timedOut.status, 0, timedOut.stdout + timedOut.stderr);
+		assert.match(timedOut.stdout, /device did not return after adb root/);
+		assert.doesNotMatch(timedOut.stdout, /no tombstones/);
+
+		const pullFailed = run({ ADB_PULL_FAIL: '1' });
+		assert.equal(pullFailed.status, 0, pullFailed.stdout + pullFailed.stderr);
+		assert.match(pullFailed.stdout, /adb pull failed/);
+		assert.doesNotMatch(pullFailed.stdout, /no tombstones/);
+
+		const empty = run();
+		assert.equal(empty.status, 0, empty.stdout + empty.stderr);
+		assert.match(empty.stdout, /no tombstones/);
+		assert.match(readFileSync(trace, 'utf8'), /timeout 30s adb wait-for-device/);
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
 test('Android clean-start flows dismiss a queued system ANR before waiting for Expo', () => {
 	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
 		const flow = readMaestroFlow(filename);
@@ -1600,6 +1656,27 @@ test('store URL flows only hide the keyboard on Android before connecting', () =
 		);
 		assert.deepEqual(flow[inputIndex + 3], { tapOn: { id: 'connect-store-button' } });
 	}
+});
+
+test('auth setup dismisses the post-login keyboard without clearing the iOS URL', () => {
+	const flow = readMaestroFlow('02-auth-setup.yml');
+	const loggedInIndex = flow.findIndex(
+		(command) => command.extendedWaitUntil?.visible?.id === 'logged-in-users-label'
+	);
+
+	assert.notEqual(loggedInIndex, -1, 'auth setup must wait for the OAuth redirect');
+	assert.deepEqual(flow[loggedInIndex + 1], {
+		runFlow: {
+			when: { platform: 'Android' },
+			commands: ['hideKeyboard'],
+		},
+	});
+	assert.deepEqual(flow[loggedInIndex + 2], {
+		runFlow: {
+			when: { platform: 'iOS' },
+			commands: [{ tapOn: { id: 'logged-in-users-label' } }],
+		},
+	});
 });
 
 test('the Android step retries a transient offline ADB transport once', () => {
