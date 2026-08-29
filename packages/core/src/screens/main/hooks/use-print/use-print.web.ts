@@ -49,17 +49,16 @@ export const usePrint = (options: UsePrintOptions) => {
 			});
 			onPrintError?.(errorLocation, error);
 		},
-		onBeforePrint: () => {
+		onBeforePrint: async () => {
 			setIsPrinting(true);
 			// react-to-print waits for this promise before opening the print dialog.
-			// A rejected onBeforePrint still prints — the caller's hook is advisory.
-			const result = onBeforePrint?.();
-			return result instanceof Promise
-				? result.then(
-						() => undefined,
-						() => undefined
-					)
-				: Promise.resolve();
+			// The caller's hook is advisory: a throw or rejection still prints, and
+			// the try/catch covers a synchronous throw as well as a rejected promise.
+			try {
+				await onBeforePrint?.();
+			} catch {
+				// advisory — see above
+			}
 		},
 		onAfterPrint: () => {
 			setIsPrinting(false);
