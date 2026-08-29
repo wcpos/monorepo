@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
 	chmodSync,
+	existsSync,
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
@@ -131,6 +132,7 @@ test('the E2E aggregator runs on cancellation and fails the cancelled deploy', (
 	const result = runShell(gate.steps[0].run, {
 		env: {
 			CHANGES_RESULT: 'success',
+			COLD_START_RESULT: 'skipped',
 			DEPLOY_RESULT: 'cancelled',
 			DEPLOY_URL: '',
 			E2E_RESULT: 'skipped',
@@ -146,12 +148,13 @@ test('the E2E aggregator runs on cancellation and fails the cancelled deploy', (
 test('the E2E aggregator fails closed when change detection fails', () => {
 	const gate = readWorkflow('deploy.yml').jobs['e2e-gate'];
 
-	assert.deepEqual([...gate.needs].sort(), ['changes', 'deploy', 'e2e']);
+	assert.deepEqual([...gate.needs].sort(), ['changes', 'cold-start', 'deploy', 'e2e']);
 	assert.equal(gate.steps[0].env.CHANGES_RESULT, '${{ needs.changes.result }}');
 
 	const failedDetection = runShell(gate.steps[0].run, {
 		env: {
 			CHANGES_RESULT: 'failure',
+			COLD_START_RESULT: 'skipped',
 			DEPLOY_RESULT: 'skipped',
 			DEPLOY_URL: '',
 			E2E_RESULT: 'skipped',
@@ -165,6 +168,7 @@ test('the E2E aggregator fails closed when change detection fails', () => {
 	const legitimateSkip = runShell(gate.steps[0].run, {
 		env: {
 			CHANGES_RESULT: 'success',
+			COLD_START_RESULT: 'skipped',
 			DEPLOY_RESULT: 'skipped',
 			DEPLOY_URL: '',
 			E2E_RESULT: 'skipped',
@@ -552,7 +556,10 @@ test('both native platforms record the screen for the whole run', () => {
 	);
 	const exitIndex = androidLines.findIndex((line) => line.includes('exit "$(cat'));
 	assert.notEqual(finalizeIndex, -1, 'missing Android screenrecord finalization command');
-	assert.ok(finalizeIndex < exitIndex, 'Android screenrecord must finalize before the action exits');
+	assert.ok(
+		finalizeIndex < exitIndex,
+		'Android screenrecord must finalize before the action exits'
+	);
 	assert.match(androidLines[finalizeIndex], /kill -2/);
 	assert.match(androidLines[finalizeIndex], /kill -0/);
 	assert.match(androidLines[finalizeIndex], /SCREENRECORD_SIGNALLED/);
@@ -754,37 +761,61 @@ test('both lanes run four E2E shards', () => {
 	assert.match(matrix.shardTotal, /\|\| '\[4\]'/);
 });
 
-test('cold-start dispatches bind raw refs to an explicit store lane', () => {
-	const workflow = readWorkflow('e2e-cold-start.yml');
-	const { ref, lane } = workflow.on.workflow_dispatch.inputs;
-	const checkoutStep = findStep(workflow, 'cold-start', '🏗 Setup repository');
-	const validateStep = findStep(workflow, 'cold-start', '🔒 Validate trusted ref');
+test('cold-start verifies the deployed main artifact and participates in the gate', () => {
+	const workflow = readWorkflow('deploy.yml');
+	const coldStart = workflow.jobs['cold-start'];
 	const runStep = findStep(workflow, 'cold-start', '🥶 Run cold-start E2E');
+	const gate = workflow.jobs['e2e-gate'];
 
-	assert.equal(lane.required, true);
-	assert.deepEqual(lane.options, ['main', 'next']);
+	assert.ok(coldStart, 'deploy.yml is missing the cold-start job');
+	assert.match(coldStart.if, /github\.event_name == 'push'/);
+	assert.match(coldStart.if, /github\.ref == 'refs\/heads\/main'/);
+	assert.equal(runStep.env.E2E_COLD_START, '1');
+	assert.equal(runStep.env.BASE_URL, '${{ needs.deploy.outputs.deployment_url }}');
+	assert.equal(runStep.env.E2E_STORE_URL_PRO, 'https://dev-pro.wcpos.com');
+	assert.ok(gate.needs.includes('cold-start'));
+	assert.equal(gate.steps[0].env.COLD_START_RESULT, '${{ needs.cold-start.result }}');
+	assert.equal(
+		existsSync(path.join(ROOT, '.github', 'workflows', 'e2e-cold-start.yml')),
+		false,
+		'the scheduled cold-start workflow still exists'
+	);
 
-	// The nightly tests main. It tested `next` until 2026-08-22, which was right
-	// while the cold-start profile was next-only — but the lanes converged on
-	// 2026-08-15 and `next` stopped moving on 2026-08-18, so the gate spent four
-	// days reporting green on a branch nobody ships (#1486).
-	assert.equal(lane.default, 'main');
+	const baseEnv = {
+		CHANGES_RESULT: 'success',
+		DEPLOY_RESULT: 'success',
+		DEPLOY_URL: 'https://wcpos.expo.app',
+		E2E_RESULT: 'success',
+		SKIP_E2E_INPUT: 'false',
+	};
+	const failedMain = runShell(gate.steps[0].run, {
+		env: {
+			...baseEnv,
+			COLD_START_RESULT: 'failure',
+			EVENT_NAME: 'push',
+		},
+	});
+	assert.notEqual(failedMain.status, 0, failedMain.stdout + failedMain.stderr);
 
-	// The ref and lane defaults must agree. Otherwise a SCHEDULED run checks out
-	// one lane's code and points it at the other lane's store — the same
-	// mis-routing the validate step below prevents for dispatch inputs, arriving
-	// instead through the defaults, where nothing was watching.
-	assert.equal(ref.default, lane.default);
-	assert.match(checkoutStep.with.ref, /github\.event\.inputs\.ref \|\| 'main'/);
+	for (const [name, results] of [
+		['E2E', { COLD_START_RESULT: 'success', E2E_RESULT: 'cancelled' }],
+		['Cold-start', { COLD_START_RESULT: 'cancelled', E2E_RESULT: 'success' }],
+	]) {
+		const cancelledMain = runShell(gate.steps[0].run, {
+			env: { ...baseEnv, ...results, EVENT_NAME: 'push' },
+		});
+		assert.notEqual(cancelledMain.status, 0, cancelledMain.stdout + cancelledMain.stderr);
+		assert.match(cancelledMain.stdout + cancelledMain.stderr, new RegExp(`${name}.*superseded`));
+	}
 
-	assert.match(validateStep.env.E2E_LANE, /github\.event\.inputs\.lane \|\| 'main'/);
-	assert.match(validateStep.run, /origin\/\$E2E_LANE/);
-
-	// The store is derived from that same validated lane, each lane bound to its
-	// own store, with the absent-input fallback matching the defaults above.
-	assert.match(runStep.env.E2E_STORE_URL_PRO, /github\.event\.inputs\.lane \|\| 'main'/);
-	assert.match(runStep.env.E2E_STORE_URL_PRO, /'next' && 'https:\/\/dev-next\.wcpos\.com'/);
-	assert.match(runStep.env.E2E_STORE_URL_PRO, /'https:\/\/dev-pro\.wcpos\.com'/);
+	const skippedPr = runShell(gate.steps[0].run, {
+		env: {
+			...baseEnv,
+			COLD_START_RESULT: 'skipped',
+			EVENT_NAME: 'pull_request',
+		},
+	});
+	assert.equal(skippedPr.status, 0, skippedPr.stdout + skippedPr.stderr);
 });
 
 test('the E2E auth-state cache is shard- and lane-scoped', () => {
@@ -907,6 +938,16 @@ test('the deploy concurrency contract isolates stale rerun attempts', () => {
 	assert.match(workflow.concurrency.group, /github\.event\.pull_request\.number/);
 	assert.match(workflow.concurrency.group, /github\.run_attempt != '1'/);
 	assert.match(workflow.concurrency.group, /github\.run_id/);
+	assert.match(workflow.concurrency['cancel-in-progress'], /github\.ref != 'refs\/heads\/main'/);
+
+	for (const jobName of ['e2e', 'e2e-report', 'cold-start']) {
+		const concurrency = workflow.jobs[jobName].concurrency;
+		assert.ok(concurrency, `${jobName} is missing job-level concurrency`);
+		assert.match(concurrency.group, /github\.ref == 'refs\/heads\/main'/);
+		assert.equal(concurrency['cancel-in-progress'], true);
+	}
+	assert.match(workflow.jobs.e2e.concurrency.group, /matrix\.shardIndex/);
+	assert.ok(!('concurrency' in workflow.jobs.deploy), 'deploy job must never be cancelled');
 });
 
 test('deploy emits the required E2E check whenever the merge gate runs', () => {

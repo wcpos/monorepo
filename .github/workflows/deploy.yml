@@ -37,12 +37,11 @@ on:
     # shared planner runs inside the `changes` job, so the workflow always runs
     # and the gate always gets an answer. Ambiguous changes run every tier.
 
-# Concurrency groups are per-PR — a new push can only supersede ITS OWN PR's
-# older run (a single shared group let each new run evict another PR's queued
-# run, and the evicted PR's required "🎭 E2E Tests" gate never reported;
-# observed 2026-08-11). Re-run attempts use their original run id so a stale
-# re-run cannot cancel a newer SHA. There is deliberately NO cross-run store
-# serialization — see the comment above the e2e job.
+# Workflow concurrency isolates PRs and never cancels a main run, so production
+# deploys always finish. Job concurrency below coalesces only main's verification
+# jobs; PR verification groups remain unique per run. Re-run attempts use their
+# original run id so a stale re-run cannot cancel a newer SHA. There is
+# deliberately NO cross-run store serialization — see the comment above e2e.
 concurrency:
   group: ${{ github.event_name == 'pull_request' && format('deploy-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || format('deploy-{0}', github.ref) }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -184,6 +183,9 @@ jobs:
         # nothing. One shard cannot produce that.
         shardIndex: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || '[1, 2, 3, 4]') }}
         shardTotal: ${{ fromJSON(needs.changes.outputs.only_specs != '' && '[1]' || '[4]') }}
+    concurrency:
+      group: ${{ github.ref == 'refs/heads/main' && format('deploy-main-verify-shard-{0}', matrix.shardIndex) || format('deploy-verify-{0}-{1}', github.run_id, matrix.shardIndex) }}
+      cancel-in-progress: true
     steps:
       - name: 🏗 Setup repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -393,6 +395,58 @@ jobs:
           path: apps/main/test-results/
           retention-days: 7
 
+  cold-start:
+    name: 🥶 Cold-start E2E (thin local catalogue)
+    needs: [changes, deploy]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.deploy.outputs.deployment_url != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: ${{ github.ref == 'refs/heads/main' && 'deploy-main-verify-cold' || format('deploy-verify-cold-{0}', github.run_id) }}
+      cancel-in-progress: true
+    steps:
+      - name: 🏗 Setup repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          submodules: false
+
+      - name: 🏗 Setup monorepo
+        uses: ./.github/actions/setup-monorepo
+        with:
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+
+      - name: 💾 Cache Playwright browsers
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: 🎭 Install Playwright browsers
+        run: cd apps/main && npx playwright install chromium --only-shell
+
+      - name: 🥶 Run cold-start E2E
+        run: cd apps/main && npx playwright test --project=pro-cold-start
+        env:
+          E2E_COLD_START: '1'
+          CI: true
+          BASE_URL: ${{ needs.deploy.outputs.deployment_url }}
+          E2E_STORE_URL_PRO: https://dev-pro.wcpos.com
+
+      - name: 📸 Upload results on failure
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        if: failure()
+        with:
+          name: cold-start-results-${{ github.run_id }}
+          path: |
+            apps/main/test-results/
+            apps/main/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
   # Aggregator check consumed by merge-gate.yml as "🎭 E2E Tests".
   #
   # A skipped shard matrix used to count as a pass unconditionally, which meant
@@ -402,13 +456,14 @@ jobs:
   # app-affecting paths) or when a manual dispatch explicitly opted out.
   e2e-gate:
     name: 🎭 E2E Tests
-    needs: [changes, deploy, e2e]
+    needs: [changes, deploy, e2e, cold-start]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Check shard results
         env:
           CHANGES_RESULT: ${{ needs.changes.result }}
+          COLD_START_RESULT: ${{ needs.cold-start.result }}
           DEPLOY_RESULT: ${{ needs.deploy.result }}
           DEPLOY_URL: ${{ needs.deploy.outputs.deployment_url }}
           E2E_RESULT: ${{ needs.e2e.result }}
@@ -418,10 +473,33 @@ jobs:
           set -uo pipefail
 
           if [ -n "$DEPLOY_URL" ]; then url_state="present"; else url_state="EMPTY"; fi
-          echo "changes=$CHANGES_RESULT deploy=$DEPLOY_RESULT deployment_url=$url_state e2e=$E2E_RESULT event=$EVENT_NAME"
+          echo "changes=$CHANGES_RESULT deploy=$DEPLOY_RESULT deployment_url=$url_state e2e=$E2E_RESULT cold_start=$COLD_START_RESULT event=$EVENT_NAME"
 
           if [ "$CHANGES_RESULT" != "success" ]; then
             echo "::error::Change detection did not succeed (result: $CHANGES_RESULT). Refusing to treat downstream skips as legitimate."
+            exit 1
+          fi
+
+          if [ "$DEPLOY_RESULT" = "cancelled" ]; then
+            echo "::error::Deploy did not succeed (result: cancelled), so verification never ran."
+            exit 1
+          fi
+
+          if [ "$EVENT_NAME" = "push" ]; then
+            if [ "$E2E_RESULT" = "cancelled" ]; then
+              echo "::error::E2E verification was superseded by a newer main push"
+              exit 1
+            fi
+            if [ "$COLD_START_RESULT" = "cancelled" ]; then
+              echo "::error::Cold-start verification was superseded by a newer main push"
+              exit 1
+            fi
+            if [ "$COLD_START_RESULT" != "success" ]; then
+              echo "::error::Cold-start verification did not pass (result: $COLD_START_RESULT)"
+              exit 1
+            fi
+          elif [ "$COLD_START_RESULT" != "skipped" ]; then
+            echo "::error::Cold-start verification unexpectedly ran outside a main push (result: $COLD_START_RESULT)"
             exit 1
           fi
 
@@ -468,6 +546,9 @@ jobs:
     needs: [deploy, e2e]
     if: always() && (needs.e2e.result == 'success' || needs.e2e.result == 'failure')
     runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.ref == 'refs/heads/main' && 'deploy-main-verify-report' || format('deploy-verify-report-{0}', github.run_id) }}
+      cancel-in-progress: true
     outputs:
       result: ${{ needs.e2e.result }}
     steps:
