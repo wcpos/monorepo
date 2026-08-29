@@ -834,6 +834,60 @@ describe('require() for search — the public search-demand verb', () => {
 		await engine.dispose();
 	});
 
+	it('does not report a NATIVE-shaped cancel of a released search as an error', async () => {
+		// expo's winter fetch — what `globalThis.fetch` is on native — rejects an
+		// aborted request with a PLAIN Error (name "Error") wrapping
+		// FetchRequestCanceledException, not a DOMException named AbortError. The
+		// release branch keyed on that name, so on native every superseded search
+		// was emitted as `coverage.require.error` at ERROR level, which the dev
+		// client draws as a red box OVER the app (monorepo#1672).
+		//
+		// Assert the DIAGNOSTIC, not the outcome: `handle.ready` resolves to
+		// `released` either way, so an outcome assertion cannot tell the fixed
+		// code from the broken code. Message is verbatim from a device.
+		const started = Promise.withResolvers<AbortSignal>();
+		const harness = createEngineHarness({
+			site: SITE,
+			identity: freshIdentity(),
+			awaitReady: false,
+			fetch: async (url: string, init?: RequestInit) => {
+				if (!new URL(url).pathname.endsWith('/products')) return json([]);
+				const signal = init?.signal;
+				if (!signal) throw new Error('search request missing abort signal');
+				started.resolve(signal);
+				return await new Promise<Response>((_resolve, reject) => {
+					const abort = () =>
+						reject(
+							new Error(
+								'fetch failed: FetchRequestCanceledException: Fetch request has been canceled (at Expo/NativeResponse.swift:63)'
+							)
+						);
+					signal.addEventListener('abort', abort, { once: true });
+					if (signal.aborted) abort();
+				});
+			},
+		});
+		await harness.engine.ready;
+
+		const handle = harness.engine.require({
+			id: 'native-cancel-classification',
+			collection: 'products',
+			kind: 'search',
+			term: 'keyboard',
+		});
+		await started.promise;
+		handle.release();
+		await expect(handle.ready).resolves.toMatchObject({ action: 'released' });
+
+		// Let the deferred abandon (#1221) and the pump's catch run.
+		await new Promise((resolve) => setTimeout(resolve, 50));
+
+		expect(harness.diagnostics.filter((event) => event.type === 'coverage.require.error')).toEqual(
+			[]
+		);
+		await harness.engine.dispose();
+	});
+
 	it('dedupes concurrent identical search declarations in memory', async () => {
 		const server = scriptedProductSearchProxy([productPayload(321, 'Keyboard')]);
 		const engine = engineWith(server.fetch);
