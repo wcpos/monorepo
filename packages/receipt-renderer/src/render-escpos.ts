@@ -314,7 +314,7 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 				break;
 			}
 			writeText(encoder, node.value, context.supportsCp932, context.normalizeText);
-			if (node.value) context.lineHasText = true;
+			if (node.value) context.lineHasText = !/[\r\n]$/.test(node.value);
 			break;
 		case 'text': {
 			if (writeAlignedStandaloneTextLine(encoder, node.children, context)) {

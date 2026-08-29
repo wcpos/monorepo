@@ -648,6 +648,32 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(cutIndex).toBeGreaterThan(newlineIndex);
 	});
 
+	it('does not add another ESC/POS newline before cutting after a terminal line break', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt>Hi\n<cut /></receipt>',
+			{},
+			{ language: 'esc-pos' }
+		);
+		const bytesWithoutLineBreak = encodeThermalTemplate(
+			'<receipt>Hi<cut /></receipt>',
+			{},
+			{ language: 'esc-pos' }
+		);
+		const textIndex = sequenceIndex(bytes, [0x48, 0x69]);
+		const cutIndex = sequenceIndex(bytes, [0x1d, 0x56, 0x42, 0x00]);
+		const textIndexWithoutLineBreak = sequenceIndex(bytesWithoutLineBreak, [0x48, 0x69]);
+		const cutIndexWithoutLineBreak = sequenceIndex(bytesWithoutLineBreak, [0x1d, 0x56, 0x42, 0x00]);
+
+		expect(textIndex).toBeGreaterThanOrEqual(0);
+		expect(cutIndex).toBeGreaterThan(textIndex);
+		expect(countSequence(bytes.slice(textIndex + 2, cutIndex), [0x0a])).toBe(
+			countSequence(
+				bytesWithoutLineBreak.slice(textIndexWithoutLineBreak + 2, cutIndexWithoutLineBreak),
+				[0x0a]
+			) + 1
+		);
+	});
+
 	it('keeps the Star partial-cut command unchanged', () => {
 		const bytes = encodeThermalTemplate(
 			'<receipt><cut /></receipt>',
