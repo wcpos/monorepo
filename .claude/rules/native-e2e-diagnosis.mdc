@@ -31,6 +31,12 @@ locally.** If it does not reproduce locally, that is itself the most valuable
 finding you will get all day: it means the bug is environmental, and you should
 be reading the runner's differences, not the app's code.
 
+If the local platform prerequisites are unavailable (for example, a cloud/Linux
+agent has no Xcode, booted device, `adb`, or Maestro), record exactly what is
+missing and use the captured CI summary, annotations, and artifacts instead.
+This exception permits diagnosis from an existing run; it does not permit a
+metered native build.
+
 ## 2. Read the app's errors BEFORE the Maestro assertion message.
 
 Maestro reports what it could not find. It cannot report *why*, and the two are

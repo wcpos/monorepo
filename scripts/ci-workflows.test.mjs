@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+	chmodSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,6 +50,69 @@ function runShell(script, { cwd = ROOT, env = {}, unsetEnv = [] } = {}) {
 		encoding: 'utf8',
 		env: shellEnv,
 	});
+}
+
+function runLocalNative({ platform, device = 'phone', timestamp = '20260829T120000Z' }) {
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-local-native-'));
+	const bin = path.join(workspace, 'bin');
+	const trace = path.join(workspace, 'commands.log');
+	mkdirSync(bin);
+	const command = (name, body) => {
+		const filename = path.join(bin, name);
+		writeFileSync(filename, `#!/usr/bin/env bash\n${body}\n`);
+		chmodSync(filename, 0o755);
+	};
+	command('curl', 'echo packager-status:running');
+	command('date', 'echo "$FIXED_TIMESTAMP"');
+	command('maestro', 'echo "maestro $*" >> "$COMMAND_TRACE"');
+	command(
+		'xcrun',
+		`echo "xcrun $*" >> "$COMMAND_TRACE"
+if [ "$*" = "simctl list devices booted" ]; then
+	printf '%s\n' '    iPhone 16 Pro (11111111-1111-1111-1111-111111111111) (Booted)' '    iPad Pro (22222222-2222-2222-2222-222222222222) (Booted)'
+fi`
+	);
+	command(
+		'adb',
+		`echo "adb $*" >> "$COMMAND_TRACE"
+if [ "$1" = devices ]; then
+	printf 'List of devices attached\nemulator-5554\tdevice\n'
+fi`
+	);
+
+	const result = spawnSync(
+		'bash',
+		[
+			path.join(ROOT, 'scripts', 'e2e-native-local.sh'),
+			'--platform',
+			platform,
+			'--device',
+			device,
+			'--flow',
+			'apps/main/.maestro/flows/01-clean-launch-connect.yml',
+			'--no-video',
+		],
+		{
+			cwd: ROOT,
+			encoding: 'utf8',
+			env: {
+				...process.env,
+				COMMAND_TRACE: trace,
+				FIXED_TIMESTAMP: timestamp,
+				PATH: `${bin}:${process.env.PATH}`,
+			},
+		}
+	);
+	const consolePath = result.stdout.match(/^Console log: (.+)$/m)?.[1];
+	return {
+		result,
+		consolePath,
+		trace: readFileSync(trace, 'utf8'),
+		cleanup: () => {
+			if (consolePath) rmSync(path.dirname(consolePath), { recursive: true, force: true });
+			rmSync(workspace, { recursive: true, force: true });
+		},
+	};
 }
 
 test('the shared setup action uses a Node version supported by jsdom 30', () => {
@@ -386,6 +457,53 @@ test('native E2E keeps the whole error line, not a prefix of it', () => {
 	}
 });
 
+test('the local native runner gives same-second runs separate artifact directories', () => {
+	const timestamp = '20260829T120000Z';
+	const first = runLocalNative({ platform: 'ios', timestamp });
+	const second = runLocalNative({ platform: 'ios', timestamp });
+
+	try {
+		assert.equal(first.result.status, 0, first.result.stdout + first.result.stderr);
+		assert.equal(second.result.status, 0, second.result.stdout + second.result.stderr);
+		assert.ok(first.consolePath);
+		assert.ok(second.consolePath);
+		assert.notEqual(first.consolePath, second.consolePath);
+		assert.match(first.consolePath, new RegExp(`${timestamp}-\\d+/app-console\\.log$`));
+		assert.match(second.consolePath, new RegExp(`${timestamp}-\\d+/app-console\\.log$`));
+	} finally {
+		first.cleanup();
+		second.cleanup();
+	}
+});
+
+test('the local iOS runner selects a simulator matching the declared device class', () => {
+	const run = runLocalNative({ platform: 'ios', device: 'tablet' });
+
+	try {
+		assert.equal(run.result.status, 0, run.result.stdout + run.result.stderr);
+		assert.match(run.result.stdout, /22222222-2222-2222-2222-222222222222 \(tablet\)/);
+		assert.match(run.trace, /maestro --udid 22222222-2222-2222-2222-222222222222/);
+	} finally {
+		run.cleanup();
+	}
+});
+
+test('the local Android runner clears retained logcat entries before capture', () => {
+	const run = runLocalNative({ platform: 'android' });
+
+	try {
+		assert.equal(run.result.status, 0, run.result.stdout + run.result.stderr);
+		const commands = run.trace.split('\n');
+		const clear = commands.indexOf('adb -s emulator-5554 logcat -c');
+		const capture = commands.indexOf('adb -s emulator-5554 logcat -v threadtime');
+		assert.notEqual(clear, -1, run.trace);
+		assert.notEqual(capture, -1, run.trace);
+		assert.ok(clear < capture, run.trace);
+	} finally {
+		run.cleanup();
+	}
+});
+
 test('both native platforms record the screen for the whole run', () => {
 	// Maestro saves ONE screenshot, at the moment of failure. Every CI
 	// diagnosis is therefore backwards inference from an end state, and a still
@@ -415,12 +533,29 @@ test('both native platforms record the screen for the whole run', () => {
 	assert.match(androidScript, /screenrecord/);
 	const recorderLine = androidScript
 		.split('\n')
-		.find((line) => line.includes('screenrecord'));
+		.find((line) => line.trimStart().startsWith('nohup sh -c') && line.includes('screenrecord'));
+	assert.ok(recorderLine, 'missing executable Android screenrecord command');
 	assert.doesNotMatch(
 		recorderLine,
 		/\\$/,
 		'the screen recorder must be ONE line — a trailing backslash becomes a maestro argument'
 	);
+	assert.match(recorderLine, /screenrecord-loop\.pid/);
+	assert.match(recorderLine, /stop-screenrecord/);
+
+	// The emulator action stops the device as soon as its script returns, so the
+	// active segment must be interrupted and its wrapper allowed to pull the file
+	// before the script's final exit line.
+	const androidLines = androidScript.split('\n');
+	const finalizeIndex = androidLines.findIndex(
+		(line) => line.includes('stop-screenrecord') && line.includes('pidof screenrecord')
+	);
+	const exitIndex = androidLines.findIndex((line) => line.includes('exit "$(cat'));
+	assert.notEqual(finalizeIndex, -1, 'missing Android screenrecord finalization command');
+	assert.ok(finalizeIndex < exitIndex, 'Android screenrecord must finalize before the action exits');
+	assert.match(androidLines[finalizeIndex], /kill -2/);
+	assert.match(androidLines[finalizeIndex], /kill -0/);
+	assert.match(androidLines[finalizeIndex], /SCREENRECORD_SIGNALLED/);
 });
 
 test('native E2E searches every issue-comment page for its sticky report', () => {

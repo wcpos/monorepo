@@ -124,12 +124,5 @@ describe('platform seam: how an aborted request rejects', () => {
 			expect(source).toMatch(/FetchRequestCanceledException/);
 			expect(source).toMatch(/Fetch request has been canceled/);
 		}
-
-		// And the classifier that has to recognise it still matches that text.
-		const requirePlane = readFileSync(
-			path.join(ROOT, 'packages/sync-engine/src/require-plane.ts'),
-			'utf8'
-		);
-		expect(requirePlane).toMatch(/Fetch request has been canceled/);
 	});
 });

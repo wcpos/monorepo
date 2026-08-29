@@ -464,7 +464,7 @@ jobs:
             # ~180s, so loop it into numbered segments for the life of the run;
             # the loop dies with the job. ONE LINE, per the rule above: a
             # continuation backslash here becomes a literal maestro argument.
-            nohup sh -c 'i=0; while [ $i -lt 40 ]; do adb shell screenrecord --time-limit 180 "/sdcard/screen-$i.mp4" || break; adb pull "/sdcard/screen-$i.mp4" "$HOME/.maestro/tests/screen-$i.mp4" >/dev/null 2>&1 || true; adb shell rm -f "/sdcard/screen-$i.mp4" >/dev/null 2>&1 || true; i=$((i + 1)); done' > /dev/null 2>&1 &
+            nohup sh -c 'i=0; while [ $i -lt 40 ] && [ ! -f "$HOME/.maestro/tests/stop-screenrecord" ]; do adb shell screenrecord --time-limit 180 "/sdcard/screen-$i.mp4" || break; adb pull "/sdcard/screen-$i.mp4" "$HOME/.maestro/tests/screen-$i.mp4" >/dev/null 2>&1 || true; adb shell rm -f "/sdcard/screen-$i.mp4" >/dev/null 2>&1 || true; i=$((i + 1)); done' > /dev/null 2>&1 & echo $! > ~/.maestro/tests/screenrecord-loop.pid
             # Output tees into the artifact for the timing-triage step. The
             # runner's sh is dash (no pipefail), and each script line is its
             # own shell — so maestro's real exit code crosses lines via a
@@ -475,6 +475,7 @@ jobs:
             # deep link failed with "device offline"). Retry only that exact
             # infrastructure signature; assertions and app failures stay red.
             if [ "$(cat "$HOME/.maestro/tests/exit_code")" -ne 0 ] && grep -Rqs 'device offline' "$HOME/.maestro/tests"/*/maestro.log; then adb reconnect offline; timeout 60 adb wait-for-device; adb reverse tcp:8081 tcp:8081; { maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" apps/main/.maestro; echo $? > ~/.maestro/tests/exit_code; } 2>&1 | tee -a ~/.maestro/tests/suite.log; fi
+            touch ~/.maestro/tests/stop-screenrecord; RECORDER_LOOP_PID=$(cat ~/.maestro/tests/screenrecord-loop.pid); SCREENRECORD_SIGNALLED=0; attempts=0; while kill -0 "$RECORDER_LOOP_PID" 2>/dev/null; do if [ "$SCREENRECORD_SIGNALLED" -eq 0 ]; then SCREENRECORD_PID=$(adb shell pidof screenrecord 2>/dev/null | awk '{ print $1 }'); [ -z "$SCREENRECORD_PID" ] || { adb shell kill -2 "$SCREENRECORD_PID" >/dev/null 2>&1 && SCREENRECORD_SIGNALLED=1 || true; }; fi; attempts=$((attempts + 1)); [ "$attempts" -lt 30 ] || { echo "screenrecord did not finalize within 30 seconds" >&2; exit 1; }; sleep 1; done
             exit "$(cat ~/.maestro/tests/exit_code)"
         env:
           # The Maestro Android driver installs its two APKs and waits for the

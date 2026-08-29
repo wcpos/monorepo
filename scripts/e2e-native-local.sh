@@ -70,8 +70,10 @@ esac
 if [ "$PLATFORM" = ios ]; then
 	command -v xcrun >/dev/null 2>&1 || die "xcrun is not available. Install Xcode and boot an iOS Simulator."
 	BOOTED_DEVICES=$(xcrun simctl list devices booted)
-	DEVICE_ID=$(printf '%s\n' "$BOOTED_DEVICES" | sed -n 's/.*(\([0-9A-Fa-f-]\{36\}\)) (Booted).*/\1/p' | head -n 1)
-	[ -n "$DEVICE_ID" ] || die "No booted iOS Simulator found. Open Simulator and boot a phone or tablet, then retry."
+	DEVICE_FAMILY=iPhone
+	[ "$DEVICE_CLASS" = phone ] || DEVICE_FAMILY=iPad
+	DEVICE_ID=$(printf '%s\n' "$BOOTED_DEVICES" | sed -n "/$DEVICE_FAMILY/ s/.*(\([0-9A-Fa-f-]\{36\}\)) (Booted).*/\1/p" | head -n 1)
+	[ -n "$DEVICE_ID" ] || die "No booted iOS $DEVICE_CLASS simulator found. Boot an $DEVICE_FAMILY simulator, then retry."
 else
 	command -v adb >/dev/null 2>&1 || die "adb is not available. Install Android platform-tools and start an emulator."
 	ADB_DEVICES=$(adb devices)
@@ -85,7 +87,7 @@ echo "Using $PLATFORM device: $DEVICE_ID ($DEVICE_CLASS)"
 command -v maestro >/dev/null 2>&1 || die "maestro is not on PATH. Install Maestro, ensure 'maestro' is available, then retry."
 
 TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
-RUN_DIR="$REPO_ROOT/.e2e-local/$TIMESTAMP"
+RUN_DIR="$REPO_ROOT/.e2e-local/${TIMESTAMP}-$$"
 DEBUG_DIR="$RUN_DIR/maestro-debug"
 CONSOLE_LOG="$RUN_DIR/app-console.log"
 SUITE_LOG="$RUN_DIR/maestro.log"
@@ -137,6 +139,7 @@ if [ "$PLATFORM" = ios ]; then
 		VIDEO_PID=$!
 	fi
 else
+	adb -s "$DEVICE_ID" logcat -c || die "adb logcat clear failed."
 	adb -s "$DEVICE_ID" logcat -v threadtime > "$CONSOLE_LOG" 2>&1 &
 	LOG_PID=$!
 	if [ "$RECORD_VIDEO" -eq 1 ]; then
