@@ -1262,8 +1262,22 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						if (!subscriber.released) subscriber.resolve(outcome);
 					}
 				} catch (error) {
+					// Ask whether WE aborted it, not what the platform named the
+					// rejection. `error.name === 'AbortError'` is the WHATWG contract
+					// and holds on web and Electron, but expo's winter fetch — what
+					// `globalThis.fetch` is on native — rejects with a plain Error
+					// (name "Error") wrapping FetchRequestCanceledException. So on
+					// native this branch never matched, and every superseded search
+					// was reported as a failed load: `coverage.require.error` at
+					// error level, which the dev client then draws as a red box OVER
+					// the app (monorepo#1672).
+					//
+					// Same shape as packages/sync-core/src/recordPushAdapter.ts:216,
+					// which already ORs in the signal.
 					const abortedByRelease =
-						next.released && error instanceof Error && error.name === 'AbortError';
+						next.released &&
+						(next.abortController.signal.aborted ||
+							(error instanceof Error && error.name === 'AbortError'));
 					if (abortedByRelease) {
 						// release() aborted the in-flight fetch; the rejection is the
 						// supersede completing, not a failure. Report the same released
