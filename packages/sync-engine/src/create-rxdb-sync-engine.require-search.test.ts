@@ -701,7 +701,7 @@ describe('require() for search — the public search-demand verb', () => {
 		await engine.dispose();
 	});
 
-	it('runs only the variations sku leg for a two-character term', async () => {
+	it('runs both variations legs for a two-character term', async () => {
 		const server = scriptedVariationSearchProxy([]);
 		const engine = engineWith(server.fetch);
 		await engine.ready;
@@ -713,8 +713,11 @@ describe('require() for search — the public search-demand verb', () => {
 				kind: 'search',
 				term: '42',
 			}).ready
-		).resolves.toMatchObject({ action: 'fetched', requests: 1 });
-		expect(server.state.urls).toEqual([`${SYNC_BASE}/variations?sku=42&per_page=25&page=1`]);
+		).resolves.toMatchObject({ action: 'fetched', requests: 2 });
+		expect(server.state.urls).toEqual([
+			`${SYNC_BASE}/variations?search=42&per_page=25&page=1`,
+			`${SYNC_BASE}/variations?sku=42&per_page=25&page=1`,
+		]);
 		expect(await searchTaskRows(engine)).toEqual([]);
 		await engine.dispose();
 	});

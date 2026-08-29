@@ -166,7 +166,7 @@ describe('createProductsSchedulerFetcher', () => {
 		expect(barcodeOf(1)).toBe('GTIN-654');
 	});
 
-	it('runs only the exact SKU leg for a two-character search', async () => {
+	it('runs both legs for a two-character search', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
@@ -186,9 +186,10 @@ describe('createProductsSchedulerFetcher', () => {
 		);
 
 		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=42&per_page=25&page=1&orderby=id&order=desc&status=publish',
 			'http://wcpos.local/wp-json/wcpos/v2/products?sku=42&per_page=25&page=1&orderby=id&order=desc&status=publish',
 		]);
-		expect(result).toMatchObject({ requestCount: 1, completed: true });
+		expect(result).toMatchObject({ requestCount: 2, completed: true });
 	});
 
 	it('walks each product search leg in Performance-dial pages, not one task-limit request', async () => {

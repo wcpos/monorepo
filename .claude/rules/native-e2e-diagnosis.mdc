@@ -1,0 +1,157 @@
+---
+description: How to diagnose a failing native (Maestro) E2E run without burning a day on it
+globs:
+  - apps/main/.maestro/**
+  - .github/workflows/e2e-native.yml
+  - scripts/e2e-native-*
+alwaysApply: false
+---
+
+# Diagnosing a native E2E failure
+
+Written after a 12-hour diagnosis session on 2026-08-28/29 that should have taken
+twenty minutes. Every rule here is a scar. Follow them in order.
+
+## 1. Run it locally FIRST. CI is for confirmation, never for diagnosis.
+
+```bash
+scripts/e2e-native-local.sh --platform ios
+```
+
+A local iOS run of flows 01–06 takes **~5 minutes**. The CI round trip is
+**~60 minutes**. That is a 12x difference, and on 2026-08-28 an entire night was
+spent on the 60-minute loop for a bug the 5-minute loop showed immediately.
+
+The dev client contains no JS — Metro serves the bundle — so a local run tests the
+working tree with no build and no EAS spend. There is no reason to use CI as the
+first look.
+
+**Do not open a CI log to diagnose a failure you have not tried to reproduce
+locally.** If it does not reproduce locally, that is itself the most valuable
+finding you will get all day: it means the bug is environmental, and you should
+be reading the runner's differences, not the app's code.
+
+If the local platform prerequisites are unavailable (for example, a cloud/Linux
+agent has no Xcode, booted device, `adb`, or Maestro), record exactly what is
+missing and use the captured CI summary, annotations, and artifacts instead.
+This exception permits diagnosis from an existing run; it does not permit a
+metered native build.
+
+## 2. Read the app's errors BEFORE the Maestro assertion message.
+
+Maestro reports what it could not find. It cannot report *why*, and the two are
+routinely unrelated.
+
+The canonical failure of this suite looks like:
+
+```
+[Failed] 03-authenticated-relaunch (2m 4s)
+   (Assertion is false: id: search-products is visible)
+```
+
+which reads as "the app never launched" or "the search screen is broken or
+slow". On 2026-08-29 (run 33241496921) it was **neither**: the app was fully
+loaded — POS grid rendered, 209 products, cart, customer — with a **red error
+overlay** sitting on top of `search-products`. Maestro waited out its whole
+120-second budget looking at a working app behind a red box.
+
+So:
+
+- **`<element> is visible FAILED` is a SYMPTOM, not a cause.** Before theorising
+  about launch time, sync speed, or a missing testID, establish whether anything
+  was covering the screen.
+- The app errors are already captured. In CI: the **job summary** (`App errors
+  logged during this run`), the `::warning::` annotations, and the
+  `app-errors-*` artifact. Locally: printed first by
+  `scripts/e2e-native-local.sh`. **Look there before you look at the flow.**
+- A red box means a `console.error`. Under `--no-dev` the dev client still draws
+  it — `LogBox.ignoreAllLogs()` does NOT suppress it (it is `// Do nothing.` in
+  the non-`__DEV__` branch of RN's `LogBox.js`), so do not "fix" this by trying
+  to silence LogBox.
+
+## 3. Green is not healthy. Check the measurement, not just the verdict.
+
+The single most expensive habit in this whole episode was **treating a tool's
+verdict as the truth about the system**. Maestro prints a verdict and a duration
+in the same string; only one of them was read.
+
+Run 33243418607 reported:
+
+```
+[Passed] 03-authenticated-relaunch (45m 53s)
+```
+
+That flow's healthy time is **14-45 seconds**. A sixty-fold overrun, marked
+green, sitting next to a `::warning::` that nobody read — while the diagnosis
+effort went to the row labelled `[Failed]`.
+
+- **Compare every measurement to a physical expectation, not to a configured
+  threshold.** A cashier taps a search box and sees results in about a second.
+  So a *step* measured in minutes is a defect at 60x whatever the verdict says.
+  A threshold encodes somebody's past guess; a physical expectation encodes
+  reality. If you print a number, say what it should be.
+- **A pass with an absurd measurement is a failure.** The verdict and the
+  duration are two independent pieces of evidence.
+- This is now a **gate**, not a habit: the timing triage fails the job above
+  1200s (`ABSURD`) and warns above 600s (`STARVED`), on both platforms. Do not
+  weaken it back to a warning — a warning is what let 45m53s pass.
+
+The same reflex explains the rest of the series: `<element> is visible FAILED`
+was accepted as "the element is missing" rather than "what states of the world
+produce this observation?"; a job that exited 0 was accepted as a job that
+passed (#1662). **The label outranked the evidence every time.**
+
+## 4. One screenshot is the final frame, not the story.
+
+Maestro saves a single screenshot at the moment of failure. Everything before it
+is invisible, so a diagnosis built on it alone is backwards inference — and it is
+easy to misread a still (the same frame was misread twice in one night: once as a
+dev-launcher home screen, once as a slow search).
+
+`scripts/e2e-native-local.sh` records the whole run to `screen.mp4` by default.
+**Watch the video before forming a theory.**
+
+## 5. A flow that fails only in CI is usually missing fixtures, not broken.
+
+Flows that assert on seeded records (currently 07 and anything else using
+`VARIABLE_PRODUCT_*`) need `scripts/e2e-native-seed.mjs`, which needs
+`E2E_PRODUCT_WRITER_USER` / `E2E_PRODUCT_WRITER_PASS`. Without them the local run
+warns and those flows fail on missing data, which says nothing about the product.
+Set the credentials locally before concluding anything about a seeded flow.
+
+## 6. Fix the class at the throw site, not the instance at the catch site.
+
+Three separate red boxes in one week were the same class: **a cancellation that
+the classifier could not recognise as one.**
+
+- expo's winter fetch rejects an abort with a plain `Error` wrapping
+  `FetchRequestCanceledException`, not a WHATWG `AbortError` (#1674).
+- React Native's `AbortController` is the `abort-controller` polyfill, whose
+  `abort()` **takes no arguments** — an abort *reason* passed to it is silently
+  discarded, so `signal.reason` is `undefined` on native and only on native
+  (#1677).
+
+Each was first "fixed" by adding another string to a regex in the catch. That is
+an instance fix, and the next variant walks straight past it. **Name the error
+correctly where it is thrown** (`Object.assign(new Error(msg), { name:
+'AbortError' })`) so every downstream classifier inherits it.
+
+See `packages/sync-engine/src/maintenance/variation-prefetch.ts` for the pattern.
+
+## 7. Prefer a unit test over a device test for platform-seam bugs.
+
+Every native-only bug in this series was a **platform fact** — what RN's
+`AbortController` does with a reason, what expo's fetch names an abort, whether
+`DOMException` is a global. Those are testable in milliseconds, and were instead
+found by hour-long device runs.
+
+`packages/sync-engine/src/platform-seam.test.ts` pins these facts. When you find
+a new native/web divergence, **add it there** so the next one is caught by
+`vitest`, not by Maestro.
+
+## 8. Cost discipline
+
+Native E2E builds are metered — $2 iOS / $1 Android against a shared $45/month
+credit. **Never dispatch `e2e-native.yml` with `build=true` without asking the
+owner.** JS-only changes never need a build; a dispatch defaults to
+`build=false` and fails fast on a cache miss. See the root `CLAUDE.md`.

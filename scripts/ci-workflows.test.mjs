@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+	chmodSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,6 +50,69 @@ function runShell(script, { cwd = ROOT, env = {}, unsetEnv = [] } = {}) {
 		encoding: 'utf8',
 		env: shellEnv,
 	});
+}
+
+function runLocalNative({ platform, device = 'phone', timestamp = '20260829T120000Z' }) {
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-local-native-'));
+	const bin = path.join(workspace, 'bin');
+	const trace = path.join(workspace, 'commands.log');
+	mkdirSync(bin);
+	const command = (name, body) => {
+		const filename = path.join(bin, name);
+		writeFileSync(filename, `#!/usr/bin/env bash\n${body}\n`);
+		chmodSync(filename, 0o755);
+	};
+	command('curl', 'echo packager-status:running');
+	command('date', 'echo "$FIXED_TIMESTAMP"');
+	command('maestro', 'echo "maestro $*" >> "$COMMAND_TRACE"');
+	command(
+		'xcrun',
+		`echo "xcrun $*" >> "$COMMAND_TRACE"
+if [ "$*" = "simctl list devices booted" ]; then
+	printf '%s\n' '    iPhone 16 Pro (11111111-1111-1111-1111-111111111111) (Booted)' '    iPad Pro (22222222-2222-2222-2222-222222222222) (Booted)'
+fi`
+	);
+	command(
+		'adb',
+		`echo "adb $*" >> "$COMMAND_TRACE"
+if [ "$1" = devices ]; then
+	printf 'List of devices attached\nemulator-5554\tdevice\n'
+fi`
+	);
+
+	const result = spawnSync(
+		'bash',
+		[
+			path.join(ROOT, 'scripts', 'e2e-native-local.sh'),
+			'--platform',
+			platform,
+			'--device',
+			device,
+			'--flow',
+			'apps/main/.maestro/flows/01-clean-launch-connect.yml',
+			'--no-video',
+		],
+		{
+			cwd: ROOT,
+			encoding: 'utf8',
+			env: {
+				...process.env,
+				COMMAND_TRACE: trace,
+				FIXED_TIMESTAMP: timestamp,
+				PATH: `${bin}:${process.env.PATH}`,
+			},
+		}
+	);
+	const consolePath = result.stdout.match(/^Console log: (.+)$/m)?.[1];
+	return {
+		result,
+		consolePath,
+		trace: readFileSync(trace, 'utf8'),
+		cleanup: () => {
+			if (consolePath) rmSync(path.dirname(consolePath), { recursive: true, force: true });
+			rmSync(workspace, { recursive: true, force: true });
+		},
+	};
 }
 
 test('the shared setup action uses a Node version supported by jsdom 30', () => {
@@ -204,6 +275,287 @@ test('native E2E reports logger and direct console errors on both platforms', ()
 	} finally {
 		rmSync(workspace, { recursive: true, force: true });
 	}
+});
+
+// A PASS with an absurd duration is a FAILURE. Run 33243418607 reported
+// `[Passed] 03-authenticated-relaunch (45m 53s)` — a flow whose healthy time is
+// 14-45 SECONDS — as green, beside a ::warning:: nobody read. The verdict and
+// the duration are two independent pieces of evidence, and a tool's verdict is
+// not the truth about the system.
+function runTimingTriage(workflow, jobName, suiteLogContents) {
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-native-timing-'));
+	try {
+		const maestroDir = path.join(workspace, '.maestro', 'tests');
+		mkdirSync(maestroDir, { recursive: true });
+		writeFileSync(path.join(maestroDir, 'suite.log'), suiteLogContents);
+		const summaryPath = path.join(workspace, 'summary.md');
+		writeFileSync(summaryPath, '');
+
+		const step = findStep(workflow, jobName, '🕒 Flow timing triage');
+		const script = step.run.replaceAll('${{ matrix.device.name }}', 'phone');
+		const result = runShell(script, {
+			env: { GITHUB_STEP_SUMMARY: summaryPath, HOME: workspace },
+		});
+		return { result, summary: readFileSync(summaryPath, 'utf8') };
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+}
+
+test('a flow that passes absurdly slowly FAILS the job', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+
+	for (const jobName of ['android', 'ios']) {
+		// Verbatim from run 33243418607 — green, and 60x its healthy duration.
+		const { result, summary } = runTimingTriage(
+			workflow,
+			jobName,
+			'[Passed] 01-clean-launch-connect (1m 10s)\n' +
+				'[Passed] 03-authenticated-relaunch (45m 53s)\n'
+		);
+
+		assert.notEqual(
+			result.status,
+			0,
+			`${jobName}: a 45m "pass" must fail the job — green is not healthy`
+		);
+		assert.match(result.stdout, /::error title=absurd flow duration::/);
+		assert.match(result.stdout, /03-authenticated-relaunch took 45m 53s/);
+		// The healthy flow is not implicated.
+		assert.doesNotMatch(result.stdout, /01-clean-launch-connect took/);
+		assert.match(summary, /A pass with an absurd duration is a failure/);
+	}
+});
+
+test('a suite that died before any flow does NOT fail the timing gate', () => {
+	// The gate must fail on absurd durations and on NOTHING else. `grep`
+	// finding no timing lines exits 1, so adding `set -o pipefail` here — the
+	// reflex, and the right call elsewhere in this workflow (#1662) — would
+	// turn "the job died before Maestro finished a flow" into a bogus timing
+	// failure that masks the real cause. It is omitted on purpose: awk is the
+	// last command in the pipeline, so the gate's exit 1 propagates anyway.
+	const workflow = readWorkflow('e2e-native.yml');
+
+	for (const jobName of ['android', 'ios']) {
+		const { result } = runTimingTriage(
+			workflow,
+			jobName,
+			'maestro exploded before running anything\n'
+		);
+
+		assert.equal(
+			result.status,
+			0,
+			`${jobName}: an unparseable suite log must not fail the timing gate`
+		);
+		// Anchored to a COMMAND line: the step's comment explains why pipefail
+		// is absent, so a bare /set -o pipefail/ matches the explanation.
+		const step = findStep(workflow, jobName, '🕒 Flow timing triage');
+		assert.doesNotMatch(
+			step.run,
+			/^[ \t]*set -[a-z]*o[a-z]* pipefail[ \t]*$/m,
+			`${jobName}: pipefail turns an empty suite log into a bogus timing failure`
+		);
+	}
+});
+
+test('a healthy suite passes the timing gate', () => {
+	// The gate must not fire on ordinary timings, including a legitimately
+	// slow-but-sane flow between the warn (600s) and fail (1200s) thresholds.
+	const workflow = readWorkflow('e2e-native.yml');
+
+	for (const jobName of ['android', 'ios']) {
+		const { result } = runTimingTriage(
+			workflow,
+			jobName,
+			'[Passed] 01-clean-launch-connect (1m 10s)\n' +
+				'[Passed] 04-cash-sale (2m 30s)\n' +
+				'[Failed] 05-drawer-navigation (11m 00s)\n'
+		);
+
+		assert.equal(result.status, 0, `${jobName}: ${result.stdout}${result.stderr}`);
+		assert.doesNotMatch(result.stdout, /::error/);
+		// 11m is past the starvation threshold but under the gate: warn, not fail.
+		assert.match(result.stdout, /::warning title=starvation-shaped::/);
+	}
+});
+
+test('native E2E extracts app errors WITHOUT a length bound', () => {
+	// Two silent-failure scars live in this one expression, and both produced a
+	// report that looked like it worked:
+	//
+	//  * `grep -oE 'ERROR : .{0,300}'` — BSD grep (the macOS runners the iOS
+	//    job uses) refuses a repetition count over 255 and the step then reports
+	//    NOTHING while exiting 0. GNU grep on the Android runner accepts it, so
+	//    it failed on exactly one platform.
+	//
+	//  * `grep -oE 'ERROR : .{0,200}'` — portable, but it TRUNCATED the answer
+	//    mid-word: run 33241496921 captured the root cause of a full night's
+	//    diagnosis as `"errorDetail":"Persisted scheduler runner ab` (#1677).
+	//
+	// So a bounded repetition against the log is banned outright. Capture from
+	// the marker to end-of-line instead — no count, portable and complete.
+	const workflow = readWorkflow('e2e-native.yml');
+
+	for (const jobName of ['android', 'ios']) {
+		const step = findStep(workflow, jobName, '🔴 Surface app errors');
+
+		assert.doesNotMatch(
+			step.run,
+			/grep[^\n]*-o[^\n]*\{0,\d+\}/,
+			`${jobName}: bounded-repetition grep truncates app errors — capture to end-of-line`
+		);
+		assert.match(step.run, /sed -n 's\/\.\*\\\(ERROR : \.\*\\\)\/\\1\/p'/);
+	}
+});
+
+test('native E2E keeps the whole error line, not a prefix of it', () => {
+	// Behavioural, not textual: feed the step the exact line that was truncated
+	// in run 33241496921 and assert the decisive word survives. The literal
+	// below is 268 characters from `ERROR : `, past both the 200 bound that
+	// truncated it and the 255 BSD ceiling.
+	const workflow = readWorkflow('e2e-native.yml');
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-native-untruncated-'));
+	const longError =
+		'08-29 08:16:38.100 E unknown:ReactNative: console.error: 8:16:38 AM | ERROR : Error | Context: ' +
+		'{"category":"wcpos.sync.engine","requirementId":"_r_12_:parent:products-browse-window",' +
+		'"kind":"query","durationMs":561,"errorName":"Error",' +
+		'"errorDetail":"Persisted scheduler runner aborted",' +
+		'"type":"coverage.require.error","collection":"products","errorCode":"SYNC321"}';
+
+	try {
+		for (const [jobName, logName] of [
+			['android', 'logcat.txt'],
+			['ios', 'app-console.log'],
+		]) {
+			const maestroDir = path.join(workspace, jobName, '.maestro', 'tests');
+			const summaryPath = path.join(workspace, `${jobName}-summary.md`);
+			mkdirSync(maestroDir, { recursive: true });
+			writeFileSync(path.join(maestroDir, logName), `${longError}\n`);
+
+			const step = findStep(workflow, jobName, '🔴 Surface app errors');
+			const script = step.run
+				.replaceAll('${{ matrix.device.name }}', 'phone')
+				.replaceAll('/tmp/apperr', path.join(workspace, `${jobName}-apperr`))
+				.replaceAll('/tmp/app-errors', path.join(workspace, `${jobName}-app-errors`));
+			const result = runShell(script, {
+				env: {
+					GITHUB_STEP_SUMMARY: summaryPath,
+					HOME: path.join(workspace, jobName),
+					RUNNER_OS: jobName === 'android' ? 'Linux' : 'macOS',
+				},
+			});
+
+			assert.equal(result.status, 0, result.stdout + result.stderr);
+			// The word the 200-char bound sliced off, and the tail after it.
+			const summary = readFileSync(summaryPath, 'utf8');
+			assert.match(summary, /Persisted scheduler runner aborted/, `${jobName}: truncated`);
+			assert.match(summary, /SYNC321/, `${jobName}: lost the trailing error code`);
+		}
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
+test('the local native runner gives same-second runs separate artifact directories', () => {
+	const timestamp = '20260829T120000Z';
+	const first = runLocalNative({ platform: 'ios', timestamp });
+	const second = runLocalNative({ platform: 'ios', timestamp });
+
+	try {
+		assert.equal(first.result.status, 0, first.result.stdout + first.result.stderr);
+		assert.equal(second.result.status, 0, second.result.stdout + second.result.stderr);
+		assert.ok(first.consolePath);
+		assert.ok(second.consolePath);
+		assert.notEqual(first.consolePath, second.consolePath);
+		assert.match(first.consolePath, new RegExp(`${timestamp}-\\d+/app-console\\.log$`));
+		assert.match(second.consolePath, new RegExp(`${timestamp}-\\d+/app-console\\.log$`));
+	} finally {
+		first.cleanup();
+		second.cleanup();
+	}
+});
+
+test('the local iOS runner selects a simulator matching the declared device class', () => {
+	const run = runLocalNative({ platform: 'ios', device: 'tablet' });
+
+	try {
+		assert.equal(run.result.status, 0, run.result.stdout + run.result.stderr);
+		assert.match(run.result.stdout, /22222222-2222-2222-2222-222222222222 \(tablet\)/);
+		assert.match(run.trace, /maestro --udid 22222222-2222-2222-2222-222222222222/);
+	} finally {
+		run.cleanup();
+	}
+});
+
+test('the local Android runner clears retained logcat entries before capture', () => {
+	const run = runLocalNative({ platform: 'android' });
+
+	try {
+		assert.equal(run.result.status, 0, run.result.stdout + run.result.stderr);
+		const commands = run.trace.split('\n');
+		const clear = commands.indexOf('adb -s emulator-5554 logcat -c');
+		const capture = commands.indexOf('adb -s emulator-5554 logcat -v threadtime');
+		assert.notEqual(clear, -1, run.trace);
+		assert.notEqual(capture, -1, run.trace);
+		assert.ok(clear < capture, run.trace);
+	} finally {
+		run.cleanup();
+	}
+});
+
+test('both native platforms record the screen for the whole run', () => {
+	// Maestro saves ONE screenshot, at the moment of failure. Every CI
+	// diagnosis is therefore backwards inference from an end state, and a still
+	// is easy to misread — the same frame was read as a dev-launcher home
+	// screen and as a slow product search before it turned out to be a red box
+	// over a fully loaded POS (#1677). A recording is a background process and
+	// ~50MB of artifact; it is the cheapest diagnostic in the suite.
+	const workflow = readWorkflow('e2e-native.yml');
+
+	const iosCapture = findStep(workflow, 'ios', '📱 Boot simulator and install app');
+	assert.match(iosCapture.run, /simctl io "\$UDID" recordVideo/);
+	assert.match(iosCapture.run, /--force/);
+
+	// SIGINT, not SIGKILL: simctl finalizes the container on interrupt and a
+	// killed recording uploads as an unplayable file, which is indistinguishable
+	// from a recording that never ran.
+	const finalize = findStep(workflow, 'ios', '🎬 Finalize screen recording');
+	assert.match(finalize.run, /pkill -INT -f 'simctl io \.\* recordVideo'/);
+	assert.equal(finalize.if, 'always()');
+
+	// The Android emulator step carries its shell in `with.script`, and the
+	// emulator-runner action executes that script LINE BY LINE, each line its
+	// own `sh -c`. A continuation backslash there becomes a literal maestro
+	// argument (run 33153806439), so the recorder must be a single line.
+	const androidCapture = findStep(workflow, 'android', '📱 Run Maestro suite on emulator');
+	const androidScript = androidCapture.with.script;
+	assert.match(androidScript, /screenrecord/);
+	const recorderLine = androidScript
+		.split('\n')
+		.find((line) => line.trimStart().startsWith('nohup sh -c') && line.includes('screenrecord'));
+	assert.ok(recorderLine, 'missing executable Android screenrecord command');
+	assert.doesNotMatch(
+		recorderLine,
+		/\\$/,
+		'the screen recorder must be ONE line — a trailing backslash becomes a maestro argument'
+	);
+	assert.match(recorderLine, /screenrecord-loop\.pid/);
+	assert.match(recorderLine, /stop-screenrecord/);
+
+	// The emulator action stops the device as soon as its script returns, so the
+	// active segment must be interrupted and its wrapper allowed to pull the file
+	// before the script's final exit line.
+	const androidLines = androidScript.split('\n');
+	const finalizeIndex = androidLines.findIndex(
+		(line) => line.includes('stop-screenrecord') && line.includes('pidof screenrecord')
+	);
+	const exitIndex = androidLines.findIndex((line) => line.includes('exit "$(cat'));
+	assert.notEqual(finalizeIndex, -1, 'missing Android screenrecord finalization command');
+	assert.ok(finalizeIndex < exitIndex, 'Android screenrecord must finalize before the action exits');
+	assert.match(androidLines[finalizeIndex], /kill -2/);
+	assert.match(androidLines[finalizeIndex], /kill -0/);
+	assert.match(androidLines[finalizeIndex], /SCREENRECORD_SIGNALLED/);
 });
 
 test('native E2E searches every issue-comment page for its sticky report', () => {

@@ -562,7 +562,7 @@ describe('query-state translator', () => {
 	it.each([
 		['orders', true, 'orders-browse'],
 		['products', false, 'search'],
-		['customers', false, 'customer-browse'],
+		['customers', false, 'search'],
 		['variations', false, 'search'],
 	] as const)(
 		'preserves the %s 1-2 character search semantics',

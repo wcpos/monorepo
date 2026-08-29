@@ -108,7 +108,7 @@ describe('createVariationsSchedulerFetcher', () => {
 		expect(result).toMatchObject({ documentCount: WOO_REST_MAX_PER_PAGE + 1, completed: true });
 	});
 
-	it('runs only the exact SKU leg for a two-character search', async () => {
+	it('runs both legs for a two-character search', async () => {
 		const fetcher = vi.fn(async (_url: string) => response([]));
 		const schedulerFetcher = createVariationsSchedulerFetcher({
 			baseUrl: BASE_URL,
@@ -124,9 +124,10 @@ describe('createVariationsSchedulerFetcher', () => {
 		);
 
 		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+			`${BASE_URL}/variations?search=42&per_page=25&page=1`,
 			`${BASE_URL}/variations?sku=42&per_page=25&page=1`,
 		]);
-		expect(result).toMatchObject({ requestCount: 1, completed: true });
+		expect(result).toMatchObject({ requestCount: 2, completed: true });
 	});
 
 	it('dedupes by numeric id with the exact SKU leg winning', async () => {
