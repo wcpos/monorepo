@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-
+import { expect, test } from './test';
 import { expectRateSetParity, expectTaxParity, posAppliedRateIds } from './order-lifecycle';
 
 /**
