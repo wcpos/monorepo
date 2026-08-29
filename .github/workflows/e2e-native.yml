@@ -349,7 +349,16 @@ jobs:
       - name: 📦 Start Metro and pre-compile the bundle
         working-directory: apps/main
         run: |
-          nohup npx expo start --no-dev --minify --offline --port 8081 > /tmp/metro.log 2>&1 &
+          # EXPO_PUBLIC_E2E is inlined by Metro at bundle time and makes the app
+          # call LogBox.ignoreAllLogs(). A console.error — which every
+          # logger.error becomes — otherwise draws a full-screen red box OVER
+          # the UI, and Maestro then fails at whatever element the box happens
+          # to cover. On 2026-08-29 that produced three separate investigations
+          # into 'connect-store-button not enabled', 'product-tile not visible'
+          # and 'search-products not visible' that were all one thing: an error
+          # overlay. The error itself is NOT suppressed — it still reaches the
+          # device log, and the triage step below annotates it.
+          EXPO_PUBLIC_E2E=1 nohup npx expo start --no-dev --minify --offline --port 8081 > /tmp/metro.log 2>&1 &
           for i in $(seq 1 60); do
             curl -sf http://localhost:8081/status >/dev/null && break
             if [ "$i" -eq 60 ]; then
@@ -503,6 +512,38 @@ jobs:
       # that PASS late or die to the job timeout — failure-only upload threw
       # that evidence away every time. always() also survives timeout-kill
       # (cancelled in-progress steps still reach post steps with always()).
+      # Surfaces application errors a run hit, passing or failing. The overlay
+      # is suppressed under E2E (EXPO_PUBLIC_E2E) so it can no longer mask an
+      # assertion — this is the other half of that trade: the error still has
+      # to be REPORTED, or suppressing the box would simply hide it. Reads the
+      # device console both platforms now capture. Annotation only: nothing
+      # here passes or fails the job.
+      - name: "\U0001F534 Surface app errors"
+        if: always()
+        run: |
+          FOUND=0
+          for LOG in "$HOME/.maestro/tests/logcat.txt" "$HOME/.maestro/tests/app-console.log"; do
+            [ -f "$LOG" ] || continue
+            # The logger transport's own format. Deduped and capped so one
+            # repeated error cannot bury the rest.
+            grep -aoE 'ERROR : .{0,300}' "$LOG" | sort -u | head -20 > /tmp/apperr.txt || true
+            while IFS= read -r line; do
+              [ -n "$line" ] || continue
+              FOUND=$((FOUND + 1))
+              echo "::warning title=app error during E2E::${line}"
+              echo "    ${line}" >> /tmp/apperr-summary.txt
+            done < /tmp/apperr.txt
+          done
+          if [ "$FOUND" -gt 0 ]; then
+            echo "### App errors logged during this run (${FOUND})" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "The E2E overlay is suppressed, so these did NOT mask an assertion — but the app did log them." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            cat /tmp/apperr-summary.txt >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No app errors logged during this run." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: ⬆️ Upload device artifacts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -550,7 +591,16 @@ jobs:
       - name: 📦 Start Metro and pre-compile the bundle
         working-directory: apps/main
         run: |
-          nohup npx expo start --no-dev --minify --offline --port 8081 > /tmp/metro.log 2>&1 &
+          # EXPO_PUBLIC_E2E is inlined by Metro at bundle time and makes the app
+          # call LogBox.ignoreAllLogs(). A console.error — which every
+          # logger.error becomes — otherwise draws a full-screen red box OVER
+          # the UI, and Maestro then fails at whatever element the box happens
+          # to cover. On 2026-08-29 that produced three separate investigations
+          # into 'connect-store-button not enabled', 'product-tile not visible'
+          # and 'search-products not visible' that were all one thing: an error
+          # overlay. The error itself is NOT suppressed — it still reaches the
+          # device log, and the triage step below annotates it.
+          EXPO_PUBLIC_E2E=1 nohup npx expo start --no-dev --minify --offline --port 8081 > /tmp/metro.log 2>&1 &
           for i in $(seq 1 60); do
             curl -sf http://localhost:8081/status >/dev/null && break
             if [ "$i" -eq 60 ]; then
@@ -597,6 +647,16 @@ jobs:
           APP_PATH=$(find /tmp/e2e-app -maxdepth 2 -name "*.app" | head -1)
           xcrun simctl install "$UDID" "$APP_PATH"
           echo "MAESTRO_UDID=$UDID" >> "$GITHUB_ENV"
+          # Stream the app's OWN console, the way the Android job streams
+          # logcat. Without this iOS produced no application-level evidence at
+          # all: an app error during a run was invisible unless it happened to
+          # break an assertion, and even then the assertion named the wrong
+          # thing. Only warn/error survive `--no-dev --minify` (console.log is
+          # stripped), which is exactly the level worth reporting.
+          mkdir -p ~/.maestro/tests
+          nohup xcrun simctl spawn "$UDID" log stream --style compact \
+            --predicate 'processImagePath CONTAINS "WCPOS"' \
+            > ~/.maestro/tests/app-console.log 2>&1 &
 
       # One `maestro test` per flow, NOT batch mode: on iOS 26.x the XCUITest
       # driver socket can die mid-suite with no recovery (maestro#3318; both
@@ -659,6 +719,38 @@ jobs:
       # screenshots and no UI hierarchy, and iOS stayed a black box. Artifacts
       # are also what distinguishes "assertion failed" from "app never
       # rendered" on a green-but-suspicious run.
+      # Surfaces application errors a run hit, passing or failing. The overlay
+      # is suppressed under E2E (EXPO_PUBLIC_E2E) so it can no longer mask an
+      # assertion — this is the other half of that trade: the error still has
+      # to be REPORTED, or suppressing the box would simply hide it. Reads the
+      # device console both platforms now capture. Annotation only: nothing
+      # here passes or fails the job.
+      - name: "\U0001F534 Surface app errors"
+        if: always()
+        run: |
+          FOUND=0
+          for LOG in "$HOME/.maestro/tests/logcat.txt" "$HOME/.maestro/tests/app-console.log"; do
+            [ -f "$LOG" ] || continue
+            # The logger transport's own format. Deduped and capped so one
+            # repeated error cannot bury the rest.
+            grep -aoE 'ERROR : .{0,300}' "$LOG" | sort -u | head -20 > /tmp/apperr.txt || true
+            while IFS= read -r line; do
+              [ -n "$line" ] || continue
+              FOUND=$((FOUND + 1))
+              echo "::warning title=app error during E2E::${line}"
+              echo "    ${line}" >> /tmp/apperr-summary.txt
+            done < /tmp/apperr.txt
+          done
+          if [ "$FOUND" -gt 0 ]; then
+            echo "### App errors logged during this run (${FOUND})" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "The E2E overlay is suppressed, so these did NOT mask an assertion — but the app did log them." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            cat /tmp/apperr-summary.txt >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No app errors logged during this run." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: ⬆️ Upload device artifacts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
