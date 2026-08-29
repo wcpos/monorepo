@@ -125,7 +125,7 @@ export const DEFAULT_THERMAL_TEMPLATE = `<receipt paper-width="{{columns}}">
   <align mode="center">
     <text>Thank you for your purchase!</text>
   </align>
-  <feed lines="2" />
+  <feed lines="3" />
   {{#openDrawer}}
   <drawer />
   {{/openDrawer}}

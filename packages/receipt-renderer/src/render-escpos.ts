@@ -510,7 +510,12 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			break;
 		}
 		case 'cut':
-			encoder.cut(node.cutType === 'full' ? 'full' : 'partial');
+			if (context.language === 'esc-pos') {
+				if (context.lineHasText) writeNewline(encoder, context);
+				encoder.raw([0x1d, 0x56, node.cutType === 'full' ? 0x41 : 0x42, 0x00]);
+			} else {
+				encoder.cut(node.cutType === 'full' ? 'full' : 'partial');
+			}
 			break;
 		case 'feed':
 			writeNewline(encoder, context, node.lines);

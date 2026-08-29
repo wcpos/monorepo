@@ -610,6 +610,52 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(html).not.toContain('<img');
 	});
 
+	it('uses the ESC/POS feed-and-partial-cut command', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text>Hi</text><feed lines="2" /><cut /></receipt>',
+			{},
+			{ language: 'esc-pos' }
+		);
+
+		expect(includesSequence(bytes, [0x1d, 0x56, 0x42, 0x00])).toBe(true);
+		expect(includesSequence(bytes, [0x1d, 0x56, 0x01])).toBe(false);
+	});
+
+	it('uses the ESC/POS feed-and-full-cut command', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><cut type="full" /></receipt>',
+			{},
+			{ language: 'esc-pos' }
+		);
+
+		expect(includesSequence(bytes, [0x1d, 0x56, 0x41, 0x00])).toBe(true);
+	});
+
+	it('ends ESC/POS text with a newline before cutting', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text>Hi</text><cut /></receipt>',
+			{},
+			{ language: 'esc-pos' }
+		);
+		const textIndex = sequenceIndex(bytes, [0x48, 0x69]);
+		const newlineIndex = sequenceIndex(bytes, [0x0a], textIndex + 2);
+		const cutIndex = sequenceIndex(bytes, [0x1d, 0x56, 0x42, 0x00]);
+
+		expect(textIndex).toBeGreaterThanOrEqual(0);
+		expect(newlineIndex).toBeGreaterThan(textIndex);
+		expect(cutIndex).toBeGreaterThan(newlineIndex);
+	});
+
+	it('keeps the Star partial-cut command unchanged', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><cut /></receipt>',
+			{},
+			{ language: 'star-prnt' }
+		);
+
+		expect(includesSequence(bytes, [0x1b, 0x64, 0x01])).toBe(true);
+	});
+
 	it('prints resolved image assets as ESC/POS raster images when imageMode is raster', () => {
 		const ast = parseXml('<receipt><image src="logo://store" width="64" /></receipt>');
 		const bytes = renderEscpos(ast, {
