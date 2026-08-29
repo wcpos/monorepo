@@ -468,7 +468,7 @@ jobs:
             # the APK install (run 33237853311: clearState succeeded, then the
             # deep link failed with "device offline"). Retry only that exact
             # infrastructure signature; assertions and app failures stay red.
-            if grep -Rqs 'device offline' "$HOME/.maestro/tests"/*/maestro.log; then adb reconnect offline; timeout 60 adb wait-for-device; adb reverse tcp:8081 tcp:8081; { maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" apps/main/.maestro; echo $? > ~/.maestro/tests/exit_code; } 2>&1 | tee -a ~/.maestro/tests/suite.log; fi
+            if [ "$(cat "$HOME/.maestro/tests/exit_code")" -ne 0 ] && grep -Rqs 'device offline' "$HOME/.maestro/tests"/*/maestro.log; then adb reconnect offline; timeout 60 adb wait-for-device; adb reverse tcp:8081 tcp:8081; { maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" apps/main/.maestro; echo $? > ~/.maestro/tests/exit_code; } 2>&1 | tee -a ~/.maestro/tests/suite.log; fi
             exit "$(cat ~/.maestro/tests/exit_code)"
         env:
           # The Maestro Android driver installs its two APKs and waits for the

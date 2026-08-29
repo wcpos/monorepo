@@ -18,8 +18,7 @@ test('CodePanel uses the required React namespace import', () => {
 		ts.ScriptKind.TSX
 	);
 	const reactImport = source.statements.find(
-		(statement) =>
-			ts.isImportDeclaration(statement) && statement.moduleSpecifier.text === 'react'
+		(statement) => ts.isImportDeclaration(statement) && statement.moduleSpecifier.text === 'react'
 	);
 
 	assert.ok(
