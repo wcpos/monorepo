@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-
+import { expect, test } from './test';
 import { authenticateWithStore, navigateToPage } from './fixtures';
 
 import type { Page } from '@playwright/test';

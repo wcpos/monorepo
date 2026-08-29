@@ -1,5 +1,6 @@
-import { expect, type Route, test } from '@playwright/test';
+import { type Route } from '@playwright/test';
 
+import { expect, test } from './test';
 import { authenticateWithStore } from './fixtures';
 import {
 	createSearchProbe,

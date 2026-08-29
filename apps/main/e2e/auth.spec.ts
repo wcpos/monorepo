@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-
+import { expect, test } from './test';
 import { getStoreUrl, getStoreVariant, stubStoreVersionForE2E } from './fixtures';
 
 test.describe('Connect Screen', () => {
