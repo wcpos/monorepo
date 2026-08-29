@@ -11,6 +11,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { useAppState } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
+import { useCurrentOrderActions } from '../../contexts/current-order';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
@@ -61,6 +62,7 @@ export function PaymentWebview({
 	const { wpCredentials } = useAppState();
 	const jwt = useDocField(wpCredentials, (value) => value.access_token);
 	const { stockAdjustment } = useStockAdjustment();
+	const { setCurrentOrderID } = useCurrentOrderActions();
 	const { uiSettings } = useUISettings('pos-cart');
 	const t = useT();
 	const runtime = useQueryRuntime();
@@ -162,6 +164,7 @@ export function PaymentWebview({
 							},
 						}
 					);
+					setCurrentOrderID('');
 					// Route FIRST; the local refresh is catch-up, never a gate. Awaiting it
 					// here left cashiers on a spinning "Process payment" after a paid sale:
 					// orders #117902 and #118391 (2026-08-29, local + CI iOS) both logged
@@ -207,6 +210,7 @@ export function PaymentWebview({
 			stockAdjustment,
 			uiSettings.autoShowReceipt,
 			setLoading,
+			setCurrentOrderID,
 			orderLogger,
 			t,
 			refreshOrder,
@@ -271,6 +275,7 @@ export function PaymentWebview({
 					if (serverStatus === localStatus) return;
 
 					paymentReceivedRef.current = true;
+					setCurrentOrderID('');
 
 					// Best-effort: bring the local document up to date; routing below
 					// does not depend on it.
@@ -337,6 +342,7 @@ export function PaymentWebview({
 			router,
 			setLoading,
 			setFrameStatus,
+			setCurrentOrderID,
 			orderLogger,
 			t,
 			refreshOrder,

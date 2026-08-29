@@ -14,6 +14,7 @@ import { PaymentWebview } from './payment-webview';
 let webViewProps: Record<string, any> = {};
 const mockGet = jest.fn();
 const mockReplace = jest.fn();
+const mockSetCurrentOrderID = jest.fn();
 const mockStockAdjustment = jest.fn();
 const mockEngineRequire = jest.fn();
 let autoShowReceipt = false;
@@ -45,6 +46,9 @@ jest.mock('../../../../../contexts/app-state', () => ({
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { autoShowReceipt } }),
+}));
+jest.mock('../../contexts/current-order', () => ({
+	useCurrentOrderActions: () => ({ setCurrentOrderID: mockSetCurrentOrderID }),
 }));
 jest.mock('../../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({ get: mockGet }),
@@ -134,6 +138,7 @@ describe('PaymentWebview fallback order refresh', () => {
 				params: { orderId: 'uuid-42' },
 			});
 			expect(setLoading).toHaveBeenCalledWith(false);
+			expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 			expect(release).not.toHaveBeenCalled();
 
 			// A refresh that never settles is released at the bound, not held forever.
@@ -280,6 +285,7 @@ describe('PaymentWebview fallback order refresh', () => {
 		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
 		expect(mockEngineRequire).toHaveBeenCalledTimes(1); // best-effort local catch-up
 		expect(logger.error).not.toHaveBeenCalled();
+		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
 	});
 });
