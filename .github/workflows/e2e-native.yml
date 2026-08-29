@@ -435,6 +435,14 @@ jobs:
             # DEV_CLIENT_URL default in flows 01/02); adb reverse makes the
             # emulator's localhost:8081 reach Metro on this host, so the same
             # URL works on both platforms and in local runs.
+            # Suppress system crash/ANR dialogs. The emulator's own Pixel
+            # Launcher ANRs under load and its "isn't responding" dialog then
+            # sits ON TOP of the app under test — run 33237371510's flow 01
+            # failure screenshot is exactly that, with the dev menu visible
+            # behind it. Maestro has no global handler for a dialog that can
+            # appear at any moment, and it is not our app misbehaving, so the
+            # right place to stop it is the device.
+            adb shell settings put global hide_error_dialogs 1 || true
             adb reverse tcp:8081 tcp:8081
             adb install e2e-builds/wcpos-e2e-android.apk
             # STREAM logcat from before the suite, not dump-on-failure: the
