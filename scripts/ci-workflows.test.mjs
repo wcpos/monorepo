@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-import { parse } from 'yaml';
+import { parse, parseAllDocuments } from 'yaml';
 
 import { classify } from './ci-plan.mjs';
 
@@ -18,6 +18,13 @@ function readWorkflow(filename) {
 
 function readAction(filename) {
 	return parse(readFileSync(path.join(ROOT, '.github', 'actions', filename), 'utf8'));
+}
+
+function readMaestroFlow(filename) {
+	const documents = parseAllDocuments(
+		readFileSync(path.join(ROOT, 'apps', 'main', '.maestro', 'flows', filename), 'utf8')
+	);
+	return documents.at(-1).toJS();
 }
 
 function findStep(workflow, jobName, stepName) {
@@ -825,9 +832,110 @@ test('both native platforms upload Maestro artifacts unconditionally', () => {
 
 	for (const job of ['android', 'ios']) {
 		const upload = workflow.jobs[job].steps.find(
-			(step) => step.uses?.startsWith('actions/upload-artifact') && step.with?.name?.includes('maestro')
+			(step) =>
+				step.uses?.startsWith('actions/upload-artifact') && step.with?.name?.includes('maestro')
 		);
 		assert.ok(upload, `${job} no longer uploads Maestro artifacts`);
 		assert.equal(upload.if, 'always()', `${job} collects Maestro artifacts conditionally`);
+	}
+});
+
+test('Android clean-start flows dismiss a queued system ANR before waiting for Expo', () => {
+	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
+		const flow = readMaestroFlow(filename);
+		const androidLaunch = flow.find((command) => command.runFlow?.when?.platform === 'Android')
+			.runFlow.commands;
+
+		assert.deepEqual(
+			androidLaunch[0],
+			{ tapOn: { text: 'Wait', optional: true } },
+			`${filename} must clear an ANR dialog that predates hide_error_dialogs`
+		);
+	}
+});
+
+test('the Android step retries a transient offline ADB transport once', () => {
+	const step = findStep(
+		readWorkflow('e2e-native.yml'),
+		'android',
+		'📱 Run Maestro suite on emulator'
+	);
+	const retry = step.with.script
+		.split('\n')
+		.find((line) => line.includes("grep -Rqs 'device offline'"));
+
+	assert.ok(retry, 'the Android Maestro step no longer retries a transient offline transport');
+
+	const dir = mkdtempSync(path.join(tmpdir(), 'maestro-android-retry-'));
+	try {
+		mkdirSync(path.join(dir, '.maestro/tests/first-run'), { recursive: true });
+		writeFileSync(path.join(dir, '.maestro/tests/first-run/maestro.log'), 'device offline\n');
+		writeFileSync(path.join(dir, '.maestro/tests/exit_code'), '1\n');
+		mkdirSync(path.join(dir, 'bin'));
+		writeFileSync(path.join(dir, 'bin/adb'), '#!/bin/sh\nexit 0\n');
+		writeFileSync(
+			path.join(dir, 'bin/maestro'),
+			'#!/bin/sh\necho called >> "$MAESTRO_RETRY_COUNTER"\nexit 0\n'
+		);
+		spawnSync('chmod', ['+x', path.join(dir, 'bin/adb'), path.join(dir, 'bin/maestro')]);
+
+		const counter = path.join(dir, 'retry-count');
+		const result = runShell(retry, {
+			env: {
+				HOME: dir,
+				PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`,
+				MAESTRO_RETRY_COUNTER: counter,
+				DEVICE_CLASS: 'phone',
+			},
+		});
+
+		assert.equal(result.status, 0, result.stdout + result.stderr);
+		assert.equal(readFileSync(counter, 'utf8'), 'called\n');
+		assert.equal(readFileSync(path.join(dir, '.maestro/tests/exit_code'), 'utf8'), '0\n');
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test('the Android step does not retry a successful run with a stale offline log', () => {
+	const step = findStep(
+		readWorkflow('e2e-native.yml'),
+		'android',
+		'📱 Run Maestro suite on emulator'
+	);
+	const retry = step.with.script
+		.split('\n')
+		.find((line) => line.includes("grep -Rqs 'device offline'"));
+
+	assert.ok(retry, 'the Android Maestro step no longer has its retry decision');
+
+	const dir = mkdtempSync(path.join(tmpdir(), 'maestro-android-no-retry-'));
+	try {
+		mkdirSync(path.join(dir, '.maestro/tests/first-run'), { recursive: true });
+		writeFileSync(path.join(dir, '.maestro/tests/first-run/maestro.log'), 'device offline\n');
+		writeFileSync(path.join(dir, '.maestro/tests/exit_code'), '0\n');
+		mkdirSync(path.join(dir, 'bin'));
+		writeFileSync(path.join(dir, 'bin/adb'), '#!/bin/sh\nexit 0\n');
+		writeFileSync(
+			path.join(dir, 'bin/maestro'),
+			'#!/bin/sh\necho called >> "$MAESTRO_RETRY_COUNTER"\nexit 0\n'
+		);
+		spawnSync('chmod', ['+x', path.join(dir, 'bin/adb'), path.join(dir, 'bin/maestro')]);
+
+		const counter = path.join(dir, 'retry-count');
+		const result = runShell(retry, {
+			env: {
+				HOME: dir,
+				PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`,
+				MAESTRO_RETRY_COUNTER: counter,
+				DEVICE_CLASS: 'phone',
+			},
+		});
+
+		assert.equal(result.status, 0, result.stdout + result.stderr);
+		assert.equal(readFileSync(path.join(dir, '.maestro/tests/exit_code'), 'utf8'), '0\n');
+		assert.throws(() => readFileSync(counter, 'utf8'), { code: 'ENOENT' });
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
 	}
 });

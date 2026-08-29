@@ -7,6 +7,8 @@
 		"dev": "vite --host 0.0.0.0",
 		"build": "tsc -p tsconfig.json --noEmit && vite build",
 		"lint": "eslint src scripts --ext .ts,.tsx",
+		"lint:fix": "eslint src scripts --ext .ts,.tsx --fix",
+		"typecheck": "tsc -p tsconfig.json --noEmit",
 		"test": "vitest run",
 		"test:snapshots": "tsx --tsconfig tsconfig.json scripts/run-snapshots.ts --check",
 		"generate:gallery-previews": "tsx --tsconfig tsconfig.json scripts/generate-gallery-previews.ts",

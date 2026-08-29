@@ -429,7 +429,8 @@ jobs:
             # dialogs ("Pixel Launcher isn't responding", googlesdksetup — both
             # Android jobs in run 33127572216 died at flow 01 behind one). The
             # dialog window sits above the app, so every assert times out.
-            # hide_error_dialogs suppresses ANR/crash dialogs system-wide.
+            # hide_error_dialogs suppresses later ANR/crash dialogs system-wide;
+            # flows 01/02 also dismiss one queued during emulator boot.
             adb shell settings put global hide_error_dialogs 1
             # The flows launch the dev client into http://localhost:8081 (the
             # DEV_CLIENT_URL default in flows 01/02); adb reverse makes the
@@ -463,6 +464,11 @@ jobs:
             # own shell — so maestro's real exit code crosses lines via a
             # file, and the tee'd pipeline's own exit stays 0 on purpose.
             { maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" apps/main/.maestro; echo $? > ~/.maestro/tests/exit_code; } 2>&1 | tee ~/.maestro/tests/suite.log
+            # A newly booted emulator can briefly drop its ADB transport after
+            # the APK install (run 33237853311: clearState succeeded, then the
+            # deep link failed with "device offline"). Retry only that exact
+            # infrastructure signature; assertions and app failures stay red.
+            if [ "$(cat "$HOME/.maestro/tests/exit_code")" -ne 0 ] && grep -Rqs 'device offline' "$HOME/.maestro/tests"/*/maestro.log; then adb reconnect offline; timeout 60 adb wait-for-device; adb reverse tcp:8081 tcp:8081; { maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" apps/main/.maestro; echo $? > ~/.maestro/tests/exit_code; } 2>&1 | tee -a ~/.maestro/tests/suite.log; fi
             exit "$(cat ~/.maestro/tests/exit_code)"
         env:
           # The Maestro Android driver installs its two APKs and waits for the
