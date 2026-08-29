@@ -129,29 +129,24 @@ export function StoreSelect({
 
 	const stores = useObservableState(stores$, []);
 
-	// Auto-select single store
-	React.useEffect(() => {
-		if (stores.length === 1 && !selectedStoreId) {
-			onStoreSelect(stores[0].localID ?? null);
-		}
-		// Reset if current selection is no longer valid
-		if (selectedStoreId && !stores.find((s) => s.localID === selectedStoreId)) {
-			onStoreSelect(stores.length === 1 ? (stores[0].localID ?? null) : null);
-		}
-	}, [stores, selectedStoreId, onStoreSelect]);
+	// The parent holds the cashier's explicit pick; the EFFECTIVE selection is
+	// derived here rather than pushed back up through an effect. A pick that no
+	// longer resolves (a stale id from a prior user) simply falls away, and a
+	// lone store selects itself. Every read below — highlight, radio, login —
+	// goes through the derived store, so the parent never learns about
+	// auto-selection and a missing store id can never reach `onLogin`.
+	const selectedStore = React.useMemo(
+		() =>
+			stores.find((s) => s.localID === selectedStoreId) ?? (stores.length === 1 ? stores[0] : null),
+		[stores, selectedStoreId]
+	);
+	const selectedStoreLocalID = selectedStore?.localID ?? null;
 
 	// Gate login on a validated user — an expired/invalid cashier session should
 	// not be allowed to enter the POS with stale credentials. `isValid` starts
 	// optimistic (true) and flips false only once validation finishes reporting
 	// a failure, so we also block while validation is still in flight.
-	// Also require that the selected store actually exists in the resolved list,
-	// so a stale `selectedStoreId` held by the parent (e.g. from a prior user)
-	// can't slip a missing store ID into `onLogin`.
-	const resolvedStore = React.useMemo(
-		() => stores.find((s) => s.localID === selectedStoreId) ?? null,
-		[stores, selectedStoreId]
-	);
-	const canLogin = !!resolvedStore && isValid && !isValidating;
+	const canLogin = !!selectedStoreLocalID && isValid && !isValidating;
 
 	return (
 		<VStack space="md">
@@ -167,7 +162,10 @@ export function StoreSelect({
 						{t('auth.no_stores_available', { _tags: 'core' })}
 					</Text>
 				) : (
-					<RadioGroup value={selectedStoreId ?? ''} onValueChange={(val) => onStoreSelect(val)}>
+					<RadioGroup
+						value={selectedStoreLocalID ?? ''}
+						onValueChange={(val) => onStoreSelect(val)}
+					>
 						<VStack space="xs">
 							{stores.map((store) => (
 								<Pressable
@@ -181,7 +179,7 @@ export function StoreSelect({
 									testID={store.id != null ? `store-option-${store.id}` : undefined}
 									onPress={() => onStoreSelect(store.localID ?? null)}
 									className={`web:cursor-pointer web:transition-colors rounded-lg border p-3 ${
-										selectedStoreId === store.localID
+										selectedStoreLocalID === store.localID
 											? 'border-primary bg-primary/10'
 											: 'border-border web:hover:border-primary/40 web:hover:bg-primary/5'
 									}`}
@@ -208,7 +206,7 @@ export function StoreSelect({
 			<Button
 				testID="open-pos-button"
 				onPress={() => {
-					if (resolvedStore?.localID) onLogin(resolvedStore.localID);
+					if (selectedStoreLocalID) onLogin(selectedStoreLocalID);
 				}}
 				disabled={!canLogin}
 				size="lg"

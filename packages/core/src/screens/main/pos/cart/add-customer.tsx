@@ -28,35 +28,22 @@ import { useCurrentOrder } from '../contexts/current-order';
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
 
 /**
- *
+ * The form and its save handler, rendered inside DialogContent. DialogContent
+ * unmounts its children on close (both platforms), so every open starts from
+ * a fresh form without any reset-on-close bookkeeping in the dialog owner.
  */
-export function AddNewCustomer() {
+function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 	const t = useT();
-	const [open, setOpen] = React.useState(false);
 	const { create } = useMutation({ collectionName: 'customers' });
 	const [loading, setLoading] = React.useState(false);
 	const { format } = useCustomerNameFormat();
 	const { currentOrderRecord } = useCurrentOrder();
 	const { localPatch } = useLocalMutation();
 
-	/**
-	 *
-	 */
 	const form = useForm<z.infer<typeof customerFormSchema>>({
 		resolver: zodResolver(customerFormSchema as never) as never,
 		defaultValues: {},
 	});
-
-	/**
-	 * Clear the form when dialog closes.
-	 * This is a legitimate useEffect for cleaning up form state on modal close,
-	 * NOT for syncing external data (which should use `values` prop instead).
-	 */
-	React.useEffect(() => {
-		if (!open) {
-			form.reset({});
-		}
-	}, [form, open]);
 
 	/**
 	 * Save to server
@@ -89,7 +76,7 @@ export function AddNewCustomer() {
 								shipping: saved?.shipping,
 							},
 						});
-						setOpen(false);
+						onClose();
 					}
 				}
 			} catch (error) {
@@ -106,8 +93,19 @@ export function AddNewCustomer() {
 				setLoading(false);
 			}
 		},
-		[create, currentOrderRecord, format, localPatch, t]
+		[create, currentOrderRecord, format, localPatch, onClose, t]
 	);
+
+	return <CustomerForm form={form} onClose={onClose} onSubmit={handleSave} loading={loading} />;
+}
+
+/**
+ *
+ */
+export function AddNewCustomer() {
+	const t = useT();
+	const [open, setOpen] = React.useState(false);
+	const close = React.useCallback(() => setOpen(false), []);
 
 	return (
 		<ErrorBoundary>
@@ -125,12 +123,7 @@ export function AddNewCustomer() {
 						<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
 					</DialogHeader>
 					<DialogBody>
-						<CustomerForm
-							form={form}
-							onClose={() => setOpen(false)}
-							onSubmit={handleSave}
-							loading={loading}
-						/>
+						<AddCustomerFormBody onClose={close} />
 					</DialogBody>
 				</DialogContent>
 			</Dialog>
@@ -149,70 +142,7 @@ interface AddCustomerDialogProps {
 
 export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps) {
 	const t = useT();
-	const { create } = useMutation({ collectionName: 'customers' });
-	const [loading, setLoading] = React.useState(false);
-	const { format } = useCustomerNameFormat();
-	const { currentOrderRecord } = useCurrentOrder();
-	const { localPatch } = useLocalMutation();
-
-	const form = useForm<z.infer<typeof customerFormSchema>>({
-		resolver: zodResolver(customerFormSchema as never) as never,
-		defaultValues: {},
-	});
-
-	React.useEffect(() => {
-		if (!open) {
-			form.reset({});
-		}
-	}, [form, open]);
-
-	const handleSave = React.useCallback(
-		async (data: z.infer<typeof customerFormSchema>) => {
-			setLoading(true);
-			try {
-				const savedDoc = await create({ data, awaitRemoteId: true });
-				if (savedDoc) {
-					// create() returns the raw engine record — the customer body is its
-					// payload. Snapshot it rather than reading fields off the record:
-					// `billing`/`shipping` come back as RxDB Proxies, and writing one onto
-					// the order below would fail the storage clone.
-					const latest = (savedDoc as any).getLatest?.() ?? savedDoc;
-					const saved = ((latest as any).toMutableJSON?.() ?? latest).payload;
-					cartLogger.success(t('common.saved', { name: format(saved) }), {
-						showToast: true,
-						context: {
-							customerId: saved?.id,
-							customerName: format(saved),
-						},
-					});
-					if (currentOrderRecord) {
-						await localPatch({
-							document: currentOrderRecord,
-							data: {
-								customer_id: saved?.id,
-								billing: saved?.billing,
-								shipping: saved?.shipping,
-							},
-						});
-						onOpenChange(false);
-					}
-				}
-			} catch (error) {
-				const errorMessage = getErrorMessage(error);
-				cartLogger.error('Failed to save customer', {
-					showToast: true,
-					code: ERROR_CODES.SYNC_UNEXPECTED,
-					toast: { title: t('common.failed_to_save_customer') },
-					context: {
-						error: errorMessage,
-					},
-				});
-			} finally {
-				setLoading(false);
-			}
-		},
-		[create, currentOrderRecord, format, localPatch, onOpenChange, t]
-	);
+	const close = React.useCallback(() => onOpenChange(false), [onOpenChange]);
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange} style={{ display: 'none' }}>
@@ -221,12 +151,7 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
 					<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
 				</DialogHeader>
 				<DialogBody>
-					<CustomerForm
-						form={form}
-						onClose={() => onOpenChange(false)}
-						onSubmit={handleSave}
-						loading={loading}
-					/>
+					<AddCustomerFormBody onClose={close} />
 				</DialogBody>
 			</DialogContent>
 		</Dialog>

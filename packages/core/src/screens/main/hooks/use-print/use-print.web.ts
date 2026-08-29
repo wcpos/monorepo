@@ -38,14 +38,6 @@ const DEFAULT_PAGE_STYLE = `
 export const usePrint = (options: UsePrintOptions) => {
 	const { contentRef, pageStyle, onBeforePrint, onAfterPrint, onPrintError } = options;
 	const [isPrinting, setIsPrinting] = React.useState(false);
-	const promiseResolveRef = React.useRef<(() => void) | null>(null);
-
-	// Needed for react-to-print: resolves the Promise when isPrinting becomes true
-	React.useEffect(() => {
-		if (isPrinting && promiseResolveRef.current) {
-			promiseResolveRef.current();
-		}
-	}, [isPrinting]);
 
 	const print = useReactToPrint({
 		contentRef,
@@ -57,22 +49,18 @@ export const usePrint = (options: UsePrintOptions) => {
 			});
 			onPrintError?.(errorLocation, error);
 		},
-		onBeforePrint: () => {
-			return new Promise<void>((resolve) => {
-				promiseResolveRef.current = resolve;
-				setIsPrinting(true);
-				// Call user's onBeforePrint if provided
-				const result = onBeforePrint?.();
-				if (result instanceof Promise) {
-					result.then(resolve).catch(() => resolve());
-				} else {
-					resolve();
-				}
-			});
+		onBeforePrint: async () => {
+			setIsPrinting(true);
+			// react-to-print waits for this promise before opening the print dialog.
+			// The caller's hook is advisory: a throw or rejection still prints, and
+			// the try/catch covers a synchronous throw as well as a rejected promise.
+			try {
+				await onBeforePrint?.();
+			} catch {
+				// advisory — see above
+			}
 		},
 		onAfterPrint: () => {
-			// Reset the Promise resolve so we can print again
-			promiseResolveRef.current = null;
 			setIsPrinting(false);
 			onAfterPrint?.();
 		},

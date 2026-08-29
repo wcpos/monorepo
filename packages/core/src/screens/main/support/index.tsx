@@ -1,5 +1,5 @@
 import React from 'react';
-import { Dimensions, View } from 'react-native';
+import { useWindowDimensions, View } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,33 +17,18 @@ const adjustForPadding = (width: number, height: number) => {
 };
 
 export function Support() {
-	const [dimensions, setDimensions] = React.useState({ width: 0, height: 0 });
+	// The window seeds the size so the DOM component never mounts at 0×0; once
+	// the container reports its own layout that wins, and it reports again on
+	// every rotation, so no separate dimension listener is needed.
+	const window = useWindowDimensions();
+	const [layout, setLayout] = React.useState<{ width: number; height: number } | null>(null);
+	const dimensions = layout ?? adjustForPadding(window.width, window.height);
 	const { bottom } = useSafeAreaInsets();
 
 	const handleLayout = (event: LayoutChangeEvent) => {
 		const { width, height } = event.nativeEvent.layout;
-		setDimensions(adjustForPadding(width, height));
+		setLayout(adjustForPadding(width, height));
 	};
-
-	// Listen for dimension changes (like rotation)
-	React.useEffect(() => {
-		const updateDimensions = () => {
-			const { width, height } = Dimensions.get('window');
-			// View is full width/height with padding, so adjust
-			setDimensions(adjustForPadding(width, height));
-		};
-
-		// Update on mount
-		updateDimensions();
-
-		// Add event listener for dimension changes
-		const dimensionListener = Dimensions.addEventListener('change', updateDimensions);
-
-		// Cleanup
-		return () => {
-			dimensionListener.remove();
-		};
-	}, []);
 
 	return (
 		<View
