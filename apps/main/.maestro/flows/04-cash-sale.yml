@@ -6,8 +6,13 @@ env:
 ---
 # P0-4: core cash sale — Products → Cart → checkout → back to a fresh order.
 # Session comes from 02-auth-setup; do NOT clear state.
-- launchApp:
-    stopApp: true
+# Split stop/launch + a screenshot-based settle: a combined `launchApp:
+# {stopApp: true}` can race the XCTest driver's first hierarchy query and be
+# reported as "App crashed" — see flow 08's relaunch for the evidence.
+- stopApp
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 5000
 - extendedWaitUntil:
     visible:
       id: "search-products"
@@ -32,10 +37,10 @@ env:
 # Typing is retried; SEARCH SPEED IS NOT (owner ruling 2026-08-28: "if it
 # takes 60 seconds to return a search, that is a bug or a mis-configured
 # test"). Two separate concerns:
-# - Android inputText can race the IME and drop LEADING keystrokes (run
-#   33176268259's tablet screenshot shows "OS E2E Simple" — "WCP"
-#   swallowed). The retry block types and then ASSERTS the exact query text;
-#   a mangled entry fails fast, gets erased, and is retyped. Harness repair.
+# - A whole inputText is scanner-fast, so the wedge detector can consume it
+#   and reconstruct a query with leading keys missing. The retry block types
+#   at human speed and then ASSERTS the exact query text; a mangled entry fails
+#   fast, gets erased, and is retyped. Harness repair.
 # - The tile wait is a SINGLE 60s, deliberately outside the retry: search
 #   rides the server demand plane (require-plane `search` kind), and a
 #   correct query that cannot produce a tile in 60s is an app-side
@@ -46,7 +51,16 @@ env:
       - tapOn:
           id: "search-products"
       - eraseText
-      - inputText: ${PRODUCT_SEARCH}
+      # One `inputText` is scanner-fast. Device runs prove separate Maestro
+      # commands form separate bursts; one printable key cannot latch
+      # `foldWedgeKey`, regardless of the store's configured minimum length.
+      - evalScript: ${output.searchCharIndex = 0}
+      - repeat:
+          while:
+            true: ${output.searchCharIndex < PRODUCT_SEARCH.length}
+          commands:
+            - inputText: ${PRODUCT_SEARCH.charAt(output.searchCharIndex)}
+            - evalScript: ${output.searchCharIndex++}
       - assertVisible:
           text: ${PRODUCT_SEARCH}
 - extendedWaitUntil:
@@ -82,9 +96,15 @@ env:
     visible:
       id: "checkout-dialog"
     timeout: 60000
+# `enabled`, not merely visible: the button renders DISABLED until the
+# payment frame reports its load event (#1024 gate in checkout.tsx), and a
+# tap on the disabled button is a silent no-op — Maestro still reports
+# COMPLETED. Order #117904 (local run 2026-08-29 17:09) sat `pos-open` with no
+# payment method for the whole 120s receipt wait because of exactly that.
 - extendedWaitUntil:
     visible:
       id: "process-payment-button"
+      enabled: true
     timeout: 60000
 - tapOn:
     id: "process-payment-button"

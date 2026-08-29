@@ -102,6 +102,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			// 2026-08-21, #1415): self-signed/enterprise dev stores become testable
 			// on-device; production keeps the platform default (system CAs only).
 			...(isDev || isAdhoc ? ['./plugins/with-user-ca-trust'] : []),
+			// The dev client's dev-menu overlays (floating button, menu-at-launch,
+			// onboarding card) are switched off by default on the development
+			// profile — the build the native E2E suite drives (2026-08-29). The
+			// menu itself remains reachable and the defaults can be re-enabled in
+			// its settings; see the plugin.
+			...(isDev ? ['./plugins/with-quiet-dev-menu'] : []),
 			[
 				'expo-camera',
 				{

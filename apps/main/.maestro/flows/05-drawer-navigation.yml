@@ -1,8 +1,13 @@
 appId: com.wcpos.main.dev
 ---
 # P0-5: drawer navigation smoke — visit main areas, return to POS.
-- launchApp:
-    stopApp: true
+# Split stop/launch + a screenshot-based settle: a combined `launchApp:
+# {stopApp: true}` can race the XCTest driver's first hierarchy query and be
+# reported as "App crashed" — see flow 08's relaunch for the evidence.
+- stopApp
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 5000
 - extendedWaitUntil:
     visible:
       id: "search-products"

@@ -52,7 +52,8 @@
     "lint-staged": "^17.3.0",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "rxdb": "17.4.0",
-    "rxdb-premium": "17.4.0"
+    "rxdb-premium": "17.4.0",
+    "yaml": "2.9.0"
   },
   "dependencies": {
     "turbo": "^2.10.11",

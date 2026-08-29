@@ -235,7 +235,18 @@ jobs:
           fi
           case "$PLATFORM" in all) SLOTS=2 ;; *) SLOTS=1 ;; esac
           MONTH_START=$(date -u +%Y-%m-01T00:00:00Z)
-          if ! BUILDS=$(eas build:list --json --non-interactive --limit 100 --build-profile development); then
+          # --limit is CAPPED AT 50 by eas-cli (23.0.0: "Defaults to 10 and is
+          # capped at 50"); 100 made the command fail outright, which this step
+          # reported only as "build:list command failed." and refused every
+          # PR build (PR #1680, 2026-08-29). 50 is enough for a ceiling of 20:
+          # if 50 in-month builds come back the count already exceeds it.
+          if ! BUILDS=$(eas build:list --json --non-interactive --limit 50 --build-profile development); then
+            # `--json` swallows eas's own reason into $BUILDS. Repeat the call
+            # without --json so the real cause (token scope, unlinked project,
+            # rejected flag) is in the log.
+            echo "::group::eas build:list diagnostic (no --json)"
+            eas build:list --non-interactive --limit 1 --build-profile development || true
+            echo "::endgroup::"
             echo "::error::Could not read this month's EAS build count; refusing an unmetered build. Dispatch with build=true to override."
             exit 1
           fi

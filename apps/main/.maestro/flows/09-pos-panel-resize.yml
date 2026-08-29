@@ -13,8 +13,13 @@ env:
 # library keeps live for VoiceOver/TalkBack. Flow 01 cleared app data, so the products
 # panel starts at the initial-settings width of 60; a LEFT swipe shrinks it (clamped to
 # minSize 25), so "less than 60" is the deterministic post-drag assertion.
-- launchApp:
-    stopApp: true
+# Split stop/launch + a screenshot-based settle: a combined `launchApp:
+# {stopApp: true}` can race the XCTest driver's first hierarchy query and be
+# reported as "App crashed" — see flow 08's relaunch for the evidence.
+- stopApp
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 5000
 - extendedWaitUntil:
     visible:
       id: "screen-pos"
@@ -49,8 +54,13 @@ env:
             text: "Resize handle, (2[5-9]|[3-5][0-9])%"
           timeout: 10000
       # A stopped relaunch reads the width persisted by onLayoutChanged → patchUI.
-      - launchApp:
-          stopApp: true
+      # Split stop/launch + a screenshot-based settle: a combined `launchApp:
+      # {stopApp: true}` can race the XCTest driver's first hierarchy query and be
+      # reported as "App crashed" — see flow 08's relaunch for the evidence.
+      - stopApp
+      - launchApp
+      - waitForAnimationToEnd:
+          timeout: 5000
       - extendedWaitUntil:
           visible:
             id: "screen-pos"
