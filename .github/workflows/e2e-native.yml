@@ -432,6 +432,8 @@ jobs:
             # hide_error_dialogs suppresses later ANR/crash dialogs system-wide;
             # flows 01/02 also dismiss one queued during emulator boot.
             adb shell settings put global hide_error_dialogs 1
+            # Android's "Show all ANRs" developer option overrides that suppression.
+            adb shell settings put secure anr_show_background 0
             # The flows launch the dev client into http://localhost:8081 (the
             # DEV_CLIENT_URL default in flows 01/02); adb reverse makes the
             # emulator's localhost:8081 reach Metro on this host, so the same
