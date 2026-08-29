@@ -76,6 +76,10 @@ export function CodePanel({ content, engine, templateName }: CodePanelProps) {
 	const rootRef = useRef<HTMLDivElement | null>(null);
 	const editorContainerRef = useRef<HTMLDivElement | null>(null);
 	const viewRef = useRef<EditorView | null>(null);
+	// Latest `content`, so the mount effect below can seed a freshly created view
+	// without depending on it — depending on it would destroy and rebuild the
+	// editor (losing scroll and search state) every time the template re-renders.
+	const contentRef = useRef(content);
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return;
@@ -102,7 +106,7 @@ export function CodePanel({ content, engine, templateName }: CodePanelProps) {
 		if (!host) return;
 
 		const state = EditorState.create({
-			doc: content ?? '',
+			doc: contentRef.current ?? '',
 			extensions: [
 				lineNumbers(),
 				highlightActiveLine(),
@@ -132,6 +136,7 @@ export function CodePanel({ content, engine, templateName }: CodePanelProps) {
 
 	// Sync content into the existing view when only the document changes.
 	useEffect(() => {
+		contentRef.current = content;
 		const view = viewRef.current;
 		if (!view) return;
 		const next = content ?? '';

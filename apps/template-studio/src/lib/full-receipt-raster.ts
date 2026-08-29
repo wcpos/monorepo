@@ -166,8 +166,13 @@ function isThermalControlElement(element: Element): boolean {
 }
 
 async function waitForFonts(hostDocument: Document): Promise<void> {
+	// `document.fonts` is browser-only — jsdom (this app's test host) has no
+	// FontFaceSet at all, and a partial polyfill can expose the set without
+	// `ready`. The DOM types declare both as always present, so the absence has to
+	// be probed at runtime; testing `fonts.ready` for truthiness would be an
+	// always-true no-op, which is what `no-misused-promises` objects to.
 	const fonts = hostDocument.fonts as FontFaceSet | undefined;
-	if (!fonts?.ready) return;
+	if (typeof fonts?.ready?.then !== 'function') return;
 	await fonts.ready;
 }
 
