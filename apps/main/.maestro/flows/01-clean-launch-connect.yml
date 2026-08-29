@@ -22,6 +22,14 @@ env:
 # Keep in step with flow 02.
 - clearState
 - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
+# Some iOS versions confirm the first deep-link launch (observed in CI run
+# 33221133579). This is native system UI, so it cannot expose an app testID.
+- runFlow:
+    when:
+      platform: iOS
+      visible: 'Open in .*WCPOS.*'
+    commands:
+      - tapOn: 'Open'
 # Fourth hard-won lesson: on Android, Expo's dev MENU auto-opens over the
 # app once the JS loads after a data clear (its own onboarding — separate
 # from the launcher's disableOnboarding — and clearState wipes its

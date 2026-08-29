@@ -12,6 +12,14 @@ env:
 # behind this exact sequence; keep the two flows in step.
 - clearState
 - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
+# Some iOS versions confirm the first deep-link launch (observed in CI run
+# 33221133579). This is native system UI, so it cannot expose an app testID.
+- runFlow:
+    when:
+      platform: iOS
+      visible: 'Open in .*WCPOS.*'
+    commands:
+      - tapOn: 'Open'
 # Android-only dev-menu dismissal — see flow 01 for the full rationale
 # (Maestro 2.6.1 has no `optional` wait; iOS never shows the menu).
 - runFlow:

@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-import { parse } from 'yaml';
+import { parse, parseAllDocuments } from 'yaml';
 
 import { classify } from './ci-plan.mjs';
 
@@ -18,6 +18,14 @@ function readWorkflow(filename) {
 
 function readAction(filename) {
 	return parse(readFileSync(path.join(ROOT, '.github', 'actions', filename), 'utf8'));
+}
+
+function readMaestroCommands(filename) {
+	const documents = parseAllDocuments(
+		readFileSync(path.join(ROOT, 'apps', 'main', '.maestro', 'flows', filename), 'utf8')
+	);
+	assert.equal(documents.length, 2, `${filename} must contain config and commands documents`);
+	return documents[1].toJS();
 }
 
 function findStep(workflow, jobName, stepName) {
@@ -43,6 +51,19 @@ test('the shared setup action uses a Node version supported by jsdom 30', () => 
 	const setup = readAction('setup-monorepo/action.yml');
 
 	assert.equal(setup.inputs['node-version'].default, '22.22.2');
+});
+
+test('clear-state iOS flows accept the first deep-link security prompt', () => {
+	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
+		const commands = readMaestroCommands(filename);
+		const dismissal = commands.find(
+			(command) =>
+				command.runFlow?.when?.platform === 'iOS' &&
+				command.runFlow.when.visible === 'Open in .*WCPOS.*'
+		);
+
+		assert.deepEqual(dismissal?.runFlow.commands, [{ tapOn: 'Open' }], filename);
+	}
 });
 
 test('the E2E aggregator runs on cancellation and fails the cancelled deploy', () => {
