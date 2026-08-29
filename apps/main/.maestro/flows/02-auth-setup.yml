@@ -37,6 +37,10 @@ env:
       # happens while the menu is actually on screen. A blind global `back` is
       # never safe: there is no state in which "press back and hope" is the
       # right instruction to a device that may already be showing the app.
+      # Keep the pre-existing ANR dismissal in step with flow 01.
+      - tapOn:
+          text: "Wait"
+          optional: true
       - extendedWaitUntil:
           visible:
             text: "Toggle performance monitor"

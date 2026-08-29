@@ -72,6 +72,11 @@ env:
       # happens while the menu is actually on screen. A blind global `back` is
       # never safe: there is no state in which "press back and hope" is the
       # right instruction to a device that may already be showing the app.
+      # Android can queue an ANR before the workflow enables
+      # hide_error_dialogs. Clear that system-owned overlay if present.
+      - tapOn:
+          text: "Wait"
+          optional: true
       - extendedWaitUntil:
           visible:
             text: "Toggle performance monitor"

@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-import { parse } from 'yaml';
+import { parse, parseAllDocuments } from 'yaml';
 
 import { classify } from './ci-plan.mjs';
 
@@ -18,6 +18,13 @@ function readWorkflow(filename) {
 
 function readAction(filename) {
 	return parse(readFileSync(path.join(ROOT, '.github', 'actions', filename), 'utf8'));
+}
+
+function readMaestroFlow(filename) {
+	const documents = parseAllDocuments(
+		readFileSync(path.join(ROOT, 'apps', 'main', '.maestro', 'flows', filename), 'utf8')
+	);
+	return documents.at(-1).toJS();
 }
 
 function findStep(workflow, jobName, stepName) {
@@ -829,5 +836,20 @@ test('both native platforms upload Maestro artifacts unconditionally', () => {
 		);
 		assert.ok(upload, `${job} no longer uploads Maestro artifacts`);
 		assert.equal(upload.if, 'always()', `${job} collects Maestro artifacts conditionally`);
+	}
+});
+
+test('Android clean-start flows dismiss a queued system ANR before waiting for Expo', () => {
+	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
+		const flow = readMaestroFlow(filename);
+		const androidLaunch = flow.find(
+			(command) => command.runFlow?.when?.platform === 'Android'
+		).runFlow.commands;
+
+		assert.deepEqual(
+			androidLaunch[0],
+			{ tapOn: { text: 'Wait', optional: true } },
+			`${filename} must clear an ANR dialog that predates hide_error_dialogs`
+		);
 	}
 });

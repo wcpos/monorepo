@@ -429,7 +429,8 @@ jobs:
             # dialogs ("Pixel Launcher isn't responding", googlesdksetup — both
             # Android jobs in run 33127572216 died at flow 01 behind one). The
             # dialog window sits above the app, so every assert times out.
-            # hide_error_dialogs suppresses ANR/crash dialogs system-wide.
+            # hide_error_dialogs suppresses later ANR/crash dialogs system-wide;
+            # flows 01/02 also dismiss one queued during emulator boot.
             adb shell settings put global hide_error_dialogs 1
             # The flows launch the dev client into http://localhost:8081 (the
             # DEV_CLIENT_URL default in flows 01/02); adb reverse makes the

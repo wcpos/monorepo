@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import * as React from 'react';
 
 import { closeBrackets } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
@@ -66,22 +66,22 @@ function languageExtensionsFor(engine: TemplateEngine | undefined) {
 }
 
 export function CodePanel({ content, engine, templateName }: CodePanelProps) {
-	const [height, setHeight] = useState(() => loadNumber(HEIGHT_STORAGE_KEY, DEFAULT_HEIGHT));
-	const [collapsed, setCollapsed] = useState(() => loadBool(COLLAPSED_STORAGE_KEY, false));
-	const dragStateRef = useRef<{
+	const [height, setHeight] = React.useState(() => loadNumber(HEIGHT_STORAGE_KEY, DEFAULT_HEIGHT));
+	const [collapsed, setCollapsed] = React.useState(() => loadBool(COLLAPSED_STORAGE_KEY, false));
+	const dragStateRef = React.useRef<{
 		startY: number;
 		startHeight: number;
 		stageHeight: number;
 	} | null>(null);
-	const rootRef = useRef<HTMLDivElement | null>(null);
-	const editorContainerRef = useRef<HTMLDivElement | null>(null);
-	const viewRef = useRef<EditorView | null>(null);
+	const rootRef = React.useRef<HTMLDivElement | null>(null);
+	const editorContainerRef = React.useRef<HTMLDivElement | null>(null);
+	const viewRef = React.useRef<EditorView | null>(null);
 	// Latest `content`, so the mount effect below can seed a freshly created view
 	// without depending on it — depending on it would destroy and rebuild the
 	// editor (losing scroll and search state) every time the template re-renders.
-	const contentRef = useRef(content);
+	const contentRef = React.useRef(content);
 
-	useEffect(() => {
+	React.useEffect(() => {
 		if (typeof window === 'undefined') return;
 		try {
 			window.localStorage.setItem(HEIGHT_STORAGE_KEY, String(height));
@@ -90,7 +90,7 @@ export function CodePanel({ content, engine, templateName }: CodePanelProps) {
 		}
 	}, [height]);
 
-	useEffect(() => {
+	React.useEffect(() => {
 		if (typeof window === 'undefined') return;
 		try {
 			window.localStorage.setItem(COLLAPSED_STORAGE_KEY, String(collapsed));
@@ -100,7 +100,7 @@ export function CodePanel({ content, engine, templateName }: CodePanelProps) {
 	}, [collapsed]);
 
 	// Mount/dispose the editor when the host node appears or the engine changes.
-	useEffect(() => {
+	React.useEffect(() => {
 		if (collapsed) return;
 		const host = editorContainerRef.current;
 		if (!host) return;
@@ -135,7 +135,7 @@ export function CodePanel({ content, engine, templateName }: CodePanelProps) {
 	}, [engine, collapsed]);
 
 	// Sync content into the existing view when only the document changes.
-	useEffect(() => {
+	React.useEffect(() => {
 		contentRef.current = content;
 		const view = viewRef.current;
 		if (!view) return;
@@ -147,7 +147,7 @@ export function CodePanel({ content, engine, templateName }: CodePanelProps) {
 		});
 	}, [content]);
 
-	const handlePointerDown = useCallback(
+	const handlePointerDown = React.useCallback(
 		(event: React.PointerEvent<HTMLDivElement>) => {
 			event.preventDefault();
 			(event.target as Element).setPointerCapture(event.pointerId);
@@ -162,7 +162,7 @@ export function CodePanel({ content, engine, templateName }: CodePanelProps) {
 		[collapsed, height]
 	);
 
-	const handlePointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+	const handlePointerMove = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
 		const drag = dragStateRef.current;
 		if (!drag) return;
 		const delta = drag.startY - event.clientY;
@@ -176,7 +176,7 @@ export function CodePanel({ content, engine, templateName }: CodePanelProps) {
 		setHeight(Math.min(cap, Math.max(MIN_HEIGHT, next)));
 	}, []);
 
-	const handlePointerUp = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+	const handlePointerUp = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
 		if (!dragStateRef.current) return;
 		dragStateRef.current = null;
 		try {
