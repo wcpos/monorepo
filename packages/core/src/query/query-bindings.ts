@@ -204,6 +204,13 @@ function useDemand(
 	const demandKey = JSON.stringify(compiled.demand);
 	const engineCollection = engineCollectionNameFor(descriptor.collection);
 	const coverageGeneration = useCoverageGeneration(engine, engineCollection);
+	/**
+	 * Handles whose effect has torn down but whose successor has not declared
+	 * yet. See DECLARE BEFORE RELEASE in the effect below: releasing during
+	 * cleanup aborts an in-flight fetch that a re-declaration would have
+	 * rejoined.
+	 */
+	const pendingRelease = React.useRef<RequirementHandle[]>([]);
 
 	React.useEffect(() => {
 		if (!enabled) {
@@ -228,6 +235,23 @@ function useDemand(
 		const declare = (retryOnReject: boolean) => {
 			if (cancelled) return;
 			handles = declareRequirements(engine, requirements);
+			// DECLARE BEFORE RELEASE. React always runs an effect's cleanup
+			// before the next setup, so releasing there left the engine with a
+			// zero-subscriber window on every re-run — and `release()` ABORTS an
+			// in-flight fetch by design (create-rxdb-sync-engine.require-search:
+			// "release() abandons an in-flight search"). A coverageGeneration
+			// bump is a RE-DECLARATION signal, not a reason to throw away a
+			// search that is still running and still correct, so the cleanup now
+			// defers and we retire the predecessor here instead. An identical
+			// re-declaration rejoins the same engine entry first, so its
+			// subscriber count never reaches zero and the wire request survives.
+			// Cashier impact: search returned nothing while the catalogue was
+			// still backfilling (monorepo#1614).
+			const superseded = pendingRelease.current;
+			if (superseded.length > 0) {
+				pendingRelease.current = [];
+				releaseHandles(superseded);
+			}
 			const isUnfiltered =
 				compiled.read.complete &&
 				Object.keys(compiled.read.prefilter).length === 0 &&
@@ -273,7 +297,10 @@ function useDemand(
 			cancelled = true;
 			settleOnCancel?.();
 			if (retryTimer !== undefined) clearTimeout(retryTimer);
-			releaseHandles(handles);
+			// Defer, do not release — see DECLARE BEFORE RELEASE above. The next
+			// setup retires these once its own declaration is in; if there is no
+			// next setup (unmount), the unmount effect below releases them.
+			pendingRelease.current = [...pendingRelease.current, ...handles];
 		};
 	}, [
 		coverageGeneration,
@@ -286,6 +313,24 @@ function useDemand(
 		engineCollection,
 		id,
 	]);
+
+	// Final unmount: nothing declares after this, so whatever the effect above
+	// deferred has to be released here or it leaks a subscriber and the engine
+	// keeps the entry alive forever.
+	//
+	// DEFINED AFTER that effect deliberately — React runs cleanups in
+	// definition order, so declaring this first made it fire before the
+	// deferral had happened, releasing nothing and stranding the handles. The
+	// existing "releases direct search demand when its binding unmounts" test
+	// catches that, which is exactly what it is for.
+	React.useEffect(
+		() => () => {
+			const outstanding = pendingRelease.current;
+			pendingRelease.current = [];
+			releaseHandles(outstanding);
+		},
+		[]
+	);
 
 	React.useEffect(
 		() => () => {

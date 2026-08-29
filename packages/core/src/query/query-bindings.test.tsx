@@ -1257,6 +1257,38 @@ describe('query bindings', () => {
 		expect(engine.searchRequireCalls[0]?.released).toBe(true);
 	});
 
+	it('declares the successor before releasing the search a generation bump supersedes', async () => {
+		// The demand effect lists coverageGeneration in its deps and its cleanup
+		// releases the handles. React runs cleanup BEFORE the next setup, so the
+		// engine saw a zero-subscriber window on every re-run — and release()
+		// ABORTS an in-flight fetch by design (require-search: "release()
+		// abandons an in-flight search"). A generation bump is a re-declaration
+		// signal, not a reason to kill a search that is still running.
+		//
+		// The invariant is about ORDER, not state: the predecessor IS released
+		// either way, so a `released` flag cannot express this. What matters is
+		// that its successor exists first — an identical re-declaration then
+		// rejoins the same engine entry and the subscriber count never hits zero.
+		// Cashier impact: search returned nothing while the catalogue was still
+		// backfilling (monorepo#1614).
+		const state: QueryStateOf<'customers'> = {
+			search: 'ada',
+			filters: {},
+			sort: { field: 'last_name', direction: 'asc' },
+			limit: 10,
+		};
+		renderHook(() => useCollectionBinding('customers', state), { wrapper: Provider });
+		await waitFor(() => expect(engine.searchRequireCalls).toHaveLength(1));
+
+		// Same query, same term — only the generation moved.
+		act(() => engine.setCollectionStatus('customers', { coverageGeneration: 1 }));
+		await waitFor(() => expect(engine.searchRequireCalls.length).toBeGreaterThan(1));
+
+		const search = engine.demandEvents.filter((event) => event.endsWith(':search'));
+		// require, require, release — NOT require, release, require.
+		expect(search.slice(0, 3)).toEqual(['require:search', 'require:search', 'release:search']);
+	});
+
 	it('redeclares search demand once after a transient declaration rejection', async () => {
 		jest.useFakeTimers();
 		engine.searchFailure = new Error('transient search failure');
