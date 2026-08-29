@@ -541,6 +541,62 @@ jobs:
           echo "::error::A deployment URL was published ($DEPLOY_URL) but the E2E shards were skipped. Failing the gate."
           exit 1
 
+  # One ledger issue for a red main (#1644): opened/refreshed when the
+  # production verification fails, closed on the next green. A verification
+  # cancelled by a newer main push (coalescing above) is superseded, not red —
+  # neither e2e nor cold-start being cancelled touches the ledger.
+  main-ledger:
+    name: 📕 main verification ledger
+    needs: [e2e-gate, e2e, cold-start]
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      issues: write
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update main verification ledger
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # No checkout in this job: gh needs the repo named explicitly.
+          GH_REPO: ${{ github.repository }}
+          GATE_RESULT: ${{ needs.e2e-gate.result }}
+          E2E_RESULT: ${{ needs.e2e.result }}
+          COLD_START_RESULT: ${{ needs.cold-start.result }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          label='ci:main-red'
+          short_sha="${SHA:0:7}"
+
+          if [ "$GATE_RESULT" = "cancelled" ] || [ "$E2E_RESULT" = "cancelled" ] || [ "$COLD_START_RESULT" = "cancelled" ]; then
+            echo "Ledger unchanged: superseded verification at $short_sha"
+            exit 0
+          fi
+
+          issues=$(gh issue list --label "$label" --state open --json number --limit 1)
+          issue=$(jq -r '.[0].number // empty' <<<"$issues")
+          if [ "$GATE_RESULT" = "failure" ]; then
+            if [ -z "$issue" ]; then
+              gh label create "$label" --color B60205 --description "Main production verification is red" || true
+              gh issue create --title "main is red: production verification failed at $short_sha" --label "$label" --body "Verification failed for $SHA ($RUN_URL). Fix forward on main; this issue closes itself on the next green." >/dev/null
+              echo "Ledger issue opened for $short_sha"
+            else
+              gh issue comment "$issue" --body "Verification failed for $SHA ($RUN_URL)." >/dev/null
+              echo "Ledger issue $issue refreshed for $short_sha"
+            fi
+          elif [ "$GATE_RESULT" = "success" ]; then
+            if [ -n "$issue" ]; then
+              gh issue comment "$issue" --body "green again at $SHA ($RUN_URL)" >/dev/null
+              gh issue close "$issue" >/dev/null
+              echo "Ledger issue $issue closed at $short_sha"
+            else
+              echo "Ledger unchanged: main is green and no issue is open"
+            fi
+          else
+            echo "Ledger unchanged: gate result is $GATE_RESULT"
+          fi
+
   e2e-report:
     name: 📊 Merge E2E Reports
     needs: [deploy, e2e]

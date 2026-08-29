@@ -25,9 +25,14 @@ on:
         description: Auto submit to the store? (production only)
         type: boolean
         required: false
+      override_release_gate:
+        description: Type "I accept a red main" to override the release gate
+        type: string
+        default: ''
 
 permissions:
   contents: read
+  checks: read
 
 jobs:
   main:
@@ -38,6 +43,15 @@ jobs:
         with:
           fetch-depth: 0
           submodules: false
+
+      - name: 🟢 Require green main verification
+        if: ${{ github.event.inputs.profile == 'production' || github.event.inputs.profile == 'adhoc' }}
+        uses: ./.github/actions/require-green-main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          sha: ${{ github.sha }}
+          override: ${{ github.event.inputs.override_release_gate }}
 
       - name: 🏗 Setup monorepo
         uses: ./.github/actions/setup-monorepo

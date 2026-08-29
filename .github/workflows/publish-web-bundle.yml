@@ -19,6 +19,10 @@ on:
         description: web-bundle branch to publish to
         required: true
         default: next
+      override_release_gate:
+        description: Type "I accept a red main" to override the release gate
+        type: string
+        default: ''
 
 concurrency:
   group: publish-web-bundle-${{ github.event.inputs.bundle_branch }}
@@ -26,6 +30,7 @@ concurrency:
 
 permissions:
   contents: read
+  checks: read
 
 jobs:
   publish:
@@ -52,6 +57,18 @@ jobs:
           submodules: false
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
+
+      - name: 🔎 Resolve monorepo SHA
+        id: monorepo-sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: 🟢 Require green main verification
+        uses: ./.github/actions/require-green-main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          sha: ${{ steps.monorepo-sha.outputs.sha }}
+          override: ${{ github.event.inputs.override_release_gate }}
 
       - name: 📦 Init submodules
         # Populate apps/web BEFORE `pnpm install` scans the `apps/*` workspace glob

@@ -1,0 +1,40 @@
+name: Require green main
+description: Refuse releases whose latest main verification is not green
+
+inputs:
+  sha:
+    description: Commit SHA to verify
+    required: true
+  override:
+    description: Explicit release-gate override
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Check main verification
+      shell: bash
+      env:
+        RELEASE_SHA: ${{ inputs.sha }}
+        RELEASE_OVERRIDE: ${{ inputs.override }}
+      run: |
+        set -euo pipefail
+        phrase='I accept a red main'
+
+        if [ "$RELEASE_OVERRIDE" = "$phrase" ]; then
+          echo "::warning::release gate overridden for $RELEASE_SHA"
+          exit 0
+        fi
+
+        if ! response=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_SHA}/check-runs?check_name=%F0%9F%8E%AD%20E2E%20Tests&per_page=20"); then
+          response=''
+        fi
+        conclusion=$(jq -r '[.check_runs[]] | sort_by(.completed_at // "") | last | .conclusion // empty' <<<"$response" 2>/dev/null || true)
+        if [ "$conclusion" = "success" ]; then
+          echo "Release gate passed for $RELEASE_SHA"
+          exit 0
+        fi
+
+        found=${conclusion:-no verification found}
+        echo "::error::release refused for $RELEASE_SHA: $found. Type '$phrase' to override."
+        exit 1

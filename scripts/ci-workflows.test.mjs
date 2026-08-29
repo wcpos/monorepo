@@ -179,6 +179,155 @@ test('the E2E aggregator fails closed when change detection fails', () => {
 	assert.equal(legitimateSkip.status, 0, legitimateSkip.stdout + legitimateSkip.stderr);
 });
 
+test('the main verification ledger maintains one issue and ignores superseded runs', () => {
+	const ledger = readWorkflow('deploy.yml').jobs['main-ledger'];
+	assert.match(ledger.if, /github\.event_name == 'push'/);
+	assert.match(ledger.if, /github\.ref == 'refs\/heads\/main'/);
+	assert.ok([ledger.needs].flat().includes('e2e-gate'));
+
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-main-ledger-'));
+	const binDir = path.join(workspace, 'bin');
+	const trace = path.join(workspace, 'gh.log');
+	mkdirSync(binDir);
+	writeFileSync(
+		path.join(binDir, 'gh'),
+		`#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$GH_TRACE"
+if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
+`,
+		{ mode: 0o755 }
+	);
+	// The job has no checkout, so gh must be told the repo explicitly.
+	assert.equal(ledger.steps[0].env.GH_REPO, '${{ github.repository }}');
+	assert.ok([ledger.needs].flat().includes('cold-start'), 'ledger must see cold-start too');
+
+	const run = ({ gate, e2e = 'success', cold = 'success', issues }) => {
+		writeFileSync(trace, '');
+		const result = runShell(ledger.steps[0].run, {
+			env: {
+				PATH: `${binDir}:${process.env.PATH}`,
+				GH_TRACE: trace,
+				GH_ISSUES: issues,
+				GATE_RESULT: gate,
+				E2E_RESULT: e2e,
+				COLD_START_RESULT: cold,
+				SHA: '0123456789abcdef',
+				RUN_URL: 'https://github.test/actions/runs/1',
+			},
+		});
+		return { result, trace: readFileSync(trace, 'utf8') };
+	};
+
+	try {
+		const created = run({ gate: 'failure', issues: '[]' });
+		assert.equal(created.result.status, 0, created.result.stdout + created.result.stderr);
+		assert.match(created.trace, /issue create .*--label ci:main-red/);
+
+		const refreshed = run({ gate: 'failure', issues: '[{"number":42}]' });
+		assert.equal(refreshed.result.status, 0, refreshed.result.stdout + refreshed.result.stderr);
+		assert.match(refreshed.trace, /issue comment 42/);
+		assert.doesNotMatch(refreshed.trace, /issue create/);
+
+		const closed = run({ gate: 'success', issues: '[{"number":42}]' });
+		assert.equal(closed.result.status, 0, closed.result.stdout + closed.result.stderr);
+		assert.match(closed.trace, /issue close 42/);
+
+		const alreadyGreen = run({ gate: 'success', issues: '[]' });
+		assert.equal(
+			alreadyGreen.result.status,
+			0,
+			alreadyGreen.result.stdout + alreadyGreen.result.stderr
+		);
+		assert.doesNotMatch(alreadyGreen.trace, /issue (create|comment|close)|label create/);
+
+		const superseded = run({ gate: 'failure', e2e: 'cancelled', issues: '[{"number":42}]' });
+		assert.equal(superseded.result.status, 0, superseded.result.stdout + superseded.result.stderr);
+		assert.equal(superseded.trace, '');
+		assert.match(superseded.result.stdout, /superseded/i);
+
+		// A cancelled cold-start is the same superseded run — never a red ledger.
+		const supersededCold = run({ gate: 'failure', cold: 'cancelled', issues: '[]' });
+		assert.equal(supersededCold.result.status, 0, supersededCold.result.stdout);
+		assert.equal(supersededCold.trace, '');
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
+test('release workflows require green main with an explicit typed override', () => {
+	const build = readWorkflow('build.yml');
+	const publish = readWorkflow('publish-web-bundle.yml');
+	for (const workflow of [build, publish]) {
+		assert.equal(workflow.on.workflow_dispatch.inputs.override_release_gate.default, '');
+		assert.match(
+			workflow.on.workflow_dispatch.inputs.override_release_gate.description,
+			/I accept a red main/
+		);
+	}
+
+	const buildGate = findStep(build, 'main', '🟢 Require green main verification');
+	assert.equal(buildGate.uses, './.github/actions/require-green-main');
+	assert.equal(buildGate.with.sha, '${{ github.sha }}');
+	assert.equal(buildGate.with.override, '${{ github.event.inputs.override_release_gate }}');
+	assert.match(buildGate.if, /profile == 'production'/);
+	assert.match(buildGate.if, /profile == 'adhoc'/);
+
+	const publishGate = findStep(publish, 'publish', '🟢 Require green main verification');
+	const resolveSha = findStep(publish, 'publish', '🔎 Resolve monorepo SHA');
+	assert.equal(publishGate.uses, './.github/actions/require-green-main');
+	assert.equal(publishGate.with.override, '${{ github.event.inputs.override_release_gate }}');
+	assert.match(publishGate.with.sha, /steps\..+\.outputs\.sha/);
+	assert.match(resolveSha.run, /git rev-parse HEAD/);
+});
+
+test('the release gate uses the latest E2E check and fails closed', () => {
+	const action = readAction('require-green-main/action.yml');
+	assert.equal(action.runs.using, 'composite');
+	const step = action.runs.steps.find(({ run }) => run);
+	assert.ok(step, 'release gate is missing its shell step');
+	assert.match(step.run, /check_name=%F0%9F%8E%AD%20E2E%20Tests/);
+
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-release-gate-'));
+	const binDir = path.join(workspace, 'bin');
+	mkdirSync(binDir);
+	writeFileSync(path.join(binDir, 'gh'), '#!/usr/bin/env bash\nprintf \'%s\' "$GH_CHECK_RUNS"\n', {
+		mode: 0o755,
+	});
+	const run = (checkRuns, override = '') =>
+		runShell(step.run, {
+			env: {
+				PATH: `${binDir}:${process.env.PATH}`,
+				GITHUB_REPOSITORY: 'wcpos/monorepo',
+				RELEASE_SHA: '0123456789abcdef',
+				RELEASE_OVERRIDE: override,
+				GH_CHECK_RUNS: JSON.stringify({ check_runs: checkRuns }),
+			},
+		});
+
+	try {
+		const success = run([
+			{ conclusion: 'failure', completed_at: '2026-08-28T10:00:00Z' },
+			{ conclusion: 'success', completed_at: '2026-08-29T10:00:00Z' },
+		]);
+		assert.equal(success.status, 0, success.stdout + success.stderr);
+
+		const failure = run([{ conclusion: 'failure', completed_at: '2026-08-29T10:00:00Z' }]);
+		assert.notEqual(failure.status, 0);
+		assert.match(failure.stdout + failure.stderr, /0123456789abcdef: failure/);
+		assert.match(failure.stdout + failure.stderr, /I accept a red main/);
+
+		const missing = run([]);
+		assert.notEqual(missing.status, 0);
+		assert.match(missing.stdout + missing.stderr, /no verification found/);
+
+		const overridden = run([], 'I accept a red main');
+		assert.equal(overridden.status, 0, overridden.stdout + overridden.stderr);
+		assert.match(overridden.stdout, /::warning::release gate overridden/);
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
 test('native E2E pull requests are planned and restricted to trusted non-draft changes', () => {
 	const workflow = readWorkflow('e2e-native.yml');
 	const planner = workflow.jobs.changes.steps.find(
