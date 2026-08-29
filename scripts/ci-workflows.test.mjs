@@ -201,7 +201,7 @@ if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
 	assert.equal(ledger.steps[0].env.GH_REPO, '${{ github.repository }}');
 	assert.ok([ledger.needs].flat().includes('cold-start'), 'ledger must see cold-start too');
 
-	const run = ({ gate, e2e = 'success', cold = 'success', issues }) => {
+	const run = ({ gate, deploy = 'success', e2e = 'success', cold = 'success', issues }) => {
 		writeFileSync(trace, '');
 		const result = runShell(ledger.steps[0].run, {
 			env: {
@@ -209,6 +209,7 @@ if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
 				GH_TRACE: trace,
 				GH_ISSUES: issues,
 				GATE_RESULT: gate,
+				DEPLOY_RESULT: deploy,
 				E2E_RESULT: e2e,
 				COLD_START_RESULT: cold,
 				SHA: '0123456789abcdef',
@@ -249,6 +250,18 @@ if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
 		const supersededCold = run({ gate: 'failure', cold: 'cancelled', issues: '[]' });
 		assert.equal(supersededCold.result.status, 0, supersededCold.result.stdout);
 		assert.equal(supersededCold.trace, '');
+
+		// A pending deploy replaced by a newer main push: e2e/cold-start are
+		// skipped and the gate is red, but nothing shipped — superseded too.
+		const supersededDeploy = run({
+			gate: 'failure',
+			deploy: 'cancelled',
+			e2e: 'skipped',
+			cold: 'skipped',
+			issues: '[]',
+		});
+		assert.equal(supersededDeploy.result.status, 0, supersededDeploy.result.stdout);
+		assert.equal(supersededDeploy.trace, '');
 	} finally {
 		rmSync(workspace, { recursive: true, force: true });
 	}
@@ -273,54 +286,80 @@ test('release workflows require green main with an explicit typed override', () 
 	assert.match(buildGate.if, /profile == 'adhoc'/);
 
 	const publishGate = findStep(publish, 'publish', '🟢 Require green main verification');
-	const resolveSha = findStep(publish, 'publish', '🔎 Resolve monorepo SHA');
+	const resolveSha = findStep(publish, 'publish', '🔎 Resolve the requested monorepo SHA');
 	assert.equal(publishGate.uses, './.github/actions/require-green-main');
 	assert.equal(publishGate.with.override, '${{ github.event.inputs.override_release_gate }}');
 	assert.match(publishGate.with.sha, /steps\..+\.outputs\.sha/);
-	assert.match(resolveSha.run, /git rev-parse HEAD/);
+	// The target SHA is resolved through the API, not from a checkout of the
+	// target: the gate must run from THIS workflow revision's tree, because an
+	// older monorepo_ref would not contain the local action at all.
+	assert.match(resolveSha.run, /gh api .*commits\/\$\{MONOREPO_REF\}/);
+	const steps = publish.jobs.publish.steps.map(({ name }) => name);
+	assert.ok(
+		steps.indexOf('🟢 Require green main verification') < steps.indexOf('📥 Check out monorepo'),
+		'the release gate must run before monorepo_ref replaces the workspace'
+	);
 });
 
-test('the release gate uses the latest E2E check and fails closed', () => {
+test('the release gate requires the push verification of the SHA and fails closed', () => {
 	const action = readAction('require-green-main/action.yml');
 	assert.equal(action.runs.using, 'composite');
 	const step = action.runs.steps.find(({ run }) => run);
 	assert.ok(step, 'release gate is missing its shell step');
-	assert.match(step.run, /check_name=%F0%9F%8E%AD%20E2E%20Tests/);
+	// Only the `push` Deploy run on main counts — a PR/preview run of the same
+	// SHA verified a preview, not the artifact that ships.
+	assert.match(
+		step.run,
+		/workflows\/deploy\.yml\/runs\?head_sha=\$\{RELEASE_SHA\}&event=push&branch=main/
+	);
 
 	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-release-gate-'));
 	const binDir = path.join(workspace, 'bin');
 	mkdirSync(binDir);
-	writeFileSync(path.join(binDir, 'gh'), '#!/usr/bin/env bash\nprintf \'%s\' "$GH_CHECK_RUNS"\n', {
-		mode: 0o755,
-	});
-	const run = (checkRuns, override = '') =>
+	// The fake gh answers the runs query and the jobs query from two env vars.
+	writeFileSync(
+		path.join(binDir, 'gh'),
+		'#!/usr/bin/env bash\ncase "$*" in *"/runs?"*) printf \'%s\' "$GH_RUNS" ;; *"/jobs"*) printf \'%s\' "$GH_JOBS" ;; *) exit 1 ;; esac\n',
+		{ mode: 0o755 }
+	);
+	const gate = (conclusion) => ({ jobs: [{ name: '🎭 E2E Tests', conclusion }] });
+	const run = ({ runs = [], jobs = gate('success'), override = '' }) =>
 		runShell(step.run, {
 			env: {
 				PATH: `${binDir}:${process.env.PATH}`,
 				GITHUB_REPOSITORY: 'wcpos/monorepo',
 				RELEASE_SHA: '0123456789abcdef',
 				RELEASE_OVERRIDE: override,
-				GH_CHECK_RUNS: JSON.stringify({ check_runs: checkRuns }),
+				GH_RUNS: JSON.stringify({ workflow_runs: runs }),
+				GH_JOBS: JSON.stringify(jobs),
 			},
 		});
+	const completed = (id, created_at) => ({ id, status: 'completed', created_at });
 
 	try {
-		const success = run([
-			{ conclusion: 'failure', completed_at: '2026-08-28T10:00:00Z' },
-			{ conclusion: 'success', completed_at: '2026-08-29T10:00:00Z' },
-		]);
+		// The NEWEST push run decides, even when an older one failed.
+		const success = run({
+			runs: [completed(1, '2026-08-28T10:00:00Z'), completed(2, '2026-08-29T10:00:00Z')],
+		});
 		assert.equal(success.status, 0, success.stdout + success.stderr);
+		assert.match(success.stdout, /run 2\)/);
 
-		const failure = run([{ conclusion: 'failure', completed_at: '2026-08-29T10:00:00Z' }]);
+		const failure = run({ runs: [completed(3, '2026-08-29T10:00:00Z')], jobs: gate('failure') });
 		assert.notEqual(failure.status, 0);
-		assert.match(failure.stdout + failure.stderr, /0123456789abcdef: failure/);
+		assert.match(failure.stdout + failure.stderr, /0123456789abcdef: failure \(run 3\)/);
 		assert.match(failure.stdout + failure.stderr, /I accept a red main/);
 
-		const missing = run([]);
-		assert.notEqual(missing.status, 0);
-		assert.match(missing.stdout + missing.stderr, /no verification found/);
+		const inProgress = run({
+			runs: [{ id: 4, status: 'in_progress', created_at: '2026-08-29T11:00:00Z' }],
+		});
+		assert.notEqual(inProgress.status, 0);
+		assert.match(inProgress.stdout + inProgress.stderr, /still in_progress \(run 4\)/);
 
-		const overridden = run([], 'I accept a red main');
+		const missing = run({});
+		assert.notEqual(missing.status, 0);
+		assert.match(missing.stdout + missing.stderr, /no main verification found/);
+
+		const overridden = run({ override: 'I accept a red main' });
 		assert.equal(overridden.status, 0, overridden.stdout + overridden.stderr);
 		assert.match(overridden.stdout, /::warning::release gate overridden/);
 	} finally {
@@ -965,6 +1004,24 @@ test('cold-start verifies the deployed main artifact and participates in the gat
 		},
 	});
 	assert.equal(skippedPr.status, 0, skippedPr.stdout + skippedPr.stderr);
+
+	// A main push whose deploy was legitimately skipped (dependabot actor)
+	// deploys nothing, so cold-start is not owed either.
+	const skippedDeployOnMain = runShell(gate.steps[0].run, {
+		env: {
+			...baseEnv,
+			DEPLOY_RESULT: 'skipped',
+			DEPLOY_URL: '',
+			E2E_RESULT: 'skipped',
+			COLD_START_RESULT: 'skipped',
+			EVENT_NAME: 'push',
+		},
+	});
+	assert.equal(
+		skippedDeployOnMain.status,
+		0,
+		skippedDeployOnMain.stdout + skippedDeployOnMain.stderr
+	);
 });
 
 test('the E2E auth-state cache is shard- and lane-scoped', () => {
@@ -1088,6 +1145,9 @@ test('the deploy concurrency contract isolates stale rerun attempts', () => {
 	assert.match(workflow.concurrency.group, /github\.run_attempt != '1'/);
 	assert.match(workflow.concurrency.group, /github\.run_id/);
 	assert.match(workflow.concurrency['cancel-in-progress'], /github\.ref != 'refs\/heads\/main'/);
+	// main runs must be able to overlap, or the job-level coalescing below can
+	// never fire (review on #1687): the workflow group is run-unique on main.
+	assert.match(workflow.concurrency.group, /deploy-main-run-\{0\}', github\.run_id/);
 
 	for (const jobName of ['e2e', 'e2e-report', 'cold-start']) {
 		const concurrency = workflow.jobs[jobName].concurrency;
@@ -1096,7 +1156,11 @@ test('the deploy concurrency contract isolates stale rerun attempts', () => {
 		assert.equal(concurrency['cancel-in-progress'], true);
 	}
 	assert.match(workflow.jobs.e2e.concurrency.group, /matrix\.shardIndex/);
-	assert.ok(!('concurrency' in workflow.jobs.deploy), 'deploy job must never be cancelled');
+	// The deploy job serialises on main and is never cancelled in flight.
+	const deployConcurrency = workflow.jobs.deploy.concurrency;
+	assert.ok(deployConcurrency, 'deploy must serialise on main');
+	assert.match(deployConcurrency.group, /'deploy-main-deploy'/);
+	assert.equal(deployConcurrency['cancel-in-progress'], false);
 });
 
 test('deploy emits the required E2E check whenever the merge gate runs', () => {

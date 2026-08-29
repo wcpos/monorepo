@@ -37,13 +37,21 @@ on:
     # shared planner runs inside the `changes` job, so the workflow always runs
     # and the gate always gets an answer. Ambiguous changes run every tier.
 
-# Workflow concurrency isolates PRs and never cancels a main run, so production
-# deploys always finish. Job concurrency below coalesces only main's verification
-# jobs; PR verification groups remain unique per run. Re-run attempts use their
-# original run id so a stale re-run cannot cancel a newer SHA. There is
-# deliberately NO cross-run store serialization — see the comment above e2e.
+# Two layers of concurrency (review on #1687):
+# - Workflow level: PR runs share a per-PR group so a new push supersedes only
+#   ITS OWN PR's older run. `main` runs get a RUN-UNIQUE group — one shared
+#   group would let only one main run exist at a time and the job-level
+#   coalescing below could never fire (the newest deploy would queue behind
+#   an hour of obsolete verification).
+# - Job level: on main, `deploy` serialises in its own group and is never
+#   cancelled (a production deploy always finishes); `e2e`, `e2e-report` and
+#   `cold-start` coalesce — a newer main run cancels an OLDER run's
+#   verification, so a merge burst verifies only the artifact that is live.
+# Re-run attempts use their original run id so a stale re-run cannot cancel a
+# newer SHA. There is deliberately NO cross-run store serialization — see the
+# comment above e2e.
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('deploy-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || format('deploy-{0}', github.ref) }}
+  group: ${{ github.event_name == 'pull_request' && format('deploy-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || (github.ref == 'refs/heads/main' && format('deploy-main-run-{0}', github.run_id)) || format('deploy-{0}', github.ref) }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
@@ -78,6 +86,13 @@ jobs:
     runs-on: ubuntu-latest
     needs: changes
     if: github.actor != 'dependabot[bot]' && needs.changes.outputs.web != 'none' && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+    # Production deploys are serialised, never cancelled in flight. GitHub keeps
+    # one running + one pending job per group and REPLACES the pending one when
+    # a third arrives — so a superseded deploy is dropped before `eas deploy`
+    # ever starts, and the ledger reads that as superseded, not red.
+    concurrency:
+      group: ${{ github.ref == 'refs/heads/main' && 'deploy-main-deploy' || format('deploy-job-{0}', github.run_id) }}
+      cancel-in-progress: false
     outputs:
       deployment_url: ${{ steps.get-url.outputs.url }}
       is_production: ${{ steps.get-url.outputs.is_production }}
@@ -485,7 +500,10 @@ jobs:
             exit 1
           fi
 
-          if [ "$EVENT_NAME" = "push" ]; then
+          # Cold-start is demanded only when a main push actually deployed; a
+          # legitimately skipped deploy (dependabot actor, nothing app-affecting)
+          # takes the skipped-deploy path further down like any other run.
+          if [ "$EVENT_NAME" = "push" ] && [ "$DEPLOY_RESULT" = "success" ]; then
             if [ "$E2E_RESULT" = "cancelled" ]; then
               echo "::error::E2E verification was superseded by a newer main push"
               exit 1
@@ -560,6 +578,7 @@ jobs:
           # No checkout in this job: gh needs the repo named explicitly.
           GH_REPO: ${{ github.repository }}
           GATE_RESULT: ${{ needs.e2e-gate.result }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
           E2E_RESULT: ${{ needs.e2e.result }}
           COLD_START_RESULT: ${{ needs.cold-start.result }}
           SHA: ${{ github.sha }}
@@ -569,7 +588,9 @@ jobs:
           label='ci:main-red'
           short_sha="${SHA:0:7}"
 
-          if [ "$GATE_RESULT" = "cancelled" ] || [ "$E2E_RESULT" = "cancelled" ] || [ "$COLD_START_RESULT" = "cancelled" ]; then
+          # A cancelled deploy is a pending deploy REPLACED by a newer main push
+          # (see the deploy job's concurrency) — superseded, never red.
+          if [ "$GATE_RESULT" = "cancelled" ] || [ "$DEPLOY_RESULT" = "cancelled" ] || [ "$E2E_RESULT" = "cancelled" ] || [ "$COLD_START_RESULT" = "cancelled" ]; then
             echo "Ledger unchanged: superseded verification at $short_sha"
             exit 0
           fi

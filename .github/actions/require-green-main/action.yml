@@ -26,15 +26,32 @@ runs:
           exit 0
         fi
 
-        if ! response=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_SHA}/check-runs?check_name=%F0%9F%8E%AD%20E2E%20Tests&per_page=20"); then
-          response=''
+        # Only the `push` Deploy run on main is a production verification: a PR
+        # or preview run of the same SHA verifies a preview, not the artifact
+        # that ships (review on #1687). Newest push run wins; an unfinished one
+        # refuses rather than falling back to an older verdict.
+        if ! runs=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy.yml/runs?head_sha=${RELEASE_SHA}&event=push&branch=main&per_page=5"); then
+          runs=''
         fi
-        conclusion=$(jq -r '[.check_runs[]] | sort_by(.completed_at // "") | last | .conclusion // empty' <<<"$response" 2>/dev/null || true)
+        run_id=$(jq -r '[.workflow_runs[]] | sort_by(.created_at) | last | .id // empty' <<<"$runs" 2>/dev/null || true)
+        run_status=$(jq -r '[.workflow_runs[]] | sort_by(.created_at) | last | .status // empty' <<<"$runs" 2>/dev/null || true)
+        if [ -z "$run_id" ]; then
+          echo "::error::release refused for $RELEASE_SHA: no main verification found (no push Deploy run for this SHA). Type '$phrase' to override."
+          exit 1
+        fi
+        if [ "$run_status" != "completed" ]; then
+          echo "::error::release refused for $RELEASE_SHA: main verification still $run_status (run $run_id). Wait for it, or type '$phrase' to override."
+          exit 1
+        fi
+        if ! jobs=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=50"); then
+          jobs=''
+        fi
+        conclusion=$(jq -r '[.jobs[] | select(.name == "🎭 E2E Tests")] | last | .conclusion // empty' <<<"$jobs" 2>/dev/null || true)
         if [ "$conclusion" = "success" ]; then
-          echo "Release gate passed for $RELEASE_SHA"
+          echo "Release gate passed for $RELEASE_SHA (push verification run $run_id)"
           exit 0
         fi
 
         found=${conclusion:-no verification found}
-        echo "::error::release refused for $RELEASE_SHA: $found. Type '$phrase' to override."
+        echo "::error::release refused for $RELEASE_SHA: $found (run $run_id). Type '$phrase' to override."
         exit 1
