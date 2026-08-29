@@ -20,7 +20,7 @@ export { Toaster };
  */
 export const toast = (message: string, options?: ToastOptions) => {
 	const { type, ...rest } = options ?? {};
-	if (type) {
+	if (type === 'success' || type === 'error' || type === 'info' || type === 'warning') {
 		return sonnerToast[type](message, rest);
 	}
 	return sonnerToast(message, rest);

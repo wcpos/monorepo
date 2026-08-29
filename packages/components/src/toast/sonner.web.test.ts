@@ -42,6 +42,14 @@ describe('web toast shim', () => {
 		expect(typeOf(id)).toBeUndefined();
 	});
 
+	it('leaves unsupported runtime toast types untyped', () => {
+		// The logger's deliberately untyped setToast seam can pass its debug level here.
+		// @ts-expect-error -- `debug` is a runtime input, not part of the public toast API.
+		const id = toast('Debug details', { type: 'debug' });
+
+		expect(typeOf(id)).toBeUndefined();
+	});
+
 	it('updates a toast in place when the same id is reused', () => {
 		const id = toast('Searching online', { id: 'scan' });
 		toast('Added to cart', { id: 'scan', type: 'success' });
