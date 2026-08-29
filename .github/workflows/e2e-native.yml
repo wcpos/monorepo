@@ -349,16 +349,7 @@ jobs:
       - name: 📦 Start Metro and pre-compile the bundle
         working-directory: apps/main
         run: |
-          # EXPO_PUBLIC_E2E is inlined by Metro at bundle time and makes the app
-          # call LogBox.ignoreAllLogs(). A console.error — which every
-          # logger.error becomes — otherwise draws a full-screen red box OVER
-          # the UI, and Maestro then fails at whatever element the box happens
-          # to cover. On 2026-08-29 that produced three separate investigations
-          # into 'connect-store-button not enabled', 'product-tile not visible'
-          # and 'search-products not visible' that were all one thing: an error
-          # overlay. The error itself is NOT suppressed — it still reaches the
-          # device log, and the triage step below annotates it.
-          EXPO_PUBLIC_E2E=1 nohup npx expo start --no-dev --minify --offline --port 8081 > /tmp/metro.log 2>&1 &
+          nohup npx expo start --no-dev --minify --offline --port 8081 > /tmp/metro.log 2>&1 &
           for i in $(seq 1 60); do
             curl -sf http://localhost:8081/status >/dev/null && break
             if [ "$i" -eq 60 ]; then
@@ -512,12 +503,17 @@ jobs:
       # that PASS late or die to the job timeout — failure-only upload threw
       # that evidence away every time. always() also survives timeout-kill
       # (cancelled in-progress steps still reach post steps with always()).
-      # Surfaces application errors a run hit, passing or failing. The overlay
-      # is suppressed under E2E (EXPO_PUBLIC_E2E) so it can no longer mask an
-      # assertion — this is the other half of that trade: the error still has
-      # to be REPORTED, or suppressing the box would simply hide it. Reads the
-      # device console both platforms now capture. Annotation only: nothing
-      # here passes or fails the job.
+      # Surfaces application errors a run hit, passing or failing.
+      #
+      # An app error that draws a dev-client overlay ALSO masks whatever
+      # assertion the overlay happens to cover, so the reported failure names
+      # the wrong element. Suppressing that overlay turned out not to be
+      # available here (RN 0.86's LogBox.ignoreAllLogs() is a no-op under the
+      # `--no-dev` bundle this workflow serves), so reporting is the whole
+      # mitigation: when a run logs an error, say so loudly rather than
+      # leaving someone to infer it from a misleading assertion message.
+      # Reads the device console both platforms now capture. Annotation only:
+      # nothing here passes or fails the job.
       - name: "\U0001F534 Surface app errors"
         if: always()
         run: |
@@ -526,9 +522,15 @@ jobs:
             [ -f "$LOG" ] || continue
             # Logger-formatted and direct console errors. Exclude the logger's
             # console.error copy so it is reported only once.
+            #
+            # {0,200} not {0,300}: BSD grep (the macOS runners the iOS job uses)
+            # refuses a repetition count over 255 — "grep: maximum repetition
+            # exceeds 255" — and the step then reports NOTHING while exiting 0.
+            # GNU grep on the Linux/Android runner accepts it, so this fails on
+            # exactly one platform, silently.
             {
-              grep -aoE 'ERROR : .{0,300}' "$LOG" || true
-              grep -aoE 'console\.error: .{0,300}' "$LOG" | grep -av 'ERROR :' || true
+              grep -aoE 'ERROR : .{0,200}' "$LOG" || true
+              grep -aoE 'console\.error: .{0,200}' "$LOG" | grep -av 'ERROR :' || true
             } | sort -u | head -20 > /tmp/apperr.txt
             while IFS= read -r line; do
               [ -n "$line" ] || continue
@@ -541,7 +543,7 @@ jobs:
             {
               echo "### App errors logged during this run (${FOUND})"
               echo ""
-              echo "The E2E overlay is suppressed, so these did NOT mask an assertion — but the app did log them."
+              echo "If a test also failed nearby, check whether an error overlay was covering the element it named."
               echo ""
               cat /tmp/apperr-summary.txt
             } >> "$GITHUB_STEP_SUMMARY"
@@ -613,16 +615,7 @@ jobs:
       - name: 📦 Start Metro and pre-compile the bundle
         working-directory: apps/main
         run: |
-          # EXPO_PUBLIC_E2E is inlined by Metro at bundle time and makes the app
-          # call LogBox.ignoreAllLogs(). A console.error — which every
-          # logger.error becomes — otherwise draws a full-screen red box OVER
-          # the UI, and Maestro then fails at whatever element the box happens
-          # to cover. On 2026-08-29 that produced three separate investigations
-          # into 'connect-store-button not enabled', 'product-tile not visible'
-          # and 'search-products not visible' that were all one thing: an error
-          # overlay. The error itself is NOT suppressed — it still reaches the
-          # device log, and the triage step below annotates it.
-          EXPO_PUBLIC_E2E=1 nohup npx expo start --no-dev --minify --offline --port 8081 > /tmp/metro.log 2>&1 &
+          nohup npx expo start --no-dev --minify --offline --port 8081 > /tmp/metro.log 2>&1 &
           for i in $(seq 1 60); do
             curl -sf http://localhost:8081/status >/dev/null && break
             if [ "$i" -eq 60 ]; then
@@ -741,12 +734,17 @@ jobs:
       # screenshots and no UI hierarchy, and iOS stayed a black box. Artifacts
       # are also what distinguishes "assertion failed" from "app never
       # rendered" on a green-but-suspicious run.
-      # Surfaces application errors a run hit, passing or failing. The overlay
-      # is suppressed under E2E (EXPO_PUBLIC_E2E) so it can no longer mask an
-      # assertion — this is the other half of that trade: the error still has
-      # to be REPORTED, or suppressing the box would simply hide it. Reads the
-      # device console both platforms now capture. Annotation only: nothing
-      # here passes or fails the job.
+      # Surfaces application errors a run hit, passing or failing.
+      #
+      # An app error that draws a dev-client overlay ALSO masks whatever
+      # assertion the overlay happens to cover, so the reported failure names
+      # the wrong element. Suppressing that overlay turned out not to be
+      # available here (RN 0.86's LogBox.ignoreAllLogs() is a no-op under the
+      # `--no-dev` bundle this workflow serves), so reporting is the whole
+      # mitigation: when a run logs an error, say so loudly rather than
+      # leaving someone to infer it from a misleading assertion message.
+      # Reads the device console both platforms now capture. Annotation only:
+      # nothing here passes or fails the job.
       - name: "\U0001F534 Surface app errors"
         if: always()
         run: |
@@ -755,9 +753,15 @@ jobs:
             [ -f "$LOG" ] || continue
             # Logger-formatted and direct console errors. Exclude the logger's
             # console.error copy so it is reported only once.
+            #
+            # {0,200} not {0,300}: BSD grep (the macOS runners the iOS job uses)
+            # refuses a repetition count over 255 — "grep: maximum repetition
+            # exceeds 255" — and the step then reports NOTHING while exiting 0.
+            # GNU grep on the Linux/Android runner accepts it, so this fails on
+            # exactly one platform, silently.
             {
-              grep -aoE 'ERROR : .{0,300}' "$LOG" || true
-              grep -aoE 'console\.error: .{0,300}' "$LOG" | grep -av 'ERROR :' || true
+              grep -aoE 'ERROR : .{0,200}' "$LOG" || true
+              grep -aoE 'console\.error: .{0,200}' "$LOG" | grep -av 'ERROR :' || true
             } | sort -u | head -20 > /tmp/apperr.txt
             while IFS= read -r line; do
               [ -n "$line" ] || continue
@@ -770,7 +774,7 @@ jobs:
             {
               echo "### App errors logged during this run (${FOUND})"
               echo ""
-              echo "The E2E overlay is suppressed, so these did NOT mask an assertion — but the app did log them."
+              echo "If a test also failed nearby, check whether an error overlay was covering the element it named."
               echo ""
               cat /tmp/apperr-summary.txt
             } >> "$GITHUB_STEP_SUMMARY"
@@ -859,9 +863,10 @@ jobs:
 
             const comment =
               `${MARKER}\n### 🔴 The app logged errors during native E2E\n\n` +
-              `These did **not** necessarily fail a test — the E2E overlay is suppressed so an error ` +
-              `cannot mask an assertion. They are surfaced because an error the app logs during a ` +
-              `cashier flow is worth a look even on a green run.\n\n` +
+              `These did **not** necessarily fail a test. They are surfaced because an error the app logs ` +
+              `during a cashier flow is worth a look even on a green run — and because an error that ` +
+              `draws a dev-client overlay can mask whatever assertion it covers, making a failure ` +
+              `name the wrong element.\n\n` +
               body +
               `\n[Full run](${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId})`;
 

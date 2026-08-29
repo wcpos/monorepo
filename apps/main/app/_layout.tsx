@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { LogBox } from 'react-native';
 
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -25,31 +24,6 @@ import '../global.css';
 import '../polyfills';
 
 WebBrowser.maybeCompleteAuthSession();
-
-/**
- * Under E2E, stop LogBox drawing its error overlay over the app.
- *
- * A `console.error` — which every `logger.error` becomes — puts a full-screen
- * red box over the UI in a dev client. Maestro then fails at whatever element
- * the box happens to be covering, so the reported failure names the wrong
- * thing entirely. On 2026-08-29 that cost three separate multi-run
- * investigations: "connect-store-button not enabled", "product-tile not
- * visible" and "search-products not visible" were all the same thing — an
- * error overlay — and none of the three failure messages said so.
- *
- * Suppressing the OVERLAY does not suppress the error: it still goes through
- * the logger to the device console, and the native E2E workflow annotates any
- * app-level error it sees during a run. The test then fails at the assertion
- * that actually matters, and the error is reported as an error.
- *
- * `EXPO_PUBLIC_E2E` is inlined by Metro at bundle time, so this costs nothing
- * at runtime in a real build and needs no native change (no fingerprint move,
- * no EAS build). Disabling LogBox is also what the Maestro/React Native
- * community recommends for exactly this problem.
- */
-if (process.env.EXPO_PUBLIC_E2E === '1') {
-	LogBox.ignoreAllLogs();
-}
 
 /**
  * Forwards safe area insets to Uniwind for p-safe, m-safe, etc. utilities
