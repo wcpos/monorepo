@@ -832,7 +832,8 @@ test('both native platforms upload Maestro artifacts unconditionally', () => {
 
 	for (const job of ['android', 'ios']) {
 		const upload = workflow.jobs[job].steps.find(
-			(step) => step.uses?.startsWith('actions/upload-artifact') && step.with?.name?.includes('maestro')
+			(step) =>
+				step.uses?.startsWith('actions/upload-artifact') && step.with?.name?.includes('maestro')
 		);
 		assert.ok(upload, `${job} no longer uploads Maestro artifacts`);
 		assert.equal(upload.if, 'always()', `${job} collects Maestro artifacts conditionally`);
@@ -854,8 +855,14 @@ test('Android clean-start flows dismiss a queued system ANR before waiting for E
 });
 
 test('the Android step retries a transient offline ADB transport once', () => {
-	const step = findStep(readWorkflow('e2e-native.yml'), 'android', '📱 Run Maestro suite on emulator');
-	const retry = step.with.script.split('\n').find((line) => line.includes("grep -Rqs 'device offline'"));
+	const step = findStep(
+		readWorkflow('e2e-native.yml'),
+		'android',
+		'📱 Run Maestro suite on emulator'
+	);
+	const retry = step.with.script
+		.split('\n')
+		.find((line) => line.includes("grep -Rqs 'device offline'"));
 
 	assert.ok(retry, 'the Android Maestro step no longer retries a transient offline transport');
 
@@ -891,8 +898,14 @@ test('the Android step retries a transient offline ADB transport once', () => {
 });
 
 test('the Android step does not retry a successful run with a stale offline log', () => {
-	const step = findStep(readWorkflow('e2e-native.yml'), 'android', '📱 Run Maestro suite on emulator');
-	const retry = step.with.script.split('\n').find((line) => line.includes("grep -Rqs 'device offline'"));
+	const step = findStep(
+		readWorkflow('e2e-native.yml'),
+		'android',
+		'📱 Run Maestro suite on emulator'
+	);
+	const retry = step.with.script
+		.split('\n')
+		.find((line) => line.includes("grep -Rqs 'device offline'"));
 
 	assert.ok(retry, 'the Android Maestro step no longer has its retry decision');
 
