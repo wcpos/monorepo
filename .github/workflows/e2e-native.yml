@@ -669,7 +669,12 @@ jobs:
           # thing. Only warn/error survive `--no-dev --minify` (console.log is
           # stripped), which is exactly the level worth reporting.
           mkdir -p ~/.maestro/tests
-          nohup xcrun simctl spawn "$UDID" log stream --style compact \
+          # --level info is LOAD-BEARING: React Native maps warn and below to
+          # OS_LOG_TYPE_INFO (React/Base/RCTLog.mm), and `log stream` suppresses
+          # info by default — so without this every logger.warn is dropped at
+          # CAPTURE time and the report is silently half-blind. Errors alone
+          # would still arrive, which is what makes the omission hard to spot.
+          nohup xcrun simctl spawn "$UDID" log stream --style compact --level info \
             --predicate 'processImagePath CONTAINS "WCPOS"' \
             > ~/.maestro/tests/app-console.log 2>&1 &
 
