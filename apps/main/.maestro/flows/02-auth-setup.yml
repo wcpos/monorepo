@@ -179,8 +179,9 @@ env:
 # Returning from the auth browser re-focuses the store-URL input and reopens
 # the soft keyboard over the store list / Open POS button — both Android jobs
 # in run 33074068139 logged in fine and then failed exactly there. Dismiss it
-# before asserting the stores. iOS hideKeyboard is broken (see above), so use
-# Maestro's documented workaround: tap the visible, non-interactive heading.
+# before asserting the stores. The iOS consent sheet can reappear over the
+# returned app, so clear it first; then use Maestro's documented hideKeyboard
+# workaround by tapping the visible, non-interactive heading.
 - runFlow:
     when:
       platform: Android
@@ -190,6 +191,11 @@ env:
     when:
       platform: iOS
     commands:
+      - runFlow:
+          when:
+            visible: "Continue"
+          commands:
+            - tapOn: "Continue"
       - tapOn:
           id: "logged-in-users-label"
 # Select the first store and open the POS (store rows tagged in PR #730).

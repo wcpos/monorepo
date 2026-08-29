@@ -1674,7 +1674,15 @@ test('auth setup dismisses the post-login keyboard without clearing the iOS URL'
 	assert.deepEqual(flow[loggedInIndex + 2], {
 		runFlow: {
 			when: { platform: 'iOS' },
-			commands: [{ tapOn: { id: 'logged-in-users-label' } }],
+			commands: [
+				{
+					runFlow: {
+						when: { visible: 'Continue' },
+						commands: [{ tapOn: 'Continue' }],
+					},
+				},
+				{ tapOn: { id: 'logged-in-users-label' } },
+			],
 		},
 	});
 });
