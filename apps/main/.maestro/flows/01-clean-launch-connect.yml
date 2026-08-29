@@ -56,11 +56,33 @@ env:
     when:
       platform: Android
     commands:
+      # OPTIONAL wait, CONDITIONAL dismissal. The dev menu's appearance is not
+      # deterministic on Android, and the old unconditional wait + blind
+      # `pressKey: back` failed BOTH ways — 5 of 15 Android job-runs surveyed
+      # on 2026-08-29:
+      #
+      #   menu never appeared  → the wait itself failed
+      #                          (runs 33236848150, 33222190589, flow 01)
+      #   menu closed itself   → `back` fell through to the APP and exited it;
+      #     before `back` landed   the failure screenshot is the launcher home
+      #                          screen (runs 33236601064, 33235312423,
+      #                          33234084368, flow 02 at store-url-input)
+      #
+      # Both disappear if the wait may find nothing and the key press only
+      # happens while the menu is actually on screen. A blind global `back` is
+      # never safe: there is no state in which "press back and hope" is the
+      # right instruction to a device that may already be showing the app.
       - extendedWaitUntil:
           visible:
             text: "Toggle performance monitor"
           timeout: 60000
-      - pressKey: back
+          optional: true
+      - runFlow:
+          when:
+            visible:
+              text: "Toggle performance monitor"
+          commands:
+            - pressKey: back
 # iOS has no back key, and the sheet arrives in two stages: the onboarding
 # card ("This is the developer menu…") with a Continue button, which then
 # hands you the dev menu proper. "Close" is the menu's own labelled control

@@ -85,6 +85,8 @@ export interface FakeEngine extends RxdbSyncEngine {
 	database: RxDatabase;
 	requireCalls: EngineRequirement[];
 	searchRequireCalls: RecordedSearchRequirement[];
+	/** Ordered `require:<kind>` / `release:<kind>` log — for sequence assertions. */
+	demandEvents: string[];
 	searchFailure?: Error;
 	/** Rejects kind:'refresh' handles while set — drives the demand retry path. */
 	refreshFailure?: Error;
@@ -303,6 +305,13 @@ export function engineVariation(input: {
 
 export function createFakeEngine(database: RxDatabase): FakeEngine {
 	const requireCalls: EngineRequirement[] = [];
+	/**
+	 * Ordered require/release log. Some invariants are about SEQUENCE, not
+	 * state: "the predecessor is not released until the successor is declared"
+	 * cannot be expressed with a released flag, because the predecessor is
+	 * released either way — the question is when (monorepo#1614).
+	 */
+	const demandEvents: string[] = [];
 	const searchRequireCalls: RecordedSearchRequirement[] = [];
 	const resetCalls: string[] = [];
 	const syncCalls: (string | undefined)[] = [];
@@ -370,6 +379,7 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 		database,
 		requireCalls,
 		searchRequireCalls,
+		demandEvents,
 		resetCalls,
 		syncCalls,
 		coverageSubscribeCalls,
@@ -398,6 +408,7 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 		},
 		require: (requirement: EngineRequirement): RequirementHandle => {
 			requireCalls.push(requirement);
+			demandEvents.push(`require:${requirement.kind}`);
 			changeActivity(requirement.collection, 1);
 			const recordedSearch =
 				requirement.kind === 'search' ? { requirement, released: false } : undefined;
@@ -427,6 +438,7 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 			return {
 				ready,
 				release: () => {
+					demandEvents.push(`release:${requirement.kind}`);
 					if (recordedSearch) {
 						recordedSearch.released = true;
 					}

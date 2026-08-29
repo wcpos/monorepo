@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-
+import { expect, test } from './test';
 import { selectCashierSlot } from './cashier-slot';
 
 test('maps indices 0..7 collision-free within each event band', () => {

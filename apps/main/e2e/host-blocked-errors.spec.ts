@@ -1,5 +1,6 @@
-import { expect, type Page, type Route, test } from '@playwright/test';
+import { type Page, type Route } from '@playwright/test';
 
+import { expect, test } from './test';
 import { stubStoreVersionForE2E } from './fixtures';
 
 const HEADER_NAMES = [

@@ -157,6 +157,68 @@ test('native E2E concurrency is isolated per pull request', () => {
 	assert.notEqual(concurrency.group, '${{ github.workflow }}');
 });
 
+test('native E2E reports logger and direct console errors on both platforms', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-native-errors-'));
+	const loggerError =
+		'08-29 00:38:12.282 E unknown:ReactNative: console.error: 12:38:11 AM | ERROR : Error | Context: {"errorCode":"SYNC321"}, stack:';
+	// `console.error:` is the real Android wire prefix captured in run 33222749557.
+	const directError =
+		'08-29 00:38:13.282 E unknown:ReactNative: console.error: WebView error: transport failed, stack:';
+
+	try {
+		for (const [jobName, logName] of [
+			['android', 'logcat.txt'],
+			['ios', 'app-console.log'],
+		]) {
+			const maestroDir = path.join(workspace, jobName, '.maestro', 'tests');
+			const summaryPath = path.join(workspace, `${jobName}-summary.md`);
+			mkdirSync(maestroDir, { recursive: true });
+			writeFileSync(path.join(maestroDir, logName), `${loggerError}\n${directError}\n`);
+
+			const step = findStep(workflow, jobName, '🔴 Surface app errors');
+			const script = step.run
+				.replaceAll('${{ matrix.device.name }}', 'phone')
+				.replaceAll('/tmp/apperr', path.join(workspace, `${jobName}-apperr`))
+				.replaceAll('/tmp/app-errors', path.join(workspace, `${jobName}-app-errors`));
+			const result = runShell(script, {
+				env: {
+					GITHUB_STEP_SUMMARY: summaryPath,
+					HOME: path.join(workspace, jobName),
+					RUNNER_OS: jobName === 'android' ? 'Linux' : 'macOS',
+				},
+			});
+
+			assert.equal(result.status, 0, result.stdout + result.stderr);
+			assert.match(result.stdout, /ERROR : Error/);
+			assert.match(result.stdout, /console\.error: WebView error: transport failed/);
+			assert.match(readFileSync(summaryPath, 'utf8'), /App errors logged during this run \(2\)/);
+		}
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
+test('native E2E searches every issue-comment page for its sticky report', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	const step = findStep(workflow, 'app-errors', '💬 Comment when the app logged errors');
+
+	assert.match(
+		step.with.script,
+		/await github\.paginate\(\s*github\.rest\.issues\.listComments,\s*\{[^}]*per_page: 100[^}]*\}\s*\)/s
+	);
+});
+
+test('web E2E bounds and deduplicates app errors when they arrive', () => {
+	const watcher = readFileSync(path.join(ROOT, 'apps', 'main', 'e2e', 'test.ts'), 'utf8');
+
+	assert.match(watcher, /const errors = new Set<string>\(\)/);
+	assert.match(watcher, /errors\.size < MAX_REPORTED/);
+	assert.match(watcher, /errors\.add\(/);
+	assert.match(watcher, /additional distinct error\(s\) omitted/);
+	assert.doesNotMatch(watcher, /errors\.push\(/);
+});
+
 test('the native E2E aggregator fails closed except for legitimate skips', () => {
 	const gate = readWorkflow('e2e-native.yml').jobs['native-gate'];
 	const baseEnv = {

@@ -435,6 +435,14 @@ jobs:
             # DEV_CLIENT_URL default in flows 01/02); adb reverse makes the
             # emulator's localhost:8081 reach Metro on this host, so the same
             # URL works on both platforms and in local runs.
+            # Suppress system crash/ANR dialogs. The emulator's own Pixel
+            # Launcher ANRs under load and its "isn't responding" dialog then
+            # sits ON TOP of the app under test — run 33237371510's flow 01
+            # failure screenshot is exactly that, with the dev menu visible
+            # behind it. Maestro has no global handler for a dialog that can
+            # appear at any moment, and it is not our app misbehaving, so the
+            # right place to stop it is the device.
+            adb shell settings put global hide_error_dialogs 1 || true
             adb reverse tcp:8081 tcp:8081
             adb install e2e-builds/wcpos-e2e-android.apk
             # STREAM logcat from before the suite, not dump-on-failure: the
@@ -503,6 +511,71 @@ jobs:
       # that PASS late or die to the job timeout — failure-only upload threw
       # that evidence away every time. always() also survives timeout-kill
       # (cancelled in-progress steps still reach post steps with always()).
+      # Surfaces application errors a run hit, passing or failing.
+      #
+      # An app error that draws a dev-client overlay ALSO masks whatever
+      # assertion the overlay happens to cover, so the reported failure names
+      # the wrong element. Suppressing that overlay turned out not to be
+      # available here (RN 0.86's LogBox.ignoreAllLogs() is a no-op under the
+      # `--no-dev` bundle this workflow serves), so reporting is the whole
+      # mitigation: when a run logs an error, say so loudly rather than
+      # leaving someone to infer it from a misleading assertion message.
+      # Reads the device console both platforms now capture. Annotation only:
+      # nothing here passes or fails the job.
+      - name: "\U0001F534 Surface app errors"
+        if: always()
+        run: |
+          FOUND=0
+          for LOG in "$HOME/.maestro/tests/logcat.txt" "$HOME/.maestro/tests/app-console.log"; do
+            [ -f "$LOG" ] || continue
+            # Logger-formatted and direct console errors. Exclude the logger's
+            # console.error copy so it is reported only once.
+            #
+            # {0,200} not {0,300}: BSD grep (the macOS runners the iOS job uses)
+            # refuses a repetition count over 255 — "grep: maximum repetition
+            # exceeds 255" — and the step then reports NOTHING while exiting 0.
+            # GNU grep on the Linux/Android runner accepts it, so this fails on
+            # exactly one platform, silently.
+            {
+              grep -aoE 'ERROR : .{0,200}' "$LOG" || true
+              grep -aoE 'console\.error: .{0,200}' "$LOG" | grep -av 'ERROR :' || true
+            } | sort -u | head -20 > /tmp/apperr.txt
+            while IFS= read -r line; do
+              [ -n "$line" ] || continue
+              FOUND=$((FOUND + 1))
+              echo "::warning title=app error during E2E::${line}"
+              echo "    ${line}" >> /tmp/apperr-summary.txt
+            done < /tmp/apperr.txt
+          done
+          if [ "$FOUND" -gt 0 ]; then
+            {
+              echo "### App errors logged during this run (${FOUND})"
+              echo ""
+              echo "If a test also failed nearby, check whether an error overlay was covering the element it named."
+              echo ""
+              cat /tmp/apperr-summary.txt
+            } >> "$GITHUB_STEP_SUMMARY"
+            # Also leave it on disk: a warning in a run log is invisible to
+            # anyone who is not already reading that run. The report job below
+            # turns this into a PR comment.
+            mkdir -p /tmp/app-errors
+            {
+              echo "### ${{ matrix.device.name }} (${RUNNER_OS})"
+              cat /tmp/apperr-summary.txt
+            } > "/tmp/app-errors/${RUNNER_OS}-${{ matrix.device.name }}.md"
+          else
+            echo "No app errors logged during this run." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: ⬆️ Upload app-error report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: app-errors-${{ runner.os }}-${{ matrix.device.name }}
+          path: /tmp/app-errors
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: ⬆️ Upload device artifacts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -597,6 +670,21 @@ jobs:
           APP_PATH=$(find /tmp/e2e-app -maxdepth 2 -name "*.app" | head -1)
           xcrun simctl install "$UDID" "$APP_PATH"
           echo "MAESTRO_UDID=$UDID" >> "$GITHUB_ENV"
+          # Stream the app's OWN console, the way the Android job streams
+          # logcat. Without this iOS produced no application-level evidence at
+          # all: an app error during a run was invisible unless it happened to
+          # break an assertion, and even then the assertion named the wrong
+          # thing. Only warn/error survive `--no-dev --minify` (console.log is
+          # stripped), which is exactly the level worth reporting.
+          mkdir -p ~/.maestro/tests
+          # --level info is LOAD-BEARING: React Native maps warn and below to
+          # OS_LOG_TYPE_INFO (React/Base/RCTLog.mm), and `log stream` suppresses
+          # info by default — so without this every logger.warn is dropped at
+          # CAPTURE time and the report is silently half-blind. Errors alone
+          # would still arrive, which is what makes the omission hard to spot.
+          nohup xcrun simctl spawn "$UDID" log stream --style compact --level info \
+            --predicate 'processImagePath CONTAINS "WCPOS"' \
+            > ~/.maestro/tests/app-console.log 2>&1 &
 
       # One `maestro test` per flow, NOT batch mode: on iOS 26.x the XCUITest
       # driver socket can die mid-suite with no recovery (maestro#3318; both
@@ -659,6 +747,71 @@ jobs:
       # screenshots and no UI hierarchy, and iOS stayed a black box. Artifacts
       # are also what distinguishes "assertion failed" from "app never
       # rendered" on a green-but-suspicious run.
+      # Surfaces application errors a run hit, passing or failing.
+      #
+      # An app error that draws a dev-client overlay ALSO masks whatever
+      # assertion the overlay happens to cover, so the reported failure names
+      # the wrong element. Suppressing that overlay turned out not to be
+      # available here (RN 0.86's LogBox.ignoreAllLogs() is a no-op under the
+      # `--no-dev` bundle this workflow serves), so reporting is the whole
+      # mitigation: when a run logs an error, say so loudly rather than
+      # leaving someone to infer it from a misleading assertion message.
+      # Reads the device console both platforms now capture. Annotation only:
+      # nothing here passes or fails the job.
+      - name: "\U0001F534 Surface app errors"
+        if: always()
+        run: |
+          FOUND=0
+          for LOG in "$HOME/.maestro/tests/logcat.txt" "$HOME/.maestro/tests/app-console.log"; do
+            [ -f "$LOG" ] || continue
+            # Logger-formatted and direct console errors. Exclude the logger's
+            # console.error copy so it is reported only once.
+            #
+            # {0,200} not {0,300}: BSD grep (the macOS runners the iOS job uses)
+            # refuses a repetition count over 255 — "grep: maximum repetition
+            # exceeds 255" — and the step then reports NOTHING while exiting 0.
+            # GNU grep on the Linux/Android runner accepts it, so this fails on
+            # exactly one platform, silently.
+            {
+              grep -aoE 'ERROR : .{0,200}' "$LOG" || true
+              grep -aoE 'console\.error: .{0,200}' "$LOG" | grep -av 'ERROR :' || true
+            } | sort -u | head -20 > /tmp/apperr.txt
+            while IFS= read -r line; do
+              [ -n "$line" ] || continue
+              FOUND=$((FOUND + 1))
+              echo "::warning title=app error during E2E::${line}"
+              echo "    ${line}" >> /tmp/apperr-summary.txt
+            done < /tmp/apperr.txt
+          done
+          if [ "$FOUND" -gt 0 ]; then
+            {
+              echo "### App errors logged during this run (${FOUND})"
+              echo ""
+              echo "If a test also failed nearby, check whether an error overlay was covering the element it named."
+              echo ""
+              cat /tmp/apperr-summary.txt
+            } >> "$GITHUB_STEP_SUMMARY"
+            # Also leave it on disk: a warning in a run log is invisible to
+            # anyone who is not already reading that run. The report job below
+            # turns this into a PR comment.
+            mkdir -p /tmp/app-errors
+            {
+              echo "### ${{ matrix.device.name }} (${RUNNER_OS})"
+              cat /tmp/apperr-summary.txt
+            } > "/tmp/app-errors/${RUNNER_OS}-${{ matrix.device.name }}.md"
+          else
+            echo "No app errors logged during this run." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: ⬆️ Upload app-error report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: app-errors-${{ runner.os }}-${{ matrix.device.name }}
+          path: /tmp/app-errors
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: ⬆️ Upload device artifacts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -666,6 +819,75 @@ jobs:
           name: maestro-ios-${{ matrix.device.name }}
           path: ~/.maestro/tests
           retention-days: 7
+
+  # An app error nobody reads is the same as no app error. A ::warning:: only
+  # shows to someone already inside the run, and a report attachment only to
+  # someone who opens the report — so neither reaches anyone on a PASSING run.
+  # This posts (and updates) ONE sticky PR comment when a run logged app
+  # errors, and stays silent when it did not.
+  app-errors:
+    name: 🔴 App error report
+    needs: [android, ios]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: 📥 Collect app-error reports
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v6.0.0
+        continue-on-error: true
+        with:
+          pattern: app-errors-*
+          path: app-errors
+          merge-multiple: true
+
+      - name: 💬 Comment when the app logged errors
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            const MARKER = '<!-- native-e2e-app-errors -->';
+            let body = '';
+            try {
+              for (const f of fs.readdirSync('app-errors')) {
+                body += fs.readFileSync(`app-errors/${f}`, 'utf8') + '\n';
+              }
+            } catch { /* no artifacts — nothing was logged */ }
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100,
+            });
+            const existing = comments.find((c) => c.body?.includes(MARKER));
+
+            if (!body.trim()) {
+              // Recovered: retract a stale comment rather than leave a scary
+              // one standing after the errors are gone.
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner, repo, comment_id: existing.id,
+                  body: `${MARKER}\n✅ No app errors logged in the latest native E2E run.`,
+                });
+              }
+              return;
+            }
+
+            const comment =
+              `${MARKER}\n### 🔴 The app logged errors during native E2E\n\n` +
+              `These did **not** necessarily fail a test. They are surfaced because an error the app logs ` +
+              `during a cashier flow is worth a look even on a green run — and because an error that ` +
+              `draws a dev-client overlay can mask whatever assertion it covers, making a failure ` +
+              `name the wrong element.\n\n` +
+              body +
+              `\n[Full run](${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId})`;
+
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body: comment });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body: comment });
+            }
 
   native-gate:
     name: 📱 Native E2E
