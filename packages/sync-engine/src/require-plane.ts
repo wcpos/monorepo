@@ -1262,8 +1262,38 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						if (!subscriber.released) subscriber.resolve(outcome);
 					}
 				} catch (error) {
+					// Ask whether WE aborted it, not what the platform named the
+					// rejection. `error.name === 'AbortError'` is the WHATWG contract
+					// and holds on web and Electron, but expo's winter fetch — what
+					// `globalThis.fetch` is on native — rejects with a plain Error
+					// (name "Error") wrapping FetchRequestCanceledException. So on
+					// native this branch never matched, and every superseded search
+					// was reported as a failed load: `coverage.require.error` at
+					// error level, which the dev client then draws as a red box OVER
+					// the app (monorepo#1672).
+					//
+					// Same shape as packages/sync-core/src/recordPushAdapter.ts:216,
+					// which already ORs in the signal.
+					// Match the CANCELLATION, not merely an aborted signal. An
+					// earlier attempt OR-ed in `signal.aborted`, which is true for
+					// any error raised while a released requirement's signal happens
+					// to be aborted — including genuine failures. That branch does
+					// not reject its subscribers, so a real failure stopped settling
+					// its waiters and the pro `product-category-filter` web spec hung
+					// (PR #1674, shard 2, failed on the attempt and both retries).
+					//
+					// expo's winter fetch wraps FetchRequestCanceledException in a
+					// plain Error, so the name check alone misses it on native; the
+					// message is the only distinguishing evidence it carries.
+					const isPlatformCancel =
+						error instanceof Error &&
+						/FetchRequestCanceledException|Fetch request has been canceled|The operation was aborted/i.test(
+							error.message
+						);
 					const abortedByRelease =
-						next.released && error instanceof Error && error.name === 'AbortError';
+						next.released &&
+						error instanceof Error &&
+						(error.name === 'AbortError' || isPlatformCancel);
 					if (abortedByRelease) {
 						// release() aborted the in-flight fetch; the rejection is the
 						// supersede completing, not a failure. Report the same released
