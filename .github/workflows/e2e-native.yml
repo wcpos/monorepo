@@ -487,15 +487,36 @@ jobs:
           # Tells flow 09 whether the resize handle is required (tablet) or optional (phone).
           DEVICE_CLASS: ${{ matrix.device.name }}
 
-      # Makes a red (or slow-green) check self-explaining at a glance: the
-      # job summary carries every flow's duration, and any flow past the
-      # STARVED threshold gets a ::warning:: naming it — so "red because the
-      # device starved" and "red because an assertion failed" stop looking
-      # identical (owner complaint, 2026-08-28). Labeling only: nothing here
-      # passes or fails the job.
+      # Makes a red (or slow-green) check self-explaining at a glance: the job
+      # summary carries every flow's duration, and any flow past a threshold is
+      # named — so "red because the device starved" and "red because an
+      # assertion failed" stop looking identical (owner complaint, 2026-08-28).
+      #
+      # This step FAILS the job, and that is the point. It used to warn only,
+      # and on 2026-08-29 run 33243418607 reported
+      # `[Passed] 03-authenticated-relaunch (45m 53s)` — a flow whose healthy
+      # time is 14-45 SECONDS, green, next to a warning nobody read. A pass
+      # with an absurd measurement is a failure; a verdict and a duration are
+      # two independent pieces of evidence, and green is not the same as
+      # healthy.
+      #
+      # Two thresholds, because they mean different things:
+      #   STARVED (600s)  — labelling. An order of magnitude over a healthy
+      #                     flow, far under the historical rover (27-30 min);
+      #                     misclassification needs a 10x swing. Warns.
+      #   ABSURD (1200s)  — a gate. No flow in this suite does a minute of real
+      #                     work; twenty minutes is not a slow device, it is a
+      #                     defect. Fails.
       - name: 🕒 Flow timing triage
         if: always()
         run: |
+          # Deliberately NO `set -o pipefail` here, and the reason is the
+          # opposite of the usual one. The gate is an awk at the END of
+          # `grep | tr | awk`, and bash already reports the last command's
+          # status, so the exit 1 propagates without it. Adding pipefail would
+          # make `grep` finding NOTHING (exit 1) fail this step — which is
+          # exactly the case where a suite died before any flow finished, so a
+          # bogus timing failure would mask the real cause. Verified both ways.
           LOG="$HOME/.maestro/tests/suite.log"
           [ -f "$LOG" ] || { echo "no suite.log — the job died before Maestro ran" >> "$GITHUB_STEP_SUMMARY"; exit 0; }
           # 600s: an order of magnitude over a healthy flow (1-2.5 min), far
@@ -505,8 +526,8 @@ jobs:
           # trailing "<mins> m <secs> s" / "<secs> s" tokens.
           grep -aoE '\[(Passed|Failed)\] [0-9a-z-]+ \(([0-9]+m )?[0-9]+s\)' "$LOG" \
             | tr '()[]' ' ' \
-            | awk -v threshold=600 -v summary="$GITHUB_STEP_SUMMARY" '
-              BEGIN { printf "### Maestro flow timings (${{ matrix.device.name }})\n| Flow | Verdict | Duration |\n|---|---|---|\n" >> summary }
+            | awk -v threshold=600 -v absurd=1200 -v summary="$GITHUB_STEP_SUMMARY" '
+              BEGIN { printf "### Maestro flow timings (${{ matrix.device.name }})\n| Flow | Verdict | Duration |\n|---|---|---|\n" >> summary; over=0 }
               {
                 verdict=$1; flow=$2; total=0
                 for (i=3; i<=NF; i++) {
@@ -515,9 +536,15 @@ jobs:
                   else if (v ~ /s$/) { sub(/s$/,"",v); total += v+0 }
                 }
                 printf "| %s | %s | %dm %02ds |\n", flow, verdict, total/60, total%60 >> summary
-                if (total > threshold)
+                if (total > absurd) {
+                  over++
+                  printf "::error title=absurd flow duration::%s took %dm %02ds (limit %ds). No flow in this suite does a minute of real work — a %s this slow is a defect, not a slow device.\n", flow, total/60, total%60, absurd, verdict
+                  printf "\n**%s took %dm %02ds** — over the %ds limit. A pass with an absurd duration is a failure.\n", flow, total/60, total%60, absurd >> summary
+                }
+                else if (total > threshold)
                   printf "::warning title=starvation-shaped::%s took %dm %02ds (threshold %ds) — device starvation, not necessarily an app failure\n", flow, total/60, total%60, threshold
-              }'
+              }
+              END { if (over > 0) exit 1 }'
 
       # always(), not failure(): the roving-slow-flow evidence lives in runs
       # that PASS late or die to the job timeout — failure-only upload threw
@@ -763,9 +790,36 @@ jobs:
             fi
             return 1
           }
+          # Record a per-flow verdict AND duration, because nothing else does.
+          # Android gets these lines free from a whole-directory `maestro test`;
+          # the iOS job runs one invocation per flow (see above) and a
+          # single-flow invocation prints its steps and NO
+          # `[Passed] <flow> (<duration>)` summary line. So iOS had no timing
+          # signal of any kind — a flow could take 45 minutes and pass without
+          # a warning, which is exactly what happened on Android in run
+          # 33243418607 where the signal DID exist.
+          #
+          # Emitting the same shape here means the timing triage step below is
+          # identical on both platforms rather than Android-only.
+          SUITE_LOG="$HOME/.maestro/tests/suite.log"
+          mkdir -p "$(dirname "$SUITE_LOG")"
+          : > "$SUITE_LOG"
+          record_timing() {
+            local flow="$1" verdict="$2" seconds="$3" name
+            name=$(basename "$flow" .yml)
+            printf '[%s] %s (%dm %02ds)\n' \
+              "$verdict" "$name" "$((seconds / 60))" "$((seconds % 60))" \
+              | tee -a "$SUITE_LOG"
+          }
           for flow in apps/main/.maestro/flows/*.yml; do
             echo "▶ ${flow}"
-            run_flow "$flow" || exit 1
+            started=$SECONDS
+            if run_flow "$flow"; then
+              record_timing "$flow" Passed "$((SECONDS - started))"
+            else
+              record_timing "$flow" Failed "$((SECONDS - started))"
+              exit 1
+            fi
           done
         env:
           # Maestro's XCUITest driver compiles and installs its runner on
@@ -778,6 +832,65 @@ jobs:
           VARIABLE_PRODUCT_ID: ${{ needs.build.outputs.variable_product_id }}
           # Tells flow 09 whether the resize handle is required (tablet) or optional (phone).
           DEVICE_CLASS: ${{ matrix.device.name }}
+
+      # Makes a red (or slow-green) check self-explaining at a glance: the job
+      # summary carries every flow's duration, and any flow past a threshold is
+      # named — so "red because the device starved" and "red because an
+      # assertion failed" stop looking identical (owner complaint, 2026-08-28).
+      #
+      # This step FAILS the job, and that is the point. It used to warn only,
+      # and on 2026-08-29 run 33243418607 reported
+      # `[Passed] 03-authenticated-relaunch (45m 53s)` — a flow whose healthy
+      # time is 14-45 SECONDS, green, next to a warning nobody read. A pass
+      # with an absurd measurement is a failure; a verdict and a duration are
+      # two independent pieces of evidence, and green is not the same as
+      # healthy.
+      #
+      # Two thresholds, because they mean different things:
+      #   STARVED (600s)  — labelling. An order of magnitude over a healthy
+      #                     flow, far under the historical rover (27-30 min);
+      #                     misclassification needs a 10x swing. Warns.
+      #   ABSURD (1200s)  — a gate. No flow in this suite does a minute of real
+      #                     work; twenty minutes is not a slow device, it is a
+      #                     defect. Fails.
+      - name: 🕒 Flow timing triage
+        if: always()
+        run: |
+          # Deliberately NO `set -o pipefail` here, and the reason is the
+          # opposite of the usual one. The gate is an awk at the END of
+          # `grep | tr | awk`, and bash already reports the last command's
+          # status, so the exit 1 propagates without it. Adding pipefail would
+          # make `grep` finding NOTHING (exit 1) fail this step — which is
+          # exactly the case where a suite died before any flow finished, so a
+          # bogus timing failure would mask the real cause. Verified both ways.
+          LOG="$HOME/.maestro/tests/suite.log"
+          [ -f "$LOG" ] || { echo "no suite.log — the job died before Maestro ran" >> "$GITHUB_STEP_SUMMARY"; exit 0; }
+          # 600s: an order of magnitude over a healthy flow (1-2.5 min), far
+          # under the rover (27-30 min) — misclassification needs a 10x swing.
+          # POSIX awk only (runners ship mawk — no gawk 3-arg match): the
+          # duration is normalised by stripping punctuation and reading the
+          # trailing "<mins> m <secs> s" / "<secs> s" tokens.
+          grep -aoE '\[(Passed|Failed)\] [0-9a-z-]+ \(([0-9]+m )?[0-9]+s\)' "$LOG" \
+            | tr '()[]' ' ' \
+            | awk -v threshold=600 -v absurd=1200 -v summary="$GITHUB_STEP_SUMMARY" '
+              BEGIN { printf "### Maestro flow timings (${{ matrix.device.name }})\n| Flow | Verdict | Duration |\n|---|---|---|\n" >> summary; over=0 }
+              {
+                verdict=$1; flow=$2; total=0
+                for (i=3; i<=NF; i++) {
+                  v=$i
+                  if (v ~ /m$/) { sub(/m$/,"",v); total += v*60 }
+                  else if (v ~ /s$/) { sub(/s$/,"",v); total += v+0 }
+                }
+                printf "| %s | %s | %dm %02ds |\n", flow, verdict, total/60, total%60 >> summary
+                if (total > absurd) {
+                  over++
+                  printf "::error title=absurd flow duration::%s took %dm %02ds (limit %ds). No flow in this suite does a minute of real work — a %s this slow is a defect, not a slow device.\n", flow, total/60, total%60, absurd, verdict
+                  printf "\n**%s took %dm %02ds** — over the %ds limit. A pass with an absurd duration is a failure.\n", flow, total/60, total%60, absurd >> summary
+                }
+                else if (total > threshold)
+                  printf "::warning title=starvation-shaped::%s took %dm %02ds (threshold %ds) — device starvation, not necessarily an app failure\n", flow, total/60, total%60, threshold
+              }
+              END { if (over > 0) exit 1 }'
 
       # always(), matching the Android twin: `failure()` collects nothing when
       # the job cannot report failure, which is precisely the state the pipe

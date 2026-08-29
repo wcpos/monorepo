@@ -63,7 +63,39 @@ So:
   the non-`__DEV__` branch of RN's `LogBox.js`), so do not "fix" this by trying
   to silence LogBox.
 
-## 3. One screenshot is the final frame, not the story.
+## 3. Green is not healthy. Check the measurement, not just the verdict.
+
+The single most expensive habit in this whole episode was **treating a tool's
+verdict as the truth about the system**. Maestro prints a verdict and a duration
+in the same string; only one of them was read.
+
+Run 33243418607 reported:
+
+```
+[Passed] 03-authenticated-relaunch (45m 53s)
+```
+
+That flow's healthy time is **14-45 seconds**. A sixty-fold overrun, marked
+green, sitting next to a `::warning::` that nobody read — while the diagnosis
+effort went to the row labelled `[Failed]`.
+
+- **Compare every measurement to a physical expectation, not to a configured
+  threshold.** A cashier taps a search box and sees results in about a second.
+  So a *step* measured in minutes is a defect at 60x whatever the verdict says.
+  A threshold encodes somebody's past guess; a physical expectation encodes
+  reality. If you print a number, say what it should be.
+- **A pass with an absurd measurement is a failure.** The verdict and the
+  duration are two independent pieces of evidence.
+- This is now a **gate**, not a habit: the timing triage fails the job above
+  1200s (`ABSURD`) and warns above 600s (`STARVED`), on both platforms. Do not
+  weaken it back to a warning — a warning is what let 45m53s pass.
+
+The same reflex explains the rest of the series: `<element> is visible FAILED`
+was accepted as "the element is missing" rather than "what states of the world
+produce this observation?"; a job that exited 0 was accepted as a job that
+passed (#1662). **The label outranked the evidence every time.**
+
+## 4. One screenshot is the final frame, not the story.
 
 Maestro saves a single screenshot at the moment of failure. Everything before it
 is invisible, so a diagnosis built on it alone is backwards inference — and it is
@@ -73,7 +105,7 @@ dev-launcher home screen, once as a slow search).
 `scripts/e2e-native-local.sh` records the whole run to `screen.mp4` by default.
 **Watch the video before forming a theory.**
 
-## 4. A flow that fails only in CI is usually missing fixtures, not broken.
+## 5. A flow that fails only in CI is usually missing fixtures, not broken.
 
 Flows that assert on seeded records (currently 07 and anything else using
 `VARIABLE_PRODUCT_*`) need `scripts/e2e-native-seed.mjs`, which needs
@@ -81,7 +113,7 @@ Flows that assert on seeded records (currently 07 and anything else using
 warns and those flows fail on missing data, which says nothing about the product.
 Set the credentials locally before concluding anything about a seeded flow.
 
-## 5. Fix the class at the throw site, not the instance at the catch site.
+## 6. Fix the class at the throw site, not the instance at the catch site.
 
 Three separate red boxes in one week were the same class: **a cancellation that
 the classifier could not recognise as one.**
@@ -100,7 +132,7 @@ correctly where it is thrown** (`Object.assign(new Error(msg), { name:
 
 See `packages/sync-engine/src/maintenance/variation-prefetch.ts` for the pattern.
 
-## 6. Prefer a unit test over a device test for platform-seam bugs.
+## 7. Prefer a unit test over a device test for platform-seam bugs.
 
 Every native-only bug in this series was a **platform fact** — what RN's
 `AbortController` does with a reason, what expo's fetch names an abort, whether
@@ -111,7 +143,7 @@ found by hour-long device runs.
 a new native/web divergence, **add it there** so the next one is caught by
 `vitest`, not by Maestro.
 
-## 7. Cost discipline
+## 8. Cost discipline
 
 Native E2E builds are metered — $2 iOS / $1 Android against a shared $45/month
 credit. **Never dispatch `e2e-native.yml` with `build=true` without asking the

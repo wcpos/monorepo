@@ -206,6 +206,109 @@ test('native E2E reports logger and direct console errors on both platforms', ()
 	}
 });
 
+// A PASS with an absurd duration is a FAILURE. Run 33243418607 reported
+// `[Passed] 03-authenticated-relaunch (45m 53s)` — a flow whose healthy time is
+// 14-45 SECONDS — as green, beside a ::warning:: nobody read. The verdict and
+// the duration are two independent pieces of evidence, and a tool's verdict is
+// not the truth about the system.
+function runTimingTriage(workflow, jobName, suiteLogContents) {
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-native-timing-'));
+	try {
+		const maestroDir = path.join(workspace, '.maestro', 'tests');
+		mkdirSync(maestroDir, { recursive: true });
+		writeFileSync(path.join(maestroDir, 'suite.log'), suiteLogContents);
+		const summaryPath = path.join(workspace, 'summary.md');
+		writeFileSync(summaryPath, '');
+
+		const step = findStep(workflow, jobName, '🕒 Flow timing triage');
+		const script = step.run.replaceAll('${{ matrix.device.name }}', 'phone');
+		const result = runShell(script, {
+			env: { GITHUB_STEP_SUMMARY: summaryPath, HOME: workspace },
+		});
+		return { result, summary: readFileSync(summaryPath, 'utf8') };
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+}
+
+test('a flow that passes absurdly slowly FAILS the job', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+
+	for (const jobName of ['android', 'ios']) {
+		// Verbatim from run 33243418607 — green, and 60x its healthy duration.
+		const { result, summary } = runTimingTriage(
+			workflow,
+			jobName,
+			'[Passed] 01-clean-launch-connect (1m 10s)\n' +
+				'[Passed] 03-authenticated-relaunch (45m 53s)\n'
+		);
+
+		assert.notEqual(
+			result.status,
+			0,
+			`${jobName}: a 45m "pass" must fail the job — green is not healthy`
+		);
+		assert.match(result.stdout, /::error title=absurd flow duration::/);
+		assert.match(result.stdout, /03-authenticated-relaunch took 45m 53s/);
+		// The healthy flow is not implicated.
+		assert.doesNotMatch(result.stdout, /01-clean-launch-connect took/);
+		assert.match(summary, /A pass with an absurd duration is a failure/);
+	}
+});
+
+test('a suite that died before any flow does NOT fail the timing gate', () => {
+	// The gate must fail on absurd durations and on NOTHING else. `grep`
+	// finding no timing lines exits 1, so adding `set -o pipefail` here — the
+	// reflex, and the right call elsewhere in this workflow (#1662) — would
+	// turn "the job died before Maestro finished a flow" into a bogus timing
+	// failure that masks the real cause. It is omitted on purpose: awk is the
+	// last command in the pipeline, so the gate's exit 1 propagates anyway.
+	const workflow = readWorkflow('e2e-native.yml');
+
+	for (const jobName of ['android', 'ios']) {
+		const { result } = runTimingTriage(
+			workflow,
+			jobName,
+			'maestro exploded before running anything\n'
+		);
+
+		assert.equal(
+			result.status,
+			0,
+			`${jobName}: an unparseable suite log must not fail the timing gate`
+		);
+		// Anchored to a COMMAND line: the step's comment explains why pipefail
+		// is absent, so a bare /set -o pipefail/ matches the explanation.
+		const step = findStep(workflow, jobName, '🕒 Flow timing triage');
+		assert.doesNotMatch(
+			step.run,
+			/^[ \t]*set -[a-z]*o[a-z]* pipefail[ \t]*$/m,
+			`${jobName}: pipefail turns an empty suite log into a bogus timing failure`
+		);
+	}
+});
+
+test('a healthy suite passes the timing gate', () => {
+	// The gate must not fire on ordinary timings, including a legitimately
+	// slow-but-sane flow between the warn (600s) and fail (1200s) thresholds.
+	const workflow = readWorkflow('e2e-native.yml');
+
+	for (const jobName of ['android', 'ios']) {
+		const { result } = runTimingTriage(
+			workflow,
+			jobName,
+			'[Passed] 01-clean-launch-connect (1m 10s)\n' +
+				'[Passed] 04-cash-sale (2m 30s)\n' +
+				'[Failed] 05-drawer-navigation (11m 00s)\n'
+		);
+
+		assert.equal(result.status, 0, `${jobName}: ${result.stdout}${result.stderr}`);
+		assert.doesNotMatch(result.stdout, /::error/);
+		// 11m is past the starvation threshold but under the gate: warn, not fail.
+		assert.match(result.stdout, /::warning title=starvation-shaped::/);
+	}
+});
+
 test('native E2E extracts app errors WITHOUT a length bound', () => {
 	// Two silent-failure scars live in this one expression, and both produced a
 	// report that looked like it worked:
