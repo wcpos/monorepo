@@ -15,6 +15,12 @@ import { useUISettings } from '../../../contexts/ui-settings';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 
+// Upper bound on the post-payment local refresh. The cart and receipt are
+// already routed by then; this only decides how long a queued-but-stalled
+// require may hold its handle before it is released. 10 s covers a slow store
+// round-trip without keeping a handle open across a whole cashier shift.
+const ORDER_REFRESH_TIMEOUT_MS = 10_000;
+
 const paymentLogger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 
 /**
@@ -84,6 +90,13 @@ export function PaymentWebview({
 		return url.toString();
 	}, [paymentURL, jwt]);
 
+	/**
+	 * Best-effort local catch-up after a payment: pull the paid order so the
+	 * cart/receipt reflect the server's status. Bounded, because a require's
+	 * `ready` is not guaranteed to settle (a queued plane, dirty-row protection)
+	 * and nothing that the cashier is waiting on may depend on it — see
+	 * handlePaymentReceived.
+	 */
 	const refreshOrder = React.useCallback(async () => {
 		if (!orderId) {
 			throw new Error('payment_refresh_requires_persisted_order');
@@ -95,9 +108,16 @@ export function PaymentWebview({
 			remoteIds: [orderId].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 			forceRefresh: true,
 		});
+		let timer: ReturnType<typeof setTimeout> | undefined;
 		try {
-			await handle.ready;
+			await Promise.race([
+				handle.ready,
+				new Promise<void>((resolve) => {
+					timer = setTimeout(resolve, ORDER_REFRESH_TIMEOUT_MS);
+				}),
+			]);
 		} finally {
+			if (timer) clearTimeout(timer);
 			handle.release();
 		}
 	}, [runtime, orderId]);
@@ -142,7 +162,19 @@ export function PaymentWebview({
 							},
 						}
 					);
-					await refreshOrder();
+					// Route FIRST; the local refresh is catch-up, never a gate. Awaiting it
+					// here left cashiers on a spinning "Process payment" after a paid sale:
+					// orders #117902 and #118391 (2026-08-29, local + CI iOS) both logged
+					// "payment completed", the server had them paid, and the receipt never
+					// opened — the require's `ready` never settled, so neither did this
+					// handler, and the fallback poll was already disarmed by
+					// `paymentReceivedRef`. The fallback path below has always routed
+					// without waiting; the success path now does the same.
+					void refreshOrder().catch((err) => {
+						orderLogger.debug('Post-payment order refresh did not complete', {
+							context: { error: getErrorMessage(err) },
+						});
+					});
 
 					if (uiSettings.autoShowReceipt) {
 						router.replace({
