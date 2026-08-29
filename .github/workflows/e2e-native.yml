@@ -524,9 +524,12 @@ jobs:
           FOUND=0
           for LOG in "$HOME/.maestro/tests/logcat.txt" "$HOME/.maestro/tests/app-console.log"; do
             [ -f "$LOG" ] || continue
-            # The logger transport's own format. Deduped and capped so one
-            # repeated error cannot bury the rest.
-            grep -aoE 'ERROR : .{0,300}' "$LOG" | sort -u | head -20 > /tmp/apperr.txt || true
+            # Logger-formatted and direct console errors. Exclude the logger's
+            # console.error copy so it is reported only once.
+            {
+              grep -aoE 'ERROR : .{0,300}' "$LOG" || true
+              grep -aoE 'console\.error: .{0,300}' "$LOG" | grep -av 'ERROR :' || true
+            } | sort -u | head -20 > /tmp/apperr.txt
             while IFS= read -r line; do
               [ -n "$line" ] || continue
               FOUND=$((FOUND + 1))
@@ -535,11 +538,13 @@ jobs:
             done < /tmp/apperr.txt
           done
           if [ "$FOUND" -gt 0 ]; then
-            echo "### App errors logged during this run (${FOUND})" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "The E2E overlay is suppressed, so these did NOT mask an assertion — but the app did log them." >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            cat /tmp/apperr-summary.txt >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "### App errors logged during this run (${FOUND})"
+              echo ""
+              echo "The E2E overlay is suppressed, so these did NOT mask an assertion — but the app did log them."
+              echo ""
+              cat /tmp/apperr-summary.txt
+            } >> "$GITHUB_STEP_SUMMARY"
             # Also leave it on disk: a warning in a run log is invisible to
             # anyone who is not already reading that run. The report job below
             # turns this into a PR comment.
@@ -748,9 +753,12 @@ jobs:
           FOUND=0
           for LOG in "$HOME/.maestro/tests/logcat.txt" "$HOME/.maestro/tests/app-console.log"; do
             [ -f "$LOG" ] || continue
-            # The logger transport's own format. Deduped and capped so one
-            # repeated error cannot bury the rest.
-            grep -aoE 'ERROR : .{0,300}' "$LOG" | sort -u | head -20 > /tmp/apperr.txt || true
+            # Logger-formatted and direct console errors. Exclude the logger's
+            # console.error copy so it is reported only once.
+            {
+              grep -aoE 'ERROR : .{0,300}' "$LOG" || true
+              grep -aoE 'console\.error: .{0,300}' "$LOG" | grep -av 'ERROR :' || true
+            } | sort -u | head -20 > /tmp/apperr.txt
             while IFS= read -r line; do
               [ -n "$line" ] || continue
               FOUND=$((FOUND + 1))
@@ -759,11 +767,13 @@ jobs:
             done < /tmp/apperr.txt
           done
           if [ "$FOUND" -gt 0 ]; then
-            echo "### App errors logged during this run (${FOUND})" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "The E2E overlay is suppressed, so these did NOT mask an assertion — but the app did log them." >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            cat /tmp/apperr-summary.txt >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "### App errors logged during this run (${FOUND})"
+              echo ""
+              echo "The E2E overlay is suppressed, so these did NOT mask an assertion — but the app did log them."
+              echo ""
+              cat /tmp/apperr-summary.txt
+            } >> "$GITHUB_STEP_SUMMARY"
             # Also leave it on disk: a warning in a run log is invisible to
             # anyone who is not already reading that run. The report job below
             # turns this into a PR comment.
