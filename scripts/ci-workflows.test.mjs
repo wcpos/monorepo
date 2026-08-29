@@ -853,3 +853,41 @@ test('Android clean-start flows dismiss a queued system ANR before waiting for E
 		);
 	}
 });
+
+test('the Android step retries a transient offline ADB transport once', () => {
+	const step = findStep(readWorkflow('e2e-native.yml'), 'android', '📱 Run Maestro suite on emulator');
+	const retry = step.with.script
+		.split('\n')
+		.find((line) => line.startsWith("if grep -Rqs 'device offline'"));
+
+	assert.ok(retry, 'the Android Maestro step no longer retries a transient offline transport');
+
+	const dir = mkdtempSync(path.join(tmpdir(), 'maestro-android-retry-'));
+	try {
+		mkdirSync(path.join(dir, '.maestro/tests/first-run'), { recursive: true });
+		writeFileSync(path.join(dir, '.maestro/tests/first-run/maestro.log'), 'device offline\n');
+		mkdirSync(path.join(dir, 'bin'));
+		writeFileSync(path.join(dir, 'bin/adb'), '#!/bin/sh\nexit 0\n');
+		writeFileSync(
+			path.join(dir, 'bin/maestro'),
+			'#!/bin/sh\necho called >> "$MAESTRO_RETRY_COUNTER"\nexit 0\n'
+		);
+		spawnSync('chmod', ['+x', path.join(dir, 'bin/adb'), path.join(dir, 'bin/maestro')]);
+
+		const counter = path.join(dir, 'retry-count');
+		const result = runShell(retry, {
+			env: {
+				HOME: dir,
+				PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`,
+				MAESTRO_RETRY_COUNTER: counter,
+				DEVICE_CLASS: 'phone',
+			},
+		});
+
+		assert.equal(result.status, 0, result.stdout + result.stderr);
+		assert.equal(readFileSync(counter, 'utf8'), 'called\n');
+		assert.equal(readFileSync(path.join(dir, '.maestro/tests/exit_code'), 'utf8'), '0\n');
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
