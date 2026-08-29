@@ -19,6 +19,10 @@ on:
         description: web-bundle branch to publish to
         required: true
         default: next
+      override_release_gate:
+        description: Type "I accept a red main" to override the release gate
+        type: string
+        default: ''
 
 concurrency:
   group: publish-web-bundle-${{ github.event.inputs.bundle_branch }}
@@ -26,6 +30,7 @@ concurrency:
 
 permissions:
   contents: read
+  checks: read
 
 jobs:
   publish:
@@ -42,6 +47,33 @@ jobs:
           repositories: |
             monorepo
             web-bundle
+
+      # The release gate runs from THIS workflow revision's checkout, before
+      # `monorepo_ref` replaces the tree — an older ref would not contain the
+      # local action and the gate (override included) could never run.
+      - name: 📥 Check out the workflow revision (for the release gate)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      - name: 🔎 Resolve the requested monorepo SHA
+        id: monorepo-sha
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MONOREPO_REF: ${{ github.event.inputs.monorepo_ref }}
+        run: |
+          sha=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${MONOREPO_REF}" --jq .sha)
+          [ -n "$sha" ] || { echo "::error::could not resolve monorepo_ref '$MONOREPO_REF'"; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: 🟢 Require green main verification
+        uses: ./.github/actions/require-green-main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          sha: ${{ steps.monorepo-sha.outputs.sha }}
+          override: ${{ github.event.inputs.override_release_gate }}
 
       - name: 📥 Check out monorepo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

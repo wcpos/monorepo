@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
 	chmodSync,
+	existsSync,
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
@@ -131,6 +132,7 @@ test('the E2E aggregator runs on cancellation and fails the cancelled deploy', (
 	const result = runShell(gate.steps[0].run, {
 		env: {
 			CHANGES_RESULT: 'success',
+			COLD_START_RESULT: 'skipped',
 			DEPLOY_RESULT: 'cancelled',
 			DEPLOY_URL: '',
 			E2E_RESULT: 'skipped',
@@ -146,12 +148,13 @@ test('the E2E aggregator runs on cancellation and fails the cancelled deploy', (
 test('the E2E aggregator fails closed when change detection fails', () => {
 	const gate = readWorkflow('deploy.yml').jobs['e2e-gate'];
 
-	assert.deepEqual([...gate.needs].sort(), ['changes', 'deploy', 'e2e']);
+	assert.deepEqual([...gate.needs].sort(), ['changes', 'cold-start', 'deploy', 'e2e']);
 	assert.equal(gate.steps[0].env.CHANGES_RESULT, '${{ needs.changes.result }}');
 
 	const failedDetection = runShell(gate.steps[0].run, {
 		env: {
 			CHANGES_RESULT: 'failure',
+			COLD_START_RESULT: 'skipped',
 			DEPLOY_RESULT: 'skipped',
 			DEPLOY_URL: '',
 			E2E_RESULT: 'skipped',
@@ -165,6 +168,7 @@ test('the E2E aggregator fails closed when change detection fails', () => {
 	const legitimateSkip = runShell(gate.steps[0].run, {
 		env: {
 			CHANGES_RESULT: 'success',
+			COLD_START_RESULT: 'skipped',
 			DEPLOY_RESULT: 'skipped',
 			DEPLOY_URL: '',
 			E2E_RESULT: 'skipped',
@@ -173,6 +177,194 @@ test('the E2E aggregator fails closed when change detection fails', () => {
 		},
 	});
 	assert.equal(legitimateSkip.status, 0, legitimateSkip.stdout + legitimateSkip.stderr);
+});
+
+test('the main verification ledger maintains one issue and ignores superseded runs', () => {
+	const ledger = readWorkflow('deploy.yml').jobs['main-ledger'];
+	assert.match(ledger.if, /github\.event_name == 'push'/);
+	assert.match(ledger.if, /github\.ref == 'refs\/heads\/main'/);
+	assert.ok([ledger.needs].flat().includes('e2e-gate'));
+
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-main-ledger-'));
+	const binDir = path.join(workspace, 'bin');
+	const trace = path.join(workspace, 'gh.log');
+	mkdirSync(binDir);
+	writeFileSync(
+		path.join(binDir, 'gh'),
+		`#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$GH_TRACE"
+if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
+`,
+		{ mode: 0o755 }
+	);
+	// The job has no checkout, so gh must be told the repo explicitly.
+	assert.equal(ledger.steps[0].env.GH_REPO, '${{ github.repository }}');
+	assert.ok([ledger.needs].flat().includes('cold-start'), 'ledger must see cold-start too');
+
+	const run = ({ gate, deploy = 'success', e2e = 'success', cold = 'success', issues }) => {
+		writeFileSync(trace, '');
+		const result = runShell(ledger.steps[0].run, {
+			env: {
+				PATH: `${binDir}:${process.env.PATH}`,
+				GH_TRACE: trace,
+				GH_ISSUES: issues,
+				GATE_RESULT: gate,
+				DEPLOY_RESULT: deploy,
+				E2E_RESULT: e2e,
+				COLD_START_RESULT: cold,
+				SHA: '0123456789abcdef',
+				RUN_URL: 'https://github.test/actions/runs/1',
+			},
+		});
+		return { result, trace: readFileSync(trace, 'utf8') };
+	};
+
+	try {
+		const created = run({ gate: 'failure', issues: '[]' });
+		assert.equal(created.result.status, 0, created.result.stdout + created.result.stderr);
+		assert.match(created.trace, /issue create .*--label ci:main-red/);
+
+		const refreshed = run({ gate: 'failure', issues: '[{"number":42}]' });
+		assert.equal(refreshed.result.status, 0, refreshed.result.stdout + refreshed.result.stderr);
+		assert.match(refreshed.trace, /issue comment 42/);
+		assert.doesNotMatch(refreshed.trace, /issue create/);
+
+		const closed = run({ gate: 'success', issues: '[{"number":42}]' });
+		assert.equal(closed.result.status, 0, closed.result.stdout + closed.result.stderr);
+		assert.match(closed.trace, /issue close 42/);
+
+		const alreadyGreen = run({ gate: 'success', issues: '[]' });
+		assert.equal(
+			alreadyGreen.result.status,
+			0,
+			alreadyGreen.result.stdout + alreadyGreen.result.stderr
+		);
+		assert.doesNotMatch(alreadyGreen.trace, /issue (create|comment|close)|label create/);
+
+		const superseded = run({ gate: 'failure', e2e: 'cancelled', issues: '[{"number":42}]' });
+		assert.equal(superseded.result.status, 0, superseded.result.stdout + superseded.result.stderr);
+		assert.equal(superseded.trace, '');
+		assert.match(superseded.result.stdout, /superseded/i);
+
+		// A cancelled cold-start is the same superseded run — never a red ledger.
+		const supersededCold = run({ gate: 'failure', cold: 'cancelled', issues: '[]' });
+		assert.equal(supersededCold.result.status, 0, supersededCold.result.stdout);
+		assert.equal(supersededCold.trace, '');
+
+		// A pending deploy replaced by a newer main push: e2e/cold-start are
+		// skipped and the gate is red, but nothing shipped — superseded too.
+		const supersededDeploy = run({
+			gate: 'failure',
+			deploy: 'cancelled',
+			e2e: 'skipped',
+			cold: 'skipped',
+			issues: '[]',
+		});
+		assert.equal(supersededDeploy.result.status, 0, supersededDeploy.result.stdout);
+		assert.equal(supersededDeploy.trace, '');
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
+test('release workflows require green main with an explicit typed override', () => {
+	const build = readWorkflow('build.yml');
+	const publish = readWorkflow('publish-web-bundle.yml');
+	for (const workflow of [build, publish]) {
+		assert.equal(workflow.on.workflow_dispatch.inputs.override_release_gate.default, '');
+		assert.match(
+			workflow.on.workflow_dispatch.inputs.override_release_gate.description,
+			/I accept a red main/
+		);
+	}
+
+	const buildGate = findStep(build, 'main', '🟢 Require green main verification');
+	assert.equal(buildGate.uses, './.github/actions/require-green-main');
+	assert.equal(buildGate.with.sha, '${{ github.sha }}');
+	assert.equal(buildGate.with.override, '${{ github.event.inputs.override_release_gate }}');
+	assert.match(buildGate.if, /profile == 'production'/);
+	assert.match(buildGate.if, /profile == 'adhoc'/);
+
+	const publishGate = findStep(publish, 'publish', '🟢 Require green main verification');
+	const resolveSha = findStep(publish, 'publish', '🔎 Resolve the requested monorepo SHA');
+	assert.equal(publishGate.uses, './.github/actions/require-green-main');
+	assert.equal(publishGate.with.override, '${{ github.event.inputs.override_release_gate }}');
+	assert.match(publishGate.with.sha, /steps\..+\.outputs\.sha/);
+	// The target SHA is resolved through the API, not from a checkout of the
+	// target: the gate must run from THIS workflow revision's tree, because an
+	// older monorepo_ref would not contain the local action at all.
+	assert.match(resolveSha.run, /gh api .*commits\/\$\{MONOREPO_REF\}/);
+	const steps = publish.jobs.publish.steps.map(({ name }) => name);
+	assert.ok(
+		steps.indexOf('🟢 Require green main verification') < steps.indexOf('📥 Check out monorepo'),
+		'the release gate must run before monorepo_ref replaces the workspace'
+	);
+});
+
+test('the release gate requires the push verification of the SHA and fails closed', () => {
+	const action = readAction('require-green-main/action.yml');
+	assert.equal(action.runs.using, 'composite');
+	const step = action.runs.steps.find(({ run }) => run);
+	assert.ok(step, 'release gate is missing its shell step');
+	// Only the `push` Deploy run on main counts — a PR/preview run of the same
+	// SHA verified a preview, not the artifact that ships.
+	assert.match(
+		step.run,
+		/workflows\/deploy\.yml\/runs\?head_sha=\$\{RELEASE_SHA\}&event=push&branch=main/
+	);
+
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-release-gate-'));
+	const binDir = path.join(workspace, 'bin');
+	mkdirSync(binDir);
+	// The fake gh answers the runs query and the jobs query from two env vars.
+	writeFileSync(
+		path.join(binDir, 'gh'),
+		'#!/usr/bin/env bash\ncase "$*" in *"/runs?"*) printf \'%s\' "$GH_RUNS" ;; *"/jobs"*) printf \'%s\' "$GH_JOBS" ;; *) exit 1 ;; esac\n',
+		{ mode: 0o755 }
+	);
+	const gate = (conclusion) => ({ jobs: [{ name: '🎭 E2E Tests', conclusion }] });
+	const run = ({ runs = [], jobs = gate('success'), override = '' }) =>
+		runShell(step.run, {
+			env: {
+				PATH: `${binDir}:${process.env.PATH}`,
+				GITHUB_REPOSITORY: 'wcpos/monorepo',
+				RELEASE_SHA: '0123456789abcdef',
+				RELEASE_OVERRIDE: override,
+				GH_RUNS: JSON.stringify({ workflow_runs: runs }),
+				GH_JOBS: JSON.stringify(jobs),
+			},
+		});
+	const completed = (id, created_at) => ({ id, status: 'completed', created_at });
+
+	try {
+		// The NEWEST push run decides, even when an older one failed.
+		const success = run({
+			runs: [completed(1, '2026-08-28T10:00:00Z'), completed(2, '2026-08-29T10:00:00Z')],
+		});
+		assert.equal(success.status, 0, success.stdout + success.stderr);
+		assert.match(success.stdout, /run 2\)/);
+
+		const failure = run({ runs: [completed(3, '2026-08-29T10:00:00Z')], jobs: gate('failure') });
+		assert.notEqual(failure.status, 0);
+		assert.match(failure.stdout + failure.stderr, /0123456789abcdef: failure \(run 3\)/);
+		assert.match(failure.stdout + failure.stderr, /I accept a red main/);
+
+		const inProgress = run({
+			runs: [{ id: 4, status: 'in_progress', created_at: '2026-08-29T11:00:00Z' }],
+		});
+		assert.notEqual(inProgress.status, 0);
+		assert.match(inProgress.stdout + inProgress.stderr, /still in_progress \(run 4\)/);
+
+		const missing = run({});
+		assert.notEqual(missing.status, 0);
+		assert.match(missing.stdout + missing.stderr, /no main verification found/);
+
+		const overridden = run({ override: 'I accept a red main' });
+		assert.equal(overridden.status, 0, overridden.stdout + overridden.stderr);
+		assert.match(overridden.stdout, /::warning::release gate overridden/);
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
 });
 
 test('native E2E pull requests are planned and restricted to trusted non-draft changes', () => {
@@ -757,37 +949,79 @@ test('both lanes run four E2E shards', () => {
 	assert.match(matrix.shardTotal, /\|\| '\[4\]'/);
 });
 
-test('cold-start dispatches bind raw refs to an explicit store lane', () => {
-	const workflow = readWorkflow('e2e-cold-start.yml');
-	const { ref, lane } = workflow.on.workflow_dispatch.inputs;
-	const checkoutStep = findStep(workflow, 'cold-start', '🏗 Setup repository');
-	const validateStep = findStep(workflow, 'cold-start', '🔒 Validate trusted ref');
+test('cold-start verifies the deployed main artifact and participates in the gate', () => {
+	const workflow = readWorkflow('deploy.yml');
+	const coldStart = workflow.jobs['cold-start'];
 	const runStep = findStep(workflow, 'cold-start', '🥶 Run cold-start E2E');
+	const gate = workflow.jobs['e2e-gate'];
 
-	assert.equal(lane.required, true);
-	assert.deepEqual(lane.options, ['main', 'next']);
+	assert.ok(coldStart, 'deploy.yml is missing the cold-start job');
+	assert.match(coldStart.if, /github\.event_name == 'push'/);
+	assert.match(coldStart.if, /github\.ref == 'refs\/heads\/main'/);
+	assert.equal(runStep.env.E2E_COLD_START, '1');
+	assert.equal(runStep.env.BASE_URL, '${{ needs.deploy.outputs.deployment_url }}');
+	assert.equal(runStep.env.E2E_STORE_URL_PRO, 'https://dev-pro.wcpos.com');
+	assert.ok(gate.needs.includes('cold-start'));
+	assert.equal(gate.steps[0].env.COLD_START_RESULT, '${{ needs.cold-start.result }}');
+	assert.equal(
+		existsSync(path.join(ROOT, '.github', 'workflows', 'e2e-cold-start.yml')),
+		false,
+		'the scheduled cold-start workflow still exists'
+	);
 
-	// The nightly tests main. It tested `next` until 2026-08-22, which was right
-	// while the cold-start profile was next-only — but the lanes converged on
-	// 2026-08-15 and `next` stopped moving on 2026-08-18, so the gate spent four
-	// days reporting green on a branch nobody ships (#1486).
-	assert.equal(lane.default, 'main');
+	const baseEnv = {
+		CHANGES_RESULT: 'success',
+		DEPLOY_RESULT: 'success',
+		DEPLOY_URL: 'https://wcpos.expo.app',
+		E2E_RESULT: 'success',
+		SKIP_E2E_INPUT: 'false',
+	};
+	const failedMain = runShell(gate.steps[0].run, {
+		env: {
+			...baseEnv,
+			COLD_START_RESULT: 'failure',
+			EVENT_NAME: 'push',
+		},
+	});
+	assert.notEqual(failedMain.status, 0, failedMain.stdout + failedMain.stderr);
 
-	// The ref and lane defaults must agree. Otherwise a SCHEDULED run checks out
-	// one lane's code and points it at the other lane's store — the same
-	// mis-routing the validate step below prevents for dispatch inputs, arriving
-	// instead through the defaults, where nothing was watching.
-	assert.equal(ref.default, lane.default);
-	assert.match(checkoutStep.with.ref, /github\.event\.inputs\.ref \|\| 'main'/);
+	for (const [name, results] of [
+		['E2E', { COLD_START_RESULT: 'success', E2E_RESULT: 'cancelled' }],
+		['Cold-start', { COLD_START_RESULT: 'cancelled', E2E_RESULT: 'success' }],
+	]) {
+		const cancelledMain = runShell(gate.steps[0].run, {
+			env: { ...baseEnv, ...results, EVENT_NAME: 'push' },
+		});
+		assert.notEqual(cancelledMain.status, 0, cancelledMain.stdout + cancelledMain.stderr);
+		assert.match(cancelledMain.stdout + cancelledMain.stderr, new RegExp(`${name}.*superseded`));
+	}
 
-	assert.match(validateStep.env.E2E_LANE, /github\.event\.inputs\.lane \|\| 'main'/);
-	assert.match(validateStep.run, /origin\/\$E2E_LANE/);
+	const skippedPr = runShell(gate.steps[0].run, {
+		env: {
+			...baseEnv,
+			COLD_START_RESULT: 'skipped',
+			EVENT_NAME: 'pull_request',
+		},
+	});
+	assert.equal(skippedPr.status, 0, skippedPr.stdout + skippedPr.stderr);
 
-	// The store is derived from that same validated lane, each lane bound to its
-	// own store, with the absent-input fallback matching the defaults above.
-	assert.match(runStep.env.E2E_STORE_URL_PRO, /github\.event\.inputs\.lane \|\| 'main'/);
-	assert.match(runStep.env.E2E_STORE_URL_PRO, /'next' && 'https:\/\/dev-next\.wcpos\.com'/);
-	assert.match(runStep.env.E2E_STORE_URL_PRO, /'https:\/\/dev-pro\.wcpos\.com'/);
+	// A main push whose deploy was legitimately skipped (dependabot actor)
+	// deploys nothing, so cold-start is not owed either.
+	const skippedDeployOnMain = runShell(gate.steps[0].run, {
+		env: {
+			...baseEnv,
+			DEPLOY_RESULT: 'skipped',
+			DEPLOY_URL: '',
+			E2E_RESULT: 'skipped',
+			COLD_START_RESULT: 'skipped',
+			EVENT_NAME: 'push',
+		},
+	});
+	assert.equal(
+		skippedDeployOnMain.status,
+		0,
+		skippedDeployOnMain.stdout + skippedDeployOnMain.stderr
+	);
 });
 
 test('the E2E auth-state cache is shard- and lane-scoped', () => {
@@ -910,6 +1144,23 @@ test('the deploy concurrency contract isolates stale rerun attempts', () => {
 	assert.match(workflow.concurrency.group, /github\.event\.pull_request\.number/);
 	assert.match(workflow.concurrency.group, /github\.run_attempt != '1'/);
 	assert.match(workflow.concurrency.group, /github\.run_id/);
+	assert.match(workflow.concurrency['cancel-in-progress'], /github\.ref != 'refs\/heads\/main'/);
+	// main runs must be able to overlap, or the job-level coalescing below can
+	// never fire (review on #1687): the workflow group is run-unique on main.
+	assert.match(workflow.concurrency.group, /deploy-main-run-\{0\}', github\.run_id/);
+
+	for (const jobName of ['e2e', 'e2e-report', 'cold-start']) {
+		const concurrency = workflow.jobs[jobName].concurrency;
+		assert.ok(concurrency, `${jobName} is missing job-level concurrency`);
+		assert.match(concurrency.group, /github\.ref == 'refs\/heads\/main'/);
+		assert.equal(concurrency['cancel-in-progress'], true);
+	}
+	assert.match(workflow.jobs.e2e.concurrency.group, /matrix\.shardIndex/);
+	// The deploy job serialises on main and is never cancelled in flight.
+	const deployConcurrency = workflow.jobs.deploy.concurrency;
+	assert.ok(deployConcurrency, 'deploy must serialise on main');
+	assert.match(deployConcurrency.group, /'deploy-main-deploy'/);
+	assert.equal(deployConcurrency['cancel-in-progress'], false);
 });
 
 test('deploy emits the required E2E check whenever the merge gate runs', () => {
