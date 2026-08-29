@@ -87,6 +87,10 @@ env:
           commands:
             - tapOn:
                 text: "Open"
+            # Same settle as the early-prompt tap above: the required wait
+            # below is the next hierarchy query, and the app is mid-launch.
+            - waitForAnimationToEnd:
+                timeout: 5000
 - extendedWaitUntil:
     visible:
       id: "store-url-input"

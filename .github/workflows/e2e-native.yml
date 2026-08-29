@@ -835,10 +835,21 @@ jobs:
             return "$rc"
           }
           run_flow() {
-            local flow="$1" log
+            local flow="$1" log rc
             log=$(mktemp)
-            if with_deadline maestro --udid "$MAESTRO_UDID" test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" "$flow" 2>&1 | tee "$log"; then
+            # PIPESTATUS[0] is with_deadline's own status (pipefail would also
+            # surface it, but the retry decision below needs the exact code).
+            with_deadline maestro --udid "$MAESTRO_UDID" test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" "$flow" 2>&1 | tee "$log"
+            rc=${PIPESTATUS[0]}
+            if [ "$rc" -eq 0 ]; then
               return 0
+            fi
+            # A watchdog kill (124) is never retried: the process was hung, and
+            # whatever text it left in the log — including the startup-flake
+            # string — describes the run that was killed, not a reason to
+            # spend another 20 minutes.
+            if [ "$rc" -eq 124 ]; then
+              return 124
             fi
             if grep -q "driver not ready in time" "$log"; then
               echo "↻ driver startup flake — retrying ${flow} once"
