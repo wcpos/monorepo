@@ -33,36 +33,38 @@ const MAX_REPORTED = 20;
 export const test = base.extend<{ appErrorWatcher: void }>({
 	appErrorWatcher: [
 		async ({ page }, use, testInfo) => {
-			const errors: string[] = [];
+			const errors = new Set<string>();
+			let errorsOmitted = false;
 
 			// Listeners must be attached BEFORE the test navigates, which is why
 			// this is an auto fixture rather than something specs opt into.
 			page.on('pageerror', (error) => {
-				errors.push(`pageerror: ${error.message}`);
+				const detail = `pageerror: ${error.message}`;
+				if (errors.has(detail)) return;
+				if (errors.size < MAX_REPORTED) errors.add(detail);
+				else errorsOmitted = true;
 			});
 			page.on('console', (message) => {
-				if (message.type() === 'error') {
-					errors.push(`console.error: ${message.text()}`);
-				}
+				if (message.type() !== 'error') return;
+				const detail = `console.error: ${message.text()}`;
+				if (errors.has(detail)) return;
+				if (errors.size < MAX_REPORTED) errors.add(detail);
+				else errorsOmitted = true;
 			});
 
 			await use();
 
-			if (errors.length === 0) return;
+			if (errors.size === 0) return;
 
-			// Dedupe: a render loop can emit the same error hundreds of times.
-			const unique = [...new Set(errors)];
-			const reported = unique.slice(0, MAX_REPORTED);
+			const reported = [...errors];
+			const errorCount = `${reported.length}${errorsOmitted ? '+' : ''}`;
 			const body =
-				reported.join('\n') +
-				(unique.length > reported.length
-					? `\n… and ${unique.length - reported.length} more distinct error(s)`
-					: '');
+				reported.join('\n') + (errorsOmitted ? '\n… additional distinct error(s) omitted' : '');
 
 			await testInfo.attach('app-console-errors', { body, contentType: 'text/plain' });
 			testInfo.annotations.push({
 				type: 'app-error',
-				description: `${unique.length} distinct app error(s) — see the app-console-errors attachment`,
+				description: `${errorCount} distinct app error(s) — see the app-console-errors attachment`,
 			});
 
 			if (process.env.CI) {
@@ -74,7 +76,7 @@ export const test = base.extend<{ appErrorWatcher: void }>({
 			}
 
 			if (process.env.E2E_FAIL_ON_APP_ERROR === '1') {
-				throw new Error(`${unique.length} app error(s) during "${testInfo.title}":\n${body}`);
+				throw new Error(`${errorCount} app error(s) during "${testInfo.title}":\n${body}`);
 			}
 		},
 		{ auto: true },

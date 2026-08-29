@@ -199,6 +199,26 @@ test('native E2E reports logger and direct console errors on both platforms', ()
 	}
 });
 
+test('native E2E searches every issue-comment page for its sticky report', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	const step = findStep(workflow, 'app-errors', '💬 Comment when the app logged errors');
+
+	assert.match(
+		step.with.script,
+		/await github\.paginate\(\s*github\.rest\.issues\.listComments,\s*\{[^}]*per_page: 100[^}]*\}\s*\)/s
+	);
+});
+
+test('web E2E bounds and deduplicates app errors when they arrive', () => {
+	const watcher = readFileSync(path.join(ROOT, 'apps', 'main', 'e2e', 'test.ts'), 'utf8');
+
+	assert.match(watcher, /const errors = new Set<string>\(\)/);
+	assert.match(watcher, /errors\.size < MAX_REPORTED/);
+	assert.match(watcher, /errors\.add\(/);
+	assert.match(watcher, /additional distinct error\(s\) omitted/);
+	assert.doesNotMatch(watcher, /errors\.push\(/);
+});
+
 test('the native E2E aggregator fails closed except for legitimate skips', () => {
 	const gate = readWorkflow('e2e-native.yml').jobs['native-gate'];
 	const baseEnv = {
