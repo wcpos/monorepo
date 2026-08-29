@@ -389,7 +389,7 @@ jobs:
           # 9.4 s), and a passing job measured 1.8 s / 18.6 s for the same two
           # requests. These numbers say how much headroom a run had.
           for _ in 1 2; do
-            curl -sf -o /dev/null -w "warm manifest: %{time_total}s\n" -H "expo-platform: android" http://localhost:8081/
+            curl -sf --max-time 30 -o /dev/null -w "warm manifest: %{time_total}s\n" -H "expo-platform: android" http://localhost:8081/
           done
           curl -sf --max-time 120 -o /dev/null -w "warm bundle: %{time_total}s (%{size_download} bytes)\n" "$BUNDLE_URL"
           echo "Metro up; Android bundle compiled."
@@ -656,7 +656,7 @@ jobs:
       # diagnosed backwards from the client's error screen (PR #1686's run).
       - name: 📜 Collect Metro log
         if: always()
-        run: cp /tmp/metro.log ~/.maestro/tests/metro.log 2>/dev/null || true
+        run: mkdir -p ~/.maestro/tests && cp /tmp/metro.log ~/.maestro/tests/metro.log 2>/dev/null || true
 
       - name: ⬆️ Upload device artifacts
         if: always()
@@ -729,7 +729,7 @@ jobs:
           # 9.4 s), and a passing job measured 1.8 s / 18.6 s for the same two
           # requests. These numbers say how much headroom a run had.
           for _ in 1 2; do
-            curl -sf -o /dev/null -w "warm manifest: %{time_total}s\n" -H "expo-platform: ios" http://localhost:8081/
+            curl -sf --max-time 30 -o /dev/null -w "warm manifest: %{time_total}s\n" -H "expo-platform: ios" http://localhost:8081/
           done
           curl -sf --max-time 120 -o /dev/null -w "warm bundle: %{time_total}s (%{size_download} bytes)\n" "$BUNDLE_URL"
           echo "Metro up; iOS bundle compiled."
@@ -1093,7 +1093,7 @@ jobs:
       # diagnosed backwards from the client's error screen (PR #1686's run).
       - name: 📜 Collect Metro log
         if: always()
-        run: cp /tmp/metro.log ~/.maestro/tests/metro.log 2>/dev/null || true
+        run: mkdir -p ~/.maestro/tests && cp /tmp/metro.log ~/.maestro/tests/metro.log 2>/dev/null || true
 
       - name: ⬆️ Upload device artifacts
         if: always()

@@ -1504,6 +1504,69 @@ test('both native platforms upload Maestro artifacts unconditionally', () => {
 	}
 });
 
+test('both native warm-manifest probes have a finite transfer timeout', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-native-manifest-probe-'));
+
+	try {
+		const bin = path.join(workspace, 'bin');
+		const trace = path.join(workspace, 'curl-args');
+		mkdirSync(bin);
+		writeFileSync(path.join(bin, 'curl'), '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$CURL_TRACE"\n');
+		chmodSync(path.join(bin, 'curl'), 0o755);
+
+		for (const jobName of ['android', 'ios']) {
+			const step = findStep(workflow, jobName, '📦 Start Metro and pre-compile the bundle');
+			const loopStart = step.run.indexOf('for _ in 1 2; do');
+			const loopEnd = step.run.indexOf('\ndone', loopStart);
+			assert.notEqual(loopStart, -1, `${jobName}: missing warm-manifest probe loop`);
+			assert.notEqual(loopEnd, -1, `${jobName}: unterminated warm-manifest probe loop`);
+
+			const result = runShell(step.run.slice(loopStart, loopEnd + '\ndone'.length), {
+				env: {
+					CURL_TRACE: trace,
+					PATH: `${bin}:${process.env.PATH}`,
+				},
+			});
+			assert.equal(result.status, 0, result.stdout + result.stderr);
+		}
+
+		const invocations = readFileSync(trace, 'utf8').trim().split('\n');
+		assert.equal(invocations.length, 4);
+		for (const invocation of invocations) {
+			assert.match(invocation, /--max-time [1-9][0-9]*/);
+		}
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
+test('both native Metro-log collectors create their artifact directory', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-native-metro-log-'));
+
+	try {
+		const source = path.join(workspace, 'metro.log');
+		writeFileSync(source, 'metro diagnostics\n');
+
+		for (const jobName of ['android', 'ios']) {
+			const home = path.join(workspace, jobName);
+			const step = findStep(workflow, jobName, '📜 Collect Metro log');
+			const result = runShell(step.run.replace('/tmp/metro.log', source), {
+				env: { HOME: home },
+			});
+
+			assert.equal(result.status, 0, result.stdout + result.stderr);
+			assert.equal(
+				readFileSync(path.join(home, '.maestro', 'tests', 'metro.log'), 'utf8'),
+				'metro diagnostics\n'
+			);
+		}
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
 test('Android clean-start flows dismiss a queued system ANR before waiting for Expo', () => {
 	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
 		const flow = readMaestroFlow(filename);
