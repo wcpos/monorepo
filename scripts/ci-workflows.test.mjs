@@ -1581,6 +1581,27 @@ test('Android clean-start flows dismiss a queued system ANR before waiting for E
 	}
 });
 
+test('store URL flows only hide the keyboard on Android before connecting', () => {
+	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
+		const flow = readMaestroFlow(filename);
+		const inputIndex = flow.findIndex((command) => command.tapOn?.id === 'store-url-input');
+
+		assert.notEqual(inputIndex, -1, `${filename} must target the store URL input`);
+		assert.ok(flow[inputIndex + 1].inputText, `${filename} must enter a store URL`);
+		assert.deepEqual(
+			flow[inputIndex + 2],
+			{
+				runFlow: {
+					when: { platform: 'Android' },
+					commands: [{ hideKeyboard: { optional: true } }],
+				},
+			},
+			`${filename} must not let iOS hideKeyboard clear the store URL`
+		);
+		assert.deepEqual(flow[inputIndex + 3], { tapOn: { id: 'connect-store-button' } });
+	}
+});
+
 test('the Android step retries a transient offline ADB transport once', () => {
 	const step = findStep(
 		readWorkflow('e2e-native.yml'),

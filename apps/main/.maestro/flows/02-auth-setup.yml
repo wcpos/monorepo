@@ -88,10 +88,14 @@ env:
 - tapOn:
     id: "store-url-input"
 - inputText: ${STORE_URL}
-# optional — see flow 01: hideKeyboard is flaky on iOS and this is
-# housekeeping; a genuinely covered target fails at its own tap.
-- hideKeyboard:
-    optional: true
+# See flow 01: iOS hideKeyboard can clear this input. It is housekeeping here,
+# so only Android needs it before tapping the button.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - hideKeyboard:
+          optional: true
 - tapOn:
     id: "connect-store-button"
 - extendedWaitUntil:
