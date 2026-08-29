@@ -74,18 +74,42 @@ env:
       # 33219707312 iOS tablet: openurl 23:24:25, Open tapped 23:24:32,
       # wait expired 23:25:32 on the splash). The suite budgets 120-240s
       # for cold-start waits elsewhere; this one belongs in that band.
+      # CONDITIONAL from here, for the same reason the Android block above is:
+      # the dev menu's appearance is not deterministic. A required wait for
+      # "Continue" fails outright whenever the menu does not show — run
+      # 33238290876's iOS tablet died exactly there, at
+      # `Assert that "Continue" is visible FAILED`, having already cleared the
+      # scheme prompt.
+      #
+      # The either-wait above is the real gate: it does not return until one
+      # of the two launch surfaces exists. Everything after it is cleanup, and
+      # cleanup must never be the thing that fails a flow. If the menu never
+      # appears, the app is simply already usable and the required
+      # `store-url-input` wait below proves it.
       - extendedWaitUntil:
           visible:
             text: "Continue"
           timeout: 180000
-      - tapOn:
-          text: "Continue"
-      - extendedWaitUntil:
-          visible:
-            text: "Close"
-          timeout: 30000
-      - tapOn:
-          text: "Close"
+          optional: true
+      - runFlow:
+          when:
+            visible:
+              text: "Continue"
+          commands:
+            - tapOn:
+                text: "Continue"
+            - extendedWaitUntil:
+                visible:
+                  text: "Close"
+                timeout: 30000
+                optional: true
+            - runFlow:
+                when:
+                  visible:
+                    text: "Close"
+                commands:
+                  - tapOn:
+                      text: "Close"
 - extendedWaitUntil:
     visible:
       id: "store-url-input"
