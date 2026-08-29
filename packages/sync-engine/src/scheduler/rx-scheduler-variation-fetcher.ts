@@ -1,4 +1,4 @@
-import { FLEXSEARCH_MIN_TERM_LENGTH, variationDocumentId } from '@wcpos/sync-core';
+import { variationDocumentId } from '@wcpos/sync-core';
 
 import {
 	parseVariationsEnvelope,
@@ -108,10 +108,9 @@ export function createVariationsSchedulerFetcher(
 		const search = assertVariationSearchTask(task).trim();
 		const limit = task.limit;
 		const pageSize = taskLimit(task, input.pullBatchSize);
-		const searchLeg =
-			search.length < FLEXSEARCH_MIN_TERM_LENGTH
-				? null
-				: await fetchVariationSearchLeg(input, 'search', search, limit, pageSize, context);
+		const searchLeg = !search.length
+			? null
+			: await fetchVariationSearchLeg(input, 'search', search, limit, pageSize, context);
 		const skuLeg = await fetchVariationSearchLeg(input, 'sku', search, limit, pageSize, context);
 		const payloads = uniqueVariationPayloads([...skuLeg.payloads, ...(searchLeg?.payloads ?? [])]);
 		// The manifest row travels on the envelope, not on the stored document — see
