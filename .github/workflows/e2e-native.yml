@@ -791,15 +791,58 @@ jobs:
           # That failure happens before the flow executes a single command, so
           # a retry cannot double-apply state; any other failure is a real
           # test failure and must not run twice.
+          # A hung Maestro must cost minutes, not the job. Run 33262053590's
+          # iOS phone: the XCUITest driver answered kAXErrorInvalidUIElement
+          # during a launch transition, Maestro 2.6.1 raised it as an UNCAUGHT
+          # exception and its JVM never exited — the step sat on flow 01 for
+          # 53 minutes until the job's 60-minute limit killed it, and a
+          # cancelled job uploads no artifacts. The deadline equals the ABSURD
+          # threshold in the triage step below: no flow does twenty minutes of
+          # real work, so past it the process is hung, not slow.
+          FLOW_DEADLINE_SECONDS=1200
+          with_deadline() {
+            local marker
+            marker=$(mktemp)
+            rm -f "$marker"
+            "$@" &
+            local pid=$!
+            # The watchdog's stdio is detached from the caller's pipe: a
+            # background `sleep` that inherits the pipe keeps `tee` waiting for
+            # EOF until the sleep ends, which turned this helper into the hang
+            # it exists to prevent (scripts/ci-workflows.test.mjs caught it).
+            (
+              sleep "$FLOW_DEADLINE_SECONDS"
+              if kill -0 "$pid" 2>/dev/null; then
+                touch "$marker"
+                pkill -TERM -P "$pid" 2>/dev/null || true
+                kill -TERM "$pid" 2>/dev/null || true
+                sleep 5
+                pkill -KILL -P "$pid" 2>/dev/null || true
+                kill -KILL "$pid" 2>/dev/null || true
+              fi
+            ) </dev/null >/dev/null 2>&1 &
+            local watchdog=$!
+            local rc=0
+            wait "$pid" || rc=$?
+            pkill -TERM -P "$watchdog" 2>/dev/null || true
+            kill -TERM "$watchdog" 2>/dev/null || true
+            wait "$watchdog" 2>/dev/null || true
+            if [ -e "$marker" ]; then
+              echo "::error::flow exceeded ${FLOW_DEADLINE_SECONDS}s — maestro (pid $pid) was killed; the process was hung, not slow"
+              rm -f "$marker"
+              return 124
+            fi
+            return "$rc"
+          }
           run_flow() {
             local flow="$1" log
             log=$(mktemp)
-            if maestro --udid "$MAESTRO_UDID" test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" "$flow" 2>&1 | tee "$log"; then
+            if with_deadline maestro --udid "$MAESTRO_UDID" test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" "$flow" 2>&1 | tee "$log"; then
               return 0
             fi
             if grep -q "driver not ready in time" "$log"; then
               echo "↻ driver startup flake — retrying ${flow} once"
-              maestro --udid "$MAESTRO_UDID" test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" "$flow"
+              with_deadline maestro --udid "$MAESTRO_UDID" test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" "$flow"
               return
             fi
             return 1

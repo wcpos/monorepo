@@ -64,6 +64,13 @@ env:
           commands:
             - tapOn:
                 text: "Open"
+            # The app is mid-launch after "Open"; a hierarchy query during the
+            # scene transition can answer kAXErrorInvalidUIElement, which
+            # Maestro 2.6.1 raises as an UNCAUGHT exception (run 33262053590
+            # iOS phone: flow 01 died there and the JVM then hung for 53 min).
+            # Screenshot-based settle first, same as every relaunch.
+            - waitForAnimationToEnd:
+                timeout: 5000
       # Cold start: first fetch of the ~29 MB Metro bundle plus Hermes parse.
       # 60s expired on CI with the app still on its splash (run 33219707312);
       # the suite budgets 120-240s elsewhere. Optional only so a LATE scheme
