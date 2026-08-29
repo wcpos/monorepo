@@ -78,9 +78,11 @@ const GS_RULES: Record<number, OpcodeRule> = {
 			if (m === 0 || m === 1 || m === 48 || m === 49) return 3;
 			return 4;
 		},
-		describe: ([m]) => {
+		describe: ([m, n]) => {
 			if (m === 0 || m === 48) return 'full cut';
 			if (m === 1 || m === 49) return 'partial cut';
+			if (m === 65) return `feed to cut position + ${n ?? 0}, full cut`;
+			if (m === 66) return `feed to cut position + ${n ?? 0}, partial cut`;
 			return `cut mode ${m}`;
 		},
 	},

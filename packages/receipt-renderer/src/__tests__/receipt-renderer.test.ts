@@ -632,8 +632,10 @@ describe('@wcpos/receipt-renderer exports', () => {
 	});
 
 	it('ends ESC/POS text with a newline before cutting', () => {
+		// Bare receipt-level text is raw-text: nothing else terminates the line,
+		// so this exercises the guard in writeCut() itself.
 		const bytes = encodeThermalTemplate(
-			'<receipt><text>Hi</text><cut /></receipt>',
+			'<receipt>Hi<cut /></receipt>',
 			{},
 			{ language: 'esc-pos' }
 		);

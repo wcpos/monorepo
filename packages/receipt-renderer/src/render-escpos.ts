@@ -510,12 +510,7 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			break;
 		}
 		case 'cut':
-			if (context.language === 'esc-pos') {
-				if (context.lineHasText) writeNewline(encoder, context);
-				encoder.raw([0x1d, 0x56, node.cutType === 'full' ? 0x41 : 0x42, 0x00]);
-			} else {
-				encoder.cut(node.cutType === 'full' ? 'full' : 'partial');
-			}
+			writeCut(encoder, context, node.cutType === 'full' ? 'full' : 'partial');
 			break;
 		case 'feed':
 			writeNewline(encoder, context, node.lines);
@@ -587,6 +582,29 @@ function singleStyledLineDepth(node: ThermalNode, styleDepth: number): number | 
 function styledLineDepth(nodes: readonly ThermalNode[], styleDepth: number): number | undefined {
 	if (nodes.length === 1) return singleStyledLineDepth(nodes[0] as ThermalNode, styleDepth);
 	return isInlineTextContent(nodes) ? styleDepth : undefined;
+}
+
+/**
+ * Cut the paper.
+ *
+ * On ESC/POS the library's `cut()` is the immediate form (`GS V 1`): it cuts
+ * where the paper stands, so the lines still inside the head-to-cutter gap are
+ * sliced. Its only compensation is the profile-guessed `feedBeforeCut` blank
+ * lines, and that guess is deliberately superseded here: `GS V 66/65 0` asks
+ * the printer itself to feed to the cutting position before cutting, which is
+ * model-independent. Star languages keep the library's feed-then-cut variants.
+ */
+function writeCut(
+	encoder: ReceiptPrinterEncoder,
+	context: RenderContext,
+	cutType: 'full' | 'partial'
+): void {
+	if (context.language !== 'esc-pos') {
+		encoder.cut(cutType);
+		return;
+	}
+	if (context.lineHasText) writeNewline(encoder, context);
+	encoder.raw([0x1d, 0x56, cutType === 'full' ? 0x41 : 0x42, 0x00]);
 }
 
 function writeNewline(encoder: ReceiptPrinterEncoder, context: RenderContext, lines = 1): void {
