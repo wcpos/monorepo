@@ -1,7 +1,6 @@
 import * as path from 'path';
 
-import { expect, test } from '@playwright/test';
-
+import { expect, test } from './test';
 import { authenticateWithStore, navigateToPage } from './fixtures';
 import { unwrapWireBody } from './wire-envelope';
 import { resolveIdleSoakMs } from './idle-backfill-soak-duration';

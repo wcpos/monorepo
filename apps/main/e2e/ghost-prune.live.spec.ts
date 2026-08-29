@@ -1,8 +1,7 @@
 import * as fs from 'fs';
 import { execFileSync } from 'child_process';
 
-import { expect, test } from '@playwright/test';
-
+import { expect, test } from './test';
 import { authenticateWithStore, blockScriptRequests, getStoreUrl } from './fixtures';
 import { exportOPFS, restoreOPFS } from './opfs-helpers';
 import { restoreLocalStorage, type SavedAuthState } from './indexeddb-helpers';
