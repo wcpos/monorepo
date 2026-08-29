@@ -214,6 +214,9 @@ function useDemand(
 
 	React.useEffect(() => {
 		if (!enabled) {
+			const outstanding = pendingRelease.current;
+			pendingRelease.current = [];
+			releaseHandles(outstanding);
 			coverageTarget$.next(null);
 			ready.current = Promise.resolve(ATTEMPTED);
 			return undefined;

@@ -1543,11 +1543,16 @@ describe('query bindings', () => {
 			})
 		);
 		expect(current(result.current.resource)?.searchActive).toBe(true);
+		const variationSearch = engine.searchRequireCalls.find(
+			({ requirement }) => requirement.collection === 'variations'
+		);
+		expect(variationSearch?.released).toBe(false);
 
 		rerender({ queryState: { ...state, search: '' } });
 		await waitFor(() =>
 			expect(Boolean(current(result.current.resource)?.searchActive)).toBe(false)
 		);
+		expect(variationSearch?.released).toBe(true);
 	});
 
 	it('excludes non-published variation matches from a published product search', async () => {
