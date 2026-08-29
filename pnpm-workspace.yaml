@@ -37,6 +37,12 @@ overrides:
   "react-native-edge-to-edge": "^1.6.2"
   "react-native-gesture-handler": "~2.32.0"
   "react-native-safe-area-context": "~5.7.0"
+  # react-native-calendars lists moment as an OPTIONAL dependency and requires it
+  # inside a try/catch, which Metro treats as an optional require: absent, it is
+  # skipped; present, it is bundled. The lock had never resolved it, and every
+  # re-resolution would otherwise pull 4.7 MB of moment into the app graph for
+  # an AgendaList we never render. Drop it so the shipped bundle cannot change.
+  "react-native-calendars>moment": "-"
   "@electron/node-gyp": "10.2.0-electron.2"
   "tar": "^7.5.11"
   "react-native-nitro-modules": "0.35.9"

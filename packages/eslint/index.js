@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 import expoConfig from 'eslint-config-expo/flat.js';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
+import youMightNotNeedAnEffect from 'eslint-plugin-react-you-might-not-need-an-effect';
 import reactCompiler from 'eslint-plugin-react-compiler';
 
 import prettierConfig from './prettier.js';
@@ -648,6 +649,29 @@ export const config = [
 				},
 			],
 		},
+	},
+	// TRIAL (2026-08-29, owner: "try including that for a while"). Catches
+	// effects that should not exist at all — derived state, event-handler logic,
+	// hand-rolled store subscriptions. Complements react-hooks rather than
+	// duplicating it: `react-hooks/set-state-in-effect` covers synchronous
+	// setState in an effect, this covers the wider family.
+	//
+	// WARN, not error, deliberately: it is on trial. If it earns its place,
+	// promote to `strict`; if it turns out noisy, drop it — do not leave it
+	// warning forever, since a warning nobody acts on is just noise.
+	//
+	// Note it would NOT have caught monorepo#1666: that effect legitimately
+	// synchronised with an external system, and the bug was a DESTRUCTIVE
+	// cleanup, which no rule in this plugin models.
+	{
+		// Its `configs.recommended` also sets `languageOptions.parserOptions`,
+		// which clobbers the TypeScript parser configuration the packages set up
+		// earlier — @wcpos/printer failed with "Parsing error: Unexpected token
+		// interface". Take the plugin and its rules, leave parsing alone.
+		plugins: { 'react-you-might-not-need-an-effect': youMightNotNeedAnEffect },
+		rules: Object.fromEntries(
+			Object.keys(youMightNotNeedAnEffect.configs.recommended.rules).map((rule) => [rule, 'warn'])
+		),
 	},
 	reactCompiler.configs.recommended,
 	// Files that legitimately need default exports
