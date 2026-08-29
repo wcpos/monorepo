@@ -1001,6 +1001,45 @@ describe('runPersistedSchedulerTasks', () => {
 		expect(repository.markFailed).not.toHaveBeenCalled();
 	});
 
+	// REGRESSION (run 33241496921, iOS tablet flow 03): React Native's
+	// AbortController is the `abort-controller` polyfill, whose `abort()` takes
+	// NO arguments — the reason require-plane's abandon() passes is discarded
+	// and `signal.reason` is undefined. That is unreproducible with the Node
+	// AbortController used everywhere else in this file, so the drop is
+	// simulated here rather than asserted away.
+	//
+	// The name is what matters: require-plane classifies a cancellation by
+	// `error.name === 'AbortError'`, and a plain Error was reported as a
+	// genuine coverage failure (`coverage.require.error` / SYNC321) at ERROR
+	// level, which the dev client draws as a red box OVER the running app.
+	it('names its abort AbortError when the platform dropped the abort reason', async () => {
+		const first = state({ taskId: 'orders:first', requirementId: 'orders.first' });
+		const second = state({ taskId: 'orders:second', requirementId: 'orders.second' });
+		const repository = createRepository([first, second]);
+		const abortController = new AbortController();
+		const fetcher = vi.fn(async (task) => {
+			abortController.abort(new Error('reason the platform will drop'));
+			return { taskId: task.id, documentCount: 1, requestCount: 1, completed: true };
+		});
+		// Simulate the polyfill: aborted, but no reason survived.
+		const signal = abortController.signal;
+		Object.defineProperty(signal, 'reason', { value: undefined, configurable: true });
+
+		const error = await runPersistedSchedulerTasks({
+			...baseInput,
+			repository,
+			fetcher,
+			signal,
+		}).then(
+			() => null,
+			(caught: unknown) => caught
+		);
+
+		expect(error).toBeInstanceOf(Error);
+		expect((error as Error).name).toBe('AbortError');
+		expect((error as Error).message).toBe('Persisted scheduler runner aborted');
+	});
+
 	it('releases the claimed persisted task before propagating a fetch abort', async () => {
 		const runnable = state();
 		const repository = createRepository([runnable]);

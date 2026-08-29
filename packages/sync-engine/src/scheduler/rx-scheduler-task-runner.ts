@@ -132,7 +132,27 @@ export function ledgerRebuiltSchedulerTaskRunnerResult(): PersistedSchedulerTask
 function throwIfAborted(signal?: AbortSignal): void {
 	if (!signal?.aborted) return;
 	if (signal.reason instanceof Error) throw signal.reason;
-	throw new Error('Persisted scheduler runner aborted');
+	// NAME it, never leave it a plain Error. React Native's AbortController is
+	// the `abort-controller` polyfill (react-native/Libraries/Core/setUpXHR.js),
+	// whose `abort()` takes NO arguments — the string "reason" does not occur
+	// anywhere in it. So the DOMException that require-plane's abandon() passes
+	// (`abort(new DOMException('Requirement released during drain',
+	// 'AbortError'))`) is silently discarded and `signal.reason` is undefined
+	// HERE AND ONLY ON NATIVE; web and Electron keep it and return above.
+	//
+	// A plain Error then reached require-plane's classifier, which asks
+	// `error.name === 'AbortError'` to tell our own cancellation from a real
+	// failure. It said failure: `coverage.require.error` / SYNC321 at ERROR
+	// level, which the dev client draws as a RED BOX over the running app. In
+	// run 33241496921 the box covered `search-products` on a fully loaded POS
+	// (209 products rendered) and flow 03 timed out at 2m4s reporting a missing
+	// search box — a launch/search bug that was neither.
+	//
+	// Matches the pattern already used by variation-prefetch.ts's own
+	// throwIfAborted, which had this right.
+	throw Object.assign(new Error('Persisted scheduler runner aborted'), {
+		name: 'AbortError',
+	});
 }
 
 function taskFromState(state: PersistedSchedulerTaskState): FetchTask {
