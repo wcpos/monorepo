@@ -31,6 +31,7 @@
 		"./screens/main/customers/add": "./src/screens/main/customers/add.tsx",
 		"./screens/main/customers/edit": "./src/screens/main/customers/edit/index.tsx",
 		"./screens/main/hooks/use-collection": "./src/screens/main/hooks/use-collection.ts",
+		"./screens/main/hooks/use-default-customer": "./src/screens/main/hooks/use-default-customer.ts",
 		"./screens/main/hooks/use-rest-http-client": "./src/screens/main/hooks/use-rest-http-client/index.ts",
 		"./screens/main/health": "./src/screens/main/health/index.tsx",
 		"./screens/main/logs": "./src/screens/main/logs/index.tsx",

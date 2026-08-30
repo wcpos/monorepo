@@ -5,6 +5,7 @@ import { useObservableSuspense } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
+import { Suspense } from '@wcpos/components/suspense';
 import {
 	Form,
 	FormCombobox,
@@ -64,7 +65,30 @@ const formSchema = z.object({
 /**
  *
  */
+/**
+ * The default-customer resource is built HERE, and read one level down inside the boundary.
+ *
+ * Built in the component that also READS it, the resource would be discarded with the aborted
+ * render and rebuilt by every Suspense retry, which never ends (#1707): the customers query's
+ * first emission is always async, and `SettingsPage`'s boundary sits ABOVE this component, so
+ * it cannot help. Above a boundary of its own, this component commits alongside the fallback
+ * and the retry reads back the resource the first attempt already subscribed.
+ */
 export function GeneralSettings() {
+	const { defaultCustomerResource } = useDefaultCustomer();
+
+	return (
+		<Suspense>
+			<GeneralSettingsForm defaultCustomerResource={defaultCustomerResource} />
+		</Suspense>
+	);
+}
+
+function GeneralSettingsForm({
+	defaultCustomerResource,
+}: {
+	defaultCustomerResource: ReturnType<typeof useDefaultCustomer>['defaultCustomerResource'];
+}) {
 	const { store } = useStoreSession();
 	const formData = useDocField(store, (latest) => {
 		return {
@@ -84,7 +108,6 @@ export function GeneralSettings() {
 			thousands_group_style: latest.thousands_group_style,
 		};
 	});
-	const { defaultCustomerResource } = useDefaultCustomer();
 	const defaultCustomer = useObservableSuspense(defaultCustomerResource);
 	// The resource emits an engine record for a configured customer (guest is plain data);
 	// the name formatter takes the WIRE shape, so unwrap the payload before formatting.

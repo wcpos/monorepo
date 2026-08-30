@@ -82,7 +82,7 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 	 * everything above it, this provider included, alongside the fallback. The `useMemo` below
 	 * therefore survives and the retry reads back the same resource. Only a builder inside the
 	 * suspending boundary's own subtree loses its state, which is the Orders blank body (#1707);
-	 * `packages/query/tests/suspense-resource.test.tsx` pins both halves of the rule.
+	 * `packages/query/tests/suspense-boundary-placement.test.tsx` pins both halves of the rule.
 	 */
 	const createUIResource = React.useCallback(
 		<T extends UISettingID>(id: T) => {

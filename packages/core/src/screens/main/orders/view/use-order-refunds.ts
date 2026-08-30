@@ -41,7 +41,7 @@ export interface WCRefund {
  * builds the resource and renders the `Suspense` (and the error boundary) BELOW itself, so it
  * commits alongside the fallback and its `useMemo` survives; the retry reads back the resource
  * whose HTTP GET is already in flight. `use-order-refunds.suspense.test.tsx` pins that, and
- * `packages/query/tests/suspense-resource.test.tsx` pins the general rule.
+ * `packages/query/tests/suspense-boundary-placement.test.tsx` pins the general rule.
  *
  * A keyed cache would be the WRONG fix here even though it would also stop a loop: refunds come
  * from an HTTP GET with no live subscription behind it, so an entry keyed by order id would

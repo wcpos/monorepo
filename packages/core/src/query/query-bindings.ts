@@ -31,7 +31,6 @@ import {
 	type QueryResult,
 	useLocalQuery,
 	useQueryRuntime,
-	useSuspenseResource,
 } from '@wcpos/query';
 import type {
 	CensusTotals,
@@ -103,6 +102,19 @@ function useStableDescriptor(descriptor: EngineQueryDescriptor): EngineQueryDesc
 		}),
 		[key, descriptor.read]
 	);
+}
+
+function useObservableResource<T>(observable$: Observable<T>): ObservableResource<T> {
+	const [resource] = React.useState(() => new ObservableResource(observable$));
+	React.useEffect(() => {
+		// Reloading retains the current value while the new query loads and clears terminal errors.
+		if (resource.input$ !== observable$) resource.reload(observable$);
+	}, [observable$, resource]);
+	React.useEffect(() => {
+		// The resource owns the direct RxDB/db$ subscription for this binding.
+		return () => resource.destroy();
+	}, [resource]);
+	return resource;
 }
 
 /**
@@ -583,20 +595,7 @@ function useEngineBinding(
 		() => coverageProjection$(runtime.engine, result$, demand.coverageTarget$, census$),
 		[census$, demand.coverageTarget$, result$, runtime.engine]
 	);
-	// Bridged across Suspense retries (see `useSuspenseResource`): a resource kept in plain
-	// `useState` is fiber state, so a consumer that suspends on it before its subtree has ever
-	// committed gets it rebuilt on every retry and never mounts — the Orders blank body
-	// (#1707), and every select and table in the app reads its binding in the very component
-	// that built it. Once mounted the resource is this binding's own, reloaded rather than
-	// rebuilt when the descriptor moves, so a keystroke never blanks the grid.
-	const resource = useSuspenseResource<QueryResult<RxCollection>>(
-		runtime.engine,
-		// The scope belongs in the key: a same-site store switch mutates the engine in place and
-		// hands the same object back, so `runtime.engine` alone does not tell two stores apart
-		// (`engine-record-resource`, #1710).
-		JSON.stringify([runtime.engine.active()?.scopeId ?? null, descriptor, enabled, runtime.locale]),
-		result$
-	);
+	const resource = useObservableResource(result$);
 	const total$ = React.useMemo(() => projection$.pipe(map(({ total }) => total)), [projection$]);
 	const laneProgress$ = React.useMemo(
 		() => projection$.pipe(map(({ laneProgress }) => laneProgress)),
@@ -783,18 +782,7 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 			shareReplay({ bufferSize: 1, refCount: true })
 		);
 	}, [bindingId, childDescriptor, compiled.read, descriptor, runtime.engine, runtime.locale]);
-	// Same reason as `useEngineBinding` above — the resource must outlive a Suspense retry.
-	const resource = useSuspenseResource<QueryResult<RxCollection>>(
-		runtime.engine,
-		JSON.stringify([
-			runtime.engine.active()?.scopeId ?? null,
-			descriptor,
-			childDescriptor,
-			compiled.read,
-			runtime.locale,
-		]),
-		result$
-	);
+	const resource = useObservableResource(result$);
 	const census$ = React.useMemo(
 		() => (compiled.censusScoped ? censusTotal$(runtime.engine, 'products') : NO_CENSUS_TOTAL$),
 		[compiled.censusScoped, runtime.engine]
