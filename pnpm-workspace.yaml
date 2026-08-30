@@ -134,6 +134,15 @@ patchedDependencies:
   # opacity and pointerEvents from an uncommitted animated value.
   react-native-drawer-layout@4.2.5: patches/react-native-drawer-layout@4.2.5.patch
   "react-native-esc-pos-printer@4.5.0": "patches/react-native-esc-pos-printer@4.5.0.patch"
+  # WCPOS1661 DIAGNOSTIC ONLY — MUST NOT MERGE (wcpos/monorepo#1661). Adds a
+  # logcat probe to NativeProxy.cpp that walks each surface's
+  # MountingCoordinator mounting-override delegate list and prints, per
+  # delegate, the pointer, weak_ptr state and the vtable word resolved through
+  # dladdr to the owning .so. react-native-screens hosts the probe because it
+  # is compiled FROM SOURCE by the app build and already holds the UIManager;
+  # react-native's own MountingCoordinator ships prebuilt in
+  # com.facebook.react:react-android and cannot be patched from node_modules.
+  react-native-screens@4.26.2: patches/react-native-screens@4.26.2.patch
   # NOTE: rxdb-premium cannot be patched here — its dist/ is produced by a
   # license-gated postinstall, so it is absent from the tarball pnpm patches.
   # The resurrection-index-leak fix for it lives in

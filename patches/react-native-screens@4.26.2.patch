@@ -1,0 +1,356 @@
+diff --git a/android/CMakeLists.txt b/android/CMakeLists.txt
+index 9d0999253eb8c0d0ef43b2d061026751bc0ca6b8..75b3a75453fb490e96e4741a8bb042a69fdc102a 100644
+--- a/android/CMakeLists.txt
++++ b/android/CMakeLists.txt
+@@ -36,4 +36,9 @@ target_link_libraries(rnscreens
+     ReactAndroid::jsi
+     fbjni::fbjni
+     android
++    # WCPOS1661 (diagnostic, must not merge): the delegate probe in
++    # NativeProxy.cpp logs through __android_log_print and resolves vtable
++    # pointers with dladdr.
++    log
++    dl
+ )
+diff --git a/android/src/main/cpp/NativeProxy.cpp b/android/src/main/cpp/NativeProxy.cpp
+index 239e03a3dad5591b6a34aaf70e4cc0ce44e3a6f8..8f4ff50ec629ab09392412b1b079af35d5cd0168 100644
+--- a/android/src/main/cpp/NativeProxy.cpp
++++ b/android/src/main/cpp/NativeProxy.cpp
+@@ -6,6 +6,310 @@
+ 
+ #include "NativeProxy.h"
+ 
++// ---------------------------------------------------------------------------
++// WCPOS1661 — DIAGNOSTIC INSTRUMENTATION, MUST NOT MERGE (wcpos/monorepo#1661)
++//
++// Android SIGSEGVs on the JS thread (`mqt_v_js`) ~8-13 s after
++// `loadJSBundleFromMetro`, with the only symbolised backtrace showing the PC in
++// an anonymous scudo heap mapping and the return address in
++// `facebook::react::MountingCoordinator::pullTransaction(bool)` — i.e. an
++// INDIRECT CALL from pullTransaction jumped into freed heap. The indirect calls
++// in that frame are the virtual dispatches on each registered
++// `MountingOverrideDelegate`, so the leading suspect is a delegate whose vtable
++// pointer is dead.
++//
++// `MountingCoordinator` lives in the PREBUILT `libreactnative.so` shipped by
++// `com.facebook.react:react-android` — Android never compiles ReactCommon from
++// source unless the app opts into a build-from-source composite build — so it
++// cannot be instrumented from node_modules. react-native-screens, by contrast,
++// IS compiled from source by the app build and already holds the UIManager, so
++// the probe rides here: a background thread walks every surface's
++// mounting-override delegate list and logs, per delegate, the raw pointer,
++// whether the weak_ptr is expired, and the first word at that address (the
++// vtable pointer) resolved through dladdr() to the owning .so. The delegate
++// whose entry goes bad — or whose library becomes unresolvable — immediately
++// before the tombstone is the dead one, and dladdr names the library that owns
++// it.
++//
++// Nothing is dereferenced as an object: the vtable word is copied out with
++// memcpy and only ever printed.
++// ---------------------------------------------------------------------------
++#include <android/log.h>
++#include <dlfcn.h>
++#include <pthread.h>
++#include <unistd.h>
++
++#include <react/renderer/mounting/MountingCoordinator.h>
++#include <react/renderer/mounting/MountingOverrideDelegate.h>
++#include <react/renderer/uimanager/UIManager.h>
++
++#include <atomic>
++#include <chrono>
++#include <cstdint>
++#include <cstdio>
++#include <cstring>
++#include <memory>
++#include <mutex>
++#include <string>
++#include <thread>
++#include <unordered_map>
++#include <vector>
++
++namespace wcpos1661 {
++
++#define WCPOS1661_LOG(...) \
++  __android_log_print(ANDROID_LOG_ERROR, "WCPOS1661", __VA_ARGS__)
++
++using DelegateList =
++    std::vector<std::weak_ptr<const facebook::react::MountingOverrideDelegate>>;
++
++// Access checking is not performed on the arguments of an explicit template
++// instantiation, which is what makes the two private members of
++// MountingCoordinator readable from here without patching react-native.
++template <typename Tag, typename Tag::type Member>
++struct Robber {
++  friend typename Tag::type wcposMember(Tag) {
++    return Member;
++  }
++};
++
++struct DelegatesTag {
++  using type = DelegateList facebook::react::MountingCoordinator::*;
++  friend type wcposMember(DelegatesTag);
++};
++template struct Robber<
++    DelegatesTag,
++    &facebook::react::MountingCoordinator::mountingOverrideDelegates_>;
++
++struct MutexTag {
++  using type = std::mutex facebook::react::MountingCoordinator::*;
++  friend type wcposMember(MutexTag);
++};
++template struct Robber<MutexTag, &facebook::react::MountingCoordinator::mutex_>;
++
++namespace {
++
++std::atomic<bool> gArmed{false};
++
++// Updated on every `nativeAddMutationsListener` so a dev-client RELOAD (new
++// ReactHost, new UIManager, same process) keeps the single probe thread pointed
++// at the live UIManager instead of leaving it watching a dead one.
++std::mutex gUIManagerMutex;
++std::weak_ptr<facebook::react::UIManager> gUIManager;
++
++// One delegate as this probe sees it. `useCount` is deliberately NOT part of
++// the comparison used for change detection: strong references come and go on
++// the mount path, and only the identity/liveness/vtable triple is diagnostic.
++struct DelegateSnapshot {
++  const void *object;
++  uintptr_t vtable;
++  bool expired;
++  long useCount;
++
++  bool sameShape(const DelegateSnapshot &other) const {
++    return object == other.object && vtable == other.vtable &&
++        expired == other.expired;
++  }
++};
++
++// The delegate list is append-only and guarded by the coordinator's own mutex,
++// which pullTransaction holds for its whole duration. try_lock keeps this probe
++// off the mount path's critical section: a busy coordinator is skipped, not
++// waited on, so the race under investigation is perturbed as little as
++// possible.
++std::vector<DelegateSnapshot> collectDelegates(
++    const facebook::react::MountingCoordinator *coordinator,
++    bool &busy) {
++  busy = false;
++  std::vector<DelegateSnapshot> snapshots;
++
++  auto &mutexRef =
++      const_cast<std::mutex &>(coordinator->*wcposMember(MutexTag{}));
++  std::unique_lock<std::mutex> lock(mutexRef, std::try_to_lock);
++  if (!lock.owns_lock()) {
++    busy = true;
++    return snapshots;
++  }
++
++  const DelegateList &delegates = coordinator->*wcposMember(DelegatesTag{});
++  snapshots.reserve(delegates.size());
++
++  for (const auto &weakDelegate : delegates) {
++    DelegateSnapshot snapshot{};
++    snapshot.expired = weakDelegate.expired();
++    snapshot.useCount = weakDelegate.use_count();
++    const std::shared_ptr<const facebook::react::MountingOverrideDelegate>
++        strongDelegate = snapshot.expired ? nullptr : weakDelegate.lock();
++    snapshot.object = strongDelegate.get();
++    snapshot.vtable = 0;
++    if (snapshot.object != nullptr) {
++      std::memcpy(&snapshot.vtable, snapshot.object, sizeof(snapshot.vtable));
++    }
++    snapshots.push_back(snapshot);
++  }
++
++  return snapshots;
++}
++
++// dladdr takes the loader lock, so resolutions are memoised: a given vtable
++// pointer is resolved once per process, and a NEW (i.e. corrupt) value is the
++// only thing that pays for a lookup.
++//
++// `off=` is the vtable's offset from the library's load base. dladdr reads only
++// .dynsym, and three of the five possible delegates
++// (AnimatedMountingOverrideDelegate, the ViewTransition delegate,
++// LayoutAnimationDriver) live in the same libreactnative.so with only the last
++// one's vtable exported — so `lib=` alone cannot tell them apart. The offset
++// can: it is looked up afterwards in the same .so from the build's AAR, whose
++// debug variant carries a full symbol table.
++const std::string &resolveVtable(uintptr_t vtable) {
++  static std::unordered_map<uintptr_t, std::string> cache;
++  const auto found = cache.find(vtable);
++  if (found != cache.end()) {
++    return found->second;
++  }
++
++  char described[512];
++  Dl_info info;
++  std::memset(&info, 0, sizeof(info));
++  const int resolved =
++      vtable != 0 ? dladdr(reinterpret_cast<void *>(vtable), &info) : 0;
++  const uintptr_t base = (resolved != 0 && info.dli_fbase != nullptr)
++      ? reinterpret_cast<uintptr_t>(info.dli_fbase)
++      : 0;
++  std::snprintf(
++      described,
++      sizeof(described),
++      "lib=%s base=0x%016llx off=0x%llx sym=%s",
++      (resolved != 0 && info.dli_fname != nullptr) ? info.dli_fname
++                                                   : "UNRESOLVED",
++      static_cast<unsigned long long>(base),
++      static_cast<unsigned long long>(base != 0 ? vtable - base : 0),
++      (resolved != 0 && info.dli_sname != nullptr) ? info.dli_sname
++                                                   : "UNRESOLVED");
++  return cache.emplace(vtable, described).first->second;
++}
++
++void logSnapshots(
++    const char *kind,
++    int tick,
++    const facebook::react::MountingCoordinator *coordinator,
++    const std::vector<DelegateSnapshot> &snapshots) {
++  if (snapshots.empty()) {
++    WCPOS1661_LOG(
++        "%s tick=%d coord=%p surface=%d delegates=0",
++        kind,
++        tick,
++        static_cast<const void *>(coordinator),
++        static_cast<int>(coordinator->getSurfaceId()));
++    return;
++  }
++
++  for (size_t i = 0; i < snapshots.size(); i++) {
++    const DelegateSnapshot &snapshot = snapshots[i];
++    WCPOS1661_LOG(
++        "%s tick=%d coord=%p surface=%d idx=%zu/%zu ptr=%p expired=%d use=%ld vtable=0x%016llx %s",
++        kind,
++        tick,
++        static_cast<const void *>(coordinator),
++        static_cast<int>(coordinator->getSurfaceId()),
++        i,
++        snapshots.size(),
++        snapshot.object,
++        snapshot.expired ? 1 : 0,
++        snapshot.useCount,
++        static_cast<unsigned long long>(snapshot.vtable),
++        resolveVtable(snapshot.vtable).c_str());
++  }
++}
++
++void snapshotLoop() {
++  pthread_setname_np(pthread_self(), "wcpos1661");
++
++  // Keyed by coordinator address: a full dump is logged only when a
++  // coordinator's delegate list CHANGES (a delegate added, a weak_ptr expiring,
++  // or a vtable pointer that moved), so the crash window is bounded by the poll
++  // interval without flooding logcat with identical lines.
++  std::unordered_map<const void *, std::vector<DelegateSnapshot>> lastSeen;
++
++  for (int tick = 0;; tick++) {
++    std::this_thread::sleep_for(std::chrono::milliseconds(100));
++
++    std::shared_ptr<facebook::react::UIManager> uiManager;
++    {
++      std::lock_guard<std::mutex> lock(gUIManagerMutex);
++      uiManager = gUIManager.lock();
++    }
++    if (!uiManager) {
++      if (tick % 100 == 0) {
++        WCPOS1661_LOG("tick=%d uiManager released; probe idle", tick);
++      }
++      continue;
++    }
++
++    std::vector<std::shared_ptr<const facebook::react::MountingCoordinator>>
++        coordinators;
++    uiManager->getShadowTreeRegistry().enumerate(
++        [&coordinators](
++            const facebook::react::ShadowTree &shadowTree, bool & /*stop*/) {
++          if (auto coordinator = shadowTree.getMountingCoordinator()) {
++            coordinators.push_back(std::move(coordinator));
++          }
++        });
++
++    for (const auto &coordinator : coordinators) {
++      bool busy = false;
++      std::vector<DelegateSnapshot> snapshots =
++          collectDelegates(coordinator.get(), busy);
++      if (busy) {
++        continue;
++      }
++
++      const void *key = static_cast<const void *>(coordinator.get());
++      const auto previous = lastSeen.find(key);
++      bool changed = previous == lastSeen.end() ||
++          previous->second.size() != snapshots.size();
++      if (!changed) {
++        for (size_t i = 0; i < snapshots.size(); i++) {
++          if (!snapshots[i].sameShape(previous->second[i])) {
++            changed = true;
++            break;
++          }
++        }
++      }
++
++      // Heartbeat every ~10 s so a run with no change still proves the probe
++      // was alive right up to the tombstone.
++      if (!changed && tick % 100 != 0) {
++        continue;
++      }
++      lastSeen[key] = snapshots;
++      logSnapshots(
++          changed ? "delta" : "beat", tick, coordinator.get(), snapshots);
++    }
++  }
++}
++
++void armSnapshotProbe(
++    const std::shared_ptr<facebook::react::UIManager> &uiManager) {
++  {
++    std::lock_guard<std::mutex> lock(gUIManagerMutex);
++    gUIManager = uiManager;
++  }
++  WCPOS1661_LOG(
++      "probe armed (pid=%d uiManager=%p) — polling mounting-override delegates every 100ms",
++      static_cast<int>(getpid()),
++      static_cast<const void *>(uiManager.get()));
++  bool expected = false;
++  if (!gArmed.compare_exchange_strong(expected, true)) {
++    return;
++  }
++  std::thread(snapshotLoop).detach();
++}
++
++} // namespace
++} // namespace wcpos1661
++
+ using namespace facebook;
+ using namespace react;
+ 
+@@ -42,6 +346,13 @@ void NativeProxy::nativeAddMutationsListener(
+         });
+   }
+ 
++  // WCPOS1661 (diagnostic, must not merge)
++  WCPOS1661_LOG(
++      "screens nativeAddMutationsListener listener=%p uiManager=%p",
++      static_cast<const void *>(screenRemovalListener_.get()),
++      static_cast<const void *>(uiManager.get()));
++  wcpos1661::armSnapshotProbe(uiManager);
++
+   cleanupExpiredMountingCoordinators();
+ 
+   uiManager->getShadowTreeRegistry().enumerate(
+@@ -81,6 +392,12 @@ void NativeProxy::addMountingCoordinatorIfNeeded(
+   if (!wasRegistered) {
+     coordinator->setMountingOverrideDelegate(screenRemovalListener_);
+     coordinatorsWithMountingOverrides_.push_back(coordinator);
++    // WCPOS1661 (diagnostic, must not merge)
++    WCPOS1661_LOG(
++        "screens register listener=%p coord=%p surface=%d",
++        static_cast<const void *>(screenRemovalListener_.get()),
++        static_cast<const void *>(coordinator.get()),
++        static_cast<int>(coordinator->getSurfaceId()));
+   }
+ }
+ 
