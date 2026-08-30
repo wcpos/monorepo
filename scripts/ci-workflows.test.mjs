@@ -2375,6 +2375,8 @@ test('the offline retry never re-runs into a transport that will not stabilise',
 		const statePolls = readFileSync(path.join(dir, '.maestro/tests/adb-state.log'), 'utf8')
 			.trim()
 			.split('\n');
+		// 36 polls with a no-op sleep finish far inside the 180 s wall-clock
+		// deadline, so the poll bound is what ends the loop here.
 		assert.equal(statePolls.length, 36, 'the poll bound must be exhausted, not skipped');
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
