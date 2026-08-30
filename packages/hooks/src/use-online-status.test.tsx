@@ -180,6 +180,32 @@ describe('OnlineStatusProvider', () => {
 			expect(screen.getByTestId('online-status').textContent).toBe('online-website-unavailable');
 		});
 
+		it('restarts the window when the store URL changes', () => {
+			mockNetInfo(true, false);
+			const { rerender } = renderProvider('https://store-a.example.com/wp-json/');
+
+			act(() => {
+				jest.advanceTimersByTime(WEBSITE_UNAVAILABLE_CONFIRMATION_MS - 1000);
+			});
+			rerender(
+				<OnlineStatusProvider wpAPIURL="https://store-b.example.com/wp-json/">
+					<StatusConsumer />
+				</OnlineStatusProvider>
+			);
+
+			// Store A's window would have closed here; its failures are not evidence
+			// about store B.
+			act(() => {
+				jest.advanceTimersByTime(1000);
+			});
+			expect(screen.getByTestId('online-status').textContent).toBe('online-website-available');
+
+			act(() => {
+				jest.advanceTimersByTime(WEBSITE_UNAVAILABLE_CONFIRMATION_MS);
+			});
+			expect(screen.getByTestId('online-status').textContent).toBe('online-website-unavailable');
+		});
+
 		it('reports a dropped device link immediately, without confirmation', () => {
 			mockNetInfo(false, false);
 			renderProvider('https://example.com/wp-json/');

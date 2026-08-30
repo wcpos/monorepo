@@ -14,7 +14,10 @@ import * as React from 'react';
 
 import { checkWebsiteReachability } from './check-website-reachability';
 import { lastNetworkResponseAt, subscribeNetworkPulse } from './network-pulse';
-import { WEBSITE_UNAVAILABLE_CONFIRMATION_PROBES } from './website-unavailable-confirmation';
+import {
+	WEBSITE_UNAVAILABLE_CONFIRMATION_MS,
+	WEBSITE_UNAVAILABLE_CONFIRMATION_TOLERANCE_MS,
+} from './website-unavailable-confirmation';
 
 export type OnlineStatus = 'offline' | 'online-website-unavailable' | 'online-website-available';
 
@@ -45,10 +48,11 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 	// Ref to track if a check is in progress (prevent multiple simultaneous checks)
 	const checkInProgressRef = React.useRef(false);
 	const checkRequestedRef = React.useRef(false);
-	// Failed probes since the last time the site answered. One failure is not
-	// evidence the store is down, so the unavailable verdict waits for the
-	// confirming probe.
-	const consecutiveProbeFailuresRef = React.useRef(0);
+	// When the current run of failures started, or null if the site last
+	// answered. Counting probes would not do: a wake fires `online` and
+	// `visibilitychange` together and the queued checks run back-to-back, so two
+	// failures can land seconds apart. The verdict is elapsed failure instead.
+	const failingSinceRef = React.useRef<number | null>(null);
 
 	/**
 	 * Perform a full connectivity check
@@ -73,21 +77,30 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 				const isReachable = await checkWebsiteReachability(wpAPIURL);
 
 				if (isReachable) {
-					consecutiveProbeFailuresRef.current = 0;
+					failingSinceRef.current = null;
 					setStatus('online-website-available');
 				} else if (typeof navigator !== 'undefined' && !navigator.onLine) {
 					// The link is down. That is the OS's verdict, not the website's, so it
 					// needs no confirming and says nothing about the site.
-					consecutiveProbeFailuresRef.current = 0;
+					failingSinceRef.current = null;
 					setStatus('offline');
 				} else {
-					consecutiveProbeFailuresRef.current += 1;
-					if (consecutiveProbeFailuresRef.current >= WEBSITE_UNAVAILABLE_CONFIRMATION_PROBES) {
+					const now = Date.now();
+					// A clock that has rolled back would otherwise hold the verdict off
+					// indefinitely; re-anchor rather than measure a negative window.
+					if (failingSinceRef.current === null || failingSinceRef.current > now) {
+						failingSinceRef.current = now;
+					}
+
+					if (
+						now - failingSinceRef.current >=
+						WEBSITE_UNAVAILABLE_CONFIRMATION_MS - WEBSITE_UNAVAILABLE_CONFIRMATION_TOLERANCE_MS
+					) {
 						setStatus('online-website-unavailable');
 					}
-					// Below the threshold the status is left alone: an unconfirmed blip
-					// must not raise the cashier's "Website is unreachable" toast or push
-					// the request queue offline. The next interval probe decides.
+					// Inside the window the status is left alone: an unconfirmed blip must
+					// not raise the cashier's "Website is unreachable" toast or push the
+					// request queue offline. A later probe decides.
 				}
 			} while (checkRequestedRef.current);
 		} finally {
@@ -96,12 +109,21 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 	}, [wpAPIURL]);
 
 	/**
+	 * A new store URL is a new question. AppLayout re-supplies `wpAPIURL` without
+	 * remounting the provider, so failures gathered against the previous site
+	 * would otherwise confirm this one on its very first failed probe.
+	 */
+	React.useEffect(() => {
+		failingSinceRef.current = null;
+	}, [wpAPIURL]);
+
+	/**
 	 * Subscribe to successful HTTP traffic as direct evidence that the site answered.
 	 */
 	React.useEffect(
 		() =>
 			subscribeNetworkPulse(wpAPIURL, () => {
-				consecutiveProbeFailuresRef.current = 0;
+				failingSinceRef.current = null;
 				setStatus('online-website-available');
 			}),
 		[wpAPIURL]
@@ -121,7 +143,7 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 
 		const handleOffline = () => {
 			// A dropped link is not evidence against the website.
-			consecutiveProbeFailuresRef.current = 0;
+			failingSinceRef.current = null;
 			setStatus('offline');
 		};
 

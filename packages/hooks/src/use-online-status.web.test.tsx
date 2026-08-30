@@ -5,7 +5,7 @@ import { act, render, screen } from '@testing-library/react';
 import { checkWebsiteReachability } from './check-website-reachability';
 import { reportNetworkResponse } from './network-pulse';
 import { OnlineStatusProvider, useOnlineStatus } from './use-online-status.web';
-import { WEBSITE_UNAVAILABLE_CONFIRMATION_PROBES } from './website-unavailable-confirmation';
+import { WEBSITE_UNAVAILABLE_CONFIRMATION_MS } from './website-unavailable-confirmation';
 
 jest.mock('./check-website-reachability', () => ({
 	checkWebsiteReachability: jest.fn(),
@@ -36,11 +36,17 @@ async function flushAsyncWork() {
 	});
 }
 
-/** Drive interval probes until the unavailable verdict can be confirmed (#1669). */
-async function runConfirmingProbes(count = WEBSITE_UNAVAILABLE_CONFIRMATION_PROBES - 1) {
+const PROBE_INTERVAL_MS = 30000;
+
+/**
+ * Drive interval probes. One is enough to confirm the verdict (#1669), because
+ * the interval matches the confirmation window — but only when the earlier
+ * failure is a full window old, which back-to-back queued checks never are.
+ */
+async function runProbes(count = 1) {
 	for (let i = 0; i < count; i += 1) {
 		await act(async () => {
-			jest.advanceTimersByTime(30000);
+			jest.advanceTimersByTime(PROBE_INTERVAL_MS);
 			await Promise.resolve();
 		});
 	}
@@ -146,7 +152,7 @@ describe('OnlineStatusProvider web', () => {
 		checkWebsiteReachabilityMock.mockResolvedValue(false);
 		renderProvider('https://current.example.com/wp-json/');
 		await flushAsyncWork();
-		await runConfirmingProbes();
+		await runProbes();
 		expect(screen.getByTestId('online-status').textContent).toBe('online-website-unavailable');
 
 		act(() => reportNetworkResponse('https://other.example.com/wp-json/'));
@@ -220,13 +226,13 @@ describe('OnlineStatusProvider web', () => {
 		expect(checkWebsiteReachabilityMock).toHaveBeenCalledTimes(1);
 	});
 
-	it('marks repeated failed probes unavailable when navigator.onLine is true', async () => {
+	it('marks a sustained probe failure unavailable when navigator.onLine is true', async () => {
 		checkWebsiteReachabilityMock.mockResolvedValue(false);
 		// A host of its own: network-pulse state is module-global, so a pulse
 		// reported by an earlier test would let the interval skip the probe.
 		renderProvider('https://repeated-failure.example.com/wp-json/');
 		await flushAsyncWork();
-		await runConfirmingProbes();
+		await runProbes();
 
 		expect(screen.getByTestId('online-status').textContent).toBe('online-website-unavailable');
 	});
@@ -245,9 +251,9 @@ describe('OnlineStatusProvider web', () => {
 			checkWebsiteReachabilityMock.mockResolvedValueOnce(false).mockResolvedValue(true);
 			renderProvider('https://transient-blip.example.com/wp-json/');
 			await flushAsyncWork();
-			// The whole confirmation schedule elapses; the site answered in between,
-			// so no probe count survives to trip the verdict.
-			await runConfirmingProbes(WEBSITE_UNAVAILABLE_CONFIRMATION_PROBES + 1);
+			// Several windows' worth of time elapses; the site answered in between,
+			// so no run of failure survives to trip the verdict.
+			await runProbes(3);
 
 			// Never merely "available again": the cashier's toast fires on the
 			// transition, so the unavailable status must never have been published.
@@ -255,18 +261,18 @@ describe('OnlineStatusProvider web', () => {
 			expect(screen.getByTestId('online-status').textContent).toBe('online-website-available');
 		});
 
-		it('restarts the count after a success between failures', async () => {
+		it('restarts the window after a success between failures', async () => {
 			checkWebsiteReachabilityMock
 				.mockResolvedValueOnce(false)
 				.mockResolvedValueOnce(true)
 				.mockResolvedValue(false);
 			renderProvider('https://restarted-count.example.com/wp-json/');
 			await flushAsyncWork();
-			await runConfirmingProbes(2); // success, then the first failure of a fresh run
+			await runProbes(2); // success, then the first failure of a fresh run
 
 			expect(screen.getByTestId('online-status').textContent).toBe('online-website-available');
 
-			await runConfirmingProbes();
+			await runProbes();
 			expect(screen.getByTestId('online-status').textContent).toBe('online-website-unavailable');
 		});
 
@@ -274,16 +280,63 @@ describe('OnlineStatusProvider web', () => {
 			checkWebsiteReachabilityMock.mockResolvedValue(false);
 			renderProvider('https://immediate-recovery.example.com/wp-json/');
 			await flushAsyncWork();
-			await runConfirmingProbes();
+			await runProbes();
 			expect(screen.getByTestId('online-status').textContent).toBe('online-website-unavailable');
 
 			checkWebsiteReachabilityMock.mockResolvedValue(true);
-			await runConfirmingProbes(1);
+			await runProbes(1);
 
 			expect(screen.getByTestId('online-status').textContent).toBe('online-website-available');
 		});
 
-		it('does not count a failure the browser attributes to a dropped link', async () => {
+		it('does not confirm two checks queued back-to-back by a wake', async () => {
+			checkWebsiteReachabilityMock.mockResolvedValue(false);
+			renderProvider('https://wake-burst.example.com/wp-json/');
+			await flushAsyncWork();
+
+			// Waking fires `online` and `visibilitychange` together: the second
+			// check is queued and runs the instant the first finishes. Two failures
+			// seconds apart are not 30s of failure.
+			await act(async () => {
+				window.dispatchEvent(new Event('online'));
+				document.dispatchEvent(new Event('visibilitychange'));
+				await Promise.resolve();
+				await Promise.resolve();
+				await Promise.resolve();
+			});
+
+			expect(checkWebsiteReachabilityMock.mock.calls.length).toBeGreaterThan(1);
+			expect(renderedStatuses).not.toContain('online-website-unavailable');
+			expect(screen.getByTestId('online-status').textContent).toBe('online-website-available');
+		});
+
+		it('drops failure evidence gathered against the previous store URL', async () => {
+			checkWebsiteReachabilityMock.mockResolvedValue(false);
+			const { rerender } = renderProvider('https://store-a.example.com/wp-json/');
+			await flushAsyncWork();
+			expect(screen.getByTestId('online-status').textContent).toBe('online-website-available');
+
+			// Hidden: the interval stops probing, so store A's single failure simply
+			// ages past the window without ever being confirmed.
+			Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+			act(() => {
+				jest.advanceTimersByTime(WEBSITE_UNAVAILABLE_CONFIRMATION_MS * 2);
+			});
+
+			// Switching stores re-probes; that first failure is store B's first, and
+			// store A's stale evidence must not confirm it.
+			rerender(
+				<OnlineStatusProvider wpAPIURL="https://store-b.example.com/wp-json/">
+					<StatusConsumer />
+				</OnlineStatusProvider>
+			);
+			await flushAsyncWork();
+
+			expect(renderedStatuses).not.toContain('online-website-unavailable');
+			expect(screen.getByTestId('online-status').textContent).toBe('online-website-available');
+		});
+
+		it('keeps no evidence from a failure the browser attributes to a dropped link', async () => {
 			checkWebsiteReachabilityMock.mockResolvedValue(false);
 			Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false });
 			renderProvider('https://dropped-link.example.com/wp-json/');
@@ -293,10 +346,10 @@ describe('OnlineStatusProvider web', () => {
 			// Link back, site still down: the offline probe left no evidence behind,
 			// so the full confirmation is still required.
 			Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: true });
-			await runConfirmingProbes(WEBSITE_UNAVAILABLE_CONFIRMATION_PROBES - 1);
+			await runProbes(1);
 			expect(screen.getByTestId('online-status').textContent).toBe('offline');
 
-			await runConfirmingProbes(1);
+			await runProbes(1);
 			expect(screen.getByTestId('online-status').textContent).toBe('online-website-unavailable');
 		});
 	});

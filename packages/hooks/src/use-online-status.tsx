@@ -48,6 +48,11 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 	const pingFailing = netInfo.isConnected === true && netInfo.isInternetReachable === false;
 	const [pingFailureConfirmed, setPingFailureConfirmed] = React.useState(false);
 
+	// The site the current run of failures is evidence about. Changing stores
+	// starts a fresh window rather than confirming the new site with the old
+	// site's failures.
+	const failingSite = pingFailing ? wpAPIURL : null;
+
 	/**
 	 * Hold the unavailable verdict until the failure has lasted the confirmation
 	 * window. NetInfo keeps re-probing throughout, and the moment one succeeds it
@@ -55,7 +60,7 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 	 * so recovery costs nothing.
 	 */
 	React.useEffect(() => {
-		if (!pingFailing) return;
+		if (failingSite === null) return;
 
 		const timeout = setTimeout(
 			() => setPingFailureConfirmed(true),
@@ -68,7 +73,7 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 			clearTimeout(timeout);
 			setPingFailureConfirmed(false);
 		};
-	}, [pingFailing]);
+	}, [failingSite]);
 
 	const status = React.useMemo((): OnlineStatus => {
 		// Device is offline: the OS link-layer state, which our own traffic cannot
