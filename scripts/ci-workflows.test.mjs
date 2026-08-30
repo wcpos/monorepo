@@ -1654,7 +1654,7 @@ exit 0
 			!existsSync(path.join(tests, 'bugreport.zip')),
 			'the bugreport zip is not kept in the artifact'
 		);
-		assert.match(readFileSync(trace, 'utf8'), /timeout 300 adb bugreport/);
+		assert.match(readFileSync(trace, 'utf8'), /timeout 600 adb bugreport/);
 	} finally {
 		rmSync(workspace, { recursive: true, force: true });
 	}

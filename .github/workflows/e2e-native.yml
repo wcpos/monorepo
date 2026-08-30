@@ -337,6 +337,14 @@ jobs:
     # take ~1 min. Budget = worst observed sync window + full suite + headroom.
     timeout-minutes: 100
     strategy:
+      # ONE device job per platform at a time. Every device job logs a fresh
+      # cashier in and syncs the store; with both classes (and other runs)
+      # in flight dev-pro's php-fpm (4 workers by design) logged "server
+      # reached pm.max_children" 181 times in six hours on 2026-08-29/30,
+      # the PHP container restarted at 01:37Z, the WordPress login answered
+      # 502 to the iOS phone (run 33285279390) and the order-pay page took
+      # 21 min on Android (run 33280466971). Slower runs beat red ones.
+      max-parallel: 1
       fail-fast: false
       matrix:
         device:
@@ -619,7 +627,12 @@ jobs:
             exit 0
           fi
           mkdir -p ~/.maestro/tests/tombstones
-          if timeout 300 adb bugreport ~/.maestro/tests/bugreport.zip >/dev/null 2>&1; then
+          # The emulator drops adb ("device offline") around a crash; get it
+          # back before asking for a bugreport, and give dumpstate ten
+          # minutes — the 300 s budget expired on run 33285279390's tablet.
+          adb reconnect offline >/dev/null 2>&1 || true
+          timeout 60 adb wait-for-device || true
+          if timeout 600 adb bugreport ~/.maestro/tests/bugreport.zip > ~/.maestro/tests/bugreport.log 2>&1; then
             unzip -o -q -j ~/.maestro/tests/bugreport.zip 'FS/data/tombstones/*' -d ~/.maestro/tests/tombstones 2>/dev/null || true
             rm -f ~/.maestro/tests/bugreport.zip
             if ls ~/.maestro/tests/tombstones/tombstone_* >/dev/null 2>&1; then
@@ -628,7 +641,7 @@ jobs:
               echo "::warning title=tombstones::bugreport had no tombstones although logcat shows a fatal signal"
             fi
           else
-            echo "::warning title=tombstones::adb bugreport failed or exceeded 300s; tombstones not collected"
+            echo "::warning title=tombstones::adb bugreport failed or exceeded 600s; tombstones not collected"; tail -5 ~/.maestro/tests/bugreport.log
           fi
 
       - name: "\U0001F534 Surface app errors"
@@ -731,6 +744,14 @@ jobs:
     # Metro's one-time bundle compile (~3-6 min) to the front of the job.
     timeout-minutes: 60
     strategy:
+      # ONE device job per platform at a time. Every device job logs a fresh
+      # cashier in and syncs the store; with both classes (and other runs)
+      # in flight dev-pro's php-fpm (4 workers by design) logged "server
+      # reached pm.max_children" 181 times in six hours on 2026-08-29/30,
+      # the PHP container restarted at 01:37Z, the WordPress login answered
+      # 502 to the iOS phone (run 33285279390) and the order-pay page took
+      # 21 min on Android (run 33280466971). Slower runs beat red ones.
+      max-parallel: 1
       fail-fast: false
       matrix:
         device:
