@@ -28,32 +28,34 @@ import {
 	useEngineRecordsByWooId,
 } from './use-engine-document';
 
-type FakeRecord = { uuid: string; remoteId: string | null };
+type FakeRecord = { uuid: string; remoteId: string | null; scope: string };
 
 /** Subscriptions to a record query — one per `ObservableResource` ever built. */
 let querySubscriptions = 0;
 
+/** The store/cashier scope the engine is on. A same-site switch changes it in place. */
+let scopeId = 'site|1|7';
+
 /** Emits one microtask after each subscribe — the shape of a live RxDB query. */
-function asyncQuery<T>(value: T): Observable<T> {
+function asyncQuery<T>(value: () => T): Observable<T> {
 	return new Observable<T>((subscriber) => {
 		querySubscriptions += 1;
-		void Promise.resolve().then(() => subscriber.next(value));
+		void Promise.resolve().then(() => subscriber.next(value()));
 	});
 }
 
-const coffee: FakeRecord = { uuid: 'product-uuid', remoteId: '42' };
-const tools: FakeRecord = { uuid: 'category-12', remoteId: '12' };
+const record = (uuid: string): FakeRecord => ({ uuid, remoteId: '42', scope: scopeId });
 
 const database = {
 	collections: {
-		products: { findOne: () => ({ $: asyncQuery<FakeRecord | null>(coffee) }) },
-		customers: { findOne: () => ({ $: asyncQuery<FakeRecord | null>(coffee) }) },
-		categories: { find: () => ({ $: asyncQuery<FakeRecord[]>([tools]) }) },
+		products: { findOne: () => ({ $: asyncQuery(() => record('product-uuid')) }) },
+		customers: { findOne: () => ({ $: asyncQuery(() => record('product-uuid')) }) },
+		categories: { find: () => ({ $: asyncQuery(() => [record('category-12')]) }) },
 	},
 };
 
 const engine = {
-	active: () => ({ database }),
+	active: () => ({ database, scopeId }),
 	ready: Promise.resolve(undefined),
 	db$: () => () => undefined,
 };
@@ -72,32 +74,43 @@ const settle = async () => {
 	}
 };
 
+const label = (found: FakeRecord | null | undefined) =>
+	found ? `${found.uuid}@${found.scope}` : 'none';
+
 function RecordByUuid({ uuid }: { uuid: string }) {
-	const record = useObservableSuspense(useEngineRecord('products', uuid));
-	return <div data-testid="record">{record?.uuid ?? 'none'}</div>;
+	const found = useObservableSuspense(useEngineRecord('products', uuid));
+	return <div data-testid="record">{label(found as unknown as FakeRecord | null)}</div>;
 }
 
 function RecordByWooId({ wooId }: { wooId: number }) {
-	const record = useObservableSuspense(useEngineRecordByWooId('customers', wooId));
-	return <div data-testid="record">{record?.uuid ?? 'none'}</div>;
+	const found = useObservableSuspense(useEngineRecordByWooId('customers', wooId));
+	return <div data-testid="record">{label(found as unknown as FakeRecord | null)}</div>;
 }
 
 function RecordsByWooId({ wooIds }: { wooIds: number[] }) {
-	const records = useObservableSuspense(useEngineRecordsByWooId('categories', wooIds));
-	return <div data-testid="record">{records.map((record) => record.uuid).join(',')}</div>;
+	const found = useObservableSuspense(useEngineRecordsByWooId('categories', wooIds));
+	return (
+		<div data-testid="record">
+			{(found as unknown as FakeRecord[]).map((one) => label(one)).join(',')}
+		</div>
+	);
 }
 
-const renderSuspending = (children: React.ReactNode) =>
-	render(<React.Suspense fallback={<div data-testid="fallback" />}>{children}</React.Suspense>);
+const suspending = (children: React.ReactNode) => (
+	<React.Suspense fallback={<div data-testid="fallback" />}>{children}</React.Suspense>
+);
+
+const renderSuspending = (children: React.ReactNode) => render(suspending(children));
 
 beforeEach(() => {
 	querySubscriptions = 0;
+	scopeId = 'site|1|7';
 });
 
 describe.each([
-	['useEngineRecord', <RecordByUuid key="a" uuid="product-uuid" />, 'product-uuid'],
-	['useEngineRecordByWooId', <RecordByWooId key="b" wooId={42} />, 'product-uuid'],
-	['useEngineRecordsByWooId', <RecordsByWooId key="c" wooIds={[12]} />, 'category-12'],
+	['useEngineRecord', <RecordByUuid key="a" uuid="product-uuid" />, 'product-uuid@site|1|7'],
+	['useEngineRecordByWooId', <RecordByWooId key="b" wooId={42} />, 'product-uuid@site|1|7'],
+	['useEngineRecordsByWooId', <RecordsByWooId key="c" wooIds={[12]} />, 'category-12@site|1|7'],
 ] as const)('%s under a Suspense boundary', (_name, element, expected) => {
 	it('mounts on the first emission, having subscribed the query exactly once', async () => {
 		// The retry loop is only visible as a COUNT: each attempt built its own resource, and
@@ -138,6 +151,22 @@ describe('engine record resource identity', () => {
 		await settle();
 
 		expect(await screen.findAllByTestId('record')).toHaveLength(2);
+		expect(querySubscriptions).toBe(2);
+	});
+
+	it('reads the new store scope after a switch, never the outgoing one', async () => {
+		// A same-site store or cashier switch mutates the engine in place, so the engine object
+		// is the same before and after: without the scope in the cache identity this consumer
+		// would go on rendering the store it just left, under the id it asked for.
+		const view = renderSuspending(<RecordByUuid uuid="product-uuid" />);
+		await settle();
+		expect((await screen.findByTestId('record')).textContent).toBe('product-uuid@site|1|7');
+
+		scopeId = 'site|2|7';
+		view.rerender(suspending(<RecordByUuid uuid="product-uuid" />));
+		await settle();
+
+		expect((await screen.findByTestId('record')).textContent).toBe('product-uuid@site|2|7');
 		expect(querySubscriptions).toBe(2);
 	});
 });
