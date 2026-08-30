@@ -39,7 +39,17 @@ for (const file of walk(maestroDir, ['.yml', '.yaml'])) {
 	for (const match of text.matchAll(/^\s*id:\s*(?:"(.*)"|'(.*)'|([^"'\n]+?))\s*$/gm)) {
 		const raw = (match[1] ?? match[2] ?? match[3]).trim();
 		const interpolation = raw.indexOf('${');
+		// An id that is WHOLLY an interpolation has no static prefix to check
+		// (`id: "${APP_READY_TESTID}"` in subflows/recover-dev-launcher.yml, which
+		// takes its testID from the caller). Skipping it costs no coverage: the
+		// literal is supplied at each call site as an env value, collected next.
+		if (interpolation === 0) continue;
 		flowIds.add(interpolation === -1 ? raw : raw.slice(0, interpolation));
+	}
+	// `env: {FOO_TESTID: some-test-id}` passed to a subflow names a testID as
+	// surely as `id:` does; lint it the same way.
+	for (const match of text.matchAll(/^\s*\w*_TESTID:\s*["']?([^"'\n]+?)["']?\s*$/gm)) {
+		flowIds.add(match[1].trim());
 	}
 }
 

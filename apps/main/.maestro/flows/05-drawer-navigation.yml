@@ -21,6 +21,15 @@ appId: com.wcpos.main.dev
       - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
       - waitForAnimationToEnd:
           timeout: 5000
+# The launcher can answer a launch with its own manifest-timeout error
+# screen instead of the app — tap Reload rather than letting the wait
+# below spend its whole budget staring at it. Inert on a healthy launch;
+# evidence, the 10s timeout and the text-selector exemption are in the
+# subflow.
+- runFlow:
+    file: ../subflows/recover-dev-launcher.yml
+    env:
+      APP_READY_TESTID: search-products
 - extendedWaitUntil:
     visible:
       id: "search-products"

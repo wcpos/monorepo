@@ -1727,6 +1727,81 @@ test('Android clean-start flows dismiss a queued system ANR before waiting for E
 	}
 });
 
+// The Expo dev launcher's manifest request has a hard 10s native timeout, and a
+// starved 3-core macOS runner can miss it (main run 33302195102, iOS tablet:
+// app-console "finished with error [-1001] … http://localhost:8081/" 10s after
+// the request). The launcher then shows its own error screen, the flow's next
+// wait spends its whole budget on it, and the device job is lost. Every launch
+// must therefore hand control to subflows/recover-dev-launcher.yml BEFORE the
+// flow asserts anything — a recovery placed after the first required wait would
+// only ever run once that wait had already burned its 120-180s.
+test('every dev-client launch runs the launcher-recovery subflow before asserting', () => {
+	const maestroDir = path.join(ROOT, 'apps', 'main', '.maestro');
+	assert.ok(
+		existsSync(path.join(maestroDir, 'subflows', 'recover-dev-launcher.yml')),
+		'the dev-launcher recovery subflow is missing'
+	);
+	// It must NOT live in flows/: config.yaml lists `flows/*.yml` and the iOS
+	// job globs the same path, so a subflow there would run as a suite flow.
+	assert.ok(
+		!existsSync(path.join(maestroDir, 'flows', 'recover-dev-launcher.yml')),
+		'the recovery subflow must not sit in flows/, where it runs as a suite flow'
+	);
+
+	const launches = new Set(['launchApp', 'openLink']);
+	// Commands that read the app's own UI. `optional: true` ones are excluded:
+	// they are allowed to find nothing, so they neither prove a healthy launch
+	// nor lose a budget to a stuck launcher.
+	const assertions = new Set(['assertVisible', 'assertNotVisible', 'extendedWaitUntil']);
+
+	const flatten = (commands, out = []) => {
+		for (const command of commands ?? []) {
+			const [key, value] =
+				typeof command === 'string' ? [command, null] : Object.entries(command)[0];
+			out.push([key, value]);
+			// runFlow/repeat/retry hold nested command lists; a `when:` guard is
+			// a runtime branch, so its commands still count in document order.
+			if (Array.isArray(value?.commands)) flatten(value.commands, out);
+		}
+		return out;
+	};
+
+	let recoveries = 0;
+	for (const filename of readdirSync(path.join(maestroDir, 'flows')).sort()) {
+		const flow = readMaestroFlow(filename);
+		let pendingLaunch = null;
+
+		for (const [key, value] of flatten(flow)) {
+			if (launches.has(key)) {
+				pendingLaunch ??= key;
+				continue;
+			}
+			const file = typeof value === 'string' ? value : value?.file;
+			if (key === 'runFlow' && file?.includes('recover-dev-launcher')) {
+				recoveries += 1;
+				pendingLaunch = null;
+				continue;
+			}
+			if (assertions.has(key) && value?.optional !== true) {
+				assert.equal(
+					pendingLaunch,
+					null,
+					`${filename}: \`${key}\` runs after \`${pendingLaunch}\` with no recover-dev-launcher subflow between them`
+				);
+			}
+		}
+
+		assert.equal(
+			pendingLaunch,
+			null,
+			`${filename} ends on \`${pendingLaunch}\` without running the recover-dev-launcher subflow`
+		);
+	}
+
+	// A launch site per flow at minimum; 08 and 09 relaunch a second time.
+	assert.ok(recoveries >= 11, `only ${recoveries} launcher-recovery call sites`);
+});
+
 test('the Android step retries a transient offline ADB transport once', () => {
 	const step = findStep(
 		readWorkflow('e2e-native.yml'),

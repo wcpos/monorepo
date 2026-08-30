@@ -61,6 +61,15 @@ env:
             # Screenshot-based settle first, same as every relaunch.
             - waitForAnimationToEnd:
                 timeout: 5000
+      # The launcher can answer a launch with its own manifest-timeout error
+      # screen instead of the app — tap Reload rather than letting the wait
+      # below spend its whole budget staring at it. Inert on a healthy launch;
+      # evidence, the 10s timeout and the text-selector exemption are in the
+      # subflow.
+      - runFlow:
+          file: ../subflows/recover-dev-launcher.yml
+          env:
+            APP_READY_TESTID: store-url-input
       # Cold start: first fetch of the ~29 MB Metro bundle plus Hermes parse.
       # 60s expired on CI with the app still on its splash (run 33219707312);
       # the suite budgets 120-240s elsewhere. Optional only so a LATE scheme
@@ -81,6 +90,15 @@ env:
             # below is the next hierarchy query, and the app is mid-launch.
             - waitForAnimationToEnd:
                 timeout: 5000
+# The launcher can answer a launch with its own manifest-timeout error
+# screen instead of the app — tap Reload rather than letting the wait
+# below spend its whole budget staring at it. Inert on a healthy launch;
+# evidence, the 10s timeout and the text-selector exemption are in the
+# subflow.
+- runFlow:
+    file: ../subflows/recover-dev-launcher.yml
+    env:
+      APP_READY_TESTID: store-url-input
 - extendedWaitUntil:
     visible:
       id: "store-url-input"

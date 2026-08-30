@@ -1,0 +1,73 @@
+appId: com.wcpos.main.dev
+---
+# Shared subflow — NOT a suite flow. It lives outside flows/ on purpose:
+# config.yaml lists `flows/*.yml` and the iOS job's per-flow loop globs
+# `apps/main/.maestro/flows/*.yml`, so nothing here is ever run as a top-level
+# flow. Call it with `runFlow: {file: ../subflows/recover-dev-launcher.yml,
+# env: {APP_READY_TESTID: …}}` immediately after every openLink/launchApp.
+#
+# WHAT IT RECOVERS FROM: the Expo dev launcher's manifest request to Metro has
+# a hard 10s NATIVE timeout. On a 3-core GitHub macOS runner — simulator,
+# XCTest driver, `recordVideo` and `log stream` all competing — an idle Metro
+# sometimes fails to answer inside it even though a warm manifest measures
+# 5-27ms on the same runner class. The launcher then gives up and shows its
+# own error screen instead of the app, and the flow's next wait sits on that
+# screen until it times out, losing the whole device job.
+#   main run 33302195102, iOS tablet: app-console
+#   "Task … finished with error [-1001] … http://localhost:8081/" at 09:48:00
+#   for a request started at 09:47:50; flow 01 failed after 13m42s. PR #1686's
+#   run hit the same screen on BOTH iOS jobs.
+# Metro itself is healthy (relaunch bundles are 68-835ms since #1704) — the
+# request just needs asking again, which is exactly what Reload does.
+#
+# TEXT SELECTORS, DELIBERATELY: this screen is expo-dev-launcher's OWN UI, not
+# ours. The suite's testID-only policy governs the app's UI; the launcher
+# carries no testIDs and is not localized, so its exact strings are the only
+# handle there is. The screen reads "There was a problem loading the project."
+# over "This development build encountered the following error:" and "Failed to
+# load app from http://localhost:8081 with error: The request timed out.", with
+# Reload / Go home / Copy buttons.
+#
+# APP_READY_TESTID (required, supplied by the caller): the testID that proves
+# the JS bundle rendered — the same one the caller's own wait uses. Every pass
+# is inert the moment it is on screen, so a healthy launch costs one hierarchy
+# query and no waiting.
+- repeat:
+    times: 3
+    commands:
+      - runFlow:
+          when:
+            notVisible:
+              id: "${APP_READY_TESTID}"
+          commands:
+            # A bounded window for the launcher to either finish loading or
+            # fail: it returns the instant the app renders, so a slow-but-
+            # healthy cold start does not pay for this — the wait it would have
+            # spent in the caller's own extendedWaitUntil is spent here instead.
+            # The error screen appears ~10s after the launch (the native
+            # timeout), which is why the window is 15s and not 10s.
+            - extendedWaitUntil:
+                visible:
+                  id: "${APP_READY_TESTID}"
+                timeout: 15000
+                optional: true
+            - runFlow:
+                when:
+                  visible:
+                    text: "There was a problem loading the project.*"
+                commands:
+                  - tapOn:
+                      text: "Reload"
+                  # Screenshot-based settle before the next hierarchy query:
+                  # the app is mid-launch again, and a query during the scene
+                  # transition can answer kAXErrorInvalidUIElement (which
+                  # Maestro 2.6.1 raises as an UNCAUGHT exception — see the
+                  # launch comments in flows 01 and 08).
+                  - waitForAnimationToEnd:
+                      timeout: 5000
+# The retries must not MASK a launcher that is still broken. Three Reloads in
+# and still on the error screen: fail HERE, with that screen in the failure
+# screenshot and this file named in the log, rather than letting the caller's
+# 120-180s wait time out somewhere that says nothing about why.
+- assertNotVisible:
+    text: "There was a problem loading the project.*"
