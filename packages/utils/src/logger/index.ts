@@ -20,6 +20,7 @@ import {
 import { ERROR_CATALOGUE, ErrorCode } from './generated/error-codes.generated';
 import { redactSensitiveFields, redactSensitiveText } from './redact';
 import { LogRetentionCollection, sweepLogRetention } from './retention';
+import { captureLoggedError } from './sentry-sink';
 
 /**
  * Schema-v2 terminal-record columns. These are promoted to top-level log row
@@ -676,6 +677,10 @@ const mainTransport = (props: any) => {
 		} else {
 			console.error(formattedMessage);
 		}
+	}
+
+	if (levelName === 'error') {
+		captureLoggedError({ message, code: options.code, context: options.context });
 	}
 
 	// 2. Show toast if available and requested
