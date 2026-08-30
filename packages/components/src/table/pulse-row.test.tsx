@@ -166,21 +166,27 @@ describe('PulseTableRow', () => {
 			expect(removeLine).toHaveBeenCalledTimes(2);
 		});
 
-		it('releases the latch when a pulse is cancelled without committing', () => {
+		it('restarts after an add pulse cancels a remove pulse, and the restart commits', () => {
+			// Reachable from the cart: `detectNewCartLines` reports a line whose
+			// QUANTITY changed, so the table fires `pulseAdd()` on a row that may be
+			// mid-remove-pulse. That cancels the remove pulse and its removal never
+			// lands, so the row has to stay removable — this is why the re-entrancy
+			// guard lives here, on the only side that can see the cancellation.
 			const { ref } = renderRow();
-			const removeLine = jest.fn();
+			const cancelledRemoval = jest.fn();
+			const committedRemoval = jest.fn();
 
-			act(() => ref.current!.pulseRemove(removeLine));
-			// An add pulse cancels the remove pulse, so its removal never lands.
+			act(() => ref.current!.pulseRemove(cancelledRemoval));
 			act(() => ref.current!.pulseAdd());
-			expect(removeLine).not.toHaveBeenCalled();
+			expect(cancelledRemoval).not.toHaveBeenCalled();
 
-			// The row must remain removable rather than being stuck latched.
-			act(() => ref.current!.pulseRemove(removeLine));
+			act(() => ref.current!.pulseRemove(committedRemoval));
 			expect(removePulses()).toHaveLength(2);
 
 			finishPendingAnimations();
-			expect(removeLine).toHaveBeenCalledTimes(1);
+
+			expect(committedRemoval).toHaveBeenCalledTimes(1);
+			expect(cancelledRemoval).not.toHaveBeenCalled();
 		});
 	});
 });
