@@ -20,23 +20,22 @@ import { Observable } from 'rxjs';
 
 import { useSuspenseResource } from '../src/suspense-resource';
 
-class ErrorBoundary extends React.Component<React.PropsWithChildren, { error: Error | null }> {
-	state = { error: null };
-
-	static getDerivedStateFromError(error: Error) {
-		return { error };
-	}
-
-	render() {
-		return this.state.error ? <div data-testid="error">failed</div> : this.props.children;
-	}
-}
-
 /** Emits one microtask after each subscribe — the shape of an RxDB query's first emission. */
 function asyncSource(onSubscribe: () => void): Observable<string> {
 	return new Observable<string>((subscriber) => {
 		onSubscribe();
 		void Promise.resolve().then(() => subscriber.next('value'));
+	});
+}
+
+/**
+ * Lets a scheduled teardown run. `useSuspenseResource` defers destruction by a macrotask so a
+ * replayed effect setup can take its own teardown back (see `pendingTeardowns`), so a real
+ * unmount releases the subscription one tick later, not synchronously.
+ */
+async function flushTeardown() {
+	await React.act(async () => {
+		await new Promise((resolve) => setTimeout(resolve, 0));
 	});
 }
 
@@ -46,6 +45,22 @@ async function settle(cycles = 25) {
 		await React.act(async () => {
 			await Promise.resolve();
 		});
+	}
+}
+
+/** Catches what `read()` rethrows once a resource has latched an error. */
+class Boundary extends React.Component<{ children: React.ReactNode }, { message: string | null }> {
+	state: { message: string | null } = { message: null };
+
+	static getDerivedStateFromError(error: Error) {
+		return { message: error.message };
+	}
+
+	render() {
+		if (this.state.message !== null) {
+			return <div data-testid="boundary">{this.state.message}</div>;
+		}
+		return this.props.children;
 	}
 }
 
@@ -152,38 +167,17 @@ describe('useSuspenseResource', () => {
 		expect(subscribes).toBe(1);
 	});
 
-	it('evicts an unclaimed resource that errors so a remount can retry', async () => {
-		const scope = {};
-		let subscribes = 0;
-		const source$ = new Observable<string>((subscriber) => {
-			subscribes++;
-			if (subscribes === 1) subscriber.error(new Error('transient'));
-			else subscriber.next('recovered');
-		});
-		function Consumer() {
-			const resource = useSuspenseResource(scope, 'input', source$);
-			return <div data-testid="consumer">{useObservableSuspense(resource)}</div>;
-		}
-
-		const failed = render(
-			<ErrorBoundary>
-				<Consumer />
-			</ErrorBoundary>
-		);
-		await settle(2);
-		expect(screen.getByTestId('error')).toBeTruthy();
-		failed.unmount();
-
-		render(
-			<ErrorBoundary>
-				<Consumer />
-			</ErrorBoundary>
-		);
-		await settle(2);
-		expect(screen.getByTestId('consumer').textContent).toBe('recovered');
-		expect(subscribes).toBe(2);
-	});
-
+	/*
+	 * A third eviction test lived here — the same claim as the two in "a bridged resource whose
+	 * stream fails" below, but with the source erroring SYNCHRONOUSLY inside the
+	 * `ObservableResource` constructor. It was removed because it can only pass when the code is
+	 * worse: a synchronous throw errors the render itself, React recovers by re-rendering the
+	 * root, and it reports that recovery (`onRecoverableError`), which `act` turns into a test
+	 * failure. That report fires only when the retry SUCCEEDS — i.e. only once the failed entry
+	 * is actually dropped. Keeping the failed resource cached suppresses it, so the test rewarded
+	 * the bug. The asynchronous variants below pin the same behaviour, and match how a live RxDB
+	 * query actually fails.
+	 */
 	it('preserves its claimed resource through Strict Mode replay', async () => {
 		const scope = {};
 		let subscribes = 0;
@@ -294,6 +288,7 @@ describe('useSuspenseResource', () => {
 		await React.act(async () => {
 			view.unmount();
 		});
+		await flushTeardown();
 		expect(unsubscribes).toBe(1);
 		expect(captured[0].isDestroyed).toBe(true);
 
@@ -390,5 +385,164 @@ describe('useSuspenseResource', () => {
 		// The owner claimed its resource out of the bridge, so eviction could never reach it:
 		// it is still live and still being served.
 		expect(view.getByTestId('owner').textContent).toBe('value');
+	});
+});
+
+describe('a bridged resource whose stream fails', () => {
+	/**
+	 * `ObservableResource` LATCHES an error: `read()` rethrows it forever. A stream that fails
+	 * before its first value — a transient storage fault, a database closing under the query —
+	 * therefore poisons the bridge slot, because the consumer never commits and so never claims
+	 * the entry out of it. Resetting the error boundary or remounting the route would read the
+	 * same dead resource straight back, and the screen could not recover until 32 unrelated
+	 * entries pushed it out. Same class as `engine-record-resource` (#1710).
+	 */
+	it('is dropped, so the very next attempt resubscribes and the screen recovers', async () => {
+		const scope = {};
+		let subscribes = 0;
+		const source$ = new Observable<string>((subscriber) => {
+			subscribes++;
+			const attempt = subscribes;
+			void Promise.resolve().then(() => {
+				if (attempt === 1) subscriber.error(new Error('storage fault'));
+				else subscriber.next('value');
+			});
+		});
+		function Consumer() {
+			const resource = useSuspenseResource(scope, 'poisoned', source$);
+			return <div data-testid="consumer">{useObservableSuspense(resource)}</div>;
+		}
+		const first = render(
+			<Boundary>
+				<React.Suspense fallback={<div data-testid="fallback" />}>
+					<Consumer />
+				</React.Suspense>
+			</Boundary>
+		);
+		await settle();
+
+		// On the old code the error boundary is showing 'storage fault': the failed resource
+		// stayed in the bridge, so the Suspense retry read the same latched error straight back
+		// and nothing could clear it. Dropping the entry turns that retry into a recovery.
+		expect(screen.queryByTestId('boundary')).toBeNull();
+		expect((await screen.findByTestId('consumer')).textContent).toBe('value');
+		expect(subscribes).toBe(2);
+
+		// And a later mount gets a live resource too, rather than the dead one.
+		await React.act(async () => {
+			first.unmount();
+		});
+		await flushTeardown();
+		render(
+			<Boundary>
+				<React.Suspense fallback={<div data-testid="fallback" />}>
+					<Consumer />
+				</React.Suspense>
+			</Boundary>
+		);
+		await settle();
+
+		expect(screen.queryByTestId('boundary')).toBeNull();
+		expect((await screen.findByTestId('consumer')).textContent).toBe('value');
+	});
+
+	it('is dropped when the stream completes without ever emitting, too', async () => {
+		// `ObservableResource` turns that into "Suspender ended unexpectedly" — the same latch.
+		const scope = {};
+		let subscribes = 0;
+		const source$ = new Observable<string>((subscriber) => {
+			subscribes++;
+			const attempt = subscribes;
+			void Promise.resolve().then(() => {
+				if (attempt === 1) subscriber.complete();
+				else subscriber.next('value');
+			});
+		});
+		function Consumer() {
+			const resource = useSuspenseResource(scope, 'empty-complete', source$);
+			return <div data-testid="consumer">{useObservableSuspense(resource)}</div>;
+		}
+		render(
+			<Boundary>
+				<React.Suspense fallback={<div data-testid="fallback" />}>
+					<Consumer />
+				</React.Suspense>
+			</Boundary>
+		);
+		await settle();
+
+		expect(screen.queryByTestId('boundary')).toBeNull();
+		expect((await screen.findByTestId('consumer')).textContent).toBe('value');
+		expect(subscribes).toBe(2);
+	});
+});
+
+describe('under React.StrictMode', () => {
+	/**
+	 * Strict Mode replays every mount effect setup/cleanup/setup in development. The cleanup
+	 * destroys the claimed resource, so the second setup must not mistake its own prior claim
+	 * for a competing reader — and must never leave the consumer holding a DESTROYED resource,
+	 * whose `read()` throws "Resource has been destroyed" and whose `shouldUpdate$$` is closed,
+	 * freezing the component on whatever it last rendered.
+	 */
+	it('leaves the consumer holding a live resource, still showing its value', async () => {
+		const scope = {};
+		const seen: ObservableResource<string>[] = [];
+		function Consumer() {
+			const resource = useSuspenseResource(
+				scope,
+				'strict',
+				React.useMemo(() => asyncSource(() => undefined), [])
+			);
+			const value = useObservableSuspense(resource);
+			seen.push(resource);
+			return <div data-testid="consumer">{value}</div>;
+		}
+		render(
+			<React.StrictMode>
+				<React.Suspense fallback={<div data-testid="fallback" />}>
+					<Consumer />
+				</React.Suspense>
+			</React.StrictMode>
+		);
+		await settle();
+
+		expect((await screen.findByTestId('consumer')).textContent).toBe('value');
+		const held = seen[seen.length - 1];
+		expect(held.isDestroyed).toBe(false);
+		// And it can still push an update: a destroyed resource has completed `shouldUpdate$$`.
+		expect(held.valueRef$$.value?.current).toBe('value');
+	});
+
+	it('destroys its subscription exactly once when the consumer really unmounts', async () => {
+		const scope = {};
+		let subscribes = 0;
+		let unsubscribes = 0;
+		const source$ = new Observable<string>((subscriber) => {
+			subscribes++;
+			subscriber.next('value');
+			return () => {
+				unsubscribes++;
+			};
+		});
+		function Consumer() {
+			const resource = useSuspenseResource(scope, 'strict-teardown', source$);
+			return <div data-testid="consumer">{useObservableSuspense(resource)}</div>;
+		}
+		const view = render(
+			<React.StrictMode>
+				<Consumer />
+			</React.StrictMode>
+		);
+		await settle(2);
+		await React.act(async () => {
+			view.unmount();
+		});
+		await flushTeardown();
+
+		// Whatever the replay did in between, nothing is left subscribed — and the replay did
+		// not cost an extra subscription either.
+		expect(subscribes).toBe(1);
+		expect(unsubscribes).toBe(1);
 	});
 });

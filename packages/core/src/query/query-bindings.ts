@@ -591,7 +591,10 @@ function useEngineBinding(
 	// rebuilt when the descriptor moves, so a keystroke never blanks the grid.
 	const resource = useSuspenseResource<QueryResult<RxCollection>>(
 		runtime.engine,
-		JSON.stringify([descriptor, enabled, runtime.locale]),
+		// The scope belongs in the key: a same-site store switch mutates the engine in place and
+		// hands the same object back, so `runtime.engine` alone does not tell two stores apart
+		// (`engine-record-resource`, #1710).
+		JSON.stringify([runtime.engine.active()?.scopeId ?? null, descriptor, enabled, runtime.locale]),
 		result$
 	);
 	const total$ = React.useMemo(() => projection$.pipe(map(({ total }) => total)), [projection$]);
@@ -783,7 +786,13 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 	// Same reason as `useEngineBinding` above — the resource must outlive a Suspense retry.
 	const resource = useSuspenseResource<QueryResult<RxCollection>>(
 		runtime.engine,
-		JSON.stringify([descriptor, childDescriptor, compiled.read, runtime.locale]),
+		JSON.stringify([
+			runtime.engine.active()?.scopeId ?? null,
+			descriptor,
+			childDescriptor,
+			compiled.read,
+			runtime.locale,
+		]),
 		result$
 	);
 	const census$ = React.useMemo(

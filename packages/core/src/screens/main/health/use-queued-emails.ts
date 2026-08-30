@@ -75,6 +75,16 @@ function queued$(collection: QueueCollection | undefined): Observable<QueuedEmai
  *
  * Keyed on the collection, so a store switch or a reset follows the new one and the entry is
  * released with the collection it belongs to.
+ *
+ * A FAILED RESOURCE IS NEVER SERVED TWICE, for the reason `engine-record-resource` gives
+ * (#1710): `ObservableResource` latches an error and `read()` rethrows it forever, so a queue
+ * read that fails before its first value — a transient storage fault, a database closing under
+ * the query — would otherwise be cached for the collection's whole lifetime, and navigating
+ * away and back would read the same dead resource. The per-mount implementation this replaced
+ * resubscribed on every mount, and that recovery has to survive the cache. The input is tapped:
+ * an error, or a completion with no value at all (which `ObservableResource` turns into
+ * "Suspender ended unexpectedly"), drops the entry, so the Suspense retry that follows builds a
+ * live one and the panel recovers when storage does.
  */
 const resourceByCollection = new WeakMap<object, ObservableResource<QueuedEmail[]>>();
 /** No store database: `of([])`, one resource for all of them, and it never suspends. */
@@ -84,25 +94,38 @@ function queuedEmailsResource(
 	collection: QueueCollection | undefined
 ): ObservableResource<QueuedEmail[]> {
 	if (!collection) return emptyQueueResource;
-	let resource = resourceByCollection.get(collection);
-	if (!resource) {
-		resource = new ObservableResource(
-			queued$(collection).pipe(
-				tap({
-					error: () => {
-						// A synchronous error can arrive before the resource is cached, so defer the
-						// identity check. A remount can then establish a fresh query subscription.
-						void Promise.resolve().then(() => {
-							if (resourceByCollection.get(collection) === resource) {
-								resourceByCollection.delete(collection);
-							}
-						});
-					},
-				})
-			)
-		);
-		resourceByCollection.set(collection, resource);
-	}
+	const cached = resourceByCollection.get(collection);
+	if (cached && !cached.isDestroyed) return cached;
+
+	// A failure can arrive synchronously, inside the `ObservableResource` constructor — so
+	// before `holder.resource` is assigned and before anything is cached to drop. The flag is
+	// what covers that case; the holder covers the asynchronous one. (Closing over the `const`
+	// directly is a temporal-dead-zone throw on the synchronous path, which is exactly what
+	// "re-subscribes after a transient queue error and remount" catches.)
+	let emitted = false;
+	let failed = false;
+	const holder: { resource?: ObservableResource<QueuedEmail[]> } = {};
+	const dropFailed = () => {
+		failed = true;
+		if (holder.resource && resourceByCollection.get(collection) === holder.resource) {
+			resourceByCollection.delete(collection);
+		}
+	};
+	const resource = new ObservableResource(
+		queued$(collection).pipe(
+			tap({
+				next: () => {
+					emitted = true;
+				},
+				error: dropFailed,
+				complete: () => {
+					if (!emitted) dropFailed();
+				},
+			})
+		)
+	);
+	holder.resource = resource;
+	if (!failed) resourceByCollection.set(collection, resource);
 	return resource;
 }
 

@@ -15,7 +15,9 @@ jest.mock('../../../query', () => ({
 // (see `useSuspenseResource`), so it now needs a runtime. Nothing this file asserts changes:
 // the bridge is scoped on the engine, and an empty stub is a perfectly good scope object.
 jest.mock('@wcpos/query', () => ({
-	useQueryRuntime: () => ({ engine: {} }),
+	// `active()` is part of the engine surface: the bridge key names the scope, because a
+	// same-site store switch mutates the engine in place (see use-default-customer.ts).
+	useQueryRuntime: () => ({ engine: { active: () => ({ scopeId: 'test-scope' }) } }),
 	useSuspenseResource: jest.requireActual('../../../../../query/src/suspense-resource')
 		.useSuspenseResource,
 }));

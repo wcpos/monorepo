@@ -18,11 +18,16 @@ import { Observable } from 'rxjs';
 import { useDefaultCustomer } from './use-default-customer';
 
 let subscribeCount = 0;
-let unsubscribeCount = 0;
 let result$: Observable<{ hits: { record: { payload: { id: number } } }[] }>;
-let guestCustomer: { id: number; billing: { first_name: string; country: string } };
-
-const engine = {};
+/** The store-derived guest fallback the observable closes over. */
+let guestCustomer: { id: number; billing: { country: string } };
+/**
+ * A same-site store switch mutates the engine IN PLACE and hands the same object back
+ * (`switchAppEngineScope` / `createAppSyncEngine`), so only `scopeId` moves — which is exactly
+ * why it has to be in the key. Mirrors `engine-record-resource` (#1710).
+ */
+let scopeId = 'store-a';
+const engine = { active: () => ({ scopeId }) };
 
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine }),
@@ -71,9 +76,9 @@ async function settle() {
 
 beforeEach(() => {
 	subscribeCount = 0;
-	unsubscribeCount = 0;
-	guestCustomer = { id: 0, billing: { first_name: 'Guest', country: 'US' } };
 	result$ = asyncResult();
+	scopeId = 'store-a';
+	guestCustomer = { id: 0, billing: { country: 'US' } };
 });
 
 describe('the default customer resource', () => {
@@ -112,28 +117,41 @@ describe('the default customer resource', () => {
 		expect(subscribeCount).toBe(1);
 	});
 
-	it('does not reuse an abandoned guest fallback after the store fields change', async () => {
-		result$ = new Observable(() => {
-			subscribeCount++;
-			return () => {
-				unsubscribeCount++;
-			};
-		});
+	it("does not serve one store's guest fallback to the next store", async () => {
+		// `useGuestCustomer` builds the fallback from STORE data (country, and the translated
+		// name), and the observable closes over it — so the guest is part of what the resource
+		// emits, not just of what the query returns. A store switch keeps the same engine
+		// object and the same customer ids, so an unclaimed bridge entry left by an abandoned
+		// render in store A would otherwise be handed to a render in store B, which would adopt
+		// it as equivalent and never reload: `useNewOrder` would seed the order with the
+		// previous store's guest.
 		function GuestScreen() {
 			const { defaultCustomerResource } = useDefaultCustomer();
-			const customer = useObservableSuspense(defaultCustomerResource) as typeof guestCustomer;
+			const customer = useObservableSuspense(defaultCustomerResource) as {
+				billing: { country: string };
+			};
 			return <div data-testid="guest-country">{customer.billing.country}</div>;
 		}
+
+		// Store A: a render that suspends and is abandoned before it can commit, so its entry
+		// stays in the bridge with nobody to claim it.
+		result$ = new Observable((subscriber) => {
+			subscribeCount++;
+			void subscriber;
+		});
 		const abandoned = render(
 			<React.Suspense fallback={<div data-testid="fallback" />}>
 				<GuestScreen />
 			</React.Suspense>
 		);
 		await settle();
-		expect(screen.getByTestId('fallback')).toBeTruthy();
-		abandoned.unmount();
+		await React.act(async () => {
+			abandoned.unmount();
+		});
 
-		guestCustomer = { id: 0, billing: { first_name: 'Guest', country: 'CA' } };
+		// Store B: same engine object, same customer ids, different guest.
+		scopeId = 'store-b';
+		guestCustomer = { id: 0, billing: { country: 'GB' } };
 		result$ = new Observable((subscriber) => {
 			subscribeCount++;
 			void Promise.resolve().then(() => subscriber.next({ hits: [] }));
@@ -145,8 +163,6 @@ describe('the default customer resource', () => {
 		);
 		await settle();
 
-		expect(screen.getByTestId('guest-country').textContent).toBe('CA');
-		expect(subscribeCount).toBe(2);
-		expect(unsubscribeCount).toBe(1);
+		expect((await screen.findByTestId('guest-country')).textContent).toBe('GB');
 	});
 });

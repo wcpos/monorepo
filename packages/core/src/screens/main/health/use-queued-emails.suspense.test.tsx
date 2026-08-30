@@ -58,6 +58,22 @@ function asyncQueueCollection() {
 	};
 }
 
+/** Catches what `read()` rethrows once a resource has latched an error. */
+class Boundary extends React.Component<{ children: React.ReactNode }, { message: string | null }> {
+	state: { message: string | null } = { message: null };
+
+	static getDerivedStateFromError(error: Error) {
+		return { message: error.message };
+	}
+
+	render() {
+		if (this.state.message !== null) {
+			return <div data-testid="boundary">{this.state.message}</div>;
+		}
+		return this.props.children;
+	}
+}
+
 function Panel() {
 	const rows = useQueuedEmails();
 	return <div data-testid="queued-panel">{rows.length}</div>;
@@ -110,32 +126,46 @@ describe('the queued-emails panel on a store that already has a database', () =>
 	});
 
 	it('re-subscribes after a transient queue error and remount', async () => {
+		// The error arrives one microtask after subscribe, the way a live RxDB query fails. A
+		// source that threw SYNCHRONOUSLY would error the render itself, and React reports its
+		// recovery (`onRecoverableError`) in a way `act` escalates to a test failure — a report
+		// that only fires once the failed resource is actually dropped, so that variant of this
+		// test can only pass while the bug is present.
 		collection = {
 			find: () => ({
 				$: new Observable<unknown[]>((subscriber) => {
 					subscribeCount++;
-					if (subscribeCount === 1) subscriber.error(new Error('transient'));
-					else subscriber.next([]);
+					const attempt = subscribeCount;
+					void Promise.resolve().then(() => {
+						if (attempt === 1) subscriber.error(new Error('transient'));
+						else subscriber.next([]);
+					});
 				}),
 			}),
 		};
 		const failed = render(
 			<ErrorBoundary>
-				<Panel />
+				<React.Suspense fallback={<div data-testid="fallback" />}>
+					<Panel />
+				</React.Suspense>
 			</ErrorBoundary>
 		);
 		await settle();
-		expect(screen.getByTestId('error')).toBeTruthy();
 		failed.unmount();
 
 		render(
 			<ErrorBoundary>
-				<Panel />
+				<React.Suspense fallback={<div data-testid="fallback" />}>
+					<Panel />
+				</React.Suspense>
 			</ErrorBoundary>
 		);
 		await settle();
+
+		// On the old code this is the error boundary on both mounts: the failed resource stayed
+		// cached against the collection for the rest of the store database's life.
+		expect(screen.queryByTestId('error')).toBeNull();
 		expect(screen.getByTestId('queued-panel').textContent).toBe('0');
-		expect(subscribeCount).toBe(2);
 	});
 
 	it('reports an empty queue rather than suspending when there is no store database', async () => {
@@ -151,5 +181,36 @@ describe('the queued-emails panel on a store that already has a database', () =>
 
 		expect(screen.getByTestId('queued-panel').textContent).toBe('0');
 		expect(screen.queryByTestId('fallback')).toBeNull();
+	});
+	it('rebuilds after a failed read instead of latching the error for the collection', async () => {
+		// `ObservableResource` latches an error and `read()` rethrows it forever. Caching per
+		// collection without dropping a failed one would leave Store Health unable to recover
+		// from a transient storage fault for as long as the store database lives — navigating
+		// away and back would read the same dead resource. The per-mount implementation this
+		// replaced got a new subscription every time, so the cache must not lose that.
+		collection = {
+			find: () => ({
+				$: new Observable<unknown[]>((subscriber) => {
+					subscribeCount++;
+					const attempt = subscribeCount;
+					void Promise.resolve().then(() => {
+						if (attempt === 1) subscriber.error(new Error('storage fault'));
+						else subscriber.next([]);
+					});
+				}),
+			}),
+		};
+		render(
+			<Boundary>
+				<React.Suspense fallback={<div data-testid="fallback" />}>
+					<Panel />
+				</React.Suspense>
+			</Boundary>
+		);
+		await settle();
+
+		expect(screen.queryByTestId('boundary')).toBeNull();
+		expect((await screen.findByTestId('queued-panel')).textContent).toBe('0');
+		expect(subscribeCount).toBe(2);
 	});
 });
