@@ -1022,6 +1022,28 @@ jobs:
               with_deadline maestro --udid "$MAESTRO_UDID" test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" "$flow"
               return
             fi
+            # Third driver shape (2026-08-30: runs 33327826137, 33327340303,
+            # 33327456369 — three iOS flow-01 reds inside two hours): the driver
+            # STARTS and commands run, then the hierarchy goes BLIND mid-flow.
+            # Assertions time out on elements the failure screenshot shows fully
+            # rendered while maestro.log fills with xcTestDriverStatusCheck
+            # [Failed] connection refusals (50–76 per instance). The app is
+            # fine; the driver's socket died under it. Retry is confined to
+            # flow 01: it begins with clearState, so a rerun cannot
+            # double-apply state. A later flow with this signature stays red —
+            # its artifact carries the refusal count for a human, and its
+            # on-device state is not safely repeatable.
+            # The refusals are logger records: they land in the invocation's
+            # ~/.maestro/tests/<ts>/maestro.log, NOT on stdout — grep the
+            # newest per-run log (terminal capture kept as a fallback).
+            # (Codex review on #1722 caught the original stdout-only grep.)
+            latest_maestro_log=$(ls -td "$HOME/.maestro/tests"/*/ 2>/dev/null | head -1)maestro.log
+            refusals=$(cat "$latest_maestro_log" "$log" 2>/dev/null | grep -c "xcTestDriverStatusCheck: \[Failed\]" || true)
+            if [[ "$flow" == *01-clean-launch-connect* ]] && [ "${refusals:-0}" -ge 10 ]; then
+              echo "↻ driver went blind mid-flow (${refusals} status-check refusals) — retrying ${flow} once"
+              with_deadline maestro --udid "$MAESTRO_UDID" test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" "$flow"
+              return
+            fi
             return 1
           }
           # Record a per-flow verdict AND duration, because nothing else does.
