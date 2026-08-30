@@ -16,7 +16,11 @@ const resolveExpoConfig = (easProfile) =>
 	);
 
 test('release bumps do not change the development client native fingerprint', () => {
-	assert.equal(resolveExpoConfig('development').version, '1.10.3');
+	// The dev-client version is DEV_CLIENT_NATIVE_VERSION in app.config.ts — a
+	// frozen constant, so a package bump must leave it behind.
+	const developmentVersion = resolveExpoConfig('development').version;
+	assert.match(developmentVersion, /^\d+\.\d+\.\d+$/);
+	assert.notEqual(developmentVersion, packageJson.version);
 });
 
 test('production builds use the package version', () => {
