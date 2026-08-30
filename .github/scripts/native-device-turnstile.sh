@@ -41,8 +41,8 @@
 #   WORKFLOW_FILE     workflow file name (default: e2e-native.yml)
 #   WAIT_BUDGET_SECONDS   give up after this long (default 9000 = 150 min:
 #                     three queued Android suites ahead of us, worst observed)
-#   POLL_SECONDS      poll interval (default 120; even the paginated run list
-#                     and waiting jobs stay well under the 1000/h token limit)
+#   POLL_SECONDS      poll interval (default 120: five waiting jobs × ~5 API
+#                     calls per poll stays well under the 1000/h token limit)
 #   SIBLING_GRACE_SECONDS   see the rule above (default 180)
 set -euo pipefail
 
@@ -94,7 +94,12 @@ while :; do
 		exit 1
 	fi
 
-	if ! runs_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=100" --paginate --slurp 2>/tmp/turnstile-api.err)"; then
+	# ONE page of 100, never --paginate: this workflow has thousands of runs, and a
+	# waiting job polls every 2 min — paging the whole history would be ~30 requests per
+	# poll per job and exhaust the token's 1000/h limit for every run in flight. 100 runs
+	# is more than a day at the busiest rate seen (2026-08-30), and a device job cannot
+	# still be alive after 250 min, so any older run that matters is on the first page.
+	if ! runs_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=100" 2>/tmp/turnstile-api.err)"; then
 		api_failures=$((api_failures + 1))
 		echo "::warning::Could not list workflow runs (attempt ${api_failures}): $(tr -d '\n' < /tmp/turnstile-api.err)"
 		sleep "$POLL_SECONDS"
@@ -103,9 +108,9 @@ while :; do
 
 	older_runs="$(jq -c --argjson me "$GITHUB_RUN_ID" '
 		def epoch: sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601;
-		([.[].workflow_runs[] | select(.id == $me)][0]) as $current
+		([.workflow_runs[] | select(.id == $me)][0]) as $current
 		| (($current.run_started_at // $current.created_at) | epoch) as $me_started
-		| [.[].workflow_runs[]
+		| [.workflow_runs[]
 			| ((.run_started_at // .created_at) | epoch) as $started
 			| select(.id != $me and .status != "completed"
 				and ($started < $me_started or ($started == $me_started and .id < $me)))

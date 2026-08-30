@@ -1888,13 +1888,10 @@ case "$p" in
   */workflows/*/runs*)
     n=$(cat "$STATE/poll" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > "$STATE/poll"
     if [ -f "$FIXTURES/fail-runs.$n" ]; then echo "mock: 503 Service Unavailable" >&2; exit 1; fi
-	    f="$FIXTURES/runs.$n.json"; [ -f "$f" ] || f="$FIXTURES/runs.json"
-	    page2="$FIXTURES/runs-page2.$n.json"; [ -f "$page2" ] || page2="$FIXTURES/runs-page2.json"
-	    if printf '%s' "$*" | grep -q -- '--slurp'; then
-	      if [ -f "$page2" ]; then jq -s '.' "$f" "$page2"; else jq -s '.' "$f"; fi
-	    else
-	      cat "$f"
-	    fi ;;
+    f="$FIXTURES/runs.$n.json"; [ -f "$f" ] || f="$FIXTURES/runs.json"
+    # One page only: the script must never --paginate (see its header).
+    if printf '%s' "$*" | grep -q -- '--paginate'; then echo "mock: --paginate is forbidden" >&2; exit 2; fi
+    cat "$f" ;;
   */runs/*/jobs*)
     id=$(printf '%s' "$p" | sed -E 's#.*/runs/([0-9]+)/jobs.*#\\1#'); n=$(cat "$STATE/poll")
     f="$FIXTURES/jobs-$id.$n.json"; [ -f "$f" ] || f="$FIXTURES/jobs-$id.json"
@@ -1986,21 +1983,6 @@ esac
 	});
 	assert.equal(result.status, 1, result.stdout + result.stderr);
 	assert.match(result.stdout, /runs\/700/);
-
-	// An active blocker beyond the first 100 workflow runs still participates
-	// in FIFO ordering; the fake exposes page two only to --paginate --slurp.
-	result = drive({
-		slot: '🍎 iOS (phone)',
-		prefix: '🍎 iOS (',
-		fixtures: {
-			'runs.json': runs(run(ME)),
-			'runs-page2.json': runs(run(400)),
-			'jobs-400.json': jobs(job('🍎 iOS (phone)', 'in_progress')),
-		},
-		env: giveUp,
-	});
-	assert.equal(result.status, 1, result.stdout + result.stderr);
-	assert.match(result.stdout, /runs\/400/);
 
 	// An older run's same-name job blocks until it completes; the wait names
 	// the run, and the second poll releases us.
@@ -2136,4 +2118,28 @@ esac
 	});
 	assert.equal(result.status, 1, result.stdout + result.stderr);
 	assert.match(result.stdout, /runs\/400 \(branch-400\) — jobs unreadable/);
+});
+
+test('the Android suite keeps adb reverse alive for the life of the run', () => {
+	const step = findStep(
+		readWorkflow('e2e-native.yml'),
+		'android',
+		'📱 Run Maestro suite on emulator'
+	);
+	const lines = (step.with?.script ?? step.run).split('\n');
+	const refresher = lines.findIndex(
+		(line) => line.startsWith('nohup sh -c') && line.includes('adb reverse tcp:8081 tcp:8081')
+	);
+	const suite = lines.findIndex((line) => line.startsWith('{ maestro test'));
+	assert.ok(refresher >= 0, 'missing the adb reverse refresher loop');
+	assert.ok(suite > refresher, 'the refresher must start before the suite');
+	// Run 33319233428 (phone) lost the reverse port mid-suite; the launcher's
+	// ECONNREFUSED on relaunch is only diagnosable with a log of what adb held.
+	assert.match(lines[refresher], /adb reverse --list/);
+	assert.match(lines[refresher], /adb-reverse\.log/);
+	// It must end with the run — the same sentinel the screen recorder honours.
+	assert.match(lines[refresher], /stop-screenrecord/);
+	// The emulator-runner action executes the script LINE BY LINE: one line, no
+	// continuation backslash.
+	assert.doesNotMatch(lines[refresher], /\\$/);
 });

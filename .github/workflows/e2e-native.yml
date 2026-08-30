@@ -530,6 +530,17 @@ jobs:
             # runner's sh is dash (no pipefail), and each script line is its
             # own shell — so maestro's real exit code crosses lines via a
             # file, and the tee'd pipeline's own exit stays 0 on purpose.
+            # Keep the reverse port alive for the life of the suite. Run 33319233428
+            # (phone) lost it mid-suite: flow 04 ran 15 min under load, logcat shows
+            # adbd closing sockets ("timeout expired while flushing socket") at
+            # 16:20, and flow 05's relaunch then died on the dev launcher's
+            # "Failed to connect to localhost/127.0.0.1:8081 … ECONNREFUSED" — Metro
+            # was up on the host; the emulator's localhost:8081 no longer reached
+            # it. The retry below re-applied reverse once and lost it the same way.
+            # Re-issuing `adb reverse` is idempotent and cheap; the log of
+            # `adb reverse --list` is the evidence trail for the next red. Ends
+            # with the screenrecord sentinel. ONE LINE, per the rule above.
+            nohup sh -c 'while [ ! -f "$HOME/.maestro/tests/stop-screenrecord" ]; do { date -u +%FT%TZ; adb reverse --list; } >> "$HOME/.maestro/tests/adb-reverse.log" 2>&1; adb reverse tcp:8081 tcp:8081 >/dev/null 2>&1; sleep 10; done' >/dev/null 2>&1 &
             { maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" apps/main/.maestro; echo $? > ~/.maestro/tests/exit_code; } 2>&1 | tee ~/.maestro/tests/suite.log
             # A newly booted emulator can briefly drop its ADB transport after
             # the APK install (run 33237853311: clearState succeeded, then the
