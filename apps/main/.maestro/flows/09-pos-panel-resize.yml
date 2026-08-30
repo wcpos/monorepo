@@ -20,6 +20,19 @@ env:
 - launchApp
 - waitForAnimationToEnd:
     timeout: 5000
+# Android: a cold `launchApp` can land on the dev launcher's HOME screen
+# instead of reloading the last project (PR #1690 run 33279550244 attempt 2,
+# phone, flow 05: "Development servers … Recently opened" with the app never
+# loaded, so the first assertion timed out on the launcher). Reload through
+# the same deep link flows 01/02 use; inert when the app came up normally.
+- runFlow:
+    when:
+      platform: Android
+      visible: "(?i)fetch development servers"
+    commands:
+      - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
+      - waitForAnimationToEnd:
+          timeout: 5000
 - extendedWaitUntil:
     visible:
       id: "screen-pos"
@@ -36,9 +49,14 @@ env:
         id: "pos-resize-handle"
     commands:
       # Regression check for #1620: tablet launch must render the full cart column,
-      # not the pre-layout 60:1 sliver.
+      # not the pre-layout 60:1 sliver. The referent is the cart column's HEADER,
+      # not the totals: this flow runs after 08 voided the current order, so the
+      # relaunch lands on a fresh EMPTY order (CurrentOrderProvider falls back to
+      # `newOrder` when the remembered uuid is gone) and an empty cart has no
+      # subtotal row — run 33285279390's iOS tablet passed 01–08 and died here
+      # on `cart-subtotal`. The customer chip is rendered for every order.
       - assertVisible:
-          id: "cart-subtotal"
+          id: "cart-customer-name"
       - assertVisible:
           id: "pos-resize-handle"
           text: "Resize handle, 60%"

@@ -317,6 +317,17 @@ jobs:
     name: 🤖 Android (${{ matrix.device.name }})
     needs: build
     if: needs.build.outputs.platform != 'ios'
+    # One job per (platform, device class) at a time across the whole repo:
+    # the runs' apps all sync against dev-pro, whose php-fpm stays at 4
+    # workers by design (owner ruling 2026-08-19 — a dev store behaves like a
+    # real one), and two overlapping runs tonight put the order-pay page at
+    # 83–108 s (iOS, PR #1690 run 33274650949) and flow 04 at 21 min
+    # (Android, run 33280466971) against a 5.7 s passing sample. Queue, do
+    # not cancel: the workflow-level group above still cancels superseded PR
+    # runs.
+    concurrency:
+      group: native-device-android-${{ matrix.device.name }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     # 100, not 60: the app's ONE-TIME initial catalog sync (~40 min on these
     # 2-vCPU swiftshader emulators) slows every interaction in whichever flow
@@ -326,6 +337,14 @@ jobs:
     # take ~1 min. Budget = worst observed sync window + full suite + headroom.
     timeout-minutes: 100
     strategy:
+      # ONE device job per platform at a time. Every device job logs a fresh
+      # cashier in and syncs the store; with both classes (and other runs)
+      # in flight dev-pro's php-fpm (4 workers by design) logged "server
+      # reached pm.max_children" 181 times in six hours on 2026-08-29/30,
+      # the PHP container restarted at 01:37Z, the WordPress login answered
+      # 502 to the iOS phone (run 33285279390) and the order-pay page took
+      # 21 min on Android (run 33280466971). Slower runs beat red ones.
+      max-parallel: 1
       fail-fast: false
       matrix:
         device:
@@ -381,6 +400,17 @@ jobs:
           [ -n "$BUNDLE_URL" ] && [ "$BUNDLE_URL" != "null" ] || { echo "::error::manifest had no launchAsset URL"; tail -50 /tmp/metro.log; exit 1; }
           curl -sf --max-time 900 -o /dev/null "$BUNDLE_URL" \
             || { echo "::error::Android bundle pre-compile failed"; tail -80 /tmp/metro.log; exit 1; }
+          # Latency of a WARM manifest and a WARM bundle on this runner. The
+          # dev client gives the manifest a hard 10 s (expo-dev-launcher's
+          # EXDevLauncherDefaultRequestTimeout) and the bundle 60 s; PR #1686's
+          # run lost BOTH iOS jobs in flow 01 to "The request timed out" on the
+          # manifest (Metro accepted the TCP connection and sent nothing for
+          # 9.4 s), and a passing job measured 1.8 s / 18.6 s for the same two
+          # requests. These numbers say how much headroom a run had.
+          for _ in 1 2; do
+            curl -sf --max-time 30 -o /dev/null -w "warm manifest: %{time_total}s\n" -H "expo-platform: android" http://localhost:8081/
+          done
+          curl -sf --max-time 120 -o /dev/null -w "warm bundle: %{time_total}s (%{size_download} bytes)\n" "$BUNDLE_URL"
           echo "Metro up; Android bundle compiled."
 
       - name: 🧰 Install Maestro
@@ -575,6 +605,45 @@ jobs:
       # leaving someone to infer it from a misleading assertion message.
       # Reads the device console both platforms now capture. Annotation only:
       # nothing here passes or fails the job.
+      # A native crash leaves /data/tombstones/tombstone_NN: registers, the
+      # memory around them and the process maps. logcat's copy of the
+      # backtrace stops at `[anon:scudo:primary]` (#1661 — seven identical
+      # SIGSEGVs in pullTransaction with nothing naming the dead delegate);
+      # the tombstone is the only record that can. `adb root` works on the
+      # google_apis image this job boots (not on the Play image).
+      # A native crash leaves /data/tombstones/tombstone_NN: registers, the
+      # memory around them and the process maps. logcat's copy of the dump
+      # has the registers and backtrace only — for #1661 that stops at
+      # `[anon:scudo:primary]` with nothing naming the dead delegate; the
+      # tombstone's "memory near" dumps can. The CI image refuses `adb root`
+      # (run 33280466971), so the tombstones come out of `adb bugreport`,
+      # which needs no root but takes a minute or two — only worth it when
+      # logcat shows a fatal signal.
+      - name: "\U0001FAA6 Collect tombstones"
+        if: always()
+        run: |
+          if ! grep -q "Fatal signal" ~/.maestro/tests/logcat.txt 2>/dev/null; then
+            echo "no fatal signal in logcat; skipping tombstone collection"
+            exit 0
+          fi
+          mkdir -p ~/.maestro/tests/tombstones
+          # The emulator drops adb ("device offline") around a crash; get it
+          # back before asking for a bugreport, and give dumpstate ten
+          # minutes — the 300 s budget expired on run 33285279390's tablet.
+          adb reconnect offline >/dev/null 2>&1 || true
+          timeout 60 adb wait-for-device || true
+          if timeout 600 adb bugreport ~/.maestro/tests/bugreport.zip > ~/.maestro/tests/bugreport.log 2>&1; then
+            unzip -o -q -j ~/.maestro/tests/bugreport.zip 'FS/data/tombstones/*' -d ~/.maestro/tests/tombstones 2>/dev/null || true
+            rm -f ~/.maestro/tests/bugreport.zip
+            if ls ~/.maestro/tests/tombstones/tombstone_* >/dev/null 2>&1; then
+              ls -la ~/.maestro/tests/tombstones
+            else
+              echo "::warning title=tombstones::bugreport had no tombstones although logcat shows a fatal signal"
+            fi
+          else
+            echo "::warning title=tombstones::adb bugreport failed or exceeded 600s; tombstones not collected"; tail -5 ~/.maestro/tests/bugreport.log
+          fi
+
       - name: "\U0001F534 Surface app errors"
         if: always()
         run: |
@@ -640,6 +709,13 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # Metro's own log is the only record of what the server did between the
+      # pre-warm and the client's fetch; without it a manifest timeout is
+      # diagnosed backwards from the client's error screen (PR #1686's run).
+      - name: 📜 Collect Metro log
+        if: always()
+        run: mkdir -p ~/.maestro/tests && cp /tmp/metro.log ~/.maestro/tests/metro.log 2>/dev/null || true
+
       - name: ⬆️ Upload device artifacts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -652,11 +728,30 @@ jobs:
     name: 🍎 iOS (${{ matrix.device.name }})
     needs: build
     if: needs.build.outputs.platform != 'android'
+    # One job per (platform, device class) at a time across the whole repo:
+    # the runs' apps all sync against dev-pro, whose php-fpm stays at 4
+    # workers by design (owner ruling 2026-08-19 — a dev store behaves like a
+    # real one), and two overlapping runs tonight put the order-pay page at
+    # 83–108 s (iOS, PR #1690 run 33274650949) and flow 04 at 21 min
+    # (Android, run 33280466971) against a 5.7 s passing sample. Queue, do
+    # not cancel: the workflow-level group above still cancels superseded PR
+    # runs.
+    concurrency:
+      group: native-device-ios-${{ matrix.device.name }}
+      cancel-in-progress: false
     runs-on: macos-15
     # 60, was 45: the dev-client architecture adds pnpm install (~3-5 min) and
     # Metro's one-time bundle compile (~3-6 min) to the front of the job.
     timeout-minutes: 60
     strategy:
+      # ONE device job per platform at a time. Every device job logs a fresh
+      # cashier in and syncs the store; with both classes (and other runs)
+      # in flight dev-pro's php-fpm (4 workers by design) logged "server
+      # reached pm.max_children" 181 times in six hours on 2026-08-29/30,
+      # the PHP container restarted at 01:37Z, the WordPress login answered
+      # 502 to the iOS phone (run 33285279390) and the order-pay page took
+      # 21 min on Android (run 33280466971). Slower runs beat red ones.
+      max-parallel: 1
       fail-fast: false
       matrix:
         device:
@@ -703,6 +798,17 @@ jobs:
           [ -n "$BUNDLE_URL" ] && [ "$BUNDLE_URL" != "null" ] || { echo "::error::manifest had no launchAsset URL"; tail -50 /tmp/metro.log; exit 1; }
           curl -sf --max-time 900 -o /dev/null "$BUNDLE_URL" \
             || { echo "::error::iOS bundle pre-compile failed"; tail -80 /tmp/metro.log; exit 1; }
+          # Latency of a WARM manifest and a WARM bundle on this runner. The
+          # dev client gives the manifest a hard 10 s (expo-dev-launcher's
+          # EXDevLauncherDefaultRequestTimeout) and the bundle 60 s; PR #1686's
+          # run lost BOTH iOS jobs in flow 01 to "The request timed out" on the
+          # manifest (Metro accepted the TCP connection and sent nothing for
+          # 9.4 s), and a passing job measured 1.8 s / 18.6 s for the same two
+          # requests. These numbers say how much headroom a run had.
+          for _ in 1 2; do
+            curl -sf --max-time 30 -o /dev/null -w "warm manifest: %{time_total}s\n" -H "expo-platform: ios" http://localhost:8081/
+          done
+          curl -sf --max-time 120 -o /dev/null -w "warm bundle: %{time_total}s (%{size_download} bytes)\n" "$BUNDLE_URL"
           echo "Metro up; iOS bundle compiled."
 
       - name: 🧰 Install Maestro
@@ -1058,6 +1164,13 @@ jobs:
           else
             echo "::warning title=no screen recording::recordVideo produced no output"
           fi
+
+      # Metro's own log is the only record of what the server did between the
+      # pre-warm and the client's fetch; without it a manifest timeout is
+      # diagnosed backwards from the client's error screen (PR #1686's run).
+      - name: 📜 Collect Metro log
+        if: always()
+        run: mkdir -p ~/.maestro/tests && cp /tmp/metro.log ~/.maestro/tests/metro.log 2>/dev/null || true
 
       - name: ⬆️ Upload device artifacts
         if: always()

@@ -1504,6 +1504,162 @@ test('both native platforms upload Maestro artifacts unconditionally', () => {
 	}
 });
 
+test('both native warm-manifest probes have a finite transfer timeout', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-native-manifest-probe-'));
+
+	try {
+		const bin = path.join(workspace, 'bin');
+		const trace = path.join(workspace, 'curl-args');
+		mkdirSync(bin);
+		writeFileSync(path.join(bin, 'curl'), '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$CURL_TRACE"\n');
+		chmodSync(path.join(bin, 'curl'), 0o755);
+
+		for (const jobName of ['android', 'ios']) {
+			const step = findStep(workflow, jobName, '📦 Start Metro and pre-compile the bundle');
+			const loopStart = step.run.indexOf('for _ in 1 2; do');
+			const loopEnd = step.run.indexOf('\ndone', loopStart);
+			assert.notEqual(loopStart, -1, `${jobName}: missing warm-manifest probe loop`);
+			assert.notEqual(loopEnd, -1, `${jobName}: unterminated warm-manifest probe loop`);
+
+			const result = runShell(step.run.slice(loopStart, loopEnd + '\ndone'.length), {
+				env: {
+					CURL_TRACE: trace,
+					PATH: `${bin}:${process.env.PATH}`,
+				},
+			});
+			assert.equal(result.status, 0, result.stdout + result.stderr);
+		}
+
+		const invocations = readFileSync(trace, 'utf8').trim().split('\n');
+		assert.equal(invocations.length, 4);
+		for (const invocation of invocations) {
+			assert.match(invocation, /--max-time [1-9][0-9]*/);
+		}
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
+test('both native Metro-log collectors create their artifact directory', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-native-metro-log-'));
+
+	try {
+		const source = path.join(workspace, 'metro.log');
+		writeFileSync(source, 'metro diagnostics\n');
+
+		for (const jobName of ['android', 'ios']) {
+			const home = path.join(workspace, jobName);
+			const step = findStep(workflow, jobName, '📜 Collect Metro log');
+			const result = runShell(step.run.replace('/tmp/metro.log', source), {
+				env: { HOME: home },
+			});
+
+			assert.equal(result.status, 0, result.stdout + result.stderr);
+			assert.equal(
+				readFileSync(path.join(home, '.maestro', 'tests', 'metro.log'), 'utf8'),
+				'metro diagnostics\n'
+			);
+		}
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
+test('Android tombstone collection runs only after a fatal signal and reports every outcome', () => {
+	const step = findStep(readWorkflow('e2e-native.yml'), 'android', '🪦 Collect tombstones');
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-native-tombstones-'));
+	const bin = path.join(workspace, 'bin');
+	const trace = path.join(workspace, 'commands.log');
+	const tests = path.join(workspace, '.maestro', 'tests');
+	mkdirSync(bin);
+	mkdirSync(tests, { recursive: true });
+	// Two bugreport fixtures: one carrying a tombstone, one without.
+	const fixtures = path.join(workspace, 'fixtures');
+	mkdirSync(path.join(fixtures, 'with', 'FS', 'data', 'tombstones'), { recursive: true });
+	mkdirSync(path.join(fixtures, 'without', 'FS', 'data'), { recursive: true });
+	writeFileSync(
+		path.join(fixtures, 'with', 'FS', 'data', 'tombstones', 'tombstone_00'),
+		'signal 11\n'
+	);
+	writeFileSync(path.join(fixtures, 'without', 'FS', 'data', 'other.txt'), 'x\n');
+	for (const name of ['with', 'without']) {
+		const zipped = spawnSync('zip', ['-q', '-r', path.join(fixtures, `${name}.zip`), 'FS'], {
+			cwd: path.join(fixtures, name),
+			encoding: 'utf8',
+		});
+		assert.equal(zipped.status, 0, zipped.stdout + zipped.stderr);
+	}
+	writeFileSync(
+		path.join(bin, 'timeout'),
+		`#!/bin/sh
+printf 'timeout %s\\n' "$*" >> "$COMMAND_TRACE"
+shift
+exec "$@"
+`
+	);
+	writeFileSync(
+		path.join(bin, 'adb'),
+		`#!/bin/sh
+printf 'adb %s\\n' "$*" >> "$COMMAND_TRACE"
+if [ "$1" = bugreport ]; then
+  if [ "\${BUGREPORT_FAIL:-0}" = 1 ]; then exit 1; fi
+  cp "$BUGREPORT_FIXTURE" "$2"
+fi
+exit 0
+`
+	);
+	for (const command of ['timeout', 'adb']) chmodSync(path.join(bin, command), 0o755);
+
+	const run = (env = {}) =>
+		runShell(step.run, {
+			env: {
+				HOME: workspace,
+				PATH: `${bin}:${process.env.PATH}`,
+				COMMAND_TRACE: trace,
+				BUGREPORT_FIXTURE: path.join(fixtures, 'with.zip'),
+				...env,
+			},
+		});
+
+	try {
+		// No fatal signal: nothing is collected and adb is never called.
+		writeFileSync(
+			path.join(tests, 'logcat.txt'),
+			'I ActivityManager: Displayed com.wcpos.main.dev\n'
+		);
+		const quiet = run();
+		assert.equal(quiet.status, 0, quiet.stdout + quiet.stderr);
+		assert.match(quiet.stdout, /no fatal signal in logcat/);
+		assert.ok(!existsSync(trace), 'adb must not run when logcat shows no fatal signal');
+
+		writeFileSync(
+			path.join(tests, 'logcat.txt'),
+			'F libc    : Fatal signal 11 (SIGSEGV), code 2 (SEGV_ACCERR) in tid 1 (mqt_v_js)\n'
+		);
+		const failed = run({ BUGREPORT_FAIL: '1' });
+		assert.equal(failed.status, 0, failed.stdout + failed.stderr);
+		assert.match(failed.stdout, /adb bugreport failed/);
+
+		const empty = run({ BUGREPORT_FIXTURE: path.join(fixtures, 'without.zip') });
+		assert.equal(empty.status, 0, empty.stdout + empty.stderr);
+		assert.match(empty.stdout, /had no tombstones/);
+
+		const collected = run();
+		assert.equal(collected.status, 0, collected.stdout + collected.stderr);
+		assert.match(collected.stdout, /tombstone_00/);
+		assert.ok(existsSync(path.join(tests, 'tombstones', 'tombstone_00')));
+		assert.ok(
+			!existsSync(path.join(tests, 'bugreport.zip')),
+			'the bugreport zip is not kept in the artifact'
+		);
+		assert.match(readFileSync(trace, 'utf8'), /timeout 600 adb bugreport/);
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
 test('Android clean-start flows dismiss a queued system ANR before waiting for Expo', () => {
 	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
 		const flow = readMaestroFlow(filename);

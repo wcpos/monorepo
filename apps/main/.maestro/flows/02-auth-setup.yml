@@ -100,8 +100,17 @@ env:
     timeout: 60000
 - tapOn:
     id: "add-user-button"
-# iOS shows the ASWebAuthenticationSession consent alert; Android goes
-# straight to the Custom Tab (spike #696 / check on #698).
+# iOS shows the ASWebAuthenticationSession consent alert ("WCPOS" Wants to
+# Use "wcpos.com" to Sign In); Android goes straight to the Custom Tab (spike
+# #696 / check on #698). The alert is NOT immediate: on the CI simulator it
+# surfaced more than 10 s after the tap (main run 33268389943, iOS phone) —
+# Maestro's one-shot `when: visible` had already given up, and the flow then
+# spent its whole 60 s login-page wait looking at the alert. Wait for EITHER
+# surface first; the tap stays conditional, so Android and an already-
+# consented simulator skip it.
+- extendedWaitUntil:
+    visible: "Continue|Use without an account|Username or Email Address|Nombre de usuario o correo electrónico"
+    timeout: 60000
 - runFlow:
     when:
       visible: "Continue"
