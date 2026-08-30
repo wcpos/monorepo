@@ -1746,7 +1746,19 @@ test('the Android step retries a transient offline ADB transport once', () => {
 		writeFileSync(path.join(dir, '.maestro/tests/first-run/maestro.log'), 'device offline\n');
 		writeFileSync(path.join(dir, '.maestro/tests/exit_code'), '1\n');
 		mkdirSync(path.join(dir, 'bin'));
-		writeFileSync(path.join(dir, 'bin/adb'), '#!/bin/sh\nexit 0\n');
+		// The stable-transport retry polls `timeout 10 adb get-state`; a silent
+		// fake would spin the full 3-minute bound, so answer "device" like a
+		// healthy box. `timeout` is faked pass-through (absent on macOS dev
+		// boxes) and `sleep` is a no-op so the consecutive-poll loop costs
+		// milliseconds.
+		writeFileSync(
+			path.join(dir, 'bin/adb'),
+			'#!/bin/sh\nif [ "$1" = get-state ]; then echo device; fi\nexit 0\n'
+		);
+		writeFileSync(path.join(dir, 'bin/timeout'), '#!/bin/sh\nshift\nexec "$@"\n');
+		writeFileSync(path.join(dir, 'bin/sleep'), '#!/bin/sh\nexit 0\n');
+		spawnSync('chmod', ['+x', path.join(dir, 'bin/timeout')]);
+		spawnSync('chmod', ['+x', path.join(dir, 'bin/sleep')]);
 		writeFileSync(
 			path.join(dir, 'bin/maestro'),
 			'#!/bin/sh\necho called >> "$MAESTRO_RETRY_COUNTER"\nexit 0\n'
@@ -1789,7 +1801,19 @@ test('the Android step does not retry a successful run with a stale offline log'
 		writeFileSync(path.join(dir, '.maestro/tests/first-run/maestro.log'), 'device offline\n');
 		writeFileSync(path.join(dir, '.maestro/tests/exit_code'), '0\n');
 		mkdirSync(path.join(dir, 'bin'));
-		writeFileSync(path.join(dir, 'bin/adb'), '#!/bin/sh\nexit 0\n');
+		// The stable-transport retry polls `timeout 10 adb get-state`; a silent
+		// fake would spin the full 3-minute bound, so answer "device" like a
+		// healthy box. `timeout` is faked pass-through (absent on macOS dev
+		// boxes) and `sleep` is a no-op so the consecutive-poll loop costs
+		// milliseconds.
+		writeFileSync(
+			path.join(dir, 'bin/adb'),
+			'#!/bin/sh\nif [ "$1" = get-state ]; then echo device; fi\nexit 0\n'
+		);
+		writeFileSync(path.join(dir, 'bin/timeout'), '#!/bin/sh\nshift\nexec "$@"\n');
+		writeFileSync(path.join(dir, 'bin/sleep'), '#!/bin/sh\nexit 0\n');
+		spawnSync('chmod', ['+x', path.join(dir, 'bin/timeout')]);
+		spawnSync('chmod', ['+x', path.join(dir, 'bin/sleep')]);
 		writeFileSync(
 			path.join(dir, 'bin/maestro'),
 			'#!/bin/sh\necho called >> "$MAESTRO_RETRY_COUNTER"\nexit 0\n'
@@ -2291,6 +2315,69 @@ test('the blind-driver retry never touches a stateful later flow', () => {
 			'a stateful flow with the blind-driver signature was retried — it must stay red'
 		);
 		assert.doesNotMatch(result.stdout, /driver went blind mid-flow/);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test('the offline retry never re-runs into a transport that will not stabilise', () => {
+	// Codex on #1724: after the poll bound the old line re-ran unconditionally —
+	// a second confusing openLink red instead of "transport never stabilised".
+	const step = findStep(
+		readWorkflow('e2e-native.yml'),
+		'android',
+		'📱 Run Maestro suite on emulator'
+	);
+	const retry = step.with.script
+		.split('\n')
+		.find((line) => line.includes("grep -Rqs 'device offline'"));
+	assert.ok(retry, 'missing the offline retry line');
+
+	const dir = mkdtempSync(path.join(tmpdir(), 'maestro-android-unstable-'));
+	try {
+		mkdirSync(path.join(dir, '.maestro/tests/first-run'), { recursive: true });
+		writeFileSync(path.join(dir, '.maestro/tests/first-run/maestro.log'), 'device offline\n');
+		writeFileSync(path.join(dir, '.maestro/tests/exit_code'), '1\n');
+		mkdirSync(path.join(dir, 'bin'));
+		// get-state answers "offline" forever; sleep is a no-op so the 36-poll
+		// bound costs milliseconds instead of three minutes.
+		writeFileSync(
+			path.join(dir, 'bin/adb'),
+			'#!/bin/sh\nif [ "$1" = get-state ]; then echo offline; fi\nexit 0\n'
+		);
+		writeFileSync(path.join(dir, 'bin/sleep'), '#!/bin/sh\nexit 0\n');
+		writeFileSync(path.join(dir, 'bin/timeout'), '#!/bin/sh\nshift\nexec "$@"\n');
+		writeFileSync(
+			path.join(dir, 'bin/maestro'),
+			'#!/bin/sh\necho called >> "$MAESTRO_RETRY_COUNTER"\nexit 0\n'
+		);
+		for (const bin of ['adb', 'sleep', 'timeout', 'maestro']) {
+			spawnSync('chmod', ['+x', path.join(dir, 'bin', bin)]);
+		}
+
+		const result = runShell(retry, {
+			cwd: dir,
+			env: {
+				PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`,
+				HOME: dir,
+				MAESTRO_RETRY_COUNTER: path.join(dir, 'retry-count'),
+				VARIABLE_PRODUCT_ID: '1',
+				DEVICE_CLASS: 'phone',
+			},
+		});
+
+		assert.ok(
+			!existsSync(path.join(dir, 'retry-count')),
+			'maestro was re-run into a dead transport'
+		);
+		assert.match(result.stdout, /::error::adb transport never stabilised/);
+		assert.equal(readFileSync(path.join(dir, '.maestro/tests/exit_code'), 'utf8').trim(), '1');
+		const statePolls = readFileSync(path.join(dir, '.maestro/tests/adb-state.log'), 'utf8')
+			.trim()
+			.split('\n');
+		// 36 polls with a no-op sleep finish far inside the 180 s wall-clock
+		// deadline, so the poll bound is what ends the loop here.
+		assert.equal(statePolls.length, 36, 'the poll bound must be exhausted, not skipped');
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}
