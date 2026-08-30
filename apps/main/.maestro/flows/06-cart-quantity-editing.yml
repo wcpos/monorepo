@@ -62,6 +62,14 @@ env:
     commands:
       - tapOn:
           id: "search-products"
+      # The tap must have FOCUSED the field before any key is typed — see flow
+      # 01 for the run where it had not. Inside the retry, so a tap that lands
+      # without focus is simply done again.
+      - extendedWaitUntil:
+          visible:
+            id: "search-products"
+            focused: true
+          timeout: 10000
       - eraseText
       # See flow 04: one printable key per Maestro command cannot latch the
       # wedge detector, regardless of the store's configured minimum length.
@@ -72,7 +80,10 @@ env:
           commands:
             - inputText: ${PRODUCT_SEARCH.charAt(output.searchCharIndex)}
             - evalScript: ${output.searchCharIndex++}
+      # Read back the FIELD: a bare text match here can be satisfied by a
+      # product ROW carrying the same name while the input sat empty.
       - assertVisible:
+          id: "search-products"
           text: ${PRODUCT_SEARCH}
 - extendedWaitUntil:
     visible:
@@ -98,10 +109,25 @@ env:
     visible:
       id: "cart-quantity-input"
     timeout: 30000
-- tapOn:
-    id: "cart-quantity-input"
-- eraseText
-- inputText: "3"
+# Tap, wait for focus, type, read back — see flow 01 for the evidence.
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn:
+          id: "cart-quantity-input"
+      - extendedWaitUntil:
+          visible:
+            id: "cart-quantity-input"
+            focused: true
+          timeout: 10000
+      - eraseText
+      - inputText: "3"
+      # Read back the FIELD, not the screen: a bare "3" matches half the cart.
+      # The value is still the raw string here (NumberInput only normalizes on
+      # blur), so the match is exact.
+      - assertVisible:
+          id: "cart-quantity-input"
+          text: "3"
 # optional — see flow 01: hideKeyboard is flaky on iOS and this is
 # housekeeping; a genuinely covered target fails at its own tap.
 - hideKeyboard:

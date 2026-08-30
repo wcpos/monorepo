@@ -69,6 +69,14 @@ env:
     commands:
       - tapOn:
           id: "search-products"
+      # The tap must have FOCUSED the field before any key is typed — see flow
+      # 01 for the run where it had not. Inside the retry, so a tap that lands
+      # without focus is simply done again.
+      - extendedWaitUntil:
+          visible:
+            id: "search-products"
+            focused: true
+          timeout: 10000
       - eraseText
       # See flow 04: one printable key per Maestro command cannot latch the
       # wedge detector, regardless of the store's configured minimum length.
@@ -79,7 +87,10 @@ env:
           commands:
             - inputText: ${VARIABLE_PRODUCT_SEARCH.charAt(output.searchCharIndex)}
             - evalScript: ${output.searchCharIndex++}
+      # Read back the FIELD: a bare text match here can be satisfied by a
+      # product ROW carrying the same name while the input sat empty.
       - assertVisible:
+          id: "search-products"
           text: ${VARIABLE_PRODUCT_SEARCH}
 # VARIABLE_PRODUCT_ID pins the tap to the SEEDED product's id-bearing testID, so a
 # second catalogue record matching the search cannot be tapped instead. The seed

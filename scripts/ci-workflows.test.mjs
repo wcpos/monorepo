@@ -1729,13 +1729,14 @@ test('Android clean-start flows dismiss a queued system ANR before waiting for E
 
 test('clean-launch connection proves the probe URL landed before tapping Connect', () => {
 	const flow = readMaestroFlow('01-clean-launch-connect.yml');
-	const inputIndex = flow.findIndex((command) => command.tapOn?.id === 'store-url-input');
+	const entry = flow.findIndex((command) =>
+		command.retry?.commands?.some((step) => step.tapOn?.id === 'store-url-input')
+	);
 
-	assert.notEqual(inputIndex, -1, 'clean launch must target the store URL input');
-	assert.equal(flow[inputIndex + 1].inputText, 'https://not-a-real-store.invalid');
+	assert.notEqual(entry, -1, 'the probe URL must be typed inside a retry block');
 	// Keyboard dismissal stays Android-only here: it is housekeeping, and on iOS
-	// it has been seen to hit the field's own controls.
-	assert.deepEqual(flow[inputIndex + 2], {
+	// it flails (seventeen retries in run 33307998593).
+	assert.deepEqual(flow[entry + 1], {
 		runFlow: {
 			when: { platform: 'Android' },
 			commands: [{ hideKeyboard: { optional: true } }],
@@ -1745,21 +1746,89 @@ test('clean-launch connection proves the probe URL landed before tapping Connect
 	// the tap proves the keystrokes landed — whatever lost them. Run 33307998593
 	// (iOS tablet) tapped Connect on an empty field and the flow only failed 30s
 	// later, on the post-tap discovery wait, blaming the store for a lost input.
-	assert.deepEqual(flow[inputIndex + 3], {
+	assert.deepEqual(flow[entry + 2], {
 		extendedWaitUntil: {
 			visible: { id: 'connect-store-button', enabled: true },
 			timeout: 10000,
 		},
 	});
-	assert.deepEqual(flow[inputIndex + 4], { tapOn: { id: 'connect-store-button' } });
+	assert.deepEqual(flow[entry + 3], { tapOn: { id: 'connect-store-button' } });
 	// The post-tap wait must outlast the app's own discovery budget: two
 	// use-url-discovery probes at 10s plus two use-api-discovery attempts at 15s.
-	assert.deepEqual(flow[inputIndex + 5], {
+	assert.deepEqual(flow[entry + 4], {
 		extendedWaitUntil: {
 			visible: { id: 'connect-store-button', enabled: true },
 			timeout: 90000,
 		},
 	});
+});
+
+// `tapOn` returns when the tap LANDS, not when the field takes first responder,
+// so the driver can type into nothing at all. Run 33307998593 (iOS tablet)
+// dumped store-url-input as `… enabled=true, focused=false` at the moment of the
+// inputText and the recording shows the field empty for the next eleven seconds;
+// the flow then failed three steps later at a wait that reads as "the store
+// never answered". Every text entry into OUR OWN UI must therefore wait for
+// `focused: true` before typing and read the value back from the SAME id
+// afterwards, so a lost keystroke fails at the step that lost it.
+test('every text entry into the app waits for focus and reads its value back', () => {
+	const flowsDir = path.join(ROOT, 'apps', 'main', '.maestro', 'flows');
+
+	// The only exemptions, both deliberate and both documented at their site:
+	// a lone newline is a key press, not text; and the two WordPress credential
+	// fields live in the auth browser's web view, where there is no testID to
+	// read back, a password cannot be read at all, and re-typing into a form we
+	// do not control can concatenate rather than replace.
+	const exempt = new Set(['\n', '${E2E_USERNAME}', '${E2E_PASSWORD}']);
+
+	const flatten = (commands, out = []) => {
+		for (const command of commands ?? []) {
+			const [key, value] =
+				typeof command === 'string' ? [command, null] : Object.entries(command)[0];
+			out.push([key, value]);
+			if (Array.isArray(value?.commands)) flatten(value.commands, out);
+		}
+		return out;
+	};
+
+	let verified = 0;
+	for (const filename of readdirSync(flowsDir).filter((name) => name.endsWith('.yml'))) {
+		const flow = readMaestroFlow(filename);
+		// The id of the most recent `focused: true` wait, and whether a read-back
+		// for it is still owed. A new focus wait closes the previous entry.
+		let focusedId = null;
+		let owed = null;
+
+		for (const [key, value] of flatten(flow)) {
+			if (key === 'extendedWaitUntil' && value?.visible?.focused === true) {
+				assert.equal(owed, null, `${filename}: no read-back of \`${owed}\` before the next entry`);
+				focusedId = value.visible.id;
+				assert.ok(focusedId, `${filename}: a focus wait must name the input's id`);
+				continue;
+			}
+			if (key === 'inputText') {
+				if (exempt.has(String(value))) continue;
+				assert.ok(
+					focusedId,
+					`${filename}: \`inputText: ${value}\` types without first waiting for focus`
+				);
+				owed = focusedId;
+				continue;
+			}
+			if (key === 'assertVisible' && value?.id && value?.text !== undefined && value.id === owed) {
+				// The read-back closes the entry: a later inputText needs its OWN
+				// focus wait, and says so by name when it does not have one.
+				owed = null;
+				focusedId = null;
+				verified += 1;
+			}
+		}
+
+		assert.equal(owed, null, `${filename}: text typed into \`${owed}\` is never read back`);
+	}
+
+	// 01 and 02 (store URL), 04, 06 and 07 (search), 06 (quantity), 08 (fee).
+	assert.ok(verified >= 7, `only ${verified} verified text entries`);
 });
 
 // The Expo dev launcher's manifest request has a hard 10s native timeout, and a

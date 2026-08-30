@@ -103,9 +103,23 @@ env:
     visible:
       id: "store-url-input"
     timeout: 180000
-- tapOn:
-    id: "store-url-input"
-- inputText: ${STORE_URL}
+# Tap, wait for focus, type, read back — see flow 01 for the evidence (a tap
+# that had not focused the field by the time the driver typed).
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn:
+          id: "store-url-input"
+      - extendedWaitUntil:
+          visible:
+            id: "store-url-input"
+            focused: true
+          timeout: 10000
+      - eraseText
+      - inputText: ${STORE_URL}
+      - assertVisible:
+          id: "store-url-input"
+          text: ${STORE_URL}
 # optional — see flow 01: hideKeyboard is flaky on iOS and this is
 # housekeeping; a genuinely covered target fails at its own tap.
 - hideKeyboard:
@@ -158,6 +172,15 @@ env:
 - extendedWaitUntil:
     visible: "Username or Email Address|Nombre de usuario o correo electrónico"
     timeout: 60000
+# The two credential fields are the ONE pair of text entries in the suite that
+# is not tap-focus-type-verify, deliberately: they live in the WordPress login
+# page inside the auth browser, not in our app. There is no testID to read the
+# value back from, a password field cannot be read at all, and a retry that
+# re-types into a form we do not control can concatenate instead of replace
+# (eraseText in a web view is not dependable either). The failure referent here
+# is already honest without it: a lost keystroke leaves the login page up and
+# the flow fails at the `logged-in-users-label` wait below with that page in the
+# screenshot — it never misreports as an app or store fault.
 - tapOn: "Username or Email Address|Nombre de usuario o correo electrónico"
 - inputText: ${E2E_USERNAME}
 # Android: the soft keyboard covers the password field — ENTER advances focus.

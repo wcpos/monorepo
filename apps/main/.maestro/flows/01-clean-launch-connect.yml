@@ -118,12 +118,47 @@ env:
 - assertVisible:
     id: "enter-demo-store-button"
 # Invalid URL must not produce a connected site.
-- tapOn:
-    id: "store-url-input"
-- inputText: "https://not-a-real-store.invalid"
-# iOS hideKeyboard can tap the adjacent clear control, leaving Connect
-# disabled (PR #1690 and PR #1709 iOS-tablet artifacts). Flow 02 keeps its
-# separate iOS dismissal because the keyboard covers its later Open POS target.
+#
+# TAP, WAIT FOR FOCUS, TYPE, READ BACK — the shape every text entry in this
+# suite uses, and the reason for it is this step. `tapOn` returns as soon as the
+# tap lands; the driver then types into whatever holds first responder, which
+# after a tap on a starved runner is not yet the field. Run 33307998593 (iOS
+# tablet) dumped this element as
+#   {… resource-id=store-url-input, bounds=[205,642][527,674], enabled=true,
+#    focused=false}
+# at 11:34:21 — the moment of the inputText — and the recording shows the field
+# still empty at the Connect tap 11 s later. The keystrokes went nowhere, and
+# the flow died 30 s further on at a wait that reads as "the store never
+# answered". So: require `focused: true` before typing, read the value back
+# afterwards, and let `retry` do the whole tap-focus-type-verify again if any of
+# it missed. maxRetries: 2 matches the search blocks in flows 04/06/07.
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn:
+          id: "store-url-input"
+      - extendedWaitUntil:
+          visible:
+            id: "store-url-input"
+            focused: true
+          timeout: 10000
+      # No-op on the first attempt; on a retry it clears a partial entry.
+      - eraseText
+      - inputText: "https://not-a-real-store.invalid"
+      # The read-back. `.` is regex-any, which is what the literal dots need.
+      - assertVisible:
+          id: "store-url-input"
+          text: "https://not-a-real-store.invalid"
+# Android-only, and NOT for the reason first recorded here: the claim was that
+# iOS hideKeyboard taps the field's clear control and empties it. Run
+# 33307998593's recording rules that out — the field was already empty before
+# hideKeyboard ran (see the timeline above), so nothing was cleared. What the
+# artifacts DO show is hideKeyboard flailing on iOS: seventeen retries between
+# 11:34:24.9 and 11:34:29.2, and an earlier local run failed outright at this
+# step. It is housekeeping either way — with the read-back above, a keyboard
+# that genuinely covers the next target now fails at THAT target and names it —
+# so it stays gated to the platform where it works. Flow 02 keeps its own iOS
+# dismissal because the keyboard there covers its later Open POS target.
 - runFlow:
     when:
       platform: Android

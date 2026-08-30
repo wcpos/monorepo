@@ -80,13 +80,27 @@ appId: com.wcpos.main.dev
     visible:
       id: "add-fee-dialog"
     timeout: 30000
-- tapOn:
-    id: "fee-amount-input"
-- eraseText
-- inputText: ${output.dollars}
-- inputText: ".${output.cents}"
-- assertVisible:
-    text: "${output.dollars}.${output.cents}"
+# Tap, wait for focus, type, read back — see flow 01 for the evidence. The
+# read-back was already here; it now names the FIELD as well as the text, and
+# the whole entry retries if the tap did not focus in time.
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn:
+          id: "fee-amount-input"
+      - extendedWaitUntil:
+          visible:
+            id: "fee-amount-input"
+            focused: true
+          timeout: 10000
+      - eraseText
+      - inputText: ${output.dollars}
+      - inputText: ".${output.cents}"
+      # The `.` is regex-any on purpose: the store's decimal separator may be
+      # a comma, and CurrencyInput renders whatever the store configures.
+      - assertVisible:
+          id: "fee-amount-input"
+          text: "${output.dollars}.${output.cents}"
 # The submit button sits UNDER the numeric keyboard on a phone (y≈543 vs a
 # keyboard top of ≈516 on an iPhone 16 Pro) and iOS `hideKeyboard` failed
 # here (run 2026-08-29 16:27, "Hide Keyboard... WARNED"), so the tap landed
