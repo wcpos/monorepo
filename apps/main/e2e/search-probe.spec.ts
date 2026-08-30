@@ -5,6 +5,7 @@ import {
 	isolatedVariableProductTest,
 	tryAddRunPrivateSimpleProduct,
 } from './checkout-probe';
+import { probeVariationSearch } from './cold-start';
 import {
 	authorizationCandidates,
 	resolveProbeAuthorization,
@@ -81,27 +82,27 @@ function fakeStore(accepts: string) {
 	const asked: string[] = [];
 	const urls: string[] = [];
 	const params: Record<string, string>[] = [];
-	const record = (
-		url: string,
-		options: { headers?: Record<string, string>; params?: Record<string, string> }
-	) => {
+	const timeouts: (number | undefined)[] = [];
+	type SentOptions = {
+		headers?: Record<string, string>;
+		params?: Record<string, string>;
+		timeout?: number;
+	};
+	const record = (url: string, options: SentOptions) => {
 		const offered = options.params?.authorization ?? options.headers?.Authorization ?? '';
 		asked.push(offered);
 		urls.push(url);
 		params.push(options.params ?? {});
+		timeouts.push(options.timeout);
 		return offered === accepts;
 	};
 	const context = {
-		get: async (
-			url: string,
-			options: { headers?: Record<string, string>; params?: Record<string, string> }
-		) => response(record(url, options) ? 200 : 401, []),
-		post: async (
-			url: string,
-			options: { headers?: Record<string, string>; params?: Record<string, string> }
-		) => response(record(url, options) ? 201 : 401, { id: 7, slug: 'e2e-probe' }),
+		get: async (url: string, options: SentOptions) =>
+			response(record(url, options) ? 200 : 401, []),
+		post: async (url: string, options: SentOptions) =>
+			response(record(url, options) ? 201 : 401, { id: 7, slug: 'e2e-probe' }),
 	} as unknown as APIRequestContext;
-	return { context, asked, urls, params };
+	return { context, asked, urls, params, timeouts };
 }
 
 test('re-reads the app credential until one actually authenticates', async () => {
@@ -132,6 +133,28 @@ test('gives up with the statuses it saw when no credential ever authenticates', 
 	).rejects.toThrow(/authenticated against no \/wc\/v3\/products transport/);
 	// The whole ladder was walked, not just the captured form.
 	expect(store.asked.length).toBeGreaterThan(1);
+});
+
+test('bounds every verification request by what is left of the budget', async () => {
+	// `APIRequestContext.get` waits 30 s by default and the resolver can only consult its
+	// deadline BETWEEN candidates, so an unanswering store would stretch a 10 s budget to
+	// two minutes. Each request must therefore carry the remaining budget itself.
+	const store = fakeStore('nothing-works');
+
+	await expect(
+		resolveProbeAuthorization(
+			store.context,
+			'https://example.test',
+			() => ({ transport: 'header', value: 'Bearer dead' }),
+			{ timeoutMs: 10_000 }
+		)
+	).rejects.toThrow(/authenticated against no/);
+
+	expect(store.timeouts.length).toBeGreaterThan(1);
+	for (const timeout of store.timeouts) {
+		expect(timeout).toBeGreaterThan(0);
+		expect(timeout).toBeLessThanOrEqual(10_000);
+	}
 });
 
 test('proves the credential against the namespace the caller named', async () => {
@@ -307,6 +330,76 @@ test.describe('search-probe pure logic', () => {
 		await expect(
 			searchAndWaitForServer(page as never, { fill: async () => {} } as never, 'products', 'zxdead')
 		).rejects.toThrow('products search demand failed: HTTP 401');
+	});
+
+	test('an exact local row does not excuse a search demand that 401d', async () => {
+		// `localResult` stands in for the server demand only while the wire stayed QUIET —
+		// an already-covered search fires no request at all, which is what the parameter
+		// exists for. A demand that DID go out and failed is not excused by a row that
+		// happened to render, or a cached row would mask an auth regression outright.
+		const failed = searchDemand(401, 'zxcached');
+		const page = {
+			waitForResponse: (predicate: (r: ReturnType<typeof searchDemand>) => boolean) => {
+				predicate(failed);
+				// Never settles: after the 401 the store answers nothing more.
+				return new Promise(() => {});
+			},
+		};
+		const localResult = { waitFor: async () => {} };
+
+		await expect(
+			searchAndWaitForServer(
+				page as never,
+				{ fill: async () => {} } as never,
+				'products',
+				'zxcached',
+				localResult as never
+			)
+		).rejects.toThrow('products search demand failed: HTTP 401');
+	});
+
+	/** The store's `wcpos/v2` namespace index, as `variationsRouteAdvertisesSearch` reads it. */
+	function variationsIndex(args: Record<string, unknown>) {
+		return response(200, {
+			routes: { '/wcpos/v2/variations': { endpoints: [{ args }] } },
+		});
+	}
+
+	test('an include-only variations route is unsupported without asking for a credential', async () => {
+		// The capability answer must be reachable on a store that can never produce one:
+		// resolving first would spend the ladder's budget and then THROW on exactly the
+		// stores this probe exists to report as unsupported.
+		const urls: string[] = [];
+		const request = {
+			get: async (url: string) => {
+				urls.push(url);
+				return variationsIndex({ include: {} });
+			},
+		} as unknown as APIRequestContext;
+
+		const probe = await probeVariationSearch(request, 'https://example.test', () => null, 'zx1');
+
+		expect(probe).toEqual({
+			supported: false,
+			reason: 'variations route registers no `search` arg',
+		});
+		expect(urls).toEqual(['https://example.test/wp-json/wcpos/v2']);
+	});
+
+	test('a store the app never authenticated against is unsupported, not a failure', async () => {
+		const urls: string[] = [];
+		const request = {
+			get: async (url: string) => {
+				urls.push(url);
+				return variationsIndex({ search: {} });
+			},
+		} as unknown as APIRequestContext;
+
+		const probe = await probeVariationSearch(request, 'https://example.test', () => null, 'zx2');
+
+		expect(probe).toEqual({ supported: false, reason: 'no store authorization was observed' });
+		// No verification read was attempted — the index is the only request.
+		expect(urls).toEqual(['https://example.test/wp-json/wcpos/v2']);
 	});
 
 	test('writer credentials must be either fully configured or fully absent', () => {

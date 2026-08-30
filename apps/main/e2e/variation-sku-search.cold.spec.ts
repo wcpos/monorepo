@@ -2,7 +2,6 @@ import { expect, type Page } from '@playwright/test';
 
 import { probeVariationSearch, coldStartTest as test } from './cold-start';
 import { becomesVisible, getStoreUrl } from './fixtures';
-import { resolveProbeAuthorization } from './probe-credential';
 import {
 	createRunPrivateProduct,
 	deleteSearchProbe,
@@ -76,13 +75,10 @@ test.describe('Cold start — variation SKU search', () => {
 		try {
 			// Secretless forks retain the existing store-discovered variation SKU.
 			const searchTerm = runPrivateProduct?.variationSku ?? VARIATION_SKU_TERM;
-			// Resolved against the same namespace the probe reads (`wcpos/v2`), never
-			// replayed: a stale captured token answers 401 here, and the branch below
-			// would report that as "the store did not serve the SKU we just created".
-			const authorization = await resolveProbeAuthorization(request, storeUrl, storeAuthorization, {
-				route: '/wcpos/v2/products',
-			});
-			const probe = await probeVariationSearch(request, storeUrl, authorization, searchTerm);
+			// The GETTER, not its value: probeVariationSearch answers the two "this store
+			// cannot do it" cases before asking for a live credential, then resolves one
+			// itself rather than replaying whatever the app last sent.
+			const probe = await probeVariationSearch(request, storeUrl, storeAuthorization, searchTerm);
 			if (!probe.supported) {
 				if (runPrivateProduct) {
 					throw new Error(`Created variation SKU was not served by wcpos/v2: ${probe.reason}`);

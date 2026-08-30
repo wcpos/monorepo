@@ -112,13 +112,37 @@ async function verificationRead(
 	request: APIRequestContext,
 	storeUrl: string,
 	route: ProbeVerificationRoute,
-	options: { headers: Record<string, string>; params: Record<string, string> }
+	options: { headers: Record<string, string>; params: Record<string, string> },
+	deadline: number
 ): Promise<APIResponse> {
 	const base = storeUrl.replace(/\/+$/, '');
 	const params = { ...options.params, ...VERIFICATION_ROUTES[route], per_page: '1' };
-	const pretty = await request.get(`${base}/wp-json${route}`, { ...options, params });
+	const pretty = await request.get(`${base}/wp-json${route}`, {
+		...options,
+		params,
+		timeout: remainingRequestTimeout(deadline),
+	});
 	if (pretty.status() !== 404) return pretty;
-	return request.get(`${base}/index.php`, { ...options, params: { ...params, rest_route: route } });
+	return request.get(`${base}/index.php`, {
+		...options,
+		params: { ...params, rest_route: route },
+		timeout: remainingRequestTimeout(deadline),
+	});
+}
+
+/**
+ * Every verification request is bounded by what is LEFT of the resolver's budget.
+ *
+ * `APIRequestContext.get` waits 30 s by default, and the resolver can only look at its
+ * deadline between candidates — so a store that accepts the connection and then says
+ * nothing would spend 30 s per candidate and blow a 10 s teardown budget out to two
+ * minutes. Floored at 1 ms rather than 0 because Playwright reads `timeout: 0` as
+ * "no timeout at all", which is the opposite of what an exhausted budget means. The
+ * ladder is still walked in full once — the candidates after the budget runs out simply
+ * fail fast, and their statuses still reach the error message.
+ */
+function remainingRequestTimeout(deadline: number): number {
+	return Math.max(1, deadline - Date.now());
 }
 
 /** How long to keep re-reading the app's credential while it is still a stale one. */
@@ -174,7 +198,8 @@ export async function resolveProbeAuthorization(
 						request,
 						storeUrl,
 						route,
-						storeRequestOptions(candidate)
+						storeRequestOptions(candidate),
+						deadline
 					);
 					if (response.ok()) return candidate;
 					statuses.push(`${candidate.transport}=${response.status()}`);

@@ -1091,7 +1091,16 @@ export async function sweepOrphanedProductProbes(
  * this way, for the hostile-proxy flavour of the same recovery.)
  *
  * Nothing is weakened: a demand that NEVER succeeds inside the budget still fails, and the
- * failure names the last status the store actually gave rather than a bare timeout.
+ * failure names the last status the store actually gave rather than a bare timeout — and
+ * an exact `localResult` may only stand in for the demand while the wire stayed QUIET. A
+ * demand that went out and 401'd is not excused by a row that happened to render.
+ *
+ * That last rule is why this is not a `Promise.all` of the two waiters. `localResult`
+ * exists precisely because the sync engine's demand coverage means an already-satisfied
+ * search fires NO wire request at all: requiring both would hang the full 120 s every time
+ * (observed on CI shard 4, 2026-08-21 — see `addCheckoutProbeProductAgain` in
+ * checkout-probe.ts). Checking `lastFailure` on the local win keeps the invariant without
+ * reintroducing that hang.
  */
 export async function searchAndWaitForServer(
 	page: Page,
@@ -1133,9 +1142,13 @@ export async function searchAndWaitForServer(
 	localResultPending?.catch(() => {});
 
 	await searchInput.fill(term);
+	let satisfiedLocally = false;
 	try {
 		if (localResultPending) {
-			await Promise.race([responsePending, localResultPending.then(() => null)]);
+			satisfiedLocally = await Promise.race([
+				responsePending.then(() => false),
+				localResultPending.then(() => true),
+			]);
 		} else {
 			await responsePending;
 		}
@@ -1144,5 +1157,8 @@ export async function searchAndWaitForServer(
 			throw new Error(`${collection} search demand failed: HTTP ${lastFailure.status}`);
 		}
 		throw error;
+	}
+	if (satisfiedLocally && lastFailure.status !== null) {
+		throw new Error(`${collection} search demand failed: HTTP ${lastFailure.status}`);
 	}
 }

@@ -1109,15 +1109,22 @@ export const authenticatedTest = base.extend<{
 			// we guard the settle()+resolve+call as well (route-handler-never-rethrow, #997).
 			try {
 				await orderCapture.settle();
-				await finalizeCreatedOrders(
-					request,
-					getStoreUrl(testInfo),
-					orderCapture.createdOrderIds,
-					await resolveProbeOptions(request, getStoreUrl(testInfo), storeAuthorization, {
-						route: '/wcpos/v1/orders',
-						timeoutMs: TEARDOWN_CREDENTIAL_TIMEOUT_MS,
-					})
-				);
+				// Most authenticated specs create no orders at all. `finalizeCreatedOrders`
+				// already returns immediately on an empty set, but an awaited argument is
+				// evaluated BEFORE it can — so without this guard every such teardown would
+				// pay a REST round trip, or a whole credential ladder during a stale-auth
+				// incident, against stores that are deliberately concurrency-limited.
+				if (orderCapture.createdOrderIds.size > 0) {
+					await finalizeCreatedOrders(
+						request,
+						getStoreUrl(testInfo),
+						orderCapture.createdOrderIds,
+						await resolveProbeOptions(request, getStoreUrl(testInfo), storeAuthorization, {
+							route: '/wcpos/v1/orders',
+							timeoutMs: TEARDOWN_CREDENTIAL_TIMEOUT_MS,
+						})
+					);
+				}
 			} catch (error) {
 				log.warn(
 					`[order-cleanup] teardown failed: ${error instanceof Error ? error.message : String(error)}`
