@@ -1,5 +1,3 @@
-import * as React from 'react';
-
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 import { type Observable, of } from 'rxjs';
@@ -64,20 +62,44 @@ function queued$(collection: QueueCollection | undefined): Observable<QueuedEmai
 }
 
 /**
+ * One resource per queue collection, held OUTSIDE the render lifecycle — the same
+ * suspend-before-commit trap `use-rejected-mutations` documents.
+ *
+ * That file claims this hook "gets away with" a `useMemo` because its observable emits
+ * `of([])` synchronously while the collection is undefined. That is only true on a cold boot.
+ * Open Store Health with a store database already mounted — the ordinary way a merchant gets
+ * here — and `queued$` takes the live `find().$` path, whose first emission is async; the
+ * panel then suspends before it has ever committed, React discards the `useMemo` with the
+ * aborted render, and every retry builds a resource that suspends for the reason its
+ * predecessor did. A loop, not a load (#1707).
+ *
+ * Keyed on the collection, so a store switch or a reset follows the new one and the entry is
+ * released with the collection it belongs to.
+ */
+const resourceByCollection = new WeakMap<object, ObservableResource<QueuedEmail[]>>();
+/** No store database: `of([])`, one resource for all of them, and it never suspends. */
+const emptyQueueResource = new ObservableResource(queued$(undefined));
+
+function queuedEmailsResource(
+	collection: QueueCollection | undefined
+): ObservableResource<QueuedEmail[]> {
+	if (!collection) return emptyQueueResource;
+	let resource = resourceByCollection.get(collection);
+	if (!resource) {
+		resource = new ObservableResource(queued$(collection));
+		resourceByCollection.set(collection, resource);
+	}
+	return resource;
+}
+
+/**
  * Suspends until the first emission, then re-renders on every queue change —
  * the house data-flow (ObservableResource + Suspense), so there is no loading
- * branch to get wrong. Keyed on the collection so a store switch or a reset
- * rebuilds the resource.
+ * branch to get wrong.
  */
 export function useQueuedEmails(): QueuedEmail[] {
 	const collection = useReceiptEmailQueueCollection();
-	const resource = React.useMemo(
-		() => new ObservableResource(queued$(collection as unknown as QueueCollection | undefined)),
-		[collection]
+	return useObservableSuspense(
+		queuedEmailsResource(collection as unknown as QueueCollection | undefined)
 	);
-	React.useEffect(() => {
-		// ObservableResource owns the RxDB subscription and must release it on rebind/unmount.
-		return () => resource.destroy();
-	}, [resource]);
-	return useObservableSuspense(resource);
 }

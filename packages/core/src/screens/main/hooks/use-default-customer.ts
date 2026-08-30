@@ -1,8 +1,7 @@
-import * as React from 'react';
-
-import { ObservableResource, useObservable } from 'observable-hooks';
+import { useObservable } from 'observable-hooks';
 import { map, switchMap } from 'rxjs/operators';
 
+import { useQueryRuntime, useSuspenseResource } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 
 import { useCollectionBinding } from '../../../query';
@@ -10,6 +9,7 @@ import { useDefaultCustomerID } from './use-default-customer-id';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
 
 export const useDefaultCustomer = () => {
+	const runtime = useQueryRuntime();
 	const guestCustomer = useGuestCustomer();
 	const defaultCustomerID = useDefaultCustomerID();
 	const defaultCustomerRemoteId = remoteIdOrNull(defaultCustomerID);
@@ -39,9 +39,17 @@ export const useDefaultCustomer = () => {
 		[binding.result$, guestCustomer]
 	);
 
-	const defaultCustomerResource = React.useMemo(
-		() => new ObservableResource(defaultCustomer$),
-		[defaultCustomer$]
+	// Bridged across Suspense retries (see `useSuspenseResource`). Both callers — the general
+	// settings form and `useNewOrder` — read this resource with `useObservableSuspense` in the
+	// SAME component that builds it, with no boundary in between, which is the exact shape of
+	// the Orders blank body (#1707): a `useMemo` resource is thrown away with the uncommitted
+	// fiber, the retry builds another, and a customers query's first emission is always async,
+	// so the wait never ends. The customer ids are the input identity, so a changed default
+	// reloads the mounted consumer's resource in place instead of replacing it.
+	const defaultCustomerResource = useSuspenseResource(
+		runtime.engine,
+		`${defaultCustomerID}:${guestCustomer?.id ?? ''}`,
+		defaultCustomer$
 	);
 
 	return { defaultCustomer$, defaultCustomerResource };

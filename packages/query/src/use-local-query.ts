@@ -1,11 +1,11 @@
 import * as React from 'react';
 
-import { ObservableResource } from 'observable-hooks';
 import { combineLatest, defer, from, of, throwError } from 'rxjs';
 import { catchError, map, shareReplay, startWith, switchMap } from 'rxjs/operators';
 
 import { useQueryRuntime } from './provider';
 import { useLocalCollection$ } from './use-local-collection';
+import { useSuspenseResource } from './suspense-resource';
 import { recoverLogsCollectionStorage } from './logs-storage-recovery';
 
 import type { QueryResult } from './query-result';
@@ -136,26 +136,21 @@ export const useLocalQuery = (options: LocalQueryOptions) => {
 			),
 		[collection$, runtime.locale, stableOptions]
 	);
-	// One resource for the hook's lifetime (mirrors useObservableResource in
-	// @wcpos/core query-bindings): reloading retains the current value while the
-	// new query loads and clears terminal errors, so a descriptor change never
-	// blanks a mounted consumer.
-	const [resource] = React.useState(() => new ObservableResource(result$));
-	const resourceRef = React.useRef(resource);
+	// One resource for the hook's lifetime, bridged across Suspense retries (see
+	// `useSuspenseResource`): plain `useState` lives on the fiber, so a consumer that suspends
+	// on this resource before its subtree has ever committed would have it rebuilt on every
+	// retry and never mount. Once this hook commits the resource is ordinary component state
+	// again, reloaded — never rebuilt — when the query moves, which is what keeps a descriptor
+	// change from blanking a mounted consumer.
+	const resource = useSuspenseResource<QueryResult<LocalCollection>>(
+		runtime.localDB,
+		`${key}|${runtime.locale}`,
+		result$
+	);
 	const total$ = React.useMemo(
 		() => result$.pipe(map((result) => result.count ?? result.hits.length)),
 		[result$]
 	);
-
-	React.useEffect(() => {
-		if (resource.input$ !== result$) resource.reload(result$);
-	}, [resource, result$]);
-
-	React.useEffect(() => {
-		const lifetimeResource = resourceRef.current;
-		// The resource owns the local RxDB subscriptions for this hook.
-		return () => lifetimeResource.destroy();
-	}, []);
 
 	return { resource, result$, total$ };
 };

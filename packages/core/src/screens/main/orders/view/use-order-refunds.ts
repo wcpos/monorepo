@@ -31,6 +31,23 @@ export interface WCRefund {
 	}[];
 }
 
+/**
+ * The refunds for one order, as a Suspense resource.
+ *
+ * CANNOT loop across a Suspense retry, and deliberately holds no cache. A resource built during
+ * render is only thrown away when the component that built it is INSIDE the boundary that
+ * catches the suspension — React unwinds to the boundary and discards the work-in-progress
+ * fibers below it. This hook's only caller, `RefundsResourceBoundary` in `../view/modal.tsx`,
+ * builds the resource and renders the `Suspense` (and the error boundary) BELOW itself, so it
+ * commits alongside the fallback and its `useMemo` survives; the retry reads back the resource
+ * whose HTTP GET is already in flight. `use-order-refunds.suspense.test.tsx` pins that, and
+ * `packages/query/tests/suspense-resource.test.tsx` pins the general rule.
+ *
+ * A keyed cache would be the WRONG fix here even though it would also stop a loop: refunds come
+ * from an HTTP GET with no live subscription behind it, so an entry keyed by order id would
+ * serve a snapshot forever and a refund taken on another till would never appear. The resource
+ * is per mount on purpose — every open of the modal asks the server again.
+ */
 export function useOrderRefunds(orderId: number) {
 	const http = useRestHttpClient();
 

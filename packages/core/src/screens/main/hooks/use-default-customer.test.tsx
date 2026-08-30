@@ -11,6 +11,14 @@ let mockDefaultCustomerID = 0;
 jest.mock('../../../query', () => ({
 	useCollectionBinding: (...args: unknown[]) => mockUseCollectionBinding(...args),
 }));
+// The hook holds its Suspense resource in the query runtime's bridge rather than a `useMemo`
+// (see `useSuspenseResource`), so it now needs a runtime. Nothing this file asserts changes:
+// the bridge is scoped on the engine, and an empty stub is a perfectly good scope object.
+jest.mock('@wcpos/query', () => ({
+	useQueryRuntime: () => ({ engine: {} }),
+	useSuspenseResource: jest.requireActual('../../../../../query/src/suspense-resource')
+		.useSuspenseResource,
+}));
 jest.mock('./use-default-customer-id', () => ({
 	useDefaultCustomerID: () => mockDefaultCustomerID,
 }));
