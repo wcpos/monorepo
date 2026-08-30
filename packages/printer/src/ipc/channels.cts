@@ -86,6 +86,8 @@ export type NovuBridgeEvent =
 	| { kind: 'unseen_count_changed'; count: number }
 	| { kind: 'session_ready' };
 
+export type TelemetryConsent = 'undecided' | 'allowed' | 'denied';
+
 /**
  * invoke = render→main→render (Promise); send = render→main (fire-and-forget);
  * on = main→render push (renderer subscribes).
@@ -117,6 +119,7 @@ export interface IpcInvokeChannels {
 
 export interface IpcSendChannels {
 	clearData: unknown;
+	'telemetry-consent': TelemetryConsent;
 	'print-external-url': { externalURL: string; printJobId: string };
 	'open-external-url': string;
 	'bluetooth-device-selected': string;
@@ -147,6 +150,7 @@ export const INVOKE_CHANNELS = [
 
 export const SEND_CHANNELS = [
 	'clearData',
+	'telemetry-consent',
 	'print-external-url',
 	'open-external-url',
 	'bluetooth-device-selected',

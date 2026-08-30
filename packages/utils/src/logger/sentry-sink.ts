@@ -4,4 +4,8 @@ export type SentryCaptureInput = {
 	context?: unknown;
 };
 
+export type TelemetryConsent = 'undecided' | 'allowed' | 'denied';
+
+export function setTelemetryConsent(_consent: TelemetryConsent): void {}
+
 export function captureLoggedError(_input: SentryCaptureInput): void {}

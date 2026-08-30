@@ -199,6 +199,10 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			// value that already validated, so existing documents pass through.
 			return oldDoc;
 		},
+		15(oldDoc: StoreDocumentType) {
+			// v15 adds optional tracking consent; the next server sync populates it.
+			return oldDoc;
+		},
 	},
 };
 

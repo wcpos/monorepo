@@ -8,8 +8,13 @@ export type SentryCaptureInput = {
 	context?: unknown;
 };
 
+export type TelemetryConsent = 'undecided' | 'allowed' | 'denied';
+
 // Public DSN for the same Sentry project used by the desktop main process.
 const SENTRY_DSN = 'https://39233e9d1e5046cbb67dae52f807de5f@o159038.ingest.sentry.io/1220733';
+
+let telemetryConsent: TelemetryConsent = 'undecided';
+let isInitialized = false;
 
 function getInstallId(): string | undefined {
 	const electronInstallId = (window as unknown as { electron?: { installId?: unknown } }).electron
@@ -67,6 +72,8 @@ export function buildCaptureOptions({ message, code, context }: SentryCaptureInp
 }
 
 export function captureLoggedError(input: SentryCaptureInput): void {
+	if (!isInitialized) return;
+
 	try {
 		const error = (input.context as any)?.error;
 		const options = buildCaptureOptions(input);
@@ -80,17 +87,41 @@ export function captureLoggedError(input: SentryCaptureInput): void {
 	}
 }
 
+// Development builds never report, whatever the merchant chose: dev noise
+// would drown the production signal. ts-jest leaves __DEV__ undefined.
 const isDevelopment = typeof __DEV__ !== 'undefined' && __DEV__;
-if (typeof window !== 'undefined' && !isDevelopment) {
-	Sentry.init({
-		dsn: SENTRY_DSN,
-		release: `wcpos-app@${AppInfo.version}`,
-		environment: AppInfo.platform,
-		sendDefaultPii: false,
-		sampleRate: 1,
-		beforeSend: scrubEvent,
-		ignoreErrors: [/ResizeObserver loop/],
-	});
-	const installId = getInstallId();
-	if (installId) Sentry.setUser({ id: installId });
+
+export function setTelemetryConsent(consent: TelemetryConsent): void {
+	if (consent === telemetryConsent) return;
+	telemetryConsent = consent;
+
+	if (consent === 'allowed') {
+		if (isDevelopment || typeof window === 'undefined') return;
+		Sentry.init({
+			dsn: SENTRY_DSN,
+			release: `wcpos-app@${AppInfo.version}`,
+			environment: AppInfo.platform,
+			sendDefaultPii: false,
+			sampleRate: 1,
+			beforeSend: scrubEvent,
+			ignoreErrors: [/ResizeObserver loop/],
+		});
+		const installId = getInstallId();
+		if (installId) Sentry.setUser({ id: installId });
+		isInitialized = true;
+		return;
+	}
+
+	if (isInitialized) {
+		void Sentry.close();
+		isInitialized = false;
+	}
+
+	if (consent === 'denied') {
+		try {
+			window.localStorage.removeItem('wcpos_install_id');
+		} catch {
+			// Browser storage can be unavailable despite window being present.
+		}
+	}
 }
