@@ -187,6 +187,37 @@ describe('useOnEndReached', () => {
 		expect(settledHandler).toHaveBeenCalledTimes(1);
 	});
 
+	it('re-arms when a populated list becomes empty with a stable handler', () => {
+		const onEndReached = jest.fn();
+		const scrollElement = createMockScrollElement({
+			scrollTop: 0,
+			clientHeight: 500,
+			scrollHeight: 500,
+		});
+
+		const { rerender } = renderHook(
+			({ data }) =>
+				useOnEndReached({
+					scrollElement,
+					horizontal: false,
+					onEndReached,
+					onEndReachedThreshold: 0.5,
+					data,
+					totalSize: 0,
+				}),
+			{ initialProps: { data: [1] } }
+		);
+
+		expect(onEndReached).toHaveBeenCalledTimes(1);
+		(scrollElement as HTMLDivElement & { _triggerScroll(): void })._triggerScroll();
+		expect(onEndReached).toHaveBeenCalledTimes(2);
+
+		rerender({ data: [] });
+		(scrollElement as HTMLDivElement & { _triggerScroll(): void })._triggerScroll();
+
+		expect(onEndReached).toHaveBeenCalledTimes(3);
+	});
+
 	it.each([
 		['vertical', false, { clientHeight: 0, scrollHeight: 0 }],
 		['horizontal', true, { clientWidth: 0, scrollWidth: 0 }],
