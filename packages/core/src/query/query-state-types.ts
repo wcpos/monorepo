@@ -100,5 +100,7 @@ export type QueryStateActions<C extends CollectionKey> = {
 	/** Set (or, with undefined, remove) a filter in both the live state and the resetFilters baseline. */
 	rebaseFilter<F extends keyof FiltersOf<C>>(field: F, value: FiltersOf<C>[F] | undefined): void;
 	setSort(field: SortFieldOf<C>, direction: 'asc' | 'desc'): void;
+	/** Re-size the paging step; raises `limit` to the new size when the current window is smaller. */
+	setPageSize(pageSize: number): void;
 	extendLimit(): void;
 };

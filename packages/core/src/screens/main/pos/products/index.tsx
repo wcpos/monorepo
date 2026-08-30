@@ -26,8 +26,10 @@ import { CameraScanButton } from './camera-scan-button';
 import { CameraScannerPanel } from './camera-scanner-panel';
 import { StorageOutageBanner } from './storage-outage-banner';
 import { ProductGrid } from './grid';
+import { POS_PRODUCTS_MIN_PAGE_SIZE } from './fit-page-size';
 import { UISettingsForm } from './ui-settings-form';
 import { useBarcode } from './use-barcode';
+import { useFitPageSize } from './use-fit-page-size';
 import { ViewModeToggle } from './view-mode-toggle';
 import { useT } from '../../../../contexts/translations';
 import { DataTable, DataTableFooter, defaultRenderItem } from '../../components/data-table';
@@ -59,7 +61,7 @@ import type { Row, Table } from '../../../../table-types';
 
 type ProductRow = { record: EngineRecord<'products'> };
 
-const POS_PRODUCTS_PAGE_SIZE = 10;
+const POS_PRODUCTS_PAGE_SIZE = POS_PRODUCTS_MIN_PAGE_SIZE;
 const POS_PRODUCT_SORT_FIELDS = [
 	'name',
 	'sku',
@@ -198,12 +200,14 @@ function POSProductsContent({
 		[actions]
 	);
 	const { calcTaxes } = useTaxSettings();
-	const viewMode = useDocField(uiSettings, (value) => value.viewMode);
+	const viewMode = useDocField(uiSettings, (value) => value.viewMode) === 'grid' ? 'grid' : 'table';
+	const gridColumns = useDocField(uiSettings, (value) => value.gridColumns);
 	const sortBy = useDocField(uiSettings, (value) => value.sortBy);
 	const sortDirection = useDocField(uiSettings, (value) => value.sortDirection);
 	const [expandedRef, expanded$] = useObservableRef<ExpandedState>({} as ExpandedState);
 	const [scannerOpen, setScannerOpen] = React.useState(false);
 	const t = useT();
+	const handleProductsLayout = useFitPageSize(actions.setPageSize, viewMode, gridColumns);
 
 	/**
 	 * Barcode
@@ -321,32 +325,34 @@ function POSProductsContent({
 					</ErrorBoundary>
 				</CardHeader>
 				<CardContent className="border-border flex-1 border-t p-0">
-					<ErrorBoundary>
-						<Suspense>
-							{viewMode === 'grid' ? (
-								<ProductGrid binding={binding} actions={tableActions} />
-							) : (
-								<DataTable<ProductRow>
-									id="pos-products"
-									collectionName="products"
-									binding={binding}
-									resource={binding.resource}
-									sort={state.sort}
-									actions={tableActions}
-									active$={binding.active$}
-									total$={binding.total$}
-									sync={binding.sync}
-									renderItem={renderItem}
-									cellsForRow={cellsForRow}
-									noDataMessage={t('common.no_products_found')}
-									estimatedItemSize={100}
-									TableFooterComponent={calcTaxes ? TableFooter : DataTableFooter}
-									getItemType={(row) => row.original.record.payload.type}
-									tableConfig={tableConfig}
-								/>
-							)}
-						</Suspense>
-					</ErrorBoundary>
+					<View className="flex-1" onLayout={handleProductsLayout}>
+						<ErrorBoundary>
+							<Suspense>
+								{viewMode === 'grid' ? (
+									<ProductGrid binding={binding} actions={tableActions} />
+								) : (
+									<DataTable<ProductRow>
+										id="pos-products"
+										collectionName="products"
+										binding={binding}
+										resource={binding.resource}
+										sort={state.sort}
+										actions={tableActions}
+										active$={binding.active$}
+										total$={binding.total$}
+										sync={binding.sync}
+										renderItem={renderItem}
+										cellsForRow={cellsForRow}
+										noDataMessage={t('common.no_products_found')}
+										estimatedItemSize={100}
+										TableFooterComponent={calcTaxes ? TableFooter : DataTableFooter}
+										getItemType={(row) => row.original.record.payload.type}
+										tableConfig={tableConfig}
+									/>
+								)}
+							</Suspense>
+						</ErrorBoundary>
+					</View>
 				</CardContent>
 			</Card>
 		</View>
