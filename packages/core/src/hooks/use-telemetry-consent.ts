@@ -9,13 +9,22 @@ import { setTelemetryConsent, type TelemetryConsent } from '@wcpos/utils/logger/
 
 export function useTelemetryConsent(): void {
 	const { store } = useAppState();
-	// Without a store, reset the external client until a merchant preference is available.
+	// Two different "no store" situations:
+	// - Boot, before the session has restored: no opinion (`null`). Sending
+	//   'undecided' here would overwrite the desktop shell's persisted answer
+	//   on every launch and switch its reporting off exactly while the local
+	//   database opens — the moment the storage-corruption class fires.
+	// - Logout, after a store was seen: 'undecided', so the client stops until the
+	//   next merchant's preference is known.
+	// Adjust state during render — the sanctioned pattern (see useThemeRestorer).
+	const [seenStore, setSeenStore] = React.useState(false);
+	if (store && !seenStore) setSeenStore(true);
 	const consent$ = React.useMemo(
 		() =>
 			store
 				? store.tracking_consent$!.pipe(startWith(store.tracking_consent ?? 'undecided'))
-				: of<TelemetryConsent>('undecided'),
-		[store]
+				: of<TelemetryConsent | null>(seenStore ? 'undecided' : null),
+		[store, seenStore]
 	);
 	const consent = useObservableEagerState(consent$);
 
