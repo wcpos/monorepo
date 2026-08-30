@@ -138,13 +138,15 @@ env:
           id: "pos-tab-cart"
       - extendedWaitUntil:
           visible:
-            id: "cart-quantity-input"
+            id: "pos-tab-cart"
+            selected: true
           timeout: 10000
           optional: true
       - runFlow:
           when:
             notVisible:
-              id: "cart-quantity-input"
+              id: "pos-tab-cart"
+              selected: true
           commands:
             - evalScript: "${console.log('WCPOS_E2E pos-tab-cart tap did not switch tabs within 10 s, tapping again')}"
             - tapOn:
