@@ -25,7 +25,12 @@ export function useFitPageSize(
 
 	const handleLayout = React.useCallback(
 		(event: LayoutChangeEvent) => {
-			layoutRef.current = event.nativeEvent.layout;
+			const { width, height } = event.nativeEvent.layout;
+			// A hidden panel (small screens keep Products mounted under display:none while Cart is
+			// active) measures 0x0. That is not a fit: keep the last real measurement so the page
+			// size never falls back to the floor and re-opens short on the next search reset.
+			if (width <= 0 || height <= 0) return;
+			layoutRef.current = { width, height };
 			applyFit(layoutRef.current);
 		},
 		[applyFit]

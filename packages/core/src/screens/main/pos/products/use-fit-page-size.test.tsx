@@ -31,4 +31,24 @@ describe('useFitPageSize', () => {
 		rerender({ viewMode: 'grid', gridColumns: 5 });
 		expect(setPageSize).toHaveBeenLastCalledWith(30);
 	});
+
+	it('ignores a hidden (zero-sized) panel and keeps the last real measurement', () => {
+		const setPageSize = jest.fn();
+		const { result, rerender } = renderHook(
+			({ gridColumns }: { gridColumns: number }) =>
+				useFitPageSize(setPageSize, 'grid', gridColumns),
+			{ initialProps: { gridColumns: 4 } }
+		);
+
+		act(() => result.current(layoutEvent(1000, 1500)));
+		expect(setPageSize).toHaveBeenLastCalledWith(24);
+
+		// Products tab hidden under display:none while Cart is active.
+		act(() => result.current(layoutEvent(0, 0)));
+		expect(setPageSize).toHaveBeenCalledTimes(1);
+
+		// A display-setting change re-fits from the retained 1000x1500, not from 0x0.
+		rerender({ gridColumns: 5 });
+		expect(setPageSize).toHaveBeenLastCalledWith(30);
+	});
 });
