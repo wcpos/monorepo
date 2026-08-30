@@ -6,61 +6,95 @@ env:
 ---
 # P0-2: controlled authentication — the ONE real-OAuth flow (doubles as suite
 # setup; later flows reuse the session it persists). Auth decision: #698.
-# clearState without launching, then openLink cold-starts the app with the
-# URL as its launch intent, then dismiss the dev menu that auto-opens over
-# the app after any data clear — see flow 01 for the four live failures
-# behind this exact sequence; keep the two flows in step.
+# clearState without launching, then retry openLink as the cold-start intent;
+# see flow 01 for the four live failures behind this exact sequence. In run
+# 33312573162, iOS flow 01's 27 s reinstall returned and openLink COMPLETED in
+# 5 s, but the home screen showed no prompt, splash, or launcher for 5.5 min.
+# That dropped link has no surface to Reload, so the required store-url-input
+# wait deliberately gates a re-issue; keep the two flows in step.
 - clearState
-- openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
-# Launch blockers. The dev client's own overlays (floating dev-menu button,
-# menu-at-launch, onboarding card) are switched OFF by default in the
-# development build — apps/main/plugins/with-quiet-dev-menu.js — so the only
-# surfaces between openLink and the app are system-owned:
-#   Android: a queued ANR dialog ("Wait"), when the workflow enabled
-#            hide_error_dialogs too late.
-#   iOS:     SpringBoard's "Open in “WCPOS”?" scheme confirmation. clearState
-#            on iOS is uninstall+reinstall, and a simulator that has not yet
-#            trusted the scheme asks first. CI creates a fresh simulator every
-#            run (deterministic there; runs 33217891131 and 33218641226 sat
-#            behind it); a reused local simulator never shows it, so the wait
-#            is optional. The prompt can arrive >30s after openLink (run
-#            33220523217), so it is checked AGAIN after the cold-start wait —
-#            two surfaces on independent clocks must be handled in both
-#            orders, never one.
-# If the dev menu ever comes back, the required store-url-input wait below
-# fails visibly at a self-describing step; nothing here races it.
-# Menu/prompt text, not testID: third-party native UI — the app's selector
-# policy cannot apply.
-- runFlow:
-    when:
-      platform: Android
+- retry:
+    maxRetries: 2
     commands:
-      - tapOn:
-          text: "Wait"
-          optional: true
-- runFlow:
-    when:
-      platform: iOS
-    commands:
-      - extendedWaitUntil:
-          visible:
-            text: "Open in .*WCPOS.*"
-          timeout: 45000
-          optional: true
+      - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
+      # Launch blockers. The dev client's own overlays (floating dev-menu button,
+      # menu-at-launch, onboarding card) are switched OFF by default in the
+      # development build — apps/main/plugins/with-quiet-dev-menu.js — so the only
+      # surfaces between openLink and the app are system-owned:
+      #   Android: a queued ANR dialog ("Wait"), when the workflow enabled
+      #            hide_error_dialogs too late.
+      #   iOS:     SpringBoard's "Open in “WCPOS”?" scheme confirmation. clearState
+      #            on iOS is uninstall+reinstall, and a simulator that has not yet
+      #            trusted the scheme asks first. CI creates a fresh simulator every
+      #            run (deterministic there; runs 33217891131 and 33218641226 sat
+      #            behind it); a reused local simulator never shows it, so the wait
+      #            is optional. The prompt can arrive >30s after openLink (run
+      #            33220523217), so it is checked AGAIN after the cold-start wait —
+      #            two surfaces on independent clocks must be handled in both
+      #            orders, never one.
+      # If the dev menu ever comes back, the required store-url-input wait below
+      # fails visibly at a self-describing step; nothing here races it.
+      # Menu/prompt text, not testID: third-party native UI — the app's selector
+      # policy cannot apply.
       - runFlow:
           when:
-            visible:
-              text: "Open in .*WCPOS.*"
+            platform: Android
           commands:
             - tapOn:
-                text: "Open"
-            # The app is mid-launch after "Open"; a hierarchy query during the
-            # scene transition can answer kAXErrorInvalidUIElement, which
-            # Maestro 2.6.1 raises as an UNCAUGHT exception (run 33262053590
-            # iOS phone: flow 01 died there and the JVM then hung for 53 min).
-            # Screenshot-based settle first, same as every relaunch.
-            - waitForAnimationToEnd:
-                timeout: 5000
+                text: "Wait"
+                optional: true
+      - runFlow:
+          when:
+            platform: iOS
+          commands:
+            - extendedWaitUntil:
+                visible:
+                  text: "Open in .*WCPOS.*"
+                timeout: 45000
+                optional: true
+            - runFlow:
+                when:
+                  visible:
+                    text: "Open in .*WCPOS.*"
+                commands:
+                  - tapOn:
+                      text: "Open"
+                  # The app is mid-launch after "Open"; a hierarchy query during the
+                  # scene transition can answer kAXErrorInvalidUIElement, which
+                  # Maestro 2.6.1 raises as an UNCAUGHT exception (run 33262053590
+                  # iOS phone: flow 01 died there and the JVM then hung for 53 min).
+                  # Screenshot-based settle first, same as every relaunch.
+                  - waitForAnimationToEnd:
+                      timeout: 5000
+            # The launcher can answer a launch with its own manifest-timeout error
+            # screen instead of the app — tap Reload rather than letting the wait
+            # below spend its whole budget staring at it. Inert on a healthy launch;
+            # evidence, the 10s timeout and the text-selector exemption are in the
+            # subflow.
+            - runFlow:
+                file: ../subflows/recover-dev-launcher.yml
+                env:
+                  APP_READY_TESTID: store-url-input
+            # Cold start: first fetch of the ~29 MB Metro bundle plus Hermes parse.
+            # 60s expired on CI with the app still on its splash (run 33219707312);
+            # the suite budgets 120-240s elsewhere. Optional only so a LATE scheme
+            # prompt sitting in front of it can still be cleared next.
+            - extendedWaitUntil:
+                visible:
+                  id: "store-url-input"
+                timeout: 180000
+                optional: true
+            - runFlow:
+                when:
+                  visible:
+                    text: "Open in .*WCPOS.*"
+                commands:
+                  - tapOn:
+                      text: "Open"
+                  # Same settle as the early-prompt tap above: the required wait
+                  # below is the next hierarchy query, and the app is mid-launch.
+                  - waitForAnimationToEnd:
+                      timeout: 5000
       # The launcher can answer a launch with its own manifest-timeout error
       # screen instead of the app — tap Reload rather than letting the wait
       # below spend its whole budget staring at it. Inert on a healthy launch;
@@ -70,39 +104,10 @@ env:
           file: ../subflows/recover-dev-launcher.yml
           env:
             APP_READY_TESTID: store-url-input
-      # Cold start: first fetch of the ~29 MB Metro bundle plus Hermes parse.
-      # 60s expired on CI with the app still on its splash (run 33219707312);
-      # the suite budgets 120-240s elsewhere. Optional only so a LATE scheme
-      # prompt sitting in front of it can still be cleared next.
       - extendedWaitUntil:
           visible:
             id: "store-url-input"
           timeout: 180000
-          optional: true
-      - runFlow:
-          when:
-            visible:
-              text: "Open in .*WCPOS.*"
-          commands:
-            - tapOn:
-                text: "Open"
-            # Same settle as the early-prompt tap above: the required wait
-            # below is the next hierarchy query, and the app is mid-launch.
-            - waitForAnimationToEnd:
-                timeout: 5000
-# The launcher can answer a launch with its own manifest-timeout error
-# screen instead of the app — tap Reload rather than letting the wait
-# below spend its whole budget staring at it. Inert on a healthy launch;
-# evidence, the 10s timeout and the text-selector exemption are in the
-# subflow.
-- runFlow:
-    file: ../subflows/recover-dev-launcher.yml
-    env:
-      APP_READY_TESTID: store-url-input
-- extendedWaitUntil:
-    visible:
-      id: "store-url-input"
-    timeout: 180000
 # Tap, type, read back, retry — see flow 01 for the evidence (a tap that had
 # not focused the field by the time the driver typed, and why the guarantee is
 # the read-back rather than a `focused` gate the iOS driver gets wrong).

@@ -1716,8 +1716,10 @@ test('no Maestro flow declares a default for a variable the runners pass with -e
 test('Android clean-start flows dismiss a queued system ANR before waiting for Expo', () => {
 	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
 		const flow = readMaestroFlow(filename);
-		const androidLaunch = flow.find((command) => command.runFlow?.when?.platform === 'Android')
-			.runFlow.commands;
+		const launch = flow.find((command) => command.retry?.commands?.[0]?.openLink).retry.commands;
+		const androidLaunch = launch.find(
+			(command) => command.runFlow?.when?.platform === 'Android'
+		).runFlow.commands;
 
 		assert.deepEqual(
 			androidLaunch[0],
@@ -1932,6 +1934,41 @@ test('every dev-client launch runs the launcher-recovery subflow before assertin
 
 	// A launch site per flow at minimum; 08 and 09 relaunch a second time.
 	assert.ok(recoveries >= 11, `only ${recoveries} launcher-recovery call sites`);
+});
+
+test('flows 01 and 02 re-issue the cold-start link: openLink sits in a retry gated by the required store-url-input wait', () => {
+	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
+		const flow = readMaestroFlow(filename);
+		const clearStateIndex = flow.findIndex((command) => command === 'clearState');
+		assert.notEqual(clearStateIndex, -1, `${filename}: clearState is missing`);
+
+		const retry = flow[clearStateIndex + 1]?.retry;
+		assert.ok(retry, `${filename}: the top-level command after clearState is not a retry`);
+		assert.ok(retry.maxRetries >= 1, `${filename}: the launch retry has no retries`);
+
+		const firstCommand = retry.commands?.[0];
+		assert.ok(
+			typeof firstCommand?.openLink === 'string' &&
+				firstCommand.openLink.includes('expo-development-client'),
+			`${filename}: the launch retry does not start with the development-client openLink`
+		);
+
+		const lastCommand = retry.commands?.at(-1)?.extendedWaitUntil;
+		assert.equal(
+			lastCommand?.visible?.id,
+			'store-url-input',
+			`${filename}: the launch retry is not gated by a final store-url-input wait`
+		);
+		assert.notEqual(
+			lastCommand?.optional,
+			true,
+			`${filename}: the final store-url-input retry gate is optional`
+		);
+		assert.ok(
+			!flow.some((command) => command?.openLink !== undefined),
+			`${filename}: openLink remains at the flow's top level outside the retry`
+		);
+	}
 });
 
 test('the Android step retries a transient offline ADB transport once', () => {
