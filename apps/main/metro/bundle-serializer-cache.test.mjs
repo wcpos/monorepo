@@ -1,6 +1,8 @@
-// node:test, not jest: `*.test.mjs` is outside jest-expo's `[jt]s?(x)` match, so
-// no package.json change is needed to keep jest away from it (package.json
-// scripts are part of the native fingerprint — an edit there spends an EAS build).
+// node:test, not jest (jest-expo's preset would otherwise pick this file up; the
+// `metro/` directory is in jest's testPathIgnorePatterns like `plugins/`). It is
+// invoked directly from test.yml rather than via a package.json script because
+// package.json SCRIPTS are part of the native fingerprint — adding one spends an
+// EAS build. The jest block is not part of the fingerprint.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 

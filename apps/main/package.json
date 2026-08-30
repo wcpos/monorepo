@@ -30,7 +30,8 @@
 		"testPathIgnorePatterns": [
 			"/node_modules/",
 			"<rootDir>/e2e/",
-			"<rootDir>/plugins/"
+			"<rootDir>/plugins/",
+			"<rootDir>/metro/"
 		]
 	},
 	"expo": {
