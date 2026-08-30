@@ -41,6 +41,7 @@ import {
 	isRouteTeardownError,
 	type StoreAuthorization,
 } from './fixtures';
+import { resolveProbeAuthorization } from './probe-credential';
 
 /**
  * Keep in sync with the same check in `playwright.config.ts` — the config
@@ -169,20 +170,32 @@ async function variationsRouteAdvertisesSearch(
  *
  * Runs through Playwright's APIRequestContext, which is not affected by the
  * page's route stubs.
+ *
+ * Takes the credential GETTER, not a credential. The two cheap "this store cannot do it"
+ * answers — the route not advertising `search`, and the app never having been seen
+ * authenticating — must be reachable WITHOUT asking for a live credential: resolving one
+ * first would spend the ladder's whole budget and then throw on exactly the stores this
+ * probe exists to report as unsupported. Once past those, the credential is resolved
+ * rather than replayed, because the captured value is the last one the app SENT and a
+ * stale token answers 401 here — which the caller would otherwise report as "the store
+ * did not serve the SKU we just created".
  */
 export async function probeVariationSearch(
 	request: APIRequestContext,
 	storeUrl: string,
-	authorization: StoreAuthorization | null,
+	getAuthorization: () => StoreAuthorization | null,
 	term: string
 ): Promise<VariationSearchProbe> {
 	const advertised = await variationsRouteAdvertisesSearch(request, storeUrl);
 	if (advertised === false) {
 		return { supported: false, reason: 'variations route registers no `search` arg' };
 	}
-	if (!authorization) {
+	if (!getAuthorization()) {
 		return { supported: false, reason: 'no store authorization was observed' };
 	}
+	const authorization = await resolveProbeAuthorization(request, storeUrl, getAuthorization, {
+		route: '/wcpos/v2/products',
+	});
 	const endpoint = `${storeUrl.replace(/\/+$/, '')}/wp-json/wcpos/v2/variations`;
 	const response = await request.get(endpoint, {
 		params: {

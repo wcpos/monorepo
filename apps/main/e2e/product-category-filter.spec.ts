@@ -2,7 +2,8 @@ import { type APIRequestContext, expect, type Page } from '@playwright/test';
 
 import { LOADED_COUNT_READY, LOADED_COUNT_TEST_ID } from './catalogue-readiness';
 import { getStoreUrl, authenticatedTest as test } from './fixtures';
-import { probeGet, resolveProbeOptions } from './search-probe';
+import { resolveProbeOptions } from './probe-credential';
+import { probeGet } from './search-probe';
 import { unwrapWireBody } from './wire-envelope';
 
 /**

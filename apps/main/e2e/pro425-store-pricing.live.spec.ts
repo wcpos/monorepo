@@ -4,8 +4,8 @@ import {
 	captureStoreAuthorization,
 	getStoreUrl,
 	navigateToPage,
-	storeRequestOptions,
 } from './fixtures';
+import { resolveProbeOptions } from './probe-credential';
 
 /**
  * pro#425 — the till must DISPLAY its own store's price.
@@ -103,7 +103,11 @@ test.describe('pro#425 — store-scoped pricing in the till', () => {
 
 		// Ask the server what THIS scope should see, and what the web store sees.
 		const storeUrl = getStoreUrl(testInfo);
-		const options = storeRequestOptions(getAuthorization());
+		// Resolved against the namespace these reads use, never replayed: the captured
+		// value is the last credential the app was seen sending, not a working one.
+		const options = await resolveProbeOptions(request, storeUrl, getAuthorization, {
+			route: '/wcpos/v2/products',
+		});
 		const read = async (headers: Record<string, string>) => {
 			// Both permalink styles, per the repo's store-agnostic policy: a plain-
 			// permalink store 404s the pretty /wp-json/ path even though the API is

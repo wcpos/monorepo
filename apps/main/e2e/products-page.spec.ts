@@ -8,6 +8,7 @@ import {
 	navigateToPage,
 	type StoreAuthorization,
 } from './fixtures';
+import { resolveProbeAuthorization } from './probe-credential';
 import {
 	createSearchProbe,
 	deleteSearchProbe,
@@ -101,7 +102,11 @@ test.describe('Products Page (Pro)', () => {
 	}, testInfo) => {
 		const storeUrl = getStoreUrl(testInfo);
 		const writerAuthorization = await productWriterAuthorization(request, storeUrl);
-		const authorization = writerAuthorization ?? storeAuthorization();
+		// Resolved, not replayed: the captured value is the last credential the app was
+		// seen SENDING, which a restored session makes an expired one.
+		const authorization =
+			writerAuthorization ??
+			(await resolveProbeAuthorization(request, storeUrl, storeAuthorization));
 		const token = mintSearchProbeToken(testInfo.workerIndex);
 		const alpha = await createSearchProbe({
 			request,
@@ -214,7 +219,11 @@ test.describe('Products Page (Pro)', () => {
 		// prefers the optional CI product-writer credentials and falls back to
 		// the captured auth (whose 403 becomes the skip below).
 		const writerAuthorization = await productWriterAuthorization(request, storeUrl);
-		const authorization = writerAuthorization ?? storeAuthorization();
+		// Resolved, not replayed: the captured value is the last credential the app was
+		// seen SENDING, which a restored session makes an expired one.
+		const authorization =
+			writerAuthorization ??
+			(await resolveProbeAuthorization(request, storeUrl, storeAuthorization));
 		const created = await createSearchProbe({
 			request,
 			storeUrl,
@@ -271,7 +280,11 @@ test.describe('Products Page (Pro)', () => {
 	) {
 		const storeUrl = getStoreUrl(testInfo);
 		const writerAuthorization = await productWriterAuthorization(request, storeUrl);
-		const authorization = writerAuthorization ?? storeAuthorization();
+		// Resolved, not replayed: the captured value is the last credential the app was
+		// seen SENDING, which a restored session makes an expired one.
+		const authorization =
+			writerAuthorization ??
+			(await resolveProbeAuthorization(request, storeUrl, storeAuthorization));
 		const created = await createSearchProbe({
 			request,
 			storeUrl,
@@ -366,7 +379,11 @@ test.describe('Products Page (Pro)', () => {
 	}, testInfo) => {
 		const storeUrl = getStoreUrl(testInfo);
 		const writerAuthorization = await productWriterAuthorization(request, storeUrl);
-		const authorization = writerAuthorization ?? storeAuthorization();
+		// Resolved, not replayed: the captured value is the last credential the app was
+		// seen SENDING, which a restored session makes an expired one.
+		const authorization =
+			writerAuthorization ??
+			(await resolveProbeAuthorization(request, storeUrl, storeAuthorization));
 		const created = await createSearchProbe({
 			request,
 			storeUrl,
