@@ -69,6 +69,34 @@ function PulseTableRow<TData extends RowData, TFeatures extends TableFeatures>({
 		};
 	});
 
+	/**
+	 * `pulseRemove` commits the row's removal from the animation's completion
+	 * callback, so a second call must NOT cancel and restart the pulse: reanimated
+	 * resolves a cancelled animation with `finished === false`, which would drop
+	 * the pending removal on the floor. That is exactly what repeated presses of
+	 * the cart's remove button did — the row pulsed red forever and only removed
+	 * itself 400ms after the cashier stopped clicking (wcpos/monorepo#1693).
+	 *
+	 * So: the first `pulseRemove` latches, later calls are no-ops, and the latch
+	 * is released only if the pulse is cancelled by something else (an add pulse,
+	 * say) without ever committing — otherwise the row would be stuck unremovable.
+	 */
+	const removePulseActive = React.useRef(false);
+	const removePulseCallback = React.useRef<(() => void) | null>(null);
+
+	const settleRemovePulse = React.useCallback((finished: boolean) => {
+		const callback = removePulseCallback.current;
+		removePulseCallback.current = null;
+
+		if (!finished) {
+			removePulseActive.current = false;
+			return;
+		}
+
+		// Stay latched: the removal has been committed and must never run twice.
+		callback?.();
+	}, []);
+
 	React.useImperativeHandle(
 		ref,
 		() => ({
@@ -87,17 +115,21 @@ function PulseTableRow<TData extends RowData, TFeatures extends TableFeatures>({
 				);
 			},
 			pulseRemove(callback?: () => void) {
+				if (removePulseActive.current) {
+					return;
+				}
+				removePulseActive.current = true;
+				removePulseCallback.current = callback ?? null;
+
 				cancelAnimation(backgroundColor);
 				// Pulse to error color
 				backgroundColor.value = withTiming(errorColor, { duration: 400 }, (finished) => {
 					'worklet';
-					if (finished && callback) {
-						scheduleOnRN(callback);
-					}
+					scheduleOnRN(settleRemovePulse, !!finished);
 				});
 			},
 		}),
-		[backgroundColor, baseColor, successColor, errorColor, row.id, table]
+		[backgroundColor, baseColor, successColor, errorColor, row.id, table, settleRemovePulse]
 	);
 
 	return (

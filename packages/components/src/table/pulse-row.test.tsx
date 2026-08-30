@@ -1,28 +1,89 @@
 import * as React from 'react';
 
-import { render } from '@testing-library/react';
+import { act, render } from '@testing-library/react';
 
-import { PulseTableRow } from './pulse-row';
+import { PulseTableRow, type PulseTableRowRef } from './pulse-row';
 
-jest.mock('react-native-reanimated', () => ({
-	__esModule: true,
-	default: {
-		View: ({ children, ...props }: any) => React.createElement('div', props, children),
-	},
-	cancelAnimation: jest.fn(),
-	useAnimatedStyle: () => ({}),
-	useSharedValue: (value: any) => ({ value }),
-	withSequence: jest.fn(),
-	withTiming: jest.fn(),
-}));
+const ERROR_COLOR = '#d40924';
+
+type StartedAnimation = { toValue: unknown; callback?: (finished: boolean) => void };
+
+/**
+ * Faithful-enough reanimated: `withTiming` records the animation it started and
+ * parks its completion callback, and `cancelAnimation` resolves every parked
+ * callback with `finished === false` — which is exactly how reanimated reports a
+ * cancelled animation, and the behaviour that made #1693 possible.
+ */
+jest.mock('react-native-reanimated', () => {
+	const actualReact = jest.requireActual<typeof import('react')>('react');
+	const started: StartedAnimation[] = [];
+	const pending: ((finished: boolean) => void)[] = [];
+
+	return {
+		__esModule: true,
+		default: {
+			View: ({ children, ...props }: any) => actualReact.createElement('div', props, children),
+		},
+		__started: started,
+		__pending: pending,
+		cancelAnimation: () => {
+			pending.splice(0).forEach((callback) => callback(false));
+		},
+		useAnimatedStyle: () => ({}),
+		useSharedValue: (value: any) => ({ value }),
+		withSequence: (...animations: unknown[]) => animations,
+		withTiming: (toValue: unknown, _config: unknown, callback?: (finished: boolean) => void) => {
+			started.push({ toValue, callback });
+			if (callback) {
+				pending.push(callback);
+			}
+			return toValue;
+		},
+	};
+});
 
 jest.mock('react-native-worklets', () => ({
-	scheduleOnRN: jest.fn(),
+	scheduleOnRN: (fn: (...args: unknown[]) => void, ...args: unknown[]) => fn(...args),
 }));
 
 jest.mock('uniwind', () => ({
-	useCSSVariable: () => ['#ffffff', '#eeeeee', '#007936', '#d40924'],
+	useCSSVariable: () => ['#ffffff', '#eeeeee', '#007936', ERROR_COLOR],
 }));
+
+const reanimated = jest.requireMock('react-native-reanimated') as {
+	__started: StartedAnimation[];
+	__pending: ((finished: boolean) => void)[];
+};
+
+/** Every remove pulse started so far (add pulses fade to the success colour). */
+function removePulses() {
+	return reanimated.__started.filter((animation) => animation.toValue === ERROR_COLOR);
+}
+
+/** Run every in-flight animation to completion. */
+function finishPendingAnimations() {
+	act(() => {
+		reanimated.__pending.splice(0).forEach((callback) => callback(true));
+	});
+}
+
+function renderRow() {
+	const ref = React.createRef<PulseTableRowRef>();
+	const { container } = render(
+		<PulseTableRow
+			ref={ref}
+			row={{ id: 'row-1' } as any}
+			table={{ options: { meta: {} } } as any}
+			index={0}
+		/>
+	);
+	return { ref, container };
+}
+
+beforeEach(() => {
+	reanimated.__started.length = 0;
+	reanimated.__pending.length = 0;
+});
 
 describe('PulseTableRow', () => {
 	it('never carries a CSS color transition — it would fight the reanimated pulse', () => {
@@ -31,16 +92,67 @@ describe('PulseTableRow', () => {
 		// add/remove pulse never reached the success/error color and visibly
 		// lagged and snapped. The animated inline style also always overrides
 		// class-based backgrounds, so a transition class buys nothing here.
-		const { container } = render(
-			<PulseTableRow
-				row={{ id: 'row-1' } as any}
-				table={{ options: { meta: {} } } as any}
-				index={0}
-			/>
-		);
+		const { container } = renderRow();
 
 		const row = container.firstElementChild as HTMLElement;
 		expect(row).not.toBeNull();
 		expect(row.className).not.toMatch(/transition-colors/);
+	});
+
+	describe('pulseRemove re-entrancy (#1693)', () => {
+		it('ignores repeat calls instead of cancelling the pending removal', () => {
+			const { ref } = renderRow();
+			const removeLine = jest.fn();
+
+			// Three presses of the cart row's remove button, faster than the 400ms
+			// pulse. Before the fix each press cancelled the in-flight fade — which
+			// resolved its callback with `finished === false` and dropped that
+			// press's removal — then started a fresh 400ms fade, so nothing was
+			// removed until the cashier stopped clicking.
+			act(() => ref.current!.pulseRemove(removeLine));
+			act(() => ref.current!.pulseRemove(removeLine));
+			act(() => ref.current!.pulseRemove(removeLine));
+
+			expect(removePulses()).toHaveLength(1);
+			expect(removeLine).not.toHaveBeenCalled();
+
+			finishPendingAnimations();
+
+			expect(removeLine).toHaveBeenCalledTimes(1);
+		});
+
+		it('stays latched after the removal has been committed', () => {
+			const { ref } = renderRow();
+			const removeLine = jest.fn();
+
+			act(() => ref.current!.pulseRemove(removeLine));
+			finishPendingAnimations();
+			expect(removeLine).toHaveBeenCalledTimes(1);
+
+			// A late press must not run the mutation a second time: removing an
+			// already-removed uuid reports a stale cart line to the cashier.
+			act(() => ref.current!.pulseRemove(removeLine));
+			finishPendingAnimations();
+
+			expect(removePulses()).toHaveLength(1);
+			expect(removeLine).toHaveBeenCalledTimes(1);
+		});
+
+		it('releases the latch when a pulse is cancelled without committing', () => {
+			const { ref } = renderRow();
+			const removeLine = jest.fn();
+
+			act(() => ref.current!.pulseRemove(removeLine));
+			// An add pulse cancels the remove pulse, so its removal never lands.
+			act(() => ref.current!.pulseAdd());
+			expect(removeLine).not.toHaveBeenCalled();
+
+			// The row must remain removable rather than being stuck latched.
+			act(() => ref.current!.pulseRemove(removeLine));
+			expect(removePulses()).toHaveLength(2);
+
+			finishPendingAnimations();
+			expect(removeLine).toHaveBeenCalledTimes(1);
+		});
 	});
 });
