@@ -7,6 +7,8 @@ const { getDefaultConfig } = require('expo/metro-config');
 const { FileStore } = require('metro-cache');
 const { withUniwindConfig } = require('uniwind/metro');
 
+const { withBundleSerializerCache } = require('./metro/bundle-serializer-cache');
+
 let config = getDefaultConfig(__dirname);
 
 // Bundle the zxing-wasm barcode reader as a static asset so the Electron shell
@@ -96,7 +98,11 @@ if (process.env.EXPO_UNSTABLE_ATLAS === 'true') {
 	config = withExpoAtlas(config);
 }
 
-module.exports = withUniwindConfig(config, {
+config = withUniwindConfig(config, {
 	cssEntryFile: './global.css',
 	extraThemes: ['ocean', 'sunset', 'monochrome'],
 });
+
+// Outermost on purpose: every serializer wrapper above (Expo, Atlas, uniwind)
+// is inside the cache, so a hit skips all of them. See the module for why.
+module.exports = withBundleSerializerCache(config);

@@ -180,7 +180,7 @@ jobs:
           touch "$RUNNER_TEMP/ci-unit-executed"
           # apps/main is on jest-expo 29 while packages are on jest 30, so it
           # cannot join the loop above. Its jest config ignores e2e/ (Playwright
-          # specs, see #676) and plugins/ (node:test files, run separately).
+          # specs, see #676), plugins/ and metro/ (node:test files, run separately).
           set -o pipefail
           failed=0
 
@@ -190,6 +190,13 @@ jobs:
 
           echo "::group::Testing @wcpos/main config plugins (node:test)"
           pnpm --filter @wcpos/main test:plugins 2>&1 | tee apps/main/plugin-test-results.tap || failed=1
+          echo "::endgroup::"
+
+          # Invoked directly rather than via a package.json script: package.json
+          # scripts are part of the native fingerprint, so adding one there
+          # would spend an EAS build (verified with @expo/fingerprint, 2026-08-30).
+          echo "::group::Testing @wcpos/main Metro config (node:test)"
+          pnpm --filter @wcpos/main exec node --test 'metro/*.test.mjs' 2>&1 | tee apps/main/metro-test-results.tap || failed=1
           echo "::endgroup::"
 
           if [ "$failed" -ne 0 ]; then
@@ -254,12 +261,14 @@ jobs:
             fi
           done
 
-          plugin_file="apps/main/plugin-test-results.tap"
-          if [ -f "$plugin_file" ] && grep -q '^not ok ' "$plugin_file"; then
-            plugin_failures=$(printf '\n\n### `@wcpos/main plugins`\n```text\n'; sed -n '/^not ok /,$p' "$plugin_file" | head -c 2000; printf '\n```\n')
-            has_failures=true
-            failure_md="$failure_md$plugin_failures"
-          fi
+          for tap_entry in "plugins:apps/main/plugin-test-results.tap" "metro:apps/main/metro-test-results.tap"; do
+            tap_label="${tap_entry%%:*}"; tap_file="${tap_entry#*:}"
+            if [ -f "$tap_file" ] && grep -q '^not ok ' "$tap_file"; then
+              tap_failures=$(printf '\n\n### `@wcpos/main %s`\n```text\n' "$tap_label"; sed -n '/^not ok /,$p' "$tap_file" | head -c 2000; printf '\n```\n')
+              has_failures=true
+              failure_md="$failure_md$tap_failures"
+            fi
+          done
 
           if [ "$has_failures" = true ]; then
             echo "## ❌ Test Failures" >> $GITHUB_STEP_SUMMARY
