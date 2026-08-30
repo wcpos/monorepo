@@ -7,6 +7,7 @@ import {
 	navigateToPage,
 	authenticatedTest as test,
 } from './fixtures';
+import { resolveProbeAuthorization } from './probe-credential';
 import {
 	createSearchProbe,
 	deleteSearchProbe,
@@ -183,7 +184,10 @@ test.describe('Customers Page (Pro)', () => {
 		storeAuthorization,
 	}, testInfo) => {
 		const storeUrl = getStoreUrl(testInfo);
-		const authorization = storeAuthorization();
+		// Resolved, never taken on trust: `storeAuthorization()` is the last credential
+		// the app was seen SENDING, which on a restored session is routinely an expired
+		// token — every probe then 401s and reads as a broken store.
+		const authorization = await resolveProbeAuthorization(request, storeUrl, storeAuthorization);
 		const created = await createSearchProbe({
 			request,
 			storeUrl,

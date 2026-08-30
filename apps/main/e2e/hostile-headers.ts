@@ -6,6 +6,7 @@ import {
 	hydrateAuthenticatedPage,
 	navigateToPage,
 } from './fixtures';
+import { resolveProbeAuthorization } from './probe-credential';
 import {
 	createSearchProbe,
 	deleteSearchProbe,
@@ -63,7 +64,10 @@ test('census and order browse survive stripped Tier 2 headers', async ({
 	// that declares no writer capability skips, with the helper's reason.
 	const storeUrl = getStoreUrl(testInfo);
 	const writer = await productWriterAuthorization(request, storeUrl);
-	const authorization = writer ?? storeAuthorization();
+	// Resolved rather than replayed — a stale captured token would 401 every probe here
+	// and read as the stripped headers having broken the pipeline.
+	const authorization =
+		writer ?? (await resolveProbeAuthorization(request, storeUrl, storeAuthorization));
 	const token = mintSearchProbeToken(testInfo.workerIndex);
 	const created = await createSearchProbe({
 		request,

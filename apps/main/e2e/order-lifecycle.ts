@@ -24,6 +24,7 @@ import { type APIRequestContext, expect, type Page, type TestInfo } from '@playw
 
 import { isolatedProductTest } from './checkout-probe';
 import { getStoreUrl, type StoreAuthorization, storeRequestOptions } from './fixtures';
+import { resolveProbeAuthorization, TEARDOWN_CREDENTIAL_TIMEOUT_MS } from './probe-credential';
 
 /** POST target the app uses to persist an order. */
 export const PUSH_ORDERS = /\/wp-json\/wcpos\/v2\/push\/orders(\?|$)/;
@@ -801,8 +802,29 @@ export const liveOrderTest = isolatedProductTest.extend<{
 			tracked.set(order.id, { ...tracked.get(order.id), ...order });
 		});
 
+		if (tracked.size === 0) return;
+
+		// Resolve the credential ONCE, against the namespace trashOrder uses. The captured
+		// value is the last credential the app was seen SENDING: on a restored session that
+		// is routinely an expired token, and replaying it makes the ownership read fail —
+		// which trashOrder correctly treats as "ownership not proven" and skips, leaking
+		// every order this test created. Falling back to the captured value on a failed
+		// resolve keeps the previous behaviour rather than dropping cleanup entirely.
+		const authorization = await resolveProbeAuthorization(
+			request,
+			getStoreUrl(testInfo),
+			storeAuthorization,
+			{ route: '/wcpos/v2/orders', timeoutMs: TEARDOWN_CREDENTIAL_TIMEOUT_MS }
+		).catch((error) => {
+			console.warn(
+				'[e2e-cleanup] no live store credential for teardown; trying the captured one:',
+				error instanceof Error ? error.message : String(error)
+			);
+			return storeAuthorization();
+		});
+
 		for (const order of tracked.values()) {
-			await trashOrder(request, testInfo, storeAuthorization(), order).catch((error) => {
+			await trashOrder(request, testInfo, authorization, order).catch((error) => {
 				console.warn(`[e2e-cleanup] teardown failed for order ${order.id}:`, error);
 			});
 		}

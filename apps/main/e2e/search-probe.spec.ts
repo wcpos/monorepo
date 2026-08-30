@@ -7,20 +7,24 @@ import {
 } from './checkout-probe';
 import {
 	authorizationCandidates,
+	resolveProbeAuthorization,
+	resolveProbeOptions,
+} from './probe-credential';
+import {
 	createRunPrivateProduct,
+	createSearchProbe,
 	deleteSearchProbe,
 	findCreatedProductRecord,
 	plainPermalinkUrl,
 	productProbeFailureAction,
 	productWriterAuthorization,
 	productWriterCredentialsDecision,
-	resolveProbeOptions,
 	searchAndWaitForServer,
 	sweepOrphanedProductProbes,
 } from './search-probe';
 
 import type { APIRequestContext } from '@playwright/test';
-import type { StoreAuthorization } from './fixtures';
+import type { StoreAuthorization } from './probe-credential';
 
 function response(status: number, body: unknown) {
 	return {
@@ -64,23 +68,40 @@ test('offers no candidate when the app was never seen authenticating', () => {
 });
 
 /**
- * A store that only honours one credential, and records what it was asked with.
- * `resolveProbeOptions` must find the good one by evidence alone — it never inspects
- * a token, because credentials here are opaque.
+ * A store that only honours one credential, and records what it was asked with — which
+ * URL, which credential, which params. The resolver must find the good one by evidence
+ * alone: it never inspects a token, because credentials here are opaque.
+ *
+ * A live re-run cannot verify any of this. `globalSetup` re-authenticates before the
+ * suite, so the captured credential is fresh and the spec goes green whether or not the
+ * ladder is wired in at all. A fake store honouring exactly ONE credential is the only
+ * harness that can show the dead one was tried and the live one won.
  */
 function fakeStore(accepts: string) {
 	const asked: string[] = [];
+	const urls: string[] = [];
+	const params: Record<string, string>[] = [];
+	const record = (
+		url: string,
+		options: { headers?: Record<string, string>; params?: Record<string, string> }
+	) => {
+		const offered = options.params?.authorization ?? options.headers?.Authorization ?? '';
+		asked.push(offered);
+		urls.push(url);
+		params.push(options.params ?? {});
+		return offered === accepts;
+	};
 	const context = {
 		get: async (
-			_url: string,
+			url: string,
 			options: { headers?: Record<string, string>; params?: Record<string, string> }
-		) => {
-			const offered = options.params?.authorization ?? options.headers?.Authorization ?? '';
-			asked.push(offered);
-			return response(offered === accepts ? 200 : 401, []);
-		},
+		) => response(record(url, options) ? 200 : 401, []),
+		post: async (
+			url: string,
+			options: { headers?: Record<string, string>; params?: Record<string, string> }
+		) => response(record(url, options) ? 201 : 401, { id: 7, slug: 'e2e-probe' }),
 	} as unknown as APIRequestContext;
-	return { context, asked };
+	return { context, asked, urls, params };
 }
 
 test('re-reads the app credential until one actually authenticates', async () => {
@@ -108,9 +129,59 @@ test('gives up with the statuses it saw when no credential ever authenticates', 
 
 	await expect(
 		resolveProbeOptions(store.context, 'https://example.test', () => captured, { timeoutMs: 1 })
-	).rejects.toThrow(/authenticated against no wc\/v3 transport/);
+	).rejects.toThrow(/authenticated against no \/wc\/v3\/products transport/);
 	// The whole ladder was walked, not just the captured form.
 	expect(store.asked.length).toBeGreaterThan(1);
+});
+
+test('proves the credential against the namespace the caller named', async () => {
+	// The ladder is only evidence about the route it actually read. A JWT that reaches
+	// `wcpos/v2` can be stripped before `wc/v3` sees it, so a caller that will read
+	// `wcpos/v1` must be verified there — and `wcpos/v1` is marker-gated: an unmarked
+	// request is answered as if the route did not exist.
+	const store = fakeStore('live-jwt');
+
+	await resolveProbeAuthorization(
+		store.context,
+		'https://example.test/shop/',
+		() => ({ transport: 'query', value: 'live-jwt' }),
+		{ route: '/wcpos/v1/orders' }
+	);
+
+	expect(store.urls[0]).toBe('https://example.test/shop/wp-json/wcpos/v1/orders');
+	expect(store.params[0].wcpos).toBe('1');
+});
+
+test('a swept probe helper writes with the resolved credential, not the captured one', async () => {
+	// The shape every swept call site now has: resolve first, then hand the PROVEN
+	// credential to the helper. Without the sweep the helper is handed `expired-jwt`
+	// and its write 401s — which the caller reports as the store refusing to be
+	// written to, i.e. as a broken environment rather than a stale token.
+	let captured: StoreAuthorization = { transport: 'query', value: 'expired-jwt' };
+	const store = fakeStore('refreshed-jwt');
+	setTimeout(() => {
+		captured = { transport: 'query', value: 'refreshed-jwt' };
+	}, 50);
+
+	const authorization = await resolveProbeAuthorization(
+		store.context,
+		'https://example.test',
+		() => captured,
+		{ timeoutMs: 8_000 }
+	);
+	const created = await createSearchProbe({
+		request: store.context,
+		storeUrl: 'https://example.test',
+		authorization,
+		collection: 'customers',
+		workerIndex: 0,
+	});
+
+	expect(created.ok).toBe(true);
+	// The dead credential really was tried first — otherwise this passes on a resolver
+	// that ignored the getter — and the WRITE went out with the live one.
+	expect(store.asked[0]).toBe('expired-jwt');
+	expect(store.asked.at(-1)).toBe('refreshed-jwt');
 });
 
 let simpleProductWriterStarted = false;
@@ -189,6 +260,53 @@ test.describe('search-probe pure logic', () => {
 			'zxlocal',
 			localResult as never
 		);
+	});
+
+	/** One `wcpos/v2` search demand for `term`, as `searchAndWaitForServer` sees it. */
+	function searchDemand(status: number, term: string) {
+		return {
+			request: () => ({ method: () => 'GET' }),
+			url: () => `https://example.test/wp-json/wcpos/v2/products?search=${term}`,
+			ok: () => status >= 200 && status < 300,
+			status: () => status,
+		};
+	}
+
+	/** A page that offers each scripted response to the predicate, in order. */
+	function scriptedPage(responses: ReturnType<typeof searchDemand>[]) {
+		return {
+			waitForResponse: async (predicate: (r: ReturnType<typeof searchDemand>) => boolean) => {
+				for (const candidate of responses) {
+					if (predicate(candidate)) return candidate;
+				}
+				throw new Error('Timeout 120000ms exceeded while waiting for response');
+			},
+		};
+	}
+
+	test('waits through a 401 the app recovers from', async () => {
+		// The access token lives 30 minutes, so a session evicted mid-run makes the app
+		// take one 401, refresh, and retry. Asserting on the FIRST matching response
+		// turned that recovery into a red test on every PR (2026-08-30).
+		const page = scriptedPage([searchDemand(401, 'zxstale'), searchDemand(200, 'zxstale')]);
+
+		await searchAndWaitForServer(
+			page as never,
+			{ fill: async () => {} } as never,
+			'products',
+			'zxstale'
+		);
+	});
+
+	test('still fails, naming the status, when no search demand ever succeeds', async () => {
+		// Tolerating recovery must not tolerate a demand that never lands: a real 401
+		// regression still fails, and the message names what the store actually said
+		// rather than a bare Playwright timeout.
+		const page = scriptedPage([searchDemand(401, 'zxdead')]);
+
+		await expect(
+			searchAndWaitForServer(page as never, { fill: async () => {} } as never, 'products', 'zxdead')
+		).rejects.toThrow('products search demand failed: HTTP 401');
 	});
 
 	test('writer credentials must be either fully configured or fully absent', () => {

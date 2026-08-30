@@ -22,6 +22,11 @@ import {
 import { cashierAuthStateName, currentShardIndex, getE2ECashierAuth } from './cashier-slot';
 import { captureCreatedOrderIds, finalizeCreatedOrders } from './order-cleanup';
 import { restoreOPFS } from './opfs-helpers';
+import {
+	resolveProbeOptions,
+	type StoreAuthorization,
+	TEARDOWN_CREDENTIAL_TIMEOUT_MS,
+} from './probe-credential';
 import { restoreLocalStorage, type SavedAuthState } from './indexeddb-helpers';
 
 import type { StoreVariant, WcposTestOptions } from '../playwright.config';
@@ -44,11 +49,11 @@ const AUTH_ENTRY_ATTEMPTS = 3;
 const AUTH_ENTRY_RETRY_DELAY_MS = 15_000;
 
 /**
- * How the app presents its store credentials: some sites accept the JWT in an
- * `Authorization` header, others (when `use_jwt_as_param` is set) can only take
- * it as a query parameter.
+ * The credential primitives live in `probe-credential.ts` (which the order teardown
+ * below also needs, and which must not import this module back). Re-exported here so
+ * every existing `from './fixtures'` importer keeps working.
  */
-export type StoreAuthorization = { transport: 'header' | 'query'; value: string };
+export { storeRequestOptions, type StoreAuthorization } from './probe-credential';
 
 /**
  * Record the header or query-parameter authorization the app sends to the
@@ -69,23 +74,6 @@ export function captureStoreAuthorization(page: Page): () => StoreAuthorization 
 		else if (query) authorization = { transport: 'query', value: query };
 	});
 	return () => authorization;
-}
-
-/**
- * Request options that carry the app's own store credentials, for out-of-band
- * `APIRequestContext` calls (which page route stubs never touch).
- */
-export function storeRequestOptions(authorization: StoreAuthorization | null): {
-	headers: Record<string, string>;
-	params: Record<string, string>;
-} {
-	return {
-		headers: {
-			'X-WCPOS': '1',
-			...(authorization?.transport === 'header' ? { Authorization: authorization.value } : {}),
-		},
-		params: authorization?.transport === 'query' ? { authorization: authorization.value } : {},
-	};
 }
 
 /**
@@ -1112,16 +1100,23 @@ export const authenticatedTest = base.extend<{
 		} finally {
 			// Best-effort: transition any still-open carts this spec created to a
 			// terminal status (cancelled) so they don't pile up on the shared dev
-			// store. Reuses the app's own captured credentials/transport. This must
+			// store. Reuses the app's own credentials/transport — but RESOLVED, not
+			// taken on trust: the captured value is the last credential the app was
+			// seen sending, and on a restored session that is routinely an expired
+			// token. Replaying it makes every finalize 401 and the carts pile up
+			// anyway, silently, because teardown swallows its failures. This must
 			// never fail the test — finalizeCreatedOrders swallows all errors, but
-			// we guard the settle()+call as well (route-handler-never-rethrow, #997).
+			// we guard the settle()+resolve+call as well (route-handler-never-rethrow, #997).
 			try {
 				await orderCapture.settle();
 				await finalizeCreatedOrders(
 					request,
 					getStoreUrl(testInfo),
 					orderCapture.createdOrderIds,
-					storeRequestOptions(storeAuthorization())
+					await resolveProbeOptions(request, getStoreUrl(testInfo), storeAuthorization, {
+						route: '/wcpos/v1/orders',
+						timeoutMs: TEARDOWN_CREDENTIAL_TIMEOUT_MS,
+					})
 				);
 			} catch (error) {
 				log.warn(
