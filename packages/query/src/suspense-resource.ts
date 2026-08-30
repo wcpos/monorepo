@@ -48,6 +48,7 @@ type BridgeEntry<T> = {
 	resource: ObservableResource<T>;
 	bucket: Map<string, BridgeEntry<any>>;
 	key: string;
+	exclusiveGroup?: string;
 	/** Monotonic, so eviction drops the least recently asked-for entry. */
 	lastAcquired: number;
 };
@@ -75,12 +76,18 @@ function evictOldest(bucket: Map<string, BridgeEntry<any>>): void {
 function bridgeAcquire<T>(
 	scope: object,
 	key: string,
-	input$: Observable<T>
+	input$: Observable<T>,
+	exclusiveGroup?: string
 ): ObservableResource<T> {
 	let bucket = bucketsByScope.get(scope);
 	if (!bucket) {
 		bucket = new Map();
 		bucketsByScope.set(scope, bucket);
+	}
+	if (exclusiveGroup) {
+		for (const entry of bucket.values()) {
+			if (entry.exclusiveGroup === exclusiveGroup && entry.key !== key) destroyEntry(entry);
+		}
 	}
 	const existing = bucket.get(key) as BridgeEntry<T> | undefined;
 	if (existing) {
@@ -105,6 +112,7 @@ function bridgeAcquire<T>(
 		resource,
 		bucket,
 		key,
+		exclusiveGroup,
 		lastAcquired: ++acquisitionClock,
 	};
 	bucket.set(key, entry);
@@ -133,13 +141,16 @@ function bridgeClaim(resource: ObservableResource<any>): boolean {
  *   Attempts that agree on this key share a resource; once the consumer has committed, a change
  *   here RELOADS its resource in place rather than replacing it, which is what keeps a
  *   descriptor change from blanking a mounted consumer.
- * @param input$ The observable to subscribe. Read when the resource is created, and again on
- *   each reload, so re-deriving an equivalent observable every render costs nothing.
+ * @param input$ The observable to subscribe. Its reference must remain stable while `inputKey`
+ *   is unchanged; a new reference after commit reloads the resource and resubscribes the query.
+ * @param exclusiveGroup Optional identity for a bridge that has only one current input key.
+ *   Acquiring a new key destroys an older unclaimed resource in the same group.
  */
 export function useSuspenseResource<T>(
 	scope: object,
 	inputKey: string,
-	input$: Observable<T>
+	input$: Observable<T>,
+	exclusiveGroup?: string
 ): ObservableResource<T> {
 	// The initialiser runs on every attempt, because a discarded attempt takes this state with
 	// it — which is the whole point: every attempt lands on the same bridged resource, and the
@@ -147,7 +158,7 @@ export function useSuspenseResource<T>(
 	// marks a resource this hook BUILT rather than took from the bridge, so the effect below
 	// cannot try (and fail) to claim it and replace it again, forever.
 	const [held, setHeld] = React.useState<{ resource: ObservableResource<T>; owned: boolean }>(
-		() => ({ resource: bridgeAcquire<T>(scope, inputKey, input$), owned: false })
+		() => ({ resource: bridgeAcquire<T>(scope, inputKey, input$, exclusiveGroup), owned: false })
 	);
 	const resource = held.resource;
 	const bound = React.useRef<{ resource: ObservableResource<T>; input$: Observable<T> } | null>(

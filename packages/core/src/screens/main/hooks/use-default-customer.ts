@@ -49,7 +49,8 @@ export const useDefaultCustomer = () => {
 	const defaultCustomerResource = useSuspenseResource(
 		runtime.engine,
 		JSON.stringify([defaultCustomerID, guestCustomer]),
-		defaultCustomer$
+		defaultCustomer$,
+		'default-customer'
 	);
 
 	return { defaultCustomer$, defaultCustomerResource };

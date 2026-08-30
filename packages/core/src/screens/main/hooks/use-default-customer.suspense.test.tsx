@@ -18,6 +18,7 @@ import { Observable } from 'rxjs';
 import { useDefaultCustomer } from './use-default-customer';
 
 let subscribeCount = 0;
+let unsubscribeCount = 0;
 let result$: Observable<{ hits: { record: { payload: { id: number } } }[] }>;
 let guestCustomer: { id: number; billing: { first_name: string; country: string } };
 
@@ -70,6 +71,7 @@ async function settle() {
 
 beforeEach(() => {
 	subscribeCount = 0;
+	unsubscribeCount = 0;
 	guestCustomer = { id: 0, billing: { first_name: 'Guest', country: 'US' } };
 	result$ = asyncResult();
 });
@@ -113,6 +115,9 @@ describe('the default customer resource', () => {
 	it('does not reuse an abandoned guest fallback after the store fields change', async () => {
 		result$ = new Observable(() => {
 			subscribeCount++;
+			return () => {
+				unsubscribeCount++;
+			};
 		});
 		function GuestScreen() {
 			const { defaultCustomerResource } = useDefaultCustomer();
@@ -142,5 +147,6 @@ describe('the default customer resource', () => {
 
 		expect(screen.getByTestId('guest-country').textContent).toBe('CA');
 		expect(subscribeCount).toBe(2);
+		expect(unsubscribeCount).toBe(1);
 	});
 });
