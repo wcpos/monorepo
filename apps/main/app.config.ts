@@ -28,7 +28,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		name: 'WCPOS',
 		slug: 'wcpos',
 		owner: 'wcpos',
-		version: packageJson.version,
+		// Metro serves the checked-out JS to dev clients, so release-only package
+		// bumps must keep using the native metadata already cached by EAS.
+		version: isDev ? '1.10.3' : packageJson.version,
 
 		orientation: 'default',
 		icon: './assets/images/icon.png',
