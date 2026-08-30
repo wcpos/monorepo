@@ -27,8 +27,21 @@ export function useSeparatorA11y({
 	handleId,
 	model,
 }: SeparatorA11yOptions): SeparatorA11yProps {
-	React.useSyncExternalStore(model.subscribe, model.getVersion, model.getVersion);
-	const { valueMax, valueMin, valueNow } = model.getSeparatorAriaValues(handleId);
+	// Read the values THROUGH the store hook. A bare `useSyncExternalStore(...,
+	// getVersion)` whose result is discarded leaves `model.getSeparatorAriaValues`
+	// with no reactive input the React Compiler can see, so it memoises the first
+	// render's (empty) result on [model, handleId] for the life of the handle —
+	// on native the label stayed "Resize handle" with no percentage for the whole
+	// session (iPad, 2026-08-30). The model returns a version-stable snapshot.
+	const getSnapshot = React.useCallback(
+		() => model.getSeparatorAriaValues(handleId),
+		[handleId, model]
+	);
+	const { valueMax, valueMin, valueNow } = React.useSyncExternalStore(
+		model.subscribe,
+		getSnapshot,
+		getSnapshot
+	);
 	const onAccessibilityAction: NonNullable<SeparatorA11yProps['onAccessibilityAction']> = (
 		event
 	) => {

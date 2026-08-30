@@ -125,6 +125,15 @@ patchedDependencies:
   # the error boundary mid-search (#1671). Expo SDK 57 prescribes exactly 2.0.2
   # (expo/bundledNativeModules.json), so we patch instead of upgrading; drop this patch
   # when the SDK moves flash-list to >= 2.2.2.
+  #
+  # Second hunk (2026-08-30): backport of Shopify/flash-list#2460 (open, fixes upstream
+  # #2440 / #2291, still present in 2.3.2). The render stack can outlive a layout-table
+  # shrink, and `ViewHolderCollection` read it through the throwing `getLayout(index)`
+  # ("index out of bounds, not enough layouts") — the POS products grid fell into its
+  # error boundary the moment the tablet's products column was dragged narrower (iPad,
+  # flow 09) and on Android mid-search (run 33280466971). `tryGetLayout` returns undefined
+  # for a dropped index; the render path skips that key and `validateItemSize` drops the
+  # stale measurement, exactly as the upstream PR does. Drop with the upgrade above.
   "@shopify/flash-list@2.0.2": "patches/@shopify__flash-list@2.0.2.patch"
   # A closed drawer is only translated off-screen, so a stale animated transform can leave
   # it — and the dimming overlay, which is its SIBLING and reads the same animated progress
