@@ -119,20 +119,19 @@ test('different serializer options are different entries; functions are ignored 
 test('a changed EXPO_PUBLIC environment value invalidates a development bundle', async () => {
 	const h = harness();
 	const graph = makeGraph(['a.js']);
-	const name = 'EXPO_PUBLIC_BUNDLE_SERIALIZER_CACHE_TEST';
-	const previous = process.env[name];
+	const previous = process.env.EXPO_PUBLIC_BUNDLE_SERIALIZER_CACHE_TEST;
 
 	try {
-		process.env[name] = 'first';
+		process.env.EXPO_PUBLIC_BUNDLE_SERIALIZER_CACHE_TEST = 'first';
 		await h.serialize(graph, [], 'entry.js', { dev: true });
 		await h.serialize(graph, [], 'entry.js', { dev: true });
 		assert.equal(h.calls(), 1);
-		process.env[name] = 'second';
+		process.env.EXPO_PUBLIC_BUNDLE_SERIALIZER_CACHE_TEST = 'second';
 		await h.serialize(graph, [], 'entry.js', { dev: true });
 		assert.equal(h.calls(), 2);
 	} finally {
-		if (previous === undefined) delete process.env[name];
-		else process.env[name] = previous;
+		if (previous === undefined) delete process.env.EXPO_PUBLIC_BUNDLE_SERIALIZER_CACHE_TEST;
+		else process.env.EXPO_PUBLIC_BUNDLE_SERIALIZER_CACHE_TEST = previous;
 	}
 });
 

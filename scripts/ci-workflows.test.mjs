@@ -65,16 +65,7 @@ function runLocalNative({ platform, device = 'phone', timestamp = '20260829T1200
 	};
 	command('curl', 'echo packager-status:running');
 	command('date', 'echo "$FIXED_TIMESTAMP"');
-	command(
-		'maestro',
-		`if grep -Fxq 'adb devices' "$COMMAND_TRACE"; then
-	for _attempt in {1..100}; do
-		grep -Fxq 'adb -s emulator-5554 logcat -v threadtime' "$COMMAND_TRACE" && break
-		sleep 0.01
-	done
-fi
-echo "maestro $*" >> "$COMMAND_TRACE"`
-	);
+	command('maestro', 'echo "maestro $*" >> "$COMMAND_TRACE"');
 	command(
 		'xcrun',
 		`echo "xcrun $*" >> "$COMMAND_TRACE"
