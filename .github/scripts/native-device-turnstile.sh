@@ -84,10 +84,16 @@ blocking_jobs() {
 	' <<< "$1"
 }
 
+polls=0
 while :; do
 	now="$(date +%s)"
 	waited=$((now - started_at))
-	if [ "$waited" -ge "$WAIT_BUDGET_SECONDS" ]; then
+	# The budget applies only after at least one poll: a job must never give up —
+	# or pass — on the clock alone. (The test suite drives this with a 1 s budget,
+	# and on a slow runner the first `date` tick could land past it before any
+	# blocker had been looked up; the Lint job then failed on main-bound PRs with
+	# "Gave up waiting … after 1s" and no blocker named, run 33328330299.)
+	if [ "$polls" -gt 0 ] && [ "$waited" -ge "$WAIT_BUDGET_SECONDS" ]; then
 		echo "::error::Gave up waiting for the ${SLOT_JOB} device slot after ${waited}s (budget ${WAIT_BUDGET_SECONDS}s). Still ahead of this run:"
 		printf '%s\n' "${last_blockers:-<unknown>}"
 		echo "Re-run this job once the queue drains; nothing was cancelled."
@@ -101,6 +107,7 @@ while :; do
 	# still be alive after 250 min, so any older run that matters is on the first page.
 	if ! runs_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=100" 2>/tmp/turnstile-api.err)"; then
 		api_failures=$((api_failures + 1))
+		polls=$((polls + 1))
 		echo "::warning::Could not list workflow runs (attempt ${api_failures}): $(tr -d '\n' < /tmp/turnstile-api.err)"
 		sleep "$POLL_SECONDS"
 		continue
@@ -139,6 +146,7 @@ while :; do
 		found="$(blocking_jobs "$jobs_json" "$run_url" "$run_branch")"
 		[ -z "$found" ] || blockers+="${found}"$'\n'
 	done <<< "$older_runs"
+	polls=$((polls + 1))
 
 	if [ -z "$blockers" ]; then
 		echo "✅ ${SLOT_JOB} device slot is free after ${waited}s"
