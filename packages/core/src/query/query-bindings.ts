@@ -74,6 +74,10 @@ export interface QueryBinding {
 	resource: ObservableResource<QueryResult<RxCollection>>;
 	result$: Observable<QueryResult<RxCollection>>;
 	active$: Observable<boolean>;
+	/** True from standing demand declaration until its readiness settles. */
+	pending$: Observable<boolean>;
+	/** Engine exhaustion for this demand, or `null` when there is no search lane to consult. */
+	exhausted$: Observable<boolean | null>;
 	/**
 	 * The size of the set this screen is about, or `null` when nothing can vouch for one.
 	 *
@@ -91,6 +95,8 @@ export interface QueryBinding {
 const DEMAND_RETRY_BACKOFF_MS = 250;
 const NO_CENSUS_TOTAL$ = of(null as number | null);
 const INACTIVE$ = of(false);
+const NOT_PENDING$ = of(false);
+const UNKNOWN_EXHAUSTED$ = of(null as boolean | null);
 const NO_LANE_PROGRESS$ = of(null as QueryLaneProgress | null);
 
 function useStableDescriptor(descriptor: EngineQueryDescriptor): EngineQueryDescriptor {
@@ -126,14 +132,19 @@ function useObservableResource<T>(observable$: Observable<T>): ObservableResourc
  * tab's activity counters, so a release must never be read as "the references landed" — the
  * caller has to keep waiting and re-declare rather than act on it.
  */
-type DemandReadiness = { attempted: boolean };
+type DemandReadiness = {
+	attempted: boolean;
+	/** At least one requirement was met by a WIRE walk (`fetched`), not served from local rows. */
+	fetched: boolean;
+};
 
-const ATTEMPTED: DemandReadiness = { attempted: true };
-const NOT_ATTEMPTED: DemandReadiness = { attempted: false };
+const ATTEMPTED: DemandReadiness = { attempted: true, fetched: false };
+const NOT_ATTEMPTED: DemandReadiness = { attempted: false, fetched: false };
 
 function readinessFrom(outcomes: CoverageOutcome[]): DemandReadiness {
 	return {
 		attempted: outcomes.every((outcome) => outcome.action !== 'released'),
+		fetched: outcomes.some((outcome) => outcome.action === 'fetched'),
 	};
 }
 
@@ -168,6 +179,12 @@ function coverageTargetFor(input: {
 
 type DemandProjection = {
 	coverageTarget$: Observable<CoverageTarget | null>;
+	/** The `kind: 'search'` requirement's coverage lane, or null when the demand has none. */
+	searchLane$: Observable<CoverageTarget | null>;
+	/** True from declaration until the standing declaration settles, however it settles. */
+	pending$: Observable<boolean>;
+	/** True once the last settled declaration was met by a wire walk (`fetched`), false otherwise. */
+	fetched$: Observable<boolean>;
 	/** Readiness of the STANDING declaration — the one the binding keeps alive while mounted. */
 	whenReady(): Promise<DemandReadiness>;
 	/** Declares the same requirements once more and releases them; the re-arm after a release. */
@@ -200,6 +217,12 @@ function useDemand(
 		() => new BehaviorSubject<CoverageTarget | null>(null),
 		[engine, id]
 	);
+	const [searchLane$] = React.useState(() => new BehaviorSubject<CoverageTarget | null>(null));
+	const [pending$] = React.useState(() => new BehaviorSubject(false));
+	// Whether the LAST settled declaration was met by a wire walk. Only a walk writes the search
+	// lane, so only after one is "the lane is incomplete" evidence that the server has more —
+	// see `exhaustedFromCoverage$`.
+	const [fetched$] = React.useState(() => new BehaviorSubject(false));
 	const ready = React.useRef<Promise<DemandReadiness>>(Promise.resolve(ATTEMPTED));
 	const demandKey = JSON.stringify(compiled.demand);
 	const engineCollection = engineCollectionNameFor(descriptor.collection);
@@ -218,6 +241,9 @@ function useDemand(
 			pendingRelease.current = [];
 			releaseHandles(outstanding);
 			coverageTarget$.next(null);
+			searchLane$.next(null);
+			pending$.next(false);
+			fetched$.next(false);
 			ready.current = Promise.resolve(ATTEMPTED);
 			return undefined;
 		}
@@ -237,6 +263,8 @@ function useDemand(
 		});
 		const declare = (retryOnReject: boolean) => {
 			if (cancelled) return;
+			pending$.next(true);
+			fetched$.next(false);
 			handles = declareRequirements(engine, requirements);
 			// DECLARE BEFORE RELEASE. React always runs an effect's cleanup
 			// before the next setup, so releasing there left the engine with a
@@ -267,6 +295,14 @@ function useDemand(
 					isUnfiltered,
 				})
 			);
+			const searchIndex = requirements.findIndex(({ kind }) => kind === 'search');
+			const searchRequirement = requirements[searchIndex];
+			const searchHandle = handles[searchIndex];
+			searchLane$.next(
+				searchRequirement?.kind === 'search' && searchHandle?.queryKey
+					? { collection: searchRequirement.collection, queryKey: searchHandle.queryKey }
+					: null
+			);
 			const settled = Promise.all(handles.map((handle) => handle.ready)).then(readinessFrom);
 			// The readiness barrier must stay PENDING across the scheduled retry: settling
 			// through the rejection would let whenReady() complete while nothing is in
@@ -293,12 +329,22 @@ function useDemand(
 							})
 					)
 				: settled;
-			void ready.current.catch(() => undefined);
+			const barrier = ready.current;
+			const settle = (readiness: DemandReadiness) => {
+				// A superseded declaration must not speak for its successor.
+				if (ready.current !== barrier) return;
+				fetched$.next(readiness.fetched);
+				pending$.next(false);
+			};
+			void barrier.then(settle, () => settle(NOT_ATTEMPTED));
 		};
 		declare(true);
 		return () => {
 			cancelled = true;
 			settleOnCancel?.();
+			pending$.next(false);
+			fetched$.next(false);
+			searchLane$.next(null);
 			if (retryTimer !== undefined) clearTimeout(retryTimer);
 			// Defer, do not release — see DECLARE BEFORE RELEASE above. The next
 			// setup retires these once its own declaration is in; if there is no
@@ -315,6 +361,9 @@ function useDemand(
 		engine,
 		engineCollection,
 		id,
+		fetched$,
+		pending$,
+		searchLane$,
 	]);
 
 	// Final unmount: nothing declares after this, so whatever the effect above
@@ -393,7 +442,16 @@ function useDemand(
 	);
 
 	const whenReady = React.useCallback(() => ready.current.catch(() => NOT_ATTEMPTED), []);
-	return { coverageTarget$, sync, whenReady, declareOnce, generation: coverageGeneration };
+	return {
+		coverageTarget$,
+		searchLane$,
+		pending$,
+		fetched$,
+		sync,
+		whenReady,
+		declareOnce,
+		generation: coverageGeneration,
+	};
 }
 
 /** The engine declining to vouch — what a binding with no coverage target reports. */
@@ -417,6 +475,48 @@ function coverageTargetKey(target: CoverageTarget | null): string {
 	return 'queryKey' in target
 		? `${target.collection}::${target.queryKey}`
 		: `${target.collection}::@reference`;
+}
+
+/**
+ * The engine's opinion on whether the server has more rows for a SEARCH demand — the signal
+ * the grids page on instead of "was the local page short" (`useGuardedExtension`).
+ *
+ *  - `true`: the walk ended on a short page inside its limit and the lane is still fresh
+ *    (`fetchSearch` records `exhausted` as the lane's `complete`). Stale-complete reads as
+ *    `false` on purpose: the next end-reached re-declares, the require-plane re-walks (it only
+ *    serves local for complete AND fresh), and the verdict settles back to `true`.
+ *  - `false`: a walk landed (the standing declaration settled `fetched`) and filled its limit —
+ *    more may exist.
+ *  - `null`: no opinion. No search lane (browse windows never complete, by design), or the
+ *    last declaration did not walk: a failed walk leaves no lane, and a `serve-local` for a
+ *    fully resident catalogue leaves none either — in both the local rows ARE the answer, and
+ *    reading "no lane" as "more may exist" would grow the limit on every end-reached fire
+ *    (offline, or on every render once resident): the #1221 storm by another door. The
+ *    verdict cannot tell those apart on its own — an incomplete lane and no lane both report
+ *    `source: 'unknown'` — which is why the settle outcome is consulted.
+ */
+function exhaustedFromCoverage$(
+	engine: RxdbSyncEngine,
+	searchLane$: Observable<CoverageTarget | null>,
+	fetched$: Observable<boolean>
+): Observable<boolean | null> {
+	return searchLane$.pipe(
+		distinctUntilChanged(
+			(previous, current) => coverageTargetKey(previous) === coverageTargetKey(current)
+		),
+		switchMap((target) =>
+			target === null
+				? UNKNOWN_EXHAUSTED$
+				: combineLatest([observeCoverage(engine, target), fetched$]).pipe(
+						map(([verdict, fetched]) => {
+							if (verdict.complete && verdict.fresh) return true;
+							return fetched ? false : null;
+						})
+					)
+		),
+		distinctUntilChanged(),
+		shareReplay({ bufferSize: 1, refCount: true })
+	);
 }
 
 /**
@@ -534,6 +634,8 @@ export function useLogsBinding(state: QueryStateOf<'logs'>): QueryBinding {
 		total$: local.total$,
 		laneProgress$: NO_LANE_PROGRESS$,
 		active$: INACTIVE$,
+		pending$: NOT_PENDING$,
+		exhausted$: UNKNOWN_EXHAUSTED$,
 		sync: async () => undefined,
 	};
 }
@@ -601,6 +703,10 @@ function useEngineBinding(
 		() => projection$.pipe(map(({ laneProgress }) => laneProgress)),
 		[projection$]
 	);
+	const exhausted$ = React.useMemo(
+		() => exhaustedFromCoverage$(runtime.engine, demand.searchLane$, demand.fetched$),
+		[demand.fetched$, demand.searchLane$, runtime.engine]
+	);
 	// Memoised for the same reason as the projections above: consumers hold the binding and
 	// compare it, so a fresh object per render is churn they cannot memoise away.
 	return React.useMemo(
@@ -608,6 +714,8 @@ function useEngineBinding(
 			resource,
 			result$,
 			active$,
+			pending$: demand.pending$,
+			exhausted$,
 			total$,
 			laneProgress$,
 			sync: demand.sync,
@@ -615,7 +723,7 @@ function useEngineBinding(
 			declareOnce: demand.declareOnce,
 			generation: demand.generation,
 		}),
-		[resource, result$, active$, total$, laneProgress$, demand]
+		[resource, result$, active$, exhausted$, total$, laneProgress$, demand]
 	);
 }
 
@@ -828,10 +936,23 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 		() => projection$.pipe(map(({ laneProgress }) => laneProgress)),
 		[projection$]
 	);
+	const pending$ = React.useMemo(
+		() =>
+			combineLatest([parentDemand.pending$, childDemand.pending$]).pipe(
+				map((values) => values.some(Boolean)),
+				distinctUntilChanged(),
+				shareReplay({ bufferSize: 1, refCount: true })
+			),
+		[childDemand.pending$, parentDemand.pending$]
+	);
+	const exhausted$ = React.useMemo(
+		() => exhaustedFromCoverage$(runtime.engine, parentDemand.searchLane$, parentDemand.fetched$),
+		[parentDemand.fetched$, parentDemand.searchLane$, runtime.engine]
+	);
 
 	return React.useMemo(
-		() => ({ resource, result$, active$, total$, laneProgress$, sync }),
-		[resource, result$, active$, total$, laneProgress$, sync]
+		() => ({ resource, result$, active$, pending$, exhausted$, total$, laneProgress$, sync }),
+		[resource, result$, active$, pending$, exhausted$, total$, laneProgress$, sync]
 	);
 }
 

@@ -294,6 +294,7 @@ export function Products() {
 							<DataTable<ProductRow>
 								id="products"
 								collectionName="products"
+								binding={binding}
 								resource={binding.resource}
 								sort={state.sort}
 								actions={tableActions}

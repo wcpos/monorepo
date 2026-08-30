@@ -329,6 +329,7 @@ function POSProductsContent({
 								<DataTable<ProductRow>
 									id="pos-products"
 									collectionName="products"
+									binding={binding}
 									resource={binding.resource}
 									sort={state.sort}
 									actions={tableActions}

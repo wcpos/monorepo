@@ -213,6 +213,37 @@ export type RequirePlaneDeps = {
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
 };
 
+/** Rows a `search` requirement walks to when the declarer names no limit. */
+const DEFAULT_SEARCH_LIMIT = 25;
+
+/**
+ * The coverage lane a `search` requirement walks into — the ONE place the key is spelled.
+ *
+ * Products/variations keys carry no limit (#1221: the walk pages to `limit` and stops on a
+ * short page, so limit is not lane identity); customers keys do (`customers:search=…:limit=N`).
+ * Handed out on the requirement handle so core can observe the lane's verdict without
+ * constructing a key itself (CONTEXT.md: callers never construct lane keys). Null for a
+ * requirement the walk would reject anyway (empty term, invalid limit, unsupported collection).
+ */
+export function searchLaneQueryKey(
+	requirement: Pick<Extract<EngineRequirement, { kind: 'search' }>, 'collection' | 'term' | 'limit'>
+): string | null {
+	const term = (requirement.term ?? '').trim();
+	const limit = requirement.limit ?? DEFAULT_SEARCH_LIMIT;
+	if (
+		term.length === 0 ||
+		!Number.isSafeInteger(limit) ||
+		limit <= 0 ||
+		!['products', 'customers', 'variations'].includes(requirement.collection)
+	) {
+		return null;
+	}
+	const encodedTerm = encodeURIComponent(term);
+	return requirement.collection === 'customers'
+		? `customers:search=${encodedTerm}:limit=${limit}`
+		: `${requirement.collection}:search:${encodedTerm}`;
+}
+
 type InternalRequirement =
 	| EngineRequirement
 	| (EngineRequirementCommon & {
@@ -405,7 +436,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	const lastDemandReferencePullMs = new Map<string, number>();
 	let seq = 0;
 	let running = false;
-	const defaultSearchLimit = 25;
+	const defaultSearchLimit = DEFAULT_SEARCH_LIMIT;
 	const searchLimitOf = (requirement: InternalRequirement): number =>
 		requirement.kind === 'search' ? (requirement.limit ?? defaultSearchLimit) : 0;
 	// The limit is deliberately NOT part of the key (#1221): the walk pages to `limit` and
@@ -947,10 +978,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					throw new Error("require: 'search' limit must be a positive integer");
 				}
 				const encodedTerm = encodeURIComponent(term);
-				const queryKey =
-					searchCollection === 'customers'
-						? `customers:search=${encodedTerm}:limit=${limit}`
-						: `${searchCollection}:search:${encodedTerm}`;
+				const queryKey = searchLaneQueryKey(item.requirement)!;
 				if (!item.requirement.forceRefresh) {
 					const lane = await coverage.readLane(searchCollection, queryKey);
 					const equivalentCustomerLanes =
@@ -1380,6 +1408,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				});
 			}
 			const queryKey = (() => {
+				if (requirement.kind === 'search') return searchLaneQueryKey(requirement);
 				if (requirement.kind === 'orders-browse') return orderBrowserQueryKey(requirement);
 				if (requirement.kind === 'product-browse') {
 					// Recorded on DECLARATION, not on completion: the idle backfill must follow the

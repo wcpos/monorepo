@@ -10,6 +10,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { useDocField } from '@wcpos/query';
 
 import { useGuardedExtendLimit } from '../../../../../query';
+import { ProductGridFooter } from './grid-footer';
 import { ProductTile } from './product-tile';
 import { VariableProductTile } from './variable-product-tile';
 import { useT } from '../../../../../contexts/translations';
@@ -53,10 +54,13 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 	const result = useObservableSuspense(binding.resource);
 	const deferredResult = React.useDeferredValue(result);
 
-	// Guarded (#1221): a short page is the true end, and an outstanding extension must land
-	// before the next one fires — unguarded end-reached churn recompiled the search demand
-	// per step and abort/re-issued identical wire requests.
-	const handleEndReached = useGuardedExtendLimit(actions.extendLimit, deferredResult.hits.length);
+	// Guarded (#1221): search paging follows the engine's exhaustion verdict, not the shorter
+	// locally merged product rows, while pending demand still blocks duplicate extensions.
+	const handleEndReached = useGuardedExtendLimit(
+		actions.extendLimit,
+		deferredResult.hits.length,
+		binding
+	);
 
 	/**
 	 * Chunk flat product list into rows of N
@@ -123,6 +127,9 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 					estimatedItemSize={200}
 					onEndReachedThreshold={0.1}
 					onEndReached={handleEndReached}
+					ListFooterComponent={
+						<ProductGridFooter binding={binding} count={deferredResult.hits.length} />
+					}
 					ListEmptyComponent={() => (
 						<View className="items-center justify-center p-4">
 							<Text testID="no-data-message">{t('common.no_products_found')}</Text>

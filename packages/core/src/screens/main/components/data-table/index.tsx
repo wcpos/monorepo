@@ -102,6 +102,7 @@ interface CommonProps<TData extends RowData> {
 
 type BindingProps<TSortField extends string> = {
 	collectionName: DataTableCollectionKey;
+	binding?: Pick<import('../../../../query').QueryBinding, 'pending$' | 'exhausted$'>;
 	resource: import('observable-hooks').ObservableResource<QueryResult<import('rxdb').RxCollection>>;
 	sort: { field: TSortField; direction: 'asc' | 'desc' };
 	actions: BindingActions<TSortField>;
@@ -176,12 +177,12 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 		[patchUI, props.actions]
 	);
 
-	// Guarded (#1221): a short page is the true end, and an outstanding extension must land
-	// before the next one fires — unguarded end-reached churn recompiled the search demand
-	// per step and abort/re-issued identical wire requests.
+	// Guarded (#1221): engine-backed searches extend until their lane is exhausted; bindings
+	// without a search verdict keep the short-page fallback. Only one extension runs at a time.
 	const handleEndReached = useGuardedExtendLimit(
 		props.actions.extendLimit,
-		deferredResult.hits.length
+		deferredResult.hits.length,
+		props.binding
 	);
 
 	const table = useTable<DataTableFeatures, DataTableRow>({

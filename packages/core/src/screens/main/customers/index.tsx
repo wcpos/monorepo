@@ -147,6 +147,7 @@ function CustomersScreenContent() {
 							<DataTable<CustomerRow>
 								id="customers"
 								collectionName="customers"
+								binding={binding}
 								resource={binding.resource}
 								sort={state.sort}
 								actions={tableActions}
