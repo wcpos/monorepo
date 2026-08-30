@@ -85,6 +85,16 @@ describe('sentry-sink.web', () => {
 		expect(event.breadcrumbs?.[1].data).toEqual({ method: 'GET' });
 	});
 
+	it('redacts credentials from scrubbed url query strings', () => {
+		const event = scrubEvent({
+			request: {
+				url: 'https://merchant.example/checkout?access_token=secret-token&order=42',
+			},
+		});
+
+		expect(event.request?.url).toBe('/checkout?access_token=[REDACTED]&order=42');
+	});
+
 	it('removes store origins from nested extra context urls', () => {
 		const event = scrubEvent({
 			extra: {

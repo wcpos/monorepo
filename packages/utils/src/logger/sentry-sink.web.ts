@@ -1,6 +1,7 @@
 import * as Sentry from '@sentry/browser';
 
 import { AppInfo } from '../app-info';
+import { redactSensitiveText } from './redact';
 
 export type SentryCaptureInput = {
 	message: string;
@@ -42,9 +43,9 @@ function getInstallId(): string | undefined {
 function stripOrigin(url: string): string {
 	try {
 		const parsedUrl = new URL(url);
-		return `${parsedUrl.pathname}${parsedUrl.search}`;
+		return redactSensitiveText(`${parsedUrl.pathname}${parsedUrl.search}`);
 	} catch {
-		return url;
+		return redactSensitiveText(url);
 	}
 }
 
