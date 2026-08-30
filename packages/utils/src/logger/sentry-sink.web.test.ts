@@ -11,7 +11,8 @@ const localStorage = {
 };
 // The sink refuses to initialise in development builds; this suite exercises
 // the production path. Cleared before the module under test is loaded.
-(globalThis as any).__DEV__ = false;
+const testGlobal = globalThis as typeof globalThis & { __DEV__: boolean };
+testGlobal.__DEV__ = false;
 Object.defineProperty(globalThis, 'window', {
 	configurable: true,
 	value: {
@@ -40,6 +41,16 @@ describe('sentry-sink.web', () => {
 		setTelemetryConsent('allowed');
 
 		expect(Sentry.init).toHaveBeenCalledTimes(1);
+		const initCall = jest.mocked(Sentry.init).mock.calls[0];
+		if (!initCall) throw new Error('Missing Sentry init call');
+		const [initOptions] = initCall;
+		if (!initOptions) throw new Error('Missing Sentry init options');
+		const configureIntegrations = initOptions.integrations;
+		expect(configureIntegrations).toEqual(expect.any(Function));
+		if (typeof configureIntegrations !== 'function') throw new Error('Missing integrations filter');
+		expect(configureIntegrations([{ name: 'GlobalHandlers' }, { name: 'BrowserSession' }])).toEqual(
+			[{ name: 'GlobalHandlers' }]
+		);
 		expect(Sentry.setUser).toHaveBeenCalledWith({ id: 'new-install-id' });
 	});
 
@@ -72,6 +83,24 @@ describe('sentry-sink.web', () => {
 		expect(event.request?.url).toBe('/wp-json/wcpos/v1?order=42');
 		expect(event.breadcrumbs?.[0].data?.url).toBe('/products?search=shirt');
 		expect(event.breadcrumbs?.[1].data).toEqual({ method: 'GET' });
+	});
+
+	it('removes store origins from nested extra context urls', () => {
+		const event = scrubEvent({
+			extra: {
+				context: {
+					siteUrl: 'https://merchant.example/wp-json',
+					attempts: [{ originalUrl: 'https://store.example/products?page=2' }],
+				},
+			},
+		});
+
+		expect(event.extra).toEqual({
+			context: {
+				siteUrl: '/wp-json',
+				attempts: [{ originalUrl: '/products?page=2' }],
+			},
+		});
 	});
 
 	it('adds error-code grouping only when a code is provided', () => {

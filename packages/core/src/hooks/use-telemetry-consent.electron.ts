@@ -10,13 +10,12 @@ import { setTelemetryConsent, type TelemetryConsent } from '@wcpos/utils/logger/
 
 export function useTelemetryConsent(): void {
 	const { store } = useAppState();
-	// No store document, no opinion: `null` until the store has loaded, so a
-	// boot-time 'undecided' can never overwrite the merchant's stored answer.
+	// Without a store, reset both telemetry clients until a merchant preference is available.
 	const consent$ = React.useMemo(
 		() =>
 			store
 				? store.tracking_consent$!.pipe(startWith(store.tracking_consent ?? 'undecided'))
-				: of<TelemetryConsent | null>(null),
+				: of<TelemetryConsent>('undecided'),
 		[store]
 	);
 	const consent = useObservableEagerState(consent$);

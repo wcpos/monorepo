@@ -48,6 +48,15 @@ function stripOrigin(url: string): string {
 	}
 }
 
+function scrubUrlValues(value: unknown): unknown {
+	if (typeof value === 'string') return stripOrigin(value);
+	if (Array.isArray(value)) return value.map(scrubUrlValues);
+	if (value === null || typeof value !== 'object' || value instanceof Error) return value;
+	return Object.fromEntries(
+		Object.entries(value).map(([key, nestedValue]) => [key, scrubUrlValues(nestedValue)])
+	);
+}
+
 export function scrubEvent<T extends Sentry.Event>(event: T): T {
 	if (event.request?.url) {
 		event.request.url = stripOrigin(event.request.url);
@@ -56,6 +65,11 @@ export function scrubEvent<T extends Sentry.Event>(event: T): T {
 		if (typeof breadcrumb.data?.url === 'string') {
 			breadcrumb.data.url = stripOrigin(breadcrumb.data.url);
 		}
+	}
+	if (event.extra) {
+		event.extra = Object.fromEntries(
+			Object.entries(event.extra).map(([key, value]) => [key, scrubUrlValues(value)])
+		);
 	}
 	return event;
 }
@@ -75,7 +89,10 @@ export function captureLoggedError(input: SentryCaptureInput): void {
 	if (!isInitialized) return;
 
 	try {
-		const error = (input.context as any)?.error;
+		const error =
+			input.context !== null && typeof input.context === 'object' && 'error' in input.context
+				? input.context.error
+				: undefined;
 		const options = buildCaptureOptions(input);
 		if (error instanceof Error) {
 			Sentry.captureException(error, options);
@@ -102,6 +119,7 @@ export function setTelemetryConsent(consent: TelemetryConsent): void {
 			release: `wcpos-app@${AppInfo.version}`,
 			environment: AppInfo.platform,
 			sendDefaultPii: false,
+			integrations: (integrations) => integrations.filter(({ name }) => name !== 'BrowserSession'),
 			sampleRate: 1,
 			beforeSend: scrubEvent,
 			ignoreErrors: [/ResizeObserver loop/],
