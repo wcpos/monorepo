@@ -20,6 +20,14 @@ const SYNCED_FILES = [
 		'scripts/opfs-targeted-recovery.test.mjs',
 		'apps/electron/src/main/opfs-targeted-recovery.test.mjs',
 	],
+	[
+		'scripts/patch-rxdb-premium-changes-file-salvage.mjs',
+		'apps/electron/scripts/patch-rxdb-premium-changes-file-salvage.mjs',
+	],
+	[
+		'scripts/rxdb-premium-changes-file-salvage.test.mjs',
+		'apps/electron/scripts/rxdb-premium-changes-file-salvage.test.mjs',
+	],
 ];
 
 const submoduleInitialized = existsSync(join(repoRoot, 'apps/electron/package.json'));
