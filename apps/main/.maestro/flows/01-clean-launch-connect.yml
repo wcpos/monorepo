@@ -121,15 +121,15 @@ env:
 - tapOn:
     id: "store-url-input"
 - inputText: "https://not-a-real-store.invalid"
-# optional: hideKeyboard is unreliable on iOS (this file already says so at
-# the two Android-gated uses below, but this one was left ungated and failed
-# a local iOS suite run 2026-08-29 at exactly this step, having passed the
-# same step minutes earlier). Dismissing the keyboard is housekeeping — if it
-# genuinely covers the next target, THAT tap fails and names the real problem.
-# Failing here instead just reports "Hide Keyboard" and hides which element
-# was blocked.
-- hideKeyboard:
-    optional: true
+# iOS hideKeyboard can tap the adjacent clear control, leaving Connect
+# disabled (PR #1690 and PR #1709 iOS-tablet artifacts). Flow 02 keeps its
+# separate iOS dismissal because the keyboard covers its later Open POS target.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - hideKeyboard:
+          optional: true
 - tapOn:
     id: "connect-store-button"
 # The button disables while the discovery request is in flight; waiting for it

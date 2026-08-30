@@ -1727,6 +1727,21 @@ test('Android clean-start flows dismiss a queued system ANR before waiting for E
 	}
 });
 
+test('clean-launch connection does not let iOS keyboard dismissal clear the probe URL', () => {
+	const flow = readMaestroFlow('01-clean-launch-connect.yml');
+	const inputIndex = flow.findIndex((command) => command.tapOn?.id === 'store-url-input');
+
+	assert.notEqual(inputIndex, -1, 'clean launch must target the store URL input');
+	assert.equal(flow[inputIndex + 1].inputText, 'https://not-a-real-store.invalid');
+	assert.deepEqual(flow[inputIndex + 2], {
+		runFlow: {
+			when: { platform: 'Android' },
+			commands: [{ hideKeyboard: { optional: true } }],
+		},
+	});
+	assert.deepEqual(flow[inputIndex + 3], { tapOn: { id: 'connect-store-button' } });
+});
+
 // The Expo dev launcher's manifest request has a hard 10s native timeout, and a
 // starved 3-core macOS runner can miss it (main run 33302195102, iOS tablet:
 // app-console "finished with error [-1001] … http://localhost:8081/" 10s after
