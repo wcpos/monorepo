@@ -1768,17 +1768,23 @@ test('clean-launch connection proves the probe URL landed before tapping Connect
 // dumped store-url-input as `… enabled=true, focused=false` at the moment of the
 // inputText and the recording shows the field empty for the next eleven seconds;
 // the flow then failed three steps later at a wait that reads as "the store
-// never answered". Every text entry into OUR OWN UI must therefore wait for
-// `focused: true` before typing and read the value back from the SAME id
-// afterwards, so a lost keystroke fails at the step that lost it.
-test('every text entry into the app waits for focus and reads its value back', () => {
+// never answered". Every text entry into OUR OWN UI must therefore read its
+// value back from the field's own id, so a lost keystroke fails at the step that
+// lost it and the surrounding `retry` can type it again.
+//
+// The read-back is the ONLY gate: `focused` is not trustworthy on Maestro
+// 2.6.1's iOS driver. Run 33310843729 (iOS phone) failed a `focused: true` wait
+// for its full 10s while the ❌ screenshot shows the caret blinking in the field
+// with the URL keyboard up, and every hierarchy dump in that log reads
+// `focused=false`. Do not reintroduce a focus gate here.
+test('every text entry into the app reads its value back from the same field', () => {
 	const flowsDir = path.join(ROOT, 'apps', 'main', '.maestro', 'flows');
 
-	// The only exemptions, both deliberate and both documented at their site:
-	// a lone newline is a key press, not text; and the two WordPress credential
-	// fields live in the auth browser's web view, where there is no testID to
-	// read back, a password cannot be read at all, and re-typing into a form we
-	// do not control can concatenate rather than replace.
+	// The only exemptions, all deliberate and documented at their site: a lone
+	// newline is a key press, not text; and the two WordPress credential fields
+	// live in the auth browser's web view, where there is no testID to read back,
+	// a password cannot be read at all, and re-typing into a form we do not
+	// control can concatenate rather than replace.
 	const exempt = new Set(['\n', '${E2E_USERNAME}', '${E2E_PASSWORD}']);
 
 	const flatten = (commands, out = []) => {
@@ -1794,32 +1800,34 @@ test('every text entry into the app waits for focus and reads its value back', (
 	let verified = 0;
 	for (const filename of readdirSync(flowsDir).filter((name) => name.endsWith('.yml'))) {
 		const flow = readMaestroFlow(filename);
-		// The id of the most recent `focused: true` wait, and whether a read-back
-		// for it is still owed. A new focus wait closes the previous entry.
-		let focusedId = null;
+		// `field` is the input the last id-bearing tapOn opened; `owed` is set once
+		// something has been typed into it and cleared by the read-back.
+		let field = null;
 		let owed = null;
 
 		for (const [key, value] of flatten(flow)) {
-			if (key === 'extendedWaitUntil' && value?.visible?.focused === true) {
-				assert.equal(owed, null, `${filename}: no read-back of \`${owed}\` before the next entry`);
-				focusedId = value.visible.id;
-				assert.ok(focusedId, `${filename}: a focus wait must name the input's id`);
+			if (key === 'tapOn' && value?.id) {
+				assert.equal(
+					owed,
+					null,
+					`${filename}: text typed into \`${owed}\` is left unread when the flow taps on`
+				);
+				field = value.id;
 				continue;
 			}
 			if (key === 'inputText') {
 				if (exempt.has(String(value))) continue;
 				assert.ok(
-					focusedId,
-					`${filename}: \`inputText: ${value}\` types without first waiting for focus`
+					field,
+					`${filename}: \`inputText: ${value}\` types without a preceding tapOn naming the field`
 				);
-				owed = focusedId;
+				owed = field;
 				continue;
 			}
 			if (key === 'assertVisible' && value?.id && value?.text !== undefined && value.id === owed) {
-				// The read-back closes the entry: a later inputText needs its OWN
-				// focus wait, and says so by name when it does not have one.
+				// The read-back closes the entry; the next one starts at its own tapOn.
 				owed = null;
-				focusedId = null;
+				field = null;
 				verified += 1;
 			}
 		}
@@ -1829,6 +1837,26 @@ test('every text entry into the app waits for focus and reads its value back', (
 
 	// 01 and 02 (store URL), 04, 06 and 07 (search), 06 (quantity), 08 (fee).
 	assert.ok(verified >= 7, `only ${verified} verified text entries`);
+});
+
+// No flow may gate on `focused`: Maestro 2.6.1's iOS driver reports
+// `focused=false` for a field that is demonstrably focused (run 33310843729,
+// iOS phone — see the test above), so such a gate is a false negative that fails
+// a healthy step.
+test('no Maestro flow gates on the unreliable iOS `focused` attribute', () => {
+	const maestroDir = path.join(ROOT, 'apps', 'main', '.maestro');
+	const offenders = [];
+	for (const dir of ['flows', 'subflows']) {
+		for (const filename of readdirSync(path.join(maestroDir, dir))) {
+			if (!filename.endsWith('.yml')) continue;
+			const source = readFileSync(path.join(maestroDir, dir, filename), 'utf8');
+			for (const line of source.split('\n')) {
+				if (/^\s*focused:/.test(line)) offenders.push(`${dir}/${filename}: ${line.trim()}`);
+			}
+		}
+	}
+
+	assert.deepEqual(offenders, [], 'a flow gates on `focused`, which the iOS driver gets wrong');
 });
 
 // The Expo dev launcher's manifest request has a hard 10s native timeout, and a

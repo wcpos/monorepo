@@ -80,19 +80,14 @@ appId: com.wcpos.main.dev
     visible:
       id: "add-fee-dialog"
     timeout: 30000
-# Tap, wait for focus, type, read back — see flow 01 for the evidence. The
-# read-back was already here; it now names the FIELD as well as the text, and
-# the whole entry retries if the tap did not focus in time.
+# Tap, type, read back, retry — see flow 01 for the evidence. The read-back was
+# already here; it now names the FIELD as well as the text, and the whole entry
+# is retried if the keystrokes did not land in it.
 - retry:
     maxRetries: 2
     commands:
       - tapOn:
           id: "fee-amount-input"
-      - extendedWaitUntil:
-          visible:
-            id: "fee-amount-input"
-            focused: true
-          timeout: 10000
       - eraseText
       - inputText: ${output.dollars}
       - inputText: ".${output.cents}"

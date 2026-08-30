@@ -62,14 +62,6 @@ env:
     commands:
       - tapOn:
           id: "search-products"
-      # The tap must have FOCUSED the field before any key is typed — see flow
-      # 01 for the run where it had not. Inside the retry, so a tap that lands
-      # without focus is simply done again.
-      - extendedWaitUntil:
-          visible:
-            id: "search-products"
-            focused: true
-          timeout: 10000
       - eraseText
       # See flow 04: one printable key per Maestro command cannot latch the
       # wedge detector, regardless of the store's configured minimum length.
@@ -109,17 +101,12 @@ env:
     visible:
       id: "cart-quantity-input"
     timeout: 30000
-# Tap, wait for focus, type, read back — see flow 01 for the evidence.
+# Tap, type, read back, retry — see flow 01 for the evidence.
 - retry:
     maxRetries: 2
     commands:
       - tapOn:
           id: "cart-quantity-input"
-      - extendedWaitUntil:
-          visible:
-            id: "cart-quantity-input"
-            focused: true
-          timeout: 10000
       - eraseText
       - inputText: "3"
       # Read back the FIELD, not the screen: a bare "3" matches half the cart.

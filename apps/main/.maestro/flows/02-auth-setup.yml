@@ -103,18 +103,14 @@ env:
     visible:
       id: "store-url-input"
     timeout: 180000
-# Tap, wait for focus, type, read back — see flow 01 for the evidence (a tap
-# that had not focused the field by the time the driver typed).
+# Tap, type, read back, retry — see flow 01 for the evidence (a tap that had
+# not focused the field by the time the driver typed, and why the guarantee is
+# the read-back rather than a `focused` gate the iOS driver gets wrong).
 - retry:
     maxRetries: 2
     commands:
       - tapOn:
           id: "store-url-input"
-      - extendedWaitUntil:
-          visible:
-            id: "store-url-input"
-            focused: true
-          timeout: 10000
       - eraseText
       - inputText: ${STORE_URL}
       - assertVisible:

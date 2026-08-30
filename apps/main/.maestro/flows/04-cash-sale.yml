@@ -72,14 +72,6 @@ env:
     commands:
       - tapOn:
           id: "search-products"
-      # The tap must have FOCUSED the field before any key is typed — see flow
-      # 01 for the run where it had not. Inside the retry, so a tap that lands
-      # without focus is simply done again.
-      - extendedWaitUntil:
-          visible:
-            id: "search-products"
-            focused: true
-          timeout: 10000
       - eraseText
       # One `inputText` is scanner-fast. Device runs prove separate Maestro
       # commands form separate bursts; one printable key cannot latch
