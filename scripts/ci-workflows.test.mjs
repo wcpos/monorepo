@@ -1727,19 +1727,39 @@ test('Android clean-start flows dismiss a queued system ANR before waiting for E
 	}
 });
 
-test('clean-launch connection does not let iOS keyboard dismissal clear the probe URL', () => {
+test('clean-launch connection proves the probe URL landed before tapping Connect', () => {
 	const flow = readMaestroFlow('01-clean-launch-connect.yml');
 	const inputIndex = flow.findIndex((command) => command.tapOn?.id === 'store-url-input');
 
 	assert.notEqual(inputIndex, -1, 'clean launch must target the store URL input');
 	assert.equal(flow[inputIndex + 1].inputText, 'https://not-a-real-store.invalid');
+	// Keyboard dismissal stays Android-only here: it is housekeeping, and on iOS
+	// it has been seen to hit the field's own controls.
 	assert.deepEqual(flow[inputIndex + 2], {
 		runFlow: {
 			when: { platform: 'Android' },
 			commands: [{ hideKeyboard: { optional: true } }],
 		},
 	});
-	assert.deepEqual(flow[inputIndex + 3], { tapOn: { id: 'connect-store-button' } });
+	// Connect is DISABLED while the field is empty, so requiring it ENABLED before
+	// the tap proves the keystrokes landed — whatever lost them. Run 33307998593
+	// (iOS tablet) tapped Connect on an empty field and the flow only failed 30s
+	// later, on the post-tap discovery wait, blaming the store for a lost input.
+	assert.deepEqual(flow[inputIndex + 3], {
+		extendedWaitUntil: {
+			visible: { id: 'connect-store-button', enabled: true },
+			timeout: 10000,
+		},
+	});
+	assert.deepEqual(flow[inputIndex + 4], { tapOn: { id: 'connect-store-button' } });
+	// The post-tap wait must outlast the app's own discovery budget: two
+	// use-url-discovery probes at 10s plus two use-api-discovery attempts at 15s.
+	assert.deepEqual(flow[inputIndex + 5], {
+		extendedWaitUntil: {
+			visible: { id: 'connect-store-button', enabled: true },
+			timeout: 90000,
+		},
+	});
 });
 
 // The Expo dev launcher's manifest request has a hard 10s native timeout, and a

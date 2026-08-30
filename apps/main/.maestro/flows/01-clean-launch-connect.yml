@@ -130,15 +130,42 @@ env:
     commands:
       - hideKeyboard:
           optional: true
-- tapOn:
-    id: "connect-store-button"
-# The button disables while the discovery request is in flight; waiting for it
-# to be enabled again proves the request settled (there is no "Loading" text).
+# The URL must actually have LANDED before we tap Connect. The button is
+# DISABLED while the field is empty, so this is the cheap proof that the input
+# reached the field — and it is the step that names the failure when it did not.
+# On this PR's run 33307998593 (iOS tablet, 2026-08-30_112856) it had not: the
+# screen recording shows the field EMPTY and Connect pale through the tap on
+# store-url-input (11:34:19), the inputText (11:34:21.5), the hideKeyboard
+# retries (11:34:24.9-29.2) and the Connect tap (11:34:32.7), and the app
+# console logs no discovery request at all. The flow instead died 30s later on
+# the post-tap wait below, which reads as "discovery never settled" and blames
+# the store for what was a lost keystroke. Ten seconds is generous: the button
+# enables from local state the moment the text is there.
 - extendedWaitUntil:
     visible:
       id: "connect-store-button"
       enabled: true
-    timeout: 30000
+    timeout: 10000
+- tapOn:
+    id: "connect-store-button"
+# The button disables while the discovery request is in flight; waiting for it
+# to be enabled again proves the request settled (there is no "Loading" text).
+#
+# 90s, not 30s: this budget has to outlast the APP'S OWN discovery timeouts. A
+# bogus host that hangs instead of failing fast walks the whole chain —
+# packages/core/src/screens/auth/hooks/use-url-discovery.ts probes twice at
+# DISCOVERY_PROBE_TIMEOUT_MS = 10_000 (link header, then the fallback) and
+# use-api-discovery.ts then makes two attempts at timeout: 15_000, i.e. up to
+# ~50s before the app gives up and re-enables the button. 30s was inside that
+# window, so on a starved runner (slow DNS path; `.invalid` need not fail fast)
+# the gate could expire while the app was still correctly waiting. Only the
+# budget moves: the referent is still the button being ENABLED, which is what
+# proves the request settled, and the two assertions below are unchanged.
+- extendedWaitUntil:
+    visible:
+      id: "connect-store-button"
+      enabled: true
+    timeout: 90000
 - assertNotVisible:
     id: "logged-in-users-label"
 - assertVisible:
