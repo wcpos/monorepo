@@ -88,7 +88,29 @@ describe('cart line Actions', () => {
 		expect(button.getAttribute('data-disabled')).toBe('false');
 	});
 
-	it('stays pressable when the removal fails, so the cashier can try again', async () => {
+	it('stays pressable when a handled write failure leaves the row mounted', async () => {
+		// `localPatch` logs and toasts the failures it handles and then RESOLVES,
+		// so a removal that never landed is indistinguishable from one that did.
+		// If the row is still mounted afterwards it must still be removable.
+		const { pulseRemove, button } = renderActions();
+
+		fireEvent.click(button);
+		await act(async () => {
+			await committedRemoval(pulseRemove)();
+		});
+		expect(mockRemoveLineItem).toHaveBeenCalledTimes(1);
+
+		fireEvent.click(button);
+		expect(pulseRemove).toHaveBeenCalledTimes(2);
+
+		await act(async () => {
+			await committedRemoval(pulseRemove, 1)();
+		});
+
+		expect(mockRemoveLineItem).toHaveBeenCalledTimes(2);
+	});
+
+	it('stays pressable when the removal rejects outright', async () => {
 		mockRemoveLineItem.mockRejectedValue(new Error('local write failed'));
 		const { pulseRemove, button } = renderActions();
 

@@ -49,17 +49,28 @@ export function Actions({ row, table }: CellContext<Props, 'actions'>) {
 		if (rowRef) {
 			removing.current = true;
 			rowRef.pulseRemove(() =>
-				removeLineItem(uuid, type).catch((error: unknown) => {
-					// The removal didn't land, so the line is still in the cart and the
-					// cashier has to be able to try again. `localPatch` has already
-					// logged and toasted every failure it handles — a rejection getting
-					// this far is unexpected, so log it here without a second toast.
-					removing.current = false;
-					cartLogger.error('Cart line removal failed', {
-						code: ERROR_CODES.CART_UPDATE_FAILED,
-						context: { uuid, itemType: type, error: getErrorMessage(error) },
-					});
-				})
+				removeLineItem(uuid, type)
+					.catch((error: unknown) => {
+						// `localPatch` logs and toasts every failure it handles, and
+						// re-raises only ActiveScopeChangedTwiceError, so a rejection
+						// getting this far is unexpected. Log it — without a second
+						// toast, which would double up on the cashier.
+						cartLogger.error('Cart line removal failed', {
+							code: ERROR_CODES.CART_UPDATE_FAILED,
+							context: { uuid, itemType: type, error: getErrorMessage(error) },
+						});
+					})
+					// Release on settle, not just on rejection: a handled write failure
+					// RESOLVES (localPatch swallows it after reporting), so the cell
+					// cannot tell from the promise whether the line actually went away.
+					// Releasing unconditionally is what keeps a failed removal from
+					// leaving the row unremovable for the rest of the session. Double
+					// commits are still impossible — pulse-row holds its own latch until
+					// this promise settles — and on success the row unmounts, leaving at
+					// most one render between settle and unmount.
+					.finally(() => {
+						removing.current = false;
+					})
 			);
 		}
 		// meta.rowRefs is a stable ref; its `.current` is read at call time, so it
