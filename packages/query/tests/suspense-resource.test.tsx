@@ -239,7 +239,9 @@ describe('useSuspenseResource', () => {
 		expect((await screen.findByTestId('one')).textContent).toBe('value');
 		expect((await screen.findByTestId('two')).textContent).toBe('value');
 		// Both mounted with distinct resources: neither holds one its owner destroyed.
-		expect(new Set(owned).size).toBe(2);
+		const distinct = new Set(owned);
+		expect(distinct.size).toBe(2);
+		for (const resource of distinct) expect(resource.isDestroyed).toBe(false);
 	});
 
 	it('does not share a resource between keys, or between scopes', async () => {
