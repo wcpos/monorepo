@@ -1,18 +1,15 @@
 appId: com.wcpos.main.dev
-env:
-  # CI passes phone|tablet from the device matrix; locally it stays 'auto' and the
-  # handle's visibility decides. On a declared tablet the handle is REQUIRED, so a
-  # regression that routes tablets to the phone layout fails instead of skipping.
-  DEVICE_CLASS: auto
 ---
 # P0-9: the tablet POS split resizes by drag and the user-chosen width survives a relaunch.
 # Session comes from 02-auth-setup; do NOT clear state. Phones render the tabbed layout
 # without a resize handle and skip the guarded block.
 #
 # State is read from the handle's accessibility label ("Resize handle, NN%"), which the
-# library keeps live for VoiceOver/TalkBack. Flow 01 cleared app data, so the products
-# panel starts at the initial-settings width of 60; a LEFT swipe shrinks it (clamped to
-# minSize 25), so "less than 60" is the deterministic post-drag assertion.
+# library keeps live for VoiceOver/TalkBack. NN is a ROUNDED percentage, so the flow
+# asserts BANDS, never an exact number: the products panel starts around the
+# initial-settings width of 60 (55..75) and a LEFT swipe shrinks it out of that band
+# and into 25..54 (clamped to minSize 25). The bands are disjoint on purpose — a
+# handle that never moved cannot satisfy the post-swipe assertion.
 # Split stop/launch + a screenshot-based settle: a combined `launchApp:
 # {stopApp: true}` can race the XCTest driver's first hierarchy query and be
 # reported as "App crashed" — see flow 08's relaunch for the evidence.
@@ -37,9 +34,25 @@ env:
     visible:
       id: "screen-pos"
     timeout: 120000
+# On a DECLARED tablet the handle is REQUIRED, so a regression that routes tablets
+# to the phone layout fails here instead of quietly skipping the guarded block below.
+#
+# There is deliberately NO `env: DEVICE_CLASS` default in this flow: under Maestro
+# 2.6.1 a flow-level env block is a second `Define variables` command that runs
+# AFTER the CLI's `-e` vars and SHADOWS them, which made this guard inert. Run
+# 33297473431 (iOS tablet) logged all three lines:
+#   DefineVariablesCommand(env={VARIABLE_PRODUCT_ID=107940, DEVICE_CLASS=tablet, ...})
+#   DefineVariablesCommand(env={DEVICE_CLASS=auto})
+#   Run flow when ${DEVICE_CLASS == 'tablet'} is true SKIPPED
+# DEVICE_CLASS therefore comes from the CLI only: e2e-native.yml passes
+# `-e DEVICE_CLASS=<matrix.device.name>` (phone|tablet) on both platforms, and
+# scripts/e2e-native-local.sh passes `-e DEVICE_CLASS="$DEVICE_CLASS"` (--device,
+# default phone). A bare `maestro test apps/main/.maestro` leaves it undefined; the
+# typeof guard reads that as "no declared class" rather than erroring, and the
+# handle-visibility block below still runs.
 - runFlow:
     when:
-      true: ${DEVICE_CLASS == 'tablet'}
+      true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'tablet'}"
     commands:
       - assertVisible:
           id: "pos-resize-handle"
@@ -57,19 +70,31 @@ env:
       # on `cart-subtotal`. The customer chip is rendered for every order.
       - assertVisible:
           id: "cart-customer-name"
+      # 55..75, not an exact 60: the label is `Math.round(layout[products])` of a
+      # width that need not print as the initial-settings 60 — a previous session's
+      # drag persists a fractional width (onLayoutChanged → patchUI writes the raw
+      # percentage), and rounding on a given device width can land a point either
+      # side. #1620 is not a rounding error: the pre-layout 60:1 flexGrow fallback
+      # renders the cart as a ~1.5% sliver, i.e. a products panel in the high 90s,
+      # so ANY value in the sane band disproves it while an exact 60 only adds
+      # flake (iOS tablet, PR #1704 run 33297473431). 75 is the ceiling the cart's
+      # minSize 25 allows.
       - assertVisible:
           id: "pos-resize-handle"
-          text: "Resize handle, 60%"
+          text: "Resize handle, (5[5-9]|6[0-9]|7[0-5])%"
       - swipe:
           from:
             id: "pos-resize-handle"
           direction: LEFT
           duration: 600
-      # 25..59: shrunk from the default but never below minSize.
+      # 25..54: shrunk out of the pre-swipe band (>= 55) but never below minSize 25,
+      # so the assertion cannot pass on an unmoved handle — the two bands do not
+      # overlap. The shrunk band is the wider of the two because the swipe distance,
+      # not the starting width, is the uncertain quantity here.
       - extendedWaitUntil:
           visible:
             id: "pos-resize-handle"
-            text: "Resize handle, (2[5-9]|[3-5][0-9])%"
+            text: "Resize handle, (2[5-9]|[34][0-9]|5[0-4])%"
           timeout: 10000
       # A stopped relaunch reads the width persisted by onLayoutChanged → patchUI.
       # Split stop/launch + a screenshot-based settle: a combined `launchApp:
@@ -85,7 +110,8 @@ env:
           timeout: 120000
       - assertVisible:
           id: "pos-resize-handle"
-          text: "Resize handle, (2[5-9]|[3-5][0-9])%"
+          text: "Resize handle, (2[5-9]|[34][0-9]|5[0-4])%"
+      # ...and did NOT snap back to anywhere in the default band.
       - assertNotVisible:
           id: "pos-resize-handle"
-          text: "Resize handle, 60%"
+          text: "Resize handle, (5[5-9]|6[0-9]|7[0-5])%"

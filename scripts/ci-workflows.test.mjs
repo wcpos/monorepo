@@ -1676,6 +1676,43 @@ exit 0
 	}
 });
 
+test('no Maestro flow declares a default for a variable the runners pass with -e', () => {
+	// Maestro 2.6.1 emits a flow's `env:` block as a second `Define variables`
+	// command that runs AFTER the CLI's `-e` vars and SHADOWS them, so a flow-level
+	// default silently wins over the value CI passes. Run 33297473431 logged
+	// `DefineVariablesCommand(env={… DEVICE_CLASS=tablet …})` then
+	// `DefineVariablesCommand(env={DEVICE_CLASS=auto})` and skipped the tablet
+	// guard; the same run's flow 07 was passed VARIABLE_PRODUCT_ID=107940 and still
+	// evaluated `idRegex=variable-product-tile-.*`. A CLI-passed variable therefore
+	// must not have a flow-level default anywhere.
+	const cliPassed = new Set();
+	for (const source of [
+		readFileSync(path.join(ROOT, '.github', 'workflows', 'e2e-native.yml'), 'utf8'),
+		readFileSync(path.join(ROOT, 'scripts', 'e2e-native-local.sh'), 'utf8'),
+	]) {
+		for (const [, name] of source.matchAll(/-e\s+([A-Z][A-Z0-9_]*)=/g)) cliPassed.add(name);
+	}
+
+	assert.ok(cliPassed.has('DEVICE_CLASS'), 'the runners no longer pass DEVICE_CLASS with -e');
+
+	const flowsDir = path.join(ROOT, 'apps', 'main', '.maestro', 'flows');
+	const offenders = [];
+	for (const filename of readdirSync(flowsDir).filter((name) => name.endsWith('.yml'))) {
+		const documents = parseAllDocuments(readFileSync(path.join(flowsDir, filename), 'utf8'));
+		if (documents.length < 2) continue; // no front-matter, so no env block
+		const declared = documents[0].toJS()?.env ?? {};
+		for (const name of Object.keys(declared)) {
+			if (cliPassed.has(name)) offenders.push(`${filename}: ${name}`);
+		}
+	}
+
+	assert.deepEqual(
+		offenders,
+		[],
+		'a flow-level env default shadows the value the runners pass with -e'
+	);
+});
+
 test('Android clean-start flows dismiss a queued system ANR before waiting for Expo', () => {
 	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
 		const flow = readMaestroFlow(filename);

@@ -28,11 +28,18 @@ function walk(dir, exts, files = []) {
 }
 
 // 1. Collect ids referenced by flows.
+// A quoted value may itself contain quotes when the id interpolates a Maestro
+// expression (e.g. "tile-${typeof VAR === 'undefined' ? '.*' : VAR}"), so the
+// quoted forms are matched to the END of the line rather than to the first inner
+// quote — otherwise such an id silently drops out of the lint. Everything from
+// the first `${` is runtime-substituted, so only the static prefix is checkable.
 const flowIds = new Set();
 for (const file of walk(maestroDir, ['.yml', '.yaml'])) {
 	const text = fs.readFileSync(file, 'utf8');
-	for (const match of text.matchAll(/^\s*id:\s*["']?([^"'\n]+?)["']?\s*$/gm)) {
-		flowIds.add(match[1].trim());
+	for (const match of text.matchAll(/^\s*id:\s*(?:"(.*)"|'(.*)'|([^"'\n]+?))\s*$/gm)) {
+		const raw = (match[1] ?? match[2] ?? match[3]).trim();
+		const interpolation = raw.indexOf('${');
+		flowIds.add(interpolation === -1 ? raw : raw.slice(0, interpolation));
 	}
 }
 
