@@ -44,11 +44,11 @@ export const useDefaultCustomer = () => {
 	// SAME component that builds it, with no boundary in between, which is the exact shape of
 	// the Orders blank body (#1707): a `useMemo` resource is thrown away with the uncommitted
 	// fiber, the retry builds another, and a customers query's first emission is always async,
-	// so the wait never ends. The customer ids are the input identity, so a changed default
-	// reloads the mounted consumer's resource in place instead of replacing it.
+	// so the wait never ends. The default id and complete guest fallback are the input identity,
+	// so a changed default or store-derived fallback reloads in place instead of being reused.
 	const defaultCustomerResource = useSuspenseResource(
 		runtime.engine,
-		`${defaultCustomerID}:${guestCustomer?.id ?? ''}`,
+		JSON.stringify([defaultCustomerID, guestCustomer]),
 		defaultCustomer$
 	);
 

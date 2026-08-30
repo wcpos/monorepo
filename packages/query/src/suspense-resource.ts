@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { ObservableResource } from 'observable-hooks';
+import { tap } from 'rxjs/operators';
 
 import type { Observable } from 'rxjs';
 
@@ -86,8 +87,22 @@ function bridgeAcquire<T>(
 		existing.lastAcquired = ++acquisitionClock;
 		return existing.resource;
 	}
-	const entry: BridgeEntry<T> = {
-		resource: new ObservableResource(input$),
+	let entry: BridgeEntry<T> | undefined;
+	const resource = new ObservableResource(
+		input$.pipe(
+			tap({
+				error: () => {
+					// A synchronous error can arrive before `entry` is assigned. Defer removal so
+					// ErrorBoundary retry cannot reacquire the resource that latched that error.
+					void Promise.resolve().then(() => {
+						if (entry && entryByResource.get(entry.resource) === entry) destroyEntry(entry);
+					});
+				},
+			})
+		)
+	);
+	entry = {
+		resource,
 		bucket,
 		key,
 		lastAcquired: ++acquisitionClock,
@@ -138,9 +153,18 @@ export function useSuspenseResource<T>(
 	const bound = React.useRef<{ resource: ObservableResource<T>; input$: Observable<T> } | null>(
 		null
 	);
+	const claimedResource = React.useRef<ObservableResource<T> | null>(null);
+	const raceReplacement = React.useRef<{
+		shared: ObservableResource<T>;
+		held: { resource: ObservableResource<T>; owned: true };
+	} | null>(null);
+	const cleanupStateRef = React.useRef({ version: 0 });
 
 	React.useEffect(() => {
-		if (!held.owned && !bridgeClaim(held.resource)) {
+		const cleanupState = cleanupStateRef.current;
+		const version = ++cleanupState.version;
+		let ownedResource = held.resource;
+		if (!held.owned && claimedResource.current !== held.resource && !bridgeClaim(held.resource)) {
 			// Another reader committed on this bridged resource first and now owns it — it will
 			// reload and destroy it on its own schedule, so binding to it here would be reading
 			// someone else's subscription. Rare: it takes two consumers with identical inputs
@@ -151,13 +175,26 @@ export function useSuspenseResource<T>(
 			// Losing the race is an EVENT, not derived render data: claiming consumes a one-shot
 			// external entry and can only happen post-commit. The extra render is safe because
 			// this component has committed, so its state survives the suspension that follows.
-			// eslint-disable-next-line react-hooks/set-state-in-effect -- see the paragraph above
-			setHeld({ resource: new ObservableResource(held.resource.input$), owned: true });
-			return undefined;
+			if (raceReplacement.current?.shared !== held.resource) {
+				raceReplacement.current = {
+					shared: held.resource,
+					held: { resource: new ObservableResource(held.resource.input$), owned: true },
+				};
+			}
+			ownedResource = raceReplacement.current.held.resource;
+			setHeld(raceReplacement.current.held);
+		} else if (!held.owned) {
+			claimedResource.current = held.resource;
 		}
 		// Claimed: this resource is now ordinary component state, owned by this consumer, and
-		// it holds the live subscription behind the binding.
-		return () => held.resource.destroy();
+		// it holds the live subscription behind the binding. Strict Mode immediately replays an
+		// effect's setup after its cleanup, so defer destruction one microtask: the replay bumps
+		// this version and keeps the same subscription; a real unmount does not and destroys it.
+		return () => {
+			void Promise.resolve().then(() => {
+				if (cleanupState.version === version) ownedResource.destroy();
+			});
+		};
 	}, [held]);
 
 	React.useEffect(() => {

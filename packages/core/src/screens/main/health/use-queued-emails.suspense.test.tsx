@@ -16,6 +16,18 @@ import { Observable } from 'rxjs';
 
 import { useQueuedEmails } from './use-queued-emails';
 
+class ErrorBoundary extends React.Component<React.PropsWithChildren, { error: Error | null }> {
+	state = { error: null };
+
+	static getDerivedStateFromError(error: Error) {
+		return { error };
+	}
+
+	render() {
+		return this.state.error ? <div data-testid="error">failed</div> : this.props.children;
+	}
+}
+
 let subscribeCount = 0;
 let collection: unknown;
 
@@ -95,6 +107,35 @@ describe('the queued-emails panel on a store that already has a database', () =>
 
 		expect(await screen.findAllByTestId('queued-panel')).toHaveLength(2);
 		expect(subscribeCount).toBe(1);
+	});
+
+	it('re-subscribes after a transient queue error and remount', async () => {
+		collection = {
+			find: () => ({
+				$: new Observable<unknown[]>((subscriber) => {
+					subscribeCount++;
+					if (subscribeCount === 1) subscriber.error(new Error('transient'));
+					else subscriber.next([]);
+				}),
+			}),
+		};
+		const failed = render(
+			<ErrorBoundary>
+				<Panel />
+			</ErrorBoundary>
+		);
+		await settle();
+		expect(screen.getByTestId('error')).toBeTruthy();
+		failed.unmount();
+
+		render(
+			<ErrorBoundary>
+				<Panel />
+			</ErrorBoundary>
+		);
+		await settle();
+		expect(screen.getByTestId('queued-panel').textContent).toBe('0');
+		expect(subscribeCount).toBe(2);
 	});
 
 	it('reports an empty queue rather than suspending when there is no store database', async () => {

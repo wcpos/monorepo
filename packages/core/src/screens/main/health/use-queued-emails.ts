@@ -1,5 +1,5 @@
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
-import { map } from 'rxjs/operators';
+import { map, tap } from 'rxjs/operators';
 import { type Observable, of } from 'rxjs';
 
 import { useReceiptEmailQueueCollection } from '../receipt/email-queue/use-receipt-email-queue-collection';
@@ -86,7 +86,21 @@ function queuedEmailsResource(
 	if (!collection) return emptyQueueResource;
 	let resource = resourceByCollection.get(collection);
 	if (!resource) {
-		resource = new ObservableResource(queued$(collection));
+		resource = new ObservableResource(
+			queued$(collection).pipe(
+				tap({
+					error: () => {
+						// A synchronous error can arrive before the resource is cached, so defer the
+						// identity check. A remount can then establish a fresh query subscription.
+						void Promise.resolve().then(() => {
+							if (resourceByCollection.get(collection) === resource) {
+								resourceByCollection.delete(collection);
+							}
+						});
+					},
+				})
+			)
+		);
 		resourceByCollection.set(collection, resource);
 	}
 	return resource;

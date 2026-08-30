@@ -132,6 +132,7 @@ jest.mock('react-native-reanimated', () => ({
 }));
 jest.mock('react-native', () => ({
 	Linking: { openURL: jest.fn() },
+	Text: passthrough,
 	View: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
 		<div data-testid={testID}>{children}</div>
 	),

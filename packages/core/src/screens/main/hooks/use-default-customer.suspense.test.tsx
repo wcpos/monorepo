@@ -19,6 +19,7 @@ import { useDefaultCustomer } from './use-default-customer';
 
 let subscribeCount = 0;
 let result$: Observable<{ hits: { record: { payload: { id: number } } }[] }>;
+let guestCustomer: { id: number; billing: { first_name: string; country: string } };
 
 const engine = {};
 
@@ -39,7 +40,7 @@ jest.mock('./use-default-customer-id', () => ({
 	useDefaultCustomerID: () => 7,
 }));
 jest.mock('../hooks/use-guest-customer', () => ({
-	useGuestCustomer: () => ({ id: 0 }),
+	useGuestCustomer: () => guestCustomer,
 }));
 
 /** Emits one microtask after each subscribe — the shape of an engine query's first value. */
@@ -69,6 +70,7 @@ async function settle() {
 
 beforeEach(() => {
 	subscribeCount = 0;
+	guestCustomer = { id: 0, billing: { first_name: 'Guest', country: 'US' } };
 	result$ = asyncResult();
 });
 
@@ -106,5 +108,39 @@ describe('the default customer resource', () => {
 
 		expect((await screen.findByTestId('guest-customer')).textContent).toBe('0');
 		expect(subscribeCount).toBe(1);
+	});
+
+	it('does not reuse an abandoned guest fallback after the store fields change', async () => {
+		result$ = new Observable(() => {
+			subscribeCount++;
+		});
+		function GuestScreen() {
+			const { defaultCustomerResource } = useDefaultCustomer();
+			const customer = useObservableSuspense(defaultCustomerResource) as typeof guestCustomer;
+			return <div data-testid="guest-country">{customer.billing.country}</div>;
+		}
+		const abandoned = render(
+			<React.Suspense fallback={<div data-testid="fallback" />}>
+				<GuestScreen />
+			</React.Suspense>
+		);
+		await settle();
+		expect(screen.getByTestId('fallback')).toBeTruthy();
+		abandoned.unmount();
+
+		guestCustomer = { id: 0, billing: { first_name: 'Guest', country: 'CA' } };
+		result$ = new Observable((subscriber) => {
+			subscribeCount++;
+			void Promise.resolve().then(() => subscriber.next({ hits: [] }));
+		});
+		render(
+			<React.Suspense fallback={<div data-testid="fallback" />}>
+				<GuestScreen />
+			</React.Suspense>
+		);
+		await settle();
+
+		expect(screen.getByTestId('guest-country').textContent).toBe('CA');
+		expect(subscribeCount).toBe(2);
 	});
 });

@@ -20,6 +20,18 @@ import { Observable } from 'rxjs';
 
 import { useSuspenseResource } from '../src/suspense-resource';
 
+class ErrorBoundary extends React.Component<React.PropsWithChildren, { error: Error | null }> {
+	state = { error: null };
+
+	static getDerivedStateFromError(error: Error) {
+		return { error };
+	}
+
+	render() {
+		return this.state.error ? <div data-testid="error">failed</div> : this.props.children;
+	}
+}
+
 /** Emits one microtask after each subscribe — the shape of an RxDB query's first emission. */
 function asyncSource(onSubscribe: () => void): Observable<string> {
 	return new Observable<string>((subscriber) => {
@@ -138,6 +150,71 @@ describe('useSuspenseResource', () => {
 		// The retry read back the resource the first attempt already had in flight, so its
 		// first emission ended the wait instead of starting the next one.
 		expect(subscribes).toBe(1);
+	});
+
+	it('evicts an unclaimed resource that errors so a remount can retry', async () => {
+		const scope = {};
+		let subscribes = 0;
+		const source$ = new Observable<string>((subscriber) => {
+			subscribes++;
+			if (subscribes === 1) subscriber.error(new Error('transient'));
+			else subscriber.next('recovered');
+		});
+		function Consumer() {
+			const resource = useSuspenseResource(scope, 'input', source$);
+			return <div data-testid="consumer">{useObservableSuspense(resource)}</div>;
+		}
+
+		const failed = render(
+			<ErrorBoundary>
+				<Consumer />
+			</ErrorBoundary>
+		);
+		await settle(2);
+		expect(screen.getByTestId('error')).toBeTruthy();
+		failed.unmount();
+
+		render(
+			<ErrorBoundary>
+				<Consumer />
+			</ErrorBoundary>
+		);
+		await settle(2);
+		expect(screen.getByTestId('consumer').textContent).toBe('recovered');
+		expect(subscribes).toBe(2);
+	});
+
+	it('preserves its claimed resource through Strict Mode replay', async () => {
+		const scope = {};
+		let subscribes = 0;
+		let unsubscribes = 0;
+		const source$ = new Observable<string>((subscriber) => {
+			subscribes++;
+			void Promise.resolve().then(() => subscriber.next('value'));
+			return () => {
+				unsubscribes++;
+			};
+		});
+		function Consumer() {
+			const resource = useSuspenseResource(scope, 'input', source$);
+			return <div data-testid="consumer">{useObservableSuspense(resource)}</div>;
+		}
+
+		const view = render(
+			<React.StrictMode>
+				<React.Suspense fallback={<div data-testid="fallback" />}>
+					<Consumer />
+				</React.Suspense>
+			</React.StrictMode>
+		);
+		await settle();
+		expect(screen.getByTestId('consumer').textContent).toBe('value');
+		expect(subscribes).toBe(1);
+		expect(unsubscribes).toBe(0);
+
+		view.unmount();
+		await settle(2);
+		expect(unsubscribes).toBe(1);
 	});
 
 	it('bridges one resource to every attempt, then lets exactly one reader own it', async () => {
