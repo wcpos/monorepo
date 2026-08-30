@@ -88,14 +88,10 @@ env:
 - tapOn:
     id: "store-url-input"
 - inputText: ${STORE_URL}
-# See flow 01: iOS hideKeyboard can clear this input. It is housekeeping here,
-# so only Android needs it before tapping the button.
-- runFlow:
-    when:
-      platform: Android
-    commands:
-      - hideKeyboard:
-          optional: true
+# optional — see flow 01: hideKeyboard is flaky on iOS and this is
+# housekeeping; a genuinely covered target fails at its own tap.
+- hideKeyboard:
+    optional: true
 - tapOn:
     id: "connect-store-button"
 - extendedWaitUntil:
@@ -179,25 +175,13 @@ env:
 # Returning from the auth browser re-focuses the store-URL input and reopens
 # the soft keyboard over the store list / Open POS button — both Android jobs
 # in run 33074068139 logged in fine and then failed exactly there. Dismiss it
-# before asserting the stores. The iOS consent sheet can reappear over the
-# returned app, so clear it first; then use Maestro's documented hideKeyboard
-# workaround by tapping the visible, non-interactive heading.
+# before asserting the stores. Android-scoped because hideKeyboard is broken
+# on iOS (see above) — if iOS shows the same overlay, its artifacts will say so.
 - runFlow:
     when:
       platform: Android
     commands:
       - hideKeyboard
-- runFlow:
-    when:
-      platform: iOS
-    commands:
-      - runFlow:
-          when:
-            visible: "Continue"
-          commands:
-            - tapOn: "Continue"
-      - tapOn:
-          id: "logged-in-users-label"
 # Select the first store and open the POS (store rows tagged in PR #730).
 - extendedWaitUntil:
     visible:

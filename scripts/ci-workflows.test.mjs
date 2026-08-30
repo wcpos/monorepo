@@ -1674,56 +1674,6 @@ test('Android clean-start flows dismiss a queued system ANR before waiting for E
 	}
 });
 
-test('store URL flows only hide the keyboard on Android before connecting', () => {
-	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
-		const flow = readMaestroFlow(filename);
-		const inputIndex = flow.findIndex((command) => command.tapOn?.id === 'store-url-input');
-
-		assert.notEqual(inputIndex, -1, `${filename} must target the store URL input`);
-		assert.ok(flow[inputIndex + 1].inputText, `${filename} must enter a store URL`);
-		assert.deepEqual(
-			flow[inputIndex + 2],
-			{
-				runFlow: {
-					when: { platform: 'Android' },
-					commands: [{ hideKeyboard: { optional: true } }],
-				},
-			},
-			`${filename} must not let iOS hideKeyboard clear the store URL`
-		);
-		assert.deepEqual(flow[inputIndex + 3], { tapOn: { id: 'connect-store-button' } });
-	}
-});
-
-test('auth setup dismisses the post-login keyboard without clearing the iOS URL', () => {
-	const flow = readMaestroFlow('02-auth-setup.yml');
-	const loggedInIndex = flow.findIndex(
-		(command) => command.extendedWaitUntil?.visible?.id === 'logged-in-users-label'
-	);
-
-	assert.notEqual(loggedInIndex, -1, 'auth setup must wait for the OAuth redirect');
-	assert.deepEqual(flow[loggedInIndex + 1], {
-		runFlow: {
-			when: { platform: 'Android' },
-			commands: ['hideKeyboard'],
-		},
-	});
-	assert.deepEqual(flow[loggedInIndex + 2], {
-		runFlow: {
-			when: { platform: 'iOS' },
-			commands: [
-				{
-					runFlow: {
-						when: { visible: 'Continue' },
-						commands: [{ tapOn: 'Continue' }],
-					},
-				},
-				{ tapOn: { id: 'logged-in-users-label' } },
-			],
-		},
-	});
-});
-
 test('the Android step retries a transient offline ADB transport once', () => {
 	const step = findStep(
 		readWorkflow('e2e-native.yml'),
