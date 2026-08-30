@@ -117,6 +117,18 @@ env:
 - tapOn:
     id: "variation-popover-add-to-cart"
 # Adding closes the popover. Phone layout: switch to the cart tab.
+#
+# One logged retry of the tab tap. Twice on CI iOS phones (runs 33317998775 and
+# 33325996550) the tap was DELIVERED — the app console shows the touch began/ended
+# reaching the main window ~2.7 s after add-to-cart, the same shape as the
+# add-to-cart tap that worked — and the tab never switched; nothing appeared
+# for 30 s. The same sequence, same timing, passes on a local simulator, so this
+# is not the toast overlay (react-native-screens' FullWindowOverlay passes the
+# touch through) and not a covered target; the press is lost inside the app on
+# a starved runner. A second tap on an unchanged tab is idempotent, and the
+# console.log below leaves a line in maestro.log every time the first press was
+# lost, so the rate — and whether a second press lands — is measured instead of
+# hidden. If the retry also fails the flow still fails on the 30 s wait below.
 - runFlow:
     when:
       visible:
@@ -124,6 +136,19 @@ env:
     commands:
       - tapOn:
           id: "pos-tab-cart"
+      - extendedWaitUntil:
+          visible:
+            id: "cart-quantity-input"
+          timeout: 10000
+          optional: true
+      - runFlow:
+          when:
+            notVisible:
+              id: "cart-quantity-input"
+          commands:
+            - evalScript: "${console.log('WCPOS_E2E pos-tab-cart tap did not switch tabs within 10 s, tapping again')}"
+            - tapOn:
+                id: "pos-tab-cart"
 - extendedWaitUntil:
     visible:
       id: "cart-quantity-input"
