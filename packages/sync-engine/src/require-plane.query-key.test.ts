@@ -53,4 +53,37 @@ describe('RequirementHandle.queryKey', () => {
 		expect(queryKeyFor(orders)).toBe(orderBrowserQueryKey(orders));
 		expect(queryKeyFor(products)).toBe(productBrowseWindowQueryKeyFromDimensions(products));
 	});
+
+	it('carries the search lane key, including the customer window limit', () => {
+		expect(
+			queryKeyFor({
+				id: 'products-search',
+				collection: 'products',
+				kind: 'search',
+				term: 'blue shirt / sale',
+				limit: 10,
+			})
+		).toBe('products:search:blue%20shirt%20%2F%20sale');
+		expect(
+			queryKeyFor({
+				id: 'customers-search',
+				collection: 'customers',
+				kind: 'search',
+				term: 'Ada Lovelace',
+				limit: 40,
+			})
+		).toBe('customers:search=Ada%20Lovelace:limit=40');
+	});
+
+	it('does not throw synchronously for a malformed search term', () => {
+		expect(
+			queryKeyFor({
+				id: 'products-search-malformed',
+				collection: 'products',
+				kind: 'search',
+				term: '\ud800',
+				limit: 10,
+			})
+		).toBeNull();
+	});
 });

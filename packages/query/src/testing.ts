@@ -9,6 +9,7 @@ import {
 	memoryEngineStorage,
 	orderBrowserQueryKey,
 	productBrowseWindowQueryKeyFromDimensions,
+	searchLaneQueryKey,
 } from '@wcpos/sync-engine/testing';
 import type {
 	CensusTotals,
@@ -133,6 +134,7 @@ export interface RecordedSearchRequirement {
 }
 
 const requirementQueryKey = (requirement: EngineRequirement): string | null => {
+	if (requirement.kind === 'search') return searchLaneQueryKey(requirement);
 	if (requirement.kind === 'orders-browse') return orderBrowserQueryKey(requirement);
 	if (requirement.kind === 'product-browse') {
 		return productBrowseWindowQueryKeyFromDimensions(requirement);

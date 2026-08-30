@@ -31,6 +31,7 @@ let mockShowOutOfStock = false;
 let mockSortBy = 'name';
 let mockSortDirection = 'asc';
 let mockViewMode = 'table';
+let mockGridColumns = 4;
 
 jest.mock('../../../../query', () => {
 	const actual = jest.requireActual('../../../../query');
@@ -116,6 +117,7 @@ jest.mock('../../contexts/ui-settings', () => ({
 			sortDirection$: mockSortDirection,
 			showOutOfStock$: mockShowOutOfStock,
 			viewMode$: mockViewMode,
+			gridColumns$: mockGridColumns,
 		},
 	}),
 }));
@@ -179,6 +181,7 @@ describe('POSProducts query-state wiring', () => {
 		mockSortBy = 'name';
 		mockSortDirection = 'asc';
 		mockViewMode = 'table';
+		mockGridColumns = 4;
 	});
 
 	it('binds table mode, barcode fallback, and the shared filter bar without a fluent Query', () => {

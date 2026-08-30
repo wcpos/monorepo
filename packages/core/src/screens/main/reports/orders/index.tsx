@@ -204,6 +204,7 @@ export function Orders() {
 							<DataTable<OrderRow>
 								id="reports-orders"
 								collectionName="orders"
+								binding={binding}
 								resource={binding.resource}
 								sort={state.sort}
 								actions={tableActions}

@@ -60,6 +60,9 @@ describe('package exports', () => {
 			'schedulerTaskStateKey',
 			'schedulerTaskStateSchema',
 			'scriptedConnectivity',
+			// The search lane key the require-plane hands out on a search handle (#1714):
+			// @wcpos/query's fake engine imports it so the two can never spell it differently.
+			'searchLaneQueryKey',
 		]);
 	});
 });

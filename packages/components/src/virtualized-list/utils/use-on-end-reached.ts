@@ -23,6 +23,13 @@ export function useOnEndReached({
 	const endReachedRef = React.useRef(false);
 	const hasTriggeredForShortContent = React.useRef(false);
 
+	// Empty content cannot re-arm through either data growth or the short-content effect.
+	React.useEffect(() => {
+		if (data.length === 0) {
+			endReachedRef.current = false;
+		}
+	}, [data.length, onEndReached]);
+
 	// Handle scroll-based onEndReached
 	React.useEffect(() => {
 		if (!scrollElement || typeof onEndReached !== 'function') return;

@@ -24,6 +24,69 @@ describe('QueryStateProvider', () => {
 		);
 	}
 
+	function renderProbe() {
+		let actions: QueryStateActions<'products'> | undefined;
+		let state: QueryStateOf<'products'> | undefined;
+		let renders = 0;
+
+		function Probe() {
+			state = useQueryState<'products'>();
+			actions = useQueryStateActions<'products'>();
+			renders += 1;
+			return null;
+		}
+
+		render(wrapper(<Probe />));
+		if (!actions) throw new Error('Query-state actions were not captured');
+		return { actions, getState: () => state, getRenders: () => renders };
+	}
+
+	it('raises a smaller result window to a new page size', () => {
+		const probe = renderProbe();
+
+		act(() => probe.actions.setPageSize(30));
+
+		expect(probe.getState()?.limit).toBe(30);
+	});
+
+	it('leaves a larger result window unchanged when the page size changes', () => {
+		const probe = renderProbe();
+		act(() => probe.actions.extendLimit());
+		const renders = probe.getRenders();
+
+		act(() => probe.actions.setPageSize(30));
+
+		expect(probe.getState()?.limit).toBe(40);
+		expect(probe.getRenders()).toBe(renders);
+	});
+
+	it('uses the changed page size for extensions and result resets', () => {
+		const probe = renderProbe();
+		act(() => probe.actions.setPageSize(30));
+
+		act(() => probe.actions.extendLimit());
+		expect(probe.getState()?.limit).toBe(60);
+
+		act(() => probe.actions.setSearch('tea'));
+		expect(probe.getState()).toMatchObject({ search: 'tea', limit: 30 });
+	});
+
+	it('does not publish when the page size is unchanged', () => {
+		const probe = renderProbe();
+		const renders = probe.getRenders();
+
+		act(() => probe.actions.setPageSize(20));
+
+		expect(probe.getRenders()).toBe(renders);
+	});
+
+	it('rejects page sizes that are not positive integers', () => {
+		const { actions } = renderProbe();
+
+		expect(() => actions.setPageSize(0)).toThrow('pageSize must be a positive integer');
+		expect(() => actions.setPageSize(2.5)).toThrow('pageSize must be a positive integer');
+	});
+
 	it('only re-renders subscribers whose selected slice changed', () => {
 		let actions: QueryStateActions<'products'> | undefined;
 		let searchRenders = 0;

@@ -55,9 +55,10 @@ function createStore<C extends CollectionKey>(
 	initial: QueryStateOf<C>,
 	clearFilters: FiltersOf<C>,
 	resetFilters: FiltersOf<C>,
-	pageSize: number
+	initialPageSize: number
 ): Store<C> {
 	let state = initial;
+	let pageSize = initialPageSize;
 	// Cloned so rebaseFilter never mutates the object aliased into the initial state.
 	let resetBaseline = clone(resetFilters);
 	let searchResetNonce = 0;
@@ -111,6 +112,14 @@ function createStore<C extends CollectionKey>(
 				publish({ ...state, filters });
 			},
 			setSort: (field, direction) => resultChange({ sort: { field, direction } }),
+			setPageSize: (nextPageSize) => {
+				if (!Number.isInteger(nextPageSize) || nextPageSize <= 0) {
+					throw new Error('Query state pageSize must be a positive integer');
+				}
+				if (nextPageSize === pageSize) return;
+				pageSize = nextPageSize;
+				if (state.limit < pageSize) publish({ ...state, limit: pageSize });
+			},
 			extendLimit: () => publish({ ...state, limit: state.limit + pageSize }),
 		},
 	};
