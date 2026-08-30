@@ -114,3 +114,29 @@ test('a handle that registers after the first render gets its values on the next
 	expect(result.current.accessibilityLabel).toBe('Resize handle, 50%');
 	expect(result.current.accessibilityValue).toMatchObject({ now: 50 });
 });
+
+test('new constraints that keep the layout valid still refresh the accessibility bounds', () => {
+	// The snapshot is cached per layout version; a constraint change that commits no
+	// layout must still notify, or valueMin/valueMax would report the old bounds.
+	const left = panel('left', { defaultSize: 50.4, minSize: 20.4, maxSize: 70.6 });
+	const model = createPanelGroupModel({ direction: 'horizontal' });
+	model.registerPanel(left);
+	model.registerPanel(panel('right', { defaultSize: 49.6 }));
+	model.registerHandle('handle');
+	model.flush();
+	const { result } = renderHook(() =>
+		useSeparatorA11y({ direction: 'horizontal', disabled: false, handleId: 'handle', model })
+	);
+	expect(result.current.accessibilityValue).toMatchObject({ min: 20, max: 71, now: 50 });
+
+	act(() => {
+		const prevConstraints = { ...left.constraints };
+		left.constraints.minSize = 30;
+		left.constraints.maxSize = 60;
+		model.reevaluatePanelConstraints('left', prevConstraints);
+	});
+
+	// 50 still satisfies 30..60, so no resize was committed — the bounds moved anyway.
+	expect(result.current.accessibilityValue).toMatchObject({ min: 30, max: 60, now: 50 });
+	expect(result.current.accessibilityLabel).toBe('Resize handle, 50%');
+});

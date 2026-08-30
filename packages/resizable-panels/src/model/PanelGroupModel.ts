@@ -416,6 +416,7 @@ export function createPanelGroupModel(options: {
 			panelSize: prevPanelSize,
 		} = panelDataHelper(id);
 		if (prevPanelSize == null) return;
+		const versionBefore = version;
 		if (prevCollapsible && nextCollapsible && prevPanelSize === prevCollapsed) {
 			if (prevCollapsed !== nextCollapsed) resizePanel(id, nextCollapsed);
 		} else if (prevPanelSize < nextMin) {
@@ -423,6 +424,10 @@ export function createPanelGroupModel(options: {
 		} else if (prevPanelSize > nextMax) {
 			resizePanel(id, nextMax);
 		}
+		// New constraints that still accept the current layout commit nothing, but the
+		// separator's accessibility bounds (valueMin/valueMax) are derived from them and
+		// are cached per version — subscribers must re-read.
+		if (version === versionBefore) notifyListeners();
 	};
 	const getHandlePanelIndex = (handleId: string) => {
 		const handleIndex = handles.findIndex((handle) => handle.id === handleId);
