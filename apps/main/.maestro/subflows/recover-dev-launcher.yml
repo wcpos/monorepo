@@ -54,7 +54,7 @@ appId: com.wcpos.main.dev
             - runFlow:
                 when:
                   visible:
-                    text: "There was a problem loading the project.*"
+                    text: "Failed to load app from http://localhost:8081 with error: The request timed out.*"
                 commands:
                   - tapOn:
                       text: "Reload"
@@ -65,6 +65,14 @@ appId: com.wcpos.main.dev
                   # launch comments in flows 01 and 08).
                   - waitForAnimationToEnd:
                       timeout: 5000
+# The next repeat provides this outcome window for Reloads one and two. The
+# third Reload needs its own: otherwise the final assertion can run during the
+# request's first 5s, before the launcher's 10s timeout screen reappears.
+- extendedWaitUntil:
+    visible:
+      id: "${APP_READY_TESTID}"
+    timeout: 15000
+    optional: true
 # The retries must not MASK a launcher that is still broken. Three Reloads in
 # and still on the error screen: fail HERE, with that screen in the failure
 # screenshot and this file named in the log, rather than letting the caller's
