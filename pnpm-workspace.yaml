@@ -118,6 +118,14 @@ allowBuilds:
   "unrs-resolver": true
   usb: true
 patchedDependencies:
+  # Backport of flash-list 2.2.2's guard in RVLayoutManager.modifyLayout: when the data
+  # array shrinks, `layoutInfo` still carries the indices of ViewHolders measured before
+  # the shrink, and the unguarded `this.layouts[index].width = ...` in processLayoutInfo
+  # throws "Cannot set property 'width' of undefined" — the POS product grid dropping into
+  # the error boundary mid-search (#1671). Expo SDK 57 prescribes exactly 2.0.2
+  # (expo/bundledNativeModules.json), so we patch instead of upgrading; drop this patch
+  # when the SDK moves flash-list to >= 2.2.2.
+  "@shopify/flash-list@2.0.2": "patches/@shopify__flash-list@2.0.2.patch"
   "react-native-esc-pos-printer@4.5.0": "patches/react-native-esc-pos-printer@4.5.0.patch"
   # NOTE: rxdb-premium cannot be patched here — its dist/ is produced by a
   # license-gated postinstall, so it is absent from the tarball pnpm patches.
