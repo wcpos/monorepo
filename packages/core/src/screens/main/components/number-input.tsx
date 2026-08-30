@@ -113,6 +113,11 @@ export function NumberInput({
 			onFocus={handleFocus}
 			onBlur={handleBlur}
 			type="decimal"
+			// A cashier tapping a quantity/price box means "replace this number".
+			// Without select-on-focus the caret lands wherever the tap fell — in
+			// the narrow tablet cart cell that is BEFORE the digit (iPad, flow 06:
+			// three "3"s typed into a "1" produced "3331") — so the digits append.
+			selectTextOnFocus
 		/>
 	);
 }
