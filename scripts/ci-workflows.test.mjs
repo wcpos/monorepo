@@ -2196,11 +2196,15 @@ test('the iOS step retries flow 01 when the driver went blind mid-flow', () => {
 		mkdirSync(path.join(dir, 'apps/main/.maestro/flows'), { recursive: true });
 		writeFileSync(path.join(dir, 'apps/main/.maestro/flows/01-clean-launch-connect.yml'), '');
 		mkdirSync(path.join(dir, 'bin'));
-		const refusals = Array.from(
-			{ length: 12 },
-			() =>
-				'echo "[ INFO] xcuitest.installer.LocalXCTestInstaller.xcTestDriverStatusCheck: [Failed] Perform XCUITest driver status check"'
-		);
+		// The refusals are LOGGER records: the real maestro writes them into
+		// ~/.maestro/tests/<ts>/maestro.log, not to stdout. The fake does the
+		// same, so this test drives the workflow's file-based grep — an
+		// echo-based fake validated the instrument, not the data source
+		// (Codex review on #1722).
+		const writeRefusalLog = [
+			'mkdir -p "$HOME/.maestro/tests/run1"',
+			'for i in $(seq 1 12); do echo "[ INFO] xcuitest.installer.LocalXCTestInstaller.xcTestDriverStatusCheck: [Failed] Perform XCUITest driver status check" >> "$HOME/.maestro/tests/run1/maestro.log"; done',
+		];
 		writeFileSync(
 			path.join(dir, 'bin/maestro'),
 			[
@@ -2208,7 +2212,7 @@ test('the iOS step retries flow 01 when the driver went blind mid-flow', () => {
 				'C="$TMPDIR_COUNTER"',
 				'if [ -f "$C" ]; then exit 0; fi',
 				'touch "$C"',
-				...refusals,
+				...writeRefusalLog,
 				'echo "Assertion is false: id: store-url-input is visible"',
 				'exit 1',
 				'',
@@ -2220,6 +2224,7 @@ test('the iOS step retries flow 01 when the driver went blind mid-flow', () => {
 			cwd: dir,
 			env: {
 				PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`,
+				HOME: dir,
 				MAESTRO_UDID: 'fake',
 				TMPDIR_COUNTER: path.join(dir, 'called-once'),
 			},
@@ -2246,11 +2251,15 @@ test('the blind-driver retry never touches a stateful later flow', () => {
 		mkdirSync(path.join(dir, 'apps/main/.maestro/flows'), { recursive: true });
 		writeFileSync(path.join(dir, 'apps/main/.maestro/flows/05-drawer-navigation.yml'), '');
 		mkdirSync(path.join(dir, 'bin'));
-		const refusals = Array.from(
-			{ length: 12 },
-			() =>
-				'echo "[ INFO] xcuitest.installer.LocalXCTestInstaller.xcTestDriverStatusCheck: [Failed] Perform XCUITest driver status check"'
-		);
+		// The refusals are LOGGER records: the real maestro writes them into
+		// ~/.maestro/tests/<ts>/maestro.log, not to stdout. The fake does the
+		// same, so this test drives the workflow's file-based grep — an
+		// echo-based fake validated the instrument, not the data source
+		// (Codex review on #1722).
+		const writeRefusalLog = [
+			'mkdir -p "$HOME/.maestro/tests/run1"',
+			'for i in $(seq 1 12); do echo "[ INFO] xcuitest.installer.LocalXCTestInstaller.xcTestDriverStatusCheck: [Failed] Perform XCUITest driver status check" >> "$HOME/.maestro/tests/run1/maestro.log"; done',
+		];
 		writeFileSync(
 			path.join(dir, 'bin/maestro'),
 			[
@@ -2258,7 +2267,7 @@ test('the blind-driver retry never touches a stateful later flow', () => {
 				'C="$TMPDIR_COUNTER"',
 				'if [ -f "$C" ]; then exit 0; fi',
 				'touch "$C"',
-				...refusals,
+				...writeRefusalLog,
 				'echo "Assertion is false: id: drawer-nav is visible"',
 				'exit 1',
 				'',
@@ -2270,6 +2279,7 @@ test('the blind-driver retry never touches a stateful later flow', () => {
 			cwd: dir,
 			env: {
 				PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`,
+				HOME: dir,
 				MAESTRO_UDID: 'fake',
 				TMPDIR_COUNTER: path.join(dir, 'called-once'),
 			},

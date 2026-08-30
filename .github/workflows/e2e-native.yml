@@ -1033,8 +1033,14 @@ jobs:
             # double-apply state. A later flow with this signature stays red —
             # its artifact carries the refusal count for a human, and its
             # on-device state is not safely repeatable.
-            if [[ "$flow" == *01-clean-launch-connect* ]] && [ "$(grep -c "xcTestDriverStatusCheck: \[Failed\]" "$log")" -ge 10 ]; then
-              echo "↻ driver went blind mid-flow ($(grep -c "xcTestDriverStatusCheck: \[Failed\]" "$log") status-check refusals) — retrying ${flow} once"
+            # The refusals are logger records: they land in the invocation's
+            # ~/.maestro/tests/<ts>/maestro.log, NOT on stdout — grep the
+            # newest per-run log (terminal capture kept as a fallback).
+            # (Codex review on #1722 caught the original stdout-only grep.)
+            latest_maestro_log=$(ls -td "$HOME/.maestro/tests"/*/ 2>/dev/null | head -1)maestro.log
+            refusals=$(cat "$latest_maestro_log" "$log" 2>/dev/null | grep -c "xcTestDriverStatusCheck: \[Failed\]" || true)
+            if [[ "$flow" == *01-clean-launch-connect* ]] && [ "${refusals:-0}" -ge 10 ]; then
+              echo "↻ driver went blind mid-flow (${refusals} status-check refusals) — retrying ${flow} once"
               with_deadline maestro --udid "$MAESTRO_UDID" test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" "$flow"
               return
             fi
