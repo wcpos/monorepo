@@ -1567,17 +1567,34 @@ test('both native Metro-log collectors create their artifact directory', () => {
 	}
 });
 
-test('Android tombstone collection bounds reconnects and reports collection outcomes', () => {
+test('Android tombstone collection runs only after a fatal signal and reports every outcome', () => {
 	const step = findStep(readWorkflow('e2e-native.yml'), 'android', '🪦 Collect tombstones');
 	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-native-tombstones-'));
 	const bin = path.join(workspace, 'bin');
 	const trace = path.join(workspace, 'commands.log');
+	const tests = path.join(workspace, '.maestro', 'tests');
 	mkdirSync(bin);
+	mkdirSync(tests, { recursive: true });
+	// Two bugreport fixtures: one carrying a tombstone, one without.
+	const fixtures = path.join(workspace, 'fixtures');
+	mkdirSync(path.join(fixtures, 'with', 'FS', 'data', 'tombstones'), { recursive: true });
+	mkdirSync(path.join(fixtures, 'without', 'FS', 'data'), { recursive: true });
+	writeFileSync(
+		path.join(fixtures, 'with', 'FS', 'data', 'tombstones', 'tombstone_00'),
+		'signal 11\n'
+	);
+	writeFileSync(path.join(fixtures, 'without', 'FS', 'data', 'other.txt'), 'x\n');
+	for (const name of ['with', 'without']) {
+		const zipped = spawnSync('zip', ['-q', '-r', path.join(fixtures, `${name}.zip`), 'FS'], {
+			cwd: path.join(fixtures, name),
+			encoding: 'utf8',
+		});
+		assert.equal(zipped.status, 0, zipped.stdout + zipped.stderr);
+	}
 	writeFileSync(
 		path.join(bin, 'timeout'),
 		`#!/bin/sh
 printf 'timeout %s\\n' "$*" >> "$COMMAND_TRACE"
-if [ "\${TIMEOUT_FAIL:-0}" = 1 ]; then exit 124; fi
 shift
 exec "$@"
 `
@@ -1586,12 +1603,14 @@ exec "$@"
 		path.join(bin, 'adb'),
 		`#!/bin/sh
 printf 'adb %s\\n' "$*" >> "$COMMAND_TRACE"
-if [ "$1" = pull ] && [ "\${ADB_PULL_FAIL:-0}" = 1 ]; then exit 1; fi
+if [ "$1" = bugreport ]; then
+  if [ "\${BUGREPORT_FAIL:-0}" = 1 ]; then exit 1; fi
+  cp "$BUGREPORT_FIXTURE" "$2"
+fi
 exit 0
 `
 	);
-	writeFileSync(path.join(bin, 'sleep'), '#!/bin/sh\nexit 0\n');
-	for (const command of ['timeout', 'adb', 'sleep']) chmodSync(path.join(bin, command), 0o755);
+	for (const command of ['timeout', 'adb']) chmodSync(path.join(bin, command), 0o755);
 
 	const run = (env = {}) =>
 		runShell(step.run, {
@@ -1599,25 +1618,43 @@ exit 0
 				HOME: workspace,
 				PATH: `${bin}:${process.env.PATH}`,
 				COMMAND_TRACE: trace,
+				BUGREPORT_FIXTURE: path.join(fixtures, 'with.zip'),
 				...env,
 			},
 		});
 
 	try {
-		const timedOut = run({ TIMEOUT_FAIL: '1' });
-		assert.equal(timedOut.status, 0, timedOut.stdout + timedOut.stderr);
-		assert.match(timedOut.stdout, /device did not return after adb root/);
-		assert.doesNotMatch(timedOut.stdout, /no tombstones/);
+		// No fatal signal: nothing is collected and adb is never called.
+		writeFileSync(
+			path.join(tests, 'logcat.txt'),
+			'I ActivityManager: Displayed com.wcpos.main.dev\n'
+		);
+		const quiet = run();
+		assert.equal(quiet.status, 0, quiet.stdout + quiet.stderr);
+		assert.match(quiet.stdout, /no fatal signal in logcat/);
+		assert.ok(!existsSync(trace), 'adb must not run when logcat shows no fatal signal');
 
-		const pullFailed = run({ ADB_PULL_FAIL: '1' });
-		assert.equal(pullFailed.status, 0, pullFailed.stdout + pullFailed.stderr);
-		assert.match(pullFailed.stdout, /adb pull failed/);
-		assert.doesNotMatch(pullFailed.stdout, /no tombstones/);
+		writeFileSync(
+			path.join(tests, 'logcat.txt'),
+			'F libc    : Fatal signal 11 (SIGSEGV), code 2 (SEGV_ACCERR) in tid 1 (mqt_v_js)\n'
+		);
+		const failed = run({ BUGREPORT_FAIL: '1' });
+		assert.equal(failed.status, 0, failed.stdout + failed.stderr);
+		assert.match(failed.stdout, /adb bugreport failed/);
 
-		const empty = run();
+		const empty = run({ BUGREPORT_FIXTURE: path.join(fixtures, 'without.zip') });
 		assert.equal(empty.status, 0, empty.stdout + empty.stderr);
-		assert.match(empty.stdout, /no tombstones/);
-		assert.match(readFileSync(trace, 'utf8'), /timeout 30s adb wait-for-device/);
+		assert.match(empty.stdout, /had no tombstones/);
+
+		const collected = run();
+		assert.equal(collected.status, 0, collected.stdout + collected.stderr);
+		assert.match(collected.stdout, /tombstone_00/);
+		assert.ok(existsSync(path.join(tests, 'tombstones', 'tombstone_00')));
+		assert.ok(
+			!existsSync(path.join(tests, 'bugreport.zip')),
+			'the bugreport zip is not kept in the artifact'
+		);
+		assert.match(readFileSync(trace, 'utf8'), /timeout 300 adb bugreport/);
 	} finally {
 		rmSync(workspace, { recursive: true, force: true });
 	}

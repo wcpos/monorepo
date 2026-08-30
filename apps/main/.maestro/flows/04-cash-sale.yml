@@ -13,6 +13,19 @@ env:
 - launchApp
 - waitForAnimationToEnd:
     timeout: 5000
+# Android: a cold `launchApp` can land on the dev launcher's HOME screen
+# instead of reloading the last project (PR #1690 run 33279550244 attempt 2,
+# phone, flow 05: "Development servers … Recently opened" with the app never
+# loaded, so the first assertion timed out on the launcher). Reload through
+# the same deep link flows 01/02 use; inert when the app came up normally.
+- runFlow:
+    when:
+      platform: Android
+      visible: "(?i)fetch development servers"
+    commands:
+      - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
+      - waitForAnimationToEnd:
+          timeout: 5000
 - extendedWaitUntil:
     visible:
       id: "search-products"
