@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useNetInfoInstance } from '@react-native-community/netinfo';
 
 import { pingProbeUrl } from './reachability-url';
+import { WEBSITE_UNAVAILABLE_CONFIRMATION_MS } from './website-unavailable-confirmation';
 
 export type OnlineStatus = 'offline' | 'online-website-unavailable' | 'online-website-available';
 
@@ -42,25 +43,51 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 
 	const { netInfo } = useNetInfoInstance(false, config);
 
+	// NetInfo flips `isInternetReachable` to false after a SINGLE failed ping —
+	// any rejection, including one timeout or one 5xx from a proxy.
+	const pingFailing = netInfo.isConnected === true && netInfo.isInternetReachable === false;
+	const [pingFailureConfirmed, setPingFailureConfirmed] = React.useState(false);
+
+	/**
+	 * Hold the unavailable verdict until the failure has lasted the confirmation
+	 * window. NetInfo keeps re-probing throughout, and the moment one succeeds it
+	 * notifies with `true`, which clears both the timer and the pending verdict —
+	 * so recovery costs nothing.
+	 */
+	React.useEffect(() => {
+		if (!pingFailing) return;
+
+		const timeout = setTimeout(
+			() => setPingFailureConfirmed(true),
+			WEBSITE_UNAVAILABLE_CONFIRMATION_MS
+		);
+
+		// Clearing the verdict on the way out keeps recovery immediate and starts
+		// the next episode from zero evidence.
+		return () => {
+			clearTimeout(timeout);
+			setPingFailureConfirmed(false);
+		};
+	}, [pingFailing]);
+
 	const status = React.useMemo((): OnlineStatus => {
-		// Device is offline
+		// Device is offline: the OS link-layer state, which our own traffic cannot
+		// spuriously trip.
 		if (netInfo.isConnected === false) {
 			return 'offline';
 		}
 
-		// Device is online but website is unreachable
-		if (netInfo.isConnected === true && netInfo.isInternetReachable === false) {
-			return 'online-website-unavailable';
+		// Device is online but the ping is failing. Until that failure is
+		// confirmed, stay optimistic — the same default this provider already uses
+		// for an unknown state. An unconfirmed blip must not raise the cashier's
+		// "Website is unreachable" toast or push the request queue offline.
+		if (pingFailing) {
+			return pingFailureConfirmed ? 'online-website-unavailable' : 'online-website-available';
 		}
 
-		// Device is online and website is reachable
-		if (netInfo.isConnected === true && netInfo.isInternetReachable === true) {
-			return 'online-website-available';
-		}
-
-		// Optimistic default - assume everything is working
+		// Reachable, or not yet known - assume everything is working
 		return 'online-website-available';
-	}, [netInfo.isConnected, netInfo.isInternetReachable]);
+	}, [netInfo.isConnected, pingFailing, pingFailureConfirmed]);
 
 	const value = React.useMemo(() => ({ status }), [status]);
 

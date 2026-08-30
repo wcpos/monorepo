@@ -14,6 +14,7 @@ import * as React from 'react';
 
 import { checkWebsiteReachability } from './check-website-reachability';
 import { lastNetworkResponseAt, subscribeNetworkPulse } from './network-pulse';
+import { WEBSITE_UNAVAILABLE_CONFIRMATION_PROBES } from './website-unavailable-confirmation';
 
 export type OnlineStatus = 'offline' | 'online-website-unavailable' | 'online-website-available';
 
@@ -44,6 +45,10 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 	// Ref to track if a check is in progress (prevent multiple simultaneous checks)
 	const checkInProgressRef = React.useRef(false);
 	const checkRequestedRef = React.useRef(false);
+	// Failed probes since the last time the site answered. One failure is not
+	// evidence the store is down, so the unavailable verdict waits for the
+	// confirming probe.
+	const consecutiveProbeFailuresRef = React.useRef(0);
 
 	/**
 	 * Perform a full connectivity check
@@ -68,11 +73,21 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 				const isReachable = await checkWebsiteReachability(wpAPIURL);
 
 				if (isReachable) {
+					consecutiveProbeFailuresRef.current = 0;
 					setStatus('online-website-available');
 				} else if (typeof navigator !== 'undefined' && !navigator.onLine) {
+					// The link is down. That is the OS's verdict, not the website's, so it
+					// needs no confirming and says nothing about the site.
+					consecutiveProbeFailuresRef.current = 0;
 					setStatus('offline');
 				} else {
-					setStatus('online-website-unavailable');
+					consecutiveProbeFailuresRef.current += 1;
+					if (consecutiveProbeFailuresRef.current >= WEBSITE_UNAVAILABLE_CONFIRMATION_PROBES) {
+						setStatus('online-website-unavailable');
+					}
+					// Below the threshold the status is left alone: an unconfirmed blip
+					// must not raise the cashier's "Website is unreachable" toast or push
+					// the request queue offline. The next interval probe decides.
 				}
 			} while (checkRequestedRef.current);
 		} finally {
@@ -84,7 +99,11 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 	 * Subscribe to successful HTTP traffic as direct evidence that the site answered.
 	 */
 	React.useEffect(
-		() => subscribeNetworkPulse(wpAPIURL, () => setStatus('online-website-available')),
+		() =>
+			subscribeNetworkPulse(wpAPIURL, () => {
+				consecutiveProbeFailuresRef.current = 0;
+				setStatus('online-website-available');
+			}),
 		[wpAPIURL]
 	);
 
@@ -101,6 +120,8 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 		};
 
 		const handleOffline = () => {
+			// A dropped link is not evidence against the website.
+			consecutiveProbeFailuresRef.current = 0;
 			setStatus('offline');
 		};
 
