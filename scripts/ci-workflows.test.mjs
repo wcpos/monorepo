@@ -2108,6 +2108,22 @@ esac
 	assert.match(result.stdout, /::warning::Could not list workflow runs \(attempt 1\): mock: 503/);
 	assert.match(result.stdout, /slot is free/);
 
+	// The current run can fall off the single page of 100 during a long wait. It
+	// then counts as the newest run and keeps waiting on every live one — never a
+	// jq error on a null start time that would empty the blocker list and pass.
+	result = drive({
+		slot: '🍎 iOS (phone)',
+		prefix: '🍎 iOS (',
+		fixtures: {
+			'runs.json': runs(run(400)),
+			'jobs-400.json': jobs(job(BUILD, 'completed', 900), job('🍎 iOS (phone)', 'in_progress')),
+		},
+		env: giveUp,
+	});
+	assert.equal(result.status, 1, result.stdout + result.stderr);
+	assert.doesNotMatch(result.stdout + result.stderr, /jq: error/);
+	assert.match(result.stdout, /runs\/400 \(branch-400\) — 🍎 iOS \(phone\): in_progress/);
+
 	// An older run whose jobs cannot be read is treated as a blocker: waiting
 	// is cheap, overlapping a live suite is the thing being prevented.
 	result = drive({

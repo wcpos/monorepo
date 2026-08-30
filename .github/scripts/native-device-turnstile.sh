@@ -109,7 +109,12 @@ while :; do
 	older_runs="$(jq -c --argjson me "$GITHUB_RUN_ID" '
 		def epoch: sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601;
 		([.workflow_runs[] | select(.id == $me)][0]) as $current
-		| (($current.run_started_at // $current.created_at) | epoch) as $me_started
+		# This run is normally on the page it just fetched. If 100 newer runs have
+		# piled up while it waited (a long queue on a busy day), treat it as the
+		# newest — wait on every live run — rather than let a null start time turn
+		# into a jq error, an empty blocker list and a silent pass through the gate.
+		| (if $current == null then now
+		   else (($current.run_started_at // $current.created_at) | epoch) end) as $me_started
 		| [.workflow_runs[]
 			| ((.run_started_at // .created_at) | epoch) as $started
 			| select(.id != $me and .status != "completed"
