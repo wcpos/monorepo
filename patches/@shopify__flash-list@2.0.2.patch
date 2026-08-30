@@ -1,3 +1,57 @@
+diff --git a/dist/recyclerview/RecyclerView.js b/dist/recyclerview/RecyclerView.js
+index 8bea6266ba1053d9d86d1ad19bee7cef5a2265c4..3976fbcee4f45be1a24cdf03459089e9eb3d3727 100644
+--- a/dist/recyclerview/RecyclerView.js
++++ b/dist/recyclerview/RecyclerView.js
+@@ -224,7 +224,14 @@ var RecyclerViewComponent = function (props, ref) {
+      */
+     var validateItemSize = (0, react_1.useCallback)(function (index, size) {
+         var _a, _b, _c, _d;
+-        var layout = recyclerViewManager.getLayout(index);
++        // A ViewHolder can report its size after the layout table has already
++        // shrunk past the index it was rendered with. There is nothing left to
++        // validate the measurement against, so drop it. (Backport of
++        // Shopify/flash-list#2460 for #2291/#2440.)
++        var layout = recyclerViewManager.tryGetLayout(index);
++        if (layout === undefined) {
++            return;
++        }
+         var width = Math.max(Math.min(layout.width, (_a = layout.maxWidth) !== null && _a !== void 0 ? _a : Infinity), (_b = layout.minWidth) !== null && _b !== void 0 ? _b : 0);
+         var height = Math.max(Math.min(layout.height, (_c = layout.maxHeight) !== null && _c !== void 0 ? _c : Infinity), (_d = layout.minHeight) !== null && _d !== void 0 ? _d : 0);
+         if ((0, measureLayout_1.areDimensionsNotEqual)(width, size.width) ||
+@@ -317,7 +324,7 @@ var RecyclerViewComponent = function (props, ref) {
+                 isHorizontalRTL && viewToMeasureBoundedSize,
+                 renderHeader,
+                 !isHorizontalRTL && viewToMeasureBoundedSize,
+-                react_1.default.createElement(ViewHolderCollection_1.ViewHolderCollection, { viewHolderCollectionRef: viewHolderCollectionRef, data: data, horizontal: horizontal, renderStack: recyclerViewManager.getRenderStack(), getLayout: function (index) { return recyclerViewManager.getLayout(index); }, getAdjustmentMargin: function () {
++                react_1.default.createElement(ViewHolderCollection_1.ViewHolderCollection, { viewHolderCollectionRef: viewHolderCollectionRef, data: data, horizontal: horizontal, renderStack: recyclerViewManager.getRenderStack(), getLayout: function (index) { return recyclerViewManager.tryGetLayout(index); }, getAdjustmentMargin: function () {
+                         if (!shouldRenderFromBottom || !recyclerViewManager.hasLayout()) {
+                             return 0;
+                         }
+diff --git a/dist/recyclerview/ViewHolderCollection.js b/dist/recyclerview/ViewHolderCollection.js
+index 9049c7d6193c31908922e2beae8426c746e0c32a..72f0905484f666eac072f618fd43619ba24f54fe 100644
+--- a/dist/recyclerview/ViewHolderCollection.js
++++ b/dist/recyclerview/ViewHolderCollection.js
+@@ -80,11 +80,19 @@ var ViewHolderCollection = function (props) {
+         hasData &&
+         Array.from(renderStack.entries(), function (_a) {
+             var _b = tslib_1.__read(_a, 2), reactKey = _b[0], index = _b[1].index;
++            var layout = getLayout(index);
++            if (layout === undefined) {
++                // The layout table was truncated past this index while the render
++                // stack still held its key, so the item it points at is gone. The
++                // key is reused on the next render stack sync. (Backport of
++                // Shopify/flash-list#2460 for #2440.)
++                return null;
++            }
+             var item = data[index];
+             var trailingItem = ItemSeparatorComponent
+                 ? data[index + 1]
+                 : undefined;
+-            return (react_1.default.createElement(ViewHolder_1.ViewHolder, { key: reactKey, index: index, item: item, trailingItem: trailingItem, layout: tslib_1.__assign({}, getLayout(index)), refHolder: refHolder, onSizeChanged: onSizeChanged, target: "Cell", renderItem: renderItem, extraData: extraData, CellRendererComponent: CellRendererComponent, ItemSeparatorComponent: ItemSeparatorComponent, horizontal: horizontal }));
++            return (react_1.default.createElement(ViewHolder_1.ViewHolder, { key: reactKey, index: index, item: item, trailingItem: trailingItem, layout: tslib_1.__assign({}, layout), refHolder: refHolder, onSizeChanged: onSizeChanged, target: "Cell", renderItem: renderItem, extraData: extraData, CellRendererComponent: CellRendererComponent, ItemSeparatorComponent: ItemSeparatorComponent, horizontal: horizontal }));
+         })));
+ };
+ exports.ViewHolderCollection = ViewHolderCollection;
 diff --git a/dist/recyclerview/layout-managers/LayoutManager.js b/dist/recyclerview/layout-managers/LayoutManager.js
 index 51710aaafe522a52f1c3212da3fe303b338d5dd5..4e9ac8257e3ccdbc637cd627aae7d80788feb17f 100644
 --- a/dist/recyclerview/layout-managers/LayoutManager.js
@@ -20,6 +74,74 @@ index 51710aaafe522a52f1c3212da3fe303b338d5dd5..4e9ac8257e3ccdbc637cd627aae7d807
          if (this.layouts.length > totalItemCount) {
              this.layouts.length = totalItemCount;
              this.spanTracker.length = totalItemCount;
+diff --git a/src/recyclerview/RecyclerView.tsx b/src/recyclerview/RecyclerView.tsx
+index 5447a5c3218e7e570ed6ab4a178a34154c694afe..c36b0bd39f0b769f7594a9728cd9e07c4ee9cca3 100644
+--- a/src/recyclerview/RecyclerView.tsx
++++ b/src/recyclerview/RecyclerView.tsx
+@@ -342,7 +342,14 @@ const RecyclerViewComponent = <T,>(
+    */
+   const validateItemSize = useCallback(
+     (index: number, size: RVDimension) => {
+-      const layout = recyclerViewManager.getLayout(index);
++      // A ViewHolder can report its size after the layout table has already
++      // shrunk past the index it was rendered with. There is nothing left to
++      // validate the measurement against, so drop it. (Backport of
++      // Shopify/flash-list#2460 for #2291/#2440.)
++      const layout = recyclerViewManager.tryGetLayout(index);
++      if (layout === undefined) {
++        return;
++      }
+       const width = Math.max(
+         Math.min(layout.width, layout.maxWidth ?? Infinity),
+         layout.minWidth ?? 0
+@@ -529,7 +536,7 @@ const RecyclerViewComponent = <T,>(
+             data={data}
+             horizontal={horizontal}
+             renderStack={recyclerViewManager.getRenderStack()}
+-            getLayout={(index) => recyclerViewManager.getLayout(index)}
++            getLayout={(index) => recyclerViewManager.tryGetLayout(index)}
+             getAdjustmentMargin={() => {
+               if (!shouldRenderFromBottom || !recyclerViewManager.hasLayout()) {
+                 return 0;
+diff --git a/src/recyclerview/ViewHolderCollection.tsx b/src/recyclerview/ViewHolderCollection.tsx
+index 1db0d2b569f4fd3577f5bdc4e2ceb04526efd5fc..6c0729d057134dbff067da2a8f66cb8940c305ea 100644
+--- a/src/recyclerview/ViewHolderCollection.tsx
++++ b/src/recyclerview/ViewHolderCollection.tsx
+@@ -23,7 +23,9 @@ export interface ViewHolderCollectionProps<TItem> {
+   /** Map of indices to React keys for each rendered item */
+   renderStack: Map<string, { index: number }>;
+   /** Function to get layout information for a specific index */
+-  getLayout: (index: number) => RVLayout;
++  // Undefined when the index is no longer in the layout table. A render stack
++  // entry can outlive a layout table shrink, and reading it must not throw.
++  getLayout: (index: number) => RVLayout | undefined;
+   /** Ref to control layout updates from parent components */
+   viewHolderCollectionRef: React.Ref<ViewHolderCollectionRef>;
+   /** Map to store refs for each ViewHolder instance */
+@@ -164,6 +166,14 @@ export const ViewHolderCollection = <TItem,>(
+       {containerLayout &&
+         hasData &&
+         Array.from(renderStack.entries(), ([reactKey, { index }]) => {
++          const layout = getLayout(index);
++          if (layout === undefined) {
++            // The layout table was truncated past this index while the render
++            // stack still held its key, so the item it points at is gone. The
++            // key is reused on the next render stack sync. (Backport of
++            // Shopify/flash-list#2460 for #2440.)
++            return null;
++          }
+           const item = data[index];
+           const trailingItem = ItemSeparatorComponent
+             ? data[index + 1]
+@@ -175,7 +185,7 @@ export const ViewHolderCollection = <TItem,>(
+               item={item}
+               trailingItem={trailingItem}
+               layout={{
+-                ...getLayout(index),
++                ...layout,
+               }}
+               refHolder={refHolder}
+               onSizeChanged={onSizeChanged}
 diff --git a/src/recyclerview/layout-managers/LayoutManager.ts b/src/recyclerview/layout-managers/LayoutManager.ts
 index 95535f6432a351d9d669578dcb2fe9a583b19982..27ccdc3a1c09d38f8460a897738cd0f9df410934 100644
 --- a/src/recyclerview/layout-managers/LayoutManager.ts

@@ -459,15 +459,29 @@ export function createPanelGroupModel(options: {
 	const nudge = (handleId: string, deltaPercent: number) => {
 		adjustHandle(handleId, deltaPercent, 'keyboard');
 	};
-	const getSeparatorAriaValues = (handleId: string) => {
+	// Cached per handle and layout version so the SAME object comes back while
+	// nothing changed: `useSeparatorA11y` reads these through
+	// `useSyncExternalStore`, whose snapshot must be referentially stable between
+	// notifications (a fresh object per call would re-render forever). Reading
+	// them through the store hook, rather than calling this after a discarded
+	// version read, is what keeps the React Compiler from memoising the first
+	// render's values for the life of the handle (#1620 follow-up: native
+	// handles reported a bare "Resize handle" label for the whole session).
+	const separatorAriaCache = new Map<string, { version: number; values: SeparatorAriaValues }>();
+	const getSeparatorAriaValues = (handleId: string): SeparatorAriaValues => {
+		const cached = separatorAriaCache.get(handleId);
+		if (cached && cached.version === version) return cached.values;
 		const panelIndex = getHandlePanelIndex(handleId);
-		return panelIndex == null
-			? { valueMin: undefined, valueMax: undefined, valueNow: undefined }
-			: calculateAriaValues({
-					layout,
-					panelConstraints: getResolvedConstraints(),
-					panelIndex,
-				});
+		const values: SeparatorAriaValues =
+			panelIndex == null
+				? { valueMin: undefined, valueMax: undefined, valueNow: undefined }
+				: calculateAriaValues({
+						layout,
+						panelConstraints: getResolvedConstraints(),
+						panelIndex,
+					});
+		separatorAriaCache.set(handleId, { version, values });
+		return values;
 	};
 	const toggleCollapseAdjacent = (handleId: string) => {
 		const panelIndex = getHandlePanelIndex(handleId);

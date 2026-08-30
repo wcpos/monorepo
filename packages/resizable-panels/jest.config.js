@@ -7,7 +7,18 @@ module.exports = {
 	preset: 'ts-jest',
 	testEnvironment: 'node',
 	transform: {
-		'^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: 'tsconfig.json', isolatedModules: true }],
+		// The separator a11y hooks are compiled with babel-plugin-react-compiler,
+		// as the app compiles them (apps/main app.config.ts sets
+		// experiments.reactCompiler): ts-jest skips the compiler, and the bug this
+		// guards — the compiler memoising `model.getSeparatorAriaValues()` on
+		// [model, handleId] so a native handle reported a bare "Resize handle"
+		// for the whole session (iPad, 2026-08-30) — is invisible without it.
+		// The patterns are mutually exclusive so transformer pick order can't matter.
+		'hooks/useSeparatorA11y(\\.web)?\\.ts$': '<rootDir>/jest/react-compiler-transform.js',
+		'^(?!.*hooks/useSeparatorA11y(\\.web)?\\.ts$).+\\.(ts|tsx)$': [
+			'ts-jest',
+			{ tsconfig: 'tsconfig.json', isolatedModules: true },
+		],
 	},
 	testRegex: TEST_REGEX,
 	moduleNameMapper: { '^react-native$': 'react-native-web' },
