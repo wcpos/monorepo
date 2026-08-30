@@ -21,14 +21,23 @@ function readRecoveryCommands() {
 // These parsed-command checks pin Maestro configuration that can only execute
 // against expo-dev-launcher's native UI. The screen text itself was captured on
 // the iOS tablet in run 33302195102; these tests guard how the suite responds.
-test('launcher recovery reloads only the localhost manifest-timeout screen', () => {
+test('launcher recovery triggers on the launcher-screen TITLE, not one error body', () => {
 	const commands = readRecoveryCommands();
 	const guardedReload = commands[0].repeat.commands[0].runFlow.commands[1].runFlow;
+	const title = 'There was a problem loading the project.*';
 
-	assert.equal(
-		guardedReload.when.visible.text,
-		'Failed to load app from http://localhost:8081 with error: The request timed out.*'
-	);
+	// The manifest timeout is one CAUSE; the launcher shows this same screen,
+	// with the same Reload button, for every load failure (a 5xx or a JSON error
+	// from Metro included), each with its own body line. Triggering on a body
+	// would drop recovery for all of those, and the body is also the line that
+	// carries a URL and wraps or truncates on a narrow device. The title is the
+	// screen's invariant, captured on run 33302195102's failure screenshot.
+	assert.equal(guardedReload.when.visible.text, title);
+
+	// The trigger and the "still broken" assertion must name the SAME screen —
+	// tapping Reload for one set of errors while failing on another would leave
+	// a recoverable launcher unrecovered.
+	assert.equal(commands.at(-1).assertNotVisible.text, title);
 });
 
 test('launcher recovery observes the final Reload outcome before returning', () => {

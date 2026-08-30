@@ -51,10 +51,20 @@ appId: com.wcpos.main.dev
                   id: "${APP_READY_TESTID}"
                 timeout: 15000
                 optional: true
+            # The TITLE, not the body line. The body names one cause
+            # ("Failed to load app from http://localhost:8081 with error: The
+            # request timed out."), but the launcher renders this same screen,
+            # with the same Reload button, for every load failure it hits — a
+            # 5xx or a JSON error from Metro included, each with its own body.
+            # Matching the body would drop recovery for all of those, and it is
+            # brittle besides: the body carries a URL and is the line that
+            # wraps or truncates on a narrow device. The title is the invariant
+            # captured on the failure screenshot, so it is the trigger, and the
+            # assertion at the end of this file matches it too.
             - runFlow:
                 when:
                   visible:
-                    text: "Failed to load app from http://localhost:8081 with error: The request timed out.*"
+                    text: "There was a problem loading the project.*"
                 commands:
                   - tapOn:
                       text: "Reload"
@@ -65,9 +75,11 @@ appId: com.wcpos.main.dev
                   # launch comments in flows 01 and 08).
                   - waitForAnimationToEnd:
                       timeout: 5000
-# The next repeat provides this outcome window for Reloads one and two. The
-# third Reload needs its own: otherwise the final assertion can run during the
-# request's first 5s, before the launcher's 10s timeout screen reappears.
+# Reloads one and two are judged by the NEXT pass of the repeat above; the
+# third has no pass after it, so its outcome window goes here. Without it the
+# assertion below runs inside that last Reload's first seconds — while the
+# launcher is loading and its error screen is legitimately absent — and would
+# report a still-broken launcher as recovered.
 - extendedWaitUntil:
     visible:
       id: "${APP_READY_TESTID}"
