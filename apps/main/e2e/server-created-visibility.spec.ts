@@ -6,6 +6,7 @@ import {
 	navigateToPage,
 	authenticatedTest as test,
 } from './fixtures';
+import { resolveProbeAuthorization } from './probe-credential';
 import {
 	createOrderArrivalProbe,
 	createSearchProbe,
@@ -168,7 +169,10 @@ test('a product created on the server reaches the products grid without a search
 
 	const storeUrl = getStoreUrl(testInfo);
 	const writer = await productWriterAuthorization(request, storeUrl);
-	const authorization = writer ?? storeAuthorization();
+	// The captured fallback is RESOLVED, never replayed: it is the last credential the app
+	// was seen sending, and a restored session replays an expired one (see resolveProbeAuthorization).
+	const authorization =
+		writer ?? (await resolveProbeAuthorization(request, storeUrl, storeAuthorization));
 
 	await navigateToPage(page, 'products');
 	const screen = page.getByTestId('screen-products').filter({ visible: true });
@@ -335,7 +339,10 @@ test('an order created on the server reaches the orders grid without a search', 
 
 	const storeUrl = getStoreUrl(testInfo);
 	const writer = await productWriterAuthorization(request, storeUrl);
-	const authorization = writer ?? storeAuthorization();
+	// The captured fallback is RESOLVED, never replayed: it is the last credential the app
+	// was seen sending, and a restored session replays an expired one (see resolveProbeAuthorization).
+	const authorization =
+		writer ?? (await resolveProbeAuthorization(request, storeUrl, storeAuthorization));
 
 	await navigateToPage(page, 'orders');
 	const screen = page.getByTestId('screen-orders').filter({ visible: true });
@@ -493,7 +500,10 @@ test('a customer created on the server reaches the customers grid without a sear
 
 	const storeUrl = getStoreUrl(testInfo);
 	const writer = await productWriterAuthorization(request, storeUrl);
-	const authorization = writer ?? storeAuthorization();
+	// The captured fallback is RESOLVED, never replayed: it is the last credential the app
+	// was seen sending, and a restored session replays an expired one (see resolveProbeAuthorization).
+	const authorization =
+		writer ?? (await resolveProbeAuthorization(request, storeUrl, storeAuthorization));
 
 	await navigateToPage(page, 'customers');
 	const screen = page.getByTestId('screen-customers').filter({ visible: true });

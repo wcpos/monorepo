@@ -20,9 +20,13 @@ import type { APIRequestContext, Page } from '@playwright/test';
  * LIVE status and only finalizes orders still in `pos-open`, so a real test sale is
  * never cancelled.
  *
- * Auth: teardown reuses the SAME credentials/transport the app itself sends (captured
- * by `captureStoreAuthorization` and shaped by `storeRequestOptions` in fixtures.ts),
- * so it works for both header-JWT and `use_jwt_as_param` stores without a second login.
+ * Auth: teardown reuses the SAME credentials/transport the app itself sends, so it works
+ * for both header-JWT and `use_jwt_as_param` stores without a second login. The caller
+ * RESOLVES that credential first (`resolveProbeOptions` in probe-credential.ts) rather
+ * than replaying whatever `captureStoreAuthorization` last saw: the captured value is the
+ * last credential the app was seen SENDING, and a restored session replays an expired
+ * token — which makes every call below 401 and, because teardown swallows its failures,
+ * leaves the carts piling up with nothing red to show for it.
  *
  * Robustness: teardown is strictly best-effort. Every failure is logged and swallowed
  * — a teardown error must NEVER fail the test (mirrors the route-handler-never-rethrow
@@ -30,8 +34,9 @@ import type { APIRequestContext, Page } from '@playwright/test';
  */
 
 /**
- * Out-of-band request auth, as produced by `storeRequestOptions(storeAuthorization())`
- * in fixtures.ts: the app's own store credentials in the app's own transport.
+ * Out-of-band request auth, as produced by `resolveProbeOptions(request, storeUrl,
+ * storeAuthorization, …)`: the app's own store credentials in a transport this store has
+ * actually been seen to accept.
  */
 export interface StoreRequestAuth {
 	headers: Record<string, string>;

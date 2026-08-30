@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 
 import { log } from '@wcpos/utils/logger';
 
-import { type StoreAuthorization, storeRequestOptions } from './fixtures';
+import { type StoreAuthorization, storeRequestOptions } from './probe-credential';
 
 import type { APIRequestContext, APIResponse, Locator, Page } from '@playwright/test';
 
@@ -293,102 +293,6 @@ async function probeRequest(
 	const pretty = await send(collectionUrl(storeUrl, collection, id));
 	if (pretty.status() !== 404) return pretty;
 	return send(plainPermalinkUrl(storeUrl, collection, id));
-}
-
-/**
- * The transports worth trying for a credential the app was seen using, in order.
- *
- * The captured form comes first — it demonstrably reached `wcpos/v2` — then the
- * alternates, because a credential that works on ONE route and transport does not
- * automatically work on another. dev-free runs an always-on hostile proxy tier
- * that strips `Authorization` (wcpos-infra#72 Tier 3) and applies WAF prefix rules
- * to query params, so the same JWT can need the header on one store, `?authorization=Bearer …`
- * on the next and the bare `?authorization=…` on a third. Mirrors the candidate
- * ladder `resolveWriterTransport` already uses for the minted writer token.
- *
- * Pure and exported for its own test: the ORDER is the contract.
- */
-export function authorizationCandidates(captured: StoreAuthorization | null): StoreAuthorization[] {
-	if (!captured) return [];
-	const bare = captured.value.replace(/^Bearer\s+/i, '');
-	const ladder: StoreAuthorization[] = [
-		captured,
-		{ transport: 'header', value: `Bearer ${bare}` },
-		{ transport: 'query', value: `Bearer ${bare}` },
-		{ transport: 'query', value: bare },
-	];
-	const seen = new Set<string>();
-	return ladder.filter((candidate) => {
-		const key = `${candidate.transport}:${candidate.value}`;
-		if (seen.has(key)) return false;
-		seen.add(key);
-		return true;
-	});
-}
-
-/** How long to keep re-reading the app's credential while it is still a stale one. */
-const PROBE_CREDENTIAL_TIMEOUT_MS = 45_000;
-/** Gap between re-reads, long enough for the app to have sent another request. */
-const PROBE_CREDENTIAL_POLL_MS = 2_000;
-
-/**
- * Resolve — by evidence, not assumption — request options that actually authenticate
- * against wc/v3 on THIS store, starting from the credential the app was seen using.
- *
- * TWO independent ways the captured credential lets a spec down, both observed:
- *
- *  1. **Wrong transport for the route.** What reached `wcpos/v2` through whatever proxy
- *     sits in front does not automatically reach wc/v3 — dev-free's hostile tier strips
- *     `Authorization` outright, so only the `?authorization=` forms authenticate there.
- *     Hence the candidate ladder.
- *  2. **A STALE token.** `captureStoreAuthorization` reports the last credential the app
- *     was seen SENDING, not a working one. E2E auth state is cached (per-day in CI), so
- *     a restored session replays an access token that expired hours ago; the app refreshes
- *     on the 401 and carries on, while the spec is left holding the dead JWT. Measured on
- *     2026-08-23: expired by 732s at probe time, and every candidate 401s — which reads
- *     exactly like a broken store. Hence the retry: the getter is re-read until the app's
- *     own traffic yields a credential that works, or the budget runs out.
- *
- * Deliberately never inspects the token's contents. Credentials are opaque here — the only
- * evidence that one is good is a store answering with it.
- *
- * Throws when nothing authenticates inside the budget: that is a genuinely broken
- * environment, and per the E2E store-agnostic policy it must fail rather than skip.
- */
-export async function resolveProbeOptions(
-	request: APIRequestContext,
-	storeUrl: string,
-	getAuthorization: () => StoreAuthorization | null,
-	options: { timeoutMs?: number } = {}
-): Promise<{ headers: Record<string, string>; params: Record<string, string> }> {
-	const deadline = Date.now() + (options.timeoutMs ?? PROBE_CREDENTIAL_TIMEOUT_MS);
-	let statuses: string[] = ['no credential captured'];
-	let rounds = 0;
-	for (;;) {
-		rounds += 1;
-		const candidates = authorizationCandidates(getAuthorization());
-		if (candidates.length > 0) {
-			statuses = [];
-			for (const candidate of candidates) {
-				const candidateOptions = storeRequestOptions(candidate);
-				try {
-					const response = await probeRequest(request, 'get', storeUrl, 'products', undefined, {
-						...candidateOptions,
-						params: { ...candidateOptions.params, per_page: '1' },
-					});
-					if (response.ok()) return candidateOptions;
-					statuses.push(`${candidate.transport}=${response.status()}`);
-				} catch {
-					statuses.push(`${candidate.transport}=transport-error`);
-				}
-			}
-		}
-		if (Date.now() >= deadline) break;
-		await new Promise((resolve) => setTimeout(resolve, PROBE_CREDENTIAL_POLL_MS));
-	}
-	throw new Error(
-		`the app's credential authenticated against no wc/v3 transport on ${storeUrl} after ${rounds} rounds (${statuses.join(', ')}) — the app never surfaced a working credential`
-	);
 }
 
 /**
@@ -1174,7 +1078,30 @@ export async function sweepOrphanedProductProbes(
 	}
 }
 
-/** Fill a testID-located search input after arming its server and exact-local-result waiters. */
+/**
+ * Fill a testID-located search input after arming its server and exact-local-result waiters.
+ *
+ * The server waiter requires a SUCCESSFUL demand, not merely the first matching response.
+ * A search that 401s and then succeeds is the app recovering, and recovery is correct
+ * behaviour: the access token lives 30 minutes, so a session evicted or expired mid-run
+ * makes the app take one 401, refresh, and retry — and asserting on the first matching
+ * response turns that recovery into `<collection> search demand failed: HTTP 401`. That is
+ * what reddened 24/12/16 tests per shard on every PR on 2026-08-30, on stores whose
+ * app-driven specs were otherwise passing. (product-category-filter.spec.ts already waits
+ * this way, for the hostile-proxy flavour of the same recovery.)
+ *
+ * Nothing is weakened: a demand that NEVER succeeds inside the budget still fails, and the
+ * failure names the last status the store actually gave rather than a bare timeout — and
+ * an exact `localResult` may only stand in for the demand while the wire stayed QUIET. A
+ * demand that went out and 401'd is not excused by a row that happened to render.
+ *
+ * That last rule is why this is not a `Promise.all` of the two waiters. `localResult`
+ * exists precisely because the sync engine's demand coverage means an already-satisfied
+ * search fires NO wire request at all: requiring both would hang the full 120 s every time
+ * (observed on CI shard 4, 2026-08-21 — see `addCheckoutProbeProductAgain` in
+ * checkout-probe.ts). Checking `lastFailure` on the local win keeps the invariant without
+ * reintroducing that hang.
+ */
 export async function searchAndWaitForServer(
 	page: Page,
 	searchInput: Locator,
@@ -1182,6 +1109,10 @@ export async function searchAndWaitForServer(
 	term: string,
 	localResult?: Locator
 ): Promise<void> {
+	// The last non-OK matching demand, kept so a budget that runs out can say WHY.
+	// A holder, not a `let`: the assignment happens inside the predicate closure, and
+	// TypeScript's flow analysis would otherwise still read the variable as `null`.
+	const lastFailure: { status: number | null } = { status: null };
 	const responsePending = page.waitForResponse(
 		(response) => {
 			if (response.request().method() !== 'GET') return false;
@@ -1193,7 +1124,10 @@ export async function searchAndWaitForServer(
 				(collection === 'products' &&
 					(url.pathname.endsWith('/wp-json/wcpos/v2/variations') ||
 						route === '/wcpos/v2/variations'));
-			return matchesDemand && url.searchParams.get('search') === term;
+			if (!matchesDemand || url.searchParams.get('search') !== term) return false;
+			if (response.ok()) return true;
+			lastFailure.status = response.status();
+			return false;
 		},
 		// 120s, not 60s: calibrated to the slowest gated store, not the fastest.
 		// Under 4 concurrent shards the realism-profile store (dev-pro: WC 10.9,
@@ -1208,11 +1142,23 @@ export async function searchAndWaitForServer(
 	localResultPending?.catch(() => {});
 
 	await searchInput.fill(term);
-	const response = localResultPending
-		? await Promise.race([responsePending, localResultPending.then(() => null)])
-		: await responsePending;
-	if (response === null) return;
-	if (!response.ok()) {
-		throw new Error(`${collection} search demand failed: HTTP ${response.status()}`);
+	let satisfiedLocally = false;
+	try {
+		if (localResultPending) {
+			satisfiedLocally = await Promise.race([
+				responsePending.then(() => false),
+				localResultPending.then(() => true),
+			]);
+		} else {
+			await responsePending;
+		}
+	} catch (error) {
+		if (lastFailure.status !== null) {
+			throw new Error(`${collection} search demand failed: HTTP ${lastFailure.status}`);
+		}
+		throw error;
+	}
+	if (satisfiedLocally && lastFailure.status !== null) {
+		throw new Error(`${collection} search demand failed: HTTP ${lastFailure.status}`);
 	}
 }

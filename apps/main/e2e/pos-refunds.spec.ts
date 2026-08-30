@@ -3,11 +3,13 @@ import { expect, type Page } from '@playwright/test';
 import { isolatedProductTest as test, tryAddRunPrivateSimpleProduct } from './checkout-probe';
 import {
 	becomesVisible,
+	getStoreUrl,
 	getStoreVariant,
 	isWcposRestRoute,
 	tryAddProductBySku,
 	wcposRestRoute,
 } from './fixtures';
+import { resolveProbeAuthorization } from './probe-credential';
 import {
 	expectFullPrecision,
 	expectMoneyMatches,
@@ -331,9 +333,20 @@ liveTest.describe('POS refunds (Pro) - real refund (live store)', () => {
 
 			await processPayment(page);
 
+			// Resolved once against the read-back namespace, then reused for every read
+			// below. `storeAuthorization()` is the last credential the app was seen
+			// SENDING — a restored session replays an expired token and every read-back
+			// 401s, which the poll below would report as "the refund never landed".
+			const probeAuthorization = await resolveProbeAuthorization(
+				request,
+				getStoreUrl(testInfo),
+				storeAuthorization,
+				{ route: '/wcpos/v2/orders' }
+			);
+
 			// Guard the premise: refunding an order that never got paid would pass for
 			// the wrong reason.
-			const paid = await readOrder(request, testInfo, storeAuthorization(), orderId);
+			const paid = await readOrder(request, testInfo, probeAuthorization, orderId);
 			expect(paid.customer_note, 'must refund the order this test created').toBe(label);
 
 			// Totals parity on the SALE half (Money-oracle doctrine in TEST-PLAN.md):
@@ -396,7 +409,7 @@ liveTest.describe('POS refunds (Pro) - real refund (live store)', () => {
 				.poll(
 					async () => {
 						// A failed read is "not yet", not a verdict — keep polling.
-						const order = await readOrder(request, testInfo, storeAuthorization(), orderId).catch(
+						const order = await readOrder(request, testInfo, probeAuthorization, orderId).catch(
 							() => null
 						);
 						return (order?.refunds ?? []).length;
@@ -405,7 +418,7 @@ liveTest.describe('POS refunds (Pro) - real refund (live store)', () => {
 				)
 				.toBe(1);
 
-			const afterRefund = await readOrder(request, testInfo, storeAuthorization(), orderId);
+			const afterRefund = await readOrder(request, testInfo, probeAuthorization, orderId);
 			expect(afterRefund.customer_note, 'still the order this test created').toBe(label);
 
 			// WooCommerce stores refunds as negative amounts against the parent order.

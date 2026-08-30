@@ -3,11 +3,13 @@ import { expect, type Locator, type Page } from '@playwright/test';
 import { isolatedProductTest as test, tryAddRunPrivateSimpleProduct } from './checkout-probe';
 import {
 	becomesVisible,
+	getStoreUrl,
 	isRouteTeardownError,
 	isWcposRestRoute,
 	tryAddProductBySku,
 	wcposRestRoute,
 } from './fixtures';
+import { resolveProbeAuthorization } from './probe-credential';
 import {
 	expectFullPrecision,
 	expectMoneyMatches,
@@ -378,7 +380,17 @@ liveTest.describe('POS Checkout - real payment (live store)', () => {
 
 			await processPayment(page);
 
-			const server = await readOrder(request, testInfo, storeAuthorization(), orderId);
+			// Resolved once against the read-back namespace. `storeAuthorization()` is the
+			// last credential the app was seen SENDING — a restored session replays an
+			// expired token, and the read-back then fails with HTTP 401 as though the
+			// order were missing.
+			const probeAuthorization = await resolveProbeAuthorization(
+				request,
+				getStoreUrl(testInfo),
+				storeAuthorization,
+				{ route: '/wcpos/v2/orders' }
+			);
+			const server = await readOrder(request, testInfo, probeAuthorization, orderId);
 
 			// IDENTITY FIRST. Everything below is only meaningful if this is the order
 			// this test created — the store is shared, so a readback that silently

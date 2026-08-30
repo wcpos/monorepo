@@ -75,7 +75,10 @@ test.describe('Cold start — variation SKU search', () => {
 		try {
 			// Secretless forks retain the existing store-discovered variation SKU.
 			const searchTerm = runPrivateProduct?.variationSku ?? VARIATION_SKU_TERM;
-			const probe = await probeVariationSearch(request, storeUrl, storeAuthorization(), searchTerm);
+			// The GETTER, not its value: probeVariationSearch answers the two "this store
+			// cannot do it" cases before asking for a live credential, then resolves one
+			// itself rather than replaying whatever the app last sent.
+			const probe = await probeVariationSearch(request, storeUrl, storeAuthorization, searchTerm);
 			if (!probe.supported) {
 				if (runPrivateProduct) {
 					throw new Error(`Created variation SKU was not served by wcpos/v2: ${probe.reason}`);
