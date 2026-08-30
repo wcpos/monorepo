@@ -4,14 +4,40 @@ import * as React from 'react';
 import {
 	DrawerContentScrollView,
 	getDrawerStatusFromState,
+	useDrawerProgress,
 } from 'expo-router/build/react-navigation/drawer';
+import { useAnimatedReaction } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DrawerItemList } from './drawer-item-list';
-import { DrawerPanelVisibilityReporter } from './panel-visibility';
+import { DrawerPanelVisibilityReporter, useReassertDrawerPanelHidden } from './panel-visibility';
 import { Version } from './version';
 
 import type { DrawerContentComponentProps } from 'expo-router/build/react-navigation/drawer';
+
+/**
+ * `react-native-drawer-layout` renders the drawer content inside its `DrawerProgressContext`
+ * (`Drawer.native.js` / `Drawer.js` both wrap `renderDrawerContent()` in the provider), so this
+ * is the one component that can watch the panel's animated progress. When that progress returns
+ * to 0 the drawer is closed on screen — which is not always accompanied by a navigation state
+ * change (a cancelled opening swipe is not), so it is the signal the visibility guard needs to
+ * re-apply itself. See `panel-visibility.tsx`.
+ */
+function useReassertHiddenWhenProgressSettlesClosed() {
+	const progress = useDrawerProgress();
+	const reassert = useReassertDrawerPanelHidden();
+
+	useAnimatedReaction(
+		() => progress.value,
+		(value, previous) => {
+			if (previous !== null && previous !== value && value === 0) {
+				scheduleOnRN(reassert);
+			}
+		},
+		[reassert]
+	);
+}
 
 export function DrawerContent(props: DrawerContentComponentProps) {
 	const insets = useSafeAreaInsets();
@@ -20,6 +46,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 	// content is the one component the navigator hands it to. Report it upward so the layout
 	// can take a settled-closed panel out of layout entirely — see `panel-visibility.tsx`.
 	const status = getDrawerStatusFromState(props.state);
+	useReassertHiddenWhenProgressSettlesClosed();
 
 	return (
 		<>

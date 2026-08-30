@@ -18,19 +18,44 @@ import {
 	DrawerPanelVisibilityProvider,
 	DrawerPanelVisibilityReporter,
 	useDrawerPanelHidden,
+	useReassertDrawerPanelHidden,
 } from './panel-visibility';
 
 function Harness({ status }: { status: DrawerPanelStatus }) {
 	return (
 		<DrawerPanelVisibilityProvider>
 			<Readout />
+			<Reasserter />
 			<DrawerPanelVisibilityReporter status={status} />
 		</DrawerPanelVisibilityProvider>
 	);
 }
 
+/**
+ * Stands in for the animated-progress reaction in `DrawerContent`: fires the re-assert the way a
+ * cancelled opening swipe would.
+ */
+function Reasserter() {
+	const reassert = useReassertDrawerPanelHidden();
+	return <button data-testid="reassert" onClick={reassert} />;
+}
+
+function fireReassert(container: HTMLElement) {
+	act(() => {
+		container.querySelector<HTMLButtonElement>('[data-testid="reassert"]')?.click();
+	});
+	// The drop is restored from a deferred timer so it lands as its own commit.
+	act(() => {
+		jest.advanceTimersByTime(1);
+	});
+}
+
+/** Every value `useDrawerPanelHidden` has published, so a test can see the drop-and-restore. */
+const publishedHidden: boolean[] = [];
+
 function Readout() {
 	const hidden = useDrawerPanelHidden();
+	if (publishedHidden[publishedHidden.length - 1] !== hidden) publishedHidden.push(hidden);
 	return <div data-testid="hidden">{String(hidden)}</div>;
 }
 
@@ -39,6 +64,7 @@ const readHidden = (container: HTMLElement) =>
 
 describe('drawer panel visibility', () => {
 	beforeEach(() => {
+		publishedHidden.length = 0;
 		jest.useFakeTimers();
 	});
 
@@ -113,6 +139,36 @@ describe('drawer panel visibility', () => {
 		);
 
 		expect(readHidden(container)).toBe('true');
+	});
+
+	it('re-applies the hide after a cancelled opening swipe', () => {
+		// The swipe never changes the navigation state, so the reporter does not re-run. Without
+		// the re-assert the static `display: 'none'` is never committed again and the guard
+		// silently disarms — which is exactly how #1691 could come back.
+		const { container } = render(<Harness status="closed" />);
+		act(() => {
+			jest.advanceTimersByTime(DRAWER_CLOSE_SETTLE_MS + 1);
+		});
+		expect(readHidden(container)).toBe('true');
+		publishedHidden.length = 0;
+
+		fireReassert(container);
+
+		// Dropped for one commit — a real prop change the renderer cannot diff away — then hidden
+		// again. Publishing `true` twice in a row would be the no-op that lets the bug back in.
+		expect(publishedHidden).toEqual([false, true]);
+		expect(readHidden(container)).toBe('true');
+	});
+
+	it('does not hide an open drawer when a re-assert arrives', () => {
+		const { container } = render(<Harness status="open" />);
+		expect(readHidden(container)).toBe('false');
+
+		publishedHidden.length = 0;
+		fireReassert(container);
+
+		expect(publishedHidden).toEqual([]);
+		expect(readHidden(container)).toBe('false');
 	});
 
 	it('reports visible with no provider, so a tree without the guard is unchanged', () => {
