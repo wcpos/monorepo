@@ -126,6 +126,13 @@ patchedDependencies:
   # (expo/bundledNativeModules.json), so we patch instead of upgrading; drop this patch
   # when the SDK moves flash-list to >= 2.2.2.
   "@shopify/flash-list@2.0.2": "patches/@shopify__flash-list@2.0.2.patch"
+  # A closed drawer is only translated off-screen, so a stale animated transform can leave
+  # it — and the dimming overlay, which is its SIBLING and reads the same animated progress
+  # — on top of the screen the app has navigated to (#1691). The app hides the settled-closed
+  # panel with `drawerStyle.display: 'none'`; this patch mirrors that onto the overlay, which
+  # the library exposes no option to reach. Drop it if upstream stops driving the overlay's
+  # opacity and pointerEvents from an uncommitted animated value.
+  react-native-drawer-layout@4.2.5: patches/react-native-drawer-layout@4.2.5.patch
   "react-native-esc-pos-printer@4.5.0": "patches/react-native-esc-pos-printer@4.5.0.patch"
   # NOTE: rxdb-premium cannot be patched here — its dist/ is produced by a
   # license-gated postinstall, so it is absent from the tarball pnpm patches.

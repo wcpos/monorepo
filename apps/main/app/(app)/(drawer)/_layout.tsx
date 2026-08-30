@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { Drawer } from 'expo-router/drawer';
 import { useCSSVariable } from 'uniwind';
@@ -10,6 +10,10 @@ import { useT } from '@wcpos/core/contexts/translations';
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { DrawerContent } from '@wcpos/core/screens/main/components/drawer-content';
 import { LogsBadge } from '@wcpos/core/screens/main/components/drawer-content/logs-badge';
+import {
+	DrawerPanelVisibilityProvider,
+	useDrawerPanelHidden,
+} from '@wcpos/core/screens/main/components/drawer-content/panel-visibility';
 import { Header } from '@wcpos/core/screens/main/components/header';
 
 import { UnreadLogsProvider, useUnreadLogsCount } from '../../../components/unread-logs';
@@ -41,6 +45,14 @@ function ThemedDrawer({
 }) {
 	const screenBackgroundColor = useNavigationBackground();
 
+	// A closed drawer is only translated off-screen, so a stale animated transform can leave it
+	// covering the screen the app has already navigated to (#1691). Once it has settled closed
+	// we take the panel out of layout, which no animation can undo. Native only: the failure is
+	// a Reanimated/Fabric one, and the web drawer has no equivalent (inactive screens there are
+	// already display:none). Never for the permanent rail, which is always on screen.
+	const panelSettledClosed = useDrawerPanelHidden();
+	const hideDrawerPanel = Platform.OS !== 'web' && screenSize !== 'lg' && panelSettledClosed;
+
 	// Get theme-aware colors for navigation
 	const [sidebarColor, sidebarBorderColor] = useCSSVariable([
 		'--color-sidebar',
@@ -55,6 +67,9 @@ function ThemedDrawer({
 				},
 				drawerType: screenSize === 'lg' ? 'permanent' : 'front',
 				drawerStyle: {
+					// Only ever ADDED, never set to 'flex': the library drives `display` itself
+					// while it measures the panel, and we must not override that.
+					...(hideDrawerPanel ? ({ display: 'none' } as const) : null),
 					backgroundColor: sidebarColor,
 					width: screenSize === 'lg' ? 'auto' : 200,
 					borderRightColor: sidebarBorderColor,
@@ -239,7 +254,9 @@ function DrawerLayoutContent() {
 export default function DrawerLayout() {
 	return (
 		<UnreadLogsProvider>
-			<DrawerLayoutContent />
+			<DrawerPanelVisibilityProvider>
+				<DrawerLayoutContent />
+			</DrawerPanelVisibilityProvider>
 		</UnreadLogsProvider>
 	);
 }
