@@ -69,6 +69,8 @@ env:
 
 permissions:
   contents: read
+  # The device jobs' turnstile lists this workflow's runs and their jobs.
+  actions: read
 
 jobs:
   changes:
@@ -317,17 +319,12 @@ jobs:
     name: 🤖 Android (${{ matrix.device.name }})
     needs: build
     if: needs.build.outputs.platform != 'ios'
-    # One job per (platform, device class) at a time across the whole repo:
-    # the runs' apps all sync against dev-pro, whose php-fpm stays at 4
-    # workers by design (owner ruling 2026-08-19 — a dev store behaves like a
-    # real one), and two overlapping runs tonight put the order-pay page at
-    # 83–108 s (iOS, PR #1690 run 33274650949) and flow 04 at 21 min
-    # (Android, run 33280466971) against a 5.7 s passing sample. Queue, do
-    # not cancel: the workflow-level group above still cancels superseded PR
-    # runs.
-    concurrency:
-      group: native-device-android-${{ matrix.device.name }}
-      cancel-in-progress: false
+    # One job per (platform, device class) at a time across the whole repo —
+    # enforced by the "Wait for the device slot" step, NOT by a job-level
+    # concurrency group: a GitHub group holds one running and one pending job
+    # and a newer pending job cancels the older pending one, which cancelled
+    # every main run on 2026-08-30 and turned PR device jobs red as
+    # "cancelled". See .github/scripts/native-device-turnstile.sh.
     runs-on: ubuntu-latest
     # 100, not 60: the app's ONE-TIME initial catalog sync (~40 min on these
     # 2-vCPU swiftshader emulators) slows every interaction in whichever flow
@@ -335,7 +332,9 @@ jobs:
     # flow 06 41m; run 33131212326: flows 04+05 52m together, then cancelled at
     # 60:00 with every completed flow green). Once the sync finishes, flows
     # take ~1 min. Budget = worst observed sync window + full suite + headroom.
-    timeout-minutes: 100
+    # Plus 150 for the device-slot turnstile's wait budget (the wait happens
+    # inside this job, so it counts against this timeout).
+    timeout-minutes: 250
     strategy:
       # ONE device job per platform at a time. Every device job logs a fresh
       # cashier in and syncs the store; with both classes (and other runs)
@@ -356,6 +355,16 @@ jobs:
         with:
           ref: ${{ needs.build.outputs.sha }}
           submodules: false
+
+      # FIFO queue for the (platform, device) slot — waits, never cancels.
+      # Before the downloads and the monorepo setup so a long wait does not
+      # sit on a warm Metro. Rationale and rule: the script's header.
+      - name: ⏳ Wait for the device slot
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLOT_JOB: 🤖 Android (${{ matrix.device.name }})
+          PLATFORM_PREFIX: '🤖 Android ('
+        run: bash .github/scripts/native-device-turnstile.sh
 
       - name: ⬇️ Download builds
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -728,21 +737,15 @@ jobs:
     name: 🍎 iOS (${{ matrix.device.name }})
     needs: build
     if: needs.build.outputs.platform != 'android'
-    # One job per (platform, device class) at a time across the whole repo:
-    # the runs' apps all sync against dev-pro, whose php-fpm stays at 4
-    # workers by design (owner ruling 2026-08-19 — a dev store behaves like a
-    # real one), and two overlapping runs tonight put the order-pay page at
-    # 83–108 s (iOS, PR #1690 run 33274650949) and flow 04 at 21 min
-    # (Android, run 33280466971) against a 5.7 s passing sample. Queue, do
-    # not cancel: the workflow-level group above still cancels superseded PR
-    # runs.
-    concurrency:
-      group: native-device-ios-${{ matrix.device.name }}
-      cancel-in-progress: false
+    # One job per (platform, device class) at a time across the whole repo —
+    # see the Android job's twin comment and
+    # .github/scripts/native-device-turnstile.sh.
     runs-on: macos-15
     # 60, was 45: the dev-client architecture adds pnpm install (~3-5 min) and
     # Metro's one-time bundle compile (~3-6 min) to the front of the job.
-    timeout-minutes: 60
+    # Plus 150 for the device-slot turnstile's wait budget (the wait happens
+    # inside this job, so it counts against this timeout).
+    timeout-minutes: 210
     strategy:
       # ONE device job per platform at a time. Every device job logs a fresh
       # cashier in and syncs the store; with both classes (and other runs)
@@ -763,6 +766,16 @@ jobs:
         with:
           ref: ${{ needs.build.outputs.sha }}
           submodules: false
+
+      # FIFO queue for the (platform, device) slot — waits, never cancels.
+      # Before the downloads and the monorepo setup so a long wait does not
+      # sit on a warm Metro. Rationale and rule: the script's header.
+      - name: ⏳ Wait for the device slot
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLOT_JOB: 🍎 iOS (${{ matrix.device.name }})
+          PLATFORM_PREFIX: '🍎 iOS ('
+        run: bash .github/scripts/native-device-turnstile.sh
 
       - name: ⬇️ Download builds
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
