@@ -131,11 +131,15 @@ const DISTS = [
 				prelude: helpersPrelude('r(stampHandle,runState)'),
 				rewrites: [
 					{
+						// Every initRead must SETTLE before the verdict: Promise.all rejects on the
+						// first null row while sibling reads are still in flight, and a late one
+						// landing between the rebuild's row assignment and its persist would write
+						// the corrupt rows straight back to disk.
 						name: 'validateBoot',
 						before:
 							'if(await b.getSize()>0){var[,S]=await Promise.all([Promise.all(y.map((e=>e.initRead(n)))),v.getChangelogOperations(n)]);Array.from(S.entries()).map((([e,a])=>{var t=y[e];a.forEach((e=>t.runChangelogOperation(e)))}))}',
 						after:
-							'if(await b.getSize()>0){var E=await(await u).getFileHandle("wcpos-changelog-baked.txt",{create:!0}),R=await r(E,n),reason=null;try{await Promise.all(y.map((e=>e.initRead(n))));var S=await v.getChangelogOperations(n),stamp=n.storageInstance._decode(await R.read(0));if(""!==stamp&&stamp===__wcposHash(v.__wcposLastRaw))reason="stale-changelog-after-compaction";else reason=__wcposReplayChangelog(y,S);if(!reason)reason=__wcposValidateRows(y,x)}catch(error){reason="boot-failed:"+(error&&error.message)}if(reason!==null)await __wcposRebuildIndexes({reason:reason,runState:n,docsAccessHandle:b,indexStates:y,changelog:v,stampHandle:E,decode:n.storageInstance._decode.bind(n.storageInstance),primaryPath:g,databaseName:d.databaseName,collectionName:d.collectionName})}',
+							'if(await b.getSize()>0){var E=await(await u).getFileHandle("wcpos-changelog-baked.txt",{create:!0}),R=await r(E,n),reason=null;try{var settled=await Promise.allSettled(y.map((e=>e.initRead(n)))),failed=settled.find((e=>"rejected"===e.status));if(failed)throw failed.reason;var S=await v.getChangelogOperations(n),stamp=n.storageInstance._decode(await R.read(0));if(""!==stamp&&stamp===__wcposHash(v.__wcposLastRaw))reason="stale-changelog-after-compaction";else reason=__wcposReplayChangelog(y,S);if(!reason)reason=__wcposValidateRows(y,x)}catch(error){reason="boot-failed:"+(error&&error.message)}if(reason!==null)await __wcposRebuildIndexes({reason:reason,runState:n,docsAccessHandle:b,indexStates:y,changelog:v,stampHandle:E,decode:n.storageInstance._decode.bind(n.storageInstance),primaryPath:g,databaseName:d.databaseName,collectionName:d.collectionName})}',
 					},
 				],
 			},
@@ -178,7 +182,7 @@ const DISTS = [
 						before:
 							'if(await y.getSize()>0){var[,w]=await Promise.all([Promise.all(h.map((e=>e.initRead(o)))),x.getChangelogOperations(o)]);Array.from(w.entries()).map((([e,a])=>{var t=h[e];a.forEach((e=>t.runChangelogOperation(e)))}))}',
 						after:
-							'if(await y.getSize()>0){var E=await(await m).getFileHandle("wcpos-changelog-baked.txt",{create:!0}),R=await(0,a.getAccessHandle)(E,o),reason=null;try{await Promise.all(h.map((e=>e.initRead(o))));var w=await x.getChangelogOperations(o),stamp=o.storageInstance._decode(await R.read(0));if(""!==stamp&&stamp===__wcposHash(x.__wcposLastRaw))reason="stale-changelog-after-compaction";else reason=__wcposReplayChangelog(h,w);if(!reason)reason=__wcposValidateRows(h,f)}catch(error){reason="boot-failed:"+(error&&error.message)}if(reason!==null)await __wcposRebuildIndexes({reason:reason,runState:o,docsAccessHandle:y,indexStates:h,changelog:x,stampHandle:E,decode:o.storageInstance._decode.bind(o.storageInstance),primaryPath:g,databaseName:i.databaseName,collectionName:i.collectionName})}',
+							'if(await y.getSize()>0){var E=await(await m).getFileHandle("wcpos-changelog-baked.txt",{create:!0}),R=await(0,a.getAccessHandle)(E,o),reason=null;try{var settled=await Promise.allSettled(h.map((e=>e.initRead(o)))),failed=settled.find((e=>"rejected"===e.status));if(failed)throw failed.reason;var w=await x.getChangelogOperations(o),stamp=o.storageInstance._decode(await R.read(0));if(""!==stamp&&stamp===__wcposHash(x.__wcposLastRaw))reason="stale-changelog-after-compaction";else reason=__wcposReplayChangelog(h,w);if(!reason)reason=__wcposValidateRows(h,f)}catch(error){reason="boot-failed:"+(error&&error.message)}if(reason!==null)await __wcposRebuildIndexes({reason:reason,runState:o,docsAccessHandle:y,indexStates:h,changelog:x,stampHandle:E,decode:o.storageInstance._decode.bind(o.storageInstance),primaryPath:g,databaseName:i.databaseName,collectionName:i.collectionName})}',
 					},
 				],
 			},
