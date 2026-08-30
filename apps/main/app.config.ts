@@ -2,6 +2,15 @@ import { ConfigContext, ExpoConfig } from 'expo/config';
 
 import packageJson from './package.json';
 
+/**
+ * Native version stamped into the `development`-profile dev client. FROZEN on
+ * purpose: `version` feeds the EAS fingerprint, so a release-only package bump
+ * would otherwise miss the shared dev-client cache and cost a build ($2 iOS /
+ * $1 Android) for a client whose JS comes from Metro anyway. Move it only when
+ * a native change forces a new dev-client build regardless.
+ */
+const DEV_CLIENT_NATIVE_VERSION = '1.10.3';
+
 export default ({ config }: ConfigContext): ExpoConfig => {
 	const easProfile = process.env.EAS_BUILD_PROFILE ?? 'production';
 	const iosInfoPlist = config.ios?.infoPlist ?? {};
@@ -28,7 +37,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		name: 'WCPOS',
 		slug: 'wcpos',
 		owner: 'wcpos',
-		version: packageJson.version,
+		// Metro serves the checked-out JS to dev clients, so release-only package
+		// bumps must keep using the native metadata already cached by EAS.
+		version: isDev ? DEV_CLIENT_NATIVE_VERSION : packageJson.version,
 
 		orientation: 'default',
 		icon: './assets/images/icon.png',
