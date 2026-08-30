@@ -67,7 +67,14 @@ function App({
 }) {
 	return (
 		<React.Suspense fallback={null}>
-			<CurrentOrderProvider resource={resource} currentOrderUUID="order-a">
+			{/* The provider takes the default-customer resource as a prop now: it is built by
+			    `(pos)/_layout.tsx`, ABOVE this boundary, so a Suspense retry cannot rebuild it.
+			    `useNewOrder` is mocked here, so any resource stands in. */}
+			<CurrentOrderProvider
+				resource={resource}
+				defaultCustomerResource={resource as never}
+				currentOrderUUID="order-a"
+			>
 				<CaptureActions />
 				<ReadOnMarkerChange marker={marker} />
 			</CurrentOrderProvider>

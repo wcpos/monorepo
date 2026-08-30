@@ -11,6 +11,7 @@ let mockDefaultCustomerID = 0;
 jest.mock('../../../query', () => ({
 	useCollectionBinding: (...args: unknown[]) => mockUseCollectionBinding(...args),
 }));
+jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => ({ engine: {} }) }));
 jest.mock('./use-default-customer-id', () => ({
 	useDefaultCustomerID: () => mockDefaultCustomerID,
 }));

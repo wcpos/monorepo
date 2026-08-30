@@ -13,6 +13,8 @@ import {
 } from './context';
 import { useNewOrder } from './use-new-order';
 
+import type { DefaultCustomerResource } from './use-new-order';
+
 export { useOpenOrdersResource } from './use-open-orders-resource';
 export {
 	CurrentOrderActionsContext,
@@ -30,6 +32,8 @@ export {
 interface CurrentOrderContextProviderProps {
 	children: React.ReactNode;
 	resource: ObservableResource<OpenOrderHit[]>;
+	/** Built by `(pos)/_layout.tsx`, above this boundary — see `useNewOrder`. */
+	defaultCustomerResource: DefaultCustomerResource;
 	currentOrderUUID?: string;
 }
 
@@ -44,9 +48,10 @@ interface CurrentOrderContextProviderProps {
 export function CurrentOrderProvider({
 	children,
 	resource,
+	defaultCustomerResource,
 	currentOrderUUID,
 }: CurrentOrderContextProviderProps) {
-	const { newOrder } = useNewOrder();
+	const { newOrder } = useNewOrder(defaultCustomerResource);
 	const openOrders = useObservableSuspense(resource);
 	const router = useRouter();
 
