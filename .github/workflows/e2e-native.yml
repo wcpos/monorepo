@@ -469,7 +469,15 @@ jobs:
           disable-animations: true
           # swiftshader_indirect sidesteps the host-GPU ColorBuffer failures;
           # no-snapshot avoids stale snapshot restores on ephemeral runners.
-          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          # -dns-server: the emulator otherwise forwards guest DNS to the host's
+          # resolver through its 10.0.2.3 proxy, and on some runners that proxy
+          # never answers — run 33325931363 (phone) booted with every
+          # NetworkMonitor probe failing ("PROBE_DNS www.google.com … FAIL …
+          # resNetworkResult failed: ECONNREFUSED", 16 times from 17:58:00),
+          # flow 01 passed (it asserts a bogus host fails) and flow 02 died on
+          # "Site does not seem to be a WordPress site" against a store that
+          # answered the host in 0.45 s. Public resolvers bypass the proxy.
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -dns-server 8.8.8.8,1.1.1.1
           # All 4 of the runner's vCPUs, not the action's default 2:
           # swiftshader renders the GPU on these same guest cores, so the app
           # and its renderer were sharing two virtual CPUs — the
@@ -505,6 +513,14 @@ jobs:
             # appear at any moment, and it is not our app misbehaving, so the
             # right place to stop it is the device.
             adb shell settings put global hide_error_dialogs 1 || true
+            # Fail fast, with the reason, if the guest never validates a network:
+            # the flows would otherwise spend their 60 s budgets and report a
+            # store-shaped red ("Site does not seem to be a WordPress site") for
+            # an emulator that cannot resolve any host. A validated network shows
+            # as VALIDATED in `dumpsys connectivity`; give the boot 90 s, bounce
+            # wifi once (the emulated AndroidWifi network re-validates on
+            # reconnect), then abort with the probe log. ONE LINE, per the rule above.
+            i=0; until adb shell dumpsys connectivity 2>/dev/null | grep -q VALIDATED; do i=$((i+1)); if [ "$i" -eq 18 ]; then adb shell svc wifi disable; sleep 3; adb shell svc wifi enable; fi; if [ "$i" -ge 36 ]; then echo "::error::emulator has no validated internet after 180s — DNS/connectivity probes are failing (logcat NetworkMonitor); aborting before the suite"; adb shell dumpsys connectivity | head -80; exit 1; fi; sleep 5; done; echo "emulator network validated after $((i*5))s"
             adb reverse tcp:8081 tcp:8081
             adb install e2e-builds/wcpos-e2e-android.apk
             # STREAM logcat from before the suite, not dump-on-failure: the

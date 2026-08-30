@@ -2159,3 +2159,27 @@ test('the Android suite keeps adb reverse alive for the life of the run', () => 
 	// continuation backslash.
 	assert.doesNotMatch(lines[refresher], /\\$/);
 });
+
+test('the Android emulator resolves DNS through public resolvers and proves connectivity before the suite', () => {
+	const step = findStep(
+		readWorkflow('e2e-native.yml'),
+		'android',
+		'📱 Run Maestro suite on emulator'
+	);
+	// Run 33325931363 (phone): the guest booted with every NetworkMonitor DNS probe
+	// refused, and the store-shaped red in flow 02 was the only symptom.
+	assert.match(step.with['emulator-options'], /-dns-server 8\.8\.8\.8,1\.1\.1\.1/);
+	const lines = step.with.script.split('\n');
+	const guard = lines.findIndex((line) =>
+		line.startsWith('i=0; until adb shell dumpsys connectivity')
+	);
+	const reverse = lines.findIndex((line) => line.trim() === 'adb reverse tcp:8081 tcp:8081');
+	const suite = lines.findIndex((line) => line.startsWith('{ maestro test'));
+	assert.ok(guard >= 0, 'missing the connectivity guard');
+	assert.ok(guard < reverse && reverse < suite, 'the guard must run before the suite');
+	// It aborts with an explicit reason instead of letting the flows time out.
+	assert.match(lines[guard], /::error::emulator has no validated internet/);
+	assert.match(lines[guard], /exit 1/);
+	// ONE line: the emulator-runner action executes the script line by line.
+	assert.doesNotMatch(lines[guard], /\\$/);
+});
