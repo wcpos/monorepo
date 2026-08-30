@@ -123,11 +123,24 @@ env:
 # tap on the disabled button is a silent no-op — Maestro still reports
 # COMPLETED. Order #117904 (local run 2026-08-29 17:09) sat `pos-open` with no
 # payment method for the whole 120s receipt wait because of exactly that.
+#
+# 180s, not 60s: this budget is spent by the RUNNER'S WEBVIEW, not by the app
+# and not by the store. PR #1706's run 33304776835 (iOS phone,
+# 2026-08-30_100022) failed here at 10:03:19.645 —
+# "Assertion is false: id: process-payment-button, enabled is visible" — with
+# the pay sheet showing "Pagar pedido #121921" over a BLANK payment frame and
+# the button still spinning. dev-pro's nginx log has that frame's page request,
+# GET /wcpos-checkout/order-pay/121921/?pay_for_order=1&key=…, arriving at
+# 10:03:48: served 200, assets right after, PHP container up 2h, zero 5xx in
+# the hour. So on the starved 3-core runner the WebView took ~90s to even
+# ISSUE the request — 29s AFTER this gate had already expired — and the store
+# answered it immediately. The same gate lost a run at 61.07s the night
+# before. Only the time budget moves; the referent is unchanged.
 - extendedWaitUntil:
     visible:
       id: "process-payment-button"
       enabled: true
-    timeout: 60000
+    timeout: 180000
 - tapOn:
     id: "process-payment-button"
 # Receipt appears once the (cash) payment completes.
