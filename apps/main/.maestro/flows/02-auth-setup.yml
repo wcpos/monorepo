@@ -167,6 +167,46 @@ env:
       platform: iOS
     commands:
       - inputText: "\n"
+# One logged retype when the form is still on screen after the submit. Run
+# 33330747038 (iOS tablet): the username's keystrokes were lost into the web
+# view (field EMPTY behind a "Fill out this field" bubble, password filled —
+# the same iOS input-loss class as run 33307998593's URL field) and the
+# keyboard-return submit fired on the half-filled form. Retyping is gated on
+# the form still being visible, so a login that actually submitted can never
+# be retyped; erase-first makes the retype idempotent. If the retry loses
+# keystrokes too, the 120 s wait below still fails the flow.
+- extendedWaitUntil:
+    visible:
+      id: "logged-in-users-label"
+    timeout: 45000
+    optional: true
+- runFlow:
+    when:
+      visible: "Username or Email Address|Nombre de usuario o correo electrónico"
+    commands:
+      - evalScript: "${console.log('WCPOS_E2E login form still visible after submit, retyping once')}"
+      - tapOn: "Username or Email Address|Nombre de usuario o correo electrónico"
+      - eraseText
+      - inputText: ${E2E_USERNAME}
+      - runFlow:
+          when:
+            platform: Android
+          commands:
+            - pressKey: Enter
+      - tapOn: "Password|Contraseña"
+      - eraseText
+      - inputText: ${E2E_PASSWORD}
+      - runFlow:
+          when:
+            platform: Android
+          commands:
+            - hideKeyboard
+            - tapOn: "Log In|Acceder"
+      - runFlow:
+          when:
+            platform: iOS
+          commands:
+            - inputText: "\n"
 # Redirect returns through the wcpos:// deep link.
 - extendedWaitUntil:
     visible:
