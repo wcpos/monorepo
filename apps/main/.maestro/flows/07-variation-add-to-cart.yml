@@ -5,12 +5,6 @@ env:
   # step with the seed script's VARIABLE_* constants.
   VARIABLE_PRODUCT_SEARCH: WCPOS E2E Variable
   VARIATION_OPTION: Small
-  # CI overrides this with the seeded product's remote id (the seed exports it
-  # and the workflow passes `maestro test -e VARIABLE_PRODUCT_ID=…`), pinning
-  # the tap to that product's id-bearing testID even if another catalogue
-  # record matches the search. Locally the default matches any variable tile
-  # left visible by the search filter.
-  VARIABLE_PRODUCT_ID: ".*"
 ---
 # P0-7 (added 2026-08-27): variable-product popover → pick a variation → cart.
 # The original 7-flow suite never touched variations, which is how the
@@ -78,9 +72,18 @@ env:
             - evalScript: ${output.searchCharIndex++}
       - assertVisible:
           text: ${VARIABLE_PRODUCT_SEARCH}
+# VARIABLE_PRODUCT_ID pins the tap to the SEEDED product's id-bearing testID, so a
+# second catalogue record matching the search cannot be tapped instead. The seed
+# exports the id and both runners pass it on the CLI (`-e VARIABLE_PRODUCT_ID=…`
+# in e2e-native.yml and scripts/e2e-native-local.sh); the fallback is inline rather
+# than a flow-level `env:` default because under Maestro 2.6.1 the flow env block
+# runs AFTER the CLI vars and SHADOWS them — run 33297473431 was passed
+# `-e VARIABLE_PRODUCT_ID=107940` and still evaluated this selector as
+# `idRegex=variable-product-tile-.*`, i.e. the pin was inert. See flow 09 for the
+# `Define variables` log lines that show the shadowing.
 - extendedWaitUntil:
     visible:
-      id: "variable-product-tile-${VARIABLE_PRODUCT_ID}"
+      id: "variable-product-tile-${typeof VARIABLE_PRODUCT_ID === 'undefined' ? '.*' : VARIABLE_PRODUCT_ID}"
     timeout: 60000
 # Dismiss the keyboard BEFORE opening the popover — hideKeyboard afterwards
 # could dismiss the popover overlay instead.
@@ -89,7 +92,7 @@ env:
 - hideKeyboard:
     optional: true
 - tapOn:
-    id: "variable-product-tile-${VARIABLE_PRODUCT_ID}"
+    id: "variable-product-tile-${typeof VARIABLE_PRODUCT_ID === 'undefined' ? '.*' : VARIABLE_PRODUCT_ID}"
     index: 0
 # The popover portal mounts and renders option buttons immediately (they come
 # from the parent's attributes), but they stay DISABLED until the popover's

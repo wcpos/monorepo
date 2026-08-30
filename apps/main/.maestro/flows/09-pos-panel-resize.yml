@@ -1,9 +1,4 @@
 appId: com.wcpos.main.dev
-env:
-  # CI passes phone|tablet from the device matrix; locally it stays 'auto' and the
-  # handle's visibility decides. On a declared tablet the handle is REQUIRED, so a
-  # regression that routes tablets to the phone layout fails instead of skipping.
-  DEVICE_CLASS: auto
 ---
 # P0-9: the tablet POS split resizes by drag and the user-chosen width survives a relaunch.
 # Session comes from 02-auth-setup; do NOT clear state. Phones render the tabbed layout
@@ -39,9 +34,25 @@ env:
     visible:
       id: "screen-pos"
     timeout: 120000
+# On a DECLARED tablet the handle is REQUIRED, so a regression that routes tablets
+# to the phone layout fails here instead of quietly skipping the guarded block below.
+#
+# There is deliberately NO `env: DEVICE_CLASS` default in this flow: under Maestro
+# 2.6.1 a flow-level env block is a second `Define variables` command that runs
+# AFTER the CLI's `-e` vars and SHADOWS them, which made this guard inert. Run
+# 33297473431 (iOS tablet) logged all three lines:
+#   DefineVariablesCommand(env={VARIABLE_PRODUCT_ID=107940, DEVICE_CLASS=tablet, ...})
+#   DefineVariablesCommand(env={DEVICE_CLASS=auto})
+#   Run flow when ${DEVICE_CLASS == 'tablet'} is true SKIPPED
+# DEVICE_CLASS therefore comes from the CLI only: e2e-native.yml passes
+# `-e DEVICE_CLASS=<matrix.device.name>` (phone|tablet) on both platforms, and
+# scripts/e2e-native-local.sh passes `-e DEVICE_CLASS="$DEVICE_CLASS"` (--device,
+# default phone). A bare `maestro test apps/main/.maestro` leaves it undefined; the
+# typeof guard reads that as "no declared class" rather than erroring, and the
+# handle-visibility block below still runs.
 - runFlow:
     when:
-      true: ${DEVICE_CLASS == 'tablet'}
+      true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'tablet'}"
     commands:
       - assertVisible:
           id: "pos-resize-handle"
