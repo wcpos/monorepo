@@ -60,7 +60,7 @@ on:
           - android
 
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('native-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || format('native-{0}', github.ref) }}
+  group: ${{ github.event_name == 'pull_request' && format('native-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || github.ref == 'refs/heads/main' && format('native-main-run-{0}', github.run_id) || format('native-{0}', github.ref) }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
@@ -69,8 +69,6 @@ env:
 
 permissions:
   contents: read
-  # The device jobs' turnstile lists this workflow's runs and their jobs.
-  actions: read
 
 jobs:
   changes:
@@ -319,6 +317,10 @@ jobs:
     name: 🤖 Android (${{ matrix.device.name }})
     needs: build
     if: needs.build.outputs.platform != 'ios'
+    permissions:
+      # The turnstile lists this workflow's runs and their jobs.
+      actions: read
+      contents: read
     # One job per (platform, device class) at a time across the whole repo —
     # enforced by the "Wait for the device slot" step, NOT by a job-level
     # concurrency group: a GitHub group holds one running and one pending job
@@ -350,10 +352,10 @@ jobs:
           - { name: phone, profile: pixel_6 }
           - { name: tablet, profile: pixel_tablet }
     steps:
-      - name: 🏗 Setup repository
+      - name: 🏗 Setup repository (workflow revision)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.build.outputs.sha }}
+          ref: ${{ github.sha }}
           submodules: false
 
       # FIFO queue for the (platform, device) slot — waits, never cancels.
@@ -365,6 +367,13 @@ jobs:
           SLOT_JOB: 🤖 Android (${{ matrix.device.name }})
           PLATFORM_PREFIX: '🤖 Android ('
         run: bash .github/scripts/native-device-turnstile.sh
+
+      - name: 🏗 Checkout revision under test
+        if: needs.build.outputs.sha != github.sha
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.build.outputs.sha }}
+          submodules: false
 
       - name: ⬇️ Download builds
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -737,6 +746,10 @@ jobs:
     name: 🍎 iOS (${{ matrix.device.name }})
     needs: build
     if: needs.build.outputs.platform != 'android'
+    permissions:
+      # The turnstile lists this workflow's runs and their jobs.
+      actions: read
+      contents: read
     # One job per (platform, device class) at a time across the whole repo —
     # see the Android job's twin comment and
     # .github/scripts/native-device-turnstile.sh.
@@ -761,10 +774,10 @@ jobs:
           - { name: phone, simulator: iPhone 16 Pro }
           - { name: tablet, simulator: iPad Pro 11-inch (M4) }
     steps:
-      - name: 🏗 Setup repository
+      - name: 🏗 Setup repository (workflow revision)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.build.outputs.sha }}
+          ref: ${{ github.sha }}
           submodules: false
 
       # FIFO queue for the (platform, device) slot — waits, never cancels.
@@ -776,6 +789,13 @@ jobs:
           SLOT_JOB: 🍎 iOS (${{ matrix.device.name }})
           PLATFORM_PREFIX: '🍎 iOS ('
         run: bash .github/scripts/native-device-turnstile.sh
+
+      - name: 🏗 Checkout revision under test
+        if: needs.build.outputs.sha != github.sha
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.build.outputs.sha }}
+          submodules: false
 
       - name: ⬇️ Download builds
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0

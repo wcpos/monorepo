@@ -436,10 +436,11 @@ test('native E2E routes next-target PRs to the next store', () => {
 	assert.match(seed.stderr, /Store unreachable: https:\/\/dev-next\.wcpos\.com → HTTP 503/);
 });
 
-test('native E2E concurrency is isolated per pull request', () => {
+test('native E2E concurrency isolates pull requests without replacing queued main runs', () => {
 	const { concurrency } = readWorkflow('e2e-native.yml');
 
 	assert.match(concurrency.group, /github\.event\.pull_request\.number/);
+	assert.match(concurrency.group, /native-main-run-\{0\}', github\.run_id/);
 	assert.notEqual(concurrency.group, '${{ github.workflow }}');
 });
 
@@ -1815,23 +1816,31 @@ test('the Android step does not retry a successful run with a stale offline log'
 
 test('native device jobs queue through the FIFO turnstile, not a concurrency group', () => {
 	const workflow = readWorkflow('e2e-native.yml');
-	// GITHUB_TOKEN needs actions:read to list the workflow's runs and jobs.
-	assert.equal(workflow.permissions.actions, 'read');
+	// PR-controlled setup actions must not inherit Actions API access. Only the
+	// two jobs that invoke the turnstile need actions:read.
+	assert.equal(workflow.permissions.actions, undefined);
 	for (const [jobName, emoji, platform] of [
 		['android', '🤖', 'Android'],
 		['ios', '🍎', 'iOS'],
 	]) {
 		const job = workflow.jobs[jobName];
+		assert.deepEqual(job.permissions, { actions: 'read', contents: 'read' });
 		// A job-level group is what cancelled main's pending device jobs on
 		// 2026-08-30: GitHub keeps one pending job per group and cancels the
 		// older one when a newer arrives, whatever cancel-in-progress says.
 		assert.equal(job.concurrency, undefined, `${jobName} must not use a concurrency group`);
 		assert.equal(job.strategy['max-parallel'], 1);
-		const [checkout, turnstile] = job.steps;
-		assert.equal(checkout.name, '🏗 Setup repository');
+		const [workflowCheckout, turnstile, targetCheckout] = job.steps;
+		assert.equal(workflowCheckout.name, '🏗 Setup repository (workflow revision)');
+		assert.equal(workflowCheckout.with.ref, '${{ github.sha }}');
 		assert.equal(turnstile.name, '⏳ Wait for the device slot');
 		assert.equal(turnstile.run, 'bash .github/scripts/native-device-turnstile.sh');
 		assert.equal(turnstile.env.GH_TOKEN, '${{ github.token }}');
+		// A dispatch may test a main ancestor from before the turnstile existed.
+		// Switch to that target only after running the workflow revision's gate.
+		assert.equal(targetCheckout.name, '🏗 Checkout revision under test');
+		assert.equal(targetCheckout.if, 'needs.build.outputs.sha != github.sha');
+		assert.equal(targetCheckout.with.ref, '${{ needs.build.outputs.sha }}');
 		// The slot name must be the job's rendered name, or a run would never
 		// see its predecessor's job and two suites would overlap on the store.
 		assert.equal(turnstile.env.SLOT_JOB, job.name);
@@ -1845,14 +1854,19 @@ test('native device jobs queue through the FIFO turnstile, not a concurrency gro
 	assert.ok(workflow.jobs.android['timeout-minutes'] >= 150 + 100);
 });
 
-test('the device-slot turnstile waits on older runs by run id and never cancels', () => {
+test('the device-slot turnstile waits on earlier attempts and never cancels', () => {
 	const script = path.join(ROOT, '.github', 'scripts', 'native-device-turnstile.sh');
 	const ME = 500;
 	const iso = (secondsAgo) =>
 		new Date(Date.now() - secondsAgo * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
-	const run = (id, status = 'in_progress') => ({
+	const run = (
+		id,
+		status = 'in_progress',
+		startedSecondsAgo = id < ME ? 200 : id === ME ? 100 : 50
+	) => ({
 		id,
 		status,
+		run_started_at: iso(startedSecondsAgo),
 		html_url: `https://github.com/wcpos/monorepo/actions/runs/${id}`,
 		head_branch: `branch-${id}`,
 	});
@@ -1874,7 +1888,13 @@ case "$p" in
   */workflows/*/runs*)
     n=$(cat "$STATE/poll" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > "$STATE/poll"
     if [ -f "$FIXTURES/fail-runs.$n" ]; then echo "mock: 503 Service Unavailable" >&2; exit 1; fi
-    f="$FIXTURES/runs.$n.json"; [ -f "$f" ] || f="$FIXTURES/runs.json"; cat "$f" ;;
+	    f="$FIXTURES/runs.$n.json"; [ -f "$f" ] || f="$FIXTURES/runs.json"
+	    page2="$FIXTURES/runs-page2.$n.json"; [ -f "$page2" ] || page2="$FIXTURES/runs-page2.json"
+	    if printf '%s' "$*" | grep -q -- '--slurp'; then
+	      if [ -f "$page2" ]; then jq -s '.' "$f" "$page2"; else jq -s '.' "$f"; fi
+	    else
+	      cat "$f"
+	    fi ;;
   */runs/*/jobs*)
     id=$(printf '%s' "$p" | sed -E 's#.*/runs/([0-9]+)/jobs.*#\\1#'); n=$(cat "$STATE/poll")
     f="$FIXTURES/jobs-$id.$n.json"; [ -f "$f" ] || f="$FIXTURES/jobs-$id.json"
@@ -1938,6 +1958,49 @@ esac
 	assert.equal(result.status, 0, result.stdout + result.stderr);
 	assert.match(result.stdout, /slot is free after \d+s/);
 	assert.doesNotMatch(result.stdout, /queued behind/);
+
+	// A rerun keeps its original ID but gets a new run_started_at. A lower-ID
+	// attempt that started after us is newer and must wait on us.
+	result = drive({
+		slot: '🍎 iOS (phone)',
+		prefix: '🍎 iOS (',
+		fixtures: {
+			'runs.json': runs(run(400, 'in_progress', 10), run(ME)),
+			'jobs-400.json': jobs(job('🍎 iOS (phone)', 'in_progress')),
+		},
+		env: giveUp,
+	});
+	assert.equal(result.status, 0, result.stdout + result.stderr);
+	assert.doesNotMatch(result.stdout, /runs\/400/);
+
+	// Conversely, an earlier-started attempt blocks even when its immutable run
+	// ID is numerically higher than ours.
+	result = drive({
+		slot: '🍎 iOS (phone)',
+		prefix: '🍎 iOS (',
+		fixtures: {
+			'runs.json': runs(run(700, 'in_progress', 200), run(ME)),
+			'jobs-700.json': jobs(job('🍎 iOS (phone)', 'in_progress')),
+		},
+		env: giveUp,
+	});
+	assert.equal(result.status, 1, result.stdout + result.stderr);
+	assert.match(result.stdout, /runs\/700/);
+
+	// An active blocker beyond the first 100 workflow runs still participates
+	// in FIFO ordering; the fake exposes page two only to --paginate --slurp.
+	result = drive({
+		slot: '🍎 iOS (phone)',
+		prefix: '🍎 iOS (',
+		fixtures: {
+			'runs.json': runs(run(ME)),
+			'runs-page2.json': runs(run(400)),
+			'jobs-400.json': jobs(job('🍎 iOS (phone)', 'in_progress')),
+		},
+		env: giveUp,
+	});
+	assert.equal(result.status, 1, result.stdout + result.stderr);
+	assert.match(result.stdout, /runs\/400/);
 
 	// An older run's same-name job blocks until it completes; the wait names
 	// the run, and the second poll releases us.
