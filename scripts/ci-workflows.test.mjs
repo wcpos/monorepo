@@ -2183,3 +2183,105 @@ test('the Android emulator resolves DNS through public resolvers and proves conn
 	// ONE line: the emulator-runner action executes the script line by line.
 	assert.doesNotMatch(lines[guard], /\\$/);
 });
+
+test('the iOS step retries flow 01 when the driver went blind mid-flow', () => {
+	// Third driver shape (runs 33327826137 / 33327340303 / 33327456369): commands
+	// run, then assertions time out on elements the screenshot shows rendered,
+	// with dozens of xcTestDriverStatusCheck [Failed] refusals in the log. Flow 01
+	// starts with clearState, so one retry cannot double-apply state.
+	const step = findStep(readWorkflow('e2e-native.yml'), 'ios', '📱 Run Maestro suite on simulator');
+
+	const dir = mkdtempSync(path.join(tmpdir(), 'maestro-blind-'));
+	try {
+		mkdirSync(path.join(dir, 'apps/main/.maestro/flows'), { recursive: true });
+		writeFileSync(path.join(dir, 'apps/main/.maestro/flows/01-clean-launch-connect.yml'), '');
+		mkdirSync(path.join(dir, 'bin'));
+		const refusals = Array.from(
+			{ length: 12 },
+			() =>
+				'echo "[ INFO] xcuitest.installer.LocalXCTestInstaller.xcTestDriverStatusCheck: [Failed] Perform XCUITest driver status check"'
+		);
+		writeFileSync(
+			path.join(dir, 'bin/maestro'),
+			[
+				'#!/bin/sh',
+				'C="$TMPDIR_COUNTER"',
+				'if [ -f "$C" ]; then exit 0; fi',
+				'touch "$C"',
+				...refusals,
+				'echo "Assertion is false: id: store-url-input is visible"',
+				'exit 1',
+				'',
+			].join('\n')
+		);
+		spawnSync('chmod', ['+x', path.join(dir, 'bin/maestro')]);
+
+		const result = runShell(step.run, {
+			cwd: dir,
+			env: {
+				PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`,
+				MAESTRO_UDID: 'fake',
+				TMPDIR_COUNTER: path.join(dir, 'called-once'),
+			},
+		});
+
+		assert.equal(
+			result.status,
+			0,
+			`the blind-driver retry did not fire for flow 01: ${result.stdout}${result.stderr}`
+		);
+		assert.match(result.stdout, /driver went blind mid-flow \(12 status-check refusals\)/);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test('the blind-driver retry never touches a stateful later flow', () => {
+	// The same signature on any flow after 01 must stay red: those flows carry
+	// on-device state and are not safely repeatable.
+	const step = findStep(readWorkflow('e2e-native.yml'), 'ios', '📱 Run Maestro suite on simulator');
+
+	const dir = mkdtempSync(path.join(tmpdir(), 'maestro-blind-later-'));
+	try {
+		mkdirSync(path.join(dir, 'apps/main/.maestro/flows'), { recursive: true });
+		writeFileSync(path.join(dir, 'apps/main/.maestro/flows/05-drawer-navigation.yml'), '');
+		mkdirSync(path.join(dir, 'bin'));
+		const refusals = Array.from(
+			{ length: 12 },
+			() =>
+				'echo "[ INFO] xcuitest.installer.LocalXCTestInstaller.xcTestDriverStatusCheck: [Failed] Perform XCUITest driver status check"'
+		);
+		writeFileSync(
+			path.join(dir, 'bin/maestro'),
+			[
+				'#!/bin/sh',
+				'C="$TMPDIR_COUNTER"',
+				'if [ -f "$C" ]; then exit 0; fi',
+				'touch "$C"',
+				...refusals,
+				'echo "Assertion is false: id: drawer-nav is visible"',
+				'exit 1',
+				'',
+			].join('\n')
+		);
+		spawnSync('chmod', ['+x', path.join(dir, 'bin/maestro')]);
+
+		const result = runShell(step.run, {
+			cwd: dir,
+			env: {
+				PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`,
+				MAESTRO_UDID: 'fake',
+				TMPDIR_COUNTER: path.join(dir, 'called-once'),
+			},
+		});
+
+		assert.notEqual(
+			result.status,
+			0,
+			'a stateful flow with the blind-driver signature was retried — it must stay red'
+		);
+		assert.doesNotMatch(result.stdout, /driver went blind mid-flow/);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
