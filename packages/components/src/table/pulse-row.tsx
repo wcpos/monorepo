@@ -26,9 +26,16 @@ type PulseTableRowProps<
 	ref?: React.Ref<PulseTableRowRef>;
 };
 
+/**
+ * `pulseRemove`'s completion callback. It may return a promise — the row uses it
+ * to know when the mutation it committed has settled — and it owns reporting its
+ * own failures: a rejection is passed through, never swallowed here.
+ */
+type PulseRemoveCallback = () => void | Promise<unknown>;
+
 interface PulseTableRowRef {
 	pulseAdd: (callback?: () => void) => void;
-	pulseRemove: (callback?: () => void) => void;
+	pulseRemove: (callback?: PulseRemoveCallback) => void;
 }
 
 /**
@@ -77,24 +84,33 @@ function PulseTableRow<TData extends RowData, TFeatures extends TableFeatures>({
 	 * the cart's remove button did — the row pulsed red forever and only removed
 	 * itself 400ms after the cashier stopped clicking (wcpos/monorepo#1693).
 	 *
-	 * So: the first `pulseRemove` latches, later calls are no-ops, and the latch
-	 * is released only if the pulse is cancelled by something else (an add pulse,
-	 * say) without ever committing — otherwise the row would be stuck unremovable.
+	 * So: the first `pulseRemove` latches and later calls are no-ops. The latch is
+	 * released again once the row demonstrably did not go away — the pulse was
+	 * cancelled before it could commit, or the committed mutation settled without
+	 * unmounting the row (a failed write leaves the line in the cart, and it must
+	 * not be stuck unremovable for the rest of the session).
 	 */
 	const removePulseActive = React.useRef(false);
-	const removePulseCallback = React.useRef<(() => void) | null>(null);
+	const removePulseCallback = React.useRef<PulseRemoveCallback | null>(null);
 
 	const settleRemovePulse = React.useCallback((finished: boolean) => {
 		const callback = removePulseCallback.current;
 		removePulseCallback.current = null;
 
 		if (!finished) {
+			// Cancelled before it could commit: nothing was removed.
 			removePulseActive.current = false;
 			return;
 		}
 
-		// Stay latched: the removal has been committed and must never run twice.
-		callback?.();
+		// Committed. Hold the latch until the mutation settles so a press landing
+		// mid-flight can't commit it twice, then release it: on success the row
+		// unmounts and the latch is moot, and on failure the row is still here and
+		// has to stay removable. A rejection keeps propagating — the callback owns
+		// reporting it.
+		void Promise.resolve(callback?.()).finally(() => {
+			removePulseActive.current = false;
+		});
 	}, []);
 
 	React.useImperativeHandle(
@@ -114,7 +130,7 @@ function PulseTableRow<TData extends RowData, TFeatures extends TableFeatures>({
 					})
 				);
 			},
-			pulseRemove(callback?: () => void) {
+			pulseRemove(callback?: PulseRemoveCallback) {
 				if (removePulseActive.current) {
 					return;
 				}

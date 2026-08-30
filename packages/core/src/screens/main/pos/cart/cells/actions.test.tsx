@@ -7,16 +7,16 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { Actions } from './actions';
 
-const mockRemoveLineItem = jest.fn();
+const mockRemoveLineItem = jest.fn<Promise<void>, [string, string]>();
 
 jest.mock('../../hooks/use-remove-line-item', () => ({
 	useRemoveLineItem: () => ({ removeLineItem: mockRemoveLineItem }),
 }));
 
 /**
- * A stand-in for IconButton that stays pressable even once `disabled` is set, so
- * the test exercises the cell's own guard rather than the DOM's — on native a
- * press can still land while React is re-rendering.
+ * A stand-in for IconButton that is always pressable. The cell must guard itself
+ * rather than lean on the `disabled` prop: on Android, removing `disabled` once
+ * it has been set does not reliably re-enable the native view.
  */
 jest.mock('@wcpos/components/icon-button', () => {
 	const actualReact = jest.requireActual<typeof import('react')>('react');
@@ -30,6 +30,11 @@ jest.mock('@wcpos/components/icon-button', () => {
 			}),
 	};
 });
+
+/** The pulse callback the cell handed to `pulseRemove` for press number `n`. */
+function committedRemoval(pulseRemove: jest.Mock, n = 0) {
+	return pulseRemove.mock.calls[n][0] as () => void | Promise<unknown>;
+}
 
 function renderActions() {
 	const pulseRemove = jest.fn();
@@ -48,11 +53,12 @@ function renderActions() {
 }
 
 beforeEach(() => {
-	mockRemoveLineItem.mockClear();
+	mockRemoveLineItem.mockReset();
+	mockRemoveLineItem.mockResolvedValue(undefined);
 });
 
 describe('cart line Actions', () => {
-	it('lets the first press win when the remove button is hammered (#1693)', () => {
+	it('lets the first press win when the remove button is hammered (#1693)', async () => {
 		const { pulseRemove, button } = renderActions();
 
 		// Three presses inside the 400ms pulse. Before the fix every press
@@ -63,15 +69,46 @@ describe('cart line Actions', () => {
 		fireEvent.click(button);
 
 		expect(pulseRemove).toHaveBeenCalledTimes(1);
-		expect(button.getAttribute('data-disabled')).toBe('true');
 
 		// The pulse completes and commits the removal exactly once — a second
 		// removal would find no matching uuid and report a stale cart line.
-		act(() => {
-			(pulseRemove.mock.calls[0][0] as () => void)();
+		await act(async () => {
+			await committedRemoval(pulseRemove)();
 		});
 
 		expect(mockRemoveLineItem).toHaveBeenCalledTimes(1);
 		expect(mockRemoveLineItem).toHaveBeenCalledWith('uuid-1', 'line_items');
+	});
+
+	it('never toggles the button `disabled` prop, which latches on Android', () => {
+		const { button } = renderActions();
+
+		fireEvent.click(button);
+
+		expect(button.getAttribute('data-disabled')).toBe('false');
+	});
+
+	it('stays pressable when the removal fails, so the cashier can try again', async () => {
+		mockRemoveLineItem.mockRejectedValue(new Error('local write failed'));
+		const { pulseRemove, button } = renderActions();
+
+		fireEvent.click(button);
+		await act(async () => {
+			await committedRemoval(pulseRemove)();
+		});
+		expect(mockRemoveLineItem).toHaveBeenCalledTimes(1);
+
+		// The line is still in the cart: a later press must start a new pulse
+		// rather than finding the row permanently latched.
+		mockRemoveLineItem.mockResolvedValue(undefined);
+		fireEvent.click(button);
+
+		expect(pulseRemove).toHaveBeenCalledTimes(2);
+
+		await act(async () => {
+			await committedRemoval(pulseRemove, 1)();
+		});
+
+		expect(mockRemoveLineItem).toHaveBeenCalledTimes(2);
 	});
 });

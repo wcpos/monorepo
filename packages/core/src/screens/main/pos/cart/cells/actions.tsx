@@ -2,8 +2,12 @@ import * as React from 'react';
 
 import { IconButton } from '@wcpos/components/icon-button';
 import type { CellContext } from '@wcpos/core/table-types';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useRemoveLineItem } from '../../hooks/use-remove-line-item';
+
+const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'remove']);
 
 interface Props {
 	uuid: string;
@@ -28,26 +32,39 @@ export function Actions({ row, table }: CellContext<Props, 'actions'>) {
 	 * completes, so a second press must not restart it (wcpos/monorepo#1693).
 	 * Latching also stops a double removal, which is not harmless here — the
 	 * second call finds no matching uuid and reports a stale cart line to the
-	 * cashier. The row unmounts once the removal lands, and `disabled` is only
-	 * ever set and never cleared, so the Android disabled-prop-removal latch
-	 * does not apply.
+	 * cashier.
+	 *
+	 * A ref rather than state + `disabled`: on Android, removing a Pressable's
+	 * `disabled` prop once it has been set does not reliably re-enable the native
+	 * view, so a latch that has to be released again must never be expressed as a
+	 * `disabled` toggle. A ref also skips the re-render entirely.
 	 */
-	const [removing, setRemoving] = React.useState(false);
+	const removing = React.useRef(false);
 
 	const handleRemoveLineItem = React.useCallback(() => {
-		if (removing) {
+		if (removing.current) {
 			return;
 		}
 		const rowRef = meta.rowRefs.current?.get(uuid);
 		if (rowRef) {
-			setRemoving(true);
-			rowRef.pulseRemove(() => {
-				void removeLineItem(uuid, type);
-			});
+			removing.current = true;
+			rowRef.pulseRemove(() =>
+				removeLineItem(uuid, type).catch((error: unknown) => {
+					// The removal didn't land, so the line is still in the cart and the
+					// cashier has to be able to try again. `localPatch` has already
+					// logged and toasted every failure it handles — a rejection getting
+					// this far is unexpected, so log it here without a second toast.
+					removing.current = false;
+					cartLogger.error('Cart line removal failed', {
+						code: ERROR_CODES.CART_UPDATE_FAILED,
+						context: { uuid, itemType: type, error: getErrorMessage(error) },
+					});
+				})
+			);
 		}
 		// meta.rowRefs is a stable ref; its `.current` is read at call time, so it
 		// is intentionally not a dependency.
-	}, [removeLineItem, removing, type, uuid]);
+	}, [removeLineItem, type, uuid]);
 
 	/**
 	 * Add-pulses are triggered by the cart table's detection effect (which owns
@@ -58,7 +75,6 @@ export function Actions({ row, table }: CellContext<Props, 'actions'>) {
 			name="circleXmark"
 			variant="destructive"
 			size="4xl"
-			disabled={removing}
 			onPress={handleRemoveLineItem}
 		/>
 	);

@@ -67,6 +67,13 @@ function finishPendingAnimations() {
 	});
 }
 
+/** Let promise continuations queued by a settled pulse run. */
+async function flushMicrotasks() {
+	await act(async () => {
+		await Promise.resolve();
+	});
+}
+
 function renderRow() {
 	const ref = React.createRef<PulseTableRowRef>();
 	const { container } = render(
@@ -121,21 +128,42 @@ describe('PulseTableRow', () => {
 			expect(removeLine).toHaveBeenCalledTimes(1);
 		});
 
-		it('stays latched after the removal has been committed', () => {
+		it('stays latched while the committed removal is still in flight', async () => {
 			const { ref } = renderRow();
-			const removeLine = jest.fn();
+			// A removal that has been committed but has not settled yet.
+			const removeLine = jest.fn(() => new Promise<void>(() => {}));
 
 			act(() => ref.current!.pulseRemove(removeLine));
 			finishPendingAnimations();
 			expect(removeLine).toHaveBeenCalledTimes(1);
 
-			// A late press must not run the mutation a second time: removing an
-			// already-removed uuid reports a stale cart line to the cashier.
+			await flushMicrotasks();
+
+			// A press landing mid-flight must not run the mutation a second time:
+			// removing an already-removed uuid reports a stale cart line.
 			act(() => ref.current!.pulseRemove(removeLine));
 			finishPendingAnimations();
 
 			expect(removePulses()).toHaveLength(1);
 			expect(removeLine).toHaveBeenCalledTimes(1);
+		});
+
+		it('releases the latch when the committed removal rejects', async () => {
+			const { ref } = renderRow();
+			// The write failed, so the line is still in the cart. The caller owns
+			// reporting the failure, hence the handled rejection here.
+			const removeLine = jest.fn(() => Promise.reject(new Error('write failed')).catch(() => {}));
+
+			act(() => ref.current!.pulseRemove(removeLine));
+			finishPendingAnimations();
+			await flushMicrotasks();
+
+			// The row is still on screen and must not be stuck unremovable.
+			act(() => ref.current!.pulseRemove(removeLine));
+			expect(removePulses()).toHaveLength(2);
+
+			finishPendingAnimations();
+			expect(removeLine).toHaveBeenCalledTimes(2);
 		});
 
 		it('releases the latch when a pulse is cancelled without committing', () => {
