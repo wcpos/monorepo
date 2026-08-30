@@ -65,7 +65,22 @@ function runLocalNative({ platform, device = 'phone', timestamp = '20260829T1200
 	};
 	command('curl', 'echo packager-status:running');
 	command('date', 'echo "$FIXED_TIMESTAMP"');
-	command('maestro', 'echo "maestro $*" >> "$COMMAND_TRACE"');
+	// The runner starts log capture in the BACKGROUND and its EXIT trap kills that
+	// process the moment maestro returns — so on a loaded runner the capture stub can
+	// be killed before it ever appends its line, and the trace is missing it FOREVER
+	// (waiting after spawnSync cannot recover it: the runner already reaped the child).
+	// maestro is the runner's foreground, so block here until the capture has recorded
+	// itself; that is the only point at which waiting still keeps the child alive.
+	command(
+		'maestro',
+		`echo "maestro $*" >> "$COMMAND_TRACE"
+i=0
+while [ "$i" -lt 100 ]; do
+	grep -q -- "$CAPTURE_TRACE_PATTERN" "$COMMAND_TRACE" && break
+	sleep 0.05
+	i=$((i + 1))
+done`
+	);
 	command(
 		'xcrun',
 		`echo "xcrun $*" >> "$COMMAND_TRACE"
@@ -98,6 +113,7 @@ fi`
 			encoding: 'utf8',
 			env: {
 				...process.env,
+				CAPTURE_TRACE_PATTERN: platform === 'ios' ? 'log stream' : 'logcat -v threadtime',
 				COMMAND_TRACE: trace,
 				FIXED_TIMESTAMP: timestamp,
 				PATH: `${bin}:${process.env.PATH}`,
