@@ -49,9 +49,14 @@ env:
         id: "pos-resize-handle"
     commands:
       # Regression check for #1620: tablet launch must render the full cart column,
-      # not the pre-layout 60:1 sliver.
+      # not the pre-layout 60:1 sliver. The referent is the cart column's HEADER,
+      # not the totals: this flow runs after 08 voided the current order, so the
+      # relaunch lands on a fresh EMPTY order (CurrentOrderProvider falls back to
+      # `newOrder` when the remembered uuid is gone) and an empty cart has no
+      # subtotal row — run 33285279390's iOS tablet passed 01–08 and died here
+      # on `cart-subtotal`. The customer chip is rendered for every order.
       - assertVisible:
-          id: "cart-subtotal"
+          id: "cart-customer-name"
       - assertVisible:
           id: "pos-resize-handle"
           text: "Resize handle, 60%"
