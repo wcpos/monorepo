@@ -1746,7 +1746,12 @@ test('the Android step retries a transient offline ADB transport once', () => {
 		writeFileSync(path.join(dir, '.maestro/tests/first-run/maestro.log'), 'device offline\n');
 		writeFileSync(path.join(dir, '.maestro/tests/exit_code'), '1\n');
 		mkdirSync(path.join(dir, 'bin'));
-		writeFileSync(path.join(dir, 'bin/adb'), '#!/bin/sh\nexit 0\n');
+		// The stable-transport retry polls `adb get-state`; a silent fake would
+		// spin the full 3-minute bound, so answer "device" like a healthy box.
+		writeFileSync(
+			path.join(dir, 'bin/adb'),
+			'#!/bin/sh\nif [ "$1" = get-state ]; then echo device; fi\nexit 0\n'
+		);
 		writeFileSync(
 			path.join(dir, 'bin/maestro'),
 			'#!/bin/sh\necho called >> "$MAESTRO_RETRY_COUNTER"\nexit 0\n'
@@ -1789,7 +1794,12 @@ test('the Android step does not retry a successful run with a stale offline log'
 		writeFileSync(path.join(dir, '.maestro/tests/first-run/maestro.log'), 'device offline\n');
 		writeFileSync(path.join(dir, '.maestro/tests/exit_code'), '0\n');
 		mkdirSync(path.join(dir, 'bin'));
-		writeFileSync(path.join(dir, 'bin/adb'), '#!/bin/sh\nexit 0\n');
+		// The stable-transport retry polls `adb get-state`; a silent fake would
+		// spin the full 3-minute bound, so answer "device" like a healthy box.
+		writeFileSync(
+			path.join(dir, 'bin/adb'),
+			'#!/bin/sh\nif [ "$1" = get-state ]; then echo device; fi\nexit 0\n'
+		);
 		writeFileSync(
 			path.join(dir, 'bin/maestro'),
 			'#!/bin/sh\necho called >> "$MAESTRO_RETRY_COUNTER"\nexit 0\n'

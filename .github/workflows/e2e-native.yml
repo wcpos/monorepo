@@ -562,7 +562,15 @@ jobs:
             # the APK install (run 33237853311: clearState succeeded, then the
             # deep link failed with "device offline"). Retry only that exact
             # infrastructure signature; assertions and app failures stay red.
-            if [ "$(cat "$HOME/.maestro/tests/exit_code")" -ne 0 ] && grep -Rqs 'device offline' "$HOME/.maestro/tests"/*/maestro.log; then adb reconnect offline; timeout 60 adb wait-for-device; adb reverse tcp:8081 tcp:8081; { maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" apps/main/.maestro; echo $? > ~/.maestro/tests/exit_code; } 2>&1 | tee -a ~/.maestro/tests/suite.log; fi
+            # The retry must wait for a STABLE transport, not a single
+            # wait-for-device: run 33334403960 flapped (adb reverse --list
+            # answered at 21:04:35 while maestro got "device offline" at
+            # 21:04:18) and the old one-shot wait re-ran maestro straight into
+            # the flap — both attempts died at the first openLink 28 s apart.
+            # get-state must answer "device" three polls in a row (5 s apart,
+            # ≤3 min, kill-server escalation halfway); every poll is logged to
+            # adb-state.log in the artifact. ONE LINE, per the rule above.
+            if [ "$(cat "$HOME/.maestro/tests/exit_code")" -ne 0 ] && grep -Rqs 'device offline' "$HOME/.maestro/tests"/*/maestro.log; then adb reconnect offline; stable=0; i=0; while [ "$stable" -lt 3 ] && [ "$i" -lt 36 ]; do i=$((i+1)); s=$(adb get-state 2>/dev/null || echo none); echo "$(date -u +%FT%TZ) poll $i state=${s:-none}" >> ~/.maestro/tests/adb-state.log; if [ "${s:-none}" = "device" ]; then stable=$((stable+1)); else stable=0; fi; if [ "$i" -eq 18 ] && [ "$stable" -eq 0 ]; then adb kill-server; adb start-server; adb reconnect offline; fi; [ "$stable" -ge 3 ] || sleep 5; done; adb reverse tcp:8081 tcp:8081; { maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" apps/main/.maestro; echo $? > ~/.maestro/tests/exit_code; } 2>&1 | tee -a ~/.maestro/tests/suite.log; fi
             touch ~/.maestro/tests/stop-screenrecord; RECORDER_LOOP_PID=$(cat ~/.maestro/tests/screenrecord-loop.pid); SCREENRECORD_SIGNALLED=0; attempts=0; while kill -0 "$RECORDER_LOOP_PID" 2>/dev/null; do if [ "$SCREENRECORD_SIGNALLED" -eq 0 ]; then SCREENRECORD_PID=$(adb shell pidof screenrecord 2>/dev/null | awk '{ print $1 }'); [ -z "$SCREENRECORD_PID" ] || { adb shell kill -2 "$SCREENRECORD_PID" >/dev/null 2>&1 && SCREENRECORD_SIGNALLED=1 || true; }; fi; attempts=$((attempts + 1)); [ "$attempts" -lt 30 ] || { echo "screenrecord did not finalize within 30 seconds" >&2; exit 1; }; sleep 1; done
             exit "$(cat ~/.maestro/tests/exit_code)"
         env:
