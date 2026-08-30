@@ -62,6 +62,17 @@ test('a re-transformed module (new object, same key) invalidates', async () => {
 	assert.equal(h.calls(), 2);
 });
 
+test('a re-keyed module (same object, new key) invalidates', async () => {
+	const h = harness();
+	const graph = makeGraph(['a.js', 'b.js']);
+	const module = graph.dependencies.get('b.js');
+	await h.serialize(graph);
+	graph.dependencies.delete('b.js');
+	graph.dependencies.set('renamed.js', module);
+	await h.serialize(graph);
+	assert.equal(h.calls(), 2);
+});
+
 test('an added or deleted module invalidates', async () => {
 	const h = harness();
 	const graph = makeGraph(['a.js']);
@@ -105,6 +116,26 @@ test('different serializer options are different entries; functions are ignored 
 	assert.equal(h.calls(), 3, 'a different entry point must miss');
 });
 
+test('a changed EXPO_PUBLIC environment value invalidates a development bundle', async () => {
+	const h = harness();
+	const graph = makeGraph(['a.js']);
+	const name = 'EXPO_PUBLIC_BUNDLE_SERIALIZER_CACHE_TEST';
+	const previous = process.env[name];
+
+	try {
+		process.env[name] = 'first';
+		await h.serialize(graph, [], 'entry.js', { dev: true });
+		await h.serialize(graph, [], 'entry.js', { dev: true });
+		assert.equal(h.calls(), 1);
+		process.env[name] = 'second';
+		await h.serialize(graph, [], 'entry.js', { dev: true });
+		assert.equal(h.calls(), 2);
+	} finally {
+		if (previous === undefined) delete process.env[name];
+		else process.env[name] = previous;
+	}
+});
+
 test('unrelated graphs do not share entries', async () => {
 	const h = harness();
 	await h.serialize(makeGraph(['a.js']));
@@ -123,6 +154,19 @@ test(`at most ${MAX_CACHED_BUNDLES} option variants are kept per graph, oldest e
 	await h.serialize(graph, [], 'entry.js', opts(MAX_CACHED_BUNDLES)); // newest: hit
 	assert.equal(h.calls(), MAX_CACHED_BUNDLES + 1);
 	await h.serialize(graph, [], 'entry.js', opts(0)); // oldest: evicted, miss
+	assert.equal(h.calls(), MAX_CACHED_BUNDLES + 2);
+});
+
+test(`at most ${MAX_CACHED_BUNDLES} bundles are kept globally, least recently used evicted first`, async () => {
+	const h = harness();
+	const graphs = Array.from({ length: MAX_CACHED_BUNDLES + 1 }, (_, n) => makeGraph([`${n}.js`]));
+	for (let n = 0; n < MAX_CACHED_BUNDLES; n++) await h.serialize(graphs[n]);
+	await h.serialize(graphs[0]); // refresh the oldest entry
+	assert.equal(h.calls(), MAX_CACHED_BUNDLES);
+	await h.serialize(graphs[MAX_CACHED_BUNDLES]); // evicts graph 1, not refreshed graph 0
+	await h.serialize(graphs[0]);
+	assert.equal(h.calls(), MAX_CACHED_BUNDLES + 1);
+	await h.serialize(graphs[1]);
 	assert.equal(h.calls(), MAX_CACHED_BUNDLES + 2);
 });
 

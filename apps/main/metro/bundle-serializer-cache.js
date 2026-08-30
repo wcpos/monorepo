@@ -20,21 +20,28 @@
 //
 // Keyed by graph identity + the serializer's non-function options (which
 // embed the request's sourceUrl, so a different query string is a different
-// entry). Bounded so a few platform/option variants cannot pin more than a
-// handful of 29 MB strings.
+// entry) + public environment values in development. A global LRU bounds the
+// number of 29 MB strings across all platform/entry-point graphs.
 
 const MAX_CACHED_BUNDLES = 4;
 
 function optionsKey(entryPoint, options) {
-	return JSON.stringify([entryPoint, options], (_key, value) =>
+	const publicEnv = options.dev
+		? Object.keys(process.env)
+				.filter((key) => key.startsWith('EXPO_PUBLIC_'))
+				.sort()
+				.map((key) => [key, process.env[key]])
+		: null;
+	return JSON.stringify([entryPoint, options, publicEnv], (_key, value) =>
 		typeof value === 'function' ? undefined : value
 	);
 }
 
 function fingerprint(preModules, graph) {
-	const modules = new Array(graph.dependencies.size);
+	const modules = new Array(graph.dependencies.size * 2);
 	let i = 0;
-	for (const module of graph.dependencies.values()) {
+	for (const [key, module] of graph.dependencies) {
+		modules[i++] = key;
 		modules[i++] = module;
 	}
 	return { preModules: Array.from(preModules), modules };
@@ -59,7 +66,7 @@ function resultSize(result) {
 }
 
 /**
- * Wrap `config.serializer.customSerializer` with a per-graph output cache.
+ * Wrap `config.serializer.customSerializer` with a bounded output cache.
  *
  * @param {object} config Metro config whose `serializer.customSerializer` is set.
  * @param {{ log?: (line: string) => void }} [hooks]
@@ -72,30 +79,29 @@ function withBundleSerializerCache(config, { log = console.log } = {}) {
 			'withBundleSerializerCache: config.serializer.customSerializer must be set first'
 		);
 	}
-	// graph -> Map<optionsKey, { fingerprint, result, size }>, insertion-ordered for eviction.
-	const cache = new WeakMap();
+	// { graph, key, fingerprint, result, size }[], least recently used first.
+	const cache = [];
 
 	config.serializer.customSerializer = async (entryPoint, preModules, graph, options) => {
 		const key = optionsKey(entryPoint, options);
 		const current = fingerprint(preModules, graph);
-		let perGraph = cache.get(graph);
-		const hit = perGraph && perGraph.get(key);
+		const hitIndex = cache.findIndex((entry) => entry.graph === graph && entry.key === key);
+		const hit = cache[hitIndex];
 		if (hit && sameFingerprint(hit.fingerprint, current)) {
+			cache.splice(hitIndex, 1);
+			cache.push(hit);
 			log(`[bundle-cache] hit (${hit.size} bytes)`);
 			return hit.result;
 		}
 		const startedAt = Date.now();
 		const result = await baseSerializer(entryPoint, preModules, graph, options);
 		const size = resultSize(result);
-		if (!perGraph) {
-			perGraph = new Map();
-			cache.set(graph, perGraph);
+		const staleIndex = cache.findIndex((entry) => entry.graph === graph && entry.key === key);
+		if (staleIndex !== -1) cache.splice(staleIndex, 1);
+		while (cache.length >= MAX_CACHED_BUNDLES) {
+			cache.shift();
 		}
-		perGraph.delete(key);
-		while (perGraph.size >= MAX_CACHED_BUNDLES) {
-			perGraph.delete(perGraph.keys().next().value);
-		}
-		perGraph.set(key, { fingerprint: current, result, size });
+		cache.push({ graph, key, fingerprint: current, result, size });
 		log(`[bundle-cache] miss: serialised ${size} bytes in ${Date.now() - startedAt}ms`);
 		return result;
 	};
