@@ -1,28 +1,45 @@
 diff --git a/dist/recyclerview/layout-managers/LayoutManager.js b/dist/recyclerview/layout-managers/LayoutManager.js
-index 51710aaafe522a52f1c3212da3fe303b338d5dd5..e784e41ff1b00c51d4b7262caa2d71c0ac19cd73 100644
+index 51710aaafe522a52f1c3212da3fe303b338d5dd5..4e9ac8257e3ccdbc637cd627aae7d80788feb17f 100644
 --- a/dist/recyclerview/layout-managers/LayoutManager.js
 +++ b/dist/recyclerview/layout-managers/LayoutManager.js
-@@ -132,6 +132,9 @@ var RVLayoutManager = /** @class */ (function () {
+@@ -128,6 +128,17 @@ var RVLayoutManager = /** @class */ (function () {
+         var _a;
+         this.maxItemsToProcess = Math.max(this.maxItemsToProcess, layoutInfo.length * 10);
+         var minRecomputeIndex = Number.MAX_VALUE;
++        // `layoutInfo` carries one entry per ViewHolder still mounted, so once the data
++        // shrinks it can name indices that no longer exist, and `processLayoutInfo` then
++        // writes `this.layouts[index].width` on `undefined`. flash-list 2.2.2 filters these
++        // out, but only inside the `layouts.length > totalItemCount` branch below. In the
++        // real shrink path that branch is already spent: `RecyclerViewManager.processDataUpdate()`
++        // runs `modifyLayout([], newLength)` during render, so by the time the layout effect
++        // reports the stale measurements the array is already trimmed, the branch is skipped
++        // and upstream still throws (verified against 2.3.2). Filtering unconditionally covers
++        // both orderings: an index >= totalItemCount is invalid in every branch, and the growth
++        // branch below materializes every index < totalItemCount before `processLayoutInfo` runs.
++        layoutInfo = layoutInfo.filter(function (info) { return info.index < totalItemCount; });
+         if (this.layouts.length > totalItemCount) {
              this.layouts.length = totalItemCount;
              this.spanTracker.length = totalItemCount;
-             minRecomputeIndex = totalItemCount - 1; // <0 gets skipped so it's safe to set to totalItemCount - 1
-+            // layoutInfo may contain stale indices from ViewHolders that were rendered
-+            // before the data shrunk. Filter out any indices that are now out of bounds.
-+            layoutInfo = layoutInfo.filter(function (info) { return info.index < totalItemCount; });
-         }
-         // update average windows
-         minRecomputeIndex = Math.min(minRecomputeIndex, this.computeEstimatesAndMinMaxChangedLayout(layoutInfo));
 diff --git a/src/recyclerview/layout-managers/LayoutManager.ts b/src/recyclerview/layout-managers/LayoutManager.ts
-index 95535f6432a351d9d669578dcb2fe9a583b19982..35913e92a57b28745412bfe57961288b2a6ce2bc 100644
+index 95535f6432a351d9d669578dcb2fe9a583b19982..27ccdc3a1c09d38f8460a897738cd0f9df410934 100644
 --- a/src/recyclerview/layout-managers/LayoutManager.ts
 +++ b/src/recyclerview/layout-managers/LayoutManager.ts
-@@ -182,6 +182,9 @@ export abstract class RVLayoutManager {
+@@ -178,6 +178,18 @@ export abstract class RVLayoutManager {
+     );
+     let minRecomputeIndex = Number.MAX_VALUE;
+ 
++    // `layoutInfo` carries one entry per ViewHolder still mounted, so once the data
++    // shrinks it can name indices that no longer exist, and `processLayoutInfo` then
++    // writes `this.layouts[index].width` on `undefined`. flash-list 2.2.2 filters these
++    // out, but only inside the `layouts.length > totalItemCount` branch below. In the
++    // real shrink path that branch is already spent: `RecyclerViewManager.processDataUpdate()`
++    // runs `modifyLayout([], newLength)` during render, so by the time the layout effect
++    // reports the stale measurements the array is already trimmed, the branch is skipped
++    // and upstream still throws (verified against 2.3.2). Filtering unconditionally covers
++    // both orderings: an index >= totalItemCount is invalid in every branch, and the growth
++    // branch below materializes every index < totalItemCount before `processLayoutInfo` runs.
++    layoutInfo = layoutInfo.filter((info) => info.index < totalItemCount);
++
+     if (this.layouts.length > totalItemCount) {
        this.layouts.length = totalItemCount;
        this.spanTracker.length = totalItemCount;
-       minRecomputeIndex = totalItemCount - 1; // <0 gets skipped so it's safe to set to totalItemCount - 1
-+      // layoutInfo may contain stale indices from ViewHolders that were rendered
-+      // before the data shrunk. Filter out any indices that are now out of bounds.
-+      layoutInfo = layoutInfo.filter((info) => info.index < totalItemCount);
-     }
-     // update average windows
-     minRecomputeIndex = Math.min(

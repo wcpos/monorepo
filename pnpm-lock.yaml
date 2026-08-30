@@ -34,7 +34,7 @@ overrides:
   '@svgr/plugin-svgo>svgo': '>=3.3.4 <4'
 
 patchedDependencies:
-  '@shopify/flash-list@2.0.2': 12448453be05fb9fc56a03fcbc7e6a2a8943652734692f27d3c0a5185af3ce52
+  '@shopify/flash-list@2.0.2': a8f3a5f9d2c265ba4d50fb3ab7d6948156e8190623afcd4be0c4b78816214ed6
   react-native-esc-pos-printer@4.5.0: f5c6fa6bddf06b2e5934df4919d7e5e39f09f89e9d5b7e30174e799bfda31faf
 
 importers:
