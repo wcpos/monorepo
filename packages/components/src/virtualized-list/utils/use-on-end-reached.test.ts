@@ -158,6 +158,35 @@ describe('useOnEndReached', () => {
 		expect(onEndReached).not.toHaveBeenCalled();
 	});
 
+	it('rechecks an empty list when its end-reached handler changes', () => {
+		const firstHandler = jest.fn();
+		const settledHandler = jest.fn();
+		const scrollElement = createMockScrollElement({
+			scrollTop: 0,
+			clientHeight: 500,
+			scrollHeight: 500,
+		});
+
+		const { rerender } = renderHook(
+			({ onEndReached }) =>
+				useOnEndReached({
+					scrollElement,
+					horizontal: false,
+					onEndReached,
+					onEndReachedThreshold: 0.5,
+					data: [],
+					totalSize: 0,
+				}),
+			{ initialProps: { onEndReached: firstHandler } }
+		);
+
+		expect(firstHandler).toHaveBeenCalledTimes(1);
+
+		rerender({ onEndReached: settledHandler });
+
+		expect(settledHandler).toHaveBeenCalledTimes(1);
+	});
+
 	it.each([
 		['vertical', false, { clientHeight: 0, scrollHeight: 0 }],
 		['horizontal', true, { clientWidth: 0, scrollWidth: 0 }],

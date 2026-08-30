@@ -238,7 +238,12 @@ export function searchLaneQueryKey(
 	) {
 		return null;
 	}
-	const encodedTerm = encodeURIComponent(term);
+	let encodedTerm: string;
+	try {
+		encodedTerm = encodeURIComponent(term);
+	} catch {
+		return null;
+	}
 	return requirement.collection === 'customers'
 		? `customers:search=${encodedTerm}:limit=${limit}`
 		: `${requirement.collection}:search:${encodedTerm}`;

@@ -74,4 +74,16 @@ describe('RequirementHandle.queryKey', () => {
 			})
 		).toBe('customers:search=Ada%20Lovelace:limit=40');
 	});
+
+	it('does not throw synchronously for a malformed search term', () => {
+		expect(
+			queryKeyFor({
+				id: 'products-search-malformed',
+				collection: 'products',
+				kind: 'search',
+				term: '\ud800',
+				limit: 10,
+			})
+		).toBeNull();
+	});
 });

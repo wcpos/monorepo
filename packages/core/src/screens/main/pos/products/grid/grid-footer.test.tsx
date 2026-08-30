@@ -4,7 +4,7 @@
 import * as React from 'react';
 
 import { render, screen } from '@testing-library/react';
-import { BehaviorSubject, of } from 'rxjs';
+import { BehaviorSubject } from 'rxjs';
 
 import { QueryStateProvider } from '../../../../../query/query-state-store';
 import { ProductGridFooter } from './grid-footer';
@@ -77,18 +77,11 @@ describe('ProductGridFooter', () => {
 	});
 
 	it('falls back to the short-page rule when the engine has no opinion', () => {
-		renderFooter(4, settled());
+		const short = renderFooter(4, settled());
 		expect(screen.getByTestId('pos-products-grid-end')).toBeTruthy();
 
-		render(
-			<QueryStateProvider
-				collection="products"
-				initialPageSize={10}
-				initialSort={{ field: 'name', direction: 'asc' }}
-			>
-				<ProductGridFooter binding={{ pending$: of(false), exhausted$: of(null) }} count={10} />
-			</QueryStateProvider>
-		);
-		expect(screen.getAllByTestId('pos-products-grid-end')).toHaveLength(1);
+		short.unmount();
+		renderFooter(10, settled());
+		expect(screen.queryByTestId('pos-products-grid-end')).toBeNull();
 	});
 });
