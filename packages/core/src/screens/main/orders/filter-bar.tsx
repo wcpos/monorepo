@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { ObservableResource } from 'observable-hooks';
-
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { useQueryRuntime } from '@wcpos/query';
@@ -17,6 +15,7 @@ import { StatusPill } from '../components/order/filter-bar/status-pill';
 import { StorePill } from '../components/order/filter-bar/store-pill';
 import { useEngineRecordByWooId } from '../hooks/use-engine-document';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
+import { storeListResource } from '../hooks/store-list-resource';
 
 /**
  *
@@ -44,10 +43,9 @@ export function FilterBar() {
 		void forceRefreshFilterCustomer(runtime, cashierID, 'cashier');
 	}, [cashierID, runtime]);
 
-	const storesResource = React.useMemo(
-		() => new ObservableResource(wpCredentials.populate$('stores'), (val) => !!val),
-		[wpCredentials]
-	);
+	// Held outside React on purpose — a resource rebuilt on each Suspense retry re-suspends
+	// forever. See `store-list-resource.ts`.
+	const storesResource = storeListResource(wpCredentials);
 
 	return (
 		<HStack className="w-full flex-wrap">
@@ -62,13 +60,13 @@ export function FilterBar() {
 			<Suspense>
 				<CashierPill resource={cashierResource} onMissing={refreshCashier} />
 			</Suspense>
-			<StorePill
-				resource={
-					storesResource as import('observable-hooks').ObservableResource<
-						import('@wcpos/database').StoreDocument[]
-					>
-				}
-			/>
+			{/* Its own boundary, like the two pills above: a pill still waiting for its records
+			    must never blank the screen around it. Without this the suspension escaped to
+			    expo-router's per-route boundary, whose production fallback is `null`, and the
+			    Orders body rendered empty under a painted header (CI run 33295532237). */}
+			<Suspense>
+				<StorePill resource={storesResource} />
+			</Suspense>
 			<DateRangePill />
 		</HStack>
 	);
