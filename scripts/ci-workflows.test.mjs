@@ -1714,6 +1714,19 @@ test('no Maestro flow declares a default for a variable the runners pass with -e
 	);
 });
 
+test('flow 08 issues the destructive void tap only once', () => {
+	const voidTaps = [];
+	const visit = (value) => {
+		if (Array.isArray(value)) return value.forEach(visit);
+		if (!value || typeof value !== 'object') return;
+		if (value.tapOn?.id === 'void-button') voidTaps.push(value.tapOn);
+		Object.values(value).forEach(visit);
+	};
+
+	visit(readMaestroFlow('08-void-order.yml'));
+	assert.equal(voidTaps.length, 1, 'a retry can reissue an accepted in-flight server delete');
+});
+
 test('Android clean-start flows dismiss a queued system ANR before waiting for Expo', () => {
 	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
 		const launchBlock = readMaestroFlow(filename).find((command) => command.retry)?.retry.commands;
