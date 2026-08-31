@@ -234,6 +234,44 @@ describe('query bindings', () => {
 		);
 	});
 
+	it('answers a search from a document scan when the search index fails (#1733)', async () => {
+		await engineDB.collections.products.insert(
+			engineProduct({ uuid: 'coffee', id: 1, name: 'Coffee' })
+		);
+		const base: QueryStateOf<'products'> = {
+			search: '',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'name', direction: 'asc' },
+			limit: 10,
+		};
+		const { result, rerender } = renderHook(
+			({ state }) => useCollectionBinding('products', state),
+			{ wrapper: Provider, initialProps: { state: base } }
+		);
+		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
+
+		// A broken index no longer errors the search — the scan lane answers it.
+		const products = engineDB.collections.products;
+		(products as unknown as { initSearch: () => Promise<never> }).initSearch = async () => {
+			throw new Error('search index failed');
+		};
+		try {
+			rerender({ state: { ...base, search: 'coffee' } });
+			await waitFor(
+				() => {
+					const read = result.current.resource.read();
+					expect(read.hits.map((hit) => hit.id)).toEqual(['coffee']);
+					expect(read.searchState).toBe('answered');
+				},
+				{ timeout: 2000 }
+			);
+		} finally {
+			// The stub must not outlive a failed assertion — the collection instance
+			// is shared with later tests in this file.
+			installResidentSearch(products);
+		}
+	});
+
 	it('recovers from a query error when the descriptor changes', async () => {
 		await engineDB.collections.products.insert(
 			engineProduct({ uuid: 'coffee', id: 1, name: 'Coffee' })
@@ -251,16 +289,21 @@ describe('query bindings', () => {
 		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
 
 		const products = engineDB.collections.products;
-		(products as unknown as { initSearch: () => Promise<never> }).initSearch = async () => {
-			throw new Error('search index failed');
+		const originalFind = products.find.bind(products);
+		(products as unknown as { find: () => never }).find = () => {
+			throw new Error('collection read failed');
 		};
-		rerender({ state: { ...base, search: 'broken' } });
-		await waitFor(() =>
-			expect(() => result.current.resource.read()).toThrow('search index failed')
-		);
-
-		installResidentSearch(products);
-		rerender({ state: { ...base, search: 'coffee' } });
+		try {
+			rerender({ state: { ...base, filters: { ...base.filters, categories: [9] } } });
+			await waitFor(() =>
+				expect(() => result.current.resource.read()).toThrow('collection read failed')
+			);
+		} finally {
+			// The stub must not outlive a failed assertion — the collection instance
+			// is shared with later tests in this file.
+			(products as unknown as { find: typeof originalFind }).find = originalFind;
+		}
+		rerender({ state: base });
 		await waitFor(() =>
 			expect(result.current.resource.read().hits.map((hit) => hit.id)).toEqual(['coffee'])
 		);

@@ -43,6 +43,7 @@ export {
 	observeEngineQuery,
 	type EngineQueryDescriptor,
 } from './engine-query';
+export { startSearchReadiness } from './search-readiness';
 export { declareRequirements, runResetRefill } from './requirement-bridge';
 export { observeCollectionActive } from './engine-status';
 export { recoverLogsCollectionStorage } from './logs-storage-recovery';

@@ -1724,6 +1724,50 @@
 		"introducedIn": "1.10.2"
 	},
 	{
+		"code": "CLIENT142",
+		"symbol": "SEARCH_INDEX_STALLED",
+		"domain": "CLIENT",
+		"severity": "warn",
+		"actionHint": "No action needed. Search keeps working from a direct catalogue scan.",
+		"retryPolicy": "automatic",
+		"dataSafety": "no-impact",
+		"escalation": "support-with-export",
+		"summary": "The search index did not answer in time, so WCPOS searched the catalogue directly instead.",
+		"docsBody": "The local search index was still building or could not run — typically when the POS tab has been in the background or another tab holds the database lead. Searches still answer, from a direct scan of the local catalogue, and switch back to the index automatically once it responds. No catalogue data was changed.",
+		"troubleshooting": [
+			"Usually no action is needed: search results keep working and the index takes over again on its own.",
+			"If this code appears on every search all day, keep the POS in its own browser window rather than a background tab, and reload the app once.",
+			"If the code returns after a reload, export debug info and contact support; the log context identifies the affected catalogue."
+		],
+		"logSources": [
+			"browser-console"
+		],
+		"evidence": "monorepo#1733 silent zero-result searches while the index pipeline was stalled",
+		"introducedIn": "1.10.5"
+	},
+	{
+		"code": "CLIENT143",
+		"symbol": "SEARCH_INDEX_FALSE_MISS",
+		"domain": "CLIENT",
+		"severity": "error",
+		"actionHint": "No action needed. If search still misses products you can see in the catalogue, reload the app.",
+		"retryPolicy": "automatic",
+		"dataSafety": "no-impact",
+		"escalation": "support-with-export",
+		"summary": "The search index could not find a product it should contain; the app attempts an automatic search index rebuild.",
+		"docsBody": "A periodic self-check asked the local search index for a product by that product's own name and the index did not return it. That means searches may have been showing fewer results than the catalogue really holds. The app attempts to rebuild the local search index automatically. No catalogue data was changed.",
+		"troubleshooting": [
+			"Usually no action is needed: the index is rebuilt automatically and searches recover on their own.",
+			"If search still misses products you can see in the catalogue, reload the app to rebuild the in-memory index.",
+			"If the code returns, export debug info and contact support; the log context identifies the affected catalogue and the sample the index missed."
+		],
+		"logSources": [
+			"browser-console"
+		],
+		"evidence": "monorepo#1733 divergence detector was one-sided: false hits were detected, false misses never were",
+		"introducedIn": "1.10.5"
+	},
+	{
 		"code": "CHECKOUT411",
 		"symbol": "CART_LINE_PRICE_BASIS_UNREADABLE",
 		"domain": "CHECKOUT",

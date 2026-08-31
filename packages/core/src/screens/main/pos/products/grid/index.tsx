@@ -132,7 +132,13 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 					}
 					ListEmptyComponent={() => (
 						<View className="items-center justify-center p-4">
-							<Text testID="no-data-message">{t('common.no_products_found')}</Text>
+							{/* "No products found" may only ever mean the search ANSWERED with
+							    nothing; a pending search says so instead (#1733). */}
+							{deferredResult.searchActive && deferredResult.searchState === 'pending' ? (
+								<Text testID="search-pending-message">{t('common.searching')}</Text>
+							) : (
+								<Text testID="no-data-message">{t('common.no_products_found')}</Text>
+							)}
 						</View>
 					)}
 				/>

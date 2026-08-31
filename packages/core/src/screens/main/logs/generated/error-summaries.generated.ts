@@ -172,6 +172,10 @@ export function translateErrorSummary(t: TranslateError, code: ErrorCode): strin
 			return t('health.logs.error_summary.CLIENT131');
 		case 'CLIENT141':
 			return t('health.logs.error_summary.CLIENT141');
+		case 'CLIENT142':
+			return t('health.logs.error_summary.CLIENT142');
+		case 'CLIENT143':
+			return t('health.logs.error_summary.CLIENT143');
 		case 'CHECKOUT411':
 			return t('health.logs.error_summary.CHECKOUT411');
 		case 'CHECKOUT421':
