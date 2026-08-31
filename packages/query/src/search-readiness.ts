@@ -16,21 +16,44 @@ import {
 	sharedSearchInstances,
 } from './search-shared';
 
-import type { LegacyCollectionName } from './engine-adapter/collection-map';
 import type { AdapterDatabase, EngineRxDocument } from './engine-adapter/execute-query';
 
+type SearchedCollection = keyof typeof LEGACY_SEARCH_FIELDS;
+
 /**
- * The collections the till searches. Warming these at startup means the index
- * pipeline starts building at till-open, not on the first keystroke (#1733);
- * other searchable collections stay lazy and are covered by the scan fallback.
+ * The till's hot path: the products panel is the screen every session opens,
+ * so these two indexes get the first crack at boot I/O.
  */
-const WARMUP_COLLECTIONS = [
+const TILL_COLLECTIONS = [
 	'products',
 	'variations',
-] as const satisfies readonly LegacyCollectionName[];
+] as const satisfies readonly SearchedCollection[];
 
-/** Let the boot I/O burst settle before opening the index pipelines. */
+/**
+ * Every other collection the app searches. A cashier refreshing the customer
+ * list expects a customer to be findable exactly as they expect a product
+ * (#1733) — the same first-search build applies to all of them, so all of them
+ * warm at startup; the till pair merely goes first. Local sets outside
+ * products are windowed by their sync lanes, so these backlogs are bounded.
+ */
+const SECONDARY_COLLECTIONS = [
+	'customers',
+	'orders',
+	'products/categories',
+	'products/tags',
+	'products/brands',
+	'coupons',
+] as const satisfies readonly SearchedCollection[];
+
+const SEARCHED_COLLECTIONS = [
+	...TILL_COLLECTIONS,
+	...SECONDARY_COLLECTIONS,
+] as const satisfies readonly SearchedCollection[];
+
+/** Let the boot I/O burst settle before opening the till's index pipelines. */
 const SEARCH_WARMUP_DELAY_MS = 1_000;
+/** The remaining searched collections warm after the till pair has had first crack. */
+const SEARCH_WARMUP_SECONDARY_DELAY_MS = 5_000;
 /** First audit soon enough to catch a broken index within the first minutes of a shift. */
 const SEARCH_INDEX_AUDIT_INITIAL_DELAY_MS = 60_000;
 const SEARCH_INDEX_AUDIT_INTERVAL_MS = 10 * 60_000;
@@ -69,7 +92,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | typeof AUD
 	});
 }
 
-function initializationOptionsFor(name: (typeof WARMUP_COLLECTIONS)[number]) {
+function initializationOptionsFor(name: SearchedCollection) {
 	return {
 		searchFields: [...LEGACY_SEARCH_FIELDS[name]],
 		documentSnapshot: (document: EngineRxDocument) => legacySearchSnapshot(name, document),
@@ -92,7 +115,8 @@ function candidateTokens(snapshot: Record<string, unknown>, searchFields: string
 }
 
 /**
- * Builds the till's search indexes eagerly at startup and periodically
+ * Builds the app's search indexes eagerly at startup — the till pair first,
+ * every other searched collection a few seconds behind — and periodically
  * verifies a sampled document is findable by its own name (#1733).
  *
  * The warmup exists because index construction is otherwise lazy — the first
@@ -116,6 +140,7 @@ export function startSearchReadiness(options: {
 	/** Test seam only — production callers take the defaults. */
 	timings?: Partial<{
 		warmupDelayMs: number;
+		warmupSecondaryDelayMs: number;
 		auditInitialDelayMs: number;
 		auditIntervalMs: number;
 		auditFindTimeoutMs: number;
@@ -124,6 +149,7 @@ export function startSearchReadiness(options: {
 	const { engine, locale } = options;
 	const timings = {
 		warmupDelayMs: SEARCH_WARMUP_DELAY_MS,
+		warmupSecondaryDelayMs: SEARCH_WARMUP_SECONDARY_DELAY_MS,
 		auditInitialDelayMs: SEARCH_INDEX_AUDIT_INITIAL_DELAY_MS,
 		auditIntervalMs: SEARCH_INDEX_AUDIT_INTERVAL_MS,
 		auditFindTimeoutMs: SEARCH_INDEX_AUDIT_FIND_TIMEOUT_MS,
@@ -148,8 +174,8 @@ export function startSearchReadiness(options: {
 		timers.add(handle);
 	};
 
-	const warmCollections = (database: AdapterDatabase) => {
-		for (const name of WARMUP_COLLECTIONS) {
+	const warmCollections = (database: AdapterDatabase, names: readonly SearchedCollection[]) => {
+		for (const name of names) {
 			const collection = database.collections[engineCollectionNameFor(name)] as unknown as
 				SearchableCollection | undefined;
 			if (!collection?.initSearch) continue;
@@ -158,10 +184,7 @@ export function startSearchReadiness(options: {
 		}
 	};
 
-	const auditCollection = async (
-		database: AdapterDatabase,
-		name: (typeof WARMUP_COLLECTIONS)[number]
-	) => {
+	const auditCollection = async (database: AdapterDatabase, name: SearchedCollection) => {
 		const collection = database.collections[engineCollectionNameFor(name)] as unknown as
 			SearchableCollection | undefined;
 		if (!collection?.initSearch) return;
@@ -249,7 +272,7 @@ export function startSearchReadiness(options: {
 	const auditTick = async () => {
 		const database = currentDatabase;
 		if (!database || disposed) return;
-		for (const name of WARMUP_COLLECTIONS) {
+		for (const name of SEARCHED_COLLECTIONS) {
 			try {
 				await auditCollection(database, name);
 			} catch (error) {
@@ -271,7 +294,8 @@ export function startSearchReadiness(options: {
 		auditFailureStreaks.clear();
 		if (!currentDatabase) return;
 		const target = currentDatabase;
-		schedule(() => warmCollections(target), timings.warmupDelayMs);
+		schedule(() => warmCollections(target, TILL_COLLECTIONS), timings.warmupDelayMs);
+		schedule(() => warmCollections(target, SECONDARY_COLLECTIONS), timings.warmupSecondaryDelayMs);
 		schedule(() => void auditTick(), timings.auditInitialDelayMs);
 	});
 

@@ -13,6 +13,7 @@ const searchError = jest.mocked(searchLogger.error);
 /** Fast cadence so a test observes several audit ticks inside its own timeout. */
 const TEST_TIMINGS = {
 	warmupDelayMs: 5,
+	warmupSecondaryDelayMs: 10,
 	auditInitialDelayMs: 20,
 	auditIntervalMs: 20,
 	auditFindTimeoutMs: 100,
@@ -21,8 +22,8 @@ const TEST_TIMINGS = {
 describe('startSearchReadiness', () => {
 	beforeEach(() => searchError.mockClear());
 
-	it('warms the product and variation indexes without waiting for a search', async () => {
-		const database = await createEngineDatabase(['products', 'variations']);
+	it('warms every searched collection without waiting for a search — till pair first', async () => {
+		const database = await createEngineDatabase(['products', 'variations', 'customers']);
 		const engine = createFakeEngine(database);
 		const stub = { collection: { $: of(null) }, find: async () => [] };
 		const initProducts = jest
@@ -30,6 +31,9 @@ describe('startSearchReadiness', () => {
 			.mockResolvedValue(stub as never);
 		const initVariations = jest
 			.spyOn(database.collections.variations, 'initSearch')
+			.mockResolvedValue(stub as never);
+		const initCustomers = jest
+			.spyOn(database.collections.customers, 'initSearch')
 			.mockResolvedValue(stub as never);
 
 		const dispose = startSearchReadiness({
@@ -40,12 +44,25 @@ describe('startSearchReadiness', () => {
 		try {
 			await waitFor(() => expect(initProducts).toHaveBeenCalled());
 			await waitFor(() => expect(initVariations).toHaveBeenCalled());
+			// A cashier refreshing the customer list expects a customer just the same:
+			// the secondary tier warms too, after the till pair.
+			await waitFor(() => expect(initCustomers).toHaveBeenCalled());
 			expect(initProducts).toHaveBeenCalledWith(
 				'warmup-locale',
 				expect.objectContaining({
 					searchFields: ['name', 'sku', 'barcode'],
 					documentSnapshot: expect.any(Function),
 				})
+			);
+			expect(initCustomers).toHaveBeenCalledWith(
+				'warmup-locale',
+				expect.objectContaining({
+					searchFields: expect.arrayContaining(['first_name', 'last_name', 'email']),
+				})
+			);
+			// The till pair was warmed before the customer index.
+			expect(initProducts.mock.invocationCallOrder[0]).toBeLessThan(
+				initCustomers.mock.invocationCallOrder[0]
 			);
 		} finally {
 			dispose();
