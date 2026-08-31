@@ -47,6 +47,34 @@ appId: com.wcpos.main.dev
     commands:
       - tapOn:
           id: "pos-tab-cart"
+# iOS lost-press (class seen in flows 04/06/07, #1719/#1726/#1727): the tab tap
+# above was delivered and swallowed on run 33417438187 (flow failed on
+# add-cart-item-menu while the screenshot showed Products still active, zero
+# recoveries). Same remedy: bounded settle, then one logged re-tap.
+# add-cart-item-menu is the cart screen's tell — present even on an empty cart
+# (this flow taps it on exactly that state below).
+- extendedWaitUntil:
+    visible:
+      id: "add-cart-item-menu"
+    timeout: 10000
+    optional: true
+- runFlow:
+    when:
+      notVisible:
+        id: "add-cart-item-menu"
+    commands:
+      - evalScript: "${console.log('WCPOS_E2E cart screen not shown after the tab tap, re-tapping once')}"
+      - runFlow:
+          when:
+            visible:
+              id: "pos-tab-cart"
+          commands:
+            - tapOn:
+                id: "pos-tab-cart"
+- extendedWaitUntil:
+    visible:
+      id: "add-cart-item-menu"
+    timeout: 15000
 # A relaunch opens a FRESH current order, so the cart is empty and has no tab
 # of its own yet — it gets one on the first write below.
 - assertNotVisible:
@@ -65,6 +93,21 @@ appId: com.wcpos.main.dev
 # order total equals the typed amount whatever the store's tax setup is.
 - tapOn:
     id: "add-cart-item-menu"
+# Lost-press guard: settle briefly, and only if the dropdown never opened
+# re-tap once (a re-tap on an OPEN menu would close it, so the check matters).
+- extendedWaitUntil:
+    visible:
+      id: "menu-add-fee"
+    timeout: 10000
+    optional: true
+- runFlow:
+    when:
+      notVisible:
+        id: "menu-add-fee"
+    commands:
+      - evalScript: "${console.log('WCPOS_E2E add-item menu did not open, re-tapping once')}"
+      - tapOn:
+          id: "add-cart-item-menu"
 - tapOn:
     id: "menu-add-fee"
 - extendedWaitUntil:
@@ -108,7 +151,23 @@ appId: com.wcpos.main.dev
 - tapOn:
     id: "void-button"
 # The voided order leaves the tab strip and the cart falls back to a fresh
-# empty order.
+# empty order. Lost-press guard: if our amount is still on screen after the
+# settle, the tap was swallowed — re-tap once. Idempotent: once the void lands
+# the amount is gone, so the condition can never re-void (the fresh order's
+# void-button is behind a false condition).
+- extendedWaitUntil:
+    notVisible:
+      text: "${output.amountRe}"
+    timeout: 30000
+    optional: true
+- runFlow:
+    when:
+      visible:
+        text: "${output.amountRe}"
+    commands:
+      - evalScript: "${console.log('WCPOS_E2E order still present after the void tap, re-tapping once')}"
+      - tapOn:
+          id: "void-button"
 - extendedWaitUntil:
     notVisible:
       text: "${output.amountRe}"
@@ -158,6 +217,32 @@ appId: com.wcpos.main.dev
     commands:
       - tapOn:
           id: "pos-tab-cart"
+# Same lost-press guard as the first cart navigation above. Without it, a
+# swallowed tab tap leaves Products on screen, where the empty-cart negative
+# assert below would pass VACUOUSLY and the ghost check would look at the
+# wrong screen entirely.
+- extendedWaitUntil:
+    visible:
+      id: "add-cart-item-menu"
+    timeout: 10000
+    optional: true
+- runFlow:
+    when:
+      notVisible:
+        id: "add-cart-item-menu"
+    commands:
+      - evalScript: "${console.log('WCPOS_E2E cart screen not shown after the relaunch tab tap, re-tapping once')}"
+      - runFlow:
+          when:
+            visible:
+              id: "pos-tab-cart"
+          commands:
+            - tapOn:
+                id: "pos-tab-cart"
+- extendedWaitUntil:
+    visible:
+      id: "add-cart-item-menu"
+    timeout: 15000
 - assertNotVisible:
     id: "cart-quantity-input"
 - extendedWaitUntil:
