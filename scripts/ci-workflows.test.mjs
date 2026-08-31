@@ -2252,13 +2252,15 @@ test('the Android emulator resolves DNS through public resolvers and proves conn
 	assert.doesNotMatch(lines[guard], /\\$/);
 });
 
-// Round-1 Android CI performance settings (2026-08-31): 4 GB guest RAM + AVD
-// quickboot snapshot caching + half-resolution screenrecord. Each pin guards a
-// measured lever against the starved-runner classes in the 2026-08-31 handoff.
-test('the Android suite boots a 4 GB emulator from a cached quickboot snapshot', () => {
+// Round-1 Android CI performance settings (2026-08-31): reserve one host core,
+// 4 GB guest RAM + AVD quickboot snapshot caching + half-resolution
+// screenrecord. Each pin guards a measured lever against the starved-runner
+// classes in the 2026-08-31 handoff.
+test('the Android suite reserves a host core and boots from a cached quickboot snapshot', () => {
 	const workflow = readWorkflow('e2e-native.yml');
 	const suite = findStep(workflow, 'android', '📱 Run Maestro suite on emulator');
 
+	assert.equal(suite.with.cores, 3, 'Maestro and Metro must retain one host core');
 	assert.equal(suite.with['ram-size'], '4096M', 'guest RAM must stay at 4 GB');
 	assert.equal(suite.with['heap-size'], '576M');
 	assert.equal(
@@ -2276,7 +2278,7 @@ test('the Android suite boots a 4 GB emulator from a cached quickboot snapshot',
 	const cache = findStep(workflow, 'android', '📦 Restore AVD snapshot');
 	assert.equal(cache.id, 'avd-cache');
 	assert.match(cache.uses, /actions\/cache\/restore@/);
-	for (const input of ['api35', 'google_apis', 'x86_64', 'cores4', 'ram4096', 'heap576']) {
+	for (const input of ['api35', 'google_apis', 'x86_64', 'cores3', 'ram4096', 'heap576']) {
 		assert.ok(
 			String(cache.with.key).includes(input),
 			`AVD cache key must pin ${input} - an unkeyed input makes restores stale`

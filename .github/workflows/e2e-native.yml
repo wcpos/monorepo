@@ -350,7 +350,7 @@ jobs:
       matrix:
         device:
           # record_size: HALF the device resolution. screenrecord encodes on the
-          # emulator's guest cores - the same 4 vCPUs everything else shares -
+          # emulator's guest cores - the same 3 vCPUs everything else shares -
           # and encode cost scales with pixels; half resolution is ~1/4 the
           # work and the failure video stays perfectly readable.
           - { name: phone, profile: pixel_6, record_size: 540x1200 }
@@ -470,7 +470,7 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-api35-google_apis-x86_64-${{ matrix.device.profile }}-cores4-ram4096-heap576-v1
+          key: avd-api35-google_apis-x86_64-${{ matrix.device.profile }}-cores3-ram4096-heap576-v1
 
       # Cache miss: create the AVD and save a clean quickboot snapshot (no
       # -no-snapshot in the options, so the emulator saves state on exit).
@@ -496,7 +496,7 @@ jobs:
             sed -i '/^vm\.heapSize=/d' "$ANDROID_AVD_HOME/test.avd/config.ini"
             printf 'vm.heapSize=576\n' >> "$ANDROID_AVD_HOME/test.avd/config.ini"
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -dns-server 8.8.8.8,1.1.1.1
-          cores: 4
+          cores: 3
           ram-size: 4096M
           heap-size: 576M
           emulator-boot-timeout: 900
@@ -510,7 +510,7 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-api35-google_apis-x86_64-${{ matrix.device.profile }}-cores4-ram4096-heap576-v1
+          key: avd-api35-google_apis-x86_64-${{ matrix.device.profile }}-cores3-ram4096-heap576-v1
 
       # STEP timeout 10 min under the job's: `always()` cannot buy execution
       # time past the JOB deadline — GitHub cancels the whole job there, and
@@ -545,17 +545,12 @@ jobs:
           # "Site does not seem to be a WordPress site" against a store that
           # answered the host in 0.45 s. Public resolvers bypass the proxy.
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -dns-server 8.8.8.8,1.1.1.1
-          # All 4 of the runner's vCPUs, not the action's default 2:
-          # swiftshader renders the GPU on these same guest cores, so the app
-          # and its renderer were sharing two virtual CPUs — the
-          # roving-starvation runs (single taps at 480-514s, run 33182224622)
-          # happened under that budget. The host-side processes (QEMU
-          # plumbing, adb, maestro, Metro) are IO-bound waiters during flows,
-          # so full oversubscription is the better bet than reserving a core
-          # — and the flow-timing triage below measures exactly this, so if 4
-          # thrashes worse than 3 the table will say so and this is a
-          # one-line revert.
-          cores: 4
+          # Reserve one of the runner's 4 vCPUs for host-side Maestro, Metro,
+          # adb, and QEMU plumbing. The cached 4-core run 33388020813 still
+          # delivered individual input characters 2-4 minutes apart while the
+          # app remained responsive on video: full guest oversubscription was
+          # starving the host control plane rather than buying guest throughput.
+          cores: 3
           # 4 GB guest RAM (profile default is 2 GB) + the community-standard
           # 576 MB VM heap: the first-boot catalog sync hammers SQLite and the
           # JS heap at exactly the moment the guest is most memory-starved -
