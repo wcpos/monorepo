@@ -687,6 +687,17 @@ export const CONFORMANCE_TABLE = {
  */
 const CONFORMANCE = new Map<string, Conformance>(Object.entries(CONFORMANCE_TABLE));
 
+/** Resolve the shared cashier-log error classification for a raw sync event. */
+export function resolveSyncEventErrorCode(event: SyncEvent): ErrorCode | null {
+	const fields = (event.fields ?? {}) as Record<string, unknown>;
+	const conformance: Conformance = CONFORMANCE.get(event.type) ?? INHERITED_DEFAULT;
+	const level = conformance.visible === false ? 'debug' : (conformance.level ?? event.level);
+	if (level !== 'warn' && level !== 'error') return null;
+	return typeof conformance.code === 'function'
+		? conformance.code(event, fields)
+		: conformance.code;
+}
+
 /**
  * Pure event→persist mapping; the caller owns logger wiring and engine-identity
  * guarding. Idle work and info-level narration are intentionally left for the
@@ -740,8 +751,7 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 		// still emit a name this table has never heard of, and a merchant's failure
 		// must never be dropped just because its label is unknown here.
 		const conformance: Conformance = mapped ?? INHERITED_DEFAULT;
-		const code =
-			typeof conformance.code === 'function' ? conformance.code(event, fields) : conformance.code;
+		const code = resolveSyncEventErrorCode(event);
 		// The did-work gate only ever suppresses IDLE work. A warn/error event is
 		// never idle, so it bypasses the gate entirely: several emitters raise the
 		// level on a signal their counters don't carry — `queue.scheduler.drain`

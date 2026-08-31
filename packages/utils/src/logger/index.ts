@@ -1062,4 +1062,5 @@ export function getLogger(category: string[]): CategoryLogger {
 
 export { getErrorMessage } from './error-message';
 export { mapExceptionToCode } from './map-exception';
+export { redactSensitiveText } from './redact';
 export { log, recorderStats, snapshotRecorder };

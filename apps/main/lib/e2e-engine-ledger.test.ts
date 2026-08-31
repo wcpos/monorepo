@@ -54,7 +54,20 @@ describe('createE2eEngineLedgerObserver', () => {
 				},
 			})
 		);
-		observer?.(event({ type: 'engine.ready', fields: { outcome: 'ready' } }));
+		observer?.(
+			event({
+				type: 'coverage.require.outcome',
+				collection: 'products',
+				fields: {
+					requirementId: 'browse-products',
+					kind: 'browse',
+					action: 'fetched',
+					documents: 12,
+					requests: 2,
+					durationMs: 34,
+				},
+			})
+		);
 
 		expect(lines).toHaveLength(2);
 		expect(lines.every(({ line, level }) => line.startsWith(prefix) && level === 1)).toBe(true);
@@ -69,8 +82,53 @@ describe('createE2eEngineLedgerObserver', () => {
 			active: true,
 		});
 		expect(JSON.parse(lines[1].line.slice(prefix.length))).toEqual({
-			type: 'engine.ready',
-			outcome: 'ready',
+			type: 'coverage.require.outcome',
+			collection: 'products',
+			requirementId: 'browse-products',
+			kind: 'browse',
+			action: 'fetched',
+			documents: 12,
+			requests: 2,
+			durationMs: 34,
+		});
+	});
+
+	it('redacts credential-shaped values in every allowlisted string', () => {
+		process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
+		const lines: string[] = [];
+		nativeGlobal.nativeLoggingHook = (line) => lines.push(line);
+
+		createE2eEngineLedgerObserver()?.(
+			event({
+				type: 'coverage.require.error',
+				fields: {
+					path: 'https://cashier:secret@example.com/wp-json',
+					errorDetail: 'request failed with token=plain-token',
+				},
+			})
+		);
+
+		const payload = JSON.parse(lines[0].slice('WCPOS_E2E_ENGINE '.length));
+		expect(payload.path).toBe('https://[REDACTED]@example.com/wp-json');
+		expect(payload.errorDetail).toBe('request failed with token=[REDACTED]');
+	});
+
+	it('derives the conformance error code for raw engine events', () => {
+		process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
+		const lines: string[] = [];
+		nativeGlobal.nativeLoggingHook = (line) => lines.push(line);
+
+		createE2eEngineLedgerObserver()?.(
+			event({
+				type: 'coverage.require.error',
+				level: 'error',
+				fields: { errorName: 'NetworkError' },
+			})
+		);
+
+		expect(JSON.parse(lines[0].slice('WCPOS_E2E_ENGINE '.length))).toMatchObject({
+			type: 'coverage.require.error',
+			errorCode: 'SYNC321',
 		});
 	});
 
@@ -94,7 +152,7 @@ describe('createE2eEngineLedgerObserver', () => {
 		expect(() => observer?.(event({ type: 'engine.ready' }))).not.toThrow();
 	});
 
-	it('caps native log lines at 2000 characters', () => {
+	it('caps native log lines at 2000 characters while preserving valid JSON', () => {
 		process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
 		const lines: string[] = [];
 		nativeGlobal.nativeLoggingHook = (line) => lines.push(line);
@@ -105,5 +163,6 @@ describe('createE2eEngineLedgerObserver', () => {
 
 		expect(lines).toHaveLength(1);
 		expect(lines[0].length).toBeLessThanOrEqual(2_000);
+		expect(() => JSON.parse(lines[0].slice('WCPOS_E2E_ENGINE '.length))).not.toThrow();
 	});
 });

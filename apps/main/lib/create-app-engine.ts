@@ -301,6 +301,7 @@ export async function switchAppEngineScope(session: {
 	entry.clockSkew.evaluated = false;
 }
 
+/** Create or reuse the app sync engine for the requested store scope. */
 export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSyncEngine {
 	const cacheKey = scopeCacheKey(options.scope);
 	const siteKey = canonicalSite(options.scope.site);
