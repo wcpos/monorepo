@@ -79,6 +79,8 @@ export type ErrorCode =
 	| 'PRINT311'
 	| 'CLIENT131'
 	| 'CLIENT141'
+	| 'CLIENT142'
+	| 'CLIENT143'
 	| 'CHECKOUT411'
 	| 'CHECKOUT421';
 export type ErrorDomain =
@@ -810,6 +812,27 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		summary:
 			'Local search returned results that do not match the catalogue; the app attempts an automatic search index rebuild.',
 	},
+	CLIENT142: {
+		code: 'CLIENT142',
+		symbol: 'SEARCH_INDEX_STALLED',
+		domain: 'CLIENT',
+		severity: 'warn',
+		actionHint: 'No action needed. Search keeps working from a direct catalogue scan.',
+		dataSafety: 'no-impact',
+		summary:
+			'The search index did not answer in time, so WCPOS searched the catalogue directly instead.',
+	},
+	CLIENT143: {
+		code: 'CLIENT143',
+		symbol: 'SEARCH_INDEX_FALSE_MISS',
+		domain: 'CLIENT',
+		severity: 'error',
+		actionHint:
+			'No action needed. If search still misses products you can see in the catalogue, reload the app.',
+		dataSafety: 'no-impact',
+		summary:
+			'The search index could not find a product it should contain; the app attempts an automatic search index rebuild.',
+	},
 	CHECKOUT411: {
 		code: 'CHECKOUT411',
 		symbol: 'CART_LINE_PRICE_BASIS_UNREADABLE',
@@ -910,6 +933,8 @@ export const ERROR_CODES = {
 	RECEIPT_DELIVERY_FAILED: 'PRINT311',
 	REQUEST_QUEUE_OVERFLOW: 'CLIENT131',
 	SEARCH_INDEX_DIVERGENCE: 'CLIENT141',
+	SEARCH_INDEX_STALLED: 'CLIENT142',
+	SEARCH_INDEX_FALSE_MISS: 'CLIENT143',
 	CART_LINE_PRICE_BASIS_UNREADABLE: 'CHECKOUT411',
 	ORDER_TAX_RATE_UNKNOWN: 'CHECKOUT421',
 } as const satisfies Record<string, ErrorCode>;

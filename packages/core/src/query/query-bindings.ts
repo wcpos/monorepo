@@ -858,15 +858,19 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 					if (Number.isFinite(parentId)) counts.set(parentId, (counts.get(parentId) ?? 0) + 1);
 				}
 				const parentIds = [...counts.keys()];
+				// The union is an ANSWER only once both search legs have answered —
+				// a pending leg means the merged rows are still provisional (#1733).
+				const searchAnswered =
+					direct.searchState === 'answered' && children.searchState === 'answered';
 				return observeParentLookup(
 					runtime.engine,
 					runtime.locale,
 					`${bindingId}:lookup`,
 					parentIds,
 					descriptor.searchFields
-				).pipe(map((lookup) => ({ direct, lookup, counts })));
+				).pipe(map((lookup) => ({ direct, lookup, counts, searchAnswered })));
 			}),
-			switchMap(({ direct, lookup, counts }) => {
+			switchMap(({ direct, lookup, counts, searchAnswered }) => {
 				const uuids = [...new Set([...direct.hits, ...lookup.hits].map((hit) => hit.id))];
 				return observeEngineQuery(runtime.engine, runtime.locale, {
 					...descriptor,
@@ -876,6 +880,7 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 					map((result) => ({
 						...result,
 						searchActive: Boolean(compiled.read.search),
+						searchState: searchAnswered ? ('answered' as const) : ('pending' as const),
 						hits: result.hits.map((hit) => {
 							const wooId = Number(hit.record.payload.id);
 							return {

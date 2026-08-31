@@ -17,6 +17,7 @@ import type { RxDatabase } from 'rxdb';
 
 const searchLogger = getLogger(['wcpos', 'query', 'search']);
 const searchError = jest.mocked(searchLogger.error);
+const searchWarn = jest.mocked(searchLogger.warn);
 
 describe('observeEngineQuery', () => {
 	it('exposes the native engine record beside the legacy document', async () => {
@@ -188,42 +189,174 @@ describe('observeEngineQuery', () => {
 		}
 	});
 
-	it('does not reset the data collection when only the search index is corrupt', async () => {
-		const error = new Error('could not requestRemote: SyntaxError: value is not valid JSON');
-		const resetCollection = jest.fn().mockRejectedValue(error);
-		const database = {
-			collections: {
-				products: {
-					initSearch: async () => ({
-						collection: { $: of(null) },
-						find: async () => Promise.reject(error),
-					}),
-				},
-			},
-		};
-		const engine = {
-			active: () => ({ database, scopeId: 'store-a' }),
-			db$: (listener) => {
-				listener(database);
-				return () => undefined;
-			},
-			ready: Promise.resolve(),
-			scope: { resetCollection },
-		};
+	it('answers from a document scan when only the search index is corrupt', async () => {
+		// #1733: a broken index must neither error the search nor trigger storage
+		// recovery — the scan lane answers, the failure is logged once.
+		const database = await createEngineDatabase(['products']);
+		const engine = createFakeEngine(database);
+		await database.collections.products.insert(
+			engineProduct({ uuid: 'scan-hit', id: 1, name: 'Coffee Grinder' })
+		);
+		const indexError = new Error('could not requestRemote: SyntaxError: value is not valid JSON');
+		jest.spyOn(database.collections.products, 'initSearch').mockRejectedValue(indexError);
 
-		await new Promise<void>((resolve) => {
-			observeEngineQuery(engine as never, 'en', {
-				collection: 'products',
-				search: 'coffee',
-			}).subscribe({
-				error: (received) => {
-					expect(received).toBe(error);
-					resolve();
-				},
-			});
+		let ids: string[] | null = null;
+		const subscription = observeEngineQuery(engine, 'corrupt-index-scan', {
+			collection: 'products',
+			search: 'coffee',
+			searchFields: ['name'],
+		}).subscribe((result) => {
+			ids = result.hits.map((hit) => hit.id);
 		});
 
-		expect(resetCollection).not.toHaveBeenCalled();
+		try {
+			await waitFor(() => expect(ids).toEqual(['scan-hit']), { timeout: 2000 });
+			expect(engine.resetCalls).toEqual([]);
+			expect(searchWarn).toHaveBeenCalledWith(
+				'Search index is not answering; searching by document scan',
+				expect.objectContaining({ code: ERROR_CODES.SEARCH_INDEX_STALLED })
+			);
+		} finally {
+			subscription.unsubscribe();
+			await database.close();
+		}
+	});
+
+	describe('search never blocks on the index (#1733)', () => {
+		beforeEach(() => {
+			searchError.mockClear();
+			searchWarn.mockClear();
+		});
+
+		it('answers from a document scan while the index never answers, then swaps in the indexed answer', async () => {
+			const database = await createEngineDatabase(['products']);
+			const engine = createFakeEngine(database);
+			await database.collections.products.bulkInsert([
+				// Mid-word match proves the scan mirrors the index's `tokenize: 'full'`.
+				engineProduct({ uuid: 'scan-substring', id: 1, name: 'Kuorintasaippua' }),
+				engineProduct({ uuid: 'indexed-only', id: 2, name: 'Saippuakivi' }),
+			]);
+			const indexedDocument = await database.collections.products.findOne('indexed-only').exec();
+			if (!indexedDocument) throw new Error('missing indexed fixture');
+			let resolveFind: ((documents: unknown[]) => void) | undefined;
+			const find = jest.fn(
+				() =>
+					new Promise<unknown[]>((resolve) => {
+						resolveFind = resolve;
+					})
+			);
+			jest
+				.spyOn(database.collections.products, 'initSearch')
+				.mockResolvedValue({ collection: { $: of(null) }, find } as never);
+			const emissions: string[][] = [];
+			const subscription = observeEngineQuery(engine, 'stalled-index-scan', {
+				collection: 'products',
+				search: 'saippua',
+				searchFields: ['name'],
+			}).subscribe((result) => emissions.push(result.hits.map((hit) => hit.id)));
+
+			try {
+				await waitFor(
+					() =>
+						expect([...(emissions.at(-1) ?? [])].sort()).toEqual([
+							'indexed-only',
+							'scan-substring',
+						]),
+					{ timeout: 2000 }
+				);
+				expect(searchWarn).toHaveBeenCalledWith(
+					'Search index is not answering; searching by document scan',
+					expect.objectContaining({
+						code: ERROR_CODES.SEARCH_INDEX_STALLED,
+						context: expect.objectContaining({
+							collection: 'products',
+							locale: 'stalled-index-scan',
+						}),
+					})
+				);
+				// The indexed answer — deliberately narrower — replaces the scan's.
+				resolveFind?.([indexedDocument]);
+				await waitFor(() => expect(emissions.at(-1)).toEqual(['indexed-only']));
+			} finally {
+				subscription.unsubscribe();
+				await database.close();
+			}
+		});
+
+		it('never scans when the index answers immediately', async () => {
+			const database = await createEngineDatabase(['products']);
+			const engine = createFakeEngine(database);
+			await database.collections.products.insert(
+				engineProduct({ uuid: 'indexed-hit', id: 1, name: 'Abc product' })
+			);
+			const document = await database.collections.products.findOne('indexed-hit').exec();
+			if (!document) throw new Error('missing indexed fixture');
+			jest
+				.spyOn(database.collections.products, 'initSearch')
+				.mockResolvedValue({ collection: { $: of(null) }, find: async () => [document] } as never);
+			const findSpy = jest.spyOn(database.collections.products, 'find');
+			const emissions: string[][] = [];
+			const subscription = observeEngineQuery(engine, 'healthy-index', {
+				collection: 'products',
+				search: 'abc',
+				searchFields: ['name'],
+			}).subscribe((result) => emissions.push(result.hits.map((hit) => hit.id)));
+
+			try {
+				await waitFor(() => expect(emissions.at(-1)).toEqual(['indexed-hit']));
+				// Outlive the scan deadline to prove the scan lane stood down.
+				await new Promise((resolve) => setTimeout(resolve, 400));
+				// The scan is the only caller of find() with no arguments; the adapter
+				// query path always passes one.
+				expect(findSpy.mock.calls.filter((call) => call.length === 0)).toEqual([]);
+				expect(searchWarn).not.toHaveBeenCalled();
+			} finally {
+				subscription.unsubscribe();
+				await database.close();
+			}
+		});
+
+		it('marks the pre-database placeholder pending and real answers answered', async () => {
+			const database = await createEngineDatabase(['products']);
+			await database.collections.products.insert(
+				engineProduct({ uuid: 'answered-hit', id: 1, name: 'Abc product' })
+			);
+			const document = await database.collections.products.findOne('answered-hit').exec();
+			if (!document) throw new Error('missing answered fixture');
+			jest
+				.spyOn(database.collections.products, 'initSearch')
+				.mockResolvedValue({ collection: { $: of(null) }, find: async () => [document] } as never);
+			const pending = createPendingFakeEngine(database);
+			const listeners = new Set<(current: RxDatabase | null) => void>();
+			pending.engine.db$ = (listener) => {
+				listeners.add(listener);
+				listener(null);
+				return () => listeners.delete(listener);
+			};
+			const states: (string | undefined)[] = [];
+			let ids: string[] = [];
+			const subscription = observeEngineQuery(pending.engine, 'pending-state', {
+				collection: 'products',
+				search: 'abc',
+				searchFields: ['name'],
+			}).subscribe((result) => {
+				states.push(result.searchState);
+				ids = result.hits.map((hit) => hit.id);
+			});
+
+			try {
+				// The placeholder emitted before any engine database is bound is NOT an
+				// answer — rendering it as "no products found" is the #1733 lie.
+				expect(states).toEqual(['pending']);
+				listeners.forEach((listener) => listener(database as never));
+				await waitFor(() => expect(states.at(-1)).toBe('answered'));
+				expect(ids).toEqual(['answered-hit']);
+			} finally {
+				subscription.unsubscribe();
+				pending.open();
+				await database.close();
+			}
+		});
 	});
 
 	describe('search index divergence self-check', () => {

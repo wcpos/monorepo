@@ -21,6 +21,10 @@ const mockClearAndRefresh = jest.fn();
 // Mutable so a test can change the visible-column set between renders; the
 // default matches the original single-column fixture.
 let mockColumns: { key: string; show: boolean }[] = [{ key: 'level', show: true }];
+// Mutable so a test can render an empty (or search-pending) result.
+let mockResult: Record<string, unknown> = {
+	hits: [{ id: 'log-1', record: { payload: { level: 'error' } } }],
+};
 
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
@@ -31,9 +35,7 @@ jest.mock('observable-hooks', () => ({
 	// The paging guard reads the binding's pending$/exhausted$ through this; the initial
 	// value ("not pending", "no opinion") is all these tests need.
 	useObservableState: (_source: unknown, initial: unknown) => initial,
-	useObservableSuspense: () => ({
-		hits: [{ id: 'log-1', record: { payload: { level: 'error' } } }],
-	}),
+	useObservableSuspense: () => mockResult,
 }));
 
 jest.mock('../../contexts/ui-settings', () => ({
@@ -61,7 +63,9 @@ jest.mock('@wcpos/components/table', () => ({
 	TableRow: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
+		<span data-testid={testID}>{children}</span>
+	),
 }));
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
@@ -75,12 +79,15 @@ jest.mock('@wcpos/components/virtualized-list', () => ({
 		data,
 		renderItem,
 		onEndReached,
+		ListEmptyComponent,
 	}: {
 		data: unknown[];
 		renderItem: (input: { item: unknown; index: number }) => React.ReactNode;
 		onEndReached: () => void;
+		ListEmptyComponent?: React.ComponentType;
 	}) => (
 		<div>
+			{data.length === 0 && ListEmptyComponent ? <ListEmptyComponent /> : null}
 			{data.map((item, index) => (
 				<React.Fragment key={index}>{renderItem({ item, index })}</React.Fragment>
 			))}
@@ -155,6 +162,50 @@ describe('DataTable binding contract', () => {
 		mockFooterProps = undefined;
 		mockDefaultFooterProps = undefined;
 		mockColumns = [{ key: 'level', show: true }];
+		mockResult = { hits: [{ id: 'log-1', record: { payload: { level: 'error' } } }] };
+	});
+
+	function renderEmptyStateTable() {
+		const BindingDataTable = DataTable as unknown as React.ComponentType<Record<string, unknown>>;
+		render(
+			<QueryStateProvider
+				collection="logs"
+				initialPageSize={1}
+				initialSort={{ field: 'level', direction: 'asc' }}
+			>
+				<BindingDataTable
+					id="logs"
+					collectionName="logs"
+					resource={{ kind: 'resource' }}
+					sort={{ field: 'level', direction: 'asc' }}
+					actions={{
+						setSort: mockSetSort,
+						extendLimit: mockExtendLimit,
+						setFilter: mockSetFilter,
+					}}
+					active$={of(false)}
+					total$={of(0)}
+					sync={jest.fn(async () => undefined)}
+					TableFooterComponent={Footer}
+				/>
+			</QueryStateProvider>
+		);
+	}
+
+	it('says "searching", not "no results", while an active search is still pending (#1733)', () => {
+		mockResult = { hits: [], searchActive: true, searchState: 'pending' };
+		renderEmptyStateTable();
+
+		expect(screen.getByTestId('search-pending-message').textContent).toBe('common.searching');
+		expect(screen.queryByTestId('no-data-message')).toBeNull();
+	});
+
+	it('says "no results" only once the search has actually answered', () => {
+		mockResult = { hits: [], searchActive: true, searchState: 'answered' };
+		renderEmptyStateTable();
+
+		expect(screen.getByTestId('no-data-message').textContent).toBe('common.no_results_found');
+		expect(screen.queryByTestId('search-pending-message')).toBeNull();
 	});
 
 	it('uses binding actions for sorting and pagination and publishes only filter actions to cells', () => {

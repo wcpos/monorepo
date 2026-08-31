@@ -293,6 +293,7 @@
 	"common.search_states": "Search States",
 	"common.search_tags": "Search Tags",
 	"common.search_variations": "Search Variations",
+	"common.searching": "Searching…",
 	"common.select": "Select",
 	"common.select_a_currency_position": "Select a currency position",
 	"common.select_brand": "Select Brand",
@@ -1454,6 +1455,8 @@
 	"health.logs.error_summary.PRINT311": "This receipt could not be emailed or downloaded.",
 	"health.logs.error_summary.CLIENT131": "WCPOS queued too many requests at once and dropped some.",
 	"health.logs.error_summary.CLIENT141": "Local search returned results that do not match the catalogue; the app attempts an automatic search index rebuild.",
+	"health.logs.error_summary.CLIENT142": "The search index did not answer in time, so WCPOS searched the catalogue directly instead.",
+	"health.logs.error_summary.CLIENT143": "The search index could not find a product it should contain; the app attempts an automatic search index rebuild.",
 	"health.logs.error_summary.CHECKOUT411": "A line on this order has price details the POS could not read, so its amount was taken from the stored totals instead.",
 	"health.logs.error_summary.CHECKOUT421": "This order refers to a tax rate your store no longer has, so its tax may be wrong.",
 	"health.logs.error_action.SYNC101": "Note the unsaved change and check device storage, then restart. Do not clear local data.",
@@ -1534,6 +1537,8 @@
 	"health.logs.error_action.PRINT311": "Retry; check the email/SMTP or download settings.",
 	"health.logs.error_action.CLIENT131": "Pause a moment, confirm your last action went through, then retry.",
 	"health.logs.error_action.CLIENT141": "No action needed. If search results still look wrong, reload the app.",
+	"health.logs.error_action.CLIENT142": "No action needed. Search keeps working from a direct catalogue scan.",
+	"health.logs.error_action.CLIENT143": "No action needed. If search still misses products you can see in the catalogue, reload the app.",
 	"health.logs.error_action.CHECKOUT411": "Remove that line and add it again, then check the total.",
 	"health.logs.error_action.CHECKOUT421": "Check the tax on this order; ask the admin whether a tax rate was deleted."
 }

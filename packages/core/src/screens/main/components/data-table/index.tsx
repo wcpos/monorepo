@@ -260,9 +260,17 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 					onEndReached={handleEndReached}
 					ListEmptyComponent={() => (
 						<TableRow className="justify-center p-2">
-							<Text testID="no-data-message">
-								{noDataMessage ? noDataMessage : t('common.no_results_found')}
-							</Text>
+							{/* "No results" may only ever mean the search ANSWERED with nothing.
+							    A pending search (index building, engine database not bound yet)
+							    says so instead — rendering the ordinary empty state there reads
+							    as "this record does not exist" (#1733). */}
+							{deferredResult.searchActive && deferredResult.searchState === 'pending' ? (
+								<Text testID="search-pending-message">{t('common.searching')}</Text>
+							) : (
+								<Text testID="no-data-message">
+									{noDataMessage ? noDataMessage : t('common.no_results_found')}
+								</Text>
+							)}
 						</TableRow>
 					)}
 					ListFooterComponent={() =>
