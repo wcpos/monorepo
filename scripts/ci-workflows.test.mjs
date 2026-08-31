@@ -2301,6 +2301,16 @@ test('the Android suite boots a 4 GB emulator from a cached quickboot snapshot',
 			`snapshot generation ${input} must match the suite step`
 		);
 	}
+
+	// v2.34.0 writes heap-size to the unrecognised hw.heapSize key. The
+	// pre-launch hook runs before the action creates a cache-miss AVD, so it
+	// must create the missing AVD before writing the recognised vm.heapSize.
+	for (const step of [generate, suite]) {
+		const preLaunch = String(step.with['pre-emulator-launch-script']);
+		assert.match(preLaunch, /\[ -d "\$ANDROID_AVD_HOME\/test\.avd" \] \|\|/);
+		assert.match(preLaunch, /avdmanager create avd/);
+		assert.match(preLaunch, /vm\.heapSize=576/);
+	}
 });
 
 test('the Android screenrecord encodes at half resolution on the guest cores', () => {

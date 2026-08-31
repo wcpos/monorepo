@@ -485,8 +485,16 @@ jobs:
           target: google_apis
           profile: ${{ matrix.device.profile }}
           arch: x86_64
+          avd-name: test
           disable-animations: true
           force-avd-creation: false
+          # v2.34.0 writes heap-size to the ignored hw.heapSize key. This hook
+          # runs after SDK install but before the action's AVD creation, so it
+          # creates only a missing AVD and writes Android's vm.heapSize key.
+          pre-emulator-launch-script: |
+            [ -d "$ANDROID_AVD_HOME/test.avd" ] || echo no | avdmanager create avd --force -n test --abi 'google_apis/x86_64' --package 'system-images;android-35;google_apis;x86_64' --device '${{ matrix.device.profile }}'
+            sed -i '/^vm\.heapSize=/d' "$ANDROID_AVD_HOME/test.avd/config.ini"
+            printf 'vm.heapSize=576\n' >> "$ANDROID_AVD_HOME/test.avd/config.ini"
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -dns-server 8.8.8.8,1.1.1.1
           cores: 4
           ram-size: 4096M
@@ -522,6 +530,7 @@ jobs:
           target: google_apis
           profile: ${{ matrix.device.profile }}
           arch: x86_64
+          avd-name: test
           disable-animations: true
           # swiftshader_indirect sidesteps the host-GPU ColorBuffer failures;
           # -no-snapshot-save boots FROM the cached quickboot snapshot (see the
@@ -555,6 +564,10 @@ jobs:
           ram-size: 4096M
           heap-size: 576M
           force-avd-creation: false
+          pre-emulator-launch-script: |
+            [ -d "$ANDROID_AVD_HOME/test.avd" ] || echo no | avdmanager create avd --force -n test --abi 'google_apis/x86_64' --package 'system-images;android-35;google_apis;x86_64' --device '${{ matrix.device.profile }}'
+            sed -i '/^vm\.heapSize=/d' "$ANDROID_AVD_HOME/test.avd/config.ini"
+            printf 'vm.heapSize=576\n' >> "$ANDROID_AVD_HOME/test.avd/config.ini"
           emulator-boot-timeout: 900
           script: |
             adb wait-for-device
