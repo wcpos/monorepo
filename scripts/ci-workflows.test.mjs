@@ -405,6 +405,16 @@ test('native E2E pull requests are planned and restricted to trusted non-draft c
 	);
 });
 
+test('the #1661 diagnostic dispatch is pinned to its authorized Android build', () => {
+	const resolve = findStep(
+		readWorkflow('e2e-native.yml'),
+		'build',
+		'🔑 Resolve revision under test'
+	);
+
+	assert.equal(resolve.env.RAW_PLATFORM, 'android');
+});
+
 test('native E2E routes next-target PRs to the next store', () => {
 	const workflow = readWorkflow('e2e-native.yml');
 
