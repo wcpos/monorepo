@@ -30,6 +30,18 @@ const FIELD_ALLOWLIST = [
 type LedgerValue = string | number | boolean;
 type NativeLoggingGlobal = typeof globalThis & { nativeLoggingHook?: unknown };
 
+// redactSensitiveText masks URL credentials, Bearer tokens, and key=value
+// pairs — but NOT a bare email in prose ("request failed for
+// cashier@example.com"), and CI artifacts are public. Mask emails after it,
+// mirroring sync-log-observer's server-prose contract.
+const redactLedgerString = (value: string): string =>
+	redactSensitiveText(value).replace(
+		/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
+		// A URL credential is already `[REDACTED]@host` at this point — leave
+		// that token alone instead of re-mangling it into nested brackets.
+		(match) => (match.startsWith('REDACTED@') ? match : '[REDACTED]')
+	);
+
 /** Serialize a ledger payload within the native log line limit without cutting JSON syntax. */
 function serializePayload(payload: Record<string, LedgerValue>): string {
 	let serialized = JSON.stringify(payload);
@@ -64,7 +76,7 @@ export function createE2eEngineLedgerObserver(): SyncObserver | null {
 			for (const key of FIELD_ALLOWLIST) {
 				const value = key === 'type' || key === 'collection' ? event[key] : fields[key];
 				if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-					payload[key] = typeof value === 'string' ? redactSensitiveText(value) : value;
+					payload[key] = typeof value === 'string' ? redactLedgerString(value) : value;
 				}
 			}
 			const errorCode = resolveSyncEventErrorCode(event);

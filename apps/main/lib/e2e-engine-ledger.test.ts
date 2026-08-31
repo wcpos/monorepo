@@ -132,6 +132,28 @@ describe('createE2eEngineLedgerObserver', () => {
 		});
 	});
 
+	it('masks a bare email in prose without re-mangling redacted URL credentials', () => {
+		process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
+		const lines: string[] = [];
+		nativeGlobal.nativeLoggingHook = (line) => lines.push(line);
+
+		createE2eEngineLedgerObserver()?.(
+			event({
+				type: 'coverage.require.error',
+				fields: {
+					errorDetail: 'request failed for cashier@example.com',
+					path: 'https://cashier:secret@example.com/wp-json',
+				},
+			})
+		);
+
+		expect(lines).toHaveLength(1);
+		expect(lines[0]).not.toContain('cashier@example.com');
+		const payload = JSON.parse(lines[0].slice('WCPOS_E2E_ENGINE '.length));
+		expect(payload.errorDetail).toBe('request failed for [REDACTED]');
+		expect(payload.path).toBe('https://[REDACTED]@example.com/wp-json');
+	});
+
 	it('falls back to console.warn when the native hook is unavailable', () => {
 		process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
 		delete nativeGlobal.nativeLoggingHook;
