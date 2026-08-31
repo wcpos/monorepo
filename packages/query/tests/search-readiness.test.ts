@@ -5,6 +5,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { startSearchReadiness } from '../src/search-readiness';
+import { sharedSearchInstances } from '../src/search-shared';
 import { createEngineDatabase, createFakeEngine, engineProduct } from '../src/testing';
 
 const searchLogger = getLogger(['wcpos', 'query', 'search']);
@@ -189,6 +190,67 @@ describe('startSearchReadiness', () => {
 			expect(searchError).not.toHaveBeenCalled();
 		} finally {
 			dispose();
+			await database.close();
+		}
+	});
+
+	it('does not publish a rebuilt index from a superseded database emission', async () => {
+		const database = await createEngineDatabase(['products', 'variations']);
+		await database.collections.products.bulkInsert([
+			engineProduct({ uuid: 'first-miss', id: 1, name: 'Coffee Grinder' }),
+			engineProduct({ uuid: 'second-miss', id: 2, name: 'Tea Strainer' }),
+		]);
+		const engine = createFakeEngine(database);
+		const initialScope = engine.active();
+		if (!initialScope) throw new Error('missing active scope fixture');
+		const listeners = new Set<(active: typeof database | null) => void>();
+		engine.active = () => ({ ...initialScope, database }) as never;
+		engine.db$ = (listener) => {
+			listeners.add(listener as (active: typeof database | null) => void);
+			listener(database);
+			return () => listeners.delete(listener as (active: typeof database | null) => void);
+		};
+
+		const brokenInstance = { collection: { $: of(null) }, find: jest.fn(async () => []) };
+		const staleRebuiltInstance = { collection: { $: of(null) }, find: jest.fn(async () => []) };
+		const currentInstance = { collection: { $: of(null) }, find: jest.fn(async () => []) };
+		const shared = sharedSearchInstances('products:database-switch', currentInstance);
+		let rebuildCompleted = false;
+		jest
+			.spyOn(database.collections.products, 'initSearch')
+			.mockImplementation(
+				async () => (rebuildCompleted ? staleRebuiltInstance : brokenInstance) as never
+			);
+		jest
+			.spyOn(database.collections.variations, 'initSearch')
+			.mockResolvedValue({ collection: { $: of(null) }, find: async () => [] } as never);
+		let finishRebuild: (() => void) | undefined;
+		const recreateSearch = jest.fn(
+			() =>
+				new Promise<null>((resolve) => {
+					finishRebuild = () => {
+						rebuildCompleted = true;
+						resolve(null);
+					};
+				})
+		);
+		Object.assign(database.collections.products, { recreateSearch });
+		const random = jest.spyOn(Math, 'random').mockReturnValueOnce(0).mockReturnValue(0.99);
+
+		const dispose = startSearchReadiness({
+			engine,
+			locale: 'database-switch',
+			timings: { ...TEST_TIMINGS, tillHeadStartCapMs: 10_000 },
+		});
+		try {
+			await waitFor(() => expect(recreateSearch).toHaveBeenCalledTimes(1), { timeout: 2000 });
+			listeners.forEach((listener) => listener(database));
+			finishRebuild?.();
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			expect(shared.value).toBe(currentInstance);
+		} finally {
+			dispose();
+			random.mockRestore();
 			await database.close();
 		}
 	});

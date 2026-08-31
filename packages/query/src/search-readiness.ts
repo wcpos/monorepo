@@ -161,6 +161,7 @@ export function startSearchReadiness(options: {
 	};
 	let disposed = false;
 	let currentDatabase: AdapterDatabase | null = null;
+	let databaseGeneration = 0;
 	const timers = new Set<ReturnType<typeof setTimeout>>();
 	/** Streak of missed audits per collection:locale, with the last missed document. */
 	const auditFailureStreaks = new Map<string, { count: number; lastUuid: string }>();
@@ -217,11 +218,16 @@ export function startSearchReadiness(options: {
 		});
 	};
 
-	const auditCollection = async (database: AdapterDatabase, name: SearchedCollection) => {
+	const auditCollection = async (
+		database: AdapterDatabase,
+		name: SearchedCollection,
+		generation: number
+	) => {
 		// A store switch mid-audit must not let this audit's conclusions — least
 		// of all a rebuild or a shared-instance rebind — land on the NEW scope's
 		// live subscriptions: the shared key carries only collection:locale.
-		const stale = () => disposed || currentDatabase !== database;
+		const stale = () =>
+			disposed || currentDatabase !== database || databaseGeneration !== generation;
 		const collection = database.collections[engineCollectionNameFor(name)] as unknown as
 			SearchableCollection | undefined;
 		if (!collection?.initSearch) return;
@@ -298,6 +304,7 @@ export function startSearchReadiness(options: {
 		rebuiltSearchIndexes.add(key);
 		try {
 			await collection.recreateSearch?.(locale);
+			if (stale()) return;
 			const rebuilt = await collection.initSearch(locale, initializationOptions);
 			// Rebind every live search subscription to the rebuilt instance — but
 			// never after a store switch: pushing the OLD scope's instance under the
@@ -312,10 +319,11 @@ export function startSearchReadiness(options: {
 
 	const auditTick = async () => {
 		const database = currentDatabase;
+		const generation = databaseGeneration;
 		if (!database || disposed) return;
 		for (const name of SEARCHED_COLLECTIONS) {
 			try {
-				await auditCollection(database, name);
+				await auditCollection(database, name, generation);
 			} catch (error) {
 				// An audit must never break anything: a failed read here is either
 				// transient or will surface through the query path's own recovery.
@@ -323,12 +331,13 @@ export function startSearchReadiness(options: {
 					context: { collection: name, locale, error },
 				});
 			}
-			if (disposed || currentDatabase !== database) return;
+			if (disposed || currentDatabase !== database || databaseGeneration !== generation) return;
 		}
 		schedule(() => void auditTick(), timings.auditIntervalMs);
 	};
 
 	const subscription = observeEngineDatabases(engine).subscribe((database) => {
+		databaseGeneration += 1;
 		currentDatabase = database as unknown as AdapterDatabase | null;
 		// A database swap (store switch) restarts the cadence against the new scope.
 		clearTimers();
