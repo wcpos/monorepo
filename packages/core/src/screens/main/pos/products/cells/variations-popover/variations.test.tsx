@@ -31,6 +31,9 @@ const mockSync = jest.fn().mockResolvedValue(undefined);
 let mockResultCount: number | null = null;
 // The most recent result$ subscriber - lets a test emit a later count.
 let mockResultNext: ((result: { count: number }) => void) | null = null;
+// When true, result$ never emits on subscribe - the count stays at the effect's
+// -1 "unknown" sentinel, the shape of a live query delaying its first emission.
+let mockResultSilent = false;
 const mockUseCollectionBinding = jest.fn(
 	(_collection: string, state: { filters: { status?: string } }) => {
 		const hits =
@@ -44,7 +47,7 @@ const mockUseCollectionBinding = jest.fn(
 			resource: { value: { count, hits } },
 			result$: {
 				subscribe(next: (result: { count: number }) => void) {
-					next({ count });
+					if (!mockResultSilent) next({ count });
 					mockResultNext = next;
 					return { unsubscribe() {} };
 				},
@@ -167,6 +170,7 @@ describe('Variations popover query state', () => {
 		mockSync.mockClear();
 		mockResultCount = null;
 		mockResultNext = null;
+		mockResultSilent = false;
 	});
 
 	it('refreshes variations once when opened, not when re-rendered', () => {
@@ -229,6 +233,103 @@ describe('Variations popover query state', () => {
 			});
 			expect(mockSync).toHaveBeenCalledTimes(3);
 		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it('retries even when the refresh never settles (the hang shape)', async () => {
+		// Run 33382238335 (iOS phone): the wedge recurred with ZERO retry logs -
+		// sync() hung, and a retry chained on resolution never scheduled. The
+		// settle timeout must convert the hang into a logged retry.
+		jest.useFakeTimers();
+		try {
+			mockResultCount = 0;
+			mockSync.mockImplementation(() => new Promise(() => {}));
+			render(
+				<VariationsPopover
+					parent={
+						{
+							payload: {
+								variations: [11, 12],
+								attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
+							},
+						} as never
+					}
+					addToCart={jest.fn()}
+				/>
+			);
+			expect(mockSync).toHaveBeenCalledTimes(1);
+			await act(async () => {});
+
+			// Settle timeout (15 s) fires, then the first retry delay (3 s).
+			await act(async () => {
+				jest.advanceTimersByTime(15000 + 3000);
+			});
+			expect(mockSync).toHaveBeenCalledTimes(2);
+
+			// Second hang: settle timeout again, then the 10 s delay.
+			await act(async () => {
+				jest.advanceTimersByTime(15000 + 10000);
+			});
+			expect(mockSync).toHaveBeenCalledTimes(3);
+
+			// Retries spent: the loop stops even though nothing ever settles.
+			await act(async () => {
+				jest.advanceTimersByTime(600000);
+			});
+			expect(mockSync).toHaveBeenCalledTimes(3);
+		} finally {
+			mockSync.mockReset();
+			mockSync.mockResolvedValue(undefined);
+			jest.useRealTimers();
+		}
+	});
+
+	it('retries when result$ never emits and the refresh never settles', async () => {
+		// CodeRabbit on #1731: with a silent result$ the count stays at the -1
+		// sentinel, and a "!== 0" guard read unknown as "variations present" -
+		// the settle timeout then exited without logging or retrying, recreating
+		// the zero-log wedge this PR fixes. Unknown must be retryable.
+		jest.useFakeTimers();
+		try {
+			mockResultSilent = true;
+			mockSync.mockImplementation(() => new Promise(() => {}));
+			render(
+				<VariationsPopover
+					parent={
+						{
+							payload: {
+								variations: [11, 12],
+								attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
+							},
+						} as never
+					}
+					addToCart={jest.fn()}
+				/>
+			);
+			expect(mockSync).toHaveBeenCalledTimes(1);
+			await act(async () => {});
+
+			// Settle timeout (15 s) fires with the count still unknown, then the
+			// first retry delay (3 s) - the retry must still be scheduled.
+			await act(async () => {
+				jest.advanceTimersByTime(15000 + 3000);
+			});
+			expect(mockSync).toHaveBeenCalledTimes(2);
+
+			await act(async () => {
+				jest.advanceTimersByTime(15000 + 10000);
+			});
+			expect(mockSync).toHaveBeenCalledTimes(3);
+
+			// Retries spent: the loop stops even though the count never reports.
+			await act(async () => {
+				jest.advanceTimersByTime(600000);
+			});
+			expect(mockSync).toHaveBeenCalledTimes(3);
+		} finally {
+			mockSync.mockReset();
+			mockSync.mockResolvedValue(undefined);
 			jest.useRealTimers();
 		}
 	});

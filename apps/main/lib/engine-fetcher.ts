@@ -268,6 +268,13 @@ export function createEngineFetcher(input: {
 			} catch (error) {
 				const atMs = now();
 				const durationMs = atMs - startedAtMs;
+				const isNativeCancel =
+					init?.signal?.aborted === true &&
+					error instanceof Error &&
+					/FetchRequestCanceledException|Fetch request has been canceled|UnexpectedException: cancelled|The operation was aborted/i.test(
+						error.message
+					);
+				if (isNativeCancel) error.name = 'AbortError';
 				const aborted = (error as { name?: unknown } | null)?.name === 'AbortError';
 				input.emitTransport(
 					{
