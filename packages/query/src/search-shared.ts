@@ -58,20 +58,8 @@ export function sharedSearchInstances(
 	return existing;
 }
 
-/** FlexSearch's own notion of a word boundary, mirrored wherever we tokenize like it. */
-export const FLEXSEARCH_TOKEN_BOUNDARY = /[\p{Z}\p{S}\p{P}\p{C}]+/u;
-
-/**
- * Lowercase ONLY, exactly what FlexSearch's encoder does under our config
- * (probed 2026-08-31: `preset: 'performance', tokenize: 'full'` matches
- * case-insensitively but performs no Unicode normalization whatsoever — an NFC
- * query does not match an NFD-stored name, and no diacritics are stripped).
- * A fallback that matched more loosely than the index would make results
- * appear from the scan and vanish when the indexed answer swaps in, and would
- * let the audit probe tokens the index never stored. Normalization-insensitive
- * matching is #1732 and must land in BOTH paths together, with an index
- * version bump.
- */
-export function normalizeForScan(value: string): string {
-	return value.toLowerCase();
-}
+// Folding note: every plane that matches text — the index's encoder, the scan
+// fallback, the false-hit verifier, and the audit's token probes — must use
+// the ONE shared `foldSearchText`/`FLEXSEARCH_TOKEN_BOUNDARY` from
+// `@wcpos/sync-core` (#1732). A plane that folds differently makes results
+// appear from one path and vanish when another takes over.

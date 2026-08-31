@@ -2,13 +2,16 @@ import get from 'lodash/get';
 
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
+import {
+	FLEXSEARCH_MIN_TERM_LENGTH,
+	FLEXSEARCH_TOKEN_BOUNDARY,
+	foldSearchText,
+} from '@wcpos/sync-core';
 
 import { engineCollectionNameFor, LEGACY_SEARCH_FIELDS } from './engine-adapter/collection-map';
 import { legacySearchSnapshot } from './engine-adapter/search-snapshot';
-import { FLEXSEARCH_MIN_TERM_LENGTH, observeEngineDatabases } from './engine-query';
+import { observeEngineDatabases } from './engine-query';
 import {
-	FLEXSEARCH_TOKEN_BOUNDARY,
-	normalizeForScan,
 	rebuiltSearchIndexes,
 	type SearchableCollection,
 	type SearchInstance,
@@ -110,7 +113,7 @@ function candidateTokens(snapshot: Record<string, unknown>, searchFields: string
 	for (const field of searchFields) {
 		const value = get(snapshot, field);
 		if (value === undefined || value === null) continue;
-		for (const token of normalizeForScan(String(value)).split(FLEXSEARCH_TOKEN_BOUNDARY)) {
+		for (const token of foldSearchText(value).split(FLEXSEARCH_TOKEN_BOUNDARY)) {
 			if (token.length >= FLEXSEARCH_MIN_TERM_LENGTH && !tokens.includes(token)) {
 				tokens.push(token);
 			}

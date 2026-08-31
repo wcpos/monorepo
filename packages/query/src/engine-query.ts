@@ -22,7 +22,11 @@ import {
 } from 'rxjs/operators';
 import get from 'lodash/get';
 
-import { FLEXSEARCH_MIN_TERM_LENGTH } from '@wcpos/sync-core';
+import {
+	FLEXSEARCH_MIN_TERM_LENGTH,
+	FLEXSEARCH_TOKEN_BOUNDARY,
+	foldSearchText,
+} from '@wcpos/sync-core';
 import type { CoverageTarget, CoverageVerdict, RxdbSyncEngine } from '@wcpos/sync-engine';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -40,8 +44,6 @@ import {
 import { legacySearchSnapshot } from './engine-adapter/search-snapshot';
 import { recoverEngineCollectionStorage } from './logs-storage-recovery';
 import {
-	FLEXSEARCH_TOKEN_BOUNDARY,
-	normalizeForScan,
 	rebuiltSearchIndexes,
 	type SearchableCollection,
 	searchLogger,
@@ -138,16 +140,13 @@ function withSearchSelector(selector: LegacyMangoSelector, ids: string[]): Legac
 		: ({ $and: [selector, searchSelector] } as LegacyMangoSelector);
 }
 
-const DIACRITICS = /[\u0300-\u036f]/g;
-function normalizeSearchValue(value: unknown) {
-	return String(value).toLowerCase().normalize('NFD').replace(DIACRITICS, '');
-}
-
 /**
  * The fallback answer when the index cannot answer: match the query directly
  * against the documents, mirroring the index's semantics — per-token AND over
  * the same fields joined into one blob, substring match (`tokenize: 'full'`),
  * tokens under the index's minimum length dropped as the index drops them.
+ * Folding goes through the SAME `foldSearchText` the index's encoder uses
+ * (#1732), so a scan answer and the indexed answer that replaces it agree.
  *
  * The scan reads the documents themselves, so its answer is ground truth for
  * local data; the indexed answer replaces it only because the index also
@@ -159,20 +158,19 @@ async function scanDocumentsForSearch(
 	searchFields: string[],
 	documentSnapshot: (document: EngineRxDocument) => Record<string, unknown>
 ): Promise<EngineRxDocument[]> {
-	const tokens = normalizeForScan(search)
+	const tokens = foldSearchText(search)
 		.split(FLEXSEARCH_TOKEN_BOUNDARY)
 		.filter((token) => token.length >= FLEXSEARCH_MIN_TERM_LENGTH);
 	if (tokens.length === 0 || searchFields.length === 0) return [];
 	const documents = await collection.find().exec();
 	return documents.filter((document) => {
 		const snapshot = documentSnapshot(document);
-		const blob = normalizeForScan(
+		const blob = foldSearchText(
 			searchFields.map((field) => String(get(snapshot, field) ?? '')).join(' ')
 		);
 		return tokens.every((token) => blob.includes(token));
 	});
 }
-
 function matchingSelectors$(
 	database: AdapterDatabase,
 	descriptor: EngineQueryDescriptor,
@@ -189,8 +187,14 @@ function matchingSelectors$(
 	const documentSnapshot = (document: EngineRxDocument): Record<string, unknown> =>
 		legacySearchSnapshot(descriptor.collection, document);
 
-	if (search.length < FLEXSEARCH_MIN_TERM_LENGTH) {
-		const prefix = search.toLowerCase();
+	// Route on the FOLDED length, not the raw one: a pasted NFD "Cè" is 3 code units but
+	// folds to 2 chars, which the index's minlength would silently drop — it belongs on the
+	// short-prefix path with the typed NFC "Cè" (#1732). A query that folds away entirely
+	// (only combining marks) matches everything, like WooCommerce's ai_ci LIKE would.
+	const foldedSearch = foldSearchText(search);
+	if (!foldedSearch) return of(selector);
+	if (foldedSearch.length < FLEXSEARCH_MIN_TERM_LENGTH) {
+		const prefix = foldedSearch;
 		// Mirror initSearch's fallback so short and indexed terms search the same fields.
 		const searchFields =
 			descriptor.read?.searchFields ??
@@ -211,7 +215,7 @@ function matchingSelectors$(
 							return searchFields.some((field) =>
 								String(get(snapshot, field) ?? '')
 									.split(/\s+/)
-									.some((token) => token.toLowerCase().startsWith(prefix))
+									.some((token) => foldSearchText(token).startsWith(prefix))
 							);
 						})
 						.map((document) => document.primary)
@@ -222,16 +226,14 @@ function matchingSelectors$(
 	const configuredFields = descriptor.read?.searchFields ?? descriptor.searchFields;
 	const searchFields = configuredFields ?? collection.options?.searchFields ?? [];
 	const findFalseHits = (documents: EngineRxDocument[]) => {
-		const tokens = normalizeSearchValue(search)
+		const tokens = foldSearchText(search)
 			.split(FLEXSEARCH_TOKEN_BOUNDARY)
 			.filter((token) => token.length >= FLEXSEARCH_MIN_TERM_LENGTH);
 		if (searchFields.length === 0 || tokens.length === 0) return [];
 		return documents.flatMap((document) => {
 			const snapshot = documentSnapshot(document);
 			const fields = searchFields.map((field) => String(get(snapshot, field) ?? ''));
-			return tokens.some((token) =>
-				fields.every((field) => !normalizeSearchValue(field).includes(token))
-			)
+			return tokens.some((token) => fields.every((field) => !foldSearchText(field).includes(token)))
 				? [{ document, uuid: document.primary, fields: fields.join(' ').slice(0, 120) }]
 				: [];
 		});

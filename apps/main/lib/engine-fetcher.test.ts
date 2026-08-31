@@ -932,6 +932,24 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
+	it('normalizes an iOS native cancellation for an aborted request', async () => {
+		const controller = new AbortController();
+		const cancellation = new Error(
+			'fetch failed: UnexpectedException: cancelled (at ExpoModulesCore/Promise.swift:56)'
+		);
+		const fetch = jest.fn().mockRejectedValue(cancellation);
+		const { fetcher, recordTransport, networkWarn } = createFetcherHarness({ fetch });
+		controller.abort();
+
+		await expect(
+			fetcher('https://store.example.test/wp-json/wcpos/v2/products', {
+				signal: controller.signal,
+			})
+		).rejects.toMatchObject({ name: 'AbortError' });
+		expect(recordTransport).toHaveBeenCalledWith(expect.objectContaining({ failed: false }));
+		expect(networkWarn).not.toHaveBeenCalled();
+	});
+
 	it('does not persist a row for a successful request, and never logs query credentials', async () => {
 		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
 		const { fetcher, networkInfo, appMetricsObserver } = createFetcherHarness({
