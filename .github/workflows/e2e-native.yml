@@ -349,8 +349,12 @@ jobs:
       fail-fast: false
       matrix:
         device:
-          - { name: phone, profile: pixel_6 }
-          - { name: tablet, profile: pixel_tablet }
+          # record_size: HALF the device resolution. screenrecord encodes on the
+          # emulator's guest cores - the same 4 vCPUs everything else shares -
+          # and encode cost scales with pixels; half resolution is ~1/4 the
+          # work and the failure video stays perfectly readable.
+          - { name: phone, profile: pixel_6, record_size: 540x1200 }
+          - { name: tablet, profile: pixel_tablet, record_size: 1280x800 }
     steps:
       - name: 🏗 Setup repository (workflow revision)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -448,6 +452,43 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      # AVD + quickboot snapshot cache (the documented android-emulator-runner
+      # recipe): first-boot provisioning plus cold boot costs ~5-8 min per job
+      # and the cold first boot is where the system-process ANR dialogs and the
+      # adb transport flaps live. The key pins every input that shapes the AVD,
+      # so a restore is deterministic - the stale-restore worry that once
+      # justified -no-snapshot does not apply to a cache this narrowly keyed.
+      - name: 📦 Cache AVD snapshot
+        id: avd-cache
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-api35-google_apis-x86_64-${{ matrix.device.profile }}-cores4-ram4096-v1
+
+      # Cache miss: create the AVD and save a clean quickboot snapshot (no
+      # -no-snapshot in the options, so the emulator saves state on exit).
+      # Every AVD-shaping input MUST match the run step below or the snapshot
+      # is invalid. The suite step then boots from this snapshot.
+      - name: 📱 Generate AVD snapshot
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 25
+        uses: reactivecircus/android-emulator-runner@1dcd0090116d15e7c562f8db72807de5e036a4ed # v2.34.0
+        with:
+          api-level: 35
+          target: google_apis
+          profile: ${{ matrix.device.profile }}
+          arch: x86_64
+          disable-animations: true
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -dns-server 8.8.8.8,1.1.1.1
+          cores: 4
+          ram-size: 4096M
+          heap-size: 576M
+          emulator-boot-timeout: 900
+          script: echo "Generated AVD snapshot for caching."
+
       # STEP timeout 10 min under the job's: `always()` cannot buy execution
       # time past the JOB deadline — GitHub cancels the whole job there, and
       # the streamed log would still be lost in the exact rover-hang scenario
@@ -468,7 +509,9 @@ jobs:
           arch: x86_64
           disable-animations: true
           # swiftshader_indirect sidesteps the host-GPU ColorBuffer failures;
-          # no-snapshot avoids stale snapshot restores on ephemeral runners.
+          # -no-snapshot-save boots FROM the cached quickboot snapshot (see the
+          # cache step above) without overwriting it - a cold boot happens only
+          # on a cache miss, in the generation step.
           # -dns-server: the emulator otherwise forwards guest DNS to the host's
           # resolver through its 10.0.2.3 proxy, and on some runners that proxy
           # never answers — run 33325931363 (phone) booted with every
@@ -477,7 +520,7 @@ jobs:
           # flow 01 passed (it asserts a bogus host fails) and flow 02 died on
           # "Site does not seem to be a WordPress site" against a store that
           # answered the host in 0.45 s. Public resolvers bypass the proxy.
-          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -dns-server 8.8.8.8,1.1.1.1
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -dns-server 8.8.8.8,1.1.1.1
           # All 4 of the runner's vCPUs, not the action's default 2:
           # swiftshader renders the GPU on these same guest cores, so the app
           # and its renderer were sharing two virtual CPUs — the
@@ -489,6 +532,14 @@ jobs:
           # thrashes worse than 3 the table will say so and this is a
           # one-line revert.
           cores: 4
+          # 4 GB guest RAM (profile default is 2 GB) + the community-standard
+          # 576 MB VM heap: the first-boot catalog sync hammers SQLite and the
+          # JS heap at exactly the moment the guest is most memory-starved -
+          # the cheapest lever against the sync-window rover (MNF discussion
+          # #229; measured against the 2026-08-31 baseline in the handoff).
+          ram-size: 4096M
+          heap-size: 576M
+          force-avd-creation: false
           emulator-boot-timeout: 900
           script: |
             adb wait-for-device
@@ -541,7 +592,7 @@ jobs:
             # ~180s, so loop it into numbered segments for the life of the run;
             # the loop dies with the job. ONE LINE, per the rule above: a
             # continuation backslash here becomes a literal maestro argument.
-            nohup sh -c 'i=0; while [ $i -lt 40 ] && [ ! -f "$HOME/.maestro/tests/stop-screenrecord" ]; do adb shell screenrecord --time-limit 180 "/sdcard/screen-$i.mp4" || break; adb pull "/sdcard/screen-$i.mp4" "$HOME/.maestro/tests/screen-$i.mp4" >/dev/null 2>&1 || true; adb shell rm -f "/sdcard/screen-$i.mp4" >/dev/null 2>&1 || true; i=$((i + 1)); done' > /dev/null 2>&1 & echo $! > ~/.maestro/tests/screenrecord-loop.pid
+            nohup sh -c 'i=0; while [ $i -lt 40 ] && [ ! -f "$HOME/.maestro/tests/stop-screenrecord" ]; do adb shell screenrecord --time-limit 180 --size "$RECORD_SIZE" --bit-rate 2000000 "/sdcard/screen-$i.mp4" || break; adb pull "/sdcard/screen-$i.mp4" "$HOME/.maestro/tests/screen-$i.mp4" >/dev/null 2>&1 || true; adb shell rm -f "/sdcard/screen-$i.mp4" >/dev/null 2>&1 || true; i=$((i + 1)); done' > /dev/null 2>&1 & echo $! > ~/.maestro/tests/screenrecord-loop.pid
             # Output tees into the artifact for the timing-triage step. The
             # runner's sh is dash (no pipefail), and each script line is its
             # own shell — so maestro's real exit code crosses lines via a
@@ -588,6 +639,8 @@ jobs:
           # instrumentation channel; first-boot emulators on shared runners
           # regularly exceed the 15s default.
           MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000'
+          # Half-resolution screenrecord target - see the matrix comment.
+          RECORD_SIZE: ${{ matrix.device.record_size }}
           # Pins flow 07 to the seeded product's id-bearing testID; the `.*`
           # fallback (also the flow's own default) matches any variable tile.
           VARIABLE_PRODUCT_ID: ${{ needs.build.outputs.variable_product_id }}
