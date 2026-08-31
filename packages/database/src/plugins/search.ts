@@ -2,7 +2,7 @@ import get from 'lodash/get';
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { FLEXSEARCH_MIN_TERM_LENGTH } from '@wcpos/sync-core';
+import { encodeSearchText, FLEXSEARCH_MIN_TERM_LENGTH } from '@wcpos/sync-core';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import type { RxCollection, RxPlugin } from 'rxdb';
@@ -36,8 +36,9 @@ function normalizeLocale(locale: string): string {
  * checkpoint and an empty index collection, forcing a one-time full rebuild.
  *
  * v2: tokenize 'forward' -> 'full' for WooCommerce-parity mid-word matching (#679).
+ * v3: accent-/Unicode-normalization-folding encoder (#1732).
  */
-const SEARCH_INDEX_VERSION = 'v2';
+const SEARCH_INDEX_VERSION = 'v3';
 
 /**
  * Build the FlexSearch instance identifier for a collection + locale.
@@ -164,6 +165,9 @@ async function createSearchInstance(
 			// do NOT enable `suggest` on queries: WooCommerce search is not fuzzy, and
 			// best-effort partial results would return matches Woo would not. See #679.
 			tokenize: 'full',
+			// Make the index accent- and NFC/NFD-insensitive like WooCommerce admin search (#1732).
+			// The query-side verifier applies the same fold so the two planes converge.
+			encode: encodeSearchText,
 			minlength: FLEXSEARCH_MIN_TERM_LENGTH,
 			language: locale,
 		},

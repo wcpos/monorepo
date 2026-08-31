@@ -2,7 +2,11 @@ import { BehaviorSubject, defer, EMPTY, from, Observable, of, throwError } from 
 import { catchError, distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
 import get from 'lodash/get';
 
-import { FLEXSEARCH_MIN_TERM_LENGTH } from '@wcpos/sync-core';
+import {
+	FLEXSEARCH_MIN_TERM_LENGTH,
+	FLEXSEARCH_TOKEN_BOUNDARY,
+	foldSearchText,
+} from '@wcpos/sync-core';
 import type { CoverageTarget, CoverageVerdict, RxdbSyncEngine } from '@wcpos/sync-engine';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -142,12 +146,6 @@ function withSearchSelector(selector: LegacyMangoSelector, ids: string[]): Legac
 		: ({ $and: [selector, searchSelector] } as LegacyMangoSelector);
 }
 
-const DIACRITICS = /[\u0300-\u036f]/g;
-const FLEXSEARCH_TOKEN_BOUNDARY = /[\p{Z}\p{S}\p{P}\p{C}]+/u;
-function normalizeSearchValue(value: unknown) {
-	return String(value).toLowerCase().normalize('NFD').replace(DIACRITICS, '');
-}
-
 function matchingSelectors$(
 	database: AdapterDatabase,
 	descriptor: EngineQueryDescriptor,
@@ -164,8 +162,14 @@ function matchingSelectors$(
 	const documentSnapshot = (document: EngineRxDocument): Record<string, unknown> =>
 		legacySearchSnapshot(descriptor.collection, document);
 
-	if (search.length < FLEXSEARCH_MIN_TERM_LENGTH) {
-		const prefix = search.toLowerCase();
+	// Route on the FOLDED length, not the raw one: a pasted NFD "Cè" is 3 code units but
+	// folds to 2 chars, which the index's minlength would silently drop — it belongs on the
+	// short-prefix path with the typed NFC "Cè" (#1732). A query that folds away entirely
+	// (only combining marks) matches everything, like WooCommerce's ai_ci LIKE would.
+	const foldedSearch = foldSearchText(search);
+	if (!foldedSearch) return of(selector);
+	if (foldedSearch.length < FLEXSEARCH_MIN_TERM_LENGTH) {
+		const prefix = foldedSearch;
 		// Mirror initSearch's fallback so short and indexed terms search the same fields.
 		const searchFields =
 			descriptor.read?.searchFields ??
@@ -186,7 +190,7 @@ function matchingSelectors$(
 							return searchFields.some((field) =>
 								String(get(snapshot, field) ?? '')
 									.split(/\s+/)
-									.some((token) => token.toLowerCase().startsWith(prefix))
+									.some((token) => foldSearchText(token).startsWith(prefix))
 							);
 						})
 						.map((document) => document.primary)
@@ -197,16 +201,14 @@ function matchingSelectors$(
 	const configuredFields = descriptor.read?.searchFields ?? descriptor.searchFields;
 	const searchFields = configuredFields ?? collection.options?.searchFields ?? [];
 	const findFalseHits = (documents: EngineRxDocument[]) => {
-		const tokens = normalizeSearchValue(search)
+		const tokens = foldSearchText(search)
 			.split(FLEXSEARCH_TOKEN_BOUNDARY)
 			.filter((token) => token.length >= FLEXSEARCH_MIN_TERM_LENGTH);
 		if (searchFields.length === 0 || tokens.length === 0) return [];
 		return documents.flatMap((document) => {
 			const snapshot = documentSnapshot(document);
 			const fields = searchFields.map((field) => String(get(snapshot, field) ?? ''));
-			return tokens.some((token) =>
-				fields.every((field) => !normalizeSearchValue(field).includes(token))
-			)
+			return tokens.some((token) => fields.every((field) => !foldSearchText(field).includes(token)))
 				? [{ document, uuid: document.primary, fields: fields.join(' ').slice(0, 120) }]
 				: [];
 		});
