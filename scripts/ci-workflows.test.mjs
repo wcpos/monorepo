@@ -2271,14 +2271,23 @@ test('the Android suite boots a 4 GB emulator from a cached quickboot snapshot',
 	assert.match(suite.with['emulator-options'], /-no-snapshot-save/);
 	assert.doesNotMatch(suite.with['emulator-options'], /-no-snapshot(?!-save)/);
 
-	const cache = findStep(workflow, 'android', '📦 Cache AVD snapshot');
+	// restore/save split: plain actions/cache saves in a post-if: success()
+	// step, so a budget-killed suite would discard the snapshot forever.
+	const cache = findStep(workflow, 'android', '📦 Restore AVD snapshot');
 	assert.equal(cache.id, 'avd-cache');
+	assert.match(cache.uses, /actions\/cache\/restore@/);
 	for (const input of ['api35', 'google_apis', 'x86_64', 'cores4', 'ram4096', 'heap576']) {
 		assert.ok(
 			String(cache.with.key).includes(input),
 			`AVD cache key must pin ${input} - an unkeyed input makes restores stale`
 		);
 	}
+
+	const save = findStep(workflow, 'android', '📦 Save AVD snapshot');
+	assert.match(save.uses, /actions\/cache\/save@/);
+	assert.equal(save.if, "steps.avd-cache.outputs.cache-hit != 'true'");
+	assert.equal(save.with.key, cache.with.key, 'save and restore must share the key');
+	assert.equal(save.with.path, cache.with.path, 'save and restore must share the paths');
 
 	const generate = findStep(workflow, 'android', '📱 Generate AVD snapshot');
 	assert.equal(generate.if, "steps.avd-cache.outputs.cache-hit != 'true'");

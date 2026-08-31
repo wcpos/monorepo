@@ -458,9 +458,14 @@ jobs:
       # adb transport flaps live. The key pins every input that shapes the AVD,
       # so a restore is deterministic - the stale-restore worry that once
       # justified -no-snapshot does not apply to a cache this narrowly keyed.
-      - name: 📦 Cache AVD snapshot
+      # restore/save SPLIT, not plain actions/cache: the combined action saves
+      # in a `post-if: success()` step, so a suite failure (the 90-min budget
+      # kill included) would discard the freshly generated snapshot - on this
+      # lane the cache would never seed. The explicit save step below runs
+      # right after generation, before the suite can fail.
+      - name: 📦 Restore AVD snapshot
         id: avd-cache
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: |
             ~/.android/avd/*
@@ -488,6 +493,16 @@ jobs:
           heap-size: 576M
           emulator-boot-timeout: 900
           script: echo "Generated AVD snapshot for caching."
+
+      # Persist the snapshot the moment it exists - see the restore/save note.
+      - name: 📦 Save AVD snapshot
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-api35-google_apis-x86_64-${{ matrix.device.profile }}-cores4-ram4096-heap576-v1
 
       # STEP timeout 10 min under the job's: `always()` cannot buy execution
       # time past the JOB deadline — GitHub cancels the whole job there, and
