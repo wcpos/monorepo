@@ -233,6 +233,54 @@ describe('Variations popover query state', () => {
 		}
 	});
 
+	it('retries even when the refresh never settles (the hang shape)', async () => {
+		// Run 33382238335 (iOS phone): the wedge recurred with ZERO retry logs -
+		// sync() hung, and a retry chained on resolution never scheduled. The
+		// settle timeout must convert the hang into a logged retry.
+		jest.useFakeTimers();
+		try {
+			mockResultCount = 0;
+			mockSync.mockImplementation(() => new Promise(() => {}));
+			render(
+				<VariationsPopover
+					parent={
+						{
+							payload: {
+								variations: [11, 12],
+								attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
+							},
+						} as never
+					}
+					addToCart={jest.fn()}
+				/>
+			);
+			expect(mockSync).toHaveBeenCalledTimes(1);
+			await act(async () => {});
+
+			// Settle timeout (15 s) fires, then the first retry delay (3 s).
+			await act(async () => {
+				jest.advanceTimersByTime(15000 + 3000);
+			});
+			expect(mockSync).toHaveBeenCalledTimes(2);
+
+			// Second hang: settle timeout again, then the 10 s delay.
+			await act(async () => {
+				jest.advanceTimersByTime(15000 + 10000);
+			});
+			expect(mockSync).toHaveBeenCalledTimes(3);
+
+			// Retries spent: the loop stops even though nothing ever settles.
+			await act(async () => {
+				jest.advanceTimersByTime(600000);
+			});
+			expect(mockSync).toHaveBeenCalledTimes(3);
+		} finally {
+			mockSync.mockReset();
+			mockSync.mockResolvedValue(undefined);
+			jest.useRealTimers();
+		}
+	});
+
 	it('skips a scheduled retry when variations arrive during the delay', async () => {
 		jest.useFakeTimers();
 		try {
