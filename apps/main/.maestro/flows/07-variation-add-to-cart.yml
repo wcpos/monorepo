@@ -94,6 +94,28 @@ env:
 - tapOn:
     id: "variable-product-tile-${typeof VARIABLE_PRODUCT_ID === 'undefined' ? '.*' : VARIABLE_PRODUCT_ID}"
     index: 0
+# One logged re-tap when the popover never opens. Run 33345302219 (iOS phone):
+# the tile tap COMPLETED and the ❌ frame shows the grid untouched with no
+# popover — the lost-press class on the one tap here without a recovery (the
+# option tap below and the cart-tab tap already have theirs). Gated on the
+# option button being absent, because re-tapping a tile under an OPEN popover
+# would hit the overlay instead.
+- extendedWaitUntil:
+    visible:
+      id: "variation-option-${VARIATION_OPTION}"
+    timeout: 15000
+    optional: true
+- runFlow:
+    when:
+      notVisible:
+        id: "variation-option-${VARIATION_OPTION}"
+    commands:
+      - evalScript: "${console.log('WCPOS_E2E variation popover did not open, re-tapping the tile once')}"
+      - hideKeyboard:
+          optional: true
+      - tapOn:
+          id: "variable-product-tile-${typeof VARIABLE_PRODUCT_ID === 'undefined' ? '.*' : VARIABLE_PRODUCT_ID}"
+          index: 0
 # The popover portal mounts and renders option buttons immediately (they come
 # from the parent's attributes), but they stay DISABLED until the popover's
 # lazy variation sync materializes locally — a tap during that window is a
