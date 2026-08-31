@@ -66,6 +66,31 @@ describe('observeEngineQuery', () => {
 		}
 	});
 
+	it('folds accented short prefixes and NFD input', async () => {
+		const database = await createEngineDatabase(['products']);
+		const engine = createFakeEngine(database);
+		await database.collections.products.insert(
+			engineProduct({ uuid: 'accented-prefix', id: 1, name: 'Éclair 42' })
+		);
+
+		try {
+			// The NFD 'éc' is 3 code units but folds to 2 chars: it must route to the
+			// short-prefix path on its FOLDED length, or the index's minlength drops it.
+			for (const term of ['ec', 'é'.normalize('NFD'), 'éc'.normalize('NFD')]) {
+				const result = await firstValueFrom(
+					observeEngineQuery(engine, 'en', {
+						collection: 'products',
+						search: term,
+						searchFields: ['name'],
+					})
+				);
+				expect(result.hits.map((hit) => hit.id)).toEqual(['accented-prefix']);
+			}
+		} finally {
+			await database.close();
+		}
+	});
+
 	it('reacts to source writes for short searches and keeps an explicit empty id selector', async () => {
 		const database = await createEngineDatabase(['products']);
 		const engine = createFakeEngine(database);

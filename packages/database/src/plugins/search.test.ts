@@ -12,8 +12,7 @@ import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 // Real FlexSearch engine, used by the tokenizer-behaviour tests below.
 import { Index } from 'flexsearch';
 
-// eslint-disable-next-line import/no-unresolved -- Jest maps source without a runtime dependency.
-import { deriveBarcodeFromPayload } from '@wcpos/sync-core';
+import { deriveBarcodeFromPayload, encodeSearchText } from '@wcpos/sync-core';
 
 import { getSearchIdentifier, searchPlugin } from './search';
 
@@ -246,12 +245,12 @@ describe('search plugin', () => {
 
 	describe('search identifier generation', () => {
 		it('should generate a versioned, unique identifier per collection and locale', () => {
-			// The version tag (v2) is migration-critical: it forces the rxdb-premium
+			// The version tag (v3) is migration-critical: it forces the rxdb-premium
 			// flexsearch pipeline to rebuild the persisted index from scratch when the
-			// index config changes. Guard it explicitly. See #679.
-			expect(getSearchIdentifier('products', 'en')).toBe('products-search-v2-en');
-			expect(getSearchIdentifier('orders', 'de')).toBe('orders-search-v2-de');
-			expect(getSearchIdentifier('customers', 'fr')).toBe('customers-search-v2-fr');
+			// index config changes. Guard it explicitly. See #679 and #1732.
+			expect(getSearchIdentifier('products', 'en')).toBe('products-search-v3-en');
+			expect(getSearchIdentifier('orders', 'de')).toBe('orders-search-v3-de');
+			expect(getSearchIdentifier('customers', 'fr')).toBe('customers-search-v3-fr');
 		});
 
 		it('should generate different identifiers for different locales', () => {
@@ -291,8 +290,9 @@ describe('search plugin', () => {
 
 			const config = (addFulltextSearch as jest.Mock).mock.calls[0][0] as {
 				docToString(document: Record<string, unknown>): string;
-				indexOptions: { minlength?: number };
+				indexOptions: { encode?: typeof encodeSearchText; minlength?: number };
 			};
+			expect(config.indexOptions.encode).toBe(encodeSearchText);
 			expect(config.indexOptions.minlength).toBe(3);
 			expect(
 				config.docToString({
@@ -362,9 +362,17 @@ describe('search plugin', () => {
 	describe('tokenizer behaviour (WooCommerce parity)', () => {
 		// Mirrors createSearchInstance's indexOptions (minus language stemming).
 		const buildIndex = (tokenize: 'forward' | 'full') => {
-			const index = new Index({ preset: 'performance', tokenize });
+			const indexOptions = {
+				preset: 'performance',
+				tokenize,
+				minlength: 3,
+				encode: encodeSearchText,
+			} as const;
+			const index = new Index(indexOptions);
 			index.add(1, 'Kuorintasaippua'); // Finnish compound: "exfoliating soap"
 			index.add(2, 'Blue Cotton Shirt');
+			index.add(3, 'Château du Cèdre 2022');
+			index.add(4, 'Cèdre 2023'.normalize('NFD'));
 			return index;
 		};
 
@@ -385,6 +393,26 @@ describe('search plugin', () => {
 			const index = buildIndex('full');
 			expect(index.search('kuor')).toContain(1);
 			expect(index.search('shirt')).toContain(2);
+		});
+
+		it('matches an accentless query against an accented title', () => {
+			expect(buildIndex('full').search('cedre')).toContain(3);
+		});
+
+		it('matches an NFD query against an NFC-indexed title', () => {
+			expect(buildIndex('full').search('Cèdre 2022'.normalize('NFD'))).toContain(3);
+		});
+
+		it('matches an NFC query against an NFD-indexed title', () => {
+			expect(buildIndex('full').search('Cèdre 2023')).toContain(4);
+		});
+
+		it('keeps mid-word substring matching through the custom encoder', () => {
+			expect(buildIndex('full').search('teau')).toContain(3);
+		});
+
+		it('still enforces minlength through the custom encoder', () => {
+			expect(buildIndex('full').search('ce')).toEqual([]);
 		});
 
 		it('finds a custom-meta barcode after materialization into the grid search field', () => {
