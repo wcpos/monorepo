@@ -88,12 +88,15 @@ describe('startSearchReadiness', () => {
 		}
 	});
 
-	it('detects a false miss after consecutive failed audits and rebuilds once', async () => {
+	it('detects a false miss after misses on two distinct documents and rebuilds once', async () => {
 		const database = await createEngineDatabase(['products', 'variations']);
 		const engine = createFakeEngine(database);
-		await database.collections.products.insert(
-			engineProduct({ uuid: 'missed-sample', id: 1, name: 'Coffee Grinder' })
-		);
+		// Two documents: the streak only extends on a DIFFERENT missed document, so a
+		// single-document store can never reach the threshold by resampling itself.
+		await database.collections.products.bulkInsert([
+			engineProduct({ uuid: 'missed-sample', id: 1, name: 'Coffee Grinder' }),
+			engineProduct({ uuid: 'missed-sibling', id: 2, name: 'Tea Strainer' }),
+		]);
 		// The index never returns the document it should contain — a false miss.
 		const find = jest.fn(async () => []);
 		jest
@@ -119,7 +122,6 @@ describe('startSearchReadiness', () => {
 					context: expect.objectContaining({
 						collection: 'products',
 						locale: 'false-miss-audit',
-						uuid: 'missed-sample',
 					}),
 				})
 			);
@@ -135,6 +137,40 @@ describe('startSearchReadiness', () => {
 				{ timeout: 2000 }
 			);
 			expect(recreateSearch).toHaveBeenCalledTimes(1);
+		} finally {
+			dispose();
+			await database.close();
+		}
+	});
+
+	it('never rebuilds from repeated misses of the same single document', async () => {
+		const database = await createEngineDatabase(['products', 'variations']);
+		const engine = createFakeEngine(database);
+		await database.collections.products.insert(
+			engineProduct({ uuid: 'only-doc', id: 1, name: 'Coffee Grinder' })
+		);
+		const find = jest.fn(async () => []);
+		jest
+			.spyOn(database.collections.products, 'initSearch')
+			.mockResolvedValue({ collection: { $: of(null) }, find } as never);
+		jest
+			.spyOn(database.collections.variations, 'initSearch')
+			.mockResolvedValue({ collection: { $: of(null) }, find: async () => [] } as never);
+		const recreateSearch = jest.fn();
+		Object.assign(database.collections.products, { recreateSearch });
+
+		const dispose = startSearchReadiness({
+			engine,
+			locale: 'single-doc-audit',
+			timings: TEST_TIMINGS,
+		});
+		try {
+			// Let the audit resample the same document several times over.
+			await waitFor(() => expect(find.mock.calls.length).toBeGreaterThanOrEqual(4), {
+				timeout: 2000,
+			});
+			expect(recreateSearch).not.toHaveBeenCalled();
+			expect(searchError).not.toHaveBeenCalled();
 		} finally {
 			dispose();
 			await database.close();

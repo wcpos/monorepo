@@ -42,10 +42,12 @@ const SEARCH_INDEX_AUDIT_FIND_TIMEOUT_MS = 5_000;
 /** How many of the sampled document's own tokens to try before calling it missed. */
 const SEARCH_INDEX_AUDIT_TOKENS_PER_DOCUMENT = 3;
 /**
- * Consecutive missed audits (different samples) before declaring a false miss.
- * One miss can be a token the tokenizer legitimately drops (a stopword under a
- * language preset); two different documents in a row is an index that cannot
- * find its own content.
+ * Missed audits on DIFFERENT documents before declaring a false miss. One
+ * document can legitimately carry only tokens the tokenizer drops (minlength
+ * edges, encoding quirks); two distinct documents the index cannot find is an
+ * index that cannot find its own content. A repeat sample of the same document
+ * neither extends nor resets the streak — a single-document store therefore
+ * never triggers a rebuild, and is covered by the scan fallback instead.
  */
 const SEARCH_INDEX_AUDIT_FAILURE_THRESHOLD = 2;
 
@@ -102,8 +104,9 @@ function candidateTokens(snapshot: Record<string, unknown>, searchFields: string
  * The audit exists because the divergence self-check in `engine-query.ts` only
  * detects false HITS. An index returning too few results — the case that loses
  * sales — was previously undetectable. Each audit samples one document and
- * asks the index for it by its own tokens; two consecutive misses order a
- * rebuild through the same once-per-session machinery the divergence path uses.
+ * asks the index for it by its own tokens; misses on two distinct documents
+ * order a rebuild through the same once-per-session machinery the divergence
+ * path uses.
  *
  * Returns a dispose function; timers and subscriptions stop with it.
  */
@@ -129,7 +132,8 @@ export function startSearchReadiness(options: {
 	let disposed = false;
 	let currentDatabase: AdapterDatabase | null = null;
 	const timers = new Set<ReturnType<typeof setTimeout>>();
-	const auditFailureStreaks = new Map<string, number>();
+	/** Streak of missed audits per collection:locale, with the last missed document. */
+	const auditFailureStreaks = new Map<string, { count: number; lastUuid: string }>();
 
 	const clearTimers = () => {
 		for (const handle of timers) clearTimeout(handle);
@@ -168,9 +172,15 @@ export function startSearchReadiness(options: {
 		);
 		if (instance === AUDIT_TIMED_OUT || instance === null) return;
 
-		const documents = await collection.find().exec();
-		if (documents.length === 0) return;
-		const sample = documents[Math.floor(Math.random() * documents.length)];
+		// One bounded read, never the whole catalog: count once, then fetch a single
+		// document at a random offset (RxDB's default primary-key sort makes the
+		// offset deterministic). A large variation catalog must not be materialized
+		// every ten minutes just to pick one sample.
+		const total = collection.count ? await collection.count().exec() : 0;
+		if (total === 0) return;
+		const skip = Math.floor(Math.random() * total);
+		const [sample] = await collection.find({ skip, limit: 1 }).exec();
+		if (!sample) return;
 		const snapshot = initializationOptions.documentSnapshot(sample);
 		const tokens = candidateTokens(snapshot, initializationOptions.searchFields).slice(
 			0,
@@ -193,8 +203,15 @@ export function startSearchReadiness(options: {
 			}
 		}
 
-		const streak = (auditFailureStreaks.get(key) ?? 0) + 1;
-		auditFailureStreaks.set(key, streak);
+		const previous = auditFailureStreaks.get(key);
+		// A repeat of the SAME document must not extend the streak: one document
+		// with only tokenizer-dropped tokens would otherwise reach the threshold
+		// alone, defeating the two-distinct-documents safeguard.
+		const streak =
+			previous && previous.lastUuid === sample.primary
+				? previous.count
+				: (previous?.count ?? 0) + 1;
+		auditFailureStreaks.set(key, { count: streak, lastUuid: sample.primary });
 		if (streak < SEARCH_INDEX_AUDIT_FAILURE_THRESHOLD) {
 			searchLogger.debug('Search index audit missed a sampled document', {
 				context: { collection: name, locale, uuid: sample.primary, tokens },

@@ -13,7 +13,8 @@ export type SearchInstance = {
 export type SearchableCollection = {
 	$: Observable<unknown>;
 	options?: { searchFields?: string[] };
-	find(): { exec(): Promise<EngineRxDocument[]> };
+	find(query?: Record<string, unknown>): { exec(): Promise<EngineRxDocument[]> };
+	count?(): { exec(): Promise<number> };
 	initSearch(
 		locale: string,
 		options: {
@@ -61,11 +62,16 @@ export function sharedSearchInstances(
 export const FLEXSEARCH_TOKEN_BOUNDARY = /[\p{Z}\p{S}\p{P}\p{C}]+/u;
 
 /**
- * Composition-form-insensitive, case-insensitive — but deliberately NOT
- * accent-insensitive: the index is accent-exact today, and a fallback path
- * that matched more loosely than the index would make results flicker when the
- * indexed answer swaps in. Accent-insensitivity across BOTH paths is #1732.
+ * Lowercase ONLY, exactly what FlexSearch's encoder does under our config
+ * (probed 2026-08-31: `preset: 'performance', tokenize: 'full'` matches
+ * case-insensitively but performs no Unicode normalization whatsoever — an NFC
+ * query does not match an NFD-stored name, and no diacritics are stripped).
+ * A fallback that matched more loosely than the index would make results
+ * appear from the scan and vanish when the indexed answer swaps in, and would
+ * let the audit probe tokens the index never stored. Normalization-insensitive
+ * matching is #1732 and must land in BOTH paths together, with an index
+ * version bump.
  */
 export function normalizeForScan(value: string): string {
-	return value.normalize('NFKC').toLowerCase();
+	return value.toLowerCase();
 }
