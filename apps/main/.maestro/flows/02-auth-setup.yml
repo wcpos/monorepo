@@ -100,9 +100,23 @@ env:
           visible:
             id: "store-url-input"
           timeout: 180000
-- tapOn:
-    id: "store-url-input"
-- inputText: ${STORE_URL}
+# Char-by-char in a retry: one driver call per key, erase-then-retype on a
+# failed attempt - see flow 01's INVALID_URL comment for the evidence (run
+# 33348495405: a whole-string inputText is ONE gRPC call and a starved
+# emulator blew its 120 s deadline mid-string).
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn:
+          id: "store-url-input"
+      - eraseText
+      - evalScript: ${output.urlCharIndex = 0}
+      - repeat:
+          while:
+            true: ${output.urlCharIndex < STORE_URL.length}
+          commands:
+            - inputText: ${STORE_URL.charAt(output.urlCharIndex)}
+            - evalScript: ${output.urlCharIndex++}
 # optional — see flow 01: hideKeyboard is flaky on iOS and this is
 # housekeeping; a genuinely covered target fails at its own tap.
 - hideKeyboard:

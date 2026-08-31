@@ -1,6 +1,7 @@
 appId: com.wcpos.main.dev
 env:
   STORE_URL: https://dev-pro.wcpos.com
+  INVALID_URL: https://not-a-real-store.invalid
 ---
 # P0-1: clean launch → connect screen renders; invalid URL does not connect.
 #
@@ -115,9 +116,25 @@ env:
 - assertVisible:
     id: "enter-demo-store-button"
 # Invalid URL must not produce a connected site.
-- tapOn:
-    id: "store-url-input"
-- inputText: "https://not-a-real-store.invalid"
+# Run 33348495405 (Android tablet): the driver's single inputText gRPC call
+# for this whole string hit its 120 s deadline on a starved emulator with
+# only "https://not-" typed (DEADLINE_EXCEEDED, flow dead on the spot). One
+# printable key per Maestro command makes every keystroke its own driver
+# call - the pattern flows 04/06/07 already use for search - and the retry
+# erases the partial text before retyping. Keep in step with flow 02.
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn:
+          id: "store-url-input"
+      - eraseText
+      - evalScript: ${output.urlCharIndex = 0}
+      - repeat:
+          while:
+            true: ${output.urlCharIndex < INVALID_URL.length}
+          commands:
+            - inputText: ${INVALID_URL.charAt(output.urlCharIndex)}
+            - evalScript: ${output.urlCharIndex++}
 # optional: hideKeyboard is unreliable on iOS (this file already says so at
 # the two Android-gated uses below, but this one was left ungated and failed
 # a local iOS suite run 2026-08-29 at exactly this step, having passed the
