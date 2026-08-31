@@ -70,6 +70,19 @@ describe('redactSensitiveFields', () => {
 		expect(result.items[0].access_token).toBe('abcdef...lmnop');
 	});
 
+	it('preserves Error instances while redacting their diagnostics', () => {
+		const error = new Error('Request failed with Bearer secret-token');
+		error.stack = 'Error: Request failed with Bearer secret-token\n    at checkout';
+
+		const result = redactSensitiveFields({ error });
+
+		expect(result.error).toBeInstanceOf(Error);
+		expect(result.error.message).toBe('Request failed with Bearer [REDACTED]');
+		expect(result.error.stack).toBe(
+			'Error: Request failed with Bearer [REDACTED]\n    at checkout'
+		);
+	});
+
 	it('should return primitives unchanged', () => {
 		expect(redactSensitiveFields('hello')).toBe('hello');
 		expect(redactSensitiveFields(42)).toBe(42);

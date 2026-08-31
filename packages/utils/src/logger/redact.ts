@@ -34,6 +34,12 @@ export function redactSensitiveText(value: string): string {
 export function redactSensitiveFields(obj: any): any {
 	if (typeof obj === 'string') return redactSensitiveText(obj);
 	if (obj == null || typeof obj !== 'object') return obj;
+	if (obj instanceof Error) {
+		const error = new Error(redactSensitiveText(obj.message));
+		error.name = obj.name;
+		if (obj.stack) error.stack = redactSensitiveText(obj.stack);
+		return error;
+	}
 
 	if (Array.isArray(obj)) {
 		return obj.map((item) => redactSensitiveFields(item));

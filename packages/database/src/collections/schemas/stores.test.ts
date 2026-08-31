@@ -51,3 +51,17 @@ describe('stores schema — shipping_tax_class', () => {
 		expect(() => validateStore({ localID: 'a', shipping_tax_class: 42 })).toThrow();
 	});
 });
+
+describe('stores schema — tracking_consent', () => {
+	it('accepts an allowed consent value', () => {
+		expect(() => validateStore({ localID: 'a', tracking_consent: 'allowed' })).not.toThrow();
+	});
+
+	it('rejects an unknown consent value', () => {
+		expect(() => validateStore({ localID: 'a', tracking_consent: 'maybe' })).toThrow();
+	});
+
+	it('accepts a document without tracking consent', () => {
+		expect(() => validateStore({ localID: 'a' })).not.toThrow();
+	});
+});

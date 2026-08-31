@@ -13,6 +13,7 @@ import { useAppState } from '@wcpos/core/contexts/app-state';
 import { HydrationProviders } from '@wcpos/core/contexts/hydration-providers';
 import { createMerchantToast } from '@wcpos/core/contexts/merchant-toast';
 import { useT } from '@wcpos/core/contexts/translations';
+import { useTelemetryConsent } from '@wcpos/core/hooks/use-telemetry-consent';
 import { setToast } from '@wcpos/utils/logger';
 
 import {
@@ -81,6 +82,7 @@ function useToastTheme(): 'light' | 'dark' {
 function RootStack() {
 	const { storeDB, store } = useAppState();
 	const { isThemeReady } = useThemeRestorer();
+	useTelemetryConsent();
 	const t = useT();
 	// `Toast.show` on its own would print the developer log message when a call
 	// site logs `showToast: true` without cashier copy. The adapter resolves the

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { INVOKE_CHANNELS, ON_CHANNELS } from '@wcpos/printer/ipc-channels';
+import { INVOKE_CHANNELS, ON_CHANNELS, SEND_CHANNELS } from '@wcpos/printer/ipc-channels';
 
 /**
  * The Electron preload allowlists come verbatim from these arrays. A channel that a
@@ -17,5 +17,9 @@ describe('Electron IPC channel allowlists', () => {
 
 	it('allows the novu:event push channel used for notification streams', () => {
 		expect(ON_CHANNELS).toContain('novu:event');
+	});
+
+	it('allows the telemetry consent channel used by the renderer', () => {
+		expect(SEND_CHANNELS).toContain('telemetry-consent');
 	});
 });
