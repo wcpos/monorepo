@@ -2252,6 +2252,82 @@ test('the Android emulator resolves DNS through public resolvers and proves conn
 	assert.doesNotMatch(lines[guard], /\\$/);
 });
 
+// Round-1 Android CI performance settings (2026-08-31): reserve one host core,
+// 4 GB guest RAM + AVD quickboot snapshot caching + half-resolution
+// screenrecord. Each pin guards a measured lever against the starved-runner
+// classes in the 2026-08-31 handoff.
+test('the Android suite reserves a host core and boots from a cached quickboot snapshot', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	const suite = findStep(workflow, 'android', '📱 Run Maestro suite on emulator');
+
+	assert.equal(suite.with.cores, 3, 'Maestro and Metro must retain one host core');
+	assert.equal(suite.with['ram-size'], '4096M', 'guest RAM must stay at 4 GB');
+	assert.equal(suite.with['heap-size'], '576M');
+	assert.equal(
+		suite.with['force-avd-creation'],
+		false,
+		'recreating the AVD would discard the cached snapshot'
+	);
+	// -no-snapshot-save (restore, never overwrite) - and NOT bare -no-snapshot,
+	// which would ignore the cached snapshot entirely.
+	assert.match(suite.with['emulator-options'], /-no-snapshot-save/);
+	assert.doesNotMatch(suite.with['emulator-options'], /-no-snapshot(?!-save)/);
+
+	// restore/save split: plain actions/cache saves in a post-if: success()
+	// step, so a budget-killed suite would discard the snapshot forever.
+	const cache = findStep(workflow, 'android', '📦 Restore AVD snapshot');
+	assert.equal(cache.id, 'avd-cache');
+	assert.match(cache.uses, /actions\/cache\/restore@/);
+	for (const input of ['api35', 'google_apis', 'x86_64', 'cores3', 'ram4096', 'heap576']) {
+		assert.ok(
+			String(cache.with.key).includes(input),
+			`AVD cache key must pin ${input} - an unkeyed input makes restores stale`
+		);
+	}
+
+	const save = findStep(workflow, 'android', '📦 Save AVD snapshot');
+	assert.match(save.uses, /actions\/cache\/save@/);
+	assert.equal(save.if, "steps.avd-cache.outputs.cache-hit != 'true'");
+	assert.equal(save.with.key, cache.with.key, 'save and restore must share the key');
+	assert.equal(save.with.path, cache.with.path, 'save and restore must share the paths');
+
+	const generate = findStep(workflow, 'android', '📱 Generate AVD snapshot');
+	assert.equal(generate.if, "steps.avd-cache.outputs.cache-hit != 'true'");
+	// The generation boot must SAVE its snapshot: no -no-snapshot variant at all.
+	assert.doesNotMatch(String(generate.with['emulator-options']), /-no-snapshot/);
+	// Every AVD-shaping input must match the suite step or the snapshot is invalid.
+	for (const input of ['api-level', 'target', 'profile', 'arch', 'cores', 'ram-size', 'heap-size']) {
+		assert.deepEqual(
+			generate.with[input],
+			suite.with[input],
+			`snapshot generation ${input} must match the suite step`
+		);
+	}
+
+	// v2.34.0 writes heap-size to the unrecognised hw.heapSize key. The
+	// pre-launch hook runs before the action creates a cache-miss AVD, so it
+	// must create the missing AVD before writing the recognised vm.heapSize.
+	for (const step of [generate, suite]) {
+		const preLaunch = String(step.with['pre-emulator-launch-script']);
+		assert.match(preLaunch, /\[ -d "\$ANDROID_AVD_HOME\/test\.avd" \] \|\|/);
+		assert.match(preLaunch, /avdmanager create avd/);
+		assert.match(preLaunch, /vm\.heapSize=576/);
+	}
+});
+
+test('the Android screenrecord encodes at half resolution on the guest cores', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	const suite = findStep(workflow, 'android', '📱 Run Maestro suite on emulator');
+	const recorder = suite.with.script
+		.split('\n')
+		.find((line) => line.includes('screenrecord --time-limit'));
+
+	assert.ok(recorder, 'missing screenrecord invocation');
+	assert.match(recorder, /--size "\$RECORD_SIZE"/);
+	assert.match(recorder, /--bit-rate 2000000/);
+	assert.equal(suite.env.RECORD_SIZE, '${{ matrix.device.record_size }}');
+});
+
 test('the iOS step retries flow 01 when the driver went blind mid-flow', () => {
 	// Third driver shape (runs 33327826137 / 33327340303 / 33327456369): commands
 	// run, then assertions time out on elements the screenshot shows rendered,
