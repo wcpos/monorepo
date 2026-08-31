@@ -82,7 +82,11 @@ function VariationsPopoverContent({
 				};
 			}
 		).result$;
-		let variationCount = -1; // unknown until the binding reports
+		// Unknown until the binding reports. An UNKNOWN count is retryable: a live
+		// query can delay its first emission while sync() hangs, and treating -1 as
+		// "variations present" would silence the settle timeout - the exact zero-log
+		// signature this effect exists to kill (CodeRabbit, #1731).
+		let variationCount = -1;
 		const subscription = result$?.subscribe((result) => {
 			variationCount = result.count;
 		});
@@ -93,7 +97,7 @@ function VariationsPopoverContent({
 		const attemptSync = () => {
 			// A retry timer scheduled while the count was 0 can fire AFTER result$
 			// reported variations - skip the redundant refresh (CodeRabbit, #1729).
-			if (cancelled || (attempt > 0 && variationCount !== 0)) return;
+			if (cancelled || (attempt > 0 && variationCount > 0)) return;
 			attempt += 1;
 			// Race the refresh against the settle timeout: a HUNG sync() (see
 			// VARIATION_SYNC_SETTLE_TIMEOUT_MS above) must still log and retry.
@@ -102,7 +106,7 @@ function VariationsPopoverContent({
 				if (settled) return;
 				settled = true;
 				if (settleTimer !== undefined) clearTimeout(settleTimer);
-				if (cancelled || variationCount !== 0) return;
+				if (cancelled || variationCount > 0) return;
 				const delay = VARIATION_SYNC_RETRY_DELAYS_MS[attempt - 1];
 				if (delay === undefined) return;
 				popoverLogger.warn(
