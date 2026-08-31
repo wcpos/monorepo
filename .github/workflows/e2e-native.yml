@@ -60,7 +60,7 @@ on:
           - android
 
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('native-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || format('native-{0}', github.ref) }}
+  group: ${{ github.event_name == 'pull_request' && format('native-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || github.ref == 'refs/heads/main' && format('native-main-run-{0}', github.run_id) || format('native-{0}', github.ref) }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
@@ -317,17 +317,16 @@ jobs:
     name: 🤖 Android (${{ matrix.device.name }})
     needs: build
     if: needs.build.outputs.platform != 'ios'
-    # One job per (platform, device class) at a time across the whole repo:
-    # the runs' apps all sync against dev-pro, whose php-fpm stays at 4
-    # workers by design (owner ruling 2026-08-19 — a dev store behaves like a
-    # real one), and two overlapping runs tonight put the order-pay page at
-    # 83–108 s (iOS, PR #1690 run 33274650949) and flow 04 at 21 min
-    # (Android, run 33280466971) against a 5.7 s passing sample. Queue, do
-    # not cancel: the workflow-level group above still cancels superseded PR
-    # runs.
-    concurrency:
-      group: native-device-android-${{ matrix.device.name }}
-      cancel-in-progress: false
+    permissions:
+      # The turnstile lists this workflow's runs and their jobs.
+      actions: read
+      contents: read
+    # One job per (platform, device class) at a time across the whole repo —
+    # enforced by the "Wait for the device slot" step, NOT by a job-level
+    # concurrency group: a GitHub group holds one running and one pending job
+    # and a newer pending job cancels the older pending one, which cancelled
+    # every main run on 2026-08-30 and turned PR device jobs red as
+    # "cancelled". See .github/scripts/native-device-turnstile.sh.
     runs-on: ubuntu-latest
     # 100, not 60: the app's ONE-TIME initial catalog sync (~40 min on these
     # 2-vCPU swiftshader emulators) slows every interaction in whichever flow
@@ -335,7 +334,9 @@ jobs:
     # flow 06 41m; run 33131212326: flows 04+05 52m together, then cancelled at
     # 60:00 with every completed flow green). Once the sync finishes, flows
     # take ~1 min. Budget = worst observed sync window + full suite + headroom.
-    timeout-minutes: 100
+    # Plus 150 for the device-slot turnstile's wait budget (the wait happens
+    # inside this job, so it counts against this timeout).
+    timeout-minutes: 250
     strategy:
       # ONE device job per platform at a time. Every device job logs a fresh
       # cashier in and syncs the store; with both classes (and other runs)
@@ -351,7 +352,24 @@ jobs:
           - { name: phone, profile: pixel_6 }
           - { name: tablet, profile: pixel_tablet }
     steps:
-      - name: 🏗 Setup repository
+      - name: 🏗 Setup repository (workflow revision)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          submodules: false
+
+      # FIFO queue for the (platform, device) slot — waits, never cancels.
+      # Before the downloads and the monorepo setup so a long wait does not
+      # sit on a warm Metro. Rationale and rule: the script's header.
+      - name: ⏳ Wait for the device slot
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLOT_JOB: 🤖 Android (${{ matrix.device.name }})
+          PLATFORM_PREFIX: '🤖 Android ('
+        run: bash .github/scripts/native-device-turnstile.sh
+
+      - name: 🏗 Checkout revision under test
+        if: needs.build.outputs.sha != github.sha
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ needs.build.outputs.sha }}
@@ -451,7 +469,15 @@ jobs:
           disable-animations: true
           # swiftshader_indirect sidesteps the host-GPU ColorBuffer failures;
           # no-snapshot avoids stale snapshot restores on ephemeral runners.
-          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          # -dns-server: the emulator otherwise forwards guest DNS to the host's
+          # resolver through its 10.0.2.3 proxy, and on some runners that proxy
+          # never answers — run 33325931363 (phone) booted with every
+          # NetworkMonitor probe failing ("PROBE_DNS www.google.com … FAIL …
+          # resNetworkResult failed: ECONNREFUSED", 16 times from 17:58:00),
+          # flow 01 passed (it asserts a bogus host fails) and flow 02 died on
+          # "Site does not seem to be a WordPress site" against a store that
+          # answered the host in 0.45 s. Public resolvers bypass the proxy.
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -dns-server 8.8.8.8,1.1.1.1
           # All 4 of the runner's vCPUs, not the action's default 2:
           # swiftshader renders the GPU on these same guest cores, so the app
           # and its renderer were sharing two virtual CPUs — the
@@ -487,6 +513,14 @@ jobs:
             # appear at any moment, and it is not our app misbehaving, so the
             # right place to stop it is the device.
             adb shell settings put global hide_error_dialogs 1 || true
+            # Fail fast, with the reason, if the guest never validates a network:
+            # the flows would otherwise spend their 60 s budgets and report a
+            # store-shaped red ("Site does not seem to be a WordPress site") for
+            # an emulator that cannot resolve any host. A validated network shows
+            # as VALIDATED in `dumpsys connectivity`; give the boot 90 s, bounce
+            # wifi once (the emulated AndroidWifi network re-validates on
+            # reconnect), then abort with the probe log. ONE LINE, per the rule above.
+            i=0; until adb shell dumpsys connectivity 2>/dev/null | grep -q VALIDATED; do i=$((i+1)); if [ "$i" -eq 18 ]; then adb shell svc wifi disable; sleep 3; adb shell svc wifi enable; fi; if [ "$i" -ge 36 ]; then echo "::error::emulator has no validated internet after 180s — DNS/connectivity probes are failing (logcat NetworkMonitor); aborting before the suite"; adb shell dumpsys connectivity | head -80; exit 1; fi; sleep 5; done; echo "emulator network validated after $((i*5))s"
             adb reverse tcp:8081 tcp:8081
             adb install e2e-builds/wcpos-e2e-android.apk
             # STREAM logcat from before the suite, not dump-on-failure: the
@@ -512,12 +546,41 @@ jobs:
             # runner's sh is dash (no pipefail), and each script line is its
             # own shell — so maestro's real exit code crosses lines via a
             # file, and the tee'd pipeline's own exit stays 0 on purpose.
+            # Keep the reverse port alive for the life of the suite. Run 33319233428
+            # (phone) lost it mid-suite: flow 04 ran 15 min under load, logcat shows
+            # adbd closing sockets ("timeout expired while flushing socket") at
+            # 16:20, and flow 05's relaunch then died on the dev launcher's
+            # "Failed to connect to localhost/127.0.0.1:8081 … ECONNREFUSED" — Metro
+            # was up on the host; the emulator's localhost:8081 no longer reached
+            # it. The retry below re-applied reverse once and lost it the same way.
+            # Re-issuing `adb reverse` is idempotent and cheap; the log of
+            # `adb reverse --list` is the evidence trail for the next red. Ends
+            # with the screenrecord sentinel. ONE LINE, per the rule above.
+            nohup sh -c 'while [ ! -f "$HOME/.maestro/tests/stop-screenrecord" ]; do { date -u +%FT%TZ; adb reverse --list; } >> "$HOME/.maestro/tests/adb-reverse.log" 2>&1; adb reverse tcp:8081 tcp:8081 >/dev/null 2>&1; sleep 10; done' >/dev/null 2>&1 &
             { maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" apps/main/.maestro; echo $? > ~/.maestro/tests/exit_code; } 2>&1 | tee ~/.maestro/tests/suite.log
             # A newly booted emulator can briefly drop its ADB transport after
             # the APK install (run 33237853311: clearState succeeded, then the
             # deep link failed with "device offline"). Retry only that exact
             # infrastructure signature; assertions and app failures stay red.
-            if [ "$(cat "$HOME/.maestro/tests/exit_code")" -ne 0 ] && grep -Rqs 'device offline' "$HOME/.maestro/tests"/*/maestro.log; then adb reconnect offline; timeout 60 adb wait-for-device; adb reverse tcp:8081 tcp:8081; { maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" apps/main/.maestro; echo $? > ~/.maestro/tests/exit_code; } 2>&1 | tee -a ~/.maestro/tests/suite.log; fi
+            # The retry must wait for a STABLE transport, not a single
+            # wait-for-device: run 33334403960 flapped (adb reverse --list
+            # answered at 21:04:35 while maestro got "device offline" at
+            # 21:04:18) and the old one-shot wait re-ran maestro straight into
+            # the flap — both attempts died at the first openLink 28 s apart.
+            # get-state (each call under its own 10 s timeout — a wedged server
+            # blocks the call itself) must answer "device" three polls in a row
+            # (5 s apart); the whole window is bounded by BOTH 36 polls and a
+            # 180 s wall-clock deadline — whichever ends first — so blocked
+            # calls cannot stretch it (CodeRabbit on #1724: 36×(10+5) was
+            # 535 s against a claimed 3 minutes). The reconnect itself runs
+            # under timeout 15. Every poll is logged to adb-state.log in the
+            # artifact. No kill-server escalation: it would tear down the
+            # logcat capture and the screenrecord loop above (Codex review on
+            # #1724). If stability is never reached the retry DOES NOT re-run —
+            # it reports the state log and keeps the original exit code, so the
+            # red says "transport never stabilised" instead of a second
+            # confusing openLink failure. ONE LINE, per the rule above.
+            if [ "$(cat "$HOME/.maestro/tests/exit_code")" -ne 0 ] && grep -Rqs 'device offline' "$HOME/.maestro/tests"/*/maestro.log; then timeout 15 adb reconnect offline || true; deadline=$(( $(date +%s) + 180 )); stable=0; i=0; while [ "$stable" -lt 3 ] && [ "$i" -lt 36 ] && [ "$(date +%s)" -lt "$deadline" ]; do i=$((i+1)); s=$(timeout 10 adb get-state 2>/dev/null || echo none); echo "$(date -u +%FT%TZ) poll $i state=${s:-none}" >> ~/.maestro/tests/adb-state.log; if [ "${s:-none}" = "device" ]; then stable=$((stable+1)); else stable=0; fi; [ "$stable" -ge 3 ] || sleep 5; done; if [ "$stable" -ge 3 ]; then adb reverse tcp:8081 tcp:8081; { maestro test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" apps/main/.maestro; echo $? > ~/.maestro/tests/exit_code; } 2>&1 | tee -a ~/.maestro/tests/suite.log; else echo "::error::adb transport never stabilised after the offline retry window — see adb-state.log; not re-running the suite"; fi; fi
             touch ~/.maestro/tests/stop-screenrecord; RECORDER_LOOP_PID=$(cat ~/.maestro/tests/screenrecord-loop.pid); SCREENRECORD_SIGNALLED=0; attempts=0; while kill -0 "$RECORDER_LOOP_PID" 2>/dev/null; do if [ "$SCREENRECORD_SIGNALLED" -eq 0 ]; then SCREENRECORD_PID=$(adb shell pidof screenrecord 2>/dev/null | awk '{ print $1 }'); [ -z "$SCREENRECORD_PID" ] || { adb shell kill -2 "$SCREENRECORD_PID" >/dev/null 2>&1 && SCREENRECORD_SIGNALLED=1 || true; }; fi; attempts=$((attempts + 1)); [ "$attempts" -lt 30 ] || { echo "screenrecord did not finalize within 30 seconds" >&2; exit 1; }; sleep 1; done
             exit "$(cat ~/.maestro/tests/exit_code)"
         env:
@@ -728,21 +791,19 @@ jobs:
     name: 🍎 iOS (${{ matrix.device.name }})
     needs: build
     if: needs.build.outputs.platform != 'android'
-    # One job per (platform, device class) at a time across the whole repo:
-    # the runs' apps all sync against dev-pro, whose php-fpm stays at 4
-    # workers by design (owner ruling 2026-08-19 — a dev store behaves like a
-    # real one), and two overlapping runs tonight put the order-pay page at
-    # 83–108 s (iOS, PR #1690 run 33274650949) and flow 04 at 21 min
-    # (Android, run 33280466971) against a 5.7 s passing sample. Queue, do
-    # not cancel: the workflow-level group above still cancels superseded PR
-    # runs.
-    concurrency:
-      group: native-device-ios-${{ matrix.device.name }}
-      cancel-in-progress: false
+    permissions:
+      # The turnstile lists this workflow's runs and their jobs.
+      actions: read
+      contents: read
+    # One job per (platform, device class) at a time across the whole repo —
+    # see the Android job's twin comment and
+    # .github/scripts/native-device-turnstile.sh.
     runs-on: macos-15
     # 60, was 45: the dev-client architecture adds pnpm install (~3-5 min) and
     # Metro's one-time bundle compile (~3-6 min) to the front of the job.
-    timeout-minutes: 60
+    # Plus 150 for the device-slot turnstile's wait budget (the wait happens
+    # inside this job, so it counts against this timeout).
+    timeout-minutes: 210
     strategy:
       # ONE device job per platform at a time. Every device job logs a fresh
       # cashier in and syncs the store; with both classes (and other runs)
@@ -758,7 +819,24 @@ jobs:
           - { name: phone, simulator: iPhone 16 Pro }
           - { name: tablet, simulator: iPad Pro 11-inch (M4) }
     steps:
-      - name: 🏗 Setup repository
+      - name: 🏗 Setup repository (workflow revision)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          submodules: false
+
+      # FIFO queue for the (platform, device) slot — waits, never cancels.
+      # Before the downloads and the monorepo setup so a long wait does not
+      # sit on a warm Metro. Rationale and rule: the script's header.
+      - name: ⏳ Wait for the device slot
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLOT_JOB: 🍎 iOS (${{ matrix.device.name }})
+          PLATFORM_PREFIX: '🍎 iOS ('
+        run: bash .github/scripts/native-device-turnstile.sh
+
+      - name: 🏗 Checkout revision under test
+        if: needs.build.outputs.sha != github.sha
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ needs.build.outputs.sha }}
@@ -959,6 +1037,28 @@ jobs:
             fi
             if grep -q "driver not ready in time" "$log"; then
               echo "↻ driver startup flake — retrying ${flow} once"
+              with_deadline maestro --udid "$MAESTRO_UDID" test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" "$flow"
+              return
+            fi
+            # Third driver shape (2026-08-30: runs 33327826137, 33327340303,
+            # 33327456369 — three iOS flow-01 reds inside two hours): the driver
+            # STARTS and commands run, then the hierarchy goes BLIND mid-flow.
+            # Assertions time out on elements the failure screenshot shows fully
+            # rendered while maestro.log fills with xcTestDriverStatusCheck
+            # [Failed] connection refusals (50–76 per instance). The app is
+            # fine; the driver's socket died under it. Retry is confined to
+            # flow 01: it begins with clearState, so a rerun cannot
+            # double-apply state. A later flow with this signature stays red —
+            # its artifact carries the refusal count for a human, and its
+            # on-device state is not safely repeatable.
+            # The refusals are logger records: they land in the invocation's
+            # ~/.maestro/tests/<ts>/maestro.log, NOT on stdout — grep the
+            # newest per-run log (terminal capture kept as a fallback).
+            # (Codex review on #1722 caught the original stdout-only grep.)
+            latest_maestro_log=$(ls -td "$HOME/.maestro/tests"/*/ 2>/dev/null | head -1)maestro.log
+            refusals=$(cat "$latest_maestro_log" "$log" 2>/dev/null | grep -c "xcTestDriverStatusCheck: \[Failed\]" || true)
+            if [[ "$flow" == *01-clean-launch-connect* ]] && [ "${refusals:-0}" -ge 10 ]; then
+              echo "↻ driver went blind mid-flow (${refusals} status-check refusals) — retrying ${flow} once"
               with_deadline maestro --udid "$MAESTRO_UDID" test -e VARIABLE_PRODUCT_ID="${VARIABLE_PRODUCT_ID:-.*}" -e DEVICE_CLASS="${DEVICE_CLASS}" "$flow"
               return
             fi

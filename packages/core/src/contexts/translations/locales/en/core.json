@@ -649,6 +649,7 @@
 	"pos_products.combination_unavailable": "Variant not available",
 	"pos_products.in_stock": "{quantity} in stock",
 	"pos_products.meta_data_keys_description": "Product meta keys copied to the cart. Suggestions come from products synced to this device — you can also type a custom key.",
+	"pos_products.no_more_products": "No more products",
 	"pos_products.out_of_stock": "{name} out of stock",
 	"pos_products.select_an_option": "Select an option",
 	"pos_products.switch_to_grid_view": "Switch to grid view",

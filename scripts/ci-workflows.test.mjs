@@ -436,10 +436,11 @@ test('native E2E routes next-target PRs to the next store', () => {
 	assert.match(seed.stderr, /Store unreachable: https:\/\/dev-next\.wcpos\.com → HTTP 503/);
 });
 
-test('native E2E concurrency is isolated per pull request', () => {
+test('native E2E concurrency isolates pull requests without replacing queued main runs', () => {
 	const { concurrency } = readWorkflow('e2e-native.yml');
 
 	assert.match(concurrency.group, /github\.event\.pull_request\.number/);
+	assert.match(concurrency.group, /native-main-run-\{0\}', github\.run_id/);
 	assert.notEqual(concurrency.group, '${{ github.workflow }}');
 });
 
@@ -1715,14 +1716,58 @@ test('no Maestro flow declares a default for a variable the runners pass with -e
 
 test('Android clean-start flows dismiss a queued system ANR before waiting for Expo', () => {
 	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
-		const flow = readMaestroFlow(filename);
-		const androidLaunch = flow.find((command) => command.runFlow?.when?.platform === 'Android')
-			.runFlow.commands;
+		const launchBlock = readMaestroFlow(filename).find((command) => command.retry)?.retry.commands;
+		assert.ok(launchBlock, `${filename} lost its openLink retry wrapper`);
+		const androidLaunch = launchBlock.find(
+			(command) => command.runFlow?.when?.platform === 'Android'
+		).runFlow.commands;
 
 		assert.deepEqual(
 			androidLaunch[0],
 			{ tapOn: { text: 'Wait', optional: true } },
 			`${filename} must clear an ANR dialog that predates hide_error_dialogs`
+		);
+	}
+});
+
+// clearState on iOS is uninstall+reinstall; on a starved runner the openLink
+// issued right after it is dropped (run 33312573162: home screen for 5.5 min)
+// or simctl itself times out (run 33348495405: NSPOSIXErrorDomain code=60).
+// The remedy is re-issuing the link: openLink through the REQUIRED
+// store-url-input wait live inside one retry, so a dead launch runs the link
+// again instead of spending the whole budget on the home screen.
+test('clean-start flows re-issue a dropped openLink, gated on the connect screen', () => {
+	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
+		const wrapper = readMaestroFlow(filename).find((command) => command.retry)?.retry;
+		assert.ok(wrapper, `${filename} lost its openLink retry wrapper`);
+		assert.equal(wrapper.maxRetries, 1, `${filename}: one re-issue of the link`);
+		assert.match(
+			String(wrapper.commands[0].openLink ?? ''),
+			/^wcpos:\/\/expo-development-client\//,
+			`${filename}: the wrapper must START by (re-)issuing the launch link`
+		);
+		const iosLaunch = wrapper.commands.find(
+			(command) => command.runFlow?.when?.platform === 'iOS'
+		).runFlow.commands;
+		const optionalConnectWait = iosLaunch.find(
+			(command) => command.extendedWaitUntil?.visible?.id === 'store-url-input'
+		);
+		assert.deepEqual(
+			optionalConnectWait,
+			{
+				extendedWaitUntil: {
+					visible: { id: 'store-url-input' },
+					timeout: 60000,
+					optional: true,
+				},
+			},
+			`${filename}: the optional cold-start probe must leave the full budget to the gate`
+		);
+		const last = wrapper.commands.at(-1);
+		assert.deepEqual(
+			last,
+			{ extendedWaitUntil: { visible: { id: 'store-url-input' }, timeout: 180000 } },
+			`${filename}: the required store-url-input wait must be the retry gate`
 		);
 	}
 });
@@ -1745,7 +1790,19 @@ test('the Android step retries a transient offline ADB transport once', () => {
 		writeFileSync(path.join(dir, '.maestro/tests/first-run/maestro.log'), 'device offline\n');
 		writeFileSync(path.join(dir, '.maestro/tests/exit_code'), '1\n');
 		mkdirSync(path.join(dir, 'bin'));
-		writeFileSync(path.join(dir, 'bin/adb'), '#!/bin/sh\nexit 0\n');
+		// The stable-transport retry polls `timeout 10 adb get-state`; a silent
+		// fake would spin the full 3-minute bound, so answer "device" like a
+		// healthy box. `timeout` is faked pass-through (absent on macOS dev
+		// boxes) and `sleep` is a no-op so the consecutive-poll loop costs
+		// milliseconds.
+		writeFileSync(
+			path.join(dir, 'bin/adb'),
+			'#!/bin/sh\nif [ "$1" = get-state ]; then echo device; fi\nexit 0\n'
+		);
+		writeFileSync(path.join(dir, 'bin/timeout'), '#!/bin/sh\nshift\nexec "$@"\n');
+		writeFileSync(path.join(dir, 'bin/sleep'), '#!/bin/sh\nexit 0\n');
+		spawnSync('chmod', ['+x', path.join(dir, 'bin/timeout')]);
+		spawnSync('chmod', ['+x', path.join(dir, 'bin/sleep')]);
 		writeFileSync(
 			path.join(dir, 'bin/maestro'),
 			'#!/bin/sh\necho called >> "$MAESTRO_RETRY_COUNTER"\nexit 0\n'
@@ -1788,7 +1845,19 @@ test('the Android step does not retry a successful run with a stale offline log'
 		writeFileSync(path.join(dir, '.maestro/tests/first-run/maestro.log'), 'device offline\n');
 		writeFileSync(path.join(dir, '.maestro/tests/exit_code'), '0\n');
 		mkdirSync(path.join(dir, 'bin'));
-		writeFileSync(path.join(dir, 'bin/adb'), '#!/bin/sh\nexit 0\n');
+		// The stable-transport retry polls `timeout 10 adb get-state`; a silent
+		// fake would spin the full 3-minute bound, so answer "device" like a
+		// healthy box. `timeout` is faked pass-through (absent on macOS dev
+		// boxes) and `sleep` is a no-op so the consecutive-poll loop costs
+		// milliseconds.
+		writeFileSync(
+			path.join(dir, 'bin/adb'),
+			'#!/bin/sh\nif [ "$1" = get-state ]; then echo device; fi\nexit 0\n'
+		);
+		writeFileSync(path.join(dir, 'bin/timeout'), '#!/bin/sh\nshift\nexec "$@"\n');
+		writeFileSync(path.join(dir, 'bin/sleep'), '#!/bin/sh\nexit 0\n');
+		spawnSync('chmod', ['+x', path.join(dir, 'bin/timeout')]);
+		spawnSync('chmod', ['+x', path.join(dir, 'bin/sleep')]);
 		writeFileSync(
 			path.join(dir, 'bin/maestro'),
 			'#!/bin/sh\necho called >> "$MAESTRO_RETRY_COUNTER"\nexit 0\n'
@@ -1808,6 +1877,551 @@ test('the Android step does not retry a successful run with a stale offline log'
 		assert.equal(result.status, 0, result.stdout + result.stderr);
 		assert.equal(readFileSync(path.join(dir, '.maestro/tests/exit_code'), 'utf8'), '0\n');
 		assert.throws(() => readFileSync(counter, 'utf8'), { code: 'ENOENT' });
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test('native device jobs queue through the FIFO turnstile, not a concurrency group', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	// PR-controlled setup actions must not inherit Actions API access. Only the
+	// two jobs that invoke the turnstile need actions:read.
+	assert.equal(workflow.permissions.actions, undefined);
+	for (const [jobName, emoji, platform] of [
+		['android', '🤖', 'Android'],
+		['ios', '🍎', 'iOS'],
+	]) {
+		const job = workflow.jobs[jobName];
+		assert.deepEqual(job.permissions, { actions: 'read', contents: 'read' });
+		// A job-level group is what cancelled main's pending device jobs on
+		// 2026-08-30: GitHub keeps one pending job per group and cancels the
+		// older one when a newer arrives, whatever cancel-in-progress says.
+		assert.equal(job.concurrency, undefined, `${jobName} must not use a concurrency group`);
+		assert.equal(job.strategy['max-parallel'], 1);
+		const [workflowCheckout, turnstile, targetCheckout] = job.steps;
+		assert.equal(workflowCheckout.name, '🏗 Setup repository (workflow revision)');
+		assert.equal(workflowCheckout.with.ref, '${{ github.sha }}');
+		assert.equal(turnstile.name, '⏳ Wait for the device slot');
+		assert.equal(turnstile.run, 'bash .github/scripts/native-device-turnstile.sh');
+		assert.equal(turnstile.env.GH_TOKEN, '${{ github.token }}');
+		// A dispatch may test a main ancestor from before the turnstile existed.
+		// Switch to that target only after running the workflow revision's gate.
+		assert.equal(targetCheckout.name, '🏗 Checkout revision under test');
+		assert.equal(targetCheckout.if, 'needs.build.outputs.sha != github.sha');
+		assert.equal(targetCheckout.with.ref, '${{ needs.build.outputs.sha }}');
+		// The slot name must be the job's rendered name, or a run would never
+		// see its predecessor's job and two suites would overlap on the store.
+		assert.equal(turnstile.env.SLOT_JOB, job.name);
+		assert.equal(job.name, `${emoji} ${platform} (\${{ matrix.device.name }})`);
+		assert.equal(turnstile.env.PLATFORM_PREFIX, `${emoji} ${platform} (`);
+		assert.ok(job.name.startsWith(turnstile.env.PLATFORM_PREFIX));
+	}
+	// The wait runs inside the job (150 min budget) and counts against its
+	// timeout; the suite budgets it protected before must survive.
+	assert.ok(workflow.jobs.ios['timeout-minutes'] >= 150 + 60);
+	assert.ok(workflow.jobs.android['timeout-minutes'] >= 150 + 100);
+});
+
+test('the device-slot turnstile waits on earlier attempts and never cancels', () => {
+	const script = path.join(ROOT, '.github', 'scripts', 'native-device-turnstile.sh');
+	const ME = 500;
+	const iso = (secondsAgo) =>
+		new Date(Date.now() - secondsAgo * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+	const run = (
+		id,
+		status = 'in_progress',
+		startedSecondsAgo = id < ME ? 200 : id === ME ? 100 : 50
+	) => ({
+		id,
+		status,
+		run_started_at: iso(startedSecondsAgo),
+		html_url: `https://github.com/wcpos/monorepo/actions/runs/${id}`,
+		head_branch: `branch-${id}`,
+	});
+	const job = (name, status, completedSecondsAgo = null) => ({
+		name,
+		status,
+		completed_at: completedSecondsAgo === null ? null : iso(completedSecondsAgo),
+	});
+	const BUILD = '📦 Resolve dev-client build';
+
+	// Fake `gh api <path>`: the runs list is served from runs.<poll>.json (poll
+	// counts each runs-list call; falls back to runs.json), a run's jobs from
+	// jobs-<id>.<poll>.json (falls back to jobs-<id>.json). fail-runs.<poll>
+	// makes that runs-list call fail, as an API outage would.
+	const fakeGh = `#!/bin/sh
+[ "$1" = api ] || { echo "unexpected gh $*" >&2; exit 2; }
+p="$2"
+case "$p" in
+  */workflows/*/runs*)
+    n=$(cat "$STATE/poll" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > "$STATE/poll"
+    if [ -f "$FIXTURES/fail-runs.$n" ]; then echo "mock: 503 Service Unavailable" >&2; exit 1; fi
+    f="$FIXTURES/runs.$n.json"; [ -f "$f" ] || f="$FIXTURES/runs.json"
+    # One page only: the script must never --paginate (see its header).
+    if printf '%s' "$*" | grep -q -- '--paginate'; then echo "mock: --paginate is forbidden" >&2; exit 2; fi
+    cat "$f" ;;
+  */runs/*/jobs*)
+    id=$(printf '%s' "$p" | sed -E 's#.*/runs/([0-9]+)/jobs.*#\\1#'); n=$(cat "$STATE/poll")
+    f="$FIXTURES/jobs-$id.$n.json"; [ -f "$f" ] || f="$FIXTURES/jobs-$id.json"
+    [ -f "$f" ] || { echo "mock: no jobs fixture for $id" >&2; exit 1; }
+    cat "$f" ;;
+  *) echo "unexpected path $p" >&2; exit 2 ;;
+esac
+`;
+
+	const drive = ({ slot, prefix, fixtures, env = {} }) => {
+		const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-turnstile-'));
+		const bin = path.join(workspace, 'bin');
+		const fixturesDir = path.join(workspace, 'fixtures');
+		const state = path.join(workspace, 'state');
+		mkdirSync(bin);
+		mkdirSync(fixturesDir);
+		mkdirSync(state);
+		writeFileSync(path.join(bin, 'gh'), fakeGh);
+		chmodSync(path.join(bin, 'gh'), 0o755);
+		for (const [name, value] of Object.entries(fixtures)) {
+			writeFileSync(
+				path.join(fixturesDir, name),
+				typeof value === 'string' ? value : JSON.stringify(value)
+			);
+		}
+		try {
+			return runShell(`bash "${script}"`, {
+				env: {
+					PATH: `${bin}:${process.env.PATH}`,
+					FIXTURES: fixturesDir,
+					STATE: state,
+					GH_TOKEN: 'fake',
+					GITHUB_REPOSITORY: 'wcpos/monorepo',
+					GITHUB_RUN_ID: String(ME),
+					SLOT_JOB: slot,
+					PLATFORM_PREFIX: prefix,
+					POLL_SECONDS: '0',
+					WAIT_BUDGET_SECONDS: '60',
+					...env,
+				},
+			});
+		} finally {
+			rmSync(workspace, { recursive: true, force: true });
+		}
+	};
+	const runs = (...list) => ({ workflow_runs: list });
+	const jobs = (...list) => ({ jobs: list });
+	// One blocked poll, then the budget ends: the bounded-wait failure path.
+	const giveUp = { WAIT_BUDGET_SECONDS: '1', POLL_SECONDS: '1' };
+
+	// Nothing older in flight: the slot is free on the first poll. A newer
+	// run's live job is ignored — it waits on us, not we on it.
+	let result = drive({
+		slot: '🍎 iOS (phone)',
+		prefix: '🍎 iOS (',
+		fixtures: {
+			'runs.json': runs(run(700), run(400, 'completed'), run(ME)),
+			'jobs-700.json': jobs(job('🍎 iOS (phone)', 'in_progress')),
+		},
+	});
+	assert.equal(result.status, 0, result.stdout + result.stderr);
+	assert.match(result.stdout, /slot is free after \d+s/);
+	assert.doesNotMatch(result.stdout, /queued behind/);
+
+	// A rerun keeps its original ID but gets a new run_started_at. A lower-ID
+	// attempt that started after us is newer and must wait on us.
+	result = drive({
+		slot: '🍎 iOS (phone)',
+		prefix: '🍎 iOS (',
+		fixtures: {
+			'runs.json': runs(run(400, 'in_progress', 10), run(ME)),
+			'jobs-400.json': jobs(job('🍎 iOS (phone)', 'in_progress')),
+		},
+		env: giveUp,
+	});
+	assert.equal(result.status, 0, result.stdout + result.stderr);
+	assert.doesNotMatch(result.stdout, /runs\/400/);
+
+	// Conversely, an earlier-started attempt blocks even when its immutable run
+	// ID is numerically higher than ours.
+	result = drive({
+		slot: '🍎 iOS (phone)',
+		prefix: '🍎 iOS (',
+		fixtures: {
+			'runs.json': runs(run(700, 'in_progress', 200), run(ME)),
+			'jobs-700.json': jobs(job('🍎 iOS (phone)', 'in_progress')),
+		},
+		env: giveUp,
+	});
+	assert.equal(result.status, 1, result.stdout + result.stderr);
+	assert.match(result.stdout, /runs\/700/);
+
+	// An older run's same-name job blocks until it completes; the wait names
+	// the run, and the second poll releases us.
+	result = drive({
+		slot: '🍎 iOS (phone)',
+		prefix: '🍎 iOS (',
+		fixtures: {
+			'runs.json': runs(run(400), run(ME)),
+			'jobs-400.1.json': jobs(job(BUILD, 'completed', 900), job('🍎 iOS (phone)', 'in_progress')),
+			'jobs-400.2.json': jobs(
+				job(BUILD, 'completed', 900),
+				job('🍎 iOS (phone)', 'completed', 1),
+				job('🍎 iOS (tablet)', 'in_progress')
+			),
+		},
+	});
+	assert.equal(result.status, 0, result.stdout + result.stderr);
+	assert.match(
+		result.stdout,
+		/queued behind:\n\s+https:\/\/github\.com\/wcpos\/monorepo\/actions\/runs\/400 \(branch-400\) — 🍎 iOS \(phone\): in_progress/
+	);
+	assert.match(result.stdout, /slot is free/);
+
+	// A `pending` job (held by GitHub) is not completed: still a blocker. And
+	// when the budget ends the job fails naming what it waited on.
+	result = drive({
+		slot: '🤖 Android (tablet)',
+		prefix: '🤖 Android (',
+		fixtures: {
+			'runs.json': runs(run(400, 'pending'), run(ME)),
+			'jobs-400.json': jobs(job(BUILD, 'completed', 900), job('🤖 Android (tablet)', 'pending')),
+		},
+		env: giveUp,
+	});
+	assert.equal(result.status, 1, result.stdout + result.stderr);
+	assert.match(
+		result.stdout,
+		/::error::Gave up waiting for the 🤖 Android \(tablet\) device slot after \d+s/
+	);
+	assert.match(result.stdout, /runs\/400 \(branch-400\) — 🤖 Android \(tablet\): pending/);
+	assert.match(result.stdout, /nothing was cancelled/);
+
+	// max-parallel: 1 creates the tablet job only after the phone job ends,
+	// so an older run with a live phone job and no tablet job yet blocks the
+	// tablet slot (the tablet job is coming) — and for a grace period after
+	// the phone completes (the tablet job appears ~1 s later).
+	const tabletBehindPhone = (phoneStatus, phoneCompletedSecondsAgo) =>
+		drive({
+			slot: '🍎 iOS (tablet)',
+			prefix: '🍎 iOS (',
+			fixtures: {
+				'runs.json': runs(run(400), run(ME)),
+				'jobs-400.json': jobs(
+					job(BUILD, 'completed', 900),
+					job('🍎 iOS (phone)', phoneStatus, phoneCompletedSecondsAgo)
+				),
+			},
+			env: giveUp,
+		});
+	result = tabletBehindPhone('in_progress', null);
+	assert.equal(result.status, 1, result.stdout + result.stderr);
+	assert.match(result.stdout, /🍎 iOS \(phone\): in_progress \(🍎 iOS \(tablet\) follows it\)/);
+	result = tabletBehindPhone('completed', 5);
+	assert.equal(result.status, 1, result.stdout + result.stderr);
+	assert.match(result.stdout, /🍎 iOS \(phone\): completed \(🍎 iOS \(tablet\) follows it\)/);
+	// Phone finished well outside the grace window and no tablet job ever
+	// appeared: the run is not going to create one — the slot is free.
+	result = tabletBehindPhone('completed', 600);
+	assert.equal(result.status, 0, result.stdout + result.stderr);
+	assert.match(result.stdout, /slot is free/);
+
+	// Before the older run's build resolves it has no device jobs at all;
+	// they are created when it completes, so wait for it. A build that
+	// completed long ago without creating our platform (platform-only
+	// dispatch) does not block.
+	const phoneBehindBuild = (buildStatus, buildCompletedSecondsAgo) =>
+		drive({
+			slot: '🤖 Android (phone)',
+			prefix: '🤖 Android (',
+			fixtures: {
+				'runs.json': runs(run(400), run(ME)),
+				'jobs-400.json': jobs(
+					job('🔍 Detect Native Changes', 'completed', 1200),
+					job(BUILD, buildStatus, buildCompletedSecondsAgo),
+					job('🍎 iOS (phone)', 'in_progress')
+				),
+			},
+			env: giveUp,
+		});
+	result = phoneBehindBuild('in_progress', null);
+	assert.equal(result.status, 1, result.stdout + result.stderr);
+	assert.match(result.stdout, /runs\/400 \(branch-400\) — device jobs not created yet/);
+	result = phoneBehindBuild('completed', 600);
+	assert.equal(result.status, 0, result.stdout + result.stderr);
+	assert.match(result.stdout, /slot is free/);
+
+	// The other platform's traffic never blocks ours.
+	result = drive({
+		slot: '🤖 Android (phone)',
+		prefix: '🤖 Android (',
+		fixtures: {
+			'runs.json': runs(run(400), run(ME)),
+			'jobs-400.json': jobs(
+				job(BUILD, 'completed', 900),
+				job('🍎 iOS (phone)', 'in_progress'),
+				job('🤖 Android (phone)', 'completed', 900),
+				job('🤖 Android (tablet)', 'completed', 300)
+			),
+		},
+	});
+	assert.equal(result.status, 0, result.stdout + result.stderr);
+
+	// An API outage is a warning and a retry, not a verdict.
+	result = drive({
+		slot: '🍎 iOS (phone)',
+		prefix: '🍎 iOS (',
+		fixtures: {
+			'fail-runs.1': '',
+			'runs.json': runs(run(ME)),
+		},
+	});
+	assert.equal(result.status, 0, result.stdout + result.stderr);
+	assert.match(result.stdout, /::warning::Could not list workflow runs \(attempt 1\): mock: 503/);
+	assert.match(result.stdout, /slot is free/);
+
+	// The current run can fall off the single page of 100 during a long wait. It
+	// then counts as the newest run and keeps waiting on every live one — never a
+	// jq error on a null start time that would empty the blocker list and pass.
+	result = drive({
+		slot: '🍎 iOS (phone)',
+		prefix: '🍎 iOS (',
+		fixtures: {
+			'runs.json': runs(run(400)),
+			'jobs-400.json': jobs(job(BUILD, 'completed', 900), job('🍎 iOS (phone)', 'in_progress')),
+		},
+		env: giveUp,
+	});
+	assert.equal(result.status, 1, result.stdout + result.stderr);
+	assert.doesNotMatch(result.stdout + result.stderr, /jq: error/);
+	assert.match(result.stdout, /runs\/400 \(branch-400\) — 🍎 iOS \(phone\): in_progress/);
+
+	// An older run whose jobs cannot be read is treated as a blocker: waiting
+	// is cheap, overlapping a live suite is the thing being prevented.
+	result = drive({
+		slot: '🍎 iOS (phone)',
+		prefix: '🍎 iOS (',
+		fixtures: { 'runs.json': runs(run(400), run(ME)) },
+		env: giveUp,
+	});
+	assert.equal(result.status, 1, result.stdout + result.stderr);
+	assert.match(result.stdout, /runs\/400 \(branch-400\) — jobs unreadable/);
+});
+
+test('the Android suite keeps adb reverse alive for the life of the run', () => {
+	const step = findStep(
+		readWorkflow('e2e-native.yml'),
+		'android',
+		'📱 Run Maestro suite on emulator'
+	);
+	const lines = (step.with?.script ?? step.run).split('\n');
+	const refresher = lines.findIndex(
+		(line) => line.startsWith('nohup sh -c') && line.includes('adb reverse tcp:8081 tcp:8081')
+	);
+	const suite = lines.findIndex((line) => line.startsWith('{ maestro test'));
+	assert.ok(refresher >= 0, 'missing the adb reverse refresher loop');
+	assert.ok(suite > refresher, 'the refresher must start before the suite');
+	// Run 33319233428 (phone) lost the reverse port mid-suite; the launcher's
+	// ECONNREFUSED on relaunch is only diagnosable with a log of what adb held.
+	assert.match(lines[refresher], /adb reverse --list/);
+	assert.match(lines[refresher], /adb-reverse\.log/);
+	// It must end with the run — the same sentinel the screen recorder honours.
+	assert.match(lines[refresher], /stop-screenrecord/);
+	// The emulator-runner action executes the script LINE BY LINE: one line, no
+	// continuation backslash.
+	assert.doesNotMatch(lines[refresher], /\\$/);
+});
+
+test('the Android emulator resolves DNS through public resolvers and proves connectivity before the suite', () => {
+	const step = findStep(
+		readWorkflow('e2e-native.yml'),
+		'android',
+		'📱 Run Maestro suite on emulator'
+	);
+	// Run 33325931363 (phone): the guest booted with every NetworkMonitor DNS probe
+	// refused, and the store-shaped red in flow 02 was the only symptom.
+	assert.match(step.with['emulator-options'], /-dns-server 8\.8\.8\.8,1\.1\.1\.1/);
+	const lines = step.with.script.split('\n');
+	const guard = lines.findIndex((line) =>
+		line.startsWith('i=0; until adb shell dumpsys connectivity')
+	);
+	const reverse = lines.findIndex((line) => line.trim() === 'adb reverse tcp:8081 tcp:8081');
+	const suite = lines.findIndex((line) => line.startsWith('{ maestro test'));
+	assert.ok(guard >= 0, 'missing the connectivity guard');
+	assert.ok(guard < reverse && reverse < suite, 'the guard must run before the suite');
+	// It aborts with an explicit reason instead of letting the flows time out.
+	assert.match(lines[guard], /::error::emulator has no validated internet/);
+	assert.match(lines[guard], /exit 1/);
+	// ONE line: the emulator-runner action executes the script line by line.
+	assert.doesNotMatch(lines[guard], /\\$/);
+});
+
+test('the iOS step retries flow 01 when the driver went blind mid-flow', () => {
+	// Third driver shape (runs 33327826137 / 33327340303 / 33327456369): commands
+	// run, then assertions time out on elements the screenshot shows rendered,
+	// with dozens of xcTestDriverStatusCheck [Failed] refusals in the log. Flow 01
+	// starts with clearState, so one retry cannot double-apply state.
+	const step = findStep(readWorkflow('e2e-native.yml'), 'ios', '📱 Run Maestro suite on simulator');
+
+	const dir = mkdtempSync(path.join(tmpdir(), 'maestro-blind-'));
+	try {
+		mkdirSync(path.join(dir, 'apps/main/.maestro/flows'), { recursive: true });
+		writeFileSync(path.join(dir, 'apps/main/.maestro/flows/01-clean-launch-connect.yml'), '');
+		mkdirSync(path.join(dir, 'bin'));
+		// The refusals are LOGGER records: the real maestro writes them into
+		// ~/.maestro/tests/<ts>/maestro.log, not to stdout. The fake does the
+		// same, so this test drives the workflow's file-based grep — an
+		// echo-based fake validated the instrument, not the data source
+		// (Codex review on #1722).
+		const writeRefusalLog = [
+			'mkdir -p "$HOME/.maestro/tests/run1"',
+			'for i in $(seq 1 12); do echo "[ INFO] xcuitest.installer.LocalXCTestInstaller.xcTestDriverStatusCheck: [Failed] Perform XCUITest driver status check" >> "$HOME/.maestro/tests/run1/maestro.log"; done',
+		];
+		writeFileSync(
+			path.join(dir, 'bin/maestro'),
+			[
+				'#!/bin/sh',
+				'C="$TMPDIR_COUNTER"',
+				'if [ -f "$C" ]; then exit 0; fi',
+				'touch "$C"',
+				...writeRefusalLog,
+				'echo "Assertion is false: id: store-url-input is visible"',
+				'exit 1',
+				'',
+			].join('\n')
+		);
+		spawnSync('chmod', ['+x', path.join(dir, 'bin/maestro')]);
+
+		const result = runShell(step.run, {
+			cwd: dir,
+			env: {
+				PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`,
+				HOME: dir,
+				MAESTRO_UDID: 'fake',
+				TMPDIR_COUNTER: path.join(dir, 'called-once'),
+			},
+		});
+
+		assert.equal(
+			result.status,
+			0,
+			`the blind-driver retry did not fire for flow 01: ${result.stdout}${result.stderr}`
+		);
+		assert.match(result.stdout, /driver went blind mid-flow \(12 status-check refusals\)/);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test('the blind-driver retry never touches a stateful later flow', () => {
+	// The same signature on any flow after 01 must stay red: those flows carry
+	// on-device state and are not safely repeatable.
+	const step = findStep(readWorkflow('e2e-native.yml'), 'ios', '📱 Run Maestro suite on simulator');
+
+	const dir = mkdtempSync(path.join(tmpdir(), 'maestro-blind-later-'));
+	try {
+		mkdirSync(path.join(dir, 'apps/main/.maestro/flows'), { recursive: true });
+		writeFileSync(path.join(dir, 'apps/main/.maestro/flows/05-drawer-navigation.yml'), '');
+		mkdirSync(path.join(dir, 'bin'));
+		// The refusals are LOGGER records: the real maestro writes them into
+		// ~/.maestro/tests/<ts>/maestro.log, not to stdout. The fake does the
+		// same, so this test drives the workflow's file-based grep — an
+		// echo-based fake validated the instrument, not the data source
+		// (Codex review on #1722).
+		const writeRefusalLog = [
+			'mkdir -p "$HOME/.maestro/tests/run1"',
+			'for i in $(seq 1 12); do echo "[ INFO] xcuitest.installer.LocalXCTestInstaller.xcTestDriverStatusCheck: [Failed] Perform XCUITest driver status check" >> "$HOME/.maestro/tests/run1/maestro.log"; done',
+		];
+		writeFileSync(
+			path.join(dir, 'bin/maestro'),
+			[
+				'#!/bin/sh',
+				'C="$TMPDIR_COUNTER"',
+				'if [ -f "$C" ]; then exit 0; fi',
+				'touch "$C"',
+				...writeRefusalLog,
+				'echo "Assertion is false: id: drawer-nav is visible"',
+				'exit 1',
+				'',
+			].join('\n')
+		);
+		spawnSync('chmod', ['+x', path.join(dir, 'bin/maestro')]);
+
+		const result = runShell(step.run, {
+			cwd: dir,
+			env: {
+				PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`,
+				HOME: dir,
+				MAESTRO_UDID: 'fake',
+				TMPDIR_COUNTER: path.join(dir, 'called-once'),
+			},
+		});
+
+		assert.notEqual(
+			result.status,
+			0,
+			'a stateful flow with the blind-driver signature was retried — it must stay red'
+		);
+		assert.doesNotMatch(result.stdout, /driver went blind mid-flow/);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test('the offline retry never re-runs into a transport that will not stabilise', () => {
+	// Codex on #1724: after the poll bound the old line re-ran unconditionally —
+	// a second confusing openLink red instead of "transport never stabilised".
+	const step = findStep(
+		readWorkflow('e2e-native.yml'),
+		'android',
+		'📱 Run Maestro suite on emulator'
+	);
+	const retry = step.with.script
+		.split('\n')
+		.find((line) => line.includes("grep -Rqs 'device offline'"));
+	assert.ok(retry, 'missing the offline retry line');
+
+	const dir = mkdtempSync(path.join(tmpdir(), 'maestro-android-unstable-'));
+	try {
+		mkdirSync(path.join(dir, '.maestro/tests/first-run'), { recursive: true });
+		writeFileSync(path.join(dir, '.maestro/tests/first-run/maestro.log'), 'device offline\n');
+		writeFileSync(path.join(dir, '.maestro/tests/exit_code'), '1\n');
+		mkdirSync(path.join(dir, 'bin'));
+		// get-state answers "offline" forever; sleep is a no-op so the 36-poll
+		// bound costs milliseconds instead of three minutes.
+		writeFileSync(
+			path.join(dir, 'bin/adb'),
+			'#!/bin/sh\nif [ "$1" = get-state ]; then echo offline; fi\nexit 0\n'
+		);
+		writeFileSync(path.join(dir, 'bin/sleep'), '#!/bin/sh\nexit 0\n');
+		writeFileSync(path.join(dir, 'bin/timeout'), '#!/bin/sh\nshift\nexec "$@"\n');
+		writeFileSync(
+			path.join(dir, 'bin/maestro'),
+			'#!/bin/sh\necho called >> "$MAESTRO_RETRY_COUNTER"\nexit 0\n'
+		);
+		for (const bin of ['adb', 'sleep', 'timeout', 'maestro']) {
+			spawnSync('chmod', ['+x', path.join(dir, 'bin', bin)]);
+		}
+
+		const result = runShell(retry, {
+			cwd: dir,
+			env: {
+				PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`,
+				HOME: dir,
+				MAESTRO_RETRY_COUNTER: path.join(dir, 'retry-count'),
+				VARIABLE_PRODUCT_ID: '1',
+				DEVICE_CLASS: 'phone',
+			},
+		});
+
+		assert.ok(
+			!existsSync(path.join(dir, 'retry-count')),
+			'maestro was re-run into a dead transport'
+		);
+		assert.match(result.stdout, /::error::adb transport never stabilised/);
+		assert.equal(readFileSync(path.join(dir, '.maestro/tests/exit_code'), 'utf8').trim(), '1');
+		const statePolls = readFileSync(path.join(dir, '.maestro/tests/adb-state.log'), 'utf8')
+			.trim()
+			.split('\n');
+		// 36 polls with a no-op sleep finish far inside the 180 s wall-clock
+		// deadline, so the poll bound is what ends the loop here.
+		assert.equal(statePolls.length, 36, 'the poll bound must be exhausted, not skipped');
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}

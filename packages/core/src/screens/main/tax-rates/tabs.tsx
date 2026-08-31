@@ -4,6 +4,7 @@ import get from 'lodash/get';
 import groupBy from 'lodash/groupBy';
 import { useObservableSuspense } from 'observable-hooks';
 
+import { Suspense } from '@wcpos/components/suspense';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import type { EngineRecord } from '@wcpos/query';
@@ -25,12 +26,24 @@ interface QueryResult {
 	hits: { record: EngineRecord<'taxRates'> }[];
 }
 
+type TaxRatesBinding = ReturnType<typeof useCollectionBinding<'tax-rates'>>;
+
 /**
  *
  */
+/** Creator above, reader below its own boundary — see `tax-rates.tsx` for why. */
 export function TaxRatesTabs() {
 	const state = useQueryState<'tax-rates'>();
 	const binding = useCollectionBinding('tax-rates', state);
+
+	return (
+		<Suspense>
+			<TaxRatesTabsContent binding={binding} />
+		</Suspense>
+	);
+}
+
+function TaxRatesTabsContent({ binding }: { binding: TaxRatesBinding }) {
 	const result = useObservableSuspense(binding.resource) as QueryResult;
 	const rates = result.hits.map((hit) => hit.record.payload);
 	const { extraData } = useExtraData();

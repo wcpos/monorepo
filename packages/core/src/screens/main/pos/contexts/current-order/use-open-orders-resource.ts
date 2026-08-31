@@ -37,6 +37,17 @@ function orderMeta(document: EngineRecord<'orders'>) {
 	return Array.isArray(meta) ? meta : undefined;
 }
 
+/**
+ * CANNOT loop across a Suspense retry: `(pos)/_layout.tsx` calls this hook and renders
+ * `CurrentOrderProvider` — the `useObservableSuspense` consumer — inside a `Suspense` BELOW
+ * itself. React unwinds only as far as that boundary and commits everything above it with the
+ * fallback, so the layout's `useMemo` is preserved and the retry reads back the same resource.
+ * Only a builder inside the boundary's own subtree loses its state, which is the Orders blank
+ * body (#1707). `packages/query/tests/suspense-boundary-placement.test.tsx` pins both halves of that rule.
+ *
+ * The demand handles and the resident subscription are bound to this resource's lifetime in the
+ * effect below, which is why it stays a per-mount resource rather than a cached one.
+ */
 export function useOpenOrdersResource(
 	cashierID: number | undefined,
 	storeID: number | undefined

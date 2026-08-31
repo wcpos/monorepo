@@ -2,7 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { useRouter } from 'expo-router';
-import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense } from 'observable-hooks';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import {
@@ -46,8 +46,11 @@ import { useStoreSession } from '../../../../contexts/app-state';
 import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 import { reloadApp } from '../../../../utils/reload-app';
+import { storeListResource } from '../../hooks/store-list-resource';
 import { useImageAttachment } from '../../hooks/use-image-attachment';
 import { countUnsentChanges, describeResetConfirm } from '../../hooks/use-unsent-changes';
+
+import type { ObservableResource } from 'observable-hooks';
 
 const uiLogger = getLogger(['wcpos', 'ui', 'menu']);
 
@@ -138,17 +141,11 @@ export function UserMenu() {
 	 */
 	const [restartRequired, setRestartRequired] = React.useState(false);
 
-	/**
-	 *
-	 */
-	const storesResource = React.useMemo(
-		() =>
-			new ObservableResource(
-				wpCredentials.populate$('stores'),
-				(val): val is StoreDocument[] => !!val
-			),
-		[wpCredentials]
-	) as ObservableResource<StoreDocument[], StoreDocument[]>;
+	// Held outside React on purpose — a resource rebuilt on each Suspense retry re-suspends
+	// forever, and `StoreSubMenu` reads it with `useObservableSuspense`. See
+	// `store-list-resource.ts`. The same resource the Orders and Reports filter bars read, so
+	// the header and the pills share one subscription to this credential's stores.
+	const storesResource = storeListResource(wpCredentials);
 
 	/**
 	 * Clearing local data destroys the durable mutation queue, so it destroys any
@@ -280,11 +277,18 @@ export function UserMenu() {
 								<Text>{t('common.switch_store')}</Text>
 							</DropdownMenuSubTrigger>
 							<DropdownMenuSubContent>
-								<StoreSubMenu
-									storesResource={storesResource}
-									switchStore={handleSwitchStore}
-									currentStoreID={store.localID!}
-								/>
+								{/* Its own boundary. `StoreSubMenu` suspends until the stores land,
+								    and the nearest boundary above this menu is the one expo-router
+								    wraps every route in — whose production fallback is `null`, so a
+								    submenu still waiting for its records would blank the screen
+								    behind it rather than itself (#1707). */}
+								<Suspense>
+									<StoreSubMenu
+										storesResource={storesResource}
+										switchStore={handleSwitchStore}
+										currentStoreID={store.localID!}
+									/>
+								</Suspense>
 							</DropdownMenuSubContent>
 						</DropdownMenuSub>
 						<DropdownMenuSeparator />

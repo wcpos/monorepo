@@ -12,6 +12,7 @@ import { useObservableSuspense } from 'observable-hooks';
 import { filter, firstValueFrom } from 'rxjs';
 
 import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
+import type { RequirementHandle } from '@wcpos/sync-engine';
 import { QueryProvider, useQueryRuntime } from '@wcpos/query';
 import type { QueryResult } from '@wcpos/query';
 import {
@@ -1013,6 +1014,136 @@ describe('query bindings', () => {
 		expect(engine.coverageSubscribeCalls).toEqual([]);
 	});
 
+	it('reports the parent search lane exhaustion verdict and no opinion for browse', async () => {
+		const target = { collection: 'products' as const, queryKey: 'products:search:sprite' };
+		engine.setCoverageVerdict(target, { complete: true, fresh: true, source: 'lane', total: 4 });
+		// The fake serves local by default; an incomplete lane only means "more may exist"
+		// after a wire walk actually wrote it, so settle the search as `fetched`.
+		const originalRequire = engine.require.bind(engine);
+		engine.require = (requirement) => {
+			const handle = originalRequire(requirement);
+			if (requirement.kind !== 'search') return handle;
+			return {
+				...handle,
+				ready: Promise.resolve({
+					action: 'fetched' as const,
+					missingRecordIds: [],
+					reason: 'test walked',
+				}),
+			};
+		};
+		const search: QueryStateOf<'products'> = {
+			search: 'sprite',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'name', direction: 'asc' },
+			limit: 10,
+		};
+		const { result, rerender } = renderHook(({ state }) => useRelationalCollectionBinding(state), {
+			wrapper: Provider,
+			initialProps: { state: search },
+		});
+
+		await expect(
+			firstValueFrom(result.current.exhausted$.pipe(filter((value) => value === true)))
+		).resolves.toBe(true);
+
+		const incomplete = firstValueFrom(
+			result.current.exhausted$.pipe(filter((value) => value === false))
+		);
+		act(() =>
+			engine.setCoverageVerdict(target, { complete: false, fresh: true, source: 'lane', total: 10 })
+		);
+		await expect(incomplete).resolves.toBe(false);
+
+		rerender({ state: { ...search, search: '' } });
+		await expect(
+			firstValueFrom(result.current.exhausted$.pipe(filter((value) => value === null)))
+		).resolves.toBeNull();
+		engine.require = originalRequire;
+	});
+
+	// A walk that never landed leaves no lane. Reading "no lane" as "more may exist" would let
+	// the grid grow its limit on every end-reached fire while the store is unreachable — the
+	// #1221 storm by another door — so the engine must decline to have an opinion instead.
+	it('has no exhaustion opinion when nothing walked: served local, or the walk failed', async () => {
+		const target = { collection: 'products' as const, queryKey: 'products:search:sprite' };
+		const search: QueryStateOf<'products'> = {
+			search: 'sprite',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'name', direction: 'asc' },
+			limit: 10,
+		};
+
+		// Served local (the fake's default outcome) over an INCOMPLETE lane — a fully resident
+		// catalogue looks exactly like this, and its local rows are the whole answer: null.
+		engine.setCoverageVerdict(target, { complete: false, fresh: true, source: 'lane', total: 10 });
+		const first = renderHook(() => useRelationalCollectionBinding(search), { wrapper: Provider });
+		const firstSeen: (boolean | null)[] = [];
+		const firstSubscription = first.result.current.exhausted$.subscribe((value) =>
+			firstSeen.push(value)
+		);
+		await waitFor(() => expect(firstValueFrom(first.result.current.pending$)).resolves.toBe(false));
+		expect(firstSeen).not.toContain(false);
+		expect(firstSeen.at(-1)).toBeNull();
+		firstSubscription.unsubscribe();
+		first.unmount();
+
+		// The walk failed: even a lane that LOOKS incomplete must not read as "more may exist".
+		engine.setCoverageVerdict(target, { complete: false, fresh: true, source: 'lane', total: 10 });
+		const originalRequire = engine.require.bind(engine);
+		engine.require = (requirement) => {
+			const handle = originalRequire(requirement);
+			if (requirement.kind !== 'search') return handle;
+			return {
+				...handle,
+				ready: Promise.reject(new Error('Woo REST products search request failed: 503')),
+			};
+		};
+		const second = renderHook(() => useRelationalCollectionBinding(search), { wrapper: Provider });
+		const seen: (boolean | null)[] = [];
+		const subscription = second.result.current.exhausted$.subscribe((value) => seen.push(value));
+		await waitFor(() =>
+			expect(firstValueFrom(second.result.current.pending$)).resolves.toBe(false)
+		);
+		expect(seen).not.toContain(false);
+		expect(seen.at(-1)).toBeNull();
+		subscription.unsubscribe();
+		engine.require = originalRequire;
+	});
+
+	it('reports pending between standing demand declaration and settlement', async () => {
+		const originalRequire = engine.require.bind(engine);
+		let settleSearch!: (outcome: Awaited<RequirementHandle['ready']>) => void;
+		engine.require = (requirement) => {
+			const handle = originalRequire(requirement);
+			if (requirement.kind !== 'search') return handle;
+			return {
+				...handle,
+				ready: new Promise((resolve) => {
+					settleSearch = resolve;
+				}),
+			};
+		};
+		const state: QueryStateOf<'customers'> = {
+			search: 'ada',
+			filters: {},
+			sort: { field: 'last_name', direction: 'asc' },
+			limit: 10,
+		};
+		const { result } = renderHook(() => useCollectionBinding('customers', state), {
+			wrapper: Provider,
+		});
+		const pending: boolean[] = [];
+		const subscription = result.current.pending$.subscribe((value) => pending.push(value));
+		await waitFor(() => expect(pending.at(-1)).toBe(true));
+
+		act(() =>
+			settleSearch({ action: 'serve-local', missingRecordIds: [], reason: 'test settled' })
+		);
+		await waitFor(() => expect(pending.at(-1)).toBe(false));
+		subscription.unsubscribe();
+	});
+
 	// Owner ruling 2026-08-22: the denominator is a property of the STORE, not of the current
 	// view, so it holds still while the cashier types. "Showing 1 of 203" says this till knows
 	// 203 products and one matches; the old "Showing 1 of 1" made the denominator move with
@@ -1372,6 +1503,8 @@ describe('query bindings', () => {
 			wrapper: Provider,
 			initialProps: { currentState: state },
 		});
+		await expect(firstValueFrom(result.current.pending$)).resolves.toBe(false);
+		await expect(firstValueFrom(result.current.exhausted$)).resolves.toBeNull();
 		await waitFor(() =>
 			expect(
 				(result.current.resource.valueRef$$.value?.current as QueryResult<RxCollection>)?.hits
@@ -2040,7 +2173,15 @@ describe('query bindings', () => {
 	 * what crashed, the value a component destructures was.
 	 */
 	describe('first render never yields an undefined binding (resurrected 1.9 guard)', () => {
-		const BINDING_FIELDS = ['resource', 'result$', 'active$', 'total$', 'laneProgress$'] as const;
+		const BINDING_FIELDS = [
+			'resource',
+			'result$',
+			'active$',
+			'pending$',
+			'exhausted$',
+			'total$',
+			'laneProgress$',
+		] as const;
 
 		const productsState: QueryStateOf<'products'> = {
 			search: '',
@@ -2108,7 +2249,14 @@ describe('query bindings', () => {
 			}
 			// The observables must be subscribable and `sync` callable straight away —
 			// "defined" is not enough if the field is a placeholder a consumer cannot use.
-			for (const field of ['result$', 'active$', 'total$', 'laneProgress$'] as const) {
+			for (const field of [
+				'result$',
+				'active$',
+				'pending$',
+				'exhausted$',
+				'total$',
+				'laneProgress$',
+			] as const) {
 				expect(typeof (captured.binding?.[field] as { subscribe?: unknown })?.subscribe).toBe(
 					'function'
 				);

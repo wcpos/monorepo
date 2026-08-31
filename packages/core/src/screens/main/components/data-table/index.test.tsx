@@ -28,6 +28,9 @@ jest.mock('@wcpos/query', () => ({
 
 jest.mock('observable-hooks', () => ({
 	useObservableEagerState: () => mockColumns,
+	// The paging guard reads the binding's pending$/exhausted$ through this; the initial
+	// value ("not pending", "no opinion") is all these tests need.
+	useObservableState: (_source: unknown, initial: unknown) => initial,
 	useObservableSuspense: () => ({
 		hits: [{ id: 'log-1', record: { payload: { level: 'error' } } }],
 	}),

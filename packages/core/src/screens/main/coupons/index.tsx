@@ -189,6 +189,7 @@ function CouponsScreenContent() {
 							<DataTable<CouponRow>
 								id="coupons"
 								collectionName="coupons"
+								binding={binding}
 								resource={binding.resource}
 								sort={state.sort}
 								actions={tableActions}

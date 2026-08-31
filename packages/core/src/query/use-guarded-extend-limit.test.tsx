@@ -5,29 +5,33 @@
 import * as React from 'react';
 
 import { act, render } from '@testing-library/react';
+import { BehaviorSubject, of } from 'rxjs';
 
 import { QueryStateProvider, useQueryState, useQueryStateActions } from './query-state-store';
 import { useGuardedExtendLimit } from './use-guarded-extend-limit';
 
+import type { QueryBinding } from './query-bindings';
+
 describe('useGuardedExtendLimit (#1221)', () => {
 	let fire: (() => void) | undefined;
 	let limit: number | undefined;
+	type EngineBinding = Pick<QueryBinding, 'pending$' | 'exhausted$'>;
 
-	function Probe({ resultCount }: { resultCount: number }) {
+	function Probe({ resultCount, binding }: { resultCount: number; binding?: EngineBinding }) {
 		limit = useQueryState<'products', number>((state) => state.limit);
 		const actions = useQueryStateActions<'products'>();
-		fire = useGuardedExtendLimit(actions.extendLimit, resultCount);
+		fire = useGuardedExtendLimit(actions.extendLimit, resultCount, binding);
 		return null;
 	}
 
-	function renderProbe(resultCount: number) {
+	function renderProbe(resultCount: number, binding?: EngineBinding) {
 		return render(
 			<QueryStateProvider
 				collection="products"
 				initialPageSize={10}
 				initialSort={{ field: 'name', direction: 'asc' }}
 			>
-				<Probe resultCount={resultCount} />
+				<Probe resultCount={resultCount} binding={binding} />
 			</QueryStateProvider>
 		);
 	}
@@ -83,5 +87,34 @@ describe('useGuardedExtendLimit (#1221)', () => {
 		);
 		act(() => fire!());
 		expect(limit).toBe(30);
+	});
+
+	it('extends a short local result when the engine says more may exist', () => {
+		renderProbe(4, { pending$: of(false), exhausted$: of(false) });
+		act(() => fire!());
+		expect(limit).toBe(20);
+	});
+
+	it('does not extend when the engine says the search is exhausted', () => {
+		renderProbe(10, { pending$: of(false), exhausted$: of(true) });
+		act(() => fire!());
+		expect(limit).toBe(10);
+	});
+
+	it('waits for a pending extension to settle before extending again', () => {
+		const pending$ = new BehaviorSubject(true);
+		renderProbe(10, { pending$, exhausted$: of(false) });
+		act(() => fire!());
+		expect(limit).toBe(10);
+
+		act(() => pending$.next(false));
+		act(() => fire!());
+		expect(limit).toBe(20);
+	});
+
+	it('keeps the short-page heuristic when the engine has no opinion', () => {
+		renderProbe(4, { pending$: of(false), exhausted$: of(null) });
+		act(() => fire!());
+		expect(limit).toBe(10);
 	});
 });

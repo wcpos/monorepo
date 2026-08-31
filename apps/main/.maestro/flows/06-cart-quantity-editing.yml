@@ -85,6 +85,50 @@ env:
     commands:
       - tapOn:
           id: "pos-tab-cart"
+# One logged re-add when the cart shows no line — the same recovery flow 04
+# carries, same class: run 33337147851 (Android tablet, two-column layout, no
+# tab switch involved) found the product, tapped the tile, and the cart column
+# stayed empty; `cart-quantity-input` never appeared in 30 s. The #1614
+# defect-2 keyboard no-op and the lost-press family both land here. The log
+# line makes every occurrence greppable (count evalScriptCommand COMPLETED in
+# the commands JSON — bare maestro.log greps over-count command metadata). A
+# re-add on a cart that already has the line still passes the quantity edit
+# below (it edits the FIRST quantity cell); the suite voids its orders.
+- runFlow:
+    when:
+      notVisible:
+        id: "cart-quantity-input"
+    commands:
+      - extendedWaitUntil:
+          visible:
+            id: "cart-quantity-input"
+          timeout: 10000
+          optional: true
+      - runFlow:
+          when:
+            notVisible:
+              id: "cart-quantity-input"
+          commands:
+            - evalScript: "${console.log('WCPOS_E2E cart has no line after the tile tap, re-adding once')}"
+            - runFlow:
+                when:
+                  visible:
+                    id: "pos-tab-products"
+                commands:
+                  - tapOn:
+                      id: "pos-tab-products"
+            - hideKeyboard:
+                optional: true
+            - tapOn:
+                id: "product-tile"
+                index: 0
+            - runFlow:
+                when:
+                  visible:
+                    id: "pos-tab-cart"
+                commands:
+                  - tapOn:
+                      id: "pos-tab-cart"
 - extendedWaitUntil:
     visible:
       id: "cart-quantity-input"

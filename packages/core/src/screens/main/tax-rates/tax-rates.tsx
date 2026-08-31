@@ -4,6 +4,7 @@ import get from 'lodash/get';
 import groupBy from 'lodash/groupBy';
 import { useObservableSuspense } from 'observable-hooks';
 
+import { Suspense } from '@wcpos/components/suspense';
 import {
 	Modal,
 	ModalBody,
@@ -35,9 +36,29 @@ interface QueryResult {
 	hits: { record: EngineRecord<'taxRates'> }[];
 }
 
+type TaxRatesBinding = ReturnType<typeof useCollectionBinding<'tax-rates'>>;
+
+/**
+ * The binding is built HERE, and the reader below sits inside its own `Suspense`.
+ *
+ * A resource built inside the boundary that suspends on it is discarded with the aborted
+ * render and rebuilt by every retry, which never ends (#1707) — the modal's own boundary in
+ * `index.tsx` sits ABOVE this component, so it cannot help. Creating the binding above a
+ * boundary of our own makes this component commit alongside the fallback, so the retry reads
+ * back the resource the first attempt already subscribed.
+ */
 export function TaxRates() {
 	const state = useQueryState<'tax-rates'>();
 	const binding = useCollectionBinding('tax-rates', state);
+
+	return (
+		<Suspense>
+			<TaxRatesContent binding={binding} />
+		</Suspense>
+	);
+}
+
+function TaxRatesContent({ binding }: { binding: TaxRatesBinding }) {
 	const result = useObservableSuspense(binding.resource) as QueryResult;
 	const rates = result.hits.map((hit) => hit.record.payload);
 	const { extraData } = useExtraData();

@@ -90,12 +90,12 @@ export function CategorySearch() {
  */
 function CategoryTreeLoaderInner({
 	onOptionsLoaded,
+	resource,
 }: {
 	onOptionsLoaded: (options: HierarchicalOption[]) => void;
+	resource: ReturnType<typeof useAllCategoriesBinding>['resource'];
 }) {
-	const binding = useAllCategoriesBinding();
-
-	const result = useObservableSuspense(binding.resource) as {
+	const result = useObservableSuspense(resource) as {
 		hits: { id: string; record: EngineRecord<'categories'> }[];
 	};
 
@@ -124,9 +124,15 @@ function CategoryTreeLoaderInner({
 export function CategoryTreeLoader(props: {
 	onOptionsLoaded: (options: HierarchicalOption[]) => void;
 }) {
+	// The binding is built HERE, above the boundary, and only the reader is inside it. A
+	// resource built inside the boundary that suspends on it is discarded with the aborted
+	// render and rebuilt by every retry, which never ends (#1707); built above it, this
+	// component commits alongside the fallback and the retry reads back the same resource.
+	const binding = useAllCategoriesBinding();
+
 	return (
 		<Suspense>
-			<CategoryTreeLoaderInner {...props} />
+			<CategoryTreeLoaderInner {...props} resource={binding.resource} />
 		</Suspense>
 	);
 }

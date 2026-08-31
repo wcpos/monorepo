@@ -32,8 +32,17 @@ export function useSeparatorA11y({
 	handleId,
 	model,
 }: SeparatorA11yOptions): SeparatorA11yProps {
-	React.useSyncExternalStore(model.subscribe, model.getVersion, model.getVersion);
-	const { valueMax, valueMin, valueNow } = model.getSeparatorAriaValues(handleId);
+	// Read through the store hook — see useSeparatorA11y.ts for why a discarded
+	// version read is not enough under the React Compiler.
+	const getSnapshot = React.useCallback(
+		() => model.getSeparatorAriaValues(handleId),
+		[handleId, model]
+	);
+	const { valueMax, valueMin, valueNow } = React.useSyncExternalStore(
+		model.subscribe,
+		getSnapshot,
+		getSnapshot
+	);
 	const onKeyDown = React.useCallback(
 		(event: SeparatorKeyEvent) => {
 			if (disabled || event.defaultPrevented) return;

@@ -23,6 +23,25 @@ appId: com.wcpos.main.dev
       - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
       - waitForAnimationToEnd:
           timeout: 5000
+# Run 33348495405 (Android phone): flow 02's second-submit recovery fired
+# ("login form still visible after submit, retyping once"), flow 02 PASSED,
+# but the login Custom Tab never closed - and this relaunch brought the task
+# back with that tab still on top, so the 120 s wait below stared at a filled
+# dev-pro login form. One logged Back press dismisses the tab and reveals the
+# app; gated on the login form itself so it can never fire while the app is
+# still loading (a blind Back during startup would background the app).
+# Login-page text, not testID: third-party browser content - the app's
+# selector policy cannot apply (same exemption flow 02 uses for these exact
+# strings). Flows 07/08 relaunch too but always run AFTER this dismissal.
+- runFlow:
+    when:
+      platform: Android
+      visible: "Username or Email Address|Nombre de usuario o correo electrónico"
+    commands:
+      - evalScript: "${console.log('WCPOS_E2E lingering login tab over the relaunched app, pressing back once')}"
+      - back
+      - waitForAnimationToEnd:
+          timeout: 5000
 - extendedWaitUntil:
     visible:
       id: "search-products"

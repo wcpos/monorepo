@@ -20,15 +20,26 @@ const newOrderLogger = getLogger(['wcpos', 'pos', 'new-order']);
  */
 const newOrderResource = new ObservableResource(newOrder$);
 
+/** What `useDefaultCustomer` hands back, taken as a prop rather than built here. */
+export type DefaultCustomerResource = ReturnType<
+	typeof useDefaultCustomer
+>['defaultCustomerResource'];
+
 /**
  * Provides the temporary (engine-shaped) order populated from the current customer and
  * store state. The returned document is the RAW temp record — the current-order provider
  * wraps it for the legacy face; all seeding writes here go through the temp-order
  * repository's payload merge.
+ *
+ * The default-customer resource is a PARAMETER, not something this hook builds, and that is
+ * load-bearing. Its only caller, `CurrentOrderProvider`, renders inside the `Suspense` that
+ * `(pos)/_layout.tsx` puts around it — so a resource built here would be discarded with the
+ * aborted render and rebuilt by every retry, which never ends (#1707). Built in the layout,
+ * which commits alongside the fallback, the retry reads back the same resource. This is the
+ * shape `useOpenOrdersResource` already uses, for the same reason.
  */
-export const useNewOrder = () => {
+export const useNewOrder = (defaultCustomerResource: DefaultCustomerResource) => {
 	const { store, wpCredentials } = useStoreSession();
-	const { defaultCustomerResource } = useDefaultCustomer();
 
 	const defaultCustomer = useObservableSuspense(defaultCustomerResource);
 	const currency = useDocField(store, (value) => value.currency);

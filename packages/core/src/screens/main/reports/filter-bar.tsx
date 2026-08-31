@@ -2,7 +2,6 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { endOfDay, startOfDay } from 'date-fns';
-import { ObservableResource } from 'observable-hooks';
 
 import { Card } from '@wcpos/components/card';
 import { HStack } from '@wcpos/components/hstack';
@@ -20,6 +19,7 @@ import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
 import { StatusPill } from '../components/order/filter-bar/status-pill';
 import { StorePill } from '../components/order/filter-bar/store-pill';
 import { useEngineRecordByWooId } from '../hooks/use-engine-document';
+import { storeListResource } from '../hooks/store-list-resource';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
 
 /**
@@ -49,10 +49,9 @@ export function FilterBar() {
 		void forceRefreshFilterCustomer(runtime, cashierID, 'cashier');
 	}, [cashierID, runtime]);
 
-	const storesResource = React.useMemo(
-		() => new ObservableResource(wpCredentials.populate$('stores'), (value) => !!value),
-		[wpCredentials]
-	);
+	// Held outside React on purpose — a resource rebuilt on each Suspense retry re-suspends
+	// forever. See `store-list-resource.ts`.
+	const storesResource = storeListResource(wpCredentials);
 
 	/**
 	 * Reports must stay bounded to a date window; clearing restores today's window.
@@ -80,13 +79,14 @@ export function FilterBar() {
 					<Suspense>
 						<CashierPill resource={cashierResource} onMissing={refreshCashier} />
 					</Suspense>
-					<StorePill
-						resource={
-							storesResource as import('observable-hooks').ObservableResource<
-								import('@wcpos/database').StoreDocument[]
-							>
-						}
-					/>
+					{/* Its own boundary, like the two pills above: a pill still waiting for its
+					    records must never blank the screen around it. Without this the
+					    suspension escaped to expo-router's per-route boundary, whose production
+					    fallback is `null`, which is how the Orders body came to render empty
+					    under a painted header (#1707, CI run 33295532237). */}
+					<Suspense>
+						<StorePill resource={storesResource} />
+					</Suspense>
 					<DateRangePill onRemove={removeDateRangeFilter} />
 				</HStack>
 			</Card>

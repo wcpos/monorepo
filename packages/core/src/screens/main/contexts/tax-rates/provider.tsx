@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
+import { Suspense } from '@wcpos/components/suspense';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 
@@ -108,6 +109,28 @@ export function TaxRatesProvider({ children, order }: TaxRatesProviderProps) {
 function TaxSettingsProvider({ children }: { children: React.ReactNode }) {
 	const state = useQueryState<'tax-rates'>();
 	const binding = useCollectionBinding('tax-rates', state);
+
+	// The binding is built HERE and read one level down, inside the boundary. Built in the
+	// component that also READS it, the resource would be discarded with the aborted render
+	// and rebuilt by every Suspense retry, which never ends (#1707): a tax-rates query's first
+	// emission is always async, and the nearest boundary was the per-route one, whose
+	// production fallback is `null` — a blank POS body under a painted header. Above a boundary
+	// of its own, this component commits alongside the fallback and the retry reads back the
+	// resource the first attempt already subscribed.
+	return (
+		<Suspense>
+			<TaxSettingsFromRates binding={binding}>{children}</TaxSettingsFromRates>
+		</Suspense>
+	);
+}
+
+function TaxSettingsFromRates({
+	binding,
+	children,
+}: {
+	binding: ReturnType<typeof useCollectionBinding<'tax-rates'>>;
+	children: React.ReactNode;
+}) {
 	const result = useObservableSuspense(binding.resource) as QueryResult;
 	const allRates = React.useMemo(() => result.hits.map((hit) => hit.record.payload), [result.hits]);
 

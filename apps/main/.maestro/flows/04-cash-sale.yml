@@ -97,6 +97,51 @@ env:
     commands:
       - tapOn:
           id: "pos-tab-cart"
+# One logged recovery when the cart shows no line. Run 33327340303 (main, iOS
+# phone) is the documented #1614-defect-2 shape recurring: the ⚠️ frame shows
+# the keyboard still up at the tile tap (hideKeyboard above is optional because
+# it is flaky on iOS), the tap silently no-ops, and the cart renders empty —
+# the tab itself had switched. Re-hide the keyboard, re-tap the tile, re-enter
+# the cart, once; the console.log line makes every occurrence greppable in
+# maestro.log. If the product was in fact added and this branch re-adds it, the
+# flow still measures what it always did — add → pay → complete — on a dev
+# store whose orders are voided by the suite. If the retry also fails, the
+# 30 s wait below still fails the flow.
+- runFlow:
+    when:
+      notVisible:
+        id: "cart-subtotal"
+    commands:
+      - extendedWaitUntil:
+          visible:
+            id: "cart-subtotal"
+          timeout: 10000
+          optional: true
+      - runFlow:
+          when:
+            notVisible:
+              id: "cart-subtotal"
+          commands:
+            - evalScript: "${console.log('WCPOS_E2E cart has no line after the tile tap, re-adding once')}"
+            - runFlow:
+                when:
+                  visible:
+                    id: "pos-tab-products"
+                commands:
+                  - tapOn:
+                      id: "pos-tab-products"
+            - hideKeyboard:
+                optional: true
+            - tapOn:
+                id: "product-tile"
+                index: 0
+            - runFlow:
+                when:
+                  visible:
+                    id: "pos-tab-cart"
+                commands:
+                  - tapOn:
+                      id: "pos-tab-cart"
 - extendedWaitUntil:
     visible:
       id: "cart-subtotal"
@@ -114,11 +159,17 @@ env:
 # tap on the disabled button is a silent no-op — Maestro still reports
 # COMPLETED. Order #117904 (local run 2026-08-29 17:09) sat `pos-open` with no
 # payment method for the whole 120s receipt wait because of exactly that.
+# 180 s, not 60: the button enables when the gateway frame loads, and that load
+# is dev-pro's slowest path under the concurrency the turnstile permits — run
+# 33319523590 measured a 71 s first WebView commit, and run 33337147851 (iOS
+# phone, flow 04's only red on the final 2026-08-30 stack) showed the dialog
+# open with the body empty and WebKit still negotiating navigation past the old
+# 60 s budget. Same figure as the pay-frame wait below (#1709's evidence).
 - extendedWaitUntil:
     visible:
       id: "process-payment-button"
       enabled: true
-    timeout: 60000
+    timeout: 180000
 - tapOn:
     id: "process-payment-button"
 # Receipt appears once the (cash) payment completes.

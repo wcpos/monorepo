@@ -9,6 +9,7 @@ import { PortalHost } from '@wcpos/components/portal';
 import { Suspense } from '@wcpos/components/suspense';
 import { useStoreSession } from '@wcpos/core/contexts/app-state';
 import { TaxRatesProvider } from '@wcpos/core/screens/main/contexts/tax-rates';
+import { useDefaultCustomer } from '@wcpos/core/screens/main/hooks/use-default-customer';
 import {
 	CurrentOrderProvider,
 	useOpenOrdersResource,
@@ -71,6 +72,13 @@ export default function POSLayout() {
 	 */
 	const resource = useOpenOrdersResource(cashierID, storeID);
 
+	// Built HERE, above the Suspense below, and handed to the provider — the same shape as the
+	// open-orders resource above it and for the same reason: a resource built inside the
+	// boundary that suspends on it is discarded with the aborted render and rebuilt by every
+	// retry, which never ends (#1707). This layout commits alongside the fallback, so the retry
+	// reads back the resource the first attempt already subscribed.
+	const { defaultCustomerResource } = useDefaultCustomer();
+
 	// The divergence store sits OUTSIDE the Suspense boundary, deliberately (R1).
 	// A save-time money divergence can be acked for an order in a background tab,
 	// or while the cart screen is unmounted on a small layout — so the
@@ -90,7 +98,11 @@ export default function POSLayout() {
 		<OrderMoneyDivergenceProvider>
 			<OrderEngineWarningsProvider>
 				<Suspense>
-					<CurrentOrderProvider resource={resource} currentOrderUUID={orderId}>
+					<CurrentOrderProvider
+						resource={resource}
+						defaultCustomerResource={defaultCustomerResource}
+						currentOrderUUID={orderId}
+					>
 						<ErrorBoundary>
 							<Suspense>
 								<POSStack />

@@ -37,6 +37,7 @@ jest.mock('@wcpos/components/virtualized-list', () => ({
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
+jest.mock('./grid-footer', () => ({ ProductGridFooter: () => null }));
 jest.mock('./product-tile', () => ({ ProductTile: () => null }));
 jest.mock('./variable-product-tile', () => ({ VariableProductTile: () => null }));
 jest.mock('../../../components/data-table/footer', () => ({ DataTableFooter: () => null }));
