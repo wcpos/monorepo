@@ -164,6 +164,13 @@ export function startSearchReadiness(options: {
 	const timers = new Set<ReturnType<typeof setTimeout>>();
 	/** Streak of missed audits per collection:locale, with the last missed document. */
 	const auditFailureStreaks = new Map<string, { count: number; lastUuid: string }>();
+	/**
+	 * Round-robin sample cursor per collection:locale. Deterministic on purpose:
+	 * successive audits walk the whole catalog instead of resampling at random
+	 * (which CodeQL also flags as insecure-randomness dataflow), and a walk
+	 * guarantees the distinct-document miss streak can actually progress.
+	 */
+	const auditSampleCursors = new Map<string, number>();
 
 	const clearTimers = () => {
 		for (const handle of timers) clearTimeout(handle);
@@ -211,6 +218,10 @@ export function startSearchReadiness(options: {
 	};
 
 	const auditCollection = async (database: AdapterDatabase, name: SearchedCollection) => {
+		// A store switch mid-audit must not let this audit's conclusions — least
+		// of all a rebuild or a shared-instance rebind — land on the NEW scope's
+		// live subscriptions: the shared key carries only collection:locale.
+		const stale = () => disposed || currentDatabase !== database;
 		const collection = database.collections[engineCollectionNameFor(name)] as unknown as
 			SearchableCollection | undefined;
 		if (!collection?.initSearch) return;
@@ -219,17 +230,19 @@ export function startSearchReadiness(options: {
 			collection.initSearch(locale, initializationOptions),
 			timings.auditFindTimeoutMs
 		);
-		if (instance === AUDIT_TIMED_OUT || instance === null) return;
+		if (stale() || instance === AUDIT_TIMED_OUT || instance === null) return;
 
-		// One bounded read, never the whole catalog: count once, then fetch a single
-		// document at a random offset (RxDB's default primary-key sort makes the
-		// offset deterministic). A large variation catalog must not be materialized
-		// every ten minutes just to pick one sample.
+		// One bounded read, never the whole catalog: count once, then fetch the
+		// single document at the round-robin cursor (RxDB's default primary-key
+		// sort makes the offset deterministic). A large variation catalog must not
+		// be materialized every ten minutes just to pick one sample.
+		const key = `${name}:${locale}`;
 		const total = collection.count ? await collection.count().exec() : 0;
-		if (total === 0) return;
-		const skip = Math.floor(Math.random() * total);
-		const [sample] = await collection.find({ skip, limit: 1 }).exec();
-		if (!sample) return;
+		if (stale() || total === 0) return;
+		const cursor = auditSampleCursors.get(key) ?? 0;
+		auditSampleCursors.set(key, cursor + 1);
+		const [sample] = await collection.find({ skip: cursor % total, limit: 1 }).exec();
+		if (stale() || !sample) return;
 		const snapshot = initializationOptions.documentSnapshot(sample);
 		const tokens = candidateTokens(snapshot, initializationOptions.searchFields).slice(
 			0,
@@ -237,12 +250,12 @@ export function startSearchReadiness(options: {
 		);
 		if (tokens.length === 0) return;
 
-		const key = `${name}:${locale}`;
 		for (const token of tokens) {
 			const found = await withTimeout(
 				(instance as SearchInstance).find(token),
 				timings.auditFindTimeoutMs
 			);
+			if (stale()) return;
 			// The index cannot answer right now (building, follower tab). Searches are
 			// covered by the scan lane; abstaining keeps "not ready" out of "wrong".
 			if (found === AUDIT_TIMED_OUT) return;
@@ -286,8 +299,10 @@ export function startSearchReadiness(options: {
 		try {
 			await collection.recreateSearch?.(locale);
 			const rebuilt = await collection.initSearch(locale, initializationOptions);
-			// Rebind every live search subscription to the rebuilt instance.
-			if (rebuilt) sharedSearchInstances(key, rebuilt);
+			// Rebind every live search subscription to the rebuilt instance — but
+			// never after a store switch: pushing the OLD scope's instance under the
+			// scope-less shared key would rebind the NEW scope's subscriptions.
+			if (rebuilt && !stale()) sharedSearchInstances(key, rebuilt);
 		} catch (error) {
 			searchLogger.warn('Search index rebuild failed', {
 				context: { collection: name, locale, error },
@@ -318,6 +333,7 @@ export function startSearchReadiness(options: {
 		// A database swap (store switch) restarts the cadence against the new scope.
 		clearTimers();
 		auditFailureStreaks.clear();
+		auditSampleCursors.clear();
 		if (!currentDatabase) return;
 		warmDatabase(currentDatabase);
 		schedule(() => void auditTick(), timings.auditInitialDelayMs);

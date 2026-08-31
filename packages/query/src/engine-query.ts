@@ -253,23 +253,54 @@ function matchingSelectors$(
 		});
 	};
 
+	// The scan answers directly from the documents, reacting to source writes;
+	// callers decide when it runs (deadline lane, or takeover after an index
+	// failure). No error handling on purpose: a scan failure is a genuine
+	// collection read error and must stay eligible for storage recovery
+	// (mirrors the short-term path above).
+	const scanAnswers$ = () =>
+		collection.$.pipe(
+			startWith(null),
+			throttleTime(SEARCH_SCAN_RETHROTTLE_MS, asyncScheduler, {
+				leading: true,
+				trailing: true,
+			}),
+			switchMap(() =>
+				from(scanDocumentsForSearch(collection, search, searchFields, documentSnapshot))
+			)
+		);
+
 	return defer(() => {
-		// Latched by the FIRST indexed answer for this subscription; the scan lane
-		// stands down once the index has proven it can answer this term.
-		const indexAnswered$ = new ReplaySubject<void>(1);
-		const indexedLane$ = from(
+		const boundInstances$ = from(
 			collection.initSearch(locale, {
 				searchFields: descriptor.read?.searchFields ?? descriptor.searchFields,
 				documentSnapshot,
 			})
 		).pipe(
 			switchMap((searchInstance) => {
-				if (!searchInstance) return EMPTY;
+				if (!searchInstance) return of(null);
 				const searchInstances = sharedSearchInstances(sharedKey, searchInstance);
 				return searchInstances.pipe(map((activeSearch) => ({ activeSearch, searchInstances })));
 			}),
-			switchMap(({ activeSearch, searchInstances }) =>
-				activeSearch.collection.$.pipe(
+			// A failed initSearch must never take search down with it: log once and
+			// answer from the scan. The next subscription (next keystroke) retries.
+			catchError((error) => {
+				logIndexNotAnswering(error);
+				return of(null);
+			})
+		);
+		// One race per BOUND INSTANCE, not per subscription: a rebuild rebind
+		// (divergence, false-miss audit) re-enters here with a fresh latch, so the
+		// scan lane revives if the rebuilt index stalls mid-build instead of
+		// leaving the term frozen on stale results.
+		return boundInstances$.pipe(
+			switchMap((bound) => {
+				if (!bound) return scanAnswers$();
+				const { activeSearch, searchInstances } = bound;
+				// Latched by the FIRST indexed answer for this binding; the scan lane
+				// stands down once the index has proven it can answer this term.
+				const indexAnswered$ = new ReplaySubject<void>(1);
+				const indexedLane$ = activeSearch.collection.$.pipe(
 					startWith(null),
 					switchMap(() => from(activeSearch.find(search)).pipe(tap(() => indexAnswered$.next()))),
 					switchMap(async (documents) => {
@@ -308,38 +339,25 @@ function matchingSelectors$(
 							});
 							return filtered;
 						}
+					}),
+					// A poisoned pipeline surfacing through find() must never take search
+					// down with it — even after earlier answers: log once, stand the
+					// deadline lane down, and hand this binding to the scan for good. A
+					// rebind or the next keystroke retries the index.
+					catchError((error) => {
+						logIndexNotAnswering(error);
+						indexAnswered$.next();
+						return scanAnswers$();
 					})
-				)
-			),
-			// A failed index — an initSearch rejection, a poisoned pipeline surfacing
-			// through find() — must never take search down with it: log once and let
-			// the scan lane keep answering. The next subscription (next keystroke)
-			// tries the index afresh.
-			catchError((error) => {
-				logIndexNotAnswering(error);
-				return EMPTY;
+				);
+				const deadlineScanLane$ = timer(SEARCH_INDEX_ANSWER_DEADLINE_MS).pipe(
+					tap(() => logIndexNotAnswering()),
+					switchMap(() => scanAnswers$()),
+					takeUntil(indexAnswered$)
+				);
+				return merge(indexedLane$, deadlineScanLane$);
 			})
 		);
-		const scanLane$ = timer(SEARCH_INDEX_ANSWER_DEADLINE_MS).pipe(
-			tap(() => logIndexNotAnswering()),
-			switchMap(() =>
-				collection.$.pipe(
-					startWith(null),
-					throttleTime(SEARCH_SCAN_RETHROTTLE_MS, asyncScheduler, {
-						leading: true,
-						trailing: true,
-					})
-				)
-			),
-			// No error handling here on purpose: a scan failure is a genuine collection
-			// read error and must stay eligible for storage recovery (mirrors the
-			// short-term path above).
-			switchMap(() =>
-				from(scanDocumentsForSearch(collection, search, searchFields, documentSnapshot))
-			),
-			takeUntil(indexAnswered$)
-		);
-		return merge(indexedLane$, scanLane$);
 	}).pipe(
 		map((documents) =>
 			withSearchSelector(

@@ -255,17 +255,21 @@ describe('query bindings', () => {
 		(products as unknown as { initSearch: () => Promise<never> }).initSearch = async () => {
 			throw new Error('search index failed');
 		};
-		rerender({ state: { ...base, search: 'coffee' } });
-		await waitFor(
-			() => {
-				const read = result.current.resource.read();
-				expect(read.hits.map((hit) => hit.id)).toEqual(['coffee']);
-				expect(read.searchState).toBe('answered');
-			},
-			{ timeout: 2000 }
-		);
-
-		installResidentSearch(products);
+		try {
+			rerender({ state: { ...base, search: 'coffee' } });
+			await waitFor(
+				() => {
+					const read = result.current.resource.read();
+					expect(read.hits.map((hit) => hit.id)).toEqual(['coffee']);
+					expect(read.searchState).toBe('answered');
+				},
+				{ timeout: 2000 }
+			);
+		} finally {
+			// The stub must not outlive a failed assertion — the collection instance
+			// is shared with later tests in this file.
+			installResidentSearch(products);
+		}
 	});
 
 	it('recovers from a query error when the descriptor changes', async () => {
@@ -289,12 +293,16 @@ describe('query bindings', () => {
 		(products as unknown as { find: () => never }).find = () => {
 			throw new Error('collection read failed');
 		};
-		rerender({ state: { ...base, filters: { ...base.filters, categories: [9] } } });
-		await waitFor(() =>
-			expect(() => result.current.resource.read()).toThrow('collection read failed')
-		);
-
-		(products as unknown as { find: typeof originalFind }).find = originalFind;
+		try {
+			rerender({ state: { ...base, filters: { ...base.filters, categories: [9] } } });
+			await waitFor(() =>
+				expect(() => result.current.resource.read()).toThrow('collection read failed')
+			);
+		} finally {
+			// The stub must not outlive a failed assertion — the collection instance
+			// is shared with later tests in this file.
+			(products as unknown as { find: typeof originalFind }).find = originalFind;
+		}
 		rerender({ state: base });
 		await waitFor(() =>
 			expect(result.current.resource.read().hits.map((hit) => hit.id)).toEqual(['coffee'])

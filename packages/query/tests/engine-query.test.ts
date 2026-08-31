@@ -316,6 +316,49 @@ describe('observeEngineQuery', () => {
 			}
 		});
 
+		it('revives the scan lane when a rebuilt index stalls mid-build', async () => {
+			// The race is per BOUND INSTANCE: after a divergence rebuild rebinds the
+			// subscription, a rebuilt index that never answers must not freeze the
+			// term on stale results — the scan lane arms again for the new binding.
+			const database = await createEngineDatabase(['products']);
+			const engine = createFakeEngine(database);
+			await database.collections.products.bulkInsert([
+				engineProduct({ uuid: 'false-hit', id: 1, name: 'Oxford Shorts' }),
+				engineProduct({ uuid: 'correct-hit', id: 2, name: 'Oxford Shirt' }),
+			]);
+			const falseHit = await database.collections.products.findOne('false-hit').exec();
+			if (!falseHit) throw new Error('missing stalled-rebuild fixture');
+			jest
+				.spyOn(database.collections.products, 'initSearch')
+				.mockResolvedValueOnce({
+					collection: { $: of(null) },
+					find: async () => [falseHit],
+				} as never)
+				// The rebuilt instance never answers — a pipeline still chewing.
+				.mockResolvedValueOnce({
+					collection: { $: of(null) },
+					find: () => new Promise<never>(() => undefined),
+				} as never);
+			Object.assign(database.collections.products, {
+				recreateSearch: jest.fn().mockResolvedValue(null),
+			});
+			const emissions: string[][] = [];
+			const subscription = observeEngineQuery(engine, 'stalled-rebuild', {
+				collection: 'products',
+				search: 'shirt',
+				searchFields: ['name'],
+			}).subscribe((result) => emissions.push(result.hits.map((hit) => hit.id)));
+
+			try {
+				await waitFor(() => expect(emissions.at(-1)).toEqual(['correct-hit']), {
+					timeout: 2000,
+				});
+			} finally {
+				subscription.unsubscribe();
+				await database.close();
+			}
+		});
+
 		it('marks the pre-database placeholder pending and real answers answered', async () => {
 			const database = await createEngineDatabase(['products']);
 			await database.collections.products.insert(
