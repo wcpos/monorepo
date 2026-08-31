@@ -50,10 +50,15 @@ const SEARCHED_COLLECTIONS = [
 	...SECONDARY_COLLECTIONS,
 ] as const satisfies readonly SearchedCollection[];
 
-/** Let the boot I/O burst settle before opening the till's index pipelines. */
-const SEARCH_WARMUP_DELAY_MS = 1_000;
-/** The remaining searched collections warm after the till pair has had first crack. */
-const SEARCH_WARMUP_SECONDARY_DELAY_MS = 5_000;
+/**
+ * Upper bound on the till pair's exclusive head start. The secondary tier
+ * normally starts the moment the till indexes report built (their pipelines
+ * idle — an event, not a guess); this cap only bounds the pathological tails:
+ * a follower/wedged tab whose pipelines never report, or a catalog so large
+ * that waiting for it would postpone customer search indefinitely. A tail
+ * guard, not a tuning knob.
+ */
+const TILL_WARMUP_HEAD_START_CAP_MS = 10_000;
 /** First audit soon enough to catch a broken index within the first minutes of a shift. */
 const SEARCH_INDEX_AUDIT_INITIAL_DELAY_MS = 60_000;
 const SEARCH_INDEX_AUDIT_INTERVAL_MS = 10 * 60_000;
@@ -116,8 +121,9 @@ function candidateTokens(snapshot: Record<string, unknown>, searchFields: string
 
 /**
  * Builds the app's search indexes eagerly at startup — the till pair first,
- * every other searched collection a few seconds behind — and periodically
- * verifies a sampled document is findable by its own name (#1733).
+ * every other searched collection as soon as the till indexes report built
+ * (capped) — and periodically verifies a sampled document is findable by its
+ * own name (#1733).
  *
  * The warmup exists because index construction is otherwise lazy — the first
  * search of a session paid for the whole build. `initSearch` registers the
@@ -139,8 +145,7 @@ export function startSearchReadiness(options: {
 	locale: string;
 	/** Test seam only — production callers take the defaults. */
 	timings?: Partial<{
-		warmupDelayMs: number;
-		warmupSecondaryDelayMs: number;
+		tillHeadStartCapMs: number;
 		auditInitialDelayMs: number;
 		auditIntervalMs: number;
 		auditFindTimeoutMs: number;
@@ -148,8 +153,7 @@ export function startSearchReadiness(options: {
 }): () => void {
 	const { engine, locale } = options;
 	const timings = {
-		warmupDelayMs: SEARCH_WARMUP_DELAY_MS,
-		warmupSecondaryDelayMs: SEARCH_WARMUP_SECONDARY_DELAY_MS,
+		tillHeadStartCapMs: TILL_WARMUP_HEAD_START_CAP_MS,
 		auditInitialDelayMs: SEARCH_INDEX_AUDIT_INITIAL_DELAY_MS,
 		auditIntervalMs: SEARCH_INDEX_AUDIT_INTERVAL_MS,
 		auditFindTimeoutMs: SEARCH_INDEX_AUDIT_FIND_TIMEOUT_MS,
@@ -174,14 +178,36 @@ export function startSearchReadiness(options: {
 		timers.add(handle);
 	};
 
-	const warmCollections = (database: AdapterDatabase, names: readonly SearchedCollection[]) => {
-		for (const name of names) {
+	const warmCollections = (
+		database: AdapterDatabase,
+		names: readonly SearchedCollection[]
+	): Promise<SearchInstance | null>[] =>
+		names.map((name) => {
 			const collection = database.collections[engineCollectionNameFor(name)] as unknown as
 				SearchableCollection | undefined;
-			if (!collection?.initSearch) continue;
+			if (!collection?.initSearch) return Promise.resolve(null);
 			// initSearch logs its own failures; the warmup only needs to not throw.
-			void collection.initSearch(locale, initializationOptionsFor(name)).catch(() => undefined);
-		}
+			return collection.initSearch(locale, initializationOptionsFor(name)).catch(() => null);
+		});
+
+	const warmDatabase = (database: AdapterDatabase) => {
+		const tillWarmups = warmCollections(database, TILL_COLLECTIONS);
+		// The secondary tier starts when the till indexes report BUILT — a find()
+		// resolves exactly when the index's pipeline goes idle, so an empty probe
+		// is the completion event. The cap bounds the tails where that report
+		// never comes (wedged pipeline) or comes too late (a huge catalog must not
+		// postpone customer search indefinitely). Best-effort by design: on a tab
+		// whose pipeline has not started, the probe resolves early and the head
+		// start collapses — harmless, since no pipeline is consuming I/O there.
+		const tillBuilt = Promise.all(
+			tillWarmups.map((warmup) =>
+				warmup.then((instance) => instance?.find('')).catch(() => undefined)
+			)
+		);
+		void withTimeout(tillBuilt, timings.tillHeadStartCapMs).then(() => {
+			if (disposed || currentDatabase !== database) return;
+			void warmCollections(database, SECONDARY_COLLECTIONS);
+		});
 	};
 
 	const auditCollection = async (database: AdapterDatabase, name: SearchedCollection) => {
@@ -293,9 +319,7 @@ export function startSearchReadiness(options: {
 		clearTimers();
 		auditFailureStreaks.clear();
 		if (!currentDatabase) return;
-		const target = currentDatabase;
-		schedule(() => warmCollections(target, TILL_COLLECTIONS), timings.warmupDelayMs);
-		schedule(() => warmCollections(target, SECONDARY_COLLECTIONS), timings.warmupSecondaryDelayMs);
+		warmDatabase(currentDatabase);
 		schedule(() => void auditTick(), timings.auditInitialDelayMs);
 	});
 

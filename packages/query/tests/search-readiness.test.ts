@@ -12,8 +12,7 @@ const searchError = jest.mocked(searchLogger.error);
 
 /** Fast cadence so a test observes several audit ticks inside its own timeout. */
 const TEST_TIMINGS = {
-	warmupDelayMs: 5,
-	warmupSecondaryDelayMs: 10,
+	tillHeadStartCapMs: 50,
 	auditInitialDelayMs: 20,
 	auditIntervalMs: 20,
 	auditFindTimeoutMs: 100,
