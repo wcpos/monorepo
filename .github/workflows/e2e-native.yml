@@ -465,7 +465,7 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-api35-google_apis-x86_64-${{ matrix.device.profile }}-cores4-ram4096-v1
+          key: avd-api35-google_apis-x86_64-${{ matrix.device.profile }}-cores4-ram4096-heap576-v1
 
       # Cache miss: create the AVD and save a clean quickboot snapshot (no
       # -no-snapshot in the options, so the emulator saves state on exit).

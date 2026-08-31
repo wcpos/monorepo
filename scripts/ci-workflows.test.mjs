@@ -2273,7 +2273,7 @@ test('the Android suite boots a 4 GB emulator from a cached quickboot snapshot',
 
 	const cache = findStep(workflow, 'android', '📦 Cache AVD snapshot');
 	assert.equal(cache.id, 'avd-cache');
-	for (const input of ['api35', 'google_apis', 'x86_64', 'cores4', 'ram4096']) {
+	for (const input of ['api35', 'google_apis', 'x86_64', 'cores4', 'ram4096', 'heap576']) {
 		assert.ok(
 			String(cache.with.key).includes(input),
 			`AVD cache key must pin ${input} - an unkeyed input makes restores stale`
