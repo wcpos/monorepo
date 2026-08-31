@@ -81,6 +81,9 @@ function VariationsPopoverContent({
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		let attempt = 0;
 		const attemptSync = () => {
+			// A retry timer scheduled while the count was 0 can fire AFTER result$
+			// reported variations - skip the redundant refresh (CodeRabbit, #1729).
+			if (cancelled || (attempt > 0 && variationCount !== 0)) return;
 			attempt += 1;
 			void openBinding
 				.sync()

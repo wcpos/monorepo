@@ -29,6 +29,8 @@ const mockSync = jest.fn().mockResolvedValue(undefined);
 // When non-null, the binding reports this count (with no hits) - the shape the
 // retry effect watches. null = derive count from the filtered documents.
 let mockResultCount: number | null = null;
+// The most recent result$ subscriber - lets a test emit a later count.
+let mockResultNext: ((result: { count: number }) => void) | null = null;
 const mockUseCollectionBinding = jest.fn(
 	(_collection: string, state: { filters: { status?: string } }) => {
 		const hits =
@@ -43,6 +45,7 @@ const mockUseCollectionBinding = jest.fn(
 			result$: {
 				subscribe(next: (result: { count: number }) => void) {
 					next({ count });
+					mockResultNext = next;
 					return { unsubscribe() {} };
 				},
 			},
@@ -163,6 +166,7 @@ describe('Variations popover query state', () => {
 	beforeEach(() => {
 		mockSync.mockClear();
 		mockResultCount = null;
+		mockResultNext = null;
 	});
 
 	it('refreshes variations once when opened, not when re-rendered', () => {
@@ -224,6 +228,39 @@ describe('Variations popover query state', () => {
 				jest.advanceTimersByTime(120000);
 			});
 			expect(mockSync).toHaveBeenCalledTimes(3);
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it('skips a scheduled retry when variations arrive during the delay', async () => {
+		jest.useFakeTimers();
+		try {
+			mockResultCount = 0;
+			render(
+				<VariationsPopover
+					parent={
+						{
+							payload: {
+								variations: [11, 12],
+								attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
+							},
+						} as never
+					}
+					addToCart={jest.fn()}
+				/>
+			);
+			expect(mockSync).toHaveBeenCalledTimes(1);
+			await act(async () => {});
+
+			// Variations materialize while the first retry timer is pending.
+			act(() => {
+				mockResultNext?.({ count: 2 });
+			});
+			await act(async () => {
+				jest.advanceTimersByTime(120000);
+			});
+			expect(mockSync).toHaveBeenCalledTimes(1);
 		} finally {
 			jest.useRealTimers();
 		}
