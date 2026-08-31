@@ -40,6 +40,7 @@ import { Platform } from '@wcpos/utils/platform';
 import { lastUserActivityMs, onUserActivity } from '@wcpos/utils/user-activity';
 
 import { getEngineConnectivity } from './connectivity';
+import { createE2eEngineLedgerObserver } from './e2e-engine-ledger';
 import { createEngineFetcher, type EngineFetcherScope, fetchWooQueryTotal } from './engine-fetcher';
 import { platformEngineFetch } from './engine-platform-fetch';
 import { appMetricsObserver } from './metrics';
@@ -300,6 +301,7 @@ export async function switchAppEngineScope(session: {
 	entry.clockSkew.evaluated = false;
 }
 
+/** Create or reuse the app sync engine for the requested store scope. */
 export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSyncEngine {
 	const cacheKey = scopeCacheKey(options.scope);
 	const siteKey = canonicalSite(options.scope.site);
@@ -416,6 +418,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	};
 	const fetcherScope: EngineFetcherScope = { storeId: options.scope.storeId };
 	const clockSkew = { generation: 0, evaluated: false };
+	const e2eEngineLedgerObserver = createE2eEngineLedgerObserver();
 	const webLocksAvailable =
 		isWeb && typeof navigator !== 'undefined' && navigator.locks !== undefined;
 
@@ -431,6 +434,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		} catch (error) {
 			console.error('Metrics observer threw on a transport event', error);
 		}
+		e2eEngineLedgerObserver?.(event);
 		if (!durable) return;
 		try {
 			guardedDiagnostics(event);
@@ -497,7 +501,8 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	const onWriteLeaderUnavailable = () =>
 		composeObservers(
 			appMetricsObserver,
-			guardedDiagnostics
+			guardedDiagnostics,
+			e2eEngineLedgerObserver
 		)({
 			type: 'engine.write-leader.degraded',
 			level: 'warn',
@@ -562,7 +567,11 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				: {}),
 			lastUserActivityMs,
 			onUserActivity,
-			diagnostics: composeObservers(appMetricsObserver, guardedDiagnostics),
+			diagnostics: composeObservers(
+				appMetricsObserver,
+				guardedDiagnostics,
+				e2eEngineLedgerObserver
+			),
 			multiInstance: isWeb ? webLocksAvailable : (options.multiInstance ?? false),
 			...(writeLeader ? { writePlaneOwner: () => writeLeader.current.isLeader() } : {}),
 			...(writeOutcomeBridge ? { writeOutcomeBridge } : {}),

@@ -1558,6 +1558,15 @@ test('both native warm-manifest probes have a finite transfer timeout', () => {
 	}
 });
 
+test('both native Metro steps enable the E2E engine ledger', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+
+	for (const jobName of ['android', 'ios']) {
+		const step = findStep(workflow, jobName, '📦 Start Metro and pre-compile the bundle');
+		assert.equal(step.env?.EXPO_PUBLIC_WCPOS_E2E, '1');
+	}
+});
+
 test('both native Metro-log collectors create their artifact directory', () => {
 	const workflow = readWorkflow('e2e-native.yml');
 	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-native-metro-log-'));
