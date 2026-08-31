@@ -1740,11 +1740,28 @@ test('clean-start flows re-issue a dropped openLink, gated on the connect screen
 	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
 		const wrapper = readMaestroFlow(filename).find((command) => command.retry)?.retry;
 		assert.ok(wrapper, `${filename} lost its openLink retry wrapper`);
-		assert.equal(wrapper.maxRetries, 2, `${filename}: one re-issue of the link`);
+		assert.equal(wrapper.maxRetries, 1, `${filename}: one re-issue of the link`);
 		assert.match(
 			String(wrapper.commands[0].openLink ?? ''),
 			/^wcpos:\/\/expo-development-client\//,
 			`${filename}: the wrapper must START by (re-)issuing the launch link`
+		);
+		const iosLaunch = wrapper.commands.find(
+			(command) => command.runFlow?.when?.platform === 'iOS'
+		).runFlow.commands;
+		const optionalConnectWait = iosLaunch.find(
+			(command) => command.extendedWaitUntil?.visible?.id === 'store-url-input'
+		);
+		assert.deepEqual(
+			optionalConnectWait,
+			{
+				extendedWaitUntil: {
+					visible: { id: 'store-url-input' },
+					timeout: 60000,
+					optional: true,
+				},
+			},
+			`${filename}: the optional cold-start probe must leave the full budget to the gate`
 		);
 		const last = wrapper.commands.at(-1);
 		assert.deepEqual(

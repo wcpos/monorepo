@@ -35,7 +35,7 @@ env:
 # Android never showed the class; the wrapper is platform-neutral because a
 # re-issued link is idempotent there (same VIEW intent the launcher expects).
 - retry:
-    maxRetries: 2
+    maxRetries: 1
     commands:
       - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
       # Launch blockers. The dev client's own overlays (floating dev-menu button,
@@ -94,7 +94,7 @@ env:
             - extendedWaitUntil:
                 visible:
                   id: "store-url-input"
-                timeout: 180000
+                timeout: 60000
                 optional: true
             - runFlow:
                 when:
