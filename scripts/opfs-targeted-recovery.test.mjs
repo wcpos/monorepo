@@ -2014,9 +2014,13 @@ test("boots through a crash-damaged changes file instead of failing every run", 
     ).createStorageInstance(storageParams("residue-recovering"));
     const documents = await Promise.race([
       recovering.findDocumentsById([long.id, short.id], false),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("boot read never settled")), 3000),
-      ),
+      new Promise((_, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error("boot read never settled")),
+          3000,
+        );
+        timer.unref();
+      }),
     ]);
     assert.deepEqual(
       documents.map((item) => [item.id, item.value]),
@@ -2237,11 +2241,21 @@ test("refuses to drop a hollow row when the storage is multi-instance", async ()
       ).error,
       [],
     );
+    assert.deepEqual(
+      (
+        await recovering.bulkWrite(
+          [{ document: document("order:hollow", 1) }],
+          "w-again",
+        )
+      ).error,
+      [],
+    );
     assert.equal(dropped, 0);
     assert.ok(state.firstIdx.metaIdMap.has("order:hollow"));
     assert.deepEqual(
       capture.events.map((event) => [event.kind, event.reason]),
       [
+        ["hollow-row-refused", "multi-instance"],
         ["hollow-row-refused", "multi-instance"],
         ["hollow-row-refused", "multi-instance"],
       ],

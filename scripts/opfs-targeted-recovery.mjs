@@ -542,8 +542,8 @@ export function withTargetedOpfsRecovery(storage) {
           const hollow = await findHollowIds(batch, documents, true);
           if (hollow.length === 0) return false;
           const refused = await dropHollowIds(hollow);
-          if (refused.length === hollow.length) return false;
           onMalformedBatch?.();
+          if (refused.length === hollow.length) return false;
           return true;
         };
         return repairBatch([...new Set(ids)]);
@@ -909,7 +909,7 @@ export function withTargetedOpfsRecovery(storage) {
       instance.cleanup = async (minimumDeletedTime) => {
         try {
           return await cleanup(minimumDeletedTime);
-        } catch (_error) {
+        } catch (initialError) {
           let failure;
           try {
             await dropWhitespaceRows(instance);
@@ -924,7 +924,11 @@ export function withTargetedOpfsRecovery(storage) {
           } catch (repairError) {
             failure = repairError;
           }
-          report("cleanup-recovery", { target, error: failure });
+          report("cleanup-recovery", {
+            target,
+            error: failure,
+            initialError: String(initialError),
+          });
           throw failure;
         }
       };
