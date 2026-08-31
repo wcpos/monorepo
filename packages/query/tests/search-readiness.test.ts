@@ -235,7 +235,6 @@ describe('startSearchReadiness', () => {
 				})
 		);
 		Object.assign(database.collections.products, { recreateSearch });
-		const random = jest.spyOn(Math, 'random').mockReturnValueOnce(0).mockReturnValue(0.99);
 
 		const dispose = startSearchReadiness({
 			engine,
@@ -250,7 +249,6 @@ describe('startSearchReadiness', () => {
 			expect(shared.value).toBe(currentInstance);
 		} finally {
 			dispose();
-			random.mockRestore();
 			await database.close();
 		}
 	});
