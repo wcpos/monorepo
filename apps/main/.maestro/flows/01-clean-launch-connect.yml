@@ -21,80 +21,95 @@ env:
 #   (run 33147024766 opened the literal string, step still COMPLETED).
 # Keep in step with flow 02.
 - clearState
-- openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
-# Launch blockers. The dev client's own overlays (floating dev-menu button,
-# menu-at-launch, onboarding card) are switched OFF by default in the
-# development build — apps/main/plugins/with-quiet-dev-menu.js — so the only
-# surfaces between openLink and the app are system-owned:
-#   Android: a queued ANR dialog ("Wait"), when the workflow enabled
-#            hide_error_dialogs too late.
-#   iOS:     SpringBoard's "Open in “WCPOS”?" scheme confirmation. clearState
-#            on iOS is uninstall+reinstall, and a simulator that has not yet
-#            trusted the scheme asks first. CI creates a fresh simulator every
-#            run (deterministic there; runs 33217891131 and 33218641226 sat
-#            behind it); a reused local simulator never shows it, so the wait
-#            is optional. The prompt can arrive >30s after openLink (run
-#            33220523217), so it is checked AGAIN after the cold-start wait —
-#            two surfaces on independent clocks must be handled in both
-#            orders, never one.
-# If the dev menu ever comes back, the required store-url-input wait below
-# fails visibly at a self-describing step; nothing here races it.
-# Menu/prompt text, not testID: third-party native UI — the app's selector
-# policy cannot apply.
-- runFlow:
-    when:
-      platform: Android
+# One retry re-issuing the link. Two live shapes on starved CI runners, both
+# right after clearState's uninstall+reinstall (27-50 s there vs 0.4 s
+# locally), neither reproducible on a healthy machine:
+# - run 33312573162 (iOS tablet): openLink COMPLETED in 5 s but the link was
+#   silently DROPPED - home screen, no scheme prompt, no splash, for 5.5 min.
+# - run 33348495405 (iOS tablet, flow 02): openLink itself THREW - simctl
+#   answered NSPOSIXErrorDomain code=60 (operation timed out) and the flow
+#   died on the spot with the home screen in the failure frame.
+# The retry covers both: the required store-url-input wait at the end of the
+# block is deliberately the retry gate, and a re-run re-issues the link.
+# Android never showed the class; the wrapper is platform-neutral because a
+# re-issued link is idempotent there (same VIEW intent the launcher expects).
+- retry:
+    maxRetries: 2
     commands:
-      - tapOn:
-          text: "Wait"
-          optional: true
-- runFlow:
-    when:
-      platform: iOS
-    commands:
-      - extendedWaitUntil:
-          visible:
-            text: "Open in .*WCPOS.*"
-          timeout: 45000
-          optional: true
+      - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
+      # Launch blockers. The dev client's own overlays (floating dev-menu button,
+      # menu-at-launch, onboarding card) are switched OFF by default in the
+      # development build — apps/main/plugins/with-quiet-dev-menu.js — so the only
+      # surfaces between openLink and the app are system-owned:
+      #   Android: a queued ANR dialog ("Wait"), when the workflow enabled
+      #            hide_error_dialogs too late.
+      #   iOS:     SpringBoard's "Open in “WCPOS”?" scheme confirmation. clearState
+      #            on iOS is uninstall+reinstall, and a simulator that has not yet
+      #            trusted the scheme asks first. CI creates a fresh simulator every
+      #            run (deterministic there; runs 33217891131 and 33218641226 sat
+      #            behind it); a reused local simulator never shows it, so the wait
+      #            is optional. The prompt can arrive >30s after openLink (run
+      #            33220523217), so it is checked AGAIN after the cold-start wait —
+      #            two surfaces on independent clocks must be handled in both
+      #            orders, never one.
+      # If the dev menu ever comes back, the required store-url-input wait below
+      # fails visibly at a self-describing step; nothing here races it.
+      # Menu/prompt text, not testID: third-party native UI — the app's selector
+      # policy cannot apply.
       - runFlow:
           when:
-            visible:
-              text: "Open in .*WCPOS.*"
+            platform: Android
           commands:
             - tapOn:
-                text: "Open"
-            # The app is mid-launch after "Open"; a hierarchy query during the
-            # scene transition can answer kAXErrorInvalidUIElement, which
-            # Maestro 2.6.1 raises as an UNCAUGHT exception (run 33262053590
-            # iOS phone: flow 01 died there and the JVM then hung for 53 min).
-            # Screenshot-based settle first, same as every relaunch.
-            - waitForAnimationToEnd:
-                timeout: 5000
-      # Cold start: first fetch of the ~29 MB Metro bundle plus Hermes parse.
-      # 60s expired on CI with the app still on its splash (run 33219707312);
-      # the suite budgets 120-240s elsewhere. Optional only so a LATE scheme
-      # prompt sitting in front of it can still be cleared next.
+                text: "Wait"
+                optional: true
+      - runFlow:
+          when:
+            platform: iOS
+          commands:
+            - extendedWaitUntil:
+                visible:
+                  text: "Open in .*WCPOS.*"
+                timeout: 45000
+                optional: true
+            - runFlow:
+                when:
+                  visible:
+                    text: "Open in .*WCPOS.*"
+                commands:
+                  - tapOn:
+                      text: "Open"
+                  # The app is mid-launch after "Open"; a hierarchy query during the
+                  # scene transition can answer kAXErrorInvalidUIElement, which
+                  # Maestro 2.6.1 raises as an UNCAUGHT exception (run 33262053590
+                  # iOS phone: flow 01 died there and the JVM then hung for 53 min).
+                  # Screenshot-based settle first, same as every relaunch.
+                  - waitForAnimationToEnd:
+                      timeout: 5000
+            # Cold start: first fetch of the ~29 MB Metro bundle plus Hermes parse.
+            # 60s expired on CI with the app still on its splash (run 33219707312);
+            # the suite budgets 120-240s elsewhere. Optional only so a LATE scheme
+            # prompt sitting in front of it can still be cleared next.
+            - extendedWaitUntil:
+                visible:
+                  id: "store-url-input"
+                timeout: 180000
+                optional: true
+            - runFlow:
+                when:
+                  visible:
+                    text: "Open in .*WCPOS.*"
+                commands:
+                  - tapOn:
+                      text: "Open"
+                  # Same settle as the early-prompt tap above: the required wait
+                  # below is the next hierarchy query, and the app is mid-launch.
+                  - waitForAnimationToEnd:
+                      timeout: 5000
       - extendedWaitUntil:
           visible:
             id: "store-url-input"
           timeout: 180000
-          optional: true
-      - runFlow:
-          when:
-            visible:
-              text: "Open in .*WCPOS.*"
-          commands:
-            - tapOn:
-                text: "Open"
-            # Same settle as the early-prompt tap above: the required wait
-            # below is the next hierarchy query, and the app is mid-launch.
-            - waitForAnimationToEnd:
-                timeout: 5000
-- extendedWaitUntil:
-    visible:
-      id: "store-url-input"
-    timeout: 180000
 - assertVisible:
     id: "connect-store-button"
 - assertVisible:

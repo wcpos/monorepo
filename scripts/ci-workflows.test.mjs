@@ -1716,14 +1716,41 @@ test('no Maestro flow declares a default for a variable the runners pass with -e
 
 test('Android clean-start flows dismiss a queued system ANR before waiting for Expo', () => {
 	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
-		const flow = readMaestroFlow(filename);
-		const androidLaunch = flow.find((command) => command.runFlow?.when?.platform === 'Android')
-			.runFlow.commands;
+		const launchBlock = readMaestroFlow(filename).find((command) => command.retry)?.retry.commands;
+		assert.ok(launchBlock, `${filename} lost its openLink retry wrapper`);
+		const androidLaunch = launchBlock.find(
+			(command) => command.runFlow?.when?.platform === 'Android'
+		).runFlow.commands;
 
 		assert.deepEqual(
 			androidLaunch[0],
 			{ tapOn: { text: 'Wait', optional: true } },
 			`${filename} must clear an ANR dialog that predates hide_error_dialogs`
+		);
+	}
+});
+
+// clearState on iOS is uninstall+reinstall; on a starved runner the openLink
+// issued right after it is dropped (run 33312573162: home screen for 5.5 min)
+// or simctl itself times out (run 33348495405: NSPOSIXErrorDomain code=60).
+// The remedy is re-issuing the link: openLink through the REQUIRED
+// store-url-input wait live inside one retry, so a dead launch runs the link
+// again instead of spending the whole budget on the home screen.
+test('clean-start flows re-issue a dropped openLink, gated on the connect screen', () => {
+	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
+		const wrapper = readMaestroFlow(filename).find((command) => command.retry)?.retry;
+		assert.ok(wrapper, `${filename} lost its openLink retry wrapper`);
+		assert.equal(wrapper.maxRetries, 2, `${filename}: one re-issue of the link`);
+		assert.match(
+			String(wrapper.commands[0].openLink ?? ''),
+			/^wcpos:\/\/expo-development-client\//,
+			`${filename}: the wrapper must START by (re-)issuing the launch link`
+		);
+		const last = wrapper.commands.at(-1);
+		assert.deepEqual(
+			last,
+			{ extendedWaitUntil: { visible: { id: 'store-url-input' }, timeout: 180000 } },
+			`${filename}: the required store-url-input wait must be the retry gate`
 		);
 	}
 });
