@@ -74,6 +74,12 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.coverage_require_log');
 		case 'coverage.require.outcome':
 			return t('health.logs.event.coverage_require_outcome');
+		case 'coverage.require.stall-settled':
+			return t('health.logs.event.coverage_require_stall_settled');
+		case 'coverage.require.stalled':
+			return t('health.logs.event.coverage_require_stalled');
+		case 'coverage.require.started':
+			return t('health.logs.event.coverage_require_started');
 		case 'customer.browse-window.sort-rejected':
 			return t('health.logs.event.customer_browse_window_sort_rejected');
 		case 'demand.activity-counter-underflow':
@@ -223,6 +229,10 @@ export function translateEventDescription(
 			return t('health.logs.event_description.connectivity_website_unreachable');
 		case 'coverage.require.outcome':
 			return t('health.logs.event_description.coverage_require_outcome');
+		case 'coverage.require.stall-settled':
+			return t('health.logs.event_description.coverage_require_stall_settled');
+		case 'coverage.require.stalled':
+			return t('health.logs.event_description.coverage_require_stalled');
 		case 'demand.flood-detected':
 			return t('health.logs.event_description.demand_flood_detected');
 		case 'engine.barcode-selector-hydrate-failed':

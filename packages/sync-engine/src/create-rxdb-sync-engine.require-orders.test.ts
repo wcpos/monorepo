@@ -977,7 +977,9 @@ describe('require() for orders (the durable path)', () => {
 		});
 		await vi.advanceTimersByTimeAsync(300);
 		expect(drain).toHaveBeenCalledTimes(3);
-		expect(vi.getTimerCount()).toBe(1);
+		// The active-wait backoff timer plus the pump's stall watchdog for the in-flight
+		// execution; the final count below is what proves neither leaks.
+		expect(vi.getTimerCount()).toBe(2);
 
 		waiting.release();
 		await vi.advanceTimersByTimeAsync(0);

@@ -69,6 +69,9 @@ export type SyncEventType =
 	| 'coverage.require.error'
 	| 'coverage.require.log'
 	| 'coverage.require.outcome'
+	| 'coverage.require.stall-settled'
+	| 'coverage.require.stalled'
+	| 'coverage.require.started'
 	// customer
 	| 'customer.browse-window.sort-rejected'
 	// demand

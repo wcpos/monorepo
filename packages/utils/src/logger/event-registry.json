@@ -183,6 +183,26 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "coverage.require.stall-settled",
+		"domain": "SYNC",
+		"label": "A stalled data request finished late",
+		"description": "A data request the POS had already given up on eventually finished. Nothing is lost; the screen re-asked on its own.",
+		"introducedIn": "1.10.5"
+	},
+	{
+		"type": "coverage.require.stalled",
+		"domain": "SYNC",
+		"label": "Gave up on a stuck data request",
+		"description": "A data request stopped making progress, so the POS abandoned it to keep other loading work moving. The screen retries on its own.",
+		"introducedIn": "1.10.5"
+	},
+	{
+		"type": "coverage.require.started",
+		"domain": "SYNC",
+		"label": "Started loading records for a screen",
+		"introducedIn": "1.10.5"
+	},
+	{
 		"type": "customer.browse-window.sort-rejected",
 		"domain": "SYNC",
 		"label": "Your store cannot sort the customer list this way",
