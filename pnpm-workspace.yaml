@@ -143,6 +143,7 @@ patchedDependencies:
   # opacity and pointerEvents from an uncommitted animated value.
   react-native-drawer-layout@4.2.5: patches/react-native-drawer-layout@4.2.5.patch
   "react-native-esc-pos-printer@4.5.0": "patches/react-native-esc-pos-printer@4.5.0.patch"
+  rxdb@17.4.0: patches/rxdb@17.4.0.patch
   # NOTE: rxdb-premium cannot be patched here — its dist/ is produced by a
   # license-gated postinstall, so it is absent from the tarball pnpm patches.
   # The resurrection-index-leak fix for it lives in
