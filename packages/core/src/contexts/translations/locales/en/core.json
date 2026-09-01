@@ -1547,7 +1547,7 @@
 	"health.logs.error_action.CLIENT141": "No action needed. If search results still look wrong, reload the app.",
 	"health.logs.error_action.CLIENT142": "No action needed. Search keeps working from a direct catalogue scan.",
 	"health.logs.error_action.CLIENT143": "No action needed. If search still misses products you can see in the catalogue, reload the app.",
-	"health.logs.error_action.CLIENT144": "Reload the app to rebuild the search index.",
+	"health.logs.error_action.CLIENT144": "Reload the app so it can rebuild the search index.",
 	"health.logs.error_action.CHECKOUT411": "Remove that line and add it again, then check the total.",
 	"health.logs.error_action.CHECKOUT421": "Check the tax on this order; ask the admin whether a tax rate was deleted."
 }

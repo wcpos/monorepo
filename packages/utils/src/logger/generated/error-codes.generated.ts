@@ -850,7 +850,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'SEARCH_INDEX_REBUILD_FAILED',
 		domain: 'CLIENT',
 		severity: 'warn',
-		actionHint: 'Reload the app to rebuild the search index.',
+		actionHint: 'Reload the app so it can rebuild the search index.',
 		dataSafety: 'no-impact',
 		summary:
 			'The automatic search index rebuild failed, so search on this device may stay incomplete until the app is reloaded.',

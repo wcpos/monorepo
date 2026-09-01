@@ -1795,16 +1795,16 @@
 		"symbol": "SEARCH_INDEX_REBUILD_FAILED",
 		"domain": "CLIENT",
 		"severity": "warn",
-		"actionHint": "Reload the app to rebuild the search index.",
+		"actionHint": "Reload the app so it can rebuild the search index.",
 		"retryPolicy": "manual",
 		"dataSafety": "no-impact",
 		"escalation": "support-with-export",
 		"summary": "The automatic search index rebuild failed, so search on this device may stay incomplete until the app is reloaded.",
-		"docsBody": "After detecting a search index problem the app tried to rebuild the index, and the rebuild itself failed. Search keeps answering — from the existing index with known bad results filtered out, or from a direct scan of the local catalogue — but it may miss or misrank products until the index is rebuilt. The app will not retry the rebuild on its own this session; reloading the app rebuilds the index from scratch. No catalogue data was changed.",
+		"docsBody": "After detecting a search index problem the app tried to rebuild the index, and the rebuild itself failed. Search keeps answering — from the existing index with known bad results hidden, or from a direct scan of the data on this device — but it may miss or misrank results until the index is rebuilt. The app will not retry the rebuild on its own this session; reload the app to give it a clean start on the index. No store data was changed.",
 		"troubleshooting": [
-			"Reload the app (or the browser tab): the search index is rebuilt from the local catalogue on every reload.",
-			"If search results look wrong again after the reload, the log context names the affected catalogue and the error the rebuild hit — export debug info and contact support.",
-			"On web, free up device storage and avoid private/incognito windows; a rebuild can fail when the browser refuses new storage."
+			"Reload the app (or the browser tab) — a reload gives the app a clean start on the search index and re-arms the automatic rebuild.",
+			"On web, free up device storage and avoid private/incognito windows; a rebuild can fail when the browser refuses new storage.",
+			"If search results look wrong again after the reload, the log context names the affected list and the error the rebuild hit — export debug info and contact support."
 		],
 		"logSources": [
 			"browser-console"
