@@ -38,10 +38,10 @@
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {
-		"@testing-library/react": "^16.3.2",
+		"@testing-library/react": "^16.3.3",
 		"jsdom": "^30.0.1",
 		"react-dom": "19.2.7",
-		"vitest": "^4.1.10"
+		"vitest": "^4.1.11"
 	},
 	"peerDependencies": {
 		"expo-print": ">=55.0.0",

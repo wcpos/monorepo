@@ -34,12 +34,12 @@
 	},
 	"devDependencies": {
 		"@testing-library/jest-dom": "7.0.1",
-		"@testing-library/react": "16.3.2",
+		"@testing-library/react": "16.3.3",
 		"@types/react": "^19.2.18",
 		"@types/react-dom": "^19.2.4",
 		"jsdom": "^30.0.1",
 		"playwright": "1.62.1",
 		"tsx": "^4.23.12",
-		"vitest": "^4.1.10"
+		"vitest": "^4.1.11"
 	}
 }

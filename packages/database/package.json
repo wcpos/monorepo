@@ -43,8 +43,8 @@
     "@faker-js/faker": "^10.6.0",
     "@types/jest": "^30.0.0",
     "@types/lodash": "^4.17.25",
-    "flexsearch": "0.7.43",
-    "jest": "^30.4.2",
+    "flexsearch": "0.8.212",
+    "jest": "^30.5.0",
     "ts-jest": "^29.4.12"
   }
 }
