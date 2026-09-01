@@ -16,7 +16,7 @@ jest.mock('@wcpos/utils/logger', () => {
 /* eslint-disable import/first -- logger mock must precede component module initialization */
 import * as React from 'react';
 
-import { render } from '@testing-library/react';
+import { act, render } from '@testing-library/react';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 
@@ -35,8 +35,13 @@ const { __logger: logger } = jest.requireMock('@wcpos/utils/logger') as {
 
 describe('OnlineStatusLogger', () => {
 	beforeEach(() => {
+		jest.useFakeTimers();
 		jest.clearAllMocks();
 		mockUseOnlineStatus.mockReturnValue({ status: 'online-website-unavailable' });
+	});
+
+	afterEach(() => {
+		jest.useRealTimers();
 	});
 
 	it('does not log on initial mount', () => {
@@ -46,11 +51,12 @@ describe('OnlineStatusLogger', () => {
 		expect(logger.success).not.toHaveBeenCalled();
 	});
 
-	it('logs once when the device goes offline', () => {
+	it('logs once when the device stays offline through the settle window', () => {
 		const { rerender } = render(<OnlineStatusLogger />);
 		mockUseOnlineStatus.mockReturnValue({ status: 'offline' });
 
 		rerender(<OnlineStatusLogger />);
+		act(() => jest.advanceTimersByTime(5_000));
 
 		expect(logger.error).toHaveBeenCalledTimes(1);
 		expect(logger.error).toHaveBeenCalledWith('Device went offline', {
@@ -66,6 +72,7 @@ describe('OnlineStatusLogger', () => {
 		mockUseOnlineStatus.mockReturnValue({ status: 'online-website-available' });
 
 		rerender(<OnlineStatusLogger />);
+		act(() => jest.advanceTimersByTime(5_000));
 
 		expect(logger.success).toHaveBeenCalledTimes(1);
 		expect(logger.success).toHaveBeenCalledWith('Connection restored', {
@@ -81,8 +88,24 @@ describe('OnlineStatusLogger', () => {
 		rerender(<OnlineStatusLogger />);
 
 		rerender(<OnlineStatusLogger />);
+		act(() => jest.advanceTimersByTime(5_000));
 
 		expect(logger.error).toHaveBeenCalledTimes(1);
+		expect(logger.success).not.toHaveBeenCalled();
+	});
+
+	it('does not log an offline-to-online flap within the settle window', () => {
+		mockUseOnlineStatus.mockReturnValue({ status: 'online-website-available' });
+		const { rerender } = render(<OnlineStatusLogger />);
+
+		mockUseOnlineStatus.mockReturnValue({ status: 'offline' });
+		rerender(<OnlineStatusLogger />);
+		act(() => jest.advanceTimersByTime(4_999));
+		mockUseOnlineStatus.mockReturnValue({ status: 'online-website-available' });
+		rerender(<OnlineStatusLogger />);
+		act(() => jest.advanceTimersByTime(5_000));
+
+		expect(logger.error).not.toHaveBeenCalled();
 		expect(logger.success).not.toHaveBeenCalled();
 	});
 });

@@ -8,13 +8,19 @@ import type { OnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useT } from '../../../../contexts/translations';
 
 const logger = getLogger(['wcpos', 'app', 'connectivity']);
+// A verdict that reverts within this window is interface flap, not an outage a
+// cashier should see; five seconds covers Chrome's burst around one network change.
+const CONNECTIVITY_SETTLE_MS = 5_000;
 
 export function OnlineStatusLogger() {
 	const { status } = useOnlineStatus();
 	const t = useT();
 	const prevStatusRef = React.useRef<OnlineStatus | null>(status);
+	const lastLoggedStatusRef = React.useRef<OnlineStatus>(status);
+	const translate = React.useEffectEvent(t);
 
-	// Log status changes from this single app-level mount point.
+	// External connectivity transitions must settle before this app-level mount
+	// point alerts the cashier; cleanup restarts the verdict on every transition.
 	React.useEffect(() => {
 		const prevStatus = prevStatusRef.current;
 		if (prevStatus === null) {
@@ -22,36 +28,42 @@ export function OnlineStatusLogger() {
 			return;
 		}
 		if (prevStatus === status) return;
-		switch (status) {
-			// Messages stay forensic English (#1150); the registered `context.type`
-			// is what the Logs UI translates at render time (#912), so the till
-			// reads these rows in its own language.
-			case 'offline':
-				logger.error('Device went offline', {
-					code: ERROR_CODES.SYNC_UNEXPECTED,
-					context: { type: 'connectivity.device-offline' },
-					showToast: true,
-					toast: { title: t('common.device_went_offline') },
-				});
-				break;
-			case 'online-website-unavailable':
-				logger.error('Website is unreachable', {
-					code: ERROR_CODES.SYNC_UNEXPECTED,
-					context: { type: 'connectivity.website-unreachable' },
-					showToast: true,
-					toast: { title: t('common.website_is_unreachable') },
-				});
-				break;
-			case 'online-website-available':
-				logger.success('Connection restored', {
-					context: { type: 'connectivity.restored' },
-					showToast: true,
-					toast: { title: t('common.connection_restored') },
-				});
-				break;
-		}
 		prevStatusRef.current = status;
-	}, [status, t]);
+		const timer = setTimeout(() => {
+			if (status === lastLoggedStatusRef.current) return;
+			switch (status) {
+				// Messages stay forensic English (#1150); the registered `context.type`
+				// is what the Logs UI translates at render time (#912), so the till
+				// reads these rows in its own language.
+				case 'offline':
+					logger.error('Device went offline', {
+						code: ERROR_CODES.SYNC_UNEXPECTED,
+						context: { type: 'connectivity.device-offline' },
+						showToast: true,
+						toast: { title: translate('common.device_went_offline') },
+					});
+					break;
+				case 'online-website-unavailable':
+					logger.error('Website is unreachable', {
+						code: ERROR_CODES.SYNC_UNEXPECTED,
+						context: { type: 'connectivity.website-unreachable' },
+						showToast: true,
+						toast: { title: translate('common.website_is_unreachable') },
+					});
+					break;
+				case 'online-website-available':
+					logger.success('Connection restored', {
+						context: { type: 'connectivity.restored' },
+						showToast: true,
+						toast: { title: translate('common.connection_restored') },
+					});
+					break;
+			}
+			lastLoggedStatusRef.current = status;
+		}, CONNECTIVITY_SETTLE_MS);
+
+		return () => clearTimeout(timer);
+	}, [status]);
 
 	return null;
 }
