@@ -708,6 +708,7 @@ function checkpointKeyFor(collection: SyncCollectionName): string {
 	return `checkpoint:${collection}`;
 }
 
+/** Create a scoped RxDB sync engine backed by the supplied host ports. */
 export function createRxdbSyncEngine(
 	ports: RxdbSyncEnginePorts,
 	initialScope: StoreScopeIdentity
@@ -810,9 +811,14 @@ export function createRxdbSyncEngine(
 			// Everything else that throws here (network timeout, DNS, TLS, connection
 			// reset) is an unambiguous transport failure and reports as status 0, the
 			// spelling the rest of the stack uses (see apps/main transport.request).
-			const abortedYoung =
-				(error as { name?: unknown } | null)?.name === 'AbortError' &&
-				nowMs() - startedAtMs < ABORT_AS_TIMEOUT_AFTER_MS;
+			// Detect the abort from the signal as well as the name: expo's native
+			// fetch rejects an aborted request with a plain Error wrapping
+			// FetchRequestCanceledException, never an AbortError (#1672), and the
+			// engine must not depend on the host's fetcher renaming it first.
+			const aborted =
+				(error as { name?: unknown } | null)?.name === 'AbortError' ||
+				init?.signal?.aborted === true;
+			const abortedYoung = aborted && nowMs() - startedAtMs < ABORT_AS_TIMEOUT_AFTER_MS;
 			if (!abortedYoung) observe(0);
 			throw error;
 		}
