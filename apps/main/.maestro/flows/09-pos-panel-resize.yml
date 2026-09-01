@@ -119,6 +119,18 @@ appId: com.wcpos.main.dev
       - launchApp
       - waitForAnimationToEnd:
           timeout: 5000
+      # Same class-6 guard as this flow's first relaunch (codex review, #1750):
+      # the orphaned login tab can resurface on ANY relaunch, including this
+      # nested persistence-check one.
+      - runFlow:
+          when:
+            platform: Android
+            visible: "Username or Email Address|Nombre de usuario o correo electrónico"
+          commands:
+            - evalScript: "${console.log('WCPOS_E2E lingering login tab over the relaunched app, pressing back once')}"
+            - back
+            - waitForAnimationToEnd:
+                timeout: 5000
       - extendedWaitUntil:
           visible:
             id: "screen-pos"
