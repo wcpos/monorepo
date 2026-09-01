@@ -17,6 +17,7 @@ const mockReplace = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
 const mockStockAdjustment = jest.fn();
 const mockEngineRequire = jest.fn();
+const mockAdoptOrderSnapshot = jest.fn();
 let autoShowReceipt = false;
 
 jest.mock('@wcpos/components/webview', () => ({
@@ -35,7 +36,9 @@ jest.mock('observable-hooks', () => ({
 jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace }) }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
-	useQueryRuntime: () => ({ engine: { require: mockEngineRequire } }),
+	useQueryRuntime: () => ({
+		engine: { require: mockEngineRequire, adoptOrderSnapshot: mockAdoptOrderSnapshot },
+	}),
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));
 jest.mock('../../../../../contexts/app-state', () => ({
@@ -79,6 +82,7 @@ describe('PaymentWebview fallback order refresh', () => {
 		webViewProps = {};
 		autoShowReceipt = false;
 		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		mockAdoptOrderSnapshot.mockResolvedValue('protected');
 	});
 	afterEach(() => {
 		jest.useRealTimers();
@@ -117,7 +121,7 @@ describe('PaymentWebview fallback order refresh', () => {
 					nativeEvent: {
 						data: {
 							action: 'wcpos-payment-received',
-							payload: { number: '42', status: 'completed', line_items: [] },
+							payload: { id: 42, number: '42', status: 'completed', line_items: [] },
 						},
 					},
 				});
@@ -150,6 +154,64 @@ describe('PaymentWebview fallback order refresh', () => {
 		} finally {
 			jest.useRealTimers();
 		}
+	});
+
+	it('adopts a valid payment payload and skips the redundant refresh when applied', async () => {
+		mockAdoptOrderSnapshot.mockResolvedValue('applied');
+		const payload = { id: 42, number: '42', status: 'completed', line_items: [] };
+
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+
+		await act(async () => {
+			webViewProps.onMessage({
+				nativeEvent: { data: { action: 'wcpos-payment-received', payload } },
+			});
+			await Promise.resolve();
+		});
+
+		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(payload);
+		expect(mockEngineRequire).not.toHaveBeenCalled();
+	});
+
+	it('warns, releases the spinner, and polls server truth for a malformed payload', async () => {
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		const setLoading = jest.fn();
+		mockGet.mockResolvedValue({
+			data: [{ id: 42, status: 'pos-open', number: '42', line_items: [] }],
+		});
+
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={setLoading}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+
+		await act(async () => {
+			webViewProps.onMessage({
+				nativeEvent: {
+					data: {
+						action: 'wcpos-payment-received',
+						payload: { id: '42', status: '', data: { malformed: true } },
+					},
+				},
+			});
+			await Promise.resolve();
+		});
+
+		expect(logger.warn).toHaveBeenCalled();
+		expect(setLoading).toHaveBeenCalledWith(false);
+		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
+		expect(mockAdoptOrderSnapshot).not.toHaveBeenCalled();
 	});
 
 	it('does not poll on the initial page load (payment cannot have completed yet)', async () => {
@@ -263,7 +325,7 @@ describe('PaymentWebview fallback order refresh', () => {
 		// direct server probe, with the engine refresh as best-effort catch-up.
 		jest.useFakeTimers();
 		mockGet.mockResolvedValue({
-			data: [{ status: 'completed', number: '42', line_items: [] }],
+			data: [{ id: 42, status: 'completed', number: '42', line_items: [] }],
 		});
 		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 
@@ -283,6 +345,12 @@ describe('PaymentWebview fallback order refresh', () => {
 		});
 
 		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
+		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith({
+			id: 42,
+			status: 'completed',
+			number: '42',
+			line_items: [],
+		});
 		expect(mockEngineRequire).toHaveBeenCalledTimes(1); // best-effort local catch-up
 		expect(logger.error).not.toHaveBeenCalled();
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');

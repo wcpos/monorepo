@@ -289,7 +289,7 @@ function assembleCustomPullOrderDocument(
  * divergence from the existence reconcile.
  */
 async function recordOrderManifestRows(
-	input: OrdersSchedulerFetcherInput,
+	input: Pick<OrdersSchedulerFetcherInput, 'repository'>,
 	materialized: readonly Materialized<OrderDocument>[],
 	applied: readonly OrderDocument[]
 ): Promise<void> {
@@ -321,6 +321,40 @@ function shouldApplyStoredOrder(
 	return !pendingMutationOrderIds.has(document.uuid);
 }
 
+/**
+ * Adopt a server order payload handed to the app OUT OF BAND — the checkout modal's
+ * `wcpos-payment-received` postMessage, or the post-payment server-truth poll — through the
+ * SAME materialize → pending-guard → storage-guard chain as the targeted pull lane, so the
+ * local flip out of `pos-open` no longer depends on a background refetch landing (the class
+ * behind "paid order stuck as an open cart"). `invalid` = not a plausible order payload (the
+ * received page can emit an encoded WP_Error); `protected` = a queued local mutation or dirty
+ * resident wins, exactly as it would against a pull.
+ */
+export async function applyOrderSnapshot(
+	input: Pick<OrdersSchedulerFetcherInput, 'repository' | 'pendingMutationOrderIds'>,
+	payload: unknown
+): Promise<'applied' | 'protected' | 'invalid'> {
+	if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return 'invalid';
+	const candidate = payload as Record<string, unknown>;
+	const prototype = Object.getPrototypeOf(payload);
+	if (
+		(prototype !== Object.prototype && prototype !== null) ||
+		typeof candidate.id !== 'number' ||
+		!Number.isFinite(candidate.id) ||
+		candidate.id <= 0 ||
+		typeof candidate.status !== 'string' ||
+		candidate.status.trim() === ''
+	) {
+		return 'invalid';
+	}
+	const materialized = materializedOrderFromWooPayload(candidate as WooOrderPayload);
+	const document = materialized.storedDocument;
+	const pending = input.pendingMutationOrderIds ? await input.pendingMutationOrderIds() : undefined;
+	if (pending && !shouldApplyStoredOrder(document, pending)) return 'protected';
+	const applied = (await input.repository.upsertMany([document])) ?? [document];
+	await recordOrderManifestRows(input, [materialized], applied);
+	return applied.length === 0 ? 'protected' : 'applied';
+}
 function coverageNowMs(input: OrdersSchedulerFetcherInput): number {
 	return input.nowMs?.() ?? Date.now();
 }

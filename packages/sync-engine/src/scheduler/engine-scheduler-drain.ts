@@ -21,7 +21,11 @@ import {
 	createSchedulerFetcherRegistry,
 	type SchedulerTaskSupportCandidate,
 } from './scheduler-fetcher-registry';
-import { createOrdersSchedulerFetcher } from './rx-scheduler-order-fetcher';
+import {
+	applyOrderSnapshot,
+	createOrdersSchedulerFetcher,
+	type OrdersSchedulerFetcherInput,
+} from './rx-scheduler-order-fetcher';
 import { createProductsSchedulerFetcher } from './rx-scheduler-product-fetcher';
 import { createVariationsSchedulerFetcher } from './rx-scheduler-variation-fetcher';
 import { createCustomerSchedulerFetcher } from './rx-scheduler-customer-fetcher';
@@ -232,6 +236,29 @@ export type SchedulerDrainDatabase = OrderRepositoryDatabase &
 		recordMutations: unknown;
 	};
 
+type OrderIngestInput = {
+	repository: EngineOrderRepository;
+	pendingMutationOrderIds: NonNullable<OrdersSchedulerFetcherInput['pendingMutationOrderIds']>;
+};
+const orderIngestInputByDatabase = new WeakMap<SchedulerDrainDatabase, OrderIngestInput>();
+function orderIngestInput(db: SchedulerDrainDatabase): OrderIngestInput {
+	let input = orderIngestInputByDatabase.get(db);
+	if (!input) {
+		input = {
+			repository: new EngineOrderRepository(db),
+			pendingMutationOrderIds: createOrderPendingMutationIds(db.recordMutations as never),
+		};
+		orderIngestInputByDatabase.set(db, input);
+	}
+	return input;
+}
+export function adoptOrderSnapshot(
+	db: SchedulerDrainDatabase,
+	payload: unknown
+): Promise<'applied' | 'protected' | 'invalid'> {
+	return applyOrderSnapshot(orderIngestInput(db), payload);
+}
+
 export type RunEngineSchedulerDrainInput = {
 	db: SchedulerDrainDatabase;
 	coverage: LocalCoverage;
@@ -321,7 +348,7 @@ function createEngineSchedulerFetcherRegistry(
 	const db = input.db;
 	const nowMs = input.nowMs ?? Date.now();
 	const getNowMs = input.now ?? (input.nowMs === undefined ? Date.now : () => nowMs);
-	const orderRepository = new EngineOrderRepository(db);
+	const orderInput = orderIngestInput(db);
 	const queryTotalRepository =
 		queryTotalRecovery === 'retry-after-rebuild'
 			? withLedgerRecovery({
@@ -387,9 +414,8 @@ function createEngineSchedulerFetcherRegistry(
 			supportsTask: isSupportedOrderSchedulerTask,
 			fetcher: createOrdersSchedulerFetcher({
 				...shared,
-				repository: orderRepository,
-				checkpointStore: orderRepository,
-				pendingMutationOrderIds: createOrderPendingMutationIds(db.recordMutations as never),
+				...orderInput,
+				checkpointStore: orderInput.repository,
 			}),
 		},
 		{

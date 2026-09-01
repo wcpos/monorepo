@@ -93,9 +93,11 @@ import {
 	type RequirementHandle,
 } from './require-plane';
 import {
+	adoptOrderSnapshot as adoptActiveOrderSnapshot,
 	type CensusTotals,
 	ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
 	type ProductBrowseWindowOrderby,
+	type SchedulerDrainDatabase,
 	seedPosBootstrapLanes,
 	seedTargetedOrderSchedulerTask,
 } from './scheduler';
@@ -550,6 +552,7 @@ export type RxdbSyncEngine = {
 	 * taken a tick earlier would.
 	 */
 	whenActive(): Promise<ActiveScope>;
+	adoptOrderSnapshot(payload: unknown): Promise<'applied' | 'protected' | 'invalid'>;
 	/** Emits the current database immediately on subscribe, then re-emits on
 	 * every switch and reset (a reset re-emits the SAME database — captured
 	 * collection references are stale, re-resolve through the database). */
@@ -2179,7 +2182,7 @@ export function createRxdbSyncEngine(
 		}
 	};
 
-	return {
+	const engine: RxdbSyncEngine = {
 		ready,
 		active: readActiveScope,
 		whenActive: async () => {
@@ -2195,6 +2198,10 @@ export function createRxdbSyncEngine(
 			throw new Error(
 				'No active store scope: the engine has no database to read from (disposed, logged out, or the active store was removed)'
 			);
+		},
+		adoptOrderSnapshot: async (payload) => {
+			const { database } = await engine.whenActive();
+			return adoptActiveOrderSnapshot(database as unknown as SchedulerDrainDatabase, payload);
 		},
 		hostTransport: () => hostTransport,
 		reconfigure: (config) => cadenceController.reconfigure(config),
@@ -2503,4 +2510,5 @@ export function createRxdbSyncEngine(
 			});
 		},
 	};
+	return engine;
 }
