@@ -89,7 +89,10 @@ type Harness = {
 	 * transport. `elapsedMs` advances the clock WHILE the request is in flight, so
 	 * the wrapper sees a genuinely long-running request.
 	 */
-	respond: (response: Response | Error, options?: { elapsedMs?: number }) => Promise<void>;
+	respond: (
+		response: Response | Error,
+		options?: { elapsedMs?: number; signal?: AbortSignal }
+	) => Promise<void>;
 	setNow: (ms: number) => void;
 	now: () => number;
 };
@@ -131,7 +134,7 @@ async function harness(
 
 	const respond = async (
 		response: Response | Error,
-		responseOptions?: { elapsedMs?: number }
+		responseOptions?: { elapsedMs?: number; signal?: AbortSignal }
 	): Promise<void> => {
 		scripted = response;
 		scriptedElapsedMs = responseOptions?.elapsedMs ?? 0;
@@ -139,7 +142,10 @@ async function harness(
 		// driving it here exercises the real pressure seam rather than a stand-in.
 		await engine
 			.hostTransport()
-			.fetcher(`${SYNC_BASE}/changes/tick`)
+			.fetcher(
+				`${SYNC_BASE}/changes/tick`,
+				responseOptions?.signal === undefined ? undefined : { signal: responseOptions.signal }
+			)
 			.catch(() => undefined);
 	};
 
@@ -636,6 +642,27 @@ describe('change-signal server-pressure adaptation', () => {
 		for (let index = 0; index < 10; index += 1) {
 			context.setNow(context.now() + 1_000);
 			await context.respond(abort());
+		}
+
+		expect(cadenceEvents(context.diagnostics, 'cadence.backoff')).toHaveLength(0);
+		expect(armedDelay(context.engine, context.now() - 10_000)).toBe(10_000);
+		await context.engine.dispose();
+	});
+
+	it('does not invent pressure from a native-shaped cancellation, where the name is never AbortError (#1672)', async () => {
+		const context = await harness();
+		context.diagnostics.length = 0;
+
+		// Expo's native fetch rejects an aborted request with a plain Error
+		// wrapping FetchRequestCanceledException — the aborted signal is the only
+		// trustworthy evidence that the cancellation was ours.
+		const controller = new AbortController();
+		controller.abort();
+		const nativeCancel = (): Error =>
+			new Error('fetch failed: FetchRequestCanceledException: Fetch request has been canceled');
+		for (let index = 0; index < 10; index += 1) {
+			context.setNow(context.now() + 1_000);
+			await context.respond(nativeCancel(), { signal: controller.signal });
 		}
 
 		expect(cadenceEvents(context.diagnostics, 'cadence.backoff')).toHaveLength(0);
