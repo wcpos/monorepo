@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { WebView } from '@wcpos/components/webview';
 import { type EngineRecord, useDocField, useQueryRuntime, useRecordField } from '@wcpos/query';
-import { remoteIdOrNull } from '@wcpos/sync-core';
+import { isRecordUuid, remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -35,7 +35,15 @@ function isOrderSnapshot(payload: unknown): payload is OrderSnapshot {
 		Number.isFinite(candidate.id) &&
 		candidate.id > 0 &&
 		typeof candidate.status === 'string' &&
-		candidate.status.trim() !== ''
+		candidate.status.trim() !== '' &&
+		Array.isArray(candidate.meta_data) &&
+		candidate.meta_data.some(
+			(meta) =>
+				meta !== null &&
+				typeof meta === 'object' &&
+				(meta as Record<string, unknown>).key === '_woocommerce_pos_uuid' &&
+				isRecordUuid((meta as Record<string, unknown>).value)
+		)
 	);
 }
 /**
@@ -177,9 +185,10 @@ export function PaymentWebview({
 				params: { include: orderId, per_page: 1 },
 			});
 			const serverOrder = response?.data?.[0] as Record<string, unknown> | undefined;
-			if (!serverOrder) return;
+			if (!serverOrder || paymentReceivedRef.current) return;
 			const serverStatus = serverOrder.status as string;
 			if (serverStatus === localStatus) return;
+			if (serverStatus !== 'processing' && serverStatus !== 'completed') return;
 			paymentReceivedRef.current = true;
 			setCurrentOrderID('');
 			adoptSnapshot(serverOrder, false);
