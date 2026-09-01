@@ -766,7 +766,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		actionHint: 'No action needed unless a screen stays stuck; then reload the app.',
 		dataSafety: 'local-only',
 		summary:
-			'One local database operation is taking far longer than normal; the app is still waiting for its answer.',
+			'One local database operation took far longer than normal to answer, and the app kept waiting for it.',
 	},
 	CHECKOUT111: {
 		code: 'CHECKOUT111',
@@ -853,7 +853,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		actionHint: 'Reload the app so it can rebuild the search index.',
 		dataSafety: 'no-impact',
 		summary:
-			'The automatic search index rebuild failed, so search on this device may stay incomplete until the app is reloaded.',
+			'The automatic search index rebuild failed, so search on this device may stay incomplete for the rest of this session.',
 	},
 	CHECKOUT411: {
 		code: 'CHECKOUT411',
