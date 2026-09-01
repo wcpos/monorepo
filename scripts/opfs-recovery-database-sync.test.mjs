@@ -8,5 +8,9 @@ test('database recovery module matches the source script byte-for-byte', async (
 		new URL('../packages/database/src/plugins/opfs-targeted-recovery.mjs', import.meta.url)
 	);
 
-	assert.deepEqual(databaseCopy, source);
+	assert.deepEqual(
+		databaseCopy,
+		source,
+		'packages/database recovery module must match the source script'
+	);
 });
