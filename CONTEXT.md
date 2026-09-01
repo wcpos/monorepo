@@ -206,3 +206,67 @@ client-minted id.
 
 **Tendered / change**:
 The cash pair. "Tender" is only ever this verb.
+
+## Language — Extensibility
+
+Ruled 2026-09-01 on the app-extensibility wayfinder map (wcpos/roadmap#120, ticket #121).
+
+**Extension**:
+A unit of functionality added to the POS app — a mini-app, a display page, or a driver
+(later: add-on forms, layout components). Qualify as "POS extension" when ambiguous with
+Woo extensions: a Woo extension (WordPress plugin) ships and registers one or more POS
+extensions.
+_Avoid_: plugin (for anything app-side), add-on (product-domain term — product add-ons)
+
+**Plugin**:
+A WordPress plugin, only — the free/Pro plugins and Woo extensions. Never an app-side unit.
+
+**Delivery class**:
+How an extension reaches the app. Three classes, one contract: **config** (declarative
+arrangement — layout, settings), **web** (remotely-served pages — mini-apps, display
+pages), **native** (build-time modules switched on by server descriptor — drivers).
+
+**Mini-app**:
+An interactive web-class extension rendered in the app's WebView, speaking the bridge and
+granted capabilities. First instance: the printer wizard.
+
+**Display page**:
+A passive web-class extension on a second screen or device that consumes the broadcast and
+holds zero capabilities — which is what makes user-authored HTML safe there. Shares the
+envelope with the bridge, not the contract.
+
+**Slot**:
+A named UI insertion point in the app, identified by a dotted id (`pos.cart.block`).
+Extensions register UI into slots. Woo SlotFill dialect, Shopify-style identity.
+_Avoid_: target (Shopify's word for the same thing)
+
+**Bridge**:
+The versioned JSON postMessage channel between the host app and a mini-app:
+request/response RPC with correlation ids, plus host-initiated events. Supersedes the
+payment webview's ad-hoc messaging as the contract for new work.
+
+**Envelope**:
+The shared message structure on bridge and broadcast alike: protocol major version,
+correlation id, namespaced action, payload.
+
+**Handshake**:
+The mandatory opening exchange on the bridge — the page posts `app.ready`, the host
+replies `app.init` (locale, theme, platform, safe store subset, granted capabilities).
+Nothing else flows before it.
+
+**Capability**:
+A named host function (`printers.scan`, `ui.toast`) granted per extension. The only path
+from an extension to native functionality; hardware is always mediated by capabilities.
+
+**Broadcast**:
+The one-way, versioned, transport-agnostic stream of live cart/order events consumed by
+display pages. Versioned from its first release — a user-customisable page makes it a
+de facto public surface.
+
+**Catalog**:
+The host-fetched data list of available web-class extensions (id, title, URL, required
+capabilities). Adding an entry is data, not an app release.
+
+**Driver**:
+Consumed unchanged from Language — Payments: the native-class extension wrapping one
+provider's SDK, disabled by default, switched on by the payment-method descriptor.
