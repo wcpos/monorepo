@@ -177,6 +177,7 @@ type MaintenanceLaneDeps = {
 	currentCustomerBrowseWindowKey?: () => string | null;
 	isWritePlaneOwner: () => boolean;
 	lastUserActivityMs?: () => number;
+	hostVisible?: () => boolean;
 	emitEvent: (event: QueryTotalCacheEvent) => void;
 	now?: () => number;
 	isServerBackingOff?: (atMs: number) => boolean;
@@ -299,6 +300,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				}
 				if (deps.connectivity() === 'offline') {
 					return skipped('offline');
+				}
+				if (deps.hostVisible?.() === false && !laneRegistryEntry(name).runsWhileHidden) {
+					return skipped('hidden');
 				}
 				// A FORCED census tick is an explicit cashier action ("check now" /
 				// per-row check): the rest of the manual sweep is not pressure-gated

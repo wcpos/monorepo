@@ -120,12 +120,16 @@ type LoggerCollection = LogRetentionCollection & {
 };
 
 type RepeatState = {
-	identity: string;
 	count: number;
+	lastSeen: number;
+	recordId: unknown;
 	write: Promise<PersistedDocument | undefined>;
 };
 
-const repeatStateByCollection = new WeakMap<object, RepeatState>();
+// Chrome batches hidden-tab chained timers into one wake-up per minute.
+const REPEAT_COLLAPSE_WINDOW_MS = 60_000;
+const REPEAT_IDENTITY_LIMIT = 16;
+const repeatStateByCollection = new WeakMap<object, Map<string, RepeatState>>();
 
 const SEARCH_CONTEXT_KEY =
 	/^(category|event|orderI[Dd]|orderUUID|orderNumber|documentId|collectionName|collection|type|lane|productId|productName|sku|itemName|couponCode|feeName|method|methodTitle|endpoint|status|customerId|errorCode|reason|previousQuantity|quantity|previousPrice|price)$/;
@@ -388,19 +392,37 @@ function persistLog(
 		context.cursorFrom ?? null,
 		context.head ?? null,
 		context.backlog ?? null,
+		// Failed HTTP attempts may share narration while proving different faults.
+		context.status ?? null,
+		context.method ?? null,
+		context.path ?? null,
 	]);
-	// Repeat-collapse folds identical consecutive REPEATS — the same event, record
-	// and reason (spec §7). A record carrying a duration is not a repeat: it is a
-	// distinct timed unit of work whose duration and cursor ARE the evidence, so two
-	// sync cycles that happen to render the same message must stay two rows rather
-	// than folding and discarding the second one's numbers. Everything without a
-	// duration (record failures, state transitions) still collapses normally, which
-	// is what keeps a failing record from flooding the log.
-	const timedUnitOfWork = terminal?.durationMs !== undefined;
-	const previous = timedUnitOfWork ? undefined : repeatStateByCollection.get(collection);
+	// Successful timed work keeps each duration as evidence. Failed timed work is
+	// repeatable failure evidence, so the first duration survives while count grows.
+	const collapseEligible = terminal?.durationMs === undefined || outcome === 'failed';
+	let repeatStates = repeatStateByCollection.get(collection);
+	if (repeatStates) {
+		for (const [candidateIdentity, state] of repeatStates) {
+			if (now - state.lastSeen > REPEAT_COLLAPSE_WINDOW_MS) {
+				repeatStates.delete(candidateIdentity);
+				continue;
+			}
+			// deriveStuckRecords trusts the newest decisive row for a record. Folding
+			// across an intervening opposite outcome would rewrite that verdict.
+			if (
+				context.recordId !== undefined &&
+				state.recordId === context.recordId &&
+				candidateIdentity !== identity
+			) {
+				repeatStates.delete(candidateIdentity);
+			}
+		}
+	}
+	const previous = collapseEligible ? repeatStates?.get(identity) : undefined;
 
-	if (previous?.identity === identity) {
+	if (previous) {
 		previous.count += 1;
+		previous.lastSeen = now;
 		previous.write = previous.write.then((document) =>
 			document?.incrementalPatch({ count: previous.count, lastSeen: now })
 		);
@@ -408,8 +430,8 @@ function persistLog(
 		// drop the repeat state so the next occurrence inserts a fresh row.
 		void previous.write.catch((error: unknown) => {
 			console.error(error);
-			if (repeatStateByCollection.get(collection) === previous) {
-				repeatStateByCollection.delete(collection);
+			if (repeatStates?.get(identity) === previous) {
+				repeatStates.delete(identity);
 			}
 		});
 		return;
@@ -449,22 +471,28 @@ function persistLog(
 		if (writeEpoch !== databaseEpoch || collection !== dbCollection) return undefined;
 		return collection.insert(row);
 	});
-	const state: RepeatState = { identity, count: 1, write };
-	// A timed unit of work is never a collapse anchor either — the next identical
-	// row must not fold into it.
-	if (timedUnitOfWork) repeatStateByCollection.delete(collection);
-	else repeatStateByCollection.set(collection, state);
-	void write.catch(() => {
-		if (repeatStateByCollection.get(collection) === state) {
-			repeatStateByCollection.delete(collection);
+	let state: RepeatState | undefined;
+	if (collapseEligible) {
+		if (!repeatStates) {
+			repeatStates = new Map();
+			repeatStateByCollection.set(collection, repeatStates);
 		}
+		if (repeatStates.size >= REPEAT_IDENTITY_LIMIT) {
+			const oldest = [...repeatStates].reduce((candidate, entry) =>
+				entry[1].lastSeen < candidate[1].lastSeen ? entry : candidate
+			);
+			repeatStates.delete(oldest[0]);
+		}
+		state = { count: 1, lastSeen: now, recordId: context.recordId, write };
+		repeatStates.set(identity, state);
+	}
+	void write.catch(() => {
+		if (state && repeatStates?.get(identity) === state) repeatStates.delete(identity);
 	});
 	void write
 		.then((document) => {
 			if (!document) {
-				if (repeatStateByCollection.get(collection) === state) {
-					repeatStateByCollection.delete(collection);
-				}
+				if (state && repeatStates?.get(identity) === state) repeatStates.delete(identity);
 				return;
 			}
 			notifyLogPersistedInsert(collection);

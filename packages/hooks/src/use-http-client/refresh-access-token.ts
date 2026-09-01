@@ -22,6 +22,15 @@ import { pauseQueue, resumeQueue } from './request-queue';
 import { requestStateManager } from './request-state-manager';
 
 const tokenLogger = getLogger(['wcpos', 'auth', 'token']);
+const REFRESH_COOLDOWN_BASE_MS = 1_000;
+const REFRESH_COOLDOWN_MAX_MS = 60_000;
+let refreshFailureStreak = 0;
+let refreshRetryAtMs = 0;
+
+export function resetRefreshCooldown(): void {
+	refreshFailureStreak = 0;
+	refreshRetryAtMs = 0;
+}
 
 export interface WPCredentialsDocument {
 	id?: number;
@@ -97,6 +106,13 @@ export async function refreshAccessToken({
 	if (requestStateManager.isAuthFailed()) {
 		return null;
 	}
+	const nowMs = Date.now();
+	if (nowMs < refreshRetryAtMs) {
+		tokenLogger.debug('Skipping token refresh - cooldown active', {
+			context: { remainingCooldownMs: refreshRetryAtMs - nowMs },
+		});
+		return null;
+	}
 
 	const latestDoc = wpUser.getLatest();
 	const refreshToken = latestDoc?.refresh_token;
@@ -116,6 +132,7 @@ export async function refreshAccessToken({
 			},
 		});
 		requestStateManager.setAuthFailed(true);
+		resetRefreshCooldown();
 		return null;
 	}
 
@@ -179,6 +196,7 @@ export async function refreshAccessToken({
 
 				const { access_token, expires_at } = responseData;
 				await wpUser.incrementalPatch({ access_token, expires_at });
+				resetRefreshCooldown();
 				// One lifecycle breadcrumb per refresh CYCLE (#899): this closure runs
 				// only in the caller that actually drove the single-flight refresh
 				// (startTokenRefresh coalesces the rest), so concurrent 401s across the
@@ -194,6 +212,18 @@ export async function refreshAccessToken({
 					},
 				});
 				return access_token;
+			} catch (error) {
+				if (isTerminalRefreshFailure(error)) {
+					resetRefreshCooldown();
+				} else {
+					refreshFailureStreak += 1;
+					const cooldownMs = Math.min(
+						REFRESH_COOLDOWN_MAX_MS,
+						REFRESH_COOLDOWN_BASE_MS * 2 ** (refreshFailureStreak - 1)
+					);
+					refreshRetryAtMs = Date.now() + cooldownMs;
+				}
+				throw error;
 			} finally {
 				resumeQueue();
 			}
@@ -221,7 +251,7 @@ export async function refreshAccessToken({
 			terminal: {
 				outcome: 'failed',
 				operationType: 'auth.refresh',
-				...(operationId !== undefined ? { operationId } : {}),
+				...(terminal && operationId !== undefined ? { operationId } : {}),
 			},
 		});
 		if (terminal) {

@@ -848,9 +848,9 @@ describe('logger/index', () => {
 			expect(String(rows[0].operationType)).toHaveLength(48);
 		});
 
-		// A timed unit of work is distinct evidence, not a repeat: two sync cycles
-		// rendering the same message must keep both durations and cursors.
-		it('never collapses records that carry a duration', async () => {
+		// Non-failed timed work is distinct evidence: two sync cycles rendering the
+		// same message must keep both durations and cursors.
+		it('does not collapse non-failed records that carry a duration', async () => {
 			const { rows, collection } = createLogCollection();
 			setDatabase(collection);
 			const logger = getLogger(['sync']);
@@ -917,6 +917,139 @@ describe('logger/index', () => {
 				code: 'PAYMENT201',
 			});
 			jest.useRealTimers();
+		});
+
+		it('collapses identical rows when another identity is interleaved', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			const logger = getLogger(['auth']);
+
+			logger.warn('Refresh failed', { context: { recordId: 'auth' } });
+			logger.warn('Transport rejected', { context: { recordId: 'transport' } });
+			logger.warn('Refresh failed', { context: { recordId: 'auth' } });
+			await flushWrites();
+
+			expect(rows).toHaveLength(2);
+			expect(rows[0]).toMatchObject({ message: 'Refresh failed', count: 2 });
+			expect(rows[1]).toMatchObject({ message: 'Transport rejected', count: 1 });
+		});
+
+		it('collapses repeated failed timed rows and keeps the first duration', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			const logger = getLogger(['sync']);
+
+			logger.warn('Sync arc failed', { terminal: { outcome: 'failed', durationMs: 120 } });
+			logger.warn('Sync arc failed', { terminal: { outcome: 'failed', durationMs: 380 } });
+			await flushWrites();
+
+			expect(rows).toHaveLength(1);
+			expect(rows[0]).toMatchObject({ outcome: 'failed', durationMs: 120, count: 2 });
+		});
+
+		it('separates failed transport attempts by status, method, and path', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			const logger = getLogger(['sync']);
+			const terminal = { outcome: 'failed' as const, durationMs: 120 };
+
+			logger.warn('transport.request', {
+				context: { status: 500, method: 'GET', path: '/wp-json/wcpos/v2/products' },
+				terminal,
+			});
+			logger.warn('transport.request', {
+				context: { status: 500, method: 'GET', path: '/wp-json/wcpos/v2/products' },
+				terminal,
+			});
+			logger.warn('transport.request', {
+				context: { status: 503, method: 'GET', path: '/wp-json/wcpos/v2/products' },
+				terminal,
+			});
+			logger.warn('transport.request', {
+				context: { status: 500, method: 'POST', path: '/wp-json/wcpos/v2/orders' },
+				terminal,
+			});
+			await flushWrites();
+
+			expect(rows).toHaveLength(3);
+			expect(rows.map((row) => row.count)).toEqual([2, 1, 1]);
+		});
+
+		it('starts a fresh fold chain after a record outcome changes', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			const logger = getLogger(['sync']);
+
+			logger.warn('orders 4711 — push failed', {
+				context: { recordId: '4711' },
+				terminal: { outcome: 'failed' },
+			});
+			logger.info('orders 4711 — push completed', {
+				context: { recordId: '4711' },
+				terminal: { outcome: 'recovered' },
+			});
+			logger.warn('orders 4711 — push failed', {
+				context: { recordId: '4711' },
+				terminal: { outcome: 'failed' },
+			});
+			await flushWrites();
+
+			expect(rows).toHaveLength(3);
+			expect(rows.map((row) => row.outcome)).toEqual(['failed', 'recovered', 'failed']);
+		});
+
+		it('lets ok timed rows bypass collapse without disrupting surrounding repeats', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			const logger = getLogger(['sync']);
+
+			logger.warn('Retry pending');
+			logger.info('Sync complete', { terminal: { outcome: 'ok', durationMs: 50 } });
+			logger.warn('Retry pending');
+			await flushWrites();
+
+			expect(rows).toHaveLength(2);
+			expect(rows[0]).toMatchObject({ message: 'Retry pending', count: 2 });
+			expect(rows[1]).toMatchObject({ outcome: 'ok', durationMs: 50, count: 1 });
+		});
+
+		it('inserts a fresh row after the repeat-collapse window expires', async () => {
+			jest.useFakeTimers().setSystemTime(1_000);
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			const logger = getLogger(['auth']);
+
+			logger.warn('Refresh failed');
+			await flushWrites();
+			jest.setSystemTime(61_001);
+			logger.warn('Refresh failed');
+			await flushWrites();
+
+			expect(rows).toHaveLength(2);
+			expect(rows).toEqual([
+				expect.objectContaining({ count: 1, lastSeen: 1_000 }),
+				expect.objectContaining({ count: 1, lastSeen: 61_001 }),
+			]);
+			jest.useRealTimers();
+		});
+
+		it('inserts fresh after a rejected fold write drops the repeat entry', async () => {
+			const consoleError = jest.spyOn(console, 'error').mockImplementation();
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			const logger = getLogger(['auth']);
+
+			logger.warn('Refresh failed');
+			await flushWrites();
+			jest.mocked(rows[0].incrementalPatch).mockRejectedValueOnce(new Error('patch failed'));
+			logger.warn('Refresh failed');
+			await flushWrites();
+			logger.warn('Refresh failed');
+			await flushWrites();
+
+			expect(rows).toHaveLength(2);
+			expect(rows[1]).toMatchObject({ count: 1 });
+			consoleError.mockRestore();
 		});
 
 		it('does not collapse cycle rows when their cursor facts change', async () => {

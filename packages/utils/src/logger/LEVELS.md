@@ -34,8 +34,9 @@ terminal row.
 
 ## Repeat-collapse escalation (future)
 
-Identical consecutive rows collapse into one row with `count`/`firstSeen`/
-`lastSeen` (spec §7). A *recurring* recovered failure can indicate pathological
+Identical rows recurring within 60 seconds collapse into one row with
+`count`/`firstSeen`/`lastSeen`, even when other identities interleave (spec §7).
+A *recurring* recovered failure can indicate pathological
 churn (e.g. token refresh cycling many times per hour); when the collapse
 writer grows threshold promotion, a collapsed `outcome: 'recovered'` row whose
 `count` crosses a threshold within a window may be promoted to `warn`. The

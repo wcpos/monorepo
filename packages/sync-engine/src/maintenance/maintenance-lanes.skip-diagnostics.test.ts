@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { StoreScopeManager, type SyncEvent } from '@wcpos/sync-core';
 
 import { createMaintenanceLanes } from './maintenance-lanes';
+import { laneRegistryEntry } from './lane-registry';
 import { censusTotalsFromCache } from '../scheduler';
 
 import type { LocalCoverage } from '../local-coverage/local-coverage';
@@ -18,6 +19,7 @@ async function skipHarness(overrides?: {
 	connectivity?: () => 'online' | 'offline' | 'degraded';
 	hasPendingInteractiveWork?: () => boolean;
 	coverage?: LocalCoverage | null;
+	hostVisible?: () => boolean;
 }) {
 	const database = {
 		listCollections: () => [],
@@ -35,6 +37,7 @@ async function skipHarness(overrides?: {
 		syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
 		fetcher: async () => Response.json({}),
 		connectivity: overrides?.connectivity ?? (() => 'online'),
+		...(overrides?.hostVisible === undefined ? {} : { hostVisible: overrides.hostVisible }),
 		diagnostics: (event) => diagnostics.push(event),
 		ownerId: () => 'owner',
 		censusFreshForMs: 60_000,
@@ -141,5 +144,17 @@ describe('maintenance lane skip diagnostics (#1318)', () => {
 			status: 'ran',
 		});
 		expect(skipEvents(context.diagnostics)).toEqual([]);
+	});
+
+	it('skips opportunistic lanes while hidden but keeps drain lanes runnable', async () => {
+		const context = await skipHarness({ hostVisible: () => false });
+
+		await expect(context.lanes.productTrickle.tick()).resolves.toMatchObject({
+			status: 'skipped',
+			reason: 'hidden',
+		});
+		await expect(context.lanes.schedulerDrain.tick()).resolves.toMatchObject({ status: 'ran' });
+		expect(laneRegistryEntry('write-drain').runsWhileHidden).toBe(true);
+		expect(laneRegistryEntry('scheduler-drain').runsWhileHidden).toBe(true);
 	});
 });

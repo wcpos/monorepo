@@ -48,14 +48,17 @@ export function createCadenceController(options: {
 	isDisposed: () => boolean;
 	lastUserActivityMs?: () => number;
 	onUserActivity?: (listener: () => void) => () => void;
+	hostVisible?: () => boolean;
+	onHostVisibilityChange?: (listener: (visible: boolean) => void) => () => void;
 	laneIsArmable: (lane: EngineLane) => boolean;
 }): CadenceController {
 	const timers = options.timers ?? systemTimers;
 	let changeSignalTimer: ReturnType<typeof setTimeout> | null = null;
 	let changeSignalDecayLevel: ChangeSignalDecayLevel = 0;
 	let unsubscribeUserActivity: (() => void) | null = null;
+	let unsubscribeHostVisibility: (() => void) | null = null;
 	let writeDrainTimer: ReturnType<typeof setInterval> | null = null;
-	const maintenanceTimers: ReturnType<typeof setInterval>[] = [];
+	const maintenanceTimers = new Map<EngineLane, ReturnType<typeof setInterval>>();
 	const laneNextDueAtMs = new Map<EngineLane, number>();
 	let pullBatchSize: number | undefined;
 	let cadenceStartAnnounced = false;
@@ -93,10 +96,13 @@ export function createCadenceController(options: {
 			0,
 			now - (lastActivityMs > 0 ? lastActivityMs : options.startedAtMs)
 		);
-		changeSignalDecayLevel = nextChangeSignalDecayLevel({
-			idleForMs,
-			currentLevel: changeSignalDecayLevel,
-		});
+		changeSignalDecayLevel =
+			options.hostVisible?.() === false
+				? 2
+				: nextChangeSignalDecayLevel({
+						idleForMs,
+						currentLevel: changeSignalDecayLevel,
+					});
 		const drawn = changeSignalDelayMs({
 			tierMs: options.intervals.changeSignalPollMs,
 			level: changeSignalDecayLevel,
@@ -237,34 +243,62 @@ export function createCadenceController(options: {
 		if (options.mode !== 'auto' || started || stopped || options.isDisposed()) return;
 		started = true;
 		armChangeSignalTimer();
+		const restoreFullCadence = (): void => {
+			if (stopped || options.isDisposed() || changeSignalTimer === null) return;
+			changeSignalDecayLevel = 0;
+			timers.clearTimeout(changeSignalTimer);
+			armChangeSignalTimer();
+			if (
+				options.pressure.multiplier() > 1 ||
+				options.pressure.retryAfterUntilMs() > options.now()
+			) {
+				return;
+			}
+			void options.gate.runLane('change-signal');
+		};
 		if (options.onUserActivity !== undefined) {
 			unsubscribeUserActivity = options.onUserActivity(() => {
-				if (
-					stopped ||
-					options.isDisposed() ||
-					changeSignalTimer === null ||
-					changeSignalDecayLevel === 0
-				) {
+				if (changeSignalDecayLevel === 0) return;
+				restoreFullCadence();
+			});
+		}
+		if (options.onHostVisibilityChange !== undefined) {
+			unsubscribeHostVisibility = options.onHostVisibilityChange((visible) => {
+				if (!visible) {
+					let statusChanged = false;
+					for (const [lane, timer] of maintenanceTimers) {
+						if (laneRegistryEntry(lane).runsWhileHidden) continue;
+						timers.clearInterval(timer);
+						maintenanceTimers.delete(lane);
+						laneNextDueAtMs.delete(lane);
+						statusChanged = true;
+					}
+					if (statusChanged) options.onStatusChange();
 					return;
 				}
-				changeSignalDecayLevel = 0;
-				timers.clearTimeout(changeSignalTimer);
-				armChangeSignalTimer();
-				if (
-					options.pressure.multiplier() > 1 ||
-					options.pressure.retryAfterUntilMs() > options.now()
-				) {
-					return;
+
+				restoreFullCadence();
+				for (const lane of INTERVAL_LANES) {
+					const entry = laneRegistryEntry(lane);
+					if (
+						entry.runsWhileHidden ||
+						lane === 'write-drain' ||
+						maintenanceTimers.has(lane) ||
+						!options.laneIsArmable(lane)
+					) {
+						continue;
+					}
+					maintenanceTimers.set(lane, armLaneInterval(lane, options.intervals[entry.intervalKey]));
 				}
-				void options.gate.runLane('change-signal');
 			});
 		}
 		for (const lane of INTERVAL_LANES) {
 			if (!options.laneIsArmable(lane)) continue;
+			if (options.hostVisible?.() === false && !laneRegistryEntry(lane).runsWhileHidden) continue;
 			if (lane === 'query-total-retry') void options.gate.runLane(lane);
 			const timer = armLaneInterval(lane, options.intervals[laneRegistryEntry(lane).intervalKey]);
 			if (lane === 'write-drain') writeDrainTimer = timer;
-			else maintenanceTimers.push(timer);
+			else maintenanceTimers.set(lane, timer);
 		}
 	};
 	const stop = (): void => {
@@ -274,9 +308,12 @@ export function createCadenceController(options: {
 		changeSignalTimer = null;
 		unsubscribeUserActivity?.();
 		unsubscribeUserActivity = null;
+		unsubscribeHostVisibility?.();
+		unsubscribeHostVisibility = null;
 		if (writeDrainTimer !== null) timers.clearInterval(writeDrainTimer);
 		writeDrainTimer = null;
-		for (const timer of maintenanceTimers.splice(0)) timers.clearInterval(timer);
+		for (const timer of maintenanceTimers.values()) timers.clearInterval(timer);
+		maintenanceTimers.clear();
 		laneNextDueAtMs.clear();
 		options.onStatusChange();
 	};

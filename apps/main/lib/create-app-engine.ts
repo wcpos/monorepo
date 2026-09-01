@@ -36,6 +36,7 @@ import type {
 import { defaultProductBrowseSort } from '@wcpos/core/screens/main/contexts/ui-settings/default-product-browse-sort';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { hostIsVisible, onHostVisibilityChange } from '@wcpos/utils/host-visibility';
 import { Platform } from '@wcpos/utils/platform';
 import { lastUserActivityMs, onUserActivity } from '@wcpos/utils/user-activity';
 
@@ -567,6 +568,8 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				: {}),
 			lastUserActivityMs,
 			onUserActivity,
+			hostVisible: hostIsVisible,
+			onHostVisibilityChange,
 			diagnostics: composeObservers(
 				appMetricsObserver,
 				guardedDiagnostics,

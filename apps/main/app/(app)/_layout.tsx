@@ -29,6 +29,7 @@ import { OnlineStatusProvider, useOnlineStatus } from '@wcpos/hooks/use-online-s
 import { RasterizeProvider } from '@wcpos/printer';
 import { QueryProvider, useDocField } from '@wcpos/query';
 import { bareAuthParamSupported } from '@wcpos/utils/auth-param';
+import { setHostVisible } from '@wcpos/utils/host-visibility';
 import { getLogger, setDatabase } from '@wcpos/utils/logger';
 import { resolveRestTransport } from '@wcpos/utils/rest-transport';
 import { markUserActivity } from '@wcpos/utils/user-activity';
@@ -65,13 +66,21 @@ function AppStack() {
 	const t = useT();
 
 	React.useEffect(() => {
-		// React Native Web does not route every keyboard/pointer interaction through responders.
+		// React Native Web does not route browser activity or visibility through responders.
 		if (Platform.OS !== 'web') return;
 		const markActivity = () => markUserActivity();
 		const events = ['keydown', 'pointerdown'] as const;
 		events.forEach((event) => window.addEventListener(event, markActivity));
+		const updateHostVisibility = () => setHostVisible(document.visibilityState === 'visible');
+		if (typeof document !== 'undefined') {
+			updateHostVisibility();
+			document.addEventListener('visibilitychange', updateHostVisibility);
+		}
 		return () => {
 			events.forEach((event) => window.removeEventListener(event, markActivity));
+			if (typeof document !== 'undefined') {
+				document.removeEventListener('visibilitychange', updateHostVisibility);
+			}
 		};
 	}, []);
 

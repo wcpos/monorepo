@@ -1,4 +1,5 @@
 import { createTokenRefreshHandler } from './create-token-refresh-handler';
+import { resetRefreshCooldown } from './refresh-access-token';
 import { requestStateManager } from './request-state-manager';
 
 // Mock dependencies
@@ -69,6 +70,7 @@ describe('createTokenRefreshHandler', () => {
 
 	beforeEach(() => {
 		jest.clearAllMocks();
+		resetRefreshCooldown();
 		mockPost = jest.fn();
 		getHttpClient = () => ({ post: mockPost });
 	});

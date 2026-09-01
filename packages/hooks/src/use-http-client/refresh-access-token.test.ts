@@ -1,6 +1,6 @@
 import { AppInfo } from '@wcpos/utils/app-info';
 
-import { refreshAccessToken } from './refresh-access-token';
+import { refreshAccessToken, resetRefreshCooldown } from './refresh-access-token';
 import { requestStateManager } from './request-state-manager';
 
 jest.mock('@wcpos/utils/logger', () => {
@@ -59,6 +59,7 @@ function makeConfig(
 describe('refreshAccessToken', () => {
 	beforeEach(() => {
 		requestStateManager.reset();
+		resetRefreshCooldown();
 	});
 
 	it('includes the POS namespace header and persists the refreshed token', async () => {
@@ -160,6 +161,81 @@ describe('refreshAccessToken', () => {
 
 		// A 5xx (or network) blip must not force re-authentication.
 		expect(requestStateManager.isAuthFailed()).toBe(false);
+	});
+
+	it('skips a second network attempt inside the transient failure cooldown', async () => {
+		const now = jest.spyOn(Date, 'now').mockReturnValue(10_000);
+		const post = jest.fn().mockRejectedValue(new Error('HTTP 503: Service Unavailable'));
+		const { config } = makeConfig(post);
+
+		await expect(refreshAccessToken(config)).resolves.toBeNull();
+		await expect(refreshAccessToken(config)).resolves.toBeNull();
+
+		expect(post).toHaveBeenCalledTimes(1);
+		expect(loggerCalls.debug).toHaveBeenCalledWith(
+			'Skipping token refresh - cooldown active',
+			expect.objectContaining({ context: { remainingCooldownMs: 1_000 } })
+		);
+		now.mockRestore();
+	});
+
+	it('counts a shared failed refresh as one cooldown attempt', async () => {
+		let nowMs = 10_000;
+		const now = jest.spyOn(Date, 'now').mockImplementation(() => nowMs);
+		const response = createDeferred<never>();
+		const post = jest
+			.fn()
+			.mockImplementationOnce(() => response.promise)
+			.mockResolvedValue({ data: { access_token: 'new-token', expires_at: 9999 }, status: 200 });
+		const { config } = makeConfig(post);
+
+		const callers = Array.from({ length: 8 }, () => refreshAccessToken(config));
+		response.reject(new Error('network unavailable'));
+		await expect(Promise.all(callers)).resolves.toEqual(Array(8).fill(null));
+		expect(post).toHaveBeenCalledTimes(1);
+
+		nowMs += 1_000;
+		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
+		expect(post).toHaveBeenCalledTimes(2);
+		now.mockRestore();
+	});
+
+	it('doubles the cooldown after consecutive transient failures', async () => {
+		let nowMs = 10_000;
+		const now = jest.spyOn(Date, 'now').mockImplementation(() => nowMs);
+		const post = jest.fn().mockRejectedValue(new Error('network unavailable'));
+		const { config } = makeConfig(post);
+
+		await refreshAccessToken(config);
+		nowMs += 1_000;
+		await refreshAccessToken(config);
+		nowMs += 1_999;
+		await refreshAccessToken(config);
+
+		expect(post).toHaveBeenCalledTimes(2);
+		expect(loggerCalls.debug).toHaveBeenLastCalledWith(
+			'Skipping token refresh - cooldown active',
+			expect.objectContaining({ context: { remainingCooldownMs: 1 } })
+		);
+		now.mockRestore();
+	});
+
+	it('resets the cooldown after a successful refresh', async () => {
+		let nowMs = 10_000;
+		const now = jest.spyOn(Date, 'now').mockImplementation(() => nowMs);
+		const post = jest
+			.fn()
+			.mockRejectedValueOnce(new Error('network unavailable'))
+			.mockResolvedValue({ data: { access_token: 'new-token', expires_at: 9999 }, status: 200 });
+		const { config } = makeConfig(post);
+
+		await refreshAccessToken(config);
+		nowMs += 1_000;
+		await refreshAccessToken(config);
+		await refreshAccessToken(config);
+
+		expect(post).toHaveBeenCalledTimes(3);
+		now.mockRestore();
 	});
 
 	it('does not attempt a refresh once authentication has terminally failed', async () => {
@@ -365,12 +441,15 @@ describe('refreshAccessToken', () => {
 			const post = jest.fn().mockRejectedValue(new Error('401 Unauthorized'));
 			const { config } = makeConfig(post);
 
-			await refreshAccessToken(config);
+			await refreshAccessToken({ ...config, operationId: 'terminal-arc' });
 
 			expect(loggerCalls.error).toHaveBeenCalledWith(
 				'Unable to refresh session',
 				expect.objectContaining({
-					terminal: expect.objectContaining({ outcome: 'failed' }),
+					terminal: expect.objectContaining({
+						outcome: 'failed',
+						operationId: 'terminal-arc',
+					}),
 				})
 			);
 			expect(loggerCalls.warn).not.toHaveBeenCalled();
@@ -381,9 +460,10 @@ describe('refreshAccessToken', () => {
 			const post = jest.fn().mockRejectedValue(new Error('HTTP 503: Service Unavailable'));
 			const { config } = makeConfig(post);
 
-			await refreshAccessToken(config);
+			await refreshAccessToken({ ...config, operationId: 'transient-arc' });
 
 			expect(loggerCalls.warn).toHaveBeenCalledWith('Unable to refresh session', expect.anything());
+			expect(loggerCalls.warn.mock.calls[0]?.[1]?.terminal).not.toHaveProperty('operationId');
 			expect(loggerCalls.error).not.toHaveBeenCalled();
 		});
 	});
