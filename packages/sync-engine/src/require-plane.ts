@@ -105,8 +105,10 @@ const ACTIVE_ORDER_WAIT_TIMEOUT_MS = ORDER_SCHEDULER_LEASE_FOR_MS * 2;
  * 90s because it must sit ABOVE the longest legitimate no-progress window — the orders
  * targeted branch waits out another owner's active claim for up to
  * ACTIVE_ORDER_WAIT_TIMEOUT_MS (60s) without emitting progress — and far above any healthy
- * execution (0.5–12s observed on the same run). Every completed wire request resets the
- * clock through the drain progress seam, so a legitimately long multi-page walk never trips.
+ * execution (0.5–12s observed on the same run). The clock resets on drain progress events
+ * AND on every settled demand-path request (the requirementFetcher seam), so a legitimately
+ * long multi-page or multi-chunk walk never trips; and it is armed only AFTER awaitReady
+ * settles, so the queue-before-ready startup wait is never counted as a stall.
  */
 export const REQUIRE_STALL_TIMEOUT_MS = 90_000;
 
@@ -759,6 +761,11 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				} finally {
 					ticketSignal?.removeEventListener('abort', abort);
 					item.abortController.signal.removeEventListener('abort', abort);
+					// Every settled demand-path request is progress to the pump's stall
+					// watchdog — this seam covers the branches with no drain-progress
+					// events (pullTargetedByIds chunks, refreshCollection pages), so a
+					// large-but-moving pull is never mistaken for a stall.
+					onProgressActivity?.();
 				}
 			};
 			const rawBoundFetch = bound.bindFetch(requirementFetcher);
@@ -1375,6 +1382,21 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				if (next.released) {
 					forgetSearch(next);
 					continue; // release() already resolved it — just drop the entry.
+				}
+				// The queue-before-ready contract (RequirePlaneDeps.awaitReady): a requirement
+				// declared before the initial scope open settles QUEUES. That wait is startup,
+				// not a stall, so it happens BEFORE the watchdog is armed — a >90s database
+				// open/migration must never reject queued requirements as stalled. A stalled
+				// BOOT has its own watchdog (readiness-watchdog.ts / engine.ready-stalled). A
+				// rejection here is surfaced per-entry by executeOne's own awaitReady instead.
+				try {
+					await deps.awaitReady();
+				} catch {
+					/* executeOne rejects this entry through the normal error path below */
+				}
+				if (next.released) {
+					forgetSearch(next);
+					continue; // released while waiting for readiness — same drop as above.
 				}
 				next.started = true;
 				const startedAt = Date.now();

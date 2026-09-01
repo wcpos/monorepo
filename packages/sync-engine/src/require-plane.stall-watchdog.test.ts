@@ -19,13 +19,17 @@ import { createRequirePlane } from './require-plane';
 const STALL_TIMEOUT_MS = 90_000;
 
 type LaneRead = () => Promise<unknown>;
+type StubOverrides = {
+	awaitReady?: () => Promise<void>;
+	fetcher?: () => Promise<Response>;
+};
 
 /**
  * The smallest deps that let two real requirement kinds execute: a variations `search`
  * (whose serve-local gate reads `coverage.readLane` — the injected hang point) and a
  * variations `targeted-records` whose ids are all resident (serve-local, no wire).
  */
-function stubPlane(input: { readLane: LaneRead }) {
+function stubPlane(input: { readLane: LaneRead } & StubOverrides) {
 	const events: SyncEvent[] = [];
 	const bound = {
 		scopeId: 'scope-1',
@@ -48,14 +52,14 @@ function stubPlane(input: { readLane: LaneRead }) {
 		},
 	};
 	const plane = createRequirePlane({
-		awaitReady: async () => undefined,
+		awaitReady: input.awaitReady ?? (async () => undefined),
 		manager: {
 			activeScope: 'scope-1',
 			runGuarded: (operation: (scope: unknown) => Promise<unknown>) => operation(bound),
 		} as never,
 		databaseFor: () => database as never,
 		coverageFor: () => ({ readLane: input.readLane }) as never,
-		fetcher: (async () => new Response('[]')) as never,
+		fetcher: (input.fetcher ?? (async () => new Response('[]'))) as never,
 		syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
 		diagnostics: (event) => {
 			events.push(event);
@@ -155,6 +159,68 @@ describe('require-plane stall watchdog (pump survival)', () => {
 		expect(eventTypes(events)).toContain('coverage.require.stall-settled');
 		// The declarer was settled exactly once, by the stall rejection above.
 		await expect(outcome).resolves.toMatch(/stalled/);
+	});
+
+	it('does not count the queue-before-ready startup wait as a stall', async () => {
+		vi.useFakeTimers();
+		let becomeReady!: () => void;
+		const ready = new Promise<void>((resolve) => (becomeReady = resolve));
+		const { plane, events } = stubPlane({
+			readLane: async () => null,
+			awaitReady: () => ready,
+		});
+
+		// Declared long before the engine is ready — a slow database open/migration.
+		const queued = plane.require({
+			id: 'req-before-ready',
+			collection: 'variations',
+			kind: 'targeted-records',
+			remoteIds: [mintRemoteId(101, 'test remote id')],
+		});
+		let settled = false;
+		void queued.ready.finally(() => (settled = true));
+
+		await vi.advanceTimersByTimeAsync(300_000);
+		expect(settled).toBe(false); // still queued, per the queue-before-ready contract
+		expect(eventTypes(events)).not.toContain('coverage.require.stalled');
+		expect(eventTypes(events)).not.toContain('coverage.require.started');
+
+		becomeReady();
+		await vi.advanceTimersByTimeAsync(0);
+		await expect(queued.ready).resolves.toMatchObject({ action: 'serve-local' });
+	});
+
+	it('treats every settled demand-path request as progress, not only drain events', async () => {
+		vi.useFakeTimers();
+		// Each wire request takes 80s — under the 90s window on its own, over it in sum.
+		// The variations search runs two sequential legs (search= then sku=), so without
+		// the requirementFetcher reset the watchdog would fire mid-walk at 90s.
+		const slowFetch = () =>
+			new Promise<Response>((resolve) => {
+				setTimeout(() => resolve(new Response('[]')), 80_000);
+			});
+		const { plane, events } = stubPlane({
+			readLane: async () => null, // no coverage lane: the search goes to the wire
+			fetcher: slowFetch,
+		});
+
+		const slow = plane.require({
+			id: 'req-slow-but-moving',
+			collection: 'variations',
+			kind: 'search',
+			term: 'slowwalk',
+		});
+		const settled = slow.ready.then(
+			() => 'settled',
+			() => 'settled'
+		);
+
+		await vi.advanceTimersByTimeAsync(80_000); // leg 1 answers → progress → clock resets
+		expect(eventTypes(events)).not.toContain('coverage.require.stalled');
+		await vi.advanceTimersByTimeAsync(80_000); // leg 2 answers at 160s total
+
+		await expect(settled).resolves.toBe('settled');
+		expect(eventTypes(events)).not.toContain('coverage.require.stalled');
 	});
 
 	it('still logs the stall for a released entry and keeps draining, without rejecting anyone', async () => {
