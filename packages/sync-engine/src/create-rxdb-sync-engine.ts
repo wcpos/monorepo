@@ -303,6 +303,8 @@ export type RxdbSyncEnginePorts = {
 	queryTotal?: QueryTotalPort;
 	/** Optional activity clock for idle-only maintenance lanes. */
 	lastUserActivityMs?: () => number;
+	/** Optional host visibility reader for background cadence and lane gating. */
+	hostVisible?: () => boolean;
 	/**
 	 * The host's authored default product sort (initial-settings), for the work
 	 * the engine does BEFORE any grid declares a window: the boot browse-window
@@ -316,6 +318,8 @@ export type RxdbSyncEnginePorts = {
 	};
 	/** Optional user-interaction subscription for idle-decay snap-back. */
 	onUserActivity?: (listener: () => void) => () => void;
+	/** Optional host visibility subscription for visible cadence snap-back. */
+	onHostVisibilityChange?: (listener: (visible: boolean) => void) => () => void;
 	now?: () => number;
 	/** Injectable timer port. Defaults to lazy global timer delegation. */
 	timers?: EngineTimers;
@@ -1839,6 +1843,7 @@ export function createRxdbSyncEngine(
 		...(ports.lastUserActivityMs !== undefined
 			? { lastUserActivityMs: ports.lastUserActivityMs }
 			: {}),
+		...(ports.hostVisible !== undefined ? { hostVisible: ports.hostVisible } : {}),
 		emitEvent: (event: QueryTotalCacheEvent) => emitEngineEvent(event),
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 		isServerBackingOff: (atMs) => serverPressure.isBackingOff(atMs),
@@ -2081,6 +2086,10 @@ export function createRxdbSyncEngine(
 			? {}
 			: { lastUserActivityMs: ports.lastUserActivityMs }),
 		...(ports.onUserActivity === undefined ? {} : { onUserActivity: ports.onUserActivity }),
+		...(ports.hostVisible === undefined ? {} : { hostVisible: ports.hostVisible }),
+		...(ports.onHostVisibilityChange === undefined
+			? {}
+			: { onHostVisibilityChange: ports.onHostVisibilityChange }),
 		...(ports.timers === undefined ? {} : { timers: ports.timers }),
 	});
 	cadence = cadenceController;

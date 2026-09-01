@@ -48,12 +48,15 @@ export function createCadenceController(options: {
 	isDisposed: () => boolean;
 	lastUserActivityMs?: () => number;
 	onUserActivity?: (listener: () => void) => () => void;
+	hostVisible?: () => boolean;
+	onHostVisibilityChange?: (listener: (visible: boolean) => void) => () => void;
 	laneIsArmable: (lane: EngineLane) => boolean;
 }): CadenceController {
 	const timers = options.timers ?? systemTimers;
 	let changeSignalTimer: ReturnType<typeof setTimeout> | null = null;
 	let changeSignalDecayLevel: ChangeSignalDecayLevel = 0;
 	let unsubscribeUserActivity: (() => void) | null = null;
+	let unsubscribeHostVisibility: (() => void) | null = null;
 	let writeDrainTimer: ReturnType<typeof setInterval> | null = null;
 	const maintenanceTimers: ReturnType<typeof setInterval>[] = [];
 	const laneNextDueAtMs = new Map<EngineLane, number>();
@@ -93,10 +96,13 @@ export function createCadenceController(options: {
 			0,
 			now - (lastActivityMs > 0 ? lastActivityMs : options.startedAtMs)
 		);
-		changeSignalDecayLevel = nextChangeSignalDecayLevel({
-			idleForMs,
-			currentLevel: changeSignalDecayLevel,
-		});
+		changeSignalDecayLevel =
+			options.hostVisible?.() === false
+				? 2
+				: nextChangeSignalDecayLevel({
+						idleForMs,
+						currentLevel: changeSignalDecayLevel,
+					});
 		const drawn = changeSignalDelayMs({
 			tierMs: options.intervals.changeSignalPollMs,
 			level: changeSignalDecayLevel,
@@ -237,26 +243,28 @@ export function createCadenceController(options: {
 		if (options.mode !== 'auto' || started || stopped || options.isDisposed()) return;
 		started = true;
 		armChangeSignalTimer();
+		const restoreFullCadence = (): void => {
+			if (stopped || options.isDisposed() || changeSignalTimer === null) return;
+			changeSignalDecayLevel = 0;
+			timers.clearTimeout(changeSignalTimer);
+			armChangeSignalTimer();
+			if (
+				options.pressure.multiplier() > 1 ||
+				options.pressure.retryAfterUntilMs() > options.now()
+			) {
+				return;
+			}
+			void options.gate.runLane('change-signal');
+		};
 		if (options.onUserActivity !== undefined) {
 			unsubscribeUserActivity = options.onUserActivity(() => {
-				if (
-					stopped ||
-					options.isDisposed() ||
-					changeSignalTimer === null ||
-					changeSignalDecayLevel === 0
-				) {
-					return;
-				}
-				changeSignalDecayLevel = 0;
-				timers.clearTimeout(changeSignalTimer);
-				armChangeSignalTimer();
-				if (
-					options.pressure.multiplier() > 1 ||
-					options.pressure.retryAfterUntilMs() > options.now()
-				) {
-					return;
-				}
-				void options.gate.runLane('change-signal');
+				if (changeSignalDecayLevel === 0) return;
+				restoreFullCadence();
+			});
+		}
+		if (options.onHostVisibilityChange !== undefined) {
+			unsubscribeHostVisibility = options.onHostVisibilityChange((visible) => {
+				if (visible) restoreFullCadence();
 			});
 		}
 		for (const lane of INTERVAL_LANES) {
@@ -274,6 +282,8 @@ export function createCadenceController(options: {
 		changeSignalTimer = null;
 		unsubscribeUserActivity?.();
 		unsubscribeUserActivity = null;
+		unsubscribeHostVisibility?.();
+		unsubscribeHostVisibility = null;
 		if (writeDrainTimer !== null) timers.clearInterval(writeDrainTimer);
 		writeDrainTimer = null;
 		for (const timer of maintenanceTimers.splice(0)) timers.clearInterval(timer);

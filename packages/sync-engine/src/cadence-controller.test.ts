@@ -7,7 +7,13 @@ import { DEFAULT_LANE_INTERVALS } from './maintenance/lane-registry';
 import type { AutomaticTickGate } from './automatic-tick-gate';
 import type { EngineTimers } from './engine-timers';
 
-function harness(random: () => number = () => 0.5) {
+function harness(
+	random: () => number = () => 0.5,
+	visibility?: {
+		hostVisible?: () => boolean;
+		onHostVisibilityChange?: (listener: (visible: boolean) => void) => () => void;
+	}
+) {
 	const timeouts: { callback: () => void; delayMs: number }[] = [];
 	const timers: EngineTimers = {
 		setTimeout: vi.fn((callback: () => void, delayMs: number) => {
@@ -35,8 +41,12 @@ function harness(random: () => number = () => 0.5) {
 		startedAtMs: 0,
 		isDisposed: () => false,
 		laneIsArmable: () => true,
+		...(visibility?.hostVisible === undefined ? {} : { hostVisible: visibility.hostVisible }),
+		...(visibility?.onHostVisibilityChange === undefined
+			? {}
+			: { onHostVisibilityChange: visibility.onHostVisibilityChange }),
 	});
-	return { controller, diagnostics, intervals, timers, timeouts };
+	return { controller, diagnostics, gate, intervals, timers, timeouts };
 }
 
 describe('createCadenceController', () => {
@@ -82,5 +92,45 @@ describe('createCadenceController', () => {
 		const { controller, timers } = harness();
 		controller.start();
 		expect(timers.unref).not.toHaveBeenCalled();
+	});
+
+	it('uses decay level 2 while the host is hidden', () => {
+		const { controller, timeouts } = harness(() => 0.5, { hostVisible: () => false });
+
+		controller.start();
+
+		expect(timeouts[0]?.delayMs).toBe(60_000);
+	});
+
+	it('restores full cadence and kicks change-signal when the host becomes visible', () => {
+		let visible = false;
+		let visibilityListener: ((visible: boolean) => void) | undefined;
+		const unsubscribe = vi.fn();
+		const { controller, gate, timeouts } = harness(() => 0.5, {
+			hostVisible: () => visible,
+			onHostVisibilityChange: (listener) => {
+				visibilityListener = listener;
+				return unsubscribe;
+			},
+		});
+		controller.start();
+
+		visibilityListener?.(false);
+		expect(timeouts).toHaveLength(1);
+		visible = true;
+		visibilityListener?.(true);
+
+		expect(timeouts.map(({ delayMs }) => delayMs)).toEqual([60_000, 10_000]);
+		expect(gate.runLane).toHaveBeenCalledWith('change-signal');
+		controller.stop();
+		expect(unsubscribe).toHaveBeenCalledTimes(1);
+	});
+
+	it('keeps the visible cadence when visibility ports are absent', () => {
+		const { controller, timeouts } = harness();
+
+		controller.start();
+
+		expect(timeouts[0]?.delayMs).toBe(10_000);
 	});
 });
