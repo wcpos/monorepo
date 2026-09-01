@@ -3,6 +3,7 @@ jest.mock('@wcpos/utils/logger', () => {
 	const actual = jest.requireActual<typeof import('@wcpos/utils/logger')>('@wcpos/utils/logger');
 	const logger = {
 		error: jest.fn(),
+		warn: jest.fn(),
 		success: jest.fn(),
 	};
 
@@ -30,7 +31,7 @@ jest.mock('../../../../contexts/translations', () => ({
 
 const mockUseOnlineStatus = jest.mocked(useOnlineStatus);
 const { __logger: logger } = jest.requireMock('@wcpos/utils/logger') as {
-	__logger: { error: jest.Mock; success: jest.Mock };
+	__logger: { error: jest.Mock; warn: jest.Mock; success: jest.Mock };
 };
 
 describe('OnlineStatusLogger', () => {
@@ -47,24 +48,30 @@ describe('OnlineStatusLogger', () => {
 	it('does not log on initial mount', () => {
 		render(<OnlineStatusLogger />);
 
+		expect(logger.warn).not.toHaveBeenCalled();
 		expect(logger.error).not.toHaveBeenCalled();
 		expect(logger.success).not.toHaveBeenCalled();
 	});
 
-	it('logs once when the device stays offline through the settle window', () => {
+	it('logs once, at warn, when the device stays offline through the settle window', () => {
 		const { rerender } = render(<OnlineStatusLogger />);
 		mockUseOnlineStatus.mockReturnValue({ status: 'offline' });
 
 		rerender(<OnlineStatusLogger />);
 		act(() => jest.advanceTimersByTime(5_000));
 
-		expect(logger.error).toHaveBeenCalledTimes(1);
-		expect(logger.error).toHaveBeenCalledWith('Device went offline', {
+		expect(logger.warn).toHaveBeenCalledTimes(1);
+		expect(logger.warn).toHaveBeenCalledWith('Device went offline', {
 			code: 'SYNC999',
 			context: { type: 'connectivity.device-offline' },
 			showToast: true,
 			toast: { title: 'common.device_went_offline' },
 		});
+		// warn, never error: `error` reaches console.error on native, where the expo
+		// dev client draws a full-screen redbox over the app on a transient blip
+		// (class 13). Offline is an expected, self-healing state in an offline-first
+		// POS — the LEVELS.md `warn` promise, not the `error` one.
+		expect(logger.error).not.toHaveBeenCalled();
 	});
 
 	it('logs once when the connection is restored', () => {
@@ -90,7 +97,8 @@ describe('OnlineStatusLogger', () => {
 		rerender(<OnlineStatusLogger />);
 		act(() => jest.advanceTimersByTime(5_000));
 
-		expect(logger.error).toHaveBeenCalledTimes(1);
+		expect(logger.warn).toHaveBeenCalledTimes(1);
+		expect(logger.error).not.toHaveBeenCalled();
 		expect(logger.success).not.toHaveBeenCalled();
 	});
 
