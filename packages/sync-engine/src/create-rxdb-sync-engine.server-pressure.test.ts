@@ -659,6 +659,7 @@ describe('change-signal server-pressure adaptation', () => {
 		// trustworthy evidence that the cancellation was ours.
 		const controller = new AbortController();
 		controller.abort();
+		/** Reproduce Expo's native cancellation error without an AbortError name. */
 		const nativeCancel = (): Error =>
 			new Error('fetch failed: FetchRequestCanceledException: Fetch request has been canceled');
 		for (let index = 0; index < 10; index += 1) {
