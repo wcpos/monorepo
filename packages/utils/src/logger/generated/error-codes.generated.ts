@@ -764,9 +764,9 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		domain: 'SYNC',
 		severity: 'warn',
 		actionHint: 'No action needed unless a screen stays stuck; then reload the app.',
-		dataSafety: 'local-only',
+		dataSafety: 'outcome-unknown',
 		summary:
-			'One local database operation took far longer than normal to answer, and the app kept waiting for it.',
+			'A local database operation is taking far longer than normal; its outcome is not yet known.',
 	},
 	CHECKOUT111: {
 		code: 'CHECKOUT111',
@@ -850,10 +850,10 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'SEARCH_INDEX_REBUILD_FAILED',
 		domain: 'CLIENT',
 		severity: 'warn',
-		actionHint: 'Reload the app so it can rebuild the search index.',
+		actionHint: 'Try another search; reload if results still look wrong.',
 		dataSafety: 'no-impact',
 		summary:
-			'The automatic search index rebuild failed, so search on this device may stay incomplete for the rest of this session.',
+			'A search index rebuild failed, so results may be incomplete while the app retries initialization.',
 	},
 	CHECKOUT411: {
 		code: 'CHECKOUT411',

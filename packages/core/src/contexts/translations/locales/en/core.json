@@ -1454,7 +1454,7 @@
 	"health.logs.error_summary.SYNC151": "Your store sent a malformed response that WCPOS had to repair before reading.",
 	"health.logs.error_summary.SYNC161": "The local database on this device stopped responding, so actions that need it are paused.",
 	"health.logs.error_summary.SYNC171": "A local database on this device could not be created or removed.",
-	"health.logs.error_summary.SYNC181": "One local database operation took far longer than normal to answer, and the app kept waiting for it.",
+	"health.logs.error_summary.SYNC181": "A local database operation is taking far longer than normal; its outcome is not yet known.",
 	"health.logs.error_summary.CHECKOUT111": "This change could not be applied to the cart, which is unchanged.",
 	"health.logs.error_summary.PRODUCT321": "More than one product matches this barcode.",
 	"health.logs.error_summary.PRODUCT421": "This product's variation price data could not be read, so displayed prices may be wrong or missing.",
@@ -1463,7 +1463,7 @@
 	"health.logs.error_summary.CLIENT141": "Local search returned results that do not match the catalogue; the app attempts an automatic search index rebuild.",
 	"health.logs.error_summary.CLIENT142": "The search index did not answer in time, so WCPOS searched the catalogue directly instead.",
 	"health.logs.error_summary.CLIENT143": "The search index could not find a product it should contain; the app attempts an automatic search index rebuild.",
-	"health.logs.error_summary.CLIENT144": "The automatic search index rebuild failed, so search on this device may stay incomplete for the rest of this session.",
+	"health.logs.error_summary.CLIENT144": "A search index rebuild failed, so results may be incomplete while the app retries initialization.",
 	"health.logs.error_summary.CHECKOUT411": "A line on this order has price details the POS could not read, so its amount was taken from the stored totals instead.",
 	"health.logs.error_summary.CHECKOUT421": "This order refers to a tax rate your store no longer has, so its tax may be wrong.",
 	"health.logs.error_action.SYNC101": "Note the unsaved change and check device storage, then restart. Do not clear local data.",
@@ -1547,7 +1547,7 @@
 	"health.logs.error_action.CLIENT141": "No action needed. If search results still look wrong, reload the app.",
 	"health.logs.error_action.CLIENT142": "No action needed. Search keeps working from a direct catalogue scan.",
 	"health.logs.error_action.CLIENT143": "No action needed. If search still misses products you can see in the catalogue, reload the app.",
-	"health.logs.error_action.CLIENT144": "Reload the app so it can rebuild the search index.",
+	"health.logs.error_action.CLIENT144": "Try another search; reload if results still look wrong.",
 	"health.logs.error_action.CHECKOUT411": "Remove that line and add it again, then check the total.",
 	"health.logs.error_action.CHECKOUT421": "Check the tax on this order; ask the admin whether a tax rate was deleted."
 }

@@ -231,6 +231,18 @@ describe('error registry', () => {
 		expect(guidance).toContain("if it failed, follow that request's error");
 	});
 
+	it('describes the actual recovery paths for storage stalls and failed search rebuilds', () => {
+		const storageStall = entryFor('SYNC181');
+		expect(storageStall.retryPolicy).toBe('manual');
+		expect(storageStall.dataSafety).toBe('outcome-unknown');
+		expect(storageStall.summary).toContain('outcome is not yet known');
+		expect(storageStall.docsBody).toContain('does not cancel or retry');
+
+		const searchRebuild = entryFor('CLIENT144');
+		expect(searchRebuild.retryPolicy).toBe('automatic');
+		expect(searchRebuild.docsBody).toContain('next search');
+	});
+
 	it('gives status-aware repair guidance for SYNC331 tombstones', () => {
 		const entry = entryFor('SYNC331');
 		const guidance = entry.troubleshooting.join(' ');
