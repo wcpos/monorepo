@@ -594,6 +594,20 @@ export const CONFORMANCE_TABLE = {
 	'coverage.gate.miss': INVISIBLE,
 	// decided: invisible — raw require-plane log lines belong in diagnostics.
 	'coverage.require.log': INVISIBLE,
+	// decided: invisible — per-request engine narration; its value is in artifacts,
+	// where a started line with no outcome names a wedged requirement.
+	'coverage.require.started': INVISIBLE,
+	// decided: visible — a data request stopped making progress and was abandoned so
+	// the rest of the queue could keep loading; the screen that asked retries on its
+	// own, but the cashier's records did not load, which is what SYNC_PARTIAL means.
+	'coverage.require.stalled': {
+		operationType: 'sync.coverage',
+		outcome: 'failed',
+		code: ERROR_CODES.SYNC_PARTIAL,
+	},
+	// decided: invisible — the breadcrumb recording that an abandoned request
+	// eventually settled; pure diagnostics narration.
+	'coverage.require.stall-settled': INVISIBLE,
 	// decided: visible — the requested customer ordering is unavailable to the cashier.
 	'customer.browse-window.sort-rejected': {
 		operationType: 'sync.coverage',

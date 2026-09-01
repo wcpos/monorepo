@@ -90,6 +90,64 @@ import type { BarcodeSelectors, BarcodeSelectorsReader } from './materialization
 
 const ACTIVE_ORDER_WAIT_TIMEOUT_MS = ORDER_SCHEDULER_LEASE_FOR_MS * 2;
 
+/**
+ * A require execution that has made no drain progress for this long is STALLED and is
+ * abandoned: its entry is aborted, its declarers are rejected, and the pump moves on.
+ *
+ * The pump below is a SERIAL loop, so before this existed one execution whose await never
+ * settled starved every queued requirement forever, with no diagnostic at all. Run
+ * 33445432662 (Android phone, flow 07, 2026-08-31): after the last search outcome at
+ * 23:41:54 the pump completed ZERO requirements for the job's final 38 minutes — the
+ * variations popover's targeted pull and both of its forced syncs queued behind a stalled
+ * execution while every other engine lane stayed healthy. The stall was pre-wire (no
+ * transport, no error, no outcome), i.e. a storage promise that never settled.
+ *
+ * 90s because it must sit ABOVE the longest legitimate no-progress window — the orders
+ * targeted branch waits out another owner's active claim for up to
+ * ACTIVE_ORDER_WAIT_TIMEOUT_MS (60s) without emitting progress — and far above any healthy
+ * execution (0.5–12s observed on the same run). The clock resets on drain progress events
+ * AND on every settled demand-path request (the requirementFetcher seam), so a legitimately
+ * long multi-page or multi-chunk walk never trips; and it is armed only AFTER awaitReady
+ * settles, so the queue-before-ready startup wait is never counted as a stall.
+ */
+export const REQUIRE_STALL_TIMEOUT_MS = 90_000;
+
+/** Race marker: the stall watchdog fired before the execution settled. */
+const STALLED = Symbol('require-stalled');
+
+/**
+ * The pump's per-execution stall clock: `reset()` on declaration start and on every drain
+ * progress event; `onStall` fires once when {@link REQUIRE_STALL_TIMEOUT_MS} passes with no
+ * reset; `cancel()` disarms it when the execution settles. Exported for its unit test only —
+ * it is not part of the package surface.
+ */
+export function createRequireStallWatchdog(input: { timeoutMs: number; onStall: () => void }): {
+	reset(): void;
+	cancel(): void;
+} {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	let done = false;
+	const clear = () => {
+		if (timer !== undefined) clearTimeout(timer);
+		timer = undefined;
+	};
+	return {
+		reset() {
+			if (done) return;
+			clear();
+			timer = setTimeout(() => {
+				done = true;
+				timer = undefined;
+				input.onStall();
+			}, input.timeoutMs);
+		},
+		cancel() {
+			done = true;
+			clear();
+		},
+	};
+}
+
 type EngineRequirementCommon = {
 	/** Caller-chosen id (diagnostics only; concurrent identical searches coalesce regardless of id). */
 	id: string;
@@ -494,10 +552,11 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		}
 		abandon(entry);
 	};
-	const progressObserver = (requirement: InternalRequirement) => {
+	const progressObserver = (requirement: InternalRequirement, onActivity?: () => void) => {
 		let documents = 0;
 		let requests = 0;
 		return (progress: { collection: string; documents: number; requests: number }): void => {
+			onActivity?.();
 			deps.diagnostics({
 				type: 'queue.drain.progress',
 				level: 'info',
@@ -601,6 +660,60 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		reason: 'released during drain',
 	});
 
+	/**
+	 * The stall watchdog fired: this execution's await never settled, or its walk stopped
+	 * making progress (see REQUIRE_STALL_TIMEOUT_MS for the run this is anchored to). Abort
+	 * the entry, tell the declarers, and record whichever way the abandoned promise
+	 * eventually settles — without ever letting it speak for the requirement again (its
+	 * subscribers are settled here, and settling is one-shot).
+	 */
+	const abandonStalledExecution = (
+		entry: QueuedRequirement,
+		startedAt: number,
+		execution: Promise<CoverageOutcome>
+	): void => {
+		const durationMs = Date.now() - startedAt;
+		entry.abortController.abort(new DOMException('Requirement stalled during drain', 'AbortError'));
+		// The same terminal state abandon() establishes: a later release() on a
+		// surviving handle must find the entry already abandoned rather than
+		// re-running abandonment (or cascading it to a predecessor).
+		entry.released = true;
+		deps.diagnostics({
+			type: 'coverage.require.stalled',
+			level: 'warn',
+			collection: entry.requirement.collection,
+			message: `require: stalled after ${durationMs}ms with no progress`,
+			fields: {
+				requirementId: entry.requirement.id,
+				kind: entry.requirement.kind,
+				durationMs,
+			},
+		});
+		const stallError = new Error(`require: stalled after ${durationMs}ms with no progress`);
+		for (const subscriber of entry.subscribers) {
+			if (!subscriber.released) subscriber.reject(stallError);
+		}
+		// A stall can be transient (a storage promise that settles minutes later): record
+		// which way the abandoned execution eventually went, so an artifact can tell a
+		// permanent hang (no stall-settled line) from a slow settle.
+		const settled = (action: string) =>
+			deps.diagnostics({
+				type: 'coverage.require.stall-settled',
+				level: 'debug',
+				collection: entry.requirement.collection,
+				fields: {
+					requirementId: entry.requirement.id,
+					kind: entry.requirement.kind,
+					action,
+					durationMs: Date.now() - startedAt,
+				},
+			});
+		void execution.then(
+			(outcome) => settled(outcome.action),
+			() => settled('error')
+		);
+	};
+
 	async function missingRemoteIds(
 		db: RxDatabase,
 		d: { collection: SyncCollectionName; wooIdField: 'remoteId' },
@@ -618,7 +731,10 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		return remoteIds.filter((id) => !present.has(id));
 	}
 
-	async function executeOne(item: QueuedRequirement): Promise<CoverageOutcome> {
+	async function executeOne(
+		item: QueuedRequirement,
+		onProgressActivity?: () => void
+	): Promise<CoverageOutcome> {
 		await deps.awaitReady();
 		return deps.manager.runGuarded(async (bound) => {
 			const database = deps.databaseFor(bound.scopeId);
@@ -649,6 +765,11 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				} finally {
 					ticketSignal?.removeEventListener('abort', abort);
 					item.abortController.signal.removeEventListener('abort', abort);
+					// Every settled demand-path request is progress to the pump's stall
+					// watchdog — this seam covers the branches with no drain-progress
+					// events (pullTargetedByIds chunks, refreshCollection pages), so a
+					// large-but-moving pull is never mistaken for a stall.
+					onProgressActivity?.();
 				}
 			};
 			const rawBoundFetch = bound.bindFetch(requirementFetcher);
@@ -704,7 +825,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					// snapshot's claimedUntilMs forever (#1175 review P2).
 					...(deps.now !== undefined ? { nowMs: deps.now(), now: deps.now } : {}),
 					signal: item.abortController.signal,
-					onProgress: progressObserver(item.requirement),
+					onProgress: progressObserver(item.requirement, onProgressActivity),
 					...overrides,
 				});
 
@@ -1060,7 +1181,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
 						signal: item.abortController.signal,
 						task,
-						onProgress: progressObserver(item.requirement),
+						onProgress: progressObserver(item.requirement, onProgressActivity),
 						...(barcodeSelectors !== undefined ? { barcodeSelectors } : {}),
 					});
 				});
@@ -1266,72 +1387,60 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					forgetSearch(next);
 					continue; // release() already resolved it — just drop the entry.
 				}
+				// The queue-before-ready contract (RequirePlaneDeps.awaitReady): a requirement
+				// declared before the initial scope open settles QUEUES. That wait is startup,
+				// not a stall, so it happens BEFORE the watchdog is armed — a >90s database
+				// open/migration must never reject queued requirements as stalled. A stalled
+				// BOOT has its own watchdog (readiness-watchdog.ts / engine.ready-stalled). A
+				// rejection here is surfaced per-entry by executeOne's own awaitReady instead.
+				try {
+					await deps.awaitReady();
+				} catch {
+					/* executeOne rejects this entry through the normal error path below */
+				}
+				if (next.released) {
+					forgetSearch(next);
+					continue; // released while waiting for readiness — same drop as above.
+				}
 				next.started = true;
 				const startedAt = Date.now();
+				// The start line is the stall watchdog's evidence twin: when a stall IS hit, the
+				// artifact's last started-without-outcome pair names exactly which requirement
+				// wedged — the line run 33445432662 did not have.
+				deps.diagnostics({
+					type: 'coverage.require.started',
+					level: 'debug',
+					collection: next.requirement.collection,
+					fields: { requirementId: next.requirement.id, kind: next.requirement.kind },
+				});
+				let declareStalled!: () => void;
+				const stallBarrier = new Promise<typeof STALLED>((resolve) => {
+					declareStalled = () => resolve(STALLED);
+				});
+				const watchdog = createRequireStallWatchdog({
+					timeoutMs: REQUIRE_STALL_TIMEOUT_MS,
+					onStall: declareStalled,
+				});
+				watchdog.reset();
+				const execution = executeOne(next, watchdog.reset);
+				const raced = await Promise.race([
+					execution.then(
+						(outcome) => ({ outcome }) as const,
+						(error: unknown) => ({ error }) as const
+					),
+					stallBarrier,
+				]);
+				watchdog.cancel();
+				if (raced === STALLED) {
+					// One hung await must never starve the queue (the serial pump IS the
+					// choke point): abandon this execution and keep draining.
+					abandonStalledExecution(next, startedAt, execution);
+					forgetSearch(next);
+					continue;
+				}
 				try {
-					const outcome = await executeOne(next);
-					deps.diagnostics({
-						type: 'coverage.require.outcome',
-						level: 'info',
-						collection: next.requirement.collection,
-						fields: {
-							requirementId: next.requirement.id,
-							kind: next.requirement.kind,
-							action: outcome.action,
-							documents: outcome.documents ?? 0,
-							requests: outcome.requests ?? 0,
-							durationMs: Date.now() - startedAt,
-						},
-					});
-					if (outcome.action !== 'released') {
-						deps.diagnostics({
-							type: outcome.action === 'serve-local' ? 'coverage.gate.hit' : 'coverage.gate.miss',
-							level: 'debug',
-							collection: next.requirement.collection,
-							fields: { requirementId: next.requirement.id, kind: next.requirement.kind },
-						});
-					}
-					for (const subscriber of next.subscribers) {
-						if (!subscriber.released) subscriber.resolve(outcome);
-					}
-				} catch (error) {
-					// Ask whether WE aborted it, not what the platform named the
-					// rejection. `error.name === 'AbortError'` is the WHATWG contract
-					// and holds on web and Electron, but expo's winter fetch — what
-					// `globalThis.fetch` is on native — rejects with a plain Error
-					// (name "Error") wrapping FetchRequestCanceledException. So on
-					// native this branch never matched, and every superseded search
-					// was reported as a failed load: `coverage.require.error` at
-					// error level, which the dev client then draws as a red box OVER
-					// the app (monorepo#1672).
-					//
-					// Same shape as packages/sync-core/src/recordPushAdapter.ts:216,
-					// which already ORs in the signal.
-					// Match the CANCELLATION, not merely an aborted signal. An
-					// earlier attempt OR-ed in `signal.aborted`, which is true for
-					// any error raised while a released requirement's signal happens
-					// to be aborted — including genuine failures. That branch does
-					// not reject its subscribers, so a real failure stopped settling
-					// its waiters and the pro `product-category-filter` web spec hung
-					// (PR #1674, shard 2, failed on the attempt and both retries).
-					//
-					// expo's winter fetch wraps FetchRequestCanceledException in a
-					// plain Error, so the name check alone misses it on native; the
-					// message is the only distinguishing evidence it carries.
-					const isPlatformCancel =
-						error instanceof Error &&
-						/FetchRequestCanceledException|Fetch request has been canceled|The operation was aborted/i.test(
-							error.message
-						);
-					const abortedByRelease =
-						next.released &&
-						error instanceof Error &&
-						(error.name === 'AbortError' || isPlatformCancel);
-					if (abortedByRelease) {
-						// release() aborted the in-flight fetch; the rejection is the
-						// supersede completing, not a failure. Report the same released
-						// outcome the success path produces — never an error, which the
-						// logs screen surfaces to the cashier as a failed load.
+					if ('outcome' in raced) {
+						const outcome = raced.outcome;
 						deps.diagnostics({
 							type: 'coverage.require.outcome',
 							level: 'info',
@@ -1339,46 +1448,110 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 							fields: {
 								requirementId: next.requirement.id,
 								kind: next.requirement.kind,
-								action: 'released',
-								documents: 0,
-								requests: 0,
+								action: outcome.action,
+								documents: outcome.documents ?? 0,
+								requests: outcome.requests ?? 0,
 								durationMs: Date.now() - startedAt,
 							},
 						});
-					} else {
-						const message =
-							error instanceof Error && error.message.startsWith('require: ')
-								? error.message
-								: error instanceof Error
-									? error.name
-									: 'UnknownError';
-						deps.diagnostics({
-							type: 'coverage.require.error',
-							level: 'error',
-							collection: next.requirement.collection,
-							message,
-							fields: {
-								requirementId: next.requirement.id,
-								kind: next.requirement.kind,
-								durationMs: Date.now() - startedAt,
-								// `message` above is an ALLOW-LIST: it keeps our own
-								// `require: …` text and collapses everything else to
-								// `error.name`, which for a plain Error is the string
-								// "Error". That is the right call for the enumerable
-								// title (it drives the cashier-facing log row), but it
-								// meant the diagnostic threw away the detail for exactly
-								// the errors nobody has identified yet — a search
-								// requirement failing on both platforms logged
-								// `ERROR : Error` and nothing else, which is why
-								// monorepo#1614 stayed open. Detail goes in `fields`,
-								// where this codebase already carries technical context
-								// (the HTTP client logs a full stack there).
-								errorName: error instanceof Error ? error.name : typeof error,
-								errorDetail: error instanceof Error ? error.message : String(error),
-							},
-						});
+						if (outcome.action !== 'released') {
+							deps.diagnostics({
+								type: outcome.action === 'serve-local' ? 'coverage.gate.hit' : 'coverage.gate.miss',
+								level: 'debug',
+								collection: next.requirement.collection,
+								fields: { requirementId: next.requirement.id, kind: next.requirement.kind },
+							});
+						}
 						for (const subscriber of next.subscribers) {
-							if (!subscriber.released) subscriber.reject(error);
+							if (!subscriber.released) subscriber.resolve(outcome);
+						}
+					} else {
+						const error = raced.error;
+						// Ask whether WE aborted it, not what the platform named the
+						// rejection. `error.name === 'AbortError'` is the WHATWG contract
+						// and holds on web and Electron, but expo's winter fetch — what
+						// `globalThis.fetch` is on native — rejects with a plain Error
+						// (name "Error") wrapping FetchRequestCanceledException. So on
+						// native this branch never matched, and every superseded search
+						// was reported as a failed load: `coverage.require.error` at
+						// error level, which the dev client then draws as a red box OVER
+						// the app (monorepo#1672).
+						//
+						// Same shape as packages/sync-core/src/recordPushAdapter.ts:216,
+						// which already ORs in the signal.
+						// Match the CANCELLATION, not merely an aborted signal. An
+						// earlier attempt OR-ed in `signal.aborted`, which is true for
+						// any error raised while a released requirement's signal happens
+						// to be aborted — including genuine failures. That branch does
+						// not reject its subscribers, so a real failure stopped settling
+						// its waiters and the pro `product-category-filter` web spec hung
+						// (PR #1674, shard 2, failed on the attempt and both retries).
+						//
+						// expo's winter fetch wraps FetchRequestCanceledException in a
+						// plain Error, so the name check alone misses it on native; the
+						// message is the only distinguishing evidence it carries.
+						const isPlatformCancel =
+							error instanceof Error &&
+							/FetchRequestCanceledException|Fetch request has been canceled|The operation was aborted/i.test(
+								error.message
+							);
+						const abortedByRelease =
+							next.released &&
+							error instanceof Error &&
+							(error.name === 'AbortError' || isPlatformCancel);
+						if (abortedByRelease) {
+							// release() aborted the in-flight fetch; the rejection is the
+							// supersede completing, not a failure. Report the same released
+							// outcome the success path produces — never an error, which the
+							// logs screen surfaces to the cashier as a failed load.
+							deps.diagnostics({
+								type: 'coverage.require.outcome',
+								level: 'info',
+								collection: next.requirement.collection,
+								fields: {
+									requirementId: next.requirement.id,
+									kind: next.requirement.kind,
+									action: 'released',
+									documents: 0,
+									requests: 0,
+									durationMs: Date.now() - startedAt,
+								},
+							});
+						} else {
+							const message =
+								error instanceof Error && error.message.startsWith('require: ')
+									? error.message
+									: error instanceof Error
+										? error.name
+										: 'UnknownError';
+							deps.diagnostics({
+								type: 'coverage.require.error',
+								level: 'error',
+								collection: next.requirement.collection,
+								message,
+								fields: {
+									requirementId: next.requirement.id,
+									kind: next.requirement.kind,
+									durationMs: Date.now() - startedAt,
+									// `message` above is an ALLOW-LIST: it keeps our own
+									// `require: …` text and collapses everything else to
+									// `error.name`, which for a plain Error is the string
+									// "Error". That is the right call for the enumerable
+									// title (it drives the cashier-facing log row), but it
+									// meant the diagnostic threw away the detail for exactly
+									// the errors nobody has identified yet — a search
+									// requirement failing on both platforms logged
+									// `ERROR : Error` and nothing else, which is why
+									// monorepo#1614 stayed open. Detail goes in `fields`,
+									// where this codebase already carries technical context
+									// (the HTTP client logs a full stack there).
+									errorName: error instanceof Error ? error.name : typeof error,
+									errorDetail: error instanceof Error ? error.message : String(error),
+								},
+							});
+							for (const subscriber of next.subscribers) {
+								if (!subscriber.released) subscriber.reject(error);
+							}
 						}
 					}
 				} finally {

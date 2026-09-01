@@ -35,6 +35,9 @@ export const SYNC_EVENT_TYPES = [
 	'coverage.require.error',
 	'coverage.require.log',
 	'coverage.require.outcome',
+	'coverage.require.stall-settled',
+	'coverage.require.stalled',
+	'coverage.require.started',
 	'customer.browse-window.sort-rejected',
 	'demand.activity-counter-underflow',
 	'demand.flood-detected',
@@ -333,6 +336,33 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		descriptionKey: 'health.logs.event_description.coverage_require_outcome',
 		description: 'The POS loaded the records this screen needed.',
 		introducedIn: '1.10.0',
+	},
+	'coverage.require.stall-settled': {
+		type: 'coverage.require.stall-settled',
+		domain: 'SYNC',
+		key: 'health.logs.event.coverage_require_stall_settled',
+		label: 'A stalled data request finished late',
+		descriptionKey: 'health.logs.event_description.coverage_require_stall_settled',
+		description:
+			'A data request the POS had already given up on eventually finished. Nothing is lost; the screen re-asked on its own.',
+		introducedIn: '1.10.5',
+	},
+	'coverage.require.stalled': {
+		type: 'coverage.require.stalled',
+		domain: 'SYNC',
+		key: 'health.logs.event.coverage_require_stalled',
+		label: 'Gave up on a stuck data request',
+		descriptionKey: 'health.logs.event_description.coverage_require_stalled',
+		description:
+			'A data request stopped making progress, so the POS abandoned it to keep other loading work moving. The screen retries on its own.',
+		introducedIn: '1.10.5',
+	},
+	'coverage.require.started': {
+		type: 'coverage.require.started',
+		domain: 'SYNC',
+		key: 'health.logs.event.coverage_require_started',
+		label: 'Started loading records for a screen',
+		introducedIn: '1.10.5',
 	},
 	'customer.browse-window.sort-rejected': {
 		type: 'customer.browse-window.sort-rejected',
