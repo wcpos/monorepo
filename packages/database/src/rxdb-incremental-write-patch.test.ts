@@ -38,7 +38,7 @@ describe('rxdb incremental-write patch', () => {
 		const storageInstance = db.docs.storageInstance;
 		const realBulkWrite = storageInstance.bulkWrite.bind(storageInstance);
 		let failedOnce = false;
-		storageInstance.bulkWrite = (rows: any, context: string) => {
+		storageInstance.bulkWrite = (rows, context) => {
 			if (context === 'incremental-write' && !failedOnce) {
 				failedOnce = true;
 				return Promise.reject(new Error('transient storage failure'));
