@@ -708,6 +708,7 @@ function checkpointKeyFor(collection: SyncCollectionName): string {
 	return `checkpoint:${collection}`;
 }
 
+/** Create a scoped RxDB sync engine backed by the supplied host ports. */
 export function createRxdbSyncEngine(
 	ports: RxdbSyncEnginePorts,
 	initialScope: StoreScopeIdentity

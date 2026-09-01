@@ -97,6 +97,7 @@ type Harness = {
 	now: () => number;
 };
 
+/** Build a deterministic engine harness with scripted transport responses. */
 async function harness(
 	overrides: Partial<RxdbSyncEnginePorts> = {},
 	options: { startAtMs?: number } = {}
