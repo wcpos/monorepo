@@ -127,6 +127,15 @@ describe('require-plane stall watchdog (pump survival)', () => {
 					event.type === 'coverage.gate.hit' && event.fields?.requirementId === 'req-behind'
 			)
 		).toBe(true);
+
+		// A late release() on the stalled handle finds the entry already abandoned
+		// (abandonStalledExecution establishes abandon()'s terminal state): inert —
+		// no re-abandonment, no new diagnostics, the settled rejection stands.
+		const eventCount = events.length;
+		stalled.release();
+		await vi.advanceTimersByTimeAsync(1_000);
+		expect(events.length).toBe(eventCount);
+		await expect(stalledSettled).resolves.toMatch(/^require: stalled after \d+ms/);
 	});
 
 	it('records how an abandoned execution eventually settles, without re-settling declarers', async () => {

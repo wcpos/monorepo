@@ -674,6 +674,10 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	): void => {
 		const durationMs = Date.now() - startedAt;
 		entry.abortController.abort(new DOMException('Requirement stalled during drain', 'AbortError'));
+		// The same terminal state abandon() establishes: a later release() on a
+		// surviving handle must find the entry already abandoned rather than
+		// re-running abandonment (or cascading it to a predecessor).
+		entry.released = true;
 		deps.diagnostics({
 			type: 'coverage.require.stalled',
 			level: 'warn',
