@@ -140,6 +140,37 @@ test('the shared setup action uses a Node version supported by jsdom 30', () => 
 	assert.equal(setup.inputs['node-version'].default, '22.22.2');
 });
 
+test('Dependabot typechecks every workspace that does not require premium install scripts', () => {
+	const step = findStep(readWorkflow('test.yml'), 'lint', '🔍 Typecheck');
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-dependabot-typecheck-'));
+	const pnpm = path.join(workspace, 'pnpm');
+	writeFileSync(pnpm, '#!/usr/bin/env bash\nprintf \'%s\\n\' "$*"\n', { mode: 0o755 });
+
+	try {
+		assert.equal(
+			step.env.SKIP_RXDB_PREMIUM_TYPECHECK,
+			"${{ github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' }}"
+		);
+
+		const dependabot = runShell(step.run, {
+			env: { PATH: `${workspace}:${process.env.PATH}`, SKIP_RXDB_PREMIUM_TYPECHECK: 'true' },
+		});
+		assert.equal(dependabot.status, 0, dependabot.stdout + dependabot.stderr);
+		assert.equal(
+			dependabot.stdout.trim(),
+			'turbo typecheck --filter={./packages/*} --filter={./apps/main} --filter={./apps/template-studio} --filter=!@wcpos/sync-engine --only'
+		);
+
+		const normal = runShell(step.run, {
+			env: { PATH: `${workspace}:${process.env.PATH}`, SKIP_RXDB_PREMIUM_TYPECHECK: 'false' },
+		});
+		assert.equal(normal.status, 0, normal.stdout + normal.stderr);
+		assert.equal(normal.stdout.trim(), 'typecheck');
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
 test('the E2E aggregator runs on cancellation and fails the cancelled deploy', () => {
 	const gate = readWorkflow('deploy.yml').jobs['e2e-gate'];
 

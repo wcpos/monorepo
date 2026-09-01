@@ -53,7 +53,14 @@ jobs:
         run: pnpm lint
 
       - name: "\U0001F50D Typecheck"
-        run: pnpm typecheck
+        env:
+          SKIP_RXDB_PREMIUM_TYPECHECK: ${{ github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' }}
+        run: |
+          if [[ "$SKIP_RXDB_PREMIUM_TYPECHECK" == "true" ]]; then
+            pnpm turbo typecheck --filter='{./packages/*}' --filter='{./apps/main}' --filter='{./apps/template-studio}' --filter='!@wcpos/sync-engine' --only
+          else
+            pnpm typecheck
+          fi
 
       - name: "\U0001F9EA Run script tests"
         run: pnpm test:scripts
