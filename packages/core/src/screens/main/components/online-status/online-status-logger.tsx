@@ -26,8 +26,18 @@ export function OnlineStatusLogger() {
 			// Messages stay forensic English (#1150); the registered `context.type`
 			// is what the Logs UI translates at render time (#912), so the till
 			// reads these rows in its own language.
+			//
+			// `warn`, not `error`, per the LEVELS.md rubric: `error` promises "needs
+			// user action now", and in an offline-first POS going offline is an
+			// expected operating mode that self-heals (the 'Connection restored' row
+			// below closes the arc) — it "will need attention if it persists", which
+			// is the `warn` promise. The level also reaches `console.*` on native:
+			// at `error` the expo dev client draws a full-screen redbox over the app
+			// on every transient blip (class 13; run 33487044969 iOS phone flow 05,
+			// where it swallowed the drawer tap). The toast and the SYNC_UNEXPECTED
+			// help link are unchanged.
 			case 'offline':
-				logger.error('Device went offline', {
+				logger.warn('Device went offline', {
 					code: ERROR_CODES.SYNC_UNEXPECTED,
 					context: { type: 'connectivity.device-offline' },
 					showToast: true,
@@ -35,7 +45,7 @@ export function OnlineStatusLogger() {
 				});
 				break;
 			case 'online-website-unavailable':
-				logger.error('Website is unreachable', {
+				logger.warn('Website is unreachable', {
 					code: ERROR_CODES.SYNC_UNEXPECTED,
 					context: { type: 'connectivity.website-unreachable' },
 					showToast: true,
