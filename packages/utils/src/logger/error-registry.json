@@ -1602,11 +1602,11 @@
 		"domain": "SYNC",
 		"severity": "warn",
 		"actionHint": "No action needed unless a screen stays stuck; then reload the app.",
-		"retryPolicy": "automatic",
+		"retryPolicy": "manual",
 		"dataSafety": "local-only",
 		"escalation": "support-with-export",
 		"summary": "One local database operation took far longer than normal to answer, and the app kept waiting for it.",
-		"docsBody": "A single read or write to the local database on this device went unanswered for far longer than normal, while the database kept answering everything else. Nothing was cancelled and no data was changed — this entry exists so a stuck screen or spinner leaves a trace naming exactly which operation stalled. Stalled sync work is given up on and retried automatically (logged as SYNC321); a stalled call from a screen is not retried, so if it never answers, that screen stays stuck until the app is reloaded.",
+		"docsBody": "A single read or write to the local database on this device went unanswered for far longer than normal, while the database kept answering everything else. Nothing was cancelled and nothing had failed at the moment this was logged — this entry exists so a stuck screen or spinner leaves a trace naming exactly which operation stalled. Stalled sync work is given up on and retried automatically (logged as SYNC321); a stalled call from a screen is not retried, so if it never answers, that screen stays stuck until the app is reloaded.",
 		"troubleshooting": [
 			"If everything is working, no action is needed — the call most likely completed, just slowly. If a change was being saved at the time, open the record and confirm it saved.",
 			"If a screen or spinner stays stuck, reload the app (or the browser tab) to abandon the stuck operation; a save that was in flight is not resent, so open the record and confirm it saved.",
@@ -1799,7 +1799,7 @@
 		"dataSafety": "no-impact",
 		"escalation": "support-with-export",
 		"summary": "The automatic search index rebuild failed, so search on this device may stay incomplete for the rest of this session.",
-		"docsBody": "After detecting a search index problem the app tried to rebuild the index, and the rebuild itself failed. Search keeps answering — from the existing index with known bad results hidden, or from a direct scan of the data on this device — but it may miss or misrank results for the affected list. The app attempts only one rebuild per list per session, so it will not retry on its own; reloading the app resets that and lets it try again. No store data was changed.",
+		"docsBody": "After detecting a search index problem the app tried to rebuild the index, and the rebuild itself failed. Search keeps answering — from the existing index with known bad results hidden, or from a direct scan of the data on this device — but it may miss or misrank results for the affected list. The app attempts the full rebuild only once per list per session, though a later search can still retry the index initialisation and recover on its own; reloading the app lets it start completely fresh. No store data was changed.",
 		"troubleshooting": [
 			"Open the log entry — its context names the list affected and the error the rebuild hit. If that error mentions storage, free up space on the device first; on web, also avoid private/incognito windows.",
 			"Reload the app (or the browser tab) — a reload lets the app attempt the rebuild again the next time the problem is detected.",
