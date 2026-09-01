@@ -1609,7 +1609,7 @@
 		"docsBody": "A single read or write to the local database on this device went unanswered for far longer than normal, while the database kept answering everything else. Nothing was cancelled and no data was changed — this entry exists so a stuck screen or spinner leaves a trace naming exactly which operation stalled. Stalled sync work is given up on and retried automatically (logged as SYNC321); a stalled call from a screen is not retried, so if it never answers, that screen stays stuck until the app is reloaded.",
 		"troubleshooting": [
 			"If everything is working, no action is needed — the call most likely completed, just slowly. If a change was being saved at the time, open the record and confirm it saved.",
-			"If a screen or spinner stays stuck, reload the app (or the browser tab) to abandon the stuck operation and start it again.",
+			"If a screen or spinner stays stuck, reload the app (or the browser tab) to abandon the stuck operation; a save that was in flight is not resent, so open the record and confirm it saved.",
 			"If this code returns regularly on the same device, export debug info and contact support; the entry's context names the operation and data collection, the exact wait, and how busy the database was meanwhile."
 		],
 		"logSources": [
@@ -1803,7 +1803,7 @@
 		"troubleshooting": [
 			"Open the log entry — its context names the list affected and the error the rebuild hit. If that error mentions storage, free up space on the device first; on web, also avoid private/incognito windows.",
 			"Reload the app (or the browser tab) — a reload lets the app attempt the rebuild again the next time the problem is detected.",
-			"If CLIENT144 is logged again after the reload, export debug info and contact support."
+			"Re-run a search on the affected list; if results are still missing or wrongly ordered, or CLIENT144 is logged again, export debug info and contact support."
 		],
 		"logSources": [
 			"browser-console"
