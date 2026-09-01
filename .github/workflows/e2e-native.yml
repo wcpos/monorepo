@@ -78,7 +78,7 @@ jobs:
       native: ${{ steps.plan.outputs.native }}
       reason: ${{ steps.plan.outputs.reason }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - uses: ./.github/actions/ci-plan
@@ -100,7 +100,7 @@ jobs:
       variable_product_id: ${{ steps.seed.outputs.variable_product_id }}
     steps:
       - name: 🏗 Setup repository (main lane)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Push runs pin the TRIGGERING SHA (review #1657): checking out the
           # mutable branch let a queued run attached to commit A test whatever
@@ -198,7 +198,7 @@ jobs:
       # for as long as the fingerprint holds.
       - name: ♻️ Restore cached builds
         id: cache
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: e2e-builds
           key: ${{ steps.fingerprint.outputs.cache_key }}
@@ -307,7 +307,7 @@ jobs:
           fi
 
       - name: ⬆️ Share builds with test jobs
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: e2e-builds
           path: e2e-builds
@@ -357,7 +357,7 @@ jobs:
           - { name: tablet, profile: pixel_tablet, record_size: 1280x800 }
     steps:
       - name: 🏗 Setup repository (workflow revision)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           submodules: false
@@ -374,13 +374,13 @@ jobs:
 
       - name: 🏗 Checkout revision under test
         if: needs.build.outputs.sha != github.sha
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.build.outputs.sha }}
           submodules: false
 
       - name: ⬇️ Download builds
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: e2e-builds
           path: e2e-builds
@@ -468,7 +468,7 @@ jobs:
       # right after generation, before the suite can fail.
       - name: 📦 Restore AVD snapshot
         id: avd-cache
-        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.android/avd/*
@@ -482,7 +482,7 @@ jobs:
       - name: 📱 Generate AVD snapshot
         if: steps.avd-cache.outputs.cache-hit != 'true'
         timeout-minutes: 25
-        uses: reactivecircus/android-emulator-runner@1dcd0090116d15e7c562f8db72807de5e036a4ed # v2.34.0
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 35
           target: google_apis
@@ -508,7 +508,7 @@ jobs:
       # Persist the snapshot the moment it exists - see the restore/save note.
       - name: 📦 Save AVD snapshot
         if: steps.avd-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.android/avd/*
@@ -522,7 +522,7 @@ jobs:
       # only the step; the job survives with headroom to upload the log.
       - name: 📱 Run Maestro suite on emulator
         timeout-minutes: 90
-        uses: reactivecircus/android-emulator-runner@1dcd0090116d15e7c562f8db72807de5e036a4ed # v2.34.0
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 35
           # google_apis images boot reliably on GH runners where the default
@@ -844,7 +844,7 @@ jobs:
 
       - name: ⬆️ Upload app-error report
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: app-errors-${{ runner.os }}-${{ matrix.device.name }}
           path: /tmp/app-errors
@@ -860,7 +860,7 @@ jobs:
 
       - name: ⬆️ Upload device artifacts
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: maestro-android-${{ matrix.device.name }}
           path: ~/.maestro/tests
@@ -899,7 +899,7 @@ jobs:
           - { name: tablet, simulator: iPad Pro 11-inch (M4) }
     steps:
       - name: 🏗 Setup repository (workflow revision)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           submodules: false
@@ -916,13 +916,13 @@ jobs:
 
       - name: 🏗 Checkout revision under test
         if: needs.build.outputs.sha != github.sha
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.build.outputs.sha }}
           submodules: false
 
       - name: ⬇️ Download builds
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: e2e-builds
           path: e2e-builds
@@ -1323,7 +1323,7 @@ jobs:
 
       - name: ⬆️ Upload app-error report
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: app-errors-${{ runner.os }}-${{ matrix.device.name }}
           path: /tmp/app-errors
@@ -1356,7 +1356,7 @@ jobs:
 
       - name: ⬆️ Upload device artifacts
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: maestro-ios-${{ matrix.device.name }}
           path: ~/.maestro/tests
@@ -1377,7 +1377,7 @@ jobs:
       pull-requests: write
     steps:
       - name: 📥 Collect app-error reports
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v6.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v6.0.0
         continue-on-error: true
         with:
           pattern: app-errors-*
@@ -1385,7 +1385,7 @@ jobs:
           merge-multiple: true
 
       - name: 💬 Comment when the app logged errors
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const fs = require('fs');
