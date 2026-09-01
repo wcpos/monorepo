@@ -135,6 +135,14 @@ env:
           commands:
             - inputText: ${INVALID_URL.charAt(output.urlCharIndex)}
             - evalScript: ${output.urlCharIndex++}
+      # Class 7 (run 33513307174, iOS phone, flow 02's twin loop): a lost press
+      # does not FAIL inputText — the loop can complete with a truncated URL
+      # and the flow then probes a half-typed host. Assert the full URL landed;
+      # a mismatch fails this attempt so the retry erases and retypes. The
+      # asserted text IS the referent (the exact string this loop just typed),
+      # not localized UI copy — the selector policy's composite-string carve-out.
+      - assertVisible:
+          text: ${INVALID_URL}
 # optional: hideKeyboard is unreliable on iOS (this file already says so at
 # the two Android-gated uses below, but this one was left ungated and failed
 # a local iOS suite run 2026-08-29 at exactly this step, having passed the

@@ -117,6 +117,15 @@ env:
           commands:
             - inputText: ${STORE_URL.charAt(output.urlCharIndex)}
             - evalScript: ${output.urlCharIndex++}
+      # Class 7 (run 33513307174, iOS phone, THIS flow): the URL field held
+      # "https://dev-" — lost presses do not FAIL inputText, so the loop
+      # completed truncated and the reachability probe timed out against a
+      # half-typed host. Assert the full URL landed; a mismatch fails this
+      # attempt so the retry erases and retypes. The asserted text IS the
+      # referent (the exact string this loop just typed), not localized UI
+      # copy — the selector policy's composite-string carve-out.
+      - assertVisible:
+          text: ${STORE_URL}
 # optional — see flow 01: hideKeyboard is flaky on iOS and this is
 # housekeeping; a genuinely covered target fails at its own tap.
 - hideKeyboard:
