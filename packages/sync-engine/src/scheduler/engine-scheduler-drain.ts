@@ -240,17 +240,19 @@ type OrderIngestInput = {
 	repository: EngineOrderRepository;
 	pendingMutationOrderIds: NonNullable<OrdersSchedulerFetcherInput['pendingMutationOrderIds']>;
 };
-const orderIngestInputByDatabase = new WeakMap<SchedulerDrainDatabase, OrderIngestInput>();
+/**
+ * Built FRESH on every call, never cached: `scope.resetCollection('mutations')` drops and
+ * recreates `recordMutations` while the database object stays the same, so anything keyed by
+ * the database (a WeakMap cache was tried and reviewer-flagged) keeps serving a guard bound
+ * to the destroyed collection — the same captured-reference staleness `db$`'s doc warns
+ * about. The repository is a thin wrapper and the guard resolves `db.recordMutations` here,
+ * at build time, so per-call construction is both cheap and reset-correct.
+ */
 function orderIngestInput(db: SchedulerDrainDatabase): OrderIngestInput {
-	let input = orderIngestInputByDatabase.get(db);
-	if (!input) {
-		input = {
-			repository: new EngineOrderRepository(db),
-			pendingMutationOrderIds: createOrderPendingMutationIds(db.recordMutations as never),
-		};
-		orderIngestInputByDatabase.set(db, input);
-	}
-	return input;
+	return {
+		repository: new EngineOrderRepository(db),
+		pendingMutationOrderIds: createOrderPendingMutationIds(db.recordMutations as never),
+	};
 }
 export function adoptOrderSnapshot(
 	db: SchedulerDrainDatabase,

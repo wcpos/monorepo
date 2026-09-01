@@ -78,6 +78,31 @@ describe('RxdbSyncEngine.adoptOrderSnapshot', () => {
 		expect(stored?.payload).toMatchObject({ status: 'pos-open' });
 	});
 
+	it('re-resolves pending mutations after the mutation collection is reset', async () => {
+		const harness = await createEngineHarness();
+		expect(await harness.engine.adoptOrderSnapshot(orderSnapshot('pos-open'))).toBe('applied');
+		expect(
+			await harness.engine.scope.resetCollection('mutations', { confirmDestroyQueue: true })
+		).toBe('reset');
+		await harness.seed('recordMutations', [
+			{
+				mutationId: 'mutation-after-reset',
+				seq: 1,
+				status: 'pending',
+				recordId: ORDER_UUID,
+				collectionName: 'orders',
+				operation: 'update',
+				payload: { status: 'pos-open' },
+				queuedAt: '2026-09-01T10:02:00.000Z',
+			},
+		]);
+
+		expect(await harness.engine.adoptOrderSnapshot(orderSnapshot('completed'))).toBe('protected');
+		const stored = (await harness.collection('orders').findOne(ORDER_UUID).exec())?.toJSON() as
+			Record<string, unknown> | undefined;
+		expect(stored?.payload).toMatchObject({ status: 'pos-open' });
+	});
+
 	it('rejects an invalid payload without writing an order', async () => {
 		const harness = await createEngineHarness();
 
