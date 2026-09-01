@@ -73,6 +73,7 @@ export type ErrorCode =
 	| 'SYNC151'
 	| 'SYNC161'
 	| 'SYNC171'
+	| 'SYNC181'
 	| 'CHECKOUT111'
 	| 'PRODUCT321'
 	| 'PRODUCT421'
@@ -81,6 +82,7 @@ export type ErrorCode =
 	| 'CLIENT141'
 	| 'CLIENT142'
 	| 'CLIENT143'
+	| 'CLIENT144'
 	| 'CHECKOUT411'
 	| 'CHECKOUT421';
 export type ErrorDomain =
@@ -756,6 +758,16 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'local-only',
 		summary: 'A local database on this device could not be created or removed.',
 	},
+	SYNC181: {
+		code: 'SYNC181',
+		symbol: 'LOCAL_DB_STALLED',
+		domain: 'SYNC',
+		severity: 'warn',
+		actionHint: 'No action needed unless a screen stays stuck; then reload the app.',
+		dataSafety: 'local-only',
+		summary:
+			'One local database operation is taking far longer than normal; the app is still waiting for its answer.',
+	},
 	CHECKOUT111: {
 		code: 'CHECKOUT111',
 		symbol: 'CART_UPDATE_FAILED',
@@ -832,6 +844,16 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'no-impact',
 		summary:
 			'The search index could not find a product it should contain; the app attempts an automatic search index rebuild.',
+	},
+	CLIENT144: {
+		code: 'CLIENT144',
+		symbol: 'SEARCH_INDEX_REBUILD_FAILED',
+		domain: 'CLIENT',
+		severity: 'warn',
+		actionHint: 'Reload the app to rebuild the search index.',
+		dataSafety: 'no-impact',
+		summary:
+			'The automatic search index rebuild failed, so search on this device may stay incomplete until the app is reloaded.',
 	},
 	CHECKOUT411: {
 		code: 'CHECKOUT411',
@@ -927,6 +949,7 @@ export const ERROR_CODES = {
 	STORE_RESPONSE_MALFORMED: 'SYNC151',
 	LOCAL_DB_UNAVAILABLE: 'SYNC161',
 	LOCAL_DB_SETUP_FAILED: 'SYNC171',
+	LOCAL_DB_STALLED: 'SYNC181',
 	CART_UPDATE_FAILED: 'CHECKOUT111',
 	BARCODE_AMBIGUOUS: 'PRODUCT321',
 	VARIABLE_PRICE_META_INVALID: 'PRODUCT421',
@@ -935,6 +958,7 @@ export const ERROR_CODES = {
 	SEARCH_INDEX_DIVERGENCE: 'CLIENT141',
 	SEARCH_INDEX_STALLED: 'CLIENT142',
 	SEARCH_INDEX_FALSE_MISS: 'CLIENT143',
+	SEARCH_INDEX_REBUILD_FAILED: 'CLIENT144',
 	CART_LINE_PRICE_BASIS_UNREADABLE: 'CHECKOUT411',
 	ORDER_TAX_RATE_UNKNOWN: 'CHECKOUT421',
 } as const satisfies Record<string, ErrorCode>;

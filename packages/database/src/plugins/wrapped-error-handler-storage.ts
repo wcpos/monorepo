@@ -188,6 +188,7 @@ function armStallReport(state: InstanceLatchState, methodName: StorageRpcMethod)
 		// Clear & Sync starts can legitimately outlive their instance.
 		if (state.closing || state.failureReason !== null) return;
 		storageLogger.warn('Storage call has not returned', {
+			code: ERROR_CODES.LOCAL_DB_STALLED,
 			context: {
 				method: methodName,
 				databaseName: state.databaseName,
