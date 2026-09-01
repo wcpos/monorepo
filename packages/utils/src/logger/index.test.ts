@@ -947,6 +947,57 @@ describe('logger/index', () => {
 			expect(rows[0]).toMatchObject({ outcome: 'failed', durationMs: 120, count: 2 });
 		});
 
+		it('separates failed transport attempts by status, method, and path', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			const logger = getLogger(['sync']);
+			const terminal = { outcome: 'failed' as const, durationMs: 120 };
+
+			logger.warn('transport.request', {
+				context: { status: 500, method: 'GET', path: '/wp-json/wcpos/v2/products' },
+				terminal,
+			});
+			logger.warn('transport.request', {
+				context: { status: 500, method: 'GET', path: '/wp-json/wcpos/v2/products' },
+				terminal,
+			});
+			logger.warn('transport.request', {
+				context: { status: 503, method: 'GET', path: '/wp-json/wcpos/v2/products' },
+				terminal,
+			});
+			logger.warn('transport.request', {
+				context: { status: 500, method: 'POST', path: '/wp-json/wcpos/v2/orders' },
+				terminal,
+			});
+			await flushWrites();
+
+			expect(rows).toHaveLength(3);
+			expect(rows.map((row) => row.count)).toEqual([2, 1, 1]);
+		});
+
+		it('starts a fresh fold chain after a record outcome changes', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			const logger = getLogger(['sync']);
+
+			logger.warn('orders 4711 — push failed', {
+				context: { recordId: '4711' },
+				terminal: { outcome: 'failed' },
+			});
+			logger.info('orders 4711 — push completed', {
+				context: { recordId: '4711' },
+				terminal: { outcome: 'recovered' },
+			});
+			logger.warn('orders 4711 — push failed', {
+				context: { recordId: '4711' },
+				terminal: { outcome: 'failed' },
+			});
+			await flushWrites();
+
+			expect(rows).toHaveLength(3);
+			expect(rows.map((row) => row.outcome)).toEqual(['failed', 'recovered', 'failed']);
+		});
+
 		it('lets ok timed rows bypass collapse without disrupting surrounding repeats', async () => {
 			const { rows, collection } = createLogCollection();
 			setDatabase(collection);

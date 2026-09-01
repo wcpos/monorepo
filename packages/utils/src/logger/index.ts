@@ -122,6 +122,7 @@ type LoggerCollection = LogRetentionCollection & {
 type RepeatState = {
 	count: number;
 	lastSeen: number;
+	recordId: unknown;
 	write: Promise<PersistedDocument | undefined>;
 };
 
@@ -391,17 +392,33 @@ function persistLog(
 		context.cursorFrom ?? null,
 		context.head ?? null,
 		context.backlog ?? null,
+		// Failed HTTP attempts may share narration while proving different faults.
+		context.status ?? null,
+		context.method ?? null,
+		context.path ?? null,
 	]);
 	// Successful timed work keeps each duration as evidence. Failed timed work is
 	// repeatable failure evidence, so the first duration survives while count grows.
 	const collapseEligible = terminal?.durationMs === undefined || outcome === 'failed';
-	let repeatStates = collapseEligible ? repeatStateByCollection.get(collection) : undefined;
+	let repeatStates = repeatStateByCollection.get(collection);
 	if (repeatStates) {
 		for (const [candidateIdentity, state] of repeatStates) {
-			if (now - state.lastSeen > REPEAT_COLLAPSE_WINDOW_MS) repeatStates.delete(candidateIdentity);
+			if (now - state.lastSeen > REPEAT_COLLAPSE_WINDOW_MS) {
+				repeatStates.delete(candidateIdentity);
+				continue;
+			}
+			// deriveStuckRecords trusts the newest decisive row for a record. Folding
+			// across an intervening opposite outcome would rewrite that verdict.
+			if (
+				context.recordId !== undefined &&
+				state.recordId === context.recordId &&
+				candidateIdentity !== identity
+			) {
+				repeatStates.delete(candidateIdentity);
+			}
 		}
 	}
-	const previous = repeatStates?.get(identity);
+	const previous = collapseEligible ? repeatStates?.get(identity) : undefined;
 
 	if (previous) {
 		previous.count += 1;
@@ -466,7 +483,7 @@ function persistLog(
 			);
 			repeatStates.delete(oldest[0]);
 		}
-		state = { count: 1, lastSeen: now, write };
+		state = { count: 1, lastSeen: now, recordId: context.recordId, write };
 		repeatStates.set(identity, state);
 	}
 	void write.catch(() => {

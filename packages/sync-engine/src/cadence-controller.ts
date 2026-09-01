@@ -58,7 +58,7 @@ export function createCadenceController(options: {
 	let unsubscribeUserActivity: (() => void) | null = null;
 	let unsubscribeHostVisibility: (() => void) | null = null;
 	let writeDrainTimer: ReturnType<typeof setInterval> | null = null;
-	const maintenanceTimers: ReturnType<typeof setInterval>[] = [];
+	const maintenanceTimers = new Map<EngineLane, ReturnType<typeof setInterval>>();
 	const laneNextDueAtMs = new Map<EngineLane, number>();
 	let pullBatchSize: number | undefined;
 	let cadenceStartAnnounced = false;
@@ -264,15 +264,41 @@ export function createCadenceController(options: {
 		}
 		if (options.onHostVisibilityChange !== undefined) {
 			unsubscribeHostVisibility = options.onHostVisibilityChange((visible) => {
-				if (visible) restoreFullCadence();
+				if (!visible) {
+					let statusChanged = false;
+					for (const [lane, timer] of maintenanceTimers) {
+						if (laneRegistryEntry(lane).runsWhileHidden) continue;
+						timers.clearInterval(timer);
+						maintenanceTimers.delete(lane);
+						laneNextDueAtMs.delete(lane);
+						statusChanged = true;
+					}
+					if (statusChanged) options.onStatusChange();
+					return;
+				}
+
+				restoreFullCadence();
+				for (const lane of INTERVAL_LANES) {
+					const entry = laneRegistryEntry(lane);
+					if (
+						entry.runsWhileHidden ||
+						lane === 'write-drain' ||
+						maintenanceTimers.has(lane) ||
+						!options.laneIsArmable(lane)
+					) {
+						continue;
+					}
+					maintenanceTimers.set(lane, armLaneInterval(lane, options.intervals[entry.intervalKey]));
+				}
 			});
 		}
 		for (const lane of INTERVAL_LANES) {
 			if (!options.laneIsArmable(lane)) continue;
+			if (options.hostVisible?.() === false && !laneRegistryEntry(lane).runsWhileHidden) continue;
 			if (lane === 'query-total-retry') void options.gate.runLane(lane);
 			const timer = armLaneInterval(lane, options.intervals[laneRegistryEntry(lane).intervalKey]);
 			if (lane === 'write-drain') writeDrainTimer = timer;
-			else maintenanceTimers.push(timer);
+			else maintenanceTimers.set(lane, timer);
 		}
 	};
 	const stop = (): void => {
@@ -286,7 +312,8 @@ export function createCadenceController(options: {
 		unsubscribeHostVisibility = null;
 		if (writeDrainTimer !== null) timers.clearInterval(writeDrainTimer);
 		writeDrainTimer = null;
-		for (const timer of maintenanceTimers.splice(0)) timers.clearInterval(timer);
+		for (const timer of maintenanceTimers.values()) timers.clearInterval(timer);
+		maintenanceTimers.clear();
 		laneNextDueAtMs.clear();
 		options.onStatusChange();
 	};

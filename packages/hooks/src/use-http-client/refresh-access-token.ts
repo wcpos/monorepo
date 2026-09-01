@@ -212,6 +212,18 @@ export async function refreshAccessToken({
 					},
 				});
 				return access_token;
+			} catch (error) {
+				if (isTerminalRefreshFailure(error)) {
+					resetRefreshCooldown();
+				} else {
+					refreshFailureStreak += 1;
+					const cooldownMs = Math.min(
+						REFRESH_COOLDOWN_MAX_MS,
+						REFRESH_COOLDOWN_BASE_MS * 2 ** (refreshFailureStreak - 1)
+					);
+					refreshRetryAtMs = Date.now() + cooldownMs;
+				}
+				throw error;
 			} finally {
 				resumeQueue();
 			}
@@ -225,16 +237,6 @@ export async function refreshAccessToken({
 		// failures — 5xx, a thrown network error, a malformed 2xx body — must stay retryable, or
 		// a momentary blip would log the cashier out mid-session.
 		const terminal = isTerminalRefreshFailure(error);
-		if (terminal) {
-			resetRefreshCooldown();
-		} else {
-			refreshFailureStreak += 1;
-			const cooldownMs = Math.min(
-				REFRESH_COOLDOWN_MAX_MS,
-				REFRESH_COOLDOWN_BASE_MS * 2 ** (refreshFailureStreak - 1)
-			);
-			refreshRetryAtMs = Date.now() + cooldownMs;
-		}
 		// Level reflects the settled outcome (#899 rubric): a terminally rejected
 		// refresh token means the user must re-authenticate → error; a transient
 		// blip (5xx/network) will need attention only if it persists → warn.

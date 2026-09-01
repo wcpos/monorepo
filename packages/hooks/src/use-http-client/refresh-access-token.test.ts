@@ -179,6 +179,27 @@ describe('refreshAccessToken', () => {
 		now.mockRestore();
 	});
 
+	it('counts a shared failed refresh as one cooldown attempt', async () => {
+		let nowMs = 10_000;
+		const now = jest.spyOn(Date, 'now').mockImplementation(() => nowMs);
+		const response = createDeferred<never>();
+		const post = jest
+			.fn()
+			.mockImplementationOnce(() => response.promise)
+			.mockResolvedValue({ data: { access_token: 'new-token', expires_at: 9999 }, status: 200 });
+		const { config } = makeConfig(post);
+
+		const callers = Array.from({ length: 8 }, () => refreshAccessToken(config));
+		response.reject(new Error('network unavailable'));
+		await expect(Promise.all(callers)).resolves.toEqual(Array(8).fill(null));
+		expect(post).toHaveBeenCalledTimes(1);
+
+		nowMs += 1_000;
+		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
+		expect(post).toHaveBeenCalledTimes(2);
+		now.mockRestore();
+	});
+
 	it('doubles the cooldown after consecutive transient failures', async () => {
 		let nowMs = 10_000;
 		const now = jest.spyOn(Date, 'now').mockImplementation(() => nowMs);

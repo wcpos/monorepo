@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createCadenceController } from './cadence-controller';
 import { createServerPressureMonitor } from './change-signal/server-pressure';
-import { DEFAULT_LANE_INTERVALS } from './maintenance/lane-registry';
+import { DEFAULT_LANE_INTERVALS, INTERVAL_LANES } from './maintenance/lane-registry';
 
 import type { AutomaticTickGate } from './automatic-tick-gate';
 import type { EngineTimers } from './engine-timers';
@@ -15,13 +15,14 @@ function harness(
 	}
 ) {
 	const timeouts: { callback: () => void; delayMs: number }[] = [];
+	let nextIntervalHandle = 100;
 	const timers: EngineTimers = {
 		setTimeout: vi.fn((callback: () => void, delayMs: number) => {
 			timeouts.push({ callback, delayMs });
 			return timeouts.length as unknown as ReturnType<typeof setTimeout>;
 		}),
 		clearTimeout: vi.fn(),
-		setInterval: vi.fn(() => 100 as unknown as ReturnType<typeof setInterval>),
+		setInterval: vi.fn(() => nextIntervalHandle++ as unknown as ReturnType<typeof setInterval>),
 		clearInterval: vi.fn(),
 		unref: vi.fn(),
 	};
@@ -124,6 +125,70 @@ describe('createCadenceController', () => {
 		expect(gate.runLane).toHaveBeenCalledWith('change-signal');
 		controller.stop();
 		expect(unsubscribe).toHaveBeenCalledTimes(1);
+	});
+
+	it('pauses opportunistic intervals while hidden and re-arms them from a full interval', () => {
+		let visibilityListener: ((visible: boolean) => void) | undefined;
+		const { controller, intervals, timers } = harness(() => 0.5, {
+			hostVisible: () => true,
+			onHostVisibilityChange: (listener) => {
+				visibilityListener = listener;
+				return vi.fn();
+			},
+		});
+		controller.start();
+		const handleFor = (lane: (typeof INTERVAL_LANES)[number]) =>
+			vi.mocked(timers.setInterval).mock.results[INTERVAL_LANES.indexOf(lane)]!.value;
+
+		visibilityListener?.(false);
+
+		expect(timers.clearInterval).toHaveBeenCalledWith(handleFor('order-window-seed'));
+		expect(timers.clearInterval).not.toHaveBeenCalledWith(handleFor('write-drain'));
+		expect(timers.clearInterval).not.toHaveBeenCalledWith(handleFor('scheduler-drain'));
+		expect(controller.nextDueAtMs('order-window-seed')).toBeUndefined();
+		expect(controller.nextDueAtMs('write-drain')).toBe(intervals.writeDrainPollMs);
+		expect(controller.nextDueAtMs('scheduler-drain')).toBe(intervals.schedulerDrainMs);
+
+		visibilityListener?.(true);
+
+		expect(controller.nextDueAtMs('order-window-seed')).toBe(intervals.orderWindowSeedMs);
+	});
+
+	it('starts hidden with only runs-while-hidden intervals armed', () => {
+		let visibilityListener: ((visible: boolean) => void) | undefined;
+		const { controller, timers } = harness(() => 0.5, {
+			hostVisible: () => false,
+			onHostVisibilityChange: (listener) => {
+				visibilityListener = listener;
+				return vi.fn();
+			},
+		});
+
+		controller.start();
+
+		expect(timers.setInterval).toHaveBeenCalledTimes(2);
+		visibilityListener?.(true);
+		expect(timers.setInterval).toHaveBeenCalledTimes(INTERVAL_LANES.length);
+	});
+
+	it('clears every interval after a hidden-visible cycle', () => {
+		let visibilityListener: ((visible: boolean) => void) | undefined;
+		const { controller, timers } = harness(() => 0.5, {
+			hostVisible: () => true,
+			onHostVisibilityChange: (listener) => {
+				visibilityListener = listener;
+				return vi.fn();
+			},
+		});
+		controller.start();
+		visibilityListener?.(false);
+		visibilityListener?.(true);
+
+		controller.stop();
+
+		for (const result of vi.mocked(timers.setInterval).mock.results) {
+			expect(timers.clearInterval).toHaveBeenCalledWith(result.value);
+		}
 	});
 
 	it('keeps the visible cadence when visibility ports are absent', () => {
