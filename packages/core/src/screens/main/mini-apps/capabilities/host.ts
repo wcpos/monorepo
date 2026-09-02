@@ -50,6 +50,14 @@ export function useHostCapabilities(onClose: (result: string) => void): BridgeHa
 				if (!isAllowedRestPath(path)) {
 					throw new BridgeError('bad_request', 'Path is not an allowed store REST endpoint');
 				}
+				if (
+					query &&
+					typeof query === 'object' &&
+					!Array.isArray(query) &&
+					Object.keys(query).includes('rest_route')
+				) {
+					throw new BridgeError('bad_request', 'Query must not override rest_route');
+				}
 				const search = new URLSearchParams();
 				if (query && typeof query === 'object' && !Array.isArray(query)) {
 					for (const [key, value] of Object.entries(query)) search.set(key, String(value));

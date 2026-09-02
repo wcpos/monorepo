@@ -21,8 +21,8 @@ import { useT } from '../../../contexts/translations';
 import { useAppInfo } from '../../../hooks/use-app-info';
 import { useLocale } from '../../../hooks/use-locale';
 
-// Covers a slow first fetch of the remote page plus the 10 s the contract allows for app.ready.
-const READY_DEADLINE_MS = 30_000;
+const INITIAL_LOAD_DEADLINE_MS = 30_000;
+const READY_DEADLINE_MS = 10_000;
 
 interface MiniAppHostProps {
 	id: string;
@@ -93,14 +93,10 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 	};
 	const { onMessage, ready, reset, send } = useBridge(webViewRef, origin, handlers);
 	const [attempt, setAttempt] = React.useState(0);
+	const [loadGeneration, setLoadGeneration] = React.useState(0);
 	const [failed, setFailed] = React.useState(false);
 	const loadTimerRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-	// The first load of each attempt is the document we asked for; only a later load is a
-	// navigation that must earn a fresh handshake.
 	const initialLoadSeenRef = React.useRef(false);
-	React.useEffect(() => {
-		initialLoadSeenRef.current = false;
-	}, [attempt]);
 
 	// Keep the imperative sender current and notify the external page before host teardown.
 	React.useEffect(() => {
@@ -110,14 +106,16 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 			if (!closingSentRef.current) send('app.closing', { reason: 'navigation' });
 		};
 	}, [send]);
-	// Arm from mount so a navigation that never loads still falls back; resetting readiness
-	// after a later load re-arms this same deadline through the ready dependency.
+	// Allow the initial fetch to be slow, then enforce the contract deadline after every load.
 	React.useEffect(() => {
 		clearTimeout(loadTimerRef.current);
 		if (ready) return;
-		loadTimerRef.current = setTimeout(() => setFailed(true), READY_DEADLINE_MS);
+		loadTimerRef.current = setTimeout(
+			() => setFailed(true),
+			loadGeneration === 0 ? INITIAL_LOAD_DEADLINE_MS : READY_DEADLINE_MS
+		);
 		return () => clearTimeout(loadTimerRef.current);
-	}, [attempt, ready]);
+	}, [attempt, loadGeneration, ready]);
 
 	const needsAppUpdate =
 		!!entry &&
@@ -134,6 +132,8 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 				<Button
 					variant="outline"
 					onPress={() => {
+						initialLoadSeenRef.current = false;
+						setLoadGeneration(0);
 						setFailed(false);
 						setAttempt((value) => value + 1);
 					}}
@@ -156,9 +156,10 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 				onLoad={() => {
 					if (!initialLoadSeenRef.current) {
 						initialLoadSeenRef.current = true;
-						return;
+						if (ready) return;
 					}
-					if (ready) reset();
+					reset();
+					setLoadGeneration((value) => value + 1);
 				}}
 				// Only the catalog origin may load inside a bridged view; anything else is refused.
 				onShouldStartLoadWithRequest={(request: { url: string }) =>

@@ -47,6 +47,19 @@ describe('useHostCapabilities', () => {
 		}
 	});
 
+	it('rejects a query that overrides the plain-permalink REST route', async () => {
+		const { result } = renderHook(() => useHostCapabilities(jest.fn()));
+
+		await expect(
+			result.current['http.proxy']({
+				method: 'GET',
+				path: '/wcpos/v1/orders',
+				query: { rest_route: '/wp/v2/users' },
+			})
+		).rejects.toMatchObject({ code: 'bad_request' });
+		expect(mockRequest).not.toHaveBeenCalled();
+	});
+
 	it('opens only https external URLs', async () => {
 		const { result } = renderHook(() => useHostCapabilities(jest.fn()));
 
