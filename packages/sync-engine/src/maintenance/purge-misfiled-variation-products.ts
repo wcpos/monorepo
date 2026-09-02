@@ -3,12 +3,12 @@ import { hasPendingLocalWork } from '../write-path/local-work-guard';
 import type { RxDatabase } from 'rxdb';
 
 /**
- * One-shot scope-open repair for stores polluted while the products search lane
- * still sent `sku=`. Woo answered that filter from both post types, so matching
- * variations were persisted into the PRODUCTS collection; the lane no longer
- * sends it. Such a document makes every barcode scan of that code falsely
- * ambiguous: the scan reads products AND variations, and the one record matches
- * in both collections.
+ * One-shot scope-open repair for stores polluted before the products search lane
+ * learned to drop variation-typed rows. The lane still sends `sku=` to stores
+ * below plugin 1.10.8, because Woo widens that filter to both post types, but now
+ * drops those variation rows itself. This purge covers old residue that otherwise
+ * makes a barcode scan falsely ambiguous: the same record matches once in the
+ * products collection and once in variations.
  *
  * Removes products-collection documents whose promoted `type` column says
  * `variation`, plus any existence-manifest row still claiming `objectType:

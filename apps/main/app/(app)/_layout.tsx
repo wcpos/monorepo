@@ -127,6 +127,7 @@ function AppStack() {
 			createAppSyncEngine({
 				wpApiUrl,
 				credentials: wpCredentials,
+				siteDocument: site,
 				useJwtAsParam,
 				useRestRouteParam,
 				bareAuthParam,
@@ -150,6 +151,7 @@ function AppStack() {
 				scope: { site: wpApiUrl, storeId: storeID, cashierId: cashierID },
 			}),
 		[
+			site,
 			wpApiUrl,
 			wcposApiUrl,
 			storeID,

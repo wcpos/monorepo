@@ -269,6 +269,7 @@ export type RequirePlaneDeps = {
 	customerSearchCatalogComplete?: () => Promise<boolean>;
 	/** The per-scope barcode carriers a demand pull materializes products/variations by. */
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
+	exactSkuLeg?: () => boolean;
 };
 
 /** Rows a `search` requirement walks to when the declarer names no limit. */
@@ -814,6 +815,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					baseUrl: deps.syncBaseUrl,
 					ownerId: 'require-plane',
 					...(barcodeSelectors !== undefined ? { barcodeSelectors } : {}),
+					...(deps.exactSkuLeg !== undefined ? { exactSkuLeg: deps.exactSkuLeg } : {}),
 					fetcher: schedulerFetcher,
 					diagnostics: deps.diagnostics,
 					...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
@@ -1183,6 +1185,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						task,
 						onProgress: progressObserver(item.requirement, onProgressActivity),
 						...(barcodeSelectors !== undefined ? { barcodeSelectors } : {}),
+						...(deps.exactSkuLeg !== undefined ? { exactSkuLeg: deps.exactSkuLeg } : {}),
 					});
 				});
 				if (applied === 'dropped')

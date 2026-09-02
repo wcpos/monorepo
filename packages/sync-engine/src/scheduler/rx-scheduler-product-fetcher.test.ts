@@ -166,7 +166,7 @@ describe('createProductsSchedulerFetcher', () => {
 		expect(barcodeOf(1)).toBe('GTIN-654');
 	});
 
-	it('issues exactly one request per page with search= and never sku=', async () => {
+	it('runs both legs for a two-character search', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
@@ -186,53 +186,71 @@ describe('createProductsSchedulerFetcher', () => {
 		);
 
 		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+			'http://wcpos.local/wp-json/wcpos/v2/products?sku=42&per_page=25&page=1&orderby=id&order=desc&status=publish',
 			'http://wcpos.local/wp-json/wcpos/v2/products?search=42&per_page=25&page=1&orderby=id&order=desc&status=publish',
 		]);
-		expect(new URL(fetcher.mock.calls[0]![0]).searchParams.has('sku')).toBe(false);
-		expect(result).toMatchObject({ requestCount: 1, completed: true });
+		expect(result).toMatchObject({ requestCount: 2, completed: true });
 	});
 
-	it('records complete empty coverage without a request for a whitespace-only term', async () => {
-		const repository = {
-			upsertMany: vi.fn(async () => undefined),
-			removeMany: vi.fn(async () => undefined),
-		};
-		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
-		const fetcher = vi.fn(async () => response([]));
+	it('uses only search= when the exact SKU leg is disabled', async () => {
+		const fetcher = vi.fn(async (_url: string) => response([]));
 		const schedulerFetcher = createProductsSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
-			repository,
-			coverageRepository,
-			coverageFreshForMs: 60_000,
-			nowMs: () => 5_000,
+			repository: {
+				upsertMany: vi.fn(async () => undefined),
+				removeMany: vi.fn(async () => undefined),
+			},
 			fetcher,
+			exactSkuLeg: () => false,
 		});
 
-		const result = await schedulerFetcher(
-			productTask({
-				id: 'products:search:%20%20:windowed',
-				queryKey: 'products:search:%20%20',
-			})
-		);
+		const result = await schedulerFetcher(productTask());
 
-		expect(fetcher).not.toHaveBeenCalled();
-		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith({
-			collection: 'products',
-			queryKey: 'products:search:%20%20',
-			records: [],
-			complete: true,
-			nowMs: 5_000,
-			freshForMs: 60_000,
-		});
-		expect(result).toEqual({
-			taskId: 'products:search:%20%20:windowed',
-			documentCount: 0,
-			requestCount: 0,
-			completed: true,
-		});
+		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=25&page=1&orderby=id&order=desc&status=publish',
+		]);
+		expect(result.requestCount).toBe(1);
 	});
 
-	it('walks product search in Performance-dial pages, not one task-limit request', async () => {
+	it.each([
+		['disabled', false],
+		['required', true],
+	] as const)(
+		'makes no request for whitespace when the exact SKU leg is %s',
+		async (_label, required) => {
+			const fetcher = vi.fn(async () => response([]));
+			const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+			const schedulerFetcher = createProductsSchedulerFetcher({
+				baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+				repository: {
+					upsertMany: vi.fn(async () => undefined),
+					removeMany: vi.fn(async () => undefined),
+				},
+				fetcher,
+				coverageRepository,
+				coverageFreshForMs: 60_000,
+				nowMs: () => 5_000,
+				exactSkuLeg: () => required,
+			});
+
+			const result = await schedulerFetcher(
+				productTask({ id: 'products:search:%20%20:windowed', queryKey: 'products:search:%20%20' })
+			);
+
+			expect(fetcher).not.toHaveBeenCalled();
+			expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith({
+				collection: 'products',
+				queryKey: 'products:search:%20%20',
+				records: [],
+				complete: true,
+				nowMs: 5_000,
+				freshForMs: 60_000,
+			});
+			expect(result).toMatchObject({ documentCount: 0, requestCount: 0, completed: true });
+		}
+	);
+
+	it('walks each product search leg in Performance-dial pages, not one task-limit request', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
@@ -256,9 +274,14 @@ describe('createProductsSchedulerFetcher', () => {
 
 		const result = await schedulerFetcher(productTask());
 
-		// #908: per_page follows the dial (10), NOT the task limit (25).
+		// #908: per_page follows the dial (10), NOT the task limit (25). The short page
+		// exhausts each leg, so it is still two requests.
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
+			'http://wcpos.local/wp-json/wcpos/v2/products?sku=keyboard&per_page=10&page=1&orderby=id&order=desc&status=publish'
+		);
+		expect(fetcher).toHaveBeenNthCalledWith(
+			2,
 			'http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=10&page=1&orderby=id&order=desc&status=publish'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
@@ -292,7 +315,7 @@ describe('createProductsSchedulerFetcher', () => {
 		expect(result).toEqual({
 			taskId: 'products:search:keyboard:windowed',
 			documentCount: 1,
-			requestCount: 1,
+			requestCount: 2,
 			completed: true,
 		});
 	});
@@ -331,7 +354,7 @@ describe('createProductsSchedulerFetcher', () => {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
 		};
-		// 30+ matches. Woo's offset is
+		// 30+ matches on the search leg; the sku leg is empty. Woo's offset is
 		// (page-1)*per_page, so shrinking the final page to the 5 remaining rows
 		// would re-read rows 11-15 and drop the true tail (greptile/codex P1).
 		const wooProduct = (id: number) => ({
@@ -341,6 +364,7 @@ describe('createProductsSchedulerFetcher', () => {
 			meta_data: posMeta(id),
 		});
 		const fetcher = vi.fn(async (url: string) => {
+			if (url.includes('sku=')) return response([]);
 			const params = new URL(url).searchParams;
 			const perPage = Number(params.get('per_page'));
 			const page = Number(params.get('page'));
@@ -358,7 +382,9 @@ describe('createProductsSchedulerFetcher', () => {
 
 		// limit=25 at dial=10: three FULL pages (per_page=10 on every request,
 		// including the last), trimmed to 25 locally — never a shrunk page 3.
-		const searchCalls = fetcher.mock.calls.map(([url]) => url);
+		const searchCalls = fetcher.mock.calls
+			.map(([url]) => url)
+			.filter((url: string) => url.includes('search='));
 		expect(searchCalls).toEqual([
 			'http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=10&page=1&orderby=id&order=desc&status=publish',
 			'http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=10&page=2&orderby=id&order=desc&status=publish',
@@ -375,7 +401,7 @@ describe('createProductsSchedulerFetcher', () => {
 		expect(result).toEqual({
 			taskId: 'products:search:keyboard:windowed',
 			documentCount: 25,
-			requestCount: 3,
+			requestCount: 4,
 			completed: false,
 		});
 	});
@@ -2116,6 +2142,185 @@ describe('createProductsSchedulerFetcher', () => {
 		});
 	});
 
+	it.each([
+		['reader absent', undefined],
+		['reader returns true', () => true],
+	] as const)('merges and prioritizes exact SKU matches with %s', async (_case, exactSkuLeg) => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const fetcher = vi.fn(async (url: string) => {
+			if (url.includes('sku=KEY-101')) {
+				return response([
+					{
+						id: 101,
+						sku: 'KEY-101',
+						name: 'Keyboard Stand',
+						date_modified_gmt: '2026-05-20T10:10:00',
+						meta_data: posMeta(101),
+					},
+				]);
+			}
+			return response([
+				{
+					id: 101,
+					sku: 'OTHER',
+					name: 'Fuzzy search copy',
+					date_modified_gmt: '2026-05-20T10:10:00',
+					meta_data: posMeta(101),
+				},
+			]);
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			fetcher,
+			...(exactSkuLeg === undefined ? {} : { exactSkuLeg }),
+		});
+
+		const result = await schedulerFetcher(
+			productTask({
+				id: 'products:search:KEY-101:windowed',
+				queryKey: 'products:search:KEY-101',
+			})
+		);
+
+		expect(fetcher).toHaveBeenNthCalledWith(
+			1,
+			'http://wcpos.local/wp-json/wcpos/v2/products?sku=KEY-101&per_page=25&page=1&orderby=id&order=desc&status=publish'
+		);
+		expect(fetcher).toHaveBeenNthCalledWith(
+			2,
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=KEY-101&per_page=25&page=1&orderby=id&order=desc&status=publish'
+		);
+		expect(repository.upsertMany).toHaveBeenCalledWith([
+			expect.objectContaining({
+				uuid: uuidFor(101),
+				remoteId: remoteId(101),
+				payload: expect.objectContaining({ name: 'Keyboard Stand', sku: 'KEY-101' }),
+			}),
+		]);
+		expect(result).toEqual({
+			taskId: 'products:search:KEY-101:windowed',
+			documentCount: 1,
+			requestCount: 2,
+			completed: true,
+		});
+	});
+
+	it('preserves exact SKU matches when search results fill the task limit', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const fetcher = vi.fn(async (url: string) => {
+			if (url.includes('sku=KEY-101')) {
+				return response([
+					{
+						id: 101,
+						sku: 'KEY-101',
+						name: 'Keyboard Stand',
+						date_modified_gmt: '2026-05-20T10:10:00',
+						meta_data: posMeta(101),
+					},
+				]);
+			}
+			return response([
+				{
+					id: 201,
+					name: 'Keyboard A',
+					date_modified_gmt: '2026-05-20T10:10:00',
+					meta_data: posMeta(201),
+				},
+				{
+					id: 202,
+					name: 'Keyboard B',
+					date_modified_gmt: '2026-05-20T10:10:00',
+					meta_data: posMeta(202),
+				},
+			]);
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			fetcher,
+		});
+
+		await schedulerFetcher(
+			productTask({
+				id: 'products:search:KEY-101:windowed',
+				queryKey: 'products:search:KEY-101',
+				limit: 2,
+			})
+		);
+
+		expect(repository.upsertMany).toHaveBeenCalledWith([
+			expect.objectContaining({ uuid: uuidFor(101), remoteId: remoteId(101) }),
+			expect.objectContaining({ uuid: uuidFor(201), remoteId: remoteId(201) }),
+		]);
+	});
+
+	it('withholds lane completion when cross-leg dedupe overflows the persisted window', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+		};
+		// Both legs exhaust (short pages), but their union (3) exceeds limit (2): the
+		// persisted set is truncated, so the lane must not read back as complete.
+		const fetcher = vi.fn(async (url: string) => {
+			if (url.includes('sku=KEY-101')) {
+				return response([
+					{
+						id: 101,
+						sku: 'KEY-101',
+						name: 'Keyboard Stand',
+						date_modified_gmt: '2026-05-20T10:10:00',
+						meta_data: posMeta(101),
+					},
+				]);
+			}
+			return response([
+				{
+					id: 201,
+					name: 'Keyboard A',
+					date_modified_gmt: '2026-05-20T10:10:00',
+					meta_data: posMeta(201),
+				},
+				{
+					id: 202,
+					name: 'Keyboard B',
+					date_modified_gmt: '2026-05-20T10:10:00',
+					meta_data: posMeta(202),
+				},
+			]);
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			coverageFreshForMs: 60_000,
+			nowMs: () => 5_000,
+			fetcher,
+		});
+
+		const result = await schedulerFetcher(
+			productTask({
+				id: 'products:search:KEY-101:windowed',
+				queryKey: 'products:search:KEY-101',
+				limit: 2,
+			})
+		);
+
+		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
+			expect.objectContaining({ complete: false })
+		);
+		expect(result.completed).toBe(false);
+	});
+
 	it('records incomplete product search coverage when the first page is full', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
@@ -2173,6 +2378,10 @@ describe('createProductsSchedulerFetcher', () => {
 
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
+			'http://wcpos.local/wp-json/wcpos/v2/products?sku=100%25+cotton&per_page=25&page=1&orderby=id&order=desc&status=publish'
+		);
+		expect(fetcher).toHaveBeenNthCalledWith(
+			2,
 			'http://wcpos.local/wp-json/wcpos/v2/products?search=100%25+cotton&per_page=25&page=1&orderby=id&order=desc&status=publish'
 		);
 	});
@@ -2377,6 +2586,55 @@ describe('createProductsSchedulerFetcher', () => {
 		);
 		expect(fetcher).not.toHaveBeenCalled();
 		expect(repository.upsertMany).not.toHaveBeenCalled();
+	});
+
+	it('never persists a variation-typed row from the sku leg into the products collection', async () => {
+		// Woo's products route answers a sku= filter with matching VARIATIONS as rows
+		// (verified live on dev-pro 2026-08-20: GET wcpos/v1/products?sku=733620209958
+		// returns {id: 68023, type: 'variation', parent_id: 66566}). Persisting that row
+		// here puts the variation into the PRODUCTS collection; the barcode scan then
+		// finds the same record in both collections and every scan of that code turns
+		// falsely ambiguous ("2 products found locally") — permanently, since both
+		// copies share one uuid and sync maintains each in its own collection.
+		const upserted: { payload: { id: number; type?: string } }[][] = [];
+		const repository = {
+			upsertMany: vi.fn(async (documents: unknown[]) => {
+				upserted.push(documents as { payload: { id: number; type?: string } }[]);
+			}),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const variationRow = {
+			id: 68023,
+			name: 'Troy Yoga Short - 32, Green',
+			type: 'variation',
+			parent_id: 66566,
+			status: 'publish',
+			sku: '733620209958',
+			date_modified_gmt: '2026-08-20T15:01:04',
+			meta_data: posMeta(68023),
+		};
+		const fetcher = vi.fn(async (url: string) =>
+			new URL(url).searchParams.has('sku') ? response([variationRow]) : response([])
+		);
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			fetcher,
+			barcodeSelectors: () => ({ products: ['sku'], variations: ['sku'] }),
+			exactSkuLeg: () => true,
+		});
+
+		await schedulerFetcher(
+			productTask({
+				id: 'products:search:733620209958:windowed',
+				queryKey: 'products:search:733620209958',
+			})
+		);
+
+		// Both legs ran (the term is long enough for the search leg).
+		const requestLegs = fetcher.mock.calls.map(([url]) => new URL(url).searchParams.has('sku'));
+		expect(requestLegs).toEqual([true, false]);
+		expect(upserted.flat()).toEqual([]);
 	});
 });
 

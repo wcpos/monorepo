@@ -19,6 +19,7 @@ import type { ExistenceManifestDocument } from '../local-coverage/existence-mani
 
 export type VariationsSchedulerFetcherInput = CollectionSchedulerInput<StoredVariationDocument> & {
 	manifestSink?: (rows: ExistenceManifestDocument[]) => Promise<void>;
+	exactSkuLeg?: () => boolean;
 };
 
 function variationSearchTerm(task: FetchTask): string | null {
@@ -53,6 +54,7 @@ function taskLimit(task: FetchTask, pullBatchSize?: () => number | undefined): n
 
 async function fetchVariationSearchLeg(
 	input: VariationsSchedulerFetcherInput,
+	name: 'search' | 'sku',
 	term: string,
 	limit: number,
 	perPage: number,
@@ -68,7 +70,7 @@ async function fetchVariationSearchLeg(
 	const pageSize = Math.min(perPage, limit);
 	while (payloads.length < limit) {
 		const query = new URLSearchParams({
-			search: term,
+			[name]: term,
 			per_page: String(pageSize),
 			page: String(requestCount + 1),
 		});
@@ -91,6 +93,15 @@ async function fetchVariationSearchLeg(
 	return { payloads: payloads.slice(0, limit), requestCount, exhausted };
 }
 
+function uniqueVariationPayloads(payloads: Record<string, unknown>[]): Record<string, unknown>[] {
+	const byId = new Map<number, Record<string, unknown>>();
+	for (const payload of payloads) {
+		const id = Number(payload.id);
+		if (!byId.has(id)) byId.set(id, payload);
+	}
+	return [...byId.values()];
+}
+
 export function createVariationsSchedulerFetcher(
 	input: VariationsSchedulerFetcherInput
 ): SchedulerFetcher {
@@ -98,10 +109,14 @@ export function createVariationsSchedulerFetcher(
 		const search = assertVariationSearchTask(task).trim();
 		const limit = task.limit;
 		const pageSize = taskLimit(task, input.pullBatchSize);
+		const exactSkuLeg = search.length > 0 && (input.exactSkuLeg?.() ?? true);
+		const skuLeg = !exactSkuLeg
+			? { payloads: [], requestCount: 0, exhausted: true }
+			: await fetchVariationSearchLeg(input, 'sku', search, limit, pageSize, context);
 		const searchLeg = !search.length
 			? { payloads: [], requestCount: 0, exhausted: true }
-			: await fetchVariationSearchLeg(input, search, limit, pageSize, context);
-		const payloads = searchLeg.payloads;
+			: await fetchVariationSearchLeg(input, 'search', search, limit, pageSize, context);
+		const payloads = uniqueVariationPayloads([...skuLeg.payloads, ...searchLeg.payloads]);
 		// The manifest row travels on the envelope, not on the stored document — see
 		// MaterializedProjection. Upsert the documents first, then feed the sink their rows.
 		const materialized = payloads
@@ -115,7 +130,7 @@ export function createVariationsSchedulerFetcher(
 		if (input.manifestSink && manifestRows.length > 0) {
 			await input.manifestSink(manifestRows);
 		}
-		const complete = searchLeg.exhausted && payloads.length <= limit;
+		const complete = searchLeg.exhausted && skuLeg.exhausted && payloads.length <= limit;
 		await recordCoverage(
 			'variations',
 			input,
@@ -131,7 +146,7 @@ export function createVariationsSchedulerFetcher(
 		return {
 			taskId: task.id,
 			documentCount: documents.length,
-			requestCount: searchLeg.requestCount,
+			requestCount: skuLeg.requestCount + searchLeg.requestCount,
 			completed: complete,
 		};
 	};

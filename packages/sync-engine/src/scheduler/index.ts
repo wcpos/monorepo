@@ -83,6 +83,7 @@ export {
 // Fetchers
 export { orderDocumentFromWooPayload } from './rx-scheduler-order-fetcher';
 export { chunk } from './chunk';
+export { exactSkuLegRequired } from './exact-sku-leg';
 
 // Policy types and decisions
 export type { FetchTask } from './replication-policy';

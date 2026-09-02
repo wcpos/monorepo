@@ -199,9 +199,11 @@ describe('require-plane stall watchdog (pump survival)', () => {
 		await expect(queued.ready).resolves.toMatchObject({ action: 'serve-local' });
 	});
 
-	it('does not stall a demand-path request that settles within the watchdog window', async () => {
+	it('treats every settled demand-path request as progress, not only drain events', async () => {
 		vi.useFakeTimers();
-		// The unified variations search makes one request that settles before the 90s window.
+		// Each wire request takes 80s — under the 90s window on its own, over it in sum.
+		// The variations search runs two sequential legs (search= then sku=), so without
+		// the requirementFetcher reset the watchdog would fire mid-walk at 90s.
 		const slowFetch = () =>
 			new Promise<Response>((resolve) => {
 				setTimeout(() => resolve(new Response('[]')), 80_000);
@@ -222,7 +224,9 @@ describe('require-plane stall watchdog (pump survival)', () => {
 			() => 'settled'
 		);
 
-		await vi.advanceTimersByTimeAsync(80_000);
+		await vi.advanceTimersByTimeAsync(80_000); // leg 1 answers → progress → clock resets
+		expect(eventTypes(events)).not.toContain('coverage.require.stalled');
+		await vi.advanceTimersByTimeAsync(80_000); // leg 2 answers at 160s total
 
 		await expect(settled).resolves.toBe('settled');
 		expect(eventTypes(events)).not.toContain('coverage.require.stalled');

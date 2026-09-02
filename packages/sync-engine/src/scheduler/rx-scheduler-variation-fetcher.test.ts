@@ -50,10 +50,11 @@ function repository() {
 }
 
 describe('createVariationsSchedulerFetcher', () => {
-	it('issues exactly one request per page with search= and never sku=', async () => {
+	it('walks only search= in fixed-size pages when the exact SKU leg is disabled', async () => {
 		const repo = repository();
 		const fetcher = vi.fn(async (url: string) => {
 			const params = new URL(url).searchParams;
+			if (params.has('sku')) return response([]);
 			return params.get('page') === '1'
 				? response([wrapper(3), wrapper(2)])
 				: response([wrapper(1)]);
@@ -63,6 +64,7 @@ describe('createVariationsSchedulerFetcher', () => {
 			repository: repo,
 			fetcher,
 			pullBatchSize: () => 2,
+			exactSkuLeg: () => false,
 		});
 
 		const result = await schedulerFetcher(variationTask({ limit: 3 }));
@@ -71,7 +73,6 @@ describe('createVariationsSchedulerFetcher', () => {
 			`${BASE_URL}/variations?search=keyboard&per_page=2&page=1`,
 			`${BASE_URL}/variations?search=keyboard&per_page=2&page=2`,
 		]);
-		expect(fetcher.mock.calls.every(([url]) => !new URL(url).searchParams.has('sku'))).toBe(true);
 		expect(result).toEqual({
 			taskId: 'variations:search:keyboard:windowed',
 			documentCount: 3,
@@ -84,6 +85,7 @@ describe('createVariationsSchedulerFetcher', () => {
 		const repo = repository();
 		const fetcher = vi.fn(async (url: string) => {
 			const params = new URL(url).searchParams;
+			if (params.has('sku')) return response([]);
 			const page = Number(params.get('page'));
 			const start = (page - 1) * WOO_REST_MAX_PER_PAGE + 1;
 			const count = page === 1 ? WOO_REST_MAX_PER_PAGE : 1;
@@ -98,6 +100,7 @@ describe('createVariationsSchedulerFetcher', () => {
 		const result = await schedulerFetcher(variationTask({ limit: WOO_REST_MAX_PER_PAGE + 1 }));
 
 		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+			`${BASE_URL}/variations?sku=keyboard&per_page=${WOO_REST_MAX_PER_PAGE}&page=1`,
 			`${BASE_URL}/variations?search=keyboard&per_page=${WOO_REST_MAX_PER_PAGE}&page=1`,
 			`${BASE_URL}/variations?search=keyboard&per_page=${WOO_REST_MAX_PER_PAGE}&page=2`,
 		]);
@@ -105,47 +108,136 @@ describe('createVariationsSchedulerFetcher', () => {
 		expect(result).toMatchObject({ documentCount: WOO_REST_MAX_PER_PAGE + 1, completed: true });
 	});
 
-	it('records complete empty coverage without a request for a whitespace-only term', async () => {
-		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+	it('runs both legs for a two-character search', async () => {
 		const fetcher = vi.fn(async (_url: string) => response([]));
 		const schedulerFetcher = createVariationsSchedulerFetcher({
 			baseUrl: BASE_URL,
 			repository: repository(),
-			coverageRepository,
-			coverageFreshForMs: 60_000,
-			nowMs: () => 5_000,
 			fetcher,
 		});
 
 		const result = await schedulerFetcher(
 			variationTask({
-				id: 'variations:search:%20%20:windowed',
-				queryKey: 'variations:search:%20%20',
+				id: 'variations:search:42:windowed',
+				queryKey: 'variations:search:42',
 			})
 		);
 
-		expect(fetcher).not.toHaveBeenCalled();
-		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith({
-			collection: 'variations',
-			queryKey: 'variations:search:%20%20',
-			records: [],
-			complete: true,
-			nowMs: 5_000,
-			freshForMs: 60_000,
-		});
-		expect(result).toEqual({
-			taskId: 'variations:search:%20%20:windowed',
-			documentCount: 0,
-			requestCount: 0,
-			completed: true,
-		});
+		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+			`${BASE_URL}/variations?sku=42&per_page=25&page=1`,
+			`${BASE_URL}/variations?search=42&per_page=25&page=1`,
+		]);
+		expect(result).toMatchObject({ requestCount: 2, completed: true });
 	});
+
+	it('dedupes by numeric id with the exact SKU leg winning', async () => {
+		const repo = repository();
+		const fetcher = vi.fn(async (url: string) =>
+			url.includes('sku=')
+				? response([wrapper(101, 9, { name: 'Exact SKU', sku: 'KEY-101' })])
+				: response([wrapper(101, 9, { name: 'Fuzzy search', sku: 'OTHER' })])
+		);
+		const schedulerFetcher = createVariationsSchedulerFetcher({
+			baseUrl: BASE_URL,
+			repository: repo,
+			fetcher,
+		});
+
+		await schedulerFetcher(
+			variationTask({
+				id: 'variations:search:KEY-101:windowed',
+				queryKey: 'variations:search:KEY-101',
+			})
+		);
+		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+			`${BASE_URL}/variations?sku=KEY-101&per_page=25&page=1`,
+			`${BASE_URL}/variations?search=KEY-101&per_page=25&page=1`,
+		]);
+
+		expect(repo.upsertMany).toHaveBeenCalledWith([
+			expect.objectContaining({
+				remoteId: remoteId(101),
+				parentRemoteId: remoteId(9),
+				payload: expect.objectContaining({ name: 'Exact SKU', sku: 'KEY-101' }),
+			}),
+		]);
+	});
+
+	it('dedupes with the exact SKU leg winning when explicitly required', async () => {
+		const repo = repository();
+		const fetcher = vi.fn(async (url: string) =>
+			url.includes('sku=')
+				? response([wrapper(101, 9, { name: 'Exact SKU', sku: 'KEY-101' })])
+				: response([wrapper(101, 9, { name: 'Fuzzy search', sku: 'OTHER' })])
+		);
+		const schedulerFetcher = createVariationsSchedulerFetcher({
+			baseUrl: BASE_URL,
+			repository: repo,
+			fetcher,
+			exactSkuLeg: () => true,
+		});
+
+		await schedulerFetcher(
+			variationTask({
+				id: 'variations:search:KEY-101:windowed',
+				queryKey: 'variations:search:KEY-101',
+			})
+		);
+
+		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+			`${BASE_URL}/variations?sku=KEY-101&per_page=25&page=1`,
+			`${BASE_URL}/variations?search=KEY-101&per_page=25&page=1`,
+		]);
+		expect(repo.upsertMany).toHaveBeenCalledWith([
+			expect.objectContaining({ payload: expect.objectContaining({ name: 'Exact SKU' }) }),
+		]);
+	});
+
+	it.each([
+		['disabled', false],
+		['required', true],
+	] as const)(
+		'makes no request for whitespace when the exact SKU leg is %s',
+		async (_label, required) => {
+			const fetcher = vi.fn(async () => response([]));
+			const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+			const schedulerFetcher = createVariationsSchedulerFetcher({
+				baseUrl: BASE_URL,
+				repository: repository(),
+				fetcher,
+				coverageRepository,
+				coverageFreshForMs: 60_000,
+				nowMs: () => 5_000,
+				exactSkuLeg: () => required,
+			});
+
+			const result = await schedulerFetcher(
+				variationTask({
+					id: 'variations:search:%20%20:windowed',
+					queryKey: 'variations:search:%20%20',
+				})
+			);
+
+			expect(fetcher).not.toHaveBeenCalled();
+			expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith({
+				collection: 'variations',
+				queryKey: 'variations:search:%20%20',
+				records: [],
+				complete: true,
+				nowMs: 5_000,
+				freshForMs: 60_000,
+			});
+			expect(result).toMatchObject({ documentCount: 0, requestCount: 0, completed: true });
+		}
+	);
 
 	it('records incomplete coverage when a leg fills the task limit without a short page', async () => {
 		const coverageRepository = {
 			recordQueryResult: vi.fn(async () => undefined),
 		};
-		const fetcher = vi.fn(async () => response([wrapper(2), wrapper(1)]));
+		const fetcher = vi.fn(async (url: string) =>
+			url.includes('sku=') ? response([]) : response([wrapper(2), wrapper(1)])
+		);
 		const schedulerFetcher = createVariationsSchedulerFetcher({
 			baseUrl: BASE_URL,
 			repository: repository(),
@@ -173,7 +265,8 @@ describe('createVariationsSchedulerFetcher', () => {
 			upsertMany: vi.fn(async (documents: StoredVariationDocument[]) => documents.slice(0, 1)),
 		};
 		const manifestSink = vi.fn(async () => undefined);
-		const fetcher = vi.fn(async () => {
+		const fetcher = vi.fn(async (url: string) => {
+			if (url.includes('sku=')) return response([]);
 			return response(
 				[
 					{

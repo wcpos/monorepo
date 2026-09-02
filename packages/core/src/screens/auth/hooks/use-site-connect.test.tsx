@@ -13,7 +13,7 @@ const mockUserLatest = { sites: [] as string[], incrementalUpdate: jest.fn() };
 const mockDiscoverWpApiUrl = jest.fn(async () => 'https://example.com/wp-json/');
 const mockDiscoverApiEndpoints = jest.fn(async () => ({
 	endpoints: { wcpos_api_url: 'https://example.com/wp-json/wcpos/v2/' },
-	siteData: { wcpos_version: '1.10.8' },
+	siteData: { wcpos_version: '1.10.0' },
 }));
 
 jest.mock('../../../contexts/app-state', () => ({

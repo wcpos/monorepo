@@ -66,6 +66,12 @@ export interface CreateAppSyncEngineOptions {
 	 * scope (react-compiler forbids it in components).
 	 */
 	credentials: { getLatest: () => { access_token?: string } };
+	/**
+	 * The stable site document; the plugin version is read fresh via getLatest()
+	 * at request time, mirroring credentials. This keeps latest/ref access out of
+	 * React render scope and lets version changes apply without recreating the engine.
+	 */
+	siteDocument?: { getLatest: () => { wcpos_version?: string } };
 	/** Query-param auth mode and whether that server accepts a bare token. */
 	useJwtAsParam?: boolean;
 	useRestRouteParam: boolean;
@@ -545,7 +551,10 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	clearUpdateRequired(options.scope.site);
 	const engine = createRxdbSyncEngine(
 		{
-			site,
+			site: {
+				...site,
+				wcposVersion: () => options.siteDocument?.getLatest().wcpos_version,
+			},
 			storage: defaultConfig.storage,
 			fetcher,
 			onUpdateRequired: (details) => {
