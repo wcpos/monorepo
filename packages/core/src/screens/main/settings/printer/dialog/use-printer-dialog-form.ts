@@ -110,6 +110,18 @@ export function usePrinterDialogForm({
 		defaultValues,
 	});
 
+	// The watches are declared BEFORE every effect below on purpose. On native,
+	// react-hook-form subscribes useWatch in a passive effect (useLayoutEffect only on
+	// web), and effects run in declaration order — a watch declared after the
+	// open/prefill effect would miss the `form.reset(next)` it publishes and keep its
+	// mount-time value until the next edit. The old `form.watch()` read live values
+	// every render and did not have this ordering hazard.
+	const vendor = useWatch({ control: form.control, name: 'vendor' });
+	const address = useWatch({ control: form.control, name: 'address' });
+	const connectionType = useWatch({ control: form.control, name: 'connectionType' });
+	const cloudPrinterId = useWatch({ control: form.control, name: 'cloudPrinterId' });
+	const cloudProvider = useWatch({ control: form.control, name: 'cloudProvider' });
+
 	const prevVendorRef = React.useRef(form.getValues('vendor'));
 
 	React.useEffect(() => {
@@ -194,7 +206,6 @@ export function usePrinterDialogForm({
 	}, [open, printer, prefill, form, printerCount, t, defaultValues, deriveVendorDefaults]);
 
 	// Vendor change → derive language/port.
-	const vendor = useWatch({ control: form.control, name: 'vendor' });
 	React.useEffect(() => {
 		if (vendor !== prevVendorRef.current) {
 			const previousVendor = prevVendorRef.current;
@@ -210,8 +221,6 @@ export function usePrinterDialogForm({
 	}, [vendor, form, deriveVendorDefaults]);
 
 	// IP probe → auto-detect vendor (network only).
-	const address = useWatch({ control: form.control, name: 'address' });
-	const connectionType = useWatch({ control: form.control, name: 'connectionType' });
 	React.useEffect(() => {
 		if (connectionType !== 'network') {
 			probeRequestIdRef.current += 1;
@@ -296,8 +305,6 @@ export function usePrinterDialogForm({
 		}
 	}, [form, buildProfile, printerService, t]);
 
-	const cloudPrinterId = useWatch({ control: form.control, name: 'cloudPrinterId' });
-	const cloudProvider = useWatch({ control: form.control, name: 'cloudProvider' });
 	const canOpenDrawer = React.useMemo(() => {
 		const profile = buildProfile({
 			...form.getValues(),
