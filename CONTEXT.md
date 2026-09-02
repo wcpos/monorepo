@@ -200,9 +200,6 @@ An order paid by more than one payment — N ledger rows on the one WooCommerce 
 are no parent or sub-orders (ruled 2026-09-02, wcpos/roadmap#103: a child order misreports
 to Analytics and no Woo report exists to feed). Multiple cash payments are Free.
 
-**Tender** (verb only — see Tendered / change):
-_Avoid_: tender as a noun for a payment row; say payment.
-
 **Refund allocation**:
 The part of a WooCommerce refund attributed to one payment row. A refund is still Woo's
 refund child order; its allocations say which payments it reverses and by how much.
