@@ -49,8 +49,10 @@ export class EpsonEposAdapter implements PrinterTransport {
 
 		const result = parseEposResponse(response.body);
 		if (!result.success) {
-			const code = result.code || 'unknown';
-			throw this.connectionError(url, new Error(`Epson ePOS code: ${code}`), code);
+			// The printer answered — this is a rejection (CoverOpen, Offline, SchemaError…),
+			// not a connection failure. A plain Error keeps the ePOS code in the message the
+			// dialog shows, instead of burying it under connectivity/certificate guidance.
+			throw new Error(`Epson print failed (code: ${result.code || 'unknown'})`);
 		}
 	}
 
@@ -62,8 +64,8 @@ export class EpsonEposAdapter implements PrinterTransport {
 		// HTTP is stateless — nothing to clean up
 	}
 
-	private connectionError(url: string, cause: unknown, code?: string): Error {
-		const error = buildConnectionError({
+	private connectionError(url: string, cause: unknown): Error {
+		return buildConnectionError({
 			vendorLabel: 'Epson',
 			protocolName: 'ePOS',
 			url,
@@ -71,7 +73,5 @@ export class EpsonEposAdapter implements PrinterTransport {
 			plainHttpPort: 8008,
 			cause,
 		});
-		if (code) error.message += ` Epson ePOS code: ${code}.`;
-		return error;
 	}
 }

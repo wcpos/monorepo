@@ -33,15 +33,26 @@ describe('Electron EpsonEposAdapter', () => {
 		});
 	});
 
-	it('includes the ePOS code in a structured connection error', async () => {
+	it('reports a printer rejection as a plain error carrying the ePOS code, not a connection error', async () => {
 		invoke.mockResolvedValue(response(false, 'SchemaError'));
 
 		const error = await new EpsonEposAdapter('192.168.1.40', 443)
 			.printRaw(new Uint8Array([0x1b]))
 			.catch((cause: unknown) => cause);
 
-		expect(isPrinterConnectionError(error)).toBe(true);
 		expect(error).toBeInstanceOf(Error);
-		expect((error as Error).message).toContain('SchemaError');
+		expect(isPrinterConnectionError(error)).toBe(false);
+		expect((error as Error).message).toBe('Epson print failed (code: SchemaError)');
+	});
+
+	it('reports a transport failure as a structured connection error', async () => {
+		invoke.mockRejectedValue(new Error('connect ECONNREFUSED 192.168.1.40:443'));
+
+		const error = await new EpsonEposAdapter('192.168.1.40', 443)
+			.printRaw(new Uint8Array([0x1b]))
+			.catch((cause: unknown) => cause);
+
+		expect(isPrinterConnectionError(error)).toBe(true);
+		expect((error as Error).message).toContain('Could not connect to Epson printer');
 	});
 });
