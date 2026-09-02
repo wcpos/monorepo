@@ -41,12 +41,26 @@ describe('identifyPrinter', () => {
 			securePrinting: true,
 			columns: 48,
 		});
-		expect(identity.ports).toEqual(
-			expect.arrayContaining([
-				expect.objectContaining({ port: 443, state: 'open', protocol: 'epos-print' }),
-				expect.objectContaining({ port: 9100, state: 'open', protocol: 'raw' }),
-			])
+		expect(identity.ports).toContainEqual(
+			expect.objectContaining({ port: 443, state: 'open', protocol: 'epos-print' })
 		);
+	});
+
+	it('never touches raw 9100 when an ePOS lane answers (a raw touch quarantines a Secure Printing Epson)', async () => {
+		const connectTcp = vi.fn(async () => 'open' as const);
+		await identifyPrinter(
+			'192.168.1.30',
+			{ name: 'EPSON TM-m30III' },
+			probes({
+				connectTcp,
+				postEpos: async (_host, port) => {
+					if (port === 443) return { status: 200, body: EPOS_RESPONSE };
+					throw new Error('closed');
+				},
+			})
+		);
+
+		expect(connectTcp).not.toHaveBeenCalled();
 	});
 
 	it('reports secure printing off when Epson ePOS answers on 443 and 80', async () => {

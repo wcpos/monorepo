@@ -232,7 +232,7 @@ export function usePrinterDialogForm({
 		}
 		const timer = setTimeout(() => {
 			setProbing(true);
-			identifyPrinter(trimmed, {}, createIdentifyProbes())
+			identifyPrinter(trimmed, { name: form.getValues('name') }, createIdentifyProbes())
 				.then((identity) => {
 					if (probeRequestIdRef.current !== requestId) return;
 					if (identity.vendor) {

@@ -97,7 +97,6 @@ export async function identifyPrinter(
 				}
 			} catch {}
 		}
-		if (hintedVendor !== 'epson') await tcp(9143);
 	})();
 	const starTask = (async () => {
 		try {
@@ -109,13 +108,15 @@ export async function identifyPrinter(
 			return null;
 		}
 	})();
-	const [, star] = await Promise.all([
-		epsonTask,
-		starTask,
-		tcp(9100),
-		tcp(631),
-		...(hintedVendor === 'epson' ? [tcp(9143)] : []),
-	]);
+	// HTTP lanes first, raw ports only when nothing answered. Any bytes on raw 9100 — even a
+	// 3-byte DLE EOT status request — are a "job" to a RED-era Epson with Secure Printing on,
+	// which then quarantines every lane (ePOS included) for ~4 minutes (wcpos/monorepo#1597).
+	// So a printer that answers ePOS or WebPRNT is never touched on 9100. 9143 (TLS raw) is not
+	// probed at all until there is a TLS raw lane to use it.
+	const [, star] = await Promise.all([epsonTask, starTask]);
+	if (!eposPort && !star) {
+		await Promise.all([tcp(9100), tcp(631)]);
+	}
 	const lane: PrinterIdentity['lane'] = eposPort
 		? {
 				port: eposPort,
