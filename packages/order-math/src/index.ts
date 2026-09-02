@@ -1,5 +1,5 @@
-// ===== @wcpos/order-math public surface (SPEC §3) =====
-// Exactly these exports; nothing more. See docs/superpowers/specs/2026-06-10-order-math-spec.md
+// ===== @wcpos/order-math public surface =====
+// The settle surface is per SPEC §3; the payments section is Payments Contract v1.
 
 export { createCartConfig } from './config';
 export type { CartConfig, CartConfigInput } from './config';
@@ -54,3 +54,37 @@ export type {
 	CouponRejectionCode,
 	RefundLike,
 } from './types';
+
+// ===== Payments contract v1 (wcpos/roadmap#97) =====
+export {
+	derive,
+	readLedger,
+	withLedger,
+	upsertPaymentRow,
+	mintManualPayment,
+	toMinor,
+	fromMinor,
+	LEDGER_META_KEY,
+	LEDGER_SCHEMA,
+	KNOWN_CAPTURE_MODES,
+	KNOWN_KINDS,
+} from './payments';
+export type {
+	PaymentKind,
+	CaptureMode,
+	OpenEnum,
+	PaymentTransport,
+	PaymentMethodDescriptor,
+	PaymentMethodsEnvelope,
+	PaymentStatus,
+	PaymentSource,
+	PaymentRefundEntry,
+	PaymentRow,
+	OrderLedger,
+	OrderPaymentSummary,
+	PaymentRouteResponse,
+	PaymentErrorCode,
+	PaymentRefusalBody,
+	PosOrderStatus,
+	DerivedOrderView,
+} from './payments';

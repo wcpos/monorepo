@@ -8,11 +8,15 @@ test('public value surface is exactly the spec', () => {
 	).toEqual([
 		'calculateCartLine',
 		'createCartConfig',
+		'derive',
+		'fromMinor',
 		'getNetPaymentTotal',
 		'isActiveCouponLine',
 		'isActiveFeeLine',
 		'isActiveLineItem',
 		'isActiveShippingLine',
+		'mintManualPayment',
+		'readLedger',
 		// Added 2026-08-19: the POS cart footer displays refunds row-by-row and then
 		// deducts a total. Without a shared rule for "what one refund is worth" the
 		// rows and the deduction were computed differently and could disagree on
@@ -25,5 +29,8 @@ test('public value surface is exactly the spec', () => {
 		'settleAggregate',
 		'settleCart',
 		'snapshotFromOrderJSON',
+		'toMinor',
+		'upsertPaymentRow',
+		'withLedger',
 	]);
 });
