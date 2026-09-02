@@ -44,12 +44,17 @@ function isTextValue(value: unknown): boolean {
  * Compiler deliberately skips any component that calls the `watch()` returned by
  * `useForm()` — its module type provider marks `watch` as knownIncompatible — so in those
  * forms nothing memoises it). The debounced writer therefore must NOT be keyed on
- * `onChange` identity: a form
- * re-renders on the very field change it is persisting (`useFormField` reads the root
- * formState proxy), and a writer rebuilt on that render would cancel the pending write —
- * which is how every string-valued Select/ToggleGroup setting (view mode, sort by, sort
- * direction) silently stopped saving. The writer is built once per `debounceMs` and reads
- * the latest `onChange` through a ref.
+ * `onChange` identity: a form re-renders on the very field change it is persisting
+ * (`useFormField` reads the root formState proxy), and a writer rebuilt on that render
+ * would cancel the pending write — which is how every string-valued Select/ToggleGroup
+ * setting (view mode, sort by, sort direction) silently stopped saving.
+ *
+ * The writer is built once per `debounceMs`, and each edit is queued TOGETHER with the
+ * `onChange` that was current when the user made it (lodash invokes the last call's
+ * arguments). So a pending write always lands on the persistence target of the edit —
+ * a callback swapped in afterwards (a store switch while the form stays mounted) never
+ * receives it — while an ordinary re-render, whose new callback targets the same store,
+ * is unaffected.
  */
 export function useFormChangeHandler<T extends FieldValues>({
 	form,
@@ -66,10 +71,11 @@ export function useFormChangeHandler<T extends FieldValues>({
 	 * Unmount FLUSHES rather than cancels: closing the dialog within the debounce window
 	 * must not lose the value the cashier just chose.
 	 */
-	const debouncedRef = React.useRef<DebouncedFunc<(changes: Partial<T>) => void> | null>(null);
+	type Write = (changes: Partial<T>, write: (changes: Partial<T>) => void) => void;
+	const debouncedRef = React.useRef<DebouncedFunc<Write> | null>(null);
 	React.useEffect(() => {
-		const debounced = debounce((changes: Partial<T>) => {
-			onChangeRef.current(changes);
+		const debounced = debounce<Write>((changes, write) => {
+			write(changes);
 		}, debounceMs);
 		debouncedRef.current = debounced;
 		return () => {
@@ -103,7 +109,7 @@ export function useFormChangeHandler<T extends FieldValues>({
 
 			// Debounce text inputs to avoid saving on every keystroke
 			if (isTextValue(value) && debounceMs > 0 && debounced) {
-				debounced(changes);
+				debounced(changes, onChangeRef.current);
 			} else {
 				// Flush any pending debounced changes first
 				debounced?.flush();

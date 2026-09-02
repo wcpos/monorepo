@@ -6,7 +6,11 @@ import * as React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
+import type { FormItemProps } from '@wcpos/components/form';
+
 import { UISettingsForm } from './ui-settings-form';
+
+import type { ControllerProps, FieldValues } from 'react-hook-form';
 
 type Settings = {
 	viewMode: 'grid' | 'table';
@@ -58,14 +62,15 @@ jest.mock('@wcpos/components/form', () => {
 		const { error } = useFormField();
 		return error ? <span>{String(error.message)}</span> : null;
 	}
-	return {
-		Form: FormProvider,
-		FormField: (props: any) => (
+	function FormField(props: ControllerProps<FieldValues, string>) {
+		return (
 			<FormFieldContext.Provider value={{ name: props.name }}>
 				<Controller {...props} />
 			</FormFieldContext.Provider>
-		),
-		FormSwitch: ({ label, value, onChange }: any) => (
+		);
+	}
+	function FormSwitch({ label, value, onChange }: FormItemProps<boolean>) {
+		return (
 			<>
 				<input
 					type="checkbox"
@@ -75,68 +80,106 @@ jest.mock('@wcpos/components/form', () => {
 				/>
 				<FieldStateReader />
 			</>
-		),
-		useFormChangeHandler,
-	};
+		);
+	}
+	return { Form: FormProvider, FormField, FormSwitch, useFormChangeHandler };
 });
 
+/**
+ * The Select and ToggleGroup doubles keep the production prop contracts (`onValueChange`
+ * receives an Option / a string) and render each choice as a plain button, so a click
+ * goes through the same field `onChange` the real popovers call.
+ */
 jest.mock('@wcpos/components/select', () => {
-	const SelectCtx = React.createContext<(o: any) => void>(() => {});
+	type SelectOption = { value: string; label: string };
+	type OnValueChange = (option: SelectOption | undefined) => void;
+	const SelectCtx = React.createContext<OnValueChange>(() => {});
+	function Select({
+		onValueChange,
+		children,
+	}: React.PropsWithChildren<{ onValueChange?: OnValueChange }>) {
+		return <SelectCtx.Provider value={onValueChange ?? (() => {})}>{children}</SelectCtx.Provider>;
+	}
+	function PassThrough({ children }: React.PropsWithChildren) {
+		return <>{children}</>;
+	}
+	function SelectItem({ value, label }: SelectOption) {
+		const onValueChange = React.useContext(SelectCtx);
+		return (
+			<button
+				type="button"
+				data-testid={`option-${value}`}
+				onClick={() => onValueChange({ value, label })}
+			>
+				{label}
+			</button>
+		);
+	}
 	return {
-		Select: ({ onValueChange, children }: any) => (
-			<SelectCtx.Provider value={onValueChange}>{children}</SelectCtx.Provider>
-		),
-		SelectTrigger: ({ children }: any) => <>{children}</>,
+		Select,
+		SelectTrigger: PassThrough,
 		SelectValue: () => null,
-		SelectContent: ({ children }: any) => <>{children}</>,
-		SelectGroup: ({ children }: any) => <>{children}</>,
-		SelectItem: ({ value, label }: any) => {
-			const onValueChange = React.useContext(SelectCtx);
-			return (
-				<button
-					type="button"
-					data-testid={`option-${value}`}
-					onClick={() => onValueChange({ value, label })}
-				>
-					{label}
-				</button>
-			);
-		},
+		SelectContent: PassThrough,
+		SelectGroup: PassThrough,
+		SelectItem,
 	};
 });
 
 jest.mock('@wcpos/components/toggle-group', () => {
-	const ToggleCtx = React.createContext<(v: string) => void>(() => {});
-	return {
-		ToggleGroup: ({ onValueChange, children }: any) => (
-			<ToggleCtx.Provider value={onValueChange}>{children}</ToggleCtx.Provider>
-		),
-		ToggleGroupItem: ({ value, testID, children }: any) => {
-			const onValueChange = React.useContext(ToggleCtx);
-			return (
-				<button type="button" data-testid={testID} onClick={() => onValueChange(value)}>
-					{children}
-				</button>
-			);
-		},
-	};
+	type OnValueChange = (value: string | undefined) => void;
+	const ToggleCtx = React.createContext<OnValueChange>(() => {});
+	function ToggleGroup({
+		onValueChange,
+		children,
+	}: React.PropsWithChildren<{ onValueChange?: OnValueChange }>) {
+		return <ToggleCtx.Provider value={onValueChange ?? (() => {})}>{children}</ToggleCtx.Provider>;
+	}
+	function ToggleGroupItem({
+		value,
+		testID,
+		children,
+	}: React.PropsWithChildren<{ value: string; testID?: string }>) {
+		const onValueChange = React.useContext(ToggleCtx);
+		return (
+			<button type="button" data-testid={testID} onClick={() => onValueChange(value)}>
+				{children}
+			</button>
+		);
+	}
+	return { ToggleGroup, ToggleGroupItem };
 });
 
-jest.mock('@wcpos/components/slider', () => ({
-	Slider: ({ value, onValueChange }: any) => (
-		<input
-			type="range"
-			data-testid="slider"
-			value={value}
-			onChange={(e) => onValueChange(Number(e.target.value))}
-		/>
-	),
+jest.mock('@wcpos/components/slider', () => {
+	function Slider({
+		value,
+		onValueChange,
+	}: {
+		value: number;
+		onValueChange: (value: number) => void;
+	}) {
+		return (
+			<input
+				type="range"
+				data-testid="slider"
+				value={value}
+				onChange={(e) => onValueChange(Number(e.target.value))}
+			/>
+		);
+	}
+	return { Slider };
+});
+jest.mock('@wcpos/components/text', () => {
+	function Text({ children }: React.PropsWithChildren) {
+		return <span>{children}</span>;
+	}
+	return { Text };
+});
+jest.mock('@wcpos/components/vstack', () => ({
+	VStack: ({ children }: React.PropsWithChildren) => children,
 }));
-jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: any) => <span>{children}</span>,
+jest.mock('@wcpos/components/hstack', () => ({
+	HStack: ({ children }: React.PropsWithChildren) => children,
 }));
-jest.mock('@wcpos/components/vstack', () => ({ VStack: ({ children }: any) => children }));
-jest.mock('@wcpos/components/hstack', () => ({ HStack: ({ children }: any) => children }));
 jest.mock('@wcpos/components/docs-link', () => ({ DocsLink: () => null }));
 jest.mock('./meta-data-keys-field', () => ({ MetaDataKeysField: () => null }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));

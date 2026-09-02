@@ -71,7 +71,7 @@ it('flushes a pending debounced change on unmount', () => {
 	expect(onChange).toHaveBeenCalledWith({ viewMode: 'grid' });
 });
 
-it('still delivers the latest onChange, not the one from the first render', () => {
+it('delivers to the onChange current at the time of the edit, not the first render', () => {
 	const first = jest.fn();
 	const second = jest.fn();
 	const view = render(<Harness onChange={first} onRender={() => {}} />);
@@ -86,4 +86,26 @@ it('still delivers the latest onChange, not the one from the first render', () =
 
 	expect(first).not.toHaveBeenCalled();
 	expect(second).toHaveBeenCalledWith({ viewMode: 'grid' });
+});
+
+/**
+ * A callback swapped in AFTER the edit (the persistence target changed while the form
+ * stayed mounted) must not receive the pending write: it belongs to the target the user
+ * was editing.
+ */
+it('does not retarget a pending write to an onChange swapped in after the edit', () => {
+	const editTime = jest.fn();
+	const afterwards = jest.fn();
+	const view = render(<Harness onChange={editTime} onRender={() => {}} />);
+
+	act(() => {
+		view.getByTestId('pick').click();
+	});
+	view.rerender(<Harness onChange={afterwards} onRender={() => {}} />);
+	act(() => {
+		jest.advanceTimersByTime(1000);
+	});
+
+	expect(editTime).toHaveBeenCalledWith({ viewMode: 'grid' });
+	expect(afterwards).not.toHaveBeenCalled();
 });
