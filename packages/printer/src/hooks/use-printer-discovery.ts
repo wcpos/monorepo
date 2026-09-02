@@ -4,6 +4,8 @@ import {
 	classifyDiscoveryFailure,
 	formatDiscoveryFailureMessage,
 } from '../discovery/discovery-errors';
+import { identifyDiscoveredPrinters } from '../discovery/identify';
+import { createIdentifyProbes } from '../discovery/identify-probes';
 import { mergePrinters } from '../discovery/merge-printers';
 
 import type { DiscoveredPrinter, DiscoveryError, PrinterDiscovery } from '../types';
@@ -81,7 +83,11 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 
 					if (result.value.length > 0) {
 						foundAny = true;
-						setPrinters((prev) => mergePrinters(prev, result.value));
+						const identified = await identifyDiscoveredPrinters(
+							result.value,
+							createIdentifyProbes()
+						);
+						setPrinters((prev) => mergePrinters(prev, identified));
 					}
 				} else {
 					failures.push(classifyDiscoveryFailure(vendor, result.reason));

@@ -4,6 +4,8 @@ import * as React from 'react';
 import WebBluetoothReceiptPrinter from '@point-of-sale/webbluetooth-receipt-printer';
 import WebUSBReceiptPrinter from '@point-of-sale/webusb-receipt-printer';
 
+import { identifyDiscoveredPrinters } from '../discovery/identify';
+import { createIdentifyProbes } from '../discovery/identify-probes.web';
 import { mapWebDeviceToDiscoveredPrinter } from '../discovery/map-web-device';
 import { mergePrinters } from '../discovery/merge-printers';
 import { saveWebDevice } from '../transport/web-device-store';
@@ -75,7 +77,8 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 				},
 			});
 			if (abortRef.current !== controller || controller.signal.aborted) return;
-			setPrinters((prev) => mergePrinters(prev, discovered));
+			const identified = await identifyDiscoveredPrinters(discovered, createIdentifyProbes());
+			setPrinters((prev) => mergePrinters(prev, identified));
 			if (discovered.length === 0) {
 				setError({ code: 'network-none-found' });
 			}

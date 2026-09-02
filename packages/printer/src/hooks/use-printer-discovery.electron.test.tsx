@@ -22,6 +22,20 @@ vi.mock('@point-of-sale/webbluetooth-receipt-printer', () => ({
 	},
 }));
 
+vi.mock('../discovery/identify-probes.electron', () => ({
+	createIdentifyProbes: () => ({
+		connectTcp: async (_host: string, port: number) => (port === 9100 ? 'open' : 'closed'),
+		postEpos: async (_host: string, port: number) => {
+			if (port !== 443) throw new Error('closed');
+			return {
+				status: 200,
+				body: '<response xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print" success="true" />',
+			};
+		},
+		fetchStar: async () => null,
+	}),
+}));
+
 // ---------------------------------------------------------------------------
 // IPC stub
 // ---------------------------------------------------------------------------
@@ -231,6 +245,37 @@ describe('usePrinterDiscovery (electron)', () => {
 				vendor: 'generic',
 			},
 		]);
+	});
+
+	it('identifies a discovered network printer and uses its printing lane port', async () => {
+		installIpc((channel: string) => {
+			if (channel === 'printer-discovery') {
+				return Promise.resolve([
+					{
+						id: 'mdns-epson',
+						name: 'EPSON TM-m30III',
+						connectionType: 'network',
+						address: '192.168.1.30',
+						port: 9100,
+						vendor: 'epson',
+					},
+				]);
+			}
+			return Promise.resolve([]);
+		});
+		const { result } = renderHook(() => usePrinterDiscovery());
+
+		await act(async () => {
+			await result.current.startScan();
+		});
+
+		expect(result.current.printers[0]).toMatchObject({
+			port: 443,
+			identity: {
+				vendor: 'epson',
+				lane: { port: 443, protocol: 'epos-print', encrypted: true },
+			},
+		});
 	});
 
 	// 7. select → connect-timeout path

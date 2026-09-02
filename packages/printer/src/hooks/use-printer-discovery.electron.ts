@@ -9,6 +9,8 @@ import {
 	type BluetoothScanSession,
 	createBluetoothScanSession,
 } from '../discovery/bluetooth-scan-session';
+import { identifyDiscoveredPrinters } from '../discovery/identify';
+import { createIdentifyProbes } from '../discovery/identify-probes.electron';
 import { mapWebDeviceToDiscoveredPrinter } from '../discovery/map-web-device';
 import { mergePrinters } from '../discovery/merge-printers';
 import { saveWebDevice } from '../transport/web-device-store';
@@ -99,12 +101,13 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 			const result = await ipc.invoke('printer-discovery', {
 				action: 'start',
 			});
+			const identified = await identifyDiscoveredPrinters(result, createIdentifyProbes());
 			setPrinters((prev) => {
 				// Keep manually-added printers (id format: "address:port")
 				// Discovered printers use prefixed ids like "mdns-host" or "epson-addr"
 				const manualPrinters = prev.filter((p) => p.id.includes(':'));
 				const merged = [...manualPrinters];
-				for (const discovered of result) {
+				for (const discovered of identified) {
 					if (!merged.some((p) => p.id === discovered.id)) {
 						merged.push(discovered);
 					}

@@ -6,9 +6,10 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { Toast } from '@wcpos/components/toast';
 import {
+	createIdentifyProbes,
+	identifyPrinter,
 	isPrinterConnectionError,
 	PrinterService,
-	probeVendor,
 	canOpenDrawer as profileCanOpenDrawer,
 } from '@wcpos/printer';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -231,15 +232,23 @@ export function usePrinterDialogForm({
 		}
 		const timer = setTimeout(() => {
 			setProbing(true);
-			probeVendor(trimmed)
-				.then((result) => {
+			identifyPrinter(trimmed, {}, createIdentifyProbes())
+				.then((identity) => {
 					if (probeRequestIdRef.current !== requestId) return;
-					if (result) {
+					if (identity.vendor) {
+						const result = identity.vendor;
 						setDetectedVendor(result);
 						form.setValue('vendor', result as PrinterFormValues['vendor']);
 						const d = deriveVendorDefaults(result as PrinterFormValues['vendor']);
 						form.setValue('language', d.language);
 						form.setValue('port', d.port);
+						if (identity.lane) form.setValue('port', identity.lane.port);
+						if (
+							identity.columns !== undefined &&
+							form.getValues('columns') === defaultValues.columns
+						) {
+							form.setValue('columns', identity.columns);
+						}
 						prevVendorRef.current = result as PrinterFormValues['vendor'];
 					} else {
 						setDetectedVendor(null);
@@ -253,7 +262,7 @@ export function usePrinterDialogForm({
 				});
 		}, 500);
 		return () => clearTimeout(timer);
-	}, [address, connectionType, form, deriveVendorDefaults]);
+	}, [address, connectionType, form, deriveVendorDefaults, defaultValues.columns]);
 
 	const setManualVendor = React.useCallback(() => {
 		manualVendorRef.current = true;
