@@ -38,6 +38,26 @@ function execute(commands, context, bursts) {
 	}
 }
 
+function maestroInterpolations(source) {
+	const expressions = [];
+	let start = source.indexOf('${');
+
+	while (start !== -1) {
+		let depth = 1;
+		let end = start + 2;
+		while (end < source.length && depth > 0) {
+			if (source[end] === '{') depth++;
+			if (source[end] === '}') depth--;
+			end++;
+		}
+		if (depth > 0) break;
+		expressions.push(source.slice(start, end));
+		start = source.indexOf('${', end);
+	}
+
+	return expressions;
+}
+
 test('native product searches type no more than one key per Maestro command', () => {
 	for (const [filename, variable] of flows) {
 		const source = readFileSync(
@@ -110,10 +130,20 @@ test('no Maestro interpolation carries a `$` inside `${...}`', () => {
 		const base = new URL(`../apps/main/.maestro/${dir}/`, import.meta.url);
 		for (const name of readdirSync(base).filter((entry) => entry.endsWith('.yml'))) {
 			const source = readFileSync(new URL(name, base), 'utf8');
-			for (const match of source.matchAll(/\$\{([^}]*)\}/g)) {
-				if (match[1].includes('$')) offenders.push(`${dir}/${name}: ${match[0]}`);
+			for (const expression of maestroInterpolations(source)) {
+				if (expression.slice(2, -1).includes('$')) {
+					offenders.push(`${dir}/${name}: ${expression}`);
+				}
 			}
 		}
 	}
 	assert.deepEqual(offenders, [], 'Maestro leaves such an expression unevaluated');
+});
+
+test('Maestro interpolation scanner consumes nested braces', () => {
+	const expression = "${STORE_URL.replace(/a{2}$/, '')}";
+	const [interpolation] = maestroInterpolations(expression);
+
+	assert.equal(interpolation, expression);
+	assert.equal(interpolation.slice(2, -1).includes('$'), true);
 });

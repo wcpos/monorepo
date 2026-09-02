@@ -1768,6 +1768,12 @@ test('flow 08 selects a fresh order before requiring an empty cart', () => {
 	);
 });
 
+test('flow-start cleanup dismisses the keyboard after persistent product state', () => {
+	const flow = readMaestroFlow('../subflows/ensure-pos-ready.yml');
+
+	assert.deepEqual(flow.at(-1), { hideKeyboard: { optional: true } });
+});
+
 test('Android relaunch recovery rechecks the development launcher on every retry leg', () => {
 	for (const filename of [
 		'03-authenticated-relaunch.yml',
