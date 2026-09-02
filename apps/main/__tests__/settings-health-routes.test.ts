@@ -23,8 +23,11 @@ function source(path: string): string {
 
 describe('settings and Store health route structure', () => {
 	it('defines every deep-linkable settings and health page', () => {
+		// The settings pages live in a `(pages)` route group since #1763 (the mini-app
+		// wizard modals sit beside them in `(modals)`); the group is invisible to the URL,
+		// so /settings/general still deep-links to settings/(pages)/general.tsx.
 		for (const route of settingsRoutes) {
-			expect(existsSync(join(appRoot, routeRoot, 'settings', route))).toBe(true);
+			expect(existsSync(join(appRoot, routeRoot, 'settings', '(pages)', route))).toBe(true);
 		}
 		for (const route of healthRoutes) {
 			expect(existsSync(join(appRoot, routeRoot, 'health', route))).toBe(true);
