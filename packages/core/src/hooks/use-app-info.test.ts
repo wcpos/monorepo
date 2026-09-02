@@ -13,9 +13,9 @@ jest.mock('@wcpos/utils/app-info', () => ({
 jest.mock('../contexts/app-state', () => ({ AppStateContext: undefined }));
 
 describe('isWcposPluginCompatible', () => {
-	it('accepts the first plugin release whose v2 search covers SKU and barcode', () => {
-		expect(isWcposPluginCompatible('1.10.2')).toBe(false);
-		expect(isWcposPluginCompatible('1.10.3')).toBe(true);
+	it('accepts the first plugin release whose v2 search covers SKU and barcode and ranks exact matches first', () => {
+		expect(isWcposPluginCompatible('1.10.7')).toBe(false);
+		expect(isWcposPluginCompatible('1.10.8')).toBe(true);
 		expect(isWcposPluginCompatible('1.11.2')).toBe(true);
 	});
 

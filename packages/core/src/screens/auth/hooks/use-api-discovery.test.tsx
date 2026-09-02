@@ -177,7 +177,7 @@ describe('useApiDiscovery', () => {
 
 	it('reports hidden routes, not an outdated plugin, when the version is compatible', async () => {
 		mockGet.mockResolvedValue({
-			data: { ...siteData, namespaces: ['wc/v3'], wcpos_version: '1.10.3' },
+			data: { ...siteData, namespaces: ['wc/v3'], wcpos_version: '1.10.8' },
 		});
 
 		const { result } = renderHook(() => useApiDiscovery());
@@ -190,7 +190,7 @@ describe('useApiDiscovery', () => {
 
 	it('lets a compatible version override a visible legacy namespace', async () => {
 		mockGet.mockResolvedValue({
-			data: { ...siteData, namespaces: ['wc/v3', 'wcpos/v1'], wcpos_version: '1.10.3' },
+			data: { ...siteData, namespaces: ['wc/v3', 'wcpos/v1'], wcpos_version: '1.10.8' },
 		});
 
 		const { result } = renderHook(() => useApiDiscovery());
@@ -202,7 +202,7 @@ describe('useApiDiscovery', () => {
 	});
 
 	it.each([
-		['routes stripped from a compatible plugin', ['wc/v3'], '1.10.3'],
+		['routes stripped from a compatible plugin', ['wc/v3'], '1.10.8'],
 		['no WCPOS evidence at all', ['wc/v3'], undefined],
 	])(
 		'shows the merchant the API message, not the dev diagnosis (%s)',
