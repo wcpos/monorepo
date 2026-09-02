@@ -53,7 +53,6 @@ function taskLimit(task: FetchTask, pullBatchSize?: () => number | undefined): n
 
 async function fetchVariationSearchLeg(
 	input: VariationsSchedulerFetcherInput,
-	name: 'search' | 'sku',
 	term: string,
 	limit: number,
 	perPage: number,
@@ -69,7 +68,7 @@ async function fetchVariationSearchLeg(
 	const pageSize = Math.min(perPage, limit);
 	while (payloads.length < limit) {
 		const query = new URLSearchParams({
-			[name]: term,
+			search: term,
 			per_page: String(pageSize),
 			page: String(requestCount + 1),
 		});
@@ -92,15 +91,6 @@ async function fetchVariationSearchLeg(
 	return { payloads: payloads.slice(0, limit), requestCount, exhausted };
 }
 
-function uniqueVariationPayloads(payloads: Record<string, unknown>[]): Record<string, unknown>[] {
-	const byId = new Map<number, Record<string, unknown>>();
-	for (const payload of payloads) {
-		const id = Number(payload.id);
-		if (!byId.has(id)) byId.set(id, payload);
-	}
-	return [...byId.values()];
-}
-
 export function createVariationsSchedulerFetcher(
 	input: VariationsSchedulerFetcherInput
 ): SchedulerFetcher {
@@ -109,10 +99,9 @@ export function createVariationsSchedulerFetcher(
 		const limit = task.limit;
 		const pageSize = taskLimit(task, input.pullBatchSize);
 		const searchLeg = !search.length
-			? null
-			: await fetchVariationSearchLeg(input, 'search', search, limit, pageSize, context);
-		const skuLeg = await fetchVariationSearchLeg(input, 'sku', search, limit, pageSize, context);
-		const payloads = uniqueVariationPayloads([...skuLeg.payloads, ...(searchLeg?.payloads ?? [])]);
+			? { payloads: [], requestCount: 0, exhausted: true }
+			: await fetchVariationSearchLeg(input, search, limit, pageSize, context);
+		const payloads = searchLeg.payloads;
 		// The manifest row travels on the envelope, not on the stored document — see
 		// MaterializedProjection. Upsert the documents first, then feed the sink their rows.
 		const materialized = payloads
@@ -126,7 +115,7 @@ export function createVariationsSchedulerFetcher(
 		if (input.manifestSink && manifestRows.length > 0) {
 			await input.manifestSink(manifestRows);
 		}
-		const complete = (searchLeg?.exhausted ?? true) && skuLeg.exhausted && payloads.length <= limit;
+		const complete = searchLeg.exhausted && payloads.length <= limit;
 		await recordCoverage(
 			'variations',
 			input,
@@ -142,7 +131,7 @@ export function createVariationsSchedulerFetcher(
 		return {
 			taskId: task.id,
 			documentCount: documents.length,
-			requestCount: (searchLeg?.requestCount ?? 0) + skuLeg.requestCount,
+			requestCount: searchLeg.requestCount,
 			completed: complete,
 		};
 	};

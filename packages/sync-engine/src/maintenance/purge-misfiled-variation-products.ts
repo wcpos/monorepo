@@ -3,12 +3,12 @@ import { hasPendingLocalWork } from '../write-path/local-work-guard';
 import type { RxDatabase } from 'rxdb';
 
 /**
- * One-shot scope-open repair for stores polluted before the products search lane
- * learned to drop variation-typed rows (Woo answers a `products?sku=` filter from
- * BOTH post types, so a variation whose sku matched a search term was persisted
- * into the PRODUCTS collection — see fetchProductSearch). Such a document makes
- * every barcode scan of that code falsely ambiguous: the scan reads products AND
- * variations, and the one record matches in both collections.
+ * One-shot scope-open repair for stores polluted while the products search lane
+ * still sent `sku=`. Woo answered that filter from both post types, so matching
+ * variations were persisted into the PRODUCTS collection; the lane no longer
+ * sends it. Such a document makes every barcode scan of that code falsely
+ * ambiguous: the scan reads products AND variations, and the one record matches
+ * in both collections.
  *
  * Removes products-collection documents whose promoted `type` column says
  * `variation`, plus any existence-manifest row still claiming `objectType:

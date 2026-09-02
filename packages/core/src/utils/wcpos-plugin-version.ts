@@ -4,9 +4,10 @@ import semver from 'semver';
 /**
  * Oldest WCPOS plugin release this app can talk to.
  *
- * The real requirement is the `wcpos/v2` REST namespace — every store route the
- * app calls lives there. 1.10.0 is the first plugin release that registers it,
- * so a 1.9.x store exposes only `wcpos/v1` and cannot serve this client.
+ * The `wcpos/v2` REST namespace requirement still begins at 1.10.0. Version
+ * 1.10.3 is the first release whose v2 product search matches SKU and the
+ * configured barcode meta key through `search=`; this client no longer sends
+ * a separate `sku=` request.
  * Connect-time discovery checks the namespace directly (it is the ground truth);
  * this constant names the version to tell the merchant to update to.
  *
@@ -14,7 +15,7 @@ import semver from 'semver';
  * before any app state exists, and importing it from `use-app-info` would pull
  * the whole app-state context in with it.
  */
-export const MINIMUM_WCPOS_PLUGIN_VERSION = '1.10.0';
+export const MINIMUM_WCPOS_PLUGIN_VERSION = '1.10.3';
 
 export function isWcposPluginCompatible(pluginVersion: string | undefined): boolean {
 	if (!pluginVersion) return false;

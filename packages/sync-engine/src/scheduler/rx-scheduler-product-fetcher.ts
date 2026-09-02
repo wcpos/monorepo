@@ -1,6 +1,6 @@
 /**
  * Product scheduler fetcher. Unlike customer, product does NOT collapse into the thin targeted/search spec:
- * its search runs a dual search=+sku= query with dedupe (not paginated), its targeted ids come from the explicit
+ * its search walks the product `search=` route, its targeted ids come from the explicit
  * numeric wooIds channel, it promotes indexed columns via withProductColumns before upsert, and it has no
  * born-local sentinel. So it keeps its own targeted/search flow but reuses the shared scaffolding helpers
  * (httpGet / recordCoverage / chunk / assertReturnedRequestedIds) — no copied pagination/coverage boilerplate.
@@ -262,17 +262,6 @@ function productSearchParams(search: string, perPage: number, page: number): URL
 	return query;
 }
 
-function productSkuParams(sku: string, perPage: number, page: number): URLSearchParams {
-	const query = new URLSearchParams();
-	query.set('sku', sku);
-	query.set('per_page', String(perPage));
-	query.set('page', String(page));
-	query.set('orderby', 'id');
-	query.set('order', 'desc');
-	query.set('status', 'publish');
-	return query;
-}
-
 /**
  * Walk one search leg to `limit` records in `perPage` pages (#908): the dial governs the
  * WIRE page size, the leg's limit governs how many records the leg wants. Stops on a short
@@ -304,15 +293,6 @@ async function fetchProductSearchLeg(
 		}
 	}
 	return { payloads: payloads.slice(0, limit), requestCount, exhausted };
-}
-
-function uniqueProductPayloads(payloads: WooProductPayload[]): WooProductPayload[] {
-	const byId = new Map<number, WooProductPayload>();
-	for (const payload of payloads) {
-		const id = Number(payload.id);
-		if (!byId.has(id)) byId.set(id, payload);
-	}
-	return [...byId.values()];
 }
 
 const compareMenuOrderPayloads = (left: WooProductPayload, right: WooProductPayload) =>
@@ -667,7 +647,7 @@ async function fetchProductSearch(
 	search: string,
 	context?: SchedulerFetcherContext
 ): Promise<FetchTaskResult> {
-	// The dial governs the WIRE page, not the result set (#908): each leg still wants
+	// The dial governs the WIRE page, not the result set (#908): search still wants
 	// `limit` records, it just walks them in dial-sized pages instead of asking for the
 	// whole set in one heavy request. Capping per_page WITHOUT paginating would truncate
 	// search results, which is why this used to opt out of the dial entirely.
@@ -675,7 +655,7 @@ async function fetchProductSearch(
 	const pageSize = taskLimit(task, input.pullBatchSize);
 	const term = search.trim();
 	const searchLeg = !term.length
-		? null
+		? { payloads: [], requestCount: 0, exhausted: true }
 		: await fetchProductSearchLeg(
 				input,
 				(perPage, page) => productSearchParams(term, perPage, page),
@@ -683,35 +663,16 @@ async function fetchProductSearch(
 				pageSize,
 				context
 			);
-	const skuLeg = await fetchProductSearchLeg(
-		input,
-		(perPage, page) => productSkuParams(term, perPage, page),
-		limit,
-		pageSize,
-		context
-	);
-	// Woo answers a sku= filter from BOTH post types: a variation whose sku matches the
-	// term comes back as a `type: 'variation'` row on the PRODUCTS route (WC core widens
-	// post_type for sku filters; verified live on dev-pro 2026-08-20). Persisting such a
-	// row here would put the variation into the PRODUCTS collection — and the barcode
-	// scan reads products AND variations, so the one record would match twice and every
-	// scan of that code turns falsely ambiguous ("2 products found locally"), permanently.
-	// Variations are materialized only by the variations lanes; drop the rows before
-	// they reach documents, counts, or coverage.
-	const payloads = uniqueProductPayloads([
-		...skuLeg.payloads,
-		...(searchLeg?.payloads ?? []),
-	]).filter((payload) => payload.type !== 'variation');
+	const payloads = searchLeg.payloads;
 	const documents = payloads
 		.slice(0, limit)
 		.map((payload) => productDocumentFromWooPayload(payload, input.barcodeSelectors?.()));
 	await persistProductDocuments(input, documents);
-	// A skipped short-term search leg counts as exhausted; otherwise both legs must exhaust.
-	// The slice above can drop deduped cross-leg hits past the window, and the products
+	// The slice above can drop hits past the window, and the products
 	// lane key carries no limit — a truncated persist must not record a complete lane,
 	// or the serve-local gate would answer a later, larger-limit search from the
 	// truncated set.
-	const complete = (searchLeg?.exhausted ?? true) && skuLeg.exhausted && payloads.length <= limit;
+	const complete = searchLeg.exhausted && payloads.length <= limit;
 	await recordCoverage(
 		'products',
 		input,
@@ -723,7 +684,7 @@ async function fetchProductSearch(
 	return {
 		taskId: task.id,
 		documentCount: documents.length,
-		requestCount: (searchLeg?.requestCount ?? 0) + skuLeg.requestCount,
+		requestCount: searchLeg.requestCount,
 		completed: complete,
 	};
 }

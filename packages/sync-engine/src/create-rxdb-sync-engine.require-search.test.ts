@@ -99,16 +99,12 @@ function variationEnvelopeDocument(
 	};
 }
 
-/** Answers a `products:search:` lane: the fetcher issues a `search=` GET and a `sku=` GET. */
+// Answers a `products:search:` lane with the plugin's unified `search=` contract.
 function scriptedProductSearchProxy(products: Record<string, unknown>[]) {
-	const state = { searchPulls: 0, skuPulls: 0 };
+	const state = { searchPulls: 0 };
 	const fetch = async (url: string): Promise<Response> => {
 		const u = new URL(url);
 		if (u.pathname.endsWith('/products')) {
-			if (u.searchParams.has('sku')) {
-				state.skuPulls += 1;
-				return json([]);
-			}
 			state.searchPulls += 1;
 			return json(products);
 		}
@@ -225,9 +221,7 @@ describe('require() for search — the public search-demand verb', () => {
 			await engine.require({ id: `${collection}-first`, collection, kind: 'search', term: 'empty' })
 				.ready;
 			const requestsBefore =
-				collection === 'products'
-					? products.state.searchPulls + products.state.skuPulls
-					: customers.state.pulls;
+				collection === 'products' ? products.state.searchPulls : customers.state.pulls;
 			await expect(
 				engine.require({ id: `${collection}-second`, collection, kind: 'search', term: 'empty' })
 					.ready
@@ -237,9 +231,7 @@ describe('require() for search — the public search-demand verb', () => {
 				requests: 0,
 			});
 			const requestsAfter =
-				collection === 'products'
-					? products.state.searchPulls + products.state.skuPulls
-					: customers.state.pulls;
+				collection === 'products' ? products.state.searchPulls : customers.state.pulls;
 			expect(requestsAfter).toBe(requestsBefore);
 		}
 		await engine.dispose();
@@ -259,7 +251,7 @@ describe('require() for search — the public search-demand verb', () => {
 			action: 'serve-local',
 			reason: 'products catalogue is fully resident locally',
 		});
-		expect(server.state).toEqual({ searchPulls: 0, skuPulls: 0 });
+		expect(server.state).toEqual({ searchPulls: 0 });
 		await engine.dispose();
 	});
 
@@ -284,7 +276,7 @@ describe('require() for search — the public search-demand verb', () => {
 				term: 'hat',
 			}).ready
 		).resolves.toMatchObject({ action: 'fetched' });
-		expect(server.state).toEqual({ searchPulls: 1, skuPulls: 1 });
+		expect(server.state).toEqual({ searchPulls: 1 });
 		await engine.dispose();
 	});
 
@@ -305,7 +297,7 @@ describe('require() for search — the public search-demand verb', () => {
 			engine.require({ id: `fetch-${_case}`, collection: 'products', kind: 'search', term: 'hat' })
 				.ready
 		).resolves.toMatchObject({ action: 'fetched' });
-		expect(server.state).toEqual({ searchPulls: 1, skuPulls: 1 });
+		expect(server.state).toEqual({ searchPulls: 1 });
 		await engine.dispose();
 	});
 
@@ -326,7 +318,7 @@ describe('require() for search — the public search-demand verb', () => {
 				forceRefresh: true,
 			}).ready
 		).resolves.toMatchObject({ action: 'fetched' });
-		expect(server.state).toEqual({ searchPulls: 2, skuPulls: 2 });
+		expect(server.state).toEqual({ searchPulls: 2 });
 		await engine.dispose();
 	});
 
@@ -607,7 +599,7 @@ describe('require() for search — the public search-demand verb', () => {
 		await engine.dispose();
 	});
 
-	it('rounds a variations search trip over both legs, preserves parent_id, and persists no search task', async () => {
+	it('rounds a variations search trip, preserves parent_id, and persists no search task', async () => {
 		const server = scriptedVariationSearchProxy([
 			variationEnvelopeDocument(654, 321, 'Blue keyboard'),
 		]);
@@ -621,10 +613,9 @@ describe('require() for search — the public search-demand verb', () => {
 				kind: 'search',
 				term: 'blue keyboard',
 			}).ready
-		).resolves.toMatchObject({ action: 'fetched', documents: 1, requests: 2 });
+		).resolves.toMatchObject({ action: 'fetched', documents: 1, requests: 1 });
 		expect(server.state.urls).toEqual([
 			`${SYNC_BASE}/variations?search=blue+keyboard&per_page=25&page=1`,
-			`${SYNC_BASE}/variations?sku=blue+keyboard&per_page=25&page=1`,
 		]);
 
 		const scope = engine.active();
@@ -697,11 +688,11 @@ describe('require() for search — the public search-demand verb', () => {
 				forceRefresh: true,
 			}).ready
 		).resolves.toMatchObject({ action: 'fetched' });
-		expect(server.state.urls).toHaveLength(4);
+		expect(server.state.urls).toHaveLength(2);
 		await engine.dispose();
 	});
 
-	it('runs both variations legs for a two-character term', async () => {
+	it('runs one variations search request for a two-character term', async () => {
 		const server = scriptedVariationSearchProxy([]);
 		const engine = engineWith(server.fetch);
 		await engine.ready;
@@ -713,11 +704,8 @@ describe('require() for search — the public search-demand verb', () => {
 				kind: 'search',
 				term: '42',
 			}).ready
-		).resolves.toMatchObject({ action: 'fetched', requests: 2 });
-		expect(server.state.urls).toEqual([
-			`${SYNC_BASE}/variations?search=42&per_page=25&page=1`,
-			`${SYNC_BASE}/variations?sku=42&per_page=25&page=1`,
-		]);
+		).resolves.toMatchObject({ action: 'fetched', requests: 1 });
+		expect(server.state.urls).toEqual([`${SYNC_BASE}/variations?search=42&per_page=25&page=1`]);
 		expect(await searchTaskRows(engine)).toEqual([]);
 		await engine.dispose();
 	});
@@ -913,7 +901,7 @@ describe('require() for search — the public search-demand verb', () => {
 			expect.objectContaining({ action: 'fetched' }),
 			expect.objectContaining({ action: 'fetched' }),
 		]);
-		expect(server.state).toEqual({ searchPulls: 1, skuPulls: 1 });
+		expect(server.state).toEqual({ searchPulls: 1 });
 		expect(await searchTaskRows(engine)).toEqual([]);
 		await engine.dispose();
 	});
@@ -924,7 +912,6 @@ describe('require() for search — the public search-demand verb', () => {
 		const engine = engineWith(async (url, init) => {
 			const parsed = new URL(url);
 			if (!parsed.pathname.endsWith('/products')) return json([]);
-			if (parsed.searchParams.has('sku')) return json([]);
 			const signal = init?.signal;
 			if (!signal) throw new Error('search request missing abort signal');
 			started.resolve(signal);
@@ -962,7 +949,6 @@ describe('require() for search — the public search-demand verb', () => {
 		const engine = engineWith(async (url, init) => {
 			const parsed = new URL(url);
 			if (!parsed.pathname.endsWith('/products')) return json([]);
-			if (parsed.searchParams.has('sku')) return json([]);
 			searchPulls += 1;
 			const signal = init?.signal;
 			if (!signal) throw new Error('search request missing abort signal');
@@ -1001,14 +987,10 @@ describe('require() for search — the public search-demand verb', () => {
 	it('queues a wider redeclare behind the in-flight walk instead of aborting it (#1221)', async () => {
 		const response = Promise.withResolvers<Response>();
 		const started = Promise.withResolvers<AbortSignal>();
-		const state = { searchPulls: 0, skuPulls: 0 };
+		const state = { searchPulls: 0 };
 		const engine = engineWith(async (url, init) => {
 			const parsed = new URL(url);
 			if (!parsed.pathname.endsWith('/products')) return json([]);
-			if (parsed.searchParams.has('sku')) {
-				state.skuPulls += 1;
-				return json([]);
-			}
 			state.searchPulls += 1;
 			const signal = init?.signal;
 			if (!signal) throw new Error('search request missing abort signal');
@@ -1038,7 +1020,7 @@ describe('require() for search — the public search-demand verb', () => {
 		await Promise.resolve(); // flush the deferred-abandon microtask
 		expect(signal.aborted).toBe(false);
 
-		// Short page → both legs exhausted → the finished walk records a COMPLETE lane,
+		// A short page exhausts the search → the finished walk records a COMPLETE lane,
 		// which answers the wider successor without another wire request.
 		response.resolve(json([]));
 		await expect(second.ready).resolves.toMatchObject({
@@ -1047,7 +1029,7 @@ describe('require() for search — the public search-demand verb', () => {
 			requests: 0,
 		});
 		expect(signal.aborted).toBe(false);
-		expect(state).toEqual({ searchPulls: 1, skuPulls: 1 });
+		expect(state).toEqual({ searchPulls: 1 });
 		await engine.dispose();
 	});
 
@@ -1104,7 +1086,6 @@ describe('require() for search — the public search-demand verb', () => {
 		const engine = engineWith(async (url, init) => {
 			const parsed = new URL(url);
 			if (!parsed.pathname.endsWith('/products')) return json([]);
-			if (parsed.searchParams.has('sku')) return json([]);
 			const signal = init?.signal;
 			if (!signal) throw new Error('search request missing abort signal');
 			started.resolve(signal);
@@ -1151,7 +1132,7 @@ describe('require() for search — the public search-demand verb', () => {
 			const engine = engineWith(async (url) => {
 				const parsed = new URL(url);
 				if (parsed.pathname.endsWith('/customers')) return customerGate.promise;
-				if (parsed.pathname.endsWith('/products') && !parsed.searchParams.has('sku')) {
+				if (parsed.pathname.endsWith('/products')) {
 					productSearchPulls += 1;
 				}
 				return json([]);
@@ -1191,7 +1172,7 @@ describe('require() for search — the public search-demand verb', () => {
 		const engine = engineWith(async (url) => {
 			const parsed = new URL(url);
 			if (parsed.pathname.endsWith('/customers')) return customerGate.promise;
-			if (parsed.pathname.endsWith('/products') && !parsed.searchParams.has('sku')) {
+			if (parsed.pathname.endsWith('/products')) {
 				productSearchPulls += 1;
 			}
 			return json([]);
@@ -1235,7 +1216,7 @@ describe('require() for search — the public search-demand verb', () => {
 		const engine = engineWith(async (url) => {
 			const parsed = new URL(url);
 			if (parsed.pathname.endsWith('/customers')) return customerGate.promise;
-			if (parsed.pathname.endsWith('/products') && !parsed.searchParams.has('sku')) {
+			if (parsed.pathname.endsWith('/products')) {
 				productPerPage.push(parsed.searchParams.get('per_page') ?? '');
 			}
 			return json([]);
@@ -1338,8 +1319,8 @@ describe('require() for search — the public search-demand verb', () => {
 				kind: 'search',
 				term: 'keyboard',
 			}).ready
-		).resolves.toMatchObject({ action: 'fetched', documents: 1, requests: 2 });
-		expect(server.state).toEqual({ searchPulls: 1, skuPulls: 1 });
+		).resolves.toMatchObject({ action: 'fetched', documents: 1, requests: 1 });
+		expect(server.state).toEqual({ searchPulls: 1 });
 		expect(await searchTaskRows(engine)).toEqual([]);
 		await engine.dispose();
 	});
