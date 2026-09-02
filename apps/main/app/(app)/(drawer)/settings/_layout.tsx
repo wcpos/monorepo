@@ -1,25 +1,31 @@
-import * as React from 'react';
+import { View } from 'react-native';
 
-import { Slot } from 'expo-router';
+import { Stack } from 'expo-router';
 
-import { useT } from '@wcpos/core/contexts/translations';
-import { NavigationAreaLayout } from '@wcpos/core/screens/main/components/navigation-area';
+import { useNavigationBackground } from '../../../../components/use-navigation-background';
 
-import { useSettingsNavigationItems } from '../../../../components/area-navigation/settings';
+export const unstable_settings = { initialRouteName: '(pages)' };
 
-export default function SettingsLayout() {
-	const items = useSettingsNavigationItems();
-	const t = useT();
-
+export default function SettingsStack() {
+	const screenBackgroundColor = useNavigationBackground();
 	return (
-		<NavigationAreaLayout
-			items={items}
-			indexHref="/settings"
-			areaLabel={t('common.settings')}
-			testID="settings-navigation"
-			screenTestID="settings-screen"
-		>
-			<Slot />
-		</NavigationAreaLayout>
+		<View className="bg-background flex-1">
+			<Stack
+				screenOptions={{
+					headerShown: false,
+					contentStyle: { backgroundColor: screenBackgroundColor },
+				}}
+			>
+				<Stack.Screen name="(pages)" />
+				<Stack.Screen
+					name="(modals)/mini-app/[id]"
+					options={{
+						presentation: 'containedTransparentModal',
+						animation: 'fade',
+						contentStyle: { backgroundColor: 'transparent' },
+					}}
+				/>
+			</Stack>
+		</View>
 	);
 }
