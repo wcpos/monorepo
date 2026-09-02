@@ -59,9 +59,23 @@ on:
           - ios
           - android
 
+# LATEST HEAD WINS (owner ruling 2026-09-01): ~10 queued 1-2h runs blocked the
+# 1.10.5 release — "I only really care about the last PR; that's more important
+# than waiting for all the previous PRs to finish."
+#  - PRs: one live run per PR, newest head supersedes (unchanged).
+#  - Main PUSHES: one shared group + cancel-in-progress, so the newest main
+#    head cancels queued AND running older-head runs. This deliberately
+#    reverses the run-unique main groups of #1687 for THIS workflow only: the
+#    2026-08-30 pending-cancels-pending incident the turnstile script guards
+#    against was cross-run JOB-level groups eating other runs' device jobs;
+#    run-level supersession of a superseded MAIN head is now the wanted
+#    behavior, and the FIFO turnstile simply no longer sees the cancelled
+#    runs. Deploy's release gate reads the Deploy workflow, not this one.
+#  - workflow_dispatch and attempt>1 re-runs keep run-unique groups: a
+#    deliberate human/bot run must not be killed by the next merge.
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('native-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || github.ref == 'refs/heads/main' && format('native-main-run-{0}', github.run_id) || format('native-{0}', github.ref) }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: ${{ github.event_name == 'pull_request' && format('native-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || (github.event_name == 'push' && github.ref == 'refs/heads/main') && format('native-main-{0}', github.run_attempt != '1' && github.run_id || 'push') || format('native-{0}-{1}', github.ref, github.run_id) }}
+  cancel-in-progress: true
 
 env:
   EXPO_USE_FAST_RESOLVER: true

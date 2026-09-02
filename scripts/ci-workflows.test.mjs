@@ -436,11 +436,22 @@ test('native E2E routes next-target PRs to the next store', () => {
 	assert.match(seed.stderr, /Store unreachable: https:\/\/dev-next\.wcpos\.com → HTTP 503/);
 });
 
-test('native E2E concurrency isolates pull requests without replacing queued main runs', () => {
+test('native E2E concurrency isolates pull requests and supersedes stale main pushes', () => {
 	const { concurrency } = readWorkflow('e2e-native.yml');
 
+	// PRs keep per-PR groups (newest head supersedes within one PR only).
 	assert.match(concurrency.group, /github\.event\.pull_request\.number/);
-	assert.match(concurrency.group, /native-main-run-\{0\}', github\.run_id/);
+	// Main PUSHES share one group so the newest main head cancels queued AND
+	// running older-head runs (owner ruling 2026-09-01: latest head wins —
+	// ~10 queued 1-2h runs blocked the 1.10.5 release). Attempt>1 re-runs
+	// stay run-unique so a deliberate re-run is never killed by the next merge.
+	assert.match(concurrency.group, /github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'/);
+	assert.match(
+		concurrency.group,
+		/native-main-\{0\}', github\.run_attempt != '1' && github\.run_id \|\| 'push'/
+	);
+	// Supersession is inert without cancellation.
+	assert.equal(concurrency['cancel-in-progress'], true);
 	assert.notEqual(concurrency.group, '${{ github.workflow }}');
 });
 
