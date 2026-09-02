@@ -14,6 +14,8 @@ import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord } from '@wcpos/query';
 import { useDocField } from '@wcpos/query';
 
+import '../register-slot-entries';
+
 import { Actions } from './cells/actions';
 import { Name } from './cells/name';
 import { Price } from './cells/price';
@@ -46,14 +48,17 @@ import { useTaxSettings } from '../../contexts/tax-rates';
 import { useUISettings } from '../../contexts/ui-settings';
 import initialSettings from '../../contexts/ui-settings/initial-settings.json';
 import { COGS } from './cells/cogs';
+import { createReadonlyView, Slot } from '../../../../extensions/slots';
 import {
 	QueryStateProvider,
 	useQueryState,
 	useQueryStateActions,
+	useQueryStateStore,
 	useRelationalCollectionBinding,
 } from '../../../../query';
 import { normalizeQuerySortField } from '../../../../query/query-state-translator';
 
+import type { SlotContracts } from '../../../../extensions/slots';
 import type { QueryStateActions, QueryStateOf } from '../../../../query';
 import type { SortFieldsByCollection } from '../../../../query/query-state-types';
 import type { BindingDataTableFooterProps, DataTableFeatures } from '../../components/data-table';
@@ -200,6 +205,33 @@ function POSProductsContent({
 		[actions]
 	);
 	const { calcTaxes } = useTaxSettings();
+
+	/**
+	 * The filter-bar slot's two channels. Both are memoised on the store, not on state, so a
+	 * keystroke re-renders the entries that subscribed to the view and nothing else.
+	 *
+	 * `data` hands out a CLONE of `{ search, filters }` — an entry must never hold a
+	 * reference into the store, and the projection is plain data by contract.
+	 */
+	const store = useQueryStateStore<'products'>();
+	const filterSlotData = React.useMemo(
+		() =>
+			createReadonlyView(store, (queryState) => ({
+				search: queryState.search,
+				filters: JSON.parse(JSON.stringify(queryState.filters)) as QueryStateOf<'products'>['filters'],
+			})),
+		[store]
+	);
+	const filterSlotApi = React.useMemo<SlotContracts['pos.products.filter-bar.item']['api']>(
+		() => ({
+			setFilter: async (field, value) => actions.setFilter(field, value),
+			clearFilter: async (field) => actions.clearFilter(field),
+			resetFilters: async () => actions.resetFilters(),
+			setSearch: async (term) => actions.setSearch(term),
+		}),
+		[actions]
+	);
+
 	const viewMode = useDocField(uiSettings, (value) => value.viewMode) === 'grid' ? 'grid' : 'table';
 	const gridColumns = useDocField(uiSettings, (value) => value.gridColumns);
 	const sortBy = useDocField(uiSettings, (value) => value.sortBy);
@@ -310,6 +342,13 @@ function POSProductsContent({
 									<UISettingsForm />
 								</UISettingsDialog>
 							</HStack>
+							<ErrorBoundary>
+								<Slot
+									id="pos.products.filter-bar.item"
+									data={filterSlotData}
+									api={filterSlotApi}
+								/>
+							</ErrorBoundary>
 							<ErrorBoundary>
 								<FilterBar />
 							</ErrorBoundary>

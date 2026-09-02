@@ -2,8 +2,10 @@ export {
 	QueryStateProvider,
 	useQueryState,
 	useQueryStateActions,
+	useQueryStateStore,
 	useSearchResetNonce,
 } from './query-state-store';
+export type { QueryStateStore } from './query-state-store';
 export { useGuardedExtendLimit, useGuardedExtension } from './use-guarded-extend-limit';
 export {
 	useCollectionBinding,

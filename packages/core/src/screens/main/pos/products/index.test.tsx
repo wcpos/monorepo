@@ -97,6 +97,10 @@ jest.mock('./grid', () => ({
 		return <div />;
 	},
 }));
+// POSProducts imports the POS slot registrations for their side effect, which reaches the
+// cart column and the quick-filter entry. Neither is under test here.
+jest.mock('../cart', () => ({ OpenOrders: () => null }));
+jest.mock('./quick-filters-bar', () => ({ QuickFiltersBar: () => null }));
 jest.mock('../../components/product/filter-bar', () => ({
 	FilterBar: (props: Record<string, unknown>) => {
 		mockFilterBarProps = props;

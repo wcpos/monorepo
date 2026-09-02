@@ -3,6 +3,7 @@ import * as React from 'react';
 import { registerSlotEntry } from '../../../extensions/slots';
 import { OpenOrders } from './cart';
 import { POSProducts } from './products';
+import { QuickFiltersBar } from './products/quick-filters-bar';
 
 import type { SlotEntryProps } from '../../../extensions/slots';
 
@@ -40,4 +41,13 @@ registerSlotEntry({
 	title: 'Cart',
 	capabilities: [],
 	component: CartPanelEntry,
+});
+
+registerSlotEntry({
+	id: 'quick-filters',
+	slot: 'pos.products.filter-bar.item',
+	order: 10,
+	title: 'Quick filters',
+	capabilities: [],
+	component: QuickFiltersBar,
 });
