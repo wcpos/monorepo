@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,13 +37,25 @@ const PLUGIN_REACT_COMPILER = require.resolve('babel-plugin-react-compiler');
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-/** Source roots the app build compiles. Test files and mocks are excluded. */
-export const SOURCE_ROOTS = [
-	'packages/core/src',
-	'packages/components/src',
-	'packages/query/src',
-	'packages/hooks/src',
-];
+/**
+ * Source roots the app build compiles: every workspace package's `src` plus the app's
+ * own routes and libraries. Derived, not listed, so a new package cannot fall outside
+ * the gate (Codex on #1779 found resizable-panels missing from a hand-written list).
+ * Packages without React code cost nothing: the compiler emits no events for them.
+ * Test files and mocks are excluded.
+ */
+export function discoverSourceRoots(root = repoRoot) {
+	const roots = [];
+	for (const entry of readdirSync(path.join(root, 'packages'), { withFileTypes: true })) {
+		if (!entry.isDirectory()) continue;
+		const src = path.join('packages', entry.name, 'src');
+		if (existsSync(path.join(root, src))) roots.push(src);
+	}
+	for (const appDir of ['apps/main/app', 'apps/main/lib', 'apps/main/components']) {
+		if (existsSync(path.join(root, appDir))) roots.push(appDir);
+	}
+	return roots;
+}
 
 /** Skip reasons that are rules violations. Matched as prefixes of the compiler's message. */
 export const SMELL_REASONS = [
@@ -54,15 +66,20 @@ export const SMELL_REASONS = [
 ];
 
 /**
- * Sites the compiler will always skip for a smell-class reason, on purpose.
- * Key: repo-relative file. Value: why it is allowed.
+ * Sites the compiler will always skip for ONE smell-class reason, on purpose. An entry
+ * excuses only that reason in that file; any other smell there stays gated.
  */
-export const ALLOWLIST = new Map([
-	[
-		'packages/components/src/virtualized-list/virtualized-list.web.tsx',
-		"TanStack Virtual's useVirtualizer is on the compiler's incompatible list by design; the wrapper opts out with 'use no memo'.",
-	],
-]);
+export const ALLOWLIST = [
+	{
+		file: 'packages/components/src/virtualized-list/virtualized-list.web.tsx',
+		reason: 'Use of incompatible library',
+		why: "TanStack Virtual's useVirtualizer is on the compiler's incompatible list by design; the wrapper opts out with 'use no memo'.",
+	},
+];
+
+function isAllowed(smell) {
+	return ALLOWLIST.some((a) => a.file === smell.file && smell.reason.startsWith(a.reason));
+}
 
 function walk(dir, out) {
 	for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -103,7 +120,7 @@ function lineOf(event) {
  * Compile every file under the roots and classify each skip.
  * Returns { compiled, smells: [{file, line, reason}], todos: Map<reason, count> }.
  */
-export function auditReactCompiler(roots = SOURCE_ROOTS, root = repoRoot) {
+export function auditReactCompiler(roots = discoverSourceRoots(), root = repoRoot) {
 	let compiled = 0;
 	const smells = [];
 	const todos = new Map();
@@ -138,8 +155,10 @@ export function auditReactCompiler(roots = SOURCE_ROOTS, root = repoRoot) {
 
 function main() {
 	const { compiled, smells, todos } = auditReactCompiler();
-	const offending = smells.filter((s) => !ALLOWLIST.has(s.file));
-	const unusedAllow = [...ALLOWLIST.keys()].filter((f) => !smells.some((s) => s.file === f));
+	const offending = smells.filter((s) => !isAllowed(s));
+	const unusedAllow = ALLOWLIST.filter(
+		(a) => !smells.some((s) => s.file === a.file && s.reason.startsWith(a.reason))
+	).map((a) => `${a.file} (${a.reason})`);
 
 	console.log(`react-compiler: ${compiled} functions compiled`);
 	const todoTotal = [...todos.values()].reduce((a, b) => a + b, 0);
@@ -166,7 +185,7 @@ function main() {
 	}
 	if (failed) process.exit(1);
 	console.log(
-		`react-compiler: no Rules-of-React skips outside the ${ALLOWLIST.size}-entry allowlist`
+		`react-compiler: no Rules-of-React skips outside the ${ALLOWLIST.length}-entry allowlist`
 	);
 }
 
