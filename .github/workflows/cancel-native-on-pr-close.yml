@@ -14,6 +14,7 @@ on:
 
 permissions:
   actions: write
+  pull-requests: read
 
 jobs:
   cancel-native-runs:
@@ -23,24 +24,60 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo;
-            const headSha = context.payload.pull_request.head.sha;
-            const headBranch = context.payload.pull_request.head.ref;
-            const prNumber = context.payload.pull_request.number;
-            const { data } = await github.rest.actions.listWorkflowRuns({
+            const pull = context.payload.pull_request;
+            const prNumber = pull.number;
+            const closedAt = Date.parse(pull.closed_at);
+            // A run's `pull_requests` lists OPEN pull requests only, so a closed PR
+            // never appears there (Codex review on #1770). Identify the PR's runs by
+            // head branch + head SHA instead — the same identity e2e-native.yml ran.
+            // Every page: a busy branch (bot pushes, reruns) can hold more active runs
+            // than one page shows (CodeRabbit on #1772).
+            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
               owner,
               repo,
               workflow_id: 'e2e-native.yml',
               event: 'pull_request',
-              branch: headBranch,
-              per_page: 20,
+              branch: pull.head.ref,
+              per_page: 100,
             });
-            const active = data.workflow_runs.filter(
+            // Closed-then-reopened before this job got a runner: the reopen has
+            // started a fresh run that must live. Re-read the PR and skip everything
+            // if it is open again; otherwise only touch runs created before the close.
+            const { data: current } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+            if (current.state !== 'closed') {
+              core.info(`PR #${prNumber} is ${current.state} again — leaving its runs alone`);
+              return;
+            }
+            // Every active run of this PR's head branch from this PR's head repo, whatever
+            // its SHA: e2e-native.yml gives attempt>1 reruns a run-specific concurrency
+            // group, so a rerun of an EARLIER head can outlive later pushes and still hold
+            // the device turnstile at close (Codex review on #1772).
+            // Fail closed: without the head repository's identity a branch name alone
+            // could match another fork's run of the same name (CodeRabbit on #1772).
+            const headRepo = pull.head.repo && pull.head.repo.full_name;
+            if (!headRepo) {
+              core.info(`PR #${prNumber}: head repository unknown (deleted fork?) — cancelling nothing`);
+              return;
+            }
+            const active = runs.filter(
               (run) =>
                 ['queued', 'in_progress', 'waiting', 'pending', 'requested'].includes(run.status) &&
-                run.pull_requests.some((pull) => pull.number === prNumber)
+                run.head_branch === pull.head.ref &&
+                run.head_repository?.full_name === headRepo &&
+                Date.parse(run.created_at) <= closedAt
             );
+            let cancelled = 0;
             for (const run of active) {
-              await github.rest.actions.cancelWorkflowRun({ owner, repo, run_id: run.id });
-              core.info(`cancelled e2e-native run ${run.id} (${run.head_sha.slice(0, 9)}) — PR #${prNumber} closed, head was ${headSha.slice(0, 9)}`);
+              try {
+                await github.rest.actions.cancelWorkflowRun({ owner, repo, run_id: run.id });
+                cancelled += 1;
+                core.info(`cancelled e2e-native run ${run.id} (${run.head_sha.slice(0, 9)}) — PR #${prNumber} closed`);
+              } catch (error) {
+                // 409 only: the run reached a terminal state between the list and the
+                // cancel. Anything else (403, 429, 5xx) leaves the run holding the
+                // turnstile and must fail this job loudly, not shrink a count.
+                if (error.status !== 409) throw error;
+                core.info(`run ${run.id}: already finished — continuing`);
+              }
             }
-            if (active.length === 0) core.info(`no active e2e-native run for PR #${prNumber}`);
+            core.info(`PR #${prNumber}: ${cancelled} of ${active.length} active e2e-native run(s) cancelled`);
