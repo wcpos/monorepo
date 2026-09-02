@@ -46,6 +46,8 @@ html, body { margin:0; height:100%; font-family:Inter, system-ui, sans-serif; co
 .A .pay .card.ok { background:var(--ok); } .A .pay .card.bad { background:var(--bad); }
 .A .pay .card .k { font-size:13px; letter-spacing:.12em; text-transform:uppercase; opacity:.85; }
 .A .pay .card .v { font-size:30px; font-weight:800; margin-top:6px; }
+.A .pay .card .icon { width:64px; height:64px; border-radius:50%; display:grid; place-items:center; font-size:34px; margin-bottom:14px; background:rgba(255,255,255,.18); }
+.A .pay .card .icon.ring { border:5px solid rgba(255,255,255,.35); border-top-color:#fff; background:transparent; animation:spin 1.1s linear infinite; }
 .A .ledger .t.paid { color:var(--ok); }
 
 /* ---------- Variant B — Stage (hero of the last item, running total footer) ---------- */
@@ -170,9 +172,9 @@ function A(state, s) {
       <div class="pay"><div class="ledger">
         <div class="t"><span>Total</span><span class="money">${s.totals.total}</span></div>
         ${state !== 'payment.complete' ? `<div class="t paid"><span>Cash paid</span><span class="money">${s.ledger.payments[0].amount}</span></div>` : ''}
-      </div><div class="card ${cls}"><div class="k">${p.k}</div><div class="v money">${p.v(s)}</div><div style="margin-top:8px;opacity:.9">${p.sub(s)}</div></div></div></div></div>`;
+      </div><div class="card ${cls}">${state === 'payment.started' ? '<div class="icon ring"></div>' : state === 'payment.declined' ? '<div class="icon">✕</div>' : '<div class="icon">✓</div>'}<div class="k">${p.k}</div><div class="v money">${p.v(s)}</div><div style="margin-top:8px;opacity:.9">${p.sub(s)}</div></div></div></div></div>`;
 }
-A.title = 'Ledger — itemised list + totals panel';
+A.title = 'Ledger — itemised list + totals panel (CHOSEN: + Stage payment icons)';
 
 // ------------------------------------------------------------------ Variant B — Stage
 function B(state, s) {
