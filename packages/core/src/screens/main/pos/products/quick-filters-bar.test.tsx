@@ -3,7 +3,9 @@
  */
 import * as React from 'react';
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+
+import { log } from '@wcpos/utils/logger';
 
 import { QuickFiltersBar } from './quick-filters-bar';
 import { createReadonlyView } from '../../../../extensions/slots';
@@ -162,6 +164,21 @@ describe('QuickFiltersBar', () => {
 		expect(pill().dataset.active).toBe('true');
 		fireEvent.click(pill());
 		expect(api.clearFilter).toHaveBeenCalledWith('stock_status');
+	});
+
+	it('reports a rejected host call instead of leaving an unhandled rejection', async () => {
+		mockQuickFilters = [filter({ kind: 'featured' })];
+		api.setFilter.mockRejectedValueOnce(new Error('host refused'));
+		renderBar();
+
+		expect(() => fireEvent.click(pill())).not.toThrow();
+		await act(async () => undefined);
+
+		expect(log.warn).toHaveBeenCalledTimes(1);
+		const [message, options] = (log.warn as jest.Mock).mock.calls[0];
+		expect(message).toContain('setFilter');
+		expect(message).toContain('Quick');
+		expect(options.context).toMatchObject({ method: 'setFilter', quickFilterId: 'qf-1' });
 	});
 
 	it('sets the search term, and clears it when it is already the current search', () => {

@@ -15,14 +15,41 @@ let mockLayoutHandler:
 let mockPosition: 'left' | 'right' = 'left';
 const mockPatchUI = jest.fn();
 
+/**
+ * `useUISettings` hands back a stable RxState container; `useDocField` is what subscribes a
+ * component to one of its fields. This stands in for that subscription so a settings change
+ * can be pushed at a MOUNTED route, the way the in-place settings dialog does it.
+ */
+const mockUISettings = {
+	width: 60,
+	// A getter, because the real RxState container is stable and its FIELDS change under it.
+	// An object literal rebuilt per call would freeze whatever `useDocField` captured.
+	get position() {
+		return mockPosition;
+	},
+};
+const mockUISettingsListeners = new Set<() => void>();
+const mockSubscribeUISettings = (listener: () => void) => {
+	mockUISettingsListeners.add(listener);
+	return () => {
+		mockUISettingsListeners.delete(listener);
+	};
+};
+
 jest.mock('expo-router', () => ({ useSegments: () => [] }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ bottom: 0 }) }));
 jest.mock('@wcpos/core/contexts/theme', () => ({ useTheme: () => ({ screenSize: 'lg' }) }));
+jest.mock('@wcpos/query', () => {
+	const react = jest.requireActual('react');
+	return {
+		useDocField: (source: unknown, select: (value: unknown) => unknown) => {
+			const read = () => select(source);
+			return react.useSyncExternalStore(mockSubscribeUISettings, read, read);
+		},
+	};
+});
 jest.mock('@wcpos/core/screens/main/contexts/ui-settings', () => ({
-	useUISettings: () => ({
-		uiSettings: { width: 60, position: mockPosition },
-		patchUI: mockPatchUI,
-	}),
+	useUISettings: () => ({ uiSettings: mockUISettings, patchUI: mockPatchUI }),
 }));
 /**
  * The slot registry and the panel registrations are the code under test, so they are the two
@@ -84,18 +111,36 @@ jest.mock('@wcpos/components/panels', () => {
 
 import ResizablePOSColumns from '../app/(app)/(drawer)/(pos)/(columns)/index';
 
-function renderColumns(position: 'left' | 'right') {
-	mockPosition = position;
+let view: ReactTestRenderer | undefined;
+
+function resetRecords() {
 	mockPanels.length = 0;
 	mockChildOrder.length = 0;
+}
+
+function renderColumns(position: 'left' | 'right') {
+	mockPosition = position;
+	resetRecords();
 	mockLayoutHandler = undefined;
 	mockPatchUI.mockClear();
-	let view: ReactTestRenderer;
 	act(() => {
 		view = create(<ResizablePOSColumns />);
 	});
-	act(() => view!.unmount());
 }
+
+/** Change a UI setting the way the in-place settings dialog does: no remount. */
+function setPositionSetting(position: 'left' | 'right') {
+	mockPosition = position;
+	resetRecords();
+	act(() => {
+		mockUISettingsListeners.forEach((listener) => listener());
+	});
+}
+
+afterEach(() => {
+	if (view) act(() => view!.unmount());
+	view = undefined;
+});
 
 describe('POS columns layout as a pos.columns.panel slot', () => {
 	it('renders the registered panels products-first by default, with a handle between them', () => {
@@ -117,6 +162,17 @@ describe('POS columns layout as a pos.columns.panel slot', () => {
 			{ id: 'cart', testID: 'pos-cart-panel', defaultSize: 40 },
 			{ id: 'products', testID: 'pos-products-panel', defaultSize: 60 },
 		]);
+	});
+
+	it('reorders a MOUNTED route when the position setting changes', () => {
+		renderColumns('left');
+		expect(mockChildOrder).toEqual(['products', 'pos-resize-handle', 'cart']);
+
+		setPositionSetting('right');
+		expect(mockChildOrder).toEqual(['cart', 'pos-resize-handle', 'products']);
+
+		setPositionSetting('left');
+		expect(mockChildOrder).toEqual(['products', 'pos-resize-handle', 'cart']);
 	});
 
 	it.each([

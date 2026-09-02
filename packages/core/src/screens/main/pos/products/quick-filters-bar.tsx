@@ -3,6 +3,7 @@ import * as React from 'react';
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { useDocField } from '@wcpos/query';
+import { log } from '@wcpos/utils/logger';
 
 import { VALUELESS_QUICK_FILTER_KINDS } from './quick-filters';
 import { useSlotValue } from '../../../../extensions/slots';
@@ -17,6 +18,19 @@ const TERM_FILTER_FIELDS = {
 	tag: 'tags',
 	brand: 'brands',
 } as const;
+
+/**
+ * Every `api` method is allowed to reject — the host may refuse a call — and a rejected
+ * promise from an event handler never reaches the ErrorBoundary around this entry. Report it
+ * instead of leaving an unhandled rejection.
+ */
+function callHost(method: string, filter: QuickFilter, run: () => Promise<void>): void {
+	run().catch((error: unknown) => {
+		log.warn(`Quick filter "${filter.label}": ${method} was rejected by the host`, {
+			context: { method, quickFilterId: filter.id, kind: filter.kind, error },
+		});
+	});
+}
 
 /**
  * The merchant-configured quick filters, as an entry in `pos.products.filter-bar.item`.
@@ -63,20 +77,24 @@ export function QuickFiltersBar({ data, api }: SlotEntryProps<'pos.products.filt
 				const field = TERM_FILTER_FIELDS[filter.kind];
 				const id = Number(filter.value);
 				const current = filters[field] ?? [];
-				void api.setFilter(field, active ? current.filter((term) => term !== id) : [...current, id]);
+				const next = active ? current.filter((term) => term !== id) : [...current, id];
+				callHost('setFilter', filter, () => api.setFilter(field, next));
 				return;
 			}
 			case 'featured':
-			case 'on_sale':
-				void (active ? api.clearFilter(filter.kind) : api.setFilter(filter.kind, true));
+			case 'on_sale': {
+				// Captured, because the narrowing on `filter.kind` does not survive into a closure.
+				const field = filter.kind;
+				if (active) callHost('clearFilter', filter, () => api.clearFilter(field));
+				else callHost('setFilter', filter, () => api.setFilter(field, true));
 				return;
+			}
 			case 'stock_status':
-				void (active
-					? api.clearFilter('stock_status')
-					: api.setFilter('stock_status', filter.value));
+				if (active) callHost('clearFilter', filter, () => api.clearFilter('stock_status'));
+				else callHost('setFilter', filter, () => api.setFilter('stock_status', filter.value));
 				return;
 			case 'search':
-				void api.setSearch(active ? '' : filter.value);
+				callHost('setSearch', filter, () => api.setSearch(active ? '' : filter.value));
 		}
 	};
 

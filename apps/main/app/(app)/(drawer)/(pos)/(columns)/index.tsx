@@ -16,6 +16,7 @@ import { Slot } from '@wcpos/core/extensions/slots';
 import { useUISettings } from '@wcpos/core/screens/main/contexts/ui-settings';
 import { OpenOrders } from '@wcpos/core/screens/main/pos/cart';
 import { POSProducts } from '@wcpos/core/screens/main/pos/products';
+import { useDocField } from '@wcpos/query';
 
 import type { ReadonlyView, SlotContracts } from '@wcpos/core/extensions/slots';
 
@@ -128,8 +129,13 @@ export default function ResizablePOSColumns() {
 	 * The wide layout IS the `pos.columns.panel` slot: the registry supplies the panels and
 	 * their order, and this route only arranges them — reversing when the merchant put the
 	 * products on the right — and owns the resize handles and the persisted width.
+	 *
+	 * `position` is read through `useDocField` because the settings dialog that writes it is
+	 * rendered INSIDE the products panel: this route stays mounted across the change, and a
+	 * plain property read off the RxState container would not re-render it.
 	 */
-	const productsOnRight = uiSettings.position === 'right';
+	const position = useDocField(uiSettings, (value) => value.position);
+	const productsOnRight = position === 'right';
 
 	return (
 		<View testID="screen-pos" style={{ flex: 1, paddingBottom: bottom }}>
