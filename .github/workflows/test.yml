@@ -33,6 +33,8 @@ jobs:
   lint:
     name: "\U0001F9F9 Lint"
     runs-on: ubuntu-latest
+    # turbo-driven; a healthy run is ~10 min (lint + typecheck + script tests + translations). On 2026-09-02 a wedged Lint held the Merge Gate for its whole 1h14 budget (PR #1787, run 33684523571).
+    timeout-minutes: 30
     needs: changes
     if: needs.changes.outputs.lint == 'true' && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next')
     steps:
@@ -73,6 +75,8 @@ jobs:
   unit-tests:
     name: "\U0001F9EA Unit Tests"
     runs-on: ubuntu-latest
+    # Jest across the workspace; a healthy run is ~4 min. Same hang class as the lint job.
+    timeout-minutes: 25
     needs: [changes, lint]
     if: needs.changes.outputs.unit != 'none'
     env:
