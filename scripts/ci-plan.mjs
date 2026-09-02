@@ -300,10 +300,10 @@ function isCommentOnlyLine(content) {
 	return false;
 }
 
-function isNonBehavioural(changed, baseRef) {
+function isNonBehavioural(changed, diffRange) {
 	if (!changed.every((file) => /\.(md|mdx)$/.test(file) || CODE_EXTENSIONS.test(file)))
 		return false;
-	const hunks = spawnSync('git', ['diff', '--no-renames', '-U0', `${baseRef}...HEAD`, '--'], {
+	const hunks = spawnSync('git', ['diff', '--no-renames', '-U0', diffRange, '--'], {
 		encoding: 'utf8',
 	});
 	if (hunks.status !== 0) return false;
@@ -344,19 +344,26 @@ function main() {
 				everythingPlan(`event is ${process.env.GITHUB_EVENT_NAME || 'unset'}, not pull_request`)
 			);
 		if (!baseRef) return emit(everythingPlan('no base SHA'));
-		const diff = spawnSync('git', ['diff', '--no-renames', '--name-only', `${baseRef}...HEAD`], {
+		const mergeParents = spawnSync('git', ['rev-parse', '--verify', 'HEAD^2']).status === 0;
+		const diffRange = mergeParents ? 'HEAD^1...HEAD^2' : `${baseRef}...HEAD`;
+		const rangeKind = mergeParents ? 'merge-parents' : 'base-sha';
+		const emitForRange = (plan) => {
+			plan.reason += `; range: ${rangeKind}`;
+			return emit(plan);
+		};
+		const diff = spawnSync('git', ['diff', '--no-renames', '--name-only', diffRange], {
 			encoding: 'utf8',
 		});
 		if (diff.status !== 0)
-			return emit(
+			return emitForRange(
 				everythingPlan(`git diff against ${baseRef} failed: ${(diff.stderr || '').trim()}`)
 			);
 		const changed = diff.stdout
 			.split('\n')
 			.map((line) => line.trim())
 			.filter(Boolean);
-		if (!changed.length) return emit(everythingPlan('git diff returned no changed files'));
-		emit(planFor(changed, { commentOnly: isNonBehavioural(changed, baseRef) }));
+		if (!changed.length) return emitForRange(everythingPlan('git diff returned no changed files'));
+		emitForRange(planFor(changed, { commentOnly: isNonBehavioural(changed, diffRange) }));
 	} catch (error) {
 		emit(
 			everythingPlan(`planner error: ${error instanceof Error ? error.message : String(error)}`)
