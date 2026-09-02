@@ -43,8 +43,12 @@ function TooltipTrigger({ children, asChild, ...props }: TooltipTriggerProps) {
 		// actually passed press handlers. A Pressable with no handlers still claims the
 		// touch responder, so a tooltip-wrapped icon inside a pressable parent (the cart's
 		// "+" new-order tab) swallowed the tap at its centre and only the edge worked.
-		const hasPressHandlers = Object.keys(props).some((key) => /^on(Long)?Press/.test(key));
-		const Component = asChild ? Slot : hasPressHandlers ? Pressable : View;
+		// Only a CALLABLE Pressable-specific handler (press, long press, hover) earns the
+		// Pressable: `onPress={undefined}` must not, and hover handlers live on Pressable only.
+		const hasPressableHandlers = Object.entries(props).some(
+			([key, value]) => typeof value === 'function' && /^on((Long)?Press|Hover)/.test(key)
+		);
+		const Component = asChild ? Slot : hasPressableHandlers ? Pressable : View;
 		return <Component {...props}>{children}</Component>;
 	}
 
