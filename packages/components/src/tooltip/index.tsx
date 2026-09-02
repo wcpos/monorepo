@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import * as TooltipPrimitive from '@rn-primitives/tooltip';
 import { Slot } from '@rn-primitives/slot';
@@ -39,8 +39,12 @@ function TooltipTrigger({ children, asChild, ...props }: TooltipTriggerProps) {
 	const { showOnNative } = React.useContext(TooltipContext);
 
 	if (!showOnNative) {
-		// Forward props to children - use generic Slot for asChild, Pressable otherwise
-		const Component = asChild ? Slot : Pressable;
+		// Forward props to children - Slot for asChild; a Pressable only when the caller
+		// actually passed press handlers. A Pressable with no handlers still claims the
+		// touch responder, so a tooltip-wrapped icon inside a pressable parent (the cart's
+		// "+" new-order tab) swallowed the tap at its centre and only the edge worked.
+		const hasPressHandlers = Object.keys(props).some((key) => /^on(Long)?Press/.test(key));
+		const Component = asChild ? Slot : hasPressHandlers ? Pressable : View;
 		return <Component {...props}>{children}</Component>;
 	}
 
