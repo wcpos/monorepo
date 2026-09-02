@@ -25,6 +25,33 @@ appId: com.wcpos.main.dev
     visible:
       id: "search-products"
     timeout: 10000
+# Two states a relaunch used to reset, seen leaking on run 33645848904 (Android
+# phone, flow 06): the drawer was still open (flow 05's closing tap was lost
+# under a crawl; search-products stays visible beside a phone drawer, so the
+# old ending could not tell) and the search box still held flow 04's query, so
+# the retype spliced and the grid said "no products found". Tapping the
+# FOCUSED drawer item dispatches closeDrawer (drawer-item-list.tsx); the
+# search box clears through its own × (renders only while it has text).
+- runFlow:
+    when:
+      visible:
+        id: "drawer-item-pos"
+    commands:
+      - evalScript: "${console.log('WCPOS_E2E drawer still open at flow start, closing')}"
+      - tapOn:
+          id: "drawer-item-pos"
+      - extendedWaitUntil:
+          notVisible:
+            id: "drawer-item-pos"
+          timeout: 10000
+- runFlow:
+    when:
+      visible:
+        id: "search-products-clear"
+    commands:
+      - evalScript: "${console.log('WCPOS_E2E search box not empty at flow start, clearing')}"
+      - tapOn:
+          id: "search-products-clear"
 - runFlow:
     when:
       visible:

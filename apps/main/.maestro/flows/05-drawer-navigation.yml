@@ -52,6 +52,13 @@ appId: com.wcpos.main.dev
           id: "drawer-open-button"
 - tapOn:
     id: "drawer-item-pos"
+# search-products is visible BESIDE an open phone drawer, so it cannot prove
+# the drawer closed. Tapping the focused item dispatches closeDrawer; require
+# the drawer gone (run 33645848904: a lost tap left it open into flow 06).
+- extendedWaitUntil:
+    notVisible:
+      id: "drawer-item-pos"
+    timeout: 15000
 - extendedWaitUntil:
     visible:
       id: "search-products"

@@ -21,6 +21,16 @@ env:
 - retry:
     maxRetries: 2
     commands:
+      # A retry leg starts on the previous leg's text; a tap lands the caret
+      # mid-field and eraseText erases only before it (the URL-field splice,
+      # run 33631408939). Clear through the box's own × first.
+      - runFlow:
+          when:
+            visible:
+              id: "search-products-clear"
+          commands:
+            - tapOn:
+                id: "search-products-clear"
       - tapOn:
           id: "search-products"
       - eraseText
