@@ -14,6 +14,7 @@ on:
 
 permissions:
   actions: write
+  pull-requests: read
 
 jobs:
   cancel-native-runs:
@@ -45,10 +46,16 @@ jobs:
               core.info(`PR #${prNumber} is ${current.state} again — leaving its runs alone`);
               return;
             }
+            // Every active run of this PR's head branch from this PR's head repo, whatever
+            // its SHA: e2e-native.yml gives attempt>1 reruns a run-specific concurrency
+            // group, so a rerun of an EARLIER head can outlive later pushes and still hold
+            // the device turnstile at close (Codex review on #1772).
+            const headRepo = pull.head.repo && pull.head.repo.full_name;
             const active = data.workflow_runs.filter(
               (run) =>
                 ['queued', 'in_progress', 'waiting', 'pending', 'requested'].includes(run.status) &&
-                run.head_sha === pull.head.sha &&
+                run.head_branch === pull.head.ref &&
+                (!headRepo || !run.head_repository || run.head_repository.full_name === headRepo) &&
                 Date.parse(run.created_at) <= closedAt
             );
             let cancelled = 0;
@@ -58,8 +65,11 @@ jobs:
                 cancelled += 1;
                 core.info(`cancelled e2e-native run ${run.id} (${run.head_sha.slice(0, 9)}) — PR #${prNumber} closed`);
               } catch (error) {
-                // 409: the run reached a terminal state between the list and the cancel.
-                core.info(`run ${run.id}: ${error.message} — continuing`);
+                // 409 only: the run reached a terminal state between the list and the
+                // cancel. Anything else (403, 429, 5xx) leaves the run holding the
+                // turnstile and must fail this job loudly, not shrink a count.
+                if (error.status !== 409) throw error;
+                core.info(`run ${run.id}: already finished — continuing`);
               }
             }
             core.info(`PR #${prNumber}: ${cancelled} of ${active.length} active e2e-native run(s) cancelled`);
