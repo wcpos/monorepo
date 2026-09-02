@@ -1597,6 +1597,28 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"code": "SYNC181",
+		"symbol": "LOCAL_DB_STALLED",
+		"domain": "SYNC",
+		"severity": "warn",
+		"actionHint": "No action needed unless a screen stays stuck; then reload the app.",
+		"retryPolicy": "manual",
+		"dataSafety": "outcome-unknown",
+		"escalation": "support-with-export",
+		"summary": "A local database operation is taking far longer than normal; its outcome is not yet known.",
+		"docsBody": "A single read or write to the local database on this device has gone unanswered for far longer than normal, while the database keeps answering everything else. This reporter only records the stall; it does not cancel or retry the operation, so the original call may still complete or fail later. Stalled sync work has a separate timeout and retry path (logged as SYNC321); a stalled call from a screen stays pending until it finishes or the app is reloaded.",
+		"troubleshooting": [
+			"If everything is working, no action is needed — the call most likely completed, just slowly. If a change was being saved at the time, open the record and confirm it saved.",
+			"If a screen or spinner stays stuck, reload the app (or the browser tab) to abandon the stuck operation; a save that was in flight is not resent, so open the record and confirm it saved.",
+			"If this code returns regularly on the same device, export debug info and contact support; the entry's context names the operation and data collection, the exact wait, and how busy the database was meanwhile."
+		],
+		"logSources": [
+			"browser-console"
+		],
+		"evidence": "2026-08-25 demo store coupons screen spun forever while every existing signal stayed silent; report-only stall detector added in monorepo#1596",
+		"introducedIn": "1.10.6"
+	},
+	{
 		"code": "CHECKOUT111",
 		"symbol": "CART_UPDATE_FAILED",
 		"domain": "CHECKOUT",
@@ -1766,6 +1788,28 @@
 		],
 		"evidence": "monorepo#1733 divergence detector was one-sided: false hits were detected, false misses never were",
 		"introducedIn": "1.10.5"
+	},
+	{
+		"code": "CLIENT144",
+		"symbol": "SEARCH_INDEX_REBUILD_FAILED",
+		"domain": "CLIENT",
+		"severity": "warn",
+		"actionHint": "Try another search; reload if results still look wrong.",
+		"retryPolicy": "automatic",
+		"dataSafety": "no-impact",
+		"escalation": "support-with-export",
+		"summary": "A search index rebuild failed, so results may be incomplete while the app retries initialization.",
+		"docsBody": "After detecting a search index problem the app tried to rebuild the index, and the rebuild itself failed. Search keeps answering — from the existing index with known bad results hidden, or from a direct scan of the data on this device — but it may miss or misrank results for the affected list. The next search or readiness check retries index initialization and can recover automatically; reloading the app is an optional fresh start if results remain wrong. No store data was changed.",
+		"troubleshooting": [
+			"Open the log entry — its context names the list affected and the error the rebuild hit. If that error mentions storage, free up space on the device first; on web, also avoid private/incognito windows.",
+			"Run another search on the affected list; the app will retry index initialization automatically.",
+			"If results are still missing or wrongly ordered, reload the app (or browser tab). If CLIENT144 is logged again, export debug info and contact support."
+		],
+		"logSources": [
+			"browser-console"
+		],
+		"evidence": "2026-09-01 log audit: both rebuild-failure paths from monorepo#1733 logged without a code while their sibling detections carried CLIENT141-143",
+		"introducedIn": "1.10.6"
 	},
 	{
 		"code": "CHECKOUT411",

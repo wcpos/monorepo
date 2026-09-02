@@ -337,6 +337,7 @@ function matchingSelectors$(
 							return filtered;
 						} catch (error) {
 							searchLogger.warn('Search index rebuild failed', {
+								code: ERROR_CODES.SEARCH_INDEX_REBUILD_FAILED,
 								context: { collection: descriptor.collection, locale, search, error },
 							});
 							return filtered;

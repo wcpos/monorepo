@@ -315,6 +315,7 @@ export function startSearchReadiness(options: {
 			if (rebuilt && !stale()) sharedSearchInstances(key, rebuilt);
 		} catch (error) {
 			searchLogger.warn('Search index rebuild failed', {
+				code: ERROR_CODES.SEARCH_INDEX_REBUILD_FAILED,
 				context: { collection: name, locale, error },
 			});
 		}

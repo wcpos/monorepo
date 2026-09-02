@@ -160,6 +160,8 @@ export function translateErrorSummary(t: TranslateError, code: ErrorCode): strin
 			return t('health.logs.error_summary.SYNC161');
 		case 'SYNC171':
 			return t('health.logs.error_summary.SYNC171');
+		case 'SYNC181':
+			return t('health.logs.error_summary.SYNC181');
 		case 'CHECKOUT111':
 			return t('health.logs.error_summary.CHECKOUT111');
 		case 'PRODUCT321':
@@ -176,6 +178,8 @@ export function translateErrorSummary(t: TranslateError, code: ErrorCode): strin
 			return t('health.logs.error_summary.CLIENT142');
 		case 'CLIENT143':
 			return t('health.logs.error_summary.CLIENT143');
+		case 'CLIENT144':
+			return t('health.logs.error_summary.CLIENT144');
 		case 'CHECKOUT411':
 			return t('health.logs.error_summary.CHECKOUT411');
 		case 'CHECKOUT421':

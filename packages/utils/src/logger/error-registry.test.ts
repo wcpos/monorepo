@@ -80,6 +80,7 @@ const SEED_SYMBOLS = [
 	'LICENSE_UNEXPECTED',
 	'LOCAL_DB_CORRUPTED',
 	'LOCAL_DB_SETUP_FAILED',
+	'LOCAL_DB_STALLED',
 	'LOCAL_DB_UNAVAILABLE',
 	'LOCAL_DB_WRITE_FAILED',
 	'LOCAL_RECORD_DIVERGED',
@@ -108,6 +109,7 @@ const SEED_SYMBOLS = [
 	'SEARCH_BLOCKED_BY_WAF',
 	'SEARCH_INDEX_DIVERGENCE',
 	'SEARCH_INDEX_FALSE_MISS',
+	'SEARCH_INDEX_REBUILD_FAILED',
 	'SEARCH_INDEX_STALLED',
 	'SEARCH_NO_RESULTS_REASON',
 	'SESSION_EXPIRED',
@@ -227,6 +229,18 @@ describe('error registry', () => {
 		const guidance = entryFor('SYNC151').troubleshooting.join(' ');
 		expect(guidance).toContain('Check whether the related request ultimately succeeded');
 		expect(guidance).toContain("if it failed, follow that request's error");
+	});
+
+	it('describes the actual recovery paths for storage stalls and failed search rebuilds', () => {
+		const storageStall = entryFor('SYNC181');
+		expect(storageStall.retryPolicy).toBe('manual');
+		expect(storageStall.dataSafety).toBe('outcome-unknown');
+		expect(storageStall.summary).toContain('outcome is not yet known');
+		expect(storageStall.docsBody).toContain('does not cancel or retry');
+
+		const searchRebuild = entryFor('CLIENT144');
+		expect(searchRebuild.retryPolicy).toBe('automatic');
+		expect(searchRebuild.docsBody).toContain('next search');
 	});
 
 	it('gives status-aware repair guidance for SYNC331 tombstones', () => {
