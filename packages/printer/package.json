@@ -35,7 +35,7 @@
 		"@point-of-sale/webusb-receipt-printer": "2.0.0",
 		"@wcpos/receipt-renderer": "workspace:*",
 		"p-queue": "^9.3.3",
-		"zod": "^4.4.3"
+		"zod": "^4.5.4"
 	},
 	"devDependencies": {
 		"@testing-library/react": "^16.3.2",
