@@ -445,7 +445,10 @@ test('native E2E concurrency isolates pull requests and supersedes stale main pu
 	// running older-head runs (owner ruling 2026-09-01: latest head wins —
 	// ~10 queued 1-2h runs blocked the 1.10.5 release). Attempt>1 re-runs
 	// stay run-unique so a deliberate re-run is never killed by the next merge.
-	assert.match(concurrency.group, /github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'/);
+	assert.match(
+		concurrency.group,
+		/github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'/
+	);
 	assert.match(
 		concurrency.group,
 		/native-main-\{0\}', github\.run_attempt != '1' && github\.run_id \|\| 'push'/
@@ -1779,9 +1782,8 @@ test('clean-start flows re-issue a dropped openLink, gated on the connect screen
 			/^wcpos:\/\/expo-development-client\//,
 			`${filename}: the wrapper must START by (re-)issuing the launch link`
 		);
-		const iosLaunch = wrapper.commands.find(
-			(command) => command.runFlow?.when?.platform === 'iOS'
-		).runFlow.commands;
+		const iosLaunch = wrapper.commands.find((command) => command.runFlow?.when?.platform === 'iOS')
+			.runFlow.commands;
 		const optionalConnectWait = iosLaunch.find(
 			(command) => command.extendedWaitUntil?.visible?.id === 'store-url-input'
 		);
@@ -1930,7 +1932,9 @@ test('native device jobs queue through the FIFO turnstile, not a concurrency gro
 		// 2026-08-30: GitHub keeps one pending job per group and cancels the
 		// older one when a newer arrives, whatever cancel-in-progress says.
 		assert.equal(job.concurrency, undefined, `${jobName} must not use a concurrency group`);
-		assert.equal(job.strategy['max-parallel'], 1);
+		// Both classes of a platform run at once (owner rulings 2026-09-01/02);
+		// the turnstile, keyed by exact job name, still serialises across runs.
+		assert.equal(job.strategy['max-parallel'], 2);
 		const [workflowCheckout, turnstile, targetCheckout] = job.steps;
 		assert.equal(workflowCheckout.name, '🏗 Setup repository (workflow revision)');
 		assert.equal(workflowCheckout.with.ref, '${{ github.sha }}');
@@ -2329,7 +2333,15 @@ test('the Android suite reserves a host core and boots from a cached quickboot s
 	// The generation boot must SAVE its snapshot: no -no-snapshot variant at all.
 	assert.doesNotMatch(String(generate.with['emulator-options']), /-no-snapshot/);
 	// Every AVD-shaping input must match the suite step or the snapshot is invalid.
-	for (const input of ['api-level', 'target', 'profile', 'arch', 'cores', 'ram-size', 'heap-size']) {
+	for (const input of [
+		'api-level',
+		'target',
+		'profile',
+		'arch',
+		'cores',
+		'ram-size',
+		'heap-size',
+	]) {
 		assert.deepEqual(
 			generate.with[input],
 			suite.with[input],
@@ -2533,5 +2545,65 @@ test('the offline retry never re-runs into a transport that will not stabilise',
 		assert.equal(statePolls.length, 36, 'the poll bound must be exhausted, not skipped');
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test('pull requests run phones only; the main push and dispatches run both device classes', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	assert.equal(
+		workflow.jobs.android.strategy.matrix.device,
+		'${{ fromJSON(needs.build.outputs.android_devices) }}'
+	);
+	assert.equal(
+		workflow.jobs.ios.strategy.matrix.device,
+		'${{ fromJSON(needs.build.outputs.ios_devices) }}'
+	);
+	assert.equal(
+		workflow.jobs.build.outputs.android_devices,
+		'${{ steps.resolve.outputs.android_devices }}'
+	);
+	assert.equal(workflow.jobs.build.outputs.ios_devices, '${{ steps.resolve.outputs.ios_devices }}');
+	const resolve = workflow.jobs.build.steps.find((step) => step.id === 'resolve');
+	// Drive the output logic with the real shell for both event kinds.
+	for (const [event, expectPhoneOnly] of [
+		['pull_request', true],
+		['push', false],
+		['workflow_dispatch', false],
+	]) {
+		const out = path.join(mkdtempSync(path.join(tmpdir(), 'devices-')), 'out');
+		writeFileSync(out, '');
+		const block = resolve.run
+			.split('\n')
+			.filter((line) =>
+				/ANDROID_(PHONE|TABLET)=|IOS_(PHONE|TABLET)=|GITHUB_EVENT_NAME|_devices=|^\s*(else|fi)\s*$/.test(
+					line
+				)
+			)
+			.join('\n');
+		const result = spawnSync('bash', ['-c', block], {
+			encoding: 'utf8',
+			env: { ...process.env, GITHUB_EVENT_NAME: event, GITHUB_OUTPUT: out },
+		});
+		assert.equal(result.status, 0, result.stderr);
+		const lines = Object.fromEntries(
+			readFileSync(out, 'utf8')
+				.trim()
+				.split('\n')
+				.map((line) => line.split(/=(.*)/s).slice(0, 2))
+		);
+		const android = JSON.parse(lines.android_devices);
+		const ios = JSON.parse(lines.ios_devices);
+		assert.deepEqual(
+			android.map((device) => device.name),
+			expectPhoneOnly ? ['phone'] : ['phone', 'tablet'],
+			event
+		);
+		assert.deepEqual(
+			ios.map((device) => device.name),
+			expectPhoneOnly ? ['phone'] : ['phone', 'tablet'],
+			event
+		);
+		assert.equal(android[0].record_size, '540x1200');
+		assert.equal(ios[0].simulator, 'iPhone 16 Pro');
 	}
 });

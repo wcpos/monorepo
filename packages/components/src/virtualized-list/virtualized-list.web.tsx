@@ -46,6 +46,7 @@ type VirtualizerInput = PartialKeys<
 
 function useVirtualWrapper(options: VirtualizerInput) {
 	'use no memo';
+	// eslint-disable-next-line react-hooks/incompatible-library -- This hook is explicitly excluded from compiler memoization above.
 	return { ...useVirtualizer(options) };
 }
 

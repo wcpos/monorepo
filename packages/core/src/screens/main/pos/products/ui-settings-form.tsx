@@ -2,7 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
 import { DocsLink } from '@wcpos/components/docs-link';
@@ -91,7 +91,7 @@ export function UISettingsForm() {
 		values: formData,
 	});
 
-	const viewMode = form.watch('viewMode');
+	const viewMode = useWatch({ control: form.control, name: 'viewMode' });
 
 	/**
 	 * The reset button lives in the dialog footer, outside this form's subtree, so the

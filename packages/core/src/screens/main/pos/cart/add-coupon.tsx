@@ -99,13 +99,14 @@ export function AddCoupon() {
 function CouponSearch({ onSearchChange }: { onSearchChange?: () => void }) {
 	const t = useT();
 	const binding = useSearchSelect('coupon');
+	const { setSearch } = binding;
 
 	const onSearch = React.useCallback(
 		(value: string) => {
-			binding.setSearch(value);
+			setSearch(value);
 			onSearchChange?.();
 		},
-		[binding.setSearch, onSearchChange]
+		[setSearch, onSearchChange]
 	);
 
 	return (

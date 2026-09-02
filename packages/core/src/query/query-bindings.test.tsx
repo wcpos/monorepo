@@ -33,6 +33,7 @@ import {
 	useRelationalCollectionBinding,
 	useSearchSelect,
 } from './query-bindings';
+import * as queryStateTranslator from './query-state-translator';
 import { createStoreDatabase } from '../../../query/tests/helpers/db';
 
 import type { QueryStateOf } from './query-state-types';
@@ -133,6 +134,34 @@ describe('query bindings', () => {
 		expect(manager).toBeDefined();
 		expect(manager).not.toHaveProperty('registerQuery');
 		expect(manager).not.toHaveProperty('queryStates');
+	});
+
+	it('preserves the compiled descriptor for deeply equal inputs and replaces it for new state', () => {
+		const compileQuery = jest.spyOn(queryStateTranslator, 'compileQuery');
+		const state: QueryStateOf<'products'> = {
+			search: '',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'id', direction: 'asc' },
+			limit: 10,
+		};
+		const { rerender } = renderHook(
+			({ currentState, remoteIds }) =>
+				useCollectionBinding('products', currentState, { remoteIds }),
+			{
+				wrapper: Provider,
+				initialProps: { currentState: state, remoteIds: ['1', '2'] as never[] },
+			}
+		);
+		const initialCompiled = compileQuery.mock.results.at(-1)?.value;
+
+		rerender({ currentState: state, remoteIds: ['1', '2'] as never[] });
+		expect(compileQuery.mock.results.at(-1)?.value).toBe(initialCompiled);
+		expect(compileQuery).toHaveBeenCalledTimes(1);
+
+		rerender({ currentState: { ...state, search: 'coffee' }, remoteIds: ['1', '2'] as never[] });
+		expect(compileQuery.mock.results.at(-1)?.value).not.toBe(initialCompiled);
+		expect(compileQuery).toHaveBeenCalledTimes(2);
+		compileQuery.mockRestore();
 	});
 
 	it('reads engine residents and composes filter, sort, limit, and search', async () => {

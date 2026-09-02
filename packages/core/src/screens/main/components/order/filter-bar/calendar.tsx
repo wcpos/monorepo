@@ -41,6 +41,10 @@ export function DateRangeCalendar({ onSelect }: Props) {
 	const t = useT();
 	const today = React.useMemo(() => new Date(), []);
 	const { shortCode } = useLocale();
+	const [date, setDate] = React.useState<DateRange | undefined>({
+		from: startOfDay(today),
+		to: endOfDay(today),
+	});
 
 	// Array of date range options for buttons
 	const dateRanges: { label: string; range: DateRange; action: () => void }[] =
@@ -103,11 +107,6 @@ export function DateRangeCalendar({ onSelect }: Props) {
 				},
 			];
 		}, [t, today]);
-
-	/**
-	 * State for the selected date range
-	 */
-	const [date, setDate] = React.useState<DateRange | undefined>(dateRanges[0]?.range);
 
 	/**
 	 * Handle date range change from the Calendar component

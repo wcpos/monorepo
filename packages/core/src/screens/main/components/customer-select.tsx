@@ -53,15 +53,16 @@ export function CustomerSelect({
 export function CustomerSearch({ withGuest = false }: { withGuest?: boolean }) {
 	const t = useT();
 	const binding = useSearchSelect('customer');
+	const { setSearch } = binding;
 
 	/**
 	 *
 	 */
 	const onSearch = React.useCallback(
 		(value: string) => {
-			binding.setSearch(value);
+			setSearch(value);
 		},
-		[binding.setSearch]
+		[setSearch]
 	);
 
 	/**

@@ -164,6 +164,7 @@ export function RefundOrderForm({ order }: Props) {
 		let mounted = true;
 
 		if (!orderData.id) {
+			// eslint-disable-next-line react-hooks/set-state-in-effect -- loader effect writing its result; pre-existing, surfaced when form.watch's compiler bailout went away. The component does not compile regardless (try/finally). Follow-up: derive the fallback instead of setting it.
 			setRefundDetails(getRefundsFallback());
 			setRefundDetailsLoading(false);
 			return;
@@ -281,6 +282,10 @@ export function RefundOrderForm({ order }: Props) {
 	const watchedCustomAmount = useWatch({
 		control: form.control,
 		name: 'custom_amount',
+	});
+	const refundDestination = useWatch({
+		control: form.control,
+		name: 'refund_destination',
 	});
 
 	const lineItemRefunds = React.useMemo(() => {
@@ -509,7 +514,7 @@ export function RefundOrderForm({ order }: Props) {
 					<VStack space="sm">
 						<Text>{t('orders.refund_destination')}</Text>
 						<RefundDestinationRadioGroup
-							value={form.watch('refund_destination')}
+							value={refundDestination}
 							onValueChange={(next) =>
 								form.setValue('refund_destination', next, { shouldDirty: true })
 							}
