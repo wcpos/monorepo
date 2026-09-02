@@ -222,18 +222,22 @@ _Avoid_: plugin (for anything app-side), add-on (product-domain term — product
 A WordPress plugin, only — the free/Pro plugins and Woo extensions. Never an app-side unit.
 
 **Delivery class**:
-How an extension reaches the app. Three classes, one contract: **config** (declarative
-arrangement — layout, settings), **web** (remotely-served pages — mini-apps, display
-pages), **native** (build-time modules switched on by server descriptor — drivers).
+How an extension reaches the app. Three classes under one umbrella, each with its own
+integration surface: **config** (declarative arrangement — layout, settings), **web**
+(remotely-served pages — mini-apps, display pages), **native** (build-time modules switched
+on by server descriptor — drivers). What they share is the envelope and the registration
+idiom, not one contract.
 
 **Mini-app**:
 An interactive web-class extension rendered in the app's WebView, speaking the bridge and
 granted capabilities. First instance: the printer wizard.
 
 **Display page**:
-A passive web-class extension on a second screen or device that consumes the broadcast and
-holds zero capabilities — which is what makes user-authored HTML safe there. Shares the
-envelope with the bridge, not the contract.
+The host page a customer display renders, served from the merchant's site: it consumes the
+broadcast, holds zero capabilities (no privileged host calls, so a broken or malicious
+template cannot reach the app or hardware — it still has ordinary browser abilities and
+sees the broadcast data), and re-renders the active display template on every event.
+Shares the envelope with the bridge, not the contract.
 
 **Slot**:
 A named UI insertion point in the app, identified by a dotted id (`pos.cart.block`).
@@ -265,8 +269,23 @@ de facto public surface.
 
 **Catalog**:
 The host-fetched data list of available web-class extensions (id, title, URL, required
-capabilities). Adding an entry is data, not an app release.
+capabilities). Adding an entry whose capabilities the installed app already implements is
+data, not an app release; a new capability still needs an app update.
 
 **Driver**:
 Consumed unchanged from Language — Payments: the native-class extension wrapping one
 provider's SDK, disabled by default, switched on by the payment-method descriptor.
+
+**Display template**:
+A template document in the receipt mould that a display page renders against the order
+snapshot: built-in or merchant-authored HTML with logicless placeholders, sections per
+display state, and host-provided declarative behaviours; may opt into `<script>`.
+_Avoid_: display page (that is the host, not the template)
+
+**Display state**:
+The state machine a display page exposes to templates: `idle`, `cart`, `payment`
+(started / approved / declined / complete). Derived from the last broadcast snapshot.
+
+**Signaling**:
+The one-time exchange that lets two WebRTC peers (POS and display) find each other,
+carried by the merchant's WordPress site as a mailbox; not the data path.
