@@ -27,6 +27,9 @@ const cloudProfile: PrinterProfile = {
 const enqueue = jest.fn().mockResolvedValue(undefined);
 const httpPost = jest.fn().mockResolvedValue({ data: {} });
 
+// printer-row and printers-empty-state navigate to the printer wizard mini-app (#1763);
+// expo-router pulls react-native internals jest cannot parse, so mock it as the other screens do.
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('react-native', () => ({
 	View: ({
 		children,
@@ -41,6 +44,14 @@ jest.mock('react-native', () => ({
 			{children}
 		</div>
 	),
+}));
+
+// printer-row.tsx reaches the printer wizard through expo-router's useRouter
+// (mini-app host, 0b8e7c2e92); the router has no native module under Jest, so it
+// is mocked the way the other screen tests mock it (customers/add.test.tsx).
+const mockRouterPush = jest.fn();
+jest.mock('expo-router', () => ({
+	useRouter: () => ({ push: mockRouterPush }),
 }));
 
 jest.mock('observable-hooks', () => ({
