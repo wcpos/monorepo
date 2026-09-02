@@ -70,6 +70,10 @@ export {
 	KNOWN_KINDS,
 } from './payments';
 export type {
+	MetaDataEntry,
+	MintManualPaymentInput,
+	MintManualPaymentResult,
+	PaymentMoney,
 	PaymentKind,
 	CaptureMode,
 	OpenEnum,

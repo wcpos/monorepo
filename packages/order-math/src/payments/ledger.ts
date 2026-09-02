@@ -9,9 +9,10 @@ import type { PaymentMethodDescriptor, PaymentRow } from './types';
 export const LEDGER_META_KEY = '_wcpos_payments';
 export const LEDGER_SCHEMA = 1;
 
+/** One `meta_data` entry as the order document carries it (`key` is optional there). */
 export type MetaDataEntry = {
 	id?: number;
-	key: string;
+	key?: string;
 	value?: unknown;
 	[k: string]: unknown;
 };

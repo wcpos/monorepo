@@ -15,6 +15,7 @@ function isMissing(value: unknown): boolean {
  * - Tax classes
  * - Shipping methods
  * - Order statuses
+ * - Payment methods
  * @TODO - we should move country codes to here too, and currency codes
  * @TODO - there must be a smarter way to only fetch data on chnages
  */
@@ -53,17 +54,28 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 					}
 				})
 				.catch(() => undefined);
+		const fetchPaymentMethods = (generation: number) =>
+			void http
+				.get('/payment-methods')
+				.then((response) => {
+					if (generation === refreshGeneration && response?.status === 200) {
+						void extraData.set('paymentMethods', () => response.data);
+					}
+				})
+				.catch(() => undefined);
 		const fetchAll = () => {
 			const generation = ++refreshGeneration;
 			fetchTaxClasses(generation);
 			fetchShippingMethods(generation);
 			fetchOrderStatuses(generation);
+			fetchPaymentMethods(generation);
 		};
 
 		const coldStartGeneration = ++refreshGeneration;
 		if (isMissing(extraData.get('taxClasses'))) fetchTaxClasses(coldStartGeneration);
 		if (isMissing(extraData.get('shippingMethods'))) fetchShippingMethods(coldStartGeneration);
 		if (isMissing(extraData.get('orderStatuses'))) fetchOrderStatuses(coldStartGeneration);
+		if (isMissing(extraData.get('paymentMethods'))) fetchPaymentMethods(coldStartGeneration);
 
 		const unsubscribeEvents = engine.events((event) => {
 			if (event.type === 'config-changed') fetchAll();

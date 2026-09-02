@@ -83,7 +83,8 @@ describe('ExtraDataProvider API services', () => {
 		expect(mockGet).toHaveBeenCalledWith('/taxes/classes');
 		expect(mockGet).toHaveBeenCalledWith('/shipping_methods');
 		expect(mockGet).toHaveBeenCalledWith('/data/order_statuses');
-		expect(mockGet).toHaveBeenCalledTimes(3);
+		expect(mockGet).toHaveBeenCalledWith('/payment-methods');
+		expect(mockGet).toHaveBeenCalledTimes(4);
 	});
 
 	it('fetches nothing on a warm start for unrelated engine events', () => {
@@ -91,6 +92,7 @@ describe('ExtraDataProvider API services', () => {
 			taxClasses: [{ slug: 'standard' }],
 			shippingMethods: [{ id: 'flat_rate' }],
 			orderStatuses: [{ slug: 'pending' }],
+			paymentMethods: { schema: 1, contract: '1.0', methods: [] },
 		};
 		render(<ExtraDataProvider>content</ExtraDataProvider>);
 
@@ -108,6 +110,7 @@ describe('ExtraDataProvider API services', () => {
 			taxClasses: [],
 			shippingMethods: [],
 			orderStatuses: [],
+			paymentMethods: { schema: 1, contract: '1.0', methods: [] },
 		};
 		render(<ExtraDataProvider>content</ExtraDataProvider>);
 
@@ -130,6 +133,7 @@ describe('ExtraDataProvider API services', () => {
 			taxClasses: [{ slug: 'standard' }],
 			shippingMethods: [{ id: 'flat_rate' }],
 			orderStatuses: [{ slug: 'pending' }],
+			paymentMethods: { schema: 1, contract: '1.0', methods: [] },
 		};
 		render(<ExtraDataProvider>content</ExtraDataProvider>);
 
@@ -138,7 +142,8 @@ describe('ExtraDataProvider API services', () => {
 		expect(mockGet).toHaveBeenCalledWith('/taxes/classes');
 		expect(mockGet).toHaveBeenCalledWith('/shipping_methods');
 		expect(mockGet).toHaveBeenCalledWith('/data/order_statuses');
-		expect(mockGet).toHaveBeenCalledTimes(3);
+		expect(mockGet).toHaveBeenCalledWith('/payment-methods');
+		expect(mockGet).toHaveBeenCalledTimes(4);
 	});
 
 	it('rebinds the event bridge to current store dependencies', async () => {
@@ -146,6 +151,7 @@ describe('ExtraDataProvider API services', () => {
 			taxClasses: [{ slug: 'standard' }],
 			shippingMethods: [{ id: 'flat_rate' }],
 			orderStatuses: [{ slug: 'pending' }],
+			paymentMethods: { schema: 1, contract: '1.0', methods: [] },
 		};
 		const previousEngine = mockEngine;
 		const previousGet = mockGet;
@@ -172,11 +178,11 @@ describe('ExtraDataProvider API services', () => {
 		expect(mockGet).not.toHaveBeenCalled();
 
 		emit(mockEngine, { type: 'config-changed', collections: ['tax_rates'] });
-		expect(mockGet).toHaveBeenCalledTimes(3);
+		expect(mockGet).toHaveBeenCalledTimes(4);
 		await act(async () => {
 			await Promise.resolve();
 		});
-		expect(mockExtraDataSet).toHaveBeenCalledTimes(3);
+		expect(mockExtraDataSet).toHaveBeenCalledTimes(4);
 	});
 
 	it('ignores responses superseded by a newer config refresh', async () => {
@@ -192,6 +198,7 @@ describe('ExtraDataProvider API services', () => {
 		mockExtraDataValues = {
 			shippingMethods: [{ id: 'flat_rate' }],
 			orderStatuses: [{ slug: 'pending' }],
+			paymentMethods: { schema: 1, contract: '1.0', methods: [] },
 		};
 		mockGet.mockImplementation((url: string) => {
 			if (url !== '/taxes/classes') return Promise.resolve({ status: 200, data: [] });
