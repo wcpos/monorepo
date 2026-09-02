@@ -1754,9 +1754,34 @@ test('flow 08 issues the destructive void tap only once', () => {
 	assert.equal(voidTaps.length, 1, 'a retry can reissue an accepted in-flight server delete');
 });
 
+// The openLink retry wrapper sits at the top level of flow 01 (clearState is
+// the point of that flow). Flow 02 continues from flow 01's connect screen and
+// keeps the same wrapper as RECOVERY only — inside a runFlow gated on
+// store-url-input NOT being visible — so a healthy run never pays a second
+// uninstall+reinstall and cold-start deep link (PR #1760). Both shapes must
+// carry the identical wrapper; this finds it wherever it lives.
+function coldStartRetry(flow, filename) {
+	const issuesLink = (command) =>
+		String(command.retry?.commands?.[0]?.openLink ?? '').startsWith('wcpos://');
+	const topLevel = flow.find(issuesLink)?.retry;
+	if (topLevel) return topLevel;
+	const recovery = flow.find(
+		(command) => command.runFlow?.when?.notVisible?.id === 'store-url-input'
+	)?.runFlow.commands;
+	assert.ok(
+		recovery,
+		`${filename}: no top-level openLink retry and no connect-screen recovery wrapper`
+	);
+	assert.ok(
+		recovery.some((command) => command === 'clearState'),
+		`${filename}: the recovery cold start must clearState before re-issuing the link`
+	);
+	return recovery.find(issuesLink)?.retry;
+}
+
 test('Android clean-start flows dismiss a queued system ANR before waiting for Expo', () => {
 	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
-		const launchBlock = readMaestroFlow(filename).find((command) => command.retry)?.retry.commands;
+		const launchBlock = coldStartRetry(readMaestroFlow(filename), filename)?.commands;
 		assert.ok(launchBlock, `${filename} lost its openLink retry wrapper`);
 		const androidLaunch = launchBlock.find(
 			(command) => command.runFlow?.when?.platform === 'Android'
@@ -1778,7 +1803,7 @@ test('Android clean-start flows dismiss a queued system ANR before waiting for E
 // again instead of spending the whole budget on the home screen.
 test('clean-start flows re-issue a dropped openLink, gated on the connect screen', () => {
 	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
-		const wrapper = readMaestroFlow(filename).find((command) => command.retry)?.retry;
+		const wrapper = coldStartRetry(readMaestroFlow(filename), filename);
 		assert.ok(wrapper, `${filename} lost its openLink retry wrapper`);
 		assert.equal(wrapper.maxRetries, 1, `${filename}: one re-issue of the link`);
 		assert.match(
