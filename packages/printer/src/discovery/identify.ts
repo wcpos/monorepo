@@ -31,6 +31,15 @@ export interface IdentifyProbes {
 	fetchStar: (host: string) => Promise<{ port: number; protocol: 'http' | 'https' } | null>;
 }
 const EXPIRED = Symbol('expired');
+
+function eposFailureState(error: unknown): TcpState {
+	if (error === EXPIRED) return 'filtered';
+	const message = error instanceof Error ? `${error.name} ${error.message}` : String(error);
+	if (/abort|timed?\s*out/i.test(message)) return 'filtered';
+	if (/refused|closed/i.test(message)) return 'closed';
+	return 'error';
+}
+
 async function beforeDeadline<T>(deadline: number, task: () => Promise<T>) {
 	const remaining = deadline - Date.now();
 	if (remaining <= 0) return EXPIRED;
@@ -78,11 +87,16 @@ export async function identifyPrinter(
 		let request: { path: string; xml: string } | undefined;
 		eposPort = await probeEposEndpoint(host, async (port, path, xml, timeoutMs) => {
 			request = { path, xml };
-			const response = await beforeDeadline(deadline, () =>
-				probes.postEpos(host, port, path, xml, Math.min(timeoutMs, deadline - Date.now()))
-			);
-			if (response === EXPIRED) throw EXPIRED;
-			return response;
+			try {
+				const response = await beforeDeadline(deadline, () =>
+					probes.postEpos(host, port, path, xml, Math.min(timeoutMs, deadline - Date.now()))
+				);
+				if (response === EXPIRED) throw EXPIRED;
+				return response;
+			} catch (error) {
+				ports.push({ port, state: eposFailureState(error), protocol: 'epos-print' });
+				throw error;
+			}
 		});
 		if (eposPort === null) return;
 		ports.push({ port: eposPort, state: 'open', protocol: 'epos-print' });
@@ -91,11 +105,14 @@ export async function identifyPrinter(
 				const response = await beforeDeadline(deadline, () =>
 					probes.postEpos(host, 80, request!.path, request!.xml, deadline - Date.now())
 				);
-				if (response !== EXPIRED && response.status >= 200 && response.status < 300) {
+				if (response === EXPIRED) throw EXPIRED;
+				if (response.status >= 200 && response.status < 300) {
 					parseEposResponse(response.body);
 					ports.push({ port: 80, state: 'open', protocol: 'epos-print' });
 				}
-			} catch {}
+			} catch (error) {
+				ports.push({ port: 80, state: eposFailureState(error), protocol: 'epos-print' });
+			}
 		}
 	})();
 	const starTask = (async () => {
@@ -149,7 +166,10 @@ export async function identifyPrinter(
 			? {
 					securePrinting:
 						eposPort === 443 &&
-						!ports.some((entry) => entry.port === 80 && entry.protocol === 'epos-print'),
+						!ports.some(
+							(entry) =>
+								entry.port === 80 && entry.protocol === 'epos-print' && entry.state === 'open'
+						),
 				}
 			: {}),
 		...(lane ? {} : { notReceiptPrinter: ippOpen || namedClosed }),

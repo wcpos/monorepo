@@ -44,6 +44,34 @@ describe('identifyPrinter', () => {
 		expect(identity.ports).toContainEqual(
 			expect.objectContaining({ port: 443, state: 'open', protocol: 'epos-print' })
 		);
+		expect(identity.ports).toContainEqual({
+			port: 80,
+			state: 'closed',
+			protocol: 'epos-print',
+		});
+	});
+
+	it('records refused and timed-out ePOS candidates before the successful lane', async () => {
+		const identity = await identifyPrinter(
+			'192.168.1.30',
+			{},
+			probes({
+				postEpos: async (_host, port) => {
+					if (port === 443) throw new Error('ECONNREFUSED');
+					if (port === 8043) throw new Error('timed out');
+					if (port === 80) return { status: 200, body: EPOS_RESPONSE };
+					throw new Error('closed');
+				},
+			})
+		);
+
+		expect(identity.ports).toEqual(
+			expect.arrayContaining([
+				{ port: 443, state: 'closed', protocol: 'epos-print' },
+				{ port: 8043, state: 'filtered', protocol: 'epos-print' },
+				{ port: 80, state: 'open', protocol: 'epos-print' },
+			])
+		);
 	});
 
 	it('never touches raw 9100 when an ePOS lane answers (a raw touch quarantines a Secure Printing Epson)', async () => {

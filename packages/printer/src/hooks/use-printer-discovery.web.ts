@@ -78,6 +78,7 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 			});
 			if (abortRef.current !== controller || controller.signal.aborted) return;
 			const identified = await identifyDiscoveredPrinters(discovered, createIdentifyProbes());
+			if (abortRef.current !== controller || controller.signal.aborted) return;
 			setPrinters((prev) => mergePrinters(prev, identified));
 			if (discovered.length === 0) {
 				setError({ code: 'network-none-found' });
