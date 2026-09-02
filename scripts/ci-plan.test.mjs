@@ -157,6 +157,50 @@ test('spec-only changes narrow to sorted spec basenames', () => {
 	assert.equal(plan.only_specs, 'orders.spec.ts products.spec.ts');
 });
 
+test('a merge checkout excludes base branch movement from the plan', () => {
+	const repo = mkdtempSync(path.join(tmpdir(), 'ci-plan-merge-'));
+	const git = (...args) => {
+		const result = spawnSync('git', args, { cwd: repo, encoding: 'utf8' });
+		assert.equal(result.status, 0, `git ${args.join(' ')}: ${result.stderr}`);
+		return result.stdout.trim();
+	};
+	try {
+		git('init', '-q', '-b', 'main');
+		git('config', 'user.email', 'test@example.invalid');
+		git('config', 'user.name', 'Test');
+		mkdirSync(path.join(repo, 'apps/main/e2e'), { recursive: true });
+		writeFileSync(path.join(repo, 'apps/main/e2e/products.spec.ts'), 'test("a", () => {});\n');
+		writeFileSync(path.join(repo, 'apps/main/package.json'), '{"version":"1.0.0"}\n');
+		git('add', '-A');
+		git('commit', '-qm', 'base');
+		const staleBase = git('rev-parse', 'HEAD');
+
+		git('switch', '-qc', 'pr');
+		appendFileSync(path.join(repo, 'apps/main/e2e/products.spec.ts'), 'test("b", () => {});\n');
+		git('commit', '-qam', 'pr');
+		git('switch', '-q', 'main');
+		writeFileSync(path.join(repo, 'apps/main/package.json'), '{"version":"1.0.1"}\n');
+		git('commit', '-qam', 'main moved');
+		git('merge', '--no-ff', '-qm', 'test merge', 'pr');
+
+		const staleFiles = git('diff', '--name-only', `${staleBase}...HEAD`).split('\n');
+		assert.ok(staleFiles.includes('apps/main/package.json'));
+		const plan = outputOf(
+			spawnSync('node', [SCRIPT, staleBase], {
+				cwd: repo,
+				encoding: 'utf8',
+				env: { ...process.env, GITHUB_EVENT_NAME: 'pull_request' },
+			})
+		);
+		assert.equal(plan.native, 'none');
+		assert.equal(plan.web, 'narrowed');
+		assert.equal(plan.only_specs, 'products.spec.ts');
+		assert.match(plan.reason, /range: merge-parents/);
+	} finally {
+		rmSync(repo, { recursive: true, force: true });
+	}
+});
+
 test('touching an E2E helper widens a spec change to full', () => {
 	const plan = planFromDiff(({ append, join }) => {
 		append(join('apps/main/e2e/fixtures.ts'), 'export const other = 2;\n');
@@ -264,10 +308,13 @@ test('unknown paths and empty file lists return the everything-plan', () => {
 test('a multi-line git error still emits one line per output key', () => {
 	// $GITHUB_OUTPUT is `key=value` per line; a newline inside `reason` would
 	// corrupt the file and fail the changes job instead of falling back.
+	const repo = mkdtempSync(path.join(tmpdir(), 'ci-plan-error-'));
 	const result = spawnSync('node', [SCRIPT, 'no-such-ref\nsecond line'], {
+		cwd: repo,
 		encoding: 'utf8',
 		env: { ...process.env, GITHUB_EVENT_NAME: 'pull_request' },
 	});
+	rmSync(repo, { recursive: true, force: true });
 	const lines = result.stdout.split('\n').filter(Boolean);
 	assert.equal(lines.length, 7, result.stdout);
 	assert.ok(lines.every((line) => /^(lint|unit|web|only_specs|native|self|reason)=/.test(line)));
