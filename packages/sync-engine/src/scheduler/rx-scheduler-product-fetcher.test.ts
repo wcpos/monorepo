@@ -186,11 +186,69 @@ describe('createProductsSchedulerFetcher', () => {
 		);
 
 		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
-			'http://wcpos.local/wp-json/wcpos/v2/products?search=42&per_page=25&page=1&orderby=id&order=desc&status=publish',
 			'http://wcpos.local/wp-json/wcpos/v2/products?sku=42&per_page=25&page=1&orderby=id&order=desc&status=publish',
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=42&per_page=25&page=1&orderby=id&order=desc&status=publish',
 		]);
 		expect(result).toMatchObject({ requestCount: 2, completed: true });
 	});
+
+	it('uses only search= when the exact SKU leg is disabled', async () => {
+		const fetcher = vi.fn(async (_url: string) => response([]));
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository: {
+				upsertMany: vi.fn(async () => undefined),
+				removeMany: vi.fn(async () => undefined),
+			},
+			fetcher,
+			exactSkuLeg: () => false,
+		});
+
+		const result = await schedulerFetcher(productTask());
+
+		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=25&page=1&orderby=id&order=desc&status=publish',
+		]);
+		expect(result.requestCount).toBe(1);
+	});
+
+	it.each([
+		['disabled', false],
+		['required', true],
+	] as const)(
+		'makes no request for whitespace when the exact SKU leg is %s',
+		async (_label, required) => {
+			const fetcher = vi.fn(async () => response([]));
+			const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+			const schedulerFetcher = createProductsSchedulerFetcher({
+				baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+				repository: {
+					upsertMany: vi.fn(async () => undefined),
+					removeMany: vi.fn(async () => undefined),
+				},
+				fetcher,
+				coverageRepository,
+				coverageFreshForMs: 60_000,
+				nowMs: () => 5_000,
+				exactSkuLeg: () => required,
+			});
+
+			const result = await schedulerFetcher(
+				productTask({ id: 'products:search:%20%20:windowed', queryKey: 'products:search:%20%20' })
+			);
+
+			expect(fetcher).not.toHaveBeenCalled();
+			expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith({
+				collection: 'products',
+				queryKey: 'products:search:%20%20',
+				records: [],
+				complete: true,
+				nowMs: 5_000,
+				freshForMs: 60_000,
+			});
+			expect(result).toMatchObject({ documentCount: 0, requestCount: 0, completed: true });
+		}
+	);
 
 	it('walks each product search leg in Performance-dial pages, not one task-limit request', async () => {
 		const repository = {
@@ -220,11 +278,11 @@ describe('createProductsSchedulerFetcher', () => {
 		// exhausts each leg, so it is still two requests.
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			'http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=10&page=1&orderby=id&order=desc&status=publish'
+			'http://wcpos.local/wp-json/wcpos/v2/products?sku=keyboard&per_page=10&page=1&orderby=id&order=desc&status=publish'
 		);
 		expect(fetcher).toHaveBeenNthCalledWith(
 			2,
-			'http://wcpos.local/wp-json/wcpos/v2/products?sku=keyboard&per_page=10&page=1&orderby=id&order=desc&status=publish'
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=10&page=1&orderby=id&order=desc&status=publish'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			{
@@ -2084,7 +2142,10 @@ describe('createProductsSchedulerFetcher', () => {
 		});
 	});
 
-	it('merges exact SKU matches into product search task results', async () => {
+	it.each([
+		['reader absent', undefined],
+		['reader returns true', () => true],
+	] as const)('merges and prioritizes exact SKU matches with %s', async (_case, exactSkuLeg) => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
@@ -2101,12 +2162,21 @@ describe('createProductsSchedulerFetcher', () => {
 					},
 				]);
 			}
-			return response([]);
+			return response([
+				{
+					id: 101,
+					sku: 'OTHER',
+					name: 'Fuzzy search copy',
+					date_modified_gmt: '2026-05-20T10:10:00',
+					meta_data: posMeta(101),
+				},
+			]);
 		});
 		const schedulerFetcher = createProductsSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			fetcher,
+			...(exactSkuLeg === undefined ? {} : { exactSkuLeg }),
 		});
 
 		const result = await schedulerFetcher(
@@ -2118,14 +2188,18 @@ describe('createProductsSchedulerFetcher', () => {
 
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			'http://wcpos.local/wp-json/wcpos/v2/products?search=KEY-101&per_page=25&page=1&orderby=id&order=desc&status=publish'
+			'http://wcpos.local/wp-json/wcpos/v2/products?sku=KEY-101&per_page=25&page=1&orderby=id&order=desc&status=publish'
 		);
 		expect(fetcher).toHaveBeenNthCalledWith(
 			2,
-			'http://wcpos.local/wp-json/wcpos/v2/products?sku=KEY-101&per_page=25&page=1&orderby=id&order=desc&status=publish'
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=KEY-101&per_page=25&page=1&orderby=id&order=desc&status=publish'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
-			expect.objectContaining({ uuid: uuidFor(101), remoteId: remoteId(101) }),
+			expect.objectContaining({
+				uuid: uuidFor(101),
+				remoteId: remoteId(101),
+				payload: expect.objectContaining({ name: 'Keyboard Stand', sku: 'KEY-101' }),
+			}),
 		]);
 		expect(result).toEqual({
 			taskId: 'products:search:KEY-101:windowed',
@@ -2304,11 +2378,11 @@ describe('createProductsSchedulerFetcher', () => {
 
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			'http://wcpos.local/wp-json/wcpos/v2/products?search=100%25+cotton&per_page=25&page=1&orderby=id&order=desc&status=publish'
+			'http://wcpos.local/wp-json/wcpos/v2/products?sku=100%25+cotton&per_page=25&page=1&orderby=id&order=desc&status=publish'
 		);
 		expect(fetcher).toHaveBeenNthCalledWith(
 			2,
-			'http://wcpos.local/wp-json/wcpos/v2/products?sku=100%25+cotton&per_page=25&page=1&orderby=id&order=desc&status=publish'
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=100%25+cotton&per_page=25&page=1&orderby=id&order=desc&status=publish'
 		);
 	});
 
@@ -2547,6 +2621,7 @@ describe('createProductsSchedulerFetcher', () => {
 			repository,
 			fetcher,
 			barcodeSelectors: () => ({ products: ['sku'], variations: ['sku'] }),
+			exactSkuLeg: () => true,
 		});
 
 		await schedulerFetcher(
@@ -2558,8 +2633,7 @@ describe('createProductsSchedulerFetcher', () => {
 
 		// Both legs ran (the term is long enough for the search leg).
 		const requestLegs = fetcher.mock.calls.map(([url]) => new URL(url).searchParams.has('sku'));
-		expect(requestLegs).toContain(true);
-		expect(requestLegs).toContain(false);
+		expect(requestLegs).toEqual([true, false]);
 		expect(upserted.flat()).toEqual([]);
 	});
 });

@@ -4,11 +4,11 @@ import type { RxDatabase } from 'rxdb';
 
 /**
  * One-shot scope-open repair for stores polluted before the products search lane
- * learned to drop variation-typed rows (Woo answers a `products?sku=` filter from
- * BOTH post types, so a variation whose sku matched a search term was persisted
- * into the PRODUCTS collection — see fetchProductSearch). Such a document makes
- * every barcode scan of that code falsely ambiguous: the scan reads products AND
- * variations, and the one record matches in both collections.
+ * learned to drop variation-typed rows. The lane still sends `sku=` to stores
+ * below plugin 1.10.8, because Woo widens that filter to both post types, but now
+ * drops those variation rows itself. This purge covers old residue that otherwise
+ * makes a barcode scan falsely ambiguous: the same record matches once in the
+ * products collection and once in variations.
  *
  * Removes products-collection documents whose promoted `type` column says
  * `variation`, plus any existence-manifest row still claiming `objectType:

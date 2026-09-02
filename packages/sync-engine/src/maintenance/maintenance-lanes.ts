@@ -134,6 +134,7 @@ type MaintenanceLaneDeps = {
 	coverageFor: (scopeId: string) => LocalCoverage | null;
 	/** The per-scope barcode carriers a scheduler pull materializes products/variations by. */
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
+	exactSkuLeg?: () => boolean;
 	/** Namespaced read base (site.syncBaseUrl) — the drain fetchers pull through it. */
 	syncBaseUrl: string;
 	/** The engine's transport port, threaded into every drain fetcher pull. */
@@ -500,6 +501,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			db: db as unknown as SchedulerDrainDatabase,
 			coverage,
 			...(barcodeSelectors !== undefined ? { barcodeSelectors } : {}),
+			...(deps.exactSkuLeg !== undefined ? { exactSkuLeg: deps.exactSkuLeg } : {}),
 			baseUrl: deps.syncBaseUrl,
 			ownerId: deps.ownerId(),
 			censusFreshForMs: deps.censusFreshForMs,

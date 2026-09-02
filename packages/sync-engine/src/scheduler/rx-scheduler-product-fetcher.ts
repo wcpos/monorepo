@@ -1,6 +1,6 @@
 /**
  * Product scheduler fetcher. Unlike customer, product does NOT collapse into the thin targeted/search spec:
- * its search runs a dual search=+sku= query with dedupe (not paginated), its targeted ids come from the explicit
+ * its search walks `search=` and conditionally adds the legacy exact `sku=` leg, its targeted ids come from the explicit
  * numeric wooIds channel, it promotes indexed columns via withProductColumns before upsert, and it has no
  * born-local sentinel. So it keeps its own targeted/search flow but reuses the shared scaffolding helpers
  * (httpGet / recordCoverage / chunk / assertReturnedRequestedIds) — no copied pagination/coverage boilerplate.
@@ -103,6 +103,8 @@ export type ProductsSchedulerFetcherInput = {
 	 * `payload.barcode` from them. A reader, not a value: a browse walk spans
 	 * many pages and a config poll can change the carrier mid-walk. */
 	barcodeSelectors?: BarcodeSelectorsReader;
+	/** Live capability gate for the legacy exact `sku=` search leg. */
+	exactSkuLeg?: () => boolean;
 };
 
 /**
@@ -674,8 +676,18 @@ async function fetchProductSearch(
 	const limit = taskLimit(task);
 	const pageSize = taskLimit(task, input.pullBatchSize);
 	const term = search.trim();
+	const exactSkuLeg = term.length > 0 && (input.exactSkuLeg?.() ?? true);
+	const skuLeg = !exactSkuLeg
+		? { payloads: [], requestCount: 0, exhausted: true }
+		: await fetchProductSearchLeg(
+				input,
+				(perPage, page) => productSkuParams(term, perPage, page),
+				limit,
+				pageSize,
+				context
+			);
 	const searchLeg = !term.length
-		? null
+		? { payloads: [], requestCount: 0, exhausted: true }
 		: await fetchProductSearchLeg(
 				input,
 				(perPage, page) => productSearchParams(term, perPage, page),
@@ -683,13 +695,6 @@ async function fetchProductSearch(
 				pageSize,
 				context
 			);
-	const skuLeg = await fetchProductSearchLeg(
-		input,
-		(perPage, page) => productSkuParams(term, perPage, page),
-		limit,
-		pageSize,
-		context
-	);
 	// Woo answers a sku= filter from BOTH post types: a variation whose sku matches the
 	// term comes back as a `type: 'variation'` row on the PRODUCTS route (WC core widens
 	// post_type for sku filters; verified live on dev-pro 2026-08-20). Persisting such a
@@ -698,20 +703,18 @@ async function fetchProductSearch(
 	// scan of that code turns falsely ambiguous ("2 products found locally"), permanently.
 	// Variations are materialized only by the variations lanes; drop the rows before
 	// they reach documents, counts, or coverage.
-	const payloads = uniqueProductPayloads([
-		...skuLeg.payloads,
-		...(searchLeg?.payloads ?? []),
-	]).filter((payload) => payload.type !== 'variation');
+	const payloads = uniqueProductPayloads([...skuLeg.payloads, ...searchLeg.payloads]).filter(
+		(payload) => payload.type !== 'variation'
+	);
 	const documents = payloads
 		.slice(0, limit)
 		.map((payload) => productDocumentFromWooPayload(payload, input.barcodeSelectors?.()));
 	await persistProductDocuments(input, documents);
-	// A skipped short-term search leg counts as exhausted; otherwise both legs must exhaust.
 	// The slice above can drop deduped cross-leg hits past the window, and the products
 	// lane key carries no limit — a truncated persist must not record a complete lane,
 	// or the serve-local gate would answer a later, larger-limit search from the
 	// truncated set.
-	const complete = (searchLeg?.exhausted ?? true) && skuLeg.exhausted && payloads.length <= limit;
+	const complete = searchLeg.exhausted && skuLeg.exhausted && payloads.length <= limit;
 	await recordCoverage(
 		'products',
 		input,
@@ -723,7 +726,7 @@ async function fetchProductSearch(
 	return {
 		taskId: task.id,
 		documentCount: documents.length,
-		requestCount: (searchLeg?.requestCount ?? 0) + skuLeg.requestCount,
+		requestCount: skuLeg.requestCount + searchLeg.requestCount,
 		completed: complete,
 	};
 }

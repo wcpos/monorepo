@@ -313,11 +313,20 @@ export type RunEngineSchedulerDrainInput = {
 	 * come back to repair them.
 	 */
 	barcodeSelectors?: BarcodeSelectorsReader;
+	exactSkuLeg?: () => boolean;
 };
 
 export type RunEngineSchedulerTaskInput = Pick<
 	RunEngineSchedulerDrainInput,
-	'db' | 'coverage' | 'baseUrl' | 'fetcher' | 'signal' | 'nowMs' | 'onProgress' | 'barcodeSelectors'
+	| 'db'
+	| 'coverage'
+	| 'baseUrl'
+	| 'fetcher'
+	| 'signal'
+	| 'nowMs'
+	| 'onProgress'
+	| 'barcodeSelectors'
+	| 'exactSkuLeg'
 > & {
 	task: FetchTask;
 };
@@ -336,6 +345,7 @@ function createEngineSchedulerFetcherRegistry(
 		| 'censusFreshForMs'
 		| 'refreshBrowseWindowKey'
 		| 'barcodeSelectors'
+		| 'exactSkuLeg'
 	>,
 	/**
 	 * How a query-total cache refusal recovers. A DRAIN tick holds claims on
@@ -408,6 +418,7 @@ function createEngineSchedulerFetcherRegistry(
 			? { refreshBrowseWindowKey: input.refreshBrowseWindowKey }
 			: {}),
 		...(input.barcodeSelectors !== undefined ? { barcodeSelectors: input.barcodeSelectors } : {}),
+		...(input.exactSkuLeg !== undefined ? { exactSkuLeg: input.exactSkuLeg } : {}),
 	};
 
 	return createSchedulerFetcherRegistry([
