@@ -158,6 +158,10 @@ export default defineConfig<WcposTestOptions>({
 							/auth\.spec\.ts/,
 							/rest-route-transport\.spec\.ts/,
 							/host-blocked-errors\.spec\.ts/,
+							// Pro-only end to end: every test skips on Free, but only AFTER the
+							// posPage fixture has hydrated a context (three hydrations per shard
+							// for three skips, run 33617749219). Exclude at collection instead.
+							/server-created-visibility\.spec\.ts/,
 							COLD_SPEC,
 							LIVE_SPEC,
 						],
