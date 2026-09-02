@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { canOpenDrawer, type PrinterProfile, probeVendor } from '@wcpos/printer';
+import { canOpenDrawer, identifyPrinter, type PrinterProfile, probeVendor } from '@wcpos/printer';
 
 import { usePrinterDialogForm, type VendorDefaults } from './use-printer-dialog-form';
 import { DEFAULT_FORM_VALUES, nativePrinterSchema, type PrinterFormValues } from '../schema';
@@ -17,6 +17,8 @@ jest.mock('@wcpos/printer', () => ({
 		}
 	},
 	probeVendor: jest.fn().mockResolvedValue(null),
+	identifyPrinter: jest.fn().mockResolvedValue({ vendor: null, lane: null, ports: [] }),
+	createIdentifyProbes: jest.fn(() => ({})),
 	canOpenDrawer: jest.fn((profile: PrinterProfile) => profile.connectionType === 'network'),
 	isPrinterConnectionError: jest.fn(() => false),
 }));
@@ -108,7 +110,11 @@ describe('usePrinterDialogForm', () => {
 		>;
 
 		expect(latest.form.getValues('language')).toBe('star-line');
-		expect(probeVendor).toHaveBeenCalledWith('192.168.1.23');
+		expect(identifyPrinter).toHaveBeenCalledWith(
+			'192.168.1.23',
+			expect.anything(),
+			expect.anything()
+		);
 		expect(canOpenDrawer).toHaveBeenLastCalledWith(
 			expect.objectContaining({ connectionType: 'network' })
 		);
