@@ -95,6 +95,12 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 	const [attempt, setAttempt] = React.useState(0);
 	const [failed, setFailed] = React.useState(false);
 	const loadTimerRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+	// The first load of each attempt is the document we asked for; only a later load is a
+	// navigation that must earn a fresh handshake.
+	const initialLoadSeenRef = React.useRef(false);
+	React.useEffect(() => {
+		initialLoadSeenRef.current = false;
+	}, [attempt]);
 
 	// Keep the imperative sender current and notify the external page before host teardown.
 	React.useEffect(() => {
@@ -148,6 +154,10 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 				className="flex-1"
 				onMessage={onMessage}
 				onLoad={() => {
+					if (!initialLoadSeenRef.current) {
+						initialLoadSeenRef.current = true;
+						return;
+					}
 					if (ready) reset();
 				}}
 				// Only the catalog origin may load inside a bridged view; anything else is refused.

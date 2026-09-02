@@ -38,6 +38,8 @@ describe('useHostCapabilities', () => {
 			'/wcpos/v1//x',
 			'/wcpos/v1/x?y=1',
 			'/wcpos/v1/%5c..%5cx',
+			'/wcpos/v1/x&rest_route=/other/v1/action',
+			'/wcpos/v1/x%26rest_route=/other/v1/action',
 		]) {
 			await expect(
 				result.current['http.proxy']({ method: 'GET', path, query: {} })

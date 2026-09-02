@@ -13,6 +13,8 @@ const BLOCKED_REQUEST_HEADERS = ['authorization', 'cookie', 'x-wcpos', 'host'];
 
 // Validated after percent-decoding, not by prefix alone: a page holding the proxy must not be
 // able to walk out of the allowed REST namespaces with dot segments or delimiters, encoded or not.
+// '&' is a delimiter too: on plain-permalink sites the path rides inside `?rest_route=`, and a
+// second `rest_route=` after an '&' would win.
 function isAllowedRestPath(path: unknown): path is string {
 	if (typeof path !== 'string' || !path.startsWith('/')) return false;
 	let decoded: string;
@@ -22,7 +24,7 @@ function isAllowedRestPath(path: unknown): path is string {
 		return false;
 	}
 	const clean = (value: string) =>
-		!/[\\?#]/.test(value) &&
+		!/[\\?#&]/.test(value) &&
 		!value.includes('//') &&
 		!value.split('/').some((segment) => segment === '.' || segment === '..');
 	return clean(path) && clean(decoded) && ALLOWED_REST_PREFIXES.some((p) => decoded.startsWith(p));
