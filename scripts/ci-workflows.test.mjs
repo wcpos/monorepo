@@ -1754,6 +1754,43 @@ test('flow 08 issues the destructive void tap only once', () => {
 	assert.equal(voidTaps.length, 1, 'a retry can reissue an accepted in-flight server delete');
 });
 
+test('flow 08 selects a fresh order before requiring an empty cart', () => {
+	const flow = readMaestroFlow('08-void-order.yml');
+	const emptyCartAssertion = flow.findIndex(
+		(command) => command.assertNotVisible?.id === 'cart-quantity-input'
+	);
+	const newOrderTap = flow.findIndex((command) => command.tapOn?.id === 'new-order-tab');
+
+	assert.ok(newOrderTap >= 0, 'flow 08 must explicitly select a fresh order');
+	assert.ok(
+		newOrderTap < emptyCartAssertion,
+		'fresh order selection must precede the empty-cart check'
+	);
+});
+
+test('Android relaunch recovery rechecks the development launcher on every retry leg', () => {
+	for (const filename of [
+		'03-authenticated-relaunch.yml',
+		'08-void-order.yml',
+		'../subflows/relaunch-to-pos.yml',
+	]) {
+		const retry = readMaestroFlow(filename).find((command) =>
+			command.retry?.commands.some(
+				(nested) => nested.extendedWaitUntil?.visible?.id === 'search-products'
+			)
+		)?.retry;
+		assert.ok(retry, `${filename} lost its relaunch readiness retry`);
+		assert.ok(
+			retry.commands.some(
+				(command) =>
+					command.runFlow?.when?.platform === 'Android' &&
+					command.runFlow.when.visible === '(?i)fetch development servers'
+			),
+			`${filename} checks the development launcher only once before the retry`
+		);
+	}
+});
+
 // The openLink retry wrapper sits at the top level of flow 01 (clearState is
 // the point of that flow). Flow 02 continues from flow 01's connect screen and
 // keeps the same wrapper as RECOVERY only — inside a runFlow gated on

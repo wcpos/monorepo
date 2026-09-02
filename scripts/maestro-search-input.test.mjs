@@ -10,6 +10,11 @@ const flows = [
 	['07-variation-add-to-cart.yml', 'VARIABLE_PRODUCT_SEARCH'],
 ];
 
+const urlFlows = [
+	['01-clean-launch-connect.yml', 'INVALID_URL'],
+	['02-auth-setup.yml', 'STORE_URL'],
+];
+
 function evaluate(expression, context) {
 	const source = expression.slice(2, -1);
 	return Function(...Object.keys(context), `"use strict"; return (${source});`)(
@@ -56,5 +61,28 @@ test('native product searches type no more than one key per Maestro command', ()
 
 		assert.equal(bursts.join(''), config.env[variable], filename);
 		assert.ok(bursts.every((burst) => [...burst].length === 1), filename);
+	}
+});
+
+test('native URL assertions treat every regex metacharacter literally', () => {
+	const literal = 'https://store.test/a+b?(c)[d]{2}|^$';
+	const escaped = literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+	for (const [filename, variable] of urlFlows) {
+		const source = readFileSync(
+			new URL(`../apps/main/.maestro/flows/${filename}`, import.meta.url),
+			'utf8'
+		);
+		const [config, flow] = parseAllDocuments(source).map((document) => document.toJS());
+		const retry = flow
+			.map((command) => command?.retry?.commands)
+			.find((commands) =>
+				commands?.some((command) => command.repeat?.while?.true?.includes(variable))
+			);
+		const selector = retry.find((command) => command.assertVisible?.text).assertVisible.text;
+		const pattern = evaluate(selector, { ...config.env, [variable]: literal });
+
+		assert.equal(pattern, escaped, filename);
+		assert.match(literal, new RegExp(`^(?:${pattern})$`), filename);
 	}
 });

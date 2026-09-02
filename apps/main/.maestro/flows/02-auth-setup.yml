@@ -141,7 +141,7 @@ env:
       # referent (the exact string this loop just typed), not localized UI
       # copy — the selector policy's composite-string carve-out.
       - assertVisible:
-          text: '${STORE_URL.replace(/\./g, "\\.")}'
+          text: '${STORE_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}'
 # optional — see flow 01: hideKeyboard is flaky on iOS and this is
 # housekeeping; a genuinely covered target fails at its own tap.
 - hideKeyboard:

@@ -15,14 +15,6 @@ appId: com.wcpos.main.dev
 # phone, flow 05: "Development servers … Recently opened" with the app never
 # loaded, so the first assertion timed out on the launcher). Reload through
 # the same deep link flows 01/02 use; inert when the app came up normally.
-- runFlow:
-    when:
-      platform: Android
-      visible: "(?i)fetch development servers"
-    commands:
-      - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
-      - waitForAnimationToEnd:
-          timeout: 5000
 # Run 33513307174 (Android phone, flow 05): the login Custom Tab from flow
 # 02's retype recovery lives in the app task's back stack and can resurface
 # over the app on ANY relaunch, not only flow 03's. Same gated dismissal as
@@ -37,6 +29,14 @@ appId: com.wcpos.main.dev
 - retry:
     maxRetries: 2
     commands:
+      - runFlow:
+          when:
+            platform: Android
+            visible: "(?i)fetch development servers"
+          commands:
+            - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
+            - waitForAnimationToEnd:
+                timeout: 5000
       - runFlow:
           when:
             platform: Android
