@@ -250,6 +250,19 @@ env:
     visible:
       id: "logged-in-users-label"
     timeout: 120000
+# The login Custom Tab (Chrome's CustomTabActivity, living in the APP's task)
+# survives this return with web history inside (authorize → login form), so a
+# single `back` navigates that history instead of closing it — run 33574072528
+# flow 07 pressed back on the resurfaced form and it STAYED (logcat shows no
+# activity transition at all). It can then resurface over the app on ANY later
+# relaunch (class 6). Force-stopping Chrome removes its activity records from
+# the task system-wide — the only deterministic dismissal. The app is already
+# back in the foreground here, so this cannot background the app under test.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - stopApp: com.android.chrome
 # Returning from the auth browser re-focuses the store-URL input and reopens
 # the soft keyboard over the store list / Open POS button — both Android jobs
 # in run 33074068139 logged in fine and then failed exactly there. Dismiss it

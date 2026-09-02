@@ -55,8 +55,10 @@ appId: com.wcpos.main.dev
             platform: Android
             visible: "Username or Email Address|Nombre de usuario o correo electrónico"
           commands:
-            - evalScript: "${console.log('WCPOS_E2E lingering login tab over the relaunched app, pressing back once')}"
-            - back
+            - evalScript: "${console.log('WCPOS_E2E lingering login tab over the relaunched app, force-stopping Chrome')}"
+            # NOT `back`: the tab keeps web history (authorize → login form) and back
+            # navigates it instead of closing the tab — run 33574072528 flow 07.
+            - stopApp: com.android.chrome
             - waitForAnimationToEnd:
                 timeout: 5000
       - extendedWaitUntil:
@@ -234,8 +236,10 @@ appId: com.wcpos.main.dev
             platform: Android
             visible: "Username or Email Address|Nombre de usuario o correo electrónico"
           commands:
-            - evalScript: "${console.log('WCPOS_E2E lingering login tab over the relaunched app, pressing back once')}"
-            - back
+            - evalScript: "${console.log('WCPOS_E2E lingering login tab over the relaunched app, force-stopping Chrome')}"
+            # NOT `back`: the tab keeps web history (authorize → login form) and back
+            # navigates it instead of closing the tab — run 33574072528 flow 07.
+            - stopApp: com.android.chrome
             - waitForAnimationToEnd:
                 timeout: 5000
       - extendedWaitUntil:

@@ -39,7 +39,12 @@ test('native product searches type no more than one key per Maestro command', ()
 			'utf8'
 		);
 		const [config, flow] = parseAllDocuments(source).map((document) => document.toJS());
-		const retry = flow.find((command) => command.retry)?.retry.commands;
+		// Flows carry more than one retry block (the relaunch login-tab guard wraps
+		// its readiness wait in one, PR #1750) — the typing loop is the retry that
+		// starts by erasing the search field.
+		const retry = flow
+			.map((command) => command?.retry?.commands)
+			.find((commands) => Array.isArray(commands) && commands.includes('eraseText'));
 		const searchCommands = retry.slice(
 			retry.findIndex((command) => command === 'eraseText') + 1,
 			retry.findIndex((command) => command.assertVisible)
