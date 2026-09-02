@@ -73,7 +73,7 @@ test('native product searches type no more than one key per Maestro command', ()
 // text selector becomes literal garbage. The general-purpose escape
 // `/[.*+?^${}()|[\]\\]/g` + `'\\$&'` therefore cannot be used here; the two URLs
 // carry dots as their only metacharacter, so dots are what get escaped.
-test('native URL assertions escape the dot and carry no `$` inside the interpolation', () => {
+test('native URL retries clear existing text and safely assert the typed URL', () => {
 	const literal = 'https://dev-pro.wcpos.com';
 
 	for (const [filename, variable] of urlFlows) {
@@ -87,6 +87,14 @@ test('native URL assertions escape the dot and carry no `$` inside the interpola
 			.find((commands) =>
 				commands?.some((command) => command.repeat?.while?.true?.includes(variable))
 			);
+		assert.equal(retry[0]?.runFlow?.when?.visible?.id, 'store-url-clear', filename);
+		assert.equal(
+			retry[0]?.runFlow?.commands?.[0]?.tapOn?.id,
+			'store-url-clear',
+			filename
+		);
+		assert.equal(retry[1]?.tapOn?.id, 'store-url-input', filename);
+		assert.equal(retry[2], 'eraseText', filename);
 		const selector = retry.find((command) => command.assertVisible?.text).assertVisible.text;
 		const pattern = evaluate(selector, { ...config.env, [variable]: literal });
 
