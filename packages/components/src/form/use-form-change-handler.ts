@@ -41,8 +41,10 @@ function isTextValue(value: unknown): boolean {
  * - Only fires onChange for user-initiated field changes
  *
  * `onChange` may be an inline arrow (every ui-settings form passes one, and the React
- * Compiler bails out of any component that calls `useForm()`, so nothing memoises it).
- * The debounced writer therefore must NOT be keyed on `onChange` identity: a form
+ * Compiler deliberately skips any component that calls the `watch()` returned by
+ * `useForm()` — its module type provider marks `watch` as knownIncompatible — so in those
+ * forms nothing memoises it). The debounced writer therefore must NOT be keyed on
+ * `onChange` identity: a form
  * re-renders on the very field change it is persisting (`useFormField` reads the root
  * formState proxy), and a writer rebuilt on that render would cancel the pending write —
  * which is how every string-valued Select/ToggleGroup setting (view mode, sort by, sort
