@@ -14,7 +14,7 @@ import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord } from '@wcpos/query';
 import { useDocField } from '@wcpos/query';
 
-import '../register-slot-entries';
+import './register-quick-filters';
 
 import { Actions } from './cells/actions';
 import { Name } from './cells/name';

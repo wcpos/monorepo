@@ -25,14 +25,13 @@ jest.mock('@wcpos/core/screens/main/contexts/ui-settings', () => ({
 	}),
 }));
 /**
- * The slot registry and the POS registrations are the code under test, so they are the two
+ * The slot registry and the panel registrations are the code under test, so they are the two
  * @wcpos/core modules that stay REAL — pinned to this checkout's source, because a linked
  * worktree borrows `node_modules` (and therefore the @wcpos/core symlink) from the main
  * tree. `virtual` covers the case where that symlink has no such subpath yet.
  *
- * Everything the registrations then reach — the two panel bodies and the filter-bar entry —
- * is stubbed under BOTH specifiers: they are one file wherever the symlink points here, and
- * two while it does not.
+ * The two panel bodies the registrations then reach are stubbed under BOTH specifiers: they
+ * are one file wherever the symlink points here, and two while it does not.
  */
 jest.mock(
 	'@wcpos/core/extensions/slots',
@@ -40,8 +39,8 @@ jest.mock(
 	{ virtual: true }
 );
 jest.mock(
-	'@wcpos/core/screens/main/pos/register-slot-entries',
-	() => jest.requireActual('../../../packages/core/src/screens/main/pos/register-slot-entries'),
+	'@wcpos/core/screens/main/pos/register-panel-entries',
+	() => jest.requireActual('../../../packages/core/src/screens/main/pos/register-panel-entries'),
 	{ virtual: true }
 );
 jest.mock('@wcpos/core/screens/main/pos/products', () => ({ POSProducts: () => null }));
@@ -50,9 +49,6 @@ jest.mock('../../../packages/core/src/screens/main/pos/products', () => ({
 }));
 jest.mock('@wcpos/core/screens/main/pos/cart', () => ({ OpenOrders: () => null }));
 jest.mock('../../../packages/core/src/screens/main/pos/cart', () => ({ OpenOrders: () => null }));
-jest.mock('../../../packages/core/src/screens/main/pos/products/quick-filters-bar', () => ({
-	QuickFiltersBar: () => null,
-}));
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
 }));

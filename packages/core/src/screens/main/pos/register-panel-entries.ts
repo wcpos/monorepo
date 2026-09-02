@@ -3,15 +3,16 @@ import * as React from 'react';
 import { registerSlotEntry } from '../../../extensions/slots';
 import { OpenOrders } from './cart';
 import { POSProducts } from './products';
-import { QuickFiltersBar } from './products/quick-filters-bar';
 
 import type { SlotEntryProps } from '../../../extensions/slots';
 
 /**
- * Every first-party POS slot entry, registered at import time.
+ * The `pos.columns.panel` entries, registered at import time.
  *
- * Both POS entry points import this module for its side effect, so the panels exist however
- * the screen was reached. Registration is idempotent by id, so importing it twice is fine.
+ * Imported for its side effect by the columns route — the only host of that slot — and by
+ * nothing else. Registrations live beside the host that renders them, never beside the
+ * component that gets registered, so no module ends up importing its own importer.
+ * Registration is idempotent by id, so importing it twice is fine.
  *
  * The panel entries are thin wrappers, not ports: `POSProducts` and `OpenOrders` keep
  * importing app internals directly. The contract governs the SLOT boundary — what crosses
@@ -41,13 +42,4 @@ registerSlotEntry({
 	title: 'Cart',
 	capabilities: [],
 	component: CartPanelEntry,
-});
-
-registerSlotEntry({
-	id: 'quick-filters',
-	slot: 'pos.products.filter-bar.item',
-	order: 10,
-	title: 'Quick filters',
-	capabilities: [],
-	component: QuickFiltersBar,
 });

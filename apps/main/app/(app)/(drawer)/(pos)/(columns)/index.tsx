@@ -4,7 +4,7 @@ import { Pressable, View } from 'react-native';
 import { useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import '@wcpos/core/screens/main/pos/register-slot-entries';
+import '@wcpos/core/screens/main/pos/register-panel-entries';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Icon } from '@wcpos/components/icon';
