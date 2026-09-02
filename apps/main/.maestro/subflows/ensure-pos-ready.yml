@@ -1,3 +1,8 @@
+appId: com.wcpos.main.dev
+# Maestro requires the config section in every flow file, subflows included:
+# without it batch mode aborts before the first flow with "Config Section
+# Required" (run 33627088324, Android phone, 99 s in, no verdict).
+---
 # Invariant: every flow ends on the POS products screen with search-products visible.
 # The healthy path performs zero relaunches; relaunch is recovery only when POS is not ready.
 # Recovery is logged so run artifacts can count every conditional relaunch.

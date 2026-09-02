@@ -1,3 +1,8 @@
+appId: com.wcpos.main.dev
+# Maestro requires the config section in every flow file, subflows included:
+# without it batch mode aborts before the first flow with "Config Section
+# Required" (run 33627088324, Android phone, 99 s in, no verdict).
+---
 # Split stop/launch + a screenshot-based settle: a combined `launchApp:
 # {stopApp: true}` can race the XCTest driver's first hierarchy query and be
 # reported as "App crashed" — see flow 08's relaunch for the evidence.
