@@ -111,6 +111,8 @@ jobs:
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
       platform: ${{ steps.resolve.outputs.platform }}
+      android_devices: ${{ steps.resolve.outputs.android_devices }}
+      ios_devices: ${{ steps.resolve.outputs.ios_devices }}
       variable_product_id: ${{ steps.seed.outputs.variable_product_id }}
     steps:
       - name: 🏗 Setup repository (main lane)
@@ -159,6 +161,26 @@ jobs:
             *) echo "::error::platform must be all, ios or android (got: $RAW_PLATFORM)"; exit 1 ;;
           esac
           echo "platform=$PLATFORM" >> "$GITHUB_OUTPUT"
+          # Device classes per event. Pull requests run PHONES only: the JS under
+          # test is identical on both classes, the tablet-specific checks (flow
+          # 09, the drawer layout) ride the main push and dispatches, and a PR
+          # verdict is one setup + one suite per platform instead of two in
+          # series (owner direction 2026-09-02: "nowhere near an hour").
+          # record_size: HALF the device resolution. screenrecord encodes on the
+          # emulator's guest cores - the same 3 vCPUs everything else shares -
+          # and encode cost scales with pixels; half resolution is ~1/4 the
+          # work and the failure video stays perfectly readable.
+          ANDROID_PHONE='{"name":"phone","profile":"pixel_6","record_size":"540x1200"}'
+          ANDROID_TABLET='{"name":"tablet","profile":"pixel_tablet","record_size":"1280x800"}'
+          IOS_PHONE='{"name":"phone","simulator":"iPhone 16 Pro"}'
+          IOS_TABLET='{"name":"tablet","simulator":"iPad Pro 11-inch (M4)"}'
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            echo "android_devices=[$ANDROID_PHONE]" >> "$GITHUB_OUTPUT"
+            echo "ios_devices=[$IOS_PHONE]" >> "$GITHUB_OUTPUT"
+          else
+            echo "android_devices=[$ANDROID_PHONE,$ANDROID_TABLET]" >> "$GITHUB_OUTPUT"
+            echo "ios_devices=[$IOS_PHONE,$IOS_TABLET]" >> "$GITHUB_OUTPUT"
+          fi
           echo "Testing main @ $SHA (platform: $PLATFORM)"
 
       # The fingerprint resolves the app config (TypeScript, with imports), so
@@ -352,23 +374,20 @@ jobs:
     # inside this job, so it counts against this timeout).
     timeout-minutes: 250
     strategy:
-      # ONE device job per platform at a time. Every device job logs a fresh
-      # cashier in and syncs the store; with both classes (and other runs)
-      # in flight dev-pro's php-fpm (4 workers by design) logged "server
-      # reached pm.max_children" 181 times in six hours on 2026-08-29/30,
-      # the PHP container restarted at 01:37Z, the WordPress login answered
-      # 502 to the iOS phone (run 33285279390) and the order-pay page took
-      # 21 min on Android (run 33280466971). Slower runs beat red ones.
-      max-parallel: 1
+      # Both device classes of a platform run at once. max-parallel: 1 dated
+      # from dev-pro's 4-worker php-fpm (181 pm.max_children warnings in six
+      # hours on 2026-08-29/30, run 33285279390 / 33280466971); the owner
+      # ruled the workers UP on 2026-09-01 and on 2026-09-02 that the suite
+      # must be nowhere near an hour — serial classes doubled every PR run.
+      # The FIFO turnstile (keyed by exact job name) still serialises runs
+      # per (platform, class). If the pay-page class returns, that is the
+      # store's capacity, not a reason to serialise classes again.
+      max-parallel: 2
       fail-fast: false
       matrix:
-        device:
-          # record_size: HALF the device resolution. screenrecord encodes on the
-          # emulator's guest cores - the same 3 vCPUs everything else shares -
-          # and encode cost scales with pixels; half resolution is ~1/4 the
-          # work and the failure video stays perfectly readable.
-          - { name: phone, profile: pixel_6, record_size: 540x1200 }
-          - { name: tablet, profile: pixel_tablet, record_size: 1280x800 }
+        # Phones on pull requests, both classes on the main push and dispatches
+        # — see the build job's android_devices output for the rationale.
+        device: ${{ fromJSON(needs.build.outputs.android_devices) }}
     steps:
       - name: 🏗 Setup repository (workflow revision)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -898,19 +917,20 @@ jobs:
     # inside this job, so it counts against this timeout).
     timeout-minutes: 210
     strategy:
-      # ONE device job per platform at a time. Every device job logs a fresh
-      # cashier in and syncs the store; with both classes (and other runs)
-      # in flight dev-pro's php-fpm (4 workers by design) logged "server
-      # reached pm.max_children" 181 times in six hours on 2026-08-29/30,
-      # the PHP container restarted at 01:37Z, the WordPress login answered
-      # 502 to the iOS phone (run 33285279390) and the order-pay page took
-      # 21 min on Android (run 33280466971). Slower runs beat red ones.
-      max-parallel: 1
+      # Both device classes of a platform run at once. max-parallel: 1 dated
+      # from dev-pro's 4-worker php-fpm (181 pm.max_children warnings in six
+      # hours on 2026-08-29/30, run 33285279390 / 33280466971); the owner
+      # ruled the workers UP on 2026-09-01 and on 2026-09-02 that the suite
+      # must be nowhere near an hour — serial classes doubled every PR run.
+      # The FIFO turnstile (keyed by exact job name) still serialises runs
+      # per (platform, class). If the pay-page class returns, that is the
+      # store's capacity, not a reason to serialise classes again.
+      max-parallel: 2
       fail-fast: false
       matrix:
-        device:
-          - { name: phone, simulator: iPhone 16 Pro }
-          - { name: tablet, simulator: iPad Pro 11-inch (M4) }
+        # Phones on pull requests, both classes on the main push and dispatches
+        # — see the build job's ios_devices output for the rationale.
+        device: ${{ fromJSON(needs.build.outputs.ios_devices) }}
     steps:
       - name: 🏗 Setup repository (workflow revision)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
