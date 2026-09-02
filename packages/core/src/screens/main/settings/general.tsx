@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useObservableSuspense } from 'observable-hooks';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
 import { Suspense } from '@wcpos/components/suspense';
@@ -150,12 +150,19 @@ function GeneralSettingsForm({
 	/**
 	 * Toggle customer select
 	 */
-	const toggleCustomerSelect = form.watch('default_customer_is_cashier');
+	const toggleCustomerSelect = useWatch({
+		control: form.control,
+		name: 'default_customer_is_cashier',
+	});
 
 	/**
 	 * Get country code
 	 */
-	const countryCode = form.watch('store_country', form.getValues('store_country'));
+	const countryCode = useWatch({
+		control: form.control,
+		name: 'store_country',
+		defaultValue: form.getValues('store_country'),
+	});
 
 	/**
 	 * Restore server settings

@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import toNumber from 'lodash/toNumber';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
 import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
@@ -108,7 +108,7 @@ export function EditFeeLineForm({ uuid, item }: Props) {
 	/**
 	 * Watch for changes to `percent`
 	 */
-	const togglePercentage = form.watch('percent');
+	const togglePercentage = useWatch({ control: form.control, name: 'percent' });
 
 	/**
 	 *
