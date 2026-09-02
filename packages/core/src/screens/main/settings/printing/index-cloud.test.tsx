@@ -27,6 +27,9 @@ const cloudProfile: PrinterProfile = {
 const enqueue = jest.fn().mockResolvedValue(undefined);
 const httpPost = jest.fn().mockResolvedValue({ data: {} });
 
+// printer-row and printers-empty-state navigate to the printer wizard mini-app (#1763);
+// expo-router pulls react-native internals jest cannot parse, so mock it as the other screens do.
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('react-native', () => ({
 	View: ({
 		children,
