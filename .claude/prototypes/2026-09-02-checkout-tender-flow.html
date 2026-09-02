@@ -91,6 +91,24 @@ body.open #scrim { opacity:1; pointer-events:auto; } body.open #modal { transfor
 .C .stage { padding:32px; display:grid; gap:20px; align-content:start; }
 .C .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px; }
 
+/* Responsive: phones get a full-screen sheet; B's ledger pane becomes a balance bar */
+@media (max-width: 760px) {
+  #modal { width:100vw; }
+  #pos { grid-template-columns:1fr; } #cart { position:fixed; bottom:0; left:0; right:0; max-height:45vh; border-left:0; border-top:1px solid var(--line); }
+  .mh { padding:12px 14px; } .mh h2 { font-size:16px; } .tabs button { padding:6px 10px; }
+  .B .body { grid-template-columns:1fr; grid-template-rows:auto 1fr; }
+  .B .left { border-right:0; border-bottom:1px solid var(--line); padding:12px 14px; gap:8px; }
+  .B .left .line, .B .left .ordertotal { display:none !important; }
+  .B .left details summary { list-style:none; cursor:pointer; display:flex; align-items:center; justify-content:space-between; }
+  .B .left details summary .balance .v { font-size:28px; }
+  .B .left .legs { margin-top:8px; }
+  .B .right { padding:14px; }
+  .B .grid { grid-template-columns:repeat(2,1fr); }
+  .A .entry { grid-template-columns:1fr; } .C .body { grid-template-columns:1fr; } .C .rail { display:none; }
+  .amt { font-size:36px; } .pad button { padding:14px; font-size:20px; }
+  #note { display:none; }
+}
+@media (min-width: 761px) { .B .left details summary { pointer-events:none; } .B .left details summary::-webkit-details-marker { display:none; } .B .left .collapsehint { display:none; } }
 /* prototype chrome */
 #bar { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:50; display:flex; align-items:center; gap:10px; background:#111; color:#fff; border-radius:999px; padding:8px 12px; box-shadow:0 10px 30px rgba(0,0,0,.45); font-size:13px; border:1px solid #333; }
 #bar button { background:#222; color:#fff; border:1px solid #444; border-radius:999px; padding:7px 11px; } #bar button.on { background:#fff; color:#111; }
@@ -205,9 +223,10 @@ A.title = 'Tiles — balance, grid, keypad under the tapped tile';
 function B() { // Two-pane
   const right = S.tab === 'legacy' ? legacyHtml() : S.view === 'receipt' ? receiptHtml() : S.view === 'cancel' ? cancelHtml()
     : `<div class="grid">${tilesHtml(S.current ? '' : '')}</div>${S.current ? `<div>${S.view==='reader'?readerHtml():S.view==='gift'?giftHtml():padHtml()}</div>` : '<div class="note">Choose a payment type. Every payment you take is added to the list on the left until the balance is zero.</div>'}`;
-  return `<div class="B" style="display:contents">${headerHtml('Checkout')}<div class="body"><div class="left"><div class="note">Priya · order #1187</div>${ORDER.lines.map(([n,q,t])=>`<div class="line" style="display:flex;justify-content:space-between;font-size:14px"><span>${q} × ${n}</span><span class="money">${fmt(t)}</span></div>`).join('')}<div style="display:flex;justify-content:space-between;font-weight:800;font-size:20px;border-top:2px solid var(--ink);padding-top:10px"><span>Total</span><span class="money">${fmt(ORDER.total)}</span></div>${legsHtml({empty:'No payments yet'})}<div style="margin-top:auto">${balanceHtml()}</div></div><div class="right">${right}</div></div></div>`;
+  const liveLegs = S.legs.length;
+  return `<div class="B" style="display:contents">${headerHtml('Checkout')}<div class="body"><div class="left"><details open><summary>${balanceHtml()}<span class="collapsehint note">${liveLegs ? liveLegs + ' payment' + (liveLegs>1?'s':'') + ' ▾' : 'Priya · #1187'}</span></summary><div class="note" style="margin-top:8px">Priya · order #1187</div>${ORDER.lines.map(([n,q,t])=>`<div class="line" style="display:flex;justify-content:space-between;font-size:14px"><span>${q} × ${n}</span><span class="money">${fmt(t)}</span></div>`).join('')}<div class="ordertotal" style="display:flex;justify-content:space-between;font-weight:800;font-size:20px;border-top:2px solid var(--ink);padding-top:10px"><span>Total</span><span class="money">${fmt(ORDER.total)}</span></div>${legsHtml({empty:'No payments yet'})}</details></div><div class="right">${right}</div></div></div>`;
 }
-B.title = 'Two-pane — ledger left, tenders + keypad right';
+B.title = 'Two-pane — ledger left, tenders right (CHOSEN; phone: balance bar + full-screen tiles)';
 
 function C() { // Steps
   const step = S.tab==='legacy' ? 0 : S.view==='receipt' ? 3 : S.view==='select' ? 1 : 2;
