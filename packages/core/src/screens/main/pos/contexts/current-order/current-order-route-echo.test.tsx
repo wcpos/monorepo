@@ -134,6 +134,75 @@ describe('CurrentOrderProvider route-param echo', () => {
 		expect(actions!.getCurrentOrderRecord().uuid).toBe('order-b');
 	});
 
+	/**
+	 * P1-1: the parked id has to be released once the ROUTE moves to another order, or the
+	 * cart is stuck on that other order for the rest of the session.
+	 */
+	it('releases the parked id once the route delivers a different order', () => {
+		const resource = makeResource();
+		const { rerender } = render(<App currentOrderUUID="order-a" resource={resource} />);
+
+		act(() => {
+			actions!.setCurrentOrderID('');
+		});
+		rerender(<App currentOrderUUID="order-b" resource={resource} />);
+		expect(renderedUUID()).toBe('order-b');
+
+		// order-a is no longer an echo — the route left it two navigations ago.
+		rerender(<App currentOrderUUID="order-a" resource={resource} />);
+		expect(renderedUUID()).toBe('order-a');
+		expect(actions!.getCurrentOrderRecord().uuid).toBe('order-a');
+	});
+
+	/**
+	 * P1-2: the target phone flow. `saveNewOrder` calls `setCurrentOrderID(newUuid)` while
+	 * the PRODUCTS route is focused, so `router.setParams` never touches the cart route —
+	 * it still holds the parked id. Persisting must therefore not release the mark.
+	 */
+	it('survives Products -> add -> Cart, and a second round trip', () => {
+		const resource = makeResource();
+		const { rerender } = render(<App currentOrderUUID="order-a" resource={resource} />);
+
+		act(() => {
+			actions!.setCurrentOrderID('');
+		});
+		// Products tab: its focused route carries no orderId.
+		rerender(<App currentOrderUUID={undefined} resource={resource} />);
+		// The add persists the new order (stood in for by order-b) from the Products tab.
+		act(() => {
+			actions!.setCurrentOrderID('order-b');
+		});
+		expect(renderedUUID()).toBe('order-b');
+
+		// Back to the Cart tab: its route still holds the parked order-a.
+		rerender(<App currentOrderUUID="order-a" resource={resource} />);
+		expect(renderedUUID()).toBe('order-b');
+
+		// Second round trip.
+		rerender(<App currentOrderUUID={undefined} resource={resource} />);
+		rerender(<App currentOrderUUID="order-a" resource={resource} />);
+		expect(renderedUUID()).toBe('order-b');
+		expect(actions!.getCurrentOrderRecord().uuid).toBe('order-b');
+	});
+
+	it('releases the parked id when the cashier selects that order again', () => {
+		const resource = makeResource();
+		const { rerender } = render(<App currentOrderUUID="order-a" resource={resource} />);
+
+		act(() => {
+			actions!.setCurrentOrderID('');
+		});
+		act(() => {
+			actions!.setCurrentOrderID('order-a');
+		});
+		expect(renderedUUID()).toBe('order-a');
+
+		// The route echo of order-a is now the truth, not an echo.
+		rerender(<App currentOrderUUID={undefined} resource={resource} />);
+		rerender(<App currentOrderUUID="order-a" resource={resource} />);
+		expect(renderedUUID()).toBe('order-a');
+	});
+
 	it('re-adopts the same order after the cashier selects it again', () => {
 		const resource = makeResource();
 		const { rerender } = render(<App currentOrderUUID="order-a" resource={resource} />);
