@@ -43,6 +43,14 @@ jest.mock('react-native', () => ({
 	),
 }));
 
+// printer-row.tsx reaches the printer wizard through expo-router's useRouter
+// (mini-app host, 0b8e7c2e92); the router has no native module under Jest, so it
+// is mocked the way the other screen tests mock it (customers/add.test.tsx).
+const mockRouterPush = jest.fn();
+jest.mock('expo-router', () => ({
+	useRouter: () => ({ push: mockRouterPush }),
+}));
+
 jest.mock('observable-hooks', () => ({
 	useObservableState: (value: unknown, fallback: unknown) => value ?? fallback,
 }));

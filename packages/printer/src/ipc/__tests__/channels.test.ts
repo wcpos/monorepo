@@ -11,6 +11,10 @@ import { INVOKE_CHANNELS, ON_CHANNELS, SEND_CHANNELS } from '@wcpos/printer/ipc-
  * gained the channel).
  */
 describe('Electron IPC channel allowlists', () => {
+	it('allows the Epson ePOS HTTP invoke channel used by Electron printing', () => {
+		expect(INVOKE_CHANNELS).toContain('print-epos-http');
+	});
+
 	it('allows the novu invoke channel used by the renderer Novu proxy', () => {
 		expect(INVOKE_CHANNELS).toContain('novu');
 	});

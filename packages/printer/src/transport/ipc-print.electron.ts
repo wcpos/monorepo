@@ -1,6 +1,6 @@
 import type { IpcInvokeChannels, TypedIpcRenderer } from '@wcpos/printer/ipc-channels';
 
-function getIpc(): TypedIpcRenderer {
+export function getIpc(): TypedIpcRenderer {
 	const w = window as {
 		ipcRenderer?: TypedIpcRenderer;
 		electronAPI?: { ipcRenderer?: TypedIpcRenderer };

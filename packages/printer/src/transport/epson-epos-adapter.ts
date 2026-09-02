@@ -1,10 +1,8 @@
 import { buildConnectionError } from '../utils/connection-error';
 import { withTargetAddressSpace } from '../utils/local-fetch';
+import { buildEposXml, commandFromBytes, parseEposResponse } from './epson-epos-protocol';
 
 import type { PrinterTransport } from '../types';
-
-const EPOS_PRINT_NS = 'http://www.epson-pos.com/schemas/2011/03/epos-print';
-const SOAP_NS = 'http://schemas.xmlsoap.org/soap/envelope/';
 
 /**
  * Epson ePOS HTTP adapter for web browsers.
@@ -46,8 +44,7 @@ export class EpsonEposAdapter implements PrinterTransport {
 	}
 
 	async printRaw(data: Uint8Array): Promise<void> {
-		const hex = uint8ArrayToHex(data);
-		await this.sendEposPrint(`<command>${hex}</command>`);
+		await this.sendEposPrint(commandFromBytes(data));
 	}
 
 	async printHtml(_html: string): Promise<void> {
@@ -63,16 +60,7 @@ export class EpsonEposAdapter implements PrinterTransport {
 			`${this.baseUrl}/cgi-bin/epos/service.cgi` +
 			`?devid=${encodeURIComponent(this.deviceId)}&timeout=10000`;
 
-		const body = [
-			'<?xml version="1.0" encoding="utf-8"?>',
-			`<s:Envelope xmlns:s="${SOAP_NS}">`,
-			'<s:Body>',
-			`<epos-print xmlns="${EPOS_PRINT_NS}">`,
-			innerXml,
-			'</epos-print>',
-			'</s:Body>',
-			'</s:Envelope>',
-		].join('');
+		const body = buildEposXml(innerXml);
 
 		const controller = new AbortController();
 		const timeoutId = setTimeout(() => controller.abort(), 15_000);
@@ -112,26 +100,9 @@ export class EpsonEposAdapter implements PrinterTransport {
 			throw new Error(`Epson ePOS HTTP ${response.status}: ${text || response.statusText}`);
 		}
 
-		const responseText = await response.text();
-		const doc = new DOMParser().parseFromString(responseText, 'text/xml');
-		const resp = doc.getElementsByTagNameNS(EPOS_PRINT_NS, 'response')[0];
-
-		if (!resp) {
-			throw new Error('Unexpected Epson ePOS response from printer');
-		}
-
-		const success = resp.getAttribute('success');
-		if (success !== 'true' && success !== '1') {
-			const code = resp.getAttribute('code') || 'unknown';
-			throw new Error(`Epson print failed (code: ${code})`);
+		const { success, code } = parseEposResponse(await response.text());
+		if (!success) {
+			throw new Error(`Epson print failed (code: ${code || 'unknown'})`);
 		}
 	}
-}
-
-function uint8ArrayToHex(bytes: Uint8Array): string {
-	const parts: string[] = [];
-	for (let i = 0; i < bytes.length; i++) {
-		parts.push(bytes[i].toString(16).padStart(2, '0'));
-	}
-	return parts.join('');
 }

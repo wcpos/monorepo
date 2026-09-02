@@ -1,6 +1,10 @@
+import { probeEposEndpoint } from './epos-endpoint';
+import { EpsonEposAdapter, postEposHttp } from './epson-epos-adapter.electron';
 import { ipcPrintRaw, PRINT_TIMEOUT_MS } from './ipc-print.electron';
 
 import type { PrinterTransport } from '../types';
+
+const eposPortByHost = new Map<string, number | null>();
 
 /**
  * Electron network adapter.
@@ -12,10 +16,23 @@ export class NetworkAdapter implements PrinterTransport {
 	constructor(
 		private host: string,
 		private port: number = 9100,
-		_vendor?: string
+		private vendor?: string
 	) {}
 
 	async printRaw(data: Uint8Array): Promise<void> {
+		if (this.vendor === 'epson') {
+			let eposPort = eposPortByHost.get(this.host);
+			if (!eposPortByHost.has(this.host)) {
+				eposPort = await probeEposEndpoint(this.host, (port, path, xml, timeoutMs) =>
+					postEposHttp(this.host, port, path, xml, timeoutMs)
+				);
+				eposPortByHost.set(this.host, eposPort);
+			}
+			if (eposPort != null) {
+				return new EpsonEposAdapter(this.host, eposPort).printRaw(data);
+			}
+		}
+
 		await ipcPrintRaw(
 			'print-raw-tcp',
 			{

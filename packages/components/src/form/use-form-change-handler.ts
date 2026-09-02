@@ -4,6 +4,8 @@ import get from 'lodash/get';
 import debounce from 'lodash/debounce';
 import { FieldValues, UseFormReturn } from 'react-hook-form';
 
+import type { DebouncedFunc } from 'lodash';
+
 interface UseFormChangeHandlerOptions<T extends FieldValues> {
 	form: UseFormReturn<T>;
 	onChange: (changes: Partial<T>) => void;
@@ -37,30 +39,50 @@ function isTextValue(value: unknown): boolean {
  * - Debounces text input changes to avoid saving on every keystroke
  * - Ignores programmatic changes (reset, setValue on entire form)
  * - Only fires onChange for user-initiated field changes
+ *
+ * `onChange` may be an inline arrow (every ui-settings form passes one, and the React
+ * Compiler deliberately skips any component that calls the `watch()` returned by
+ * `useForm()` — its module type provider marks `watch` as knownIncompatible — so in those
+ * forms nothing memoises it). The debounced writer therefore must NOT be keyed on
+ * `onChange` identity: a form re-renders on the very field change it is persisting
+ * (`useFormField` reads the root formState proxy), and a writer rebuilt on that render
+ * would cancel the pending write — which is how every string-valued Select/ToggleGroup
+ * setting (view mode, sort by, sort direction) silently stopped saving.
+ *
+ * The writer is built once per `debounceMs`, and each edit is queued TOGETHER with the
+ * `onChange` that was current when the user made it (lodash invokes the last call's
+ * arguments). So a pending write always lands on the persistence target of the edit —
+ * a callback swapped in afterwards (a store switch while the form stays mounted) never
+ * receives it — while an ordinary re-render, whose new callback targets the same store,
+ * is unaffected.
  */
 export function useFormChangeHandler<T extends FieldValues>({
 	form,
 	onChange,
 	debounceMs = 300,
 }: UseFormChangeHandlerOptions<T>) {
-	// Create a debounced version for text inputs
-	const debouncedOnChange = React.useMemo(
-		() =>
-			debounce((changes: Partial<T>) => {
-				onChange(changes);
-			}, debounceMs),
-		[onChange, debounceMs]
-	);
+	const onChangeRef = React.useRef(onChange);
+	React.useEffect(() => {
+		onChangeRef.current = onChange;
+	}, [onChange]);
 
 	/**
-	 * Cleanup debounced function on unmount to prevent memory leaks.
-	 * This is a legitimate useEffect for resource cleanup.
+	 * One debounced writer per delay, held in a ref so a re-render never replaces it.
+	 * Unmount FLUSHES rather than cancels: closing the dialog within the debounce window
+	 * must not lose the value the cashier just chose.
 	 */
+	type Write = (changes: Partial<T>, write: (changes: Partial<T>) => void) => void;
+	const debouncedRef = React.useRef<DebouncedFunc<Write> | null>(null);
 	React.useEffect(() => {
+		const debounced = debounce<Write>((changes, write) => {
+			write(changes);
+		}, debounceMs);
+		debouncedRef.current = debounced;
 		return () => {
-			debouncedOnChange.cancel();
+			debounced.flush();
+			if (debouncedRef.current === debounced) debouncedRef.current = null;
 		};
-	}, [debouncedOnChange]);
+	}, [debounceMs]);
 
 	/**
 	 * Subscribe to form field changes and persist them.
@@ -74,10 +96,11 @@ export function useFormChangeHandler<T extends FieldValues>({
 	 */
 	React.useEffect(() => {
 		const subscription = form.watch((values, { name }) => {
+			const debounced = debouncedRef.current;
 			// Only handle changes when a specific field is changed by the user.
 			// When `name` is undefined, it means the entire form was reset/set programmatically
 			if (!name) {
-				debouncedOnChange.cancel();
+				debounced?.cancel();
 				return;
 			}
 
@@ -85,15 +108,15 @@ export function useFormChangeHandler<T extends FieldValues>({
 			const changes = { [name]: value } as unknown as Partial<T>;
 
 			// Debounce text inputs to avoid saving on every keystroke
-			if (isTextValue(value) && debounceMs > 0) {
-				debouncedOnChange(changes);
+			if (isTextValue(value) && debounceMs > 0 && debounced) {
+				debounced(changes, onChangeRef.current);
 			} else {
 				// Flush any pending debounced changes first
-				debouncedOnChange.flush();
-				onChange(changes);
+				debounced?.flush();
+				onChangeRef.current(changes);
 			}
 		});
 
 		return () => subscription.unsubscribe();
-	}, [onChange, form, debouncedOnChange, debounceMs]);
+	}, [form, debounceMs]);
 }
