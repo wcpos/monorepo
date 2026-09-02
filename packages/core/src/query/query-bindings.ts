@@ -610,9 +610,14 @@ function coverageProjection$(
 	);
 }
 
+const searchFieldsCache = new Map<LegacyCollectionName, string[] | undefined>();
+
 function searchFieldsFor(collection: LegacyCollectionName): string[] | undefined {
+	if (searchFieldsCache.has(collection)) return searchFieldsCache.get(collection);
 	const fields = LEGACY_SEARCH_FIELDS[collection as keyof typeof LEGACY_SEARCH_FIELDS];
-	return fields ? [...fields] : undefined;
+	const searchFields = fields ? [...fields] : undefined;
+	searchFieldsCache.set(collection, searchFields);
+	return searchFields;
 }
 
 function emptyResult(): QueryResult<RxCollection> {
@@ -655,10 +660,9 @@ function useEngineBinding(
 	const generatedId = React.useId();
 	const bindingId = compiledId ?? generatedId;
 	const searchFields = searchFieldsFor(descriptorInput.collection);
-	const searchFieldsKey = JSON.stringify(searchFields);
 	const read = React.useMemo(
 		() => (descriptorInput.read ? { ...descriptorInput.read, searchFields } : undefined),
-		[descriptorInput.read, searchFieldsKey]
+		[descriptorInput.read, searchFields]
 	);
 	const descriptor = useStableDescriptor({
 		...descriptorInput,
@@ -736,15 +740,19 @@ export function useCollectionBinding<C extends Exclude<CollectionKey, 'logs'>>(
 	const searchFields = searchFieldsFor(
 		(collection === 'tax-rates' ? 'taxes' : collection) as LegacyCollectionName
 	);
-	const compileKey = JSON.stringify([collection, state, options.remoteIds, searchFields]);
+	const remoteIdsKey = JSON.stringify(options.remoteIds ?? null);
+	const remoteIds = React.useMemo(
+		() => (remoteIdsKey === 'null' ? undefined : (JSON.parse(remoteIdsKey) as readonly RemoteId[])),
+		[remoteIdsKey]
+	);
 	const compiled = React.useMemo(
 		() =>
 			compileQuery(collection, state, {
 				id: bindingId,
-				targeted: options.remoteIds,
+				targeted: remoteIds,
 				searchFields,
 			}),
-		[compileKey, bindingId]
+		[collection, state, remoteIds, searchFields, bindingId]
 	);
 	const engineDescriptor: EngineQueryDescriptor = {
 		collection: compiled.collection,
@@ -794,14 +802,13 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 	const runtime = useQueryRuntime();
 	const bindingId = React.useId();
 	const parentSearchFields = searchFieldsFor('products');
-	const compileKey = JSON.stringify([state, parentSearchFields]);
 	const compiled = React.useMemo(
 		() =>
 			compileQuery('products', state, {
 				id: `${bindingId}:parent`,
 				searchFields: parentSearchFields,
 			}),
-		[bindingId, compileKey]
+		[bindingId, state, parentSearchFields]
 	);
 	const descriptor = useStableDescriptor({
 		collection: 'products',
