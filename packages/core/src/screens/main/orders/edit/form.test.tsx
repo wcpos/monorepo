@@ -46,20 +46,23 @@ const setValue = jest.fn();
 const fieldOnChange = jest.fn();
 let selectCustomer: (value: string) => void = () => undefined;
 
+const mockWatch = (name: string) => {
+	if (name === 'customer_id') return 1;
+	if (name === 'billing') return { first_name: 'Previous' };
+	if (name === 'shipping') return { first_name: 'Previous' };
+	return undefined;
+};
+
 const form = {
 	control: {},
 	handleSubmit: jest.fn((callback: unknown) => callback),
 	setValue,
-	watch: jest.fn((name: string) => {
-		if (name === 'customer_id') return 1;
-		if (name === 'billing') return { first_name: 'Previous' };
-		if (name === 'shipping') return { first_name: 'Previous' };
-		return undefined;
-	}),
+	watch: jest.fn(mockWatch),
 };
 
 jest.mock('react-hook-form', () => ({
 	useForm: () => form,
+	useWatch: ({ name }: { name: string }) => mockWatch(name),
 }));
 
 jest.mock('observable-hooks', () => ({

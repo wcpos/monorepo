@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
 import { Button, ButtonText } from '@wcpos/components/button';
@@ -102,7 +102,7 @@ export function BarcodeSettings() {
 		onChange: handleChange as never,
 	});
 
-	const soundEnabled = form.watch('barcode_scanning_sound_enabled');
+	const soundEnabled = useWatch({ control: form.control, name: 'barcode_scanning_sound_enabled' });
 
 	// Literal keys so the translations pipeline can find them.
 	const themeCopy: Record<ScanSoundTheme, { label: string; desc: string }> = {

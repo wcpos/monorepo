@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useObservableEagerState } from 'observable-hooks';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { map } from 'rxjs/operators';
 import * as z from 'zod';
 
@@ -79,6 +79,7 @@ export function EditOrderForm({ order }: Props) {
 	const customerLookup$ = React.useMemo(
 		() =>
 			customerResource.valueRef$$.pipe(
+				// eslint-disable-next-line react-hooks/refs -- runs inside the observable on emission, not during render; the component does not compile anyway (try/finally, ThrowStatement in try/catch), so this predates and survives the useWatch migration
 				map((valueRef) => ({
 					requestedId: customerIdForLookup,
 					record: valueRef?.current,
@@ -258,6 +259,7 @@ export function EditOrderForm({ order }: Props) {
 					error: t('orders.customer_not_found'),
 				},
 			});
+			// eslint-disable-next-line react-hooks/set-state-in-effect -- effect-as-event-handler for the async customer lookup; pre-existing, surfaced when form.watch's compiler bailout went away. The component does not compile regardless (try/finally). Follow-up: fire this from the lookup emission instead.
 			setCustomerIdToLoad(null);
 			return;
 		}
@@ -268,9 +270,9 @@ export function EditOrderForm({ order }: Props) {
 	/**
 	 * Watch the customer fields to compute the customer label
 	 */
-	const customer_id = form.watch('customer_id');
-	const billing = form.watch('billing');
-	const shipping = form.watch('shipping');
+	const customer_id = useWatch({ control: form.control, name: 'customer_id' });
+	const billing = useWatch({ control: form.control, name: 'billing' });
+	const shipping = useWatch({ control: form.control, name: 'shipping' });
 
 	/**
 	 * Compute the customer label

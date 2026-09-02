@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { v4 as uuidv4 } from 'uuid';
 
 import { Toast } from '@wcpos/components/toast';
@@ -110,6 +110,18 @@ export function usePrinterDialogForm({
 		defaultValues,
 	});
 
+	// The watches are declared BEFORE every effect below on purpose. On native,
+	// react-hook-form subscribes useWatch in a passive effect (useLayoutEffect only on
+	// web), and effects run in declaration order — a watch declared after the
+	// open/prefill effect would miss the `form.reset(next)` it publishes and keep its
+	// mount-time value until the next edit. The old `form.watch()` read live values
+	// every render and did not have this ordering hazard.
+	const vendor = useWatch({ control: form.control, name: 'vendor' });
+	const address = useWatch({ control: form.control, name: 'address' });
+	const connectionType = useWatch({ control: form.control, name: 'connectionType' });
+	const cloudPrinterId = useWatch({ control: form.control, name: 'cloudPrinterId' });
+	const cloudProvider = useWatch({ control: form.control, name: 'cloudProvider' });
+
 	const prevVendorRef = React.useRef(form.getValues('vendor'));
 
 	React.useEffect(() => {
@@ -185,6 +197,7 @@ export function usePrinterDialogForm({
 			prevVendorRef.current = next.vendor;
 			form.reset(next);
 		}
+		// eslint-disable-next-line react-hooks/set-state-in-effect -- vendor-change effect resetting probe state; pre-existing, surfaced when form.watch's compiler bailout went away. The hook does not compile regardless (try/finally). Follow-up: reset from the vendor select's onChange.
 		setTestError(null);
 		probeRequestIdRef.current += 1;
 		setProbing(false);
@@ -193,7 +206,6 @@ export function usePrinterDialogForm({
 	}, [open, printer, prefill, form, printerCount, t, defaultValues, deriveVendorDefaults]);
 
 	// Vendor change → derive language/port.
-	const vendor = form.watch('vendor');
 	React.useEffect(() => {
 		if (vendor !== prevVendorRef.current) {
 			const previousVendor = prevVendorRef.current;
@@ -209,11 +221,10 @@ export function usePrinterDialogForm({
 	}, [vendor, form, deriveVendorDefaults]);
 
 	// IP probe → auto-detect vendor (network only).
-	const address = form.watch('address');
-	const connectionType = form.watch('connectionType');
 	React.useEffect(() => {
 		if (connectionType !== 'network') {
 			probeRequestIdRef.current += 1;
+			// eslint-disable-next-line react-hooks/set-state-in-effect -- IP-probe effect clearing state when the connection type leaves 'network'; pre-existing, surfaced when form.watch's compiler bailout went away. The hook does not compile regardless (try/finally). Follow-up: clear from the connection-type onChange.
 			setProbing(false);
 			setDetectedVendor(null);
 			return;
@@ -294,8 +305,6 @@ export function usePrinterDialogForm({
 		}
 	}, [form, buildProfile, printerService, t]);
 
-	const cloudPrinterId = form.watch('cloudPrinterId');
-	const cloudProvider = form.watch('cloudProvider');
 	const canOpenDrawer = React.useMemo(() => {
 		const profile = buildProfile({
 			...form.getValues(),

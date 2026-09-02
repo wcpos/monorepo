@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { type UseFormReturn, useWatch } from 'react-hook-form';
+
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { FormField, FormSelect } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
@@ -16,7 +18,6 @@ import { VendorSelect } from '../components/vendor-select';
 import { useT } from '../../../../../contexts/translations';
 
 import type { PrinterFormValues, VendorOption } from '../schema';
-import type { UseFormReturn } from 'react-hook-form';
 
 interface AdvancedSettingsProps {
 	form: UseFormReturn<PrinterFormValues>;
@@ -34,8 +35,8 @@ export function AdvancedSettings({
 	onVendorManualChange,
 }: AdvancedSettingsProps) {
 	const t = useT();
-	const vendor = form.watch('vendor');
-	const language = form.watch('language');
+	const vendor = useWatch({ control: form.control, name: 'vendor' });
+	const language = useWatch({ control: form.control, name: 'language' });
 
 	return (
 		<Collapsible defaultOpen={defaultOpen}>

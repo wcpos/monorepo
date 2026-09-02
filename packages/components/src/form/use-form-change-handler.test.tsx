@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { act, render } from '@testing-library/react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 
 import { useFormChangeHandler } from './use-form-change-handler';
 
@@ -22,8 +22,8 @@ function Harness({
 	const form = useForm<Values>({ values: { viewMode: 'table', enabled: false } });
 	onRender();
 	useFormChangeHandler({ form, onChange: (changes) => onChange(changes) });
-	// Subscribe this component to the field so the change re-renders it.
-	form.watch('viewMode');
+	// Subscribe this component to the field so the change re-renders it (useWatch, not form.watch: the latter is lint-banned and opts the component out of the compiler).
+	useWatch({ control: form.control, name: 'viewMode' });
 	return (
 		<button
 			type="button"

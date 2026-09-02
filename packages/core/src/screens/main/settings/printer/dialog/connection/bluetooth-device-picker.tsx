@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 
+import { type UseFormReturn, useWatch } from 'react-hook-form';
+
 import { Button } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -9,14 +11,13 @@ import { usePrinterDiscovery } from '@wcpos/printer';
 import { useT } from '../../../../../../contexts/translations';
 import { isBluetoothPickerPrinter } from './discovered-printer-filters';
 
-import type { UseFormReturn } from 'react-hook-form';
 import type { PrinterFormValues } from '../../schema';
 
 export function BluetoothDevicePicker({ form }: { form: UseFormReturn<PrinterFormValues> }) {
 	const t = useT();
 	const { printers, startScan, isScanning: scanning } = usePrinterDiscovery();
 	const devices = printers.filter(isBluetoothPickerPrinter);
-	const selectedAddress = form.watch('address');
+	const selectedAddress = useWatch({ control: form.control, name: 'address' });
 
 	return (
 		<VStack className="gap-2">

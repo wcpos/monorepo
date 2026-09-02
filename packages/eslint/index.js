@@ -674,6 +674,12 @@ export const config = [
 		),
 	},
 	reactCompiler.configs.recommended,
+	// A component that calls the `watch()` returned by react-hook-form's `useForm()` is
+	// SKIPPED by the React Compiler ("Use of incompatible library") — every inline callback
+	// in it is then a fresh function per render, which is how the Product Settings
+	// view-mode/sort selects silently stopped saving (#1766). `useWatch` is the tracked
+	// equivalent; a plain warning let 20 such sites accumulate, so it is an error.
+	{ rules: { 'react-hooks/incompatible-library': 'error' } },
 	// Files that legitimately need default exports
 	{
 		files: [
