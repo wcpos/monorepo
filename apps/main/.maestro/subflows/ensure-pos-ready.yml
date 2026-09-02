@@ -63,7 +63,22 @@ appId: com.wcpos.main.dev
 # flow's last search leaves it up, and on phones it covers the tab bar, so
 # pos-tab-cart is "not visible" and a cart-first flow never opens the cart
 # (run 33655220085, Android phone, flow 08 — flows 01–07 chained green).
-# Optional: hideKeyboard is unreliable on iOS; a genuinely covered target
-# fails at its own tap and names itself.
-- hideKeyboard:
-    optional: true
+# NEVER unconditionally: Maestro's Android hideKeyboard is `input keyevent 4`
+# (Back), which with no keyboard up leaves the app for the launcher — run
+# 33662941896 died in flow 04 at 36 s exactly that way. The keyboard's tell
+# on a phone is the tab bar pushed off screen while the search box stays:
+# dismiss only then, and only on phones (tablets have no tab bar to read).
+- runFlow:
+    when:
+      true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"
+      visible:
+        id: "search-products"
+      notVisible:
+        id: "pos-tab-products"
+    commands:
+      - evalScript: "${console.log('WCPOS_E2E keyboard covering the tab bar at flow start, dismissing')}"
+      - hideKeyboard
+      - extendedWaitUntil:
+          visible:
+            id: "pos-tab-products"
+          timeout: 10000

@@ -1768,10 +1768,19 @@ test('flow 08 selects a fresh order before requiring an empty cart', () => {
 	);
 });
 
-test('flow-start cleanup dismisses the keyboard after persistent product state', () => {
+test('flow-start cleanup dismisses the keyboard only when it is provably up, on phones', () => {
 	const flow = readMaestroFlow('../subflows/ensure-pos-ready.yml');
-
-	assert.deepEqual(flow.at(-1), { hideKeyboard: { optional: true } });
+	// Android hideKeyboard is `input keyevent 4` (Back): unconditional, it
+	// leaves the app for the launcher when no keyboard is up (run 33662941896).
+	assert.ok(
+		!flow.some((command) => command === 'hideKeyboard' || command?.hideKeyboard),
+		'hideKeyboard must not run unconditionally at flow start'
+	);
+	const guard = flow.at(-1).runFlow;
+	assert.match(guard.when.true, /DEVICE_CLASS === 'phone'/);
+	assert.deepEqual(guard.when.visible, { id: 'search-products' });
+	assert.deepEqual(guard.when.notVisible, { id: 'pos-tab-products' });
+	assert.ok(guard.commands.some((command) => command === 'hideKeyboard'));
 });
 
 test('Android relaunch recovery rechecks the development launcher on every retry leg', () => {
