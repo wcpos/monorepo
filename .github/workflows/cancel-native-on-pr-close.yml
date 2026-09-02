@@ -1,0 +1,46 @@
+name: Cancel native E2E runs of a closed PR
+
+# Latest head wins (owner ruling 2026-09-01) has a corollary: a PR that has
+# been merged or closed has no head left to test. Its in-flight e2e-native
+# run still holds the FIFO device turnstile for the length of a suite —
+# PR #1763 merged at 15:31Z on 2026-09-02 and its run kept both phone slots
+# until 17:15Z while the next PR's jobs sat in "Wait for the device slot"
+# against the 150-minute budget. The pull_request concurrency group cannot
+# see a close (no new run is created), so this cancels explicitly.
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  actions: write
+
+jobs:
+  cancel-native-runs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const headSha = context.payload.pull_request.head.sha;
+            const headBranch = context.payload.pull_request.head.ref;
+            const prNumber = context.payload.pull_request.number;
+            const { data } = await github.rest.actions.listWorkflowRuns({
+              owner,
+              repo,
+              workflow_id: 'e2e-native.yml',
+              event: 'pull_request',
+              branch: headBranch,
+              per_page: 20,
+            });
+            const active = data.workflow_runs.filter(
+              (run) =>
+                ['queued', 'in_progress', 'waiting', 'pending', 'requested'].includes(run.status) &&
+                run.pull_requests.some((pull) => pull.number === prNumber)
+            );
+            for (const run of active) {
+              await github.rest.actions.cancelWorkflowRun({ owner, repo, run_id: run.id });
+              core.info(`cancelled e2e-native run ${run.id} (${run.head_sha.slice(0, 9)}) — PR #${prNumber} closed, head was ${headSha.slice(0, 9)}`);
+            }
+            if (active.length === 0) core.info(`no active e2e-native run for PR #${prNumber}`);
