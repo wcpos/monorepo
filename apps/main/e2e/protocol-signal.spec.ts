@@ -13,8 +13,8 @@ import { authenticatedTest, getStoreUrl, hydrateAuthenticatedPage } from './fixt
  * partial evidence conservatively selects the query twins only. Native and
  * Electron coverage remains unit-pinned in engine-fetcher.test.ts.
  *
- * The connect-time probes (echo, auth/test) are deliberately excluded: they
- * predate the signal and were left untouched by design.
+ * The connect-time probes (echo, auth/test) and the boot reachability ping are
+ * deliberately excluded: they predate the signal and were left untouched by design.
  */
 
 type SyncRequest = { url: URL; headers: Record<string, string> };
@@ -50,6 +50,11 @@ function isSyncSurfaceRequest(url: URL, storeOrigin: string): boolean {
 	const route = url.searchParams.get('rest_route') ?? url.pathname;
 	if (!route.includes('/wcpos/v2/')) return false;
 	if (route.includes('/echo') || route.includes('/auth/')) return false;
+	// The boot reachability ping (hydration-steps.ts → wcpos/v2/ping?wcpos=1) is
+	// a bare `cors` fetch whose only referent is the status code; it predates the
+	// signal like echo/auth. Sampling from before hydration (PR #1767) made it
+	// visible for the first time — run 33647740361 on both stores.
+	if (route.includes('/ping')) return false;
 	return true;
 }
 
