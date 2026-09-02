@@ -164,7 +164,8 @@ async function fetchAllCategories(
 async function chooseCategory(
 	request: APIRequestContext,
 	storeUrl: string,
-	options: { headers: Record<string, string>; params: Record<string, string> }
+	options: { headers: Record<string, string>; params: Record<string, string> },
+	excludedProductCategoryIds: readonly number[] = []
 ): Promise<CategoryChoiceResult> {
 	const categories = await fetchAllCategories(request, storeUrl, options);
 	if (categories.length === 0) {
@@ -209,6 +210,9 @@ async function chooseCategory(
 	// mid-run. Never choose that slug (CI run 33614520678).
 	const candidates = [...leaves.sort(byCountDesc), ...parents.sort(byCountDesc)]
 		.filter((category) => category.slug !== 'uncategorized')
+		.filter(
+			(category) => !excludedProductCategoryIds.some((id) => descendantsOf(category.id).has(id))
+		)
 		.slice(0, CATEGORY_PROBE_BUDGET);
 
 	for (const candidate of candidates) {
@@ -353,7 +357,7 @@ test.describe('Product category filter', () => {
 
 		const options = await resolveProbeOptions(request, storeUrl, storeAuthorization);
 
-		const chosen = await chooseCategory(request, storeUrl, options);
+		const chosen = await chooseCategory(request, storeUrl, options, ownedNonMember?.categoryIds);
 		if (!chosen.ok) {
 			test.skip(true, chosen.reason);
 			return;
@@ -365,7 +369,7 @@ test.describe('Product category filter', () => {
 					id: ownedNonMember.id,
 					name: `E2E Probe ${ownedNonMember.token}`,
 					type: 'simple',
-					categories: [],
+					categories: ownedNonMember.categoryIds?.map((id) => ({ id })),
 				}
 			: await findNonMember(page, request, storeUrl, options, selectedIds);
 		if (nonMember === null) {
@@ -403,23 +407,26 @@ test.describe('Product category filter', () => {
 		// at dev-free). That recovery is correct behaviour. What must not happen is
 		// NO successful filtered window inside the budget.
 		//
-		// Armed before the click so the exchange cannot be missed.
-		const filteredWindow = page.waitForResponse(
-			(response) => {
-				const url = new URL(response.url());
-				// Tolerates both permalink styles: /wp-json/…/products and ?rest_route=/…/products.
-				const addressesProducts =
-					url.pathname.includes('/products') || url.search.includes('%2Fproducts');
-				const wireCategory = url.searchParams.get('category');
-				return (
-					addressesProducts &&
-					wireCategory !== null &&
-					wireCategory.split(',').includes(String(category.id)) &&
-					response.ok()
-				);
-			},
-			{ timeout: FILTERED_GRID_TIMEOUT_MS }
-		);
+		const waitForFilteredWindow = () =>
+			page.waitForResponse(
+				(response) => {
+					const url = new URL(response.url());
+					// Tolerates both permalink styles: /wp-json/…/products and ?rest_route=/…/products.
+					const addressesProducts =
+						url.pathname.includes('/products') || url.search.includes('%2Fproducts');
+					const wireCategory = url.searchParams.get('category');
+					return (
+						addressesProducts &&
+						wireCategory !== null &&
+						wireCategory.split(',').includes(String(category.id)) &&
+						response.ok()
+					);
+				},
+				{ timeout: FILTERED_GRID_TIMEOUT_MS }
+			);
+		let filteredWindow!: ReturnType<typeof waitForFilteredWindow>;
+		// Without a search, selecting the category issues the filtered request immediately.
+		if (!ownedNonMember) filteredWindow = waitForFilteredWindow();
 
 		// --- Apply the filter through the pill, addressing everything by testID. ---
 		await page.getByTestId('filter-pill-categories').click();
@@ -441,14 +448,7 @@ test.describe('Product category filter', () => {
 		});
 
 		// --- What the filtered grid must show. ---
-		// 1. A filtered window carrying the selected category reached the wire AND
-		//    the store answered it successfully.
-		const windowResponse = await filteredWindow;
-		expect(
-			windowResponse.status(),
-			'the filtered product window did not come back OK'
-		).toBeLessThan(400);
-		// 2. The known non-member is gone — the half that makes this a filter and not
+		// 1. The known non-member is gone — the half that makes this a filter and not
 		//    a no-op that happened to leave the catalogue on screen.
 		//
 		//    Moved AHEAD of the count poll, and given the sync budget, because it is the
@@ -463,8 +463,19 @@ test.describe('Product category filter', () => {
 		//    32738684283).
 		await expect(nonMemberTile).not.toBeVisible({ timeout: FILTERED_GRID_TIMEOUT_MS });
 		if (ownedNonMember) {
+			// Search takes precedence over category browse on the wire. Prove the category
+			// excludes the owned product locally first, then observe the request triggered
+			// by clearing search; arming earlier would wait for a request that cannot exist.
+			filteredWindow = waitForFilteredWindow();
 			await productSearch.fill('');
 		}
+		// 2. A filtered window carrying the selected category reached the wire AND
+		//    the store answered it successfully.
+		const windowResponse = await filteredWindow;
+		expect(
+			windowResponse.status(),
+			'the filtered product window did not come back OK'
+		).toBeLessThan(400);
 		// 3. The grid is not empty. The RENDERED-row count on its own, never the
 		//    "Showing X of Y" sentence, whose Y is the store-wide census and stays
 		//    non-zero over an empty grid (#1336, #1345). Still worth asserting: the

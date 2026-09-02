@@ -19,6 +19,7 @@ type SearchCollection = WcRestCollection;
 
 export interface SearchProbe {
 	collection: ProbeCollection;
+	categoryIds?: number[];
 	id: number;
 	rowTestId?: string;
 	token: string;
@@ -547,6 +548,16 @@ export async function createSearchProbe(
 			ok: true,
 			probe: {
 				collection,
+				...(collection === 'products'
+					? {
+							categoryIds: Array.isArray(record.categories)
+								? record.categories
+										.map(asRecord)
+										.map(positiveId)
+										.filter((categoryId): categoryId is number => categoryId !== null)
+								: [],
+						}
+					: {}),
 				id,
 				...(slug ? { rowTestId: `data-table-row-${slug}` } : {}),
 				token,

@@ -1,5 +1,5 @@
 {
-  "_comment": "Measured wall-seconds per spec file, summed across workers. Feeds scripts/e2e-shard-plan.js, which bin-packs specs into balanced shards \u2014 Playwright's own --shard splits by TEST COUNT, which left one shard doing 473s of work while another did 64s. Regenerate with: node scripts/e2e-shard-plan.js --measure <runId>. A spec missing from this file still runs; it is assigned the median weight, so the only cost of stale data is imperfect balance, never a skipped test.",
+  "_comment": "Measured wall-seconds per spec file, summed across workers. Feeds scripts/e2e-shard-plan.js, which bin-packs specs into balanced shards \u2014 Playwright's own --shard splits by TEST COUNT, which left one shard doing 473s of work while another did 64s. Regenerate the JSON with: PLAYWRIGHT_JSON_OUTPUT_NAME=test-results.json npx playwright merge-reports --reporter=json ./all-blob-reports, then sum result durations by spec file. A spec missing from this file still runs; it is assigned the median weight, so the only cost of stale data is imperfect balance, never a skipped test.",
   "_source": "GitHub Actions run 33617749219 (4 shards, 462 results, 3635s total)",
   "_measured": "2026-09-02",
   "_notes": {
