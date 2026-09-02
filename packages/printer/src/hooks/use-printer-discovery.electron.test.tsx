@@ -5,9 +5,10 @@ import {
 	BT_CONNECT_TIMEOUT_MS,
 	BT_DISCOVERY_TIMEOUT_MS,
 } from '../discovery/bluetooth-scan-session';
+import { identifyDiscoveredPrinters } from '../discovery/identify';
 import { usePrinterDiscovery } from './use-printer-discovery.electron';
 
-import type { BluetoothCandidate } from '../types';
+import type { BluetoothCandidate, DiscoveredPrinter } from '../types';
 import type { PosConnectedDevice } from '../types/point-of-sale-connectors';
 
 // vi.mock is hoisted by vitest to the top of the module, so the connectMock /
@@ -21,6 +22,13 @@ vi.mock('@point-of-sale/webbluetooth-receipt-printer', () => ({
 		connect = connectMock;
 	},
 }));
+
+// Wraps the real implementation so the lane test below exercises it; individual tests can
+// hold a single call open with mockReturnValueOnce.
+vi.mock('../discovery/identify', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('../discovery/identify')>();
+	return { ...actual, identifyDiscoveredPrinters: vi.fn(actual.identifyDiscoveredPrinters) };
+});
 
 vi.mock('../discovery/identify-probes.electron', () => ({
 	createIdentifyProbes: () => ({
@@ -277,6 +285,43 @@ describe('usePrinterDiscovery (electron)', () => {
 				lane: { port: 443, protocol: 'epos-print', encrypted: true },
 			},
 		});
+	});
+
+	it('does not merge identification results after the scan is stopped', async () => {
+		const discovered: DiscoveredPrinter = {
+			id: 'mdns-epson',
+			name: 'EPSON TM-m30III',
+			connectionType: 'network',
+			address: '192.168.1.30',
+			port: 9100,
+			vendor: 'epson',
+		};
+		installIpc((channel: string) =>
+			Promise.resolve(channel === 'printer-discovery' ? [discovered] : [])
+		);
+		let finishIdentification!: (printers: DiscoveredPrinter[]) => void;
+		vi.mocked(identifyDiscoveredPrinters).mockReturnValueOnce(
+			new Promise((resolve) => {
+				finishIdentification = resolve;
+			})
+		);
+		const { result } = renderHook(() => usePrinterDiscovery());
+		let scan!: Promise<void>;
+
+		await act(async () => {
+			scan = result.current.startScan();
+			await vi.waitFor(() => expect(identifyDiscoveredPrinters).toHaveBeenCalled());
+		});
+		await act(async () => {
+			await result.current.stopScan();
+		});
+		await act(async () => {
+			finishIdentification([{ ...discovered, port: 443 }]);
+			await scan;
+		});
+
+		expect(result.current.printers).toEqual([]);
+		expect(result.current.isScanning).toBe(false);
 	});
 
 	// 7. select → connect-timeout path

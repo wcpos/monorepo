@@ -20,6 +20,9 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 	const [printers, setPrinters] = React.useState<DiscoveredPrinter[]>([]);
 	const [isScanning, setIsScanning] = React.useState(false);
 	const [error, setError] = React.useState<DiscoveryError | null>(null);
+	// Bumped by stopScan and by every startScan: SDK discovery and identification cannot be
+	// cancelled, so a pass that finishes after a stop must not merge into state.
+	const scanGenerationRef = React.useRef(0);
 
 	const addManualPrinter = React.useCallback(
 		(
@@ -49,6 +52,7 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 	}, []);
 
 	const startScan = React.useCallback(async () => {
+		const generation = ++scanGenerationRef.current;
 		setIsScanning(true);
 		setError(null);
 
@@ -87,6 +91,7 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 							result.value,
 							createIdentifyProbes()
 						);
+						if (scanGenerationRef.current !== generation) return;
 						setPrinters((prev) => mergePrinters(prev, identified));
 					}
 				} else {
@@ -94,6 +99,7 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 				}
 			}
 
+			if (scanGenerationRef.current !== generation) return;
 			const failureMessage = formatDiscoveryFailureMessage(failures);
 			if (!foundAny && failureMessage) {
 				setError({ code: 'discovery-failed', detail: failureMessage });
@@ -107,11 +113,12 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 				setError({ code: 'network-none-found' });
 			}
 		} finally {
-			setIsScanning(false);
+			if (scanGenerationRef.current === generation) setIsScanning(false);
 		}
 	}, []);
 
 	const stopScan = React.useCallback(() => {
+		scanGenerationRef.current += 1;
 		setIsScanning(false);
 	}, []);
 
