@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { parseAllDocuments } from 'yaml';
@@ -17,9 +17,10 @@ const urlFlows = [
 
 function evaluate(expression, context) {
 	const source = expression.slice(2, -1);
-	return Function(...Object.keys(context), `"use strict"; return (${source});`)(
-		...Object.values(context)
-	);
+	return Function(
+		...Object.keys(context),
+		`"use strict"; return (${source});`
+	)(...Object.values(context));
 }
 
 function execute(commands, context, bursts) {
@@ -60,13 +61,20 @@ test('native product searches type no more than one key per Maestro command', ()
 		execute(searchCommands, context, bursts);
 
 		assert.equal(bursts.join(''), config.env[variable], filename);
-		assert.ok(bursts.every((burst) => [...burst].length === 1), filename);
+		assert.ok(
+			bursts.every((burst) => [...burst].length === 1),
+			filename
+		);
 	}
 });
 
-test('native URL assertions treat every regex metacharacter literally', () => {
-	const literal = 'https://store.test/a+b?(c)[d]{2}|^$';
-	const escaped = literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// Maestro evaluates `${...}` with `(?<!\\)\$\{([^$]*)}` (Env.kt, cli-2.6.1): the
+// script body may not contain a `$`, or the expression is left unevaluated and a
+// text selector becomes literal garbage. The general-purpose escape
+// `/[.*+?^${}()|[\]\\]/g` + `'\\$&'` therefore cannot be used here; the two URLs
+// carry dots as their only metacharacter, so dots are what get escaped.
+test('native URL assertions escape the dot and carry no `$` inside the interpolation', () => {
+	const literal = 'https://dev-pro.wcpos.com';
 
 	for (const [filename, variable] of urlFlows) {
 		const source = readFileSync(
@@ -82,7 +90,22 @@ test('native URL assertions treat every regex metacharacter literally', () => {
 		const selector = retry.find((command) => command.assertVisible?.text).assertVisible.text;
 		const pattern = evaluate(selector, { ...config.env, [variable]: literal });
 
-		assert.equal(pattern, escaped, filename);
+		assert.equal(pattern, 'https://dev-pro\\.wcpos\\.com', filename);
 		assert.match(literal, new RegExp(`^(?:${pattern})$`), filename);
+		assert.doesNotMatch('https://dev-proXwcposYcom', new RegExp(`^(?:${pattern})$`), filename);
 	}
+});
+
+test('no Maestro interpolation carries a `$` inside `${...}`', () => {
+	const offenders = [];
+	for (const dir of ['flows', 'subflows']) {
+		const base = new URL(`../apps/main/.maestro/${dir}/`, import.meta.url);
+		for (const name of readdirSync(base).filter((entry) => entry.endsWith('.yml'))) {
+			const source = readFileSync(new URL(name, base), 'utf8');
+			for (const match of source.matchAll(/\$\{([^}]*)\}/g)) {
+				if (match[1].includes('$')) offenders.push(`${dir}/${name}: ${match[0]}`);
+			}
+		}
+	}
+	assert.deepEqual(offenders, [], 'Maestro leaves such an expression unevaluated');
 });
