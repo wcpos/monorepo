@@ -423,6 +423,191 @@ describe('PaymentWebview fallback order refresh', () => {
 		}
 	);
 
+	it.each(['on-hold', 'processing', 'completed', 'custom-gateway-status'])(
+		'completes checkout when the fallback server status is the paid status %s',
+		async (status) => {
+			// A cheque/BACS gateway configured through POS settings lands on on-hold, and
+			// a gateway can be configured to land on any custom status. The paid check is a
+			// blocklist of unpaid statuses (mirroring the store's needs_payment() gate) —
+			// an allowlist of processing/completed would strand these sales as open carts.
+			jest.useFakeTimers();
+			const serverOrder = {
+				id: 42,
+				status,
+				number: '42',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
+				line_items: [],
+			};
+			mockGet.mockResolvedValue({ data: [serverOrder] });
+
+			render(
+				<PaymentWebview
+					order={makeOrder()}
+					setLoading={jest.fn()}
+					setFrameStatus={jest.fn()}
+					onStockRejection={() => false}
+				/>
+			);
+
+			await act(async () => {
+				webViewProps.onLoad({});
+				webViewProps.onLoad({});
+				await jest.advanceTimersByTimeAsync(1000);
+			});
+
+			expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
+			expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+			expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+		}
+	);
+
+	it('keeps polling after an early unpaid answer and completes when the webhook lands', async () => {
+		// The reviewer scenario: a pre-hardening store posts `pending`, the one-shot
+		// poll sees "still unpaid", and the provider's webhook confirms a minute
+		// later. Without a re-poll nothing ever noticed — the paid order stayed an
+		// open cart, the original bug through a new door.
+		jest.useFakeTimers();
+		const paidOrder = {
+			id: 42,
+			status: 'completed',
+			number: '42',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
+			line_items: [],
+		};
+		mockGet
+			.mockResolvedValueOnce({ data: [{ ...paidOrder, status: 'pending' }] })
+			.mockResolvedValueOnce({ data: [{ ...paidOrder, status: 'pending' }] })
+			.mockResolvedValue({ data: [paidOrder] });
+
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+
+		await act(async () => {
+			webViewProps.onMessage({
+				nativeEvent: {
+					data: {
+						action: 'wcpos-payment-received',
+						payload: { ...paidOrder, status: 'pending' },
+					},
+				},
+			});
+			await Promise.resolve();
+		});
+		expect(mockGet).toHaveBeenCalledTimes(1);
+		expect(mockReplace).not.toHaveBeenCalled();
+
+		// Two cadence ticks: still pending, then the webhook has landed.
+		await act(async () => {
+			await jest.advanceTimersByTimeAsync(3_000);
+		});
+		expect(mockGet).toHaveBeenCalledTimes(2);
+		expect(mockReplace).not.toHaveBeenCalled();
+
+		await act(async () => {
+			await jest.advanceTimersByTimeAsync(3_000);
+		});
+		expect(mockGet).toHaveBeenCalledTimes(3);
+		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(paidOrder);
+		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+		expect(mockReplace).toHaveBeenCalledTimes(1);
+
+		// Settled: no further polls.
+		await act(async () => {
+			await jest.advanceTimersByTimeAsync(30_000);
+		});
+		expect(mockGet).toHaveBeenCalledTimes(3);
+	});
+
+	it('stops re-polling at the async window bound and leaves the cart open', async () => {
+		jest.useFakeTimers();
+		mockGet.mockResolvedValue({
+			data: [{ id: 42, status: 'pending', number: '42', line_items: [] }],
+		});
+
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+
+		await act(async () => {
+			webViewProps.onLoad({});
+			webViewProps.onLoad({});
+			await jest.advanceTimersByTimeAsync(1_000);
+		});
+		expect(mockGet).toHaveBeenCalledTimes(1);
+
+		// Well past the 120 s window: polling has ceased rather than run forever.
+		await act(async () => {
+			await jest.advanceTimersByTimeAsync(300_000);
+		});
+		const callsAtBound = mockGet.mock.calls.length;
+		expect(callsAtBound).toBeGreaterThan(1);
+		expect(callsAtBound).toBeLessThanOrEqual(1 + 120_000 / 3_000);
+
+		await act(async () => {
+			await jest.advanceTimersByTimeAsync(60_000);
+		});
+		expect(mockGet).toHaveBeenCalledTimes(callsAtBound);
+		expect(mockReplace).not.toHaveBeenCalled();
+	});
+
+	it('defers to server truth when the postMessage payload reports an unpaid status', async () => {
+		// A pre-hardening store's received page emits whenever the CONFIGURED gateway
+		// status is not pos-open — for an async gateway that can be before the provider
+		// confirms. The message's say-so must not complete the sale.
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		const setLoading = jest.fn();
+		mockGet.mockResolvedValue({
+			data: [{ id: 42, status: 'pos-open', number: '42', line_items: [] }],
+		});
+
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={setLoading}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+
+		await act(async () => {
+			webViewProps.onMessage({
+				nativeEvent: {
+					data: {
+						action: 'wcpos-payment-received',
+						payload: {
+							id: 42,
+							number: '42',
+							status: 'pending',
+							meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
+							line_items: [],
+						},
+					},
+				},
+			});
+			await Promise.resolve();
+		});
+
+		expect(logger.warn).toHaveBeenCalled();
+		expect(logger.success).not.toHaveBeenCalled();
+		expect(setLoading).toHaveBeenCalledWith(false);
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
+		expect(mockAdoptOrderSnapshot).not.toHaveBeenCalled();
+		// The poll ran and, with server truth still pos-open, left everything alone.
+		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
+	});
+
 	it('does not duplicate completion when postMessage wins an in-flight fallback poll', async () => {
 		jest.useFakeTimers();
 		let resolveGet!: (value: unknown) => void;
