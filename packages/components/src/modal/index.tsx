@@ -105,8 +105,22 @@ function ModalOverlayNative({
 }: React.ComponentPropsWithoutRef<typeof View>) {
 	const insets = useSafeAreaInsets();
 
+	/**
+	 * `collapsable={false}` below is load-bearing on Android/Fabric, not a style choice.
+	 * This scrim is the screen's root view. Until its background lands it is layout-only,
+	 * so Fabric flattens it away and mounts its child straight into RNSScreenContentWrapper;
+	 * the commit that gives it a background un-flattens it, and Fabric then re-parents that
+	 * child into the newly created view. A re-parent inside a screen that react-native-screens
+	 * has put into a removal transition is fatal: `Screen.startRemovalTransition()` calls
+	 * `startViewTransition()` on every descendant, so Android leaves `mParent` set on
+	 * `removeView` and the follow-up insert throws "View already has a parent"
+	 * (software-mansion/react-native-screens#3249). The POS checkout -> receipt
+	 * `router.replace` hits exactly that window. Pinning the view means there is no
+	 * re-parent to defeat.
+	 */
 	return (
 		<View
+			collapsable={false}
 			style={[StyleSheet.absoluteFill, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
 			className={cn(
 				'flex items-center justify-center bg-black/70 p-2 [&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
