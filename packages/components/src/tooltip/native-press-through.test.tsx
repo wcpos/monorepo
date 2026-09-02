@@ -15,34 +15,36 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './index';
  * Pressable with them.
  */
 
+type MockProps = { children?: React.ReactNode; testID?: string };
+
 jest.mock('react-native', () => ({
 	Platform: { OS: 'web' },
 	StyleSheet: { create: (styles: unknown) => styles },
-	Pressable: ({ children, testID }: any) =>
+	Pressable: ({ children, testID }: MockProps) =>
 		React.createElement(
 			'button',
 			{ 'data-testid': testID, 'data-primitive': 'Pressable' },
 			children
 		),
-	View: ({ children, testID }: any) =>
+	View: ({ children, testID }: MockProps) =>
 		React.createElement('div', { 'data-testid': testID, 'data-primitive': 'View' }, children),
-	Text: ({ children }: any) => React.createElement('span', null, children),
+	Text: ({ children }: MockProps) => React.createElement('span', null, children),
 }));
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
-	default: { View: ({ children }: any) => React.createElement('div', null, children) },
+	default: { View: ({ children }: MockProps) => React.createElement('div', null, children) },
 	FadeIn: { duration: () => ({}) },
 	FadeOut: { duration: () => ({}) },
 }));
 jest.mock('@rn-primitives/tooltip', () => ({
-	Root: ({ children }: any) => React.createElement(React.Fragment, null, children),
-	Trigger: ({ children }: any) => React.createElement(React.Fragment, null, children),
-	Content: ({ children }: any) => React.createElement(React.Fragment, null, children),
-	Portal: ({ children }: any) => React.createElement(React.Fragment, null, children),
-	Overlay: ({ children }: any) => React.createElement(React.Fragment, null, children),
+	Root: ({ children }: MockProps) => React.createElement(React.Fragment, null, children),
+	Trigger: ({ children }: MockProps) => React.createElement(React.Fragment, null, children),
+	Content: ({ children }: MockProps) => React.createElement(React.Fragment, null, children),
+	Portal: ({ children }: MockProps) => React.createElement(React.Fragment, null, children),
+	Overlay: ({ children }: MockProps) => React.createElement(React.Fragment, null, children),
 }));
 jest.mock('@rn-primitives/slot', () => ({
-	Slot: ({ children }: any) => React.createElement(React.Fragment, null, children),
+	Slot: ({ children }: MockProps) => React.createElement(React.Fragment, null, children),
 }));
 jest.mock('../text', () => ({
 	TextClassContext: React.createContext(''),
@@ -64,6 +66,28 @@ describe('TooltipTrigger on native (tooltips off)', () => {
 			</Tooltip>
 		);
 		expect(screen.getByTestId('trigger').getAttribute('data-primitive')).toBe('View');
+	});
+
+	it('renders a View when a handler prop is present but not callable', () => {
+		render(
+			<Tooltip>
+				<TooltipTrigger testID="trigger" onPress={undefined}>
+					<span>+</span>
+				</TooltipTrigger>
+			</Tooltip>
+		);
+		expect(screen.getByTestId('trigger').getAttribute('data-primitive')).toBe('View');
+	});
+
+	it('still wraps in a Pressable for hover handlers, which only Pressable implements', () => {
+		render(
+			<Tooltip>
+				<TooltipTrigger testID="trigger" onHoverIn={() => undefined}>
+					<span>?</span>
+				</TooltipTrigger>
+			</Tooltip>
+		);
+		expect(screen.getByTestId('trigger').getAttribute('data-primitive')).toBe('Pressable');
 	});
 
 	it('still wraps in a Pressable when the caller passes press handlers', () => {
