@@ -82,6 +82,16 @@ appId: com.wcpos.main.dev
     commands:
       - evalScript: "${console.log('WCPOS_E2E keyboard covering the tab bar at flow start, dismissing')}"
       - hideKeyboard
+      # iOS fallback: hideKeyboard is unreliable there; the search field's
+      # return key submits the (already cleared) search and drops the keyboard.
+      - runFlow:
+          when:
+            notVisible:
+              id: "pos-tab-products"
+          commands:
+            - tapOn:
+                id: "search-products"
+            - pressKey: Enter
       - extendedWaitUntil:
           visible:
             id: "pos-tab-products"

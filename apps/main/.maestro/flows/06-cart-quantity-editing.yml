@@ -114,6 +114,13 @@ env:
 # housekeeping; a genuinely covered target fails at its own tap.
 - hideKeyboard:
     optional: true
+# iOS: hideKeyboard is unreliable and the numeric pad has no return key; the
+# keypad hides the phone tab bar, so the ending below could not reach the
+# products tab (local run 2026-09-03, flow 06 red at its own ending). A tap on
+# a non-input element is consumed by React Native as a blur — the subtotal is
+# a Text the flow asserts right after anyway.
+- tapOn:
+    id: "cart-subtotal"
 # Totals recalculate; subtotal stays visible and the cart is intact.
 - assertVisible:
     id: "cart-subtotal"
