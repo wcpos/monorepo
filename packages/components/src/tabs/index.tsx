@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform, ScrollView, View } from 'react-native';
+import { type LayoutChangeEvent, Platform, ScrollView, View } from 'react-native';
 
 import * as Haptics from 'expo-haptics';
 import * as TabsPrimitive from '@rn-primitives/tabs';
@@ -99,6 +99,20 @@ function TabsList({ asSelect, className, children, ...props }: TabsListProps) {
  */
 // Padding value for the tabs list (in pixels) - used in contentContainerStyle
 const LIST_PADDING = 8; // p-2 = 0.5rem = 8px
+
+function MeasuredTab({
+	child,
+	value,
+	onTabLayout,
+}: {
+	child: React.ReactElement;
+	value: string;
+	onTabLayout: (value: string, event: LayoutChangeEvent) => void;
+}) {
+	return React.cloneElement(child, {
+		onLayout: (event: LayoutChangeEvent) => onTabLayout(value, event),
+	} as any);
+}
 
 function ScrollableTabsList({ className, children, ...props }: TabsPrimitive.ListProps) {
 	const scrollRef = React.useRef<ScrollView>(null);
@@ -231,14 +245,13 @@ function ScrollableTabsList({ className, children, ...props }: TabsPrimitive.Lis
 					{childrenArray.map((child, index) => {
 						const childValue = (child as any).props.value;
 
-						return React.cloneElement(
-							child as React.ReactElement,
-							{
-								key: childValue || index,
-								onLayout: (event: any) => {
-									handleTabLayout(childValue, event);
-								},
-							} as any
+						return (
+							<MeasuredTab
+								key={childValue || index}
+								child={child}
+								value={childValue}
+								onTabLayout={handleTabLayout}
+							/>
 						);
 					})}
 				</TabsPrimitive.List>

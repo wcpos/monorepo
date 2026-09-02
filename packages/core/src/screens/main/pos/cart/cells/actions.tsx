@@ -38,7 +38,7 @@ export function Actions({ row, table }: CellContext<Props, 'actions'>) {
 	 * line would be unremovable. One owner for the guard, and it is the one that
 	 * can see the cancellation.
 	 */
-	const handleRemoveLineItem = React.useCallback(() => {
+	const handleRemoveLineItem = () => {
 		const rowRef = meta.rowRefs.current?.get(uuid);
 		if (rowRef) {
 			rowRef.pulseRemove(() =>
@@ -54,9 +54,7 @@ export function Actions({ row, table }: CellContext<Props, 'actions'>) {
 				})
 			);
 		}
-		// meta.rowRefs is a stable ref; its `.current` is read at call time, so it
-		// is intentionally not a dependency.
-	}, [removeLineItem, type, uuid]);
+	};
 
 	/**
 	 * Add-pulses are triggered by the cart table's detection effect (which owns

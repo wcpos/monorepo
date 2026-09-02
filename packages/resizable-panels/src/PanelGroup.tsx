@@ -86,10 +86,8 @@ export function PanelGroup({
 
 	const syncSharedValues = React.useCallback(
 		(layout: number[], panelIds: string[]) => {
-			// eslint-disable-next-line react-hooks/immutability -- reanimated shared value is the layout store
-			layoutShared.value = layout;
-			// eslint-disable-next-line react-hooks/immutability -- reanimated shared value is the layout store
-			panelIdsShared.value = panelIds;
+			layoutShared.set(layout);
+			panelIdsShared.set(panelIds);
 		},
 		[layoutShared, panelIdsShared]
 	);
@@ -111,8 +109,7 @@ export function PanelGroup({
 		(handleId: string) => {
 			const size = containerSizeRef.current[direction === 'horizontal' ? 'width' : 'height'];
 			if (model.beginDrag(handleId, size)) {
-				// eslint-disable-next-line react-hooks/immutability -- reanimated shared value is the drag store
-				dragState.value = { dragHandleId: handleId };
+				dragState.set({ dragHandleId: handleId });
 			}
 		},
 		[direction, dragState, model]
@@ -124,8 +121,7 @@ export function PanelGroup({
 	);
 	const endDrag = React.useCallback(() => {
 		model.endDrag();
-		// eslint-disable-next-line react-hooks/immutability -- reanimated shared value is the drag store
-		dragState.value = null;
+		dragState.set(null);
 	}, [dragState, model]);
 
 	React.useImperativeHandle(

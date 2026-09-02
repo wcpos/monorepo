@@ -18,6 +18,10 @@ export function useSharedValue<T>(initialValue: T) {
 				value = nextValue;
 				listeners.forEach((listener) => listener());
 			},
+			// reanimated 4's compiler-compatible setter; takes a value or an updater.
+			set(next: T | ((current: T) => T)) {
+				this.value = typeof next === 'function' ? (next as (current: T) => T)(value) : next;
+			},
 		};
 	});
 	return sharedValue;
