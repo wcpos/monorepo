@@ -8,6 +8,18 @@ import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 
 const ALLOWED_REST_PREFIXES = ['/wcpos/v1/', '/wc/v3/', '/wp/v2/'];
 const MAX_RESPONSE_LENGTH = 1024 * 1024;
+// The host owns authentication; a page may never set or override these.
+const BLOCKED_REQUEST_HEADERS = ['authorization', 'cookie', 'x-wcpos', 'host'];
+
+function isHttpResponseError(
+	error: unknown
+): error is { response: { status: number; headers?: Record<string, unknown>; data: unknown } } {
+	return (
+		!!error &&
+		typeof error === 'object' &&
+		typeof (error as { response?: { status?: unknown } }).response?.status === 'number'
+	);
+}
 
 export function useHostCapabilities(onClose: (result: string) => void): BridgeHandlers {
 	const http = useRestHttpClient();
@@ -15,7 +27,7 @@ export function useHostCapabilities(onClose: (result: string) => void): BridgeHa
 	return React.useMemo(
 		() => ({
 			'http.proxy': async (payload) => {
-				const { method, path, query, body } = payload;
+				const { method, path, query, body, headers } = payload;
 				if (typeof path !== 'string' || !ALLOWED_REST_PREFIXES.some((p) => path.startsWith(p))) {
 					throw new BridgeError('bad_request', 'Path is not an allowed store REST endpoint');
 				}
@@ -23,11 +35,25 @@ export function useHostCapabilities(onClose: (result: string) => void): BridgeHa
 				if (query && typeof query === 'object' && !Array.isArray(query)) {
 					for (const [key, value] of Object.entries(query)) search.set(key, String(value));
 				}
-				const response = (await http.request({
-					method: typeof method === 'string' ? method.toUpperCase() : 'GET',
-					url: `${path}${search.toString() ? `?${search}` : ''}`,
-					data: body,
-				})) as { status: number; headers?: Record<string, unknown>; data: unknown };
+				const requestHeaders = Object.fromEntries(
+					Object.entries(headers && typeof headers === 'object' ? headers : {}).filter(
+						([key, value]) =>
+							typeof value === 'string' && !BLOCKED_REQUEST_HEADERS.includes(key.toLowerCase())
+					)
+				);
+				let response: { status: number; headers?: Record<string, unknown>; data: unknown };
+				try {
+					response = (await http.request({
+						method: typeof method === 'string' ? method.toUpperCase() : 'GET',
+						url: `${path}${search.toString() ? `?${search}` : ''}`,
+						data: body,
+						headers: requestHeaders,
+					})) as typeof response;
+				} catch (error) {
+					// A 4xx/5xx from the store is a response the page must see, not a bridge failure.
+					if (!isHttpResponseError(error)) throw error;
+					response = error.response;
+				}
 				const contentType = String(response.headers?.['content-type'] ?? '');
 				const serialized = JSON.stringify(response.data);
 				const result = {

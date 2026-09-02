@@ -14,11 +14,14 @@ import { useBridge } from './bridge/use-bridge';
 import { type AppInitPayload, BridgeError, type BridgeHandlers } from './bridge/types';
 import { useHostCapabilities } from './capabilities/host';
 import { usePrinterCapabilities } from './capabilities/printers';
-import { MINI_APP_ORIGIN, useMiniAppCatalog } from './catalog';
+import { meetsMinAppVersion, MINI_APP_ORIGIN, useMiniAppCatalog } from './catalog';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { useAppInfo } from '../../../hooks/use-app-info';
 import { useLocale } from '../../../hooks/use-locale';
+
+// Covers a slow first fetch of the remote page plus the 10 s the contract allows for app.ready.
+const READY_DEADLINE_MS = 30_000;
 
 interface MiniAppHostProps {
 	id: string;
@@ -94,12 +97,20 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 			if (!closingSentRef.current) send('app.closing', { reason: 'navigation' });
 		};
 	}, [send]);
-	// Handshake completion cancels the external page's load deadline.
+	// The fallback deadline is armed from mount, not from the load event: a navigation that
+	// never produces a load or an error must still reach the fallback, and a handshake that
+	// beats the load event must not be failed by a timer armed afterwards.
 	React.useEffect(() => {
-		if (ready && loadTimerRef.current) clearTimeout(loadTimerRef.current);
-	}, [ready]);
+		clearTimeout(loadTimerRef.current);
+		if (ready) return;
+		loadTimerRef.current = setTimeout(() => setFailed(true), READY_DEADLINE_MS);
+		return () => clearTimeout(loadTimerRef.current);
+	}, [attempt, ready]);
 
-	const needsAppUpdate = !!entry && granted.length !== entry.capabilities.length;
+	const needsAppUpdate =
+		!!entry &&
+		(granted.length !== entry.capabilities.length ||
+			!meetsMinAppVersion(entry, appInfo.appVersion));
 	const content =
 		!entry || needsAppUpdate || failed ? (
 			<VStack className="flex-1 items-center justify-center gap-4 p-6">
@@ -135,10 +146,6 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 					request.url.startsWith(`${origin}/`)
 				}
 				onError={() => setFailed(true)}
-				onLoad={() => {
-					clearTimeout(loadTimerRef.current);
-					loadTimerRef.current = setTimeout(() => setFailed(true), 10_000);
-				}}
 			/>
 		);
 

@@ -20,17 +20,32 @@ describe('WebView web target origin', () => {
 		);
 		const framePostMessage = jest.spyOn(ref.current!.contentWindow!, 'postMessage');
 
+		const frameWindow = ref.current!.contentWindow!;
+
 		act(() => {
 			window.dispatchEvent(
 				new MessageEvent('message', { data: { ok: false }, origin: 'https://other.example' })
 			);
+			// Right origin, wrong window: another page on the same shared host.
 			window.dispatchEvent(
-				new MessageEvent('message', { data: { ok: true }, origin: 'https://mini-app.example' })
+				new MessageEvent('message', {
+					data: { ok: false },
+					origin: 'https://mini-app.example',
+					source: window,
+				})
+			);
+			window.dispatchEvent(
+				new MessageEvent('message', {
+					data: { ok: true },
+					origin: 'https://mini-app.example',
+					source: frameWindow,
+				})
 			);
 			ref.current?.postMessage('hello');
 		});
 
 		expect(onMessage).toHaveBeenCalledTimes(1);
+		expect(onMessage.mock.calls[0][0].nativeEvent.data).toEqual({ ok: true });
 		expect(framePostMessage).toHaveBeenCalledWith('hello', 'https://mini-app.example');
 	});
 });

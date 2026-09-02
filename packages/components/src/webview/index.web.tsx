@@ -89,7 +89,12 @@ function WebView({
 	React.useEffect(() => {
 		const onIframeMessage = (event: MessageEvent<any>) => {
 			const { origin, data } = event;
-			if (targetOrigin && origin !== targetOrigin) return;
+			// A pinned origin is shared hosting (a CDN); only the rendered frame may speak.
+			if (
+				targetOrigin &&
+				(origin !== targetOrigin || event.source !== localRef.current?.contentWindow)
+			)
+				return;
 
 			const message = {
 				nativeEvent: {

@@ -1,5 +1,8 @@
 import * as React from 'react';
 
+// @ts-expect-error: semver lacks type declarations in this project
+import semver from 'semver';
+
 import { AppInfo } from '@wcpos/utils/app-info';
 
 import seed from './catalog.seed.json';
@@ -21,6 +24,34 @@ export interface MiniAppCatalogEntry {
 }
 
 const bundledEntries = seed.miniApps as MiniAppCatalogEntry[];
+const PLATFORMS = ['ios', 'android', 'web', 'electron'];
+
+function isStringArray(value: unknown): value is string[] {
+	return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+function isCatalogEntry(value: unknown): value is MiniAppCatalogEntry {
+	if (!value || typeof value !== 'object') return false;
+	const item = value as Record<string, unknown>;
+	return (
+		typeof item.id === 'string' &&
+		!!item.title &&
+		typeof item.title === 'object' &&
+		typeof item.url === 'string' &&
+		item.url.startsWith(`${MINI_APP_ORIGIN}/`) &&
+		isStringArray(item.capabilities) &&
+		typeof item.minAppVersion === 'string' &&
+		isStringArray(item.entry) &&
+		isStringArray(item.platforms) &&
+		item.platforms.every((platform) => PLATFORMS.includes(platform))
+	);
+}
+
+/** True when the installed app satisfies the entry's minimum version (unparseable versions pass). */
+export function meetsMinAppVersion(entry: MiniAppCatalogEntry, appVersion: string): boolean {
+	if (!semver.valid(entry.minAppVersion) || !semver.valid(appVersion)) return true;
+	return semver.gte(appVersion, entry.minAppVersion);
+}
 let catalogPromise: Promise<MiniAppCatalogEntry[]> | undefined;
 
 function loadCatalog(): Promise<MiniAppCatalogEntry[]> {
@@ -33,8 +64,13 @@ function loadCatalog(): Promise<MiniAppCatalogEntry[]> {
 			if (!response.ok) throw new Error(`Catalog returned ${response.status}`);
 			const catalog = (await response.json()) as { wcpos?: unknown; miniApps?: unknown };
 			if (catalog.wcpos !== 1 || !Array.isArray(catalog.miniApps)) return bundledEntries;
-			return (catalog.miniApps as MiniAppCatalogEntry[]).filter((entry) =>
-				(ALLOWED_MINI_APP_IDS as readonly string[]).includes(entry.id)
+			const remote = catalog.miniApps.filter(
+				(entry): entry is MiniAppCatalogEntry =>
+					isCatalogEntry(entry) && (ALLOWED_MINI_APP_IDS as readonly string[]).includes(entry.id)
+			);
+			// A malformed remote entry must not hide the bundled one it was meant to replace.
+			return bundledEntries.map(
+				(bundled) => remote.find((entry) => entry.id === bundled.id) ?? bundled
 			);
 		} catch {
 			return bundledEntries;

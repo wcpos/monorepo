@@ -16,7 +16,7 @@
 				"ui.close",
 				"ui.openExternal"
 			],
-			"minAppVersion": "1.10.7",
+			"minAppVersion": "1.10.6",
 			"entry": ["settings.printers.empty", "settings.printers.trouble"],
 			"platforms": ["ios", "android", "web", "electron"]
 		}

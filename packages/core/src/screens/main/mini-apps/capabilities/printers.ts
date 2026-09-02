@@ -172,17 +172,21 @@ export function usePrinterCapabilities(): BridgeHandlers {
 					});
 				}
 				const collection = storeDB.collections.printer_profiles;
+				const existing = profileData.id ? await collection.findOne(id).exec() : null;
+				if (profileData.id && !existing) {
+					throw new BridgeError('bad_request', 'Printer profile was not found');
+				}
+				const fields = buildPrinterProfileFields(result.data);
+				if (existing) {
+					await existing.patch(fields);
+				} else {
+					await collection.insert({ id, ...fields });
+				}
+				// Demote other defaults only once the target is persisted, so a failed save never
+				// leaves the store without a default printer.
 				if (result.data.isDefault) {
 					const defaults = await collection.find({ selector: { isDefault: true } }).exec();
 					for (const doc of defaults) if (doc.id !== id) await doc.patch({ isDefault: false });
-				}
-				const fields = buildPrinterProfileFields(result.data);
-				if (profileData.id) {
-					const doc = await collection.findOne(id).exec();
-					if (!doc) throw new BridgeError('bad_request', 'Printer profile was not found');
-					await doc.patch(fields);
-				} else {
-					await collection.insert({ id, ...fields });
 				}
 				return { profileId: id };
 			},

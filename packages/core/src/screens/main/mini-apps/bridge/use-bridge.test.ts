@@ -17,9 +17,13 @@ function setup(handlers: Record<string, (payload: Record<string, unknown>) => Pr
 	const hook = renderHook(() => useBridge(ref, origin, handlers));
 	const receive = (data: unknown, url = `${origin}/index.html`) =>
 		hook.result.current.onMessage({ nativeEvent: { data, url } });
+	const handshake = () =>
+		act(async () => receive({ wcpos: 1, id: 'ready-1', action: 'app.ready', payload: {} }));
 
-	return { ...hook, postMessage, receive };
+	return { ...hook, postMessage, receive, handshake };
 }
+
+const READY_HANDLER = { 'app.ready': async () => ({ locale: 'en' }) };
 
 const envelope = (overrides: Record<string, unknown> = {}) => ({
 	wcpos: 1,
@@ -71,10 +75,33 @@ describe('useBridge', () => {
 		);
 	});
 
+	it('refuses every action until the handshake has succeeded', async () => {
+		const handler = jest.fn(async () => ({ ok: true }));
+		const { postMessage, receive, handshake } = setup({ ...READY_HANDLER, 'test.action': handler });
+
+		await act(async () => receive(envelope()));
+
+		expect(handler).not.toHaveBeenCalled();
+		expect(postMessage).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				id: 'request-1',
+				action: 'error',
+				payload: expect.objectContaining({ code: 'capability_denied' }),
+			})
+		);
+
+		await handshake();
+		await act(async () => receive(envelope()));
+
+		expect(handler).toHaveBeenCalledTimes(1);
+	});
+
 	it('echoes the id and action on success', async () => {
-		const { postMessage, receive } = setup({
+		const { postMessage, receive, handshake } = setup({
+			...READY_HANDLER,
 			'test.action': async () => ({ ok: true }),
 		});
+		await handshake();
 
 		await act(async () => receive(envelope()));
 
@@ -87,10 +114,12 @@ describe('useBridge', () => {
 	});
 
 	it('returns timeout when a handler exceeds its action limit', async () => {
-		jest.useFakeTimers();
-		const { postMessage, receive } = setup({
+		const { postMessage, receive, handshake } = setup({
+			...READY_HANDLER,
 			'test.action': () => new Promise(() => undefined),
 		});
+		await handshake();
+		jest.useFakeTimers();
 		const request = receive(envelope());
 
 		await act(async () => {

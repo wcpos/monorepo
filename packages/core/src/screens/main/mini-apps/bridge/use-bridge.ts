@@ -51,6 +51,7 @@ export function useBridge(
 	handlers: BridgeHandlers
 ) {
 	const [ready, setReady] = React.useState(false);
+	const readyRef = React.useRef(false);
 
 	const post = React.useCallback(
 		(message: BridgeEnvelope) => webViewRef.current?.postMessage(message),
@@ -96,7 +97,15 @@ export function useBridge(
 				postError(parsed, error, post, started);
 				return;
 			}
-			if (parsed.action === 'app.ready') setReady(true);
+			if (parsed.action !== 'app.ready' && !readyRef.current) {
+				postError(
+					parsed,
+					new BridgeError('capability_denied', 'Handshake has not completed'),
+					post,
+					started
+				);
+				return;
+			}
 			const timeoutMs = ACTION_TIMEOUT_MS[parsed.action] ?? DEFAULT_TIMEOUT_MS;
 			let timer: ReturnType<typeof setTimeout> | undefined;
 			try {
@@ -110,6 +119,10 @@ export function useBridge(
 				]);
 				const action = parsed.action === 'app.ready' ? 'app.init' : parsed.action;
 				post({ wcpos: 1, id: parsed.id, action, payload });
+				if (parsed.action === 'app.ready') {
+					readyRef.current = true;
+					setReady(true);
+				}
 				bridgeLogger.debug('Bridge response', {
 					context: {
 						action: parsed.action,
