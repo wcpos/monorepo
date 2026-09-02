@@ -1719,14 +1719,18 @@ test('no Maestro flow declares a default for a variable the runners pass with -e
 
 	assert.ok(cliPassed.has('DEVICE_CLASS'), 'the runners no longer pass DEVICE_CLASS with -e');
 
-	const flowsDir = path.join(ROOT, 'apps', 'main', '.maestro', 'flows');
+	const maestroDirs = ['flows', 'subflows'].map((dir) =>
+		path.join(ROOT, 'apps', 'main', '.maestro', dir)
+	);
 	const offenders = [];
-	for (const filename of readdirSync(flowsDir).filter((name) => name.endsWith('.yml'))) {
-		const documents = parseAllDocuments(readFileSync(path.join(flowsDir, filename), 'utf8'));
-		if (documents.length < 2) continue; // no front-matter, so no env block
-		const declared = documents[0].toJS()?.env ?? {};
-		for (const name of Object.keys(declared)) {
-			if (cliPassed.has(name)) offenders.push(`${filename}: ${name}`);
+	for (const maestroDir of maestroDirs) {
+		for (const filename of readdirSync(maestroDir).filter((name) => name.endsWith('.yml'))) {
+			const documents = parseAllDocuments(readFileSync(path.join(maestroDir, filename), 'utf8'));
+			if (documents.length < 2) continue; // no front-matter, so no env block
+			const declared = documents[0].toJS()?.env ?? {};
+			for (const name of Object.keys(declared)) {
+				if (cliPassed.has(name)) offenders.push(`${filename}: ${name}`);
+			}
 		}
 	}
 

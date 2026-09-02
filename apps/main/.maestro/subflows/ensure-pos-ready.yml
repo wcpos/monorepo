@@ -1,0 +1,29 @@
+# Invariant: every flow ends on the POS products screen with search-products visible.
+# The healthy path performs zero relaunches; relaunch is recovery only when POS is not ready.
+# Recovery is logged so run artifacts can count every conditional relaunch.
+- runFlow:
+    when:
+      visible:
+        id: "pos-tab-products"
+    commands:
+      - tapOn:
+          id: "pos-tab-products"
+- runFlow:
+    when:
+      notVisible:
+        id: "search-products"
+    commands:
+      - evalScript: "${console.log('WCPOS_E2E POS not ready at flow start, relaunching')}"
+      - runFlow:
+          file: relaunch-to-pos.yml
+- extendedWaitUntil:
+    visible:
+      id: "search-products"
+    timeout: 10000
+- runFlow:
+    when:
+      visible:
+        id: "filter-pill-remove-stock_status"
+    commands:
+      - tapOn:
+          id: "filter-pill-remove-stock_status"
