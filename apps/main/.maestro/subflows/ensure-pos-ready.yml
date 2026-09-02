@@ -37,9 +37,13 @@ appId: com.wcpos.main.dev
       visible:
         id: "drawer-item-pos"
     commands:
-      - evalScript: "${console.log('WCPOS_E2E drawer still open at flow start, closing')}"
+      - evalScript: "${console.log('WCPOS_E2E drawer still open at flow start, closing through the scrim')}"
+      # The scrim, not the focused item: the item dispatches closeDrawer, which is
+      # a no-op when the navigation state already says closed while the view is
+      # still open (run 33666934729). A phone drawer is 200 dp wide, well left of
+      # 85%; the guard above guarantees the scrim is there to receive the tap.
       - tapOn:
-          id: "drawer-item-pos"
+          point: "85%,50%"
       - extendedWaitUntil:
           notVisible:
             id: "drawer-item-pos"
