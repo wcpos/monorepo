@@ -59,3 +59,11 @@ appId: com.wcpos.main.dev
     commands:
       - tapOn:
           id: "filter-pill-remove-stock_status"
+# The keyboard is the third state a relaunch used to reset: the previous
+# flow's last search leaves it up, and on phones it covers the tab bar, so
+# pos-tab-cart is "not visible" and a cart-first flow never opens the cart
+# (run 33655220085, Android phone, flow 08 — flows 01–07 chained green).
+# Optional: hideKeyboard is unreliable on iOS; a genuinely covered target
+# fails at its own tap and names itself.
+- hideKeyboard:
+    optional: true
