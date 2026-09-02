@@ -20,6 +20,7 @@ export interface WebViewProps extends Omit<RNWebViewProps, 'onContentSizeChange'
 	ref?: React.Ref<WebViewHandle>;
 	src?: string;
 	srcDoc?: string;
+	targetOrigin?: string;
 	onMessage: (event: { nativeEvent: { data: any } }) => void;
 	onContentSizeChange?: (event: WebViewContentSizeChangeEvent) => void;
 }
@@ -27,7 +28,15 @@ export interface WebViewProps extends Omit<RNWebViewProps, 'onContentSizeChange'
 /**
  * WebView component that automatically resizes to fill its parent container
  */
-function WebView({ ref, src, srcDoc, onMessage, onContentSizeChange, ...props }: WebViewProps) {
+function WebView({
+	ref,
+	src,
+	srcDoc,
+	targetOrigin: _targetOrigin,
+	onMessage,
+	onContentSizeChange,
+	...props
+}: WebViewProps) {
 	const localRef = React.useRef<RNWebView>(null);
 
 	React.useImperativeHandle(

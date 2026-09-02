@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { useRouter } from 'expo-router';
+
 import { Button } from '@wcpos/components/button';
 import {
 	DropdownMenu,
@@ -17,6 +19,7 @@ import { VStack } from '@wcpos/components/vstack';
 import type { PrinterProfile } from '@wcpos/printer';
 
 import { printerIconName } from './utils';
+import { usePrinterWizardAvailable } from '../../mini-apps/catalog';
 import { useT } from '../../../../contexts/translations';
 
 interface PrinterRowProps {
@@ -42,6 +45,8 @@ export function PrinterRow({
 	onDelete,
 }: PrinterRowProps) {
 	const t = useT();
+	const router = useRouter();
+	const showWizard = usePrinterWizardAvailable('settings.printers.trouble');
 
 	let connectionLabel: string;
 	if (profile.connectionType === 'system') {
@@ -107,6 +112,15 @@ export function PrinterRow({
 						testID={`printer-row-${profile.id}-edit`}
 					>
 						<Text>{t('common.edit')}</Text>
+					</Button>
+				)}
+				{showWizard && (
+					<Button
+						variant="ghost-quiet"
+						size="sm"
+						onPress={() => router.push('/settings/mini-app/printer-wizard')}
+					>
+						<Text>{t('settings.having_trouble')}</Text>
 					</Button>
 				)}
 				{showMenu && (

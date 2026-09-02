@@ -1,0 +1,24 @@
+{
+	"wcpos": 1,
+	"miniApps": [
+		{
+			"id": "printer-wizard",
+			"title": { "en": "Printer setup wizard" },
+			"url": "https://cdn.jsdelivr.net/gh/wcpos/mini-apps@1/printer-wizard/index.html",
+			"capabilities": [
+				"printers.list",
+				"printers.scan",
+				"printers.probe",
+				"printers.testPrint",
+				"printers.saveProfile",
+				"http.proxy",
+				"ui.toast",
+				"ui.close",
+				"ui.openExternal"
+			],
+			"minAppVersion": "1.10.7",
+			"entry": ["settings.printers.empty", "settings.printers.trouble"],
+			"platforms": ["ios", "android", "web", "electron"]
+		}
+	]
+}

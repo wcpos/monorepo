@@ -16,10 +16,13 @@ export interface WebViewContentSizeChangeEvent {
 	nativeEvent: { contentSize: { width: number; height: number } };
 }
 
+export type WebViewHandle = HTMLIFrameElement & { postMessage(message: any): void };
+
 export interface WebViewProps extends Omit<RNWebViewProps, 'onContentSizeChange'> {
-	ref: React.RefObject<HTMLIFrameElement>;
+	ref: React.RefObject<WebViewHandle | null>;
 	src?: string;
 	srcDoc?: string;
+	targetOrigin?: string;
 	onMessage: (event: { nativeEvent: { data: any } }) => void;
 	onContentSizeChange?: (event: WebViewContentSizeChangeEvent) => void;
 }
@@ -35,6 +38,7 @@ function WebView({
 	onLoad,
 	onContentSizeChange,
 	srcDoc,
+	targetOrigin,
 	className,
 	...props
 }: WebViewProps) {
@@ -73,10 +77,10 @@ function WebView({
 		() =>
 			Object.assign(localRef.current ?? ({} as HTMLIFrameElement), {
 				postMessage(message: any) {
-					localRef.current?.contentWindow?.postMessage(message, '*');
+					localRef.current?.contentWindow?.postMessage(message, targetOrigin ?? '*');
 				},
 			}),
-		[]
+		[targetOrigin]
 	);
 
 	/**
@@ -85,6 +89,7 @@ function WebView({
 	React.useEffect(() => {
 		const onIframeMessage = (event: MessageEvent<any>) => {
 			const { origin, data } = event;
+			if (targetOrigin && origin !== targetOrigin) return;
 
 			const message = {
 				nativeEvent: {
@@ -106,7 +111,7 @@ function WebView({
 		return () => {
 			window.removeEventListener('message', onIframeMessage, true);
 		};
-	}, [onMessage]);
+	}, [onMessage, targetOrigin]);
 
 	/**
 	 * Handle loaded — also wires up content-size measurement for same-origin
