@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { WebView } from '@wcpos/components/webview';
 import { type EngineRecord, useDocField, useQueryRuntime, useRecordField } from '@wcpos/query';
-import { remoteIdOrNull } from '@wcpos/sync-core';
+import { isRecordUuid, remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -23,7 +23,29 @@ import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 const ORDER_REFRESH_TIMEOUT_MS = 10_000;
 
 const paymentLogger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+type OrderSnapshot = Record<string, unknown> & { id: number; status: string };
 
+function isOrderSnapshot(payload: unknown): payload is OrderSnapshot {
+	if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return false;
+	const candidate = payload as Record<string, unknown>;
+	const prototype = Object.getPrototypeOf(payload);
+	return (
+		(prototype === Object.prototype || prototype === null) &&
+		typeof candidate.id === 'number' &&
+		Number.isFinite(candidate.id) &&
+		candidate.id > 0 &&
+		typeof candidate.status === 'string' &&
+		candidate.status.trim() !== '' &&
+		Array.isArray(candidate.meta_data) &&
+		candidate.meta_data.some(
+			(meta) =>
+				meta !== null &&
+				typeof meta === 'object' &&
+				(meta as Record<string, unknown>).key === '_woocommerce_pos_uuid' &&
+				isRecordUuid((meta as Record<string, unknown>).value)
+		)
+	);
+}
 /**
  * Whether the store's payment document is in a position to receive
  * `wcpos-process-payment`.
@@ -123,32 +145,143 @@ export function PaymentWebview({
 			handle.release();
 		}
 	}, [runtime, orderId]);
-
+	const adoptSnapshot = React.useCallback(
+		(snapshot: OrderSnapshot | Record<string, unknown>, warnOnOutcome: boolean) => {
+			const refresh = () => {
+				void refreshOrder().catch((err) => {
+					if (!warnOnOutcome) return;
+					orderLogger.warn('Post-payment order refresh did not complete', {
+						context: { error: getErrorMessage(err) },
+					});
+				});
+			};
+			void runtime.engine.adoptOrderSnapshot(snapshot).then((outcome) => {
+				if (outcome === 'applied') return;
+				if (warnOnOutcome) {
+					orderLogger.warn('Checkout order snapshot was not applied', {
+						context: { outcome },
+					});
+				}
+				refresh();
+			}, refresh);
+		},
+		[runtime, refreshOrder, orderLogger]
+	);
+	const pollServerTruth = React.useCallback(async () => {
+		if (paymentReceivedRef.current) return;
+		const localStatus = order.getLatest().payload.status;
+		if (!localStatus || localStatus !== 'pos-open') return;
+		try {
+			orderLogger.debug('No postMessage received, checking server order status', {
+				context: { orderId },
+			});
+			// The decision reads SERVER truth directly (the sync surface's
+			// include-read) — an engine require's `ready` can settle without
+			// applying a newer revision to THIS document (skip-coalesced
+			// resident tasks, dirty-row protection), so it cannot prove
+			// payment state. The snapshot adoption below is the local write;
+			// the engine refresh inside it is catch-up only.
+			const response = await http.get('orders', {
+				params: { include: orderId, per_page: 1 },
+			});
+			const serverOrder = response?.data?.[0] as Record<string, unknown> | undefined;
+			if (!serverOrder || paymentReceivedRef.current) return;
+			const serverStatus = serverOrder.status as string;
+			if (serverStatus === localStatus) return;
+			if (serverStatus !== 'processing' && serverStatus !== 'completed') return;
+			paymentReceivedRef.current = true;
+			setCurrentOrderID('');
+			adoptSnapshot(serverOrder, false);
+			const reducedStockItems = (
+				(serverOrder.line_items as Record<string, unknown>[]) || []
+			).filter((item) =>
+				(item.meta_data as { key: string }[] | undefined)?.some(
+					(meta) => meta.key === '_reduced_stock'
+				)
+			);
+			stockAdjustment(reducedStockItems);
+			orderLogger.success(
+				t('pos_checkout.payment_completed_for_order', {
+					orderNumber: (serverOrder.number as string) || orderNumber,
+				}),
+				{
+					showToast: true,
+					context: {
+						total: serverOrder.total,
+						paymentMethod: serverOrder.payment_method,
+						paymentMethodTitle: serverOrder.payment_method_title,
+						status: serverStatus,
+						source: 'fallback-refresh',
+					},
+				}
+			);
+			if (uiSettings.autoShowReceipt) {
+				router.replace({
+					pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
+					params: { orderId: order.uuid },
+				});
+			} else {
+				router.replace({ pathname: '/cart' });
+			}
+		} catch (err) {
+			// Best-effort safety net only. Order completion is authoritatively
+			// delivered via the postMessage path, so a failed or premature poll
+			// (order not queryable yet or a transient sync error) is
+			// expected and must NOT be surfaced as a payment-gateway failure —
+			// doing so produced spurious PY02001 errors on successful checkouts.
+			orderLogger.debug('Fallback order status refresh did not complete', {
+				context: {
+					error: getErrorMessage(err),
+					source: 'fallback-refresh',
+				},
+			});
+		} finally {
+			setLoading(false);
+		}
+	}, [
+		http,
+		order,
+		orderId,
+		orderNumber,
+		stockAdjustment,
+		uiSettings.autoShowReceipt,
+		router,
+		adoptSnapshot,
+		setLoading,
+		setCurrentOrderID,
+		orderLogger,
+		t,
+	]);
 	/**
 	 *
 	 */
 	const handlePaymentReceived = React.useCallback(
 		async (event: MessageEvent) => {
-			if (
-				event?.data?.action === 'wcpos-payment-received' &&
-				typeof event?.data?.payload === 'object'
-			) {
+			if (event?.data?.action === 'wcpos-payment-received') {
+				const payload = event.data.payload;
+				if (!isOrderSnapshot(payload)) {
+					orderLogger.warn('Payment received with an invalid order snapshot', {
+						context: { orderId },
+					});
+					setLoading(false);
+					void pollServerTruth();
+					return;
+				}
 				try {
 					paymentReceivedRef.current = true;
 					if (fallbackTimerRef.current) {
 						clearTimeout(fallbackTimerRef.current);
 						fallbackTimerRef.current = null;
 					}
-					const payload = event.data.payload;
 					// get line_items with "_reduced_stock" meta
-					const reducedStockItems = (payload?.line_items || []).filter(
-						(item: Record<string, unknown>) =>
-							(item.meta_data as { key: string }[])?.some(
-								(meta: { key: string }) => meta.key === '_reduced_stock'
-							)
+					const reducedStockItems = (
+						(payload.line_items as Record<string, unknown>[]) || []
+					).filter((item: Record<string, unknown>) =>
+						(item.meta_data as { key: string }[])?.some(
+							(meta: { key: string }) => meta.key === '_reduced_stock'
+						)
 					);
 					stockAdjustment(reducedStockItems);
-
 					orderLogger.success(
 						t('pos_checkout.payment_completed_for_order', {
 							orderNumber: payload.number || orderNumber,
@@ -173,12 +306,6 @@ export function PaymentWebview({
 					// handler, and the fallback poll was already disarmed by
 					// `paymentReceivedRef`. The fallback path below has always routed
 					// without waiting; the success path now does the same.
-					void refreshOrder().catch((err) => {
-						orderLogger.debug('Post-payment order refresh did not complete', {
-							context: { error: getErrorMessage(err) },
-						});
-					});
-
 					if (uiSettings.autoShowReceipt) {
 						router.replace({
 							pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
@@ -189,6 +316,7 @@ export function PaymentWebview({
 							pathname: '/cart',
 						});
 					}
+					adoptSnapshot(payload, true);
 				} catch (err) {
 					const errorMessage = err instanceof Error ? err.message : 'Payment processing error';
 					orderLogger.error(errorMessage, {
@@ -205,6 +333,7 @@ export function PaymentWebview({
 		},
 		[
 			orderNumber,
+			orderId,
 			router,
 			order,
 			stockAdjustment,
@@ -213,7 +342,8 @@ export function PaymentWebview({
 			setCurrentOrderID,
 			orderLogger,
 			t,
-			refreshOrder,
+			adoptSnapshot,
+			pollServerTruth,
 		]
 	);
 
@@ -246,107 +376,9 @@ export function PaymentWebview({
 				clearTimeout(fallbackTimerRef.current);
 			}
 
-			const checkFallback = async () => {
-				if (paymentReceivedRef.current) return;
-
-				// Check local status first - if it's no longer pos-open,
-				// the postMessage path already handled the update
-				const localStatus = order.getLatest().payload.status;
-				if (!localStatus || localStatus !== 'pos-open') return;
-
-				try {
-					orderLogger.debug('No postMessage received, checking server order status', {
-						context: { orderId },
-					});
-
-					// The decision reads SERVER truth directly (the sync surface's
-					// include-read) — an engine require's `ready` can settle without
-					// applying a newer revision to THIS document (skip-coalesced
-					// resident tasks, dirty-row protection), so it cannot prove
-					// payment state. The engine refresh below is local catch-up only.
-					const response = await http.get('orders', {
-						params: { include: orderId, per_page: 1 },
-					});
-					const serverOrder = response?.data?.[0] as Record<string, unknown> | undefined;
-					if (!serverOrder) return;
-					const serverStatus = serverOrder.status as string;
-
-					// If server still matches local, payment hasn't completed yet
-					if (serverStatus === localStatus) return;
-
-					paymentReceivedRef.current = true;
-					setCurrentOrderID('');
-
-					// Best-effort: bring the local document up to date; routing below
-					// does not depend on it.
-					void refreshOrder().catch(() => undefined);
-
-					const reducedStockItems = (
-						(serverOrder.line_items as Record<string, unknown>[]) || []
-					).filter((item) =>
-						(item.meta_data as { key: string }[] | undefined)?.some(
-							(meta) => meta.key === '_reduced_stock'
-						)
-					);
-					stockAdjustment(reducedStockItems);
-
-					orderLogger.success(
-						t('pos_checkout.payment_completed_for_order', {
-							orderNumber: (serverOrder.number as string) || orderNumber,
-						}),
-						{
-							showToast: true,
-							context: {
-								total: serverOrder.total,
-								paymentMethod: serverOrder.payment_method,
-								paymentMethodTitle: serverOrder.payment_method_title,
-								status: serverStatus,
-								source: 'fallback-refresh',
-							},
-						}
-					);
-
-					if (uiSettings.autoShowReceipt) {
-						router.replace({
-							pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
-							params: { orderId: order.uuid },
-						});
-					} else {
-						router.replace({ pathname: '/cart' });
-					}
-				} catch (err) {
-					// Best-effort safety net only. Order completion is authoritatively
-					// delivered via the postMessage path, so a failed or premature poll
-					// (order not queryable yet or a transient sync error) is
-					// expected and must NOT be surfaced as a payment-gateway failure —
-					// doing so produced spurious PY02001 errors on successful checkouts.
-					orderLogger.debug('Fallback order status refresh did not complete', {
-						context: {
-							error: getErrorMessage(err),
-							source: 'fallback-refresh',
-						},
-					});
-				} finally {
-					setLoading(false);
-				}
-			};
-			fallbackTimerRef.current = setTimeout(() => void checkFallback(), 1000);
+			fallbackTimerRef.current = setTimeout(() => void pollServerTruth(), 1000);
 		},
-		[
-			http,
-			order,
-			orderId,
-			orderNumber,
-			stockAdjustment,
-			uiSettings.autoShowReceipt,
-			router,
-			setLoading,
-			setFrameStatus,
-			setCurrentOrderID,
-			orderLogger,
-			t,
-			refreshOrder,
-		]
+		[setFrameStatus, pollServerTruth]
 	);
 
 	/**
@@ -425,7 +457,7 @@ export function PaymentWebview({
 					onMessage={(event) => {
 						const data = event?.nativeEvent?.data as Record<string, unknown> | undefined;
 						const payload = data?.payload as Record<string, unknown> | undefined;
-						if (payload?.data) {
+						if (data?.action !== 'wcpos-payment-received' && payload?.data) {
 							if (onStockRejection(payload)) {
 								setLoading(false);
 								return;

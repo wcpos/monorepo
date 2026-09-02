@@ -17,7 +17,9 @@ const mockReplace = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
 const mockStockAdjustment = jest.fn();
 const mockEngineRequire = jest.fn();
+const mockAdoptOrderSnapshot = jest.fn();
 let autoShowReceipt = false;
+const ORDER_UUID = '5b8e1a3c-2f4d-4a6b-9c8e-000000000042';
 
 jest.mock('@wcpos/components/webview', () => ({
 	WebView: (props: Record<string, unknown>) => {
@@ -35,7 +37,9 @@ jest.mock('observable-hooks', () => ({
 jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace }) }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
-	useQueryRuntime: () => ({ engine: { require: mockEngineRequire } }),
+	useQueryRuntime: () => ({
+		engine: { require: mockEngineRequire, adoptOrderSnapshot: mockAdoptOrderSnapshot },
+	}),
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));
 jest.mock('../../../../../contexts/app-state', () => ({
@@ -79,6 +83,7 @@ describe('PaymentWebview fallback order refresh', () => {
 		webViewProps = {};
 		autoShowReceipt = false;
 		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		mockAdoptOrderSnapshot.mockResolvedValue('protected');
 	});
 	afterEach(() => {
 		jest.useRealTimers();
@@ -117,7 +122,13 @@ describe('PaymentWebview fallback order refresh', () => {
 					nativeEvent: {
 						data: {
 							action: 'wcpos-payment-received',
-							payload: { number: '42', status: 'completed', line_items: [] },
+							payload: {
+								id: 42,
+								number: '42',
+								status: 'completed',
+								meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
+								line_items: [],
+							},
 						},
 					},
 				});
@@ -151,6 +162,124 @@ describe('PaymentWebview fallback order refresh', () => {
 			jest.useRealTimers();
 		}
 	});
+
+	it('adopts a valid payment payload and skips the redundant refresh when applied', async () => {
+		mockAdoptOrderSnapshot.mockResolvedValue('applied');
+		const payload = {
+			id: 42,
+			number: '42',
+			status: 'completed',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
+			line_items: [],
+		};
+
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+
+		await act(async () => {
+			webViewProps.onMessage({
+				nativeEvent: { data: { action: 'wcpos-payment-received', payload } },
+			});
+			await Promise.resolve();
+		});
+
+		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(payload);
+		expect(mockEngineRequire).not.toHaveBeenCalled();
+	});
+
+	it('warns, releases the spinner, and polls server truth for a malformed payload', async () => {
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		const setLoading = jest.fn();
+		mockGet.mockResolvedValue({
+			data: [{ id: 42, status: 'pos-open', number: '42', line_items: [] }],
+		});
+
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={setLoading}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+
+		await act(async () => {
+			webViewProps.onMessage({
+				nativeEvent: {
+					data: {
+						action: 'wcpos-payment-received',
+						payload: { id: '42', status: '', data: { malformed: true } },
+					},
+				},
+			});
+			await Promise.resolve();
+		});
+
+		expect(logger.warn).toHaveBeenCalled();
+		expect(setLoading).toHaveBeenCalledWith(false);
+		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
+		expect(mockAdoptOrderSnapshot).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		['missing', undefined],
+		['empty', ''],
+		['whitespace', '   '],
+		['malformed', 'not-a-uuid'],
+	])(
+		'polls server truth when a plausible payment payload has a %s stamped UUID',
+		async (_, uuid) => {
+			const serverOrder = {
+				id: 42,
+				status: 'completed',
+				number: '42',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
+				line_items: [],
+			};
+			mockGet.mockResolvedValue({ data: [serverOrder] });
+			mockAdoptOrderSnapshot.mockResolvedValue('applied');
+
+			render(
+				<PaymentWebview
+					order={makeOrder()}
+					setLoading={jest.fn()}
+					setFrameStatus={jest.fn()}
+					onStockRejection={() => false}
+				/>
+			);
+
+			const payload = { id: 42, number: '42', status: 'completed', line_items: [] } as Record<
+				string,
+				unknown
+			>;
+			if (uuid !== undefined) {
+				payload.meta_data = [{ key: '_woocommerce_pos_uuid', value: uuid }];
+			}
+
+			await act(async () => {
+				webViewProps.onMessage({
+					nativeEvent: {
+						data: {
+							action: 'wcpos-payment-received',
+							payload,
+						},
+					},
+				});
+				await Promise.resolve();
+			});
+
+			expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
+			expect(mockAdoptOrderSnapshot).toHaveBeenCalledTimes(1);
+			expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(serverOrder);
+			expect(mockReplace).toHaveBeenCalledTimes(1);
+		}
+	);
 
 	it('does not poll on the initial page load (payment cannot have completed yet)', async () => {
 		jest.useFakeTimers();
@@ -256,16 +385,57 @@ describe('PaymentWebview fallback order refresh', () => {
 		expect(mockReplace).not.toHaveBeenCalled();
 	});
 
-	it('routes on SERVER truth even when the local document never updates', async () => {
-		// The review scenario: an engine require can settle without applying a
-		// newer revision (skip-coalesced resident task, dirty-row protection) —
-		// the local doc stays pos-open forever. The decision must come from the
-		// direct server probe, with the engine refresh as best-effort catch-up.
+	it.each(['pending', 'failed', 'cancelled'])(
+		'does not complete checkout when the fallback server status is %s',
+		async (status) => {
+			jest.useFakeTimers();
+			mockGet.mockResolvedValue({
+				data: [
+					{
+						id: 42,
+						status,
+						number: '42',
+						meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
+						line_items: [],
+					},
+				],
+			});
+
+			render(
+				<PaymentWebview
+					order={makeOrder()}
+					setLoading={jest.fn()}
+					setFrameStatus={jest.fn()}
+					onStockRejection={() => false}
+				/>
+			);
+
+			await act(async () => {
+				webViewProps.onLoad({});
+				webViewProps.onLoad({});
+				await jest.advanceTimersByTimeAsync(1000);
+			});
+
+			expect(mockAdoptOrderSnapshot).not.toHaveBeenCalled();
+			expect(mockStockAdjustment).not.toHaveBeenCalled();
+			expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
+			expect(mockReplace).not.toHaveBeenCalled();
+		}
+	);
+
+	it('does not duplicate completion when postMessage wins an in-flight fallback poll', async () => {
 		jest.useFakeTimers();
-		mockGet.mockResolvedValue({
-			data: [{ status: 'completed', number: '42', line_items: [] }],
-		});
-		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		let resolveGet!: (value: unknown) => void;
+		mockGet.mockReturnValue(new Promise((resolve) => (resolveGet = resolve)));
+		mockAdoptOrderSnapshot.mockResolvedValue('applied');
+		const postMessageOrder = {
+			id: 42,
+			status: 'completed',
+			number: 'post-message',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
+			line_items: [],
+		};
+		const polledOrder = { ...postMessageOrder, number: 'poll' };
 
 		render(
 			<PaymentWebview
@@ -280,14 +450,72 @@ describe('PaymentWebview fallback order refresh', () => {
 			webViewProps.onLoad({});
 			webViewProps.onLoad({});
 			await jest.advanceTimersByTimeAsync(1000);
+			webViewProps.onMessage({
+				nativeEvent: {
+					data: { action: 'wcpos-payment-received', payload: postMessageOrder },
+				},
+			});
+			resolveGet({ data: [polledOrder] });
+			await Promise.resolve();
 		});
 
-		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
-		expect(mockEngineRequire).toHaveBeenCalledTimes(1); // best-effort local catch-up
-		expect(logger.error).not.toHaveBeenCalled();
-		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
-		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockAdoptOrderSnapshot).toHaveBeenCalledTimes(1);
+		expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith(postMessageOrder);
+		expect(mockStockAdjustment).toHaveBeenCalledTimes(1);
+		expect(mockSetCurrentOrderID).toHaveBeenCalledTimes(1);
+		expect(mockReplace).toHaveBeenCalledTimes(1);
 	});
+
+	it.each(['completed', 'processing'])(
+		'routes on %s SERVER truth even when the local document never updates',
+		async (status) => {
+			// The review scenario: an engine require can settle without applying a
+			// newer revision (skip-coalesced resident task, dirty-row protection) —
+			// the local doc stays pos-open forever. The decision must come from the
+			// direct server probe, with the engine refresh as best-effort catch-up.
+			jest.useFakeTimers();
+			mockGet.mockResolvedValue({
+				data: [
+					{
+						id: 42,
+						status,
+						number: '42',
+						meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
+						line_items: [],
+					},
+				],
+			});
+			const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+
+			render(
+				<PaymentWebview
+					order={makeOrder()}
+					setLoading={jest.fn()}
+					setFrameStatus={jest.fn()}
+					onStockRejection={() => false}
+				/>
+			);
+
+			await act(async () => {
+				webViewProps.onLoad({});
+				webViewProps.onLoad({});
+				await jest.advanceTimersByTimeAsync(1000);
+			});
+
+			expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
+			expect(mockAdoptOrderSnapshot).toHaveBeenCalledWith({
+				id: 42,
+				status,
+				number: '42',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
+				line_items: [],
+			});
+			expect(mockEngineRequire).toHaveBeenCalledTimes(1); // best-effort local catch-up
+			expect(logger.error).not.toHaveBeenCalled();
+			expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+			expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+		}
+	);
 });
 
 /**

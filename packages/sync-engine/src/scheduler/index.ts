@@ -1,5 +1,6 @@
 // Drain
 export {
+	adoptOrderSnapshot,
 	ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
 	ORDER_SCHEDULER_LEASE_FOR_MS,
 	runEngineSchedulerDrain,

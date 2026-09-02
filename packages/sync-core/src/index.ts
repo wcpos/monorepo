@@ -59,7 +59,12 @@ export {
 	SERVER_AUTHORED_ORDER_MONEY_FIELDS,
 	stripServerAuthoredOrderMoney,
 } from './woo/orderWriteContract';
-export { identifyRecord, RECORD_UUID_META_KEY, webCryptoUuid } from './recordIdentity';
+export {
+	identifyRecord,
+	isRecordUuid,
+	RECORD_UUID_META_KEY,
+	webCryptoUuid,
+} from './recordIdentity';
 export {
 	type MetaDataEntry,
 	type PosCarrier,

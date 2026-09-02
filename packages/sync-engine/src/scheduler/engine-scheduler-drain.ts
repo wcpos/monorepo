@@ -21,7 +21,11 @@ import {
 	createSchedulerFetcherRegistry,
 	type SchedulerTaskSupportCandidate,
 } from './scheduler-fetcher-registry';
-import { createOrdersSchedulerFetcher } from './rx-scheduler-order-fetcher';
+import {
+	applyOrderSnapshot,
+	createOrdersSchedulerFetcher,
+	type OrdersSchedulerFetcherInput,
+} from './rx-scheduler-order-fetcher';
 import { createProductsSchedulerFetcher } from './rx-scheduler-product-fetcher';
 import { createVariationsSchedulerFetcher } from './rx-scheduler-variation-fetcher';
 import { createCustomerSchedulerFetcher } from './rx-scheduler-customer-fetcher';
@@ -232,6 +236,31 @@ export type SchedulerDrainDatabase = OrderRepositoryDatabase &
 		recordMutations: unknown;
 	};
 
+type OrderIngestInput = {
+	repository: EngineOrderRepository;
+	pendingMutationOrderIds: NonNullable<OrdersSchedulerFetcherInput['pendingMutationOrderIds']>;
+};
+/**
+ * Built FRESH on every call, never cached: `scope.resetCollection('mutations')` drops and
+ * recreates `recordMutations` while the database object stays the same, so anything keyed by
+ * the database (a WeakMap cache was tried and reviewer-flagged) keeps serving a guard bound
+ * to the destroyed collection — the same captured-reference staleness `db$`'s doc warns
+ * about. The repository is a thin wrapper and the guard resolves `db.recordMutations` here,
+ * at build time, so per-call construction is both cheap and reset-correct.
+ */
+function orderIngestInput(db: SchedulerDrainDatabase): OrderIngestInput {
+	return {
+		repository: new EngineOrderRepository(db),
+		pendingMutationOrderIds: createOrderPendingMutationIds(db.recordMutations as never),
+	};
+}
+export function adoptOrderSnapshot(
+	db: SchedulerDrainDatabase,
+	payload: unknown
+): Promise<'applied' | 'protected' | 'invalid'> {
+	return applyOrderSnapshot(orderIngestInput(db), payload);
+}
+
 export type RunEngineSchedulerDrainInput = {
 	db: SchedulerDrainDatabase;
 	coverage: LocalCoverage;
@@ -321,7 +350,7 @@ function createEngineSchedulerFetcherRegistry(
 	const db = input.db;
 	const nowMs = input.nowMs ?? Date.now();
 	const getNowMs = input.now ?? (input.nowMs === undefined ? Date.now : () => nowMs);
-	const orderRepository = new EngineOrderRepository(db);
+	const orderInput = orderIngestInput(db);
 	const queryTotalRepository =
 		queryTotalRecovery === 'retry-after-rebuild'
 			? withLedgerRecovery({
@@ -387,9 +416,8 @@ function createEngineSchedulerFetcherRegistry(
 			supportsTask: isSupportedOrderSchedulerTask,
 			fetcher: createOrdersSchedulerFetcher({
 				...shared,
-				repository: orderRepository,
-				checkpointStore: orderRepository,
-				pendingMutationOrderIds: createOrderPendingMutationIds(db.recordMutations as never),
+				...orderInput,
+				checkpointStore: orderInput.repository,
 			}),
 		},
 		{
