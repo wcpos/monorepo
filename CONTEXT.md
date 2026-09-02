@@ -240,8 +240,13 @@ sees the broadcast data), and re-renders the active display template on every ev
 Shares the envelope with the bridge, not the contract.
 
 **Slot**:
-A named UI insertion point in the app, identified by a dotted id (`pos.cart.block`).
-Extensions register UI into slots. Woo SlotFill dialect, Shopify-style identity.
+A named UI insertion point in the app, identified by a closed dotted id with the entry kind
+last (`pos.columns.panel`, `pos.products.filter-bar.item`). First-party code registers
+entries into slots in order via a static, typed registry (`@wcpos/core/extensions/slots`);
+an entry receives a readonly subscribable value and an enumerated set of async methods the
+host may reject, and never a database object. The name knowingly overlaps Expo Router's
+`<Slot />` and Radix / `@rn-primitives/slot`; ours is disambiguated by module path. Ruled
+wcpos/roadmap#139, 2026-09-03.
 _Avoid_: target (Shopify's word for the same thing)
 
 **Bridge**:
