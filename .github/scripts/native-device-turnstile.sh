@@ -22,8 +22,8 @@
 # is not completed:
 #   - a job with our exact name exists → block while it is not completed;
 #   - no job with our name yet, but a job of our platform exists → block while
-#     any of them is not completed (max-parallel: 1 creates the tablet job
-#     only when the phone job finishes), and for SIBLING_GRACE_SECONDS after
+#     any of them is not completed (a run may create its tablet job later, or
+#     never: pull requests run phones only), and for SIBLING_GRACE_SECONDS after
 #     one completes (the next matrix job appears ~1 s later; a poll can land
 #     inside that window);
 #   - no job of our platform at all → block until the run's build job has been
