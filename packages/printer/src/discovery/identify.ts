@@ -19,7 +19,16 @@ export interface PrinterIdentity {
 	columns?: number;
 	notReceiptPrinter?: boolean;
 }
+export type LaneProtocol = NonNullable<PrinterIdentity['lane']>['protocol'];
+
 export interface IdentifyProbes {
+	/**
+	 * Lane protocols this platform's network print path can actually use. `identity.lane` always
+	 * reports the best lane the printer offers; its port is copied onto the profile only when the
+	 * platform can print on it (Electron sends Star raw, native sends everything raw). Omitted =
+	 * every lane is printable.
+	 */
+	printableLanes?: ReadonlySet<LaneProtocol>;
 	connectTcp?: (host: string, port: number, timeoutMs: number) => Promise<TcpState>;
 	postEpos: (
 		host: string,
@@ -31,6 +40,10 @@ export interface IdentifyProbes {
 	fetchStar: (host: string) => Promise<{ port: number; protocol: 'http' | 'https' } | null>;
 }
 const EXPIRED = Symbol('expired');
+
+export function canPrintLane(protocol: LaneProtocol, probes: IdentifyProbes): boolean {
+	return probes.printableLanes?.has(protocol) ?? true;
+}
 
 function eposFailureState(error: unknown): TcpState {
 	if (error === EXPIRED) return 'filtered';
@@ -195,9 +208,11 @@ export async function identifyDiscoveredPrinters(
 				identified[index] = {
 					...printer,
 					identity,
-					...(identity.lane
+					...(identity.lane && canPrintLane(identity.lane.protocol, probes)
 						? { port: identity.lane.port, vendor: identity.vendor ?? printer.vendor }
-						: {}),
+						: identity.vendor
+							? { vendor: identity.vendor }
+							: {}),
 				};
 			})
 		);

@@ -23,6 +23,8 @@ async function connectTcp(host: string, port: number, timeoutMs: number) {
 }
 export function createIdentifyProbes(): IdentifyProbes {
 	return {
+		// network-adapter.electron.ts prints Epson over ePOS and every other vendor as raw TCP.
+		printableLanes: new Set(['epos-print', 'raw']),
 		connectTcp,
 		postEpos: postEposHttp,
 		fetchStar,

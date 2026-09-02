@@ -24,6 +24,7 @@ vi.mock('@point-of-sale/webbluetooth-receipt-printer', () => ({
 
 vi.mock('../discovery/identify-probes.electron', () => ({
 	createIdentifyProbes: () => ({
+		printableLanes: new Set(['epos-print', 'raw']),
 		connectTcp: async (_host: string, port: number) => (port === 9100 ? 'open' : 'closed'),
 		postEpos: async (_host: string, port: number) => {
 			if (port !== 443) throw new Error('closed');

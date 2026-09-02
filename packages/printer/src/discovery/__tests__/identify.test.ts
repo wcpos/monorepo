@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { identifyPrinter } from '../identify';
+import { identifyDiscoveredPrinters, identifyPrinter } from '../identify';
 
 import type { IdentifyProbes } from '../identify';
+import type { DiscoveredPrinter } from '../../types';
 
 const EPOS_RESPONSE =
 	'<response xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print" success="true" code="" status="0" />';
@@ -177,5 +178,43 @@ describe('identifyPrinter', () => {
 
 		await vi.advanceTimersByTimeAsync(4_000);
 		await expect(result).resolves.toMatchObject({ lane: null, notReceiptPrinter: false });
+	});
+});
+
+describe('identifyDiscoveredPrinters', () => {
+	const star: DiscoveredPrinter = {
+		id: 'net-star',
+		name: 'Star TSP143IV',
+		connectionType: 'network',
+		address: '192.168.1.40',
+		port: 9100,
+		vendor: 'generic',
+	};
+	const starProbes = (printableLanes?: ReadonlySet<'epos-print' | 'webprnt' | 'raw' | 'raw-tls'>) =>
+		probes({
+			fetchStar: async () => ({ port: 80, protocol: 'http' }),
+			...(printableLanes ? { printableLanes } : {}),
+		});
+
+	it('keeps the discovered port when the platform cannot print on the identified lane', async () => {
+		// Electron sends Star output as raw TCP (network-adapter.electron.ts), so WebPRNT on 80 is
+		// diagnostic only: the profile must keep 9100 or the receipt bytes go to an HTTP server.
+		const [identified] = await identifyDiscoveredPrinters(
+			[star],
+			starProbes(new Set(['epos-print', 'raw']))
+		);
+		expect(identified).toMatchObject({
+			port: 9100,
+			vendor: 'star',
+			identity: { lane: { port: 80, protocol: 'webprnt' } },
+		});
+	});
+
+	it('adopts the identified lane port where the platform prints on it', async () => {
+		const [identified] = await identifyDiscoveredPrinters(
+			[star],
+			starProbes(new Set(['epos-print', 'webprnt']))
+		);
+		expect(identified).toMatchObject({ port: 80, vendor: 'star' });
 	});
 });

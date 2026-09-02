@@ -18,6 +18,7 @@ jest.mock('@wcpos/printer', () => ({
 	},
 	probeVendor: jest.fn().mockResolvedValue(null),
 	identifyPrinter: jest.fn().mockResolvedValue({ vendor: null, lane: null, ports: [] }),
+	canPrintLane: jest.fn(() => true),
 	createIdentifyProbes: jest.fn(() => ({})),
 	canOpenDrawer: jest.fn((profile: PrinterProfile) => profile.connectionType === 'network'),
 	isPrinterConnectionError: jest.fn(() => false),

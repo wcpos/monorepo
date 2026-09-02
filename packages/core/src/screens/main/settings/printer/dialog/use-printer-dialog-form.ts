@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { Toast } from '@wcpos/components/toast';
 import {
+	canPrintLane,
 	createIdentifyProbes,
 	identifyPrinter,
 	isPrinterConnectionError,
@@ -243,7 +244,8 @@ export function usePrinterDialogForm({
 		}
 		const timer = setTimeout(() => {
 			setProbing(true);
-			identifyPrinter(trimmed, { name: form.getValues('name') }, createIdentifyProbes())
+			const probes = createIdentifyProbes();
+			identifyPrinter(trimmed, { name: form.getValues('name') }, probes)
 				.then((identity) => {
 					if (probeRequestIdRef.current !== requestId) return;
 					if (identity.vendor) {
@@ -253,7 +255,9 @@ export function usePrinterDialogForm({
 						const d = deriveVendorDefaults(result as PrinterFormValues['vendor']);
 						form.setValue('language', d.language);
 						form.setValue('port', d.port);
-						if (identity.lane) form.setValue('port', identity.lane.port);
+						if (identity.lane && canPrintLane(identity.lane.protocol, probes)) {
+							form.setValue('port', identity.lane.port);
+						}
 						if (
 							identity.columns !== undefined &&
 							form.getValues('columns') === defaultValues.columns

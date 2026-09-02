@@ -23,6 +23,8 @@ async function connectTcp(host: string, port: number, timeoutMs: number) {
 }
 export function createIdentifyProbes(): IdentifyProbes {
 	return {
+		// network-adapter.ts (native) writes raw bytes to the profile port whatever the vendor.
+		printableLanes: new Set(['raw']),
 		connectTcp,
 		postEpos: postEposFetch,
 		fetchStar,
