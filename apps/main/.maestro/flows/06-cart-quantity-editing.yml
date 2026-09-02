@@ -32,19 +32,27 @@ env:
 # flow 03: fires only when the login form itself is visible, so it can never
 # background a loading app; login-page text, not testID (third-party browser
 # content — the selector-policy exemption flow 02 documents).
-- runFlow:
-    when:
-      platform: Android
-      visible: "Username or Email Address|Nombre de usuario o correo electrónico"
+# Run 33527914510 (Android phone, flow 06): the tab resurfaces
+# ASYNCHRONOUSLY — a one-shot check right after launch raced it and lost
+# (guard SKIPPED, tab then took the screen for the whole readiness wait).
+# Re-evaluate the dismissal at each retry leg; 3 legs × 40s keep the old
+# 120s readiness budget (maxRetries counts RETRIES: executions = 3).
+- retry:
+    maxRetries: 2
     commands:
-      - evalScript: "${console.log('WCPOS_E2E lingering login tab over the relaunched app, pressing back once')}"
-      - back
-      - waitForAnimationToEnd:
-          timeout: 5000
-- extendedWaitUntil:
-    visible:
-      id: "search-products"
-    timeout: 120000
+      - runFlow:
+          when:
+            platform: Android
+            visible: "Username or Email Address|Nombre de usuario o correo electrónico"
+          commands:
+            - evalScript: "${console.log('WCPOS_E2E lingering login tab over the relaunched app, pressing back once')}"
+            - back
+            - waitForAnimationToEnd:
+                timeout: 5000
+      - extendedWaitUntil:
+          visible:
+            id: "search-products"
+          timeout: 40000
 # The In-Stock filter resets on every relaunch — clear it before searching.
 - runFlow:
     when:
