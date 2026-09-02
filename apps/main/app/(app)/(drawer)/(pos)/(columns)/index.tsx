@@ -4,15 +4,39 @@ import { Pressable, View } from 'react-native';
 import { useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import '@wcpos/core/screens/main/pos/register-slot-entries';
+
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Icon } from '@wcpos/components/icon';
 import { Panel, PanelGroup, PanelResizeHandle } from '@wcpos/components/panels';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { useTheme } from '@wcpos/core/contexts/theme';
+import { Slot } from '@wcpos/core/extensions/slots';
 import { useUISettings } from '@wcpos/core/screens/main/contexts/ui-settings';
 import { OpenOrders } from '@wcpos/core/screens/main/pos/cart';
 import { POSProducts } from '@wcpos/core/screens/main/pos/products';
+
+import type { ReadonlyView, SlotContracts } from '@wcpos/core/extensions/slots';
+
+/**
+ * The panel entry whose width the `pos-products` setting stores. The route owns that
+ * setting, so it is the route — not the slot — that knows which entry the number belongs to.
+ */
+const PRODUCTS_ENTRY_ID = 'products';
+
+/** This slot grants no host methods: the panels are pure layout. */
+const NO_API: SlotContracts['pos.columns.panel']['api'] = {};
+
+/**
+ * A panel's side is fixed for as long as it is mounted, so these views never notify.
+ * They are module constants because `useSlotValue` needs a stable snapshot.
+ */
+const NEVER_CHANGES = () => () => {};
+const PANEL_VIEWS: Record<'left' | 'right', ReadonlyView<SlotContracts['pos.columns.panel']['value']>> = {
+	left: { value: { side: 'left', isColumn: true }, subscribe: NEVER_CHANGES },
+	right: { value: { side: 'right', isColumn: true }, subscribe: NEVER_CHANGES },
+};
 
 /**
  *
@@ -101,45 +125,64 @@ export default function ResizablePOSColumns() {
 	}
 
 	/**
-	 *
+	 * The wide layout IS the `pos.columns.panel` slot: the registry supplies the panels and
+	 * their order, and this route only arranges them — reversing when the merchant put the
+	 * products on the right — and owns the resize handles and the persisted width.
 	 */
+	const productsOnRight = uiSettings.position === 'right';
+
 	return (
 		<View testID="screen-pos" style={{ flex: 1, paddingBottom: bottom }}>
-			<PanelGroup
-				onLayoutChanged={([productsWidth], { isUserInteraction }) => {
-					if (isUserInteraction) void patchUI({ width: productsWidth });
-				}}
-				direction="horizontal"
+			<Slot
+				id="pos.columns.panel"
+				api={NO_API}
+				data={(_entry, index, total) =>
+					PANEL_VIEWS[(productsOnRight ? total - 1 - index : index) === 0 ? 'left' : 'right']
+				}
 			>
-				<Panel
-					testID="pos-products-panel"
-					defaultSize={uiSettings.width}
-					minSize={25}
-					id="products"
-				>
-					<Suspense>
-						<ErrorBoundary>
-							<POSProducts isColumn />
-						</ErrorBoundary>
-					</Suspense>
-				</Panel>
-				<PanelResizeHandle testID="pos-resize-handle" />
-				{/* The cart NEEDS its complementary defaultSize: before the group's
-				    layout reaches each panel's animated style, panels render with
-				    flexGrow = defaultSize ?? 1, so a sized products panel next to an
-				    unsized cart renders 60:1 — a ~1.5% cart sliver. On slow emulators
-				    (CI, software GPU) that pre-layout style can stick for the whole
-				    session, which is how both Android nightlies lost the entire cart
-				    column (run 33110203691). With both sides sized the fallback IS
-				    the correct layout, so the race is harmless. */}
-				<Panel defaultSize={100 - uiSettings.width} minSize={25} id="cart">
-					<Suspense>
-						<ErrorBoundary>
-							<OpenOrders isColumn />
-						</ErrorBoundary>
-					</Suspense>
-				</Panel>
-			</PanelGroup>
+				{(entries) => {
+					const ordered = productsOnRight ? [...entries].reverse() : entries;
+					const productsIndex = ordered.findIndex(
+						({ descriptor }) => descriptor.id === PRODUCTS_ENTRY_ID
+					);
+					return (
+						<PanelGroup
+							onLayoutChanged={(layout, { isUserInteraction }) => {
+								const productsWidth = layout[productsIndex];
+								if (isUserInteraction && productsWidth !== undefined) {
+									void patchUI({ width: productsWidth });
+								}
+							}}
+							direction="horizontal"
+						>
+							{ordered.map(({ descriptor, element }, index) => (
+								<React.Fragment key={descriptor.id}>
+									{index > 0 ? <PanelResizeHandle testID="pos-resize-handle" /> : null}
+									{/* BOTH panels stay sized: before the group's layout reaches each panel's
+									    animated style, panels render with flexGrow = defaultSize ?? 1, so a sized
+									    products panel next to an unsized cart renders 60:1 — a ~1.5% cart sliver.
+									    On slow emulators (CI, software GPU) that pre-layout style can stick for
+									    the whole session, which is how both Android nightlies lost the entire
+									    cart column (run 33110203691). With both sides sized the fallback IS the
+									    correct layout, so the race is harmless. */}
+									<Panel
+										testID={`pos-${descriptor.id}-panel`}
+										defaultSize={
+											descriptor.id === PRODUCTS_ENTRY_ID
+												? uiSettings.width
+												: 100 - uiSettings.width
+										}
+										minSize={25}
+										id={descriptor.id}
+									>
+										{element}
+									</Panel>
+								</React.Fragment>
+							))}
+						</PanelGroup>
+					);
+				}}
+			</Slot>
 		</View>
 	);
 }
