@@ -25,6 +25,17 @@ const ORDER_REFRESH_TIMEOUT_MS = 10_000;
 const paymentLogger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 type OrderSnapshot = Record<string, unknown> & { id: number; status: string };
 
+/**
+ * Statuses that mean the payment has NOT happened — the client mirror of the store's
+ * received-page emission gate (`! $order->needs_payment()` plus the parked POS statuses):
+ * `pending`/`failed` are still payable, `cancelled` means it is never coming, and the POS
+ * statuses are open carts. Everything else counts as paid. A BLOCKLIST, not an allowlist of
+ * processing/completed: a cheque or BACS gateway configured through POS settings lands on
+ * `on-hold`, and a gateway configured to land on a custom status did so deliberately —
+ * refusing those would strand a genuinely completed sale as an open cart.
+ */
+const UNPAID_ORDER_STATUSES = ['pos-open', 'pos-partial', 'pending', 'failed', 'cancelled'];
+
 function isOrderSnapshot(payload: unknown): payload is OrderSnapshot {
 	if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return false;
 	const candidate = payload as Record<string, unknown>;
@@ -188,7 +199,15 @@ export function PaymentWebview({
 			if (!serverOrder || paymentReceivedRef.current) return;
 			const serverStatus = serverOrder.status as string;
 			if (serverStatus === localStatus) return;
-			if (serverStatus !== 'processing' && serverStatus !== 'completed') return;
+			// A status change is not a payment: an unpaid transition leaves everything in
+			// place (the finally releases the spinner) so the cashier can retry from the
+			// cart they still have.
+			if (UNPAID_ORDER_STATUSES.includes(serverStatus)) {
+				orderLogger.debug('Server order status changed but is not paid; leaving the cart open', {
+					context: { serverStatus, source: 'fallback-refresh' },
+				});
+				return;
+			}
 			paymentReceivedRef.current = true;
 			setCurrentOrderID('');
 			adoptSnapshot(serverOrder, false);
@@ -263,6 +282,20 @@ export function PaymentWebview({
 					orderLogger.warn('Payment received with an invalid order snapshot', {
 						context: { orderId },
 					});
+					setLoading(false);
+					void pollServerTruth();
+					return;
+				}
+				// A pre-hardening store's received page emits whenever the CONFIGURED
+				// gateway status is not pos-open — for an async gateway that can be
+				// before the provider confirms, with the order still unpaid. Don't
+				// complete on the message's say-so: leave the poll armed and let
+				// server truth decide.
+				if (UNPAID_ORDER_STATUSES.includes(payload.status)) {
+					orderLogger.warn(
+						'Payment received but the order is not paid; deferring to server truth',
+						{ context: { orderId, status: payload.status } }
+					);
 					setLoading(false);
 					void pollServerTruth();
 					return;
