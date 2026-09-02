@@ -142,7 +142,7 @@ env:
       # asserted text IS the referent (the exact string this loop just typed),
       # not localized UI copy — the selector policy's composite-string carve-out.
       - assertVisible:
-          text: ${INVALID_URL}
+          text: '${INVALID_URL.replace(/\./g, "\\.")}'
 # optional: hideKeyboard is unreliable on iOS (this file already says so at
 # the two Android-gated uses below, but this one was left ungated and failed
 # a local iOS suite run 2026-08-29 at exactly this step, having passed the
