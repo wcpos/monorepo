@@ -148,4 +148,20 @@ describe('useBridge', () => {
 			expect.objectContaining({ id: 'request-1', action: 'app.init' })
 		);
 	});
+
+	it('requires a new handshake after readiness is reset', async () => {
+		const handler = jest.fn(async () => ({ ok: true }));
+		const bridge = setup({ ...READY_HANDLER, 'test.action': handler });
+		await bridge.handshake();
+
+		act(() => bridge.result.current.reset());
+		expect(bridge.result.current.ready).toBe(false);
+
+		await act(async () => bridge.receive(envelope()));
+		expect(handler).not.toHaveBeenCalled();
+
+		await bridge.handshake();
+		await act(async () => bridge.receive(envelope()));
+		expect(handler).toHaveBeenCalledTimes(1);
+	});
 });

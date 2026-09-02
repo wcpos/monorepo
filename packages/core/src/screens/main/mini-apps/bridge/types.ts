@@ -36,7 +36,7 @@ type PlatformInfo = {
 	os: AppPlatform;
 	osVersion: string;
 	appVersion: string;
-	webview: 'wkwebview' | 'chromium';
+	webview: 'wkwebview' | 'chromium' | 'gecko' | 'webkit';
 };
 type StoreInfo = {
 	id: string | number;
@@ -46,6 +46,7 @@ type StoreInfo = {
 	timezone: string;
 };
 export type AppInitPayload = {
+	contract: '1.1';
 	locale: string;
 	theme: { scheme: string; accent: string };
 	platform: PlatformInfo;

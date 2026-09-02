@@ -15,6 +15,7 @@ import { type AppInitPayload, BridgeError, type BridgeHandlers } from './bridge/
 import { useHostCapabilities } from './capabilities/host';
 import { usePrinterCapabilities } from './capabilities/printers';
 import { meetsMinAppVersion, MINI_APP_ORIGIN, useMiniAppCatalog } from './catalog';
+import { detectWebEngine } from './detect-web-engine';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { useAppInfo } from '../../../hooks/use-app-info';
@@ -59,13 +60,19 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 	const availableHandlers = { ...printerHandlers, ...hostHandlers };
 	const granted = entry?.capabilities.filter((action) => action in availableHandlers) ?? [];
 	const initPayload: AppInitPayload = {
+		contract: '1.1',
 		locale: locale.code,
 		theme: { scheme: theme.toLowerCase().includes('dark') ? 'dark' : 'light', accent },
 		platform: {
 			os: appInfo.platform,
 			osVersion: String(RNPlatform.Version ?? appInfo.platformVersion),
 			appVersion: appInfo.appVersion,
-			webview: appInfo.platform === 'ios' ? 'wkwebview' : 'chromium',
+			webview:
+				appInfo.platform === 'ios'
+					? 'wkwebview'
+					: appInfo.platform === 'web'
+						? detectWebEngine(navigator.userAgent)
+						: 'chromium',
 		},
 		store: {
 			id: store.id ?? store.localID ?? '',
@@ -84,7 +91,7 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 			return initPayload;
 		},
 	};
-	const { onMessage, ready, send } = useBridge(webViewRef, origin, handlers);
+	const { onMessage, ready, reset, send } = useBridge(webViewRef, origin, handlers);
 	const [attempt, setAttempt] = React.useState(0);
 	const [failed, setFailed] = React.useState(false);
 	const loadTimerRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -97,9 +104,8 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 			if (!closingSentRef.current) send('app.closing', { reason: 'navigation' });
 		};
 	}, [send]);
-	// The fallback deadline is armed from mount, not from the load event: a navigation that
-	// never produces a load or an error must still reach the fallback, and a handshake that
-	// beats the load event must not be failed by a timer armed afterwards.
+	// Arm from mount so a navigation that never loads still falls back; resetting readiness
+	// after a later load re-arms this same deadline through the ready dependency.
 	React.useEffect(() => {
 		clearTimeout(loadTimerRef.current);
 		if (ready) return;
@@ -141,6 +147,9 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 				originWhitelist={[origin]}
 				className="flex-1"
 				onMessage={onMessage}
+				onLoad={() => {
+					if (ready) reset();
+				}}
 				// Only the catalog origin may load inside a bridged view; anything else is refused.
 				onShouldStartLoadWithRequest={(request: { url: string }) =>
 					request.url.startsWith(`${origin}/`)

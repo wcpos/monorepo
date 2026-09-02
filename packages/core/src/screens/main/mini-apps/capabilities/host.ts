@@ -11,6 +11,23 @@ const MAX_RESPONSE_LENGTH = 1024 * 1024;
 // The host owns authentication; a page may never set or override these.
 const BLOCKED_REQUEST_HEADERS = ['authorization', 'cookie', 'x-wcpos', 'host'];
 
+// Validated after percent-decoding, not by prefix alone: a page holding the proxy must not be
+// able to walk out of the allowed REST namespaces with dot segments or delimiters, encoded or not.
+function isAllowedRestPath(path: unknown): path is string {
+	if (typeof path !== 'string' || !path.startsWith('/')) return false;
+	let decoded: string;
+	try {
+		decoded = decodeURIComponent(path);
+	} catch {
+		return false;
+	}
+	const clean = (value: string) =>
+		!/[\\?#]/.test(value) &&
+		!value.includes('//') &&
+		!value.split('/').some((segment) => segment === '.' || segment === '..');
+	return clean(path) && clean(decoded) && ALLOWED_REST_PREFIXES.some((p) => decoded.startsWith(p));
+}
+
 function isHttpResponseError(
 	error: unknown
 ): error is { response: { status: number; headers?: Record<string, unknown>; data: unknown } } {
@@ -28,7 +45,7 @@ export function useHostCapabilities(onClose: (result: string) => void): BridgeHa
 		() => ({
 			'http.proxy': async (payload) => {
 				const { method, path, query, body, headers } = payload;
-				if (typeof path !== 'string' || !ALLOWED_REST_PREFIXES.some((p) => path.startsWith(p))) {
+				if (!isAllowedRestPath(path)) {
 					throw new BridgeError('bad_request', 'Path is not an allowed store REST endpoint');
 				}
 				const search = new URLSearchParams();
