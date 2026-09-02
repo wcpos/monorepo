@@ -1,9 +1,18 @@
 import { type APIRequestContext, expect, type Page } from '@playwright/test';
 
 import { LOADED_COUNT_READY, LOADED_COUNT_TEST_ID } from './catalogue-readiness';
-import { getStoreUrl, authenticatedTest as test } from './fixtures';
+import { authenticatedTest, getStoreUrl } from './fixtures';
 import { resolveProbeOptions } from './probe-credential';
-import { probeGet } from './search-probe';
+import {
+	createSearchProbe,
+	deleteSearchProbe,
+	mintSearchProbeToken,
+	probeGet,
+	productWriterAuthorization,
+	productWriterCredentialsConfigured,
+	searchAndWaitForServer,
+	type SearchProbe,
+} from './search-probe';
 import { unwrapWireBody } from './wire-envelope';
 
 /**
@@ -33,8 +42,47 @@ import { unwrapWireBody } from './wire-envelope';
  * counts, the negative control from whatever the grid happens to be rendering.
  */
 
-type WcCategory = { id: number; parent: number; name: string; count: number };
+type WcCategory = { id: number; parent: number; name: string; slug: string; count: number };
 type WcProduct = { id: number; name: string; type: string; categories?: { id: number }[] };
+
+const test = authenticatedTest.extend<{ ownedNonMember: SearchProbe | null }>({
+	ownedNonMember: async ({ posPage: _posPage, request }, provide, testInfo) => {
+		if (!productWriterCredentialsConfigured()) {
+			await provide(null);
+			return;
+		}
+
+		const storeUrl = getStoreUrl(testInfo);
+		const authorization = await productWriterAuthorization(request, storeUrl);
+		if (!authorization) {
+			throw new Error('Configured product-writer credentials did not produce authorization');
+		}
+		const token = mintSearchProbeToken(testInfo.workerIndex);
+		const created = await createSearchProbe({
+			request,
+			storeUrl,
+			authorization,
+			collection: 'products',
+			workerIndex: testInfo.workerIndex,
+			token,
+			writerConfigured: true,
+			productData: { categories: [] },
+		});
+		if (!created.ok) throw new Error(created.reason);
+
+		try {
+			await provide(created.probe);
+		} finally {
+			await deleteSearchProbe({
+				request,
+				storeUrl,
+				authorization,
+				collection: 'products',
+				id: created.probe.id,
+			});
+		}
+	},
+});
 
 /**
  * How many populated categories to probe for a member before giving up. Bounded only
@@ -157,10 +205,11 @@ async function chooseCategory(
 	const byCountDesc = (left: WcCategory, right: WcCategory) => right.count - left.count;
 	const leaves = populated.filter((category) => !childrenOf.has(category.id));
 	const parents = populated.filter((category) => childrenOf.has(category.id));
-	const candidates = [...leaves.sort(byCountDesc), ...parents.sort(byCountDesc)].slice(
-		0,
-		CATEGORY_PROBE_BUDGET
-	);
+	// Probe products from concurrent shards land in Uncategorized, then get edited or deleted
+	// mid-run. Never choose that slug (CI run 33614520678).
+	const candidates = [...leaves.sort(byCountDesc), ...parents.sort(byCountDesc)]
+		.filter((category) => category.slug !== 'uncategorized')
+		.slice(0, CATEGORY_PROBE_BUDGET);
 
 	for (const candidate of candidates) {
 		const products = await probeGet(request, storeUrl, 'products', {
@@ -289,6 +338,7 @@ test.describe('Product category filter', () => {
 		posPage: page,
 		request,
 		storeAuthorization,
+		ownedNonMember,
 	}, testInfo) => {
 		const storeUrl = getStoreUrl(testInfo);
 
@@ -310,7 +360,14 @@ test.describe('Product category filter', () => {
 		}
 		const { category, selectedIds, member } = chosen.choice;
 
-		const nonMember = await findNonMember(page, request, storeUrl, options, selectedIds);
+		const nonMember = ownedNonMember
+			? {
+					id: ownedNonMember.id,
+					name: `E2E Probe ${ownedNonMember.token}`,
+					type: 'simple',
+					categories: [],
+				}
+			: await findNonMember(page, request, storeUrl, options, selectedIds);
 		if (nonMember === null) {
 			test.skip(
 				true,
@@ -319,7 +376,21 @@ test.describe('Product category filter', () => {
 			return;
 		}
 		const nonMemberTile = page.getByTestId(tileTestId(nonMember));
-		await expect(nonMemberTile).toBeVisible();
+		// The owned non-member is found through search and the search stays active
+		// through the exclusion proof: a freshly created product has no claim to the
+		// unfiltered first page, and the filter must hide it even while the search
+		// matches it. The search is cleared after that proof, before the member proof.
+		const productSearch = page.getByTestId('search-products');
+		if (ownedNonMember) {
+			await searchAndWaitForServer(
+				page,
+				productSearch,
+				'products',
+				ownedNonMember.token,
+				nonMemberTile
+			);
+		}
+		await expect(nonMemberTile).toBeVisible({ timeout: 30_000 });
 
 		// The filtered window must reach the WIRE and come back OK — not just be
 		// dispatched, and not just re-slice the resident rows. That is the regression
@@ -391,6 +462,9 @@ test.describe('Product category filter', () => {
 		//    some attempts and at step 4 on others (runs 32738423956, 32738568493,
 		//    32738684283).
 		await expect(nonMemberTile).not.toBeVisible({ timeout: FILTERED_GRID_TIMEOUT_MS });
+		if (ownedNonMember) {
+			await productSearch.fill('');
+		}
 		// 3. The grid is not empty. The RENDERED-row count on its own, never the
 		//    "Showing X of Y" sentence, whose Y is the store-wide census and stays
 		//    non-zero over an empty grid (#1336, #1345). Still worth asserting: the
