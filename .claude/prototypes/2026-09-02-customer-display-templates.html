@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE — Customer display templates (wcpos/roadmap#131)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,500;9..144,700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+/* PROTOTYPE. Three variants of the customer display, switchable with the bottom bar or ←/→.
+   Each variant is a pure function render(state, snapshot) — the same contract the host page
+   will give real templates. Data is a hand-written order snapshot in receipt-data shape. */
+:root { --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --bg:#f8fafc; --accent:#0f766e; --accent-ink:#ffffff; --ok:#15803d; --bad:#b91c1c; }
+* { box-sizing:border-box; }
+html, body { margin:0; height:100%; font-family:Inter, system-ui, sans-serif; color:var(--ink); background:#111; }
+#stage { position:fixed; inset:0; overflow:hidden; }
+.screen { position:absolute; inset:0; }
+.money { font-variant-numeric: tabular-nums; }
+
+/* ---------- Variant A — Ledger (two columns: itemised list + totals panel) ---------- */
+.A { display:grid; grid-template-columns: 1fr 380px; background:var(--bg); }
+.A .list { padding:40px 48px; overflow:auto; }
+.A .list h1 { font-size:14px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin:0 0 20px; font-weight:600; }
+.A .row { display:grid; grid-template-columns: 56px 1fr auto; gap:16px; padding:16px 0; border-bottom:1px solid var(--line); font-size:22px; align-items:baseline; }
+.A .row .qty { color:var(--muted); font-weight:500; }
+.A .row .name { font-weight:600; }
+.A .row .meta { display:block; font-size:15px; color:var(--muted); font-weight:400; margin-top:4px; }
+.A .row .price { font-weight:600; }
+.A .row.new { animation: flash 1.2s ease-out; }
+@keyframes flash { from { background:#ccfbf1; } to { background:transparent; } }
+.A .panel { background:#fff; border-left:1px solid var(--line); padding:40px 36px; display:flex; flex-direction:column; }
+.A .panel .store { font-weight:700; font-size:18px; }
+.A .panel .greet { color:var(--muted); font-size:15px; margin-top:4px; }
+.A .totals { margin-top:auto; }
+.A .totals .t { display:flex; justify-content:space-between; padding:8px 0; font-size:18px; color:var(--muted); }
+.A .totals .t.grand { border-top:2px solid var(--ink); margin-top:12px; padding-top:16px; color:var(--ink); font-size:40px; font-weight:800; align-items:baseline; }
+.A .totals .t.grand span:first-child { font-size:16px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; }
+.A .saved { background:#ecfdf5; color:var(--ok); border-radius:8px; padding:10px 12px; font-weight:600; margin-top:14px; font-size:15px; }
+.A .empty { display:flex; align-items:center; justify-content:center; height:100%; color:var(--muted); font-size:22px; }
+.A .idle { grid-column:1/-1; background:var(--ink); color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:28px; }
+.A .idle .logo { width:88px; height:88px; border-radius:22px; background:var(--accent); display:grid; place-items:center; font-weight:800; font-size:34px; }
+.A .idle .msg { font-size:44px; font-weight:700; letter-spacing:-.02em; text-align:center; }
+.A .idle .sub { font-size:20px; color:#94a3b8; }
+.A .pay { display:flex; flex-direction:column; gap:16px; margin-top:auto; }
+.A .pay .card { border-radius:14px; padding:22px; background:var(--accent); color:var(--accent-ink); }
+.A .pay .card.ok { background:var(--ok); } .A .pay .card.bad { background:var(--bad); }
+.A .pay .card .k { font-size:13px; letter-spacing:.12em; text-transform:uppercase; opacity:.85; }
+.A .pay .card .v { font-size:30px; font-weight:800; margin-top:6px; }
+.A .ledger .t.paid { color:var(--ok); }
+
+/* ---------- Variant B — Stage (hero of the last item, running total footer) ---------- */
+.B { background:#0b1020; color:#fff; display:flex; flex-direction:column; font-family:Fraunces, Georgia, serif; }
+.B .hero { flex:1; display:flex; flex-direction:column; justify-content:center; padding:0 9vw; }
+.B .hero .label { font-family:Inter; font-size:15px; letter-spacing:.18em; text-transform:uppercase; color:#8b93b8; margin-bottom:18px; }
+.B .hero .name { font-size:clamp(48px, 8vw, 110px); line-height:.95; font-weight:700; letter-spacing:-.02em; }
+.B .hero .price { font-family:Inter; font-size:clamp(32px, 4.5vw, 64px); font-weight:600; margin-top:24px; color:#c7d2fe; }
+.B .hero .meta { font-family:Inter; font-size:20px; color:#8b93b8; margin-top:12px; }
+.B .ticker { font-family:Inter; display:flex; gap:28px; padding:0 9vw 28px; color:#8b93b8; font-size:16px; overflow:hidden; white-space:nowrap; }
+.B .ticker b { color:#fff; font-weight:500; }
+.B .foot { font-family:Inter; display:flex; align-items:center; justify-content:space-between; padding:26px 9vw; background:#fff; color:var(--ink); }
+.B .foot .k { font-size:14px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+.B .foot .v { font-size:56px; font-weight:800; letter-spacing:-.02em; line-height:1; }
+.B .foot .right { text-align:right; color:var(--muted); font-size:16px; }
+.B .idle { flex:1; position:relative; overflow:hidden; }
+.B .idle .slide { position:absolute; inset:0; display:flex; flex-direction:column; justify-content:flex-end; padding:8vw 9vw; background:linear-gradient(160deg,#1e1b4b,#0b1020 60%); }
+.B .idle .slide .tag { font-family:Inter; font-size:15px; letter-spacing:.18em; text-transform:uppercase; color:#a5b4fc; }
+.B .idle .slide h2 { font-size:clamp(44px, 7vw, 96px); line-height:1; margin:14px 0 0; font-weight:700; letter-spacing:-.02em; }
+.B .idle .slide p { font-family:Inter; font-size:22px; color:#c7d2fe; max-width:38ch; }
+.B .idle .dots { position:absolute; right:9vw; top:28px; display:flex; gap:8px; }
+.B .idle .dots i { width:26px; height:4px; border-radius:2px; background:#3b4270; } .B .idle .dots i.on { background:#a5b4fc; }
+.B .pay { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:18px; padding:0 9vw; }
+.B .pay .big { font-family:Inter; font-size:clamp(40px, 6vw, 80px); font-weight:800; letter-spacing:-.02em; }
+.B .pay .sub { font-family:Inter; font-size:22px; color:#c7d2fe; }
+.B .pay .ring { width:120px; height:120px; border-radius:50%; border:6px solid #4f46e5; border-top-color:#c7d2fe; animation:spin 1.2s linear infinite; }
+.B .pay .tick { width:120px; height:120px; border-radius:50%; background:var(--ok); display:grid; place-items:center; font-size:64px; }
+.B .pay .cross { width:120px; height:120px; border-radius:50%; background:var(--bad); display:grid; place-items:center; font-size:64px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* ---------- Variant C — Strip (short, wide second screen: total left, ticker right, promo bar) ---------- */
+.C { background:#fff; display:grid; grid-template-rows: 1fr auto; }
+.C .main { display:grid; grid-template-columns: 34% 1fr; }
+.C .total { background:var(--ink); color:#fff; padding:5vh 4vw; display:flex; flex-direction:column; justify-content:center; }
+.C .total .k { font-size:14px; letter-spacing:.16em; text-transform:uppercase; color:#94a3b8; }
+.C .total .v { font-size:clamp(48px, 9vw, 120px); font-weight:800; letter-spacing:-.03em; line-height:1; margin-top:12px; }
+.C .total .n { margin-top:16px; color:#94a3b8; font-size:18px; }
+.C .items { padding:4vh 3vw; display:flex; flex-direction:column; justify-content:center; gap:10px; overflow:hidden; }
+.C .item { display:flex; justify-content:space-between; font-size:24px; padding:10px 0; border-bottom:1px dashed var(--line); }
+.C .item.last { font-weight:700; }
+.C .item .m { color:var(--muted); font-weight:400; font-size:16px; margin-left:10px; }
+.C .item .more { color:var(--muted); font-size:16px; }
+.C .promo { background:var(--accent); color:#fff; padding:18px 4vw; font-size:20px; font-weight:600; display:flex; justify-content:space-between; align-items:center; }
+.C .promo small { font-weight:400; opacity:.85; }
+.C .idle { grid-row:1/-1; display:grid; grid-template-columns: 1fr 1fr; }
+.C .idle .brand { background:var(--ink); color:#fff; display:flex; flex-direction:column; justify-content:center; padding:5vh 4vw; gap:12px; }
+.C .idle .brand h2 { font-size:clamp(36px,5vw,64px); margin:0; font-weight:800; letter-spacing:-.02em; }
+.C .idle .brand p { color:#94a3b8; font-size:20px; margin:0; }
+.C .idle .img { background:linear-gradient(135deg,#99f6e4,#0f766e); display:grid; place-items:center; color:#fff; font-size:22px; font-weight:600; }
+.C .pay { grid-row:1/-1; display:grid; place-items:center; text-align:center; }
+.C .pay .box { max-width:70%; }
+.C .pay .big { font-size:clamp(40px,7vw,96px); font-weight:800; letter-spacing:-.02em; line-height:1; }
+.C .pay .sub { font-size:22px; color:var(--muted); margin-top:14px; }
+.C .pay.ok .big { color:var(--ok); } .C .pay.bad .big { color:var(--bad); }
+
+/* ---------- Prototype chrome (not part of the design) ---------- */
+#bar { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:10; display:flex; align-items:center; gap:10px; background:#111; color:#fff; border-radius:999px; padding:8px 12px; box-shadow:0 10px 30px rgba(0,0,0,.45); font:13px/1 Inter, system-ui; border:1px solid #333; }
+#bar button { background:#222; color:#fff; border:1px solid #444; border-radius:999px; padding:7px 11px; cursor:pointer; font:inherit; }
+#bar button.on { background:#fff; color:#111; border-color:#fff; }
+#bar .lbl { padding:0 6px; font-weight:600; min-width:150px; text-align:center; }
+#bar .sep { width:1px; height:20px; background:#444; }
+#note { position:fixed; top:14px; left:14px; z-index:10; background:rgba(17,17,17,.85); color:#ddd; font:12px/1.4 Inter; padding:8px 10px; border-radius:8px; max-width:420px; }
+</style>
+</head>
+<body>
+<div id="note"><b>PROTOTYPE</b> · Three display templates × seven states. Data is a fake order snapshot in receipt-data shape; each template is a pure render of (state, snapshot). Not production.</div>
+<div id="stage"></div>
+<div id="bar">
+  <button id="prev">←</button><span class="lbl" id="lbl"></span><button id="next">→</button>
+  <span class="sep"></span>
+  <span id="states"></span>
+</div>
+<script>
+// ------------------------------------------------------------------ data (receipt-data shape)
+const snapshot = {
+  store: { name: 'Northside Records', address: '12 Lygon St', phone: '', email: '' },
+  customer: { name: 'Priya', email: '', phone: '', billing_address: '' },
+  order: { id: 1187, number: '1187', currency: 'AUD' },
+  lines: [
+    { name: 'Miles Davis — Kind of Blue (LP)', quantity: 1, price: 49.95, total: '49.95', line_total: '$49.95', sku: 'LP-0021', meta: [{ key: 'Pressing', value: '180g' }] },
+    { name: 'Record cleaning kit', quantity: 2, price: 18.00, total: '36.00', line_total: '$36.00', sku: 'ACC-114', meta: [] },
+    { name: 'Tote bag', quantity: 1, price: 12.00, total: '12.00', line_total: '$12.00', sku: 'MERCH-2', meta: [{ key: 'Colour', value: 'Black' }] },
+  ],
+  totals: { subtotal: '$97.95', discount_total: '$5.00', tax_total: '$8.45', total: '$92.95', total_raw: 92.95, total_qty: 4, line_count: 3, total_saved: '$5.00' },
+  adjustments: [{ label: 'Loyalty discount', total: '-$5.00' }],
+  // Ledger per the payments map: N payments per order; a split tender in flight.
+  ledger: { payments: [{ method: 'Cash', amount: '$50.00', status: 'complete' }], due: '$42.95', due_raw: 42.95, tendered: '$50.00', change: '$0.00' },
+  promo: { tag: 'This week', title: '20% off all jazz reissues', body: 'Ask at the counter — ends Sunday.' },
+  slides: [ { tag: 'New in', title: 'Autumn arrivals', body: 'Fresh pressings from Blue Note and ECM.' }, { tag: 'This week', title: '20% off all jazz reissues', body: 'Ends Sunday.' } ],
+};
+
+const STATES = [
+  ['idle', 'Idle'], ['cart.empty', 'Empty cart'], ['cart', 'Cart'],
+  ['payment.started', 'Pay: started'], ['payment.approved', 'Pay: approved'], ['payment.declined', 'Pay: declined'], ['payment.complete', 'Complete'],
+];
+
+const payLabel = {
+  'payment.started': { k: 'Card · present now', v: s => s.ledger.due, sub: s => `${s.ledger.payments[0].amount} paid in cash · ${s.ledger.due} on card` },
+  'payment.approved': { k: 'Approved', v: s => s.ledger.due, sub: () => 'Thank you — printing your receipt' },
+  'payment.declined': { k: 'Declined', v: s => s.ledger.due, sub: () => 'Please try another card or ask staff' },
+  'payment.complete': { k: 'Paid in full', v: s => s.totals.total, sub: s => `Thanks, ${s.customer.name}. See you again soon.` },
+};
+
+// ------------------------------------------------------------------ Variant A — Ledger
+function A(state, s) {
+  const lines = s.lines.map((l, i) => `<div class="row ${i === s.lines.length - 1 ? 'new' : ''}">
+      <span class="qty money">${l.quantity} ×</span>
+      <span class="name">${l.name}${l.meta.map(m => `<span class="meta">${m.key}: ${m.value}</span>`).join('')}</span>
+      <span class="price money">${l.line_total}</span></div>`).join('');
+  const panelHead = `<div class="store">${s.store.name}</div><div class="greet">${s.customer.name ? `Hi ${s.customer.name}` : 'Welcome'}</div>`;
+  const totals = `<div class="totals">
+      <div class="t"><span>Subtotal</span><span class="money">${s.totals.subtotal}</span></div>
+      ${s.adjustments.map(a => `<div class="t"><span>${a.label}</span><span class="money">${a.total}</span></div>`).join('')}
+      <div class="t"><span>GST included</span><span class="money">${s.totals.tax_total}</span></div>
+      <div class="t grand"><span>Total</span><span class="money">${s.totals.total}</span></div>
+      ${s.totals.total_saved ? `<div class="saved">You saved ${s.totals.total_saved} today</div>` : ''}</div>`;
+  if (state === 'idle') return `<div class="screen A"><div class="idle"><div class="logo">N</div><div class="msg">${s.promo.title}</div><div class="sub">${s.promo.body}</div></div></div>`;
+  if (state === 'cart.empty') return `<div class="screen A"><div class="list"><div class="empty">Your items will appear here</div></div><div class="panel">${panelHead}</div></div>`;
+  if (state === 'cart') return `<div class="screen A"><div class="list"><h1>${s.totals.line_count} items</h1>${lines}</div><div class="panel">${panelHead}${totals}</div></div>`;
+  const p = payLabel[state]; const cls = state === 'payment.approved' || state === 'payment.complete' ? 'ok' : state === 'payment.declined' ? 'bad' : '';
+  return `<div class="screen A"><div class="list"><h1>${s.totals.line_count} items</h1>${lines}</div><div class="panel">${panelHead}
+      <div class="pay"><div class="ledger">
+        <div class="t"><span>Total</span><span class="money">${s.totals.total}</span></div>
+        ${state !== 'payment.complete' ? `<div class="t paid"><span>Cash paid</span><span class="money">${s.ledger.payments[0].amount}</span></div>` : ''}
+      </div><div class="card ${cls}"><div class="k">${p.k}</div><div class="v money">${p.v(s)}</div><div style="margin-top:8px;opacity:.9">${p.sub(s)}</div></div></div></div></div>`;
+}
+A.title = 'Ledger — itemised list + totals panel';
+
+// ------------------------------------------------------------------ Variant B — Stage
+function B(state, s) {
+  const last = s.lines[s.lines.length - 1];
+  const foot = `<div class="foot"><div><div class="k">Total so far</div><div class="v money">${s.totals.total}</div></div><div class="right">${s.totals.total_qty} items<br>${s.customer.name ? `for ${s.customer.name}` : ''}</div></div>`;
+  if (state === 'idle') return `<div class="screen B"><div class="idle"><div class="dots"><i class="on"></i><i></i></div><div class="slide"><div class="tag">${s.slides[0].tag}</div><h2>${s.slides[0].title}</h2><p>${s.slides[0].body}</p></div></div></div>`;
+  if (state === 'cart.empty') return `<div class="screen B"><div class="hero"><div class="label">${s.store.name}</div><div class="name">Welcome${s.customer.name ? ', ' + s.customer.name : ''}.</div><div class="meta">Your items will show here as they're scanned.</div></div></div>`;
+  if (state === 'cart') return `<div class="screen B"><div class="hero"><div class="label">Just added</div><div class="name">${last.name}</div><div class="price money">${last.line_total}${last.quantity > 1 ? ` <span style="font-size:.5em;color:#8b93b8">${last.quantity} × $${last.price.toFixed(2)}</span>` : ''}</div>${last.meta.length ? `<div class="meta">${last.meta.map(m => `${m.key}: ${m.value}`).join(' · ')}</div>` : ''}</div>
+      <div class="ticker">${s.lines.slice(0, -1).map(l => `<span>${l.quantity} × <b>${l.name}</b> ${l.line_total}</span>`).join('')}</div>${foot}</div>`;
+  const p = payLabel[state];
+  const icon = state === 'payment.started' ? '<div class="ring"></div>' : state === 'payment.declined' ? '<div class="cross">✕</div>' : '<div class="tick">✓</div>';
+  return `<div class="screen B"><div class="pay">${icon}<div class="big money">${p.v(s)}</div><div class="sub">${p.k} — ${p.sub(s)}</div></div>${foot}</div>`;
+}
+B.title = 'Stage — hero of the last item, running total';
+
+// ------------------------------------------------------------------ Variant C — Strip
+function C(state, s) {
+  const promo = `<div class="promo"><span>${s.promo.title}</span><small>${s.promo.body}</small></div>`;
+  if (state === 'idle') return `<div class="screen C"><div class="idle"><div class="brand"><h2>${s.store.name}</h2><p>${s.promo.title}</p></div><div class="img">slideshow image</div></div></div>`;
+  if (state === 'cart.empty') return `<div class="screen C"><div class="main"><div class="total"><div class="k">Total</div><div class="v money">$0.00</div><div class="n">${s.customer.name ? `Hi ${s.customer.name}` : 'Welcome'}</div></div><div class="items"><div class="item"><span style="color:var(--muted)">Scanning…</span></div></div></div>${promo}</div>`;
+  if (state === 'cart') { const show = s.lines.slice(-3).reverse(); return `<div class="screen C"><div class="main"><div class="total"><div class="k">Total</div><div class="v money">${s.totals.total}</div><div class="n">${s.totals.total_qty} items · saved ${s.totals.total_saved}</div></div><div class="items">${show.map((l, i) => `<div class="item ${i === 0 ? 'last' : ''}"><span>${l.name}<span class="m">${l.quantity > 1 ? l.quantity + ' ×' : ''}</span></span><span class="money">${l.line_total}</span></div>`).join('')}${s.lines.length > 3 ? `<div class="item"><span class="more">+ ${s.lines.length - 3} more</span></div>` : ''}</div></div>${promo}</div>`; }
+  const p = payLabel[state]; const cls = state === 'payment.approved' || state === 'payment.complete' ? 'ok' : state === 'payment.declined' ? 'bad' : '';
+  return `<div class="screen C"><div class="pay ${cls}"><div class="box"><div class="big money">${p.v(s)}</div><div class="sub"><b>${p.k}</b> · ${p.sub(s)}</div></div></div></div>`;
+}
+C.title = 'Strip — short wide screen: total, last items, promo bar';
+
+// ------------------------------------------------------------------ chrome
+const VARIANTS = { A, B, C };
+const keys = Object.keys(VARIANTS);
+const q = new URLSearchParams(location.hash.slice(1));
+let variant = keys.includes(q.get('variant')) ? q.get('variant') : 'A';
+let state = STATES.some(([k]) => k === q.get('state')) ? q.get('state') : 'cart';
+function render() {
+  document.getElementById('stage').innerHTML = VARIANTS[variant](state, snapshot);
+  document.getElementById('lbl').textContent = `${variant} — ${VARIANTS[variant].title}`;
+  document.getElementById('states').innerHTML = STATES.map(([k, l]) => `<button data-s="${k}" class="${k === state ? 'on' : ''}">${l}</button>`).join('');
+  location.hash = `variant=${variant}&state=${state}`;
+}
+document.getElementById('prev').onclick = () => { variant = keys[(keys.indexOf(variant) + keys.length - 1) % keys.length]; render(); };
+document.getElementById('next').onclick = () => { variant = keys[(keys.indexOf(variant) + 1) % keys.length]; render(); };
+document.getElementById('states').onclick = e => { const b = e.target.closest('button'); if (b) { state = b.dataset.s; render(); } };
+window.addEventListener('keydown', e => { if (e.key === 'ArrowLeft') document.getElementById('prev').click(); if (e.key === 'ArrowRight') document.getElementById('next').click(); });
+render();
+</script>
+</body>
+</html>
