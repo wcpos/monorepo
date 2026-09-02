@@ -34,6 +34,8 @@ export const useUILabel = () => {
 					meta_data: t('common.meta_data'),
 					metaDataKeys: t('common.meta_data_keys'),
 					viewMode: t('common.view_mode'),
+					position: t('common.panel_position'),
+					quickFilters: t('common.quick_filters'),
 					sortBy: t('common.sort_by'),
 					sortDirection: t('common.sort_direction'),
 					gridColumns: t('common.tile_size'),

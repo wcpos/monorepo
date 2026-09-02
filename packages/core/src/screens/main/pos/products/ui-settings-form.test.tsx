@@ -14,6 +14,8 @@ import type { ControllerProps, FieldValues } from 'react-hook-form';
 
 type Settings = {
 	viewMode: 'grid' | 'table';
+	position: 'left' | 'right';
+	quickFilters: { id: string; label: string; kind: string; value: string }[];
 	showOutOfStock: boolean;
 	sortBy: string;
 	sortDirection: 'asc' | 'desc';
@@ -25,6 +27,8 @@ type Settings = {
 
 const initialSettings: Settings = {
 	viewMode: 'table',
+	position: 'left',
+	quickFilters: [],
 	showOutOfStock: false,
 	sortBy: 'name',
 	sortDirection: 'asc',
@@ -47,6 +51,9 @@ const initialSettings: Settings = {
 const settings$ = new BehaviorSubject<Settings>(initialSettings);
 const mockUISettings = { $: settings$, get: () => settings$.getValue() };
 const patchSpy = jest.fn();
+
+// uuid ships ESM only; the house pattern is to stub it per suite.
+jest.mock('uuid', () => ({ v4: () => 'quick-filter-id' }));
 
 jest.mock('@wcpos/components/form', () => {
 	const { Controller, FormProvider } = jest.requireActual('react-hook-form');
@@ -103,12 +110,12 @@ jest.mock('@wcpos/components/select', () => {
 	function PassThrough({ children }: React.PropsWithChildren) {
 		return <>{children}</>;
 	}
-	function SelectItem({ value, label }: SelectOption) {
+	function SelectItem({ value, label, testID }: SelectOption & { testID?: string }) {
 		const onValueChange = React.useContext(SelectCtx);
 		return (
 			<button
 				type="button"
-				data-testid={`option-${value}`}
+				data-testid={testID ?? `option-${value}`}
 				onClick={() => onValueChange({ value, label })}
 			>
 				{label}
@@ -147,6 +154,49 @@ jest.mock('@wcpos/components/toggle-group', () => {
 		);
 	}
 	return { ToggleGroup, ToggleGroupItem };
+});
+
+jest.mock('@wcpos/components/button', () => {
+	function Button({
+		children,
+		onPress,
+		disabled,
+		testID,
+	}: React.PropsWithChildren<{ onPress?: () => void; disabled?: boolean; testID?: string }>) {
+		return (
+			<button type="button" data-testid={testID} disabled={disabled} onClick={onPress}>
+				{children}
+			</button>
+		);
+	}
+	function ButtonText({ children }: React.PropsWithChildren) {
+		return <span>{children}</span>;
+	}
+	return { Button, ButtonText };
+});
+
+jest.mock('@wcpos/components/input', () => {
+	function Input({
+		value,
+		onChangeText,
+		editable = true,
+		testID,
+	}: {
+		value: string;
+		onChangeText: (value: string) => void;
+		editable?: boolean;
+		testID?: string;
+	}) {
+		return (
+			<input
+				data-testid={testID}
+				value={value}
+				disabled={!editable}
+				onChange={(e) => onChangeText(e.target.value)}
+			/>
+		);
+	}
+	return { Input };
 });
 
 jest.mock('@wcpos/components/slider', () => {
@@ -266,5 +316,43 @@ it('persists a Sort Direction toggle', async () => {
 	});
 
 	expect(patchSpy).toHaveBeenCalledWith({ sortDirection: 'desc' });
+	await settle();
+});
+
+it('persists a Panel Position toggle', async () => {
+	render(<UISettingsForm />);
+
+	fireEvent.click(screen.getByTestId('panel-position-right'));
+	act(() => {
+		jest.advanceTimersByTime(1000);
+	});
+
+	expect(patchSpy).toHaveBeenCalledWith({ position: 'right' });
+	await settle();
+});
+
+it('persists an added quick filter and its removal', async () => {
+	render(<UISettingsForm />);
+
+	fireEvent.click(screen.getByTestId('quick-filter-kind-on_sale'));
+	fireEvent.change(screen.getByTestId('quick-filter-label'), { target: { value: 'On sale' } });
+	fireEvent.click(screen.getByTestId('quick-filter-add'));
+	act(() => {
+		jest.advanceTimersByTime(1000);
+	});
+
+	expect(patchSpy).toHaveBeenCalledWith({
+		quickFilters: [expect.objectContaining({ kind: 'on_sale', label: 'On sale', value: '' })],
+	});
+	await settle();
+
+	// The id is minted on add, so the remove control is addressed by its testID prefix.
+	patchSpy.mockClear();
+	fireEvent.click(screen.getByTestId(/^quick-filter-remove-/));
+	act(() => {
+		jest.advanceTimersByTime(1000);
+	});
+
+	expect(patchSpy).toHaveBeenCalledWith({ quickFilters: [] });
 	await settle();
 });

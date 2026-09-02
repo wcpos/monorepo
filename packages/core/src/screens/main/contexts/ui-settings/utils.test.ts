@@ -171,4 +171,49 @@ describe('mergeWithInitalValues', () => {
 			disableSort: true,
 		});
 	});
+
+	it('seeds quickFilters on a pos-products state written before the setting existed', async () => {
+		const currentState: Record<string, unknown> = { position: 'left', viewMode: 'grid' };
+
+		const state = {
+			get: () => currentState,
+			set: jest.fn(async (key: string, updater: (value: unknown) => unknown) => {
+				currentState[key] = updater(currentState[key]);
+			}),
+		};
+
+		await mergeWithInitalValues('pos-products', state as never);
+
+		expect(currentState.quickFilters).toEqual([]);
+	});
+
+	it('resets a position outside the enum vocabulary to the authored default', async () => {
+		const currentState: Record<string, unknown> = { position: 'top', quickFilters: [] };
+
+		const state = {
+			get: () => currentState,
+			set: jest.fn(async (key: string, updater: (value: unknown) => unknown) => {
+				currentState[key] = updater(currentState[key]);
+			}),
+		};
+
+		await mergeWithInitalValues('pos-products', state as never);
+
+		expect(currentState.position).toBe('left');
+	});
+
+	it('keeps a position the cashier actually chose', async () => {
+		const currentState: Record<string, unknown> = { position: 'right', quickFilters: [] };
+
+		const state = {
+			get: () => currentState,
+			set: jest.fn(async (key: string, updater: (value: unknown) => unknown) => {
+				currentState[key] = updater(currentState[key]);
+			}),
+		};
+
+		await mergeWithInitalValues('pos-products', state as never);
+
+		expect(currentState.position).toBe('right');
+	});
 });
