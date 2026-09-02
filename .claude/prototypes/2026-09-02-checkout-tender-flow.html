@@ -73,6 +73,9 @@ body.open #scrim { opacity:1; pointer-events:auto; } body.open #modal { transfor
 .cancel { padding:24px; text-align:center; }
 .cancel .list { text-align:left; margin:16px 0; }
 
+.split { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.split button { padding:8px 12px; border:1px solid var(--line); background:#fff; border-radius:999px; font-weight:600; font-size:13px; }
+.split button.linkish { border:0; background:transparent; color:var(--accent); text-decoration:underline; padding:4px 0; }
 /* Variant A — Tiles: balance header, tile grid, keypad slides under the tapped tile */
 .A .body { padding:24px; display:grid; gap:20px; }
 .A .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px; }
@@ -140,7 +143,7 @@ const LEGACY = [ { id:'paypal', title:'PayPal', hint:'Opens the order-pay page' 
 const fmt = n => '$' + n.toFixed(2);
 
 // ------------------------------------------------------------- shared tender state machine
-let S; function reset() { S = { legs:[], view:'select', tab:'grid', current:null, entry:'', offline:false, receiptShown:false }; }
+let S; function reset() { S = { legs:[], view:'select', tab:'grid', current:null, entry:'', offline:false, receiptShown:false, splitShare:null, splitMenu:false }; }
 reset();
 const paid = () => S.legs.filter(l => ['captured','authorized'].includes(l.status)).reduce((a,l)=>a+l.amount,0);
 const balance = () => Math.max(0, +(ORDER.total - paid()).toFixed(2));
@@ -149,7 +152,8 @@ function pick(m) {
   if (m.undrivable) return;
   if (S.offline && m.offline === 'none') return;
   S.current = { method:m, amount:balance(), tendered:null };
-  S.entry = balance().toFixed(2);
+  S.entry = (S.splitShare ? Math.min(S.splitShare, balance()) : balance()).toFixed(2);
+  S.splitShare = null; S.splitMenu = false;
   S.view = m.capture.mode === 'stored_value' ? 'gift' : 'amount';
   render();
 }
@@ -185,6 +189,7 @@ function close() { document.body.classList.remove('open'); }
 
 // ------------------------------------------------------------- shared fragments
 const legsHtml = (opts={}) => S.legs.length ? `<div class="legs">${S.legs.map(l => `<div class="leg"><span class="n">${l.method.title}${l.tendered ? ` <span class="note">· tendered ${fmt(l.tendered)}, change ${fmt(l.change)}</span>` : ''}${l.offline ? ' <span class="note">· offline</span>' : ''}</span><span class="money">${fmt(l.amount)}</span><span class="s ${l.status}">${l.status}</span></div>`).join('')}</div>` : (opts.empty ? `<div class="note">${opts.empty}</div>` : '');
+const splitHtml = () => balance() > 0 ? `<div class="split">${S.splitMenu ? `<span class="note">Split the ${fmt(balance())} balance:</span>${[2,3,4].map(n=>`<button data-split="${n}">${n} ways · ${fmt(+(balance()/n).toFixed(2))} each</button>`).join('')}<button data-split="custom">Custom amount</button><button data-split="x">✕</button>` : `<button data-splitmenu class="linkish">Split payment</button>${S.splitShare ? `<span class="note">next payment: ${fmt(S.splitShare)}</span>` : ''}`}</div>` : '';
 const balanceHtml = () => `<div class="balance"><span class="k">${paid() > 0 ? 'Remaining' : 'Total'}</span><span class="v money">${fmt(balance())}</span>${paid() > 0 ? `<span class="note">${fmt(paid())} of ${fmt(ORDER.total)} paid</span>` : ''}</div>`;
 const tilesHtml = (cls='') => METHODS.map(m => {
   const offlineBlocked = S.offline && m.offline === 'none';
@@ -214,7 +219,7 @@ function A() { // Tiles
   if (S.tab === 'legacy') body = legacyHtml();
   else if (S.view === 'receipt') body = receiptHtml();
   else if (S.view === 'cancel') body = cancelHtml();
-  else if (S.view === 'select') body = `${balanceHtml()}${legsHtml()}<div class="grid">${tilesHtml()}</div>${S.legs.length ? '' : '<div class="note">Tap a payment type. Take part of the total to split.</div>'}`;
+  else if (S.view === 'select') body = `${balanceHtml()}${splitHtml()}${legsHtml()}<div class="grid">${tilesHtml()}</div>${S.legs.length ? '' : '<div class="note">Tap a payment type. Take part of the total to split.</div>'}`;
   else body = `${balanceHtml()}<div class="entry"><div><div class="k note" style="margin-bottom:8px">${S.current.method.title}</div>${S.view==='reader'?readerHtml():S.view==='gift'?giftHtml():padHtml()}</div><div>${legsHtml({empty:'No payments yet'})}</div></div>`;
   return `<div class="A" style="display:contents">${headerHtml('Checkout · Priya')}<div class="body">${body}</div></div>`;
 }
@@ -222,7 +227,7 @@ A.title = 'Tiles — balance, grid, keypad under the tapped tile';
 
 function B() { // Two-pane
   const right = S.tab === 'legacy' ? legacyHtml() : S.view === 'receipt' ? receiptHtml() : S.view === 'cancel' ? cancelHtml()
-    : `<div class="grid">${tilesHtml(S.current ? '' : '')}</div>${S.current ? `<div>${S.view==='reader'?readerHtml():S.view==='gift'?giftHtml():padHtml()}</div>` : '<div class="note">Choose a payment type. Every payment you take is added to the list on the left until the balance is zero.</div>'}`;
+    : `${S.current ? '' : splitHtml()}<div class="grid">${tilesHtml()}</div>${S.current ? `<div>${S.view==='reader'?readerHtml():S.view==='gift'?giftHtml():padHtml()}</div>` : `<div class="note">${S.splitShare ? 'Now choose how the customer pays the first ' + fmt(S.splitShare) + '.' : 'Choose a payment type. Take less than the balance to split; every payment is added to the list on the left until the balance is zero.'}</div>`}`;
   const liveLegs = S.legs.length;
   return `<div class="B" style="display:contents">${headerHtml('Checkout')}<div class="body"><div class="left"><details open><summary>${balanceHtml()}<span class="collapsehint note">${liveLegs ? liveLegs + ' payment' + (liveLegs>1?'s':'') + ' ▾' : 'Priya · #1187'}</span></summary><div class="note" style="margin-top:8px">Priya · order #1187</div>${ORDER.lines.map(([n,q,t])=>`<div class="line" style="display:flex;justify-content:space-between;font-size:14px"><span>${q} × ${n}</span><span class="money">${fmt(t)}</span></div>`).join('')}<div class="ordertotal" style="display:flex;justify-content:space-between;font-weight:800;font-size:20px;border-top:2px solid var(--ink);padding-top:10px"><span>Total</span><span class="money">${fmt(ORDER.total)}</span></div>${legsHtml({empty:'No payments yet'})}</details></div><div class="right">${right}</div></div></div>`;
 }
@@ -232,7 +237,7 @@ function C() { // Steps
   const step = S.tab==='legacy' ? 0 : S.view==='receipt' ? 3 : S.view==='select' ? 1 : 2;
   const rail = `<div class="rail">${balanceHtml()}${[['1','Choose payment'],['2','Amount & confirm'],['3','Receipt']].map(([n,t],i)=>`<div class="step ${step===i+1?'on':''} ${step>i+1?'done':''}"><i>${step>i+1?'✓':n}</i>${t}</div>`).join('')}<div style="margin-top:auto">${legsHtml()}</div></div>`;
   const stage = S.tab==='legacy' ? legacyHtml() : S.view==='receipt' ? receiptHtml() : S.view==='cancel' ? cancelHtml()
-    : S.view==='select' ? `<h3 style="margin:0">${S.legs.length ? 'Choose the next payment' : 'How is the customer paying?'}</h3><div class="grid">${tilesHtml()}</div>`
+    : S.view==='select' ? `<h3 style="margin:0">${S.legs.length ? 'Choose the next payment' : 'How is the customer paying?'}</h3>${splitHtml()}<div class="grid">${tilesHtml()}</div>`
     : `<h3 style="margin:0">${S.current.method.title}</h3><div style="max-width:420px">${S.view==='reader'?readerHtml():S.view==='gift'?giftHtml():padHtml()}</div>`;
   return `<div class="C" style="display:contents">${headerHtml('Checkout')}<div class="body">${rail}<div class="stage">${stage}</div></div></div>`;
 }
@@ -261,6 +266,8 @@ document.getElementById('modal').addEventListener('click', e => {
   if (b.dataset.sim) return readerResult(b.dataset.sim === '1');
   if (b.dataset.gift) return giftApply(+b.dataset.gift);
   if ('back' in b.dataset) { S.current = null; S.view = 'select'; return render(); }
+  if ('splitmenu' in b.dataset) { S.splitMenu = true; return render(); }
+  if (b.dataset.split) { const v = b.dataset.split; S.splitMenu = false; S.splitShare = v === 'x' ? null : v === 'custom' ? +(balance()/2).toFixed(2) : +(balance()/+v).toFixed(2); return render(); }
   if (b.dataset.tab) { S.tab = b.dataset.tab; return render(); }
   if ('cancel' in b.dataset) return cancelSplit();
   if ('confirmcancel' in b.dataset) return confirmCancel();
