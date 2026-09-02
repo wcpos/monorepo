@@ -30,13 +30,15 @@ jobs:
             // A run's `pull_requests` lists OPEN pull requests only, so a closed PR
             // never appears there (Codex review on #1770). Identify the PR's runs by
             // head branch + head SHA instead — the same identity e2e-native.yml ran.
-            const { data } = await github.rest.actions.listWorkflowRuns({
+            // Every page: a busy branch (bot pushes, reruns) can hold more active runs
+            // than one page shows (CodeRabbit on #1772).
+            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
               owner,
               repo,
               workflow_id: 'e2e-native.yml',
               event: 'pull_request',
               branch: pull.head.ref,
-              per_page: 20,
+              per_page: 100,
             });
             // Closed-then-reopened before this job got a runner: the reopen has
             // started a fresh run that must live. Re-read the PR and skip everything
@@ -50,12 +52,18 @@ jobs:
             // its SHA: e2e-native.yml gives attempt>1 reruns a run-specific concurrency
             // group, so a rerun of an EARLIER head can outlive later pushes and still hold
             // the device turnstile at close (Codex review on #1772).
+            // Fail closed: without the head repository's identity a branch name alone
+            // could match another fork's run of the same name (CodeRabbit on #1772).
             const headRepo = pull.head.repo && pull.head.repo.full_name;
-            const active = data.workflow_runs.filter(
+            if (!headRepo) {
+              core.info(`PR #${prNumber}: head repository unknown (deleted fork?) — cancelling nothing`);
+              return;
+            }
+            const active = runs.filter(
               (run) =>
                 ['queued', 'in_progress', 'waiting', 'pending', 'requested'].includes(run.status) &&
                 run.head_branch === pull.head.ref &&
-                (!headRepo || !run.head_repository || run.head_repository.full_name === headRepo) &&
+                run.head_repository?.full_name === headRepo &&
                 Date.parse(run.created_at) <= closedAt
             );
             let cancelled = 0;
