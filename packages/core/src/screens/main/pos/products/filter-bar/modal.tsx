@@ -69,7 +69,7 @@ export function FilterBarModal() {
 					</View>
 				</ModalBody>
 				<ModalFooter>
-					<ModalClose>{t('common.close')}</ModalClose>
+					<ModalClose testID="filter-bar-modal-close">{t('common.close')}</ModalClose>
 				</ModalFooter>
 			</ModalContent>
 		</Modal>
