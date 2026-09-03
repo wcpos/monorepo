@@ -27,6 +27,12 @@ export async function fetchDisplayTemplates(): Promise<DisplayTemplate[]> {
 	}
 }
 
+/** Selection that previews the site's active display template without naming one. */
+export const ACTIVE_DISPLAY_TEMPLATE: DisplayTemplate = {
+	id: 'active',
+	title: 'Active display template',
+};
+
 export function displayPreviewUrl(
 	siteOrigin: string,
 	templateId: string | number,
@@ -34,8 +40,27 @@ export function displayPreviewUrl(
 ): string {
 	const url = new URL('/wcpos-display/', siteOrigin);
 	url.searchParams.set('preview', state);
-	url.searchParams.set('template', String(templateId));
+	if (templateId !== ACTIVE_DISPLAY_TEMPLATE.id)
+		url.searchParams.set('template', String(templateId));
 	return url.toString();
+}
+
+const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/**
+ * The configured WP origin is what the Vite server reaches. When the Studio is opened
+ * from another machine, a loopback hostname must become the Studio's own hostname so
+ * the browser can reach the display page.
+ */
+export function resolveDisplayOrigin(configuredOrigin: string, browserHostname: string): string {
+	try {
+		const url = new URL(configuredOrigin);
+		if (LOOPBACK.has(url.hostname) && !LOOPBACK.has(browserHostname))
+			url.hostname = browserHostname;
+		return url.origin;
+	} catch {
+		return configuredOrigin;
+	}
 }
 
 export async function fetchBundledTemplates(): Promise<StudioTemplate[]> {

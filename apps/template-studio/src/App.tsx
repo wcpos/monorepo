@@ -35,7 +35,12 @@ import {
 	mergeScenarioOverrides,
 	toggleScenarioOverride,
 } from './scenario-controls';
-import { fetchBundledTemplates, fetchDisplayTemplates } from './studio-api';
+import {
+	ACTIVE_DISPLAY_TEMPLATE,
+	fetchBundledTemplates,
+	fetchDisplayTemplates,
+	resolveDisplayOrigin,
+} from './studio-api';
 import {
 	defaultThermalColumnsForPaper,
 	normalizeThermalColumns,
@@ -129,11 +134,14 @@ export function App() {
 		Promise.all([fetchBundledTemplates(), fetchDisplayTemplates()])
 			.then(([loaded, loadedDisplays]) => {
 				setTemplates(loaded);
-				setDisplayTemplates(loadedDisplays);
+				// An unauthenticated or remote list still leaves the active template previewable.
+				setDisplayTemplates(loadedDisplays.length ? loadedDisplays : [ACTIVE_DISPLAY_TEMPLATE]);
 				setSelectedTemplateId((current) => {
 					if (
 						current.startsWith('display:') &&
-						loadedDisplays.some((template) => String(template.id) === current.slice(8))
+						(loadedDisplays.length ? loadedDisplays : [ACTIVE_DISPLAY_TEMPLATE]).some(
+							(template) => String(template.id) === current.slice(8)
+						)
 					) {
 						return current;
 					}
@@ -473,7 +481,7 @@ export function App() {
 
 	return (
 		<div className="studio-app">
-			<Toolbar zoom={zoom} onZoomChange={setZoom} />
+			<Toolbar zoom={zoom} onZoomChange={setZoom} zoomHidden={displayMode} />
 			{error || renderError ? <div className="error-banner">{error ?? renderError}</div> : null}
 			<div className={selectedDisplayTemplate ? 'studio-body display-mode' : 'studio-body'}>
 				<TemplateList
@@ -484,7 +492,10 @@ export function App() {
 				/>
 				{selectedDisplayTemplate ? (
 					<DisplayStage
-						siteOrigin={import.meta.env.WCPOS_STUDIO_WP_ORIGIN}
+						siteOrigin={resolveDisplayOrigin(
+							import.meta.env.WCPOS_STUDIO_WP_ORIGIN,
+							window.location.hostname
+						)}
 						templateId={selectedDisplayTemplate.id}
 					/>
 				) : (

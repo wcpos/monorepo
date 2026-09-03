@@ -3,7 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DisplayStage } from '../components/DisplayStage';
 import { TemplateList } from '../components/TemplateList';
-import { displayPreviewUrl, fetchDisplayTemplates } from '../studio-api';
+import {
+	ACTIVE_DISPLAY_TEMPLATE,
+	displayPreviewUrl,
+	fetchDisplayTemplates,
+	resolveDisplayOrigin,
+} from '../studio-api';
 
 const originalFetch = globalThis.fetch;
 
@@ -76,5 +81,25 @@ describe('customer display previews', () => {
 		expect(screen.getByRole('heading', { name: 'Display' })).toBeInTheDocument();
 		fireEvent.click(screen.getByRole('button', { name: 'Counter display' }));
 		expect(props.onSelect).toHaveBeenCalledWith('display:42');
+	});
+});
+
+describe('display preview review follow-ups', () => {
+	it('omits template= for the active display template', () => {
+		expect(displayPreviewUrl('https://store.example', ACTIVE_DISPLAY_TEMPLATE.id, 'idle')).toBe(
+			'https://store.example/wcpos-display/?preview=idle'
+		);
+	});
+
+	it('swaps a loopback WP hostname for the browser hostname', () => {
+		expect(resolveDisplayOrigin('http://localhost:8888', '192.168.1.20')).toBe(
+			'http://192.168.1.20:8888'
+		);
+		expect(resolveDisplayOrigin('http://localhost:8888', 'localhost')).toBe(
+			'http://localhost:8888'
+		);
+		expect(resolveDisplayOrigin('https://store.example', '192.168.1.20')).toBe(
+			'https://store.example'
+		);
 	});
 });
