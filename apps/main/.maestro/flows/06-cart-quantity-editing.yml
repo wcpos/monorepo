@@ -116,11 +116,12 @@ env:
     optional: true
 # iOS: hideKeyboard is unreliable and the numeric pad has no return key; the
 # keypad hides the phone tab bar, so the ending below could not reach the
-# products tab (local run 2026-09-03, flow 06 red at its own ending). A tap on
-# a non-input element is consumed by React Native as a blur — the subtotal is
-# a Text the flow asserts right after anyway.
+# products tab (local runs 2026-09-03, flow 06 red at its own ending twice).
+# Only a tap INSIDE the cart's ScrollView dismisses it — React Native's
+# keyboardShouldPersistTaps default swallows that tap as the dismissal; the
+# subtotal lives in the footer outside the scroll view and did nothing.
 - tapOn:
-    id: "cart-subtotal"
+    id: "cart-table-scroll"
 # Totals recalculate; subtotal stays visible and the cart is intact.
 - assertVisible:
     id: "cart-subtotal"
