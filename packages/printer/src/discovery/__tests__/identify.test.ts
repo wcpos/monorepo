@@ -92,6 +92,20 @@ describe('identifyPrinter', () => {
 		expect(connectTcp).not.toHaveBeenCalled();
 	});
 
+	it('never touches raw 9100 on a printer named Epson even when no ePOS lane answers', async () => {
+		// Seen live on a TM-m30III with Secure Printing on and ePOS-Print refusing (503): the only
+		// lane left is raw, and a 3-byte touch there quarantines the printer for ~4 minutes.
+		const connectTcp = vi.fn(async () => 'open' as const);
+		const identity = await identifyPrinter(
+			'192.168.1.30',
+			{ name: 'EPSON TM-m30III' },
+			probes({ connectTcp })
+		);
+
+		expect(connectTcp).not.toHaveBeenCalled();
+		expect(identity).toMatchObject({ vendor: 'epson', lane: null });
+	});
+
 	it('reports secure printing off when Epson ePOS answers on 443 and 80', async () => {
 		const identity = await identifyPrinter(
 			'192.168.1.31',
