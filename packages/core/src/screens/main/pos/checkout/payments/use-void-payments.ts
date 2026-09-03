@@ -33,7 +33,8 @@ export function useVoidPayments(): (order: EngineRecord<'orders'>) => Promise<Vo
 					post: (url, body) => http.post(url, body),
 					isOnline: () => onlineStatus.status === 'online-website-available',
 					patchAndEnqueue: async (changes) => {
-						await localPatch({ document: order, data: changes });
+						const result = await localPatch({ document: order, data: changes });
+						if (!result) throw new Error('offline_void_local_patch_failed');
 					},
 					mirror: async (changes) => {
 						await patchEngineResident({

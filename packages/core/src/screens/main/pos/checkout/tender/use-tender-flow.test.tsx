@@ -11,6 +11,7 @@ import { useTenderFlow } from './use-tender-flow';
 const mockRecordManualPayment = jest.fn();
 const mockVoidPayments = jest.fn();
 const mockCompleteOrderFlow = jest.fn();
+const mockLocalPatch = jest.fn();
 const mockBlockIfDegraded = jest.fn();
 const mockReplace = jest.fn();
 const mockInfo = jest.fn();
@@ -53,9 +54,9 @@ const noDriver = {
 	capture: { ...card.capture, mode: 'device' },
 } satisfies PaymentMethodDescriptor;
 
-const methods = [cash, card, noDriver];
+const methods: PaymentMethodDescriptor[] = [cash, card, noDriver];
 let mockPayload = { total: '92.95', meta_data: [] as { key: string; value: unknown }[] };
-let mockMethods = methods;
+let mockMethods: PaymentMethodDescriptor[] = methods;
 let mockOnlineStatus = 'online-website-available';
 
 jest.mock('../payments', () => ({
@@ -79,6 +80,9 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 }));
 jest.mock('../../../hooks/use-storage-health', () => ({
 	useStorageMoneyPathGuard: () => ({ blockIfDegraded: mockBlockIfDegraded }),
+}));
+jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
+	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
 }));
 jest.mock('../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ store: { price_num_decimals: 2 } }),
@@ -144,6 +148,7 @@ describe('useTenderFlow', () => {
 		mockRecordManualPayment.mockResolvedValue(recorded);
 		mockVoidPayments.mockResolvedValue({ failed: [] });
 		mockCompleteOrderFlow.mockResolvedValue(undefined);
+		mockLocalPatch.mockResolvedValue({ document: order });
 	});
 
 	it('pre-fills a picked method with the ledger-derived balance', () => {
@@ -185,6 +190,37 @@ describe('useTenderFlow', () => {
 
 		expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(1);
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith({ refresh: true });
+	});
+
+	it('completes a zero-balance order without recording a payment row', async () => {
+		mockPayload = { total: '0.00', meta_data: [] };
+		const { result } = renderHook(() => useTenderFlow(order));
+
+		await act(async () => result.current.takeTender());
+
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+		expect(mockLocalPatch).toHaveBeenCalledWith({
+			document: order,
+			data: { status: 'completed' },
+		});
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith({ refresh: false });
+	});
+
+	it('does not record an online-only method after connectivity drops', async () => {
+		const onlineOnly = {
+			...card,
+			id: 'online_card',
+			capabilities: { ...card.capabilities, offline: 'none' as const },
+		};
+		mockMethods = [onlineOnly];
+		const { result, rerender } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('online_card'));
+
+		mockOnlineStatus = 'offline';
+		rerender();
+		await act(async () => result.current.takeTender());
+
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 	});
 
 	it('returns to method selection without completing after a part payment', async () => {

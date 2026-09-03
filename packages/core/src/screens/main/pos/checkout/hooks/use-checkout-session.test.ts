@@ -15,6 +15,7 @@ const mockPost = jest.fn();
 const mockReplace = jest.fn();
 const mockHttp = { get: mockGet, post: mockPost };
 const mockStockAdjustment = jest.fn();
+const mockSetCurrentOrderID = jest.fn();
 const mockEngineRequire = jest.fn();
 const mockResolveStockOwnerId = jest.fn((productId: number, variationId: number) =>
 	Promise.resolve(variationId || productId)
@@ -38,6 +39,9 @@ jest.mock('../../../hooks/use-rest-http-client', () => ({
 }));
 jest.mock('../../../hooks/use-stock-adjustment', () => ({
 	useStockAdjustment: () => ({ stockAdjustment: mockStockAdjustment }),
+}));
+jest.mock('../../contexts/current-order/context', () => ({
+	useCurrentOrderActions: () => ({ setCurrentOrderID: mockSetCurrentOrderID }),
 }));
 jest.mock('../../hooks/use-cart-stock-guard', () => ({
 	useCartStockGuard: () => ({ resolveStockOwnerId: mockResolveStockOwnerId }),

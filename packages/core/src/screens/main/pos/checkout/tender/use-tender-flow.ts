@@ -18,6 +18,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
+import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
 import { useRecordManualPayment, useVoidPayments } from '../payments';
@@ -86,6 +87,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const { methods, byId, loaded: methodsLoaded, unsupportedSchema } = usePaymentMethods();
 	const online = useOnlineStatus().status === 'online-website-available';
 	const { blockIfDegraded } = useStorageMoneyPathGuard();
+	const { localPatch } = useLocalMutation();
 	const recordManualPayment = useRecordManualPayment();
 	const voidPayments = useVoidPayments();
 	const completeOrderFlow = useCompleteOrderFlow(order);
@@ -147,12 +149,20 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		busyRef.current = true;
 		setBusy(true);
 		try {
+			if (balanceMinor === 0) {
+				if (blockIfDegraded('process-payment', { orderId: order.uuid })) return;
+				const result = await localPatch({ document: order, data: { status: 'completed' } });
+				if (!result) throw new Error('zero_balance_completion_failed');
+				await completeOrderFlow({ refresh: false });
+				return;
+			}
 			if (!method) return;
 			if (entryAppliedMinor <= 0) {
 				logger.info(t('pos_checkout.enter_an_amount'), { showToast: true });
 				return;
 			}
 			if (blockIfDegraded('process-payment', { orderId: order.uuid })) return;
+			if (tiles.find(({ method: candidate }) => candidate.id === method.id)?.disabled) return;
 
 			const tendered = method.capabilities.change ? fromMinor(state.entryMinor, dp) : null;
 			const outcome = await recordManualPayment(order, method, {
@@ -191,10 +201,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		dp,
 		entryAppliedMinor,
 		method,
+		localPatch,
 		order,
 		recordManualPayment,
 		state.entryMinor,
 		t,
+		tiles,
 	]);
 
 	const cancelPayment = React.useCallback(async () => {

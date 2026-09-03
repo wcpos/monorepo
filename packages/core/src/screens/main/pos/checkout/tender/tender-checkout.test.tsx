@@ -14,6 +14,8 @@ import { initialTenderState } from './tender-state';
 import type { TenderFlow } from './use-tender-flow';
 
 const mockPickMethod = jest.fn();
+const mockBack = jest.fn();
+let mockOnClose: (() => void) | undefined;
 let mockScreenSize: 'sm' | 'md' | 'lg' = 'lg';
 let mockFlow: TenderFlow;
 
@@ -51,7 +53,7 @@ jest.mock('../../../../../contexts/theme', () => ({
 	useTheme: () => ({ screenSize: mockScreenSize }),
 }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
-jest.mock('expo-router', () => ({ useRouter: () => ({ back: jest.fn() }) }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }) }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (_order: unknown, select: (record: unknown) => unknown) =>
 		select({ payload: { number: '1187', currency_symbol: '$', line_items: [] } }),
@@ -60,7 +62,10 @@ jest.mock('@wcpos/query', () => ({
 // Chrome only: the assertions are about which pane renders, not how a modal or a
 // tab strip paints. Everything that carries a testID stays real.
 jest.mock('@wcpos/components/modal', () => ({
-	Modal: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	Modal: ({ children, onClose }: { children?: React.ReactNode; onClose?: () => void }) => {
+		mockOnClose = onClose;
+		return <div>{children}</div>;
+	},
 	ModalContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	ModalHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	ModalTitle: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
@@ -146,6 +151,7 @@ describe('TenderCheckout', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockScreenSize = 'lg';
+		mockOnClose = undefined;
 		mockFlow = makeFlow();
 	});
 
@@ -198,5 +204,27 @@ describe('TenderCheckout', () => {
 		render(<TenderCheckout order={order} />);
 
 		expect(screen.queryByTestId('checkout-cancel-payment')).not.toBeNull();
+	});
+
+	it('does not close a live payment while its cancellation view is open', () => {
+		mockFlow = makeFlow({
+			hasLiveLeg: true,
+			state: { ...initialTenderState, view: 'cancel' },
+		});
+		render(<TenderCheckout order={order} />);
+
+		mockOnClose?.();
+
+		expect(mockBack).not.toHaveBeenCalled();
+	});
+
+	it('offers a completion action for a zero-total order', () => {
+		const takeTender = jest.fn();
+		mockFlow = makeFlow({ totalMinor: 0, balanceMinor: 0, takeTender });
+		render(<TenderCheckout order={order} />);
+
+		fireEvent.click(screen.getByTestId('checkout-complete-order'));
+
+		expect(takeTender).toHaveBeenCalledTimes(1);
 	});
 });

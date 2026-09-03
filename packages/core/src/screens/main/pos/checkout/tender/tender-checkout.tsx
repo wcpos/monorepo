@@ -57,8 +57,8 @@ export function TenderCheckout({ order }: Props) {
 	// straight back to the cart would leave the cashier holding cash the order
 	// still counts as paid.
 	const handleClose = React.useCallback(() => {
-		if (flow.hasLiveLeg && flow.state.view !== 'cancel') {
-			flow.dispatch({ type: 'request-cancel' });
+		if (flow.hasLiveLeg) {
+			if (flow.state.view !== 'cancel') flow.dispatch({ type: 'request-cancel' });
 			return;
 		}
 		router.back();
@@ -80,6 +80,22 @@ export function TenderCheckout({ order }: Props) {
 		}
 		if (flow.state.tab === 'legacy') {
 			return <LegacyTab flow={flow} order={order} />;
+		}
+		if (flow.totalMinor === 0 && flow.balanceMinor === 0) {
+			return (
+				<View className="p-4">
+					<Button
+						variant="success"
+						size="lg"
+						testID="checkout-complete-order"
+						loading={flow.busy}
+						disabled={flow.busy}
+						onPress={() => void flow.takeTender()}
+					>
+						<ButtonText>{t('common.done')}</ButtonText>
+					</Button>
+				</View>
+			);
 		}
 		if (compact) {
 			return (

@@ -101,6 +101,9 @@ describe('voidPayments', () => {
 		const written = writtenRows(deps.patchAndEnqueue);
 
 		expect(deps.patchAndEnqueue).toHaveBeenCalledTimes(1);
+		expect(deps.patchAndEnqueue).toHaveBeenCalledWith(
+			expect.objectContaining({ status: 'pos-open' })
+		);
 		expect(written.map(({ id, status }) => ({ id, status }))).toEqual([
 			{ id: 'pending', status: 'voided' },
 			{ id: 'voided', status: 'voided' },

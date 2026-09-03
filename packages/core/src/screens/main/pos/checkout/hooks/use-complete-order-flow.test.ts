@@ -8,6 +8,7 @@ import { useCompleteOrderFlow } from './use-complete-order-flow';
 const mockReplace = jest.fn();
 const mockRequire = jest.fn();
 const mockStockAdjustment = jest.fn();
+const mockSetCurrentOrderID = jest.fn();
 let mockAutoShowReceipt = false;
 
 jest.mock('expo-router', () => ({
@@ -22,6 +23,9 @@ jest.mock('../../../contexts/ui-settings', () => ({
 }));
 jest.mock('../../../hooks/use-stock-adjustment', () => ({
 	useStockAdjustment: () => ({ stockAdjustment: mockStockAdjustment }),
+}));
+jest.mock('../../contexts/current-order/context', () => ({
+	useCurrentOrderActions: () => ({ setCurrentOrderID: mockSetCurrentOrderID }),
 }));
 
 function makeOrder(id: number | null = 42) {
@@ -57,6 +61,7 @@ describe('useCompleteOrderFlow', () => {
 		});
 		expect(mockRequire.mock.results[0]?.value.release).toHaveBeenCalledTimes(1);
 		expect(mockStockAdjustment).toHaveBeenCalledWith([reduced]);
+		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
 	});
 
@@ -69,6 +74,7 @@ describe('useCompleteOrderFlow', () => {
 
 		expect(mockRequire).not.toHaveBeenCalled();
 		expect(mockStockAdjustment).toHaveBeenCalledWith([reduced]);
+		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 		expect(mockReplace).toHaveBeenCalledWith({
 			pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
 			params: { orderId: 'uuid-42' },
@@ -82,5 +88,24 @@ describe('useCompleteOrderFlow', () => {
 		await expect(result.current()).rejects.toThrow('checkout_refresh_requires_persisted_order');
 		expect(mockRequire).not.toHaveBeenCalled();
 		expect(mockStockAdjustment).not.toHaveBeenCalled();
+	});
+
+	it('releases a refresh that never settles and still routes the paid order', async () => {
+		jest.useFakeTimers();
+		const release = jest.fn();
+		mockRequire.mockReturnValue({ ready: new Promise<void>(() => undefined), release });
+		const { record } = makeOrder();
+		const { result } = renderHook(() => useCompleteOrderFlow(record));
+		const completion = result.current();
+
+		await act(async () => {
+			jest.advanceTimersByTime(10_000);
+			await completion;
+		});
+
+		expect(release).toHaveBeenCalledTimes(1);
+		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+		jest.useRealTimers();
 	});
 });

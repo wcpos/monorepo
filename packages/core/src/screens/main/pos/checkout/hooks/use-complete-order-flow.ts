@@ -7,6 +7,9 @@ import { remoteIdOrNull } from '@wcpos/sync-core';
 
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
+import { useCurrentOrderActions } from '../../contexts/current-order/context';
+
+const ORDER_REFRESH_TIMEOUT_MS = 10_000;
 
 export interface CompleteOrderFlowOptions {
 	/**
@@ -25,6 +28,7 @@ export function useCompleteOrderFlow(
 	const { stockAdjustment } = useStockAdjustment();
 	const { uiSettings } = useUISettings('pos-cart');
 	const router = useRouter();
+	const { setCurrentOrderID } = useCurrentOrderActions();
 	const orderId = useRecordField(order, (record) => record.payload.id);
 
 	return React.useCallback(
@@ -40,9 +44,16 @@ export function useCompleteOrderFlow(
 					remoteIds: [orderId].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
 					forceRefresh: true,
 				});
+				let timer: ReturnType<typeof setTimeout> | undefined;
 				try {
-					await handle.ready;
+					await Promise.race([
+						handle.ready,
+						new Promise<void>((resolve) => {
+							timer = setTimeout(resolve, ORDER_REFRESH_TIMEOUT_MS);
+						}),
+					]);
 				} finally {
+					if (timer) clearTimeout(timer);
 					handle.release();
 				}
 			}
@@ -54,6 +65,7 @@ export function useCompleteOrderFlow(
 				)
 			);
 			stockAdjustment(reducedStockItems);
+			setCurrentOrderID('');
 
 			if (uiSettings.autoShowReceipt) {
 				router.replace({
@@ -64,6 +76,14 @@ export function useCompleteOrderFlow(
 				router.replace({ pathname: '/cart' });
 			}
 		},
-		[runtime, order, orderId, router, stockAdjustment, uiSettings.autoShowReceipt]
+		[
+			runtime,
+			order,
+			orderId,
+			router,
+			setCurrentOrderID,
+			stockAdjustment,
+			uiSettings.autoShowReceipt,
+		]
 	);
 }

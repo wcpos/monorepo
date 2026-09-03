@@ -16,7 +16,7 @@ export interface VoidPaymentsDeps {
 	post: (url: string, body: unknown) => Promise<{ data: unknown }>;
 	isOnline: () => boolean;
 	/** Offline void rides the order write the engine already queues. */
-	patchAndEnqueue: (changes: { meta_data: MetaDataEntry[] }) => Promise<void>;
+	patchAndEnqueue: (changes: { meta_data: MetaDataEntry[]; status: string }) => Promise<void>;
 	/** Online void mirrors the server's copy onto the resident; no second write. */
 	mirror: (changes: { meta_data: MetaDataEntry[]; status?: string }) => Promise<void>;
 	now?: () => string;
@@ -61,7 +61,10 @@ export async function voidPayments(
 			updated_at_gmt: now(),
 		}));
 		const merged = rows.reduce(upsertPaymentRow, ledger);
-		await deps.patchAndEnqueue({ meta_data: withLedger(order.meta_data, merged) });
+		await deps.patchAndEnqueue({
+			meta_data: withLedger(order.meta_data, merged),
+			status: 'pos-open',
+		});
 		return { kind: 'voided', via: 'offline', rows, failed: [], order: null };
 	}
 	let merged = ledger;
