@@ -17,6 +17,7 @@ import {
 	ModalHeader,
 	ModalTitle,
 } from '@wcpos/components/modal';
+import { Button, ButtonText } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { WebViewHandle } from '@wcpos/components/webview';
@@ -82,6 +83,9 @@ function CheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 		frameStatusRef.current = next;
 		setFrameStatus(next);
 	}, []);
+	// Each Retry press hands the frame a new token; the frame remounts on it.
+	const [frameRetryToken, setFrameRetryToken] = React.useState(0);
+	const retryPaymentFrame = React.useCallback(() => setFrameRetryToken((n) => n + 1), []);
 	const { loading, mode, error, startCheckout, handleStockRejection } = useCheckoutSession(order);
 	// #163 ruling R5. This modal is where a checkout already in progress is caught:
 	// it was opened while storage was healthy, and the worker can die at any point
@@ -179,8 +183,18 @@ function CheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 								<Text testID="checkout-payment-form-unavailable" className="text-destructive">
 									{paymentLinkMissing
 										? t('pos_checkout.payment_form_unavailable')
-										: t('pos_checkout.payment_form_load_failed')}
+										: t('pos_checkout.payment_form_load_failed_retry')}
 								</Text>
+								{paymentFrameFailed ? (
+									<Button
+										variant="outline"
+										size="sm"
+										testID="checkout-payment-form-retry"
+										onPress={retryPaymentFrame}
+									>
+										<ButtonText>{t('common.retry')}</ButtonText>
+									</Button>
+								) : null}
 							</VStack>
 						) : null}
 						{mode === 'webview' && !showStockRejection ? (
@@ -189,6 +203,7 @@ function CheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 								ref={webViewRef}
 								setLoading={setLegacyLoading}
 								setFrameStatus={reportFrameStatus}
+								retryToken={frameRetryToken}
 								onStockRejection={handleStockRejection}
 							/>
 						) : (

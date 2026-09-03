@@ -28,12 +28,12 @@ env:
       - runFlow:
           when:
             visible:
-              id: "search-products-clear"
+              id: 'search-products-clear'
           commands:
             - tapOn:
-                id: "search-products-clear"
+                id: 'search-products-clear'
       - tapOn:
-          id: "search-products"
+          id: 'search-products'
       - eraseText
       # One `inputText` is scanner-fast. Device runs prove separate Maestro
       # commands form separate bursts; one printable key cannot latch
@@ -49,7 +49,7 @@ env:
           text: ${PRODUCT_SEARCH}
 - extendedWaitUntil:
     visible:
-      id: "product-tile"
+      id: 'product-tile'
     timeout: 60000
 # Dismiss the keyboard BEFORE tapping the tile — with it up, the tile's
 # center sits under the overlay and the tap silently no-ops (empty cart in
@@ -59,15 +59,15 @@ env:
 - hideKeyboard:
     optional: true
 - tapOn:
-    id: "product-tile"
+    id: 'product-tile'
     index: 0
 - runFlow:
     when:
       visible:
-        id: "pos-tab-cart"
+        id: 'pos-tab-cart'
     commands:
       - tapOn:
-          id: "pos-tab-cart"
+          id: 'pos-tab-cart'
 # One logged recovery when the cart shows no line. Run 33327340303 (main, iOS
 # phone) is the documented #1614-defect-2 shape recurring: the ⚠️ frame shows
 # the keyboard still up at the tile tap (hideKeyboard above is optional because
@@ -81,49 +81,49 @@ env:
 - runFlow:
     when:
       notVisible:
-        id: "cart-subtotal"
+        id: 'cart-subtotal'
     commands:
       - extendedWaitUntil:
           visible:
-            id: "cart-subtotal"
+            id: 'cart-subtotal'
           timeout: 10000
           optional: true
       - runFlow:
           when:
             notVisible:
-              id: "cart-subtotal"
+              id: 'cart-subtotal'
           commands:
             - evalScript: "${console.log('WCPOS_E2E cart has no line after the tile tap, re-adding once')}"
             - runFlow:
                 when:
                   visible:
-                    id: "pos-tab-products"
+                    id: 'pos-tab-products'
                 commands:
                   - tapOn:
-                      id: "pos-tab-products"
+                      id: 'pos-tab-products'
             - hideKeyboard:
                 optional: true
             - tapOn:
-                id: "product-tile"
+                id: 'product-tile'
                 index: 0
             - runFlow:
                 when:
                   visible:
-                    id: "pos-tab-cart"
+                    id: 'pos-tab-cart'
                 commands:
                   - tapOn:
-                      id: "pos-tab-cart"
+                      id: 'pos-tab-cart'
 - extendedWaitUntil:
     visible:
-      id: "cart-subtotal"
+      id: 'cart-subtotal'
     timeout: 30000
 - assertVisible:
-    id: "checkout-button"
+    id: 'checkout-button'
 - tapOn:
-    id: "checkout-button"
+    id: 'checkout-button'
 - extendedWaitUntil:
     visible:
-      id: "checkout-dialog"
+      id: 'checkout-dialog'
     timeout: 60000
 # `enabled`, not merely visible: the button renders DISABLED until the
 # payment frame reports its load event (#1024 gate in checkout.tsx), and a
@@ -136,20 +136,41 @@ env:
 # phone, flow 04's only red on the final 2026-08-30 stack) showed the dialog
 # open with the body empty and WebKit still negotiating navigation past the old
 # 60 s budget. Same figure as the pay-frame wait below (#1709's evidence).
+#
+# The app now has its own way out of a stalled frame (payment-webview.tsx):
+# one silent reload at 90 s, then "failed" with a Retry at 180 s. On the iOS
+# simulators the stall is WebKit never sending the request (runs 33750030091
+# tablet, 33758920470 phone: the pay page reached the store five minutes late
+# or never), so the first 180 s covers the reload; if the app still gave up,
+# press Retry the way a cashier would and give the attempt the same budget.
 - extendedWaitUntil:
     visible:
-      id: "process-payment-button"
+      id: 'process-payment-button'
+      enabled: true
+    timeout: 180000
+    optional: true
+- runFlow:
+    when:
+      visible:
+        id: 'checkout-payment-form-retry'
+    commands:
+      - evalScript: "${console.log('WCPOS_E2E payment frame reported failed after its own reload, pressing Retry')}"
+      - tapOn:
+          id: 'checkout-payment-form-retry'
+- extendedWaitUntil:
+    visible:
+      id: 'process-payment-button'
       enabled: true
     timeout: 180000
 - tapOn:
-    id: "process-payment-button"
+    id: 'process-payment-button'
 # Receipt appears once the (cash) payment completes.
 - extendedWaitUntil:
     visible:
-      id: "receipt-close-button"
+      id: 'receipt-close-button'
     timeout: 120000
 - tapOn:
-    id: "receipt-close-button"
+    id: 'receipt-close-button'
 # Back on the POS with a fresh order. Closing the receipt returns to the CART
 # route, so the small-screen layout lands on the Cart tab where the products
 # search is display:none — navigate back to the Products tab first (run
@@ -158,11 +179,11 @@ env:
 - runFlow:
     when:
       visible:
-        id: "pos-tab-products"
+        id: 'pos-tab-products'
     commands:
       - tapOn:
-          id: "pos-tab-products"
+          id: 'pos-tab-products'
 - extendedWaitUntil:
     visible:
-      id: "search-products"
+      id: 'search-products'
     timeout: 60000
