@@ -6,76 +6,24 @@ env:
 ---
 # P0-6: cart quantity editing with the native soft keyboard (the web numpad
 # does not exist on native — number-input.tsx is a plain TextInput).
-# Split stop/launch + a screenshot-based settle: a combined `launchApp:
-# {stopApp: true}` can race the XCTest driver's first hierarchy query and be
-# reported as "App crashed" — see flow 08's relaunch for the evidence.
-- stopApp
-- launchApp
-- waitForAnimationToEnd:
-    timeout: 5000
-# Android: a cold `launchApp` can land on the dev launcher's HOME screen
-# instead of reloading the last project (PR #1690 run 33279550244 attempt 2,
-# phone, flow 05: "Development servers … Recently opened" with the app never
-# loaded, so the first assertion timed out on the launcher). Reload through
-# the same deep link flows 01/02 use; inert when the app came up normally.
 - runFlow:
-    when:
-      platform: Android
-      visible: "(?i)fetch development servers"
-    commands:
-      - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
-      - waitForAnimationToEnd:
-          timeout: 5000
-# Run 33513307174 (Android phone, flow 05): the login Custom Tab from flow
-# 02's retype recovery lives in the app task's back stack and can resurface
-# over the app on ANY relaunch, not only flow 03's. Same gated dismissal as
-# flow 03: fires only when the login form itself is visible, so it can never
-# background a loading app; login-page text, not testID (third-party browser
-# content — the selector-policy exemption flow 02 documents).
-# Run 33527914510 (Android phone, flow 06): the tab resurfaces
-# ASYNCHRONOUSLY — a one-shot check right after launch raced it and lost
-# (guard SKIPPED, tab then took the screen for the whole readiness wait).
-# Re-evaluate the dismissal at each retry leg; 3 legs × 40s keep the old
-# 120s readiness budget (maxRetries counts RETRIES: executions = 3).
-- retry:
-    maxRetries: 2
-    commands:
-      - runFlow:
-          when:
-            platform: Android
-            visible: "Username or Email Address|Nombre de usuario o correo electrónico"
-          commands:
-            - evalScript: "${console.log('WCPOS_E2E lingering login tab over the relaunched app, force-stopping Chrome')}"
-            # NOT `back`: the tab keeps web history (authorize → login form) and back
-            # navigates it instead of closing the tab — run 33574072528 flow 07.
-            - stopApp: com.android.chrome
-            - waitForAnimationToEnd:
-                timeout: 5000
-      - extendedWaitUntil:
-          visible:
-            id: "search-products"
-          timeout: 40000
-# The In-Stock filter resets on every relaunch — clear it before searching.
-- runFlow:
-    when:
-      visible:
-        id: "filter-pill-remove-stock_status"
-    commands:
-      - tapOn:
-          id: "filter-pill-remove-stock_status"
-- runFlow:
-    when:
-      visible:
-        id: "pos-tab-products"
-    commands:
-      - tapOn:
-          id: "pos-tab-products"
+    file: ../subflows/ensure-pos-ready.yml
 # Typing retried, search speed NOT — see flow 04 for the ruling and both
 # mechanisms. The single 60s tile wait reports a slow demand path as a
 # failure instead of absorbing it.
 - retry:
     maxRetries: 2
     commands:
+      # A retry leg starts on the previous leg's text; a tap lands the caret
+      # mid-field and eraseText erases only before it (the URL-field splice,
+      # run 33631408939). Clear through the box's own × first.
+      - runFlow:
+          when:
+            visible:
+              id: "search-products-clear"
+          commands:
+            - tapOn:
+                id: "search-products-clear"
       - tapOn:
           id: "search-products"
       - eraseText
@@ -166,8 +114,27 @@ env:
 # housekeeping; a genuinely covered target fails at its own tap.
 - hideKeyboard:
     optional: true
+# iOS: hideKeyboard is unreliable and the numeric pad has no return key; the
+# keypad hides the phone tab bar, so the ending below could not reach the
+# products tab (local runs 2026-09-03, flow 06 red at its own ending twice).
+# Only a tap INSIDE the cart's ScrollView dismisses it — React Native's
+# keyboardShouldPersistTaps default swallows that tap as the dismissal; the
+# subtotal lives in the footer outside the scroll view and did nothing.
+- tapOn:
+    id: "cart-table-scroll"
 # Totals recalculate; subtotal stays visible and the cart is intact.
 - assertVisible:
     id: "cart-subtotal"
 - assertVisible:
     id: "checkout-button"
+- runFlow:
+    when:
+      visible:
+        id: "pos-tab-products"
+    commands:
+      - tapOn:
+          id: "pos-tab-products"
+- extendedWaitUntil:
+    visible:
+      id: "search-products"
+    timeout: 60000

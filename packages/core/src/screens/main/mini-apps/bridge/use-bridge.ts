@@ -10,7 +10,9 @@ import { type BridgeEnvelope, BridgeError, type BridgeHandlers } from './types';
 export const ACTION_TIMEOUT_MS: Record<string, number> = {
 	'printers.scan': 60_000,
 	'printers.probe': 15_000,
-	'printers.testPrint': 15_000,
+	// Above the 30 s print deadlines in packages/printer, so the bridge never times out ahead
+	// of a job that can still print (and invites a duplicate retry).
+	'printers.testPrint': 35_000,
 	'http.proxy': 30_000,
 };
 const DEFAULT_TIMEOUT_MS = 5_000;
@@ -61,6 +63,10 @@ export function useBridge(
 		(action: string, payload: object) => post({ wcpos: 1, id: uuidv4(), action, payload }),
 		[post]
 	);
+	const reset = React.useCallback(() => {
+		readyRef.current = false;
+		setReady(false);
+	}, []);
 
 	const onMessage = React.useCallback(
 		async (event: MessageEvent) => {
@@ -141,7 +147,7 @@ export function useBridge(
 		[handlers, origin, post]
 	);
 
-	return { onMessage, ready, send };
+	return { onMessage, ready, reset, send };
 }
 
 function messageOrigin(url: string): string | null {

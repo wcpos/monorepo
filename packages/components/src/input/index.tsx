@@ -178,6 +178,8 @@ function Right({ children, className }: { children: React.ReactNode; className?:
 interface InputProps
 	extends Omit<InputFieldProps, 'children'>, Omit<RootProps, 'children' | 'editable'> {
 	clearable?: boolean;
+	/** testID for the clear (×) button — E2E flows clear a filled field through it. */
+	clearTestID?: string;
 	defaultValue?: string;
 	inputClassName?: string;
 }
@@ -189,6 +191,7 @@ function Input({
 	disabled = false,
 	type,
 	clearable = false,
+	clearTestID,
 	value: valueProp,
 	defaultValue,
 	onChangeText,
@@ -239,6 +242,7 @@ function Input({
 						size="sm"
 						onPress={handleClear}
 						accessibilityLabel="Clear text"
+						testID={clearTestID}
 					/>
 				</Right>
 			)}

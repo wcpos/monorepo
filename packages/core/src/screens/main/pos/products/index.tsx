@@ -333,6 +333,7 @@ function POSProductsContent({
 										className="flex-1"
 										onKeyPress={onKeyPress}
 										testID="search-products"
+										clearTestID="search-products-clear"
 									/>
 								</ErrorBoundary>
 								<CameraScanButton

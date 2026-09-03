@@ -7,6 +7,7 @@
 # against the dev-pro store) and every later flow reuses the SQLite-persisted
 # session, so execution order is pinned explicitly — Maestro's default flow
 # order is non-deterministic.
+# Shared recovery lives in subflows/; healthy flow boundaries never relaunch.
 flows:
   - flows/*.yml
 executionOrder:

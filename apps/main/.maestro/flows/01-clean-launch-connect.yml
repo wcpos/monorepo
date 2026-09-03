@@ -125,6 +125,20 @@ env:
 - retry:
     maxRetries: 2
     commands:
+      # The field may already hold text: flow 02 starts on flow 01's connect
+      # screen (the invalid URL is still in the box), and a retry leg starts on
+      # the previous leg's text. A tap lands the caret wherever the finger falls
+      # and eraseText only erases BEFORE the caret, so on Android the retype was
+      # spliced into the leftover — "https://dev-pro.wcpos.comalid", three legs
+      # in a row (run 33631408939, Android phone, flow 02). Clear through the
+      # field's own × first; it renders only while the field has text.
+      - runFlow:
+          when:
+            visible:
+              id: "store-url-clear"
+          commands:
+            - tapOn:
+                id: "store-url-clear"
       - tapOn:
           id: "store-url-input"
       - eraseText
@@ -142,7 +156,7 @@ env:
       # asserted text IS the referent (the exact string this loop just typed),
       # not localized UI copy — the selector policy's composite-string carve-out.
       - assertVisible:
-          text: ${INVALID_URL}
+          text: '${INVALID_URL.replace(/\./g, "\\.")}'
 # optional: hideKeyboard is unreliable on iOS (this file already says so at
 # the two Android-gated uses below, but this one was left ungated and failed
 # a local iOS suite run 2026-08-29 at exactly this step, having passed the

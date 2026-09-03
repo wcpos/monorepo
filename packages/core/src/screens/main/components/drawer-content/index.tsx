@@ -8,8 +8,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DrawerItemList } from './drawer-item-list';
-import { DrawerProgressWatcher } from './drawer-progress-watcher';
-import { DrawerPanelVisibilityReporter } from './panel-visibility';
+import { DrawerPanelVisibilityReporter, useDrawerPanelHidden } from './panel-visibility';
 import { Version } from './version';
 
 import type { DrawerContentComponentProps } from 'expo-router/build/react-navigation/drawer';
@@ -24,7 +23,7 @@ import type { DrawerContentComponentProps } from 'expo-router/build/react-naviga
  * mounted — which means it can only read context from providers ABOVE `Drawer`, and none of
  * the ones `Drawer` itself renders (`DrawerProgressContext`, `DrawerGestureContext`).
  * `useSafeAreaInsets` is fine because its provider is far above. Anything that needs a
- * drawer-owned context has to be a rendered element instead — see `DrawerProgressWatcher`.
+ * drawer-owned context has to be a rendered element instead.
  */
 export function DrawerContent(props: DrawerContentComponentProps) {
 	const insets = useSafeAreaInsets();
@@ -34,12 +33,34 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 	// can take a settled-closed panel out of layout entirely — see `panel-visibility.tsx`.
 	const status = getDrawerStatusFromState(props.state);
 
+	// A settled-closed panel is out of layout (`display: 'none'`, see `panel-visibility.tsx`)
+	// but its subtree stays mounted, and on Android the accessibility tree kept reporting the
+	// items with their last laid-out bounds after a heavy screen mount — a screen reader (and
+	// Maestro, run 33740223026: `drawer-item-pos` "visible" with nothing drawn) could reach
+	// menu items that are not on the screen. Hide the descendants from assistive tech while
+	// the panel is hidden; the reporter above stays mounted so an open can un-hide them.
+	//
+	// Never for a `permanent` drawer: the large-screen rail is always on screen, the layout
+	// never hides it, but the navigator's state still says "closed" (a permanent drawer has no
+	// drawer entry in `history`), so the provider's flag alone would hide the visible sidebar
+	// from screen readers for the whole session. `drawerType` comes from the screen options
+	// (`_layout.tsx` sets it per screen size); the focused route's descriptor carries it.
+	// react-native-drawer-layout >= 4.2.10 does the same on the panel view as a Reanimated
+	// animated prop; this is the static counterpart, independent of any animated value.
+	const panelHidden = useDrawerPanelHidden();
+	const focusedRoute = props.state.routes[props.state.index];
+	const drawerType = focusedRoute
+		? props.descriptors[focusedRoute.key]?.options.drawerType
+		: undefined;
+	const hideFromAssistiveTech = panelHidden && drawerType !== 'permanent';
+
 	return (
 		<>
 			<DrawerPanelVisibilityReporter status={status === 'open' ? 'open' : 'closed'} />
-			<DrawerProgressWatcher />
 			<DrawerContentScrollView
 				{...props}
+				importantForAccessibility={hideFromAssistiveTech ? 'no-hide-descendants' : 'auto'}
+				accessibilityElementsHidden={hideFromAssistiveTech}
 				contentContainerStyle={{
 					paddingTop: insets.top,
 					paddingBottom: insets.bottom,

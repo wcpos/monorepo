@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 
 import {
 	ALLOWED_DUPLICATES,
@@ -163,5 +164,11 @@ test('workspace resolves one react-native-reanimated version', () => {
 		return value;
 	});
 
-	assert.deepEqual([...versions], ['4.5.1']);
+	// One native runtime for the whole workspace, and it is the one the app pins: the
+	// `pnpm-workspace.yaml` override mirrors this pin (and may sit ahead of the Expo SDK's
+	// prescribed version, see ALLOWED_EXPO_MISMATCHES in check-expo-alignment.mjs).
+	const pinned = JSON.parse(readFileSync(new URL('../apps/main/package.json', import.meta.url)))
+		.dependencies['react-native-reanimated'];
+	assert.match(pinned, /^\d+\.\d+\.\d+$/, 'apps/main must pin an exact reanimated version');
+	assert.deepEqual([...versions], [pinned]);
 });
