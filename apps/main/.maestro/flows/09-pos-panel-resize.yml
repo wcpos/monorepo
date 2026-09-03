@@ -78,36 +78,10 @@ appId: com.wcpos.main.dev
       # Split stop/launch + a screenshot-based settle: a combined `launchApp:
       # {stopApp: true}` can race the XCTest driver's first hierarchy query and be
       # reported as "App crashed" — see flow 08's relaunch for the evidence.
-      - stopApp
-      - launchApp
-      - waitForAnimationToEnd:
-          timeout: 5000
-      # Same class-6 guard as this flow's first relaunch (codex review, #1750):
-      # the orphaned login tab can resurface on ANY relaunch, including this
-      # nested persistence-check one.
-      # Run 33527914510 (Android phone, flow 06): the tab resurfaces
-      # ASYNCHRONOUSLY — a one-shot check right after launch raced it and lost
-      # (guard SKIPPED, tab then took the screen for the whole readiness wait).
-      # Re-evaluate the dismissal at each retry leg; 3 legs × 40s keep the old
-      # 120s readiness budget (maxRetries counts RETRIES: executions = 3).
-      - retry:
-          maxRetries: 2
-          commands:
-            - runFlow:
-                when:
-                  platform: Android
-                  visible: "Username or Email Address|Nombre de usuario o correo electrónico"
-                commands:
-                  - evalScript: "${console.log('WCPOS_E2E lingering login tab over the relaunched app, force-stopping Chrome')}"
-                  # NOT `back`: the tab keeps web history (authorize → login form) and back
-                  # navigates it instead of closing the tab — run 33574072528 flow 07.
-                  - stopApp: com.android.chrome
-                  - waitForAnimationToEnd:
-                      timeout: 5000
-            - extendedWaitUntil:
-                visible:
-                  id: "screen-pos"
-                timeout: 40000
+      - runFlow:
+          file: ../subflows/relaunch-app.yml
+          env:
+            READY_ID: screen-pos
       - assertVisible:
           id: "pos-resize-handle"
           text: "Resize handle, (2[5-9]|[34][0-9]|5[0-4])%"
