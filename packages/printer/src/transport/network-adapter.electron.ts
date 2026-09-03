@@ -1,3 +1,5 @@
+// Doctrine: packages/printer/README.md — lane order and the raw-fallback rule are decided there,
+// not here; read the Lessons log before changing the probe/fallback sequence.
 import { EPOS_HTTP_PORTS, probeEposEndpoint } from './epos-endpoint';
 import { EpsonEposAdapter, postEposHttp } from './epson-epos-adapter.electron';
 import { ipcPrintRaw, PRINT_TIMEOUT_MS } from './ipc-print.electron';

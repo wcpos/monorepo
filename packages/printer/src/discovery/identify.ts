@@ -1,3 +1,5 @@
+// Doctrine: packages/printer/README.md — identify classifies what a printer ANSWERS; a label must
+// never come from the name alone, and "no response" is an outcome of its own. Lessons log lives there.
 import { probeEposEndpoint } from '../transport/epos-endpoint';
 import { parseEposResponse } from '../transport/epson-epos-protocol';
 import { type DiscoveredPrinter } from '../types';

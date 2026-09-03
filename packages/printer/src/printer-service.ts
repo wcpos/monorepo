@@ -1,4 +1,6 @@
 /// <reference path="./types/receipt-printer-encoder.d.ts" />
+// Doctrine: packages/printer/README.md — acknowledged lanes first, raw only as an honest fallback;
+// every live finding at a printer goes into that file's Lessons log in the same PR as the fix.
 import PQueue from 'p-queue';
 
 import { canOpenDrawer } from './capabilities';
