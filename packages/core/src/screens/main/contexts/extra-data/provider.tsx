@@ -67,14 +67,19 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 				.get('/payment-methods')
 				.then((response) => {
 					if (generation === refreshGeneration && response?.status === 200) {
-						void extraData.set('paymentMethods', () => response.data);
+						return extraData.set('paymentMethods', () => response.data);
 					}
+					return undefined;
 				})
 				.catch((error: { response?: { status?: number } }) => {
 					if (generation === refreshGeneration && error?.response?.status === 404) {
-						void extraData.set('paymentMethods', () => null);
+						return extraData.set('paymentMethods', () => null);
 					}
-				});
+					return undefined;
+				})
+				// A failed persistence write leaves the cached descriptor stale, which is
+				// tolerable; an unhandled rejection at app level is not.
+				.catch(() => undefined);
 		const fetchAll = () => {
 			const generation = ++refreshGeneration;
 			fetchTaxClasses(generation);

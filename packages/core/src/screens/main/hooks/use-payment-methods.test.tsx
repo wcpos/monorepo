@@ -105,5 +105,4 @@ describe('usePaymentMethods', () => {
 
 		expect(result.current).toMatchObject({ methods: [], loaded: true });
 	});
-
 });
