@@ -902,6 +902,151 @@ test('the native E2E aggregator fails closed except for legitimate skips', () =>
 	assert.equal(allSucceeded.status, 0, allSucceeded.stdout + allSucceeded.stderr);
 });
 
+test('the dev-client resolve recovers the build from a main artifact before anyone spends', () => {
+	// The cache is an LRU under a 10 GB repo quota; the dev client is read once
+	// per main run, so it is evicted first (2026-09-03: gone within 40 minutes
+	// of a hit, a PR lost its devices and main bought a $3 rebuild). The last
+	// main artifact is the same bytes on a separate quota.
+	const workflow = readWorkflow('e2e-native.yml');
+	const names = workflow.jobs.build.steps.map((step) => step.name);
+	const at = (name) => names.indexOf(name);
+	assert.ok(
+		at('♻️ Restore cached builds') < at("♻️ Recover builds from the last main run's artifact")
+	);
+	assert.ok(
+		at("♻️ Recover builds from the last main run's artifact") <
+			at('💸 Refuse an unrequested EAS build')
+	);
+	assert.ok(at('🏷 Stamp the builds with their cache key') < at('⬆️ Share builds with test jobs'));
+	const refuse = findStep(workflow, 'build', '💸 Refuse an unrequested EAS build');
+	assert.match(refuse.if, /steps\.recover\.outputs\.hit != 'true'/);
+	const build = findStep(
+		workflow,
+		'build',
+		'🛠 Build dev client on EAS (native fingerprint changed)'
+	);
+	assert.match(build.if, /steps\.recover\.outputs\.hit != 'true'/);
+	const stamp = findStep(workflow, 'build', '🏷 Stamp the builds with their cache key');
+	assert.match(stamp.run, /echo "\$CACHE_KEY" > e2e-builds\/cache-key/);
+
+	// Money-bearing shell: a fake `gh` serves MOCK_ARTIFACTS as "<run>:<stamp>"
+	// pairs, newest first; a run absent from the list has no artifact.
+	const recover = findStep(
+		workflow,
+		'build',
+		"♻️ Recover builds from the last main run's artifact"
+	);
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-devclient-recover-'));
+	const binDir = path.join(workspace, 'bin');
+	mkdirSync(binDir);
+	writeFileSync(
+		path.join(binDir, 'gh'),
+		[
+			'#!/usr/bin/env bash',
+			'if [ "$1 $2" = "run list" ]; then printf "%s\n" $MOCK_RUNS; exit 0; fi',
+			'if [ "$1 $2" = "run download" ]; then',
+			'  shift 2; run=""; dir=""; while [ $# -gt 0 ]; do case "$1" in -R) shift;; -n) shift;; -D) dir="$2"; shift;; *) [ -z "$run" ] && run="$1";; esac; shift; done',
+			'  for pair in $MOCK_ARTIFACTS; do if [ "${pair%%:*}" = "$run" ]; then echo "${pair#*:}" > "$dir/cache-key"; echo apk > "$dir/wcpos-e2e-android.apk"; echo ipa > "$dir/wcpos-e2e-ios.tar.gz"; exit 0; fi; done',
+			'  exit 1',
+			'fi',
+			'exit 2',
+		].join('\n') + '\n',
+		{ mode: 0o755 }
+	);
+	const run = (env) => {
+		const cwd = mkdtempSync(path.join(workspace, 'job-'));
+		const temp = path.join(cwd, 'tmp');
+		mkdirSync(temp);
+		const outputs = path.join(cwd, 'outputs');
+		writeFileSync(outputs, '');
+		const result = runShell(recover.run, {
+			cwd,
+			env: {
+				PATH: `${binDir}:${process.env.PATH}`,
+				RUNNER_TEMP: temp,
+				GITHUB_OUTPUT: outputs,
+				GH_REPO: 'wcpos/monorepo',
+				CACHE_KEY: 'e2e-native-devclient-fp1',
+				FINGERPRINT: 'fp1',
+				MOCK_RUNS: '333 222 111',
+				MOCK_ARTIFACTS: '333:e2e-native-devclient-other 222:e2e-native-devclient-fp1',
+				...env,
+			},
+		});
+		return { ...result, outputs: readFileSync(outputs, 'utf8'), cwd };
+	};
+
+	try {
+		// The newest artifact is another fingerprint's; the next one matches.
+		const recovered = run({});
+		assert.equal(recovered.status, 0, recovered.stdout + recovered.stderr);
+		assert.match(recovered.outputs, /^hit=true$/m);
+		assert.match(
+			recovered.stdout,
+			/Recovered the dev client \(e2e-native-devclient-fp1\) from main run 222/
+		);
+		assert.equal(
+			readFileSync(path.join(recovered.cwd, 'e2e-builds', 'wcpos-e2e-android.apk'), 'utf8'),
+			'apk\n'
+		);
+
+		// A single-platform key is satisfied by main's platform=all artifact.
+		const ios = run({ CACHE_KEY: 'e2e-native-devclient-fp1-ios' });
+		assert.match(ios.outputs, /^hit=true$/m);
+
+		// No artifact for this fingerprint: report, no files, and let the next step decide.
+		const miss = run({ FINGERPRINT: 'fp9', CACHE_KEY: 'e2e-native-devclient-fp9' });
+		assert.equal(miss.status, 0, miss.stdout + miss.stderr);
+		assert.match(miss.outputs, /^hit=false$/m);
+		assert.equal(existsSync(path.join(miss.cwd, 'e2e-builds')), false);
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
+test('the shared setup action saves one turbo cache entry per OS per day, from main only', () => {
+	// Per-commit keys filled the 10 GB quota within hours and evicted the dev
+	// client (see the recovery test above). Caches are branch-scoped and an
+	// exact hit never re-saves, so PRs restore read-only and only a main job
+	// that runs the full turbo graph saves.
+	const setup = readAction('setup-monorepo/action.yml');
+	const readOnly = setup.runs.steps.find((step) => step.name === '♻️ Restore cache');
+	const saving = setup.runs.steps.find(
+		(step) => step.name === '♻️ Restore cache (saved at job end)'
+	);
+	assert.equal(readOnly.uses, 'actions/cache/restore@v4');
+	assert.equal(readOnly.if, "inputs.cache-save != 'true'");
+	assert.equal(saving.uses, 'actions/cache@v4');
+	assert.equal(saving.if, "inputs.cache-save == 'true'");
+	assert.equal(setup.inputs['cache-save'].default, 'false');
+	for (const cache of [readOnly, saving]) {
+		assert.doesNotMatch(cache.with.key, /github\.sha/);
+		assert.match(cache.with.key, /steps\.cache-day\.outputs\.day/);
+		assert.equal(cache.with.path, readOnly.with.path);
+	}
+	const day = setup.runs.steps.find((step) => step.id === 'cache-day');
+	assert.match(day.run, /date -u \+%Y-%m-%d/);
+	assert.ok(
+		setup.runs.steps.indexOf(day) < setup.runs.steps.indexOf(readOnly),
+		'the day must be computed before the cache key uses it'
+	);
+
+	// Exactly one caller saves: deploy's build job on main. test.yml's unit-tests
+	// runs jest/vitest directly, not the turbo graph — a save from it would freeze
+	// the day's immutable entry without turbo outputs (review, #1830).
+	const savers = [];
+	for (const file of ['deploy.yml', 'test.yml', 'e2e-native.yml', 'build.yml']) {
+		const workflow = readWorkflow(file);
+		for (const [jobName, job] of Object.entries(workflow.jobs)) {
+			for (const step of job.steps ?? []) {
+				if (step.uses !== './.github/actions/setup-monorepo') continue;
+				if (step.with?.['cache-save']) savers.push(`${file}:${jobName}=${step.with['cache-save']}`);
+			}
+		}
+	}
+	assert.deepEqual(savers, ["deploy.yml:deploy=${{ github.ref == 'refs/heads/main' }}"]);
+});
+
 test('the native spend guard charges the builds a run will queue and fails closed on bad data', () => {
 	// Money-bearing shell: a fake `eas` on PATH returns EAS_MOCK_BUILDS as the
 	// month's build list; the guard decides from the count, the platform's slot
@@ -2059,9 +2204,11 @@ test('native device jobs never queue behind another run (owner ruling 2026-09-03
 	// after the head had moved. PRs test at the same time now — store
 	// capacity is php-fpm workers, not a queue in CI.
 	assert.ok(!existsSync(path.join(ROOT, '.github', 'scripts', 'native-device-turnstile.sh')));
-	// PR-controlled setup actions must not inherit Actions API access, and
-	// with no turnstile no job needs it.
+	// PR-controlled setup actions must not inherit Actions API access at the
+	// workflow level. The resolve job alone reads other runs' artifacts (the
+	// dev-client recovery), so it alone carries actions: read.
 	assert.equal(workflow.permissions.actions, undefined);
+	assert.deepEqual(workflow.jobs.build.permissions, { contents: 'read', actions: 'read' });
 	for (const [jobName, emoji, platform] of [
 		['android', '🤖', 'Android'],
 		['ios', '🍎', 'iOS'],
