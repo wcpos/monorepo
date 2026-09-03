@@ -1,4 +1,4 @@
-import type { FiltersOf } from '../../../../../query/query-state-types';
+import type { FiltersOf, QueryStateOf } from '../../../../../query/query-state-types';
 import type { QuickFilter } from './filter-bar-layout';
 
 export function quickFilterToQueryPatch(quickFilter: QuickFilter): {
@@ -18,10 +18,23 @@ function equalNumberSets(left: number[] | undefined, right: number[]): boolean {
 	return !!left && left.length === right.length && right.every((value) => left.includes(value));
 }
 
+/**
+ * A quick filter is active while everything it would apply is reflected in the query state:
+ * every condition exactly, and — when it carries one — its sort. A sort-only button has no
+ * conditions, so without the sort check `every` would be vacuously true and the button could
+ * never be pressed ON.
+ */
 export function isQuickFilterActive(
 	quickFilter: QuickFilter,
-	state: { search: string; filters: FiltersOf<'products'> }
+	state: { search: string; filters: FiltersOf<'products'>; sort: QueryStateOf<'products'>['sort'] }
 ): boolean {
+	if (
+		quickFilter.sort &&
+		(state.sort.field !== quickFilter.sort.field ||
+			state.sort.direction !== quickFilter.sort.direction)
+	) {
+		return false;
+	}
 	return quickFilter.conditions.every((condition) => {
 		if (condition.field === 'search') return state.search === condition.value;
 		if (

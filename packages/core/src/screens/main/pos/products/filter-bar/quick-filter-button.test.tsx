@@ -39,8 +39,16 @@ jest.mock('../../../../../query', () => ({
 	useQueryState: (read: (state: unknown) => unknown) =>
 		read(
 			active
-				? { search: 'shirt', filters: { categories: [2], tags: [], brands: [], on_sale: true } }
-				: { search: '', filters: { categories: [], tags: [], brands: [] } }
+				? {
+						search: 'shirt',
+						filters: { categories: [2], tags: [], brands: [], on_sale: true },
+						sort: { field: 'sortable_price', direction: 'desc' },
+					}
+				: {
+						search: '',
+						filters: { categories: [], tags: [], brands: [] },
+						sort: { field: 'name', direction: 'asc' },
+					}
 		),
 	useQueryStateActions: () => actions,
 }));

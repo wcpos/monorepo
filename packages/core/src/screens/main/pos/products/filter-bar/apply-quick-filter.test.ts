@@ -38,6 +38,7 @@ it('converts every condition field into a products query patch', () => {
 it('requires every field to match exactly, comparing taxonomy ids as sets', () => {
 	const state = {
 		search: 'shirt',
+		sort: { field: 'name' as const, direction: 'asc' as const },
 		filters: {
 			categories: [2, 1],
 			tags: [3],
@@ -72,7 +73,35 @@ it.each(filter.conditions)('detects an active standalone $field condition', (con
 	expect(
 		isQuickFilterActive(single, {
 			search: patch.search,
+			sort: { field: 'name', direction: 'asc' },
 			filters: { categories: [], tags: [], brands: [], ...patch.filters },
+		})
+	).toBe(true);
+});
+
+it('is active only while its sort is applied, so a sort-only button can be pressed on', () => {
+	const sortOnly: QuickFilter = {
+		id: 'cheapest',
+		type: 'quick',
+		label: 'Cheapest first',
+		conditions: [],
+		sort: { field: 'sortable_price', direction: 'asc' },
+	};
+	const baseline = { search: '', filters: { categories: [], tags: [], brands: [] } };
+
+	expect(
+		isQuickFilterActive(sortOnly, { ...baseline, sort: { field: 'name', direction: 'asc' } })
+	).toBe(false);
+	expect(
+		isQuickFilterActive(sortOnly, {
+			...baseline,
+			sort: { field: 'sortable_price', direction: 'desc' },
+		})
+	).toBe(false);
+	expect(
+		isQuickFilterActive(sortOnly, {
+			...baseline,
+			sort: { field: 'sortable_price', direction: 'asc' },
 		})
 	).toBe(true);
 });

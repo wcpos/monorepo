@@ -27,8 +27,26 @@ jest.mock('../../../../../contexts/translations', () => ({
 		return (messages[key] ?? key).replace('{n}', String(values?.n));
 	},
 }));
+// The POS products settings the preview must mirror; tests override per case.
+let settings: { showOutOfStock: boolean; sortBy: string; sortDirection: string } = {
+	showOutOfStock: false,
+	sortBy: 'name',
+	sortDirection: 'asc',
+};
+const providerProps: Record<string, unknown>[] = [];
+
+jest.mock('@wcpos/query', () => ({
+	useDocField: (_doc: unknown, read: (value: unknown) => unknown) => read(settings),
+}));
+jest.mock('../../../contexts/ui-settings', () => ({ useUISettings: () => ({ uiSettings: {} }) }));
 jest.mock('../../../../../query', () => ({
-	QueryStateProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	QueryStateProvider: ({
+		children,
+		...props
+	}: React.PropsWithChildren<Record<string, unknown>>) => {
+		providerProps.push(props);
+		return <>{children}</>;
+	},
 	useQueryState: () => ({ filters: {}, search: '', sort: { field: 'name', direction: 'asc' } }),
 	useQueryStateActions: () => actions,
 	useRelationalCollectionBinding: () => ({ resource: {} }),
@@ -59,7 +77,29 @@ const draft: QuickFilter = {
 beforeEach(() => {
 	jest.useFakeTimers();
 	hits = [];
+	providerProps.length = 0;
+	settings = { showOutOfStock: false, sortBy: 'name', sortDirection: 'asc' };
 	jest.clearAllMocks();
+});
+
+it('seeds the preview with the POS baseline: in-stock only unless shown, and the settings sort', () => {
+	settings = { showOutOfStock: false, sortBy: 'sku', sortDirection: 'desc' };
+	render(<QuickFilterPreview draft={draft} />);
+	expect(providerProps[0]).toMatchObject({
+		initialFilters: { status: 'publish', stock_status: 'instock' },
+		initialSort: { field: 'sku', direction: 'desc' },
+	});
+	act(() => jest.advanceTimersByTime(250));
+	// A button without its own sort previews under the settings sort, as the grid would.
+	expect(actions.setSort).toHaveBeenCalledWith('sku', 'desc');
+
+	providerProps.length = 0;
+	settings = { showOutOfStock: true, sortBy: 'name', sortDirection: 'asc' };
+	render(<QuickFilterPreview draft={draft} />);
+	expect(providerProps[0]).toMatchObject({ initialFilters: { status: 'publish' } });
+	expect((providerProps[0] as { initialFilters: object }).initialFilters).not.toHaveProperty(
+		'stock_status'
+	);
 });
 
 afterEach(() => jest.useRealTimers());

@@ -9,12 +9,13 @@ import { useUISettings } from '../../../contexts/ui-settings';
 import { useQueryState, useQueryStateActions } from '../../../../../query';
 
 import type { QuickFilter } from './filter-bar-layout';
-import type { FiltersOf } from '../../../../../query/query-state-types';
+import type { FiltersOf, QueryStateOf } from '../../../../../query/query-state-types';
 
 export function QuickFilterButton({ quickFilter }: { quickFilter: QuickFilter }) {
-	const state = useQueryState<'products', { search: string; filters: FiltersOf<'products'> }>(
-		(value) => ({ search: value.search, filters: value.filters })
-	);
+	const state = useQueryState<
+		'products',
+		{ search: string; filters: FiltersOf<'products'>; sort: QueryStateOf<'products'>['sort'] }
+	>((value) => ({ search: value.search, filters: value.filters, sort: value.sort }));
 	const actions = useQueryStateActions<'products'>();
 	const { uiSettings } = useUISettings('pos-products');
 	const settingsSort = useDocField(uiSettings, (value) =>
