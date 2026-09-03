@@ -79,8 +79,28 @@ jest.mock('@wcpos/query', () => ({
 	},
 }));
 jest.mock('@wcpos/components/button', () => ({
-	Button: ({ children, onPress }: { children: React.ReactNode; onPress?: () => void }) => (
-		<button onClick={onPress}>{children}</button>
+	// Mirrors the real Button: `loading` disables the press.
+	Button: ({
+		children,
+		onPress,
+		testID,
+		loading,
+		disabled,
+	}: {
+		children: React.ReactNode;
+		onPress?: () => void;
+		testID?: string;
+		loading?: boolean;
+		disabled?: boolean;
+	}) => (
+		<button
+			data-testid={testID}
+			data-loading={String(!!loading)}
+			disabled={!!disabled || !!loading}
+			onClick={onPress}
+		>
+			{children}
+		</button>
 	),
 	ButtonText: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
@@ -392,6 +412,53 @@ describe('Variations popover query state', () => {
 		} finally {
 			jest.useRealTimers();
 		}
+	});
+
+	it('holds Add to cart while an add is pending, so a second press cannot add twice', async () => {
+		// The popover closes only after the add settles (variable-actions.tsx);
+		// until then the button stayed pressable, and a press during a slow write
+		// (a starved device, a retry from E2E) enqueued a second line.
+		let settle: () => void = () => {};
+		const addToCart = jest.fn(
+			() =>
+				new Promise<void>((resolve) => {
+					settle = resolve;
+				})
+		);
+		render(
+			<VariationsPopover
+				parent={
+					{
+						payload: {
+							variations: [11, 12],
+							attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
+						},
+					} as never
+				}
+				addToCart={addToCart}
+			/>
+		);
+		const button = () => screen.getByTestId('variation-popover-add-to-cart') as HTMLButtonElement;
+		expect(button().disabled).toBe(false);
+
+		await act(async () => {
+			button().click();
+		});
+		expect(addToCart).toHaveBeenCalledTimes(1);
+		expect(button().disabled).toBe(true);
+		expect(button().dataset.loading).toBe('true');
+
+		// The DOM click is stopped by `disabled`; the handler's own guard must hold too.
+		await act(async () => {
+			button().click();
+		});
+		expect(addToCart).toHaveBeenCalledTimes(1);
+
+		await act(async () => {
+			settle();
+		});
+		expect(button().disabled).toBe(false);
+		expect(button().dataset.loading).toBe('false');
 	});
 
 	it('does not show draft variations', () => {
