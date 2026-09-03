@@ -66,11 +66,14 @@ on:
 #  - Main PUSHES: one shared group + cancel-in-progress, so the newest main
 #    head cancels queued AND running older-head runs. This deliberately
 #    reverses the run-unique main groups of #1687 for THIS workflow only: the
-#    2026-08-30 pending-cancels-pending incident the turnstile script guards
-#    against was cross-run JOB-level groups eating other runs' device jobs;
-#    run-level supersession of a superseded MAIN head is now the wanted
-#    behavior, and the FIFO turnstile simply no longer sees the cancelled
-#    runs. Deploy's release gate reads the Deploy workflow, not this one.
+#    2026-08-30 pending-cancels-pending incident was cross-run JOB-level
+#    groups eating other runs' device jobs; run-level supersession of a
+#    superseded MAIN head is the wanted behavior. Deploy's release gate reads
+#    the Deploy workflow, not this one.
+#  - NO cross-run queue (owner ruling 2026-09-03): device jobs from different
+#    PRs run at the same time. The FIFO device turnstile (2026-08-30 →
+#    2026-09-03) made every PR wait for every other run's suite; store
+#    capacity is dev-pro's php-fpm worker count, not a queue here.
 #  - workflow_dispatch and attempt>1 re-runs keep run-unique groups: a
 #    deliberate human/bot run must not be killed by the next merge.
 concurrency:
@@ -354,15 +357,18 @@ jobs:
     needs: build
     if: needs.build.outputs.platform != 'ios'
     permissions:
-      # The turnstile lists this workflow's runs and their jobs.
-      actions: read
       contents: read
-    # One job per (platform, device class) at a time across the whole repo —
-    # enforced by the "Wait for the device slot" step, NOT by a job-level
-    # concurrency group: a GitHub group holds one running and one pending job
-    # and a newer pending job cancels the older pending one, which cancelled
-    # every main run on 2026-08-30 and turned PR device jobs red as
-    # "cancelled". See .github/scripts/native-device-turnstile.sh.
+    # No cross-run serialisation. Owner ruling 2026-09-03: device jobs from
+    # different PRs run at the same time. The FIFO device turnstile this job
+    # carried 2026-08-30 → 2026-09-03 queued every PR's device jobs behind
+    # every other run's (waits of 23 min – 2 h observed), so a PR waited an
+    # hour for a verdict that arrived long after the head had moved. Store
+    # capacity is dev-pro's php-fpm worker count (ruled up 2026-09-01), not a
+    # queue here; if the pay-page stall class returns under concurrency, add
+    # workers. Never a job-level concurrency group either: GitHub keeps one
+    # pending job per group and cancels the older one, which cancelled every
+    # main run on 2026-08-30. Superseded heads are cancelled by the per-PR
+    # workflow group above and by cancel-native-on-pr-close.yml.
     runs-on: ubuntu-latest
     # 100, not 60: the app's ONE-TIME initial catalog sync (~40 min on these
     # 2-vCPU swiftshader emulators) slows every interaction in whichever flow
@@ -370,18 +376,19 @@ jobs:
     # flow 06 41m; run 33131212326: flows 04+05 52m together, then cancelled at
     # 60:00 with every completed flow green). Once the sync finishes, flows
     # take ~1 min. Budget = worst observed sync window + full suite + headroom.
-    # Plus 150 for the device-slot turnstile's wait budget (the wait happens
-    # inside this job, so it counts against this timeout).
-    timeout-minutes: 250
+    # 130, not 100 (CodeRabbit on #1795): the job's own setup can spend 25 min
+    # generating the AVD on a cache miss and 15 min on Metro's first bundle
+    # before the 90-min suite ceiling starts, and the always() artifact steps
+    # must still run after a suite that hits that ceiling.
+    timeout-minutes: 130
     strategy:
       # Both device classes of a platform run at once. max-parallel: 1 dated
       # from dev-pro's 4-worker php-fpm (181 pm.max_children warnings in six
       # hours on 2026-08-29/30, run 33285279390 / 33280466971); the owner
       # ruled the workers UP on 2026-09-01 and on 2026-09-02 that the suite
       # must be nowhere near an hour — serial classes doubled every PR run.
-      # The FIFO turnstile (keyed by exact job name) still serialises runs
-      # per (platform, class). If the pay-page class returns, that is the
-      # store's capacity, not a reason to serialise classes again.
+      # If the pay-page class returns, that is the store's capacity, not a
+      # reason to serialise classes again.
       max-parallel: 2
       fail-fast: false
       matrix:
@@ -394,16 +401,6 @@ jobs:
         with:
           ref: ${{ github.sha }}
           submodules: false
-
-      # FIFO queue for the (platform, device) slot — waits, never cancels.
-      # Before the downloads and the monorepo setup so a long wait does not
-      # sit on a warm Metro. Rationale and rule: the script's header.
-      - name: ⏳ Wait for the device slot
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SLOT_JOB: 🤖 Android (${{ matrix.device.name }})
-          PLATFORM_PREFIX: '🤖 Android ('
-        run: bash .github/scripts/native-device-turnstile.sh
 
       - name: 🏗 Checkout revision under test
         if: needs.build.outputs.sha != github.sha
@@ -904,27 +901,21 @@ jobs:
     needs: build
     if: needs.build.outputs.platform != 'android'
     permissions:
-      # The turnstile lists this workflow's runs and their jobs.
-      actions: read
       contents: read
-    # One job per (platform, device class) at a time across the whole repo —
-    # see the Android job's twin comment and
-    # .github/scripts/native-device-turnstile.sh.
+    # No cross-run serialisation — see the Android job's twin comment (owner
+    # ruling 2026-09-03: PRs test at the same time).
     runs-on: macos-15
     # 60, was 45: the dev-client architecture adds pnpm install (~3-5 min) and
     # Metro's one-time bundle compile (~3-6 min) to the front of the job.
-    # Plus 150 for the device-slot turnstile's wait budget (the wait happens
-    # inside this job, so it counts against this timeout).
-    timeout-minutes: 210
+    timeout-minutes: 60
     strategy:
       # Both device classes of a platform run at once. max-parallel: 1 dated
       # from dev-pro's 4-worker php-fpm (181 pm.max_children warnings in six
       # hours on 2026-08-29/30, run 33285279390 / 33280466971); the owner
       # ruled the workers UP on 2026-09-01 and on 2026-09-02 that the suite
       # must be nowhere near an hour — serial classes doubled every PR run.
-      # The FIFO turnstile (keyed by exact job name) still serialises runs
-      # per (platform, class). If the pay-page class returns, that is the
-      # store's capacity, not a reason to serialise classes again.
+      # If the pay-page class returns, that is the store's capacity, not a
+      # reason to serialise classes again.
       max-parallel: 2
       fail-fast: false
       matrix:
@@ -937,16 +928,6 @@ jobs:
         with:
           ref: ${{ github.sha }}
           submodules: false
-
-      # FIFO queue for the (platform, device) slot — waits, never cancels.
-      # Before the downloads and the monorepo setup so a long wait does not
-      # sit on a warm Metro. Rationale and rule: the script's header.
-      - name: ⏳ Wait for the device slot
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SLOT_JOB: 🍎 iOS (${{ matrix.device.name }})
-          PLATFORM_PREFIX: '🍎 iOS ('
-        run: bash .github/scripts/native-device-turnstile.sh
 
       - name: 🏗 Checkout revision under test
         if: needs.build.outputs.sha != github.sha
