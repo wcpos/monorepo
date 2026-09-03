@@ -28,6 +28,19 @@ import * as React from 'react';
  * drawer still stays off the screen — and out of the accessibility tree, which is what a
  * closed drawer should be anyway.
  *
+ * The hide is honoured by the library's own animated style as well (patch on
+ * `react-native-drawer-layout`, `patches/react-native-drawer-layout@4.2.5.patch`): that worklet
+ * is what actually writes `display` to the native view, and it re-runs on every re-render and
+ * every shared-value change, so it must return `'none'` for a hidden panel or it would un-hide
+ * it at the stale transform. That is also why there is deliberately NO "drop the hide for one
+ * commit and re-apply it" path here any more: an earlier version re-asserted the hide whenever
+ * the animated progress returned to 0, assuming the dropped frame showed nothing. It does not —
+ * the shadow tree holds the near-open transform — and on a JS thread busy mounting a heavy
+ * screen the drop landed seconds after the close and put the panel back over the routed screen
+ * (Android flow 05, run 33725936595: the drawer reappears 13 s after the Customers tap, no
+ * overlay, at the moment the rows render). A cancelled opening swipe is covered by the patch
+ * instead: the panel shows while the gesture is active and hides again once fully closed.
+ *
  * Note we cannot use the navigator's own `transitionEnd` event for this: the drawer emits it
  * with `target: state.key` (the navigator, not a route), and `useNavigationBuilder`'s emitter
  * bails out (`if (route == null) return`) for a target that matches no route, so neither
@@ -53,48 +66,18 @@ export type DrawerPanelStatus = 'open' | 'closed';
  */
 const DrawerPanelHiddenContext = React.createContext(false);
 const SetDrawerPanelHiddenContext = React.createContext<(hidden: boolean) => void>(() => {});
-const ReassertDrawerPanelHiddenContext = React.createContext<() => void>(() => {});
 
 export function DrawerPanelVisibilityProvider({ children }: { children: React.ReactNode }) {
 	// Starts hidden: the drawer boots closed, and an un-hidden closed panel is exactly the
 	// state this guard exists to prevent.
 	const [hidden, setHidden] = React.useState(true);
-	const [reassertsRequested, setReassertsRequested] = React.useState(0);
-	const [reassertsServed, setReassertsServed] = React.useState(0);
-
-	/**
-	 * A swipe that starts opening a hidden drawer and is released below the opening threshold
-	 * leaves `react-native-drawer-layout`'s own `display: 'flex'` written straight onto the panel
-	 * by Reanimated, and springs back closed WITHOUT a navigation state change — so nothing
-	 * re-renders and our `display: 'none'` is never re-applied. The guard would silently disarm.
-	 *
-	 * Re-asserting has to be a real prop change or the renderer diffs it away, so drop the hide
-	 * for exactly one commit and put it straight back. The panel is at its closed transform by
-	 * then, so the dropped frame shows nothing. A drawer that is already open is unaffected —
-	 * the published value is `false` either way.
-	 */
-	const reassert = React.useCallback(() => {
-		setReassertsRequested((requested) => requested + 1);
-	}, []);
-
-	const dropping = reassertsRequested !== reassertsServed;
-
-	React.useEffect(() => {
-		if (!dropping) return;
-		// Deferred rather than set straight away: the drop has to land as its own commit, or
-		// React batches it away with the restore and the renderer sees no change at all.
-		const restore = setTimeout(() => setReassertsServed(reassertsRequested), 0);
-		return () => clearTimeout(restore);
-	}, [dropping, reassertsRequested]);
 
 	return (
-		<ReassertDrawerPanelHiddenContext.Provider value={reassert}>
-			<SetDrawerPanelHiddenContext.Provider value={setHidden}>
-				<DrawerPanelHiddenContext.Provider value={hidden && !dropping}>
-					{children}
-				</DrawerPanelHiddenContext.Provider>
-			</SetDrawerPanelHiddenContext.Provider>
-		</ReassertDrawerPanelHiddenContext.Provider>
+		<SetDrawerPanelHiddenContext.Provider value={setHidden}>
+			<DrawerPanelHiddenContext.Provider value={hidden}>
+				{children}
+			</DrawerPanelHiddenContext.Provider>
+		</SetDrawerPanelHiddenContext.Provider>
 	);
 }
 
@@ -104,15 +87,6 @@ export function DrawerPanelVisibilityProvider({ children }: { children: React.Re
  */
 export function useDrawerPanelHidden(): boolean {
 	return React.useContext(DrawerPanelHiddenContext);
-}
-
-/**
- * Re-applies `display: 'none'` to a panel that is already meant to be hidden. Called when the
- * drawer's animated progress returns to 0 without the navigation state having changed — see the
- * cancelled-swipe note on `reassert` above.
- */
-export function useReassertDrawerPanelHidden(): () => void {
-	return React.useContext(ReassertDrawerPanelHiddenContext);
 }
 
 /**

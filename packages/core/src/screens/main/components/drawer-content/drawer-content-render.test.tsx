@@ -10,8 +10,8 @@
  * root error boundary, on web AND native.
  *
  * This pins that: `DrawerContent` renders with no drawer context of any kind in the tree, the
- * way the library invokes it. Jest has no platform-extension resolution, so the web variant of
- * `DrawerProgressWatcher` is the one resolved here — the same file the browser bundle gets.
+ * way the library invokes it, and the mocked `useDrawerProgress` below throws so any future
+ * hook call from the body fails here first.
  */
 import * as React from 'react';
 import { Platform } from 'react-native';
