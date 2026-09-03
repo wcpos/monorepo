@@ -41,7 +41,8 @@ Missing logging in the printer path is a defect. Every main-process handler logs
 elapsed time (`apps/electron/src/main/print-epos-http.ts`, `print-raw-tcp.ts`,
 `printer-discovery.ts`); every probe logs what it sent and what came back (`src/transport/
 epos-endpoint.ts`, `src/discovery/identify.ts`) through `printerLogger` (`src/logger.ts`), which is
-forwarded into Electron's `main.log`. When a live finding cannot be explained from the log, the first
+forwarded into Electron's `main.log` — the package-side half lands with wcpos/monorepo#1828; until
+it merges, only the Electron main-process handlers log. When a live finding cannot be explained from the log, the first
 fix is the log line that would have explained it, before any theory. Next on this rule: a diagnostics
 export (log + probe matrix + identity + platform) so a merchant's ticket arrives as a signature.
 
@@ -95,7 +96,10 @@ Append, newest last. One entry = date · device/lane · signature → cause → 
 - **2026-09-03 · Epson TM-m30III fw 13.21 (RED, Secure Printing ON by default in EU/UK) · network.**
   Every ESC/POS byte stream over the network is held and never printed (raw 9100 → quarantine; raw
   TLS 9143 → held; ePOS `<command>` → held). Structured ePOS-Print XML over 443 prints and is
-  acknowledged. Fixed: `renderEposXml` + `printMarkup` (wcpos/monorepo#1819). Shopify and Lightspeed
+  acknowledged. Fixed for text/receipt jobs: `renderEposXml` + `printMarkup` (wcpos/monorepo#1819).
+  **Still open:** the `fullReceiptRaster` profile toggle renders ESC/POS bytes and goes through
+  `printRaw` → ePOS `<command>`, which this printer holds; route raster output through structured
+  `<image>` markup before calling that setting supported on RED Epsons. Shopify and Lightspeed
   simply tell merchants to switch Secure Printing off; Epson's eRED guide port table says 443/8043
   "can print (encrypted)". Wizard remedy for the signature (443 answers, 80 → 404, 9100 silent):
   print structured XML on 443, and offer the Web Config steps to disable Secure Printing.
