@@ -20,11 +20,18 @@
 # approval (`build` input below).
 #
 # PR runs test the checked-out merge revision; push runs test `main`.
+#
+# WHICH PRs RUN DEVICES (owner ruling 2026-09-03, "we have so many PRs backing
+# up, the mobile e2e tests are grinding everything to a halt"): only PRs that
+# touch inputs the native apps alone consume — Maestro flows, native config
+# and deps, this workflow, its seed. Plain app/package JS runs the web suite on
+# the PR and the device suites on the push to main (the everything plan), so a
+# red main names a handful of commits. scripts/ci-plan.mjs is the rule.
 name: E2E Native
 
 on:
-  # Every PR and merge to main, not a nightly. The planner below skips PRs
-  # that implicate no native tier; drafts and forks report a legitimate skip.
+  # Every merge to main and the native-implicating PRs, not a nightly. The
+  # planner below skips the other PRs; drafts and forks report a legitimate skip.
   push:
     branches: [main]
   pull_request:

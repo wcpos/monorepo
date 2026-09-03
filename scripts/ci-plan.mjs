@@ -239,15 +239,21 @@ export function planFor(changedFiles, { commentOnly = false } = {}) {
 				else units.add(match[1] ?? 'main');
 				reasons.unit.add(rule);
 			} else if (rule === 'package-src') {
+				// No native on a PR for plain app/package source (owner ruling
+				// 2026-09-03): a device suite is ~30 min of shared-store capacity
+				// per platform and cannot gate several PRs an hour; the web suite
+				// already runs this JS in a browser. The push to main is the
+				// everything plan, so the device suites still run on every merge
+				// and a red main names a handful of commits. Only inputs the
+				// native apps alone consume — Maestro flows, native config and
+				// deps, the native workflow and its seed — run devices on the PR.
 				for (const name of affectedUnits(file.split('/')[1])) units.add(name);
 				reasons.unit.add(rule);
 				widen('web', 'full', rule);
-				widen('native', 'cachehit', rule);
 			} else if (rule === 'app-src') {
 				units.add('main');
 				reasons.unit.add(rule);
 				widen('web', 'full', rule);
-				widen('native', 'cachehit', rule);
 			} else if (rule === 'native-config') {
 				units.add('main');
 				reasons.unit.add(rule);

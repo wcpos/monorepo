@@ -218,8 +218,8 @@ test('one representative path exercises every ordered rule', () => {
 		['apps/main/e2e/fixtures.ts', 'web-helper', { web: 'full' }],
 		['packages/core/src/x.test.ts', 'unit-test-file', { unit: 'core' }],
 		['packages/virtual-printer/src/x.ts', 'leaf-package', { unit: 'none' }],
-		['packages/utils/src/x.ts', 'package-src', { web: 'full', native: 'cachehit' }],
-		['apps/main/src/x.ts', 'app-src', { unit: 'main', web: 'full' }],
+		['packages/utils/src/x.ts', 'package-src', { web: 'full', native: 'none' }],
+		['apps/main/src/x.ts', 'app-src', { unit: 'main', web: 'full', native: 'none' }],
 		['apps/main/app.config.ts', 'native-config', { native: 'rebuild' }],
 		['apps/main/modules/scanner/android/build.gradle', 'native-config', { native: 'rebuild' }],
 		['pnpm-lock.yaml', 'root-deps', { unit: 'all', web: 'full', native: 'rebuild' }],
@@ -237,6 +237,26 @@ test('one representative path exercises every ordered rule', () => {
 		for (const [key, value] of Object.entries(expected))
 			assert.equal(plan[key], value, `${file}: ${key}`);
 	}
+});
+
+test('app and package source do not run the device suites on a PR (owner ruling 2026-09-03)', () => {
+	// The web suite covers this JS on the PR; the push to main is the everything
+	// plan and runs the devices on every merge. Only native-only inputs pay for
+	// a device run on the PR.
+	for (const file of ['packages/core/src/screens/main/pos/index.tsx', 'apps/main/app/index.tsx']) {
+		const plan = planFor([file], { commentOnly: false });
+		assert.equal(plan.native, 'none', file);
+		assert.equal(plan.web, 'full', file);
+		assert.match(plan.reason, /native skipped/);
+	}
+	for (const file of [
+		'apps/main/.maestro/flows/01.yml',
+		'apps/main/app.config.ts',
+		'pnpm-lock.yaml',
+		'.github/workflows/e2e-native.yml',
+		'scripts/e2e-native-seed.mjs',
+	])
+		assert.notEqual(planFor([file], { commentOnly: false }).native, 'none', file);
 });
 
 test('workflow self-triggers widen only their associated tier', () => {
