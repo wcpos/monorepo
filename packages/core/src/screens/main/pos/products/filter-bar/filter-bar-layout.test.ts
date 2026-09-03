@@ -115,7 +115,8 @@ it('describes conditions and sort in one muted summary', () => {
 				],
 				sort: { field: 'sortable_price', direction: 'asc' },
 			}),
-			t
+			t,
+			(value) => `€${value.toFixed(2)}`
 		)
-	).toBe('Category: 2 selected · On sale · Price $10–$50 · Sort: Price ↑');
+	).toBe('Category: 2 selected · On sale · Price €10.00–€50.00 · Sort: Price ↑');
 });

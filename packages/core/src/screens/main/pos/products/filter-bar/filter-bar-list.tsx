@@ -23,6 +23,7 @@ import { useDocField } from '@wcpos/query';
 
 import { describeQuickFilter, normalizeFilterBar } from './filter-bar-layout';
 import { useUISettings } from '../../../contexts/ui-settings';
+import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useT } from '../../../../../contexts/translations';
 
 import type { FilterBarItem, QuickFilter } from './filter-bar-layout';
@@ -32,6 +33,7 @@ export function FilterBarList({ onEdit }: { onEdit: (quickFilter: QuickFilter | 
 	const items = normalizeFilterBar(useDocField(uiSettings, (value) => value.filterBar));
 	const [deleting, setDeleting] = React.useState<QuickFilter | null>(null);
 	const t = useT();
+	const { format: formatPrice } = useCurrencyFormat();
 	const save = (filterBar: FilterBarItem[]) => void patchUI({ filterBar } as never);
 
 	const renderItem = (item: FilterBarItem) => (
@@ -57,7 +59,7 @@ export function FilterBarList({ onEdit }: { onEdit: (quickFilter: QuickFilter | 
 					<VStack className="flex-1 gap-0">
 						<Text>{item.label}</Text>
 						<Text numberOfLines={1} className="text-muted-foreground text-sm">
-							{describeQuickFilter(item, t)}
+							{describeQuickFilter(item, t, formatPrice)}
 						</Text>
 					</VStack>
 					<IconButton

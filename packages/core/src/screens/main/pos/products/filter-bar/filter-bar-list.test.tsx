@@ -95,7 +95,15 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 jest.mock('../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: {}, getUILabel: (id: string) => id, patchUI }),
 }));
-jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('../../../hooks/use-currency-format', () => ({
+	useCurrencyFormat: () => ({ format: (value: number) => `€${value.toFixed(2)}` }),
+}));
+jest.mock('../../../../../contexts/translations', () => ({
+	useT: () => (key: string, values?: Record<string, string | number>) => {
+		if (key === 'pos_products.quick_filter_price_min') return `Price ${values?.min}+`;
+		return key;
+	},
+}));
 
 beforeEach(() => {
 	items = [
@@ -136,4 +144,15 @@ it('opens the empty editor request from Add quick filter', () => {
 	render(<FilterBarList onEdit={onEdit} />);
 	fireEvent.click(screen.getByTestId('filter-bar-add-quick-filter'));
 	expect(onEdit).toHaveBeenCalledWith(null);
+});
+
+it('formats price summaries with the store currency formatter', () => {
+	items[1] = {
+		id: 'saved',
+		type: 'quick',
+		label: 'Saved',
+		conditions: [{ field: 'price', value: { min: 10 } }],
+	};
+	render(<FilterBarList onEdit={onEdit} />);
+	expect(screen.getByText('Price €10.00+')).toBeTruthy();
 });

@@ -198,7 +198,15 @@ const SORT_LABEL_KEYS: Record<QuickFilterSort['field'], string> = {
 	menu_order: 'common.menu_order',
 };
 
-export function describeQuickFilter(quickFilter: QuickFilter, t: Translate): string {
+export function getQuickFilterSortLabel(field: QuickFilterSort['field'], t: Translate): string {
+	return t(SORT_LABEL_KEYS[field]);
+}
+
+export function describeQuickFilter(
+	quickFilter: QuickFilter,
+	t: Translate,
+	formatPrice: (value: number) => string
+): string {
 	const parts = quickFilter.conditions.map((condition) => {
 		if (
 			condition.field === 'categories' ||
@@ -225,16 +233,21 @@ export function describeQuickFilter(quickFilter: QuickFilter, t: Translate): str
 
 		const { min, max } = condition.value;
 		if (min !== undefined && max !== undefined) {
-			return t('pos_products.quick_filter_price_range', { min: `$${min}`, max: `$${max}` });
+			return t('pos_products.quick_filter_price_range', {
+				min: formatPrice(min),
+				max: formatPrice(max),
+			});
 		}
-		if (min !== undefined) return t('pos_products.quick_filter_price_min', { min: `$${min}` });
-		return t('pos_products.quick_filter_price_max', { max: `$${max}` });
+		if (min !== undefined) {
+			return t('pos_products.quick_filter_price_min', { min: formatPrice(min) });
+		}
+		return t('pos_products.quick_filter_price_max', { max: formatPrice(max as number) });
 	});
 
 	if (quickFilter.sort) {
 		parts.push(
 			t('pos_products.quick_filter_sort', {
-				field: t(SORT_LABEL_KEYS[quickFilter.sort.field]),
+				field: getQuickFilterSortLabel(quickFilter.sort.field, t),
 				direction: quickFilter.sort.direction === 'asc' ? '↑' : '↓',
 			})
 		);
