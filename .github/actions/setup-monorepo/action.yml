@@ -62,6 +62,11 @@ runs:
     # installs never handed over to turbo (runs 33664427747, 33687923179,
     # 33684523571: silence for 20–75 min until the Merge Gate's budget
     # failed the PR). A stale lockfile now fails HERE, loudly, in seconds.
+    # And this is the ONLY install: pnpm-workspace.yaml's
+    # `verifyDepsBeforeRun: warn` stops pnpm 11 from re-installing before
+    # every `pnpm run` / `pnpm exec` (its default is `install`; the same
+    # silent hand-over hang recurred on 2026-09-03 with the frozen lockfile in
+    # place — runs 33734477552 and 33734477584).
     - name: 📦 Install dependencies
       run: |
         if [ "${{ inputs.skip-install-scripts }}" = "true" ]; then
