@@ -32,6 +32,7 @@ interface HttpStatusError extends Error {
 	statusCode?: number;
 }
 
+/** Provides Template Studio's local data, WordPress preview, and printing routes. */
 function templateStudioPlugin(): Plugin {
 	return {
 		name: 'wcpos-template-studio-data',
@@ -201,6 +202,9 @@ function readJsonBody(
 }
 
 export default defineConfig({
+	define: {
+		'import.meta.env.WCPOS_STUDIO_WP_ORIGIN': JSON.stringify(wpProxyOrigin),
+	},
 	resolve: {
 		alias: {
 			'@wcpos/receipt-renderer/render-template': fileURLToPath(
