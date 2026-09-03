@@ -5,6 +5,7 @@
     "width": 60,
     "showOutOfStock": false,
     "position": "left",
+    "quickFilters": [],
     "viewMode": "grid",
     "scannerHeight": 176,
     "gridColumns": 4,

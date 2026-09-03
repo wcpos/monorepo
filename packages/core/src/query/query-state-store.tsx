@@ -20,6 +20,8 @@ const DEFAULT_FILTERS = {
 	logs: {},
 } satisfies { [C in CollectionKey]: FiltersOf<C> };
 
+export type QueryStateStore<C extends CollectionKey> = Store<C>;
+
 type Store<C extends CollectionKey> = {
 	getState(): QueryStateOf<C>;
 	subscribe(listener: () => void): () => void;
@@ -190,6 +192,15 @@ export function useQueryState<C extends CollectionKey, S = QueryStateOf<C>>(
 		return selected;
 	}, [selector, store]);
 	return React.useSyncExternalStore(store.subscribe, getSnapshot, getSnapshot);
+}
+
+/**
+ * The store itself, for hosts that must hand a readonly, subscribable view of query state
+ * to something outside React's render pass — the slot primitive's `createReadonlyView`.
+ * Prefer `useQueryState`; this is not a general-purpose escape hatch.
+ */
+export function useQueryStateStore<C extends CollectionKey>(): QueryStateStore<C> {
+	return useStore<C>();
 }
 
 export function useQueryStateActions<C extends CollectionKey>(): QueryStateActions<C> {

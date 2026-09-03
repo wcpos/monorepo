@@ -13,6 +13,19 @@ export type UISettingSchema<T extends UISettingID> = (typeof initialSettings)[T]
 export type UISettingState<T extends UISettingID> = import('rxdb').RxState<UISettingSchema<T>>;
 
 /**
+ * Enum-valued settings, keyed by the vocabulary the UI can actually render.
+ *
+ * The merge below only fills in keys that are MISSING, so a persisted value that has
+ * fallen outside its enum — a state doc written by a build with a different
+ * vocabulary, or hand-edited — would survive forever and reach the settings form as a
+ * toggle with no matching option. Anything not in the list here is reset to the
+ * authored default. Add an entry when a new enum setting lands.
+ */
+const ENUM_VOCABULARIES: Partial<Record<UISettingID, Record<string, readonly string[]>>> = {
+	'pos-products': { position: ['left', 'right'] },
+};
+
+/**
  * @TODO - this handles the first depth of the schema, but not nested values
  * If we change nested schema (eg: columns), we'll need to update this
  */
@@ -31,6 +44,12 @@ export const mergeWithInitalValues = async (
 
 		if (currentValue === undefined) {
 			await state.set(typedKey, (val) => initial[typedKey]);
+			continue;
+		}
+
+		const vocabulary = ENUM_VOCABULARIES[id]?.[key];
+		if (vocabulary && !vocabulary.includes(currentValue as string)) {
+			await state.set(typedKey, () => initial[typedKey]);
 			continue;
 		}
 

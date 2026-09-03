@@ -5,9 +5,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
+import { Button, ButtonText } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { Form, FormField, FormSwitch, useFormChangeHandler } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
+import { Input } from '@wcpos/components/input';
 import {
 	Select,
 	SelectContent,
@@ -23,6 +25,14 @@ import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 
 import { MetaDataKeysField } from './meta-data-keys-field';
+import {
+	createQuickFilterId,
+	QUICK_FILTER_KINDS,
+	type QuickFilter,
+	type QuickFilterKind,
+	quickFilterSchema,
+	VALUELESS_QUICK_FILTER_KINDS,
+} from './quick-filters';
 import { useT } from '../../../../contexts/translations';
 import {
 	columnsFormSchema,
@@ -45,6 +55,8 @@ const gridFieldsSchema = z.object({
 
 export const schema = z.object({
 	viewMode: z.enum(['grid', 'table']),
+	position: z.enum(['left', 'right']),
+	quickFilters: z.array(quickFilterSchema),
 	showOutOfStock: z.boolean(),
 	sortBy: z.string(),
 	sortDirection: z.enum(['asc', 'desc']),
@@ -73,6 +85,128 @@ const SORT_FIELD_VALUES = [
 ] as const;
 
 const META_DATA_KEYS_DOCS_URL = 'https://docs.wcpos.com/pos/product-panel/meta-data-keys';
+
+/**
+ * The quick-filter editor. v1 is deliberately a plain text `value` for every kind — a
+ * category/tag/brand picker is a separate piece of work, and the persisted shape does
+ * not change when one arrives.
+ */
+function QuickFiltersEditor({
+	label,
+	value,
+	onChange,
+}: {
+	label: string;
+	value: QuickFilter[] | undefined;
+	onChange: (next: QuickFilter[]) => void;
+}) {
+	const t = useT();
+	const [draft, setDraft] = React.useState<{
+		kind: QuickFilterKind;
+		value: string;
+		label: string;
+	}>({ kind: 'category', value: '', label: '' });
+
+	const filters = value ?? [];
+	const kindLabels: Record<QuickFilterKind, string> = {
+		category: t('common.category'),
+		tag: t('common.tag'),
+		brand: t('common.brand'),
+		featured: t('common.featured'),
+		on_sale: t('common.on_sale'),
+		stock_status: t('common.stock_status'),
+		search: t('common.search'),
+	};
+
+	const needsValue = !VALUELESS_QUICK_FILTER_KINDS.includes(draft.kind);
+	const canAdd = draft.label.trim() !== '' && (!needsValue || draft.value.trim() !== '');
+
+	const handleAdd = () => {
+		if (!canAdd) return;
+		onChange([
+			...filters,
+			{
+				id: createQuickFilterId(),
+				label: draft.label.trim(),
+				kind: draft.kind,
+				value: needsValue ? draft.value.trim() : '',
+			},
+		]);
+		setDraft({ kind: draft.kind, value: '', label: '' });
+	};
+
+	return (
+		<View className="gap-2 px-1 pt-2">
+			<Text className="font-medium">{label}</Text>
+			{filters.map((filter) => (
+				<HStack key={filter.id} className="items-center">
+					<Text className="flex-1">{filter.label}</Text>
+					<Text className="text-muted-foreground text-sm">
+						{filter.value ? `${kindLabels[filter.kind]}: ${filter.value}` : kindLabels[filter.kind]}
+					</Text>
+					<Button
+						size="sm"
+						variant="outline-destructive"
+						testID={`quick-filter-remove-${filter.id}`}
+						onPress={() => onChange(filters.filter((entry) => entry.id !== filter.id))}
+					>
+						<ButtonText>{t('common.remove')}</ButtonText>
+					</Button>
+				</HStack>
+			))}
+			<HStack className="items-end">
+				<View className="flex-1 gap-1">
+					<Text>{t('common.type')}</Text>
+					<Select
+						value={{ value: draft.kind, label: kindLabels[draft.kind] }}
+						onValueChange={(val) =>
+							setDraft((current) => ({
+								...current,
+								kind: (val?.value as QuickFilterKind) ?? current.kind,
+							}))
+						}
+					>
+						<SelectTrigger>
+							<SelectValue placeholder={t('common.type')} />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectGroup>
+								{QUICK_FILTER_KINDS.map((kind) => (
+									<SelectItem
+										key={kind}
+										label={kindLabels[kind]}
+										value={kind}
+										testID={`quick-filter-kind-${kind}`}
+									/>
+								))}
+							</SelectGroup>
+						</SelectContent>
+					</Select>
+				</View>
+				<View className="flex-1 gap-1">
+					<Text>{t('common.value')}</Text>
+					<Input
+						value={draft.value}
+						editable={needsValue}
+						testID="quick-filter-value"
+						onChangeText={(next) => setDraft((current) => ({ ...current, value: next }))}
+					/>
+				</View>
+				<View className="flex-1 gap-1">
+					<Text>{t('common.label')}</Text>
+					<Input
+						value={draft.label}
+						testID="quick-filter-label"
+						onChangeText={(next) => setDraft((current) => ({ ...current, label: next }))}
+					/>
+				</View>
+				<Button size="sm" disabled={!canAdd} testID="quick-filter-add" onPress={handleAdd}>
+					<ButtonText>{t('pos_products.add_quick_filter')}</ButtonText>
+				</Button>
+			</HStack>
+		</View>
+	);
+}
 
 /**
  *
@@ -140,6 +274,27 @@ export function UISettingsForm() {
 										</SelectGroup>
 									</SelectContent>
 								</Select>
+							</View>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="position"
+						render={({ field: { value, onChange } }) => (
+							<View className="gap-1 px-1">
+								<Text>{getUILabel('position')}</Text>
+								<ToggleGroup
+									type="single"
+									value={value}
+									onValueChange={(val) => onChange(val || value)}
+								>
+									<ToggleGroupItem value="left" testID="panel-position-left">
+										<Text>{t('pos_products.products_left')}</Text>
+									</ToggleGroupItem>
+									<ToggleGroupItem value="right" testID="panel-position-right">
+										<Text>{t('pos_products.products_right')}</Text>
+									</ToggleGroupItem>
+								</ToggleGroup>
 							</View>
 						)}
 					/>
@@ -270,6 +425,17 @@ export function UISettingsForm() {
 							{t('pos_products.meta_data_keys_description')}
 						</Text>
 					</View>
+					<FormField
+						control={form.control}
+						name="quickFilters"
+						render={({ field: { value, onChange } }) => (
+							<QuickFiltersEditor
+								label={getUILabel('quickFilters')}
+								value={value}
+								onChange={onChange}
+							/>
+						)}
+					/>
 				</VStack>
 			</Form>
 		</VStack>
