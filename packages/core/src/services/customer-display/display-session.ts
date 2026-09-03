@@ -1,6 +1,6 @@
 import { getLogger } from '@wcpos/utils/logger';
 
-import { makeEnvelope } from './envelope';
+import { makeEnvelope, uuid } from './envelope';
 import { createOfferer, type OffererPeer } from './peer';
 import { serialiseSnapshot } from './snapshot';
 
@@ -61,7 +61,7 @@ export class DisplaySession {
 		this.getConfig = options.getConfig;
 		this.getCurrentState = options.getCurrentState;
 		this.onConnectionChange = options.onConnectionChange;
-		this.uuid = options.uuid ?? (() => globalThis.crypto.randomUUID());
+		this.uuid = options.uuid ?? uuid;
 		this.now = options.now ?? (() => new Date());
 	}
 	get isOpen(): boolean {
@@ -182,7 +182,7 @@ export class DisplaySession {
 		const config = this.getConfig();
 		if (!config || !this.template || this.peer?.channelState !== 'open') return;
 		this.seq = 0;
-		this.peer.send(
+		const sent = this.send(
 			serialiseSnapshot(
 				makeEnvelope(
 					'display.config',
@@ -197,6 +197,7 @@ export class DisplaySession {
 				)
 			)
 		);
+		if (!sent) return;
 		this.configured = true;
 		this.pendingHelloId = null;
 		const current = this.getCurrentState();
@@ -211,7 +212,7 @@ export class DisplaySession {
 	publish(event: DisplayEvent): boolean {
 		if (!this.configured || this.peer?.channelState !== 'open') return false;
 		this.seq += 1;
-		this.peer.send(
+		const sent = this.send(
 			serialiseSnapshot(
 				makeEnvelope(event.action, {
 					...event.payload,
@@ -220,7 +221,20 @@ export class DisplaySession {
 				})
 			)
 		);
-		return true;
+		return sent;
+	}
+
+	private send(text: string): boolean {
+		try {
+			this.peer?.send(text);
+			return true;
+		} catch (error) {
+			logger.warn('Customer display send failed', {
+				context: { displayId: this.display.id, error },
+			});
+			this.peer?.close();
+			return false;
+		}
 	}
 
 	async forget(): Promise<void> {

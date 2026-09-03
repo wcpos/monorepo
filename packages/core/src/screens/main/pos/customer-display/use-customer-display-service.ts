@@ -23,10 +23,18 @@ const WCPOS_V2_PREFIX = '/wcpos/v2/';
 export function useCustomerDisplayService(): void {
 	const { store, site } = useAppState();
 	const restHttp = useRestHttpClient();
-	const restHttpRef = React.useRef(restHttp);
+	const latestRestHttpRef = React.useRef(restHttp);
+	const serviceHttpRef = React.useRef<{
+		store: typeof store;
+		site: typeof site;
+		client: typeof restHttp;
+	} | null>(null);
+	// Refresh only the client bound to the current store/site before passive service effects run.
 	React.useLayoutEffect(() => {
-		restHttpRef.current = restHttp;
-	}, [restHttp]);
+		latestRestHttpRef.current = restHttp;
+		const binding = serviceHttpRef.current;
+		if (binding && binding.store === store && binding.site === site) binding.client = restHttp;
+	}, [restHttp, site, store]);
 	const fields = useDocField(store, (value) => ({
 		display: value.display,
 		id: value.id,
@@ -38,20 +46,9 @@ export function useCustomerDisplayService(): void {
 		pricesIncludeTax: value.prices_include_tax,
 		receiptI18n: value.receipt_i18n,
 	}));
-
-	const http = React.useCallback<HttpFunction>(
-		async <T>(request: HttpRequest): Promise<{ data: T }> => {
-			const client = restHttpRef.current;
-			if (request.method === 'GET') {
-				return (await client.get(request.url, { params: request.params })) as { data: T };
-			}
-			if (request.method === 'POST') {
-				return (await client.post(request.url, request.data)) as { data: T };
-			}
-			return (await client.delete(request.url)) as { data: T };
-		},
-		[]
-	);
+	const hasDisplay = Boolean(fields?.display);
+	const displayContract = fields?.display?.contract;
+	const displaySignaling = fields?.display?.signaling;
 
 	const locale = fields?.locale || 'en_US';
 	const config: DisplayConfigInput = React.useMemo(
@@ -80,8 +77,8 @@ export function useCustomerDisplayService(): void {
 	}, [config]);
 
 	React.useEffect(() => {
-		const display = fields?.display;
-		if (!display) return;
+		if (!hasDisplay) return;
+		const display = { contract: displayContract, signaling: displaySignaling };
 		if (!isSupportedDisplayAdvertisement(display)) {
 			logger.warn('Unsupported customer display advertisement', {
 				context: { contract: display?.contract },
@@ -89,6 +86,18 @@ export function useCustomerDisplayService(): void {
 			return;
 		}
 		const { signaling } = display;
+		const httpBinding = { store, site, client: latestRestHttpRef.current };
+		serviceHttpRef.current = httpBinding;
+		const http: HttpFunction = async <T>(request: HttpRequest): Promise<{ data: T }> => {
+			const client = httpBinding.client;
+			if (request.method === 'GET') {
+				return (await client.get(request.url, { params: request.params })) as { data: T };
+			}
+			if (request.method === 'POST') {
+				return (await client.post(request.url, request.data)) as { data: T };
+			}
+			return (await client.delete(request.url)) as { data: T };
+		};
 
 		let cancelled = false;
 		let startedService: ReturnType<typeof startCustomerDisplayService> | null = null;
@@ -110,11 +119,12 @@ export function useCustomerDisplayService(): void {
 
 		return () => {
 			cancelled = true;
+			if (serviceHttpRef.current === httpBinding) serviceHttpRef.current = null;
 			if (startedService && getCustomerDisplayService() === startedService) {
 				stopCustomerDisplayService();
 			}
 		};
-	}, [fields?.display, fields?.id, http, site, store]);
+	}, [displayContract, displaySignaling, fields?.id, hasDisplay, site, store]);
 
 	React.useEffect(() => {
 		if (fields?.display) getCustomerDisplayService()?.configure(config);

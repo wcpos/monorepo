@@ -125,6 +125,37 @@ test('keeps the service running and uses the latest REST client instance', async
 	expect(nextGet).toHaveBeenCalledWith('displays', { params: undefined });
 });
 
+test('does not restart when an emission changes only display metadata', async () => {
+	const { rerender } = renderHook(() => useCustomerDisplayService());
+	await flushEffects();
+
+	mockStore.name = 'Second Counter';
+	mockStore.display = { contract: 1, signaling: '/wcpos/v2/display' };
+	rerender();
+	await flushEffects();
+
+	expect(mockStart).toHaveBeenCalledTimes(1);
+	expect(mockStopCustomerDisplayService).not.toHaveBeenCalled();
+});
+
+test("keeps an old service's HTTP client bound after a store switch", async () => {
+	const { rerender } = renderHook(() => useCustomerDisplayService());
+	await flushEffects();
+	const { http: oldHttp } = mockStart.mock.calls[0][0] as {
+		http: (request: any) => Promise<unknown>;
+	};
+	const nextGet = jest.fn(async () => ({ data: [] }));
+	mockHttpClient = { get: nextGet, post: mockPost, delete: mockDelete };
+	mockStore = { ...mockStore, localID: 'store-2', id: 8 };
+
+	rerender();
+	await flushEffects();
+	await oldHttp({ method: 'GET', url: 'displays' });
+
+	expect(mockGet).toHaveBeenCalledWith('displays', { params: undefined });
+	expect(nextGet).not.toHaveBeenCalled();
+});
+
 test('configures and reconfigures from reactive store receipt fields', async () => {
 	const { rerender } = renderHook(() => useCustomerDisplayService());
 	await flushEffects();

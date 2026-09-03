@@ -39,17 +39,30 @@ export function useDisplaySnapshot() {
 	);
 	const loggedFailures = React.useRef(new Set<string>());
 	const rows = React.useMemo(() => readLedger(orderData?.meta_data), [orderData?.meta_data]);
+	const displayOrderData = React.useMemo(
+		() =>
+			orderData && {
+				...orderData,
+				line_items: (orderData.line_items ?? []).filter((item) => item.product_id !== null),
+				fee_lines: (orderData.fee_lines ?? []).filter((item) => item.name !== null),
+				shipping_lines: (orderData.shipping_lines ?? []).filter((item) => item.method_id !== null),
+			},
+		[orderData]
+	);
 	const orderBuild = React.useMemo(() => {
-		if (!orderData || !storeData) return { value: null, failed: false };
+		if (!displayOrderData || !storeData) return { value: null, failed: false };
 		try {
 			return {
-				value: buildReceiptData(orderData, storeData, dp, { getStatusLabel, receiptI18n }),
+				value: buildReceiptData(displayOrderData, storeData, dp, {
+					getStatusLabel,
+					receiptI18n,
+				}),
 				failed: false,
 			};
 		} catch {
 			return { value: null, failed: true };
 		}
-	}, [orderData, storeData, dp, getStatusLabel, receiptI18n]);
+	}, [displayOrderData, storeData, dp, getStatusLabel, receiptI18n]);
 	const ledgerBuild = React.useMemo(() => {
 		if (!orderData || !storeData) return { value: null, failed: false };
 		try {
@@ -86,10 +99,10 @@ export function useDisplaySnapshot() {
 			order,
 			ledger,
 			isEmpty:
-				(orderData.line_items?.length ?? 0) === 0 &&
-				(orderData.fee_lines?.length ?? 0) === 0 &&
-				(orderData.shipping_lines?.length ?? 0) === 0,
+				(displayOrderData.line_items?.length ?? 0) === 0 &&
+				(displayOrderData.fee_lines?.length ?? 0) === 0 &&
+				(displayOrderData.shipping_lines?.length ?? 0) === 0,
 			hasCoupons: (orderData.coupon_lines?.length ?? 0) > 0,
 		};
-	}, [orderUuid, orderData, order, ledger, rows]);
+	}, [orderUuid, orderData, displayOrderData, order, ledger, rows]);
 }

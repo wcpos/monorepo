@@ -11,6 +11,7 @@ class FakePeer implements OffererPeer {
 	accepted: string[] = [];
 	candidates: RTCIceCandidateInit[] = [];
 	operations: string[] = [];
+	sendError: Error | null = null;
 	private openListener: () => void = () => undefined;
 	private messageListener: (text: string) => void = () => undefined;
 	private closeListener: () => void = () => undefined;
@@ -27,6 +28,7 @@ class FakePeer implements OffererPeer {
 		this.operations.push(`candidate:${candidate.candidate}`);
 	}
 	send(text: string) {
+		if (this.sendError) throw this.sendError;
 		this.sent.push(text);
 	}
 	onOpen(fn: () => void) {
@@ -176,6 +178,53 @@ test('hello receives an id-correlated config followed by current state at seq 1'
 	});
 	expect(replay.action).toBe('cart.updated');
 	expect(replay.payload).toMatchObject({ seq: 1, sentAt: '2026-09-03T10:00:00.000Z' });
+});
+
+test('a send failure during hello closes the session without propagating', async () => {
+	const { session, peers } = setup();
+	await session.poll();
+	peers[0].open();
+	peers[0].sendError = new Error('channel failed');
+
+	expect(() =>
+		peers[0].message({
+			wcpos: 1,
+			id: 'hello-id',
+			action: 'display.hello',
+			payload: { template: { id: 'ledger', version: 2 } },
+		})
+	).not.toThrow();
+	expect(peers[0].channelState).toBe('closed');
+});
+
+test('posts an offer without crypto.randomUUID', async () => {
+	const originalCrypto = globalThis.crypto;
+	Object.assign(globalThis, { crypto: undefined });
+	try {
+		const peer = new FakePeer();
+		const signaling = {
+			postSignal: jest.fn(async () => undefined),
+			readSignals: jest.fn(async () => []),
+		} as unknown as SignalingClient;
+		const session = new DisplaySession({
+			display,
+			deviceId: 'device-1',
+			signaling,
+			createPeer: () => peer,
+			getConfig: () => config,
+			getCurrentState: () => null,
+			onConnectionChange: jest.fn(),
+		});
+
+		await session.poll();
+
+		expect(signaling.postSignal).toHaveBeenCalledWith(
+			'display-1',
+			expect.objectContaining({ session: expect.any(String), type: 'offer' })
+		);
+	} finally {
+		Object.assign(globalThis, { crypto: originalCrypto });
+	}
 });
 
 test('hello accepts and echoes a numeric template id', async () => {

@@ -1,12 +1,13 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, render } from '@testing-library/react';
+import { act, render, renderHook } from '@testing-library/react';
 
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { notifyCustomerDisplayServiceStart } from './customer-display-service-start';
 import { CustomerDisplaySnapshotSource } from './snapshot-source';
+import { useDisplaySnapshot } from './use-display-snapshot';
 import { buildReceiptData } from '../../receipt/utils/build-receipt-data';
 
 const mockLoggerError = jest.fn();
@@ -33,7 +34,7 @@ jest.mock('../../../../services/customer-display', () => ({
 
 const line = {
 	id: 1,
-	product_id: 11,
+	product_id: 11 as number | null,
 	name: 'Coffee',
 	quantity: 1,
 	subtotal: '5.00',
@@ -228,6 +229,21 @@ test('publishes idle for an empty cart and cart.updated after a line is added', 
 
 	expect(mockPublish).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'cart.updated' }));
 	view.unmount();
+});
+
+test('treats tombstoned lines as empty and excludes them from receipt data', () => {
+	withPayload({
+		line_items: [{ ...line, product_id: null }],
+		fee_lines: [{ name: null }],
+		shipping_lines: [{ method_id: null }],
+	});
+
+	const { result } = renderHook(() => useDisplaySnapshot());
+
+	expect(result.current?.isEmpty).toBe(true);
+	expect(result.current?.order.lines).toEqual([]);
+	expect(result.current?.order.fees).toEqual([]);
+	expect(result.current?.order.shipping).toEqual([]);
 });
 
 test('switches directly to the new order snapshot without an idle event', () => {
