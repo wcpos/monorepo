@@ -68,13 +68,16 @@ describe('usePaymentMethods', () => {
 		expect(result.current).toMatchObject({ loaded: true, unsupportedSchema: true });
 	});
 
-	it('rejects an envelope containing a null payment method', () => {
+	it('drops a structurally unusable method and keeps the rest', () => {
+		// One malformed gateway must not stop the till taking cash on the others.
 		paymentMethodsVerified = true;
-		paymentMethods = { schema: 1, contract: '1.0', methods: [null] };
+		const cash = { id: 'cash', title: 'Cash' };
+		paymentMethods = { schema: 1, contract: '1.0', methods: [null, cash, { title: 'No id' }] };
 
 		const { result } = renderHook(() => usePaymentMethods());
 
-		expect(result.current).toMatchObject({ methods: [], loaded: false });
+		expect(result.current).toMatchObject({ methods: [cash], loaded: true });
+		expect(result.current.byId.get('cash')).toEqual(cash);
 	});
 
 	it('does not expose a persisted descriptor until this session verifies the route', () => {

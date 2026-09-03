@@ -14,9 +14,16 @@ export interface PaymentMethodsState {
 	unsupportedSchema: boolean;
 }
 
-type RuntimeEnvelope = { schema: number; contract: string; methods: PaymentMethodDescriptor[] };
+type RuntimeEnvelope = { schema: number; contract: string; methods: unknown[] };
 
-function hasMethodId(value: unknown): value is PaymentMethodDescriptor {
+/**
+ * A descriptor without a string `id` cannot be keyed, rendered or recorded against —
+ * `byId` and every tender tile read `method.id`. Drop just that row, never the envelope:
+ * one malformed gateway must not stop the till taking cash on the methods that are fine.
+ * (Contract §13 is about UNKNOWN enum values, which stay and are disabled with a reason;
+ * this guard is only for structurally unusable rows.)
+ */
+function isDescriptor(value: unknown): value is PaymentMethodDescriptor {
 	return (
 		typeof value === 'object' &&
 		value !== null &&
@@ -30,8 +37,7 @@ function isEnvelope(value: unknown): value is RuntimeEnvelope {
 	return (
 		Number.isInteger(envelope.schema) &&
 		typeof envelope.contract === 'string' &&
-		Array.isArray(envelope.methods) &&
-		envelope.methods.every(hasMethodId)
+		Array.isArray(envelope.methods)
 	);
 }
 
@@ -49,9 +55,10 @@ export function usePaymentMethods(): PaymentMethodsState {
 				unsupportedSchema: false,
 			};
 		}
+		const methods = value.methods.filter(isDescriptor);
 		return {
-			methods: value.methods,
-			byId: new Map(value.methods.map((method) => [method.id, method])),
+			methods,
+			byId: new Map(methods.map((method) => [method.id, method])),
 			contract: value.contract,
 			loaded: true,
 			unsupportedSchema: value.schema !== 1,
