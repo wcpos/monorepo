@@ -47,6 +47,12 @@ export type ServerStorePayload = { id: number } & Record<string, unknown>;
 
 export function normalizeStorePayload(store: ServerStorePayload): ServerStorePayload {
 	const out: ServerStorePayload = { ...store };
+	const display = isPlainObject(out.display) ? (out.display as Record<string, unknown>) : null;
+	if (!display || typeof display.contract !== 'number' || typeof display.signaling !== 'string') {
+		delete out.display;
+	} else {
+		out.display = { contract: display.contract, signaling: display.signaling };
+	}
 
 	if (typeof out.timezone !== 'string') {
 		out.timezone = '';
@@ -150,6 +156,9 @@ export function getServerOwnedStorePatch(
 	}
 
 	const patch: Record<string, unknown> = {};
+	if (normalizedStore.display === undefined && currentData.display !== undefined) {
+		patch.display = undefined;
+	}
 	for (const field of fields) {
 		if (!providedFields.has(field)) {
 			continue;

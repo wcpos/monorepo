@@ -1,0 +1,134 @@
+/** @jest-environment jsdom */
+import { act, renderHook } from '@testing-library/react';
+
+import { useCustomerDisplayService } from './use-customer-display-service';
+
+const mockConfigure = jest.fn();
+const mockStop = jest.fn();
+const mockService = { configure: mockConfigure, stop: mockStop };
+let mockCurrentService: typeof mockService | null = null;
+const mockStart = jest.fn((_options: unknown) => {
+	mockCurrentService = mockService;
+	return mockService;
+});
+const mockGetDeviceId = jest.fn(async () => 'device-1');
+
+jest.mock('../../../../services/customer-display', () => ({
+	getCustomerDisplayService: () => mockCurrentService,
+	getDeviceId: () => mockGetDeviceId(),
+	startCustomerDisplayService: (options: unknown) => mockStart(options),
+}));
+
+const mockGet = jest.fn(async () => ({ data: [] }));
+const mockPost = jest.fn(async () => ({ data: {} }));
+const mockDelete = jest.fn(async () => ({ data: {} }));
+const mockHttpClient = { get: mockGet, post: mockPost, delete: mockDelete };
+
+jest.mock('../../hooks/use-rest-http-client', () => ({
+	useRestHttpClient: () => mockHttpClient,
+}));
+
+let mockStore: Record<string, unknown>;
+let mockSite: Record<string, unknown>;
+jest.mock('../../../../contexts/app-state', () => ({
+	useAppState: () => ({ store: mockStore, site: mockSite }),
+}));
+
+jest.mock('@wcpos/query', () => ({
+	useDocField: (document: Record<string, unknown>, select: (value: any) => unknown) =>
+		document ? select(document) : undefined,
+}));
+
+const flushEffects = async () => {
+	await act(async () => {
+		await Promise.resolve();
+	});
+};
+
+beforeEach(() => {
+	jest.clearAllMocks();
+	mockCurrentService = null;
+	mockSite = { localID: 'site-1' };
+	mockStore = {
+		localID: 'store-1',
+		id: 7,
+		name: 'Main Street',
+		currency: 'EUR',
+		locale: 'de_DE',
+		timezone: 'Europe/Berlin',
+		tax_display_cart: 'incl',
+		prices_include_tax: 'yes',
+		receipt_i18n: { total: 'Summe' },
+		display: { contract: 1, signaling: '/wcpos/v2/display' },
+	};
+});
+
+test('starts for an advertised store and stops when the advertisement disappears', async () => {
+	const { rerender } = renderHook(() => useCustomerDisplayService());
+	await flushEffects();
+
+	expect(mockStart).toHaveBeenCalledWith(
+		expect.objectContaining({ deviceId: 'device-1', storeId: 7, siteRestRoot: 'display' })
+	);
+
+	mockStore = { ...mockStore, display: undefined };
+	rerender();
+
+	expect(mockStop).toHaveBeenCalledTimes(1);
+});
+
+test('adapts the REST client to the service HttpFunction contract', async () => {
+	renderHook(() => useCustomerDisplayService());
+	await flushEffects();
+	const { http } = mockStart.mock.calls[0][0] as { http: (request: any) => Promise<unknown> };
+
+	await http({ method: 'GET', url: 'displays', params: { device_id: 'device-1' } });
+	await http({ method: 'POST', url: 'pairings', data: { store_id: 7 } });
+	await http({ method: 'DELETE', url: 'displays/1' });
+
+	expect(mockGet).toHaveBeenCalledWith('displays', { params: { device_id: 'device-1' } });
+	expect(mockPost).toHaveBeenCalledWith('pairings', { store_id: 7 });
+	expect(mockDelete).toHaveBeenCalledWith('displays/1');
+});
+
+test('configures and reconfigures from reactive store receipt fields', async () => {
+	const { rerender } = renderHook(() => useCustomerDisplayService());
+	await flushEffects();
+
+	expect(mockConfigure).toHaveBeenLastCalledWith({
+		store: {
+			id: 7,
+			name: 'Main Street',
+			currency: 'EUR',
+			locale: 'de_DE',
+			timezone: 'Europe/Berlin',
+		},
+		presentation_hints: {
+			display_tax: 'incl',
+			prices_entered_with_tax: true,
+			rounding_mode: 'round',
+			locale: 'de_DE',
+		},
+		i18n: { total: 'Summe' },
+	});
+
+	mockStore = { ...mockStore, tax_display_cart: 'excl', prices_include_tax: 'no' };
+	rerender();
+
+	expect(mockConfigure).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			presentation_hints: expect.objectContaining({
+				display_tax: 'excl',
+				prices_entered_with_tax: false,
+			}),
+		})
+	);
+});
+
+test('does not start for a signaling path outside the WCPOS v2 API root', async () => {
+	mockStore = { ...mockStore, display: { contract: 1, signaling: '/wp-json/display' } };
+	renderHook(() => useCustomerDisplayService());
+	await flushEffects();
+
+	expect(mockStart).not.toHaveBeenCalled();
+});

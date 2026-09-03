@@ -39,7 +39,7 @@ describe('buildLedger', () => {
 			row({ id: 'authorized', status: 'authorized', amount: '40.00', change: '5.00' }),
 			row({ id: 'voided', method_id: 'unknown', status: 'voided', amount: '20.00' }),
 		];
-		const result = buildLedger(rows, 100, 2, 'EUR', 'en-IE', new Map([['cod', 'Cash']]));
+		const result = buildLedger(rows, 100, 'EUR', 'en-IE', new Map([['cod', 'Cash']]), 2);
 
 		expect(result).toMatchObject({
 			status: 'partial',
@@ -70,7 +70,7 @@ describe('buildLedger', () => {
 		[[row({ status: 'captured', amount: '50.00' })], 50, 'paid'],
 		[[row({ status: 'captured', amount: '60.00' })], 50, 'paid'],
 	] as const)('derives %s rows against %s as %s', (rows, total, status) => {
-		expect(buildLedger(rows, total, 2, 'EUR', 'en-IE', new Map()).status).toBe(status);
+		expect(buildLedger(rows, total, 'EUR', 'en-IE', new Map(), 2).status).toBe(status);
 	});
 
 	test('sums payments in minor units so an exact decimal total is paid', () => {
@@ -80,24 +80,24 @@ describe('buildLedger', () => {
 				row({ id: 'two', amount: '0.20', change: '0.20' }),
 			],
 			0.3,
-			2,
 			'EUR',
 			'en-IE',
-			new Map()
+			new Map(),
+			2
 		);
 
 		expect(result).toMatchObject({ status: 'paid', paid_raw: 0.3, due_raw: 0, change_raw: 0.3 });
 	});
 
 	test('does not mark an all-voided zero-total ledger as paid', () => {
-		const result = buildLedger([row({ status: 'voided' })], 0, 2, 'EUR', 'en-IE', new Map());
+		const result = buildLedger([row({ status: 'voided' })], 0, 'EUR', 'en-IE', new Map(), 2);
 		expect(result.status).toBe('unpaid');
 	});
 });
 
 describe('derivePaymentEvent', () => {
 	const ledger = (rows: PaymentRow[], total = 100) =>
-		buildLedger(rows, total, 2, 'EUR', 'en-IE', new Map());
+		buildLedger(rows, total, 'EUR', 'en-IE', new Map(), 2);
 
 	test('derives started when a pending row appears', () => {
 		const next = [row({ status: 'pending' })];

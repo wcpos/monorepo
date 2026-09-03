@@ -16,6 +16,7 @@ import {
 } from '@wcpos/core/screens/main/pos/contexts/current-order';
 import { OrderEngineWarningsProvider } from '@wcpos/core/screens/main/pos/contexts/order-engine-warnings';
 import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/contexts/order-money-divergence';
+import { CustomerDisplaySnapshotSource } from '@wcpos/core/screens/main/pos/customer-display/snapshot-source';
 
 import { useNavigationBackground } from '../../../../components/use-navigation-background';
 
@@ -128,6 +129,7 @@ function POSStack() {
 
 	return (
 		<TaxRatesProvider>
+			<CustomerDisplaySnapshotSource />
 			<View className="bg-background flex-1">
 				<Stack
 					screenOptions={{

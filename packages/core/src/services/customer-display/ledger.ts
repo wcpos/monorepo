@@ -33,10 +33,10 @@ export interface PaymentEvent {
 export function buildLedger(
 	rows: readonly PaymentRow[],
 	total: number,
-	dp: number,
 	currency: string,
 	locale: string | undefined,
-	methodTitles: ReadonlyMap<string, string>
+	methodTitles: ReadonlyMap<string, string>,
+	dp: number
 ): DisplayLedger {
 	const approved = rows.filter(({ status }) => status === 'captured' || status === 'authorized');
 	const paidMinor = approved.reduce((sum, payment) => sum + toMinor(payment.amount, dp), 0);
