@@ -188,6 +188,12 @@ describe('error registry', () => {
 		}
 	});
 
+	it('keeps PAYMENT501 method- and connectivity-neutral', () => {
+		const entry = entryFor('PAYMENT501');
+		const guidance = [entry.actionHint, entry.summary, entry.docsBody].join(' ');
+		expect(guidance).not.toMatch(/\bcash\b|\boffline\b/i);
+	});
+
 	it('covers non-record local write failures in SYNC101 guidance', () => {
 		const guidance = entryFor('SYNC101').troubleshooting.join(' ');
 		expect(guidance).toContain('Site and credential writes');

@@ -1,4 +1,8 @@
-export { recordManualPayment, RecordManualPaymentError } from './record-manual-payment';
+export {
+	recordManualPayment,
+	RecordManualPaymentError,
+	RecordManualPaymentMirrorError,
+} from './record-manual-payment';
 export { useRecordManualPayment } from './use-record-manual-payment';
 export type {
 	RecordManualPaymentDeps,

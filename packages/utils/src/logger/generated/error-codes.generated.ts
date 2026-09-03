@@ -335,10 +335,11 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'PAYMENT_ALREADY_PAID_ONLINE',
 		domain: 'PAYMENT',
 		severity: 'error',
-		actionHint: 'Refund the cash taken at the till — the order was already paid online.',
+		actionHint:
+			'Refund the additional payment taken at the till — the order was already paid online.',
 		dataSafety: 'money-moved',
 		summary:
-			'The order was paid online while the till was offline, so a second payment was also taken.',
+			'The order was already paid online, so an additional payment was also taken at the till.',
 	},
 	PRINT101: {
 		code: 'PRINT101',

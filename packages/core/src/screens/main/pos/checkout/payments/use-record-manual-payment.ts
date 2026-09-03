@@ -10,6 +10,7 @@ import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../../contexts/app-state';
+import { useT } from '../../../../../contexts/translations';
 import { patchEngineResident, useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { recordManualPayment } from './record-manual-payment';
@@ -38,6 +39,7 @@ export function useRecordManualPayment(): (
 	const { wpCredentials, store } = useStoreSession();
 	const { localPatch } = useLocalMutation();
 	const manager = useQueryRuntime();
+	const t = useT();
 
 	return React.useCallback(
 		async (order, method, input) => {
@@ -46,6 +48,7 @@ export function useRecordManualPayment(): (
 				uuid: order.uuid,
 				id: payload.id ?? null,
 				number: payload.number,
+				total: payload.total,
 				// RxDB serves object fields as Proxies; the ledger helpers need plain data.
 				meta_data: cloneDeep(payload.meta_data ?? []),
 			};
@@ -69,10 +72,16 @@ export function useRecordManualPayment(): (
 				},
 				raiseAttention: ({ row, order: summary, reason }) => {
 					const number = paymentOrder.number || paymentOrder.uuid.slice(0, 8);
+					const values = { number, amount: row.amount, method: method.title };
 					const message =
 						reason === 'order_already_paid'
-							? `Order #${number} was already paid online; ${row.amount} ${method.title} was also taken at the till — refund the ${row.kind === 'cash' ? 'cash' : 'payment'}.`
-							: `Order #${number}${summary?.balance ? ` only had ${summary.balance} outstanding` : ''}; ${row.amount} ${method.title} was taken at the till — refund the difference.`;
+							? t('payments.refusal.already_paid', values)
+							: summary?.balance
+								? t('payments.refusal.exceeds_balance_with_balance', {
+										...values,
+										balance: summary.balance,
+									})
+								: t('payments.refusal.exceeds_balance', values);
 					logger.error(message, {
 						code:
 							reason === 'order_already_paid'
@@ -96,6 +105,6 @@ export function useRecordManualPayment(): (
 				},
 			});
 		},
-		[http, onlineStatus.status, wpCredentials.id, store, localPatch, manager]
+		[http, onlineStatus.status, wpCredentials.id, store, localPatch, manager, t]
 	);
 }

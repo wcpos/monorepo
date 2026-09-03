@@ -4,6 +4,7 @@ import {
 	recordManualPayment,
 	type RecordManualPaymentDeps,
 	RecordManualPaymentError,
+	RecordManualPaymentMirrorError,
 } from './record-manual-payment';
 
 jest.mock('uuid', () => ({ v4: () => 'unused-default-uuid' }));
@@ -14,6 +15,7 @@ const order = {
 	uuid: 'o-1',
 	id: 1042,
 	number: '1042',
+	total: '100.00',
 	meta_data: [{ id: 5, key: '_pos_user', value: '7' }],
 };
 const cash = {
@@ -112,6 +114,7 @@ describe('recordManualPayment', () => {
 		expect(deps.post).not.toHaveBeenCalled();
 		expect(deps.mirror).not.toHaveBeenCalled();
 		expect(deps.patchAndEnqueue).toHaveBeenCalledTimes(1);
+		expect(deps.patchAndEnqueue.mock.calls[0][0].status).toBe('pos-partial');
 		expect(deps.patchAndEnqueue.mock.calls[0][0].meta_data[0]).toEqual(order.meta_data[0]);
 		expect(ledgerFrom(deps.patchAndEnqueue)).toEqual({
 			schema: 1,
@@ -128,6 +131,24 @@ describe('recordManualPayment', () => {
 		});
 		expect(result).toMatchObject({ kind: 'recorded', via: 'offline', order: null });
 		expect(order.meta_data).toEqual(original);
+	});
+
+	it('preserves the accepted online outcome when its local mirror fails', async () => {
+		const deps = createDeps();
+		const serverRow = { ...mintedCard, id: 'server-payment-id' };
+		const summary = { status: 'completed', balance: '0.00' };
+		const mirrorFailure = new Error('resident write failed');
+		deps.post.mockResolvedValue({ data: { payment: serverRow, order: summary } });
+		deps.mirror.mockRejectedValue(mirrorFailure);
+
+		const promise = recordManualPayment(order, card, { amount: '42.50' }, deps);
+
+		await expect(promise).rejects.toBeInstanceOf(RecordManualPaymentMirrorError);
+		await expect(promise).rejects.toMatchObject({
+			outcome: { kind: 'recorded', via: 'online', row: serverRow, order: summary },
+			cause: mirrorFailure,
+		});
+		expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
 	});
 
 	it.each([0, null])('uses the offline path for an online order with server id %s', async (id) => {
@@ -218,6 +239,28 @@ describe('recordManualPayment', () => {
 			expect.objectContaining({ reason: 'amount_exceeds_balance' })
 		);
 		expect(result).toMatchObject({ kind: 'refused', reason: 'amount_exceeds_balance' });
+	});
+
+	it('raises refusal attention even when its local mirror fails', async () => {
+		const deps = createDeps();
+		const mirrorFailure = new Error('resident write failed');
+		deps.post.mockRejectedValue(responseError(409, 'wcpos_order_already_paid'));
+		deps.mirror.mockRejectedValue(mirrorFailure);
+
+		const promise = recordManualPayment(order, card, { amount: '42.50' }, deps);
+
+		await expect(promise).rejects.toBeInstanceOf(RecordManualPaymentMirrorError);
+		await expect(promise).rejects.toMatchObject({
+			outcome: {
+				kind: 'refused',
+				reason: 'order_already_paid',
+				row: expect.objectContaining({ id: UUID.toLowerCase(), status: 'failed' }),
+			},
+			cause: mirrorFailure,
+		});
+		expect(deps.raiseAttention).toHaveBeenCalledWith(
+			expect.objectContaining({ reason: 'order_already_paid' })
+		);
 	});
 
 	it('throws a typed error for another coded 4xx without writing or attention', async () => {

@@ -1,6 +1,12 @@
 import { v4 as uuidv4 } from 'uuid';
 
-import { mintManualPayment, readLedger, upsertPaymentRow, withLedger } from '@wcpos/order-math';
+import {
+	derive,
+	mintManualPayment,
+	readLedger,
+	upsertPaymentRow,
+	withLedger,
+} from '@wcpos/order-math';
 import type {
 	MetaDataEntry,
 	OrderPaymentSummary,
@@ -20,6 +26,7 @@ export interface RecordManualPaymentOrder {
 	uuid: string;
 	id: number | null;
 	number?: string;
+	total: string | number | null | undefined;
 	meta_data: MetaDataEntry[];
 }
 export interface RecordManualPaymentInput {
@@ -33,7 +40,7 @@ export interface RecordManualPaymentDeps {
 	storeId: number | null;
 	currency: string;
 	dp: number;
-	patchAndEnqueue: (changes: { meta_data: MetaDataEntry[] }) => Promise<void>;
+	patchAndEnqueue: (changes: { meta_data: MetaDataEntry[]; status: string }) => Promise<void>;
 	mirror: (changes: { meta_data: MetaDataEntry[]; status?: string }) => Promise<void>;
 	raiseAttention: (entry: {
 		row: PaymentRow;
@@ -64,6 +71,18 @@ export class RecordManualPaymentError extends Error {
 	) {
 		super(message);
 		this.name = 'RecordManualPaymentError';
+	}
+}
+
+type ReconciliationOutcome = Extract<RecordManualPaymentOutcome, { kind: 'recorded' | 'refused' }>;
+
+export class RecordManualPaymentMirrorError extends Error {
+	public constructor(
+		public outcome: ReconciliationOutcome,
+		public cause: unknown
+	) {
+		super('Payment outcome could not be mirrored locally.', { cause });
+		this.name = 'RecordManualPaymentMirrorError';
 	}
 }
 
@@ -114,7 +133,11 @@ export async function recordManualPayment(
 
 	const writeOffline = async (row: PaymentRow): Promise<RecordManualPaymentOutcome> => {
 		const offlineRow = row.recorded_offline ? row : { ...row, recorded_offline: true };
-		await deps.patchAndEnqueue({ meta_data: metaDataWith(offlineRow) });
+		const ledger = upsertPaymentRow(readLedger(order.meta_data), offlineRow);
+		await deps.patchAndEnqueue({
+			meta_data: withLedger(order.meta_data, ledger),
+			status: derive(order.total, ledger, [method], { dp: deps.dp }).status,
+		});
 		return { kind: 'recorded', via: 'offline', row: offlineRow, order: null };
 	};
 
@@ -131,20 +154,25 @@ export async function recordManualPayment(
 		const response = errorResponse(error);
 		const reason = refusalReason(response?.data?.code);
 		if (reason) {
-			// The server STORED the refused row as `failed`; mirror its copy so the ledger
-			// shows the money that was taken, then put the order in front of the cashier.
+			// The server STORED the refused row as `failed`; put the order in front of the
+			// cashier independently, then mirror the server's copy into the ledger.
 			const failedRow = response?.data?.data?.payment ?? {
 				...minted.row,
 				status: 'failed',
 				failure_reason: reason,
 			};
 			const serverOrder = response?.data?.data?.order ?? null;
-			await deps.mirror({
-				meta_data: metaDataWith(failedRow),
-				...(serverOrder ? { status: serverOrder.status } : {}),
-			});
 			deps.raiseAttention({ row: failedRow, order: serverOrder, reason });
-			return { kind: 'refused', reason, row: failedRow, order: serverOrder };
+			const outcome = { kind: 'refused', reason, row: failedRow, order: serverOrder } as const;
+			try {
+				await deps.mirror({
+					meta_data: metaDataWith(failedRow),
+					...(serverOrder ? { status: serverOrder.status } : {}),
+				});
+			} catch (mirrorError) {
+				throw new RecordManualPaymentMirrorError(outcome, mirrorError);
+			}
+			return outcome;
 		}
 		const status = response?.status;
 		const code = response?.data?.code;
@@ -163,9 +191,14 @@ export async function recordManualPayment(
 
 	const serverRow = accepted.payment ?? minted.row;
 	const serverOrder = accepted.order ?? null;
-	await deps.mirror({
-		meta_data: metaDataWith(serverRow),
-		...(serverOrder ? { status: serverOrder.status } : {}),
-	});
-	return { kind: 'recorded', via: 'online', row: serverRow, order: serverOrder };
+	const outcome = { kind: 'recorded', via: 'online', row: serverRow, order: serverOrder } as const;
+	try {
+		await deps.mirror({
+			meta_data: metaDataWith(serverRow),
+			...(serverOrder ? { status: serverOrder.status } : {}),
+		});
+	} catch (mirrorError) {
+		throw new RecordManualPaymentMirrorError(outcome, mirrorError);
+	}
+	return outcome;
 }

@@ -10,6 +10,7 @@ const mockPost = jest.fn();
 const mockLocalPatch = jest.fn(async () => undefined);
 const mockPatchEngineResident = jest.fn(async (_input: unknown) => undefined);
 const mockLoggerError = jest.fn();
+const mockT = jest.fn();
 const manager = {};
 let onlineStatus = 'offline';
 
@@ -35,6 +36,18 @@ jest.mock('@wcpos/utils/logger', () => ({
 	// Lazy: the hook module calls getLogger() at import time, before the const above initialises.
 	getLogger: () => ({ error: (...args: unknown[]) => mockLoggerError(...args) }),
 }));
+jest.mock('../../../../../contexts/translations', () => {
+	const { createTestT } = jest.requireActual<typeof import('../../../../../../jest/translate')>(
+		'../../../../../../jest/translate'
+	);
+	const catalogT = createTestT();
+	return {
+		useT: () => (key: string, values?: Record<string, unknown>) => {
+			mockT(key, values);
+			return catalogT(key, values);
+		},
+	};
+});
 
 const method = {
 	schema: 1,
@@ -57,9 +70,19 @@ const method = {
 } satisfies PaymentMethodDescriptor;
 const order = {
 	uuid: 'o-1',
-	payload: { id: 1042, number: '1042', meta_data: [{ key: '_pos_user', value: '7' }] },
+	payload: {
+		id: 1042,
+		number: '1042',
+		total: '100.00',
+		meta_data: [{ key: '_pos_user', value: '7' }],
+	},
 	getLatest: () => ({
-		payload: { id: 1042, number: '1042', meta_data: [{ key: '_pos_user', value: '7' }] },
+		payload: {
+			id: 1042,
+			number: '1042',
+			total: '100.00',
+			meta_data: [{ key: '_pos_user', value: '7' }],
+		},
 	}),
 } as EngineRecord<'orders'>;
 
@@ -76,6 +99,7 @@ it('routes an offline row through localPatch on the supplied order document', as
 	expect(mockLocalPatch).toHaveBeenCalledWith({
 		document: order,
 		data: {
+			status: 'pos-partial',
 			meta_data: expect.arrayContaining([
 				expect.objectContaining({
 					key: '_wcpos_payments',
@@ -103,6 +127,11 @@ it('logs a refused online payment as a failed sync record needing attention', as
 	expect(mockPatchEngineResident).toHaveBeenCalledWith(
 		expect.objectContaining({ manager, collection: 'orders', recordId: order.uuid })
 	);
+	expect(mockT).toHaveBeenCalledWith('payments.refusal.already_paid', {
+		number: '1042',
+		amount: '40.00',
+		method: 'Cash',
+	});
 	expect(mockLoggerError).toHaveBeenCalledWith(
 		expect.stringContaining('Order #1042 was already paid online'),
 		expect.objectContaining({
@@ -113,11 +142,38 @@ it('logs a refused online payment as a failed sync record needing attention', as
 				recordId: order.uuid,
 				// The attention list renders `context.reason` as its line (deriveStuckRecords):
 				// it must be the cashier-readable sentence, never the machine code.
-				reason: expect.stringMatching(
-					/^Order #1042 was already paid online; 40\.00 Cash was also taken at the till — refund the cash\.$/
-				),
+				reason:
+					'Order #1042 was already paid online; 40.00 Cash was also taken at the till — refund that payment.',
 				refusal: 'order_already_paid',
 			}),
 		})
+	);
+});
+
+it('localizes an amount-exceeds-balance refusal with the server balance', async () => {
+	onlineStatus = 'online-website-available';
+	mockPost.mockRejectedValue({
+		response: {
+			status: 400,
+			data: {
+				code: 'wcpos_amount_exceeds_balance',
+				message: 'Too much',
+				data: { order: { status: 'pos-partial', balance: '15.00' } },
+			},
+		},
+	});
+	const { result } = renderHook(() => useRecordManualPayment());
+
+	await act(() => result.current(order, method, { amount: 40 }));
+
+	expect(mockT).toHaveBeenCalledWith('payments.refusal.exceeds_balance_with_balance', {
+		number: '1042',
+		amount: '40.00',
+		method: 'Cash',
+		balance: '15.00',
+	});
+	expect(mockLoggerError).toHaveBeenCalledWith(
+		'Order #1042 only had 15.00 outstanding; 40.00 Cash was taken at the till — refund the difference.',
+		expect.any(Object)
 	);
 });
