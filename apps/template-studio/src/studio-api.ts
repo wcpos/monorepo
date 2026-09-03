@@ -1,5 +1,43 @@
 import type { ReceiptFixture, StudioTemplate, TemplateEngine } from './studio-core';
 
+export interface DisplayTemplate {
+	id: string | number;
+	title: string;
+}
+
+export type DisplayState =
+	| 'idle'
+	| 'cart'
+	| 'cart.empty'
+	| 'payment.started'
+	| 'payment.approved'
+	| 'payment.declined'
+	| 'payment.complete';
+
+export async function fetchDisplayTemplates(): Promise<DisplayTemplate[]> {
+	try {
+		const response = await fetch('/wp-json/wcpos/v2/templates?type=display', {
+			credentials: 'include',
+		});
+		if (!response.ok) return [];
+		const templates = (await response.json()) as (DisplayTemplate & Record<string, unknown>)[];
+		return templates.map(({ id, title }) => ({ id, title }));
+	} catch {
+		return [];
+	}
+}
+
+export function displayPreviewUrl(
+	siteOrigin: string,
+	templateId: string | number,
+	state: DisplayState
+): string {
+	const url = new URL('/wcpos-display/', siteOrigin);
+	url.searchParams.set('preview', state);
+	url.searchParams.set('template', String(templateId));
+	return url.toString();
+}
+
 export async function fetchBundledTemplates(): Promise<StudioTemplate[]> {
 	const response = await fetch('/__studio/templates', { credentials: 'include' });
 	if (!response.ok) throw new Error(`Failed to load bundled templates: ${response.status}`);

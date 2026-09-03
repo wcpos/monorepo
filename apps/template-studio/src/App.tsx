@@ -18,6 +18,7 @@ import { CollapsibleSection } from './components/CollapsibleSection';
 import { DataSection } from './components/sections/DataSection';
 import { PrintSection } from './components/sections/PrintSection';
 import { WooCommerceSection } from './components/sections/WooCommerceSection';
+import { DisplayStage } from './components/DisplayStage';
 import { Stage } from './components/Stage';
 import { TemplateList } from './components/TemplateList';
 import { Toolbar } from './components/Toolbar';
@@ -34,7 +35,7 @@ import {
 	mergeScenarioOverrides,
 	toggleScenarioOverride,
 } from './scenario-controls';
-import { fetchBundledTemplates } from './studio-api';
+import { fetchBundledTemplates, fetchDisplayTemplates } from './studio-api';
 import {
 	defaultThermalColumnsForPaper,
 	normalizeThermalColumns,
@@ -44,6 +45,7 @@ import {
 
 import type { PathSegment } from './lib/path-utils';
 import type { ScenarioKey } from './scenario-controls';
+import type { DisplayTemplate } from './studio-api';
 import type { PaperWidth, StudioTemplate, TemplateEngine, ThermalColumns } from './studio-core';
 
 const SECTION_STORAGE_KEY = 'wcpos-template-studio:sections';
@@ -105,6 +107,7 @@ function defaultPaperWidth(engine: TemplateEngine | undefined): PaperWidth {
 
 export function App() {
 	const [templates, setTemplates] = React.useState<StudioTemplate[]>([]);
+	const [displayTemplates, setDisplayTemplates] = React.useState<DisplayTemplate[]>([]);
 	const [selectedTemplateId, setSelectedTemplateId] = React.useState(() => loadSelection());
 	const [zoom, setZoom] = React.useState(100);
 	const [seed, setSeed] = React.useState<number | string>('default');
@@ -123,10 +126,17 @@ export function App() {
 	const previewFrameRef = React.useRef<HTMLDivElement>(null);
 
 	React.useEffect(() => {
-		fetchBundledTemplates()
-			.then((loaded) => {
+		Promise.all([fetchBundledTemplates(), fetchDisplayTemplates()])
+			.then(([loaded, loadedDisplays]) => {
 				setTemplates(loaded);
+				setDisplayTemplates(loadedDisplays);
 				setSelectedTemplateId((current) => {
+					if (
+						current.startsWith('display:') &&
+						loadedDisplays.some((template) => String(template.id) === current.slice(8))
+					) {
+						return current;
+					}
 					if (current && loaded.some((template) => template.id === current)) return current;
 					return loaded[0]?.id ?? '';
 				});
@@ -165,7 +175,15 @@ export function App() {
 		}
 	}, [thermalColumnsByPaper]);
 
-	const selectedTemplate = selectVisibleTemplate(templates, selectedTemplateId);
+	const displayTemplateId = selectedTemplateId.startsWith('display:')
+		? selectedTemplateId.slice(8)
+		: null;
+	const selectedDisplayTemplate = displayTemplateId
+		? displayTemplates.find((template) => String(template.id) === displayTemplateId)
+		: undefined;
+	const selectedTemplate = displayTemplateId
+		? undefined
+		: selectVisibleTemplate(templates, selectedTemplateId);
 	const randomReceipt = React.useMemo(() => createRandomReceipt({ seed }), [seed]);
 	const baseScenarioState = React.useMemo(
 		() => createScenarioState(randomReceipt.scenarios, randomReceipt.data),
@@ -454,23 +472,35 @@ export function App() {
 		<div className="studio-app">
 			<Toolbar zoom={zoom} onZoomChange={setZoom} />
 			{error || renderError ? <div className="error-banner">{error ?? renderError}</div> : null}
-			<div className="studio-body">
+			<div className={selectedDisplayTemplate ? 'studio-body display-mode' : 'studio-body'}>
 				<TemplateList
 					templates={templates}
-					selectedTemplateId={selectedTemplate?.id ?? ''}
+					displayTemplates={displayTemplates}
+					selectedTemplateId={selectedTemplateId}
 					onSelect={setSelectedTemplateId}
 				/>
-				<Stage
-					previewFrameRef={previewFrameRef}
-					rendered={rendered}
-					previewHtml={previewHtml}
-					paperWidth={effectivePaperWidth}
-					zoom={zoom}
-					templateName={selectedTemplate?.name}
-					templateContent={selectedTemplate?.content}
-					templateEngine={selectedTemplate?.engine}
-				/>
-				<aside className="right-panel" aria-label="Studio controls">
+				{selectedDisplayTemplate ? (
+					<DisplayStage
+						siteOrigin={import.meta.env.WCPOS_STUDIO_WP_ORIGIN}
+						templateId={selectedDisplayTemplate.id}
+					/>
+				) : (
+					<Stage
+						previewFrameRef={previewFrameRef}
+						rendered={rendered}
+						previewHtml={previewHtml}
+						paperWidth={effectivePaperWidth}
+						zoom={zoom}
+						templateName={selectedTemplate?.name}
+						templateContent={selectedTemplate?.content}
+						templateEngine={selectedTemplate?.engine}
+					/>
+				)}
+				<aside
+					className="right-panel"
+					aria-label="Studio controls"
+					hidden={Boolean(selectedDisplayTemplate)}
+				>
 					<CollapsibleSection
 						title="Data"
 						open={sections.data}

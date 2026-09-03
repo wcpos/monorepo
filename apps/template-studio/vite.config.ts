@@ -201,6 +201,9 @@ function readJsonBody(
 }
 
 export default defineConfig({
+	define: {
+		'import.meta.env.WCPOS_STUDIO_WP_ORIGIN': JSON.stringify(wpProxyOrigin),
+	},
 	resolve: {
 		alias: {
 			'@wcpos/receipt-renderer/render-template': fileURLToPath(
