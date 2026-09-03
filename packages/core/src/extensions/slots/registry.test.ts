@@ -6,7 +6,9 @@ import {
 	SLOT_API_VERSION,
 } from './registry';
 
-const Noop = () => null;
+function Noop() {
+	return null;
+}
 
 function register(id: string, order: number) {
 	registerSlotEntry({
@@ -17,6 +19,10 @@ function register(id: string, order: number) {
 		capabilities: [],
 		component: Noop,
 	});
+}
+
+function Replacement() {
+	return null;
 }
 
 describe('slot registry', () => {
@@ -42,7 +48,6 @@ describe('slot registry', () => {
 
 	it('replaces a duplicate id in the same slot and warns', () => {
 		const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
-		const Replacement = () => null;
 		register('quick-filters', 10);
 		registerSlotEntry({
 			id: 'quick-filters',

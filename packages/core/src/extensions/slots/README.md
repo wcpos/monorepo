@@ -16,11 +16,11 @@ Ruled in [wcpos/roadmap#139](https://github.com/wcpos/roadmap/issues/139), 2026-
 
 An entry component receives exactly three props (`SlotEntryProps`):
 
-| prop    | what it is                                                              |
-| ------- | ----------------------------------------------------------------------- |
+| prop    | what it is                                                                  |
+| ------- | --------------------------------------------------------------------------- |
 | `data`  | a `ReadonlyView` — a readonly, subscribable value (`useSlotValue` reads it) |
-| `api`   | the enumerated async methods for that slot; the host may reject any call |
-| `entry` | the entry's own descriptor                                              |
+| `api`   | the enumerated async methods for that slot; the host may reject any call    |
+| `entry` | the entry's own descriptor                                                  |
 
 Slot ids are a closed union (`keyof SlotContracts`), so a registration infers its contract
 from the id it registers under. `getSlotEntries` orders by `order`, then `id`.

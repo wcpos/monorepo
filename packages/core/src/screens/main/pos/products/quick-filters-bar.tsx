@@ -41,8 +41,7 @@ function callHost(method: string, filter: QuickFilter, run: () => Promise<void>)
 export function QuickFiltersBar({ data, api }: SlotEntryProps<'pos.products.filter-bar.item'>) {
 	const { uiSettings } = useUISettings('pos-products');
 	const configured = useDocField(uiSettings, (value) => value.quickFilters) as
-		| QuickFilter[]
-		| undefined;
+		QuickFilter[] | undefined;
 	const { search, filters } = useSlotValue(data);
 
 	// A kind that needs a value and has none was never finishable in the settings form;

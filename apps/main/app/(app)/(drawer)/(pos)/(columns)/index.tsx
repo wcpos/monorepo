@@ -5,7 +5,6 @@ import { useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import '@wcpos/core/screens/main/pos/register-panel-entries';
-
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Icon } from '@wcpos/components/icon';
 import { Panel, PanelGroup, PanelResizeHandle } from '@wcpos/components/panels';
@@ -34,7 +33,10 @@ const NO_API: SlotContracts['pos.columns.panel']['api'] = {};
  * They are module constants because `useSlotValue` needs a stable snapshot.
  */
 const NEVER_CHANGES = () => () => {};
-const PANEL_VIEWS: Record<'left' | 'right', ReadonlyView<SlotContracts['pos.columns.panel']['value']>> = {
+const PANEL_VIEWS: Record<
+	'left' | 'right',
+	ReadonlyView<SlotContracts['pos.columns.panel']['value']>
+> = {
 	left: { value: { side: 'left', isColumn: true }, subscribe: NEVER_CHANGES },
 	right: { value: { side: 'right', isColumn: true }, subscribe: NEVER_CHANGES },
 };
@@ -47,6 +49,14 @@ export default function ResizablePOSColumns() {
 	const { screenSize } = useTheme();
 	const { bottom } = useSafeAreaInsets();
 	const segments: string[] = useSegments();
+
+	// Which side the products panel sits on, for the wide layout below. Read through
+	// `useDocField` because the settings dialog that writes it is rendered INSIDE the
+	// products panel: this route stays mounted across the change, and a plain property read
+	// off the RxState container would not re-render it. It is read here, above the
+	// small-screen early return, because hooks may not sit behind a conditional.
+	const position = useDocField(uiSettings, (value) => value.position);
+	const productsOnRight = position === 'right';
 
 	// Check if we're at a /cart route (with or without orderId)
 	// If at cart route, default to cart tab; otherwise products tab
@@ -129,14 +139,7 @@ export default function ResizablePOSColumns() {
 	 * The wide layout IS the `pos.columns.panel` slot: the registry supplies the panels and
 	 * their order, and this route only arranges them — reversing when the merchant put the
 	 * products on the right — and owns the resize handles and the persisted width.
-	 *
-	 * `position` is read through `useDocField` because the settings dialog that writes it is
-	 * rendered INSIDE the products panel: this route stays mounted across the change, and a
-	 * plain property read off the RxState container would not re-render it.
 	 */
-	const position = useDocField(uiSettings, (value) => value.position);
-	const productsOnRight = position === 'right';
-
 	return (
 		<View testID="screen-pos" style={{ flex: 1, paddingBottom: bottom }}>
 			<Slot

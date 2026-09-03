@@ -218,7 +218,9 @@ function POSProductsContent({
 		() =>
 			createReadonlyView(store, (queryState) => ({
 				search: queryState.search,
-				filters: JSON.parse(JSON.stringify(queryState.filters)) as QueryStateOf<'products'>['filters'],
+				filters: JSON.parse(
+					JSON.stringify(queryState.filters)
+				) as QueryStateOf<'products'>['filters'],
 			})),
 		[store]
 	);
@@ -343,11 +345,7 @@ function POSProductsContent({
 								</UISettingsDialog>
 							</HStack>
 							<ErrorBoundary>
-								<Slot
-									id="pos.products.filter-bar.item"
-									data={filterSlotData}
-									api={filterSlotApi}
-								/>
+								<Slot id="pos.products.filter-bar.item" data={filterSlotData} api={filterSlotApi} />
 							</ErrorBoundary>
 							<ErrorBoundary>
 								<FilterBar />

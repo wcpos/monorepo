@@ -6,7 +6,7 @@ import * as React from 'react';
 import { act, render, screen } from '@testing-library/react';
 
 import { registerSlotEntry, resetSlotRegistry, type SlotEntryProps } from './registry';
-import { createReadonlyView, Slot, useSlotValue, type SlotRenderedEntry } from './slot';
+import { createReadonlyView, Slot, type SlotRenderedEntry, useSlotValue } from './slot';
 
 // The repo's ErrorBoundary IS react-error-boundary plus a rich fallback; the fallback drags
 // in reanimated, which jsdom can't load. Keep the real containment, drop the chrome.
@@ -46,6 +46,11 @@ function makeStore(search: string) {
 			listeners.forEach((listener) => listener());
 		},
 	};
+}
+
+/** An entry that subscribes to the slot's view — a real component, so it may call hooks. */
+function SearchEcho({ data }: SlotEntryProps<typeof SLOT>) {
+	return <div>{useSlotValue(data).search}</div>;
 }
 
 function registerLabel(id: string, order: number) {
@@ -135,7 +140,7 @@ describe('<Slot>', () => {
 			order: 10,
 			title: 'Echo',
 			capabilities: [],
-			component: ({ data }: SlotEntryProps<typeof SLOT>) => <div>{useSlotValue(data).search}</div>,
+			component: SearchEcho,
 		});
 
 		const { container } = render(<Slot id={SLOT} data={liveView} api={api} />);

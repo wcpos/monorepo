@@ -19,7 +19,10 @@ export const SLOT_API_VERSION = 1;
  * call. Both are plain and JSON-serializable — never an RxDB collection, document or query.
  */
 export interface SlotContracts {
-	'pos.columns.panel': { value: { side: 'left' | 'right'; isColumn: boolean }; api: Record<string, never> };
+	'pos.columns.panel': {
+		value: { side: 'left' | 'right'; isColumn: boolean };
+		api: Record<string, never>;
+	};
 	'pos.products.filter-bar.item': {
 		value: { search: string; filters: FiltersOf<'products'> };
 		api: {
@@ -134,8 +137,7 @@ export function getSlotEntryComponent<S extends SlotId>(
 	id: string
 ): React.ComponentType<SlotEntryProps<S>> | undefined {
 	return entriesBySlot.get(slot)?.get(id)?.component as
-		| React.ComponentType<SlotEntryProps<S>>
-		| undefined;
+		React.ComponentType<SlotEntryProps<S>> | undefined;
 }
 
 /** Subscribe to registrations so a host re-renders when an entry arrives late. */

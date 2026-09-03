@@ -6,11 +6,11 @@ import { Suspense } from '@wcpos/components/suspense';
 import {
 	getSlotEntries,
 	getSlotEntryComponent,
-	subscribeSlotRegistry,
 	type ReadonlyView,
 	type SlotContracts,
 	type SlotEntryDescriptor,
 	type SlotId,
+	subscribeSlotRegistry,
 } from './registry';
 
 export type SlotRenderedEntry = {

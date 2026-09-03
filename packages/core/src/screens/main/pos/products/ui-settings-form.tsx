@@ -28,10 +28,10 @@ import { MetaDataKeysField } from './meta-data-keys-field';
 import {
 	createQuickFilterId,
 	QUICK_FILTER_KINDS,
-	quickFilterSchema,
-	VALUELESS_QUICK_FILTER_KINDS,
 	type QuickFilter,
 	type QuickFilterKind,
+	quickFilterSchema,
+	VALUELESS_QUICK_FILTER_KINDS,
 } from './quick-filters';
 import { useT } from '../../../../contexts/translations';
 import {

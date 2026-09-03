@@ -10,8 +10,7 @@ type PanelRecord = { id: string; testID?: string; defaultSize?: number };
 const mockPanels: PanelRecord[] = [];
 const mockChildOrder: string[] = [];
 let mockLayoutHandler:
-	| ((layout: number[], meta: { isUserInteraction: boolean }) => void)
-	| undefined;
+	((layout: number[], meta: { isUserInteraction: boolean }) => void) | undefined;
 let mockPosition: 'left' | 'right' = 'left';
 const mockPatchUI = jest.fn();
 
