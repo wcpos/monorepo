@@ -140,6 +140,22 @@ test('the shared setup action uses a Node version supported by jsdom 30', () => 
 	assert.equal(setup.inputs['node-version'].default, '22.22.2');
 });
 
+test('the shared setup action initialises the apps/web workspace submodule BEFORE it installs', () => {
+	// apps/web is both a submodule and a pnpm workspace member. Initialised by
+	// the root preinstall script mid-install, the tree pnpm left behind never
+	// matched the workspace it had installed for, and every later `pnpm run`
+	// saw a stale tree ("The workspace structure has changed since last
+	// install") — the trigger for the pre-#1799 implicit re-installs.
+	const setup = readAction('setup-monorepo/action.yml');
+	const names = setup.runs.steps.map((step) => step.name);
+	const init = names.findIndex((name) => /apps\/web/.test(name ?? ''));
+	const install = names.indexOf('📦 Install dependencies');
+	assert.ok(init >= 0, 'no submodule init step');
+	assert.ok(install >= 0, 'no install step');
+	assert.ok(init < install, 'the submodule must be initialised before the install');
+	assert.match(setup.runs.steps[init].run, /git submodule update --init apps\/web/);
+});
+
 test('the E2E aggregator runs on cancellation and fails the cancelled deploy', () => {
 	const gate = readWorkflow('deploy.yml').jobs['e2e-gate'];
 

@@ -62,6 +62,17 @@ runs:
     # installs never handed over to turbo (runs 33664427747, 33687923179,
     # 33684523571: silence for 20–75 min until the Merge Gate's budget
     # failed the PR). A stale lockfile now fails HERE, loudly, in seconds.
+    # apps/web is a git submodule AND a pnpm workspace member (`apps/*`). The
+    # root `preinstall` script initialises it *during* `pnpm install`, so the
+    # project set pnpm installed for differs from the tree it leaves behind —
+    # every later `pnpm run`/`pnpm exec` then warns "Your node_modules are out
+    # of sync with your lockfile. The workspace structure has changed since
+    # last install" (and, before #1799, re-installed: "Packages: -103"). Put
+    # the submodule in place first so the install sees the final workspace.
+    - name: 🏗 Init the apps/web workspace submodule
+      run: git submodule update --init apps/web
+      shell: bash
+
     - name: 📦 Install dependencies
       run: |
         if [ "${{ inputs.skip-install-scripts }}" = "true" ]; then
