@@ -37,8 +37,9 @@ function normalizeLocale(locale: string): string {
  *
  * v2: tokenize 'forward' -> 'full' for WooCommerce-parity mid-word matching (#679).
  * v3: accent-/Unicode-normalization-folding encoder (#1732).
+ * v4: terms keep their punctuation — "0.4" is one term, not "0" + "4" dropped by minlength.
  */
-const SEARCH_INDEX_VERSION = 'v3';
+const SEARCH_INDEX_VERSION = 'v4';
 
 /**
  * Build the FlexSearch instance identifier for a collection + locale.

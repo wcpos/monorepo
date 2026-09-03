@@ -247,10 +247,10 @@ describe('search plugin', () => {
 		it('should generate a versioned, unique identifier per collection and locale', () => {
 			// The version tag (v3) is migration-critical: it forces the rxdb-premium
 			// flexsearch pipeline to rebuild the persisted index from scratch when the
-			// index config changes. Guard it explicitly. See #679 and #1732.
-			expect(getSearchIdentifier('products', 'en')).toBe('products-search-v3-en');
-			expect(getSearchIdentifier('orders', 'de')).toBe('orders-search-v3-de');
-			expect(getSearchIdentifier('customers', 'fr')).toBe('customers-search-v3-fr');
+			// index config changes. Guard it explicitly. See #679, #1732, and the v4 decimal-term fix.
+			expect(getSearchIdentifier('products', 'en')).toBe('products-search-v4-en');
+			expect(getSearchIdentifier('orders', 'de')).toBe('orders-search-v4-de');
+			expect(getSearchIdentifier('customers', 'fr')).toBe('customers-search-v4-fr');
 		});
 
 		it('should generate different identifiers for different locales', () => {
@@ -373,6 +373,9 @@ describe('search plugin', () => {
 			index.add(2, 'Blue Cotton Shirt');
 			index.add(3, 'Château du Cèdre 2022');
 			index.add(4, 'Cèdre 2023'.normalize('NFD'));
+			index.add(5, 'ModelX Coil 0.4ohm');
+			index.add(6, 'ModelX Coil 0.6ohm');
+			index.add(7, 'ModelX Tank WCP-0001-BLK');
 			return index;
 		};
 
@@ -413,6 +416,31 @@ describe('search plugin', () => {
 
 		it('still enforces minlength through the custom encoder', () => {
 			expect(buildIndex('full').search('ce')).toEqual([]);
+		});
+
+		it('finds a decimal spec typed on its own', () => {
+			// "0.4" used to split into "0" + "4", both under minlength, so it matched nothing.
+			expect(buildIndex('full').search('0.4')).toEqual([5]);
+		});
+
+		it('ANDs a model name with a decimal spec down to the one matching product', () => {
+			const index = buildIndex('full');
+			expect(index.search('modelx').sort()).toEqual([5, 6, 7]);
+			expect(index.search('modelx 0.4')).toEqual([5]);
+			expect(index.search('modelx 0.6')).toEqual([6]);
+			expect(index.search('modelx 0.9')).toEqual([]);
+		});
+
+		it('matches inside a punctuated SKU the way LIKE %term% does', () => {
+			const index = buildIndex('full');
+			expect(index.search('WCP-0001')).toEqual([7]);
+			expect(index.search('0001-blk')).toEqual([7]);
+			expect(index.search('wcp 0001 blk')).toEqual([7]);
+		});
+
+		it('treats punctuation as literal: a hyphenated query does not match a spaced title', () => {
+			// wp-admin LIKE '%blue-cotton%' misses "Blue Cotton Shirt" too.
+			expect(buildIndex('full').search('blue-cotton')).toEqual([]);
 		});
 
 		it('finds a custom-meta barcode after materialization into the grid search field', () => {

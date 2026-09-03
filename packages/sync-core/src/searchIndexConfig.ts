@@ -13,7 +13,23 @@
 /** Shortest term the local search index can match. */
 export const FLEXSEARCH_MIN_TERM_LENGTH = 3;
 
-export const FLEXSEARCH_TOKEN_BOUNDARY = /[\p{Z}\p{S}\p{P}\p{C}]+/u;
+/**
+ * Where a search string breaks into terms: whitespace/control characters and the
+ * three characters WordPress's own `WP_Query::parse_search()` treats as term
+ * separators (`"`, `,`, `+`). Every other character is part of its term.
+ *
+ * This deliberately does NOT split on punctuation or symbols. FlexSearch's default
+ * encoder does (`/[\p{Z}\p{S}\p{P}\p{C}]+/u`), which turned "0.4" into "0" and "4",
+ * both under `FLEXSEARCH_MIN_TERM_LENGTH` — so a decimal spec ("0.4", "1.5", "2.0")
+ * could never be indexed or queried, and "modelX 0.4" silently degraded to "modelX".
+ * The server searches `LIKE '%term%'` per whitespace-split term with punctuation
+ * literal, and wp-admin does the same, so keeping punctuation inside the term is
+ * what makes the local index agree with both.
+ *
+ * Bump `SEARCH_INDEX_VERSION` in `@wcpos/database` whenever this changes: the
+ * persisted index is not re-tokenized in place.
+ */
+export const FLEXSEARCH_TOKEN_BOUNDARY = /[\p{Z}\p{C}",+]+/u;
 
 export function foldSearchText(value: unknown): string {
 	return String(value)
