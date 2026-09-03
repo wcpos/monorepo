@@ -9,6 +9,8 @@ import * as React from 'react';
  */
 export interface ExtraDataContextProps {
 	extraData: import('rxdb').RxState<Record<string, unknown>>;
+	/** True only after this provider instance has confirmed the payments route. */
+	paymentMethodsVerified: boolean;
 }
 
 // eslint-disable-next-line wcpos/no-rx-in-context-value -- Persisted extra data is structurally an RxState shared by its writer and field-hook consumers; sanctioned exception dated 2026-08-21, see #1385 stage K.

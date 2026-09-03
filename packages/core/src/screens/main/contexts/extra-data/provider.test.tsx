@@ -76,10 +76,10 @@ beforeEach(() => {
 });
 
 describe('ExtraDataProvider API services', () => {
-	it('fetches each resource on a cold start', () => {
+	it('fetches each resource on a cold start', async () => {
 		render(<ExtraDataProvider>content</ExtraDataProvider>);
+		await act(async () => Promise.resolve());
 
-		expect(mockUseRestHttpClient).toHaveBeenCalledTimes(1);
 		expect(mockGet).toHaveBeenCalledWith('/taxes/classes');
 		expect(mockGet).toHaveBeenCalledWith('/shipping_methods');
 		expect(mockGet).toHaveBeenCalledWith('/data/order_statuses');
@@ -87,7 +87,7 @@ describe('ExtraDataProvider API services', () => {
 		expect(mockGet).toHaveBeenCalledTimes(4);
 	});
 
-	it('fetches nothing on a warm start for unrelated engine events', () => {
+	it('revalidates payment-method capability on a warm start', async () => {
 		mockExtraDataValues = {
 			taxClasses: [{ slug: 'standard' }],
 			shippingMethods: [{ id: 'flat_rate' }],
@@ -95,6 +95,7 @@ describe('ExtraDataProvider API services', () => {
 			paymentMethods: { schema: 1, contract: '1.0', methods: [] },
 		};
 		render(<ExtraDataProvider>content</ExtraDataProvider>);
+		await act(async () => Promise.resolve());
 
 		emit(mockEngine, {
 			type: 'lane-finish',
@@ -102,10 +103,11 @@ describe('ExtraDataProvider API services', () => {
 			status: 'ran',
 		});
 
-		expect(mockGet).not.toHaveBeenCalled();
+		expect(mockGet).toHaveBeenCalledTimes(1);
+		expect(mockGet).toHaveBeenCalledWith('/payment-methods');
 	});
 
-	it('treats cached empty arrays as loaded on a warm start', () => {
+	it('revalidates a cached empty payment-method envelope on a warm start', async () => {
 		mockExtraDataValues = {
 			taxClasses: [],
 			shippingMethods: [],
@@ -113,8 +115,10 @@ describe('ExtraDataProvider API services', () => {
 			paymentMethods: { schema: 1, contract: '1.0', methods: [] },
 		};
 		render(<ExtraDataProvider>content</ExtraDataProvider>);
+		await act(async () => Promise.resolve());
 
-		expect(mockGet).not.toHaveBeenCalled();
+		expect(mockGet).toHaveBeenCalledTimes(1);
+		expect(mockGet).toHaveBeenCalledWith('/payment-methods');
 	});
 
 	it('consumes rejected resource requests', async () => {
@@ -128,7 +132,7 @@ describe('ExtraDataProvider API services', () => {
 		expect(mockExtraDataSet).not.toHaveBeenCalled();
 	});
 
-	it('refetches all resources when the engine reports changed config', () => {
+	it('refetches all resources when the engine reports changed config', async () => {
 		mockExtraDataValues = {
 			taxClasses: [{ slug: 'standard' }],
 			shippingMethods: [{ id: 'flat_rate' }],
@@ -138,12 +142,13 @@ describe('ExtraDataProvider API services', () => {
 		render(<ExtraDataProvider>content</ExtraDataProvider>);
 
 		emit(mockEngine, { type: 'config-changed', collections: ['tax_rates'] });
+		await act(async () => Promise.resolve());
 
 		expect(mockGet).toHaveBeenCalledWith('/taxes/classes');
 		expect(mockGet).toHaveBeenCalledWith('/shipping_methods');
 		expect(mockGet).toHaveBeenCalledWith('/data/order_statuses');
 		expect(mockGet).toHaveBeenCalledWith('/payment-methods');
-		expect(mockGet).toHaveBeenCalledTimes(4);
+		expect(mockGet).toHaveBeenCalledTimes(5);
 	});
 
 	it('rebinds the event bridge to current store dependencies', async () => {
@@ -168,17 +173,17 @@ describe('ExtraDataProvider API services', () => {
 			get: (key: string) => mockExtraDataValues[key],
 			set: mockExtraDataSet,
 		};
-		rerender(<ExtraDataProvider>content</ExtraDataProvider>);
+		act(() => rerender(<ExtraDataProvider>content</ExtraDataProvider>));
 
 		emit(previousEngine, {
 			type: 'config-changed',
 			collections: ['tax_rates'],
 		});
-		expect(previousGet).not.toHaveBeenCalled();
-		expect(mockGet).not.toHaveBeenCalled();
+		expect(previousGet).toHaveBeenCalledTimes(1);
+		expect(mockGet).toHaveBeenCalledTimes(1);
 
 		emit(mockEngine, { type: 'config-changed', collections: ['tax_rates'] });
-		expect(mockGet).toHaveBeenCalledTimes(4);
+		expect(mockGet).toHaveBeenCalledTimes(5);
 		await act(async () => {
 			await Promise.resolve();
 		});

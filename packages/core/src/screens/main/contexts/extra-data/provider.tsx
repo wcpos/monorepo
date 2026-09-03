@@ -23,6 +23,10 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 	const http = useRestHttpClient();
 	const { extraData } = useStoreSession();
 	const { engine } = useQueryRuntime();
+	const [verifiedPaymentMethodsFor, setVerifiedPaymentMethodsFor] = React.useState<
+		typeof extraData | null
+	>(null);
+	const paymentMethodsVerified = verifiedPaymentMethodsFor === extraData;
 
 	React.useEffect(() => {
 		// Store-scoped bridge from the sync engine's public event stream to persisted RxState.
@@ -57,14 +61,18 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 		const fetchPaymentMethods = (generation: number) =>
 			void http
 				.get('/payment-methods')
-				.then((response) => {
+				.then(async (response) => {
 					if (generation === refreshGeneration && response?.status === 200) {
-						void extraData.set('paymentMethods', () => response.data);
+						await extraData.set('paymentMethods', () => response.data);
+						if (generation === refreshGeneration) setVerifiedPaymentMethodsFor(extraData);
 					}
 				})
-				.catch(() => undefined);
+				.catch(() => {
+					if (generation === refreshGeneration) setVerifiedPaymentMethodsFor(null);
+				});
 		const fetchAll = () => {
 			const generation = ++refreshGeneration;
+			setVerifiedPaymentMethodsFor(null);
 			fetchTaxClasses(generation);
 			fetchShippingMethods(generation);
 			fetchOrderStatuses(generation);
@@ -75,7 +83,7 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 		if (isMissing(extraData.get('taxClasses'))) fetchTaxClasses(coldStartGeneration);
 		if (isMissing(extraData.get('shippingMethods'))) fetchShippingMethods(coldStartGeneration);
 		if (isMissing(extraData.get('orderStatuses'))) fetchOrderStatuses(coldStartGeneration);
-		if (isMissing(extraData.get('paymentMethods'))) fetchPaymentMethods(coldStartGeneration);
+		fetchPaymentMethods(coldStartGeneration);
 
 		const unsubscribeEvents = engine.events((event) => {
 			if (event.type === 'config-changed') fetchAll();
@@ -87,5 +95,9 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 		};
 	}, [engine, extraData, http]);
 
-	return <ExtraDataContext.Provider value={{ extraData }}>{children}</ExtraDataContext.Provider>;
+	return (
+		<ExtraDataContext.Provider value={{ extraData, paymentMethodsVerified }}>
+			{children}
+		</ExtraDataContext.Provider>
+	);
 }

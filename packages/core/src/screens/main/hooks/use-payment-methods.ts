@@ -36,11 +36,11 @@ function isEnvelope(value: unknown): value is RuntimeEnvelope {
 }
 
 export function usePaymentMethods(): PaymentMethodsState {
-	const { extraData } = useExtraData();
+	const { extraData, paymentMethodsVerified } = useExtraData();
 	const value = useDocField(extraData, (document) => document.paymentMethods);
 
 	return React.useMemo(() => {
-		if (!isEnvelope(value)) {
+		if (!paymentMethodsVerified || !isEnvelope(value)) {
 			return {
 				methods: [],
 				byId: new Map<string, PaymentMethodDescriptor>(),
@@ -56,5 +56,5 @@ export function usePaymentMethods(): PaymentMethodsState {
 			loaded: true,
 			unsupportedSchema: value.schema !== 1,
 		};
-	}, [value]);
+	}, [paymentMethodsVerified, value]);
 }
