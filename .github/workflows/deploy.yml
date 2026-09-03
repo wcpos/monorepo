@@ -109,10 +109,17 @@ jobs:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
 
+      # A wedged turbo build has no timeout of its own: on 2026-09-02 two PR
+      # deploys (runs 33664427747, 33687923179) sat in this step for 40–75 min
+      # until the Merge Gate's budget failed the PR — a whole review cycle lost
+      # to a runner hang. A healthy build takes ~5 min; 20 is a hang, and a
+      # red in 20 min re-runs in one click.
       - name: ✅ Build apps/main
+        timeout-minutes: 20
         run: pnpm run -w build:main
 
       - name: 🌐 Export apps/main for web
+        timeout-minutes: 20
         working-directory: apps/main
         run: pnpm expo export --platform web --output-dir ./build
 

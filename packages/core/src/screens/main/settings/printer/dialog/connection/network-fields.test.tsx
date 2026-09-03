@@ -111,6 +111,7 @@ jest.mock('../../../../../../contexts/translations', () => ({
 const makeForm = () =>
 	({
 		control: {},
+		getValues: jest.fn(() => 42),
 		setValue: jest.fn(),
 		resetField: jest.fn(),
 	}) as unknown as React.ComponentProps<typeof NetworkFields>['form'];
@@ -153,6 +154,32 @@ describe('NetworkFields discovery states', () => {
 		expect(screen.getByTestId('add-printer-network-none-found')).toHaveTextContent(
 			'Enter the IP address above to add one manually'
 		);
+	});
+
+	it('applies an identified model width when selecting a scan result', () => {
+		const form = makeForm();
+		const identifiedPrinter: DiscoveredPrinter = {
+			...networkPrinter,
+			identity: {
+				vendor: 'epson',
+				lane: { port: 8043, protocol: 'epos-print', encrypted: true },
+				ports: [],
+				columns: 48,
+			},
+		};
+		render(
+			<NetworkFields
+				form={form}
+				probing={false}
+				detectedVendor={null}
+				onScan={jest.fn()}
+				printers={[identifiedPrinter]}
+			/>
+		);
+
+		fireEvent.click(screen.getByTestId('add-printer-network-result-net-1'));
+
+		expect(form.setValue).toHaveBeenCalledWith('columns', 48);
 	});
 
 	it('renders network scan results as a pick-list and applies the selected target', () => {

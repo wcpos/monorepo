@@ -18,39 +18,18 @@ import {
 	DrawerPanelVisibilityProvider,
 	DrawerPanelVisibilityReporter,
 	useDrawerPanelHidden,
-	useReassertDrawerPanelHidden,
 } from './panel-visibility';
 
 function Harness({ status }: { status: DrawerPanelStatus }) {
 	return (
 		<DrawerPanelVisibilityProvider>
 			<Readout />
-			<Reasserter />
 			<DrawerPanelVisibilityReporter status={status} />
 		</DrawerPanelVisibilityProvider>
 	);
 }
 
-/**
- * Stands in for the animated-progress reaction in `DrawerContent`: fires the re-assert the way a
- * cancelled opening swipe would.
- */
-function Reasserter() {
-	const reassert = useReassertDrawerPanelHidden();
-	return <button data-testid="reassert" onClick={reassert} />;
-}
-
-function fireReassert(container: HTMLElement) {
-	act(() => {
-		container.querySelector<HTMLButtonElement>('[data-testid="reassert"]')?.click();
-	});
-	// The drop is restored from a deferred timer so it lands as its own commit.
-	act(() => {
-		jest.advanceTimersByTime(1);
-	});
-}
-
-/** Every value `useDrawerPanelHidden` has published, so a test can see the drop-and-restore. */
+/** Every value `useDrawerPanelHidden` has published, so a test can see a hide that flickers. */
 const publishedHidden: boolean[] = [];
 
 function Readout() {
@@ -141,34 +120,29 @@ describe('drawer panel visibility', () => {
 		expect(readHidden(container)).toBe('true');
 	});
 
-	it('re-applies the hide after a cancelled opening swipe', () => {
-		// The swipe never changes the navigation state, so the reporter does not re-run. Without
-		// the re-assert the static `display: 'none'` is never committed again and the guard
-		// silently disarms — which is exactly how #1691 could come back.
-		const { container } = render(<Harness status="closed" />);
+	it('never drops the hide of a settled-closed panel on a state echo', () => {
+		// The old "re-assert" path dropped the hide for one commit whenever the animated progress
+		// returned to 0 — after EVERY close — assuming the dropped frame showed nothing. On a
+		// stalled JS thread the drop landed seconds late, and Reanimated < 4.5.3 had by then
+		// reverted the panel's static style to the last settled OPEN state (reanimated#9965), so
+		// that commit drew the panel over the routed screen (Android flow 05, run 33725936595).
+		// A closed-status re-render must publish `true` and nothing else.
+		const { container, rerender } = render(<Harness status="closed" />);
 		act(() => {
 			jest.advanceTimersByTime(DRAWER_CLOSE_SETTLE_MS + 1);
 		});
 		expect(readHidden(container)).toBe('true');
 		publishedHidden.length = 0;
 
-		fireReassert(container);
+		rerender(<Harness status="closed" />);
+		act(() => {
+			jest.advanceTimersByTime(DRAWER_CLOSE_SETTLE_MS + 1);
+		});
 
-		// Dropped for one commit — a real prop change the renderer cannot diff away — then hidden
-		// again. Publishing `true` twice in a row would be the no-op that lets the bug back in.
-		expect(publishedHidden).toEqual([false, true]);
+		// The readout re-pushes on its first render after the reset, so the only thing that
+		// matters is that `false` never appears.
+		expect(publishedHidden).not.toContain(false);
 		expect(readHidden(container)).toBe('true');
-	});
-
-	it('does not hide an open drawer when a re-assert arrives', () => {
-		const { container } = render(<Harness status="open" />);
-		expect(readHidden(container)).toBe('false');
-
-		publishedHidden.length = 0;
-		fireReassert(container);
-
-		expect(publishedHidden).toEqual([]);
-		expect(readHidden(container)).toBe('false');
 	});
 
 	it('reports visible with no provider, so a tree without the guard is unchanged', () => {

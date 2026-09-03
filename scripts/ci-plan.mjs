@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CODE_EXTENSIONS = /\.(ts|tsx|js|jsx|mjs|cjs)$/;
+const PLATFORM_SOURCE = /\.(native|ios|android)\.(ts|tsx|js|jsx|mjs|cjs)$/;
 const UNIT_PACKAGES = new Set([
 	'core',
 	'components',
@@ -26,6 +27,7 @@ const UNIT_PACKAGES = new Set([
 ]);
 const WEB_SPEC = /^apps\/main\/e2e\/([A-Za-z0-9._-]+\.spec\.ts)$/;
 
+/** Classify a repository-relative path into its most specific CI routing rule. */
 export function classify(file) {
 	if (
 		/\.(md|mdx)$/.test(file) ||
@@ -56,15 +58,24 @@ export function classify(file) {
 		(/\.test\.(ts|tsx|js|mjs|cjs)$/.test(file) || file.includes('/__tests__/'))
 	)
 		return 'unit-test-file';
+	if (/^packages\/[^/]+\/package\.json$/.test(file)) return 'package-deps';
 	if (
 		file.startsWith('packages/virtual-printer/') ||
 		file.startsWith('packages/eslint/') ||
 		file.startsWith('apps/template-studio/')
 	)
 		return 'leaf-package';
+	const source = /^(.*)\.(ts|tsx|js|jsx|mjs|cjs)$/.exec(file);
+	if (
+		/^(apps\/main|packages\/[^/]+)\//.test(file) &&
+		(PLATFORM_SOURCE.test(file) ||
+			(source && existsSync(path.join(ROOT, `${source[1]}.web.${source[2]}`))))
+	)
+		return 'native-source';
 	// Native inputs must win before the generic apps/main rule.
 	if (
 		/^apps\/main\/app\.config\.[^/]+$/.test(file) ||
+		/^apps\/main\/assets\/images\/(icon|adaptive-icon|splash-icon)\.png$/.test(file) ||
 		file.startsWith('apps/main/plugins/') ||
 		file.startsWith('apps/main/modules/') ||
 		file === 'apps/main/eas.json' ||
@@ -168,7 +179,7 @@ function reasonFor(plan, reasons) {
 	].join('; ');
 }
 
-export function planFor(changedFiles, { commentOnly = false } = {}) {
+export function planFor(changedFiles, { commentOnly = false, baseBranch = '' } = {}) {
 	try {
 		if (!changedFiles.length) return everythingPlan('no changed files detected');
 		const rules = changedFiles.map((file) => classify(file));
@@ -239,15 +250,33 @@ export function planFor(changedFiles, { commentOnly = false } = {}) {
 				else units.add(match[1] ?? 'main');
 				reasons.unit.add(rule);
 			} else if (rule === 'package-src') {
+				// No native on a main-targeting PR for plain app/package source (owner ruling
+				// 2026-09-03): a device suite is ~30 min of shared-store capacity
+				// per platform and cannot gate several PRs an hour; the web suite
+				// already runs this JS in a browser. The push to main is the
+				// everything plan, so the device suites still run on every merge
+				// and a red main names a handful of commits. Only inputs the
+				// native apps alone consume — Maestro flows, native config and
+				// deps, the native workflow and its seed — run devices on the PR.
 				for (const name of affectedUnits(file.split('/')[1])) units.add(name);
 				reasons.unit.add(rule);
 				widen('web', 'full', rule);
-				widen('native', 'cachehit', rule);
 			} else if (rule === 'app-src') {
 				units.add('main');
 				reasons.unit.add(rule);
 				widen('web', 'full', rule);
+			} else if (rule === 'native-source') {
+				if (file.startsWith('packages/'))
+					for (const name of affectedUnits(file.split('/')[1])) units.add(name);
+				else units.add('main');
+				reasons.unit.add(rule);
+				widen('web', 'full', rule);
 				widen('native', 'cachehit', rule);
+			} else if (rule === 'package-deps') {
+				for (const name of affectedUnits(file.split('/')[1])) units.add(name);
+				reasons.unit.add(rule);
+				widen('web', 'full', rule);
+				widen('native', 'rebuild', rule);
 			} else if (rule === 'native-config') {
 				units.add('main');
 				reasons.unit.add(rule);
@@ -276,6 +305,8 @@ export function planFor(changedFiles, { commentOnly = false } = {}) {
 				if (file === 'scripts/e2e-native-seed.mjs') widen('native', 'cachehit', rule);
 				else if (!/^scripts\/(?:check-.*\.mjs|[^/]+\.test\.mjs)$/.test(file)) all(rule);
 			}
+			if (baseBranch === 'next' && (rule === 'package-src' || rule === 'app-src'))
+				widen('native', 'cachehit', rule);
 		}
 		if (plan.unit !== 'all' && units.size) plan.unit = [...units].sort().join(',');
 		if (plan.web === 'narrowed') plan.only_specs = [...specs].sort().join(' ');
@@ -363,7 +394,12 @@ function main() {
 			.map((line) => line.trim())
 			.filter(Boolean);
 		if (!changed.length) return emitForRange(everythingPlan('git diff returned no changed files'));
-		emitForRange(planFor(changed, { commentOnly: isNonBehavioural(changed, diffRange) }));
+		emitForRange(
+			planFor(changed, {
+				commentOnly: isNonBehavioural(changed, diffRange),
+				baseBranch: process.env.GITHUB_BASE_REF,
+			})
+		);
 	} catch (error) {
 		emit(
 			everythingPlan(`planner error: ${error instanceof Error ? error.message : String(error)}`)

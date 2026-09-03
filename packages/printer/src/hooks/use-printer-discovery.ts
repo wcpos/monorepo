@@ -4,6 +4,8 @@ import {
 	classifyDiscoveryFailure,
 	formatDiscoveryFailureMessage,
 } from '../discovery/discovery-errors';
+import { identifyDiscoveredPrinters } from '../discovery/identify';
+import { createIdentifyProbes } from '../discovery/identify-probes';
 import { mergePrinters } from '../discovery/merge-printers';
 
 import type { DiscoveredPrinter, DiscoveryError, PrinterDiscovery } from '../types';
@@ -18,6 +20,9 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 	const [printers, setPrinters] = React.useState<DiscoveredPrinter[]>([]);
 	const [isScanning, setIsScanning] = React.useState(false);
 	const [error, setError] = React.useState<DiscoveryError | null>(null);
+	// Bumped by stopScan and by every startScan: SDK discovery and identification cannot be
+	// cancelled, so a pass that finishes after a stop must not merge into state.
+	const scanGenerationRef = React.useRef(0);
 
 	const addManualPrinter = React.useCallback(
 		(
@@ -47,6 +52,7 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 	}, []);
 
 	const startScan = React.useCallback(async () => {
+		const generation = ++scanGenerationRef.current;
 		setIsScanning(true);
 		setError(null);
 
@@ -74,6 +80,7 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 					),
 				}))
 			);
+			if (scanGenerationRef.current !== generation) return;
 
 			for (const { vendor, result } of discoveryResults) {
 				if (result.status === 'fulfilled') {
@@ -81,13 +88,19 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 
 					if (result.value.length > 0) {
 						foundAny = true;
-						setPrinters((prev) => mergePrinters(prev, result.value));
+						const identified = await identifyDiscoveredPrinters(
+							result.value,
+							createIdentifyProbes()
+						);
+						if (scanGenerationRef.current !== generation) return;
+						setPrinters((prev) => mergePrinters(prev, identified));
 					}
 				} else {
 					failures.push(classifyDiscoveryFailure(vendor, result.reason));
 				}
 			}
 
+			if (scanGenerationRef.current !== generation) return;
 			const failureMessage = formatDiscoveryFailureMessage(failures);
 			if (!foundAny && failureMessage) {
 				setError({ code: 'discovery-failed', detail: failureMessage });
@@ -101,11 +114,12 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 				setError({ code: 'network-none-found' });
 			}
 		} finally {
-			setIsScanning(false);
+			if (scanGenerationRef.current === generation) setIsScanning(false);
 		}
 	}, []);
 
 	const stopScan = React.useCallback(() => {
+		scanGenerationRef.current += 1;
 		setIsScanning(false);
 	}, []);
 

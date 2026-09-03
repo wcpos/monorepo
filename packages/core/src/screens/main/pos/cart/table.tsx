@@ -304,7 +304,7 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 					);
 				})}
 			</TableHeader>
-			<ScrollView ref={scrollViewRef}>
+			<ScrollView ref={scrollViewRef} testID="cart-table-scroll">
 				<TableBody>
 					{table.getRowModel().rows.map((row, index) => {
 						return (

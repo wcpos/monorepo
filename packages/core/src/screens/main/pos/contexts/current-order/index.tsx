@@ -68,11 +68,32 @@ export function CurrentOrderProvider({
 	// Implemented as the React "adjust state during render" pattern (tracking the
 	// previous route param) instead of an effect, so it never sets state inside
 	// useEffect.
+	//
+	// A route param that merely ECHOES an id this provider has already left is not a
+	// navigation: `router.setParams({ orderId: undefined })` cannot empty the
+	// `[...orderId]` catch-all, so picking the "new order" tab leaves `/cart/<previous
+	// uuid>` in the route. On a phone the Products and Cart tabs are two focused routes,
+	// so every Products -> Cart round trip re-delivers that id — and adopting it silently
+	// puts the cart, and the `getCurrentOrderRecord()` every product tile writes through,
+	// back on the order the cashier just left.
+	//
+	// Exactly one id is parked, and only the ROUTE releases it: the mark is dropped when
+	// the route delivers a DIFFERENT order (below), or when the cashier selects the parked
+	// order again (in `setCurrentOrderID`). Persisting a new order must NOT release it —
+	// that `setParams` lands on whichever route is focused, which during an add from the
+	// Products tab is not the cart's, so the cart route still holds the parked id.
+	const routeOrderUUIDRef = React.useRef(currentOrderUUID);
+	const [supersededRouteOrderUUID, setSupersededRouteOrderUUID] = React.useState<
+		string | undefined
+	>(undefined);
 	const [prevOrderUUID, setPrevOrderUUID] = React.useState(currentOrderUUID);
 	if (currentOrderUUID !== prevOrderUUID) {
 		setPrevOrderUUID(currentOrderUUID);
-		if (currentOrderUUID !== undefined) {
+		if (currentOrderUUID !== undefined && currentOrderUUID !== supersededRouteOrderUUID) {
 			setInternalOrderId(currentOrderUUID);
+			if (supersededRouteOrderUUID !== undefined) {
+				setSupersededRouteOrderUUID(undefined);
+			}
 		}
 	}
 
@@ -89,6 +110,12 @@ export function CurrentOrderProvider({
 		(orderId: string) => {
 			// Update internal state immediately - this is the source of truth
 			setInternalOrderId(orderId || undefined);
+
+			// Leaving an order parks the id the route still holds (see the sync above).
+			// Selecting the parked order again releases it; persisting a new one does not.
+			setSupersededRouteOrderUUID((parked) =>
+				orderId ? (orderId === parked ? undefined : parked) : routeOrderUUIDRef.current
+			);
 
 			// Also sync to URL for bookmarking/refresh/history purposes
 			router.setParams({ orderId: orderId ? [orderId] : undefined });
@@ -121,6 +148,10 @@ export function CurrentOrderProvider({
 	React.useLayoutEffect(() => {
 		currentOrderRecordRef.current = currentOrderRecord;
 	}, [currentOrderRecord]);
+
+	React.useLayoutEffect(() => {
+		routeOrderUUIDRef.current = currentOrderUUID;
+	}, [currentOrderUUID]);
 
 	/**
 	 * Stable for the provider's lifetime — `setCurrentOrderID` is a useCallback on the router
