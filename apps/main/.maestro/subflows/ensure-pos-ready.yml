@@ -1,0 +1,104 @@
+appId: com.wcpos.main.dev
+# Maestro requires the config section in every flow file, subflows included:
+# without it batch mode aborts before the first flow with "Config Section
+# Required" (run 33627088324, Android phone, 99 s in, no verdict).
+---
+# Invariant: every flow ends on the POS products screen with search-products visible.
+# The healthy path performs zero relaunches; relaunch is recovery only when POS is not ready.
+# Recovery is logged so run artifacts can count every conditional relaunch.
+- runFlow:
+    when:
+      visible:
+        id: "pos-tab-products"
+    commands:
+      - tapOn:
+          id: "pos-tab-products"
+- runFlow:
+    when:
+      notVisible:
+        id: "search-products"
+    commands:
+      - evalScript: "${console.log('WCPOS_E2E POS not ready at flow start, relaunching')}"
+      - runFlow:
+          file: relaunch-to-pos.yml
+- extendedWaitUntil:
+    visible:
+      id: "search-products"
+    timeout: 10000
+# Two states a relaunch used to reset, seen leaking on run 33645848904 (Android
+# phone, flow 06): the drawer was still open (flow 05's closing tap was lost
+# under a crawl; search-products stays visible beside a phone drawer, so the
+# old ending could not tell) and the search box still held flow 04's query, so
+# the retype spliced and the grid said "no products found". Tapping the
+# FOCUSED drawer item dispatches closeDrawer (drawer-item-list.tsx); the
+# search box clears through its own × (renders only while it has text).
+- runFlow:
+    when:
+      visible:
+        id: "drawer-item-pos"
+    commands:
+      - evalScript: "${console.log('WCPOS_E2E drawer still open at flow start, closing through the scrim')}"
+      # The scrim, not the focused item: the item dispatches closeDrawer, which is
+      # a no-op when the navigation state already says closed while the view is
+      # still open (run 33666934729). A phone drawer is 200 dp wide, well left of
+      # 85%; the guard above guarantees the scrim is there to receive the tap.
+      - tapOn:
+          point: "85%,50%"
+      - extendedWaitUntil:
+          notVisible:
+            id: "drawer-item-pos"
+          timeout: 10000
+- runFlow:
+    when:
+      visible:
+        id: "search-products-clear"
+    commands:
+      - evalScript: "${console.log('WCPOS_E2E search box not empty at flow start, clearing')}"
+      - tapOn:
+          id: "search-products-clear"
+      # The × leaves the field focused with the keyboard up, and on iOS the
+      # covered tab bar still reads as visible to Maestro, so the keyboard guard
+      # below cannot see it and a cart-first flow's tab tap lands on the keys
+      # (local run 5, flow 08). The field has a return key: Enter submits the
+      # now-empty search (a no-op) and drops the keyboard on both platforms.
+      - pressKey: Enter
+- runFlow:
+    when:
+      visible:
+        id: "filter-pill-remove-stock_status"
+    commands:
+      - tapOn:
+          id: "filter-pill-remove-stock_status"
+# The keyboard is the third state a relaunch used to reset: the previous
+# flow's last search leaves it up, and on phones it covers the tab bar, so
+# pos-tab-cart is "not visible" and a cart-first flow never opens the cart
+# (run 33655220085, Android phone, flow 08 — flows 01–07 chained green).
+# NEVER unconditionally: Maestro's Android hideKeyboard is `input keyevent 4`
+# (Back), which with no keyboard up leaves the app for the launcher — run
+# 33662941896 died in flow 04 at 36 s exactly that way. The keyboard's tell
+# on a phone is the tab bar pushed off screen while the search box stays:
+# dismiss only then, and only on phones (tablets have no tab bar to read).
+- runFlow:
+    when:
+      true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"
+      visible:
+        id: "search-products"
+      notVisible:
+        id: "pos-tab-products"
+    commands:
+      - evalScript: "${console.log('WCPOS_E2E keyboard covering the tab bar at flow start, dismissing')}"
+      - hideKeyboard
+      # iOS fallback: hideKeyboard is unreliable there; the search field's
+      # return key submits the (already cleared) search and drops the keyboard.
+      - runFlow:
+          when:
+            notVisible:
+              id: "pos-tab-products"
+          commands:
+            - tapOn:
+                id: "search-products"
+            - pressKey: Enter
+      - extendedWaitUntil:
+          visible:
+            id: "pos-tab-products"
+          timeout: 10000

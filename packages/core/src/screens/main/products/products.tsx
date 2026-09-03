@@ -272,6 +272,7 @@ export function Products() {
 									placeholder={t('common.search_products')}
 									className="flex-1"
 									testID="search-products"
+									clearTestID="search-products-clear"
 								/>
 							</ErrorBoundary>
 							{/* <Icon

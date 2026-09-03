@@ -1719,14 +1719,18 @@ test('no Maestro flow declares a default for a variable the runners pass with -e
 
 	assert.ok(cliPassed.has('DEVICE_CLASS'), 'the runners no longer pass DEVICE_CLASS with -e');
 
-	const flowsDir = path.join(ROOT, 'apps', 'main', '.maestro', 'flows');
+	const maestroDirs = ['flows', 'subflows'].map((dir) =>
+		path.join(ROOT, 'apps', 'main', '.maestro', dir)
+	);
 	const offenders = [];
-	for (const filename of readdirSync(flowsDir).filter((name) => name.endsWith('.yml'))) {
-		const documents = parseAllDocuments(readFileSync(path.join(flowsDir, filename), 'utf8'));
-		if (documents.length < 2) continue; // no front-matter, so no env block
-		const declared = documents[0].toJS()?.env ?? {};
-		for (const name of Object.keys(declared)) {
-			if (cliPassed.has(name)) offenders.push(`${filename}: ${name}`);
+	for (const maestroDir of maestroDirs) {
+		for (const filename of readdirSync(maestroDir).filter((name) => name.endsWith('.yml'))) {
+			const documents = parseAllDocuments(readFileSync(path.join(maestroDir, filename), 'utf8'));
+			if (documents.length < 2) continue; // no front-matter, so no env block
+			const declared = documents[0].toJS()?.env ?? {};
+			for (const name of Object.keys(declared)) {
+				if (cliPassed.has(name)) offenders.push(`${filename}: ${name}`);
+			}
 		}
 	}
 
@@ -1750,9 +1754,86 @@ test('flow 08 issues the destructive void tap only once', () => {
 	assert.equal(voidTaps.length, 1, 'a retry can reissue an accepted in-flight server delete');
 });
 
+test('flow 08 selects a fresh order before requiring an empty cart', () => {
+	const flow = readMaestroFlow('08-void-order.yml');
+	const emptyCartAssertion = flow.findIndex(
+		(command) => command.assertNotVisible?.id === 'cart-quantity-input'
+	);
+	const newOrderTap = flow.findIndex((command) => command.tapOn?.id === 'new-order-tab');
+
+	assert.ok(newOrderTap >= 0, 'flow 08 must explicitly select a fresh order');
+	assert.ok(
+		newOrderTap < emptyCartAssertion,
+		'fresh order selection must precede the empty-cart check'
+	);
+});
+
+test('flow-start cleanup dismisses the keyboard only when it is provably up, on phones', () => {
+	const flow = readMaestroFlow('../subflows/ensure-pos-ready.yml');
+	// Android hideKeyboard is `input keyevent 4` (Back): unconditional, it
+	// leaves the app for the launcher when no keyboard is up (run 33662941896).
+	assert.ok(
+		!flow.some((command) => command === 'hideKeyboard' || command?.hideKeyboard),
+		'hideKeyboard must not run unconditionally at flow start'
+	);
+	const guard = flow.at(-1).runFlow;
+	assert.match(guard.when.true, /DEVICE_CLASS === 'phone'/);
+	assert.deepEqual(guard.when.visible, { id: 'search-products' });
+	assert.deepEqual(guard.when.notVisible, { id: 'pos-tab-products' });
+	assert.ok(guard.commands.some((command) => command === 'hideKeyboard'));
+});
+
+test('Android relaunch recovery rechecks the development launcher on every retry leg', () => {
+	for (const filename of [
+		'03-authenticated-relaunch.yml',
+		'08-void-order.yml',
+		'../subflows/relaunch-to-pos.yml',
+	]) {
+		const retry = readMaestroFlow(filename).find((command) =>
+			command.retry?.commands.some(
+				(nested) => nested.extendedWaitUntil?.visible?.id === 'search-products'
+			)
+		)?.retry;
+		assert.ok(retry, `${filename} lost its relaunch readiness retry`);
+		assert.ok(
+			retry.commands.some(
+				(command) =>
+					command.runFlow?.when?.platform === 'Android' &&
+					command.runFlow.when.visible === '(?i)fetch development servers'
+			),
+			`${filename} checks the development launcher only once before the retry`
+		);
+	}
+});
+
+// The openLink retry wrapper sits at the top level of flow 01 (clearState is
+// the point of that flow). Flow 02 continues from flow 01's connect screen and
+// keeps the same wrapper as RECOVERY only — inside a runFlow gated on
+// store-url-input NOT being visible — so a healthy run never pays a second
+// uninstall+reinstall and cold-start deep link (PR #1760). Both shapes must
+// carry the identical wrapper; this finds it wherever it lives.
+function coldStartRetry(flow, filename) {
+	const issuesLink = (command) =>
+		String(command.retry?.commands?.[0]?.openLink ?? '').startsWith('wcpos://');
+	const topLevel = flow.find(issuesLink)?.retry;
+	if (topLevel) return topLevel;
+	const recovery = flow.find(
+		(command) => command.runFlow?.when?.notVisible?.id === 'store-url-input'
+	)?.runFlow.commands;
+	assert.ok(
+		recovery,
+		`${filename}: no top-level openLink retry and no connect-screen recovery wrapper`
+	);
+	assert.ok(
+		recovery.some((command) => command === 'clearState'),
+		`${filename}: the recovery cold start must clearState before re-issuing the link`
+	);
+	return recovery.find(issuesLink)?.retry;
+}
+
 test('Android clean-start flows dismiss a queued system ANR before waiting for Expo', () => {
 	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
-		const launchBlock = readMaestroFlow(filename).find((command) => command.retry)?.retry.commands;
+		const launchBlock = coldStartRetry(readMaestroFlow(filename), filename)?.commands;
 		assert.ok(launchBlock, `${filename} lost its openLink retry wrapper`);
 		const androidLaunch = launchBlock.find(
 			(command) => command.runFlow?.when?.platform === 'Android'
@@ -1774,7 +1855,7 @@ test('Android clean-start flows dismiss a queued system ANR before waiting for E
 // again instead of spending the whole budget on the home screen.
 test('clean-start flows re-issue a dropped openLink, gated on the connect screen', () => {
 	for (const filename of ['01-clean-launch-connect.yml', '02-auth-setup.yml']) {
-		const wrapper = readMaestroFlow(filename).find((command) => command.retry)?.retry;
+		const wrapper = coldStartRetry(readMaestroFlow(filename), filename);
 		assert.ok(wrapper, `${filename} lost its openLink retry wrapper`);
 		assert.equal(wrapper.maxRetries, 1, `${filename}: one re-issue of the link`);
 		assert.match(

@@ -16,55 +16,8 @@ appId: com.wcpos.main.dev
 # The void itself: the cashier role cannot DELETE (`woocommerce_rest_cannot_delete`),
 # so the app converts the void to `status: pending` (buttons/void.tsx). Open
 # tabs are filtered to `pos-open`, so the converted order must not return.
-# Split stop/launch + a screenshot-based settle: a combined `launchApp:
-# {stopApp: true}` can race the XCTest driver's first hierarchy query and be
-# reported as "App crashed" — see flow 08's relaunch for the evidence.
-- stopApp
-- launchApp
-- waitForAnimationToEnd:
-    timeout: 5000
-# Android: a cold `launchApp` can land on the dev launcher's HOME screen
-# instead of reloading the last project (PR #1690 run 33279550244 attempt 2,
-# phone, flow 05: "Development servers … Recently opened" with the app never
-# loaded, so the first assertion timed out on the launcher). Reload through
-# the same deep link flows 01/02 use; inert when the app came up normally.
 - runFlow:
-    when:
-      platform: Android
-      visible: "(?i)fetch development servers"
-    commands:
-      - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
-      - waitForAnimationToEnd:
-          timeout: 5000
-# Run 33513307174 (Android phone, flow 05): the login Custom Tab from flow
-# 02's retype recovery lives in the app task's back stack and can resurface
-# over the app on ANY relaunch, not only flow 03's. Same gated dismissal as
-# flow 03: fires only when the login form itself is visible, so it can never
-# background a loading app; login-page text, not testID (third-party browser
-# content — the selector-policy exemption flow 02 documents).
-# Run 33527914510 (Android phone, flow 06): the tab resurfaces
-# ASYNCHRONOUSLY — a one-shot check right after launch raced it and lost
-# (guard SKIPPED, tab then took the screen for the whole readiness wait).
-# Re-evaluate the dismissal at each retry leg; 3 legs × 40s keep the old
-# 120s readiness budget (maxRetries counts RETRIES: executions = 3).
-- retry:
-    maxRetries: 2
-    commands:
-      - runFlow:
-          when:
-            platform: Android
-            visible: "Username or Email Address|Nombre de usuario o correo electrónico"
-          commands:
-            - evalScript: "${console.log('WCPOS_E2E lingering login tab over the relaunched app, force-stopping Chrome')}"
-            # NOT `back`: the tab keeps web history (authorize → login form) and back
-            # navigates it instead of closing the tab — run 33574072528 flow 07.
-            - stopApp: com.android.chrome
-            - waitForAnimationToEnd:
-                timeout: 5000
-      - extendedWaitUntil:
-          visible:
-            id: "search-products"
-          timeout: 40000
+    file: ../subflows/ensure-pos-ready.yml
 - runFlow:
     when:
       visible:
@@ -100,8 +53,10 @@ appId: com.wcpos.main.dev
     visible:
       id: "add-cart-item-menu"
     timeout: 15000
-# A relaunch opens a FRESH current order, so the cart is empty and has no tab
-# of its own yet — it gets one on the first write below.
+# The chained suite preserves flow 06/07's cart. Explicitly select the new-order
+# tab so this flow owns an empty order; it gets its own tab on the first write.
+- tapOn:
+    id: "new-order-tab"
 - assertNotVisible:
     id: "cart-quantity-input"
 # Mint a run-unique amount: 5-digit dollars + 2-digit cents, a 9M-value space
@@ -209,14 +164,6 @@ appId: com.wcpos.main.dev
 # phone, flow 05: "Development servers … Recently opened" with the app never
 # loaded, so the first assertion timed out on the launcher). Reload through
 # the same deep link flows 01/02 use; inert when the app came up normally.
-- runFlow:
-    when:
-      platform: Android
-      visible: "(?i)fetch development servers"
-    commands:
-      - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
-      - waitForAnimationToEnd:
-          timeout: 5000
 # Run 33513307174 (Android phone, flow 05): the login Custom Tab from flow
 # 02's retype recovery lives in the app task's back stack and can resurface
 # over the app on ANY relaunch, not only flow 03's. Same gated dismissal as
@@ -231,6 +178,14 @@ appId: com.wcpos.main.dev
 - retry:
     maxRetries: 2
     commands:
+      - runFlow:
+          when:
+            platform: Android
+            visible: "(?i)fetch development servers"
+          commands:
+            - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
+            - waitForAnimationToEnd:
+                timeout: 5000
       - runFlow:
           when:
             platform: Android
@@ -287,3 +242,14 @@ appId: com.wcpos.main.dev
     timeout: 30000
 - assertNotVisible:
     text: "${output.amountRe}"
+- runFlow:
+    when:
+      visible:
+        id: "pos-tab-products"
+    commands:
+      - tapOn:
+          id: "pos-tab-products"
+- extendedWaitUntil:
+    visible:
+      id: "search-products"
+    timeout: 60000

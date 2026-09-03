@@ -1,8 +1,8 @@
 appId: com.wcpos.main.dev
+# Maestro requires the config section in every flow file, subflows included:
+# without it batch mode aborts before the first flow with "Config Section
+# Required" (run 33627088324, Android phone, 99 s in, no verdict).
 ---
-# P0-3: authenticated relaunch — the session hydrates from native SQLite and
-# the POS appears WITHOUT reconnecting. This behavior is also the mechanism
-# every later flow relies on (auth decision #698: OAuth once, reuse session).
 # Split stop/launch + a screenshot-based settle: a combined `launchApp:
 # {stopApp: true}` can race the XCTest driver's first hierarchy query and be
 # reported as "App crashed" — see flow 08's relaunch for the evidence.
@@ -15,16 +15,12 @@ appId: com.wcpos.main.dev
 # phone, flow 05: "Development servers … Recently opened" with the app never
 # loaded, so the first assertion timed out on the launcher). Reload through
 # the same deep link flows 01/02 use; inert when the app came up normally.
-# Run 33348495405 (Android phone): flow 02's second-submit recovery fired
-# ("login form still visible after submit, retyping once"), flow 02 PASSED,
-# but the login Custom Tab never closed - and this relaunch brought the task
-# back with that tab still on top, so the 120 s wait below stared at a filled
-# dev-pro login form. One logged Back press dismisses the tab and reveals the
-# app; gated on the login form itself so it can never fire while the app is
-# still loading (a blind Back during startup would background the app).
-# Login-page text, not testID: third-party browser content - the app's
-# selector policy cannot apply (same exemption flow 02 uses for these exact
-# strings). Flows 07/08 relaunch too but always run AFTER this dismissal.
+# Run 33513307174 (Android phone, flow 05): the login Custom Tab from flow
+# 02's retype recovery lives in the app task's back stack and can resurface
+# over the app on ANY relaunch, not only flow 03's. Same gated dismissal as
+# flow 03: fires only when the login form itself is visible, so it can never
+# background a loading app; login-page text, not testID (third-party browser
+# content — the selector-policy exemption flow 02 documents).
 # Run 33527914510 (Android phone, flow 06): the tab resurfaces
 # ASYNCHRONOUSLY — a one-shot check right after launch raced it and lost
 # (guard SKIPPED, tab then took the screen for the whole readiness wait).
@@ -56,5 +52,20 @@ appId: com.wcpos.main.dev
           visible:
             id: "search-products"
           timeout: 40000
-- assertNotVisible:
-    id: "store-url-input"
+# The In-Stock filter resets on every relaunch (POSProducts remounts with
+# showOutOfStock=false) — clear it here, not just in 02-auth-setup.
+- runFlow:
+    when:
+      visible:
+        id: "filter-pill-remove-stock_status"
+    commands:
+      - tapOn:
+          id: "filter-pill-remove-stock_status"
+# Phone layout splits Products/Cart into tabs; tablet shows both columns.
+- runFlow:
+    when:
+      visible:
+        id: "pos-tab-products"
+    commands:
+      - tapOn:
+          id: "pos-tab-products"
