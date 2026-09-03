@@ -1,7 +1,7 @@
 import { EpsonEposAdapter } from './epson-epos-adapter';
 import { StarWebPrntAdapter } from './star-webprnt-adapter';
 
-import type { PrinterTransport, PrintRawOptions } from '../types';
+import type { MarkupPrintJob, PrinterTransport, PrintRawOptions } from '../types';
 
 /**
  * Web network adapter — delegates to vendor-specific HTTP adapters.
@@ -47,6 +47,15 @@ export class NetworkAdapter implements PrinterTransport {
 
 	async printRaw(data: Uint8Array, options?: PrintRawOptions): Promise<void> {
 		return this.delegate.printRaw(data, options);
+	}
+
+	supportsMarkup = async (): Promise<boolean> => (await this.delegate.supportsMarkup?.()) ?? false;
+
+	async printMarkup(job: MarkupPrintJob): Promise<void> {
+		if (!(await this.supportsMarkup())) {
+			throw new Error('markup printing is not available on this transport');
+		}
+		return this.delegate.printMarkup!(job);
 	}
 
 	async printHtml(html: string): Promise<void> {

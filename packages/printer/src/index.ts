@@ -75,6 +75,7 @@ export { isPrinterConnectionError, PrinterConnectionError } from './utils/connec
 export type { ConnectionDiagnostics } from './utils/connection-error';
 export type {
 	PrinterTransport,
+	MarkupPrintJob,
 	PrinterProfile,
 	DiscoveredPrinter,
 	PrintJob,

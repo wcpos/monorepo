@@ -112,4 +112,21 @@ describe('NetworkAdapter web endpoints', () => {
 		expect(String(init.body)).toContain('<rawData>');
 		expect(String(init.body)).not.toContain('<cutpaper');
 	});
+
+	it('supports and forwards markup only for Epson', async () => {
+		const epson = new NetworkAdapter('192.168.1.20', 8008, 'epson');
+		const star = new NetworkAdapter('192.168.1.20', 80, 'star');
+
+		expect(await epson.supportsMarkup()).toBe(true);
+		expect(await star.supportsMarkup()).toBe(false);
+		await epson.printMarkup({
+			template: '<receipt><text>Hello</text></receipt>',
+			data: {},
+			options: {},
+		});
+		expect(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body)).toContain('<text ');
+		await expect(
+			star.printMarkup({ template: '<receipt/>', data: {}, options: {} })
+		).rejects.toThrow('markup printing is not available on this transport');
+	});
 });

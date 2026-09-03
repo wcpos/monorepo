@@ -3,8 +3,11 @@ import PQueue from 'p-queue';
 
 import { canOpenDrawer } from './capabilities';
 import { buildDiagnosticTemplate } from './encoder/diagnostic-template';
-import { encodeReceipt } from './encoder/encode-receipt';
-import { encodeThermalTemplateForPrint } from './encoder/thermal-print';
+import { buildReceiptMarkupJob, encodeReceipt } from './encoder/encode-receipt';
+import {
+	buildThermalTemplateMarkupJob,
+	encodeThermalTemplateForPrint,
+} from './encoder/thermal-print';
 import { encodeThermalTemplate } from './renderer';
 import { CloudAdapter } from './transport/cloud-adapter';
 import { SystemPrintAdapter } from './transport/system-print-adapter';
@@ -164,9 +167,11 @@ export class PrinterService {
 				openDrawer: profile.autoOpenDrawer,
 				decimals,
 			};
-			const bytes = encodeReceipt(receiptData, encodeOpts);
-
-			await transport.printRaw(bytes);
+			if (await transport.supportsMarkup?.()) {
+				await transport.printMarkup!(buildReceiptMarkupJob(receiptData, encodeOpts));
+			} else {
+				await transport.printRaw(encodeReceipt(receiptData, encodeOpts));
+			}
 		});
 	}
 
@@ -191,6 +196,14 @@ export class PrinterService {
 
 		return this.queue.add(async () => {
 			const transport = await this.getTransport(profile);
+			if (await transport.supportsMarkup?.()) {
+				await transport.printMarkup!({
+					template: '<receipt><drawer/></receipt>',
+					data: {},
+					options: { drawerConnector: profile.drawerConnector },
+				});
+				return;
+			}
 			const bytes =
 				encodeEscposRealtimeDrawerKick(profile) ??
 				encodeThermalTemplate(
@@ -245,7 +258,7 @@ export class PrinterService {
 	): Promise<void> {
 		return this.queue.add(async () => {
 			const transport = await this.getTransport(profile);
-			const bytes = await encodeThermalTemplateForPrint({
+			const input = {
 				templateXml,
 				receiptData,
 				maxWidthDots,
@@ -257,7 +270,12 @@ export class PrinterService {
 					openDrawer: profile.autoOpenDrawer,
 					drawerConnector: profile.drawerConnector,
 				},
-			});
+			};
+			if (await transport.supportsMarkup?.()) {
+				await transport.printMarkup!(await buildThermalTemplateMarkupJob(input));
+				return;
+			}
+			const bytes = await encodeThermalTemplateForPrint(input);
 			await transport.printRaw(bytes);
 		});
 	}
@@ -290,19 +308,20 @@ export class PrinterService {
 
 		return this.queue.add(async () => {
 			const transport = await this.getTransport(profile);
-			const bytes = encodeThermalTemplate(
-				buildDiagnosticTemplate(profile.columns),
-				{ printerName: profile.name, date: new Date().toLocaleString() },
-				{
+			const job = {
+				template: buildDiagnosticTemplate(profile.columns),
+				data: { printerName: profile.name, date: new Date().toLocaleString() },
+				options: {
 					language: profile.language,
 					columns: profile.columns,
 					printerModel: profile.printerModel,
 					emitEscPrintMode: profile.emitEscPrintMode ?? true,
 					openDrawer: options.openDrawer ?? profile.autoOpenDrawer,
 					drawerConnector: profile.drawerConnector,
-				}
-			);
-			await transport.printRaw(bytes);
+				},
+			};
+			if (await transport.supportsMarkup?.()) await transport.printMarkup!(job);
+			else await transport.printRaw(encodeThermalTemplate(job.template, job.data, job.options));
 		});
 	}
 
