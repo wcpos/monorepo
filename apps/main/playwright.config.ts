@@ -162,6 +162,7 @@ export default defineConfig<WcposTestOptions>({
 							// posPage fixture has hydrated a context (three hydrations per shard
 							// for three skips, run 33617749219). Exclude at collection instead.
 							/server-created-visibility\.spec\.ts/,
+							/checkout-tender\.spec\.ts/,
 							COLD_SPEC,
 							LIVE_SPEC,
 						],

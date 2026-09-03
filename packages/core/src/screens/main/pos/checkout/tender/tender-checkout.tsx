@@ -120,6 +120,9 @@ export function TenderCheckout({ order }: Props) {
 	return (
 		<Modal onClose={handleClose}>
 			<ModalContent testID="checkout-dialog" size={compact ? 'full' : '2xl'} className="h-full">
+				<Text testID="checkout-server-order-id" className="hidden">
+					{payload.id}
+				</Text>
 				<ModalHeader>
 					<HStack className="items-center gap-3">
 						<ModalTitle asChild>

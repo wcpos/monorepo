@@ -14,13 +14,16 @@
  */
 import { type APIRequestContext, expect, type Page, type TestInfo } from '@playwright/test';
 
+import { log } from '@wcpos/utils/logger';
+
 import { tryAddRunPrivateSimpleProduct } from './checkout-probe';
-import { getStoreUrl, getStoreVariant } from './fixtures';
+import { getStoreUrl, getStoreVariant, wcposRestRoute } from './fixtures';
 import {
 	createPushOrdersResponseMatcher,
 	expectOrderPaid,
 	liveOrderTest as liveTest,
 	newRunLabel,
+	orderIdFromPaymentFrame,
 	readOrder,
 	type ServerOrder,
 	stampRunLabel,
@@ -105,6 +108,62 @@ async function fetchDescriptors(
 /** Methods the tender grid can actually drive: enabled, and captured by the app itself. */
 function manualMethods(descriptors: Descriptor[]): Descriptor[] {
 	return descriptors.filter((method) => method.pos_enabled && method.capture?.mode === 'manual');
+}
+
+async function requireTenderCheckout(
+	request: APIRequestContext,
+	testInfo: TestInfo,
+	storeAuthorization: () => StoreAuthorization | null,
+	mode: 'tender' | 'legacy'
+): Promise<{ authorization: StoreAuthorization; descriptors: Descriptor[] }> {
+	const authorization = await resolveProbeAuthorization(
+		request,
+		getStoreUrl(testInfo),
+		storeAuthorization,
+		{ route: '/wcpos/v2/orders' }
+	);
+	const descriptors = await fetchDescriptors(request, testInfo, authorization);
+	liveTest.skip(descriptors === null, 'store does not serve the payments contract');
+	expect(mode, 'a store serving the payments contract must render the tender checkout').toBe(
+		'tender'
+	);
+	return { authorization, descriptors: descriptors! };
+}
+
+type PaymentWrite = 'record' | 'void';
+
+function createPaymentResponseMatcher(orderId: number, write: PaymentWrite) {
+	let sawUnauthorized = false;
+	return (response: {
+		url: () => string;
+		request: () => { method: () => string };
+		status: () => number;
+	}) => {
+		if (response.request().method() !== 'POST') return false;
+		const route = wcposRestRoute(response.url());
+		const base = `/wcpos/v2/orders/${orderId}/payments`;
+		const matches =
+			write === 'record' ? route === base : new RegExp(`^${base}/[^/]+/void$`).test(route ?? '');
+		if (!matches || response.status() !== 401) return matches;
+		if (sawUnauthorized) return true;
+		sawUnauthorized = true;
+		return false;
+	};
+}
+
+async function clickAndExpectPaymentWrite(
+	page: Page,
+	testId: string,
+	orderId: number,
+	write: PaymentWrite
+): Promise<void> {
+	const pending = page.waitForResponse(createPaymentResponseMatcher(orderId, write), {
+		timeout: 90_000,
+	});
+	pending.catch(() => {});
+	await page.getByTestId(testId).click();
+	const response = await pending;
+	expect(response.status(), `${write} payment POST must succeed`).toBeLessThan(400);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -204,7 +263,7 @@ async function openCheckoutModal(
 		);
 	}
 	const ack = (await response.json().catch(() => null)) as { document?: { id?: number } } | null;
-	const orderId = Number(ack?.document?.id ?? 0);
+	let orderId = Number(ack?.document?.id ?? 0);
 	// Register before any wait that can fail: the order exists on the server from here on.
 	if (orderId > 0) onOrderCreated({ id: orderId, uuid });
 
@@ -221,7 +280,25 @@ async function openCheckoutModal(
 	await expect(tender.or(legacy).first()).toBeVisible({ timeout: 30_000 });
 	const mode = (await tender.isVisible()) ? 'tender' : 'legacy';
 
-	expect(orderId, 'the push ack must name the server order id').toBeGreaterThan(0);
+	if (orderId <= 0) {
+		if (mode === 'tender') {
+			await expect
+				.poll(
+					async () =>
+						Number((await page.getByTestId('checkout-server-order-id').textContent()) ?? 0),
+					{
+						timeout: 30_000,
+						message: 'the tender checkout must expose its server-assigned order id',
+					}
+				)
+				.toBeGreaterThan(0);
+			orderId = Number((await page.getByTestId('checkout-server-order-id').textContent()) ?? 0);
+		} else {
+			orderId = await orderIdFromPaymentFrame(page);
+		}
+		expect(orderId, 'server-assigned order id (push ack had none)').toBeGreaterThan(0);
+		onOrderCreated({ id: orderId, uuid });
+	}
 	return { orderId, uuid, mode };
 }
 
@@ -229,17 +306,16 @@ async function openCheckoutModal(
 async function newOrderAtCheckout(
 	page: Page,
 	trackOrder: (order: TrackedOrder) => void
-): Promise<{ orderId: number; mode: 'tender' | 'legacy' }> {
+): Promise<{ orderId: number; mode: 'tender' | 'legacy'; cartTotal: number }> {
 	const added = await tryAddRunPrivateSimpleProduct(page);
-	expect(added, 'writer credentials are configured, so the probe product must reach the cart').toBe(
-		true
-	);
+	liveTest.skip(!added, 'product-writer credentials are unavailable');
 	const label = newRunLabel();
 	await stampRunLabel(page, label);
+	const cartTotal = await readAmountMinor(page, 'cart-order-total');
 	const { orderId, mode } = await openCheckoutModal(page, (order) =>
 		trackOrder({ ...order, label })
 	);
-	return { orderId, mode };
+	return { orderId, mode, cartTotal };
 }
 
 /** Tap a tile, then key in an exact minor-unit amount (digits shift in from the right). */
@@ -268,18 +344,17 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 
 	liveTest(
 		'renders the tender checkout with the order balance',
-		async ({ posPage: page, trackOrder }) => {
+		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
 			liveTest.slow();
-			const { mode } = await newOrderAtCheckout(page, trackOrder);
-			liveTest.skip(mode === 'legacy', 'store does not serve the payments contract');
+			const { mode, cartTotal } = await newOrderAtCheckout(page, trackOrder);
+			await requireTenderCheckout(request, testInfo, storeAuthorization, mode);
 
 			const balance = await readAmountMinor(page, 'checkout-balance');
 			const total = await readAmountMinor(page, 'checkout-order-total');
 			expect(balance, 'a fresh order owes its whole total').toBe(total);
 			expect(balance, 'checkout must show a non-zero balance').toBeGreaterThan(0);
 			// The modal must be bound to the order the cart rang up, not some other one.
-			const cartTotal = digitsOf((await page.getByTestId('checkout-button').textContent()) ?? '');
-			expect(String(total), 'checkout total must equal the cart total').toBe(cartTotal);
+			expect(total, 'checkout total must equal the cart total').toBe(cartTotal);
 		}
 	);
 
@@ -288,17 +363,13 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
 			liveTest.slow();
 			const { orderId, mode } = await newOrderAtCheckout(page, trackOrder);
-			liveTest.skip(mode === 'legacy', 'store does not serve the payments contract');
-
-			const authorization = await resolveProbeAuthorization(
+			const { authorization, descriptors } = await requireTenderCheckout(
 				request,
-				getStoreUrl(testInfo),
+				testInfo,
 				storeAuthorization,
-				{ route: '/wcpos/v2/orders' }
+				mode
 			);
-			const descriptors = await fetchDescriptors(request, testInfo, authorization);
-			liveTest.skip(descriptors === null, 'store does not serve the payments contract');
-			const cash = manualMethods(descriptors!).find((method) => method.kind === 'cash');
+			const cash = manualMethods(descriptors).find((method) => method.kind === 'cash');
 			liveTest.skip(!cash, 'store declares no manual cash method');
 
 			const balance = await readAmountMinor(page, 'checkout-balance');
@@ -308,7 +379,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
 				.toBe(balance);
 
-			await page.getByTestId('checkout-take-payment').click();
+			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderId, 'record');
 
 			// Route departure is the app's own completion signal (see `processPayment`).
 			await page.waitForURL((url) => !CHECKOUT_ROUTE.test(url.pathname), { timeout: 120_000 });
@@ -338,30 +409,26 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
 			liveTest.slow();
 			const { orderId, mode } = await newOrderAtCheckout(page, trackOrder);
-			liveTest.skip(mode === 'legacy', 'store does not serve the payments contract');
-
-			const authorization = await resolveProbeAuthorization(
+			const { authorization, descriptors } = await requireTenderCheckout(
 				request,
-				getStoreUrl(testInfo),
+				testInfo,
 				storeAuthorization,
-				{ route: '/wcpos/v2/orders' }
+				mode
 			);
-			const descriptors = await fetchDescriptors(request, testInfo, authorization);
-			liveTest.skip(descriptors === null, 'store does not serve the payments contract');
-			const manual = manualMethods(descriptors!);
+			const manual = manualMethods(descriptors);
 			const cash = manual.find((method) => method.kind === 'cash');
 			liveTest.skip(!cash, 'store declares no manual cash method');
 			// The manual card gateway when the store offers one; otherwise a second cash leg —
 			// the split itself is what is under test, and every store can produce that.
 			const second = manual.find((method) => method.id !== cash!.id) ?? cash!;
-			console.log(`[checkout-tender] split legs: ${cash!.id} then ${second.id}`);
+			log.debug(`[checkout-tender] split legs: ${cash!.id} then ${second.id}`);
 
 			const balance = await readAmountMinor(page, 'checkout-balance');
 			const part = Math.floor(balance / 2);
 			expect(part, 'the probe order must be big enough to split').toBeGreaterThan(0);
 
 			await enterAmount(page, cash!.id, part);
-			await page.getByTestId('checkout-take-payment').click();
+			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderId, 'record');
 
 			// The balance falls by exactly what was taken, and the ledger shows the one leg.
 			await expect
@@ -374,7 +441,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
 				.toBe(balance - part);
-			await page.getByTestId('checkout-take-payment').click();
+			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderId, 'record');
 
 			await page.waitForURL((url) => !CHECKOUT_ROUTE.test(url.pathname), { timeout: 120_000 });
 			await expect(page.getByTestId('checkout-dialog')).toBeHidden({ timeout: 30_000 });
@@ -404,17 +471,13 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
 			liveTest.slow();
 			const { orderId, mode } = await newOrderAtCheckout(page, trackOrder);
-			liveTest.skip(mode === 'legacy', 'store does not serve the payments contract');
-
-			const authorization = await resolveProbeAuthorization(
+			const { authorization, descriptors } = await requireTenderCheckout(
 				request,
-				getStoreUrl(testInfo),
+				testInfo,
 				storeAuthorization,
-				{ route: '/wcpos/v2/orders' }
+				mode
 			);
-			const descriptors = await fetchDescriptors(request, testInfo, authorization);
-			liveTest.skip(descriptors === null, 'store does not serve the payments contract');
-			const cash = manualMethods(descriptors!).find((method) => method.kind === 'cash');
+			const cash = manualMethods(descriptors).find((method) => method.kind === 'cash');
 			liveTest.skip(!cash, 'store declares no manual cash method');
 
 			const balance = await readAmountMinor(page, 'checkout-balance');
@@ -422,15 +485,27 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			expect(part, 'the probe order must be big enough to part-pay').toBeGreaterThan(0);
 
 			await enterAmount(page, cash!.id, part);
-			await page.getByTestId('checkout-take-payment').click();
+			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderId, 'record');
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-balance'), { timeout: 60_000 })
 				.toBe(balance - part);
+			const ledgerRow = page.locator('[data-testid^="checkout-leg-"]');
+			await expect(ledgerRow).toHaveCount(1);
+			const ledgerTestId = await ledgerRow.getAttribute('data-testid');
+			expect(ledgerTestId, 'the cash ledger row must expose its stable row id').toMatch(
+				/^checkout-leg-.+/
+			);
+			const rowId = ledgerTestId!.replace(/^checkout-leg-/, '');
 
 			await page.getByTestId('checkout-cancel-payment').click();
 			// Cancelling is a physical act first: the cash taken must be listed to be returned.
-			await expect(page.locator('[data-testid^="checkout-cancel-leg-"]')).toHaveCount(1);
-			await page.getByTestId('checkout-cancel-confirm').click();
+			const cancelRow = page.getByTestId(`checkout-cancel-leg-${rowId}`);
+			await expect(cancelRow).toHaveCount(1);
+			expect(
+				digitsOf((await cancelRow.textContent()) ?? ''),
+				'the cancellation view must show the exact cash amount to return'
+			).toBe(String(part));
+			await clickAndExpectPaymentWrite(page, 'checkout-cancel-confirm', orderId, 'void');
 
 			await page.waitForURL((url) => !CHECKOUT_ROUTE.test(url.pathname), { timeout: 120_000 });
 			await expect(page.getByTestId('checkout-dialog')).toBeHidden({ timeout: 30_000 });
@@ -440,7 +515,10 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				testInfo,
 				authorization,
 				orderId,
-				(order) => ledgerRows(order).every((row) => row.status === 'voided'),
+				(order) => {
+					const rows = ledgerRows(order);
+					return rows.length === 1 && rows.every((row) => row.status === 'voided');
+				},
 				'the cancelled leg must be voided on the server'
 			);
 			const rows = ledgerRows(server);
