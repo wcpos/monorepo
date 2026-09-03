@@ -282,7 +282,7 @@ export async function openCheckout(
  * `order-pay/<id>` endpoint, so the id is recoverable even if the push ack was
  * a retry we did not observe.
  */
-async function orderIdFromPaymentFrame(page: Page): Promise<number> {
+export async function orderIdFromPaymentFrame(page: Page): Promise<number> {
 	const src = await page
 		.locator('iframe')
 		.first()
