@@ -82,12 +82,13 @@ jest.mock('./components/title', () => ({ CheckoutTitle: () => null }));
 // the payments contract still gets. The contract branch has its own suite
 // (tender/tender-checkout.test.tsx); mounting it here would drag the tab strip →
 // expo-haptics into a suite that transforms neither.
+let paymentMethodsLoaded = false;
 jest.mock('../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({
 		methods: [],
 		byId: new Map(),
 		contract: null,
-		loaded: false,
+		loaded: paymentMethodsLoaded,
 		unsupportedSchema: false,
 	}),
 }));
@@ -498,5 +499,20 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 
 		expect(startCheckout).toHaveBeenCalledTimes(1);
 		expect(mockPostMessage).not.toHaveBeenCalled();
+	});
+
+	it('latches the checkout mode when the modal opens — a descriptor change mid-checkout does not swap it', () => {
+		paymentMethodsLoaded = true;
+		mockUseObservableSuspense.mockReturnValue(makeOrder(PAYMENT_URL));
+		mockUseObservableEagerState.mockReturnValue(null);
+		const { rerender } = render(<Checkout resource={{} as never} />);
+		expect(screen.getByTestId('tender-checkout')).toBeTruthy();
+
+		// The store's answer changes underneath an open checkout (cache invalidated, config refresh).
+		paymentMethodsLoaded = false;
+		rerender(<Checkout resource={{} as never} />);
+
+		expect(screen.getByTestId('tender-checkout')).toBeTruthy();
+		paymentMethodsLoaded = false;
 	});
 });

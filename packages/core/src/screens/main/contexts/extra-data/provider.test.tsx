@@ -132,6 +132,42 @@ describe('ExtraDataProvider API services', () => {
 		expect(mockExtraDataSet).not.toHaveBeenCalled();
 	});
 
+	it('keeps the cached payment methods when the store cannot be reached', async () => {
+		mockExtraDataValues = {
+			taxClasses: [{ slug: 'standard' }],
+			shippingMethods: [{ id: 'flat_rate' }],
+			orderStatuses: [{ slug: 'pending' }],
+			paymentMethods: { schema: 1, contract: '1.0', methods: [] },
+		};
+		// No `response`: the request never reached a server. An offline till has to
+		// keep the tender checkout it was already working with.
+		mockGet.mockRejectedValue(new Error('network unavailable'));
+
+		render(<ExtraDataProvider>content</ExtraDataProvider>);
+		await act(async () => Promise.resolve());
+
+		expect(mockExtraDataSet).not.toHaveBeenCalled();
+	});
+
+	it('drops the cached payment methods when the store no longer serves the route', async () => {
+		mockExtraDataValues = {
+			taxClasses: [{ slug: 'standard' }],
+			shippingMethods: [{ id: 'flat_rate' }],
+			orderStatuses: [{ slug: 'pending' }],
+			paymentMethods: { schema: 1, contract: '1.0', methods: [] },
+		};
+		mockGet.mockRejectedValue(
+			Object.assign(new Error('rest_no_route'), { response: { status: 404 } })
+		);
+
+		render(<ExtraDataProvider>content</ExtraDataProvider>);
+		await act(async () => Promise.resolve());
+
+		expect(mockExtraDataSet).toHaveBeenCalledTimes(1);
+		expect(mockExtraDataSet).toHaveBeenCalledWith('paymentMethods', expect.any(Function));
+		expect(mockExtraDataSet.mock.calls[0][1]()).toBeNull();
+	});
+
 	it('refetches all resources when the engine reports changed config', async () => {
 		mockExtraDataValues = {
 			taxClasses: [{ slug: 'standard' }],

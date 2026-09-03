@@ -70,8 +70,13 @@ export function Checkout({ resource }: Props) {
  */
 function CheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 	const { loaded, unsupportedSchema } = usePaymentMethods();
+	// Latched once, when the modal opens. The descriptor can change underneath an open
+	// checkout (a config refresh, a 404 invalidating the cache); swapping the component then
+	// would unmount a tender flow holding live legs without running its cancel guard. The
+	// next time checkout opens, the current answer is read again.
+	const [useTenderFlow] = React.useState(() => loaded && !unsupportedSchema);
 
-	if (loaded && !unsupportedSchema) {
+	if (useTenderFlow) {
 		return <TenderCheckout order={order} />;
 	}
 

@@ -24,20 +24,18 @@ const cash = {
 } as const;
 
 let paymentMethods: unknown;
-let paymentMethodsVerified = true;
 
 jest.mock('@wcpos/query', () => ({
 	useDocField: (_document: unknown, selector: (value: Record<string, unknown>) => unknown) =>
 		selector({ paymentMethods }),
 }));
 jest.mock('../contexts/extra-data', () => ({
-	useExtraData: () => ({ extraData: {}, paymentMethodsVerified }),
+	useExtraData: () => ({ extraData: {} }),
 }));
 
 describe('usePaymentMethods', () => {
 	it('returns the loaded envelope and indexes methods without reordering them', () => {
 		paymentMethods = { schema: 1, contract: '1.0', methods: [cash] };
-		paymentMethodsVerified = true;
 
 		const { result } = renderHook(() => usePaymentMethods());
 
@@ -70,7 +68,6 @@ describe('usePaymentMethods', () => {
 
 	it('drops a structurally unusable method and keeps the rest', () => {
 		// One malformed gateway must not stop the till taking cash on the others.
-		paymentMethodsVerified = true;
 		paymentMethods = {
 			schema: 1,
 			contract: '1.0',
@@ -84,7 +81,6 @@ describe('usePaymentMethods', () => {
 	});
 
 	it('keeps a method whose enum values are unknown (disabled-with-reason, not dropped)', () => {
-		paymentMethodsVerified = true;
 		const future = { ...cash, id: 'future', capture: { ...cash.capture, mode: 'teleport' } };
 		paymentMethods = { schema: 1, contract: '1.0', methods: [future] };
 
@@ -95,7 +91,6 @@ describe('usePaymentMethods', () => {
 
 	it('stays unloaded when every advertised method is malformed', () => {
 		// A broken payload must leave the legacy checkout available, not an empty tile grid.
-		paymentMethodsVerified = true;
 		paymentMethods = { schema: 1, contract: '1.0', methods: [null, { id: 'broken' }] };
 
 		const { result } = renderHook(() => usePaymentMethods());
@@ -104,19 +99,10 @@ describe('usePaymentMethods', () => {
 	});
 
 	it('treats a genuinely empty advertised list as loaded', () => {
-		paymentMethodsVerified = true;
 		paymentMethods = { schema: 1, contract: '1.0', methods: [] };
 
 		const { result } = renderHook(() => usePaymentMethods());
 
 		expect(result.current).toMatchObject({ methods: [], loaded: true });
-	});
-
-	it('does not expose a persisted descriptor until this session verifies the route', () => {
-		paymentMethodsVerified = false;
-
-		const { result } = renderHook(() => usePaymentMethods());
-
-		expect(result.current).toMatchObject({ methods: [], loaded: false });
 	});
 });
