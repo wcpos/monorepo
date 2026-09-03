@@ -28,7 +28,9 @@ function report(kind, details) {
     } catch {}
   }
   const { target, error, ...rest } = details;
-  console.error(`[${kind}] ${target ?? ""}`.trimEnd(), error ?? rest);
+  const recovered = kind.endsWith("-dropped");
+  const log = recovered ? console.warn : console.error;
+  log(`[${kind}] ${target ?? ""}`.trimEnd(), error ?? rest);
 }
 
 function documentsAccessHandle(state, runState) {

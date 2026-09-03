@@ -1750,6 +1750,44 @@ test("does not verify a hollow id as clean on a withDeleted read", async () => {
   }
 });
 
+test("does not report a successful hollow-row recovery as an error", async () => {
+  const basePath = await mkdtemp(join(tmpdir(), "wcpos-hollow-report-"));
+  const hollow = document("order:hollow", 0);
+  const originalError = console.error;
+  const originalWarn = console.warn;
+  const errors = [];
+  const warnings = [];
+
+  try {
+    await (await seedCompacted(basePath, [hollow], "report-seed")).close();
+    await corruptRecordInPlace(basePath, hollow.id, () => Buffer.alloc(0));
+    console.error = (...args) => errors.push(args);
+    console.warn = (...args) => warnings.push(args);
+
+    const { withTargetedOpfsRecovery } =
+      await import("./opfs-targeted-recovery.mjs");
+    const recovering = await withTargetedOpfsRecovery(
+      getRxStorageFilesystemNode({ basePath }),
+    ).createStorageInstance(storageParams("report-recovering"));
+    assert.deepEqual(
+      await recovering.findDocumentsById([hollow.id], true),
+      [],
+    );
+    await recovering.close();
+
+    assert.deepEqual(errors, []);
+    assert.equal(warnings.length, 1);
+    assert.equal(
+      warnings[0][0],
+      "[hollow-row-dropped] targeted-recovery-db/products",
+    );
+  } finally {
+    console.error = originalError;
+    console.warn = originalWarn;
+    await rm(basePath, { recursive: true, force: true });
+  }
+});
+
 test("refuses a row that points at another document and still lands the write", async () => {
   const basePath = await mkdtemp(join(tmpdir(), "wcpos-foreign-row-"));
   const shifted = document("order:shifted", 0);
