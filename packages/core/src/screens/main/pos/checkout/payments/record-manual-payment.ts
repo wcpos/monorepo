@@ -42,6 +42,12 @@ export interface RecordManualPaymentDeps {
 	dp: number;
 	patchAndEnqueue: (changes: { meta_data: MetaDataEntry[]; status: string }) => Promise<void>;
 	mirror: (changes: { meta_data: MetaDataEntry[]; status?: string }) => Promise<void>;
+	/**
+	 * The order's status as the server holds it, for a refusal whose body omits the
+	 * summary. `null` when the server cannot be asked — the mirror then leaves the
+	 * local status alone rather than asserting a stale one.
+	 */
+	fetchOrderStatus: () => Promise<string | null>;
 	raiseAttention: (entry: {
 		row: PaymentRow;
 		order: OrderPaymentSummary | null;
@@ -163,18 +169,25 @@ export async function recordManualPayment(
 			};
 			const serverOrder = response?.data?.data?.order ?? null;
 			deps.raiseAttention({ row: failedRow, order: serverOrder, reason });
-			if (reason === 'order_already_paid' && !serverOrder) {
-				throw new RecordManualPaymentError(
-					response?.data?.message ?? reason,
-					response?.data?.code ?? reason,
-					response?.status
-				);
+			// A refusal IS the server saying our copy of the order is stale — it is already
+			// paid, or its balance is smaller than the one we held. Mirroring the failed row
+			// under the stale local status would leave a paid order sitting at `pending`, so
+			// when the refusal body omits the summary, ask the server for the order's status
+			// before mirroring. A failed refresh is not fatal: the row and the attention
+			// entry still land, the status is simply left untouched.
+			let authoritativeStatus = serverOrder?.status ?? null;
+			if (!authoritativeStatus) {
+				try {
+					authoritativeStatus = await deps.fetchOrderStatus();
+				} catch {
+					authoritativeStatus = null;
+				}
 			}
 			const outcome = { kind: 'refused', reason, row: failedRow, order: serverOrder } as const;
 			try {
 				await deps.mirror({
 					meta_data: metaDataWith(failedRow),
-					...(serverOrder ? { status: serverOrder.status } : {}),
+					...(authoritativeStatus ? { status: authoritativeStatus } : {}),
 				});
 			} catch (mirrorError) {
 				throw new RecordManualPaymentMirrorError(outcome, mirrorError);

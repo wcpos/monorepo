@@ -14,13 +14,28 @@ export interface PaymentMethodsState {
 	unsupportedSchema: boolean;
 }
 
-type RuntimeEnvelope = { schema: number; contract: string; methods: PaymentMethodDescriptor[] };
+type RuntimeEnvelope = { schema: number; contract: string; methods: unknown[] };
 
-function hasMethodId(value: unknown): value is PaymentMethodDescriptor {
+/**
+ * A descriptor without a string `id` cannot be keyed, rendered or recorded against —
+ * `byId` and every tender tile read `method.id`. Drop just that row, never the envelope:
+ * one malformed gateway must not stop the till taking cash on the methods that are fine.
+ * (Contract §13 is about UNKNOWN enum values, which stay and are disabled with a reason;
+ * this guard is only for structurally unusable rows.)
+ */
+function isDescriptor(value: unknown): value is PaymentMethodDescriptor {
+	if (typeof value !== 'object' || value === null) return false;
+	const row = value as { id?: unknown; kind?: unknown; capture?: unknown; capabilities?: unknown };
+	// The tender tiles dereference capture.mode and capabilities.offline unconditionally, so a
+	// row must carry those objects to be renderable; their VALUES may be anything (§13).
 	return (
-		typeof value === 'object' &&
-		value !== null &&
-		typeof (value as { id?: unknown }).id === 'string'
+		typeof row.id === 'string' &&
+		typeof row.kind === 'string' &&
+		typeof row.capture === 'object' &&
+		row.capture !== null &&
+		typeof (row.capture as { mode?: unknown }).mode === 'string' &&
+		typeof row.capabilities === 'object' &&
+		row.capabilities !== null
 	);
 }
 
@@ -30,8 +45,7 @@ function isEnvelope(value: unknown): value is RuntimeEnvelope {
 	return (
 		Number.isInteger(envelope.schema) &&
 		typeof envelope.contract === 'string' &&
-		Array.isArray(envelope.methods) &&
-		envelope.methods.every(hasMethodId)
+		Array.isArray(envelope.methods)
 	);
 }
 
@@ -49,9 +63,21 @@ export function usePaymentMethods(): PaymentMethodsState {
 				unsupportedSchema: false,
 			};
 		}
+		const methods = value.methods.filter(isDescriptor);
+		// A store that advertised methods but none survived the guard is a broken payload, not an
+		// empty till: keep the legacy checkout rather than strand the cashier on an empty grid.
+		if (value.methods.length > 0 && methods.length === 0) {
+			return {
+				methods: [],
+				byId: new Map<string, PaymentMethodDescriptor>(),
+				contract: value.contract,
+				loaded: false,
+				unsupportedSchema: value.schema !== 1,
+			};
+		}
 		return {
-			methods: value.methods,
-			byId: new Map(value.methods.map((method) => [method.id, method])),
+			methods,
+			byId: new Map(methods.map((method) => [method.id, method])),
 			contract: value.contract,
 			loaded: true,
 			unsupportedSchema: value.schema !== 1,
