@@ -110,6 +110,7 @@ function manualMethods(descriptors: Descriptor[]): Descriptor[] {
 	return descriptors.filter((method) => method.pos_enabled && method.capture?.mode === 'manual');
 }
 
+/** Require the live store to expose the payments contract and tender checkout UI. */
 async function requireTenderCheckout(
 	request: APIRequestContext,
 	testInfo: TestInfo,
@@ -418,10 +419,9 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			const manual = manualMethods(descriptors);
 			const cash = manual.find((method) => method.kind === 'cash');
 			liveTest.skip(!cash, 'store declares no manual cash method');
-			// The manual card gateway when the store offers one; otherwise a second cash leg —
-			// the split itself is what is under test, and every store can produce that.
-			const second = manual.find((method) => method.id !== cash!.id) ?? cash!;
-			log.debug(`[checkout-tender] split legs: ${cash!.id} then ${second.id}`);
+			const second = manual.find((method) => method.id !== cash!.id);
+			liveTest.skip(!second, 'store declares no distinct second manual payment method');
+			log.debug(`[checkout-tender] split legs: ${cash!.id} then ${second!.id}`);
 
 			const balance = await readAmountMinor(page, 'checkout-balance');
 			const part = Math.floor(balance / 2);
@@ -436,7 +436,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				.toBe(balance - part);
 			await expect(page.locator('[data-testid^="checkout-leg-"]')).toHaveCount(1);
 
-			await page.getByTestId(`checkout-tile-${second.id}`).click();
+			await page.getByTestId(`checkout-tile-${second!.id}`).click();
 			// Pre-filled with the REMAINING balance, so the second leg closes the order.
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
@@ -457,7 +457,8 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			expectOrderPaid(server);
 			const rows = ledgerRows(server);
 			expect(rows.map((row) => row.status)).toEqual(['captured', 'captured']);
-			expect(rows.map((row) => row.method_id)).toEqual([cash!.id, second.id]);
+			expect(rows.map((row) => row.method_id)).toEqual([cash!.id, second!.id]);
+			expect(new Set(rows.map((row) => row.method_id)).size).toBe(2);
 			const paid = rows.reduce((sum, row) => sum + Number(row.amount), 0);
 			expect(paid, 'the two legs must add up to the order total').toBeCloseTo(
 				Number(server.total),
