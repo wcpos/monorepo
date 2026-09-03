@@ -5,7 +5,38 @@
     "width": 60,
     "showOutOfStock": false,
     "position": "left",
-    "quickFilters": [],
+    "filterBar": [
+      {
+        "id": "stock_status",
+        "type": "pill",
+        "show": true
+      },
+      {
+        "id": "featured",
+        "type": "pill",
+        "show": true
+      },
+      {
+        "id": "on_sale",
+        "type": "pill",
+        "show": true
+      },
+      {
+        "id": "categories",
+        "type": "pill",
+        "show": true
+      },
+      {
+        "id": "tags",
+        "type": "pill",
+        "show": true
+      },
+      {
+        "id": "brands",
+        "type": "pill",
+        "show": true
+      }
+    ],
     "viewMode": "grid",
     "scannerHeight": 176,
     "gridColumns": 4,

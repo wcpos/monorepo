@@ -14,8 +14,6 @@ import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord } from '@wcpos/query';
 import { useDocField } from '@wcpos/query';
 
-import './register-quick-filters';
-
 import { Actions } from './cells/actions';
 import { Name } from './cells/name';
 import { Price } from './cells/price';
@@ -30,12 +28,13 @@ import { StorageOutageBanner } from './storage-outage-banner';
 import { ProductGrid } from './grid';
 import { POS_PRODUCTS_MIN_PAGE_SIZE } from './fit-page-size';
 import { UISettingsForm } from './ui-settings-form';
+import { POSFilterBar } from './filter-bar/pos-filter-bar';
+import { getPOSProductSort } from './pos-product-sort';
 import { useBarcode } from './use-barcode';
 import { useFitPageSize } from './use-fit-page-size';
 import { ViewModeToggle } from './view-mode-toggle';
 import { useT } from '../../../../contexts/translations';
 import { DataTable, DataTableFooter, defaultRenderItem } from '../../components/data-table';
-import { FilterBar } from '../../components/product/filter-bar';
 import { ProductImage } from '../../components/product/image';
 import { TaxBasedOn } from '../../components/product/tax-based-on';
 import { VariableProductImage } from '../../components/product/variable-image';
@@ -46,7 +45,6 @@ import { QuerySearchInput } from '../../components/query-search-input';
 import { UISettingsDialog } from '../../components/ui-settings';
 import { useTaxSettings } from '../../contexts/tax-rates';
 import { useUISettings } from '../../contexts/ui-settings';
-import initialSettings from '../../contexts/ui-settings/initial-settings.json';
 import { COGS } from './cells/cogs';
 import { createReadonlyView, Slot } from '../../../../extensions/slots';
 import {
@@ -56,55 +54,15 @@ import {
 	useQueryStateStore,
 	useRelationalCollectionBinding,
 } from '../../../../query';
-import { normalizeQuerySortField } from '../../../../query/query-state-translator';
 
 import type { SlotContracts } from '../../../../extensions/slots';
 import type { QueryStateActions, QueryStateOf } from '../../../../query';
-import type { SortFieldsByCollection } from '../../../../query/query-state-types';
 import type { BindingDataTableFooterProps, DataTableFeatures } from '../../components/data-table';
 import type { Row, Table } from '../../../../table-types';
 
 type ProductRow = { record: EngineRecord<'products'> };
 
 const POS_PRODUCTS_PAGE_SIZE = POS_PRODUCTS_MIN_PAGE_SIZE;
-const POS_PRODUCT_SORT_FIELDS = [
-	'name',
-	'sku',
-	'barcode',
-	'type',
-	'sortable_price',
-	'date_created_gmt',
-	'date_modified_gmt',
-	'total_sales',
-	'stock_quantity',
-	'stock_status',
-	'menu_order',
-] as const satisfies readonly SortFieldsByCollection['products'][];
-function isPOSProductSortField(field: unknown): field is SortFieldsByCollection['products'] {
-	return POS_PRODUCT_SORT_FIELDS.some((sortField) => sortField === field);
-}
-
-// The invalid-persisted-sort fallback DERIVES from the one authored default
-// (initial-settings.json) rather than restating it — Paul's ruling 2026-08-19,
-// which also moved that default from menu_order (#810's 1.9 parity) to name asc.
-const DEFAULT_POS_PRODUCT_SORT: QueryStateOf<'products'>['sort'] = (() => {
-	const { sortBy, sortDirection } = initialSettings['pos-products'];
-	const field = normalizeQuerySortField('products', sortBy);
-	if (!isPOSProductSortField(field)) {
-		throw new Error(`initial-settings pos-products.sortBy "${sortBy}" is not a POS sort field`);
-	}
-	return { field, direction: sortDirection === 'desc' ? 'desc' : 'asc' };
-})();
-
-function getPOSProductSort(
-	sortBy: unknown,
-	sortDirection: unknown
-): QueryStateOf<'products'>['sort'] {
-	const sortField = normalizeQuerySortField('products', sortBy);
-	if (!isPOSProductSortField(sortField)) return DEFAULT_POS_PRODUCT_SORT;
-	return { field: sortField, direction: sortDirection === 'desc' ? 'desc' : 'asc' };
-}
-
 const cells = {
 	simple: {
 		actions: Actions,
@@ -349,7 +307,7 @@ function POSProductsContent({
 								<Slot id="pos.products.filter-bar.item" data={filterSlotData} api={filterSlotApi} />
 							</ErrorBoundary>
 							<ErrorBoundary>
-								<FilterBar />
+								<POSFilterBar />
 							</ErrorBoundary>
 							{scannerOpen ? (
 								<ErrorBoundary>
