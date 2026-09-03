@@ -163,6 +163,13 @@ export async function recordManualPayment(
 			};
 			const serverOrder = response?.data?.data?.order ?? null;
 			deps.raiseAttention({ row: failedRow, order: serverOrder, reason });
+			if (reason === 'order_already_paid' && !serverOrder) {
+				throw new RecordManualPaymentError(
+					response?.data?.message ?? reason,
+					response?.data?.code ?? reason,
+					response?.status
+				);
+			}
 			const outcome = { kind: 'refused', reason, row: failedRow, order: serverOrder } as const;
 			try {
 				await deps.mirror({

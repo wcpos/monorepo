@@ -218,7 +218,11 @@ describe('recordManualPayment', () => {
 
 	it('marks the minted row failed when an already-paid refusal omits its row', async () => {
 		const deps = createDeps();
-		deps.post.mockRejectedValue(responseError(409, 'wcpos_order_already_paid'));
+		deps.post.mockRejectedValue(
+			responseError(409, 'wcpos_order_already_paid', {
+				order: { status: 'completed', balance: '0.00' },
+			})
+		);
 
 		await recordManualPayment(order, card, { amount: '42.50' }, deps);
 
@@ -227,6 +231,20 @@ describe('recordManualPayment', () => {
 			status: 'failed',
 			failure_reason: 'order_already_paid',
 		});
+	});
+
+	it('rejects an already-paid refusal without authoritative order state', async () => {
+		const deps = createDeps();
+		const staleOrder = { ...order, status: 'pending' };
+		deps.post.mockRejectedValue(responseError(409, 'wcpos_order_already_paid'));
+
+		const promise = recordManualPayment(staleOrder, card, { amount: '42.50' }, deps);
+
+		await expect(promise).rejects.toMatchObject({
+			code: 'wcpos_order_already_paid',
+			status: 409,
+		});
+		expect(deps.mirror).not.toHaveBeenCalled();
 	});
 
 	it('records an amount-exceeds-balance refusal and raises attention', async () => {
@@ -244,7 +262,11 @@ describe('recordManualPayment', () => {
 	it('raises refusal attention even when its local mirror fails', async () => {
 		const deps = createDeps();
 		const mirrorFailure = new Error('resident write failed');
-		deps.post.mockRejectedValue(responseError(409, 'wcpos_order_already_paid'));
+		deps.post.mockRejectedValue(
+			responseError(409, 'wcpos_order_already_paid', {
+				order: { status: 'completed', balance: '0.00' },
+			})
+		);
 		deps.mirror.mockRejectedValue(mirrorFailure);
 
 		const promise = recordManualPayment(order, card, { amount: '42.50' }, deps);

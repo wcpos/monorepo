@@ -54,6 +54,7 @@ describe('ledger meta', () => {
 		[[]],
 		[[{ key: '_wcpos_payments', value: '{bad' }]],
 		[[{ key: '_wcpos_payments', value: { schema: 1, payments: {} } }]],
+		[[{ key: '_wcpos_payments', value: { schema: 1, payments: [{}] } }]],
 	] as const)('returns empty for absent or invalid ledger data', (meta) => {
 		expect(readLedger(meta as readonly MetaDataEntry[])).toEqual([]);
 	});

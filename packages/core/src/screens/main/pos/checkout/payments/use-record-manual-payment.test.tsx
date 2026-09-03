@@ -7,7 +7,7 @@ import type { EngineRecord } from '@wcpos/query';
 import { useRecordManualPayment } from './use-record-manual-payment';
 
 const mockPost = jest.fn();
-const mockLocalPatch = jest.fn(async () => undefined);
+const mockLocalPatch = jest.fn();
 const mockPatchEngineResident = jest.fn(async (_input: unknown) => undefined);
 const mockLoggerError = jest.fn();
 const mockT = jest.fn();
@@ -88,6 +88,7 @@ const order = {
 
 beforeEach(() => {
 	jest.clearAllMocks();
+	mockLocalPatch.mockResolvedValue({ document: order });
 	onlineStatus = 'offline';
 });
 
@@ -112,12 +113,23 @@ it('routes an offline row through localPatch on the supplied order document', as
 	});
 });
 
+it('rejects the payment when localPatch reports a failed write', async () => {
+	mockLocalPatch.mockResolvedValue(undefined);
+	const { result } = renderHook(() => useRecordManualPayment());
+
+	await expect(result.current(order, method, { amount: 40 })).rejects.toThrow();
+});
+
 it('logs a refused online payment as a failed sync record needing attention', async () => {
 	onlineStatus = 'online-website-available';
 	mockPost.mockRejectedValue({
 		response: {
 			status: 409,
-			data: { code: 'wcpos_order_already_paid', message: 'Paid', data: {} },
+			data: {
+				code: 'wcpos_order_already_paid',
+				message: 'Paid',
+				data: { order: { status: 'completed', balance: '0.00' } },
+			},
 		},
 	});
 	const { result } = renderHook(() => useRecordManualPayment());

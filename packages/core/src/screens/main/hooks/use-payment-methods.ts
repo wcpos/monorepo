@@ -16,13 +16,22 @@ export interface PaymentMethodsState {
 
 type RuntimeEnvelope = { schema: number; contract: string; methods: PaymentMethodDescriptor[] };
 
+function hasMethodId(value: unknown): value is PaymentMethodDescriptor {
+	return (
+		typeof value === 'object' &&
+		value !== null &&
+		typeof (value as { id?: unknown }).id === 'string'
+	);
+}
+
 function isEnvelope(value: unknown): value is RuntimeEnvelope {
 	if (!value || typeof value !== 'object') return false;
 	const envelope = value as Record<string, unknown>;
 	return (
 		Number.isInteger(envelope.schema) &&
 		typeof envelope.contract === 'string' &&
-		Array.isArray(envelope.methods)
+		Array.isArray(envelope.methods) &&
+		envelope.methods.every(hasMethodId)
 	);
 }
 

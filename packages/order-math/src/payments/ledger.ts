@@ -33,9 +33,13 @@ export function readLedger(metaData: readonly MetaDataEntry[] | null | undefined
 	const candidate = ledger as Record<string, unknown>;
 	if (candidate.schema !== LEDGER_SCHEMA || !Array.isArray(candidate.payments)) return [];
 	// A fresh array of object rows: callers never hold a reference into the (possibly
-	// frozen RxDB) document, and a non-object entry cannot reach derive().
+	// frozen RxDB) document, and a row without an identity cannot reach derive/upsert.
 	return candidate.payments.filter(
-		(row): row is PaymentRow => typeof row === 'object' && row !== null && !Array.isArray(row)
+		(row): row is PaymentRow =>
+			typeof row === 'object' &&
+			row !== null &&
+			!Array.isArray(row) &&
+			typeof (row as { id?: unknown }).id === 'string'
 	);
 }
 

@@ -60,7 +60,8 @@ export function useRecordManualPayment(): (
 				currency: store.currency ?? '',
 				dp: store.price_num_decimals ?? 2,
 				patchAndEnqueue: async (changes) => {
-					await localPatch({ document: order, data: changes });
+					const result = await localPatch({ document: order, data: changes });
+					if (!result) throw new Error('Payment could not be saved locally.');
 				},
 				mirror: async (changes) => {
 					await patchEngineResident({

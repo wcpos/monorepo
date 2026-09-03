@@ -65,4 +65,12 @@ describe('usePaymentMethods', () => {
 
 		expect(result.current).toMatchObject({ loaded: true, unsupportedSchema: true });
 	});
+
+	it('rejects an envelope containing a null payment method', () => {
+		paymentMethods = { schema: 1, contract: '1.0', methods: [null] };
+
+		const { result } = renderHook(() => usePaymentMethods());
+
+		expect(result.current).toMatchObject({ methods: [], loaded: false });
+	});
 });
