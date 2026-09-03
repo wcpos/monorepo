@@ -38,7 +38,7 @@ jest.mock('@wcpos/utils/logger', () => ({
 const mockGet = jest.fn(async () => ({ data: [] }));
 const mockPost = jest.fn(async () => ({ data: {} }));
 const mockDelete = jest.fn(async () => ({ data: {} }));
-const mockHttpClient = { get: mockGet, post: mockPost, delete: mockDelete };
+let mockHttpClient = { get: mockGet, post: mockPost, delete: mockDelete };
 
 jest.mock('../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => mockHttpClient,
@@ -63,6 +63,7 @@ const flushEffects = async () => {
 
 beforeEach(() => {
 	jest.clearAllMocks();
+	mockHttpClient = { get: mockGet, post: mockPost, delete: mockDelete };
 	mockCurrentService = null;
 	mockSite = { localID: 'site-1' };
 	mockStore = {
@@ -106,6 +107,22 @@ test('adapts the REST client to the service HttpFunction contract', async () => 
 	expect(mockGet).toHaveBeenCalledWith('displays', { params: { device_id: 'device-1' } });
 	expect(mockPost).toHaveBeenCalledWith('pairings', { store_id: 7 });
 	expect(mockDelete).toHaveBeenCalledWith('displays/1');
+});
+
+test('keeps the service running and uses the latest REST client instance', async () => {
+	const { rerender } = renderHook(() => useCustomerDisplayService());
+	await flushEffects();
+	const { http } = mockStart.mock.calls[0][0] as { http: (request: any) => Promise<unknown> };
+	const nextGet = jest.fn(async () => ({ data: [] }));
+	mockHttpClient = { get: nextGet, post: mockPost, delete: mockDelete };
+
+	rerender();
+	await flushEffects();
+	await http({ method: 'GET', url: 'displays' });
+
+	expect(mockStart).toHaveBeenCalledTimes(1);
+	expect(mockStopCustomerDisplayService).not.toHaveBeenCalled();
+	expect(nextGet).toHaveBeenCalledWith('displays', { params: undefined });
 });
 
 test('configures and reconfigures from reactive store receipt fields', async () => {

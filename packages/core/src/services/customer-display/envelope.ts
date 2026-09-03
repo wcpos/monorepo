@@ -5,7 +5,7 @@ export interface DisplayEnvelope<T extends object = Record<string, unknown>> {
 	payload: T;
 }
 
-function uuid(): string {
+export function uuid(): string {
 	const crypto = globalThis.crypto;
 	if (typeof crypto?.randomUUID === 'function') return crypto.randomUUID();
 	return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (token) => {

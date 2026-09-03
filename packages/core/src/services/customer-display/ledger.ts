@@ -45,7 +45,7 @@ export function buildLedger(
 	const paid = Number(fromMinor(paidMinor, dp));
 	const change = Number(fromMinor(changeMinor, dp));
 	const due = Number(fromMinor(dueMinor, dp));
-	const money = (amount: number) => formatMoney(amount, currency, locale);
+	const money = (amount: number) => formatMoney(amount, currency, locale, dp);
 	const payments = rows.map((payment): LedgerPayment => {
 		const amount = Number(payment.amount);
 		const tendered = payment.tendered === null ? undefined : Number(payment.tendered);

@@ -70,7 +70,9 @@ export class CustomerDisplayService {
 			if (this.pairingCode && displays.some(({ id }) => !this.pairingDisplayIds.has(id))) {
 				this.pairingCode = null;
 			}
-			this.displays = displays;
+			this.displays = displays.map((display) =>
+				this.sessions.get(display.id)?.isOpen ? { ...display, connected: true } : display
+			);
 			const present = new Set(displays.map(({ id }) => id));
 			for (const [id, session] of this.sessions) {
 				if (!present.has(id)) {
@@ -132,6 +134,7 @@ export class CustomerDisplayService {
 			await session?.forget();
 			await this.signaling.forget(displayId);
 		} catch (error) {
+			this.sessions.delete(displayId);
 			this.schedule();
 			throw error;
 		}
@@ -169,7 +172,16 @@ export class CustomerDisplayService {
 		}
 		this.lastPublished = serialised;
 		this.currentState = event;
-		this.sessions.forEach((session) => session.publish(event));
+		this.sessions.forEach((session, displayId) => {
+			try {
+				session.publish(event);
+			} catch (error) {
+				logger.warn('Customer display publish failed', { context: { displayId, error } });
+				session.close();
+				this.sessions.delete(displayId);
+				this.schedule();
+			}
+		});
 		return true;
 	}
 
@@ -186,6 +198,7 @@ export class CustomerDisplayService {
 		const now = (this.options.now ?? (() => new Date()))().getTime();
 		if (this.pairingCode && this.pairingCode.expires_at * 1000 <= now) {
 			this.pairingCode = null;
+			this.emit();
 		}
 		return this.pairingCode;
 	}
@@ -201,7 +214,7 @@ export class CustomerDisplayService {
 		const needsPoll =
 			!this.registryReadSucceeded ||
 			this.activePairingCode() ||
-			[...this.sessions.values()].some((session) => !session.isOpen);
+			this.displays.some(({ id }) => !this.sessions.get(id)?.isOpen);
 		if (needsPoll) {
 			this.timer = setTimeout(() => {
 				void this.refreshDisplays().catch((error) => {

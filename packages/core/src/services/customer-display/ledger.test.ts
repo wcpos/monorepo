@@ -93,6 +93,13 @@ describe('buildLedger', () => {
 		const result = buildLedger([row({ status: 'voided' })], 0, 'EUR', 'en-IE', new Map(), 2);
 		expect(result.status).toBe('unpaid');
 	});
+
+	test('formats money using the store decimal precision', () => {
+		const result = buildLedger([], 1.234, 'EUR', 'en-IE', new Map(), 3);
+
+		expect(result.total).toBe('€1.234');
+		expect(result.total_raw).toBe(1.234);
+	});
 });
 
 describe('derivePaymentEvent', () => {

@@ -8,6 +8,7 @@ import type { DisplayRegistryRow, HttpFunction } from './signaling-client';
 class FakePeer implements OffererPeer {
 	channelState: 'connecting' | 'open' | 'closed' = 'connecting';
 	sent: string[] = [];
+	sendError?: Error;
 	private openListener: () => void = () => undefined;
 	private messageListener: (text: string) => void = () => undefined;
 	private closeListener: () => void = () => undefined;
@@ -17,6 +18,7 @@ class FakePeer implements OffererPeer {
 	async acceptAnswer() {}
 	async addCandidate() {}
 	send(text: string) {
+		if (this.sendError) throw this.sendError;
 		this.sent.push(text);
 	}
 	onOpen(fn: () => void) {
@@ -60,6 +62,7 @@ function setup(initialDisplays: DisplayRegistryRow[] = []) {
 	let displays = initialDisplays;
 	let registryFailures = 0;
 	let byeFailures = 0;
+	let deleteFailures = 0;
 	let now = new Date('2026-09-03T10:00:00Z');
 	const requests: Parameters<HttpFunction>[0][] = [];
 	const http: HttpFunction = async <T>(request: Parameters<HttpFunction>[0]) => {
@@ -77,6 +80,10 @@ function setup(initialDisplays: DisplayRegistryRow[] = []) {
 		}
 		if (request.method === 'GET' && request.url.endsWith('/signal'))
 			return { data: { messages: [] } as T };
+		if (request.method === 'DELETE' && deleteFailures > 0) {
+			deleteFailures -= 1;
+			throw new Error('delete unavailable');
+		}
 		if (request.url.endsWith('/pairings')) {
 			return { data: { code: '123456', expires_at: 1788430200 } as T };
 		}
@@ -107,6 +114,7 @@ function setup(initialDisplays: DisplayRegistryRow[] = []) {
 		setDisplays: (next: DisplayRegistryRow[]) => (displays = next),
 		failRegistryReads: (count = 1) => (registryFailures = count),
 		failByes: (count = 1) => (byeFailures = count),
+		failDeletes: (count = 1) => (deleteFailures = count),
 		advance: (milliseconds: number) => (now = new Date(now.getTime() + milliseconds)),
 	};
 }
@@ -134,6 +142,17 @@ describe('CustomerDisplayService', () => {
 
 		expect(service.getState().displays[0].connected).toBe(true);
 		expect(requests.filter(({ url }) => url.endsWith('/displays'))).toHaveLength(registryReads);
+		service.stop();
+	});
+
+	test('keeps an open session connected when the registry row is stale', async () => {
+		const { service, peers } = setup([registryRow('one')]);
+		await service.refreshDisplays();
+		peers[0].open();
+
+		await service.refreshDisplays();
+
+		expect(service.getState().displays[0].connected).toBe(true);
 		service.stop();
 	});
 
@@ -193,6 +212,19 @@ describe('CustomerDisplayService', () => {
 		service.stop();
 	});
 
+	test('emits when an expired pairing code is cleared', async () => {
+		const { service, advance } = setup();
+		await service.mintPairingCode();
+		const listener = jest.fn();
+		service.subscribe(listener);
+
+		advance(600_001);
+		expect(service.getState().pairingCode).toBeNull();
+
+		expect(listener).toHaveBeenCalledTimes(1);
+		service.stop();
+	});
+
 	test('fans out to two configured sessions and deduplicates equal payloads', async () => {
 		const { service, peers } = setup([registryRow('one'), registryRow('two')]);
 		await service.refreshDisplays();
@@ -207,6 +239,22 @@ describe('CustomerDisplayService', () => {
 			'cart.updated',
 			'cart.updated',
 		]);
+		service.stop();
+	});
+
+	test('continues publishing when one display transport throws', async () => {
+		const { service, peers } = setup([registryRow('one'), registryRow('two')]);
+		await service.refreshDisplays();
+		peers.forEach((peer) => peer.open());
+		const secondBefore = peers[1].sent.length;
+		peers[0].sendError = new Error('channel send failed');
+
+		expect(() =>
+			service.publish({ action: 'cart.updated', payload: { order: { id: 1 }, ledger: {} } })
+		).not.toThrow();
+
+		expect(peers[0].channelState).toBe('closed');
+		expect(peers[1].sent).toHaveLength(secondBefore + 1);
 		service.stop();
 	});
 
@@ -311,6 +359,20 @@ describe('CustomerDisplayService', () => {
 		expect(peers[0].channelState).toBe('closed');
 		expect(jest.getTimerCount()).toBe(1);
 		await jest.advanceTimersByTimeAsync(5000);
+		expect(peers).toHaveLength(2);
+		service.stop();
+	});
+
+	test('a failed registry delete recreates the stopped display session on refresh', async () => {
+		const { service, peers, failDeletes } = setup([registryRow('one')]);
+		await service.refreshDisplays();
+		failDeletes();
+
+		await expect(service.forget('one')).rejects.toThrow('delete unavailable');
+		expect(service.getState().displays).toEqual([registryRow('one')]);
+		expect(jest.getTimerCount()).toBe(1);
+
+		await service.refreshDisplays();
 		expect(peers).toHaveLength(2);
 		service.stop();
 	});
