@@ -1,5 +1,7 @@
 import type { DrawerConnector } from '@wcpos/receipt-renderer';
 
+import type { PrinterIdentity } from './discovery/identify';
+
 export type { DrawerConnector };
 
 export interface PrintRawOptions {
@@ -47,6 +49,7 @@ export interface DiscoveredPrinter {
 	address: string;
 	port?: number;
 	vendor?: 'epson' | 'star' | 'generic';
+	identity?: PrinterIdentity;
 	/** Vendor-native interface hint (for example Star BluetoothLE vs Bluetooth). */
 	nativeInterfaceType?: string;
 }

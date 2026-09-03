@@ -9,6 +9,8 @@ import {
 	type BluetoothScanSession,
 	createBluetoothScanSession,
 } from '../discovery/bluetooth-scan-session';
+import { identifyDiscoveredPrinters } from '../discovery/identify';
+import { createIdentifyProbes } from '../discovery/identify-probes.electron';
 import { mapWebDeviceToDiscoveredPrinter } from '../discovery/map-web-device';
 import { mergePrinters } from '../discovery/merge-printers';
 import { saveWebDevice } from '../transport/web-device-store';
@@ -41,6 +43,9 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 	const [bluetoothCandidates, setBluetoothCandidates] = React.useState<BluetoothCandidate[]>([]);
 	const [error, setError] = React.useState<DiscoveryError | null>(null);
 	const sessionRef = React.useRef<BluetoothScanSession | null>(null);
+	// Bumped by stopScan and by every startScan: identification keeps running after the IPC
+	// stop, and a finished pass must not merge into a scan the user has already stopped.
+	const scanGenerationRef = React.useRef(0);
 
 	// useEffect required: subscribes to an external IPC event source (chooser candidates
 	// pushed by the main process) and must tear down both the subscription and any
@@ -92,6 +97,7 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 			return;
 		}
 
+		const generation = ++scanGenerationRef.current;
 		setIsScanning(true);
 		setError(null);
 
@@ -99,12 +105,15 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 			const result = await ipc.invoke('printer-discovery', {
 				action: 'start',
 			});
+			if (scanGenerationRef.current !== generation) return;
+			const identified = await identifyDiscoveredPrinters(result, createIdentifyProbes());
+			if (scanGenerationRef.current !== generation) return;
 			setPrinters((prev) => {
 				// Keep manually-added printers (id format: "address:port")
 				// Discovered printers use prefixed ids like "mdns-host" or "epson-addr"
 				const manualPrinters = prev.filter((p) => p.id.includes(':'));
 				const merged = [...manualPrinters];
-				for (const discovered of result) {
+				for (const discovered of identified) {
 					if (!merged.some((p) => p.id === discovered.id)) {
 						merged.push(discovered);
 					}
@@ -112,12 +121,13 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 				return merged;
 			});
 		} catch (err) {
+			if (scanGenerationRef.current !== generation) return;
 			setError({
 				code: 'discovery-failed',
 				detail: err instanceof Error ? err.message : String(err),
 			});
 		} finally {
-			setIsScanning(false);
+			if (scanGenerationRef.current === generation) setIsScanning(false);
 		}
 	}, []);
 
@@ -209,6 +219,7 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 	}, []);
 
 	const stopScan = React.useCallback(async () => {
+		scanGenerationRef.current += 1;
 		const ipc = getIpcRenderer();
 		if (ipc) {
 			try {
