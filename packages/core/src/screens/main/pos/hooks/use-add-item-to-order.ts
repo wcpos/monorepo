@@ -244,6 +244,11 @@ export const useAddItemToOrder = () => {
 						if (hasQueuedOrAcknowledgedCreate(resident)) {
 							context.order = latest;
 							isNew = false;
+							// The line is going into a resident the cart is NOT showing — it is
+							// still rendering the temporary order this uuid was born from. The
+							// create path calls this after its own birth; this path must too, or
+							// the cart keeps the "new order" tab while the item lands elsewhere.
+							setCurrentOrderID(recordId);
 						} else {
 							// A skeleton whose create never made it to the queue: stay on the
 							// create path so it is retried against this resident, instead of
@@ -299,6 +304,7 @@ export const useAddItemToOrder = () => {
 			localPatch,
 			runtime,
 			saveNewOrder,
+			setCurrentOrderID,
 			showBackorderWarning,
 			stockGuardEnabled,
 		]
