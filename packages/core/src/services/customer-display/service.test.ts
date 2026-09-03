@@ -195,6 +195,47 @@ describe('CustomerDisplayService', () => {
 		service.stop();
 	});
 
+	test('a new cart cancels the completed-order idle suppression window', async () => {
+		const { service, peers } = setup([registryRow('one')]);
+		await service.refreshDisplays();
+		peers[0].open();
+		service.publish({ action: 'payment.state', payload: { state: 'complete' } });
+		service.publish({ action: 'cart.updated', payload: { order: {}, ledger: {} } });
+
+		expect(service.publish({ action: 'display.idle', payload: { reason: 'no_cart' } })).toBe(true);
+		expect(JSON.parse(peers[0].sent.at(-1)!).action).toBe('display.idle');
+		service.stop();
+	});
+
+	test('stop ignores a pending registry response and future refreshes', async () => {
+		let resolveList!: (value: { data: DisplayRegistryRow[] }) => void;
+		const httpMock = jest.fn(
+			() =>
+				new Promise<{ data: DisplayRegistryRow[] }>((resolve) => {
+					resolveList = resolve;
+				})
+		);
+		const http = httpMock as unknown as HttpFunction;
+		const createPeer = jest.fn(() => new FakePeer());
+		const service = new CustomerDisplayService({
+			http,
+			deviceId: 'device-1',
+			storeId: 7,
+			siteRestRoot: '/wcpos/v2/display',
+			createPeer,
+		});
+		const refresh = service.refreshDisplays();
+
+		service.stop();
+		resolveList({ data: [registryRow('late')] });
+		await refresh;
+		expect(createPeer).not.toHaveBeenCalled();
+
+		httpMock.mockClear();
+		await service.refreshDisplays();
+		expect(httpMock).not.toHaveBeenCalled();
+	});
+
 	test('stop clears a held-idle timer', async () => {
 		const { service, peers } = setup([registryRow('one')]);
 		await service.refreshDisplays();

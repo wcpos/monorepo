@@ -62,8 +62,10 @@ export class CustomerDisplayService {
 		this.sessions.forEach((session) => session.refreshConfig());
 	}
 	async refreshDisplays(): Promise<void> {
+		if (this.stopped) return;
 		try {
 			const displays = await this.signaling.listDisplays(this.options.deviceId);
+			if (this.stopped) return;
 			this.registryReadSucceeded = true;
 			if (this.pairingCode && displays.some(({ id }) => !this.pairingDisplayIds.has(id))) {
 				this.pairingCode = null;
@@ -93,7 +95,10 @@ export class CustomerDisplayService {
 				} else {
 					session.updateDisplay(display);
 				}
-				if (!session.isOpen) await session.poll();
+				if (!session.isOpen) {
+					await session.poll();
+					if (this.stopped) return;
+				}
 			}
 			this.emit();
 		} finally {
@@ -119,6 +124,12 @@ export class CustomerDisplayService {
 	}
 	publish(event: DisplayEvent): boolean {
 		const now = (this.options.now ?? (() => new Date()))().getTime();
+		if (
+			event.action === 'cart.updated' ||
+			(event.action === 'payment.state' && event.payload.state !== 'complete')
+		) {
+			this.suppressIdleUntil = 0;
+		}
 		if (event.action === 'display.idle' && now < this.suppressIdleUntil) {
 			this.pendingIdle = event;
 			if (this.idleTimer) clearTimeout(this.idleTimer);

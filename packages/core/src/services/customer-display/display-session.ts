@@ -115,14 +115,26 @@ export class DisplaySession {
 			logger.warn('Customer display channel closed', { context: { displayId: this.display.id } });
 			this.onConnectionChange();
 		});
-		const offer = await peer.createOffer();
-		await this.signaling.postSignal(this.display.id, {
-			from: `pos:${this.deviceId}`,
-			to: 'display',
-			type: 'offer',
-			session: sessionId,
-			body: offer,
-		});
+		try {
+			const offer = await peer.createOffer();
+			await this.signaling.postSignal(this.display.id, {
+				from: `pos:${this.deviceId}`,
+				to: 'display',
+				type: 'offer',
+				session: sessionId,
+				body: offer,
+			});
+		} catch (error) {
+			peer.close();
+			if (this.peer === peer) {
+				this.peer = null;
+				this.sessionId = null;
+			}
+			logger.warn('Customer display offer failed', {
+				context: { displayId: this.display.id },
+			});
+			throw error;
+		}
 	}
 	private handleMessage(text: string): void {
 		let message: { wcpos?: unknown; id?: unknown; action?: unknown; payload?: unknown };

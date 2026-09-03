@@ -7,6 +7,10 @@ const mockConfigure = jest.fn();
 const mockStop = jest.fn();
 const mockService = { configure: mockConfigure, stop: mockStop };
 let mockCurrentService: typeof mockService | null = null;
+const mockStopCustomerDisplayService = jest.fn(() => {
+	mockCurrentService?.stop();
+	mockCurrentService = null;
+});
 const mockStart = jest.fn((_options: unknown) => {
 	mockCurrentService = mockService;
 	return mockService;
@@ -16,7 +20,19 @@ const mockGetDeviceId = jest.fn(async () => 'device-1');
 jest.mock('../../../../services/customer-display', () => ({
 	getCustomerDisplayService: () => mockCurrentService,
 	getDeviceId: () => mockGetDeviceId(),
+	isSupportedDisplayAdvertisement: (
+		display: { contract?: unknown; signaling?: unknown } | undefined
+	) =>
+		display?.contract === 1 &&
+		typeof display.signaling === 'string' &&
+		display.signaling.startsWith('/wcpos/v2/'),
 	startCustomerDisplayService: (options: unknown) => mockStart(options),
+	stopCustomerDisplayService: () => mockStopCustomerDisplayService(),
+}));
+
+const mockLoggerWarn = jest.fn();
+jest.mock('@wcpos/utils/logger', () => ({
+	getLogger: () => ({ warn: (...args: unknown[]) => mockLoggerWarn(...args) }),
 }));
 
 const mockGet = jest.fn(async () => ({ data: [] }));
@@ -75,6 +91,7 @@ test('starts for an advertised store and stops when the advertisement disappears
 	rerender();
 
 	expect(mockStop).toHaveBeenCalledTimes(1);
+	expect(mockStopCustomerDisplayService).toHaveBeenCalledTimes(1);
 });
 
 test('adapts the REST client to the service HttpFunction contract', async () => {
@@ -114,6 +131,7 @@ test('configures and reconfigures from reactive store receipt fields', async () 
 
 	mockStore = { ...mockStore, tax_display_cart: 'excl', prices_include_tax: 'no' };
 	rerender();
+	await flushEffects();
 
 	expect(mockConfigure).toHaveBeenLastCalledWith(
 		expect.objectContaining({
@@ -131,4 +149,28 @@ test('does not start for a signaling path outside the WCPOS v2 API root', async 
 	await flushEffects();
 
 	expect(mockStart).not.toHaveBeenCalled();
+	expect(mockLoggerWarn).toHaveBeenCalledWith('Unsupported customer display advertisement', {
+		context: { contract: 1 },
+	});
+});
+
+test('does not start for an unsupported advertised contract', async () => {
+	mockStore = { ...mockStore, display: { contract: 2, signaling: '/wcpos/v2/display' } };
+	renderHook(() => useCustomerDisplayService());
+	await flushEffects();
+
+	expect(mockStart).not.toHaveBeenCalled();
+	expect(mockLoggerWarn).toHaveBeenCalledWith('Unsupported customer display advertisement', {
+		context: { contract: 2 },
+	});
+});
+
+test('cleanup does not stop a newer singleton service', async () => {
+	const view = renderHook(() => useCustomerDisplayService());
+	await flushEffects();
+	mockCurrentService = { configure: jest.fn(), stop: jest.fn() };
+
+	view.unmount();
+
+	expect(mockStopCustomerDisplayService).not.toHaveBeenCalled();
 });

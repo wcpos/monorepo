@@ -6,7 +6,13 @@ const MAX_CUSTOMER_NOTE_BYTES = 1024;
 const MAX_LINE_META_ENTRIES = 8;
 
 type SnapshotContainer = {
-	payload?: { order?: { customer_note?: unknown; lines?: unknown[]; lines_truncated?: boolean } };
+	payload?: {
+		order?: {
+			order?: { customer_note?: unknown };
+			lines?: unknown[];
+			lines_truncated?: boolean;
+		};
+	};
 };
 
 const byteLength = (text: string): number => new TextEncoder().encode(text).byteLength;
@@ -28,8 +34,8 @@ export function serialiseSnapshot(value: object): string {
 	const copy = JSON.parse(serialised) as SnapshotContainer;
 	const order = copy.payload?.order;
 	if (!order) return serialised;
-	if (typeof order.customer_note === 'string') {
-		order.customer_note = truncateUtf8(order.customer_note, MAX_CUSTOMER_NOTE_BYTES);
+	if (typeof order.order?.customer_note === 'string') {
+		order.order.customer_note = truncateUtf8(order.order.customer_note, MAX_CUSTOMER_NOTE_BYTES);
 	}
 	serialised = JSON.stringify(copy);
 	if (byteLength(serialised) <= MAX_SNAPSHOT_BYTES) return serialised;

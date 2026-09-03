@@ -236,6 +236,21 @@ test('a close re-offers with a fresh session on the next poll', async () => {
 	);
 });
 
+test('a rejected offer post clears the peer and the next poll re-offers', async () => {
+	const { session, peers, signaling } = setup();
+	jest.mocked(signaling.postSignal).mockRejectedValueOnce(new Error('temporary failure'));
+
+	await expect(session.poll()).rejects.toThrow('temporary failure');
+	expect(peers[0].channelState).toBe('closed');
+
+	await session.poll();
+	expect(peers).toHaveLength(2);
+	expect(signaling.postSignal).toHaveBeenLastCalledWith(
+		'display-1',
+		expect.objectContaining({ session: 'session-2', type: 'offer' })
+	);
+});
+
 test('forget posts bye then closes the peer', async () => {
 	const { session, peers, signaling } = setup();
 	await session.poll();

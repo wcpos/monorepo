@@ -14,6 +14,7 @@ import {
 	type CustomerDisplayService,
 	type CustomerDisplayState,
 	getCustomerDisplayService,
+	isSupportedDisplayAdvertisement,
 } from '../../../../services/customer-display';
 import {
 	getCustomerDisplayServiceStartVersion,
@@ -86,7 +87,7 @@ function AdvertisedSettings({ url }: { url: string }) {
 export function CustomerDisplaySettings() {
 	const t = useT();
 	const { store, site } = useStoreSession();
-	const advertised = useDocField(store, (value) => !!value.display);
+	const advertised = useDocField(store, (value) => isSupportedDisplayAdvertisement(value.display));
 	const siteFields = useDocField(site, (value) => ({
 		url: value.url,
 		useRestRouteParam: value.use_rest_route_param === true,

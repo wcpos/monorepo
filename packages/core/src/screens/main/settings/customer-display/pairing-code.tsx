@@ -37,7 +37,9 @@ export function PairingCode({
 		: null;
 
 	const copyUrl = React.useCallback(() => {
-		void navigator.clipboard.writeText(url);
+		const clipboard = navigator.clipboard;
+		if (typeof clipboard?.writeText !== 'function') return;
+		void clipboard.writeText(url).catch(() => undefined);
 	}, [url]);
 
 	return (

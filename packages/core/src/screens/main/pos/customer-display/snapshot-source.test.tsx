@@ -3,8 +3,26 @@ import * as React from 'react';
 
 import { act, render } from '@testing-library/react';
 
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+
 import { notifyCustomerDisplayServiceStart } from './customer-display-service-start';
 import { CustomerDisplaySnapshotSource } from './snapshot-source';
+import { buildReceiptData } from '../../receipt/utils/build-receipt-data';
+
+const mockLoggerError = jest.fn();
+jest.mock('@wcpos/utils/logger', () => ({
+	getLogger: () => ({
+		debug: jest.fn(),
+		error: (...args: unknown[]) => mockLoggerError(...args),
+		info: jest.fn(),
+		warn: jest.fn(),
+	}),
+}));
+
+jest.mock('../../receipt/utils/build-receipt-data', () => {
+	const actual = jest.requireActual('../../receipt/utils/build-receipt-data');
+	return { ...actual, buildReceiptData: jest.fn(actual.buildReceiptData) };
+});
 
 const mockPublish = jest.fn();
 let mockDisplayService: { publish: typeof mockPublish } | null = { publish: mockPublish };
@@ -74,16 +92,19 @@ jest.mock('../../contexts/tax-rates/provider', () => ({
 	useTaxSettingsOptional: () => ({ priceNumDecimals: 2 }),
 }));
 
+const mockGetStatusLabel = (status: string) => status;
 jest.mock('../../hooks/use-order-status-label', () => ({
-	useOrderStatusLabel: () => ({ getLabel: (status: string) => status }),
+	useOrderStatusLabel: () => ({ getLabel: mockGetStatusLabel }),
 }));
 
+const mockPaymentMethods = new Map([['cod', { id: 'cod', title: 'Cash' }]]);
 jest.mock('../../hooks/use-payment-methods', () => ({
-	usePaymentMethods: () => ({ byId: new Map([['cod', { id: 'cod', title: 'Cash' }]]) }),
+	usePaymentMethods: () => ({ byId: mockPaymentMethods }),
 }));
 
+const mockT = () => 'Payment declined — please try another payment method.';
 jest.mock('../../../../contexts/translations', () => ({
-	useT: () => () => 'Payment declined — please try another payment method.',
+	useT: () => mockT,
 }));
 
 const payment = (status: 'pending' | 'captured' | 'failed') => ({
@@ -124,9 +145,61 @@ const flushMicrotask = async () => {
 
 beforeEach(() => {
 	jest.useRealTimers();
-	mockPublish.mockClear();
+	jest.clearAllMocks();
 	mockDisplayService = { publish: mockPublish };
 	withPayload({}, 'order-a');
+});
+
+test('renders local receipt data without passing string money through the printer formatter', () => {
+	// Adapted from the realistic order/store fixtures in build-receipt-data.test.ts.
+	const numberFormat = jest.spyOn(Intl, 'NumberFormat').mockImplementation(() => {
+		throw new RangeError('Intl currency formatting unavailable');
+	});
+	try {
+		withPayload({ line_items: [line] });
+		expect(() => render(<CustomerDisplaySnapshotSource />)).not.toThrow();
+		expect(mockPublish).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				action: 'cart.updated',
+				payload: expect.objectContaining({
+					order: expect.objectContaining({
+						lines: [expect.objectContaining({ unit_price: '5.00' })],
+					}),
+				}),
+			})
+		);
+	} finally {
+		numberFormat.mockRestore();
+	}
+});
+
+test('publishes idle and logs once when receipt building throws', () => {
+	jest.mocked(buildReceiptData).mockImplementationOnce(() => {
+		throw new Error('broken receipt');
+	});
+
+	const view = render(<CustomerDisplaySnapshotSource />);
+	view.rerender(<CustomerDisplaySnapshotSource />);
+
+	expect(mockPublish).toHaveBeenLastCalledWith({
+		action: 'display.idle',
+		payload: { reason: 'no_cart' },
+	});
+	expect(mockLoggerError).toHaveBeenCalledTimes(1);
+	expect(mockLoggerError).toHaveBeenCalledWith('Customer display snapshot build failed', {
+		code: ERROR_CODES.PRINT_UNEXPECTED,
+		context: { orderUuid: 'order-a' },
+	});
+});
+
+test('does not republish an unchanged memoised snapshot on rerender', () => {
+	withPayload({ line_items: [line] });
+	const view = render(<CustomerDisplaySnapshotSource />);
+	mockPublish.mockClear();
+
+	view.rerender(<CustomerDisplaySnapshotSource />);
+
+	expect(mockPublish).not.toHaveBeenCalled();
 });
 
 test('publishes the current snapshot when the service finishes starting', () => {

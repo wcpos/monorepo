@@ -10,7 +10,9 @@ import {
 	getDeviceId,
 	type HttpFunction,
 	type HttpRequest,
+	isSupportedDisplayAdvertisement,
 	startCustomerDisplayService,
+	stopCustomerDisplayService,
 } from '../../../../services/customer-display';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { notifyCustomerDisplayServiceStart } from './customer-display-service-start';
@@ -73,14 +75,14 @@ export function useCustomerDisplayService(): void {
 	}, [config]);
 
 	React.useEffect(() => {
-		const signaling = fields?.display?.signaling;
-		if (!signaling) return;
-		if (!signaling.startsWith(WCPOS_V2_PREFIX)) {
-			logger.warn('Customer display signaling path is outside the WCPOS v2 API root', {
-				context: { signaling },
+		const display = fields?.display;
+		if (!isSupportedDisplayAdvertisement(display)) {
+			logger.warn('Unsupported customer display advertisement', {
+				context: { contract: display?.contract },
 			});
 			return;
 		}
+		const { signaling } = display;
 
 		let cancelled = false;
 		let startedService: ReturnType<typeof startCustomerDisplayService> | null = null;
@@ -102,9 +104,11 @@ export function useCustomerDisplayService(): void {
 
 		return () => {
 			cancelled = true;
-			startedService?.stop();
+			if (startedService && getCustomerDisplayService() === startedService) {
+				stopCustomerDisplayService();
+			}
 		};
-	}, [fields?.display?.signaling, fields?.id, http, site, store]);
+	}, [fields?.display, fields?.id, http, site, store]);
 
 	React.useEffect(() => {
 		if (fields?.display) getCustomerDisplayService()?.configure(config);

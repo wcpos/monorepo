@@ -120,6 +120,12 @@ jest.mock('../../../../contexts/translations', () => ({
 }));
 jest.mock('../../../../services/customer-display', () => ({
 	getCustomerDisplayService: () => mockCustomerDisplayService,
+	isSupportedDisplayAdvertisement: (
+		display: { contract?: unknown; signaling?: unknown } | undefined
+	) =>
+		display?.contract === 1 &&
+		typeof display.signaling === 'string' &&
+		display.signaling.startsWith('/wcpos/v2/'),
 }));
 jest.mock('../../pos/customer-display/customer-display-service-start', () => ({
 	getCustomerDisplayServiceStartVersion: () => 1,
@@ -176,6 +182,18 @@ describe('CustomerDisplaySettings', () => {
 		expect(screen.queryByTestId('customer-display-list')).not.toBeInTheDocument();
 	});
 
+	it.each([
+		{ contract: 2, signaling: '/wcpos/v2/display' },
+		{ contract: 1, signaling: '' },
+		{ contract: 1, signaling: '/wp-json/display' },
+	])('hides settings for unsupported advertisement %#', (display) => {
+		store = { display };
+		render(<CustomerDisplaySettings />);
+
+		expect(screen.getByTestId('customer-display-not-advertised')).toBeInTheDocument();
+		expect(screen.queryByTestId('customer-display-pair-button')).not.toBeInTheDocument();
+	});
+
 	it('renders service state and starts pairing when customer displays are advertised', () => {
 		store = { display: { contract: 1, signaling: '/wcpos/v2/display' } };
 
@@ -220,5 +238,13 @@ describe('CustomerDisplaySettings', () => {
 		mockPlatform.OS = 'ios';
 		render(<CustomerDisplaySettings />);
 		expect(screen.queryByRole('button', { name: 'Copy URL' })).not.toBeInTheDocument();
+	});
+
+	it('does nothing when the Clipboard API is unavailable', () => {
+		store = { display: { contract: 1, signaling: '/wcpos/v2/display' } };
+		Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+		render(<CustomerDisplaySettings />);
+
+		expect(() => fireEvent.click(screen.getByRole('button', { name: 'Copy URL' }))).not.toThrow();
 	});
 });
