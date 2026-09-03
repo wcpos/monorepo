@@ -25,7 +25,9 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { type PaymentFrameStatus, PaymentWebview } from './components/payment-webview';
 import { CheckoutTitle } from './components/title';
 import { useCheckoutSession } from './hooks/use-checkout-session';
+import { TenderCheckout } from './tender/tender-checkout';
 import { useT } from '../../../../contexts/translations';
+import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 import { TotalsChangedBanner } from '../cart/totals-changed-banner';
 import { stockRejection$ } from '../hooks/stock-rejection';
@@ -58,7 +60,25 @@ export function Checkout({ resource }: Props) {
 	return <CheckoutDocument order={order} />;
 }
 
+/**
+ * Which checkout the till gets is decided by the store, not by a setting: a store
+ * serving `GET wcpos/v2/payment-methods` has the payments contract and gets the
+ * two-pane tender flow (wcpos/roadmap#143). A store that does not — an older
+ * plugin, or one whose descriptor is a schema this build cannot read — keeps the
+ * gateway checkout it has always had. There is no half-way state where a cashier
+ * meets a tile grid the server cannot record against.
+ */
 function CheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
+	const { loaded, unsupportedSchema } = usePaymentMethods();
+
+	if (loaded && !unsupportedSchema) {
+		return <TenderCheckout order={order} />;
+	}
+
+	return <LegacyCheckoutDocument order={order} />;
+}
+
+function LegacyCheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 	const orderData = useRecordField(order, (record) => record.payload);
 	const orderNumber = orderData.number;
 	const stockRejection = useObservableEagerState(stockRejection$);

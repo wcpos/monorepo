@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { useRouter } from 'expo-router';
-
 import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
@@ -12,10 +10,8 @@ import {
 	PaymentGatewayContract,
 	supportsCheckoutContract,
 } from '../../../hooks/payment-gateway-contract';
-import { useUISettings } from '../../../contexts/ui-settings';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { usePaymentGateways } from '../../../hooks/use-payment-gateways';
-import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import {
 	clearStockRejection,
@@ -24,6 +20,7 @@ import {
 	stockRejection$,
 } from '../../hooks/stock-rejection';
 import { useCartStockGuard } from '../../hooks/use-cart-stock-guard';
+import { useCompleteOrderFlow } from './use-complete-order-flow';
 
 const checkoutLogger = getLogger(['wcpos', 'pos', 'checkout', 'contract']);
 
@@ -59,9 +56,6 @@ export function createCheckoutIdempotencyKey(
 export function useCheckoutSession(order: EngineRecord<'orders'>) {
 	const http = useRestHttpClient();
 	const runtime = useQueryRuntime();
-	const { stockAdjustment } = useStockAdjustment();
-	const { uiSettings } = useUISettings('pos-cart');
-	const router = useRouter();
 	const t = useT();
 	const { resolveStockOwnerId } = useCartStockGuard();
 	const { blockIfDegraded } = useStorageMoneyPathGuard();
@@ -72,6 +66,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 	const orderData = useRecordField(order, (record) => record.payload);
 	const orderId = orderData.id;
 	const orderNumber = orderData.number;
+	const completeOrderFlow = useCompleteOrderFlow(order);
 
 	const gatewayId = React.useMemo(
 		() => orderData.payment_method || 'pos_cash',
@@ -93,41 +88,6 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 	React.useEffect(() => {
 		checkoutAttemptIdRef.current = null;
 	}, [gatewayId, orderId]);
-
-	const completeOrderFlow = React.useCallback(async () => {
-		if (!orderId) {
-			throw new Error('checkout_refresh_requires_persisted_order');
-		}
-		const handle = runtime.engine.require({
-			id: `checkout:order-refresh:${orderId}`,
-			collection: 'orders',
-			kind: 'targeted-records',
-			remoteIds: [orderId].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
-			forceRefresh: true,
-		});
-		try {
-			await handle.ready;
-		} finally {
-			handle.release();
-		}
-
-		const latest = order.getLatest().payload;
-		const reducedStockItems = (latest.line_items || []).filter((item) =>
-			(item.meta_data as { key: string }[] | undefined)?.some(
-				(meta) => meta.key === '_reduced_stock'
-			)
-		);
-		stockAdjustment(reducedStockItems);
-
-		if (uiSettings.autoShowReceipt) {
-			router.replace({
-				pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
-				params: { orderId: order.uuid! },
-			});
-		} else {
-			router.replace({ pathname: '/cart' });
-		}
-	}, [runtime, order, orderId, router, stockAdjustment, uiSettings.autoShowReceipt]);
 
 	const handleStockRejection = React.useCallback(
 		(error: unknown) => {

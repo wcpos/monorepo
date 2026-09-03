@@ -78,6 +78,22 @@ jest.mock('./components/payment-webview', () => ({
 	},
 }));
 jest.mock('./components/title', () => ({ CheckoutTitle: () => null }));
+// This suite is about the legacy gateway checkout, which is what a store WITHOUT
+// the payments contract still gets. The contract branch has its own suite
+// (tender/tender-checkout.test.tsx); mounting it here would drag the tab strip →
+// expo-haptics into a suite that transforms neither.
+jest.mock('../../hooks/use-payment-methods', () => ({
+	usePaymentMethods: () => ({
+		methods: [],
+		byId: new Map(),
+		contract: null,
+		loaded: false,
+		unsupportedSchema: false,
+	}),
+}));
+jest.mock('./tender/tender-checkout', () => ({
+	TenderCheckout: () => <div data-testid="tender-checkout" />,
+}));
 // The R1 banner has its own suite (cart/totals-changed-banner.test.tsx); here it
 // is only a child, and rendering it for real drags @wcpos/components/icon-button
 // → expo-haptics into a suite that transforms neither.
