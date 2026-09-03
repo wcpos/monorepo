@@ -938,12 +938,12 @@ function alignedPadding(
 	return ' '.repeat(paddingCharacters);
 }
 
-function normalizeThermalText(value: string): string {
+export function normalizeThermalText(value: string): string {
 	return value
 		.replace(/[\u2010\u2011\u2012\u2013\u2014\u2212]/g, '-')
 		.replace(/[\u2018\u2019]/g, "'")
 		.replace(/[\u201C\u201D]/g, '"')
-		.replace(/\u00A0/g, ' ');
+		.replace(/[\u00A0\u202F\u2009\u2007]/g, ' ');
 }
 
 function containsJapaneseText(value: string): boolean {
