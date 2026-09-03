@@ -1,41 +1,45 @@
 diff --git a/lib/module/views/Drawer.native.js b/lib/module/views/Drawer.native.js
-index 5fb761c4140881cbb19d40597e2d6e33e870748b..7d09d450e888761f30cc816aee2a764ccd31dd22 100644
+index 263fb160bc7f939f2f512a0bee2c819bbc097480..89ebe5c03c4d60fe144bc8320e8d2bbc1db4d7c8 100644
 --- a/lib/module/views/Drawer.native.js
 +++ b/lib/module/views/Drawer.native.js
-@@ -53,6 +53,14 @@ export function Drawer({
+@@ -55,6 +55,17 @@ export function Drawer({
      layout,
      drawerStyle
    });
-+  // A closed drawer is only translated off-screen — the panel stays in layout, and the
-+  // transform that hides it is not what the shadow tree holds (see the zIndex FIXME below).
-+  // An app can therefore take a settled-closed panel out of layout itself by passing
-+  // `drawerStyle.display: 'none'` (wcpos/monorepo#1691). The overlay is a SIBLING of the
-+  // panel rather than a descendant, and its opacity AND pointerEvents both come from the same
-+  // animated `progress`, so it has to go with the panel: otherwise a stale progress leaves a
-+  // dim, touch-intercepting sheet over the screen the app has navigated to.
++  // A closed drawer is only translated off-screen: the panel stays in layout at full size, and
++  // nothing but Reanimated's animated transform keeps it out of sight. An app can therefore take
++  // a settled-closed panel out of layout itself by passing `drawerStyle.display: 'none'`
++  // (wcpos/monorepo#1691, #1797). Why an app would: Reanimated < 4.5.3 could revert an animated
++  // view to a stale style after a JS-thread stall (software-mansion/react-native-reanimated#9965,
++  // fixed by #9527): the closed drawer came back at the OPEN position seconds after a close, the
++  // moment a heavy screen finished mounting. A static layout prop survives that revert.
++  // The overlay is a SIBLING of the panel rather than a descendant, and its opacity AND
++  // pointerEvents both come from the same animated `progress`, so it has to go with the panel:
++  // otherwise a stale progress leaves a dim, touch-intercepting sheet over the routed screen.
 +  const isDrawerPanelHidden = StyleSheet.flatten(drawerStyle)?.display === 'none';
    const isOpen = drawerType === 'permanent' ? true : open;
    const isRight = drawerPosition === 'right';
    const getDrawerTranslationX = React.useCallback(open => {
-@@ -242,7 +250,16 @@ export function Drawer({
+@@ -242,7 +253,17 @@ export function Drawer({
        // For 'back' type: always keep drawer behind content (-1 when open, 0 when closed/animating)
        // For other types: 0 when open, 1 when closed/animating
        zIndex: drawerType === 'back' ? translateX.value === 0 ? -1 : 0 : translateX.value === 0 ? 0 : 1,
 -      display: isHidden.value ? 'none' : 'flex',
-+      // The app's `drawerStyle.display: 'none'` (see isDrawerPanelHidden above) has to win HERE
-+      // too: this worklet is what actually writes `display` to the native view, and it re-runs on
-+      // every re-render of the hook and every change of a shared value it reads. Left as plain
-+      // `'flex'`, any such re-run un-hides a panel the app has taken out of layout, at whatever
-+      // transform the shadow tree last committed — and per the FIXME above that is close to the
-+      // OPEN position for a closed drawer (wcpos/monorepo#1691: the panel reappearing over the
-+      // routed screen seconds after a close, with the overlay correctly at 0). While a swipe is
-+      // in flight, or the spring-back after a released one is still moving, the panel follows
-+      // the finger as before; it is hidden only once it is fully closed again.
++      // The app's `drawerStyle.display: 'none'` (see isDrawerPanelHidden above) is honoured HERE
++      // too. This animated style is committed to the shadow tree every frame and re-applied on
++      // each React commit from Reanimated's props registry; the static `display: 'none'` only
++      // wins in React's own style merge (drawerStyle is last in the panel's style array).
++      // Returning 'none' from the worklet gives the registry the same answer, so a settled-closed
++      // panel stays hidden whichever side lands last (wcpos/monorepo#1797). While a swipe is in
++      // flight, or the spring-back after a released one is still moving, the panel follows the
++      // finger as before; it is hidden only once it is fully closed again. `translateX` compares
++      // exactly: the derived value is clamped to the closed edge and `withSpring` snaps to its
++      // target on finish (reanimated spring.ts, `animation.current = toValue`).
 +      display: isHidden.value || isDrawerPanelHidden && gestureState.value !== GestureState.ACTIVE && translateX.value === getDrawerTranslationX(false) ? 'none' : 'flex',
        transform: drawerType === 'permanent' ?
        // Reanimated needs the property to be present, but it results in Browser bug
        // https://bugs.chromium.org/p/chromium/issues/detail?id=20574
-@@ -252,7 +269,7 @@ export function Drawer({
+@@ -252,7 +273,7 @@ export function Drawer({
          (drawerType === 'back' ? 0 : translateX.value) + (direction === 'rtl' ? drawerPosition === 'left' ? -distanceFromEdge : 0 : drawerPosition === 'left' ? 0 : distanceFromEdge)
        }]
      };
@@ -44,7 +48,7 @@ index 5fb761c4140881cbb19d40597e2d6e33e870748b..7d09d450e888761f30cc816aee2a764c
    const contentAnimatedStyle = useAnimatedStyle(() => {
      return {
        // FIXME: Force Reanimated to commit to the shadow tree
-@@ -292,7 +309,7 @@ export function Drawer({
+@@ -316,7 +337,7 @@ export function Drawer({
                  open: open,
                  progress: progress,
                  onPress: () => toggleDrawer(false),
@@ -53,7 +57,7 @@ index 5fb761c4140881cbb19d40597e2d6e33e870748b..7d09d450e888761f30cc816aee2a764c
                  accessibilityLabel: overlayAccessibilityLabel
                }) : null]
              }), /*#__PURE__*/_jsx(Animated.View, {
-@@ -310,6 +327,9 @@ export function Drawer({
+@@ -335,6 +356,9 @@ export function Drawer({
    });
  }
  const styles = StyleSheet.create({

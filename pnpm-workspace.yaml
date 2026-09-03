@@ -44,8 +44,15 @@ overrides:
   "react": "19.2.3"
   "react-dom": "19.2.3"
   "react-native": "0.86.2"
-  # Expo SDK 57.0.13 prescribes 4.5.1; keep transitive auto-installed peers on the same native runtime.
-  "react-native-reanimated": "4.5.1"
+  # Expo SDK 57 prescribes 4.5.1. Held at 4.5.5 (same 4.5 line, same worklets 0.10.x peer): 4.5.3
+  # ships software-mansion/react-native-reanimated#9527, which stops a settled animation reverting
+  # to a stale value after a JS-thread stall (#9965) - the drawer-reappears-at-open class (#1691,
+  # #1797). 4.6.x needs worklets 0.12, outside expo-modules-core 57's peer range; do not float there.
+  # Keep transitive auto-installed peers on the same native runtime.
+  "react-native-reanimated": "4.5.5"
+  # expo-router floats ^4.2.2; pin so the patch below has one target. 4.2.10 carries upstream's
+  # useLayoutEffect toggle (react-navigation#13186) and the accessibility-hiding animated props.
+  "react-native-drawer-layout": "4.2.10"
   "react-native-edge-to-edge": "^1.6.2"
   "react-native-gesture-handler": "~2.32.0"
   "react-native-safe-area-context": "~5.7.0"
@@ -151,13 +158,16 @@ patchedDependencies:
   # for a dropped index; the render path skips that key and `validateItemSize` drops the
   # stale measurement, exactly as the upstream PR does. Drop with the upgrade above.
   "@shopify/flash-list@2.0.2": "patches/@shopify__flash-list@2.0.2.patch"
-  # A closed drawer is only translated off-screen, so a stale animated transform can leave
-  # it — and the dimming overlay, which is its SIBLING and reads the same animated progress
-  # — on top of the screen the app has navigated to (#1691). The app hides the settled-closed
-  # panel with `drawerStyle.display: 'none'`; this patch mirrors that onto the overlay, which
-  # the library exposes no option to reach. Drop it if upstream stops driving the overlay's
-  # opacity and pointerEvents from an uncommitted animated value.
-  react-native-drawer-layout@4.2.5: patches/react-native-drawer-layout@4.2.5.patch
+  # A closed drawer is only translated off-screen. Reanimated < 4.5.3 could revert that
+  # transform to a stale value after a JS-thread stall (reanimated#9965, fixed by #9527 —
+  # the drawer reappearing at the OPEN position over the routed screen, #1691/#1797), and the
+  # dimming overlay is the panel's SIBLING reading the same animated progress. The app hides
+  # the settled-closed panel with `drawerStyle.display: 'none'`; this patch (a) mirrors that
+  # onto the overlay, which the library exposes no option to reach, and (b) returns 'none' from
+  # the panel's own animated style once it has settled closed, so Reanimated's props registry
+  # agrees with React's static prop. Kept as a guard after the Reanimated bump; drop it once
+  # native flow 05 has stayed green on 4.5.5 for a while, or if upstream hides a closed panel.
+  react-native-drawer-layout@4.2.10: patches/react-native-drawer-layout@4.2.10.patch
   "react-native-esc-pos-printer@4.5.0": "patches/react-native-esc-pos-printer@4.5.0.patch"
   rxdb@17.4.0: patches/rxdb@17.4.0.patch
   # NOTE: rxdb-premium cannot be patched here — its dist/ is produced by a

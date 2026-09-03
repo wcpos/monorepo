@@ -21,6 +21,13 @@ import { parseImporters } from './check-dep-duplicates.mjs';
 // Map of dependency name -> reason.
 export const ALLOWED_EXPO_MISMATCHES = new Map([
 	// example: ['react-native-svg', 'pinned ahead of SDK for fix XYZ'],
+	[
+		'react-native-reanimated',
+		'4.5.5: SDK 57 prescribes 4.5.1; 4.5.3 ships reanimated#9527 (settled animations no longer ' +
+			'revert to a stale value after a JS-thread stall, #9965) — the drawer-reappears-at-open ' +
+			'class, #1691/#1797/#1802. Same 4.5 line and worklets 0.10.x peer. Drop when the SDK ' +
+			'prescribes >= 4.5.3.',
+	],
 ]);
 
 /**

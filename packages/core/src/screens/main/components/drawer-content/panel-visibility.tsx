@@ -6,40 +6,38 @@ import * as React from 'react';
  * `react-native-drawer-layout` never hides the panel: closing it only moves it off-screen
  * with a Reanimated transform, and the panel stays `display: 'flex'` and in the view
  * hierarchy the whole time. That transform is therefore the only thing keeping a closed
- * drawer out of sight — and the library itself documents that the transform is not what the
- * shadow tree holds (`Drawer.native.js` animates `zIndex` purely to "force the commit",
- * because "Reanimated skips committing to the shadow tree if no layout props are animated").
- * `zIndex` only changes as the drawer leaves/reaches the fully-open position, so for the rest
- * of a close the committed position stays near "open" while the on-screen view is moved
- * directly.
+ * drawer out of sight.
  *
- * That is fine while the animation is still producing frames — the next frame re-asserts the
- * real position. It stops being fine when the tap that closes the drawer also mounts an
- * expensive screen: once the close spring has settled, nothing re-asserts anything, and a
- * later React commit (the heavy screen finally landing) renders the panel back at the stale
- * position with the app already on the new route. That is monorepo#1691 — iOS flow 05, where
- * the drawer re-appears ~16 s after the tap with the Orders table rendered behind it, with no
- * touch and no drawer action in between (the tablet variant of the same run ends up stuck
- * part-way open, with the dim overlay at the matching partial opacity — a position no drawer
- * action can produce, since actions only ever spring to the two endpoints).
+ * Why that was not enough — the actual mechanism, verified against the Reanimated 4.5.1
+ * source and upstream trackers (2026-09-03): on Fabric every animated frame IS committed to
+ * the shadow tree, and a commit hook re-applies the animated props from Reanimated's registry
+ * on every React commit. A JS-side collector then syncs settled values back into React state
+ * and evicts registry entries idle for more than ~2 s. If the JS thread is stalled (a heavy
+ * screen mounting) when the close settles, the entry is evicted before React absorbed the
+ * closed value, and the next React commit lands React's stale static props — the last state
+ * it did absorb, i.e. OPEN. That is software-mansion/react-native-reanimated#9965, fixed by
+ * #9527 (shipped in 4.5.3); react-navigation#13186 is the same symptom on the drawer. It is
+ * monorepo#1691 — iOS flow 05, the drawer re-appearing ~16 s after the tap with the Orders
+ * table rendered behind it, no touch and no drawer action in between — and the Android flow
+ * 05 recurrence (run 33725936595, 13 s after the Customers tap). The drawer library's own
+ * zIndex FIXME ("Reanimated skips committing to the shadow tree…") dates from RN 0.76 and does
+ * not describe Reanimated 4.x; earlier revisions of this comment built on it and were wrong.
  *
- * So once the drawer has settled closed we hide the panel outright. `display: 'none'` is a
- * plain layout prop React owns; the transform can then be as stale as it likes and a closed
- * drawer still stays off the screen — and out of the accessibility tree, which is what a
- * closed drawer should be anyway.
+ * The repo now runs Reanimated 4.5.5, which carries the fix. This guard stays because it is
+ * cheap and independent of that fix: once the drawer has settled closed we hide the panel
+ * outright with `display: 'none'`, a plain layout prop React owns, so a closed drawer stays
+ * off the screen — and out of the accessibility tree, which is what a closed drawer should be
+ * anyway — whatever an animated value does.
  *
  * The hide is honoured by the library's own animated style as well (patch on
- * `react-native-drawer-layout`, `patches/react-native-drawer-layout@4.2.5.patch`): that worklet
- * is what actually writes `display` to the native view, and it re-runs on every re-render and
- * every shared-value change, so it must return `'none'` for a hidden panel or it would un-hide
- * it at the stale transform. That is also why there is deliberately NO "drop the hide for one
- * commit and re-apply it" path here any more: an earlier version re-asserted the hide whenever
- * the animated progress returned to 0, assuming the dropped frame showed nothing. It does not —
- * the shadow tree holds the near-open transform — and on a JS thread busy mounting a heavy
- * screen the drop landed seconds after the close and put the panel back over the routed screen
- * (Android flow 05, run 33725936595: the drawer reappears 13 s after the Customers tap, no
- * overlay, at the moment the rows render). A cancelled opening swipe is covered by the patch
- * instead: the panel shows while the gesture is active and hides again once fully closed.
+ * `react-native-drawer-layout`, `patches/react-native-drawer-layout@4.2.10.patch`), so the
+ * registry and React's static prop give the same answer for a settled-closed panel. There is
+ * deliberately NO "drop the hide for one commit and re-apply it" path here: an earlier version
+ * re-asserted the hide by dropping it whenever the animated progress returned to 0 — i.e.
+ * after EVERY close — via `scheduleOnRN` + `setTimeout(0)`, which on a stalled JS thread
+ * landed seconds after the close as a commit with no hide and the stale transform above. A
+ * cancelled opening swipe is covered by the patch instead: the panel shows while the gesture
+ * is active and hides again once fully closed.
  *
  * Note we cannot use the navigator's own `transitionEnd` event for this: the drawer emits it
  * with `target: state.key` (the navigator, not a route), and `useNavigationBuilder`'s emitter
