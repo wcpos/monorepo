@@ -2,6 +2,11 @@ import { isQuickFilterActive, quickFilterToQueryPatch } from './apply-quick-filt
 
 import type { QuickFilter } from './filter-bar-layout';
 
+const resetState = {
+	filters: { categories: [], tags: [], brands: [], status: 'publish' as const },
+	sort: { field: 'name' as const, direction: 'asc' as const },
+};
+
 const filter: QuickFilter = {
 	id: 'all-fields',
 	type: 'quick',
@@ -40,6 +45,7 @@ it('requires every field to match exactly, comparing taxonomy ids as sets', () =
 		search: 'shirt',
 		sort: { field: 'name' as const, direction: 'asc' as const },
 		filters: {
+			...resetState.filters,
 			categories: [2, 1],
 			tags: [3],
 			brands: [4],
@@ -51,19 +57,27 @@ it('requires every field to match exactly, comparing taxonomy ids as sets', () =
 		},
 	};
 
-	expect(isQuickFilterActive(filter, state)).toBe(true);
-	expect(isQuickFilterActive(filter, { ...state, search: 'shirts' })).toBe(false);
+	expect(isQuickFilterActive(filter, state, resetState)).toBe(true);
+	expect(isQuickFilterActive(filter, { ...state, search: 'shirts' }, resetState)).toBe(false);
 	expect(
-		isQuickFilterActive(filter, {
-			...state,
-			filters: { ...state.filters, categories: [1, 2, 3] },
-		})
+		isQuickFilterActive(
+			filter,
+			{
+				...state,
+				filters: { ...state.filters, categories: [1, 2, 3] },
+			},
+			resetState
+		)
 	).toBe(false);
 	expect(
-		isQuickFilterActive(filter, {
-			...state,
-			filters: { ...state.filters, price: { min: 10 } },
-		})
+		isQuickFilterActive(
+			filter,
+			{
+				...state,
+				filters: { ...state.filters, price: { min: 10 } },
+			},
+			resetState
+		)
 	).toBe(false);
 });
 
@@ -71,12 +85,41 @@ it.each(filter.conditions)('detects an active standalone $field condition', (con
 	const single = { ...filter, conditions: [condition] } as QuickFilter;
 	const patch = quickFilterToQueryPatch(single);
 	expect(
-		isQuickFilterActive(single, {
-			search: patch.search,
-			sort: { field: 'name', direction: 'asc' },
-			filters: { categories: [], tags: [], brands: [], ...patch.filters },
-		})
+		isQuickFilterActive(
+			single,
+			{
+				search: patch.search,
+				sort: { field: 'name', direction: 'asc' },
+				filters: { ...resetState.filters, ...patch.filters },
+			},
+			resetState
+		)
 	).toBe(true);
+});
+
+it('rejects extra filters and the wrong effective default sort', () => {
+	const onSale = { ...filter, conditions: [{ field: 'on_sale', value: true }] } as QuickFilter;
+	const matching = {
+		search: '',
+		filters: { ...resetState.filters, on_sale: true },
+		sort: resetState.sort,
+	};
+
+	expect(isQuickFilterActive(onSale, matching, resetState)).toBe(true);
+	expect(
+		isQuickFilterActive(
+			onSale,
+			{ ...matching, filters: { ...matching.filters, featured: true } },
+			resetState
+		)
+	).toBe(false);
+	expect(
+		isQuickFilterActive(
+			onSale,
+			{ ...matching, sort: { field: 'sku', direction: 'asc' } },
+			resetState
+		)
+	).toBe(false);
 });
 
 it('is active only while its sort is applied, so a sort-only button can be pressed on', () => {
@@ -87,21 +130,33 @@ it('is active only while its sort is applied, so a sort-only button can be press
 		conditions: [],
 		sort: { field: 'sortable_price', direction: 'asc' },
 	};
-	const baseline = { search: '', filters: { categories: [], tags: [], brands: [] } };
+	const baseline = { search: '', filters: resetState.filters };
 
 	expect(
-		isQuickFilterActive(sortOnly, { ...baseline, sort: { field: 'name', direction: 'asc' } })
+		isQuickFilterActive(
+			sortOnly,
+			{ ...baseline, sort: { field: 'name', direction: 'asc' } },
+			resetState
+		)
 	).toBe(false);
 	expect(
-		isQuickFilterActive(sortOnly, {
-			...baseline,
-			sort: { field: 'sortable_price', direction: 'desc' },
-		})
+		isQuickFilterActive(
+			sortOnly,
+			{
+				...baseline,
+				sort: { field: 'sortable_price', direction: 'desc' },
+			},
+			resetState
+		)
 	).toBe(false);
 	expect(
-		isQuickFilterActive(sortOnly, {
-			...baseline,
-			sort: { field: 'sortable_price', direction: 'asc' },
-		})
+		isQuickFilterActive(
+			sortOnly,
+			{
+				...baseline,
+				sort: { field: 'sortable_price', direction: 'asc' },
+			},
+			resetState
+		)
 	).toBe(true);
 });

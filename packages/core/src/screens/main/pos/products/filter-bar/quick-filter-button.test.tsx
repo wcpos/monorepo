@@ -33,7 +33,7 @@ jest.mock('@wcpos/components/button', () => ({
 }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: (_doc: unknown, read: (value: unknown) => unknown) =>
-		read({ sortBy: 'name', sortDirection: 'asc' }),
+		read({ sortBy: 'name', sortDirection: 'asc', showOutOfStock: true }),
 }));
 jest.mock('../../../../../query', () => ({
 	useQueryState: (read: (state: unknown) => unknown) =>
@@ -41,18 +41,28 @@ jest.mock('../../../../../query', () => ({
 			active
 				? {
 						search: 'shirt',
-						filters: { categories: [2], tags: [], brands: [], on_sale: true },
+						filters: {
+							categories: [2],
+							tags: [],
+							brands: [],
+							status: 'publish',
+							on_sale: true,
+						},
 						sort: { field: 'sortable_price', direction: 'desc' },
 					}
 				: {
 						search: '',
-						filters: { categories: [], tags: [], brands: [] },
+						filters: { categories: [], tags: [], brands: [], status: 'publish' },
 						sort: { field: 'name', direction: 'asc' },
 					}
 		),
 	useQueryStateActions: () => actions,
 }));
-jest.mock('../../../contexts/ui-settings', () => ({ useUISettings: () => ({ uiSettings: {} }) }));
+jest.mock('../../../contexts/ui-settings', () => ({
+	useUISettings: () => ({
+		uiSettings: { sortBy: 'name', sortDirection: 'asc', showOutOfStock: true },
+	}),
+}));
 
 const quickFilter: QuickFilter = {
 	id: 'summer',

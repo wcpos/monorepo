@@ -50,6 +50,11 @@ export function FilterBarModal() {
 								onEdit={(quickFilter) =>
 									setEditing(quickFilter ? { mode: 'edit', quickFilter } : { mode: 'new' })
 								}
+								onDelete={(quickFilter) =>
+									setEditing((value) =>
+										value?.mode === 'edit' && value.quickFilter.id === quickFilter.id ? null : value
+									)
+								}
 							/>
 						</View>
 						<View className="border-border md:flex-1 md:border-l md:pl-4">

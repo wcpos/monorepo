@@ -2,9 +2,11 @@ import {
 	BUILT_IN_PILL_IDS,
 	DEFAULT_FILTER_BAR,
 	describeQuickFilter,
+	getQuickFilterSortLabel,
 	isQuickFilterValid,
 	migrateLegacyQuickFilters,
 	normalizeFilterBar,
+	quickFilterSortSchema,
 } from './filter-bar-layout';
 
 import type { QuickFilter } from './filter-bar-layout';
@@ -16,6 +18,7 @@ const t = (key: string, values?: Record<string, string | number>) => {
 		'common.category': 'Category',
 		'common.on_sale': 'On sale',
 		'common.price': 'Price',
+		'common.type': 'Type',
 		'pos_products.quick_filter_selected': '{label}: {count} selected',
 		'pos_products.quick_filter_price_range': 'Price {min}–{max}',
 		'pos_products.quick_filter_sort': 'Sort: {field} {direction}',
@@ -59,6 +62,18 @@ describe('normalizeFilterBar', () => {
 	it('uses the authored defaults for non-array input', () => {
 		expect(normalizeFilterBar(null)).toEqual(DEFAULT_FILTER_BAR);
 		expect(DEFAULT_FILTER_BAR.map((item) => item.id)).toEqual(BUILT_IN_PILL_IDS);
+	});
+
+	it('drops a persisted quick filter with an empty price range', () => {
+		const result = normalizeFilterBar([quick({ conditions: [{ field: 'price', value: {} }] })]);
+
+		expect(result.some((item) => item.type === 'quick')).toBe(false);
+	});
+
+	it('retains a persisted sort-only product type filter', () => {
+		const filter = quick({ conditions: [], sort: { field: 'type', direction: 'asc' } });
+
+		expect(normalizeFilterBar([filter])[0]).toEqual(filter);
 	});
 });
 
@@ -119,4 +134,9 @@ it('describes conditions and sort in one muted summary', () => {
 			(value) => `€${value.toFixed(2)}`
 		)
 	).toBe('Category: 2 selected · On sale · Price €10.00–€50.00 · Sort: Price ↑');
+});
+
+it('supports product type as a saved sort field', () => {
+	expect(quickFilterSortSchema.safeParse({ field: 'type', direction: 'asc' }).success).toBe(true);
+	expect(getQuickFilterSortLabel('type', t)).toBe('Type');
 });

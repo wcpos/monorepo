@@ -14,6 +14,7 @@ export const SORT_FIELD_VALUES = [
 	'name',
 	'sku',
 	'barcode',
+	'type',
 	'sortable_price',
 	'date_created_gmt',
 	'date_modified_gmt',
@@ -90,7 +91,9 @@ export function normalizeFilterBar(persisted: unknown): FilterBarItem[] {
 	const items: FilterBarItem[] = [];
 	for (const entry of persisted) {
 		const parsed = filterBarItemSchema.safeParse(entry);
-		if (!parsed.success || seen.has(parsed.data.id)) continue;
+		if (!parsed.success) continue;
+		if (parsed.data.type === 'quick' && !isQuickFilterValid(parsed.data)) continue;
+		if (seen.has(parsed.data.id)) continue;
 		seen.add(parsed.data.id);
 		items.push(parsed.data);
 	}
@@ -189,6 +192,7 @@ const SORT_LABEL_KEYS: Record<QuickFilterSort['field'], string> = {
 	name: 'common.name',
 	sku: 'common.sku',
 	barcode: 'common.barcode',
+	type: 'common.type',
 	sortable_price: 'common.price',
 	date_created_gmt: 'common.date_created',
 	date_modified_gmt: 'common.date_modified',

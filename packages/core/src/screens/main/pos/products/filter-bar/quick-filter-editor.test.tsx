@@ -135,7 +135,24 @@ jest.mock('@wcpos/components/text', () => ({
 jest.mock('@wcpos/components/suspense', () => ({
 	Suspense: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
-jest.mock('../../../components/currency-input', () => ({ CurrencyInput: () => null }));
+jest.mock('../../../components/currency-input', () => ({
+	CurrencyInput: ({
+		value,
+		onChangeText,
+		testID,
+	}: {
+		value?: number;
+		onChangeText: (value: number) => void;
+		testID: string;
+	}) => (
+		<input
+			type="number"
+			data-testid={testID}
+			value={value ?? ''}
+			onChange={(event) => onChangeText(Number(event.target.value))}
+		/>
+	),
+}));
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -194,4 +211,38 @@ it('enables Save when a named draft has only a sort field', () => {
 	fireEvent.click(screen.getByTestId('quick-filter-sort-option-name'));
 
 	expect((screen.getByTestId('quick-filter-save') as HTMLButtonElement).disabled).toBe(false);
+});
+
+it('saves product type as a sort field', () => {
+	renderEditor();
+	nameDraft();
+	fireEvent.click(screen.getByTestId('quick-filter-sort-option-type'));
+	fireEvent.click(screen.getByTestId('quick-filter-save'));
+
+	expect(onSave).toHaveBeenCalledWith(
+		expect.objectContaining({ conditions: [], sort: { field: 'type', direction: 'asc' } })
+	);
+});
+
+it('preserves a finite negative price bound', () => {
+	renderEditor();
+	nameDraft();
+	fireEvent.click(screen.getByTestId('quick-filter-add-condition'));
+	fireEvent.click(screen.getByTestId('quick-filter-condition-option-0-price'));
+	fireEvent.change(screen.getByTestId('quick-filter-price-min'), { target: { value: '-5' } });
+	fireEvent.click(screen.getByTestId('quick-filter-save'));
+
+	expect(onSave).toHaveBeenCalledWith(
+		expect.objectContaining({ conditions: [{ field: 'price', value: { min: -5 } }] })
+	);
+});
+
+it('keeps a zero price bound unbounded', () => {
+	renderEditor();
+	nameDraft();
+	fireEvent.click(screen.getByTestId('quick-filter-add-condition'));
+	fireEvent.click(screen.getByTestId('quick-filter-condition-option-0-price'));
+	fireEvent.change(screen.getByTestId('quick-filter-price-min'), { target: { value: '0' } });
+
+	expect((screen.getByTestId('quick-filter-save') as HTMLButtonElement).disabled).toBe(true);
 });

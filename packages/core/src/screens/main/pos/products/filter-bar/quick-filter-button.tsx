@@ -21,7 +21,18 @@ export function QuickFilterButton({ quickFilter }: { quickFilter: QuickFilter })
 	const settingsSort = useDocField(uiSettings, (value) =>
 		getPOSProductSort(value.sortBy, value.sortDirection)
 	);
-	const active = isQuickFilterActive(quickFilter, state);
+	const showOutOfStock = useDocField(uiSettings, (value) => value.showOutOfStock);
+	const resetState = {
+		filters: {
+			categories: [],
+			tags: [],
+			brands: [],
+			status: 'publish' as const,
+			...(showOutOfStock ? {} : { stock_status: 'instock' as const }),
+		},
+		sort: settingsSort,
+	};
+	const active = isQuickFilterActive(quickFilter, state, resetState);
 
 	const reset = () => {
 		actions.resetFilters();

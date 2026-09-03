@@ -12,6 +12,7 @@ const patchUI = jest.fn((patch: { filterBar: FilterBarItem[] }) => {
 	items = patch.filterBar;
 });
 const onEdit = jest.fn();
+const onDelete = jest.fn();
 
 jest.mock('uuid', () => ({ v4: () => 'quick-filter-id' }));
 jest.mock('@wcpos/query', () => ({
@@ -131,13 +132,14 @@ it('writes a pill visibility toggle immediately', () => {
 	});
 });
 
-it('removes a quick filter only after delete confirmation', () => {
-	render(<FilterBarList onEdit={onEdit} />);
+it('removes a quick filter only after delete confirmation and reports the deletion', () => {
+	render(<FilterBarList onEdit={onEdit} onDelete={onDelete} />);
 	fireEvent.click(screen.getByTestId('filter-bar-delete-saved'));
 	fireEvent.click(screen.getByTestId('filter-bar-delete-confirm'));
 	expect(
 		patchUI.mock.calls.at(-1)?.[0].filterBar.some((item: FilterBarItem) => item.id === 'saved')
 	).toBe(false);
+	expect(onDelete).toHaveBeenCalledWith(expect.objectContaining({ id: 'saved' }));
 });
 
 it('opens the empty editor request from Add quick filter', () => {

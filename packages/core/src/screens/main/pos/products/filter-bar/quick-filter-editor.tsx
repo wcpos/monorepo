@@ -72,11 +72,10 @@ const DEFAULT_ORDER = 'default';
  *
  * Zero is folded into "no bound" on purpose: the shared NumberInput renders a numeric 0 as an
  * empty field, and on web its numpad returns 0 when Done is pressed without typing — so a
- * stored 0 would be an invisible bound (a max of 0 matches nothing). Prices are never
- * negative, so a min of 0 is the same filter as no min.
+ * stored 0 would be an invisible bound (a max of 0 matches nothing).
  */
 const priceBound = (value: number): number | undefined =>
-	Number.isFinite(value) && value > 0 ? value : undefined;
+	Number.isFinite(value) && value !== 0 ? value : undefined;
 
 const FIELD_LABEL_KEYS: Record<ConditionField, string> = {
 	categories: 'common.category',

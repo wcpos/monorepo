@@ -28,7 +28,13 @@ import { useT } from '../../../../../contexts/translations';
 
 import type { FilterBarItem, QuickFilter } from './filter-bar-layout';
 
-export function FilterBarList({ onEdit }: { onEdit: (quickFilter: QuickFilter | null) => void }) {
+export function FilterBarList({
+	onEdit,
+	onDelete,
+}: {
+	onEdit: (quickFilter: QuickFilter | null) => void;
+	onDelete?: (quickFilter: QuickFilter) => void;
+}) {
 	const { uiSettings, getUILabel, patchUI } = useUISettings('pos-products');
 	const items = normalizeFilterBar(useDocField(uiSettings, (value) => value.filterBar));
 	const [deleting, setDeleting] = React.useState<QuickFilter | null>(null);
@@ -106,7 +112,10 @@ export function FilterBarList({ onEdit }: { onEdit: (quickFilter: QuickFilter | 
 							variant="destructive"
 							testID="filter-bar-delete-confirm"
 							onPress={() => {
-								if (deleting) save(items.filter((item) => item.id !== deleting.id));
+								if (deleting) {
+									save(items.filter((item) => item.id !== deleting.id));
+									onDelete?.(deleting);
+								}
 								setDeleting(null);
 							}}
 						>
