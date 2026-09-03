@@ -16,6 +16,10 @@ export default defineConfig({
 				__dirname,
 				'../../node_modules/@point-of-sale/webbluetooth-receipt-printer/dist/webbluetooth-receipt-printer.esm.js'
 			),
+			'@point-of-sale/webusb-receipt-printer': resolve(
+				__dirname,
+				'../../node_modules/@point-of-sale/webusb-receipt-printer/dist/webusb-receipt-printer.esm.js'
+			),
 		},
 	},
 	// The ipc-channels registry is a .cts file (CJS for the Electron preload build);

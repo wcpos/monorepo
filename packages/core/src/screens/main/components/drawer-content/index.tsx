@@ -8,7 +8,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DrawerItemList } from './drawer-item-list';
-import { DrawerProgressWatcher } from './drawer-progress-watcher';
 import { DrawerPanelVisibilityReporter } from './panel-visibility';
 import { Version } from './version';
 
@@ -24,7 +23,7 @@ import type { DrawerContentComponentProps } from 'expo-router/build/react-naviga
  * mounted — which means it can only read context from providers ABOVE `Drawer`, and none of
  * the ones `Drawer` itself renders (`DrawerProgressContext`, `DrawerGestureContext`).
  * `useSafeAreaInsets` is fine because its provider is far above. Anything that needs a
- * drawer-owned context has to be a rendered element instead — see `DrawerProgressWatcher`.
+ * drawer-owned context has to be a rendered element instead.
  */
 export function DrawerContent(props: DrawerContentComponentProps) {
 	const insets = useSafeAreaInsets();
@@ -37,7 +36,6 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 	return (
 		<>
 			<DrawerPanelVisibilityReporter status={status === 'open' ? 'open' : 'closed'} />
-			<DrawerProgressWatcher />
 			<DrawerContentScrollView
 				{...props}
 				contentContainerStyle={{

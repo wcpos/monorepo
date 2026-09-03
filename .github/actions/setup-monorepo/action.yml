@@ -54,12 +54,20 @@ runs:
     #     git submodule update packages/rn-primitives
     #   shell: bash
 
+    # --frozen-lockfile: the lockfile is the contract. --no-frozen-lockfile
+    # (unexplained since 2025-05) re-resolved on every runner and left
+    # node_modules ~100 packages away from the lockfile, so the first
+    # `pnpm run` of every turbo-driven step re-installed to prune them
+    # ("Packages: -103", 7 s) — and on 2026-09-02 three of those run-time
+    # installs never handed over to turbo (runs 33664427747, 33687923179,
+    # 33684523571: silence for 20–75 min until the Merge Gate's budget
+    # failed the PR). A stale lockfile now fails HERE, loudly, in seconds.
     - name: 📦 Install dependencies
       run: |
         if [ "${{ inputs.skip-install-scripts }}" = "true" ]; then
-          pnpm install --no-frozen-lockfile --ignore-scripts
+          pnpm install --frozen-lockfile --ignore-scripts
         else
-          pnpm install --no-frozen-lockfile
+          pnpm install --frozen-lockfile
         fi
       shell: bash
 

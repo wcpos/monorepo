@@ -1998,334 +1998,44 @@ test('the Android step does not retry a successful run with a stale offline log'
 	}
 });
 
-test('native device jobs queue through the FIFO turnstile, not a concurrency group', () => {
+test('native device jobs never queue behind another run (owner ruling 2026-09-03)', () => {
 	const workflow = readWorkflow('e2e-native.yml');
-	// PR-controlled setup actions must not inherit Actions API access. Only the
-	// two jobs that invoke the turnstile need actions:read.
+	// The FIFO device turnstile (2026-08-30 → 2026-09-03) serialised every
+	// PR's device jobs behind every other run's; a verdict arrived an hour
+	// after the head had moved. PRs test at the same time now — store
+	// capacity is php-fpm workers, not a queue in CI.
+	assert.ok(!existsSync(path.join(ROOT, '.github', 'scripts', 'native-device-turnstile.sh')));
+	// PR-controlled setup actions must not inherit Actions API access, and
+	// with no turnstile no job needs it.
 	assert.equal(workflow.permissions.actions, undefined);
 	for (const [jobName, emoji, platform] of [
 		['android', '🤖', 'Android'],
 		['ios', '🍎', 'iOS'],
 	]) {
 		const job = workflow.jobs[jobName];
-		assert.deepEqual(job.permissions, { actions: 'read', contents: 'read' });
+		assert.deepEqual(job.permissions, { contents: 'read' });
 		// A job-level group is what cancelled main's pending device jobs on
 		// 2026-08-30: GitHub keeps one pending job per group and cancels the
 		// older one when a newer arrives, whatever cancel-in-progress says.
 		assert.equal(job.concurrency, undefined, `${jobName} must not use a concurrency group`);
-		// Both classes of a platform run at once (owner rulings 2026-09-01/02);
-		// the turnstile, keyed by exact job name, still serialises across runs.
+		// Both classes of a platform run at once (owner rulings 2026-09-01/02).
 		assert.equal(job.strategy['max-parallel'], 2);
-		const [workflowCheckout, turnstile, targetCheckout] = job.steps;
+		assert.equal(job.name, `${emoji} ${platform} (\${{ matrix.device.name }})`);
+		const [workflowCheckout, targetCheckout] = job.steps;
 		assert.equal(workflowCheckout.name, '🏗 Setup repository (workflow revision)');
 		assert.equal(workflowCheckout.with.ref, '${{ github.sha }}');
-		assert.equal(turnstile.name, '⏳ Wait for the device slot');
-		assert.equal(turnstile.run, 'bash .github/scripts/native-device-turnstile.sh');
-		assert.equal(turnstile.env.GH_TOKEN, '${{ github.token }}');
-		// A dispatch may test a main ancestor from before the turnstile existed.
-		// Switch to that target only after running the workflow revision's gate.
 		assert.equal(targetCheckout.name, '🏗 Checkout revision under test');
 		assert.equal(targetCheckout.if, 'needs.build.outputs.sha != github.sha');
 		assert.equal(targetCheckout.with.ref, '${{ needs.build.outputs.sha }}');
-		// The slot name must be the job's rendered name, or a run would never
-		// see its predecessor's job and two suites would overlap on the store.
-		assert.equal(turnstile.env.SLOT_JOB, job.name);
-		assert.equal(job.name, `${emoji} ${platform} (\${{ matrix.device.name }})`);
-		assert.equal(turnstile.env.PLATFORM_PREFIX, `${emoji} ${platform} (`);
-		assert.ok(job.name.startsWith(turnstile.env.PLATFORM_PREFIX));
+		for (const step of job.steps) {
+			assert.ok(!/turnstile|device slot/i.test(`${step.name ?? ''}${step.run ?? ''}`), step.name);
+		}
 	}
-	// The wait runs inside the job (150 min budget) and counts against its
-	// timeout; the suite budgets it protected before must survive.
-	assert.ok(workflow.jobs.ios['timeout-minutes'] >= 150 + 60);
-	assert.ok(workflow.jobs.android['timeout-minutes'] >= 150 + 100);
-});
-
-test('the device-slot turnstile waits on earlier attempts and never cancels', () => {
-	const script = path.join(ROOT, '.github', 'scripts', 'native-device-turnstile.sh');
-	const ME = 500;
-	const iso = (secondsAgo) =>
-		new Date(Date.now() - secondsAgo * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
-	const run = (
-		id,
-		status = 'in_progress',
-		startedSecondsAgo = id < ME ? 200 : id === ME ? 100 : 50
-	) => ({
-		id,
-		status,
-		run_started_at: iso(startedSecondsAgo),
-		html_url: `https://github.com/wcpos/monorepo/actions/runs/${id}`,
-		head_branch: `branch-${id}`,
-	});
-	const job = (name, status, completedSecondsAgo = null) => ({
-		name,
-		status,
-		completed_at: completedSecondsAgo === null ? null : iso(completedSecondsAgo),
-	});
-	const BUILD = '📦 Resolve dev-client build';
-
-	// Fake `gh api <path>`: the runs list is served from runs.<poll>.json (poll
-	// counts each runs-list call; falls back to runs.json), a run's jobs from
-	// jobs-<id>.<poll>.json (falls back to jobs-<id>.json). fail-runs.<poll>
-	// makes that runs-list call fail, as an API outage would.
-	const fakeGh = `#!/bin/sh
-[ "$1" = api ] || { echo "unexpected gh $*" >&2; exit 2; }
-p="$2"
-case "$p" in
-  */workflows/*/runs*)
-    n=$(cat "$STATE/poll" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > "$STATE/poll"
-    if [ -f "$FIXTURES/fail-runs.$n" ]; then echo "mock: 503 Service Unavailable" >&2; exit 1; fi
-    f="$FIXTURES/runs.$n.json"; [ -f "$f" ] || f="$FIXTURES/runs.json"
-    # One page only: the script must never --paginate (see its header).
-    if printf '%s' "$*" | grep -q -- '--paginate'; then echo "mock: --paginate is forbidden" >&2; exit 2; fi
-    cat "$f" ;;
-  */runs/*/jobs*)
-    id=$(printf '%s' "$p" | sed -E 's#.*/runs/([0-9]+)/jobs.*#\\1#'); n=$(cat "$STATE/poll")
-    f="$FIXTURES/jobs-$id.$n.json"; [ -f "$f" ] || f="$FIXTURES/jobs-$id.json"
-    [ -f "$f" ] || { echo "mock: no jobs fixture for $id" >&2; exit 1; }
-    cat "$f" ;;
-  *) echo "unexpected path $p" >&2; exit 2 ;;
-esac
-`;
-
-	const drive = ({ slot, prefix, fixtures, env = {} }) => {
-		const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-turnstile-'));
-		const bin = path.join(workspace, 'bin');
-		const fixturesDir = path.join(workspace, 'fixtures');
-		const state = path.join(workspace, 'state');
-		mkdirSync(bin);
-		mkdirSync(fixturesDir);
-		mkdirSync(state);
-		writeFileSync(path.join(bin, 'gh'), fakeGh);
-		chmodSync(path.join(bin, 'gh'), 0o755);
-		for (const [name, value] of Object.entries(fixtures)) {
-			writeFileSync(
-				path.join(fixturesDir, name),
-				typeof value === 'string' ? value : JSON.stringify(value)
-			);
-		}
-		try {
-			return runShell(`bash "${script}"`, {
-				env: {
-					PATH: `${bin}:${process.env.PATH}`,
-					FIXTURES: fixturesDir,
-					STATE: state,
-					GH_TOKEN: 'fake',
-					GITHUB_REPOSITORY: 'wcpos/monorepo',
-					GITHUB_RUN_ID: String(ME),
-					SLOT_JOB: slot,
-					PLATFORM_PREFIX: prefix,
-					POLL_SECONDS: '0',
-					WAIT_BUDGET_SECONDS: '60',
-					...env,
-				},
-			});
-		} finally {
-			rmSync(workspace, { recursive: true, force: true });
-		}
-	};
-	const runs = (...list) => ({ workflow_runs: list });
-	const jobs = (...list) => ({ jobs: list });
-	// One blocked poll, then the budget ends: the bounded-wait failure path.
-	const giveUp = { WAIT_BUDGET_SECONDS: '1', POLL_SECONDS: '1' };
-
-	// Nothing older in flight: the slot is free on the first poll. A newer
-	// run's live job is ignored — it waits on us, not we on it.
-	let result = drive({
-		slot: '🍎 iOS (phone)',
-		prefix: '🍎 iOS (',
-		fixtures: {
-			'runs.json': runs(run(700), run(400, 'completed'), run(ME)),
-			'jobs-700.json': jobs(job('🍎 iOS (phone)', 'in_progress')),
-		},
-	});
-	assert.equal(result.status, 0, result.stdout + result.stderr);
-	assert.match(result.stdout, /slot is free after \d+s/);
-	assert.doesNotMatch(result.stdout, /queued behind/);
-
-	// A rerun keeps its original ID but gets a new run_started_at. A lower-ID
-	// attempt that started after us is newer and must wait on us.
-	result = drive({
-		slot: '🍎 iOS (phone)',
-		prefix: '🍎 iOS (',
-		fixtures: {
-			'runs.json': runs(run(400, 'in_progress', 10), run(ME)),
-			'jobs-400.json': jobs(job('🍎 iOS (phone)', 'in_progress')),
-		},
-		env: giveUp,
-	});
-	assert.equal(result.status, 0, result.stdout + result.stderr);
-	assert.doesNotMatch(result.stdout, /runs\/400/);
-
-	// Conversely, an earlier-started attempt blocks even when its immutable run
-	// ID is numerically higher than ours.
-	result = drive({
-		slot: '🍎 iOS (phone)',
-		prefix: '🍎 iOS (',
-		fixtures: {
-			'runs.json': runs(run(700, 'in_progress', 200), run(ME)),
-			'jobs-700.json': jobs(job('🍎 iOS (phone)', 'in_progress')),
-		},
-		env: giveUp,
-	});
-	assert.equal(result.status, 1, result.stdout + result.stderr);
-	assert.match(result.stdout, /runs\/700/);
-
-	// An older run's same-name job blocks until it completes; the wait names
-	// the run, and the second poll releases us.
-	result = drive({
-		slot: '🍎 iOS (phone)',
-		prefix: '🍎 iOS (',
-		fixtures: {
-			'runs.json': runs(run(400), run(ME)),
-			'jobs-400.1.json': jobs(job(BUILD, 'completed', 900), job('🍎 iOS (phone)', 'in_progress')),
-			'jobs-400.2.json': jobs(
-				job(BUILD, 'completed', 900),
-				job('🍎 iOS (phone)', 'completed', 1),
-				job('🍎 iOS (tablet)', 'in_progress')
-			),
-		},
-	});
-	assert.equal(result.status, 0, result.stdout + result.stderr);
-	assert.match(
-		result.stdout,
-		/queued behind:\n\s+https:\/\/github\.com\/wcpos\/monorepo\/actions\/runs\/400 \(branch-400\) — 🍎 iOS \(phone\): in_progress/
-	);
-	assert.match(result.stdout, /slot is free/);
-
-	// A `pending` job (held by GitHub) is not completed: still a blocker. And
-	// when the budget ends the job fails naming what it waited on.
-	result = drive({
-		slot: '🤖 Android (tablet)',
-		prefix: '🤖 Android (',
-		fixtures: {
-			'runs.json': runs(run(400, 'pending'), run(ME)),
-			'jobs-400.json': jobs(job(BUILD, 'completed', 900), job('🤖 Android (tablet)', 'pending')),
-		},
-		env: giveUp,
-	});
-	assert.equal(result.status, 1, result.stdout + result.stderr);
-	assert.match(
-		result.stdout,
-		/::error::Gave up waiting for the 🤖 Android \(tablet\) device slot after \d+s/
-	);
-	assert.match(result.stdout, /runs\/400 \(branch-400\) — 🤖 Android \(tablet\): pending/);
-	assert.match(result.stdout, /nothing was cancelled/);
-
-	// The whole matrix is created when the build resolves (max-parallel: 2),
-	// and pull requests create no tablet job at all. An older run with a live
-	// phone job and no tablet job blocks the tablet slot only while its build
-	// completed inside the grace window (the matrix may still be expanding);
-	// after that, a missing same-name job will never exist and the slot is
-	// free — a main tablet job must not wait behind every PR's phone job.
-	const tabletBehindPhone = (phoneStatus, phoneCompletedSecondsAgo, buildCompletedSecondsAgo) =>
-		drive({
-			slot: '🍎 iOS (tablet)',
-			prefix: '🍎 iOS (',
-			fixtures: {
-				'runs.json': runs(run(400), run(ME)),
-				'jobs-400.json': jobs(
-					job(BUILD, 'completed', buildCompletedSecondsAgo),
-					job('🍎 iOS (phone)', phoneStatus, phoneCompletedSecondsAgo)
-				),
-			},
-			env: giveUp,
-		});
-	// Build resolved 5 s ago: the tablet job may still be on its way.
-	result = tabletBehindPhone('in_progress', null, 5);
-	assert.equal(result.status, 1, result.stdout + result.stderr);
-	assert.match(result.stdout, /🍎 iOS \(phone\): in_progress \(🍎 iOS \(tablet\) follows it\)/);
-	// Build resolved 900 s ago with a phone job live and no tablet job: the
-	// matrix is complete, there will be no tablet job — the slot is free.
-	result = tabletBehindPhone('in_progress', null, 900);
-	assert.equal(result.status, 0, result.stdout + result.stderr);
-	assert.match(result.stdout, /slot is free/);
-	result = tabletBehindPhone('completed', 5, 900);
-	assert.equal(result.status, 0, result.stdout + result.stderr);
-	assert.match(result.stdout, /slot is free/);
-	result = tabletBehindPhone('completed', 600, 900);
-	assert.equal(result.status, 0, result.stdout + result.stderr);
-	assert.match(result.stdout, /slot is free/);
-
-	// Before the older run's build resolves it has no device jobs at all;
-	// they are created when it completes, so wait for it. A build that
-	// completed long ago without creating our platform (platform-only
-	// dispatch) does not block.
-	const phoneBehindBuild = (buildStatus, buildCompletedSecondsAgo) =>
-		drive({
-			slot: '🤖 Android (phone)',
-			prefix: '🤖 Android (',
-			fixtures: {
-				'runs.json': runs(run(400), run(ME)),
-				'jobs-400.json': jobs(
-					job('🔍 Detect Native Changes', 'completed', 1200),
-					job(BUILD, buildStatus, buildCompletedSecondsAgo),
-					job('🍎 iOS (phone)', 'in_progress')
-				),
-			},
-			env: giveUp,
-		});
-	result = phoneBehindBuild('in_progress', null);
-	assert.equal(result.status, 1, result.stdout + result.stderr);
-	assert.match(result.stdout, /runs\/400 \(branch-400\) — device jobs not created yet/);
-	result = phoneBehindBuild('completed', 600);
-	assert.equal(result.status, 0, result.stdout + result.stderr);
-	assert.match(result.stdout, /slot is free/);
-
-	// The other platform's traffic never blocks ours.
-	result = drive({
-		slot: '🤖 Android (phone)',
-		prefix: '🤖 Android (',
-		fixtures: {
-			'runs.json': runs(run(400), run(ME)),
-			'jobs-400.json': jobs(
-				job(BUILD, 'completed', 900),
-				job('🍎 iOS (phone)', 'in_progress'),
-				job('🤖 Android (phone)', 'completed', 900),
-				job('🤖 Android (tablet)', 'completed', 300)
-			),
-		},
-	});
-	assert.equal(result.status, 0, result.stdout + result.stderr);
-
-	// An API outage is a warning and a retry, not a verdict.
-	result = drive({
-		slot: '🍎 iOS (phone)',
-		prefix: '🍎 iOS (',
-		fixtures: {
-			'fail-runs.1': '',
-			'runs.json': runs(run(ME)),
-		},
-	});
-	assert.equal(result.status, 0, result.stdout + result.stderr);
-	assert.match(result.stdout, /::warning::Could not list workflow runs \(attempt 1\): mock: 503/);
-	assert.match(result.stdout, /slot is free/);
-
-	// The current run can fall off the single page of 100 during a long wait. It
-	// then counts as the newest run and keeps waiting on every live one — never a
-	// jq error on a null start time that would empty the blocker list and pass.
-	result = drive({
-		slot: '🍎 iOS (phone)',
-		prefix: '🍎 iOS (',
-		fixtures: {
-			'runs.json': runs(run(400)),
-			'jobs-400.json': jobs(job(BUILD, 'completed', 900), job('🍎 iOS (phone)', 'in_progress')),
-		},
-		env: giveUp,
-	});
-	assert.equal(result.status, 1, result.stdout + result.stderr);
-	assert.doesNotMatch(result.stdout + result.stderr, /jq: error/);
-	assert.match(result.stdout, /runs\/400 \(branch-400\) — 🍎 iOS \(phone\): in_progress/);
-
-	// An older run whose jobs cannot be read is treated as a blocker: waiting
-	// is cheap, overlapping a live suite is the thing being prevented.
-	result = drive({
-		slot: '🍎 iOS (phone)',
-		prefix: '🍎 iOS (',
-		fixtures: { 'runs.json': runs(run(400), run(ME)) },
-		env: giveUp,
-	});
-	assert.equal(result.status, 1, result.stdout + result.stderr);
-	assert.match(result.stdout, /runs\/400 \(branch-400\) — jobs unreadable/);
+	// The wait budget (150 min) left the job timeouts with it. Android: 25 min
+	// AVD generation + 15 min Metro + the 90-min suite ceiling + collection.
+	assert.ok(workflow.jobs.ios['timeout-minutes'] <= 60);
+	assert.ok(workflow.jobs.android['timeout-minutes'] <= 130);
+	assert.ok(workflow.jobs.android['timeout-minutes'] >= 25 + 15 + 90);
 });
 
 test('the Android suite keeps adb reverse alive for the life of the run', () => {
