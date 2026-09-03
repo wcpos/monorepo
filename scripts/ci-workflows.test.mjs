@@ -2323,3 +2323,17 @@ test('pull requests run phones only; the main push and dispatches run both devic
 		assert.equal(ios[0].simulator, 'iPhone 16 Pro');
 	}
 });
+
+test('pnpm never installs on its own before a script (verifyDepsBeforeRun lives in pnpm-workspace.yaml)', () => {
+	// pnpm 11 defaults verifyDepsBeforeRun to `install` and reads it ONLY from
+	// pnpm-workspace.yaml (.npmrc carries auth/registry keys). The implicit
+	// install it ran before every CI `pnpm run`/`pnpm exec` was the step that
+	// wedged silently for 20–75 min on 2026-09-02/03 (runs 33734477552,
+	// 33734477584). The setup action's frozen-lockfile install is the one install.
+	const workspace = readFileSync(path.join(ROOT, 'pnpm-workspace.yaml'), 'utf8');
+	assert.match(workspace, /^verifyDepsBeforeRun: (warn|false)$/m);
+	assert.doesNotMatch(workspace, /^verifyDepsBeforeRun: install$/m);
+	// A dead .npmrc copy would read as the setting and hide a future regression.
+	const npmrc = path.join(ROOT, '.npmrc');
+	if (existsSync(npmrc)) assert.doesNotMatch(readFileSync(npmrc, 'utf8'), /verify-deps-before-run/);
+});
