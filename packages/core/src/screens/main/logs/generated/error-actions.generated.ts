@@ -180,6 +180,8 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.CHECKOUT411');
 		case 'CHECKOUT421':
 			return t('health.logs.error_action.CHECKOUT421');
+		case 'DISPLAY101':
+			return t('health.logs.error_action.DISPLAY101');
 		default: {
 			const exhaustive: never = code;
 			return exhaustive;

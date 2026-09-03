@@ -72,7 +72,7 @@ export function useDisplaySnapshot() {
 		if (!buildFailed || !orderUuid || loggedFailures.current.has(orderUuid)) return;
 		loggedFailures.current.add(orderUuid);
 		logger.error('Customer display snapshot build failed', {
-			code: ERROR_CODES.PRINT_UNEXPECTED,
+			code: ERROR_CODES.CUSTOMER_DISPLAY_SNAPSHOT_FAILED,
 			context: { orderUuid },
 		});
 	}, [buildFailed, orderUuid]);

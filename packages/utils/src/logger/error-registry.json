@@ -1636,7 +1636,7 @@
 			"browser-console"
 		],
 		"evidence": "2026-08-25 demo store coupons screen spun forever while every existing signal stayed silent; report-only stall detector added in monorepo#1596",
-		"introducedIn": "1.10.6"
+		"introducedIn": "1.11.0"
 	},
 	{
 		"code": "CHECKOUT111",
@@ -1829,7 +1829,7 @@
 			"browser-console"
 		],
 		"evidence": "2026-09-01 log audit: both rebuild-failure paths from monorepo#1733 logged without a code while their sibling detections carried CLIENT141-143",
-		"introducedIn": "1.10.6"
+		"introducedIn": "1.11.0"
 	},
 	{
 		"code": "CHECKOUT411",
@@ -1878,5 +1878,24 @@
 		],
 		"evidence": "monorepo#1560 order-math EngineWarning unknown_tax_rate_id",
 		"introducedIn": "1.10.0"
+	},
+	{
+		"code": "DISPLAY101",
+		"symbol": "CUSTOMER_DISPLAY_SNAPSHOT_FAILED",
+		"domain": "DISPLAY",
+		"severity": "error",
+		"actionHint": "Keep using the till; the display retries on the next cart change.",
+		"retryPolicy": "automatic",
+		"dataSafety": "no-impact",
+		"escalation": "support-with-export",
+		"summary": "The customer display could not build the cart snapshot; the display shows the idle screen until the next change.",
+		"docsBody": "The till keeps working while the customer display shows the idle screen. The display tries to build the cart snapshot again when the cart changes.",
+		"troubleshooting": [
+			"The till keeps working; only the customer display returns to the idle screen until the cart changes.",
+			"If this repeats, report the affected order and include exported debug info."
+		],
+		"logSources": [],
+		"evidence": "packages/core/src/screens/main/pos/customer-display/use-display-snapshot.ts",
+		"introducedIn": "1.11.0"
 	}
 ]

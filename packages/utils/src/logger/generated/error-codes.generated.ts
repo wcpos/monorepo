@@ -85,9 +85,19 @@ export type ErrorCode =
 	| 'CLIENT143'
 	| 'CLIENT144'
 	| 'CHECKOUT411'
-	| 'CHECKOUT421';
+	| 'CHECKOUT421'
+	| 'DISPLAY101';
 export type ErrorDomain =
-	'AUTH' | 'SYNC' | 'CHECKOUT' | 'PAYMENT' | 'PRINT' | 'PRODUCT' | 'LICENSE' | 'CLIENT' | 'HOST';
+	| 'AUTH'
+	| 'SYNC'
+	| 'CHECKOUT'
+	| 'PAYMENT'
+	| 'PRINT'
+	| 'PRODUCT'
+	| 'LICENSE'
+	| 'CLIENT'
+	| 'HOST'
+	| 'DISPLAY';
 export type ErrorSeverity = 'info' | 'warn' | 'error';
 export type DataSafety =
 	'no-impact' | 'local-only' | 'order-safe' | 'money-moved' | 'outcome-unknown' | 'data-at-risk';
@@ -886,6 +896,16 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'order-safe',
 		summary: 'This order refers to a tax rate your store no longer has, so its tax may be wrong.',
 	},
+	DISPLAY101: {
+		code: 'DISPLAY101',
+		symbol: 'CUSTOMER_DISPLAY_SNAPSHOT_FAILED',
+		domain: 'DISPLAY',
+		severity: 'error',
+		actionHint: 'Keep using the till; the display retries on the next cart change.',
+		dataSafety: 'no-impact',
+		summary:
+			'The customer display could not build the cart snapshot; the display shows the idle screen until the next change.',
+	},
 };
 
 export const ERROR_CODES = {
@@ -974,4 +994,5 @@ export const ERROR_CODES = {
 	SEARCH_INDEX_REBUILD_FAILED: 'CLIENT144',
 	CART_LINE_PRICE_BASIS_UNREADABLE: 'CHECKOUT411',
 	ORDER_TAX_RATE_UNKNOWN: 'CHECKOUT421',
+	CUSTOMER_DISPLAY_SNAPSHOT_FAILED: 'DISPLAY101',
 } as const satisfies Record<string, ErrorCode>;

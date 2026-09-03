@@ -187,7 +187,7 @@ test('publishes idle and logs once when receipt building throws', () => {
 	});
 	expect(mockLoggerError).toHaveBeenCalledTimes(1);
 	expect(mockLoggerError).toHaveBeenCalledWith('Customer display snapshot build failed', {
-		code: ERROR_CODES.PRINT_UNEXPECTED,
+		code: ERROR_CODES.CUSTOMER_DISPLAY_SNAPSHOT_FAILED,
 		context: { orderUuid: 'order-a' },
 	});
 });
