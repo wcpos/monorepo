@@ -199,7 +199,14 @@ test('a send failure during hello closes the session without propagating', async
 
 test('posts an offer without crypto.randomUUID', async () => {
 	const originalCrypto = globalThis.crypto;
-	Object.assign(globalThis, { crypto: undefined });
+	Object.assign(globalThis, {
+		crypto: {
+			getRandomValues: (array: Uint8Array) => {
+				for (let i = 0; i < array.length; i += 1) array[i] = (i * 37 + 11) % 256;
+				return array;
+			},
+		},
+	});
 	try {
 		const peer = new FakePeer();
 		const signaling = {

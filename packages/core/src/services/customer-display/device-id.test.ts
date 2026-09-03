@@ -24,7 +24,12 @@ describe('getDeviceId', () => {
 	test('persists a fallback v4 id under the display-specific key without randomUUID', async () => {
 		const setItem = jest.fn();
 		Object.assign(globalThis, {
-			crypto: undefined,
+			crypto: {
+				getRandomValues: (array: Uint8Array) => {
+					for (let i = 0; i < array.length; i += 1) array[i] = (i * 37 + 11) % 256;
+					return array;
+				},
+			},
 			window: {
 				localStorage: { getItem: () => null, setItem },
 				crypto: {},
