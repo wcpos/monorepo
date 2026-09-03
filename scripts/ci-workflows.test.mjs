@@ -1031,7 +1031,9 @@ test('the shared setup action saves one turbo cache entry per OS per day, from m
 		'the day must be computed before the cache key uses it'
 	);
 
-	// Exactly the full-graph main jobs save: deploy's build and test's unit job.
+	// Exactly one caller saves: deploy's build job on main. test.yml's unit-tests
+	// runs jest/vitest directly, not the turbo graph — a save from it would freeze
+	// the day's immutable entry without turbo outputs (review, #1830).
 	const savers = [];
 	for (const file of ['deploy.yml', 'test.yml', 'e2e-native.yml', 'build.yml']) {
 		const workflow = readWorkflow(file);
@@ -1042,10 +1044,7 @@ test('the shared setup action saves one turbo cache entry per OS per day, from m
 			}
 		}
 	}
-	assert.deepEqual(savers.sort(), [
-		"deploy.yml:deploy=${{ github.ref == 'refs/heads/main' }}",
-		"test.yml:unit-tests=${{ github.ref == 'refs/heads/main' }}",
-	]);
+	assert.deepEqual(savers, ["deploy.yml:deploy=${{ github.ref == 'refs/heads/main' }}"]);
 });
 
 test('the native spend guard charges the builds a run will queue and fails closed on bad data', () => {
