@@ -56,6 +56,12 @@ appId: com.wcpos.main.dev
       - evalScript: "${console.log('WCPOS_E2E search box not empty at flow start, clearing')}"
       - tapOn:
           id: "search-products-clear"
+      # The × leaves the field focused with the keyboard up, and on iOS the
+      # covered tab bar still reads as visible to Maestro, so the keyboard guard
+      # below cannot see it and a cart-first flow's tab tap lands on the keys
+      # (local run 5, flow 08). The field has a return key: Enter submits the
+      # now-empty search (a no-op) and drops the keyboard on both platforms.
+      - pressKey: Enter
 - runFlow:
     when:
       visible:
