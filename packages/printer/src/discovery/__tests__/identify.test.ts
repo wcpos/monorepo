@@ -103,7 +103,9 @@ describe('identifyPrinter', () => {
 		);
 
 		expect(connectTcp).not.toHaveBeenCalled();
-		expect(identity).toMatchObject({ vendor: 'epson', lane: null });
+		// Only ePOS candidates were tried and they refused; that says nothing about whether this
+		// is a receipt printer, so the named-but-closed rule must not fire.
+		expect(identity).toMatchObject({ vendor: 'epson', lane: null, notReceiptPrinter: false });
 	});
 
 	it('reports secure printing off when Epson ePOS answers on 443 and 80', async () => {

@@ -168,10 +168,13 @@ export async function identifyPrinter(
 				? (hintedVendor ?? 'generic')
 				: hintedVendor;
 	const ippOpen = ports.some((entry) => entry.port === 631 && entry.state === 'open');
+	// Only raw/IPP results say whether a *named* host is a receipt printer at all; refused ePOS
+	// candidates on an Epson whose ePOS-Print is off prove nothing (its raw ports were skipped).
+	const nonEposPorts = ports.filter((entry) => entry.protocol !== 'epos-print');
 	const namedClosed =
 		!!hints.name &&
-		ports.length > 0 &&
-		ports.every(({ state }) => state === 'closed' || state === 'error');
+		nonEposPorts.length > 0 &&
+		nonEposPorts.every(({ state }) => state === 'closed' || state === 'error');
 	return {
 		vendor,
 		...identifyModel(hints.name),
