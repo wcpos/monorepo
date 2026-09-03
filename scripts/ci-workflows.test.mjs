@@ -421,6 +421,61 @@ test('native E2E pull requests are planned and restricted to trusted non-draft c
 	);
 });
 
+test('PRs targeting next skip both E2E suites and their gates accept the skip', () => {
+	// Owner ruling 2026-09-03: the dev trunk is explored by hand on dev-next;
+	// the store cannot serve several PR runs at once. Both suites skip on a
+	// next-target PR and both aggregators report that as a legitimate skip
+	// (an unexplained skip is still a gate failure).
+	const deploy = readWorkflow('deploy.yml');
+	assert.match(deploy.jobs.e2e.if, /github\.base_ref != 'next'/);
+	const e2eGate = findStep(deploy, 'e2e-gate', 'Check shard results');
+	assert.equal(e2eGate.env.BASE_REF, '${{ github.base_ref }}');
+	assert.match(e2eGate.run, /"\$\{BASE_REF:-\}" = "next"/);
+
+	const native = readWorkflow('e2e-native.yml');
+	assert.match(native.jobs.build.if, /github\.base_ref != 'next'/);
+	const nativeGate = findStep(native, 'native-gate', 'Check native results');
+	assert.equal(nativeGate.env.BASE_REF, '${{ github.base_ref }}');
+	assert.match(nativeGate.run, /"\$\{BASE_REF:-\}" = "next"/);
+	// The exemption must be evaluated BEFORE the build-result check, or a
+	// skipped build reads as a failed dev-client resolution.
+	assert.ok(
+		nativeGate.run.indexOf('"${BASE_REF:-}" = "next"') <
+			nativeGate.run.indexOf('Native dev-client resolution did not succeed')
+	);
+
+	// Execute the web gate: a next-target PR whose deploy succeeded but whose
+	// shards were skipped passes; the same shape against main still fails
+	// closed (a published preview with no shards is the silent-no-run trap).
+	const webEnv = {
+		CHANGES_RESULT: 'success',
+		COLD_START_RESULT: 'skipped',
+		DEPLOY_RESULT: 'success',
+		DEPLOY_URL: 'https://preview.test',
+		E2E_RESULT: 'skipped',
+		EVENT_NAME: 'pull_request',
+		SKIP_E2E_INPUT: '',
+	};
+	const nextTarget = runShell(e2eGate.run, { env: { ...webEnv, BASE_REF: 'next' } });
+	assert.equal(nextTarget.status, 0, nextTarget.stdout + nextTarget.stderr);
+	assert.match(nextTarget.stdout, /targeting next/);
+	const nextDeployFailed = runShell(e2eGate.run, {
+		env: { ...webEnv, BASE_REF: 'next', DEPLOY_RESULT: 'failure', DEPLOY_URL: '' },
+	});
+	assert.notEqual(nextDeployFailed.status, 0, nextDeployFailed.stdout + nextDeployFailed.stderr);
+	const nextDeployUrlMissing = runShell(e2eGate.run, {
+		env: { ...webEnv, BASE_REF: 'next', DEPLOY_URL: '' },
+	});
+	assert.notEqual(nextDeployUrlMissing.status, 0, nextDeployUrlMissing.stdout + nextDeployUrlMissing.stderr);
+	const mainTarget = runShell(e2eGate.run, { env: { ...webEnv, BASE_REF: 'main' } });
+	assert.notEqual(mainTarget.status, 0, mainTarget.stdout + mainTarget.stderr);
+	// A push to main has no base_ref; the exemption must not fire there.
+	const mainPush = runShell(e2eGate.run, {
+		env: { ...webEnv, EVENT_NAME: 'push', BASE_REF: '' },
+	});
+	assert.notEqual(mainPush.status, 0, mainPush.stdout + mainPush.stderr);
+});
+
 test('native E2E routes next-target PRs to the next store', () => {
 	const workflow = readWorkflow('e2e-native.yml');
 
@@ -897,6 +952,25 @@ test('the native E2E aggregator fails closed except for legitimate skips', () =>
 
 	const androidSkipped = runGate({ ANDROID_RESULT: 'skipped' });
 	assert.notEqual(androidSkipped.status, 0, androidSkipped.stdout + androidSkipped.stderr);
+
+	// A PR targeting next skips the device suites entirely (owner ruling
+	// 2026-09-03): build/android/ios all skipped is a legitimate pass there,
+	// and the same shape against main is still a failed resolution.
+	const nextTarget = runGate({
+		BASE_REF: 'next',
+		BUILD_RESULT: 'skipped',
+		ANDROID_RESULT: 'skipped',
+		IOS_RESULT: 'skipped',
+	});
+	assert.equal(nextTarget.status, 0, nextTarget.stdout + nextTarget.stderr);
+	assert.match(nextTarget.stdout + nextTarget.stderr, /targeting next/);
+	const mainTargetSkipped = runGate({
+		BASE_REF: 'main',
+		BUILD_RESULT: 'skipped',
+		ANDROID_RESULT: 'skipped',
+		IOS_RESULT: 'skipped',
+	});
+	assert.notEqual(mainTargetSkipped.status, 0, mainTargetSkipped.stdout + mainTargetSkipped.stderr);
 
 	const allSucceeded = runGate({});
 	assert.equal(allSucceeded.status, 0, allSucceeded.stdout + allSucceeded.stderr);
