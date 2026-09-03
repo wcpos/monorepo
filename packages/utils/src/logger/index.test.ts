@@ -178,6 +178,23 @@ describe('logger/index', () => {
 		});
 
 		describe('log methods', () => {
+			it('forwards renderer logs to Electron and tolerates a missing bridge', () => {
+				const electronInfo = jest.fn();
+				Object.defineProperty(globalThis, 'window', {
+					configurable: true,
+					value: { __electronLog: { info: electronInfo } },
+				});
+
+				try {
+					logger.info('bridged');
+					expect(electronInfo).toHaveBeenCalledWith(expect.stringContaining('bridged | Context:'));
+					Reflect.deleteProperty(globalThis, 'window');
+					expect(() => logger.info('without bridge')).not.toThrow();
+				} finally {
+					Reflect.deleteProperty(globalThis, 'window');
+				}
+			});
+
 			it('only writes warnings and errors to the console in production', () => {
 				const originalDev = __DEV__;
 				const consoleLog = jest.spyOn(console, 'log').mockImplementation();

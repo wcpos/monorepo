@@ -3,6 +3,7 @@
 import { EPOS_HTTP_PORTS, probeEposEndpoint } from './epos-endpoint';
 import { EpsonEposAdapter, postEposHttp } from './epson-epos-adapter.electron';
 import { ipcPrintRaw, PRINT_TIMEOUT_MS } from './ipc-print.electron';
+import { printerLogger } from '../logger';
 
 import type { MarkupPrintJob, PrinterTransport } from '../types';
 
@@ -60,11 +61,17 @@ export class NetworkAdapter implements PrinterTransport {
 
 	private async probeEposPort(): Promise<number | null> {
 		const cached = eposPortByHost.get(this.host);
-		if (cached != null) return cached;
+		if (cached != null) {
+			printerLogger.info('Using cached ePOS port', { context: { host: this.host, port: cached } });
+			return cached;
+		}
 		const port = await probeEposEndpoint(this.host, (candidate, path, xml, timeoutMs) =>
 			postEposHttp(this.host, candidate, path, xml, timeoutMs)
 		);
-		if (port != null) eposPortByHost.set(this.host, port);
+		if (port != null) {
+			eposPortByHost.set(this.host, port);
+			printerLogger.info('Using freshly probed ePOS port', { context: { host: this.host, port } });
+		}
 		// Never remember a miss (roadmap#136 gotcha #5): the next call probes again.
 		else this.resolvedEposPort = undefined;
 		return port;
