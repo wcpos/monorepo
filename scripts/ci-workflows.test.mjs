@@ -429,12 +429,15 @@ test('native E2E routes next-target PRs to the next store', () => {
 		"${{ github.event_name == 'pull_request' && github.base_ref == 'next' && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}"
 	);
 
+	// A 404, not a 503: the seed retries transient statuses for a minute
+	// (store-transient-retry.mjs), and this test is about routing, not retries.
+	// A permanent 503 here would cost five real ten-second sleeps per run.
 	const seed = spawnSync(
 		process.execPath,
 		[
 			'--input-type=module',
 			'--eval',
-			"globalThis.fetch = async () => new Response(null, { status: 503 }); await import('./scripts/e2e-native-seed.mjs');",
+			"globalThis.fetch = async () => new Response(null, { status: 404 }); await import('./scripts/e2e-native-seed.mjs');",
 		],
 		{
 			cwd: ROOT,
@@ -449,7 +452,7 @@ test('native E2E routes next-target PRs to the next store', () => {
 	);
 
 	assert.notEqual(seed.status, 0);
-	assert.match(seed.stderr, /Store unreachable: https:\/\/dev-next\.wcpos\.com → HTTP 503/);
+	assert.match(seed.stderr, /Store unreachable: https:\/\/dev-next\.wcpos\.com → HTTP 404/);
 });
 
 test('native E2E concurrency isolates pull requests and supersedes stale main pushes', () => {
