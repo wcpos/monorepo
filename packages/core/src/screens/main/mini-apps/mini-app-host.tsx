@@ -15,13 +15,14 @@ import { type AppInitPayload, BridgeError, type BridgeHandlers } from './bridge/
 import { useHostCapabilities } from './capabilities/host';
 import { usePrinterCapabilities } from './capabilities/printers';
 import { meetsMinAppVersion, MINI_APP_ORIGIN, useMiniAppCatalog } from './catalog';
+import { detectWebEngine } from './detect-web-engine';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { useAppInfo } from '../../../hooks/use-app-info';
 import { useLocale } from '../../../hooks/use-locale';
 
-// Covers a slow first fetch of the remote page plus the 10 s the contract allows for app.ready.
-const READY_DEADLINE_MS = 30_000;
+const INITIAL_LOAD_DEADLINE_MS = 30_000;
+const READY_DEADLINE_MS = 10_000;
 
 interface MiniAppHostProps {
 	id: string;
@@ -59,13 +60,19 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 	const availableHandlers = { ...printerHandlers, ...hostHandlers };
 	const granted = entry?.capabilities.filter((action) => action in availableHandlers) ?? [];
 	const initPayload: AppInitPayload = {
+		contract: '1.1',
 		locale: locale.code,
 		theme: { scheme: theme.toLowerCase().includes('dark') ? 'dark' : 'light', accent },
 		platform: {
 			os: appInfo.platform,
 			osVersion: String(RNPlatform.Version ?? appInfo.platformVersion),
 			appVersion: appInfo.appVersion,
-			webview: appInfo.platform === 'ios' ? 'wkwebview' : 'chromium',
+			webview:
+				appInfo.platform === 'ios'
+					? 'wkwebview'
+					: appInfo.platform === 'web'
+						? detectWebEngine(navigator.userAgent)
+						: 'chromium',
 		},
 		store: {
 			id: store.id ?? store.localID ?? '',
@@ -84,10 +91,12 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 			return initPayload;
 		},
 	};
-	const { onMessage, ready, send } = useBridge(webViewRef, origin, handlers);
+	const { onMessage, ready, reset, send } = useBridge(webViewRef, origin, handlers);
 	const [attempt, setAttempt] = React.useState(0);
+	const [loadGeneration, setLoadGeneration] = React.useState(0);
 	const [failed, setFailed] = React.useState(false);
 	const loadTimerRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+	const initialLoadSeenRef = React.useRef(false);
 
 	// Keep the imperative sender current and notify the external page before host teardown.
 	React.useEffect(() => {
@@ -97,15 +106,16 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 			if (!closingSentRef.current) send('app.closing', { reason: 'navigation' });
 		};
 	}, [send]);
-	// The fallback deadline is armed from mount, not from the load event: a navigation that
-	// never produces a load or an error must still reach the fallback, and a handshake that
-	// beats the load event must not be failed by a timer armed afterwards.
+	// Allow the initial fetch to be slow, then enforce the contract deadline after every load.
 	React.useEffect(() => {
 		clearTimeout(loadTimerRef.current);
 		if (ready) return;
-		loadTimerRef.current = setTimeout(() => setFailed(true), READY_DEADLINE_MS);
+		loadTimerRef.current = setTimeout(
+			() => setFailed(true),
+			loadGeneration === 0 ? INITIAL_LOAD_DEADLINE_MS : READY_DEADLINE_MS
+		);
 		return () => clearTimeout(loadTimerRef.current);
-	}, [attempt, ready]);
+	}, [attempt, loadGeneration, ready]);
 
 	const needsAppUpdate =
 		!!entry &&
@@ -122,6 +132,8 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 				<Button
 					variant="outline"
 					onPress={() => {
+						initialLoadSeenRef.current = false;
+						setLoadGeneration(0);
 						setFailed(false);
 						setAttempt((value) => value + 1);
 					}}
@@ -141,6 +153,14 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 				originWhitelist={[origin]}
 				className="flex-1"
 				onMessage={onMessage}
+				onLoad={() => {
+					if (!initialLoadSeenRef.current) {
+						initialLoadSeenRef.current = true;
+						if (ready) return;
+					}
+					reset();
+					setLoadGeneration((value) => value + 1);
+				}}
 				// Only the catalog origin may load inside a bridged view; anything else is refused.
 				onShouldStartLoadWithRequest={(request: { url: string }) =>
 					request.url.startsWith(`${origin}/`)

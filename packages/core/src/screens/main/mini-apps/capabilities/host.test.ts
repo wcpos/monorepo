@@ -31,9 +31,33 @@ describe('useHostCapabilities', () => {
 		}
 		expect(mockRequest).toHaveBeenCalledTimes(3);
 
+		for (const path of [
+			'https://evil.example',
+			'/wcpos/v1/../../wp-json/wp/v2/users',
+			'/wcpos/v1/%2e%2e/x',
+			'/wcpos/v1//x',
+			'/wcpos/v1/x?y=1',
+			'/wcpos/v1/%5c..%5cx',
+			'/wcpos/v1/x&rest_route=/other/v1/action',
+			'/wcpos/v1/x%26rest_route=/other/v1/action',
+		]) {
+			await expect(
+				result.current['http.proxy']({ method: 'GET', path, query: {} })
+			).rejects.toMatchObject({ code: 'bad_request' });
+		}
+	});
+
+	it('rejects a query that overrides the plain-permalink REST route', async () => {
+		const { result } = renderHook(() => useHostCapabilities(jest.fn()));
+
 		await expect(
-			result.current['http.proxy']({ method: 'GET', path: 'https://evil.example', query: {} })
+			result.current['http.proxy']({
+				method: 'GET',
+				path: '/wcpos/v1/orders',
+				query: { rest_route: '/wp/v2/users' },
+			})
 		).rejects.toMatchObject({ code: 'bad_request' });
+		expect(mockRequest).not.toHaveBeenCalled();
 	});
 
 	it('opens only https external URLs', async () => {
