@@ -30,10 +30,12 @@ function createDeferred<T>() {
 }
 
 let mockEngine = createMockEngine();
-let mockGet: jest.Mock<Promise<MockResponse>, [string]> = jest.fn(async (_url: string) => ({
-	status: 200,
-	data: [],
-}));
+let mockGet: jest.Mock<Promise<MockResponse>, [string, { quietErrors?: boolean }?]> = jest.fn(
+	async (_url: string) => ({
+		status: 200,
+		data: [],
+	})
+);
 let mockHttp = { get: mockGet };
 let mockExtraDataSet = jest.fn();
 let mockExtraDataValues: Record<string, unknown> = {};
@@ -83,7 +85,7 @@ describe('ExtraDataProvider API services', () => {
 		expect(mockGet).toHaveBeenCalledWith('/taxes/classes');
 		expect(mockGet).toHaveBeenCalledWith('/shipping_methods');
 		expect(mockGet).toHaveBeenCalledWith('/data/order_statuses');
-		expect(mockGet).toHaveBeenCalledWith('/payment-methods');
+		expect(mockGet).toHaveBeenCalledWith('/payment-methods', { quietErrors: true });
 		expect(mockGet).toHaveBeenCalledTimes(4);
 	});
 
@@ -104,7 +106,7 @@ describe('ExtraDataProvider API services', () => {
 		});
 
 		expect(mockGet).toHaveBeenCalledTimes(1);
-		expect(mockGet).toHaveBeenCalledWith('/payment-methods');
+		expect(mockGet).toHaveBeenCalledWith('/payment-methods', { quietErrors: true });
 	});
 
 	it('revalidates a cached empty payment-method envelope on a warm start', async () => {
@@ -118,7 +120,7 @@ describe('ExtraDataProvider API services', () => {
 		await act(async () => Promise.resolve());
 
 		expect(mockGet).toHaveBeenCalledTimes(1);
-		expect(mockGet).toHaveBeenCalledWith('/payment-methods');
+		expect(mockGet).toHaveBeenCalledWith('/payment-methods', { quietErrors: true });
 	});
 
 	it('consumes rejected resource requests', async () => {
@@ -183,7 +185,7 @@ describe('ExtraDataProvider API services', () => {
 		expect(mockGet).toHaveBeenCalledWith('/taxes/classes');
 		expect(mockGet).toHaveBeenCalledWith('/shipping_methods');
 		expect(mockGet).toHaveBeenCalledWith('/data/order_statuses');
-		expect(mockGet).toHaveBeenCalledWith('/payment-methods');
+		expect(mockGet).toHaveBeenCalledWith('/payment-methods', { quietErrors: true });
 		expect(mockGet).toHaveBeenCalledTimes(5);
 	});
 

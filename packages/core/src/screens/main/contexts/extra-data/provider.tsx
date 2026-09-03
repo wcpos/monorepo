@@ -64,7 +64,7 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 		// which is the whole point of `capabilities.offline` and the "works offline" tile badge.
 		const fetchPaymentMethods = (generation: number) =>
 			void http
-				.get('/payment-methods')
+				.get('/payment-methods', { quietErrors: true })
 				.then((response) => {
 					if (generation === refreshGeneration && response?.status === 200) {
 						return extraData.set('paymentMethods', () => response.data);
