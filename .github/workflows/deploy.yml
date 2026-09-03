@@ -184,10 +184,16 @@ jobs:
   # CLAUDE.md), and Playwright CI retries absorb residual contention. If a
   # spec flakes under concurrency, fix THAT spec's isolation; do not
   # reintroduce a cross-run mutex here.
+  # PRs targeting `next` skip the web E2E suite (owner ruling 2026-09-03):
+  # the dev lane is where performance and behaviour are explored by hand on
+  # dev-next, and the store cannot serve several PR runs at once (six php-fpm
+  # workers; global setup then reports the store offline). UI regressions are
+  # caught when the work is promoted to main and tested on dev-free/dev-pro.
+  # The e2e-gate below treats this skip as legitimate.
   e2e:
     name: 🎭 E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
     needs: [changes, deploy]
-    if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main')
+    if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main') && github.base_ref != 'next'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -490,6 +496,7 @@ jobs:
           DEPLOY_URL: ${{ needs.deploy.outputs.deployment_url }}
           E2E_RESULT: ${{ needs.e2e.result }}
           EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
           SKIP_E2E_INPUT: ${{ github.event.inputs.skip_e2e }}
         run: |
           set -uo pipefail
@@ -550,6 +557,12 @@ jobs:
           # Explicit opt-out on a manual run.
           if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$SKIP_E2E_INPUT" = "true" ]; then
             echo "⏭️ E2E skipped by the explicit skip_e2e workflow_dispatch input"
+            exit 0
+          fi
+
+          # PRs to the dev trunk are exempt (see the e2e job's comment).
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "${BASE_REF:-}" = "next" ]; then
+            echo "⏭️ E2E skipped: PRs targeting next are exempt from the web suite (owner ruling 2026-09-03)"
             exit 0
           fi
 
