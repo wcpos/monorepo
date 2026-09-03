@@ -122,9 +122,11 @@ describe('drawer panel visibility', () => {
 
 	it('never drops the hide of a settled-closed panel on a state echo', () => {
 		// The old "re-assert" path dropped the hide for one commit whenever the animated progress
-		// returned to 0, assuming the dropped frame showed nothing. On a busy JS thread the drop
-		// landed seconds late and rendered the panel back at the stale open transform (Android
-		// flow 05, run 33725936595). A closed-status re-render must publish `true` and nothing else.
+		// returned to 0 — after EVERY close — assuming the dropped frame showed nothing. On a
+		// stalled JS thread the drop landed seconds late, and Reanimated < 4.5.3 had by then
+		// reverted the panel's static style to the last settled OPEN state (reanimated#9965), so
+		// that commit drew the panel over the routed screen (Android flow 05, run 33725936595).
+		// A closed-status re-render must publish `true` and nothing else.
 		const { container, rerender } = render(<Harness status="closed" />);
 		act(() => {
 			jest.advanceTimersByTime(DRAWER_CLOSE_SETTLE_MS + 1);

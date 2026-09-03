@@ -39,15 +39,28 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 	// Maestro, run 33740223026: `drawer-item-pos` "visible" with nothing drawn) could reach
 	// menu items that are not on the screen. Hide the descendants from assistive tech while
 	// the panel is hidden; the reporter above stays mounted so an open can un-hide them.
+	//
+	// Never for a `permanent` drawer: the large-screen rail is always on screen, the layout
+	// never hides it, but the navigator's state still says "closed" (a permanent drawer has no
+	// drawer entry in `history`), so the provider's flag alone would hide the visible sidebar
+	// from screen readers for the whole session. `drawerType` comes from the screen options
+	// (`_layout.tsx` sets it per screen size); the focused route's descriptor carries it.
+	// react-native-drawer-layout >= 4.2.10 does the same on the panel view as a Reanimated
+	// animated prop; this is the static counterpart, independent of any animated value.
 	const panelHidden = useDrawerPanelHidden();
+	const focusedRoute = props.state.routes[props.state.index];
+	const drawerType = focusedRoute
+		? props.descriptors[focusedRoute.key]?.options.drawerType
+		: undefined;
+	const hideFromAssistiveTech = panelHidden && drawerType !== 'permanent';
 
 	return (
 		<>
 			<DrawerPanelVisibilityReporter status={status === 'open' ? 'open' : 'closed'} />
 			<DrawerContentScrollView
 				{...props}
-				importantForAccessibility={panelHidden ? 'no-hide-descendants' : 'auto'}
-				accessibilityElementsHidden={panelHidden}
+				importantForAccessibility={hideFromAssistiveTech ? 'no-hide-descendants' : 'auto'}
+				accessibilityElementsHidden={hideFromAssistiveTech}
 				contentContainerStyle={{
 					paddingTop: insets.top,
 					paddingBottom: insets.bottom,

@@ -120,6 +120,26 @@ describe('DrawerContent', () => {
 		expect(scroll()?.getAttribute('data-elements-hidden')).toBe('false');
 	});
 
+	it('never hides a permanent drawer from assistive tech', () => {
+		// The large-screen rail is `drawerType: 'permanent'`: always on screen, never hidden by
+		// the layout, but the navigator's state still says "closed" (no drawer entry in
+		// `history`), so the provider's flag alone would hide the visible sidebar from screen
+		// readers for the whole session (Codex P1 on #1804). The gate is the focused route's
+		// `drawerType` option, which is what the layout sets per screen size.
+		const permanentProps = {
+			...drawerProps,
+			descriptors: { 'pos-1': { options: { drawerType: 'permanent' } } },
+		} as unknown as DrawerContentComponentProps;
+		const { container } = render(
+			<DrawerPanelVisibilityProvider>
+				<DrawerContent {...permanentProps} />
+			</DrawerPanelVisibilityProvider>
+		);
+		const scroll = container.querySelector('[data-testid="drawer-scroll"]');
+		expect(scroll?.getAttribute('data-important')).toBe('auto');
+		expect(scroll?.getAttribute('data-elements-hidden')).toBe('false');
+	});
+
 	it('renders even with no visibility provider either', () => {
 		const { container } = render(<DrawerContent {...drawerProps} />);
 
