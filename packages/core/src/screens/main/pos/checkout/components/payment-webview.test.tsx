@@ -127,6 +127,50 @@ describe('PaymentWebview load watchdog', () => {
 			jest.advanceTimersByTime(PAYMENT_FRAME_LOAD_TIMEOUT_MS);
 		});
 		expect(webViewMounts).toBe(2);
+		expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
+	});
+
+	it('does not watch a frame that has no payment link — there is no navigation to time', () => {
+		const setFrameStatus = jest.fn();
+		const order = {
+			uuid: 'uuid-42',
+			payload: { id: 42, number: '42', status: 'pos-open', links: {}, line_items: [] },
+			getLatest: () => order,
+		};
+		render(
+			<PaymentWebview
+				order={order as never}
+				setLoading={jest.fn()}
+				setFrameStatus={setFrameStatus}
+				onStockRejection={() => false}
+			/>
+		);
+		expect(webViewMounts).toBe(0);
+
+		act(() => {
+			jest.advanceTimersByTime(PAYMENT_FRAME_LOAD_TIMEOUT_MS * 3);
+		});
+		expect(webViewMounts).toBe(0);
+		expect(setFrameStatus).not.toHaveBeenCalledWith('stalled');
+		expect(setFrameStatus).not.toHaveBeenCalledWith('failed');
+	});
+
+	it('an error on the first document is a stall (retryable); on a later navigation it is a failure', () => {
+		const { setFrameStatus } = renderFrame();
+
+		act(() => {
+			webViewProps.onError({ nativeEvent: { code: -1001, description: 'timed out' } });
+		});
+		expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
+
+		// The document loads on the reload; the gateway's redirect then errors.
+		act(() => {
+			webViewProps.onLoad({});
+		});
+		act(() => {
+			webViewProps.onLoadStart();
+			webViewProps.onError({ nativeEvent: { code: -1009, description: 'offline' } });
+		});
 		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
 	});
 
@@ -142,7 +186,7 @@ describe('PaymentWebview load watchdog', () => {
 			jest.advanceTimersByTime(PAYMENT_FRAME_LOAD_TIMEOUT_MS * 3);
 		});
 		expect(webViewMounts).toBe(1);
-		expect(setFrameStatus).not.toHaveBeenCalledWith('failed');
+		expect(setFrameStatus).not.toHaveBeenCalledWith('stalled');
 	});
 
 	it("the cashier's Retry remounts the frame, re-gates it, and reports a second stall", () => {
@@ -155,7 +199,7 @@ describe('PaymentWebview load watchdog', () => {
 		act(() => {
 			jest.advanceTimersByTime(PAYMENT_FRAME_LOAD_TIMEOUT_MS);
 		});
-		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+		expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
 		expect(webViewMounts).toBe(2);
 
 		rerender(
@@ -175,7 +219,7 @@ describe('PaymentWebview load watchdog', () => {
 			jest.advanceTimersByTime(PAYMENT_FRAME_LOAD_TIMEOUT_MS);
 		});
 		expect(webViewMounts).toBe(3);
-		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+		expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
 	});
 });
 
@@ -944,6 +988,8 @@ describe('PaymentWebview frame-status signal', () => {
 		// Without this the gate would close on load start and never reopen, leaving
 		// the cashier with a button that spins forever — the exact failure the gate
 		// exists to prevent, moved one step earlier.
-		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+		// On the FIRST document the error is a stall: nothing was posted, so the
+		// checkout may offer a retry that navigates to the pay page again.
+		expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
 	});
 });

@@ -90,11 +90,17 @@ function isOrderSnapshot(payload: unknown): payload is OrderSnapshot {
  *
  * - `loading` — no document yet, or the frame is navigating to a new one.
  * - `ready` — a document finished loading in the frame.
- * - `failed` — the load errored, so no load event is coming. Distinct from
- *   `loading` because a gate with no failure state leaves the button disabled
- *   behind a spinner forever, which is the very stall this gate exists to stop.
+ * - `stalled` — the FIRST document never arrived: its load timed out (after the
+ *   one silent reload) or errored. Nothing has been posted into it, so a retry
+ *   that navigates to the pay page again is safe, and the checkout offers one.
+ * - `failed` — a LATER navigation (the gateway's redirect, the post-payment hop)
+ *   errored, so no load event is coming. Distinct from `loading` because a gate
+ *   with no failure state leaves the button disabled behind a spinner forever,
+ *   which is the very stall this gate exists to stop — and distinct from
+ *   `stalled` because a retry here would put the pay page back under a sale
+ *   that may already be paid; the fallback poll owns that outcome.
  */
-export type PaymentFrameStatus = 'loading' | 'ready' | 'failed';
+export type PaymentFrameStatus = 'loading' | 'ready' | 'stalled' | 'failed';
 
 export interface PaymentWebviewProps extends Partial<React.ComponentProps<typeof WebView>> {
 	order: EngineRecord<'orders'>;
@@ -516,7 +522,7 @@ export function PaymentWebview({
 	 */
 	const onWebViewError = React.useCallback(
 		(event: unknown) => {
-			setFrameStatus('failed');
+			setFrameStatus(loadCountRef.current === 0 ? 'stalled' : 'failed');
 			frameSettledRef.current = true;
 			const nativeEvent = (event as { nativeEvent?: Record<string, unknown> } | undefined)
 				?.nativeEvent;
@@ -562,6 +568,8 @@ export function PaymentWebview({
 	 * for either loads or is reported.
 	 */
 	React.useEffect(() => {
+		// No link, no frame, no navigation to watch: the banner already says so.
+		if (!paymentURLWithToken) return;
 		const timer = setTimeout(() => {
 			if (frameSettledRef.current) return;
 			if (autoReloads === 0 && retryToken === 0) {
@@ -574,7 +582,7 @@ export function PaymentWebview({
 			orderLogger.warn('Payment form did not load after a reload; waiting for the cashier', {
 				context: { timeoutMs: PAYMENT_FRAME_LOAD_TIMEOUT_MS, retryToken },
 			});
-			setFrameStatus('failed');
+			setFrameStatus('stalled');
 		}, PAYMENT_FRAME_LOAD_TIMEOUT_MS);
 		return () => clearTimeout(timer);
 	}, [
@@ -595,11 +603,13 @@ export function PaymentWebview({
 		};
 	}, []);
 
+	// The key sits on the boundary, not the frame: a WebView that threw while
+	// mounting leaves the boundary in its fallback, and re-keying a child inside
+	// a fallback mounts nothing. A retry has to reset both.
 	return (
-		<ErrorBoundary>
+		<ErrorBoundary key={frameKey}>
 			{paymentURL ? (
 				<WebView
-					key={frameKey}
 					{...(props as React.ComponentProps<typeof WebView>)}
 					src={paymentURLWithToken}
 					onLoad={onWebViewLoaded}

@@ -1174,6 +1174,7 @@
 	"settings.scanner_type_hid_pos": "HID POS",
 	"pos_checkout.payment_form_unavailable": "The payment form can't load — this order has no payment link from the server yet. Close checkout and try again.",
 	"pos_checkout.payment_form_load_failed_retry": "The payment form didn't load — check the connection to your store, then retry.",
+	"pos_checkout.payment_form_navigation_failed": "The payment page failed to load after processing — close checkout and check the order's status before paying again.",
 	"health.logs.watching": "Watching for changes — last check {ago}",
 	"health.logs.next_check_s": "next check ~{n} s",
 	"health.logs.next_check_min": "next check ~{n} min",
