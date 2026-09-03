@@ -24,6 +24,7 @@ import {
 	liveOrderTest as liveTest,
 	newRunLabel,
 	orderIdFromPaymentFrame,
+	readCartMoney,
 	readOrder,
 	type ServerOrder,
 	stampRunLabel,
@@ -307,12 +308,12 @@ async function openCheckoutModal(
 async function newOrderAtCheckout(
 	page: Page,
 	trackOrder: (order: TrackedOrder) => void
-): Promise<{ orderId: number; mode: 'tender' | 'legacy'; cartTotal: number }> {
+): Promise<{ orderId: number; mode: 'tender' | 'legacy'; cartTotal: string }> {
 	const added = await tryAddRunPrivateSimpleProduct(page);
 	liveTest.skip(!added, 'product-writer credentials are unavailable');
 	const label = newRunLabel();
 	await stampRunLabel(page, label);
-	const cartTotal = await readAmountMinor(page, 'cart-order-total');
+	const { total: cartTotal } = await readCartMoney(page);
 	const { orderId, mode } = await openCheckoutModal(page, (order) =>
 		trackOrder({ ...order, label })
 	);
@@ -347,15 +348,22 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 		'renders the tender checkout with the order balance',
 		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
 			liveTest.slow();
-			const { mode, cartTotal } = await newOrderAtCheckout(page, trackOrder);
-			await requireTenderCheckout(request, testInfo, storeAuthorization, mode);
+			const { orderId, mode, cartTotal } = await newOrderAtCheckout(page, trackOrder);
+			const { authorization } = await requireTenderCheckout(
+				request,
+				testInfo,
+				storeAuthorization,
+				mode
+			);
 
 			const balance = await readAmountMinor(page, 'checkout-balance');
 			const total = await readAmountMinor(page, 'checkout-order-total');
 			expect(balance, 'a fresh order owes its whole total').toBe(total);
 			expect(balance, 'checkout must show a non-zero balance').toBeGreaterThan(0);
-			// The modal must be bound to the order the cart rang up, not some other one.
-			expect(total, 'checkout total must equal the cart total').toBe(cartTotal);
+			const server = await readOrder(request, testInfo, authorization, orderId);
+			expect(Number(server.total), 'server total must equal the cart total').toBe(
+				Number(cartTotal)
+			);
 		}
 	);
 
