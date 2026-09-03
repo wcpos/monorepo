@@ -178,8 +178,13 @@ function ScrollableTabsList({ className, children, ...props }: TabsPrimitive.Lis
 		(w: number) => {
 			totalWidthRef.current = w;
 			updateScrollable();
+			// A tab was added or removed: every position measured before is stale
+			// and the active tab may now sit off-screen. After voiding an order on a
+			// phone the "+" tab that became active stayed out of view until the
+			// cashier scrolled (run 33750030091, Android phone, flow 08).
+			if (value) scrollToActiveTab(value);
 		},
-		[updateScrollable]
+		[updateScrollable, value, scrollToActiveTab]
 	);
 
 	const handleLayout = React.useCallback(
@@ -226,7 +231,12 @@ function ScrollableTabsList({ className, children, ...props }: TabsPrimitive.Lis
 	return (
 		<HStack className="gap-0">
 			{scrollable && (
-				<IconButton name="chevronLeft" onPress={onPressLeft} disabled={currentIndex === 0} />
+				<IconButton
+					name="chevronLeft"
+					testID="scrollable-tabs-prev"
+					onPress={onPressLeft}
+					disabled={currentIndex === 0}
+				/>
 			)}
 			<StyledScrollView
 				ref={scrollRef}
@@ -259,6 +269,7 @@ function ScrollableTabsList({ className, children, ...props }: TabsPrimitive.Lis
 			{scrollable && (
 				<IconButton
 					name="chevronRight"
+					testID="scrollable-tabs-next"
 					onPress={onPressRight}
 					disabled={currentIndex === childrenArray.length - 1}
 				/>
