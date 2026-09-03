@@ -4,10 +4,10 @@ description: Prepare and install everything for the monorepo
 inputs:
   node-version:
     description: Version of Node to use
-    default: "22.22.2"
+    default: '22.22.2'
   eas-version:
     description: Version of EAS CLI to use
-    default: "latest"
+    default: 'latest'
   expo-token:
     description: Expo token to authenticate with
     required: false
@@ -16,15 +16,15 @@ inputs:
     required: false
   skip-install-scripts:
     description: Skip package lifecycle scripts during pnpm install
-    default: "false"
+    default: 'false'
   cache-save:
     description: >-
       Save the turbo cache at job end (true only for a main-branch job that
       runs the full turbo graph; everything else restores read-only)
-    default: "false"
+    default: 'false'
 
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
     - name: 🏗 Setup pnpm
       uses: pnpm/action-setup@v4

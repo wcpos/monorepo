@@ -508,7 +508,7 @@ jobs:
         working-directory: apps/main
         # Switches on the E2E-only engine wire ledger; grep WCPOS_E2E_ENGINE in logcat/app-console.
         env:
-          EXPO_PUBLIC_WCPOS_E2E: "1"
+          EXPO_PUBLIC_WCPOS_E2E: '1'
         run: |
           nohup npx expo start --no-dev --minify --offline --port 8081 > /tmp/metro.log 2>&1 &
           for i in $(seq 1 60); do
@@ -1031,7 +1031,7 @@ jobs:
         working-directory: apps/main
         # Switches on the E2E-only engine wire ledger; grep WCPOS_E2E_ENGINE in logcat/app-console.
         env:
-          EXPO_PUBLIC_WCPOS_E2E: "1"
+          EXPO_PUBLIC_WCPOS_E2E: '1'
         run: |
           nohup npx expo start --no-dev --minify --offline --port 8081 > /tmp/metro.log 2>&1 &
           for i in $(seq 1 60); do

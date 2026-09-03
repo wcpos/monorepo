@@ -910,19 +910,32 @@ test('the dev-client resolve recovers the build from a main artifact before anyo
 	const workflow = readWorkflow('e2e-native.yml');
 	const names = workflow.jobs.build.steps.map((step) => step.name);
 	const at = (name) => names.indexOf(name);
-	assert.ok(at('♻️ Restore cached builds') < at("♻️ Recover builds from the last main run's artifact"));
-	assert.ok(at("♻️ Recover builds from the last main run's artifact") < at('💸 Refuse an unrequested EAS build'));
+	assert.ok(
+		at('♻️ Restore cached builds') < at("♻️ Recover builds from the last main run's artifact")
+	);
+	assert.ok(
+		at("♻️ Recover builds from the last main run's artifact") <
+			at('💸 Refuse an unrequested EAS build')
+	);
 	assert.ok(at('🏷 Stamp the builds with their cache key') < at('⬆️ Share builds with test jobs'));
 	const refuse = findStep(workflow, 'build', '💸 Refuse an unrequested EAS build');
 	assert.match(refuse.if, /steps\.recover\.outputs\.hit != 'true'/);
-	const build = findStep(workflow, 'build', '🛠 Build dev client on EAS (native fingerprint changed)');
+	const build = findStep(
+		workflow,
+		'build',
+		'🛠 Build dev client on EAS (native fingerprint changed)'
+	);
 	assert.match(build.if, /steps\.recover\.outputs\.hit != 'true'/);
 	const stamp = findStep(workflow, 'build', '🏷 Stamp the builds with their cache key');
 	assert.match(stamp.run, /echo "\$CACHE_KEY" > e2e-builds\/cache-key/);
 
 	// Money-bearing shell: a fake `gh` serves MOCK_ARTIFACTS as "<run>:<stamp>"
 	// pairs, newest first; a run absent from the list has no artifact.
-	const recover = findStep(workflow, 'build', "♻️ Recover builds from the last main run's artifact");
+	const recover = findStep(
+		workflow,
+		'build',
+		"♻️ Recover builds from the last main run's artifact"
+	);
 	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-devclient-recover-'));
 	const binDir = path.join(workspace, 'bin');
 	mkdirSync(binDir);
@@ -968,8 +981,14 @@ test('the dev-client resolve recovers the build from a main artifact before anyo
 		const recovered = run({});
 		assert.equal(recovered.status, 0, recovered.stdout + recovered.stderr);
 		assert.match(recovered.outputs, /^hit=true$/m);
-		assert.match(recovered.stdout, /Recovered the dev client \(e2e-native-devclient-fp1\) from main run 222/);
-		assert.equal(readFileSync(path.join(recovered.cwd, 'e2e-builds', 'wcpos-e2e-android.apk'), 'utf8'), 'apk\n');
+		assert.match(
+			recovered.stdout,
+			/Recovered the dev client \(e2e-native-devclient-fp1\) from main run 222/
+		);
+		assert.equal(
+			readFileSync(path.join(recovered.cwd, 'e2e-builds', 'wcpos-e2e-android.apk'), 'utf8'),
+			'apk\n'
+		);
 
 		// A single-platform key is satisfied by main's platform=all artifact.
 		const ios = run({ CACHE_KEY: 'e2e-native-devclient-fp1-ios' });
@@ -992,7 +1011,9 @@ test('the shared setup action saves one turbo cache entry per OS per day, from m
 	// that runs the full turbo graph saves.
 	const setup = readAction('setup-monorepo/action.yml');
 	const readOnly = setup.runs.steps.find((step) => step.name === '♻️ Restore cache');
-	const saving = setup.runs.steps.find((step) => step.name === '♻️ Restore cache (saved at job end)');
+	const saving = setup.runs.steps.find(
+		(step) => step.name === '♻️ Restore cache (saved at job end)'
+	);
 	assert.equal(readOnly.uses, 'actions/cache/restore@v4');
 	assert.equal(readOnly.if, "inputs.cache-save != 'true'");
 	assert.equal(saving.uses, 'actions/cache@v4');
