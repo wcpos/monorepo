@@ -68,7 +68,51 @@ appId: com.wcpos.main.dev
       # below cannot see it and a cart-first flow's tab tap lands on the keys
       # (local run 5, flow 08). The field has a return key: Enter submits the
       # now-empty search (a no-op) and drops the keyboard on both platforms.
+      #
+      # The × refocuses the field a beat later; an Enter sent before that focus
+      # lands types into nothing and the keyboard comes back up over the tab
+      # bar (run 33794370953, iOS phone, flow 08: two delivered cart-tab taps
+      # landed on the keys). On iOS focus is the keyboard's tell: wait for it,
+      # submit, require it gone; one logged retry. iOS only — on Android the
+      # view keeps focus after the keyboard has gone (run 33798568767, Android
+      # phone, flow 05: focus never cleared, keyboard already down), so focus
+      # says nothing there and Enter alone has never left it up.
+      - runFlow:
+          when:
+            platform: iOS
+          commands:
+            - extendedWaitUntil:
+                visible:
+                  id: "search-products"
+                  focused: true
+                timeout: 5000
+                optional: true
       - pressKey: Enter
+      - runFlow:
+          when:
+            platform: iOS
+          commands:
+            - extendedWaitUntil:
+                notVisible:
+                  id: "search-products"
+                  focused: true
+                timeout: 5000
+                optional: true
+            - runFlow:
+                when:
+                  visible:
+                    id: "search-products"
+                    focused: true
+                commands:
+                  - evalScript: "${console.log('WCPOS_E2E search field still focused after Enter, submitting again')}"
+                  - tapOn:
+                      id: "search-products"
+                  - pressKey: Enter
+                  - extendedWaitUntil:
+                      notVisible:
+                        id: "search-products"
+                        focused: true
+                      timeout: 5000
 - runFlow:
     when:
       visible:
