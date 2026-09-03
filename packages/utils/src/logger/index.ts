@@ -711,8 +711,9 @@ const mainTransport = (props: any) => {
 			typeof window === 'undefined'
 				? undefined
 				: (window as unknown as { __electronLog?: Record<string, unknown> }).__electronLog;
-		const electronLevel = ['error', 'warn', 'info', 'debug'].includes(level.text)
-			? level.text
+		// levelName is the normalized severity (success → info); level.text is the display label.
+		const electronLevel = ['error', 'warn', 'info', 'debug'].includes(levelName)
+			? levelName
 			: 'verbose';
 		const forward =
 			electronLog && typeof electronLog === 'object' ? electronLog[electronLevel] : undefined;

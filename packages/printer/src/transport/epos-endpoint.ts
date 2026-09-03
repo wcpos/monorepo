@@ -35,6 +35,9 @@ export async function probeEposEndpoint(host: string, postFn: EposPostFn): Promi
 					host,
 					port,
 					outcome: error instanceof Error ? error.name : 'UnknownError',
+					// First line of the message only: enough to tell refused / timeout / certificate apart.
+					cause:
+						error instanceof Error ? error.message.split('\n')[0]?.slice(0, 160) : String(error),
 					elapsedMs: Date.now() - startedAt,
 				},
 			});

@@ -199,7 +199,7 @@ export async function identifyPrinter(
 			host,
 			vendor,
 			lane: lane ? { port: lane.port, protocol: lane.protocol } : null,
-			portStates: ports.map(({ port, state }) => ({ port, state })),
+			portStates: ports.map(({ port, state, protocol }) => ({ port, state, protocol })),
 			elapsedMs: Date.now() - startedAt,
 		},
 	});
