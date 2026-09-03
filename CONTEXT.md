@@ -196,9 +196,13 @@ _Avoid_: transaction (Woo's `_transaction_id` is a provider reference)
 An order's payments and their refunds, in order.
 
 **Split payment**:
-An order paid by more than one payment. WooCommerce has no such concept, so split needs
-Woo-side structure (working premise: a zero-total parent with sub-orders carrying the
-partial totals). Multiple cash payments are Free.
+An order paid by more than one payment — N ledger rows on the one WooCommerce order. There
+are no parent or sub-orders (ruled 2026-09-02, wcpos/roadmap#103: a child order misreports
+to Analytics and no Woo report exists to feed). Multiple cash payments are Free.
+
+**Refund allocation**:
+The part of a WooCommerce refund attributed to one payment row. A refund is still Woo's
+refund child order; its allocations say which payments it reverses and by how much.
 
 **Offline payment**:
 A payment recorded on the device before the server knows of it, identified by a

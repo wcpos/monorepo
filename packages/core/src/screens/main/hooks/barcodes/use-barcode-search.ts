@@ -114,11 +114,13 @@ export const useBarcodeSearch = () => {
 					selectors.products.length > 0 &&
 					document.payload?.status === 'publish' &&
 					// A products-collection document claiming to be a variation is misfiled
-					// (Woo's products route answers sku= filters with variation rows; the
-					// search lane drops them and scope-open purges old residue). Guarding
-					// here too keeps a scan from turning falsely ambiguous — the same
-					// record matching once per collection — while a polluted store is
-					// still open, or if any future path misfiles again. String() because
+					// (Woo answers the `sku=` leg from both post types). The lane still
+					// sends it to stores below plugin 1.10.8 but now drops variation rows
+					// itself; scope-open purges residue from before it learned to do so.
+					// Guarding here too keeps a scan from turning falsely ambiguous — the
+					// same record matching once per collection — while that residue is
+					// still present, or if any future path misfiles again.
+					// String() because
 					// the payload TYPE already forbids 'variation'; this guards data
 					// written outside that contract.
 					String(document.payload?.type) !== 'variation'

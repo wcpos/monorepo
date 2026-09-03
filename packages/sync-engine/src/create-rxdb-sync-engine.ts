@@ -95,6 +95,7 @@ import {
 import {
 	adoptOrderSnapshot as adoptActiveOrderSnapshot,
 	type CensusTotals,
+	exactSkuLegRequired,
 	ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
 	type ProductBrowseWindowOrderby,
 	type SchedulerDrainDatabase,
@@ -242,7 +243,7 @@ export type EngineStringStore = {
 };
 
 export type RxdbSyncEnginePorts = {
-	site: { syncBaseUrl: string; wpJsonRoot: string };
+	site: { syncBaseUrl: string; wpJsonRoot: string; wcposVersion?: () => string | undefined };
 	/** Optional host lifecycle barrier. Initial database creation waits for this
 	 * while the engine handle itself remains synchronously constructible. */
 	databaseOpenBarrier?: Promise<void>;
@@ -1668,6 +1669,7 @@ export function createRxdbSyncEngine(
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
 		coverageFor: (scopeId) => localCoverageByScopeId.get(scopeId) ?? null,
 		barcodeSelectorsFor,
+		exactSkuLeg: () => exactSkuLegRequired(ports.site.wcposVersion?.()),
 		fetcher,
 		syncBaseUrl: ports.site.syncBaseUrl,
 		diagnostics,
@@ -1803,6 +1805,7 @@ export function createRxdbSyncEngine(
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
 		coverageFor: (scopeId) => localCoverageByScopeId.get(scopeId) ?? null,
 		barcodeSelectorsFor,
+		exactSkuLeg: () => exactSkuLegRequired(ports.site.wcposVersion?.()),
 		syncBaseUrl: ports.site.syncBaseUrl,
 		fetcher,
 		connectivity: () => {

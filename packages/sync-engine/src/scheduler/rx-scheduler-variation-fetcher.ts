@@ -19,6 +19,7 @@ import type { ExistenceManifestDocument } from '../local-coverage/existence-mani
 
 export type VariationsSchedulerFetcherInput = CollectionSchedulerInput<StoredVariationDocument> & {
 	manifestSink?: (rows: ExistenceManifestDocument[]) => Promise<void>;
+	exactSkuLeg?: () => boolean;
 };
 
 function variationSearchTerm(task: FetchTask): string | null {
@@ -108,11 +109,14 @@ export function createVariationsSchedulerFetcher(
 		const search = assertVariationSearchTask(task).trim();
 		const limit = task.limit;
 		const pageSize = taskLimit(task, input.pullBatchSize);
+		const exactSkuLeg = search.length > 0 && (input.exactSkuLeg?.() ?? true);
+		const skuLeg = !exactSkuLeg
+			? { payloads: [], requestCount: 0, exhausted: true }
+			: await fetchVariationSearchLeg(input, 'sku', search, limit, pageSize, context);
 		const searchLeg = !search.length
-			? null
+			? { payloads: [], requestCount: 0, exhausted: true }
 			: await fetchVariationSearchLeg(input, 'search', search, limit, pageSize, context);
-		const skuLeg = await fetchVariationSearchLeg(input, 'sku', search, limit, pageSize, context);
-		const payloads = uniqueVariationPayloads([...skuLeg.payloads, ...(searchLeg?.payloads ?? [])]);
+		const payloads = uniqueVariationPayloads([...skuLeg.payloads, ...searchLeg.payloads]);
 		// The manifest row travels on the envelope, not on the stored document — see
 		// MaterializedProjection. Upsert the documents first, then feed the sink their rows.
 		const materialized = payloads
@@ -126,7 +130,7 @@ export function createVariationsSchedulerFetcher(
 		if (input.manifestSink && manifestRows.length > 0) {
 			await input.manifestSink(manifestRows);
 		}
-		const complete = (searchLeg?.exhausted ?? true) && skuLeg.exhausted && payloads.length <= limit;
+		const complete = searchLeg.exhausted && skuLeg.exhausted && payloads.length <= limit;
 		await recordCoverage(
 			'variations',
 			input,
@@ -142,7 +146,7 @@ export function createVariationsSchedulerFetcher(
 		return {
 			taskId: task.id,
 			documentCount: documents.length,
-			requestCount: (searchLeg?.requestCount ?? 0) + skuLeg.requestCount,
+			requestCount: skuLeg.requestCount + searchLeg.requestCount,
 			completed: complete,
 		};
 	};

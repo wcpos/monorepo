@@ -21,11 +21,12 @@
 # Blocking rule, evaluated against every EARLIER attempt of this workflow that
 # is not completed:
 #   - a job with our exact name exists → block while it is not completed;
-#   - no job with our name yet, but a job of our platform exists → block while
-#     any of them is not completed (a run may create its tablet job later, or
-#     never: pull requests run phones only), and for SIBLING_GRACE_SECONDS after
-#     one completes (the next matrix job appears ~1 s later; a poll can land
-#     inside that window);
+#   - no job with our name yet, but a job of our platform exists → block only
+#     while that run's build job is not completed or completed less than
+#     SIBLING_GRACE_SECONDS ago: the whole matrix is created when the build
+#     resolves (max-parallel: 2), so once that window has passed a missing
+#     same-name job will never exist (pull requests run phones only) and a
+#     main tablet job must not wait behind every earlier PR's phone job;
 #   - no job of our platform at all → block until the run's build job has been
 #     completed for SIBLING_GRACE_SECONDS (device jobs are created when the
 #     build resolves; a platform-only dispatch never creates ours).
@@ -75,8 +76,10 @@ blocking_jobs() {
 		| if ($slot_jobs | length) > 0 then
 			$slot_jobs | map(select(.status != "completed")) | .[] | describe
 		  elif ($platform_jobs | length) > 0 then
-			($platform_jobs | map(select(.status != "completed" or recent))
-			 | .[] | "\(describe) (\($slot) follows it)")
+			(if ($build_jobs | length) == 0 or ($build_jobs | any(.status != "completed" or recent)) then
+				($platform_jobs | map(select(.status != "completed" or recent))
+				 | .[] | "\(describe) (\($slot) follows it)")
+			 else empty end)
 		  elif ($build_jobs | length) == 0 or ($build_jobs | any(.status != "completed" or recent)) then
 			"\($url) (\($branch)) — device jobs not created yet"
 		  else empty

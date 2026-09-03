@@ -151,9 +151,16 @@ function scriptedCustomerSearchProxy(customers: Record<string, unknown>[]) {
 	return { state, fetch };
 }
 
-function engineWith(fetch: (url: string, init?: RequestInit) => Promise<Response>) {
+function engineWith(
+	fetch: (url: string, init?: RequestInit) => Promise<Response>,
+	wcposVersion?: () => string | undefined
+) {
 	return createEngineHarness({
-		site: SITE,
+		site: {
+			syncBaseUrl: SYNC_BASE,
+			wpJsonRoot: `${SITE}/wp-json`,
+			...(wcposVersion === undefined ? {} : { wcposVersion }),
+		},
 		identity: freshIdentity(),
 		fetch,
 		awaitReady: false,
@@ -213,6 +220,26 @@ async function searchTaskRows(engine: RxdbSyncEngine): Promise<Record<string, un
 }
 
 describe('require() for search — the public search-demand verb', () => {
+	it.each([
+		['1.10.8', { searchPulls: 1, skuPulls: 0 }],
+		['1.10.2', { searchPulls: 1, skuPulls: 1 }],
+	] as const)('gates the product exact-SKU leg for plugin %s', async (version, expected) => {
+		const server = scriptedProductSearchProxy([]);
+		const engine = engineWith(server.fetch, () => version);
+		await engine.ready;
+
+		await expect(
+			engine.require({
+				id: `version-${version}`,
+				collection: 'products',
+				kind: 'search',
+				term: 'hat',
+			}).ready
+		).resolves.toMatchObject({ action: 'fetched' });
+		expect(server.state).toEqual(expected);
+		await engine.dispose();
+	});
+
 	it('serves repeated product and customer searches from fresh complete coverage lanes', async () => {
 		const products = scriptedProductSearchProxy([]);
 		const customers = scriptedCustomerSearchProxy([]);
@@ -623,8 +650,8 @@ describe('require() for search — the public search-demand verb', () => {
 			}).ready
 		).resolves.toMatchObject({ action: 'fetched', documents: 1, requests: 2 });
 		expect(server.state.urls).toEqual([
-			`${SYNC_BASE}/variations?search=blue+keyboard&per_page=25&page=1`,
 			`${SYNC_BASE}/variations?sku=blue+keyboard&per_page=25&page=1`,
+			`${SYNC_BASE}/variations?search=blue+keyboard&per_page=25&page=1`,
 		]);
 
 		const scope = engine.active();
@@ -715,8 +742,8 @@ describe('require() for search — the public search-demand verb', () => {
 			}).ready
 		).resolves.toMatchObject({ action: 'fetched', requests: 2 });
 		expect(server.state.urls).toEqual([
-			`${SYNC_BASE}/variations?search=42&per_page=25&page=1`,
 			`${SYNC_BASE}/variations?sku=42&per_page=25&page=1`,
+			`${SYNC_BASE}/variations?search=42&per_page=25&page=1`,
 		]);
 		expect(await searchTaskRows(engine)).toEqual([]);
 		await engine.dispose();

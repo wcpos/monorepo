@@ -2130,32 +2130,38 @@ esac
 	assert.match(result.stdout, /runs\/400 \(branch-400\) — 🤖 Android \(tablet\): pending/);
 	assert.match(result.stdout, /nothing was cancelled/);
 
-	// max-parallel: 1 creates the tablet job only after the phone job ends,
-	// so an older run with a live phone job and no tablet job yet blocks the
-	// tablet slot (the tablet job is coming) — and for a grace period after
-	// the phone completes (the tablet job appears ~1 s later).
-	const tabletBehindPhone = (phoneStatus, phoneCompletedSecondsAgo) =>
+	// The whole matrix is created when the build resolves (max-parallel: 2),
+	// and pull requests create no tablet job at all. An older run with a live
+	// phone job and no tablet job blocks the tablet slot only while its build
+	// completed inside the grace window (the matrix may still be expanding);
+	// after that, a missing same-name job will never exist and the slot is
+	// free — a main tablet job must not wait behind every PR's phone job.
+	const tabletBehindPhone = (phoneStatus, phoneCompletedSecondsAgo, buildCompletedSecondsAgo) =>
 		drive({
 			slot: '🍎 iOS (tablet)',
 			prefix: '🍎 iOS (',
 			fixtures: {
 				'runs.json': runs(run(400), run(ME)),
 				'jobs-400.json': jobs(
-					job(BUILD, 'completed', 900),
+					job(BUILD, 'completed', buildCompletedSecondsAgo),
 					job('🍎 iOS (phone)', phoneStatus, phoneCompletedSecondsAgo)
 				),
 			},
 			env: giveUp,
 		});
-	result = tabletBehindPhone('in_progress', null);
+	// Build resolved 5 s ago: the tablet job may still be on its way.
+	result = tabletBehindPhone('in_progress', null, 5);
 	assert.equal(result.status, 1, result.stdout + result.stderr);
 	assert.match(result.stdout, /🍎 iOS \(phone\): in_progress \(🍎 iOS \(tablet\) follows it\)/);
-	result = tabletBehindPhone('completed', 5);
-	assert.equal(result.status, 1, result.stdout + result.stderr);
-	assert.match(result.stdout, /🍎 iOS \(phone\): completed \(🍎 iOS \(tablet\) follows it\)/);
-	// Phone finished well outside the grace window and no tablet job ever
-	// appeared: the run is not going to create one — the slot is free.
-	result = tabletBehindPhone('completed', 600);
+	// Build resolved 900 s ago with a phone job live and no tablet job: the
+	// matrix is complete, there will be no tablet job — the slot is free.
+	result = tabletBehindPhone('in_progress', null, 900);
+	assert.equal(result.status, 0, result.stdout + result.stderr);
+	assert.match(result.stdout, /slot is free/);
+	result = tabletBehindPhone('completed', 5, 900);
+	assert.equal(result.status, 0, result.stdout + result.stderr);
+	assert.match(result.stdout, /slot is free/);
+	result = tabletBehindPhone('completed', 600, 900);
 	assert.equal(result.status, 0, result.stdout + result.stderr);
 	assert.match(result.stdout, /slot is free/);
 
