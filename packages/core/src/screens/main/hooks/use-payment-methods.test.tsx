@@ -71,13 +71,45 @@ describe('usePaymentMethods', () => {
 	it('drops a structurally unusable method and keeps the rest', () => {
 		// One malformed gateway must not stop the till taking cash on the others.
 		paymentMethodsVerified = true;
-		const cash = { id: 'cash', title: 'Cash' };
-		paymentMethods = { schema: 1, contract: '1.0', methods: [null, cash, { title: 'No id' }] };
+		paymentMethods = {
+			schema: 1,
+			contract: '1.0',
+			methods: [null, cash, { title: 'No id' }, { id: 'broken', title: 'No capture block' }],
+		};
 
 		const { result } = renderHook(() => usePaymentMethods());
 
 		expect(result.current).toMatchObject({ methods: [cash], loaded: true });
-		expect(result.current.byId.get('cash')).toEqual(cash);
+		expect(result.current.byId.get('pos_cash')).toEqual(cash);
+	});
+
+	it('keeps a method whose enum values are unknown (disabled-with-reason, not dropped)', () => {
+		paymentMethodsVerified = true;
+		const future = { ...cash, id: 'future', capture: { ...cash.capture, mode: 'teleport' } };
+		paymentMethods = { schema: 1, contract: '1.0', methods: [future] };
+
+		const { result } = renderHook(() => usePaymentMethods());
+
+		expect(result.current.methods).toEqual([future]);
+	});
+
+	it('stays unloaded when every advertised method is malformed', () => {
+		// A broken payload must leave the legacy checkout available, not an empty tile grid.
+		paymentMethodsVerified = true;
+		paymentMethods = { schema: 1, contract: '1.0', methods: [null, { id: 'broken' }] };
+
+		const { result } = renderHook(() => usePaymentMethods());
+
+		expect(result.current).toMatchObject({ methods: [], loaded: false });
+	});
+
+	it('treats a genuinely empty advertised list as loaded', () => {
+		paymentMethodsVerified = true;
+		paymentMethods = { schema: 1, contract: '1.0', methods: [] };
+
+		const { result } = renderHook(() => usePaymentMethods());
+
+		expect(result.current).toMatchObject({ methods: [], loaded: true });
 	});
 
 	it('does not expose a persisted descriptor until this session verifies the route', () => {

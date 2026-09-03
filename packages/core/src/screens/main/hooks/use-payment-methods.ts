@@ -24,10 +24,18 @@ type RuntimeEnvelope = { schema: number; contract: string; methods: unknown[] };
  * this guard is only for structurally unusable rows.)
  */
 function isDescriptor(value: unknown): value is PaymentMethodDescriptor {
+	if (typeof value !== 'object' || value === null) return false;
+	const row = value as { id?: unknown; kind?: unknown; capture?: unknown; capabilities?: unknown };
+	// The tender tiles dereference capture.mode and capabilities.offline unconditionally, so a
+	// row must carry those objects to be renderable; their VALUES may be anything (§13).
 	return (
-		typeof value === 'object' &&
-		value !== null &&
-		typeof (value as { id?: unknown }).id === 'string'
+		typeof row.id === 'string' &&
+		typeof row.kind === 'string' &&
+		typeof row.capture === 'object' &&
+		row.capture !== null &&
+		typeof (row.capture as { mode?: unknown }).mode === 'string' &&
+		typeof row.capabilities === 'object' &&
+		row.capabilities !== null
 	);
 }
 
@@ -56,6 +64,17 @@ export function usePaymentMethods(): PaymentMethodsState {
 			};
 		}
 		const methods = value.methods.filter(isDescriptor);
+		// A store that advertised methods but none survived the guard is a broken payload, not an
+		// empty till: keep the legacy checkout rather than strand the cashier on an empty grid.
+		if (value.methods.length > 0 && methods.length === 0) {
+			return {
+				methods: [],
+				byId: new Map<string, PaymentMethodDescriptor>(),
+				contract: value.contract,
+				loaded: false,
+				unsupportedSchema: value.schema !== 1,
+			};
+		}
 		return {
 			methods,
 			byId: new Map(methods.map((method) => [method.id, method])),
