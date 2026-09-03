@@ -10,8 +10,8 @@
  * root error boundary, on web AND native.
  *
  * This pins that: `DrawerContent` renders with no drawer context of any kind in the tree, the
- * way the library invokes it. Jest has no platform-extension resolution, so the web variant of
- * `DrawerProgressWatcher` is the one resolved here — the same file the browser bundle gets.
+ * way the library invokes it, and the mocked `useDrawerProgress` below throws so any future
+ * hook call from the body fails here first.
  */
 import * as React from 'react';
 import { Platform } from 'react-native';
@@ -19,7 +19,7 @@ import { Platform } from 'react-native';
 import { render } from '@testing-library/react';
 
 import { DrawerContent } from './index';
-import { DrawerPanelVisibilityProvider } from './panel-visibility';
+import { DrawerPanelVisibilityProvider, DrawerPanelVisibilityReporter } from './panel-visibility';
 
 import type { DrawerContentComponentProps } from 'expo-router/build/react-navigation/drawer';
 
@@ -30,8 +30,24 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('expo-router/build/react-navigation/drawer', () => {
 	const R = require('react');
 	return {
-		DrawerContentScrollView: ({ children }: { children?: React.ReactNode }) =>
-			R.createElement('div', { 'data-testid': 'drawer-scroll' }, children),
+		DrawerContentScrollView: ({
+			children,
+			importantForAccessibility,
+			accessibilityElementsHidden,
+		}: {
+			children?: React.ReactNode;
+			importantForAccessibility?: string;
+			accessibilityElementsHidden?: boolean;
+		}) =>
+			R.createElement(
+				'div',
+				{
+					'data-testid': 'drawer-scroll',
+					'data-important': importantForAccessibility,
+					'data-elements-hidden': String(accessibilityElementsHidden),
+				},
+				children
+			),
 		// Throws exactly like the real hook does without a `DrawerProgressContext`, so this
 		// suite fails loudly if anything ever calls it from `DrawerContent`'s body again.
 		useDrawerProgress: () => {
@@ -79,6 +95,49 @@ describe('DrawerContent', () => {
 		);
 
 		expect(container.querySelector('[data-testid="drawer-scroll"]')).not.toBeNull();
+	});
+
+	it('hides the menu from assistive tech while the panel is hidden, and exposes it once open', () => {
+		// The provider starts hidden (the drawer boots closed). Android kept reporting the
+		// hidden panel's items with stale bounds after a heavy screen mount (run 33740223026).
+		const { container, rerender } = render(
+			<DrawerPanelVisibilityProvider>
+				<DrawerContent {...drawerProps} />
+			</DrawerPanelVisibilityProvider>
+		);
+		const scroll = () => container.querySelector('[data-testid="drawer-scroll"]');
+		expect(scroll()?.getAttribute('data-important')).toBe('no-hide-descendants');
+		expect(scroll()?.getAttribute('data-elements-hidden')).toBe('true');
+
+		// An open drawer un-hides immediately (the reporter is what DrawerContent renders).
+		rerender(
+			<DrawerPanelVisibilityProvider>
+				<DrawerPanelVisibilityReporter status="open" />
+				<DrawerContent {...drawerProps} />
+			</DrawerPanelVisibilityProvider>
+		);
+		expect(scroll()?.getAttribute('data-important')).toBe('auto');
+		expect(scroll()?.getAttribute('data-elements-hidden')).toBe('false');
+	});
+
+	it('never hides a permanent drawer from assistive tech', () => {
+		// The large-screen rail is `drawerType: 'permanent'`: always on screen, never hidden by
+		// the layout, but the navigator's state still says "closed" (no drawer entry in
+		// `history`), so the provider's flag alone would hide the visible sidebar from screen
+		// readers for the whole session (Codex P1 on #1804). The gate is the focused route's
+		// `drawerType` option, which is what the layout sets per screen size.
+		const permanentProps = {
+			...drawerProps,
+			descriptors: { 'pos-1': { options: { drawerType: 'permanent' } } },
+		} as unknown as DrawerContentComponentProps;
+		const { container } = render(
+			<DrawerPanelVisibilityProvider>
+				<DrawerContent {...permanentProps} />
+			</DrawerPanelVisibilityProvider>
+		);
+		const scroll = container.querySelector('[data-testid="drawer-scroll"]');
+		expect(scroll?.getAttribute('data-important')).toBe('auto');
+		expect(scroll?.getAttribute('data-elements-hidden')).toBe('false');
 	});
 
 	it('renders even with no visibility provider either', () => {

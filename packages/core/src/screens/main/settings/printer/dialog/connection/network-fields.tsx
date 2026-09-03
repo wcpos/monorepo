@@ -11,6 +11,7 @@ import { VStack } from '@wcpos/components/vstack';
 import type { DiscoveredPrinter } from '@wcpos/printer';
 
 import { useT } from '../../../../../../contexts/translations';
+import { DEFAULT_FORM_VALUES } from '../../schema';
 
 import type { UseFormReturn } from 'react-hook-form';
 import type { PrinterFormValues } from '../../schema';
@@ -207,6 +208,13 @@ export function NetworkFields({
 									form.setValue('name', printer.name);
 									if (printer.vendor) {
 										form.setValue('vendor', printer.vendor);
+									}
+									const identifiedColumns = printer.identity?.columns;
+									if (
+										identifiedColumns !== undefined &&
+										form.getValues('columns') === DEFAULT_FORM_VALUES.columns
+									) {
+										form.setValue('columns', identifiedColumns);
 									}
 									const port = resolveResultPort ? resolveResultPort(printer) : printer.port;
 									if (port != null) {

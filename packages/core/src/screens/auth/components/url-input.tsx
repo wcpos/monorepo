@@ -34,6 +34,7 @@ export function UrlInput() {
 					}}
 					onSubmitEditing={() => onConnect(url)}
 					clearable
+					clearTestID="store-url-clear"
 					className="flex-1"
 					autoCorrect={false}
 				/>

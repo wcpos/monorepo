@@ -45,11 +45,16 @@ function ThemedDrawer({
 }) {
 	const screenBackgroundColor = useNavigationBackground();
 
-	// A closed drawer is only translated off-screen, so a stale animated transform can leave it
-	// covering the screen the app has already navigated to (#1691). Once it has settled closed
-	// we take the panel out of layout, which no animation can undo. Native only: the failure is
-	// a Reanimated/Fabric one, and the web drawer has no equivalent (inactive screens there are
-	// already display:none). Never for the permanent rail, which is always on screen.
+	// A closed drawer is only translated off-screen, and Reanimated < 4.5.3 could revert that
+	// transform to a stale value after a JS-thread stall, leaving the panel over the screen the
+	// app has already navigated to (#1691; upstream reanimated#9965). Once it has settled closed
+	// we take the panel out of layout with a static layout prop, which survives such a revert.
+	// The library's own animated style honours this `display: 'none'` too
+	// (patches/react-native-drawer-layout@4.2.10.patch), so the hide holds whichever side commits
+	// last. Kept after the Reanimated bump as a guard (see panel-visibility.tsx). Native only:
+	// the failure is a Reanimated/Fabric one, and the web drawer has no equivalent (inactive
+	// screens there are already display:none). Never for the permanent rail, which is always on
+	// screen.
 	const panelSettledClosed = useDrawerPanelHidden();
 	const hideDrawerPanel = Platform.OS !== 'web' && screenSize !== 'lg' && panelSettledClosed;
 

@@ -5,9 +5,10 @@ import {
 	BT_CONNECT_TIMEOUT_MS,
 	BT_DISCOVERY_TIMEOUT_MS,
 } from '../discovery/bluetooth-scan-session';
+import { identifyDiscoveredPrinters } from '../discovery/identify';
 import { usePrinterDiscovery } from './use-printer-discovery.electron';
 
-import type { BluetoothCandidate } from '../types';
+import type { BluetoothCandidate, DiscoveredPrinter } from '../types';
 import type { PosConnectedDevice } from '../types/point-of-sale-connectors';
 
 // vi.mock is hoisted by vitest to the top of the module, so the connectMock /
@@ -20,6 +21,28 @@ vi.mock('@point-of-sale/webbluetooth-receipt-printer', () => ({
 		addEventListener = addEventListenerMock;
 		connect = connectMock;
 	},
+}));
+
+// Wraps the real implementation so the lane test below exercises it; individual tests can
+// hold a single call open with mockReturnValueOnce.
+vi.mock('../discovery/identify', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('../discovery/identify')>();
+	return { ...actual, identifyDiscoveredPrinters: vi.fn(actual.identifyDiscoveredPrinters) };
+});
+
+vi.mock('../discovery/identify-probes.electron', () => ({
+	createIdentifyProbes: () => ({
+		printableLanes: new Set(['epos-print', 'raw']),
+		connectTcp: async (_host: string, port: number) => (port === 9100 ? 'open' : 'closed'),
+		postEpos: async (_host: string, port: number) => {
+			if (port !== 443) throw new Error('closed');
+			return {
+				status: 200,
+				body: '<response xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print" success="true" />',
+			};
+		},
+		fetchStar: async () => null,
+	}),
 }));
 
 // ---------------------------------------------------------------------------
@@ -231,6 +254,109 @@ describe('usePrinterDiscovery (electron)', () => {
 				vendor: 'generic',
 			},
 		]);
+	});
+
+	it('identifies a discovered network printer and uses its printing lane port', async () => {
+		installIpc((channel: string) => {
+			if (channel === 'printer-discovery') {
+				return Promise.resolve([
+					{
+						id: 'mdns-epson',
+						name: 'EPSON TM-m30III',
+						connectionType: 'network',
+						address: '192.168.1.30',
+						port: 9100,
+						vendor: 'epson',
+					},
+				]);
+			}
+			return Promise.resolve([]);
+		});
+		const { result } = renderHook(() => usePrinterDiscovery());
+
+		await act(async () => {
+			await result.current.startScan();
+		});
+
+		expect(result.current.printers[0]).toMatchObject({
+			port: 443,
+			identity: {
+				vendor: 'epson',
+				lane: { port: 443, protocol: 'epos-print', encrypted: true },
+			},
+		});
+	});
+
+	it('does not merge identification results after the scan is stopped', async () => {
+		const discovered: DiscoveredPrinter = {
+			id: 'mdns-epson',
+			name: 'EPSON TM-m30III',
+			connectionType: 'network',
+			address: '192.168.1.30',
+			port: 9100,
+			vendor: 'epson',
+		};
+		installIpc((channel: string) =>
+			Promise.resolve(channel === 'printer-discovery' ? [discovered] : [])
+		);
+		let finishIdentification!: (printers: DiscoveredPrinter[]) => void;
+		vi.mocked(identifyDiscoveredPrinters).mockReturnValueOnce(
+			new Promise((resolve) => {
+				finishIdentification = resolve;
+			})
+		);
+		const { result } = renderHook(() => usePrinterDiscovery());
+		let scan!: Promise<void>;
+
+		await act(async () => {
+			scan = result.current.startScan();
+			await vi.waitFor(() => expect(identifyDiscoveredPrinters).toHaveBeenCalled());
+		});
+		await act(async () => {
+			await result.current.stopScan();
+		});
+		await act(async () => {
+			finishIdentification([{ ...discovered, port: 443 }]);
+			await scan;
+		});
+
+		expect(result.current.printers).toEqual([]);
+		expect(result.current.isScanning).toBe(false);
+	});
+
+	it('does not start identification after the scan is stopped during discovery', async () => {
+		const discovered: DiscoveredPrinter = {
+			id: 'mdns-epson',
+			name: 'EPSON TM-m30III',
+			connectionType: 'network',
+			address: '192.168.1.30',
+			port: 9100,
+			vendor: 'epson',
+		};
+		let finishDiscovery!: (printers: DiscoveredPrinter[]) => void;
+		let discoveryInvocations = 0;
+		installIpc((channel: string) =>
+			channel === 'printer-discovery' && discoveryInvocations++ === 0
+				? new Promise((resolve) => {
+						finishDiscovery = resolve;
+					})
+				: Promise.resolve([])
+		);
+		vi.mocked(identifyDiscoveredPrinters).mockClear();
+		const { result } = renderHook(() => usePrinterDiscovery());
+		let scan!: Promise<void>;
+
+		act(() => {
+			scan = result.current.startScan();
+		});
+		await act(async () => {
+			await result.current.stopScan();
+			finishDiscovery([discovered]);
+			await scan;
+		});
+
+		expect(identifyDiscoveredPrinters).not.toHaveBeenCalled();
+		expect(result.current.isScanning).toBe(false);
 	});
 
 	// 7. select → connect-timeout path

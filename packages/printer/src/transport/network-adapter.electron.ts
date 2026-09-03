@@ -1,10 +1,11 @@
-import { probeEposEndpoint } from './epos-endpoint';
+import { EPOS_HTTP_PORTS, probeEposEndpoint } from './epos-endpoint';
 import { EpsonEposAdapter, postEposHttp } from './epson-epos-adapter.electron';
 import { ipcPrintRaw, PRINT_TIMEOUT_MS } from './ipc-print.electron';
 
 import type { PrinterTransport } from '../types';
 
-const eposPortByHost = new Map<string, number | null>();
+// Cache successes only: a cached miss can repeat the roadmap#136 gotcha #5 quarantine loop.
+const eposPortByHost = new Map<string, number>();
 
 /**
  * Electron network adapter.
@@ -21,12 +22,16 @@ export class NetworkAdapter implements PrinterTransport {
 
 	async printRaw(data: Uint8Array): Promise<void> {
 		if (this.vendor === 'epson') {
-			let eposPort = eposPortByHost.get(this.host);
-			if (!eposPortByHost.has(this.host)) {
+			if (EPOS_HTTP_PORTS.includes(this.port)) {
+				return new EpsonEposAdapter(this.host, this.port).printRaw(data);
+			}
+
+			let eposPort: number | null | undefined = eposPortByHost.get(this.host);
+			if (eposPort == null) {
 				eposPort = await probeEposEndpoint(this.host, (port, path, xml, timeoutMs) =>
 					postEposHttp(this.host, port, path, xml, timeoutMs)
 				);
-				eposPortByHost.set(this.host, eposPort);
+				if (eposPort != null) eposPortByHost.set(this.host, eposPort);
 			}
 			if (eposPort != null) {
 				return new EpsonEposAdapter(this.host, eposPort).printRaw(data);

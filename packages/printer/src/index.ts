@@ -68,6 +68,9 @@ export type { TemplateInfo, ResolvePrinterOptions } from './resolve-printer';
 export { detectMismatch } from './detect-mismatch';
 export { probeVendor, probeVendorEndpoint } from './utils/probe-vendor';
 export type { ProbedEndpoint } from './utils/probe-vendor';
+export { canPrintLane, identifyPrinter } from './discovery/identify';
+export type { PrinterIdentity } from './discovery/identify';
+export { createIdentifyProbes } from './discovery/identify-probes';
 export { isPrinterConnectionError, PrinterConnectionError } from './utils/connection-error';
 export type { ConnectionDiagnostics } from './utils/connection-error';
 export type {

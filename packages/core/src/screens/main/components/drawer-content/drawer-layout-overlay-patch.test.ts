@@ -6,7 +6,7 @@
  * therefore leaves a dim, touch-intercepting sheet over the screen the app has navigated to,
  * even with the panel gone.
  *
- * `patches/react-native-drawer-layout@4.2.5.patch` mirrors the panel's `display: 'none'` onto
+ * `patches/react-native-drawer-layout@4.2.10.patch` mirrors the panel's `display: 'none'` onto
  * the overlay. The library exposes no option that could do this from the app: `overlayStyle` is
  * built inside `DrawerView` as `{ backgroundColor: overlayColor }` and only `overlayColor` is a
  * screen option, and `pointerEvents` arrives as an animated PROP, which no style can override.

@@ -2,8 +2,8 @@
 /**
  * Maestro testID drift lint (native E2E spec, wayfinder #688 / decision #694).
  *
- * Every `id:` referenced in apps/main/.maestro/ flows must exist as a testID
- * in application source, so YAML flows can't silently drift from the app.
+ * Every `id:` referenced in apps/main/.maestro/{flows,subflows}/ must exist as
+ * a testID in application source, so YAML flows can't silently drift from the app.
  * Dynamic ids are supported on both sides:
  *   - flow ids may end in a regex tail (e.g. "store-option-.*") — matched by prefix
  *   - source testIDs may be template literals (e.g. `open-order-tab-${id}`) — matched by prefix
@@ -13,6 +13,7 @@ import path from 'node:path';
 
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const maestroDir = path.join(repoRoot, 'apps/main/.maestro');
+const maestroFlowDirs = ['flows', 'subflows'].map((dir) => path.join(maestroDir, dir));
 const sourceDirs = ['packages/core/src', 'packages/components/src', 'apps/main/app'].map((p) =>
 	path.join(repoRoot, p)
 );
@@ -34,12 +35,14 @@ function walk(dir, exts, files = []) {
 // quote — otherwise such an id silently drops out of the lint. Everything from
 // the first `${` is runtime-substituted, so only the static prefix is checkable.
 const flowIds = new Set();
-for (const file of walk(maestroDir, ['.yml', '.yaml'])) {
-	const text = fs.readFileSync(file, 'utf8');
-	for (const match of text.matchAll(/^\s*id:\s*(?:"(.*)"|'(.*)'|([^"'\n]+?))\s*$/gm)) {
-		const raw = (match[1] ?? match[2] ?? match[3]).trim();
-		const interpolation = raw.indexOf('${');
-		flowIds.add(interpolation === -1 ? raw : raw.slice(0, interpolation));
+for (const dir of maestroFlowDirs) {
+	for (const file of walk(dir, ['.yml', '.yaml'])) {
+		const text = fs.readFileSync(file, 'utf8');
+		for (const match of text.matchAll(/^\s*id:\s*(?:"(.*)"|'(.*)'|([^"'\n]+?))\s*$/gm)) {
+			const raw = (match[1] ?? match[2] ?? match[3]).trim();
+			const interpolation = raw.indexOf('${');
+			flowIds.add(interpolation === -1 ? raw : raw.slice(0, interpolation));
+		}
 	}
 }
 
