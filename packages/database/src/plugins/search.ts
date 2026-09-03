@@ -1,4 +1,5 @@
 import get from 'lodash/get';
+import { removeCollectionStorages } from 'rxdb';
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 
 import { getLogger } from '@wcpos/utils/logger';
@@ -42,11 +43,67 @@ function normalizeLocale(locale: string): string {
 const SEARCH_INDEX_VERSION = 'v4';
 
 /**
+ * Identifier versions this build no longer reads ('' is the unversioned pre-v2 name).
+ * A bump above leaves every upgraded device carrying the whole old index next to the
+ * new one, so the first build of a collection+locale in a session drops these.
+ */
+const STALE_SEARCH_INDEX_VERSIONS = ['', 'v2', 'v3'];
+const staleSearchIndexSweeps = new Set<string>();
+
+/**
  * Build the FlexSearch instance identifier for a collection + locale.
  * FlexSearch appends `_flexsearch` to this string to name its persisted collection.
  */
 export function getSearchIdentifier(collectionName: string, locale: string): string {
 	return `${collectionName}-search-${SEARCH_INDEX_VERSION}-${locale}`;
+}
+
+/**
+ * Persisted `*_flexsearch` collection names of superseded index versions.
+ */
+export function staleSearchCollectionNames(collectionName: string, locale: string): string[] {
+	return STALE_SEARCH_INDEX_VERSIONS.map((version) =>
+		version
+			? `${collectionName}-search-${version}-${locale}_flexsearch`
+			: `${collectionName}-search-${locale}_flexsearch`
+	);
+}
+
+/**
+ * Drop the persisted indexes of superseded versions, once per database+collection+locale
+ * per session. Removing a name nothing was written under is a cheap no-op.
+ */
+async function removeStaleSearchCollections(
+	collection: RxCollection,
+	locale: string
+): Promise<void> {
+	const database = collection.database;
+	const sweepKey = `${database.name}:${collection.name}:${locale}`;
+	if (!database.internalStore || staleSearchIndexSweeps.has(sweepKey)) return;
+	staleSearchIndexSweeps.add(sweepKey);
+	for (const name of staleSearchCollectionNames(collection.name, locale)) {
+		try {
+			await removeCollectionStorages(
+				database.storage,
+				database.internalStore,
+				database.token,
+				database.name,
+				name,
+				database.multiInstance,
+				database.password,
+				database.hashFunction
+			);
+		} catch (error: any) {
+			searchLogger.warn('Could not remove a stale search index', {
+				context: {
+					collection: collection.name,
+					locale,
+					searchCollection: name,
+					error: error.message,
+				},
+			});
+		}
+	}
 }
 
 /**
@@ -147,6 +204,8 @@ async function createSearchInstance(
 			});
 		}
 	}
+
+	await removeStaleSearchCollections(collection, locale);
 
 	const searchInstance = await addFulltextSearch({
 		identifier: getSearchIdentifier(collection.name, locale),

@@ -11,14 +11,20 @@
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 // Real FlexSearch engine, used by the tokenizer-behaviour tests below.
 import { Index } from 'flexsearch';
+import { removeCollectionStorages } from 'rxdb';
 
 import { deriveBarcodeFromPayload, encodeSearchText } from '@wcpos/sync-core';
 
-import { getSearchIdentifier, searchPlugin } from './search';
+import { getSearchIdentifier, searchPlugin, staleSearchCollectionNames } from './search';
 
 import type { RxCollection } from 'rxdb';
 
 let shouldFailOnCreate = false;
+
+// The plugin only imports the storage-removal helper from rxdb; types are erased.
+jest.mock('rxdb', () => ({
+	removeCollectionStorages: jest.fn().mockResolvedValue(undefined),
+}));
 
 jest.mock(
 	'rxdb-premium/plugins/flexsearch',
@@ -308,6 +314,47 @@ describe('search plugin', () => {
 			).toBe('Renamed Keyboard KB-1');
 		});
 
+		it('drops the persisted indexes of superseded identifier versions, never the current one', async () => {
+			const collectionPrototype: Record<string, unknown> = {};
+			const install = searchPlugin.prototypes?.RxCollection;
+			if (!install) throw new Error('search plugin RxCollection prototype is missing');
+			install(collectionPrototype as unknown as RxCollection);
+			const database = {
+				name: 'sweep-db',
+				collections: {},
+				internalStore: { id: 'internal' },
+				storage: { name: 'memory' },
+				token: 'token',
+				multiInstance: false,
+				password: undefined,
+				hashFunction: jest.fn(),
+			};
+			const collection = Object.assign(Object.create(collectionPrototype), {
+				name: 'products',
+				options: { searchFields: ['name'] },
+				database,
+				onClose: [],
+			});
+			(removeCollectionStorages as jest.Mock).mockClear();
+
+			await collection.initSearch('en');
+
+			const removed = (removeCollectionStorages as jest.Mock).mock.calls.map((call) => call[4]);
+			expect(removed).toEqual([
+				'products-search-en_flexsearch',
+				'products-search-v2-en_flexsearch',
+				'products-search-v3-en_flexsearch',
+			]);
+			expect(removed).toEqual(staleSearchCollectionNames('products', 'en'));
+			expect(removed).not.toContain(`${getSearchIdentifier('products', 'en')}_flexsearch`);
+			expect((removeCollectionStorages as jest.Mock).mock.calls[0].slice(0, 4)).toEqual([
+				database.storage,
+				database.internalStore,
+				database.token,
+				database.name,
+			]);
+		});
+
 		it('should call addFulltextSearch with correct config', async () => {
 			const mockCollection = {
 				name: 'products',
@@ -421,6 +468,11 @@ describe('search plugin', () => {
 		it('finds a decimal spec typed on its own', () => {
 			// "0.4" used to split into "0" + "4", both under minlength, so it matched nothing.
 			expect(buildIndex('full').search('0.4')).toEqual([5]);
+		});
+
+		it('ignores punctuation wrapping the typed term', () => {
+			expect(buildIndex('full').search("'0.4'")).toEqual([5]);
+			expect(buildIndex('full').search('shirt!')).toEqual([2]);
 		});
 
 		it('ANDs a model name with a decimal spec down to the one matching product', () => {
