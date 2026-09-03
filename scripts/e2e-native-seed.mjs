@@ -66,9 +66,11 @@ async function mintWriterToken() {
 			if (page.ok && nonce && session) return { nonce, session };
 			const title = /<title>([^<]*)<\/title>/i.exec(html)?.[1]?.trim() ?? '(no title)';
 			const why = page.ok ? 'no _wpnonce/auth_session fields' : 'not OK';
-			throw new TransientStoreError(
-				`HTTP ${page.status} (${why}) title="${title}" bytes=${html.length}`
-			);
+			const message = `HTTP ${page.status} (${why}) title="${title}" bytes=${html.length}`;
+			if (page.ok || isTransientStatus(page.status)) {
+				throw new TransientStoreError(message);
+			}
+			throw new Error(message);
 		}).catch((err) => {
 			console.error(`✖ /wcpos-auth/ login page unusable: ${err.message}`);
 			process.exit(1);

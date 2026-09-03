@@ -455,6 +455,37 @@ test('native E2E routes next-target PRs to the next store', () => {
 	assert.match(seed.stderr, /Store unreachable: https:\/\/dev-next\.wcpos\.com → HTTP 404/);
 });
 
+test('native E2E does not retry a login-page 404', () => {
+	const seed = spawnSync(
+		process.execPath,
+		[
+			'--input-type=module',
+			'--eval',
+			`let loginCalls = 0;
+globalThis.setTimeout = (fn) => { fn(); return 0; };
+globalThis.fetch = async (url) => {
+	if (String(url).endsWith('/wp-json')) return new Response(null, { status: 200 });
+	loginCalls += 1;
+	return new Response(\`<title>login attempt \${loginCalls}</title>\`, { status: 404 });
+};
+await import('./scripts/e2e-native-seed.mjs');`,
+		],
+		{
+			cwd: ROOT,
+			encoding: 'utf8',
+			env: {
+				...process.env,
+				E2E_PRODUCT_WRITER_USER: 'writer',
+				E2E_PRODUCT_WRITER_PASS: 'password',
+			},
+		}
+	);
+
+	assert.notEqual(seed.status, 0);
+	assert.match(seed.stderr, /login page unusable: HTTP 404 \(not OK\) title="login attempt 1"/);
+	assert.doesNotMatch(seed.stderr, /retrying/);
+});
+
 test('native E2E concurrency isolates pull requests and supersedes stale main pushes', () => {
 	const { concurrency } = readWorkflow('e2e-native.yml');
 
