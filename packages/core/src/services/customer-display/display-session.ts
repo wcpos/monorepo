@@ -47,6 +47,8 @@ export class DisplaySession {
 	private cursor = 0;
 	private template: { id: string | number; version: number } | null = null;
 	private pendingHelloId: string | null = null;
+	private pendingCandidates: RTCIceCandidateInit[] = [];
+	private answerAccepted = false;
 	private configured = false;
 	private seq = 0;
 	private stopped = false;
@@ -85,9 +87,17 @@ export class DisplaySession {
 			if (message.session !== activeSession) continue;
 			if (message.type === 'answer') {
 				const sdp = (message.body as { sdp?: unknown }).sdp;
-				if (typeof sdp === 'string') await this.peer?.acceptAnswer(sdp);
+				if (typeof sdp === 'string') {
+					await this.peer?.acceptAnswer(sdp);
+					this.answerAccepted = true;
+					for (const candidate of this.pendingCandidates.splice(0)) {
+						await this.peer?.addCandidate(candidate);
+					}
+				}
 			} else if (message.type === 'candidate') {
-				await this.peer?.addCandidate(message.body as RTCIceCandidateInit);
+				const candidate = message.body as RTCIceCandidateInit;
+				if (this.answerAccepted) await this.peer?.addCandidate(candidate);
+				else this.pendingCandidates.push(candidate);
 			} else if (message.type === 'bye') {
 				this.peer?.close();
 			}
@@ -101,6 +111,8 @@ export class DisplaySession {
 		this.offeredAt = this.now().getTime();
 		this.configured = false;
 		this.pendingHelloId = null;
+		this.pendingCandidates = [];
+		this.answerAccepted = false;
 		peer.onOpen(() => {
 			logger.warn('Customer display channel opened', { context: { displayId: this.display.id } });
 			this.onConnectionChange();
@@ -112,6 +124,8 @@ export class DisplaySession {
 			this.sessionId = null;
 			this.configured = false;
 			this.pendingHelloId = null;
+			this.pendingCandidates = [];
+			this.answerAccepted = false;
 			logger.warn('Customer display channel closed', { context: { displayId: this.display.id } });
 			this.onConnectionChange();
 		});
@@ -210,17 +224,20 @@ export class DisplaySession {
 	}
 
 	async forget(): Promise<void> {
-		this.stopped = true;
-		if (this.sessionId) {
-			await this.signaling.postSignal(this.display.id, {
-				from: `pos:${this.deviceId}`,
-				to: 'display',
-				type: 'bye',
-				session: this.sessionId,
-				body: {},
-			});
+		try {
+			if (this.sessionId) {
+				await this.signaling.postSignal(this.display.id, {
+					from: `pos:${this.deviceId}`,
+					to: 'display',
+					type: 'bye',
+					session: this.sessionId,
+					body: {},
+				});
+			}
+			this.stopped = true;
+		} finally {
+			this.peer?.close();
 		}
-		this.peer?.close();
 	}
 
 	close(): void {

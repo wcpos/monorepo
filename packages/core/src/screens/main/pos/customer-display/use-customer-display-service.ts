@@ -76,6 +76,7 @@ export function useCustomerDisplayService(): void {
 
 	React.useEffect(() => {
 		const display = fields?.display;
+		if (!display) return;
 		if (!isSupportedDisplayAdvertisement(display)) {
 			logger.warn('Unsupported customer display advertisement', {
 				context: { contract: display?.contract },

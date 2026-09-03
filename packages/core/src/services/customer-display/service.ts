@@ -88,7 +88,15 @@ export class CustomerDisplayService {
 						createPeer: this.options.createPeer ?? createOfferer,
 						getConfig: () => this.config,
 						getCurrentState: () => this.currentState,
-						onConnectionChange: () => this.schedule(),
+						onConnectionChange: () => {
+							this.displays = this.displays.map((current) =>
+								current.id === display.id
+									? { ...current, connected: session?.isOpen ?? false }
+									: current
+							);
+							this.emit();
+							this.schedule();
+						},
 						now: this.options.now,
 					});
 					this.sessions.set(display.id, session);
@@ -105,19 +113,29 @@ export class CustomerDisplayService {
 			this.schedule();
 		}
 	}
-	async mintPairingCode(): Promise<PairingCode> {
+	async mintPairingCode(): Promise<PairingCode | null> {
+		if (this.stopped) return null;
+		const displays = await this.signaling.listDisplays(this.options.deviceId);
+		if (this.stopped) return null;
+		this.registryReadSucceeded = true;
+		this.displays = displays;
 		const code = await this.signaling.mintPairingCode(this.options.deviceId, this.options.storeId);
 		this.pairingCode = code;
-		this.pairingDisplayIds = new Set(this.displays.map(({ id }) => id));
+		this.pairingDisplayIds = new Set(displays.map(({ id }) => id));
 		this.emit();
 		this.schedule();
 		return code;
 	}
 	async forget(displayId: string): Promise<void> {
 		const session = this.sessions.get(displayId);
+		try {
+			await session?.forget();
+			await this.signaling.forget(displayId);
+		} catch (error) {
+			this.schedule();
+			throw error;
+		}
 		this.sessions.delete(displayId);
-		await session?.forget();
-		await this.signaling.forget(displayId);
 		this.displays = this.displays.filter(({ id }) => id !== displayId);
 		this.emit();
 		this.schedule();

@@ -154,6 +154,16 @@ test('does not start for a signaling path outside the WCPOS v2 API root', async 
 	});
 });
 
+test('silently ignores a store without a display advertisement', async () => {
+	const { display: _display, ...storeWithoutDisplay } = mockStore;
+	mockStore = storeWithoutDisplay;
+	renderHook(() => useCustomerDisplayService());
+	await flushEffects();
+
+	expect(mockStart).not.toHaveBeenCalled();
+	expect(mockLoggerWarn).not.toHaveBeenCalled();
+});
+
 test('does not start for an unsupported advertised contract', async () => {
 	mockStore = { ...mockStore, display: { contract: 2, signaling: '/wcpos/v2/display' } };
 	renderHook(() => useCustomerDisplayService());

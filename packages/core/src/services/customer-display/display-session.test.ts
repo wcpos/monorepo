@@ -10,6 +10,7 @@ class FakePeer implements OffererPeer {
 	sent: string[] = [];
 	accepted: string[] = [];
 	candidates: RTCIceCandidateInit[] = [];
+	operations: string[] = [];
 	private openListener: () => void = () => undefined;
 	private messageListener: (text: string) => void = () => undefined;
 	private closeListener: () => void = () => undefined;
@@ -19,9 +20,11 @@ class FakePeer implements OffererPeer {
 	}
 	async acceptAnswer(sdp: string) {
 		this.accepted.push(sdp);
+		this.operations.push(`answer:${sdp}`);
 	}
 	async addCandidate(candidate: RTCIceCandidateInit) {
 		this.candidates.push(candidate);
+		this.operations.push(`candidate:${candidate.candidate}`);
 	}
 	send(text: string) {
 		this.sent.push(text);
@@ -127,17 +130,22 @@ test('posts an offer from the paired POS device and ignores stale answers', asyn
 	expect(peers[0].accepted).toEqual([]);
 });
 
-test('accepts the matching answer and candidate', async () => {
+test('buffers matching candidates until the answer is accepted, preserving their order', async () => {
 	const { session, peers, setSignals } = setup();
 	setSignals([
-		signal({ id: 2 }),
-		signal({ id: 3, type: 'candidate', body: { candidate: 'candidate:1' } }),
+		signal({ id: 2, type: 'candidate', body: { candidate: 'candidate:1' } }),
+		signal({ id: 3, type: 'candidate', body: { candidate: 'candidate:2' } }),
+		signal({ id: 4 }),
 	]);
 
 	await session.poll();
 
 	expect(peers[0].accepted).toEqual(['remote-answer']);
-	expect(peers[0].candidates).toEqual([{ candidate: 'candidate:1' }]);
+	expect(peers[0].operations).toEqual([
+		'answer:remote-answer',
+		'candidate:candidate:1',
+		'candidate:candidate:2',
+	]);
 });
 
 test('hello receives an id-correlated config followed by current state at seq 1', async () => {

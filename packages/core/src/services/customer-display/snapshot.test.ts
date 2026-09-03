@@ -86,3 +86,19 @@ test('stops truncating once the customer note makes the event fit', () => {
 	const result = JSON.parse(serialiseSnapshot(value));
 	expect(result.payload.order.lines[0].meta).toHaveLength(9);
 });
+
+test('drops oversized display config translations to stay under the message cap', () => {
+	const value = {
+		action: 'display.config',
+		payload: {
+			i18n: { receipt: 'x'.repeat(MAX_SNAPSHOT_BYTES) },
+			presentation_hints: { locale: 'en_US' },
+		},
+	};
+	const text = serialiseSnapshot(value);
+	const result = JSON.parse(text);
+
+	expect(new TextEncoder().encode(text).byteLength).toBeLessThanOrEqual(MAX_SNAPSHOT_BYTES);
+	expect(result.payload.i18n).toEqual({});
+	expect(result.payload.presentation_hints).toEqual({ locale: 'en_US' });
+});

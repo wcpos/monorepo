@@ -59,10 +59,15 @@ const registryRow = (id: string): DisplayRegistryRow => ({
 function setup(initialDisplays: DisplayRegistryRow[] = []) {
 	let displays = initialDisplays;
 	let registryFailures = 0;
+	let byeFailures = 0;
 	let now = new Date('2026-09-03T10:00:00Z');
 	const requests: Parameters<HttpFunction>[0][] = [];
 	const http: HttpFunction = async <T>(request: Parameters<HttpFunction>[0]) => {
 		requests.push(request);
+		if ((request.data as { type?: unknown } | undefined)?.type === 'bye' && byeFailures > 0) {
+			byeFailures -= 1;
+			throw new Error('bye unavailable');
+		}
 		if (request.method === 'GET' && request.url.endsWith('/displays')) {
 			if (registryFailures > 0) {
 				registryFailures -= 1;
@@ -101,6 +106,7 @@ function setup(initialDisplays: DisplayRegistryRow[] = []) {
 		requests,
 		setDisplays: (next: DisplayRegistryRow[]) => (displays = next),
 		failRegistryReads: (count = 1) => (registryFailures = count),
+		failByes: (count = 1) => (byeFailures = count),
 		advance: (milliseconds: number) => (now = new Date(now.getTime() + milliseconds)),
 	};
 }
@@ -116,6 +122,18 @@ describe('CustomerDisplayService', () => {
 
 		peers[0].open();
 		expect(jest.getTimerCount()).toBe(0);
+		service.stop();
+	});
+
+	test('updates registry state when a session opens without another registry poll', async () => {
+		const { service, peers, requests } = setup([registryRow('one')]);
+		await service.refreshDisplays();
+		const registryReads = requests.filter(({ url }) => url.endsWith('/displays')).length;
+
+		peers[0].open();
+
+		expect(service.getState().displays[0].connected).toBe(true);
+		expect(requests.filter(({ url }) => url.endsWith('/displays'))).toHaveLength(registryReads);
 		service.stop();
 	});
 
@@ -145,6 +163,24 @@ describe('CustomerDisplayService', () => {
 		await service.refreshDisplays();
 		expect(service.getState().pairingCode).toBeNull();
 		service.stop();
+	});
+
+	test('uses a fresh registry baseline when minting before the first refresh', async () => {
+		const { service } = setup([registryRow('existing')]);
+
+		await service.mintPairingCode();
+		await service.refreshDisplays();
+
+		expect(service.getState().pairingCode?.code).toBe('123456');
+		service.stop();
+	});
+
+	test('does not mint a pairing code after stop', async () => {
+		const { service, requests } = setup();
+		service.stop();
+
+		await expect(service.mintPairingCode()).resolves.toBeNull();
+		expect(requests).toEqual([]);
 	});
 
 	test('expires a pairing code using its unix-seconds timestamp', async () => {
@@ -261,6 +297,21 @@ describe('CustomerDisplayService', () => {
 			])
 		);
 		expect(service.getState().displays).toEqual([]);
+		service.stop();
+	});
+
+	test('a failed forget keeps the display registered and schedules a reconnect poll', async () => {
+		const { service, peers, failByes } = setup([registryRow('one')]);
+		await service.refreshDisplays();
+		failByes();
+
+		await expect(service.forget('one')).rejects.toThrow('bye unavailable');
+
+		expect(service.getState().displays).toEqual([registryRow('one')]);
+		expect(peers[0].channelState).toBe('closed');
+		expect(jest.getTimerCount()).toBe(1);
+		await jest.advanceTimersByTimeAsync(5000);
+		expect(peers).toHaveLength(2);
 		service.stop();
 	});
 });
