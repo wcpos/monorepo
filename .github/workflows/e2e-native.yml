@@ -128,6 +128,12 @@ jobs:
     # the way deploy.yml does; the aggregator reports the skip.
     if: needs.changes.outputs.native != 'none' && github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.draft == false))
     runs-on: ubuntu-latest
+    # actions: read is what `gh run list` / `gh run download` need to read the
+    # last main runs' e2e-builds artifacts (the recovery step below). Only this
+    # job: the device jobs run PR-controlled setup and get contents: read.
+    permissions:
+      contents: read
+      actions: read
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
       platform: ${{ steps.resolve.outputs.platform }}

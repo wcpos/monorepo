@@ -985,19 +985,46 @@ test('the dev-client resolve recovers the build from a main artifact before anyo
 	}
 });
 
-test('the shared setup action saves one turbo cache entry per OS per day, not per commit', () => {
+test('the shared setup action saves one turbo cache entry per OS per day, from main only', () => {
 	// Per-commit keys filled the 10 GB quota within hours and evicted the dev
-	// client (see the recovery test above).
+	// client (see the recovery test above). Caches are branch-scoped and an
+	// exact hit never re-saves, so PRs restore read-only and only a main job
+	// that runs the full turbo graph saves.
 	const setup = readAction('setup-monorepo/action.yml');
-	const cache = setup.runs.steps.find((step) => step.name === '♻️ Restore cache');
-	assert.doesNotMatch(cache.with.key, /github\.sha/);
-	assert.match(cache.with.key, /steps\.cache-day\.outputs\.day/);
+	const readOnly = setup.runs.steps.find((step) => step.name === '♻️ Restore cache');
+	const saving = setup.runs.steps.find((step) => step.name === '♻️ Restore cache (saved at job end)');
+	assert.equal(readOnly.uses, 'actions/cache/restore@v4');
+	assert.equal(readOnly.if, "inputs.cache-save != 'true'");
+	assert.equal(saving.uses, 'actions/cache@v4');
+	assert.equal(saving.if, "inputs.cache-save == 'true'");
+	assert.equal(setup.inputs['cache-save'].default, 'false');
+	for (const cache of [readOnly, saving]) {
+		assert.doesNotMatch(cache.with.key, /github\.sha/);
+		assert.match(cache.with.key, /steps\.cache-day\.outputs\.day/);
+		assert.equal(cache.with.path, readOnly.with.path);
+	}
 	const day = setup.runs.steps.find((step) => step.id === 'cache-day');
 	assert.match(day.run, /date -u \+%Y-%m-%d/);
 	assert.ok(
-		setup.runs.steps.indexOf(day) < setup.runs.steps.indexOf(cache),
+		setup.runs.steps.indexOf(day) < setup.runs.steps.indexOf(readOnly),
 		'the day must be computed before the cache key uses it'
 	);
+
+	// Exactly the full-graph main jobs save: deploy's build and test's unit job.
+	const savers = [];
+	for (const file of ['deploy.yml', 'test.yml', 'e2e-native.yml', 'build.yml']) {
+		const workflow = readWorkflow(file);
+		for (const [jobName, job] of Object.entries(workflow.jobs)) {
+			for (const step of job.steps ?? []) {
+				if (step.uses !== './.github/actions/setup-monorepo') continue;
+				if (step.with?.['cache-save']) savers.push(`${file}:${jobName}=${step.with['cache-save']}`);
+			}
+		}
+	}
+	assert.deepEqual(savers.sort(), [
+		"deploy.yml:deploy=${{ github.ref == 'refs/heads/main' }}",
+		"test.yml:unit-tests=${{ github.ref == 'refs/heads/main' }}",
+	]);
 });
 
 test('the native spend guard charges the builds a run will queue and fails closed on bad data', () => {
@@ -2157,9 +2184,11 @@ test('native device jobs never queue behind another run (owner ruling 2026-09-03
 	// after the head had moved. PRs test at the same time now — store
 	// capacity is php-fpm workers, not a queue in CI.
 	assert.ok(!existsSync(path.join(ROOT, '.github', 'scripts', 'native-device-turnstile.sh')));
-	// PR-controlled setup actions must not inherit Actions API access, and
-	// with no turnstile no job needs it.
+	// PR-controlled setup actions must not inherit Actions API access at the
+	// workflow level. The resolve job alone reads other runs' artifacts (the
+	// dev-client recovery), so it alone carries actions: read.
 	assert.equal(workflow.permissions.actions, undefined);
+	assert.deepEqual(workflow.jobs.build.permissions, { contents: 'read', actions: 'read' });
 	for (const [jobName, emoji, platform] of [
 		['android', '🤖', 'Android'],
 		['ios', '🍎', 'iOS'],

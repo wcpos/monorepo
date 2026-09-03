@@ -17,6 +17,11 @@ inputs:
   skip-install-scripts:
     description: Skip package lifecycle scripts during pnpm install
     default: "false"
+  cache-save:
+    description: >-
+      Save the turbo cache at job end (true only for a main-branch job that
+      runs the full turbo graph; everything else restores read-only)
+    default: "false"
 
 runs:
   using: "composite"
@@ -87,21 +92,42 @@ runs:
         fi
       shell: bash
 
-    # One turbo cache entry per OS per UTC day, not per commit. A per-commit
-    # key saved a fresh 360-380 MB entry for every PR head and every merge on
-    # both runner OSes; the repo's 10 GB cache quota filled within hours and
-    # its LRU evicted the entries read least often — the native E2E dev
-    # client, read once per main run and worth $3 to rebuild (2026-09-03:
-    # 23 entries at 8.3 GB, the dev client gone within 40 minutes of a hit).
-    # Later commits in a day restore the day's entry through restore-keys and
-    # rebuild only what changed; turbo hashes inputs, so correctness does not
-    # depend on the entry being current.
+    # One turbo cache entry per OS per UTC day, saved by main, not one per
+    # commit. A per-commit key saved a fresh 360-380 MB entry for every PR
+    # head and every merge on both runner OSes; the repo's 10 GB cache quota
+    # filled within hours and its LRU evicted the entries read least often —
+    # the native E2E dev client, read once per main run and worth $3 to
+    # rebuild (2026-09-03: 23 entries at 8.3 GB, the dev client gone within
+    # 40 minutes of a hit).
+    #
+    # Caches are scoped by branch, so a PR that saved would mint its own
+    # daily entry; PRs (and any job that runs no turbo task) therefore
+    # restore read-only through actions/cache/restore, and only a main job
+    # that runs the full turbo graph passes cache-save=true. An exact-key hit
+    # never re-saves, so the day's entry is the first such main job's output
+    # and later commits restore it via restore-keys and rebuild only what
+    # changed; turbo hashes inputs, so correctness does not depend on the
+    # entry being current.
     - name: 🗓 Cache day
       id: cache-day
       run: echo "day=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
       shell: bash
 
     - name: ♻️ Restore cache
+      if: inputs.cache-save != 'true'
+      uses: actions/cache/restore@v4
+      with:
+        key: turbo-${{ runner.os }}-${{ steps.cache-day.outputs.day }}
+        restore-keys: |
+          turbo-${{ runner.os }}
+        path: |
+          .turbo/cache
+          node_modules/.cache
+          apps/*/.turbo
+          packages/*/.turbo
+
+    - name: ♻️ Restore cache (saved at job end)
+      if: inputs.cache-save == 'true'
       uses: actions/cache@v4
       with:
         key: turbo-${{ runner.os }}-${{ steps.cache-day.outputs.day }}

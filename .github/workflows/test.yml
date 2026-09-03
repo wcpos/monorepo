@@ -97,6 +97,8 @@ jobs:
         with:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+          # main saves the day's turbo cache from the full test graph; PRs restore read-only.
+          cache-save: ${{ github.ref == 'refs/heads/main' }}
           skip-install-scripts: ${{ github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' }}
 
       - name: "\U0001F9EA Run tests for each package"

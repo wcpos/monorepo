@@ -108,6 +108,8 @@ jobs:
         with:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+          # main saves the day's turbo cache from the full build; PRs restore read-only.
+          cache-save: ${{ github.ref == 'refs/heads/main' }}
 
       # A wedged turbo build has no timeout of its own: on 2026-09-02 two PR
       # deploys (runs 33664427747, 33687923179) sat in this step for 40–75 min
