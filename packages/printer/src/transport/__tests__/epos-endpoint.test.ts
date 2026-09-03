@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { probeEposEndpoint } from '../epos-endpoint';
 
+const { info } = vi.hoisted(() => ({ info: vi.fn() }));
+vi.mock('../../logger', () => ({ printerLogger: { debug: vi.fn(), info } }));
+
 const SUCCESS_BODY =
 	'<response xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print" success="true" code="" status="251658262" />';
 const SCHEMA_ERROR_BODY =
@@ -30,6 +33,7 @@ describe('probeEposEndpoint', () => {
 			expect.stringContaining('<epos-print'),
 			4000
 		);
+		expect(info).toHaveBeenCalledWith('ePOS port selected', expect.any(Object));
 	});
 
 	it('accepts SchemaError as proof that the ePOS CGI exists', async () => {

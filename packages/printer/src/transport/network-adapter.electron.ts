@@ -1,6 +1,7 @@
 import { EPOS_HTTP_PORTS, probeEposEndpoint } from './epos-endpoint';
 import { EpsonEposAdapter, postEposHttp } from './epson-epos-adapter.electron';
 import { ipcPrintRaw, PRINT_TIMEOUT_MS } from './ipc-print.electron';
+import { printerLogger } from '../logger';
 
 import type { PrinterTransport } from '../types';
 
@@ -27,6 +28,7 @@ export class NetworkAdapter implements PrinterTransport {
 			}
 
 			let eposPort: number | null | undefined = eposPortByHost.get(this.host);
+			const cached = eposPort != null;
 			if (eposPort == null) {
 				eposPort = await probeEposEndpoint(this.host, (port, path, xml, timeoutMs) =>
 					postEposHttp(this.host, port, path, xml, timeoutMs)
@@ -34,6 +36,10 @@ export class NetworkAdapter implements PrinterTransport {
 				if (eposPort != null) eposPortByHost.set(this.host, eposPort);
 			}
 			if (eposPort != null) {
+				const source = cached ? 'cached' : 'freshly probed';
+				printerLogger.info(`Using ${source} ePOS port`, {
+					context: { host: this.host, port: eposPort },
+				});
 				return new EpsonEposAdapter(this.host, eposPort).printRaw(data);
 			}
 		}

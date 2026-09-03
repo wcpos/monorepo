@@ -1,6 +1,7 @@
 import { probeEposEndpoint } from '../transport/epos-endpoint';
 import { parseEposResponse } from '../transport/epson-epos-protocol';
 import { type DiscoveredPrinter } from '../types';
+import { printerLogger } from '../logger';
 import { identifyModel } from './identify-models';
 type Vendor = 'epson' | 'star' | 'generic' | null;
 type TcpState = 'open' | 'closed' | 'filtered' | 'error';
@@ -74,7 +75,8 @@ export async function identifyPrinter(
 	probes: IdentifyProbes,
 	opts: { timeoutMs?: number } = {}
 ): Promise<PrinterIdentity> {
-	const deadline = Date.now() + (opts.timeoutMs ?? 4_000);
+	const startedAt = Date.now();
+	const deadline = startedAt + (opts.timeoutMs ?? 4_000);
 	const ports: PrinterIdentity['ports'] = [];
 	const hintedVendor = vendorFromName(hints.name);
 	let eposPort: number | null = null;
@@ -175,7 +177,7 @@ export async function identifyPrinter(
 		!!hints.name &&
 		nonEposPorts.length > 0 &&
 		nonEposPorts.every(({ state }) => state === 'closed' || state === 'error');
-	return {
+	const identity: PrinterIdentity = {
 		vendor,
 		...identifyModel(hints.name),
 		lane,
@@ -192,6 +194,16 @@ export async function identifyPrinter(
 			: {}),
 		...(lane ? {} : { notReceiptPrinter: ippOpen || namedClosed }),
 	};
+	printerLogger.info('Printer identified', {
+		context: {
+			host,
+			vendor,
+			lane: lane ? { port: lane.port, protocol: lane.protocol } : null,
+			portStates: ports.map(({ port, state }) => ({ port, state })),
+			elapsedMs: Date.now() - startedAt,
+		},
+	});
+	return identity;
 }
 function vendorFromName(name?: string): Vendor {
 	if (/epson/i.test(name ?? '')) return 'epson';

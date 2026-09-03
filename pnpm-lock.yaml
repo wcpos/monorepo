@@ -967,6 +967,9 @@ importers:
       '@wcpos/receipt-renderer':
         specifier: workspace:*
         version: link:../receipt-renderer
+      '@wcpos/utils':
+        specifier: workspace:*
+        version: link:../utils
       expo-print:
         specifier: '>=55.0.0'
         version: 57.0.1(expo@57.0.14)(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))

@@ -706,6 +706,26 @@ const mainTransport = (props: any) => {
 			console.error(formattedMessage);
 		}
 	}
+	try {
+		const electronLog =
+			typeof window === 'undefined'
+				? undefined
+				: (window as unknown as { __electronLog?: Record<string, unknown> }).__electronLog;
+		const electronLevel = ['error', 'warn', 'info', 'debug'].includes(level.text)
+			? level.text
+			: 'verbose';
+		const forward =
+			electronLog && typeof electronLog === 'object' ? electronLog[electronLevel] : undefined;
+		if (typeof forward === 'function') {
+			// electron-log adds its own timestamp and level prefix; forward only the message + context.
+			forward.call(
+				electronLog,
+				`${message}${options.context ? ` | Context: ${safeStringify(options.context)}` : ''}`
+			);
+		}
+	} catch {
+		// Electron main-process logging is best-effort diagnostics.
+	}
 
 	if (levelName === 'error') {
 		captureLoggedError({ message, code: options.code, context: options.context });
