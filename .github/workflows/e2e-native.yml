@@ -20,11 +20,19 @@
 # approval (`build` input below).
 #
 # PR runs test the checked-out merge revision; push runs test `main`.
+#
+# WHICH PRs RUN DEVICES (owner ruling 2026-09-03, "we have so many PRs backing
+# up, the mobile e2e tests are grinding everything to a halt"): only PRs that
+# touch inputs the native apps alone consume — Maestro flows, native config
+# and deps, this workflow, its seed. Plain app/package JS targeting main runs
+# devices after merge (the everything plan); next-targeting PRs retain a
+# cache-hit device run because this workflow has no next push trigger.
+# scripts/ci-plan.mjs is the rule.
 name: E2E Native
 
 on:
-  # Every PR and merge to main, not a nightly. The planner below skips PRs
-  # that implicate no native tier; drafts and forks report a legitimate skip.
+  # Every merge to main and the native-implicating PRs, not a nightly. The
+  # planner below skips the other PRs; drafts and forks report a legitimate skip.
   push:
     branches: [main]
   pull_request:
@@ -63,13 +71,14 @@ on:
 # 1.10.5 release — "I only really care about the last PR; that's more important
 # than waiting for all the previous PRs to finish."
 #  - PRs: one live run per PR, newest head supersedes (unchanged).
-#  - Main PUSHES: one shared group + cancel-in-progress, so the newest main
-#    head cancels queued AND running older-head runs. This deliberately
-#    reverses the run-unique main groups of #1687 for THIS workflow only: the
+#  - Main PUSHES: one shared group; a RUNNING run always completes (it is
+#    the device coverage for every JS merge since 2026-09-03), and the newest
+#    pending head replaces older pending ones. This deliberately reverses
+#    the run-unique main groups of #1687 for THIS workflow only: the
 #    2026-08-30 pending-cancels-pending incident was cross-run JOB-level
 #    groups eating other runs' device jobs; run-level supersession of a
-#    superseded MAIN head is the wanted behavior. Deploy's release gate reads
-#    the Deploy workflow, not this one.
+#    superseded pending MAIN head is the wanted behavior. Deploy's release
+#    gate reads the Deploy workflow, not this one.
 #  - NO cross-run queue (owner ruling 2026-09-03): device jobs from different
 #    PRs run at the same time. The FIFO device turnstile (2026-08-30 →
 #    2026-09-03) made every PR wait for every other run's suite; store
@@ -78,7 +87,15 @@ on:
 #    deliberate human/bot run must not be killed by the next merge.
 concurrency:
   group: ${{ github.event_name == 'pull_request' && format('native-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || (github.event_name == 'push' && github.ref == 'refs/heads/main') && format('native-main-{0}', github.run_attempt != '1' && github.run_id || 'push') || format('native-{0}-{1}', github.ref, github.run_id) }}
-  cancel-in-progress: true
+  # PRs: the newest head cancels the running run (latest head wins). Main:
+  # NEVER cancel a running run — with the 2026-09-03 trigger policy the main
+  # push is the only device coverage for app/package JS, and merges land
+  # minutes apart, so a cancelled-on-every-merge run would never complete
+  # (run 33740497846 lost both iOS jobs to the next merge four minutes in).
+  # GitHub still keeps only the newest PENDING run per group, so a burst of
+  # merges yields one running run + the latest tip waiting, and the skipped
+  # intermediate heads show as cancelled runs — superseded, by design.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   EXPO_USE_FAST_RESOLVER: true
