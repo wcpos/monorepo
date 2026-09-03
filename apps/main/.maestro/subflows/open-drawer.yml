@@ -1,0 +1,42 @@
+appId: com.wcpos.main.dev
+# Maestro requires the config section in every flow file, subflows included
+# (see ensure-pos-ready.yml).
+---
+# Bring the navigation items on screen.
+#
+# Small screens hide the rail behind a drawer button. A drawer left open
+# swallows the header tap: the hamburger sits under the drawer's first item,
+# so "open" becomes "tap POS" and the route sequence silently changes (run
+# 33666934729 ended with the drawer open over POS). Require it closed first;
+# close through the scrim if it is not, and log it.
+#
+# Large screens show a permanent rail: the items are always there, there is no
+# scrim, and "wait for the items to vanish" can never pass (run 33783980686,
+# Android tablet, flow 05 at 34 s). The panel says which kind it is
+# (drawer-panel-permanent, drawer-content/index.tsx); on a rail this subflow
+# only confirms the items are on screen.
+- runFlow:
+    when:
+      visible:
+        id: "drawer-item-pos"
+      notVisible:
+        id: "drawer-panel-permanent"
+    commands:
+      - evalScript: "${console.log('WCPOS_E2E drawer already open before the header tap, closing through the scrim')}"
+      - tapOn:
+          point: "85%,50%"
+      - extendedWaitUntil:
+          notVisible:
+            id: "drawer-item-pos"
+          timeout: 10000
+- runFlow:
+    when:
+      visible:
+        id: "drawer-open-button"
+    commands:
+      - tapOn:
+          id: "drawer-open-button"
+- extendedWaitUntil:
+    visible:
+      id: "drawer-item-pos"
+    timeout: 10000

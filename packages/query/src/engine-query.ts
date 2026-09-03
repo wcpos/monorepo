@@ -22,11 +22,7 @@ import {
 } from 'rxjs/operators';
 import get from 'lodash/get';
 
-import {
-	FLEXSEARCH_MIN_TERM_LENGTH,
-	FLEXSEARCH_TOKEN_BOUNDARY,
-	foldSearchText,
-} from '@wcpos/sync-core';
+import { encodeSearchText, FLEXSEARCH_MIN_TERM_LENGTH, foldSearchText } from '@wcpos/sync-core';
 import type { CoverageTarget, CoverageVerdict, RxdbSyncEngine } from '@wcpos/sync-engine';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -158,9 +154,9 @@ async function scanDocumentsForSearch(
 	searchFields: string[],
 	documentSnapshot: (document: EngineRxDocument) => Record<string, unknown>
 ): Promise<EngineRxDocument[]> {
-	const tokens = foldSearchText(search)
-		.split(FLEXSEARCH_TOKEN_BOUNDARY)
-		.filter((token) => token.length >= FLEXSEARCH_MIN_TERM_LENGTH);
+	const tokens = encodeSearchText(search).filter(
+		(token) => token.length >= FLEXSEARCH_MIN_TERM_LENGTH
+	);
 	if (tokens.length === 0 || searchFields.length === 0) return [];
 	const documents = await collection.find().exec();
 	return documents.filter((document) => {
@@ -226,9 +222,9 @@ function matchingSelectors$(
 	const configuredFields = descriptor.read?.searchFields ?? descriptor.searchFields;
 	const searchFields = configuredFields ?? collection.options?.searchFields ?? [];
 	const findFalseHits = (documents: EngineRxDocument[]) => {
-		const tokens = foldSearchText(search)
-			.split(FLEXSEARCH_TOKEN_BOUNDARY)
-			.filter((token) => token.length >= FLEXSEARCH_MIN_TERM_LENGTH);
+		const tokens = encodeSearchText(search).filter(
+			(token) => token.length >= FLEXSEARCH_MIN_TERM_LENGTH
+		);
 		if (searchFields.length === 0 || tokens.length === 0) return [];
 		return documents.flatMap((document) => {
 			const snapshot = documentSnapshot(document);

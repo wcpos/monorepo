@@ -7,11 +7,13 @@ import { act, render } from '@testing-library/react';
 
 import { getLogger } from '@wcpos/utils/logger';
 
-import { PaymentWebview } from './payment-webview';
+import { PAYMENT_FRAME_LOAD_TIMEOUT_MS, PaymentWebview } from './payment-webview';
 
 // Capture the props handed to the (mocked) WebView so the test can drive the
 // `onLoad` lifecycle the same way the real iframe/native webview would.
 let webViewProps: Record<string, any> = {};
+// Every mount of the (mocked) WebView: a reload is a remount (new `key`).
+let webViewMounts = 0;
 const mockGet = jest.fn();
 const mockReplace = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
@@ -21,12 +23,18 @@ const mockAdoptOrderSnapshot = jest.fn();
 let autoShowReceipt = false;
 const ORDER_UUID = '5b8e1a3c-2f4d-4a6b-9c8e-000000000042';
 
-jest.mock('@wcpos/components/webview', () => ({
-	WebView: (props: Record<string, unknown>) => {
-		webViewProps = props;
-		return null;
-	},
-}));
+jest.mock('@wcpos/components/webview', () => {
+	const R = jest.requireActual('react');
+	return {
+		WebView: (props: Record<string, unknown>) => {
+			webViewProps = props;
+			R.useEffect(() => {
+				webViewMounts += 1;
+			}, []);
+			return null;
+		},
+	};
+});
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
 }));
@@ -75,6 +83,145 @@ const makeOrder = (href = 'https://shop.example.com/wcpos-checkout/order-pay/42'
 	};
 	return order as never;
 };
+
+describe('PaymentWebview load watchdog', () => {
+	const renderFrame = (retryToken = 0) => {
+		const setFrameStatus = jest.fn();
+		const utils = render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={setFrameStatus}
+				onStockRejection={() => false}
+				retryToken={retryToken}
+			/>
+		);
+		return { ...utils, setFrameStatus };
+	};
+
+	beforeEach(() => {
+		jest.clearAllMocks();
+		jest.useFakeTimers();
+		webViewProps = {};
+		webViewMounts = 0;
+	});
+	afterEach(() => {
+		jest.useRealTimers();
+	});
+
+	it('reloads the frame once when no load event arrives, then reports the stall as failed', () => {
+		// iOS simulators on the CI runners (runs 33750030091 tablet, 33758920470
+		// phone): the pay page reached the store five minutes late, or never,
+		// and the footer spun for the whole 180 s flow budget.
+		const { setFrameStatus } = renderFrame();
+		expect(webViewMounts).toBe(1);
+
+		act(() => {
+			jest.advanceTimersByTime(PAYMENT_FRAME_LOAD_TIMEOUT_MS);
+		});
+		expect(webViewMounts).toBe(2);
+		expect(setFrameStatus).not.toHaveBeenCalledWith('failed');
+		expect(setFrameStatus).toHaveBeenLastCalledWith('loading');
+
+		act(() => {
+			jest.advanceTimersByTime(PAYMENT_FRAME_LOAD_TIMEOUT_MS);
+		});
+		expect(webViewMounts).toBe(2);
+		expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
+	});
+
+	it('does not watch a frame that has no payment link — there is no navigation to time', () => {
+		const setFrameStatus = jest.fn();
+		const order = {
+			uuid: 'uuid-42',
+			payload: { id: 42, number: '42', status: 'pos-open', links: {}, line_items: [] },
+			getLatest: () => order,
+		};
+		render(
+			<PaymentWebview
+				order={order as never}
+				setLoading={jest.fn()}
+				setFrameStatus={setFrameStatus}
+				onStockRejection={() => false}
+			/>
+		);
+		expect(webViewMounts).toBe(0);
+
+		act(() => {
+			jest.advanceTimersByTime(PAYMENT_FRAME_LOAD_TIMEOUT_MS * 3);
+		});
+		expect(webViewMounts).toBe(0);
+		expect(setFrameStatus).not.toHaveBeenCalledWith('stalled');
+		expect(setFrameStatus).not.toHaveBeenCalledWith('failed');
+	});
+
+	it('an error on the first document is a stall (retryable); on a later navigation it is a failure', () => {
+		const { setFrameStatus } = renderFrame();
+
+		act(() => {
+			webViewProps.onError({ nativeEvent: { code: -1001, description: 'timed out' } });
+		});
+		expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
+
+		// The document loads on the reload; the gateway's redirect then errors.
+		act(() => {
+			webViewProps.onLoad({});
+		});
+		act(() => {
+			webViewProps.onLoadStart();
+			webViewProps.onError({ nativeEvent: { code: -1009, description: 'offline' } });
+		});
+		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+	});
+
+	it('a load event before the deadline disarms the watchdog', () => {
+		const { setFrameStatus } = renderFrame();
+
+		act(() => {
+			webViewProps.onLoad({});
+		});
+		expect(setFrameStatus).toHaveBeenLastCalledWith('ready');
+
+		act(() => {
+			jest.advanceTimersByTime(PAYMENT_FRAME_LOAD_TIMEOUT_MS * 3);
+		});
+		expect(webViewMounts).toBe(1);
+		expect(setFrameStatus).not.toHaveBeenCalledWith('stalled');
+	});
+
+	it("the cashier's Retry remounts the frame, re-gates it, and reports a second stall", () => {
+		const { setFrameStatus, rerender } = renderFrame();
+		// One deadline per act: the reload's re-arm is a render, and React flushes
+		// it when the act ends, not between two timers advanced in one go.
+		act(() => {
+			jest.advanceTimersByTime(PAYMENT_FRAME_LOAD_TIMEOUT_MS);
+		});
+		act(() => {
+			jest.advanceTimersByTime(PAYMENT_FRAME_LOAD_TIMEOUT_MS);
+		});
+		expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
+		expect(webViewMounts).toBe(2);
+
+		rerender(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={setFrameStatus}
+				onStockRejection={() => false}
+				retryToken={1}
+			/>
+		);
+		expect(webViewMounts).toBe(3);
+		expect(setFrameStatus).toHaveBeenLastCalledWith('loading');
+
+		// The retry is the attempt: a stall now is reported, not reloaded again quietly.
+		act(() => {
+			jest.advanceTimersByTime(PAYMENT_FRAME_LOAD_TIMEOUT_MS);
+		});
+		expect(webViewMounts).toBe(3);
+		expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
+	});
+});
 
 describe('PaymentWebview fallback order refresh', () => {
 	beforeEach(() => {
@@ -841,6 +988,8 @@ describe('PaymentWebview frame-status signal', () => {
 		// Without this the gate would close on load start and never reopen, leaving
 		// the cashier with a button that spins forever — the exact failure the gate
 		// exists to prevent, moved one step earlier.
-		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
+		// On the FIRST document the error is a stall: nothing was posted, so the
+		// checkout may offer a retry that navigates to the pay page again.
+		expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
 	});
 });

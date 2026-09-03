@@ -602,7 +602,7 @@ describe('observeEngineQuery', () => {
 			const database = await createEngineDatabase(['products']);
 			const engine = createFakeEngine(database);
 			await database.collections.products.insert(
-				engineProduct({ uuid: 'red-shirt', id: 1, name: 'Red Shirt' })
+				engineProduct({ uuid: 'red-shirt', id: 1, name: 'Red-Shirt XL' })
 			);
 			const document = await database.collections.products.findOne('red-shirt').exec();
 			if (!document) throw new Error('missing punctuation fixture');

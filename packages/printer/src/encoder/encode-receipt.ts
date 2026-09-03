@@ -1,3 +1,5 @@
+import type { EscposRenderOptions } from '@wcpos/receipt-renderer';
+
 import { encodeThermalTemplate } from '../renderer';
 import { DEFAULT_THERMAL_TEMPLATE } from './default-thermal-template';
 import { isEscposTextEncodable } from './escpos-text';
@@ -30,7 +32,10 @@ export interface EncodeReceiptOptions {
 	decimals?: number;
 }
 
-export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions = {}): Uint8Array {
+export function buildReceiptMarkupJob(
+	data: ReceiptData,
+	options: EncodeReceiptOptions = {}
+): { template: string; data: Record<string, unknown>; options: EscposRenderOptions } {
 	const {
 		printerModel,
 		language = 'esc-pos',
@@ -126,12 +131,14 @@ export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions =
 		})),
 	};
 
-	return encodeThermalTemplate(DEFAULT_THERMAL_TEMPLATE, templateData, {
-		printerModel,
-		language,
-		columns,
-		enableCp932,
-		emitEscPrintMode,
-		drawerConnector,
-	});
+	return {
+		template: DEFAULT_THERMAL_TEMPLATE,
+		data: templateData,
+		options: { printerModel, language, columns, enableCp932, emitEscPrintMode, drawerConnector },
+	};
+}
+
+export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions = {}): Uint8Array {
+	const job = buildReceiptMarkupJob(data, options);
+	return encodeThermalTemplate(job.template, job.data, job.options);
 }

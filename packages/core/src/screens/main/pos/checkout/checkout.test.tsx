@@ -25,6 +25,7 @@ const mockPostMessage = jest.fn();
 
 interface MockPaymentWebviewProps {
 	setFrameStatus: (status: PaymentFrameStatus) => void;
+	retryToken?: number;
 	setLoading?: (loading: boolean) => void;
 	onStockRejection?: (error: unknown) => boolean;
 	ref?: React.RefObject<{ postMessage: (message: unknown) => void } | null>;
@@ -108,6 +109,23 @@ jest.mock('@wcpos/components/modal', () => ({
 			</button>
 		);
 	},
+}));
+
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		children,
+		testID,
+		onPress,
+	}: {
+		children?: React.ReactNode;
+		testID?: string;
+		onPress?: () => void;
+	}) => (
+		<button data-testid={testID} onClick={onPress}>
+			{children}
+		</button>
+	),
+	ButtonText: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
 }));
 
 jest.mock('@wcpos/components/text', () => ({
@@ -315,6 +333,45 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 		expect(loaded.dataset.loading).toBe('false');
 	});
 
+	it('offers Retry once the frame reports a failed load, and the retry reaches the frame', () => {
+		// A frame that never loads used to leave the cashier with a spinner and
+		// "close checkout and try again" (runs 33750030091 / 33758920470, iOS: the
+		// pay page never reached the store). The frame now reports the stall, and
+		// the cashier retries in place.
+		const button = renderCheckout({ mode: 'webview' });
+		expect(screen.queryByTestId('checkout-payment-form-retry')).toBeNull();
+
+		act(() => {
+			paymentWebviewProps.setFrameStatus('stalled');
+		});
+
+		expect(button.disabled).toBe(true);
+		expect(screen.getByTestId('checkout-payment-form-unavailable').textContent).toBe(
+			'pos_checkout.payment_form_load_failed_retry'
+		);
+		expect(paymentWebviewProps.retryToken).toBe(0);
+
+		act(() => {
+			screen.getByTestId('checkout-payment-form-retry').click();
+		});
+
+		expect(paymentWebviewProps.retryToken).toBe(1);
+	});
+
+	it('offers no Retry when a later navigation fails — a remount would reload the pay page under a paid sale', () => {
+		const button = renderCheckout({ mode: 'webview' });
+
+		act(() => {
+			paymentWebviewProps.setFrameStatus('failed');
+		});
+
+		expect(button.disabled).toBe(true);
+		expect(screen.getByTestId('checkout-payment-form-unavailable').textContent).toBe(
+			'pos_checkout.payment_form_navigation_failed'
+		);
+		expect(screen.queryByTestId('checkout-payment-form-retry')).toBeNull();
+	});
+
 	it('posts nothing when pressed before the frame has loaded', async () => {
 		renderCheckout({ mode: 'webview' });
 
@@ -461,7 +518,7 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 
 		expect(button.disabled).toBe(true);
 		expect(button.dataset.loading).toBe('false');
-		expect(screen.getByText('pos_checkout.payment_form_load_failed')).toBeTruthy();
+		expect(screen.getByText('pos_checkout.payment_form_navigation_failed')).toBeTruthy();
 
 		await act(async () => {
 			await processPaymentProps.onPress?.();
