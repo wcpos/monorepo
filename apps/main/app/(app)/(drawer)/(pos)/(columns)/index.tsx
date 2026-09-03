@@ -16,7 +16,6 @@ import { useUISettings } from '@wcpos/core/screens/main/contexts/ui-settings';
 import { OpenOrders } from '@wcpos/core/screens/main/pos/cart';
 import { POSProducts } from '@wcpos/core/screens/main/pos/products';
 import { useDocField } from '@wcpos/query';
-
 import type { ReadonlyView, SlotContracts } from '@wcpos/core/extensions/slots';
 
 /**
