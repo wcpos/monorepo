@@ -184,6 +184,7 @@ export function App() {
 	const selectedTemplate = displayTemplateId
 		? undefined
 		: selectVisibleTemplate(templates, selectedTemplateId);
+	const displayMode = Boolean(selectedDisplayTemplate);
 	const randomReceipt = React.useMemo(() => createRandomReceipt({ seed }), [seed]);
 	const baseScenarioState = React.useMemo(
 		() => createScenarioState(randomReceipt.scenarios, randomReceipt.data),
@@ -445,6 +446,8 @@ export function App() {
 				target?.tagName === 'TEXTAREA' ||
 				target?.isContentEditable === true;
 			const meta = event.metaKey || event.ctrlKey;
+			// Display previews are iframes: leave the browser's print shortcut alone.
+			if (meta && (event.key === 'p' || event.key === 'P') && displayMode) return;
 			if (meta && (event.key === 'p' || event.key === 'P')) {
 				event.preventDefault();
 				openPrintDialog();
@@ -466,7 +469,7 @@ export function App() {
 		};
 		window.addEventListener('keydown', handler);
 		return () => window.removeEventListener('keydown', handler);
-	}, [openPrintDialog, shuffleSeed]);
+	}, [displayMode, openPrintDialog, shuffleSeed]);
 
 	return (
 		<div className="studio-app">
