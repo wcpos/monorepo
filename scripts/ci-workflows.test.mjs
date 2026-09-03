@@ -2056,26 +2056,42 @@ test('flow-start cleanup dismisses the keyboard only when it is provably up, on 
 	assert.ok(guard.commands.some((command) => command === 'hideKeyboard'));
 });
 
-test('Android relaunch recovery rechecks the development launcher on every retry leg', () => {
-	for (const filename of [
-		'03-authenticated-relaunch.yml',
-		'08-void-order.yml',
-		'../subflows/relaunch-to-pos.yml',
+test('relaunch recovery retries one launch and preserves each caller readiness target', () => {
+	const filename = '../subflows/relaunch-app.yml';
+	const documents = parseAllDocuments(
+		readFileSync(path.join(ROOT, 'apps', 'main', '.maestro', 'flows', filename), 'utf8')
+	).map((document) => document.toJS());
+	assert.equal(documents[0].env?.READY_ID, undefined);
+
+	const retry = documents.at(-1).find((command) => command.retry)?.retry;
+	assert.equal(retry.maxRetries, 1);
+	assert.ok(
+		retry.commands.some(
+			(command) =>
+				command.runFlow?.when?.platform === 'Android' &&
+				command.runFlow.when.visible === '(?i)fetch development servers'
+		),
+		'relaunch recovery must recheck the development launcher on its retry leg'
+	);
+
+	const findRelaunch = (commands) => {
+		for (const command of commands) {
+			if (command.runFlow?.file === '../subflows/relaunch-app.yml') return command.runFlow;
+			const nested = command.runFlow?.commands;
+			if (nested) {
+				const relaunch = findRelaunch(nested);
+				if (relaunch) return relaunch;
+			}
+		}
+	};
+	for (const [caller, readyId] of [
+		['03-authenticated-relaunch.yml', 'search-products'],
+		['08-void-order.yml', 'search-products'],
+		['09-pos-panel-resize.yml', 'screen-pos'],
+		['../subflows/relaunch-to-pos.yml', 'search-products'],
 	]) {
-		const retry = readMaestroFlow(filename).find((command) =>
-			command.retry?.commands.some(
-				(nested) => nested.extendedWaitUntil?.visible?.id === 'search-products'
-			)
-		)?.retry;
-		assert.ok(retry, `${filename} lost its relaunch readiness retry`);
-		assert.ok(
-			retry.commands.some(
-				(command) =>
-					command.runFlow?.when?.platform === 'Android' &&
-					command.runFlow.when.visible === '(?i)fetch development servers'
-			),
-			`${filename} checks the development launcher only once before the retry`
-		);
+		const relaunch = findRelaunch(readMaestroFlow(caller));
+		assert.equal(relaunch?.env?.READY_ID, readyId, `${caller} lost its readiness target`);
 	}
 });
 

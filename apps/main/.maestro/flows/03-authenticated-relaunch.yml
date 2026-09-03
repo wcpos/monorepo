@@ -8,5 +8,7 @@ appId: com.wcpos.main.dev
 # reported as "App crashed" — see flow 08's relaunch for the evidence.
 - runFlow:
     file: ../subflows/relaunch-app.yml
+    env:
+      READY_ID: search-products
 - assertNotVisible:
     id: "store-url-input"

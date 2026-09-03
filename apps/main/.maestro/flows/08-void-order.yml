@@ -169,6 +169,8 @@ appId: com.wcpos.main.dev
 # app's hierarchy while the scene is still coming up.
 - runFlow:
     file: ../subflows/relaunch-app.yml
+    env:
+      READY_ID: search-products
 - runFlow:
     when:
       visible:

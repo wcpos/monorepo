@@ -1,10 +1,6 @@
 appId: com.wcpos.main.dev
 # Maestro requires the config section in every flow file, subflows included
 # (see ensure-pos-ready.yml).
-env:
-  # The element that says the relaunched app is ready. Flow 09 waits for the
-  # POS screen itself; everything else waits for the products search box.
-  READY_ID: search-products
 ---
 # Cold-start the app and wait until it is usable again.
 #
@@ -26,7 +22,7 @@ env:
 - stopApp
 - evalScript: "${output.relaunchAttempt = 0}"
 - retry:
-    maxRetries: 2
+    maxRetries: 1
     commands:
       - evalScript: "${output.relaunchAttempt = output.relaunchAttempt + 1}"
       - runFlow:
