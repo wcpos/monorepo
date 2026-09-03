@@ -34,15 +34,35 @@ function walk(dir, exts, files = []) {
 // quoted forms are matched to the END of the line rather than to the first inner
 // quote — otherwise such an id silently drops out of the lint. Everything from
 // the first `${` is runtime-substituted, so only the static prefix is checkable.
+// An id that is ENTIRELY one variable (`id: "${READY_ID}"`) has no static
+// prefix to check; its values are the variable's assignments — the subflow's
+// own `env:` default and every caller's `runFlow: env:` override — so those
+// are what the lint checks (subflows/relaunch-app.yml, flow 09).
 const flowIds = new Set();
+const envAssignments = new Map();
+const flowTexts = [];
 for (const dir of maestroFlowDirs) {
 	for (const file of walk(dir, ['.yml', '.yaml'])) {
 		const text = fs.readFileSync(file, 'utf8');
-		for (const match of text.matchAll(/^\s*id:\s*(?:"(.*)"|'(.*)'|([^"'\n]+?))\s*$/gm)) {
-			const raw = (match[1] ?? match[2] ?? match[3]).trim();
-			const interpolation = raw.indexOf('${');
-			flowIds.add(interpolation === -1 ? raw : raw.slice(0, interpolation));
+		flowTexts.push(text);
+		for (const match of text.matchAll(/^\s+([A-Z][A-Z0-9_]*):\s*"?([A-Za-z0-9_.-]+)"?\s*$/gm)) {
+			if (!envAssignments.has(match[1])) envAssignments.set(match[1], new Set());
+			envAssignments.get(match[1]).add(match[2]);
 		}
+	}
+}
+for (const text of flowTexts) {
+	for (const match of text.matchAll(/^\s*id:\s*(?:"(.*)"|'(.*)'|([^"'\n]+?))\s*$/gm)) {
+		const raw = (match[1] ?? match[2] ?? match[3]).trim();
+		const whole = /^\${([A-Z][A-Z0-9_]*)}$/.exec(raw);
+		if (whole) {
+			const values = envAssignments.get(whole[1]);
+			if (!values || values.size === 0) flowIds.add(raw);
+			else for (const value of values) flowIds.add(value);
+			continue;
+		}
+		const interpolation = raw.indexOf('${');
+		flowIds.add(interpolation === -1 ? raw : raw.slice(0, interpolation));
 	}
 }
 

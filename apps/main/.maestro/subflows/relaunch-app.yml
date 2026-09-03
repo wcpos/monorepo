@@ -1,0 +1,62 @@
+appId: com.wcpos.main.dev
+# Maestro requires the config section in every flow file, subflows included
+# (see ensure-pos-ready.yml).
+---
+# Cold-start the app and wait until it is usable again.
+#
+# Split stop/launch + a screenshot-based settle: a combined `launchApp
+# {stopApp: true}` can race the XCTest driver's first hierarchy query ("Application
+# … is not running", flow 08's history has the timings).
+#
+# The launch sits INSIDE the retry. On the Android emulators a Metro cold
+# start dies in Fabric mounting 8–14 s after the bundle loads, intermittently
+# (#1661: react-native-screens' mounting delegate, a refcount fault; run
+# 33802794551 was ~1 in 12 cold starts today). The process is simply gone —
+# the failure screenshot is the launcher — and a retry that only re-waits can
+# never recover it. A second `launchApp` can. It is counted and logged so the
+# rate stays a grep (`WCPOS_E2E cold start never reached`), and the tombstone
+# collection still records every crash; this is not a fix for #1661, it stops
+# one known crash from failing a whole device run while the fix is found.
+# The same second launch also covers a genuinely slow load that missed the
+# 40 s budget — that costs one more cold start, nothing else.
+- stopApp
+- evalScript: "${output.relaunchAttempt = 0}"
+- retry:
+    maxRetries: 1
+    commands:
+      - evalScript: "${output.relaunchAttempt = output.relaunchAttempt + 1}"
+      - runFlow:
+          when:
+            true: "${output.relaunchAttempt > 1}"
+          commands:
+            - evalScript: "${console.log('WCPOS_E2E cold start never reached ' + READY_ID + ' within 40 s, launching again (attempt ' + output.relaunchAttempt + '; a Fatal signal in logcat makes this #1661)')}"
+      - launchApp
+      - waitForAnimationToEnd:
+          timeout: 5000
+      # Android: a cold `launchApp` can land on the dev launcher's HOME screen
+      # instead of reloading the last project (PR #1690 run 33279550244 attempt
+      # 2, phone, flow 05). Reload through the deep link.
+      - runFlow:
+          when:
+            platform: Android
+            visible: "(?i)fetch development servers"
+          commands:
+            - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
+            - waitForAnimationToEnd:
+                timeout: 5000
+      # A login tab left in the task stack can sit over the relaunched app.
+      # NOT `back`: the tab keeps web history (authorize → login form) and back
+      # navigates it instead of closing the tab — run 33574072528 flow 07.
+      - runFlow:
+          when:
+            platform: Android
+            visible: "Username or Email Address|Nombre de usuario o correo electrónico"
+          commands:
+            - evalScript: "${console.log('WCPOS_E2E lingering login tab over the relaunched app, force-stopping Chrome')}"
+            - stopApp: com.android.chrome
+            - waitForAnimationToEnd:
+                timeout: 5000
+      - extendedWaitUntil:
+          visible:
+            id: "${READY_ID}"
+          timeout: 40000
