@@ -1950,9 +1950,11 @@ test('native device jobs never queue behind another run (owner ruling 2026-09-03
 			assert.ok(!/turnstile|device slot/i.test(`${step.name ?? ''}${step.run ?? ''}`), step.name);
 		}
 	}
-	// The wait budget (150 min) left the job timeouts with it.
+	// The wait budget (150 min) left the job timeouts with it. Android: 25 min
+	// AVD generation + 15 min Metro + the 90-min suite ceiling + collection.
 	assert.ok(workflow.jobs.ios['timeout-minutes'] <= 60);
-	assert.ok(workflow.jobs.android['timeout-minutes'] <= 100);
+	assert.ok(workflow.jobs.android['timeout-minutes'] <= 130);
+	assert.ok(workflow.jobs.android['timeout-minutes'] >= 25 + 15 + 90);
 });
 
 test('the Android suite keeps adb reverse alive for the life of the run', () => {

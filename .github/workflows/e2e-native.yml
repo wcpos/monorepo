@@ -376,7 +376,11 @@ jobs:
     # flow 06 41m; run 33131212326: flows 04+05 52m together, then cancelled at
     # 60:00 with every completed flow green). Once the sync finishes, flows
     # take ~1 min. Budget = worst observed sync window + full suite + headroom.
-    timeout-minutes: 100
+    # 130, not 100 (CodeRabbit on #1795): the job's own setup can spend 25 min
+    # generating the AVD on a cache miss and 15 min on Metro's first bundle
+    # before the 90-min suite ceiling starts, and the always() artifact steps
+    # must still run after a suite that hits that ceiling.
+    timeout-minutes: 130
     strategy:
       # Both device classes of a platform run at once. max-parallel: 1 dated
       # from dev-pro's 4-worker php-fpm (181 pm.max_children warnings in six
