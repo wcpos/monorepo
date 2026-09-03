@@ -32,13 +32,13 @@ describe('useDisplayApi', () => {
 		};
 
 		await result.current.createPairing('device-1');
-		await result.current.listDisplays();
+		await result.current.listDisplays('device-1');
 		await result.current.forgetDisplay('d_42');
 		await result.current.readSignals('d_42', 7);
 		await result.current.postSignal('d_42', signal);
 
 		expect(post).toHaveBeenNthCalledWith(1, 'pairings', { device_id: 'device-1' });
-		expect(get).toHaveBeenNthCalledWith(1, 'displays');
+		expect(get).toHaveBeenNthCalledWith(1, 'displays', { params: { device_id: 'device-1' } });
 		expect(deleteRequest).toHaveBeenCalledWith('displays/d_42');
 		expect(get).toHaveBeenNthCalledWith(2, 'displays/d_42/signal', {
 			params: { for: 'pos', since: 7 },

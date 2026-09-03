@@ -22,8 +22,8 @@ export function useDisplayApi() {
 			async createPairing(deviceId: string): Promise<DisplayPairing> {
 				return responseData(await http.post('pairings', { device_id: deviceId }));
 			},
-			async listDisplays(): Promise<PairedDisplay[]> {
-				return responseData(await http.get('displays'));
+			async listDisplays(deviceId: string): Promise<PairedDisplay[]> {
+				return responseData(await http.get('displays', { params: { device_id: deviceId } }));
 			},
 			async forgetDisplay(id: string): Promise<void> {
 				responseData(await http.delete(`displays/${id}`));

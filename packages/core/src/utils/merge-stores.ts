@@ -7,6 +7,8 @@ import { AUTO_SYNCED_STORE_FIELDS } from '@wcpos/database/collections/schemas/st
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { DISPLAY_CAPABILITY_REVOKED } from '../screens/main/display/store';
+
 const appLogger = getLogger(['wcpos', 'app', 'stores']);
 
 /**
@@ -158,6 +160,17 @@ export function getServerOwnedStorePatch(
 		if (incomingValue !== undefined && !isEqual(currentData[field], incomingValue)) {
 			patch[field] = incomingValue;
 		}
+	}
+
+	// Unlike fields older plugins simply omit, the display capability is revoked when the
+	// server stops advertising it (Pro deactivated): absence is authoritative.
+	if (
+		fields.includes('display') &&
+		!providedFields.has('display') &&
+		currentData.display &&
+		!isEqual(currentData.display, DISPLAY_CAPABILITY_REVOKED)
+	) {
+		patch.display = DISPLAY_CAPABILITY_REVOKED;
 	}
 
 	return patch;

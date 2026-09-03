@@ -62,7 +62,7 @@ function CustomerDisplayContent() {
 
 	const loadDisplays = React.useCallback(async () => {
 		try {
-			setDisplays(await api.listDisplays());
+			setDisplays(await api.listDisplays(await getDeviceId()));
 		} catch (error) {
 			Toast.show({ type: 'error', title: t('common.error'), description: getErrorMessage(error) });
 		}

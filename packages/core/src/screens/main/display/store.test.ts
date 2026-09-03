@@ -11,3 +11,11 @@ describe('getDisplaySignaling', () => {
 		expect(getDisplaySignaling({ display: { contract: 1, signaling } })).toBeNull();
 	});
 });
+
+describe('getDisplaySignaling contract gate', () => {
+	it.each([0, 2, undefined])('returns null for contract %p', (contract) => {
+		expect(
+			getDisplaySignaling({ display: { contract, signaling: '/wcpos/v2/display' } })
+		).toBeNull();
+	});
+});

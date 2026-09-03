@@ -122,6 +122,8 @@ describe('CustomerDisplaySettings', () => {
 			() => new Promise((resolve) => listResolvers.push(resolve as (displays: never[]) => void))
 		);
 		render(<CustomerDisplaySettings />);
+		// listDisplays is called after getDeviceId() resolves.
+		await act(async () => {});
 		await act(async () => {
 			listResolvers[0]([]);
 		});

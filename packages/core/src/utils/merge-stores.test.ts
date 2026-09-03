@@ -170,6 +170,28 @@ describe('mergeStoresWithResponse', () => {
 		});
 	});
 
+	it('revokes the display capability when the server stops advertising it', async () => {
+		const existingStore = makeStoreDocument({
+			id: 1,
+			localID: getLocalID(1),
+			display: { contract: 1, signaling: '/wcpos/v2/display' },
+		});
+		const userDB = makeUserDB();
+		const wpUser = makeWpUser([existingStore]);
+
+		await mergeStoresWithResponse({
+			userDB: userDB as any,
+			wpUser: wpUser as any,
+			remoteStores: [{ id: 1, name: 'Store 1' }],
+			user: { uuid: 'user-uuid' },
+			siteID: 'site-1',
+		});
+
+		expect(existingStore.incrementalPatch).toHaveBeenCalledWith(
+			expect.objectContaining({ display: { contract: 0, signaling: '' } })
+		);
+	});
+
 	it('leaves existing values unchanged when server-owned fields are absent', async () => {
 		const existingStore = makeStoreDocument({
 			id: 1,
