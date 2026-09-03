@@ -221,6 +221,10 @@ describe('useTenderFlow', () => {
 		await act(async () => result.current.takeTender());
 
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+		// Refusing silently would leave the cashier pressing a dead button.
+		expect(mockInfo).toHaveBeenCalledWith('pos_checkout.needs_a_connection', {
+			showToast: true,
+		});
 	});
 
 	it('returns to method selection without completing after a part payment', async () => {

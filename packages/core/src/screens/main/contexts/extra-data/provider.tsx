@@ -23,10 +23,6 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 	const http = useRestHttpClient();
 	const { extraData } = useStoreSession();
 	const { engine } = useQueryRuntime();
-	const [verifiedPaymentMethodsFor, setVerifiedPaymentMethodsFor] = React.useState<
-		typeof extraData | null
-	>(null);
-	const paymentMethodsVerified = verifiedPaymentMethodsFor === extraData;
 
 	React.useEffect(() => {
 		// Store-scoped bridge from the sync engine's public event stream to persisted RxState.
@@ -58,21 +54,29 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 					}
 				})
 				.catch(() => undefined);
+		// This descriptor is the checkout-mode gate (`usePaymentMethods` → `CheckoutDocument`),
+		// so unlike its three neighbours it is re-fetched on every start rather than only when
+		// missing: a store that rolls the plugin back must stop being handed the tender flow.
+		// A 404 is the store ANSWERING that it no longer serves the payments contract, so the
+		// cached descriptor is dropped and the till falls back to the gateway checkout. Every
+		// other failure — offline, timeout, a 500 — proves nothing about the store, and the
+		// cached descriptor stands: an offline till keeps the tender flow it was working with,
+		// which is the whole point of `capabilities.offline` and the "works offline" tile badge.
 		const fetchPaymentMethods = (generation: number) =>
 			void http
 				.get('/payment-methods')
-				.then(async (response) => {
+				.then((response) => {
 					if (generation === refreshGeneration && response?.status === 200) {
-						await extraData.set('paymentMethods', () => response.data);
-						if (generation === refreshGeneration) setVerifiedPaymentMethodsFor(extraData);
+						void extraData.set('paymentMethods', () => response.data);
 					}
 				})
-				.catch(() => {
-					if (generation === refreshGeneration) setVerifiedPaymentMethodsFor(null);
+				.catch((error: { response?: { status?: number } }) => {
+					if (generation === refreshGeneration && error?.response?.status === 404) {
+						void extraData.set('paymentMethods', () => null);
+					}
 				});
 		const fetchAll = () => {
 			const generation = ++refreshGeneration;
-			setVerifiedPaymentMethodsFor(null);
 			fetchTaxClasses(generation);
 			fetchShippingMethods(generation);
 			fetchOrderStatuses(generation);
@@ -95,9 +99,5 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 		};
 	}, [engine, extraData, http]);
 
-	return (
-		<ExtraDataContext.Provider value={{ extraData, paymentMethodsVerified }}>
-			{children}
-		</ExtraDataContext.Provider>
-	);
+	return <ExtraDataContext.Provider value={{ extraData }}>{children}</ExtraDataContext.Provider>;
 }

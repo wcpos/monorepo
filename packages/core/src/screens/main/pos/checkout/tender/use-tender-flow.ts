@@ -22,6 +22,7 @@ import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
 import { useRecordManualPayment, useVoidPayments } from '../payments';
+import { disabledReasonKey } from './labels';
 import {
 	appliedMinor,
 	changeMinor,
@@ -162,7 +163,17 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				return;
 			}
 			if (blockIfDegraded('process-payment', { orderId: order.uuid })) return;
-			if (tiles.find(({ method: candidate }) => candidate.id === method.id)?.disabled) return;
+			// The tile can go disabled under a keypad that is already open — connectivity
+			// drops on an online-only method. Refusing here is right, but a press that does
+			// nothing is not: the contract §13 rule is disabled WITH THE REASON, never a
+			// dead button, so the cashier gets the same line the tile is showing.
+			const selectedTile = tiles.find(({ method: candidate }) => candidate.id === method.id);
+			if (selectedTile?.disabled && selectedTile.reason) {
+				logger.info(t(disabledReasonKey(selectedTile.reason), { title: method.title }), {
+					showToast: true,
+				});
+				return;
+			}
 
 			const tendered = method.capabilities.change ? fromMinor(state.entryMinor, dp) : null;
 			const outcome = await recordManualPayment(order, method, {

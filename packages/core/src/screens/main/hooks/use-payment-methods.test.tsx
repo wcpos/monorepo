@@ -24,20 +24,18 @@ const cash = {
 } as const;
 
 let paymentMethods: unknown;
-let paymentMethodsVerified = true;
 
 jest.mock('@wcpos/query', () => ({
 	useDocField: (_document: unknown, selector: (value: Record<string, unknown>) => unknown) =>
 		selector({ paymentMethods }),
 }));
 jest.mock('../contexts/extra-data', () => ({
-	useExtraData: () => ({ extraData: {}, paymentMethodsVerified }),
+	useExtraData: () => ({ extraData: {} }),
 }));
 
 describe('usePaymentMethods', () => {
 	it('returns the loaded envelope and indexes methods without reordering them', () => {
 		paymentMethods = { schema: 1, contract: '1.0', methods: [cash] };
-		paymentMethodsVerified = true;
 
 		const { result } = renderHook(() => usePaymentMethods());
 
@@ -69,16 +67,7 @@ describe('usePaymentMethods', () => {
 	});
 
 	it('rejects an envelope containing a null payment method', () => {
-		paymentMethodsVerified = true;
 		paymentMethods = { schema: 1, contract: '1.0', methods: [null] };
-
-		const { result } = renderHook(() => usePaymentMethods());
-
-		expect(result.current).toMatchObject({ methods: [], loaded: false });
-	});
-
-	it('does not expose a persisted descriptor until this session verifies the route', () => {
-		paymentMethodsVerified = false;
 
 		const { result } = renderHook(() => usePaymentMethods());
 
