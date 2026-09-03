@@ -80,6 +80,7 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 					),
 				}))
 			);
+			if (scanGenerationRef.current !== generation) return;
 
 			for (const { vendor, result } of discoveryResults) {
 				if (result.status === 'fulfilled') {

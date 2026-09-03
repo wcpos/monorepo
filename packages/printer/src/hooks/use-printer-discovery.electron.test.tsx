@@ -324,6 +324,41 @@ describe('usePrinterDiscovery (electron)', () => {
 		expect(result.current.isScanning).toBe(false);
 	});
 
+	it('does not start identification after the scan is stopped during discovery', async () => {
+		const discovered: DiscoveredPrinter = {
+			id: 'mdns-epson',
+			name: 'EPSON TM-m30III',
+			connectionType: 'network',
+			address: '192.168.1.30',
+			port: 9100,
+			vendor: 'epson',
+		};
+		let finishDiscovery!: (printers: DiscoveredPrinter[]) => void;
+		let discoveryInvocations = 0;
+		installIpc((channel: string) =>
+			channel === 'printer-discovery' && discoveryInvocations++ === 0
+				? new Promise((resolve) => {
+						finishDiscovery = resolve;
+					})
+				: Promise.resolve([])
+		);
+		vi.mocked(identifyDiscoveredPrinters).mockClear();
+		const { result } = renderHook(() => usePrinterDiscovery());
+		let scan!: Promise<void>;
+
+		act(() => {
+			scan = result.current.startScan();
+		});
+		await act(async () => {
+			await result.current.stopScan();
+			finishDiscovery([discovered]);
+			await scan;
+		});
+
+		expect(identifyDiscoveredPrinters).not.toHaveBeenCalled();
+		expect(result.current.isScanning).toBe(false);
+	});
+
 	// 7. select → connect-timeout path
 	it('select then connect timeout sets bt-connect-failed error and clears scanning', () => {
 		const { result } = renderHook(() => usePrinterDiscovery());

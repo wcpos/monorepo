@@ -105,6 +105,7 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 			const result = await ipc.invoke('printer-discovery', {
 				action: 'start',
 			});
+			if (scanGenerationRef.current !== generation) return;
 			const identified = await identifyDiscoveredPrinters(result, createIdentifyProbes());
 			if (scanGenerationRef.current !== generation) return;
 			setPrinters((prev) => {

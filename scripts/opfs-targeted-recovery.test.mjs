@@ -1769,11 +1769,14 @@ test("does not report a successful hollow-row recovery as an error", async () =>
     const recovering = await withTargetedOpfsRecovery(
       getRxStorageFilesystemNode({ basePath }),
     ).createStorageInstance(storageParams("report-recovering"));
-    assert.deepEqual(
-      await recovering.findDocumentsById([hollow.id], true),
-      [],
-    );
-    await recovering.close();
+    try {
+      assert.deepEqual(
+        await recovering.findDocumentsById([hollow.id], true),
+        [],
+      );
+    } finally {
+      await recovering.close();
+    }
 
     assert.deepEqual(errors, []);
     assert.equal(warnings.length, 1);
