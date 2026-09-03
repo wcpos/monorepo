@@ -26,6 +26,7 @@ export type ErrorCode =
 	| 'PAYMENT201'
 	| 'PAYMENT301'
 	| 'PAYMENT401'
+	| 'PAYMENT501'
 	| 'PRINT101'
 	| 'PRINT201'
 	| 'PRINT301'
@@ -328,6 +329,17 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		actionHint: 'Wake the terminal, check its connection, and re-pair.',
 		dataSafety: 'no-impact',
 		summary: 'The payment terminal did not finish pairing with WCPOS.',
+	},
+	PAYMENT501: {
+		code: 'PAYMENT501',
+		symbol: 'PAYMENT_ALREADY_PAID_ONLINE',
+		domain: 'PAYMENT',
+		severity: 'error',
+		actionHint:
+			'Refund the additional payment taken at the till — the order was already paid online.',
+		dataSafety: 'money-moved',
+		summary:
+			'The order was already paid online, so an additional payment was also taken at the till.',
 	},
 	PRINT101: {
 		code: 'PRINT101',
@@ -902,6 +914,7 @@ export const ERROR_CODES = {
 	PAYMENT_OUTCOME_UNKNOWN: 'PAYMENT201',
 	GATEWAY_UNAVAILABLE: 'PAYMENT301',
 	TERMINAL_PAIRING_INCOMPLETE: 'PAYMENT401',
+	PAYMENT_ALREADY_PAID_ONLINE: 'PAYMENT501',
 	AUTOPRINT_DID_NOT_START: 'PRINT101',
 	PRINT_JOB_FAILED: 'PRINT201',
 	PRINTER_UNREACHABLE: 'PRINT301',

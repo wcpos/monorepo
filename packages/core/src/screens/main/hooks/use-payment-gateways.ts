@@ -3,6 +3,9 @@ import * as React from 'react';
 import { PaymentGatewayContract } from './payment-gateway-contract';
 import { useRestHttpClient } from './use-rest-http-client';
 
+/**
+ * @deprecated Payments contract v1 (wcpos/roadmap#97): read descriptors from usePaymentMethods(); this hook serves the legacy /payment-gateways checkout contract until the two-pane checkout lands (#143).
+ */
 export function usePaymentGateways(selectedGatewayId?: string | null) {
 	const http = useRestHttpClient();
 	const [gateways, setGateways] = React.useState<PaymentGatewayContract[]>([]);

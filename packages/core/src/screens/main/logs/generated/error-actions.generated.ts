@@ -60,6 +60,8 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.PAYMENT301');
 		case 'PAYMENT401':
 			return t('health.logs.error_action.PAYMENT401');
+		case 'PAYMENT501':
+			return t('health.logs.error_action.PAYMENT501');
 		case 'PRINT101':
 			return t('health.logs.error_action.PRINT101');
 		case 'PRINT201':

@@ -88,6 +88,7 @@ const SEED_SYMBOLS = [
 	'NATIVE_CRASH',
 	'ORDER_TAX_RATE_UNKNOWN',
 	'OUT_OF_MEMORY',
+	'PAYMENT_ALREADY_PAID_ONLINE',
 	'PAYMENT_OK_STATUS_CHECK_FAILED',
 	'PAYMENT_OUTCOME_UNKNOWN',
 	'PAYMENT_UNEXPECTED',
@@ -185,6 +186,12 @@ describe('error registry', () => {
 		} finally {
 			rmSync(outputDirectory, { recursive: true, force: true });
 		}
+	});
+
+	it('keeps PAYMENT501 method- and connectivity-neutral', () => {
+		const entry = entryFor('PAYMENT501');
+		const guidance = [entry.actionHint, entry.summary, entry.docsBody].join(' ');
+		expect(guidance).not.toMatch(/\bcash\b|\boffline\b/i);
 	});
 
 	it('covers non-record local write failures in SYNC101 guidance', () => {

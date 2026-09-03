@@ -580,6 +580,26 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"code": "PAYMENT501",
+		"symbol": "PAYMENT_ALREADY_PAID_ONLINE",
+		"domain": "PAYMENT",
+		"severity": "error",
+		"actionHint": "Refund the additional payment taken at the till — the order was already paid online.",
+		"retryPolicy": "never",
+		"dataSafety": "money-moved",
+		"escalation": "none",
+		"summary": "The order was already paid online, so an additional payment was also taken at the till.",
+		"docsBody": "The store reported that the order was already paid after the till took a manual payment. The manual payment is kept in the order's ledger as failed (order_already_paid) so nothing is hidden; the cashier refunds the additional payment.",
+		"troubleshooting": [
+			"Open the order from the attention list.",
+			"Confirm the online payment in WooCommerce.",
+			"Refund the till payment and note it on the order."
+		],
+		"logSources": [],
+		"evidence": "wcpos/roadmap#105",
+		"introducedIn": "1.11.0"
+	},
+	{
 		"code": "PRINT101",
 		"symbol": "AUTOPRINT_DID_NOT_START",
 		"domain": "PRINT",

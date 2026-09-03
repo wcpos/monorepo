@@ -30,17 +30,21 @@ import { resolveProbeAuthorization, TEARDOWN_CREDENTIAL_TIMEOUT_MS } from './pro
 export const PUSH_ORDERS = /\/wp-json\/wcpos\/v2\/push\/orders(\?|$)/;
 
 /**
- * Whether a response is the order-push POST, under EITHER permalink style.
+ * Whether a response is a successful order-push POST, under EITHER permalink style.
  * Pretty permalinks put the route in the pathname; plain permalinks carry it
  * as `?rest_route=` — matching only the pretty form makes a spec time out on a
  * plain-permalink store despite a successful save (#1114 review). Same dual
  * form orders.spec.ts always used.
+ *
+ * The app refreshes an expired credential after a 401 and retries the write.
+ * Ignore that rejected attempt so the waiter can observe the successful retry.
  */
 export function isPushOrdersResponse(response: {
 	url: () => string;
 	request: () => { method: () => string };
+	status: () => number;
 }): boolean {
-	if (response.request().method() !== 'POST') return false;
+	if (response.request().method() !== 'POST' || response.status() >= 400) return false;
 	const url = new URL(response.url());
 	return (
 		PUSH_ORDERS.test(response.url()) ||
