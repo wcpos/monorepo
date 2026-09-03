@@ -78,6 +78,7 @@ function createDeps(online = true): RecordManualPaymentDeps & {
 	patchAndEnqueue: jest.Mock;
 	mirror: jest.Mock;
 	raiseAttention: jest.Mock;
+	fetchOrderStatus: jest.Mock;
 } {
 	return {
 		post: jest.fn(),
@@ -88,6 +89,7 @@ function createDeps(online = true): RecordManualPaymentDeps & {
 		dp: 2,
 		patchAndEnqueue: jest.fn(async () => undefined),
 		mirror: jest.fn(async () => undefined),
+		fetchOrderStatus: jest.fn(async () => null),
 		raiseAttention: jest.fn(),
 		now: () => NOW,
 		uuid: () => UUID,
@@ -233,18 +235,46 @@ describe('recordManualPayment', () => {
 		});
 	});
 
-	it('rejects an already-paid refusal without authoritative order state', async () => {
+	it('refreshes the order status when an already-paid refusal omits its summary', async () => {
 		const deps = createDeps();
-		const staleOrder = { ...order, status: 'pending' };
 		deps.post.mockRejectedValue(responseError(409, 'wcpos_order_already_paid'));
+		deps.fetchOrderStatus.mockResolvedValue('completed');
 
-		const promise = recordManualPayment(staleOrder, card, { amount: '42.50' }, deps);
+		const result = await recordManualPayment(order, card, { amount: '42.50' }, deps);
 
-		await expect(promise).rejects.toMatchObject({
-			code: 'wcpos_order_already_paid',
-			status: 409,
-		});
-		expect(deps.mirror).not.toHaveBeenCalled();
+		// The refusal is the server saying the local copy is stale; mirroring the failed
+		// row must not leave a paid order sitting at its stale status.
+		expect(deps.fetchOrderStatus).toHaveBeenCalledTimes(1);
+		expect(deps.mirror.mock.calls[0][0].status).toBe('completed');
+		expect(result).toMatchObject({ kind: 'refused', reason: 'order_already_paid' });
+	});
+
+	it('still mirrors the refused row when the status refresh fails', async () => {
+		const deps = createDeps();
+		deps.post.mockRejectedValue(responseError(409, 'wcpos_order_already_paid'));
+		deps.fetchOrderStatus.mockRejectedValue(new Error('offline'));
+
+		const result = await recordManualPayment(order, card, { amount: '42.50' }, deps);
+
+		// The money was taken: the row and the attention entry land regardless; only the
+		// status is left alone because we have nothing authoritative to set it to.
+		expect(deps.mirror.mock.calls[0][0].status).toBeUndefined();
+		expect(deps.raiseAttention).toHaveBeenCalledTimes(1);
+		expect(result).toMatchObject({ kind: 'refused', reason: 'order_already_paid' });
+	});
+
+	it('does not refresh when the refusal already carries the server summary', async () => {
+		const deps = createDeps();
+		deps.post.mockRejectedValue(
+			responseError(409, 'wcpos_order_already_paid', {
+				order: { status: 'completed', balance: '0.00' },
+			})
+		);
+
+		await recordManualPayment(order, card, { amount: '42.50' }, deps);
+
+		expect(deps.fetchOrderStatus).not.toHaveBeenCalled();
+		expect(deps.mirror.mock.calls[0][0].status).toBe('completed');
 	});
 
 	it('records an amount-exceeds-balance refusal and raises attention', async () => {

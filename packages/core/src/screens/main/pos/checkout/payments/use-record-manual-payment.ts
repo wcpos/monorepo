@@ -63,6 +63,11 @@ export function useRecordManualPayment(): (
 					const result = await localPatch({ document: order, data: changes });
 					if (!result) throw new Error('Payment could not be saved locally.');
 				},
+				fetchOrderStatus: async () => {
+					const response = await http.get(`orders/${paymentOrder.id}`);
+					const status = (response?.data as { status?: unknown } | undefined)?.status;
+					return typeof status === 'string' ? status : null;
+				},
 				mirror: async (changes) => {
 					await patchEngineResident({
 						manager,

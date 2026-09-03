@@ -7,6 +7,7 @@ import type { EngineRecord } from '@wcpos/query';
 import { useRecordManualPayment } from './use-record-manual-payment';
 
 const mockPost = jest.fn();
+const mockGet = jest.fn();
 const mockLocalPatch = jest.fn();
 const mockPatchEngineResident = jest.fn(async (_input: unknown) => undefined);
 const mockLoggerError = jest.fn();
@@ -16,7 +17,7 @@ let onlineStatus = 'offline';
 
 jest.mock('uuid', () => ({ v4: () => 'payment-id' }));
 jest.mock('../../../hooks/use-rest-http-client', () => ({
-	useRestHttpClient: () => ({ post: mockPost }),
+	useRestHttpClient: () => ({ post: mockPost, get: mockGet }),
 }));
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: onlineStatus }),
@@ -111,6 +112,25 @@ it('routes an offline row through localPatch on the supplied order document', as
 			]),
 		},
 	});
+});
+
+it('refreshes the order over REST when a refusal omits the server summary', async () => {
+	onlineStatus = 'online-website-available';
+	mockPost.mockRejectedValue({
+		response: {
+			status: 409,
+			data: { code: 'wcpos_order_already_paid', message: 'Paid', data: {} },
+		},
+	});
+	mockGet.mockResolvedValue({ data: { id: 1042, status: 'completed' } });
+	const { result } = renderHook(() => useRecordManualPayment());
+
+	await act(() => result.current(order, method, { amount: 40 }));
+
+	expect(mockGet).toHaveBeenCalledWith('orders/1042');
+	expect(mockPatchEngineResident).toHaveBeenCalledWith(
+		expect.objectContaining({ changes: expect.objectContaining({ status: 'completed' }) })
+	);
 });
 
 it('rejects the payment when localPatch reports a failed write', async () => {

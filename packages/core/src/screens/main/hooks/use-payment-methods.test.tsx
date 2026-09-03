@@ -66,11 +66,44 @@ describe('usePaymentMethods', () => {
 		expect(result.current).toMatchObject({ loaded: true, unsupportedSchema: true });
 	});
 
-	it('rejects an envelope containing a null payment method', () => {
-		paymentMethods = { schema: 1, contract: '1.0', methods: [null] };
+	it('drops a structurally unusable method and keeps the rest', () => {
+		// One malformed gateway must not stop the till taking cash on the others.
+		paymentMethods = {
+			schema: 1,
+			contract: '1.0',
+			methods: [null, cash, { title: 'No id' }, { id: 'broken', title: 'No capture block' }],
+		};
+
+		const { result } = renderHook(() => usePaymentMethods());
+
+		expect(result.current).toMatchObject({ methods: [cash], loaded: true });
+		expect(result.current.byId.get('pos_cash')).toEqual(cash);
+	});
+
+	it('keeps a method whose enum values are unknown (disabled-with-reason, not dropped)', () => {
+		const future = { ...cash, id: 'future', capture: { ...cash.capture, mode: 'teleport' } };
+		paymentMethods = { schema: 1, contract: '1.0', methods: [future] };
+
+		const { result } = renderHook(() => usePaymentMethods());
+
+		expect(result.current.methods).toEqual([future]);
+	});
+
+	it('stays unloaded when every advertised method is malformed', () => {
+		// A broken payload must leave the legacy checkout available, not an empty tile grid.
+		paymentMethods = { schema: 1, contract: '1.0', methods: [null, { id: 'broken' }] };
 
 		const { result } = renderHook(() => usePaymentMethods());
 
 		expect(result.current).toMatchObject({ methods: [], loaded: false });
 	});
+
+	it('treats a genuinely empty advertised list as loaded', () => {
+		paymentMethods = { schema: 1, contract: '1.0', methods: [] };
+
+		const { result } = renderHook(() => usePaymentMethods());
+
+		expect(result.current).toMatchObject({ methods: [], loaded: true });
+	});
+
 });
