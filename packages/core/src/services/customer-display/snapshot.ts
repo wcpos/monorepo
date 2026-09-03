@@ -13,6 +13,7 @@ type SnapshotContainer = {
 		i18n?: unknown;
 		presentation_hints?: unknown;
 		order?: {
+			i18n?: unknown;
 			order?: { customer_note?: unknown };
 			lines?: unknown[];
 			lines_truncated?: boolean;
@@ -75,6 +76,10 @@ export function serialiseSnapshot(value: object): string {
 	if (byteLength(serialised) > MAX_SNAPSHOT_BYTES) {
 		order.lines = [];
 		order.lines_truncated = true;
+		serialised = JSON.stringify(copy);
+	}
+	if (byteLength(serialised) > MAX_SNAPSHOT_BYTES) {
+		order.i18n = {};
 		serialised = JSON.stringify(copy);
 	}
 	if (byteLength(serialised) > MAX_SNAPSHOT_BYTES) {

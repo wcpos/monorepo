@@ -61,3 +61,37 @@ test('caps ICE gathering at three seconds', async () => {
 	);
 	jest.useRealTimers();
 });
+
+test.each(['channel error', 'failed connection'])(
+	'%s closes both transports before notifying',
+	(cause) => {
+		const events: string[] = [];
+		const channel = {
+			readyState: 'connecting',
+			close: jest.fn(() => events.push('channel closed')),
+			send: jest.fn(),
+			onerror: null as (() => void) | null,
+		};
+		let connectionStateChange: () => void = () => undefined;
+		const connection = {
+			iceGatheringState: 'complete',
+			connectionState: 'new',
+			createDataChannel: () => channel,
+			addEventListener: jest.fn((type: string, listener: () => void) => {
+				if (type === 'connectionstatechange') connectionStateChange = listener;
+			}),
+			close: jest.fn(() => events.push('connection closed')),
+		};
+		Object.assign(globalThis, { RTCPeerConnection: jest.fn(() => connection) });
+		const peer = createOfferer();
+		peer.onClose(() => events.push('notified'));
+
+		if (cause === 'channel error') channel.onerror?.();
+		else {
+			connection.connectionState = 'failed';
+			connectionStateChange();
+		}
+
+		expect(events).toEqual(['channel closed', 'connection closed', 'notified']);
+	}
+);

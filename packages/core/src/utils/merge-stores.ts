@@ -156,9 +156,6 @@ export function getServerOwnedStorePatch(
 	}
 
 	const patch: Record<string, unknown> = {};
-	if (normalizedStore.display === undefined && currentData.display !== undefined) {
-		patch.display = undefined;
-	}
 	for (const field of fields) {
 		if (!providedFields.has(field)) {
 			continue;
@@ -181,6 +178,12 @@ export async function mergeServerOwnedStoreFields(
 	const patch = getServerOwnedStorePatch(latest, incomingStore);
 	if (Object.keys(patch).length > 0) {
 		await storeDocument.incrementalPatch(patch as never);
+	}
+	if (latest.display !== undefined && normalizeStorePayload(incomingStore).display === undefined) {
+		await storeDocument.getLatest().incrementalModify((docData) => {
+			delete (docData as { display?: unknown }).display;
+			return docData;
+		});
 	}
 	return patch;
 }

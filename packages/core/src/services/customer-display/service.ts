@@ -64,7 +64,9 @@ export class CustomerDisplayService {
 	async refreshDisplays(): Promise<void> {
 		if (this.stopped) return;
 		try {
-			const displays = await this.signaling.listDisplays(this.options.deviceId);
+			const displays = (await this.signaling.listDisplays(this.options.deviceId)).filter(
+				({ store_id }) => store_id === 0 || store_id === this.options.storeId
+			);
 			if (this.stopped) return;
 			this.registryReadSucceeded = true;
 			if (this.pairingCode && displays.some(({ id }) => !this.pairingDisplayIds.has(id))) {
@@ -106,7 +108,13 @@ export class CustomerDisplayService {
 					session.updateDisplay(display);
 				}
 				if (!session.isOpen) {
-					await session.poll();
+					try {
+						await session.poll();
+					} catch (error) {
+						logger.warn('Customer display session poll failed', {
+							context: { displayId: display.id, error },
+						});
+					}
 					if (this.stopped) return;
 				}
 			}
@@ -117,7 +125,9 @@ export class CustomerDisplayService {
 	}
 	async mintPairingCode(): Promise<PairingCode | null> {
 		if (this.stopped) return null;
-		const displays = await this.signaling.listDisplays(this.options.deviceId);
+		const displays = (await this.signaling.listDisplays(this.options.deviceId)).filter(
+			({ store_id }) => store_id === 0 || store_id === this.options.storeId
+		);
 		if (this.stopped) return null;
 		this.registryReadSucceeded = true;
 		this.displays = displays;
@@ -214,7 +224,7 @@ export class CustomerDisplayService {
 		const needsPoll =
 			!this.registryReadSucceeded ||
 			this.activePairingCode() ||
-			this.displays.some(({ id }) => !this.sessions.get(id)?.isOpen);
+			this.displays.some(({ id }) => !this.sessions.get(id)?.isConfigured);
 		if (needsPoll) {
 			this.timer = setTimeout(() => {
 				void this.refreshDisplays().catch((error) => {

@@ -300,6 +300,19 @@ test('a close re-offers with a fresh session on the next poll', async () => {
 	);
 });
 
+test('closes an open channel that never sends a valid hello', async () => {
+	jest.useFakeTimers();
+	const { session, peers } = setup();
+	await session.poll();
+	peers[0].open();
+
+	await jest.advanceTimersByTimeAsync(10_000);
+
+	expect(peers[0].channelState).toBe('closed');
+	expect(session.isOpen).toBe(false);
+	jest.useRealTimers();
+});
+
 test('a rejected offer post clears the peer and the next poll re-offers', async () => {
 	const { session, peers, signaling } = setup();
 	jest.mocked(signaling.postSignal).mockRejectedValueOnce(new Error('temporary failure'));

@@ -102,3 +102,19 @@ test('drops oversized display config translations to stay under the message cap'
 	expect(result.payload.i18n).toEqual({});
 	expect(result.payload.presentation_hints).toEqual({ locale: 'en_US' });
 });
+
+test('drops oversized order translations after dropping lines', () => {
+	const value = {
+		action: 'cart.updated',
+		payload: {
+			order: { i18n: { receipt: 'x'.repeat(MAX_SNAPSHOT_BYTES) }, lines: [] },
+			ledger: { total_raw: 10 },
+		},
+	};
+	const text = serialiseSnapshot(value);
+	const result = JSON.parse(text);
+
+	expect(new TextEncoder().encode(text).byteLength).toBeLessThanOrEqual(MAX_SNAPSHOT_BYTES);
+	expect(result.payload.order.i18n).toEqual({});
+	expect(result.payload.ledger).toEqual({ total_raw: 10 });
+});

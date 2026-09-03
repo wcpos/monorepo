@@ -46,6 +46,7 @@ export function useDisplaySnapshot() {
 				line_items: (orderData.line_items ?? []).filter((item) => item.product_id !== null),
 				fee_lines: (orderData.fee_lines ?? []).filter((item) => item.name !== null),
 				shipping_lines: (orderData.shipping_lines ?? []).filter((item) => item.method_id !== null),
+				coupon_lines: (orderData.coupon_lines ?? []).filter((item) => item.code != null),
 			},
 		[orderData]
 	);
@@ -102,7 +103,7 @@ export function useDisplaySnapshot() {
 				(displayOrderData.line_items?.length ?? 0) === 0 &&
 				(displayOrderData.fee_lines?.length ?? 0) === 0 &&
 				(displayOrderData.shipping_lines?.length ?? 0) === 0,
-			hasCoupons: (orderData.coupon_lines?.length ?? 0) > 0,
+			hasCoupons: displayOrderData.coupon_lines.length > 0,
 		};
 	}, [orderUuid, orderData, displayOrderData, order, ledger, rows]);
 }

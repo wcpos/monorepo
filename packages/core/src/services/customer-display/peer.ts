@@ -34,18 +34,20 @@ export function createOfferer(): OffererPeer {
 	let message: (text: string) => void = () => undefined;
 	let close: () => void = () => undefined;
 	let closed = false;
-	const notifyClose = () => {
+	const closePeer = () => {
 		if (closed) return;
 		closed = true;
+		channel.close();
+		connection.close();
 		close();
 	};
 	channel.onopen = () => open();
 	channel.onmessage = (event) => message(String(event.data));
-	channel.onclose = notifyClose;
-	channel.onerror = notifyClose;
+	channel.onclose = closePeer;
+	channel.onerror = closePeer;
 	connection.addEventListener('connectionstatechange', () => {
 		if (connection.connectionState === 'failed' || connection.connectionState === 'closed') {
-			notifyClose();
+			closePeer();
 		}
 	});
 	return {
@@ -81,9 +83,7 @@ export function createOfferer(): OffererPeer {
 			close = fn;
 		},
 		close() {
-			channel.close();
-			connection.close();
-			notifyClose();
+			closePeer();
 		},
 	};
 }

@@ -1,5 +1,6 @@
 import {
 	getServerOwnedStorePatch,
+	mergeServerOwnedStoreFields,
 	mergeStoresWithResponse,
 	normalizeStorePayload,
 } from './merge-stores';
@@ -68,8 +69,12 @@ const makeStoreDocument = (data: Record<string, unknown>) => {
 		incrementalPatch: jest.fn(async (patch: Record<string, unknown>) => {
 			Object.assign(document, patch);
 		}),
+		incrementalModify: jest.fn(
+			async (modify: (data: Record<string, unknown>) => Record<string, unknown>) => modify(document)
+		),
 	};
 	document.getLatest = jest.fn(() => document);
+	document.toJSON = jest.fn(() => document);
 	return document;
 };
 
@@ -535,13 +540,19 @@ describe('mergeStoresWithResponse', () => {
 });
 
 describe('getServerOwnedStorePatch', () => {
-	it('clears a withdrawn display advertisement', () => {
-		expect(
-			getServerOwnedStorePatch(
-				{ id: 1, display: { contract: 1, signaling: '/wcpos/v2/display' } },
-				{ id: 1 }
-			)
-		).toEqual({ display: undefined });
+	it('deletes a withdrawn display advertisement without patching undefined', async () => {
+		const store = makeStoreDocument({
+			id: 1,
+			display: { contract: 1, signaling: '/wcpos/v2/display' },
+		});
+
+		const patch = await mergeServerOwnedStoreFields(store, { id: 1 });
+
+		expect(patch).toEqual({});
+		expect(Object.values(patch)).not.toContain(undefined);
+		expect(store).not.toHaveProperty('display');
+		expect(store.incrementalPatch).not.toHaveBeenCalled();
+		expect(store.incrementalModify).toHaveBeenCalledTimes(1);
 	});
 
 	it('compares plain toJSON data, never RxDocument property proxies', () => {

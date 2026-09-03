@@ -231,11 +231,12 @@ test('publishes idle for an empty cart and cart.updated after a line is added', 
 	view.unmount();
 });
 
-test('treats tombstoned lines as empty and excludes them from receipt data', () => {
+test('treats tombstoned lines and coupons as empty and excludes them from receipt data', () => {
 	withPayload({
 		line_items: [{ ...line, product_id: null }],
 		fee_lines: [{ name: null }],
 		shipping_lines: [{ method_id: null }],
+		coupon_lines: [{ code: null }],
 	});
 
 	const { result } = renderHook(() => useDisplaySnapshot());
@@ -244,6 +245,8 @@ test('treats tombstoned lines as empty and excludes them from receipt data', () 
 	expect(result.current?.order.lines).toEqual([]);
 	expect(result.current?.order.fees).toEqual([]);
 	expect(result.current?.order.shipping).toEqual([]);
+	expect(result.current?.order.discounts).toEqual([]);
+	expect(result.current?.hasCoupons).toBe(false);
 });
 
 test('switches directly to the new order snapshot without an idle event', () => {

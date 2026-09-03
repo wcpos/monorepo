@@ -5,6 +5,11 @@ import { CustomerDisplayService } from './service';
 import type { OffererPeer } from './peer';
 import type { DisplayRegistryRow, HttpFunction } from './signaling-client';
 
+const mockLoggerWarn = jest.fn();
+jest.mock('@wcpos/utils/logger', () => ({
+	getLogger: () => ({ warn: (...args: unknown[]) => mockLoggerWarn(...args) }),
+}));
+
 class FakePeer implements OffererPeer {
 	channelState: 'connecting' | 'open' | 'closed' = 'connecting';
 	sent: string[] = [];
@@ -34,25 +39,26 @@ class FakePeer implements OffererPeer {
 		this.channelState = 'closed';
 		this.closeListener();
 	}
-	open() {
+	open(configured = true) {
 		this.channelState = 'open';
 		this.openListener();
-		this.messageListener(
-			JSON.stringify({
-				wcpos: 1,
-				id: `hello-${Math.random()}`,
-				action: 'display.hello',
-				payload: { template: { id: 'ledger', version: 1 } },
-			})
-		);
+		if (configured)
+			this.messageListener(
+				JSON.stringify({
+					wcpos: 1,
+					id: `hello-${Math.random()}`,
+					action: 'display.hello',
+					payload: { template: { id: 'ledger', version: 1 } },
+				})
+			);
 	}
 }
 
-const registryRow = (id: string): DisplayRegistryRow => ({
+const registryRow = (id: string, storeId = 7): DisplayRegistryRow => ({
 	id,
 	name: id,
 	device_id: 'device-1',
-	store_id: 7,
+	store_id: storeId,
 	paired_at: 1788429600,
 	last_seen: 1788429600,
 	connected: false,
@@ -63,6 +69,7 @@ function setup(initialDisplays: DisplayRegistryRow[] = []) {
 	let registryFailures = 0;
 	let byeFailures = 0;
 	let deleteFailures = 0;
+	const signalReadFailures = new Set<string>();
 	let now = new Date('2026-09-03T10:00:00Z');
 	const requests: Parameters<HttpFunction>[0][] = [];
 	const http: HttpFunction = async <T>(request: Parameters<HttpFunction>[0]) => {
@@ -78,6 +85,11 @@ function setup(initialDisplays: DisplayRegistryRow[] = []) {
 			}
 			return { data: displays as T };
 		}
+		if (request.method === 'GET' && request.url.endsWith('/signal'))
+			if ([...signalReadFailures].some((id) => request.url.endsWith(`/${id}/signal`))) {
+				signalReadFailures.delete(request.url.split('/').at(-2)!);
+				throw new Error('signal unavailable');
+			}
 		if (request.method === 'GET' && request.url.endsWith('/signal'))
 			return { data: { messages: [] } as T };
 		if (request.method === 'DELETE' && deleteFailures > 0) {
@@ -115,6 +127,7 @@ function setup(initialDisplays: DisplayRegistryRow[] = []) {
 		failRegistryReads: (count = 1) => (registryFailures = count),
 		failByes: (count = 1) => (byeFailures = count),
 		failDeletes: (count = 1) => (deleteFailures = count),
+		failSignalRead: (id: string) => signalReadFailures.add(id),
 		advance: (milliseconds: number) => (now = new Date(now.getTime() + milliseconds)),
 	};
 }
@@ -130,6 +143,49 @@ describe('CustomerDisplayService', () => {
 
 		peers[0].open();
 		expect(jest.getTimerCount()).toBe(0);
+		service.stop();
+	});
+
+	test('continues polling other displays when one session poll fails', async () => {
+		const { service, requests, failSignalRead } = setup([registryRow('one'), registryRow('two')]);
+		failSignalRead('one');
+
+		await expect(service.refreshDisplays()).resolves.toBeUndefined();
+
+		expect(
+			requests
+				.filter(({ method, url }) => method === 'GET' && url.endsWith('/signal'))
+				.map(({ url }) => url)
+		).toEqual(['/wcpos/v2/display/displays/one/signal', '/wcpos/v2/display/displays/two/signal']);
+		expect(mockLoggerWarn).toHaveBeenCalledWith('Customer display session poll failed', {
+			context: { displayId: 'one', error: expect.any(Error) },
+		});
+		service.stop();
+	});
+
+	test('only creates sessions for this store and unscoped displays', async () => {
+		const { service, peers } = setup([
+			registryRow('mine', 7),
+			registryRow('unscoped', 0),
+			registryRow('other', 8),
+		]);
+
+		await service.refreshDisplays();
+
+		expect(service.getState().displays.map(({ id }) => id)).toEqual(['mine', 'unscoped']);
+		expect(peers).toHaveLength(2);
+		service.stop();
+	});
+
+	test('keeps registry polling scheduled while an open session is unconfigured', async () => {
+		const { service, peers, requests } = setup([registryRow('one')]);
+		await service.refreshDisplays();
+		peers[0].open(false);
+		const registryReads = requests.filter(({ url }) => url.endsWith('/displays')).length;
+
+		await jest.advanceTimersByTimeAsync(5000);
+
+		expect(requests.filter(({ url }) => url.endsWith('/displays'))).toHaveLength(registryReads + 1);
 		service.stop();
 	});
 

@@ -9,6 +9,7 @@ import type { DisplayRegistryRow, SignalingClient } from './signaling-client';
 const logger = getLogger(['wcpos', 'customer-display', 'session']);
 // This matches the page default and leaves long enough to read its thank-you state.
 export const IDLE_AFTER_COMPLETE_MS = 8000;
+const HELLO_TIMEOUT_MS = 10_000; // Match the display page's config timeout before re-offering.
 // Mailbox offers expire server-side after two minutes, so only then is a waiting offer stale.
 const OFFER_LIFETIME_MS = 2 * 60 * 1000;
 export interface DisplayEvent {
@@ -50,6 +51,7 @@ export class DisplaySession {
 	private pendingCandidates: RTCIceCandidateInit[] = [];
 	private answerAccepted = false;
 	private configured = false;
+	private helloTimer: ReturnType<typeof setTimeout> | null = null;
 	private seq = 0;
 	private stopped = false;
 
@@ -66,6 +68,9 @@ export class DisplaySession {
 	}
 	get isOpen(): boolean {
 		return this.peer?.channelState === 'open';
+	}
+	get isConfigured(): boolean {
+		return this.isOpen && this.configured;
 	}
 	updateDisplay(display: DisplayRegistryRow): void {
 		this.display = display;
@@ -115,11 +120,14 @@ export class DisplaySession {
 		this.answerAccepted = false;
 		peer.onOpen(() => {
 			logger.warn('Customer display channel opened', { context: { displayId: this.display.id } });
+			this.helloTimer = setTimeout(() => peer.close(), HELLO_TIMEOUT_MS);
 			this.onConnectionChange();
 		});
 		peer.onMessage((text) => this.handleMessage(text));
 		peer.onClose(() => {
 			if (this.peer !== peer) return;
+			if (this.helloTimer) clearTimeout(this.helloTimer);
+			this.helloTimer = null;
 			this.peer = null;
 			this.sessionId = null;
 			this.configured = false;
@@ -174,6 +182,8 @@ export class DisplaySession {
 		if (!template || typeof template !== 'object') return;
 		const { id, version } = template as { id?: unknown; version?: unknown };
 		if ((typeof id !== 'string' && typeof id !== 'number') || typeof version !== 'number') return;
+		if (this.helloTimer) clearTimeout(this.helloTimer);
+		this.helloTimer = null;
 		this.template = { id, version };
 		this.pendingHelloId = message.id;
 		this.sendConfig(message.id);
@@ -199,6 +209,7 @@ export class DisplaySession {
 		);
 		if (!sent) return;
 		this.configured = true;
+		this.onConnectionChange();
 		this.pendingHelloId = null;
 		const current = this.getCurrentState();
 		if (current) this.publish(current);
