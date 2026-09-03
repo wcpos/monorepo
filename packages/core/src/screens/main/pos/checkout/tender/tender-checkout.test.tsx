@@ -56,7 +56,7 @@ jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: str
 jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }) }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (_order: unknown, select: (record: unknown) => unknown) =>
-		select({ payload: { number: '1187', currency_symbol: '$', line_items: [] } }),
+		select({ payload: { id: 1187, number: '1187', currency_symbol: '$', line_items: [] } }),
 }));
 
 // Chrome only: the assertions are about which pane renders, not how a modal or a
@@ -158,6 +158,7 @@ describe('TenderCheckout', () => {
 	it('shows the ledger pane beside the tenders on a wide screen', () => {
 		render(<TenderCheckout order={order} />);
 
+		expect(screen.getByTestId('checkout-server-order-id').textContent).toBe('1187');
 		expect(screen.getByTestId('checkout-order-total').textContent).toBe('$92.95');
 		expect(screen.queryByTestId('checkout-balance-bar')).toBeNull();
 	});
