@@ -54,6 +54,17 @@ runs:
     #     git submodule update packages/rn-primitives
     #   shell: bash
 
+    # apps/web is a git submodule AND a pnpm workspace member (`apps/*`). The
+    # root `preinstall` script initialises it *during* `pnpm install`, so the
+    # project set pnpm installed for differs from the tree it leaves behind —
+    # every later `pnpm run`/`pnpm exec` then warns "Your node_modules are out
+    # of sync with your lockfile. The workspace structure has changed since
+    # last install" (and, before #1799, re-installed: "Packages: -103"). Put
+    # the submodule in place first so the install sees the final workspace.
+    - name: 🏗 Init the apps/web workspace submodule
+      run: git submodule update --init apps/web
+      shell: bash
+
     # --frozen-lockfile: the lockfile is the contract. --no-frozen-lockfile
     # (unexplained since 2025-05) re-resolved on every runner and left
     # node_modules ~100 packages away from the lockfile, so the first
