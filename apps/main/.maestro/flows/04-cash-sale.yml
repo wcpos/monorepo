@@ -185,7 +185,7 @@ env:
 # COMPLETED. Order #117904 (local run 2026-08-29 17:09) sat `pos-open` with no
 # payment method for the whole 120s receipt wait because of exactly that.
 # 180 s, not 60: the button enables when the gateway frame loads, and that load
-# is dev-pro's slowest path under the concurrency the turnstile permits — run
+# is dev-pro's slowest path under concurrent suites — run
 # 33319523590 measured a 71 s first WebView commit, and run 33337147851 (iOS
 # phone, flow 04's only red on the final 2026-08-30 stack) showed the dialog
 # open with the body empty and WebKit still negotiating navigation past the old
