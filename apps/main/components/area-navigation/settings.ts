@@ -6,6 +6,14 @@ import type { NavigationAreaItem } from '@wcpos/core/screens/main/components/nav
 export function useSettingsNavigationItems(): NavigationAreaItem[] {
 	const t = useT();
 	const { store } = useStoreSession();
+	// Typed as an item so the href is checked against Expo's typed routes.
+	const customerDisplay: NavigationAreaItem | null = getDisplaySignaling(store)
+		? {
+				href: '/settings/customer-display',
+				label: t('settings.customer_display'),
+				testID: 'settings-customer-display-nav',
+			}
+		: null;
 
 	return [
 		{
@@ -23,15 +31,7 @@ export function useSettingsNavigationItems(): NavigationAreaItem[] {
 			label: t('settings.printing'),
 			testID: 'settings-nav-printing',
 		},
-		...(getDisplaySignaling(store)
-			? [
-					{
-						href: '/settings/customer-display',
-						label: t('settings.customer_display'),
-						testID: 'settings-customer-display-nav',
-					},
-				]
-			: []),
+		...(customerDisplay ? [customerDisplay] : []),
 		{
 			href: '/settings/barcode-scanning',
 			label: t('settings.barcode_scanning'),
