@@ -459,6 +459,14 @@ test('PRs targeting next skip both E2E suites and their gates accept the skip', 
 	const nextTarget = runShell(e2eGate.run, { env: { ...webEnv, BASE_REF: 'next' } });
 	assert.equal(nextTarget.status, 0, nextTarget.stdout + nextTarget.stderr);
 	assert.match(nextTarget.stdout, /targeting next/);
+	const nextDeployFailed = runShell(e2eGate.run, {
+		env: { ...webEnv, BASE_REF: 'next', DEPLOY_RESULT: 'failure', DEPLOY_URL: '' },
+	});
+	assert.notEqual(nextDeployFailed.status, 0, nextDeployFailed.stdout + nextDeployFailed.stderr);
+	const nextDeployUrlMissing = runShell(e2eGate.run, {
+		env: { ...webEnv, BASE_REF: 'next', DEPLOY_URL: '' },
+	});
+	assert.notEqual(nextDeployUrlMissing.status, 0, nextDeployUrlMissing.stdout + nextDeployUrlMissing.stderr);
 	const mainTarget = runShell(e2eGate.run, { env: { ...webEnv, BASE_REF: 'main' } });
 	assert.notEqual(mainTarget.status, 0, mainTarget.stdout + mainTarget.stderr);
 	// A push to main has no base_ref; the exemption must not fire there.
