@@ -1,6 +1,18 @@
 packages:
   - "apps/*"
   - "packages/*"
+# Never let `pnpm run` / `pnpm exec` install on their own. pnpm 11's default is
+# `install`: before every script it re-checks node_modules and, if it judges it
+# stale, runs a full install first — and this is the ONLY file pnpm 11 reads
+# the setting from (.npmrc carries auth/registry keys only, so the old
+# `.npmrc` line was dead). In CI that implicit install ran inside the build
+# and test steps on every run ("Packages: -103", ~7 s) and, on 2026-09-02/03,
+# repeatedly never handed over to the script: 20–75 min of silence after
+# "Done in 5.5s using pnpm" until the job timeout (runs 33664427747,
+# 33687923179, 33684523571, 33734477552, 33734477584). The setup action's
+# frozen-lockfile install is the one install; a stale tree is a warning to
+# read, not a second install to wait on.
+verifyDepsBeforeRun: warn
 nodeLinker: hoisted
 preferSymlinkedExecutables: false
 minimumReleaseAge: 1440
