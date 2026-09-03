@@ -21,6 +21,11 @@ export function useSettingsNavigationItems(): NavigationAreaItem[] {
 			testID: 'settings-nav-printing',
 		},
 		{
+			href: '/settings/customer-display',
+			label: t('settings.customer_display.title'),
+			testID: 'settings-nav-customer-display',
+		},
+		{
 			href: '/settings/barcode-scanning',
 			label: t('settings.barcode_scanning'),
 			testID: 'settings-nav-barcode-scanning',

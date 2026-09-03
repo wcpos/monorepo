@@ -7,7 +7,7 @@ test('uses the display mailbox routes with the expected request shapes', async (
 		if (request.url.endsWith('/displays')) return { data: [{ id: 'display-1' }] };
 		if (request.url.endsWith('/signal') && request.method === 'GET')
 			return { data: { messages: [] } };
-		return { data: { code: '123456', expires_at: '2026-09-03T11:00:00Z' } };
+		return { data: { code: '123456', expires_at: 1788433200 } };
 	}) as jest.MockedFunction<HttpFunction>;
 	const client = createSignalingClient('/wcpos/v2/display/', http);
 

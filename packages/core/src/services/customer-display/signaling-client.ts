@@ -10,13 +10,13 @@ export interface DisplayRegistryRow {
 	name: string;
 	device_id: string;
 	store_id: number;
-	paired_at: string;
-	last_seen: string;
+	paired_at: number; // unix seconds
+	last_seen: number; // unix seconds
 	connected: boolean;
 }
 export interface PairingCode {
 	code: string;
-	expires_at: string;
+	expires_at: number; // unix seconds
 }
 export type SignalType = 'offer' | 'answer' | 'candidate' | 'bye';
 export interface OutgoingSignal {

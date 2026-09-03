@@ -53,8 +53,8 @@ const display: DisplayRegistryRow = {
 	name: 'Counter',
 	device_id: 'device-1',
 	store_id: 7,
-	paired_at: '2026-09-03T10:00:00Z',
-	last_seen: '2026-09-03T10:00:00Z',
+	paired_at: 1788429600,
+	last_seen: 1788429600,
 	connected: false,
 };
 

@@ -155,7 +155,7 @@ export class CustomerDisplayService {
 
 	private activePairingCode(): PairingCode | null {
 		const now = (this.options.now ?? (() => new Date()))().getTime();
-		if (this.pairingCode && Date.parse(this.pairingCode.expires_at) <= now) {
+		if (this.pairingCode && this.pairingCode.expires_at * 1000 <= now) {
 			this.pairingCode = null;
 		}
 		return this.pairingCode;

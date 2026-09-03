@@ -51,8 +51,8 @@ const registryRow = (id: string): DisplayRegistryRow => ({
 	name: id,
 	device_id: 'device-1',
 	store_id: 7,
-	paired_at: '2026-09-03T10:00:00Z',
-	last_seen: '2026-09-03T10:00:00Z',
+	paired_at: 1788429600,
+	last_seen: 1788429600,
 	connected: false,
 });
 
@@ -73,7 +73,7 @@ function setup(initialDisplays: DisplayRegistryRow[] = []) {
 		if (request.method === 'GET' && request.url.endsWith('/signal'))
 			return { data: { messages: [] } as T };
 		if (request.url.endsWith('/pairings')) {
-			return { data: { code: '123456', expires_at: '2026-09-03T10:10:00Z' } as T };
+			return { data: { code: '123456', expires_at: 1788430200 } as T };
 		}
 		return { data: {} as T };
 	};
@@ -143,6 +143,16 @@ describe('CustomerDisplayService', () => {
 
 		setDisplays([registryRow('new')]);
 		await service.refreshDisplays();
+		expect(service.getState().pairingCode).toBeNull();
+		service.stop();
+	});
+
+	test('expires a pairing code using its unix-seconds timestamp', async () => {
+		const { service, advance } = setup();
+		await service.mintPairingCode();
+
+		expect(service.getState().pairingCode?.code).toBe('123456');
+		advance(600_001);
 		expect(service.getState().pairingCode).toBeNull();
 		service.stop();
 	});
