@@ -126,7 +126,10 @@ jobs:
     # Dependabot PRs run without the repository secrets (no EXPO_TOKEN, no
     # store writer), so they would fail here rather than skip — exclude them
     # the way deploy.yml does; the aggregator reports the skip.
-    if: needs.changes.outputs.native != 'none' && github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.draft == false))
+    # PRs targeting `next` skip the device suites too (owner ruling
+    # 2026-09-03, same reasoning as deploy.yml's e2e job); the aggregator
+    # reports that skip as legitimate.
+    if: needs.changes.outputs.native != 'none' && github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.draft == false && github.base_ref != 'next'))
     runs-on: ubuntu-latest
     # actions: read is what `gh run list` / `gh run download` need to read the
     # last main runs' e2e-builds artifacts (the recovery step below). Only this
@@ -1539,9 +1542,10 @@ jobs:
           IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
           IS_DRAFT: ${{ github.event.pull_request.draft }}
           IS_DEPENDABOT: ${{ github.actor == 'dependabot[bot]' }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
           set -uo pipefail
-          echo "changes=$CHANGES_RESULT plan=$NATIVE_PLAN build=$BUILD_RESULT android=$ANDROID_RESULT ios=$IOS_RESULT event=$EVENT_NAME"
+          echo "changes=$CHANGES_RESULT plan=$NATIVE_PLAN build=$BUILD_RESULT android=$ANDROID_RESULT ios=$IOS_RESULT event=$EVENT_NAME base=${BASE_REF:-}"
 
           if [ "$CHANGES_RESULT" != "success" ]; then
             echo "::error::Change detection did not succeed (result: $CHANGES_RESULT)"
@@ -1553,6 +1557,10 @@ jobs:
           fi
           if [ "$EVENT_NAME" = "pull_request" ] && { [ "$IS_FORK" = "true" ] || [ "$IS_DRAFT" = "true" ] || [ "$IS_DEPENDABOT" = "true" ]; }; then
             echo "::notice::Native E2E skipped: fork, draft or dependabot PR (no secrets / no gate)"
+            exit 0
+          fi
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "${BASE_REF:-}" = "next" ]; then
+            echo "::notice::Native E2E skipped: PRs targeting next are exempt from the device suites (owner ruling 2026-09-03)"
             exit 0
           fi
           if [ "$BUILD_RESULT" != "success" ]; then
