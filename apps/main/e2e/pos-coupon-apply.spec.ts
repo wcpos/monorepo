@@ -5,9 +5,9 @@ import { type APIRequestContext, expect, request as playwrightRequest } from '@p
 import { addCheckoutProbeProduct } from './checkout-probe';
 import { getStoreVariant, listStoreIds, storeRequestOptions } from './fixtures';
 import {
+	createPushOrdersResponseMatcher,
 	expectMoneyMatches,
 	expectRateSetParity,
-	isPushOrdersResponse,
 	liveOrderTest as liveTest,
 	newRunLabel,
 	type OrderPayload,
@@ -203,7 +203,7 @@ for (const targetStoreId of storeTargets) {
 						'the cart must have discounted the applied coupon before saving'
 					).toBeGreaterThan(0);
 
-					const saved = page.waitForResponse((response) => isPushOrdersResponse(response), {
+					const saved = page.waitForResponse(createPushOrdersResponseMatcher(), {
 						timeout: 90_000,
 					});
 					saved.catch(() => {});

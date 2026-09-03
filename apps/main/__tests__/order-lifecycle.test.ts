@@ -1,4 +1,4 @@
-import { isPushOrdersResponse } from '../e2e/order-lifecycle';
+import { createPushOrdersResponseMatcher } from '../e2e/order-lifecycle';
 
 jest.mock('@wcpos/utils/logger', () => ({
 	log: { warn: jest.fn() },
@@ -15,9 +15,17 @@ function pushResponse(status: number) {
 	};
 }
 
-describe('isPushOrdersResponse', () => {
-	it('waits through a rejected attempt while the app refreshes its credential', () => {
-		expect(isPushOrdersResponse(pushResponse(401))).toBe(false);
-		expect(isPushOrdersResponse(pushResponse(200))).toBe(true);
+describe('createPushOrdersResponseMatcher', () => {
+	it('waits through the refreshable 401 and matches the completed retry', () => {
+		const matches = createPushOrdersResponseMatcher();
+		expect(matches(pushResponse(401))).toBe(false);
+		expect(matches(pushResponse(200))).toBe(true);
+	});
+
+	it('matches a failed retry and other terminal failures immediately', () => {
+		const matches = createPushOrdersResponseMatcher();
+		expect(matches(pushResponse(401))).toBe(false);
+		expect(matches(pushResponse(401))).toBe(true);
+		expect(createPushOrdersResponseMatcher()(pushResponse(500))).toBe(true);
 	});
 });

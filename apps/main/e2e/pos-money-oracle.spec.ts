@@ -11,10 +11,10 @@ import {
 } from './money-oracle-guards';
 import { getStoreUrl, tryAddProductBySku } from './fixtures';
 import {
+	createPushOrdersResponseMatcher,
 	expectMoneyMatches,
 	expectRateSetParity,
 	expectTaxParity,
-	isPushOrdersResponse,
 	liveOrderTest as liveTest,
 	newRunLabel,
 	type OrderPayload,
@@ -235,7 +235,7 @@ async function saveAndCapture(
 	// against itself and go green whatever the server did (pos-cart.spec.ts).
 	const cart = await readCartMoney(page);
 
-	const saved = page.waitForResponse((response) => isPushOrdersResponse(response), {
+	const saved = page.waitForResponse(createPushOrdersResponseMatcher(), {
 		timeout: 90_000,
 	});
 	saved.catch(() => {});
