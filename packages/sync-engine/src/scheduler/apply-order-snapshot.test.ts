@@ -66,6 +66,45 @@ describe('applyOrderSnapshot', () => {
 		expect(document.local.dirty).toBe(false);
 	});
 
+	it('stores REST receipt links as order data without transport fields', async () => {
+		const { repository, upsertMany } = fakeRepository();
+		const snapshot = orderPayload({
+			_links: {
+				receipt: [{ href: 'https://example.test/receipt/42' }],
+				payment: [{ href: 'https://example.test/payment/42' }],
+			},
+			_embedded: { customer: [{ id: 7 }] },
+		});
+
+		await applyOrderSnapshot({ repository }, snapshot);
+
+		const [documents] = upsertMany.mock.calls[0];
+		const storedPayload = (documents[0] as { payload: Record<string, unknown> }).payload;
+		expect(storedPayload).toHaveProperty('links.receipt.0.href', 'https://example.test/receipt/42');
+		expect(storedPayload).not.toHaveProperty('_links');
+		expect(storedPayload).not.toHaveProperty('_embedded');
+		expect(snapshot).toHaveProperty('_links');
+		expect(snapshot).toHaveProperty('_embedded');
+	});
+
+	it('keeps existing order links instead of replacing them with REST links', async () => {
+		const { repository, upsertMany } = fakeRepository();
+		const links = { receipt: [{ href: 'https://example.test/existing-receipt/42' }] };
+
+		await applyOrderSnapshot(
+			{ repository },
+			orderPayload({
+				links,
+				_links: { receipt: [{ href: 'https://example.test/rest-receipt/42' }] },
+			})
+		);
+
+		const [documents] = upsertMany.mock.calls[0];
+		const storedPayload = (documents[0] as { payload: Record<string, unknown> }).payload;
+		expect(storedPayload.links).toEqual(links);
+		expect(storedPayload).not.toHaveProperty('_links');
+	});
+
 	it('refuses to overwrite an order with queued local work (pending set)', async () => {
 		const { repository, upsertMany } = fakeRepository();
 		await expect(

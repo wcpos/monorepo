@@ -84,7 +84,9 @@ jest.mock('@wcpos/components/error-boundary', () => ({
 }));
 
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+	Text: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
+		<span data-testid={testID}>{children}</span>
+	),
 }));
 
 jest.mock('@wcpos/components/vstack', () => ({
@@ -260,6 +262,19 @@ describe('Receipt preview content size', () => {
 
 		act(() => template7Handler({ nativeEvent: { contentSize: { width: 398, height: 814 } } }));
 		expect(viewportContentSize()).toEqual({ width: 794, height: 1123 });
+	});
+
+	it('shows an unavailable message instead of a receipt frame when no preview source exists', () => {
+		mockUseTemplateRenderer.mockReturnValue({
+			...defaultTemplateRenderer,
+			renderedHtml: null,
+			receiptUrl: null,
+		});
+
+		render(<Receipt resource={{} as never} />);
+
+		expect(screen.getByTestId('receipt-unavailable')).toBeTruthy();
+		expect(screen.queryByTitle('receipt-preview-frame')).toBeNull();
 	});
 });
 

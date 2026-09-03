@@ -303,16 +303,22 @@ function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 								zoomOutLabel={t('receipt.zoom_out')}
 								testID="receipt-preview"
 							>
-								<WebView
-									ref={iframeRef as never}
-									{...(renderedHtml != null
-										? { srcDoc: renderedHtml }
-										: { src: templateReceiptUrl || baseReceiptURL || '' })}
-									onLoad={handleLoad}
-									onMessage={() => {}}
-									onContentSizeChange={handleContentSizeChange}
-									className="h-full w-full"
-								/>
+								{renderedHtml == null && !(templateReceiptUrl || baseReceiptURL) ? (
+									<Text testID="receipt-unavailable" className="p-4 text-center">
+										{t('receipt.preview_unavailable')}
+									</Text>
+								) : (
+									<WebView
+										ref={iframeRef as never}
+										{...(renderedHtml != null
+											? { srcDoc: renderedHtml }
+											: { src: templateReceiptUrl || baseReceiptURL || '' })}
+										onLoad={handleLoad}
+										onMessage={() => {}}
+										onContentSizeChange={handleContentSizeChange}
+										className="h-full w-full"
+									/>
+								)}
 							</ReceiptPreviewViewport>
 						</VStack>
 					</ErrorBoundary>
