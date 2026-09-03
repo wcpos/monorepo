@@ -35,7 +35,7 @@ overrides:
 
 patchedDependencies:
   '@shopify/flash-list@2.0.2': adb7914aa896d99e5e241e6db3049e118b370f73b007d7704bfce49294cd57be
-  react-native-drawer-layout@4.2.5: af7e1846c186e59bf5106bd0a685fc0e025d57f1724fdb4f74c50e134df65436
+  react-native-drawer-layout@4.2.5: 7dab1256ffc320b9d6a05007fd5eb155a5409df7b7be66c6fdcd85059936bd4c
   react-native-esc-pos-printer@4.5.0: f5c6fa6bddf06b2e5934df4919d7e5e39f09f89e9d5b7e30174e799bfda31faf
   rxdb@17.4.0: 87af07266a4345ec1c9a160d108d9a42e9624a2eff4cd8c418d1e863d6b3ba97
 
@@ -16343,7 +16343,7 @@ snapshots:
       react-fast-compare: 3.2.2
       react-is: 19.2.8
       react-native: 0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)
-      react-native-drawer-layout: 4.2.5(patch_hash=af7e1846c186e59bf5106bd0a685fc0e025d57f1724fdb4f74c50e134df65436)(2ec9f7c6d0e0a21d3836a932dae49aa4)
+      react-native-drawer-layout: 4.2.5(patch_hash=7dab1256ffc320b9d6a05007fd5eb155a5409df7b7be66c6fdcd85059936bd4c)(2ec9f7c6d0e0a21d3836a932dae49aa4)
       react-native-safe-area-context: 5.7.0(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
       react-native-screens: 4.26.2(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
       server-only: 0.0.1
@@ -18873,7 +18873,7 @@ snapshots:
     dependencies:
       react-native: 0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)
 
-  react-native-drawer-layout@4.2.5(patch_hash=af7e1846c186e59bf5106bd0a685fc0e025d57f1724fdb4f74c50e134df65436)(2ec9f7c6d0e0a21d3836a932dae49aa4):
+  react-native-drawer-layout@4.2.5(patch_hash=7dab1256ffc320b9d6a05007fd5eb155a5409df7b7be66c6fdcd85059936bd4c)(2ec9f7c6d0e0a21d3836a932dae49aa4):
     dependencies:
       color: 4.2.3
       react: 19.2.3
