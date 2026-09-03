@@ -1,6 +1,6 @@
 export const storesLiteral = {
 	title: 'WCPOS Store schema',
-	version: 15,
+	version: 16,
 	description: 'WooCommerce POS Store',
 	type: 'object',
 	primaryKey: 'localID',
@@ -635,6 +635,15 @@ export const storesLiteral = {
 				required: ['template_id'],
 			},
 		},
+		display: {
+			description: 'Server-advertised customer display capability.',
+			type: 'object',
+			properties: {
+				contract: { type: 'number' },
+				signaling: { type: 'string' },
+			},
+			required: ['contract', 'signaling'],
+		},
 	},
 } as const;
 
@@ -691,6 +700,7 @@ export const SERVER_OWNED_STORE_FIELDS = [
 	'footer_imprint',
 	'tax_ids',
 	'active_templates',
+	'display',
 ] as const satisfies readonly (keyof typeof storesLiteral.properties)[];
 
 /**

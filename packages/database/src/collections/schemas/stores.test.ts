@@ -65,3 +65,18 @@ describe('stores schema — tracking_consent', () => {
 		expect(() => validateStore({ localID: 'a' })).not.toThrow();
 	});
 });
+
+describe('stores schema — display', () => {
+	it('accepts the Pro display capability contract', () => {
+		expect(() =>
+			validateStore({
+				localID: 'a',
+				display: { contract: 1, signaling: '/wcpos/v2/display' },
+			})
+		).not.toThrow();
+	});
+
+	it('rejects a malformed display capability', () => {
+		expect(() => validateStore({ localID: 'a', display: { contract: '1' } })).toThrow();
+	});
+});

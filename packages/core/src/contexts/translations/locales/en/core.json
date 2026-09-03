@@ -1618,5 +1618,19 @@
 	"pos_checkout.status_authorized": "Authorized",
 	"pos_checkout.status_captured": "Captured",
 	"pos_checkout.status_failed": "Failed",
-	"pos_checkout.status_voided": "Voided"
+	"pos_checkout.status_voided": "Voided",
+	"settings.customer_display": "Customer display",
+	"settings.customer_display_paired": "Paired displays",
+	"settings.customer_display_empty": "No displays paired to this device yet.",
+	"settings.customer_display_refresh": "Refresh",
+	"settings.customer_display_connected": "Connected",
+	"settings.customer_display_last_seen": "Last seen {time}",
+	"settings.customer_display_forget": "Forget",
+	"settings.customer_display_forget_title": "Forget this display?",
+	"settings.customer_display_forget_description": "{name} will need to be paired again before it can show this register.",
+	"settings.customer_display_pair": "Pair a display",
+	"settings.customer_display_instructions": "Open {home}/wcpos-display/ on the customer-facing device and enter the code.",
+	"settings.customer_display_expired": "Code expired",
+	"settings.customer_display_open_second": "Open on second screen",
+	"settings.customer_display_coming": "Coming in the next update"
 }

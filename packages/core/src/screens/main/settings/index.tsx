@@ -8,6 +8,7 @@ import { Text } from '@wcpos/components/text';
 export { BarcodeScanning } from './barcode-scanning';
 export { GeneralSettings } from './general';
 export { PrintingSettings } from './printing';
+export { CustomerDisplaySettings } from './customer-display';
 export { TaxSettings } from './tax';
 export { ThemeSettings } from './theme';
 export { SettingsSection } from './components/settings-section';

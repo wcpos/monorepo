@@ -152,6 +152,24 @@ describe('mergeStoresWithResponse', () => {
 		expect(userDB.stores.bulkInsert).not.toHaveBeenCalled();
 	});
 
+	it('patches the display capability onto an existing store', async () => {
+		const existingStore = makeStoreDocument({ id: 1, localID: getLocalID(1) });
+		const userDB = makeUserDB();
+		const wpUser = makeWpUser([existingStore]);
+
+		await mergeStoresWithResponse({
+			userDB: userDB as any,
+			wpUser: wpUser as any,
+			remoteStores: [{ id: 1, display: { contract: 1, signaling: '/wcpos/v2/display' } }],
+			user: { uuid: 'user-uuid' },
+			siteID: 'site-1',
+		});
+
+		expect(existingStore.incrementalPatch).toHaveBeenCalledWith({
+			display: { contract: 1, signaling: '/wcpos/v2/display' },
+		});
+	});
+
 	it('leaves existing values unchanged when server-owned fields are absent', async () => {
 		const existingStore = makeStoreDocument({
 			id: 1,
