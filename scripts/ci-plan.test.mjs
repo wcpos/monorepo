@@ -24,7 +24,7 @@ function outputOf(result) {
 }
 
 /** Build a throwaway repo with a base commit and one PR commit on top. */
-function planFromDiff(mutate) {
+function planFromDiff(mutate, env = {}) {
 	const repo = mkdtempSync(path.join(tmpdir(), 'ci-plan-'));
 	const git = (...args) => {
 		const result = spawnSync('git', args, { cwd: repo, encoding: 'utf8' });
@@ -61,7 +61,7 @@ function planFromDiff(mutate) {
 			spawnSync('node', [SCRIPT, 'base-ref'], {
 				cwd: repo,
 				encoding: 'utf8',
-				env: { ...process.env, GITHUB_EVENT_NAME: 'pull_request' },
+				env: { ...process.env, GITHUB_EVENT_NAME: 'pull_request', ...env },
 			})
 		);
 	} finally {
@@ -218,6 +218,8 @@ test('one representative path exercises every ordered rule', () => {
 		['apps/main/e2e/fixtures.ts', 'web-helper', { web: 'full' }],
 		['packages/core/src/x.test.ts', 'unit-test-file', { unit: 'core' }],
 		['packages/virtual-printer/src/x.ts', 'leaf-package', { unit: 'none' }],
+		['packages/core/src/polyfills.ts', 'native-source', { native: 'cachehit' }],
+		['packages/core/package.json', 'package-deps', { native: 'rebuild' }],
 		['packages/utils/src/x.ts', 'package-src', { web: 'full', native: 'none' }],
 		['apps/main/src/x.ts', 'app-src', { unit: 'main', web: 'full', native: 'none' }],
 		['apps/main/app.config.ts', 'native-config', { native: 'rebuild' }],
@@ -257,6 +259,48 @@ test('app and package source do not run the device suites on a PR (owner ruling 
 		'scripts/e2e-native-seed.mjs',
 	])
 		assert.notEqual(planFor([file], { commentOnly: false }).native, 'none', file);
+});
+
+test('native resolver sources retain cache-hit device coverage on a PR', () => {
+	for (const file of [
+		'apps/main/polyfills.ts',
+		'packages/core/src/polyfills.ts',
+		'packages/database/src/database-generation.native.ts',
+		'packages/core/src/screens/main/pos/products/use-ble-scan.ios.ts',
+		'packages/scanner/src/permissions.android.ts',
+	]) {
+		assert.equal(classify(file), 'native-source', file);
+		assert.equal(planFor([file], {}).native, 'cachehit', file);
+	}
+});
+
+test('native configuration assets require a native rebuild', () => {
+	for (const file of [
+		'apps/main/assets/images/icon.png',
+		'apps/main/assets/images/adaptive-icon.png',
+		'apps/main/assets/images/splash-icon.png',
+	]) {
+		assert.equal(classify(file), 'native-config', file);
+		assert.equal(planFor([file], {}).native, 'rebuild', file);
+	}
+});
+
+test('package dependency manifests require a native rebuild', () => {
+	for (const file of ['packages/core/package.json', 'packages/components/package.json']) {
+		assert.equal(classify(file), 'package-deps', file);
+		assert.equal(planFor([file], {}).native, 'rebuild', file);
+	}
+});
+
+test('app and package source targeting next retain cache-hit device coverage', () => {
+	for (const file of ['packages/core/src/index.ts', 'apps/main/app/index.tsx'])
+		assert.equal(planFor([file], { baseBranch: 'next' }).native, 'cachehit', file);
+
+	const plan = planFromDiff(
+		({ append, join }) => append(join('packages/core/src/index.ts'), 'export const next = 1;\n'),
+		{ GITHUB_BASE_REF: 'next' }
+	);
+	assert.equal(plan.native, 'cachehit');
 });
 
 test('workflow self-triggers widen only their associated tier', () => {
