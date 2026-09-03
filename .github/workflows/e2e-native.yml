@@ -70,13 +70,14 @@ on:
 # 1.10.5 release — "I only really care about the last PR; that's more important
 # than waiting for all the previous PRs to finish."
 #  - PRs: one live run per PR, newest head supersedes (unchanged).
-#  - Main PUSHES: one shared group + cancel-in-progress, so the newest main
-#    head cancels queued AND running older-head runs. This deliberately
-#    reverses the run-unique main groups of #1687 for THIS workflow only: the
+#  - Main PUSHES: one shared group; a RUNNING run always completes (it is
+#    the device coverage for every JS merge since 2026-09-03), and the newest
+#    pending head replaces older pending ones. This deliberately reverses
+#    the run-unique main groups of #1687 for THIS workflow only: the
 #    2026-08-30 pending-cancels-pending incident was cross-run JOB-level
 #    groups eating other runs' device jobs; run-level supersession of a
-#    superseded MAIN head is the wanted behavior. Deploy's release gate reads
-#    the Deploy workflow, not this one.
+#    superseded pending MAIN head is the wanted behavior. Deploy's release
+#    gate reads the Deploy workflow, not this one.
 #  - NO cross-run queue (owner ruling 2026-09-03): device jobs from different
 #    PRs run at the same time. The FIFO device turnstile (2026-08-30 →
 #    2026-09-03) made every PR wait for every other run's suite; store

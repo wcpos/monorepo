@@ -453,8 +453,12 @@ test('native E2E concurrency isolates pull requests and supersedes stale main pu
 		concurrency.group,
 		/native-main-\{0\}', github\.run_attempt != '1' && github\.run_id \|\| 'push'/
 	);
-	// Supersession is inert without cancellation.
-	assert.equal(concurrency['cancel-in-progress'], true);
+	// Supersession on a PR is inert without cancellation.
+	// Only a PR's newest head cancels a running run. A main push run must
+	// complete: since 2026-09-03 it is the only device coverage for app JS,
+	// and merges land minutes apart (run 33740497846 lost both iOS jobs to
+	// the next merge four minutes in).
+	assert.equal(concurrency['cancel-in-progress'], "${{ github.event_name == 'pull_request' }}");
 	assert.notEqual(concurrency.group, '${{ github.workflow }}');
 });
 
