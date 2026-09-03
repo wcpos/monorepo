@@ -44,6 +44,7 @@ export class CustomerDisplayService {
 	private pendingIdle: DisplayEvent | null = null;
 	private idleTimer: ReturnType<typeof setTimeout> | null = null;
 	private registryReadSucceeded = false;
+	private registryGeneration = 0;
 	private timer: ReturnType<typeof setTimeout> | null = null;
 	private stopped = false;
 
@@ -63,11 +64,12 @@ export class CustomerDisplayService {
 	}
 	async refreshDisplays(): Promise<void> {
 		if (this.stopped) return;
+		const generation = ++this.registryGeneration;
 		try {
 			const displays = (await this.signaling.listDisplays(this.options.deviceId)).filter(
 				({ store_id }) => store_id === 0 || store_id === this.options.storeId
 			);
-			if (this.stopped) return;
+			if (this.stopped || generation !== this.registryGeneration) return;
 			this.registryReadSucceeded = true;
 			if (this.pairingCode && displays.some(({ id }) => !this.pairingDisplayIds.has(id))) {
 				this.pairingCode = null;
@@ -125,10 +127,11 @@ export class CustomerDisplayService {
 	}
 	async mintPairingCode(): Promise<PairingCode | null> {
 		if (this.stopped) return null;
+		const generation = ++this.registryGeneration;
 		const displays = (await this.signaling.listDisplays(this.options.deviceId)).filter(
 			({ store_id }) => store_id === 0 || store_id === this.options.storeId
 		);
-		if (this.stopped) return null;
+		if (this.stopped || generation !== this.registryGeneration) return null;
 		this.registryReadSucceeded = true;
 		this.displays = displays;
 		const code = await this.signaling.mintPairingCode(this.options.deviceId, this.options.storeId);

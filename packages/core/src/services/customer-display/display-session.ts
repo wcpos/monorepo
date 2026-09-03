@@ -93,19 +93,38 @@ export class DisplaySession {
 			if (message.type === 'answer') {
 				const sdp = (message.body as { sdp?: unknown }).sdp;
 				if (typeof sdp === 'string') {
-					await this.peer?.acceptAnswer(sdp);
+					await this.applySignal((peer) => peer.acceptAnswer(sdp));
 					this.answerAccepted = true;
 					for (const candidate of this.pendingCandidates.splice(0)) {
-						await this.peer?.addCandidate(candidate);
+						await this.applySignal((peer) => peer.addCandidate(candidate));
 					}
 				}
 			} else if (message.type === 'candidate') {
 				const candidate = message.body as RTCIceCandidateInit;
-				if (this.answerAccepted) await this.peer?.addCandidate(candidate);
+				if (this.answerAccepted) await this.applySignal((peer) => peer.addCandidate(candidate));
 				else this.pendingCandidates.push(candidate);
 			} else if (message.type === 'bye') {
 				this.peer?.close();
 			}
+		}
+	}
+	private async applySignal(operation: (peer: OffererPeer) => Promise<void>): Promise<void> {
+		const peer = this.peer;
+		if (!peer) return;
+		try {
+			await operation(peer);
+		} catch (error) {
+			peer.close();
+			if (this.peer === peer) {
+				this.peer = null;
+				this.sessionId = null;
+				this.pendingCandidates = [];
+				this.answerAccepted = false;
+			}
+			logger.warn('Customer display signaling failed', {
+				context: { displayId: this.display.id },
+			});
+			throw error;
 		}
 	}
 	private async postOffer(): Promise<void> {

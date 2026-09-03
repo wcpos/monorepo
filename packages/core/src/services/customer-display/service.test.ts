@@ -376,6 +376,38 @@ describe('CustomerDisplayService', () => {
 		expect(httpMock).not.toHaveBeenCalled();
 	});
 
+	test('keeps the newer registry result when refresh and pairing reads resolve in reverse order', async () => {
+		const resolvers: ((value: { data: DisplayRegistryRow[] }) => void)[] = [];
+		const http: HttpFunction = async <T>(request: Parameters<HttpFunction>[0]) => {
+			if (request.method === 'GET' && request.url.endsWith('/displays')) {
+				return new Promise<{ data: T }>((resolve) => {
+					resolvers.push(resolve as (value: { data: DisplayRegistryRow[] }) => void);
+				});
+			}
+			if (request.url.endsWith('/pairings')) {
+				return { data: { code: '123456', expires_at: 1788430200 } as T };
+			}
+			return { data: { messages: [] } as T };
+		};
+		const service = new CustomerDisplayService({
+			http,
+			deviceId: 'device-1',
+			storeId: 7,
+			siteRestRoot: '/wcpos/v2/display',
+			createPeer: () => new FakePeer(),
+		});
+
+		const olderRefresh = service.refreshDisplays();
+		const newerPairing = service.mintPairingCode();
+		resolvers[1]({ data: [registryRow('newer')] });
+		await newerPairing;
+		resolvers[0]({ data: [registryRow('older')] });
+		await olderRefresh;
+
+		expect(service.getState().displays.map(({ id }) => id)).toEqual(['newer']);
+		service.stop();
+	});
+
 	test('stop clears a held-idle timer', async () => {
 		const { service, peers } = setup([registryRow('one')]);
 		await service.refreshDisplays();

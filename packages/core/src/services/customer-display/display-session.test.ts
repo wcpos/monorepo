@@ -5,6 +5,11 @@ import { type DisplayEvent, DisplaySession } from './display-session';
 import type { OffererPeer } from './peer';
 import type { DisplayRegistryRow, IncomingSignal, SignalingClient } from './signaling-client';
 
+const mockLoggerWarn = jest.fn();
+jest.mock('@wcpos/utils/logger', () => ({
+	getLogger: () => ({ warn: (...args: unknown[]) => mockLoggerWarn(...args) }),
+}));
+
 class FakePeer implements OffererPeer {
 	channelState: 'connecting' | 'open' | 'closed' = 'connecting';
 	sent: string[] = [];
@@ -318,6 +323,49 @@ test('a rejected offer post clears the peer and the next poll re-offers', async 
 	jest.mocked(signaling.postSignal).mockRejectedValueOnce(new Error('temporary failure'));
 
 	await expect(session.poll()).rejects.toThrow('temporary failure');
+	expect(peers[0].channelState).toBe('closed');
+
+	await session.poll();
+	expect(peers).toHaveLength(2);
+	expect(signaling.postSignal).toHaveBeenLastCalledWith(
+		'display-1',
+		expect.objectContaining({ session: 'session-2', type: 'offer' })
+	);
+});
+
+test('a rejected answer clears the peer and the next poll re-offers', async () => {
+	const { session, peers, signaling, setSignals } = setup();
+	await session.poll();
+	jest.spyOn(peers[0], 'acceptAnswer').mockRejectedValueOnce(new Error('invalid answer'));
+	setSignals([signal({ id: 2 })]);
+
+	await expect(session.poll()).rejects.toThrow('invalid answer');
+	expect(session).toHaveProperty('peer', null);
+	expect(session).toHaveProperty('sessionId', null);
+	expect(peers[0].channelState).toBe('closed');
+	expect(mockLoggerWarn).toHaveBeenLastCalledWith('Customer display signaling failed', {
+		context: { displayId: 'display-1' },
+	});
+
+	await session.poll();
+	expect(peers).toHaveLength(2);
+	expect(signaling.postSignal).toHaveBeenLastCalledWith(
+		'display-1',
+		expect.objectContaining({ session: 'session-2', type: 'offer' })
+	);
+});
+
+test('a rejected buffered candidate clears the peer and the next poll re-offers', async () => {
+	const { session, peers, signaling, setSignals } = setup();
+	setSignals([signal({ id: 2, type: 'candidate', body: { candidate: 'candidate:1' } })]);
+	await session.poll();
+	jest.spyOn(peers[0], 'addCandidate').mockRejectedValueOnce(new Error('invalid candidate'));
+	setSignals([signal({ id: 3 })]);
+
+	await expect(session.poll()).rejects.toThrow('invalid candidate');
+	expect(session).toHaveProperty('peer', null);
+	expect(session).toHaveProperty('sessionId', null);
+	expect(session).toHaveProperty('pendingCandidates', []);
 	expect(peers[0].channelState).toBe('closed');
 
 	await session.poll();
