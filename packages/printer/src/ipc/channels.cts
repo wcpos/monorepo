@@ -96,6 +96,7 @@ export interface IpcInvokeChannels {
 	// data crosses IPC as a structured-cloned Uint8Array; number[] is the legacy
 	// wire shape, still accepted by main (wcpos/electron#353).
 	'print-raw-tcp': { req: { host: string; port: number; data: Uint8Array | number[] }; res: void };
+	'print-raw-tls': { req: { host: string; port: number; data: Uint8Array | number[] }; res: void };
 	'print-epos-http': {
 		req: { host: string; port: number; path: string; xml: string; timeoutMs: number };
 		res: { status: number; body: string };
@@ -141,6 +142,7 @@ export interface IpcOnChannels {
 
 export const INVOKE_CHANNELS = [
 	'print-raw-tcp',
+	'print-raw-tls',
 	'print-epos-http',
 	'print-raw-usb',
 	'print-raw-serial',

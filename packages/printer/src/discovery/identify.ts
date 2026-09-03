@@ -14,6 +14,7 @@ export interface PrinterIdentity {
 		protocol: 'epos-print' | 'webprnt' | 'raw' | 'raw-tls';
 		encrypted: boolean;
 	} | null;
+	lanes: NonNullable<PrinterIdentity['lane']>[];
 	ports: { port: number; state: TcpState; protocol: PortProtocol; latencyMs?: number }[];
 	securePrinting?: boolean;
 	columns?: number;
@@ -24,12 +25,13 @@ export type LaneProtocol = NonNullable<PrinterIdentity['lane']>['protocol'];
 export interface IdentifyProbes {
 	/**
 	 * Lane protocols this platform's network print path can actually use. `identity.lane` always
-	 * reports the best lane the printer offers; its port is copied onto the profile only when the
-	 * platform can print on it (Electron sends Star raw, native sends everything raw). Omitted =
-	 * every lane is printable.
+	 * reports the best lane the printer offers; the first printable offered lane is copied onto the
+	 * profile (Electron sends Star raw, native sends everything raw). Omitted = every lane is
+	 * printable.
 	 */
 	printableLanes?: ReadonlySet<LaneProtocol>;
 	connectTcp?: (host: string, port: number, timeoutMs: number) => Promise<TcpState>;
+	connectTls?: (host: string, port: number, timeoutMs: number) => Promise<TcpState>;
 	postEpos: (
 		host: string,
 		port: number,
@@ -43,6 +45,10 @@ const EXPIRED = Symbol('expired');
 
 export function canPrintLane(protocol: LaneProtocol, probes: IdentifyProbes): boolean {
 	return probes.printableLanes?.has(protocol) ?? true;
+}
+
+export function printableLane(identity: PrinterIdentity, probes: IdentifyProbes) {
+	return identity.lanes.find(({ protocol }) => canPrintLane(protocol, probes));
 }
 
 function eposFailureState(error: unknown): TcpState {
@@ -79,6 +85,7 @@ export async function identifyPrinter(
 	const hintedVendor = vendorFromName(hints.name);
 	let eposPort: number | null = null;
 	let rawOpen = false;
+	let rawTlsOpen = false;
 	const tcp = async (port: number) => {
 		if (!probes.connectTcp) return;
 		try {
@@ -96,6 +103,25 @@ export async function identifyPrinter(
 			ports.push({ port, state: 'error', protocol: null });
 		}
 	};
+	const probeTls = async () => {
+		const startedAt = Date.now();
+		try {
+			const state = await beforeDeadline(deadline, () =>
+				probes.connectTls!(host, 9143, Math.max(0, deadline - Date.now()))
+			);
+			if (state === EXPIRED) return;
+			ports.push({ port: 9143, protocol: 'raw-tls', state, latencyMs: Date.now() - startedAt });
+			rawTlsOpen = state === 'open';
+		} catch {
+			ports.push({
+				port: 9143,
+				protocol: 'raw-tls',
+				state: 'error',
+				latencyMs: Date.now() - startedAt,
+			});
+		}
+	};
+	let tlsTask = hintedVendor === 'epson' && probes.connectTls ? probeTls() : undefined;
 	const epsonTask = (async () => {
 		let request: { path: string; xml: string } | undefined;
 		eposPort = await probeEposEndpoint(host, async (port, path, xml, timeoutMs) => {
@@ -112,6 +138,7 @@ export async function identifyPrinter(
 			}
 		});
 		if (eposPort === null) return;
+		if (probes.connectTls && !tlsTask) tlsTask = probeTls();
 		ports.push({ port: eposPort, state: 'open', protocol: 'epos-print' });
 		if (eposPort === 443 && request) {
 			try {
@@ -138,28 +165,34 @@ export async function identifyPrinter(
 			return null;
 		}
 	})();
-	// HTTP lanes first, raw ports only when nothing answered. Any bytes on raw 9100 — even a
-	// 3-byte DLE EOT status request — are a "job" to a RED-era Epson with Secure Printing on,
+	// Probe safe HTTP/TLS lanes first, raw ports only when nothing answered. Any bytes on raw 9100 —
+	// even a 3-byte DLE EOT status request — are a "job" to a RED-era Epson with Secure Printing on,
 	// which then quarantines every lane (ePOS included) for ~4 minutes (wcpos/monorepo#1597).
 	// So a printer that answers ePOS or WebPRNT is never touched on 9100, and neither is one
 	// that already looks like an Epson from its name: an Epson whose ePOS-Print is off or busy
 	// (443 answering 503 was seen live, wcpos/roadmap#136) still quarantines on a raw touch.
-	// 9143 (TLS raw) is not probed at all until there is a TLS raw lane to use it.
 	const [, star] = await Promise.all([epsonTask, starTask]);
+	await tlsTask;
 	if (!eposPort && !star && hintedVendor !== 'epson') {
 		await Promise.all([tcp(9100), tcp(631)]);
 	}
-	const lane: PrinterIdentity['lane'] = eposPort
-		? {
-				port: eposPort,
-				protocol: 'epos-print',
-				encrypted: eposPort === 443 || eposPort === 8043,
-			}
-		: star
-			? { port: star.port, protocol: 'webprnt', encrypted: star.protocol === 'https' }
-			: rawOpen
-				? { port: 9100, protocol: 'raw', encrypted: false }
-				: null;
+	const lanes: PrinterIdentity['lanes'] = [
+		...(rawTlsOpen ? [{ port: 9143, protocol: 'raw-tls' as const, encrypted: true }] : []),
+		...(eposPort
+			? [
+					{
+						port: eposPort,
+						protocol: 'epos-print' as const,
+						encrypted: eposPort === 443 || eposPort === 8043,
+					},
+				]
+			: []),
+		...(star
+			? [{ port: star.port, protocol: 'webprnt' as const, encrypted: star.protocol === 'https' }]
+			: []),
+		...(rawOpen ? [{ port: 9100, protocol: 'raw' as const, encrypted: false }] : []),
+	];
+	const lane = lanes[0] ?? null;
 	const vendor: Vendor = eposPort
 		? 'epson'
 		: star
@@ -170,7 +203,9 @@ export async function identifyPrinter(
 	const ippOpen = ports.some((entry) => entry.port === 631 && entry.state === 'open');
 	// Only raw/IPP results say whether a *named* host is a receipt printer at all; refused ePOS
 	// candidates on an Epson whose ePOS-Print is off prove nothing (its raw ports were skipped).
-	const nonEposPorts = ports.filter((entry) => entry.protocol !== 'epos-print');
+	const nonEposPorts = ports.filter(
+		(entry) => entry.protocol !== 'epos-print' && entry.protocol !== 'raw-tls'
+	);
 	const namedClosed =
 		!!hints.name &&
 		nonEposPorts.length > 0 &&
@@ -179,6 +214,7 @@ export async function identifyPrinter(
 		vendor,
 		...identifyModel(hints.name),
 		lane,
+		lanes,
 		ports,
 		...(eposPort
 			? {
@@ -210,11 +246,12 @@ export async function identifyDiscoveredPrinters(
 		await Promise.all(
 			pending.slice(offset, offset + 4).map(async ({ printer, index }) => {
 				const identity = await identifyPrinter(printer.address, { name: printer.name }, probes);
+				const lane = printableLane(identity, probes);
 				identified[index] = {
 					...printer,
 					identity,
-					...(identity.lane && canPrintLane(identity.lane.protocol, probes)
-						? { port: identity.lane.port, vendor: identity.vendor ?? printer.vendor }
+					...(lane
+						? { port: lane.port, vendor: identity.vendor ?? printer.vendor }
 						: identity.vendor
 							? { vendor: identity.vendor }
 							: {}),

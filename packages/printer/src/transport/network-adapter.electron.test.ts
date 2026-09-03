@@ -35,7 +35,9 @@ describe('Electron NetworkAdapter ePOS routing', () => {
 	beforeEach(() => {
 		eposConstructorMock.mockClear();
 		eposPrintRawMock.mockReset().mockResolvedValue(undefined);
-		ipcPrintRawMock.mockReset().mockResolvedValue(undefined);
+		ipcPrintRawMock.mockReset().mockImplementation(async (channel: string) => {
+			if (channel === 'print-raw-tls') throw new Error("No handler registered for 'print-raw-tls'");
+		});
 		probeEposEndpointMock.mockReset();
 	});
 
@@ -57,6 +59,40 @@ describe('Electron NetworkAdapter ePOS routing', () => {
 		expect(ipcPrintRawMock).not.toHaveBeenCalled();
 	});
 
+	it('uses a saved raw TLS port directly', async () => {
+		ipcPrintRawMock.mockResolvedValueOnce(undefined);
+		const data = new Uint8Array([6]);
+
+		await new NetworkAdapter('tls-port.test', 9143, 'epson').printRaw(data);
+
+		expect(ipcPrintRawMock).toHaveBeenCalledWith(
+			'print-raw-tls',
+			{ host: 'tls-port.test', port: 9143, data },
+			expect.any(String)
+		);
+		expect(probeEposEndpointMock).not.toHaveBeenCalled();
+		expect(ipcPrintRawMock).not.toHaveBeenCalledWith(
+			'print-raw-tcp',
+			expect.anything(),
+			expect.any(String)
+		);
+	});
+
+	it('surfaces a saved raw TLS port failure without fallback', async () => {
+		const error = new Error('TLS unavailable');
+		ipcPrintRawMock.mockRejectedValueOnce(error);
+
+		await expect(
+			new NetworkAdapter('tls-failure.test', 9143, 'epson').printRaw(new Uint8Array([7]))
+		).rejects.toBe(error);
+		expect(probeEposEndpointMock).not.toHaveBeenCalled();
+		expect(ipcPrintRawMock).not.toHaveBeenCalledWith(
+			'print-raw-tcp',
+			expect.anything(),
+			expect.any(String)
+		);
+	});
+
 	it('does not cache a failed probe', async () => {
 		probeEposEndpointMock.mockResolvedValue(null);
 		const data = new Uint8Array([3]);
@@ -65,7 +101,13 @@ describe('Electron NetworkAdapter ePOS routing', () => {
 		await new NetworkAdapter('failed-probe.test', 9100, 'epson').printRaw(data);
 
 		expect(probeEposEndpointMock).toHaveBeenCalledTimes(2);
-		expect(ipcPrintRawMock).toHaveBeenCalledTimes(2);
+		expect(ipcPrintRawMock).toHaveBeenCalledTimes(4);
+		expect(ipcPrintRawMock.mock.calls.map(([channel]) => channel)).toEqual([
+			'print-raw-tls',
+			'print-raw-tcp',
+			'print-raw-tls',
+			'print-raw-tcp',
+		]);
 		expect(ipcPrintRawMock).toHaveBeenCalledWith(
 			'print-raw-tcp',
 			expect.objectContaining({ host: 'failed-probe.test', port: 9100 }),
@@ -82,6 +124,67 @@ describe('Electron NetworkAdapter ePOS routing', () => {
 		expect(probeEposEndpointMock).toHaveBeenCalledTimes(1);
 		expect(eposConstructorMock).toHaveBeenCalledTimes(2);
 		expect(eposConstructorMock).toHaveBeenCalledWith('successful-probe.test', 8008);
-		expect(ipcPrintRawMock).not.toHaveBeenCalled();
+		expect(ipcPrintRawMock.mock.calls.map(([channel]) => channel)).toEqual([
+			'print-raw-tls',
+			'print-raw-tls',
+		]);
+	});
+
+	it('probes 9143 with zero bytes, then prints over TLS and caches the host', async () => {
+		ipcPrintRawMock.mockResolvedValue(undefined);
+
+		await new NetworkAdapter('tls-cache.test', 9100, 'epson').printRaw(new Uint8Array([8]));
+		await new NetworkAdapter('tls-cache.test', 9100, 'epson').printRaw(new Uint8Array([9]));
+
+		expect(ipcPrintRawMock.mock.calls.map(([channel]) => channel)).toEqual([
+			'print-raw-tls',
+			'print-raw-tls',
+			'print-raw-tls',
+		]);
+		expect(
+			ipcPrintRawMock.mock.calls.map(([, args]) => (args as { data: Uint8Array }).data.length)
+		).toEqual([0, 1, 1]);
+		expect(probeEposEndpointMock).not.toHaveBeenCalled();
+	});
+
+	it('never sends the job over TLS when the probe fails', async () => {
+		probeEposEndpointMock.mockResolvedValue(null);
+
+		await new NetworkAdapter('tls-refused.test', 9100, 'epson').printRaw(new Uint8Array([11]));
+
+		const tlsCalls = ipcPrintRawMock.mock.calls.filter(([channel]) => channel === 'print-raw-tls');
+		expect(tlsCalls).toHaveLength(1);
+		expect((tlsCalls[0][1] as { data: Uint8Array }).data).toHaveLength(0);
+		expect(ipcPrintRawMock).toHaveBeenCalledWith(
+			'print-raw-tcp',
+			expect.objectContaining({ host: 'tls-refused.test', port: 9100 }),
+			expect.any(String)
+		);
+	});
+
+	it('abandons a hung 9143 probe after two seconds without ever sending the job over TLS', async () => {
+		vi.useFakeTimers();
+		ipcPrintRawMock.mockImplementation((channel: string) => {
+			if (channel === 'print-raw-tls') return new Promise<void>(() => undefined);
+			return Promise.resolve();
+		});
+		probeEposEndpointMock.mockResolvedValue(null);
+		const result = new NetworkAdapter('tls-timeout.test', 9100, 'epson').printRaw(
+			new Uint8Array([10])
+		);
+
+		await vi.advanceTimersByTimeAsync(1_999);
+		expect(probeEposEndpointMock).not.toHaveBeenCalled();
+		await vi.advanceTimersByTimeAsync(1);
+		await result;
+
+		expect(probeEposEndpointMock).toHaveBeenCalledTimes(1);
+		expect(ipcPrintRawMock.mock.calls.map(([channel]) => channel)).toEqual([
+			'print-raw-tls',
+			'print-raw-tcp',
+		]);
+		// The hung call was the zero-byte probe; the job bytes went only to raw TCP.
+		expect((ipcPrintRawMock.mock.calls[0][1] as { data: Uint8Array }).data).toHaveLength(0);
+		vi.useRealTimers();
 	});
 });

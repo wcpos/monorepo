@@ -6,10 +6,10 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { Toast } from '@wcpos/components/toast';
 import {
-	canPrintLane,
 	createIdentifyProbes,
 	identifyPrinter,
 	isPrinterConnectionError,
+	printableLane,
 	PrinterService,
 	canOpenDrawer as profileCanOpenDrawer,
 } from '@wcpos/printer';
@@ -255,8 +255,9 @@ export function usePrinterDialogForm({
 						const d = deriveVendorDefaults(result as PrinterFormValues['vendor']);
 						form.setValue('language', d.language);
 						form.setValue('port', d.port);
-						if (identity.lane && canPrintLane(identity.lane.protocol, probes)) {
-							form.setValue('port', identity.lane.port);
+						const lane = printableLane(identity, probes);
+						if (lane) {
+							form.setValue('port', lane.port);
 						}
 						if (
 							identity.columns !== undefined &&

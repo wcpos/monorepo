@@ -163,6 +163,7 @@ describe('NetworkFields discovery states', () => {
 			identity: {
 				vendor: 'epson',
 				lane: { port: 8043, protocol: 'epos-print', encrypted: true },
+				lanes: [{ port: 8043, protocol: 'epos-print', encrypted: true }],
 				ports: [],
 				columns: 48,
 			},

@@ -13,7 +13,7 @@ export function getIpc(): TypedIpcRenderer {
 export const PRINT_TIMEOUT_MS = 30_000;
 
 /** Raw ESC/POS print channels — bytes cross IPC as a structured-cloned Uint8Array. */
-type RawPrintChannel = 'print-raw-serial' | 'print-raw-usb' | 'print-raw-tcp';
+type RawPrintChannel = 'print-raw-serial' | 'print-raw-usb' | 'print-raw-tcp' | 'print-raw-tls';
 type RawPrintArgs<C extends RawPrintChannel> = Omit<IpcInvokeChannels[C]['req'], 'data'> & {
 	data: Uint8Array;
 };

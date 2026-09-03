@@ -9,6 +9,9 @@ describe('Electron NetworkAdapter', () => {
 
 	it('falls back to raw TCP when every Epson ePOS endpoint probe fails', async () => {
 		const invoke = vi.fn(async (channel: string) => {
+			if (channel === 'print-raw-tls') {
+				throw new Error("No handler registered for 'print-raw-tls'");
+			}
 			if (channel === 'print-epos-http') {
 				return { status: 404, body: '<html>Not found</html>' };
 			}
@@ -20,6 +23,7 @@ describe('Electron NetworkAdapter', () => {
 		await adapter.printRaw(new Uint8Array([0x1b, 0x40]));
 
 		expect(invoke.mock.calls.map(([channel]) => channel)).toEqual([
+			'print-raw-tls',
 			'print-epos-http',
 			'print-epos-http',
 			'print-epos-http',
@@ -36,23 +40,27 @@ describe('Electron NetworkAdapter', () => {
 	it('memoizes a successful probe and delegates Epson jobs to ePOS HTTP', async () => {
 		const successBody =
 			'<response xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print" success="true" code="" status="0" />';
-		const invoke = vi.fn(async (_channel: string, _args?: unknown) => ({
-			status: 200,
-			body: successBody,
-		}));
+		const invoke = vi.fn(async (channel: string, _args?: unknown) => {
+			if (channel === 'print-raw-tls') {
+				throw new Error("No handler registered for 'print-raw-tls'");
+			}
+			return { status: 200, body: successBody };
+		});
 		(window as unknown as Record<string, unknown>).ipcRenderer = { invoke };
 
 		const adapter = new NetworkAdapter('192.168.1.34', 9100, 'epson');
 		await adapter.printRaw(new Uint8Array([0x1b, 0x40]));
 		await adapter.printRaw(new Uint8Array([0x0a]));
 
-		expect(invoke).toHaveBeenCalledTimes(3);
+		expect(invoke).toHaveBeenCalledTimes(5);
 		expect(invoke.mock.calls.map(([channel]) => channel)).toEqual([
+			'print-raw-tls',
 			'print-epos-http',
 			'print-epos-http',
+			'print-raw-tls',
 			'print-epos-http',
 		]);
-		expect(invoke.mock.calls[2][1]).toMatchObject({
+		expect(invoke.mock.calls[4][1]).toMatchObject({
 			host: '192.168.1.34',
 			port: 443,
 			xml: expect.stringContaining('<command>0a</command>'),

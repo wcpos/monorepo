@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { identifyDiscoveredPrinters, identifyPrinter } from '../identify';
 
-import type { IdentifyProbes } from '../identify';
+import type { IdentifyProbes, LaneProtocol } from '../identify';
 import type { DiscoveredPrinter } from '../../types';
 
 const EPOS_RESPONSE =
@@ -21,6 +21,29 @@ function probes(overrides: Partial<IdentifyProbes> = {}): IdentifyProbes {
 
 describe('identifyPrinter', () => {
 	afterEach(() => vi.useRealTimers());
+
+	it('prefers Epson raw TLS and keeps every offered lane in preference order', async () => {
+		const identity = await identifyPrinter(
+			'192.168.1.29',
+			{ name: 'EPSON TM-m30III' },
+			probes({
+				connectTls: async () => 'open',
+				postEpos: async (_host, port) => {
+					if (port === 443) return { status: 200, body: EPOS_RESPONSE };
+					throw new Error('closed');
+				},
+			})
+		);
+
+		expect(identity.lanes).toEqual([
+			{ port: 9143, protocol: 'raw-tls', encrypted: true },
+			{ port: 443, protocol: 'epos-print', encrypted: true },
+		]);
+		expect(identity.lane).toEqual(identity.lanes[0]);
+		expect(identity.ports).toContainEqual(
+			expect.objectContaining({ port: 9143, state: 'open', protocol: 'raw-tls' })
+		);
+	});
 
 	it('prefers secure Epson ePOS over an open raw port', async () => {
 		const identity = await identifyPrinter(
@@ -106,6 +129,86 @@ describe('identifyPrinter', () => {
 		// Only ePOS candidates were tried and they refused; that says nothing about whether this
 		// is a receipt printer, so the named-but-closed rule must not fire.
 		expect(identity).toMatchObject({ vendor: 'epson', lane: null, notReceiptPrinter: false });
+	});
+
+	it('uses raw TLS for a named Epson when every ePOS candidate fails', async () => {
+		const connectTcp = vi.fn(async () => 'open' as const);
+		const identity = await identifyPrinter(
+			'192.168.1.37',
+			{ name: 'EPSON TM-m30III' },
+			probes({ connectTcp, connectTls: async () => 'open' })
+		);
+
+		expect(identity).toMatchObject({
+			vendor: 'epson',
+			lane: { port: 9143, protocol: 'raw-tls', encrypted: true },
+		});
+		expect(connectTcp).not.toHaveBeenCalled();
+		expect(identity).not.toHaveProperty('notReceiptPrinter');
+	});
+
+	it.each([[{ name: 'Star TSP143' }], [{}]])(
+		'does not probe raw TLS for non-Epson hints %#',
+		async (hints) => {
+			const connectTls = vi.fn(async () => 'open' as const);
+			await identifyPrinter('192.168.1.38', hints, probes({ connectTls }));
+
+			expect(connectTls).not.toHaveBeenCalled();
+		}
+	);
+
+	it('starts raw TLS as soon as ePOS identifies an unnamed Epson', async () => {
+		let finishPort80!: (response: { status: number; body: string }) => void;
+		let port80Started!: () => void;
+		const atPort80 = new Promise<void>((resolve) => (port80Started = resolve));
+		const port80Response = new Promise<{ status: number; body: string }>(
+			(resolve) => (finishPort80 = resolve)
+		);
+		const connectTls = vi.fn(async () => 'open' as const);
+		const result = identifyPrinter(
+			'192.168.1.40',
+			{},
+			probes({
+				connectTls,
+				postEpos: async (_host, port) => {
+					if (port === 443) return { status: 200, body: EPOS_RESPONSE };
+					if (port === 80) {
+						port80Started();
+						return port80Response;
+					}
+					throw new Error('closed');
+				},
+			})
+		);
+
+		await atPort80;
+		const callsBeforePort80Finished = connectTls.mock.calls.length;
+		finishPort80({ status: 503, body: '' });
+		await result;
+
+		expect(callsBeforePort80Finished).toBe(1);
+	});
+
+	it('treats a missing raw TLS IPC handler as diagnostics only', async () => {
+		const withoutTls = await identifyPrinter('192.168.1.39', { name: 'EPSON TM-m30III' }, probes());
+		const withMissingHandler = await identifyPrinter(
+			'192.168.1.39',
+			{ name: 'EPSON TM-m30III' },
+			probes({
+				connectTls: async () => {
+					throw new Error("No handler registered for 'print-raw-tls'");
+				},
+			})
+		);
+
+		const tlsPort = withMissingHandler.ports.find(({ protocol }) => protocol === 'raw-tls');
+		expect(tlsPort).toEqual(
+			expect.objectContaining({ port: 9143, protocol: 'raw-tls', state: 'error' })
+		);
+		expect({
+			...withMissingHandler,
+			ports: withMissingHandler.ports.filter(({ protocol }) => protocol !== 'raw-tls'),
+		}).toEqual(withoutTls);
 	});
 
 	it('reports secure printing off when Epson ePOS answers on 443 and 80', async () => {
@@ -232,5 +335,34 @@ describe('identifyDiscoveredPrinters', () => {
 			starProbes(new Set(['epos-print', 'webprnt']))
 		);
 		expect(identified).toMatchObject({ port: 80, vendor: 'star' });
+	});
+
+	it.each([
+		[new Set<LaneProtocol>(['raw-tls', 'epos-print', 'raw']), 9143],
+		[new Set<LaneProtocol>(['epos-print', 'webprnt']), 443],
+		[new Set<LaneProtocol>(['raw']), 9100],
+	] as const)('adopts the first printable Epson lane %#', async (printableLanes, port) => {
+		const [identified] = await identifyDiscoveredPrinters(
+			[
+				{
+					id: 'net-epson',
+					name: 'EPSON TM-m30III',
+					connectionType: 'network',
+					address: '192.168.1.41',
+					port: 9100,
+					vendor: 'generic',
+				},
+			],
+			probes({
+				printableLanes,
+				connectTls: async () => 'open',
+				postEpos: async (_host, candidate) => {
+					if (candidate === 443) return { status: 200, body: EPOS_RESPONSE };
+					throw new Error('closed');
+				},
+			})
+		);
+
+		expect(identified.port).toBe(port);
 	});
 });
