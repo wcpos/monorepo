@@ -55,6 +55,18 @@ appId: com.wcpos.main.dev
     timeout: 15000
 # The chained suite preserves flow 06/07's cart. Explicitly select the new-order
 # tab so this flow owns an empty order; it gets its own tab on the first write.
+# On a phone the tab strip scrolls, and with the earlier flows' carts still open
+# the "+" tab sits off its right end (run 33750030091, Android phone). The
+# strip's › selects the next tab and scrolls it into view — step along it the
+# way a cashier would until "+" is on screen. Bounded: one press per open tab.
+- repeat:
+    while:
+      notVisible:
+        id: "new-order-tab"
+    times: 8
+    commands:
+      - tapOn:
+          id: "scrollable-tabs-next"
 - tapOn:
     id: "new-order-tab"
 - assertNotVisible:
