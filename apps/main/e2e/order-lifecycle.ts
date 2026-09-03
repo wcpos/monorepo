@@ -30,22 +30,30 @@ import { resolveProbeAuthorization, TEARDOWN_CREDENTIAL_TIMEOUT_MS } from './pro
 export const PUSH_ORDERS = /\/wp-json\/wcpos\/v2\/push\/orders(\?|$)/;
 
 /**
- * Whether a response is the order-push POST, under EITHER permalink style.
+ * Match the completed order-push POST, under EITHER permalink style.
  * Pretty permalinks put the route in the pathname; plain permalinks carry it
  * as `?rest_route=` — matching only the pretty form makes a spec time out on a
  * plain-permalink store despite a successful save (#1114 review). Same dual
- * form orders.spec.ts always used.
+ * form orders.spec.ts always used. The first 401 starts the fetcher's single
+ * refresh-and-retry cycle; a second 401 is the terminal retry response.
  */
-export function isPushOrdersResponse(response: {
+export function createPushOrdersResponseMatcher(): (response: {
 	url: () => string;
 	request: () => { method: () => string };
-}): boolean {
-	if (response.request().method() !== 'POST') return false;
-	const url = new URL(response.url());
-	return (
-		PUSH_ORDERS.test(response.url()) ||
-		url.searchParams.get('rest_route') === '/wcpos/v2/push/orders'
-	);
+	status: () => number;
+}) => boolean {
+	let sawUnauthorized = false;
+	return (response) => {
+		if (response.request().method() !== 'POST') return false;
+		const url = new URL(response.url());
+		const isPushOrders =
+			PUSH_ORDERS.test(response.url()) ||
+			url.searchParams.get('rest_route') === '/wcpos/v2/push/orders';
+		if (!isPushOrders || response.status() !== 401) return isPushOrders;
+		if (sawUnauthorized) return true;
+		sawUnauthorized = true;
+		return false;
+	};
 }
 
 /** The checkout modal route, `/cart/<uuid>/checkout`. */
@@ -203,7 +211,7 @@ export async function openCheckout(
 	page: Page,
 	options: { onOrderCreated?: (order: TrackedOrder) => void } = {}
 ): Promise<{ orderId: number; uuid: string; sent: OrderPayload }> {
-	const saved = page.waitForResponse((response) => isPushOrdersResponse(response), {
+	const saved = page.waitForResponse(createPushOrdersResponseMatcher(), {
 		timeout: 90_000,
 	});
 	// If the click below throws, this waiter is left pending and rejects later with
