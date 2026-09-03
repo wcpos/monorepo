@@ -58,6 +58,17 @@ function maestroInterpolations(source) {
 	return expressions;
 }
 
+/**
+ * The typed-URL assert: a direct `assertVisible` in the retry, or (flow 02) the
+ * same assert wrapped in a conditional `runFlow` that skips it when the sign-in
+ * consent alert is already over the field. Returns the assert command or null.
+ */
+function urlAssert(command) {
+	if (command?.assertVisible?.text) return command.assertVisible;
+	const nested = command?.runFlow?.commands?.find((inner) => inner?.assertVisible?.text);
+	return nested ? nested.assertVisible : null;
+}
+
 test('native product searches type no more than one key per Maestro command', () => {
 	for (const [filename, variable] of flows) {
 		const source = readFileSync(
@@ -73,7 +84,7 @@ test('native product searches type no more than one key per Maestro command', ()
 			.find((commands) => Array.isArray(commands) && commands.includes('eraseText'));
 		const searchCommands = retry.slice(
 			retry.findIndex((command) => command === 'eraseText') + 1,
-			retry.findIndex((command) => command.assertVisible)
+			retry.findIndex((command) => urlAssert(command))
 		);
 		const context = { ...config.env, output: {} };
 		const bursts = [];
@@ -115,7 +126,7 @@ test('native URL retries clear existing text and safely assert the typed URL', (
 		);
 		assert.equal(retry[1]?.tapOn?.id, 'store-url-input', filename);
 		assert.equal(retry[2], 'eraseText', filename);
-		const selector = retry.find((command) => command.assertVisible?.text).assertVisible.text;
+		const selector = retry.map(urlAssert).find(Boolean).text;
 		const pattern = evaluate(selector, { ...config.env, [variable]: literal });
 
 		assert.equal(pattern, 'https://dev-pro\\.wcpos\\.com', filename);
