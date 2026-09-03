@@ -87,10 +87,24 @@ runs:
         fi
       shell: bash
 
+    # One turbo cache entry per OS per UTC day, not per commit. A per-commit
+    # key saved a fresh 360-380 MB entry for every PR head and every merge on
+    # both runner OSes; the repo's 10 GB cache quota filled within hours and
+    # its LRU evicted the entries read least often — the native E2E dev
+    # client, read once per main run and worth $3 to rebuild (2026-09-03:
+    # 23 entries at 8.3 GB, the dev client gone within 40 minutes of a hit).
+    # Later commits in a day restore the day's entry through restore-keys and
+    # rebuild only what changed; turbo hashes inputs, so correctness does not
+    # depend on the entry being current.
+    - name: 🗓 Cache day
+      id: cache-day
+      run: echo "day=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+      shell: bash
+
     - name: ♻️ Restore cache
       uses: actions/cache@v4
       with:
-        key: turbo-${{ runner.os }}-${{ github.sha }}
+        key: turbo-${{ runner.os }}-${{ steps.cache-day.outputs.day }}
         restore-keys: |
           turbo-${{ runner.os }}
         # Turbo v2 stores its local cache in .turbo/cache — the old
