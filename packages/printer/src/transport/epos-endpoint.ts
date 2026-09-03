@@ -9,9 +9,10 @@ type EposPostFn = (
 
 const EPOS_PATH = '/cgi-bin/epos/service.cgi?devid=local_printer&timeout=4000';
 const PROBE_TIMEOUT_MS = 4_000;
+export const EPOS_HTTP_PORTS: readonly number[] = [443, 8043, 80, 8008];
 
 export async function probeEposEndpoint(host: string, postFn: EposPostFn): Promise<number | null> {
-	for (const port of [443, 8043, 80, 8008]) {
+	for (const port of EPOS_HTTP_PORTS) {
 		try {
 			const response = await postFn(port, EPOS_PATH, buildEposXml(''), PROBE_TIMEOUT_MS);
 			if (response.status < 200 || response.status >= 300) continue;
