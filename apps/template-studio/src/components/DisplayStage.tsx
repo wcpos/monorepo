@@ -21,6 +21,7 @@ const DISPLAY_STATES: readonly { state: DisplayState; label: string }[] = [
 	{ state: 'payment.complete', label: 'Payment complete' },
 ];
 
+/** Renders a responsive customer-display iframe and its preview-state controls. */
 export function DisplayStage({ siteOrigin, templateId }: DisplayStageProps) {
 	const [state, setState] = React.useState<DisplayState>('cart');
 	const [scale, setScale] = React.useState(1);

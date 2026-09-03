@@ -14,6 +14,7 @@ export type DisplayState =
 	| 'payment.declined'
 	| 'payment.complete';
 
+/** Fetches the display templates available from the configured WordPress site. */
 export async function fetchDisplayTemplates(): Promise<DisplayTemplate[]> {
 	try {
 		const response = await fetch('/wp-json/wcpos/v2/templates?type=display', {
@@ -33,6 +34,7 @@ export const ACTIVE_DISPLAY_TEMPLATE: DisplayTemplate = {
 	title: 'Active display template',
 };
 
+/** Builds a WordPress customer-display preview URL for a template and state. */
 export function displayPreviewUrl(
 	siteOrigin: string,
 	templateId: string | number,

@@ -14,6 +14,7 @@ const ENGINE_LABELS: Record<TemplateEngine, string> = {
 };
 const ENGINE_ORDER: TemplateEngine[] = ['logicless', 'thermal'];
 
+/** Lists receipt and customer-display templates for Studio selection. */
 export function TemplateList({
 	templates,
 	displayTemplates,

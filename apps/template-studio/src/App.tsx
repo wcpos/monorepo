@@ -110,6 +110,7 @@ function defaultPaperWidth(engine: TemplateEngine | undefined): PaperWidth {
 	return engine === 'thermal' ? '80mm' : 'a4';
 }
 
+/** Renders the interactive receipt and customer-display Template Studio. */
 export function App() {
 	const [templates, setTemplates] = React.useState<StudioTemplate[]>([]);
 	const [displayTemplates, setDisplayTemplates] = React.useState<DisplayTemplate[]>([]);

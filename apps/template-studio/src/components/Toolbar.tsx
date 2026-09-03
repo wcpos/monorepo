@@ -9,6 +9,7 @@ const ZOOM_STEP = 10;
 const ZOOM_MIN = 50;
 const ZOOM_MAX = 200;
 
+/** Renders the Studio brand and receipt-preview zoom controls. */
 export function Toolbar({ zoom, onZoomChange, zoomHidden = false }: ToolbarProps) {
 	return (
 		<header className="studio-toolbar" role="toolbar" aria-label="Canvas controls">
