@@ -8,7 +8,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DrawerItemList } from './drawer-item-list';
-import { DrawerPanelVisibilityReporter } from './panel-visibility';
+import { DrawerPanelVisibilityReporter, useDrawerPanelHidden } from './panel-visibility';
 import { Version } from './version';
 
 import type { DrawerContentComponentProps } from 'expo-router/build/react-navigation/drawer';
@@ -33,11 +33,21 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 	// can take a settled-closed panel out of layout entirely — see `panel-visibility.tsx`.
 	const status = getDrawerStatusFromState(props.state);
 
+	// A settled-closed panel is out of layout (`display: 'none'`, see `panel-visibility.tsx`)
+	// but its subtree stays mounted, and on Android the accessibility tree kept reporting the
+	// items with their last laid-out bounds after a heavy screen mount — a screen reader (and
+	// Maestro, run 33740223026: `drawer-item-pos` "visible" with nothing drawn) could reach
+	// menu items that are not on the screen. Hide the descendants from assistive tech while
+	// the panel is hidden; the reporter above stays mounted so an open can un-hide them.
+	const panelHidden = useDrawerPanelHidden();
+
 	return (
 		<>
 			<DrawerPanelVisibilityReporter status={status === 'open' ? 'open' : 'closed'} />
 			<DrawerContentScrollView
 				{...props}
+				importantForAccessibility={panelHidden ? 'no-hide-descendants' : 'auto'}
+				accessibilityElementsHidden={panelHidden}
 				contentContainerStyle={{
 					paddingTop: insets.top,
 					paddingBottom: insets.bottom,
