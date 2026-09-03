@@ -23,7 +23,8 @@ import { parseRemoteId } from '../utils/parse-remote-id';
 
 import type { CollectionKey, FiltersOf, LogKindFilter, QueryStateOf } from './query-state-types';
 
-type Operator = 'taxonomy-many' | 'value' | 'metadata' | 'store' | 'date-range' | 'all-match';
+type Operator =
+	'taxonomy-many' | 'value' | 'metadata' | 'store' | 'date-range' | 'numeric-range' | 'all-match';
 
 type WireField = FieldMapEntry & {
 	wireFace: NonNullable<FieldMapEntry['wireFace']>;
@@ -44,6 +45,8 @@ export const FILTER_TRANSLATORS = {
 		on_sale: mappedEntry(collectionMap.products.fields.on_sale),
 		stock_status: mappedEntry(collectionMap.products.fields.stock_status),
 		status: mappedEntry(collectionMap.products.fields.status),
+		price: mappedEntry(collectionMap.products.fields.price, 'numeric-range'),
+		type: mappedEntry(collectionMap.products.fields.type),
 	},
 	orders: {
 		status: mappedEntry(collectionMap.orders.fields.status),
@@ -181,6 +184,24 @@ function compileReadFilter(
 } {
 	const { mapping, operator } = entryValue;
 	const actual = (document: EngineDocument) => mappedValue(mapping, document);
+	if (operator === 'numeric-range') {
+		const range = value as { min?: number; max?: number };
+		const min = Number.isFinite(range.min) ? range.min : undefined;
+		const max = Number.isFinite(range.max) ? range.max : undefined;
+		const condition = {
+			...(min !== undefined ? { $gte: min } : {}),
+			...(max !== undefined ? { $lte: max } : {}),
+		};
+		return {
+			...(min !== undefined || max !== undefined
+				? { prefilter: { [mapping.enginePath]: condition } }
+				: {}),
+			matches: (document) => {
+				const current = Number(actual(document));
+				return (min === undefined || current >= min) && (max === undefined || current <= max);
+			},
+		};
+	}
 	if (operator === 'taxonomy-many') {
 		const ids = [...new Set(value as number[])].sort((a, b) => a - b);
 		const prefilter =
@@ -312,6 +333,10 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 		if (value === undefined || (Array.isArray(value) && value.length === 0)) return [];
 		const translator = translators[field]!;
 		if (translator.operator === 'metadata' && parseRemoteId(value) === undefined) return [];
+		if (translator.operator === 'numeric-range') {
+			const range = value as { min?: number; max?: number };
+			if (!Number.isFinite(range.min) && !Number.isFinite(range.max)) return [];
+		}
 		return [{ field, value, translator }];
 	});
 	const targeted = options.targeted?.map(remoteIdOrNull).filter((remoteId) => remoteId !== null);
@@ -508,6 +533,18 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 				filtered = true;
 			} else if (field === 'stock_status' || (field === 'status' && value !== 'publish'))
 				represented = false;
+			else if (field === 'price') {
+				const range = value as { min?: number; max?: number };
+				if (Number.isFinite(range.min)) dimensions.min_price = range.min;
+				if (Number.isFinite(range.max)) dimensions.max_price = range.max;
+				filtered = true;
+			} else if (
+				field === 'type' &&
+				['simple', 'variable', 'grouped', 'external'].includes(String(value))
+			) {
+				dimensions.type = value as ProductBrowseDimensions['type'];
+				filtered = true;
+			} else if (field === 'type') represented = false;
 		}
 		if (wooOrderby) {
 			dimensions.orderby = wooOrderby;

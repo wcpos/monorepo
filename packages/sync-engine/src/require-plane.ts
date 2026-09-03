@@ -197,6 +197,9 @@ export type ProductBrowseDimensions = {
 	featured?: boolean;
 	on_sale?: boolean;
 	stock_status?: 'instock' | 'outofstock' | 'onbackorder';
+	min_price?: number;
+	max_price?: number;
+	type?: 'simple' | 'variable' | 'grouped' | 'external';
 };
 
 /**
