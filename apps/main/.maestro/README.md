@@ -42,6 +42,10 @@ is broken, whatever its verdict says.
 - PRs that touch native-E2E inputs run **phones only**; pushes to `main` and
   `workflow_dispatch` run all four devices (a dispatch can be narrowed with
   `platform=`). A tablet fix is proven by its merge run, not its PR run.
+- A red run on a push to `main` opens (or refreshes) a `ci:main-native-red`
+  issue carrying the per-platform results. It closes itself only on a run
+  where both platforms passed, and a rerun of an older push never moves it.
+  The web suite's equivalent is `ci:main-red` from `deploy.yml`.
 - PRs whose base is `next` skip the native suite by ruling (2026-09-03).
 - Red native checks on a PR that is not itself native-E2E work do not block a
   merge (owner ruling, 2026-09-03). Native-E2E PRs merge on evidence.
@@ -285,6 +289,3 @@ add its case in the same PR.
   the class has changed and the row above is stale. Beware: `maestro.log`
   repeats each retry block's command metadata on every evaluation, so grep for
   the output form of the line, not bare `WCPOS_E2E`.
-- `main` has no native-lane ledger. The web suite opens and closes a
-  `ci:main-red` issue from `deploy.yml`; a red native run on `main` exists
-  only as a cross in the Actions tab.
