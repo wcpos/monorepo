@@ -992,7 +992,12 @@ const processInitialPropsStep: HydrationStep = {
 			const preparedStore = stores[index];
 			const existingStore = await userDB.stores.findOne(preparedStore.localID).exec();
 			if (existingStore) {
-				await mergeServerOwnedStoreFields(existingStore, initialStores[index]);
+				// Inline initial props come from the free plugin without Pro's store
+				// filters, so they never carry `display`; letting them revoke it
+				// stopped the customer display service on every reload of /pos/.
+				await mergeServerOwnedStoreFields(existingStore, initialStores[index], {
+					revokeDisplayOnAbsence: false,
+				});
 			} else {
 				newStores.push(preparedStore);
 			}

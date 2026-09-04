@@ -310,6 +310,66 @@ describe('PROCESS_INITIAL_PROPS', () => {
 	});
 });
 
+describe('PROCESS_INITIAL_PROPS display advertisement', () => {
+	it('keeps a display advertisement the initial props do not carry', async () => {
+		// The free plugin builds inline initial props without Pro's store filters,
+		// so `display` is never present there; the cashier response is the only
+		// payload that may withdraw it.
+		type StoreData = Record<string, unknown> & { display?: unknown };
+		type StoreDouble = StoreData & {
+			incrementalPatch: jest.Mock<Promise<void>, [Record<string, unknown>]>;
+			incrementalModify: jest.Mock<Promise<void>, [(doc: StoreData) => StoreData]>;
+			getLatest: () => StoreDouble;
+		};
+		const existingStore: StoreDouble = {
+			id: 1,
+			localID: '0123456789',
+			display: { contract: 1, signaling: '/wcpos/v2/display' },
+			incrementalPatch: jest.fn(async (patch: Record<string, unknown>) => {
+				Object.assign(existingStore, patch);
+			}),
+			incrementalModify: jest.fn(async (modify: (doc: StoreData) => StoreData) => {
+				const next = modify({ ...existingStore });
+				delete existingStore.display;
+				Object.assign(existingStore, next);
+			}),
+			getLatest: () => existingStore,
+		};
+		const siteDoc = { uuid: 'site-1' };
+		const wpCredentialsDoc = { uuid: 'credentials-1', patch: jest.fn(async () => undefined) };
+		const userDB = {
+			sites: {
+				schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
+				findOne: jest.fn(() => ({ exec: jest.fn(async () => null) })),
+				incrementalUpsert: jest.fn(async () => siteDoc),
+			},
+			wp_credentials: { upsert: jest.fn(async () => wpCredentialsDoc) },
+			stores: {
+				findOne: jest.fn(() => ({ exec: jest.fn(async () => existingStore) })),
+				bulkInsert: jest.fn(async () => undefined),
+			},
+		};
+		const appState = {
+			get: jest.fn(async () => ({ storeID: existingStore.localID })),
+			set: jest.fn(async () => undefined),
+		};
+		type StepContext = Parameters<NonNullable<(typeof hydrationSteps)[number]['execute']>>[0];
+		const step = hydrationSteps.find(({ name }) => name === 'PROCESS_INITIAL_PROPS');
+		await step!.execute({
+			userDB: userDB as unknown as StepContext['userDB'],
+			appState: appState as unknown as StepContext['appState'],
+			user: { uuid: 'user-1' } as unknown as StepContext['user'],
+			initialProps: {
+				site: siteDoc,
+				wp_credentials: wpCredentialsDoc,
+				stores: [{ id: 1, calc_taxes: 'yes' }],
+			},
+		});
+		expect(existingStore.display).toEqual({ contract: 1, signaling: '/wcpos/v2/display' });
+		expect(existingStore.incrementalModify).not.toHaveBeenCalled();
+	});
+});
+
 describe('probe transport', () => {
 	/**
 	 * The 1.10.2 connect outage: these probes called the renderer's global fetch.
