@@ -135,6 +135,7 @@ export class CustomerDisplayService {
 		this.registryReadSucceeded = true;
 		this.displays = displays;
 		const code = await this.signaling.mintPairingCode(this.options.deviceId, this.options.storeId);
+		if (this.stopped) return null;
 		this.pairingCode = code;
 		this.pairingDisplayIds = new Set(displays.map(({ id }) => id));
 		this.emit();

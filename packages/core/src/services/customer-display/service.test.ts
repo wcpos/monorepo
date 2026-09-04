@@ -3,7 +3,7 @@
 import { CustomerDisplayService } from './service';
 
 import type { OffererPeer } from './peer';
-import type { DisplayRegistryRow, HttpFunction } from './signaling-client';
+import type { DisplayRegistryRow, HttpFunction, PairingCode } from './signaling-client';
 
 const mockLoggerWarn = jest.fn();
 jest.mock('@wcpos/utils/logger', () => ({
@@ -463,5 +463,32 @@ describe('CustomerDisplayService', () => {
 		await service.refreshDisplays();
 		expect(peers).toHaveLength(2);
 		service.stop();
+	});
+	test('stop during a pending pairing request discards the code', async () => {
+		let resolveMint!: (value: { data: PairingCode }) => void;
+		const http: HttpFunction = async <T>(request: Parameters<HttpFunction>[0]) => {
+			if (request.url.endsWith('/pairings')) {
+				return new Promise<{ data: T }>((resolve) => {
+					resolveMint = resolve as unknown as typeof resolveMint;
+				});
+			}
+			if (request.method === 'GET' && request.url.endsWith('/displays')) return { data: [] as T };
+			return { data: {} as T };
+		};
+		const service = new CustomerDisplayService({
+			http,
+			deviceId: 'device-1',
+			storeId: 7,
+			siteRestRoot: '/wcpos/v2/display',
+			createPeer: () => new FakePeer(),
+		});
+		const minted = service.mintPairingCode();
+		await Promise.resolve();
+		await Promise.resolve();
+		service.stop();
+		resolveMint({ data: { code: '123456', expires_at: 1788430200 } });
+
+		await expect(minted).resolves.toBeNull();
+		expect(service.getState().pairingCode).toBeNull();
 	});
 });
