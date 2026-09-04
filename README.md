@@ -130,7 +130,7 @@ CI/CD lives in [`.github/workflows/`](./.github/workflows):
 - **[`deploy.yml`](./.github/workflows/deploy.yml)** — exports the `apps/main` web build and deploys it to EAS Hosting ([wcpos.expo.app](https://wcpos.expo.app)); PRs get preview deployments. Runs sharded Playwright E2E against the deployment.
 - **[`build.yml`](./.github/workflows/build.yml)** — EAS Build for native iOS/Android apps (manually dispatched), with optional store submission.
 - **[`test.yml`](./.github/workflows/test.yml)** — lint, type-check and unit tests with a coverage ratchet, gating every PR.
-- **[`publish-web-bundle.yml`](./.github/workflows/publish-web-bundle.yml)** — builds `apps/web` and publishes the bundle to the [`web-bundle`](https://github.com/wcpos/web-bundle) repo for jsDelivr.
+- **[`publish-web-bundle.yml`](./.github/workflows/publish-web-bundle.yml)** — builds `apps/web` and publishes the bundle to a branch of the [`web-bundle`](https://github.com/wcpos/web-bundle) repo for jsDelivr. One ref per lane, named after the lane: the `next` trunk ships at `https://cdn.jsdelivr.net/gh/wcpos/web-bundle@next` (the `next` branch _is_ its tag — dev-next reads it); the released trunk ships at the plugin's major.minor tag (`@1.10`, then `@1.11` once `next` becomes `main`), which the release train cuts. See "Web bundle ref per lane" in `CLAUDE.md`.
 - **[`bump-submodules.yml`](./.github/workflows/bump-submodules.yml)** — daily auto-bump of the `apps/electron` submodule.
 
 ## 📚 Documentation
