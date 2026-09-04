@@ -6,7 +6,9 @@ import { formatDistance } from 'date-fns';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
+import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { SettingsRow } from '../components/settings-row';
@@ -15,6 +17,8 @@ import { useT } from '../../../../contexts/translations';
 import { useLocalDate } from '../../../../hooks/use-local-date';
 
 import type { PairingCode as PairingCodeValue } from '../../../../services/customer-display';
+
+const logger = getLogger(['wcpos', 'customer-display', 'settings']);
 
 export function PairingCode({
 	disabled,
@@ -38,6 +42,21 @@ export function PairingCode({
 			})
 		: null;
 
+	const mint = React.useCallback(async () => {
+		try {
+			await onMint();
+		} catch (error) {
+			// A pairing code is minted through the Pro mailbox; a failure here is
+			// almost always an auth or plugin-version problem the cashier must see.
+			logger.warn('Pairing code request failed', { context: { error } });
+			Toast.show({
+				type: 'error',
+				title: t('settings.customer_display.pairing_failed'),
+				description: getErrorMessage(error),
+			});
+		}
+	}, [onMint, t]);
+
 	const copyUrl = React.useCallback(() => {
 		const clipboard = navigator.clipboard;
 		if (typeof clipboard?.writeText !== 'function') return;
@@ -60,13 +79,17 @@ export function PairingCode({
 					</Text>
 				</View>
 			) : null}
-			<Button
-				testID="customer-display-pair-button"
-				disabled={disabled}
-				onPress={() => void onMint().catch(() => undefined)}
-			>
+			<Button testID="customer-display-pair-button" disabled={disabled} onPress={() => void mint()}>
 				<ButtonText>{t('settings.customer_display.generate_code')}</ButtonText>
 			</Button>
+			{disabled ? (
+				<Text
+					testID="customer-display-service-unavailable"
+					className="text-muted-foreground text-xs"
+				>
+					{t('settings.customer_display.service_unavailable')}
+				</Text>
+			) : null}
 			<SettingsRow label={t('settings.customer_display.display_url')}>
 				<VStack className="items-end gap-2">
 					<Text selectable testID="customer-display-host-url" className="font-mono text-xs">
