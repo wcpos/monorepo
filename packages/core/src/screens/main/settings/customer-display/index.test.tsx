@@ -190,7 +190,7 @@ describe('CustomerDisplaySettings', () => {
 		expect(screen.getByTestId('customer-display-not-advertised')).toBeInTheDocument();
 		expect(
 			screen.getByText(
-				'Customer displays need a newer version of WooCommerce POS Pro. Update the Pro plugin in WordPress.'
+				'Customer displays need a newer version of WCPOS Pro. Update the Pro plugin in WordPress.'
 			)
 		).toBeInTheDocument();
 		expect(screen.queryByText('Customer displays are a Pro feature.')).not.toBeInTheDocument();
