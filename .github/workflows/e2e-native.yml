@@ -1577,3 +1577,57 @@ jobs:
             exit 1
           fi
           echo "✅ Native E2E passed"
+
+  main-ledger:
+    name: 📕 main native ledger
+    needs: [native-gate, android, ios]
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      issues: write
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update main native ledger
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          GATE_RESULT: ${{ needs.native-gate.result }}
+          ANDROID_RESULT: ${{ needs.android.result }}
+          IOS_RESULT: ${{ needs.ios.result }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          label='ci:main-native-red'
+          short_sha="${SHA:0:7}"
+
+          if [ "$GATE_RESULT" = "cancelled" ] || [ "$ANDROID_RESULT" = "cancelled" ] || [ "$IOS_RESULT" = "cancelled" ]; then
+            echo "Ledger unchanged: superseded native verification at $short_sha"
+            exit 0
+          fi
+
+          issues=$(gh issue list --label "$label" --state open --json number --limit 1)
+          issue=$(jq -r '.[0].number // empty' <<<"$issues")
+          facts="Native verification failed for $SHA ($RUN_URL); android: $ANDROID_RESULT, ios: $IOS_RESULT."
+          if [ "$GATE_RESULT" = "failure" ]; then
+            if [ -z "$issue" ]; then
+              gh label create "$label" --color B60205 --description "Main native (Maestro) verification is red" || true
+              gh issue create --title "main native E2E is red at $short_sha" --label "$label" --body "$facts This issue closes itself on the next fully green device run." >/dev/null
+              echo "Ledger issue opened for $short_sha"
+            else
+              gh issue comment "$issue" --body "$facts" >/dev/null
+              echo "Ledger issue $issue refreshed for $short_sha"
+            fi
+          elif [ "$GATE_RESULT" = "success" ] && [ "$ANDROID_RESULT" = "success" ] && [ "$IOS_RESULT" = "success" ]; then
+            if [ -n "$issue" ]; then
+              gh issue comment "$issue" --body "green again at $SHA ($RUN_URL)" >/dev/null
+              gh issue close "$issue" >/dev/null
+              echo "Ledger issue $issue closed at $short_sha"
+            else
+              echo "Ledger unchanged: main native E2E is green and no issue is open"
+            fi
+          elif [ "$GATE_RESULT" = "success" ]; then
+            echo "Ledger unchanged: devices did not both succeed (gate: $GATE_RESULT, android: $ANDROID_RESULT, ios: $IOS_RESULT)"
+          else
+            echo "Ledger unchanged: gate=$GATE_RESULT android=$ANDROID_RESULT ios=$IOS_RESULT"
+          fi

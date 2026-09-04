@@ -299,6 +299,96 @@ if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
 	}
 });
 
+test('the main native ledger tracks only completed device verification', () => {
+	const ledger = readWorkflow('e2e-native.yml').jobs['main-ledger'];
+	assert.match(ledger.if, /github\.event_name == 'push'/);
+	assert.match(ledger.if, /github\.ref == 'refs\/heads\/main'/);
+	for (const need of ['native-gate', 'android', 'ios']) {
+		assert.ok([ledger.needs].flat().includes(need), `ledger must need ${need}`);
+	}
+	assert.equal(ledger.steps[0].env.GH_REPO, '${{ github.repository }}');
+
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-main-native-ledger-'));
+	const binDir = path.join(workspace, 'bin');
+	const trace = path.join(workspace, 'gh.log');
+	mkdirSync(binDir);
+	writeFileSync(
+		path.join(binDir, 'gh'),
+		`#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$GH_TRACE"
+if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
+`,
+		{ mode: 0o755 }
+	);
+
+	const run = ({ gate, android = 'success', ios = 'success', issues }) => {
+		writeFileSync(trace, '');
+		const result = runShell(ledger.steps[0].run, {
+			env: {
+				PATH: `${binDir}:${process.env.PATH}`,
+				GH_TRACE: trace,
+				GH_ISSUES: issues,
+				GATE_RESULT: gate,
+				ANDROID_RESULT: android,
+				IOS_RESULT: ios,
+				SHA: '0123456789abcdef',
+				RUN_URL: 'https://github.test/actions/runs/2',
+			},
+		});
+		return { result, trace: readFileSync(trace, 'utf8') };
+	};
+
+	try {
+		const created = run({ gate: 'failure', android: 'failure', issues: '[]' });
+		assert.equal(created.result.status, 0, created.result.stdout + created.result.stderr);
+		assert.match(created.trace, /label create ci:main-native-red --color B60205/);
+		assert.match(created.trace, /--description Main native \(Maestro\) verification is red/);
+		assert.match(created.trace, /issue create --title main native E2E is red at 0123456/);
+		assert.match(created.trace, /0123456789abcdef.*https:\/\/github\.test\/actions\/runs\/2/);
+		assert.match(created.trace, /android: failure, ios: success/);
+		assert.match(created.trace, /closes itself on the next fully green device run/);
+
+		const refreshed = run({ gate: 'failure', ios: 'failure', issues: '[{"number":42}]' });
+		assert.equal(refreshed.result.status, 0, refreshed.result.stdout + refreshed.result.stderr);
+		assert.match(refreshed.trace, /issue comment 42/);
+		assert.match(refreshed.trace, /android: success, ios: failure/);
+		assert.doesNotMatch(refreshed.trace, /issue create/);
+
+		const closed = run({ gate: 'success', issues: '[{"number":42}]' });
+		assert.equal(closed.result.status, 0, closed.result.stdout + closed.result.stderr);
+		assert.match(closed.trace, /issue comment 42 --body green again at 0123456789abcdef/);
+		assert.match(closed.trace, /issue close 42/);
+
+		const skipped = run({
+			gate: 'success',
+			android: 'skipped',
+			ios: 'skipped',
+			issues: '[{"number":42}]',
+		});
+		assert.equal(skipped.result.status, 0, skipped.result.stdout + skipped.result.stderr);
+		assert.doesNotMatch(skipped.trace, /issue (create|comment|close)|label create/);
+		assert.match(skipped.result.stdout, /devices did not both succeed/i);
+
+		for (const cancelled of ['gate', 'android', 'ios']) {
+			const superseded = run({
+				gate: cancelled === 'gate' ? 'cancelled' : 'failure',
+				android: cancelled === 'android' ? 'cancelled' : 'failure',
+				ios: cancelled === 'ios' ? 'cancelled' : 'success',
+				issues: '[{"number":42}]',
+			});
+			assert.equal(
+				superseded.result.status,
+				0,
+				superseded.result.stdout + superseded.result.stderr
+			);
+			assert.equal(superseded.trace, '', `${cancelled} cancellation must make no gh calls`);
+			assert.match(superseded.result.stdout, /superseded/i);
+		}
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
 test('release workflows require green main with an explicit typed override', () => {
 	const build = readWorkflow('build.yml');
 	const publish = readWorkflow('publish-web-bundle.yml');
@@ -466,7 +556,11 @@ test('PRs targeting next skip both E2E suites and their gates accept the skip', 
 	const nextDeployUrlMissing = runShell(e2eGate.run, {
 		env: { ...webEnv, BASE_REF: 'next', DEPLOY_URL: '' },
 	});
-	assert.notEqual(nextDeployUrlMissing.status, 0, nextDeployUrlMissing.stdout + nextDeployUrlMissing.stderr);
+	assert.notEqual(
+		nextDeployUrlMissing.status,
+		0,
+		nextDeployUrlMissing.stdout + nextDeployUrlMissing.stderr
+	);
 	const mainTarget = runShell(e2eGate.run, { env: { ...webEnv, BASE_REF: 'main' } });
 	assert.notEqual(mainTarget.status, 0, mainTarget.stdout + mainTarget.stderr);
 	// A push to main has no base_ref; the exemption must not fire there.
