@@ -132,6 +132,22 @@ test('native URL retries clear existing text and safely assert the typed URL', (
 		assert.equal(pattern, 'https://dev-pro\\.wcpos\\.com', filename);
 		assert.match(literal, new RegExp(`^(?:${pattern})$`), filename);
 		assert.doesNotMatch('https://dev-proXwcposYcom', new RegExp(`^(?:${pattern})$`), filename);
+
+		if (filename === '02-auth-setup.yml') {
+			const consentWaitIndex = retry.findIndex((command) =>
+				command.extendedWaitUntil?.visible?.includes('|Continue')
+			);
+			assert.notEqual(consentWaitIndex, -1, 'flow 02 waits for the typed URL or consent alert');
+			assert.ok(consentWaitIndex < retry.findIndex((command) => urlAssert(command)));
+			const consentWait = retry[consentWaitIndex];
+			const [urlExpression] = maestroInterpolations(consentWait.extendedWaitUntil.visible);
+			assert.equal(
+				`${evaluate(urlExpression, { ...config.env, [variable]: literal })}|Continue`,
+				'https://dev-pro\\.wcpos\\.com|Continue',
+				filename
+			);
+			assert.equal(consentWait.extendedWaitUntil.optional, true, filename);
+		}
 	}
 });
 
