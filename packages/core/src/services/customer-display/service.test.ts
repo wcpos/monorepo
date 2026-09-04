@@ -159,7 +159,7 @@ describe('CustomerDisplayService', () => {
 				.map(({ url }) => url)
 		).toEqual(['/wcpos/v2/display/displays/one/signal', '/wcpos/v2/display/displays/two/signal']);
 		expect(mockLoggerWarn).toHaveBeenCalledWith('Customer display session poll failed', {
-			context: { displayId: 'one', error: expect.any(String) },
+			context: { displayId: 'one', error: 'signal unavailable' },
 		});
 		service.stop();
 	});
