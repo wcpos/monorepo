@@ -149,7 +149,27 @@ found by hour-long device runs.
 a new native/web divergence, **add it there** so the next one is caught by
 `vitest`, not by Maestro.
 
-## 8. Cost discipline
+## 8. Match the red against the known classes before theorising.
+
+`apps/main/.maestro/README.md` is the playbook: the green baseline durations,
+the flow-authoring rules, a table of every failure class seen through
+2026-09-04 (screenshot → mechanism → where it is handled → what not to do),
+the environment facts that decide whether a red is the app's, and the
+tripwire scripts. Read the table first; most reds since 2026-09-03 were a
+listed class recurring, not a new bug. A red that matches no row earns a new
+row in the same PR as its fix.
+
+Rules from that file that agents break most often:
+
+- A retry without a `WCPOS_E2E …` log line hides the defect it papers over.
+- A harness retry is for a lost press on the starved runner; an app defect
+  (a tab that does not re-centre, an input that appends, a button that
+  accepts a second press) is fixed in the app with a unit test.
+- Android relaunches via `openLink`, never `launchApp` (`pm grant` hang).
+- Tablets have a permanent rail: never wait for the drawer to close.
+- The php-fpm worker count lives in `wcpos-wordpress`; box edits revert.
+
+## 9. Cost discipline
 
 Native E2E builds are metered — $2 iOS / $1 Android against a shared $45/month
 credit. **Never dispatch `e2e-native.yml` with `build=true` without asking the
