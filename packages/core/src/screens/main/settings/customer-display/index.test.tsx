@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom';
 import * as React from 'react';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { CustomerDisplaySettings } from './index';
 
@@ -137,9 +137,20 @@ jest.mock('../../../../services/customer-display', () => ({
 		typeof display.signaling === 'string' &&
 		display.signaling.startsWith('/wcpos/v2/'),
 }));
+const mockStartNotifier = {
+	version: 0,
+	listeners: new Set<() => void>(),
+	notify() {
+		mockStartNotifier.version += 1;
+		mockStartNotifier.listeners.forEach((listener) => listener());
+	},
+};
 jest.mock('../../pos/customer-display/customer-display-service-start', () => ({
-	getCustomerDisplayServiceStartVersion: () => 1,
-	subscribeCustomerDisplayServiceStart: () => jest.fn(),
+	getCustomerDisplayServiceStartVersion: () => mockStartNotifier.version,
+	subscribeCustomerDisplayServiceStart: (listener: () => void) => {
+		mockStartNotifier.listeners.add(listener);
+		return () => mockStartNotifier.listeners.delete(listener);
+	},
 }));
 jest.mock('../../../../hooks/use-local-date', () => ({
 	useLocalDate: () => ({ dateFnsLocale: undefined }),
@@ -269,6 +280,24 @@ describe('CustomerDisplaySettings', () => {
 				})
 			)
 		);
+	});
+
+	it('enables pairing when the service starts after the page has rendered', () => {
+		// Cold load of /pos/settings/customer-display: the page mounts before the
+		// root hook has resolved the device id and started the service.
+		store = { display: { contract: 1, signaling: '/wcpos/v2/display' } };
+		customerDisplayService = null;
+		render(<CustomerDisplaySettings />);
+		expect(screen.getByTestId('customer-display-pair-button')).toBeDisabled();
+
+		act(() => {
+			customerDisplayService = mockCustomerDisplayService;
+			mockStartNotifier.notify();
+		});
+
+		expect(screen.getByTestId('customer-display-pair-button')).toBeEnabled();
+		expect(screen.queryByTestId('customer-display-service-unavailable')).not.toBeInTheDocument();
+		expect(refreshDisplays).toHaveBeenCalled();
 	});
 
 	it('explains the disabled button when the display service is not running', () => {

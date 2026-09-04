@@ -233,3 +233,17 @@ test('cleanup does not stop a newer singleton service', async () => {
 
 	expect(mockStopCustomerDisplayService).not.toHaveBeenCalled();
 });
+
+test('keeps a started service when the initial configure throws', async () => {
+	mockConfigure.mockImplementationOnce(() => {
+		throw new Error('config boom');
+	});
+	renderHook(() => useCustomerDisplayService());
+	await flushEffects();
+
+	expect(mockStart).toHaveBeenCalledTimes(1);
+	expect(mockStopCustomerDisplayService).not.toHaveBeenCalled();
+	expect(mockLoggerWarn).toHaveBeenCalledWith('Customer display initial config failed', {
+		context: { error: 'config boom' },
+	});
+});

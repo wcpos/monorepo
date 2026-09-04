@@ -15,7 +15,6 @@ import {
 	stopCustomerDisplayService,
 } from '../../../../services/customer-display';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
-import { notifyCustomerDisplayServiceStart } from './customer-display-service-start';
 
 const logger = getLogger(['wcpos', 'customer-display', 'hook']);
 const WCPOS_V2_PREFIX = '/wcpos/v2/';
@@ -110,8 +109,15 @@ export function useCustomerDisplayService(): void {
 					storeId: fields.id ?? 0,
 					siteRestRoot: signaling.slice(WCPOS_V2_PREFIX.length),
 				});
-				startedService.configure(configRef.current);
-				notifyCustomerDisplayServiceStart();
+				// startCustomerDisplayService has already told subscribers; a config
+				// failure must not turn a running service into a silent one.
+				try {
+					startedService.configure(configRef.current);
+				} catch (error) {
+					logger.warn('Customer display initial config failed', {
+						context: { error: getErrorMessage(error) },
+					});
+				}
 			})
 			.catch((error) => {
 				logger.warn('Customer display service failed to start', {

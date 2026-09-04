@@ -34,3 +34,45 @@ test.each([
 ])('validates display advertisements against contract v1', (display, supported) => {
 	expect(isSupportedDisplayAdvertisement(display)).toBe(supported);
 });
+
+describe('service start/stop notifier', () => {
+	it('tells subscribers when the service starts and stops', async () => {
+		const {
+			getCustomerDisplayService,
+			getCustomerDisplayServiceStartVersion,
+			startCustomerDisplayService,
+			stopCustomerDisplayService,
+			subscribeCustomerDisplayServiceStart,
+		} = await import('./index');
+		const listener = jest.fn();
+		const unsubscribe = subscribeCustomerDisplayServiceStart(listener);
+		const before = getCustomerDisplayServiceStartVersion();
+
+		const service = startCustomerDisplayService({
+			http: async () => ({ data: [] }) as never,
+			deviceId: 'device-1',
+			storeId: 1,
+			siteRestRoot: 'display',
+		});
+		expect(getCustomerDisplayService()).toBe(service);
+		expect(listener).toHaveBeenCalledTimes(1);
+		expect(getCustomerDisplayServiceStartVersion()).toBe(before + 1);
+
+		stopCustomerDisplayService();
+		expect(getCustomerDisplayService()).toBeNull();
+		expect(listener).toHaveBeenCalledTimes(2);
+
+		stopCustomerDisplayService();
+		expect(listener).toHaveBeenCalledTimes(2);
+
+		unsubscribe();
+		startCustomerDisplayService({
+			http: async () => ({ data: [] }) as never,
+			deviceId: 'device-1',
+			storeId: 1,
+			siteRestRoot: 'display',
+		});
+		expect(listener).toHaveBeenCalledTimes(2);
+		stopCustomerDisplayService();
+	});
+});
