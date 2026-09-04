@@ -555,6 +555,21 @@ describe('getServerOwnedStorePatch', () => {
 		expect(store.incrementalModify).toHaveBeenCalledTimes(1);
 	});
 
+	it('keeps the display advertisement when the caller opts out of revocation', async () => {
+		const store = makeStoreDocument({
+			id: 1,
+			display: { contract: 1, signaling: '/wcpos/v2/display' },
+		});
+		const patch = await mergeServerOwnedStoreFields(
+			store,
+			{ id: 1 },
+			{ revokeDisplayOnAbsence: false }
+		);
+		expect(patch).toEqual({});
+		expect(store).toHaveProperty('display', { contract: 1, signaling: '/wcpos/v2/display' });
+		expect(store.incrementalModify).not.toHaveBeenCalled();
+	});
+
 	it('compares plain toJSON data, never RxDocument property proxies', () => {
 		// Object-valued fields read directly off an RxDocument are Proxies
 		// (rxdb getDocumentProperty). On Electron, lodash isEqual hands such a

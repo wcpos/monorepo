@@ -170,16 +170,32 @@ export function getServerOwnedStorePatch(
 }
 
 /** Apply authoritative values from one server payload to an existing store document. */
+export interface MergeServerOwnedStoreFieldsOptions {
+	/**
+	 * Treat a missing `display` advertisement as a withdrawal and delete it.
+	 * Only payloads that run the Pro store filters (the cashier and stores REST
+	 * routes) can withdraw; the plugin-hosted app's inline initial props are
+	 * built by the free plugin alone and never carry `display`, so they must
+	 * not revoke what the cashier response advertised.
+	 */
+	revokeDisplayOnAbsence?: boolean;
+}
+
 export async function mergeServerOwnedStoreFields(
 	storeDocument: StoreDocument,
-	incomingStore: ServerStorePayload
+	incomingStore: ServerStorePayload,
+	{ revokeDisplayOnAbsence = true }: MergeServerOwnedStoreFieldsOptions = {}
 ): Promise<Record<string, unknown>> {
 	const latest = storeDocument.getLatest() as unknown as Record<string, unknown>;
 	const patch = getServerOwnedStorePatch(latest, incomingStore);
 	if (Object.keys(patch).length > 0) {
 		await storeDocument.incrementalPatch(patch as never);
 	}
-	if (latest.display !== undefined && normalizeStorePayload(incomingStore).display === undefined) {
+	if (
+		revokeDisplayOnAbsence &&
+		latest.display !== undefined &&
+		normalizeStorePayload(incomingStore).display === undefined
+	) {
 		await storeDocument.getLatest().incrementalModify((docData) => {
 			delete (docData as { display?: unknown }).display;
 			return docData;
