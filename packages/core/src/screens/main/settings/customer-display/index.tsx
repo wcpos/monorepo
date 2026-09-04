@@ -91,12 +91,20 @@ export function CustomerDisplaySettings() {
 	const siteFields = useDocField(site, (value) => ({
 		url: value.url,
 		useRestRouteParam: value.use_rest_route_param === true,
+		proVersion: value.wcpos_pro_version,
 	}));
 
 	if (!advertised) {
+		// A site that reports a Pro version but no advertisement is running a Pro
+		// plugin older than the display contract: ask for an update, not an upgrade.
+		const proInstalled = Boolean(siteFields?.proVersion);
 		return (
 			<VStack testID="customer-display-not-advertised" className="items-start gap-2">
-				<Text>{t('settings.customer_display.requires_pro')}</Text>
+				<Text>
+					{proInstalled
+						? t('settings.customer_display.update_pro')
+						: t('settings.customer_display.requires_pro')}
+				</Text>
 				<DocsLink testID="customer-display-docs-link" href={DOCS_URL}>
 					{t('settings.customer_display.learn_more')}
 				</DocsLink>
