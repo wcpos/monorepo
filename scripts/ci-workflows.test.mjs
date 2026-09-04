@@ -2061,10 +2061,14 @@ test('relaunch recovery retries one launch and preserves each caller readiness t
 	const documents = parseAllDocuments(
 		readFileSync(path.join(ROOT, 'apps', 'main', '.maestro', 'flows', filename), 'utf8')
 	).map((document) => document.toJS());
-	assert.equal(documents[0].env?.READY_ID, undefined);
+	assert.equal(
+		Object.hasOwn(documents[0].env ?? {}, 'READY_ID'),
+		false,
+		'the subflow must not shadow the READY_ID supplied by each caller'
+	);
 
 	const retry = documents.at(-1).find((command) => command.retry)?.retry;
-	assert.equal(retry.maxRetries, 1);
+	assert.equal(retry.maxRetries, 1, 'relaunch recovery must remain bounded to one retry');
 	assert.ok(
 		retry.commands.some(
 			(command) =>

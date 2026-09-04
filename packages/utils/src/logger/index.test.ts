@@ -225,6 +225,33 @@ describe('logger/index', () => {
 				}
 			});
 
+			it('keeps error lines off console.error under the native E2E flag, text intact', () => {
+				// The dev client overlays the whole screen on console.error even for a
+				// production-mode bundle (run 33808415134, iPad, flow 06: a background
+				// sync's transient 502 covered the UI). The run's app-error report greps
+				// the "ERROR :" text, so the line must keep it.
+				const originalDev = __DEV__;
+				const originalFlag = process.env.EXPO_PUBLIC_WCPOS_E2E;
+				const consoleWarn = jest.spyOn(console, 'warn').mockImplementation();
+				const consoleError = jest.spyOn(console, 'error').mockImplementation();
+
+				Object.defineProperty(globalThis, '__DEV__', { configurable: true, value: false });
+				process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
+
+				try {
+					logger.error('failure', { code: 'CLIENT999' });
+
+					expect(consoleError).not.toHaveBeenCalled();
+					expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining('ERROR : failure'));
+				} finally {
+					Object.defineProperty(globalThis, '__DEV__', { configurable: true, value: originalDev });
+					if (originalFlag === undefined) delete process.env.EXPO_PUBLIC_WCPOS_E2E;
+					else process.env.EXPO_PUBLIC_WCPOS_E2E = originalFlag;
+					consoleWarn.mockRestore();
+					consoleError.mockRestore();
+				}
+			});
+
 			it('should have debug method', () => {
 				expect(typeof logger.debug).toBe('function');
 				// Should not throw
