@@ -13,6 +13,7 @@ const DOMAINS = [
 	'LICENSE',
 	'CLIENT',
 	'HOST',
+	'DISPLAY',
 ];
 const SEVERITIES = ['info', 'warn', 'error'];
 const RETRY_POLICIES = ['automatic', 'manual', 'after-change', 'never'];
@@ -265,9 +266,7 @@ ${cases}
 function renderActions(registry) {
 	const cases = registry
 		.map((entry) =>
-			[`		case ${quote(entry.code)}:`, `			return t(${quote(actionKey(entry.code))});`].join(
-				'\n'
-			)
+			[`		case ${quote(entry.code)}:`, `			return t(${quote(actionKey(entry.code))});`].join('\n')
 		)
 		.join('\n');
 	return `${BANNER}

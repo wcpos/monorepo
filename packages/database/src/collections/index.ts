@@ -203,6 +203,9 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			// v15 adds optional tracking consent; the next server sync populates it.
 			return oldDoc;
 		},
+		16(oldDoc: StoreDocumentType) {
+			return oldDoc;
+		},
 	},
 };
 

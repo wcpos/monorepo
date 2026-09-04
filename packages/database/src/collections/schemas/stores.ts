@@ -1,6 +1,6 @@
 export const storesLiteral = {
 	title: 'WCPOS Store schema',
-	version: 15,
+	version: 16,
 	description: 'WooCommerce POS Store',
 	type: 'object',
 	primaryKey: 'localID',
@@ -117,6 +117,14 @@ export const storesLiteral = {
 			type: 'string',
 			enum: ['undecided', 'allowed', 'denied'],
 			default: 'undecided',
+		},
+		display: {
+			type: 'object',
+			properties: {
+				contract: { type: 'number' },
+				signaling: { type: 'string' },
+			},
+			required: ['contract', 'signaling'],
 		},
 		default_customer_address: {
 			title: 'Default customer location',
@@ -654,6 +662,7 @@ export const SERVER_OWNED_STORE_FIELDS = [
 	'default_customer',
 	'default_customer_is_cashier',
 	'tracking_consent',
+	'display',
 	'store_address',
 	'store_address_2',
 	'store_city',

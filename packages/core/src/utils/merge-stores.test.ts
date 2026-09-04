@@ -1,5 +1,6 @@
 import {
 	getServerOwnedStorePatch,
+	mergeServerOwnedStoreFields,
 	mergeStoresWithResponse,
 	normalizeStorePayload,
 } from './merge-stores';
@@ -68,12 +69,32 @@ const makeStoreDocument = (data: Record<string, unknown>) => {
 		incrementalPatch: jest.fn(async (patch: Record<string, unknown>) => {
 			Object.assign(document, patch);
 		}),
+		incrementalModify: jest.fn(
+			async (modify: (data: Record<string, unknown>) => Record<string, unknown>) => modify(document)
+		),
 	};
 	document.getLatest = jest.fn(() => document);
+	document.toJSON = jest.fn(() => document);
 	return document;
 };
 
 describe('normalizeStorePayload', () => {
+	it('keeps a valid customer-display advertisement', () => {
+		expect(
+			normalizeStorePayload({
+				id: 1,
+				display: { contract: 1, signaling: '/wcpos/v2/display' },
+			}).display
+		).toEqual({ contract: 1, signaling: '/wcpos/v2/display' });
+	});
+
+	it.each([null, 'display', { contract: '1', signaling: '/wcpos/v2/display' }])(
+		'drops a malformed customer-display advertisement: %p',
+		(display) => {
+			expect(normalizeStorePayload({ id: 1, display })).not.toHaveProperty('display');
+		}
+	);
+
 	it('defaults absent receipt_i18n to an empty object', () => {
 		expect(normalizeStorePayload({ id: 1 }).receipt_i18n).toEqual({});
 	});
@@ -111,6 +132,7 @@ describe('mergeStoresWithResponse', () => {
 			price_num_decimals: 2,
 			wc_price_decimals: 2,
 			prevent_overselling: false,
+			display: undefined,
 			theme: 'dark',
 			barcode_scanning_prefix: 'LOCAL-',
 			sync_pull_batch_size: 75,
@@ -128,6 +150,7 @@ describe('mergeStoresWithResponse', () => {
 					calc_taxes: 'yes',
 					price_num_decimals: 3,
 					prevent_overselling: true,
+					display: { contract: 1, signaling: '/wcpos/v2/display' },
 					theme: 'light',
 					barcode_scanning_prefix: 'SERVER-',
 					sync_pull_batch_size: 10,
@@ -141,6 +164,7 @@ describe('mergeStoresWithResponse', () => {
 		// wc_price_decimals is the server-authoritative copy and still auto-syncs.
 		expect(existingStore.incrementalPatch).toHaveBeenCalledWith({
 			calc_taxes: 'yes',
+			display: { contract: 1, signaling: '/wcpos/v2/display' },
 			wc_price_decimals: 3,
 			prevent_overselling: true,
 		});
@@ -516,6 +540,21 @@ describe('mergeStoresWithResponse', () => {
 });
 
 describe('getServerOwnedStorePatch', () => {
+	it('deletes a withdrawn display advertisement without patching undefined', async () => {
+		const store = makeStoreDocument({
+			id: 1,
+			display: { contract: 1, signaling: '/wcpos/v2/display' },
+		});
+
+		const patch = await mergeServerOwnedStoreFields(store, { id: 1 });
+
+		expect(patch).toEqual({});
+		expect(Object.values(patch)).not.toContain(undefined);
+		expect(store).not.toHaveProperty('display');
+		expect(store.incrementalPatch).not.toHaveBeenCalled();
+		expect(store.incrementalModify).toHaveBeenCalledTimes(1);
+	});
+
 	it('compares plain toJSON data, never RxDocument property proxies', () => {
 		// Object-valued fields read directly off an RxDocument are Proxies
 		// (rxdb getDocumentProperty). On Electron, lodash isEqual hands such a

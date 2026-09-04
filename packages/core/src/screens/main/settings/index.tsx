@@ -6,6 +6,7 @@ import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 
 export { BarcodeScanning } from './barcode-scanning';
+export { CustomerDisplaySettings } from './customer-display';
 export { GeneralSettings } from './general';
 export { PrintingSettings } from './printing';
 export { TaxSettings } from './tax';

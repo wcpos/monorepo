@@ -14,6 +14,7 @@ import { HydrationProviders } from '@wcpos/core/contexts/hydration-providers';
 import { createMerchantToast } from '@wcpos/core/contexts/merchant-toast';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useTelemetryConsent } from '@wcpos/core/hooks/use-telemetry-consent';
+import { useCustomerDisplayService } from '@wcpos/core/screens/main/pos/customer-display/use-customer-display-service';
 import { setToast } from '@wcpos/utils/logger';
 
 import {
@@ -97,13 +98,21 @@ function RootStack() {
 	}
 
 	return (
-		<Stack screenOptions={{ headerShown: false }}>
-			<Stack.Protected guard={!!storeDB}>
-				<Stack.Screen name="(app)" />
-			</Stack.Protected>
-			<Stack.Screen name="(auth)" />
-		</Stack>
+		<>
+			{storeDB ? <CustomerDisplayServiceController /> : null}
+			<Stack screenOptions={{ headerShown: false }}>
+				<Stack.Protected guard={!!storeDB}>
+					<Stack.Screen name="(app)" />
+				</Stack.Protected>
+				<Stack.Screen name="(auth)" />
+			</Stack>
+		</>
 	);
+}
+
+function CustomerDisplayServiceController(): null {
+	useCustomerDisplayService();
+	return null;
 }
 
 /**

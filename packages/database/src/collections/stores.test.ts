@@ -32,4 +32,13 @@ describe('stores migration strategy', () => {
 		const migrated = migrate({}, undefined as never);
 		expect(migrated.receipt_i18n).toEqual({});
 	});
+
+	it('migration 16 preserves existing store data', async () => {
+		const { userCollections } = await import('./index');
+		const migrate = userCollections.stores.migrationStrategies?.[16];
+		if (!migrate) throw new Error('stores migration 16 missing');
+		const oldStore = { localID: 'store-1', name: 'Main Street' };
+
+		expect(migrate(oldStore, undefined as never)).toBe(oldStore);
+	});
 });

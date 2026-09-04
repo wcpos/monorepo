@@ -47,6 +47,12 @@ export type ServerStorePayload = { id: number } & Record<string, unknown>;
 
 export function normalizeStorePayload(store: ServerStorePayload): ServerStorePayload {
 	const out: ServerStorePayload = { ...store };
+	const display = isPlainObject(out.display) ? (out.display as Record<string, unknown>) : null;
+	if (!display || typeof display.contract !== 'number' || typeof display.signaling !== 'string') {
+		delete out.display;
+	} else {
+		out.display = { contract: display.contract, signaling: display.signaling };
+	}
 
 	if (typeof out.timezone !== 'string') {
 		out.timezone = '';
@@ -172,6 +178,12 @@ export async function mergeServerOwnedStoreFields(
 	const patch = getServerOwnedStorePatch(latest, incomingStore);
 	if (Object.keys(patch).length > 0) {
 		await storeDocument.incrementalPatch(patch as never);
+	}
+	if (latest.display !== undefined && normalizeStorePayload(incomingStore).display === undefined) {
+		await storeDocument.getLatest().incrementalModify((docData) => {
+			delete (docData as { display?: unknown }).display;
+			return docData;
+		});
 	}
 	return patch;
 }

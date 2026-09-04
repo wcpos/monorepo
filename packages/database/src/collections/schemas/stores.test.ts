@@ -65,3 +65,22 @@ describe('stores schema — tracking_consent', () => {
 		expect(() => validateStore({ localID: 'a' })).not.toThrow();
 	});
 });
+
+describe('stores schema — display', () => {
+	it('accepts the server advertisement', () => {
+		expect(() =>
+			validateStore({
+				localID: 'a',
+				display: { contract: 1, signaling: '/wcpos/v2/display' },
+			})
+		).not.toThrow();
+	});
+
+	it('rejects a malformed advertisement', () => {
+		expect(() => validateStore({ localID: 'a', display: { contract: '1' } })).toThrow();
+	});
+
+	it('accepts a document without a display advertisement', () => {
+		expect(() => validateStore({ localID: 'a' })).not.toThrow();
+	});
+});

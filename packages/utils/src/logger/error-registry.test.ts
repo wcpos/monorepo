@@ -7,6 +7,7 @@ import registry from './error-registry.json';
 
 const DOMAINS = ['AUTH', 'SYNC', 'CHECKOUT', 'PAYMENT', 'PRINT', 'PRODUCT', 'LICENSE', 'CLIENT'];
 DOMAINS.push('HOST');
+DOMAINS.push('DISPLAY');
 const SEVERITIES = ['info', 'warn', 'error'];
 /**
  * Required of every registry entry. Wider than what the generator EMITS: the
@@ -72,6 +73,7 @@ const SEED_SYMBOLS = [
 	'CORS_MISCONFIGURED',
 	'CORS_PREFLIGHT_BLOCKED',
 	'CREDENTIALS_REJECTED',
+	'CUSTOMER_DISPLAY_SNAPSHOT_FAILED',
 	'DEMAND_REQUEST_FLOOD',
 	'GATEWAY_UNAVAILABLE',
 	'HOST_RATE_LIMITED',
