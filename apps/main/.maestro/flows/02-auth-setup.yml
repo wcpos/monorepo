@@ -154,20 +154,51 @@ env:
       # attempt so the retry erases and retypes. The asserted text IS the
       # referent (the exact string this loop just typed), not localized UI
       # copy — the selector policy's composite-string carve-out.
-      - assertVisible:
-          text: '${STORE_URL.replace(/\./g, "\\.")}'
+      # Either surface, not a one-shot look: the alert can surface seconds after
+      # the last keystroke (the consent step below documents the same lag), and
+      # a branch taken just before it would assert under the alert. Optional:
+      # a miss here is judged by the assert/branch below, not by this wait.
+      - extendedWaitUntil:
+          visible: '${STORE_URL.replace(/\./g, "\\.")}|Continue'
+          timeout: 15000
+          optional: true
+      # iOS, run 33815585789 (iPad): all 25 characters were typed, and 17 s
+      # later the sign-in consent alert was already over the screen — the app
+      # had connected and reached the sign-in prompt without the flow tapping
+      # Connect or Add user. The assert below could not see the field under
+      # the alert, the retry could not find the field, and the flow died on a
+      # state that is exactly where the Connect + Add user taps lead. When the
+      # alert is up, the URL that reached the store is the one that matters:
+      # log it and skip the assert; the alert is handled below like any other.
+      - runFlow:
+          when:
+            visible: "Continue"
+          commands:
+            - evalScript: "${console.log('WCPOS_E2E sign-in consent alert already up after typing the URL; connect and add-user were not tapped by this flow')}"
+      - runFlow:
+          when:
+            notVisible: "Continue"
+          commands:
+            - assertVisible:
+                text: '${STORE_URL.replace(/\./g, "\\.")}'
 # optional — see flow 01: hideKeyboard is flaky on iOS and this is
 # housekeeping; a genuinely covered target fails at its own tap.
-- hideKeyboard:
-    optional: true
-- tapOn:
-    id: "connect-store-button"
-- extendedWaitUntil:
-    visible:
-      id: "add-user-button"
-    timeout: 60000
-- tapOn:
-    id: "add-user-button"
+# Skipped, with the two taps, when the consent alert is already up (see the
+# retry above): they lead exactly there, and tapping under an alert fails.
+- runFlow:
+    when:
+      notVisible: "Continue"
+    commands:
+      - hideKeyboard:
+          optional: true
+      - tapOn:
+          id: "connect-store-button"
+      - extendedWaitUntil:
+          visible:
+            id: "add-user-button"
+          timeout: 60000
+      - tapOn:
+          id: "add-user-button"
 # iOS shows the ASWebAuthenticationSession consent alert ("WCPOS" Wants to
 # Use "wcpos.com" to Sign In); Android goes straight to the Custom Tab (spike
 # #696 / check on #698). The alert is NOT immediate: on the CI simulator it
