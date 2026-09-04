@@ -521,6 +521,21 @@ function isDevelopment(): boolean {
 	return typeof __DEV__ !== 'undefined' && __DEV__;
 }
 
+/**
+ * The native E2E suites run a production-mode bundle (`--no-dev --minify`)
+ * inside the dev client. That client puts a full-screen error overlay over
+ * the app for every `console.error`, whatever the bundle's dev flag says —
+ * so one background sync logging a transient store 502 at error level took
+ * the whole screen away from a flow (run 33808415134, iPad, flow 06;
+ * 33334403960 before it). Metro bakes EXPO_PUBLIC_WCPOS_E2E into that
+ * bundle and nothing else sets it; under it, error-level lines go through
+ * `console.warn` with the same `ERROR :` text, which the run's app-error
+ * report still collects. Production builds are untouched.
+ */
+function isNativeE2E(): boolean {
+	return process.env.EXPO_PUBLIC_WCPOS_E2E === '1';
+}
+
 // Initialize log level from localStorage (if available) or use default
 function getInitialLogLevel(): LogLevel {
 	if (typeof window !== 'undefined' && window.localStorage) {
@@ -700,11 +715,32 @@ const mainTransport = (props: any) => {
 		if (isDevelopment()) {
 			// console.errors open a redbox in development which is annoying
 			console.log(formattedMessage);
-		} else if (levelName === 'warn') {
+		} else if (levelName === 'warn' || isNativeE2E()) {
 			console.warn(formattedMessage);
 		} else {
 			console.error(formattedMessage);
 		}
+	}
+	try {
+		const electronLog =
+			typeof window === 'undefined'
+				? undefined
+				: (window as unknown as { __electronLog?: Record<string, unknown> }).__electronLog;
+		// levelName is the normalized severity (success → info); level.text is the display label.
+		const electronLevel = ['error', 'warn', 'info', 'debug'].includes(levelName)
+			? levelName
+			: 'verbose';
+		const forward =
+			electronLog && typeof electronLog === 'object' ? electronLog[electronLevel] : undefined;
+		if (typeof forward === 'function') {
+			// electron-log adds its own timestamp and level prefix; forward only the message + context.
+			forward.call(
+				electronLog,
+				`${message}${options.context ? ` | Context: ${safeStringify(options.context)}` : ''}`
+			);
+		}
+	} catch {
+		// Electron main-process logging is best-effort diagnostics.
 	}
 
 	if (levelName === 'error') {

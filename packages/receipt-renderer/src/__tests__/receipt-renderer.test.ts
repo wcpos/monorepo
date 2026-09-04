@@ -11,6 +11,7 @@ import {
 	sanitizeHtml,
 	thermalImageAssetKey,
 } from '../index';
+import { normalizeThermalText } from '../render-escpos';
 
 const THERMAL_TEMPLATE = `<receipt paper-width="32">
   <align mode="center"><bold>{{store.name}}</bold></align>
@@ -1988,6 +1989,14 @@ describe('@wcpos/receipt-renderer exports', () => {
 
 		expect(decoded).toContain('Mon-Sat 9:00-18:00');
 		expect(decoded).not.toContain('Mon–Sat');
+	});
+
+	it('normalizes narrow no-break spaces before ESC/POS text encoding', () => {
+		expect(normalizeThermalText('4:35 PM')).toBe('4:35 PM');
+
+		const bytes = encodeThermalTemplate('<receipt><text>4:35 PM</text></receipt>', {});
+		expect(includesSequence(bytes, [0x34, 0x3a, 0x33, 0x35, 0x20, 0x50, 0x4d])).toBe(true);
+		expect(Array.from(bytes)).not.toContain(0x3f);
 	});
 
 	it('does not ASCII-normalize typographic punctuation for non-ESC/POS languages', () => {

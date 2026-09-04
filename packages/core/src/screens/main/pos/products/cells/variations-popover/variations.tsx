@@ -33,7 +33,10 @@ interface VariationPopoverProps {
 		typeof import('../../../../../../query').useCollectionBinding<'variations'>
 	>['resource'];
 	parent: EngineRecord<'products'>;
-	addToCart: (variation: EngineRecord<'variations'>, metaData: LineItem['meta_data']) => void;
+	addToCart: (
+		variation: EngineRecord<'variations'>,
+		metaData: LineItem['meta_data']
+	) => void | Promise<void>;
 	/** The products list's Stock Status filter; undefined leaves every option selectable. */
 	stockStatus?: string;
 }
@@ -62,6 +65,10 @@ export function Variations({
 	const selectedVariation = result.count === 1 && hits[0].record;
 	const parentAttributes = useRecordField(parent, (record) => record.payload.attributes);
 	const t = useT();
+	// The add is a local write that normally settles in milliseconds, but the
+	// popover only closes once it has; a second press in that window is a
+	// second line in the cart. Hold the button while one is pending.
+	const [adding, setAdding] = React.useState(false);
 
 	/**
 	 *
@@ -92,21 +99,25 @@ export function Variations({
 	/**
 	 *
 	 */
-	const handleAddToCart = React.useCallback(() => {
-		if (selectedVariation) {
-			const selectedAttributesMetaData = (attributeOptions || [])
-				.filter((a) => a.selected)
-				.map((a) => {
-					const metaData = {
-						attr_id: a.selected!.id,
-						display_key: a.selected!.name,
-						display_value: a.selected!.option,
-					};
-					return metaData;
-				});
-			addToCart(selectedVariation, selectedAttributesMetaData);
+	const handleAddToCart = React.useCallback(async () => {
+		if (!selectedVariation || adding) return;
+		const selectedAttributesMetaData = (attributeOptions || [])
+			.filter((a) => a.selected)
+			.map((a) => {
+				const metaData = {
+					attr_id: a.selected!.id,
+					display_key: a.selected!.name,
+					display_value: a.selected!.option,
+				};
+				return metaData;
+			});
+		setAdding(true);
+		try {
+			await addToCart(selectedVariation, selectedAttributesMetaData);
+		} finally {
+			setAdding(false);
 		}
-	}, [addToCart, attributeOptions, selectedVariation]);
+	}, [addToCart, adding, attributeOptions, selectedVariation]);
 
 	/**
 	 *
@@ -145,7 +156,11 @@ export function Variations({
 				);
 			})}
 			{selectedVariation ? (
-				<VariationAddToCart variation={selectedVariation} onAddToCart={handleAddToCart} />
+				<VariationAddToCart
+					variation={selectedVariation}
+					adding={adding}
+					onAddToCart={handleAddToCart}
+				/>
 			) : result.count === 0 ? (
 				loading ? (
 					<HStack testID="variation-popover-syncing" space="xs" className="justify-center">
@@ -171,9 +186,11 @@ export function Variations({
  */
 function VariationAddToCart({
 	variation,
+	adding,
 	onAddToCart,
 }: {
 	variation: EngineRecord<'variations'>;
+	adding: boolean;
 	onAddToCart: () => void;
 }) {
 	const stock = useVariationStock(variation);
@@ -187,6 +204,7 @@ function VariationAddToCart({
 			<Button
 				testID="variation-popover-add-to-cart"
 				onPress={onAddToCart}
+				loading={adding}
 				disabled={!stock.sellable}
 			>
 				<ButtonText>{t('common.add_to_cart') + ': ' + format(Number(price ?? 0))}</ButtonText>

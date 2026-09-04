@@ -75,6 +75,7 @@ export { isPrinterConnectionError, PrinterConnectionError } from './utils/connec
 export type { ConnectionDiagnostics } from './utils/connection-error';
 export type {
 	PrinterTransport,
+	MarkupPrintJob,
 	PrinterProfile,
 	DiscoveredPrinter,
 	PrintJob,
@@ -88,3 +89,4 @@ export type {
 export { buildPrintableReceiptHtml, normalizeReceiptPaperWidth } from './print-html';
 export type { ReceiptPaperWidth } from './print-html';
 export { DEFAULT_THERMAL_TEMPLATE } from './encoder/default-thermal-template';
+export { printerLogger } from './logger';

@@ -178,6 +178,23 @@ describe('logger/index', () => {
 		});
 
 		describe('log methods', () => {
+			it('forwards renderer logs to Electron and tolerates a missing bridge', () => {
+				const electronInfo = jest.fn();
+				Object.defineProperty(globalThis, 'window', {
+					configurable: true,
+					value: { __electronLog: { info: electronInfo } },
+				});
+
+				try {
+					logger.info('bridged');
+					expect(electronInfo).toHaveBeenCalledWith(expect.stringContaining('bridged | Context:'));
+					Reflect.deleteProperty(globalThis, 'window');
+					expect(() => logger.info('without bridge')).not.toThrow();
+				} finally {
+					Reflect.deleteProperty(globalThis, 'window');
+				}
+			});
+
 			it('only writes warnings and errors to the console in production', () => {
 				const originalDev = __DEV__;
 				const consoleLog = jest.spyOn(console, 'log').mockImplementation();
@@ -203,6 +220,33 @@ describe('logger/index', () => {
 						value: originalDev,
 					});
 					consoleLog.mockRestore();
+					consoleWarn.mockRestore();
+					consoleError.mockRestore();
+				}
+			});
+
+			it('keeps error lines off console.error under the native E2E flag, text intact', () => {
+				// The dev client overlays the whole screen on console.error even for a
+				// production-mode bundle (run 33808415134, iPad, flow 06: a background
+				// sync's transient 502 covered the UI). The run's app-error report greps
+				// the "ERROR :" text, so the line must keep it.
+				const originalDev = __DEV__;
+				const originalFlag = process.env.EXPO_PUBLIC_WCPOS_E2E;
+				const consoleWarn = jest.spyOn(console, 'warn').mockImplementation();
+				const consoleError = jest.spyOn(console, 'error').mockImplementation();
+
+				Object.defineProperty(globalThis, '__DEV__', { configurable: true, value: false });
+				process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
+
+				try {
+					logger.error('failure', { code: 'CLIENT999' });
+
+					expect(consoleError).not.toHaveBeenCalled();
+					expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining('ERROR : failure'));
+				} finally {
+					Object.defineProperty(globalThis, '__DEV__', { configurable: true, value: originalDev });
+					if (originalFlag === undefined) delete process.env.EXPO_PUBLIC_WCPOS_E2E;
+					else process.env.EXPO_PUBLIC_WCPOS_E2E = originalFlag;
 					consoleWarn.mockRestore();
 					consoleError.mockRestore();
 				}

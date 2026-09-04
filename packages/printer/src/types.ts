@@ -1,4 +1,10 @@
-import type { DrawerConnector } from '@wcpos/receipt-renderer';
+import type {
+	DrawerConnector,
+	EscposRenderOptions,
+	ThermalBarcodeImages,
+	ThermalBarcodeMode,
+	ThermalImageAssets,
+} from '@wcpos/receipt-renderer';
 
 import type { PrinterIdentity } from './discovery/identify';
 
@@ -9,6 +15,15 @@ export interface PrintRawOptions {
 	cutPaper?: boolean;
 }
 
+export interface MarkupPrintJob {
+	template: string;
+	data: Record<string, unknown>;
+	options: EscposRenderOptions & {
+		imageAssets?: ThermalImageAssets;
+		barcodeImages?: ThermalBarcodeImages;
+		barcodeMode?: ThermalBarcodeMode;
+	};
+}
 /**
  * Transport adapter — sends bytes to a physical printer.
  */
@@ -21,6 +36,8 @@ export interface PrinterTransport {
 	 * Resolves when the printer acknowledges receipt or the data is sent.
 	 */
 	printRaw(data: Uint8Array, options?: PrintRawOptions): Promise<void>;
+	printMarkup?(job: MarkupPrintJob): Promise<void>;
+	supportsMarkup?(): Promise<boolean> | boolean;
 
 	/**
 	 * Print HTML content via system print dialog.

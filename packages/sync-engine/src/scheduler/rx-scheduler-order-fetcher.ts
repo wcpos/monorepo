@@ -347,7 +347,22 @@ export async function applyOrderSnapshot(
 	) {
 		return 'invalid';
 	}
-	const materialized = materializedOrderFromWooPayload(candidate as WooOrderPayload);
+	// Both snapshot sources are v1 REST payloads, which carry the POS payment/receipt URLs under
+	// HAL `_links`; only the v2 lanes serve them as `links`. The receipt and checkout screens read
+	// `payload.links`, so an adopted snapshot stored as-is silently lost both URLs (the legacy PHP
+	// receipt spun forever after a card payment, 2026-09-03). `_links`/`_embedded` are transport.
+	const storedCandidate = { ...candidate };
+	if (
+		storedCandidate.links === undefined &&
+		candidate._links !== null &&
+		typeof candidate._links === 'object' &&
+		!Array.isArray(candidate._links)
+	) {
+		storedCandidate.links = candidate._links;
+	}
+	delete storedCandidate._links;
+	delete storedCandidate._embedded;
+	const materialized = materializedOrderFromWooPayload(storedCandidate as WooOrderPayload);
 	const document = materialized.storedDocument;
 	const pending = input.pendingMutationOrderIds ? await input.pendingMutationOrderIds() : undefined;
 	if (pending && !shouldApplyStoredOrder(document, pending)) return 'protected';

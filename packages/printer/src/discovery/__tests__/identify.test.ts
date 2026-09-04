@@ -5,6 +5,9 @@ import { identifyDiscoveredPrinters, identifyPrinter } from '../identify';
 import type { IdentifyProbes } from '../identify';
 import type { DiscoveredPrinter } from '../../types';
 
+const { info } = vi.hoisted(() => ({ info: vi.fn() }));
+vi.mock('../../logger', () => ({ printerLogger: { debug: vi.fn(), info } }));
+
 const EPOS_RESPONSE =
 	'<response xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print" success="true" code="" status="0" />';
 
@@ -50,6 +53,7 @@ describe('identifyPrinter', () => {
 			state: 'closed',
 			protocol: 'epos-print',
 		});
+		expect(info).toHaveBeenCalledWith('Printer identified', expect.any(Object));
 	});
 
 	it('records refused and timed-out ePOS candidates before the successful lane', async () => {

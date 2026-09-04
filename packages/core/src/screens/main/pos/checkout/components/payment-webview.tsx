@@ -32,6 +32,23 @@ const ORDER_REFRESH_TIMEOUT_MS = 10_000;
 const ASYNC_PAYMENT_POLL_INTERVAL_MS = 3_000;
 const ASYNC_PAYMENT_POLL_WINDOW_MS = 120_000;
 
+// How long the checkout waits for the store's order-pay document before it
+// treats the navigation as stalled and reloads the frame once.
+//
+// The document is one WordPress page. A healthy store serves it in about a
+// second; a starved CI simulator was measured at 8 s from dialog to enabled
+// (run 33750030091, iOS phone) and, at the very worst, 71 s to the first
+// WebView commit (run 33319523590). The stall this guards against is a
+// different animal: WebKit never sends the request at all — the pay page
+// reached the store five minutes after the tap (run 33758920470, iOS phone)
+// or never (run 33750030091, iPad), and WebKit's own 60 s request timeout
+// cannot fire for a request that never left the process. Without a way out
+// the cashier is left with the spinner #1024 was meant to end. 90 s sits past
+// every real load ever measured and well short of the stall. A reload
+// restarts the navigation WebKit dropped; a second stall is reported as a
+// failure with a Retry rather than hidden behind more waiting.
+export const PAYMENT_FRAME_LOAD_TIMEOUT_MS = 90_000;
+
 const paymentLogger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 type OrderSnapshot = Record<string, unknown> & { id: number; status: string };
 
@@ -73,11 +90,17 @@ function isOrderSnapshot(payload: unknown): payload is OrderSnapshot {
  *
  * - `loading` — no document yet, or the frame is navigating to a new one.
  * - `ready` — a document finished loading in the frame.
- * - `failed` — the load errored, so no load event is coming. Distinct from
- *   `loading` because a gate with no failure state leaves the button disabled
- *   behind a spinner forever, which is the very stall this gate exists to stop.
+ * - `stalled` — the FIRST document never arrived: its load timed out (after the
+ *   one silent reload) or errored. Nothing has been posted into it, so a retry
+ *   that navigates to the pay page again is safe, and the checkout offers one.
+ * - `failed` — a LATER navigation (the gateway's redirect, the post-payment hop)
+ *   errored, so no load event is coming. Distinct from `loading` because a gate
+ *   with no failure state leaves the button disabled behind a spinner forever,
+ *   which is the very stall this gate exists to stop — and distinct from
+ *   `stalled` because a retry here would put the pay page back under a sale
+ *   that may already be paid; the fallback poll owns that outcome.
  */
-export type PaymentFrameStatus = 'loading' | 'ready' | 'failed';
+export type PaymentFrameStatus = 'loading' | 'ready' | 'stalled' | 'failed';
 
 export interface PaymentWebviewProps extends Partial<React.ComponentProps<typeof WebView>> {
 	order: EngineRecord<'orders'>;
@@ -85,6 +108,12 @@ export interface PaymentWebviewProps extends Partial<React.ComponentProps<typeof
 	/** Reports frame readiness to the checkout footer, which gates on it. */
 	setFrameStatus: (status: PaymentFrameStatus) => void;
 	onStockRejection: (error: unknown) => boolean;
+	/**
+	 * Bumped by the checkout's Retry after a failed load: remounts the frame for
+	 * one more attempt. A stall on that attempt is reported again, not retried
+	 * silently — the cashier asked for it and is watching.
+	 */
+	retryToken?: number;
 }
 
 /**
@@ -95,6 +124,7 @@ export function PaymentWebview({
 	setLoading,
 	setFrameStatus,
 	onStockRejection,
+	retryToken = 0,
 	...props
 }: PaymentWebviewProps) {
 	const router = useRouter();
@@ -113,6 +143,17 @@ export function PaymentWebview({
 	const paymentReceivedRef = React.useRef(false);
 	const fallbackTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 	const loadCountRef = React.useRef(0);
+	// The load watchdog's bookkeeping. `autoReloads` counts the one silent
+	// reload; `navigationStarts` re-arms the watchdog on a load-start event;
+	// `frameSettledRef` is set by the load or error event that ends a navigation,
+	// so a timer that fires after one is a no-op. The frame's key derives from
+	// the retry token and the reload count: a remount is a fresh navigation on
+	// both platforms (the web iframe has no reload API) and drops whatever
+	// WebKit was, or was not, doing with the old one.
+	const [autoReloads, setAutoReloads] = React.useState(0);
+	const [navigationStarts, setNavigationStarts] = React.useState(0);
+	const frameSettledRef = React.useRef(false);
+	const frameKey = `${retryToken}:${autoReloads}`;
 
 	// Create a logger with order context
 	const orderLogger = React.useMemo(
@@ -432,6 +473,7 @@ export function PaymentWebview({
 			// signal either platform exposes — the template sends no ready message —
 			// so the checkout footer gates on it (#1024).
 			setFrameStatus('ready');
+			frameSettledRef.current = true;
 
 			loadCountRef.current += 1;
 			if (loadCountRef.current < 2) {
@@ -462,6 +504,14 @@ export function PaymentWebview({
 	 */
 	const onWebViewLoadStart = React.useCallback(() => {
 		setFrameStatus('loading');
+		// Only the first document is watched. Later navigations are the gateway's
+		// (a redirect, the post-payment hop); a stalled one is the fallback poll's
+		// business, and a remount there would put the pay page back under a sale
+		// that may already be paid.
+		if (loadCountRef.current === 0) {
+			frameSettledRef.current = false;
+			setNavigationStarts((n) => n + 1);
+		}
 	}, [setFrameStatus]);
 
 	/**
@@ -472,7 +522,8 @@ export function PaymentWebview({
 	 */
 	const onWebViewError = React.useCallback(
 		(event: unknown) => {
-			setFrameStatus('failed');
+			setFrameStatus(loadCountRef.current === 0 ? 'stalled' : 'failed');
+			frameSettledRef.current = true;
 			const nativeEvent = (event as { nativeEvent?: Record<string, unknown> } | undefined)
 				?.nativeEvent;
 			orderLogger.warn('Payment form failed to load in the checkout frame', {
@@ -502,9 +553,47 @@ export function PaymentWebview({
 	 */
 	React.useLayoutEffect(() => {
 		loadCountRef.current = 0;
+		frameSettledRef.current = false;
 		setFrameStatus('loading');
 		return () => setFrameStatus('loading');
-	}, [paymentURLWithToken, setFrameStatus]);
+	}, [paymentURLWithToken, frameKey, setFrameStatus]);
+
+	/**
+	 * The load watchdog. Runs for every navigation of the first document (a new
+	 * URL, a remount, a load-start event); the load or error event that ends the
+	 * navigation settles it, so a timer that fires afterwards does nothing.
+	 * Firing unsettled means neither event arrived: the navigation stalled
+	 * before it reached the network, the case WebKit's own timeout never sees.
+	 * The silent reload is spent by the cashier's Retry — the attempt they asked
+	 * for either loads or is reported.
+	 */
+	React.useEffect(() => {
+		// No link, no frame, no navigation to watch: the banner already says so.
+		if (!paymentURLWithToken) return;
+		const timer = setTimeout(() => {
+			if (frameSettledRef.current) return;
+			if (autoReloads === 0 && retryToken === 0) {
+				orderLogger.warn('Payment form did not load in time; reloading it once', {
+					context: { timeoutMs: PAYMENT_FRAME_LOAD_TIMEOUT_MS },
+				});
+				setAutoReloads(1);
+				return;
+			}
+			orderLogger.warn('Payment form did not load after a reload; waiting for the cashier', {
+				context: { timeoutMs: PAYMENT_FRAME_LOAD_TIMEOUT_MS, retryToken },
+			});
+			setFrameStatus('stalled');
+		}, PAYMENT_FRAME_LOAD_TIMEOUT_MS);
+		return () => clearTimeout(timer);
+	}, [
+		paymentURLWithToken,
+		frameKey,
+		navigationStarts,
+		autoReloads,
+		retryToken,
+		orderLogger,
+		setFrameStatus,
+	]);
 
 	React.useEffect(() => {
 		return () => {
@@ -514,8 +603,11 @@ export function PaymentWebview({
 		};
 	}, []);
 
+	// The key sits on the boundary, not the frame: a WebView that threw while
+	// mounting leaves the boundary in its fallback, and re-keying a child inside
+	// a fallback mounts nothing. A retry has to reset both.
 	return (
-		<ErrorBoundary>
+		<ErrorBoundary key={frameKey}>
 			{paymentURL ? (
 				<WebView
 					{...(props as React.ComponentProps<typeof WebView>)}

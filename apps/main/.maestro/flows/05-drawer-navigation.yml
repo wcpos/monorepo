@@ -1,135 +1,37 @@
 appId: com.wcpos.main.dev
 ---
 # P0-5: drawer navigation smoke — visit main areas, return to POS.
+#
+# One subflow per visit: it opens a phone drawer (closing one left open first)
+# and, on a large screen's permanent rail, only confirms the items are there.
 - runFlow:
     file: ../subflows/ensure-pos-ready.yml
-# Small screens hide the rail behind a drawer button; large screens show it.
-# A drawer left open swallows the header tap: the hamburger sits under the
-# drawer's first item, so "open" becomes "tap POS" and the route sequence
-# silently changes (run 33666934729 ended with the drawer open over POS).
-# Require it closed first; close through the scrim if it is not, and log it.
 - runFlow:
-    when:
-      visible:
-        id: "drawer-item-pos"
-    commands:
-      - evalScript: "${console.log('WCPOS_E2E drawer already open before the header tap, closing through the scrim')}"
-      - tapOn:
-          point: "85%,50%"
-      - extendedWaitUntil:
-          notVisible:
-            id: "drawer-item-pos"
-          timeout: 10000
-- runFlow:
-    when:
-      visible:
-        id: "drawer-open-button"
-    commands:
-      - tapOn:
-          id: "drawer-open-button"
-- extendedWaitUntil:
-    visible:
-      id: "drawer-item-pos"
-    timeout: 10000
+    file: ../subflows/open-drawer.yml
 - tapOn:
     id: "drawer-item-products"
 - extendedWaitUntil:
     visible:
       id: "screen-products"
     timeout: 60000
-# A drawer left open swallows the header tap: the hamburger sits under the
-# drawer's first item, so "open" becomes "tap POS" and the route sequence
-# silently changes (run 33666934729 ended with the drawer open over POS).
-# Require it closed first; close through the scrim if it is not, and log it.
 - runFlow:
-    when:
-      visible:
-        id: "drawer-item-pos"
-    commands:
-      - evalScript: "${console.log('WCPOS_E2E drawer already open before the header tap, closing through the scrim')}"
-      - tapOn:
-          point: "85%,50%"
-      - extendedWaitUntil:
-          notVisible:
-            id: "drawer-item-pos"
-          timeout: 10000
-- runFlow:
-    when:
-      visible:
-        id: "drawer-open-button"
-    commands:
-      - tapOn:
-          id: "drawer-open-button"
-- extendedWaitUntil:
-    visible:
-      id: "drawer-item-pos"
-    timeout: 10000
+    file: ../subflows/open-drawer.yml
 - tapOn:
     id: "drawer-item-orders"
 - extendedWaitUntil:
     visible:
       id: "screen-orders"
     timeout: 60000
-# A drawer left open swallows the header tap: the hamburger sits under the
-# drawer's first item, so "open" becomes "tap POS" and the route sequence
-# silently changes (run 33666934729 ended with the drawer open over POS).
-# Require it closed first; close through the scrim if it is not, and log it.
 - runFlow:
-    when:
-      visible:
-        id: "drawer-item-pos"
-    commands:
-      - evalScript: "${console.log('WCPOS_E2E drawer already open before the header tap, closing through the scrim')}"
-      - tapOn:
-          point: "85%,50%"
-      - extendedWaitUntil:
-          notVisible:
-            id: "drawer-item-pos"
-          timeout: 10000
-- runFlow:
-    when:
-      visible:
-        id: "drawer-open-button"
-    commands:
-      - tapOn:
-          id: "drawer-open-button"
-- extendedWaitUntil:
-    visible:
-      id: "drawer-item-pos"
-    timeout: 10000
+    file: ../subflows/open-drawer.yml
 - tapOn:
     id: "drawer-item-customers"
 - extendedWaitUntil:
     visible:
       id: "screen-customers"
     timeout: 60000
-# A drawer left open swallows the header tap: the hamburger sits under the
-# drawer's first item, so "open" becomes "tap POS" and the route sequence
-# silently changes (run 33666934729 ended with the drawer open over POS).
-# Require it closed first; close through the scrim if it is not, and log it.
 - runFlow:
-    when:
-      visible:
-        id: "drawer-item-pos"
-    commands:
-      - evalScript: "${console.log('WCPOS_E2E drawer already open before the header tap, closing through the scrim')}"
-      - tapOn:
-          point: "85%,50%"
-      - extendedWaitUntil:
-          notVisible:
-            id: "drawer-item-pos"
-          timeout: 10000
-- runFlow:
-    when:
-      visible:
-        id: "drawer-open-button"
-    commands:
-      - tapOn:
-          id: "drawer-open-button"
-- extendedWaitUntil:
-    visible:
-      id: "drawer-item-pos"
-    timeout: 10000
+    file: ../subflows/open-drawer.yml
 - takeScreenshot: 05-before-pos-tap
 - tapOn:
     id: "drawer-item-pos"
@@ -137,10 +39,16 @@ appId: com.wcpos.main.dev
 # search-products is visible BESIDE an open phone drawer, so it cannot prove
 # the drawer closed. The router closes the drawer when the focused index
 # changes; require it gone (runs 33645848904, 33666934729 left it open).
-- extendedWaitUntil:
-    notVisible:
-      id: "drawer-item-pos"
-    timeout: 15000
+# Not on a permanent rail: it never closes, and the POS screen is the proof.
+- runFlow:
+    when:
+      notVisible:
+        id: "drawer-panel-permanent"
+    commands:
+      - extendedWaitUntil:
+          notVisible:
+            id: "drawer-item-pos"
+          timeout: 15000
 - extendedWaitUntil:
     visible:
       id: "search-products"

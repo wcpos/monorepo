@@ -131,6 +131,12 @@ jobs:
     # reports that skip as legitimate.
     if: needs.changes.outputs.native != 'none' && github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.draft == false && github.base_ref != 'next'))
     runs-on: ubuntu-latest
+    # actions: read is what `gh run list` / `gh run download` need to read the
+    # last main runs' e2e-builds artifacts (the recovery step below). Only this
+    # job: the device jobs run PR-controlled setup and get contents: read.
+    permissions:
+      contents: read
+      actions: read
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
       platform: ${{ steps.resolve.outputs.platform }}
@@ -249,6 +255,7 @@ jobs:
           else
             echo "cache_key=e2e-native-devclient-$FP-$PLATFORM" >> "$GITHUB_OUTPUT"
           fi
+          echo "fingerprint=$FP" >> "$GITHUB_OUTPUT"
           echo "Native fingerprint: $FP"
 
       # EAS artifacts expire after ~2 weeks (observed in #696), so finished
@@ -262,6 +269,48 @@ jobs:
           path: e2e-builds
           key: ${{ steps.fingerprint.outputs.cache_key }}
 
+      # "Every merge touches this key" is not enough: the cache is an LRU under
+      # a 10 GB quota shared with every other cache in the repo, and the dev
+      # client is read once per main run, so whenever the quota is hit it is
+      # the oldest entry and the first to go. 2026-09-03: minted 12:05, hit
+      # 17:22, gone by 18:01 with 23 entries at 8.3 GB — the next PR could not
+      # run its devices and the next main push bought a rebuild ($3). The last
+      # main run's e2e-builds artifact is the same bytes on a separate quota
+      # (3-day retention, refreshed by every merge and the nightly), stamped
+      # with its cache key: recover from it before anyone spends. A main
+      # (platform=all) artifact satisfies a single-platform key too. The
+      # cache action re-mints the entry from the recovered files at job end.
+      - name: ♻️ Recover builds from the last main run's artifact
+        id: recover
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CACHE_KEY: ${{ steps.fingerprint.outputs.cache_key }}
+          FINGERPRINT: ${{ steps.fingerprint.outputs.fingerprint }}
+        run: |
+          set -uo pipefail
+          hit=false
+          ALL_KEY="e2e-native-devclient-$FINGERPRINT"
+          for run in $(gh run list -R "$GH_REPO" --workflow e2e-native.yml --branch main --limit 10 --json databaseId --jq '.[].databaseId'); do
+            rm -rf "$RUNNER_TEMP/recover" && mkdir -p "$RUNNER_TEMP/recover"
+            if ! gh run download -R "$GH_REPO" "$run" -n e2e-builds -D "$RUNNER_TEMP/recover" >/dev/null 2>&1; then
+              echo "main run $run: no e2e-builds artifact"
+              continue
+            fi
+            key=$(cat "$RUNNER_TEMP/recover/cache-key" 2>/dev/null || echo none)
+            if [ "$key" != "$CACHE_KEY" ] && [ "$key" != "$ALL_KEY" ]; then
+              echo "main run $run: artifact is $key, not $CACHE_KEY"
+              continue
+            fi
+            mkdir -p e2e-builds && cp "$RUNNER_TEMP/recover"/* e2e-builds/
+            echo "::notice::Recovered the dev client ($key) from main run $run's artifact; the cache entry is re-minted when this job ends."
+            hit=true
+            break
+          done
+          [ "$hit" = true ] || echo "No main run in the last 10 carries an artifact stamped $CACHE_KEY (or $ALL_KEY)."
+          echo "hit=$hit" >> "$GITHUB_OUTPUT"
+
       # A dispatch does not spend without explicit approval. A PR may spend
       # while the monthly ceiling has room for the builds this run will queue
       # (2 for platform=all, else 1). A miss on a plan that expected no
@@ -274,6 +323,7 @@ jobs:
       - name: 💸 Refuse an unrequested EAS build
         if: >-
           steps.cache.outputs.cache-hit != 'true'
+          && steps.recover.outputs.hit != 'true'
           && (github.event_name == 'pull_request'
           || (github.event_name == 'workflow_dispatch' && github.event.inputs.build != 'true'))
         env:
@@ -342,7 +392,7 @@ jobs:
       # it contains no JS, so it only needs rebuilding when the native
       # fingerprint moves.
       - name: 🛠 Build dev client on EAS (native fingerprint changed)
-        if: steps.cache.outputs.cache-hit != 'true'
+        if: steps.cache.outputs.cache-hit != 'true' && steps.recover.outputs.hit != 'true'
         working-directory: apps/main
         env:
           PLATFORM: ${{ steps.resolve.outputs.platform }}
@@ -364,6 +414,15 @@ jobs:
             [ -n "$ANDROID_URL" ] || { echo "::error::Android build produced no artifact URL"; exit 1; }
             curl -fsSL "$ANDROID_URL" -o ../../e2e-builds/wcpos-e2e-android.apk
           fi
+
+      # The stamp is what the recovery step above matches on: an artifact
+      # that cannot say which fingerprint built it cannot be reused.
+      - name: 🏷 Stamp the builds with their cache key
+        env:
+          CACHE_KEY: ${{ steps.fingerprint.outputs.cache_key }}
+        run: |
+          mkdir -p e2e-builds
+          echo "$CACHE_KEY" > e2e-builds/cache-key
 
       - name: ⬆️ Share builds with test jobs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -452,7 +511,7 @@ jobs:
         working-directory: apps/main
         # Switches on the E2E-only engine wire ledger; grep WCPOS_E2E_ENGINE in logcat/app-console.
         env:
-          EXPO_PUBLIC_WCPOS_E2E: "1"
+          EXPO_PUBLIC_WCPOS_E2E: '1'
         run: |
           nohup npx expo start --no-dev --minify --offline --port 8081 > /tmp/metro.log 2>&1 &
           for i in $(seq 1 60); do
@@ -975,7 +1034,7 @@ jobs:
         working-directory: apps/main
         # Switches on the E2E-only engine wire ledger; grep WCPOS_E2E_ENGINE in logcat/app-console.
         env:
-          EXPO_PUBLIC_WCPOS_E2E: "1"
+          EXPO_PUBLIC_WCPOS_E2E: '1'
         run: |
           nohup npx expo start --no-dev --minify --offline --port 8081 > /tmp/metro.log 2>&1 &
           for i in $(seq 1 60); do
@@ -1518,3 +1577,67 @@ jobs:
             exit 1
           fi
           echo "✅ Native E2E passed"
+
+  main-ledger:
+    name: 📕 main native ledger
+    needs: [native-gate, android, ios]
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      issues: write
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update main native ledger
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          GATE_RESULT: ${{ needs.native-gate.result }}
+          ANDROID_RESULT: ${{ needs.android.result }}
+          IOS_RESULT: ${{ needs.ios.result }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          label='ci:main-native-red'
+          short_sha="${SHA:0:7}"
+
+          if [ "$GATE_RESULT" = "cancelled" ] || [ "$ANDROID_RESULT" = "cancelled" ] || [ "$IOS_RESULT" = "cancelled" ]; then
+            echo "Ledger unchanged: superseded native verification at $short_sha"
+            exit 0
+          fi
+
+          # A rerun of an OLDER push keeps its original ref and SHA, so it passes
+          # this job's guard, and the run_attempt > 1 concurrency group lets it
+          # finish after newer verification. Only the current tip of main may
+          # move the ledger; an old green must not close the issue for a red tip.
+          main_sha=$(gh api "repos/$GH_REPO/commits/main" --jq .sha)
+          if [ "$main_sha" != "$SHA" ]; then
+            echo "Ledger unchanged: $short_sha is not the tip of main (${main_sha:0:7}); stale rerun"
+            exit 0
+          fi
+
+          issues=$(gh issue list --label "$label" --state open --json number --limit 1)
+          issue=$(jq -r '.[0].number // empty' <<<"$issues")
+          facts="Native verification failed for $SHA ($RUN_URL); android: $ANDROID_RESULT, ios: $IOS_RESULT."
+          if [ "$GATE_RESULT" = "failure" ]; then
+            if [ -z "$issue" ]; then
+              gh label create "$label" --color B60205 --description "Main native (Maestro) verification is red" || true
+              gh issue create --title "main native E2E is red at $short_sha" --label "$label" --body "$facts This issue closes itself on the next fully green device run." >/dev/null
+              echo "Ledger issue opened for $short_sha"
+            else
+              gh issue comment "$issue" --body "$facts" >/dev/null
+              echo "Ledger issue $issue refreshed for $short_sha"
+            fi
+          elif [ "$GATE_RESULT" = "success" ] && [ "$ANDROID_RESULT" = "success" ] && [ "$IOS_RESULT" = "success" ]; then
+            if [ -n "$issue" ]; then
+              gh issue comment "$issue" --body "green again at $SHA ($RUN_URL)" >/dev/null
+              gh issue close "$issue" >/dev/null
+              echo "Ledger issue $issue closed at $short_sha"
+            else
+              echo "Ledger unchanged: main native E2E is green and no issue is open"
+            fi
+          elif [ "$GATE_RESULT" = "success" ]; then
+            echo "Ledger unchanged: devices did not both succeed (gate: $GATE_RESULT, android: $ANDROID_RESULT, ios: $IOS_RESULT)"
+          else
+            echo "Ledger unchanged: gate=$GATE_RESULT android=$ANDROID_RESULT ios=$IOS_RESULT"
+          fi
