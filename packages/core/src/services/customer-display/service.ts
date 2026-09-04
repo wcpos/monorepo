@@ -1,4 +1,4 @@
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import {
 	type DisplayConfigInput,
@@ -54,7 +54,9 @@ export class CustomerDisplayService {
 	}
 	start(): void {
 		void this.refreshDisplays().catch((error) => {
-			logger.warn('Customer display registry refresh failed', { context: { error } });
+			logger.warn('Customer display registry refresh failed', {
+				context: { error: getErrorMessage(error) },
+			});
 		});
 	}
 	configure(config: DisplayConfigInput): void {
@@ -114,7 +116,7 @@ export class CustomerDisplayService {
 						await session.poll();
 					} catch (error) {
 						logger.warn('Customer display session poll failed', {
-							context: { displayId: display.id, error },
+							context: { displayId: display.id, error: getErrorMessage(error) },
 						});
 					}
 					if (this.stopped) return;
@@ -190,7 +192,9 @@ export class CustomerDisplayService {
 			try {
 				session.publish(event);
 			} catch (error) {
-				logger.warn('Customer display publish failed', { context: { displayId, error } });
+				logger.warn('Customer display publish failed', {
+					context: { displayId, error: getErrorMessage(error) },
+				});
 				session.close();
 				this.sessions.delete(displayId);
 				this.schedule();
@@ -232,7 +236,9 @@ export class CustomerDisplayService {
 		if (needsPoll) {
 			this.timer = setTimeout(() => {
 				void this.refreshDisplays().catch((error) => {
-					logger.warn('Customer display registry poll failed', { context: { error } });
+					logger.warn('Customer display registry poll failed', {
+						context: { error: getErrorMessage(error) },
+					});
 				});
 			}, REGISTRY_POLL_MS);
 		}

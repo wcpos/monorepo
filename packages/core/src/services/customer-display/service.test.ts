@@ -7,6 +7,7 @@ import type { DisplayRegistryRow, HttpFunction, PairingCode } from './signaling-
 
 const mockLoggerWarn = jest.fn();
 jest.mock('@wcpos/utils/logger', () => ({
+	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 	getLogger: () => ({ warn: (...args: unknown[]) => mockLoggerWarn(...args) }),
 }));
 
@@ -158,7 +159,7 @@ describe('CustomerDisplayService', () => {
 				.map(({ url }) => url)
 		).toEqual(['/wcpos/v2/display/displays/one/signal', '/wcpos/v2/display/displays/two/signal']);
 		expect(mockLoggerWarn).toHaveBeenCalledWith('Customer display session poll failed', {
-			context: { displayId: 'one', error: expect.any(Error) },
+			context: { displayId: 'one', error: expect.any(String) },
 		});
 		service.stop();
 	});

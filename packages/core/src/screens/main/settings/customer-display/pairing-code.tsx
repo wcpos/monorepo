@@ -48,7 +48,7 @@ export function PairingCode({
 		} catch (error) {
 			// A pairing code is minted through the Pro mailbox; a failure here is
 			// almost always an auth or plugin-version problem the cashier must see.
-			logger.warn('Pairing code request failed', { context: { error } });
+			logger.warn('Pairing code request failed', { context: { error: getErrorMessage(error) } });
 			Toast.show({
 				type: 'error',
 				title: t('settings.customer_display.pairing_failed'),

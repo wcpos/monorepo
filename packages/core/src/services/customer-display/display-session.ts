@@ -1,4 +1,4 @@
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { makeEnvelope, uuid } from './envelope';
 import { createOfferer, type OffererPeer } from './peer';
@@ -260,7 +260,7 @@ export class DisplaySession {
 			return true;
 		} catch (error) {
 			logger.warn('Customer display send failed', {
-				context: { displayId: this.display.id, error },
+				context: { displayId: this.display.id, error: getErrorMessage(error) },
 			});
 			this.peer?.close();
 			return false;
