@@ -44,6 +44,7 @@ const mockCustomerDisplayService = {
 	subscribe,
 };
 const mockClipboardWriteText = jest.fn().mockResolvedValue(undefined);
+const mockOpenExternalURL = jest.fn().mockResolvedValue(undefined);
 
 let store: { display?: { contract: number; signaling: string } } = {};
 const site: { url: string; use_rest_route_param: boolean; wcpos_pro_version?: string } = {
@@ -92,6 +93,9 @@ jest.mock('@wcpos/components/docs-link', () => ({
 }));
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+}));
+jest.mock('@wcpos/utils/open-external-url', () => ({
+	openExternalURL: (url: string) => mockOpenExternalURL(url),
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
@@ -254,6 +258,19 @@ describe('CustomerDisplaySettings', () => {
 		mockPlatform.OS = 'ios';
 		render(<CustomerDisplaySettings />);
 		expect(screen.queryByRole('button', { name: 'Copy URL' })).not.toBeInTheDocument();
+	});
+
+	it('opens the display URL in the browser on web and hides the action on native', () => {
+		store = { display: { contract: 1, signaling: '/wcpos/v2/display' } };
+		const { unmount } = render(<CustomerDisplaySettings />);
+
+		fireEvent.click(screen.getByRole('button', { name: 'Open in browser' }));
+		expect(mockOpenExternalURL).toHaveBeenCalledWith('https://example.com/shop/?wcpos-display=1');
+
+		unmount();
+		mockPlatform.OS = 'ios';
+		render(<CustomerDisplaySettings />);
+		expect(screen.queryByRole('button', { name: 'Open in browser' })).not.toBeInTheDocument();
 	});
 
 	it('does nothing when the Clipboard API is unavailable', () => {

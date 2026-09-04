@@ -126,7 +126,6 @@ export interface IpcSendChannels {
 	'telemetry-consent': TelemetryConsent;
 	'print-external-url': { externalURL: string; printJobId: string };
 	'open-external-url': string;
-	'open-customer-display': { url: string };
 	'bluetooth-device-selected': string;
 	'serial-port-selected': string;
 	'hid-device-selected': string;
@@ -159,7 +158,6 @@ export const SEND_CHANNELS = [
 	'telemetry-consent',
 	'print-external-url',
 	'open-external-url',
-	'open-customer-display',
 	'bluetooth-device-selected',
 	'serial-port-selected',
 	'hid-device-selected',
