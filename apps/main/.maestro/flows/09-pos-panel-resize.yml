@@ -33,11 +33,11 @@ appId: com.wcpos.main.dev
       true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'tablet'}"
     commands:
       - assertVisible:
-          id: "pos-resize-handle"
+          id: 'pos-resize-handle'
 - runFlow:
     when:
       visible:
-        id: "pos-resize-handle"
+        id: 'pos-resize-handle'
     commands:
       # Regression check for #1620: tablet launch must render the full cart column,
       # not the pre-layout 60:1 sliver. The referent is the cart column's HEADER,
@@ -47,7 +47,7 @@ appId: com.wcpos.main.dev
       # subtotal row — run 33285279390's iOS tablet passed 01–08 and died here
       # on `cart-subtotal`. The customer chip is rendered for every order.
       - assertVisible:
-          id: "cart-customer-name"
+          id: 'cart-customer-name'
       # 55..75, not an exact 60: the label is `Math.round(layout[products])` of a
       # width that need not print as the initial-settings 60 — a previous session's
       # drag persists a fractional width (onLayoutChanged → patchUI writes the raw
@@ -58,11 +58,11 @@ appId: com.wcpos.main.dev
       # flake (iOS tablet, PR #1704 run 33297473431). 75 is the ceiling the cart's
       # minSize 25 allows.
       - assertVisible:
-          id: "pos-resize-handle"
-          text: "Resize handle, (5[5-9]|6[0-9]|7[0-5])%"
+          id: 'pos-resize-handle'
+          text: 'Resize handle, (5[5-9]|6[0-9]|7[0-5])%'
       - swipe:
           from:
-            id: "pos-resize-handle"
+            id: 'pos-resize-handle'
           direction: LEFT
           duration: 600
       # 25..54: shrunk out of the pre-swipe band (>= 55) but never below minSize 25,
@@ -71,47 +71,38 @@ appId: com.wcpos.main.dev
       # not the starting width, is the uncertain quantity here.
       - extendedWaitUntil:
           visible:
-            id: "pos-resize-handle"
-            text: "Resize handle, (2[5-9]|[34][0-9]|5[0-4])%"
+            id: 'pos-resize-handle'
+            text: 'Resize handle, (2[5-9]|[34][0-9]|5[0-4])%'
           timeout: 10000
+      # The label above goes live when the layout COMMITS, mid-drag. The persisted
+      # width is written later: the handle's finalize hops UI thread → JS thread
+      # (scheduleOnRN in PanelResizeHandle.tsx), the POS layout's onLayoutChanged
+      # calls patchUI, and RxState writes it to storage — one async write, no
+      # debounce. Run 33845834328 (Android tablet) killed the process 300 ms after
+      # the swipe ended, the write never landed, and the cold start read the
+      # default 60%. A cashier does not force-quit within a second of a drag; give
+      # the write the starved runner's JS scheduling gap (2.7 s measured, see
+      # ios-runner-lost-press notes) before pulling the plug. This is a settle on
+      # the WRITE, not on the UI: nothing on screen changes when it lands, and
+      # Maestro has no sleep, so wait (optionally) for an id that cannot appear on
+      # a signed-in POS screen — the sign-in URL field — and let the timeout elapse.
+      - extendedWaitUntil:
+          visible:
+            id: 'store-url-input'
+          timeout: 3000
+          optional: true
       # A stopped relaunch reads the width persisted by onLayoutChanged → patchUI.
       # Split stop/launch + a screenshot-based settle: a combined `launchApp:
       # {stopApp: true}` can race the XCTest driver's first hierarchy query and be
       # reported as "App crashed" — see flow 08's relaunch for the evidence.
-      - stopApp
-      - launchApp
-      - waitForAnimationToEnd:
-          timeout: 5000
-      # Same class-6 guard as this flow's first relaunch (codex review, #1750):
-      # the orphaned login tab can resurface on ANY relaunch, including this
-      # nested persistence-check one.
-      # Run 33527914510 (Android phone, flow 06): the tab resurfaces
-      # ASYNCHRONOUSLY — a one-shot check right after launch raced it and lost
-      # (guard SKIPPED, tab then took the screen for the whole readiness wait).
-      # Re-evaluate the dismissal at each retry leg; 3 legs × 40s keep the old
-      # 120s readiness budget (maxRetries counts RETRIES: executions = 3).
-      - retry:
-          maxRetries: 2
-          commands:
-            - runFlow:
-                when:
-                  platform: Android
-                  visible: "Username or Email Address|Nombre de usuario o correo electrónico"
-                commands:
-                  - evalScript: "${console.log('WCPOS_E2E lingering login tab over the relaunched app, force-stopping Chrome')}"
-                  # NOT `back`: the tab keeps web history (authorize → login form) and back
-                  # navigates it instead of closing the tab — run 33574072528 flow 07.
-                  - stopApp: com.android.chrome
-                  - waitForAnimationToEnd:
-                      timeout: 5000
-            - extendedWaitUntil:
-                visible:
-                  id: "screen-pos"
-                timeout: 40000
+      - runFlow:
+          file: ../subflows/relaunch-app.yml
+          env:
+            READY_ID: screen-pos
       - assertVisible:
-          id: "pos-resize-handle"
-          text: "Resize handle, (2[5-9]|[34][0-9]|5[0-4])%"
+          id: 'pos-resize-handle'
+          text: 'Resize handle, (2[5-9]|[34][0-9]|5[0-4])%'
       # ...and did NOT snap back to anywhere in the default band.
       - assertNotVisible:
-          id: "pos-resize-handle"
-          text: "Resize handle, (5[5-9]|6[0-9]|7[0-5])%"
+          id: 'pos-resize-handle'
+          text: 'Resize handle, (5[5-9]|6[0-9]|7[0-5])%'

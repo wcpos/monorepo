@@ -55,6 +55,18 @@ appId: com.wcpos.main.dev
     timeout: 15000
 # The chained suite preserves flow 06/07's cart. Explicitly select the new-order
 # tab so this flow owns an empty order; it gets its own tab on the first write.
+# On a phone the tab strip scrolls, and with the earlier flows' carts still open
+# the "+" tab sits off its right end (run 33750030091, Android phone). The
+# strip's › selects the next tab and scrolls it into view — step along it the
+# way a cashier would until "+" is on screen. Bounded: one press per open tab.
+- repeat:
+    while:
+      notVisible:
+        id: "new-order-tab"
+    times: 8
+    commands:
+      - tapOn:
+          id: "scrollable-tabs-next"
 - tapOn:
     id: "new-order-tab"
 - assertNotVisible:
@@ -155,52 +167,10 @@ appId: com.wcpos.main.dev
 # no crash report, process alive 25s later, manual terminate+launch 3/3).
 # `waitForAnimationToEnd` is screenshot-based, so it does not query the
 # app's hierarchy while the scene is still coming up.
-- stopApp
-- launchApp
-- waitForAnimationToEnd:
-    timeout: 5000
-# Android: a cold `launchApp` can land on the dev launcher's HOME screen
-# instead of reloading the last project (PR #1690 run 33279550244 attempt 2,
-# phone, flow 05: "Development servers … Recently opened" with the app never
-# loaded, so the first assertion timed out on the launcher). Reload through
-# the same deep link flows 01/02 use; inert when the app came up normally.
-# Run 33513307174 (Android phone, flow 05): the login Custom Tab from flow
-# 02's retype recovery lives in the app task's back stack and can resurface
-# over the app on ANY relaunch, not only flow 03's. Same gated dismissal as
-# flow 03: fires only when the login form itself is visible, so it can never
-# background a loading app; login-page text, not testID (third-party browser
-# content — the selector-policy exemption flow 02 documents).
-# Run 33527914510 (Android phone, flow 06): the tab resurfaces
-# ASYNCHRONOUSLY — a one-shot check right after launch raced it and lost
-# (guard SKIPPED, tab then took the screen for the whole readiness wait).
-# Re-evaluate the dismissal at each retry leg; 3 legs × 40s keep the old
-# 120s readiness budget (maxRetries counts RETRIES: executions = 3).
-- retry:
-    maxRetries: 2
-    commands:
-      - runFlow:
-          when:
-            platform: Android
-            visible: "(?i)fetch development servers"
-          commands:
-            - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
-            - waitForAnimationToEnd:
-                timeout: 5000
-      - runFlow:
-          when:
-            platform: Android
-            visible: "Username or Email Address|Nombre de usuario o correo electrónico"
-          commands:
-            - evalScript: "${console.log('WCPOS_E2E lingering login tab over the relaunched app, force-stopping Chrome')}"
-            # NOT `back`: the tab keeps web history (authorize → login form) and back
-            # navigates it instead of closing the tab — run 33574072528 flow 07.
-            - stopApp: com.android.chrome
-            - waitForAnimationToEnd:
-                timeout: 5000
-      - extendedWaitUntil:
-          visible:
-            id: "search-products"
-          timeout: 40000
+- runFlow:
+    file: ../subflows/relaunch-app.yml
+    env:
+      READY_ID: search-products
 - runFlow:
     when:
       visible:

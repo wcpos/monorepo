@@ -16,6 +16,12 @@
  */
 import { randomUUID } from 'node:crypto';
 
+import {
+	isTransientStatus,
+	TransientStoreError,
+	withStoreRetry,
+} from './store-transient-retry.mjs';
+
 const STORE_URL = (process.env.E2E_STORE_URL ?? 'https://dev-pro.wcpos.com').replace(/\/$/, '');
 const WRITER_USER = process.env.E2E_PRODUCT_WRITER_USER;
 const WRITER_PASS = process.env.E2E_PRODUCT_WRITER_PASS;
@@ -49,18 +55,26 @@ async function mintWriterToken() {
 	// (observed on dev-next 2026-08-08, noted in search-probe.ts) — one retry
 	// absorbs that; a genuine rejection still fails below.
 	for (let attempt = 0; attempt < 2; attempt += 1) {
-		const page = await fetch(authUrl);
-		if (!page.ok) {
-			console.error(`✖ /wcpos-auth/ login page failed: HTTP ${page.status}`);
+		// A saturated store answers this GET with an error page (HTTP 200,
+		// no form fields) or a 5xx for a minute or two — retry through that
+		// rather than lose the run; say what the store served either way.
+		const { nonce, session } = await withStoreRetry('/wcpos-auth/ login page', async () => {
+			const page = await fetch(authUrl);
+			const html = await page.text();
+			const nonce = /name="_wpnonce" value="([^"]+)"/.exec(html)?.[1];
+			const session = /name="auth_session" value="([^"]+)"/.exec(html)?.[1];
+			if (page.ok && nonce && session) return { nonce, session };
+			const title = /<title>([^<]*)<\/title>/i.exec(html)?.[1]?.trim() ?? '(no title)';
+			const why = page.ok ? 'no _wpnonce/auth_session fields' : 'not OK';
+			const message = `HTTP ${page.status} (${why}) title="${title}" bytes=${html.length}`;
+			if (page.ok || isTransientStatus(page.status)) {
+				throw new TransientStoreError(message);
+			}
+			throw new Error(message);
+		}).catch((err) => {
+			console.error(`✖ /wcpos-auth/ login page unusable: ${err.message}`);
 			process.exit(1);
-		}
-		const html = await page.text();
-		const nonce = /name="_wpnonce" value="([^"]+)"/.exec(html)?.[1];
-		const session = /name="auth_session" value="([^"]+)"/.exec(html)?.[1];
-		if (!nonce || !session) {
-			console.error('✖ /wcpos-auth/ login page did not include _wpnonce/auth_session fields');
-			process.exit(1);
-		}
+		});
 		const submit = await fetch(authUrl, {
 			method: 'POST',
 			redirect: 'manual',
@@ -111,7 +125,14 @@ async function mintWriterToken() {
 }
 
 // Reachability first — fail loudly and early either way.
-const head = await fetch(`${STORE_URL}/wp-json`, { method: 'GET' });
+const head = await withStoreRetry('store reachability', async () => {
+	const r = await fetch(`${STORE_URL}/wp-json`, { method: 'GET' });
+	if (isTransientStatus(r.status)) throw new TransientStoreError(`HTTP ${r.status}`);
+	return r;
+}).catch((err) => {
+	console.error(`✖ Store unreachable: ${STORE_URL} → ${err.message}`);
+	process.exit(1);
+});
 if (!head.ok) {
 	console.error(`✖ Store unreachable: ${STORE_URL} → HTTP ${head.status}`);
 	process.exit(1);
@@ -142,7 +163,14 @@ const authedFetch = (route, transport, init = {}) => {
 	const headers = { 'content-type': 'application/json', ...init.headers };
 	if (transport.kind === 'header') headers.authorization = transport.value;
 	else url.searchParams.set('authorization', transport.value);
-	return fetch(url, { ...init, headers });
+	const send = () => fetch(url, { ...init, headers });
+	// Only reads retry: a duplicated POST/PUT on the shared store is a defect.
+	if (init.method && init.method !== 'GET') return send();
+	return withStoreRetry(`GET wc/v3/${route}`, async () => {
+		const r = await send();
+		if (isTransientStatus(r.status)) throw new TransientStoreError(`HTTP ${r.status}`);
+		return r;
+	});
 };
 
 // Decide which transport actually delivers the JWT to wc/v3 — by evidence,

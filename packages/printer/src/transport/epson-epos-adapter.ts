@@ -1,8 +1,10 @@
+import { encodeThermalTemplateToEpos } from '@wcpos/receipt-renderer';
+
 import { buildConnectionError } from '../utils/connection-error';
 import { withTargetAddressSpace } from '../utils/local-fetch';
 import { buildEposXml, commandFromBytes, parseEposResponse } from './epson-epos-protocol';
 
-import type { PrinterTransport } from '../types';
+import type { MarkupPrintJob, PrinterTransport } from '../types';
 
 /**
  * Epson ePOS HTTP adapter for web browsers.
@@ -44,9 +46,13 @@ export class EpsonEposAdapter implements PrinterTransport {
 	}
 
 	async printRaw(data: Uint8Array): Promise<void> {
+		// <command> pass-through is not printable when Secure Printing is on; the service prefers printMarkup.
 		await this.sendEposPrint(commandFromBytes(data));
 	}
 
+	supportsMarkup = (): boolean => true;
+	printMarkup = async (job: MarkupPrintJob): Promise<void> =>
+		this.sendEposPrint(encodeThermalTemplateToEpos(job.template, job.data, job.options));
 	async printHtml(_html: string): Promise<void> {
 		throw new Error('EpsonEposAdapter does not support HTML printing.');
 	}

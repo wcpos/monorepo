@@ -33,6 +33,20 @@ describe('Electron EpsonEposAdapter', () => {
 		});
 	});
 
+	it('posts structured markup without a command wrapper', async () => {
+		const adapter = new EpsonEposAdapter('192.168.1.40', 443);
+		expect(await adapter.supportsMarkup()).toBe(true);
+		await adapter.printMarkup({
+			template: '<receipt><text>Hello</text></receipt>',
+			data: {},
+			options: {},
+		});
+
+		const request = invoke.mock.calls[0]?.[1];
+		expect(request.xml).toContain('<text ');
+		expect(request.xml).not.toContain('<command>');
+	});
+
 	it('reports a printer rejection as a plain error carrying the ePOS code, not a connection error', async () => {
 		invoke.mockResolvedValue(response(false, 'SchemaError'));
 

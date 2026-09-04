@@ -53,12 +53,18 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 		? props.descriptors[focusedRoute.key]?.options.drawerType
 		: undefined;
 	const hideFromAssistiveTech = panelHidden && drawerType !== 'permanent';
+	// The E2E flows need to tell a permanent rail (always on screen, nothing to
+	// close) from a front drawer left open (close it through the scrim before the
+	// flow starts): both show the same items. The panel says which it is.
+	const permanentPanelTestID = 'drawer-panel-permanent';
+	const panelTestID = drawerType === 'permanent' ? permanentPanelTestID : 'drawer-panel';
 
 	return (
 		<>
 			<DrawerPanelVisibilityReporter status={status === 'open' ? 'open' : 'closed'} />
 			<DrawerContentScrollView
 				{...props}
+				testID={panelTestID}
 				importantForAccessibility={hideFromAssistiveTech ? 'no-hide-descendants' : 'auto'}
 				accessibilityElementsHidden={hideFromAssistiveTech}
 				contentContainerStyle={{

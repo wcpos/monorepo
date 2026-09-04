@@ -17,6 +17,8 @@ import { isEscposTextEncodable } from './escpos-text';
 import { formatReceiptData } from './format-receipt-data';
 import { mapReceiptData } from './map-receipt-data';
 
+import type { MarkupPrintJob } from '../types';
+
 const SUPPORTED_DATA_IMAGE_RE = /^data:image\/(?:png|jpe?g);base64,[A-Za-z0-9+/=]+$/i;
 const DEFAULT_THERMAL_IMAGE_WIDTH_DOTS = 200;
 
@@ -137,6 +139,13 @@ export async function prepareThermalPrintAssets(input: {
 export async function encodeThermalTemplateForPrint(
 	input: EncodeThermalTemplateForPrintInput
 ): Promise<Uint8Array> {
+	const job = await buildThermalTemplateMarkupJob(input);
+	return encodeThermalTemplate(job.template, job.data, job.options);
+}
+
+export async function buildThermalTemplateMarkupJob(
+	input: EncodeThermalTemplateForPrintInput
+): Promise<MarkupPrintJob> {
 	const canonical = mapReceiptData((input.receiptData ?? {}) as Record<string, unknown>);
 	const language = input.encodeOptions?.language ?? 'esc-pos';
 	const formatted = formatReceiptData(canonical, {
@@ -152,13 +161,17 @@ export async function encodeThermalTemplateForPrint(
 		imageSrcResolver: input.imageSrcResolver,
 	});
 
-	return encodeThermalTemplate(input.templateXml, formatted, {
-		...input.encodeOptions,
-		imageMode: 'raster',
-		imageAssets,
-		barcodeMode: 'image',
-		barcodeImages,
-	});
+	return {
+		template: input.templateXml,
+		data: formatted as Record<string, unknown>,
+		options: {
+			...input.encodeOptions,
+			imageMode: 'raster',
+			imageAssets,
+			barcodeMode: 'image',
+			barcodeImages,
+		},
+	};
 }
 
 export function isSupportedThermalLogoSrc(src: unknown): boolean {

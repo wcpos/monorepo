@@ -5,7 +5,24 @@ import { PrinterService } from '../printer-service';
 
 import type { PrinterProfile, PrinterTransport } from '../types';
 
-const { encodeReceiptMock, encodeThermalTemplateForPrintMock } = vi.hoisted(() => ({
+const {
+	buildReceiptMarkupJobMock,
+	buildThermalTemplateMarkupJobMock,
+	encodeReceiptMock,
+	encodeThermalTemplateForPrintMock,
+} = vi.hoisted(() => ({
+	buildReceiptMarkupJobMock: vi.fn(() => ({
+		template: '<receipt><text>receipt</text></receipt>',
+		data: { receipt: true },
+		options: {},
+	})),
+	buildThermalTemplateMarkupJobMock: vi.fn(() =>
+		Promise.resolve({
+			template: '<receipt><image src="logo"/></receipt>',
+			data: { template: true },
+			options: { imageAssets: { logo: undefined }, barcodeImages: {}, barcodeMode: 'image' },
+		})
+	),
 	encodeReceiptMock: vi.fn(() => new Uint8Array([1, 2, 3])),
 	encodeThermalTemplateForPrintMock: vi.fn(() => Promise.resolve(new Uint8Array([4, 5, 6]))),
 }));
@@ -21,10 +38,12 @@ const { epsonNativeCtorMock, starNativeCtorMock } = vi.hoisted(() => ({
 }));
 
 vi.mock('../encoder/encode-receipt', () => ({
+	buildReceiptMarkupJob: buildReceiptMarkupJobMock,
 	encodeReceipt: encodeReceiptMock,
 }));
 
 vi.mock('../encoder/thermal-print', () => ({
+	buildThermalTemplateMarkupJob: buildThermalTemplateMarkupJobMock,
 	encodeThermalTemplateForPrint: encodeThermalTemplateForPrintMock,
 }));
 
@@ -61,14 +80,105 @@ vi.mock('../transport/star-native-adapter', () => ({
 	},
 }));
 
+function networkProfile(overrides: Partial<PrinterProfile> = {}): PrinterProfile {
+	return {
+		id: 'markup-printer',
+		name: 'Markup Printer',
+		connectionType: 'network',
+		vendor: 'epson',
+		address: '127.0.0.1',
+		port: 443,
+		language: 'esc-pos',
+		columns: 48,
+		fullReceiptRaster: false,
+		autoCut: true,
+		autoOpenDrawer: false,
+		isDefault: true,
+		isBuiltIn: false,
+		...overrides,
+	};
+}
+
+function markupTransport() {
+	return {
+		name: 'markup',
+		printRaw: vi.fn().mockResolvedValue(undefined),
+		printHtml: vi.fn().mockResolvedValue(undefined),
+		supportsMarkup: vi.fn(() => true),
+		printMarkup: vi.fn().mockResolvedValue(undefined),
+	};
+}
+
 describe('PrinterService', () => {
 	beforeEach(() => {
 		encodeReceiptMock.mockClear();
+		buildReceiptMarkupJobMock.mockClear();
+		buildThermalTemplateMarkupJobMock.mockClear();
 		encodeThermalTemplateForPrintMock.mockClear();
 		epsonNativePrintRawMock.mockClear();
 		starNativePrintRawMock.mockClear();
 		epsonNativeCtorMock.mockClear();
 		starNativeCtorMock.mockClear();
+	});
+
+	it('uses markup for built-in receipts when supported', async () => {
+		const service = new PrinterService();
+		const transport = markupTransport();
+		(service as any).getTransport = vi.fn().mockResolvedValue(transport);
+
+		await service.printReceipt(sampleReceiptData, networkProfile());
+
+		expect(transport.printMarkup).toHaveBeenCalledWith(
+			buildReceiptMarkupJobMock.mock.results[0]?.value
+		);
+		expect(transport.printRaw).not.toHaveBeenCalled();
+	});
+
+	it('uses markup for standalone drawer kicks when supported', async () => {
+		const service = new PrinterService();
+		const transport = markupTransport();
+		(service as any).getTransport = vi.fn().mockResolvedValue(transport);
+
+		await service.openDrawer(networkProfile({ drawerConnector: 'pin5' }));
+
+		expect(transport.printMarkup).toHaveBeenCalledWith(
+			expect.objectContaining({
+				template: '<receipt><drawer/></receipt>',
+				options: expect.objectContaining({ drawerConnector: 'pin5' }),
+			})
+		);
+		expect(transport.printRaw).not.toHaveBeenCalled();
+	});
+
+	it('uses prepared markup jobs for custom thermal templates when supported', async () => {
+		const service = new PrinterService();
+		const transport = markupTransport();
+		(service as any).getTransport = vi.fn().mockResolvedValue(transport);
+
+		await service.printThermalTemplateForPrint(
+			sampleReceiptData,
+			networkProfile(),
+			'<receipt/>',
+			576
+		);
+
+		expect(transport.printMarkup).toHaveBeenCalledWith(
+			await buildThermalTemplateMarkupJobMock.mock.results[0]?.value
+		);
+		expect(transport.printRaw).not.toHaveBeenCalled();
+	});
+
+	it('uses markup for diagnostic test prints when supported', async () => {
+		const service = new PrinterService();
+		const transport = markupTransport();
+		(service as any).getTransport = vi.fn().mockResolvedValue(transport);
+
+		await service.testPrint(networkProfile());
+
+		expect(transport.printMarkup).toHaveBeenCalledWith(
+			expect.objectContaining({ template: expect.stringContaining('Printer Diagnostic') })
+		);
+		expect(transport.printRaw).not.toHaveBeenCalled();
 	});
 
 	it('forwards decimals to encodeReceipt for default thermal printing', async () => {
@@ -106,6 +216,7 @@ describe('PrinterService', () => {
 				decimals: 3,
 			})
 		);
+		expect(transport.printRaw).toHaveBeenCalledWith(new Uint8Array([1, 2, 3]));
 	});
 
 	it('queues thermal asset preparation with printing so concurrent receipts keep order', async () => {
@@ -154,11 +265,14 @@ describe('PrinterService', () => {
 			384
 		);
 		await Promise.resolve();
+		await Promise.resolve();
 
 		expect(encodeThermalTemplateForPrintMock).toHaveBeenCalledTimes(1);
 		resolveFirst?.(new Uint8Array([1]));
 		await first;
 		expect(transport.printRaw).toHaveBeenNthCalledWith(1, new Uint8Array([1]));
+		await Promise.resolve();
+		await Promise.resolve();
 		expect(encodeThermalTemplateForPrintMock).toHaveBeenCalledTimes(2);
 		resolveSecond?.(new Uint8Array([2]));
 		await second;

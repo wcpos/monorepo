@@ -111,7 +111,30 @@ env:
           timeout: 20000
 - tapOn:
     id: "variation-popover-add-to-cart"
-# Adding closes the popover. Phone layout: switch to the cart tab.
+# Adding closes the popover — require that before touching anything else. A
+# lost press here (run 33789029835, Android phone: the tap COMPLETED, the
+# popover stayed open, the cart-tab tap then dismissed it as a tap outside, and
+# the cart held only flow 06's line) failed 17 s later on the meta assertion
+# with nothing in the log to say which press was lost. Same shape and budget as
+# the cart-tab retry below: one logged second tap, then a hard wait.
+- extendedWaitUntil:
+    notVisible:
+      id: "variation-popover-add-to-cart"
+    timeout: 10000
+    optional: true
+- runFlow:
+    when:
+      visible:
+        id: "variation-popover-add-to-cart"
+    commands:
+      - evalScript: "${console.log('WCPOS_E2E variation-popover-add-to-cart tap did not close the popover within 10 s, tapping again')}"
+      - tapOn:
+          id: "variation-popover-add-to-cart"
+- extendedWaitUntil:
+    notVisible:
+      id: "variation-popover-add-to-cart"
+    timeout: 15000
+# Phone layout: switch to the cart tab.
 #
 # One logged retry of the tab tap. Twice on CI iOS phones (runs 33317998775 and
 # 33325996550) the tap was DELIVERED — the app console shows the touch began/ended

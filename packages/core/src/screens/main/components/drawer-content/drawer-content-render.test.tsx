@@ -32,10 +32,12 @@ jest.mock('expo-router/build/react-navigation/drawer', () => {
 	return {
 		DrawerContentScrollView: ({
 			children,
+			testID,
 			importantForAccessibility,
 			accessibilityElementsHidden,
 		}: {
 			children?: React.ReactNode;
+			testID?: string;
 			importantForAccessibility?: string;
 			accessibilityElementsHidden?: boolean;
 		}) =>
@@ -43,6 +45,7 @@ jest.mock('expo-router/build/react-navigation/drawer', () => {
 				'div',
 				{
 					'data-testid': 'drawer-scroll',
+					'data-panel': testID,
 					'data-important': importantForAccessibility,
 					'data-elements-hidden': String(accessibilityElementsHidden),
 				},
@@ -106,6 +109,8 @@ describe('DrawerContent', () => {
 			</DrawerPanelVisibilityProvider>
 		);
 		const scroll = () => container.querySelector('[data-testid="drawer-scroll"]');
+		// A closable panel: the E2E readiness guard may close it through the scrim.
+		expect(scroll()?.getAttribute('data-panel')).toBe('drawer-panel');
 		expect(scroll()?.getAttribute('data-important')).toBe('no-hide-descendants');
 		expect(scroll()?.getAttribute('data-elements-hidden')).toBe('true');
 
@@ -136,6 +141,8 @@ describe('DrawerContent', () => {
 			</DrawerPanelVisibilityProvider>
 		);
 		const scroll = container.querySelector('[data-testid="drawer-scroll"]');
+		// The rail says it is permanent so the E2E readiness guard never tries to close it.
+		expect(scroll?.getAttribute('data-panel')).toBe('drawer-panel-permanent');
 		expect(scroll?.getAttribute('data-important')).toBe('auto');
 		expect(scroll?.getAttribute('data-elements-hidden')).toBe('false');
 	});

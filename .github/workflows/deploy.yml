@@ -108,6 +108,8 @@ jobs:
         with:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+          # main saves the day's turbo cache from the full build; PRs restore read-only.
+          cache-save: ${{ github.ref == 'refs/heads/main' }}
 
       # A wedged turbo build has no timeout of its own: on 2026-09-02 two PR
       # deploys (runs 33664427747, 33687923179) sat in this step for 40–75 min
@@ -560,12 +562,6 @@ jobs:
             exit 0
           fi
 
-          # PRs to the dev trunk are exempt (see the e2e job's comment).
-          if [ "$EVENT_NAME" = "pull_request" ] && [ "${BASE_REF:-}" = "next" ]; then
-            echo "⏭️ E2E skipped: PRs targeting next are exempt from the web suite (owner ruling 2026-09-03)"
-            exit 0
-          fi
-
           if [ "$DEPLOY_RESULT" != "success" ]; then
             echo "::error::Deploy did not succeed (result: $DEPLOY_RESULT), so the E2E shards never ran. A broken deploy is not a passing E2E run."
             exit 1
@@ -574,6 +570,12 @@ jobs:
           if [ -z "$DEPLOY_URL" ]; then
             echo "::error::Deploy reported success but published an EMPTY deployment URL, so every E2E shard was skipped. Refusing to count a silent no-deploy as a passing E2E run — check the '🚀 Deploy preview' step's EAS output."
             exit 1
+          fi
+
+          # PRs to the dev trunk are exempt (see the e2e job's comment).
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "${BASE_REF:-}" = "next" ]; then
+            echo "⏭️ E2E skipped: PRs targeting next are exempt from the web suite (owner ruling 2026-09-03)"
+            exit 0
           fi
 
           echo "::error::A deployment URL was published ($DEPLOY_URL) but the E2E shards were skipped. Failing the gate."

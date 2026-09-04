@@ -2,13 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NetworkAdapter } from './network-adapter.electron';
 
-const { eposConstructorMock, eposPrintRawMock, ipcPrintRawMock, probeEposEndpointMock } =
-	vi.hoisted(() => ({
-		eposConstructorMock: vi.fn(),
-		eposPrintRawMock: vi.fn(),
-		ipcPrintRawMock: vi.fn(),
-		probeEposEndpointMock: vi.fn(),
-	}));
+const {
+	eposConstructorMock,
+	eposPrintMarkupMock,
+	eposPrintRawMock,
+	ipcPrintRawMock,
+	probeEposEndpointMock,
+} = vi.hoisted(() => ({
+	eposConstructorMock: vi.fn(),
+	eposPrintMarkupMock: vi.fn(),
+	eposPrintRawMock: vi.fn(),
+	ipcPrintRawMock: vi.fn(),
+	probeEposEndpointMock: vi.fn(),
+}));
 
 vi.mock('./epson-epos-adapter.electron', () => ({
 	EpsonEposAdapter: class {
@@ -17,6 +23,7 @@ vi.mock('./epson-epos-adapter.electron', () => ({
 		}
 
 		printRaw = eposPrintRawMock;
+		printMarkup = eposPrintMarkupMock;
 	},
 	postEposHttp: vi.fn(),
 }));
@@ -35,6 +42,7 @@ describe('Electron NetworkAdapter ePOS routing', () => {
 	beforeEach(() => {
 		eposConstructorMock.mockClear();
 		eposPrintRawMock.mockReset().mockResolvedValue(undefined);
+		eposPrintMarkupMock.mockReset().mockResolvedValue(undefined);
 		ipcPrintRawMock.mockReset().mockResolvedValue(undefined);
 		probeEposEndpointMock.mockReset();
 	});
@@ -60,9 +68,10 @@ describe('Electron NetworkAdapter ePOS routing', () => {
 	it('does not cache a failed probe', async () => {
 		probeEposEndpointMock.mockResolvedValue(null);
 		const data = new Uint8Array([3]);
+		const adapter = new NetworkAdapter('failed-probe.test', 9100, 'epson');
 
-		await new NetworkAdapter('failed-probe.test', 9100, 'epson').printRaw(data);
-		await new NetworkAdapter('failed-probe.test', 9100, 'epson').printRaw(data);
+		await adapter.printRaw(data);
+		await adapter.printRaw(data);
 
 		expect(probeEposEndpointMock).toHaveBeenCalledTimes(2);
 		expect(ipcPrintRawMock).toHaveBeenCalledTimes(2);
@@ -83,5 +92,28 @@ describe('Electron NetworkAdapter ePOS routing', () => {
 		expect(eposConstructorMock).toHaveBeenCalledTimes(2);
 		expect(eposConstructorMock).toHaveBeenCalledWith('successful-probe.test', 8008);
 		expect(ipcPrintRawMock).not.toHaveBeenCalled();
+	});
+
+	it('reports markup support and forwards without probing twice on an ePOS lane', async () => {
+		probeEposEndpointMock.mockResolvedValue(8008);
+		const adapter = new NetworkAdapter('markup-probe.test', 9100, 'epson');
+		const job = { template: '<receipt/>', data: {}, options: {} };
+
+		expect(await adapter.supportsMarkup()).toBe(true);
+		await adapter.printMarkup(job);
+
+		expect(probeEposEndpointMock).toHaveBeenCalledTimes(1);
+		expect(eposPrintMarkupMock).toHaveBeenCalledWith(job);
+		expect(ipcPrintRawMock).not.toHaveBeenCalled();
+	});
+
+	it('rejects markup when an Epson profile resolves to raw TCP', async () => {
+		probeEposEndpointMock.mockResolvedValue(null);
+		const adapter = new NetworkAdapter('raw-only.test', 9100, 'epson');
+
+		expect(await adapter.supportsMarkup()).toBe(false);
+		await expect(
+			adapter.printMarkup({ template: '<receipt/>', data: {}, options: {} })
+		).rejects.toThrow('markup printing is not available on this transport');
 	});
 });

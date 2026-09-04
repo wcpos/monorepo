@@ -299,6 +299,117 @@ if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
 	}
 });
 
+test('the main native ledger tracks only completed device verification', () => {
+	const ledger = readWorkflow('e2e-native.yml').jobs['main-ledger'];
+	assert.match(ledger.if, /github\.event_name == 'push'/);
+	assert.match(ledger.if, /github\.ref == 'refs\/heads\/main'/);
+	for (const need of ['native-gate', 'android', 'ios']) {
+		assert.ok([ledger.needs].flat().includes(need), `ledger must need ${need}`);
+	}
+	assert.equal(ledger.steps[0].env.GH_REPO, '${{ github.repository }}');
+
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-main-native-ledger-'));
+	const binDir = path.join(workspace, 'bin');
+	const trace = path.join(workspace, 'gh.log');
+	mkdirSync(binDir);
+	writeFileSync(
+		path.join(binDir, 'gh'),
+		`#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$GH_TRACE"
+if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
+if [ "$1" = "api" ]; then printf '%s' "$GH_MAIN_SHA"; fi
+`,
+		{ mode: 0o755 }
+	);
+
+	const run = ({
+		gate,
+		android = 'success',
+		ios = 'success',
+		issues,
+		mainSha = '0123456789abcdef',
+	}) => {
+		writeFileSync(trace, '');
+		const result = runShell(ledger.steps[0].run, {
+			env: {
+				PATH: `${binDir}:${process.env.PATH}`,
+				GH_TRACE: trace,
+				GH_ISSUES: issues,
+				GATE_RESULT: gate,
+				ANDROID_RESULT: android,
+				IOS_RESULT: ios,
+				SHA: '0123456789abcdef',
+				RUN_URL: 'https://github.test/actions/runs/2',
+				GH_MAIN_SHA: mainSha,
+				GH_REPO: 'wcpos/monorepo',
+			},
+		});
+		return { result, trace: readFileSync(trace, 'utf8') };
+	};
+
+	try {
+		const created = run({ gate: 'failure', android: 'failure', issues: '[]' });
+		assert.equal(created.result.status, 0, created.result.stdout + created.result.stderr);
+		assert.match(created.trace, /api repos\/wcpos\/monorepo\/commits\/main/);
+		assert.match(created.trace, /label create ci:main-native-red --color B60205/);
+		assert.match(created.trace, /--description Main native \(Maestro\) verification is red/);
+		assert.match(created.trace, /issue create --title main native E2E is red at 0123456/);
+		assert.match(created.trace, /0123456789abcdef.*https:\/\/github\.test\/actions\/runs\/2/);
+		assert.match(created.trace, /android: failure, ios: success/);
+		assert.match(created.trace, /closes itself on the next fully green device run/);
+
+		const refreshed = run({ gate: 'failure', ios: 'failure', issues: '[{"number":42}]' });
+		assert.equal(refreshed.result.status, 0, refreshed.result.stdout + refreshed.result.stderr);
+		assert.match(refreshed.trace, /issue comment 42/);
+		assert.match(refreshed.trace, /android: success, ios: failure/);
+		assert.doesNotMatch(refreshed.trace, /issue create/);
+
+		const closed = run({ gate: 'success', issues: '[{"number":42}]' });
+		assert.equal(closed.result.status, 0, closed.result.stdout + closed.result.stderr);
+		assert.match(closed.trace, /issue comment 42 --body green again at 0123456789abcdef/);
+		assert.match(closed.trace, /issue close 42/);
+
+		const skipped = run({
+			gate: 'success',
+			android: 'skipped',
+			ios: 'skipped',
+			issues: '[{"number":42}]',
+		});
+		assert.equal(skipped.result.status, 0, skipped.result.stdout + skipped.result.stderr);
+		assert.doesNotMatch(skipped.trace, /issue (create|comment|close)|label create/);
+		assert.match(skipped.result.stdout, /devices did not both succeed/i);
+
+		// A rerun of an older push (its SHA is no longer main's tip) must never
+		// move the ledger: not close it on an old green, not reopen it on an old red.
+		for (const gate of ['success', 'failure']) {
+			const stale = run({ gate, issues: '[{"number":42}]', mainSha: 'fedcba9876543210' });
+			assert.equal(stale.result.status, 0, stale.result.stdout + stale.result.stderr);
+			assert.doesNotMatch(stale.trace, /issue (create|comment|close)|label create/);
+			assert.match(stale.result.stdout, /stale rerun/i);
+		}
+		const staleRed = run({ gate: 'failure', issues: '[]', mainSha: 'fedcba9876543210' });
+		assert.doesNotMatch(staleRed.trace, /issue create/);
+
+		for (const cancelled of ['gate', 'android', 'ios']) {
+			const superseded = run({
+				gate: cancelled === 'gate' ? 'cancelled' : 'failure',
+				android: cancelled === 'android' ? 'cancelled' : 'failure',
+				ios: cancelled === 'ios' ? 'cancelled' : 'success',
+				issues: '[{"number":42}]',
+			});
+			assert.equal(
+				superseded.result.status,
+				0,
+				superseded.result.stdout + superseded.result.stderr
+			);
+			assert.equal(superseded.trace, '', `${cancelled} cancellation must make no gh calls`);
+			assert.match(superseded.result.stdout, /superseded/i);
+		}
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
 test('release workflows require green main with an explicit typed override', () => {
 	const build = readWorkflow('build.yml');
 	const publish = readWorkflow('publish-web-bundle.yml');
@@ -459,6 +570,18 @@ test('PRs targeting next skip both E2E suites and their gates accept the skip', 
 	const nextTarget = runShell(e2eGate.run, { env: { ...webEnv, BASE_REF: 'next' } });
 	assert.equal(nextTarget.status, 0, nextTarget.stdout + nextTarget.stderr);
 	assert.match(nextTarget.stdout, /targeting next/);
+	const nextDeployFailed = runShell(e2eGate.run, {
+		env: { ...webEnv, BASE_REF: 'next', DEPLOY_RESULT: 'failure', DEPLOY_URL: '' },
+	});
+	assert.notEqual(nextDeployFailed.status, 0, nextDeployFailed.stdout + nextDeployFailed.stderr);
+	const nextDeployUrlMissing = runShell(e2eGate.run, {
+		env: { ...webEnv, BASE_REF: 'next', DEPLOY_URL: '' },
+	});
+	assert.notEqual(
+		nextDeployUrlMissing.status,
+		0,
+		nextDeployUrlMissing.stdout + nextDeployUrlMissing.stderr
+	);
 	const mainTarget = runShell(e2eGate.run, { env: { ...webEnv, BASE_REF: 'main' } });
 	assert.notEqual(mainTarget.status, 0, mainTarget.stdout + mainTarget.stderr);
 	// A push to main has no base_ref; the exemption must not fire there.
@@ -476,12 +599,15 @@ test('native E2E routes next-target PRs to the next store', () => {
 		"${{ github.event_name == 'pull_request' && github.base_ref == 'next' && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}"
 	);
 
+	// A 404, not a 503: the seed retries transient statuses for a minute
+	// (store-transient-retry.mjs), and this test is about routing, not retries.
+	// A permanent 503 here would cost five real ten-second sleeps per run.
 	const seed = spawnSync(
 		process.execPath,
 		[
 			'--input-type=module',
 			'--eval',
-			"globalThis.fetch = async () => new Response(null, { status: 503 }); await import('./scripts/e2e-native-seed.mjs');",
+			"globalThis.fetch = async () => new Response(null, { status: 404 }); await import('./scripts/e2e-native-seed.mjs');",
 		],
 		{
 			cwd: ROOT,
@@ -496,7 +622,38 @@ test('native E2E routes next-target PRs to the next store', () => {
 	);
 
 	assert.notEqual(seed.status, 0);
-	assert.match(seed.stderr, /Store unreachable: https:\/\/dev-next\.wcpos\.com → HTTP 503/);
+	assert.match(seed.stderr, /Store unreachable: https:\/\/dev-next\.wcpos\.com → HTTP 404/);
+});
+
+test('native E2E does not retry a login-page 404', () => {
+	const seed = spawnSync(
+		process.execPath,
+		[
+			'--input-type=module',
+			'--eval',
+			`let loginCalls = 0;
+globalThis.setTimeout = (fn) => { fn(); return 0; };
+globalThis.fetch = async (url) => {
+	if (String(url).endsWith('/wp-json')) return new Response(null, { status: 200 });
+	loginCalls += 1;
+	return new Response(\`<title>login attempt \${loginCalls}</title>\`, { status: 404 });
+};
+await import('./scripts/e2e-native-seed.mjs');`,
+		],
+		{
+			cwd: ROOT,
+			encoding: 'utf8',
+			env: {
+				...process.env,
+				E2E_PRODUCT_WRITER_USER: 'writer',
+				E2E_PRODUCT_WRITER_PASS: 'password',
+			},
+		}
+	);
+
+	assert.notEqual(seed.status, 0);
+	assert.match(seed.stderr, /login page unusable: HTTP 404 \(not OK\) title="login attempt 1"/);
+	assert.doesNotMatch(seed.stderr, /retrying/);
 });
 
 test('native E2E concurrency isolates pull requests and supersedes stale main pushes', () => {
@@ -932,6 +1089,151 @@ test('the native E2E aggregator fails closed except for legitimate skips', () =>
 
 	const allSucceeded = runGate({});
 	assert.equal(allSucceeded.status, 0, allSucceeded.stdout + allSucceeded.stderr);
+});
+
+test('the dev-client resolve recovers the build from a main artifact before anyone spends', () => {
+	// The cache is an LRU under a 10 GB repo quota; the dev client is read once
+	// per main run, so it is evicted first (2026-09-03: gone within 40 minutes
+	// of a hit, a PR lost its devices and main bought a $3 rebuild). The last
+	// main artifact is the same bytes on a separate quota.
+	const workflow = readWorkflow('e2e-native.yml');
+	const names = workflow.jobs.build.steps.map((step) => step.name);
+	const at = (name) => names.indexOf(name);
+	assert.ok(
+		at('♻️ Restore cached builds') < at("♻️ Recover builds from the last main run's artifact")
+	);
+	assert.ok(
+		at("♻️ Recover builds from the last main run's artifact") <
+			at('💸 Refuse an unrequested EAS build')
+	);
+	assert.ok(at('🏷 Stamp the builds with their cache key') < at('⬆️ Share builds with test jobs'));
+	const refuse = findStep(workflow, 'build', '💸 Refuse an unrequested EAS build');
+	assert.match(refuse.if, /steps\.recover\.outputs\.hit != 'true'/);
+	const build = findStep(
+		workflow,
+		'build',
+		'🛠 Build dev client on EAS (native fingerprint changed)'
+	);
+	assert.match(build.if, /steps\.recover\.outputs\.hit != 'true'/);
+	const stamp = findStep(workflow, 'build', '🏷 Stamp the builds with their cache key');
+	assert.match(stamp.run, /echo "\$CACHE_KEY" > e2e-builds\/cache-key/);
+
+	// Money-bearing shell: a fake `gh` serves MOCK_ARTIFACTS as "<run>:<stamp>"
+	// pairs, newest first; a run absent from the list has no artifact.
+	const recover = findStep(
+		workflow,
+		'build',
+		"♻️ Recover builds from the last main run's artifact"
+	);
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-devclient-recover-'));
+	const binDir = path.join(workspace, 'bin');
+	mkdirSync(binDir);
+	writeFileSync(
+		path.join(binDir, 'gh'),
+		[
+			'#!/usr/bin/env bash',
+			'if [ "$1 $2" = "run list" ]; then printf "%s\n" $MOCK_RUNS; exit 0; fi',
+			'if [ "$1 $2" = "run download" ]; then',
+			'  shift 2; run=""; dir=""; while [ $# -gt 0 ]; do case "$1" in -R) shift;; -n) shift;; -D) dir="$2"; shift;; *) [ -z "$run" ] && run="$1";; esac; shift; done',
+			'  for pair in $MOCK_ARTIFACTS; do if [ "${pair%%:*}" = "$run" ]; then echo "${pair#*:}" > "$dir/cache-key"; echo apk > "$dir/wcpos-e2e-android.apk"; echo ipa > "$dir/wcpos-e2e-ios.tar.gz"; exit 0; fi; done',
+			'  exit 1',
+			'fi',
+			'exit 2',
+		].join('\n') + '\n',
+		{ mode: 0o755 }
+	);
+	const run = (env) => {
+		const cwd = mkdtempSync(path.join(workspace, 'job-'));
+		const temp = path.join(cwd, 'tmp');
+		mkdirSync(temp);
+		const outputs = path.join(cwd, 'outputs');
+		writeFileSync(outputs, '');
+		const result = runShell(recover.run, {
+			cwd,
+			env: {
+				PATH: `${binDir}:${process.env.PATH}`,
+				RUNNER_TEMP: temp,
+				GITHUB_OUTPUT: outputs,
+				GH_REPO: 'wcpos/monorepo',
+				CACHE_KEY: 'e2e-native-devclient-fp1',
+				FINGERPRINT: 'fp1',
+				MOCK_RUNS: '333 222 111',
+				MOCK_ARTIFACTS: '333:e2e-native-devclient-other 222:e2e-native-devclient-fp1',
+				...env,
+			},
+		});
+		return { ...result, outputs: readFileSync(outputs, 'utf8'), cwd };
+	};
+
+	try {
+		// The newest artifact is another fingerprint's; the next one matches.
+		const recovered = run({});
+		assert.equal(recovered.status, 0, recovered.stdout + recovered.stderr);
+		assert.match(recovered.outputs, /^hit=true$/m);
+		assert.match(
+			recovered.stdout,
+			/Recovered the dev client \(e2e-native-devclient-fp1\) from main run 222/
+		);
+		assert.equal(
+			readFileSync(path.join(recovered.cwd, 'e2e-builds', 'wcpos-e2e-android.apk'), 'utf8'),
+			'apk\n'
+		);
+
+		// A single-platform key is satisfied by main's platform=all artifact.
+		const ios = run({ CACHE_KEY: 'e2e-native-devclient-fp1-ios' });
+		assert.match(ios.outputs, /^hit=true$/m);
+
+		// No artifact for this fingerprint: report, no files, and let the next step decide.
+		const miss = run({ FINGERPRINT: 'fp9', CACHE_KEY: 'e2e-native-devclient-fp9' });
+		assert.equal(miss.status, 0, miss.stdout + miss.stderr);
+		assert.match(miss.outputs, /^hit=false$/m);
+		assert.equal(existsSync(path.join(miss.cwd, 'e2e-builds')), false);
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
+test('the shared setup action saves one turbo cache entry per OS per day, from main only', () => {
+	// Per-commit keys filled the 10 GB quota within hours and evicted the dev
+	// client (see the recovery test above). Caches are branch-scoped and an
+	// exact hit never re-saves, so PRs restore read-only and only a main job
+	// that runs the full turbo graph saves.
+	const setup = readAction('setup-monorepo/action.yml');
+	const readOnly = setup.runs.steps.find((step) => step.name === '♻️ Restore cache');
+	const saving = setup.runs.steps.find(
+		(step) => step.name === '♻️ Restore cache (saved at job end)'
+	);
+	assert.equal(readOnly.uses, 'actions/cache/restore@v4');
+	assert.equal(readOnly.if, "inputs.cache-save != 'true'");
+	assert.equal(saving.uses, 'actions/cache@v4');
+	assert.equal(saving.if, "inputs.cache-save == 'true'");
+	assert.equal(setup.inputs['cache-save'].default, 'false');
+	for (const cache of [readOnly, saving]) {
+		assert.doesNotMatch(cache.with.key, /github\.sha/);
+		assert.match(cache.with.key, /steps\.cache-day\.outputs\.day/);
+		assert.equal(cache.with.path, readOnly.with.path);
+	}
+	const day = setup.runs.steps.find((step) => step.id === 'cache-day');
+	assert.match(day.run, /date -u \+%Y-%m-%d/);
+	assert.ok(
+		setup.runs.steps.indexOf(day) < setup.runs.steps.indexOf(readOnly),
+		'the day must be computed before the cache key uses it'
+	);
+
+	// Exactly one caller saves: deploy's build job on main. test.yml's unit-tests
+	// runs jest/vitest directly, not the turbo graph — a save from it would freeze
+	// the day's immutable entry without turbo outputs (review, #1830).
+	const savers = [];
+	for (const file of ['deploy.yml', 'test.yml', 'e2e-native.yml', 'build.yml']) {
+		const workflow = readWorkflow(file);
+		for (const [jobName, job] of Object.entries(workflow.jobs)) {
+			for (const step of job.steps ?? []) {
+				if (step.uses !== './.github/actions/setup-monorepo') continue;
+				if (step.with?.['cache-save']) savers.push(`${file}:${jobName}=${step.with['cache-save']}`);
+			}
+		}
+	}
+	assert.deepEqual(savers, ["deploy.yml:deploy=${{ github.ref == 'refs/heads/main' }}"]);
 });
 
 test('the native spend guard charges the builds a run will queue and fails closed on bad data', () => {
@@ -1869,26 +2171,46 @@ test('flow-start cleanup dismisses the keyboard only when it is provably up, on 
 	assert.ok(guard.commands.some((command) => command === 'hideKeyboard'));
 });
 
-test('Android relaunch recovery rechecks the development launcher on every retry leg', () => {
-	for (const filename of [
-		'03-authenticated-relaunch.yml',
-		'08-void-order.yml',
-		'../subflows/relaunch-to-pos.yml',
+test('relaunch recovery retries one launch and preserves each caller readiness target', () => {
+	const filename = '../subflows/relaunch-app.yml';
+	const documents = parseAllDocuments(
+		readFileSync(path.join(ROOT, 'apps', 'main', '.maestro', 'flows', filename), 'utf8')
+	).map((document) => document.toJS());
+	assert.equal(
+		Object.hasOwn(documents[0].env ?? {}, 'READY_ID'),
+		false,
+		'the subflow must not shadow the READY_ID supplied by each caller'
+	);
+
+	const retry = documents.at(-1).find((command) => command.retry)?.retry;
+	assert.equal(retry.maxRetries, 1, 'relaunch recovery must remain bounded to one retry');
+	assert.ok(
+		retry.commands.some(
+			(command) =>
+				command.runFlow?.when?.platform === 'Android' &&
+				command.runFlow.when.visible === '(?i)fetch development servers'
+		),
+		'relaunch recovery must recheck the development launcher on its retry leg'
+	);
+
+	const findRelaunch = (commands) => {
+		for (const command of commands) {
+			if (command.runFlow?.file === '../subflows/relaunch-app.yml') return command.runFlow;
+			const nested = command.runFlow?.commands;
+			if (nested) {
+				const relaunch = findRelaunch(nested);
+				if (relaunch) return relaunch;
+			}
+		}
+	};
+	for (const [caller, readyId] of [
+		['03-authenticated-relaunch.yml', 'search-products'],
+		['08-void-order.yml', 'search-products'],
+		['09-pos-panel-resize.yml', 'screen-pos'],
+		['../subflows/relaunch-to-pos.yml', 'search-products'],
 	]) {
-		const retry = readMaestroFlow(filename).find((command) =>
-			command.retry?.commands.some(
-				(nested) => nested.extendedWaitUntil?.visible?.id === 'search-products'
-			)
-		)?.retry;
-		assert.ok(retry, `${filename} lost its relaunch readiness retry`);
-		assert.ok(
-			retry.commands.some(
-				(command) =>
-					command.runFlow?.when?.platform === 'Android' &&
-					command.runFlow.when.visible === '(?i)fetch development servers'
-			),
-			`${filename} checks the development launcher only once before the retry`
-		);
+		const relaunch = findRelaunch(readMaestroFlow(caller));
+		assert.equal(relaunch?.env?.READY_ID, readyId, `${caller} lost its readiness target`);
 	}
 });
 
@@ -2091,9 +2413,11 @@ test('native device jobs never queue behind another run (owner ruling 2026-09-03
 	// after the head had moved. PRs test at the same time now — store
 	// capacity is php-fpm workers, not a queue in CI.
 	assert.ok(!existsSync(path.join(ROOT, '.github', 'scripts', 'native-device-turnstile.sh')));
-	// PR-controlled setup actions must not inherit Actions API access, and
-	// with no turnstile no job needs it.
+	// PR-controlled setup actions must not inherit Actions API access at the
+	// workflow level. The resolve job alone reads other runs' artifacts (the
+	// dev-client recovery), so it alone carries actions: read.
 	assert.equal(workflow.permissions.actions, undefined);
+	assert.deepEqual(workflow.jobs.build.permissions, { contents: 'read', actions: 'read' });
 	for (const [jobName, emoji, platform] of [
 		['android', '🤖', 'Android'],
 		['ios', '🍎', 'iOS'],
