@@ -275,6 +275,8 @@ describe('Receipt preview content size', () => {
 
 		expect(screen.getByTestId('receipt-unavailable')).toBeTruthy();
 		expect(screen.queryByTitle('receipt-preview-frame')).toBeNull();
+		// The message sits on the themed panel, never on the viewport's white paper sheet.
+		expect(screen.queryByTestId('preview-viewport')).toBeNull();
 	});
 });
 

@@ -295,19 +295,23 @@ function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 								onSelect={setPrinterSelection}
 							/>
 							<MismatchBadge message={mismatchWarning} />
-							<ReceiptPreviewViewport
-								key={previewKey}
-								paperWidth={previewPaperWidth}
-								contentSize={contentSize}
-								zoomInLabel={t('receipt.zoom_in')}
-								zoomOutLabel={t('receipt.zoom_out')}
-								testID="receipt-preview"
-							>
-								{renderedHtml == null && !(templateReceiptUrl || baseReceiptURL) ? (
-									<Text testID="receipt-unavailable" className="p-4 text-center">
+							{renderedHtml == null && !(templateReceiptUrl || baseReceiptURL) ? (
+								// No paper canvas when there is nothing to draw on it: the viewport's
+								// sheet is hard-coded white, so themed text would vanish on it in dark themes.
+								<VStack className="bg-muted min-h-0 flex-1 items-center justify-center rounded-md border p-4">
+									<Text testID="receipt-unavailable" className="text-muted-foreground text-center">
 										{t('receipt.preview_unavailable')}
 									</Text>
-								) : (
+								</VStack>
+							) : (
+								<ReceiptPreviewViewport
+									key={previewKey}
+									paperWidth={previewPaperWidth}
+									contentSize={contentSize}
+									zoomInLabel={t('receipt.zoom_in')}
+									zoomOutLabel={t('receipt.zoom_out')}
+									testID="receipt-preview"
+								>
 									<WebView
 										ref={iframeRef as never}
 										{...(renderedHtml != null
@@ -318,8 +322,8 @@ function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
 										onContentSizeChange={handleContentSizeChange}
 										className="h-full w-full"
 									/>
-								)}
-							</ReceiptPreviewViewport>
+								</ReceiptPreviewViewport>
+							)}
 						</VStack>
 					</ErrorBoundary>
 				</ModalBody>
