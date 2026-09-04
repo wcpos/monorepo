@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useDocField } from '@wcpos/query';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../../contexts/app-state';
 import {
@@ -114,7 +114,9 @@ export function useCustomerDisplayService(): void {
 				notifyCustomerDisplayServiceStart();
 			})
 			.catch((error) => {
-				logger.warn('Customer display service failed to start', { context: { error } });
+				logger.warn('Customer display service failed to start', {
+					context: { error: getErrorMessage(error) },
+				});
 			});
 
 		return () => {

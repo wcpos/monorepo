@@ -7,6 +7,7 @@ import type { DisplayRegistryRow, IncomingSignal, SignalingClient } from './sign
 
 const mockLoggerWarn = jest.fn();
 jest.mock('@wcpos/utils/logger', () => ({
+	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 	getLogger: () => ({ warn: (...args: unknown[]) => mockLoggerWarn(...args) }),
 }));
 

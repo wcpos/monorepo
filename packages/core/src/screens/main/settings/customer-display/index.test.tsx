@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom';
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { CustomerDisplaySettings } from './index';
 
@@ -43,6 +43,8 @@ const mockCustomerDisplayService = {
 	refreshDisplays,
 	subscribe,
 };
+let customerDisplayService: typeof mockCustomerDisplayService | null = mockCustomerDisplayService;
+const mockToastShow = jest.fn();
 const mockClipboardWriteText = jest.fn().mockResolvedValue(undefined);
 const mockOpenExternalURL = jest.fn().mockResolvedValue(undefined);
 
@@ -77,10 +79,11 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
 		children,
+		disabled,
 		onPress,
 		testID,
-	}: React.PropsWithChildren<{ onPress?: () => void; testID?: string }>) => (
-		<button type="button" data-testid={testID} onClick={onPress}>
+	}: React.PropsWithChildren<{ disabled?: boolean; onPress?: () => void; testID?: string }>) => (
+		<button type="button" data-testid={testID} disabled={disabled} onClick={onPress}>
 			{children}
 		</button>
 	),
@@ -122,8 +125,11 @@ jest.mock('../../../../contexts/translations', () => ({
 			)
 			.createTestT(),
 }));
+jest.mock('@wcpos/components/toast', () => ({
+	Toast: { show: (...args: unknown[]) => mockToastShow(...args) },
+}));
 jest.mock('../../../../services/customer-display', () => ({
-	getCustomerDisplayService: () => mockCustomerDisplayService,
+	getCustomerDisplayService: () => customerDisplayService,
 	isSupportedDisplayAdvertisement: (
 		display: { contract?: unknown; signaling?: unknown } | undefined
 	) =>
@@ -174,6 +180,8 @@ describe('CustomerDisplaySettings', () => {
 		mockPlatform.OS = 'web';
 		store = {};
 		delete site.wcpos_pro_version;
+		customerDisplayService = mockCustomerDisplayService;
+		mockToastShow.mockClear();
 	});
 	afterEach(() => jest.restoreAllMocks());
 
@@ -243,6 +251,35 @@ describe('CustomerDisplaySettings', () => {
 				'Forget Counter screen? It will need to be paired again before it can show this device.'
 			)
 		).toBeInTheDocument();
+	});
+
+	it('shows the failure when a pairing code cannot be minted', async () => {
+		store = { display: { contract: 1, signaling: '/wcpos/v2/display' } };
+		mintPairingCode.mockRejectedValueOnce(new Error('rest_forbidden'));
+		render(<CustomerDisplaySettings />);
+
+		fireEvent.click(screen.getByTestId('customer-display-pair-button'));
+
+		await waitFor(() =>
+			expect(mockToastShow).toHaveBeenCalledWith(
+				expect.objectContaining({
+					type: 'error',
+					title: 'Could not generate a pairing code',
+					description: 'rest_forbidden',
+				})
+			)
+		);
+	});
+
+	it('explains the disabled button when the display service is not running', () => {
+		store = { display: { contract: 1, signaling: '/wcpos/v2/display' } };
+		customerDisplayService = null;
+		render(<CustomerDisplaySettings />);
+
+		expect(screen.getByTestId('customer-display-pair-button')).toBeDisabled();
+		expect(screen.getByTestId('customer-display-service-unavailable')).toHaveTextContent(
+			'The customer display service is not running on this device.'
+		);
 	});
 
 	it('copies the display URL on web and hides the copy action on native', () => {
