@@ -804,6 +804,7 @@
 	"settings.customer_display.second_screen": "Second screen",
 	"settings.customer_display.second_screen_description": "Open the customer display on this computer’s second screen.",
 	"settings.customer_display.title": "Customer Display",
+	"settings.customer_display.update_pro": "Customer displays need a newer version of WCPOS Pro. Update the Pro plugin in WordPress.",
 	"settings.barcode_sound_failure": "Failure sound",
 	"settings.barcode_sound_haptic": "Failure vibration",
 	"settings.barcode_sound_preview_failure": "Preview failure sound",

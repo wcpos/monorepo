@@ -46,7 +46,7 @@ const mockCustomerDisplayService = {
 const mockClipboardWriteText = jest.fn().mockResolvedValue(undefined);
 
 let store: { display?: { contract: number; signaling: string } } = {};
-const site = {
+const site: { url: string; use_rest_route_param: boolean; wcpos_pro_version?: string } = {
 	url: 'https://example.com/shop',
 	use_rest_route_param: true,
 };
@@ -169,6 +169,7 @@ describe('CustomerDisplaySettings', () => {
 		});
 		mockPlatform.OS = 'web';
 		store = {};
+		delete site.wcpos_pro_version;
 	});
 	afterEach(() => jest.restoreAllMocks());
 
@@ -180,6 +181,21 @@ describe('CustomerDisplaySettings', () => {
 		expect(screen.getByTestId('customer-display-docs-link')).toBeInTheDocument();
 		expect(screen.queryByTestId('customer-display-pair-button')).not.toBeInTheDocument();
 		expect(screen.queryByTestId('customer-display-list')).not.toBeInTheDocument();
+	});
+
+	it('asks for a Pro update when Pro is installed but does not advertise displays', () => {
+		site.wcpos_pro_version = '1.10.7';
+		render(<CustomerDisplaySettings />);
+
+		expect(screen.getByTestId('customer-display-not-advertised')).toBeInTheDocument();
+		expect(
+			screen.getByText(
+				'Customer displays need a newer version of WCPOS Pro. Update the Pro plugin in WordPress.'
+			)
+		).toBeInTheDocument();
+		expect(screen.queryByText('Customer displays are a Pro feature.')).not.toBeInTheDocument();
+		expect(screen.getByTestId('customer-display-docs-link')).toBeInTheDocument();
+		expect(screen.queryByTestId('customer-display-pair-button')).not.toBeInTheDocument();
 	});
 
 	it.each([
