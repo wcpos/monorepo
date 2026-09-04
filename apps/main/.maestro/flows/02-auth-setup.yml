@@ -154,6 +154,14 @@ env:
       # attempt so the retry erases and retypes. The asserted text IS the
       # referent (the exact string this loop just typed), not localized UI
       # copy — the selector policy's composite-string carve-out.
+      # Either surface, not a one-shot look: the alert can surface seconds after
+      # the last keystroke (the consent step below documents the same lag), and
+      # a branch taken just before it would assert under the alert. Optional:
+      # a miss here is judged by the assert/branch below, not by this wait.
+      - extendedWaitUntil:
+          visible: '${STORE_URL.replace(/\./g, "\\.")}|Continue'
+          timeout: 15000
+          optional: true
       # iOS, run 33815585789 (iPad): all 25 characters were typed, and 17 s
       # later the sign-in consent alert was already over the screen — the app
       # had connected and reached the sign-in prompt without the flow tapping
