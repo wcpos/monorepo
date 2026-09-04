@@ -2,6 +2,10 @@ import isEqual from 'lodash/isEqual';
 import set from 'lodash/set';
 
 import initialSettings from './initial-settings.json';
+import {
+	DEFAULT_FILTER_BAR,
+	migrateLegacyQuickFilters,
+} from '../../pos/products/filter-bar/filter-bar-layout';
 
 // Define a type for the keys of initialSettings
 type InitialSettingsKey = keyof typeof initialSettings;
@@ -43,7 +47,12 @@ export const mergeWithInitalValues = async (
 		const initialValue = initial[typedKey];
 
 		if (currentValue === undefined) {
-			await state.set(typedKey, (val) => initial[typedKey]);
+			const legacy = (current as Record<string, unknown>).quickFilters;
+			const value =
+				id === 'pos-products' && key === 'filterBar' && Array.isArray(legacy)
+					? [...DEFAULT_FILTER_BAR, ...migrateLegacyQuickFilters(legacy)]
+					: initial[typedKey];
+			await state.set(typedKey, () => value as UISettingSchema<typeof id>[typeof typedKey]);
 			continue;
 		}
 

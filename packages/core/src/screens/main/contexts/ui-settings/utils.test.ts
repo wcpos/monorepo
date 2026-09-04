@@ -1,5 +1,7 @@
 import { mergeWithInitalValues } from './utils';
 
+jest.mock('uuid', () => ({ v4: () => 'quick-filter-id' }));
+
 describe('mergeWithInitalValues', () => {
 	it('appends missing pos-cart columns for existing settings state', async () => {
 		const currentState = {
@@ -172,7 +174,7 @@ describe('mergeWithInitalValues', () => {
 		});
 	});
 
-	it('seeds quickFilters on a pos-products state written before the setting existed', async () => {
+	it('seeds the default filter bar on a pos-products state written before the setting existed', async () => {
 		const currentState: Record<string, unknown> = { position: 'left', viewMode: 'grid' };
 
 		const state = {
@@ -184,11 +186,43 @@ describe('mergeWithInitalValues', () => {
 
 		await mergeWithInitalValues('pos-products', state as never);
 
-		expect(currentState.quickFilters).toEqual([]);
+		expect(currentState.filterBar).toEqual([
+			{ id: 'stock_status', type: 'pill', show: true },
+			{ id: 'featured', type: 'pill', show: true },
+			{ id: 'on_sale', type: 'pill', show: true },
+			{ id: 'categories', type: 'pill', show: true },
+			{ id: 'tags', type: 'pill', show: true },
+			{ id: 'brands', type: 'pill', show: true },
+		]);
+	});
+
+	it('appends migrated legacy quick filters when filterBar is missing', async () => {
+		const currentState: Record<string, unknown> = {
+			quickFilters: [{ id: 'legacy', label: 'Sale', kind: 'on_sale', value: '' }],
+		};
+		const state = {
+			get: () => currentState,
+			set: jest.fn(async (key: string, updater: (value: unknown) => unknown) => {
+				currentState[key] = updater(currentState[key]);
+			}),
+		};
+
+		await mergeWithInitalValues('pos-products', state as never);
+
+		expect(currentState.filterBar).toEqual(
+			expect.arrayContaining([
+				{
+					id: 'legacy',
+					type: 'quick',
+					label: 'Sale',
+					conditions: [{ field: 'on_sale', value: true }],
+				},
+			])
+		);
 	});
 
 	it('resets a position outside the enum vocabulary to the authored default', async () => {
-		const currentState: Record<string, unknown> = { position: 'top', quickFilters: [] };
+		const currentState: Record<string, unknown> = { position: 'top', filterBar: [] };
 
 		const state = {
 			get: () => currentState,
@@ -203,7 +237,7 @@ describe('mergeWithInitalValues', () => {
 	});
 
 	it('keeps a position the cashier actually chose', async () => {
-		const currentState: Record<string, unknown> = { position: 'right', quickFilters: [] };
+		const currentState: Record<string, unknown> = { position: 'right', filterBar: [] };
 
 		const state = {
 			get: () => currentState,

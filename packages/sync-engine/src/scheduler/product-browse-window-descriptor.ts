@@ -81,6 +81,9 @@ export type ProductBrowseWindowDescriptor = {
 	featured?: boolean;
 	on_sale?: boolean;
 	stock_status?: ProductBrowseWindowStockStatus;
+	min_price?: number;
+	max_price?: number;
+	type?: NonNullable<ProductBrowseDimensions['type']>;
 };
 
 /** Default result-window size — one Woo page's worth of rows, NOT a per-request size. */
@@ -127,7 +130,15 @@ export function normalizeProductBrowseWindowLimit(limit: number | undefined): nu
 /** The filter dimensions, in the one order the grammar admits. */
 export type ProductBrowseWindowFilters = Pick<
 	ProductBrowseWindowDescriptor,
-	'category' | 'tag' | 'brand' | 'featured' | 'on_sale' | 'stock_status'
+	| 'category'
+	| 'tag'
+	| 'brand'
+	| 'featured'
+	| 'on_sale'
+	| 'stock_status'
+	| 'min_price'
+	| 'max_price'
+	| 'type'
 >;
 
 /**
@@ -226,6 +237,9 @@ export function productBrowseWindowFilterPart(filters?: ProductBrowseWindowFilte
 		flagPart('featured'),
 		flagPart('on_sale'),
 		filters.stock_status ? `:stock_status=${filters.stock_status}` : '',
+		filters.min_price !== undefined ? `:min_price=${filters.min_price}` : '',
+		filters.max_price !== undefined ? `:max_price=${filters.max_price}` : '',
+		filters.type ? `:type=${filters.type}` : '',
 	].join('');
 }
 
@@ -261,6 +275,9 @@ export function productBrowseWindowQueryParams(
 		if (descriptor[field] !== undefined) query.set(field, String(descriptor[field]));
 	}
 	if (descriptor.stock_status) query.set('stock_status', descriptor.stock_status);
+	if (descriptor.min_price !== undefined) query.set('min_price', String(descriptor.min_price));
+	if (descriptor.max_price !== undefined) query.set('max_price', String(descriptor.max_price));
+	if (descriptor.type) query.set('type', descriptor.type);
 	return query;
 }
 
@@ -280,7 +297,7 @@ export function productBrowseWindowViewKey(descriptor: ProductBrowseWindowDescri
 }
 
 const QUERY_KEY_PATTERN =
-	/^products:browse-window:limit=(\d+)(?::orderby=([a-z_]+):order=(asc|desc))?(?::category=(\d+(?:,\d+)*))?(?::tag=(\d+(?:,\d+)*))?(?::brand=(\d+(?:,\d+)*))?(?::featured=(0|1))?(?::on_sale=(0|1))?(?::stock_status=(instock|outofstock|onbackorder))?$/;
+	/^products:browse-window:limit=(\d+)(?::orderby=([a-z_]+):order=(asc|desc))?(?::category=(\d+(?:,\d+)*))?(?::tag=(\d+(?:,\d+)*))?(?::brand=(\d+(?:,\d+)*))?(?::featured=(0|1))?(?::on_sale=(0|1))?(?::stock_status=(instock|outofstock|onbackorder))?(?::min_price=(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:e[+-]?\d+)?))?(?::max_price=(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:e[+-]?\d+)?))?(?::type=(simple|variable|grouped|external))?$/;
 
 function parseCanonicalIds(value: string | undefined): number[] | null | undefined {
 	if (value === undefined) return undefined;
@@ -290,6 +307,12 @@ function parseCanonicalIds(value: string | undefined): number[] | null | undefin
 	)
 		? ids
 		: null;
+}
+
+function parseCanonicalNumber(value: string | undefined): number | null | undefined {
+	if (value === undefined) return undefined;
+	const number = Number(value);
+	return Number.isFinite(number) && String(number) === value ? number : null;
 }
 
 /**
@@ -315,6 +338,9 @@ export function parseProductBrowseWindowDescriptor(
 	if (match[2] !== undefined && isDefaultSort(orderby, order)) return null;
 	const [category, tag, brand] = [match[4], match[5], match[6]].map(parseCanonicalIds);
 	if (category === null || tag === null || brand === null) return null;
+	const minPrice = parseCanonicalNumber(match[10]);
+	const maxPrice = parseCanonicalNumber(match[11]);
+	if (minPrice === null || maxPrice === null) return null;
 	return {
 		limit,
 		orderby,
@@ -325,6 +351,9 @@ export function parseProductBrowseWindowDescriptor(
 		...(match[7] ? { featured: match[7] === '1' } : {}),
 		...(match[8] ? { on_sale: match[8] === '1' } : {}),
 		...(match[9] ? { stock_status: match[9] as ProductBrowseWindowStockStatus } : {}),
+		...(minPrice !== undefined ? { min_price: minPrice } : {}),
+		...(maxPrice !== undefined ? { max_price: maxPrice } : {}),
+		...(match[12] ? { type: match[12] as NonNullable<ProductBrowseDimensions['type']> } : {}),
 	};
 }
 

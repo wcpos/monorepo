@@ -97,12 +97,8 @@ jest.mock('./grid', () => ({
 		return <div />;
 	},
 }));
-// POSProducts registers the quick-filter slot entry on import. Its pill button reaches
-// expo-haptics, which ships ESM and is not transformed for this suite; the entry has its own
-// suite, and only its host wiring matters here.
-jest.mock('./quick-filters-bar', () => ({ QuickFiltersBar: () => null }));
-jest.mock('../../components/product/filter-bar', () => ({
-	FilterBar: (props: Record<string, unknown>) => {
+jest.mock('./filter-bar/pos-filter-bar', () => ({
+	POSFilterBar: (props: Record<string, unknown>) => {
 		mockFilterBarProps = props;
 		return null;
 	},

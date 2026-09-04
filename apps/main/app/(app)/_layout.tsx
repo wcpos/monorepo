@@ -211,6 +211,14 @@ function AppStack() {
 												contentStyle: { backgroundColor: 'transparent' },
 											}}
 										/>
+										<Stack.Screen
+											name="(modals)/filter-bar"
+											options={{
+												presentation: 'containedTransparentModal',
+												animation: 'fade',
+												contentStyle: { backgroundColor: 'transparent' },
+											}}
+										/>
 										{/* <Stack.Screen
 							name="(modals)/login"
 							options={{

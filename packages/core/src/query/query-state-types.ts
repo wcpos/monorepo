@@ -20,6 +20,8 @@ export interface FiltersByCollection {
 		on_sale?: boolean;
 		stock_status?: string;
 		status?: string;
+		price?: { min?: number; max?: number };
+		type?: string;
 	};
 	orders: {
 		status?: string;

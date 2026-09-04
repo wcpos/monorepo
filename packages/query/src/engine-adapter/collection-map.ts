@@ -402,6 +402,7 @@ export const collectionMap = {
 				legacy: 'type',
 				kind: 'promoted',
 				enginePath: 'type',
+				wireFace: 'dimension',
 			},
 			stock_quantity: {
 				legacy: 'stock_quantity',
@@ -424,6 +425,7 @@ export const collectionMap = {
 				enginePath: 'price',
 				readEnginePath: 'payload.price',
 				numeric: true,
+				wireFace: 'dimension',
 				notes: 'Promoted price is numeric cents precision; reads preserve the Woo string.',
 				sort: { uiAlias: 'sortable_price', wooOrderby: 'price' },
 			},

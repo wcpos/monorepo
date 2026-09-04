@@ -15,7 +15,7 @@ import type { ControllerProps, FieldValues } from 'react-hook-form';
 type Settings = {
 	viewMode: 'grid' | 'table';
 	position: 'left' | 'right';
-	quickFilters: { id: string; label: string; kind: string; value: string }[];
+	filterBar: { id: string; type: string; show: boolean }[];
 	showOutOfStock: boolean;
 	sortBy: string;
 	sortDirection: 'asc' | 'desc';
@@ -28,7 +28,7 @@ type Settings = {
 const initialSettings: Settings = {
 	viewMode: 'table',
 	position: 'left',
-	quickFilters: [],
+	filterBar: [],
 	showOutOfStock: false,
 	sortBy: 'name',
 	sortDirection: 'asc',
@@ -51,9 +51,11 @@ const initialSettings: Settings = {
 const settings$ = new BehaviorSubject<Settings>(initialSettings);
 const mockUISettings = { $: settings$, get: () => settings$.getValue() };
 const patchSpy = jest.fn();
+const pushSpy = jest.fn();
 
 // uuid ships ESM only; the house pattern is to stub it per suite.
 jest.mock('uuid', () => ({ v4: () => 'quick-filter-id' }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: pushSpy }) }));
 
 jest.mock('@wcpos/components/form', () => {
 	const { Controller, FormProvider } = jest.requireActual('react-hook-form');
@@ -331,28 +333,8 @@ it('persists a Panel Position toggle', async () => {
 	await settle();
 });
 
-it('persists an added quick filter and its removal', async () => {
+it('opens the filter-bar customisation modal', () => {
 	render(<UISettingsForm />);
-
-	fireEvent.click(screen.getByTestId('quick-filter-kind-on_sale'));
-	fireEvent.change(screen.getByTestId('quick-filter-label'), { target: { value: 'On sale' } });
-	fireEvent.click(screen.getByTestId('quick-filter-add'));
-	act(() => {
-		jest.advanceTimersByTime(1000);
-	});
-
-	expect(patchSpy).toHaveBeenCalledWith({
-		quickFilters: [expect.objectContaining({ kind: 'on_sale', label: 'On sale', value: '' })],
-	});
-	await settle();
-
-	// The id is minted on add, so the remove control is addressed by its testID prefix.
-	patchSpy.mockClear();
-	fireEvent.click(screen.getByTestId(/^quick-filter-remove-/));
-	act(() => {
-		jest.advanceTimersByTime(1000);
-	});
-
-	expect(patchSpy).toHaveBeenCalledWith({ quickFilters: [] });
-	await settle();
+	fireEvent.click(screen.getByTestId('customize-filter-bar'));
+	expect(pushSpy).toHaveBeenCalledWith('/(app)/(modals)/filter-bar');
 });

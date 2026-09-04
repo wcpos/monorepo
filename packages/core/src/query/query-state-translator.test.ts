@@ -85,7 +85,92 @@ describe('query-state translator', () => {
 			'on_sale',
 			'stock_status',
 			'status',
+			'price',
+			'type',
 		]);
+	});
+
+	it.each([
+		[{ min: 10 }, { price: { $gte: 10 } }],
+		[{ max: 20 }, { price: { $lte: 20 } }],
+		[{ min: 10, max: 20 }, { price: { $gte: 10, $lte: 20 } }],
+	] as const)(
+		'compiles the product price range %j into a promoted prefilter',
+		(price, prefilter) => {
+			const compiled = compileQuery(
+				'products',
+				{
+					search: '',
+					filters: { categories: [], tags: [], brands: [], price },
+					sort: { field: 'id', direction: 'asc' },
+					limit: 25,
+				} satisfies QueryStateOf<'products'>,
+				{ id: 'products' }
+			);
+
+			expect(compiled.read.prefilter).toEqual(prefilter);
+		}
+	);
+
+	it('matches product price and type filters locally and carries them into demand', () => {
+		const compiled = compileQuery(
+			'products',
+			{
+				search: '',
+				filters: {
+					categories: [],
+					tags: [],
+					brands: [],
+					price: { min: 10, max: 20 },
+					type: 'variable',
+				},
+				sort: { field: 'id', direction: 'asc' },
+				limit: 25,
+			} satisfies QueryStateOf<'products'>,
+			{ id: 'products' }
+		);
+
+		expect(
+			compiled.read.residual({ uuid: '15', price: 15, type: 'variable', payload: { price: '15' } })
+		).toBe(true);
+		expect(
+			compiled.read.residual({ uuid: '9', price: 9, type: 'variable', payload: { price: '9' } })
+		).toBe(false);
+		expect(
+			compiled.read.residual({ uuid: 'type', price: 15, type: 'simple', payload: { price: '15' } })
+		).toBe(false);
+		expect(compiled.demand[0]).toMatchObject({
+			min_price: 10,
+			max_price: 20,
+			type: 'variable',
+			priority: 700,
+		});
+		expect(compiled.represented).toBe(true);
+	});
+
+	it('ignores non-finite price bounds and rejects an unsupported product type on demand', () => {
+		const compiled = compileQuery(
+			'products',
+			{
+				search: '',
+				filters: {
+					categories: [],
+					tags: [],
+					brands: [],
+					price: { min: Number.NaN, max: Number.POSITIVE_INFINITY },
+					type: 'bundle',
+				},
+				sort: { field: 'id', direction: 'asc' },
+				limit: 25,
+			} satisfies QueryStateOf<'products'>,
+			{ id: 'products' }
+		);
+
+		expect(compiled.read.prefilter).toEqual({ type: 'bundle' });
+		expect(compiled.demand[0]).not.toHaveProperty('min_price');
+		expect(compiled.demand[0]).not.toHaveProperty('max_price');
+		expect(compiled.demand[0]).not.toHaveProperty('type');
+		expect(compiled.represented).toBe(false);
 	});
 
 	it('compiles every products filter into equivalent wire and read faces', () => {
