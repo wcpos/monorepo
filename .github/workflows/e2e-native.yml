@@ -1595,6 +1595,7 @@ jobs:
           ANDROID_RESULT: ${{ needs.android.result }}
           IOS_RESULT: ${{ needs.ios.result }}
           SHA: ${{ github.sha }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -1606,13 +1607,20 @@ jobs:
             exit 0
           fi
 
-          # A rerun of an OLDER push keeps its original ref and SHA, so it passes
-          # this job's guard, and the run_attempt > 1 concurrency group lets it
-          # finish after newer verification. Only the current tip of main may
-          # move the ledger; an old green must not close the issue for a red tip.
+          # Device jobs take ~45 min, so main routinely moves before this job
+          # runs (run 33854536075: iPad red on 4ab427a, ledger ran with the tip
+          # at d4f21c9 and recorded nothing). A red on ANY first-attempt main
+          # run is a real verdict on a real commit and is recorded, naming its
+          # SHA. Only two things are refused: an old GREEN closing the issue for
+          # a red tip (green closes only at the tip), and a RERUN of an older
+          # push (run_attempt > 1 keeps the original SHA and gets its own
+          # concurrency group, so it can finish after newer verification)
+          # re-opening an issue after recovery.
           main_sha=$(gh api "repos/$GH_REPO/commits/main" --jq .sha)
-          if [ "$main_sha" != "$SHA" ]; then
-            echo "Ledger unchanged: $short_sha is not the tip of main (${main_sha:0:7}); stale rerun"
+          at_tip=true
+          [ "$main_sha" = "$SHA" ] || at_tip=false
+          if [ "$at_tip" = false ] && [ "${RUN_ATTEMPT:-1}" != "1" ]; then
+            echo "Ledger unchanged: $short_sha is not the tip of main (${main_sha:0:7}) and this is attempt $RUN_ATTEMPT; stale rerun"
             exit 0
           fi
 
@@ -1629,7 +1637,9 @@ jobs:
               echo "Ledger issue $issue refreshed for $short_sha"
             fi
           elif [ "$GATE_RESULT" = "success" ] && [ "$ANDROID_RESULT" = "success" ] && [ "$IOS_RESULT" = "success" ]; then
-            if [ -n "$issue" ]; then
+            if [ "$at_tip" = false ]; then
+              echo "Ledger unchanged: green at $short_sha but the tip of main is ${main_sha:0:7}; only the tip closes the issue"
+            elif [ -n "$issue" ]; then
               gh issue comment "$issue" --body "green again at $SHA ($RUN_URL)" >/dev/null
               gh issue close "$issue" >/dev/null
               echo "Ledger issue $issue closed at $short_sha"
