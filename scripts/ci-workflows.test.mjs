@@ -317,11 +317,18 @@ test('the main native ledger tracks only completed device verification', () => {
 		`#!/usr/bin/env bash
 printf '%s\n' "$*" >> "$GH_TRACE"
 if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
+if [ "$1" = "api" ]; then printf '%s' "$GH_MAIN_SHA"; fi
 `,
 		{ mode: 0o755 }
 	);
 
-	const run = ({ gate, android = 'success', ios = 'success', issues }) => {
+	const run = ({
+		gate,
+		android = 'success',
+		ios = 'success',
+		issues,
+		mainSha = '0123456789abcdef',
+	}) => {
 		writeFileSync(trace, '');
 		const result = runShell(ledger.steps[0].run, {
 			env: {
@@ -333,6 +340,8 @@ if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
 				IOS_RESULT: ios,
 				SHA: '0123456789abcdef',
 				RUN_URL: 'https://github.test/actions/runs/2',
+				GH_MAIN_SHA: mainSha,
+				GH_REPO: 'wcpos/monorepo',
 			},
 		});
 		return { result, trace: readFileSync(trace, 'utf8') };
@@ -341,6 +350,7 @@ if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
 	try {
 		const created = run({ gate: 'failure', android: 'failure', issues: '[]' });
 		assert.equal(created.result.status, 0, created.result.stdout + created.result.stderr);
+		assert.match(created.trace, /api repos\/wcpos\/monorepo\/commits\/main/);
 		assert.match(created.trace, /label create ci:main-native-red --color B60205/);
 		assert.match(created.trace, /--description Main native \(Maestro\) verification is red/);
 		assert.match(created.trace, /issue create --title main native E2E is red at 0123456/);
@@ -368,6 +378,17 @@ if [ "$1 $2" = "issue list" ]; then printf '%s' "$GH_ISSUES"; fi
 		assert.equal(skipped.result.status, 0, skipped.result.stdout + skipped.result.stderr);
 		assert.doesNotMatch(skipped.trace, /issue (create|comment|close)|label create/);
 		assert.match(skipped.result.stdout, /devices did not both succeed/i);
+
+		// A rerun of an older push (its SHA is no longer main's tip) must never
+		// move the ledger: not close it on an old green, not reopen it on an old red.
+		for (const gate of ['success', 'failure']) {
+			const stale = run({ gate, issues: '[{"number":42}]', mainSha: 'fedcba9876543210' });
+			assert.equal(stale.result.status, 0, stale.result.stdout + stale.result.stderr);
+			assert.doesNotMatch(stale.trace, /issue (create|comment|close)|label create/);
+			assert.match(stale.result.stdout, /stale rerun/i);
+		}
+		const staleRed = run({ gate: 'failure', issues: '[]', mainSha: 'fedcba9876543210' });
+		assert.doesNotMatch(staleRed.trace, /issue create/);
 
 		for (const cancelled of ['gate', 'android', 'ios']) {
 			const superseded = run({

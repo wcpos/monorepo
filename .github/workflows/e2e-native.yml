@@ -1606,6 +1606,16 @@ jobs:
             exit 0
           fi
 
+          # A rerun of an OLDER push keeps its original ref and SHA, so it passes
+          # this job's guard, and the run_attempt > 1 concurrency group lets it
+          # finish after newer verification. Only the current tip of main may
+          # move the ledger; an old green must not close the issue for a red tip.
+          main_sha=$(gh api "repos/$GH_REPO/commits/main" --jq .sha)
+          if [ "$main_sha" != "$SHA" ]; then
+            echo "Ledger unchanged: $short_sha is not the tip of main (${main_sha:0:7}); stale rerun"
+            exit 0
+          fi
+
           issues=$(gh issue list --label "$label" --state open --json number --limit 1)
           issue=$(jq -r '.[0].number // empty' <<<"$issues")
           facts="Native verification failed for $SHA ($RUN_URL); android: $ANDROID_RESULT, ios: $IOS_RESULT."
