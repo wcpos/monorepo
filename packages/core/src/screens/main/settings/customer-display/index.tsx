@@ -5,7 +5,6 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 
-import { OpenSecondScreen } from './open-second-screen';
 import { PairedDisplays } from './paired-displays';
 import { PairingCode } from './pairing-code';
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -79,7 +78,6 @@ function AdvertisedSettings({ url }: { url: string }) {
 				observedAt={observedAt}
 				onForget={(id) => service?.forget(id) ?? Promise.resolve()}
 			/>
-			<OpenSecondScreen url={url} />
 		</VStack>
 	);
 }

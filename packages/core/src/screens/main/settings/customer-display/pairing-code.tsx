@@ -4,8 +4,10 @@ import { Platform, View } from 'react-native';
 import { formatDistance } from 'date-fns';
 
 import { Button, ButtonText } from '@wcpos/components/button';
+import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { SettingsRow } from '../components/settings-row';
 import { SettingsSection } from '../components/settings-section';
@@ -71,9 +73,14 @@ export function PairingCode({
 						{url}
 					</Text>
 					{Platform.OS === 'web' ? (
-						<Button variant="outline" size="sm" onPress={copyUrl}>
-							<ButtonText>{t('settings.customer_display.copy_url')}</ButtonText>
-						</Button>
+						<HStack className="gap-2">
+							<Button variant="outline" size="sm" onPress={copyUrl}>
+								<ButtonText>{t('settings.customer_display.copy_url')}</ButtonText>
+							</Button>
+							<Button variant="outline" size="sm" onPress={() => void openExternalURL(url)}>
+								<ButtonText>{t('settings.customer_display.open_in_browser')}</ButtonText>
+							</Button>
+						</HStack>
 					) : null}
 				</VStack>
 			</SettingsRow>
