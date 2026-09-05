@@ -101,6 +101,10 @@ export const ReceiptStoreAddressSchema = z.object({
 export const ReceiptStoreMetaSchema = z.object({
 	id: z.number().int().describe('Store ID'),
 	name: z.string().describe('Store display name'),
+	price_decimals: z
+		.number()
+		.optional()
+		.describe('Store money precision from wc_get_price_decimals()'),
 	address: ReceiptStoreAddressSchema.optional().describe(
 		'Structured address parts. Use these to compose custom / country-specific layouts; address_lines[] is the pre-formatted default.'
 	),
@@ -180,6 +184,7 @@ export const ReceiptTaxIdSchema = z.object({
 export const ReceiptCustomerSchema = z.object({
 	id: z.number().int().nullable().describe('Customer ID (null/0 = guest)'),
 	name: z.string().describe('Customer display name'),
+	first_name: z.string().optional().describe('Billing first name, empty when unavailable'),
 	billing_address: z.record(z.string(), z.string()).optional().describe('Billing address fields'),
 	shipping_address: z.record(z.string(), z.string()).optional().describe('Shipping address fields'),
 	tax_ids: z

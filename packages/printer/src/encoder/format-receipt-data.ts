@@ -134,7 +134,7 @@ export function formatReceiptData(
 	};
 
 	const fmt = (value: number): string =>
-		formatMoney(value, currency, locale, undefined, options.isSymbolEncodable);
+		formatMoney(value, currency, locale, data.store.price_decimals, options.isSymbolEncodable);
 	const perUnit = (total: number | undefined, qty: number): number | undefined => {
 		if (total == null || qty === 0) return undefined;
 		return total / qty;

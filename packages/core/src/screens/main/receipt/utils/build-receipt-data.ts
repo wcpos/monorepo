@@ -29,6 +29,7 @@ interface ReceiptOrder {
 
 interface ReceiptStore {
 	name: string;
+	price_decimals?: number;
 	address: string;
 	phone: string;
 	email: string;
@@ -44,6 +45,7 @@ interface ReceiptCustomer {
 	 */
 	id: number | null;
 	name: string;
+	first_name: string;
 	email: string;
 	phone: string;
 	billing_address: string;
@@ -819,6 +821,7 @@ export function buildReceiptData(
 		},
 		store: {
 			name: store.name || '',
+			price_decimals: store.wc_price_decimals,
 			address: formatAddress({
 				address_1: store.store_address,
 				address_2: store.store_address_2,
@@ -852,6 +855,7 @@ export function buildReceiptData(
 			return {
 				id: customerId > 0 ? customerId : null,
 				name: [billing.first_name, billing.last_name].filter(Boolean).join(' '),
+				first_name: billing.first_name || '',
 				email: billing.email || '',
 				phone: billing.phone || '',
 				billing_address: formatAddress(billing),
