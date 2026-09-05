@@ -92,3 +92,4 @@ export { buildPrintableReceiptHtml, normalizeReceiptPaperWidth } from './print-h
 export type { ReceiptPaperWidth } from './print-html';
 export { DEFAULT_THERMAL_TEMPLATE } from './encoder/default-thermal-template';
 export { printerLogger } from './logger';
+export { queryUsbPrinterModel } from './discovery/usb-model-query.electron';
