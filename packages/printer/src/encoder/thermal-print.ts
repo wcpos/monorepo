@@ -17,6 +17,8 @@ import { printerLogger } from '../logger';
 import { isEscposTextEncodable } from './escpos-text';
 import { formatReceiptData } from './format-receipt-data';
 import { mapReceiptData } from './map-receipt-data';
+import { rasterizeThermalImage } from './thermal-raster';
+import { normalizeThermalImageSize } from './thermal-raster-shared';
 
 import type { MarkupPrintJob } from '../types';
 
@@ -217,19 +219,7 @@ export function maxDotsForPaperWidth(paperWidth: '58mm' | '80mm' | string): numb
 	return 576;
 }
 
-export function normalizeThermalImageSize(input: {
-	width: number;
-	height: number;
-	maxWidth: number;
-}): { width: number; height: number } {
-	const scale = input.width > input.maxWidth ? input.maxWidth / input.width : 1;
-	const width = Math.max(8, Math.floor(input.width * scale));
-	const height = Math.max(8, Math.floor(input.height * scale));
-	return {
-		width: Math.max(8, width - (width % 8)),
-		height: height + ((8 - (height % 8)) % 8),
-	};
-}
+export { normalizeThermalImageSize } from './thermal-raster-shared';
 
 export async function loadThermalLogoAsset(input: {
 	src: string;
@@ -239,32 +229,7 @@ export async function loadThermalLogoAsset(input: {
 }): Promise<ThermalRasterImage | undefined> {
 	const loadSrc = input.loadSrc ?? input.src;
 	if (!isSupportedThermalLogoSrc(loadSrc)) return undefined;
-	try {
-		const image = await loadHtmlImage(loadSrc);
-		const naturalWidth = image.naturalWidth || image.width;
-		const naturalHeight = image.naturalHeight || image.height;
-		if (!naturalWidth || !naturalHeight) return undefined;
-
-		const desiredWidth = Math.min(input.requestedWidth || naturalWidth, input.maxWidth);
-		const size = normalizeThermalImageSize({
-			width: desiredWidth,
-			height: naturalHeight * (desiredWidth / naturalWidth),
-			maxWidth: input.maxWidth,
-		});
-
-		const imageData = drawImageToImageData(image, size);
-		if (!imageData) return undefined;
-
-		return {
-			image: imageData,
-			width: size.width,
-			height: size.height,
-			algorithm: 'atkinson',
-			threshold: 128,
-		};
-	} catch {
-		return undefined;
-	}
+	return rasterizeThermalImage({ ...input, loadSrc });
 }
 
 export async function renderThermalBarcodeAsset(input: {

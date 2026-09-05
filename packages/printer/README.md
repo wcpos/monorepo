@@ -154,7 +154,8 @@ Append, newest last. One entry = date · device/lane · signature → cause → 
 - **2026-09-04 · Android, raw 9100 · receipt.** Barcode printed without its number: the encoder
   was called with a bare height and `@point-of-sale/receipt-printer-encoder` defaults HRI text off;
   `text: true` now (G4). Logo missing: the image raster needs a browser canvas, which native has
-  none of — logged now, native raster still open (G8).
+  none of — logged now, and native rasterises through pure-JS PNG/JPEG decoders instead (G8,
+  `thermal-raster.native.ts`; verify on paper next session).
 - **2026-09-04 · Android · Bluetooth, TM-m30III.** Pairing needs the printer's Bluetooth Status
   Sheet (feed-button sequence) to enter pairing mode; the SDK then prints over Bluetooth Classic
   (verified on paper). Two gotchas: the `BT:` row only appears while the printer is discoverable
