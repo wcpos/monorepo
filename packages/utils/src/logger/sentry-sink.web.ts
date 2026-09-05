@@ -95,10 +95,12 @@ export function messageTemplate(message: string): string {
  * method + endpoint template so a 503 on `/products` and one on `/orders` are
  * two issues, whatever the code.
  */
-function fingerprintFor(message: string, code: string, context?: Record<string, unknown>) {
-	const endpoint = context?.endpoint;
+function fingerprintFor(message: string, code: string, context: unknown) {
+	const fields =
+		context !== null && typeof context === 'object' ? (context as Record<string, unknown>) : {};
+	const endpoint = fields.endpoint;
 	if (typeof endpoint === 'string' && endpoint.length > 0) {
-		const method = typeof context?.method === 'string' ? context.method : '';
+		const method = typeof fields.method === 'string' ? fields.method : '';
 		return [code, method, messageTemplate(endpoint)];
 	}
 	return code.endsWith('999') ? [code, messageTemplate(message)] : [code];
