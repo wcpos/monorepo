@@ -42,39 +42,47 @@ const usb: DiscoveredPrinter = {
 	vendor: 'epson',
 	nativeInterfaceType: 'USB',
 };
-async function scan(printers: DiscoveredPrinter[]) {
+let publishPrinters: (printers: DiscoveredPrinter[]) => void;
+async function scan(printers: DiscoveredPrinter[], platform: 'electron' | 'web' = 'electron') {
 	function Harness() {
 		const [found, setFound] = React.useState<DiscoveredPrinter[]>([]);
+		// Expose discovery updates to the test outside rendering.
+		React.useEffect(() => {
+			publishPrinters = setFound;
+		}, []);
 		const [error, setError] = React.useState<DiscoveryError | null>(null);
 		// Test harness: expose the hook result to the test body.
 		// eslint-disable-next-line react-compiler/react-compiler
-		flow = usePrinterSetupFlow({
-			discovery: {
-				printers: found,
-				isScanning: false,
-				error,
-				connectUsbDevice: async () => {
-					const devices = await enumerateUsb();
-					setFound((prev) => [...prev, ...devices]);
-				},
-				connectSerialDevice: async () => {
-					try {
-						const devices = await enumerateSerial();
+		flow = usePrinterSetupFlow(
+			{
+				discovery: {
+					printers: found,
+					isScanning: false,
+					error,
+					connectUsbDevice: async () => {
+						const devices = await enumerateUsb();
 						setFound((prev) => [...prev, ...devices]);
-					} catch {
-						setError({ code: 'discovery-failed' });
-					}
+					},
+					connectSerialDevice: async () => {
+						try {
+							const devices = await enumerateSerial();
+							setFound((prev) => [...prev, ...devices]);
+						} catch {
+							setError({ code: 'discovery-failed' });
+						}
+					},
+					stopScan,
+					startScan: async () => {
+						setFound((prev) => [...prev, ...printers]);
+					},
 				},
-				stopScan,
-				startScan: async () => {
-					setFound((prev) => [...prev, ...printers]);
-				},
+				printerService,
+				persist,
+				t: (key) => key,
+				printerCount: 0,
 			},
-			printerService,
-			persist,
-			t: (key) => key,
-			printerCount: 0,
-		});
+			{ platform }
+		);
 		return null;
 	}
 	await act(async () => {
@@ -228,4 +236,50 @@ it.each(['usb', 'serial'])('keeps other results when %s enumeration fails', asyn
 	expect(flow.state.phase).toBe('results');
 	expect(flow.state.found).toHaveLength(2);
 	expect(printerService.testPrint).not.toHaveBeenCalled();
+});
+
+it('only scans the network on web without opening device pickers', async () => {
+	await scan([], 'web');
+	expect(flow.state.phase).toBe('results');
+	expect(enumerateUsb).not.toHaveBeenCalled();
+	expect(enumerateSerial).not.toHaveBeenCalled();
+});
+it('adopts a new web USB row after intervening discovery updates and tests it once', async () => {
+	await scan([], 'web');
+	await act(async () => flow.startUsbPicker());
+	// A sweep update before the chooser resolves must not consume the pending picker.
+	act(() => publishPrinters([{ ...epson, identity: undefined }]));
+	expect(printerService.testPrint).not.toHaveBeenCalled();
+	const device = { ...usb, address: 'webusb:device', vendor: 'generic' as const };
+	await act(async () => publishPrinters([device]));
+	expect(flow.state.phase).toBe('asking');
+	expect(classifyPrinter(device, 'web')).toBe('ready');
+	expect(printerService.testPrint).toHaveBeenCalledTimes(1);
+	expect(printerService.testPrint).toHaveBeenCalledWith(
+		expect.objectContaining({ address: 'webusb:device', connectionType: 'usb', vendor: 'epson' }),
+		{ openDrawer: false }
+	);
+});
+it.each([9100, 8123])('resolves an Epson web draft port from %s', async (port) => {
+	await scan(
+		[
+			{
+				...epson,
+				identity: {
+					...epson.identity!,
+					lane: {
+						port,
+						protocol: 'epos-print',
+						encrypted: false,
+					},
+				},
+			},
+		],
+		'web'
+	);
+	expect(flow.state.profileDraft).toMatchObject({
+		vendor: 'epson',
+		language: 'esc-pos',
+		port: port === 9100 ? 8008 : 8123,
+	});
 });

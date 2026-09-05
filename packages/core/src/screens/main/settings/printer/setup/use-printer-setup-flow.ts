@@ -14,6 +14,7 @@ import { hasTargetKind, isUsbLikeDevice } from '../dialog/connection/discovered-
 import { isWindowsPlatform } from '../dialog/connection/is-windows';
 import { buildPrinterProfileFields } from '../profile-config';
 import { DEFAULT_FORM_VALUES, type PrinterFormValues } from '../schema';
+import { deriveWebVendorDefaults, resolveWebPort } from '../web-network-defaults';
 
 import type { TestPrintFailure } from '../dialog/use-printer-dialog-form';
 
@@ -31,11 +32,15 @@ function candidate(printer: DiscoveredPrinter): SetupCandidate {
 				: printer.connectionType,
 	};
 }
-export function classifyPrinter(printer: DiscoveredPrinter) {
+export function classifyPrinter(
+	printer: DiscoveredPrinter,
+	platform: 'electron' | 'web' = 'electron'
+) {
+	if (platform === 'web' && /^web(usb|bluetooth):/.test(printer.address)) return 'ready';
 	if (isUsbLikeDevice(printer) || hasTargetKind(printer, 'serial')) return 'ready';
 	if (printer.identity?.notReceiptPrinter) return 'notprinter';
 	const lane = printer.identity?.lane;
-	if (lane?.protocol === 'raw') return 'unsure';
+	if (platform === 'electron' && lane?.protocol === 'raw') return 'unsure';
 	return lane && canPrintLane(lane.protocol, createIdentifyProbes()) ? 'ready' : 'unknown';
 }
 interface SetupState {
@@ -66,13 +71,11 @@ interface SetupArgs {
 	t: (key: string) => string;
 	printerCount?: number;
 }
-export function usePrinterSetupFlow({
-	discovery,
-	printerService,
-	persist,
-	t,
-	printerCount = 0,
-}: SetupArgs) {
+export function usePrinterSetupFlow(
+	{ discovery, printerService, persist, t, printerCount = 0 }: SetupArgs,
+	{ platform = 'electron' }: { platform?: 'electron' | 'web' } = {}
+) {
+	const web = platform === 'web';
 	const [state, setState] = React.useState<SetupState>({
 		phase: 'scanning',
 		found: [],
@@ -80,12 +83,14 @@ export function usePrinterSetupFlow({
 		testPages: 0,
 		profileDraft: {
 			...DEFAULT_FORM_VALUES,
+			...(web ? { vendor: 'epson' as const, ...deriveWebVendorDefaults('epson') } : {}),
 			name: t('settings.receipt_printer'),
 			isDefault: printerCount === 0,
 		},
 	});
 	const current = React.useRef(state);
 	const active = React.useRef(true);
+	const pendingPicker = React.useRef<DiscoveredPrinter[] | null>(null);
 	const [scanComplete, setScanComplete] = React.useState(false);
 	function update(patch: Partial<SetupState>) {
 		current.current = { ...current.current, ...patch };
@@ -106,14 +111,16 @@ export function usePrinterSetupFlow({
 	function updateDraft(patch: Partial<PrinterFormValues>) {
 		const profileDraft = { ...current.current.profileDraft, ...patch };
 		if (patch.vendor) profileDraft.language = patch.vendor === 'star' ? 'star-line' : 'esc-pos';
+		if (web && patch.vendor) profileDraft.language = deriveWebVendorDefaults(patch.vendor).language;
 		update({ profileDraft, columns: profileDraft.columns });
 	}
 	function select(selected: DiscoveredPrinter, keepDraft = false) {
-		const vendor =
+		let vendor =
 			selected.identity?.vendor ??
 			selected.vendor ??
 			(keepDraft ? current.current.profileDraft.vendor : undefined) ??
 			'generic';
+		if (web) vendor = vendor === 'star' ? 'star' : 'epson';
 		const lane = selected.identity?.lane;
 		// A lane this platform cannot print (e.g. WebPRNT on Electron) must not become the raw port.
 		const lanePort =
@@ -129,7 +136,9 @@ export function usePrinterSetupFlow({
 			connectionType: selected.connectionType,
 			nativeInterfaceType: selected.nativeInterfaceType,
 			vendor,
-			port: lanePort ?? selected.port ?? base.port ?? 9100,
+			port: web
+				? resolveWebPort(vendor, lane?.port ?? selected.port)
+				: (lanePort ?? selected.port ?? base.port ?? 9100),
 			columns:
 				selected.connectionType === 'network'
 					? (selected.identity?.columns ?? base.columns ?? 42)
@@ -161,13 +170,14 @@ export function usePrinterSetupFlow({
 	}
 	async function start() {
 		active.current = true;
+		pendingPicker.current = null;
 		setScanComplete(false);
 		update({ phase: 'scanning', found: [], selected: undefined, failure: undefined });
 		const scans = await Promise.allSettled([
 			discovery.startScan(),
-			discovery.connectUsbDevice?.(),
+			!web ? discovery.connectUsbDevice?.() : undefined,
 			// Windows installed queues already come from usb-discovery.
-			!isWindowsPlatform() ? discovery.connectSerialDevice?.() : undefined,
+			!web && !isWindowsPlatform() ? discovery.connectSerialDevice?.() : undefined,
 		]);
 		for (const result of scans) {
 			if (result.status === 'rejected') {
@@ -187,7 +197,10 @@ export function usePrinterSetupFlow({
 				discovery.printers
 					.filter(
 						(p) =>
-							p.connectionType === 'network' || isUsbLikeDevice(p) || hasTargetKind(p, 'serial')
+							p.connectionType === 'network' ||
+							isUsbLikeDevice(p) ||
+							hasTargetKind(p, 'serial') ||
+							(web && /^webbluetooth:/.test(p.address))
 					)
 					.map((p) => [p.address, candidate(p)])
 			).values(),
@@ -195,8 +208,10 @@ export function usePrinterSetupFlow({
 		// A printer tapped while the Wi-Fi scan was still running is already printing; only refresh the list.
 		if (current.current.phase !== 'scanning') return update({ found });
 		update({ phase: 'results', found });
-		const printable = found.filter((p) => ['ready', 'unsure'].includes(classifyPrinter(p)));
-		if (printable.length === 1) {
+		const printable = found.filter((p) =>
+			['ready', 'unsure'].includes(classifyPrinter(p, platform))
+		);
+		if (printable.length === 1 && !(web && pendingPicker.current)) {
 			select(printable[0]);
 			void testPrint();
 		}
@@ -211,18 +226,25 @@ export function usePrinterSetupFlow({
 		if (early.length > 0 && addresses(early) !== addresses(current.current.found))
 			update({ found: early });
 	}, [discovery.printers]);
-	const pendingBle = React.useRef<DiscoveredPrinter[] | null>(null);
 	function startBluetoothScan() {
-		pendingBle.current = discovery.printers;
+		pendingPicker.current = discovery.printers;
 		discovery.connectBluetoothDevice?.();
+	}
+	function startUsbPicker() {
+		pendingPicker.current = discovery.printers;
+		void discovery.connectUsbDevice?.();
 	}
 	// The external chooser publishes its connected device through discovery state.
 	React.useEffect(() => {
-		if (!pendingBle.current || discovery.isBluetoothScanning || !active.current) return;
-		const device = discovery.printers.find(
-			(p) => p.address.startsWith('webbluetooth:') && !pendingBle.current?.includes(p)
+		if (!pendingPicker.current || discovery.isBluetoothScanning || !active.current) return;
+		const device = discovery.printers.find((p) =>
+			web
+				? /^web(usb|bluetooth):/.test(p.address) &&
+					!pendingPicker.current?.some((old) => old.address === p.address)
+				: p.address.startsWith('webbluetooth:') && !pendingPicker.current?.includes(p)
 		);
-		pendingBle.current = null;
+		if (web && !device) return;
+		pendingPicker.current = null;
 		if (device) {
 			select(device, false);
 			void testPrint();
@@ -287,6 +309,7 @@ export function usePrinterSetupFlow({
 		state,
 		start,
 		startBluetoothScan,
+		startUsbPicker,
 		select,
 		testPrint,
 		answer,

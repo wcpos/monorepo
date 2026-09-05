@@ -25,6 +25,7 @@ import { PrinterDialogFooter } from './dialog/printer-dialog-footer';
 import { PrinterDialogLayout } from './dialog/printer-dialog-layout';
 import { TestPrintError } from './dialog/test-print-error';
 import { usePrinterDialogForm } from './dialog/use-printer-dialog-form';
+import { PrinterSetupDialog } from './setup/printer-setup-dialog';
 import { DEFAULT_FORM_VALUES, type PrinterFormValues, webPrinterSchema } from './schema';
 import {
 	deriveEndpointExplanation,
@@ -47,7 +48,12 @@ interface PrinterDialogProps {
 	prefill?: PrinterDialogPrefill;
 }
 
-export function PrinterDialog({
+export function PrinterDialog(props: PrinterDialogProps) {
+	if (!props.printer) return props.open ? <PrinterSetupDialog {...props} platform="web" /> : null;
+	return <EditPrinterDialog {...props} />;
+}
+
+function EditPrinterDialog({
 	open,
 	onOpenChange,
 	onSave,

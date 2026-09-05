@@ -17,17 +17,24 @@ import { Form, FormField, FormInput, FormSelect } from '@wcpos/components/form';
 import { OptionSelect, type SelectSingleRootProps } from '@wcpos/components/select';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { PrinterService, usePrinterDiscovery } from '@wcpos/printer';
+import {
+	isWebBluetoothSupported,
+	isWebUsbSupported,
+	PrinterService,
+	usePrinterDiscovery,
+} from '@wcpos/printer';
 
 import { VendorSelect } from '../components/vendor-select';
 import { hasTargetKind, isUsbLikeDevice } from '../dialog/connection/discovered-printer-filters';
 import { ElectronBtPicker } from '../dialog/connection/electron-bt-picker';
+import { WebVendorSegmented } from '../dialog/connection/web-vendor-segmented';
 import { formatDiscoveryError } from '../dialog/discovery-error-message';
 import { PrinterToggleGroup } from '../dialog/printer-toggle-group';
 import { TestPrintError } from '../dialog/test-print-error';
 import { persistPrinterProfile } from '../persist-printer-profile';
 import { openPrinterDocs } from '../printer-docs';
-import { electronPrinterSchema, type PrinterFormValues } from '../schema';
+import { electronPrinterSchema, type PrinterFormValues, webPrinterSchema } from '../schema';
+import { deriveWebVendorDefaults } from '../web-network-defaults';
 import { classifyPrinter, usePrinterSetupFlow } from './use-printer-setup-flow';
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
@@ -55,29 +62,34 @@ export function PrinterSetupDialog({
 	onOpenChange,
 	onSave,
 	printerCount = 0,
+	platform = 'electron',
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	onSave: () => void;
 	printerCount?: number;
+	platform?: 'electron' | 'web';
 }) {
 	const t = useT();
+	const web = platform === 'web';
 	const discovery = usePrinterDiscovery();
 	const { storeDB } = useStoreSession();
 	const printerService = React.useMemo(() => new PrinterService(), []);
-	const flow = usePrinterSetupFlow({
-		discovery,
-		printerService,
-		persist: (data) => persistPrinterProfile(storeDB, data),
-		t,
-		printerCount,
-	});
+	const flow = usePrinterSetupFlow(
+		{
+			discovery,
+			printerService,
+			persist: (data) => persistPrinterProfile(storeDB, data),
+			t,
+			printerCount,
+		},
+		{ platform }
+	);
 	const { phase, found, selected, columns, testPages, failure, profileDraft: draft } = flow.state;
+	const schema = web ? webPrinterSchema : electronPrinterSchema;
 	const form = useForm<PrinterFormValues>({
 		values: draft,
-		resolver: standardSchemaResolver(
-			electronPrinterSchema as z.ZodType<PrinterFormValues, PrinterFormValues>
-		),
+		resolver: standardSchemaResolver(schema as z.ZodType<PrinterFormValues, PrinterFormValues>),
 	});
 	const [optionsOpen, setOptionsOpen] = React.useState(false);
 	const [focusAddress, setFocusAddress] = React.useState(false);
@@ -141,10 +153,15 @@ export function PrinterSetupDialog({
 	const guide = action('setup_open_guide', openPrinterDocs, { disabled: false, variant: 'link' });
 	// Bluetooth LE printers only appear through the system chooser, which needs a tap: keep the
 	// button in view on every scan screen rather than under Options.
-	const bluetooth = discovery.connectBluetoothDevice && (
+	const usb =
+		web &&
+		isWebUsbSupported() &&
+		action('setup_add_usb', flow.startUsbPicker, { disabled: printerBusy });
+	const bluetoothSupported = !web || isWebBluetoothSupported();
+	const bluetooth = discovery.connectBluetoothDevice && bluetoothSupported && (
 		<React.Fragment key="bluetooth">
 			{action('setup_add_ble', flow.startBluetoothScan, { disabled: printerBusy })}
-			{bleScanning && (
+			{!web && bleScanning && (
 				<VStack className="gap-2">
 					<Text className="text-muted-foreground">{t('settings.bt_searching')}</Text>
 					<ElectronBtPicker
@@ -163,13 +180,17 @@ export function PrinterSetupDialog({
 		if (value === 'ok') void form.handleSubmit(() => flow.answer('ok'))();
 		else void flow.answer(value);
 	};
-	const printable = found.filter((p) => ['ready', 'unsure'].includes(classifyPrinter(p)));
-	const deviceLane = selected && (isUsbLikeDevice(selected) || hasTargetKind(selected, 'serial'));
+	const printable = found.filter((p) => ['ready', 'unsure'].includes(classifyPrinter(p, platform)));
+	const deviceLane =
+		selected &&
+		(isUsbLikeDevice(selected) ||
+			hasTargetKind(selected, 'serial') ||
+			(web && /^web(usb|bluetooth):/.test(selected.address)));
 	const officeOnly =
-		printable.length === 0 && found.some((p) => classifyPrinter(p) === 'notprinter');
+		printable.length === 0 && found.some((p) => classifyPrinter(p, platform) === 'notprinter');
 	const scanning = busy && !bleScanning;
 	const cards = found.map((p) => {
-		const status = classifyPrinter(p);
+		const status = classifyPrinter(p, platform);
 		return (
 			<Button
 				key={p.address}
@@ -222,12 +243,19 @@ export function PrinterSetupDialog({
 											: phase === 'saving'
 												? t('settings.setup_saving')
 												: t(
-														discovery.isScanning && discovery.printers.length > 0
-															? 'settings.setup_checking'
-															: 'settings.setup_scanning'
+														web
+															? 'settings.setup_scanning_web'
+															: discovery.isScanning && discovery.printers.length > 0
+																? 'settings.setup_checking'
+																: 'settings.setup_scanning'
 													)}
 									</Text>
 								</View>
+							)}
+							{web && phase === 'scanning' && (discovery.scanProgress?.total ?? 0) > 0 && (
+								<Text className="text-muted-foreground text-xs">
+									{t('settings.setup_sweep_progress', discovery.scanProgress)}
+								</Text>
 							)}
 							{phase === 'printing' && line('look')}
 							{phase === 'scanning' && cards}
@@ -242,6 +270,7 @@ export function PrinterSetupDialog({
 							)}
 							{(phase === 'scanning' || phase === 'results') && (
 								<VStack className="gap-2">
+									{usb}
 									{bluetooth}
 									{phase === 'results' && action('setup_scan_again', () => void flow.rescan())}
 									{action('setup_enter_address', enterAddress, { disabled: printerBusy })}
@@ -335,14 +364,24 @@ export function PrinterSetupDialog({
 										<FormField
 											control={form.control}
 											name="vendor"
-											render={({ field }) => (
-												<FormSelect
-													{...field}
-													customComponent={VendorSelect}
-													options={vendors}
-													label={t('settings.printer_vendor')}
-												/>
-											)}
+											render={({ field }) =>
+												web ? (
+													<WebVendorSegmented
+														vendor={field.value}
+														onSelect={(vendor) => {
+															field.onChange(vendor);
+															form.setValue('port', deriveWebVendorDefaults(vendor).port);
+														}}
+													/>
+												) : (
+													<FormSelect
+														{...field}
+														customComponent={VendorSelect}
+														options={vendors}
+														label={t('settings.printer_vendor')}
+													/>
+												)
+											}
 										/>
 										<FormField
 											control={form.control}
@@ -365,6 +404,7 @@ export function PrinterSetupDialog({
 										{phase !== 'scanning' && phase !== 'results' && (
 											<>
 												{action('setup_scan_again', () => void flow.rescan())}
+												{usb}
 												{bluetooth}
 											</>
 										)}

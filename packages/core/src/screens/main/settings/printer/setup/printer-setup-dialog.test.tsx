@@ -27,6 +27,7 @@ jest.mock('@wcpos/components/collapsible', () => ({
 	CollapsibleTrigger: 'Trigger',
 	CollapsibleContent: 'Options',
 }));
+jest.mock('../dialog/connection/web-vendor-segmented', () => ({ WebVendorSegmented: () => null }));
 jest.mock('../components/vendor-select', () => ({ VendorSelect: () => null }));
 jest.mock('../dialog/printer-toggle-group', () => ({ PrinterToggleGroup: () => null }));
 jest.mock('../dialog/test-print-error', () => ({ TestPrintError: () => null }));
@@ -35,9 +36,13 @@ jest.mock('../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ storeDB: {} }),
 }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => createTestT() }));
+let mockWebScanning = false;
+const mockConnectUsb = jest.fn();
 const mockTestPrint = jest.fn(async () => {});
 const mockUsbPrinters: { id: string; name: string; address: string; connectionType: 'usb' }[] = [];
 jest.mock('@wcpos/printer', () => ({
+	isWebUsbSupported: () => true,
+	isWebBluetoothSupported: () => true,
 	PrinterService: class {
 		testPrint = mockTestPrint;
 		async dispose() {}
@@ -48,7 +53,9 @@ jest.mock('@wcpos/printer', () => ({
 		>([]);
 		const [isBluetoothScanning, setScanning] = React.useState(false);
 		return {
-			isBluetoothScanning,
+			isBluetoothScanning: mockWebScanning ? undefined : isBluetoothScanning,
+			connectUsbDevice: mockConnectUsb,
+			scanProgress: { tested: 3, total: 20 },
 			connectBluetoothDevice: () => setScanning(true),
 			bluetoothCandidates: [{ id: 'ble', name: 'TM-P20' }],
 			selectBluetoothCandidate: () => {
@@ -73,7 +80,7 @@ jest.mock('@wcpos/printer', () => ({
 					},
 				},
 			],
-			isScanning: false,
+			isScanning: mockWebScanning,
 			error: null,
 			startScan: async () => {},
 			stopScan: jest.fn(),
@@ -167,4 +174,35 @@ it('keeps the Bluetooth button in view and tests the device the chooser resolves
 	);
 	act(() => renderer.unmount());
 	mockUsbPrinters.length = 0;
+});
+
+it('offers gesture-only web pickers beside the web scanning status and sweep progress', async () => {
+	mockWebScanning = true;
+	mockConnectUsb.mockClear();
+	let renderer!: ReactTestRenderer;
+	await act(async () => {
+		renderer = create(
+			<PrinterSetupDialog platform="web" open onOpenChange={jest.fn()} onSave={jest.fn()} />
+		);
+	});
+	expect(mockConnectUsb).not.toHaveBeenCalled();
+	const texts = renderer.root
+		.findAllByType('Text' as React.ElementType)
+		.map((n) => n.props.children);
+	expect(texts).toContain('Looking for printers on Wi-Fi… USB or Bluetooth? Tap below.');
+	expect(texts).toContain('3 of 20 addresses');
+	for (const key of ['setup_add_usb', 'setup_add_ble']) {
+		expect(renderer.root.findByProps({ testID: `printer-setup-${key}` }).props.disabled).toBe(
+			false
+		);
+	}
+	act(() => {
+		renderer.root.findByProps({ testID: 'printer-setup-setup_add_usb' }).props.onPress();
+		// Assert before yielding: deferring the picker loses the browser click gesture.
+		expect(mockConnectUsb).toHaveBeenCalledTimes(1);
+	});
+	expect(renderer.root.findAllByProps({ testID: 'electron-bt-device-ble' })).toHaveLength(0);
+	expect(texts).not.toContain(createTestT()('settings.web_printer_limitation'));
+	act(() => renderer.unmount());
+	mockWebScanning = false;
 });
