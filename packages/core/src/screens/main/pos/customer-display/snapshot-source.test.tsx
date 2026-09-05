@@ -151,20 +151,58 @@ beforeEach(() => {
 	withPayload({}, 'order-a');
 });
 
-test('renders local receipt data without passing string money through the printer formatter', () => {
-	// Adapted from the realistic order/store fixtures in build-receipt-data.test.ts.
+test('publishes the canonical receipt shape the display template reads', () => {
+	// The Ledger template (woocommerce-pos-pro templates/display.html) is
+	// logicless: it prints `qty` and the `_display` money strings, and guards
+	// sections on numeric totals, so zero savings must stay a falsy 0.
+	withPayload({ line_items: [line] });
+	render(<CustomerDisplaySnapshotSource />);
+
+	expect(mockPublish).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			action: 'cart.updated',
+			payload: expect.objectContaining({
+				order: expect.objectContaining({
+					lines: [
+						expect.objectContaining({
+							name: 'Coffee',
+							qty: 1,
+							line_total: 5,
+							line_total_display: '€5.00',
+						}),
+					],
+					totals: expect.objectContaining({
+						total_qty: 1,
+						subtotal_display: '€5.00',
+						tax_total_display: '€0.00',
+						total_display: '€5.00',
+						// No regular price on the line means no savings figure: null, not a
+						// "0.00" string, so `{{#totals.total_saved}}` stays hidden.
+						total_saved: null,
+					}),
+				}),
+			}),
+		})
+	);
+});
+
+test('still publishes when the runtime has no Intl currency formatter', () => {
+	// formatMoney falls back to "<code> <amount>"; the build must not throw
+	// during POS boot (the 2026-09-03 regression) and must not go idle.
 	const numberFormat = jest.spyOn(Intl, 'NumberFormat').mockImplementation(() => {
 		throw new RangeError('Intl currency formatting unavailable');
 	});
 	try {
 		withPayload({ line_items: [line] });
 		expect(() => render(<CustomerDisplaySnapshotSource />)).not.toThrow();
+		expect(mockLoggerError).not.toHaveBeenCalled();
 		expect(mockPublish).toHaveBeenLastCalledWith(
 			expect.objectContaining({
 				action: 'cart.updated',
 				payload: expect.objectContaining({
 					order: expect.objectContaining({
-						lines: [expect.objectContaining({ unit_price: '5.00' })],
+						lines: [expect.objectContaining({ qty: 1, line_total_display: 'EUR 5.00' })],
+						totals: expect.objectContaining({ total_display: 'EUR 5.00' }),
 					}),
 				}),
 			})

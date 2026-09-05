@@ -1,6 +1,8 @@
 import * as React from 'react';
 
 import { readLedger } from '@wcpos/order-math';
+import { formatReceiptData } from '@wcpos/printer/encoder/format-receipt-data';
+import { mapReceiptData } from '@wcpos/printer/encoder/map-receipt-data';
 import { useDocField, useRecordField } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -53,11 +55,18 @@ export function useDisplaySnapshot() {
 	const orderBuild = React.useMemo(() => {
 		if (!displayOrderData || !storeData) return { value: null, failed: false };
 		try {
+			// The display template is logicless and reads the canonical receipt
+			// data: numeric money with locale-formatted `_display` companions and
+			// `qty` on each line, the same object the receipt printer renders.
+			// buildReceiptData emits the offline shape (string money, `quantity`),
+			// so it must be mapped to canonical before it is formatted; formatting
+			// the offline shape directly is what threw during POS boot on 2026-09-03.
+			const receipt = buildReceiptData(displayOrderData, storeData, dp, {
+				getStatusLabel,
+				receiptI18n,
+			});
 			return {
-				value: buildReceiptData(displayOrderData, storeData, dp, {
-					getStatusLabel,
-					receiptI18n,
-				}),
+				value: formatReceiptData(mapReceiptData(receipt as unknown as Record<string, unknown>)),
 				failed: false,
 			};
 		} catch {
