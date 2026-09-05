@@ -126,8 +126,12 @@ export function usePrinterSetupFlow(
 	}
 	function updateDraft(patch: Partial<PrinterFormValues>) {
 		const profileDraft = { ...current.current.profileDraft, ...patch };
-		if (patch.vendor) profileDraft.language = patch.vendor === 'star' ? 'star-line' : 'esc-pos';
-		if (web && patch.vendor) profileDraft.language = deriveWebVendorDefaults(patch.vendor).language;
+		if (patch.vendor)
+			profileDraft.language = web
+				? deriveWebVendorDefaults(patch.vendor).language
+				: patch.vendor === 'star'
+					? 'star-line'
+					: 'esc-pos';
 		update({ profileDraft, columns: profileDraft.columns });
 	}
 	function select(selected: DiscoveredPrinter, keepDraft = false) {
@@ -248,6 +252,7 @@ export function usePrinterSetupFlow(
 			['ready', 'unsure'].includes(classifyPrinter(p, platform))
 		);
 		if (printable.length === 1 && !current.current.selected) select(printable[0]);
+		// The platform option and its derived web flag are fixed for this hook's lifetime.
 	}, [scanComplete, discovery.isScanning, discovery.printers]);
 	// Plugged-in and OS-paired printers enumerate in a second; list them while the Wi-Fi scan continues.
 	React.useEffect(() => {

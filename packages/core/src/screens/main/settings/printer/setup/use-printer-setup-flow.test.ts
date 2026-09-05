@@ -127,6 +127,18 @@ it('pre-selects one Epson, prints on request, then saves its identified profile'
 		expect.objectContaining({ port: 443, vendor: 'epson', columns: 48, isDefault: true })
 	);
 });
+it('shows an error when saving the printer profile fails', async () => {
+	await scan([epson]);
+	await act(async () => {
+		await flow.testPrint();
+	});
+	persist.mockRejectedValueOnce(new Error('Database unavailable'));
+	await act(async () => {
+		await flow.answer('ok');
+	});
+	expect(flow.state.phase).toBe('error');
+	expect(flow.state.failure).toEqual({ message: 'Database unavailable', diagnostics: null });
+});
 it('lists two printers and prints only the selected one', async () => {
 	await scan([epson, { ...epson, id: 'second', address: '192.168.1.11' }]);
 	expect(flow.state.phase).toBe('results');
