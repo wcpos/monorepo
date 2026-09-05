@@ -172,8 +172,11 @@ function mapCustomer(src: Record<string, any>): ReceiptCustomer {
 	if (taxIds.length === 0 && scalarTaxId) {
 		taxIds.push({ type: 'other', value: scalarTaxId });
 	}
+	// null/0 = guest (schema). Pass a real id through so display templates can
+	// greet a known customer without guessing from the name.
+	const id = Number(src.id) || 0;
 	return {
-		id: 0,
+		id: id > 0 ? id : null,
 		name: toStr(src.name),
 		billing_address: {},
 		shipping_address: {},

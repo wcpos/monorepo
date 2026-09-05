@@ -540,9 +540,23 @@ describe('mapReceiptData', () => {
 
 		it('maps customer fields', () => {
 			expect(mapped.customer.name).toBe('John Doe');
-			expect(mapped.customer.id).toBe(0);
+			// No id on the offline shape = guest (schema: null/0 = guest).
+			expect(mapped.customer.id).toBeNull();
 			expect(mapped.customer.billing_address).toEqual({});
 			expect(mapped.customer.shipping_address).toEqual({});
+		});
+
+		it('passes a real customer id through and nulls guest ids', () => {
+			const known = mapReceiptData({
+				...offlineReceiptData,
+				customer: { ...offlineReceiptData.customer, id: 7 },
+			});
+			expect(known.customer.id).toBe(7);
+			const guest = mapReceiptData({
+				...offlineReceiptData,
+				customer: { ...offlineReceiptData.customer, id: 0 },
+			});
+			expect(guest.customer.id).toBeNull();
 		});
 
 		it('provides a default cashier', () => {
