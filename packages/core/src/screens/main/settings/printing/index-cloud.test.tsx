@@ -2,11 +2,12 @@
 import '@testing-library/jest-dom';
 import * as React from 'react';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import type { PrinterProfile } from '@wcpos/printer';
 
 import { PrintingSettings } from './index';
+import { PrinterRow } from './printer-row';
 
 const cloudProfile: PrinterProfile = {
 	id: 'cloud:reg-7',
@@ -178,7 +179,7 @@ jest.mock('../printer/add-printer', () => ({
 }));
 
 jest.mock('./printers-empty-state', () => ({
-	PrintersEmptyState: () => null,
+	PrintersEmptyState: () => <div data-testid="printers-empty-state" />,
 }));
 
 jest.mock('../components/settings-section', () => ({
@@ -194,7 +195,7 @@ jest.mock('./use-ensure-system-printer', () => ({
 }));
 
 jest.mock('../printer/use-available-printer-profiles', () => ({
-	useAvailablePrinterProfiles: () => [cloudProfile],
+	useAvailablePrinterProfiles: () => mockAvailableProfiles,
 }));
 
 jest.mock('../../receipt/hooks/use-active-templates', () => ({
@@ -235,8 +236,14 @@ jest.mock('../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({ post: httpPost }),
 }));
 
+let mockAvailableProfiles = { printers: [cloudProfile], isLoading: false };
+let mockShowWizard = true;
+jest.mock('../../mini-apps/catalog', () => ({ usePrinterWizardAvailable: () => mockShowWizard }));
+
 describe('PrintingSettings cloud printers', () => {
 	beforeEach(() => {
+		mockAvailableProfiles = { printers: [cloudProfile], isLoading: false };
+		mockShowWizard = true;
 		enqueue.mockClear();
 		httpPost.mockClear();
 	});
@@ -266,4 +273,47 @@ describe('PrintingSettings cloud printers', () => {
 		expect(screen.queryByTestId('printing-scan-network-button')).not.toBeInTheDocument();
 		expect(screen.queryByTestId('printing-scan-candidates')).not.toBeInTheDocument();
 	});
+});
+
+it('hides the list until loaded, then shows the empty state', () => {
+	mockAvailableProfiles = { printers: [], isLoading: true };
+	const { rerender } = render(<PrintingSettings />);
+	expect(screen.queryByTestId('printers-empty-state')).not.toBeInTheDocument();
+	expect(screen.queryByTestId('printing-add-printer-button')).not.toBeInTheDocument();
+	mockAvailableProfiles = { printers: [], isLoading: false };
+	rerender(<PrintingSettings />);
+	expect(screen.getByTestId('printers-empty-state')).toBeInTheDocument();
+});
+
+it('renders help once outside saved rows only when available', () => {
+	mockShowWizard = true;
+	mockAvailableProfiles = {
+		printers: [cloudProfile, { ...cloudProfile, id: 'second' }],
+		isLoading: false,
+	};
+	const { rerender } = render(<PrintingSettings />);
+	expect(screen.getAllByText('Having trouble?')).toHaveLength(1);
+	fireEvent.click(screen.getByText('Having trouble?'));
+	expect(mockRouterPush).toHaveBeenCalledWith('/settings/mini-app/printer-wizard');
+	expect(
+		within(screen.getByTestId('printer-row-second')).queryByText('Having trouble?')
+	).toBeNull();
+	mockShowWizard = false;
+	rerender(<PrintingSettings />);
+	expect(screen.queryByText('Having trouble?')).toBeNull();
+});
+
+it('does not render help on a saved local printer row', () => {
+	mockShowWizard = true;
+	render(
+		<PrinterRow
+			profile={{ ...cloudProfile, isBuiltIn: false }}
+			isTesting={false}
+			onTest={jest.fn()}
+			onEdit={jest.fn()}
+			onDelete={jest.fn()}
+			onSetDefault={jest.fn()}
+		/>
+	);
+	expect(screen.queryByText('Having trouble?')).toBeNull();
 });

@@ -131,7 +131,9 @@ describe('OsPrintersSection — winspool config', () => {
 			/>
 		);
 		fireEvent.click(screen.getByTestId('add-printer-installed-device-w1'));
-		expect(setValue).toHaveBeenCalledWith('address', 'winspool:EPSON TM-T20III');
+		expect(setValue).toHaveBeenCalledWith('address', 'winspool:EPSON TM-T20III', {
+			shouldValidate: true,
+		});
 		expect(setValue).toHaveBeenCalledWith('name', 'EPSON TM-T20III');
 		expect(setValue).not.toHaveBeenCalledWith('connectionType', expect.anything());
 	});
@@ -203,7 +205,9 @@ describe('OsPrintersSection — serial config', () => {
 			/>
 		);
 		fireEvent.click(screen.getByTestId('add-printer-paired-device-s1'));
-		expect(setValue).toHaveBeenCalledWith('address', 'serial:/dev/tty.Star-TSP100-SerialPort-1');
+		expect(setValue).toHaveBeenCalledWith('address', 'serial:/dev/tty.Star-TSP100-SerialPort-1', {
+			shouldValidate: true,
+		});
 		expect(setValue).toHaveBeenCalledWith('name', 'Star TSP100');
 		expect(setValue).not.toHaveBeenCalledWith('connectionType', expect.anything());
 	});

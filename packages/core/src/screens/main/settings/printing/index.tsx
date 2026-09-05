@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { useRouter } from 'expo-router';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
@@ -30,10 +31,13 @@ import { createCloudEnqueueFactory } from '../../hooks/use-cloud-enqueue';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { useActiveTemplates } from '../../receipt/hooks/use-active-templates';
 import { useStoreSession } from '../../../../contexts/app-state';
+import { usePrinterWizardAvailable } from '../../mini-apps/catalog';
 import { useT } from '../../../../contexts/translations';
 
 export function PrintingSettings() {
 	const t = useT();
+	const router = useRouter();
+	const showWizard = usePrinterWizardAvailable('settings.printers.trouble');
 	const { storeDB } = useStoreSession();
 	const [dialogOpen, setDialogOpen] = React.useState(false);
 	const [editingPrinter, setEditingPrinter] = React.useState<PrinterProfile | undefined>();
@@ -51,7 +55,7 @@ export function PrintingSettings() {
 		[cloudEnqueueFactory]
 	);
 	const templates = useActiveTemplates();
-	const printers = useAvailablePrinterProfiles();
+	const { printers, isLoading } = useAvailablePrinterProfiles();
 
 	useEnsureSystemPrinter(storeDB);
 
@@ -203,7 +207,7 @@ export function PrintingSettings() {
 				title={t('settings.printers')}
 				description={t('settings.printers_description')}
 			>
-				{!hasVisiblePrinterTargets ? (
+				{isLoading ? null : !hasVisiblePrinterTargets ? (
 					<PrintersEmptyState onAddPrinter={openAddDialog} />
 				) : (
 					<>
@@ -233,6 +237,15 @@ export function PrintingSettings() {
 							</Button>
 						</HStack>
 					</>
+				)}
+				{showWizard && (
+					<Button
+						variant="ghost-quiet"
+						size="sm"
+						onPress={() => router.push('/settings/mini-app/printer-wizard')}
+					>
+						<Text>{t('settings.having_trouble')}</Text>
+					</Button>
 				)}
 			</SettingsSection>
 

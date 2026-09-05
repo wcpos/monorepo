@@ -68,7 +68,7 @@ function candidateProfile(candidate: Record<string, unknown>): PrinterProfile {
 }
 
 export function usePrinterCapabilities(): BridgeHandlers {
-	const profiles = useAvailablePrinterProfiles();
+	const { printers: profiles } = useAvailablePrinterProfiles();
 	const discovery = usePrinterDiscovery();
 	const discoveryRef = React.useRef(discovery);
 	const { storeDB } = useStoreSession();
