@@ -52,7 +52,8 @@ const listen = async (server, port, host) => {
  * @param {(...args: unknown[]) => void} [options.log]
  * @returns {Promise<{ scenario: import('./scenarios.mjs').Scenario, name: string,
  *   ports: { raw: number, http: number | null, https: number | null, ipp: number | null },
- *   jobs: PrinterJob[], events: PrinterEvent[], close: () => Promise<void> }>}
+ *   jobs: PrinterJob[], events: PrinterEvent[], tls: { cert: string, fingerprint256: string },
+ *   close: () => Promise<void> }>}
  */
 export async function createVirtualPrinter(options = {}) {
 	const {
