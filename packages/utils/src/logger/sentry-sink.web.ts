@@ -75,12 +75,21 @@ export function scrubEvent<T extends Sentry.Event>(event: T): T {
 	return event;
 }
 
+export function messageTemplate(message: string): string {
+	return message
+		.replace(/\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b/gi, '{}')
+		.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, '{}')
+		.replace(/\b\d+\b/g, '{}');
+}
+
 export function buildCaptureOptions({ message, code, context }: SentryCaptureInput) {
 	return {
 		level: 'error' as const,
 		...(code !== undefined && {
 			tags: { errorCode: String(code) },
-			fingerprint: [String(code)],
+			fingerprint: String(code).endsWith('999')
+				? [String(code), messageTemplate(message)]
+				: [String(code)],
 		}),
 		extra: { message, context },
 	};

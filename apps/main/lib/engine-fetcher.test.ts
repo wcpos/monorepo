@@ -1340,6 +1340,36 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
+	it('reports a 403 at error once per path and at info after that (#1876)', async () => {
+		// Sentry AUTH201: a cashier without customer read permission produced one
+		// error row per 10 s tick, 242 events on 11 installs. The permission is a
+		// property of the session, so the second 403 on the same path is info.
+		const credentials = {
+			getLatest: jest.fn(() => ({ access_token: 'token' })),
+		};
+		const fetch = jest
+			.fn()
+			.mockResolvedValueOnce(new Response(null, { status: 403 }))
+			.mockResolvedValueOnce(new Response(null, { status: 403 }))
+			.mockResolvedValueOnce(new Response(null, { status: 403 }));
+		const { fetcher, appMetricsObserver } = createFetcherHarness({
+			fetch,
+			auth: { credentials, refreshAuth: jest.fn() },
+		});
+
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/customers?page=1');
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/customers?page=2');
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+
+		const rows = appMetricsObserver.mock.calls
+			.map(([event]) => event)
+			.filter((event) => event.type === 'transport.request' && event.fields?.status === 403);
+		expect(rows.map((event) => event.level)).toEqual(['error', 'info', 'error']);
+		expect(rows[1].fields).toEqual(expect.objectContaining({ outcome: 'forbidden-repeat' }));
+		expect(rows[0].fields).not.toEqual(expect.objectContaining({ outcome: 'forbidden-repeat' }));
+		fetch.mockReset();
+	});
+
 	it('classifies the tick-probe 404 as a recovered debug row (designed fallback)', async () => {
 		const credentials = {
 			getLatest: jest.fn(() => ({ access_token: 'token' })),

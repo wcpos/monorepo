@@ -131,6 +131,11 @@ export function createEngineFetcher(input: {
 }): EngineFetcher {
 	const now = input.now ?? Date.now;
 	const observeResponseStatus = createRateLimitObserver();
+	// Paths that have already answered 403 on this fetcher. A permission error is
+	// a property of the session (a cashier role without that capability), not of
+	// the tick, so it is reported at error ONCE per path and at info after that;
+	// the fetcher is created per engine, so a new session starts clean (#1876).
+	const forbiddenPaths = new Set<string>();
 
 	// One logical request = one arc. When a 401 enters the refresh path, the arc's
 	// rows — the absorbed attempt, the refresh layer's "Session renewed
@@ -434,8 +439,15 @@ export function createEngineFetcher(input: {
 			if (attempt.response.ok || status === 304) attempt.settle('info', extraFields);
 			else if (status === 404 && isTickProbe)
 				attempt.settle('debug', { outcome: 'recovered', ...extraFields });
-			else if (status === 403) attempt.settle('error', extraFields);
-			else attempt.settle('warn', extraFields);
+			else if (status === 403) {
+				const forbiddenKey = requestPath ?? url;
+				const repeat = forbiddenPaths.has(forbiddenKey);
+				forbiddenPaths.add(forbiddenKey);
+				attempt.settle(repeat ? 'info' : 'error', {
+					...(repeat ? { outcome: 'forbidden-repeat' } : {}),
+					...extraFields,
+				});
+			} else attempt.settle('warn', extraFields);
 		};
 
 		const first = await performAttempt();

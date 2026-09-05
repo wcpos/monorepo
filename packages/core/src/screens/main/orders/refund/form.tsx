@@ -15,6 +15,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
+import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { Form, FormField, FormInput, FormTextarea } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { ModalAction, ModalClose } from '@wcpos/components/modal';
@@ -388,7 +389,8 @@ export function RefundOrderForm({ order }: Props) {
 			if (isStorageBlockedError(err)) return;
 
 			const serverMessage = extractErrorMessage(err?.response?.data, t('orders.refund_failed'));
-			refundLogger.error(serverMessage, {
+			const logLevel = isExpectedPreflightBlock(err) ? 'info' : 'error';
+			refundLogger[logLevel](serverMessage, {
 				showToast: true,
 				code: ERROR_CODES.PAYMENT_UNEXPECTED,
 				context: {

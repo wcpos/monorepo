@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -51,7 +52,8 @@ export function useDownloadReceiptPdf() {
 					},
 				});
 			} catch (error) {
-				httpLogger.error('Failed to download receipt PDF', {
+				const logLevel = isExpectedPreflightBlock(error) ? 'info' : 'error';
+				httpLogger[logLevel]('Failed to download receipt PDF', {
 					showToast: true,
 					code: ERROR_CODES.RECEIPT_DELIVERY_FAILED,
 					context: {

@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
+import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { DialogAction, DialogClose, DialogFooter } from '@wcpos/components/dialog';
 import { Form, FormField, FormInput, FormSwitch } from '@wcpos/components/form';
 import { Text } from '@wcpos/components/text';
@@ -144,7 +145,8 @@ export function EmailForm({ order }: Props) {
 					) {
 						return;
 					}
-					httpLogger.error('Failed to send receipt email', {
+					const logLevel = isExpectedPreflightBlock(error) ? 'info' : 'error';
+					httpLogger[logLevel]('Failed to send receipt email', {
 						showToast: true,
 						toast: { text2: failure.reason },
 						code: ERROR_CODES.RECEIPT_DELIVERY_FAILED,

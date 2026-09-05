@@ -14,6 +14,7 @@ import type { ReceiptEmailRow } from './email-queue/queue';
 const mockPost = jest.fn();
 const mockToast = jest.fn();
 const mockLoggerError = jest.fn();
+const mockLoggerInfo = jest.fn();
 const mockLoggerSuccess = jest.fn();
 let onlineStatus = 'online-website-available';
 let queueRows: ReceiptEmailRow[] = [];
@@ -91,7 +92,7 @@ jest.mock('@wcpos/utils/logger', () => ({
 	// Lazy wrappers: `getLogger` runs at module load, before the mock consts above
 	// are initialized.
 	getLogger: () => ({
-		info: () => undefined,
+		info: (...args: unknown[]) => mockLoggerInfo(...args),
 		debug: () => undefined,
 		warn: () => undefined,
 		error: (...args: unknown[]) => mockLoggerError(...args),
@@ -233,7 +234,8 @@ describe('EmailForm', () => {
 		render(<EmailForm order={order} />);
 		await send();
 
-		expect(mockLoggerError).toHaveBeenCalledWith(
+		expect(mockLoggerError).not.toHaveBeenCalled();
+		expect(mockLoggerInfo).toHaveBeenCalledWith(
 			'Failed to send receipt email',
 			expect.objectContaining({
 				code: 'PRINT311',

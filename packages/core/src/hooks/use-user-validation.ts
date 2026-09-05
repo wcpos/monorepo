@@ -8,6 +8,7 @@ import {
 	requestStateManager,
 	useHttpClient,
 } from '@wcpos/hooks/use-http-client';
+import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
 import { AppInfo } from '@wcpos/utils/app-info';
 import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
@@ -301,7 +302,8 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						error?.response?.data,
 						'Failed to fetch user data from server'
 					);
-					appLogger.error(serverMessage, {
+					const logLevel = isExpectedPreflightBlock(error) ? 'info' : 'error';
+					appLogger[logLevel](serverMessage, {
 						code: ERROR_CODES.AUTH_UNEXPECTED,
 						context: {
 							error: getErrorMessage(error),
@@ -456,7 +458,8 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					});
 				} else {
 					const errorMsg = getErrorMessage(error);
-					appLogger.error('[stores] validation FAILED', {
+					const logLevel = isExpectedPreflightBlock(error) ? 'info' : 'error';
+					appLogger[logLevel]('[stores] validation FAILED', {
 						code: ERROR_CODES.AUTH_UNEXPECTED,
 						context: {
 							error: errorMsg,

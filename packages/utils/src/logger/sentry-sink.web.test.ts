@@ -21,8 +21,13 @@ Object.defineProperty(globalThis, 'window', {
 	},
 });
 
-const { buildCaptureOptions, captureLoggedError, scrubEvent, setTelemetryConsent } =
-	jest.requireActual<typeof import('./sentry-sink.web')>('./sentry-sink.web');
+const {
+	buildCaptureOptions,
+	captureLoggedError,
+	messageTemplate,
+	scrubEvent,
+	setTelemetryConsent,
+} = jest.requireActual<typeof import('./sentry-sink.web')>('./sentry-sink.web');
 const sentryInitCallsOnImport = jest.mocked(Sentry.init).mock.calls.length;
 
 describe('sentry-sink.web', () => {
@@ -126,6 +131,28 @@ describe('sentry-sink.web', () => {
 			level: 'error',
 			extra: { message: 'Uncoded error', context: undefined },
 		});
+	});
+
+	it.each([
+		['Order 123 failed', 'Order {} failed'],
+		['Product 123e4567-e89b-12d3-a456-426614174000 failed', 'Product {} failed'],
+		['Product "Blue shirt" failed', 'Product {} failed'],
+		["Product 'Blue shirt' failed", 'Product {} failed'],
+	])('templates %s', (message, expected) => {
+		expect(messageTemplate(message)).toBe(expected);
+	});
+
+	it('separates catch-all messages but preserves specific-code grouping', () => {
+		const fingerprints = ['Barcode lookup failed', 'Stock refresh failed'].map(
+			(message) => buildCaptureOptions({ message, code: 'PRODUCT999' }).fingerprint
+		);
+		expect(fingerprints).toEqual([
+			['PRODUCT999', 'Barcode lookup failed'],
+			['PRODUCT999', 'Stock refresh failed'],
+		]);
+		expect(
+			buildCaptureOptions({ message: 'Order 123 failed', code: 'AUTH201' }).fingerprint
+		).toEqual(['AUTH201']);
 	});
 
 	it('captures Error context as an exception', () => {

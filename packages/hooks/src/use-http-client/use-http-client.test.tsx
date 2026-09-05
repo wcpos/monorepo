@@ -144,7 +144,7 @@ describe('useHttpClient network audit logs', () => {
 			)
 		).rejects.toBe(failure);
 
-		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed', {
+		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed: GET /wc/v3/products', {
 			code: 'SYNC131',
 			context: expect.objectContaining({
 				method: 'GET',
@@ -171,7 +171,7 @@ describe('useHttpClient network audit logs', () => {
 
 		await expect(result.current.get('/wc/v3/products')).rejects.toBe(failure);
 
-		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed', {
+		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed: GET /wc/v3/products', {
 			code: 'SYNC131',
 			context: expect.objectContaining({
 				serverCode: 'merchant_plugin_unknown_error',
@@ -214,7 +214,7 @@ describe('useHttpClient network audit logs', () => {
 
 		await expect(result.current.get('/wc/v3/products')).rejects.toBe(failure);
 
-		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed', {
+		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed: GET /wc/v3/products', {
 			code: 'CLIENT999',
 			context: expect.objectContaining({
 				status: 0,
@@ -236,15 +236,18 @@ describe('useHttpClient network audit logs', () => {
 		).rejects.toBe(failure);
 
 		expect(loggerMock.__error).not.toHaveBeenCalled();
-		expect(loggerMock.__warn).toHaveBeenCalledWith('HTTP request failed', {
-			code: 'CLIENT999',
-			context: expect.objectContaining({
-				method: 'GET',
-				endpoint: '/wp-content/uploads/product.jpg',
-				status: 0,
-				codeFallback: true,
-			}),
-		});
+		expect(loggerMock.__warn).toHaveBeenCalledWith(
+			'HTTP request failed: GET /wp-content/uploads/product.jpg',
+			{
+				code: 'CLIENT999',
+				context: expect.objectContaining({
+					method: 'GET',
+					endpoint: '/wp-content/uploads/product.jpg',
+					status: 0,
+					codeFallback: true,
+				}),
+			}
+		);
 	});
 
 	it.each([false, true])(
