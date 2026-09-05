@@ -5,23 +5,14 @@ import {
 	BT_CONNECT_TIMEOUT_MS,
 	BT_DISCOVERY_TIMEOUT_MS,
 } from '../discovery/bluetooth-scan-session';
+import { forgetBleDevice, getBleDevice } from '../transport/ble-device-registry';
 import { identifyDiscoveredPrinters } from '../discovery/identify';
 import { usePrinterDiscovery } from './use-printer-discovery.electron';
 
 import type { BluetoothCandidate, DiscoveredPrinter } from '../types';
-import type { PosConnectedDevice } from '../types/point-of-sale-connectors';
 
-// vi.mock is hoisted by vitest to the top of the module, so the connectMock /
-// addEventListenerMock references inside the factory are valid even though the
-// const declarations appear below.
-const connectMock = vi.fn();
-const addEventListenerMock = vi.fn();
-vi.mock('@point-of-sale/webbluetooth-receipt-printer', () => ({
-	default: class MockPrinter {
-		addEventListener = addEventListenerMock;
-		connect = connectMock;
-	},
-}));
+const requestDeviceMock = vi.fn();
+let resolveDevice: (device: typeof btDevice) => void;
 
 // Wraps the real implementation so the lane test below exercises it; individual tests can
 // hold a single call open with mockReturnValueOnce.
@@ -75,20 +66,12 @@ function removeIpc() {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Fire the 'connected' handler captured by addEventListenerMock (call index 0 by default). */
-function emitConnected(device: PosConnectedDevice, callIdx = 0) {
-	const call = addEventListenerMock.mock.calls[callIdx] as
-		[string, (device: PosConnectedDevice) => void] | undefined;
-	if (!call) throw new Error(`No addEventListener call at index ${callIdx}`);
-	call[1](device);
-}
-
-const btDevice: PosConnectedDevice = {
+const btDevice = {
 	type: 'bluetooth',
 	id: 'dev-1',
 	name: 'TM-P20',
 	language: 'esc-pos',
-	codepageMapping: 'epson',
+	gatt: { connect: vi.fn() },
 };
 
 // ---------------------------------------------------------------------------
@@ -98,13 +81,21 @@ const btDevice: PosConnectedDevice = {
 describe('usePrinterDiscovery (electron)', () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
-		connectMock.mockReset();
-		addEventListenerMock.mockReset();
+		forgetBleDevice('webbluetooth:dev-1');
+		requestDeviceMock.mockReset();
+		requestDeviceMock.mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					resolveDevice = resolve;
+				})
+		);
+		vi.stubGlobal('navigator', { bluetooth: { requestDevice: requestDeviceMock } });
 		installIpc();
 	});
 
 	afterEach(() => {
 		removeIpc();
+		vi.unstubAllGlobals();
 		vi.useRealTimers();
 	});
 
@@ -126,9 +117,18 @@ describe('usePrinterDiscovery (electron)', () => {
 
 		act(() => {
 			result.current.connectBluetoothDevice?.();
+			expect(requestDeviceMock).toHaveBeenCalledWith({
+				acceptAllDevices: true,
+				optionalServices: [
+					'000018f0-0000-1000-8000-00805f9b34fb',
+					'0000ff00-0000-1000-8000-00805f9b34fb',
+					'49535343-fe7d-4ae5-8fa9-9fafd205e455',
+					'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
+				],
+			});
 		});
 
-		expect(connectMock).toHaveBeenCalledTimes(1);
+		expect(requestDeviceMock).toHaveBeenCalledTimes(1);
 		expect(result.current.isBluetoothScanning).toBe(true);
 
 		// Second call while session is active — should be a no-op.
@@ -136,7 +136,7 @@ describe('usePrinterDiscovery (electron)', () => {
 			result.current.connectBluetoothDevice?.();
 		});
 
-		expect(connectMock).toHaveBeenCalledTimes(1);
+		expect(requestDeviceMock).toHaveBeenCalledTimes(1);
 	});
 
 	// 3. selectBluetoothCandidate sends ipc.send; connected event adds printer
@@ -158,12 +158,14 @@ describe('usePrinterDiscovery (electron)', () => {
 
 		// Fire connected event.
 		await act(async () => {
-			emitConnected(btDevice);
+			resolveDevice(btDevice);
 		});
 
 		expect(result.current.isBluetoothScanning).toBe(false);
 		expect(result.current.printers).toHaveLength(1);
 		expect(result.current.printers[0].connectionType).toBe('bluetooth');
+		expect(getBleDevice('webbluetooth:dev-1')).toBe(btDevice);
+		expect(btDevice.gatt.connect).not.toHaveBeenCalled();
 	});
 
 	// 4. discovery timeout → ipc.send('', ''), scanning false, error bt-none-found
@@ -391,11 +393,11 @@ describe('usePrinterDiscovery (electron)', () => {
 		});
 
 		expect(result.current.error).toEqual({ code: 'ipc-unavailable' });
-		expect(connectMock).not.toHaveBeenCalled();
+		expect(requestDeviceMock).not.toHaveBeenCalled();
 	});
 
 	it('a synchronous chooser failure surfaces discovery-failed and clears scanning', () => {
-		connectMock.mockImplementationOnce(() => {
+		requestDeviceMock.mockImplementationOnce(() => {
 			throw new Error('Web Bluetooth API globally disabled');
 		});
 		const { result } = renderHook(() => usePrinterDiscovery());
@@ -414,6 +416,19 @@ describe('usePrinterDiscovery (electron)', () => {
 			result.current.connectBluetoothDevice?.();
 		});
 		expect(result.current.isBluetoothScanning).toBe(true);
+	});
+
+	it('requestDevice rejection ends scanning with the existing error', async () => {
+		requestDeviceMock.mockRejectedValueOnce(new DOMException('Cancelled', 'NotFoundError'));
+		const { result } = renderHook(() => usePrinterDiscovery());
+		await act(async () => {
+			result.current.connectBluetoothDevice?.();
+		});
+		expect(result.current.isBluetoothScanning).toBe(false);
+		expect(result.current.error).toEqual({
+			code: 'discovery-failed',
+			detail: expect.stringContaining('Cancelled'),
+		});
 	});
 
 	// 10. connectSerialDevice: success → printers list updated, isSerialScanning false
@@ -510,7 +525,7 @@ describe('usePrinterDiscovery (electron)', () => {
 			result.current.connectBluetoothDevice?.();
 		});
 		expect(result.current.isBluetoothScanning).toBe(true);
-		expect(connectMock).toHaveBeenCalledTimes(1);
+		expect(requestDeviceMock).toHaveBeenCalledTimes(1);
 
 		act(() => {
 			result.current.cancelBluetoothScan?.();
@@ -528,7 +543,7 @@ describe('usePrinterDiscovery (electron)', () => {
 			result.current.connectBluetoothDevice?.();
 		});
 
-		expect(connectMock).toHaveBeenCalledTimes(2);
+		expect(requestDeviceMock).toHaveBeenCalledTimes(2);
 		expect(result.current.isBluetoothScanning).toBe(true);
 	});
 });

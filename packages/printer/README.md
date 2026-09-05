@@ -181,10 +181,14 @@ Append, newest last. One entry = date · device/lane · signature → cause → 
   (Spec I2), so the next test can compare bytes, not theories. An earlier 32-column diagnostic print
   narrowed the investigation; the corrected receipt and byte capture still need a dated
   Netum/Electron paper run.
-- **2026-09-05 · Netum over Bluetooth LE on Electron.** The chooser finds `BlueTooth Printer`, the
-  print times out: `WebBluetoothAdapter` reconnects via the library's `getDevices()` path, which
-  needs persisted device permissions Electron does not keep. Open (Spec H: connect through the
-  device object in hand). Same lesson for any browser session without a persisted permission.
+- **2026-09-05 · Netum NT-1809 over BLE · Electron.** Its GATT (read from the Mac): `18f0/2af1`,
+  `ff00/ff02`, ISSC `49535343-…`, `e7810a71-…`, MTU 240; a 30-byte ESC/POS job written to `2af1`
+  without response in 20-byte chunks printed at once. The app's Web Bluetooth path printed nothing
+  because it reconnected through the library's `getDevices()` route, which needs persisted device
+  permissions Electron does not keep (timeout after 10 s). Fixed: print through the `BluetoothDevice`
+  in hand — `transport/ble-gatt.ts`, profiles probed in the order above (Spec H). Two gotchas for the
+  wizard copy: a BLE printer that is *connected* (even by a stale link) stops advertising and vanishes
+  from every scan until power-cycled; the Netum also advertises Bluetooth Classic to macOS.
 - **2026-09-05 · Scan-first setup must not read as a Wi-Fi scan.** A shop with only a USB or
   Bluetooth printer saw "Looking for printers on your network…" and a Bluetooth button hidden
   under Options. Chromium only opens the Bluetooth LE chooser from a click, so that button has to

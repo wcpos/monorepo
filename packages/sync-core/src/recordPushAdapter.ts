@@ -218,7 +218,12 @@ export async function pushRecordMutation(input: {
 			type: aborted ? 'push.aborted' : 'push.error',
 			level: aborted ? 'warn' : 'error',
 			collection: mutation.collectionName,
-			fields: { ...baseFields, reason: error instanceof Error ? error.name : 'unknown' },
+			fields: {
+				...baseFields,
+				reason: error instanceof Error ? error.name : 'unknown',
+				...(error instanceof Error ? { message: error.message.slice(0, 200) } : {}),
+				phase: 'transport',
+			},
 		});
 		throw error;
 	}

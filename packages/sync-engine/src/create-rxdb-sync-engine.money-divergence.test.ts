@@ -425,15 +425,15 @@ describe('divergence detection at the ack boundary', () => {
 					fields: [
 						{
 							field: `line_items[${ORDER_MONEY_ORACLE_LINE_UUID}].subtotal`,
-							expected: '29.970000',
-							got: '25.000000',
-							decimals: 6,
+							expected: '29.97',
+							got: '25.00',
+							decimals: 2,
 						},
 						{
 							field: `line_items[${ORDER_MONEY_ORACLE_LINE_UUID}].total`,
-							expected: '29.970000',
-							got: '25.000000',
-							decimals: 6,
+							expected: '29.97',
+							got: '25.00',
+							decimals: 2,
 						},
 					],
 				},
@@ -474,8 +474,8 @@ describe('divergence detection at the ack boundary', () => {
 					mutationId: expect.any(String),
 					mode: 'exact-6dp',
 					fields: [
-						{ field: 'total', expected: '36.680000', got: '50.070000', decimals: 6 },
-						{ field: 'total_tax', expected: '6.710000', got: '11.100000', decimals: 6 },
+						{ field: 'total', expected: '36.68', got: '50.07', decimals: 2 },
+						{ field: 'total_tax', expected: '6.71', got: '11.10', decimals: 2 },
 					],
 				},
 			]);
@@ -502,6 +502,7 @@ describe('divergence detection at the ack boundary', () => {
 				fields: expect.objectContaining({
 					recordId: ORDER_UUID,
 					outcome: 'failed',
+					roundingClass: 'material',
 					mode: 'exact-6dp',
 					divergentFields: `line_items[${ORDER_MONEY_ORACLE_LINE_UUID}].total`,
 				}),

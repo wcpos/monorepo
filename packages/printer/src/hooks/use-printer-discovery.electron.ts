@@ -1,19 +1,18 @@
 /// <reference path="../types/point-of-sale-connectors.d.ts" />
 import * as React from 'react';
 
-import WebBluetoothReceiptPrinter from '@point-of-sale/webbluetooth-receipt-printer';
-
-import type { TypedIpcRenderer } from '@wcpos/printer/ipc-channels';
-
 import {
 	type BluetoothScanSession,
 	createBluetoothScanSession,
+	getIpcRenderer,
 } from '../discovery/bluetooth-scan-session';
 import { identifyDiscoveredPrinters } from '../discovery/identify';
 import { createIdentifyProbes } from '../discovery/identify-probes.electron';
 import { mapWebDeviceToDiscoveredPrinter } from '../discovery/map-web-device';
 import { mergePrinters } from '../discovery/merge-printers';
 import { parseTarget } from '../transport/device-key';
+import { rememberBleDevice } from '../transport/ble-device-registry';
+import { BLE_PRINT_SERVICE_UUIDS, type WebBluetoothNavigator } from '../transport/ble-gatt';
 import { saveWebDevice } from '../transport/web-device-store';
 
 import type {
@@ -22,14 +21,6 @@ import type {
 	DiscoveryError,
 	PrinterDiscovery,
 } from '../types';
-
-function getIpcRenderer(): TypedIpcRenderer | null {
-	const w = window as {
-		ipcRenderer?: TypedIpcRenderer;
-		electronAPI?: { ipcRenderer?: TypedIpcRenderer };
-	};
-	return w.ipcRenderer ?? w.electronAPI?.ipcRenderer ?? null;
-}
 
 /**
  * Electron-specific printer discovery: mDNS via the main process, installed/USB printers
@@ -195,9 +186,21 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 			{
 				sendSelection: (deviceId) => ipc.send('bluetooth-device-selected', deviceId),
 				startChooser: (onConnected) => {
-					const printer = new WebBluetoothReceiptPrinter();
-					printer.addEventListener('connected', onConnected);
-					printer.connect(); // synchronous within the click gesture → select-bluetooth-device in main
+					// First async call stays inside the click gesture so Electron opens its chooser.
+					return (navigator as WebBluetoothNavigator)
+						.bluetooth!.requestDevice({
+							acceptAllDevices: true,
+							optionalServices: BLE_PRINT_SERVICE_UUIDS,
+						})
+						.then((device) => {
+							rememberBleDevice('webbluetooth:' + device.id, device);
+							onConnected({
+								type: 'bluetooth',
+								name: device.name ?? 'Bluetooth printer',
+								id: device.id,
+								language: 'esc-pos',
+							});
+						});
 				},
 			},
 			{
