@@ -27,15 +27,31 @@ function mapPort(ports: VirtualPrinterPorts, port: number): number | null {
 	return null;
 }
 
+export interface ScenarioTls {
+	cert: string;
+	fingerprint256: string;
+}
+/** Chain-verify against the scenario's own certificate and pin its fingerprint (it names no host). */
+function tlsOptions(tls?: ScenarioTls): https.RequestOptions {
+	if (!tls) return {};
+	return {
+		ca: tls.cert,
+		checkServerIdentity: (_host, peer) =>
+			peer.fingerprint256 === tls.fingerprint256
+				? undefined
+				: new Error('unexpected virtual printer certificate'),
+	};
+}
 function request(
 	secure: boolean,
 	options: https.RequestOptions,
-	body?: string
+	body?: string,
+	tls?: ScenarioTls
 ): Promise<{ status: number; body: string }> {
 	return new Promise((resolve, reject) => {
-		// Secure Printing presents a self-signed certificate; the print path must not need a chain.
+		// Secure Printing presents a self-signed certificate: trust exactly that one (`ca`).
 		const send = secure ? https.request : http.request;
-		const req = send({ ...options, rejectUnauthorized: false }, (res) => {
+		const req = send({ ...options, ...(secure ? tlsOptions(tls) : {}) }, (res) => {
 			const chunks: Buffer[] = [];
 			res.on('data', (chunk: Buffer) => chunks.push(chunk));
 			res.on('end', () =>
@@ -54,7 +70,8 @@ function request(
  */
 export function createScenarioProbes(
 	ports: VirtualPrinterPorts,
-	touched: number[] = []
+	touched: number[] = [],
+	tls?: ScenarioTls
 ): IdentifyProbes & { touched: number[] } {
 	const postEpos: IdentifyProbes['postEpos'] = async (host, port, path, xml, timeoutMs) => {
 		const target = mapPort(ports, port);
@@ -71,7 +88,8 @@ export function createScenarioProbes(
 				headers: { 'Content-Type': 'text/xml' },
 				timeout: Math.max(1, timeoutMs),
 			},
-			xml
+			xml,
+			tls
 		);
 	};
 

@@ -9,6 +9,7 @@
  */
 import http from 'node:http';
 import https from 'node:https';
+import crypto from 'node:crypto';
 import net from 'node:net';
 import { once } from 'node:events';
 
@@ -164,5 +165,9 @@ export async function createVirtualPrinter(options = {}) {
 		);
 	};
 
-	return { scenario: spec, name, ports, jobs, events, close };
+	// The self-signed certificate the HTTPS scenario serves, as PEM plus its SHA-256 fingerprint, so
+	// a caller can pin exactly this one (the cert names no host) instead of disabling verification.
+	const { cert } = tlsCert();
+	const fingerprint256 = new crypto.X509Certificate(cert).fingerprint256;
+	return { scenario: spec, name, ports, jobs, events, tls: { cert, fingerprint256 }, close };
 }

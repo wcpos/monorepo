@@ -25,11 +25,23 @@ const sendRaw = async (port, bytes) => {
 	await new Promise((resolve) => socket.on('close', resolve));
 };
 
-/** The app reaches a printer's self-signed HTTPS the same way: without checking the chain. */
-const getInsecure = (port, path) =>
+/** Trust exactly the certificate the scenario serves (a real Epson's is self-signed too). */
+const getSecure = (printer, path) =>
 	new Promise((resolve, reject) => {
 		https
-			.get({ host: '127.0.0.1', port, path, rejectUnauthorized: false }, async (response) => {
+			.get(
+				{
+					host: '127.0.0.1',
+					port: printer.ports.https,
+					path,
+					ca: printer.tls.cert,
+					// The cert names no host: pin its fingerprint instead of skipping verification.
+					checkServerIdentity: (_host, peer) =>
+						peer.fingerprint256 === printer.tls.fingerprint256
+							? undefined
+							: new Error('unexpected virtual printer certificate'),
+				},
+				async (response) => {
 				const chunks = [];
 				for await (const chunk of response) chunks.push(chunk);
 				resolve({ status: response.statusCode, body: Buffer.concat(chunks).toString('utf8') });
@@ -84,7 +96,7 @@ test('HTTP requests are recorded as events', async () => {
 
 test('the ePOS-Device scenario serves a socket.io banner over TLS', async () => {
 	await withPrinter({ scenario: 'epos-device' }, async (printer) => {
-		const response = await getInsecure(printer.ports.https, '/cgi-bin/epos/service.cgi');
+		const response = await getSecure(printer, '/cgi-bin/epos/service.cgi');
 		assert.equal(response.status, 200);
 		assert.equal(response.body, 'Welcome to socket.io.');
 	});

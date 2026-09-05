@@ -47,7 +47,7 @@ async function sendRaw(port: number, bytes: number[]): Promise<void> {
 describe('identify against the virtual printer', () => {
 	it('default: picks the ePOS lane and records the status that decided it', async () => {
 		const printer = await start('default');
-		const probes = createScenarioProbes(printer.ports);
+		const probes = createScenarioProbes(printer.ports, [], printer.tls);
 
 		const identity = await identifyPrinter('127.0.0.1', { name: 'Virtual WCPOS Printer' }, probes);
 
@@ -63,7 +63,7 @@ describe('identify against the virtual printer', () => {
 
 	it('secure-printing: TLS-only ePOS is flagged, and 9100 is never touched', async () => {
 		const printer = await start('secure-printing');
-		const probes = createScenarioProbes(printer.ports);
+		const probes = createScenarioProbes(printer.ports, [], printer.tls);
 
 		const identity = await identifyPrinter('127.0.0.1', { name: 'EPSON TM-m30III' }, probes);
 
@@ -80,7 +80,7 @@ describe('identify against the virtual printer', () => {
 		const identity = await identifyPrinter(
 			'127.0.0.1',
 			{ name: 'EPSON TM-T88VII' },
-			createScenarioProbes(printer.ports)
+			createScenarioProbes(printer.ports, [], printer.tls)
 		);
 
 		// A held printer answers 503 to everything: no ePOS lane, but the 503 is on the port row,
@@ -101,7 +101,7 @@ describe('identify against the virtual printer', () => {
 		const identity = await identifyPrinter(
 			'127.0.0.1',
 			{ name: 'Receipt Printer' },
-			createScenarioProbes(printer.ports)
+			createScenarioProbes(printer.ports, [], printer.tls)
 		);
 
 		expect(identity.lane).toEqual({ port: 9100, protocol: 'raw', encrypted: false });
@@ -120,7 +120,7 @@ describe('identify against the virtual printer', () => {
 		const identity = await identifyPrinter(
 			'127.0.0.1',
 			{ name: 'Star TSP143' },
-			createScenarioProbes(printer.ports)
+			createScenarioProbes(printer.ports, [], printer.tls)
 		);
 
 		expect(identity.vendor).toBe('star');
@@ -133,7 +133,7 @@ describe('identify against the virtual printer', () => {
 		const identity = await identifyPrinter(
 			'127.0.0.1',
 			{ name: 'Star TSP100' },
-			createScenarioProbes(printer.ports)
+			createScenarioProbes(printer.ports, [], printer.tls)
 		);
 
 		expect(identity.vendor).toBe('star');
@@ -146,7 +146,7 @@ describe('identify against the virtual printer', () => {
 		const identity = await identifyPrinter(
 			'127.0.0.1',
 			{ name: 'TM-DT Box' },
-			createScenarioProbes(printer.ports)
+			createScenarioProbes(printer.ports, [], printer.tls)
 		);
 
 		// The port answered (404: ePOS off) but never became a lane; the status row is kept for the report.
@@ -171,7 +171,7 @@ describe('identify against the virtual printer', () => {
 		const identity = await identifyPrinter(
 			'127.0.0.1',
 			{ name: 'HP OfficeJet Pro 9015' },
-			createScenarioProbes(printer.ports)
+			createScenarioProbes(printer.ports, [], printer.tls)
 		);
 
 		expect(identity.lane).toBeNull();
@@ -186,7 +186,7 @@ describe('identify against the virtual printer', () => {
 		const identity = await identifyPrinter(
 			'127.0.0.1',
 			{ name: 'Slow Printer' },
-			createScenarioProbes(printer.ports),
+			createScenarioProbes(printer.ports, [], printer.tls),
 			{ timeoutMs: 4_000 }
 		);
 
