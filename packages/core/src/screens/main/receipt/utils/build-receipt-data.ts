@@ -37,6 +37,12 @@ interface ReceiptStore {
 }
 
 interface ReceiptCustomer {
+	/**
+	 * WooCommerce customer id; null for a guest sale. Mirrors the PHP
+	 * Receipt_Data_Builder so templates can key on `customer.id` (the guest
+	 * customer carries a real billing name, so `name` cannot tell them apart).
+	 */
+	id: number | null;
 	name: string;
 	email: string;
 	phone: string;
@@ -842,7 +848,9 @@ export function buildReceiptData(
 							},
 						]
 					: [];
+			const customerId = Number(order.customer_id) || 0;
 			return {
+				id: customerId > 0 ? customerId : null,
 				name: [billing.first_name, billing.last_name].filter(Boolean).join(' '),
 				email: billing.email || '',
 				phone: billing.phone || '',

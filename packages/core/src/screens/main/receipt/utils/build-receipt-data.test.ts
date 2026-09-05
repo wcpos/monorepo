@@ -290,6 +290,15 @@ describe('buildReceiptData', () => {
 		expect(result.customer.phone).toBe('555-1234');
 	});
 
+	it('carries the customer id, null for a guest sale', () => {
+		// The guest customer is written onto the order with a real billing name
+		// ("Guest"), so `customer.id` is the only way a template can tell a
+		// known customer from a guest — same contract as the PHP builder.
+		expect(buildReceiptData({ ...mockOrder, customer_id: 7 }, mockStore).customer.id).toBe(7);
+		expect(buildReceiptData({ ...mockOrder, customer_id: 0 }, mockStore).customer.id).toBeNull();
+		expect(buildReceiptData(mockOrder, mockStore).customer.id).toBeNull();
+	});
+
 	it('maps line items', () => {
 		const result = buildReceiptData(mockOrder, mockStore);
 		expect(result.lines).toHaveLength(1);
