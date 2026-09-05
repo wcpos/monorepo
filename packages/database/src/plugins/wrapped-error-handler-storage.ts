@@ -530,7 +530,7 @@ function handleStorageError(
 	if (message.startsWith(REQUEST_REMOTE_ERROR_MARKER)) {
 		const workerFailure = isStorageWorkerFailure(error);
 		const remoteError = getRemoteErrorDetails(message);
-		const signature = `${methodName}:${remoteError.name ?? ''}`;
+		const signature = `${methodName}:${remoteError.name ?? remoteError.message ?? ''}`;
 		const level = state.activeRemoteErrorSignatures.has(signature) ? 'debug' : 'error';
 		state.activeRemoteErrorSignatures.add(signature);
 		storageLogger[level](

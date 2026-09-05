@@ -135,6 +135,31 @@ describe('wrappedErrorHandlerStorage', () => {
 			}
 		);
 
+		it('logs string-form remote errors by message and suppresses only repeats', async () => {
+			const stringError = (message: string) =>
+				new Error(`could not requestRemote: ${JSON.stringify({ error: message })}`);
+			const write = jest
+				.fn()
+				.mockRejectedValueOnce(stringError('first remote failure'))
+				.mockRejectedValueOnce(stringError('first remote failure'))
+				.mockRejectedValueOnce(stringError('second remote failure'));
+			const instance = await wrap(write);
+
+			for (let count = 0; count < 3; count += 1) {
+				await expect(instance.bulkWrite([], 'test')).rejects.toThrow('could not requestRemote');
+			}
+
+			expect(mockLoggerInstance.error).toHaveBeenCalledTimes(2);
+			expect(mockLoggerInstance.debug).toHaveBeenCalledTimes(1);
+			expect(mockLoggerInstance.error).toHaveBeenNthCalledWith(
+				2,
+				'Storage remote method error in bulkWrite',
+				expect.objectContaining({
+					context: expect.objectContaining({ remoteErrorMessage: 'second remote failure' }),
+				})
+			);
+		});
+
 		it('logs repeats at debug and re-arms only after the same method succeeds', async () => {
 			const write = jest.fn().mockRejectedValue(remoteError());
 			const instance = await wrap(write);
