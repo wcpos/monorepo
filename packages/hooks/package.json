@@ -51,13 +51,13 @@
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^7.0.1",
-    "@testing-library/react": "^16.3.2",
+    "@testing-library/react": "^16.3.3",
     "@types/jest": "^30.0.0",
     "@types/lodash": "^4.17.25",
     "@types/react": "^19.2.18",
-    "jest": "^30.4.2",
+    "jest": "^30.5.1",
     "react-native": "0.86.2",
-    "react-test-renderer": "19.2.3",
+    "react-test-renderer": "19.2.8",
     "ts-jest": "^29.4.12"
   }
 }
