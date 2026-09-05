@@ -73,11 +73,17 @@ describe('connectBleReceiptPrinter', () => {
 
 	it('names discovered services when no supported profile exists', async () => {
 		const unknownService = '12345678-1234-1234-1234-123456789abc';
-		const { device } = mockDevice({ [unknownService]: ['87654321-4321-4321-4321-cba987654321'] });
+		const { device, server } = mockDevice({
+			[unknownService]: ['87654321-4321-4321-4321-cba987654321'],
+		});
+		server.disconnect.mockImplementation(() => {
+			throw new Error('Disconnect failed');
+		});
 
 		await expect(connectBleReceiptPrinter(device)).rejects.toThrow(
 			`No supported print service on Receipt Printer (services: ${unknownService})`
 		);
+		expect(server.disconnect).toHaveBeenCalledOnce();
 	});
 
 	it('writes a 50-byte job in 20/20-byte chunks without response and the last 10 bytes acknowledged', async () => {

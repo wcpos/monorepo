@@ -65,8 +65,9 @@ export async function connectBleReceiptPrinter(
 		context: { device: device.name ?? device.id },
 	});
 
+	let server: BluetoothRemoteGATTServer | undefined;
 	try {
-		const server = await device.gatt.connect();
+		server = await device.gatt.connect();
 		let match:
 			| {
 					profile: string;
@@ -88,12 +89,6 @@ export async function connectBleReceiptPrinter(
 
 		if (!match) {
 			const uuids = (await server.getPrimaryServices()).map((service) => service.uuid);
-			// Release the link: a connected BLE printer stops advertising until it is dropped.
-			try {
-				server.disconnect();
-			} catch {
-				// Nothing more to release.
-			}
 			throw new Error(
 				`No supported print service on ${device.name ?? device.id} (services: ${uuids.join(', ')})`
 			);
@@ -103,6 +98,7 @@ export async function connectBleReceiptPrinter(
 		printerLogger.info('BLE GATT print profile matched', {
 			context: { profile, characteristic: characteristicUuid },
 		});
+		const connectedServer = server;
 
 		return {
 			profile,
@@ -132,7 +128,7 @@ export async function connectBleReceiptPrinter(
 			},
 			async disconnect() {
 				try {
-					server.disconnect();
+					connectedServer.disconnect();
 				} catch (cause) {
 					warnFailure(cause);
 					throw cause;
@@ -140,6 +136,11 @@ export async function connectBleReceiptPrinter(
 			},
 		};
 	} catch (cause) {
+		try {
+			server?.disconnect();
+		} catch {
+			// Preserve the operation failure that triggered cleanup.
+		}
 		warnFailure(cause);
 		throw cause;
 	}
