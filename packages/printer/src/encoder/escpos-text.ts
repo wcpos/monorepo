@@ -70,11 +70,11 @@ const ESCPOS_HEADER_SCAN_BYTES = 8;
 export function withEscposFontA(bytes: Uint8Array, language: EscposLanguage): Uint8Array {
 	if (language !== 'esc-pos') return bytes;
 	const header = bytes.subarray(0, ESCPOS_HEADER_SCAN_BYTES);
-	const selectsFont = header.some(
-		(byte, index) =>
-			byte === ESCPOS_SELECT_FONT_A[0] && header[index + 1] === ESCPOS_SELECT_FONT_A[1]
+	// Only an explicit Font A (ESC M 0) counts; ESC M 1 selects Font B and must not be mistaken for it.
+	const selectsFontA = header.some((_byte, index) =>
+		ESCPOS_SELECT_FONT_A.every((expected, offset) => header[index + offset] === expected)
 	);
-	if (selectsFont) return bytes;
+	if (selectsFontA) return bytes;
 	const startsInitialized = ESCPOS_INITIALIZE.every((byte, index) => bytes[index] === byte);
 	const offset = startsInitialized ? ESCPOS_INITIALIZE.length : 0;
 	const out = new Uint8Array(bytes.length + ESCPOS_SELECT_FONT_A.length);

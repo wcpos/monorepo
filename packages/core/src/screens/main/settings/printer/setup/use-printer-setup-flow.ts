@@ -142,9 +142,11 @@ interface SetupArgs {
 	persist: (data: PrinterFormValues) => Promise<string>;
 	t: (key: string) => string;
 	printerCount?: number;
+	/** Address/port/vendor handed in by a caller (e.g. a scanner result); the address form opens on it. */
+	prefill?: Partial<PrinterFormValues>;
 }
 export function usePrinterSetupFlow(
-	{ discovery, printerService, persist, t, printerCount = 0 }: SetupArgs,
+	{ discovery, printerService, persist, t, printerCount = 0, prefill }: SetupArgs,
 	{ platform = 'electron' }: { platform?: SetupPlatform } = {}
 ) {
 	const web = platform === 'web';
@@ -161,6 +163,7 @@ export function usePrinterSetupFlow(
 			...(web ? { vendor: 'epson' as const, ...deriveWebVendorDefaults('epson') } : {}),
 			name: t('settings.receipt_printer'),
 			isDefault: printerCount === 0,
+			...prefill,
 		},
 	});
 	const current = React.useRef(state);
@@ -241,7 +244,14 @@ export function usePrinterSetupFlow(
 		else if (/^web(usb|bluetooth):/.test(selected.address) && !selected.identity?.vendor)
 			vendor = 'generic';
 		// Bluetooth and USB run through the Epson and Star SDKs; native has no generic device transport.
-		if (native && selected.connectionType !== 'network' && vendor === 'generic') vendor = 'epson';
+		// SDK Bluetooth/USB rows print through the Epson or Star SDK; a `ble:` row is the generic GATT lane.
+		if (
+			native &&
+			selected.connectionType !== 'network' &&
+			vendor === 'generic' &&
+			!/^ble:/i.test(selected.address)
+		)
+			vendor = 'epson';
 		const secureTarget = native ? secureTargetFor(selected) : undefined;
 		if (secureTarget) vendor = 'epson';
 		const lane = selected.identity?.lane;

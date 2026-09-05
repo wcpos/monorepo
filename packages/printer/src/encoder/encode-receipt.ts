@@ -139,7 +139,15 @@ export function buildReceiptMarkupJob(
 	return {
 		template: DEFAULT_THERMAL_TEMPLATE,
 		data: templateData,
-		options: { printerModel, language, columns, enableCp932, emitEscPrintMode, drawerConnector },
+		options: {
+			printerModel,
+			language,
+			columns,
+			enableCp932,
+			emitEscPrintMode,
+			drawerConnector,
+			codePage,
+		},
 	};
 }
 

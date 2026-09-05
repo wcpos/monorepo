@@ -29,7 +29,8 @@ export async function resolveNativePrinterColumns(input: {
 	printerLogger.debug('Printer columns query started', { context: { ...input } });
 	// A generic BLE printer answers no width query and its advertised name is rarely a model the
 	// table knows, so the flow asks the merchant instead of guessing from a near-miss name match.
-	if (input.address.startsWith(BLE_PREFIX) && (input.vendor ?? 'generic') === 'generic') {
+	// Whatever vendor the form later settles on, a `ble:` target is the generic GATT lane.
+	if (input.address.startsWith(BLE_PREFIX)) {
 		printerLogger.info('Printer columns resolved', {
 			context: { ...input, columns: undefined, source: 'default' },
 		});

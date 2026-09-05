@@ -202,6 +202,7 @@ export async function buildThermalTemplateMarkupJob(
 		data: formatted as Record<string, unknown>,
 		options: {
 			...input.encodeOptions,
+			codePage: input.codePage,
 			imageMode: 'raster',
 			imageAssets,
 			barcodeMode: 'image',

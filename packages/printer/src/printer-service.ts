@@ -240,11 +240,13 @@ export class PrinterService {
 		html?: string,
 		decimals?: number
 	): Promise<void> {
-		return this.enqueue('receipt', profile?.id ?? SYSTEM_QUEUE_ID, async () => {
-			if (
-				!profile ||
-				(profile.connectionType === 'system' && !profile.address?.startsWith('winspool:'))
-			) {
+		// Anything that ends in the OS print dialog shares one queue, so two dialogs never open at once;
+		// winspool queues are raw jobs and keep their own.
+		const usesSystemDialog =
+			!profile ||
+			(profile.connectionType === 'system' && !profile.address?.startsWith('winspool:'));
+		return this.enqueue('receipt', usesSystemDialog ? SYSTEM_QUEUE_ID : profile.id, async () => {
+			if (usesSystemDialog) {
 				// Fallback: system print dialog with HTML
 				const transport = new SystemPrintAdapter();
 				if (!html) {

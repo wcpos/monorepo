@@ -149,9 +149,16 @@ async function openConnection(deviceId: string): Promise<BleConnection> {
 	}
 	const bleManager = await getBleManager();
 	const device = await bleManager.connectToDevice(deviceId, { requestMTU: ANDROID_MTU });
-	await device.discoverAllServicesAndCharacteristics();
-	const match = await findPrintCharacteristic(device);
-	if (!match) throw new Error(`No supported print service on ${device.name ?? deviceId}`);
+	let match: Awaited<ReturnType<typeof findPrintCharacteristic>>;
+	try {
+		await device.discoverAllServicesAndCharacteristics();
+		match = await findPrintCharacteristic(device);
+		if (!match) throw new Error(`No supported print service on ${device.name ?? deviceId}`);
+	} catch (error) {
+		// A half-open link keeps the printer from advertising; drop it before reporting.
+		await device.cancelConnection().catch(() => undefined);
+		throw error;
+	}
 	const connection: BleConnection = {
 		device,
 		...match,

@@ -53,6 +53,7 @@ import {
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 
+import type { PrinterDialogPrefill } from '../profile-config';
 import type * as z from 'zod';
 
 /**
@@ -77,18 +78,35 @@ function SetupWidthSelect({ value, onValueChange, ...props }: SelectSingleRootPr
 		/>
 	);
 }
+/** A caller's prefill is a discovered-printer shape; the draft wants form values. */
+function prefillDraft(prefill?: PrinterDialogPrefill): Partial<PrinterFormValues> | undefined {
+	if (!prefill) return undefined;
+	return {
+		...(prefill.name ? { name: prefill.name } : {}),
+		...(prefill.address ? { address: prefill.address } : {}),
+		...(prefill.port != null ? { port: prefill.port } : {}),
+		...(prefill.vendor ? { vendor: prefill.vendor } : {}),
+		// Cloud printers are registered server-side; the setup flow only handles local lanes.
+		...(prefill.connectionType && prefill.connectionType !== 'cloud'
+			? { connectionType: prefill.connectionType }
+			: {}),
+		...(prefill.nativeInterfaceType ? { nativeInterfaceType: prefill.nativeInterfaceType } : {}),
+	};
+}
 export function PrinterSetupDialog({
 	open,
 	onOpenChange,
 	onSave,
 	printerCount = 0,
 	platform = 'electron',
+	prefill,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	onSave: () => void;
 	printerCount?: number;
 	platform?: SetupPlatform;
+	prefill?: PrinterDialogPrefill;
 }) {
 	const t = useT();
 	const web = platform === 'web';
@@ -103,6 +121,7 @@ export function PrinterSetupDialog({
 			persist: (data) => persistPrinterProfile(storeDB, data),
 			t,
 			printerCount,
+			prefill: prefillDraft(prefill),
 		},
 		{ platform }
 	);
@@ -124,7 +143,7 @@ export function PrinterSetupDialog({
 		resolver: standardSchemaResolver(schema as z.ZodType<PrinterFormValues, PrinterFormValues>),
 	});
 	const [optionsOpen, setOptionsOpen] = React.useState(false);
-	const [addressOpen, setAddressOpen] = React.useState(false);
+	const [addressOpen, setAddressOpen] = React.useState(Boolean(prefill?.address));
 	const bleScanning = Boolean(discovery.isBluetoothScanning);
 	const busy =
 		bleScanning ||
