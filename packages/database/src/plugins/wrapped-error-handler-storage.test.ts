@@ -27,6 +27,7 @@ const terminalFailureApi = jest.requireActual<typeof import('./wrapped-error-han
 
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: jest.fn(() => ({
+		debug: jest.fn(),
 		warn: jest.fn(),
 		error: jest.fn(),
 	})),
@@ -38,6 +39,7 @@ jest.mock('@wcpos/utils/logger', () => ({
  * (jest.mock is hoisted), so we can grab the instance it returned.
  */
 const mockLoggerInstance = (getLogger as jest.Mock).mock.results[0].value as {
+	debug: jest.Mock;
 	warn: jest.Mock;
 	error: jest.Mock;
 };
@@ -82,6 +84,148 @@ function createMockStorage(instance: RxStorageInstance<any, any, any, any>) {
 describe('wrappedErrorHandlerStorage', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+	});
+
+	describe('remote failure diagnostics', () => {
+		const remoteMessage =
+			'A requested file or directory could not be found at the time an operation was processed.';
+		const remoteError = (name = 'NotFoundError', message = remoteMessage) =>
+			new Error(
+				'could not requestRemote: ' +
+					JSON.stringify({
+						error: { name, message, code: 8 },
+						params: ['private document'],
+					})
+			);
+		async function wrap(bulkWrite = jest.fn().mockRejectedValue(remoteError())) {
+			return wrappedErrorHandlerStorage({
+				storage: createMockStorage(
+					createMockStorageInstance({
+						bulkWrite,
+						findDocumentsById: jest.fn().mockResolvedValue([]),
+					})
+				),
+			}).createStorageInstance({ databaseName: 'remote-db' } as Parameters<
+				RxStorage<unknown, unknown>['createStorageInstance']
+			>[0]);
+		}
+		beforeEach(() => clearStorageDegradation());
+		afterEach(() => clearStorageDegradation());
+
+		it.each([remoteMessage, 'x'.repeat(250)])(
+			'logs only remote error details (%s)',
+			async (message) => {
+				const instance = await wrap(
+					jest.fn().mockRejectedValue(remoteError('NotFoundError', message))
+				);
+				await expect(instance.bulkWrite([], 'test')).rejects.toThrow('could not requestRemote');
+				expect(mockLoggerInstance.error).toHaveBeenCalledWith(
+					'Storage remote method error in bulkWrite',
+					expect.objectContaining({
+						context: {
+							method: 'bulkWrite',
+							remoteErrorName: 'NotFoundError',
+							remoteErrorMessage: message.slice(0, 200),
+							remoteErrorCode: 8,
+							recoveryDocumentId: undefined,
+							recoveryFailure: undefined,
+						},
+					})
+				);
+			}
+		);
+
+		it('logs repeats at debug and re-arms only after the same method succeeds', async () => {
+			const write = jest.fn().mockRejectedValue(remoteError());
+			const instance = await wrap(write);
+			await expect(instance.bulkWrite([], 'test')).rejects.toThrow();
+			await instance.findDocumentsById([], false);
+			await expect(instance.bulkWrite([], 'test')).rejects.toThrow();
+			expect(mockLoggerInstance.error).toHaveBeenCalledTimes(1);
+			expect(mockLoggerInstance.debug).toHaveBeenCalledWith(
+				'Storage remote method error in bulkWrite',
+				expect.anything()
+			);
+			write.mockResolvedValueOnce({ error: [] });
+			await instance.bulkWrite([], 'test');
+			await expect(instance.bulkWrite([], 'test')).rejects.toThrow();
+			expect(mockLoggerInstance.error).toHaveBeenCalledTimes(2);
+			expect(isStorageDegraded('remote-db')).toBe(false);
+		});
+
+		it('does not re-arm logging when a failed RPC returns a handled fallback', async () => {
+			const write = jest.fn().mockRejectedValue(remoteError());
+			const instance = await wrap(write);
+			await expect(instance.bulkWrite([], 'test')).rejects.toThrow();
+			write.mockRejectedValueOnce(new Error('CONFLICT'));
+			await instance.bulkWrite([], 'test');
+			await expect(instance.bulkWrite([], 'test')).rejects.toThrow();
+			expect(mockLoggerInstance.error).toHaveBeenCalledTimes(1);
+			expect(mockLoggerInstance.debug).toHaveBeenCalledTimes(1);
+		});
+
+		it.each(['NotFoundError', 'QuotaExceededError'])(
+			'latches only the third NotFoundError (%s)',
+			async (name) => {
+				const instance = await wrap(jest.fn().mockRejectedValue(remoteError(name)));
+				for (let count = 1; count <= 3; count += 1) {
+					await expect(instance.bulkWrite([], 'test')).rejects.toThrow();
+					expect(isStorageDegraded('remote-db')).toBe(name === 'NotFoundError' && count === 3);
+				}
+				if (name === 'NotFoundError') {
+					expect(mockLoggerInstance.error).toHaveBeenCalledWith(
+						'Storage degraded for database "remote-db" in bulkWrite',
+						expect.objectContaining({ code: 'SYNC161' })
+					);
+				}
+			}
+		);
+
+		it.each(['success', 'QuotaExceededError'])(
+			'breaks the failure streak on %s',
+			async (interruption) => {
+				const write = jest.fn().mockRejectedValue(remoteError());
+				const instance = await wrap(write);
+				for (let count = 0; count < 2; count += 1) {
+					await expect(instance.bulkWrite([], 'test')).rejects.toThrow();
+				}
+				if (interruption === 'success') {
+					write.mockResolvedValueOnce({ error: [] });
+					await instance.bulkWrite([], 'test');
+				} else {
+					write.mockRejectedValueOnce(remoteError(interruption));
+					await expect(instance.bulkWrite([], 'test')).rejects.toThrow();
+				}
+				await expect(instance.bulkWrite([], 'test')).rejects.toThrow();
+				expect(isStorageDegraded('remote-db')).toBe(false);
+			}
+		);
+
+		it('keeps counts and signatures separate for instances of the same database', async () => {
+			const first = await wrap();
+			const second = await wrap();
+			await expect(first.bulkWrite([], 'test')).rejects.toThrow();
+			await expect(first.bulkWrite([], 'test')).rejects.toThrow();
+			await expect(second.bulkWrite([], 'test')).rejects.toThrow();
+			expect(mockLoggerInstance.error).toHaveBeenCalledTimes(2);
+			expect(isStorageDegraded('remote-db')).toBe(false);
+		});
+
+		it('does not latch for three NotFoundError reads', async () => {
+			const instance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(
+					createMockStorageInstance({
+						findDocumentsById: jest.fn().mockRejectedValue(remoteError()),
+					})
+				),
+			}).createStorageInstance({ databaseName: 'remote-db' } as Parameters<
+				RxStorage<unknown, unknown>['createStorageInstance']
+			>[0]);
+			for (let count = 0; count < 3; count += 1) {
+				await expect(instance.findDocumentsById([], false)).rejects.toThrow();
+			}
+			expect(isStorageDegraded('remote-db')).toBe(false);
+		});
 	});
 
 	// -----------------------------------------------------------------------
