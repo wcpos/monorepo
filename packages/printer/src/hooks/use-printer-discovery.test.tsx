@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { discover as discoverBle } from '../discovery/ble-native-discovery';
 import { discover as discoverEpson } from '../discovery/epson-native-discovery';
 import { identifyDiscoveredPrinters } from '../discovery/identify';
 import { discover as discoverStar } from '../discovery/star-native-discovery';
@@ -21,6 +22,7 @@ vi.mock('../discovery/epson-native-discovery', () => ({
 	discover: vi.fn(),
 }));
 vi.mock('../discovery/star-native-discovery', () => ({ discover: vi.fn() }));
+vi.mock('../discovery/ble-native-discovery', () => ({ discover: vi.fn() }));
 vi.mock('../discovery/identify', () => ({ identifyDiscoveredPrinters: vi.fn() }));
 vi.mock('../discovery/identify-probes', () => ({ createIdentifyProbes: () => ({}) }));
 
@@ -28,6 +30,7 @@ describe('usePrinterDiscovery (native)', () => {
 	beforeEach(() => {
 		vi.mocked(discoverEpson).mockReset().mockResolvedValue([discoveredPrinter]);
 		vi.mocked(discoverStar).mockReset().mockResolvedValue([]);
+		vi.mocked(discoverBle).mockReset().mockResolvedValue([]);
 		vi.mocked(identifyDiscoveredPrinters).mockReset();
 	});
 
@@ -41,6 +44,27 @@ describe('usePrinterDiscovery (native)', () => {
 
 		expect(result.current.printers).toEqual([{ ...discoveredPrinter, port: 443 }]);
 		expect(result.current.isScanning).toBe(false);
+	});
+
+	it('lists generic BLE printers alongside the vendor SDK rows', async () => {
+		const bleRow: DiscoveredPrinter = {
+			id: 'ble-aa:11',
+			name: 'NT-1809',
+			connectionType: 'bluetooth',
+			address: 'ble:aa:11',
+			vendor: 'generic',
+		};
+		vi.mocked(discoverEpson).mockResolvedValue([]);
+		vi.mocked(discoverBle).mockResolvedValue([bleRow]);
+		vi.mocked(identifyDiscoveredPrinters).mockResolvedValue([bleRow]);
+		const { result } = renderHook(() => usePrinterDiscovery());
+
+		await act(async () => {
+			await result.current.startScan();
+		});
+
+		expect(result.current.printers).toEqual([bleRow]);
+		expect(result.current.error).toBeNull();
 	});
 
 	it('does not merge identification results after the scan is stopped', async () => {

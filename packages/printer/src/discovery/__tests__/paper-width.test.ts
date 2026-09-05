@@ -30,6 +30,19 @@ describe('native printer paper width', () => {
 		).resolves.toEqual({ columns, source: 'printer' });
 	});
 
+	it('asks the merchant for a generic BLE printer instead of guessing from its name', async () => {
+		getPaperWidthMm.mockClear();
+		await expect(
+			resolveNativePrinterColumns({
+				address: 'ble:aa:11',
+				connectionType: 'bluetooth',
+				vendor: 'generic',
+				name: 'Netum NT-1809',
+			})
+		).resolves.toEqual({ columns: undefined, source: 'default' });
+		expect(getPaperWidthMm).not.toHaveBeenCalled();
+	});
+
 	it('falls back to the model table when the SDK query fails', async () => {
 		getPaperWidthMm.mockRejectedValueOnce(new Error('query failed'));
 		await expect(

@@ -49,6 +49,7 @@
 	},
 	"peerDependencies": {
 		"expo-print": ">=55.0.0",
+		"react-native-ble-plx": ">=3.0.0",
 		"react-native-esc-pos-printer": ">=4.0.0",
 		"react-native-star-io10": ">=1.0.0",
 		"react-native-tcp-socket": ">=6.0.0"
@@ -58,6 +59,9 @@
 			"optional": true
 		},
 		"react-native-tcp-socket": {
+			"optional": true
+		},
+		"react-native-ble-plx": {
 			"optional": true
 		},
 		"react-native-esc-pos-printer": {

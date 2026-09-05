@@ -1,4 +1,4 @@
-export type NativeDiscoveryVendor = 'epson' | 'star';
+export type NativeDiscoveryVendor = 'epson' | 'star' | 'ble';
 
 export type DiscoveryFailureKind = 'package-missing' | 'native-module-missing' | 'scan-failed';
 
@@ -17,7 +17,8 @@ function stringifyError(error: unknown): string {
 }
 
 function toVendorLabel(vendor: NativeDiscoveryVendor): string {
-	return vendor === 'epson' ? 'Epson' : 'Star';
+	if (vendor === 'epson') return 'Epson';
+	return vendor === 'star' ? 'Star' : 'Bluetooth';
 }
 
 export function classifyDiscoveryFailure(

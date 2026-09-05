@@ -1,4 +1,5 @@
 import { printerLogger } from '../logger';
+import { BLE_PREFIX } from '../transport/device-key';
 import { EpsonNativeAdapter } from '../transport/epson-native-adapter';
 import { identifyModel } from './identify-models';
 
@@ -26,6 +27,14 @@ export async function resolveNativePrinterColumns(input: {
 	name?: string;
 }): Promise<{ columns: number | undefined; source: 'printer' | 'model' | 'default' }> {
 	printerLogger.debug('Printer columns query started', { context: { ...input } });
+	// A generic BLE printer answers no width query and its advertised name is rarely a model the
+	// table knows, so the flow asks the merchant instead of guessing from a near-miss name match.
+	if (input.address.startsWith(BLE_PREFIX) && (input.vendor ?? 'generic') === 'generic') {
+		printerLogger.info('Printer columns resolved', {
+			context: { ...input, columns: undefined, source: 'default' },
+		});
+		return { columns: undefined, source: 'default' };
+	}
 	let columns: number | undefined;
 	let source: 'printer' | 'model' | 'default' = 'default';
 	const isNativeEpson =

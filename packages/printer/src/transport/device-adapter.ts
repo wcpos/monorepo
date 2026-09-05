@@ -1,3 +1,5 @@
+import { BleNativeAdapter } from './ble-native-adapter';
+import { BLE_PREFIX } from './device-key';
 import { EpsonNativeAdapter } from './epson-native-adapter';
 import { StarNativeAdapter } from './star-native-adapter';
 
@@ -10,6 +12,13 @@ export async function createDeviceTransport(profile: PrinterProfile): Promise<Pr
 	}
 	if (!profile.address) {
 		throw new Error(`Native printer profile is missing an address for ${profile.name}`);
+	}
+	// Generic BLE printers ride the same GATT profiles as the browser lane; no vendor SDK involved.
+	if (
+		profile.connectionType === 'bluetooth' &&
+		(profile.address.startsWith(BLE_PREFIX) || profile.vendor === 'generic')
+	) {
+		return new BleNativeAdapter(profile.address);
 	}
 	if (profile.vendor === 'epson') {
 		return new EpsonNativeAdapter(profile.address, profile.connectionType);
