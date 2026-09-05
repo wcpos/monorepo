@@ -1,9 +1,11 @@
+import { printerLogger } from '../logger';
+
 import type { PrinterTransport } from '../types';
 
 type NativeConnectionType = 'network' | 'bluetooth' | 'usb';
 
 function toEpsonTarget(address: string, connectionType: NativeConnectionType): string {
-	if (/^(TCP|BT|USB):/i.test(address)) {
+	if (/^(TCP|TCPS|BT|BLE|USB):/i.test(address)) {
 		return address;
 	}
 
@@ -48,6 +50,7 @@ export class EpsonNativeAdapter implements PrinterTransport {
 		disconnect: () => Promise<void>;
 		addCommand: (data: Uint8Array) => Promise<void>;
 		sendData: (timeout?: number) => Promise<unknown>;
+		getPrinterSetting: (type: number, timeout?: number) => Promise<{ value: number }>;
 	} | null = null;
 
 	constructor(
@@ -87,6 +90,32 @@ export class EpsonNativeAdapter implements PrinterTransport {
 			'EpsonNativeAdapter does not support HTML printing. ' +
 				'Use SystemPrintAdapter for HTML output.'
 		);
+	}
+
+	async getPaperWidthMm(): Promise<58 | 60 | 70 | 76 | 80 | undefined> {
+		try {
+			const printer = await this.getPrinter();
+			const { PrinterGetSettingsType } = await import('react-native-esc-pos-printer');
+			const result = await (async () => {
+				try {
+					await printer.connect(5_000);
+					return await printer.getPrinterSetting(
+						PrinterGetSettingsType.PRINTER_SETTING_PAPERWIDTH,
+						5_000
+					);
+				} finally {
+					await this.disconnect();
+				}
+			})();
+			return [58, 60, 70, 76, 80].includes(result.value)
+				? (result.value as 58 | 60 | 70 | 76 | 80)
+				: undefined;
+		} catch (error) {
+			printerLogger.debug('Epson paper width query failed', {
+				context: { cause: error instanceof Error ? error.message : String(error) },
+			});
+			return undefined;
+		}
 	}
 
 	async disconnect(): Promise<void> {

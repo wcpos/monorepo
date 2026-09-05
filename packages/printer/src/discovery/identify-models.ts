@@ -16,8 +16,9 @@ export const PRINTER_MODEL_TABLE = [
 ] as const;
 export function identifyModel(name?: string): { model?: string; columns?: number } {
 	if (!name) return {};
+	const haystack = name.replace(/_/g, ' ');
 	for (const { pattern, columns } of PRINTER_MODEL_TABLE) {
-		const match = name.match(pattern);
+		const match = haystack.match(pattern);
 		if (match) return { model: match[0], columns };
 	}
 	return {};

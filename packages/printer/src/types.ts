@@ -69,6 +69,11 @@ export interface DiscoveredPrinter {
 	identity?: PrinterIdentity;
 	/** Vendor-native interface hint (for example Star BluetoothLE vs Bluetooth). */
 	nativeInterfaceType?: string;
+	/**
+	 * Vendor-SDK encrypted network target for the same printer (Epson `TCPS:<mac>[local_printer]`),
+	 * kept on the printer's one network row so a lane can pick it under Secure Printing.
+	 */
+	secureTarget?: string;
 }
 
 /**
