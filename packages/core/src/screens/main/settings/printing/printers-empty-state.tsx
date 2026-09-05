@@ -1,15 +1,13 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useRouter } from 'expo-router';
-
 import { Button } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
-import { usePrinterWizardAvailable } from '../../mini-apps/catalog';
+import { openPrinterDocs } from '../printer/printer-docs';
 import { useT } from '../../../../contexts/translations';
 
 interface PrintersEmptyStateProps {
@@ -21,8 +19,6 @@ interface PrintersEmptyStateProps {
  */
 export function PrintersEmptyState({ onAddPrinter }: PrintersEmptyStateProps) {
 	const t = useT();
-	const router = useRouter();
-	const showWizard = usePrinterWizardAvailable('settings.printers.empty');
 
 	return (
 		<View className="border-border items-center rounded-lg border border-dashed p-8">
@@ -38,14 +34,9 @@ export function PrintersEmptyState({ onAddPrinter }: PrintersEmptyStateProps) {
 					<Button leftIcon="plus" onPress={onAddPrinter} testID="printing-add-printer-button">
 						<Text>{t('settings.add_printer')}</Text>
 					</Button>
-					{showWizard && (
-						<Button
-							variant="secondary"
-							onPress={() => router.push('/settings/mini-app/printer-wizard')}
-						>
-							<Text>{t('settings.set_up_a_printer')}</Text>
-						</Button>
-					)}
+					<Button variant="secondary" onPress={openPrinterDocs}>
+						<Text>{t('settings.set_up_a_printer')}</Text>
+					</Button>
 				</HStack>
 			</VStack>
 		</View>

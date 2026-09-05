@@ -44,7 +44,6 @@ jest.mock('@wcpos/components/status-badge', () => ({
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
 }));
-jest.mock('../../mini-apps/catalog', () => ({ usePrinterWizardAvailable: () => true }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 
 const profile: PrinterProfile = {
