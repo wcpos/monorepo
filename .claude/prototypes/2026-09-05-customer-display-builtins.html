@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Customer display built-ins — prototype</title>
+<style>
+  :root { --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --accent:#0f766e; }
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  header{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid var(--line);padding:14px 22px;display:flex;flex-direction:column;gap:10px}
+  .row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+  .row .lbl{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);width:78px}
+  button.pill{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:999px;padding:6px 14px;font:inherit;font-size:14px;cursor:pointer}
+  button.pill.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  button.pill.tpl{font-weight:700;padding:8px 18px}
+  button.pill.tpl small{display:block;font-weight:400;font-size:11px;opacity:.75}
+  .hint{font-size:13px;color:var(--muted);margin-left:auto}
+  main{padding:22px;display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start;justify-content:center}
+  .frame{display:flex;flex-direction:column;gap:8px;align-items:center}
+  .frame .cap{font-size:12px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;font-weight:600}
+  .frame .cap b{color:var(--accent)}
+  .shell{position:relative;background:#111;border-radius:22px;padding:10px;box-shadow:0 20px 50px rgba(15,23,42,.25)}
+  .shell.monitor{border-radius:10px;padding:8px}
+  .shell.tablet{border-radius:18px}
+  .vp{overflow:hidden;border-radius:14px;background:#fff}
+  .shell.monitor .vp{border-radius:4px}
+  iframe{border:0;display:block;transform-origin:0 0;background:#fff}
+  .notes{max-width:1100px;margin:0 auto 40px;padding:0 22px;font-size:14px;color:var(--muted);line-height:1.5}
+  .notes b{color:var(--ink)}
+  kbd{font:inherit;border:1px solid var(--line);border-radius:4px;padding:0 5px;background:#fff}
+</style>
+</head>
+<body>
+<header>
+  <div class="row"><span class="lbl">Template</span><span id="tpls"></span><span class="hint">←/→ switch template · ↑/↓ state · <kbd>g</kbd> guest · <kbd>z</kbd> zoom</span></div>
+  <div class="row"><span class="lbl">State</span><span id="states"></span></div>
+  <div class="row"><span class="lbl">Frames</span><span id="devs"></span><button class="pill" id="guest">Known customer</button><button class="pill" id="zoom">Fit all</button></div>
+</header>
+<main id="main"></main>
+<div class="notes" id="notes"></div>
+
+<!-- ===================================================================== -->
+<!-- TEMPLATE 1: LEDGER — the responsive general-purpose default            -->
+<!-- ===================================================================== -->
+<script type="text/x-wcpos-template" id="tpl-ledger">
+<!--
+Ledger — default WCPOS Pro customer display template (responsive).
+Wide screens: itemised list + totals panel. Narrow screens: list with a
+docked totals bar. Every state is a top-level section; the host shows the
+most specific matching state. Rows carry data-wcpos-line-key so the host can
+mark the just-added row with .wcpos-line-new.
+-->
+<style>
+:root{--ledger-ink:#0f172a;--ledger-muted:#64748b;--ledger-line:#e2e8f0;--ledger-bg:#f8fafc;--ledger-accent:#0f766e;--ledger-ok:#15803d;--ledger-bad:#b91c1c;--ledger-new:#ecfeff}
+html,body{margin:0;min-height:100%}
+.wcpos-ledger,.wcpos-ledger *{box-sizing:border-box}
+.wcpos-ledger{height:100dvh;background:var(--ledger-bg);color:var(--ledger-ink);display:grid;grid-template-columns:minmax(0,1fr) 380px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.wcpos-ledger__list{display:flex;flex-direction:column;min-width:0;padding:40px 48px;overflow:auto}
+.wcpos-ledger__greeting{margin:0 0 20px;color:var(--ledger-accent);font-size:32px;font-weight:700;letter-spacing:-.01em}
+.wcpos-ledger__caption{margin:0 0 20px;color:var(--ledger-muted);font-size:14px;font-weight:600;letter-spacing:.14em;text-transform:uppercase}
+.wcpos-ledger__items{display:flex;flex:1;flex-direction:column}
+.wcpos-ledger__row{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:16px;align-items:baseline;padding:16px 0;border-bottom:1px solid var(--ledger-line);font-size:22px;transition:background .6s}
+.wcpos-ledger__row.wcpos-line-new{background:var(--ledger-new);box-shadow:inset 4px 0 0 var(--ledger-accent);padding-left:12px;margin-left:-12px}
+.wcpos-ledger__qty{color:var(--ledger-muted);font-weight:500}
+.wcpos-ledger__name,.wcpos-ledger__price{font-weight:600}
+.wcpos-ledger__price,.wcpos-ledger__money{font-variant-numeric:tabular-nums}
+.wcpos-ledger__meta{display:block;margin-top:4px;color:var(--ledger-muted);font-size:15px;font-weight:400}
+.wcpos-ledger__empty{display:flex;flex:1;align-items:center;justify-content:center;color:var(--ledger-muted);font-size:22px;text-align:center}
+.wcpos-ledger__panel{display:flex;flex-direction:column;padding:40px 36px;border-left:1px solid var(--ledger-line);background:#fff}
+.wcpos-ledger__store{font-size:18px;font-weight:700}
+.wcpos-ledger__totals,.wcpos-ledger__payment{margin-top:auto}
+.wcpos-ledger__total-row{display:flex;justify-content:space-between;gap:20px;padding:8px 0;color:var(--ledger-muted);font-size:18px}
+.wcpos-ledger__total-row--paid{color:var(--ledger-ok)}
+.wcpos-ledger__grand{align-items:baseline;margin-top:12px;padding-top:16px;border-top:2px solid var(--ledger-ink);color:var(--ledger-ink);font-size:40px;font-weight:800}
+.wcpos-ledger__grand span:first-child{font-size:16px;font-weight:600;letter-spacing:.1em;text-transform:uppercase}
+.wcpos-ledger__saved{margin-top:14px;padding:10px 12px;border-radius:8px;background:#ecfdf5;color:var(--ledger-ok);font-size:15px;font-weight:600}
+.wcpos-ledger__payment{display:flex;flex-direction:column;gap:16px}
+.wcpos-ledger__card{padding:22px;border-radius:14px;background:var(--ledger-accent);color:#fff}
+.wcpos-ledger__card--ok{background:var(--ledger-ok)}
+.wcpos-ledger__card--bad{background:var(--ledger-bad)}
+.wcpos-ledger__icon{display:grid;place-items:center;width:64px;height:64px;margin-bottom:14px;border-radius:50%;background:rgba(255,255,255,.18);font-size:34px}
+.wcpos-ledger__spinner{border:5px solid rgba(255,255,255,.35);border-top-color:#fff;background:transparent;animation:ledger-spin 1.1s linear infinite}
+.wcpos-ledger__card-title{font-size:13px;letter-spacing:.12em;text-transform:uppercase;opacity:.85}
+.wcpos-ledger__card-amount{margin-top:6px;font-size:40px;font-weight:800}
+.wcpos-ledger__message{margin-top:8px;font-size:18px;line-height:1.4;opacity:.92}
+.wcpos-ledger--idle{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;background:var(--ledger-ink);color:#fff;text-align:center}
+.wcpos-ledger__logo{display:block;max-width:min(320px,60vw);max-height:180px;object-fit:contain}
+.wcpos-ledger__brand{font-size:56px;font-weight:800;letter-spacing:-.02em}
+.wcpos-ledger__welcome{color:#94a3b8;font-size:24px}
+@keyframes ledger-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.wcpos-ledger__spinner{animation:none}}
+/* Narrow: the panel becomes a docked bar. Store name and the small rows go;
+   the grand total and any payment card stay. */
+@media (max-width:700px){
+  .wcpos-ledger{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto}
+  .wcpos-ledger__list{padding:18px 20px 12px}
+  .wcpos-ledger__greeting{margin-bottom:8px;font-size:22px}
+  .wcpos-ledger__caption{margin-bottom:8px;font-size:12px}
+  .wcpos-ledger__row{grid-template-columns:44px minmax(0,1fr) auto;gap:12px;padding:12px 0;font-size:18px}
+  .wcpos-ledger__meta{font-size:13px}
+  .wcpos-ledger__empty{font-size:18px}
+  .wcpos-ledger__panel{max-height:48dvh;padding:14px 20px 20px;border-left:0;border-top:1px solid var(--ledger-line);overflow:auto;box-shadow:0 -12px 24px rgba(15,23,42,.06)}
+  .wcpos-ledger__store{display:none}
+  .wcpos-ledger__totals,.wcpos-ledger__payment{margin-top:0}
+  .wcpos-ledger__total-row{padding:4px 0;font-size:15px}
+  .wcpos-ledger__grand{margin-top:6px;padding-top:10px;font-size:30px}
+  .wcpos-ledger__grand span:first-child{font-size:13px}
+  .wcpos-ledger__saved{margin-top:8px;padding:8px 10px;font-size:14px}
+  .wcpos-ledger__card{padding:16px;display:grid;grid-template-columns:auto 1fr;column-gap:16px;align-items:center}
+  .wcpos-ledger__icon{width:48px;height:48px;margin:0;font-size:26px;grid-row:1 / -1}
+  .wcpos-ledger__card-amount{margin-top:2px;font-size:30px}
+  .wcpos-ledger__message{margin-top:4px;font-size:15px}
+  .wcpos-ledger__brand{font-size:40px}
+  .wcpos-ledger__welcome{font-size:20px}
+}
+</style>
+
+<section class="wcpos-ledger wcpos-ledger--idle" data-wcpos-state="idle">
+  {{#store.logo}}<img class="wcpos-ledger__logo" src="{{store.logo}}" alt="{{store.name}}">{{/store.logo}}
+  {{^store.logo}}<div class="wcpos-ledger__brand">{{store.name}}</div>{{/store.logo}}
+  <div class="wcpos-ledger__welcome">{{i18n.welcome}}</div>
+</section>
+
+<section class="wcpos-ledger" data-wcpos-state="cart">
+  <div class="wcpos-ledger__list">
+    {{#customer.id}}<div class="wcpos-ledger__greeting">{{i18n.greeting}} {{customer.first_name}}!</div>{{/customer.id}}
+    <div class="wcpos-ledger__caption">{{i18n.your_items}}</div>
+    <div class="wcpos-ledger__items">
+      {{#lines}}<div class="wcpos-ledger__row" data-wcpos-line-key="{{key}}"><span class="wcpos-ledger__qty wcpos-ledger__money">{{qty}} &times;</span><span class="wcpos-ledger__name">{{name}}{{#meta}}<span class="wcpos-ledger__meta">{{key}}: {{value}}</span>{{/meta}}</span><span class="wcpos-ledger__price wcpos-ledger__money">{{line_total_display}}</span></div>{{/lines}}
+      {{^lines}}<div class="wcpos-ledger__empty">{{i18n.items_appear_here}}</div>{{/lines}}
+    </div>
+  </div>
+  <aside class="wcpos-ledger__panel">
+    <div class="wcpos-ledger__store">{{store.name}}</div>
+    {{#totals.total_qty}}
+    <div class="wcpos-ledger__totals">
+      <div class="wcpos-ledger__total-row"><span>{{i18n.subtotal}}</span><span class="wcpos-ledger__money">{{totals.subtotal_display}}</span></div>
+      {{#discounts}}<div class="wcpos-ledger__total-row"><span>{{#label}}{{label}}{{/label}}{{^label}}{{i18n.discount}}{{/label}}</span><span class="wcpos-ledger__money">-{{total_display}}</span></div>{{/discounts}}
+      <div class="wcpos-ledger__total-row"><span>{{i18n.total_tax}}</span><span class="wcpos-ledger__money">{{totals.tax_total_display}}</span></div>
+      <div class="wcpos-ledger__total-row wcpos-ledger__grand"><span>{{i18n.total}}</span><span class="wcpos-ledger__money">{{totals.total_display}}</span></div>
+      {{#totals.total_saved}}<div class="wcpos-ledger__saved">{{i18n.you_saved}} {{totals.total_saved_display}}</div>{{/totals.total_saved}}
+    </div>
+    {{/totals.total_qty}}
+  </aside>
+</section>
+
+<section class="wcpos-ledger" data-wcpos-state="payment.started">
+  <div class="wcpos-ledger__list">
+    {{#customer.id}}<div class="wcpos-ledger__greeting">{{i18n.greeting}} {{customer.first_name}}!</div>{{/customer.id}}
+    <div class="wcpos-ledger__caption">{{i18n.your_items}}</div>
+    <div class="wcpos-ledger__items">{{#lines}}<div class="wcpos-ledger__row" data-wcpos-line-key="{{key}}"><span class="wcpos-ledger__qty wcpos-ledger__money">{{qty}} &times;</span><span class="wcpos-ledger__name">{{name}}{{#meta}}<span class="wcpos-ledger__meta">{{key}}: {{value}}</span>{{/meta}}</span><span class="wcpos-ledger__price wcpos-ledger__money">{{line_total_display}}</span></div>{{/lines}}</div>
+  </div>
+  <aside class="wcpos-ledger__panel">
+    <div class="wcpos-ledger__store">{{store.name}}</div>
+    <div class="wcpos-ledger__payment">
+      <div><div class="wcpos-ledger__total-row"><span>{{i18n.total}}</span><span class="wcpos-ledger__money">{{ledger.total}}</span></div>{{#ledger.paid_raw}}<div class="wcpos-ledger__total-row wcpos-ledger__total-row--paid"><span>{{i18n.paid_so_far}}</span><span class="wcpos-ledger__money">{{ledger.paid}}</span></div>{{/ledger.paid_raw}}</div>
+      <div class="wcpos-ledger__card"><div class="wcpos-ledger__icon wcpos-ledger__spinner" aria-hidden="true"></div><div class="wcpos-ledger__card-title">{{i18n.present_card}}</div><div class="wcpos-ledger__card-amount wcpos-ledger__money">{{ledger.due}}</div>{{#ledger.paid_raw}}<div class="wcpos-ledger__message">{{ledger.paid}} {{i18n.paid_so_far_lc}} &middot; {{ledger.due}} {{i18n.to_pay}}</div>{{/ledger.paid_raw}}</div>
+    </div>
+  </aside>
+</section>
+
+<section class="wcpos-ledger" data-wcpos-state="payment.approved">
+  <div class="wcpos-ledger__list">
+    {{#customer.id}}<div class="wcpos-ledger__greeting">{{i18n.greeting}} {{customer.first_name}}!</div>{{/customer.id}}
+    <div class="wcpos-ledger__caption">{{i18n.your_items}}</div>
+    <div class="wcpos-ledger__items">{{#lines}}<div class="wcpos-ledger__row" data-wcpos-line-key="{{key}}"><span class="wcpos-ledger__qty wcpos-ledger__money">{{qty}} &times;</span><span class="wcpos-ledger__name">{{name}}{{#meta}}<span class="wcpos-ledger__meta">{{key}}: {{value}}</span>{{/meta}}</span><span class="wcpos-ledger__price wcpos-ledger__money">{{line_total_display}}</span></div>{{/lines}}</div>
+  </div>
+  <aside class="wcpos-ledger__panel">
+    <div class="wcpos-ledger__store">{{store.name}}</div>
+    <div class="wcpos-ledger__payment">
+      <div><div class="wcpos-ledger__total-row"><span>{{i18n.total}}</span><span class="wcpos-ledger__money">{{ledger.total}}</span></div>{{#ledger.paid_raw}}<div class="wcpos-ledger__total-row wcpos-ledger__total-row--paid"><span>{{i18n.paid_so_far}}</span><span class="wcpos-ledger__money">{{ledger.paid}}</span></div>{{/ledger.paid_raw}}</div>
+      <div class="wcpos-ledger__card wcpos-ledger__card--ok"><div class="wcpos-ledger__icon" aria-hidden="true">&#10003;</div><div class="wcpos-ledger__card-title">{{i18n.approved}}</div><div class="wcpos-ledger__card-amount wcpos-ledger__money">{{ledger.due}}</div>{{#payment.message}}<div class="wcpos-ledger__message">{{payment.message}}</div>{{/payment.message}}</div>
+    </div>
+  </aside>
+</section>
+
+<section class="wcpos-ledger" data-wcpos-state="payment.declined">
+  <div class="wcpos-ledger__list">
+    {{#customer.id}}<div class="wcpos-ledger__greeting">{{i18n.greeting}} {{customer.first_name}}!</div>{{/customer.id}}
+    <div class="wcpos-ledger__caption">{{i18n.your_items}}</div>
+    <div class="wcpos-ledger__items">{{#lines}}<div class="wcpos-ledger__row" data-wcpos-line-key="{{key}}"><span class="wcpos-ledger__qty wcpos-ledger__money">{{qty}} &times;</span><span class="wcpos-ledger__name">{{name}}{{#meta}}<span class="wcpos-ledger__meta">{{key}}: {{value}}</span>{{/meta}}</span><span class="wcpos-ledger__price wcpos-ledger__money">{{line_total_display}}</span></div>{{/lines}}</div>
+  </div>
+  <aside class="wcpos-ledger__panel">
+    <div class="wcpos-ledger__store">{{store.name}}</div>
+    <div class="wcpos-ledger__payment">
+      <div><div class="wcpos-ledger__total-row"><span>{{i18n.total}}</span><span class="wcpos-ledger__money">{{ledger.total}}</span></div>{{#ledger.paid_raw}}<div class="wcpos-ledger__total-row wcpos-ledger__total-row--paid"><span>{{i18n.paid_so_far}}</span><span class="wcpos-ledger__money">{{ledger.paid}}</span></div>{{/ledger.paid_raw}}</div>
+      <div class="wcpos-ledger__card wcpos-ledger__card--bad"><div class="wcpos-ledger__icon" aria-hidden="true">&times;</div><div class="wcpos-ledger__card-title">{{i18n.declined}}</div><div class="wcpos-ledger__card-amount wcpos-ledger__money">{{ledger.due}}</div>{{#payment.message}}<div class="wcpos-ledger__message">{{payment.message}}</div>{{/payment.message}}{{^payment.message}}<div class="wcpos-ledger__message">{{i18n.try_another_card}}</div>{{/payment.message}}</div>
+    </div>
+  </aside>
+</section>
+
+<section class="wcpos-ledger" data-wcpos-state="payment.complete">
+  <div class="wcpos-ledger__list">
+    {{#customer.id}}<div class="wcpos-ledger__greeting">{{i18n.greeting}} {{customer.first_name}}!</div>{{/customer.id}}
+    <div class="wcpos-ledger__caption">{{i18n.your_items}}</div>
+    <div class="wcpos-ledger__items">{{#lines}}<div class="wcpos-ledger__row" data-wcpos-line-key="{{key}}"><span class="wcpos-ledger__qty wcpos-ledger__money">{{qty}} &times;</span><span class="wcpos-ledger__name">{{name}}{{#meta}}<span class="wcpos-ledger__meta">{{key}}: {{value}}</span>{{/meta}}</span><span class="wcpos-ledger__price wcpos-ledger__money">{{line_total_display}}</span></div>{{/lines}}</div>
+  </div>
+  <aside class="wcpos-ledger__panel">
+    <div class="wcpos-ledger__store">{{store.name}}</div>
+    <div class="wcpos-ledger__payment">
+      <div class="wcpos-ledger__card wcpos-ledger__card--ok"><div class="wcpos-ledger__icon" aria-hidden="true">&#10003;</div><div class="wcpos-ledger__card-title">{{i18n.paid_in_full}}</div><div class="wcpos-ledger__card-amount wcpos-ledger__money">{{totals.total_display}}</div>{{#ledger.change_raw}}<div class="wcpos-ledger__message">{{i18n.change}} {{ledger.change}}</div>{{/ledger.change_raw}}<div class="wcpos-ledger__message">{{i18n.thank_you}}</div></div>
+    </div>
+  </aside>
+</section>
+</script>
+
+<!-- ===================================================================== -->
+<!-- TEMPLATE 2: POCKET — built for small screens (phone on a stand)        -->
+<!-- ===================================================================== -->
+<script type="text/x-wcpos-template" id="tpl-pocket">
+<!--
+Pocket — WCPOS Pro customer display template for small screens.
+A docked header carries the running total; items list newest-first beneath
+it; payment states take the whole screen. Designed for a phone in portrait,
+survives landscape. Rows carry data-wcpos-line-key for the host's
+.wcpos-line-new cue.
+-->
+<style>
+:root{--pk-ink:#0f172a;--pk-muted:#64748b;--pk-line:#e2e8f0;--pk-bg:#fff;--pk-accent:#0f766e;--pk-ok:#15803d;--pk-bad:#b91c1c}
+html,body{margin:0;min-height:100%;background:var(--pk-bg)}
+.wcpos-pocket,.wcpos-pocket *{box-sizing:border-box}
+.wcpos-pocket{display:flex;flex-direction:column;height:100dvh;color:var(--pk-ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.wcpos-pocket__head{padding:env(safe-area-inset-top,0) 20px 14px;padding-top:max(18px,env(safe-area-inset-top));background:var(--pk-ink);color:#fff;flex:none}
+.wcpos-pocket__store{font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;opacity:.7}
+.wcpos-pocket__total{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-top:6px}
+.wcpos-pocket__total-label{font-size:15px;font-weight:600;opacity:.8}
+.wcpos-pocket__total-amount{font-size:44px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1}
+.wcpos-pocket__greeting{margin-top:6px;font-size:16px;color:#5eead4;font-weight:600}
+.wcpos-pocket__list{flex:1;display:flex;flex-direction:column-reverse;justify-content:flex-end;overflow:auto;padding:6px 20px 20px}
+.wcpos-pocket__row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:12px 0;border-bottom:1px solid var(--pk-line);font-size:17px}
+.wcpos-pocket__row.wcpos-line-new{background:#ecfeff;margin:0 -20px;padding:12px 20px;box-shadow:inset 4px 0 0 var(--pk-accent);animation:pocket-in .35s ease-out}
+.wcpos-pocket__name{font-weight:600;min-width:0}
+.wcpos-pocket__qty{color:var(--pk-muted);font-weight:500;margin-right:6px}
+.wcpos-pocket__meta{display:block;color:var(--pk-muted);font-size:13px;font-weight:400;margin-top:2px}
+.wcpos-pocket__price{font-weight:600;font-variant-numeric:tabular-nums}
+.wcpos-pocket__empty{flex:1;display:flex;align-items:center;justify-content:center;color:var(--pk-muted);font-size:17px;text-align:center;padding:20px}
+.wcpos-pocket__foot{flex:none;padding:10px 20px 16px;border-top:1px solid var(--pk-line);font-size:14px;color:var(--pk-muted);display:flex;flex-wrap:wrap;gap:6px 16px}
+.wcpos-pocket__foot b{color:var(--pk-ok);font-weight:600}
+/* Payment: full screen. */
+.wcpos-pocket--pay{align-items:center;justify-content:center;text-align:center;padding:32px 24px;background:var(--pk-accent);color:#fff}
+.wcpos-pocket--ok{background:var(--pk-ok)}
+.wcpos-pocket--bad{background:var(--pk-bad)}
+.wcpos-pocket__icon{display:grid;place-items:center;width:96px;height:96px;border-radius:50%;background:rgba(255,255,255,.18);font-size:52px;margin-bottom:22px}
+.wcpos-pocket__spinner{border:7px solid rgba(255,255,255,.35);border-top-color:#fff;background:transparent;animation:pocket-spin 1.1s linear infinite}
+.wcpos-pocket__title{font-size:15px;letter-spacing:.14em;text-transform:uppercase;opacity:.85}
+.wcpos-pocket__amount{margin-top:8px;font-size:56px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.wcpos-pocket__msg{margin-top:12px;font-size:18px;line-height:1.4;opacity:.92}
+.wcpos-pocket__split{margin-top:26px;padding-top:16px;border-top:1px solid rgba(255,255,255,.3);width:100%;max-width:320px;font-size:15px;opacity:.9;display:flex;justify-content:space-between}
+.wcpos-pocket--idle{align-items:center;justify-content:center;gap:18px;text-align:center;background:var(--pk-ink);color:#fff;padding:24px}
+.wcpos-pocket__logo{display:block;max-width:70vw;max-height:30vh;object-fit:contain}
+.wcpos-pocket__brand{font-size:36px;font-weight:800;letter-spacing:-.02em}
+.wcpos-pocket__welcome{color:#94a3b8;font-size:18px}
+@keyframes pocket-spin{to{transform:rotate(360deg)}}
+@keyframes pocket-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.wcpos-pocket__spinner,.wcpos-pocket__row.wcpos-line-new{animation:none}}
+/* Landscape phone: header goes left, list right. */
+@media (orientation:landscape) and (max-height:500px){
+  .wcpos-pocket{flex-direction:row}
+  .wcpos-pocket__head{width:44%;display:flex;flex-direction:column;justify-content:center;padding:20px}
+  .wcpos-pocket__total{flex-direction:column;align-items:flex-start;gap:2px}
+  .wcpos-pocket__foot{display:none}
+}
+</style>
+
+<section class="wcpos-pocket wcpos-pocket--idle" data-wcpos-state="idle">
+  {{#store.logo}}<img class="wcpos-pocket__logo" src="{{store.logo}}" alt="{{store.name}}">{{/store.logo}}
+  {{^store.logo}}<div class="wcpos-pocket__brand">{{store.name}}</div>{{/store.logo}}
+  <div class="wcpos-pocket__welcome">{{i18n.welcome}}</div>
+</section>
+
+<section class="wcpos-pocket" data-wcpos-state="cart">
+  <header class="wcpos-pocket__head">
+    <div class="wcpos-pocket__store">{{store.name}}</div>
+    <div class="wcpos-pocket__total"><span class="wcpos-pocket__total-label">{{i18n.total}}</span><span class="wcpos-pocket__total-amount">{{totals.total_display}}</span></div>
+    {{#customer.id}}<div class="wcpos-pocket__greeting">{{i18n.greeting}} {{customer.first_name}}!</div>{{/customer.id}}
+  </header>
+  {{#totals.total_qty}}
+  <div class="wcpos-pocket__list">
+    {{#lines}}<div class="wcpos-pocket__row" data-wcpos-line-key="{{key}}"><span class="wcpos-pocket__name"><span class="wcpos-pocket__qty">{{qty}}&times;</span>{{name}}{{#meta}}<span class="wcpos-pocket__meta">{{key}}: {{value}}</span>{{/meta}}</span><span class="wcpos-pocket__price">{{line_total_display}}</span></div>{{/lines}}
+  </div>
+  <footer class="wcpos-pocket__foot">
+    <span>{{i18n.subtotal}} {{totals.subtotal_display}}</span>
+    {{#discounts}}<span>{{#label}}{{label}}{{/label}}{{^label}}{{i18n.discount}}{{/label}} &minus;{{total_display}}</span>{{/discounts}}
+    <span>{{i18n.total_tax}} {{totals.tax_total_display}}</span>
+    {{#totals.total_saved}}<b>{{i18n.you_saved}} {{totals.total_saved_display}}</b>{{/totals.total_saved}}
+  </footer>
+  {{/totals.total_qty}}
+  {{^totals.total_qty}}<div class="wcpos-pocket__empty">{{i18n.items_appear_here}}</div>{{/totals.total_qty}}
+</section>
+
+<section class="wcpos-pocket wcpos-pocket--pay" data-wcpos-state="payment.started">
+  <div class="wcpos-pocket__icon wcpos-pocket__spinner" aria-hidden="true"></div>
+  <div class="wcpos-pocket__title">{{i18n.present_card}}</div>
+  <div class="wcpos-pocket__amount">{{ledger.due}}</div>
+  {{#ledger.paid_raw}}<div class="wcpos-pocket__split"><span>{{i18n.paid_so_far}}</span><span>{{ledger.paid}}</span></div>{{/ledger.paid_raw}}
+</section>
+
+<section class="wcpos-pocket wcpos-pocket--pay wcpos-pocket--ok" data-wcpos-state="payment.approved">
+  <div class="wcpos-pocket__icon" aria-hidden="true">&#10003;</div>
+  <div class="wcpos-pocket__title">{{i18n.approved}}</div>
+  <div class="wcpos-pocket__amount">{{ledger.due}}</div>
+  {{#payment.message}}<div class="wcpos-pocket__msg">{{payment.message}}</div>{{/payment.message}}
+</section>
+
+<section class="wcpos-pocket wcpos-pocket--pay wcpos-pocket--bad" data-wcpos-state="payment.declined">
+  <div class="wcpos-pocket__icon" aria-hidden="true">&times;</div>
+  <div class="wcpos-pocket__title">{{i18n.declined}}</div>
+  <div class="wcpos-pocket__amount">{{ledger.due}}</div>
+  {{#payment.message}}<div class="wcpos-pocket__msg">{{payment.message}}</div>{{/payment.message}}
+  {{^payment.message}}<div class="wcpos-pocket__msg">{{i18n.try_another_card}}</div>{{/payment.message}}
+</section>
+
+<section class="wcpos-pocket wcpos-pocket--pay wcpos-pocket--ok" data-wcpos-state="payment.complete">
+  <div class="wcpos-pocket__icon" aria-hidden="true">&#10003;</div>
+  <div class="wcpos-pocket__title">{{i18n.paid_in_full}}</div>
+  <div class="wcpos-pocket__amount">{{totals.total_display}}</div>
+  {{#ledger.change_raw}}<div class="wcpos-pocket__split"><span>{{i18n.change}}</span><span>{{ledger.change}}</span></div>{{/ledger.change_raw}}
+  <div class="wcpos-pocket__msg">{{i18n.thank_you}}{{#customer.id}}, {{customer.first_name}}{{/customer.id}}</div>
+</section>
+</script>
+
+<!-- ===================================================================== -->
+<!-- TEMPLATE 3: MARQUEE — built for large screens (monitor, wide tablet)   -->
+<!-- ===================================================================== -->
+<script type="text/x-wcpos-template" id="tpl-marquee">
+<!--
+Marquee — WCPOS Pro customer display template for large screens.
+Three zones: a brand column on the left (logo, greeting, your own promo
+copy or images — edit the template), the item list in the middle with the
+just-added item promoted to a hero, and totals on the right. Payment states
+swap the totals for a status card. Rows carry data-wcpos-line-key for the
+host's .wcpos-line-new cue.
+-->
+<style>
+:root{--mq-ink:#0f172a;--mq-muted:#64748b;--mq-line:#e2e8f0;--mq-bg:#f8fafc;--mq-brand:#0b1220;--mq-accent:#0f766e;--mq-ok:#15803d;--mq-bad:#b91c1c}
+html,body{margin:0;min-height:100%}
+.wcpos-mq,.wcpos-mq *{box-sizing:border-box}
+.wcpos-mq{height:100dvh;display:grid;grid-template-columns:clamp(300px,26vw,520px) minmax(0,1fr) clamp(340px,24vw,520px);background:var(--mq-bg);color:var(--mq-ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.wcpos-mq__brand{display:flex;flex-direction:column;padding:clamp(32px,3vw,64px) clamp(28px,2.5vw,56px);background:linear-gradient(160deg,#0b1220,#134e4a);color:#fff}
+.wcpos-mq__logo{display:block;max-width:100%;max-height:160px;object-fit:contain}
+.wcpos-mq__name{font-size:clamp(36px,2.6vw,56px);font-weight:800;letter-spacing:-.02em;line-height:1.05}
+.wcpos-mq__greeting{margin-top:28px;font-size:clamp(28px,2vw,42px);font-weight:700;color:#5eead4}
+.wcpos-mq__promo{margin-top:auto;padding:24px;border-radius:16px;background:rgba(255,255,255,.08);font-size:clamp(18px,1.2vw,26px);line-height:1.45;color:#cbd5e1}
+.wcpos-mq__promo b{display:block;color:#fff;font-size:24px;margin-bottom:6px}
+.wcpos-mq__list{display:flex;flex-direction:column;min-width:0;padding:clamp(32px,3vw,64px) clamp(32px,3vw,64px) 40px;overflow:auto}
+.wcpos-mq__caption{margin:0 0 20px;color:var(--mq-muted);font-size:clamp(14px,.9vw,18px);font-weight:600;letter-spacing:.14em;text-transform:uppercase}
+.wcpos-mq__items{display:flex;flex-direction:column-reverse;justify-content:flex-end;flex:1}
+.wcpos-mq__row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:20px;align-items:baseline;padding:20px 0;border-bottom:1px solid var(--mq-line);font-size:clamp(24px,1.7vw,40px)}
+.wcpos-mq__qty{min-width:2.4em}
+.wcpos-mq__qty{color:var(--mq-muted);font-weight:500;font-variant-numeric:tabular-nums}
+.wcpos-mq__name-l,.wcpos-mq__price{font-weight:600}
+.wcpos-mq__price{font-variant-numeric:tabular-nums}
+.wcpos-mq__meta{display:block;margin-top:4px;color:var(--mq-muted);font-size:clamp(16px,1.1vw,24px);font-weight:400}
+/* The just-added row becomes the hero: bigger type, accent card, pinned top by column-reverse. */
+.wcpos-mq__row.wcpos-line-new{grid-template-columns:auto minmax(0,1fr) auto;margin:0 0 28px;padding:28px 32px;border:0;border-radius:20px;background:#fff;box-shadow:0 18px 40px rgba(15,23,42,.10),inset 6px 0 0 var(--mq-accent);font-size:clamp(34px,2.4vw,60px);animation:mq-in .4s ease-out}
+.wcpos-mq__row.wcpos-line-new .wcpos-mq__qty{font-size:.6em}
+.wcpos-mq__row.wcpos-line-new .wcpos-mq__meta{font-size:.5em}
+.wcpos-mq__empty{display:flex;flex:1;align-items:center;justify-content:center;color:var(--mq-muted);font-size:clamp(24px,1.7vw,36px);text-align:center}
+.wcpos-mq__panel{display:flex;flex-direction:column;padding:clamp(32px,3vw,64px) clamp(28px,2.2vw,48px);border-left:1px solid var(--mq-line);background:#fff}
+.wcpos-mq__totals,.wcpos-mq__payment{margin-top:auto}
+.wcpos-mq__total-row{display:flex;justify-content:space-between;gap:20px;padding:10px 0;color:var(--mq-muted);font-size:clamp(20px,1.3vw,30px)}
+.wcpos-mq__total-row--paid{color:var(--mq-ok)}
+.wcpos-mq__money{font-variant-numeric:tabular-nums}
+.wcpos-mq__grand{align-items:baseline;margin-top:14px;padding-top:20px;border-top:3px solid var(--mq-ink);color:var(--mq-ink);font-size:clamp(48px,3.6vw,84px);font-weight:800}
+.wcpos-mq__grand span:first-child{font-size:clamp(16px,1vw,22px);font-weight:600;letter-spacing:.1em;text-transform:uppercase}
+.wcpos-mq__saved{margin-top:18px;padding:14px 16px;border-radius:10px;background:#ecfdf5;color:var(--mq-ok);font-size:clamp(18px,1.2vw,26px);font-weight:600}
+.wcpos-mq__payment{display:flex;flex-direction:column;gap:20px}
+.wcpos-mq__card{padding:clamp(24px,2vw,40px);border-radius:20px;background:var(--mq-accent);color:#fff}
+.wcpos-mq__card--ok{background:var(--mq-ok)}
+.wcpos-mq__card--bad{background:var(--mq-bad)}
+.wcpos-mq__icon{display:grid;place-items:center;width:clamp(72px,5vw,110px);height:clamp(72px,5vw,110px);margin-bottom:18px;border-radius:50%;background:rgba(255,255,255,.18);font-size:46px}
+.wcpos-mq__spinner{border:7px solid rgba(255,255,255,.35);border-top-color:#fff;background:transparent;animation:mq-spin 1.1s linear infinite}
+.wcpos-mq__card-title{font-size:clamp(14px,1vw,20px);letter-spacing:.12em;text-transform:uppercase;opacity:.85}
+.wcpos-mq__card-amount{margin-top:8px;font-size:clamp(44px,3.4vw,76px);font-weight:800;letter-spacing:-.02em}
+.wcpos-mq__message{margin-top:10px;font-size:clamp(18px,1.3vw,28px);line-height:1.4;opacity:.92}
+.wcpos-mq--idle{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:32px;background:linear-gradient(160deg,#0b1220,#134e4a);color:#fff;text-align:center}
+.wcpos-mq--idle .wcpos-mq__logo{max-width:min(480px,50vw);max-height:260px}
+.wcpos-mq--idle .wcpos-mq__name{font-size:min(88px,12vw);overflow-wrap:anywhere;padding:0 24px}
+.wcpos-mq__welcome{color:#99f6e4;font-size:clamp(22px,2vw,40px)}
+@keyframes mq-spin{to{transform:rotate(360deg)}}
+@keyframes mq-in{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.wcpos-mq__spinner,.wcpos-mq__row.wcpos-line-new{animation:none}}
+/* Not designed for narrow screens: below 1000px the brand column folds away. */
+@media (max-width:1200px){
+  .wcpos-mq{grid-template-columns:minmax(0,1fr) 340px}
+  .wcpos-mq__brand{display:none}
+}
+/* Phones: stack, totals docked. Marquee is not designed for this; it just stays usable. */
+@media (max-width:700px){
+  .wcpos-mq{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto}
+  .wcpos-mq__list{padding:20px}
+  .wcpos-mq__row.wcpos-line-new{padding:16px 18px;margin-bottom:16px}
+  .wcpos-mq__panel{max-height:48dvh;padding:14px 20px 20px;border-left:0;border-top:1px solid var(--mq-line);overflow:auto}
+  .wcpos-mq__totals,.wcpos-mq__payment{margin-top:0}
+  .wcpos-mq__grand{font-size:30px}
+  .wcpos-mq__card{display:grid;grid-template-columns:auto 1fr;column-gap:16px;align-items:center}
+  .wcpos-mq__icon{width:48px;height:48px;margin:0;font-size:26px;grid-row:1 / -1}
+  .wcpos-mq__card-amount{font-size:30px}
+}
+</style>
+
+<section class="wcpos-mq wcpos-mq--idle" data-wcpos-state="idle">
+  {{#store.logo}}<img class="wcpos-mq__logo" src="{{store.logo}}" alt="{{store.name}}">{{/store.logo}}
+  {{^store.logo}}<div class="wcpos-mq__name">{{store.name}}</div>{{/store.logo}}
+  <div class="wcpos-mq__welcome">{{i18n.welcome}}</div>
+</section>
+
+<section class="wcpos-mq" data-wcpos-state="cart">
+  <aside class="wcpos-mq__brand">
+    {{#store.logo}}<img class="wcpos-mq__logo" src="{{store.logo}}" alt="{{store.name}}">{{/store.logo}}
+    {{^store.logo}}<div class="wcpos-mq__name">{{store.name}}</div>{{/store.logo}}
+    {{#customer.id}}<div class="wcpos-mq__greeting">{{i18n.greeting}} {{customer.first_name}}!</div>{{/customer.id}}
+    <div class="wcpos-mq__promo"><b>Edit me</b>Your promo copy or images go here — this is plain HTML in the template.</div>
+  </aside>
+  <div class="wcpos-mq__list">
+    <div class="wcpos-mq__caption">{{i18n.your_items}}</div>
+    {{#totals.total_qty}}
+    <div class="wcpos-mq__items">
+      {{#lines}}<div class="wcpos-mq__row" data-wcpos-line-key="{{key}}"><span class="wcpos-mq__qty">{{qty}} &times;</span><span class="wcpos-mq__name-l">{{name}}{{#meta}}<span class="wcpos-mq__meta">{{key}}: {{value}}</span>{{/meta}}</span><span class="wcpos-mq__price">{{line_total_display}}</span></div>{{/lines}}
+    </div>
+    {{/totals.total_qty}}
+    {{^totals.total_qty}}<div class="wcpos-mq__empty">{{i18n.items_appear_here}}</div>{{/totals.total_qty}}
+  </div>
+  <aside class="wcpos-mq__panel">
+    {{#totals.total_qty}}
+    <div class="wcpos-mq__totals">
+      <div class="wcpos-mq__total-row"><span>{{i18n.subtotal}}</span><span class="wcpos-mq__money">{{totals.subtotal_display}}</span></div>
+      {{#discounts}}<div class="wcpos-mq__total-row"><span>{{#label}}{{label}}{{/label}}{{^label}}{{i18n.discount}}{{/label}}</span><span class="wcpos-mq__money">-{{total_display}}</span></div>{{/discounts}}
+      <div class="wcpos-mq__total-row"><span>{{i18n.total_tax}}</span><span class="wcpos-mq__money">{{totals.tax_total_display}}</span></div>
+      <div class="wcpos-mq__total-row wcpos-mq__grand"><span>{{i18n.total}}</span><span class="wcpos-mq__money">{{totals.total_display}}</span></div>
+      {{#totals.total_saved}}<div class="wcpos-mq__saved">{{i18n.you_saved}} {{totals.total_saved_display}}</div>{{/totals.total_saved}}
+    </div>
+    {{/totals.total_qty}}
+  </aside>
+</section>
+
+<section class="wcpos-mq" data-wcpos-state="payment">
+  <aside class="wcpos-mq__brand">
+    {{#store.logo}}<img class="wcpos-mq__logo" src="{{store.logo}}" alt="{{store.name}}">{{/store.logo}}
+    {{^store.logo}}<div class="wcpos-mq__name">{{store.name}}</div>{{/store.logo}}
+    {{#customer.id}}<div class="wcpos-mq__greeting">{{i18n.greeting}} {{customer.first_name}}!</div>{{/customer.id}}
+  </aside>
+  <div class="wcpos-mq__list">
+    <div class="wcpos-mq__caption">{{i18n.your_items}}</div>
+    <div class="wcpos-mq__items">{{#lines}}<div class="wcpos-mq__row" data-wcpos-line-key="{{key}}"><span class="wcpos-mq__qty">{{qty}} &times;</span><span class="wcpos-mq__name-l">{{name}}{{#meta}}<span class="wcpos-mq__meta">{{key}}: {{value}}</span>{{/meta}}</span><span class="wcpos-mq__price">{{line_total_display}}</span></div>{{/lines}}</div>
+  </div>
+  <aside class="wcpos-mq__panel">
+    <div class="wcpos-mq__payment">
+      <div><div class="wcpos-mq__total-row"><span>{{i18n.total}}</span><span class="wcpos-mq__money">{{ledger.total}}</span></div>{{#ledger.paid_raw}}<div class="wcpos-mq__total-row wcpos-mq__total-row--paid"><span>{{i18n.paid_so_far}}</span><span class="wcpos-mq__money">{{ledger.paid}}</span></div>{{/ledger.paid_raw}}</div>
+      <div class="wcpos-mq__card"><div class="wcpos-mq__icon wcpos-mq__spinner" aria-hidden="true"></div><div class="wcpos-mq__card-title">{{i18n.present_card}}</div><div class="wcpos-mq__card-amount wcpos-mq__money">{{ledger.due}}</div></div>
+    </div>
+  </aside>
+</section>
+
+<section class="wcpos-mq" data-wcpos-state="payment.approved">
+  <aside class="wcpos-mq__brand">
+    {{#store.logo}}<img class="wcpos-mq__logo" src="{{store.logo}}" alt="{{store.name}}">{{/store.logo}}
+    {{^store.logo}}<div class="wcpos-mq__name">{{store.name}}</div>{{/store.logo}}
+    {{#customer.id}}<div class="wcpos-mq__greeting">{{i18n.greeting}} {{customer.first_name}}!</div>{{/customer.id}}
+  </aside>
+  <div class="wcpos-mq__list">
+    <div class="wcpos-mq__caption">{{i18n.your_items}}</div>
+    <div class="wcpos-mq__items">{{#lines}}<div class="wcpos-mq__row" data-wcpos-line-key="{{key}}"><span class="wcpos-mq__qty">{{qty}} &times;</span><span class="wcpos-mq__name-l">{{name}}{{#meta}}<span class="wcpos-mq__meta">{{key}}: {{value}}</span>{{/meta}}</span><span class="wcpos-mq__price">{{line_total_display}}</span></div>{{/lines}}</div>
+  </div>
+  <aside class="wcpos-mq__panel">
+    <div class="wcpos-mq__payment">
+      <div><div class="wcpos-mq__total-row"><span>{{i18n.total}}</span><span class="wcpos-mq__money">{{ledger.total}}</span></div>{{#ledger.paid_raw}}<div class="wcpos-mq__total-row wcpos-mq__total-row--paid"><span>{{i18n.paid_so_far}}</span><span class="wcpos-mq__money">{{ledger.paid}}</span></div>{{/ledger.paid_raw}}</div>
+      <div class="wcpos-mq__card wcpos-mq__card--ok"><div class="wcpos-mq__icon" aria-hidden="true">&#10003;</div><div class="wcpos-mq__card-title">{{i18n.approved}}</div><div class="wcpos-mq__card-amount wcpos-mq__money">{{ledger.due}}</div>{{#payment.message}}<div class="wcpos-mq__message">{{payment.message}}</div>{{/payment.message}}</div>
+    </div>
+  </aside>
+</section>
+
+<section class="wcpos-mq" data-wcpos-state="payment.declined">
+  <aside class="wcpos-mq__brand">
+    {{#store.logo}}<img class="wcpos-mq__logo" src="{{store.logo}}" alt="{{store.name}}">{{/store.logo}}
+    {{^store.logo}}<div class="wcpos-mq__name">{{store.name}}</div>{{/store.logo}}
+    {{#customer.id}}<div class="wcpos-mq__greeting">{{i18n.greeting}} {{customer.first_name}}!</div>{{/customer.id}}
+  </aside>
+  <div class="wcpos-mq__list">
+    <div class="wcpos-mq__caption">{{i18n.your_items}}</div>
+    <div class="wcpos-mq__items">{{#lines}}<div class="wcpos-mq__row" data-wcpos-line-key="{{key}}"><span class="wcpos-mq__qty">{{qty}} &times;</span><span class="wcpos-mq__name-l">{{name}}{{#meta}}<span class="wcpos-mq__meta">{{key}}: {{value}}</span>{{/meta}}</span><span class="wcpos-mq__price">{{line_total_display}}</span></div>{{/lines}}</div>
+  </div>
+  <aside class="wcpos-mq__panel">
+    <div class="wcpos-mq__payment">
+      <div><div class="wcpos-mq__total-row"><span>{{i18n.total}}</span><span class="wcpos-mq__money">{{ledger.total}}</span></div>{{#ledger.paid_raw}}<div class="wcpos-mq__total-row wcpos-mq__total-row--paid"><span>{{i18n.paid_so_far}}</span><span class="wcpos-mq__money">{{ledger.paid}}</span></div>{{/ledger.paid_raw}}</div>
+      <div class="wcpos-mq__card wcpos-mq__card--bad"><div class="wcpos-mq__icon" aria-hidden="true">&times;</div><div class="wcpos-mq__card-title">{{i18n.declined}}</div><div class="wcpos-mq__card-amount wcpos-mq__money">{{ledger.due}}</div>{{#payment.message}}<div class="wcpos-mq__message">{{payment.message}}</div>{{/payment.message}}{{^payment.message}}<div class="wcpos-mq__message">{{i18n.try_another_card}}</div>{{/payment.message}}</div>
+    </div>
+  </aside>
+</section>
+
+<section class="wcpos-mq" data-wcpos-state="payment.complete">
+  <aside class="wcpos-mq__brand">
+    {{#store.logo}}<img class="wcpos-mq__logo" src="{{store.logo}}" alt="{{store.name}}">{{/store.logo}}
+    {{^store.logo}}<div class="wcpos-mq__name">{{store.name}}</div>{{/store.logo}}
+    {{#customer.id}}<div class="wcpos-mq__greeting">{{i18n.thank_you}}, {{customer.first_name}}!</div>{{/customer.id}}
+    {{^customer.id}}<div class="wcpos-mq__greeting">{{i18n.thank_you}}!</div>{{/customer.id}}
+  </aside>
+  <div class="wcpos-mq__list">
+    <div class="wcpos-mq__caption">{{i18n.your_items}}</div>
+    <div class="wcpos-mq__items">{{#lines}}<div class="wcpos-mq__row" data-wcpos-line-key="{{key}}"><span class="wcpos-mq__qty">{{qty}} &times;</span><span class="wcpos-mq__name-l">{{name}}{{#meta}}<span class="wcpos-mq__meta">{{key}}: {{value}}</span>{{/meta}}</span><span class="wcpos-mq__price">{{line_total_display}}</span></div>{{/lines}}</div>
+  </div>
+  <aside class="wcpos-mq__panel">
+    <div class="wcpos-mq__payment">
+      <div class="wcpos-mq__card wcpos-mq__card--ok"><div class="wcpos-mq__icon" aria-hidden="true">&#10003;</div><div class="wcpos-mq__card-title">{{i18n.paid_in_full}}</div><div class="wcpos-mq__card-amount wcpos-mq__money">{{totals.total_display}}</div>{{#ledger.change_raw}}<div class="wcpos-mq__message">{{i18n.change}} {{ledger.change}}</div>{{/ledger.change_raw}}</div>
+    </div>
+  </aside>
+</section>
+</script>
+
+<script>/* mustache 4.2.0 UMD, inlined so the file works offline */
+(function(global,factory){typeof exports==="object"&&typeof module!=="undefined"?module.exports=factory():typeof define==="function"&&define.amd?define(factory):(global=global||self,global.Mustache=factory())})(this,function(){"use strict";var objectToString=Object.prototype.toString;var isArray=Array.isArray||function isArrayPolyfill(object){return objectToString.call(object)==="[object Array]"};function isFunction(object){return typeof object==="function"}function typeStr(obj){return isArray(obj)?"array":typeof obj}function escapeRegExp(string){return string.replace(/[\-\[\]{}()*+?.,\\\^$|#\s]/g,"\\$&")}function hasProperty(obj,propName){return obj!=null&&typeof obj==="object"&&propName in obj}function primitiveHasOwnProperty(primitive,propName){return primitive!=null&&typeof primitive!=="object"&&primitive.hasOwnProperty&&primitive.hasOwnProperty(propName)}var regExpTest=RegExp.prototype.test;function testRegExp(re,string){return regExpTest.call(re,string)}var nonSpaceRe=/\S/;function isWhitespace(string){return!testRegExp(nonSpaceRe,string)}var entityMap={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;","/":"&#x2F;","`":"&#x60;","=":"&#x3D;"};function escapeHtml(string){return String(string).replace(/[&<>"'`=\/]/g,function fromEntityMap(s){return entityMap[s]})}var whiteRe=/\s*/;var spaceRe=/\s+/;var equalsRe=/\s*=/;var curlyRe=/\s*\}/;var tagRe=/#|\^|\/|>|\{|&|=|!/;function parseTemplate(template,tags){if(!template)return[];var lineHasNonSpace=false;var sections=[];var tokens=[];var spaces=[];var hasTag=false;var nonSpace=false;var indentation="";var tagIndex=0;function stripSpace(){if(hasTag&&!nonSpace){while(spaces.length)delete tokens[spaces.pop()]}else{spaces=[]}hasTag=false;nonSpace=false}var openingTagRe,closingTagRe,closingCurlyRe;function compileTags(tagsToCompile){if(typeof tagsToCompile==="string")tagsToCompile=tagsToCompile.split(spaceRe,2);if(!isArray(tagsToCompile)||tagsToCompile.length!==2)throw new Error("Invalid tags: "+tagsToCompile);openingTagRe=new RegExp(escapeRegExp(tagsToCompile[0])+"\\s*");closingTagRe=new RegExp("\\s*"+escapeRegExp(tagsToCompile[1]));closingCurlyRe=new RegExp("\\s*"+escapeRegExp("}"+tagsToCompile[1]))}compileTags(tags||mustache.tags);var scanner=new Scanner(template);var start,type,value,chr,token,openSection;while(!scanner.eos()){start=scanner.pos;value=scanner.scanUntil(openingTagRe);if(value){for(var i=0,valueLength=value.length;i<valueLength;++i){chr=value.charAt(i);if(isWhitespace(chr)){spaces.push(tokens.length);indentation+=chr}else{nonSpace=true;lineHasNonSpace=true;indentation+=" "}tokens.push(["text",chr,start,start+1]);start+=1;if(chr==="\n"){stripSpace();indentation="";tagIndex=0;lineHasNonSpace=false}}}if(!scanner.scan(openingTagRe))break;hasTag=true;type=scanner.scan(tagRe)||"name";scanner.scan(whiteRe);if(type==="="){value=scanner.scanUntil(equalsRe);scanner.scan(equalsRe);scanner.scanUntil(closingTagRe)}else if(type==="{"){value=scanner.scanUntil(closingCurlyRe);scanner.scan(curlyRe);scanner.scanUntil(closingTagRe);type="&"}else{value=scanner.scanUntil(closingTagRe)}if(!scanner.scan(closingTagRe))throw new Error("Unclosed tag at "+scanner.pos);if(type==">"){token=[type,value,start,scanner.pos,indentation,tagIndex,lineHasNonSpace]}else{token=[type,value,start,scanner.pos]}tagIndex++;tokens.push(token);if(type==="#"||type==="^"){sections.push(token)}else if(type==="/"){openSection=sections.pop();if(!openSection)throw new Error('Unopened section "'+value+'" at '+start);if(openSection[1]!==value)throw new Error('Unclosed section "'+openSection[1]+'" at '+start)}else if(type==="name"||type==="{"||type==="&"){nonSpace=true}else if(type==="="){compileTags(value)}}stripSpace();openSection=sections.pop();if(openSection)throw new Error('Unclosed section "'+openSection[1]+'" at '+scanner.pos);return nestTokens(squashTokens(tokens))}function squashTokens(tokens){var squashedTokens=[];var token,lastToken;for(var i=0,numTokens=tokens.length;i<numTokens;++i){token=tokens[i];if(token){if(token[0]==="text"&&lastToken&&lastToken[0]==="text"){lastToken[1]+=token[1];lastToken[3]=token[3]}else{squashedTokens.push(token);lastToken=token}}}return squashedTokens}function nestTokens(tokens){var nestedTokens=[];var collector=nestedTokens;var sections=[];var token,section;for(var i=0,numTokens=tokens.length;i<numTokens;++i){token=tokens[i];switch(token[0]){case"#":case"^":collector.push(token);sections.push(token);collector=token[4]=[];break;case"/":section=sections.pop();section[5]=token[2];collector=sections.length>0?sections[sections.length-1][4]:nestedTokens;break;default:collector.push(token)}}return nestedTokens}function Scanner(string){this.string=string;this.tail=string;this.pos=0}Scanner.prototype.eos=function eos(){return this.tail===""};Scanner.prototype.scan=function scan(re){var match=this.tail.match(re);if(!match||match.index!==0)return"";var string=match[0];this.tail=this.tail.substring(string.length);this.pos+=string.length;return string};Scanner.prototype.scanUntil=function scanUntil(re){var index=this.tail.search(re),match;switch(index){case-1:match=this.tail;this.tail="";break;case 0:match="";break;default:match=this.tail.substring(0,index);this.tail=this.tail.substring(index)}this.pos+=match.length;return match};function Context(view,parentContext){this.view=view;this.cache={".":this.view};this.parent=parentContext}Context.prototype.push=function push(view){return new Context(view,this)};Context.prototype.lookup=function lookup(name){var cache=this.cache;var value;if(cache.hasOwnProperty(name)){value=cache[name]}else{var context=this,intermediateValue,names,index,lookupHit=false;while(context){if(name.indexOf(".")>0){intermediateValue=context.view;names=name.split(".");index=0;while(intermediateValue!=null&&index<names.length){if(index===names.length-1)lookupHit=hasProperty(intermediateValue,names[index])||primitiveHasOwnProperty(intermediateValue,names[index]);intermediateValue=intermediateValue[names[index++]]}}else{intermediateValue=context.view[name];lookupHit=hasProperty(context.view,name)}if(lookupHit){value=intermediateValue;break}context=context.parent}cache[name]=value}if(isFunction(value))value=value.call(this.view);return value};function Writer(){this.templateCache={_cache:{},set:function set(key,value){this._cache[key]=value},get:function get(key){return this._cache[key]},clear:function clear(){this._cache={}}}}Writer.prototype.clearCache=function clearCache(){if(typeof this.templateCache!=="undefined"){this.templateCache.clear()}};Writer.prototype.parse=function parse(template,tags){var cache=this.templateCache;var cacheKey=template+":"+(tags||mustache.tags).join(":");var isCacheEnabled=typeof cache!=="undefined";var tokens=isCacheEnabled?cache.get(cacheKey):undefined;if(tokens==undefined){tokens=parseTemplate(template,tags);isCacheEnabled&&cache.set(cacheKey,tokens)}return tokens};Writer.prototype.render=function render(template,view,partials,config){var tags=this.getConfigTags(config);var tokens=this.parse(template,tags);var context=view instanceof Context?view:new Context(view,undefined);return this.renderTokens(tokens,context,partials,template,config)};Writer.prototype.renderTokens=function renderTokens(tokens,context,partials,originalTemplate,config){var buffer="";var token,symbol,value;for(var i=0,numTokens=tokens.length;i<numTokens;++i){value=undefined;token=tokens[i];symbol=token[0];if(symbol==="#")value=this.renderSection(token,context,partials,originalTemplate,config);else if(symbol==="^")value=this.renderInverted(token,context,partials,originalTemplate,config);else if(symbol===">")value=this.renderPartial(token,context,partials,config);else if(symbol==="&")value=this.unescapedValue(token,context);else if(symbol==="name")value=this.escapedValue(token,context,config);else if(symbol==="text")value=this.rawValue(token);if(value!==undefined)buffer+=value}return buffer};Writer.prototype.renderSection=function renderSection(token,context,partials,originalTemplate,config){var self=this;var buffer="";var value=context.lookup(token[1]);function subRender(template){return self.render(template,context,partials,config)}if(!value)return;if(isArray(value)){for(var j=0,valueLength=value.length;j<valueLength;++j){buffer+=this.renderTokens(token[4],context.push(value[j]),partials,originalTemplate,config)}}else if(typeof value==="object"||typeof value==="string"||typeof value==="number"){buffer+=this.renderTokens(token[4],context.push(value),partials,originalTemplate,config)}else if(isFunction(value)){if(typeof originalTemplate!=="string")throw new Error("Cannot use higher-order sections without the original template");value=value.call(context.view,originalTemplate.slice(token[3],token[5]),subRender);if(value!=null)buffer+=value}else{buffer+=this.renderTokens(token[4],context,partials,originalTemplate,config)}return buffer};Writer.prototype.renderInverted=function renderInverted(token,context,partials,originalTemplate,config){var value=context.lookup(token[1]);if(!value||isArray(value)&&value.length===0)return this.renderTokens(token[4],context,partials,originalTemplate,config)};Writer.prototype.indentPartial=function indentPartial(partial,indentation,lineHasNonSpace){var filteredIndentation=indentation.replace(/[^ \t]/g,"");var partialByNl=partial.split("\n");for(var i=0;i<partialByNl.length;i++){if(partialByNl[i].length&&(i>0||!lineHasNonSpace)){partialByNl[i]=filteredIndentation+partialByNl[i]}}return partialByNl.join("\n")};Writer.prototype.renderPartial=function renderPartial(token,context,partials,config){if(!partials)return;var tags=this.getConfigTags(config);var value=isFunction(partials)?partials(token[1]):partials[token[1]];if(value!=null){var lineHasNonSpace=token[6];var tagIndex=token[5];var indentation=token[4];var indentedValue=value;if(tagIndex==0&&indentation){indentedValue=this.indentPartial(value,indentation,lineHasNonSpace)}var tokens=this.parse(indentedValue,tags);return this.renderTokens(tokens,context,partials,indentedValue,config)}};Writer.prototype.unescapedValue=function unescapedValue(token,context){var value=context.lookup(token[1]);if(value!=null)return value};Writer.prototype.escapedValue=function escapedValue(token,context,config){var escape=this.getConfigEscape(config)||mustache.escape;var value=context.lookup(token[1]);if(value!=null)return typeof value==="number"&&escape===mustache.escape?String(value):escape(value)};Writer.prototype.rawValue=function rawValue(token){return token[1]};Writer.prototype.getConfigTags=function getConfigTags(config){if(isArray(config)){return config}else if(config&&typeof config==="object"){return config.tags}else{return undefined}};Writer.prototype.getConfigEscape=function getConfigEscape(config){if(config&&typeof config==="object"&&!isArray(config)){return config.escape}else{return undefined}};var mustache={name:"mustache.js",version:"4.2.0",tags:["{{","}}"],clearCache:undefined,escape:undefined,parse:undefined,render:undefined,Scanner:undefined,Context:undefined,Writer:undefined,set templateCache(cache){defaultWriter.templateCache=cache},get templateCache(){return defaultWriter.templateCache}};var defaultWriter=new Writer;mustache.clearCache=function clearCache(){return defaultWriter.clearCache()};mustache.parse=function parse(template,tags){return defaultWriter.parse(template,tags)};mustache.render=function render(template,view,partials,config){if(typeof template!=="string"){throw new TypeError('Invalid template! Template should be a "string" '+'but "'+typeStr(template)+'" was given as the first '+"argument for mustache#render(template, view, partials)")}return defaultWriter.render(template,view,partials,config)};mustache.escape=escapeHtml;mustache.Scanner=Scanner;mustache.Context=Context;mustache.Writer=Writer;return mustache});
+
+</script>
+<script>
+// ---- Sample snapshot (Pro packages/display/src/sample-snapshot.json, trimmed) + the proposed i18n keys ----
+const SAMPLE = {
+  order: {
+    store: { id: 1, name: 'Northside Records', logo: '' },
+    lines: [
+      { key: '1', name: 'Blue Train', qty: 1, line_total_display: '$49.95', meta: [{ key: 'Format', value: '180g vinyl' }] },
+      { key: '2', name: 'Kind of Blue', qty: 1, line_total_display: '$30.00', meta: [] },
+      { key: '3', name: 'Northside T-shirt', qty: 2, line_total_display: '$40.00', meta: [{ key: 'Size', value: 'L' }] },
+      { key: '4', name: 'A Love Supreme', qty: 1, line_total_display: '$32.00', meta: [] },
+    ],
+    discounts: [{ label: 'Member discount', total_display: '$10.00' }],
+    totals: { subtotal_display: '$151.95', tax_total_display: '$3.00', total_display: '$144.95', total_saved: 15, total_saved_display: '$15.00', total_qty: 5 },
+    customer: { id: 12, name: 'Max Ferreira', first_name: 'Max' },
+    i18n: {
+      subtotal: 'Subtotal', discount: 'Discount', total_tax: 'Tax', total: 'Total', change: 'Change',
+      // proposed display keys (join Receipt_I18n_Labels, #156)
+      welcome: 'Welcome', greeting: 'Hi', your_items: 'Your items', items_appear_here: 'Your items will appear here',
+      you_saved: 'You saved', paid_so_far: 'Paid so far', paid_so_far_lc: 'paid so far', to_pay: 'to pay',
+      present_card: 'Please present your card', approved: 'Approved', declined: 'Declined',
+      try_another_card: 'Please try another card or ask staff', paid_in_full: 'Paid in full', thank_you: 'Thank you',
+    },
+  },
+  ledger: { status: 'partial', total: '$144.95', paid: '$50.00', paid_raw: 50, due: '$94.95', due_raw: 94.95, change: '$0.00', change_raw: 0 },
+  payment: {
+    started: { state: 'started', message: '' },
+    approved: { state: 'approved', message: 'Payment approved' },
+    declined: { state: 'declined', message: 'Card declined' },
+    complete: { state: 'complete', message: 'Paid in full' },
+  },
+  states: {
+    'cart.empty': { order: { lines: [], discounts: [], totals: { subtotal_display: '$0.00', tax_total_display: '$0.00', total_display: '$0.00', total_saved: 0, total_qty: 0 } },
+                    ledger: { status: 'unpaid', total: '$0.00', paid: '$0.00', paid_raw: 0, due: '$0.00', due_raw: 0, change: '$0.00', change_raw: 0 } },
+    'payment.complete': { ledger: { status: 'paid', total: '$144.95', paid: '$150.00', paid_raw: 150, due: '$0.00', due_raw: 0, change: '$5.05', change_raw: 5.05 } },
+  },
+};
+
+const TEMPLATES = [
+  { id: 'ledger',  name: 'Ledger',  sub: 'default · responsive',      primary: 'tablet' },
+  { id: 'pocket',  name: 'Pocket',  sub: 'small screens',             primary: 'phone' },
+  { id: 'marquee', name: 'Marquee', sub: 'large screens',             primary: 'monitor' },
+];
+const STATES = ['idle', 'cart.empty', 'cart', 'payment.started', 'payment.approved', 'payment.declined', 'payment.complete'];
+const DEVICES = [
+  { id: 'phone',   label: 'Phone 390×844',     w: 390,  h: 844,  fit: 0.72, big: 1 },
+  { id: 'tablet',  label: 'Tablet 1024×768',   w: 1024, h: 768,  fit: 0.46, big: 0.85 },
+  { id: 'monitor', label: 'Monitor 1920×1080', w: 1920, h: 1080, fit: 0.31, big: 0.62 },
+];
+
+let tpl = 0, state = 2, guest = false, zoom = false;
+const devOn = { phone: true, tablet: true, monitor: true };
+
+// Mirrors Pro previewContext(): base order + per-state override, ledger, payment.
+function context(st) {
+  const o = SAMPLE.states[st] || {};
+  const order = { ...SAMPLE.order, ...(o.order || {}) };
+  if (guest) order.customer = { id: null, name: 'Guest', first_name: 'Guest' };
+  const ctx = { ...order, ledger: o.ledger || SAMPLE.ledger };
+  const pay = SAMPLE.payment[st.split('.')[1]];
+  if (pay) ctx.payment = pay;
+  return ctx;
+}
+// Mirrors the engine: exact state, else namespace ("payment"), else "cart"; idle only exact.
+function pickSection(doc, st) {
+  const engineState = st === 'cart.empty' ? 'cart' : st;
+  const secs = [...doc.querySelectorAll('section[data-wcpos-state]')];
+  return secs.find(s => s.dataset.wcposState === engineState)
+      || (engineState !== 'idle' && secs.find(s => s.dataset.wcposState === engineState.split('.')[0]))
+      || (engineState !== 'idle' && secs.find(s => s.dataset.wcposState === 'cart'));
+}
+function renderDoc(tplId, st) {
+  const src = document.getElementById('tpl-' + tplId).textContent;
+  const html = Mustache.render(src, context(st));
+  const doc = new DOMParser().parseFromString('<!doctype html><html><body>' + html + '</body></html>', 'text/html');
+  const style = doc.querySelector('style');
+  const sec = pickSection(doc, st);
+  // host cue: the row with the newest key is .wcpos-line-new (engine diff, #156 Q4)
+  if (sec) {
+    const rows = sec.querySelectorAll('[data-wcpos-line-key]');
+    if (rows.length && st === 'cart') rows[rows.length - 1].classList.add('wcpos-line-new');
+  }
+  return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+       + (style ? style.outerHTML : '') + '</head><body>' + (sec ? sec.outerHTML : '<p style="font:16px sans-serif;padding:20px">No section for state ' + st + '</p>') + '</body></html>';
+}
+
+function paint() {
+  const t = TEMPLATES[tpl];
+  document.getElementById('tpls').innerHTML = TEMPLATES.map((x, i) =>
+    `<button class="pill tpl ${i === tpl ? 'on' : ''}" data-tpl="${i}">${x.name}<small>${x.sub}</small></button>`).join('');
+  document.getElementById('states').innerHTML = STATES.map((s, i) =>
+    `<button class="pill ${i === state ? 'on' : ''}" data-state="${i}">${s}</button>`).join('');
+  document.getElementById('devs').innerHTML = DEVICES.map(d =>
+    `<button class="pill ${devOn[d.id] ? 'on' : ''}" data-dev="${d.id}">${d.label}</button>`).join('');
+  document.getElementById('guest').textContent = guest ? 'Guest sale' : 'Known customer (Max)';
+  document.getElementById('guest').classList.toggle('on', guest);
+  document.getElementById('zoom').textContent = zoom ? 'Zoomed: ' + t.primary : 'Fit all';
+  document.getElementById('zoom').classList.toggle('on', zoom);
+
+  const main = document.getElementById('main');
+  main.innerHTML = '';
+  const html = renderDoc(t.id, STATES[state]);
+  DEVICES.filter(d => zoom ? d.id === t.primary : devOn[d.id]).forEach(d => {
+    const scale = zoom ? d.big : d.fit;
+    const f = document.createElement('div'); f.className = 'frame';
+    f.innerHTML = `<div class="cap">${d.label}${d.id === t.primary ? ' · <b>built for this</b>' : ''}</div>
+      <div class="shell ${d.id}"><div class="vp" style="width:${d.w * scale}px;height:${d.h * scale}px">
+      <iframe width="${d.w}" height="${d.h}" style="transform:scale(${scale})"></iframe></div></div>`;
+    main.appendChild(f);
+    f.querySelector('iframe').srcdoc = html;
+  });
+  location.hash = `tpl=${t.id}&state=${STATES[state]}${guest ? '&guest' : ''}`;
+  document.getElementById('notes').innerHTML = NOTES[t.id];
+}
+
+const NOTES = {
+  ledger: `<b>Ledger — the responsive default.</b> The live template with its narrow layout redone: below 700px the panel becomes a docked bar (store name dropped, grand total kept, payment card goes horizontal) so the list keeps most of the screen. All hard-coded English replaced with <code>{{i18n.*}}</code> keys; greeting uses <code>customer.first_name</code>; the just-added row gets the host's <code>.wcpos-line-new</code> tint.`,
+  pocket: `<b>Pocket — built for small screens.</b> A dark docked header owns the running total (the one number a customer looks for), greeting under it; items newest-first (<code>column-reverse</code>, so the just-added row is at the top and highlighted); subtotal/tax/savings in a quiet footer line. Payment states take the whole screen: spinner / tick / cross, the amount, and the split line when part is already paid. Landscape phone puts the header on the left.`,
+  marquee: `<b>Marquee — built for large screens.</b> Three zones: brand column (logo or name, greeting, an editable promo block — plain HTML for the merchant's own copy or images), the item list with the <b>just-added item promoted to a hero card</b> via the host's cue, and a totals column at 56px. Payment states swap totals for the status card. Type scales with the screen (clamp on vw) so it reads from a metre away. Below 1200px the brand column folds away; below 700px it stacks — usable, but this one is not meant for phones.`,
+};
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.tpl != null) tpl = +b.dataset.tpl;
+  else if (b.dataset.state != null) state = +b.dataset.state;
+  else if (b.dataset.dev) devOn[b.dataset.dev] = !devOn[b.dataset.dev];
+  else if (b.id === 'guest') guest = !guest;
+  else if (b.id === 'zoom') zoom = !zoom;
+  paint();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight') tpl = (tpl + 1) % TEMPLATES.length;
+  else if (e.key === 'ArrowLeft') tpl = (tpl + TEMPLATES.length - 1) % TEMPLATES.length;
+  else if (e.key === 'ArrowDown') state = (state + 1) % STATES.length;
+  else if (e.key === 'ArrowUp') state = (state + STATES.length - 1) % STATES.length;
+  else if (e.key === 'g') guest = !guest;
+  else if (e.key === 'z') zoom = !zoom;
+  else return;
+  e.preventDefault(); paint();
+});
+function fromHash() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  const ti = TEMPLATES.findIndex(t => t.id === p.get('tpl')); if (ti >= 0) tpl = ti;
+  const si = STATES.indexOf(p.get('state')); if (si >= 0) state = si;
+  guest = p.has('guest');
+}
+window.addEventListener('hashchange', () => { fromHash(); paint(); });
+fromHash();
+paint();
+</script>
+</body>
+</html>
