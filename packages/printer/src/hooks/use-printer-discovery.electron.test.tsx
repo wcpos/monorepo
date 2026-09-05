@@ -287,7 +287,7 @@ describe('usePrinterDiscovery (electron)', () => {
 		});
 	});
 
-	it('does not merge identification results after the scan is stopped', async () => {
+	it('does not expose results while identification is pending or after the scan is stopped', async () => {
 		const discovered: DiscoveredPrinter = {
 			id: 'mdns-epson',
 			name: 'EPSON TM-m30III',
@@ -312,6 +312,7 @@ describe('usePrinterDiscovery (electron)', () => {
 			scan = result.current.startScan();
 			await vi.waitFor(() => expect(identifyDiscoveredPrinters).toHaveBeenCalled());
 		});
+		expect(result.current.printers).toEqual([]);
 		await act(async () => {
 			await result.current.stopScan();
 		});
