@@ -3,12 +3,17 @@ import { makeRedirectUri } from 'expo-auth-session';
 import type { WcposAuthParams, WcposAuthResult } from './types';
 
 /**
- * Get the redirect URI for auth callbacks
+ * Get the redirect URI for auth callbacks.
+ *
+ * No `scheme` is passed on purpose: expo-linking resolves it from the app
+ * config, which sets one scheme per build profile (`wcpos`, `wcpos-dev`,
+ * `wcpos-adhoc` - see apps/main/app.config.ts). Hardcoding `wcpos` here sent
+ * every variant's login back through the production scheme, so a device with
+ * two variants installed could not tell which app to return to.
  */
 export function getRedirectUri(): string {
 	return makeRedirectUri({
-		scheme: 'wcpos',
-		path: (window as any)?.baseUrl ?? undefined,
+		path: typeof window !== 'undefined' ? ((window as any).baseUrl ?? undefined) : undefined,
 	});
 }
 

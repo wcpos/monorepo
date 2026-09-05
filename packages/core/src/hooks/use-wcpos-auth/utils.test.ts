@@ -1,7 +1,9 @@
 /**
  * @jest-environment node
  */
-import { buildAuthUrl, generateState, parseAuthResult } from './utils';
+import { makeRedirectUri } from 'expo-auth-session';
+
+import { buildAuthUrl, generateState, getRedirectUri, parseAuthResult } from './utils';
 
 // Mock expo-auth-session for getRedirectUri
 jest.mock('expo-auth-session', () => ({
@@ -9,6 +11,18 @@ jest.mock('expo-auth-session', () => ({
 }));
 
 describe('use-wcpos-auth utils', () => {
+	describe('getRedirectUri', () => {
+		it('lets expo resolve the scheme from the app config instead of hardcoding one', () => {
+			// The scheme is per build profile (wcpos / wcpos-dev / wcpos-adhoc, see
+			// apps/main/app.config.ts). A hardcoded `scheme` here would send every
+			// variant's login back through the production app.
+			jest.mocked(makeRedirectUri).mockClear();
+			getRedirectUri();
+			expect(makeRedirectUri).toHaveBeenCalledTimes(1);
+			expect(jest.mocked(makeRedirectUri).mock.calls[0][0]).not.toHaveProperty('scheme');
+		});
+	});
+
 	describe('generateState', () => {
 		it('should generate a 64-character hex string', () => {
 			const state = generateState();
