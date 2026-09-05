@@ -853,7 +853,8 @@ function writeAlignedStandaloneTextLine(
 	const text = extractText(nodes);
 	const normalized = context.normalizeText ? normalizeThermalText(text) : text;
 	if (hasLineBreak(normalized)) {
-		for (const line of splitInlineTextLines(nodes)) {
+		const lines = splitInlineTextLines(nodes);
+		for (const [index, line] of lines.entries()) {
 			if (!extractText(line)) {
 				writeNewline(encoder, context);
 			} else if (!writeAlignedStandaloneTextLine(encoder, line, context)) {
@@ -861,6 +862,11 @@ function writeAlignedStandaloneTextLine(
 				writeNewline(encoder, context);
 			}
 			if (context.lineHasText) writeNewline(encoder, context);
+			const activeHeight = context.escposPrintMode?.height ?? 1;
+			if (index < lines.length - 1 && activeHeight > 1) {
+				context.activeScaledLineSpacing = activeHeight;
+				encoder.raw([0x1b, 0x33, Math.min(255, activeHeight * 30)]);
+			}
 		}
 		writePrinterAlign(encoder, context, context.align);
 		return true;

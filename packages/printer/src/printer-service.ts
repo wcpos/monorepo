@@ -10,7 +10,7 @@ import {
 	buildThermalTemplateMarkupJob,
 	encodeThermalTemplateForPrint,
 } from './encoder/thermal-print';
-import { printerLogger } from './logger';
+import { isVerboseDiagnostics, printerLogger } from './logger';
 import { encodeThermalTemplate } from './renderer';
 import { CloudAdapter } from './transport/cloud-adapter';
 import { SystemPrintAdapter } from './transport/system-print-adapter';
@@ -18,7 +18,7 @@ import { SystemPrintAdapter } from './transport/system-print-adapter';
 import type { EncodeReceiptOptions } from './encoder/encode-receipt';
 import type { ReceiptData } from './encoder/types';
 import type { CloudEnqueueFn } from './transport/cloud-adapter';
-import type { PrinterProfile, PrinterTransport } from './types';
+import type { PrinterProfile, PrinterTransport, PrintRawOptions } from './types';
 
 // Receipts are a few KB; diagnostics exports and live printer tests need exact bytes.
 const RAW_JOB_HEX_PREVIEW_BYTES = 8192;
@@ -176,9 +176,32 @@ export class PrinterService {
 			if (await transport.supportsMarkup?.()) {
 				await transport.printMarkup!(buildReceiptMarkupJob(receiptData, encodeOpts));
 			} else {
-				await transport.printRaw(encodeReceipt(receiptData, encodeOpts));
+				await this.dispatchRaw(transport, encodeReceipt(receiptData, encodeOpts));
 			}
 		});
+	}
+
+	private async dispatchRaw(
+		transport: PrinterTransport,
+		data: Uint8Array,
+		options?: PrintRawOptions
+	): Promise<void> {
+		printerLogger.debug('Raw job dispatched', {
+			context: {
+				transport: transport.name,
+				bytes: data.byteLength,
+				...(isVerboseDiagnostics()
+					? {
+							hexPreview: Array.from(data.subarray(0, RAW_JOB_HEX_PREVIEW_BYTES), (byte) =>
+								byte.toString(16).padStart(2, '0')
+							).join(''),
+							truncated: data.byteLength > RAW_JOB_HEX_PREVIEW_BYTES,
+						}
+					: {}),
+			},
+		});
+		if (options) await transport.printRaw(data, options);
+		else await transport.printRaw(data);
 	}
 
 	/**
@@ -187,17 +210,7 @@ export class PrinterService {
 	async printRaw(data: Uint8Array, profile: PrinterProfile): Promise<void> {
 		return this.queue.add(async () => {
 			const transport = await this.getTransport(profile);
-			printerLogger.debug('Raw job dispatched', {
-				context: {
-					transport: transport.name,
-					bytes: data.byteLength,
-					hexPreview: Array.from(data.subarray(0, RAW_JOB_HEX_PREVIEW_BYTES), (byte) =>
-						byte.toString(16).padStart(2, '0')
-					).join(''),
-					truncated: data.byteLength > RAW_JOB_HEX_PREVIEW_BYTES,
-				},
-			});
-			await transport.printRaw(data);
+			await this.dispatchRaw(transport, data);
 		});
 	}
 
@@ -233,7 +246,7 @@ export class PrinterService {
 						drawerConnector: profile.drawerConnector,
 					}
 				);
-			await transport.printRaw(bytes, { cutPaper: false });
+			await this.dispatchRaw(transport, bytes, { cutPaper: false });
 		});
 	}
 
@@ -292,7 +305,7 @@ export class PrinterService {
 				return;
 			}
 			const bytes = await encodeThermalTemplateForPrint(input);
-			await transport.printRaw(bytes);
+			await this.dispatchRaw(transport, bytes);
 		});
 	}
 
@@ -337,7 +350,12 @@ export class PrinterService {
 				},
 			};
 			if (await transport.supportsMarkup?.()) await transport.printMarkup!(job);
-			else await transport.printRaw(encodeThermalTemplate(job.template, job.data, job.options));
+			else {
+				await this.dispatchRaw(
+					transport,
+					encodeThermalTemplate(job.template, job.data, job.options)
+				);
+			}
 		});
 	}
 

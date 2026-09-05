@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { sampleReceiptData } from '../encoder/__tests__/fixtures';
-import { printerLogger } from '../logger';
+import { isVerboseDiagnostics, printerLogger } from '../logger';
 import { PrinterService } from '../printer-service';
 
 import type { PrinterProfile, PrinterTransport } from '../types';
 
-vi.mock('../logger', () => ({ printerLogger: { debug: vi.fn() } }));
+vi.mock('../logger', () => ({
+	isVerboseDiagnostics: vi.fn(() => false),
+	printerLogger: { debug: vi.fn() },
+}));
 
 const {
 	buildReceiptMarkupJobMock,
@@ -125,7 +128,7 @@ describe('PrinterService', () => {
 				? Uint8Array.from([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
 				: new Uint8Array(size).fill(0xab);
 		Reflect.set(service, 'getTransport', vi.fn().mockResolvedValue(transport));
-		vi.mocked(printerLogger.debug).mockClear();
+		vi.mocked(isVerboseDiagnostics).mockReturnValue(true);
 
 		await service.printRaw(data, networkProfile());
 
@@ -135,7 +138,21 @@ describe('PrinterService', () => {
 		});
 	});
 
+	it('omits reversible raw bytes outside verbose diagnostics', async () => {
+		const service = new PrinterService();
+		const transport = markupTransport();
+		Reflect.set(service, 'getTransport', vi.fn().mockResolvedValue(transport));
+
+		await service.printRaw(Uint8Array.from([0xde, 0xad]), networkProfile());
+
+		expect(printerLogger.debug).toHaveBeenCalledExactlyOnceWith('Raw job dispatched', {
+			context: { transport: 'markup', bytes: 2 },
+		});
+	});
+
 	beforeEach(() => {
+		vi.mocked(isVerboseDiagnostics).mockReset().mockReturnValue(false);
+		vi.mocked(printerLogger.debug).mockClear();
 		encodeReceiptMock.mockClear();
 		buildReceiptMarkupJobMock.mockClear();
 		buildThermalTemplateMarkupJobMock.mockClear();
@@ -242,6 +259,9 @@ describe('PrinterService', () => {
 			})
 		);
 		expect(transport.printRaw).toHaveBeenCalledWith(new Uint8Array([1, 2, 3]));
+		expect(printerLogger.debug).toHaveBeenCalledExactlyOnceWith('Raw job dispatched', {
+			context: { transport: 'test', bytes: 3 },
+		});
 	});
 
 	it('queues thermal asset preparation with printing so concurrent receipts keep order', async () => {
@@ -302,6 +322,13 @@ describe('PrinterService', () => {
 		resolveSecond?.(new Uint8Array([2]));
 		await second;
 		expect(transport.printRaw).toHaveBeenNthCalledWith(2, new Uint8Array([2]));
+		expect(printerLogger.debug).toHaveBeenCalledTimes(2);
+		expect(printerLogger.debug).toHaveBeenNthCalledWith(1, 'Raw job dispatched', {
+			context: { transport: 'test', bytes: 1 },
+		});
+		expect(printerLogger.debug).toHaveBeenNthCalledWith(2, 'Raw job dispatched', {
+			context: { transport: 'test', bytes: 1 },
+		});
 	});
 
 	it('forwards autoOpenDrawer to encodeThermalTemplateForPrint so the setting works for thermal templates', async () => {
@@ -370,6 +397,9 @@ describe('PrinterService', () => {
 			Uint8Array.from([0x10, 0x14, 0x01, 0x01, 0x03]),
 			{ cutPaper: false }
 		);
+		expect(printerLogger.debug).toHaveBeenCalledExactlyOnceWith('Raw job dispatched', {
+			context: { transport: 'test', bytes: 5 },
+		});
 	});
 
 	it('uses ESC/POS real-time pin2 kick by default for drawer-only opens', async () => {
@@ -473,6 +503,9 @@ describe('PrinterService', () => {
 		const raw = [...bytes];
 		const pulseIndex = raw.findIndex((byte, index) => byte === 0x1b && raw[index + 1] === 0x70);
 		expect(pulseIndex).toBeGreaterThanOrEqual(0);
+		expect(printerLogger.debug).toHaveBeenCalledExactlyOnceWith('Raw job dispatched', {
+			context: { transport: 'test', bytes: bytes.byteLength },
+		});
 	});
 
 	it('testPrint can suppress the drawer pulse for save validation', async () => {

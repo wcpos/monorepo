@@ -1640,6 +1640,25 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(nextIndex).toBeGreaterThan(restoreSpacingIndex);
 	});
 
+	it('reapplies scaled line spacing between aligned lines inside an outer size', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><size width="2" height="2"><align mode="center">A\nB</align></size></receipt>',
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const firstLineIndex = sequenceIndex(bytes, [0x41]);
+		const newlineIndex = sequenceIndex(bytes, [0x0a], firstLineIndex);
+		const restoreSpacingIndex = sequenceIndex(bytes, [0x1b, 0x32], newlineIndex);
+		const reappliedSpacingIndex = sequenceIndex(bytes, [0x1b, 0x33, 60], restoreSpacingIndex);
+		const secondLineIndex = sequenceIndex(bytes, [0x42], reappliedSpacingIndex);
+
+		expect(firstLineIndex).toBeGreaterThanOrEqual(0);
+		expect(newlineIndex).toBeGreaterThan(firstLineIndex);
+		expect(restoreSpacingIndex).toBeGreaterThan(newlineIndex);
+		expect(reappliedSpacingIndex).toBeGreaterThan(restoreSpacingIndex);
+		expect(secondLineIndex).toBeGreaterThan(reappliedSpacingIndex);
+	});
+
 	it('keeps height-only scaled mixed inline text on one physical line', () => {
 		const bytes = encodeThermalTemplate(
 			'<receipt paper-width="48"><align mode="center"><size height="2">AB<bold>CD</bold></size></align></receipt>',
