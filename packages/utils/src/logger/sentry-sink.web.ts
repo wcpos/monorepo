@@ -110,17 +110,35 @@ export function captureLoggedError(input: SentryCaptureInput): void {
  * phase, tagged so Sentry can pivot by vendor/lane/platform. Sent only when the merchant
  * allowed telemetry; carries no addresses or device keys.
  */
+// Only stable, address-free fields leave the device; failure text can carry a printer endpoint.
+export const PRINTER_OUTCOME_FIELDS = [
+	'result',
+	'platform',
+	'source',
+	'vendor',
+	'model',
+	'lane',
+	'columns',
+	'testPages',
+	'securePrinting',
+] as const;
+
 export function capturePrinterOutcome(
 	context: Record<string, string | number | boolean | undefined>
 ): void {
 	if (!isInitialized) return;
 	try {
-		const tags = Object.fromEntries(
-			Object.entries(context)
-				.filter(([, value]) => value !== undefined)
-				.map(([key, value]) => [key, String(value)])
+		const safe = Object.fromEntries(
+			PRINTER_OUTCOME_FIELDS.filter((key) => context[key] !== undefined).map((key) => [
+				key,
+				String(context[key]),
+			])
 		);
-		Sentry.captureMessage('Printer setup outcome', { level: 'info', tags, extra: { context } });
+		Sentry.captureMessage('Printer setup outcome', {
+			level: 'info',
+			tags: safe,
+			extra: { context: safe },
+		});
 	} catch {
 		// Diagnostics must never interfere with the logger.
 	}

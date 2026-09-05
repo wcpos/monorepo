@@ -188,13 +188,31 @@ describe('PrinterService', () => {
 				transport: 'markup',
 				kind: 'receipt',
 				dataKeys: ['receipt'],
-				preview: JSON.stringify({
-					template: '<receipt><text>receipt</text></receipt>',
-					data: { receipt: true },
-				}),
+				templatePreview: '<receipt><text>receipt</text></receipt>',
 				truncated: false,
 			},
 		});
+	});
+
+	it('settles a queued job when the service is disposed while another job runs', async () => {
+		const service = new PrinterService();
+		let release!: () => void;
+		const blocking = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const transport = { name: 'slow', printRaw: vi.fn(() => blocking) };
+		Reflect.set(service, 'getTransport', vi.fn().mockResolvedValue(transport));
+		const first = service.printRaw(new Uint8Array([1]), networkProfile());
+		const second = service.printRaw(new Uint8Array([2]), networkProfile());
+		await vi.waitFor(() => expect(transport.printRaw).toHaveBeenCalledTimes(1));
+		const disposed = service.dispose();
+		await expect(second).rejects.toThrow('Printer service is closing');
+		await expect(service.printRaw(new Uint8Array([3]), networkProfile())).rejects.toThrow(
+			'Printer service is closing'
+		);
+		release();
+		await expect(first).resolves.toBeUndefined();
+		await disposed;
 	});
 
 	it('separates queue wait from transport time on every job', async () => {

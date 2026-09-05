@@ -46,11 +46,13 @@ function encodeEscposRealtimeDrawerKick(profile: PrinterProfile): Uint8Array | n
  * Verbose-diagnostics only, mirroring the raw hex preview: the template and its data, never the
  * render options — those carry rasterised image buffers, megabytes of unreadable pixels.
  */
-function markupPreview(job: MarkupPrintJob): { preview: string; truncated: boolean } {
-	const serialised = JSON.stringify({ template: job.template, data: job.data });
+// The preview is the template source only: `job.data` carries customer, tax and payment fields,
+// and printer log lines end up in copied setup reports.
+function markupPreview(job: MarkupPrintJob): { templatePreview: string; truncated: boolean } {
+	const template = typeof job.template === 'string' ? job.template : JSON.stringify(job.template);
 	return {
-		preview: serialised.slice(0, MARKUP_JOB_PREVIEW_CHARS),
-		truncated: serialised.length > MARKUP_JOB_PREVIEW_CHARS,
+		templatePreview: template.slice(0, MARKUP_JOB_PREVIEW_CHARS),
+		truncated: template.length > MARKUP_JOB_PREVIEW_CHARS,
 	};
 }
 
@@ -71,6 +73,9 @@ export interface TestPrintOptions {
 
 export class PrinterService {
 	private queue = new PQueue({ concurrency: 1 });
+	// Jobs accepted but not started; dispose() settles them instead of leaving them pending forever.
+	private pending = new Set<(error: Error) => void>();
+	private closing = false;
 	private transports = new Map<string, PrinterTransport>();
 	private cloudFactoryVersion = 0;
 	/** Tracks the config fingerprint used to create each cached transport. */
@@ -253,8 +258,17 @@ export class PrinterService {
 	 * behind other jobs from the time the transport itself took.
 	 */
 	private enqueue(kind: PrintJobKind, run: () => Promise<void>): Promise<void> {
+		if (this.closing) return Promise.reject(new Error('Printer service is closing'));
 		const enqueuedAt = Date.now();
-		return this.queue.add(async () => {
+		// p-queue's clear() drops queued tasks without settling their promises: race each job
+		// against a rejection handle that dispose() can fire for jobs it removed.
+		let rejectPending!: (error: Error) => void;
+		const removed = new Promise<never>((_, reject) => {
+			rejectPending = reject;
+		});
+		this.pending.add(rejectPending);
+		const job = this.queue.add(async () => {
+			this.pending.delete(rejectPending);
 			const startedAt = Date.now();
 			let outcome: 'ok' | 'failed' = 'ok';
 			try {
@@ -273,6 +287,7 @@ export class PrinterService {
 				});
 			}
 		});
+		return Promise.race([job, removed]).finally(() => this.pending.delete(rejectPending));
 	}
 
 	/**
@@ -443,10 +458,11 @@ export class PrinterService {
 	 * Clean up all transports. Waits for in-flight jobs to finish first.
 	 */
 	async dispose(): Promise<void> {
-		// Prevent new jobs from being accepted
+		// Refuse new jobs, settle the ones that never started, let the running one finish.
+		this.closing = true;
 		this.queue.clear();
-
-		// Wait for any currently executing job to complete
+		for (const reject of this.pending) reject(new Error('Printer service is closing'));
+		this.pending.clear();
 		await this.queue.onIdle();
 
 		for (const transport of this.transports.values()) {

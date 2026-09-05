@@ -138,7 +138,9 @@ export function usePrinterSetupFlow(
 					failure: current.current.failure?.message,
 				};
 				printerLogger.info('Printer setup outcome', { context: outcome });
-				capturePrinterOutcome(outcome);
+				// The sink allowlists fields; the failure text stays in the local log only.
+				const { failure: _failure, port: _port, ...remote } = outcome;
+				capturePrinterOutcome(remote);
 			}
 		}
 	}
