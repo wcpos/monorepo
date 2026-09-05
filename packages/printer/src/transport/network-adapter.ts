@@ -1,5 +1,7 @@
 import TcpSocket from 'react-native-tcp-socket';
 
+import { printerLogger } from '../logger';
+
 import type { PrinterTransport } from '../types';
 
 /**
@@ -16,6 +18,9 @@ export class NetworkAdapter implements PrinterTransport {
 	) {}
 
 	async printRaw(data: Uint8Array): Promise<void> {
+		const startedAt = Date.now();
+		const context = { host: this.host, port: this.port, bytes: data.byteLength };
+		printerLogger.debug('Raw TCP connect started', { context });
 		return new Promise<void>((resolve, reject) => {
 			let settled = false;
 			let client: ReturnType<typeof TcpSocket.createConnection> | null = null;
@@ -28,8 +33,18 @@ export class NetworkAdapter implements PrinterTransport {
 					client.destroy();
 				}
 				if (err) {
+					printerLogger.warn('Raw TCP job failed', {
+						context: {
+							...context,
+							elapsedMs: Date.now() - startedAt,
+							cause: err.message.includes('timed out') ? 'timeout' : err.message,
+						},
+					});
 					reject(err);
 				} else {
+					printerLogger.info('Raw TCP job sent', {
+						context: { ...context, elapsedMs: Date.now() - startedAt },
+					});
 					resolve();
 				}
 			};

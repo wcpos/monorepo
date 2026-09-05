@@ -38,10 +38,14 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
+    "expo-application": "~57.0.2",
     "expo-constants": "~57.0.12",
     "react-native": "*"
   },
   "peerDependenciesMeta": {
+    "expo-application": {
+      "optional": true
+    },
     "expo-constants": {
       "optional": true
     }

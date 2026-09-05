@@ -44,7 +44,9 @@ is broken, whatever its verdict says.
   `platform=`). A tablet fix is proven by its merge run, not its PR run.
 - A red run on a push to `main` opens (or refreshes) a `ci:main-native-red`
   issue carrying the per-platform results. It closes itself only on a run
-  where both platforms passed, and a rerun of an older push never moves it.
+  where both platforms passed at the current tip of `main`; a red on any
+  first-attempt run is recorded even after `main` has moved on (devices take
+  ~45 min), and a rerun of an older push never moves it.
   The web suite's equivalent is `ci:main-red` from `deploy.yml`.
 - PRs whose base is `next` skip the native suite by ruling (2026-09-03).
 - Red native checks on a PR that is not itself native-E2E work do not block a
@@ -212,6 +214,7 @@ Known classes, by what the screenshot shows:
 | iOS flow 08 keyboard up over the tab bar; taps hit keys                                                                                  | Search-clear refocus vs Enter race                                                                                  | Focus-verified dismissal, iOS-only (#1833)                                                                                    |                                                                  |
 | iPad flow 02 consent alert already up after the URL was typed                                                                            | App reached sign-in without the flow's Connect/Add-user taps (trigger not established)                              | Flow 02 logs, skips those taps, and falls into the consent handling (#1841)                                                   |                                                                  |
 | Android tablet flow 09, cold start shows the default ~60% split; post-relaunch band assert fails                                         | The relaunch killed the process ~300 ms after the swipe, before the single async RxState width write landed         | 3 s write settle before the relaunch in flow 09 (the write has no UI observable)                                              | read it as a persistence bug; the app has no debounce to shorten |
+| iPad flow 02, connected-store card with "Sign in with WordPress" idle after the add-user tap; no consent alert, no login page            | Add-user press lost on the starved runner (tap COMPLETED, no reaction)                                              | Logged re-tap after 20 s when neither sign-in surface is up and the button is still there                                     | raise the 60 s wait                                              |
 | iOS "Application is not running" ~200 ms after launch                                                                                    | XCTest driver queried before scene activation; not a crash                                                          | Split stop/launch and a settle in `relaunch-app.yml`                                                                          | read it as a crash                                               |
 
 When a red matches none of these, the thing to produce is a new row: the
@@ -231,6 +234,16 @@ handling lives. A fix without a row is a fix nobody can recognise next time.
   so a suite running at that moment sees a ~30 s blip.
 - dev-next has its own worker ceiling under a separate ruling; the 16-worker
   ruling does not cover it.
+- **Every plugin deploy restarts both dev stores' php containers.** The
+  `deploy-dev` workflow in `woocommerce-pos` and `woocommerce-pos-pro` finds
+  each store's php container by bind mount and restarts it to flush OPcache;
+  a merge to either repo's `main` can produce two restarts (pro auto-dispatches
+  after free). Each is 1–2 s of nginx 502 on dev-free and dev-pro with no
+  store-side cause, no SSH login and no Coolify record. A flow that dies on
+  exactly one 5xx, or a seed blip, in such a window is this, not a regression
+  (2026-09-03 22:12/22:17 and 2026-09-04 06:33). Check
+  `gh run list -R wcpos/woocommerce-pos-pro --workflow deploy-dev.yml` before
+  reading the box.
 - `ssh wcpos-prod` works only while the owner's machine is unlocked (the key
   lives in a 1Password agent). Overnight, the box is unreachable, which reads
   as an outage. Probe the store from outside before concluding anything.

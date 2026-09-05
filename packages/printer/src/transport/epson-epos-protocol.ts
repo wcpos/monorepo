@@ -19,15 +19,16 @@ export function parseEposResponse(body: string): {
 	code: string;
 	status: string;
 } {
-	const doc = new DOMParser().parseFromString(body, 'text/xml');
-	const response = doc.getElementsByTagNameNS(EPOS_PRINT_NS, 'response')[0];
+	const response = body.match(/<(?:[A-Za-z_][\w.-]*:)?response\b[^>]*>/i)?.[0];
 	if (!response) throw new Error('Unexpected Epson ePOS response from printer');
+	const attribute = (name: string) =>
+		response.match(new RegExp(`\\b${name}\\s*=\\s*(["'])(.*?)\\1`, 'i'))?.[2] ?? '';
 
-	const success = response.getAttribute('success');
+	const success = attribute('success');
 	return {
 		success: success === 'true' || success === '1',
-		code: response.getAttribute('code') ?? '',
-		status: response.getAttribute('status') ?? '',
+		code: attribute('code'),
+		status: attribute('status'),
 	};
 }
 

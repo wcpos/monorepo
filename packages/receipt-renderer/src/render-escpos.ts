@@ -470,7 +470,7 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 					break;
 				}
 			}
-			encoder.barcode(node.value, node.barcodeType, node.height);
+			encoder.barcode(node.value, node.barcodeType, { height: node.height, text: true });
 			break;
 		case 'qrcode':
 			if (context.barcodeMode === 'image') {

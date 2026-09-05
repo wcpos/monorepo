@@ -8,6 +8,9 @@ import {
 } from '../encoder/thermal-print';
 import { sampleReceiptData } from '../encoder/__tests__/fixtures';
 
+const { debug, warn } = vi.hoisted(() => ({ debug: vi.fn(), warn: vi.fn() }));
+vi.mock('../logger', () => ({ printerLogger: { debug, warn } }));
+
 const ONE_PIXEL_PNG =
 	'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
 
@@ -15,6 +18,7 @@ afterEach(() => {
 	delete (window as Window & { electron?: unknown }).electron;
 	vi.useRealTimers();
 	vi.restoreAllMocks();
+	vi.clearAllMocks();
 	vi.unstubAllGlobals();
 });
 
@@ -71,6 +75,24 @@ function countSequence(bytes: Uint8Array, sequence: readonly number[]): number {
 	}
 	return count;
 }
+
+describe('discoverThermalAssetRequests without a DOM (React Native)', () => {
+	it('decodes attribute entities in image src values on the regex path', () => {
+		const original = globalThis.DOMParser;
+		// Hermes has no DOMParser; force the regex branch.
+		(globalThis as { DOMParser?: unknown }).DOMParser = undefined;
+		try {
+			const requests = discoverThermalAssetRequests(
+				'<receipt><image src="https:&#x2F;&#x2F;shop.example&#x2F;logo.jpg?a=1&amp;b=2" width="200" /></receipt>'
+			);
+			expect(requests.images).toEqual([
+				{ src: 'https://shop.example/logo.jpg?a=1&b=2', width: 200 },
+			]);
+		} finally {
+			(globalThis as { DOMParser?: unknown }).DOMParser = original;
+		}
+	});
+});
 
 describe('encodeThermalTemplateForPrint', () => {
 	it('uses ISO currency text when the INR symbol would be substituted', async () => {
@@ -138,6 +160,9 @@ describe('encodeThermalTemplateForPrint', () => {
 		await vi.advanceTimersByTimeAsync(10000);
 
 		await expect(assets).resolves.toEqual({ imageAssets: {}, barcodeImages: {} });
+		expect(debug).toHaveBeenCalledWith('Thermal image asset skipped', {
+			context: { cause: 'Timed out loading thermal image asset' },
+		});
 	});
 
 	it('loads rendered SVG barcode assets through a URL-encoded data URI', async () => {
@@ -165,6 +190,29 @@ describe('encodeThermalTemplateForPrint', () => {
 
 		expect(requestedSrc).toMatch(/^data:image\/svg\+xml;charset=utf-8,/);
 		expect(decodeURIComponent(requestedSrc.split(',', 2)[1] ?? '')).toContain('<svg');
+		expect(debug).toHaveBeenCalledWith('Thermal barcode asset skipped', {
+			context: expect.objectContaining({ fallback: 'native-barcode' }),
+		});
+	});
+
+	it('logs a skipped image when its resolver fails', async () => {
+		const src = 'https://example.test/logo.png?signature=secret';
+		const result = await prepareThermalPrintAssets({
+			renderedTemplateXml: `<receipt><image src="${src}" /></receipt>`,
+			maxWidthDots: 384,
+			imageSrcResolver: async () => {
+				throw new Error('loader failed');
+			},
+		});
+
+		expect(result.imageAssets).toEqual({});
+		expect(warn).toHaveBeenCalledWith('Thermal image asset skipped', {
+			context: { sourceType: 'remote-url', cause: 'loader failed' },
+		});
+		expect(warn).not.toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({ context: expect.objectContaining({ src }) })
+		);
 	});
 
 	it('loads Electron remote thermal images through canvas-safe data URLs', async () => {

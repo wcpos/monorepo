@@ -44,23 +44,14 @@ test('the config trusts system AND user anchors, nothing else', () => {
 });
 
 // A custom networkSecurityConfig replaces the dev client's stock config, and
-// <base-config> without cleartextTrafficPermitted DENIES cleartext on API 28+
-// — which broke Metro-served JS ("CLEARTEXT communication to localhost not
-// permitted", native E2E run 33160623858). Cleartext is allowed ONLY for the
-// loopback/emulator-host set React Native's own debug config uses.
-test('cleartext is permitted only inside the loopback domain-config', () => {
-	const base = NETWORK_SECURITY_CONFIG_XML.match(/<base-config>[\s\S]*?<\/base-config>/)[0];
-	assert.ok(!base.includes('cleartextTrafficPermitted'), 'base-config must not permit cleartext');
-	const domain = NETWORK_SECURITY_CONFIG_XML.match(
-		/<domain-config cleartextTrafficPermitted="true">[\s\S]*?<\/domain-config>/
-	);
-	assert.ok(domain, 'loopback domain-config missing');
-	// EXACT set equality, not merely presence: a fifth host smuggled into the
-	// cleartext config must FAIL this test (CodeRabbit on #1634 — the
-	// presence-only loop would have passed `example.com`).
-	const hosts = [...domain[0].matchAll(/<domain[^>]*>([^<]+)<\/domain>/g)].map((m) => m[1]).sort();
-	assert.deepEqual(hosts, ['10.0.2.2', '10.0.3.2', '127.0.0.1', 'localhost']);
-	// The whole set stays scoped: exactly one domain-config, no wildcard domains.
-	assert.equal(NETWORK_SECURITY_CONFIG_XML.match(/<domain-config/g).length, 1);
-	assert.ok(!domain[0].includes('includeSubdomains="true"'));
+// <base-config> without cleartextTrafficPermitted DENIES cleartext on API 28+.
+// The loopback-only allow-list (#1634) still broke physical devices, which
+// reach Metro over the LAN, and the app's own HTTP printer probes; there is no
+// range syntax to allow-list a LAN, so dev/adhoc builds permit cleartext in
+// base-config and nowhere else (no domain-config, no debug-overrides).
+test('dev/adhoc builds permit cleartext in base-config and nowhere else', () => {
+	const base = NETWORK_SECURITY_CONFIG_XML.match(/<base-config[^>]*>[\s\S]*?<\/base-config>/)[0];
+	assert.ok(base.startsWith('<base-config cleartextTrafficPermitted="true">'));
+	assert.ok(!NETWORK_SECURITY_CONFIG_XML.includes('<domain-config'));
+	assert.equal(NETWORK_SECURITY_CONFIG_XML.match(/cleartextTrafficPermitted/g).length, 1);
 });

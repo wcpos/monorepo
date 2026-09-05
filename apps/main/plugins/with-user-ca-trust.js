@@ -20,24 +20,22 @@ const pkg = 'with-wcpos-user-ca-trust';
 // cleartextTrafficPermitted denies cleartext on API 28+. That silently broke
 // the dev client's ability to load JS from Metro: the launcher died with
 // "CLEARTEXT communication to localhost not permitted" (native E2E run
-// 33160623858, 2026-08-28 — the error screen named it outright). The set is
-// React Native's own debug-config set: device loopback plus the two
-// emulator→host aliases. Cleartext stays denied everywhere else, and the
-// domain-config inherits the base trust-anchors.
+// 33160623858, 2026-08-28). The first fix allowed only React Native's debug
+// set (loopback + the two emulator→host aliases) — which still broke every
+// PHYSICAL device, whose dev client reaches Metro over the LAN ("CLEARTEXT
+// communication to 192.168.1.157 not permitted", Pixel 10, 2026-09-04), and
+// blocked the app's own HTTP printer probes (ePOS on port 80). Android's
+// network_security_config has no CIDR/range syntax, so a LAN allow-list is not
+// expressible; dev/adhoc builds therefore permit cleartext in base-config.
+// Production builds do not use this plugin and keep the platform default.
 const NETWORK_SECURITY_CONFIG_XML = `<?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <base-config>
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
             <certificates src="user" />
         </trust-anchors>
     </base-config>
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">localhost</domain>
-        <domain includeSubdomains="false">127.0.0.1</domain>
-        <domain includeSubdomains="false">10.0.2.2</domain>
-        <domain includeSubdomains="false">10.0.3.2</domain>
-    </domain-config>
 </network-security-config>
 `;
 

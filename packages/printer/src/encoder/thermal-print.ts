@@ -13,9 +13,12 @@ import type {
 	ThermalRasterImage,
 } from '@wcpos/receipt-renderer';
 
+import { printerLogger } from '../logger';
 import { isEscposTextEncodable } from './escpos-text';
 import { formatReceiptData } from './format-receipt-data';
 import { mapReceiptData } from './map-receipt-data';
+import { rasterizeThermalImage } from './thermal-raster';
+import { normalizeThermalImageSize } from './thermal-raster-shared';
 
 import type { MarkupPrintJob } from '../types';
 
@@ -81,7 +84,7 @@ export function discoverThermalAssetRequests(template: string): ThermalAssetRequ
 	return {
 		images: uniqueImages(
 			Array.from(template.matchAll(/<image\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi)).map((match) => ({
-				src: match[1] ?? '',
+				src: decodeAttributeEntities(match[1] ?? ''),
 				width: numberFromAttributeText(match[0] ?? '', 'width') ?? DEFAULT_THERMAL_IMAGE_WIDTH_DOTS,
 			}))
 		),
@@ -104,6 +107,16 @@ export async function prepareThermalPrintAssets(input: {
 	imageSrcResolver?: ThermalImageSrcResolver;
 }): Promise<ThermalPrintAssets> {
 	const requests = discoverThermalAssetRequests(input.renderedTemplateXml);
+	printerLogger.debug('Thermal assets requested', {
+		context: {
+			images: requests.images.map((image) => ({
+				src: image.src.slice(0, 120),
+				width: image.width,
+			})),
+			barcodes: requests.barcodes.length,
+			maxWidthDots: input.maxWidthDots,
+		},
+	});
 	const imageAssets: ThermalImageAssets = {};
 	const barcodeImages: ThermalBarcodeImages = {};
 
@@ -116,9 +129,27 @@ export async function prepareThermalPrintAssets(input: {
 					requestedWidth: image.width ?? DEFAULT_THERMAL_IMAGE_WIDTH_DOTS,
 					maxWidth: input.maxWidthDots,
 				});
-				if (asset) imageAssets[thermalImageAssetKey(image)] = asset;
-			} catch {
-				// Thermal image assets are optional: a missing/offline logo must not abort printing.
+				if (asset) {
+					imageAssets[thermalImageAssetKey(image)] = asset;
+					printerLogger.debug('Thermal image asset ready', {
+						context: {
+							source: describeImageSource(image.src),
+							width: asset.width,
+							height: asset.height,
+						},
+					});
+				}
+			} catch (error) {
+				printerLogger.warn('Thermal image asset skipped', {
+					context: {
+						sourceType: /^data:/i.test(image.src)
+							? 'data-url'
+							: /^https?:/i.test(image.src)
+								? 'remote-url'
+								: 'other',
+						cause: error instanceof Error ? error.message : String(error),
+					},
+				});
 			}
 		})
 	);
@@ -211,19 +242,7 @@ export function maxDotsForPaperWidth(paperWidth: '58mm' | '80mm' | string): numb
 	return 576;
 }
 
-export function normalizeThermalImageSize(input: {
-	width: number;
-	height: number;
-	maxWidth: number;
-}): { width: number; height: number } {
-	const scale = input.width > input.maxWidth ? input.maxWidth / input.width : 1;
-	const width = Math.max(8, Math.floor(input.width * scale));
-	const height = Math.max(8, Math.floor(input.height * scale));
-	return {
-		width: Math.max(8, width - (width % 8)),
-		height: height + ((8 - (height % 8)) % 8),
-	};
-}
+export { normalizeThermalImageSize } from './thermal-raster-shared';
 
 export async function loadThermalLogoAsset(input: {
 	src: string;
@@ -233,32 +252,7 @@ export async function loadThermalLogoAsset(input: {
 }): Promise<ThermalRasterImage | undefined> {
 	const loadSrc = input.loadSrc ?? input.src;
 	if (!isSupportedThermalLogoSrc(loadSrc)) return undefined;
-	try {
-		const image = await loadHtmlImage(loadSrc);
-		const naturalWidth = image.naturalWidth || image.width;
-		const naturalHeight = image.naturalHeight || image.height;
-		if (!naturalWidth || !naturalHeight) return undefined;
-
-		const desiredWidth = Math.min(input.requestedWidth || naturalWidth, input.maxWidth);
-		const size = normalizeThermalImageSize({
-			width: desiredWidth,
-			height: naturalHeight * (desiredWidth / naturalWidth),
-			maxWidth: input.maxWidth,
-		});
-
-		const imageData = drawImageToImageData(image, size);
-		if (!imageData) return undefined;
-
-		return {
-			image: imageData,
-			width: size.width,
-			height: size.height,
-			algorithm: 'atkinson',
-			threshold: 128,
-		};
-	} catch {
-		return undefined;
-	}
+	return rasterizeThermalImage({ ...input, loadSrc });
 }
 
 export async function renderThermalBarcodeAsset(input: {
@@ -313,7 +307,13 @@ export async function renderThermalBarcodeAsset(input: {
 				threshold: 128,
 			},
 		};
-	} catch {
+	} catch (error) {
+		printerLogger.debug('Thermal barcode asset skipped', {
+			context: {
+				cause: error instanceof Error ? error.message : String(error),
+				fallback: 'native-barcode',
+			},
+		});
 		return undefined;
 	}
 }
@@ -596,4 +596,26 @@ function parsePositiveInt(value: string | null | undefined): number | undefined 
 	if (!trimmed || !/^[1-9]\d*$/.test(trimmed)) return undefined;
 	const parsed = Number(trimmed);
 	return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+/**
+ * The regex path (React Native has no DOMParser) sees attribute values as written in the
+ * markup, entities included (`https:&#x2F;&#x2F;…`); the DOM path decodes them for free.
+ */
+function decodeAttributeEntities(value: string): string {
+	return value
+		.replace(/&#x([0-9a-f]+);/gi, (_match, hex: string) => String.fromCodePoint(parseInt(hex, 16)))
+		.replace(/&#(\d+);/g, (_match, dec: string) => String.fromCodePoint(parseInt(dec, 10)))
+		.replace(/&quot;/g, '"')
+		.replace(/&#39;|&apos;/g, "'")
+		.replace(/&lt;/g, '<')
+		.replace(/&gt;/g, '>')
+		.replace(/&amp;/g, '&');
+}
+
+/** Log-safe image source: type plus host and path, never the query string (signed URLs). */
+function describeImageSource(src: string): string {
+	if (/^data:/i.test(src)) return 'data-url';
+	const match = /^(https?:\/\/[^/?#]+[^?#]*)/i.exec(src);
+	return match ? match[1].slice(0, 120) : 'other';
 }
