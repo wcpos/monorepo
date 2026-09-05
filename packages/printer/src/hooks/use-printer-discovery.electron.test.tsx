@@ -258,6 +258,21 @@ describe('usePrinterDiscovery (electron)', () => {
 		]);
 	});
 
+	it('keeps a manual network printer when a scan fails', async () => {
+		installIpc(async () => {
+			throw new Error('Network unavailable');
+		});
+		const { result } = renderHook(() => usePrinterDiscovery());
+		act(() => result.current.addManualPrinter('Manual', '192.168.1.50', 9100));
+		await act(async () => {
+			await result.current.startScan();
+		});
+		expect(result.current.printers).toMatchObject([
+			{ id: '192.168.1.50:9100', name: 'Manual', connectionType: 'network' },
+		]);
+		expect(result.current.error?.code).toBe('discovery-failed');
+	});
+
 	it('identifies a discovered network printer and uses its printing lane port', async () => {
 		installIpc((channel: string) => {
 			if (channel === 'printer-discovery') {
