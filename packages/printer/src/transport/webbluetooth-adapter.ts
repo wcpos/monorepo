@@ -58,7 +58,12 @@ export class WebBluetoothAdapter implements PrinterTransport {
 				await new Promise<void>((resolve) => setTimeout(resolve, BLE_RECONNECT_DELAY_MS));
 				try {
 					printer = await connectBleReceiptPrinter(live);
-				} catch {
+				} catch (retryError) {
+					printerLogger.debug('Bluetooth connection retry failed', {
+						context: {
+							cause: retryError instanceof Error ? retryError.message : String(retryError),
+						},
+					});
 					throw new Error(
 						'Bluetooth printer is not responding. Turn it off and on again, then try again.'
 					);

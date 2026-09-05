@@ -17,18 +17,19 @@ export async function persistPrinterProfile(
 		if (twin) existingId = twin.id;
 	}
 	const id = existingId ?? uuidv4();
-	if (data.isDefault) {
-		const existingDefaults = await collection.find({ selector: { isDefault: true } }).exec();
-		for (const doc of existingDefaults) {
-			if (doc.id !== id) await doc.patch({ isDefault: false });
-		}
-	}
 	if (existingId) {
 		const doc = await collection.findOne(existingId).exec();
 		if (!doc) throw new Error(`Printer profile ${existingId} no longer exists`);
 		await doc.patch(profileData);
 	} else {
 		await collection.insert({ id, ...profileData });
+	}
+	// Demote the other defaults only once the target row is safely written.
+	if (data.isDefault) {
+		const existingDefaults = await collection.find({ selector: { isDefault: true } }).exec();
+		for (const doc of existingDefaults) {
+			if (doc.id !== id) await doc.patch({ isDefault: false });
+		}
 	}
 	return id;
 }

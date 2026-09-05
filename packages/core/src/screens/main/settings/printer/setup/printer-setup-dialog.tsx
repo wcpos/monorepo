@@ -367,9 +367,8 @@ export function PrinterSetupDialog({
 						'setup_check_address',
 						() =>
 							void form.handleSubmit(async (data) => {
-								await flow.checkAddress(data);
 								// The checked printer lands as a selected card; the form gets out of its way.
-								setAddressOpen(false);
+								if (await flow.checkAddress(data)) setAddressOpen(false);
 							})(),
 						{ variant: 'default' }
 					),
@@ -383,6 +382,7 @@ export function PrinterSetupDialog({
 					</Button>
 				)}
 			</View>
+			{failure && <TestPrintError error={failure} />}
 			{line('address_help', 'text-muted-foreground text-sm')}
 			{links(link('setup_scan_again', startOver), guide)}
 		</>

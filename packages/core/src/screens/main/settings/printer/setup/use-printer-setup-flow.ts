@@ -105,6 +105,8 @@ export function usePrinterSetupFlow(
 	const current = React.useRef(state);
 	const active = React.useRef(true);
 	const pendingPicker = React.useRef<DiscoveredPrinter[] | null>(null);
+	// A scan that finishes after Stop or a manual check must not touch the list.
+	const scanGeneration = React.useRef(0);
 	const [scanComplete, setScanComplete] = React.useState(false);
 	function update(patch: Partial<SetupState>) {
 		current.current = { ...current.current, ...patch };
@@ -177,7 +179,7 @@ export function usePrinterSetupFlow(
 							: 42),
 		});
 	}
-	function fail(error: unknown, phase: 'trouble' | 'error') {
+	function fail(error: unknown, phase: 'trouble' | 'error' | 'results') {
 		update({
 			phase,
 			failure: {
@@ -203,6 +205,7 @@ export function usePrinterSetupFlow(
 	async function start() {
 		active.current = true;
 		pendingPicker.current = null;
+		const generation = ++scanGeneration.current;
 		setScanComplete(false);
 		update({ phase: 'scanning', found: [], selected: undefined, failure: undefined });
 		const scans = await Promise.allSettled([
@@ -218,7 +221,7 @@ export function usePrinterSetupFlow(
 				});
 			}
 		}
-		if (active.current) setScanComplete(true);
+		if (active.current && generation === scanGeneration.current) setScanComplete(true);
 	}
 	// Discovery publishes React state, not a return value; consume it after the completed scan commits.
 	React.useEffect(() => {
@@ -288,6 +291,7 @@ export function usePrinterSetupFlow(
 	/** The cashier already knows the address: stop looking and keep whatever was found so far. */
 	function cancelScan() {
 		if (current.current.phase !== 'scanning') return;
+		scanGeneration.current += 1;
 		void discovery.stopScan();
 		setScanComplete(false);
 		update({ phase: 'results' });
@@ -310,7 +314,9 @@ export function usePrinterSetupFlow(
 			fail(error, 'error');
 		}
 	}
-	async function checkAddress(values: PrinterFormValues) {
+	/** Resolves true when the address answered; a failure stays on the results screen with the form. */
+	async function checkAddress(values: PrinterFormValues): Promise<boolean> {
+		scanGeneration.current += 1;
 		void discovery.stopScan();
 		setScanComplete(false);
 		update({
@@ -326,7 +332,7 @@ export function usePrinterSetupFlow(
 				{ name: values.name, vendor: values.vendor },
 				createIdentifyProbes()
 			);
-			if (!active.current) return;
+			if (!active.current) return false;
 			const manual: DiscoveredPrinter = {
 				id: values.address,
 				address: values.address,
@@ -343,8 +349,11 @@ export function usePrinterSetupFlow(
 				],
 			});
 			select(manual, true);
+			return true;
 		} catch (error) {
-			if (active.current) fail(error, 'error');
+			// Not the save-error screen: that one retries a save. The form stays up with the failure.
+			if (active.current) fail(error, 'results');
+			return false;
 		}
 	}
 	function stop() {
