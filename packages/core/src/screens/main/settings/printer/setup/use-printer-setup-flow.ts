@@ -47,6 +47,7 @@ export function classifyPrinter(
 interface SetupState {
 	phase:
 		| 'scanning'
+		| 'checking'
 		| 'results'
 		| 'printing'
 		| 'asking'
@@ -310,8 +311,10 @@ export function usePrinterSetupFlow(
 		}
 	}
 	async function checkAddress(values: PrinterFormValues) {
+		void discovery.stopScan();
+		setScanComplete(false);
 		update({
-			phase: 'scanning',
+			phase: 'checking',
 			failure: undefined,
 			profileDraft: values,
 			columns: values.columns,

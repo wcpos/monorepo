@@ -232,9 +232,27 @@ it('stops the scan when the cashier already knows the address', async () => {
 		renderer.root.findByProps({ testID: 'printer-setup-setup_enter_address' }).props.onPress();
 	});
 	expect(mockStopScan).toHaveBeenCalled();
-	// The results screen is up (Scan again is offered) and Options is open on the address field.
+	// The results screen is up (Scan again is offered) with the address form in view.
 	renderer.root.findByProps({ testID: 'printer-setup-setup_scan_again' });
-	expect(renderer.root.findByType('Collapsible' as React.ElementType).props.open).toBe(true);
+	renderer.root.findByProps({ testID: 'printer-setup-address-form' });
+	act(() => renderer.unmount());
+	mockWebScanning = false;
+});
+
+it('offers Stop while scanning and stops discovery on tap', async () => {
+	mockWebScanning = true;
+	mockStopScan.mockClear();
+	let renderer!: ReactTestRenderer;
+	await act(async () => {
+		renderer = create(
+			<PrinterSetupDialog platform="web" open onOpenChange={jest.fn()} onSave={jest.fn()} />
+		);
+	});
+	await act(async () => {
+		renderer.root.findByProps({ testID: 'printer-setup-stop' }).props.onPress();
+	});
+	expect(mockStopScan).toHaveBeenCalled();
+	expect(renderer.root.findAllByProps({ testID: 'printer-setup-stop' })).toHaveLength(0);
 	act(() => renderer.unmount());
 	mockWebScanning = false;
 });

@@ -103,9 +103,14 @@ export function PrinterSetupDialog({
 		resolver: standardSchemaResolver(schema as z.ZodType<PrinterFormValues, PrinterFormValues>),
 	});
 	const [optionsOpen, setOptionsOpen] = React.useState(false);
-	const [focusAddress, setFocusAddress] = React.useState(false);
+	const [addressOpen, setAddressOpen] = React.useState(false);
 	const bleScanning = Boolean(discovery.isBluetoothScanning);
-	const busy = bleScanning || phase === 'scanning' || phase === 'printing' || phase === 'saving';
+	const busy =
+		bleScanning ||
+		phase === 'scanning' ||
+		phase === 'checking' ||
+		phase === 'printing' ||
+		phase === 'saving';
 	// The printer itself is busy only while a page prints or the profile saves; scanning must not block a tap.
 	const printerBusy = bleScanning || phase === 'printing' || phase === 'saving';
 	const vendors = [
@@ -129,9 +134,12 @@ export function PrinterSetupDialog({
 	}, []);
 	const enterAddress = () => {
 		flow.cancelScan();
-		setOptionsOpen(true);
-		setFocusAddress(true);
-		form.setFocus('address');
+		setAddressOpen(true);
+	};
+	const startOver = () => {
+		setAddressOpen(false);
+		setOptionsOpen(false);
+		void flow.rescan();
 	};
 	type ActionOpts = {
 		disabled?: boolean;
@@ -169,10 +177,15 @@ export function PrinterSetupDialog({
 			{t(`settings.setup_${key}`, values)}
 		</Text>
 	);
-	const status = (text: string) => (
+	const status = (text: string, stop?: () => void) => (
 		<View className="flex-row items-center gap-3">
 			<ActivityIndicator />
-			<Text className="text-lg font-semibold">{text}</Text>
+			<Text className="flex-1 text-lg font-semibold">{text}</Text>
+			{stop && (
+				<Button testID="printer-setup-stop" variant="ghost" size="sm" onPress={stop}>
+					<Text>{t('settings.setup_stop')}</Text>
+				</Button>
+			)}
 		</View>
 	);
 	const guide = (
@@ -217,7 +230,7 @@ export function PrinterSetupDialog({
 	const officeOnly =
 		printable.length === 0 && found.some((p) => classifyPrinter(p, platform) === 'notprinter');
 	const scanning = busy && !bleScanning;
-	const scanScreen = phase === 'scanning' || phase === 'results';
+	const scanScreen = phase === 'scanning' || phase === 'checking' || phase === 'results';
 	const pill: Record<string, string> = {
 		ready: 'bg-success/15 text-success',
 		unsure: 'bg-warning/10 text-warning',
@@ -296,13 +309,16 @@ export function PrinterSetupDialog({
 										? t('settings.setup_printing', { name: draft.name })
 										: phase === 'saving'
 											? t('settings.setup_saving')
-											: t(
-													web
-														? 'settings.setup_scanning_web'
-														: discovery.isScanning && discovery.printers.length > 0
-															? 'settings.setup_checking'
-															: 'settings.setup_scanning'
-												)
+											: phase === 'checking'
+												? t('settings.setup_checking_address', { address: draft.address })
+												: t(
+														web
+															? 'settings.setup_scanning_web'
+															: discovery.isScanning && discovery.printers.length > 0
+																? 'settings.setup_checking'
+																: 'settings.setup_scanning'
+													),
+									phase === 'scanning' ? flow.cancelScan : undefined
 								)}
 							{web && phase === 'scanning' && (discovery.scanProgress?.total ?? 0) > 0 && (
 								<Text className="text-muted-foreground -mt-2 ml-8 text-xs">
@@ -353,13 +369,66 @@ export function PrinterSetupDialog({
 										usb,
 										bluetooth,
 										phase === 'results' &&
-											action('setup_scan_again', () => void flow.rescan(), {
-												icon: 'arrowRotateRight',
-											}),
-										action('setup_enter_address', enterAddress, { disabled: printerBusy }),
+											action('setup_scan_again', startOver, { icon: 'arrowRotateRight' }),
+										!addressOpen &&
+											action('setup_enter_address', enterAddress, { disabled: printerBusy }),
 										phase === 'results' && printable.length === 0 && guide
 									)}
 									{chooser}
+									{addressOpen && phase !== 'checking' && (
+										<View
+											testID="printer-setup-address-form"
+											className="border-border gap-3 rounded-xl border p-3"
+										>
+											<View className="flex-row gap-3">
+												<View className="flex-1">
+													<FormField
+														control={form.control}
+														name="address"
+														render={({ field }) => (
+															<FormInput
+																{...field}
+																testID="printer-setup-address"
+																editable={!busy}
+																label={t('settings.printer_address')}
+																autoFocus
+															/>
+														)}
+													/>
+												</View>
+												<View className="w-24">
+													<FormField
+														control={form.control}
+														name="port"
+														render={({ field }) => (
+															<FormInput
+																{...field}
+																testID="printer-setup-port"
+																editable={!busy}
+																label={t('settings.printer_port')}
+																type="numeric"
+															/>
+														)}
+													/>
+												</View>
+											</View>
+											{row(
+												action(
+													'setup_check_address',
+													() => void form.handleSubmit((data) => flow.checkAddress(data))(),
+													{ variant: 'default' }
+												),
+												<Button
+													key="close-address"
+													variant="ghost"
+													size="sm"
+													onPress={() => setAddressOpen(false)}
+												>
+													<Text>{t('common.cancel')}</Text>
+												</Button>
+											)}
+										</View>
+									)}
 								</>
 							)}
 							{(phase === 'asking' || phase === 'width' || phase === 'trouble') && headline}
@@ -412,6 +481,7 @@ export function PrinterSetupDialog({
 											icon: 'arrowRotateRight',
 										}),
 										action('save_anyway', answer('ok')),
+										action('setup_start_over', startOver, { variant: 'ghost' }),
 										guide
 									)}
 								</>
@@ -424,6 +494,7 @@ export function PrinterSetupDialog({
 											variant: 'default',
 											icon: 'arrowRotateRight',
 										}),
+										action('setup_start_over', startOver, { variant: 'ghost' }),
 										guide
 									)}
 								</>
@@ -457,7 +528,7 @@ export function PrinterSetupDialog({
 									</View>
 								</View>
 							)}
-							{phase !== 'saved' && (
+							{scanScreen && (
 								<View className="border-border mt-1 border-t pt-3">
 									<Collapsible open={optionsOpen} onOpenChange={setOptionsOpen}>
 										<CollapsibleTrigger testID="printer-setup-options">
@@ -486,38 +557,6 @@ export function PrinterSetupDialog({
 														/>
 													)}
 												/>
-												<View className="flex-row gap-3">
-													<View className="flex-1">
-														<FormField
-															control={form.control}
-															name="address"
-															render={({ field }) => (
-																<FormInput
-																	{...field}
-																	testID="printer-setup-address"
-																	editable={!busy}
-																	label={t('settings.printer_address')}
-																	autoFocus={focusAddress}
-																/>
-															)}
-														/>
-													</View>
-													<View className="w-28">
-														<FormField
-															control={form.control}
-															name="port"
-															render={({ field }) => (
-																<FormInput
-																	{...field}
-																	testID="printer-setup-port"
-																	editable={!busy}
-																	label={t('settings.printer_port')}
-																	type="numeric"
-																/>
-															)}
-														/>
-													</View>
-												</View>
 												<FormField
 													control={form.control}
 													name="vendor"
@@ -554,20 +593,6 @@ export function PrinterSetupDialog({
 													)}
 												/>
 												<PrinterToggleGroup form={form} />
-												{row(
-													action(
-														'setup_check_address',
-														() => void form.handleSubmit((data) => flow.checkAddress(data))(),
-														{ variant: 'default' }
-													),
-													!scanScreen &&
-														action('setup_scan_again', () => void flow.rescan(), {
-															icon: 'arrowRotateRight',
-														}),
-													!scanScreen && usb,
-													!scanScreen && bluetooth
-												)}
-												{!scanScreen && chooser}
 											</VStack>
 										</CollapsibleContent>
 									</Collapsible>
