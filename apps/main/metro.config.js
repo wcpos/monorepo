@@ -1,3 +1,4 @@
+const fs = require('fs');
 const path = require('path');
 
 // Load .env from monorepo root before Metro starts
@@ -5,11 +6,26 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const { getDefaultConfig } = require('expo/metro-config');
 const { FileStore } = require('metro-cache');
+const { getBundleModeMetroConfig } = require('react-native-worklets/bundleMode');
 const { withUniwindConfig } = require('uniwind/metro');
 
 const { withBundleSerializerCache } = require('./metro/bundle-serializer-cache');
 
 let config = getDefaultConfig(__dirname);
+
+// Local link: packages live outside this worktree; watch them and resolve their
+// imports from the app too. These paths also work once the packages come from npm.
+const workletPackages = ['rxdb-storage-worklet', 'worklet-opfs', 'react-native-worklet-fs'];
+const workletPackageRoots = Object.fromEntries(
+	workletPackages.map((name) => {
+		const moduleRoot = require.resolve
+			.paths(name)
+			.find((root) => fs.existsSync(path.join(root, name, 'package.json')));
+		return [name, fs.realpathSync(path.join(moduleRoot, name))];
+	})
+);
+config.watchFolders = [...config.watchFolders, ...Object.values(workletPackageRoots)];
+config.resolver.extraNodeModules = { ...config.resolver.extraNodeModules, ...workletPackageRoots };
 
 // Bundle the zxing-wasm barcode reader as a static asset so the Electron shell
 // can load it from the app origin instead of the CSP-blocked jsDelivr CDN
@@ -59,6 +75,17 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
 	if (moduleName === 'rxdb/plugins/utils') {
 		return { type: 'sourceFile', filePath: rxdbESMUtils };
 	}
+	// Bundle Mode forwards bare imports too: core/remote/filesystem must share
+	// the ESM graph with the existing utils/shared redirects above.
+	if (/^(rxdb|rxdb-premium)(\/plugins\/[^/]+)?$/.test(moduleName)) {
+		return {
+			type: 'sourceFile',
+			filePath: require
+				.resolve(moduleName)
+				.replace('/dist/cjs/', '/dist/esm/')
+				.replace(/\.cjs$/, '.mjs'),
+		};
+	}
 	for (const [packageName, sourceRoot] of Object.entries(workspaceSourceRoots)) {
 		if (moduleName === packageName || moduleName.startsWith(`${packageName}/`)) {
 			const subpath = moduleName === packageName ? '' : moduleName.slice(packageName.length + 1);
@@ -98,11 +125,13 @@ if (process.env.EXPO_UNSTABLE_ATLAS === 'true') {
 	config = withExpoAtlas(config);
 }
 
-config = withUniwindConfig(config, {
+// Uniwind must wrap Bundle Mode, or its class transforms stop applying
+// (rxdb-storage-worklet example, 2026-09-05).
+config = withUniwindConfig(getBundleModeMetroConfig(config), {
 	cssEntryFile: './global.css',
 	extraThemes: ['ocean', 'sunset', 'monochrome'],
 });
 
-// Outermost on purpose: every serializer wrapper above (Expo, Atlas, uniwind)
-// is inside the cache, so a hit skips all of them. See the module for why.
+// Outermost on purpose: every serializer wrapper above (Expo, Atlas, Bundle Mode,
+// uniwind) is inside the cache, so a hit skips all of them. See the module for why.
 module.exports = withBundleSerializerCache(config);
