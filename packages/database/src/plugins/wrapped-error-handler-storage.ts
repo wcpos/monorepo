@@ -38,7 +38,13 @@ type InstanceLatchState = {
 	 * tears its side down; that is teardown noise, not a live-store outage.
 	 */
 	closing: boolean;
-	lastRemoteErrorSignature: string | null;
+	/**
+	 * `method:remoteErrorName` signatures that have already been logged at error
+	 * on this instance and not yet cleared by a success of that method. One entry
+	 * per signature (not one slot) so two methods failing in alternation each log
+	 * once, not once per turn.
+	 */
+	activeRemoteErrorSignatures: Set<string>;
 	notFoundWriteStreak: number;
 };
 const instancesByDatabaseName = new Map<string, Set<InstanceLatchState>>();
@@ -268,6 +274,13 @@ export function clearStorageDegradation(databaseName?: string): void {
 		return;
 	}
 	publishDegradedStorage();
+}
+
+/** A successful RPC re-arms error-level logging for that method's signatures only. */
+function clearRemoteErrorSignatures(state: InstanceLatchState, methodName: string): void {
+	for (const signature of state.activeRemoteErrorSignatures) {
+		if (signature.startsWith(`${methodName}:`)) state.activeRemoteErrorSignatures.delete(signature);
+	}
 }
 
 function getRemoteErrorDetails(message: string) {
@@ -516,8 +529,8 @@ function handleStorageError(
 		const workerFailure = isStorageWorkerFailure(error);
 		const remoteError = getRemoteErrorDetails(message);
 		const signature = `${methodName}:${remoteError.name ?? ''}`;
-		const level = state.lastRemoteErrorSignature === signature ? 'debug' : 'error';
-		state.lastRemoteErrorSignature = signature;
+		const level = state.activeRemoteErrorSignatures.has(signature) ? 'debug' : 'error';
+		state.activeRemoteErrorSignatures.add(signature);
 		storageLogger[level](
 			`${workerFailure ? 'Storage worker error' : 'Storage remote method error'} in ${methodName}`,
 			{
@@ -759,9 +772,7 @@ function wrapStorageInstance<RxDocType>(
 	instance.findDocumentsById = async (ids, withDeleted) => {
 		try {
 			const result = await originalFindDocumentsById(ids, withDeleted);
-			if (state.lastRemoteErrorSignature?.startsWith('findDocumentsById:')) {
-				state.lastRemoteErrorSignature = null;
-			}
+			clearRemoteErrorSignatures(state, 'findDocumentsById');
 			return result;
 		} catch (error) {
 			const handled = handleStorageError('findDocumentsById', error, state, {
@@ -780,9 +791,7 @@ function wrapStorageInstance<RxDocType>(
 		try {
 			const result = await originalBulkWrite(documentWrites, context);
 			state.notFoundWriteStreak = 0;
-			if (state.lastRemoteErrorSignature?.startsWith('bulkWrite:')) {
-				state.lastRemoteErrorSignature = null;
-			}
+			clearRemoteErrorSignatures(state, 'bulkWrite');
 			return result;
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
@@ -819,7 +828,7 @@ function wrapStorageInstance<RxDocType>(
 		failureReason: null,
 		inFlight: new Set(),
 		closing: false,
-		lastRemoteErrorSignature: null,
+		activeRemoteErrorSignatures: new Set(),
 		notFoundWriteStreak: 0,
 	};
 	const instances = instancesByDatabaseName.get(databaseName) ?? new Set();
@@ -848,9 +857,7 @@ function wrapStorageInstance<RxDocType>(
 	instance.cleanup = (...args) =>
 		raceStorageCall(state, 'cleanup', () => cleanup(...args)).then(
 			(result) => {
-				if (state.lastRemoteErrorSignature?.startsWith('cleanup:')) {
-					state.lastRemoteErrorSignature = null;
-				}
+				clearRemoteErrorSignatures(state, 'cleanup');
 				// Only a completed round re-arms reporting — see containCleanupFailure.
 				if (result === true) reportedCleanupFailures.delete(cleanupKey);
 				return result;
