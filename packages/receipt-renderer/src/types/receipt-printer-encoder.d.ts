@@ -32,6 +32,7 @@ declare module '@point-of-sale/receipt-printer-encoder' {
 			rows: (string | ((encoder: ReceiptPrinterEncoder) => void))[][]
 		): this;
 		barcode(data: string, symbology: string, height: number): this;
+		barcode(data: string, symbology: string, options: { height?: number; text?: boolean }): this;
 		qrcode(data: string, model?: 1 | 2, size?: number, errorlevel?: 'l' | 'm' | 'q' | 'h'): this;
 		image(
 			image: unknown,

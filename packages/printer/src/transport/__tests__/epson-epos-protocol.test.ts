@@ -35,4 +35,19 @@ describe('Epson ePOS protocol', () => {
 
 		expect(result).toEqual({ success: false, code: 'SchemaError', status: '0' });
 	});
+
+	it.each([
+		[
+			'<?xml version="1.0" encoding="utf-8"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><response success="true" code="" status="251658262" battery="0" xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print"></response></s:Body></s:Envelope>',
+		],
+		['<x:response code="" status="251658262" success="1" />'],
+	])('parses response tags without a DOM', (body) => {
+		expect(parseEposResponse(body)).toEqual({ success: true, code: '', status: '251658262' });
+	});
+
+	it('rejects bodies without a response element', () => {
+		expect(() => parseEposResponse('garbage')).toThrow(
+			'Unexpected Epson ePOS response from printer'
+		);
+	});
 });

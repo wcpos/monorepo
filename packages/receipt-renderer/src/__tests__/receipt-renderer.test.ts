@@ -1301,7 +1301,10 @@ describe('@wcpos/receipt-renderer exports', () => {
 		const ast = parseXml('<receipt><barcode type="code128">ABC-123</barcode></receipt>');
 		const bytes = renderEscpos(ast, { barcodeMode: 'native' });
 
-		expect(includesSequence(bytes, [0x1d, 0x6b])).toBe(true);
+		const hriIndex = sequenceIndex(bytes, [0x1d, 0x48, 0x02]);
+		const barcodeIndex = sequenceIndex(bytes, [0x1d, 0x6b]);
+		expect(hriIndex).toBeGreaterThanOrEqual(0);
+		expect(hriIndex).toBeLessThan(barcodeIndex);
 	});
 
 	it('emits ASCII-safe bytes for default line rules', () => {

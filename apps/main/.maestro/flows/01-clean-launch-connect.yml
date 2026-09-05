@@ -37,7 +37,7 @@ env:
 - retry:
     maxRetries: 1
     commands:
-      - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
+      - openLink: "wcpos-dev://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
       # Launch blockers. The dev client's own overlays (floating dev-menu button,
       # menu-at-launch, onboarding card) are switched OFF by default in the
       # development build — apps/main/plugins/with-quiet-dev-menu.js — so the only
