@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
@@ -54,9 +54,13 @@ export function ElectronBtPicker({
 	);
 	return (
 		<VStack className="gap-2">
-			{likely.map((d) => item(d, true))}
-			{named.map((d) => item(d, false))}
-			{showUnnamed && unnamed.map((d) => item(d, false))}
+			{/* An office shows dozens of devices: the list scrolls inside a fixed height so the
+			    dialog's own buttons stay in reach. */}
+			<ScrollView className="max-h-64" contentContainerClassName="gap-2">
+				{likely.map((d) => item(d, true))}
+				{named.map((d) => item(d, false))}
+				{showUnnamed && unnamed.map((d) => item(d, false))}
+			</ScrollView>
 			{unnamed.length > 0 && (
 				<Button
 					variant="link"

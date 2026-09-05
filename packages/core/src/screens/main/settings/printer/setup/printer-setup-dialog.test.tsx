@@ -9,6 +9,7 @@ jest.mock('react-native', () => ({
 	ActivityIndicator: 'Spinner',
 	Pressable: 'Pressable',
 	View: 'View',
+	ScrollView: 'ScrollView',
 }));
 jest.mock('@wcpos/components/button', () => ({ Button: 'Button' }));
 jest.mock('@wcpos/components/text', () => ({ Text: 'Text' }));

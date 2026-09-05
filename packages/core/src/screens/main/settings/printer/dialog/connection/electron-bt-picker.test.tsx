@@ -21,6 +21,7 @@ jest.mock('react-native', () => ({
 		</button>
 	),
 	View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	ScrollView: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
 
 jest.mock('@wcpos/components/button', () => ({
