@@ -5,7 +5,6 @@ import { standardSchemaResolver } from '@hookform/resolvers/standard-schema';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { Button } from '@wcpos/components/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { DocsLink } from '@wcpos/components/docs-link';
 import {
 	Dialog,
@@ -146,11 +145,12 @@ export function PrinterSetupDialog({
 		variant?: 'outline' | 'default' | 'ghost' | 'link';
 		icon?: IconName;
 		full?: boolean;
+		label?: string;
 	};
 	const action = (
 		key: string,
 		onPress: () => void,
-		{ disabled = busy, variant = 'outline', icon, full = false }: ActionOpts = {}
+		{ disabled = busy, variant = 'outline', icon, full = false, label }: ActionOpts = {}
 	) => (
 		<Button
 			key={key}
@@ -163,29 +163,59 @@ export function PrinterSetupDialog({
 			onPress={onPress}
 		>
 			<Text className={full ? 'text-base font-semibold' : 'font-semibold'}>
-				{t(`settings.${key}`)}
+				{label ?? t(`settings.${key}`)}
 			</Text>
 		</Button>
 	);
+	// Secondary actions read as one line of links, not a wall of buttons.
+	const link = (key: string, onPress: () => void, disabled = printerBusy) => (
+		<Button
+			key={key}
+			testID={`printer-setup-${key}`}
+			variant="link"
+			size="sm"
+			className="h-auto px-0 py-0"
+			disabled={disabled}
+			onPress={onPress}
+		>
+			<Text className="text-sm font-semibold">{t(`settings.${key}`)}</Text>
+		</Button>
+	);
+	const links = (...items: React.ReactNode[]) => {
+		const present = items.filter(Boolean);
+		return (
+			<View className="flex-row flex-wrap items-center gap-x-3 gap-y-1">
+				{present.map((item, i) => (
+					<React.Fragment key={i}>
+						{i > 0 && <Text className="text-border">|</Text>}
+						{item}
+					</React.Fragment>
+				))}
+			</View>
+		);
+	};
 	const line = (key: string, className = 'text-muted-foreground') => (
 		<Text key={key} className={className}>
 			{t(`settings.setup_${key}`)}
 		</Text>
 	);
 	const heading = (key: string, values?: Record<string, unknown>) => (
-		<Text key={key} className="text-lg font-semibold">
+		<Text key={key} className="text-base font-semibold">
 			{t(`settings.setup_${key}`, values)}
 		</Text>
 	);
-	const status = (text: string, stop?: () => void) => (
-		<View className="flex-row items-center gap-3">
-			<ActivityIndicator />
-			<Text className="flex-1 text-lg font-semibold">{text}</Text>
-			{stop && (
-				<Button testID="printer-setup-stop" variant="ghost" size="sm" onPress={stop}>
-					<Text>{t('settings.setup_stop')}</Text>
-				</Button>
-			)}
+	const status = (text: string, help?: string, stop?: () => void) => (
+		<View className="gap-1">
+			<View className="flex-row items-center gap-3">
+				<ActivityIndicator />
+				<Text className="flex-1 text-lg font-semibold">{text}</Text>
+				{stop && (
+					<Button testID="printer-setup-stop" variant="ghost" size="sm" onPress={stop}>
+						<Text>{t('settings.setup_stop')}</Text>
+					</Button>
+				)}
+			</View>
+			{help && <Text className="text-muted-foreground ml-8 text-sm">{help}</Text>}
 		</View>
 	);
 	const guide = (
@@ -193,29 +223,13 @@ export function PrinterSetupDialog({
 			{t('settings.setup_open_guide')}
 		</DocsLink>
 	);
-	// Bluetooth LE printers only appear through the system chooser, which needs a tap: keep the
-	// button in view on every scan screen rather than under Options.
-	const usb =
-		web &&
-		isWebUsbSupported() &&
-		action('setup_add_usb', flow.startUsbPicker, { disabled: printerBusy });
+	// The browser pickers and the Electron chooser only open from a tap: they stay in the links line.
+	const usb = web && isWebUsbSupported() && link('setup_add_usb', flow.startUsbPicker);
 	const bluetoothSupported = !web || isWebBluetoothSupported();
 	const bluetooth =
 		discovery.connectBluetoothDevice &&
 		bluetoothSupported &&
-		action('setup_add_ble', flow.startBluetoothScan, { disabled: printerBusy });
-	const chooser = !web && bleScanning && (
-		<VStack className="gap-2">
-			<Text className="text-muted-foreground text-sm">{t('settings.bt_searching')}</Text>
-			<ElectronBtPicker
-				candidates={discovery.bluetoothCandidates ?? []}
-				onSelect={(id) => discovery.selectBluetoothCandidate?.(id)}
-			/>
-			<Button variant="ghost" size="sm" onPress={() => discovery.cancelBluetoothScan?.()}>
-				<Text>{t('common.cancel')}</Text>
-			</Button>
-		</VStack>
-	);
+		link('setup_add_ble', flow.startBluetoothScan);
 	// Only saving needs a valid form; 'short' and 'none' are answers about the paper, not the form.
 	const answer = (value: 'ok' | 'short' | 'none') => () => {
 		if (value === 'ok') void form.handleSubmit(() => flow.answer('ok'))();
@@ -231,6 +245,7 @@ export function PrinterSetupDialog({
 		printable.length === 0 && found.some((p) => classifyPrinter(p, platform) === 'notprinter');
 	const scanning = busy && !bleScanning;
 	const scanScreen = phase === 'scanning' || phase === 'checking' || phase === 'results';
+	const vendorLabel = (vendor?: string) => vendors.find((v) => v.value === vendor)?.label ?? '';
 	const pill: Record<string, string> = {
 		ready: 'bg-success/15 text-success',
 		unsure: 'bg-warning/10 text-warning',
@@ -259,7 +274,7 @@ export function PrinterSetupDialog({
 								{p.identity?.model
 									? ` · ${p.identity.model}`
 									: p.identity?.vendor
-										? ` · ${vendors.find((v) => v.value === p.identity?.vendor)?.label ?? ''}`
+										? ` · ${vendorLabel(p.identity.vendor)}`
 										: ''}
 							</Text>
 							<Text className="border-border text-muted-foreground rounded-md border px-1.5 text-xs">
@@ -281,12 +296,11 @@ export function PrinterSetupDialog({
 				{deviceLane
 					? t('settings.setup_details_device', {
 							source: t(`settings.setup_source_${selected?.source ?? 'usb'}`),
-							vendor: vendors.find((v) => v.value === draft.vendor)?.label,
+							vendor: vendorLabel(draft.vendor),
 						})
 					: t('settings.setup_details', {
 							address: draft.address,
-							vendor: vendors.find((v) => v.value === draft.vendor)?.label,
-							port: draft.port,
+							vendor: vendorLabel(draft.vendor),
 						})}
 			</Text>
 		</View>
@@ -294,9 +308,183 @@ export function PrinterSetupDialog({
 	const row = (...items: React.ReactNode[]) => (
 		<View className="flex-row flex-wrap items-center gap-2">{items}</View>
 	);
+	const selectedPrintable = selected && printable.some((p) => p.address === selected.address);
+	const printButton =
+		selectedPrintable &&
+		action('setup_print_test', () => void flow.testPrint(), {
+			variant: 'default',
+			icon: 'printer',
+			full: true,
+			label:
+				printable.length > 1
+					? t('settings.setup_print_test_on', { name: selected?.name })
+					: undefined,
+		});
+	const widthToggle =
+		selectedPrintable &&
+		!columnsKnown &&
+		row(
+			<Text key="label" className="text-muted-foreground text-sm">
+				{t('settings.setup_paper_label')}
+			</Text>,
+			...([32, 48] as const).map((n) =>
+				action(`setup_paper_${n}`, () => flow.updateDraft({ columns: n }), {
+					variant: columns === n ? 'default' : 'outline',
+					disabled: printerBusy,
+				})
+			)
+		);
+	const scanHelp = web
+		? [
+				t('settings.setup_scanning_sources_web'),
+				(discovery.scanProgress?.total ?? 0) > 0
+					? t('settings.setup_sweep_progress', discovery.scanProgress)
+					: '',
+			]
+				.filter(Boolean)
+				.join(' · ')
+		: t('settings.setup_scanning_sources');
+	const addressScreen = (
+		<>
+			{heading('address_heading')}
+			<View
+				testID="printer-setup-address-form"
+				className="border-border gap-3 rounded-xl border p-3"
+			>
+				<View className="flex-row gap-3">
+					<View className="flex-1">
+						<FormField
+							control={form.control}
+							name="address"
+							render={({ field }) => (
+								<FormInput
+									{...field}
+									testID="printer-setup-address"
+									editable={!busy}
+									label={t('settings.printer_address')}
+									autoFocus
+								/>
+							)}
+						/>
+					</View>
+					<View className="w-24">
+						<FormField
+							control={form.control}
+							name="port"
+							render={({ field }) => (
+								<FormInput
+									{...field}
+									testID="printer-setup-port"
+									editable={!busy}
+									label={t('settings.printer_port')}
+									type="numeric"
+								/>
+							)}
+						/>
+					</View>
+				</View>
+				{row(
+					action(
+						'setup_check_address',
+						() => void form.handleSubmit((data) => flow.checkAddress(data))(),
+						{ variant: 'default' }
+					),
+					<Button
+						key="close-address"
+						variant="ghost"
+						size="sm"
+						onPress={() => setAddressOpen(false)}
+					>
+						<Text>{t('common.cancel')}</Text>
+					</Button>
+				)}
+			</View>
+			{line('address_help', 'text-muted-foreground text-sm')}
+			{links(link('setup_scan_again', startOver), guide)}
+		</>
+	);
+	const chooserScreen = (
+		<>
+			{heading('choose_bluetooth')}
+			<ElectronBtPicker
+				candidates={discovery.bluetoothCandidates ?? []}
+				onSelect={(id) => discovery.selectBluetoothCandidate?.(id)}
+			/>
+			{line('bt_not_listed', 'text-muted-foreground text-sm')}
+			<Button
+				variant="ghost"
+				size="sm"
+				className="self-start"
+				onPress={() => discovery.cancelBluetoothScan?.()}
+			>
+				<Text>{t('common.cancel')}</Text>
+			</Button>
+		</>
+	);
+	const moreOptions = optionsOpen && (
+		<VStack testID="printer-setup-options" className="border-border gap-3 rounded-xl border p-3">
+			<FormField
+				control={form.control}
+				name="name"
+				render={({ field }) => (
+					<FormInput
+						{...field}
+						testID="printer-setup-name"
+						editable={!busy}
+						label={t('settings.printer_name')}
+					/>
+				)}
+			/>
+			<FormField
+				control={form.control}
+				name="vendor"
+				render={({ field }) =>
+					web ? (
+						<WebVendorSegmented
+							vendor={field.value}
+							onSelect={(vendor) => {
+								field.onChange(vendor);
+								form.setValue('port', deriveWebVendorDefaults(vendor).port);
+							}}
+						/>
+					) : (
+						<FormSelect
+							{...field}
+							customComponent={VendorSelect}
+							options={vendors}
+							label={t('settings.printer_vendor')}
+						/>
+					)
+				}
+			/>
+			<FormField
+				control={form.control}
+				name="columns"
+				render={({ field }) => (
+					<FormSelect
+						{...field}
+						value={String(field.value)}
+						onChange={(value: string) => field.onChange(Number(value))}
+						customComponent={SetupWidthSelect}
+						label={t('settings.printer_text_width')}
+					/>
+				)}
+			/>
+			<PrinterToggleGroup form={form} />
+		</VStack>
+	);
+	const scanLinks = links(
+		usb,
+		bluetooth,
+		phase === 'results' && found.length > 0 && link('setup_not_this', startOver),
+		phase === 'results' && found.length === 0 && link('setup_scan_again', startOver),
+		link('setup_enter_address', enterAddress),
+		phase === 'results' && link('setup_more_options', () => setOptionsOpen((v) => !v), false),
+		phase === 'results' && printable.length === 0 && guide
+	);
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent size="xl">
+			<DialogContent size="lg">
 				<DialogHeader>
 					<DialogTitle>{t('settings.add_printer')}</DialogTitle>
 				</DialogHeader>
@@ -311,124 +499,34 @@ export function PrinterSetupDialog({
 											? t('settings.setup_saving')
 											: phase === 'checking'
 												? t('settings.setup_checking_address', { address: draft.address })
-												: t(
-														web
-															? 'settings.setup_scanning_web'
-															: discovery.isScanning && discovery.printers.length > 0
-																? 'settings.setup_checking'
-																: 'settings.setup_scanning'
-													),
+												: t('settings.setup_scanning'),
+									phase === 'scanning'
+										? scanHelp
+										: phase === 'printing'
+											? t('settings.setup_look')
+											: undefined,
 									phase === 'scanning' ? flow.cancelScan : undefined
 								)}
-							{web && phase === 'scanning' && (discovery.scanProgress?.total ?? 0) > 0 && (
-								<Text className="text-muted-foreground -mt-2 ml-8 text-xs">
-									{t('settings.setup_sweep_progress', discovery.scanProgress)}
-								</Text>
-							)}
-							{phase === 'printing' && line('look', 'text-muted-foreground -mt-2 ml-8')}
-							{phase === 'scanning' && cards}
-							{phase === 'results' && (
+							{scanScreen && bleScanning && !web && chooserScreen}
+							{scanScreen && !bleScanning && addressOpen && phase !== 'checking' && addressScreen}
+							{scanScreen && !bleScanning && !addressOpen && (
 								<>
-									{heading(
-										printable.length === 1
-											? 'found_single'
-											: printable.length > 1
-												? 'which_printer'
-												: officeOnly
-													? 'office_heading'
-													: 'none'
-									)}
-									{cards}
-									{printable.length === 0 && line('none_help')}
-									{selected &&
-										!columnsKnown &&
-										printable.some((p) => p.address === selected.address) &&
-										row(
-											<Text key="label" className="text-muted-foreground text-sm">
-												{t('settings.setup_paper_label')}
-											</Text>,
-											...([32, 48] as const).map((n) =>
-												action(`setup_paper_${n}`, () => flow.updateDraft({ columns: n }), {
-													variant: columns === n ? 'default' : 'outline',
-													disabled: printerBusy,
-												})
-											)
+									{phase === 'results' &&
+										heading(
+											printable.length === 1
+												? 'found_single'
+												: printable.length > 1
+													? 'which_printer'
+													: officeOnly
+														? 'office_heading'
+														: 'none'
 										)}
-									{selected &&
-										printable.some((p) => p.address === selected.address) &&
-										action('setup_print_test', () => void flow.testPrint(), {
-											variant: 'default',
-											icon: 'printer',
-											full: true,
-										})}
-								</>
-							)}
-							{scanScreen && (
-								<>
-									{row(
-										usb,
-										bluetooth,
-										phase === 'results' &&
-											action('setup_scan_again', startOver, { icon: 'arrowRotateRight' }),
-										!addressOpen &&
-											action('setup_enter_address', enterAddress, { disabled: printerBusy }),
-										phase === 'results' && printable.length === 0 && guide
-									)}
-									{chooser}
-									{addressOpen && phase !== 'checking' && (
-										<View
-											testID="printer-setup-address-form"
-											className="border-border gap-3 rounded-xl border p-3"
-										>
-											<View className="flex-row gap-3">
-												<View className="flex-1">
-													<FormField
-														control={form.control}
-														name="address"
-														render={({ field }) => (
-															<FormInput
-																{...field}
-																testID="printer-setup-address"
-																editable={!busy}
-																label={t('settings.printer_address')}
-																autoFocus
-															/>
-														)}
-													/>
-												</View>
-												<View className="w-24">
-													<FormField
-														control={form.control}
-														name="port"
-														render={({ field }) => (
-															<FormInput
-																{...field}
-																testID="printer-setup-port"
-																editable={!busy}
-																label={t('settings.printer_port')}
-																type="numeric"
-															/>
-														)}
-													/>
-												</View>
-											</View>
-											{row(
-												action(
-													'setup_check_address',
-													() => void form.handleSubmit((data) => flow.checkAddress(data))(),
-													{ variant: 'default' }
-												),
-												<Button
-													key="close-address"
-													variant="ghost"
-													size="sm"
-													onPress={() => setAddressOpen(false)}
-												>
-													<Text>{t('common.cancel')}</Text>
-												</Button>
-											)}
-										</View>
-									)}
+									{cards}
+									{phase === 'results' && printable.length === 0 && line('none_help')}
+									{widthToggle}
+									{printButton}
+									{phase !== 'checking' && scanLinks}
+									{moreOptions}
 								</>
 							)}
 							{(phase === 'asking' || phase === 'width' || phase === 'trouble') && headline}
@@ -460,6 +558,7 @@ export function PrinterSetupDialog({
 											})
 										)}
 									</VStack>
+									{line('width_help', 'text-muted-foreground text-xs')}
 								</>
 							)}
 							{phase === 'trouble' && (
@@ -480,10 +579,9 @@ export function PrinterSetupDialog({
 											variant: 'default',
 											icon: 'arrowRotateRight',
 										}),
-										action('save_anyway', answer('ok')),
-										action('setup_start_over', startOver, { variant: 'ghost' }),
-										guide
+										action('save_anyway', answer('ok'))
 									)}
+									{links(link('setup_start_over', startOver, false), guide)}
 								</>
 							)}
 							{phase === 'error' && (
@@ -493,13 +591,11 @@ export function PrinterSetupDialog({
 										action('setup_retry', answer('ok'), {
 											variant: 'default',
 											icon: 'arrowRotateRight',
-										}),
-										action('setup_start_over', startOver, { variant: 'ghost' }),
-										guide
+										})
 									)}
+									{links(link('setup_start_over', startOver, false), guide)}
 								</>
 							)}
-							{/* "none found" is already the heading; only real failures earn a red line. */}
 							{discovery.error &&
 								discovery.error.code !== 'network-none-found' &&
 								phase === 'results' && (
@@ -508,7 +604,7 @@ export function PrinterSetupDialog({
 									</Text>
 								)}
 							{phase === 'saved' && (
-								<View className="items-center gap-2 py-6">
+								<View className="items-center gap-2 py-4">
 									<View className="bg-success/15 mb-1 size-14 items-center justify-center rounded-full">
 										<Icon name="check" size="xl" className="text-success" />
 									</View>
@@ -526,76 +622,7 @@ export function PrinterSetupDialog({
 											{ variant: 'default' }
 										)}
 									</View>
-								</View>
-							)}
-							{scanScreen && (
-								<View className="border-border mt-1 border-t pt-3">
-									<Collapsible open={optionsOpen} onOpenChange={setOptionsOpen}>
-										<CollapsibleTrigger testID="printer-setup-options">
-											<View className="flex-row items-center gap-1.5">
-												<Icon
-													name={optionsOpen ? 'chevronDown' : 'chevronRight'}
-													size="xs"
-													className="text-muted-foreground"
-												/>
-												<Text className="text-muted-foreground text-sm font-semibold">
-													{t('settings.setup_options')}
-												</Text>
-											</View>
-										</CollapsibleTrigger>
-										<CollapsibleContent>
-											<VStack className="gap-3 pt-3">
-												<FormField
-													control={form.control}
-													name="name"
-													render={({ field }) => (
-														<FormInput
-															{...field}
-															testID="printer-setup-name"
-															editable={!busy}
-															label={t('settings.printer_name')}
-														/>
-													)}
-												/>
-												<FormField
-													control={form.control}
-													name="vendor"
-													render={({ field }) =>
-														web ? (
-															<WebVendorSegmented
-																vendor={field.value}
-																onSelect={(vendor) => {
-																	field.onChange(vendor);
-																	form.setValue('port', deriveWebVendorDefaults(vendor).port);
-																}}
-															/>
-														) : (
-															<FormSelect
-																{...field}
-																customComponent={VendorSelect}
-																options={vendors}
-																label={t('settings.printer_vendor')}
-															/>
-														)
-													}
-												/>
-												<FormField
-													control={form.control}
-													name="columns"
-													render={({ field }) => (
-														<FormSelect
-															{...field}
-															value={String(field.value)}
-															onChange={(value: string) => field.onChange(Number(value))}
-															customComponent={SetupWidthSelect}
-															label={t('settings.printer_text_width')}
-														/>
-													)}
-												/>
-												<PrinterToggleGroup form={form} />
-											</VStack>
-										</CollapsibleContent>
-									</Collapsible>
+									{line('saved_help', 'text-muted-foreground mt-2 text-center text-xs')}
 								</View>
 							)}
 						</VStack>

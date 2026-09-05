@@ -159,12 +159,6 @@ it('keeps the Bluetooth button in view and selects the device the chooser resolv
 	await act(async () => {
 		renderer.root.findByProps({ testID: 'printer-setup-setup_add_ble' }).props.onPress();
 	});
-	// The chooser renders beside the button, never inside the collapsed Options section.
-	expect(
-		renderer.root
-			.findByType('Options' as React.ElementType)
-			.findAllByProps({ testID: 'electron-bt-device-ble' })
-	).toHaveLength(0);
 	await act(async () => {
 		renderer.root.findByProps({ testID: 'electron-bt-device-ble' }).props.onPress();
 	});
@@ -202,8 +196,8 @@ it('offers gesture-only web pickers beside the web scanning status and sweep pro
 	const texts = renderer.root
 		.findAllByType('Text' as React.ElementType)
 		.map((n) => n.props.children);
-	expect(texts).toContain('Looking for printers on Wi-Fi… USB or Bluetooth? Tap below.');
-	expect(texts).toContain('3 of 20 addresses');
+	expect(texts).toContain('Looking for printers…');
+	expect(texts).toContain('Wi-Fi · 3 of 20 addresses');
 	for (const key of ['setup_add_usb', 'setup_add_ble']) {
 		expect(renderer.root.findByProps({ testID: `printer-setup-${key}` }).props.disabled).toBe(
 			false
