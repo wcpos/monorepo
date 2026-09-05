@@ -289,6 +289,8 @@ function getRemoteErrorDetails(message: string) {
 		const envelope: unknown = JSON.parse(message.slice(REQUEST_REMOTE_ERROR_MARKER.length));
 		if (envelope === null || typeof envelope !== 'object') return {};
 		const remoteError = (envelope as { error?: unknown }).error;
+		// The worker may serialise the error as a bare string; keep it as the message.
+		if (typeof remoteError === 'string') return { message: remoteError.slice(0, 200) };
 		if (remoteError === null || typeof remoteError !== 'object') return {};
 		const { name, message: remoteMessage, code } = remoteError as Record<string, unknown>;
 		return {
