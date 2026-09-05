@@ -24,8 +24,8 @@ interface BluetoothRemoteGATTService {
 	getCharacteristic(uuid: string): Promise<BluetoothRemoteGATTCharacteristic>;
 }
 interface BluetoothRemoteGATTCharacteristic {
-	readonly properties: { readonly writeWithoutResponse: boolean };
-	writeValue(value: ArrayBufferView): Promise<void>;
+	readonly properties: { readonly write: boolean; readonly writeWithoutResponse: boolean };
+	writeValueWithResponse(value: ArrayBufferView): Promise<void>;
 	writeValueWithoutResponse(value: ArrayBufferView): Promise<void>;
 }
 // 20 bytes is the BLE default-MTU floor that every printer accepts.
@@ -80,6 +80,7 @@ export async function connectBleReceiptPrinter(
 			try {
 				const service = await server.getPrimaryService(profile);
 				const characteristic = await service.getCharacteristic(characteristicUuid);
+				if (!characteristic.properties.write) continue;
 				match = { profile, characteristicUuid, characteristic };
 				break;
 			} catch {
@@ -112,7 +113,7 @@ export async function connectBleReceiptPrinter(
 						if (characteristic.properties.writeWithoutResponse && !last) {
 							await characteristic.writeValueWithoutResponse(chunk);
 						} else {
-							await characteristic.writeValue(chunk);
+							await characteristic.writeValueWithResponse(chunk);
 						}
 						chunks += 1;
 						if (!last) await pause();

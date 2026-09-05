@@ -11,12 +11,12 @@ const PROFILE_FF00 = {
 	characteristic: '0000ff02-0000-1000-8000-00805f9b34fb',
 };
 
-function mockDevice(services: Record<string, string[]>) {
+function mockDevice(services: Record<string, string[]>, supportsAcknowledgedWrites = true) {
 	const characteristics = new Map<
 		string,
 		{
 			writeValueWithoutResponse: ReturnType<typeof vi.fn>;
-			writeValue: ReturnType<typeof vi.fn>;
+			writeValueWithResponse: ReturnType<typeof vi.fn>;
 		}
 	>();
 	const primaryServices = Object.entries(services).map(([serviceUuid, characteristicUuids]) => ({
@@ -25,9 +25,9 @@ function mockDevice(services: Record<string, string[]>) {
 			if (!characteristicUuids.includes(characteristicUuid)) throw new Error('Not found');
 			const characteristic = {
 				uuid: characteristicUuid,
-				properties: { writeWithoutResponse: true },
+				properties: { writeWithoutResponse: true, write: supportsAcknowledgedWrites },
 				writeValueWithoutResponse: vi.fn(async () => undefined),
-				writeValue: vi.fn(async () => undefined),
+				writeValueWithResponse: vi.fn(async () => undefined),
 			};
 			characteristics.set(`${serviceUuid}/${characteristicUuid}`, characteristic);
 			return characteristic;
@@ -86,6 +86,18 @@ describe('connectBleReceiptPrinter', () => {
 		expect(server.disconnect).toHaveBeenCalledOnce();
 	});
 
+	it('rejects a known profile without acknowledged-write support', async () => {
+		const { device, server } = mockDevice(
+			{ [PROFILE_18F0.service]: [PROFILE_18F0.characteristic] },
+			false
+		);
+
+		await expect(connectBleReceiptPrinter(device)).rejects.toThrow(
+			`No supported print service on Receipt Printer (services: ${PROFILE_18F0.service})`
+		);
+		expect(server.disconnect).toHaveBeenCalledOnce();
+	});
+
 	it('writes a 50-byte job in 20/20-byte chunks without response and the last 10 bytes acknowledged', async () => {
 		const { device, characteristics } = mockDevice({
 			[PROFILE_18F0.service]: [PROFILE_18F0.characteristic],
@@ -100,7 +112,7 @@ describe('connectBleReceiptPrinter', () => {
 		const writes = vi.mocked(characteristic.writeValueWithoutResponse).mock.calls;
 		expect(writes.map(([chunk]) => chunk.byteLength)).toEqual([20, 20]);
 		// The tail goes as an acknowledged write so the link is not dropped with bytes in flight.
-		const acknowledged = vi.mocked(characteristic.writeValue).mock.calls;
+		const acknowledged = vi.mocked(characteristic.writeValueWithResponse).mock.calls;
 		expect(acknowledged.map(([chunk]) => chunk.byteLength)).toEqual([10]);
 	});
 });
